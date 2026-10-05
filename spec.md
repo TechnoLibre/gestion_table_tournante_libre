@@ -1264,7 +1264,7 @@ geste, jamais un minuteur » du § 8.2.
 ### 8.6 Les fichiers
 
 **Emplacement.** Ces règles sont des propriétés de l'implémentation
-**`electron`**, celle qui est livrée. Sous `browser`, « à côté de l'exécutable »
+**`electron`**, celle qui est livrée. Sous `web`, « à côté de l'exécutable »
 ne désigne rien, et la plateforme l'annonce déjà au démarrage (§ 8.8).
 
 Le logiciel détermine son **dossier de travail une fois par séance**, par une
@@ -1408,7 +1408,7 @@ croit avoir supprimé les coordonnées d'une personne les a en réalité déplac
 ### 8.8 Ce qui résiste à une panne
 
 Ces garanties sont des propriétés de l'implémentation **`electron`**, celle qui
-est livrée. L'implémentation `browser`, de développement, n'offre ni renommage
+est livrée. L'implémentation `web`, de développement, n'offre ni renommage
 atomique ni verrou, et **le logiciel l'annonce au démarrage sur cette
 plateforme**.
 
@@ -1463,7 +1463,7 @@ plateforme**.
   affaiblie** : le renommage par-dessus n'y a pas la même valeur que sur le
   volume système, et le support peut disparaître entre l'écriture et le
   renommage. Le logiciel l'annonce comme il annonce déjà les limites de la
-  plateforme `browser`.
+  plateforme `web`.
 
 
 ### 8.9 La forme des placements dans le fichier
@@ -1850,7 +1850,7 @@ coupés trop court sont refaits à la main pendant que la file s'allonge.
 > affirmer que « le logiciel ne lit pas les marges » serait faux sur la
 > plateforme livrée. Ce qui manque n'est pas la maîtrise, c'est **l'épreuve** —
 > elle passe par un rendu, donc par un moteur de navigateur que le cycle court
-> n'a pas. La plateforme `browser`, elle, n'offre que la boîte de dialogue du
+> n'a pas. La plateforme `web`, elle, n'offre que la boîte de dialogue du
 > navigateur et son « ajuster à la page ».
 
 **Ce que cette réduction retire du chemin critique.** La bibliothèque n'ingère
@@ -2737,14 +2737,33 @@ nommant le critère appliqué à sa place.
 
 ### 13.1 Forme du projet
 
-Une application **Cordova**, dont le code vit dans `www/` et ne dépend d'aucun
+Une application **Capacitor**, dont le code web vit dans `www/` — la sortie de
+Vite, que Capacitor désigne comme son répertoire web — et ne dépend d'aucun
 service.
 
-| plateforme | rôle |
-|---|---|
-| `electron` | la livraison : un exécutable Windows |
-| `browser` | le développement et les tests sous Linux |
-| `android` | ouvert, non requis pour la première livraison |
+| plateforme | ce qui la porte | rôle |
+|---|---|---|
+| `electron` | une **coquille Electron propre au projet**, emballée par `electron-builder` | la livraison : un exécutable Windows |
+| `web` | la plateforme web de Capacitor, servie en local | le développement et les tests sous Linux |
+| `android` | la plateforme Android de Capacitor | ouverte, non requise pour la première livraison |
+
+**Capacitor ne porte pas l'exécutable Windows, et c'est délibéré.** Il ne fournit
+de plateforme de bureau que par une extension communautaire, et une plateforme
+dont la mise à jour ne dépend pas du projet fige le moteur d'exécution embarqué :
+l'exécutable livré porterait un Chromium que plus personne ne corrige. La coquille
+du projet tient en deux fichiers — le processus principal et le script de
+préchargement — et fixe elle-même sa version d'Electron, que la construction met
+à jour comme n'importe quelle dépendance.
+
+**La coquille est l'endroit où vivent les deux frontières de plateforme du § 13.4
+sous `electron`** : le système de fichiers — écriture atomique, verrou, sonde
+d'écriture, chemin publié par le lanceur portable (§ 8.6, § 8.8) — et
+l'impression (§ 11.7). Le processus principal les exécute ; le script de
+préchargement les expose à l'application par un **pont étroit et nommé**,
+l'isolation de contexte restant active et l'intégration de Node coupée dans la
+page. Une page qui atteindrait le système de fichiers directement ferait d'une
+faille d'affichage — un nom importé interprété comme du balisage — un accès
+complet au disque.
 
 Le code que Vite compile vit sous **`src/`**, en modules nommés d'après les
 couches du § 13.4 : `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`,
@@ -2824,7 +2843,7 @@ message d'erreur**.
   stockage           lecture et écriture de fichiers
 ```
 
-**Le moteur ne connaît ni le DOM ni Cordova.** Il reçoit des nombres et des
+**Le moteur ne connaît ni le DOM, ni Capacitor, ni Electron.** Il reçoit des nombres et des
 listes, il rend des placements. C'est ce qui le rend testable sous `node`, en
 quelques secondes — et c'est la condition pour qu'il soit éprouvé sérieusement.
 
@@ -3766,8 +3785,11 @@ ne désigne nulle part une organisation existante.
 
 ## 16. Livraison
 
-L'exécutable Windows se construit depuis Linux par la plateforme `electron` de
-Cordova, qui s'appuie sur `electron-builder`.
+L'exécutable Windows se construit depuis Linux par `electron-builder`, qui
+emballe la coquille Electron du projet et le même `www/` que servent les
+plateformes de Capacitor (§ 13.1). Une cible Windows construite depuis Linux passe
+par Wine ; la construction s'exécute donc dans un conteneur qui le porte, et la
+machine de développement n'a rien à installer en dehors du projet.
 
 **Cette capacité est à vérifier dès la première semaine**, sur un squelette vide,
 au même titre que la publication du dossier d'origine par le lanceur portable
@@ -3804,7 +3826,7 @@ qu'il se **garde** au lieu de se surveiller. La liste des écrans est celle du
 § 19.3.
 
 **`GUIDE-WINDOWS.md` sort de la boucle d'engendrement** (§ 19.8) : le pilotage
-s'exécute sur `browser` sous Linux, et les écrans que ce guide décrit appartiennent
+s'exécute sur `web` sous Linux, et les écrans que ce guide décrit appartiennent
 à `electron` sous Windows. Il **ne cite jamais un nom d'exécutable complet** : il
 cite le **gabarit** et désigne « le fichier dont le nom commence par
 `gestion_table_tournante_libre_v` » — un nom daté change à chaque livraison, et
@@ -3916,9 +3938,10 @@ construit puis jeté sans être envoyé n'a consommé aucun numéro.
 le champ détruirait la propriété de tri que toute la section achète, et cent
 livraisons dans une journée désignent un autre problème que le format du numéro.
 
-**La forme technique.** Les fichiers de description du projet et de la plateforme
-exigent trois champs entiers **sans zéro de tête** : le format qu'ils valident
-refuse `0105`. Le logiciel dérive donc le mois et le jour en **un entier**,
+**La forme technique.** Le fichier de description du projet, `package.json`,
+exige trois champs entiers **sans zéro de tête** — le format de version qu'il
+valide refuse `0105` — et `electron-builder` en tire la ressource de version de
+l'exécutable Windows. Le logiciel dérive donc le mois et le jour en **un entier**,
 `MM × 100 + JJ`, écrit sans remplissage, et le rang en entier :
 
 ```
@@ -3934,6 +3957,11 @@ contrôle refait le trajet dans les deux sens et refuse une divergence. Les troi
 nombres tiennent dans les **16 bits** que le format de ressources Windows impose à
 chacun de ses quatre champs : l'année, `MM × 100 + JJ` qui vaut au plus 1231, et
 le rang.
+
+**Quand la plateforme `android` sera ajoutée**, son `versionCode`, un entier
+unique, dérivera de la même source sous la forme `AAMMJJNN` sur huit chiffres —
+`26100501` —, monotone et sous la borne de 2 100 000 000 qu'impose la
+plateforme, et rejoindra le contrôle du § 18.5.
 
 **La longueur fixe ne vaut que pour la forme affichée et pour le nom de fichier**,
 qui sont les seules qu'un humain trie. La forme technique n'est jamais lue par
@@ -3977,8 +4005,8 @@ Tout le reste en dérive, par un script de construction :
 
 | destination | forme | usage |
 |---|---|---|
-| les fichiers de description du projet et de la plateforme | technique | ce qu'exigent les outils de construction |
-| nom de l'exécutable | soulignés | ce que l'opérateur voit dans son dossier |
+| `package.json` | technique | ce qu'exigent npm et `electron-builder`, qui en tire la ressource de version Windows |
+| nom de l'exécutable, posé dans la configuration d'`electron-builder` | soulignés | ce que l'opérateur voit dans son dossier |
 | `src/version.genere.js` | affichée **et** technique | ce que l'application affiche |
 | titre de la section de tête du `CHANGELOG.md` | affichée | ce que l'opérateur lit avant de remplacer |
 
@@ -4058,7 +4086,7 @@ est une livraison dont l'opérateur ne peut pas décider.
 Chaque endroit où un chiffre se recopie est une occasion de diverger. Un contrôle
 de la série `node` surveillée (§ 14.4) **échoue** quand :
 
-1. la version technique des fichiers de description n'est pas celle que la
+1. la version technique de `package.json` n'est pas celle que la
    dérivation du § 18.1 produit depuis `version.json`, ou ne se redécompose pas en
    la version affichée ;
 2. le module engendré ne reproduit pas, caractère pour caractère, ce que le script
@@ -4073,7 +4101,7 @@ de la série `node` surveillée (§ 14.4) **échoue** quand :
    contrôle attrape est une année ou un mois tapé de travers, pas une minute ;
 6. une chaîne **de la forme affichée** apparaît ailleurs que dans `version.json`,
    le module engendré et le changelog, ou une chaîne **de la forme technique**
-   ailleurs que dans les fichiers de description et le module engendré ;
+   ailleurs que dans `package.json` et le module engendré ;
 7. un document construit porte le littéral `#_#`, ou cite un nom d'exécutable qui
    **ne se conforme pas au gabarit** du § 18.2. Un gabarit non substitué se lit
    comme un nom de fichier et envoie l'opérateur chercher un fichier qui n'existe
@@ -4130,7 +4158,7 @@ question. Le logiciel fait donc en sorte qu'on n'ait pas à la chercher.
 complément.** Un signalement arrive le plus souvent sous forme d'image, et une
 capture faite à la touche d'impression d'écran, ou cadrée sur le défaut, ne
 contient pas toujours la barre de titre du système — elle ne la contient jamais sur
-la plateforme `browser`, où le titre est celui d'un onglet. Un bandeau dessiné par
+la plateforme `web`, où le titre est celui d'un onglet. Un bandeau dessiné par
 l'application est dans l'image quel que soit le cadrage. Le § 8.4 impose en plus un
 cadre permanent **autour du plan** pour le mode : les deux coexistent, le cadre
 signalant le mode là où la main agit, le bandeau portant la version jusque sur la
@@ -4194,7 +4222,7 @@ documentation s'arrête en nommant l'étape, et **elle ne republie pas les image
 passage précédent** : une documentation partielle qui se complète avec d'anciennes
 images est exactement le défaut que la boucle existe pour supprimer.
 
-Le pilotage s'exécute sur la plateforme `browser` (§ 13.1), servie en local. Le
+Le pilotage s'exécute sur la plateforme `web` (§ 13.1), servie en local. Le
 pilote, le navigateur et son pilote de protocole sont des **dépendances de
 développement** : l'exigence « aucune connexion requise » du § 2 porte sur le
 logiciel livré, jamais sur l'atelier qui le construit.
@@ -4216,7 +4244,7 @@ se juge sur elles, pas sur le nom :
    atteignable.
 2. **La capture d'écran d'un élément**, et non de la fenêtre. Elle **recadre sur la
    surface de l'application** : le cadre de fenêtre et la barre système — ce qui
-   diffère entre `browser` sous Linux et `electron` sous Windows — sortent de
+   diffère entre `web` sous Linux et `electron` sous Windows — sortent de
    l'image, et le guide d'usage reste vrai sur la plateforme livrée.
 3. **La maîtrise de la taille du cadre d'affichage.** Voir § 19.4 : la commande du
    standard dimensionne la **fenêtre**, pas le cadre d'affichage, et le logiciel ne
@@ -4491,7 +4519,7 @@ région engendrée fait échouer la construction au lieu d'être perdue au passa
 suivant (§ 14.3).
 
 **`GUIDE-WINDOWS.md` sort de la boucle** (§ 16.1). Le pilotage s'exécute sur
-`browser` sous Linux ; les écrans que ce guide décrit — obtenir l'exécutable, le
+`web` sous Linux ; les écrans que ce guide décrit — obtenir l'exécutable, le
 premier lancement, le blocage par un antivirus, l'emplacement des fichiers dans
 l'explorateur — appartiennent à `electron` sous Windows et **aucun scénario ne les
 produit**. Le guide les décrit en toutes lettres, ou les illustre par des images
@@ -4648,7 +4676,7 @@ avec elle donne une couverture imaginaire.
   `touch-action`, qui ne se juge que sous un vrai doigt. Ce sont les pannes que le
   § 7.3 nomme, et elles restent au niveau manuel.
 - **les garanties de panne du § 8.8.** Elles sont des propriétés de
-  l'implémentation `electron` ; le pilotage s'exécute sur `browser`. **Aucune
+  l'implémentation `electron` ; le pilotage s'exécute sur `web`. **Aucune
   capture d'écran n'établit quoi que ce soit sur la résistance à une panne.**
 - **la lisibilité.** Une image nette d'un plan illisible est une image nette.
 - **la justesse du français**, et le fait qu'une phrase du guide dise bien ce que
