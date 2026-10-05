@@ -48,6 +48,8 @@ const journal = {
   sequence: [],
   // Options de chaque new BrowserWindow.
   fenetres: [],
+  // Argument de chaque Menu.setApplicationMenu.
+  menus: [],
   // { loadFile: chemin } ou { loadURL: adresse }, par appel.
   chargements: [],
   // Canal de chaque ipcMain.handle ou ipcMain.on.
@@ -123,6 +125,13 @@ export class BrowserWindow {
     return Promise.resolve();
   }
 }
+
+export const Menu = {
+  setApplicationMenu(menu) {
+    journal.sequence.push('Menu.setApplicationMenu');
+    journal.menus.push(menu);
+  },
+};
 
 export const ipcMain = {
   handle(canal, gestionnaire) {

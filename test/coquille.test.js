@@ -92,6 +92,14 @@ describe('coquille : processus principal', () => {
     assert.ok(existsSync(webPreferences.preload), `${webPreferences.preload} absent`);
   });
 
+  test("aucun menu d'application : le menu par défaut d'Electron, en anglais, est retiré avant la première fenêtre (§ 2)", () => {
+    const { menus, sequence } = journalDeLaCoquille();
+    assert.deepEqual(menus, [null]);
+    const retrait = sequence.indexOf('Menu.setApplicationMenu');
+    const fenetre = sequence.indexOf('new BrowserWindow');
+    assert.ok(retrait !== -1 && fenetre !== -1 && retrait < fenetre, `ordre des appels : ${sequence.join(', ')}`);
+  });
+
   test('la fenêtre charge la page que Vite construit dans www/', () => {
     assert.deepEqual(journalDeLaCoquille().chargements, [
       { loadFile: join(RACINE, 'www', 'index.html') },

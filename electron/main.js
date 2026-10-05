@@ -10,7 +10,7 @@
 // processus principal que par les canaux que ce module traite. Un nom importé
 // interprété comme du balisage reste ainsi une faute d'affichage, et non un
 // accès au disque.
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import { fileURLToPath } from 'node:url';
 
 // Chemins relatifs à ce module : ils valent dans le dépôt comme dans
@@ -45,4 +45,12 @@ function creerFenetre() {
   fenetre.loadFile(PAGE);
 }
 
-app.whenReady().then(creerFenetre);
+// Sans menu posé par l'application, Electron installe le sien : en anglais,
+// alors que l'interface est en français (§ 2), et porteur de « Reload » et
+// des outils de développement. null le retire, et retire avec lui la barre
+// de menu des fenêtres sous Windows et Linux ; il est posé avant la première
+// fenêtre, qui naîtrait sinon avec la barre.
+app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+  creerFenetre();
+});
