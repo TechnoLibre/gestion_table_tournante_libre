@@ -1,0 +1,63 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Un seul lanceur, trois projets (§ 14.4, § 14.8).
+//
+// node        fonctions pures, sans DOM et sans greffon Svelte : un module qui
+//             importerait un composant échoue au chargement.
+// node-long   épreuves lourdes, hors de la série surveillée. Leur durée croît
+//             avec l'application : chacune dispose de deux minutes, là où le
+//             délai par défaut de Vitest, 5 s, la ferait échouer par
+//             dépassement et non sur un défaut. Ce délai arrête un test
+//             bloqué ; il n'est pas le plafond de la série (§ 14.14).
+// navigateur  un vrai moteur de rendu. Le projet étend vite.config.js : un
+//             module s'y résout par les mêmes greffons et réglages que dans la
+//             construction du livrable, sans seconde configuration à tenir
+//             d'accord avec la première.
+import { defineConfig } from 'vitest/config';
+import { playwright } from '@vitest/browser-playwright';
+
+export default defineConfig({
+  test: {
+    // Sous surveillance, une épreuve se relance quand un module de son graphe
+    // d'imports change. Les fichiers des motifs se lisent hors de tout
+    // graphe : le contrôle de version (§ 18.5) lit les premiers par le
+    // système de fichiers ; la coquille s'exécute dans un processus à part,
+    // la configuration d'electron-builder se charge par un require natif et
+    // lit capacitor.config.json, et le script de construction se lance
+    // depuis une copie. Chaque motif rattache ses fichiers aux épreuves qui
+    // les lisent, et au contrôle de version quand son point 6 les balaie. Un
+    // fichier qui répond à un motif ne relance que les épreuves nommées, et
+    // plus celles qui l'importeraient : un motif ne nomme donc aucun fichier
+    // qu'une épreuve importe. L'option se lit au niveau du lanceur : posée
+    // dans un projet, elle est ignorée sans avertissement.
+    watchTriggerPatterns: [
+      { pattern: /(^|\/)(version\.json|package-lock\.json|CHANGELOG\.md|README\.md|GUIDE-[^/]*\.md)$/,
+        testsToRun: () => 'scripts/version.test.js' },
+      { pattern: /(^|\/)electron\/[^/]+$/,
+        testsToRun: () => ['test/coquille.test.js', 'test/livrable.test.js', 'scripts/version.test.js'] },
+      { pattern: /(^|\/)test\/electron_factice\.js$/,
+        testsToRun: () => ['test/coquille.test.js', 'scripts/version.test.js'] },
+      { pattern: /(^|\/)(electron-builder\.config\.cjs|capacitor\.config\.json)$/,
+        testsToRun: () => ['test/livrable.test.js', 'scripts/construire_windows.test.js', 'scripts/version.test.js'] },
+      { pattern: /(^|\/)scripts\/construire_windows\.sh$/,
+        testsToRun: () => ['scripts/construire_windows.test.js', 'scripts/version.test.js'] },
+    ],
+    projects: [
+      { test: {
+          name: 'node', environment: 'node',
+          include: ['src/**/*.test.js', 'scripts/**/*.test.js', 'test/**/*.test.js'],
+          exclude: ['**/*.long.test.js', '**/*.navigateur.test.js', 'node_modules/**'] } },
+      { test: {
+          name: 'node-long', environment: 'node',
+          include: ['src/**/*.long.test.js', 'test/**/*.long.test.js'],
+          testTimeout: 120_000 } },
+      { extends: './vite.config.js',
+        test: {
+          name: 'navigateur',
+          include: ['src/**/*.navigateur.test.js'],
+          browser: { enabled: true, headless: true, provider: playwright(),
+                     instances: [{ browser: 'chromium' }] } } },
+    ],
+  },
+});

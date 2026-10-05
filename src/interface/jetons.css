@@ -1,0 +1,42 @@
+/* © 2026 TechnoLibre (http://www.technolibre.ca)
+   License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) */
+
+/* Jetons de l'interface : couleurs, typographie, espacements, rayons. Le thème
+   suit prefers-color-scheme ; chaque thème redéfinit les mêmes jetons de
+   couleur, et les composants ne lisent que les jetons (§ 13.3).
+
+   Chaque couleur de texte tient au moins 4,5:1 sur le fond où elle est peinte,
+   et aucune n'emploie de canal alpha : la couleur relue dans le style calculé
+   est alors la couleur peinte (§ 14.5). */
+
+:root {
+  color-scheme: light;
+
+  --couleur-page-fond: #f6f7f9;
+  --couleur-page-texte: #1c2128;
+  --couleur-bandeau-fond: #1f3a5f;
+  --couleur-bandeau-texte: #ffffff;
+  --couleur-bandeau-filet: #8fb3d9;
+
+  --police-interface: system-ui, sans-serif;
+  --taille-texte-bandeau: 0.9375rem;
+
+  --espace-1: 0.25rem;
+  --espace-2: 0.5rem;
+  --espace-3: 0.75rem;
+  --espace-4: 1rem;
+
+  --rayon-1: 0.25rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --couleur-page-fond: #121519;
+    --couleur-page-texte: #e3e6ea;
+    --couleur-bandeau-fond: #1d2c3f;
+    --couleur-bandeau-texte: #f2f4f7;
+    --couleur-bandeau-filet: #5b7fa6;
+  }
+}
