@@ -3787,9 +3787,14 @@ ne désigne nulle part une organisation existante.
 
 L'exécutable Windows se construit depuis Linux par `electron-builder`, qui
 emballe la coquille Electron du projet et le même `www/` que servent les
-plateformes de Capacitor (§ 13.1). Une cible Windows construite depuis Linux passe
-par Wine ; la construction s'exécute donc dans un conteneur qui le porte, et la
-machine de développement n'a rien à installer en dehors du projet.
+plateformes de Capacitor (§ 13.1). La construction s'exécute dans un conteneur,
+sous une image épinglée par empreinte, de sorte que la machine de développement
+n'a rien à installer en dehors du projet. La cible portable n'exige pas Wine :
+`electron-builder` édite lui-même les ressources de l'exécutable. L'image n'en
+porte donc pas, et une cible qui l'exigerait — un installateur — y échoue au lieu
+de produire le livrable que ce paragraphe exclut. Le conteneur ne reçoit aucune
+variable de l'hôte : un numéro de construction d'intégration continue y
+remplacerait le quatrième champ de la version Windows (§ 18.1).
 
 **Cette capacité est à vérifier dès la première semaine**, sur un squelette vide,
 au même titre que la publication du dossier d'origine par le lanceur portable
