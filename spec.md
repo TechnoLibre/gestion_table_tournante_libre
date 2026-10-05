@@ -380,6 +380,7 @@ une lecture et non un jugement :
 | **personnes distinctes rencontrées** | sur l'ensemble des tours ; une personne revue compte une fois |
 | **collisions cumulées** | occurrences (paire, tour) où deux personnes d'une même appartenance partagent une table — l'unité dans laquelle les planchers du § 5.6 se démontrent |
 | **paires de même appartenance** | **paires distinctes** réunies au moins une fois ; jamais la même unité que la ligne précédente |
+| **excédent de collisions** | collisions cumulées − paires distinctes : le nombre de **retrouvailles au-delà de la première** entre deux personnes d'une même appartenance. Nul quand aucune paire de collègues n'est réunie deux fois |
 | **rencontres répétées** | paires réunies plus d'une fois |
 | **nombre maximal de rencontres d'une même paire** | |
 | **retours à une table déjà occupée** | *voir ci-dessous* |
@@ -410,6 +411,25 @@ cité quelque part — § 5.6, § 12.4, § 15.3, une étape du pilotage — **no
 unité**. Un plan qui garde les deux mêmes collègues ensemble aux quatre tours
 mesure **4** collisions cumulées et **1** paire distincte : confondre les deux
 fait afficher une mesure inférieure à son propre plancher.
+
+**Une collision répétée coûte plus cher que la même quantité répartie, et c'est
+l'excédent qui le dit.** Trois plans à comparer, tous en conflit :
+
+| plan | collisions cumulées | paires distinctes | excédent |
+|---|---|---|---|
+| un collègue retrouvé **quatre fois** | 4 | 1 | **3** |
+| deux collègues retrouvés **deux fois** chacun | 4 | 2 | **2** |
+| six collègues retrouvés **une fois** chacun | 6 | 6 | **0** |
+
+Le dernier est le moins mauvais, bien qu'il porte le **plus** de collisions
+cumulées — passer la soirée avec le même collègue est pire que croiser six
+collègues une fois. Ni les collisions cumulées ni les paires distinctes, prises
+seules, ne rendent cet ordre : **les deux classent le premier plan en tête**,
+c'est-à-dire exactement à l'envers. L'excédent le rend, et c'est pour cela qu'il
+ouvre le classement du § 5.7.
+
+Les trois restent **affichés** : ce sont trois conflits, et aucun ne se cache
+derrière la grandeur qui ordonne.
 
 **Quand une population est vide, le logiciel écrit « — », jamais zéro.** Un
 ensemble vide n'est pas une mesure nulle.
@@ -557,6 +577,11 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   cumulées sur les 4 tours, portées par au moins 2 paires distinctes ». Le
   plancher se démontre **en occurrences** ; le chiffre nomme donc son unité, et
   le compte de paires distinctes l'accompagne (§ 5.4) ;
+- **le plancher de l'excédent**, quand un groupe de g personnes subit un plancher
+  de C collisions cumulées et que `C > C(g, 2)` : les retrouvailles sont alors
+  forcées, et l'excédent ne descend pas sous `C − C(g, 2)`. Le diagnostic l'écrit
+  **quand il est strictement positif**, et se tait sinon — annoncer un plancher
+  nul laisserait croire qu'un plancher a été calculé là où il n'y en a pas ;
 - redondance minimale `r_min(p) = max(0, |F(p)| − G)` → « au moins 6
   appartenances recroisées par personne ; avec 3 tours au lieu de 4, aucune ne
   le serait » ;
@@ -603,12 +628,24 @@ explicite**, écrit dans l'interface. Confondre les deux ferait dépendre l'ordr
 de poids internes que l'opérateur ne voit pas.
 
 Ordre par défaut : **écart au plafond a priori** le plus faible (§ 5.5), puis
-**paires de même appartenance** — des paires **distinctes**, l'unité est nommée
-—, puis rencontres répétées, puis **redondance d'appartenance comme départage**.
-Ce rang se justifie par l'asymétrie des gains — rencontrer une personne de plus
-est un gain certain, rencontrer une appartenance de plus est un raffinement.
-Mettre la diversité au-dessus ferait **refuser un contact neuf** parce que
-l'appartenance du voisin est déjà croisée.
+**excédent de collisions**, puis **collisions cumulées**, puis rencontres
+répétées, puis **redondance d'appartenance comme départage**.
+
+Le premier rang se justifie par l'asymétrie des gains — rencontrer une personne
+de plus est un gain certain, rencontrer une appartenance de plus est un
+raffinement. Mettre la diversité au-dessus ferait **refuser un contact neuf**
+parce que l'appartenance du voisin est déjà croisée.
+
+**Les deux rangs de collision sont dans cet ordre, et l'inverse serait faux.**
+Le § 5.4 le démontre en trois plans : classer d'abord sur les collisions
+cumulées — comme classer d'abord sur les paires distinctes — met en tête le plan
+qui fait passer toute la soirée aux deux mêmes collègues, parce qu'il en porte le
+moins. L'excédent d'abord, le volume ensuite : un plan qui répartit six collisions
+sur six paires passe devant un plan qui en concentre quatre sur une seule.
+
+**Les paires distinctes ne sont pas une clé de tri** ; elles restent une colonne
+affichée, et se retrouvent de toute façon par soustraction. Trois clés pour deux
+quantités indépendantes feraient un départage qui ne départage rien.
 
 Quand le plafond a priori par personne n'est pas disponible (§ 17, point 4), le premier
 critère est **sauté** et la page nomme celui qu'elle applique à sa place : un
@@ -696,10 +733,31 @@ d'écran (§ 19.4) tomberait avec. L'interdit de `performance.now` dans le moteu
 (§ 14.7) n'est donc pas une règle d'hygiène : c'est elle qui rend vraie la phrase
 « à graine égale, placement identique ».
 
+**Le compte est un réglage, et son plafond d'usage est de trente minutes.** Il
+est exposé dans les réglages de génération, avec son unité ; le logiciel affiche
+à côté la **durée réellement observée du dernier calcul sur cette machine**, qui
+est la seule façon d'étalonner un compte. Le réglage livré par défaut est celui
+qui, sur la machine de référence, reste bien en deçà de ce plafond.
+
+**Une génération longue s'annonce avant de partir.** À partir de la dernière
+durée mesurée, le logiciel énonce l'ordre de grandeur attendu — « environ vingt
+minutes à ce réglage » — et demande. Une recherche d'une demi-heure lancée par
+mégarde est une demi-heure de soirée perdue, et aucun réglage par défaut ne
+protège de cela.
+
+**Pendant la recherche, l'application reste vivante.** Le calcul ne tient pas le
+fil d'exécution de l'interface : le plan reste lisible, la page de qualité des
+propositions déjà obtenues reste ouverte, et l'avancement est visible. Une
+demi-heure de fenêtre figée se lit comme un plantage, et l'opérateur tue le
+logiciel — ce qui perd exactement ce que la recherche avait trouvé. Le compteur
+d'inactivité du § 8.4 est suspendu tant qu'un calcul tourne, donc le retour
+automatique en lecture ne tombe jamais au milieu d'une génération.
+
 **Une commande annule une génération en cours, et elle écarte le résultat
-partiel.** Une proposition issue d'une recherche tronquée porterait la même
-graine et le même compte qu'une proposition complète, et ne s'en distinguerait
-dans aucun fichier.
+partiel.** L'annulation est immédiate — elle n'attend pas la fin d'une itération
+longue. Une proposition issue d'une recherche tronquée porterait la même graine
+et le même compte qu'une proposition complète, et ne s'en distinguerait dans aucun
+fichier.
 
 **Le recalcul complet est la mesure**, celui dont sortent les chiffres du § 5.4
 et de la page de qualité ; **l'incrémental n'existe que dans la boucle de
@@ -1823,7 +1881,30 @@ Conséquences à tenir :
   pas, et le mesurer là introduirait la seconde arithmétique que le § 13.2
   interdit.
 
-### 11.2 La planche : quatre badges A6 exacts par feuille A4
+### 11.2 La planche : deux impositions, A4 et Lettre
+
+**Le logiciel sait produire sur les deux papiers, et aucun des deux n'est un cas
+de repli.** Le badge est un A6 exact — 105 × 148 mm — dans les deux cas ; ce qui
+change est le nombre de cellules par feuille et le tracé de coupe.
+
+| papier | format | badges par feuille | axes de coupe | pour 257 badges |
+|---|---|---|---|---|
+| **A4** | 210 × 297 mm | **4**, deux colonnes de 105 et deux rangées de 148 | **3** : une verticale, deux horizontales | **65 planches** |
+| **Lettre** | 215,9 × 279,4 mm | **2**, à plat, 148 de large et 105 de haut | **5** : un encadrement complet | **129 planches** |
+
+**Le logiciel demande le format à la première production et ne le redemande
+plus** (§ 8.5). Il n'en impose aucun par défaut : choisir pour l'opérateur, c'est
+produire soixante-cinq feuilles inutilisables quand le bac contient l'autre
+papier. Le format retenu est écrit sur la feuille de contrôle et dans le nom du
+fichier (§ 11.3, § 11.6), parce que c'est la seule chose qui survit à l'envoi de
+la planche à quelqu'un d'autre.
+
+**Les deux impositions sont éprouvées à égalité** (§ 14.4) : la pagination sur
+`n = 1, 4, 5, 259, 261` en A4 et `n = 1, 2, 3, 257` en Lettre, et la géométrie —
+cellules, filets, zone de silence — sur chacune. Une branche qui ne serait
+éprouvée que « au cas où » est une branche qui sort fausse le jour où elle sert.
+
+#### L'A4 : quatre cellules, un millimètre perdu
 
 A4 fait 210 × 297 mm, A6 fait 105 × 148 mm. Deux colonnes de 105 occupent
 **exactement** 210 ; deux rangées de 148 occupent 296 et laissent **1 mm**.
@@ -1838,10 +1919,11 @@ taillée à 148 accepte — et la planche cesserait de pouvoir s'annoncer A6. **
 sortie qui ment sur son format est pire qu'une sortie qui coûte une coupe**, et
 c'est la même règle qui gouverne le papier Lettre ci-dessous.
 
-> La troisième coupe ne coûte rien à qui tranche la rame entière : trois réglages
-> de butée, trois passes, quel que soit le nombre de feuilles. Elle coûte un
-> geste par feuille aux ciseaux. C'est un argument de plus pour l'imposition en
-> pile (§ 11.6) sur les gros tirages, pas une raison de changer le défaut.
+> La troisième coupe ne coûte rien à qui tranche la rame entière sur un massicot :
+> trois réglages de butée, trois passes, quel que soit le nombre de feuilles. Elle
+> coûte un geste par feuille aux ciseaux. C'est un argument de plus pour
+> l'imposition en pile (§ 11.6) sur les gros tirages, pas une raison de rogner le
+> badge.
 
 **L'absence de marge latérale gouverne tout le reste.** Le bord d'un badge est le
 bord de la feuille, où aucune imprimante à jet ou à laser courante ne dépose
@@ -1850,14 +1932,24 @@ cadre** : un fond coloré ressort avec une bande blanche de trois à cinq
 millimètres sur deux côtés, et la coupe se met à chasser la bande au lieu de
 suivre un repère.
 
-**Le papier Lettre n'est pas un cas exotique.** Il mesure 215,9 × 279,4 mm : deux
-rangées de 148 en demandent 296. Un gabarit A4 imprimé sur Lettre perd la rangée
-du bas. Le logiciel **refuse de réduire en silence** : il produit **deux badges
-A6 exacts par feuille, à plat** — 148 de large, 105 de haut — plutôt que quatre
-cartons rognés à 139 mm. Sur Lettre les badges ne pavent plus la feuille : le
-logiciel trace un **encadrement de coupe complet**, et la coupe demande cinq
-passes au lieu de trois. Le nombre de feuilles **double**, et le logiciel
-l'annonce **avant** de produire.
+#### Le Lettre : deux cellules, un encadrement complet
+
+Le Lettre mesure 215,9 × 279,4 mm : deux rangées de 148 en demandent 296. Un
+gabarit A4 imprimé sur Lettre perd la rangée du bas. Le logiciel **refuse de
+réduire en silence** : il produit **deux badges A6 exacts par feuille, à plat** —
+148 de large, 105 de haut — plutôt que quatre cartons rognés à 139 mm. Sur Lettre
+les badges ne pavent plus la feuille : le logiciel trace un **encadrement de coupe
+complet**, et la coupe demande cinq passes au lieu de trois. Le nombre de feuilles
+**double**, et le logiciel l'annonce **avant** de produire.
+
+> **Trois badges par feuille Lettre sont géométriquement possibles, et le logiciel
+> ne les produit pas.** Deux A6 debout côte à côte occupent 210 × 148, et un A6
+> couché entre dans la bande de 215,9 × 131,4 qui reste : quatre-vingt-sept
+> feuilles au lieu de cent trente pour deux cent soixante badges. Le prix est une
+> **coupe non traversante**, qui interdit de trancher la rame entière en un
+> réglage — elle échange un tiers du papier contre un geste par feuille. Elle se
+> décidera sur l'outil de coupe réellement disponible, et pas avant : une
+> imposition de plus est une imposition de plus à éprouver.
 
 **La pagination s'éprouve sur les deux impositions, et sur les comptes qui
 séparent les deux arrondis** (§ 14.2) : `n = 1, 4, 5, 259, 261` pour l'A4 —
@@ -1897,6 +1989,14 @@ sans quoi la prochaine main la « corrigera » par le calcul :
 du § 14.4 : elle se fait sur les imprimantes visées, avant la livraison, parce
 qu'un banc de navigateur ne mesure ni un décalage d'imprimante ni une erreur de
 main. Une zone calculée au plus juste fait couper dans un patronyme.
+
+**La cote intérieure des pochettes n'est pas une contrainte de la première
+itération.** Le badge reste un A6 exact, et la troisième coupe reste : la découpe
+se fait au massicot, où trois passes coûtent trois réglages de butée quel que soit
+le nombre de feuilles. Si une pochette mesurée tolérait un demi-millimètre, la
+bande perdue pourrait être répartie et la troisième coupe disparaître — mais la
+planche cesserait alors de pouvoir s'annoncer A6, et **une sortie qui ment sur son
+format est pire qu'une sortie qui coûte une coupe**.
 
 **La feuille de contrôle est la page 1 du document, et ne se découpe pas.** Elle
 porte une **échelle graphique de 100 mm, repérée tous les 10 mm**, les dimensions
@@ -2241,13 +2341,23 @@ empilée en **deux segments** : **prouvé inévitable** (le plancher du diagnost
 et **reste**. Chaque ligne porte l'effectif du groupe.
 
 **La barre est dessinée en collisions cumulées** — des occurrences
-(paire, tour) —, parce que c'est l'unité dans laquelle le plancher se démontre, et
-chaque ligne porte **en encre secondaire** le compte de **paires distinctes**
-(§ 5.4). Empiler les deux unités dans une même barre produit un segment « reste »
-négatif : un plan qui garde les deux mêmes collègues ensemble aux quatre tours
-mesure **1** paire distincte contre un plancher de **4**, la garde du § 12.3
-refuse alors de dessiner, et elle a raison — l'arithmétique est fausse, non dans
-le code mais dans la spécification.
+(paire, tour) —, parce que c'est l'unité dans laquelle le plancher se démontre.
+Empiler deux unités dans une même barre produit un segment « reste » négatif : un
+plan qui garde les deux mêmes collègues ensemble aux quatre tours mesure **1**
+paire distincte contre un plancher de **4**, la garde du § 12.3 refuse alors de
+dessiner, et elle a raison — l'arithmétique est fausse, non dans le code mais
+dans la spécification.
+
+**Chaque ligne porte en encre secondaire ses trois autres chiffres** : l'effectif
+du groupe, les **paires distinctes**, et l'**excédent** (§ 5.4). Les deux derniers
+sont ce qui distingue un conflit réparti d'un conflit concentré, et c'est
+l'excédent qui ordonne les propositions (§ 5.7) : une vue qui ne montrerait que
+le volume ferait conclure que le plan le mieux classé est le plus mauvais.
+
+**Les lignes se trient sur l'excédent, pas sur la longueur de la barre.** La pire
+appartenance est celle qui remet le plus souvent les mêmes personnes ensemble,
+non celle qui porte le plus d'occurrences — c'est le même arbitrage qu'au § 5.7,
+et deux tris opposés dans une même page se contredisent devant l'opérateur.
 
 **Le second segment ne s'appelle pas « évitable ».** Le plancher se calcule en
 relâchant les contraintes : c'est une **borne inférieure**, jamais un fait.
@@ -3165,8 +3275,13 @@ moins une collision par tour, quatre sur les quatre tours** — mais l'indicateu
 « paires de même appartenance » compte des **paires distinctes**, et un plan qui
 garde les deux mêmes personnes ensemble aux quatre tours n'en affiche qu'**une**.
 Affirmer « aucune proposition ne descend sous quatre » sur cet indicateur ferait
-échouer le test sur un plan légitime, et même sur le plan que le classement par
-défaut du § 5.7 **préfère**.
+échouer le test sur un plan légitime. Un second test tient l'autre bout : le
+classement par défaut du § 5.7 **préfère le plan qui répartit**, donc celui dont
+l'**excédent** est nul et qui porte quatre paires distinctes, et non celui qui
+concentre ses quatre collisions sur une seule paire. Le test compare deux plans
+construits à la main — l'un réparti, l'autre concentré — et affirme l'ordre ; il
+est l'unique garde contre une réécriture du classement qui le remettrait à
+l'envers (§ 5.4).
 
 #### Le PDF
 
@@ -3562,9 +3677,14 @@ de tailles **5, 4, 3**. Cinq personnes ne se répartissent pas sur quatre tables
 sans que deux se retrouvent : **au moins une collision par tour, quatre collisions
 cumulées sur les quatre tours**, quel que soit l'algorithme — et **au moins une
 paire distincte**, jamais quatre : un plan qui garde les deux mêmes personnes
-ensemble aux quatre tours n'en réunit qu'une, et c'est même le plan que le
-classement par défaut du § 5.7 préfère. Les deux planchers sont dans deux unités
-différentes et le logiciel ne les confond jamais (§ 5.4).
+ensemble aux quatre tours n'en réunit qu'une. Les deux planchers sont dans deux
+unités différentes et le logiciel ne les confond jamais (§ 5.4).
+
+Cette variante est aussi l'instance la plus courte où le classement du § 5.7 se
+lit : le groupe de 5 porte dix paires possibles pour quatre collisions forcées,
+donc l'**excédent n'est pas forcé** — un plan peut répartir ses quatre collisions
+sur quatre paires distinctes, et c'est celui que le logiciel met en tête, devant
+un plan qui les concentrerait sur une seule.
 
 Une personne déplacée d'un groupe à l'autre fait basculer le logiciel de « minimum
 atteint » à « quatre collisions cumulées inévitables » : c'est le contraste le
@@ -4159,7 +4279,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `10-diagnostic.png` | **grande démonstration** | le diagnostic préalable (§ 5.6), le plafond a priori, les **99 retours imposés** énoncés à part, et le plancher de l'écart d'itinéraire | les valeurs affichées égalent celles du moteur pour la même entrée ; le plafond des quatre animateurs des tables de 7 vaut **24** |
 | `11-propositions.png` | l'événement en construction | plusieurs propositions comparées, l'ordre de classement **écrit dans l'interface** (§ 5.7), les colonnes de diversité | au moins trois propositions ; l'ordre affiché est celui que produit la clé de tri du moteur |
 | `12-qualite-profil.png` | **grande démonstration** | la courbe en escalier, deux séries sur **un seul axe**, le plafond réalisé tracé dans le même ordre, le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée |
-| `13-qualite-collisions.png` | **petite démonstration, variante « conflit inévitable »** | les barres horizontales à deux segments, « prouvé inévitable » et « reste », en **collisions cumulées**, avec le compte de paires distinctes en encre secondaire | le segment prouvé vaut **4 collisions cumulées** et égale le plancher du diagnostic, au chiffre près |
+| `13-qualite-collisions.png` | **petite démonstration, variante « conflit inévitable »** | les barres horizontales à deux segments, « prouvé inévitable » et « reste », en **collisions cumulées**, avec l'effectif, les paires distinctes et l'**excédent** en encre secondaire | le segment prouvé vaut **4 collisions cumulées** et égale le plancher du diagnostic, au chiffre près ; les lignes sont triées sur l'excédent (§ 12.4) |
 | `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et chaque ligne mène au tour fautif |
 | `15-pas-de-matrice.png` | **grande démonstration** | à 260 participants, le tableau et non la matrice, avec la phrase qui le dit | aucune matrice n'est dessinée |
 | `16-minimum-atteint.png` | **petite démonstration** | **« minimum atteint »**, les compteurs de collision et de répétition **mesurés** à zéro, la ligne secondaire « ancrés » à **« — »** (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
