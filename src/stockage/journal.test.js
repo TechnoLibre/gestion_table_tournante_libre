@@ -1,0 +1,1095 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Épreuves du journal (§ 8.2, § 8.3, § 8.6, § 8.8) : le texte exact de chaque
+// sorte de ligne et ce que l'écriture refuse ; la cadence des instantanés ;
+// chaque instant d'une séance de 120 gestes sur la petite démonstration,
+// restitué tel qu'il s'est écrit ; la lecture qui s'arrête à la première
+// ligne illisible et compte ce qu'elle écarte ; le fil courant, défaire et
+// refaire ; la construction notée ; l'élagage. Les journaux s'écrivent comme
+// les écrit l'enregistreur, une ligne après l'autre, par les fonctions du
+// module ; chaque charge de la séance passe l'analyse du fichier d'état et le
+// contrôle des placements. Les noms des personnes ajoutées sont inventés,
+// hors des réservoirs des démonstrations ; les versions viennent du module
+// engendré, seul à en porter le texte.
+import assert from 'node:assert/strict';
+import { describe, test } from '../../test/lanceur.js';
+import { versionVoisine } from '../../test/version_voisine.js';
+import { CATALOGUE } from '../demo/catalogue.js';
+import { rechercher } from '../moteur/recherche.js';
+import { VERSION } from '../version.genere.js';
+import { serialiser, serialiserCharge } from './canonique.js';
+import { analyser, configurationDepuisCharge, creerCharge, etatDeduit } from './document.js';
+import { ErreurStockage } from './erreurs.js';
+import {
+  INTERVALLE_INSTANTANE,
+  PLAFOND_ENTREES,
+  PLANCHER_ENTREES,
+  elaguer,
+  estInstantane,
+  fil,
+  ligneEntree,
+  ligneJalon,
+  ligneOuverture,
+  lireJournal,
+  reconstruire,
+  versionDe,
+} from './journal.js';
+import { examiner, versFichier } from './placements.js';
+
+// L'événement des journaux d'épreuve, et deux constructions : celle du module
+// engendré et sa voisine.
+const EVENEMENT = 'evt-essai';
+const V1 = VERSION.affichee;
+const V2 = versionVoisine(V1);
+
+const copie = (valeur) => structuredClone(valeur);
+// Valeur calculée au premier appel, puis gardée : une donnée d'épreuve que le
+// module construit ne se calcule qu'à l'intérieur d'une épreuve, dont l'échec
+// n'empêche pas les autres de s'exécuter.
+function memoire(calculer) {
+  let calculee = false;
+  let valeur;
+  return () => {
+    if (!calculee) [calculee, valeur] = [true, calculer()];
+    return valeur;
+  };
+}
+const texteCanonique = (charge) => serialiserCharge(charge);
+// Entiers de a à b inclus, dans le sens qui mène de l'un à l'autre.
+const de = (a, b) => Array.from({ length: Math.abs(b - a) + 1 }, (_, i) => (a <= b ? a + i : a - i));
+// Lignes d'un texte de journal, sa dernière fin de ligne retirée ; et
+// l'inverse, chaque ligne suivie d'une fin de ligne.
+const lignesDe = (texte) => texte.replace(/\n$/, '').split('\n');
+const texteDe = (lignes) => `${lignes.join('\n')}\n`;
+
+// Horodatage d'affichage de la révision r : une minute par révision à partir
+// de 8 h, le 17 mai 2031, à l'heure de l'Est.
+function horodatage(r) {
+  const minutes = 8 * 60 + r;
+  const deux = (n) => String(n).padStart(2, '0');
+  return `2031-05-17T${deux(Math.floor(minutes / 60) % 24)}:${deux(minutes % 60)}:00-04:00`;
+}
+
+// Texte du journal qu'écrit un enregistreur fidèle au contrat : l'ouverture,
+// puis chaque étape à la révision suivante, depuis premiere — en instantané
+// quand la révision ouvre un intervalle, en correctif depuis la charge de
+// l'étape précédente sinon, la construction notée à la première entrée et
+// quand elle change —, et les jalons d'une étape après elle. Une étape est
+// { apres, sens, retour, version, jalons } ; seul apres est requis, et
+// version vaut V1 quand elle manque.
+function journalDe(etapes, { premiere = 1, evenement = EVENEMENT } = {}) {
+  const lignes = [ligneOuverture(evenement)];
+  etapes.forEach((etape, rang) => {
+    const revision = premiere + rang;
+    const version = etape.version ?? V1;
+    const precedente = rang === 0 ? null : (etapes[rang - 1].version ?? V1);
+    lignes.push(
+      ligneEntree({
+        revision,
+        libelle: etape.libelle ?? `Geste ${revision}`,
+        horodatage: horodatage(revision),
+        sens: etape.sens ?? null,
+        retour: etape.retour ?? null,
+        produitVersion: version === precedente ? null : version,
+        avant: etapes[rang - 1]?.apres,
+        apres: etape.apres,
+        instantane: estInstantane(revision, premiere),
+      }),
+    );
+    for (const nom of etape.jalons ?? []) lignes.push(ligneJalon({ revision, nom, horodatage: horodatage(revision) }));
+  });
+  return texteDe(lignes);
+}
+
+// --- Les charges -----------------------------------------------------------
+
+// La charge du contrat sans liste, brouillon.
+const chargeVide = () => creerCharge({ id: EVENEMENT, nom: "Soirée d'essai", siegesParDefaut: 2, tours: 2 });
+
+// La même avec Iris Ombrelle, personne 1.
+function avecIris() {
+  const charge = chargeVide();
+  charge.prochainsIds.participant = 2;
+  charge.participants.push({
+    id: 1,
+    nom: 'Ombrelle',
+    prenom: 'Iris',
+    appartenance: 'Club des Merles',
+    courriel: null,
+    titrePressenti: 'animation',
+    notes: null,
+    exclu: false,
+  });
+  return charge;
+}
+
+// n étapes ordinaires sur la charge à une personne : l'étape de rang i porte
+// la note « note i+1 », si bien que deux étapes ne s'écrivent jamais pareil.
+function suite(n) {
+  return Array.from({ length: n }, (_, rang) => {
+    const apres = avecIris();
+    apres.participants[0].notes = `note ${rang + 1}`;
+    return { apres };
+  });
+}
+
+// Charge d'une démonstration du catalogue (§ 15) : ses personnes, ses tables
+// au défaut de l'événement, aucune proposition.
+function chargeDe(cle) {
+  const entree = CATALOGUE.find((candidate) => candidate.cle === cle);
+  const configuration = entree.construire();
+  const siegesParDefaut = Math.max(...configuration.tables.map(({ capacite }) => capacite));
+  const charge = creerCharge({ id: `evt-${cle}`, nom: entree.nom, siegesParDefaut, tours: configuration.tours });
+  charge.participants = configuration.participants.map(({ id, nom, prenom, appartenance }) => ({
+    id,
+    nom,
+    prenom,
+    appartenance,
+    courriel: null,
+    titrePressenti: null,
+    notes: null,
+    exclu: false,
+  }));
+  charge.tables = configuration.tables.map(({ id, numero, capacite }, rang) => ({
+    id,
+    numero,
+    sieges: capacite === siegesParDefaut ? null : capacite,
+    forme: 'ronde',
+    position: { x: 250 * (rang % 6), y: 250 * Math.floor(rang / 6) },
+  }));
+  charge.reservations = configuration.reservations.map(({ participant, table, portee }) => ({
+    participant,
+    table,
+    siege: null,
+    portee,
+    tour: null,
+  }));
+  charge.prochainsIds = { participant: charge.participants.length + 1, table: charge.tables.length + 1, proposition: 1 };
+  return charge;
+}
+
+// --- Les gestes d'une séance -----------------------------------------------
+//
+// Chaque geste reçoit la charge courante, qu'il ne modifie pas, et un entier
+// d'où il tire ses paramètres ; il rend une charge neuve, ou la charge reçue
+// quand il n'a pas d'objet.
+
+const NOMS_AJOUTES = ['Ombrelle', 'Grisaille', 'Pervenche', 'Lacasse', 'Mirabelle', 'Quenouille', 'Sarbacane'];
+const PRENOMS_AJOUTES = ['Iris', 'Théo', 'Ondine', 'Aurèle', null];
+const APPARTENANCES_AJOUTEES = ['Club des Merles', 'Société Alpha', null];
+const REGLAGES = ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances', 'attribuerSieges'];
+// Compte d'arrêt des générations : court, la recherche n'est pas éprouvée ici.
+const ARRET = 200;
+
+function ajouter(charge, n) {
+  const suivante = copie(charge);
+  const id = suivante.prochainsIds.participant;
+  suivante.prochainsIds.participant = id + 1;
+  suivante.participants.push({
+    id,
+    nom: NOMS_AJOUTES[n % NOMS_AJOUTES.length],
+    prenom: PRENOMS_AJOUTES[n % PRENOMS_AJOUTES.length],
+    appartenance: APPARTENANCES_AJOUTEES[n % APPARTENANCES_AJOUTEES.length],
+    courriel: null,
+    titrePressenti: null,
+    notes: null,
+    exclu: false,
+  });
+  return suivante;
+}
+
+function modifier(charge, n) {
+  const suivante = copie(charge);
+  const personne = suivante.participants[n % suivante.participants.length];
+  personne.notes = `note ${n}`;
+  personne.courriel = n % 2 === 0 ? `p${n}@exemple.test` : null;
+  return suivante;
+}
+
+function exclure(charge, n) {
+  const suivante = copie(charge);
+  const personne = suivante.participants[(3 * n) % suivante.participants.length];
+  personne.exclu = !personne.exclu;
+  return suivante;
+}
+
+function deplacer(charge, n) {
+  const suivante = copie(charge);
+  const table = suivante.tables[n % suivante.tables.length];
+  table.position = { x: table.position.x + 10, y: (n % 7) * 25 };
+  return suivante;
+}
+
+function regler(charge, n) {
+  const suivante = copie(charge);
+  const cle = REGLAGES[n % REGLAGES.length];
+  suivante.reglages[cle] = !suivante.reglages[cle];
+  return suivante;
+}
+
+// Pose deux propositions du moteur, numérotées au-delà du compteur ; quand
+// les présents dépassent les places, ajoute une table à la place.
+function generer(charge, n) {
+  const configuration = configurationDepuisCharge(charge);
+  const places = configuration.tables.reduce((somme, { capacite }) => somme + capacite, 0);
+  const presents = configuration.participants.filter(({ exclu }) => !exclu).length;
+  const suivante = copie(charge);
+  if (presents > places) {
+    const id = suivante.prochainsIds.table;
+    suivante.prochainsIds.table = id + 1;
+    suivante.tables.push({ id, numero: id, sieges: null, forme: 'carree', position: { x: 0, y: 300 } });
+    return suivante;
+  }
+  const decalage = suivante.prochainsIds.proposition - 1;
+  const options = { produitVersion: V1, attribuerSieges: suivante.reglages.attribuerSieges, decalage };
+  const posees = rechercher(configuration, { graine: n, arret: ARRET, nombre: 2 }).map((proposition) =>
+    versFichier(proposition, configuration, options),
+  );
+  suivante.propositions.push(...posees);
+  suivante.prochainsIds.proposition = decalage + posees.length + 1;
+  return suivante;
+}
+
+// Retient une proposition : le retenu en reprend le plan.
+function retenir(charge, n) {
+  if (charge.propositions.length === 0) return charge;
+  const { id, siegesAttribues, tables, capacites, tours, participants, placement } = copie(
+    charge.propositions[n % charge.propositions.length],
+  );
+  const suivante = copie(charge);
+  suivante.retenu = { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
+  return suivante;
+}
+
+// Retouche le retenu à la main (§ 5.8) : au tour que n désigne, les
+// premières personnes de deux tables voisines échangent leurs tables.
+function retoucher(charge, n) {
+  if (charge.retenu === null) return charge;
+  const suivante = copie(charge);
+  const { sieges } = suivante.retenu.placement[n % suivante.retenu.tours];
+  const a = n % sieges.length;
+  const b = (a + 1) % sieges.length;
+  if (a === b || sieges[a].length === 0 || sieges[b].length === 0) return charge;
+  [sieges[a][0], sieges[b][0]] = [sieges[b][0], sieges[a][0]];
+  return suivante;
+}
+
+// Supprime la dernière personne de la liste, et ses réservations.
+function supprimer(charge) {
+  const suivante = copie(charge);
+  const [retiree] = suivante.participants.splice(-1, 1);
+  suivante.reservations = suivante.reservations.filter(({ participant }) => participant !== retiree.id);
+  return suivante;
+}
+
+// Efface les propositions ; le retenu et le compteur restent.
+function effacer(charge) {
+  if (charge.propositions.length === 0) return charge;
+  const suivante = copie(charge);
+  suivante.propositions = [];
+  return suivante;
+}
+
+const CYCLE = [
+  ['ajouter', ajouter],
+  ['modifier', modifier],
+  ['exclure', exclure],
+  ['generer', generer],
+  ['retenir', retenir],
+  ['retoucher', retoucher],
+  ['deplacer', deplacer],
+  ['regler', regler],
+  ['supprimer', supprimer],
+  ['generer', generer],
+  ['retoucher', retoucher],
+  ['effacer', effacer],
+];
+
+// Retours de la séance, par révision : [sens, révision visée]. Défaire et
+// refaire visent ce que le fil courant désigne à cet instant ; deux d'entre
+// eux encadrent l'instantané de la révision 51.
+const RETOURS = new Map([
+  [30, ['revenir', 20]],
+  [52, ['defaire', 50]],
+  [53, ['refaire', 51]],
+  [99, ['revenir', 60]],
+  [102, ['defaire', 100]],
+]);
+
+// La séance : la petite démonstration à la révision 1, puis à chaque
+// révision jusqu'à 120 le retour que RETOURS y place, ou le geste du cycle.
+// Un geste sans effet — retenir sans proposition ou ce qui est déjà retenu,
+// retoucher sans retenu, effacer sans proposition — cède la place à un
+// réglage basculé : chaque geste change la charge. Un jalon nomme la
+// création, et l'instant qui précède chaque génération qui pose (§ 8.3).
+function seance() {
+  const etapes = [{ apres: chargeDe('petite'), geste: 'creer', jalons: ['Création'] }];
+  for (let r = 2; r <= 120; r += 1) {
+    const courante = etapes.at(-1).apres;
+    if (RETOURS.has(r)) {
+      const [sens, retour] = RETOURS.get(r);
+      etapes.push({ apres: copie(etapes[retour - 1].apres), geste: sens, sens, retour, jalons: [] });
+      continue;
+    }
+    let [geste, faire] = CYCLE[r % CYCLE.length];
+    let apres = faire(courante, r);
+    if (texteCanonique(apres) === texteCanonique(courante)) [geste, apres] = ['regler', regler(courante, r)];
+    apres.evenement.etat = etatDeduit(apres);
+    if (geste === 'generer' && apres.propositions.length > courante.propositions.length) {
+      geste = 'poser';
+      etapes.at(-1).jalons.push('Avant génération');
+    }
+    etapes.push({ apres, geste, jalons: [] });
+  }
+  return etapes;
+}
+
+const SEANCE = seance();
+const texteSeance = memoire(() => journalDe(SEANCE));
+
+// --- Les lignes ------------------------------------------------------------
+
+// Texte compact de la charge du contrat sans liste, dans l'ordre canonique.
+const INSTANTANE_VIDE =
+  `{"evenement":{"id":"evt-essai","nom":"Soirée d'essai","date":null,"siegesParDefaut":2,"tours":2,"unite":"cm",` +
+  `"etat":"brouillon","filiation":null},"reglages":{"separerAppartenances":true,"nouveauxVoisins":true,` +
+  `"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,` +
+  `"arret":200000,"historique":1000}},"prochainsIds":{"participant":1,"table":1,"proposition":1},` +
+  `"participants":[],"tables":[],"reservations":[],"titres":[],"propositions":[],"retenu":null}`;
+
+describe('les lignes du journal : le texte exact, et ce que l’écriture refuse (§ 8.2, § 8.3)', () => {
+  test('ouverture, entrée en instantané, entrée en correctif, entrée de retour, jalon : le texte du contrat, sans fin de ligne', () => {
+    const vide = chargeVide();
+    const iris = avecIris();
+    const tard = copie(iris);
+    tard.participants[0].notes = 'arrive tard';
+    const lignes = [
+      ligneOuverture(EVENEMENT),
+      ligneEntree({
+        revision: 1,
+        libelle: "Création de l'événement « Soirée d'essai »",
+        horodatage: '2026-10-06T19:02:11-04:00',
+        produitVersion: V1,
+        apres: vide,
+        instantane: true,
+      }),
+      ligneJalon({ revision: 1, nom: 'Création', horodatage: '2026-10-06T19:02:11-04:00' }),
+      ligneEntree({
+        revision: 2,
+        libelle: 'Ajouté Iris Ombrelle',
+        horodatage: '2026-10-06T19:03:40-04:00',
+        avant: vide,
+        apres: iris,
+        instantane: false,
+      }),
+      ligneEntree({
+        revision: 3,
+        libelle: 'Modifié Iris Ombrelle',
+        horodatage: '2026-10-06T19:04:15-04:00',
+        avant: iris,
+        apres: tard,
+        instantane: false,
+      }),
+      ligneEntree({
+        revision: 4,
+        libelle: 'Retour à « Ajouté Iris Ombrelle »',
+        horodatage: '2026-10-06T19:05:02-04:00',
+        sens: 'revenir',
+        retour: 2,
+        avant: tard,
+        apres: iris,
+        instantane: false,
+      }),
+    ];
+    assert.equal(lignes[0], '{"type":"journal","format":1,"evenement":"evt-essai"}');
+    assert.equal(
+      lignes[1],
+      `{"type":"entree","revision":1,"libelle":"Création de l'événement « Soirée d'essai »",` +
+        `"horodatage":"2026-10-06T19:02:11-04:00","sens":null,"retour":null,"produitVersion":"${V1}",` +
+        `"instantane":${INSTANTANE_VIDE},"correctif":null}`,
+    );
+    assert.equal(lignes[2], '{"type":"jalon","revision":1,"nom":"Création","horodatage":"2026-10-06T19:02:11-04:00"}');
+    assert.equal(
+      lignes[3],
+      '{"type":"entree","revision":2,"libelle":"Ajouté Iris Ombrelle","horodatage":"2026-10-06T19:03:40-04:00",' +
+        '"sens":null,"retour":null,"produitVersion":null,"instantane":null,"correctif":[' +
+        '{"op":"poser","chemin":["prochainsIds","participant"],"valeur":2},' +
+        '{"op":"poser","chemin":["participants",{"id":1}],"valeur":{"id":1,"nom":"Ombrelle","prenom":"Iris",' +
+        '"appartenance":"Club des Merles","courriel":null,"titrePressenti":"animation","notes":null,"exclu":false}}]}',
+    );
+    assert.equal(
+      lignes[5],
+      '{"type":"entree","revision":4,"libelle":"Retour à « Ajouté Iris Ombrelle »",' +
+        '"horodatage":"2026-10-06T19:05:02-04:00","sens":"revenir","retour":2,"produitVersion":null,' +
+        '"instantane":null,"correctif":[{"op":"poser","chemin":["participants",{"id":1},"notes"],"valeur":null}]}',
+    );
+    for (const ligne of lignes) assert.doesNotMatch(ligne, /[\n\r]/);
+    for (const charge of [vide, iris, tard]) {
+      assert.doesNotThrow(() => analyser(serialiser(charge, { revision: 1, produitVersion: V1 })));
+    }
+
+    // Relu : quatre entrées dans l'ordre des lignes, le jalon, rien d'écarté.
+    const journal = lireJournal(texteDe(lignes));
+    assert.equal(journal.evenement, EVENEMENT);
+    assert.deepEqual(
+      journal.entrees.map(({ revision, sens, retour }) => [revision, sens, retour]),
+      [[1, null, null], [2, null, null], [3, null, null], [4, 'revenir', 2]],
+    );
+    assert.deepEqual(journal.jalons, [
+      { type: 'jalon', revision: 1, nom: 'Création', horodatage: '2026-10-06T19:02:11-04:00' },
+    ]);
+    assert.equal(journal.ecartees, 0);
+    assert.equal(texteCanonique(reconstruire(journal, 4)), texteCanonique(iris));
+  });
+
+  test('une entrée ne dépend ni de l’ordre des clés ni de celui des listes de la charge reçue', () => {
+    const avant = avecIris();
+    const apres = ajouter(avant, 3);
+    // La même charge, chaque objet refait clés à rebours, les personnes en ordre inverse.
+    const aRebours = (valeur) => {
+      if (Array.isArray(valeur)) return valeur.map(aRebours);
+      if (typeof valeur !== 'object' || valeur === null) return valeur;
+      return Object.fromEntries(Object.keys(valeur).reverse().map((cle) => [cle, aRebours(valeur[cle])]));
+    };
+    const renversee = aRebours(apres);
+    renversee.participants.reverse();
+    assert.notEqual(JSON.stringify(renversee), JSON.stringify(apres));
+    const options = { revision: 2, libelle: 'Ajouté', horodatage: horodatage(2), avant };
+    for (const instantane of [true, false]) {
+      assert.equal(
+        ligneEntree({ ...options, apres: renversee, instantane }),
+        ligneEntree({ ...options, apres, instantane }),
+      );
+    }
+    assert.equal(
+      ligneEntree({ ...options, avant: aRebours(avant), apres, instantane: false }),
+      ligneEntree({ ...options, apres, instantane: false }),
+    );
+  });
+
+  test('l’écriture refuse, par TypeError, toute ligne que la lecture refuserait', () => {
+    const avant = chargeVide();
+    const apres = avecIris();
+    const valide = { revision: 2, libelle: 'Ajouté Iris Ombrelle', horodatage: horodatage(2), avant, apres, instantane: false };
+    assert.doesNotThrow(() => ligneEntree(valide));
+    const nomVide = avecIris();
+    nomVide.participants[0].nom = '';
+    const sansReglages = avecIris();
+    delete sansReglages.reglages;
+    const cleInconnue = avecIris();
+    cleInconnue.participants[0].auteur = 'Théo';
+    // Une proposition de forme admise, puis la même hors de sa règle.
+    const avecProposition = avecIris();
+    avecProposition.prochainsIds.proposition = 2;
+    avecProposition.propositions.push({
+      id: 1,
+      graine: 7,
+      arret: 100,
+      historique: 10,
+      produitVersion: V1,
+      siegesAttribues: false,
+      tables: [],
+      capacites: [],
+      tours: 2,
+      participants: [],
+      placement: [
+        { sieges: [], reserve: [] },
+        { sieges: [], reserve: [] },
+      ],
+    });
+    assert.doesNotThrow(() => ligneEntree({ ...valide, apres: avecProposition, instantane: true }));
+    const graineNegative = copie(avecProposition);
+    graineNegative.propositions[0].graine = -1;
+    const refus = [
+      ['révision 0', { revision: 0 }],
+      ['révision non entière', { revision: 2.5 }],
+      ['révision en texte', { revision: '2' }],
+      ['libellé vide', { libelle: '' }],
+      ['libellé absent', { libelle: undefined }],
+      ['horodatage sans fuseau', { horodatage: '2026-10-06T19:03:40' }],
+      ['horodatage en temps universel', { horodatage: '2026-10-06T23:03:40Z' }],
+      ['horodatage qui n’est pas un texte', { horodatage: 20261006 }],
+      ['sens inconnu', { sens: 'annuler', retour: 1 }],
+      ['retour sans sens', { retour: 1 }],
+      ['sens sans retour', { sens: 'defaire' }],
+      ['retour vers sa propre révision', { sens: 'revenir', retour: 2 }],
+      ['retour vers la révision 0', { sens: 'revenir', retour: 0 }],
+      ['version vide', { produitVersion: '' }],
+      ['instantane absent', { instantane: undefined }],
+      ['instantane qui n’est pas un booléen', { instantane: 1 }],
+      ['charge hors de sa règle, en correctif', { apres: nomVide }],
+      ['charge hors de sa règle, en instantané', { apres: nomVide, instantane: true }],
+      ['charge sans réglages', { apres: sansReglages }],
+      ['charge absente', { apres: undefined }],
+      ['clé inconnue dans la charge, en correctif', { apres: cleInconnue }],
+      ['clé inconnue dans la charge, en instantané', { apres: cleInconnue, instantane: true }],
+      ['proposition hors de sa règle', { apres: graineNegative, instantane: true }],
+      ['charge précédente absente, en correctif', { avant: undefined }],
+    ];
+    for (const [nom, changement] of refus) {
+      assert.throws(() => ligneEntree({ ...valide, ...changement }), TypeError, nom);
+    }
+    for (const changement of [{ revision: 0 }, { nom: '' }, { horodatage: 'hier' }, { revision: undefined }]) {
+      const jalon = { revision: 1, nom: 'Création', horodatage: horodatage(1), ...changement };
+      assert.throws(() => ligneJalon(jalon), TypeError, JSON.stringify(changement));
+    }
+    for (const evenement of ['', null, 7, undefined]) {
+      assert.throws(() => ligneOuverture(evenement), TypeError, String(evenement));
+    }
+  });
+});
+
+// --- La cadence ------------------------------------------------------------
+
+describe('la cadence des instantanés (§ 8.6)', () => {
+  test('constantes : un instantané toutes les 50 révisions, un plancher de 500 entrées, un plafond de 600', () => {
+    assert.equal(INTERVALLE_INSTANTANE, 50);
+    assert.equal(PLANCHER_ENTREES, 500);
+    assert.equal(PLAFOND_ENTREES, 600);
+  });
+
+  test('estInstantane : la première révision du journal, puis toutes les 50 comptées depuis elle, jamais avant elle', () => {
+    const cas = [
+      [1, 1, true],
+      [2, 1, false],
+      [50, 1, false],
+      [51, 1, true],
+      [101, 1, true],
+      [120, 1, false],
+      [151, 151, true],
+      [200, 151, false],
+      [201, 151, true],
+      [101, 151, false],
+      [1, 51, false],
+      [37, 37, true],
+      [87, 37, true],
+    ];
+    for (const [revision, premiere, attendu] of cas) {
+      assert.equal(estInstantane(revision, premiere), attendu, `${revision} depuis ${premiere}`);
+    }
+  });
+
+  test('120 entrées depuis la révision 1 : instantanés aux révisions 1, 51 et 101, correctifs ailleurs', () => {
+    const journal = lireJournal(texteSeance());
+    assert.equal(journal.entrees.length, 120);
+    assert.deepEqual(
+      journal.entrees.filter(({ instantane }) => instantane !== null).map(({ revision }) => revision),
+      [1, 51, 101],
+    );
+    for (const { revision, instantane, correctif } of journal.entrees) {
+      assert.equal(Array.isArray(correctif), instantane === null, `révision ${revision}`);
+    }
+    // Le texte le dit aussi : chaque ligne d'entrée porte l'un ou l'autre.
+    const lignes = lignesDe(texteSeance()).filter((ligne) => ligne.startsWith('{"type":"entree"'));
+    assert.deepEqual(
+      lignes.flatMap((ligne, rang) => (ligne.includes('"instantane":{') ? [rang + 1] : [])),
+      [1, 51, 101],
+    );
+  });
+});
+
+// --- La restitution --------------------------------------------------------
+
+describe('chaque instant se reconstruit (§ 8.3, § 14.10)', () => {
+  test('la séance : 120 gestes — ajouts, modifications, exclusions, propositions posées, retenues et retouchées, retours —, chaque charge admise, chacune différente de la précédente', () => {
+    assert.equal(SEANCE.length, 120);
+    const compte = new Map();
+    for (const { geste } of SEANCE) compte.set(geste, (compte.get(geste) ?? 0) + 1);
+    const planchers = { ajouter: 5, modifier: 5, exclure: 5, poser: 10, retenir: 4, retoucher: 8, supprimer: 5, effacer: 5 };
+    for (const [geste, plancher] of Object.entries(planchers)) {
+      assert.ok((compte.get(geste) ?? 0) >= plancher, `${geste} : ${compte.get(geste) ?? 0} fois, moins de ${plancher}`);
+    }
+    assert.deepEqual(['revenir', 'defaire', 'refaire'].map((sens) => compte.get(sens)), [2, 2, 1]);
+    SEANCE.forEach(({ apres }, rang) => {
+      const revision = rang + 1;
+      assert.doesNotThrow(() => analyser(serialiser(apres, { revision, produitVersion: V1 })), `révision ${revision}`);
+      const { fautives, retenu } = examiner(apres);
+      assert.deepEqual([fautives, retenu.fautes], [[], []], `révision ${revision}`);
+      if (rang > 0) assert.notEqual(texteCanonique(apres), texteCanonique(SEANCE[rang - 1].apres), `révision ${revision}`);
+    });
+    // Défaire et refaire visent ce que le fil courant désigne juste avant eux.
+    for (const [revision, [sens, cible]] of RETOURS) {
+      if (sens === 'revenir') continue;
+      const avant = fil(lireJournal(journalDe(SEANCE.slice(0, revision - 1))));
+      assert.equal(sens === 'defaire' ? avant.cibleDefaire : avant.cibleRefaire, cible, `révision ${revision}`);
+    }
+  });
+
+  test('reconstruire(journal, r) égale, en texte canonique, la charge écrite à la révision r, pour chacune des 120', () => {
+    const journal = lireJournal(texteSeance());
+    assert.equal(journal.ecartees, 0);
+    SEANCE.forEach(({ apres }, rang) => {
+      assert.equal(texteCanonique(reconstruire(journal, rang + 1)), texteCanonique(apres), `révision ${rang + 1}`);
+    });
+  });
+
+  test('le fil courant de la séance remonte ses retours : les gestes que défaire ou revenir ont quittés en sont absents', () => {
+    assert.deepEqual(fil(lireJournal(texteSeance())), {
+      position: 120,
+      pile: [],
+      courant: [...de(120, 103), 100, ...de(60, 54), ...de(51, 31), ...de(20, 1)],
+      cibleDefaire: 119,
+      cibleRefaire: null,
+    });
+  });
+
+  test('un correctif qui ne s’applique pas lève CORRECTIF de sa révision à l’instantané suivant, et nulle part ailleurs', () => {
+    const lignes = lignesDe(texteSeance());
+    const rang = lignes.findIndex((ligne) => ligne.startsWith('{"type":"entree","revision":33,'));
+    const entree = JSON.parse(lignes[rang]);
+    lignes[rang] = JSON.stringify({ ...entree, correctif: [{ op: 'retirer', chemin: ['participants', { id: 999 }] }] });
+    const journal = lireJournal(texteDe(lignes));
+    assert.equal(journal.entrees.length, 120);
+    for (const revision of [33, 34, 49, 50]) {
+      assert.throws(
+        () => reconstruire(journal, revision),
+        (erreur) => erreur instanceof ErreurStockage && erreur.code === 'CORRECTIF' && erreur.details.rang === 0,
+        `révision ${revision}`,
+      );
+    }
+    for (const revision of [1, 32, 51, 52, 53, 100, 120]) {
+      assert.equal(texteCanonique(reconstruire(journal, revision)), texteCanonique(SEANCE[revision - 1].apres));
+    }
+  });
+
+  test('un retenu hors de sa règle, que le contrôle des placements garde, traverse le journal tel quel : posé, gardé, libéré, remis', () => {
+    // Le retenu porte une clé inconnue et n'a pas de placement : l'analyse
+    // l'admet comme conteneur, et canonique.js le recopie hors du schéma.
+    const fautif = { proposition: 1, siegesAttribues: false, tables: [1], capacites: [2], tours: 2, participants: [1], auteur: 'Iris' };
+    const etapes = suite(5);
+    for (const { apres } of etapes) apres.prochainsIds.proposition = 2;
+    for (const rang of [1, 2]) etapes[rang].apres.retenu = copie(fautif);
+    // Seule la forme du retenu est fautive : l'analyse admet la charge, et le
+    // contrôle des placements ne nomme que cette faute.
+    assert.doesNotThrow(() => analyser(serialiser(etapes[1].apres, { revision: 2, produitVersion: V1 })));
+    assert.deepEqual(examiner(etapes[1].apres).retenu.fautes, [{ code: 'FORME', chemin: 'placement' }]);
+    etapes[4] = { apres: etapes[2].apres, sens: 'revenir', retour: 3 };
+    for (const premiere of [1, 2]) {
+      const liste = etapes.slice(premiere - 1);
+      const journal = lireJournal(journalDe(liste, { premiere }));
+      assert.deepEqual([journal.entrees.length, journal.ecartees], [liste.length, 0]);
+      liste.forEach(({ apres }, rang) => {
+        assert.equal(texteCanonique(reconstruire(journal, premiere + rang)), texteCanonique(apres), `révision ${premiere + rang}`);
+      });
+    }
+    assert.match(texteCanonique(reconstruire(lireJournal(journalDe(etapes)), 5)), /"retenu": \{"auteur":"Iris",/);
+  });
+
+  test('une révision absente du journal lève RangeError ; la charge rendue ne partage rien avec le journal', () => {
+    const journal = lireJournal(texteSeance());
+    for (const revision of [0, 121, -1, 2.5, '5', null, undefined]) {
+      assert.throws(() => reconstruire(journal, revision), RangeError, String(revision));
+    }
+    assert.throws(() => reconstruire(lireJournal(''), 1), RangeError);
+    for (const revision of [1, 51, 77]) {
+      const rendue = reconstruire(journal, revision);
+      rendue.participants.length = 0;
+      rendue.evenement.nom = 'autre';
+      assert.equal(texteCanonique(reconstruire(journal, revision)), texteCanonique(SEANCE[revision - 1].apres));
+    }
+  });
+});
+
+// --- La lecture ------------------------------------------------------------
+
+describe('la lecture s’arrête à la première ligne illisible et compte ce qu’elle écarte (§ 8.6)', () => {
+  const cent = memoire(() => journalDe(suite(100)));
+  const lignesCent = memoire(() => lignesDe(cent()));
+  // Le journal de cent entrées dont la ligne de rang donné — 0 pour
+  // l'ouverture, r pour l'entrée r — est remplacée par remplacer(ligne, valeur
+  // relue).
+  const abime = (rang, remplacer) => {
+    const lignes = [...lignesCent()];
+    lignes[rang] = remplacer(lignes[rang], JSON.parse(lignes[rang]));
+    return texteDe(lignes);
+  };
+  const retouche = (changer) => (_, valeur) => JSON.stringify(changer(valeur));
+  // Le journal de cent entrées où la ligne donnée s'insère au rang donné.
+  const insere = (rang, ligne) => texteDe(lignesCent().toSpliced(rang, 0, ligne));
+  // Ce que la lecture retient et écarte, en nombres.
+  const bilan = (texte) => {
+    const { evenement, entrees, jalons, ecartees } = lireJournal(texte);
+    return { evenement, entrees: entrees.length, derniere: entrees.at(-1)?.revision ?? null, jalons: jalons.length, ecartees };
+  };
+
+  test('journal de 100 entrées, la 37ᵉ abîmée : 36 entrées retenues, 64 annoncées écartées, quelle que soit l’avarie', () => {
+    assert.deepEqual(bilan(cent()), { evenement: EVENEMENT, entrees: 100, derniere: 100, jalons: 0, ecartees: 0 });
+    const instantane1 = JSON.parse(lignesCent()[1]).instantane;
+    const avaries = [
+      ['JSON tronqué', (ligne) => ligne.slice(0, -1)],
+      ['ligne vide', () => ''],
+      ['blancs seuls', () => '   '],
+      ['null', () => 'null'],
+      ['une liste', () => '[]'],
+      ['un nombre', () => '37'],
+      ['type inconnu', retouche((valeur) => ({ ...valeur, type: 'entre' }))],
+      ['clé inconnue', retouche((valeur) => ({ ...valeur, auteur: 'Iris' }))],
+      ['clé __proto__', (ligne) => ligne.replace(/\}$/, ',"__proto__":{}}')],
+      ['clé manquante', retouche(({ libelle, ...reste }) => reste)],
+      ['révision répétée', retouche((valeur) => ({ ...valeur, revision: 36 }))],
+      ['révision sautée', retouche((valeur) => ({ ...valeur, revision: 38 }))],
+      ['révision en texte', retouche((valeur) => ({ ...valeur, revision: '37' }))],
+      ['libellé vide', retouche((valeur) => ({ ...valeur, libelle: '' }))],
+      ['horodatage sans fuseau', retouche((valeur) => ({ ...valeur, horodatage: '2031-05-17T08:37:00' }))],
+      ['horodatage qui n’est pas un texte', retouche((valeur) => ({ ...valeur, horodatage: 20310517 }))],
+      ['sens inconnu', retouche((valeur) => ({ ...valeur, sens: 'annuler', retour: 3 }))],
+      ['retour sans sens', retouche((valeur) => ({ ...valeur, retour: 3 }))],
+      ['sens sans retour', retouche((valeur) => ({ ...valeur, sens: 'revenir' }))],
+      ['retour vers sa propre révision', retouche((valeur) => ({ ...valeur, sens: 'revenir', retour: 37 }))],
+      ['version vide', retouche((valeur) => ({ ...valeur, produitVersion: '' }))],
+      ['correctif qui n’est pas une liste', retouche((valeur) => ({ ...valeur, correctif: {} }))],
+      ['ni instantané ni correctif', retouche((valeur) => ({ ...valeur, correctif: null }))],
+      ['instantané et correctif', retouche((valeur) => ({ ...valeur, instantane: instantane1 }))],
+      ['instantané hors de la cadence', retouche((valeur) => ({ ...valeur, instantane: instantane1, correctif: null }))],
+    ];
+    for (const [nom, remplacer] of avaries) {
+      assert.deepEqual(
+        bilan(abime(37, remplacer)),
+        { evenement: EVENEMENT, entrees: 36, derniere: 36, jalons: 0, ecartees: 64 },
+        nom,
+      );
+    }
+  });
+
+  test('une dernière ligne sans fin de ligne est écartée et comptée, même lisible', () => {
+    assert.deepEqual(bilan(cent().slice(0, -1)), { evenement: EVENEMENT, entrees: 99, derniere: 99, jalons: 0, ecartees: 1 });
+    const coupee = cent().slice(0, cent().lastIndexOf('{"op"'));
+    assert.deepEqual(bilan(coupee), { evenement: EVENEMENT, entrees: 99, derniere: 99, jalons: 0, ecartees: 1 });
+  });
+
+  test('une révision qui saute arrête la lecture : l’entrée 37 manquante, la 38 et la suite sont écartées', () => {
+    const sansLa37 = texteDe(lignesCent().toSpliced(37, 1));
+    assert.deepEqual(bilan(sansLa37), { evenement: EVENEMENT, entrees: 36, derniere: 36, jalons: 0, ecartees: 63 });
+  });
+
+  test('la première entrée porte sa version et un instantané de forme admise ; la cadence tient depuis elle', () => {
+    const toutEcarte = { evenement: EVENEMENT, entrees: 0, derniere: null, jalons: 0, ecartees: 100 };
+    const instantaneAvec = (changer) =>
+      retouche((valeur) => {
+        const instantane = copie(valeur.instantane);
+        changer(instantane);
+        return { ...valeur, instantane };
+      });
+    const proposition = {
+      id: 1,
+      graine: 7,
+      arret: 100,
+      historique: 10,
+      produitVersion: V1,
+      siegesAttribues: false,
+      tables: [],
+      capacites: [],
+      tours: 2,
+      participants: [],
+      placement: [
+        { sieges: [], reserve: [] },
+        { sieges: [], reserve: [] },
+      ],
+    };
+    const { graine, ...sansGraine } = proposition;
+    const avaries = [
+      ['sans version', retouche((valeur) => ({ ...valeur, produitVersion: null }))],
+      ['en correctif', retouche((valeur) => ({ ...valeur, instantane: null, correctif: [] }))],
+      ['instantané qui n’est pas un objet', retouche((valeur) => ({ ...valeur, instantane: 'charge' }))],
+      ['instantané dont une personne a un nom vide', instantaneAvec((charge) => { charge.participants[0].nom = ''; })],
+      ['instantané sans réglages', instantaneAvec((charge) => { delete charge.reglages; })],
+      ['instantané à clé inconnue', instantaneAvec((charge) => { charge.auteur = 'Iris'; })],
+      ['instantané dont une proposition sort de sa règle', instantaneAvec((charge) => { charge.propositions.push({ ...proposition, graine: -1 }); })],
+      ['instantané dont une proposition manque une clé', instantaneAvec((charge) => { charge.propositions.push(sansGraine); })],
+    ];
+    for (const [nom, remplacer] of avaries) assert.deepEqual(bilan(abime(1, remplacer)), toutEcarte, nom);
+    // Une proposition de forme admise ne l'empêche pas.
+    const admise = abime(1, instantaneAvec((charge) => { charge.propositions.push(proposition); }));
+    assert.equal(bilan(admise).entrees, 100);
+    // La révision 51 ouvre un intervalle : un correctif à sa place arrête la lecture.
+    const sans51 = abime(51, retouche((valeur) => ({ ...valeur, instantane: null, correctif: [] })));
+    assert.deepEqual(bilan(sans51), { evenement: EVENEMENT, entrees: 50, derniere: 50, jalons: 0, ecartees: 50 });
+    // Un journal peut commencer à une révision quelconque : sa cadence part de
+    // sa première entrée. Commencé à 137, il porte ses instantanés à 137 et
+    // 187 ; un compte depuis la révision 1 les attendrait à 151 et 201, et la
+    // lecture s'arrêterait à 151.
+    const depuis137 = journalDe(suite(64), { premiere: 137 });
+    assert.deepEqual(bilan(depuis137), { evenement: EVENEMENT, entrees: 64, derniere: 200, jalons: 0, ecartees: 0 });
+    assert.deepEqual(
+      lireJournal(depuis137).entrees.filter(({ instantane }) => instantane !== null).map(({ revision }) => revision),
+      [137, 187],
+    );
+  });
+
+  test('une ouverture illisible écarte tout, et le journal n’a plus d’événement', () => {
+    const avaries = [
+      ['JSON invalide', (ligne) => ligne.slice(1)],
+      ['type inconnu', retouche((valeur) => ({ ...valeur, type: 'jornal' }))],
+      ['format plus récent', retouche((valeur) => ({ ...valeur, format: 2 }))],
+      ['format en texte', retouche((valeur) => ({ ...valeur, format: '1' }))],
+      ['événement vide', retouche((valeur) => ({ ...valeur, evenement: '' }))],
+      ['événement absent', retouche(({ evenement, ...reste }) => reste)],
+      ['clé inconnue', retouche((valeur) => ({ ...valeur, nom: "Soirée d'essai" }))],
+      ['une entrée à sa place', () => lignesCent()[1]],
+    ];
+    for (const [nom, remplacer] of avaries) {
+      assert.deepEqual(bilan(abime(0, remplacer)), { evenement: null, entrees: 0, derniere: null, jalons: 0, ecartees: 101 }, nom);
+    }
+  });
+
+  test('un jalon nomme une révision lue : avant toute entrée, à venir, élaguée ou sans nom, il arrête la lecture ; les jalons écartés se comptent comme lignes', () => {
+    const jalon = (revision, nom = `Jalon ${revision}`) => ligneJalon({ revision, nom, horodatage: horodatage(revision) });
+    assert.deepEqual(bilan(insere(1, jalon(1))), { evenement: EVENEMENT, entrees: 0, derniere: null, jalons: 0, ecartees: 101 });
+    assert.deepEqual(bilan(insere(37, jalon(37))), { evenement: EVENEMENT, entrees: 36, derniere: 36, jalons: 0, ecartees: 65 });
+    assert.deepEqual(bilan(insere(37, jalon(36))), { evenement: EVENEMENT, entrees: 100, derniere: 100, jalons: 1, ecartees: 0 });
+    assert.deepEqual(bilan(insere(37, jalon(1))), { evenement: EVENEMENT, entrees: 100, derniere: 100, jalons: 1, ecartees: 0 });
+    const sansNom = insere(37, jalon(36).replace('"nom":"Jalon 36"', '"nom":""'));
+    assert.deepEqual(bilan(sansNom), { evenement: EVENEMENT, entrees: 36, derniere: 36, jalons: 0, ecartees: 65 });
+    const depuis101 = lignesDe(journalDe(suite(5), { premiere: 101 }));
+    assert.deepEqual(bilan(texteDe(depuis101.toSpliced(2, 0, jalon(100)))), {
+      evenement: EVENEMENT,
+      entrees: 1,
+      derniere: 101,
+      jalons: 0,
+      ecartees: 5,
+    });
+    // Dix entrées, des jalons aux révisions 2, 5 et 8, la 4ᵉ abîmée : trois
+    // entrées et un jalon retenus ; les sept entrées et deux jalons qui
+    // suivent, écartés.
+    const etapes = suite(10).map((etape, rang) => ({ ...etape, jalons: [2, 5, 8].includes(rang + 1) ? ['Jalon'] : [] }));
+    const lignes = lignesDe(journalDe(etapes));
+    const rang = lignes.findIndex((ligne) => ligne.startsWith('{"type":"entree","revision":4,'));
+    lignes[rang] = lignes[rang].slice(0, 20);
+    assert.deepEqual(bilan(texteDe(lignes)), { evenement: EVENEMENT, entrees: 3, derniere: 3, jalons: 1, ecartees: 9 });
+  });
+
+  test('texte vide, ouverture seule ou coupée ; marque d’ordre d’octets, fins de ligne CRLF, horloge qui recule', () => {
+    assert.deepEqual(lireJournal(''), { evenement: null, entrees: [], jalons: [], ecartees: 0 });
+    assert.deepEqual(lireJournal(texteDe([ligneOuverture(EVENEMENT)])), {
+      evenement: EVENEMENT,
+      entrees: [],
+      jalons: [],
+      ecartees: 0,
+    });
+    assert.deepEqual(lireJournal(ligneOuverture(EVENEMENT)), { evenement: null, entrees: [], jalons: [], ecartees: 1 });
+    assert.deepEqual(lireJournal('\n'), { evenement: null, entrees: [], jalons: [], ecartees: 1 });
+    assert.deepEqual(lireJournal(`\u{FEFF}${cent()}`), lireJournal(cent()));
+    assert.deepEqual(lireJournal(cent().replaceAll('\n', '\r\n')), lireJournal(cent()));
+    // L'ordre est celui des lignes : un horodatage qui recule n'y change rien.
+    const etapes = suite(5);
+    const lignes = [ligneOuverture(EVENEMENT)];
+    etapes.forEach(({ apres }, rang) => {
+      lignes.push(
+        ligneEntree({
+          revision: rang + 1,
+          libelle: `Geste ${rang + 1}`,
+          horodatage: horodatage(100 - rang),
+          produitVersion: rang === 0 ? V1 : null,
+          avant: etapes[rang - 1]?.apres,
+          apres,
+          instantane: rang === 0,
+        }),
+      );
+    });
+    const journal = lireJournal(texteDe(lignes));
+    assert.deepEqual(journal.entrees.map(({ revision }) => revision), [1, 2, 3, 4, 5]);
+    assert.equal(fil(journal).position, 5);
+    assert.equal(texteCanonique(reconstruire(journal, 5)), texteCanonique(etapes[4].apres));
+  });
+});
+
+// --- Le fil courant --------------------------------------------------------
+
+describe('le fil courant, défaire et refaire (§ 8.3)', () => {
+  // Les étapes 1 à 5 sont des gestes ; la 6 défait vers 4, la 7 vers 3, la
+  // 8 refait vers 4, la 9 est un geste. Chaque retour porte la charge de sa
+  // cible.
+  const ETAPES = suite(9);
+  ETAPES[5] = { apres: ETAPES[3].apres, sens: 'defaire', retour: 4 };
+  ETAPES[6] = { apres: ETAPES[2].apres, sens: 'defaire', retour: 3 };
+  ETAPES[7] = { apres: ETAPES[3].apres, sens: 'refaire', retour: 4 };
+  const filApres = (n, etapes = ETAPES) => fil(lireJournal(journalDe(etapes.slice(0, n))));
+
+  test('gestes 1 à 5, défaire (6 → 4), défaire (7 → 3), refaire (8 → 4), geste 9 : position 9, pile vide, refaire null, défaire → 4, fil courant [9, 4, 3, 2, 1], le geste 5 hors du fil', () => {
+    assert.deepEqual(filApres(9), { position: 9, pile: [], courant: [9, 4, 3, 2, 1], cibleDefaire: 4, cibleRefaire: null });
+  });
+
+  test('après l’entrée 7 : défaire → 2, refaire → 4 ; après la 6 et la 8, défaire → 3, refaire → 5', () => {
+    assert.deepEqual(filApres(7), { position: 3, pile: [5, 4], courant: [3, 2, 1], cibleDefaire: 2, cibleRefaire: 4 });
+    assert.deepEqual(filApres(6), { position: 4, pile: [5], courant: [4, 3, 2, 1], cibleDefaire: 3, cibleRefaire: 5 });
+    assert.deepEqual(filApres(8), { position: 4, pile: [5], courant: [4, 3, 2, 1], cibleDefaire: 3, cibleRefaire: 5 });
+  });
+
+  test('un revenir vers 2 depuis 5 se défait par refaire vers 5', () => {
+    const etapes = suite(7);
+    etapes[5] = { apres: etapes[1].apres, sens: 'revenir', retour: 2 };
+    etapes[6] = { apres: etapes[4].apres, sens: 'refaire', retour: 5 };
+    assert.deepEqual(filApres(6, etapes), { position: 2, pile: [5], courant: [2, 1], cibleDefaire: 1, cibleRefaire: 5 });
+    assert.deepEqual(filApres(7, etapes), { position: 5, pile: [], courant: [5, 4, 3, 2, 1], cibleDefaire: 4, cibleRefaire: null });
+  });
+
+  test('un retour vers une entrée de retour prend la position de celle-ci', () => {
+    const etapes = suite(8);
+    etapes[5] = { apres: etapes[1].apres, sens: 'revenir', retour: 2 };
+    etapes[7] = { apres: etapes[1].apres, sens: 'revenir', retour: 6 };
+    assert.deepEqual(filApres(8, etapes), { position: 2, pile: [7], courant: [2, 1], cibleDefaire: 1, cibleRefaire: 7 });
+  });
+
+  test('un journal sans entrée n’a pas de position ; d’une seule entrée, rien à défaire', () => {
+    const vide = { position: null, pile: [], courant: [], cibleDefaire: null, cibleRefaire: null };
+    assert.deepEqual(fil(lireJournal('')), vide);
+    assert.deepEqual(fil(lireJournal(texteDe([ligneOuverture(EVENEMENT)]))), vide);
+    assert.deepEqual(filApres(1), { position: 1, pile: [], courant: [1], cibleDefaire: null, cibleRefaire: null });
+  });
+
+  test('un retour dont la cible précède le journal est une position sans prédécesseur ; la pile repart de lui', () => {
+    // Révisions 101 à 104 : revenir vers 60, un geste, défaire vers 101,
+    // refaire vers 102.
+    const etapes = suite(4);
+    etapes[0] = { ...etapes[0], sens: 'revenir', retour: 60 };
+    etapes[2] = { apres: etapes[0].apres, sens: 'defaire', retour: 101 };
+    etapes[3] = { apres: etapes[1].apres, sens: 'refaire', retour: 102 };
+    const filDepuis101 = (n, liste = etapes) => fil(lireJournal(journalDe(liste.slice(0, n), { premiere: 101 })));
+    assert.deepEqual(filDepuis101(1), { position: 101, pile: [], courant: [101], cibleDefaire: null, cibleRefaire: null });
+    assert.deepEqual(filDepuis101(3), { position: 101, pile: [102], courant: [101], cibleDefaire: null, cibleRefaire: 102 });
+    assert.deepEqual(filDepuis101(4), { position: 102, pile: [], courant: [102, 101], cibleDefaire: 101, cibleRefaire: null });
+    // Refaire vers une révision qui précède le journal, pile vide.
+    const refaireSansPile = suite(2);
+    refaireSansPile[1] = { ...refaireSansPile[1], sens: 'refaire', retour: 98 };
+    assert.deepEqual(filDepuis101(2, refaireSansPile), {
+      position: 102,
+      pile: [],
+      courant: [102],
+      cibleDefaire: null,
+      cibleRefaire: null,
+    });
+  });
+});
+
+// --- La construction notée -------------------------------------------------
+
+describe('la construction notée (§ 8.8)', () => {
+  test('produitVersion non nulle à la première entrée et au premier geste d’une autre construction, nulle ailleurs ; versionDe rend celle de chaque révision', () => {
+    const versions = [...Array(10).fill(V1), ...Array(10).fill(V2), ...Array(5).fill(V1)];
+    const etapes = suite(25).map((etape, rang) => ({ ...etape, version: versions[rang] }));
+    const journal = lireJournal(journalDe(etapes));
+    assert.deepEqual(
+      journal.entrees.flatMap(({ revision, produitVersion }) => (produitVersion === null ? [] : [[revision, produitVersion]])),
+      [[1, V1], [11, V2], [21, V1]],
+    );
+    assert.deepEqual(de(1, 25).map((revision) => versionDe(journal, revision)), versions);
+    for (const absente of [0, 26, -1, 2.5, '3', null, undefined]) assert.equal(versionDe(journal, absente), null);
+    assert.equal(versionDe(lireJournal(''), 1), null);
+    // Une seule construction : notée une fois, à la première entrée.
+    const seance = lireJournal(texteSeance());
+    assert.deepEqual(seance.entrees.filter(({ produitVersion }) => produitVersion !== null).map(({ revision }) => revision), [1]);
+    assert.equal(versionDe(seance, 120), V1);
+  });
+});
+
+// --- L'élagage -------------------------------------------------------------
+
+describe('l’élagage : au-delà du plafond, depuis la frontière d’instantané la plus récente qui garde le plancher (§ 8.6)', () => {
+  // 700 étapes : la construction V2 de la révision 130 à la 159, V1 ailleurs ;
+  // un jalon toutes les 25 révisions.
+  const ETAPES = suite(700).map((etape, rang) => ({
+    ...etape,
+    version: rang + 1 >= 130 && rang + 1 < 160 ? V2 : V1,
+    jalons: (rang + 1) % 25 === 0 ? [`Jalon ${rang + 1}`] : [],
+  }));
+  const lignes700 = memoire(() => lignesDe(journalDe(ETAPES)));
+  // Texte du journal des n premières étapes : les lignes qui précèdent l'entrée n + 1.
+  const prefixe = (n) => {
+    const fin = lignes700().findIndex((ligne) => ligne.startsWith(`{"type":"entree","revision":${n + 1},`));
+    return texteDe(lignes700().slice(0, fin === -1 ? lignes700().length : fin));
+  };
+
+  test('650 entrées : la première gardée est la révision 151, un instantané, qui porte sa construction ; 500 entrées ; les jalons des entrées retirées partis ; toute autre ligne gardée intacte', () => {
+    const texte = prefixe(650);
+    const elague = elaguer(texte);
+    const journal = lireJournal(elague);
+    assert.equal(journal.entrees.length, 500);
+    assert.equal(journal.entrees[0].revision, 151);
+    assert.notEqual(journal.entrees[0].instantane, null);
+    assert.equal(journal.ecartees, 0);
+    assert.deepEqual(
+      journal.jalons.map(({ revision }) => revision),
+      de(151, 650).filter((revision) => revision % 25 === 0),
+    );
+    // Le texte attendu : l'ouverture, l'entrée 151 qui porte V2, la
+    // construction de la révision 130 dont elle hérite, puis les lignes
+    // d'origine de révision 151 ou plus, telles quelles.
+    const origine = lignesDe(texte);
+    const valeurs = origine.map((ligne) => JSON.parse(ligne));
+    const rang = valeurs.findIndex(({ type, revision }) => type === 'entree' && revision === 151);
+    assert.equal(valeurs[rang].produitVersion, null);
+    const attendu = [
+      origine[0],
+      JSON.stringify({ ...valeurs[rang], produitVersion: V2 }),
+      ...origine.slice(rang + 1).filter((_, i) => valeurs[rang + 1 + i].revision >= 151),
+    ];
+    assert.equal(elague, texteDe(attendu));
+    // Chaque instant gardé se restitue comme avant l'élagage, avec sa construction.
+    const avant = lireJournal(texte);
+    for (const revision of [151, 152, 199, 200, 201, 202, 649, 650]) {
+      assert.equal(texteCanonique(reconstruire(journal, revision)), texteCanonique(reconstruire(avant, revision)));
+    }
+    for (const revision of de(151, 650)) assert.equal(versionDe(journal, revision), versionDe(avant, revision));
+    assert.deepEqual(fil(journal), { ...fil(avant), courant: de(650, 151) });
+  });
+
+  test('601 entrées : coupe à 101, 501 gardées ; 600 entrées, et 600 avec des jalons en plus : null', () => {
+    const journal = lireJournal(elaguer(prefixe(601)));
+    assert.equal(journal.entrees.length, 501);
+    assert.equal(journal.entrees[0].revision, 101);
+    assert.equal(journal.entrees[0].produitVersion, V1);
+    assert.equal(elaguer(prefixe(600)), null);
+    const jalonne = suite(600).map((etape) => ({ ...etape, jalons: ['Jalon'] }));
+    assert.equal(elaguer(journalDe(jalonne)), null);
+  });
+
+  test('le plancher l’emporte : de 601 à 700 entrées, la coupe garde de 500 à 549 entrées, depuis un instantané', () => {
+    for (const n of [601, 602, 625, 649, 650, 651, 675, 699, 700]) {
+      const coupe = 1 + INTERVALLE_INSTANTANE * Math.floor((n - PLANCHER_ENTREES) / INTERVALLE_INSTANTANE);
+      const elague = elaguer(prefixe(n));
+      const { entrees } = lireJournal(elague);
+      assert.equal(entrees[0].revision, coupe, `${n} entrées`);
+      assert.equal(entrees.length, n - coupe + 1, `${n} entrées`);
+      assert.ok(entrees.length >= PLANCHER_ENTREES && entrees.length < PLANCHER_ENTREES + INTERVALLE_INSTANTANE);
+      assert.notEqual(entrees[0].instantane, null);
+      assert.equal(elaguer(elague), null);
+    }
+  });
+
+  test('une première entrée gardée qui porte déjà sa construction garde sa ligne intacte', () => {
+    const etapes = suite(650).map((etape, rang) => ({ ...etape, version: rang + 1 >= 151 ? V2 : V1 }));
+    const texte = journalDe(etapes);
+    const ligne151 = lignesDe(texte).find((ligne) => ligne.startsWith('{"type":"entree","revision":151,'));
+    assert.match(ligne151, new RegExp(`"produitVersion":"${V2.replaceAll('.', '\\.')}"`));
+    assert.equal(lignesDe(elaguer(texte))[1], ligne151);
+  });
+
+  test('un journal déjà élagué s’élague depuis sa première révision ; les lignes écartées se recopient ; la marque d’ordre d’octets ne se recopie pas', () => {
+    // Commencé à la révision 137, le journal porte ses instantanés à 137,
+    // 187, 237… : la coupe tombe sur 237, le plus récent qui garde le
+    // plancher, et non sur 201, qu'un compte depuis la révision 1 désignerait.
+    const depuis137 = lireJournal(elaguer(journalDe(suite(601), { premiere: 137 })));
+    assert.deepEqual([depuis137.entrees.length, depuis137.entrees.at(0)?.revision, depuis137.ecartees], [501, 237, 0]);
+    // Une dernière ligne coupée, puis une ligne illisible suivie d'une autre.
+    const coupee = `${prefixe(650)}{"type":"entree","revision":651`;
+    const elaguee = elaguer(coupee);
+    assert.ok(elaguee.endsWith('\n{"type":"entree","revision":651'));
+    assert.deepEqual([lireJournal(elaguee).entrees.length, lireJournal(elaguee).ecartees], [500, 1]);
+    const queue = `${prefixe(650)}illisible\n${lignes700().at(-1)}\n`;
+    assert.ok(elaguer(queue).endsWith(`\nillisible\n${lignes700().at(-1)}\n`));
+    assert.equal(lireJournal(elaguer(queue)).ecartees, 2);
+    assert.equal(elaguer(`\u{FEFF}${prefixe(601)}`), elaguer(prefixe(601)));
+  });
+
+  test('un retour dont la cible est élaguée devient la racine du fil : il porte la charge de sa cible, et défaire s’arrête à lui', () => {
+    const etapes = suite(601);
+    etapes[589] = { apres: etapes[59].apres, sens: 'revenir', retour: 60 };
+    const texte = journalDe(etapes);
+    assert.deepEqual(fil(lireJournal(texte)).courant, [...de(601, 591), ...de(60, 1)]);
+    const journal = lireJournal(elaguer(texte));
+    assert.equal(journal.entrees[0].revision, 101);
+    assert.deepEqual(fil(journal), { position: 601, pile: [], courant: de(601, 590), cibleDefaire: 600, cibleRefaire: null });
+    assert.equal(texteCanonique(reconstruire(journal, 590)), texteCanonique(etapes[59].apres));
+  });
+});
