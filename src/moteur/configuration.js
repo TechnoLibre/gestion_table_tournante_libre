@@ -70,7 +70,10 @@ const NOMS_CONTRAINTES = [
 
 // Valeur citée dans un message : une chaîne s'écrit entre guillemets, pour
 // ne pas se lire comme le nombre qu'elle contient.
-const decrire = (valeur) => (typeof valeur === 'string' ? JSON.stringify(valeur) : String(valeur));
+// Valeur citée dans un message : une chaîne entre guillemets, pour qu'elle
+// ne se lise pas comme le nombre qu'elle contient ; toute autre valeur telle
+// quelle.
+export const decrire = (valeur) => (typeof valeur === 'string' ? JSON.stringify(valeur) : String(valeur));
 
 function exigerListe(valeur, nom) {
   if (!Array.isArray(valeur)) throw new TypeError(`configuration.${nom} : liste attendue`);

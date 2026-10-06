@@ -222,9 +222,8 @@ describe('intégration : la grande démonstration de bout en bout (§ 5.5, § 12
 // configurations hors de ce cadre, d'une graine écrite ici. Les propriétés
 // éprouvées valent pour tout plan que rend la recherche, quelle qu'en soit
 // la qualité : un compte d'arrêt bref suffit. Un historique court fait jouer
-// la bascule et la relance de la descente : avec cette graine, 86 des 460
-// propositions basculent dans l'ordre des contraintes, et 74 relancent leur
-// descente au moins une fois.
+// la bascule de la descente dans l'ordre des contraintes, qu'un plancher
+// compte ci-dessous.
 const GRILLE = Object.freeze({ graine: 1_729, configurations: 300, arret: 3_000, nombre: 2 });
 
 // Une salle sur cinq est trop petite, deux sont tendues, deux ont des places
@@ -404,7 +403,7 @@ function juger(nom, { configuration, instance, aPriori, diagnostic }, propositio
   const violations = verifierInvariants(instance, plan);
   if (violations.length > 0) {
     fautes.push(`${nom} : ${JSON.stringify(violations)}`);
-    return;
+    return false;
   }
   const tableDe = indexerPlan(instance, plan);
   const mesures = mesurer(instance, tableDe);
@@ -440,6 +439,9 @@ function juger(nom, { configuration, instance, aPriori, diagnostic }, propositio
   if (JSON.stringify(regenerer(configuration, { graine, arret, historique })) !== JSON.stringify(plan)) {
     fautes.push(`${nom} : la régénération rend un autre plan`);
   }
+  // Une proposition a basculé dans l'ordre des contraintes exactement quand
+  // son plan atteint un écart au plafond a priori maximal nul.
+  return Math.max(...ecartsAuPlafondAPriori(mesures, aPriori)) === 0;
 }
 
 // Planchers de la grille (§ 14.2) : ce que la boucle doit avoir éprouvé pour
@@ -465,6 +467,7 @@ const PLANCHERS = Object.freeze([
   ["avec plancher d'excédent", 'plancherExcedent', 10], // 15
   ["avec plancher d'écart d'itinéraire", 'plancherEcartItineraire', 35], // 50
   ['marches au dernier palier', 'marches', 400], // 460, une par proposition
+  ["propositions qui basculent dans l'ordre des contraintes", 'bascules', 60], // 86
 ]);
 
 describe('intégration : grille de propriétés sur des configurations tirées (§ 14.12)', () => {
@@ -484,6 +487,7 @@ describe('intégration : grille de propriétés sur des configurations tirées (
       plancherExcedent: 0,
       plancherEcartItineraire: 0,
       marches: 0,
+      bascules: 0,
     };
     const fautes = [];
     for (let c = 1; c <= GRILLE.configurations; c += 1) {
@@ -525,7 +529,7 @@ describe('intégration : grille de propriétés sur des configurations tirées (
       if (propositions.length !== GRILLE.nombre) fautes.push(`${nom} : ${propositions.length} propositions`);
       for (const proposition of propositions) {
         const nomProposition = `${nom}, proposition ${proposition.id}`;
-        juger(nomProposition, contexte, proposition, fautes);
+        if (juger(nomProposition, contexte, proposition, fautes)) comptes.bascules += 1;
         if (marcher(nomProposition, instance, proposition.graine, fautes)) comptes.marches += 1;
       }
     }

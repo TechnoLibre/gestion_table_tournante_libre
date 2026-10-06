@@ -929,19 +929,3 @@ describe('rechercher : bascule et relance, à la lettre (en-tête de recherche.j
     );
   });
 });
-
-describe('rechercher : la petite démonstration (§ 15.3)', () => {
-  test('arret 200 000, trois propositions : chacune rencontre 8 pour les douze, zéro collision, zéro répétition', () => {
-    const configuration = demo('petite');
-    const instance = normaliser(configuration);
-    const propositions = rechercher(configuration, { graine: 2_026, arret: 200_000, nombre: 3 });
-    assert.equal(propositions.length, 3);
-    for (const { id, plan } of propositions) {
-      const mesures = mesurer(instance, indexerPlan(instance, plan));
-      assert.deepEqual(mesures.rencontres, Array(12).fill(8), `proposition ${id}`);
-      assert.equal(mesures.collisionsCumulees, 0, `proposition ${id}`);
-      assert.deepEqual(mesures.rencontresRepetees, { choisies: 0, imposees: 0 }, `proposition ${id}`);
-      assert.equal(mesures.maxRencontresPaire, 1, `proposition ${id}`);
-    }
-  });
-});

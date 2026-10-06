@@ -480,6 +480,14 @@ describe('plafonds : valeurs exactes (§ 5.5, § 15)', () => {
     assert.throws(() => planDepuisIndex(instance, fautif), attendu);
     assert.throws(() => plafondsRealises(instance, fautif), attendu);
   });
+
+  test('un itinéraire hors forme cite la valeur comme la garde du plan indexé : la chaîne "-1" entre guillemets', () => {
+    const { instance } = forme({ capacites: [3, 3], ancres: [0, 0], autres: 4, tours: 2 });
+    assert.throws(() => plafondItineraire(instance, 0, [0, '-1']), {
+      name: 'RangeError',
+      message: 'itinéraire, case 1 : index de table "-1" hors de −1..1',
+    });
+  });
 });
 
 describe("plafond a priori : la programmation dynamique contre l'énumération (§ 14.11, § 14.12)", () => {

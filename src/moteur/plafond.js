@@ -42,7 +42,7 @@
 // Une case d'itinéraire en réserve vaut RESERVE, et RESERVE vaut LIBRE
 // (configuration.js) : une rangée de instance.fixe se lit comme l'itinéraire
 // qui laisse en réserve chaque tour libre.
-import { LIBRE, RESERVE, STATUT, exigerPlanIndexe } from './configuration.js';
+import { LIBRE, RESERVE, STATUT, decrire, exigerPlanIndexe } from './configuration.js';
 import { ErreurConfiguration } from './erreurs.js';
 
 // Nombre de multiensembles au-delà duquel l'énumération refuse une
@@ -107,7 +107,7 @@ function exigerCases(itineraire, T) {
   for (let i = 0; i < itineraire.length; i += 1) {
     const t = itineraire[i];
     if (t !== RESERVE && !(Number.isInteger(t) && t >= 0 && t < T)) {
-      throw new RangeError(`itinéraire, case ${i} : index de table ${String(t)} hors de −1..${T - 1}`);
+      throw new RangeError(`itinéraire, case ${i} : index de table ${decrire(t)} hors de −1..${T - 1}`);
     }
   }
 }

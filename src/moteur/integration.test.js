@@ -36,10 +36,7 @@ import { verifierIndicateurs, verifierInvariants } from './verification.js';
 //
 // Le compte pèse sur la relance sous surveillance (§ 14.14) : toute
 // modification du moteur, ou du générateur que lit le catalogue, rejoue ce
-// fichier. Sur deux cœurs, la relance qui suit une modification de
-// recherche.js tient en 1,6 s au mur, contre 2,0 s à 200 000 mouvements ;
-// celle qui suit indicateurs.js, qui rejoue sept fichiers, prend 2,6 s,
-// contre 2,9 s.
+// fichier.
 const REGLAGES = Object.freeze({ graine: 314_159, arret: 100_000, nombre: 3 });
 
 // La même génération, arrêtée au premier mouvement. Aucune de ses

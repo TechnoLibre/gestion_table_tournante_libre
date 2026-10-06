@@ -315,7 +315,7 @@ function modifierPaire(etat, a, b, sens) {
   etat.paires[k] = apres;
   const ga = etat.groupe[a];
   const gb = etat.groupe[b];
-  const memeGroupe = ga === gb && etat.affilie[a] === 1;
+  const memeGroupe = ga === gb && etat.porteAppartenance[a] === 1;
   if (memeGroupe) etat.collisionsCumulees += sens;
   if ((sens > 0 ? avant : apres) !== 0) {
     etat.excedentPaires += sens;
@@ -324,8 +324,8 @@ function modifierPaire(etat, a, b, sens) {
   }
   changerRencontres(etat, a, sens);
   changerRencontres(etat, b, sens);
-  if (etat.affilie[b] === 1) changerAffilie(etat, a, gb, sens);
-  if (etat.affilie[a] === 1) changerAffilie(etat, b, ga, sens);
+  if (etat.porteAppartenance[b] === 1) changerAffilie(etat, a, gb, sens);
+  if (etat.porteAppartenance[a] === 1) changerAffilie(etat, b, ga, sens);
 }
 
 // Ajoute sens aux visites de p à la table t, et ajuste les retours choisis.
@@ -390,11 +390,12 @@ function etatInitial(structure, rng) {
     instance,
     contraintes: instance.contraintes,
     groupe: instance.groupe,
-    // affilie[p] vaut 1 quand p porte une appartenance, 0 pour SANS_GROUPE.
+    // porteAppartenance[p] vaut 1 quand p porte une appartenance, 0 pour
+    // SANS_GROUPE.
     // modifierPaire le lit au lieu de comparer un groupe à SANS_GROUPE : sous
     // le lanceur d'épreuves, chaque lecture d'une valeur importée passe par
     // un accesseur, que la boucle de recherche paierait à chaque paire.
-    affilie: Uint8Array.from(instance.groupe, (g) => (g === SANS_GROUPE ? 0 : 1)),
+    porteAppartenance: Uint8Array.from(instance.groupe, (g) => (g === SANS_GROUPE ? 0 : 1)),
     N,
     T,
     R,

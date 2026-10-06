@@ -3494,6 +3494,12 @@ couverture :
 | relance sous surveillance, après une modification | **2 secondes** | le développeur commence à grouper ses modifications, et le test cesse de désigner laquelle a cassé |
 | série `node` surveillée complète, à froid | **10 secondes** | le développeur change de fenêtre ; le retour de contexte coûte plus que l'épreuve, et le niveau glisse vers « avant un commit » |
 
+**Le budget se mesure sur une machine de développement d'au moins quatre
+cœurs.** Sur deux, le lanceur ne porte la série que dans un seul processus :
+la relance qui suit la modification d'un module de base — celui que presque
+toutes les épreuves importent — dépasse deux secondes, et ce dépassement y est
+accepté. Le budget à froid de dix secondes, lui, y tient.
+
 **Pourquoi ces deux valeurs.** En deçà de deux secondes, l'attention reste sur le
 code et le résultat se lit comme la suite du geste. Au-delà de dix, elle part
 ailleurs ; le niveau `node` cesse d'être lancé à chaque modification, et les

@@ -109,7 +109,7 @@ const PARCOURS_DE_CLES = [
   ['Object.keys', /\bObject\s*\??\.\s*keys\b/g],
   ['Object.entries', /\bObject\s*\??\.\s*entries\b/g],
   ['Object.values', /\bObject\s*\??\.\s*values\b/g],
-  ['Object[', /\bObject\s*(?:\?\.)?\s*\[/g],
+  ['Object[', /\bObject\s*(?:\?\.)?\s*\[(?!\s*\])/g],
   ['for…in', /\bfor\s*\(\s*(?:(?:const|let|var)\s+)?(?:[\p{L}_$][\p{L}\p{N}_$.]*|\[[^\]]*\]|\{[^}]*\})\s+in\b/gu],
   ['Reflect.ownKeys', /\bReflect\s*\??\.\s*ownKeys\b/g],
   ['Object.getOwnPropertyNames', /\bObject\s*\??\.\s*getOwnPropertyNames\b/g],
@@ -306,6 +306,7 @@ describe('arborescence : déterminisme (§ 14.7)', () => {
         'export const z = monObject.keys + objectKeys;',
         'export const w = Object.fromEntries(paires);',
         'for (const index of inventaire) t.push(index);',
+        '/** @param {Object[]} entrees  les entrées, dans leur ordre */',
       ].join('\n'),
     };
     assert.deepEqual(avecArbre(fichiers, releverDeterminisme), [
