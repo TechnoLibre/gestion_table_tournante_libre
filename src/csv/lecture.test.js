@@ -39,13 +39,20 @@ function erreurDe(fonction) {
   return assert.fail("rien n'a été levé");
 }
 
-// Vérifie que fonction lève le refus d'un séparateur introuvable.
-function assertSeparateurIntrouvable(fonction) {
+// Vérifie que fonction lève le refus d'un séparateur introuvable, avec ses
+// détails : le candidat écarté, le rang de l'enregistrement fautif et la
+// cause, ou rien quand aucun candidat ne donne à l'en-tête deux champs.
+function assertSeparateurIntrouvable(fonction, details = {}) {
   const erreur = erreurDe(fonction);
   assert.ok(erreur instanceof ErreurCsv);
   assert.equal(erreur.code, 'SEPARATEUR_INTROUVABLE');
-  assert.deepEqual(erreur.details, {});
+  assert.deepEqual(erreur.details, details);
 }
+
+// Détails d'un refus dont le candidat est écarté par le nombre de champs d'un
+// enregistrement, ou par un guillemet resté ouvert.
+const ecart = (separateur, ligne) => ({ separateur, ligne, cause: 'NOMBRE_DE_CHAMPS' });
+const ouvert = (separateur, ligne) => ({ separateur, ligne, cause: 'GUILLEMET_OUVERT' });
 
 // Enregistrements que decouper rend, une fois vérifié qu'aucun guillemet ne
 // reste ouvert.
@@ -304,22 +311,22 @@ describe('choisirSeparateur : le candidat retenu (§ 10.1)', () => {
     };
 
     test('un enregistrement plus long au rang 20 écarte « ; », au rang 21 non', () => {
-      assertSeparateurIntrouvable(() => choisirSeparateur(texteAvec(20, 'x;y;z;t'), reconnaitre));
+      assertSeparateurIntrouvable(() => choisirSeparateur(texteAvec(20, 'x;y;z;t'), reconnaitre), ecart(';', 20));
       assert.deepEqual(choisirSeparateur(texteAvec(21, 'x;y;z;t'), reconnaitre), { separateur: ';' });
     });
 
     test('un enregistrement plus court au rang 20 écarte « ; », au rang 21 non', () => {
-      assertSeparateurIntrouvable(() => choisirSeparateur(texteAvec(20, 'x;y'), reconnaitre));
+      assertSeparateurIntrouvable(() => choisirSeparateur(texteAvec(20, 'x;y'), reconnaitre), ecart(';', 20));
       assert.deepEqual(choisirSeparateur(texteAvec(21, 'x;y'), reconnaitre), { separateur: ';' });
     });
 
     test('un guillemet resté ouvert depuis le rang 20 écarte « ; », depuis le rang 21 non', () => {
       // Le dernier champ de l'enregistrement avale la fin du fichier : le
       // nombre de champs reste trois, seul le guillemet ouvert écarte « ; ».
-      const ouvert = 'x;y;"ouvert';
-      assert.deepEqual(largeursLues(texteAvec(20, ouvert), ';'), new Array(20).fill(3));
-      assertSeparateurIntrouvable(() => choisirSeparateur(texteAvec(20, ouvert), reconnaitre));
-      const texte = texteAvec(21, ouvert);
+      const guillemet = 'x;y;"ouvert';
+      assert.deepEqual(largeursLues(texteAvec(20, guillemet), ';'), new Array(20).fill(3));
+      assertSeparateurIntrouvable(() => choisirSeparateur(texteAvec(20, guillemet), reconnaitre), ouvert(';', 20));
+      const texte = texteAvec(21, guillemet);
       assert.deepEqual(choisirSeparateur(texte, reconnaitre), { separateur: ';' });
       // Le découpage du fichier entier, lui, voit le guillemet resté ouvert.
       assert.equal(decouper(texte, ';').guillemetOuvert, true);
@@ -359,23 +366,27 @@ describe('choisirSeparateur : le séparateur introuvable (§ 10.1)', () => {
   });
 
   test('un nombre de champs qui varie, pour chaque candidat : un enregistrement plus long', () => {
-    assertSeparateurIntrouvable(() =>
-      choisirSeparateur('nom;prenom\nBenoît;Exemple;Groupe Azur\n', reconnaitre),
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('nom;prenom\nBenoît;Exemple;Groupe Azur\n', reconnaitre),
+      ecart(';', 2),
     );
   });
 
   test("un nombre de champs qui varie, pour chaque candidat : un enregistrement plus court, jusqu'à un seul champ", () => {
-    assertSeparateurIntrouvable(() =>
-      choisirSeparateur('nom;prenom;appartenance\nBenoît;Exemple\n', reconnaitre),
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('nom;prenom;appartenance\nBenoît;Exemple\n', reconnaitre),
+      ecart(';', 2),
     );
-    assertSeparateurIntrouvable(() =>
-      choisirSeparateur('nom;prenom\nBenoît;Exemple\nune ligne sans séparateur\n', reconnaitre),
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('nom;prenom\nBenoît;Exemple\nune ligne sans séparateur\n', reconnaitre),
+      ecart(';', 3),
     );
   });
 
   test('un guillemet resté ouvert dans les premiers enregistrements, même quand le nombre de champs reste constant', () => {
-    assertSeparateurIntrouvable(() =>
-      choisirSeparateur('nom;prenom\n"Benoît;Exemple\nOdile;Fictive\n', reconnaitre),
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('nom;prenom\n"Benoît;Exemple\nOdile;Fictive\n', reconnaitre),
+      ouvert(';', 2),
     );
     // Deux champs partout, mais le second de la dernière ligne avale la fin du
     // fichier : seul le guillemet resté ouvert écarte « ; ».
@@ -383,12 +394,65 @@ describe('choisirSeparateur : le séparateur introuvable (§ 10.1)', () => {
     const lu = decouper(texte, ';');
     assert.deepEqual(lu.enregistrements.map((e) => e.length), [2, 2]);
     assert.equal(lu.guillemetOuvert, true);
-    assertSeparateurIntrouvable(() => choisirSeparateur(texte, reconnaitre));
+    assertSeparateurIntrouvable(() => choisirSeparateur(texte, reconnaitre), ouvert(';', 2));
   });
 
   test('un texte vide, ou fait de lignes vides', () => {
     assertSeparateurIntrouvable(() => choisirSeparateur('', reconnaitre));
     assertSeparateurIntrouvable(() => choisirSeparateur('\r\n\r\n', reconnaitre));
+  });
+
+  test("le refus nomme le premier défaut dans l'ordre du texte, à son rang, les enregistrements vides comptés", () => {
+    // Un enregistrement plus court passe avant le guillemet ouvert qui le suit.
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('nom;prenom;appartenance\nBenoît;Exemple\nOdile;"Fictive\n', reconnaitre),
+      ecart(';', 2),
+    );
+    // Une ligne vide et une ligne de séparateurs seuls ne rompent rien, mais
+    // comptent dans le rang : le numéro de ligne qu'un tableur donne.
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('\nnom;prenom\n\n;\nBenoît;Exemple;x\n', reconnaitre),
+      ecart(';', 5),
+    );
+    // Sans écart, le guillemet ouvert, au rang de l'enregistrement où il
+    // s'ouvre ; ce qui le suit tient dans son champ.
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('nom;prenom\nBenoît;Exemple\n\nOdile;"Fictive\nRémi;Témoin\n', reconnaitre),
+      ouvert(';', 4),
+    );
+  });
+
+  test("parmi les candidats écartés, le refus nomme celui aux plus d'en-têtes reconnus, puis le premier dans l'ordre", () => {
+    // « ; » et « , » donnent deux champs à l'en-tête, et chacun s'écarte sur
+    // son propre enregistrement : « , » au rang 2, « ; » au rang 3. Sous « , »,
+    // « prenom » est reconnu ; sous « ; », rien.
+    const texte = 'x;nom,prenom\na;b,c,d\ne;f;g\n';
+    assertSeparateurIntrouvable(() => choisirSeparateur(texte, reconnaitre), ecart(',', 2));
+    assertSeparateurIntrouvable(() => choisirSeparateur(texte, () => false), ecart(';', 3));
+    // Un guillemet en tête de ligne s'ouvre sous chaque candidat.
+    assertSeparateurIntrouvable(() => choisirSeparateur('a;b,c\n"d;e,f\n', () => false), ouvert(';', 2));
+    assertSeparateurIntrouvable(() => choisirSeparateur('a,b\tc\n"d,e\tf\n', () => false), ouvert(',', 2));
+  });
+
+  test("aucun candidat ne donne à l'en-tête deux champs : le refus ne nomme rien", () => {
+    // Une colonne d'en-tête inconnu ; un séparateur hors des candidats ; un
+    // guillemet ouvert dès l'en-tête, qui n'en termine aucun ; vingt lignes
+    // vides, qui laissent la fenêtre sans en-tête.
+    const textes = [
+      'Benoît Exemple\n"Odile Fictive\n',
+      'nom|prenom\nBenoît|"Exemple\n',
+      'nom;"prenom\nBenoît;Exemple\n',
+      `${'\n'.repeat(20)}nom;prenom\nBenoît;Exemple;x\n`,
+    ];
+    for (const texte of textes) {
+      assertSeparateurIntrouvable(() => choisirSeparateur(texte, reconnaitre));
+    }
+  });
+
+  test('un fichier à une colonne dont la ligne entière est un en-tête reconnu passe avant un candidat écarté', () => {
+    // « ; » donne deux champs à l'en-tête, puis trois : il est écarté au rang 2.
+    const reconnaitreLigne = (entete) => entete === 'nom;prenom';
+    assert.deepEqual(choisirSeparateur('nom;prenom\nBenoît;Exemple;x\n', reconnaitreLigne), { separateur: null });
   });
 });
 

@@ -120,6 +120,33 @@ export function enregistrementVide(enregistrement) {
   return enregistrement.every((champ) => champ.trim() === '');
 }
 
+// Lecture d'un texte par un candidat dans la fenêtre du choix. L'en-tête est
+// le premier enregistrement non vide parmi ceux que la fenêtre termine : un
+// guillemet resté ouvert court jusqu'à la fin du texte, et l'enregistrement
+// où il s'ouvre, le dernier lu, reste inachevé. Rend null quand l'en-tête
+// manque ou n'a qu'un champ : la constance seule ne suffit pas, et le candidat
+// n'a pas de défaut à nommer. Sinon, rend le nombre d'en-têtes reconnus et le
+// premier défaut qui écarte le candidat, ou null : un enregistrement non vide
+// dont le nombre de champs diffère de celui de l'en-tête, à son rang ; à
+// défaut, le guillemet resté ouvert, au rang où il s'ouvre.
+function lireAvec(texte, candidat, reconnaitre) {
+  const { enregistrements, guillemetOuvert } = analyser(texte, candidat, FENETRE);
+  const termines = guillemetOuvert ? enregistrements.slice(0, -1) : enregistrements;
+  const entete = termines.find((e) => !enregistrementVide(e));
+  if (entete === undefined || entete.length < 2) return null;
+  const ecart = termines.findIndex((e) => !enregistrementVide(e) && e.length !== entete.length);
+  let defaut = null;
+  if (ecart !== -1) defaut = { ligne: ecart + 1, cause: 'NOMBRE_DE_CHAMPS' };
+  else if (guillemetOuvert) defaut = { ligne: enregistrements.length, cause: 'GUILLEMET_OUVERT' };
+  return { separateur: candidat, reconnus: entete.filter((champ) => reconnaitre(champ)).length, defaut };
+}
+
+// La lecture qui l'emporte, de la meilleure jusqu'ici et d'une suivante dans
+// l'ordre des candidats : celle qui reconnaît le plus d'en-têtes, la première
+// à égalité.
+const meilleure = (jusquIci, suivante) =>
+  jusquIci === null || suivante.reconnus > jusquIci.reconnus ? suivante : jusquIci;
+
 /**
  * Choisit le séparateur parmi « ; », « , » et la tabulation en lisant les vingt
  * premiers enregistrements avec chacun. Un candidat convient quand la lecture
@@ -135,7 +162,13 @@ export function enregistrementVide(enregistrement) {
  * Quand aucun candidat ne convient et que la première ligne entière, ses blancs
  * de bord retirés, est un en-tête reconnu, le fichier n'a qu'une colonne :
  * separateur est null, et un nom qui porte une virgule reste entier. Sinon,
- * ErreurCsv('SEPARATEUR_INTROUVABLE').
+ * ErreurCsv('SEPARATEUR_INTROUVABLE'), dont les détails nomment ce qui écarte
+ * le candidat que le même départage désigne parmi ceux dont l'en-tête a au
+ * moins deux champs : { separateur, ligne, cause }, ligne étant le rang de
+ * l'enregistrement fautif et cause NOMBRE_DE_CHAMPS — le premier
+ * enregistrement non vide dont le nombre de champs diffère de celui de
+ * l'en-tête — ou GUILLEMET_OUVERT — sans écart, le guillemet resté ouvert,
+ * au rang où il s'ouvre. Sans un tel candidat, les détails sont vides.
  *
  * @param {string} texte
  * @param {(entete: string) => unknown} reconnaitre  rend une valeur vraie pour
@@ -143,23 +176,22 @@ export function enregistrementVide(enregistrement) {
  *   tel qu'il est écrit, ou la première ligne entière d'un fichier à une
  *   colonne, ses blancs de bord retirés
  * @returns {{ separateur: string|null }}
- * @throws {ErreurCsv} SEPARATEUR_INTROUVABLE
+ * @throws {ErreurCsv} SEPARATEUR_INTROUVABLE, détails
+ *   { separateur, ligne, cause } ou {}
  */
 export function choisirSeparateur(texte, reconnaitre) {
   let retenu = null;
+  let ecarte = null;
   for (const candidat of CANDIDATS) {
-    const { enregistrements, guillemetOuvert } = analyser(texte, candidat, FENETRE);
-    if (guillemetOuvert) continue;
-    const pleins = enregistrements.filter((e) => !enregistrementVide(e));
-    if (pleins.length === 0) continue;
-    const largeur = pleins[0].length;
-    if (largeur < 2 || pleins.some((e) => e.length !== largeur)) continue;
-    const reconnus = pleins[0].filter((entete) => reconnaitre(entete)).length;
-    if (retenu === null || reconnus > retenu.reconnus) retenu = { separateur: candidat, reconnus };
+    const lecture = lireAvec(texte, candidat, reconnaitre);
+    if (lecture === null) continue;
+    if (lecture.defaut === null) retenu = meilleure(retenu, lecture);
+    else ecarte = meilleure(ecarte, lecture);
   }
   if (retenu !== null) return { separateur: retenu.separateur };
 
   const premiere = analyser(texte, null, FENETRE).enregistrements.find((e) => !enregistrementVide(e));
   if (premiere !== undefined && reconnaitre(premiere[0].trim())) return { separateur: null };
-  throw new ErreurCsv('SEPARATEUR_INTROUVABLE');
+  if (ecarte === null) throw new ErreurCsv('SEPARATEUR_INTROUVABLE');
+  throw new ErreurCsv('SEPARATEUR_INTROUVABLE', { separateur: ecarte.separateur, ...ecarte.defaut });
 }
