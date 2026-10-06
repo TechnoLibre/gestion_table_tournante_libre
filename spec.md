@@ -3494,11 +3494,16 @@ couverture :
 | relance sous surveillance, après une modification | **2 secondes** | le développeur commence à grouper ses modifications, et le test cesse de désigner laquelle a cassé |
 | série `node` surveillée complète, à froid | **10 secondes** | le développeur change de fenêtre ; le retour de contexte coûte plus que l'épreuve, et le niveau glisse vers « avant un commit » |
 
-**Le budget se mesure sur une machine de développement d'au moins quatre
-cœurs.** Sur deux, le lanceur ne porte la série que dans un seul processus :
-la relance qui suit la modification d'un module de base — celui que presque
-toutes les épreuves importent — dépasse deux secondes, et ce dépassement y est
-accepté. Le budget à froid de dix secondes, lui, y tient.
+**La série surveillée s'adapte au nombre de cœurs, et le budget tient sur toute
+machine.** À partir de quatre cœurs, des processus complets portent la série
+entière. En deçà, le lanceur n'en porterait la série que dans un seul
+processus, et la relance qui suit un module de base — celui que presque toutes
+les épreuves importent — dépasserait deux secondes. La série s'y joue donc en
+threads sur tous les cœurs, et ses épreuves lourdes passent dans la série
+`node:long`. Aucune épreuve ne disparaît : elle change de série, et ce qu'elle
+éprouve ne dépend pas de la machine. Une garde refuse, dans ces séries, ce
+qu'un thread refuserait et qu'un processus accepte, et le lanceur annonce à
+chaque exécution le mode qu'il a retenu.
 
 **Pourquoi ces deux valeurs.** En deçà de deux secondes, l'attention reste sur le
 code et le résultat se lit comme la suite du geste. Au-delà de dix, elle part

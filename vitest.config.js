@@ -16,6 +16,13 @@
 //             d'accord avec la première.
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
+import { coeursDisponibles, reglagesSeries } from './test/machine.js';
+
+// Les séries node suivent le nombre de cœurs de la machine (test/machine.js) :
+// en deçà de quatre, des threads sur tous les cœurs, et les épreuves lourdes
+// de la série surveillée passent dans la série longue (§ 14.14).
+const SERIES = reglagesSeries(coeursDisponibles());
+const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
 
 export default defineConfig({
   test: {
@@ -50,12 +57,13 @@ export default defineConfig({
     ],
     projects: [
       { test: {
-          name: 'node', environment: 'node',
+          name: 'node', environment: 'node', ...PROCESSUS,
           include: ['src/**/*.test.js', 'scripts/**/*.test.js', 'test/**/*.test.js'],
-          exclude: ['**/*.long.test.js', '**/*.navigateur.test.js', 'node_modules/**'] } },
+          exclude: ['**/*.long.test.js', '**/*.navigateur.test.js', 'node_modules/**',
+                    ...SERIES.horsSerieSurveillee] } },
       { test: {
-          name: 'node-long', environment: 'node',
-          include: ['src/**/*.long.test.js', 'test/**/*.long.test.js'],
+          name: 'node-long', environment: 'node', ...PROCESSUS,
+          include: ['src/**/*.long.test.js', 'test/**/*.long.test.js', ...SERIES.horsSerieSurveillee],
           testTimeout: 120_000 } },
       { extends: './vite.config.js',
         test: {

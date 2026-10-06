@@ -20,7 +20,10 @@
 // n'a pas vu prendre rend la durée de son projet inconnue, et un projet à
 // plafond refuse alors au lieu de passer sans mesure (§ 14.2). Une exécution
 // interrompue imprime son bilan sans rien refuser : ses durées sont
-// partielles.
+// partielles. Le bilan finit sur le mode que la machine a fait retenir
+// (test/machine.js) : un développeur sait ainsi sur quelle série sa relance a
+// porté.
+import { coeursDisponibles, ligneMachine, reglagesSeries } from './machine.js';
 
 // Plafond au mur de chaque projet, en millisecondes, par nom d'exécution du
 // projet : celui de vitest.config.js, que Vitest fait suivre du navigateur
@@ -29,8 +32,8 @@
 // chargée, et un test capricieux se désactive.
 export const PLAFONDS = new Map([
   // La série node surveillée : trente secondes (§ 14.14). Seule, elle dure
-  // 1,8 s au mur sur 16 cœurs et 6,6 s sur 2 ; la commande entière, lanceur
-  // compris, prend 2,5 s sur 16 cœurs.
+  // 1,8 s au mur sur 16 cœurs et 3,7 s sur 2, où elle se joue en threads
+  // (test/machine.js).
   ['node', 30_000],
   // Posé sur la mesure de node-long : seule, 17 s au mur sur 16 cœurs et
   // 28 s sur un seul. Le plafond laisse un facteur 2,1 au cas le plus lent.
@@ -182,6 +185,7 @@ export default class Rapporteur {
     );
     const { lignes, refus } = bilan({ duree, projets, epreuves, plafonds: this.#plafonds });
     for (const ligne of lignes) this.#journal.log(ligne);
+    this.#journal.log(ligneMachine(reglagesSeries(coeursDisponibles())));
     if (raison === 'interrupted') return;
     for (const message of refus) this.#journal.error(message);
     if (refus.length > 0) process.exitCode = 1;
