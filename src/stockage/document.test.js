@@ -1,0 +1,953 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Épreuves du document d'événement (§ 4, § 6.1, § 8.1, § 8.8, § 9) : la
+// charge neuve ; l'analyse d'un texte, ce qu'elle lit et chacun de ses
+// refus, nommé par sa raison et son chemin ; la lecture d'un format plus
+// récent ; la configuration que reçoit le moteur ; l'état qu'impose le
+// contenu ; la capacité d'une table ; l'erreur de stockage ; le parcours
+// de forme que partagent l'analyse, le contrôle des placements et les
+// correctifs. Les textes d'épreuve sont du JSON compact : l'analyse ne
+// dépend pas de la mise en page. Les noms sont inventés.
+import assert from 'node:assert/strict';
+import { describe, test } from '../../test/lanceur.js';
+import { STATUT, normaliser } from '../moteur/configuration.js';
+import { ErreurConfiguration } from '../moteur/erreurs.js';
+import { HISTORIQUE_PAR_DEFAUT } from '../moteur/recherche.js';
+import { VERSION } from '../version.genere.js';
+import { serialiser } from './canonique.js';
+import {
+  FORMAT,
+  GENERATION_PAR_DEFAUT,
+  SCHEMA,
+  analyser,
+  capacite,
+  configurationDepuisCharge,
+  creerCharge,
+  etatDeduit,
+  premiereFaute,
+  premiereFauteEnPlace,
+} from './document.js';
+import { ErreurStockage } from './erreurs.js';
+
+// Un document valide : quatre participants, dont un exclu, l'identifiant 4
+// retiré et jamais réattribué ; deux tables, dont une surchargée ; une
+// réservation de portée « tous » à siège donné et une de tour désigné sans
+// siège ; un titre ; une proposition ; une filiation. Une copie neuve à
+// chaque appel, que chaque épreuve abîme à sa façon.
+function documentValide() {
+  return {
+    entete: {
+      format: 1,
+      produitVersion: VERSION.affichee,
+      revision: 12,
+      comptes: { participants: 4, tables: 2, reservations: 2, titres: 1, propositions: 1, retenu: 0 },
+    },
+    charge: {
+      evenement: {
+        id: 'evt-lucioles',
+        nom: 'Veillée des Lucioles',
+        date: '2026-11-12',
+        siegesParDefaut: 3,
+        tours: 2,
+        unite: 'cm',
+        etat: 'propose',
+        filiation: {
+          source: { id: 'evt-modele', nom: 'Veillée modèle' },
+          instant: { revision: 7, libelle: 'Tables posées' },
+        },
+      },
+      reglages: {
+        separerAppartenances: true,
+        nouveauxVoisins: false,
+        nouvelleTable: true,
+        varierAppartenances: false,
+        attribuerSieges: false,
+        generation: { nombre: 3, arret: 50_000, historique: 500 },
+      },
+      prochainsIds: { participant: 6, table: 4, proposition: 2 },
+      participants: [
+        { id: 1, nom: 'Brindille', prenom: 'Anouk', appartenance: 'Chorale du Vallon',
+          courriel: 'anouk@exemple.test', titrePressenti: 'animation', notes: null, exclu: false },
+        { id: 2, nom: 'Sarrasin', prenom: null, appartenance: 'Chorale du Vallon', courriel: null,
+          titrePressenti: null, notes: 'part à 21 h', exclu: false },
+        { id: 3, nom: 'Coquelicot', prenom: 'Basile', appartenance: null, courriel: null,
+          titrePressenti: null, notes: null, exclu: true },
+        { id: 5, nom: 'Mirabelle', prenom: 'Ysé', appartenance: 'Cercle Gamma', courriel: null,
+          titrePressenti: null, notes: null, exclu: false },
+      ],
+      tables: [
+        { id: 1, numero: 1, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
+        { id: 3, numero: 2, sieges: 4, forme: 'carree', position: { x: 120.5, y: -40 } },
+      ],
+      reservations: [
+        { participant: 1, table: 3, siege: 4, portee: 'tous', tour: null },
+        { participant: 2, table: 1, siege: null, portee: 'tour', tour: 2 },
+      ],
+      titres: [{ table: 3, siege: 4, libelle: 'animation' }],
+      propositions: [
+        {
+          id: 1,
+          graine: 7,
+          arret: 50_000,
+          historique: 500,
+          produitVersion: VERSION.affichee,
+          siegesAttribues: false,
+          tables: [1, 3],
+          capacites: [3, 4],
+          tours: 2,
+          participants: [1, 2, 5],
+          placement: [
+            { sieges: [[2, 5], [1]], reserve: [] },
+            { sieges: [[2], [1, 5]], reserve: [] },
+          ],
+        },
+      ],
+      retenu: null,
+    },
+  };
+}
+
+// Un retenu bien formé pour le document valide.
+const retenuValide = () => ({
+  proposition: 1,
+  siegesAttribues: false,
+  tables: [1, 3],
+  capacites: [3, 4],
+  tours: 2,
+  participants: [1, 2, 5],
+  placement: [
+    { sieges: [[2, 5], [1]], reserve: [] },
+    { sieges: [[2], [1, 5]], reserve: [] },
+  ],
+});
+
+// Texte du document valide, une fois modifier passé sur lui.
+function abime(modifier) {
+  const copie = documentValide();
+  modifier(copie);
+  return JSON.stringify(copie);
+}
+
+// texte où avant, qui doit y figurer exactement une fois, devient apres :
+// pour une valeur que JSON.stringify n'écrit pas. Un remplacement qui ne
+// trouve rien échoue au lieu de rendre le texte inchangé.
+function remplacerUneFois(texte, avant, apres) {
+  assert.equal(texte.split(avant).length, 2, `« ${avant} » doit figurer une fois`);
+  return texte.replace(avant, () => apres);
+}
+
+// Écart entre ce que fait analyser(texte) et le refus ETAT_ILLISIBLE dont
+// les détails sont la raison et le chemin attendus, puis ceux de plus ; null
+// quand ils concordent.
+function ecartDeRefus(texte, raison, chemin, plus = {}) {
+  const attendus = { raison, chemin, ...plus };
+  try {
+    analyser(texte);
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) {
+      return `${erreur?.name} au lieu d'une ErreurStockage : ${erreur?.message}`;
+    }
+    if (erreur.code !== 'ETAT_ILLISIBLE') return `code ${erreur.code} au lieu de ETAT_ILLISIBLE`;
+    try {
+      assert.deepEqual(erreur.details, attendus);
+    } catch {
+      return `détails ${JSON.stringify(erreur.details)} au lieu de ${JSON.stringify(attendus)}`;
+    }
+    return null;
+  }
+  return 'aucun refus';
+}
+
+// Chaque cas [libellé, texte, raison, chemin, détails en plus] dont le refus
+// s'écarte de l'attendu, en une ligne lisible.
+function ecartsDeRefus(cas) {
+  assert.ok(cas.length > 0, 'aucun cas examiné');
+  return cas.flatMap(([libelle, texte, raison, chemin, plus]) => {
+    const ecart = ecartDeRefus(texte, raison, chemin, plus);
+    return ecart === null ? [] : [`${libelle} : ${ecart}`];
+  });
+}
+
+// Étapes — clés d'objet et rangs de liste — menant à chaque valeur que
+// l'analyse examine dans valeur, parents avant enfants, hors de l'intérieur
+// des propositions et du retenu, que l'analyse laisse au contrôle des
+// placements.
+function etapesDe(valeur, prefixe = []) {
+  const aPart =
+    prefixe.length === 2 && prefixe[0] === 'charge' && (prefixe[1] === 'propositions' || prefixe[1] === 'retenu');
+  if (aPart || typeof valeur !== 'object' || valeur === null) return [];
+  const suivantes = Array.isArray(valeur) ? valeur.map((_, rang) => rang) : Object.keys(valeur);
+  return suivantes.flatMap((etape) => [[...prefixe, etape], ...etapesDe(valeur[etape], [...prefixe, etape])]);
+}
+
+// Chemin d'ETAT_ILLISIBLE de ces étapes : clés séparées par un point, rangs
+// entre crochets.
+const cheminDe = (etapes) =>
+  etapes.map((etape, i) => (typeof etape === 'number' ? `[${etape}]` : i === 0 ? etape : `.${etape}`)).join('');
+
+// Valeur au bout de ces étapes dans racine.
+const valeurEn = (racine, etapes) => etapes.reduce((valeur, etape) => valeur[etape], racine);
+
+// Chemin de ces étapes, rangs effacés : charge.participants[].nom.
+const sansRangs = (etapes) => cheminDe(etapes).replace(/\[\d+\]/g, '[]');
+
+// Chemins, rangs effacés, des valeurs que le contrat de données admet
+// nulles. La liste s'écrit d'après le contrat, sans lire le schéma : un
+// champ que le schéma rendrait nullable à tort reste ainsi éprouvé.
+const ADMETTENT_NULL = new Set([
+  'charge.evenement.date',
+  'charge.evenement.filiation',
+  'charge.participants[].prenom',
+  'charge.participants[].appartenance',
+  'charge.participants[].courriel',
+  'charge.participants[].titrePressenti',
+  'charge.participants[].notes',
+  'charge.tables[].sieges',
+  'charge.reservations[].siege',
+  'charge.reservations[].tour',
+  'charge.retenu',
+]);
+
+// Gèle valeur et tout ce qu'elle contient : une écriture y lève TypeError,
+// le module s'exécutant en mode strict.
+function geler(valeur) {
+  if (typeof valeur === 'object' && valeur !== null) {
+    for (const enfant of Object.values(valeur)) geler(enfant);
+    Object.freeze(valeur);
+  }
+  return valeur;
+}
+
+describe('ErreurStockage (erreurs.js)', () => {
+  test('porte son code et ses détails ; le message les écrit, code puis détails en JSON', () => {
+    const erreur = new ErreurStockage('ABSENT', { chemin: 'veillee.gtt.json' });
+    assert.ok(erreur instanceof Error);
+    assert.equal(erreur.name, 'ErreurStockage');
+    assert.equal(erreur.code, 'ABSENT');
+    assert.deepEqual(erreur.details, { chemin: 'veillee.gtt.json' });
+    assert.equal(erreur.message, 'ABSENT {"chemin":"veillee.gtt.json"}');
+    const sansDetails = new ErreurStockage('CORRECTIF');
+    assert.deepEqual(sansDetails.details, {});
+    assert.equal(sansDetails.message, 'CORRECTIF {}');
+  });
+});
+
+describe('creerCharge (§ 4, § 6.1, § 9)', () => {
+  test('une charge neuve est un brouillon sans participant ni table, au format 1, aux réglages par défaut', () => {
+    assert.equal(FORMAT, 1);
+    const charge = creerCharge({ id: 'evt-neuf', nom: 'Atelier du jeudi', date: '2026-11-12', siegesParDefaut: 8, tours: 3 });
+    assert.deepEqual(charge, {
+      evenement: {
+        id: 'evt-neuf',
+        nom: 'Atelier du jeudi',
+        date: '2026-11-12',
+        siegesParDefaut: 8,
+        tours: 3,
+        unite: 'cm',
+        etat: 'brouillon',
+        filiation: null,
+      },
+      reglages: {
+        separerAppartenances: true,
+        nouveauxVoisins: true,
+        nouvelleTable: true,
+        varierAppartenances: true,
+        attribuerSieges: false,
+        generation: { nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT },
+      },
+      prochainsIds: { participant: 1, table: 1, proposition: 1 },
+      participants: [],
+      tables: [],
+      reservations: [],
+      titres: [],
+      propositions: [],
+      retenu: null,
+    });
+  });
+
+  test("GENERATION_PAR_DEFAUT : cinq propositions de 200 000 mouvements, l'historique par défaut du moteur ; figée, copiée dans chaque charge neuve", () => {
+    assert.deepEqual(GENERATION_PAR_DEFAUT, { nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT });
+    assert.ok(Object.isFrozen(GENERATION_PAR_DEFAUT));
+    const { generation } = creerCharge({ id: 'evt-neuf', nom: 'Atelier', siegesParDefaut: 8, tours: 3 }).reglages;
+    assert.deepEqual(generation, GENERATION_PAR_DEFAUT);
+    assert.notEqual(generation, GENERATION_PAR_DEFAUT);
+    assert.ok(!Object.isFrozen(generation));
+  });
+
+  test('sans date, la date est nulle ; deux charges neuves ne partagent aucun objet', () => {
+    const premiere = creerCharge({ id: 'evt-a', nom: 'Veillée A', siegesParDefaut: 6, tours: 2 });
+    const seconde = creerCharge({ id: 'evt-b', nom: 'Veillée B', siegesParDefaut: 6, tours: 2 });
+    assert.equal(premiere.evenement.date, null);
+    premiere.reglages.generation.nombre = 9;
+    premiere.prochainsIds.participant = 2;
+    premiere.participants.push({ id: 1 });
+    assert.equal(seconde.reglages.generation.nombre, 5);
+    assert.equal(seconde.prochainsIds.participant, 1);
+    assert.deepEqual(seconde.participants, []);
+  });
+
+  test("une charge neuve s'écrit, se relit à l'identique, et son état déduit est brouillon", () => {
+    const charge = creerCharge({ id: 'evt-neuf', nom: 'Atelier du jeudi', siegesParDefaut: 8, tours: 3 });
+    const lecture = analyser(serialiser(charge, { revision: 1, produitVersion: VERSION.affichee }));
+    assert.deepEqual(lecture.charge, charge);
+    assert.equal(lecture.formatPlusRecent, false);
+    assert.equal(etatDeduit(lecture.charge), 'brouillon');
+  });
+});
+
+describe('analyser : ce qui se lit (§ 8.8)', () => {
+  test('le document valide se lit : son en-tête et sa charge tels que le texte les porte, au format courant', () => {
+    const { entete, charge } = documentValide();
+    assert.deepEqual(analyser(JSON.stringify(documentValide())), { entete, charge, formatPlusRecent: false });
+  });
+
+  test('variantes admises : chacune se lit sans refus', () => {
+    const variantes = [
+      ['date nulle', abime((d) => { d.charge.evenement.date = null; })],
+      ["29 février d'une année bissextile", abime((d) => { d.charge.evenement.date = '2024-02-29'; })],
+      ['29 février 2000, séculaire divisible par 400', abime((d) => { d.charge.evenement.date = '2000-02-29'; })],
+      ['31 décembre', abime((d) => { d.charge.evenement.date = '2026-12-31'; })],
+      ['filiation nulle', abime((d) => { d.charge.evenement.filiation = null; })],
+      ['table de deux sièges', abime((d) => {
+        d.charge.tables[1].sieges = 2;
+        d.charge.reservations[0].siege = 2;
+        d.charge.titres[0].siege = 1;
+      })],
+      ["réservation d'une personne exclue", abime((d) => {
+        d.charge.reservations.push({ participant: 3, table: 1, siege: null, portee: 'tous', tour: null });
+        d.entete.comptes.reservations = 3;
+      })],
+      ['réservation au dernier tour', abime((d) => { d.charge.reservations[1].tour = 2; })],
+      ["texte précédé d'une marque d'ordre d'octets", `\uFEFF${JSON.stringify(documentValide())}`],
+      ['texte mis en page autrement', JSON.stringify(documentValide(), null, 4)],
+      ["propositions fautives, que l'analyse ne contrôle pas", abime((d) => {
+        const [premiere] = d.charge.propositions;
+        d.charge.propositions.push(42, { id: 1, inconnue: true }, { ...premiere, placement: [{ sieges: [[9]] }] });
+        d.entete.comptes.propositions = 4;
+      })],
+      ['retenu quelconque', abime((d) => {
+        d.charge.retenu = { inconnue: [] };
+        d.entete.comptes.retenu = 1;
+      })],
+      // Un identifiant de proposition qui n'en est pas un ne s'attribue pas :
+      // il ne se compare pas à prochainsIds.proposition, et le contrôle des
+      // placements écarte la proposition ou signale le retenu.
+      ["identifiants de proposition qui n'en sont pas, au-delà de prochainsIds.proposition", abime((d) => {
+        d.charge.propositions.push(null, { id: 'neuf' }, { id: 9.5 }, { id: 2 ** 53 }, [9]);
+        d.entete.comptes.propositions = 6;
+        d.charge.retenu = { ...retenuValide(), proposition: '9' };
+        d.entete.comptes.retenu = 1;
+      })],
+      ['deux propositions de même identifiant, sous prochainsIds.proposition', abime((d) => {
+        d.charge.propositions.push({ ...d.charge.propositions[0], graine: 8 });
+        d.entete.comptes.propositions = 2;
+      })],
+      ['retenu bien formé', abime((d) => {
+        d.charge.retenu = retenuValide();
+        d.entete.comptes.retenu = 1;
+      })],
+      ['toutes les listes vides', abime((d) => {
+        for (const cle of ['participants', 'tables', 'reservations', 'titres', 'propositions']) {
+          d.charge[cle] = [];
+          d.entete.comptes[cle] = 0;
+        }
+      })],
+    ];
+    const refusees = variantes.flatMap(([libelle, texte]) => {
+      try {
+        analyser(texte);
+        return [];
+      } catch (erreur) {
+        return [`${libelle} : ${erreur.message}`];
+      }
+    });
+    assert.deepEqual(refusees, []);
+  });
+});
+
+describe('analyser : les refus que le plan nomme (§ 8.8)', () => {
+  test('vide, JSON, clé inconnue, identifiant égal à prochainsIds, comptes, référence, format 0 : chacun avec sa raison et son chemin', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['texte vide', '', 'VIDE', null],
+      ['« { »', '{', 'JSON', null],
+      ['clé inconnue dans un participant',
+        abime((d) => { d.charge.participants[1].surnom = 'Sasa'; }), 'FORME', 'charge.participants[1].surnom'],
+      ['identifiant de participant égal à prochainsIds.participant',
+        abime((d) => { d.charge.participants[3].id = 6; }), 'FORME', 'charge.participants[3].id'],
+      ['comptes faux',
+        abime((d) => { d.entete.comptes.participants = 5; }), 'COMPTES', 'entete.comptes.participants'],
+      ['réservation vers la personne 9, absente',
+        abime((d) => { d.charge.reservations[0].participant = 9; }), 'REFERENCE', 'charge.reservations[0].participant'],
+      ['format 0', abime((d) => { d.entete.format = 0; }), 'FORMAT_INCONNU', 'entete.format'],
+    ]), []);
+  });
+});
+
+describe('analyser : texte vide, JSON, racine et format', () => {
+  test('chaque refus porte sa raison et son chemin ; null quand aucun élément ne se désigne', () => {
+    const valide = JSON.stringify(documentValide());
+    assert.deepEqual(ecartsDeRefus([
+      ['blancs seuls', ' \n\t\r\n ', 'VIDE', null],
+      ["marque d'ordre d'octets suivie de blancs", '\uFEFF \n', 'VIDE', null],
+      ['texte tronqué', valide.slice(0, -20), 'JSON', null],
+      ['deux documents à la suite', `${valide}${valide}`, 'JSON', null],
+      ['racine qui est une liste', '[]', 'FORME', ''],
+      ['racine nulle', 'null', 'FORME', ''],
+      ['racine qui est un nombre', '3', 'FORME', ''],
+      ['en-tête absent', abime((d) => { delete d.entete; }), 'FORME', 'entete'],
+      ['en-tête qui est un nombre', abime((d) => { d.entete = 1; }), 'FORME', 'entete'],
+      ['format absent', abime((d) => { delete d.entete.format; }), 'FORME', 'entete.format'],
+      ['format négatif', abime((d) => { d.entete.format = -1; }), 'FORMAT_INCONNU', 'entete.format'],
+      ['format non entier', abime((d) => { d.entete.format = 1.5; }), 'FORMAT_INCONNU', 'entete.format'],
+      ['format en texte', abime((d) => { d.entete.format = '1'; }), 'FORMAT_INCONNU', 'entete.format'],
+      ['format nul', abime((d) => { d.entete.format = null; }), 'FORMAT_INCONNU', 'entete.format'],
+    ]), []);
+  });
+});
+
+describe('analyser : forme (§ 8.8)', () => {
+  test('chaque clé du contrat, retirée, est nommée par son chemin', () => {
+    const etapes = etapesDe(documentValide()).filter((e) => typeof e.at(-1) === 'string');
+    assert.ok(etapes.length >= 100, `${etapes.length} clés seulement`);
+    assert.deepEqual(ecartsDeRefus(etapes.map((e) => [
+      `sans ${cheminDe(e)}`,
+      abime((d) => { delete valeurEn(d, e.slice(0, -1))[e.at(-1)]; }),
+      'FORME',
+      cheminDe(e),
+    ])), []);
+  });
+
+  test('une clé inconnue, dans chaque objet que le contrat décrit, racine comprise, est nommée par son chemin', () => {
+    const objets = [[], ...etapesDe(documentValide())].filter((e) => {
+      const valeur = valeurEn(documentValide(), e);
+      return typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
+    });
+    assert.ok(objets.length >= 20, `${objets.length} objets seulement`);
+    assert.deepEqual(ecartsDeRefus(objets.map((e) => [
+      `inconnue sous ${cheminDe(e) || 'la racine'}`,
+      abime((d) => { valeurEn(d, e).inconnue = 1; }),
+      'FORME',
+      cheminDe([...e, 'inconnue']),
+    ])), []);
+  });
+
+  test("chaque valeur remplacée par une valeur d'une autre sorte est nommée par son chemin", () => {
+    // Une liste devient un objet, toute autre valeur une liste : aucune règle
+    // du contrat n'admet l'un pour l'autre. Le format, lu avant tout le reste,
+    // a sa propre raison.
+    const etapes = etapesDe(documentValide());
+    assert.deepEqual(ecartsDeRefus(etapes.map((e) => {
+      const chemin = cheminDe(e);
+      return [
+        `${chemin} d'une autre sorte`,
+        abime((d) => {
+          const porteur = valeurEn(d, e.slice(0, -1));
+          porteur[e.at(-1)] = Array.isArray(porteur[e.at(-1)]) ? {} : [];
+        }),
+        chemin === 'entete.format' ? 'FORMAT_INCONNU' : 'FORME',
+        chemin,
+      ];
+    })), []);
+  });
+
+  test('chaque valeur hors de son domaine est nommée par son chemin', () => {
+    const cas = [
+      ['produitVersion vide', (d) => { d.entete.produitVersion = ''; }, 'entete.produitVersion'],
+      ['révision 0', (d) => { d.entete.revision = 0; }, 'entete.revision'],
+      ['révision non entière', (d) => { d.entete.revision = 2.5; }, 'entete.revision'],
+      ['compte négatif', (d) => { d.entete.comptes.titres = -1; }, 'entete.comptes.titres'],
+      ['compte de retenu 2', (d) => { d.entete.comptes.retenu = 2; }, 'entete.comptes.retenu'],
+      ["identifiant d'événement vide", (d) => { d.charge.evenement.id = ''; }, 'charge.evenement.id'],
+      ["nom d'événement vide", (d) => { d.charge.evenement.nom = ''; }, 'charge.evenement.nom'],
+      ['30 février', (d) => { d.charge.evenement.date = '2026-02-30'; }, 'charge.evenement.date'],
+      ["29 février d'une année ordinaire", (d) => { d.charge.evenement.date = '2026-02-29'; }, 'charge.evenement.date'],
+      ['29 février 1900, séculaire', (d) => { d.charge.evenement.date = '1900-02-29'; }, 'charge.evenement.date'],
+      ['31 avril', (d) => { d.charge.evenement.date = '2026-04-31'; }, 'charge.evenement.date'],
+      ['mois 13', (d) => { d.charge.evenement.date = '2026-13-01'; }, 'charge.evenement.date'],
+      ['mois 00', (d) => { d.charge.evenement.date = '2026-00-10'; }, 'charge.evenement.date'],
+      ['jour 00', (d) => { d.charge.evenement.date = '2026-11-00'; }, 'charge.evenement.date'],
+      ['date dans un autre ordre', (d) => { d.charge.evenement.date = '12/11/2026'; }, 'charge.evenement.date'],
+      ['date suivie d\'une heure', (d) => { d.charge.evenement.date = '2026-11-12T19:00'; }, 'charge.evenement.date'],
+      ['date vide', (d) => { d.charge.evenement.date = ''; }, 'charge.evenement.date'],
+      ['un seul siège par défaut', (d) => { d.charge.evenement.siegesParDefaut = 1; }, 'charge.evenement.siegesParDefaut'],
+      ['aucun tour', (d) => { d.charge.evenement.tours = 0; }, 'charge.evenement.tours'],
+      ['unité autre que le centimètre', (d) => { d.charge.evenement.unite = 'mm'; }, 'charge.evenement.unite'],
+      ['état inconnu', (d) => { d.charge.evenement.etat = 'archive'; }, 'charge.evenement.etat'],
+      ['source de filiation sans nom', (d) => { d.charge.evenement.filiation.source.nom = ''; },
+        'charge.evenement.filiation.source.nom'],
+      ['instant de filiation à la révision 0', (d) => { d.charge.evenement.filiation.instant.revision = 0; },
+        'charge.evenement.filiation.instant.revision'],
+      ['réglage non booléen', (d) => { d.charge.reglages.attribuerSieges = 'non'; }, 'charge.reglages.attribuerSieges'],
+      ["compte d'arrêt nul", (d) => { d.charge.reglages.generation.arret = 0; }, 'charge.reglages.generation.arret'],
+      ['aucune proposition demandée', (d) => { d.charge.reglages.generation.nombre = 0; },
+        'charge.reglages.generation.nombre'],
+      ['historique de longueur 0', (d) => { d.charge.reglages.generation.historique = 0; },
+        'charge.reglages.generation.historique'],
+      ['prochain identifiant 0', (d) => { d.charge.prochainsIds.participant = 0; }, 'charge.prochainsIds.participant'],
+      ['prochain identifiant de table 0', (d) => { d.charge.prochainsIds.table = 0; }, 'charge.prochainsIds.table'],
+      ['prochain identifiant de proposition 0', (d) => { d.charge.prochainsIds.proposition = 0; },
+        'charge.prochainsIds.proposition'],
+      ['identifiant 0', (d) => { d.charge.participants[0].id = 0; }, 'charge.participants[0].id'],
+      ['identifiant en texte', (d) => { d.charge.participants[0].id = '1'; }, 'charge.participants[0].id'],
+      ['révision au-delà des entiers exacts', (d) => { d.entete.revision = 2 ** 53; }, 'entete.revision'],
+      ['nom de participant vide', (d) => { d.charge.participants[1].nom = ''; }, 'charge.participants[1].nom'],
+      ['prénom vide au lieu de null', (d) => { d.charge.participants[1].prenom = ''; }, 'charge.participants[1].prenom'],
+      ['notes vides au lieu de null', (d) => { d.charge.participants[2].notes = ''; }, 'charge.participants[2].notes'],
+      ['courriel numérique', (d) => { d.charge.participants[0].courriel = 42; }, 'charge.participants[0].courriel'],
+      ['exclu en texte', (d) => { d.charge.participants[2].exclu = 'oui'; }, 'charge.participants[2].exclu'],
+      ['exclu nul', (d) => { d.charge.participants[2].exclu = null; }, 'charge.participants[2].exclu'],
+      ['numéro de table 0', (d) => { d.charge.tables[0].numero = 0; }, 'charge.tables[0].numero'],
+      ['table d\'un seul siège', (d) => { d.charge.tables[1].sieges = 1; }, 'charge.tables[1].sieges'],
+      ['sièges non entiers', (d) => { d.charge.tables[1].sieges = 3.5; }, 'charge.tables[1].sieges'],
+      ['forme inconnue', (d) => { d.charge.tables[0].forme = 'ovale'; }, 'charge.tables[0].forme'],
+      ['position en texte', (d) => { d.charge.tables[0].position.x = '0'; }, 'charge.tables[0].position.x'],
+      ['position nulle', (d) => { d.charge.tables[1].position.y = null; }, 'charge.tables[1].position.y'],
+      ['portée inconnue', (d) => { d.charge.reservations[0].portee = 'toujours'; }, 'charge.reservations[0].portee'],
+      ['siège réservé 0', (d) => { d.charge.reservations[0].siege = 0; }, 'charge.reservations[0].siege'],
+      ['tour 0', (d) => { d.charge.reservations[1].tour = 0; }, 'charge.reservations[1].tour'],
+      ['libellé de titre vide', (d) => { d.charge.titres[0].libelle = ''; }, 'charge.titres[0].libelle'],
+      ['titre sans siège', (d) => { d.charge.titres[0].siege = null; }, 'charge.titres[0].siege'],
+    ];
+    assert.deepEqual(ecartsDeRefus(cas.map(([libelle, modifier, chemin]) => [libelle, abime(modifier), 'FORME', chemin])), []);
+  });
+
+  test("une position que JSON.parse lit infinie, 1e400 ou -1e400, est nommée par son chemin", () => {
+    // JSON.stringify n'écrit jamais un nombre infini : le cas s'écrit dans le
+    // texte, et l'épreuve vérifie d'abord qu'il se lit bien infini.
+    const valide = JSON.stringify(documentValide());
+    const cas = [
+      ['abscisse 1e400',
+        remplacerUneFois(valide, '"position":{"x":0,"y":0}', '"position":{"x":1e400,"y":0}'),
+        'FORME', 'charge.tables[0].position.x'],
+      ['ordonnée -1e400',
+        remplacerUneFois(valide, '"position":{"x":120.5,"y":-40}', '"position":{"x":120.5,"y":-1e400}'),
+        'FORME', 'charge.tables[1].position.y'],
+    ];
+    assert.equal(JSON.parse(cas[0][1]).charge.tables[0].position.x, Infinity);
+    assert.equal(JSON.parse(cas[1][1]).charge.tables[1].position.y, -Infinity);
+    assert.deepEqual(ecartsDeRefus(cas), []);
+  });
+
+  test("null, posé à chaque valeur dont le contrat ne l'admet pas, est nommé par son chemin", () => {
+    const etapes = etapesDe(documentValide());
+    // Chaque chemin admis nul désigne au moins une valeur du document : la
+    // liste suit le contrat, sans entrée qui ne désigne plus rien.
+    for (const chemin of ADMETTENT_NULL) {
+      assert.ok(etapes.some((e) => sansRangs(e) === chemin), `${chemin} : aucune valeur du document`);
+    }
+    const refusent = etapes.filter((e) => !ADMETTENT_NULL.has(sansRangs(e)));
+    assert.ok(refusent.length >= 80, `${refusent.length} valeurs seulement`);
+    // Le format, lu avant tout le reste, a sa propre raison.
+    assert.deepEqual(ecartsDeRefus(refusent.map((e) => {
+      const chemin = cheminDe(e);
+      return [
+        `${chemin} nul`,
+        abime((d) => { valeurEn(d, e.slice(0, -1))[e.at(-1)] = null; }),
+        chemin === 'entete.format' ? 'FORMAT_INCONNU' : 'FORME',
+        chemin,
+      ];
+    })), []);
+  });
+
+  test("de plusieurs clés inconnues, la plus petite en unités UTF-16 est nommée, quel que soit l'ordre où elles arrivent", () => {
+    const avec = (cles) => abime((d) => {
+      for (const cle of cles) d.charge.participants[1][cle] = 1;
+    });
+    // Une clé « __proto__ » ne s'écrit que dans le texte : une affectation en
+    // JavaScript changerait le prototype au lieu d'ajouter une clé.
+    const avecProto = JSON.stringify(documentValide()).replace('"nom":"Sarrasin"', '"nom":"Sarrasin","__proto__":{}');
+    assert.deepEqual(ecartsDeRefus([
+      ['zeta puis alpha', avec(['zeta', 'alpha']), 'FORME', 'charge.participants[1].alpha'],
+      ['alpha puis zeta', avec(['alpha', 'zeta']), 'FORME', 'charge.participants[1].alpha'],
+      ['une majuscule précède une minuscule', avec(['alpha', 'Zeta']), 'FORME', 'charge.participants[1].Zeta'],
+      ["une clé qui n'est pas un identifiant", avec(['nom complet']), 'FORME', 'charge.participants[1]["nom complet"]'],
+      ['une clé vide', avec(['']), 'FORME', 'charge.participants[1][""]'],
+      ['une clé entière', avec(['7']), 'FORME', 'charge.participants[1]["7"]'],
+      ['une clé « __proto__ »', avecProto, 'FORME', 'charge.participants[1].__proto__'],
+    ]), []);
+  });
+});
+
+describe('analyser : identifiants et tours (§ 4)', () => {
+  test('un identifiant en double, ou atteignant prochainsIds, est nommé ; un tour hors de sa portée aussi', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['identifiant de participant au-delà de prochainsIds',
+        abime((d) => { d.charge.participants[3].id = 9; }), 'FORME', 'charge.participants[3].id'],
+      ['identifiant de participant en double, le second fautif',
+        abime((d) => { d.charge.participants[2].id = 1; }), 'FORME', 'charge.participants[2].id'],
+      ['identifiant de table égal à prochainsIds.table',
+        abime((d) => { d.charge.tables[1].id = 4; }), 'FORME', 'charge.tables[1].id'],
+      ['identifiant de table en double',
+        abime((d) => { d.charge.tables[1].id = 1; }), 'FORME', 'charge.tables[1].id'],
+      ['portée « tous » avec un tour',
+        abime((d) => { d.charge.reservations[0].tour = 1; }), 'FORME', 'charge.reservations[0].tour'],
+      ['portée « tour » sans tour',
+        abime((d) => { d.charge.reservations[1].tour = null; }), 'FORME', 'charge.reservations[1].tour'],
+      ['tour au-delà du nombre de tours',
+        abime((d) => { d.charge.reservations[1].tour = 3; }), 'FORME', 'charge.reservations[1].tour'],
+    ]), []);
+  });
+
+  test("l'identifiant d'une proposition et la proposition d'origine du retenu ne se comparent pas à prochainsIds.proposition : le fichier se lit tel qu'écrit, au format courant comme plus récent, et le contrôle des placements les juge (§ 8.9, point 3)", () => {
+    // La proposition 1 est seule, et prochainsIds.proposition vaut 2.
+    const avecRetenu = (proposition) => (d) => {
+      d.charge.retenu = { ...retenuValide(), proposition };
+      d.entete.comptes.retenu = 1;
+    };
+    const seconde = (id) => (d) => {
+      d.charge.propositions.push({ ...d.charge.propositions[0], id });
+      d.entete.comptes.propositions = 2;
+    };
+    const cas = [
+      ['identifiant de proposition égal à prochainsIds.proposition', (d) => { d.charge.propositions[0].id = 2; }],
+      ['identifiant de proposition au-delà de prochainsIds.proposition', (d) => { d.charge.propositions[0].id = 7; }],
+      ['la seconde proposition au-delà, la première en deçà', seconde(3)],
+      ["proposition d'origine du retenu égale à prochainsIds.proposition", avecRetenu(2)],
+      ["proposition d'origine du retenu au-delà, sans aucune proposition", (d) => {
+        avecRetenu(5)(d);
+        d.charge.propositions = [];
+        d.entete.comptes.propositions = 0;
+      }],
+      ['compteur abaissé à 1, sous chaque identifiant et sous le retenu', (d) => {
+        avecRetenu(1)(d);
+        seconde(3)(d);
+        d.charge.prochainsIds.proposition = 1;
+      }],
+    ];
+    // Chaque cas se lit à chaque format, l'en-tête et la charge rendus tels
+    // que le document les porte.
+    const ecarts = cas.flatMap(([libelle, modifier]) =>
+      [FORMAT, FORMAT + 1].flatMap((format) => {
+        const attendu = documentValide();
+        modifier(attendu);
+        attendu.entete.format = format;
+        try {
+          assert.deepEqual(analyser(JSON.stringify(attendu)), { ...attendu, formatPlusRecent: format > FORMAT });
+          return [];
+        } catch (erreur) {
+          return [`${libelle}, format ${format} : ${erreur.message.split('\n')[0]}`];
+        }
+      }),
+    );
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(ecarts, []);
+    // Un identifiant de table en double reste refusé, quels que soient ceux
+    // des propositions.
+    assert.deepEqual(ecartsDeRefus([
+      ['une table en double, une proposition au-delà du compteur', abime((d) => {
+        seconde(3)(d);
+        d.charge.tables[1].id = 1;
+      }), 'FORME', 'charge.tables[1].id'],
+    ]), []);
+  });
+});
+
+describe('analyser : comptes de l\'en-tête (§ 8.8)', () => {
+  test('chaque compte se compare à sa liste, le retenu à 0 ou 1', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['un participant perdu', abime((d) => { d.charge.participants.pop(); }), 'COMPTES', 'entete.comptes.participants'],
+      ['une table annoncée en trop', abime((d) => { d.entete.comptes.tables = 3; }), 'COMPTES', 'entete.comptes.tables'],
+      ['une réservation annoncée en moins',
+        abime((d) => { d.entete.comptes.reservations = 1; }), 'COMPTES', 'entete.comptes.reservations'],
+      ['un titre annoncé en trop', abime((d) => { d.entete.comptes.titres = 2; }), 'COMPTES', 'entete.comptes.titres'],
+      ['aucune proposition annoncée',
+        abime((d) => { d.entete.comptes.propositions = 0; }), 'COMPTES', 'entete.comptes.propositions'],
+      ['un retenu annoncé, aucun écrit', abime((d) => { d.entete.comptes.retenu = 1; }), 'COMPTES', 'entete.comptes.retenu'],
+      ['un retenu écrit, aucun annoncé',
+        abime((d) => { d.charge.retenu = retenuValide(); }), 'COMPTES', 'entete.comptes.retenu'],
+    ]), []);
+  });
+});
+
+describe('analyser : références (§ 4, § 6.2)', () => {
+  test("une réservation ou un titre vers une table ou une personne absente, ou un siège au-delà de la capacité, est nommé", () => {
+    assert.deepEqual(ecartsDeRefus([
+      ["réservation d'une personne retirée",
+        abime((d) => { d.charge.reservations[1].participant = 4; }), 'REFERENCE', 'charge.reservations[1].participant'],
+      ['réservation vers une table absente',
+        abime((d) => { d.charge.reservations[0].table = 2; }), 'REFERENCE', 'charge.reservations[0].table'],
+      ['siège réservé au-delà de la capacité par défaut',
+        abime((d) => { d.charge.reservations[1].siege = 4; }), 'REFERENCE', 'charge.reservations[1].siege'],
+      ['siège réservé au-delà de la surcharge',
+        abime((d) => { d.charge.reservations[0].siege = 5; }), 'REFERENCE', 'charge.reservations[0].siege'],
+      ['titre vers une table absente',
+        abime((d) => { d.charge.titres[0].table = 7; }), 'REFERENCE', 'charge.titres[0].table'],
+      ['titre au-delà de la capacité',
+        abime((d) => { d.charge.titres[0].siege = 5; }), 'REFERENCE', 'charge.titres[0].siege'],
+    ]), []);
+  });
+});
+
+describe('analyser : ordre des refus', () => {
+  test('format, forme de chaque champ, identifiants et tours, comptes, puis références ; dans chacun, l\'ordre du schéma puis des rangs', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['le format avant la forme', abime((d) => {
+        d.entete.format = 0;
+        d.charge.participants[0].nom = '';
+      }), 'FORMAT_INCONNU', 'entete.format'],
+      ["l'ordre du schéma dans la forme", abime((d) => {
+        d.charge.participants[0].nom = '';
+        d.charge.evenement.nom = '';
+      }), 'FORME', 'charge.evenement.nom'],
+      ['les rangs dans leur ordre', abime((d) => {
+        d.charge.participants[2].nom = '';
+        d.charge.participants[1].nom = '';
+      }), 'FORME', 'charge.participants[1].nom'],
+      ["un champ connu avant une clé inconnue du même objet", abime((d) => {
+        d.charge.participants[0].alpha = 1;
+        d.charge.participants[0].nom = '';
+      }), 'FORME', 'charge.participants[0].nom'],
+      ['la forme de chaque champ avant les identifiants', abime((d) => {
+        d.charge.participants[1].id = 1;
+        d.charge.titres[0].libelle = '';
+      }), 'FORME', 'charge.titres[0].libelle'],
+      ['la forme avant les comptes', abime((d) => {
+        d.entete.comptes.participants = 5;
+        d.charge.participants[0].nom = '';
+      }), 'FORME', 'charge.participants[0].nom'],
+      ['les comptes avant les références', abime((d) => {
+        d.charge.participants.shift();
+      }), 'COMPTES', 'entete.comptes.participants'],
+      ['la forme avant les références, même plus loin dans le texte', abime((d) => {
+        d.charge.reservations[0].participant = 9;
+        d.charge.titres[0].libelle = '';
+      }), 'FORME', 'charge.titres[0].libelle'],
+    ]), []);
+  });
+});
+
+describe('analyser : format plus récent (§ 8.8, § 18.6)', () => {
+  test("un format 2 se lit, formatPlusRecent vrai, ses clés inconnues ignorées : ni l'en-tête ni la charge rendus ne les portent", () => {
+    const simple = analyser(abime((d) => { d.entete.format = 2; }));
+    assert.equal(simple.formatPlusRecent, true);
+    assert.equal(simple.entete.format, 2);
+    const { entete, charge } = documentValide();
+    const etendu = analyser(abime((d) => {
+      d.entete.format = 2;
+      d.annexe = { couleur: 'vert' };
+      d.entete.signature = null;
+      d.entete.comptes.lieux = 1;
+      d.charge.evenement.lieu = 'Salle des fêtes';
+      d.charge.participants[0].pronom = 'elle';
+      d.charge.tables[1].position.z = 0;
+      d.charge.propositions[0].note = 'refaite';
+      d.charge.propositions[0].placement[0].commentaire = 'tour calme';
+    }));
+    assert.deepEqual(etendu, { entete: { ...entete, format: 2 }, charge, formatPlusRecent: true });
+  });
+
+  test("dans un format plus récent, toute autre faute de forme lève FORMAT_PLUS_RECENT avec le format lu ; comptes et références gardent leur raison et portent le format lu", () => {
+    const plusRecent = (format, modifier) => abime((d) => {
+      d.entete.format = format;
+      d.charge.evenement.lieu = 'Salle des fêtes';
+      modifier(d);
+    });
+    assert.deepEqual(ecartsDeRefus([
+      ['état « archive »', plusRecent(2, (d) => { d.charge.evenement.etat = 'archive'; }),
+        'FORMAT_PLUS_RECENT', 'charge.evenement.etat', { format: 2 }],
+      ['état « archive », format 3', plusRecent(3, (d) => { d.charge.evenement.etat = 'archive'; }),
+        'FORMAT_PLUS_RECENT', 'charge.evenement.etat', { format: 3 }],
+      ['nom vide', plusRecent(2, (d) => { d.charge.participants[0].nom = ''; }),
+        'FORMAT_PLUS_RECENT', 'charge.participants[0].nom', { format: 2 }],
+      ['clé connue absente', plusRecent(2, (d) => { delete d.charge.tables[0].forme; }),
+        'FORMAT_PLUS_RECENT', 'charge.tables[0].forme', { format: 2 }],
+      ['charge qui est une liste', plusRecent(2, (d) => { d.charge = []; }),
+        'FORMAT_PLUS_RECENT', 'charge', { format: 2 }],
+      ['identifiant en double', plusRecent(2, (d) => { d.charge.participants[2].id = 1; }),
+        'FORMAT_PLUS_RECENT', 'charge.participants[2].id', { format: 2 }],
+      ['tour au-delà du nombre de tours', plusRecent(2, (d) => { d.charge.reservations[1].tour = 3; }),
+        'FORMAT_PLUS_RECENT', 'charge.reservations[1].tour', { format: 2 }],
+      ['comptes faux', plusRecent(2, (d) => { d.entete.comptes.tables = 1; }),
+        'COMPTES', 'entete.comptes.tables', { format: 2 }],
+      ['référence absente', plusRecent(2, (d) => { d.charge.titres[0].table = 7; }),
+        'REFERENCE', 'charge.titres[0].table', { format: 2 }],
+      ['comptes faux, format 3', plusRecent(3, (d) => { d.entete.comptes.titres = 0; }),
+        'COMPTES', 'entete.comptes.titres', { format: 3 }],
+      ['référence absente, format 3', plusRecent(3, (d) => { d.charge.reservations[1].participant = 4; }),
+        'REFERENCE', 'charge.reservations[1].participant', { format: 3 }],
+      ['siège au-delà de la capacité', plusRecent(2, (d) => { d.charge.reservations[1].siege = 4; }),
+        'REFERENCE', 'charge.reservations[1].siege', { format: 2 }],
+      ['au format courant, la même faute reste FORME',
+        abime((d) => { d.charge.evenement.etat = 'archive'; }), 'FORME', 'charge.evenement.etat'],
+    ]), []);
+  });
+
+  test("une collection qu'un format plus récent ajoute, ignorée à la lecture, laisse une référence ou un compte sans objet : la raison reste REFERENCE ou COMPTES, et les détails portent le format lu", () => {
+    // Le format 2 de l'épreuve range une table d'appoint hors de tables, et
+    // une réservation la désigne ; la lecture ne garde que les clés connues.
+    const avecAppoint = (modifier) => abime((d) => {
+      d.entete.format = 2;
+      d.charge.tablesAppoint = [{ id: 4, numero: 3, sieges: 4, forme: 'ronde', position: { x: 0, y: 200 } }];
+      d.charge.prochainsIds.table = 5;
+      d.charge.reservations.push({ participant: 5, table: 4, siege: 1, portee: 'tous', tour: null });
+      d.entete.comptes.reservations = 3;
+      modifier(d);
+    });
+    assert.deepEqual(ecartsDeRefus([
+      ["la réservation de la table d'appoint", avecAppoint(() => {}),
+        'REFERENCE', 'charge.reservations[2].table', { format: 2 }],
+      ["la table d'appoint comptée parmi les tables", avecAppoint((d) => { d.entete.comptes.tables = 3; }),
+        'COMPTES', 'entete.comptes.tables', { format: 2 }],
+    ]), []);
+  });
+});
+
+describe('configurationDepuisCharge (§ 6.1)', () => {
+  test('une table qui suit le défaut le prend, une table surchargée garde sa valeur, et changer le défaut ne touche pas la surchargée', () => {
+    const { charge } = documentValide();
+    assert.deepEqual(configurationDepuisCharge(charge).tables, [
+      { id: 1, numero: 1, capacite: 3 },
+      { id: 3, numero: 2, capacite: 4 },
+    ]);
+    charge.evenement.siegesParDefaut = 6;
+    assert.deepEqual(configurationDepuisCharge(charge).tables.map((table) => table.capacite), [6, 4]);
+  });
+
+  test('la configuration porte les participants, les tours, les réservations sans siège et les quatre contraintes', () => {
+    assert.deepEqual(configurationDepuisCharge(documentValide().charge), {
+      participants: [
+        { id: 1, nom: 'Brindille', appartenance: 'Chorale du Vallon', exclu: false },
+        { id: 2, nom: 'Sarrasin', appartenance: 'Chorale du Vallon', exclu: false },
+        { id: 3, nom: 'Coquelicot', appartenance: null, exclu: true },
+        { id: 5, nom: 'Mirabelle', appartenance: 'Cercle Gamma', exclu: false },
+      ],
+      tables: [
+        { id: 1, numero: 1, capacite: 3 },
+        { id: 3, numero: 2, capacite: 4 },
+      ],
+      tours: 2,
+      reservations: [
+        { participant: 1, table: 3, portee: 'tous' },
+        { participant: 2, table: 1, portee: 'tour', tour: 2 },
+      ],
+      contraintes: {
+        separerAppartenances: true,
+        nouveauxVoisins: false,
+        nouvelleTable: true,
+        varierAppartenances: false,
+      },
+    });
+  });
+
+  test("les listes gardent l'ordre de la charge : le rang d'une réservation que nomme une ErreurConfiguration est son rang dans la charge", () => {
+    const { charge } = documentValide();
+    charge.participants.reverse();
+    charge.tables.reverse();
+    charge.reservations.reverse();
+    const configuration = configurationDepuisCharge(charge);
+    assert.deepEqual(configuration.participants.map(({ id }) => id), [5, 3, 2, 1]);
+    assert.deepEqual(configuration.tables.map(({ id }) => id), [3, 1]);
+    assert.deepEqual(configuration.reservations.map(({ participant }) => participant), [2, 1]);
+    // La seconde réservation de la charge désigne une table absente : le
+    // moteur la nomme à son rang dans la charge, 1.
+    charge.reservations[1].table = 9;
+    assert.throws(
+      () => normaliser(configurationDepuisCharge(charge)),
+      (erreur) =>
+        erreur instanceof ErreurConfiguration &&
+        erreur.code === 'RESERVATION_INCONNUE' &&
+        erreur.details.reservation === 1 &&
+        erreur.details.table === 9,
+    );
+  });
+
+  test('le résultat passe normaliser du moteur : exclu écarté, ancrage dérivé de la portée « tous », capacités résolues', () => {
+    const charge = geler(documentValide().charge);
+    const instance = normaliser(configurationDepuisCharge(charge));
+    assert.deepEqual(instance.ids, [1, 2, 5]);
+    assert.deepEqual([...instance.exclus], [3]);
+    assert.deepEqual(instance.idsTables, [1, 3]);
+    assert.deepEqual(instance.capacite, Int32Array.from([3, 4]));
+    assert.deepEqual(instance.statut, Uint8Array.from([STATUT.ANCRE, STATUT.PARTIELLEMENT_FIXE, STATUT.MOBILE]));
+    assert.equal(instance.R, 2);
+  });
+});
+
+describe('etatDeduit (§ 8.7, § 9)', () => {
+  test('sans proposition, brouillon ; avec, proposé ; avec un retenu, retenu', () => {
+    assert.equal(etatDeduit(creerCharge({ id: 'evt-neuf', nom: 'Atelier', siegesParDefaut: 8, tours: 3 })), 'brouillon');
+    const { charge } = documentValide();
+    assert.equal(etatDeduit(charge), 'propose');
+    charge.retenu = retenuValide();
+    assert.equal(etatDeduit(charge), 'retenu');
+    charge.propositions = [];
+    assert.equal(etatDeduit(charge), 'retenu');
+  });
+
+  test("un plan bloqué donne l'un des trois, jamais bloqué : le contenu décide, pas l'état inscrit", () => {
+    const bloquee = (modifier) => {
+      const { charge } = documentValide();
+      charge.evenement.etat = 'bloque';
+      modifier(charge);
+      return etatDeduit(charge);
+    };
+    assert.deepEqual(
+      [
+        bloquee((c) => { c.propositions = []; }),
+        bloquee(() => {}),
+        bloquee((c) => { c.retenu = retenuValide(); }),
+      ],
+      ['brouillon', 'propose', 'retenu'],
+    );
+    const { charge } = documentValide();
+    charge.evenement.etat = 'retenu';
+    charge.propositions = [];
+    assert.equal(etatDeduit(charge), 'brouillon');
+  });
+});
+
+describe('capacite (§ 6.1)', () => {
+  test("les sièges de la table, ou le défaut quand elle le suit ; un identifiant au lieu de l'enregistrement lève TypeError", () => {
+    const { charge } = documentValide();
+    assert.equal(capacite(charge, charge.tables[0]), 3);
+    assert.equal(capacite(charge, charge.tables[1]), 4);
+    charge.evenement.siegesParDefaut = 10;
+    assert.equal(capacite(charge, charge.tables[0]), 10);
+    assert.equal(capacite(charge, charge.tables[1]), 4);
+    assert.throws(() => capacite(charge, 3), TypeError);
+    assert.throws(() => capacite(charge, null), TypeError);
+  });
+});
+
+describe('premiereFaute : le parcours de forme, sans lever (§ 8.8, § 8.9)', () => {
+  test("le chemin de la première faute, ou null ; une règle aPart n'examine que son conteneur sous une autre règle, et tout son contenu donnée pour racine", () => {
+    const regleDe = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+    const RETENU = regleDe(regleDe(SCHEMA, 'charge'), 'retenu');
+    const valide = documentValide();
+    valide.charge.retenu = retenuValide();
+    assert.equal(premiereFaute(valide, SCHEMA), null);
+    assert.equal(premiereFaute(valide.charge.retenu, RETENU), null);
+    const fautif = { ...retenuValide(), tours: 0 };
+    valide.charge.retenu = fautif;
+    assert.equal(premiereFaute(valide, SCHEMA), null);
+    assert.equal(premiereFaute(fautif, RETENU), 'tours');
+    assert.equal(premiereFaute(fautif, RETENU, 'charge.retenu'), 'charge.retenu.tours');
+    assert.equal(premiereFaute(null, RETENU), null);
+    valide.charge.retenu = [];
+    assert.equal(premiereFaute(valide, SCHEMA), 'charge.retenu');
+  });
+
+  test("premiereFauteEnPlace lit une valeur comme l'analyse la lit à sa place : une règle aPart n'y examine que son conteneur, toute autre comme premiereFaute", () => {
+    const regleDe = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+    const CHARGE = regleDe(SCHEMA, 'charge');
+    const RETENU = regleDe(CHARGE, 'retenu');
+    const PROPOSITIONS = regleDe(CHARGE, 'propositions');
+    const EVENEMENT = regleDe(CHARGE, 'evenement');
+    const fautif = { ...retenuValide(), tours: 0 };
+    assert.equal(premiereFaute(fautif, RETENU), 'tours');
+    assert.equal(premiereFauteEnPlace(fautif, RETENU), null);
+    assert.equal(premiereFauteEnPlace(null, RETENU), null);
+    assert.equal(premiereFauteEnPlace([], RETENU), '');
+    assert.equal(premiereFauteEnPlace(5, RETENU, 'charge.retenu'), 'charge.retenu');
+    assert.equal(premiereFaute([42], PROPOSITIONS), '[0]');
+    assert.equal(premiereFauteEnPlace([42, { id: 'x' }], PROPOSITIONS), null);
+    assert.equal(premiereFauteEnPlace({}, PROPOSITIONS), '');
+    assert.equal(premiereFauteEnPlace(null, PROPOSITIONS), '');
+    const { evenement } = documentValide().charge;
+    for (const valeur of [evenement, { ...evenement, nom: '' }, { ...evenement, lieu: 'Salle' }, 5]) {
+      assert.equal(premiereFauteEnPlace(valeur, EVENEMENT), premiereFaute(valeur, EVENEMENT), JSON.stringify(valeur));
+    }
+    assert.equal(premiereFauteEnPlace({ ...evenement, nom: '' }, EVENEMENT, 'charge.evenement'), 'charge.evenement.nom');
+  });
+});

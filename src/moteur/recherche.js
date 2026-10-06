@@ -148,7 +148,7 @@ const ORDRE_CONTRAINTES = Object.freeze([2, 3, 4, 0, 1, 5]);
 // Itérations entre deux appels de progression, et entre deux lectures du
 // signal.
 const CADENCE = 1_000;
-const HISTORIQUE_PAR_DEFAUT = 1_000;
+export const HISTORIQUE_PAR_DEFAUT = 1_000;
 // Longueurs d'historique sans changement du score courant au-delà desquelles
 // une descente se relance, dans l'ordre des contraintes seulement.
 const PATIENCE = 10;
