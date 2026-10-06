@@ -16,6 +16,7 @@
 //             d'accord avec la première.
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
+import { optionsChromium } from './test/chromium.js';
 import { coeursDisponibles, reglagesSeries } from './test/machine.js';
 
 // Les séries node suivent le nombre de cœurs de la machine (test/machine.js) :
@@ -69,7 +70,7 @@ export default defineConfig({
         test: {
           name: 'navigateur',
           include: ['src/**/*.navigateur.test.js'],
-          browser: { enabled: true, headless: true, provider: playwright(),
+          browser: { enabled: true, headless: true, provider: playwright(optionsChromium(process.env)),
                      instances: [{ browser: 'chromium' }] } } },
     ],
   },

@@ -118,6 +118,11 @@ const NODE_CONSIGNE = [
 // bin/ en reçoit des liens : seul podman y manque.
 const OUTILS = ['bash', 'dirname', 'find', 'mkdir', 'rm', 'wc', 'file'];
 
+// La construction se fait sous Linux (§ 16) : le script emploie bash 4 et le
+// find de GNU, que ni macOS ni Windows ne livrent. Ces épreuves ne se jouent
+// pas ailleurs.
+const HORS_LINUX = process.platform !== 'linux';
+
 // Chemin d'un exécutable dans le PATH de l'épreuve, ou null.
 function chercher(nom) {
   for (const dossier of (process.env.PATH ?? '').split(delimiter)) {
@@ -248,7 +253,7 @@ const taperLeNom = (nom) => (projet) =>
 let reussie;
 const constructionReussie = () => (reussie ??= construire({ produit: NOM }));
 
-describe('construction Windows : refus avant de construire', () => {
+describe('construction Windows : refus avant de construire', { skip: HORS_LINUX }, () => {
   test('une version sans section au changelog ne se construit pas (§ 16)', () => {
     const r = construire({
       preparer: (projet) =>
@@ -321,7 +326,7 @@ describe('construction Windows : refus avant de construire', () => {
   });
 });
 
-describe('construction Windows : la page', () => {
+describe('construction Windows : la page', { skip: HORS_LINUX }, () => {
   test('une page qui ne se construit pas arrête tout, avant podman', () => {
     const r = construire({ produit: NOM, codeNpm: 1 });
     assert.equal(r.statut, 1, r.erreurs);
@@ -339,7 +344,7 @@ describe('construction Windows : la page', () => {
   });
 });
 
-describe('construction Windows : la construction', () => {
+describe('construction Windows : la construction', { skip: HORS_LINUX }, () => {
   test("construit la page puis l'exécutable, et imprime son chemin, sa taille et son type", () => {
     const r = constructionReussie();
     assert.equal(r.statut, 0, r.erreurs);
@@ -393,7 +398,7 @@ describe('construction Windows : la construction', () => {
   });
 });
 
-describe('construction Windows : contrôle de fin de construction (§ 18.5)', () => {
+describe('construction Windows : contrôle de fin de construction (§ 18.5)', { skip: HORS_LINUX }, () => {
   test("refuse un exécutable dont le nom ne dérive pas de version.json", () => {
     const autre = 'Gestion table tournante Libre.exe';
     const r = construire({ produit: autre });
@@ -434,7 +439,7 @@ describe('construction Windows : contrôle de fin de construction (§ 18.5)', ()
   });
 });
 
-describe('construction Windows : interruption', () => {
+describe('construction Windows : interruption', { skip: HORS_LINUX }, () => {
   // Le signal ne vise que le shell, comme un kill depuis un autre terminal.
   // podman écrit après l'avoir reçu, comme electron-builder qui achève son
   // travail : l'épreuve ne réagit qu'à des événements, l'annonce du podman
