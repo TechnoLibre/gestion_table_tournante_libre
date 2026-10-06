@@ -10,14 +10,15 @@
 // fausses API exportées ici, qui consignent chaque appel. Quand le processus
 // n'a plus rien à faire, le module joue le rôle de la page : il exécute
 // electron/preload.cjs dans une fonction qui reçoit require, module et
-// exports, appelle le pont exposé et les gestionnaires posés par le processus
-// principal, puis imprime le journal en JSON sur la sortie standard.
+// exports, et appelle chaque fonction du pont exposé, qui atteint les
+// gestionnaires posés par le processus principal. Il joue ensuite la sortie
+// de l'application — before-quit, will-quit, quit — puis imprime le journal
+// en JSON sur la sortie standard.
 //
 // Seul require est restreint, à electron, comme dans un rendu en bac à
 // sable. Les globales de Node du processus d'épreuve, dont process et Buffer,
 // restent visibles du préchargement, et un vrai préchargement en bac à sable
-// lit lui aussi process.env. Un pont qui lirait lui-même la variable
-// répondrait donc juste : le journal des invocations, et non l'absence de
+// lit lui aussi process.env. Le journal des invocations, et non l'absence de
 // process, montre que chaque réponse vient du processus principal.
 //
 // Les exports sont la surface d'Electron que la coquille a le droit
@@ -25,9 +26,17 @@
 // electron/main.js. Ils refusent ce qu'Electron refuse et qu'une erreur de
 // la coquille provoquerait : une fenêtre créée avant que l'application soit
 // prête, un second gestionnaire pour un même canal, un appel à un canal sans
-// gestionnaire.
-import { readFileSync } from 'node:fs';
+// gestionnaire, un nom de chemin qu'app.getPath ne connaît pas.
+//
+// app.getPath rend le dossier temporaire du processus — que l'épreuve
+// désigne par TMPDIR, et par TEMP et TMP sous Windows —, et des Documents et
+// un AppData qui y vivent ; app.getName, le nom de produit de package.json,
+// comme Electron. Les dialogues rendent une annulation ; l'explorateur
+// consigne le dossier qu'on lui demande d'ouvrir, et réussit.
+import { existsSync, readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compileFunction } from 'node:vm';
 
@@ -39,13 +48,45 @@ registerHooks({
 });
 
 const PRECHARGEMENT = fileURLToPath(new URL('../electron/preload.cjs', import.meta.url));
+const NOM_PRODUIT = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).productName;
 
-// Valeur de PORTABLE_EXECUTABLE_DIR quand le lanceur portable la publie.
-const DOSSIER_PUBLIE = 'E:\\soirees';
+// Ce que rend app.getPath, par nom.
+const TEMPORAIRE = tmpdir();
+const CHEMINS = Object.freeze({
+  temp: TEMPORAIRE,
+  documents: join(TEMPORAIRE, 'Documents'),
+  appData: join(TEMPORAIRE, 'AppData'),
+});
+
+// Arguments que la page passe à chaque fonction du pont, selon la réponse de
+// racines() quand elle a précédé : une racine que le processus principal ne
+// connaît pas, pour que la réponse vienne du confinement sans toucher au
+// disque ; la racine documents pour l'explorateur ; un nom et des octets
+// pour l'enregistrement. Une fonction absente d'ici s'appelle sans argument.
+const INCONNUE = { id: 'racine-inconnue', chemin: TEMPORAIRE };
+const ARGUMENTS_DE_LA_PAGE = {
+  sonder: () => [INCONNUE],
+  typeSupport: () => [INCONNUE],
+  lireTexte: () => [INCONNUE, 'soiree.gtt.json'],
+  ecrireAtomique: () => [INCONNUE, 'soiree.gtt.json', '{}\n'],
+  ajouterLigne: () => [INCONNUE, 'soiree.gtt-journal.jsonl', '{}'],
+  lister: () => [INCONNUE, ''],
+  creerDossier: () => [INCONNUE, 'corbeille'],
+  deplacer: () => [INCONNUE, 'soiree.gtt.json', 'corbeille/soiree.gtt.json'],
+  supprimer: () => [INCONNUE, 'soiree.gtt.json'],
+  verrouiller: () => [INCONNUE, 'soiree.gtt.verrou', 'seance-factice'],
+  deverrouiller: () => [INCONNUE, 'soiree.gtt.verrou', 'seance-factice'],
+  ouvrirDansExplorateur: (racines) => [racines?.documents],
+  enregistrerSous: () => ['liste.csv', new Uint8Array([0x6e, 0x6f, 0x6d])],
+};
 
 const journal = {
   // Appels qui comptent pour l'ordre, dans l'ordre où ils arrivent.
   sequence: [],
+  // Ce que rend app.getPath, par nom.
+  chemins: CHEMINS,
+  // Chaque app.setPath : { nom, chemin }.
+  setPath: [],
   // Options de chaque new BrowserWindow.
   fenetres: [],
   // Argument de chaque Menu.setApplicationMenu.
@@ -57,17 +98,26 @@ const journal = {
   // Canal de chaque ipcRenderer.invoke du préchargement, dans l'ordre des
   // appels.
   invocations: [],
+  // Chaque dialogue : sa méthode, sa fenêtre parente est-elle une
+  // BrowserWindow, ses options.
+  dialogues: [],
+  // Dossier de chaque shell.openPath.
+  explorateur: [],
   // Réponse du gestionnaire d'ouverture de chaque fenêtre à une adresse
   // externe.
   ouvertures: [],
   // Pour chaque écouteur de will-navigate : la navigation est-elle annulée ?
   navigations: [],
-  // Ce que fait le préchargement : modules requis, objets exposés, et la
-  // réponse du pont selon PORTABLE_EXECUTABLE_DIR.
+  // Ce que fait le préchargement : modules requis, objets exposés, membres
+  // de gtt.fichiers, et pour chacun les canaux qu'il invoque et sa réponse.
   prechargement: null,
+  // Le dossier userData existe-t-il avant la sortie de l'application, puis
+  // après ; null sans app.setPath('userData').
+  profil: null,
 };
 
 const gestionnaires = new Map();
+const ecouteurs = new Map();
 const pageDeFenetre = [];
 
 // L'application n'est jamais prête pendant l'évaluation du module principal,
@@ -88,11 +138,24 @@ export const app = {
     });
     return quandPret;
   },
-  on(evenement) {
+  on(evenement, ecouteur) {
     journal.sequence.push(`app.on:${evenement}`);
+    if (!ecouteurs.has(evenement)) ecouteurs.set(evenement, []);
+    ecouteurs.get(evenement).push(ecouteur);
   },
   quit() {
     journal.sequence.push('app.quit');
+  },
+  getName() {
+    return NOM_PRODUIT;
+  },
+  getPath(nom) {
+    if (!Object.hasOwn(CHEMINS, nom)) throw new Error(`Failed to get '${nom}' path`);
+    return CHEMINS[nom];
+  },
+  setPath(nom, chemin) {
+    journal.sequence.push(`app.setPath:${nom}`);
+    journal.setPath.push({ nom, chemin });
   },
 };
 
@@ -148,6 +211,24 @@ export const ipcMain = {
   },
 };
 
+export const dialog = {
+  async showOpenDialog(parent, options) {
+    journal.dialogues.push({ methode: 'showOpenDialog', parent: parent instanceof BrowserWindow, options });
+    return { canceled: true, filePaths: [] };
+  },
+  async showSaveDialog(parent, options) {
+    journal.dialogues.push({ methode: 'showSaveDialog', parent: parent instanceof BrowserWindow, options });
+    return { canceled: true, filePath: '' };
+  },
+};
+
+export const shell = {
+  async openPath(chemin) {
+    journal.explorateur.push(chemin);
+    return '';
+  },
+};
+
 // Côté page : ce que require('electron') rend au préchargement. invoke se
 // consigne, atteint le gestionnaire posé par le processus principal pour ce
 // canal, et rejette comme Electron quand il n'y en a pas.
@@ -169,16 +250,25 @@ function electronDuRendu(exposes) {
   };
 }
 
-// Réponse du pont pour une valeur de PORTABLE_EXECUTABLE_DIR, undefined
-// valant variable absente ; une erreur se consigne par son message.
-async function reponseDuPont(api, valeur) {
-  if (valeur === undefined) delete process.env.PORTABLE_EXECUTABLE_DIR;
-  else process.env.PORTABLE_EXECUTABLE_DIR = valeur;
-  try {
-    return { valeur: await api.dossierExecutable() };
-  } catch (erreur) {
-    return { erreur: erreur.message };
+// Appelle chaque fonction de gtt.fichiers, dans l'ordre de ses membres, et
+// consigne pour chacune son type, les canaux qu'elle invoque et sa réponse,
+// une erreur par son message.
+async function appelerLePont(fichiers) {
+  const appels = [];
+  let racines;
+  for (const membre of Object.keys(fichiers)) {
+    const avant = journal.invocations.length;
+    const appel = { membre, type: typeof fichiers[membre] };
+    try {
+      appel.reponse = await fichiers[membre](...(ARGUMENTS_DE_LA_PAGE[membre]?.(racines) ?? []));
+      if (membre === 'racines') racines = appel.reponse?.valeur;
+    } catch (erreur) {
+      appel.erreur = erreur.message;
+    }
+    appel.canaux = journal.invocations.slice(avant);
+    appels.push(appel);
   }
+  return appels;
 }
 
 async function jouerLePrechargement() {
@@ -195,20 +285,21 @@ async function jouerLePrechargement() {
     filename: PRECHARGEMENT,
   })(requerir, module, module.exports);
 
-  const gtt = exposes.find(({ cle }) => cle === 'gtt')?.api;
+  const fichiers = exposes.find(({ cle }) => cle === 'gtt')?.api?.fichiers;
   return {
     requis,
     exposes: exposes.map(({ cle, api }) => ({ cle, membres: Object.keys(api).sort() })),
-    plateforme: gtt?.plateforme ?? null,
-    reponses:
-      typeof gtt?.dossierExecutable === 'function'
-        ? {
-            publie: await reponseDuPont(gtt, DOSSIER_PUBLIE),
-            absent: await reponseDuPont(gtt, undefined),
-            vide: await reponseDuPont(gtt, ''),
-          }
-        : null,
+    fichiers: fichiers === undefined ? null : Object.keys(fichiers),
+    appels: fichiers === undefined ? [] : await appelerLePont(fichiers),
   };
+}
+
+// Joue la sortie de l'application : chaque écouteur de ces évènements, dans
+// l'ordre où Electron les émet.
+function sortir() {
+  for (const evenement of ['before-quit', 'will-quit', 'quit']) {
+    for (const ecouteur of ecouteurs.get(evenement) ?? []) ecouteur({ preventDefault() {} }, 0);
+  }
 }
 
 async function jouerLaPage() {
@@ -227,6 +318,10 @@ async function jouerLaPage() {
   } catch (erreur) {
     journal.prechargement = { erreur: erreur.message };
   }
+  const profil = journal.setPath.find(({ nom }) => nom === 'userData')?.chemin;
+  const avant = profil !== undefined && existsSync(profil);
+  sortir();
+  journal.profil = profil === undefined ? null : { avant, apres: existsSync(profil) };
   process.stdout.write(`${JSON.stringify(journal)}\n`);
 }
 

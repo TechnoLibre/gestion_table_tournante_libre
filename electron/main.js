@@ -2,33 +2,81 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Processus principal de la coquille Electron (§ 13.1) : une fenêtre qui
-// charge la page construite par Vite dans www/, et un seul canal IPC, que
-// electron/preload.cjs expose à la page sous window.gtt.
+// charge la page construite par Vite dans www/, et le système de fichiers de
+// la plateforme (electron/fichiers.js), offert à la page par un canal IPC
+// par primitive, que electron/preload.cjs expose sous window.gtt.fichiers.
 //
 // La page n'a ni Node ni accès au disque : isolation de contexte active,
 // intégration de Node coupée, rendu en bac à sable. Elle n'atteint le
-// processus principal que par les canaux que ce module traite. Un nom importé
-// interprété comme du balisage reste ainsi une faute d'affichage, et non un
-// accès au disque.
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+// processus principal que par ces canaux, et n'y désigne un fichier que par
+// une racine que ce processus connaît et un chemin relatif à elle. Un nom
+// importé interprété comme du balisage reste ainsi une faute d'affichage, et
+// non un accès au disque.
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { readdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { creerFichiers, decrireSysteme, processusVivant, servir } from './fichiers.js';
 
 // Chemins relatifs à ce module : ils valent dans le dépôt comme dans
 // l'archive app.asar de l'exécutable, qui reproduit electron/ et www/.
 const PRECHARGEMENT = fileURLToPath(new URL('./preload.cjs', import.meta.url));
 const PAGE = fileURLToPath(new URL('../www/index.html', import.meta.url));
 
-// Dossier de l'exécutable livré (§ 8.6, point 1). L'exécutable portable est
-// une archive auto-extractible : l'application tourne depuis un dossier
-// temporaire effacé à la sortie, et le lanceur publie son propre dossier dans
-// PORTABLE_EXECUTABLE_DIR avant de la lancer. Hors de ce lanceur, la variable
-// est absente ; vide, elle ne désigne aucun dossier. Dans les deux cas, le
-// canal rend null. Le gestionnaire est posé avant le chargement de la page,
-// qui peut l'appeler dès son premier script.
-ipcMain.handle('gtt:dossier-executable', () => process.env.PORTABLE_EXECUTABLE_DIR || null);
+// Profil de Chromium (§ 8.6) : un dossier neuf sous le dossier temporaire du
+// système, nommé gtt-profil-<pid>-…, posé avant que l'application soit
+// prête — Chromium l'ouvre alors —, et retiré à la sortie. L'application ne
+// garde rien dans ce profil, et un exécutable portable ne laisse ainsi rien
+// dans AppData, ni dans le dossier de travail.
+//
+// Le retrait de la sortie n'est qu'un premier temps : Chromium écrit encore
+// dans le profil après l'évènement quit — son état local, ses préférences,
+// le stockage de session —, et le dossier renaît, réduit à quelques fichiers.
+// Une séance qui s'arrête sans sortir n'en retire rien. Chaque démarrage
+// retire donc, après l'ouverture de la fenêtre, les profils des séances
+// terminées : le pid de leur nom ne désigne plus aucun processus de ce
+// poste. Le profil d'une séance qui tourne encore reste.
+const TEMPORAIRE = app.getPath('temp');
+const PROFIL_DE_SEANCE = /^gtt-profil-(\d+)-/;
+const PROFIL = mkdtempSync(join(TEMPORAIRE, `gtt-profil-${process.pid}-`));
+app.setPath('userData', PROFIL);
+app.on('quit', () => {
+  try {
+    rmSync(PROFIL, { recursive: true, force: true });
+  } catch {
+    // Au mieux : le démarrage suivant le retire.
+  }
+});
+
+async function retirerProfilsTermines() {
+  for (const nom of await readdir(TEMPORAIRE)) {
+    const pid = Number(PROFIL_DE_SEANCE.exec(nom)?.[1]);
+    if (!(pid > 0) || pid === process.pid || processusVivant(pid)) continue;
+    await rm(join(TEMPORAIRE, nom), { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+// Le système de fichiers : emplacements et racines lus une fois, au
+// démarrage (§ 8.6) ; les dialogues s'ouvrent sur la fenêtre de la page. Les
+// gestionnaires sont posés avant le chargement de la page, qui peut les
+// appeler dès son premier script.
+let fenetre = null;
+const fichiers = creerFichiers({
+  ...decrireSysteme({
+    env: process.env,
+    plateforme: process.platform,
+    cheminSysteme: (nom) => app.getPath(nom),
+    nomProduit: app.getName(),
+  }),
+  dialog,
+  shell,
+  fenetre: () => fenetre,
+});
+servir(fichiers, (canal, gestionnaire) => ipcMain.handle(canal, gestionnaire));
 
 function creerFenetre() {
-  const fenetre = new BrowserWindow({
+  fenetre = new BrowserWindow({
     width: 1366,
     height: 768,
     webPreferences: {
@@ -53,4 +101,5 @@ function creerFenetre() {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   creerFenetre();
+  retirerProfilsTermines().catch(() => {});
 });
