@@ -1,0 +1,441 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Système de fichiers de la plateforme web (§ 13.1, § 13.4) : l'interface de
+// systeme_fichiers.js portée par l'OPFS du navigateur, que
+// navigator.storage.getDirectory() ouvre. Avec fichiers_electron.js, ce module
+// est l'une des deux exceptions nommées de la frontière des couches : il
+// touche navigator pour l'OPFS, et document pour le champ de fichier et le
+// lien de téléchargement. Il n'y touche qu'à l'appel d'une primitive : le
+// charger hors d'un navigateur ne lève rien.
+//
+// Une seule racine, documents : le dossier gestion_table_tournante_libre de
+// l'OPFS, affiché « /gestion_table_tournante_libre ». Ni exécutable publié,
+// ni données applicatives, ni racine portable ; le support est inconnu.
+//
+// La plateforme n'offre ni renommage atomique ni verrou (§ 8.8) et le dit :
+// renommageAtomique et verrouDisponible sont faux, et l'application
+// l'annonce au démarrage. ecrireAtomique et ajouterLigne écrivent par un flux
+// de l'OPFS ouvert sur la cible (createWritable) : le contenu n'atteint la
+// cible qu'à la fermeture du flux ; un échec avant elle abandonne le flux et
+// retire le fichier que l'appel a créé, si bien que la cible reste telle
+// qu'avant l'appel. Rien ne garantit ce que devient une fermeture
+// interrompue. deplacer copie les octets de la source sous la cible, puis
+// retire la source ; un échec du retrait retire la copie. verrouiller rend
+// { pris: true } sans rien écrire, et deverrouiller n'efface rien.
+//
+// L'OPFS compare les noms à la lettre : la casse et la forme de normalisation
+// distinguent deux fichiers, d'où insensibleCasse faux. Il ne date pas un
+// dossier, que lister date de 0. Pendant l'écriture d'un flux, Chromium peut
+// poser à côté de la cible un fichier d'échange, <nom>.crswap, que lister
+// rend comme toute entrée ; un fichier qui disparaît entre la liste et sa
+// lecture n'est pas rendu.
+//
+// L'OPFS et le fichier choisi lèvent des DOMException, que le module traduit
+// en codes. Une lecture qui ne trouve pas l'entrée — NotFoundError, ou
+// TypeMismatchError pour une entrée d'un autre genre que celui demandé —
+// lève ABSENT ; toute autre exception d'une lecture lève LECTURE, car une
+// panne n'est pas une absence ; tout échec d'une écriture lève ECRITURE. Les
+// deux portent {chemin, dossier, cause}, dont la cause est le nom de
+// l'exception : SecurityError pour un OPFS que le navigateur refuse à
+// l'origine, NotReadableError pour un fichier qui change pendant qu'on le
+// lit, NotFoundError pour une écriture dans un dossier absent,
+// TypeMismatchError, QuotaExceededError… Le chemin '' désigne la racine
+// elle-même, un dossier.
+//
+// Sous web, ni explorateur ni dialogue de dossier : ouvrirDansExplorateur et
+// choisirDossier lèvent NON_DISPONIBLE {primitive}. choisirFichierAImporter
+// passe par un champ de fichier, que le navigateur n'ouvre que dans le
+// prolongement d'un geste de l'opérateur, et qui ne dit du fichier choisi
+// que son nom : l'échec de sa lecture le nomme, dossier null.
+// enregistrerSous passe par un lien de téléchargement : le navigateur range
+// le fichier sans dire où ni si l'opérateur y renonce, et la primitive rend
+// le nom proposé.
+import { ErreurStockage } from './erreurs.js';
+import { exigerCheminRelatif } from './systeme_fichiers.js';
+
+// Le dossier du produit dans l'OPFS, et la racine documents qui le désigne.
+const DOSSIER_PRODUIT = 'gestion_table_tournante_libre';
+const DOCUMENTS = 'documents';
+const CHEMIN_DOCUMENTS = `/${DOSSIER_PRODUIT}`;
+
+// Nom du témoin de la sonde (§ 8.6), qui porte aussi ce nom pour texte.
+const TEMOIN = '.gtt-temoin';
+
+// Cause d'une écriture qui vise un dossier — la racine elle-même, ou un
+// dossier là où un fichier est attendu —, celle que lève l'OPFS.
+const TYPE_DIFFERENT = 'TypeMismatchError';
+
+// Cause d'une sonde dont le témoin relu diffère du texte écrit.
+const RELECTURE_DIFFERENTE = 'RELECTURE_DIFFERENTE';
+
+// Un fichier s'écrit en UTF-8 sans marque d'ordre d'octets, et se lit sans
+// retirer celle qu'il porte, que Blob.text retirerait. Un octet qui n'est pas
+// de l'UTF-8 se lit U+FFFD.
+const UTF8 = new TextEncoder();
+const DECODEUR = new TextDecoder('utf-8', { ignoreBOM: true });
+
+// Un nettoyage qui échoue ne masque pas l'échec qu'il suit.
+const ignorer = () => {};
+
+// Vrai pour l'exception de l'OPFS qui dit qu'une entrée manque : absente, ou
+// d'un autre genre que celui demandé.
+const estAbsence = (erreur) => erreur?.name === 'NotFoundError' || erreur?.name === TYPE_DIFFERENT;
+
+// Cause d'une ECRITURE ou d'une LECTURE : le nom de l'exception, ou son
+// texte quand elle n'en porte pas.
+const causeDe = (erreur) => (typeof erreur?.name === 'string' && erreur.name !== '' ? erreur.name : String(erreur));
+
+function exigerChaine(valeur, quoi) {
+  if (typeof valeur !== 'string') throw new TypeError(`${quoi} n'est pas une chaîne`);
+}
+
+function exigerSeance(seance) {
+  if (typeof seance !== 'string' || seance === '') throw new TypeError("la séance n'est pas une chaîne non vide");
+}
+
+// Ce que désigne un chemin relatif à la racine : ses segments, ceux du
+// dossier qui le porte, son nom — null pour '', la racine elle-même —, et le
+// chemin affichable de ce dossier, celui de la racine pour ''. CHEMIN_REFUSE
+// pour un chemin refusé ou une racine inconnue, reconnue par son seul
+// identifiant.
+function localiser(racine, chemin) {
+  const segments = exigerCheminRelatif(chemin);
+  if (racine?.id !== DOCUMENTS) throw new ErreurStockage('CHEMIN_REFUSE', { chemin });
+  const parent = segments.slice(0, -1);
+  return {
+    chemin,
+    segments,
+    parent,
+    nom: segments.length > 0 ? segments[segments.length - 1] : null,
+    dossier: [CHEMIN_DOCUMENTS, ...parent].join('/'),
+  };
+}
+
+const refus = (loc, cause) => new ErreurStockage('ECRITURE', { chemin: loc.chemin, dossier: loc.dossier, cause });
+
+const absent = (chemin) => new ErreurStockage('ABSENT', { chemin });
+
+// Ce que devient l'exception d'une lecture de loc : ABSENT quand l'entrée
+// manque, LECTURE sinon.
+const echecLecture = (loc, erreur) =>
+  estAbsence(erreur)
+    ? absent(loc.chemin)
+    : new ErreurStockage('LECTURE', { chemin: loc.chemin, dossier: loc.dossier, cause: causeDe(erreur) });
+
+// Exécute travail, une écriture sur loc, et rend ce qu'il rend : une
+// ErreurStockage passe telle quelle, toute autre exception devient ECRITURE.
+async function ecrire(loc, travail) {
+  try {
+    return await travail();
+  } catch (erreur) {
+    if (erreur instanceof ErreurStockage) throw erreur;
+    throw refus(loc, causeDe(erreur));
+  }
+}
+
+// Poignée du dossier que désignent les segments sous le dossier du produit ;
+// creer crée ce qui manque, dossier du produit compris. Lève l'exception de
+// l'OPFS : NotFoundError pour un dossier absent, TypeMismatchError pour un
+// fichier à sa place.
+async function dossierDe(segments, creer = false) {
+  const options = { create: creer };
+  let dossier = await (await navigator.storage.getDirectory()).getDirectoryHandle(DOSSIER_PRODUIT, options);
+  for (const segment of segments) dossier = await dossier.getDirectoryHandle(segment, options);
+  return dossier;
+}
+
+// Le dossier que désignent les segments, ou null quand il n'existe pas.
+async function dossierExistant(segments) {
+  try {
+    return await dossierDe(segments);
+  } catch (erreur) {
+    if (estAbsence(erreur)) return null;
+    throw erreur;
+  }
+}
+
+// Genre de l'entrée nom du dossier : 'fichier', 'dossier', ou null quand elle
+// n'existe pas.
+async function genreDe(dossier, nom) {
+  try {
+    await dossier.getFileHandle(nom);
+    return 'fichier';
+  } catch (erreur) {
+    if (erreur?.name === TYPE_DIFFERENT) return 'dossier';
+    if (erreur?.name === 'NotFoundError') return null;
+    throw erreur;
+  }
+}
+
+// Retire l'entrée nom du dossier ; une entrée absente n'est pas une faute.
+async function retirer(dossier, nom) {
+  try {
+    await dossier.removeEntry(nom);
+  } catch (erreur) {
+    if (erreur?.name !== 'NotFoundError') throw erreur;
+  }
+}
+
+// Texte d'un fichier : ses octets décodés tels quels.
+const lire = async (poignee) => DECODEUR.decode(await (await poignee.getFile()).arrayBuffer());
+
+// Écrit le fichier nom du dossier par un flux de l'OPFS, que remplir(flux,
+// poignee) alimente ; garder ouvre le flux sur le contenu présent, sinon sur
+// un contenu vide. Le contenu n'atteint le fichier qu'à la fermeture du flux.
+// Un échec abandonne le flux, retire le fichier quand l'appel l'a créé, puis
+// se relance : le fichier reste tel qu'avant l'appel.
+async function ecrireParFlux(dossier, nom, garder, remplir) {
+  let poignee;
+  let cree = false;
+  try {
+    poignee = await dossier.getFileHandle(nom);
+  } catch (erreur) {
+    if (erreur?.name !== 'NotFoundError') throw erreur;
+    poignee = await dossier.getFileHandle(nom, { create: true });
+    cree = true;
+  }
+  let flux = null;
+  try {
+    flux = await poignee.createWritable({ keepExistingData: garder });
+    await remplir(flux, poignee);
+    await flux.close();
+  } catch (erreur) {
+    if (flux !== null) await flux.abort().catch(ignorer);
+    if (cree) await dossier.removeEntry(nom).catch(ignorer);
+    throw erreur;
+  }
+}
+
+// Description d'une entrée d'un dossier, ou null pour un fichier disparu
+// entre la liste et sa lecture.
+async function decrire(poignee) {
+  if (poignee.kind === 'directory') return { nom: poignee.name, type: 'dossier', taille: 0, modifie: 0 };
+  try {
+    const fichier = await poignee.getFile();
+    return { nom: poignee.name, type: 'fichier', taille: fichier.size, modifie: fichier.lastModified };
+  } catch (erreur) {
+    if (erreur?.name === 'NotFoundError') return null;
+    throw erreur;
+  }
+}
+
+// Ordre des entrées : leurs noms comparés par unités UTF-16, une à une.
+const parNom = (a, b) => (a.nom < b.nom ? -1 : a.nom > b.nom ? 1 : 0);
+
+// La source de deplacer : le dossier qui la porte et ses octets. ABSENT quand
+// elle n'existe pas ; ECRITURE TypeMismatchError quand c'est un dossier.
+async function lireSource(loc) {
+  if (loc.nom === null) throw refus(loc, TYPE_DIFFERENT);
+  const dossier = await dossierExistant(loc.parent);
+  const genre = dossier === null ? null : await genreDe(dossier, loc.nom);
+  if (genre === null) throw absent(loc.chemin);
+  if (genre === 'dossier') throw refus(loc, TYPE_DIFFERENT);
+  const fichier = await (await dossier.getFileHandle(loc.nom)).getFile();
+  return { dossier, octets: await fichier.arrayBuffer() };
+}
+
+// Écrit les octets sous la cible de deplacer, et rend le dossier qui la
+// porte. EXISTE quand une entrée y porte déjà ce nom, quel qu'en soit le
+// genre, et pour '', la racine elle-même.
+async function copierVers(loc, octets) {
+  if (loc.nom === null) throw new ErreurStockage('EXISTE', { chemin: loc.chemin });
+  const dossier = await dossierDe(loc.parent);
+  if ((await genreDe(dossier, loc.nom)) !== null) throw new ErreurStockage('EXISTE', { chemin: loc.chemin });
+  await ecrireParFlux(dossier, loc.nom, false, (flux) => flux.write(octets));
+  return dossier;
+}
+
+// Ouvre le dialogue du navigateur par un champ de fichier, hors du document,
+// et rend le nom et les octets du fichier choisi ; null quand l'opérateur
+// annule — l'événement cancel — ou que le champ revient sans fichier. Un
+// fichier choisi qui ne se lit pas lève ABSENT ou LECTURE sous son nom.
+function choisirFichier() {
+  return new Promise((resoudre, rejeter) => {
+    const champ = document.createElement('input');
+    champ.type = 'file';
+    champ.addEventListener('cancel', () => resoudre(null), { once: true });
+    champ.addEventListener(
+      'change',
+      () => {
+        const fichier = champ.files[0];
+        if (fichier === undefined) {
+          resoudre(null);
+          return;
+        }
+        fichier.arrayBuffer().then(
+          (tampon) => resoudre({ nom: fichier.name, octets: new Uint8Array(tampon) }),
+          (erreur) => rejeter(echecLecture({ chemin: fichier.name, dossier: null }, erreur)),
+        );
+      },
+      { once: true },
+    );
+    champ.click();
+  });
+}
+
+/**
+ * Système de fichiers de la plateforme web, sur l'OPFS. Chaque appel rend un
+ * système neuf ; tous partagent l'OPFS de l'origine.
+ *
+ * @returns {import('./systeme_fichiers.js').SystemeFichiers}
+ */
+export function creerFichiersWeb() {
+  return {
+    nature: 'web',
+    renommageAtomique: false,
+    verrouDisponible: false,
+
+    emplacements: async () => ({ executable: null, donneesApplicatives: [], insensibleCasse: false, separateur: '/' }),
+
+    racines: async () => ({ portable: null, documents: { id: DOCUMENTS, chemin: CHEMIN_DOCUMENTS } }),
+
+    choisirDossier: async () => {
+      throw new ErreurStockage('NON_DISPONIBLE', { primitive: 'choisirDossier' });
+    },
+
+    // Crée le dossier du produit, efface un témoin resté, écrit le témoin, le
+    // relit, l'efface. Un échec rend sa cause et efface le témoin qu'il
+    // laisse ; seule une racine inconnue lève.
+    sonder: async (racine) => {
+      localiser(racine, '');
+      let dossier = null;
+      try {
+        dossier = await dossierDe([], true);
+        await retirer(dossier, TEMOIN);
+        await ecrireParFlux(dossier, TEMOIN, false, (flux) => flux.write(UTF8.encode(TEMOIN)));
+        const relu = await lire(await dossier.getFileHandle(TEMOIN));
+        await retirer(dossier, TEMOIN);
+        return relu === TEMOIN
+          ? { inscriptible: true, cause: null }
+          : { inscriptible: false, cause: RELECTURE_DIFFERENTE };
+      } catch (erreur) {
+        if (dossier !== null) await retirer(dossier, TEMOIN).catch(ignorer);
+        return { inscriptible: false, cause: causeDe(erreur) };
+      }
+    },
+
+    typeSupport: async (racine) => {
+      localiser(racine, '');
+      return 'inconnu';
+    },
+
+    lireTexte: async (racine, chemin) => {
+      const loc = localiser(racine, chemin);
+      if (loc.nom === null) throw absent(chemin);
+      try {
+        return await lire(await (await dossierDe(loc.parent)).getFileHandle(loc.nom));
+      } catch (erreur) {
+        throw echecLecture(loc, erreur);
+      }
+    },
+
+    ecrireAtomique: async (racine, chemin, texte) => {
+      exigerChaine(texte, 'le texte');
+      const loc = localiser(racine, chemin);
+      await ecrire(loc, async () => {
+        if (loc.nom === null) throw refus(loc, TYPE_DIFFERENT);
+        const octets = UTF8.encode(texte);
+        await ecrireParFlux(await dossierDe(loc.parent), loc.nom, false, (flux) => flux.write(octets));
+      });
+    },
+
+    // Le flux garde le contenu présent et écrit la ligne à sa fin.
+    ajouterLigne: async (racine, chemin, ligne) => {
+      exigerChaine(ligne, 'la ligne');
+      if (/[\r\n]/.test(ligne)) throw new TypeError('la ligne porte une fin de ligne');
+      const loc = localiser(racine, chemin);
+      await ecrire(loc, async () => {
+        if (loc.nom === null) throw refus(loc, TYPE_DIFFERENT);
+        const octets = UTF8.encode(`${ligne}\n`);
+        await ecrireParFlux(await dossierDe(loc.parent), loc.nom, true, async (flux, poignee) => {
+          const { size } = await poignee.getFile();
+          await flux.write({ type: 'write', position: size, data: octets });
+        });
+      });
+    },
+
+    lister: async (racine, chemin) => {
+      const loc = localiser(racine, chemin);
+      const entrees = [];
+      try {
+        for await (const poignee of (await dossierDe(loc.segments)).values()) {
+          const entree = await decrire(poignee);
+          if (entree !== null) entrees.push(entree);
+        }
+      } catch (erreur) {
+        throw echecLecture(loc, erreur);
+      }
+      return entrees.sort(parNom);
+    },
+
+    creerDossier: async (racine, chemin) => {
+      const loc = localiser(racine, chemin);
+      await ecrire(loc, () => dossierDe(loc.segments, true));
+    },
+
+    // Un échec de la lecture de la source ou de son retrait nomme la source ;
+    // un échec de la copie nomme la cible.
+    deplacer: async (racine, de, vers) => {
+      const source = localiser(racine, de);
+      const cible = localiser(racine, vers);
+      const { dossier: dossierSource, octets } = await ecrire(source, () => lireSource(source));
+      const dossierCible = await ecrire(cible, () => copierVers(cible, octets));
+      await ecrire(source, async () => {
+        try {
+          await dossierSource.removeEntry(source.nom);
+        } catch (erreur) {
+          await dossierCible.removeEntry(cible.nom).catch(ignorer);
+          throw erreur;
+        }
+      });
+    },
+
+    // Retire un fichier ; un dossier, la racine comprise, lève ECRITURE
+    // TypeMismatchError et reste.
+    supprimer: async (racine, chemin) => {
+      const loc = localiser(racine, chemin);
+      await ecrire(loc, async () => {
+        if (loc.nom === null) throw refus(loc, TYPE_DIFFERENT);
+        const dossier = await dossierExistant(loc.parent);
+        const genre = dossier === null ? null : await genreDe(dossier, loc.nom);
+        if (genre === 'dossier') throw refus(loc, TYPE_DIFFERENT);
+        if (genre === 'fichier') await retirer(dossier, loc.nom);
+      });
+    },
+
+    verrouiller: async (racine, chemin, seance) => {
+      exigerSeance(seance);
+      localiser(racine, chemin);
+      return { pris: true };
+    },
+
+    deverrouiller: async (racine, chemin, seance) => {
+      exigerSeance(seance);
+      localiser(racine, chemin);
+    },
+
+    ouvrirDansExplorateur: async (racine) => {
+      localiser(racine, '');
+      throw new ErreurStockage('NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' });
+    },
+
+    choisirFichierAImporter: () => choisirFichier(),
+
+    // Le clic remet au navigateur l'adresse du contenu, qui se libère à la
+    // tâche suivante.
+    enregistrerSous: async (nomPropose, octets) => {
+      if (typeof nomPropose !== 'string' || nomPropose === '') {
+        throw new TypeError("le nom proposé n'est pas une chaîne non vide");
+      }
+      if (!(octets instanceof Uint8Array)) throw new TypeError("les octets ne sont pas un Uint8Array");
+      const adresse = URL.createObjectURL(new Blob([octets], { type: 'application/octet-stream' }));
+      const lien = document.createElement('a');
+      lien.href = adresse;
+      lien.download = nomPropose;
+      lien.click();
+      setTimeout(() => URL.revokeObjectURL(adresse), 0);
+      return nomPropose;
+    },
+  };
+}
