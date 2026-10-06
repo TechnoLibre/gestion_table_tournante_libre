@@ -1,0 +1,1030 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Épreuves des noms de fichiers d'un événement (§ 8.6, § 8.7, § 14.10) : les
+// valeurs du contrat, la longueur du plus long chemin relatif qu'un événement
+// écrit, la dérivation de la base d'un nom — caractères invisibles et
+// demi-paires isolées, noms réservés, caractères que Windows refuse, composition
+// en NFC, collisions comparées par la majuscule, borne du chemin complet — et
+// le dossier daté de la corbeille, jusqu'à son dernier rang. Chaque épreuve de
+// dérivation se joue sur les deux dossiers de travail possibles du § 8.6.
+//
+// La borne s'éprouve contre un oracle écrit ici : chaque chemin qu'un
+// événement écrit se recompose en entier, de la racine au suffixe, avec des
+// textes littéraux et non les constantes du module. Une borne prise sur le seul
+// état, ou sur le seul journal, y dépasse 259 unités. Les noms d'épreuve sont
+// inventés. Un caractère invisible ou combinant s'écrit en échappement, jamais
+// en clair : ce qu'on ne voit pas ne se relit pas.
+import assert from 'node:assert/strict';
+import { describe, test } from '../../test/lanceur.js';
+import { ErreurStockage } from './erreurs.js';
+import {
+  DOSSIER_CORBEILLE,
+  LONGUEUR_CHEMIN_MAX,
+  SUFFIXES,
+  SUFFIXE_ECRITURE,
+  deriverBase,
+  dossierCorbeille,
+  longueurRelativeMax,
+} from './noms.js';
+
+// Les deux dossiers de travail possibles (§ 8.6) : le dossier du produit dans
+// les Documents, et data/ à côté d'un exécutable posé sur un support amovible.
+const DOSSIERS = [
+  { racine: 'C:\\Users\\Exemple\\Documents\\Gestion table tournante Libre', separateur: '\\' },
+  { racine: 'E:\\soirees\\data', separateur: '\\' },
+];
+
+// Le dossier daté de la corbeille au rang de collision le plus long, à deux
+// chiffres, et les suffixes des fichiers d'un événement : le journal en compte
+// 18, l'état 9.
+const CORBEILLE_RANG_99 = 'corbeille/2026-10-06_19-02-11_99';
+const SUFFIXES_ECRITS = ['.gtt.json', '.gtt.json.precedent', '.gtt-journal.jsonl', '.gtt.verrou'];
+
+// Le caractère de substitution haute d'une paire, et celui de substitution basse.
+const estHaute = (unite) => unite >= 0xd800 && unite <= 0xdbff;
+const estBasse = (unite) => unite >= 0xdc00 && unite <= 0xdfff;
+
+// n lettres de l'alphabet, répété : ni espace ni point, et chaque position
+// d'une coupe se reconnaît.
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
+const lettres = (n) => Array.from({ length: n }, (_, i) => ALPHABET[i % ALPHABET.length]).join('');
+
+// Plus long chemin de la liste ; le premier en cas d'égalité.
+const plusLong = (chemins) => chemins.reduce((a, b) => (b.length > a.length ? b : a));
+
+// Chaque chemin relatif qu'un événement de base donnée écrit : un fichier de
+// chaque suffixe et son fichier d'écriture atomique, dans le dossier de travail
+// puis dans le dossier daté de la corbeille.
+function cheminsRelatifs(base) {
+  const noms = SUFFIXES_ECRITS.flatMap((suffixe) => [`${base}${suffixe}`, `${base}${suffixe}.ecriture`]);
+  return [...noms, ...noms.map((nom) => `${CORBEILLE_RANG_99}/${nom}`)];
+}
+
+// Chaque chemin complet : la racine, un seul séparateur, puis le chemin
+// relatif écrit avec ce séparateur.
+function cheminsComplets({ racine, separateur }, base) {
+  const tete = racine.endsWith(separateur) ? racine : racine + separateur;
+  return cheminsRelatifs(base).map((relatif) => tete + relatif.replaceAll('/', separateur));
+}
+
+// Plus grande longueur de base dont le plus long chemin complet tient en 259
+// unités : l'oracle de la borne, qui ne lit que des chemins recomposés.
+function longueurMaxDeBase(dossier) {
+  let n = 0;
+  while (plusLong(cheminsComplets(dossier, 'a'.repeat(n + 1))).length <= 259) n += 1;
+  return n;
+}
+
+// Le contexte que deriverBase reçoit pour un dossier de travail.
+const contexte = ({ racine, separateur }, existantes = []) => ({ racine, separateur, existantes });
+const derive = (nom, dossier, existantes = []) => deriverBase(nom, contexte(dossier, existantes));
+
+// Une épreuve par dossier de travail : son titre dit lequel.
+function surChaqueDossier(titre, epreuve) {
+  for (const dossier of DOSSIERS) test(`${titre} — ${dossier.racine}`, () => epreuve(dossier));
+}
+
+// L'erreur que lève fonction ; échoue quand elle n'en lève aucune.
+function erreurDe(fonction) {
+  try {
+    fonction();
+  } catch (erreur) {
+    return erreur;
+  }
+  return assert.fail('aucune erreur levée');
+}
+
+// Vrai quand fonction lève CHEMIN_TROP_LONG, qui nomme la racine donnée.
+function refuseTropLong(fonction, racine) {
+  const erreur = erreurDe(fonction);
+  assert.ok(erreur instanceof ErreurStockage, `${erreur?.name} au lieu d'une ErreurStockage`);
+  assert.equal(erreur.code, 'CHEMIN_TROP_LONG');
+  assert.deepEqual(erreur.details, { racine });
+}
+
+// Un dossier de travail dont la racine compte n unités, lecteur compris.
+const dossierDeLongueur = (n) => ({ racine: `C:\\${'x'.repeat(n - 3)}`, separateur: '\\' });
+
+// Les noms que Windows réserve, en capitales : CON, PRN, AUX, NUL, COM et LPT
+// de 0 à 9 et des exposants ¹ ² ³, CONIN$ et CONOUT$.
+const CHIFFRES = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '\u00b9', '\u00b2', '\u00b3'];
+const NOMS_RESERVES = [
+  'CON', 'PRN', 'AUX', 'NUL',
+  ...CHIFFRES.map((chiffre) => `COM${chiffre}`),
+  ...CHIFFRES.map((chiffre) => `LPT${chiffre}`),
+  'CONIN$', 'CONOUT$',
+];
+const MINUSCULES_RESERVEES = new Set(NOMS_RESERVES.map((nom) => nom.toLowerCase()));
+
+// Vrai quand Windows verrait un périphérique : la partie avant le premier
+// point, espaces finaux retirés, est un nom réservé.
+const estReserve = (base) => MINUSCULES_RESERVEES.has(base.split('.')[0].trimEnd().toLowerCase());
+
+// Clé de comparaison de deux bases : la majuscule de leur NFC, comme Windows
+// compare deux noms de fichier, caractère par caractère et sans contexte.
+const cle = (base) => base.normalize('NFC').toUpperCase();
+
+// Les caractères qu'aucun œil ne voit : de contrôle (Cc), de format (Cf) et
+// ignorables par défaut.
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/u;
+
+// Un caractère par son point de code, U+XXXX ; un texte par ceux de tous ses
+// caractères, séparés d'une espace : la seule façon de lire un écart de
+// composition, où une lettre et sa marque combinante se confondent à l'écran.
+const pointDeCode = (caractere) => `U+${caractere.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+const pointsDeCode = (texte) => Array.from(texte, pointDeCode).join(' ');
+
+// Un texte où chaque caractère invisible, et chaque demi-paire de substitution
+// isolée, s'écrit ⟨U+XXXX⟩ : la seule façon de lire un écart qu'on ne voit pas.
+const visible = (texte) =>
+  texte.replace(/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\ud800-\udfff]/gu, (caractere) => `⟨${pointDeCode(caractere)}⟩`);
+
+describe('noms.js : valeurs du contrat', () => {
+  test('SUFFIXES, SUFFIXE_ECRITURE, DOSSIER_CORBEILLE et LONGUEUR_CHEMIN_MAX valent le contrat, et SUFFIXES ne se modifie pas', () => {
+    // Seule épreuve qui écrit ces valeurs en clair : les autres recomposent
+    // les chemins avec des textes littéraux.
+    assert.deepEqual(SUFFIXES, {
+      etat: '.gtt.json',
+      precedent: '.gtt.json.precedent',
+      journal: '.gtt-journal.jsonl',
+      verrou: '.gtt.verrou',
+    });
+    assert.ok(Object.isFrozen(SUFFIXES));
+    assert.equal(SUFFIXE_ECRITURE, '.ecriture');
+    assert.equal(DOSSIER_CORBEILLE, 'corbeille');
+    assert.equal(LONGUEUR_CHEMIN_MAX, 259);
+  });
+
+  test("longueurs des suffixes : l'état 9, le journal 18, l'état précédent 19, et 28 avec le suffixe d'écriture", () => {
+    assert.deepEqual(
+      [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou].map((suffixe) => suffixe.length),
+      [9, 19, 18, 11],
+    );
+    assert.equal(SUFFIXE_ECRITURE.length, 9);
+    assert.equal(`${SUFFIXES.precedent}${SUFFIXE_ECRITURE}`.length, 28);
+    assert.equal(`${SUFFIXES.journal}${SUFFIXE_ECRITURE}`.length, 27);
+  });
+});
+
+describe("longueurRelativeMax : le plus long chemin relatif qu'un événement écrit", () => {
+  test("elle vaut la longueur du plus long chemin recomposé : l'état précédent en écriture atomique, dans la corbeille au rang 99", () => {
+    const bases = ['', 'a', 'Gala', lettres(100), lettres(197)];
+    assert.ok(bases.length > 0, 'aucune base examinée');
+    for (const base of bases) {
+      const plus = plusLong(cheminsRelatifs(base));
+      assert.equal(plus, `${CORBEILLE_RANG_99}/${base}.gtt.json.precedent.ecriture`);
+      assert.equal(longueurRelativeMax(base), plus.length, `base de ${base.length} unités`);
+    }
+    // La partie qui ne dépend pas de la base : la corbeille datée, son
+    // séparateur, et le suffixe le plus long.
+    assert.equal(longueurRelativeMax(''), 33 + 28);
+  });
+
+  test("le rang le plus long que rend dossierCorbeille est celui que la longueur retient : deux chiffres, au rang 99", () => {
+    const horodatage = '2026-10-06T19:02:11-04:00';
+    const premier = dossierCorbeille(horodatage, []);
+    // Les rangs 2 à 98 sont pris : le suivant est le 99.
+    const existants = [premier, ...Array.from({ length: 97 }, (_, i) => `${premier}_${i + 2}`)];
+    assert.equal(existants.length, 98);
+    const dernier = dossierCorbeille(horodatage, existants);
+    assert.equal(dernier, CORBEILLE_RANG_99);
+    assert.equal(longueurRelativeMax('Gala'), `${dernier}/Gala.gtt.json.precedent.ecriture`.length);
+  });
+});
+
+describe('deriverBase : les deux dossiers de travail', () => {
+  test("leur racine compte 56 et 15 unités, et la borne laisse 141 et 182 unités à la base", () => {
+    assert.deepEqual(DOSSIERS.map(({ racine }) => racine.length), [56, 15]);
+    // 259 − racine − 1 séparateur − 61 de chemin relatif hors base.
+    assert.deepEqual(DOSSIERS.map(longueurMaxDeBase), [259 - 56 - 1 - 61, 259 - 15 - 1 - 61]);
+    assert.deepEqual(DOSSIERS.map(longueurMaxDeBase), [141, 182]);
+    // Le module laisse ces longueurs à la base d'un nom qui les dépasse.
+    assert.deepEqual(DOSSIERS.map((dossier) => derive(lettres(400), dossier).length), [141, 182]);
+  });
+});
+
+describe('deriverBase : les caractères de format et les demi-paires isolées', () => {
+  surChaqueDossier('un nom fait de seuls caractères de format ou de demi-paires isolées donne evenement, jamais une base invisible', (dossier) => {
+    const invisibles = [
+      '\u200b',
+      '\u200b\u200c\u200d\u2060\ufeff\u00ad',
+      '\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069',
+      '\ud800',
+      '\udfff',
+      '\ude00\ud83d',
+      '\u{e0041}\u{e007f}',
+      ' \u200b . \u200b ',
+    ];
+    assert.ok(invisibles.length > 0, 'aucun nom examiné');
+    assert.deepEqual(invisibles.map((nom) => derive(nom, dossier)), invisibles.map(() => 'evenement'));
+  });
+
+  surChaqueDossier('chaque caractère de format, et chaque demi-paire isolée, est retiré, non remplacé', (dossier) => {
+    // Espace, antiliant et liant sans chasse ; marques, enchâssements, forçages
+    // et isolats bidirectionnels ; trait d'union conditionnel ; gluon de mots ;
+    // U+FEFF ; marque de lettre arabe ; une étiquette, hors du plan de base.
+    const formats = [
+      '\u200b', '\u200c', '\u200d', '\u200e', '\u200f',
+      '\u202a', '\u202b', '\u202c', '\u202d', '\u202e',
+      '\u2066', '\u2067', '\u2068', '\u2069',
+      '\u00ad', '\u2060', '\ufeff', '\u061c', '\u{e0041}',
+    ];
+    const demiPaires = ['\ud800', '\udbff', '\udc00', '\udfff'];
+    assert.equal(formats.length, 19);
+    assert.equal(demiPaires.length, 4);
+    const ecarts = [...formats, ...demiPaires]
+      .map((caractere) => [caractere, derive(`Ga${caractere}la`, dossier)])
+      .filter(([, base]) => base !== 'Gala')
+      .map(([caractere, base]) => `U+${caractere.codePointAt(0).toString(16).padStart(4, '0')} donne ${JSON.stringify(base)}`);
+    assert.deepEqual(ecarts, []);
+    assert.equal(derive('\u200eGala\u200e', dossier), 'Gala');
+    assert.equal(derive('\ufeffGala\ufeff', dossier), 'Gala');
+    // U+FEFF, que \s compte parmi les blancs, part sans laisser d'espace.
+    assert.equal(derive('Ga\ufeffla', dossier), 'Gala');
+    // Un forçage de droite à gauche part : la fin du nom s'affiche comme elle s'écrit.
+    assert.equal(derive('Gala\u202eslx.exe', dossier), 'Galaslx.exe');
+    // Une paire bien formée, emoji ou idéogramme hors du plan de base, reste.
+    assert.equal(derive('Gala\u{1F600}', dossier), 'Gala\u{1F600}');
+    assert.equal(derive('\u{20000}', dossier), '\u{20000}');
+  });
+
+  surChaqueDossier('le retrait précède toutes les autres règles : composition, caractères refusés, blancs, bords, noms réservés', (dossier) => {
+    const cas = [
+      // Entre une lettre et sa marque combinante, un caractère de format
+      // empêcherait la composition : la base sort en NFC.
+      ['Soire\u200b\u0301e', 'Soir\u00e9e'],
+      ['a<\u200b\u0338b', 'a\u226eb'],
+      // Deux moitiés que sépare un caractère refusé ne se recollent pas.
+      ['Ga\ud83d<\ude00la', 'Gala'],
+      // Retirés d'abord, ils ne séparent ni deux blancs ni un bord.
+      ['Gala \u200b du', 'Gala du'],
+      ['.\u200b.Gala.\u200b.', 'Gala'],
+      [' \u2060 Gala \u2060 ', 'Gala'],
+      // Un nom réservé qu'ils masquent se reconnaît.
+      ['C\u200bON', 'CON_'],
+      ['con\u200e.soir\u00e9e', 'con_.soir\u00e9e'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(
+      cas.map(([nom]) => derive(nom, dossier)),
+      cas.map(([, attendu]) => attendu),
+    );
+  });
+
+  surChaqueDossier('un nom à caractère de format ou à demi-paire isolée heurte le même nom sans eux', (dossier) => {
+    assert.equal(derive('Gala\u200b', dossier, ['gala']), 'Gala (2)');
+    assert.equal(derive('\u200eGALA\u200e', dossier, ['gala', 'Gala (2)']), 'GALA (3)');
+    // Deux noms qui ne diffèrent que par une demi-paire donnent la même base :
+    // le second prend un rang au lieu d'écrire le même fichier.
+    const premier = derive('Gala\ud800', dossier);
+    assert.equal(premier, 'Gala');
+    assert.equal(derive('Gala\udbff', dossier, [premier]), 'Gala (2)');
+  });
+});
+
+describe('deriverBase : les caractères de contrôle et les ignorables par défaut', () => {
+  // Les trois noms que ni les caractères refusés par Windows ni \s ne couvrent :
+  // un contrôle de C1, un remplisseur hangul et un sélecteur de variante. Gardés,
+  // chacun donnerait une base qui ne se voit pas.
+  surChaqueDossier('un nom fait du seul U+0085, contrôle de C1, donne evenement', (dossier) => {
+    assert.equal(visible(derive('\u{85}', dossier)), 'evenement');
+  });
+
+  surChaqueDossier('un nom fait du seul U+3164, remplisseur hangul qui se dessine en blanc, donne evenement', (dossier) => {
+    assert.equal(visible(derive('\u{3164}', dossier)), 'evenement');
+  });
+
+  surChaqueDossier('un nom fait du seul U+FE0F, sélecteur de variante, donne evenement', (dossier) => {
+    assert.equal(visible(derive('\u{fe0f}', dossier)), 'evenement');
+  });
+
+  surChaqueDossier('un nom fait de seuls contrôles ou ignorables par défaut, mêlés ou non de blancs et de points, donne evenement', (dossier) => {
+    const invisibles = [
+      // DEL, puis le premier et le dernier contrôle de C1.
+      '\u{7f}',
+      '\u{80}\u{9f}',
+      '\u{85}\u{85}\u{85}',
+      // Lien de graphèmes, remplisseurs hangul, voyelles inhérentes khmères.
+      '\u{34f}',
+      '\u{115f}\u{1160}\u{3164}\u{ffa0}',
+      '\u{17b4}\u{17b5}',
+      // Sélecteurs de variante : mongols, de base, du supplément.
+      '\u{180b}\u{180c}\u{180d}\u{180f}',
+      '\u{fe00}\u{fe0f}',
+      '\u{e0100}\u{e01ef}',
+      // Ignorables par défaut que rien n'assigne.
+      '\u{2065}\u{fff0}\u{fff8}',
+      // De format sans être ignorables par défaut : signe de nombre arabe, marque de fin d'ayah.
+      '\u{600}\u{6dd}',
+      ' \u{3164} . \u{85} ',
+    ];
+    assert.ok(invisibles.length > 0, 'aucun nom examiné');
+    const ecarts = invisibles
+      .map((nom) => [nom, derive(nom, dossier)])
+      .filter(([, base]) => base !== 'evenement')
+      .map(([nom, base]) => `${visible(nom)} donne ${visible(base)}`);
+    assert.deepEqual(ecarts, []);
+  });
+
+  surChaqueDossier('chaque caractère de contrôle, de format ou ignorable par défaut est retiré, non remplacé', (dossier) => {
+    // Les membres de la classe se lisent au moteur : aucun n'est oublié, quelle
+    // que soit la version d'Unicode qu'il embarque.
+    const membres = [];
+    for (let code = 0; code <= 0x10ffff; code += 1) {
+      if (code >= 0xd800 && code <= 0xdfff) continue;
+      const caractere = String.fromCodePoint(code);
+      if (INVISIBLE.test(caractere)) membres.push(caractere);
+    }
+    assert.ok(membres.length > 4000, `${membres.length} caractères examinés`);
+    const ecarts = membres
+      .map((caractere) => [caractere, derive(`Ga${caractere}la`, dossier)])
+      .filter(([, base]) => base !== 'Gala')
+      .map(([caractere, base]) => `${visible(caractere)} donne ${visible(base)}`);
+    assert.deepEqual(ecarts, []);
+  });
+
+  surChaqueDossier('une tabulation et une fin de ligne sont retirées, non remplacées par une espace', (dossier) => {
+    const cas = [
+      ['Ga\tla', 'Gala'],
+      ['Ga\nla', 'Gala'],
+      ['Ga\r\nla', 'Gala'],
+      ['Gala\tdu\nsoir', 'Galadusoir'],
+      // L'espace, elle, reste.
+      ['Gala du\tsoir', 'Gala dusoir'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(
+      cas.map(([nom]) => derive(nom, dossier)),
+      cas.map(([, attendu]) => attendu),
+    );
+  });
+
+  surChaqueDossier("le retrait précède les autres règles : un contrôle ou un ignorable ne masque ni un nom réservé, ni une collision, ni un bord", (dossier) => {
+    const cas = [
+      ['C\u{3164}ON', [], 'CON_'],
+      ['con\u{85}.soir\u{e9}e', [], 'con_.soir\u{e9}e'],
+      ['Gala\u{3164}', ['gala'], 'Gala (2)'],
+      ['\u{fe0f}Gala\u{fe0f}', [], 'Gala'],
+      ['. \u{85} Gala \u{3164} .', [], 'Gala'],
+      ['Ga\u{85}la', [], 'Gala'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(
+      cas.map(([nom, existantes]) => visible(derive(nom, dossier, existantes))),
+      cas.map(([, , attendu]) => attendu),
+    );
+  });
+});
+
+describe('deriverBase : les noms réservés (§ 8.6)', () => {
+  surChaqueDossier('con et CON reçoivent « _ », con.soirée aussi, Com1 de même, et console reste', (dossier) => {
+    const cas = [
+      ['con', 'con_'],
+      ['CON', 'CON_'],
+      ['con.soirée', 'con_.soirée'],
+      ['Com1', 'Com1_'],
+      ['console', 'console'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(
+      cas.map(([nom]) => derive(nom, dossier)),
+      cas.map(([, attendu]) => attendu),
+    );
+  });
+
+  surChaqueDossier('chacun des noms réservés, en minuscules, en capitales et capitalisé, reçoit « _ »', (dossier) => {
+    const casses = (nom) => [nom.toLowerCase(), nom, nom[0] + nom.slice(1).toLowerCase()];
+    const cas = NOMS_RESERVES.flatMap(casses);
+    assert.equal(NOMS_RESERVES.length, 4 + 13 + 13 + 2);
+    assert.equal(cas.length, NOMS_RESERVES.length * 3);
+    const ecarts = cas
+      .map((nom) => [nom, derive(nom, dossier)])
+      .filter(([nom, base]) => base !== `${nom}_`)
+      .map(([nom, base]) => `${JSON.stringify(nom)} donne ${JSON.stringify(base)}`);
+    assert.deepEqual(ecarts, []);
+  });
+
+  surChaqueDossier('seule la partie avant le premier point compte : un nom voisin ou réservé après le point reste', (dossier) => {
+    const intacts = [
+      'COM10', 'COM', 'COMA', 'LPT', 'LPT10', 'CON1', 'CONIN', 'CONOUT', 'NULL', 'AUXE', 'PRN0',
+      'console', 'COM\u00b9\u00b9', 'CONIN$$', 'xcon', 'con soirée', 'soirée.con', 'a.nul', 'con_', 'conin$x',
+    ];
+    assert.ok(intacts.length > 0, 'aucun nom examiné');
+    assert.deepEqual(intacts.map((nom) => derive(nom, dossier)), intacts);
+    const reserves = [
+      ['Nul.txt', 'Nul_.txt'],
+      ['aux.c.d', 'aux_.c.d'],
+      ['COM\u00b9.x', 'COM\u00b9_.x'],
+      ['lpt9.log', 'lpt9_.log'],
+      ['conin$.x', 'conin$_.x'],
+      ['Con.Soirée.Finale', 'Con_.Soirée.Finale'],
+    ];
+    assert.ok(reserves.length > 0, 'aucun nom examiné');
+    assert.deepEqual(
+      reserves.map(([nom]) => derive(nom, dossier)),
+      reserves.map(([, attendu]) => attendu),
+    );
+  });
+
+  surChaqueDossier('un nom réservé se reconnaît après le nettoyage, et des espaces avant le point ne le défont pas', (dossier) => {
+    const cas = [
+      ['c:o:n', 'con_'],
+      ['CO<N', 'CON_'],
+      ['. con .', 'con_'],
+      ['con\u00a0', 'con_'],
+      ['con .soirée', 'con_ .soirée'],
+      ['con   .soirée', 'con_ .soirée'],
+      ['NUL . x', 'NUL_ . x'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(
+      cas.map(([nom]) => derive(nom, dossier)),
+      cas.map(([, attendu]) => attendu),
+    );
+  });
+});
+
+describe('deriverBase : ce que Windows refuse (§ 8.6)', () => {
+  surChaqueDossier('«Gala»: 2026/11/14? donne «Gala» 20261114, ... donne evenement, Soirée. donne Soirée', (dossier) => {
+    assert.equal(derive('«Gala»: 2026/11/14?', dossier), '«Gala» 20261114');
+    assert.equal(derive('...', dossier), 'evenement');
+    assert.equal(derive('Soirée.', dossier), 'Soirée');
+  });
+
+  surChaqueDossier('un nom en NFD et son NFC donnent la même base, en NFC', (dossier) => {
+    const nfc = 'Soir\u00e9e';
+    const nfd = 'Soire\u0301e';
+    assert.notEqual(nfd, nfc);
+    assert.equal(nfd.length, 7);
+    assert.equal(derive(nfd, dossier), nfc);
+    assert.equal(derive(nfc, dossier), nfc);
+    assert.equal(derive(nfd, dossier).length, 6);
+  });
+
+  surChaqueDossier("la conversion en NFC précède le retrait : un « < » composé avec U+0338 n'est plus refusé", (dossier) => {
+    assert.equal(derive('a<\u0338b', dossier), 'a\u226eb');
+    assert.equal(derive('a>\u0338b', dossier), 'a\u226fb');
+    assert.equal(derive('a=\u0338b', dossier), 'a\u2260b');
+    // Sans U+0338, le caractère refusé part.
+    assert.equal(derive('a<b', dossier), 'ab');
+  });
+
+  surChaqueDossier("la conversion en NFC revient après le retrait : un caractère refusé entre une lettre et sa marque combinante laisse une base en NFC, qui se dérive en elle-même", (dossier) => {
+    // Le caractère refusé empêche la première NFC de composer. Une fois retiré,
+    // la lettre et sa marque se touchent, et seule une seconde NFC les compose.
+    const cas = [
+      // « < » entre « a » et U+0301 : Gála.
+      ['Ga<\u{301}la', 'G\u{e1}la'],
+      // Deux marques, à remettre dans l'ordre canonique avant de composer.
+      ['a\u{301}<\u{323}', '\u{1ea1}\u{301}'],
+      ['e:\u{302}\u{301}', '\u{1ebf}'],
+      // Les jamos d'un syllabe hangul : initiale, voyelle, finale.
+      ['\u{1100}<\u{1161}', '\u{ac00}'],
+      ['\u{1100}<\u{1161}<\u{11a8}', '\u{ac01}'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    const bases = cas.map(([nom]) => derive(nom, dossier));
+    assert.deepEqual(bases.map(pointsDeCode), cas.map(([, attendu]) => pointsDeCode(attendu)));
+    assert.deepEqual(bases.filter((base) => base !== base.normalize('NFC')).map(pointsDeCode), []);
+    assert.deepEqual(bases.filter((base) => derive(base, dossier) !== base).map(pointsDeCode), []);
+    // Chacun des caractères refusés agit de même entre « a » et U+0301.
+    const refuses = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    assert.equal(refuses.length, 9);
+    const ecarts = refuses
+      .map((refuse) => [refuse, derive(`Ga${refuse}\u{301}la`, dossier)])
+      .filter(([, base]) => base !== 'G\u{e1}la')
+      .map(([refuse, base]) => `${refuse} donne ${pointsDeCode(base)}`);
+    assert.deepEqual(ecarts, []);
+  });
+
+  surChaqueDossier('chaque caractère refusé, et chaque code de U+0000 à U+001F, est retiré, non remplacé', (dossier) => {
+    const refuses = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    const controles = Array.from({ length: 32 }, (_, code) => String.fromCharCode(code));
+    assert.equal(refuses.length, 9);
+    assert.equal(controles.length, 32);
+    const ecarts = [...refuses, ...controles]
+      .map((caractere) => [caractere, derive(`Ga${caractere}la`, dossier)])
+      .filter(([, base]) => base !== 'Gala')
+      .map(([caractere, base]) => `U+${caractere.charCodeAt(0).toString(16).padStart(4, '0')} donne ${JSON.stringify(base)}`);
+    assert.deepEqual(ecarts, []);
+    // Une tabulation est un code refusé, non un blanc : retirée, elle ne sépare pas.
+    assert.equal(derive('Ga\tla', dossier), 'Gala');
+    // L'espace, qui n'est pas refusée, reste.
+    assert.equal(derive('Ga la', dossier), 'Ga la');
+  });
+
+  surChaqueDossier('les blancs consécutifs se réduisent à une espace ; les espaces et points des deux bouts se retirent', (dossier) => {
+    const cas = [
+      ['Gala   du    soir', 'Gala du soir'],
+      ['Gala\u00a0du\u202fsoir\u3000fin', 'Gala du soir fin'],
+      ['  Gala  ', 'Gala'],
+      ['Gala\u00a0\u00a0:', 'Gala'],
+      ['Ga : la', 'Ga la'],
+      ['. Gala .', 'Gala'],
+      ['..Gala..', 'Gala'],
+      ['Soirée. . ', 'Soirée'],
+      ['Gala. ?', 'Gala'],
+      ['v1.2 finale', 'v1.2 finale'],
+      ['a . b', 'a . b'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(
+      cas.map(([nom]) => derive(nom, dossier)),
+      cas.map(([, attendu]) => attendu),
+    );
+  });
+
+  surChaqueDossier("de très longues suites d'espaces et de points se traitent d'une passe", (dossier) => {
+    // Une suite au milieu du nom, aux deux bouts, ou le nom entier : la
+    // dérivation rend sans attendre, là où un retrait par expression régulière
+    // reprendrait la suite à chacune de ses positions.
+    const points = '.'.repeat(200_000);
+    assert.equal(derive(`a${points}b`, dossier), 'a');
+    assert.equal(derive(`${points}a${points}`, dossier), 'a');
+    assert.equal(derive(`a${' .'.repeat(100_000)}b`, dossier), 'a');
+    assert.equal(derive(' .'.repeat(100_000), dossier), 'evenement');
+  });
+
+  surChaqueDossier('un nom dont il ne reste rien donne evenement : vide, blancs, points, caractères refusés', (dossier) => {
+    const vides = ['', ' ', '.', '...', '. .', '. '.repeat(200), '<>:"/\\|?*', ' ? ', '\u0000', '\u00a0\u3000', '*.*'];
+    assert.ok(vides.length > 0, 'aucun nom examiné');
+    assert.deepEqual(vides.map((nom) => derive(nom, dossier)), vides.map(() => 'evenement'));
+  });
+});
+
+describe('deriverBase : les collisions, sans égard à la casse (§ 8.6)', () => {
+  surChaqueDossier('Gala avec gala donne Gala (2), avec gala et GALA (2) donne Gala (3)', (dossier) => {
+    assert.equal(derive('Gala', dossier, ['gala']), 'Gala (2)');
+    assert.equal(derive('Gala', dossier, ['gala', 'GALA (2)']), 'Gala (3)');
+    assert.equal(derive('Gala', dossier, []), 'Gala');
+  });
+
+  surChaqueDossier("des noms qui donnent la même base prennent (2), (3)… dans l'ordre, au-delà de (9) compris", (dossier) => {
+    const noms = ['Gala', 'gala', 'GALA', 'Gala.', ' Gala ', 'Gala?'];
+    const existantes = [];
+    for (const nom of noms) existantes.push(derive(nom, dossier, existantes));
+    assert.deepEqual(existantes, ['Gala', 'gala (2)', 'GALA (3)', 'Gala (4)', 'Gala (5)', 'Gala (6)']);
+    // Le douzième exemplaire porte un rang à deux chiffres.
+    const pris = ['Gala', ...Array.from({ length: 10 }, (_, i) => `Gala (${i + 2})`)];
+    assert.equal(pris.length, 11);
+    assert.equal(derive('Gala', dossier, pris), 'Gala (12)');
+    // Un rang libre au milieu se prend : (2) est libre, (3) est pris.
+    assert.equal(derive('Gala', dossier, ['gala', 'gala (3)']), 'Gala (2)');
+  });
+
+  surChaqueDossier("la casse des lettres accentuées compte pour rien, et un nom en NFD heurte le même nom en NFC", (dossier) => {
+    assert.equal(derive('\u00e9cole', dossier, ['\u00c9COLE']), '\u00e9cole (2)');
+    assert.equal(derive('Soir\u00e9e', dossier, ['Soire\u0301e']), 'Soir\u00e9e (2)');
+    assert.equal(derive('Soire\u0301e', dossier, ['SOIR\u00c9E']), 'Soir\u00e9e (2)');
+  });
+
+  surChaqueDossier("la casse se compare lettre à lettre, sans contexte : un sigma final et un sigma de milieu de mot désignent la même base", (dossier) => {
+    // Windows compare deux noms par leur majuscule, un caractère après l'autre.
+    // toLowerCase, lui, écrit « ς » le Σ qui finit un mot et « σ » les autres :
+    // « ΣΑΣ2 » et « σασ2 » y auraient deux clés pour un seul fichier.
+    const cas = [
+      // ΣΑΣ2 contre σασ2, dans les deux sens, puis contre σας2.
+      ['\u{3a3}\u{391}\u{3a3}2', ['\u{3c3}\u{3b1}\u{3c3}2'], '\u{3a3}\u{391}\u{3a3}2 (2)'],
+      ['\u{3c3}\u{3b1}\u{3c3}2', ['\u{3a3}\u{391}\u{3a3}2'], '\u{3c3}\u{3b1}\u{3c3}2 (2)'],
+      ['\u{3a3}\u{391}\u{3a3}2', ['\u{3c3}\u{3b1}\u{3c2}2'], '\u{3a3}\u{391}\u{3a3}2 (2)'],
+      // Un Σ qui finit le nom : ΟΔΟΣ contre οδοσ.
+      ['\u{39f}\u{394}\u{39f}\u{3a3}', ['\u{3bf}\u{3b4}\u{3bf}\u{3c3}'], '\u{39f}\u{394}\u{39f}\u{3a3} (2)'],
+    ];
+    assert.ok(cas.length > 0, 'aucun cas examiné');
+    assert.deepEqual(
+      cas.map(([nom, existantes]) => derive(nom, dossier, existantes)),
+      cas.map(([, , attendu]) => attendu),
+    );
+  });
+
+  surChaqueDossier("seule une base entière en heurte une autre, et un ensemble d'existantes vaut une liste", (dossier) => {
+    const voisines = ['Gala du printemps', 'Gal', 'Gala (2)', 'un Gala', 'Gala2', 'evenement'];
+    assert.equal(derive('Gala', dossier, voisines), 'Gala');
+    assert.equal(derive('Gala', dossier, new Set(['gala'])), 'Gala (2)');
+    assert.equal(derive('Gala', dossier, new Set()), 'Gala');
+    // Deux noms sans rien d'utilisable donnent le nom générique, puis son rang 2.
+    assert.equal(derive('???', dossier, ['evenement']), 'evenement (2)');
+    assert.equal(derive('...', dossier, ['EVENEMENT', 'evenement (2)']), 'evenement (3)');
+  });
+
+  surChaqueDossier("la collision d'un nom réservé se joue sur la base protégée : con_ puis con_ (2)", (dossier) => {
+    assert.equal(derive('con', dossier, ['CON_']), 'con_ (2)');
+    assert.equal(derive('con', dossier, ['con']), 'con_');
+  });
+});
+
+describe('deriverBase : la borne du chemin complet (§ 8.6, § 14.10)', () => {
+  surChaqueDossier('un nom de 400 caractères se tronque : le plus long chemin écrit tient en 259 unités, corbeille et écriture comprises', (dossier) => {
+    const nom = lettres(400);
+    const limite = longueurMaxDeBase(dossier);
+    const base = derive(nom, dossier);
+    const chemins = cheminsComplets(dossier, base);
+    const plus = plusLong(chemins);
+    assert.ok(plus.length <= LONGUEUR_CHEMIN_MAX, `le plus long chemin compte ${plus.length} unités : ${plus}`);
+    // La plus longue base qui tient : la tête du nom, au chemin de 259 unités.
+    assert.equal(base, nom.slice(0, limite));
+    assert.equal(plus.length, LONGUEUR_CHEMIN_MAX);
+    assert.ok(plus.endsWith('.gtt.json.precedent.ecriture'));
+    assert.ok(plus.includes(`${dossier.separateur}corbeille${dossier.separateur}`));
+    assert.deepEqual(chemins.filter((chemin) => chemin.length > 259), []);
+    // Une base plus longue d'une unité déborde : la borne n'est pas trop large.
+    assert.ok(plusLong(cheminsComplets(dossier, nom.slice(0, limite + 1))).length > 259);
+  });
+
+  surChaqueDossier("une borne sur un seul suffixe, sans la corbeille ou sans l'écriture atomique, laisserait déborder le plus long chemin ; la base dérivée reste en deçà", (dossier) => {
+    const bornes = [
+      ['sur .gtt.json seul', '.gtt.json'],
+      ['sur .gtt-journal.jsonl seul', '.gtt-journal.jsonl'],
+      ['sur .gtt.json.precedent.ecriture sans la corbeille', '.gtt.json.precedent.ecriture'],
+      ['sur la corbeille et .gtt.json.precedent sans .ecriture', `${CORBEILLE_RANG_99}/.gtt.json.precedent`],
+      ['sur la corbeille et .gtt-journal.jsonl.ecriture', `${CORBEILLE_RANG_99}/.gtt-journal.jsonl.ecriture`],
+      ['sur un rang à un chiffre', 'corbeille/2026-10-06_19-02-11_9/.gtt.json.precedent.ecriture'],
+    ];
+    assert.ok(bornes.length > 0, 'aucune borne examinée');
+    const limite = longueurMaxDeBase(dossier);
+    const racine = dossier.racine.length;
+    const base = derive(lettres(400), dossier);
+    for (const [libelle, relatifSansBase] of bornes) {
+      const fautive = 259 - (racine + 1) - relatifSansBase.length;
+      assert.ok(fautive > limite, `${libelle} : ${fautive} unités, la bonne borne en laisse ${limite}`);
+      assert.ok(
+        plusLong(cheminsComplets(dossier, lettres(fautive))).length > 259,
+        `${libelle} : le plus long chemin tiendrait`,
+      );
+      // Un module qui bornerait ainsi laisserait ces unités à la base.
+      assert.ok(base.length < fautive, `${libelle} : la base dérivée compte ${base.length} unités`);
+    }
+  });
+
+  surChaqueDossier("la coupe d'un nom à espaces garde la tête du nom, espaces et points finaux retirés", (dossier) => {
+    const limite = longueurMaxDeBase(dossier);
+    const phrase = 'Grande soirée des lanternes, rencontre annuelle du cercle des jardiniers. '.repeat(10);
+    const base = derive(phrase, dossier);
+    assert.equal(base, phrase.slice(0, limite).replace(/[ .]+$/, ''));
+    assert.ok(plusLong(cheminsComplets(dossier, base)).length <= 259);
+    // La coupe laisse un point et deux espaces en queue : ils partent.
+    assert.equal(derive(`${'a'.repeat(limite - 3)} . ${'b'.repeat(40)}`, dossier), 'a'.repeat(limite - 3));
+    assert.equal(derive(`${'a'.repeat(limite - 1)}.${'b'.repeat(40)}`, dossier), 'a'.repeat(limite - 1));
+  });
+
+  surChaqueDossier("un emoji en position de coupe n'est pas coupé en deux : il tient tout entier ou il est retiré", (dossier) => {
+    const limite = longueurMaxDeBase(dossier);
+    const emoji = '\u{1F600}';
+    assert.equal(emoji.length, 2);
+    // La paire chevauche la limite : une coupe naïve garderait sa moitié haute seule.
+    const chevauche = `${'a'.repeat(limite - 1)}${emoji}${lettres(40)}`;
+    assert.ok(estHaute(chevauche.charCodeAt(limite - 1)) && estBasse(chevauche.charCodeAt(limite)));
+    assert.equal(derive(chevauche, dossier), 'a'.repeat(limite - 1));
+    // La paire finit à la limite : elle tient.
+    const finit = `${'a'.repeat(limite - 2)}${emoji}${lettres(40)}`;
+    assert.equal(derive(finit, dossier), `${'a'.repeat(limite - 2)}${emoji}`);
+    // Une suite d'emoji tient autant de paires entières que la borne en laisse.
+    const base = derive(emoji.repeat(300), dossier);
+    assert.equal(base, emoji.repeat(Math.floor(limite / 2)));
+    assert.ok(plusLong(cheminsComplets(dossier, base)).length <= 259);
+  });
+
+  surChaqueDossier('une collision se règle dans la borne : la base se raccourcit du rang, les blancs de coupe partent', (dossier) => {
+    const limite = longueurMaxDeBase(dossier);
+    const nom = lettres(400);
+    const base = derive(nom, dossier);
+    const casse = base.toUpperCase();
+    assert.notEqual(casse, base);
+    const deux = derive(nom, dossier, [casse]);
+    assert.equal(deux, `${nom.slice(0, limite - 4)} (2)`);
+    assert.equal(deux.length, limite);
+    const trois = derive(nom, dossier, [casse, deux]);
+    assert.equal(trois, `${nom.slice(0, limite - 4)} (3)`);
+    // Un rang à deux chiffres prend une unité de plus.
+    const pris = [casse, ...Array.from({ length: 8 }, (_, i) => `${nom.slice(0, limite - 4)} (${i + 2})`)];
+    assert.equal(derive(nom, dossier, pris), `${nom.slice(0, limite - 5)} (10)`);
+    for (const resultat of [deux, trois]) {
+      assert.ok(plusLong(cheminsComplets(dossier, resultat)).length <= 259);
+    }
+    // La coupe du rang tombe après une espace : elle part, puis le rang s'ajoute.
+    const aEspace = `${'a'.repeat(limite - 5)} ${'b'.repeat(30)}`;
+    const premier = derive(aEspace, dossier);
+    assert.equal(premier, `${'a'.repeat(limite - 5)} bbbb`);
+    assert.equal(derive(aEspace, dossier, [premier]), `${'a'.repeat(limite - 5)} (2)`);
+  });
+
+  test('une racine de 250 caractères ne laisse tenir aucune base : CHEMIN_TROP_LONG nomme la racine', () => {
+    const dossier = dossierDeLongueur(250);
+    assert.equal(dossier.racine.length, 250);
+    refuseTropLong(() => derive('Gala', dossier), dossier.racine);
+    refuseTropLong(() => derive('...', dossier), dossier.racine);
+  });
+
+  test("la racine la plus longue qui laisse une base d'une unité compte 196 caractères ; à 197, aucune base ne tient", () => {
+    const auPlus = dossierDeLongueur(196);
+    const auDela = dossierDeLongueur(197);
+    assert.equal(longueurMaxDeBase(auPlus), 1);
+    assert.equal(longueurMaxDeBase(auDela), 0);
+    assert.equal(derive('Gala', auPlus), 'G');
+    assert.equal(plusLong(cheminsComplets(auPlus, 'G')).length, 259);
+    refuseTropLong(() => derive('Gala', auDela), auDela.racine);
+  });
+
+  test("à la limite, le rang d'une collision tient dans la borne : G (2) en 5 unités, puis plus aucun rang", () => {
+    const cinq = dossierDeLongueur(192);
+    assert.equal(longueurMaxDeBase(cinq), 5);
+    assert.equal(derive('Gala', cinq), 'Gala');
+    assert.equal(derive('Gala', cinq, ['gala']), 'G (2)');
+    assert.equal(derive('Gala', cinq, ['gala', 'g (2)']), 'G (3)');
+    const neuf = ['gala', ...Array.from({ length: 8 }, (_, i) => `g (${i + 2})`)];
+    assert.equal(derive('Gala', cinq, neuf.slice(0, 8)), 'G (9)');
+    refuseTropLong(() => derive('Gala', cinq, neuf), cinq.racine);
+    // Une base d'une unité, déjà prise : le rang 2 ne tient plus.
+    const une = dossierDeLongueur(196);
+    refuseTropLong(() => derive('Gala', une, ['g']), une.racine);
+  });
+
+  test('la coupe ne laisse jamais un nom réservé : « con_ » tient à quatre unités, « co » à trois', () => {
+    const trois = dossierDeLongueur(194);
+    const quatre = dossierDeLongueur(193);
+    assert.equal(longueurMaxDeBase(trois), 3);
+    assert.equal(longueurMaxDeBase(quatre), 4);
+    const surTrois = [['con', 'co'], ['console', 'co'], ['Con.x', 'Co'], ['aux x', 'au'], ['conin$.y', 'co']];
+    assert.ok(surTrois.length > 0, 'aucun nom examiné');
+    assert.deepEqual(
+      surTrois.map(([nom]) => derive(nom, trois)),
+      surTrois.map(([, attendu]) => attendu),
+    );
+    const surQuatre = [['con', 'con_'], ['console', 'cons'], ['con.x', 'con_'], ['aux x', 'aux_'], ['conin$.y', 'coni']];
+    assert.ok(surQuatre.length > 0, 'aucun nom examiné');
+    assert.deepEqual(
+      surQuatre.map(([nom]) => derive(nom, quatre)),
+      surQuatre.map(([, attendu]) => attendu),
+    );
+    for (const [dossier, noms] of [[trois, surTrois], [quatre, surQuatre]]) {
+      for (const [nom] of noms) {
+        const base = derive(nom, dossier);
+        assert.ok(!estReserve(base), `${nom} donne ${base}`);
+        assert.ok(plusLong(cheminsComplets(dossier, base)).length <= 259);
+      }
+    }
+  });
+
+  test("un nom dont le premier caractère tient en deux unités ne tient pas dans une seule : CHEMIN_TROP_LONG", () => {
+    const une = dossierDeLongueur(196);
+    refuseTropLong(() => derive('\u{1F600}Gala', une), une.racine);
+    // À deux unités, la paire tient.
+    const deux = dossierDeLongueur(195);
+    assert.equal(derive('\u{1F600}Gala', deux), '\u{1F600}');
+  });
+
+  test('la racine se compte en unités UTF-16 comme la base : un emoji y pèse deux unités', () => {
+    const dossier = { racine: `C:\\${'\u{1F600}'.repeat(50)}`, separateur: '\\' };
+    assert.equal(dossier.racine.length, 3 + 2 * 50);
+    assert.equal(Array.from(dossier.racine).length, 3 + 50);
+    const limite = longueurMaxDeBase(dossier);
+    assert.equal(limite, 259 - 103 - 1 - 61);
+    const base = derive(lettres(400), dossier);
+    assert.equal(base, lettres(limite));
+    assert.equal(plusLong(cheminsComplets(dossier, base)).length, 259);
+  });
+
+  test("une racine qui finit par le séparateur ne compte pas un séparateur de plus", () => {
+    const nom = lettres(400);
+    const cas = [
+      { racine: 'E:\\soirees\\data\\', separateur: '\\' },
+      { racine: 'E:\\', separateur: '\\' },
+      { racine: '/home/exemple/soirees/', separateur: '/' },
+      { racine: '/home/exemple/soirees', separateur: '/' },
+      { racine: '/', separateur: '/' },
+    ];
+    assert.ok(cas.length > 0, 'aucun dossier examiné');
+    for (const dossier of cas) {
+      const limite = longueurMaxDeBase(dossier);
+      const base = derive(nom, dossier);
+      assert.equal(base, nom.slice(0, limite), dossier.racine);
+      assert.equal(plusLong(cheminsComplets(dossier, base)).length, 259, dossier.racine);
+    }
+    // Avec ou sans le séparateur final, le même dossier donne la même base.
+    assert.equal(derive(nom, cas[0]), derive(nom, DOSSIERS[1]));
+    assert.equal(derive(nom, cas[2]), derive(nom, cas[3]));
+    // Les valeurs : E:\ laisse 195 unités à la base, « / » 197.
+    assert.deepEqual([cas[1], cas[4]].map(longueurMaxDeBase), [195, 197]);
+  });
+});
+
+// Noms que la dérivation doit traverser sans rien rompre : vides, réservés,
+// refusés, en NFD, à emoji, trop longs, à caractères de contrôle, de format ou
+// ignorables par défaut, à demi-paires isolées, à marque combinante que sépare
+// un caractère refusé, à sigma majuscule, médian ou final.
+const NOMS_HOSTILES = [
+  '', ' ', '.', '...', '. . .', '<>:"/\\|?*', '\u0000\u001f', '\u00a0', '*.*',
+  'con', 'CON', 'Con.txt', 'nul.', 'aux .x', 'COM1', 'lpt9.log', 'CONIN$', 'conout$.x', 'COM\u00b9', 'console',
+  'c:o:n', ' con ', 'PRN . . ',
+  '«Gala»: 2026/11/14?', 'Soirée.', 'Soire\u0301e', '  Gala   du   soir  ', 'Gala\u00a0du\u202fsoir',
+  '\u{1F600}', '\u{1F600}'.repeat(300), `${'a'.repeat(139)}\u{1F600}${'b'.repeat(50)}`,
+  `${'a'.repeat(140)}\u{1F600}${'b'.repeat(50)}`, `${'a'.repeat(181)}\u{1F600}${'b'.repeat(50)}`,
+  `${'a'.repeat(180)}\u{1F600}${'b'.repeat(50)}`,
+  lettres(400), '\u00e9'.repeat(400), 'e\u0301'.repeat(200), '. '.repeat(250), `con.${lettres(400)}`,
+  `${'a'.repeat(138)} ${'b'.repeat(60)}`, `${'a'.repeat(140)}.${'b'.repeat(60)}`, 'x'.repeat(141), 'x'.repeat(142),
+  '\u200b', '\u200b'.repeat(300), '\u200eGala\u200e', 'Gala\u200b', 'Ga\ufeffla', 'Ga\u00adla', 'Gala\u202eslx.exe',
+  'C\u200bON', 'Soire\u200b\u0301e', '\ud800', 'Ga\udc00la', '\ude00\ud83d', 'Ga\ud83d<\ude00la',
+  `${'a'.repeat(140)}\u200b${'b'.repeat(50)}`,
+  // Un contrôle de C1, un remplisseur hangul et un sélecteur de variante, seuls ou dans un nom.
+  '\u{85}', '\u{3164}', '\u{fe0f}', 'Ga\u{3164}la', 'C\u{3164}ON', `${'a'.repeat(140)}\u{3164}${'b'.repeat(50)}`,
+  // Une lettre et sa marque combinante, qu'un caractère refusé sépare : retiré, il les laisse se composer.
+  'Ga<\u{301}la', 'a\u{301}<\u{323}', 'e:\u{302}\u{301}', '\u{1100}<\u{1161}<\u{11a8}',
+  // Un sigma majuscule, médian et final : trois écritures d'un même nom.
+  '\u{3a3}\u{391}\u{3a3}2', '\u{3c3}\u{3b1}\u{3c3}2', '\u{3c3}\u{3b1}\u{3c2}2',
+];
+
+// Les invariants d'une base dérivée : invariantsRompus rend, en une ligne
+// chacun, ceux que la base viole.
+const INTERDIT = /[<>:"/\\|?*\u0000-\u001f]/;
+const BORD = /^[ .]|[ .]$/;
+const SUBSTITUTION_ISOLEE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+function invariantsRompus(base, dossier) {
+  const rompus = [];
+  if (base.length === 0) rompus.push('base vide');
+  if (base !== base.normalize('NFC')) rompus.push('base hors NFC');
+  if (INTERDIT.test(base)) rompus.push('caractère refusé');
+  if (INVISIBLE.test(base)) rompus.push('caractère invisible');
+  if (BORD.test(base)) rompus.push('espace ou point de bord');
+  if (estReserve(base)) rompus.push('nom réservé');
+  if (SUBSTITUTION_ISOLEE.test(base)) rompus.push('paire de substitution coupée');
+  const longueur = plusLong(cheminsComplets(dossier, base)).length;
+  if (longueur > 259) rompus.push(`chemin de ${longueur} unités`);
+  return rompus;
+}
+
+describe('deriverBase : les invariants de toute base', () => {
+  // Non vide, en NFC, sans caractère refusé ni de format ni bord, jamais
+  // réservée, sans paire de substitution coupée, le plus long chemin dans la
+  // borne ; et stable : une base dérivée redonne la même.
+  surChaqueDossier('chaque nom hostile donne une base valide, qui se dérive en elle-même', (dossier) => {
+    assert.ok(NOMS_HOSTILES.length >= 40, `${NOMS_HOSTILES.length} noms examinés`);
+    const ecarts = NOMS_HOSTILES.flatMap((nom, rang) => {
+      const base = derive(nom, dossier);
+      const rompus = invariantsRompus(base, dossier);
+      if (derive(base, dossier) !== base) rompus.push('base non stable');
+      return rompus.map((rompu) => `nom ${rang} : ${rompu}`);
+    });
+    assert.deepEqual(ecarts, []);
+  });
+
+  surChaqueDossier('des noms hostiles dérivés à la suite donnent des bases deux à deux distinctes, sans égard à la casse', (dossier) => {
+    const existantes = [];
+    const ecarts = [];
+    for (const [rang, nom] of NOMS_HOSTILES.entries()) {
+      const base = derive(nom, dossier, existantes);
+      if (existantes.some((autre) => cle(autre) === cle(base))) ecarts.push(`nom ${rang} : ${base} déjà pris`);
+      for (const rompu of invariantsRompus(base, dossier)) ecarts.push(`nom ${rang} : ${rompu}`);
+      existantes.push(base);
+    }
+    assert.equal(existantes.length, NOMS_HOSTILES.length);
+    assert.equal(new Set(existantes.map(cle)).size, NOMS_HOSTILES.length);
+    assert.deepEqual(ecarts, []);
+  });
+});
+
+describe('dossierCorbeille (§ 8.7)', () => {
+  test("un horodatage donne corbeille/AAAA-MM-JJ_HH-MM-SS : la date et l'heure telles qu'écrites, sans le décalage", () => {
+    assert.equal(dossierCorbeille('2026-10-06T19:02:11-04:00', []), 'corbeille/2026-10-06_19-02-11');
+    assert.equal(dossierCorbeille('2026-10-06T19:02:11+05:30', []), 'corbeille/2026-10-06_19-02-11');
+    assert.equal(dossierCorbeille('2026-12-31T23:59:59-05:00', []), 'corbeille/2026-12-31_23-59-59');
+    assert.equal(dossierCorbeille('2027-01-01T00:00:00+00:00', []), 'corbeille/2027-01-01_00-00-00');
+  });
+
+  test('un nom déjà présent, seul ou avec le préfixe corbeille/, ajoute le rang 2 ; le premier rang libre est pris', () => {
+    const horodatage = '2026-10-06T19:02:11-04:00';
+    const nom = '2026-10-06_19-02-11';
+    assert.equal(dossierCorbeille(horodatage, [nom]), `corbeille/${nom}_2`);
+    assert.equal(dossierCorbeille(horodatage, [`corbeille/${nom}`]), `corbeille/${nom}_2`);
+    assert.equal(dossierCorbeille(horodatage, [nom, `${nom}_2`]), `corbeille/${nom}_3`);
+    assert.equal(dossierCorbeille(horodatage, [`corbeille/${nom}`, `corbeille/${nom}_2`]), `corbeille/${nom}_3`);
+    // Un trou se comble : le rang 2 est libre quand seuls le premier et le 3 sont pris.
+    assert.equal(dossierCorbeille(horodatage, [nom, `${nom}_3`]), `corbeille/${nom}_2`);
+    // Le rang 10 : un nom et ses rangs 2 à 9.
+    const pris = [nom, ...Array.from({ length: 8 }, (_, i) => `${nom}_${i + 2}`)];
+    assert.equal(dossierCorbeille(horodatage, pris), `corbeille/${nom}_10`);
+  });
+
+  test('le nom et ses rangs 2 à 99 pris, CORBEILLE_SATUREE nomme le dossier daté : le rang 100 dépasserait la borne', () => {
+    const horodatage = '2026-10-06T19:02:11-04:00';
+    const nom = '2026-10-06_19-02-11';
+    const rangs = [nom, ...Array.from({ length: 98 }, (_, i) => `${nom}_${i + 2}`)];
+    assert.equal(rangs.length, 99);
+    assert.equal(rangs.at(-1), `${nom}_99`);
+    for (const existants of [rangs, rangs.map((entree) => `corbeille/${entree}`)]) {
+      const erreur = erreurDe(() => dossierCorbeille(horodatage, existants));
+      assert.ok(erreur instanceof ErreurStockage, `${erreur?.name} au lieu d'une ErreurStockage`);
+      assert.equal(erreur.code, 'CORBEILLE_SATUREE');
+      assert.deepEqual(erreur.details, { dossier: `corbeille/${nom}` });
+    }
+    // Seuls les rangs de cet instant comptent : le rang 99 libre se prend, quel
+    // que soit le nombre d'entrées d'autres instants.
+    const autres = Array.from({ length: 5 }, (_, i) => `2026-10-06_19-02-1${i + 2}`);
+    assert.equal(dossierCorbeille(horodatage, [...rangs.slice(0, 98), ...autres]), `corbeille/${nom}_99`);
+    // Un rang libre plus bas se prend, même quand le rang 99 est pris.
+    assert.equal(dossierCorbeille(horodatage, rangs.filter((entree) => entree !== `${nom}_50`)), `corbeille/${nom}_50`);
+  });
+
+  test("les entrées d'un autre instant, ou d'une autre forme, ne heurtent rien ; une liste figée n'est pas modifiée", () => {
+    const horodatage = '2026-10-06T19:02:11-04:00';
+    const voisines = Object.freeze([
+      '2026-10-06_19-02-12', '2026-10-06_19-02-10', '2026-10-07_19-02-11', '2026-10-06_19-02-11_x',
+      '2026-10-06_19-02-11 (2)', 'autre', 'corbeille', '',
+    ]);
+    assert.equal(dossierCorbeille(horodatage, voisines), 'corbeille/2026-10-06_19-02-11');
+    assert.equal(dossierCorbeille(horodatage, new Set(['2026-10-06_19-02-11'])), 'corbeille/2026-10-06_19-02-11_2');
+    assert.equal(voisines.length, 8);
+  });
+
+  test("un horodatage d'une autre forme que AAAA-MM-JJTHH:MM:SS±HH:MM lève TypeError : le chemin n'en porte que des chiffres", () => {
+    const refuses = [
+      '', '2026-10-06', '2026-10-06 19:02:11-04:00', '2026-10-06T19:02:11', '2026-10-06T19:02:11Z',
+      '2026-10-06T19:02:11-04:00 ', '2026-10-06T19:02:11-04:00\n', ' 2026-10-06T19:02:11-04:00',
+      '2026-10-06T19:02:11-04:00/../..', '../../2026-10-06T19:02:11-04:00', '2026-10-06T19:02:11.5-04:00',
+      '26-10-06T19:02:11-04:00', '2026-10-06T19-02-11-04:00', '2026-10-06T19:02:11-0400', '20261006T190211-0400',
+      '\u0662026-10-06T19:02:11-04:00',
+    ];
+    assert.ok(refuses.length > 0, 'aucun horodatage examiné');
+    const ecarts = refuses
+      .map((horodatage) => [horodatage, erreurDe(() => dossierCorbeille(horodatage, []))])
+      .filter(([, erreur]) => !(erreur instanceof TypeError))
+      .map(([horodatage, erreur]) => `${JSON.stringify(horodatage)} : ${erreur?.name}`);
+    assert.deepEqual(ecarts, []);
+    for (const horodatage of [undefined, null, 20261006, ['2026-10-06T19:02:11-04:00']]) {
+      assert.ok(erreurDe(() => dossierCorbeille(horodatage, [])) instanceof TypeError);
+    }
+  });
+});
+
+// Exécute fonction pendant que l'horloge, les sources d'aléa et les
+// comparaisons localisées lèvent à leur lecture, puis les rétablit telles
+// qu'elles étaient, propres ou héritées ; rend ce que rend fonction.
+function sansSourcesVariables(fonction) {
+  const interdite = (nom) => () => {
+    throw new Error(`${nom} lu`);
+  };
+  const remplacees = [
+    [Math, 'random'],
+    [Date, 'now'],
+    [performance, 'now'],
+    [crypto, 'getRandomValues'],
+    [crypto, 'randomUUID'],
+    [String.prototype, 'localeCompare'],
+    [String.prototype, 'toLocaleLowerCase'],
+    [String.prototype, 'toLocaleUpperCase'],
+  ].map(([objet, nom]) => ({ objet, nom, propre: Object.hasOwn(objet, nom), valeur: objet[nom] }));
+  const DateReelle = globalThis.Date;
+  for (const { objet, nom } of remplacees) objet[nom] = interdite(nom);
+  function DateInterdite() {
+    throw new Error('Date lu');
+  }
+  DateInterdite.now = interdite('Date.now');
+  globalThis.Date = DateInterdite;
+  try {
+    return fonction();
+  } finally {
+    globalThis.Date = DateReelle;
+    for (const { objet, nom, propre, valeur } of remplacees) {
+      if (propre) objet[nom] = valeur;
+      else delete objet[nom];
+    }
+  }
+}
+
+describe('déterminisme et pureté (§ 14.7)', () => {
+  test('longueurRelativeMax, deriverBase et dossierCorbeille ne lisent ni horloge, ni aléa, ni comparaison localisée', () => {
+    // Le filet est éprouvé d'abord : chaque source lève pendant qu'il est tendu.
+    for (const lecture of [
+      () => Math.random(),
+      () => Date.now(),
+      () => new Date(),
+      () => performance.now(),
+      () => crypto.getRandomValues(new Uint8Array(1)),
+      () => crypto.randomUUID(),
+      () => 'a'.localeCompare('b'),
+      () => 'A'.toLocaleLowerCase(),
+      () => 'a'.toLocaleUpperCase(),
+    ]) {
+      assert.throws(() => sansSourcesVariables(lecture), / lu$/);
+    }
+    assert.equal(typeof Date.now(), 'number');
+    assert.equal('A'.toLocaleLowerCase(), 'a');
+    const rendre = () => [
+      longueurRelativeMax('Gala'),
+      derive('Gala', DOSSIERS[0], ['gala', 'GALA (2)']),
+      derive(lettres(400), DOSSIERS[1], []),
+      derive('Con.soirée', DOSSIERS[0], ['con_.soirée']),
+      dossierCorbeille('2026-10-06T19:02:11-04:00', ['2026-10-06_19-02-11']),
+    ];
+    assert.deepEqual(sansSourcesVariables(rendre), rendre());
+  });
+
+  test("les arguments ne sont pas modifiés : un contexte et une liste figés passent, et le résultat se répète", () => {
+    const existantes = Object.freeze(['gala', 'GALA (2)']);
+    const dossier = Object.freeze({ racine: DOSSIERS[0].racine, separateur: '\\', existantes });
+    const premier = deriverBase('Gala', dossier);
+    assert.equal(premier, 'Gala (3)');
+    assert.equal(deriverBase('Gala', dossier), premier);
+    assert.deepEqual([...existantes], ['gala', 'GALA (2)']);
+  });
+});
