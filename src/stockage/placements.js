@@ -26,6 +26,7 @@
 // manière. Aucune fonction ne modifie ce qu'elle reçoit ; aucune ne lit
 // l'horloge ni un aléa.
 import { SCHEMA, capacite, premiereFaute } from './document.js';
+import { ErreurStockage } from './erreurs.js';
 
 /**
  * Une faute d'un placement ; types.js en donne la table des codes. FORME :
@@ -248,11 +249,17 @@ function exigerCoherent(p, fonction) {
  * du schéma ; rien n'est partagé avec les arguments, qui ne sont pas
  * modifiés.
  *
- * Lève TypeError, sans rien rendre, quand decalage n'est pas un entier ≥ 0,
- * ou quand la forme produite serait fautive : attribuerSieges qui n'est pas
- * un booléen, version vide ou absente, réglage hors de son domaine, plan que
- * la configuration contredit — table inconnue d'elle, nombre de tours,
- * personne non placée, liste au-delà d'une capacité.
+ * Lève ErreurStockage('COMPTEUR_SATURE', { compteur: 'proposition' }), sans
+ * rien rendre, quand l'identifiant atteint 2^31 − 1, le plus grand
+ * qu'admette la règle d'un identifiant, que suit aussi le compteur, qui
+ * n'aurait alors aucune valeur au-delà de lui. Un fichier valide y mène — un
+ * compteur écrit à la main à 2^31 − 1, ou un identifiant qui l'y relève — et
+ * le compteur ne recule jamais : l'appelant lit ce code avant d'écrire la
+ * génération. Lève TypeError, sans rien rendre, quand decalage n'est pas un
+ * entier ≥ 0, ou quand la forme produite serait fautive : attribuerSieges
+ * qui n'est pas un booléen, version vide ou absente, réglage hors de son
+ * domaine, plan que la configuration contredit — table inconnue d'elle,
+ * nombre de tours, personne non placée, liste au-delà d'une capacité.
  *
  * @param {import('../moteur/recherche.js').Proposition} proposition
  * @param {import('../moteur/types.js').Configuration} configuration
@@ -265,11 +272,16 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
   if (!Number.isSafeInteger(decalage) || decalage < 0) {
     throw new TypeError(`versFichier : décalage entier ≥ 0 attendu, reçu ${JSON.stringify(decalage)}`);
   }
+  // Le compteur que l'appelant porte au-delà de l'identifiant écrit suit la
+  // règle d'un identifiant : un identifiant qui atteint le plus grand
+  // qu'elle admet ne laisserait aucun compteur au-delà de lui.
+  const identifiant = decalage + proposition.id;
+  if (identifiant >= IDENTIFIANT.max) throw new ErreurStockage('COMPTEUR_SATURE', { compteur: 'proposition' });
   const { plan } = proposition;
   const capaciteDe = new Map(configuration.tables.map(({ id, capacite: places }) => [id, places]));
   const ordonner = (liste) => (attribuerSieges ? [...liste] : [...liste].sort(croissant));
   const fichier = {
-    id: decalage + proposition.id,
+    id: identifiant,
     graine: proposition.graine,
     arret: proposition.arret,
     historique: proposition.historique,
@@ -435,16 +447,17 @@ export function formeNommee(p, charge) {
   return lignes;
 }
 
-// valeur quand elle est un identifiant de proposition, null sinon.
+// valeur quand elle est un identifiant de proposition, null sinon : un
+// entier au-delà de 2^31 − 1 n'en est pas un.
 const identifiantLisible = (valeur) => (premiereFaute(valeur, IDENTIFIANT) === null ? valeur : null);
 
 // Compteur des propositions de la charge que rend examiner : celui de la
 // charge, relevé au-delà de plusGrand, le plus grand identifiant lu, 0 quand
-// aucun ne se lit ; il ne recule jamais. Le compteur est un identifiant, un
-// entier exact : relevé, il s'arrête à 2^53 − 1, et un identifiant de cette
-// valeur reste hors de lui.
+// aucun ne se lit ; il ne recule jamais. Le compteur suit la règle d'un
+// identifiant : relevé, il s'arrête au plus grand qu'elle admet, 2^31 − 1,
+// et un identifiant de cette valeur reste hors de lui.
 const compteurReleve = (charge, plusGrand) =>
-  Math.max(charge.prochainsIds.proposition, Math.min(plusGrand + 1, Number.MAX_SAFE_INTEGER));
+  Math.max(charge.prochainsIds.proposition, Math.min(plusGrand + 1, IDENTIFIANT.max));
 
 // Faute d'un identifiant de proposition que la charge a attribué au-delà de
 // son compteur, ou [] : prochainsIds.proposition dépasse tout identifiant
@@ -494,13 +507,17 @@ function examinerRetenu(charge) {
  * y vaut le plus grand du compteur reçu et du plus grand identifiant lu plus
  * un — celui de chaque élément de la liste, gardé ou écarté, quelle que soit
  * sa faute, et la proposition d'origine du retenu, fautif ou non ; une
- * valeur qui n'est pas un identifiant n'y entre pas. Le compteur ne recule
- * donc jamais, et une génération numérotée depuis lui, comme le dit
- * versFichier, ne réattribue ni l'identifiant d'une proposition écartée ni
- * celui de l'origine du retenu : le retenu ne désigne jamais une autre
- * proposition que la sienne. Le compteur reste un entier exact, qui s'arrête
- * à 2^53 − 1 ; un identifiant de cette valeur reste hors de lui, et
- * IDENTIFIANT_HORS_COMPTEUR le nomme tant que le fichier le porte.
+ * valeur qui n'est pas un identifiant, un entier au-delà de 2^31 − 1
+ * compris, n'y entre pas : la proposition qui la porte est fautive, FORME,
+ * le retenu aussi. Le compteur ne recule donc jamais, et une génération
+ * numérotée depuis lui, comme le dit versFichier, ne réattribue ni
+ * l'identifiant d'une proposition écartée ni celui de l'origine du retenu :
+ * le retenu ne désigne jamais une autre proposition que la sienne. Le
+ * compteur suit la règle d'un identifiant, qui s'arrête à 2^31 − 1 ; un
+ * identifiant de cette valeur reste hors de lui, et
+ * IDENTIFIANT_HORS_COMPTEUR le nomme tant que le fichier le porte. Un
+ * compteur à 2^31 − 1 ne numérote plus aucune génération : versFichier lève
+ * COMPTEUR_SATURE.
  *
  * Rend une charge neuve, dont propositions ne porte que les gardées, dans
  * l'ordre de la liste, et prochainsIds un objet neuf, son compteur des

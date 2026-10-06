@@ -8,8 +8,9 @@
 // l'analyse parcourt la table pour contrôler la forme. Chaque règle porte
 // aussi ce que canonique.js lit pour écrire : la mise en page et l'ordre des
 // listes. Les formes sont décrites dans types.js. Ce parcours de la forme
-// est le seul : premiereFaute le rend au contrôle des placements, et
-// premiereFauteEnPlace aux correctifs.
+// est le seul : premiereFaute le rend au contrôle des placements et aux
+// correctifs, et premiereFauteEnPlace aux correctifs, pour le retenu posé à
+// sa place.
 //
 // analyser lit un texte sans rien écrire et lève, à la première faute,
 // ErreurStockage('ETAT_ILLISIBLE', { raison, chemin }), en contrôlant dans
@@ -69,7 +70,14 @@ const CHAINE = chaine();
 const CHAINE_OU_NUL = chaine({ nul: true });
 const BOOLEEN = regle('booleen');
 const NOMBRE = regle('nombre');
-const IDENTIFIANT = entier(1);
+// Un identifiant entier — d'un participant, d'une table, d'une proposition,
+// ou de ce qu'une réservation, un titre ou un placement désigne — reste sous
+// 2^31, dans un entier signé de 32 bits, la largeur des tableaux du moteur
+// (Int32Array). Chaque compteur de prochainsIds, le prochain identifiant à
+// attribuer, suit la même règle : relevé au-delà d'un identifiant lu, il
+// reste ainsi loin de 2^53, où l'analyse ne le relirait plus. Au-delà, la
+// valeur sort de sa règle.
+const IDENTIFIANT = entier(1, 2 ** 31 - 1);
 const DATE_OU_NUL = regle('date', { nul: true });
 
 // Ordres des listes de la charge (§ 8.8, § 8.9). canonique.js range les
@@ -459,8 +467,8 @@ export function premiereFaute(valeur, regle, chemin = '') {
 /**
  * premiereFaute de valeur lue à la place d'une règle regle sous une autre,
  * comme l'analyse la lit : une règle aPart n'y examine que son conteneur,
- * même donnée ici. Les correctifs contrôlent ainsi une valeur posée là où
- * l'analyse la lirait.
+ * même donnée ici. Les correctifs contrôlent ainsi le retenu posé à sa
+ * place, que la lecture admet hors de sa règle.
  *
  * @param {*} valeur
  * @param {import('./types.js').Regle} regle

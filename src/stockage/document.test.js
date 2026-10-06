@@ -334,8 +334,8 @@ describe('analyser : ce qui se lit (§ 8.8)', () => {
       // il ne se compare pas à prochainsIds.proposition, et le contrôle des
       // placements écarte la proposition ou signale le retenu.
       ["identifiants de proposition qui n'en sont pas, au-delà de prochainsIds.proposition", abime((d) => {
-        d.charge.propositions.push(null, { id: 'neuf' }, { id: 9.5 }, { id: 2 ** 53 }, [9]);
-        d.entete.comptes.propositions = 6;
+        d.charge.propositions.push(null, { id: 'neuf' }, { id: 9.5 }, { id: 2 ** 31 }, { id: 2 ** 53 }, [9]);
+        d.entete.comptes.propositions = 7;
         d.charge.retenu = { ...retenuValide(), proposition: '9' };
         d.entete.comptes.retenu = 1;
       })],
@@ -346,6 +346,10 @@ describe('analyser : ce qui se lit (§ 8.8)', () => {
       ['retenu bien formé', abime((d) => {
         d.charge.retenu = retenuValide();
         d.entete.comptes.retenu = 1;
+      })],
+      ['compteurs au plus grand identifiant, 2^31 − 1, et une personne juste en deçà', abime((d) => {
+        d.charge.prochainsIds = { participant: 2 ** 31 - 1, table: 2 ** 31 - 1, proposition: 2 ** 31 - 1 };
+        d.charge.participants[3].id = 2 ** 31 - 2;
       })],
       ['toutes les listes vides', abime((d) => {
         for (const cle of ['participants', 'tables', 'reservations', 'titres', 'propositions']) {
@@ -490,6 +494,24 @@ describe('analyser : forme (§ 8.8)', () => {
         'charge.prochainsIds.proposition'],
       ['identifiant 0', (d) => { d.charge.participants[0].id = 0; }, 'charge.participants[0].id'],
       ['identifiant en texte', (d) => { d.charge.participants[0].id = '1'; }, 'charge.participants[0].id'],
+      // Un identifiant, et chaque compteur qui en est le prochain, reste sous
+      // 2^31 ; une référence vers un identifiant au-delà sort de sa règle
+      // avant de désigner quoi que ce soit. L'identifiant d'un participant
+      // ou d'une table, l'analyse le compare aussi à son compteur, qui le
+      // tient déjà sous 2^31 − 1, sous le même chemin : sa règle s'éprouve
+      // là où rien ne le compare au compteur, dans les poses d'un correctif
+      // (correctifs.test.js).
+      ['prochain identifiant à 2^31', (d) => { d.charge.prochainsIds.participant = 2 ** 31; },
+        'charge.prochainsIds.participant'],
+      ['prochain identifiant de table à 2^31', (d) => { d.charge.prochainsIds.table = 2 ** 31; },
+        'charge.prochainsIds.table'],
+      ['prochain identifiant de proposition à 2^31', (d) => { d.charge.prochainsIds.proposition = 2 ** 31; },
+        'charge.prochainsIds.proposition'],
+      ['réservation de la personne 2^31', (d) => { d.charge.reservations[0].participant = 2 ** 31; },
+        'charge.reservations[0].participant'],
+      ['réservation de la table 2^31', (d) => { d.charge.reservations[1].table = 2 ** 31; },
+        'charge.reservations[1].table'],
+      ['titre de la table 2^31', (d) => { d.charge.titres[0].table = 2 ** 31; }, 'charge.titres[0].table'],
       ['révision au-delà des entiers exacts', (d) => { d.entete.revision = 2 ** 53; }, 'entete.revision'],
       ['nom de participant vide', (d) => { d.charge.participants[1].nom = ''; }, 'charge.participants[1].nom'],
       ['prénom vide au lieu de null', (d) => { d.charge.participants[1].prenom = ''; }, 'charge.participants[1].prenom'],

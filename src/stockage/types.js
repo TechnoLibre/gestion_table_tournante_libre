@@ -14,7 +14,10 @@
 // Les chaînes de saisie sont en NFC : la conversion se fait à l'entrée — CSV,
 // commandes —, jamais à l'écriture. Une chaîne « non vide » compte au moins
 // une unité ; un champ « chaîne ou null » porte null plutôt qu'une chaîne
-// vide. Un entier est un entier exact, au plus 2^53 − 1.
+// vide. Un entier est un entier exact, au plus 2^53 − 1 ; un identifiant —
+// d'un participant, d'une table, d'une proposition, et ce qu'une
+// réservation, un titre ou un placement désigne — et chaque compteur de
+// prochainsIds, au plus 2^31 − 1.
 
 /**
  * Le fichier d'état, format 1 (§ 8.8, § 8.9). Deux régions : l'en-tête et la
@@ -94,9 +97,10 @@
  * @property {{nombre: number, arret: number, historique: number}} generation
  *                                       entiers ≥ 1
  *
- * @typedef {Object} ProchainsIds   entiers ≥ 1, au-delà de tout identifiant
- *                                  attribué ; ils ne reculent jamais, et un
- *                                  identifiant ne se réattribue pas (§ 4)
+ * @typedef {Object} ProchainsIds   entiers de 1 à 2^31 − 1, au-delà de tout
+ *                                  identifiant attribué ; ils ne reculent
+ *                                  jamais, et un identifiant ne se
+ *                                  réattribue pas (§ 4)
  * @property {number} participant
  * @property {number} table
  * @property {number} proposition   au-delà de chaque identifiant de
@@ -111,10 +115,14 @@
  *                                  chaque identifiant lu, écartées et
  *                                  origine du retenu comprises : abaissé à
  *                                  la main, il ne fait réattribuer aucun
- *                                  d'eux
+ *                                  d'eux. Relevé, il s'arrête à 2^31 − 1 ;
+ *                                  un entier au-delà n'est pas un
+ *                                  identifiant, et n'y entre pas. À
+ *                                  2^31 − 1, aucune génération ne se
+ *                                  numérote plus (COMPTEUR_SATURE)
  *
  * @typedef {Object} Participant
- * @property {number} id                    entier ≥ 1, unique
+ * @property {number} id                    identifiant, unique
  * @property {string} nom                   non vide
  * @property {string|null} prenom
  * @property {string|null} appartenance
@@ -124,7 +132,7 @@
  * @property {boolean} exclu                (§ 4.4)
  *
  * @typedef {Object} Table
- * @property {number} id            entier ≥ 1, unique
+ * @property {number} id            identifiant, unique
  * @property {number} numero        affiché, entier ≥ 1
  * @property {number|null} sieges   null : suit le défaut ; entier ≥ 2 :
  *                                  surcharge (§ 6.1)
@@ -161,7 +169,7 @@
  * @property {number[]} reserve       triée par identifiant croissant
  *
  * @typedef {Object} PropositionFichier
- * @property {number} id              entier ≥ 1 : place dans la suite des
+ * @property {number} id              identifiant : place dans la suite des
  *                                    graines dérivées (§ 5.7)
  * @property {number} graine          graine dérivée, 0 ≤ g < 2^32
  * @property {number} arret           compte d'arrêt, ≥ 1
@@ -184,7 +192,9 @@
  *                            l'admet et le contrôle des placements le garde
  *                            en le signalant (§ 8.9, point 3) : canonique.js
  *                            l'écrit compact à la clé retenu, ses clés
- *                            rangées, ses listes dans l'ordre écrit
+ *                            rangées, ses listes dans l'ordre écrit ; un
+ *                            correctif le pose entier, et ne pose rien sous
+ *                            lui (correctifs.js)
  * @property {number} proposition     id de la proposition d'origine, sous
  *                                    prochainsIds.proposition
  * @property {boolean} siegesAttribues
@@ -344,6 +354,16 @@
  *                                                    collision dépasserait les
  *                                                    deux chiffres que la borne
  *                                                    réserve (§ 8.7)
+ *   COMPTEUR_SATURE      {compteur}                  l'identifiant à attribuer
+ *                                                    atteindrait 2^31 − 1 : le
+ *                                                    compteur de prochainsIds
+ *                                                    que compteur nomme —
+ *                                                    'proposition' pour
+ *                                                    versFichier — n'aurait
+ *                                                    aucune valeur au-delà ; un
+ *                                                    fichier valide y mène, et
+ *                                                    l'appelant le lit avant
+ *                                                    toute écriture
  *
  * @typedef {'ABSENT'|'VIDE'|'JSON'|'FORME'|'COMPTES'|'REFERENCE'|'FORMAT_INCONNU'|'FORMAT_PLUS_RECENT'} RaisonIllisible
  *   ABSENT          le journal existe sans l'état ; posée par le dépôt, jamais
@@ -351,8 +371,9 @@
  *   VIDE            zéro octet, ou des blancs seulement
  *   JSON            le texte n'est pas du JSON
  *   FORME           type, clé manquante ou inconnue, valeur hors de son
- *                   domaine, identifiant de participant ou de table en
- *                   double ou atteignant prochainsIds, tour d'une
+ *                   domaine — un identifiant ou un compteur au-delà de
+ *                   2^31 − 1 compris —, identifiant de participant ou de
+ *                   table en double ou atteignant prochainsIds, tour d'une
  *                   réservation hors de sa portée ; des propositions et du
  *                   retenu, seul le conteneur
  *   COMPTES         un compte de l'en-tête contredit sa liste
@@ -421,5 +442,5 @@
  *                                         ses raisons de dérive ; la charge
  *                                         qu'examiner rend relève le compteur
  *                                         au-delà de l'identifiant, qui ne se
- *                                         réattribue pas
+ *                                         réattribue pas, jusqu'à 2^31 − 1
  */

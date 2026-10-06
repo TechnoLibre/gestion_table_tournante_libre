@@ -20,6 +20,7 @@ import { HISTORIQUE_PAR_DEFAUT, rechercher, regenerer } from '../moteur/recherch
 import { VERSION } from '../version.genere.js';
 import { serialiser } from './canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge } from './document.js';
+import { ErreurStockage } from './erreurs.js';
 import { derive, examiner, fautes, formeNommee, planDepuisFichier, versFichier } from './placements.js';
 
 const ENTETE = Object.freeze({ revision: 1, produitVersion: VERSION.affichee });
@@ -192,6 +193,22 @@ function leveTypeError(appel, motif, message) {
   assert.throws(appel, (erreur) => erreur instanceof TypeError && motif.test(erreur.message), message);
 }
 
+// Code et détails de l'ErreurStockage que lève appel, ou un texte qui dit
+// l'écart : une autre erreur, aucun refus.
+function refusDe(appel) {
+  try {
+    appel();
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) return `${erreur?.name} au lieu d'une ErreurStockage : ${erreur?.message}`;
+    return { code: erreur.code, details: erreur.details };
+  }
+  return 'aucun refus';
+}
+
+// Le refus d'un identifiant qui ne laisserait au compteur des propositions
+// aucune valeur au-delà.
+const COMPTEUR_SATURE = Object.freeze({ code: 'COMPTEUR_SATURE', details: Object.freeze({ compteur: 'proposition' }) });
+
 // Une ligne attendue de la forme nommée.
 const ligne = (tour, idTable, numero, siege, participant, nom, prenom) => ({
   tour,
@@ -354,6 +371,27 @@ describe('versFichier et planDepuisFichier : la proposition du moteur et sa form
     const sansTable = petite();
     sansTable.tables.pop();
     leveTypeError(() => versFichier(PARFAITE, sansTable, options), /"FORME"/, 'table 4 absente');
+  });
+
+  test("versFichier refuse sous un code l'identifiant qui ne laisserait au compteur aucune valeur au-delà, 2^31 − 1 et plus : ErreurStockage COMPTEUR_SATURE, qui nomme le compteur des propositions ; 2^31 − 2, le dernier qui lui en laisse une, s'écrit", () => {
+    // Une troisième proposition, que son décalage porte comme la première à
+    // l'identifiant 2^31 − 1.
+    const troisieme = { ...PARFAITE, id: 3 };
+    const options = { produitVersion: VERSION.affichee, attribuerSieges: false, decalage: 0 };
+    assert.equal(versFichier(PARFAITE, petite(), { ...options, decalage: 2 ** 31 - 3 }).id, 2 ** 31 - 2);
+    const refus = [
+      [PARFAITE, 2 ** 31 - 2],
+      [troisieme, 2 ** 31 - 4],
+      [PARFAITE, 2 ** 31 - 1],
+    ].map(([proposition, decalage]) => [
+      decalage + proposition.id,
+      refusDe(() => versFichier(proposition, petite(), { ...options, decalage })),
+    ]);
+    assert.deepStrictEqual(refus, [
+      [2 ** 31 - 1, COMPTEUR_SATURE],
+      [2 ** 31 - 1, COMPTEUR_SATURE],
+      [2 ** 31, COMPTEUR_SATURE],
+    ]);
   });
 
   test("le fichier écrit se relit : examiner garde chaque proposition telle qu'écrite, sans faute ni dérive", () => {
@@ -573,6 +611,12 @@ describe('fautes : la corruption délibérée (§ 8.9, points 1 à 3)', () => {
       ['liste de table en nombre', (p) => { p.placement[2].sieges[1] = 7; return p; }, 'placement[2].sieges[1]'],
       ['occupant fractionnaire', (p) => { p.placement[3].sieges[0][2] = 2.5; return p; }, 'placement[3].sieges[0][2]'],
       ['occupant au-delà des entiers exacts', (p) => { p.placement[3].sieges[1][0] = 2 ** 53; return p; }, 'placement[3].sieges[1][0]'],
+      // Un identifiant reste sous 2^31.
+      ['identifiant 2^31', (p) => { p.id = 2 ** 31; return p; }, 'id'],
+      ['identifiant de table 2^31', (p) => { p.tables[3] = 2 ** 31; return p; }, 'tables[3]'],
+      ['participant déclaré 2^31', (p) => { p.participants[11] = 2 ** 31; return p; }, 'participants[11]'],
+      ['occupant 2^31', (p) => { p.placement[3].sieges[1][0] = 2 ** 31; return p; }, 'placement[3].sieges[1][0]'],
+      ['en réserve, 2^31', (p) => { p.placement[2].reserve = [2 ** 31]; return p; }, 'placement[2].reserve[0]'],
       ['réserve absente', (p) => { delete p.placement[0].reserve; return p; }, 'placement[0].reserve'],
       ['graine absente', (p) => { delete p.graine; return p; }, 'graine'],
       ['deux clés inconnues : la plus petite', (p) => { p.zeta = 1; p.alpha = 2; return p; }, 'alpha'],
@@ -919,9 +963,9 @@ describe("examiner : le partage d'une charge lue (§ 8.9, point 3)", () => {
     assert.deepStrictEqual(examen.retenu, { fautes: [longueur], raisons: [] });
   });
 
-  test("la charge rendue relève prochainsIds.proposition au-delà de chaque identifiant lu — d'une proposition écartée, quelle que soit sa faute, et de l'origine du retenu, cohérent ou non — ; le compteur ne recule jamais, ce qui n'est pas un identifiant n'y entre pas, et il reste un entier exact que l'analyse relit", () => {
+  test("la charge rendue relève prochainsIds.proposition au-delà de chaque identifiant lu — d'une proposition écartée, quelle que soit sa faute, et de l'origine du retenu, cohérent ou non — ; le compteur ne recule jamais, ce qui n'est pas un identifiant, au-delà de 2^31 − 1 compris, n'y entre pas, et relevé, il s'arrête au plus grand identifiant, que l'analyse relit", () => {
     const HORS = 'IDENTIFIANT_HORS_COMPTEUR';
-    const MAX = Number.MAX_SAFE_INTEGER;
+    const PLUS_GRAND = 2 ** 31 - 1;
     // Les propositions 1, 2 et 3 sous le compteur 4 ; le retenu vient de la
     // troisième. Chaque cas abîme la charge du fichier écrit, que l'analyse
     // relit et qui se fige avant l'examen. Il nomme les écartées, [id,
@@ -942,6 +986,9 @@ describe("examiner : le partage d'une charge lue (§ 8.9, point 3)", () => {
       ['la troisième répète la deuxième', (c) => { c.propositions[2].id = 2; }, [[2, 'IDENTIFIANT_REPETE']], [], 4],
       ['la troisième à 9.5', (c) => { c.propositions[2].id = 9.5; }, [[null, 'FORME']], [], 4],
       ['la troisième à 2^53', (c) => { c.propositions[2].id = 2 ** 53; }, [[null, 'FORME']], [], 4],
+      ['la troisième à 2^31', (c) => { c.propositions[2].id = 2 ** 31; }, [[null, 'FORME']], [], 4],
+      ['la troisième au plus grand identifiant', (c) => { c.propositions[2].id = PLUS_GRAND; },
+        [[PLUS_GRAND, HORS]], [], PLUS_GRAND],
       ["l'origine du retenu à 9", (c) => { c.retenu.proposition = 9; }, [], [HORS], 10],
       ["l'origine du retenu à 9, qui se contredit", (c) => { Object.assign(c.retenu, { proposition: 9, tours: 5 }); },
         [], ['LONGUEUR'], 10],
@@ -950,7 +997,11 @@ describe("examiner : le partage d'une charge lue (§ 8.9, point 3)", () => {
         delete c.retenu.tours;
       }, [], ['FORME'], 10],
       ["l'origine du retenu à 9.5", (c) => { c.retenu.proposition = 9.5; }, [], ['FORME'], 4],
-      ["l'origine du retenu au plus grand entier exact", (c) => { c.retenu.proposition = MAX; }, [], [HORS], MAX],
+      ["l'origine du retenu au plus grand entier exact", (c) => { c.retenu.proposition = Number.MAX_SAFE_INTEGER; },
+        [], ['FORME'], 4],
+      ["l'origine du retenu à 2^31", (c) => { c.retenu.proposition = 2 ** 31; }, [], ['FORME'], 4],
+      ["l'origine du retenu au plus grand identifiant", (c) => { c.retenu.proposition = PLUS_GRAND; },
+        [], [HORS], PLUS_GRAND],
     ];
     // Le compteur que l'analyse relit dans le fichier de la charge rendue,
     // ou le refus qu'elle lève.
@@ -982,6 +1033,95 @@ describe("examiner : le partage d'une charge lue (§ 8.9, point 3)", () => {
         compteur,
       ]),
     );
+  });
+
+  test("un identifiant au-delà de 2^31 − 1, écrit à la main à l'origine du retenu ou à une proposition, n'en est pas un : le retenu est fautif, la proposition écartée, le compteur reste à 4 ; la génération suivante, numérotée comme le dit versFichier, prend 4, 5 et 6, et le fichier se rouvre", () => {
+    // Les propositions 1, 2 et 3 sous le compteur 4 ; le retenu vient de la
+    // première. Une valeur change dans le texte écrit, que l'analyse lit
+    // sans entrer dans les propositions ni dans le retenu.
+    const suivante = rechercher(petite(), { graine: 13, arret: 2_000, nombre: 3 });
+    const charge = chargeAvecGeneration();
+    charge.retenu = retenuDe(charge.propositions[0]);
+    charge.evenement.etat = 'retenu';
+    const texte = serialiser(charge, ENTETE);
+    const FORME_ORIGINE = { code: 'FORME', chemin: 'proposition' };
+    const cas = [
+      ["l'origine du retenu à 2^53 − 2", '"retenu": {"proposition":1,', 2 ** 53 - 2, [1, 2, 3], [FORME_ORIGINE]],
+      ["l'origine du retenu à 2^31", '"retenu": {"proposition":1,', 2 ** 31, [1, 2, 3], [FORME_ORIGINE]],
+      ['la troisième proposition à 2^53 − 2', '{"id":3,"graine"', 2 ** 53 - 2, [1, 2], []],
+      ['la troisième proposition à 2^31', '{"id":3,"graine"', 2 ** 31, [1, 2], []],
+    ];
+    const observes = [];
+    const attendus = [];
+    for (const [libelle, avant, valeur, gardees, fautesDuRetenu] of cas) {
+      assert.equal(texte.split(avant).length, 2, `« ${avant} » doit figurer une fois`);
+      const ouverte = examiner(analyser(texte.replace(avant, avant.replace(/\d+,/, `${valeur},`))).charge).charge;
+      // L'appelant, comme le dit versFichier : la génération décalée de
+      // prochainsIds.proposition − 1, puis le compteur porté au-delà.
+      const decalage = ouverte.prochainsIds.proposition - 1;
+      const configuration = configurationDepuisCharge(ouverte);
+      const options = { produitVersion: VERSION.affichee, attribuerSieges: false, decalage };
+      const generee = {
+        ...ouverte,
+        prochainsIds: { ...ouverte.prochainsIds, proposition: decalage + suivante.length + 1 },
+        propositions: [
+          ...ouverte.propositions,
+          ...suivante.map((proposition) => versFichier(proposition, configuration, options)),
+        ],
+      };
+      const rouverte = examiner(relire(generee));
+      observes.push([
+        libelle,
+        decalage,
+        rouverte.charge.propositions.map(({ id }) => id),
+        rouverte.fautives,
+        rouverte.retenu.fautes,
+        rouverte.charge.prochainsIds.proposition,
+      ]);
+      attendus.push([libelle, 3, [...gardees, 4, 5, 6], [], fautesDuRetenu, 7]);
+    }
+    assert.deepStrictEqual(observes, attendus);
+  });
+
+  test("un identifiant de 2^31 − 1, le plus grand, écrit à la main à l'origine du retenu ou à une proposition, ou le compteur écrit à cette valeur, laisse à 2^31 − 1 le compteur de la charge rendue : la génération suivante, d'une proposition ou de trois, numérotée comme le dit versFichier, lève COMPTEUR_SATURE à sa première proposition, un code que l'appelant lit avant toute écriture", () => {
+    // Les propositions 1, 2 et 3 sous le compteur 4 ; le retenu vient de la
+    // première. Une valeur change dans le texte écrit, que l'analyse admet :
+    // elle ne lit des propositions et du retenu que le conteneur, et le
+    // compteur reste dans sa règle.
+    const PLUS_GRAND = 2 ** 31 - 1;
+    const suivante = rechercher(petite(), { graine: 13, arret: 2_000, nombre: 3 });
+    const charge = chargeAvecGeneration();
+    charge.retenu = retenuDe(charge.propositions[0]);
+    charge.evenement.etat = 'retenu';
+    const texte = serialiser(charge, ENTETE);
+    const cas = [
+      ["l'origine du retenu", '"retenu": {"proposition":1,', `"retenu": {"proposition":${PLUS_GRAND},`],
+      ['la troisième proposition', '{"id":3,"graine"', `{"id":${PLUS_GRAND},"graine"`],
+      ['le compteur', '"proposition":4}', `"proposition":${PLUS_GRAND}}`],
+    ];
+    const observes = [];
+    const attendus = [];
+    for (const [libelle, avant, apres] of cas) {
+      assert.equal(texte.split(avant).length, 2, `« ${avant} » doit figurer une fois`);
+      const ouverte = examiner(analyser(texte.replace(avant, apres)).charge).charge;
+      // L'appelant, comme le dit versFichier : la génération décalée de
+      // prochainsIds.proposition − 1, chacune de ses propositions mise en
+      // forme avant qu'aucune ne s'écrive.
+      const decalage = ouverte.prochainsIds.proposition - 1;
+      const options = { produitVersion: VERSION.affichee, attribuerSieges: false, decalage };
+      const configuration = configurationDepuisCharge(ouverte);
+      for (const nombre of [1, 3]) {
+        const generation = suivante.slice(0, nombre);
+        observes.push([
+          libelle,
+          nombre,
+          ouverte.prochainsIds.proposition,
+          refusDe(() => generation.map((proposition) => versFichier(proposition, configuration, options))),
+        ]);
+        attendus.push([libelle, nombre, PLUS_GRAND, COMPTEUR_SATURE]);
+      }
+    }
+    assert.deepStrictEqual(observes, attendus);
   });
 
   test("un compteur abaissé à la main, puis une génération numérotée depuis la charge rendue, comme le dit versFichier : aucun identifiant écarté ne revient, et l'origine du retenu n'est jamais réattribuée", () => {

@@ -658,27 +658,65 @@ describe('difference : localité sur la grande démonstration (§ 8.9)', () => {
     assert.ok(taille < 200, `${taille} octets`);
   });
 
-  test('sans attribution, un échange qui décale les rangs dans les listes triées ne touche que ces deux listes, une entrée par rang changé', () => {
+  test("sans attribution, un échange entre deux tables pleines tient en deux opérations de moins de 250 octets, une par liste : une liste d'identifiants se pose entière quand ses opérations rang par rang pèsent plus qu'elle", () => {
     const avant = grande();
-    const apres = copie(avant);
-    const { sieges } = apres.propositions.find((p) => p.id === 4).placement[1];
-    // La plus petite personne de la table de rang 4 contre la plus grande de
-    // celle de rang 30 : chacune entre vers un bout de l'autre liste, et les
+    const listes = avant.propositions.find((p) => p.id === 4).placement[1].sieges;
+    // Échange [t1, r1, t2, r2] : la personne du rang r1 de la table de rang
+    // t1 contre celle du rang r2 de la table de rang t2, puis chaque liste
+    // rangée par identifiant, comme la copie canonique d'une proposition
+    // sans attribution. Chacune entre dans l'autre liste à son rang, et les
     // entrées qu'elle franchit se décalent d'un rang.
-    const [premiere, seconde] = [sieges[4], sieges[30]];
-    const [plusPetit, plusGrand] = [premiere[0], seconde[seconde.length - 1]];
-    sieges[4] = [...premiere.slice(1), plusGrand].sort(croissant);
-    sieges[30] = [plusPetit, ...seconde.slice(0, -1)].sort(croissant);
-    const changes = (avantEchange, apresEchange) => avantEchange.filter((id, rang) => apresEchange[rang] !== id).length;
-    const correctif = difference(avant, apres);
-    assert.ok(correctif.length > 2, `${correctif.length} opérations`);
-    assert.equal(correctif.length, changes(premiere, sieges[4]) + changes(seconde, sieges[30]));
-    for (const { op, chemin } of correctif) {
-      assert.equal(op, 'poser');
-      assert.deepEqual(chemin.slice(0, 5), listesDuTour2(4));
-      assert.ok(chemin.length === 7 && (chemin[5] === 4 || chemin[5] === 30), JSON.stringify(chemin));
+    const echanger = ([t1, r1, t2, r2]) => {
+      const apres = copie(avant);
+      const { sieges } = apres.propositions.find((p) => p.id === 4).placement[1];
+      [sieges[t1][r1], sieges[t2][r2]] = [sieges[t2][r2], sieges[t1][r1]];
+      for (const t of [t1, t2]) sieges[t].sort(croissant);
+      return { apres, sieges };
+    };
+    // Les deux listes posées entières, dans l'ordre des rangs de table.
+    const entieres = (sieges, tables) =>
+      [...tables].sort(croissant).map((t) => ({ op: 'poser', chemin: [...listesDuTour2(4), t], valeur: sieges[t] }));
+    // La plus petite personne de la table de rang 4 contre la plus grande de
+    // celle de rang 30 : chacune franchit toute l'autre liste, et ses poses
+    // rang par rang pèseraient plus que les deux listes entières.
+    const extremes = [4, 0, 30, listes[30].length - 1];
+    const { apres, sieges } = echanger(extremes);
+    assert.deepEqual(difference(avant, apres), entieres(sieges, [4, 30]));
+    // Deux identifiants consécutifs, que l'échange laisse chacun au rang de
+    // l'autre : une pose par liste, au rang qui change. Puis, de chaque
+    // table, une personne contre une personne de la table onze rangs plus
+    // loin, à des rangs qui varient d'une table à l'autre.
+    const voisin = listes[4][2] + 1;
+    const tableDuVoisin = listes.findIndex((liste) => liste.includes(voisin));
+    const echanges = [
+      extremes,
+      [4, 2, tableDuVoisin, listes[tableDuVoisin].indexOf(voisin)],
+      ...listes.map((liste, t) => {
+        const autre = (t + 11) % listes.length;
+        return [t, t % liste.length, autre, (3 * t + 1) % listes[autre].length];
+      }),
+    ];
+    const formes = new Set();
+    for (const echange of echanges) {
+      const [t1, , t2] = echange;
+      const { apres: rendu, sieges: rangees } = echanger(echange);
+      const correctif = difference(avant, rendu);
+      const cas = JSON.stringify(echange);
+      assert.equal(correctif.length, 2, cas);
+      assert.deepEqual(correctif.map(({ chemin }) => chemin[5]), [t1, t2].sort(croissant), cas);
+      for (const { op, chemin } of correctif) {
+        assert.equal(op, 'poser', cas);
+        assert.deepEqual(chemin.slice(0, 5), listesDuTour2(4), cas);
+        formes.add(chemin.length);
+      }
+      const taille = octets(JSON.stringify(correctif));
+      assert.ok(taille < 250, `${cas} : ${taille} octets`);
+      assert.ok(taille <= octets(JSON.stringify(entieres(rangees, [t1, t2]))), `${cas} : ${taille} octets`);
+      assert.equal(serialiserCharge(appliquer(avant, correctif)), serialiserCharge(rendu), cas);
     }
-    assert.equal(serialiserCharge(appliquer(avant, correctif)), serialiserCharge(apres));
+    // Le balayage rencontre les deux issues : une liste posée entière, et une
+    // seule pose au rang qui change.
+    assert.deepEqual([...formes].sort(croissant), [6, 7]);
   });
 
   test('ajouter un participant donne une opération poser à { id }, et prochainsIds avance', () => {
@@ -746,6 +784,15 @@ describe('difference : localité sur la grande démonstration (§ 8.9)', () => {
 });
 
 describe('difference : les règles (§ 8.6)', () => {
+  // Poses au rang qui mènent de la liste d'identifiants avant à la liste
+  // apres, de même longueur, au bout de chemin : une par rang qui change.
+  const posesAuRang = (avant, apres, chemin) =>
+    avant.flatMap((id, rang) =>
+      id === apres[rang] ? [] : [{ op: 'poser', chemin: [...chemin, rang], valeur: apres[rang] }],
+    );
+  // Poids d'opérations : les octets de leur texte JSON.
+  const poids = (operations) => octets(JSON.stringify(operations));
+
   test("deux charges égales à l'ordre près donnent [] : ordre des clés, des collections, et des tables d'une proposition sans attribution", () => {
     const a = petite();
     const b = copie(a);
@@ -885,7 +932,7 @@ describe('difference : les règles (§ 8.6)', () => {
     }
   });
 
-  test('les autres listes : de même longueur, rang par rang ; de longueurs différentes, posées entières', () => {
+  test("les autres listes : de même longueur, rang par rang, des capacités toutes changées comprises ; de longueurs différentes, posées entières", () => {
     const a = petite();
     a.reservations = [
       { participant: 2, table: 1, siege: 1, portee: 'tous', tour: null },
@@ -895,6 +942,10 @@ describe('difference : les règles (§ 8.6)', () => {
     const b = copie(a);
     b.reservations[1].siege = 2;
     b.titres.push({ table: 2, siege: 3, libelle: 'accueil' });
+    // Une capacité ne change que son rang : la pose d'une liste entière plus
+    // légère que ses poses rang par rang ne vaut que pour une liste
+    // d'identifiants, que l'ordre canonique décale.
+    b.propositions[0].capacites = [4, 4, 4, 4];
     // Au tour 1, la première personne de la table de rang 0 passe à la réserve.
     const tour1 = b.propositions[0].placement[0];
     const [personne, ...restants] = tour1.sieges[0];
@@ -910,6 +961,11 @@ describe('difference : les règles (§ 8.6)', () => {
           { table: 2, siege: 3, libelle: 'accueil' },
         ],
       },
+      ...[0, 1, 2, 3].map((rang) => ({
+        op: 'poser',
+        chemin: ['propositions', { id: 1 }, 'capacites', rang],
+        valeur: 4,
+      })),
       { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', 0, 'sieges', 0], valeur: restants },
       { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', 0, 'reserve'], valeur: [personne] },
     ]);
@@ -985,6 +1041,26 @@ describe('difference : les règles (§ 8.6)', () => {
     assert.deepEqual(ecarts, []);
   });
 
+  test("un retenu que sa règle admet mais qui se contredit — cinq tours déclarés, quatre écrits — se compare champ par champ, comme un retenu cohérent : seul un retenu hors de sa règle se pose entier (§ 8.9, point 3)", () => {
+    const a = petite();
+    a.retenu = { ...retenuDe(a.propositions[0]), tours: 5 };
+    a.evenement.etat = 'retenu';
+    // Relu, le retenu est gardé, et sa contradiction nommée.
+    const examen = examiner(analyser(serialiser(a, ENTETE)).charge);
+    assert.deepEqual(examen.retenu.fautes, [{ code: 'LONGUEUR', tour: null, table: null, declare: 5, ecrit: 4 }]);
+    assert.equal(porteUnRetenuAbime(a), false);
+    // Basculer le drapeau garde l'ordre des listes, rangées sans
+    // attribution ; la première liste du premier tour s'inverse.
+    const b = copie(a);
+    b.retenu.siegesAttribues = true;
+    b.retenu.placement[0].sieges[0].reverse();
+    assert.deepEqual(difference(a, b), [
+      { op: 'poser', chemin: ['retenu', 'siegesAttribues'], valeur: true },
+      { op: 'poser', chemin: ['retenu', 'placement', 0, 'sieges', 0], valeur: b.retenu.placement[0].sieges[0] },
+    ]);
+    assert.equal(serialiserCharge(appliquer(a, difference(a, b))), serialiserCharge(b));
+  });
+
   test("deux propositions de même identifiant : la liste se compare par rang dans l'ordre canonique, ou se pose entière", () => {
     const a = petite();
     a.propositions.push({ ...copie(a.propositions[0]), graine: 7 });
@@ -1006,11 +1082,124 @@ describe('difference : les règles (§ 8.6)', () => {
     ]);
     const b = copie(a);
     for (const proposition of b.propositions) proposition.placement[0].sieges[0].reverse();
-    const [premier, , dernier] = a.propositions[1].placement[0].sieges[0];
+    // Le premier et le dernier des trois sièges changent : leurs deux poses
+    // pèsent plus que la liste posée entière.
     assert.deepEqual(difference(a, b), [
-      { op: 'poser', chemin: ['propositions', { id: 2 }, 'placement', 0, 'sieges', 0, 0], valeur: dernier },
-      { op: 'poser', chemin: ['propositions', { id: 2 }, 'placement', 0, 'sieges', 0, 2], valeur: premier },
+      {
+        op: 'poser',
+        chemin: ['propositions', { id: 2 }, 'placement', 0, 'sieges', 0],
+        valeur: [...a.propositions[1].placement[0].sieges[0]].reverse(),
+      },
     ]);
+    assert.equal(serialiserCharge(appliquer(a, difference(a, b))), serialiserCharge(b));
+  });
+
+  test("à poids égal, la pose au rang reste : la seule personne de la réserve échangée contre un occupant donne une pose au rang de chaque liste", () => {
+    // Au tour 1 d'une proposition à sièges attribués, la troisième personne
+    // de la première table attend à la réserve, puis prend le siège du
+    // milieu de la deuxième table, dont l'occupant passe à la réserve.
+    const a = chargeDe('petite', [{ id: 1, siegesAttribues: true }]);
+    const tour1 = a.propositions[0].placement[0];
+    tour1.reserve = [tour1.sieges[0].pop()];
+    const b = copie(a);
+    const { sieges, reserve } = b.propositions[0].placement[0];
+    [sieges[1][1], reserve[0]] = [reserve[0], sieges[1][1]];
+    const chemin = ['propositions', { id: 1 }, 'placement', 0];
+    const correctif = difference(a, b);
+    assert.deepEqual(correctif, [
+      { op: 'poser', chemin: [...chemin, 'sieges', 1, 1], valeur: sieges[1][1] },
+      { op: 'poser', chemin: [...chemin, 'reserve', 0], valeur: reserve[0] },
+    ]);
+    // La réserve posée entière pèserait autant que sa pose au rang.
+    const entiere = { op: 'poser', chemin: [...chemin, 'reserve'], valeur: reserve };
+    assert.equal(octets(JSON.stringify([entiere])), octets(JSON.stringify([correctif[1]])));
+    assert.equal(serialiserCharge(appliquer(a, correctif)), serialiserCharge(b));
+  });
+
+  test("une liste d'identifiants se pose entière selon le poids de ses poses au rang, et non selon leur nombre : deux rangs changés gardent leurs deux poses dans les 260 participants d'une proposition, et cèdent la place à la liste entière dans une liste de table de huit", () => {
+    const a = grande();
+    const chemin = ['propositions', { id: 4 }];
+    // Dans les participants de la proposition 4, 259 cède la place à 261 :
+    // la liste rangée change à ses deux derniers rangs, et leurs deux poses
+    // pèsent bien moins que la liste entière.
+    const b = copie(a);
+    const declaree = b.propositions.find((p) => p.id === 4);
+    assert.deepEqual(declaree.participants.slice(-2), [259, 260]);
+    declaree.participants = [...declaree.participants.slice(0, -2), 260, 261];
+    const cheminDesParticipants = [...chemin, 'participants'];
+    const deuxPoses = [
+      { op: 'poser', chemin: [...cheminDesParticipants, 258], valeur: 260 },
+      { op: 'poser', chemin: [...cheminDesParticipants, 259], valeur: 261 },
+    ];
+    assert.deepEqual(difference(a, b), deuxPoses);
+    const listeEntiere = { op: 'poser', chemin: cheminDesParticipants, valeur: declaree.participants };
+    assert.ok(poids(deuxPoses) < poids([listeEntiere]), `${poids(deuxPoses)} octets au rang`);
+    assert.equal(serialiserCharge(appliquer(a, deuxPoses)), serialiserCharge(b));
+    // Au tour 2, la quatrième personne de la table de rang 0 contre la
+    // cinquième de celle de rang 1 : chaque liste de huit, rangée, change à
+    // deux rangs, et ses deux poses pèsent plus qu'elle posée entière.
+    const c = copie(a);
+    const avant = a.propositions.find((p) => p.id === 4).placement[1].sieges;
+    const { sieges } = c.propositions.find((p) => p.id === 4).placement[1];
+    [sieges[0][3], sieges[1][4]] = [sieges[1][4], sieges[0][3]];
+    for (const t of [0, 1]) sieges[t].sort(croissant);
+    const cheminDesListes = [...chemin, 'placement', 1, 'sieges'];
+    const entieres = [0, 1].map((t) => ({ op: 'poser', chemin: [...cheminDesListes, t], valeur: sieges[t] }));
+    for (const [t, entiere] of entieres.entries()) {
+      const auRang = posesAuRang(avant[t], sieges[t], entiere.chemin);
+      assert.equal(auRang.length, 2, `table de rang ${t}`);
+      assert.ok(poids(auRang) > poids([entiere]), `table de rang ${t} : ${poids(auRang)} octets au rang`);
+    }
+    assert.deepEqual(difference(a, c), entieres);
+    assert.equal(serialiserCharge(appliquer(a, entieres)), serialiserCharge(c));
+  });
+
+  test("la pose entière vaut pour chaque sorte de liste d'identifiants, d'une proposition comme du retenu — ses tables, ses participants, la réserve d'un tour — : une liste qui change à chaque rang donne une seule pose, la liste entière", () => {
+    // La grande démonstration : au tour 2 de la proposition 4, trois
+    // personnes de la table de rang 0 attendent à la réserve ; le retenu
+    // vient de cette proposition.
+    const a = grande();
+    const proposition = a.propositions.find((p) => p.id === 4);
+    const tour2 = proposition.placement[1];
+    tour2.reserve = tour2.sieges[0].splice(1, 3);
+    a.retenu = retenuDe(proposition);
+    a.evenement.etat = 'retenu';
+    // Chaque liste change dans une copie de a, à chaque rang : les tables
+    // tournent d'un rang ; dans un ensemble rangé, le plus petit identifiant
+    // cède la place à 261, plus grand que tous.
+    const tourner = (liste) => [...liste.slice(1), liste[0]];
+    const remplacerLePremier = (liste) => [...liste.slice(1), 261];
+    const listes = [
+      [['tables'], tourner],
+      [['participants'], remplacerLePremier],
+      [['placement', 1, 'reserve'], remplacerLePremier],
+    ];
+    const porteurs = [
+      [['propositions', { id: 4 }], (charge) => charge.propositions.find((p) => p.id === 4)],
+      [['retenu'], (charge) => charge.retenu],
+    ];
+    const ecarts = porteurs.flatMap(([cheminDuPorteur, porteurDe]) =>
+      listes.flatMap(([cles, changer]) => {
+        const b = copie(a);
+        const parent = cles.slice(0, -1).reduce((valeur, cle) => valeur[cle], porteurDe(b));
+        const cle = cles.at(-1);
+        const avant = parent[cle];
+        parent[cle] = changer(avant);
+        const chemin = [...cheminDuPorteur, ...cles];
+        const attendu = [{ op: 'poser', chemin, valeur: parent[cle] }];
+        const auRang = posesAuRang(avant, parent[cle], chemin);
+        const correctif = difference(a, b);
+        const cas = JSON.stringify(chemin);
+        // Chaque rang change : rang par rang, le correctif compterait
+        // plusieurs poses.
+        if (auRang.length < 2 || auRang.length !== avant.length) return [`${cas} : ${auRang.length} rangs changés`];
+        if (JSON.stringify(correctif) !== JSON.stringify(attendu)) {
+          return [`${cas} : ${correctif.length} opérations, ${poids(correctif)} octets`];
+        }
+        return serialiserCharge(appliquer(a, correctif)) === serialiserCharge(b) ? [] : [`${cas} : cible non rendue`];
+      }),
+    );
+    assert.deepEqual(ecarts, []);
   });
 });
 
@@ -1024,7 +1213,10 @@ describe('appliquer : une copie canonique, sans partage (§ 8.6)', () => {
     b.tables.push({ id: b.prochainsIds.table, numero: 34, sieges: null, forme: 'carree', position: { x: 0, y: 1500 } });
     b.prochainsIds.table += 1;
     b.tables[0].position.y = 75;
-    b.propositions.find((p) => p.id === 7).placement[3].sieges[0].reverse();
+    // Deux personnes échangent leurs sièges attribués : une pose au rang de
+    // chacune des deux listes.
+    const { sieges: echangees } = b.propositions.find((p) => p.id === 7).placement[3];
+    [echangees[0][1], echangees[1][2]] = [echangees[1][2], echangees[0][1]];
     const tour1 = b.propositions.find((p) => p.id === 9).placement[0];
     tour1.reserve = [tour1.sieges[0].pop()];
     b.retenu = retenuDe(b.propositions[0]);
@@ -1045,6 +1237,34 @@ describe('appliquer : une copie canonique, sans partage (§ 8.6)', () => {
     const ailleurs = new Set([...objetsDe(a), ...objetsDe(correctif)]);
     const partages = [...objetsDe(rendu)].filter((objet) => ailleurs.has(objet));
     assert.equal(partages.length, 0);
+  });
+
+  test("un retenu hors de sa règle, recopié hors du schéma, ne se partage pas davantage : le résultat ne partage rien avec a ni avec le correctif, et le correctif rien avec sa cible", () => {
+    // La petite démonstration, son retenu hors de sa règle : « tours »
+    // renommé « toura », une clé inconnue. Ses listes d'entiers se recopient
+    // hors du schéma.
+    const a = petite();
+    const { tours, ...plan } = retenuDe(a.propositions[0]);
+    a.retenu = { ...plan, toura: tours, note: 'à revoir' };
+    a.evenement.etat = 'retenu';
+    geler(a);
+    assert.ok(porteUnRetenuAbime(a));
+    // Un nom changé : le retenu du résultat vient de la copie de a. Une
+    // capacité du retenu changée : le correctif pose le retenu entier.
+    const renommee = copie(a);
+    renommee.participants[0].nom = 'Brindille';
+    const retouchee = copie(a);
+    retouchee.retenu.capacites[0] = 4;
+    assert.deepEqual(difference(a, retouchee), [{ op: 'poser', chemin: ['retenu'], valeur: retouchee.retenu }]);
+    for (const cible of [renommee, retouchee]) {
+      const correctif = geler(difference(a, cible));
+      const rendu = appliquer(a, correctif);
+      assert.equal(serialiserCharge(rendu), serialiserCharge(cible));
+      const ailleurs = new Set([...objetsDe(a), ...objetsDe(correctif)]);
+      assert.deepEqual([...objetsDe(rendu)].filter((objet) => ailleurs.has(objet)), []);
+      const deLaCible = objetsDe(cible);
+      assert.deepEqual([...objetsDe(correctif)].filter((objet) => deLaCible.has(objet)), []);
+    }
   });
 
   test('un correctif vide rend la copie canonique de a, et non a', () => {
@@ -1086,6 +1306,12 @@ describe("appliquer : un correctif qui ne s'applique pas lève CORRECTIF avec le
     // La petite démonstration, et la même avec deux propositions d'id 1.
     const jumelles = petite();
     jumelles.propositions.push({ ...copie(jumelles.propositions[0]), graine: 7 });
+    // La même avec un retenu dans sa règle ; puis avec un retenu hors de sa
+    // règle, dont une clé inconnue porte une liste d'objets à identifiant.
+    const avecRetenu = petite();
+    avecRetenu.retenu = retenuDe(avecRetenu.propositions[0]);
+    const retenuAbime = petite();
+    retenuAbime.retenu = { ...retenuDe(retenuAbime.propositions[0]), note: [{ id: 1 }] };
     // Chaque cas suit, au rang 0, une pose qu'appliquer admet : POSE, ou
     // celle que le cas nomme après son opération.
     const POSE = { op: 'poser', chemin: ['evenement', 'nom'], valeur: 'Soirée renommée' };
@@ -1199,9 +1425,8 @@ describe("appliquer : un correctif qui ne s'applique pas lève CORRECTIF avec le
       ['une étape qui est une liste', base, { op: 'retirer', chemin: ['participants', [3]] }],
       ['un { id } qui est un texte', base, { op: 'retirer', chemin: ['participants', { id: '3' }] }],
       ['une étape objet sans id', base, { op: 'retirer', chemin: ['participants', {}] }],
-      // Une valeur posée est une valeur que l'analyse admet à sa place : hors
-      // des propositions et du retenu, sa forme entière ; à leur place, leur
-      // conteneur. Un cas par genre de règle.
+      // Une valeur posée suit la règle de sa place, sa forme entière ; à la
+      // place du retenu, son seul conteneur. Un cas par genre de règle.
       ["poser un nombre à la place d'un objet", base, { op: 'poser', chemin: ['evenement'], valeur: 5 }],
       ['poser un objet sans les clés de sa règle', base, { op: 'poser', chemin: ['evenement'], valeur: {} }],
       [
@@ -1234,36 +1459,97 @@ describe("appliquer : un correctif qui ne s'applique pas lève CORRECTIF avec le
         base,
         { op: 'poser', chemin: ['participants', { id: 13 }], valeur: { ...troisieme, id: 13, nom: '' } },
       ],
+      // Un identifiant reste sous 2^31. Rien ne compare ici l'enregistrement
+      // posé au compteur, qui borne déjà l'identifiant à l'analyse : seule sa
+      // règle le refuse.
+      [
+        "poser par { id } un participant d'identifiant 2^31",
+        base,
+        { op: 'poser', chemin: ['participants', { id: 2 ** 31 }], valeur: { ...troisieme, id: 2 ** 31 } },
+      ],
+      [
+        "poser par { id } une table d'identifiant 2^31",
+        base,
+        { op: 'poser', chemin: ['tables', { id: 2 ** 31 }], valeur: { ...copie(base.tables[2]), id: 2 ** 31 } },
+      ],
       ['poser un objet à la place des propositions', base, { op: 'poser', chemin: ['propositions'], valeur: {} }],
       ['poser un nombre à la place du retenu', base, { op: 'poser', chemin: ['retenu'], valeur: 5 }],
       ['poser une liste à la place du retenu', base, { op: 'poser', chemin: ['retenu'], valeur: [] }],
-      // L'analyse n'entre ni dans les propositions ni dans le retenu : une
-      // valeur posée plus bas ne s'examine pas, et peut donner à une liste
-      // une forme qui n'est pas la sienne. { id } n'y vaut toujours que dans
-      // une liste d'enregistrements du schéma, et sur des enregistrements.
+      // Les propositions et le retenu, l'analyse ne les lit que comme
+      // conteneurs ; une valeur posée en eux suit pourtant la règle de sa
+      // place : une charge rendue n'a jamais une proposition que canoniser,
+      // difference ou serialiser ne sauraient lire.
       [
-        "descendre par { id } dans un placement qu'une pose a doté d'identifiants",
+        "poser des propositions qui sont une liste d'entiers",
         base,
-        { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', { id: 1 }, 'reserve'], valeur: [] },
+        { op: 'poser', chemin: ['propositions'], valeur: [12] },
+      ],
+      [
+        'poser par { id } une proposition sans les clés de sa règle',
+        base,
+        { op: 'poser', chemin: ['propositions', { id: 9 }], valeur: { id: 9 } },
+      ],
+      [
+        'poser par { id } la valeur null dans les propositions',
+        base,
+        { op: 'poser', chemin: ['propositions', { id: 13 }], valeur: null },
+      ],
+      [
+        'poser un placement qui est un objet',
+        base,
+        { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement'], valeur: {} },
+      ],
+      [
+        'poser un placement dont un tour porte un identifiant',
+        base,
         { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement'], valeur: [{ id: 1, sieges: [], reserve: [] }] },
       ],
       [
-        "poser par { id } dans une liste vide qu'une pose a ajoutée sous une clé hors du schéma",
+        'poser un tour à clé hors du schéma',
         base,
-        { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', 0, 'x', { id: 1 }], valeur: { id: 1 } },
         { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', 0], valeur: { sieges: [], reserve: [], x: [] } },
       ],
       [
-        "poser par { id } dans des propositions qu'une pose a faites liste d'entiers",
+        "poser un occupant qui n'est pas un identifiant",
         base,
-        { op: 'poser', chemin: ['propositions', { id: 13 }], valeur: { ...base.propositions[0], id: 13 } },
-        { op: 'poser', chemin: ['propositions'], valeur: [12] },
+        { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', 0, 'sieges', 0, 0], valeur: 'Brindille' },
       ],
-      ['poser par { id } la valeur null dans les propositions', base, { op: 'poser', chemin: ['propositions', { id: 13 }], valeur: null }],
+      [
+        'poser un occupant au-delà de 2^31 − 1',
+        base,
+        { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', 0, 'sieges', 0, 0], valeur: 2 ** 31 },
+      ],
+      [
+        'poser sous le retenu un placement objet',
+        avecRetenu,
+        { op: 'poser', chemin: ['retenu', 'placement'], valeur: {} },
+      ],
+      [
+        "poser sous le retenu une table qui n'est pas un identifiant",
+        avecRetenu,
+        { op: 'poser', chemin: ['retenu', 'tables', 0], valeur: 'x' },
+      ],
+      // Un retenu hors de sa règle se pose entier, jamais par morceaux :
+      // difference ne descend pas en lui.
+      [
+        'poser sous un retenu hors de sa règle, même une valeur que sa place admet',
+        retenuAbime,
+        { op: 'poser', chemin: ['retenu', 'capacites', 0], valeur: 3 },
+      ],
+      // Une étape { id } ne vaut que dans une liste d'enregistrements du
+      // schéma : une clé hors du schéma n'en mène à aucune, même quand elle
+      // porte des objets à identifiant.
+      [
+        "retirer par { id } dans une liste qu'un retenu hors de sa règle porte sous une clé hors du schéma",
+        retenuAbime,
+        { op: 'retirer', chemin: ['retenu', 'note', { id: 1 }] },
+      ],
     ];
     const texteBase = JSON.stringify(base);
     geler(base);
     geler(jumelles);
+    geler(avecRetenu);
+    geler(retenuAbime);
     const ecarts = cas.flatMap(([libelle, charge, operation, prealable = POSE]) => {
       const refus = refusDe(charge, geler([prealable, operation]));
       return JSON.stringify(refus) === JSON.stringify({ rang: 1 }) ? [] : [`${libelle} : ${JSON.stringify(refus)}`];
@@ -1311,7 +1597,7 @@ describe("appliquer : un correctif qui ne s'applique pas lève CORRECTIF avec le
     assert.deepEqual(ecarts, []);
   });
 
-  test("une valeur posée passe la forme que l'analyse donne à sa place : hors des propositions et du retenu, à chaque place, une valeur d'une autre sorte est refusée et la sienne admise ; plus bas, aucune ne s'examine", () => {
+  test("une valeur posée suit la règle de sa place : à chaque place, propositions et retenu compris, une valeur d'une autre sorte est refusée et la sienne admise ; à la place du retenu, un retenu hors de sa règle reste admis", () => {
     // La petite démonstration, avec une date, une filiation, une
     // réservation, un titre et un retenu : chaque règle du schéma y a une
     // valeur à éprouver.
@@ -1341,12 +1627,11 @@ describe("appliquer : un correctif qui ne s'applique pas lève CORRECTIF avec le
     // qui le remet en place se rejoue.
     const retenuFautif = { ...retenuDe(charge.propositions[0]), tours: 0 };
     assert.equal(refusDe(canonique, [{ op: 'poser', chemin: ['retenu'], valeur: retenuFautif }]), 'aucun refus');
-    const sousAPart = (chemin) => chemin.length > 1 && (chemin[0] === 'propositions' || chemin[0] === 'retenu');
     const ecarts = valeurs.flatMap(({ chemin, valeur }) => {
       const autre = Array.isArray(valeur) ? {} : [];
       return [
         ['sa valeur', valeur, 'aucun refus'],
-        ["une valeur d'une autre sorte", autre, sousAPart(chemin) ? 'aucun refus' : { rang: 0 }],
+        ["une valeur d'une autre sorte", autre, { rang: 0 }],
       ].flatMap(([cas, posee, attendu]) => {
         const refus = JSON.stringify(refusDe(canonique, [{ op: 'poser', chemin, valeur: posee }]));
         return refus === JSON.stringify(attendu) ? [] : [`${JSON.stringify(chemin)}, ${cas} : ${refus}`];

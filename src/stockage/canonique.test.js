@@ -221,6 +221,18 @@ function geler(valeur) {
   return valeur;
 }
 
+// Chaque objet et chaque liste que porte valeur, elle comprise :
+// JSON.stringify présente chacun à la fonction de remplacement avant de
+// l'écrire.
+function objetsDe(valeur) {
+  const objets = new Set();
+  JSON.stringify(valeur, (_, enfant) => {
+    if (typeof enfant === 'object' && enfant !== null) objets.add(enfant);
+    return enfant;
+  });
+  return objets;
+}
+
 // Exécute fonction pendant que l'horloge et les sources d'aléa lèvent à leur
 // lecture, puis les rétablit telles qu'elles étaient, propres ou héritées ;
 // rend ce que rend fonction.
@@ -644,7 +656,7 @@ describe('un retenu hors de sa règle (§ 8.9, point 3)', () => {
     assert.equal(serialiser(aRebours(charge), ENTETE), attendu);
   });
 
-  test("chaque retenu que sa règle refuse et que l'analyse admet s'écrit, se relit au même retenu et se réécrit octet pour octet, quel que soit l'ordre de ses clés ; canoniser en rend une copie détachée", () => {
+  test("chaque retenu que sa règle refuse et que l'analyse admet s'écrit, se relit au même retenu et se réécrit octet pour octet, quel que soit l'ordre de ses clés ; canoniser en rend une copie détachée, qui ne partage aucun objet ni aucune liste avec lui", () => {
     assert.ok(FACONS.length > 0, 'aucune façon examinée');
     const ecarts = FACONS.flatMap(([libelle, facon]) => {
       const charge = abimee(facon);
@@ -658,8 +670,11 @@ describe('un retenu hors de sa règle (§ 8.9, point 3)', () => {
         assert.equal(serialiser(aRebours(charge), ENTETE), texte);
         assert.equal(serialiserCharge(charge), serialiserCharge(relue));
         const avant = JSON.stringify(charge.retenu);
-        const copie = canoniser(geler(structuredClone(charge))).retenu;
+        const source = geler(structuredClone(charge));
+        const copie = canoniser(source).retenu;
         assert.deepEqual(copie, charge.retenu);
+        const recus = objetsDe(source.retenu);
+        assert.deepEqual([...objetsDe(copie)].filter((objet) => recus.has(objet)), []);
         assert.equal(JSON.stringify(canoniser(charge).retenu), JSON.stringify(copie));
         assert.equal(JSON.stringify(charge.retenu), avant);
         return [];
@@ -668,6 +683,17 @@ describe('un retenu hors de sa règle (§ 8.9, point 3)', () => {
       }
     });
     assert.deepEqual(ecarts, []);
+  });
+
+  test("un retenu que sa règle admet mais qui se contredit — cinq tours déclarés, deux écrits — suit la mise en page d'une proposition : seul un retenu que sa règle refuse s'écrit compact", () => {
+    const charge = chargeAvecRetenu();
+    charge.retenu.tours = 5;
+    const ligne = '"retenu": {"proposition":1,"siegesAttribues":false,"tables":[1,2],"capacites":[2,2],"tours":';
+    const attendu = remplacer(TEXTE_AVEC_RETENU, `${ligne}2,`, `${ligne}5,`);
+    assert.equal(serialiser(charge, ENTETE), attendu);
+    assert.equal(serialiser(aRebours(charge), ENTETE), attendu);
+    const { entete, charge: relue } = analyser(attendu);
+    assert.equal(serialiser(relue, { revision: entete.revision, produitVersion: entete.produitVersion }), attendu);
   });
 
   test("un retenu qui n'est pas un objet, que l'analyse refuse, lève TypeError : aucun texte qu'elle refuserait ne s'écrit", () => {
