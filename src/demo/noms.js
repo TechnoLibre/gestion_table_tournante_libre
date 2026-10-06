@@ -8,7 +8,10 @@
 // un patronyme distinct, chaque appartenance un libellé distinct, sans boucle
 // de rattrapage. Les fragments sont forgés pour ne désigner personne ;
 // catalogue.long.test.js refuse qu'un patronyme complet ou une racine
-// apparaisse ailleurs dans le projet.
+// apparaisse ailleurs dans le projet, hors des fichiers que
+// scripts/engendrer_livrables.js engendre de ces listes et qui les portent
+// par construction : les démonstrations livrées et les deux CSV de
+// démonstration (§ 15.6).
 //
 // L'ordre de chaque liste fait partie du contrat des tirages (§ 15.5,
 // point 3) : un tirage désigne un rang, et changer un ordre change les

@@ -3,8 +3,12 @@
 
 // Garde des noms forgés (§ 14.9, § 15.6) : aucun patronyme forgé complet, nom
 // long compris, ni aucune racine d'organisation n'apparaît en mot entier dans
-// un fichier texte du projet hors de src/demo/noms.js, qui les définit. Les
-// données d'épreuve de test/fixtures/ sont balayées comme le reste.
+// un fichier texte du projet hors de src/demo/noms.js, qui les définit, et
+// des fichiers que scripts/engendrer_livrables.js engendre et qui les portent
+// par construction : les démonstrations livrées, sous src/demo/livrees/, et
+// les deux CSV de démonstration, sous exemples/. Le CSV des cas limites,
+// écrit à la main, sa variante windows-1252 et les données d'épreuve de
+// test/fixtures/ sont balayés comme le reste.
 //
 // Un mot entier est bordé, de chaque côté, par autre chose qu'une lettre, une
 // marque combinante ou un chiffre : le trait de soulignement et le trait
@@ -16,11 +20,13 @@
 // Chaque fichier de l'arbre exerce une règle : une sonde de test/fixtures/
 // porte chaque nom cherché ; d'autres placent un nom au-delà du premier Mio
 // du texte, en NFD, après un octet nul, dans une entrée cachée, dans un
-// noms.js qui n'est pas celui des listes, ou sous un répertoire exclu ; trois
-// derniers se lisent malgré un nom voisin d'une exclusion : src/distances/,
-// distinctes.js et un fichier .git. L'épreuve affirme les fichiers lus, le
-// compte exact des trouvailles, et que la garde de l'épreuve du projet
-// désigne exactement les fichiers placés sous un répertoire exclu.
+// noms.js qui n'est pas celui des listes, dans un fichier engendré, ou sous
+// un répertoire exclu ; les derniers se lisent malgré un nom voisin d'une
+// exclusion : src/distances/, distinctes.js, un fichier .git, un module
+// src/demo/livrees.js, le CSV des cas limites et sa variante. L'épreuve
+// affirme les fichiers lus, le compte exact des trouvailles, et que la garde
+// de l'épreuve du projet désigne exactement les fichiers placés sous un
+// répertoire exclu.
 //
 // L'épreuve établit l'absence dans ce projet, rien sur le monde réel : aucune
 // vérification locale ne prouve qu'un nom forgé ne désigne nulle part une
@@ -28,13 +34,27 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
 import { NOMS_LONGS, RACINES, patronymes } from './noms.js';
 
 const RACINE = fileURLToPath(new URL('../..', import.meta.url));
 const LISTES = join('src', 'demo', 'noms.js');
+
+// Fichiers qui portent les noms forgés par construction, que
+// scripts/engendrer_livrables.js écrit (§ 10.3, § 15.6) : tout fichier sous
+// src/demo/livrees/, et les deux CSV de démonstration.
+const DEMONSTRATIONS_LIVREES = join('src', 'demo', 'livrees') + sep;
+const CSV_DE_DEMONSTRATION = new Set([
+  join('exemples', 'participants_demo_petite.csv'),
+  join('exemples', 'participants_demo_grande.csv'),
+]);
+
+// Vrai pour les listes du générateur et pour un fichier que
+// scripts/engendrer_livrables.js en engendre.
+const porteLesNomsParConstruction = (chemin) =>
+  chemin === LISTES || chemin.startsWith(DEMONSTRATIONS_LIVREES) || CSV_DE_DEMONSTRATION.has(chemin);
 
 // Répertoires hors balayage, à toute profondeur : .git, les dépendances, les
 // caches des outils, et les sorties de construction, qui portent une copie
@@ -87,17 +107,18 @@ function motifDes(noms) {
 // Occurrences du motif dans un texte, normalisé en NFC.
 const occurrences = (motif, texte) => [...texte.normalize('NFC').matchAll(motif)].map(([mot]) => mot);
 
-// Balaie l'arbre de racine : chaque fichier texte hors des répertoires exclus
-// et des listes du générateur se lit en entier, décodé en UTF-8, et chaque
-// nom cherché s'y relève. Rend les chemins examinés, relatifs à racine et
-// triés, et les trouvailles { chemin, mot }, fichier après fichier, dans
-// l'ordre du texte.
+// Balaie l'arbre de racine : chaque fichier texte hors des répertoires
+// exclus, des listes du générateur et des fichiers que
+// scripts/engendrer_livrables.js en engendre se lit en entier, décodé en
+// UTF-8, et chaque nom cherché s'y relève. Rend les chemins examinés,
+// relatifs à racine et triés, et les trouvailles { chemin, mot }, fichier
+// après fichier, dans l'ordre du texte.
 function balayer(racine) {
   const motif = motifDes(nomsCherches());
   const examines = [];
   const trouvailles = [];
   for (const chemin of fichiers(racine)) {
-    if (chemin === LISTES) continue;
+    if (porteLesNomsParConstruction(chemin)) continue;
     const octets = readFileSync(join(racine, chemin));
     if (estBinaire(octets)) continue;
     examines.push(chemin);
@@ -178,12 +199,22 @@ describe('noms forgés : balayage du projet (§ 15.6)', () => {
       [join('src', 'distances', 'a.js'), patronyme, [patronyme]],
       [join('src', 'distinctes.js'), 'paires distinctes\n', []],
       [join('sous', '.git'), 'gitdir: ../.git/worktrees/sous\n', []],
+      // Les voisins des fichiers engendrés se lisent : un module dont le nom
+      // commence comme leur répertoire, le CSV des cas limites, écrit à la
+      // main, et sa variante windows-1252, que le script dérive de lui.
+      [join('src', 'demo', 'livrees.js'), patronyme, [patronyme]],
+      [join('exemples', 'participants_cas_limites.csv'), patronyme, [patronyme]],
+      [join('exemples', 'participants_cas_limites_cp1252.csv'), patronyme, [patronyme]],
     ];
     // [chemin, contenu] : les fichiers que le balayage saute — un octet nul
-    // dans les 8000 premiers, les listes du générateur.
+    // dans les 8000 premiers, les listes du générateur, les fichiers que le
+    // script en engendre.
     const sautes = [
       ['nul-dedans.dat', nulA(7999, patronyme)],
       [LISTES, patronyme],
+      [join('src', 'demo', 'livrees', 'grande.gtt.json'), patronyme],
+      [join('exemples', 'participants_demo_petite.csv'), patronyme],
+      [join('exemples', 'participants_demo_grande.csv'), patronyme],
     ];
     // Un fichier sous chaque répertoire exclu, à la racine et plus profond ;
     // chacun porte un nom forgé.
@@ -224,7 +255,7 @@ describe('noms forgés : balayage du projet (§ 15.6)', () => {
     assert.deepEqual(arbre.map(([chemin]) => chemin).filter(sousUnRepertoireExclu), exclus);
   });
 
-  test('aucun patronyme forgé ni aucune racine hors de src/demo/noms.js', () => {
+  test('aucun patronyme forgé ni aucune racine hors de src/demo/noms.js et des fichiers engendrés', () => {
     assert.ok(nomsCherches().length > 0, 'aucun nom forgé à chercher');
     const { examines, trouvailles } = balayer(RACINE);
     assert.ok(examines.length > 0, 'balayage vide');

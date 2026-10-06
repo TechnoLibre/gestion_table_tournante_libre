@@ -299,7 +299,14 @@ const LIGNES_OBLIGATOIRES = [
 //   contrôlent ;
 // - les documents (*.md), dont le point 7 contrôle les noms cités ;
 // - les épreuves de la dérivation, qui citent des versions par nécessité ;
-// - les données d'épreuve, sous test/fixtures/.
+// - les données d'épreuve, sous test/fixtures/ ;
+// - les démonstrations livrées, sous src/demo/livrees/, données engendrées
+//   dont l'en-tête porte la version de la construction qui les a écrites
+//   (§ 18.5, § 18.6) : une livraison suivante ne les réécrit pas (§ 15.5,
+//   point 5).
+// Un répertoire s'exclut par son chemin exact, et rien n'est lu sous lui ;
+// un fichier dont le nom commence comme le sien, src/demo/livrees.js, reste
+// balayé.
 // package.json reste balayé : la forme technique y est à sa place, la forme
 // affichée non.
 const ARBRES_BALAYES = ['src', 'scripts', 'electron', 'test'];
@@ -310,7 +317,7 @@ const FICHIERS_EXCLUS = new Set([
   'CHANGELOG.md',
   'scripts/version.test.js',
 ]);
-const REPERTOIRES_EXCLUS = new Set(['test/fixtures']);
+const REPERTOIRES_EXCLUS = new Set(['test/fixtures', 'src/demo/livrees']);
 const DOCUMENT = /\.md$/i;
 const ARBRE_DES_SOURCES = 'src/';
 

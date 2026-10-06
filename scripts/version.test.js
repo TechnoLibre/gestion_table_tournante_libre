@@ -629,12 +629,21 @@ describe('version : contrôle du § 18.5, un défaut à la fois', () => {
       assert.deepEqual(controler(racine, { dateCivile: DATE }), []);
     }));
 
+  test('point 6 : seul le répertoire des démonstrations livrées est exclu, pas un fichier qui porte son nom', () =>
+    surArbre((racine) => {
+      ecrire(racine, 'src/demo/livrees.js', "export const v = '2026.10.05.01';\n");
+      ecrire(racine, 'src/demo/livrees/sous/grande.gtt.json', '{"produitVersion":"2026.10.05.01"}\n');
+      const echecs = exigerEchecs(racine, [6], [/^6\. src\/demo\/livrees\.js, ligne 1 : « 2026\.10\.05\.01 », forme affichée/]);
+      assert.equal(echecs.length, 1, echecs.join('\n'));
+    }));
+
   test('point 6 : données, guides, dépendances et sorties restent hors du périmètre', () =>
     surArbre((racine) => {
       const versions = `${VERSION} ${TECHNIQUE} ${TECHNIQUE}.0\n`;
       for (const chemin of [
         'scripts/version.test.js',
         'test/fixtures/demonstration.json',
+        'src/demo/livrees/grande.gtt.json',
         'GUIDE-USAGE.md',
         'docs/notes.md',
         'node_modules/paquet/index.js',

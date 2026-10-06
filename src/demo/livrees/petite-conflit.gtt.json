@@ -1,0 +1,32 @@
+{
+  "entete": {"format":1,"produitVersion":"2026.10.05.01","revision":1,"comptes":{"participants":12,"tables":4,"reservations":0,"titres":0,"propositions":0,"retenu":0}},
+  "charge": {
+    "evenement": {"id":"demo:petite-conflit","nom":"Petite démonstration, conflit inévitable","date":null,"siegesParDefaut":3,"tours":4,"unite":"cm","etat":"brouillon","filiation":null},
+    "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
+    "prochainsIds": {"participant":13,"table":5,"proposition":1},
+    "participants": [
+      {"id":1,"nom":"Bralmumet","prenom":"Caroline","appartenance":"Ateliers Jolvane","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":2,"nom":"Neskault","prenom":"Hugo","appartenance":"Tannerie Cassorgue","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":3,"nom":"Ivrotte","prenom":"Youssef","appartenance":"Verrerie Ulvardes","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":4,"nom":"Selvière","prenom":"Louis","appartenance":"Tannerie Cassorgue","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":5,"nom":"Selvançon","prenom":"Youssef","appartenance":"Ateliers Jolvane","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":6,"nom":"Quilmoubre","prenom":"Amina","appartenance":"Verrerie Ulvardes","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":7,"nom":"Voskotte","prenom":"Julie","appartenance":"Verrerie Ulvardes","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":8,"nom":"Neskivet","prenom":"Paul","appartenance":"Ateliers Jolvane","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":9,"nom":"Bralmignac","prenom":"Michel","appartenance":"Tannerie Cassorgue","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":10,"nom":"Tolveval","prenom":"Zoé","appartenance":"Ateliers Jolvane","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":11,"nom":"Urvard","prenom":"Luc","appartenance":"Tannerie Cassorgue","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":12,"nom":"Mirveval","prenom":"Véronique","appartenance":"Ateliers Jolvane","courriel":null,"titrePressenti":null,"notes":null,"exclu":false}
+    ],
+    "tables": [
+      {"id":1,"numero":1,"sieges":null,"forme":"ronde","position":{"x":0,"y":0}},
+      {"id":2,"numero":2,"sieges":null,"forme":"ronde","position":{"x":300,"y":0}},
+      {"id":3,"numero":3,"sieges":null,"forme":"ronde","position":{"x":0,"y":300}},
+      {"id":4,"numero":4,"sieges":null,"forme":"ronde","position":{"x":300,"y":300}}
+    ],
+    "reservations": [],
+    "titres": [],
+    "propositions": [],
+    "retenu": null
+  }
+}
