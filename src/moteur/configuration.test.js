@@ -1,9 +1,11 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Épreuves de la configuration (§ 4, § 5.2, § 5.9) : l'instance indexée que
-// rend normaliser et ses refus, le nombre de places manquantes, la conversion
-// d'un plan entre la forme par identifiants et la forme indexée. Les
+// Épreuves de la configuration (§ 4, § 5.2, § 5.9) : les valeurs du contrat
+// de données, l'instance indexée que rend normaliser et ses refus, le nombre
+// de places et de places manquantes, la conversion d'un plan entre la forme
+// par identifiants et la forme indexée, la garde de forme d'un plan indexé
+// et la répartition des personnes entre les trois populations du § 5.4. Les
 // identifiants diffèrent des index qu'ils reçoivent et des tables arrivent
 // hors de l'ordre de leurs identifiants : confondre un identifiant et un index
 // fait échouer une épreuve au lieu de passer inaperçu.
@@ -11,11 +13,22 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { ErreurAnnulee, ErreurConfiguration } from './erreurs.js';
 import {
+  LIBRE,
+  RESERVE,
+  SANS_GROUPE,
+  STATUT,
+  exigerPlanIndexe,
   indexerPlan,
+  nombrePlaces,
   nombrePlacesManquantes,
   normaliser,
   planDepuisIndex,
+  replierParPopulation,
 } from './configuration.js';
+import { mesurer } from './indicateurs.js';
+import { plafondsRealises } from './plafond.js';
+
+const { MOBILE, PARTIELLEMENT_FIXE, ANCRE } = STATUT;
 
 const SANS_CONTRAINTE = {
   separerAppartenances: false,
@@ -89,6 +102,17 @@ function ecartsDeRefus(cas) {
     .map(([libelle, ecart]) => `${libelle} : ${ecart}`);
 }
 
+describe('valeurs du contrat de données (types.js)', () => {
+  test('STATUT, LIBRE, RESERVE et SANS_GROUPE valent ce que types.js écrit, et STATUT ne se modifie pas', () => {
+    // Seule épreuve qui écrit ces valeurs en clair : les autres les
+    // importent. LIBRE et RESERVE sont égales : une rangée de instance.fixe se
+    // lit comme le plan qui laisse en réserve chaque tour libre.
+    assert.deepEqual(STATUT, { MOBILE: 0, PARTIELLEMENT_FIXE: 1, ANCRE: 2 });
+    assert.ok(Object.isFrozen(STATUT));
+    assert.deepEqual([LIBRE, RESERVE, SANS_GROUPE], [-1, -1, -1]);
+  });
+});
+
 describe('normaliser : statuts (§ 4.2, § 4.3)', () => {
   test('le statut se dérive du fait : ancré, partiellement fixé ou mobile', () => {
     const instance = normaliser(configuration({
@@ -112,16 +136,21 @@ describe('normaliser : statuts (§ 4.2, § 4.3)', () => {
     // seul dernier tour ; 9 : chaque tour, la même table au premier et au
     // dernier, une autre entre les deux. Seuls 1 et 2 comptent dans k : un
     // partiellement fixé compte parmi les mobiles.
-    assert.deepEqual(instance.statut, Uint8Array.from([2, 2, 1, 1, 1, 0, 1, 1, 1]));
+    assert.deepEqual(instance.statut, Uint8Array.from([
+      ANCRE, ANCRE,
+      PARTIELLEMENT_FIXE, PARTIELLEMENT_FIXE, PARTIELLEMENT_FIXE,
+      MOBILE,
+      PARTIELLEMENT_FIXE, PARTIELLEMENT_FIXE, PARTIELLEMENT_FIXE,
+    ]));
     assert.deepEqual(instance.fixe, Int32Array.from([
       0, 0, 0,
       1, 1, 1,
-      -1, 2, -1,
-      0, 1, -1,
+      LIBRE, 2, LIBRE,
+      0, 1, LIBRE,
       2, 2, 3,
-      -1, -1, -1,
-      3, -1, -1,
-      -1, -1, 3,
+      LIBRE, LIBRE, LIBRE,
+      3, LIBRE, LIBRE,
+      LIBRE, LIBRE, 3,
       1, 2, 1,
     ]));
     assert.equal(instance.k, 2);
@@ -135,8 +164,8 @@ describe('normaliser : statuts (§ 4.2, § 4.3)', () => {
       tours: 1,
       reservations: [auTour(1, 11, 1)],
     }));
-    assert.deepEqual(unTour.statut, Uint8Array.from([2, 0]));
-    assert.deepEqual(unTour.fixe, Int32Array.from([0, -1]));
+    assert.deepEqual(unTour.statut, Uint8Array.from([ANCRE, MOBILE]));
+    assert.deepEqual(unTour.fixe, Int32Array.from([0, LIBRE]));
     assert.equal(unTour.k, 1);
   });
 });
@@ -162,7 +191,7 @@ describe('normaliser : ancrés et instance réduite (§ 5.2)', () => {
     assert.equal(instance.k, 4);
     assert.equal(instance.n, 16);
     assert.deepEqual(instance.ancresParTable, Int32Array.from([1, 1, 1, 1]));
-    assert.equal(instance.statut[instance.indexDe.get(2)], 1);
+    assert.equal(instance.statut[instance.indexDe.get(2)], PARTIELLEMENT_FIXE);
   });
 
   test('ancresParTable suit les index de table, dans l’ordre de configuration.tables', () => {
@@ -195,8 +224,8 @@ describe('normaliser : exclusion (§ 4.4)', () => {
     assert.equal(instance.k, 0);
     assert.equal(instance.n, 3);
     assert.deepEqual(instance.ancresParTable, Int32Array.from([0, 0]));
-    assert.deepEqual(instance.fixe, new Int32Array(6).fill(-1));
-    assert.deepEqual(instance.statut, new Uint8Array(3));
+    assert.deepEqual(instance.fixe, new Int32Array(6).fill(LIBRE));
+    assert.deepEqual(instance.statut, new Uint8Array(3).fill(MOBILE));
   });
 
   test('la réservation d’un exclu rend sa place : elle n’entre pas dans la surréservation', () => {
@@ -234,7 +263,7 @@ describe('normaliser : exclusion (§ 4.4)', () => {
       reservations: [tous(2, 11), tous(1, 12)],
     }));
     assert.equal(instance.k, 1);
-    assert.deepEqual(instance.statut, Uint8Array.from([2]));
+    assert.deepEqual(instance.statut, Uint8Array.from([ANCRE]));
     assert.deepEqual(instance.fixe, Int32Array.from([1, 1]));
     assert.deepEqual(
       ecartsDeRefus([[
@@ -290,7 +319,7 @@ describe('normaliser : appartenances', () => {
       const instance = normaliser(configuration({ participants, tables: tablesDe([11], 8), tours: 1 }));
       assert.deepEqual(instance.ids, [1, 2, 4, 5, 7, 9]);
       assert.deepEqual(instance.groupes, ['Y', 'Z', 'X']);
-      assert.deepEqual(instance.groupe, Int32Array.from([0, 1, 1, 2, -1, 0]));
+      assert.deepEqual(instance.groupe, Int32Array.from([0, 1, 1, 2, SANS_GROUPE, 0]));
     }
   });
 
@@ -308,7 +337,7 @@ describe('normaliser : appartenances', () => {
     ];
     const instance = normaliser(configuration({ participants, tables: tablesDe([11], 8), tours: 1 }));
     assert.deepEqual(instance.groupes, ['X', 'x', 'X ', '']);
-    assert.deepEqual(instance.groupe, Int32Array.from([0, 1, 2, 0, 3, -1, 3]));
+    assert.deepEqual(instance.groupe, Int32Array.from([0, 1, 2, 0, 3, SANS_GROUPE, 3]));
   });
 });
 
@@ -513,6 +542,25 @@ describe('normaliser : refus (§ 5.9, § 6.2)', () => {
   });
 });
 
+describe('nombrePlaces (§ 5.9)', () => {
+  test('somme les capacités : ni les participants, ni les exclus, ni les réservations ne la changent', () => {
+    const tables = [
+      { id: 13, numero: 1, capacite: 3 },
+      { id: 11, numero: 2, capacite: 2 },
+      { id: 12, numero: 3, capacite: 7 },
+    ];
+    const salle = (participants, reservations = []) =>
+      normaliser(configuration({ participants, tables, tours: 2, reservations }));
+    assert.equal(nombrePlaces(salle(personnes(suite(1, 4)))), 12);
+    assert.equal(nombrePlaces(salle(personnes(suite(1, 20)))), 12);
+    assert.equal(nombrePlaces(salle([], [])), 12);
+    assert.equal(
+      nombrePlaces(salle([...personnes(suite(1, 4)), exclu(5)], [tous(1, 13), auTour(2, 12, 2), tous(5, 11)])),
+      12,
+    );
+  });
+});
+
 describe('nombrePlacesManquantes (§ 5.9)', () => {
   const salle = (reservations = [], participants = personnes(suite(1, 15))) =>
     normaliser(configuration({ participants, tables: tablesDe([11, 12, 13], 4), tours: 2, reservations }));
@@ -579,8 +627,8 @@ describe('plans : forme par identifiants et forme indexée (§ 8.9)', () => {
   // reste vide à un tour, et une liste de table comme une réserve portent
   // deux ids, dont l'ordre croissant se voit.
   const TABLE_DE = [
-    -1, 0,
-    -1, 1,
+    RESERVE, 0,
+    RESERVE, 1,
     0, 2,
     2, 1,
   ];
@@ -610,13 +658,13 @@ describe('plans : forme par identifiants et forme indexée (§ 8.9)', () => {
   test('indexerPlan ∘ planDepuisIndex est l’identité sur chaque plan indexé de l’instance', () => {
     const instance = instancePlans();
     const cases = instance.N * instance.R;
-    // Chaque case prend une valeur de −1 (la réserve) à T − 1.
+    // Chaque case prend une valeur de RESERVE, −1, à T − 1.
     const valeurs = instance.T + 1;
     let examines = 0;
     for (let rang = 0; rang < valeurs ** cases; rang += 1) {
       const tableDe = new Int32Array(cases);
       for (let i = 0, reste = rang; i < cases; i += 1, reste = Math.floor(reste / valeurs)) {
-        tableDe[i] = (reste % valeurs) - 1;
+        tableDe[i] = RESERVE + (reste % valeurs);
       }
       const retour = indexerPlan(instance, planDepuisIndex(instance, tableDe));
       if (retour.length !== tableDe.length || retour.some((valeur, i) => valeur !== tableDe[i])) {
@@ -719,29 +767,112 @@ describe('plans : forme par identifiants et forme indexée (§ 8.9)', () => {
     assert.deepEqual(ecartsDeRefus(cas), []);
   });
 
-  test('planDepuisIndex refuse un plan indexé hors de la forme de l’instance', () => {
+  // TABLE_DE dont les cases nommées reçoivent une autre valeur : fautes est
+  // une liste de couples [case, valeur].
+  const avecFautes = (fautes) => {
+    const tableDe = [...TABLE_DE];
+    for (const [i, valeur] of fautes) tableDe[i] = valeur;
+    return tableDe;
+  };
+
+  // Plans indexés hors de la forme de l'instance, et le message qui les
+  // refuse. Les ids [3, 6, 8, 11] occupent les index 0 à 3 ; la case p × 2 + r
+  // est celle de l'index p au tour r + 1. Trois tables : un index de table va
+  // de 0 à 2. Une chaîne numérique n'est pas un index, et se cite entre
+  // guillemets. Deux cases fautives : la première dans l'ordre des cases est
+  // nommée, la case 1 (3 au tour 2) avant la case 2 (6 au tour 1).
+  const FAUTIFS = [
+    ['longueur N × R − 1', TABLE_DE.slice(1), 'plan indexé de 7 cases, N × R = 8 attendues'],
+    ['longueur N × R + 1', [...TABLE_DE, RESERVE], 'plan indexé de 9 cases, N × R = 8 attendues'],
+    ['longueur N × T', Array(12).fill(RESERVE), 'plan indexé de 12 cases, N × R = 8 attendues'],
+    ['index de table T', avecFautes([[0, 3]]), 'participant 3, tour 1, index de table 3'],
+    ['index −2', avecFautes([[3, -2]]), 'participant 6, tour 2, index de table -2'],
+    ['index non entier', avecFautes([[5, 0.5]]), 'participant 8, tour 2, index de table 0.5'],
+    ['index null', avecFautes([[4, null]]), 'participant 8, tour 1, index de table null'],
+    ['chaîne "0"', avecFautes([[6, '0']]), 'participant 11, tour 1, index de table "0"'],
+    ['chaîne "-1"', avecFautes([[7, '-1']]), 'participant 11, tour 2, index de table "-1"'],
+    ['deux cases fautives', avecFautes([[2, 9], [1, 9]]), 'participant 3, tour 2, index de table 9'],
+  ].map(([libelle, tableDe, message]) => [
+    libelle,
+    tableDe,
+    message.startsWith('plan indexé de') ? message : `plan indexé : ${message} hors de −1..2`,
+  ]);
+
+  // « Nom : message » de l'erreur que lève fonction, « aucun refus » sinon.
+  function erreurDe(fonction) {
+    try {
+      fonction();
+    } catch (erreur) {
+      return `${erreur?.name} : ${erreur?.message}`;
+    }
+    return 'aucun refus';
+  }
+
+  test('exigerPlanIndexe accepte un plan indexé de la forme de l’instance, Int32Array ou liste, sans le modifier', () => {
     const instance = instancePlans();
-    const variantes = [
-      ['longueur N × R − 1', TABLE_DE.slice(1)],
-      ['longueur N × R + 1', [...TABLE_DE, -1]],
-      ['longueur N × T', Array.from({ length: instance.N * instance.T }, () => -1)],
-      ['index de table T', TABLE_DE.map((valeur, i) => (i === 0 ? instance.T : valeur))],
-      ['index −2', TABLE_DE.map((valeur, i) => (i === 3 ? -2 : valeur))],
-      ['index non entier', TABLE_DE.map((valeur, i) => (i === 5 ? 0.5 : valeur))],
-    ];
-    assert.ok(variantes.length > 0, 'aucune variante examinée');
+    assert.equal(exigerPlanIndexe(instance, Int32Array.from(TABLE_DE)), undefined);
+    assert.equal(exigerPlanIndexe(instance, geler([...TABLE_DE])), undefined);
+  });
+
+  test('exigerPlanIndexe refuse un plan indexé hors forme : RangeError qui nomme le participant, le tour et la valeur de la première case fautive', () => {
+    const instance = instancePlans();
+    assert.ok(FAUTIFS.length > 0, 'aucune variante examinée');
     const ecarts = [];
-    for (const [libelle, tableDe] of variantes) {
-      try {
-        planDepuisIndex(instance, tableDe);
-        ecarts.push(`${libelle} : aucun refus`);
-      } catch (erreur) {
-        if (!(erreur instanceof RangeError)) {
-          ecarts.push(`${libelle} : ${erreur?.name} au lieu de RangeError`);
-        }
-      }
+    for (const [libelle, tableDe, message] of FAUTIFS) {
+      const recue = erreurDe(() => exigerPlanIndexe(instance, tableDe));
+      const attendue = `RangeError : ${message}`;
+      if (recue !== attendue) ecarts.push(`${libelle} : « ${recue} » au lieu de « ${attendue} »`);
     }
     assert.deepEqual(ecarts, []);
+  });
+
+  test('une seule garde : planDepuisIndex, mesurer et plafondsRealises lèvent l’erreur de exigerPlanIndexe, au même message', () => {
+    const instance = instancePlans();
+    const appelants = [
+      ['planDepuisIndex', (tableDe) => planDepuisIndex(instance, tableDe)],
+      ['mesurer', (tableDe) => mesurer(instance, tableDe)],
+      ['plafondsRealises', (tableDe) => plafondsRealises(instance, tableDe)],
+    ];
+    const ecarts = [];
+    let confrontees = 0;
+    for (const [libelle, tableDe] of FAUTIFS) {
+      const attendue = erreurDe(() => exigerPlanIndexe(instance, tableDe));
+      for (const [nom, appeler] of appelants) {
+        confrontees += 1;
+        const recue = erreurDe(() => appeler(tableDe));
+        if (recue !== attendue) ecarts.push(`${nom}, ${libelle} : « ${recue} » au lieu de « ${attendue} »`);
+      }
+    }
+    assert.equal(confrontees, 3 * FAUTIFS.length);
+    assert.deepEqual(ecarts, []);
+  });
+});
+
+describe('replierParPopulation (§ 5.4)', () => {
+  test('chacun compte dans tous, puis parmi les ancrés ou parmi les mobiles, partiellement fixés compris, dans l’ordre canonique', () => {
+    const statut = Uint8Array.from([ANCRE, MOBILE, PARTIELLEMENT_FIXE, ANCRE, MOBILE, PARTIELLEMENT_FIXE]);
+    const enListe = (cumul, valeur) => [...cumul, valeur];
+    assert.deepEqual(replierParPopulation([10, 11, 12, 13, 14, 15], statut, [], enListe), {
+      tous: [10, 11, 12, 13, 14, 15],
+      mobiles: [11, 12, 14, 15],
+      ancres: [10, 13],
+    });
+  });
+
+  test('les trois populations partent de la valeur initiale ; une population sans membre la garde', () => {
+    const plusGrand = (cumul, valeur) => (cumul === null || valeur > cumul ? valeur : cumul);
+    assert.deepEqual(
+      replierParPopulation([4, 9], Uint8Array.from([MOBILE, PARTIELLEMENT_FIXE]), null, plusGrand),
+      { tous: 9, mobiles: 9, ancres: null },
+    );
+    assert.deepEqual(
+      replierParPopulation([3], Uint8Array.from([ANCRE]), null, plusGrand),
+      { tous: 3, mobiles: null, ancres: 3 },
+    );
+    assert.deepEqual(
+      replierParPopulation([], new Uint8Array(0), 'vide', plusGrand),
+      { tous: 'vide', mobiles: 'vide', ancres: 'vide' },
+    );
   });
 });
 

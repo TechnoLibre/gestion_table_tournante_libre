@@ -30,7 +30,9 @@ function figer(valeur) {
 // plafond a priori de chacun, 8 − rencontres ; collisions est le triplet
 // (cumulées, distinctes, excédent) du § 5.4 ; repetees et imposees comptent
 // les rencontres répétées que le moteur a choisies et celles qu'imposent les
-// réservations ; redondance est r(p) pour chacun.
+// réservations ; redondance est Σ_p r(p), le total que mesurer rend sous le
+// nom totalRedondance. La liste des r(p) n'y figure pas : classer ne la lit
+// pas.
 function proposition(
   id,
   {
@@ -38,7 +40,7 @@ function proposition(
     collisions = [0, 0, 0],
     repetees = 0,
     imposees = 0,
-    redondance = [0, 0, 0],
+    redondance = 0,
   } = {},
 ) {
   const [collisionsCumulees, pairesDistinctes, excedentCollisions] = collisions;
@@ -50,7 +52,7 @@ function proposition(
       pairesDistinctes,
       excedentCollisions,
       rencontresRepetees: { choisies: repetees, imposees },
-      redondance,
+      totalRedondance: redondance,
     },
     plafondsAPriori: [8, 8, 8],
   };
@@ -65,7 +67,7 @@ const permutations = ([a, b, c]) => [[a, b, c], [a, c, b], [b, a, c], [b, c, a],
 describe('classer : les critères et leur ordre (§ 5.7)', () => {
   test('CRITERES nomme les cinq critères dans leur ordre, et ne se modifie pas', () => {
     assert.deepEqual(CRITERES, [
-      'ecartAPrioriMax',
+      'ecartAuPlafondAPrioriMax',
       'excedentCollisions',
       'collisionsCumulees',
       'rencontresRepetees',
@@ -104,7 +106,7 @@ describe('classer : les critères et leur ordre (§ 5.7)', () => {
       proposition(2, { collisions: [2, 1, 1], repetees: 1 }), // excédent 1
       proposition(3, { collisions: [3, 3, 0] }), // 3 cumulées, excédent 0
       proposition(4, { repetees: 1 }), // une rencontre répétée
-      proposition(5, { redondance: [1, 0, 0] }), // redondance 1
+      proposition(5, { redondance: 1 }), // redondance 1
       proposition(6),
     ];
     assert.deepEqual(classer(figer(entrees)), {
@@ -128,9 +130,11 @@ describe('classer : les critères et leur ordre (§ 5.7)', () => {
     assert.deepEqual(classer(entrees).ordre, [2, 1]);
   });
 
-  test('la redondance se somme sur les personnes', () => {
-    // 1 : 1, 1, 1, somme 3 et plus grande 1 ; 2 : 2, 0, 0, somme 2 et plus grande 2.
-    const entrees = [proposition(1, { redondance: [1, 1, 1] }), proposition(2, { redondance: [2, 0, 0] })];
+  test('la redondance se lit sur totalRedondance, la somme que mesurer rend', () => {
+    // 1 : r(p) vaut 1, 1, 1, somme 3 et plus grand 1 ; 2 : r(p) vaut 2, 0,
+    // 0, somme 2 et plus grand 2. La somme range 2 devant 1, le plus grand
+    // ferait l'inverse.
+    const entrees = [proposition(1, { redondance: 3 }), proposition(2, { redondance: 2 })];
     assert.deepEqual(classer(entrees).ordre, [2, 1]);
   });
 });
@@ -148,7 +152,7 @@ describe('classer : le critère sauté (§ 5.7, § 12.6)', () => {
     });
     // Un seul a priori inconnu suffit : l'excédent ouvre alors le classement
     // de toutes, y compris de celle dont l'a priori est connu.
-    const attendu = { ordre: [2, 1], criteresAppliques: SANS_A_PRIORI, critereSaute: 'ecartAPrioriMax' };
+    const attendu = { ordre: [2, 1], criteresAppliques: SANS_A_PRIORI, critereSaute: 'ecartAuPlafondAPrioriMax' };
     assert.deepEqual(classer([premiere, inconnu(seconde)]), attendu);
     assert.deepEqual(classer([inconnu(premiere), seconde]), attendu);
     assert.deepEqual(classer([inconnu(premiere), inconnu(seconde)]), attendu);
@@ -158,7 +162,7 @@ describe('classer : le critère sauté (§ 5.7, § 12.6)', () => {
 describe('classer : le départage par identifiant (§ 15.5, point 4)', () => {
   test("à égalité sur les cinq critères, l'identifiant croissant, quel que soit l'ordre reçu", () => {
     const egales = [7, 3, 5].map((id) =>
-      proposition(id, { rencontres: [7, 8, 8], collisions: [2, 1, 1], repetees: 1, redondance: [1, 0, 0] }),
+      proposition(id, { rencontres: [7, 8, 8], collisions: [2, 1, 1], repetees: 1, redondance: 1 }),
     );
     for (const ordreRecu of permutations(egales)) {
       assert.deepEqual(classer(ordreRecu).ordre, [3, 5, 7]);
@@ -203,7 +207,7 @@ describe('classer : petite démonstration, conflit inévitable (§ 14.10, § 15.
     assert.deepEqual(classer(entrees.map(inconnu)), {
       ordre: [2, 1],
       criteresAppliques: SANS_A_PRIORI,
-      critereSaute: 'ecartAPrioriMax',
+      critereSaute: 'ecartAuPlafondAPrioriMax',
     });
   });
 });
@@ -216,7 +220,7 @@ describe('classer : les entrées reçues', () => {
   test("population vide, plafond a priori connu : le premier critère s'applique, sans rien départager", () => {
     // Une population vide n'a pas de plus grand écart au plafond a priori ;
     // ce n'est pas un plafond a priori inconnu, et rien n'est sauté.
-    const vide = (id) => ({ ...proposition(id, { rencontres: [], redondance: [] }), plafondsAPriori: [] });
+    const vide = (id) => ({ ...proposition(id, { rencontres: [] }), plafondsAPriori: [] });
     assert.deepEqual(classer([vide(2), vide(1)]), {
       ordre: [1, 2],
       criteresAppliques: [...CRITERES],
@@ -238,7 +242,7 @@ describe('classer : les entrées reçues', () => {
 
   test('des mesures de populations de tailles différentes lèvent RangeError', () => {
     const quatre = {
-      ...proposition(2, { rencontres: [8, 8, 8, 8], redondance: [0, 0, 0, 0] }),
+      ...proposition(2, { rencontres: [8, 8, 8, 8] }),
       plafondsAPriori: [8, 8, 8, 8],
     };
     assert.throws(() => classer([proposition(1), quatre]), RangeError);

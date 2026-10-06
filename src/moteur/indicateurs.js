@@ -14,6 +14,12 @@
 // sans appartenance ne sont pas collègues. Un ensemble vide rend null, jamais
 // 0 : le taux de diversité de qui ne rencontre aucun affilié, le minimum et la
 // moyenne d'une population sans membre.
+import {
+  RESERVE,
+  SANS_GROUPE,
+  exigerPlanIndexe,
+  replierParPopulation,
+} from './configuration.js';
 
 /**
  * @typedef {Object} Agregat
@@ -39,6 +45,9 @@
  * @property {number[]} retoursImposes      par personne
  * @property {TroisAgregats} aggRencontres
  * @property {TroisAgregats} aggRedondance
+ * @property {number} totalRedondance       Σ_p r(p), le seul total de la
+ *                                          redondance : la recherche et le
+ *                                          classement le lisent
  * @property {number} collisionsCumulees    Σ paires de même groupe × tours ensemble
  * @property {number} pairesDistinctes      paires de même groupe réunies ≥ 1 fois
  * @property {number} excedentCollisions    cumulées − distinctes
@@ -53,43 +62,8 @@
  *           ordre de instance.groupes
  */
 
-// Case d'un plan indexé : la réserve.
-const RESERVE = -1;
-// instance.groupe d'un participant sans appartenance.
-const SANS_GROUPE = -1;
-// instance.statut d'un ancré ; 0 marque un mobile, 1 un partiellement fixé.
-const ANCRE = 2;
 // Plus grand compte que tient un Uint16Array.
 const UINT16_MAX = 0xffff;
-
-// Valeur citée dans un message : une chaîne s'écrit entre guillemets, pour
-// ne pas se lire comme le nombre qu'elle contient.
-const decrire = (valeur) => (typeof valeur === 'string' ? JSON.stringify(valeur) : String(valeur));
-
-// Lève RangeError quand tableDe n'a pas N × R cases, ou qu'une case n'est ni
-// −1 ni un index de table entier ; le message nomme alors le participant et
-// le tour. Sans cette garde, deux écarts passeraient sans bruit : une case de
-// trop serait ignorée ; une chaîne numérique comme "0" assiérait la personne
-// à la table qu'elle désigne, mais compterRetours, qui la compare strictement
-// à instance.fixe, n'y reconnaîtrait pas sa réservation. Une case manquante
-// ou toute autre valeur lèverait dans compterRencontres une TypeError qui ne
-// nomme ni la personne ni le tour.
-function exigerForme({ N, T, R, ids }, tableDe) {
-  if (tableDe.length !== N * R) {
-    throw new RangeError(`plan indexé de ${tableDe.length} cases, N × R = ${N * R} attendues`);
-  }
-  for (let p = 0; p < N; p += 1) {
-    for (let r = 0; r < R; r += 1) {
-      const t = tableDe[p * R + r];
-      if (t !== RESERVE && !(Number.isInteger(t) && t >= 0 && t < T)) {
-        throw new RangeError(
-          `plan indexé : participant ${ids[p]}, tour ${r + 1}, `
-            + `index de table ${decrire(t)} hors de −1..${T - 1}`,
-        );
-      }
-    }
-  }
-}
 
 // Rang de la paire (a, b), a < b, dans le triangle supérieur d'une matrice
 // N × N rangé ligne par ligne : la ligne a s'ouvre après les
@@ -232,13 +206,16 @@ function compterRetours({ N, T, R, fixe }, tableDe) {
   return { toursAssis, retoursChoisis, retoursImposes };
 }
 
-// Ajoute une valeur à une population. min reste null tant que la population
-// est vide : aucun Infinity ne sert de minimum initial.
-function ajouter(population, valeur) {
-  if (population.min === null || valeur < population.min) population.min = valeur;
-  population.somme += valeur;
-  population.effectif += 1;
-}
+// Population sans membre. min reste null tant qu'aucune valeur n'y entre :
+// aucun Infinity ne sert de minimum initial.
+const VIDE = Object.freeze({ min: null, somme: 0, effectif: 0 });
+
+// La population, une valeur de plus ; celle qu'elle reçoit reste intacte.
+const ajouter = ({ min, somme, effectif }, valeur) => ({
+  min: min === null || valeur < min ? valeur : min,
+  somme: somme + valeur,
+  effectif: effectif + 1,
+});
 
 // Agrégat d'une population ; la moyenne d'une population vide vaut null.
 const conclure = ({ min, somme, effectif }) => ({
@@ -247,17 +224,10 @@ const conclure = ({ min, somme, effectif }) => ({
   effectif,
 });
 
-// Minimum, moyenne et effectif de valeurs[p] sur les trois populations, en un
-// passage : chacun compte dans « tous », puis parmi les ancrés ou parmi les
-// mobiles, qui comprennent les partiellement fixés (§ 5.4).
+// Minimum, moyenne et effectif de valeurs[p] sur les trois populations du
+// § 5.4, que replierParPopulation forme.
 function troisAgregats(valeurs, statut) {
-  const tous = { min: null, somme: 0, effectif: 0 };
-  const mobiles = { min: null, somme: 0, effectif: 0 };
-  const ancres = { min: null, somme: 0, effectif: 0 };
-  for (let p = 0; p < valeurs.length; p += 1) {
-    ajouter(tous, valeurs[p]);
-    ajouter(statut[p] === ANCRE ? ancres : mobiles, valeurs[p]);
-  }
+  const { tous, mobiles, ancres } = replierParPopulation(valeurs, statut, VIDE, ajouter);
   return { tous: conclure(tous), mobiles: conclure(mobiles), ancres: conclure(ancres) };
 }
 
@@ -265,15 +235,17 @@ const somme = (valeurs) => valeurs.reduce((total, valeur) => total + valeur, 0);
 
 /**
  * Mesure complète d'un plan indexé : la mesure qui fait foi (§ 5.10). Ne
- * modifie ni l'instance ni le plan. Lève RangeError quand tableDe n'a pas
- * N × R cases, ou qu'une case n'est ni −1 ni un index de table.
+ * modifie ni l'instance ni le plan. Lève ce que lève exigerPlanIndexe
+ * (configuration.js) avant de lire une case : une case manquante ou d'une
+ * autre forme lèverait plus loin une erreur qui ne nommerait ni la personne
+ * ni le tour.
  *
  * @param {import('./types.js').Instance} instance
- * @param {ArrayLike<number>} tableDe  tableDe[p * R + r] = index de table, −1 pour la réserve
+ * @param {ArrayLike<number>} tableDe  tableDe[p * R + r] = index de table, RESERVE pour la réserve
  * @returns {Mesures}
  */
 export function mesurer(instance, tableDe) {
-  exigerForme(instance, tableDe);
+  exigerPlanIndexe(instance, tableDe);
   const { N, groupe, groupes, statut } = instance;
   const paires = lirePaires(instance, compterRencontres(instance, tableDe));
   const { collisions, distinctes } = paires;
@@ -311,6 +283,7 @@ export function mesurer(instance, tableDe) {
     retoursImposes,
     aggRencontres: troisAgregats(rencontres, statut),
     aggRedondance: troisAgregats(redondance, statut),
+    totalRedondance: somme(redondance),
     collisionsCumulees,
     pairesDistinctes,
     excedentCollisions: collisionsCumulees - pairesDistinctes,

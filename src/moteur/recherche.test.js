@@ -4,25 +4,35 @@
 // Épreuves de la recherche (§ 5.2, § 5.7, § 5.9, § 5.10, § 14.10) : à graine
 // et entrée égales, propositions identiques ; l'identifiant d'une proposition
 // est son rang dans la suite des graines dérivées, et son plan sort de sa
-// seule graine dérivée ; chaque plan rendu tient les invariants et les
-// réservations, et l'appartenance d'un ancré y pèse comme une autre ; une
-// salle trop petite est refusée avec le nombre de places manquantes ;
+// graine dérivée, de son compte d'arrêt et de son historique, trois champs à
+// partir desquels regenerer le rend ; chaque plan rendu tient les invariants
+// et les réservations, et l'appartenance d'un ancré y pèse comme une autre ;
+// une salle trop petite est refusée avec le nombre de places manquantes ;
 // l'avancement se rapporte toutes les 1 000 itérations, une descente
 // s'arrête sur un score nul, une annulation ne rend rien ; le placement
 // initial égale celui que décrit le paragraphe « Sièges » de l'en-tête de
-// recherche.js, récrit ici à la lettre ; la descente égale l'acceptation
-// tardive de son paragraphe « Acceptation tardive », récrite de même, là où
-// ni bascule ni relance ne jouent, et sinon augmentée de la bascule et de la
-// relance de son paragraphe « Deux ordres d'acceptation » ; le score tenu à jour et le score recalculé égalent un n-uplet
-// recalculé ici par énumération des paires ; la petite démonstration atteint
-// son plan parfait sans cas particulier. Un plan rendu se juge par
-// verifierInvariants et se mesure par mesurer, deux modules distincts du
-// module éprouvé.
+// recherche.js, récrit ici à la lettre ; un échange avec une place fantôme
+// fait passer une personne à une autre table, comme le dit son paragraphe
+// « Mouvement » ; la descente égale l'acceptation tardive de son paragraphe
+// « Acceptation tardive », récrite de même, là où ni bascule ni relance ne
+// jouent, et sinon augmentée de la bascule et de la relance de son
+// paragraphe « Deux ordres d'acceptation » ; le score tenu à jour et le score
+// recalculé égalent un n-uplet recalculé ici par énumération des paires ; la
+// petite démonstration atteint son plan parfait sans cas particulier. Un plan
+// rendu se juge par verifierInvariants et se mesure par mesurer, deux modules
+// distincts du module éprouvé.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { FLUX, creerPcg32 } from '../demo/prng.js';
-import { indexerPlan, normaliser, planDepuisIndex } from './configuration.js';
+import {
+  LIBRE,
+  RESERVE,
+  SANS_GROUPE,
+  indexerPlan,
+  normaliser,
+  planDepuisIndex,
+} from './configuration.js';
 import { ErreurAnnulee } from './erreurs.js';
 import { mesurer } from './indicateurs.js';
 import { plafondsAPriori } from './plafond.js';
@@ -31,6 +41,7 @@ import {
   defaire,
   proposerEtAppliquer,
   rechercher,
+  regenerer,
   scoreComplet,
   scoreIncremental,
 } from './recherche.js';
@@ -158,7 +169,7 @@ function placementLitteral(instance, rng) {
     const libres = [];
     for (let p = 0; p < N; p += 1) {
       const t = fixe[p * R + r];
-      if (t === -1) {
+      if (t === LIBRE) {
         libres.push(p);
       } else {
         tableDe[p * R + r] = t;
@@ -190,7 +201,7 @@ function scoreOracle(instance, tableDe, aPriori) {
     for (let a = 0; a < N; a += 1) {
       for (let b = a + 1; b < N; b += 1) {
         const t = tableDe[a * R + r];
-        if (t !== -1 && t === tableDe[b * R + r]) M[a * N + b] += 1;
+        if (t !== RESERVE && t === tableDe[b * R + r]) M[a * N + b] += 1;
       }
     }
   }
@@ -207,12 +218,12 @@ function scoreOracle(instance, tableDe, aPriori) {
       excedentPaires += m - 1;
       for (const [p, q] of [[a, b], [b, a]]) {
         rencontres[p] += 1;
-        if (groupe[q] !== -1) {
+        if (groupe[q] !== SANS_GROUPE) {
           affilies[p] += 1;
           appartenances[p].add(groupe[q]);
         }
       }
-      if (groupe[a] !== -1 && groupe[a] === groupe[b]) {
+      if (groupe[a] !== SANS_GROUPE && groupe[a] === groupe[b]) {
         cumulees += m;
         distinctes += 1;
       }
@@ -432,6 +443,153 @@ describe('rechercher : reproductibilité et identifiants (§ 5.7, § 19.4)', () 
   });
 });
 
+describe('regenerer : une proposition depuis ses seuls champs (§ 5.7, § 8.9)', () => {
+  test("pour chaque proposition d'une génération, regenerer rend le même plan à partir de ses trois champs, sans lire ni son plan ni son rang", () => {
+    // arret 5 000 n'est pas un multiple de l'historique 37 : une descente
+    // dont le plan dépendrait de son rang dans la génération, par le compte
+    // des mouvements que la génération a déjà faits, ne se régénérerait pas
+    // au-delà de la première proposition. Les propositions se régénèrent de
+    // la dernière à la première, et regenerer ne reçoit que leur graine
+    // dérivée, leur compte d'arrêt et leur historique, ni leur plan ni leur
+    // identifiant : chacune sort de ces trois champs, et non de son rang ou
+    // d'un état que la précédente aurait laissé. salleReservee porte des
+    // places fantômes et des partiellement fixés.
+    const reglages = { graine: 5, arret: 5_000, nombre: 3, historique: 37 };
+    let regenerees = 0;
+    let conflit = null;
+    for (const [nom, construire] of [
+      ['salleReservee', salleReservee],
+      ['petite-conflit', () => demo('petite-conflit')],
+    ]) {
+      const configuration = construire();
+      const propositions = rechercher(configuration, reglages);
+      for (const { id, graine, arret, historique, plan } of [...propositions].reverse()) {
+        assert.deepStrictEqual(
+          regenerer(configuration, { graine, arret, historique }),
+          plan,
+          `${nom}, proposition ${id}`,
+        );
+        regenerees += 1;
+      }
+      assert.deepStrictEqual(configuration, construire(), nom);
+      // L'historique décide du plan : sous la longueur par défaut, les mêmes
+      // graines donnent d'autres plans, ceux que rendrait une régénération
+      // qui ignorerait ce champ.
+      assert.notDeepStrictEqual(
+        rechercher(configuration, { ...reglages, historique: HISTORIQUE_PAR_DEFAUT }).map(({ plan }) => plan),
+        propositions.map(({ plan }) => plan),
+        nom,
+      );
+      conflit = propositions;
+    }
+    assert.equal(regenerees, 6);
+    // Dans la variante conflit, chaque descente atteint un écart nul,
+    // bascule, puis relance : la réplique littérale rend les mêmes plans, et
+    // compte bascules et relances. La régénération rejoue donc aussi le
+    // placement neuf qu'une relance tire.
+    const repliques = descentesALaLettre(demo('petite-conflit'), reglages, { bascule: true });
+    assert.deepStrictEqual(repliques.map(({ plan }) => plan), conflit.map(({ plan }) => plan));
+    assert.deepEqual(
+      repliques.map(({ bascules, relances }) => [bascules, relances > 0]),
+      [
+        [1, true],
+        [1, true],
+        [1, true],
+      ],
+    );
+  });
+
+  test("le compte d'arrêt décide du plan : à chaque compte de 1 à 32, regenerer rend chaque plan, et un compte au moins change un plan du précédent ; à 100, regenerer rend chaque plan, et la moitié comme le double de ce compte en donnent d'autres", () => {
+    // Là où la descente ne progresse plus, comme à 5 000 mouvements dans
+    // l'épreuve précédente, la moitié ou le double du compte rendent les
+    // mêmes plans, et une régénération qui compterait autrement passerait.
+    //
+    // Sur ses premiers mouvements, la descente change souvent de meilleure
+    // affectation. À chaque compte de 1 à COMPTES_COURTS, regenerer rend le
+    // plan de chaque proposition à partir de ses trois champs, et l'épreuve
+    // exige qu'un compte au moins de la boucle change un plan par rapport au
+    // compte précédent : une régénération qui compterait un mouvement de
+    // moins rend un autre plan à ce compte, et une qui en compterait un de
+    // plus, au compte précédent.
+    //
+    // À 100 mouvements, la descente progresse encore. Une descente plus
+    // courte refait, mouvement pour mouvement, le début de celle-ci, et la
+    // meilleure affectation ne cède qu'à une meilleure : des plans qui
+    // changent à arret / 2 et à 2 × arret changent à tout compte hors de cet
+    // intervalle.
+    const COMPTES_COURTS = 32;
+    const configuration = demo('petite-conflit');
+    const reglages = { graine: 5, arret: 100, nombre: 3, historique: 37 };
+    let precedents = null;
+    let changements = 0;
+    for (let compte = 1; compte <= COMPTES_COURTS; compte += 1) {
+      const courtes = rechercher(configuration, { ...reglages, arret: compte });
+      for (const { id, graine, arret, historique, plan } of courtes) {
+        assert.deepStrictEqual(
+          regenerer(configuration, { graine, arret, historique }),
+          plan,
+          `arret ${compte}, proposition ${id}`,
+        );
+      }
+      const plans = courtes.map(({ plan }) => JSON.stringify(plan));
+      if (precedents !== null && plans.some((plan, i) => plan !== precedents[i])) changements += 1;
+      precedents = plans;
+    }
+    assert.ok(changements > 0, `aucun compte de 2 à ${COMPTES_COURTS} ne change un plan du compte précédent`);
+    const propositions = rechercher(configuration, reglages);
+    for (const { id, graine, arret, historique, plan } of [...propositions].reverse()) {
+      assert.deepStrictEqual(regenerer(configuration, { graine, arret, historique }), plan, `proposition ${id}`);
+    }
+    for (const arret of [reglages.arret / 2, 2 * reglages.arret]) {
+      assert.notDeepStrictEqual(
+        rechercher(configuration, { ...reglages, arret }).map(({ plan }) => plan),
+        propositions.map(({ plan }) => plan),
+        `arret ${arret}`,
+      );
+    }
+  });
+
+  test('champ hors de son domaine ou absent : RangeError qui le nomme ; salle trop petite : PLACES_MANQUANTES, comme rechercher', () => {
+    // Un champ absent ne prend pas la valeur par défaut de rechercher : une
+    // proposition qui ne porte pas son historique ne se régénère pas sous une
+    // longueur supposée. Les deux bornes de la graine sont admises.
+    const champs = { graine: 1, arret: 10, historique: 5 };
+    for (const graine of [0, 2 ** 32 - 1]) {
+      assert.equal(regenerer(demo('petite'), { ...champs, graine }).tours.length, 4, `graine ${graine}`);
+    }
+    const cas = [
+      [{ ...champs, graine: -1 }, 'graine'],
+      [{ ...champs, graine: 2 ** 32 }, 'graine'],
+      [{ ...champs, graine: 1.5 }, 'graine'],
+      [{ arret: 10, historique: 5 }, 'graine'],
+      [{ ...champs, arret: 0 }, 'arret'],
+      [{ ...champs, arret: '10' }, 'arret'],
+      [{ ...champs, historique: 0 }, 'historique'],
+      [{ graine: 1, arret: 10 }, 'historique'],
+    ];
+    for (const [proposition, nom] of cas) {
+      assert.throws(
+        () => regenerer(demo('petite'), proposition),
+        (erreur) => erreur instanceof RangeError && erreur.message.startsWith(`${nom} :`),
+        JSON.stringify(proposition),
+      );
+    }
+    const tropPetite = configurationDe({
+      appartenances: Array(11).fill(null),
+      tables: [
+        { id: 1, capacite: 4 },
+        { id: 2, capacite: 4 },
+      ],
+      tours: 2,
+    });
+    assert.throws(() => regenerer(tropPetite, champs), {
+      name: 'ErreurConfiguration',
+      code: 'PLACES_MANQUANTES',
+      details: { placesManquantes: 3 },
+    });
+  });
+});
+
 describe('rechercher : plans valides (§ 5.2, § 5.9, § 14.12)', () => {
   test('chaque proposition des quatre démonstrations tient tous les invariants, réserve interdite', () => {
     let examinees = 0;
@@ -497,7 +655,9 @@ describe('rechercher : plans valides (§ 5.2, § 5.9, § 14.12)', () => {
   test('salle trop petite : PLACES_MANQUANTES et le nombre exact de places manquantes, aucun plan', () => {
     // Douze inscrits dont un exclu, deux tables de 4 et une de 2 : onze
     // présents pour dix places. L'exclu ne compte pas, une réservation ne
-    // change rien au compte (§ 5.9).
+    // change rien au compte (§ 5.9). Le détail se nomme placesManquantes,
+    // comme dans le diagnostic : « manque » désigne plafond réalisé −
+    // rencontres (§ 5.5).
     const tables = [
       { id: 1, capacite: 4 },
       { id: 2, capacite: 4 },
@@ -517,13 +677,13 @@ describe('rechercher : plans valides (§ 5.2, § 5.9, § 14.12)', () => {
       assert.throws(() => rechercher(configuration, reglages), {
         name: 'ErreurConfiguration',
         code: 'PLACES_MANQUANTES',
-        details: { manque: 1 },
+        details: { placesManquantes: 1 },
       });
     }
     const unDePlus = configurationDe({ appartenances: Array(13).fill(null), tables, tours: 2 });
     assert.throws(() => rechercher(unDePlus, reglages), {
       code: 'PLACES_MANQUANTES',
-      details: { manque: 3 },
+      details: { placesManquantes: 3 },
     });
   });
 });
@@ -641,6 +801,32 @@ describe('état de recherche : placement initial et score incrémental (§ 5.10)
     for (const mouvement of appliques.reverse()) defaire(etat, mouvement);
     assert.deepStrictEqual(etat.tableDe, planDepart);
     assert.deepStrictEqual(scoreIncremental(etat), depart);
+  });
+});
+
+describe("rechercher : l'échange avec une place fantôme (paragraphe « Mouvement » de recherche.js)", () => {
+  test("une personne passe au siège vide d'une autre table : deux tables de 3 pour A, A, B, B, aucune collision sur vingt graines", () => {
+    // Le placement initial assied trois personnes à la première table et la
+    // quatrième à la seconde : deux d'une même appartenance s'y retrouvent.
+    // Un échange entre deux personnes garde trois et une ; seul l'échange
+    // avec une place fantôme fait passer quelqu'un à la seconde table. À
+    // deux par table, chacune peut réunir un A et un B, sans collision.
+    const configuration = configurationDe({
+      appartenances: ['A', 'A', 'B', 'B'],
+      tables: [
+        { id: 1, capacite: 3 },
+        { id: 2, capacite: 3 },
+      ],
+      tours: 1,
+      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+    });
+    const instance = normaliser(configuration);
+    const collisions = [];
+    for (let graine = 0; graine < 20; graine += 1) {
+      const [{ plan }] = rechercher(configuration, { graine, arret: 2_000, nombre: 1 });
+      collisions.push(mesurer(instance, indexerPlan(instance, plan)).collisionsCumulees);
+    }
+    assert.deepEqual(collisions, Array(20).fill(0));
   });
 });
 

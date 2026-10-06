@@ -10,9 +10,10 @@
 // ailleurs, jamais 0 par défaut.
 //
 // Les quantités que le moteur calcule déjà viennent de leur unique
-// implémentation (§ 13.2) : places manquantes de configuration.js, plafond a
-// priori de plafond.js, retours imposés de la mesure d'indicateurs.js. Le
-// diagnostic ne modifie pas la configuration et lève ce que normaliser lève.
+// implémentation (§ 13.2) : nombre de places et places manquantes de
+// configuration.js, plafond a priori de plafond.js, retours imposés de la
+// mesure d'indicateurs.js. Le diagnostic ne modifie pas la configuration et
+// lève ce que normaliser lève.
 
 /**
  * @typedef {Object} PlancherCollisions
@@ -39,18 +40,16 @@
  * @property {number} retoursImposes
  * @property {{plancher: number, mobilesAuMoins: number}|null} ecartItineraire
  */
-import { nombrePlacesManquantes, normaliser } from './configuration.js';
+import {
+  LIBRE,
+  SANS_GROUPE,
+  STATUT,
+  nombrePlaces,
+  nombrePlacesManquantes,
+  normaliser,
+} from './configuration.js';
 import { mesurer } from './indicateurs.js';
 import { plafondsAPriori } from './plafond.js';
-
-// Statuts d'un participant dans instance.statut (§ 4.2).
-const MOBILE = 0;
-const PARTIELLEMENT_FIXE = 1;
-const ANCRE = 2;
-// Case de instance.fixe sans table imposée.
-const LIBRE = -1;
-// instance.groupe d'un participant sans appartenance.
-const SANS_GROUPE = -1;
 
 // Paires que forment n personnes : C(n, 2).
 const paires = (n) => (n * (n - 1)) / 2;
@@ -145,7 +144,7 @@ function animateursMemeAppartenance({ N, statut, groupe }) {
   let commun = SANS_GROUPE;
   let animateurs = 0;
   for (let p = 0; p < N; p += 1) {
-    if (statut[p] !== ANCRE) continue;
+    if (statut[p] !== STATUT.ANCRE) continue;
     if (groupe[p] === SANS_GROUPE || (animateurs > 0 && groupe[p] !== commun)) return false;
     commun = groupe[p];
     animateurs += 1;
@@ -205,10 +204,8 @@ function plafondPassantPar(configuration, instance, p, t) {
 // s'ajoutent au plafond hors du terme que n_p borne.
 function ecartItineraire(configuration, instance, aPriori) {
   const { N, T, R, capacite, ancresParTable, statut } = instance;
-  let places = 0;
-  for (let t = 0; t < T; t += 1) places += capacite[t];
-  if (places !== N || statut.includes(PARTIELLEMENT_FIXE)) return null;
-  const mobile = statut.indexOf(MOBILE);
+  if (nombrePlaces(instance) !== N || statut.includes(STATUT.PARTIELLEMENT_FIXE)) return null;
+  const mobile = statut.indexOf(STATUT.MOBILE);
   if (mobile === -1) return null;
   const plafondCommun = aPriori[mobile];
   const parGabarit = new Map();

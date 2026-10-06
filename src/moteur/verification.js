@@ -8,6 +8,7 @@
 // est une violation de la liste rendue, et la liste vide dit que tout tient.
 // Aucun ne modifie ce qu'il reçoit. Les formes reçues sont décrites dans
 // types.js.
+import { LIBRE } from './configuration.js';
 
 /**
  * @typedef {{code: string, participant?: number, table?: number, tour?: number,
@@ -18,8 +19,6 @@
  *          instance.ids
  */
 
-// Case de instance.fixe sans table imposée.
-const LIBRE = -1;
 // Index de table d'une liste que plan.tables ne rattache à aucune table de
 // l'instance. Aucune case de instance.fixe ne le porte : une réservation ne
 // s'honore jamais dans une telle liste.

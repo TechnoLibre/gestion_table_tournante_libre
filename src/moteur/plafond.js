@@ -38,15 +38,13 @@
 // Une personne se désigne par son index dans l'instance, une table par son
 // index ; un tableau rendu suit l'ordre de instance.ids. Aucune fonction ne
 // modifie l'instance.
+//
+// Une case d'itinéraire en réserve vaut RESERVE, et RESERVE vaut LIBRE
+// (configuration.js) : une rangée de instance.fixe se lit comme l'itinéraire
+// qui laisse en réserve chaque tour libre.
+import { LIBRE, RESERVE, STATUT, exigerPlanIndexe } from './configuration.js';
 import { ErreurConfiguration } from './erreurs.js';
 
-// Statut d'un ancré dans instance.statut (§ 4.2).
-const ANCRE = 2;
-// Case de instance.fixe sans table imposée, et case d'un itinéraire ou d'un
-// plan indexé en réserve : la même valeur, si bien qu'une rangée de fixe se
-// lit comme l'itinéraire qui laisse en réserve chaque tour libre.
-const LIBRE = -1;
-const RESERVE = -1;
 // Nombre de multiensembles au-delà duquel l'énumération refuse une
 // signature.
 const LIMITE_ENUMERATION = 300_000;
@@ -60,11 +58,11 @@ function borne(instance, nP, ancres, sieges) {
 // n_p : les mobiles — partiellement fixés compris — que p peut rencontrer,
 // p excepté quand il en est un.
 const mobilesRencontrables = (instance, p) =>
-  instance.statut[p] === ANCRE ? instance.n : instance.n - 1;
+  instance.statut[p] === STATUT.ANCRE ? instance.n : instance.n - 1;
 
 // Table d'ancrage de p, −1 s'il n'est pas ancré.
 const ancrageDe = (instance, p) =>
-  instance.statut[p] === ANCRE ? instance.fixe[p * instance.R] : -1;
+  instance.statut[p] === STATUT.ANCRE ? instance.fixe[p * instance.R] : -1;
 
 // a_t vu de p : les ancrés de la table t, p non compté.
 const ancresVus = (instance, t, ancrage) => instance.ancresParTable[t] - (t === ancrage ? 1 : 0);
@@ -103,12 +101,13 @@ function plafondSurRangee(instance, p, cases, debut, occupation) {
   return borne(instance, mobilesRencontrables(instance, p), ancres, sieges);
 }
 
-// Lève RangeError quand une case de cases n'est ni −1 ni un index de table.
-function exigerCases(cases, T, quoi) {
-  for (let i = 0; i < cases.length; i += 1) {
-    const t = cases[i];
-    if (!Number.isInteger(t) || t < RESERVE || t >= T) {
-      throw new RangeError(`${quoi}, case ${i} : index de table ${String(t)} hors de −1..${T - 1}`);
+// Lève RangeError quand une case de l'itinéraire n'est ni RESERVE ni un index
+// de table. Un plan indexé passe par exigerPlanIndexe (configuration.js).
+function exigerCases(itineraire, T) {
+  for (let i = 0; i < itineraire.length; i += 1) {
+    const t = itineraire[i];
+    if (t !== RESERVE && !(Number.isInteger(t) && t >= 0 && t < T)) {
+      throw new RangeError(`itinéraire, case ${i} : index de table ${String(t)} hors de −1..${T - 1}`);
     }
   }
 }
@@ -138,7 +137,7 @@ export function plafondItineraire(instance, p, itineraire) {
   if (itineraire.length !== R) {
     throw new RangeError(`itinéraire de ${itineraire.length} tours, ${R} attendus`);
   }
-  exigerCases(itineraire, T, 'itinéraire');
+  exigerCases(itineraire, T);
   return plafondSurRangee(instance, p, itineraire, 0, null);
 }
 
@@ -148,19 +147,15 @@ export function plafondItineraire(instance, p, itineraire) {
  * en réserve n'entre pas dans le plafond de la personne, ni dans
  * l'occupation d'aucune table.
  *
- * Lève RangeError quand tableDe n'a pas N × R cases, ou qu'une case n'est ni
- * −1 ni un index de table.
+ * Lève ce que lève exigerPlanIndexe (configuration.js).
  *
  * @param {import('./types.js').Instance} instance
  * @param {ArrayLike<number>} tableDe  plan indexé, [p × R + r]
  * @returns {number[]}
  */
 export function plafondsRealises(instance, tableDe) {
+  exigerPlanIndexe(instance, tableDe);
   const { N, T, R } = instance;
-  if (tableDe.length !== N * R) {
-    throw new RangeError(`plan indexé de ${tableDe.length} cases, N × R = ${N * R} attendues`);
-  }
-  exigerCases(tableDe, T, 'plan indexé');
   const occupation = new Int32Array(T * R);
   for (let p = 0; p < N; p += 1) {
     for (let r = 0; r < R; r += 1) {

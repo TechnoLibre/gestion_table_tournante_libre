@@ -40,8 +40,10 @@ const DEFAIT_TOUS_LES = 3;
 const ESSAIS_MAX = 100 * PALIERS.at(-1);
 
 // Vrai quand deux listes de nombres ont la même longueur et les mêmes
-// valeurs, rang par rang.
-const egales = (a, b) => a.length === b.length && a.every((valeur, i) => valeur === b[i]);
+// valeurs, rang par rang, chacune un nombre fini : deux champs absents, deux
+// undefined, ne s'accordent pas.
+const egales = (a, b) =>
+  a.length === b.length && a.every((valeur, i) => Number.isFinite(valeur) && valeur === b[i]);
 
 // Ajoute à releve un libellé « palier : grandeur » pour chaque grandeur où
 // l'état tenu à jour diffère du recalcul complet.
@@ -55,8 +57,9 @@ function relever(etat, instance, palier, releve) {
   confronter('affilies', Array.from(etat.affilies), mesures.affilies);
   confronter('appartenancesVues', Array.from(etat.appartenancesVues), mesures.appartenancesVues);
   confronter('collisionsCumulees', [etat.collisionsCumulees], [mesures.collisionsCumulees]);
-  confronter('pairesDistinctes', [etat.pairesDistinctes], [mesures.pairesDistinctes]);
+  confronter('excedentCollisions', [etat.excedentCollisions], [mesures.excedentCollisions]);
   confronter('totalRetoursChoisis', [etat.totalRetoursChoisis], [mesures.totalRetoursChoisis]);
+  confronter('totalRedondance', [etat.totalRedondance], [mesures.totalRedondance]);
 }
 
 describe('recherche : incrémental contre recalcul complet (§ 5.10, § 14.10)', () => {

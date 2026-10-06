@@ -14,7 +14,8 @@
 // configuration, de sa graine dérivée, du compte d'arrêt et de la longueur de
 // l'historique, trois réglages qu'elle porte : la proposition 2 d'une demande
 // de 3 est celle d'une demande de 5, quel que soit l'ordre dans lequel les
-// propositions s'achèvent.
+// propositions s'achèvent, et regenerer en rend le plan à partir de ces trois
+// champs seuls (§ 8.9). Les deux passent par la même descente, proposer.
 //
 // Sièges. Chaque tour offre S = Σ c_t sièges, rangés table par table dans
 // l'ordre des tables. Les personnes que instance.fixe impose à un tour
@@ -49,13 +50,14 @@
 // Incrémental. L'état tient à jour ce dont le score dépend : la matrice des
 // rencontres par paire ; rencontres(p) ; l'histogramme des écarts au plafond
 // a priori, d'où leur maximum, et la somme de leurs carrés ; les collisions
-// cumulées et les paires distinctes de même appartenance ; Σ_paires
-// max(0, M − 1) ; les visites par (personne, table), d'où les retours
-// choisis ; par personne, le nombre d'affiliés rencontrés de chaque
-// appartenance, d'où |F(p)|, A(p) et r(p). Un échange ne touche que les
-// paires des deux tables concernées, au tour concerné : O(capacité). Ce score
-// sert la boucle de recherche et rien d'autre ; scoreComplet recompose le
-// même n-uplet à partir de mesurer, la mesure qui fait foi (§ 5.10, § 13.2).
+// cumulées de même appartenance et leur excédent ; Σ_paires max(0, M − 1) ;
+// les visites par (personne, table), d'où les retours choisis ; par
+// personne, le nombre d'affiliés rencontrés de chaque appartenance, d'où
+// |F(p)|, A(p) et Σ r(p). Un échange ne touche que les paires des deux tables
+// concernées, au tour concerné : O(capacité). Ce score sert la boucle de
+// recherche et rien d'autre ; scoreComplet recompose le même n-uplet à partir
+// de la mesure qui fait foi, dont il lit chaque grandeur au lieu de la
+// refaire (§ 5.10, § 13.2).
 //
 // Acceptation tardive. L'historique H, de longueur L, part du score initial.
 // À l'itération i, le candidat est gardé s'il ne dépasse ni le score courant
@@ -91,9 +93,17 @@
 // inchangé y marque aussi bien un plateau que la descente parcourt, et une
 // relance couperait ce parcours, d'autant plus souvent que L est court.
 import { FLUX, creerPcg32 } from '../demo/prng.js';
-import { nombrePlacesManquantes, normaliser, planDepuisIndex } from './configuration.js';
+import {
+  LIBRE,
+  RESERVE,
+  SANS_GROUPE,
+  nombrePlacesManquantes,
+  normaliser,
+  planDepuisIndex,
+} from './configuration.js';
 import { ErreurAnnulee, ErreurConfiguration } from './erreurs.js';
 import { mesurer } from './indicateurs.js';
+import { ecartsAuPlafondAPriori } from './manque.js';
 import { plafondsAPriori } from './plafond.js';
 
 /**
@@ -112,27 +122,23 @@ import { plafondsAPriori } from './plafond.js';
  *
  * @typedef {Object} EtatRecherche
  * Rendu par creerEtat ; les champs qui suivent se lisent, aucun ne s'écrit
- * hors de ce module.
+ * hors de ce module. Un champ qui tient une grandeur que mesurer rend en
+ * porte le nom.
  * @property {Int32Array} tableDe            plan indexé courant, N × R
  * @property {Int32Array} rencontres         |met(p)|, ordre canonique
  * @property {Int32Array} affilies           |F(p)|
  * @property {Int32Array} appartenancesVues  A(p)
  * @property {number} collisionsCumulees
- * @property {number} pairesDistinctes       paires de même appartenance réunies
+ * @property {number} excedentCollisions     collisions cumulées − paires distinctes
  * @property {number} totalRetoursChoisis
+ * @property {number} totalRedondance        Σ_p r(p)
  *
  * @typedef {{tour: number, a: number, b: number}} Mouvement
  *          l'échange des occupants des sièges a et b au tour d'index tour
  */
 
-// Case de instance.fixe sans table imposée, et case d'un plan indexé en
-// réserve.
-const LIBRE = -1;
-const RESERVE = -1;
 // Siège sans occupant : la place fantôme.
 const FANTOME = -1;
-// instance.groupe d'un participant sans appartenance.
-const SANS_GROUPE = -1;
 const TAILLE_SCORE = 6;
 // Ordres de comparaison du n-uplet, par rang de composante : celui du score,
 // et celui des contraintes, qui passe les composantes 2, 3 et 4 devant les
@@ -164,6 +170,17 @@ function exigerReglage(nom, valeur, min, max) {
   }
 }
 
+// Lève une RangeError qui nomme le premier des trois réglages qu'une
+// proposition porte à sortir de son domaine, contrôlés dans cet ordre :
+// graine de 0 à 2^32 − 1, arret et historique ≥ 1. rechercher et regenerer
+// l'appellent tous deux : ce que l'un admet, l'autre l'admet, et regenerer
+// accepte les champs de toute proposition que rechercher rend.
+function exigerChampsProposition({ graine, arret, historique }) {
+  exigerReglage('graine', graine, 0, MOT_MAX);
+  exigerReglage('arret', arret, 1, Number.MAX_SAFE_INTEGER);
+  exigerReglage('historique', historique, 1, Number.MAX_SAFE_INTEGER);
+}
+
 // Ce que toutes les propositions d'une instance partagent : la disposition
 // des sièges, les sièges fixés et les sièges mobiles de chaque tour, les
 // personnes libres de chaque tour par index croissant, le plafond a priori
@@ -171,8 +188,8 @@ function exigerReglage(nom, valeur, min, max) {
 // une visite est un retour choisi. Lève PLACES_MANQUANTES quand les sièges
 // d'un tour ne suffisent pas à asseoir tout le monde (§ 5.9).
 function preparer(instance) {
-  const manque = nombrePlacesManquantes(instance);
-  if (manque > 0) throw new ErreurConfiguration('PLACES_MANQUANTES', { manque });
+  const placesManquantes = nombrePlacesManquantes(instance);
+  if (placesManquantes > 0) throw new ErreurConfiguration('PLACES_MANQUANTES', { placesManquantes });
   const { N, T, R, capacite, fixe } = instance;
 
   const debut = new Int32Array(T + 1);
@@ -280,29 +297,35 @@ function changerAffilie(etat, p, g, sens) {
     etat.appartenancesVues[p] += sens;
     vues = sens;
   }
-  etat.sommeRedondance += sens - vues;
+  etat.totalRedondance += sens - vues;
 }
 
 // Ajoute sens, 1 ou −1, aux rencontres de la paire (a, b), a ≠ b, et
-// propage : Σ max(0, M − 1) ; collisions cumulées pour deux personnes de la
-// même appartenance ; et, quand la paire devient réunie ou cesse de l'être,
-// les paires distinctes, les rencontres et les affiliés des deux.
+// propage : les collisions cumulées pour deux personnes de la même
+// appartenance. Quand la paire était réunie avant un ajout, ou le reste
+// après un retrait, la rencontre ajoutée ou retirée est une répétition :
+// elle compte dans Σ max(0, M − 1) et, entre collègues, dans l'excédent de
+// collisions, qui vaut Σ max(0, M − 1) sur les paires de même appartenance.
+// Sinon la paire devient réunie ou cesse de l'être : les rencontres et les
+// affiliés des deux suivent.
 function modifierPaire(etat, a, b, sens) {
   const k = a < b ? a * etat.N + b : b * etat.N + a;
   const avant = etat.paires[k];
   const apres = avant + sens;
   etat.paires[k] = apres;
-  if ((sens > 0 ? avant : apres) >= 1) etat.excedentPaires += sens;
   const ga = etat.groupe[a];
   const gb = etat.groupe[b];
-  const memeGroupe = ga !== SANS_GROUPE && ga === gb;
+  const memeGroupe = ga === gb && etat.affilie[a] === 1;
   if (memeGroupe) etat.collisionsCumulees += sens;
-  if ((sens > 0 ? avant : apres) !== 0) return;
-  if (memeGroupe) etat.pairesDistinctes += sens;
+  if ((sens > 0 ? avant : apres) !== 0) {
+    etat.excedentPaires += sens;
+    if (memeGroupe) etat.excedentCollisions += sens;
+    return;
+  }
   changerRencontres(etat, a, sens);
   changerRencontres(etat, b, sens);
-  if (gb !== SANS_GROUPE) changerAffilie(etat, a, gb, sens);
-  if (ga !== SANS_GROUPE) changerAffilie(etat, b, ga, sens);
+  if (etat.affilie[b] === 1) changerAffilie(etat, a, gb, sens);
+  if (etat.affilie[a] === 1) changerAffilie(etat, b, ga, sens);
 }
 
 // Ajoute sens aux visites de p à la table t, et ajuste les retours choisis.
@@ -367,6 +390,11 @@ function etatInitial(structure, rng) {
     instance,
     contraintes: instance.contraintes,
     groupe: instance.groupe,
+    // affilie[p] vaut 1 quand p porte une appartenance, 0 pour SANS_GROUPE.
+    // modifierPaire le lit au lieu de comparer un groupe à SANS_GROUPE : sous
+    // le lanceur d'épreuves, chaque lecture d'une valeur importée passe par
+    // un accesseur, que la boucle de recherche paierait à chaque paire.
+    affilie: Uint8Array.from(instance.groupe, (g) => (g === SANS_GROUPE ? 0 : 1)),
     N,
     T,
     R,
@@ -390,10 +418,10 @@ function etatInitial(structure, rng) {
     ecartAuPlafondAPrioriMax: 0,
     carresEcartsAuPlafondAPriori: 0,
     collisionsCumulees: 0,
-    pairesDistinctes: 0,
+    excedentCollisions: 0,
     excedentPaires: 0,
     totalRetoursChoisis: 0,
-    sommeRedondance: 0,
+    totalRedondance: 0,
   };
   for (let p = 0; p < N; p += 1) {
     etat.histogramme[aPriori[p]] += 1;
@@ -424,16 +452,17 @@ function etatInitial(structure, rng) {
 
 // Écrit dans sortie le n-uplet du score, à partir des grandeurs nommées de
 // q, et le rend. Une seule composition sert le score tenu à jour et le score
-// recalculé.
+// recalculé ; une grandeur que mesurer rend y porte son nom, et la
+// composition n'en refait aucune.
 function composer(contraintes, q, sortie) {
   const separer = contraintes.separerAppartenances;
   sortie[0] = q.ecartAuPlafondAPrioriMax;
   sortie[1] = q.carresEcartsAuPlafondAPriori;
-  sortie[2] = separer ? q.collisionsCumulees - q.pairesDistinctes : 0;
+  sortie[2] = separer ? q.excedentCollisions : 0;
   sortie[3] = separer ? q.collisionsCumulees : 0;
   sortie[4] = (contraintes.nouveauxVoisins ? q.excedentPaires : 0)
     + (contraintes.nouvelleTable ? q.totalRetoursChoisis : 0);
-  sortie[5] = contraintes.varierAppartenances ? q.sommeRedondance : 0;
+  sortie[5] = contraintes.varierAppartenances ? q.totalRedondance : 0;
   return sortie;
 }
 
@@ -531,13 +560,25 @@ function descendre(structure, rng, { arret, historique, dejaFaits, total, signal
   return meilleurPlan;
 }
 
+// Le plan de la proposition de graine dérivée graineDerivee : la descente
+// depuis creerPcg32(graineDerivee, FLUX.RECHERCHE), rendue par identifiants.
+// rechercher et regenerer l'appellent tous deux. À instance égale, le plan ne
+// dépend que de la graine dérivée, d'options.arret et d'options.historique :
+// les autres options ne servent qu'à rapporter l'avancement et à lire le
+// signal.
+function proposer(instance, structure, graineDerivee, options) {
+  const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
+  return planDepuisIndex(instance, descendre(structure, rng, options));
+}
+
 /**
  * Propositions de placement d'une configuration (§ 5.7) : nombre
  * propositions, d'identifiants 1 à nombre, chacune la meilleure affectation
  * vue en arret mouvements évalués, relances comprises (en-tête du module).
  * Chacune porte sa graine dérivée, arret et historique, défaut résolu : les
- * trois décident de son plan. À configuration et réglages égaux, le résultat
- * est identique. Ne modifie pas la configuration.
+ * trois décident de son plan, que regenerer rend à partir d'eux. À
+ * configuration et réglages égaux, le résultat est identique. Ne modifie pas
+ * la configuration.
  *
  * Toutes les 1 000 itérations, comptées sur la génération entière,
  * progression(fait, total) reçoit le rang du mouvement en cours parmi
@@ -549,8 +590,9 @@ function descendre(structure, rng, { arret, historique, dejaFaits, total, signal
  * Lève RangeError quand un réglage n'est pas un entier de son domaine —
  * graine de 0 à 2^32 − 1, arret, nombre et historique ≥ 1 ;
  * ErreurConfiguration de normaliser ; ErreurConfiguration
- * ('PLACES_MANQUANTES', { manque }) quand les tables n'offrent pas assez de
- * sièges, manque étant le nombre de places qui manquent à chaque tour.
+ * ('PLACES_MANQUANTES', { placesManquantes }) quand les tables n'offrent pas
+ * assez de sièges, placesManquantes étant le nombre de places qui manquent à
+ * chaque tour, celui que rend nombrePlacesManquantes.
  *
  * @param {import('./types.js').Configuration} configuration
  * @param {ReglagesGeneration} reglages
@@ -559,10 +601,8 @@ function descendre(structure, rng, { arret, historique, dejaFaits, total, signal
  */
 export function rechercher(configuration, reglages, { signal, progression } = {}) {
   const { graine, arret, nombre, historique = HISTORIQUE_PAR_DEFAUT } = reglages;
-  exigerReglage('graine', graine, 0, MOT_MAX);
-  exigerReglage('arret', arret, 1, Number.MAX_SAFE_INTEGER);
+  exigerChampsProposition({ graine, arret, historique });
   exigerReglage('nombre', nombre, 1, Number.MAX_SAFE_INTEGER);
-  exigerReglage('historique', historique, 1, Number.MAX_SAFE_INTEGER);
   const instance = normaliser(configuration);
   const structure = preparer(instance);
   const graines = creerPcg32(graine, FLUX.GRAINES);
@@ -571,8 +611,7 @@ export function rechercher(configuration, reglages, { signal, progression } = {}
   for (let id = 1; id <= nombre; id += 1) {
     lireSignal(signal);
     const graineDerivee = graines.suivant();
-    const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
-    const meilleur = descendre(structure, rng, {
+    const plan = proposer(instance, structure, graineDerivee, {
       arret,
       historique,
       dejaFaits: (id - 1) * arret,
@@ -580,17 +619,49 @@ export function rechercher(configuration, reglages, { signal, progression } = {}
       signal,
       progression,
     });
-    const plan = planDepuisIndex(instance, meilleur);
     propositions.push({ id, graine: graineDerivee, arret, historique, plan });
   }
   return propositions;
 }
 
 /**
+ * Le plan d'une proposition, régénéré à partir de ses seuls champs (§ 5.7,
+ * § 8.9) : la descente part de proposition.graine, la graine dérivée qu'elle
+ * porte, et compte proposition.arret mouvements sous un historique de
+ * proposition.historique cases. Ces trois champs décident du plan : à
+ * configuration égale, regenerer rend le plan que rechercher a rendu pour
+ * cette proposition, quel que soit son rang dans sa génération. La descente
+ * elle-même fait aussi partie du résultat, ordre des tirages, PATIENCE et
+ * ordres d'acceptation : une proposition rendue par une autre version de ce
+ * module n'est pas garantie régénérable (§ 8.9). Aucun autre champ n'est lu,
+ * ni id ni plan. Ne modifie ni la configuration ni la proposition.
+ *
+ * Lève RangeError quand l'un des trois champs n'est pas un entier de son
+ * domaine, graine de 0 à 2^32 − 1, arret et historique ≥ 1 : un champ absent
+ * ne reçoit pas la valeur par défaut de rechercher, qui ferait régénérer une
+ * autre proposition sans le dire. Lève ce que rechercher lève pour la
+ * configuration : ErreurConfiguration de normaliser, PLACES_MANQUANTES.
+ *
+ * @param {import('./types.js').Configuration} configuration
+ * @param {{graine: number, arret: number, historique: number}} proposition
+ * @returns {import('./types.js').Plan}
+ */
+export function regenerer(configuration, { graine, arret, historique }) {
+  exigerChampsProposition({ graine, arret, historique });
+  const instance = normaliser(configuration);
+  return proposer(instance, preparer(instance), graine, {
+    arret,
+    historique,
+    dejaFaits: 0,
+    total: arret,
+  });
+}
+
+/**
  * État de recherche au placement initial (§ 5.10) : fixés à leurs tables,
  * libres mélangés par rng.melanger, tour après tour, puis assis table après
  * table dans l'ordre des tables. Lève ErreurConfiguration('PLACES_MANQUANTES',
- * { manque }) comme rechercher.
+ * { placesManquantes }) comme rechercher.
  *
  * @param {import('./types.js').Instance} instance
  * @param {ReturnType<typeof creerPcg32>} rng
@@ -611,11 +682,19 @@ export function scoreIncremental(etat) {
 }
 
 /**
- * Le même n-uplet, recalculé de zéro sur etat.tableDe : plafondsAPriori et
- * mesurer en donnent les grandeurs. Σ_paires max(0, M − 1) vaut Σ_paires M
- * − Σ_paires min(M, 1) : le premier terme compte les paires réunies à chaque
- * table de chaque tour, o(o − 1)/2 pour o occupants ; le second, les paires
- * réunies au moins une fois, Σ_p rencontres(p) / 2.
+ * Le même n-uplet, recalculé de zéro sur etat.tableDe à partir de la mesure
+ * qui fait foi, dont chaque grandeur se lit au lieu de se refaire : les
+ * écarts au plafond a priori par ecartsAuPlafondAPriori (manque.js), sur les
+ * plafonds de plafondsAPriori ; l'excédent de collisions, les collisions
+ * cumulées, les retours choisis et Σ r(p) par mesurer. Une redéfinition de
+ * l'une d'elles dans son module change donc ce score, et son accord avec le
+ * score tenu à jour tombe.
+ *
+ * Seule Σ_paires max(0, M − 1), que la mesure ne rend pas, se calcule ici :
+ * elle vaut Σ_paires M − Σ_paires min(M, 1). Le premier terme compte les
+ * paires réunies à chaque table de chaque tour, o(o − 1)/2 pour o
+ * occupants ; le second, les paires réunies au moins une fois,
+ * Σ_p rencontres(p) / 2.
  *
  * @param {EtatRecherche} etat
  * @returns {number[]}
@@ -623,16 +702,12 @@ export function scoreIncremental(etat) {
 export function scoreComplet(etat) {
   const { instance, tableDe } = etat;
   const { N, T, R } = instance;
-  const aPriori = plafondsAPriori(instance);
   const mesures = mesurer(instance, tableDe);
   let ecartAuPlafondAPrioriMax = 0;
   let carresEcartsAuPlafondAPriori = 0;
-  let sommeRencontres = 0;
-  for (let p = 0; p < N; p += 1) {
-    const ecart = aPriori[p] - mesures.rencontres[p];
+  for (const ecart of ecartsAuPlafondAPriori(mesures, plafondsAPriori(instance))) {
     ecartAuPlafondAPrioriMax = Math.max(ecartAuPlafondAPrioriMax, ecart);
     carresEcartsAuPlafondAPriori += ecart * ecart;
-    sommeRencontres += mesures.rencontres[p];
   }
   const occupation = new Int32Array(T * R);
   for (let p = 0; p < N; p += 1) {
@@ -643,14 +718,16 @@ export function scoreComplet(etat) {
   }
   let reunions = 0;
   for (const o of occupation) reunions += (o * (o - 1)) / 2;
+  let sommeRencontres = 0;
+  for (const rencontres of mesures.rencontres) sommeRencontres += rencontres;
   const grandeurs = {
     ecartAuPlafondAPrioriMax,
     carresEcartsAuPlafondAPriori,
+    excedentCollisions: mesures.excedentCollisions,
     collisionsCumulees: mesures.collisionsCumulees,
-    pairesDistinctes: mesures.pairesDistinctes,
     excedentPaires: reunions - sommeRencontres / 2,
     totalRetoursChoisis: mesures.totalRetoursChoisis,
-    sommeRedondance: mesures.redondance.reduce((somme, r) => somme + r, 0),
+    totalRedondance: mesures.totalRedondance,
   };
   return composer(instance.contraintes, grandeurs, new Array(TAILLE_SCORE));
 }

@@ -157,8 +157,9 @@ quand la configuration en impose un. Sans ce dernier, le troisième chiffre de l
 page de qualité envoie relancer vers un zéro que la configuration interdit.
 
 **9. Générer.** *Nécessaire pour obtenir un placement, reprenable sans perte.*
-La commande prend une **graine** et un **compte d'arrêt**, que chaque
-proposition conserve (§ 5.7, § 8.9). Le logiciel produit plusieurs propositions
+La commande prend une **graine** et un **compte d'arrêt** ; chaque proposition
+conserve sa graine dérivée, ce compte et la longueur d'historique qui l'ont
+produite (§ 5.7, § 8.9). Le logiciel produit plusieurs propositions
 comparables ; relancer **ajoute** des candidats, un classement unique les
 ordonne tous. Les réservations des étapes 6 et 7 sont honorées, le moteur place
 les autres autour (§ 5.2). Le logiciel nomme automatiquement l'instant qui
@@ -611,10 +612,11 @@ réglages ajoute des candidats plutôt que d'effacer les précédents, et un
 classement unique les ordonne tous. Une commande efface la liste en épargnant
 celui qui est retenu.
 
-**La commande prend une graine entière et un compte d'arrêt**, que chaque
-proposition conserve (§ 8.9). C'est le support de « à graine et entrée égales,
-placement identique » ; sans lui, une proposition retenue cesse d'être
-régénérable.
+**La commande prend une graine entière et un compte d'arrêt**, et une longueur
+d'historique d'acceptation dont l'algorithme fixe la valeur par défaut. Chaque
+proposition conserve sa graine dérivée, ce compte et cette longueur (§ 8.9).
+C'est le support de « à graine et entrée égales, placement identique » ; sans
+eux, une proposition retenue cesse d'être régénérable.
 
 **L'identifiant entier d'une proposition vient de sa place dans la suite de
 graines dérivées, jamais de son ordre d'achèvement.** Quand plusieurs
@@ -1505,11 +1507,22 @@ Chaque proposition déclare, **une fois** :
 - la **liste des capacités** correspondantes ;
 - le **nombre de tours** ;
 - l'**ensemble des identifiants de participants** qu'elle place ;
-- sa **graine** entière et le **compte d'arrêt** de la recherche qui l'a produite.
+- sa **graine dérivée** (§ 5.7), le **compte d'arrêt** et la **longueur de
+  l'historique** d'acceptation de la recherche qui l'a produite : les trois
+  réglages qui la déterminent.
 
-Les deux derniers champs sont le support de « à graine et entrée égales, placement
-identique » (§ 5.10) ; sans eux, cette phrase n'existe que dans un scénario de
-pilotage, et une proposition retenue cesse d'être régénérable.
+Ces trois champs sont le support de « à graine et entrée égales, placement
+identique » (§ 5.10) : à configuration égale et pour une même version du moteur
+(`produit_version`, § 8.8), la régénération d'une proposition à partir d'eux
+seuls rend son plan, quel que soit son rang dans sa génération. Sans eux, cette
+phrase n'existe que dans un scénario de pilotage, et une proposition retenue
+cesse d'être régénérable. La longueur de l'historique a une valeur par défaut,
+mais la proposition porte celle qui l'a produite : régénérer sous une valeur
+supposée rendrait une autre proposition, sans le dire. Les trois champs ne
+déterminent le plan que pour l'algorithme de recherche qui l'a produit, dont
+l'ordre des tirages et les règles d'acceptation font partie du résultat : une
+proposition produite par une autre version du moteur n'est pas garantie
+régénérable.
 
 Puis, **par tour** : la liste des tables, chacune étant la liste des
 **identifiants entiers** de ses occupants **dans l'ordre des sièges** ; et la
@@ -1525,7 +1538,7 @@ différents, et le § 8.8 est violé par la seule forme du stockage.
 # illustration, annotée ; le fichier livré est du JSON strict
 propositions: [
   { id: 3,
-    graine: 48271, arret: 20000,
+    graine: 48271, arret: 20000, historique: 1000,
     tables:    [7, 12, 2, ...],        identifiants de table (§ 4)
     capacites: [8, 8, 7, ...],
     tours: 4,
@@ -3655,9 +3668,16 @@ certitude fausse.
 gros groupe tient dans le nombre de tables » est nécessaire mais **ne suffit
 pas** : trois tables de 10, 1 et 1 ne peuvent séparer quatre groupes de 3, parce
 que la table de 10 exigerait 10 appartenances distinctes. Le logiciel vérifie
-**deux** inégalités — plus gros groupe ≤ nombre de tables, plus grande capacité
-≤ nombre de groupes — puis **construit un tour témoin**. Le générateur **refuse
-une graine dont aucun tour témoin ne se construit**.
+**deux** inégalités — plus gros groupe ≤ nombre de tables, plus grande
+capacité − places vides ≤ nombre de groupes — puis **construit un tour
+témoin**. Les places vides sont les sièges qui restent une fois chaque membre
+assis, zéro quand la salle n'en laisse pas : une table reçoit au moins sa
+capacité moins ces places, chacun de ses occupants d'une appartenance
+différente. Dans une salle exactement pleine, la seconde inégalité se lit
+« plus grande capacité ≤ nombre de groupes » ; ailleurs, cette lecture
+refuserait à tort deux tables de 3 pour deux membres d'appartenances
+différentes, qu'un tour sépare. Le générateur **refuse une graine dont aucun
+tour témoin ne se construit**.
 
 ### 15.3 La petite démonstration — 12 membres
 

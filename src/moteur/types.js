@@ -3,7 +3,9 @@
 
 // Contrat de données du moteur : les formes qu'il reçoit et celles qu'il
 // rend. Ce module ne porte que des définitions JSDoc et n'exécute rien ; un
-// module cite un type par import('./types.js').Instance.
+// module cite un type par import('./types.js').Instance. Les valeurs que ces
+// formes portent — STATUT, LIBRE, RESERVE, SANS_GROUPE — sont définies et
+// exportées par configuration.js, leur seul propriétaire.
 
 /**
  * @typedef {Object} Participant
@@ -54,20 +56,31 @@
  * @property {number[]} idsTables    index → id table, ordre de configuration.tables
  * @property {Map<number, number>} indexTableDe
  * @property {Int32Array} capacite   par index de table
- * @property {Int32Array} groupe     par index participant ; −1 sans appartenance
+ * @property {Int32Array} groupe     par index participant ; SANS_GROUPE (−1)
+ *                                   sans appartenance
  * @property {string[]} groupes      index de groupe → libellé ; ordre de première
  *                                   apparition en parcourant les ids croissants
  * @property {Int32Array} fixe       [p * R + r] → index de table imposé (r à
- *                                   partir de 0), −1 si libre
- * @property {Uint8Array} statut     0 mobile, 1 partiellement fixé, 2 ancré (§ 4.2)
+ *                                   partir de 0), LIBRE (−1) si libre
+ * @property {Uint8Array} statut     STATUT.MOBILE (0), STATUT.PARTIELLEMENT_FIXE
+ *                                   (1), STATUT.ANCRE (2) (§ 4.2)
  * @property {Int32Array} ancresParTable  a_t
  * @property {number} k              ancrés
  * @property {number} n              N − k
  * @property {Contraintes} contraintes
  *
  * Un plan indexé est un Int32Array `tableDe` de longueur N × R :
- * tableDe[p * R + r] = index de table, −1 pour la réserve.
+ * tableDe[p * R + r] = index de table, RESERVE (−1) pour la réserve.
+ * exigerPlanIndexe (configuration.js) en garde la forme.
  *
  * L'ordre canonique des tableaux par personne est celui de `instance.ids` :
  * tout tableau rendu par le moteur et indexé par personne suit cet ordre.
+ *
+ * Une personne que le moteur désigne sans identifiant l'est par son index
+ * canonique, son rang dans `instance.ids`, et `instance.ids[index]` en donne
+ * l'identifiant. C'est le cas d'une violation de verifierIndicateurs,
+ * { code, index } : ses trois listes ne portent pas d'identifiant, et la
+ * traduction revient à l'appelant, qui tient l'instance. Les détails d'une
+ * ErreurConfiguration et les violations de verifierInvariants désignent au
+ * contraire les participants par identifiant.
  */

@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { describe, test } from '../../test/lanceur.js';
-import { normaliser } from './configuration.js';
+import { LIBRE, STATUT, normaliser } from './configuration.js';
 import { ErreurConfiguration } from './erreurs.js';
 import { plafondsAPriori, plafondsAPrioriParEnumeration } from './plafond.js';
 
@@ -27,7 +27,7 @@ const GRAINE = 314_159;
 /**
  * Instance d'une salle : capacites[t] et ancres[t] décrivent la table
  * d'index t ; partiels[j][r] est la table imposée au j-ème partiellement
- * fixé au tour r, −1 pour un tour libre. Identifiants 1 à N : les ancrés,
+ * fixé au tour r, LIBRE pour un tour libre. Identifiants 1 à N : les ancrés,
  * table par table, puis les partiels, puis les mobiles ; la table d'index t
  * a pour identifiant 100 + t. Lève ce que normaliser lève.
  */
@@ -47,7 +47,7 @@ function instanceDe({ capacites, ancres, mobiles, tours, partiels = [] }) {
   for (const tables of partiels) {
     const id = nouveau();
     tables.forEach((t, r) => {
-      if (t < 0) return;
+      if (t === LIBRE) return;
       reservations.push({ participant: id, table: 100 + t, portee: 'tour', tour: r + 1 });
     });
   }
@@ -79,7 +79,7 @@ function arbitraireCase(T, R) {
         ),
       ),
     );
-  const tour = fc.oneof(fc.constant(-1), fc.integer({ min: 0, max: T - 1 }));
+  const tour = fc.oneof(fc.constant(LIBRE), fc.integer({ min: 0, max: T - 1 }));
   return fc
     .record({
       salle: fc.array(table, { minLength: T, maxLength: T }),
@@ -92,7 +92,7 @@ function arbitraireCase(T, R) {
         if (a < c) ouvertes.push(t);
       });
       const partiels = rangs.map((tours) =>
-        tours.map((rang) => (rang < 0 || ouvertes.length === 0 ? -1 : ouvertes[rang % ouvertes.length])),
+        tours.map((rang) => (rang === LIBRE || ouvertes.length === 0 ? LIBRE : ouvertes[rang % ouvertes.length])),
       );
       return {
         capacites: salle.map(([c]) => c),
@@ -107,7 +107,9 @@ function arbitraireCase(T, R) {
 describe("plafond a priori : la programmation dynamique contre l'énumération, grille large", () => {
   test('de 2 à 8 tables et de 2 à 5 tours, chaque case de la grille : le même plafond pour chacun', () => {
     const parCase = [];
-    const parStatut = [0, 0, 0];
+    // Une valeur de STATUT et son compte ; la Map ne sert qu'à retrouver un
+    // statut.
+    const parStatut = new Map();
     for (let T = 2; T <= 8; T += 1) {
       for (let R = 2; R <= 5; R += 1) {
         let acceptees = 0;
@@ -122,7 +124,7 @@ describe("plafond a priori : la programmation dynamique contre l'énumération, 
             }
             if (instance.N === 0) return;
             acceptees += 1;
-            for (let p = 0; p < instance.N; p += 1) parStatut[instance.statut[p]] += 1;
+            for (const statut of instance.statut) parStatut.set(statut, (parStatut.get(statut) ?? 0) + 1);
             assert.deepEqual(plafondsAPriori(instance), plafondsAPrioriParEnumeration(instance));
           }),
           { seed: GRAINE + 10 * T + R, numRuns: 300 },
@@ -137,8 +139,10 @@ describe("plafond a priori : la programmation dynamique contre l'énumération, 
       .filter(([, , acceptees]) => acceptees < 200)
       .map(([T, R, n]) => `${T} tables, ${R} tours : ${n} acceptées sur 300, 200 au moins`);
     assert.deepEqual(maigres, []);
-    assert.ok(parStatut[1] >= 5000, `${parStatut[1]} partiellement fixés comparés, 5000 au moins`);
-    assert.ok(parStatut[2] >= 5000, `${parStatut[2]} ancrés comparés, 5000 au moins`);
+    const partiels = parStatut.get(STATUT.PARTIELLEMENT_FIXE) ?? 0;
+    const ancres = parStatut.get(STATUT.ANCRE) ?? 0;
+    assert.ok(partiels >= 5000, `${partiels} partiellement fixés comparés, 5000 au moins`);
+    assert.ok(ancres >= 5000, `${ancres} ancrés comparés, 5000 au moins`);
   });
 
   test("forme de la grande démonstration et sa variante : la programmation dynamique égale l'énumération", () => {

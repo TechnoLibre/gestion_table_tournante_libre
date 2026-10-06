@@ -17,13 +17,15 @@
 // canonique, celui de instance.ids.
 //
 // Les agrégats portent sur les trois populations du § 5.4 : tous, les
-// mobiles — partiellement fixés compris — et les ancrés. Une population vide
-// rend null, jamais 0.
+// mobiles — partiellement fixés compris — et les ancrés, que forme
+// replierParPopulation (configuration.js). Une population vide rend null,
+// jamais 0.
 //
 // Le plafond a priori vaut null quand il est inconnu (§ 12.10.9) : seul null
 // le dit. undefined, la valeur d'un champ manquant, lève TypeError au lieu
 // de passer pour inconnu. Une liste qui n'a pas une case par personne lève
 // RangeError : elle décrit une autre population.
+import { replierParPopulation } from './configuration.js';
 
 /**
  * @typedef {{tous: number|null, mobiles: number|null, ancres: number|null}} ParPopulation
@@ -48,10 +50,6 @@
  * @property {number|null} [rangBascule]  à partir de 1
  * @property {'A'|'B'|null} [domine]
  */
-
-// Statut d'un ancré dans instance.statut (§ 4.2) ; 0 marque un mobile, 1 un
-// partiellement fixé.
-const ANCRE = 2;
 
 // Lève TypeError quand valeurs n'est pas une liste, faute de longueur
 // numérique ; attendu nomme ce que le paramètre nom admet.
@@ -83,19 +81,11 @@ function soustraire(gauche, droite) {
   return differences;
 }
 
-// Replie valeurs[p] sur les trois populations en un passage : chacun compte
-// dans « tous », puis parmi les ancrés ou parmi les mobiles. replier(cumul,
-// valeur) rend le cumul suivant ; cumul vaut null au premier membre d'une
-// population, et une population sans membre reste à null.
-function parPopulation(valeurs, statut, replier) {
-  const chiffres = { tous: null, mobiles: null, ancres: null };
-  for (let p = 0; p < valeurs.length; p += 1) {
-    const secondaire = statut[p] === ANCRE ? 'ancres' : 'mobiles';
-    chiffres.tous = replier(chiffres.tous, valeurs[p]);
-    chiffres[secondaire] = replier(chiffres[secondaire], valeurs[p]);
-  }
-  return chiffres;
-}
+// Replie valeurs[p] sur les trois populations (replierParPopulation).
+// replier(cumul, valeur) rend le cumul suivant ; cumul vaut null au premier
+// membre d'une population, et une population sans membre reste à null.
+const parPopulation = (valeurs, statut, replier) =>
+  replierParPopulation(valeurs, statut, null, replier);
 
 // Le plus grand des valeurs repliées.
 const plusGrand = (cumul, valeur) => (cumul === null || valeur > cumul ? valeur : cumul);

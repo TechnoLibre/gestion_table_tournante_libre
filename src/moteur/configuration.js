@@ -5,6 +5,13 @@
 // que consomme le moteur (§ 4, § 5.2), et conversion d'un plan entre ses deux
 // formes (§ 8.9). Les formes sont décrites dans types.js.
 //
+// Ce module définit aussi, une seule fois pour tout le moteur (§ 13.2), ce
+// que les autres modules lisent de ces formes : les valeurs du contrat —
+// STATUT, LIBRE, RESERVE, SANS_GROUPE —, la garde de forme d'un plan indexé,
+// le nombre de places d'un tour, et la répartition des personnes entre les
+// trois populations du § 5.4. Les autres modules et leurs épreuves les
+// importent, sans en redéfinir aucun.
+//
 // Trois familles de refus :
 // - ErreurConfiguration, avec un code, pour ce qu'une saisie, un import ou un
 //   plan périmé peut porter : une donnée incohérente avec le reste de la
@@ -26,15 +33,27 @@
 // sont pas examinés. Aucune fonction ne modifie ce qu'elle reçoit.
 import { ErreurConfiguration } from './erreurs.js';
 
-// Statuts d'un participant (§ 4.2), valeurs de instance.statut.
-const MOBILE = 0;
-const PARTIELLEMENT_FIXE = 1;
-const ANCRE = 2;
+/**
+ * Statuts d'un participant (§ 4.2), valeurs de instance.statut. normaliser
+ * les dérive des réservations ; aucun n'est déclaré. Un partiellement fixé
+ * compte parmi les mobiles dans les populations du § 5.4.
+ */
+export const STATUT = Object.freeze({ MOBILE: 0, PARTIELLEMENT_FIXE: 1, ANCRE: 2 });
 
-// Case de instance.fixe sans table imposée.
-const LIBRE = -1;
-// Case d'un plan indexé : la réserve.
-const RESERVE = -1;
+/** Case de instance.fixe sans table imposée. */
+export const LIBRE = -1;
+
+/**
+ * Case d'un plan indexé : la réserve. Elle vaut LIBRE, et une rangée de
+ * instance.fixe se lit ainsi comme le plan qui assied chacun à ses seuls
+ * tours fixés et le laisse en réserve aux autres : le diagnostic mesure ce
+ * plan, le plafond a priori part de cet itinéraire.
+ */
+export const RESERVE = -1;
+
+/** instance.groupe d'un participant sans appartenance. */
+export const SANS_GROUPE = -1;
+
 // Case d'un plan indexé qu'indexerPlan n'a pas encore remplie ; jamais rendue.
 const NON_PLACE = -2;
 
@@ -97,9 +116,9 @@ function copierContraintes(contraintes) {
 }
 
 // Groupe de chaque participant présent, présents triés par identifiant
-// croissant : un libellé reçoit le numéro de sa première apparition, −1
-// marque l'absence d'appartenance. L'égalité de chaînes fait le groupe. La
-// Map ne sert qu'à retrouver un libellé déjà numéroté.
+// croissant : un libellé reçoit le numéro de sa première apparition,
+// SANS_GROUPE marque l'absence d'appartenance. L'égalité de chaînes fait le
+// groupe. La Map ne sert qu'à retrouver un libellé déjà numéroté.
 function numeroterGroupes(presents) {
   const groupe = new Int32Array(presents.length);
   const groupes = [];
@@ -107,7 +126,7 @@ function numeroterGroupes(presents) {
   for (let p = 0; p < presents.length; p += 1) {
     const { appartenance } = presents[p];
     if (appartenance === null) {
-      groupe[p] = -1;
+      groupe[p] = SANS_GROUPE;
       continue;
     }
     if (!numeroDe.has(appartenance)) {
@@ -218,13 +237,13 @@ function deriverStatuts(fixe, N, T, R) {
       if (t !== LIBRE) aucune = false;
     }
     if (aucune) {
-      statut[p] = MOBILE;
+      statut[p] = STATUT.MOBILE;
     } else if (memeTable) {
-      statut[p] = ANCRE;
+      statut[p] = STATUT.ANCRE;
       ancresParTable[premiere] += 1;
       k += 1;
     } else {
-      statut[p] = PARTIELLEMENT_FIXE;
+      statut[p] = STATUT.PARTIELLEMENT_FIXE;
     }
   }
   return { statut, ancresParTable, k };
@@ -416,20 +435,48 @@ export function indexerPlan(instance, plan) {
 }
 
 /**
+ * La garde de forme d'un plan indexé, la seule du moteur : planDepuisIndex,
+ * mesurer et plafondsRealises l'appellent avant de lire une case. Lève
+ * RangeError quand tableDe n'a pas N × R cases, ou qu'une case n'est ni
+ * RESERVE ni un index de table entier de 0 à T − 1. Le message nomme alors
+ * le participant, par identifiant, le tour et la valeur de la première case
+ * fautive dans l'ordre des cases, p × R + r croissant ; une chaîne s'y cite
+ * entre guillemets, pour ne pas se lire comme le nombre qu'elle contient.
+ *
+ * Sans elle, une case de trop serait ignorée, et une chaîne numérique comme
+ * "0" assiérait la personne à la table qu'elle désigne là où une
+ * comparaison stricte à instance.fixe n'y reconnaîtrait pas sa réservation.
+ *
+ * @param {import('./types.js').Instance} instance
+ * @param {ArrayLike<number>} tableDe
+ */
+export function exigerPlanIndexe({ N, T, R, ids }, tableDe) {
+  if (tableDe.length !== N * R) {
+    throw new RangeError(`plan indexé de ${tableDe.length} cases, N × R = ${N * R} attendues`);
+  }
+  for (let i = 0; i < tableDe.length; i += 1) {
+    const t = tableDe[i];
+    if (t !== RESERVE && !(Number.isInteger(t) && t >= 0 && t < T)) {
+      throw new RangeError(
+        `plan indexé : participant ${ids[Math.floor(i / R)]}, tour ${(i % R) + 1}, `
+          + `index de table ${decrire(t)} hors de −1..${T - 1}`,
+      );
+    }
+  }
+}
+
+/**
  * Plan par identifiants d'un plan indexé : les tables dans l'ordre de
  * l'instance, chaque liste de table et chaque réserve en ids croissants
- * (§ 8.9). Lève RangeError quand tableDe n'a pas N × R cases, ou qu'une case
- * n'est ni −1 ni un index de table.
+ * (§ 8.9). Lève ce que lève exigerPlanIndexe.
  *
  * @param {import('./types.js').Instance} instance
  * @param {ArrayLike<number>} tableDe
  * @returns {import('./types.js').Plan}
  */
 export function planDepuisIndex(instance, tableDe) {
+  exigerPlanIndexe(instance, tableDe);
   const { N, T, R, ids, idsTables } = instance;
-  if (tableDe.length !== N * R) {
-    throw new RangeError(`plan indexé de ${tableDe.length} cases, N × R = ${N * R} attendues`);
-  }
   const tours = [];
   const reserves = [];
   for (let r = 0; r < R; r += 1) {
@@ -439,21 +486,27 @@ export function planDepuisIndex(instance, tableDe) {
     // range chaque liste en ids croissants, sans tri.
     for (let p = 0; p < N; p += 1) {
       const t = tableDe[p * R + r];
-      if (t === RESERVE) {
-        reserve.push(ids[p]);
-      } else if (Number.isInteger(t) && t >= 0 && t < T) {
-        listes[t].push(ids[p]);
-      } else {
-        throw new RangeError(
-          `plan indexé : participant ${ids[p]}, tour ${r + 1}, `
-            + `index de table ${decrire(t)} hors de −1..${T - 1}`,
-        );
-      }
+      if (t === RESERVE) reserve.push(ids[p]);
+      else listes[t].push(ids[p]);
     }
     tours.push(listes);
     reserves.push(reserve);
   }
   return { tables: [...idsTables], tours, reserves };
+}
+
+/**
+ * Places qu'offre chaque tour : Σ c_t, la somme des capacités. Ni les
+ * participants ni les réservations n'y entrent. Le nombre de places
+ * manquantes et le diagnostic d'une salle tendue la lisent ici.
+ *
+ * @param {import('./types.js').Instance} instance  T et capacite sont lus
+ * @returns {number}
+ */
+export function nombrePlaces({ T, capacite }) {
+  let places = 0;
+  for (let t = 0; t < T; t += 1) places += capacite[t];
+  return places;
 }
 
 /**
@@ -467,7 +520,36 @@ export function planDepuisIndex(instance, tableDe) {
  * @returns {number}
  */
 export function nombrePlacesManquantes(instance) {
-  let places = 0;
-  for (let t = 0; t < instance.T; t += 1) places += instance.capacite[t];
-  return Math.max(0, instance.N - places);
+  return Math.max(0, instance.N - nombrePlaces(instance));
+}
+
+/**
+ * Replie valeurs[p] sur les trois populations du § 5.4, en un passage, dans
+ * l'ordre canonique : chacun compte dans « tous », puis parmi les ancrés, ou
+ * parmi les mobiles, partiellement fixés compris. C'est le seul endroit qui
+ * range une personne dans sa population : les agrégats des indicateurs et
+ * les chiffres du manque le lisent tous deux.
+ *
+ * replier(cumul, valeur) rend le cumul suivant sans modifier celui qu'il
+ * reçoit : les trois populations partent du même initial, et une population
+ * sans membre le garde.
+ *
+ * @template C
+ * @param {ArrayLike<*>} valeurs  une par personne, dans l'ordre de instance.ids
+ * @param {ArrayLike<number>} statut  instance.statut
+ * @param {C} initial
+ * @param {function(C, *): C} replier
+ * @returns {{tous: C, mobiles: C, ancres: C}}
+ */
+export function replierParPopulation(valeurs, statut, initial, replier) {
+  let tous = initial;
+  let mobiles = initial;
+  let ancres = initial;
+  for (let p = 0; p < valeurs.length; p += 1) {
+    const valeur = valeurs[p];
+    tous = replier(tous, valeur);
+    if (statut[p] === STATUT.ANCRE) ancres = replier(ancres, valeur);
+    else mobiles = replier(mobiles, valeur);
+  }
+  return { tous, mobiles, ancres };
 }

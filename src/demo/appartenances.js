@@ -66,11 +66,12 @@ export function tirerTailles(rng, total) {
  * (§ 15.2), contrôlées dans cet ordre ; la première rompue est nommée.
  * - PLUS_GROS_GROUPE : le plus gros groupe dépasse le nombre de tables, alors
  *   que chacun de ses membres occupe une table différente.
- * - PLUS_GRANDE_CAPACITE : la plus grande capacité, diminuée du surplus de
- *   sièges sur les membres quand il est positif, dépasse le nombre de groupes.
- *   Une table reçoit au moins sa capacité moins ce surplus, chacun de ses
- *   membres d'un groupe différent. Dans une salle exactement pleine, c'est
- *   « plus grande capacité ≤ nombre de groupes ».
+ * - PLUS_GRANDE_CAPACITE : la plus grande capacité, diminuée des places
+ *   vides, dépasse le nombre de groupes. Les places vides sont les sièges qui
+ *   restent une fois chaque membre assis, zéro quand la salle n'en laisse
+ *   pas. Une table reçoit au moins sa capacité moins ces places, chacun de
+ *   ses membres d'un groupe différent. Dans une salle exactement pleine,
+ *   c'est « plus grande capacité ≤ nombre de groupes ».
  * Nécessaires, elles ne suffisent pas : seul tourTemoin conclut.
  *
  * @param {number[]} tailles  taille de chaque groupe
@@ -79,8 +80,8 @@ export function tirerTailles(rng, total) {
  */
 export function faisabilite(tailles, capacites) {
   if (maximum(tailles) > capacites.length) return { ok: false, raison: 'PLUS_GROS_GROUPE' };
-  const surplus = Math.max(0, somme(capacites) - somme(tailles));
-  if (maximum(capacites) - surplus > tailles.length) {
+  const placesVides = Math.max(0, somme(capacites) - somme(tailles));
+  if (maximum(capacites) - placesVides > tailles.length) {
     return { ok: false, raison: 'PLUS_GRANDE_CAPACITE' };
   }
   return { ok: true };

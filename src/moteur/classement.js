@@ -15,17 +15,18 @@ import { ecartsAuPlafondAPriori } from './manque.js';
 
 /**
  * Les critères du classement, dans leur ordre d'application :
- * - ecartAPrioriMax : le plus grand écart au plafond a priori, plafond a
- *   priori − rencontres, sur toutes les personnes ;
+ * - ecartAuPlafondAPrioriMax : le plus grand écart au plafond a priori,
+ *   plafond a priori − rencontres, sur toutes les personnes, sous le nom
+ *   que lui donne le glossaire du § 5.5 ;
  * - excedentCollisions et collisionsCumulees, tels que mesurer les rend ;
  * - rencontresRepetees : les rencontres répétées que le moteur a choisies ;
  *   celles qu'imposent les réservations sont les mêmes pour toute
  *   proposition, et ne départagent rien (§ 5.4) ;
  * - redondance : Σ_p r(p), la redondance d'appartenance sommée sur les
- *   personnes.
+ *   personnes, que mesurer rend sous le nom totalRedondance.
  */
 export const CRITERES = Object.freeze([
-  'ecartAPrioriMax',
+  'ecartAuPlafondAPrioriMax',
   'excedentCollisions',
   'collisionsCumulees',
   'rencontresRepetees',
@@ -34,7 +35,7 @@ export const CRITERES = Object.freeze([
 
 // Le critère qui lit le plafond a priori par personne : sauté quand il est
 // inconnu (§ 17, point 4).
-const CRITERE_A_PRIORI = 'ecartAPrioriMax';
+const CRITERE_A_PRIORI = 'ecartAuPlafondAPrioriMax';
 
 // Le plus grand élément d'une liste ; null pour une liste vide.
 function plusGrand(valeurs) {
@@ -43,22 +44,16 @@ function plusGrand(valeurs) {
   return plus;
 }
 
-// La somme d'une liste ; 0 pour une liste vide.
-function somme(valeurs) {
-  let total = 0;
-  for (const valeur of valeurs) total += valeur;
-  return total;
-}
-
 // Valeur de chaque critère pour une proposition lue : { mesures, ecarts },
-// ecarts étant ses écarts au plafond a priori. La Map ne sert qu'à retrouver
-// un critère par son nom ; CRITERES en fixe l'ordre.
+// ecarts étant ses écarts au plafond a priori. Chaque grandeur se lit dans
+// la mesure ou dans manque.js, aucune ne se refait ici. La Map ne sert qu'à
+// retrouver un critère par son nom ; CRITERES en fixe l'ordre.
 const VALEUR = new Map([
-  ['ecartAPrioriMax', ({ ecarts }) => plusGrand(ecarts)],
+  ['ecartAuPlafondAPrioriMax', ({ ecarts }) => plusGrand(ecarts)],
   ['excedentCollisions', ({ mesures }) => mesures.excedentCollisions],
   ['collisionsCumulees', ({ mesures }) => mesures.collisionsCumulees],
   ['rencontresRepetees', ({ mesures }) => mesures.rencontresRepetees.choisies],
-  ['redondance', ({ mesures }) => somme(mesures.redondance)],
+  ['redondance', ({ mesures }) => mesures.totalRedondance],
 ]);
 
 // Lève TypeError pour un identifiant qui n'est pas un entier, et RangeError

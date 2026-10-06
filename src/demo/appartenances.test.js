@@ -158,19 +158,19 @@ describe('appartenances : les deux inégalités', () => {
     [[2, 2], [3, 1], { ok: false, raison: 'PLUS_GRANDE_CAPACITE' },
       'salle pleine : une table de 3 pour 2 groupes'],
     [[2, 2, 2], [5, 2], { ok: false, raison: 'PLUS_GRANDE_CAPACITE' },
-      'un siège en surplus : la table de 5 reçoit au moins 4 membres, pour 3 groupes'],
+      'une place vide : la table de 5 reçoit au moins 4 membres, pour 3 groupes'],
     [[4, 2], [3, 3, 3], { ok: false, raison: 'PLUS_GROS_GROUPE' }, 'un groupe de 4 pour 3 tables'],
     [[3, 2, 1], [3, 3], { ok: false, raison: 'PLUS_GROS_GROUPE' }, 'un groupe de 3 pour 2 tables'],
     [[3, 3, 3, 3], [10, 1], { ok: false, raison: 'PLUS_GROS_GROUPE' },
       'les deux rompues : la première est nommée'],
     [[2, 2, 1], [3, 2], { ok: true }, 'les deux inégalités à égalité'],
     [[2, 2, 2], [4, 3], { ok: true },
-      'un siège en surplus : la table de 4 reçoit au moins 3 membres, pour 3 groupes'],
-    [[1, 1, 1], [8, 2], { ok: true }, 'sept sièges en surplus'],
+      'une place vide : la table de 4 reçoit au moins 3 membres, pour 3 groupes'],
+    [[1, 1, 1], [8, 2], { ok: true }, 'sept places vides'],
     [[2, 2], [2, 1], { ok: true },
-      'salle trop petite : un surplus négatif compte pour zéro, la table de 2 tient dans 2 groupes'],
+      'salle trop petite : aucune place vide, la table de 2 tient dans 2 groupes'],
     [[2, 2, 2], [4, 1], { ok: false, raison: 'PLUS_GRANDE_CAPACITE' },
-      'salle trop petite : un surplus négatif compte pour zéro, la table de 4 dépasse 3 groupes'],
+      'salle trop petite : aucune place vide, la table de 4 dépasse 3 groupes'],
     [[3, 3, 3, 1, 1, 1], [6, 4, 2], { ok: true }, 'inégalités tenues, sans tour pourtant'],
     [[], [8], { ok: true }, 'aucun membre'],
   ];
@@ -235,7 +235,7 @@ describe('appartenances : le tour témoin', () => {
   test('petites instances : un tour quand, et seulement quand, la recherche exhaustive en trouve un', () => {
     // Domaine : 1 à 4 groupes de 1 à 4 membres, 1 à 4 tables de 1 à 4 sièges,
     // soit 340 × 340 instances. Il contient des instances sans tour où les
-    // deux inégalités tiennent, et des instances à sièges en surplus dont la
+    // deux inégalités tiennent, et des instances à places vides dont la
     // plus grande table dépasse le nombre de groupes et qui ont un tour.
     const ecarts = [];
     let avecTour = 0;
@@ -264,6 +264,6 @@ describe('appartenances : le tour témoin', () => {
     assert.deepEqual(ecarts.slice(0, 12), []);
     assert.ok(avecTour > 0, 'aucune instance avec tour');
     assert.ok(sansTourInegalitesTenues > 0, 'aucune instance où seul le tour témoin conclut');
-    assert.ok(avecTourTableAuDelaDesGroupes > 0, 'aucune instance où le surplus de sièges compte');
+    assert.ok(avecTourTableAuDelaDesGroupes > 0, 'aucune instance où les places vides comptent');
   });
 });

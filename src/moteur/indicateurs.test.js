@@ -135,6 +135,7 @@ describe('mesurer', () => {
         mobiles: { min: 6, moyenne: 6, effectif: 12 },
         ancres: AUCUN,
       },
+      totalRedondance: 72,
       collisionsCumulees: 0,
       pairesDistinctes: 0,
       excedentCollisions: 0,
@@ -234,6 +235,21 @@ describe('mesurer', () => {
     // (2, 3), réunis aux deux tours, est la seule paire répétée.
     assert.equal(mesures.maxRencontresPaire, 2);
     assert.deepEqual(mesures.rencontresRepetees, { choisies: 1, imposees: 0 });
+  });
+
+  test('totalRedondance somme r(p) sur les personnes, et non son plus grand', () => {
+    // Le plan de l'épreuve précédente : r(p) vaut 1, 0, 1, 0 et 0. Le total
+    // est le seul Σ r(p) du moteur ; la recherche et le classement le lisent.
+    const mesures = mesurerPlan({
+      appartenance: ['X', 'X', 'Y', 'X', null],
+      capacite: 3,
+      tours: [
+        [[1, 2, 3], [4], [], [5]],
+        [[], [1, 4], [2, 3], [5]],
+      ],
+    });
+    assert.deepEqual(mesures.redondance, [1, 0, 1, 0, 0]);
+    assert.equal(mesures.totalRedondance, 2);
   });
 
   test("F(p) ne retient que les affiliés : qui ne croise aucun affilié n'a pas de taux de diversité", () => {
@@ -505,6 +521,7 @@ describe('mesurer', () => {
       retoursImposes: [],
       aggRencontres: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
       aggRedondance: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
+      totalRedondance: 0,
       collisionsCumulees: 0,
       pairesDistinctes: 0,
       excedentCollisions: 0,

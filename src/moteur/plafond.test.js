@@ -10,7 +10,14 @@
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { describe, test } from '../../test/lanceur.js';
-import { indexerPlan, normaliser } from './configuration.js';
+import {
+  LIBRE,
+  RESERVE,
+  STATUT,
+  indexerPlan,
+  normaliser,
+  planDepuisIndex,
+} from './configuration.js';
 import { ErreurConfiguration } from './erreurs.js';
 import {
   plafondItineraire,
@@ -37,7 +44,7 @@ const suite = (debut, fin) => Array.from({ length: fin - debut + 1 }, (_, i) => 
  * Instance d'une forme de salle. capacites[t] et ancres[t] décrivent la
  * table d'index t ; autres compte les participants non ancrés, dont les
  * premiers sont partiellement fixés selon partiels : partiels[j][r] est
- * l'index de table imposé au tour r, −1 pour un tour libre. Les ancrés
+ * l'index de table imposé au tour r, LIBRE pour un tour libre. Les ancrés
  * prennent les identifiants pairs tant qu'il reste des non-ancrés, et les
  * identifiants de table décroissent quand l'index croît : un index lu comme
  * un identifiant désigne une autre personne ou une autre table. Rend
@@ -66,7 +73,7 @@ function forme({ capacites, ancres, autres, tours, partiels = [] }) {
   }
   partiels.forEach((tables, j) => {
     tables.forEach((t, r) => {
-      if (t < 0) return;
+      if (t === LIBRE) return;
       reservations.push({
         participant: idsAutres[j],
         table: idTable(t),
@@ -115,14 +122,14 @@ const planIndexe = (instance, listes, reserves = listes.map(() => [])) =>
 // tables qui en ont encore ; sans siège, une personne va en réserve.
 function planBrasse(instance, graine) {
   const { N, T, R, fixe, capacite } = instance;
-  const tableDe = new Int32Array(N * R).fill(-1);
+  const tableDe = new Int32Array(N * R).fill(RESERVE);
   const brassage = (i, r) => ((i + 1) * 2_654_435_761 + (r + 1) * 40_503 + graine * 97) % 1_000_003;
   for (let r = 0; r < R; r += 1) {
     const libres = Int32Array.from(capacite);
     const aPlacer = [];
     for (let p = 0; p < N; p += 1) {
       const t = fixe[p * R + r];
-      if (t >= 0) {
+      if (t !== LIBRE) {
         tableDe[p * R + r] = t;
         libres[t] -= 1;
       } else {
@@ -156,9 +163,9 @@ const ancresDe = (c) =>
     { arbitrary: fc.constant(c), weight: 1 },
   );
 
-// Un tour d'un non-ancré : libre (−1) une fois sur deux, fixé sinon à l'une
-// des T tables.
-const tourDe = (T) => fc.oneof(fc.constant(-1), fc.integer({ min: 0, max: T - 1 }));
+// Un tour d'un non-ancré : libre (LIBRE) une fois sur deux, fixé sinon à
+// l'une des T tables.
+const tourDe = (T) => fc.oneof(fc.constant(LIBRE), fc.integer({ min: 0, max: T - 1 }));
 
 // Description d'une instance tirée dans les bornes données : chaque table
 // tire sa capacité puis ses ancrés, chaque partiel un tour par tour. Un
@@ -189,9 +196,10 @@ function arbitraireForme({ tables, tours, capacites, mobiles, partiels }) {
 // Une instance que normaliser refuse — une table qui reçoit plus de
 // personnes fixées que de sièges — ou sans participant n'est pas comptée ;
 // une autre l'est, avec ses personnes par statut et ses tables pleines
-// d'ancrés. Rend ces comptes.
+// d'ancrés. Rend ces comptes ; parStatut associe une valeur de STATUT à son
+// compte, et la Map ne sert qu'à retrouver un statut.
 function eprouverAccord(arbitraire, parametres) {
-  const bilan = { acceptees: 0, parStatut: [0, 0, 0], tablesPleines: 0 };
+  const bilan = { acceptees: 0, parStatut: new Map(), tablesPleines: 0 };
   fc.assert(
     fc.property(arbitraire, ({ salle, tours, mobiles, partiels }) => {
       let instance;
@@ -209,7 +217,9 @@ function eprouverAccord(arbitraire, parametres) {
       }
       if (instance.N === 0) return;
       bilan.acceptees += 1;
-      for (let p = 0; p < instance.N; p += 1) bilan.parStatut[instance.statut[p]] += 1;
+      for (const statut of instance.statut) {
+        bilan.parStatut.set(statut, (bilan.parStatut.get(statut) ?? 0) + 1);
+      }
       if (salle.some(([c, a]) => a === c)) bilan.tablesPleines += 1;
       assert.deepEqual(plafondsAPriori(instance), plafondsAPrioriParEnumeration(instance));
     }),
@@ -310,9 +320,9 @@ describe('plafonds : valeurs exactes (§ 5.5, § 15)', () => {
 
   test('partiellement fixé : sa table fixée entre dans F, seuls ses tours libres varient', () => {
     // Un non-ancré de la grande forme, fixé au tour 1 à une table de 7.
-    const { instance, partiels, mobiles, ancres } = grandeForme([[29, -1, -1, -1]]);
+    const { instance, partiels, mobiles, ancres } = grandeForme([[29, LIBRE, LIBRE, LIBRE]]);
     const [p] = partiels;
-    assert.equal(instance.statut[p], 1);
+    assert.equal(instance.statut[p], STATUT.PARTIELLEMENT_FIXE);
     assert.equal(instance.k, 33);
     const aPriori = plafondsAPriori(instance);
     // La table de 7 entre dans F : 1 ancré et 5 sièges ; ses trois tours
@@ -336,7 +346,7 @@ describe('plafonds : valeurs exactes (§ 5.5, § 15)', () => {
       ancres: [0, 2],
       autres: 3,
       tours: 2,
-      partiels: [[0, -1]],
+      partiels: [[0, LIBRE]],
     });
     assert.equal(instance.n, 3);
     // Partiel et mobiles : seule la table 0 est admissible, 0 ancré et
@@ -370,7 +380,7 @@ describe('plafonds : valeurs exactes (§ 5.5, § 15)', () => {
     //   5   table 1, occupée par 2 aux deux tours : 1 + 1              = 2
     assert.deepEqual(plafondsRealises(instance, tableDe), [3, 3, 2, 2, 2]);
     const p = instance.indexDe.get(3);
-    assert.equal(plafondItineraire(instance, p, [0, -1]), 2);
+    assert.equal(plafondItineraire(instance, p, [0, RESERVE]), 2);
     // L'écart d'itinéraire porte ce que le manque ne porte pas : 4 − 2.
     assert.deepEqual(plafondsAPriori(instance), [4, 4, 4, 4, 4]);
   });
@@ -391,20 +401,20 @@ describe('plafonds : valeurs exactes (§ 5.5, § 15)', () => {
     attendu[mobiles[0]] = 0;
     assert.deepEqual(plafondsAPriori(instance), attendu);
     assert.deepEqual(plafondsAPrioriParEnumeration(instance), attendu);
-    assert.equal(plafondItineraire(instance, mobiles[0], [-1, -1]), 0);
+    assert.equal(plafondItineraire(instance, mobiles[0], [RESERVE, RESERVE]), 0);
   });
 
   test('plafond a priori ≥ plafond réalisé pour chacun, sur trois plans quelconques de chaque forme', () => {
     const formes = [
       forme({ capacites: [5, 5, 5, 5], ancres: [1, 1, 1, 1], autres: 16, tours: 5 }),
       grandeForme(),
-      grandeForme([[29, -1, -1, -1], [-1, 30, 30, -1]]),
+      grandeForme([[29, LIBRE, LIBRE, LIBRE], [LIBRE, 30, 30, LIBRE]]),
       forme({ capacites: [3, 3, 3, 3], ancres: [0, 0, 0, 0], autres: 12, tours: 4 }),
       forme({ capacites: [4, 4, 4], ancres: [1, 1, 1], autres: 7, tours: 2 }),
-      forme({ capacites: [5, 2], ancres: [0, 2], autres: 3, tours: 2, partiels: [[0, -1]] }),
+      forme({ capacites: [5, 2], ancres: [0, 2], autres: 3, tours: 2, partiels: [[0, LIBRE]] }),
       // Une place de moins que de participants : chaque plan met quelqu'un
       // en réserve.
-      forme({ capacites: [3, 3], ancres: [1, 0], autres: 6, tours: 3, partiels: [[-1, 1, -1]] }),
+      forme({ capacites: [3, 3], ancres: [1, 0], autres: 6, tours: 3, partiels: [[LIBRE, 1, LIBRE]] }),
     ];
     const ecarts = [];
     let comparaisons = 0;
@@ -455,6 +465,21 @@ describe('plafonds : valeurs exactes (§ 5.5, § 15)', () => {
       .filter((ecart) => ecart !== null);
     assert.deepEqual(ecarts, []);
   });
+
+  test('un plan indexé hors forme : plafondsRealises nomme le participant, le tour et la valeur, comme planDepuisIndex', () => {
+    // Quatre participants d'identifiants 1 à 4, deux tables, deux tours. La
+    // dernière case est celle de l'identifiant 4 au tour 2. La chaîne "-1"
+    // n'est pas la réserve : le message la cite entre guillemets, pour
+    // qu'elle ne se lise pas comme la valeur qu'elle contient.
+    const { instance } = forme({ capacites: [3, 3], ancres: [0, 0], autres: 4, tours: 2 });
+    const fautif = [0, 0, 0, 0, 1, 1, 1, '-1'];
+    const attendu = {
+      name: 'RangeError',
+      message: 'plan indexé : participant 4, tour 2, index de table "-1" hors de −1..1',
+    };
+    assert.throws(() => planDepuisIndex(instance, fautif), attendu);
+    assert.throws(() => plafondsRealises(instance, fautif), attendu);
+  });
 });
 
 describe("plafond a priori : la programmation dynamique contre l'énumération (§ 14.11, § 14.12)", () => {
@@ -495,8 +520,10 @@ describe("plafond a priori : la programmation dynamique contre l'énumération (
     // les acceptées, et les personnes comparées de chaque statut.
     const { acceptees, parStatut, tablesPleines } = bilan;
     assert.ok(acceptees >= 200, `${acceptees} instances acceptées, 200 au moins`);
-    assert.ok(parStatut[1] >= 100, `${parStatut[1]} partiellement fixés comparés, 100 au moins`);
-    assert.ok(parStatut[2] >= 100, `${parStatut[2]} ancrés comparés, 100 au moins`);
+    const partiels = parStatut.get(STATUT.PARTIELLEMENT_FIXE) ?? 0;
+    const ancres = parStatut.get(STATUT.ANCRE) ?? 0;
+    assert.ok(partiels >= 100, `${partiels} partiellement fixés comparés, 100 au moins`);
+    assert.ok(ancres >= 100, `${ancres} ancrés comparés, 100 au moins`);
     assert.ok(tablesPleines >= 50, `${tablesPleines} instances à table pleine d'ancrés, 50 au moins`);
   });
 });

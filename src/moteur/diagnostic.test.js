@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
-import { indexerPlan, normaliser } from './configuration.js';
+import { LIBRE, STATUT, indexerPlan, normaliser } from './configuration.js';
 import { diagnostiquer } from './diagnostic.js';
 import { ErreurConfiguration } from './erreurs.js';
 import { mesurer } from './indicateurs.js';
@@ -23,10 +23,6 @@ const SANS_CONTRAINTE = {
   nouvelleTable: false,
   varierAppartenances: false,
 };
-
-// instance.statut d'un mobile, d'un ancré.
-const MOBILE = 0;
-const ANCRE = 2;
 
 /**
  * Configuration écrite à la main. tables porte une paire [id, capacité] par
@@ -81,7 +77,7 @@ function enumererPlans(instance, visiter) {
       return;
     }
     const r = i % R;
-    for (const t of fixe[i] === -1 ? toutes : [fixe[i]]) {
+    for (const t of fixe[i] === LIBRE ? toutes : [fixe[i]]) {
       if (occupation[t * R + r] === capacite[t]) continue;
       occupation[t * R + r] += 1;
       tableDe[i] = t;
@@ -133,7 +129,7 @@ function ecartsItineraireSurTousLesPlans(configuration, seuil) {
     for (let p = 0; p < instance.N; p += 1) {
       const ecartItineraire = aPriori[p] - realises[p];
       maximum = Math.max(maximum, ecartItineraire);
-      if (instance.statut[p] !== ANCRE && ecartItineraire >= seuil) mobiles += 1;
+      if (instance.statut[p] !== STATUT.ANCRE && ecartItineraire >= seuil) mobiles += 1;
     }
     plusPetitMaximum = Math.min(plusPetitMaximum, maximum);
     moinsDeMobiles = Math.min(moinsDeMobiles, mobiles);
@@ -152,7 +148,7 @@ function ecartsItineraireSurTousLesPlans(configuration, seuil) {
 function meilleursItineraires(configuration) {
   const instance = normaliser(configuration);
   const { T, R, capacite, ancresParTable } = instance;
-  const mobile = instance.statut.indexOf(MOBILE);
+  const mobile = instance.statut.indexOf(STATUT.MOBILE);
   assert.notEqual(mobile, -1, 'aucun mobile');
   const admissibles = [];
   for (let t = 0; t < T; t += 1) if (ancresParTable[t] < capacite[t]) admissibles.push(t);
