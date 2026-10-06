@@ -3,12 +3,13 @@
 
 // Chaque fichier source du projet s'ouvre sur l'en-tête de licence : la ligne
 // du titulaire, puis celle de la licence, après un éventuel shebang ou la
-// déclaration <!doctype html>. Les deux lignes sont des commentaires du
+// déclaration <!doctype html>, et après la marque d'ordre d'octets que
+// portent les scripts PowerShell. Les deux lignes sont des commentaires du
 // langage du fichier ; le texte ne varie pas. package.json déclare la même
 // licence et le même titulaire, que reprennent les outils d'emballage.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { extname, join, relative, sep } from 'node:path';
+import { basename, extname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from './lanceur.js';
 
@@ -17,8 +18,11 @@ const RACINE = fileURLToPath(new URL('..', import.meta.url));
 const TITULAIRE = /^© \d{4} TechnoLibre \(http:\/\/www\.technolibre\.ca\)$/;
 const LICENCE = 'License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)';
 
-// Marqueurs de commentaire, par extension de fichier source. Un commentaire
-// de ligne n'a pas de fermant.
+// Marqueurs de commentaire, par extension de fichier source, ou par nom pour
+// un fichier sans extension. Un commentaire de ligne n'a pas de fermant. Un
+// ouvrant est une chaîne qui ouvre la ligne, ou un motif : REM ouvre une
+// ligne de commandes Windows, précédé ou non de @, quelle que soit sa casse,
+// et suivi d'un blanc — @REMARQUE est une commande.
 const COMMENTAIRE = new Map([
   ['.js', { ouvrant: '//', fermant: null }],
   ['.cjs', { ouvrant: '//', fermant: null }],
@@ -27,7 +31,15 @@ const COMMENTAIRE = new Map([
   ['.svelte', { ouvrant: '<!--', fermant: '-->' }],
   ['.html', { ouvrant: '<!--', fermant: '-->' }],
   ['.css', { ouvrant: '/*', fermant: '*/' }],
+  ['.ps1', { ouvrant: '#', fermant: null }],
+  ['.nix', { ouvrant: '#', fermant: null }],
+  ['.cmd', { ouvrant: /^@?rem(?=\s)/i, fermant: null }],
+  ['Makefile', { ouvrant: '#', fermant: null }],
 ]);
+
+// Clé d'un fichier dans COMMENTAIRE : son nom quand il y figure, son
+// extension sinon.
+const cle = (chemin) => (COMMENTAIRE.has(basename(chemin)) ? basename(chemin) : extname(chemin));
 
 // Périmètre : les fichiers de la racine et les arbres des sources, des
 // épreuves, des scripts et de la coquille. Les dépendances et les sorties de
@@ -55,7 +67,7 @@ function fichiersSources() {
     }
   }
   return chemins
-    .filter((chemin) => COMMENTAIRE.has(extname(chemin)))
+    .filter((chemin) => COMMENTAIRE.has(cle(chemin)))
     .filter((chemin) => !chemin.startsWith(DONNEES_EPREUVE))
     .sort();
 }
@@ -69,8 +81,9 @@ function fichiersSources() {
 // invalidée dans une feuille, une commande dans un script.
 function enCommentaire(premiere, seconde, { ouvrant, fermant }) {
   const suite = seconde.trim();
-  if (!premiere.startsWith(ouvrant)) return false;
-  if (fermant === null) return suite.startsWith(ouvrant);
+  const ouvre = (ligne) => (typeof ouvrant === 'string' ? ligne.startsWith(ouvrant) : ouvrant.test(ligne));
+  if (!ouvre(premiere)) return false;
+  if (fermant === null) return ouvre(suite);
   const courant = !premiere.includes(fermant) && suite.endsWith(fermant);
   const repete =
     premiere.trimEnd().endsWith(fermant) &&
@@ -79,21 +92,22 @@ function enCommentaire(premiere, seconde, { ouvrant, fermant }) {
   return courant || repete;
 }
 
-// Vrai quand le contenu s'ouvre sur l'en-tête, après un éventuel shebang ou
-// la déclaration <!doctype html> : deux lignes de commentaire du langage de
-// l'extension, dont le texte, débarrassé des marqueurs, est celui de
-// l'en-tête.
-function porteLEnTete(contenu, extension) {
-  let lignes = contenu.split('\n');
+// Vrai quand le contenu s'ouvre sur l'en-tête, après une éventuelle marque
+// d'ordre d'octets, un shebang ou la déclaration <!doctype html> : deux
+// lignes de commentaire du langage de la clé, extension ou nom, dont le
+// texte, débarrassé des marqueurs, est celui de l'en-tête. Les fins de ligne
+// sont celles d'Unix ou de Windows.
+function porteLEnTete(contenu, cleFichier) {
+  let lignes = contenu.replace(/^\uFEFF/, '').split(/\r?\n/);
   if (lignes[0].startsWith('#!')) lignes = lignes.slice(1);
   if (/^<!doctype html>$/i.test(lignes[0])) lignes = lignes.slice(1);
   const [premiere = '', seconde = ''] = lignes;
   const texte = (ligne) =>
     ligne
-      .replace(/^\s*(?:\/\/|#|<!--|\/\*|\*)?\s*/, '')
+      .replace(/^\s*(?:\/\/|#|<!--|\/\*|\*|@?rem(?=\s))?\s*/i, '')
       .replace(/\s*(?:-->|\*\/)?\s*$/, '');
   return (
-    enCommentaire(premiere, seconde, COMMENTAIRE.get(extension)) &&
+    enCommentaire(premiere, seconde, COMMENTAIRE.get(cleFichier)) &&
     TITULAIRE.test(texte(premiere)) &&
     texte(seconde) === LICENCE
   );
@@ -104,7 +118,7 @@ describe('licence', () => {
     const fichiers = fichiersSources();
     assert.ok(fichiers.length > 0, 'aucun fichier source examiné');
     const sansEnTete = fichiers
-      .filter((chemin) => !porteLEnTete(readFileSync(chemin, 'utf8'), extname(chemin)))
+      .filter((chemin) => !porteLEnTete(readFileSync(chemin, 'utf8'), cle(chemin)))
       .map((chemin) => relative(RACINE, chemin));
     assert.deepEqual(sansEnTete, []);
   });
@@ -129,6 +143,16 @@ describe('licence', () => {
       ['.html', `<!-- ${titulaire}\n     ${LICENCE}\n-->\n`, false],
       ['.css', `/* ${titulaire} */\n${LICENCE}\n`, false],
       ['.css', `/* ${titulaire} */\n * ${LICENCE} */\n`, false],
+      ['.ps1', `\uFEFF# ${titulaire}\r\n# ${LICENCE}\r\n`, true],
+      ['.ps1', `# ${titulaire}\n# ${LICENCE}\n`, true],
+      ['.nix', `# ${titulaire}\n# ${LICENCE}\n`, true],
+      ['.cmd', `@REM ${titulaire}\r\n@REM ${LICENCE}\r\n@echo off\r\n`, true],
+      ['.cmd', `REM ${titulaire}\r\nrem ${LICENCE}\r\n`, true],
+      ['Makefile', `# ${titulaire}\n# ${LICENCE}\n`, true],
+      ['.ps1', `\uFEFF# ${titulaire}\r\nWrite-Host '${LICENCE}'\r\n`, false],
+      ['.cmd', `@REM ${titulaire}\r\n@echo ${LICENCE}\r\n`, false],
+      ['.cmd', `@REMARQUE ${titulaire}\r\n@REM ${LICENCE}\r\n`, false],
+      ['Makefile', `# ${titulaire}\n\t${LICENCE}\n`, false],
     ];
     const ecarts = cas
       .filter(([extension, contenu, admis]) => porteLEnTete(contenu, extension) !== admis)
