@@ -3,20 +3,24 @@
 
 // Gardes de l'arborescence, lues dans le texte des sources : le moteur et le
 // générateur de démonstrations n'appellent aucune source non reproductible
-// (§ 14.7) ; le graphe d'imports du moteur et de la géométrie ne rejoint ni
-// l'interface, ni le stockage, ni une plateforme (§ 13.4) ; chaque paquet
-// importé est déclaré dans devDependencies. Chaque relevé lit le texte
-// entier, commentaires et chaînes compris : un commentaire qui nomme un appel
-// refusé fait échouer la garde comme l'appel lui-même. Chaque garde refuse de
-// passer sur un balayage vide (§ 14.2), et d'autres épreuves la font tourner
-// sur des arbres temporaires qui portent, à plus d'un niveau de profondeur,
-// les formes qu'elle refuse et des formes voisines qu'elle admet.
+// (§ 14.7), et ne parcourent les clés d'un objet que par exception nommée
+// (§ 15.5, point 4) ; le graphe d'imports du moteur et de la géométrie ne
+// rejoint ni l'interface, ni le stockage, ni une plateforme (§ 13.4) ;
+// chaque paquet importé est déclaré dans devDependencies ; une valeur du
+// contrat de données n'a qu'une définition, celle de configuration.js.
+// Chaque relevé lit le texte entier, commentaires et chaînes compris : un
+// commentaire qui nomme un appel refusé fait échouer la garde comme l'appel
+// lui-même. Chaque garde refuse de passer sur un balayage vide (§ 14.2), et
+// d'autres épreuves la font tourner sur des arbres temporaires qui portent,
+// à plus d'un niveau de profondeur, les formes qu'elle refuse et des formes
+// voisines qu'elle admet.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { chargements } from './chargements.js';
 import { describe, test } from './lanceur.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
@@ -91,28 +95,76 @@ const SOURCES_NON_REPRODUCTIBLES = [
   ['crypto.randomFill', /\brandomFill(?:Sync)?\b/g],
 ];
 
-// Relevé « fichier:ligne appel » des sources non reproductibles dans les
-// modules de src/moteur et de src/demo, par fichier puis par ligne, et sur
-// une même ligne dans l'ordre de SOURCES_NON_REPRODUCTIBLES. Les épreuves en
-// sont exclues : un tirage y sert légitimement (§ 14.12). Lève quand l'un des
-// deux arbres ne fournit aucun module.
-function releverDeterminisme(racine) {
-  return ['src/moteur', 'src/demo'].flatMap((arbre) => {
+// Parcours des clés d'un objet (§ 15.5, point 4) : les clés entières y
+// viennent d'abord, croissantes, puis les autres dans l'ordre où l'objet les
+// a reçues. Un résultat qui en dépend change quand l'objet se construit
+// autrement, sans qu'aucune épreuve ne le voie ; un départage se fait par
+// identifiant entier. Les motifs à point suivent les règles de
+// SOURCES_NON_REPRODUCTIBLES, et Object suivi d'un crochet est refusé quel
+// que soit le membre nommé. for…in se relève sur une variable, un chemin
+// pointé ou un motif de déstructuration suivi de « in », avec ou sans
+// déclaration : la boucle à compteur, for…of et l'opérateur in hors d'une
+// boucle n'en sont pas.
+const PARCOURS_DE_CLES = [
+  ['Object.keys', /\bObject\s*\??\.\s*keys\b/g],
+  ['Object.entries', /\bObject\s*\??\.\s*entries\b/g],
+  ['Object.values', /\bObject\s*\??\.\s*values\b/g],
+  ['Object[', /\bObject\s*(?:\?\.)?\s*\[/g],
+  ['for…in', /\bfor\s*\(\s*(?:(?:const|let|var)\s+)?(?:[\p{L}_$][\p{L}\p{N}_$.]*|\[[^\]]*\]|\{[^}]*\})\s+in\b/gu],
+  ['Reflect.ownKeys', /\bReflect\s*\??\.\s*ownKeys\b/g],
+  ['Object.getOwnPropertyNames', /\bObject\s*\??\.\s*getOwnPropertyNames\b/g],
+];
+
+// Parcours de clés admis, chacun nommé par son fichier, relatif à la racine,
+// et par le texte de sa ligne, blancs de bord retirés ; sa raison dit
+// pourquoi l'ordre n'y décide d'aucun résultat. Une exception admet chaque
+// ligne de ce texte dans ce fichier, et rien d'autre : la ligne réécrite, ou
+// un second parcours ajouté à côté, se relève de nouveau. Elle ne couvre
+// aucune source de SOURCES_NON_REPRODUCTIBLES, que rien n'admet.
+const PARCOURS_DE_CLES_ADMIS = [];
+
+// Relevé « fichier:ligne appel » des sources non reproductibles et des
+// parcours de clés non admis dans les modules de src/moteur et de src/demo,
+// par fichier puis par ligne, et sur une même ligne dans l'ordre de
+// SOURCES_NON_REPRODUCTIBLES puis de PARCOURS_DE_CLES. Les épreuves en sont
+// exclues : un tirage y sert légitimement (§ 14.12). Suit une ligne
+// « exception sans objet : fichier « texte » » par exception qui n'admet
+// rien, dans l'ordre de la liste. Lève quand l'un des deux arbres ne fournit
+// aucun module.
+function releverDeterminisme(racine, admis = PARCOURS_DE_CLES_ADMIS) {
+  const servies = new Set();
+  const estAdmis = (fichier, texteDeLigne) => {
+    const exception = admis.find((e) => e.fichier === fichier && e.ligne === texteDeLigne);
+    if (exception !== undefined) servies.add(exception);
+    return exception !== undefined;
+  };
+  const releve = ['src/moteur', 'src/demo'].flatMap((arbre) => {
     const modules = modulesDe(join(racine, arbre));
     assert.ok(modules.length > 0, `${arbre} ne fournit aucun module`);
     return modules.flatMap((fichier) => {
+      const nom = relative(racine, fichier);
       const texte = readFileSync(fichier, 'utf8');
-      return SOURCES_NON_REPRODUCTIBLES.flatMap(([appel, motif]) =>
-        [...texte.matchAll(motif)].map(({ index }) => ({ ligne: ligneDe(texte, index), appel })),
-      )
+      const lignes = texte.split('\n');
+      const trouves = (motifs) =>
+        motifs.flatMap(([appel, motif]) =>
+          [...texte.matchAll(motif)].map(({ index }) => ({ ligne: ligneDe(texte, index), appel })),
+        );
+      return [
+        ...trouves(SOURCES_NON_REPRODUCTIBLES),
+        ...trouves(PARCOURS_DE_CLES).filter(({ ligne }) => !estAdmis(nom, lignes[ligne - 1].trim())),
+      ]
         .sort((a, b) => a.ligne - b.ligne)
-        .map(({ ligne, appel }) => `${relative(racine, fichier)}:${ligne} ${appel}`);
+        .map(({ ligne, appel }) => `${nom}:${ligne} ${appel}`);
     });
   });
+  const sansObjet = admis
+    .filter((exception) => !servies.has(exception))
+    .map(({ fichier, ligne }) => `exception sans objet : ${fichier} « ${ligne} »`);
+  return [...releve, ...sansObjet];
 }
 
 describe('arborescence : déterminisme (§ 14.7)', () => {
-  test('ni src/moteur ni src/demo ne lisent une source non reproductible', () => {
+  test("ni src/moteur ni src/demo ne lisent une source non reproductible, ni ne parcourent les clés d'un objet hors des exceptions nommées", () => {
     assert.deepEqual(releverDeterminisme(RACINE), []);
   });
 
@@ -224,31 +276,90 @@ describe('arborescence : déterminisme (§ 14.7)', () => {
       /src\/demo ne fournit aucun module/,
     );
   });
+
+  test("les parcours des clés d'un objet se relèvent par leur ligne, hors épreuves, et pas leurs voisins (§ 15.5, point 4)", () => {
+    const fichiers = {
+      'src/moteur/cles.js': [
+        'export const a = Object.keys(o);',
+        'export const b = Object.entries(o).map(f);',
+        'export const c = Object.values(o);',
+        'for (const k in o) t.push(k);',
+        'for (k in o) t.push(k);',
+        'export const d = Object',
+        '  .keys(o);',
+        'export const e = Object?.entries?.(o);',
+        "export const g = Object['keys'](o);",
+        'for(let k in o){}',
+        'for (const [k] in o) t.push(k);',
+        'for (var { length } in o) t.push(length);',
+        'export const h = Reflect.ownKeys(o);',
+        'export const i = Object.getOwnPropertyNames(o);',
+        'for (const k of Object.keys(o)) t.push(k);',
+        'for (a.b in o) t.push(a.b);',
+      ].join('\n'),
+      'src/moteur/cles.test.js': 'export const x = Object.keys(o);\n',
+      'src/demo/voisins.js': [
+        'for (let i = 0; i < n; i += 1) t.push(i);',
+        'for (const v of Object.freeze([])) t.push(v);',
+        "export const f = 'k' in o;",
+        'for (const [k, v] of m) t.push(k, v);',
+        'export const z = monObject.keys + objectKeys;',
+        'export const w = Object.fromEntries(paires);',
+        'for (const index of inventaire) t.push(index);',
+      ].join('\n'),
+    };
+    assert.deepEqual(avecArbre(fichiers, releverDeterminisme), [
+      'src/moteur/cles.js:1 Object.keys',
+      'src/moteur/cles.js:2 Object.entries',
+      'src/moteur/cles.js:3 Object.values',
+      'src/moteur/cles.js:4 for…in',
+      'src/moteur/cles.js:5 for…in',
+      'src/moteur/cles.js:6 Object.keys',
+      'src/moteur/cles.js:8 Object.entries',
+      'src/moteur/cles.js:9 Object[',
+      'src/moteur/cles.js:10 for…in',
+      'src/moteur/cles.js:11 for…in',
+      'src/moteur/cles.js:12 for…in',
+      'src/moteur/cles.js:13 Reflect.ownKeys',
+      'src/moteur/cles.js:14 Object.getOwnPropertyNames',
+      'src/moteur/cles.js:15 Object.keys',
+      'src/moteur/cles.js:16 for…in',
+    ]);
+  });
+
+  test("une exception nommée n'admet que la ligne qu'elle cite, dans son fichier, et qu'un parcours de clés ; une exception sans objet se relève", () => {
+    const somme = 'export const total = (o) => Object.values(o).reduce((s, v) => s + v, 0);';
+    const fichiers = {
+      'src/moteur/a.js': 'export const a = Math.random();\n',
+      'src/demo/somme.js': [
+        somme,
+        'export const nombre = (o) => Object.keys(o).length;',
+        'export const double = (o) => Object.values(o).reduce((s, v) => s + 2 * v, 0);',
+      ].join('\n'),
+      'src/demo/autre.js': `${somme}\n`,
+    };
+    const exceptions = [
+      { fichier: 'src/demo/somme.js', ligne: somme, raison: "une somme d'entiers ne dépend pas de l'ordre de ses termes" },
+      { fichier: 'src/moteur/a.js', ligne: 'export const a = Math.random();', raison: 'un tirage ne se nomme pas en exception' },
+      { fichier: 'src/demo/disparu.js', ligne: 'for (const k in o) t.push(k);', raison: 'la ligne a disparu' },
+    ];
+    assert.deepEqual(avecArbre(fichiers, (racine) => releverDeterminisme(racine, exceptions)), [
+      'src/moteur/a.js:1 Math.random',
+      'src/demo/autre.js:1 Object.values',
+      'src/demo/somme.js:2 Object.keys',
+      'src/demo/somme.js:3 Object.values',
+      'exception sans objet : src/moteur/a.js « export const a = Math.random(); »',
+      'exception sans objet : src/demo/disparu.js « for (const k in o) t.push(k); »',
+    ]);
+  });
 });
 
-// Chargements que demande un texte : import et export statiques, import()
-// et require() d'une chaîne littérale, suivie ou non d'options. Chacun est
-// { specificateur, indice }. Le relevé lit le texte entier, commentaires et
-// chaînes compris ; un argument calculé ne désigne aucun spécificateur et
-// n'est pas relevé. Une instruction à « from » se lit à partir de ce mot,
-// que seuls import et export font suivre d'une chaîne : un motif parti du
-// mot-clé s'arrêterait à l'apostrophe d'un commentaire placé entre les
-// accolades. L'import d'un module seul exige un blanc après le mot-clé, et
-// aucune arobase devant lui : une chaîne qui finit sur « import », comme
-// l'argument « --import » d'une commande, n'en est pas un, ni la règle
-// @import d'une feuille de style, dont la chaîne est une adresse relative à
-// la feuille et non un paquet.
-const DEPUIS = /\bfrom\s*(['"])(?<specificateur>[^'"\n]+)\1/g;
-const IMPORT_SEUL = /(?<!@)\bimport\s+(['"])(?<specificateur>[^'"\n]+)\1/g;
-const APPEL = /\b(?:import|require)\s*\(\s*(['"`])(?<specificateur>[^'"`$\n]+)\1\s*[,)]/g;
-function chargements(texte) {
-  return [DEPUIS, IMPORT_SEUL, APPEL].flatMap((motif) =>
-    [...texte.matchAll(motif)].map(({ groups, index }) => ({
-      specificateur: groups.specificateur,
-      indice: index,
-    })),
-  );
-}
+// Chargements d'un texte qui désignent un spécificateur, dans l'ordre du
+// texte, chacun { indice, specificateur } : ceux que relève l'analyseur
+// commun (test/chargements.js), moins les arguments calculés, qui ne
+// désignent aucun module.
+const chargementsLitteraux = (texte) =>
+  chargements(texte).filter(({ specificateur }) => specificateur !== undefined);
 
 // « ./ » ou « ../ » en tête, ou « . » et « .. » seuls.
 const RELATIF = /^\.{1,2}(?:\/|$)/;
@@ -311,7 +422,7 @@ function releverFrontiere(racine) {
       indice: index,
       motif: nom + lu.at(-1),
     }));
-    for (const { specificateur, indice } of chargements(texte)) {
+    for (const { specificateur, indice } of chargementsLitteraux(texte)) {
       const cible = cibleDe(racine, fichier, specificateur);
       if (cible === null) {
         if (isBuiltin(specificateur) || PAQUETS_EXTERIEURS.test(nomDePaquet(specificateur))) {
@@ -491,9 +602,7 @@ function releverDependances(racine) {
   const refus = [];
   for (const fichier of sourcesDuProjet(racine)) {
     const texte = readFileSync(fichier, 'utf8');
-    const trouves = chargements(texte)
-      .filter(({ specificateur }) => estNu(specificateur))
-      .sort((a, b) => a.indice - b.indice);
+    const trouves = chargementsLitteraux(texte).filter(({ specificateur }) => estNu(specificateur));
     nus += trouves.length;
     for (const { specificateur, indice } of trouves) {
       if (!isBuiltin(specificateur) && !declares.has(nomDePaquet(specificateur))) {
@@ -583,5 +692,80 @@ describe('arborescence : dépendances déclarées', () => {
   test('un périmètre sans spécificateur nu fait échouer la garde', () => {
     const fichiers = { 'package.json': '{}', 'src/a.js': "import './b.js';\n" };
     assert.throws(() => avecArbre(fichiers, releverDependances), /aucun spécificateur nu/);
+  });
+});
+
+// Valeurs du contrat de données (types.js) : configuration.js les définit et
+// les exporte, tout autre fichier de src/moteur les importe, épreuves
+// comprises (§ 13.2). Une déclaration de l'un de ces noms ailleurs est une
+// seconde définition, qui peut dériver de la première sans qu'aucune épreuve
+// ne le voie. Le relevé lit le nom qui suit const, let ou var : une
+// déstructuration de STATUT n'est pas relevée, elle lit la définition au lieu
+// de la refaire.
+const VALEURS_DU_CONTRAT = [
+  'STATUT',
+  'MOBILE',
+  'PARTIELLEMENT_FIXE',
+  'ANCRE',
+  'LIBRE',
+  'RESERVE',
+  'SANS_GROUPE',
+];
+const DECLARATION_DE_VALEUR = new RegExp(
+  `\\b(?:const|let|var)\\s+(${VALEURS_DU_CONTRAT.join('|')})\\b`,
+  'g',
+);
+const PROPRIETAIRE_DES_VALEURS = join('src', 'moteur', 'configuration.js');
+
+// Relevé « fichier:ligne nom » des déclarations d'une valeur du contrat dans
+// les fichiers JavaScript de src/moteur, à toute profondeur, épreuves
+// comprises, configuration.js excepté ; par fichier, puis par ligne. Lève
+// quand src/moteur ne fournit aucun fichier JavaScript.
+function releverValeursDuContrat(racine) {
+  const fichiers = fichiersDe(join(racine, 'src', 'moteur'))
+    .filter((fichier) => EXTENSIONS_MODULE.has(extname(fichier)))
+    .sort();
+  assert.ok(fichiers.length > 0, 'src/moteur ne fournit aucun fichier JavaScript');
+  return fichiers
+    .filter((fichier) => relative(racine, fichier) !== PROPRIETAIRE_DES_VALEURS)
+    .flatMap((fichier) => {
+      const texte = readFileSync(fichier, 'utf8');
+      return [...texte.matchAll(DECLARATION_DE_VALEUR)].map(
+        (trouve) => `${relative(racine, fichier)}:${ligneDe(texte, trouve.index)} ${trouve[1]}`,
+      );
+    });
+}
+
+describe('arborescence : un seul propriétaire des valeurs du contrat (types.js)', () => {
+  test('hors de configuration.js, aucun fichier de src/moteur ne déclare STATUT, un statut, LIBRE, RESERVE ni SANS_GROUPE', () => {
+    assert.deepEqual(releverValeursDuContrat(RACINE), []);
+  });
+
+  test('la garde relève chaque déclaration par sa ligne, épreuves comprises, et admet le propriétaire, la déstructuration et les noms voisins', () => {
+    const fichiers = {
+      'src/moteur/configuration.js': 'export const STATUT = Object.freeze({ ANCRE: 2 });\nexport const LIBRE = -1;\n',
+      'src/moteur/a.js': [
+        "import { STATUT } from './configuration.js';",
+        'const { ANCRE } = STATUT;',
+        'const ANCRES = [];',
+        'let LIBRES = 0;',
+      ].join('\n'),
+      'src/moteur/b.js': 'const ANCRE = 2;\nexport let RESERVE = -1;\n',
+      'src/moteur/sous/c.test.js': '// Épreuve.\nvar SANS_GROUPE = -1;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverValeursDuContrat), [
+      'src/moteur/b.js:1 ANCRE',
+      'src/moteur/b.js:2 RESERVE',
+      'src/moteur/sous/c.test.js:2 SANS_GROUPE',
+    ]);
+  });
+
+  test('un src/moteur sans fichier JavaScript fait échouer la garde', () => {
+    for (const fichiers of [{ 'src/demo/a.js': '' }, { 'src/moteur/notes.md': '' }]) {
+      assert.throws(
+        () => avecArbre(fichiers, releverValeursDuContrat),
+        /src\/moteur ne fournit aucun fichier JavaScript/,
+      );
+    }
   });
 });

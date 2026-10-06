@@ -3,8 +3,9 @@
 
 // Le livrable tel qu'electron-builder.config.cjs le décrit : son nom (§ 18.2),
 // sa forme (§ 16), ce qu'il emporte (§ 14.15) et l'identité inscrite dans sa
-// ressource de version. La configuration se charge ici comme electron-builder
-// la charge, par require.
+// ressource de version ; et le nom de l'application, un seul pour Electron,
+// pour Capacitor et pour le titre de la fenêtre (§ 18.6). La configuration se
+// charge ici comme electron-builder la charge, par require.
 import assert from 'node:assert/strict';
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
@@ -12,12 +13,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deriver } from '../scripts/version.js';
+import { titreAvecVersion } from '../src/interface/libelles.js';
+import { VERSION } from '../src/version.genere.js';
+import { chargements } from './chargements.js';
 import { describe, test } from './lanceur.js';
 import { versionVoisine } from './version_voisine.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
 const CONFIGURATION = 'electron-builder.config.cjs';
-const ELECTRON = join(RACINE, 'electron');
 
 const lireJson = (racine, chemin) => JSON.parse(readFileSync(join(racine, chemin), 'utf8'));
 const charger = (racine) => {
@@ -25,45 +28,47 @@ const charger = (racine) => {
   return createRequire(chemin)(chemin);
 };
 
-// Fichiers d'electron/, à toute profondeur, en chemins absolus.
-const fichiersDElectron = () =>
-  readdirSync(ELECTRON, { recursive: true, withFileTypes: true })
+// Fichiers d'electron/ sous une racine, à toute profondeur, en chemins
+// absolus.
+const fichiersDElectron = (racine) =>
+  readdirSync(join(racine, 'electron'), { recursive: true, withFileTypes: true })
     .filter((entree) => entree.isFile())
     .map((entree) => join(entree.parentPath, entree.name));
 
-// Chargements que demande le texte d'un module : import et export statiques,
-// import() et require(). Chacun est { specificateur } quand l'argument est
-// une chaîne littérale, { argument } sinon. Le relevé lit le texte entier,
-// commentaires compris.
-const DEPUIS = /\b(?:import|export)\b[^'"`;]*?\bfrom\s*(['"])(?<specificateur>[^'"]+)\1/g;
-const IMPORT_NU = /\bimport\s*(['"])(?<specificateur>[^'"]+)\1/g;
-const APPEL = /\b(?:import|require)\s*\((?<argument>[^)]*)\)/g;
-const LITTERAL = /^\s*(['"])(?<specificateur>[^'"]*)\1\s*$/;
-function chargements(texte) {
-  return [
-    ...[...texte.matchAll(DEPUIS), ...texte.matchAll(IMPORT_NU)].map(({ groups }) => ({
-      specificateur: groups.specificateur,
-    })),
-    ...[...texte.matchAll(APPEL)].map(({ groups }) => {
-      const litteral = LITTERAL.exec(groups.argument);
-      return litteral === null ? { argument: groups.argument.trim() } : { specificateur: litteral.groups.specificateur };
-    }),
-  ];
-}
-
-// Raison de refuser le chargement que demande un fichier d'electron/, ou
-// null quand il reste dans le paquet : electron, un module de Node hors du
-// lanceur d'épreuves, ou un fichier d'electron/. Le paquet n'emporte ni
-// node_modules ni rien de test/ : un chargement qui en sort échoue au
-// démarrage de l'exécutable. Un chargement calculé ne se vérifie pas d'ici.
-function raisonDeRefus({ fichier, specificateur, argument }) {
+// Raison de refuser le chargement que demande un fichier du répertoire
+// electron donné, ou null quand il reste dans le paquet : electron, un module
+// de Node hors du lanceur d'épreuves, ou un fichier de ce répertoire. Le
+// paquet n'emporte ni node_modules ni rien de test/ : un chargement qui en
+// sort échoue au démarrage de l'exécutable. Un chargement calculé ne se
+// vérifie pas d'ici.
+function raisonDeRefus(electron, { fichier, specificateur, argument }) {
   if (specificateur === undefined) return `argument calculé, ${argument} : il ne se vérifie pas`;
   if (/^(?:vitest|node:test)(?:\/|$)|^@vitest\//.test(specificateur)) return "lanceur d'épreuves";
   if (specificateur === 'electron' || isBuiltin(specificateur)) return null;
   if (/^\.{1,2}(?:\/|$)/.test(specificateur)) {
-    return resolve(dirname(fichier), specificateur).startsWith(`${ELECTRON}${sep}`) ? null : "hors d'electron/";
+    return resolve(dirname(fichier), specificateur).startsWith(`${electron}${sep}`) ? null : "hors d'electron/";
   }
   return "hors du paquet, qui n'emporte aucun node_modules";
+}
+
+// Chargements refusés des fichiers d'electron/ sous une racine, par fichier
+// puis dans l'ordre du texte : chacun est { fichier, specificateur, raison }
+// ou { fichier, argument, raison }, fichier relatif à la racine. Lève quand
+// electron/ n'a aucun fichier, ou quand ses fichiers ne demandent aucun
+// chargement.
+function refusDElectron(racine) {
+  const electron = join(racine, 'electron');
+  const fichiers = fichiersDElectron(racine).sort();
+  assert.ok(fichiers.length > 0, 'electron/ ne contient aucun fichier');
+  const demandes = fichiers.flatMap((fichier) =>
+    chargements(readFileSync(fichier, 'utf8')).map(({ specificateur, argument }) =>
+      specificateur === undefined ? { fichier, argument } : { fichier, specificateur },
+    ),
+  );
+  assert.ok(demandes.length > 0, 'aucun chargement relevé dans electron/');
+  return demandes
+    .map((demande) => ({ ...demande, fichier: relative(racine, demande.fichier), raison: raisonDeRefus(electron, demande) }))
+    .filter(({ raison }) => raison !== null);
 }
 
 describe('livrable : nom', () => {
@@ -122,20 +127,48 @@ describe('livrable : forme et contenu', () => {
   });
 
   test("electron/, que le paquet emporte en entier, ne contient aucune épreuve (§ 14.15)", () => {
-    const fichiers = fichiersDElectron();
+    const fichiers = fichiersDElectron(RACINE);
     assert.ok(fichiers.length > 0, 'electron/ ne contient aucun fichier');
     assert.deepEqual(fichiers.filter((chemin) => /\.test\.[cm]?js$/.test(chemin)), []);
   });
 
   test("electron/ ne charge qu'electron, Node et ses propres fichiers : ni épreuve, ni lanceur, ni dépendance (§ 14.9)", () => {
-    const demandes = fichiersDElectron().flatMap((fichier) =>
-      chargements(readFileSync(fichier, 'utf8')).map((chargement) => ({ fichier, ...chargement })),
-    );
-    assert.ok(demandes.length > 0, 'aucun chargement relevé dans electron/');
-    const refusees = demandes
-      .map((demande) => ({ ...demande, fichier: relative(RACINE, demande.fichier), raison: raisonDeRefus(demande) }))
-      .filter(({ raison }) => raison !== null);
-    assert.deepEqual(refusees, []);
+    assert.deepEqual(refusDElectron(RACINE), []);
+  });
+
+  test("la garde d'electron/ relève chaque chargement refusé, import à commentaire entre ses accolades compris, et admet electron, Node et les fichiers d'electron/", () => {
+    const arbre = mkdtempSync(join(tmpdir(), 'livrable-'));
+    try {
+      mkdirSync(join(arbre, 'electron'));
+      writeFileSync(join(arbre, 'electron', 'main.js'), [
+        "import { app } from 'electron';",
+        "import { join } from 'node:path';",
+        'import {',
+        "  // l'API des épreuves",
+        '  test,',
+        "} from 'vitest';",
+        'import {',
+        "  // l'aide d'à côté",
+        '  aide,',
+        "} from '../test/aide.js';",
+        "import { voisin } from './voisin.js';",
+        "const prechargement = require('./preload.cjs');",
+        'const module = require(chemin);',
+        "const { mount } = await import('svelte');",
+      ].join('\n'));
+      writeFileSync(join(arbre, 'electron', 'preload.cjs'), "const { contextBridge } = require('electron');\n");
+      assert.deepEqual(refusDElectron(arbre), [
+        { fichier: join('electron', 'main.js'), specificateur: 'vitest', raison: "lanceur d'épreuves" },
+        { fichier: join('electron', 'main.js'), specificateur: '../test/aide.js', raison: "hors d'electron/" },
+        { fichier: join('electron', 'main.js'), argument: 'chemin', raison: 'argument calculé, chemin : il ne se vérifie pas' },
+        { fichier: join('electron', 'main.js'), specificateur: 'svelte', raison: "hors du paquet, qui n'emporte aucun node_modules" },
+      ]);
+      writeFileSync(join(arbre, 'electron', 'main.js'), '// Aucun chargement.\n');
+      writeFileSync(join(arbre, 'electron', 'preload.cjs'), '');
+      assert.throws(() => refusDElectron(arbre), /aucun chargement relevé dans electron\//);
+    } finally {
+      rmSync(arbre, { recursive: true, force: true });
+    }
   });
 
   test("package.json ne déclare aucune dépendance d'exécution : le paquet n'emporte aucun node_modules", () => {
@@ -165,5 +198,24 @@ describe('livrable : identité', () => {
 
   test('le titulaire entre dans la ressource de version, champ LegalCopyright', () => {
     assert.equal(charger(RACINE).copyright, '© 2026 TechnoLibre');
+  });
+
+  test("le nom de l'application est un seul : productName de package.json, appName de Capacitor, celui du titre de la fenêtre (§ 18.6)", () => {
+    // electron-builder nomme l'application d'après productName, Capacitor
+    // d'après appName, et la page pose le titre de la fenêtre par
+    // titreAvecVersion : le nom suivi de la version affichée, que l'épreuve
+    // retire pour lire le nom.
+    const titre = titreAvecVersion(VERSION.affichee);
+    const suite = ` — ${VERSION.affichee}`;
+    assert.ok(titre.endsWith(suite), `le titre « ${titre} » ne finit pas sur « ${suite} »`);
+    const nom = titre.slice(0, -suite.length);
+    assert.ok(nom.trim() !== '', `le titre « ${titre} » ne porte aucun nom`);
+    assert.deepEqual(
+      {
+        productName: lireJson(RACINE, 'package.json').productName,
+        appName: lireJson(RACINE, 'capacitor.config.json').appName,
+      },
+      { productName: nom, appName: nom },
+    );
   });
 });

@@ -9,7 +9,7 @@
 //             avec l'application : chacune dispose de deux minutes, là où le
 //             délai par défaut de Vitest, 5 s, la ferait échouer par
 //             dépassement et non sur un défaut. Ce délai arrête un test
-//             bloqué ; il n'est pas le plafond de la série (§ 14.14).
+//             bloqué ; le plafond de la série est celui du rapporteur.
 // navigateur  un vrai moteur de rendu. Le projet étend vite.config.js : un
 //             module s'y résout par les mêmes greffons et réglages que dans la
 //             construction du livrable, sans seconde configuration à tenir
@@ -19,6 +19,11 @@ import { playwright } from '@vitest/browser-playwright';
 
 export default defineConfig({
   test: {
+    // test/rapporteur.js imprime, après le bilan par défaut, la durée de
+    // chaque projet et les dix épreuves les plus lentes, et fait échouer
+    // l'exécution quand node ou node-long dépasse son plafond (§ 14.14). Un
+    // chemin relatif se lit depuis la racine du projet.
+    reporters: ['default', './test/rapporteur.js'],
     // Sous surveillance, une épreuve se relance quand un module de son graphe
     // d'imports change. Les fichiers des motifs se lisent hors de tout
     // graphe : le contrôle de version (§ 18.5) lit les premiers par le

@@ -23,14 +23,24 @@ import { rechercher } from './recherche.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
 
 // Réglages de la génération : une graine fixée, écrite ici (§ 15.5, point 2).
-// À 200 000 mouvements, avec cette graine, les trois propositions de chaque
-// démonstration rencontrent 8 pour les douze, sans rencontre répétée ni
-// retour choisi, et ne portent que les collisions que le diagnostic impose :
-// aucune dans la petite démonstration, 4 dans sa variante. Les assertions
-// des épreuves tiennent avec cette graine dès 80 000 mouvements : 200 000
-// leur laisse une marge de 2,5. Sur les graines 1 à 64, elles tiennent
-// toutes à 200 000 ; à 150 000, deux graines en font échouer.
-const REGLAGES = Object.freeze({ graine: 314_159, arret: 200_000, nombre: 3 });
+// À 100 000 mouvements, avec cette graine, les trois propositions de chaque
+// démonstration rencontrent 8 pour les douze, sans rencontre répétée, et ne
+// portent que les collisions que le diagnostic impose : aucune dans la
+// petite démonstration, 4 dans sa variante. Une proposition de la variante
+// garde 15 retours choisis, les cinq autres aucun. Les assertions des
+// épreuves tiennent avec cette graine dès 80 000 mouvements, soit une marge
+// de 1,25 ; en deçà, les trois propositions de la petite démonstration
+// gardent des retours choisis. La marge est celle de cette graine : sur les
+// graines 1 à 64, les assertions tiennent pour 43 à 100 000, pour toutes à
+// 200 000.
+//
+// Le compte pèse sur la relance sous surveillance (§ 14.14) : toute
+// modification du moteur, ou du générateur que lit le catalogue, rejoue ce
+// fichier. Sur deux cœurs, la relance qui suit une modification de
+// recherche.js tient en 1,6 s au mur, contre 2,0 s à 200 000 mouvements ;
+// celle qui suit indicateurs.js, qui rejoue sept fichiers, prend 2,6 s,
+// contre 2,9 s.
+const REGLAGES = Object.freeze({ graine: 314_159, arret: 100_000, nombre: 3 });
 
 // La même génération, arrêtée au premier mouvement. Aucune de ses
 // propositions n'atteint son plafond a priori : avec cette graine, leurs
