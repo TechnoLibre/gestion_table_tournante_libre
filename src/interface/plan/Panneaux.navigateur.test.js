@@ -1,0 +1,1387 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Le clavier, l'infobulle, les panneaux, le menu par personne et les listes
+// de travail du plan, dans un vrai moteur de rendu (§ 2.1 étape 6, § 4,
+// § 4.1, § 4.2, § 4.4, § 5.8, § 5.9, § 7.1, § 7.3, § 13.5) : le plan est un
+// seul arrêt de tabulation ; l'infobulle s'ouvre par le survol, le focus et
+// la pression longue ; cliquer une chaise la sélectionne et ouvre son
+// panneau ; le choix en attente relie une personne et une place sans
+// glisser ; le menu fait ce que fait le geste ; un refus se pose sur la
+// place ; les listes de travail mènent à la place ou à la personne.
+//
+// Chaque épreuve monte App par monterApp, sur le système de fichiers simulé
+// où un fichier d'état d'épreuve est posé puis ouvert, au cadre de
+// 1 366 × 700, et agit par des entrées réelles (test/navigateur/entrees.js)
+// ou par le clic d'un bouton HTML ; elle lit le rendu — attributs data-…,
+// style calculé, boîte, texte — et le disque simulé : « une entrée » est une
+// entrée du journal relu de révision supérieure à celle de l'état avant le
+// geste, l'en-tête de l'état relu portant cette révision plus un. Les points
+// visés se calculent par la géométrie des tables et la vue relue de
+// l'attribut (§ 19.1). Les noms d'épreuve sont inventés.
+//
+// Le projet navigateur emploie expect, et test et describe de Vitest
+// (§ 14.8).
+import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { flushSync } from 'svelte';
+import { appliquerCommande } from '../../application/commandes.js';
+import { etatPlaces } from '../../application/places.js';
+import { constante } from '../../geometrie/constantes.js';
+import { surLeSol } from '../../geometrie/designation.js';
+import { geometrieTable } from '../../geometrie/tables.js';
+import { dessinDepuisEcran, ecranDepuisDessin, transformDe, vueDepuisTransform } from '../../geometrie/vue.js';
+import { serialiser, serialiserCharge } from '../../stockage/canonique.js';
+import { analyser, creerCharge } from '../../stockage/document.js';
+import { lireJournal } from '../../stockage/journal.js';
+import { SUFFIXES } from '../../stockage/noms.js';
+import { VERSION } from '../../version.genere.js';
+import TEXTE_HUIT from '../../../test/fixtures/plan/huit_tables_retenu.gtt.json?raw';
+import TEXTE_CONFLIT from '../../../test/fixtures/plan/conflit_table_un.gtt.json?raw';
+import { fixerCadre, glisser, pointer, touche, toucher } from '../../../test/navigateur/entrees.js';
+import { monterApp } from '../../../test/navigateur/montage.js';
+import { cadreDepuisRect, englobantDuTour } from './vue_plan.js';
+
+const BASE = 'soiree';
+const DUREE_PRESSION = constante('DUREE_PRESSION_LONGUE_MS');
+
+// --- Les configurations d'épreuve ---------------------------------------------
+
+const NOMS = [
+  ['Ombrelle', 'Iris'], ['Pervenche', 'Théo'], ['Lacasse', 'Ondine'], ['Grisaille', null],
+  ['Tourmaline', 'Basile'], ['Arrosoir', 'Capucine'], ['Cerfeuil', 'Aurèle'], ['Bruyère', 'Mélisande'],
+  ['Galet', 'Firmin'], ['Mistral', 'Clélia'], ['Houblon', 'Anatole'], ['Sarcelle', 'Solveig'],
+  ['Ravenelle', 'Octave'], ['Pimprenelle', 'Albane'], ['Coquelicot', 'Gaspard'], ['Lavandière', 'Ysaline'],
+  ['Châtaigne', 'Bérénice'], ['Murier', 'Lazare'],
+];
+
+const IRIS = 1;
+const THEO = 2;
+const ONDINE = 3;
+
+// La charge du fichier d'épreuve d'I10 : huit rondes de trois, en deux
+// rangées de quatre, vingt personnes, trois tours, la proposition 1
+// retenue. Au tour 1, la table 2 assied 4, 5 et 6 ; la table 8, la seule
+// personne 20 : ses sièges 2 et 3 sont libres.
+const huitRetenue = () => analyser(TEXTE_HUIT).charge;
+
+// La même, avant la retenue : la proposition 1 seule, le plan proposé.
+function huitAvantRetenue() {
+  const charge = huitRetenue();
+  charge.retenu = null;
+  charge.evenement.etat = 'propose';
+  return charge;
+}
+
+const executer = (charge, nom, args) => appliquerCommande(nom, charge, args).charge;
+
+/**
+ * Une charge d'épreuve : des rondes posées sur une ligne, aux places données
+ * — null suit le défaut —, les personnes de NOMS, et, quand tours est donné,
+ * une proposition à sièges non attribués de ces listes, retenue si retenir.
+ */
+function chargeDe({ id, defaut = 8, places, ecart = 300, personnes, nombreTours = 3, tours = null, retenir = true, attribuer = false }) {
+  const charge = creerCharge({ id, nom: 'Club des Merles', siegesParDefaut: defaut, tours: nombreTours });
+  charge.reglages.attribuerSieges = attribuer;
+  charge.participants = NOMS.slice(0, personnes).map(([nom, prenom], rang) => ({
+    id: rang + 1,
+    nom,
+    prenom,
+    appartenance: null,
+    courriel: null,
+    titrePressenti: null,
+    notes: null,
+    exclu: false,
+  }));
+  charge.tables = places.map((sieges, rang) => ({ id: rang + 1, numero: rang + 1, sieges, forme: 'ronde', position: { x: ecart * rang, y: 0 } }));
+  charge.prochainsIds = { participant: personnes + 1, table: places.length + 1, proposition: 1 };
+  if (tours === null) return charge;
+  charge.propositions = [
+    {
+      id: 1,
+      graine: 1,
+      arret: 40,
+      historique: 1000,
+      produitVersion: 'epreuve',
+      siegesAttribues: false,
+      tables: charge.tables.map((table) => table.id),
+      capacites: places.map((sieges) => sieges ?? defaut),
+      tours: nombreTours,
+      participants: charge.participants.map((personne) => personne.id),
+      placement: tours.map((listes) => ({ sieges: listes, reserve: [] })),
+    },
+  ];
+  charge.prochainsIds.proposition = 2;
+  charge.evenement.etat = 'propose';
+  return retenir ? executer(charge, 'retenirProposition', { id: 1 }) : charge;
+}
+
+// Cinq tables de huit, douze personnes, aucune proposition : chacun attend
+// dans la réserve, et un geste de personne pose une réservation.
+const sansProposition = (autres = {}) => chargeDe({ id: 'evt-cinq', places: [null, null, null, null, null], personnes: 12, ...autres });
+
+// --- Le montage ---------------------------------------------------------------
+
+let montes = [];
+let nettoyages = [];
+let erreursDemontees = [];
+beforeEach(async () => {
+  await fixerCadre(1366, 700);
+});
+afterEach(async () => {
+  for (const nettoyer of nettoyages.reverse()) nettoyer();
+  nettoyages = [];
+  const erreurs = [...erreursDemontees, ...montes.flatMap((m) => m.erreurs())];
+  erreursDemontees = [];
+  for (const m of montes.reverse()) m.demonter();
+  montes = [];
+  window.scrollTo(0, 0);
+  await fixerCadre(1366, 700);
+  expect(erreurs, 'erreurs reçues par le collecteur').toEqual([]);
+});
+
+function demonter(m) {
+  erreursDemontees.push(...m.erreurs());
+  m.demonter();
+  montes = montes.filter((autre) => autre !== m);
+}
+
+// Attend que l'assertion passe, le rendu de Svelte à jour, une image après
+// l'autre.
+async function attendre(assertion) {
+  for (let essai = 0; ; essai += 1) {
+    flushSync();
+    try {
+      return assertion();
+    } catch (erreur) {
+      if (essai >= 200) throw erreur;
+      await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    }
+  }
+}
+
+const uneImage = () => new Promise((resoudre) => requestAnimationFrame(resoudre));
+async function images(n = 3) {
+  for (let i = 0; i < n; i += 1) await uneImage();
+  flushSync();
+}
+
+// La charge posée en fichier d'état, ouverte — en écriture sauf mode
+// 'lecture' —, la section du plan ouverte et sa vue posée.
+async function ouvrir(charge, { mode = 'ecriture' } = {}) {
+  const texte = serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
+  const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}${SUFFIXES.etat}`, texte }] });
+  montes.push(m);
+  await m.seance.ouvrir(BASE);
+  if (mode === 'ecriture') await m.seance.passerEnEcriture();
+  m.ui.allerA('plan');
+  flushSync();
+  await attendre(() => expect(groupe(m).getAttribute('transform')).not.toBeNull());
+  await attendre(() => expect(tous(m, '[data-table]').length).toBe(charge.tables.length));
+  return m;
+}
+
+// Une démonstration livrée chargée, sur la section du plan, la vue posée.
+async function demonstration(cle) {
+  const m = await monterApp();
+  montes.push(m);
+  await m.facade.chargerDemonstration(cle);
+  flushSync();
+  m.ui.allerA('plan');
+  flushSync();
+  await attendre(() => expect(groupe(m).getAttribute('transform')).not.toBeNull());
+  return m;
+}
+
+// Pose la vue par le cadrage de la séance, puis remonte le plan, qui la
+// restitue.
+async function avecVue(m, vue) {
+  m.seance.demanderCadrage(vue);
+  m.ui.allerA('tables');
+  flushSync();
+  m.ui.allerA('plan');
+  flushSync();
+  await attendre(() => expect(groupe(m).getAttribute('transform')).toBe(transformDe(vue)));
+  await images(2);
+}
+
+// La vue qui pose le centre de l'englobant du tour au centre du cadre, à k.
+function vueCentree(m, k) {
+  const cadre = cadreDe(m);
+  const englobant = englobantDuTour(etatMontre(m));
+  return {
+    k,
+    tx: cadre.largeur / 2 - (k * (englobant.minX + englobant.maxX)) / 2,
+    ty: cadre.hauteur / 2 - (k * (englobant.minY + englobant.maxY)) / 2,
+  };
+}
+
+// --- Les lectures du rendu et du disque ---------------------------------------
+
+const dans = (m, selecteur) => m.racine.querySelector(selecteur);
+const tous = (m, selecteur) => [...m.racine.querySelectorAll(selecteur)];
+const racinePlan = (m) => dans(m, '[data-plan]');
+const groupe = (m) => dans(m, '[data-vue]');
+const tableEl = (m, id) => dans(m, `[data-table="${id}"]`);
+const chaiseEl = (m, table, siege) => dans(m, `[data-siege="${table}:${siege}"]`);
+const panneau = (m, genre) => dans(m, `[data-panneau="${genre}"]`);
+const cadreDe = (m) => cadreDepuisRect(racinePlan(m).getBoundingClientRect());
+const vueLue = (m) => vueDepuisTransform(groupe(m).getAttribute('transform'));
+const charge = (m) => m.seance.etat().charge;
+const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
+const actif = (m) => racinePlan(m).getAttribute('aria-activedescendant');
+
+// Les commandes d'un conteneur : la valeur de data-commande de chaque
+// bouton, dans l'ordre du document.
+const commandesDe = (element) => [...element.querySelectorAll('[data-commande]')].map((bouton) => bouton.dataset.commande);
+
+// L'état des places du tour montré, tel que le plan le calcule.
+const etatMontre = (m) => etatPlaces(charge(m), { tour: m.ui.etat().tour, proposition: m.ui.etat().proposition });
+
+function geometrieDe(m, id) {
+  const table = etatMontre(m).tables.find((candidate) => candidate.id === id);
+  return geometrieTable(table, table.capacite);
+}
+
+const ecranDe = (m, { x, y }) => ecranDepuisDessin(vueLue(m), cadreDe(m), x, y);
+const pointTable = (m, id) => ecranDe(m, geometrieDe(m, id).centre);
+const pointChaise = (m, id, siege) => ecranDe(m, geometrieDe(m, id).chaises[siege - 1]);
+
+function pointSol(m) {
+  const cadre = cadreDe(m);
+  const point = { x: cadre.gauche + 6, y: cadre.haut + 6 };
+  const geometries = etatMontre(m).tables.map((table) => geometrieTable(table, table.capacite));
+  expect(surLeSol(dessinDepuisEcran(vueLue(m), cadre, point.x, point.y), geometries)).toBe(true);
+  return point;
+}
+
+// Un appui relâché sur place, sous le seuil : un clic de pointeur réel.
+async function cliquerPoint({ x, y }) {
+  await pointer('presser', x, y);
+  await pointer('relacher', x, y);
+  await images(2);
+}
+
+// Un clic réel au centre d'une chaise. Quand un avertissement paru au-dessus
+// du plan l'a poussé sous le bas de la fenêtre, la page défile d'abord
+// jusqu'à la chaise.
+async function cliquerChaise(m, table, siege) {
+  const atteinte = () => {
+    const { x, y } = pointChaise(m, table, siege);
+    return chaiseEl(m, table, siege)?.contains(document.elementFromPoint(x, y)) ?? false;
+  };
+  if (!atteinte()) {
+    chaiseEl(m, table, siege).scrollIntoView({ block: 'center', inline: 'center' });
+    await attendre(() => expect(atteinte()).toBe(true));
+  }
+  await cliquerPoint(pointChaise(m, table, siege));
+}
+
+// Un clic de pointeur réel au centre d'un élément HTML, amené dans la
+// fenêtre.
+async function presserBouton(element) {
+  element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const boite = element.getBoundingClientRect();
+  await cliquerPoint({ x: boite.left + boite.width / 2, y: boite.top + boite.height / 2 });
+}
+
+// Clique un bouton par son clic HTML, puis laisse la séance écrire.
+async function cliquer(element) {
+  expect(element, 'bouton présent').not.toBeNull();
+  element.click();
+  flushSync();
+  await images(2);
+}
+
+function fichiers(m) {
+  return {
+    etat: m.fs.contenu('documents', `${BASE}${SUFFIXES.etat}`),
+    journal: m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`),
+    revision: m.seance.etat().evenement.revision,
+  };
+}
+
+function entreesApres(m, r) {
+  const texte = m.fs.contenu('documents', `${BASE}${SUFFIXES.journal}`);
+  return texte === null ? [] : lireJournal(texte).entrees.filter((entree) => entree.revision > r);
+}
+
+async function uneEntree(m, r) {
+  await attendre(() => expect(m.seance.etat().evenement.revision).toBe(r + 1));
+  const entrees = entreesApres(m, r);
+  expect(entrees).toHaveLength(1);
+  expect(analyser(m.fs.contenu('documents', `${BASE}${SUFFIXES.etat}`)).entete.revision).toBe(r + 1);
+  return entrees[0].libelle;
+}
+
+async function rienEcrit(m, avant) {
+  await images(4);
+  expect(fichiers(m)).toEqual(avant);
+}
+
+const decrit = (element) => {
+  const id = element.getAttribute('aria-describedby');
+  return id === null ? null : document.getElementById(id);
+};
+
+function recoupe(a, b) {
+  const p = a.getBoundingClientRect();
+  const q = b.getBoundingClientRect();
+  return p.left < q.right && q.left < p.right && p.top < q.bottom && q.top < p.bottom;
+}
+
+// La boîte d'un élément est dans la fenêtre et dans le cadre du plan.
+function dansLaFenetre(m, element) {
+  const boite = element.getBoundingClientRect();
+  const cadre = racinePlan(m).getBoundingClientRect();
+  return (
+    boite.width > 0 &&
+    boite.left >= Math.max(0, cadre.left) &&
+    boite.top >= Math.max(0, cadre.top) &&
+    boite.right <= Math.min(innerWidth, cadre.right) &&
+    boite.bottom <= Math.min(innerHeight, cadre.bottom)
+  );
+}
+
+// Une marque se peint : style calculé ni display: none ni visibility
+// hidden, un trait ou un remplissage, et une boîte non nulle.
+function peinte(element) {
+  if (element === null) return false;
+  const style = getComputedStyle(element);
+  const boite = element.getBoundingClientRect();
+  const peint = (style.stroke !== 'none' && parseFloat(style.strokeWidth) > 0) || style.fill !== 'none';
+  return style.display !== 'none' && style.visibility !== 'hidden' && peint && boite.width > 0 && boite.height > 0;
+}
+
+// Relève les commandes que l'interface confie à la séance.
+function releverCommandes(m) {
+  const seance = m.seance;
+  const originale = seance.executer;
+  const appels = [];
+  seance.executer = (nom, args) => {
+    appels.push({ nom, args });
+    return originale(nom, args);
+  };
+  nettoyages.push(() => {
+    seance.executer = originale;
+  });
+  return appels;
+}
+
+// L'infobulle de la page : la seule, visible ou non.
+function infobulles() {
+  return [...document.querySelectorAll('[role="tooltip"]')];
+}
+const infobulleVisible = (element) =>
+  element !== undefined && !element.hidden && getComputedStyle(element).display !== 'none' && element.getBoundingClientRect().width > 0;
+
+// Choisit une personne de la réserve visible.
+async function choisirDansLaReserve(m, participant) {
+  const bouton = dans(m, `[data-reserve] [data-participant="${participant}"]`);
+  expect(bouton, `personne ${participant} dans la réserve`).not.toBeNull();
+  await cliquer(bouton);
+  await attendre(() => expect(m.ui.etat().choix?.participant).toBe(participant));
+}
+
+// Le bouton d'une action du panneau d'une place.
+const actionPlace = (m, action) => panneau(m, 'place')?.querySelector(`[data-commande="${action}"]`) ?? null;
+
+// Entre dans le plan au clavier : Tab depuis le dernier contrôle de la barre
+// de vue, l'élément qui le précède.
+async function entrerAuClavier(m) {
+  dans(m, '[data-commande="pleinEcran"]').focus();
+  await touche('Tab');
+  flushSync();
+  expect(document.activeElement).toBe(racinePlan(m));
+}
+
+// Mène l'élément actif du plan à la table voulue, flèche après flèche, puis
+// descend dans ses sièges jusqu'au siège voulu et l'active par l'entrée :
+// la place est sélectionnée et le focus passe à son panneau.
+async function activerSiegeAuClavier(m, table, siege) {
+  await entrerAuClavier(m);
+  // Un siège actif remonte d'abord à sa table.
+  if (actif(m).startsWith('siege-')) await touche('Escape');
+  flushSync();
+  const cible = geometrieDe(m, table).centre;
+  for (let pas = 0; actif(m) !== `table-${table}`; pas += 1) {
+    expect(pas, 'flèches pour atteindre la table').toBeLessThan(12);
+    const courante = Number(actif(m).replace(/^table-/, ''));
+    const depuis = geometrieDe(m, courante).centre;
+    const dx = cible.x - depuis.x;
+    const dy = cible.y - depuis.y;
+    await touche(Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'ArrowRight' : 'ArrowLeft') : dy > 0 ? 'ArrowDown' : 'ArrowUp');
+    flushSync();
+  }
+  await touche('Enter');
+  flushSync();
+  for (let s = 1; s < siege; s += 1) await touche('ArrowRight');
+  flushSync();
+  expect(actif(m)).toBe(`siege-${table}-${siege}`);
+  await touche('Enter');
+  await attendre(() => expect(m.ui.etat().selection).toEqual({ table, siege }));
+  await attendre(() => expect(panneau(m, 'place').contains(document.activeElement)).toBe(true));
+}
+
+// Le refus posé sur une place : la cible de son aria-describedby, hors du
+// <svg data-plan>, qui recoupe la table, porte les codes dans l'ordre, chacun
+// avec une commande ; aucune fenêtre ; rien d'écrit.
+async function refusSurLaPlace(m, element, table, codes, avant) {
+  await attendre(() => expect(decrit(element)).not.toBeNull());
+  const message = decrit(element);
+  expect(racinePlan(m).contains(message)).toBe(false);
+  expect(recoupe(message, tableEl(m, table))).toBe(true);
+  const refus = [...message.querySelectorAll('[data-refus]')];
+  expect(refus.map((r) => r.dataset.refus)).toEqual(codes);
+  for (const r of refus) {
+    expect(r.querySelector('[data-commande]'), r.dataset.refus).not.toBeNull();
+    expect(texteDe(r).length).toBeGreaterThan(0);
+  }
+  expect(document.querySelector('[role="dialog"], dialog[open]')).toBeNull();
+  await rienEcrit(m, avant);
+  return message;
+}
+
+// --- Un seul arrêt (§ 7.3, § 13.5) --------------------------------------------
+
+describe('le plan est un seul arrêt de tabulation (§ 7.3, § 13.5)', () => {
+  test('grande démonstration sans exception, 264 sièges, k = 0,5 : Tab entre et sort, les flèches changent de table, l’entrée descend, l’échappement remonte ; à k = 0,39, l’entrée ouvre le panneau de la table et Échap rend le focus', async () => {
+    const m = await demonstration('grande-sans-exception');
+    await avecVue(m, vueCentree(m, 0.5));
+    expect(vueLue(m).k).toBe(0.5);
+    expect(tous(m, '[data-siege]').length).toBe(264);
+    const racine = racinePlan(m);
+    const arrets = [racine, ...racine.querySelectorAll('*')].filter((element) => element.tabIndex >= 0);
+    expect(arrets).toEqual([racine]);
+
+    dans(m, '[data-commande="pleinEcran"]').focus();
+    await touche('Tab');
+    expect(document.activeElement).toBe(racine);
+    await touche('Tab');
+    expect(document.activeElement).not.toBe(racine);
+    expect(racine.contains(document.activeElement)).toBe(false);
+
+    racine.focus();
+    flushSync();
+    const tables = charge(m).tables;
+    const premiere = tables[0];
+    expect(actif(m)).toBe(`table-${premiere.id}`);
+    const voisine = tables.find(({ position }) => position.x === premiere.position.x + 300 && position.y === premiere.position.y);
+    expect(voisine).toBeDefined();
+    await touche('ArrowRight');
+    flushSync();
+    expect(actif(m)).toBe(`table-${voisine.id}`);
+    expect(document.getElementById(actif(m))).toBe(tableEl(m, voisine.id));
+    await touche('Enter');
+    flushSync();
+    expect(actif(m)).toBe(`siege-${voisine.id}-1`);
+    expect(document.getElementById(actif(m))).toBe(chaiseEl(m, voisine.id, 1));
+    await touche('ArrowRight');
+    flushSync();
+    expect(actif(m)).toBe(`siege-${voisine.id}-2`);
+    await touche('Escape');
+    flushSync();
+    expect(actif(m)).toBe(`table-${voisine.id}`);
+
+    await avecVue(m, vueCentree(m, 0.39));
+    expect(tous(m, '[data-siege]').length).toBe(0);
+    await entrerAuClavier(m);
+    const active = Number(actif(m).replace(/^table-/, ''));
+    await touche('Enter');
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    expect(panneau(m, 'table').dataset.tablePanneau).toBe(String(active));
+    await attendre(() => expect(panneau(m, 'table').contains(document.activeElement)).toBe(true));
+    expect(document.activeElement.hasAttribute('data-choix-siege')).toBe(true);
+    await touche('Escape');
+    await attendre(() => expect(panneau(m, 'table')).toBeNull());
+    expect(document.activeElement).toBe(racinePlan(m));
+
+    // Le siège choisi dans le panneau de la table : le panneau de la place
+    // s'ouvre et reçoit le focus, qui ne tombe pas sur le corps du document.
+    await touche('Enter');
+    await attendre(() => expect(panneau(m, 'table')?.contains(document.activeElement)).toBe(true));
+    await touche('Enter');
+    await attendre(() => expect(panneau(m, 'place')).not.toBeNull());
+    expect(m.ui.etat().selection).toEqual({ table: active, siege: 1 });
+    await attendre(() => expect(panneau(m, 'place').contains(document.activeElement)).toBe(true));
+    await touche('Escape');
+    await attendre(() => expect(panneau(m, 'place')).toBeNull());
+    expect(document.activeElement).toBe(racinePlan(m));
+  });
+
+  test('noms accessibles : la racine porte tabindex 0, un role et un aria-label ; chaque table, numéro, places et conflits, tirés des libellés', async () => {
+    const m = await ouvrir(analyser(TEXTE_CONFLIT).charge);
+    m.ui.montrerTour(2);
+    flushSync();
+    await images(2);
+    const racine = racinePlan(m);
+    expect(racine.getAttribute('tabindex')).toBe('0');
+    expect(racine.getAttribute('role')).toBeTruthy();
+    expect(racine.getAttribute('aria-label')).toBe('Plan de salle');
+    const etat = etatMontre(m);
+    expect(etat.tables.length).toBe(4);
+    for (const table of etat.tables) {
+      const conflits = table.conflits.nombre === 0 ? 'aucun conflit' : `${table.conflits.nombre} conflits`;
+      expect(tableEl(m, table.id).getAttribute('aria-label')).toBe(`Table ${table.numero}, 2 places, ${conflits}`);
+    }
+    const chaise = chaiseEl(m, 1, 1);
+    expect(chaise.id).toBe('siege-1-1');
+    expect(chaise.getAttribute('aria-label')).toBe('1. Iris Ombrelle');
+    expect(tableEl(m, 1).id).toBe('table-1');
+  });
+});
+
+// --- L'infobulle (§ 7.1, § 7.3, § 19.4) ---------------------------------------
+
+describe('l’infobulle : un composant, trois déclencheurs (§ 7.1, § 7.3)', () => {
+  // Le détail que rend le moteur pour la table 1 au tour 2, en mots.
+  const LIBELLES = { separerAppartenances: 'appartenances réunies : ', nouveauxVoisins: 'voisins revus : ', nouvelleTable: 'table revue : ' };
+  function detailAttendu(m) {
+    const table = etatMontre(m).tables.find(({ id }) => id === 1);
+    const nom = (id) => {
+      const { nom: n, prenom } = charge(m).participants.find((p) => p.id === id);
+      return prenom === null ? n : `${prenom} ${n}`;
+    };
+    expect(table.conflits.nombre).toBeGreaterThan(0);
+    return [
+      `Table 1 : ${table.conflits.nombre} conflits`,
+      ...table.conflits.regles.map(
+        (regle) => `${LIBELLES[regle.regle]}${(regle.paires ?? regle.personnes.map((id) => [id])).map((g) => g.map(nom).join(' et ')).join(', ')}`,
+      ),
+    ];
+  }
+  const lignes = (element) => [...element.querySelectorAll('p')].map(texteDe);
+
+  test('survol, focus par les flèches, pression longue : le même [role=tooltip], seul de son espèce, au détail du moteur ; relâchée avant le terme, rien ; aucun <title>', async () => {
+    const m = await ouvrir(analyser(TEXTE_CONFLIT).charge);
+    m.ui.montrerTour(2);
+    flushSync();
+    await images(2);
+    const attendu = detailAttendu(m);
+    expect(attendu.length).toBeGreaterThan(1);
+    expect(infobulles()).toHaveLength(1);
+    const infobulle = infobulles()[0];
+    expect(infobulleVisible(infobulle)).toBe(false);
+
+    // (a) le survol, sans bouton enfoncé.
+    const centre = pointTable(m, 1);
+    await pointer('bouger', centre.x, centre.y);
+    await attendre(() => expect(infobulleVisible(infobulles()[0])).toBe(true));
+    expect(infobulles()).toEqual([infobulle]);
+    expect(lignes(infobulle)).toEqual(attendu);
+    const sol = pointSol(m);
+    await pointer('bouger', sol.x, sol.y);
+    await attendre(() => expect(infobulleVisible(infobulle)).toBe(false));
+    const saine = pointTable(m, 2);
+    await pointer('bouger', saine.x, saine.y);
+    await images(2);
+    expect(infobulleVisible(infobulle)).toBe(false);
+    await pointer('bouger', sol.x, sol.y);
+
+    // (b) le focus, par les flèches.
+    await entrerAuClavier(m);
+    expect(actif(m)).toBe('table-1');
+    await touche('ArrowRight');
+    flushSync();
+    expect(actif(m)).toBe('table-2');
+    await attendre(() => expect(infobulleVisible(infobulle)).toBe(false));
+    await touche('ArrowLeft');
+    flushSync();
+    expect(actif(m)).toBe('table-1');
+    await attendre(() => expect(infobulleVisible(infobulle)).toBe(true));
+    expect(infobulles()).toEqual([infobulle]);
+    expect(lignes(infobulle)).toEqual(attendu);
+    racinePlan(m).blur();
+    await attendre(() => expect(infobulleVisible(infobulle)).toBe(false));
+
+    // (c) la pression longue : relâchée avant le terme, rien ; tenue, l'infobulle.
+    await toucher('presser', [centre]);
+    m.horloge.avancer(DUREE_PRESSION - 1);
+    await images(2);
+    expect(infobulleVisible(infobulle)).toBe(false);
+    await toucher('relacher', []);
+    m.horloge.avancer(DUREE_PRESSION);
+    await images(2);
+    expect(infobulleVisible(infobulle)).toBe(false);
+    // Glissée au-delà du seuil, la pression devient un glissement : rien.
+    document.activeElement?.blur();
+    await toucher('presser', [centre]);
+    await toucher('bouger', [{ x: centre.x + 3 * constante('SEUIL_GLISSER_PX'), y: centre.y }]);
+    await images(2);
+    m.horloge.avancer(DUREE_PRESSION);
+    await images(2);
+    expect(infobulleVisible(infobulle)).toBe(false);
+    await toucher('annuler', []);
+    await images(2);
+    document.activeElement?.blur();
+    await toucher('presser', [centre]);
+    m.horloge.avancer(DUREE_PRESSION);
+    await attendre(() => expect(infobulleVisible(infobulle)).toBe(true));
+    expect(infobulles()).toEqual([infobulle]);
+    expect(lignes(infobulle)).toEqual(attendu);
+    await toucher('relacher', []);
+    await images(2);
+
+    expect(racinePlan(m).querySelector('title')).toBeNull();
+  });
+});
+
+// --- Cliquer une chaise (§ 7.1, § 8.4) ----------------------------------------
+
+describe('cliquer une chaise sélectionne la place (§ 7.1, § 8.4)', () => {
+  test('une chaise libre : la marque selection se peint ; le panneau offre exactement Assigner, Réserver, Donner un titre, Désigner ; rien d’écrit ; une chaise réservée et titrée : Retirer la réservation, Retirer le titre', async () => {
+    const base = executer(huitRetenue(), 'designer', { participant: 9, table: 8, siege: 3, libelle: 'animateur' });
+    const m = await ouvrir(base);
+    const avant = fichiers(m);
+    await cliquerChaise(m, 8, 2);
+    expect(m.ui.etat().selection).toEqual({ table: 8, siege: 2 });
+    const marque = chaiseEl(m, 8, 2).querySelector('[data-marque="selection"]');
+    expect(peinte(marque)).toBe(true);
+    expect(tous(m, '[data-marque="selection"]')).toEqual([marque]);
+    await attendre(() => expect(panneau(m, 'place')).not.toBeNull());
+    expect(commandesDe(panneau(m, 'place'))).toEqual(['assigner', 'reserver', 'donnerTitre', 'designer']);
+    await rienEcrit(m, avant);
+
+    await cliquerChaise(m, 8, 3);
+    expect(m.ui.etat().selection).toEqual({ table: 8, siege: 3 });
+    await attendre(() => expect(commandesDe(panneau(m, 'place'))).toContain('retirerReservation'));
+    const offertes = commandesDe(panneau(m, 'place'));
+    expect(offertes).toContain('retirerTitre');
+    expect(offertes).not.toContain('donnerTitre');
+    expect(offertes).not.toContain('designer');
+    await rienEcrit(m, avant);
+  });
+});
+
+// --- Assigner (§ 7.1, § 5.8) ----------------------------------------------------
+
+describe('assigner, par le choix en attente (§ 7.1, § 5.8)', () => {
+  test('avant toute proposition : Théo choisi dans la réserve, puis une chaise libre de la table 4, « Assigner » → reserver, portée « tour », au tour affiché ; l’ordre inverse rend la même charge', async () => {
+    const premier = await ouvrir(sansProposition());
+    const commandes = releverCommandes(premier);
+    let r = fichiers(premier).revision;
+    await choisirDansLaReserve(premier, THEO);
+    expect(dans(premier, `[data-reserve] [data-participant="${THEO}"]`).getAttribute('aria-pressed')).toBe('true');
+    await cliquerChaise(premier, 4, 3);
+    await cliquer(actionPlace(premier, 'assigner'));
+    await uneEntree(premier, r);
+    expect(commandes).toEqual([{ nom: 'reserver', args: { participant: THEO, table: 4, siege: 3, portee: 'tour', tour: 1 } }]);
+    expect(premier.ui.etat().choix).toBeNull();
+    const chargePremier = serialiserCharge(charge(premier));
+    demonter(premier);
+
+    const second = await ouvrir(sansProposition());
+    r = fichiers(second).revision;
+    await cliquerChaise(second, 4, 3);
+    await choisirDansLaReserve(second, THEO);
+    expect(second.ui.etat().selection).toEqual({ table: 4, siege: 3 });
+    await cliquer(actionPlace(second, 'assigner'));
+    await uneEntree(second, r);
+    expect(serialiserCharge(charge(second))).toBe(chargePremier);
+  });
+
+  test('sur un retenu : une personne de la réserve du tour 2 → deplacerDansRetenu, une entrée ; une proposition montrée → PROPOSITION_MONTREE sur la place, aucune entrée', async () => {
+    const base = executer(huitRetenue(), 'retirerDuTour', { tour: 2, participant: ONDINE });
+    const m = await ouvrir(base);
+    m.ui.montrerTour(2);
+    flushSync();
+    await images(2);
+    const commandes = releverCommandes(m);
+    const r = fichiers(m).revision;
+    await choisirDansLaReserve(m, ONDINE);
+    await cliquerChaise(m, 8, 1);
+    await cliquer(actionPlace(m, 'assigner'));
+    await uneEntree(m, r);
+    expect(commandes.at(-1)).toEqual({ nom: 'deplacerDansRetenu', args: { tour: 2, participant: ONDINE, table: 8, siege: 1 } });
+
+    m.ui.montrerProposition(1);
+    flushSync();
+    await images(2);
+    const avant = fichiers(m);
+    const assise = etatMontre(m).tables[0].chaises[0].occupant;
+    await cliquerChaise(m, 1, 1);
+    await cliquer(dans(m, `[data-menu="${assise}"] [data-commande="deplacer"]`));
+    await cliquerChaise(m, 8, 2);
+    expect(m.ui.etat().choix?.participant).toBe(assise);
+    await cliquer(actionPlace(m, 'assigner'));
+    await refusSurLaPlace(m, chaiseEl(m, 8, 2), 8, ['PROPOSITION_MONTREE'], avant);
+  });
+});
+
+describe('Échap oublie le choix en attente (§ 7.1, § 7.3)', () => {
+  test('choisie dans la réserve, puis dans les pressentis : Échap sur son bouton l’oublie ; sur le plan, Échap l’oublie depuis une table active comme depuis un siège actif, qui remonte à sa table', async () => {
+    const base = sansProposition();
+    base.participants[ONDINE - 1].titrePressenti = 'hôte';
+    const m = await ouvrir(base);
+    const bouton = dans(m, `[data-reserve] [data-participant="${THEO}"]`);
+    await choisirDansLaReserve(m, THEO);
+    bouton.focus();
+    await touche('Escape');
+    await attendre(() => expect(m.ui.etat().choix).toBeNull());
+    expect(bouton.getAttribute('aria-pressed')).toBe('false');
+
+    const pressenti = dans(m, `[data-liste-travail="pressentis"] [data-participant="${ONDINE}"]`);
+    await cliquer(pressenti);
+    expect(m.ui.etat().choix?.participant).toBe(ONDINE);
+    pressenti.focus();
+    await touche('Escape');
+    await attendre(() => expect(m.ui.etat().choix).toBeNull());
+
+    await choisirDansLaReserve(m, THEO);
+    await entrerAuClavier(m);
+    expect(actif(m)).toMatch(/^table-/);
+    await touche('Escape');
+    await attendre(() => expect(m.ui.etat().choix).toBeNull());
+
+    await choisirDansLaReserve(m, THEO);
+    await entrerAuClavier(m);
+    await touche('Enter');
+    flushSync();
+    const siege = actif(m);
+    expect(siege).toMatch(/^siege-/);
+    await touche('Escape');
+    flushSync();
+    expect(actif(m)).toBe(`table-${siege.split('-')[1]}`);
+    await attendre(() => expect(m.ui.etat().choix).toBeNull());
+  });
+});
+
+describe('un clic ne déplace pas la vue (§ 7.3, § 8.4)', () => {
+  test('une chaise à 12 px du bord gauche du cadre, cliquée : la place est sélectionnée, le transform du groupe et le cadrage restent', async () => {
+    const m = await ouvrir(sansProposition());
+    const cadre = cadreDe(m);
+    const chaise = geometrieDe(m, 1).chaises[0];
+    await avecVue(m, { k: 1, tx: 12 - chaise.x, ty: cadre.hauteur / 2 - chaise.y });
+    expect(pointChaise(m, 1, 1).x - cadreDe(m).gauche).toBeCloseTo(12, 6);
+    const transform = groupe(m).getAttribute('transform');
+    const cadrage = m.seance.cadrage();
+    await cliquerChaise(m, 1, 1);
+    expect(m.ui.etat().selection).toEqual({ table: 1, siege: 1 });
+    await images(4);
+    expect(groupe(m).getAttribute('transform')).toBe(transform);
+    expect(m.seance.cadrage()).toEqual(cadrage);
+  });
+});
+
+// --- Sous le seuil (§ 7.3) ------------------------------------------------------
+
+describe('sous le seuil, la table est la cible et son panneau choisit le siège (§ 7.3)', () => {
+  test('sans exception, k = 0,39 : un clic à la position d’une chaise sélectionne la table, ouvre son panneau, qui liste ses sièges ; un siège choisi ouvre le panneau de la place', async () => {
+    const m = await demonstration('grande-sans-exception');
+    await avecVue(m, vueCentree(m, 0.39));
+    expect(tous(m, '[data-siege]').length).toBe(0);
+    // La table la plus proche du centre du cadre.
+    const cadre = cadreDe(m);
+    const centre = { x: cadre.gauche + cadre.largeur / 2, y: cadre.haut + cadre.hauteur / 2 };
+    const distance = (id) => Math.hypot(pointTable(m, id).x - centre.x, pointTable(m, id).y - centre.y);
+    const id = charge(m).tables.map((table) => table.id).reduce((a, b) => (distance(b) < distance(a) ? b : a));
+    await cliquerPoint(pointChaise(m, id, 3));
+    expect(m.ui.etat().selection).toEqual({ table: id });
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    const sieges = [...panneau(m, 'table').querySelectorAll('[data-choix-siege]')];
+    expect(sieges.map((bouton) => bouton.dataset.choixSiege)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+    await cliquer(sieges[2]);
+    expect(m.ui.etat().selection).toEqual({ table: id, siege: 3 });
+    await attendre(() => expect(panneau(m, 'place')).not.toBeNull());
+    expect(tableEl(m, id).querySelector('[data-marque="selection"]')).not.toBeNull();
+  });
+});
+
+// --- Le menu fait ce que fait le geste (§ 7.1, § 10.2) --------------------------
+
+describe('le menu fait ce que fait le geste (§ 7.1, § 10.2)', () => {
+  // Joue les gestes dans un montage, le menu dans un autre, sur le même
+  // fichier d'état ; rend les deux charges et les libellés de leurs entrées.
+  async function comparer(base, preparer, actions) {
+    const rendus = [];
+    for (const facon of ['geste', 'menu']) {
+      const m = await ouvrir(base);
+      preparer(m);
+      flushSync();
+      await images(2);
+      const r = fichiers(m).revision;
+      for (const action of actions) await action[facon](m);
+      await attendre(() => expect(m.seance.etat().evenement.revision).toBe(r + actions.length));
+      rendus.push({ charge: serialiserCharge(charge(m)), libelles: entreesApres(m, r).map(({ libelle }) => libelle) });
+      demonter(m);
+    }
+    expect(rendus[1].libelles).toHaveLength(rendus[0].libelles.length);
+    expect(rendus[1]).toEqual(rendus[0]);
+    return rendus[0];
+  }
+
+  // Le menu de l'occupant d'une chaise, atteint au clavier, puis une action
+  // pressée ; une place cliquée ; « Assigner » pressé.
+  const parLeMenu = (table, siege, action, vers = null) => async (m) => {
+    const occupant = etatMontre(m).tables.find(({ id }) => id === table).chaises[siege - 1].occupant;
+    const r = fichiers(m).revision;
+    await activerSiegeAuClavier(m, table, siege);
+    const menu = dans(m, `[data-menu="${occupant}"]`);
+    expect(menu, `menu de ${occupant}`).not.toBeNull();
+    await presserBouton(menu.querySelector(`[data-commande="${action}"]`));
+    if (vers !== null) {
+      await cliquerChaise(m, ...vers);
+      await presserBouton(actionPlace(m, 'assigner'));
+    }
+    await uneEntree(m, r);
+  };
+  const parLeGeste = (depuis, vers) => async (m) => {
+    const r = fichiers(m).revision;
+    await glisser(pointChaise(m, ...depuis), vers === 'sol' ? pointSol(m) : pointChaise(m, ...vers));
+    await uneEntree(m, r);
+  };
+
+  test('sur un retenu : déplacer, échanger, retirer — la même charge, octet pour octet, et les mêmes libellés', async () => {
+    const { libelles } = await comparer(huitRetenue(), () => {}, [
+      { geste: parLeGeste([2, 1], [8, 2]), menu: parLeMenu(2, 1, 'deplacer', [8, 2]) },
+      { geste: parLeGeste([1, 1], [3, 1]), menu: parLeMenu(1, 1, 'echanger', [3, 1]) },
+      { geste: parLeGeste([5, 1], 'sol'), menu: parLeMenu(5, 1, 'retirerDuTour') },
+    ]);
+    expect(libelles[0]).toMatch(/^Déplacé .* à la table 8, tour 1$/);
+    expect(libelles[1]).toMatch(/^Échangé /);
+    expect(libelles[2]).toMatch(/^Retiré /);
+  });
+
+  test('avant la retenue, la proposition 1 montrée au tour 2 : « Réserver ici » du menu → reserver, portée « tour », au tour affiché, une entrée ; la charge que donne « Réserver » du panneau sur la même place', async () => {
+    // Un glissement sur la chaise d'origine ne rend aucune commande
+    // (commandeDeDepot) : la même place se réserve par le panneau.
+    const rendus = [];
+    for (const facon of ['menu', 'panneau']) {
+      const m = await ouvrir(huitAvantRetenue());
+      m.ui.montrerTour(2);
+      m.ui.montrerProposition(1);
+      flushSync();
+      await images(2);
+      const occupant = etatMontre(m).tables.find(({ id }) => id === 2).chaises[0].occupant;
+      expect(occupant).not.toBeNull();
+      const commandes = releverCommandes(m);
+      const r = fichiers(m).revision;
+      await cliquerChaise(m, 2, 1);
+      if (facon === 'menu') {
+        await cliquer(dans(m, `[data-menu="${occupant}"] [data-commande="reserverIci"]`));
+      } else {
+        await cliquer(dans(m, `[data-menu="${occupant}"] [data-commande="deplacer"]`));
+        await cliquer(actionPlace(m, 'reserver'));
+      }
+      await uneEntree(m, r);
+      expect(commandes, facon).toEqual([{ nom: 'reserver', args: { participant: occupant, table: 2, siege: 1, portee: 'tour', tour: 2 } }]);
+      rendus.push(serialiserCharge(charge(m)));
+      demonter(m);
+    }
+    expect(rendus[1]).toBe(rendus[0]);
+  });
+
+  test('avant la retenue, la proposition montrée : réserver — la même charge et le même libellé', async () => {
+    await comparer(huitAvantRetenue(), (m) => m.ui.montrerProposition(1), [
+      { geste: parLeGeste([2, 1], [8, 2]), menu: parLeMenu(2, 1, 'deplacer', [8, 2]) },
+    ]);
+  });
+});
+
+// --- Réserver, titrer, désigner (§ 4, § 2.1 étape 6, § 5.8) ---------------------
+
+describe('réserver, titrer, désigner depuis le panneau (§ 4, § 2.1 étape 6)', () => {
+  test('réserver Théo Pervenche au tour 2 → {participant, table, siege, portee: tour, tour: 2} ; puis Iris pour tous les tours', async () => {
+    const m = await ouvrir(sansProposition());
+    m.ui.montrerTour(2);
+    flushSync();
+    let r = fichiers(m).revision;
+    await choisirDansLaReserve(m, THEO);
+    await cliquerChaise(m, 4, 3);
+    await cliquer(actionPlace(m, 'reserver'));
+    await uneEntree(m, r);
+    expect(charge(m).reservations).toEqual([{ participant: THEO, table: 4, siege: 3, portee: 'tour', tour: 2 }]);
+
+    r += 1;
+    await choisirDansLaReserve(m, IRIS);
+    await cliquerChaise(m, 4, 5);
+    const portee = panneau(m, 'place').querySelector('[data-champ="portee"]');
+    portee.value = 'tous';
+    portee.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
+    await cliquer(actionPlace(m, 'reserver'));
+    await uneEntree(m, r);
+    expect(charge(m).reservations).toContainEqual({ participant: IRIS, table: 4, siege: 5, portee: 'tous', tour: null });
+  });
+
+  test('titrer : « animateur » à la table 5 → un titre {table, siege, libelle}, ni personne ni tour ; un libellé vide refusé sur le champ, rien d’écrit', async () => {
+    const m = await ouvrir(sansProposition({ attribuer: true }));
+    await cliquerChaise(m, 5, 2);
+    const champ = panneau(m, 'place').querySelector('[data-champ="libelle"] input, input[data-champ="libelle"]');
+    expect(champ).not.toBeNull();
+    const avant = fichiers(m);
+    champ.value = '   ';
+    champ.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    await cliquer(actionPlace(m, 'donnerTitre'));
+    await attendre(() => expect(panneau(m, 'place').querySelector('[data-refus="LIBELLE_VIDE"]')).not.toBeNull());
+    expect(decrit(chaiseEl(m, 5, 2))).toBeNull();
+    await rienEcrit(m, avant);
+    champ.value = 'animateur';
+    champ.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    await cliquer(actionPlace(m, 'donnerTitre'));
+    await uneEntree(m, avant.revision);
+    expect(charge(m).titres).toEqual([{ table: 5, siege: 2, libelle: 'animateur' }]);
+    expect(charge(m).reservations).toEqual([]);
+  });
+
+  test('désigner Iris à la table 3 → une réservation « tous » à la place du titre, un titre, une entrée', async () => {
+    const base = executer(sansProposition({ attribuer: true }), 'poserTitre', { table: 3, siege: 1, libelle: 'animateur' });
+    const m = await ouvrir(base);
+    const r = fichiers(m).revision;
+    await choisirDansLaReserve(m, IRIS);
+    await cliquerChaise(m, 3, 1);
+    await cliquer(actionPlace(m, 'designer'));
+    await uneEntree(m, r);
+    expect(charge(m).reservations).toEqual([{ participant: IRIS, table: 3, siege: 1, portee: 'tous', tour: null }]);
+    expect(charge(m).titres).toEqual([{ table: 3, siege: 1, libelle: 'animateur' }]);
+  });
+
+  test('après la génération : sur un retenu qui assied Iris à la table 2, la désigner à la table 3 → une réservation et un titre de plus, retenu et propositions identiques, une entrée, RESERVATION_NON_HONOREE visible', async () => {
+    const base = chargeDe({
+      id: 'evt-apres-generation',
+      places: [4, 4, 4],
+      personnes: 9,
+      tours: [
+        [[2, 3, 4], [1, 5, 6], [7, 8, 9]],
+        [[5, 7, 9], [1, 2, 8], [3, 4, 6]],
+        [[6, 8, 3], [1, 4, 7], [2, 5, 9]],
+      ],
+    });
+    const m = await ouvrir(base);
+    const origine = structuredClone(charge(m));
+    const r = fichiers(m).revision;
+    const siegeIris = etatMontre(m).tables[1].chaises.findIndex(({ occupant }) => occupant === IRIS) + 1;
+    await cliquerChaise(m, 2, siegeIris);
+    await cliquer(dans(m, `[data-menu="${IRIS}"] [data-commande="deplacer"]`));
+    expect(m.ui.etat().choix).toEqual({ genre: 'personne', participant: IRIS, depuis: { table: 2, siege: siegeIris } });
+    await cliquerChaise(m, 3, 4);
+    await cliquer(actionPlace(m, 'designer'));
+    await uneEntree(m, r);
+    const apres = charge(m);
+    expect(apres.reservations).toHaveLength(origine.reservations.length + 1);
+    expect(apres.reservations.at(-1)).toMatchObject({ participant: IRIS, table: 3, portee: 'tous', tour: null });
+    expect(apres.titres).toHaveLength(origine.titres.length + 1);
+    expect(apres.retenu).toEqual(origine.retenu);
+    expect(apres.propositions).toEqual(origine.propositions);
+    expect(m.seance.etat().avertissements).toContainEqual({ code: 'RESERVATION_NON_HONOREE', details: { participant: IRIS, table: 3, tour: 1 } });
+    await attendre(() => expect(dans(m, '[data-avertissement="RESERVATION_NON_HONOREE"]')).not.toBeNull());
+  });
+
+  // L'avertissement nomme Iris et la table 3 : son texte vient du libellé
+  // d'A2 et du composant des avertissements d'I4, que le correctif
+  // rapports/I11-avertissement-nomme.diff complète. L'épreuve échoue tant
+  // qu'il n'est pas appliqué ; appliqué, test.fails la signale à retourner.
+  test.fails('RESERVATION_NON_HONOREE nomme Iris Ombrelle et la table 3 (attend le correctif d’A2 et d’I4)', async () => {
+    const base = chargeDe({
+      id: 'evt-apres-generation',
+      places: [4, 4, 4],
+      personnes: 9,
+      tours: [
+        [[2, 3, 4], [1, 5, 6], [7, 8, 9]],
+        [[5, 7, 9], [1, 2, 8], [3, 4, 6]],
+        [[6, 8, 3], [1, 4, 7], [2, 5, 9]],
+      ],
+    });
+    const m = await ouvrir(base);
+    const r = fichiers(m).revision;
+    m.ui.choisir({ genre: 'personne', participant: IRIS, depuis: null });
+    await cliquerChaise(m, 3, 4);
+    await cliquer(actionPlace(m, 'designer'));
+    await uneEntree(m, r);
+    await attendre(() => expect(dans(m, '[data-avertissement="RESERVATION_NON_HONOREE"]')).not.toBeNull());
+    const texte = texteDe(dans(m, '[data-avertissement="RESERVATION_NON_HONOREE"]'));
+    expect(texte).toContain('Iris Ombrelle');
+    expect(texte).toContain('table 3');
+  });
+});
+
+// --- Le titre reste, le mode table, la capacité (§ 4.1, § 2.1 étape 6, § 5.9) ---
+
+describe('le titre appartient à la place (§ 4.1, § 2.1 étape 6, § 5.9)', () => {
+  test('quatre variantes depuis une désignation à la table 3 — réservation retirée, déplacée, personne supprimée, exclue : « table 3 : titre animateur non pourvu » dans la liste de travail et sur la place', async () => {
+    const designee = executer(sansProposition({ attribuer: true }), 'designer', { participant: IRIS, table: 3, siege: 1, libelle: 'animateur' });
+    const variantes = [
+      ['retiree', (c) => executer(c, 'retirerReservation', { participant: IRIS, table: 3, portee: 'tous', tour: null })],
+      ['deplacee', (c) => executer(c, 'deplacerReservation', { participant: IRIS, de: { table: 3, portee: 'tous', tour: null }, vers: { table: 4, siege: 1 } })],
+      ['supprimee', (c) => executer(c, 'supprimerParticipant', { id: IRIS })],
+      ['exclue', (c) => executer(c, 'exclureParticipant', { id: IRIS })],
+    ];
+    expect(variantes.length).toBe(4);
+    for (const [nom, appliquer] of variantes) {
+      const m = await ouvrir(appliquer(structuredClone(designee)));
+      const liste = dans(m, '[data-liste-travail="titres"]');
+      const elements = [...liste.querySelectorAll('[data-titre]')];
+      expect(elements.map(texteDe), nom).toEqual(['table 3 : titre animateur non pourvu']);
+      // Sur la place : son nom accessible, la ligne entière, et la hachure.
+      expect(chaiseEl(m, 3, 1).getAttribute('aria-label'), nom).toMatch(/^1\. .*titre animateur non pourvu$/);
+      expect(chaiseEl(m, 3, 1).querySelector('[data-marque="hachure"]'), nom).not.toBeNull();
+      demonter(m);
+    }
+  });
+
+  test('mode table : sans attribution, trois titres à la table 2 et une désignation → « 3 titres dont 1 pourvu », deux éléments pour la table 2, aucun choix de siège ; sièges attribués, le numéro se choisit', async () => {
+    let base = sansProposition();
+    for (const libelle of ['animateur', 'hôte', 'secrétaire']) base = executer(base, 'poserTitre', { table: 2, siege: null, libelle });
+    const m = await ouvrir(base);
+    const r = fichiers(m).revision;
+    await cliquerPoint(pointTable(m, 2));
+    expect(m.ui.etat().selection).toEqual({ table: 2 });
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    expect(panneau(m, 'table').querySelector('[data-champ="siege"]')).toBeNull();
+    await choisirDansLaReserve(m, IRIS);
+    await cliquer(panneau(m, 'table').querySelector('[data-commande="designer"]'));
+    await uneEntree(m, r);
+    expect(charge(m).reservations).toEqual([{ participant: IRIS, table: 2, siege: 1, portee: 'tous', tour: null }]);
+    await attendre(() => expect(texteDe(panneau(m, 'table'))).toContain('3 titres dont 1 pourvu'));
+    const pourLaTable = [...dans(m, '[data-liste-travail="titres"]').querySelectorAll('[data-titre]')].filter((e) => e.dataset.titre.startsWith('2:'));
+    expect(pourLaTable).toHaveLength(2);
+    demonter(m);
+
+    const attribuee = await ouvrir(executer(sansProposition({ attribuer: true }), 'poserTitre', { table: 2, siege: 4, libelle: 'animateur' }));
+    await cliquerPoint(pointTable(attribuee, 2));
+    await attendre(() => expect(panneau(attribuee, 'table')).not.toBeNull());
+    expect(panneau(attribuee, 'table').querySelector('[data-champ="siege"]')).not.toBeNull();
+
+    // Le numéro choisi est celui que reçoivent le titre, puis la désignation.
+    const poserChamps = (siege, libelle) => {
+      const choixSiege = panneau(attribuee, 'table').querySelector('[data-champ="siege"]');
+      choixSiege.value = String(siege);
+      choixSiege.dispatchEvent(new Event('change', { bubbles: true }));
+      const champ = panneau(attribuee, 'table').querySelector('[data-champ="libelle"]');
+      champ.value = libelle;
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+      flushSync();
+    };
+    let ra = fichiers(attribuee).revision;
+    poserChamps(3, 'secrétaire');
+    await cliquer(panneau(attribuee, 'table').querySelector('[data-commande="donnerTitre"]'));
+    await uneEntree(attribuee, ra);
+    expect(charge(attribuee).titres).toContainEqual({ table: 2, siege: 3, libelle: 'secrétaire' });
+
+    ra += 1;
+    await choisirDansLaReserve(attribuee, IRIS);
+    poserChamps(5, 'hôte');
+    await cliquer(panneau(attribuee, 'table').querySelector('[data-commande="designer"]'));
+    await uneEntree(attribuee, ra);
+    expect(charge(attribuee).titres).toContainEqual({ table: 2, siege: 5, libelle: 'hôte' });
+    expect(charge(attribuee).reservations).toEqual([{ participant: IRIS, table: 2, siege: 5, portee: 'tous', tour: null }]);
+  });
+
+  test('capacité et animateurs : table de 4, la quatrième désignation acceptée et le gel signalé par une forme ; la cinquième refusée sur la place ; des places qui manquent déjà n’ajoutent ni refus ni avertissement ; une table sans animateur n’avertit de rien', async () => {
+    // Huit places pour dix personnes : il en manque deux à chaque tour.
+    const base = chargeDe({ id: 'evt-capacite', places: [4, 2, 2], personnes: 10 });
+    const m = await ouvrir(base);
+    const rendus = [];
+    const originale = m.seance.executer;
+    m.seance.executer = async (nom, args) => {
+      const rendu = await originale(nom, args);
+      rendus.push(rendu);
+      return rendu;
+    };
+    nettoyages.push(() => {
+      m.seance.executer = originale;
+    });
+    const manques = () =>
+      [...rendus.flatMap(({ avertissements }) => avertissements), ...m.seance.etat().avertissements].filter(
+        ({ code }) => code === 'PLACES_MANQUANTES',
+      ).length;
+    await cliquerPoint(pointTable(m, 1));
+    await attendre(() => expect(panneau(m, 'table')).not.toBeNull());
+    for (const personne of [1, 2, 3, 4]) {
+      const r = fichiers(m).revision;
+      await choisirDansLaReserve(m, personne);
+      await cliquer(panneau(m, 'table').querySelector('[data-commande="designer"]'));
+      await uneEntree(m, r);
+      expect(decrit(tableEl(m, 1))).toBeNull();
+      expect(manques()).toBe(0);
+    }
+    expect(rendus).toHaveLength(4);
+    expect(charge(m).reservations).toHaveLength(4);
+    const gel = tableEl(m, 1).querySelector('[data-marque="gel"]');
+    expect(peinte(gel)).toBe(true);
+    expect(gel.tagName).toBe('path');
+    const avant = fichiers(m);
+    await choisirDansLaReserve(m, 5);
+    await cliquer(panneau(m, 'table').querySelector('[data-commande="designer"]'));
+    await refusSurLaPlace(m, tableEl(m, 1), 1, ['AUCUN_SIEGE_SANS_TITRE'], avant);
+    const autres = m.seance.etat().avertissements.filter(({ details }) => details?.table === 2 || details?.table === 3);
+    expect(autres).toEqual([]);
+  });
+});
+
+// --- Le refus sur la place (§ 5.9, § 2.1, § 19.3 09) ----------------------------
+
+describe('le refus se pose sur la place (§ 5.9)', () => {
+  // Avant la retenue, la proposition 1 montrée ; la table 8 réservée pour
+  // tous les tours à ses trois sièges ; Théo Pervenche réservé « tous » à la
+  // table 6 sans siège, que la proposition assied ailleurs.
+  function preparee() {
+    let c = huitAvantRetenue();
+    for (const [participant, siege] of [[18, 1], [19, 2], [20, 3]]) {
+      c = executer(c, 'reserver', { participant, table: 8, siege, portee: 'tous', tour: null });
+    }
+    return executer(c, 'reserver', { participant: THEO, table: 6, siege: null, portee: 'tous', tour: null });
+  }
+  async function monter() {
+    const m = await ouvrir(preparee());
+    m.ui.montrerProposition(1);
+    flushSync();
+    await images(2);
+    return m;
+  }
+
+  test('réserver tous les sièges d’une table pour tous les tours est accepté, et le gel se voit ; k_t > c_t, par glissement puis par le menu : SURRESERVATION puis PLACE_RESERVEE sur la chaise, chacun avec sa commande', async () => {
+    const m = await monter();
+    expect(peinte(tableEl(m, 8).querySelector('[data-marque="gel"]'))).toBe(true);
+    let avant = fichiers(m);
+    await glisser(pointChaise(m, 1, 1), pointChaise(m, 8, 1));
+    await refusSurLaPlace(m, chaiseEl(m, 8, 1), 8, ['SURRESERVATION', 'PLACE_RESERVEE'], avant);
+
+    avant = fichiers(m);
+    await activerSiegeAuClavier(m, 1, 1);
+    await presserBouton(panneau(m, 'place').querySelector('[data-menu] [data-commande="deplacer"]'));
+    await cliquerChaise(m, 8, 1);
+    await cliquer(actionPlace(m, 'assigner'));
+    await refusSurLaPlace(m, chaiseEl(m, 8, 1), 8, ['SURRESERVATION', 'PLACE_RESERVEE'], avant);
+  });
+
+  test('deux places sur un même tour, par glissement puis par le menu : DEUX_PLACES_MEME_TOUR sur la chaise, sa commande déplace la réservation', async () => {
+    const m = await monter();
+    const chaiseTheo = etatMontre(m).tables.flatMap((t) => t.chaises.map((c) => ({ table: t.id, ...c }))).find((c) => c.occupant === THEO);
+    expect(chaiseTheo.table).not.toBe(6);
+    let avant = fichiers(m);
+    await glisser(pointChaise(m, chaiseTheo.table, chaiseTheo.siege), pointChaise(m, 7, 3));
+    const message = await refusSurLaPlace(m, chaiseEl(m, 7, 3), 7, ['DEUX_PLACES_MEME_TOUR'], avant);
+    expect(message.querySelector('[data-commande="deplacerReservation"]')).not.toBeNull();
+
+    avant = fichiers(m);
+    await cliquerChaise(m, chaiseTheo.table, chaiseTheo.siege);
+    await cliquer(dans(m, `[data-menu="${THEO}"] [data-commande="deplacer"]`));
+    await cliquerChaise(m, 7, 3);
+    await cliquer(actionPlace(m, 'assigner'));
+    await refusSurLaPlace(m, chaiseEl(m, 7, 3), 7, ['DEUX_PLACES_MEME_TOUR'], avant);
+  });
+
+  test('une place réservée à un autre, par glissement puis par le menu : PLACE_RESERVEE ; une personne exclue, par le menu : PERSONNE_EXCLUE ; exclue et place réservée à un autre : les deux, dans l’ordre du contrat', async () => {
+    let base = huitAvantRetenue();
+    base = executer(base, 'reserver', { participant: 19, table: 7, siege: 1, portee: 'tous', tour: null });
+    const m = await ouvrir(base);
+    m.ui.montrerProposition(1);
+    flushSync();
+    await images(2);
+    let avant = fichiers(m);
+    await glisser(pointChaise(m, 1, 1), pointChaise(m, 7, 1));
+    await refusSurLaPlace(m, chaiseEl(m, 7, 1), 7, ['PLACE_RESERVEE'], avant);
+    avant = fichiers(m);
+    await cliquerChaise(m, 1, 1);
+    const occupant = etatMontre(m).tables[0].chaises[0].occupant;
+    await cliquer(dans(m, `[data-menu="${occupant}"] [data-commande="deplacer"]`));
+    await cliquerChaise(m, 7, 1);
+    await cliquer(actionPlace(m, 'assigner'));
+    await refusSurLaPlace(m, chaiseEl(m, 7, 1), 7, ['PLACE_RESERVEE'], avant);
+
+    // Exclure l'occupante de la chaise 2 de la table 1 par son menu : son menu
+    // reste, et « Déplacer » la choisit.
+    await cliquerChaise(m, 1, 2);
+    const exclue = etatMontre(m).tables[0].chaises[1].occupant;
+    const r = fichiers(m).revision;
+    await cliquer(dans(m, `[data-menu="${exclue}"] [data-commande="exclure"]`));
+    await uneEntree(m, r);
+    avant = fichiers(m);
+    await cliquer(dans(m, `[data-menu="${exclue}"] [data-commande="deplacer"]`));
+    expect(m.ui.etat().choix?.participant).toBe(exclue);
+    await cliquerChaise(m, 8, 3);
+    await cliquer(actionPlace(m, 'assigner'));
+    await refusSurLaPlace(m, chaiseEl(m, 8, 3), 8, ['PERSONNE_EXCLUE'], avant);
+
+    m.ui.choisir({ genre: 'personne', participant: exclue, depuis: null });
+    await cliquerChaise(m, 7, 1);
+    await cliquer(actionPlace(m, 'assigner'));
+    await refusSurLaPlace(m, chaiseEl(m, 7, 1), 7, ['PERSONNE_EXCLUE', 'PLACE_RESERVEE'], avant);
+  });
+});
+
+// --- Déplacer la réservation (§ 5.9, § 2.1 étape 7) ------------------------------
+
+describe('la pose ne survit ni au tour ni à la section (§ 5.9)', () => {
+  test('PLACE_RESERVEE posée par un glissement : quitter la section puis revenir au plan ne la remontre pas ; un changement de tour la retire', async () => {
+    const base = executer(huitAvantRetenue(), 'reserver', { participant: 19, table: 7, siege: 1, portee: 'tous', tour: null });
+    const m = await ouvrir(base);
+    m.ui.montrerProposition(1);
+    flushSync();
+    await images(2);
+    await glisser(pointChaise(m, 1, 1), pointChaise(m, 7, 1));
+    await attendre(() => expect(dans(m, '[data-refus="PLACE_RESERVEE"]')).not.toBeNull());
+    m.ui.allerA('tables');
+    flushSync();
+    m.ui.allerA('plan');
+    flushSync();
+    await attendre(() => expect(tous(m, '[data-table]').length).toBe(8));
+    await images(2);
+    expect(dans(m, '[data-refus]')).toBeNull();
+    expect(m.ui.etat().pose).toBeNull();
+
+    await glisser(pointChaise(m, 1, 1), pointChaise(m, 7, 1));
+    await attendre(() => expect(dans(m, '[data-refus="PLACE_RESERVEE"]')).not.toBeNull());
+    m.ui.montrerTour(2);
+    flushSync();
+    await images(2);
+    expect(dans(m, '[data-refus]')).toBeNull();
+    expect(m.ui.etat().pose).toBeNull();
+    expect(chaiseEl(m, 7, 1).getAttribute('aria-describedby')).toBeNull();
+  });
+});
+
+describe('déplacer la réservation, remède d’une place réservée (§ 5.9, § 2.1 étape 7)', () => {
+  // Basile Tourmaline (5), que les deux sources assoient à la table 2 au
+  // tour 1, désigné à son siège 2 : sa réservation et le titre « animateur ».
+  // Sur le retenu, le dépôt d'Iris sur sa place est un échange, qui le
+  // ferait aussi quitter sa réservation : RESERVEE_AILLEURS suit.
+  const avecDesignation = (charge) => executer(charge, 'designer', { participant: 5, table: 2, siege: 2, libelle: 'animateur' });
+
+  for (const [nom, base, preparer, codes] of [
+    ['avant la retenue', () => avecDesignation(huitAvantRetenue()), (m) => m.ui.montrerProposition(1), ['PLACE_RESERVEE']],
+    ['sur un retenu', () => avecDesignation(huitRetenue()), () => {}, ['PLACE_RESERVEE', 'RESERVEE_AILLEURS']],
+  ]) {
+    test(`${nom} : le dépôt sur la place est refusé, le remède choisit la réservation ; une place libre, puis « Déplacer la réservation ici » → une entrée, la réservation à la nouvelle place, le titre resté`, async () => {
+      const m = await ouvrir(base());
+      preparer(m);
+      flushSync();
+      await images(2);
+      const origine = structuredClone(charge(m));
+      const avant = fichiers(m);
+      expect(etatMontre(m).tables[1].chaises[1]).toMatchObject({ occupant: 5, reservation: { participant: 5, portee: 'tous' } });
+      await glisser(pointChaise(m, 1, 1), pointChaise(m, 2, 2));
+      const message = await refusSurLaPlace(m, chaiseEl(m, 2, 2), 2, codes, avant);
+      await cliquer(message.querySelector('[data-refus="PLACE_RESERVEE"] [data-commande="choisirPlace"]'));
+      expect(m.ui.etat().choix).toEqual({
+        genre: 'reservation',
+        participant: 5,
+        depuis: { table: 2, siege: 2 },
+        de: { table: 2, portee: 'tous', tour: null },
+      });
+      await cliquerChaise(m, 8, 3);
+      await cliquer(actionPlace(m, 'deplacerReservationIci'));
+      await uneEntree(m, avant.revision);
+      expect(charge(m).reservations).toEqual([{ participant: 5, table: 8, siege: 3, portee: 'tous', tour: null }]);
+      expect(charge(m).titres).toEqual([{ table: 2, siege: 2, libelle: 'animateur' }]);
+      expect(charge(m).retenu).toEqual(origine.retenu);
+      expect(m.ui.etat().choix).toBeNull();
+    });
+  }
+});
+
+// --- Les listes de travail (§ 5.8, § 2.1 étape 6) --------------------------------
+
+describe('les listes de travail mènent à la place ou à la personne (§ 5.8)', () => {
+  test('un titre non pourvu à la table 5, Ondine pressentie « hôte » : chaque liste porte son élément ; le titre sélectionne sa place, focalisée et dans la fenêtre ; Ondine devient la personne choisie ; « Désigner » → une entrée, les deux listes vides', async () => {
+    let base = executer(sansProposition({ attribuer: true }), 'poserTitre', { table: 5, siege: 1, libelle: 'animateur' });
+    base.participants[ONDINE - 1].titrePressenti = 'hôte';
+    const m = await ouvrir(base);
+    const cadre = cadreDe(m);
+    await avecVue(m, { k: 1, tx: cadre.largeur / 2, ty: cadre.hauteur / 2 });
+    expect(dansLaFenetre(m, chaiseEl(m, 5, 1))).toBe(false);
+    const titres = dans(m, '[data-liste-travail="titres"]');
+    const pressentis = dans(m, '[data-liste-travail="pressentis"]');
+    expect([...titres.querySelectorAll('[data-titre]')].map(texteDe)).toEqual(['table 5 : titre animateur non pourvu']);
+    expect([...pressentis.querySelectorAll('[data-participant]')].map((e) => e.dataset.participant)).toEqual([String(ONDINE)]);
+
+    await cliquer(titres.querySelector('[data-titre]'));
+    expect(m.ui.etat().selection).toEqual({ table: 5, siege: 1 });
+    await attendre(() => expect(document.activeElement).toBe(racinePlan(m)));
+    expect(actif(m)).toBe('siege-5-1');
+    await attendre(() => expect(dansLaFenetre(m, chaiseEl(m, 5, 1))).toBe(true));
+
+    const ondine = pressentis.querySelector(`[data-participant="${ONDINE}"]`);
+    await cliquer(ondine);
+    expect(m.ui.etat().choix).toEqual({ genre: 'personne', participant: ONDINE, depuis: null });
+    expect(ondine.getAttribute('aria-pressed')).toBe('true');
+    const r = fichiers(m).revision;
+    await cliquer(actionPlace(m, 'designer'));
+    await uneEntree(m, r);
+    expect(charge(m).reservations).toEqual([{ participant: ONDINE, table: 5, siege: 1, portee: 'tous', tour: null }]);
+    await attendre(() => expect(dans(m, '[data-liste-travail="titres"]').querySelectorAll('[data-titre]').length).toBe(0));
+    expect(dans(m, '[data-liste-travail="pressentis"]').querySelectorAll('[data-participant]').length).toBe(0);
+  });
+
+  test('exclusion par le menu : RESERVATIONS_SUSPENDUES nomme Iris, compte sa réservation et le titre ; la liste gagne le titre ; la chaise hachurée à cadenas ouvert ; réservations inchangées ; réintégrer rend tout', async () => {
+    const base = executer(sansProposition({ attribuer: true }), 'designer', { participant: IRIS, table: 3, siege: 1, libelle: 'animateur' });
+    const m = await ouvrir(base);
+    const reservations = structuredClone(charge(m).reservations);
+    const DESIGNATION = new Set(['selection', 'focus']);
+    const marques = () =>
+      [...chaiseEl(m, 3, 1).querySelectorAll('[data-marque]')]
+        .map((e) => e.dataset.marque)
+        .filter((marque) => !DESIGNATION.has(marque))
+        .sort();
+    expect(marques()).toEqual(['anneau', 'cadenasFerme', 'remplissagePlein']);
+    await cliquerChaise(m, 3, 1);
+    let r = fichiers(m).revision;
+    await cliquer(dans(m, `[data-menu="${IRIS}"] [data-commande="exclure"]`));
+    await uneEntree(m, r);
+    await attendre(() => expect(dans(m, '[data-avertissement="RESERVATIONS_SUSPENDUES"]')).not.toBeNull());
+    const texte = texteDe(dans(m, '[data-avertissement="RESERVATIONS_SUSPENDUES"]'));
+    expect(texte).toContain('Iris Ombrelle');
+    expect(texte).toContain('1 réservation suspendue');
+    expect(texte).toContain('1 titre de place');
+    expect([...dans(m, '[data-liste-travail="titres"]').querySelectorAll('[data-titre]')].map(texteDe)).toEqual([
+      'table 3 : titre animateur non pourvu',
+    ]);
+    await attendre(() => expect(marques()).toEqual(['cadenasOuvert', 'hachure']));
+    expect(charge(m).reservations).toEqual(reservations);
+
+    r += 1;
+    await cliquer(dans(m, `[data-menu="${IRIS}"] [data-commande="reintegrer"]`));
+    await uneEntree(m, r);
+    await attendre(() => expect(marques()).toEqual(['anneau', 'cadenasFerme', 'remplissagePlein']));
+    expect(dans(m, '[data-liste-travail="titres"]').querySelectorAll('[data-titre]').length).toBe(0);
+    expect(charge(m).reservations).toEqual(reservations);
+  });
+
+  test('conversion proposée : la R-ième réservation « tour » de Théo à la table 1 la fait paraître, la charge inchangée ; ignorer → rien ; accepter → une entrée, une réservation « tous »', async () => {
+    let base = sansProposition();
+    for (const tour of [1, 2, 3]) base = executer(base, 'reserver', { participant: THEO, table: 1, siege: 2, portee: 'tour', tour });
+    const m = await ouvrir(base);
+    const avant = fichiers(m);
+    const conversion = () => dans(m, `[data-conversion="${THEO}:1"]`);
+    await attendre(() => expect(conversion()).not.toBeNull());
+    await rienEcrit(m, avant);
+    await cliquer(conversion().querySelector('[data-commande="ignorer"]'));
+    expect(conversion()).toBeNull();
+    await rienEcrit(m, avant);
+
+    m.ui.allerA('tables');
+    flushSync();
+    m.ui.allerA('plan');
+    flushSync();
+    await attendre(() => expect(conversion()).not.toBeNull());
+    await cliquer(conversion().querySelector('[data-commande="convertir"]'));
+    await uneEntree(m, avant.revision);
+    expect(charge(m).reservations).toEqual([{ participant: THEO, table: 1, siege: 2, portee: 'tous', tour: null }]);
+  });
+
+  test('réserve visible : sur un retenu, une personne en attente au tour affiché, choisie, une chaise libre, « Assigner » → deplacerDansRetenu ; changer de tour change la réserve et oublie le choix', async () => {
+    const base = executer(executer(huitRetenue(), 'retirerDuTour', { tour: 1, participant: 7 }), 'retirerDuTour', { tour: 2, participant: 9 });
+    const m = await ouvrir(base);
+    const reserve = () => [...dans(m, '[data-reserve]').querySelectorAll('[data-participant]')].map((e) => Number(e.dataset.participant));
+    expect(dans(m, '[data-reserve]').dataset.reserve).toBe('1');
+    expect(reserve()).toEqual([7]);
+    const commandes = releverCommandes(m);
+    const r = fichiers(m).revision;
+    await choisirDansLaReserve(m, 7);
+    await cliquerChaise(m, 8, 3);
+    await cliquer(actionPlace(m, 'assigner'));
+    await uneEntree(m, r);
+    expect(commandes.at(-1)).toEqual({ nom: 'deplacerDansRetenu', args: { tour: 1, participant: 7, table: 8, siege: 3 } });
+    await attendre(() => expect(reserve()).toEqual([]));
+
+    m.ui.choisir({ genre: 'personne', participant: 8, depuis: null });
+    m.ui.montrerTour(2);
+    flushSync();
+    await images(2);
+    expect(dans(m, '[data-reserve]').dataset.reserve).toBe('2');
+    expect(reserve()).toEqual([9]);
+    expect(m.ui.etat().choix).toBeNull();
+  });
+});

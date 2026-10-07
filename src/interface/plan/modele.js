@@ -25,6 +25,10 @@ export const TAILLE_TEXTE_PASTILLE_CM = 18;
 /** Écart entre le bord d'une chaise et son anneau, ou sa mise en évidence, en cm. */
 export const ECART_ANNEAU = 6;
 export const ECART_MISE_EN_EVIDENCE = 12;
+/** Écart entre le bord d'une chaise, ou d'une emprise, et la marque de
+ *  sélection (anneau en tirets), puis le carré du focus, en cm. */
+export const ECART_DESIGNATION = 18;
+export const ECART_FOCUS = 26;
 
 // Les cadenas d'une chaise (§ 7.6), en cm, centrés sur l'origine : un corps
 // plein et une anse, fermée ou ouverte, remplis d'un seul tenant. Le dessin
@@ -139,6 +143,22 @@ export function textesLigne({ numero, etat, titulaire = null, nom, titre }, t) {
     titre: titre === null ? null : titre.libelle,
     apresTitre: titre === null || titre.pourvu ? null : t('plan.ligne.apresTitreNonPourvu'),
   };
+}
+
+/**
+ * La ligne entière en un seul texte : les parties de textesLigne bout à
+ * bout, dans l'ordre de la lecture. C'est le nom accessible d'un siège, que
+ * le plan annonce quand il devient l'élément actif.
+ *
+ * @param {ReturnType<typeof ligneListe>} ligne
+ * @param {(cle: string, details?: Object) => string} t
+ * @returns {string}
+ */
+export function texteLigne(ligne, t) {
+  const textes = textesLigne(ligne, t);
+  return ['tete', 'titulaire', 'suite', 'nom', 'avantTitre', 'titre', 'apresTitre']
+    .map((partie) => textes[partie] ?? '')
+    .join('');
 }
 
 /**
@@ -274,14 +294,26 @@ function chaisesA(etatTable, places) {
   return Array.from({ length: places }, (_, i) => etatTable.chaises[i] ?? chaiseLibre(i + 1));
 }
 
+// Le porteur d'une place {table, siege|null} dans une table dessinée : le
+// siège quand la place en nomme un que le régime sièges dessine, 'table'
+// quand elle n'en nomme pas ou que le régime table n'en dessine aucun, null
+// pour une place d'une autre table.
+function porteurDe(place, id, regime) {
+  if (place === null || place === undefined || place.table !== id) return null;
+  const siege = place.siege ?? null;
+  return siege === null || regime === 'table' ? 'table' : siege;
+}
+
 // Le dessin d'une table de l'état des places au zoom k ; places, le nombre
 // de sièges que la poignée montre, sinon sa capacité.
-function tableDessin(etatTable, { k, miseEnEvidence, nomDe }, places = etatTable.capacite) {
+function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, actif = null }, places = etatTable.capacite) {
   const { id, numero, gelee, surchargee, conflits } = etatTable;
   const geometrie = geometrieTable(etatTable, places);
   const regime = regimeCibles(k, geometrie);
   const pastille = conflits === null ? 0 : conflits.nombre;
   const etatChaises = chaisesA(etatTable, places);
+  const selectionnee = porteurDe(selection, id, regime);
+  const active = porteurDe(actif, id, regime);
   const chaises =
     regime === 'table'
       ? []
@@ -295,6 +327,8 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe }, places = etatTable
             remplissage: chaise.remplissage,
             marques: [...chaise.marques],
             miseEnEvidence: miseEnEvidence !== null && chaise.occupant === miseEnEvidence,
+            selection: selectionnee === chaise.siege,
+            focus: active === chaise.siege,
           };
         });
   return {
@@ -303,6 +337,8 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe }, places = etatTable
     regime,
     conflit: pastille > 0,
     pastille,
+    selection: selectionnee === 'table',
+    focus: active === 'table',
     gelee,
     surchargee,
     nomAccessible: {
@@ -330,6 +366,12 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe }, places = etatTable
  * bloc de noms n'est pas dans le modèle : c'est LARGEUR_BLOC_NOMS_CM du
  * registre, que le dessin lit.
  *
+ * La place sélectionnée (option selection) et l'élément actif du clavier
+ * (option actif), {table, siege|null} ou null, marquent leur chaise —
+ * drapeaux selection et focus d'une chaise — quand la place nomme un siège
+ * que le régime sièges dessine, leur table sinon — drapeaux selection et
+ * focus d'une table — ; tout autre porteur garde ses drapeaux faux.
+ *
  * Pendant le tirage d'une poignée (option poignee), la table qu'elle désigne
  * se dessine à places sièges — géométrie, régime, chaises, lignes et nom
  * accessible —, ses chaises 1 à places, celles au-delà de sa capacité
@@ -338,13 +380,22 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe }, places = etatTable
  * @param {Object} etatPlaces   EtatPlaces (A5)
  * @param {{k: number, listes: boolean, miseEnEvidence: number|null,
  *          nomDe: (id: number) => string, diagnostic?: Object|null,
- *          poignee?: {table: number, places: number}|null}} options
+ *          poignee?: {table: number, places: number}|null,
+ *          selection?: {table: number, siege?: number|null}|null,
+ *          actif?: {table: number, siege: number|null}|null}} options
  *        diagnostic : celui que rend diagnostiquer, compléments de M1 compris
  * @returns {Object}   ModeleDessin
  */
-export function modeleDessin(etatPlaces, { k, listes, miseEnEvidence, nomDe, diagnostic = null, poignee = null }) {
+export function modeleDessin(
+  etatPlaces,
+  { k, listes, miseEnEvidence, nomDe, diagnostic = null, poignee = null, selection = null, actif = null },
+) {
   const tables = etatPlaces.tables.map((etatTable) =>
-    tableDessin(etatTable, { k, miseEnEvidence, nomDe }, poignee !== null && poignee.table === etatTable.id ? poignee.places : etatTable.capacite),
+    tableDessin(
+      etatTable,
+      { k, miseEnEvidence, nomDe, selection, actif },
+      poignee !== null && poignee.table === etatTable.id ? poignee.places : etatTable.capacite,
+    ),
   );
   const toutesEnConflit = tables.length > 0 && tables.every(({ conflit }) => conflit);
   return {
@@ -353,4 +404,122 @@ export function modeleDessin(etatPlaces, { k, listes, miseEnEvidence, nomDe, dia
     bandeau: bandeauDe(toutesEnConflit, diagnostic),
     listesRendues: listes && k >= constante('K_LISTES'),
   };
+}
+
+/**
+ * Le détail des conflits d'une table au tour montré (§ 7.1, § 7.3), que
+ * l'infobulle énonce : son numéro, le nombre de violations, et chaque règle
+ * violée dans l'ordre du moteur (conflitsParTable, M1), sa clé de libellé
+ * plan.infobulle.<règle> et ses groupes nommés — une paire de noms pour
+ * séparer les appartenances et nouveaux voisins, un nom seul pour nouvelle
+ * table. Les noms sont des données : l'infobulle pose chacun dans son nœud.
+ * null quand les conflits ne s'évaluent pas ou qu'il n'y en a aucun.
+ *
+ * @param {Object} etatTable   EtatTable (A5)
+ * @param {(id: number) => string} nomDe
+ * @returns {null|{numero: number, nombre: number, regles: Array<{cle: string, groupes: string[][]}>}}
+ */
+export function detailConflits({ numero, conflits }, nomDe) {
+  if (conflits === null || conflits.nombre === 0) return null;
+  return {
+    numero,
+    nombre: conflits.nombre,
+    regles: conflits.regles.map((regle) => ({
+      cle: `plan.infobulle.${regle.regle}`,
+      groupes: (regle.paires ?? regle.personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe)),
+    })),
+  };
+}
+
+/**
+ * Les actions qu'offre le panneau d'une place (§ 7.1, § 2.1 étape 6), dans
+ * l'ordre de l'affichage : sur une place qu'aucune réservation ne tient,
+ * assigner, réserver et désigner, qui portent sur la personne choisie ;
+ * assigner aussi sur une place tenue quand une personne est choisie — le
+ * dépôt du menu, que la pose refuse sur la place comme un glissement ;
+ * donner un titre sur une place sans titre ; retirer la réservation et
+ * retirer le titre sur celles qui en portent ; déplacer la réservation ici
+ * quand le choix en attente est une réservation.
+ *
+ * @param {{reservation: Object|null, titre: Object|null}} chaise   EtatChaise
+ * @param {Object|null} choix   EtatUi.choix
+ * @returns {string[]}   parmi assigner, reserver, donnerTitre, designer,
+ *   retirerReservation, retirerTitre, deplacerReservationIci
+ */
+export function actionsPlace({ reservation, titre }, choix) {
+  const libre = reservation === null;
+  const personne = choix !== null && choix.genre === 'personne';
+  return [
+    ['assigner', libre || personne],
+    ['reserver', libre],
+    ['donnerTitre', titre === null],
+    ['designer', libre],
+    ['retirerReservation', !libre],
+    ['retirerTitre', titre !== null],
+    ['deplacerReservationIci', choix !== null && choix.genre === 'reservation'],
+  ]
+    .filter(([, offerte]) => offerte)
+    .map(([action]) => action);
+}
+
+/**
+ * Le menu d'une personne (§ 7.1), dans l'ordre de l'affichage : déplacer —
+ * le choix en attente —, toujours ; échanger quand elle est assise au tour
+ * montré ; retirer du tour quand le dépôt sur le sol rend une commande ou un
+ * refus (retrait non null) ; réserver ici quand elle est assise sur une
+ * place qu'aucune réservation ne tient ; déplacer sa réservation quand la
+ * sienne tient sa chaise ; exclure, ou réintégrer une exclue ; ouvrir la
+ * fiche.
+ *
+ * @param {{exclu: boolean, chaise: Object|null, retrait: Object|null}} personne
+ *        chaise, l'EtatChaise qu'elle occupe au tour montré, null hors du dessin
+ * @returns {string[]}   parmi deplacer, echanger, retirerDuTour, reserverIci,
+ *   deplacerReservation, exclure, reintegrer, ouvrirFiche
+ */
+export function actionsPersonne({ exclu, chaise, retrait }) {
+  const assise = chaise !== null;
+  const tenue = assise && chaise.reservation !== null && chaise.reservation.participant === chaise.occupant;
+  return [
+    ['deplacer', true],
+    ['echanger', assise],
+    ['retirerDuTour', retrait !== null],
+    ['reserverIci', assise && !exclu && chaise.reservation === null],
+    ['deplacerReservation', tenue],
+    ['exclure', !exclu],
+    ['reintegrer', exclu],
+    ['ouvrirFiche', true],
+  ]
+    .filter(([, offerte]) => offerte)
+    .map(([action]) => action);
+}
+
+/**
+ * Exécute la commande d'un panneau du plan — panneau d'une place, d'une
+ * table, menu d'une personne — et pose son refus sur la place, là où le
+ * geste a lieu (§ 5.9) : la même place qu'un glissement refusé, que
+ * Plan.svelte montre par ui.pose. Réussie, la commande oublie le choix en
+ * attente et retire la pose ; elle rend ce que rend la séance. Refusée — une
+ * erreur qui porte un code —, le refus se pose, et null est rendu. Un code de
+ * locaux, que l'appelant montre à côté de son champ, une place null et une
+ * erreur sans code remontent.
+ *
+ * @param {{seance: {executer: Function}, ui: {choisir: Function, poserSurPlace: Function}}} dependances
+ * @param {{table: number, siege?: number|null}|null} place
+ * @param {string} commande
+ * @param {Object} args
+ * @param {{locaux?: string[]}} [options]
+ * @returns {Promise<Object|null>}
+ */
+export async function executerSurPlace({ seance, ui }, place, commande, args, { locaux = [] } = {}) {
+  let rendu;
+  try {
+    rendu = await seance.executer(commande, args);
+  } catch (erreur) {
+    if (typeof erreur?.code !== 'string' || place === null || locaux.includes(erreur.code)) throw erreur;
+    ui.poserSurPlace({ place, refus: { code: erreur.code, details: erreur.details ?? {} }, avertissements: [] });
+    return null;
+  }
+  ui.choisir(null);
+  ui.poserSurPlace(null);
+  return rendu;
 }

@@ -20,17 +20,29 @@
   // Une table en conflit, quand le plan signale, porte un contour épaissi
   // (contourConflit) et une trame (trameConflit) par-dessus son plateau ; sa
   // pastille porte le nombre de violations, signalée ou non (§ 7.5).
+  //
+  // Le groupe de la table porte id="table-<id>", celui d'une chaise
+  // id="siege-<table>-<siège>" : la racine du plan, seul arrêt de tabulation,
+  // désigne l'élément actif par aria-activedescendant (§ 7.3, § 13.5). Une
+  // chaise a pour nom accessible sa ligne entière (texteLigne). La place
+  // sélectionnée porte la marque selection, un anneau en tirets ; l'élément
+  // actif du clavier, la marque focus, un carré : deux formes, que la
+  // couleur ne porte pas seule. Sur la chaise que le modèle désigne, ou sur
+  // l'emprise de la table quand la place n'a pas de chaise dessinée.
   import { getContext } from 'svelte';
   import { RAYON_POIGNEE } from '../../geometrie/tables.js';
   import {
     CADENAS_FERME,
     CADENAS_OUVERT,
     ECART_ANNEAU,
+    ECART_DESIGNATION,
+    ECART_FOCUS,
     ECART_MISE_EN_EVIDENCE,
     RAYON_PASTILLE,
     TAILLE_TEXTE_PASTILLE_CM,
     TRACE_GEL,
     formesTable,
+    texteLigne,
   } from './modele.js';
 
   let { table, signaler, prefixe } = $props();
@@ -46,9 +58,17 @@
   const signal = $derived(signaler && table.conflit);
   const hachure = $derived(`url(#${prefixe}-hachure)`);
   const trame = $derived(`url(#${prefixe}-trame)`);
+  // Les marques de désignation de la table, autour de l'emprise.
+  const autour = $derived(formesTable({ ...table.geometrie, rayonEmprise: table.geometrie.rayonEmprise + ECART_DESIGNATION }));
+  const cadreFocus = $derived(carreAutour(table.geometrie.centre, table.geometrie.rayonEmprise + ECART_FOCUS));
+
+  // Le carré de demi-côté demi centré sur un point, en attributs SVG.
+  function carreAutour({ x, y }, demi) {
+    return { x: x - demi, y: y - demi, width: 2 * demi, height: 2 * demi };
+  }
 </script>
 
-<g data-table={table.id} role="group" aria-label={t(table.nomAccessible.cle, table.nomAccessible.details)}>
+<g id="table-{table.id}" data-table={table.id} role="group" aria-label={t(table.nomAccessible.cle, table.nomAccessible.details)}>
   {#if table.regime === 'table'}
     {#if formes.ronde}
       <circle class="emprise" data-marque="contourChaise" {...formes.emprise} />
@@ -71,8 +91,23 @@
   {#if table.gelee}
     <path class="gel" data-marque="gel" d={TRACE_GEL} transform="translate({formes.gel.x},{formes.gel.y})" />
   {/if}
+  {#if table.selection}
+    {#if autour.ronde}
+      <circle class="selection" data-marque="selection" {...autour.emprise} />
+    {:else}
+      <rect class="selection" data-marque="selection" {...autour.emprise} />
+    {/if}
+  {/if}
+  {#if table.focus}
+    <rect class="focus" data-marque="focus" {...cadreFocus} />
+  {/if}
   {#each table.chaises as chaise (chaise.siege)}
-    <g data-siege="{table.id}:{chaise.siege}">
+    <g
+      id="siege-{table.id}-{chaise.siege}"
+      data-siege="{table.id}:{chaise.siege}"
+      role="img"
+      aria-label={texteLigne(table.lignes[chaise.siege - 1], t)}
+    >
       <circle
         class="chaise"
         class:pleine={chaise.remplissage === 'plein'}
@@ -91,6 +126,12 @@
       {/each}
       {#if chaise.miseEnEvidence}
         <circle class="evidence" data-marque="miseEnEvidence" cx={chaise.x} cy={chaise.y} r={chaise.rayon + ECART_MISE_EN_EVIDENCE} />
+      {/if}
+      {#if chaise.selection}
+        <circle class="selection" data-marque="selection" cx={chaise.x} cy={chaise.y} r={chaise.rayon + ECART_DESIGNATION} />
+      {/if}
+      {#if chaise.focus}
+        <rect class="focus" data-marque="focus" {...carreAutour(chaise, chaise.rayon + ECART_FOCUS)} />
       {/if}
     </g>
   {/each}
@@ -170,6 +211,25 @@
     stroke: var(--couleur-mise-en-evidence);
     stroke-width: 4;
     pointer-events: none;
+  }
+
+  /* La sélection : un anneau en tirets ; le focus du clavier : un carré
+     plein trait. Les deux gardent leur épaisseur à l'écran. */
+  .selection,
+  .focus {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    stroke-width: 3;
+    pointer-events: none;
+  }
+
+  .selection {
+    stroke: var(--couleur-selection);
+    stroke-dasharray: 6 4;
+  }
+
+  .focus {
+    stroke: var(--couleur-focus);
   }
 
   .poignee {

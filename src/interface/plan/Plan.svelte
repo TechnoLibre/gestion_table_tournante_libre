@@ -51,17 +51,53 @@
   // par RefusPlace, hors du <svg>, et la place le désigne par
   // aria-describedby ; l'appui suivant le retire. Tant que la commande d'un
   // geste n'est pas réglée, un appui ne saisit que le sol.
-  import { getContext, tick } from 'svelte';
+  //
+  // La pose — refus ou avertissements sur une place — vit dans l'état de
+  // navigation (ui.pose) : un panneau latéral y pose le refus d'une commande
+  // de place, que le plan montre comme celui d'un geste. Son remède
+  // choisirPlace (PLACE_RESERVEE) fait de la réservation qui tient la place
+  // le choix en attente (ui.choix). Une commande d'un geste exécutée oublie
+  // le choix en attente.
+  //
+  // Le clavier (§ 7.3, § 13.5) : la racine est le seul arrêt de tabulation
+  // du plan — tabindex 0, un role, un aria-label — et désigne l'élément
+  // actif, une table ou un siège, par aria-activedescendant, sur les id que
+  // TablePlan pose. Les touches passent par toucheDuPlan (clavier.js) :
+  // flèches, entrée, échappement. L'entrée sur un siège le sélectionne et
+  // porte le focus au panneau de la place ; en régime table, elle ouvre le
+  // panneau de la table et porte le focus sur la liste de ses sièges. Le
+  // panneau rend le focus à la racine par Échap. Échap sur la racine oublie
+  // le choix en attente, quel que soit l'élément actif. L'élément actif suit
+  // la place sélectionnée. Une flèche, un focus venu du clavier et une
+  // sélection venue d'ailleurs que du pointeur — un panneau, une liste de
+  // travail — amènent l'élément actif dans le cadre (vueQuiMontre) ; la
+  // sélection d'un appui sur le plan ne déplace pas la vue : la chaise
+  // cliquée reste sous le pointeur.
+  // La marque focus ne se montre que sous un focus venu du clavier
+  // (:focus-visible, puis toute touche) : un clic n'en pose pas.
+  //
+  // L'infobulle (§ 7.1, § 7.3) : un seul [role=tooltip], ouvert sur une table
+  // en conflit par le survol — un pointermove de la racine sans bouton
+  // enfoncé, hors d'un geste —, par le focus du clavier sur la table ou l'un
+  // de ses sièges, et par la pression longue d'un doigt, minuterie de
+  // l'horloge de DUREE_PRESSION_LONGUE_MS, annulée au relâcher, à
+  // l'annulation, ou quand la machine du geste juge l'appui devenu
+  // glissement, au-delà du seuil. Elle reste ouverte jusqu'à l'appui
+  // suivant.
+  import { getContext, tick, untrack } from 'svelte';
   import { controlerCapacite } from '../../application/capacite.js';
   import { etatPlaces } from '../../application/places.js';
+  import { constante } from '../../geometrie/constantes.js';
   import { ajuster as vueAjustee, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
   import BandeauPlan from './BandeauPlan.svelte';
   import BarreVue from './BarreVue.svelte';
+  import { toucheDuPlan, vueQuiMontre } from './clavier.js';
   import { deposer } from './depot.js';
   import EchellePlan from './EchellePlan.svelte';
   import Fantome from './Fantome.svelte';
   import { REPOS, cleFantome, geste, memoriser } from './gestes.js';
-  import { modeleDessin } from './modele.js';
+  import Infobulle from './Infobulle.svelte';
+  import { detailConflits, modeleDessin } from './modele.js';
   import PlanDessin from './PlanDessin.svelte';
   import RefusPlace from './RefusPlace.svelte';
   import {
@@ -80,6 +116,9 @@
   const t = getContext('t');
   const seance = getContext('seance');
   const ui = getContext('ui');
+  const horloge = getContext('horloge');
+
+  const DUREE_PRESSION = constante('DUREE_PRESSION_LONGUE_MS');
 
   let racine = $state(null);
   let vue = $state.raw(null);
@@ -90,13 +129,22 @@
   let poignee = $state.raw(null);
   // Le fantôme montré, {nom, cle}, ou null.
   let fantome = $state.raw(null);
-  // Le refus ou les avertissements posés sur une place : {place, refus,
-  // avertissements, ancre — le point de dessin de la place, cm —, origine —
-  // le coin du <svg> dans la surface, px —}, ou null.
-  let pose = $state.raw(null);
+  // Le coin du <svg> dans la surface, en cadre dont le bord gauche et le
+  // haut sont relatifs à la surface : relu à chaque changement de cadre et à
+  // chaque appui, jamais dans un pointermove.
+  let origineSvg = $state.raw({ gauche: 0, haut: 0, largeur: 0, hauteur: 0 });
+  // L'élément actif du clavier, {table, siege|null}, ou null ; la racine a
+  // le focus ; le focus vient du clavier.
+  let actif = $state.raw(null);
+  let aLeFocus = $state(false);
+  let auClavier = $state(false);
+  // Les tables que désignent le survol et la pression longue, ou null.
+  let survol = $state(null);
+  let pression = $state(null);
 
   const prefixe = $props.id();
   const idPose = `${prefixe}-pose`;
+  const idInfobulle = `${prefixe}-infobulle`;
 
   const charge = $derived($seance.charge);
   const tours = $derived(charge.evenement.tours);
@@ -104,19 +152,51 @@
   const etat = $derived(etatPlaces(charge, { tour, proposition: $ui.proposition }));
   const englobantPlan = $derived(englobantDuTour(etat));
   const nomDe = $derived(nomDeCharge(charge));
+  const selection = $derived($ui.selection);
+  const pose = $derived($ui.pose);
+  // L'élément actif que le dessin marque : sous un focus venu du clavier.
+  const actifMontre = $derived(aLeFocus && auClavier ? actif : null);
   const modele = $derived(
     vue === null
       ? null
-      : modeleDessin(etat, { k: vue.k, listes: $ui.listes, miseEnEvidence: $ui.miseEnEvidence, nomDe, diagnostic, poignee }),
+      : modeleDessin(etat, {
+          k: vue.k,
+          listes: $ui.listes,
+          miseEnEvidence: $ui.miseEnEvidence,
+          nomDe,
+          diagnostic,
+          poignee,
+          selection,
+          actif: actifMontre,
+        }),
   );
-  // La pose à sa position dans la surface, sous la vue courante.
+  // La pose à sa position dans la surface, sous la vue courante ; rien pour
+  // une place dont la table n'est plus dessinée.
   const poseAffichee = $derived.by(() => {
-    if (pose === null || vue === null) return null;
-    const { place, refus, avertissements, ancre, origine } = pose;
-    const { x, y } = ecranDepuisDessin(vue, origine, ancre.x, ancre.y);
+    if (pose === null || vue === null || modele === null) return null;
+    const { place, refus, avertissements } = pose;
+    const ancre = ancreDe(place);
+    if (ancre === null) return null;
+    const { x, y } = ecranDepuisDessin(vue, origineSvg, ancre.x, ancre.y);
     const numero = etat.tables.find(({ id }) => id === place.table)?.numero ?? null;
     return { id: idPose, numero, siege: place.siege ?? null, refus, avertissements, x, y };
   });
+  // L'infobulle : la table que désignent la pression longue, le survol, puis
+  // l'élément actif sous un focus venu du clavier ; rien quand elle n'a pas
+  // de conflit. Posée au coin haut droit de l'emprise.
+  const infobulleTable = $derived(pression ?? survol ?? (actifMontre === null ? null : actifMontre.table));
+  const infobulle = $derived.by(() => {
+    if (infobulleTable === null || vue === null || modele === null) return null;
+    const etatTable = etat.tables.find(({ id }) => id === infobulleTable);
+    const dessin = modele.tables.find(({ id }) => id === infobulleTable);
+    if (etatTable === undefined || dessin === undefined) return null;
+    const detail = detailConflits(etatTable, nomDe);
+    if (detail === null) return null;
+    const { centre, rayonEmprise } = dessin.geometrie;
+    const { x, y } = ecranDepuisDessin(vue, origineSvg, centre.x + rayonEmprise, centre.y - rayonEmprise);
+    return { detail, x, y };
+  });
+  const infobulleDuFocus = $derived(infobulle !== null && pression === null && survol === null);
 
   // Le cadre de la racine, relu maintenant.
   const cadreCourant = () => cadreDepuisRect(racine.getBoundingClientRect());
@@ -176,30 +256,109 @@
     return chaise ?? racine.querySelector(`[data-table="${table}"]`);
   }
 
-  // Le point de dessin d'une place : le centre de sa chaise, ou de sa table.
+  // Le point de dessin d'une place : le centre de sa chaise, ou de sa
+  // table ; null pour une table que le dessin n'a pas.
   function ancreDe({ table, siege = null }) {
-    const { geometrie } = modele.tables.find(({ id }) => id === table);
+    const dessin = modele.tables.find(({ id }) => id === table);
+    if (dessin === undefined) return null;
+    const { geometrie } = dessin;
     const chaise = siege === null ? undefined : geometrie.chaises[siege - 1];
     return chaise === undefined ? { ...geometrie.centre } : { x: chaise.x, y: chaise.y };
   }
 
-  // Le coin du <svg> dans la surface, relu à l'appui : un cadre dont le
-  // bord gauche et le haut sont relatifs à la surface.
-  let origineSurface = { gauche: 0, haut: 0, largeur: 0, hauteur: 0 };
+  // Relit le coin du <svg> dans la surface, du cadre relu à l'instant.
+  function relireOrigine(cadre) {
+    const rect = surface.getBoundingClientRect();
+    origineSvg = { gauche: cadre.gauche - rect.left, haut: cadre.haut - rect.top, largeur: cadre.largeur, hauteur: cadre.hauteur };
+  }
 
   // Pose un refus et des avertissements sur une place ; rien des deux
   // retire la pose.
   function poserSurPlace(place, refus, avertissements) {
-    if (refus === null && avertissements.length === 0) {
-      pose = null;
-      return;
-    }
-    pose = { place, refus, avertissements, ancre: ancreDe(place), origine: origineSurface };
+    ui.poserSurPlace(refus === null && avertissements.length === 0 ? null : { place, refus, avertissements });
   }
 
   const fermerPose = () => {
-    pose = null;
+    ui.poserSurPlace(null);
   };
+
+  // Les gestes qu'un remède posé sur une place emprunte au plan : choisir
+  // une place pour la réservation qui tient la place refusée (PLACE_RESERVEE,
+  // { geste: 'choisirPlace', puis }) — elle devient le choix en attente, et
+  // « Déplacer la réservation ici » la déplace (PanneauPlace).
+  const gestesPose = {
+    choisirPlace: (remede) => {
+      const place = ui.etat().pose?.place ?? null;
+      const { participant, de } = remede.puis.arguments;
+      ui.choisir({
+        genre: 'reservation',
+        participant,
+        depuis: place === null ? null : { table: place.table, siege: place.siege ?? null },
+        de,
+      });
+      return true;
+    },
+  };
+
+  // Amène une place dans le cadre, k inchangé ; la vue ne change que si la
+  // place en sort.
+  function montrer(place) {
+    if (place === null || vue === null || modele === null) return;
+    const ancre = ancreDe(place);
+    if (ancre === null) return;
+    const suivante = vueQuiMontre(vue, cadreCourant(), ancre);
+    if (suivante !== vue) poserVue(suivante);
+  }
+
+  // Porte le focus à un panneau latéral de la section : à son élément
+  // [data-focus-initial], sinon au panneau.
+  async function focaliserPanneau(genre) {
+    await tick();
+    const section = racine.closest('[data-section]') ?? document;
+    const panneau = section.querySelector(`[data-panneau="${genre}"]`);
+    if (panneau === null) return;
+    (panneau.querySelector('[data-focus-initial]') ?? panneau).focus();
+  }
+
+  // Le contexte de toucheDuPlan : les géométries dessinées, leur régime et
+  // leur nombre de chaises.
+  function contexteClavier() {
+    const dessin = (id) => modele.tables.find((table) => table.id === id);
+    return {
+      geometries: modele.tables.map(({ geometrie }) => geometrie),
+      regimeDe: (id) => dessin(id).regime,
+      capaciteDe: (id) => dessin(id).geometrie.chaises.length,
+    };
+  }
+
+  // L'élément actif qu'annonce aria-activedescendant : le siège quand sa
+  // chaise est dessinée, sa table sinon.
+  const activeDescendant = $derived.by(() => {
+    if (actif === null || modele === null) return undefined;
+    const dessin = modele.tables.find(({ id }) => id === actif.table);
+    if (dessin === undefined) return undefined;
+    if (actif.siege !== null && dessin.chaises.some(({ siege }) => siege === actif.siege)) return `siege-${actif.table}-${actif.siege}`;
+    return `table-${actif.table}`;
+  });
+
+  // L'élément actif suit la place sélectionnée ; une sélection nouvelle
+  // vient dans le cadre, sauf celle d'un appui du pointeur, que l'effet
+  // selectionner d'un geste désigne ici par l'objet même qu'il confie à
+  // ui.selectionner. La sélection du montage ne déplace pas la vue.
+  let selectionSuivie = untrack(() => selection);
+  let selectionDuPointeur = null;
+  $effect(() => {
+    const place = selection;
+    if (place === selectionSuivie) return;
+    selectionSuivie = place;
+    const duPointeur = place !== null && place === selectionDuPointeur;
+    selectionDuPointeur = null;
+    if (place === null) return;
+    untrack(() => {
+      actif = { table: place.table, siege: place.siege ?? null };
+      if (!duPointeur) montrer(actif);
+    });
+  });
 
   // Restaure ce qu'un geste a montré.
   function restaurer(cible) {
@@ -226,6 +385,7 @@
     commandeEnCours = true;
     try {
       await seance.executer(commande, args);
+      ui.choisir(null);
     } catch (erreur) {
       if (typeof erreur?.code !== 'string') throw erreur;
       poserSurPlace(place, { code: erreur.code, details: erreur.details ?? {} }, []);
@@ -253,6 +413,7 @@
     const recadrer = () => {
       image = null;
       const cadre = cadreCourant();
+      relireOrigine(cadre);
       vue = vue === null ? vueInitiale(seance.cadrage(), englobantPlan, cadre) : vueApresCadre(vue, englobantPlan, cadre);
     };
     const observateur = new ResizeObserver(() => {
@@ -275,6 +436,12 @@
     const element = racine;
     let etatGeste = REPOS;
     let contexte = null;
+    // La minuterie de la pression longue, armée par l'appui d'un doigt.
+    let minuteriePression = null;
+    const oublierPression = () => {
+      if (minuteriePression !== null) horloge.annuler(minuteriePression);
+      minuteriePression = null;
+    };
     // Le dernier point d'un mouvement en attente de son image.
     let image = null;
     let enAttente = null;
@@ -289,6 +456,9 @@
     function appliquer({ etat: suivant, effets }) {
       const pointeur = etatGeste.pointeur;
       etatGeste = suivant;
+      // Un appui devenu glissement — au-delà du seuil, que la machine juge —
+      // n'est plus une pression longue.
+      if (suivant.phase === 'glisse') oublierPression();
       for (const effet of effets) {
         switch (effet.type) {
           case 'capturer':
@@ -314,10 +484,10 @@
             break;
           case 'montrerPlaces':
             poignee = { table: effet.table, places: effet.places };
-            poserSurPlace({ table: effet.table }, pose?.refus ?? null, effet.avertissements);
+            poserSurPlace({ table: effet.table }, ui.etat().pose?.refus ?? null, effet.avertissements);
             break;
           case 'montrerRefus':
-            poserSurPlace(effet.place, effet.refus, pose?.avertissements ?? []);
+            poserSurPlace(effet.place, effet.refus, ui.etat().pose?.avertissements ?? []);
             break;
           case 'restaurer':
             restaurer(effet.cible);
@@ -326,6 +496,7 @@
             poserVue(effet.vue);
             break;
           case 'selectionner':
+            selectionDuPointeur = effet.place;
             ui.selectionner(effet.place);
             break;
           case 'executer':
@@ -352,13 +523,24 @@
     // qu'une commande d'un geste n'est pas réglée, seul le sol se saisit :
     // le déplacement de vue ne lit ni la charge ni l'état des places.
     const surAppui = (evenement) => {
+      auClavier = false;
       if (etatGeste.phase !== 'repos' || evenement.button !== 0 || vue === null || modele === null) return;
       const source = sourceDe(evenement.target);
       if (commandeEnCours && source.genre !== 'sol') return;
       const cadre = cadreCourant();
-      const rect = surface.getBoundingClientRect();
-      origineSurface = { gauche: cadre.gauche - rect.left, haut: cadre.haut - rect.top, largeur: cadre.largeur, hauteur: cadre.hauteur };
-      pose = null;
+      relireOrigine(cadre);
+      ui.poserSurPlace(null);
+      survol = null;
+      pression = null;
+      oublierPression();
+      // Un doigt posé sur une table : sa pression longue ouvre l'infobulle.
+      if (evenement.pointerType === 'touch' && source.table !== null) {
+        const table = source.table;
+        minuteriePression = horloge.planifier(() => {
+          minuteriePression = null;
+          pression = table;
+        }, DUREE_PRESSION);
+      }
       // La charge, l'état, les géométries et k du moment de l'appui : le
       // geste se juge sur eux jusqu'à son terme.
       const chargeDuGeste = charge;
@@ -392,20 +574,85 @@
     };
 
     const surMouvement = (evenement) => {
-      if (etatGeste.phase === 'repos' || evenement.pointerId !== etatGeste.pointeur) return;
+      if (etatGeste.phase === 'repos') {
+        // Le survol : une souris ou un stylet sans bouton enfoncé.
+        if (evenement.pointerType !== 'touch' && evenement.buttons === 0) {
+          const groupe = evenement.target.closest('[data-table]');
+          survol = groupe === null ? null : Number(groupe.dataset.table);
+        }
+        return;
+      }
+      if (evenement.pointerId !== etatGeste.pointeur) return;
       enAttente = { x: evenement.clientX, y: evenement.clientY };
       if (image === null) image = requestAnimationFrame(livrer);
     };
 
     const surRelache = (evenement) => {
       if (etatGeste.phase === 'repos' || evenement.pointerId !== etatGeste.pointeur) return;
+      oublierPression();
       oublierImage();
       const point = { x: evenement.clientX, y: evenement.clientY };
       appliquer(geste(etatGeste, { type: 'relacher', pointeur: evenement.pointerId, point }, contexte));
     };
 
     const surAnnulationPointeur = (evenement) => {
+      oublierPression();
       if (etatGeste.phase !== 'repos' && evenement.pointerId === etatGeste.pointeur) annulerGeste('pointercancel');
+    };
+
+    // La sortie du pointeur et la perte du focus arrivent aussi pendant
+    // qu'un bloc démonte le plan — Chromium retire le focus d'un élément
+    // qu'on détache — : l'état change hors du suivi des dépendances.
+    const surSortie = () => {
+      untrack(() => {
+        survol = null;
+      });
+    };
+
+    // Le focus de la racine. Venu du clavier, il active la sélection, sinon
+    // la première table, quand rien n'est actif, et amène l'élément actif
+    // dans le cadre. Un appui, qui donne aussi le focus, n'écrit rien sous
+    // la racine et ne déplace pas la vue : la première touche activera.
+    const surFocus = () => {
+      aLeFocus = true;
+      auClavier = element.matches(':focus-visible');
+      if (!auClavier || modele === null || modele.tables.length === 0) return;
+      const existe = actif !== null && modele.tables.some(({ id }) => id === actif.table);
+      if (!existe) {
+        const place = selection ?? { table: modele.tables[0].id, siege: null };
+        actif = { table: place.table, siege: place.siege ?? null };
+      }
+      if (etatGeste.phase === 'repos') montrer(actif);
+    };
+    const surPerteFocus = () => {
+      untrack(() => {
+        aLeFocus = false;
+      });
+    };
+
+    // Une touche sur la racine, hors d'un geste : Échap d'un geste en cours
+    // passe d'abord par surTouche, en phase de capture.
+    const surToucheClavier = (evenement) => {
+      if (etatGeste.phase !== 'repos' || modele === null || evenement.altKey || evenement.ctrlKey || evenement.metaKey) return;
+      auClavier = true;
+      if (evenement.key === 'Escape') ui.choisir(null);
+      const rendu = toucheDuPlan(actif, evenement.key, contexteClavier());
+      if (rendu === null) return;
+      evenement.preventDefault();
+      actif = rendu.actif;
+      const { effet } = rendu;
+      if (effet === null) {
+        montrer(actif);
+      } else if (effet.type === 'selectionner') {
+        ui.selectionner(effet.place);
+        focaliserPanneau('place');
+      } else if (effet.type === 'ouvrirTable') {
+        ui.selectionner({ table: effet.table });
+        focaliserPanneau('table');
+      } else {
+        ui.poserSurPlace(null);
+        ui.selectionner(null);
+      }
     };
 
     const desabonner = seance.surAnnulation(() => annulerGeste('lecture'));
@@ -413,8 +660,17 @@
     element.addEventListener('pointermove', surMouvement);
     element.addEventListener('pointerup', surRelache);
     element.addEventListener('pointercancel', surAnnulationPointeur);
+    element.addEventListener('pointerleave', surSortie);
+    element.addEventListener('focus', surFocus);
+    element.addEventListener('blur', surPerteFocus);
+    element.addEventListener('keydown', surToucheClavier);
     return () => {
       desabonner();
+      oublierPression();
+      element.removeEventListener('pointerleave', surSortie);
+      element.removeEventListener('focus', surFocus);
+      element.removeEventListener('blur', surPerteFocus);
+      element.removeEventListener('keydown', surToucheClavier);
       element.removeEventListener('pointerdown', surAppui);
       element.removeEventListener('pointermove', surMouvement);
       element.removeEventListener('pointerup', surRelache);
@@ -440,7 +696,21 @@
   <BarreVue {tour} {tours} {zoomer} {ajuster} />
   <div class="surface" data-surface bind:this={surface}>
     <BandeauPlan bandeau={modele === null ? [] : modele.bandeau} />
-    <svg class="dessin" data-plan aria-label={t('plan.vue.dessin')} bind:this={racine}>
+    <!-- Le plan est un composant interactif à deux dimensions, que le
+         clavier parcourt par aria-activedescendant : role="application",
+         que le compilateur range parmi les rôles non interactifs. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <svg
+      class="dessin"
+      data-plan
+      tabindex="0"
+      role="application"
+      aria-roledescription={t('plan.vue.role')}
+      aria-label={t('plan.vue.dessin')}
+      aria-activedescendant={activeDescendant}
+      aria-describedby={infobulleDuFocus ? idInfobulle : undefined}
+      bind:this={racine}
+    >
       <g data-vue transform={vue === null ? undefined : transformDe(vue)} bind:this={groupeVue}>
         {#if modele !== null}
           <PlanDessin {modele} />
@@ -449,8 +719,9 @@
       <Fantome {fantome} bind:element={elementFantome} />
     </svg>
     {#if poseAffichee !== null}
-      <RefusPlace pose={poseAffichee} fermer={fermerPose} />
+      <RefusPlace pose={poseAffichee} fermer={fermerPose} gestes={gestesPose} />
     {/if}
+    <Infobulle {infobulle} id={idInfobulle} />
     <!-- L'échelle occupe sa place avant que la vue n'existe, cachée : sa
          venue ne change pas le cadre du dessin. -->
     <div class="pied" class:cache={vue === null}>
@@ -496,5 +767,17 @@
     overflow: hidden;
     touch-action: none;
     user-select: none;
+  }
+
+  /* Un focus venu du clavier se voit sur la racine, contour tracé en
+     dedans : un contour ne change pas la boîte du cadre. L'élément actif
+     porte en plus la marque focus. */
+  .dessin:focus {
+    outline: none;
+  }
+
+  .dessin:focus-visible {
+    outline: 3px solid var(--couleur-focus);
+    outline-offset: -3px;
   }
 </style>

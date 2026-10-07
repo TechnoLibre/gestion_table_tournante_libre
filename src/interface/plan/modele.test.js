@@ -27,13 +27,18 @@ import { planDepuisFichier, versFichier } from '../../stockage/placements.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
   LARGEUR_ECHELLE_PX,
+  actionsPersonne,
+  actionsPlace,
   ajusterLigne,
+  detailConflits,
+  executerSurPlace,
   formesTable,
   libelleLongueur,
   ligneListe,
   modeleDessin,
   ordonneesLignes,
   partiesLigne,
+  texteLigne,
   textesLigne,
 } from './modele.js';
 
@@ -773,5 +778,240 @@ describe('modeleDessin : l\u{2019}option poignee dessine une table au nombre tir
       const auZoom = modeleDessin(etat, options(charge, { k, poignee: { table: cible.id, places: 30 } })).tables[0];
       assert.equal(auZoom.regime, regimeCibles(k, geometrieTable(cible, 30)), `k = ${k}`);
     }
+  });
+});
+
+// --- La sélection et l'élément actif (I11) ---------------------------------------
+
+describe('modeleDessin : les options selection et actif marquent leur chaise, ou leur table, et elle seule (§ 7.1, § 7.3)', () => {
+  // Les porteurs d'une marque : 'table:<id>' ou 'siege:<id>:<siège>'.
+  function porteurs(modele, marque) {
+    const trouves = [];
+    for (const table of modele.tables) {
+      if (table[marque]) trouves.push(`table:${table.id}`);
+      for (const chaise of table.chaises) if (chaise[marque]) trouves.push(`siege:${table.id}:${chaise.siege}`);
+    }
+    return trouves;
+  }
+
+  test('sans option, ni sélection ni focus ; chaque table et chaque chaise porte les deux drapeaux, faux', () => {
+    const charge = petite();
+    const modele = modeleDessin(etatPlaces(charge, { tour: 1 }), options(charge));
+    assert.equal(modele.tables.length, 4);
+    let chaises = 0;
+    for (const table of modele.tables) {
+      assert.equal(table.selection, false);
+      assert.equal(table.focus, false);
+      for (const chaise of table.chaises) {
+        chaises += 1;
+        assert.equal(chaise.selection, false);
+        assert.equal(chaise.focus, false);
+      }
+    }
+    assert.ok(chaises > 0);
+  });
+
+  test('régime sièges : un siège marque sa chaise, une place sans siège marque sa table', () => {
+    const charge = petite();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const [, deuxieme, troisieme] = etat.tables;
+    const modele = modeleDessin(etat, options(charge, { selection: { table: deuxieme.id, siege: 2 }, actif: { table: troisieme.id, siege: null } }));
+    assert.equal(modele.tables[1].regime, 'sieges');
+    assert.deepEqual(porteurs(modele, 'selection'), [`siege:${deuxieme.id}:2`]);
+    assert.deepEqual(porteurs(modele, 'focus'), [`table:${troisieme.id}`]);
+    const memePlace = modeleDessin(etat, options(charge, { selection: { table: deuxieme.id, siege: 1 }, actif: { table: deuxieme.id, siege: 1 } }));
+    assert.deepEqual(porteurs(memePlace, 'selection'), [`siege:${deuxieme.id}:1`]);
+    assert.deepEqual(porteurs(memePlace, 'focus'), [`siege:${deuxieme.id}:1`]);
+  });
+
+  test('régime table : un siège, que nulle chaise ne dessine, marque sa table', () => {
+    const charge = petite();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const cible = etat.tables[0];
+    const modele = modeleDessin(etat, options(charge, { k: 0.2, selection: { table: cible.id, siege: 2 }, actif: { table: cible.id, siege: 3 } }));
+    assert.equal(modele.tables[0].regime, 'table');
+    assert.deepEqual(porteurs(modele, 'selection'), [`table:${cible.id}`]);
+    assert.deepEqual(porteurs(modele, 'focus'), [`table:${cible.id}`]);
+  });
+
+  test('une place d’une table absente ne marque rien', () => {
+    const charge = petite();
+    const modele = modeleDessin(etatPlaces(charge, { tour: 1 }), options(charge, { selection: { table: 99, siege: 1 }, actif: { table: 99, siege: null } }));
+    assert.deepEqual(porteurs(modele, 'selection'), []);
+    assert.deepEqual(porteurs(modele, 'focus'), []);
+  });
+});
+
+// --- Le détail d'une table en conflit (I11) --------------------------------------
+
+describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3)', () => {
+  test('petite démonstration en conflit : chaque règle violée, ses paires ou ses personnes, dans l’ordre du moteur', () => {
+    const charge = avecPropositions(petite('petite-conflit'));
+    const nomDe = nomsDe(charge);
+    let vus = 0;
+    for (let tour = 1; tour <= charge.evenement.tours; tour += 1) {
+      for (const table of etatPlaces(charge, { tour, proposition: 1 }).tables) {
+        const detail = detailConflits(table, nomDe);
+        if (table.conflits.nombre === 0) {
+          assert.equal(detail, null);
+          continue;
+        }
+        vus += 1;
+        assert.deepEqual(detail, {
+          numero: table.numero,
+          nombre: table.conflits.nombre,
+          regles: table.conflits.regles.map((regle) => ({
+            cle: `plan.infobulle.${regle.regle}`,
+            groupes: (regle.paires ?? regle.personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe)),
+          })),
+        });
+        for (const { cle } of detail.regles) assert.ok(typeof t(cle) === 'string' && t(cle).length > 0, cle);
+      }
+    }
+    assert.ok(vus > 0, 'au moins une table en conflit');
+  });
+
+  test('conflits non évalués, ou nuls : null', () => {
+    const charge = petite();
+    const [table] = etatPlaces(charge, { tour: 1 }).tables;
+    assert.equal(detailConflits({ ...table, conflits: null }, nomsDe(charge)), null);
+    assert.equal(detailConflits({ ...table, conflits: { nombre: 0, regles: [] } }, nomsDe(charge)), null);
+  });
+});
+
+// --- Le texte entier d'une ligne, et les actions des panneaux (I11) --------------
+
+describe('texteLigne : la ligne d’une chaise en un texte, nom accessible du siège', () => {
+  const nomDe = (id) => ({ 1: 'Iris Ombrelle', 2: 'Théo Pervenche' })[id];
+  const chaise = (autres) => ({ siege: 3, occupant: null, reservation: null, titre: null, ...autres });
+
+  test('les parties de textesLigne, bout à bout', () => {
+    const cas = [
+      [chaise({}), '3. (libre)'],
+      [chaise({ occupant: 1 }), '3. Iris Ombrelle'],
+      [
+        chaise({ occupant: 1, reservation: { participant: 1, portee: 'tous', tour: null }, titre: { libelle: 'animateur', pourvu: true } }),
+        '3. (réservée, tous les tours) Iris Ombrelle \u{2014} animateur',
+      ],
+      [chaise({ titre: { libelle: 'hôte', pourvu: false } }), '3. (libre) \u{2014} titre hôte non pourvu'],
+      [chaise({ occupant: 2, reservation: { participant: 1, portee: 'tour', tour: 2 } }), '3. (réservée à Iris Ombrelle, tour 2) Théo Pervenche'],
+    ];
+    for (const [entree, attendu] of cas) assert.equal(texteLigne(ligneListe(entree, nomDe), t), attendu);
+  });
+});
+
+describe('actionsPlace : ce qu’offre le panneau d’une place (§ 7.1, § 2.1 étape 6)', () => {
+  const libre = { siege: 1, occupant: null, reservation: null, titre: null };
+  const tenue = { siege: 2, occupant: 1, reservation: { participant: 1, portee: 'tous', tour: null }, titre: { libelle: 'hôte', pourvu: true } };
+  const reservation = { genre: 'reservation', participant: 1, depuis: { table: 1, siege: 2 }, de: { table: 1, portee: 'tous', tour: null } };
+
+  test('une place libre : assigner, réserver, donner un titre, désigner — exactement', () => {
+    assert.deepEqual(actionsPlace(libre, null), ['assigner', 'reserver', 'donnerTitre', 'designer']);
+    assert.deepEqual(actionsPlace(libre, { genre: 'personne', participant: 2, depuis: null }), ['assigner', 'reserver', 'donnerTitre', 'designer']);
+  });
+
+  test('une place réservée et titrée : retirer la réservation, retirer le titre ; une personne choisie y ajoute assigner, que la pose refusera', () => {
+    assert.deepEqual(actionsPlace(tenue, null), ['retirerReservation', 'retirerTitre']);
+    assert.deepEqual(actionsPlace(tenue, reservation), ['retirerReservation', 'retirerTitre', 'deplacerReservationIci']);
+    assert.deepEqual(actionsPlace(tenue, { genre: 'personne', participant: 2, depuis: null }), ['assigner', 'retirerReservation', 'retirerTitre']);
+  });
+
+  test('une place titrée, non tenue : assigner, réserver, désigner, retirer le titre', () => {
+    assert.deepEqual(actionsPlace({ ...libre, titre: { libelle: 'hôte', pourvu: false } }, null), ['assigner', 'reserver', 'designer', 'retirerTitre']);
+  });
+
+  test('une réservation choisie ajoute « Déplacer la réservation ici »', () => {
+    assert.deepEqual(actionsPlace(libre, reservation), ['assigner', 'reserver', 'donnerTitre', 'designer', 'deplacerReservationIci']);
+  });
+});
+
+describe('actionsPersonne : le menu d’une personne (§ 7.1)', () => {
+  const assise = { siege: 2, occupant: 4, reservation: null, titre: null };
+  const retrait = { commande: 'retirerDuTour', arguments: { tour: 1, participant: 4 } };
+
+  test('assise, non réservée : déplacer, échanger, retirer du tour, réserver ici, exclure, ouvrir la fiche', () => {
+    assert.deepEqual(actionsPersonne({ exclu: false, chaise: assise, retrait }), [
+      'deplacer',
+      'echanger',
+      'retirerDuTour',
+      'reserverIci',
+      'exclure',
+      'ouvrirFiche',
+    ]);
+  });
+
+  test('assise sur sa réservation : déplacer sa réservation, plus de « réserver ici » ; sans retrait possible, pas de « retirer du tour »', () => {
+    const tenue = { ...assise, reservation: { participant: 4, portee: 'tous', tour: null } };
+    assert.deepEqual(actionsPersonne({ exclu: false, chaise: tenue, retrait: null }), ['deplacer', 'echanger', 'deplacerReservation', 'exclure', 'ouvrirFiche']);
+  });
+
+  test('hors du dessin — réserve, exclue — : déplacer, puis exclure ou réintégrer, et la fiche', () => {
+    assert.deepEqual(actionsPersonne({ exclu: false, chaise: null, retrait: null }), ['deplacer', 'exclure', 'ouvrirFiche']);
+    assert.deepEqual(actionsPersonne({ exclu: true, chaise: null, retrait: null }), ['deplacer', 'reintegrer', 'ouvrirFiche']);
+  });
+});
+
+describe('executerSurPlace : la commande d’un panneau, son refus posé sur la place (§ 5.9)', () => {
+  // Une séance et un état de navigation d'épreuve, qui relèvent leurs appels.
+  function dependances(executer) {
+    const appels = [];
+    return {
+      appels,
+      seance: { executer: async (nom, args) => (appels.push(['executer', nom, args]), executer(nom, args)) },
+      ui: {
+        choisir: (choix) => appels.push(['choisir', choix]),
+        poserSurPlace: (pose) => appels.push(['poserSurPlace', pose]),
+      },
+    };
+  }
+  const refus = (code, details = {}) => Object.assign(new Error(code), { code, details });
+  const place = { table: 2, siege: 3 };
+
+  test('réussie : rend le rendu de la séance, oublie le choix en attente et retire la pose', async () => {
+    const d = dependances(() => ({ libelle: 'ok', avertissements: [] }));
+    assert.deepEqual(await executerSurPlace(d, place, 'reserver', { participant: 1 }), { libelle: 'ok', avertissements: [] });
+    assert.deepEqual(d.appels, [['executer', 'reserver', { participant: 1 }], ['choisir', null], ['poserSurPlace', null]]);
+  });
+
+  test('refusée : le refus, code et détails, posé sur la place ; rien d’autre ; null', async () => {
+    const d = dependances(() => {
+      throw refus('PLACE_RESERVEE', { table: 2, siege: 3 });
+    });
+    assert.equal(await executerSurPlace(d, place, 'reserver', {}), null);
+    assert.deepEqual(d.appels.slice(1), [
+      ['poserSurPlace', { place, refus: { code: 'PLACE_RESERVEE', details: { table: 2, siege: 3 } }, avertissements: [] }],
+    ]);
+  });
+
+  test('un code local, une place absente, ou une erreur sans code remontent à l’appelant', async () => {
+    for (const [lieu, erreur, options] of [
+      [place, refus('LIBELLE_VIDE'), { locaux: ['LIBELLE_VIDE'] }],
+      [null, refus('SANS_EFFET'), {}],
+      [place, new TypeError('défaut'), {}],
+    ]) {
+      const d = dependances(() => {
+        throw erreur;
+      });
+      await assert.rejects(executerSurPlace(d, lieu, 'poserTitre', {}, options), (recue) => recue === erreur);
+      assert.deepEqual(d.appels.map(([nom]) => nom), ['executer']);
+    }
+  });
+});
+
+describe('les clés que les panneaux composent existent (§ 14.6)', () => {
+  test('plan.action.<action>, plan.menu.<action>, plan.infobulle.<règle> : chaque valeur possible a sa clé', () => {
+    const tenue = { siege: 1, occupant: 1, reservation: { participant: 1, portee: 'tous', tour: null }, titre: { libelle: 'hôte', pourvu: true } };
+    const libre = { siege: 1, occupant: null, reservation: null, titre: null };
+    const reservation = { genre: 'reservation', participant: 1, depuis: null, de: { table: 1, portee: 'tous', tour: null } };
+    const actions = new Set([...actionsPlace(libre, reservation), ...actionsPlace(tenue, { genre: 'personne', participant: 2, depuis: null })]);
+    const menu = new Set([
+      ...actionsPersonne({ exclu: false, chaise: { ...libre, occupant: 4 }, retrait: {} }),
+      ...actionsPersonne({ exclu: true, chaise: tenue, retrait: {} }),
+    ]);
+    assert.equal(actions.size, 7);
+    assert.equal(menu.size, 8);
+    for (const action of actions) assert.equal(typeof t(`plan.action.${action}`), 'string', action);
+    for (const action of menu) assert.equal(typeof t(`plan.menu.${action}`), 'string', action);
+    for (const regle of ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable']) assert.equal(typeof t(`plan.infobulle.${regle}`), 'string');
   });
 });

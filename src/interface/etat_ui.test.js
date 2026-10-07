@@ -21,6 +21,8 @@ const DEPART = {
   pleinEcran: false,
   selection: null,
   fiche: null,
+  choix: null,
+  pose: null,
 };
 
 // Un état et le relevé de ce que reçoit son abonné.
@@ -89,6 +91,8 @@ describe('état de navigation : chaque transition', () => {
     ui.basculerPleinEcran();
     ui.selectionner({ table: 1, siege: 2 });
     ui.ouvrirFiche(4);
+    ui.choisir({ genre: 'personne', participant: 2, depuis: null });
+    ui.poserSurPlace({ place: { table: 1, siege: 2 }, refus: { code: 'SANS_EFFET', details: {} }, avertissements: [] });
     ui.ouvrirApropos();
     ui.reinitialiser();
     assert.deepEqual(ui.etat(), { ...DEPART, apropos: true });
@@ -172,5 +176,95 @@ describe('état de navigation : chaque transition', () => {
     ui.mettreEnEvidence(null);
     ui.ouvrirFiche(null);
     assert.equal(recus.length, 1);
+  });
+});
+
+describe('état de navigation : le choix en attente (§ 5.8, § 7.1)', () => {
+  const PERSONNE = { genre: 'personne', participant: 2, depuis: { table: 4, siege: 1 } };
+  const DEPUIS_LA_RESERVE = { genre: 'personne', participant: 3, depuis: null };
+  const RESERVATION = {
+    genre: 'reservation',
+    participant: 5,
+    depuis: { table: 3, siege: 2 },
+    de: { table: 3, portee: 'tous', tour: null },
+  };
+
+  test('choisir pose un choix de chaque genre, figé, puis null l’oublie', () => {
+    const ui = creerEtatUi();
+    for (const choix of [PERSONNE, DEPUIS_LA_RESERVE, RESERVATION]) {
+      ui.choisir(choix);
+      assert.deepEqual(ui.etat(), { ...DEPART, choix });
+      assert.ok(Object.isFrozen(ui.etat().choix));
+      ui.choisir(null);
+      assert.deepEqual(ui.etat(), DEPART);
+    }
+  });
+
+  test('un choix hors du contrat lève RangeError sans rien changer', () => {
+    const ui = creerEtatUi();
+    ui.choisir(PERSONNE);
+    const avant = ui.etat();
+    const fautes = [
+      { genre: 'table', participant: 2, depuis: null },
+      { genre: 'personne', participant: 0, depuis: null },
+      { genre: 'personne', participant: '2', depuis: null },
+      { genre: 'personne', participant: 2 },
+      { genre: 'personne', participant: 2, depuis: { siege: 1 } },
+      { genre: 'personne', participant: 2, depuis: { table: 1, siege: 0 } },
+      { genre: 'reservation', participant: 5, depuis: { table: 3, siege: 2 } },
+      { genre: 'reservation', participant: 5, depuis: null, de: { table: 3, portee: 'parfois', tour: null } },
+      undefined,
+    ];
+    for (const faute of fautes) assert.throws(() => ui.choisir(faute), RangeError, JSON.stringify(faute));
+    assert.equal(ui.etat(), avant);
+  });
+
+  test('montrerTour et selectionner(null) oublient le choix ; selectionner une place le garde', () => {
+    const ui = creerEtatUi();
+    ui.choisir(PERSONNE);
+    ui.selectionner({ table: 2, siege: 3 });
+    assert.deepEqual(ui.etat().choix, PERSONNE);
+    ui.selectionner(null);
+    assert.equal(ui.etat().choix, null);
+    ui.choisir(RESERVATION);
+    ui.montrerTour(2);
+    assert.equal(ui.etat().choix, null);
+    ui.choisir(PERSONNE);
+    ui.montrerTour(2);
+    assert.equal(ui.etat().choix, null, 'le même tour remontré oublie aussi');
+  });
+
+  test('poserSurPlace pose un refus ou des avertissements sur une place, puis null les retire ; aucune transition ne reçoit la séance', () => {
+    const ui = creerEtatUi();
+    const pose = {
+      place: { table: 3, siege: null },
+      refus: { code: 'PERSONNE_EXCLUE', details: { participant: 1 } },
+      avertissements: [{ code: 'TABLE_GELEE', details: { table: 3 } }],
+    };
+    ui.poserSurPlace(pose);
+    assert.deepEqual(ui.etat(), { ...DEPART, pose });
+    assert.ok(Object.isFrozen(ui.etat().pose));
+    ui.poserSurPlace(null);
+    assert.deepEqual(ui.etat(), DEPART);
+    assert.throws(() => ui.poserSurPlace({ place: null, refus: null, avertissements: [] }), RangeError);
+    assert.equal(ui.choisir.length, 1);
+    assert.equal(ui.poserSurPlace.length, 1);
+  });
+
+  test('montrerTour, montrerProposition et un changement de section retirent la pose ; la section remontrée la garde', () => {
+    const ui = creerEtatUi();
+    const pose = { place: { table: 7, siege: 1 }, refus: { code: 'PLACE_RESERVEE', details: { participant: 4 } }, avertissements: [] };
+    ui.poserSurPlace(pose);
+    ui.montrerTour(2);
+    assert.equal(ui.etat().pose, null, 'montrerTour');
+    ui.poserSurPlace(pose);
+    ui.montrerProposition(1);
+    assert.equal(ui.etat().pose, null, 'montrerProposition');
+    ui.allerA('plan');
+    ui.poserSurPlace(pose);
+    ui.allerA('plan');
+    assert.deepEqual(ui.etat().pose, pose, 'la même section');
+    ui.allerA('tables');
+    assert.equal(ui.etat().pose, null, 'une autre section');
   });
 });

@@ -9,7 +9,7 @@
 // entre ce qui le précède et ce qui le suit. Le nom et le libellé du titre
 // sont des données : aucun texte de cette table ne les porte. La tête finit
 // par une espace quand un nom la suit (avecNom).
-import { compte } from '../../application/libelles/aides.js';
+import { compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
   // --- Le dessin d'une table (§ 7.5, § 7.6) ----------------------------------
@@ -97,8 +97,86 @@ export const TABLE = new Map([
   ['plan.refus.siege', ({ numero, siege }) => `Table ${numero}, siège ${siege}`],
   ['plan.refus.fermer', 'Fermer'],
 
+  // --- Le clavier et l'infobulle (§ 7.1, § 7.3, § 13.5) ----------------------
+  // Le plan est un seul arrêt de tabulation : sa description dit comment s'y
+  // déplacer. L'infobulle d'une table en conflit nomme chaque règle violée,
+  // puis ses groupes : les noms sont des données, chacun dans son nœud,
+  // reliés par « et » dans une paire et séparés d'un groupe à l'autre.
+  ['plan.vue.role', 'plan de salle interactif'],
+  ['plan.infobulle.entete', ({ numero, nombre }) => `Table ${numero} : ${compte(nombre, 'conflit', 'conflits')}`],
+  ['plan.infobulle.separerAppartenances', 'appartenances réunies : '],
+  ['plan.infobulle.nouveauxVoisins', 'voisins revus : '],
+  ['plan.infobulle.nouvelleTable', 'table revue : '],
+  ['plan.infobulle.et', ' et '],
+  ['plan.infobulle.separateur', ', '],
+
   // --- Les panneaux latéraux (§ 2.1, étape 8) --------------------------------
   ['plan.panneaux', 'Panneaux du plan'],
   ['plan.listesTravail.titre', 'Listes de travail'],
   ['plan.reserve.titre', 'Réserve'],
+
+  // --- Le choix en attente (§ 5.8, § 7.1) ------------------------------------
+  // Le nom de la personne choisie est une donnée, dans son propre nœud.
+  ['plan.choix.personne', 'Personne choisie : '],
+  ['plan.choix.reservation', 'Réservation choisie : '],
+  ['plan.choix.oublier', 'Oublier le choix'],
+  [
+    'plan.choix.inviter',
+    "Choisissez d'abord une personne : dans la réserve, dans la liste des pressentis, ou par « Déplacer » dans son menu.",
+  ],
+
+  // --- Le panneau d'une place (§ 7.1, § 2.1 étape 6, § 4) --------------------
+  ['plan.action.assigner', 'Assigner'],
+  ['plan.action.reserver', 'Réserver'],
+  ['plan.action.donnerTitre', 'Donner un titre'],
+  ['plan.action.designer', 'Désigner'],
+  ['plan.action.retirerReservation', 'Retirer la réservation'],
+  ['plan.action.retirerTitre', 'Retirer le titre'],
+  ['plan.action.deplacerReservationIci', 'Déplacer la réservation ici'],
+  ['plan.portee.etiquette', 'Portée'],
+  ['plan.portee.tour', ({ tour }) => `Tour ${tour}`],
+  ['plan.portee.tous', 'Tous les tours'],
+  ['plan.titre.etiquette', 'Libellé du titre'],
+
+  // --- Le panneau d'une table (§ 7.3, § 2.1 étape 6) -------------------------
+  ['plan.panneauTable.sieges', 'Sièges'],
+  [
+    'plan.panneauTable.titres',
+    ({ titres, pourvus }) => `${compte(titres, 'titre', 'titres')} dont ${compte(pourvus, 'pourvu', 'pourvus')}`,
+  ],
+  ['plan.panneauTable.siege', 'Siège'],
+
+  // --- Le menu par personne (§ 7.1) ------------------------------------------
+  // Le nom de la personne, titre du menu, est une donnée dans son nœud.
+  ['plan.menu.titre', 'Menu de '],
+  ['plan.menu.deplacer', 'Déplacer'],
+  ['plan.menu.echanger', 'Échanger'],
+  ['plan.menu.retirerDuTour', 'Retirer du tour'],
+  ['plan.menu.reserverIci', 'Réserver ici'],
+  ['plan.menu.deplacerReservation', 'Déplacer sa réservation'],
+  ['plan.menu.exclure', 'Exclure'],
+  ['plan.menu.reintegrer', 'Réintégrer'],
+  ['plan.menu.ouvrirFiche', 'Ouvrir la fiche'],
+
+  // --- Les listes de travail (§ 5.8, § 4.1, § 4.2) ---------------------------
+  // Le libellé d'un titre, le titre pressenti et le nom d'une personne sont
+  // des données, chacun dans son nœud, entre ces textes.
+  ['plan.listesTravail.titres', 'Titres de place non pourvus'],
+  ['plan.listesTravail.pressentis', 'Titres pressentis sans réservation'],
+  ['plan.listesTravail.conversions', 'Conversions proposées'],
+  ['plan.listesTravail.aucun', 'Aucun.'],
+  ['plan.listesTravail.titreNonPourvu', ({ numero }) => `table ${numero} : titre `],
+  ['plan.listesTravail.nonPourvu', ' non pourvu'],
+  [
+    'plan.listesTravail.pourvuAuxTours',
+    ({ tours }) => ` (pourvu ${tours.length === 1 ? 'au tour' : 'aux tours'} ${enumeration(tours.map(String))})`,
+  ],
+  ['plan.listesTravail.pressenti', ' \u{2014} titre pressenti '],
+  ['plan.listesTravail.conversion', ({ numero }) => ` : une réservation à chaque tour, table ${numero}`],
+  ['plan.listesTravail.convertir', 'Convertir en « tous les tours »'],
+  ['plan.listesTravail.ignorer', 'Ignorer'],
+
+  // --- La réserve (§ 7.1, § 5.8) ---------------------------------------------
+  ['plan.reserve.tour', ({ tour }) => `Personnes en attente au tour ${tour}`],
+  ['plan.reserve.vide', 'Personne en attente à ce tour.'],
 ]);

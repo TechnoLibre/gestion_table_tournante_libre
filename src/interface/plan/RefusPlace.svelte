@@ -12,12 +12,14 @@
   // place le désigne par aria-describedby, vers id.
   //
   // pose : {id, numero, siege|null, refus|null, avertissements, x, y} — x et y
-  // en px de la surface ; fermer : retire la pose.
+  // en px de la surface ; fermer : retire la pose ; gestes : ceux qu'un
+  // remède emprunte à l'écran — le choix d'une place sur le plan —, que Refus
+  // reçoit tels quels.
   import { getContext } from 'svelte';
   import Refus from '../primitives/Refus.svelte';
   import { libellePlace } from './gestes.js';
 
-  let { pose, fermer } = $props();
+  let { pose, fermer, gestes = {} } = $props();
 
   const t = getContext('t');
   const libelle = $derived(libellePlace(pose));
@@ -28,7 +30,7 @@
     {t(libelle.cle, libelle.details)}
   </p>
   {#if pose.refus !== null}
-    <Refus refus={pose.refus} lever={fermer} />
+    <Refus refus={pose.refus} lever={fermer} {gestes} />
   {/if}
   {#each pose.avertissements as avertissement, rang (rang)}
     <p class="avertissement" role="status" data-avertissement={avertissement.code}>{t(avertissement.code, avertissement.details)}</p>

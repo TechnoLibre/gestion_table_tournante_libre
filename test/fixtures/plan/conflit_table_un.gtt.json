@@ -1,0 +1,36 @@
+{
+  "entete": {"format":1,"produitVersion":"epreuve","revision":1,"comptes":{"participants":8,"tables":4,"reservations":0,"titres":0,"propositions":1,"retenu":1}},
+  "charge": {
+    "evenement": {"id":"evt-conflit-table-un","nom":"Club des Merles","date":null,"siegesParDefaut":2,"tours":2,"unite":"cm","etat":"retenu","filiation":null},
+    "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
+    "prochainsIds": {"participant":9,"table":5,"proposition":2},
+    "participants": [
+      {"id":1,"nom":"Ombrelle","prenom":"Iris","appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":2,"nom":"Pervenche","prenom":"Théo","appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":3,"nom":"Lacasse","prenom":"Ondine","appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":4,"nom":"Grisaille","prenom":null,"appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":5,"nom":"Tourmaline","prenom":"Basile","appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":6,"nom":"Arrosoir","prenom":"Capucine","appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":7,"nom":"Cerfeuil","prenom":"Aurèle","appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":8,"nom":"Bruyère","prenom":"Mélisande","appartenance":null,"courriel":null,"titrePressenti":null,"notes":null,"exclu":false}
+    ],
+    "tables": [
+      {"id":1,"numero":1,"sieges":null,"forme":"ronde","position":{"x":0,"y":0}},
+      {"id":2,"numero":2,"sieges":null,"forme":"ronde","position":{"x":300,"y":0}},
+      {"id":3,"numero":3,"sieges":null,"forme":"ronde","position":{"x":600,"y":0}},
+      {"id":4,"numero":4,"sieges":null,"forme":"ronde","position":{"x":900,"y":0}}
+    ],
+    "reservations": [],
+    "titres": [],
+    "propositions": [
+      {"id":1,"graine":1,"arret":40,"historique":1000,"produitVersion":"epreuve","siegesAttribues":false,"tables":[1,2,3,4],"capacites":[2,2,2,2],"tours":2,"participants":[1,2,3,4,5,6,7,8],"placement":[
+        {"sieges":[[1,2],[3,4],[5,6],[7,8]],"reserve":[]},
+        {"sieges":[[1,2],[5,7],[3,8],[4,6]],"reserve":[]}
+      ]}
+    ],
+    "retenu": {"proposition":1,"siegesAttribues":false,"tables":[1,2,3,4],"capacites":[2,2,2,2],"tours":2,"participants":[1,2,3,4,5,6,7,8],"placement":[
+      {"sieges":[[1,2],[3,4],[5,6],[7,8]],"reserve":[]},
+      {"sieges":[[1,2],[5,7],[3,8],[4,6]],"reserve":[]}
+    ]}
+  }
+}
