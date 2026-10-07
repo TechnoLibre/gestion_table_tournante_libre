@@ -416,6 +416,19 @@ export function creerSeance({
     }
   }
 
+  // La charge restituée, ses compteurs d'identifiants portés au plus grand
+  // de leur valeur restituée et de leur valeur courante : un retour rend le
+  // contenu d'un instant, jamais un identifiant déjà donné (§ 8.9) — une
+  // génération après un défaire numérote au-delà des propositions défaites,
+  // et le retenu d'un fil abandonné garde la proposition qu'il désignait.
+  function avecCompteursCourants(charge, courante) {
+    const prochainsIds = {};
+    for (const cle of ['participant', 'table', 'proposition']) {
+      prochainsIds[cle] = Math.max(charge.prochainsIds[cle], courante.prochainsIds[cle]);
+    }
+    return { ...charge, prochainsIds };
+  }
+
   // Un retour, sans son suivi : défaire vise le prédécesseur de l'instant
   // courant sur le fil, refaire le sommet de sa pile, revenir l'instant
   // donné ; l'entrée porte la charge restituée, son sens et sa cible.
@@ -431,7 +444,7 @@ export function creerSeance({
       if (cibleRefaire === null) throw new ErreurSeance('RIEN_A_REFAIRE');
       cible = cibleRefaire;
     }
-    const charge = restituer(ouvert, cible);
+    const charge = avecCompteursCourants(restituer(ouvert, cible), ouvert.charge);
     if (serialiserCharge(charge) === serialiserCharge(ouvert.charge)) throw new ErreurSeance('SANS_EFFET', { sens });
     const instant = sens === 'defaire' ? courant : libelleDeRevision(ouvert.journal, cible);
     const entree = { charge, libelle: libelleDuRetour(sens, instant), avertissements: [] };

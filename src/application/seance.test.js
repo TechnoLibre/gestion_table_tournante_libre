@@ -641,8 +641,17 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
         [7, 'revenir', 2, 'Retour à « Ajouté Ancolie »'],
       ],
     );
-    assert.deepEqual(etatDe(fs).charge, reconstruire(journal, 2));
-    assert.deepEqual(reconstruire(journal, 7), reconstruire(journal, 2));
+    // L'instant 2 revient avec son contenu, et ses compteurs restent où trois
+    // ajouts les ont portés : aucun identifiant donné ne se redonne (§ 8.9).
+    const instant2 = reconstruire(journal, 2);
+    const attendu = { ...instant2, prochainsIds: { ...instant2.prochainsIds, participant: 4 } };
+    assert.deepEqual(etatDe(fs).charge, attendu);
+    assert.deepEqual(reconstruire(journal, 7), attendu);
+    await seance.executer('ajouterParticipant', { champs: { nom: 'Digitale' } });
+    assert.deepEqual(
+      seance.charge.participants.map(({ id, nom }) => [id, nom]),
+      [[1, 'Ancolie'], [4, 'Digitale']],
+    );
   });
 
   test("refaire n'existe qu'après des retours, tant qu'aucun geste ne les suit", async () => {
