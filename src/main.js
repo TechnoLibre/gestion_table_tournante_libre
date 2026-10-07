@@ -6,16 +6,23 @@
 // window.gtt — le système de fichiers du processus principal et la copie
 // dans le presse-papiers ; sans lui, la page est la plateforme web, sur
 // l'OPFS et le presse-papiers du navigateur. Il construit les dépendances
-// d'App — l'horloge du système, l'exécuteur direct de la génération, les
-// identifiants tirés par crypto.randomUUID, les démonstrations livrées
-// nommées par le catalogue — et monte App dans le corps du document. Le
-// thème de départ est laissé à App, qui lit la préférence du système.
+// d'App — l'horloge du système, l'exécuteur de la génération sur le
+// travailleur, les identifiants tirés par crypto.randomUUID, les
+// démonstrations livrées nommées par le catalogue — et monte App dans le
+// corps du document. Le thème de départ est laissé à App, qui lit la
+// préférence du système.
+//
+// Il est le seul module qui importe le travailleur de génération, par
+// « ?worker&inline » : Vite l'inclut dans la page, que la coquille charge
+// par file://, sans fichier de travailleur à côté. Chaque génération en
+// prend un neuf, que l'exécuteur termine à son issue (§ 5.10).
 import { mount } from 'svelte';
-import { creerExecuteurDirect } from './application/generation.js';
+import { creerExecuteurTravailleur } from './application/executeur_travailleur.js';
 import { creerHorlogeSysteme } from './application/horloge.js';
 import { CATALOGUE } from './demo/catalogue.js';
 import { LIVREES } from './demo/livrees.js';
 import App from './interface/App.svelte';
+import Travailleur from './interface/generation/travailleur.js?worker&inline';
 import { FORMAT } from './stockage/document.js';
 import { creerFichiersElectron } from './stockage/fichiers_electron.js';
 import { creerFichiersWeb } from './stockage/fichiers_web.js';
@@ -42,7 +49,7 @@ mount(App, {
   props: {
     fs,
     horloge: creerHorlogeSysteme(),
-    executeur: creerExecuteurDirect(),
+    executeur: creerExecuteurTravailleur(() => new Travailleur()),
     pressePapiers,
     identifiant: () => crypto.randomUUID(),
     langue: 'fr',
