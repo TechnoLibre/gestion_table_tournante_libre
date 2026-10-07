@@ -9,21 +9,22 @@
 // contraste se calcule sur les couleurs calculées, qui ne sont les couleurs
 // peintes que sans opacité partielle, filtre ni mode de fusion — ce qu'une
 // épreuve vérifie dans l'ascendance de chaque texte (§ 14.5). Les épreuves de
-// visibilité, de contraste et d'opacité passent par les deux thèmes : le
-// protocole de débogage de Chromium (CDP) émule prefers-color-scheme.
+// visibilité, de contraste et d'opacité passent par les deux thèmes, que
+// l'attribut data-theme de <html> choisit (§ 19.2). Le contraste est celui de
+// palette.js, seule formule des WCAG du dépôt.
 //
 // Le projet navigateur n'importe pas node:assert/strict : côté navigateur,
 // Vite le remplace par un module qui lève une erreur à tout accès. Il emploie
 // expect, et prend test et describe chez Vitest plutôt que dans
 // test/lanceur.js, dont le repli vers node:test ne vaut que pour la série node.
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { cdp } from 'vitest/browser';
 import { flushSync, mount, unmount } from 'svelte';
 import App from './App.svelte';
+import { contraste } from './palette.js';
 import { VERSION } from '../version.genere.js';
 
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
-const THEMES = ['light', 'dark'];
+const THEMES = ['clair', 'sombre'];
 
 // Composantes [r, g, b, a] d'une couleur calculée. Chromium la rend sous la
 // forme « rgb(r, g, b) » ou « rgba(r, g, b, a) » quand la source est une
@@ -36,21 +37,6 @@ function composantes(couleur) {
   }
   const alpha = m[4] === undefined ? 1 : Number(m[4]);
   return [Number(m[1]), Number(m[2]), Number(m[3]), alpha];
-}
-
-// Luminance relative d'une couleur sRGB, au sens des WCAG.
-function luminance([r, g, b]) {
-  const lineaire = (c) => {
-    const s = c / 255;
-    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * lineaire(r) + 0.7152 * lineaire(g) + 0.0722 * lineaire(b);
-}
-
-function contraste(a, b) {
-  const la = luminance(a);
-  const lb = luminance(b);
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
 // L'élément, puis chacun de ses ancêtres jusqu'à la racine du document.
@@ -89,20 +75,21 @@ function designation(element) {
   return classe ? `${element.localName}.${classe}` : element.localName;
 }
 
-// Exécute mesure() sous le thème demandé et rend sa valeur. L'émulation est
-// levée ensuite, même quand mesure() échoue : le test suivant retrouve la
-// préférence propre du navigateur.
+// Exécute mesure() sous le thème demandé, posé par data-theme sur <html>, et
+// rend sa valeur. L'attribut retrouve ensuite sa valeur d'avant, ou son
+// absence, même quand mesure() lève : le test suivant part du même document.
 async function sousTheme(theme, mesure) {
-  await cdp().send('Emulation.setEmulatedMedia', {
-    features: [{ name: 'prefers-color-scheme', value: theme }],
-  });
+  const racine = document.documentElement;
+  const avant = racine.getAttribute('data-theme');
+  racine.setAttribute('data-theme', theme);
   try {
-    expect(matchMedia('(prefers-color-scheme: dark)').matches, theme).toBe(
-      theme === 'dark',
-    );
-    return mesure();
+    return await mesure();
   } finally {
-    await cdp().send('Emulation.setEmulatedMedia', { features: [] });
+    if (avant === null) {
+      racine.removeAttribute('data-theme');
+    } else {
+      racine.setAttribute('data-theme', avant);
+    }
   }
 }
 
@@ -210,8 +197,8 @@ describe("bandeau d'application", () => {
       });
       couleursParTheme.push(couleurs);
     }
-    // Une émulation sans effet, ou un thème sombre qui ne redéfinit aucune
-    // couleur, ferait mesurer deux fois le thème clair.
+    // Un attribut que la feuille ne lit pas, ou un thème sombre qui ne
+    // redéfinit aucune couleur, ferait mesurer deux fois le thème clair.
     expect(
       couleursParTheme[1],
       `mêmes couleurs dans les deux thèmes : ${couleursParTheme[0].join(' ; ')}`,

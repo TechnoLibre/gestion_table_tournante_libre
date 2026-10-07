@@ -1,42 +1,144 @@
 /* © 2026 TechnoLibre (http://www.technolibre.ca)
    License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) */
 
-/* Jetons de l'interface : couleurs, typographie, espacements, rayons. Le thème
-   suit prefers-color-scheme ; chaque thème redéfinit les mêmes jetons de
-   couleur, et les composants ne lisent que les jetons (§ 13.3).
+/* Jetons de l'interface, un seul fichier (§ 13.3) : couleurs, polices,
+   échelle typographique, espacements, rayons, ombres. Les composants ne lisent
+   que ces jetons ; aucune couleur n'est écrite ailleurs.
 
-   Chaque couleur de texte tient au moins 4,5:1 sur le fond où elle est peinte,
-   et aucune n'emploie de canal alpha : la couleur relue dans le style calculé
-   est alors la couleur peinte (§ 14.5). */
+   Deux thèmes, posés par l'attribut data-theme de <html>, que l'application
+   règle (§ 19.2) : :root[data-theme='clair'] et :root[data-theme='sombre']
+   définissent les mêmes jetons de couleur ; sans attribut, le clair
+   s'applique, son bloc portant aussi le sélecteur :root. Le sélecteur du
+   sombre est plus spécifique que :root seul : posé, il l'emporte. La feuille
+   ne lit pas la préférence du système.
+
+   La palette se valide par calcul (§ 12.7, § 14.5) : marques.js nomme, pour
+   chaque marque porteuse d'information et chaque texte, le jeton qui la peint
+   et ceux sur lesquels elle se peint ; palette.js mesure 3:1 pour une marque,
+   4,5:1 pour un texte, dans les deux thèmes, en couleurs d'origine puis sous
+   les trois dichromaties. Aucun jeton de texte ou de marque n'a de canal
+   alpha : la couleur relue dans le style calculé est alors la couleur peinte.
+
+   La teinte de --couleur-conflit est réservée (§ 12.7) : tout autre jeton
+   chromatique s'en tient à 30° au moins, et aucun ne porte sa valeur.
+
+   La hachure d'une place à pourvoir peint des traits --couleur-hachure sur le
+   fond de la chaise, --couleur-chaise-fond : ce sont ses deux couleurs. */
 
 :root {
-  color-scheme: light;
-
-  --couleur-page-fond: #f6f7f9;
-  --couleur-page-texte: #1c2128;
-  --couleur-bandeau-fond: #1f3a5f;
-  --couleur-bandeau-texte: #ffffff;
-  --couleur-bandeau-filet: #8fb3d9;
-
   --police-interface: system-ui, sans-serif;
+
+  /* Échelle typographique, du plus petit au plus grand. */
+  --taille-texte-petit: 0.8125rem;
   --taille-texte-bandeau: 0.9375rem;
+  --taille-texte: 1rem;
+  --taille-titre: 1.25rem;
+  --taille-titre-grand: 1.5rem;
 
   --espace-1: 0.25rem;
   --espace-2: 0.5rem;
   --espace-3: 0.75rem;
   --espace-4: 1rem;
+  --espace-5: 1.5rem;
+  --espace-6: 2rem;
 
   --rayon-1: 0.25rem;
+  --rayon-2: 0.5rem;
+
+  /* Ombres : une couleur opaque par thème, --couleur-ombre. */
+  --ombre-1: 0 1px 2px var(--couleur-ombre);
+  --ombre-2: 0 2px 6px var(--couleur-ombre);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
+:root,
+:root[data-theme='clair'] {
+  color-scheme: light;
 
-    --couleur-page-fond: #121519;
-    --couleur-page-texte: #e3e6ea;
-    --couleur-bandeau-fond: #1d2c3f;
-    --couleur-bandeau-texte: #f2f4f7;
-    --couleur-bandeau-filet: #5b7fa6;
-  }
+  /* Page. */
+  --couleur-page-fond: #f6f7f9;
+  --couleur-page-texte: #1c2128;
+  --couleur-page-texte-secondaire: #4b5563;
+  --couleur-page-filet: #c3c9d1;
+  --couleur-ombre: #b4bcc6;
+
+  /* Bandeau d'application. */
+  --couleur-bandeau-fond: #172b47;
+  --couleur-bandeau-texte: #ffffff;
+  --couleur-bandeau-filet: #8fb3d9;
+
+  /* Cadre de mode (§ 8.4). */
+  --couleur-cadre-lecture: #5c6878;
+  --couleur-cadre-ecriture: #2e7d32;
+  --couleur-cadre-bloque: #7b3fa0;
+
+  /* Messages. */
+  --couleur-refus: #6a1b9a;
+  --couleur-avis: #7a5000;
+
+  /* Désignation. Le focus, la sélection, la mise en évidence et le fantôme
+     passent sur une chaise vide comme sur une chaise pleine : leur clarté se
+     tient entre le fond et le plein de la chaise, à 3:1 de chacun. */
+  --couleur-focus: #8269e1;
+  --couleur-selection: #1a66f0;
+  --couleur-mise-en-evidence: #00897b;
+
+  /* Plan : sol, mobilier, marques. */
+  --couleur-sol: #eceef1;
+  --couleur-table-fond: #ffffff;
+  --couleur-table-trait: #4a5059;
+  --couleur-chaise-fond: #ffffff;
+  --couleur-chaise-trait: #4a5059;
+  --couleur-chaise-pleine: #1f1f1f;
+  --couleur-hachure: #1f1f1f;
+  --couleur-marque: #767676;
+  --couleur-conflit: #b3261e;
+  --couleur-pastille-fond: #2b2f36;
+  --couleur-pastille-texte: #ffffff;
+  --couleur-poignee: #4a5059;
+  --couleur-gel: #1565c0;
+  --couleur-liste-texte: #1c2128;
+  --couleur-echelle: #1c2128;
+  --couleur-fantome: #b040f0;
+}
+
+:root[data-theme='sombre'] {
+  color-scheme: dark;
+
+  --couleur-page-fond: #121519;
+  --couleur-page-texte: #e3e6ea;
+  --couleur-page-texte-secondaire: #a3acb8;
+  --couleur-page-filet: #3a414b;
+  --couleur-ombre: #000000;
+
+  --couleur-bandeau-fond: #1d2c3f;
+  --couleur-bandeau-texte: #f2f4f7;
+  --couleur-bandeau-filet: #5b7fa6;
+
+  --couleur-cadre-lecture: #9aa5b4;
+  --couleur-cadre-ecriture: #81c784;
+  --couleur-cadre-bloque: #ce93d8;
+
+  --couleur-refus: #d7a6f0;
+  --couleur-avis: #f0c060;
+
+  --couleur-focus: #8764e1;
+  --couleur-selection: #4070f0;
+  --couleur-mise-en-evidence: #00897b;
+
+  --couleur-sol: #1a1d21;
+  --couleur-table-fond: #262b31;
+  --couleur-table-trait: #9aa3ae;
+  --couleur-chaise-fond: #15181c;
+  --couleur-chaise-trait: #b0b8c2;
+  --couleur-chaise-pleine: #e8e8e8;
+  --couleur-hachure: #ededed;
+  --couleur-marque: #7a7a7a;
+  --couleur-conflit: #ff8a80;
+  --couleur-pastille-fond: #e6e8eb;
+  --couleur-pastille-texte: #15181c;
+  --couleur-poignee: #c5ccd6;
+  --couleur-gel: #90caf9;
+  --couleur-liste-texte: #e3e6ea;
+  --couleur-echelle: #e3e6ea;
+  --couleur-fantome: #b040f0;
 }
