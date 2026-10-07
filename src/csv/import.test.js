@@ -130,9 +130,10 @@ function retenuDe({ id, siegesAttribues, tables, capacites, tours, participants,
   return { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
 }
 
-// Aperçu d'un texte contre les participants de la charge, puis import.
+// Aperçu d'un texte contre les participants de la charge, dans le mode
+// donné, puis import dans ce même mode.
 function importer(charge, texte, mode, choix = {}) {
-  return appliquerImport(charge, apercevoir(texte, { participants: charge.participants, choix }), mode);
+  return appliquerImport(charge, apercevoir(texte, { participants: charge.participants, choix, mode }), mode);
 }
 
 // Motif d'épreuve : le code et ses détails en JSON. Il porte guillemets et
@@ -304,11 +305,12 @@ describe('appliquerImport : mettre à jour (§ 10.1)', () => {
 
   test("l'appartenance que porte la ligne compte même devant un seul homonyme : d'une autre appartenance, la ligne est ajoutée, et l'homonyme garde ses valeurs", () => {
     const existants = [personne(1, 'Ombrelle', 'Iris', 'Club des Merles', { courriel: 'iris@exemple.test' })];
-    const { charge: apres, resume } = importer(
-      chargeDe({ participants: existants }),
-      csv('nom;prenom;appartenance;courriel', 'Ombrelle;Iris;Chorale du Givre;givre@exemple.test'),
-      'mettreAJour',
-    );
+    const texte = csv('nom;prenom;appartenance;courriel', 'Ombrelle;Iris;Chorale du Givre;givre@exemple.test');
+    // L'aperçu nomme la ligne qui s'ajoute à côté de l'homonyme.
+    assert.deepEqual(apercevoir(texte, { participants: existants, mode: 'mettreAJour' }).homonymes, [
+      { ligne: 2, participants: [1] },
+    ]);
+    const { charge: apres, resume } = importer(chargeDe({ participants: existants }), texte, 'mettreAJour');
     assert.deepEqual(apres.participants, [
       existants[0],
       personne(2, 'Ombrelle', 'Iris', 'Chorale du Givre', { courriel: 'givre@exemple.test' }),
@@ -316,32 +318,91 @@ describe('appliquerImport : mettre à jour (§ 10.1)', () => {
     assert.deepEqual(resume, resumeDe({ ajoutes: 1 }));
   });
 
-  test('une ligne sans prénom ne désigne que des participants sans prénom : devant le seul participant de ce nom, qui en porte un, elle est ajoutée, et lui reste tel quel', () => {
-    // La clé est (nom, prénom), un prénom absent y comptant comme vide : une
-    // liste de noms sans prénoms ajoute des personnes au lieu de mettre à
-    // jour les inscrits de même nom.
-    const existants = [personne(1, 'Ombrelle', 'Iris'), personne(2, 'Pervenche', 'Théo')];
-    const { charge: apres, resume } = importer(chargeDe({ participants: existants }), csv('nom;exclu', 'Ombrelle;oui'), 'mettreAJour');
-    assert.deepEqual(apres.participants, [...existants, personne(3, 'Ombrelle', null, null, { exclu: true })]);
-    assert.deepEqual(resume, resumeDe({ ajoutes: 1 }));
+  test('une ligne sans prénom, ou un fichier sans colonne prénom, désigne le seul participant de ce nom, qui en porte un : il est mis à jour, rien ajouté', () => {
+    // Un fichier qui ne porte que les noms et les courriels complète les
+    // inscrits ; il ne les double pas.
+    const existants = [
+      personne(1, 'Ombrelle', 'Iris', 'Club des Merles'),
+      personne(2, 'Lacasse', 'Ondine', 'Société Alpha'),
+      personne(3, 'Pervenche', 'Théo'),
+    ];
+    const { charge: apres, resume } = importer(
+      chargeDe({ participants: existants }),
+      csv('nom;courriel', 'Ombrelle;iris@exemple.test', 'Lacasse;ondine@exemple.test'),
+      'mettreAJour',
+    );
+    assert.deepEqual(apres.participants, [
+      { ...existants[0], courriel: 'iris@exemple.test' },
+      { ...existants[1], courriel: 'ondine@exemple.test' },
+      existants[2],
+    ]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 2 }));
+    const vide = importer(chargeDe({ participants: existants }), csv('nom;prenom;exclu', 'Ombrelle;;oui'), 'mettreAJour');
+    assert.deepEqual(vide.charge.participants, [{ ...existants[0], exclu: true }, existants[1], existants[2]]);
+    assert.deepEqual(vide.resume, resumeDe({ misAJour: 1 }));
   });
 
-  test('une ligne qui porte un prénom ne désigne pas un participant sans prénom : elle est ajoutée, et lui reste sans prénom', () => {
+  test('une ligne qui porte un prénom désigne le seul participant de ce nom sans prénom : il prend le prénom', () => {
     const existants = [personne(1, 'Grisaille', null, 'Club des Merles')];
     const { charge: apres, resume } = importer(
       chargeDe({ participants: existants }), csv('nom;prenom;exclu', 'Grisaille;Silas;oui'), 'mettreAJour',
     );
-    assert.deepEqual(apres.participants, [...existants, personne(2, 'Grisaille', 'Silas', null, { exclu: true })]);
-    assert.deepEqual(resume, resumeDe({ ajoutes: 1 }));
+    assert.deepEqual(apres.participants, [personne(1, 'Grisaille', 'Silas', 'Club des Merles', { exclu: true })]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 1 }));
   });
 
-  test("un participant sans appartenance n'est désigné que par une ligne qui n'en porte pas : celle qui en porte une est ajoutée, et lui reste sans appartenance", () => {
-    const existants = [personne(1, 'Pervenche', 'Théo', null, { courriel: 'theo@exemple.test' })];
+  test("une ligne qui porte une appartenance désigne le participant de ce nom et de ce prénom qui n'en a pas : il la prend, rien n'est ajouté", () => {
+    const existants = [
+      personne(1, 'Ombrelle', 'Iris'),
+      personne(2, 'Lacasse', 'Ondine', null, { courriel: 'ondine@exemple.test' }),
+    ];
     const { charge: apres, resume } = importer(
-      chargeDe({ participants: existants }), csv('nom;prenom;appartenance', 'Pervenche;Théo;Club des Merles'), 'mettreAJour',
+      chargeDe({ participants: existants }),
+      csv('nom;prenom;appartenance', 'Ombrelle;Iris;Club des Merles', 'Lacasse;Ondine;Société Alpha'),
+      'mettreAJour',
     );
-    assert.deepEqual(apres.participants, [...existants, personne(2, 'Pervenche', 'Théo', 'Club des Merles')]);
-    assert.deepEqual(resume, resumeDe({ ajoutes: 1 }));
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Ombrelle', 'Iris', 'Club des Merles'),
+      personne(2, 'Lacasse', 'Ondine', 'Société Alpha', { courriel: 'ondine@exemple.test' }),
+    ]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 2 }));
+  });
+
+  test("le prénom et l'appartenance ne départagent que lorsque la ligne et le participant en portent tous deux un : plusieurs homonymes restants sont refusés, jamais un ajout", () => {
+    const existants = [
+      personne(1, 'Ombrelle', 'Iris', 'Club des Merles'),
+      personne(2, 'Ombrelle', 'Ondine', null),
+      personne(3, 'Ombrelle', null, 'Chorale du Givre'),
+      personne(4, 'Givre', 'Silas', 'Club des Merles'),
+      personne(5, 'Givre', 'Anouk', 'Club des Merles'),
+    ];
+    const { charge: apres, resume } = importer(
+      chargeDe({ participants: existants }),
+      csv(
+        'nom;prenom;appartenance;courriel',
+        // Iris : 1 par le prénom, 3 sans prénom ; Chorale du Givre écarte 1.
+        'Ombrelle;Iris;Chorale du Givre;a@exemple.test',
+        // Sans prénom ni appartenance : les trois Ombrelle.
+        'OMBRELLE;;;b@exemple.test',
+        // Club des Merles écarte 3 ; Iris écarte 2 : reste 1.
+        'Ombrelle;Iris;Club des Merles;c@exemple.test',
+        // Sans prénom : deux Givre du même club.
+        'Givre;;club des merles;d@exemple.test',
+      ),
+      'mettreAJour',
+    );
+    assert.deepEqual(resume.refusees.map(({ ligne, code, participants }) => [ligne, code, participants]), [
+      [3, 'PLUSIEURS_CORRESPONDENT', [1, 2, 3]],
+      [5, 'PLUSIEURS_CORRESPONDENT', [4, 5]],
+    ]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 2, refusees: resume.refusees }));
+    assert.deepEqual(apres.participants, [
+      { ...existants[0], courriel: 'c@exemple.test' },
+      existants[1],
+      { ...existants[2], prenom: 'Iris', courriel: 'a@exemple.test' },
+      existants[3],
+      existants[4],
+    ]);
   });
 
   test("l'appartenance se compare par sa clé normalisée, des deux côtés : la ligne désigne l'homonyme qui l'écrit sans accents ou en capitales, et lui pose l'orthographe affichée", () => {
@@ -383,6 +444,33 @@ describe('appliquerImport : mettre à jour (§ 10.1)', () => {
         brut: ['ombrelle', 'iris', 'b@exemple.test'],
       }],
     }));
+  });
+
+  test("une ligne désigne parmi les valeurs d'avant l'import : ce qu'une ligne précédente pose ne l'écarte pas, et elle est refusée DEJA_DESIGNE, dans les deux ordres", () => {
+    // Ombrelle n'a ni prénom ni appartenance : chaque ligne la désigne, quel
+    // que soit le prénom ou l'appartenance que la précédente lui a donné.
+    const existants = [personne(1, 'Ombrelle')];
+    const cas = [
+      ['nom;prenom', ['Ombrelle;Iris', 'Ombrelle;Théo']],
+      ['nom;prenom', ['Ombrelle;Théo', 'Ombrelle;Iris']],
+      ['nom;appartenance', ['Ombrelle;Club des Merles', 'Ombrelle;Chorale du Givre']],
+    ];
+    for (const [entete, [premiere, seconde]] of cas) {
+      const texte = csv(entete, premiere, seconde);
+      const apercu = apercevoir(texte, { participants: existants, mode: 'mettreAJour' });
+      const { charge: apres, resume } = appliquerImport(chargeDe({ participants: existants }), apercu, 'mettreAJour');
+      const [champ, valeur] = [entete.split(';')[1], premiere.split(';')[1]];
+      assert.deepEqual(apres.participants, [{ ...existants[0], [champ]: valeur }], premiere);
+      assert.deepEqual(resume, resumeDe({
+        misAJour: 1,
+        refusees: [{
+          ligne: 3, code: 'DEJA_DESIGNE', valeur: null, participants: [1], premiereLigne: 2, brut: seconde.split(';'),
+        }],
+      }), premiere);
+      // L'aperçu, qui lit lui aussi les valeurs d'avant l'import, ne nomme
+      // aucun homonyme.
+      assert.deepEqual(apercu.homonymes, [], premiere);
+    }
   });
 
   test('une mise à jour dont toutes les lignes sont refusées rend une charge égale à celle reçue ; les identifiants refusés, croissants', () => {
@@ -498,6 +586,7 @@ describe('appliquerImport : la charge rendue', () => {
       const charge = chargeGarnie();
       const apercu = apercevoir(csv('nom;prenom;courriel;exclu', 'Ombrelle;Iris;neuf@exemple.test;', 'Pervenche;;;peut-être', 'Bruyère;Anouk;;'), {
         participants: charge.participants,
+        mode,
       });
       const avant = structuredClone({ charge, apercu });
       const resultat = appliquerImport(charge, apercu, mode);
@@ -581,6 +670,29 @@ describe('appliquerImport : les refus globaux (§ 10.1)', () => {
       () => importer(chargeDe(), csv('nom;organisation;entreprise', 'Ombrelle;"Club;', 'Pervenche;;'), 'ajouter'),
       refus('GUILLEMET_OUVERT', { ligne: 2 }),
     );
+  });
+
+  test("un aperçu calculé pour un autre mode lève TypeError : l'aperçu montré est celui que l'import applique", () => {
+    const charge = chargeDe({ participants: [personne(1, 'Ombrelle', 'Iris', 'Club des Merles')] });
+    const texte = csv('nom;prenom;appartenance', 'Ombrelle;Iris;club des merles');
+    for (const vu of MODES) {
+      const apercu = apercevoir(texte, { participants: charge.participants, mode: vu });
+      for (const mode of MODES.filter((autre) => autre !== vu)) {
+        assert.throws(() => appliquerImport(charge, apercu, mode), {
+          name: 'TypeError',
+          message: `aperçu calculé pour ${vu}, import en ${mode}`,
+        });
+      }
+    }
+  });
+
+  test("remplacer pose l'orthographe du fichier, non celle d'un participant retiré : l'aperçu et l'import s'accordent", () => {
+    const charge = chargeDe({ participants: [personne(1, 'Ombrelle', 'Iris', 'Club des Merles')], prochain: 2 });
+    const texte = csv('nom;prenom;appartenance', 'Ombrelle;Iris;club des merles');
+    const apercu = apercevoir(texte, { participants: charge.participants, mode: 'remplacer' });
+    assert.deepEqual(apercu.doublons, []);
+    const { charge: apres } = appliquerImport(charge, apercu, 'remplacer');
+    assert.deepEqual(apres.participants, [personne(2, 'Ombrelle', 'Iris', 'club des merles')]);
   });
 
   test('un mode inconnu lève TypeError', () => {
@@ -687,7 +799,7 @@ describe('exporterRefus : la forme du CSV des refus (§ 10.1)', () => {
         personne(3, 'Pervenche'),
       ],
     });
-    const apercu = apercevoir(csv('nom', 'Ombrelle', 'Pervenche'), { participants: charge.participants });
+    const apercu = apercevoir(csv('nom', 'Ombrelle', 'Pervenche'), { participants: charge.participants, mode: 'mettreAJour' });
     assert.equal(apercu.separateur, null);
     const { resume } = appliquerImport(charge, apercu, 'mettreAJour');
     const { texte } = decoder(exporterRefus(apercu, MOTIF, resume.refusees));
@@ -790,7 +902,7 @@ describe('exporterRefus : la forme du CSV des refus (§ 10.1)', () => {
         'pervenche;theo;autre@exemple.test;',
         'Sarcelle;Ondine;;peut-être',
       ),
-      { participants: charge.participants },
+      { participants: charge.participants, mode: 'mettreAJour' },
     );
     const { resume } = appliquerImport(charge, apercu, 'mettreAJour');
     assert.deepEqual(resume.refusees.map(({ ligne, code }) => [ligne, code]), [

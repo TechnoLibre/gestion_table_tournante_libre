@@ -183,9 +183,46 @@ describe('decouper : enregistrements et champs (§ 10.1)', () => {
     assert.deepEqual(enregistrementsDe('a"b;c'), [['a"b', 'c']]);
   });
 
-  test("ce qui suit le guillemet fermant, jusqu'au séparateur, reste dans le champ", () => {
-    assert.deepEqual(enregistrementsDe('"Benoît" ;x'), [['Benoît ', 'x']]);
-    assert.deepEqual(enregistrementsDe('"a"b;c'), [['ab', 'c']]);
+  test("un guillemet fermant suivi d'autre chose qu'un séparateur, une fin d'enregistrement ou un second guillemet : la lecture s'arrête, guillemetOuvert", () => {
+    // Le champ cité est refusé là où son guillemet fermant est suivi d'un
+    // autre caractère ; le dernier enregistrement rendu est celui où le champ
+    // s'ouvre, et porte le texte lu jusqu'à ce guillemet.
+    assert.deepEqual(decouper('"Benoît" ;x', ';'), { enregistrements: [['Benoît']], guillemetOuvert: true });
+    assert.deepEqual(decouper('"a"b;c', ';'), { enregistrements: [['a']], guillemetOuvert: true });
+    assert.deepEqual(decouper('nom;notes\nA;"a ""b"" c"x\nB;y\n', ';'), {
+      enregistrements: [['nom', 'notes'], ['A', 'a "b" c']],
+      guillemetOuvert: true,
+    });
+    // Sous un séparateur null, seule une fin d'enregistrement suit le
+    // guillemet fermant.
+    assert.deepEqual(decouper('nom\n"Roy, Camille";x\n', null), {
+      enregistrements: [['nom'], ['Roy, Camille']],
+      guillemetOuvert: true,
+    });
+  });
+
+  test("un guillemet égaré qui avale des enregistrements : le champ se referme plus loin sur un autre caractère, la lecture s'arrête au rang où il s'ouvre", () => {
+    // Le guillemet qui ouvre la note de A n'est jamais refermé à sa place :
+    // celui de « "Bob" » le referme, suivi d'une lettre. Les enregistrements
+    // de B et de C ne se fondent pas dans la note de A.
+    const texte = 'nom;prenom;notes\r\nA;Pa;"VIP au fond\r\nB;Pb;\r\nC;Pc;surnommé "Bob" par tous\r\nD;Pd;\r\n';
+    assert.deepEqual(decouper(texte, ';'), {
+      enregistrements: [
+        ['nom', 'prenom', 'notes'],
+        ['A', 'Pa', 'VIP au fond\r\nB;Pb;\r\nC;Pc;surnommé '],
+      ],
+      guillemetOuvert: true,
+    });
+  });
+
+  test('un guillemet fermant suivi du séparateur, de CR, de LF, de CRLF ou de la fin du texte referme le champ', () => {
+    assert.deepEqual(enregistrementsDe('"a";b'), [['a', 'b']]);
+    assert.deepEqual(enregistrementsDe('"a"\rb'), [['a'], ['b']]);
+    assert.deepEqual(enregistrementsDe('"a"\nb'), [['a'], ['b']]);
+    assert.deepEqual(enregistrementsDe('"a"\r\nb'), [['a'], ['b']]);
+    assert.deepEqual(enregistrementsDe('x;"a"'), [['x', 'a']]);
+    assert.deepEqual(enregistrementsDe('x\t"a"\ty', '\t'), [['x', 'a', 'y']]);
+    assert.deepEqual(enregistrementsDe('"a"\nb', null), [['a'], ['b']]);
   });
 
   test('les blancs autour des valeurs sont rendus tels quels, cités ou non', () => {
@@ -395,6 +432,19 @@ describe('choisirSeparateur : le séparateur introuvable (§ 10.1)', () => {
     assert.deepEqual(lu.enregistrements.map((e) => e.length), [2, 2]);
     assert.equal(lu.guillemetOuvert, true);
     assertSeparateurIntrouvable(() => choisirSeparateur(texte, reconnaitre), ouvert(';', 2));
+  });
+
+  test("un guillemet fermant suivi d'un autre caractère dans la fenêtre écarte le candidat, au rang où le champ s'ouvre", () => {
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('nom;prenom\nBenoît;Exemple\nOdile;"Fictive"x\nRémi;Témoin\n', reconnaitre),
+      ouvert(';', 3),
+    );
+    // Le champ s'ouvre au rang 2 et avale les rangs 3 et 4 avant de se
+    // refermer sur une lettre : le rang nommé est celui où il s'ouvre.
+    assertSeparateurIntrouvable(
+      () => choisirSeparateur('nom;prenom\nBenoît;"Exemple\nOdile;Fictive\nRémi;dit "R" ici\n', reconnaitre),
+      ouvert(';', 2),
+    );
   });
 
   test('un texte vide, ou fait de lignes vides', () => {

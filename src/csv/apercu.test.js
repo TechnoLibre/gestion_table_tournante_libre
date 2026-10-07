@@ -53,6 +53,7 @@ const refusGlobal = (
   { separateur = null, entetes = [], association = { colonnes: {}, ambigus: [], nonReconnues: [] } } = {},
   ligne = null,
 ) => ({
+  mode: 'ajouter',
   separateur,
   entetes,
   association,
@@ -60,6 +61,8 @@ const refusGlobal = (
   refusees: [],
   fusions: [],
   doublons: [],
+  homonymes: [],
+  multilignes: [],
   refusGlobal: code,
   refusGlobalLigne: ligne,
 });
@@ -94,6 +97,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       'Pervenche;Théo;;;;oui;',
     );
     assert.deepEqual(apercevoir(texte), {
+      mode: 'ajouter',
       separateur: ';',
       entetes: ['Nom', 'Prénom', 'Équipe', 'Courriel', 'Rôle', 'Exclu', 'Notes'],
       association: {
@@ -119,6 +123,8 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       refusees: [],
       fusions: [],
       doublons: [],
+      homonymes: [],
+      multilignes: [],
       refusGlobal: null,
       refusGlobalLigne: null,
     });
@@ -565,6 +571,89 @@ describe('apercevoir : les doublons, signalés et jamais fusionnés (§ 10.1)', 
   });
 });
 
+describe("apercevoir : le mode de l'import (§ 10.1)", () => {
+  // Deux participants existants, dont l'appartenance de l'un s'écrit
+  // autrement dans le fichier.
+  const participants = [existant(1, 'Ombrelle', 'Iris', 'Club des Merles'), existant(2, 'Lacasse', 'Ondine', null)];
+  const texte = csv('nom;prenom;appartenance', 'Ombrelle;Iris;club des merles', 'Lacasse;Ondine;', 'Lacasse;Ondine;');
+
+  test("ajouter, par défaut, et mettre à jour lisent le fichier contre les existants : doublons et fusions les comptent", () => {
+    for (const mode of [undefined, 'ajouter', 'mettreAJour']) {
+      const apercu = apercevoir(texte, { participants, mode });
+      assert.equal(apercu.mode, mode ?? 'ajouter');
+      assert.deepEqual(apercu.doublons, [
+        { cle: '["ombrelle","iris","club des merles"]', lignes: [2], existants: [1] },
+        { cle: '["lacasse","ondine",""]', lignes: [3, 4], existants: [2] },
+      ], String(mode));
+      assert.deepEqual(apercu.fusions, [
+        { affichee: 'Club des Merles', orthographes: [{ texte: 'Club des Merles', lignes: [] }, { texte: 'club des merles', lignes: [2] }] },
+      ], String(mode));
+      assert.equal(apercu.lignes[0].champs.appartenance, 'Club des Merles', String(mode));
+    }
+  });
+
+  test("remplacer retire chaque existant : aucune ligne n'en est le doublon, aucune orthographe existante ne s'affiche ni ne fond", () => {
+    const apercu = apercevoir(texte, { participants, mode: 'remplacer' });
+    assert.equal(apercu.mode, 'remplacer');
+    assert.deepEqual(apercu.doublons, [{ cle: '["lacasse","ondine",""]', lignes: [3, 4], existants: [] }]);
+    assert.deepEqual(apercu.fusions, []);
+    assert.equal(apercu.lignes[0].champs.appartenance, 'club des merles');
+    assert.deepEqual(apercu, apercevoir(texte, { participants: [], mode: 'remplacer' }));
+  });
+
+  test("mettre à jour nomme chaque ligne qu'il ajoute à côté d'un existant de même nom, que le prénom ou l'appartenance écarte des deux côtés", () => {
+    // Iris passe du Club des Merles à la Société Alpha : la ligne ne désigne
+    // personne, et l'import ajouterait une seconde Iris Ombrelle.
+    const existants = [
+      existant(1, 'Ombrelle', 'Iris', 'Club des Merles'),
+      existant(2, 'Ombrelle', 'Théo', null),
+      existant(3, 'Lacasse', 'Ondine', null),
+    ];
+    const changeDeClub = csv(
+      'nom;prenom;appartenance',
+      // Iris écarte 2, la Société Alpha écarte 1 : un homonyme de 1 et 2.
+      'OMBRELLE;Iris;Société Alpha',
+      // Désigne 3, qui n'a pas d'appartenance : aucun homonyme.
+      'Lacasse;Ondine;Club des Merles',
+      // Aucun existant de ce nom : un ajout, pas un homonyme.
+      'Pervenche;Théo;',
+      // Sans prénom ni appartenance : les deux Ombrelle, un refus de
+      // l'import, pas un ajout.
+      'Ombrelle;;',
+      // Désigne 2, sans prénom ni appartenance de part et d'autre.
+      'Ombrelle;Théo;Chorale du Givre',
+    );
+    assert.deepEqual(apercevoir(changeDeClub, { participants: existants, mode: 'mettreAJour' }).homonymes, [
+      { ligne: 2, participants: [1, 2] },
+    ]);
+    // Ajouter et remplacer n'en nomment aucun : ajouter crée chaque ligne,
+    // remplacer retire chaque existant.
+    for (const mode of ['ajouter', 'remplacer']) {
+      assert.deepEqual(apercevoir(changeDeClub, { participants: existants, mode }).homonymes, [], mode);
+    }
+    // Les lignes qui désignent un existant ne retirent rien aux candidats
+    // des suivantes ; les identifiants sont croissants, quel que soit
+    // l'ordre des existants.
+    const inverse = csv('nom;prenom', 'Ombrelle;Théo', 'Ombrelle;Iris', 'Ombrelle;Anouk');
+    assert.deepEqual(
+      apercevoir(inverse, { participants: [existants[1], existants[0]], mode: 'mettreAJour' }).homonymes,
+      [{ ligne: 4, participants: [1, 2] }],
+    );
+  });
+
+  test('un aperçu refusé porte son mode', () => {
+    assert.equal(apercevoir('', { mode: 'remplacer' }).mode, 'remplacer');
+    assert.equal(apercevoir(csv('prenom', 'Iris'), { mode: 'mettreAJour' }).mode, 'mettreAJour');
+  });
+
+  test('un mode inconnu : TypeError, qui nomme les trois modes', () => {
+    assert.throws(() => apercevoir(texte, { mode: 'fusionner' }), {
+      name: 'TypeError',
+      message: 'mode : ajouter, mettreAJour, remplacer attendu, reçu fusionner',
+    });
+  });
+});
+
 describe('apercevoir : la réconciliation et la clé de doublon, une seule forme normalisée (§ 10.1)', () => {
   test('deux personnes du même nom et du même prénom forment un doublon si et seulement si leurs appartenances se fondent', () => {
     // Chaque orthographe éprouve une dimension de la clé : casse, accent
@@ -762,6 +851,72 @@ describe('apercevoir : les refus globaux (§ 10.1)', () => {
         String(rang),
       );
     }
+  });
+
+  test("un guillemet égaré au-delà de la fenêtre, refermé plus loin sur une lettre : GUILLEMET_OUVERT au rang où il s'ouvre, aucune personne fondue dans une autre", () => {
+    // Vingt-cinq enregistrements : la note du rang 23 ouvre un guillemet que
+    // rien ne referme à sa place ; celui de « "Bob" », au rang 25, le
+    // referme, suivi d'une lettre. Les rangs 24 et 25 tiendraient sinon dans
+    // la note du rang 23, et l'aperçu compterait 22 lignes sans un refus.
+    const lignes = Array.from({ length: 21 }, (_, i) => `Nom${i + 1};Pre${i + 1};`);
+    const texte = csv('nom;prenom;notes', ...lignes, 'Nom22;Pre22;"VIP au fond', 'Nom23;Pre23;', 'Nom24;Pre24;surnommé "Bob" par tous');
+    assert.deepEqual(
+      apercevoir(texte),
+      refusGlobal(
+        'GUILLEMET_OUVERT',
+        {
+          separateur: ';',
+          entetes: ['nom', 'prenom', 'notes'],
+          association: { colonnes: { nom: 0, prenom: 1, notes: 2 }, ambigus: [], nonReconnues: [] },
+        },
+        23,
+      ),
+    );
+    // Le même texte dont la note se referme à sa place s'importe en entier.
+    const referme = texte.replace('"VIP au fond', '"VIP au fond"');
+    assert.equal(apercevoir(referme).refusGlobal, null);
+    assert.equal(apercevoir(referme).lignes.length, 24);
+  });
+
+  test("un guillemet égaré refermé plus loin par un pouce, au-delà de la fenêtre : la cellule fondue est nommée, à son rang", () => {
+    // Le guillemet de « écran 27" » referme la note ouverte au rang 23 :
+    // les rangs 24 et 25 tiennent dans cette note, que rien ne refuse.
+    // L'aperçu nomme la cellule, qui s'étend sur plusieurs lignes du texte
+    // et porte le séparateur.
+    const lignes = Array.from({ length: 21 }, (_, i) => `Nom${i + 1};Pre${i + 1};`);
+    const texte = csv('nom;prenom;notes', ...lignes, 'Nom22;Pre22;"VIP au fond', 'Nom23;Pre23;', 'Nom24;Pre24;écran 27"', 'Nom25;Pre25;');
+    const apercu = apercevoir(texte);
+    assert.equal(apercu.refusGlobal, null);
+    assert.equal(apercu.lignes.length, 23);
+    assert.equal(apercu.lignes[21].champs.notes, 'VIP au fond\r\nNom23;Pre23;\r\nNom24;Pre24;écran 27');
+    assert.deepEqual(apercu.multilignes, [{ ligne: 23, rangs: [2] }]);
+  });
+
+  test("une cellule nommée : sur plusieurs lignes du texte et portant le séparateur, dans la fenêtre comme au-delà ; un nom sur plusieurs lignes d'un fichier à une colonne", () => {
+    // Dans la fenêtre, le guillemet égaré du rang 3 se referme au rang 4 :
+    // l'enregistrement fondu a la largeur de l'en-tête, et le séparateur
+    // est retenu.
+    const fondu = csv('nom;prenom;notes', 'Ombrelle;Iris;', 'Lacasse;Ondine;"à l\'entrée', 'Pervenche;Théo;écran 27"', 'Givre;Silas;');
+    assert.deepEqual(apercevoir(fondu).multilignes, [{ ligne: 3, rangs: [2] }]);
+    // Une note sur plusieurs lignes sans le séparateur, ou le séparateur
+    // sur une seule ligne, n'est pas nommée ; une cellule qui porte les
+    // deux l'est, une fois par cellule, quel que soit le séparateur.
+    const notes = csv(
+      'nom,prenom,appartenance,notes',
+      'Ombrelle,Iris,"Club, nord","arrive tôt\nrepart tard"',
+      'Lacasse,Ondine,"Chorale\ndu Givre","noix, arachides\r\nsans gluten"',
+      'Pervenche,Théo,,"au fond\rprès de la scène, côté jardin"',
+    );
+    assert.deepEqual(apercevoir(notes).multilignes, [{ ligne: 3, rangs: [3] }, { ligne: 4, rangs: [3] }]);
+    // Fichier à une colonne : un nom ne s'étend jamais sur deux lignes, et
+    // aucun séparateur n'est à chercher.
+    assert.deepEqual(apercevoir(csv('nom', 'Ombrelle', '"Lacasse', 'Pervenche"', 'Givre')).multilignes, [
+      { ligne: 3, rangs: [0] },
+    ]);
+    // Une ligne refusée revient dans le CSV des refus : elle n'est pas
+    // nommée ici.
+    const refusee = csv('nom;notes;exclu', 'Ombrelle;"a\nb;c";peut-être', 'Lacasse;;');
+    assert.deepEqual(apercevoir(refusee).multilignes, []);
   });
 
   test("sous GUILLEMET_OUVERT, l'association suit le choix, dans la fenêtre comme au-delà", () => {

@@ -21,12 +21,10 @@
 // champs en trop parmi les vingt premiers enregistrements, qui fait refuser
 // le texte entier, à son rang, par le choix du séparateur.
 
+import { MODES, designer, indexerParNom } from './apercu.js';
 import { ErreurCsv } from './erreurs.js';
 import { SEPARATEUR, ecrireCsv } from './export.js';
 import { enregistrementVide } from './lecture.js';
-import { cleNormalisee } from './normalisation.js';
-
-const MODES = Object.freeze(['ajouter', 'mettreAJour', 'remplacer']);
 
 // Champs d'une ligne de l'aperçu, dans l'ordre du participant : ceux que
 // porte une personne créée, et que pose une mise à jour quand la cellule
@@ -67,13 +65,7 @@ const ENTETE_MOTIF = 'motif';
  * @property {boolean} derive               vrai en état retenu
  */
 
-const croissant = (a, b) => a - b;
 const parLigne = (a, b) => a.ligne - b.ligne;
-
-// Clé qui apparie une ligne aux participants existants : le nom et le
-// prénom, chacun par sa clé normalisée, un prénom absent comptant comme
-// vide, écrits en JSON pour qu'aucun texte ne se confonde avec une frontière.
-const cleDeNom = (nom, prenom) => JSON.stringify([cleNormalisee(nom), cleNormalisee(prenom ?? '')]);
 
 // Titres pourvus (§ 4.1, § 4.4). Un titre n'est pourvu que par la réservation
 // d'une personne non exclue, sur sa place, à un tour au moins : la
@@ -164,56 +156,44 @@ function poser(participant, champs) {
 }
 
 // Met à jour, en place, les participants que désignent les lignes, et rend
-// les lignes à ajouter, les refus et les comptes. Une ligne désigne les
-// participants d'avant l'import dont le nom et le prénom ont la même clé
-// normalisée que les siens, et l'appartenance aussi quand la ligne en porte
-// une : un participant ajouté par une ligne n'est désigné par aucune autre.
-// Un prénom absent compte comme vide, sur la ligne comme chez le
-// participant : seule une ligne sans prénom désigne un participant sans
-// prénom, et elle ne désigne que ceux-là. L'appartenance que porte une ligne
-// filtre même un homonyme unique, et un participant sans appartenance ne
-// passe pas ce filtre. Une ligne qui ne désigne personne est à ajouter,
-// jamais fondue dans un homonyme. Une ligne qui en désigne plusieurs est
-// refusée PLUSIEURS_CORRESPONDENT. Le participant qu'une ligne désigne seule
-// est mis à jour par la première de ces lignes, dans l'ordre du fichier ;
-// chaque suivante est refusée DEJA_DESIGNE : deux lignes ne se fondent pas
-// en silence dans une même personne.
+// les lignes à ajouter, les refus et les comptes. Chaque ligne désigne par
+// designer, contre l'index des participants d'avant l'import : un
+// participant ajouté par une ligne n'est désigné par aucune autre, et le
+// prénom ou l'appartenance qu'une ligne pose n'écarte pas ce participant des
+// candidats d'une suivante. Une ligne qui ne désigne personne est à ajouter.
+// Une ligne qui en désigne plusieurs est refusée PLUSIEURS_CORRESPONDENT,
+// jamais ajoutée. Le participant qu'une ligne désigne seule est mis à jour
+// par la première de ces lignes, dans l'ordre du fichier ; chaque suivante
+// est refusée DEJA_DESIGNE : deux lignes ne se fondent pas en silence dans
+// une même personne.
 function mettreAJour(participants, lignes) {
-  const parNom = new Map();
-  for (const participant of participants) {
-    const cle = cleDeNom(participant.nom, participant.prenom);
-    if (!parNom.has(cle)) parNom.set(cle, []);
-    parNom.get(cle).push(participant);
-  }
+  const index = indexerParNom(participants);
+  const parId = new Map(participants.map((participant) => [participant.id, participant]));
   const designes = new Map();
   const nouvelles = [];
   const refusees = [];
   let misAJour = 0;
   let inchanges = 0;
   for (const { ligne, champs, brut } of lignes) {
-    const appartenance = champs.appartenance === null ? null : cleNormalisee(champs.appartenance);
-    const candidats = (parNom.get(cleDeNom(champs.nom, champs.prenom)) ?? []).filter(
-      (participant) => appartenance === null || cleNormalisee(participant.appartenance ?? '') === appartenance,
-    );
+    const { candidats } = designer(champs, index);
     if (candidats.length === 0) {
       nouvelles.push({ champs });
       continue;
     }
     if (candidats.length > 1) {
-      const ids = candidats.map(({ id }) => id).sort(croissant);
-      refusees.push({ ligne, code: 'PLUSIEURS_CORRESPONDENT', valeur: null, participants: ids, brut: [...brut] });
+      refusees.push({ ligne, code: 'PLUSIEURS_CORRESPONDENT', valeur: null, participants: candidats, brut: [...brut] });
       continue;
     }
-    const [designe] = candidats;
-    if (designes.has(designe.id)) {
+    const [id] = candidats;
+    if (designes.has(id)) {
       refusees.push({
-        ligne, code: 'DEJA_DESIGNE', valeur: null, participants: [designe.id], premiereLigne: designes.get(designe.id),
+        ligne, code: 'DEJA_DESIGNE', valeur: null, participants: [id], premiereLigne: designes.get(id),
         brut: [...brut],
       });
       continue;
     }
-    designes.set(designe.id, ligne);
-    if (poser(designe, champs)) misAJour += 1;
+    designes.set(id, ligne);
+    if (poser(parId.get(id), champs)) misAJour += 1;
     else inchanges += 1;
   }
   return { nouvelles, refusees, misAJour, inchanges };
@@ -223,16 +203,17 @@ function mettreAJour(participants, lignes) {
  * Applique un aperçu à une charge (§ 10.1), selon le mode :
  * - 'ajouter' : chaque ligne valide devient un participant ; un doublon ne se
  *   fusionne jamais ;
- * - 'mettreAJour' : une ligne désigne les participants d'avant l'import de
- *   même nom et même prénom normalisés, et de même appartenance quand la
- *   ligne en porte une : un prénom absent compte comme vide, sur la ligne
- *   comme chez le participant, et un participant sans appartenance n'est
- *   désigné que par une ligne qui n'en porte pas. Désigné seul, le
- *   participant prend chaque champ non vide de la ligne, nom et prénom
- *   compris, et garde la valeur d'un champ vide ; exclu vide le garde. Une
- *   ligne qui ne désigne personne est ajoutée ; qui en désigne plusieurs,
- *   refusée PLUSIEURS_CORRESPONDENT ; qui désigne un participant qu'une
- *   ligne précédente désigne déjà, refusée DEJA_DESIGNE ;
+ * - 'mettreAJour' : une ligne désigne, par designer, les participants
+ *   d'avant l'import de même nom normalisé ; le prénom et l'appartenance
+ *   n'en écartent un que lorsque la ligne et lui en portent tous deux un,
+ *   de clés normalisées différentes, selon leurs valeurs d'avant l'import.
+ *   Une ligne ajoutée à côté d'un participant de même nom est celle que
+ *   l'aperçu nomme dans homonymes. Désigné seul, le participant prend chaque champ non vide de
+ *   la ligne, nom, prénom et appartenance compris, et garde la valeur d'un
+ *   champ vide ; exclu vide le garde. Une ligne qui ne désigne personne est
+ *   ajoutée ; qui en désigne plusieurs, refusée PLUSIEURS_CORRESPONDENT ; qui
+ *   désigne un participant qu'une ligne précédente désigne déjà, refusée
+ *   DEJA_DESIGNE ;
  * - 'remplacer' : les participants et leurs réservations sont retirés,
  *   puis chaque ligne valide ajoutée. Tables, titres, propositions et retenu
  *   restent (bilanRemplacement).
@@ -251,19 +232,22 @@ function mettreAJour(participants, lignes) {
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {import('./apercu.js').Apercu} apercu  calculé contre les
- *   participants de la charge : l'appartenance d'une ligne y prend
- *   l'orthographe d'un existant de même clé, que remplacer garde même quand
- *   il retire cet existant
+ *   participants de la charge, pour ce mode : hors de remplacer,
+ *   l'appartenance d'une ligne y prend l'orthographe d'un existant de même
+ *   clé ; en remplacer, celle du fichier
  * @param {'ajouter'|'mettreAJour'|'remplacer'} mode
  * @returns {{charge: import('../stockage/types.js').Charge, resume: ResumeImport}}
  * @throws {ErreurCsv} dans cet ordre : PLAN_BLOQUE, détails {}, en état
  *   bloqué ; le refus global de l'aperçu, son code, détails { ligne }, le rang
  *   que nomme l'aperçu ou null ; AMBIGUITE, détails { champs }, les champs
  *   que l'en-tête laisse ambigus, tant que le choix ne les tranche pas
- * @throws {TypeError} pour un mode inconnu
+ * @throws {TypeError} pour un mode inconnu, et pour un aperçu calculé pour un
+ *   autre mode : l'aperçu montré à l'opérateur est celui que l'import
+ *   applique
  */
 export function appliquerImport(charge, apercu, mode) {
   if (!MODES.includes(mode)) throw new TypeError(`mode : ${MODES.join(', ')} attendu, reçu ${String(mode)}`);
+  if (apercu.mode !== mode) throw new TypeError(`aperçu calculé pour ${String(apercu.mode)}, import en ${mode}`);
   if (charge.evenement.etat === 'bloque') throw new ErreurCsv('PLAN_BLOQUE');
   if (apercu.refusGlobal !== null) throw new ErreurCsv(apercu.refusGlobal, { ligne: apercu.refusGlobalLigne });
   const { ambigus } = apercu.association;

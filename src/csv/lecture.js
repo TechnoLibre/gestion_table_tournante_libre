@@ -18,6 +18,11 @@ const CANDIDATS = [';', ',', '\t'];
 // Nombre d'enregistrements que le choix du séparateur lit.
 const FENETRE = 20;
 
+// Vrai quand le caractère qui suit un guillemet fermant le laisse refermer
+// le champ cité : le séparateur, une fin de ligne, ou la fin du texte.
+const fermeLeChamp = (suivant, separateur) =>
+  suivant === undefined || suivant === separateur || suivant === '\r' || suivant === '\n';
+
 // Parcourt texte en un seul passage et rend ses enregistrements, avec l'état
 // des guillemets à la fin de la lecture. La lecture s'arrête après limite
 // enregistrements terminés ; guillemetOuvert est alors faux, la lecture
@@ -27,8 +32,14 @@ const FENETRE = 20;
 // - un guillemet ouvre un champ cité quand il en est le premier caractère ;
 //   ailleurs, c'est un caractère comme un autre ;
 // - dans un champ cité, le séparateur et les fins de ligne font partie du
-//   texte, deux guillemets font un guillemet, un seul referme le champ ; ce qui
-//   suit le guillemet fermant, jusqu'au séparateur, reste dans le champ ;
+//   texte, deux guillemets font un guillemet, un seul referme le champ quand
+//   le séparateur, une fin de ligne ou la fin du texte le suit ;
+// - un guillemet seul suivi de tout autre caractère ne referme pas le champ :
+//   le guillemet qui l'a ouvert est égaré, et tout ce qu'il a lu depuis
+//   tiendrait dans un seul champ, jusqu'à fondre plusieurs enregistrements
+//   en un. La lecture s'arrête là, guillemetOuvert vrai : le dernier
+//   enregistrement rendu est celui où le champ s'ouvre, et porte le texte lu
+//   jusqu'à ce guillemet ;
 // - CRLF, LF ou CR terminent un enregistrement, CRLF comptant pour une seule
 //   fin ;
 // - une ligne vide est un enregistrement d'un seul champ vide ; la ligne vide
@@ -50,8 +61,12 @@ function analyser(texte, separateur, limite) {
       } else if (texte[i + 1] === GUILLEMET) {
         champ += GUILLEMET;
         i += 1;
-      } else {
+      } else if (fermeLeChamp(texte[i + 1], separateur)) {
         cite = false;
+      } else {
+        enregistrement.push(champ);
+        enregistrements.push(enregistrement);
+        return { enregistrements, guillemetOuvert: true };
       }
       continue;
     }
@@ -88,9 +103,10 @@ function analyser(texte, separateur, limite) {
 /**
  * Découpe un texte en enregistrements de champs, selon RFC 4180 : champs cités,
  * guillemets doublés, séparateur et fins de ligne dans un champ cité, fins de
- * ligne CRLF, LF ou CR. Une ligne vide est un enregistrement d'un seul champ
- * vide ; la ligne vide qui suit la dernière fin de ligne ne fait pas
- * d'enregistrement. Aucun blanc n'est retiré des champs.
+ * ligne CRLF, LF ou CR. Un champ cité se referme sur un guillemet que suivent
+ * le séparateur, une fin de ligne ou la fin du texte. Une ligne vide est un
+ * enregistrement d'un seul champ vide ; la ligne vide qui suit la dernière fin
+ * de ligne ne fait pas d'enregistrement. Aucun blanc n'est retiré des champs.
  *
  * Un enregistrement se désigne par son rang à partir de 1, l'en-tête compris :
  * le numéro de ligne qu'un tableur lui donne. Un champ cité sur plusieurs
@@ -101,8 +117,10 @@ function analyser(texte, separateur, limite) {
  * @param {string|null} separateur  un caractère, ou null pour un fichier à une
  *   colonne, dont chaque ligne est un seul champ
  * @returns {{ enregistrements: string[][], guillemetOuvert: boolean }}
- *   guillemetOuvert est vrai quand le texte s'achève dans un champ cité : le
- *   dernier enregistrement porte alors le texte lu jusque-là.
+ *   guillemetOuvert est vrai quand le texte s'achève dans un champ cité, ou
+ *   qu'un guillemet seul y est suivi d'un autre caractère que le séparateur
+ *   ou une fin de ligne : la découpe s'arrête alors, et le dernier
+ *   enregistrement, celui où le champ s'ouvre, porte le texte lu jusque-là.
  */
 export function decouper(texte, separateur) {
   return analyser(texte, separateur, Infinity);
@@ -122,8 +140,9 @@ export function enregistrementVide(enregistrement) {
 
 // Lecture d'un texte par un candidat dans la fenêtre du choix. L'en-tête est
 // le premier enregistrement non vide parmi ceux que la fenêtre termine : un
-// guillemet resté ouvert court jusqu'à la fin du texte, et l'enregistrement
-// où il s'ouvre, le dernier lu, reste inachevé. Rend null quand l'en-tête
+// guillemet resté ouvert, ou refermé sur un autre caractère que le
+// séparateur ou une fin de ligne, laisse inachevé l'enregistrement où il
+// s'ouvre, le dernier lu. Rend null quand l'en-tête
 // manque ou n'a qu'un champ : la constance seule ne suffit pas, et le candidat
 // n'a pas de défaut à nommer. Sinon, rend le nombre d'en-têtes reconnus et le
 // premier défaut qui écarte le candidat, ou null : un enregistrement non vide

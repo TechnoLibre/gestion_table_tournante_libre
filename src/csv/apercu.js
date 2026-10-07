@@ -22,7 +22,11 @@
 //   6. chaque enregistrement non vide qui suit l'en-tête est une ligne,
 //      valide ou refusée pour un seul motif ; zéro ligne valide refuse ;
 //   7. les appartenances des lignes valides se réconcilient avec celles des
-//      existants, et les doublons se relèvent.
+//      existants, et les doublons se relèvent ; en mode remplacer, qui
+//      retire chaque existant, avec ceux du fichier seuls ;
+//   8. en mode mettreAJour, les lignes ajoutées à côté d'un existant de même
+//      nom se nomment ; dans chaque mode, les cellules qui s'étendent sur
+//      plusieurs lignes du texte et portent le séparateur.
 // Une ligne refusée ne refuse pas le texte : le reste s'importe, et la ligne
 // revient dans le CSV des refus (§ 10.1).
 
@@ -31,6 +35,13 @@ import { contientNul } from './encodage.js';
 import { ErreurCsv } from './erreurs.js';
 import { choisirSeparateur, decouper, enregistrementVide } from './lecture.js';
 import { cleNormalisee } from './normalisation.js';
+
+/**
+ * Modes de l'import (§ 10.1), que l'aperçu et l'import reçoivent tous deux.
+ *
+ * @type {readonly string[]}
+ */
+export const MODES = Object.freeze(['ajouter', 'mettreAJour', 'remplacer']);
 
 /**
  * Valeurs admises d'« exclu », par clé normalisée (cleNormalisee) : une liste
@@ -69,6 +80,9 @@ export const VALEURS_EXCLU = new Map([
  *           la valeur d'une personne existante qu'un import met à jour
  *
  * @typedef {Object} Apercu
+ * @property {'ajouter'|'mettreAJour'|'remplacer'} mode   le mode pour lequel
+ *           l'aperçu est calculé : appliquerImport n'applique l'aperçu que
+ *           dans ce mode
  * @property {string|null} separateur      null pour un fichier à une colonne,
  *           et quand aucun séparateur n'est établi : sous CARACTERE_NUL, sous
  *           SEPARATEUR_INTROUVABLE, pour un texte vide ou blanc
@@ -84,8 +98,9 @@ export const VALEURS_EXCLU = new Map([
  *           valeur d'« exclu » refusée, en NFC sans ses blancs de bord, null
  *           pour les deux autres codes
  * @property {Array<{affichee: string, orthographes: Array<{texte: string, lignes: number[]}>}>} fusions
- *           chaque groupe d'au moins deux orthographes, existantes comprises,
- *           qui porte une ligne valide, rangé par sa première ligne ;
+ *           chaque groupe d'au moins deux orthographes, existantes comprises
+ *           hors du mode remplacer, qui porte une ligne valide, rangé par sa
+ *           première ligne ;
  *           orthographes dans l'ordre de rencontre, la première affichée ;
  *           lignes : rangs des lignes valides de cette orthographe, vide pour
  *           une orthographe que seuls des participants existants portent
@@ -93,10 +108,30 @@ export const VALEURS_EXCLU = new Map([
  *           chaque triplet (nom, prénom, appartenance) normalisé que portent au
  *           moins deux personnes, dont une ligne valide, rangé par sa première
  *           ligne ; cle : le triplet normalisé, en JSON ; existants :
- *           identifiants croissants
+ *           identifiants croissants, toujours vide en mode remplacer
+ * @property {Array<{ligne: number, participants: number[]}>} homonymes
+ *           en mode mettreAJour, chaque ligne valide qui ne désigne personne
+ *           (designer) alors que des existants portent son nom normalisé :
+ *           l'import l'ajoute à côté d'eux, une seconde personne de ce nom,
+ *           parce que le prénom ou l'appartenance, présents des deux côtés,
+ *           diffèrent ; participants : ces existants, identifiants
+ *           croissants ; rangée par ligne. Toujours vide dans les autres
+ *           modes : ajouter crée chaque ligne, remplacer retire chaque
+ *           existant
+ * @property {Array<{ligne: number, rangs: number[]}>} multilignes
+ *           chaque ligne valide dont une cellule au moins s'étend sur
+ *           plusieurs lignes du texte et porte le séparateur, rangée par
+ *           ligne ; rangs : les rangs croissants de ces cellules dans brut.
+ *           Sans séparateur, la fin de ligne seule suffit. C'est la forme
+ *           que laisse un guillemet égaré qu'un autre guillemet referme plus
+ *           loin, devant le séparateur ou une fin de ligne : les
+ *           enregistrements d'entre les deux tiennent dans la cellule, et
+ *           deux personnes se fondent en une. Une note écrite sur plusieurs
+ *           lignes a la même forme, et l'export l'écrit ainsi (§ 10.2) :
+ *           l'aperçu la nomme sans refuser la ligne
  * @property {null|'CARACTERE_NUL'|'AUCUN_ENTETE'|'SEPARATEUR_INTROUVABLE'|'GUILLEMET_OUVERT'|'NOM_NON_ASSOCIE'|'AUCUNE_LIGNE_VALIDE'} refusGlobal
- *           sous un refus global, lignes, fusions et doublons sont vides, et
- *           refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les lignes
+ *           sous un refus global, lignes, fusions, doublons, homonymes et
+ *           multilignes sont vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les lignes
  *           refusées sont la cause
  * @property {number|null} refusGlobalLigne   sous GUILLEMET_OUVERT, le rang de
  *           l'enregistrement où le guillemet s'ouvre ; sous
@@ -105,14 +140,16 @@ export const VALEURS_EXCLU = new Map([
  *           null sinon
  */
 
-// Aperçu d'un texte refusé en entier : ce que la lecture a établi avant le
-// refus, aucune ligne.
-function refuser(
+// Aperçu d'un texte refusé en entier : son mode, ce que la lecture a établi
+// avant le refus, aucune ligne.
+function refuserEn(
+  mode,
   code,
   { separateur = null, entetes = [], association = { colonnes: {}, ambigus: [], nonReconnues: [] } } = {},
   ligne = null,
 ) {
   return {
+    mode,
     separateur,
     entetes,
     association,
@@ -120,6 +157,8 @@ function refuser(
     refusees: [],
     fusions: [],
     doublons: [],
+    homonymes: [],
+    multilignes: [],
     refusGlobal: code,
     refusGlobalLigne: ligne,
   };
@@ -237,9 +276,98 @@ function doublonsDe(existants, valides) {
     .sort((a, b) => a.lignes[0] - b.lignes[0]);
 }
 
+// Vrai quand la valeur d'une ligne et celle d'un participant laissent ce
+// participant parmi les candidats de la ligne : l'une ou l'autre est absente
+// — null, ou de clé normalisée vide —, ou leurs clés normalisées sont égales.
+function compatibles(deLaLigne, duParticipant) {
+  const cleLigne = cleNormalisee(deLaLigne ?? '');
+  const cleParticipant = cleNormalisee(duParticipant ?? '');
+  return cleLigne === '' || cleParticipant === '' || cleLigne === cleParticipant;
+}
+
+/**
+ * Index des participants par nom normalisé, que lit designer. Chaque entrée
+ * copie l'identifiant, le prénom et l'appartenance du participant : ce
+ * qu'une mise à jour pose ensuite sur lui ne change pas l'index, qui garde
+ * les valeurs d'avant l'import.
+ *
+ * @param {Array<{id: number, nom: string, prenom: string|null, appartenance: string|null}>} participants
+ * @returns {Map<string, Array<{id: number, prenom: string|null, appartenance: string|null}>>}
+ */
+export function indexerParNom(participants) {
+  const index = new Map();
+  for (const { id, nom, prenom, appartenance } of participants) {
+    const cle = cleNormalisee(nom);
+    if (!index.has(cle)) index.set(cle, []);
+    index.get(cle).push({ id, prenom, appartenance });
+  }
+  return index;
+}
+
+/**
+ * Participants qu'une ligne désigne en mise à jour (§ 10.1), seule règle de
+ * la désignation, que l'aperçu et l'import lisent tous deux. memeNom : les
+ * participants de l'index de même nom normalisé que la ligne. candidats :
+ * ceux d'entre eux que ni le prénom ni l'appartenance n'écartent ; l'un ou
+ * l'autre n'écarte un participant que lorsque la ligne et lui en portent
+ * tous deux un, de clés normalisées différentes : une colonne absente ou une
+ * cellule vide n'écarte personne, comme elle ne vide aucune valeur.
+ *
+ * @param {{nom: string, prenom: string|null, appartenance: string|null}} champs
+ * @param {ReturnType<typeof indexerParNom>} index
+ * @returns {{memeNom: number[], candidats: number[]}}  identifiants croissants
+ */
+export function designer(champs, index) {
+  const memeNom = index.get(cleNormalisee(champs.nom)) ?? [];
+  const croissants = (entrees) => entrees.map(({ id }) => id).sort((a, b) => a - b);
+  return {
+    memeNom: croissants(memeNom),
+    candidats: croissants(
+      memeNom.filter(
+        ({ prenom, appartenance }) =>
+          compatibles(champs.prenom, prenom) && compatibles(champs.appartenance, appartenance),
+      ),
+    ),
+  };
+}
+
+// Homonymes d'une mise à jour : chaque ligne valide que designer ne fait
+// désigner à personne, alors que des participants portent son nom, avec
+// leurs identifiants. L'index est celui des participants d'avant l'import :
+// une ligne n'y change rien pour la suivante.
+function homonymesDe(participants, lignes) {
+  const index = indexerParNom(participants);
+  const homonymes = [];
+  for (const { ligne, champs } of lignes) {
+    const { memeNom, candidats } = designer(champs, index);
+    if (memeNom.length > 0 && candidats.length === 0) homonymes.push({ ligne, participants: memeNom });
+  }
+  return homonymes;
+}
+
+// Cellules d'une ligne sur plusieurs lignes du texte qui portent le
+// séparateur, ou toute fin de ligne sans séparateur : les lignes valides qui
+// en ont, avec leurs rangs.
+function multilignesDe(lignes, separateur) {
+  const multilignes = [];
+  for (const { ligne, brut } of lignes) {
+    const rangs = [];
+    brut.forEach((cellule, rang) => {
+      const surPlusieursLignes = cellule.includes('\n') || cellule.includes('\r');
+      if (surPlusieursLignes && (separateur === null || cellule.includes(separateur))) rangs.push(rang);
+    });
+    if (rangs.length > 0) multilignes.push({ ligne, rangs });
+  }
+  return multilignes;
+}
+
 /**
  * Aperçu d'un texte décodé, import ou collage, contre les participants
- * existants : rien n'est importé.
+ * existants, pour un mode de l'import : rien n'est importé. En mode
+ * remplacer, chaque existant est retiré avant que les lignes s'ajoutent :
+ * aucune ligne n'en est le doublon, et aucune orthographe existante ne
+ * s'affiche ni ne fond avec celles du fichier. Ajouter et mettre à jour
+ * lisent le fichier contre les existants.
  *
  * @param {string} texte  le texte que rend decoder, ou celui d'un collage
  * @param {Object} [options]
@@ -248,12 +376,17 @@ function doublonsDe(existants, valides) {
  *   ordonne leurs orthographes
  * @param {Object<string, number>} [options.choix]  { champ: rang } qui tranche
  *   une ambiguïté de l'en-tête (voir associer)
+ * @param {'ajouter'|'mettreAJour'|'remplacer'} [options.mode]  ajouter par
+ *   défaut
  * @returns {Apercu}
  * @throws {TypeError} quand texte n'est pas une chaîne : des octets passent
- *   d'abord par decoder
+ *   d'abord par decoder ; pour un mode inconnu
  */
-export function apercevoir(texte, { participants = [], choix = {} } = {}) {
+export function apercevoir(texte, { participants = [], choix = {}, mode = 'ajouter' } = {}) {
   if (typeof texte !== 'string') throw new TypeError('texte : chaîne attendue');
+  if (!MODES.includes(mode)) throw new TypeError(`mode : ${MODES.join(', ')} attendu, reçu ${String(mode)}`);
+  // Chaque refus global porte le mode de l'aperçu.
+  const refuser = (...refus) => refuserEn(mode, ...refus);
   if (contientNul(texte)) return refuser('CARACTERE_NUL');
 
   let separateur;
@@ -295,7 +428,7 @@ export function apercevoir(texte, { participants = [], choix = {} } = {}) {
   }
   if (valides.length === 0) return { ...refuser('AUCUNE_LIGNE_VALIDE', lu), refusees };
 
-  const existants = [...participants].sort((a, b) => a.id - b.id);
+  const existants = mode === 'remplacer' ? [] : [...participants].sort((a, b) => a.id - b.id);
   const { afficheeDe, fusions } = reconcilier(existants, valides);
   const lignes = valides.map(({ ligne, champs, brut }) => ({
     ligne,
@@ -303,11 +436,14 @@ export function apercevoir(texte, { participants = [], choix = {} } = {}) {
     brut,
   }));
   return {
+    mode,
     ...lu,
     lignes,
     refusees,
     fusions,
     doublons: doublonsDe(existants, lignes),
+    homonymes: mode === 'mettreAJour' ? homonymesDe(participants, lignes) : [],
+    multilignes: multilignesDe(lignes, separateur),
     refusGlobal: null,
     refusGlobalLigne: null,
   };
