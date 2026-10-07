@@ -11,10 +11,10 @@
 //
 // Le module n'a ni fichier ni horloge. Il rend le texte d'une ligne, sans fin
 // de ligne — l'ajout au fichier appartient au système de fichiers —, lit le
-// texte entier d'un journal, restitue la charge d'un instant, suit le fil
-// courant et élague. Une table par sorte de ligne — OUVERTURE, ENTREE, JALON
-// — donne à la fois l'ordre des clés à l'écriture et la règle de chaque clé
-// à la lecture : l'écriture refuse par TypeError la ligne dont la lecture
+// texte entier d'un journal, en décode les octets ligne par ligne, restitue
+// la charge d'un instant, suit le fil courant et élague. Une table par sorte
+// de ligne — OUVERTURE, ENTREE, JALON — donne à la fois l'ordre des clés à
+// l'écriture et la règle de chaque clé à la lecture : l'écriture refuse par TypeError la ligne dont la lecture
 // refuserait la forme. La suite des révisions et la cadence des instantanés,
 // que la lecture contrôle aussi, dépendent des lignes voisines : elles
 // appartiennent à l'appelant.
@@ -63,6 +63,11 @@ const CHARGE = regleDuChamp(SCHEMA, 'charge');
 const PROPOSITION = regleDuChamp(CHARGE, 'propositions').element;
 
 const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
+// La fin de ligne, en octets.
+const LF = 0x0a;
+// Décodage strict d'une ligne : un octet hors UTF-8 lève, et la marque
+// d'ordre d'octets reste dans le texte, que la lecture retire.
+const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 // AAAA-MM-JJTHH:MM:SS±HH:MM, la forme que rend l'horloge de l'application.
 // Le calendrier ne se contrôle pas : un horodatage ne décide d'aucun ordre.
 const HORODATAGE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/;
@@ -331,6 +336,44 @@ function lire(texte) {
  */
 export function lireJournal(texte) {
   return lire(texte).journal;
+}
+
+/**
+ * Le texte lisible des octets d'un journal (§ 8.6) : coupés à chaque octet
+ * de fin de ligne LF, chaque segment se décode strictement, dans l'ordre ;
+ * le premier qui n'est pas de l'UTF-8 arrête le texte, comme une ligne
+ * illisible arrête la lecture. Rend texte, les lignes qui le précèdent,
+ * chacune suivie de sa fin de ligne — tout le texte quand chaque segment se
+ * décode, null quand l'ouverture elle-même ne se décode pas —, et ecartees,
+ * ce segment et ceux qui le suivent, comptés comme lireJournal compte les
+ * lignes : chaque fin de ligne en termine une, et le dernier segment en est
+ * une quand il n'est pas vide. Une écriture coupée au milieu d'un caractère
+ * ne gâte ainsi que sa dernière ligne, et lireJournal(texte), ses ecartees
+ * augmentées de celles-ci, est la lecture du journal.
+ *
+ * @param {Uint8Array} octets
+ * @returns {{texte: string|null, ecartees: number}}
+ */
+export function decoderJournal(octets) {
+  const segments = [];
+  let debut = 0;
+  for (let rang = octets.indexOf(LF); rang !== -1; rang = octets.indexOf(LF, debut)) {
+    segments.push(octets.subarray(debut, rang));
+    debut = rang + 1;
+  }
+  segments.push(octets.subarray(debut));
+  const lignes = segments.length - 1 + (segments.at(-1).length > 0 ? 1 : 0);
+  let texte = '';
+  for (let rang = 0; rang < segments.length; rang += 1) {
+    let ligne;
+    try {
+      ligne = UTF8_STRICT.decode(segments[rang]);
+    } catch {
+      return { texte: rang === 0 ? null : texte, ecartees: lignes - rang };
+    }
+    texte += rang < segments.length - 1 ? `${ligne}\n` : ligne;
+  }
+  return { texte, ecartees: 0 };
 }
 
 /**

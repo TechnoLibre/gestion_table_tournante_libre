@@ -18,10 +18,24 @@
 // Ce qui écrirait l'événement se refuse dans cet ordre, sans rien écrire :
 // un fichier d'un format plus récent, LECTURE_SEULE {raison: 'FORMAT'} ; un
 // plan bloqué, LECTURE_SEULE {raison: 'BLOQUE'} ; le mode lecture,
-// MODE_LECTURE ; le support rompu, SUPPORT_ROMPU. Sur un plan bloqué, débloquer
+// MODE_LECTURE ; le support rompu, SUPPORT_ROMPU. Un état aux octets hors
+// UTF-8 ne s'ouvre qu'en secours, dont le premier geste le met de côté dans
+// la corbeille (§ 8.8). Sur un plan bloqué, débloquer
 // est le seul geste admis : il prend lui-même le verrou, et laisse la séance
 // en écriture (§ 8.5). Un geste qui laisse le plan bloqué ramène la séance en
 // lecture et rend le verrou.
+//
+// Le verrou pris — passer en écriture, débloquer —, la séance relit
+// l'événement sur le disque : une autre séance a pu l'écrire tant que
+// celle-ci le lisait. Un Ouvert de secours se relit par l'état dès que
+// l'état a changé depuis l'ouverture ; un .precedent, par le journal dès
+// que le journal a reçu une entrée ; et par sa source sinon. Ce qu'elle
+// relit devient son Ouvert, et EVENEMENT_CHANGE {revision} le dit quand la
+// révision ou la charge diffèrent : une séance n'écrit jamais par-dessus le
+// travail d'une autre (§ 8.2, § 8.8). Un événement qui ne se relit plus rend
+// le verrou, et le refus de la lecture remonte ; un état devenu illisible par
+// ses octets hors UTF-8 se refuse comme un format plus récent,
+// LECTURE_SEULE {raison: 'ENCODAGE'}.
 //
 // Une écriture refusée par le support, ECRITURE ou ETAT_NON_ECRIT — celle
 // d'un geste, d'un jalon ou du verrou qu'un passage en écriture pose —, rompt
@@ -31,7 +45,14 @@
 // l'événement dans un autre dossier, et s'y poursuit (§ 8.6). Le geste refusé
 // ne se rejoue pas. Écrire ailleurs refuse un dossier qui porte déjà
 // l'événement, celui de la séance compris : deux copies d'un même
-// identifiant ne se côtoient jamais dans un dossier (§ 8.6).
+// identifiant ne se côtoient jamais dans un dossier (§ 8.6). Tant que le
+// support est rompu, l'Ouvert de la séance est la seule copie qu'écrire
+// ailleurs peut sauver : ouvrir, ouvrir un secours, créer et fermer se
+// refusent SUPPORT_ROMPU_NON_SAUVE, sauf appelés avec {abandonner: true}.
+//
+// Les avertissements de la séance sont ceux de l'Ouvert courant — ceux de
+// l'ouverture, puis ceux que le dépôt recalcule après chaque écriture —,
+// suivis de ceux du dernier geste.
 //
 // Les appels qui lisent ou écrivent l'événement passent l'un après l'autre,
 // dans l'ordre de leur appel : chacun part de l'Ouvert que le précédent a
@@ -51,7 +72,7 @@ import {
 } from '../stockage/depot.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { fil, reconstruire } from '../stockage/journal.js';
-import { appliquerCommande, chargeNeuve } from './commandes.js';
+import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 import { libelle } from './libelles.js';
 
 /** Inactivité au terme de laquelle la séance revient seule en lecture (§ 8.4). */
@@ -79,6 +100,10 @@ ErreurSeance.prototype.name = 'ErreurSeance';
 const avertissement = (code, details) => ({ code, details });
 
 const estBloque = (ouvert) => ouvert.charge.evenement.etat === 'bloque';
+
+// La révision de la dernière entrée du journal de l'Ouvert, null sans
+// journal.
+const derniereEntree = ({ journal }) => journal?.entrees.at(-1)?.revision ?? null;
 
 // Le libellé de l'entrée de révision donnée.
 const libelleDeRevision = (journal, revision) => journal.entrees.find((entree) => entree.revision === revision).libelle;
@@ -122,6 +147,9 @@ export function creerSeance({
   const libelleReprise = libelle('ENTREE_REPRISE');
 
   // L'état de la séance. ouvert : l'Ouvert courant, null sans événement ;
+  // source : d'où il se relit, null pour l'état, 'precedent' ou 'journal'
+  // pour un secours que nul geste n'a encore écrit en état — 'journal' aussi
+  // après un jalon qui pose l'entrée de reprise sans écrire l'état ;
   // verrouTenu : la séance tient le verrou de cet événement ; refusSupport :
   // l'écriture qui a rompu le support, {echec, chemin, dossier, cause} ;
   // verrouAutre : le verrou d'une autre séance qui a refusé le dernier
@@ -130,12 +158,12 @@ export function creerSeance({
   const etat = {
     racine,
     ouvert: null,
+    source: null,
     mode: 'lecture',
     verrouTenu: false,
     supportRompu: false,
     refusSupport: null,
     verrouAutre: null,
-    avertissementsOuverture: [],
     avertissementsGeste: [],
     gestes: 0,
     calculs: 0,
@@ -233,6 +261,72 @@ export function creerSeance({
     }
   }
 
+  // L'Ouvert que le disque porte pour l'événement de l'Ouvert reçu, et la
+  // source d'où il se relira : { frais, source }. Sans source, par l'état
+  // (ouvrir). Un Ouvert de secours se relit par l'état quand celui-ci se lit
+  // et que son texte n'est plus celui de l'ouverture : une écriture l'a
+  // remplacé, et la source revient à l'état. Sinon — l'état illisible, ou
+  // lisible et inchangé, que l'opérateur a écarté pour son secours (§ 8.9,
+  // point 3) —, par sa source (ouvrirSecours) ; un .precedent dont le journal
+  // lisible a reçu une entrée depuis cède au dernier instant du journal, qui
+  // porte cette entrée, et la source devient 'journal'. Un journal qui ne se
+  // lit plus — d'un format plus récent, mal encodé — laisse le .precedent,
+  // lecture seule comprise. Un refus autre qu'ETAT_ILLISIBLE remonte. Sans
+  // source, un état dont les octets ne sont plus de l'UTF-8 garde la séance
+  // en lecture, comme un format plus récent : LECTURE_SEULE {raison:
+  // 'ENCODAGE'} ; l'opérateur l'écarte en ouvrant un secours.
+  async function relire(ouvert) {
+    const { fs: systeme, racine: dossier, base, texteEtat } = ouvert;
+    if (etat.source === null) {
+      try {
+        return { frais: await ouvrirSurDisque(systeme, dossier, base), source: null };
+      } catch (erreur) {
+        const illisible = erreur instanceof ErreurStockage && erreur.code === 'ETAT_ILLISIBLE';
+        if (illisible && erreur.details.raison === 'ENCODAGE') {
+          throw new ErreurStockage('LECTURE_SEULE', { raison: 'ENCODAGE' });
+        }
+        throw erreur;
+      }
+    }
+    try {
+      const parEtat = await ouvrirSurDisque(systeme, dossier, base);
+      if (parEtat.texteEtat !== texteEtat) return { frais: parEtat, source: null };
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage && erreur.code === 'ETAT_ILLISIBLE')) throw erreur;
+    }
+    const parSource = await ouvrirSecoursSurDisque(systeme, dossier, base, etat.source);
+    const derniere = derniereEntree(parSource);
+    if (etat.source === 'precedent' && derniere !== null && derniere !== derniereEntree(ouvert)) {
+      return { frais: await ouvrirSecoursSurDisque(systeme, dossier, base, 'journal'), source: 'journal' };
+    }
+    return { frais: parSource, source: etat.source };
+  }
+
+  // Relit l'événement de l'Ouvert, le verrou de la séance pris (relire). Ce
+  // que la lecture rend devient l'Ouvert de la séance, journal et jalons
+  // compris ; rend [EVENEMENT_CHANGE {revision}] quand sa révision ou sa
+  // charge diffèrent de celles de l'Ouvert, [] sinon. Une entrée d'une autre
+  // séance change toujours la révision relue : l'état qu'elle a écrit, ou le
+  // dernier instant du journal qu'un .precedent lui cède (relire). Une
+  // lecture refusée rend le verrou — ses avertissements deviennent ceux du
+  // dernier geste —, et son refus remonte : la séance reste en lecture sur
+  // l'Ouvert reçu.
+  async function relireSousVerrou(ouvert) {
+    let relu;
+    try {
+      relu = await relire(ouvert);
+    } catch (erreur) {
+      etat.avertissementsGeste = await rendreVerrou(ouvert);
+      throw erreur;
+    }
+    const { frais, source } = relu;
+    etat.ouvert = frais;
+    etat.source = source;
+    const change =
+      frais.revision !== ouvert.revision || serialiserCharge(frais.charge) !== serialiserCharge(ouvert.charge);
+    return change ? [avertissement('EVENEMENT_CHANGE', { revision: frais.revision })] : [];
+  }
+
   // Le retour en lecture : le compte s'arrête, et le verrou se rend ; le
   // retour explicite annule en plus le geste ouvert. Les avertissements du
   // rendu s'ajoutent à ceux du dernier geste.
@@ -254,6 +348,15 @@ export function creerSeance({
 
   function exigerSupport() {
     if (etat.supportRompu) throw new ErreurSeance('SUPPORT_ROMPU', { ...etat.refusSupport });
+  }
+
+  // Quitter l'événement — ouvrir, créer, fermer — quand le support est
+  // rompu perdrait la seule copie qu'écrire ailleurs peut sauver : refusé,
+  // sauf sur abandon explicite.
+  function exigerSauve({ abandonner = false } = {}) {
+    if (etat.supportRompu && abandonner !== true) {
+      throw new ErreurSeance('SUPPORT_ROMPU_NON_SAUVE', { ...etat.refusSupport });
+    }
   }
 
   // L'Ouvert, quand l'événement admet une écriture ; sinon le refus, dans
@@ -311,6 +414,7 @@ export function creerSeance({
     if (jalonAvant !== null) ouvert = await ecrire(ouvert, (o) => nommerSurDisque(o, { nom: jalonAvant, ...commun }));
     const entree = { libelle: texte, produitVersion, sens, retour, ...commun };
     ouvert = await ecrire(ouvert, (o) => enregistrer(o, charge, entree));
+    etat.source = null;
     const suite = [...avertissements];
     const etatDuPlan = ouvert.charge.evenement.etat;
     if (etatDuPlan !== depart.charge.evenement.etat) {
@@ -340,19 +444,37 @@ export function creerSeance({
   }
 
   // Débloquer (§ 8.5, § 9) : le seul geste qu'un plan bloqué admet. La
-  // commande d'abord, qui ne touche rien ; puis le verrou, que la séance
-  // prend en lecture ; puis l'entrée et le jalon de l'état rendu. La séance
-  // reste en écriture.
+  // commande d'abord, qui ne touche rien ; puis, en lecture, le verrou, que
+  // la séance prend, et la relecture de l'événement (relireSousVerrou) ; la
+  // commande s'applique alors à ce qui est relu. Celui-ci d'un format plus
+  // récent, ou que la commande refuse — une autre séance l'a débloqué —,
+  // rend le verrou, la séance restant en lecture sur ce qu'elle a relu, et
+  // le refus remonte. Sinon l'entrée et le jalon de l'état rendu s'écrivent,
+  // et la séance reste en écriture.
   async function debloquerPlan(ouvert, args) {
     exigerSupport();
-    const resultat = appliquerCommande('debloquer', ouvert.charge, args);
-    const avertissements = etat.mode === 'ecriture' ? [] : await prendreVerrou(ouvert);
+    let resultat = appliquerCommande('debloquer', ouvert.charge, args);
+    let depart = ouvert;
+    const avertissements = [];
+    if (etat.mode !== 'ecriture') {
+      avertissements.push(...(await prendreVerrou(ouvert)));
+      avertissements.push(...(await relireSousVerrou(ouvert)));
+      depart = etat.ouvert;
+      try {
+        if (depart.formatPlusRecent) throw new ErreurStockage('LECTURE_SEULE', { raison: 'FORMAT' });
+        resultat = appliquerCommande('debloquer', depart.charge, args);
+      } catch (erreur) {
+        etat.avertissementsGeste = [...avertissements, ...(await rendreVerrou(depart))];
+        throw erreur;
+      }
+    }
     etat.mode = 'ecriture';
-    return ecrireGeste(ouvert, { ...resultat, avertissements: [...avertissements, ...resultat.avertissements] });
+    return ecrireGeste(depart, { ...resultat, avertissements: [...avertissements, ...resultat.avertissements] });
   }
 
   // Un geste nommé, sans son suivi : le refus, ou le libellé et ce que la
-  // commande ajoute.
+  // commande ajoute. Un rendu au libellé null n'écrit rien : la séance rend
+  // son résumé, le libellé null.
   async function geste(nom, args) {
     const ouvert = exigerOuvert();
     if (nom === 'debloquer' && !ouvert.formatPlusRecent && estBloque(ouvert)) {
@@ -360,6 +482,10 @@ export function creerSeance({
     }
     exigerEcriture();
     const resultat = appliquerCommande(nom, ouvert.charge, args);
+    if (resultat.libelle === null) {
+      etat.avertissementsGeste = [...resultat.avertissements];
+      return { libelle: null, resume: resultat.resume };
+    }
     const jalonAvant = nom === 'enregistrerGeneration' ? libelle('JALON_AVANT_GENERATION') : null;
     const texte = await ecrireGeste(ouvert, resultat, { jalonAvant });
     return resultat.resume === undefined ? { libelle: texte } : { libelle: texte, resume: resultat.resume };
@@ -461,12 +587,12 @@ export function creerSeance({
     const avertissements = etat.ouvert === null ? [] : await rendreVerrou(etat.ouvert);
     Object.assign(etat, {
       ouvert: null,
+      source: null,
       mode: 'lecture',
       verrouTenu: false,
       supportRompu: false,
       refusSupport: null,
       verrouAutre: null,
-      avertissementsOuverture: [],
       avertissementsGeste: [],
       gestes: 0,
       calculs: 0,
@@ -475,12 +601,13 @@ export function creerSeance({
   }
 
   // Ouvre en lecture l'Ouvert que rend lire, sans rien écrire, après avoir
-  // fermé le précédent.
-  async function ouvrirAvec(lire) {
+  // fermé le précédent ; source dit d'où il se relit (relireSousVerrou).
+  async function ouvrirAvec(lire, source, quitter) {
+    exigerSauve(quitter);
     await fermerEvenement();
     const ouvert = await lire();
     etat.ouvert = ouvert;
-    etat.avertissementsOuverture = ouvert.avertissements;
+    etat.source = source;
     return { base: ouvert.base, avertissements: ouvert.avertissements };
   }
 
@@ -489,8 +616,10 @@ export function creerSeance({
   // l'événement ouvert reste, son mode et son verrou compris ; puis le
   // précédent se ferme, et s'écrivent l'entrée de création et le jalon
   // « Création », puis l'état. Le nouveau reste ouvert en lecture. Un état
-  // que le support refuse d'écrire, le journal écrit, rompt le support.
-  async function creerEvenement(champs) {
+  // que le support refuse d'écrire, le journal écrit, rompt le support. Le
+  // support de l'événement ouvert rompu, refusé sauf abandon (exigerSauve).
+  async function creerEvenement(champs, quitter) {
+    exigerSauve(quitter);
     const { charge, libelle: texte } = chargeNeuve(champs, identifiant);
     await fermerEvenement();
     const options = {
@@ -505,12 +634,14 @@ export function creerSeance({
       if (erreur instanceof ErreurStockage && erreur.code === 'ETAT_NON_ECRIT') rompre(erreur, erreur.details.ouvert);
       throw erreur;
     }
-    etat.avertissementsOuverture = etat.ouvert.avertissements;
     return { base: etat.ouvert.base };
   }
 
   // --- Les modes (§ 8.4, § 8.8) -------------------------------------------------------
 
+  // Le verrou pris, l'événement se relit (relireSousVerrou) ; relu d'un
+  // format plus récent, ou bloqué par une autre séance, il rend le verrou,
+  // et la séance reste en lecture sur ce qu'elle a relu, le refus levé.
   async function passerEnEcriture() {
     const ouvert = exigerOuvert();
     if (ouvert.formatPlusRecent) throw new ErreurStockage('LECTURE_SEULE', { raison: 'FORMAT' });
@@ -518,6 +649,15 @@ export function creerSeance({
     if (etat.mode === 'ecriture') return { avertissements: [] };
     exigerSupport();
     const avertissements = await prendreVerrou(ouvert);
+    avertissements.push(...(await relireSousVerrou(ouvert)));
+    const relu = etat.ouvert;
+    let refus = null;
+    if (relu.formatPlusRecent) refus = new ErreurStockage('LECTURE_SEULE', { raison: 'FORMAT' });
+    else if (estBloque(relu)) refus = new ErreurStockage('LECTURE_SEULE', { raison: 'BLOQUE' });
+    if (refus !== null) {
+      etat.avertissementsGeste = [...avertissements, ...(await rendreVerrou(relu))];
+      throw refus;
+    }
     etat.mode = 'ecriture';
     etat.avertissementsGeste = avertissements;
     armer();
@@ -533,14 +673,20 @@ export function creerSeance({
   }
 
   // Nomme l'instant courant (§ 8.3) : un jalon, sans entrée ; le nom entre en
-  // NFC, ses blancs de bord retirés.
+  // NFC, ses blancs de bord retirés. Un jalon qui pose d'abord l'entrée de
+  // reprise avance la révision de l'Ouvert sans écrire l'état : le dernier
+  // instant du journal porte désormais la charge de la séance, et la source
+  // de la relecture devient 'journal'.
   async function nommer(nom) {
     try {
       const ouvert = exigerEcriture();
       if (typeof nom !== 'string') throw new TypeError(`nom : chaîne attendue, reçu ${JSON.stringify(nom)}`);
       const texte = nom.normalize('NFC').trim();
       if (texte === '') throw new ErreurSeance('NOM_REQUIS');
-      await ecrire(ouvert, (o) => nommerSurDisque(o, { nom: texte, horodatage: horloge.horodatage(), libelleReprise }));
+      const nomme = await ecrire(ouvert, (o) =>
+        nommerSurDisque(o, { nom: texte, horodatage: horloge.horodatage(), libelleReprise }),
+      );
+      if (nomme.revision !== ouvert.revision) etat.source = 'journal';
     } finally {
       await apresGeste();
     }
@@ -573,7 +719,10 @@ export function creerSeance({
   // transporte la séance : l'Ouvert avancé du refus et la racine nouvelle, en
   // lecture, le support rompu par ce refus, le verrou rendu là où il était ;
   // un nouvel essai y trouve ce journal, et se refuse. Tout autre échec
-  // laisse tout en l'état, le support toujours rompu.
+  // laisse tout en l'état, le support toujours rompu. Réussi, il demande le
+  // type du support de la racine nouvelle, et SUPPORT_AMOVIBLE {dossier}
+  // annonce la garantie affaiblie d'un support amovible, comme la règle du
+  // dossier de travail au démarrage (§ 8.8).
   async function ecrireAilleurs(nouvelle) {
     const ouvert = exigerOuvert();
     if (ouvert.formatPlusRecent) throw new ErreurStockage('LECTURE_SEULE', { raison: 'FORMAT' });
@@ -595,7 +744,7 @@ export function creerSeance({
       throw erreur;
     }
     const avertissements = await rendreVerrou(ouvert);
-    Object.assign(etat, { ouvert: ailleurs, racine: nouvelle, supportRompu: false, refusSupport: null });
+    Object.assign(etat, { ouvert: ailleurs, source: null, racine: nouvelle, supportRompu: false, refusSupport: null });
     if (etat.mode === 'ecriture') {
       try {
         avertissements.push(...(await prendreVerrou(ailleurs)));
@@ -605,9 +754,24 @@ export function creerSeance({
         avertissements.push(avertissement(erreur.code, erreur.details));
       }
     }
+    if ((await typeDeSupport(nouvelle)) === 'amovible') {
+      avertissements.push(avertissement('SUPPORT_AMOVIBLE', { dossier: nouvelle.chemin }));
+    }
     etat.avertissementsGeste = avertissements;
     armer();
     return { base: ailleurs.base, avertissements };
+  }
+
+  // Le type du support de la racine (§ 8.8) ; 'inconnu' pour toute faute du
+  // système qui le demande — un refus du stockage, une réponse du pont
+  // illisible : l'événement y est déjà écrit et la séance transportée, et le
+  // type ne sert qu'à un avertissement.
+  async function typeDeSupport(dossier) {
+    try {
+      return await fs.typeSupport(dossier);
+    } catch {
+      return 'inconnu';
+    }
   }
 
   return {
@@ -642,9 +806,9 @@ export function creerSeance({
     get verrouAutre() {
       return etat.verrouAutre;
     },
-    /** Ceux de l'ouverture, puis ceux du dernier geste. */
+    /** Ceux de l'Ouvert courant, recalculés à chaque écriture, puis ceux du dernier geste. */
     get avertissements() {
-      return [...etat.avertissementsOuverture, ...etat.avertissementsGeste];
+      return [...(etat.ouvert?.avertissements ?? []), ...etat.avertissementsGeste];
     },
     /** {defaire, refaire} : les retours qui existent sur le fil courant (§ 8.3). */
     get retours() {
@@ -659,11 +823,17 @@ export function creerSeance({
       return etat.calculs > 0;
     },
 
-    ouvrir: (base) => enFile(() => ouvrirAvec(() => ouvrirSurDisque(fs, etat.racine, base))),
-    ouvrirSecours: (base, source) =>
-      enFile(() => ouvrirAvec(() => ouvrirSecoursSurDisque(fs, etat.racine, base, source))),
-    creer: (champs) => enFile(() => creerEvenement(champs)),
-    fermer: () => enFile(async () => ({ avertissements: await fermerEvenement() })),
+    // quitter.abandonner : vrai pour quitter l'événement d'un support rompu
+    // (exigerSauve).
+    ouvrir: (base, quitter) => enFile(() => ouvrirAvec(() => ouvrirSurDisque(fs, etat.racine, base), null, quitter)),
+    ouvrirSecours: (base, source, quitter) =>
+      enFile(() => ouvrirAvec(() => ouvrirSecoursSurDisque(fs, etat.racine, base, source), source, quitter)),
+    creer: (champs, quitter) => enFile(() => creerEvenement(champs, quitter)),
+    fermer: (quitter) =>
+      enFile(async () => {
+        exigerSauve(quitter);
+        return { avertissements: await fermerEvenement() };
+      }),
     passerEnEcriture: () => enFile(passerEnEcriture),
     passerEnLecture: () => enFile(passerEnLecture),
     executer: (nom, args = {}) => enFile(() => suivi(() => geste(nom, args))),
@@ -673,6 +843,11 @@ export function creerSeance({
     revenir: (revision) => enFile(() => suivi(() => retour('revenir', revision))),
     nommer: (nom) => enFile(() => nommer(nom)),
     ecrireAilleurs: (nouvelle) => enFile(() => ecrireAilleurs(nouvelle)),
+    /**
+     * La forme nommée d'une proposition ou du retenu (formeNommeeDe) : une
+     * lecture, admise dans tout mode, qui n'écrit rien.
+     */
+    formeNommee: (cible) => enFile(async () => formeNommeeDe(exigerOuvert().charge, cible)),
 
     // Les gestes et les calculs ouverts suspendent le compte d'inactivité ;
     // ils s'emboîtent, et un fini de trop ne compte pas.

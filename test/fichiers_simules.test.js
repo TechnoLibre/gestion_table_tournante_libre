@@ -556,6 +556,64 @@ describe('fichiers simulés : compteurs, préparation, horloge', () => {
   });
 });
 
+describe('fichiers simulés : octets déposés et décodage strict', () => {
+  // « Selvi » puis l'octet E8, un « è » enregistré en windows-1252 : une suite
+  // qui n'est pas de l'UTF-8.
+  const HORS_UTF8 = new Uint8Array([0x7b, 0x22, 0x53, 0x65, 0x6c, 0x76, 0x69, 0xe8, 0x22, 0x7d]);
+
+  test("lireTexte refuse des octets qui ne sont pas de l'UTF-8 : LECTURE {chemin, dossier, cause: UTF8_INVALIDE, octets}, comptée, ses octets une copie dont le message ne dit que le nombre ; lister en donne la taille, octets les rend tels quels", async () => {
+    const fs = preparer();
+    fs.deposerOctets('documents', 'archives/soiree.gtt.json', HORS_UTF8);
+    await echoue(fs.lireTexte(DOC, 'archives/soiree.gtt.json'), 'LECTURE', {
+      chemin: 'archives/soiree.gtt.json',
+      dossier: `${DOCUMENTS}\\archives`,
+      cause: 'UTF8_INVALIDE',
+      octets: HORS_UTF8,
+    });
+    const refus = await rejette(fs.lireTexte(DOC, 'archives/soiree.gtt.json'), 'LECTURE');
+    assert.equal(
+      refus.message,
+      `LECTURE {"chemin":"archives/soiree.gtt.json","dossier":${JSON.stringify(`${DOCUMENTS}\\archives`)},"cause":"UTF8_INVALIDE","octets":"10 octets"}`,
+    );
+    refus.details.octets[0] = 0;
+    assert.deepEqual(fs.octets('documents', 'archives/soiree.gtt.json'), HORS_UTF8);
+    assert.deepEqual(fs.compteurs, { ecritures: 0, lectures: 2 });
+    assert.deepEqual(await fs.lister(DOC, 'archives'), [
+      { nom: 'soiree.gtt.json', type: 'fichier', taille: 10, modifie: (await fs.lister(DOC, 'archives'))[0].modifie },
+    ]);
+    assert.deepEqual(fs.octets('documents', 'archives/soiree.gtt.json'), HORS_UTF8);
+    assert.equal(erreurDe(() => fs.contenu('documents', 'archives/soiree.gtt.json')).name, 'TypeError');
+  });
+
+  test("des octets UTF-8 déposés se lisent tels quels, marque d'ordre d'octets comprise ; un ajout en fin garde les octets d'avant, une écriture atomique les remplace", async () => {
+    const fs = preparer();
+    fs.deposerOctets('documents', 'bom.csv', new Uint8Array([0xef, 0xbb, 0xbf, 0xc3, 0xa9, 0x0d, 0x0a]));
+    assert.equal(await fs.lireTexte(DOC, 'bom.csv'), '\u{FEFF}\u{E9}\r\n');
+    assert.equal(fs.contenu('documents', 'bom.csv'), '\u{FEFF}\u{E9}\r\n');
+    fs.deposerOctets('documents', 'journal.jsonl', HORS_UTF8);
+    await fs.ajouterLigne(DOC, 'journal.jsonl', '\u{E9}');
+    assert.deepEqual(fs.octets('documents', 'journal.jsonl'), new Uint8Array([...HORS_UTF8, 0xc3, 0xa9, 0x0a]));
+    await fs.ecrireAtomique(DOC, 'journal.jsonl', 'neuf');
+    assert.equal(await fs.lireTexte(DOC, 'journal.jsonl'), 'neuf');
+    assert.deepEqual(fs.octets('documents', 'journal.jsonl'), new Uint8Array([0x6e, 0x65, 0x75, 0x66]));
+    assert.equal(fs.octets('documents', 'absent.txt'), null);
+    assert.equal(erreurDe(() => fs.deposerOctets('documents', 'x.txt', 'x')).name, 'TypeError');
+  });
+
+  test("un verrou aux octets hors UTF-8 se lit comme un verrou illisible", async () => {
+    const fs = preparer();
+    fs.deposerOctets('documents', 'soiree.gtt.verrou', HORS_UTF8);
+    assert.deepEqual(await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), {
+      pris: false,
+      seance: null,
+      depuis: null,
+      vivant: null,
+    });
+    await fs.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-b');
+    assert.deepEqual(fs.octets('documents', 'soiree.gtt.verrou'), HORS_UTF8);
+  });
+});
+
 describe('fichiers simulés : préconditions et dossiers', () => {
   test("ajouterLigne refuse une ligne qui porte une fin de ligne ; ecrireAtomique, un texte qui n'est pas une chaîne ; verrouiller, une séance vide", async () => {
     const fs = preparer();

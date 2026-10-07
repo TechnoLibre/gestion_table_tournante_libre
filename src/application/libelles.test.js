@@ -147,6 +147,17 @@ describe('libellés : le balayage des codes (§ 14.6, § 14.2)', () => {
     assert.deepEqual(codesDesTables(source), ['PREMIER', 'SECOND_CODE']);
   });
 
+  test("un motif de lecture seule ou d'illisibilité ne fait jamais lever le texte ni n'y laisse « undefined », quel que soit le code qui le porte", () => {
+    assert.ok(CODES.length > 0, 'table vide');
+    for (const code of ['LECTURE_SEULE', 'ETAT_ILLISIBLE', 'JOURNAL_ILLISIBLE']) {
+      for (const raison of [...CODES, 'RAISON_INVENTEE']) {
+        const texte = libelle(code, { raison, base: 'Soirée des Lucioles', chemin: null });
+        assert.equal(typeof texte, 'string', `${code} / ${raison}`);
+        assert.ok(!texte.includes('undefined'), `${code} / ${raison} : ${texte}`);
+      }
+    }
+  });
+
   test('chaque arbre émet des codes, et la table de contrat du stockage en porte', () => {
     const { parArbre, tables } = releverArbre();
     for (const arbre of ARBRES) assert.ok(parArbre.get(arbre).size > 0, `${arbre} : balayage vide`);
@@ -204,6 +215,7 @@ const EXEMPLES = new Map([
   ['REFERENCE', { chemin: 'charge.reservations[0].table' }],
   ['FORMAT_INCONNU', { chemin: 'entete.format' }],
   ['FORMAT_PLUS_RECENT', { format: 2 }],
+  ['ENCODAGE', {}],
   // Fautes d'un placement
   ['LONGUEUR', { tour: 2, table: 4, declare: 8, ecrit: 9 }],
   ['DOUBLON', { tour: 1, participant: 3 }],
@@ -225,9 +237,12 @@ const EXEMPLES = new Map([
   ['JOURNAL_EN_AVANCE_DE', { n: 3 }],
   ['JOURNAL_INCOMPLET', { etat: 9, journal: 6 }],
   ['JOURNAL_ECARTEES', { n: 64 }],
+  ['JOURNAL_RECREE', {}],
   ['JOURNAL_FORMAT_PLUS_RECENT', { format: 2 }],
+  ['JOURNAL_ILLISIBLE', { raison: 'ENCODAGE' }],
   ['JOURNAL_ETRANGER', { evenement: 'evt-autre' }],
   ['PROPOSITIONS_FAUTIVES', { ids: [3, null] }],
+  ['PROPOSITIONS_MANQUANTES', { n: 2 }],
   ['DERIVE', { ids: [1, 2], retenu: true }],
   // Dossier de travail et réglages locaux
   ['NON_PUBLIE', {}],
@@ -265,6 +280,8 @@ const EXEMPLES = new Map([
   ['BLOQUE', {}],
   ['SUPPORT_ROMPU', { echec: 'ECRITURE', chemin: 'Soirée des Lucioles.gtt-journal.jsonl', dossier: 'E:\\data', cause: 'EROFS' }],
   ['SUPPORT_INTACT', {}],
+  ['SUPPORT_ROMPU_NON_SAUVE', { echec: 'ETAT_NON_ECRIT', chemin: 'Soirée des Lucioles.gtt.json', dossier: 'E:\\data', cause: 'EIO' }],
+  ['EVENEMENT_CHANGE', { revision: 7 }],
   ['VERROU_REPRIS', { seance: 'seance-morte', depuis: '2031-05-01T21:40:00-04:00' }],
   ['VERROU_NON_RENDU', { chemin: 'Soirée des Lucioles.gtt.verrou', dossier: 'E:\\data', cause: 'EROFS' }],
   ['RIEN_A_DEFAIRE', {}],
@@ -385,6 +402,19 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
     }
   });
 
+  test("le support amovible nomme le dossier quand il est donné ; l'événement changé nomme la révision adoptée", () => {
+    assert.doesNotMatch(libelle('SUPPORT_AMOVIBLE', {}), /«/);
+    assert.match(libelle('SUPPORT_AMOVIBLE', { dossier: 'F:\\soirees' }), /« F:\\soirees »/);
+    assert.match(libelle('EVENEMENT_CHANGE', { revision: 7 }), /\b7\b/);
+  });
+
+  test("quitter un événement au support rompu nomme « Écrire ailleurs », et ce qui serait perdu", () => {
+    const details = { chemin: 'Soirée des Lucioles.gtt-journal.jsonl', dossier: 'E:\\data', cause: 'EROFS' };
+    for (const echec of ['ECRITURE', 'ETAT_NON_ECRIT', 'JALON_NON_ECRIT', 'VERROU_NON_ECRIT']) {
+      assert.match(libelle('SUPPORT_ROMPU_NON_SAUVE', { echec, ...details }), /« Écrire ailleurs »/, echec);
+    }
+  });
+
   test('le plan bloqué nomme « Débloquer », le mode lecture nomme « Modifier »', () => {
     assert.match(libelle('LECTURE_SEULE', { raison: 'BLOQUE' }), /« Débloquer »/);
     assert.match(libelle('PLAN_BLOQUE', { remede: { geste: 'debloquer' } }), /« Débloquer »/);
@@ -405,8 +435,39 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
       const details = { base: 'Soirée des Lucioles', raison, chemin: raison === 'FORME' ? 'charge.tables[0].forme' : null, secours: { precedent: null, journal: 2 } };
       assert.match(libelle('ETAT_ILLISIBLE', details), /révision 2/, raison);
     }
-    assert.throws(() => libelle('ETAT_ILLISIBLE', { base: 'x', raison: 'RAISON_INVENTEE', chemin: null }), RangeError);
-    assert.throws(() => libelle('LECTURE_SEULE', { raison: 'RAISON_INVENTEE' }), RangeError);
+    const encodage = libelle('ETAT_ILLISIBLE', { base: 'Soirée des Lucioles', raison: 'ENCODAGE', chemin: null, secours: { precedent: 4, journal: null } });
+    assert.ok(encodage.includes(libelle('ENCODAGE')), encodage);
+  });
+
+  test("une raison qu'un texte ne connaît pas ne lève jamais : une phrase générique la nomme, par son texte quand la table en porte un, telle quelle sinon", () => {
+    const inventee = libelle('ETAT_ILLISIBLE', { base: 'x', raison: 'RAISON_INVENTEE', chemin: null });
+    assert.match(inventee, /« RAISON_INVENTEE »/);
+    const seule = libelle('LECTURE_SEULE', { raison: 'RAISON_INVENTEE' });
+    assert.match(seule, /« RAISON_INVENTEE »/);
+    assert.match(seule, /lecture seule/);
+    const parSonTexte = libelle('LECTURE_SEULE', { raison: 'VIDE' });
+    assert.ok(parSonTexte.includes(libelle('VIDE')), parSonTexte);
+    assert.doesNotMatch(parSonTexte, /VIDE/);
+    assert.match(libelle('JOURNAL_ILLISIBLE', { raison: 'RAISON_INVENTEE' }), /« RAISON_INVENTEE »/);
+    for (const texte of [inventee, seule, parSonTexte]) for (const trace of TRACES) assert.doesNotMatch(texte, trace);
+  });
+
+  test("un état aux octets hors UTF-8 se dit par son encodage : en lecture seule, il nomme le secours qui le met de côté ; le journal illisible, l'historique laissé tel quel", () => {
+    const seule = libelle('LECTURE_SEULE', { raison: 'ENCODAGE' });
+    assert.ok(seule.includes(libelle('ENCODAGE')), seule);
+    assert.match(seule, /secours/);
+    assert.match(seule, /corbeille/);
+    assert.notEqual(seule, libelle('LECTURE_SEULE', { raison: 'FORMAT' }));
+    const journal = libelle('JOURNAL_ILLISIBLE', { raison: 'ENCODAGE' });
+    assert.ok(journal.includes(libelle('ENCODAGE')), journal);
+    assert.match(libelle('JOURNAL_RECREE'), /historique/);
+  });
+
+  test('les propositions manquantes se disent par leur nombre, au singulier comme au pluriel, sans jamais les énumérer', () => {
+    assert.match(libelle('PROPOSITIONS_MANQUANTES', { n: 1 }), /^1 proposition que l'en-tête annonce manque/);
+    const enorme = libelle('PROPOSITIONS_MANQUANTES', { n: 2 ** 40 });
+    assert.match(enorme, new RegExp(`^${2 ** 40} propositions que l'en-tête annonce manquent`));
+    assert.ok(enorme.length < 200, enorme);
   });
 
   test("une cause que la table porte se lit par son texte ; une cause du système s'affiche comme il la nomme", () => {

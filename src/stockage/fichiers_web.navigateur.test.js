@@ -137,10 +137,19 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
       new Uint8Array([0xc2, 0xab, 0x20, 0x61, 0x20, 0xc2, 0xbb, 0x0a]),
     );
 
-    // Un octet qui n'est pas de l'UTF-8 se lit U+FFFD ; la marque d'ordre
-    // d'octets et CRLF restent.
+    // Des octets UTF-8 se lisent tels quels, marque d'ordre d'octets et CRLF
+    // compris ; un octet qui n'est pas de l'UTF-8 lève LECTURE, cause
+    // UTF8_INVALIDE, au lieu de se lire U+FFFD ; le refus porte les octets
+    // du fichier, que le dépôt décode ligne par ligne.
+    await poserOpfs('pose.csv', BRUTS.subarray(0, BRUTS.length - 1));
+    expect(await fs.lireTexte(DOCUMENTS, 'pose.csv')).toBe('\u{FEFF}nom;\r\n');
     await poserOpfs('pose.csv', BRUTS);
-    expect(await fs.lireTexte(DOCUMENTS, 'pose.csv')).toBe('\u{FEFF}nom;\r\n\u{FFFD}');
+    await echoue(fs.lireTexte(DOCUMENTS, 'pose.csv'), 'LECTURE', {
+      chemin: 'pose.csv',
+      dossier: CHEMIN_DOCUMENTS,
+      cause: 'UTF8_INVALIDE',
+      octets: new Uint8Array(BRUTS),
+    });
     expect(noms(await fs.lister(DOCUMENTS, ''))).toStrictEqual(['corbeille', 'journal.jsonl', 'pose.csv']);
   });
 

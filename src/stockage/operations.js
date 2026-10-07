@@ -21,15 +21,28 @@
 // (§ 8.8) : la charge que l'analyse en lit tait les clés qu'elle ne connaît
 // pas. Copier, renommer et charger le refusent avant toute écriture ;
 // importer en recopie les octets, et l'événement importé s'ouvre en lecture
-// seule.
+// seule. Un état dont les octets ne sont pas de l'UTF-8 ne s'efface jamais :
+// renommer l'Ouvert de son secours le met d'abord dans un dossier daté de la
+// corbeille, comme le premier geste (mettreDeCoteEtatMalEncode, du dépôt) ;
+// copier en fait un événement neuf, sans le toucher.
 //
 // Une base se dérive du nom de l'événement (deriverBase), libre parmi les
 // bases que portent les fichiers d'événement à la racine du dossier
 // (basesPrises), comme le dépôt la dérive pour creer.
 import { canoniser } from './canonique.js';
-import { basesPrises, creer, enregistrer, enregistrerAilleurs, lister, ouvrir } from './depot.js';
+import {
+  basesPrises,
+  creer,
+  enregistrer,
+  enregistrerAilleurs,
+  lister,
+  mettreDeCoteEtatMalEncode,
+  ouvrir,
+  ouvrirSecours,
+} from './depot.js';
 import { analyser, etatDeduit } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { decoderJournal } from './journal.js';
 import { DOSSIER_CORBEILLE, SUFFIXES, SUFFIXE_ECRITURE, cleSansCasse, deriverBase, dossierCorbeille } from './noms.js';
 
 // Deux chaînes, comparées unité UTF-16 par unité.
@@ -57,12 +70,32 @@ async function entreesDe(fs, racine, dossier) {
   }
 }
 
-// Texte du fichier chemin, ou null quand il manque.
+// Texte du fichier chemin, ou null quand il manque ou que ses octets ne sont
+// pas de l'UTF-8 (LECTURE, cause UTF8_INVALIDE) : un texte qui ne se lit pas
+// ne se recopie pas. Toute autre erreur remonte telle quelle.
 async function texteSiPresent(fs, racine, chemin) {
   try {
     return await fs.lireTexte(racine, chemin);
   } catch (erreur) {
     if (erreur.code === 'ABSENT') return null;
+    if (erreur.code === 'LECTURE' && erreur.details.cause === 'UTF8_INVALIDE') return null;
+    throw erreur;
+  }
+}
+
+// Texte du journal chemin tel que l'ouverture le lit : le fichier entier ;
+// quand ses octets ne sont pas tous de l'UTF-8, les lignes qui précèdent la
+// première qui ne se décode pas (decoderJournal), celles que la lecture
+// écarterait n'étant pas recopiées ; null quand il manque, ou que sa ligne
+// d'ouverture ne se décode pas. Toute autre erreur remonte telle quelle.
+async function journalSiPresent(fs, racine, chemin) {
+  try {
+    return await fs.lireTexte(racine, chemin);
+  } catch (erreur) {
+    if (erreur.code === 'ABSENT') return null;
+    if (erreur.code === 'LECTURE' && erreur.details.cause === 'UTF8_INVALIDE') {
+      return decoderJournal(erreur.details.octets).texte;
+    }
     throw erreur;
   }
 }
@@ -70,6 +103,14 @@ async function texteSiPresent(fs, racine, chemin) {
 // Un fichier d'un format plus récent ne se réécrit sous aucun nom (§ 8.8).
 function exigerFormatCourant(formatPlusRecent) {
   if (formatPlusRecent) throw new ErreurStockage('LECTURE_SEULE', { raison: 'FORMAT_PLUS_RECENT' });
+}
+
+// Une séance est une chaîne non vide : celle sous laquelle supprimer sonde
+// le verrou.
+function exigerSeance(seance) {
+  if (typeof seance !== 'string' || seance === '') {
+    throw new TypeError("supprimer : la séance n'est pas une chaîne non vide");
+  }
 }
 
 // Libellé de l'instant que restitue l'Ouvert : celui de l'entrée de sa
@@ -240,6 +281,11 @@ async function supprimerAncienne(ouvert, nouvelle) {
  * l'ancienne base, ne se touche pas ; le verrou non plus, que la séance
  * déplace.
  *
+ * L'Ouvert d'un secours dont l'état sur le disque n'est pas de l'UTF-8 met
+ * d'abord cet état dans un dossier daté de la corbeille, à l'horodatage du
+ * renommage (mettreDeCoteEtatMalEncode) : ni la recopie ni la suppression de
+ * l'ancienne paire ne le remplacent ni ne l'effacent, et ses octets restent.
+ *
  * Un nom inchangé, les blancs de ses deux bouts mis à part — deriverBase
  * les retire aussi —, ne touche à rien : aucune entrée, aucune recopie,
  * aucune suppression, et l'Ouvert reçu revient, même quand le nom dériverait
@@ -266,6 +312,8 @@ async function supprimerAncienne(ouvert, nouvelle) {
  * @throws {ErreurStockage} sans rien écrire : LECTURE_SEULE {raison:
  *         'FORMAT_PLUS_RECENT'}, CHEMIN_TROP_LONG, ABSENT {chemin: ''} quand
  *         le dossier n'existe plus ; en place, ce que lève enregistrer ;
+ *         ce que lève la mise de côté d'un état aux octets hors UTF-8
+ *         (mettreDeCoteEtatMalEncode), l'ancienne paire sinon intacte ;
  *         ECRITURE {chemin, dossier, cause} du .precedent, du journal ou de
  *         l'état de la nouvelle paire, l'ancienne intacte ; ECRITURE {chemin,
  *         dossier, cause, ouvert} de la suppression de l'ancienne
@@ -284,8 +332,9 @@ export async function renommer(ouvert, { nom, libelle, horodatage, produitVersio
     return enregistrer(ouvert, apres, { libelle, horodatage, produitVersion, libelleReprise });
   }
   const geste = { apres, libelle, produitVersion };
-  const nouvelle = await ecrireNouvellePaire(ouvert, { geste, libelleReprise, horodatage });
-  await supprimerAncienne(ouvert, nouvelle);
+  const depart = await mettreDeCoteEtatMalEncode(ouvert, horodatage);
+  const nouvelle = await ecrireNouvellePaire(depart, { geste, libelleReprise, horodatage });
+  await supprimerAncienne(depart, nouvelle);
   return nouvelle;
 }
 
@@ -295,28 +344,32 @@ export async function renommer(ouvert, { nom, libelle, horodatage, produitVersio
 const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 // Texte des octets d'un fichier d'état. Des octets qui ne sont pas de l'UTF-8
-// ne sont pas un texte JSON : ETAT_ILLISIBLE, raison JSON, comme l'analyse le
-// lèverait d'un texte qui ne se lit pas.
+// ne sont pas un texte : ETAT_ILLISIBLE, raison ENCODAGE, comme le dépôt le
+// lève d'un état du dossier aux octets hors UTF-8.
 function decoder(octets) {
   if (!(octets instanceof Uint8Array)) throw new TypeError('importer : les octets du fichier sont un Uint8Array');
   try {
     return UTF8_STRICT.decode(octets);
   } catch {
-    throw new ErreurStockage('ETAT_ILLISIBLE', { raison: 'JSON', chemin: null });
+    throw new ErreurStockage('ETAT_ILLISIBLE', { raison: 'ENCODAGE', chemin: null });
   }
 }
 
-// Écrit dans racine l'événement id, nom : texteJournal, quand il est donné,
-// puis texteEtat, tels quels, sous une base libre que nom dérive. Rend cette
-// base. IDENTIFIANT_PRESENT quand un état lisible du dossier porte déjà id.
-async function deposer(fs, racine, { id, nom, texteEtat, texteJournal }) {
-  const present = (await lister(fs, racine)).find((resume) => resume.illisible === null && resume.id === id);
+// Écrit dans racine l'événement id, nom : ses fichiers, tels quels, chacun
+// quand il est donné, sous une base libre que nom dérive — le .precedent
+// d'abord, qui tient la base à l'événement (apparier, dans le dépôt), puis
+// le journal, puis l'état. Rend cette base. IDENTIFIANT_PRESENT quand lister
+// nomme id dans le dossier, que son état se lise ou non : l'événement y est
+// déjà, et une seconde copie de son identifiant dériverait (§ 8.6).
+async function deposer(fs, racine, { id, nom, texteEtat, textePrecedent = null, texteJournal }) {
+  const present = (await lister(fs, racine)).find((resume) => resume.id === id);
   if (present !== undefined) throw new ErreurStockage('IDENTIFIANT_PRESENT', { id, base: present.base });
   const { separateur } = await fs.emplacements();
   const existantes = await basesPrises(fs, racine);
   const base = deriverBase(nom, { racine: racine.chemin, separateur, existantes });
+  if (textePrecedent !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.precedent, textePrecedent);
   if (texteJournal !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.journal, texteJournal);
-  await fs.ecrireAtomique(racine, base + SUFFIXES.etat, texteEtat);
+  if (texteEtat !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.etat, texteEtat);
   return base;
 }
 
@@ -333,9 +386,10 @@ async function deposer(fs, racine, { id, nom, texteEtat, texteJournal }) {
  * @param {Uint8Array} octets
  * @returns {Promise<{base: string}>}
  * @throws {ErreurStockage} ETAT_ILLISIBLE {raison, chemin, [format]} de
- *         l'analyse, raison JSON pour des octets hors UTF-8 ; ni base ni
+ *         l'analyse, raison ENCODAGE pour des octets hors UTF-8 ; ni base ni
  *         secours : le fichier n'est pas du dossier. IDENTIFIANT_PRESENT {id,
- *         base} quand un état lisible du dossier porte son identifiant ;
+ *         base} quand lister nomme son identifiant dans le dossier, que
+ *         l'état qui le porte se lise ou non ;
  *         CHEMIN_TROP_LONG ; ECRITURE. Rien ne s'écrit avant l'écriture de
  *         l'état
  * @throws {TypeError} des octets qui ne sont pas un Uint8Array
@@ -346,15 +400,61 @@ export async function importer(fs, racine, octets) {
   return { base: await deposer(fs, racine, { id, nom, texteEtat: texte, texteJournal: null }) };
 }
 
+// Les fichiers de l'événement de base dans depuis, dont l'état ne se lit
+// pas, recopiés tels quels dans vers (deposer) : le .precedent et l'état,
+// chacun quand il existe et que ses octets sont de l'UTF-8, et le journal
+// que le secours source apparie, par ses lignes lisibles (journalSiPresent). Le secours source — 'precedent' ou 'journal'
+// (ouvrirSecours) — donne l'identifiant et le nom. Rend la base dans vers.
+async function importerSecours(fs, depuis, vers, base, source) {
+  const { charge, baseJournal } = await ouvrirSecours(fs, depuis, base, source);
+  const { id, nom } = charge.evenement;
+  const lire = (chemin) => texteSiPresent(fs, depuis, chemin);
+  const journal = baseJournal === null ? null : baseJournal + SUFFIXES.journal;
+  return deposer(fs, vers, {
+    id,
+    nom,
+    textePrecedent: await lire(base + SUFFIXES.precedent),
+    texteJournal: journal === null ? null : await journalSiPresent(fs, depuis, journal),
+    texteEtat: await lire(base + SUFFIXES.etat),
+  });
+}
+
+// Importe l'événement de base de depuis dans vers (importerDepuis) et rend
+// sa base là-bas. Un état illisible qui a un secours lisible s'importe par
+// ses fichiers (importerSecours), le .precedent pour source quand il se lit ;
+// sans secours, son refus remonte.
+async function importerUn(fs, depuis, vers, base) {
+  let ouvert;
+  try {
+    ouvert = await ouvrir(fs, depuis, base);
+  } catch (erreur) {
+    if (erreur.code !== 'ETAT_ILLISIBLE') throw erreur;
+    const { precedent, journal } = erreur.details.secours;
+    if (precedent === null && journal === null) throw erreur;
+    return importerSecours(fs, depuis, vers, base, precedent === null ? 'journal' : 'precedent');
+  }
+  const { texteEtat, baseJournal } = ouvert;
+  const { id, nom } = analyser(texteEtat).charge.evenement;
+  const texteJournal = baseJournal === null ? null : await journalSiPresent(fs, depuis, baseJournal + SUFFIXES.journal);
+  return deposer(fs, vers, { id, nom, texteEtat, texteJournal });
+}
+
 /**
  * Importe des événements de l'autre emplacement (§ 8.6) : pour chaque base
  * de depuis, dans l'ordre reçu, l'état et le journal qu'ouvrir lui apparie
  * se copient tels quels dans vers, le journal d'abord, sous une base libre
- * que dérive le nom que porte l'état. Le .precedent ne se copie pas. Les
- * originaux restent où ils sont, sans qu'aucune écriture ne touche depuis.
- * Une base qui ne s'importe pas se refuse par son code — ETAT_ILLISIBLE,
- * ABSENT, IDENTIFIANT_PRESENT, ECRITURE… —, sans arrêter les suivantes ;
- * l'écriture refusée de son état laisse dans vers le journal déjà écrit.
+ * que dérive le nom que porte l'état. Le .precedent ne se copie pas. Un
+ * événement dont l'état ne se lit pas, mais dont le .precedent ou le journal
+ * se lisent (§ 8.8), se copie par ses fichiers, tels quels : le .precedent,
+ * le journal que son secours apparie, et l'état, chacun quand ses octets
+ * sont de l'UTF-8 ; il s'ouvre là-bas en secours. Un journal dont une ligne
+ * n'est pas de l'UTF-8 se copie par les lignes qui la précèdent, celles que
+ * l'ouverture lit (journalSiPresent). Les originaux restent où
+ * ils sont, sans qu'aucune écriture ne touche depuis. Une base qui ne
+ * s'importe pas se refuse par son code — ETAT_ILLISIBLE sans secours
+ * lisible, ABSENT, IDENTIFIANT_PRESENT, ECRITURE… —, sans arrêter les
+ * suivantes ; l'écriture refusée d'un fichier laisse dans vers ceux déjà
+ * écrits.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} depuis
@@ -371,11 +471,7 @@ export async function importerDepuis(fs, depuis, vers, bases) {
   const refuses = [];
   for (const base of bases) {
     try {
-      const { texteEtat, baseJournal } = await ouvrir(fs, depuis, base);
-      const { id, nom } = analyser(texteEtat).charge.evenement;
-      const texteJournal =
-        baseJournal === null ? null : await texteSiPresent(fs, depuis, baseJournal + SUFFIXES.journal);
-      importes.push({ base, nouvelle: await deposer(fs, vers, { id, nom, texteEtat, texteJournal }) });
+      importes.push({ base, nouvelle: await importerUn(fs, depuis, vers, base) });
     } catch (erreur) {
       if (!(erreur instanceof ErreurStockage)) throw erreur;
       refuses.push({ base, code: erreur.code });
@@ -419,6 +515,15 @@ async function baseDuJournal(fs, racine, base, insensibleCasse) {
  * chacun à sa place ou dans la corbeille, jamais perdu, et l'événement se
  * liste encore tant que son état n'est pas parti. Rien ne vide la corbeille.
  *
+ * Une autre séance qui tient l'événement en écriture y écrit encore : avant
+ * tout déplacement, supprimer sonde le verrou en le prenant sous seance, la
+ * séance qui supprime (§ 8.8). Un verrou d'une séance vivante, d'un autre
+ * poste ou illisible — vivant n'y est pas faux — lève VERROU_PRIS, sans rien
+ * déplacer. Le verrou d'une séance morte, celui de seance, ou celui que la
+ * sonde vient de prendre part avec le reste ; un refus qui suit la sonde
+ * rend le verrou qu'elle a pris. Là où le système n'a pas de verrou
+ * (verrouDisponible faux), la sonde ne pose rien.
+ *
  * Le dossier daté se crée sous la racine, que creerDossier ne crée pas : un
  * dossier de travail qui disparaît pendant la suppression ne renaît pas
  * (§ 8.6). Disparu avant la création du dossier daté, il fait lever
@@ -428,36 +533,59 @@ async function baseDuJournal(fs, racine, base, insensibleCasse) {
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
  * @param {string} base
- * @param {{horodatage: string}} options   AAAA-MM-JJTHH:MM:SS±HH:MM
+ * @param {{horodatage: string, seance: string}} options   horodatage
+ *        AAAA-MM-JJTHH:MM:SS±HH:MM ; seance, la séance qui supprime
  * @returns {Promise<{dossier: string}>}   chemin relatif du dossier daté
  * @throws {ErreurStockage} ABSENT {chemin} quand l'événement n'a aucun
  *         fichier, CORBEILLE_SATUREE, l'un et l'autre sans rien écrire ;
+ *         VERROU_PRIS {seance, depuis, vivant}, sans rien déplacer ;
  *         ECRITURE de la création du dossier daté ou d'un déplacement
  *         refusé ; EXISTE ; ABSENT {chemin} d'un fichier qui disparaît
  *         pendant les déplacements
- * @throws {TypeError} un horodatage hors de sa forme, sans rien écrire
+ * @throws {TypeError} un horodatage hors de sa forme, une séance qui n'est
+ *         pas une chaîne non vide, sans rien écrire
  */
-export async function supprimer(fs, racine, base, { horodatage }) {
+export async function supprimer(fs, racine, base, { horodatage, seance }) {
+  exigerSeance(seance);
   const { insensibleCasse } = await fs.emplacements();
   const journal = await baseDuJournal(fs, racine, base, insensibleCasse);
+  const verrou = base + SUFFIXES.verrou;
   const fichiers = [
-    base + SUFFIXES.verrou,
+    verrou,
     ...(journal === null ? [] : [journal + SUFFIXES.journal]),
     base + SUFFIXES.precedent,
     base + SUFFIXES.etat,
   ];
-  const presents = (await fs.lister(racine, ''))
-    .filter(({ type }) => type === 'fichier')
-    .map(({ nom }) => nom)
-    .sort(comparerTextes);
-  const partants = [...fichiers.map((nom) => nom + SUFFIXE_ECRITURE), ...fichiers]
-    .map((nom) => nomSurDisque(presents, nom, insensibleCasse))
-    .filter((nom) => nom !== null);
-  if (partants.length === 0) throw new ErreurStockage('ABSENT', { chemin: base + SUFFIXES.etat });
+  // Les noms des fichiers du dossier, triés ; ceux de l'événement parmi eux,
+  // sous leur nom sur le disque, dans l'ordre de leur départ.
+  const nomsSurDisque = async () =>
+    (await fs.lister(racine, ''))
+      .filter(({ type }) => type === 'fichier')
+      .map(({ nom }) => nom)
+      .sort(comparerTextes);
+  const partantsParmi = (presents) =>
+    [...fichiers.map((nom) => nom + SUFFIXE_ECRITURE), ...fichiers]
+      .map((nom) => nomSurDisque(presents, nom, insensibleCasse))
+      .filter((nom) => nom !== null);
+  let presents = await nomsSurDisque();
+  if (partantsParmi(presents).length === 0) throw new ErreurStockage('ABSENT', { chemin: base + SUFFIXES.etat });
   const existants = (await entreesDe(fs, racine, DOSSIER_CORBEILLE)).map(({ nom }) => nom);
   const dossier = dossierCorbeille(horodatage, existants);
-  await fs.creerDossier(racine, dossier);
-  for (const nom of partants) await fs.deplacer(racine, nom, `${dossier}/${nom}`);
+  // La sonde vise le verrou sous son nom sur le disque, celui qui part.
+  const nomDuVerrou = nomSurDisque(presents, verrou, insensibleCasse) ?? verrou;
+  const sonde = await fs.verrouiller(racine, nomDuVerrou, seance);
+  if (!sonde.pris && sonde.seance !== seance && sonde.vivant !== false) {
+    throw new ErreurStockage('VERROU_PRIS', { seance: sonde.seance, depuis: sonde.depuis, vivant: sonde.vivant });
+  }
+  try {
+    if (sonde.pris) presents = await nomsSurDisque();
+    await fs.creerDossier(racine, dossier);
+    for (const nom of partantsParmi(presents)) await fs.deplacer(racine, nom, `${dossier}/${nom}`);
+  } catch (erreur) {
+    // Un nettoyage qui échoue ne masque pas l'échec qu'il suit.
+    if (sonde.pris) await fs.deverrouiller(racine, nomDuVerrou, seance).catch(() => {});
+    throw erreur;
+  }
   return { dossier };
 }
 

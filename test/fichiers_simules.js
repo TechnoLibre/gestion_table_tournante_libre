@@ -53,8 +53,25 @@ const REESSAIS_RENOMMAGE = 10;
 const ORIGINE_HORLOGE = Date.UTC(2026, 0, 1);
 const PAS_HORLOGE = 1000;
 
-// La taille d'un fichier compte les octets de son texte en UTF-8.
+// La taille d'un fichier compte les octets de son texte en UTF-8. Un fichier
+// porte un texte, ou les octets que deposerOctets a posés tels quels : ceux-ci
+// se décodent strictement, comme la coquille et la plateforme web les
+// décodent, la marque d'ordre d'octets gardée dans le texte.
 const UTF8 = new TextEncoder();
+const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
+// Le texte d'un fichier, ou null quand ses octets ne sont pas de l'UTF-8.
+function texteDuNoeud({ texte }) {
+  if (typeof texte === 'string') return texte;
+  try {
+    return UTF8_STRICT.decode(texte);
+  } catch {
+    return null;
+  }
+}
+
+// Les octets d'un fichier, copiés.
+const octetsDuNoeud = ({ texte }) => (typeof texte === 'string' ? UTF8.encode(texte) : new Uint8Array(texte));
 
 // État de chaque disque, hors de sa Map : la casse et le séparateur de sa
 // première instance, son horloge, le prochain pid, et ses processus par pid.
@@ -151,12 +168,20 @@ const estContenuVerrou = (contenu) =>
  *     lister), refusés compris ; les autres ne comptent pas ;
  *   - deposer(racineId, chemin, texte, modifie = l'instant courant) : pose un
  *     fichier, dossiers parents compris, sans compter ni avancer l'horloge ;
+ *   - deposerOctets(racineId, chemin, octets, modifie = l'instant courant) :
+ *     pose un fichier de ces octets, tels quels, de même ; lireTexte les
+ *     décode strictement et lève LECTURE {chemin, dossier, cause:
+ *     'UTF8_INVALIDE', octets} quand ils ne sont pas de l'UTF-8, octets en
+ *     étant une copie, et un ajout en fin les garde ;
  *   - deposerDossier(racineId, chemin = '') : pose un dossier, parents compris,
  *     de même ;
  *   - contenu(racineId, chemin) : le texte d'un fichier, sans compter ; null
+ *     pour un absent ou un dossier ; TypeError pour des octets hors UTF-8 ;
+ *   - octets(racineId, chemin) : les octets d'un fichier, sans compter ; null
  *     pour un absent ou un dossier.
- *   deposer, deposerDossier et contenu servent encore après une coupure : ils
- *   sont les mains de l'épreuve sur le disque, non celles du processus.
+ *   deposer, deposerOctets, deposerDossier, contenu et octets servent encore
+ *   après une coupure : ils sont les mains de l'épreuve sur le disque, non
+ *   celles du processus.
  */
 export function creerFichiersSimules({
   disque = new Map(),
@@ -287,11 +312,11 @@ export function creerFichiersSimules({
     return panne.cause;
   }
 
-  // Ce que rend verrouiller d'un verrou présent : sa séance, l'instant de sa
-  // prise, et vivant — null pour un autre hôte ; pour celui-ci, vrai quand le
-  // disque porte un processus de cet hôte sous ce pid, et que ce processus
-  // n'est pas coupé. Un verrou qui ne se lit pas rend seance, depuis et
-  // vivant à null.
+  // Ce que rend verrouiller d'un verrou présent, d'après son texte, null pour
+  // des octets hors UTF-8 : sa séance, l'instant de sa prise, et vivant —
+  // null pour un autre hôte ; pour celui-ci, vrai quand le disque porte un
+  // processus de cet hôte sous ce pid, et que ce processus n'est pas coupé.
+  // Un verrou qui ne se lit pas rend seance, depuis et vivant à null.
   function verrouPresent(texte) {
     let contenu;
     try {
@@ -367,10 +392,19 @@ export function creerFichiersSimules({
       return Object.hasOwn(support, id) ? support[id] : 'fixe';
     }),
 
+    // Des octets déposés qui ne sont pas de l'UTF-8 lèvent LECTURE, cause
+    // UTF8_INVALIDE, qui en porte une copie : aucun octet ne se remplace en
+    // silence par U+FFFD.
     lireTexte: primitive('lectures', (racine, chemin) => {
-      const noeud = disque.get(localiser(racine, chemin).cle);
+      const loc = localiser(racine, chemin);
+      const noeud = disque.get(loc.cle);
       if (noeud?.type !== 'fichier') throw new ErreurStockage('ABSENT', { chemin });
-      return noeud.texte;
+      const texte = texteDuNoeud(noeud);
+      if (texte === null) {
+        const octets = octetsDuNoeud(noeud);
+        throw new ErreurStockage('LECTURE', { chemin, dossier: loc.dossier, cause: 'UTF8_INVALIDE', octets });
+      }
+      return texte;
     }),
 
     ecrireAtomique: primitive('ecritures', (racine, chemin, texte) => {
@@ -405,7 +439,9 @@ export function creerFichiersSimules({
       exigerDossierParent(loc);
       exigerPasDossier(loc);
       const avant = disque.get(loc.cle)?.texte ?? '';
-      poserFichier(loc, `${avant}${ligne}\n`, avancer());
+      const ajout = `${ligne}\n`;
+      const texte = typeof avant === 'string' ? avant + ajout : new Uint8Array([...avant, ...UTF8.encode(ajout)]);
+      poserFichier(loc, texte, avancer());
     }),
 
     lister: primitive('lectures', (racine, dossier) => {
@@ -414,7 +450,7 @@ export function creerFichiersSimules({
       const entrees = [];
       for (const noeud of disque.values()) {
         if (noeud.parent !== loc.cle) continue;
-        const taille = noeud.type === 'fichier' ? UTF8.encode(noeud.texte).length : 0;
+        const taille = noeud.type === 'fichier' ? octetsDuNoeud(noeud).length : 0;
         entrees.push({ nom: noeud.nom, type: noeud.type, taille, modifie: noeud.modifie });
       }
       return entrees.sort((a, b) => (a.nom < b.nom ? -1 : a.nom > b.nom ? 1 : 0));
@@ -460,7 +496,7 @@ export function creerFichiersSimules({
       exigerDossierParent(loc);
       exigerPasDossier(loc);
       const present = disque.get(loc.cle);
-      if (present !== undefined) return verrouPresent(present.texte);
+      if (present !== undefined) return verrouPresent(texteDuNoeud(present));
       const prise = avancer();
       poserFichier(loc, `${JSON.stringify({ seance, pid, hote, depuis: horodatage(prise) })}\n`, prise);
       return { pris: true };
@@ -472,7 +508,7 @@ export function creerFichiersSimules({
       if (!verrouDisponible) return;
       exigerInscriptible(loc);
       const present = disque.get(loc.cle);
-      if (present?.type === 'fichier' && verrouPresent(present.texte).seance === seance) disque.delete(loc.cle);
+      if (present?.type === 'fichier' && verrouPresent(texteDuNoeud(present)).seance === seance) disque.delete(loc.cle);
     }),
 
     ouvrirDansExplorateur: primitive(null, (racine) => {
@@ -509,6 +545,14 @@ export function creerFichiersSimules({
       poserFichier(loc, texte, modifie);
     },
 
+    deposerOctets(racineId, chemin, octets, modifie = maintenant()) {
+      if (!(octets instanceof Uint8Array)) throw new TypeError("les octets ne sont pas un Uint8Array");
+      const loc = localiser({ id: racineId }, chemin);
+      creerDossiers(loc, loc.parties.length - 1, maintenant);
+      exigerPasDossier(loc);
+      poserFichier(loc, new Uint8Array(octets), modifie);
+    },
+
     deposerDossier(racineId, chemin = '') {
       const loc = localiser({ id: racineId }, chemin);
       creerDossiers(loc, loc.parties.length, maintenant);
@@ -516,7 +560,15 @@ export function creerFichiersSimules({
 
     contenu(racineId, chemin) {
       const noeud = disque.get(localiser({ id: racineId }, chemin).cle);
-      return noeud?.type === 'fichier' ? noeud.texte : null;
+      if (noeud?.type !== 'fichier') return null;
+      const texte = texteDuNoeud(noeud);
+      if (texte === null) throw new TypeError(`contenu : ${chemin} porte des octets hors UTF-8, que rend octets`);
+      return texte;
+    },
+
+    octets(racineId, chemin) {
+      const noeud = disque.get(localiser({ id: racineId }, chemin).cle);
+      return noeud?.type === 'fichier' ? octetsDuNoeud(noeud) : null;
     },
   };
 }

@@ -44,6 +44,18 @@ const VERROU = `${BASE}${SUFFIXES.verrou}`;
 const REPRISE = "Reprise de l'état trouvé sur le disque";
 const UTF8 = new TextEncoder();
 
+// La séance qui supprime : celle qui tient le verrou que posent les épreuves.
+const SEANCE = 'seance-a';
+
+// Le verrou d'une séance morte de ce poste : son pid n'est celui d'aucun
+// processus du disque d'épreuve, et supprimer l'emporte avec l'événement.
+const VERROU_MORT = `${JSON.stringify({
+  seance: 'seance-morte',
+  pid: 999,
+  hote: 'poste-epreuve',
+  depuis: '2031-05-17T07:00:00-04:00',
+})}\n`;
+
 // Le texte tel que l'écrit un éditeur réglé en Windows-1252 : un octet par
 // caractère, « é » donnant E9, qui n'est pas de l'UTF-8. Le texte ne porte
 // que des caractères que Windows-1252 code comme ISO 8859-1, sur leur point
@@ -189,6 +201,17 @@ async function arbre(disque, racine = DOC, reglages = {}) {
   };
   await parcourir('');
   return fichiers.sort(parChemin);
+}
+
+// Ce qui tient lieu, dans arbreSonde, du texte d'un verrou que la sonde de
+// supprimer a pris sous SEANCE : son pid et l'instant de sa prise varient.
+const SONDE = 'verrou de la sonde';
+
+// L'arbre de racine (arbre), le texte de chaque verrou de SEANCE remplacé
+// par SONDE.
+async function arbreSonde(disque, racine = DOC) {
+  const deLaSonde = (chemin, texte) => chemin.endsWith(SUFFIXES.verrou) && JSON.parse(texte).seance === SEANCE;
+  return (await arbre(disque, racine)).map(([chemin, texte]) => [chemin, deLaSonde(chemin, texte) ? SONDE : texte]);
 }
 
 // Ouvre base par un processus neuf, en affirmant qu'ouvrir n'écrit rien.
@@ -778,7 +801,7 @@ describe('opérations : renommer (§ 8.7)', () => {
     let ouvertDeux = await creer(second, DOC, chargeEssai({ nom: gala }), CREATION);
     ouvertDeux = await enregistrer(ouvertDeux, noter(ouvertDeux.charge, 2), geste(2));
     assert.equal(ouvertDeux.base, deux);
-    await supprimer(second, DOC, gala, { horodatage: HEURE_SUPPRESSION });
+    await supprimer(second, DOC, gala, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
     const avantDeux = await arbre(disqueDeux);
     const ecrituresDeux = second.compteurs.ecritures;
     const traceDeux = tracer(second);
@@ -943,8 +966,8 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
     assert.ok(windows1252.includes(0xe9));
     assert.equal(analyser(new TextDecoder('windows-1252').decode(windows1252)).charge.evenement.nom, BASE);
     const cas = [
-      ['des octets hors UTF-8', Uint8Array.of(0x7b, 0xc3, 0x28, 0x7d), { raison: 'JSON', chemin: null }],
-      ['un état écrit en Windows-1252', windows1252, { raison: 'JSON', chemin: null }],
+      ['des octets hors UTF-8', Uint8Array.of(0x7b, 0xc3, 0x28, 0x7d), { raison: 'ENCODAGE', chemin: null }],
+      ['un état écrit en Windows-1252', windows1252, { raison: 'ENCODAGE', chemin: null }],
       ['un texte vide', new Uint8Array(0), { raison: 'VIDE', chemin: null }],
       ['du JSON invalide', UTF8.encode('{"entete":'), { raison: 'JSON', chemin: null }],
       ['des comptes faux', UTF8.encode(comptesFaux), { raison: 'COMPTES', chemin: 'entete.comptes.participants' }],
@@ -959,7 +982,7 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
     await assert.rejects(importer(nouveauDisque().fs, DOC, etatTexte(chargeEssai())), TypeError);
   });
 
-  test("un identifiant que porte déjà un état lisible du dossier lève IDENTIFIANT_PRESENT {id, base}, quel que soit le nom, sans rien écrire ; ni un état illisible ni un journal sans état ne le portent", async () => {
+  test("un identifiant que lister nomme dans le dossier lève IDENTIFIANT_PRESENT {id, base}, quel que soit le nom, sans rien écrire : un état lisible, un état illisible apparié par son .precedent, un journal sans état ; un état illisible sans identifiant ne le porte pas", async () => {
     const { disque, fs } = nouveauDisque();
     await creer(fs, DOC, chargeEssai(), CREATION);
     const avant = await arbre(disque);
@@ -972,12 +995,25 @@ describe('opérations : importer un fichier venu d’ailleurs (§ 8.7)', () => {
 
     const illisible = disqueAvec([[ETAT, '{']]);
     assert.deepEqual(await importer(illisible.fs, DOC, octets), { base: 'Bal des Hérons' });
+    const apparie = disqueAvec([
+      [ETAT, ''],
+      [PRECEDENT, etatTexte(chargeEssai())],
+    ]);
     const journalSeul = disqueAvec([[JOURNAL, (await paireDe(chargeEssai())).journal]]);
-    assert.deepEqual(
-      (await lister(journalSeul.fs, DOC)).map(({ base, id, illisible: raison }) => [base, id, raison]),
-      [[BASE, 'evt-lucioles', 'ABSENT']],
-    );
-    assert.deepEqual(await importer(journalSeul.fs, DOC, octets), { base: 'Bal des Hérons' });
+    for (const [nom, { disque: autre, fs: autreFs }, raison] of [
+      ['un état illisible apparié par son .precedent', apparie, 'VIDE'],
+      ['un journal sans état', journalSeul, 'ABSENT'],
+    ]) {
+      assert.deepEqual(
+        (await lister(autreFs, DOC)).map(({ base, id, illisible: lue }) => [base, id, lue]),
+        [[BASE, 'evt-lucioles', raison]],
+        nom,
+      );
+      const poses = await arbre(autre);
+      const refus = await echec(importer(autreFs, DOC, octets), 'IDENTIFIANT_PRESENT', nom);
+      assert.deepEqual(refus.details, { id: 'evt-lucioles', base: BASE }, nom);
+      assert.deepEqual(await arbre(autre), poses, nom);
+    }
   });
 
   test("un fichier au format 2 s'importe tel quel et s'ouvre en lecture seule ; sans nom lisible, il est refusé avec le code de la lecture", async () => {
@@ -1071,6 +1107,102 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     }
   });
 
+  test("un événement dont l'état ne se lit pas s'importe par ses secours : l'état, le .precedent et le journal qu'il s'apparie se recopient tels quels — sauf des octets hors UTF-8, qui ne se lisent pas —, et il s'ouvre là-bas en secours, par le .precedent seul quand il n'a pas de journal ; sans secours lisible, il se refuse ETAT_ILLISIBLE ; un identifiant déjà là-bas, illisible ou non, IDENTIFIANT_PRESENT", async () => {
+    const disque = new Map();
+    const PORTABLE = { executable: 'E:\\soirees' };
+    const fs = creerFichiersSimules({ disque, ...PORTABLE });
+    fs.deposerDossier('portable');
+    fs.deposerDossier('documents');
+    const { portable, documents } = await fs.racines();
+    // Gala : l'état vidé, son .precedent et son journal intacts. Fanfare :
+    // l'état aux octets hors UTF-8, et son journal. Roseraie : l'état
+    // illisible et son .precedent, sans journal. Ifs : l'état seul,
+    // illisible. Saules : déjà dans documents, l'état illisible.
+    const gala = await (async () => {
+      const { fs: source, ouvert } = await deuxRevisions(chargeEssai({ id: 'evt-gala', nom: 'Gala des Ormes' }));
+      const lire = (suffixe) => source.contenu('documents', `${ouvert.base}${suffixe}`);
+      return { precedent: lire(SUFFIXES.precedent), journal: lire(SUFFIXES.journal), etat: lire(SUFFIXES.etat) };
+    })();
+    const fanfare = await paireDe(chargeEssai({ id: 'evt-fanfare', nom: 'Fanfare' }));
+    const saules = await paireDe(chargeEssai({ id: 'evt-saules', nom: 'Fête des Saules' }));
+    const roseraie = await paireDe(chargeEssai({ id: 'evt-roseraie', nom: 'Roseraie' }));
+    fs.deposer('portable', `Gala des Ormes${SUFFIXES.etat}`, '');
+    fs.deposer('portable', `Gala des Ormes${SUFFIXES.precedent}`, gala.precedent);
+    fs.deposer('portable', `Gala des Ormes${SUFFIXES.journal}`, gala.journal);
+    fs.deposerOctets('portable', `Fanfare${SUFFIXES.etat}`, enWindows1252(fanfare.etat));
+    fs.deposer('portable', `Fanfare${SUFFIXES.journal}`, fanfare.journal);
+    fs.deposer('portable', `Roseraie${SUFFIXES.etat}`, '{');
+    fs.deposer('portable', `Roseraie${SUFFIXES.precedent}`, roseraie.etat);
+    fs.deposer('portable', `Kermesse des Ifs${SUFFIXES.etat}`, '{');
+    fs.deposer('portable', `Fête des Saules${SUFFIXES.etat}`, saules.etat);
+    fs.deposer('documents', `Saules${SUFFIXES.etat}`, '');
+    fs.deposer('documents', `Saules${SUFFIXES.journal}`, saules.journal);
+    const ecritures = fs.compteurs.ecritures;
+
+    const bases = ['Gala des Ormes', 'Fanfare', 'Roseraie', 'Kermesse des Ifs', 'Fête des Saules'];
+    assert.deepEqual(await importerDepuis(fs, portable, documents, bases), {
+      importes: [
+        { base: 'Gala des Ormes', nouvelle: 'Gala des Ormes' },
+        { base: 'Fanfare', nouvelle: 'Fanfare' },
+        { base: 'Roseraie', nouvelle: 'Roseraie' },
+      ],
+      refuses: [
+        { base: 'Kermesse des Ifs', code: 'ETAT_ILLISIBLE' },
+        { base: 'Fête des Saules', code: 'IDENTIFIANT_PRESENT' },
+      ],
+    });
+    assert.equal(fs.compteurs.ecritures - ecritures, 6);
+    assert.deepEqual(fs.octets('portable', `Fanfare${SUFFIXES.etat}`), enWindows1252(fanfare.etat));
+    assert.deepEqual(await arbre(disque, documents), [
+      [`Fanfare${SUFFIXES.journal}`, fanfare.journal],
+      [`Gala des Ormes${SUFFIXES.journal}`, gala.journal],
+      [`Gala des Ormes${SUFFIXES.etat}`, ''],
+      [`Gala des Ormes${SUFFIXES.precedent}`, gala.precedent],
+      [`Roseraie${SUFFIXES.etat}`, '{'],
+      [`Roseraie${SUFFIXES.precedent}`, roseraie.etat],
+      [`Saules${SUFFIXES.journal}`, saules.journal],
+      [`Saules${SUFFIXES.etat}`, ''],
+    ]);
+    const lecteur = creerFichiersSimules({ disque });
+    for (const [base, raison, secours] of [
+      ['Gala des Ormes', 'VIDE', { precedent: 1, journal: 2 }],
+      ['Fanfare', 'ABSENT', { precedent: null, journal: 2 }],
+    ]) {
+      const erreur = await echec(ouvrir(lecteur, documents, base), 'ETAT_ILLISIBLE', base);
+      assert.deepEqual([erreur.details.raison, erreur.details.secours], [raison, secours], base);
+      assert.equal((await ouvrirSecours(lecteur, documents, base, 'journal')).revision, 2, base);
+    }
+    const roseraieLa = await echec(ouvrir(lecteur, documents, 'Roseraie'), 'ETAT_ILLISIBLE');
+    assert.deepEqual([roseraieLa.details.raison, roseraieLa.details.secours], ['JSON', { precedent: 2, journal: null }]);
+    const parPrecedent = await ouvrirSecours(lecteur, documents, 'Roseraie', 'precedent');
+    assert.deepEqual([parPrecedent.revision, parPrecedent.charge.evenement.id], [2, 'evt-roseraie']);
+  });
+
+  test("un journal dont la dernière ligne est coupée au milieu d'un caractère s'importe par ses lignes lisibles, celles que l'ouverture lit : l'événement s'ouvre là-bas avec son historique, sans rien écarter", async () => {
+    const disque = new Map();
+    const fs = creerFichiersSimules({ disque, executable: 'E:\\soirees' });
+    fs.deposerDossier('portable');
+    fs.deposerDossier('documents');
+    const { portable, documents } = await fs.racines();
+    const paire = await paireDe(chargeEssai({ id: 'evt-gala', nom: 'Gala des Ormes' }));
+    const coupee = [...UTF8.encode('{"type":"entree","revision":3,"libelle":"Ajout de Th'), 0xc3];
+    fs.deposer('portable', `Gala des Ormes${SUFFIXES.etat}`, paire.etat);
+    fs.deposerOctets('portable', `Gala des Ormes${SUFFIXES.journal}`, new Uint8Array([...UTF8.encode(paire.journal), ...coupee]));
+    const ouvertIci = await ouvrir(fs, portable, 'Gala des Ormes');
+    assert.deepEqual(ouvertIci.avertissements, [{ code: 'JOURNAL_ECARTEES', details: { n: 1 } }]);
+
+    assert.deepEqual(await importerDepuis(fs, portable, documents, ['Gala des Ormes']), {
+      importes: [{ base: 'Gala des Ormes', nouvelle: 'Gala des Ormes' }],
+      refuses: [],
+    });
+    assert.deepEqual(await arbre(disque, documents), [
+      [`Gala des Ormes${SUFFIXES.journal}`, paire.journal],
+      [`Gala des Ormes${SUFFIXES.etat}`, paire.etat],
+    ]);
+    const la = await ouvrir(creerFichiersSimules({ disque }), documents, 'Gala des Ormes');
+    assert.deepEqual([la.revision, la.journal.entrees.length, la.avertissements], [2, 2, []]);
+  });
+
   test("une lecture que le système de fichiers refuse autrement que par l'absence refuse la base par son code, sans rien écrire là-bas", async () => {
     const disque = new Map();
     const PORTABLE = { executable: 'E:\\soirees' };
@@ -1098,6 +1230,25 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
     });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque, documents), []);
+
+    // De même pour le .precedent d'un état illisible, que la recopie relit
+    // après l'ouverture et l'ouverture du secours.
+    const roseraie = await paireDe(chargeEssai({ id: 'evt-roseraie', nom: 'Roseraie' }));
+    fs.deposer('portable', `Roseraie${SUFFIXES.etat}`, '{');
+    fs.deposer('portable', `Roseraie${SUFFIXES.precedent}`, roseraie.etat);
+    let precedents = 0;
+    fs.lireTexte = async (racine, chemin) => {
+      if (chemin === `Roseraie${SUFFIXES.precedent}` && (precedents += 1) > 2) {
+        throw new ErreurStockage('LECTURE', { chemin, dossier: racine.chemin, cause: 'EIO' });
+      }
+      return lire(racine, chemin);
+    };
+    assert.deepEqual(await importerDepuis(fs, portable, documents, ['Roseraie']), {
+      importes: [],
+      refuses: [{ base: 'Roseraie', code: 'LECTURE' }],
+    });
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    assert.deepEqual(await arbre(disque, documents), []);
   });
 });
 
@@ -1110,7 +1261,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     await creer(fs, DOC, chargeEssai({ id: 'evt-herons', nom: 'Bal des Hérons' }), CREATION);
     const avant = await arbre(disque);
     const trace = tracer(fs);
-    assert.deepEqual(await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION }), { dossier: DATE });
+    assert.deepEqual(await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
     const deplaces = [`${JOURNAL}.ecriture`, `${ETAT}.ecriture`, VERROU, JOURNAL, PRECEDENT, ETAT];
     assert.deepEqual(trace, [['creerDossier', DATE], ...deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`])]);
     assert.deepEqual(
@@ -1142,14 +1293,15 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       suppressions.push(chemin);
       return primitive(racine, chemin);
     };
-    const a = await supprimer(fs, DOC, 'Bal des Hérons', { horodatage: heure(30) });
-    const b = await supprimer(fs, DOC, 'Gala des Saules', { horodatage: heure(30) });
-    const c = await supprimer(fs, DOC, 'Fête des Ifs', { horodatage: '2031-05-17T08:29:59-04:00' });
+    const a = await supprimer(fs, DOC, 'Bal des Hérons', { horodatage: heure(30), seance: SEANCE });
+    const b = await supprimer(fs, DOC, 'Gala des Saules', { horodatage: heure(30), seance: SEANCE });
+    const c = await supprimer(fs, DOC, 'Fête des Ifs', { horodatage: '2031-05-17T08:29:59-04:00', seance: SEANCE });
     assert.deepEqual(
       [a, b, c],
       [{ dossier: DATE }, { dossier: `${DATE}_2` }, { dossier: 'corbeille/2031-05-17_08-29-59' }],
     );
-    const paire = (nom) => [`${nom}${SUFFIXES.journal}`, `${nom}${SUFFIXES.etat}`];
+    // La paire, et le verrou que la sonde a pris : il part avec elle.
+    const paire = (nom) => [`${nom}${SUFFIXES.journal}`, `${nom}${SUFFIXES.etat}`, `${nom}${SUFFIXES.verrou}`];
     const corbeille = [
       { dossier: 'corbeille/2031-05-17_08-29-59', fichiers: paire('Fête des Ifs') },
       { dossier: DATE, fichiers: paire('Bal des Hérons') },
@@ -1163,7 +1315,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     const renomme = await renommer(ouvert, renommage('Kermesse des Ifs', 31));
     await copier(renomme, optionsCopie('Variante des Ifs'));
     await importer(fs, DOC, UTF8.encode(etatTexte(chargeEssai({ id: 'evt-e', nom: 'Bal des Hérons' }))));
-    await supprimer(fs, DOC, 'Kermesse des Ifs', { horodatage: heure(30) });
+    await supprimer(fs, DOC, 'Kermesse des Ifs', { horodatage: heure(30), seance: SEANCE });
     const apres = (await arbre(disque)).filter(([chemin]) => chemin.startsWith('corbeille/'));
     assert.deepEqual(
       apres.filter(([chemin]) => !chemin.startsWith(`${DATE}_3/`)),
@@ -1193,10 +1345,10 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     ];
     for (const [nom, poses, restants] of cas) {
       const { disque, fs } = disqueAvec(poses);
-      const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION });
+      const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       assert.deepEqual(
-        await arbre(disque),
-        poses
+        await arbreSonde(disque),
+        [...poses, [VERROU, SONDE]]
           .map(([chemin, texte]) => [restants.includes(chemin) ? chemin : `${dossier}/${chemin}`, texte])
           .sort(parChemin),
         nom,
@@ -1218,10 +1370,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
         [base],
         nom,
       );
-      const { dossier } = await supprimer(fs, DOC, base, { horodatage: HEURE_SUPPRESSION });
+      const { dossier } = await supprimer(fs, DOC, base, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       assert.deepEqual(
-        await arbre(disque),
-        poses.map(([chemin, texte]) => [`${dossier}/${chemin}`, texte]).sort(parChemin),
+        await arbreSonde(disque),
+        [...poses, [`${base}${SUFFIXES.verrou}`, SONDE]]
+          .map(([chemin, texte]) => [`${dossier}/${chemin}`, texte])
+          .sort(parChemin),
         nom,
       );
     }
@@ -1234,12 +1388,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       [ETAT, etat],
       [`SOIRÉE DES LUCIOLES${SUFFIXES.journal}`, journal],
       [`soirée des lucioles${SUFFIXES.precedent}`, etat],
-      [`Soire\u0301e Des Lucioles${SUFFIXES.verrou}`, '{}\n'],
+      [`Soire\u0301e Des Lucioles${SUFFIXES.verrou}`, VERROU_MORT],
       [`SOIRÉE des lucioles${SUFFIXES.etat}.ecriture`, 'partiel'],
     ];
     const { disque, fs } = disqueAvec(poses);
     const trace = tracer(fs);
-    const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION });
+    const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
     assert.deepEqual(
       await arbre(disque),
       poses.map(([chemin, texte]) => [`${dossier}/${chemin}`, texte]).sort(parChemin),
@@ -1254,6 +1408,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     const autre = disqueAvec(poses);
     const { dossier: dossierAutre } = await supprimer(autre.fs, DOC, 'SOIRÉE DES LUCIOLES', {
       horodatage: HEURE_SUPPRESSION,
+      seance: SEANCE,
     });
     assert.deepEqual(
       await arbre(autre.disque),
@@ -1267,6 +1422,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     const troisieme = disqueAvec(illisible);
     const { dossier: dossierIllisible } = await supprimer(troisieme.fs, DOC, 'soirée des LUCIOLES', {
       horodatage: HEURE_SUPPRESSION,
+      seance: SEANCE,
     });
     assert.deepEqual(
       await arbre(troisieme.disque),
@@ -1279,10 +1435,10 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     const lac = 'Χορος της Λιμνης';
     const grecs = [
       [`${lac}${SUFFIXES.etat}`, etatTexte(chargeEssai({ id: 'evt-lac', nom: lac }))],
-      [`ΧΟΡΟΣ ΤΗΣ ΛΙΜΝΗΣ${SUFFIXES.verrou}`, '{}\n'],
+      [`ΧΟΡΟΣ ΤΗΣ ΛΙΜΝΗΣ${SUFFIXES.verrou}`, VERROU_MORT],
     ];
     const quatrieme = disqueAvec(grecs);
-    const { dossier: dossierLac } = await supprimer(quatrieme.fs, DOC, lac, { horodatage: HEURE_SUPPRESSION });
+    const { dossier: dossierLac } = await supprimer(quatrieme.fs, DOC, lac, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
     assert.deepEqual(
       await arbre(quatrieme.disque),
       grecs.map(([chemin, texte]) => [`${dossierLac}/${chemin}`, texte]).sort(parChemin),
@@ -1305,15 +1461,19 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       const verrou = `${voisine}${SUFFIXES.verrou}`;
       const poses = [
         [`${base}${SUFFIXES.etat}`, etatTexte(chargeEssai({ id: 'evt-voisine', nom: base }))],
-        [verrou, '{}\n'],
+        [verrou, VERROU_MORT],
       ];
       const { disque, fs } = disqueAvec(poses);
-      const { dossier } = await supprimer(fs, DOC, base, { horodatage: HEURE_SUPPRESSION });
+      const { dossier } = await supprimer(fs, DOC, base, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
+      // Le verrou d'une base distincte n'est pas celui de l'événement : la
+      // sonde en prend un, qui part avec lui.
+      const sonde = prise ? [] : [[`${dossier}/${base}${SUFFIXES.verrou}`, SONDE]];
       assert.deepEqual(
-        await arbre(disque),
-        poses
-          .map(([chemin, texte]) => [chemin === verrou && !prise ? chemin : `${dossier}/${chemin}`, texte])
-          .sort(parChemin),
+        await arbreSonde(disque),
+        [
+          ...poses.map(([chemin, texte]) => [chemin === verrou && !prise ? chemin : `${dossier}/${chemin}`, texte]),
+          ...sonde,
+        ].sort(parChemin),
         voisine,
       );
     }
@@ -1325,24 +1485,29 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       [ETAT, etat],
       [`SOIRÉE DES LUCIOLES${SUFFIXES.journal}`, journal],
       [`soirée des lucioles${SUFFIXES.precedent}`, etat],
-      [`Soirée Des Lucioles${SUFFIXES.verrou}`, '{}\n'],
+      [`Soirée Des Lucioles${SUFFIXES.verrou}`, VERROU_MORT],
       [`SOIRÉE des lucioles${SUFFIXES.etat}.ecriture`, 'partiel'],
     ];
     const sensible = { insensibleCasse: false };
     const { disque, fs } = disqueAvec(poses, sensible);
-    const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION });
+    const { dossier } = await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
     // Le journal d'une autre base que son identifiant apparie part avec
     // l'événement (apparier, dans le dépôt) ; le reste ne lui appartient pas.
+    // Le verrou d'une autre casse n'est pas le sien : la sonde en prend un,
+    // qui part avec lui.
     const partis = [ETAT, poses[1][0]];
+    const restes = (await arbre(disque, DOC, sensible)).filter(([chemin]) => chemin !== `${dossier}/${VERROU}`);
     assert.deepEqual(
-      await arbre(disque, DOC, sensible),
+      restes,
       poses
         .map(([chemin, texte]) => [partis.includes(chemin) ? `${dossier}/${chemin}` : chemin, texte])
         .sort(parChemin),
     );
+    assert.equal(JSON.parse(creerFichiersSimules({ disque, ...sensible }).contenu('documents', `${dossier}/${VERROU}`)).seance, SEANCE);
     await echec(
       supprimer(creerFichiersSimules({ disque, ...sensible }), DOC, 'SOIRÉE DES LUCIOLES', {
         horodatage: HEURE_SUPPRESSION,
+        seance: SEANCE,
       }),
       'ABSENT',
     );
@@ -1357,7 +1522,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       fs.pannes.couperApres(n);
       let acheve = true;
       try {
-        await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION });
+        await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       } catch (erreur) {
         assert.ok(erreur instanceof PanneSimulee, `coupure après ${n} écritures : ${String(erreur)}`);
         acheve = false;
@@ -1385,7 +1550,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       const temoin = effacerDocumentsAvant(disque, fs, n);
       let refus = null;
       try {
-        await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION });
+        await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE });
       } catch (erreur) {
         refus = erreur;
       }
@@ -1408,12 +1573,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     await creer(fs, DOC, chargeEssai(), CREATION);
     const avant = await arbre(disque);
     const ecritures = fs.compteurs.ecritures;
-    const absent = await echec(supprimer(fs, DOC, 'Inexistant', { horodatage: HEURE_SUPPRESSION }), 'ABSENT');
+    const absent = await echec(supprimer(fs, DOC, 'Inexistant', { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'ABSENT');
     assert.deepEqual(absent.details, { chemin: `Inexistant${SUFFIXES.etat}` });
-    await assert.rejects(supprimer(fs, DOC, BASE, { horodatage: '17 mai 2031' }), TypeError);
+    await assert.rejects(supprimer(fs, DOC, BASE, { horodatage: '17 mai 2031', seance: SEANCE }), TypeError);
     fs.deposerDossier('documents', DATE);
     for (let rang = 2; rang <= 99; rang += 1) fs.deposerDossier('documents', `${DATE}_${rang}`);
-    const saturee = await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION }), 'CORBEILLE_SATUREE');
+    const saturee = await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'CORBEILLE_SATUREE');
     assert.deepEqual(saturee.details, { dossier: DATE });
     assert.equal(fs.compteurs.ecritures, ecritures);
     assert.deepEqual(await arbre(disque), avant);
@@ -1423,7 +1588,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
   test("une lecture que le système de fichiers refuse autrement que par l'absence remonte telle quelle, sans rien écrire : un chemin refusé, une corbeille illisible", async () => {
     const { fs } = await deuxRevisions();
     const ecritures = fs.compteurs.ecritures;
-    await echec(supprimer(fs, DOC, '../ailleurs', { horodatage: HEURE_SUPPRESSION }), 'CHEMIN_REFUSE');
+    await echec(supprimer(fs, DOC, '../ailleurs', { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'CHEMIN_REFUSE');
     const lister = fs.lister;
     fs.lister = async (racine, dossier) => {
       if (dossier === 'corbeille') {
@@ -1432,8 +1597,87 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       return lister(racine, dossier);
     };
     await echec(listerCorbeille(fs, DOC), 'LECTURE');
-    await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION }), 'LECTURE');
+    await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'LECTURE');
     assert.equal(fs.compteurs.ecritures, ecritures);
+  });
+
+  test("supprimer sonde le verrou sous la séance qui supprime : une autre séance vivante, d'un autre poste ou au verrou illisible lève VERROU_PRIS {seance, depuis, vivant} sans rien déplacer ; un verrou mort, le sien, ou celui que la sonde prend partent avec le reste", async () => {
+    const refuses = [
+      ['une autre séance vivante', (fs, ouvert) => verrouiller(ouvert, 'seance-b'), { seance: 'seance-b', vivant: true }],
+      [
+        "une séance d'un autre poste",
+        (fs, ouvert, disque) => verrouiller({ ...ouvert, fs: creerFichiersSimules({ disque, hote: 'poste-voisin' }) }, 'seance-c'),
+        { seance: 'seance-c', vivant: null },
+      ],
+      ['un verrou illisible', (fs) => fs.deposer('documents', VERROU, '{'), { seance: null, vivant: null }],
+    ];
+    for (const [nom, poser, attendu] of refuses) {
+      const { disque, fs, ouvert } = await deuxRevisions();
+      await poser(fs, ouvert, disque);
+      const avant = await arbre(disque);
+      const trace = tracer(fs);
+      const erreur = await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'VERROU_PRIS', nom);
+      const { depuis, ...reste } = erreur.details;
+      assert.deepEqual(reste, attendu, nom);
+      assert.equal(depuis === null, attendu.seance === null, nom);
+      assert.deepEqual(trace, [], nom);
+      assert.deepEqual(await arbre(disque), avant, nom);
+    }
+
+    // Deux processus sur un même disque : le premier tient l'événement en
+    // écriture et continue ses gestes ; le second ne le supprime pas.
+    const partage = await deuxRevisions();
+    await verrouiller(partage.ouvert, SEANCE);
+    const second = creerFichiersSimules({ disque: partage.disque });
+    const refus = await echec(supprimer(second, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: 'seance-b' }), 'VERROU_PRIS');
+    assert.deepEqual([refus.details.seance, refus.details.vivant], [SEANCE, true]);
+    const suite = await enregistrer(partage.ouvert, noter(partage.ouvert.charge, 3), geste(3));
+    assert.deepEqual([suite.revision, suite.avertissements], [3, []]);
+    assert.deepEqual((await lister(second, DOC)).map(({ base, journal }) => [base, journal]), [[BASE, BASE]]);
+    assert.deepEqual(await listerCorbeille(second, DOC), []);
+
+    // Le verrou d'une séance coupée, le sien, ou celui que la sonde pose
+    // faute de verrou : chacun part dans la corbeille avec l'événement.
+    const acceptes = [
+      [
+        "une séance coupée",
+        async (disque) => {
+          const coupee = creerFichiersSimules({ disque });
+          await coupee.verrouiller(DOC, VERROU, 'seance-morte');
+          coupee.pannes.couperApres(0);
+          return 'seance-morte';
+        },
+      ],
+      ['la séance qui supprime', async (disque, fs, ouvert) => (await verrouiller(ouvert, SEANCE), SEANCE)],
+      ['aucun verrou', async () => SEANCE],
+    ];
+    for (const [nom, poser] of acceptes) {
+      const { disque, fs, ouvert } = await deuxRevisions();
+      const tenant = await poser(disque, fs, ouvert);
+      assert.deepEqual(await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE }, nom);
+      assert.deepEqual(await listerCorbeille(fs, DOC), [{ dossier: DATE, fichiers: [JOURNAL, ETAT, PRECEDENT, VERROU] }], nom);
+      assert.equal(JSON.parse(fs.contenu('documents', `${DATE}/${VERROU}`)).seance, tenant, nom);
+      assert.deepEqual(await lister(fs, DOC), [], nom);
+    }
+  });
+
+  test("sans verrou disponible, la sonde ne pose rien et rien d'autre ne part ; une séance absente lève TypeError sans rien écrire ; un refus après la sonde rend le verrou qu'elle a pris", async () => {
+    const web = await deuxRevisions(chargeEssai(), { verrouDisponible: false });
+    assert.deepEqual(await supprimer(web.fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    assert.deepEqual(await listerCorbeille(web.fs, DOC), [{ dossier: DATE, fichiers: [JOURNAL, ETAT, PRECEDENT] }]);
+
+    const { disque, fs } = await deuxRevisions();
+    const avant = await arbre(disque);
+    const ecritures = fs.compteurs.ecritures;
+    for (const seance of [undefined, '']) {
+      await assert.rejects(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance }), TypeError);
+    }
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    fs.creerDossier = async (racine, chemin) => {
+      throw new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EACCES' });
+    };
+    await echec(supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), 'ECRITURE');
+    assert.deepEqual(await arbre(disque), avant);
   });
 
   test('une corbeille absente se liste vide ; un fichier posé à même la corbeille ne se liste pas comme un dossier', async () => {
@@ -1550,5 +1794,35 @@ describe("opérations : ce qu'une construction plus récente a écrit (§ 8.8)",
     assert.equal(ouvert.fs.compteurs.ecritures, 0);
     await echec(chargerDemonstration(ouvert.fs, DOC, '{', chargement('evt-demo-2', 3)), 'ETAT_ILLISIBLE');
     assert.equal(ouvert.fs.compteurs.ecritures, 0);
+  });
+});
+
+describe('opérations : un état aux octets hors UTF-8 (§ 8.8)', () => {
+  test("ouvert d'un secours, renommer met d'abord l'état aux octets hors UTF-8 dans un dossier daté de la corbeille, ses octets intacts, puis renomme, sous un autre nom comme en place ; copier en fait un événement neuf sans le toucher", async () => {
+    for (const [nom, base] of [
+      ['Gala des Saules', 'Gala des Saules'],
+      [`${BASE} `.toUpperCase(), BASE],
+    ]) {
+      const { disque, fs } = await deuxRevisions();
+      const octets = enWindows1252(fs.contenu('documents', ETAT));
+      fs.deposerOctets('documents', ETAT, octets);
+      const ouvert = await ouvrirSecours(fs, DOC, BASE, 'journal');
+      const copie = await copier(ouvert, optionsCopie('Variante des Lucioles'));
+      assert.equal(copie.charge.evenement.filiation.source.id, 'evt-lucioles', nom);
+      assert.deepEqual(fs.octets('documents', ETAT), octets, nom);
+      const renomme = await renommer(ouvert, renommage(nom, 3, { libelleReprise: REPRISE }));
+      assert.equal(renomme.base, base, nom);
+      assert.deepEqual(fs.octets('documents', `corbeille/2031-05-17_08-03-00/${ETAT}`), octets, nom);
+      assert.deepEqual(
+        (await lister(creerFichiersSimules({ disque }), DOC)).map(({ base: b, illisible }) => [b, illisible]),
+        [
+          [base, null],
+          ['Variante des Lucioles', null],
+        ],
+        nom,
+      );
+      const rouvert = await ouvrir(creerFichiersSimules({ disque }), DOC, base);
+      assert.deepEqual([rouvert.charge.evenement.nom, rouvert.avertissements], [nom, []], nom);
+    }
   });
 });

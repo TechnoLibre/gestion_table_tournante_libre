@@ -29,7 +29,7 @@ import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
-import { versFichier } from '../stockage/placements.js';
+import { fautes, formeNommee, versFichier } from '../stockage/placements.js';
 import { libelle } from './libelles.js';
 
 /**
@@ -266,6 +266,25 @@ function supprimerParticipant(charge, { id }) {
   };
 }
 
+// Les avertissements de chaque personne qu'un import exclut ou réintègre
+// (§ 4.4) : celle que la charge suivante porte sous le même identifiant,
+// exclu changé, et qui tient une réservation. Chacune a le bilan que
+// donnerait sa commande seule, exclureParticipant ou reintegrerParticipant,
+// appliquée à la charge d'avant : RESERVATIONS_SUSPENDUES ou
+// RESERVATIONS_RETABLIES, par identifiant croissant.
+function avertissementsDExclusion(avant, suivante) {
+  const exclusDApres = new Map(suivante.participants.map(({ id, exclu }) => [id, exclu]));
+  return avant.participants
+    .filter(({ id, exclu }) => exclusDApres.has(id) && exclusDApres.get(id) !== exclu)
+    .sort((a, b) => a.id - b.id)
+    .map((participant) => {
+      const seule = avecParticipant(avant, participant.id, (copie) => ({ ...copie, exclu: !copie.exclu }));
+      const code = participant.exclu ? 'RESERVATIONS_RETABLIES' : 'RESERVATIONS_SUSPENDUES';
+      return avertissement(code, bilanExclusion(avant, seule, participant));
+    })
+    .filter(({ details }) => details.reservations > 0);
+}
+
 /**
  * importerParticipants {apercu, mode} (§ 10.1) : l'aperçu appliqué selon le
  * mode (appliquerImport), en une seule entrée. Le refus du CSV — un aperçu
@@ -274,6 +293,13 @@ function supprimerParticipant(charge, { id }) {
  * l'état : sans avertissement en brouillon et proposé ; en retenu,
  * l'avertissement de dérive IMPORT_EN_RETENU, quel que soit le mode, sur le
  * signal resume.derive d'appliquerImport ; refusé en bloqué, PLAN_BLOQUE.
+ * Une personne que l'import exclut ou réintègre le dit ensuite comme sa
+ * commande le dirait (avertissementsDExclusion).
+ *
+ * Un import dont la charge ne change pas, mais qui refuse des lignes, n'est
+ * pas sans effet : ses refus sont à lire et à réexporter. Il rend la charge
+ * reçue, un libellé null — aucune entrée ne s'écrit —, aucun avertissement,
+ * et son résumé.
  */
 function importerParticipants(charge, { apercu, mode }) {
   exigerModifiable(charge);
@@ -284,11 +310,17 @@ function importerParticipants(charge, { apercu, mode }) {
     if (erreur instanceof ErreurCsv) throw new ErreurCommande(erreur.code, { ...erreur.details, remede: null });
     throw erreur;
   }
-  const { ajoutes, misAJour, retires, derive } = resultat.resume;
+  const { ajoutes, misAJour, retires, derive, refusees } = resultat.resume;
+  if (refusees.length > 0 && serialiserCharge(resultat.charge) === serialiserCharge(charge)) {
+    return { charge, libelle: null, avertissements: [], resume: resultat.resume };
+  }
   return {
     charge: resultat.charge,
     libelle: libelle('ENTREE_IMPORTER_PARTICIPANTS', { mode, ajoutes, misAJour, retires }),
-    avertissements: derive ? [avertissement('IMPORT_EN_RETENU', {})] : [],
+    avertissements: [
+      ...(derive ? [avertissement('IMPORT_EN_RETENU', {})] : []),
+      ...avertissementsDExclusion(charge, resultat.charge),
+    ],
     resume: resultat.resume,
   };
 }
@@ -418,11 +450,14 @@ export const COMMANDES = new Map([
  * Applique la commande nom à la charge : ce qu'elle rend, avertissements []
  * quand elle n'en donne pas. Un geste dont la charge rendue s'écrit comme la
  * charge reçue ne change rien, et n'est pas une entrée (§ 8.2) : SANS_EFFET.
+ * Un rendu au libellé null ne change rien non plus, mais porte ce qu'il y a
+ * à lire — l'import dont seules des lignes refusées auraient changé la
+ * liste : il passe tel quel, et rien ne s'écrit.
  *
  * @param {string} nom
  * @param {Object} charge
  * @param {Object} [args]
- * @returns {{charge: Object, libelle: string, avertissements: Array<{code: string, details: Object}>}}
+ * @returns {{charge: Object, libelle: string|null, avertissements: Array<{code: string, details: Object}>}}
  * @throws {ErreurCommande} le refus de la commande, ou SANS_EFFET
  * @throws {TypeError} une commande inconnue, un argument de forme fausse
  */
@@ -430,8 +465,43 @@ export function appliquerCommande(nom, charge, args = {}) {
   const commande = COMMANDES.get(nom);
   if (commande === undefined) throw new TypeError(`commande inconnue : ${JSON.stringify(nom)}`);
   const rendu = commande(charge, args ?? {});
+  if (rendu.libelle === null) return { ...rendu, avertissements: rendu.avertissements ?? [] };
   if (serialiserCharge(rendu.charge) === serialiserCharge(charge)) throw refus('SANS_EFFET', { commande: nom });
   return { ...rendu, avertissements: rendu.avertissements ?? [] };
+}
+
+/**
+ * La forme nommée d'un placement de la charge (§ 8.9, point 4), pour la
+ * lecture et le signalement d'un défaut : une lecture, ni commande ni
+ * entrée. cible désigne { proposition: id } ou { retenu: true }. Rend
+ * { lignes, fautes } : fautes, celles que le placement porte (fautes) ;
+ * lignes, sa forme nommée (formeNommee), une ligne par identifiant écrit,
+ * ou null quand sa forme est fausse (faute FORME), qui ne se lit pas en
+ * lignes. Une proposition fautive n'est plus dans la charge qu'examiner
+ * rend ; le retenu y reste, fautif ou non. La charge n'est pas modifiée.
+ *
+ * @param {Object} charge
+ * @param {{proposition: number}|{retenu: true}} cible
+ * @returns {{lignes: Array<Object>|null, fautes: Array<Object>}}
+ * @throws {ErreurCommande} PROPOSITION_INCONNUE {id} ; AUCUN_RETENU, remède
+ *         la section des propositions
+ * @throws {TypeError} une cible d'une autre forme
+ */
+export function formeNommeeDe(charge, cible) {
+  const cles = cible !== null && typeof cible === 'object' ? clesRangees(cible) : null;
+  let placement;
+  if (cles?.length === 1 && cles[0] === 'proposition' && Number.isSafeInteger(cible.proposition)) {
+    placement = charge.propositions.find(({ id }) => id === cible.proposition);
+    if (placement === undefined) throw refus('PROPOSITION_INCONNUE', { id: cible.proposition });
+  } else if (cles?.length === 1 && cles[0] === 'retenu' && cible.retenu === true) {
+    placement = charge.retenu;
+    if (placement === null) throw refus('AUCUN_RETENU', {}, { geste: 'ouvrirSection', section: 'propositions' });
+  } else {
+    throw new TypeError(`cible : {proposition: id} ou {retenu: true} attendu, reçu ${JSON.stringify(cible)}`);
+  }
+  const lues = fautes(placement);
+  const lisible = !lues.some(({ code }) => code === 'FORME');
+  return { lignes: lisible ? formeNommee(placement, charge) : null, fautes: lues };
 }
 
 /**

@@ -12,9 +12,9 @@ import { apercevoir } from '../csv/apercu.js';
 import { bilanRemplacement } from '../csv/import.js';
 import { rechercher } from '../moteur/recherche.js';
 import { configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
-import { derive, planDepuisFichier } from '../stockage/placements.js';
+import { derive, fautes, formeNommee, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
-import { COMMANDES, ErreurCommande, appliquerCommande, chargeNeuve } from './commandes.js';
+import { COMMANDES, ErreurCommande, appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 
 const V1 = VERSION.affichee;
 
@@ -118,7 +118,7 @@ describe('commandes : le registre (§ 8.2)', () => {
 
   test('un geste qui ne change pas la charge est refusé SANS_EFFET', () => {
     const charge = chargeEssai();
-    const apercu = apercevoir('nom;prenom\nLacasse;Ondine\n', { participants: charge.participants });
+    const apercu = apercevoir('nom;prenom\nLacasse;Ondine\n', { participants: charge.participants, mode: 'mettreAJour' });
     refuse(() => appliquerCommande('importerParticipants', charge, { apercu, mode: 'mettreAJour' }), 'SANS_EFFET', {
       commande: 'importerParticipants',
       remede: null,
@@ -256,7 +256,7 @@ describe("commandes : l'import (§ 10.1)", () => {
 
   test('remplacer et mettre à jour se nomment au libellé, chaque compte à sa place', () => {
     const avant = chargeEssai();
-    const apercu = apercevoir(CSV_DEUX, { participants: avant.participants });
+    const apercu = apercevoir(CSV_DEUX, { participants: avant.participants, mode: 'remplacer' });
     const remplace = executer('importerParticipants', avant, { apercu, mode: 'remplacer' });
     assert.equal(remplace.libelle, 'Remplacé la liste par import : 4 retirés, 2 ajoutés');
     assert.deepEqual(remplace.charge.reservations, []);
@@ -264,7 +264,7 @@ describe("commandes : l'import (§ 10.1)", () => {
     // intervertirait ne rendrait pas.
     const csv = 'nom;prenom;courriel\nLacasse;Ondine;o@exemple.test\nAncolie;Bastien;\nBruyère;Capucine;\n';
     const misAJour = executer('importerParticipants', avant, {
-      apercu: apercevoir(csv, { participants: avant.participants }),
+      apercu: apercevoir(csv, { participants: avant.participants, mode: 'mettreAJour' }),
       mode: 'mettreAJour',
     });
     assert.deepEqual([misAJour.resume.ajoutes, misAJour.resume.misAJour], [2, 1]);
@@ -277,7 +277,7 @@ describe("commandes : l'import (§ 10.1)", () => {
     const proposee = executer('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 2)).charge;
     const retenue = chargeRiche();
     assert.deepEqual([brouillon, proposee, retenue].map(({ evenement }) => evenement.etat), ['brouillon', 'propose', 'retenu']);
-    const ajout = (charge, mode = 'ajouter') => ({ apercu: apercevoir('nom\nBruyère\n', { participants: charge.participants }), mode });
+    const ajout = (charge, mode = 'ajouter') => ({ apercu: apercevoir('nom\nBruyère\n', { participants: charge.participants, mode }), mode });
     assert.deepEqual(executer('importerParticipants', brouillon, ajout(brouillon)).avertissements, []);
     assert.deepEqual(executer('importerParticipants', proposee, ajout(proposee)).avertissements, []);
     for (const mode of ['ajouter', 'mettreAJour', 'remplacer']) {
@@ -285,7 +285,10 @@ describe("commandes : l'import (§ 10.1)", () => {
     }
     // Une mise à jour sans personne nouvelle avertit aussi : le placement
     // retenu date de la liste d'avant.
-    const courriel = apercevoir('nom;prenom;courriel\nLacasse;Ondine;o@exemple.test\n', { participants: retenue.participants });
+    const courriel = apercevoir('nom;prenom;courriel\nLacasse;Ondine;o@exemple.test\n', {
+      participants: retenue.participants,
+      mode: 'mettreAJour',
+    });
     const misAJour = executer('importerParticipants', retenue, { apercu: courriel, mode: 'mettreAJour' });
     assert.deepEqual([misAJour.resume.ajoutes, misAJour.resume.misAJour], [0, 1]);
     assert.deepEqual(misAJour.avertissements, enRetenu);
@@ -310,6 +313,104 @@ describe("commandes : l'import (§ 10.1)", () => {
     refuse(() => executer('importerParticipants', bloquee, { apercu, mode: 'ajouter' }), 'PLAN_BLOQUE', {
       remede: { geste: 'debloquer' },
     });
+  });
+});
+
+describe("commandes : l'import qui exclut, réintègre ou ne change rien (§ 4.4, § 10.1)", () => {
+  // La charge d'essai, où Ondine Lacasse tient aussi une réservation, au
+  // tour 1, sans siège.
+  function deuxReservees() {
+    const charge = chargeEssai();
+    charge.reservations.push({ participant: 4, table: 2, siege: null, portee: 'tour', tour: 1 });
+    return charge;
+  }
+  const importer = (charge, csv) =>
+    appliquerCommande('importerParticipants', charge, {
+      apercu: apercevoir(csv, { participants: charge.participants, mode: 'mettreAJour' }),
+      mode: 'mettreAJour',
+    });
+
+  test("une mise à jour qui exclut des personnes réservées le dit pour chacune, comme exclure (§ 4.4)", () => {
+    const avant = figer(deuxReservees());
+    const rendu = importer(avant, 'nom;prenom;exclu\nOmbrelle;Iris;oui\nLacasse;Ondine;oui\nPervenche;Théo;oui\n');
+    assert.equal(rendu.libelle, 'Mis à jour la liste par import : 0 ajouté, 3 modifiés');
+    assert.deepEqual(rendu.avertissements, [
+      { code: 'RESERVATIONS_SUSPENDUES', details: { participant: 1, personne: 'Iris Ombrelle', reservations: 1, titres: 1 } },
+      { code: 'RESERVATIONS_SUSPENDUES', details: { participant: 4, personne: 'Ondine Lacasse', reservations: 1, titres: 0 } },
+    ]);
+    // Le même bilan que la commande d'exclusion, personne par personne.
+    assert.deepEqual(rendu.avertissements[0], executer('exclureParticipant', avant, { id: 1 }).avertissements[0]);
+    assert.deepEqual(rendu.avertissements[1], executer('exclureParticipant', avant, { id: 4 }).avertissements[0]);
+  });
+
+  test('une mise à jour qui réintègre une personne réservée le dit, comme réintégrer ; en retenu, après la dérive', () => {
+    const exclue = executer('exclureParticipant', chargeEssai(), { id: 1 }).charge;
+    const rendu = importer(exclue, 'nom;prenom;exclu\nOmbrelle;Iris;non\n');
+    const retablies = { code: 'RESERVATIONS_RETABLIES', details: { participant: 1, personne: 'Iris Ombrelle', reservations: 1, titres: 1 } };
+    assert.deepEqual(rendu.avertissements, [retablies]);
+    assert.equal(rendu.charge.participants[0].exclu, false);
+    const retenue = chargeRiche();
+    const enRetenu = importer(retenue, 'nom;prenom;exclu\nOmbrelle;Iris;oui\n');
+    assert.deepEqual(enRetenu.avertissements.map(({ code }) => code), ['IMPORT_EN_RETENU', 'RESERVATIONS_SUSPENDUES']);
+  });
+
+  test("une mise à jour dont les lignes valides ne changent rien, mais qui refuse des lignes, n'est pas SANS_EFFET : elle rend son résumé, sans entrée", () => {
+    const avant = chargeEssai();
+    avant.participants.push(personne(5, 'Lacasse', 'Ondine'));
+    avant.prochainsIds.participant = 6;
+    figer(avant);
+    const rendu = importer(avant, 'nom;prenom;courriel\nLacasse;Ondine;o@exemple.test\nPervenche;Théo;\n');
+    assert.equal(rendu.libelle, null);
+    assert.deepEqual(rendu.avertissements, []);
+    assert.equal(rendu.charge, avant);
+    assert.deepEqual(rendu.resume.refusees.map(({ ligne, code, participants }) => [ligne, code, participants]), [
+      [2, 'PLUSIEURS_CORRESPONDENT', [4, 5]],
+    ]);
+    assert.deepEqual([rendu.resume.ajoutes, rendu.resume.misAJour, rendu.resume.inchanges], [0, 0, 1]);
+  });
+});
+
+describe('commandes : la forme nommée, une lecture (§ 8.9, point 4)', () => {
+  test("rend la forme nommée d'une proposition ou du retenu, avec ses fautes, sans toucher la charge", () => {
+    const charge = figer(chargeRiche());
+    assert.deepEqual(formeNommeeDe(charge, { proposition: 2 }), {
+      lignes: formeNommee(charge.propositions[1], charge),
+      fautes: [],
+    });
+    const retenu = formeNommeeDe(charge, { retenu: true });
+    assert.deepEqual(retenu, { lignes: formeNommee(charge.retenu, charge), fautes: [] });
+    assert.ok(retenu.lignes.length > 0);
+    assert.ok(retenu.lignes.every(({ nom }) => typeof nom === 'string'));
+  });
+
+  test("un retenu incohérent se lit quand même : une ligne par identifiant écrit, et ses fautes à côté", () => {
+    const charge = chargeRiche();
+    const assis = charge.retenu.placement[0].sieges[0][0];
+    charge.retenu.placement[0].reserve = [...charge.retenu.placement[0].reserve, assis].sort((a, b) => a - b);
+    const coherent = chargeRiche();
+    const lue = formeNommeeDe(charge, { retenu: true });
+    assert.deepEqual(lue.fautes, [{ code: 'DOUBLON', tour: 1, participant: assis }]);
+    assert.deepEqual(lue.fautes, fautes(charge.retenu));
+    assert.equal(lue.lignes.length, formeNommee(coherent.retenu, coherent).length + 1);
+    assert.equal(lue.lignes.filter(({ tour, participant }) => tour === 1 && participant === assis).length, 2);
+  });
+
+  test("un placement dont la forme est fausse n'a pas de lignes : ses fautes seules le disent", () => {
+    const charge = chargeRiche();
+    charge.retenu.placement = 'illisible';
+    const lue = formeNommeeDe(charge, { retenu: true });
+    assert.equal(lue.lignes, null);
+    assert.deepEqual(lue.fautes.map(({ code }) => code), ['FORME']);
+  });
+
+  test("une proposition inconnue, un retenu absent sont refusés ; une cible d'une autre forme est une faute du code", () => {
+    refuse(() => formeNommeeDe(chargeRiche(), { proposition: 9 }), 'PROPOSITION_INCONNUE', { id: 9, remede: null });
+    refuse(() => formeNommeeDe(chargeEssai(), { retenu: true }), 'AUCUN_RETENU', {
+      remede: { geste: 'ouvrirSection', section: 'propositions' },
+    });
+    for (const cible of [{}, { retenu: false }, { proposition: '2' }, { proposition: 2, retenu: true }, null]) {
+      assert.throws(() => formeNommeeDe(chargeRiche(), cible), TypeError, JSON.stringify(cible));
+    }
   });
 });
 

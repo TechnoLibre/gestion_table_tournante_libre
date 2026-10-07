@@ -72,6 +72,10 @@ import { ErreurStockage } from './erreurs.js';
  * @property {string|null} nom       null pour une personne que la charge
  *                                   n'a plus
  * @property {string|null} prenom
+ * @property {boolean} reserve      vrai pour une personne de la réserve ;
+ *                                   une liste écrite au-delà des tables
+ *                                   déclarées n'a pas de table et n'est
+ *                                   pas la réserve
  *
  * Ce que rend examiner.
  *
@@ -399,31 +403,41 @@ const ordreDesTables = (a, b) =>
   (a.numero === null) - (b.numero === null) || a.numero - b.numero || a.id - b.id;
 
 /**
- * Forme nommée d'un placement cohérent, proposition ou retenu (§ 8.9,
- * point 4) : une ligne par personne placée à un tour, { tour, table,
- * numero, siege, participant, nom, prenom }, pour la lecture et le
- * signalement d'un défaut. Les lignes se rangent par tour, puis par numéro
- * de table — une table que la charge n'a plus vient après les autres, sans
- * numéro, et l'identifiant départage deux numéros égaux —, puis par rang
- * dans la liste ; la réserve suit les tables de son tour, table et numéro
- * null. siege est le rang à partir de 1 quand le placement attribue les
- * sièges, null sinon et dans la réserve. Nom et prénom viennent de la
- * charge ; une personne qu'elle n'a plus les a null. Lève TypeError quand p
- * n'est pas cohérent (fautes).
+ * Forme nommée d'un placement, proposition ou retenu (§ 8.9, point 4) : une
+ * ligne par identifiant écrit à un tour, { tour, table, numero, siege,
+ * participant, nom, prenom, reserve }, pour la lecture et le signalement
+ * d'un défaut. Les lignes se rangent par tour, puis par numéro de table —
+ * une table que la charge n'a plus vient après les autres, sans numéro, et
+ * l'identifiant départage deux numéros égaux —, puis par rang dans la
+ * liste ; la réserve suit les tables de son tour, table et numéro null.
+ * siege est le rang à partir de 1 quand le placement attribue les sièges,
+ * null sinon et dans la réserve. Nom et prénom viennent de la charge ; une
+ * personne qu'elle n'a plus, ou qu'elle n'a jamais eue, les a null.
+ *
+ * Un placement incohérent (fautes : LONGUEUR, DOUBLON, INCONNU, MANQUANT)
+ * se rend tel qu'il est écrit, pour que son défaut se lise : un identifiant
+ * écrit deux fois donne deux lignes, un manquant aucune ; les tours écrits,
+ * qu'ils soient plus ou moins nombreux que ceux déclarés ; une table
+ * déclarée sans liste n'a pas de ligne, et une liste écrite au-delà des
+ * tables déclarées suit les tables de son tour, sans table ni numéro, avant
+ * la réserve. Ses fautes se lisent par fautes(p), que l'appelant rend à
+ * côté. Lève TypeError quand la forme ou la déclaration de p est fausse
+ * (faute FORME) : ses listes ne se lisent pas.
  *
  * @param {import('./types.js').PropositionFichier|import('./types.js').Retenu} p
  * @param {import('./types.js').Charge} charge
  * @returns {Ligne[]}
  */
 export function formeNommee(p, charge) {
-  exigerCoherent(p, 'formeNommee');
+  const [premiere] = fautes(p);
+  if (premiere?.code === 'FORME') throw new TypeError(`formeNommee : placement fautif ${JSON.stringify(premiere)}`);
   const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
   const numeroDe = new Map(charge.tables.map(({ id, numero }) => [id, numero]));
   const tables = p.tables
     .map((id, rang) => ({ id, rang, numero: numeroDe.get(id) ?? null }))
     .sort(ordreDesTables);
   const lignes = [];
-  const ajouter = (tour, table, numero, siege, participant) => {
+  const ajouter = (tour, table, numero, siege, participant, reserve) => {
     const personne = personneDe.get(participant);
     lignes.push({
       tour,
@@ -433,16 +447,21 @@ export function formeNommee(p, charge) {
       participant,
       nom: personne?.nom ?? null,
       prenom: personne?.prenom ?? null,
+      reserve,
+    });
+  };
+  // Les personnes d'une liste de table, sans table pour une liste écrite
+  // au-delà des tables déclarées.
+  const ajouterListe = (tour, ids, table, numero) => {
+    ids.forEach((participant, position) => {
+      ajouter(tour, table, numero, p.siegesAttribues ? position + 1 : null, participant, false);
     });
   };
   p.placement.forEach(({ sieges, reserve }, rangDuTour) => {
     const tour = rangDuTour + 1;
-    for (const { id, rang, numero } of tables) {
-      sieges[rang].forEach((participant, position) => {
-        ajouter(tour, id, numero, p.siegesAttribues ? position + 1 : null, participant);
-      });
-    }
-    for (const participant of reserve) ajouter(tour, null, null, null, participant);
+    for (const { id, rang, numero } of tables) ajouterListe(tour, sieges[rang] ?? [], id, numero);
+    for (const ids of sieges.slice(p.tables.length)) ajouterListe(tour, ids, null, null);
+    for (const participant of reserve) ajouter(tour, null, null, null, participant, true);
   });
   return lignes;
 }

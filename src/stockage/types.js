@@ -214,6 +214,11 @@
  *                                        réduite aux clés connues quand le
  *                                        format est plus récent
  * @property {boolean} formatPlusRecent   format > FORMAT : lecture seule
+ * @property {{propositions: number, retenu: boolean}} manquants
+ *           ce que les comptes des placements annoncent sans que la charge
+ *           le porte : propositions, le nombre annoncé au-delà de la liste ;
+ *           retenu, vrai quand il est annoncé et absent. Un tel écart ne
+ *           refuse jamais le fichier (§ 8.9, point 3) ; le dépôt l'annonce
  */
 
 /**
@@ -337,6 +342,12 @@
  *   ECRITURE             {chemin, dossier, cause}    une écriture, un ajout, un
  *                                                    renommage refusés ; la
  *                                                    cible est intacte
+ *   LECTURE              {chemin, dossier, cause}    une lecture refusée
+ *                                                    autrement que sur un
+ *                                                    absent, ou des octets qui
+ *                                                    ne sont pas de l'UTF-8,
+ *                                                    cause UTF8_INVALIDE, et
+ *                                                    octets, leur copie
  *   EXISTE               {chemin}                    déplacer vers une cible
  *                                                    existante
  *   CHEMIN_REFUSE        {chemin}                    chemin absolu, .., racine
@@ -355,7 +366,11 @@
  *                                                    verrou
  *   LECTURE_SEULE        {raison}                    un geste sur un fichier
  *                                                    d'un format plus récent,
- *                                                    ou sur un plan bloqué
+ *                                                    sur un plan bloqué, ou
+ *                                                    passer en écriture sur
+ *                                                    un état devenu aux
+ *                                                    octets hors UTF-8 (raison
+ *                                                    ENCODAGE, de la séance)
  *   ETAT_NON_ECRIT       {chemin, dossier, cause}    le geste est au journal,
  *                                                    l'état n'a pas pu s'écrire
  *                                                    (§ 8.2)
@@ -375,9 +390,13 @@
  *                                                    l'appelant le lit avant
  *                                                    toute écriture
  *
- * @typedef {'ABSENT'|'VIDE'|'JSON'|'FORME'|'COMPTES'|'REFERENCE'|'FORMAT_INCONNU'|'FORMAT_PLUS_RECENT'} RaisonIllisible
+ * @typedef {'ABSENT'|'ENCODAGE'|'VIDE'|'JSON'|'FORME'|'COMPTES'|'REFERENCE'|'FORMAT_INCONNU'|'FORMAT_PLUS_RECENT'} RaisonIllisible
  *   ABSENT          le journal existe sans l'état ; posée par le dépôt, jamais
  *                   par analyser
+ *   ENCODAGE        des octets qui ne sont pas de l'UTF-8 : le système de
+ *                   fichiers lève LECTURE, cause UTF8_INVALIDE, et le dépôt
+ *                   pose cette raison, comme l'import d'un fichier ; jamais
+ *                   analyser, qui ne reçoit que du texte
  *   VIDE            zéro octet, ou des blancs seulement
  *   JSON            le texte n'est pas du JSON
  *   FORME           type, clé manquante ou inconnue, valeur hors de son
@@ -386,7 +405,10 @@
  *                   table en double ou atteignant prochainsIds, tour d'une
  *                   réservation hors de sa portée ; des propositions et du
  *                   retenu, seul le conteneur
- *   COMPTES         un compte de l'en-tête contredit sa liste
+ *   COMPTES         un compte de la saisie — participants, tables,
+ *                   réservations, titres — contredit sa liste ; ceux des
+ *                   propositions et du retenu ne refusent jamais (Lecture,
+ *                   manquants)
  *   REFERENCE       réservation ou titre vers une table ou une personne
  *                   absente, siège au-delà de la capacité
  *   FORMAT_INCONNU  format présent, mais non entier ou < 1
@@ -403,7 +425,9 @@
  *           charge.participants[2].nom : clés séparées par un point, rangs
  *           entre crochets, une clé qui ne s'écrit pas comme un identifiant
  *           entre crochets en JSON ; '' pour la racine ; null quand rien ne se
- *           désigne (ABSENT, VIDE, JSON)
+ *           désigne (ABSENT, ENCODAGE, VIDE, JSON) ; le chemin du journal
+ *           quand ouvrirSecours refuse le journal de la base, d'un format plus
+ *           récent ou aux octets hors UTF-8
  * @property {number} [format]         le format lu quand il dépasse FORMAT :
  *           FORMAT_PLUS_RECENT, et COMPTES ou REFERENCE d'un fichier plus
  *           récent

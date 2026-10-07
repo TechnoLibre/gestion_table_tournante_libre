@@ -19,7 +19,11 @@
 // FORMAT_INCONNU s'il n'est pas un entier ≥ 1) ; la forme de chaque champ,
 // dans l'ordre du schéma puis des rangs (FORME) ; les identifiants des
 // participants et des tables, et le tour des réservations (FORME) ; les
-// comptes de l'en-tête (COMPTES) ; les références (REFERENCE). Un fichier
+// comptes de la saisie dans l'en-tête — participants, tables, réservations,
+// titres — (COMPTES) ; les références (REFERENCE). Les comptes des
+// propositions et du retenu ne refusent jamais le fichier (§ 8.9, point 3) :
+// ce que l'en-tête annonce sans que la charge le porte se rend à côté
+// d'elle, et le dépôt l'annonce. Un fichier
 // d'un format plus récent que FORMAT se lit réduit aux clés que le schéma
 // connaît, et ce qui serait FORME au format courant y porte la raison
 // FORMAT_PLUS_RECENT : la lecture ne le distingue pas d'une évolution du
@@ -507,13 +511,26 @@ function examinerTours({ evenement, reservations }, faute) {
   });
 }
 
-// Chaque compte de l'en-tête contre la charge, dans l'ordre du schéma ;
-// plus s'ajoute aux détails du refus.
+// Comptes de l'en-tête qui portent sur les placements : une proposition ou
+// un retenu perdus se recalculent, la saisie non.
+const COMPTES_DES_PLACEMENTS = new Set(['propositions', 'retenu']);
+
+// Chaque compte de la saisie dans l'en-tête contre la charge, dans l'ordre
+// du schéma ; plus s'ajoute aux détails du refus. Rend ce que les comptes
+// des placements annoncent sans que la charge le porte : propositions, le
+// nombre annoncé au-delà de la liste ; retenu, vrai quand il est annoncé et
+// absent. Un compte plus petit que sa liste ne dit pas quelle proposition
+// est en trop : la liste se lit telle quelle.
 function examinerComptes(comptes, charge, plus) {
   const reels = comptesDe(charge);
   for (const [cle] of COMPTES.champs) {
+    if (COMPTES_DES_PLACEMENTS.has(cle)) continue;
     if (comptes[cle] !== reels[cle]) illisible('COMPTES', `entete.comptes.${cle}`, plus);
   }
+  return {
+    propositions: Math.max(0, comptes.propositions - reels.propositions),
+    retenu: comptes.retenu > reels.retenu,
+  };
 }
 
 // Références des réservations, puis des titres : la personne et la table
@@ -539,8 +556,10 @@ function examinerReferences(charge, plus) {
 
 /**
  * Lit le texte d'un fichier d'état, sans rien écrire (§ 8.4, § 8.8). Une
- * marque d'ordre d'octets en tête est ignorée. Rend l'en-tête, la charge et
- * formatPlusRecent, vrai quand le format dépasse FORMAT. Au format courant,
+ * marque d'ordre d'octets en tête est ignorée. Rend l'en-tête, la charge,
+ * formatPlusRecent, vrai quand le format dépasse FORMAT, et manquants, ce que
+ * les comptes des propositions et du retenu annoncent sans que la charge le
+ * porte, qui ne refuse jamais le fichier (§ 8.9, point 3). Au format courant,
  * l'en-tête et la charge sont ceux que le texte porte, ni copiés ni triés :
  * canoniser les met dans l'ordre canonique. Un fichier d'un format plus
  * récent s'ouvre en lecture seule et ne se réécrit jamais : l'en-tête et la
@@ -583,9 +602,9 @@ export function analyser(texte) {
   const { entete, charge } = fichier;
   examinerIdentifiants(charge, faute);
   examinerTours(charge, faute);
-  examinerComptes(entete.comptes, charge, plus);
+  const manquants = examinerComptes(entete.comptes, charge, plus);
   examinerReferences(charge, plus);
-  return { entete, charge, formatPlusRecent };
+  return { entete, charge, formatPlusRecent, manquants };
 }
 
 /**
@@ -593,8 +612,12 @@ export function analyser(texte) {
  * appartenance et leur exclusion ; les tables avec leur capacité courante ;
  * le nombre de tours ; les réservations sans leur siège, que le moteur ne
  * lit pas, et sans tour pour la portée « tous » ; les quatre contraintes des
- * réglages. Les listes gardent l'ordre de la charge : le rang d'une
- * réservation que nomme une ErreurConfiguration est son rang dans la charge.
+ * réglages. Les tables vont par identifiant croissant, l'ordre du texte
+ * canonique : le moteur assoit table après table, et une charge aux tables
+ * dans un autre ordre, relue après un enregistrement, ne régénérerait plus
+ * ses propositions (§ 8.9). Les participants et les réservations gardent
+ * l'ordre de la charge : le rang d'une réservation que nomme une
+ * ErreurConfiguration est son rang dans la charge.
  *
  * @param {import('./types.js').Charge} charge
  * @returns {import('../moteur/types.js').Configuration}
@@ -603,7 +626,9 @@ export function configurationDepuisCharge(charge) {
   const { evenement, reglages } = charge;
   return {
     participants: charge.participants.map(({ id, nom, appartenance, exclu }) => ({ id, nom, appartenance, exclu })),
-    tables: charge.tables.map((table) => ({ id: table.id, numero: table.numero, capacite: capacite(charge, table) })),
+    tables: [...charge.tables]
+      .sort((a, b) => a.id - b.id)
+      .map((table) => ({ id: table.id, numero: table.numero, capacite: capacite(charge, table) })),
     tours: evenement.tours,
     reservations: charge.reservations.map(({ participant, table, portee, tour }) =>
       portee === 'tous' ? { participant, table, portee } : { participant, table, portee, tour },

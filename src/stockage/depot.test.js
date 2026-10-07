@@ -194,6 +194,40 @@ function remplacer(fichiers, nom, texte) {
 
 const texteDe = (fichiers, nom) => fichiers.find(([autre]) => autre === nom)[1];
 
+// Un disque neuf dont documents porte les fichiers, nom posé en octets.
+function disqueAvecOctets(fichiers, nom, octets) {
+  const { disque, fs } = disqueAvec(remplacer(fichiers, nom, null));
+  fs.deposerOctets('documents', nom, octets);
+  return { disque, fs };
+}
+
+// Les octets UTF-8 du texte, son premier « é » (C3 A9) remplacé par l'octet
+// E9 qu'écrit un éditeur réglé en windows-1252 : une suite qui n'est pas de
+// l'UTF-8.
+function malEncode(texte) {
+  const octets = [...new TextEncoder().encode(texte)];
+  const rang = octets.findIndex((octet, i) => octet === 0xc3 && octets[i + 1] === 0xa9);
+  assert.ok(rang >= 0, 'aucun « é » à mal encoder');
+  octets.splice(rang, 2, 0xe9);
+  return new Uint8Array(octets);
+}
+
+// Les octets UTF-8 d'un texte de journal, sa ligne de rang donné (0 pour
+// l'ouverture) ouverte par l'octet E9 suivi de « { » : une suite qui n'est
+// pas de l'UTF-8, sur cette ligne seule.
+function ligneMalEncodee(texte, rang) {
+  const lignes = texte.split('\n');
+  assert.ok(rang < lignes.length - 1, `aucune ligne ${rang}`);
+  const avant = new TextEncoder().encode(lignes.slice(0, rang).map((ligne) => `${ligne}\n`).join(''));
+  const apres = new TextEncoder().encode(lignes.slice(rang).join('\n'));
+  return new Uint8Array([...avant, 0xe9, ...apres]);
+}
+
+// Le rang de la ligne d'un texte de journal qui porte l'entrée de révision
+// donnée.
+const rangDeLEntree = (texte, revision) =>
+  texte.split('\n').findIndex((ligne) => ligne.startsWith('{"type":"entree"') && JSON.parse(ligne).revision === revision);
+
 // Ouvre base sur le disque par un processus neuf, en affirmant qu'ouvrir
 // n'écrit rien (§ 8.4).
 async function rouvrir(disque, base) {
@@ -592,6 +626,93 @@ describe('dépôt : un geste, une entrée, un état (§ 8.2)', () => {
       ],
     );
     assert.deepEqual((await rouvrir(disque, BASE)).journal, nomme.journal);
+  });
+
+  test("un journal effacé entre deux gestes ne reçoit pas d'ajout : le geste suivant le réécrit en entier, ouverture et entrées en mémoire comprises, JOURNAL_RECREE ; un jalon de même ; puis les ajouts reprennent", async () => {
+    const { disque, fs } = nouveauDisque();
+    let ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+    ouvert = await enregistrer(ouvert, gesteSur(ouvert.charge, 2), geste(2));
+    await fs.supprimer(DOC, JOURNAL);
+    const trace = tracer(fs);
+    ouvert = await enregistrer(ouvert, gesteSur(ouvert.charge, 3), geste(3));
+    assert.deepEqual(trace.splice(0), [
+      ['ecrireAtomique', JOURNAL],
+      ['ecrireAtomique', PRECEDENT],
+      ['ecrireAtomique', ETAT],
+    ]);
+    assert.deepEqual(ouvert.avertissements, [{ code: 'JOURNAL_RECREE', details: {} }]);
+    let journal = exigerEquivalence(fs, BASE);
+    assert.equal(journal.evenement, 'evt-lucioles');
+    assert.deepEqual(revisionsEtLibelles(journal), [
+      [1, CREATION.libelle],
+      [2, 'Geste 2'],
+      [3, 'Geste 3'],
+    ]);
+
+    await fs.supprimer(DOC, JOURNAL);
+    trace.splice(0);
+    ouvert = await nommer(ouvert, { nom: 'Avant le tirage', horodatage: heure(4) });
+    assert.deepEqual(trace.splice(0), [['ecrireAtomique', JOURNAL]]);
+    assert.deepEqual(ouvert.avertissements, [{ code: 'JOURNAL_RECREE', details: {} }]);
+    journal = exigerEquivalence(fs, BASE);
+    assert.deepEqual(
+      journal.jalons.map(({ revision, nom }) => [revision, nom]),
+      [
+        [1, 'Création'],
+        [3, 'Avant le tirage'],
+      ],
+    );
+
+    ouvert = await enregistrer(ouvert, gesteSur(ouvert.charge, 5), geste(5));
+    assert.deepEqual(trace.splice(0), [
+      ['ajouterLigne', JOURNAL],
+      ['ecrireAtomique', PRECEDENT],
+      ['ecrireAtomique', ETAT],
+    ]);
+    assert.deepEqual(ouvert.avertissements, []);
+    assert.equal(exigerEquivalence(fs, BASE).entrees.length, 4);
+    assert.deepEqual((await rouvrir(disque, BASE)).avertissements, []);
+  });
+
+  test("le journal présent se reconnaît comme le système compare les noms : sans égard à la casse, une base d'une autre casse ajoute en fin ; sensible à la casse, le nom exact", async () => {
+    const insensible = nouveauDisque();
+    await creer(insensible.fs, DOC, chargeEssai(), CREATION);
+    const autreCasse = await ouvrir(insensible.fs, DOC, BASE.toUpperCase());
+    const trace = tracer(insensible.fs);
+    const suite = await enregistrer(autreCasse, modifier(autreCasse.charge, 2), geste(2));
+    assert.deepEqual(trace[0], ['ajouterLigne', `${BASE.toUpperCase()}${SUFFIXES.journal}`]);
+    assert.deepEqual(suite.avertissements, []);
+    assert.equal(exigerEquivalence(insensible.fs, BASE).entrees.length, 2);
+
+    const sensible = nouveauDisque({ separateur: '/', insensibleCasse: false, documents: '/exemple/Documents' });
+    const racine = { id: 'documents', chemin: '/exemple/Documents' };
+    let ouvert = await creer(sensible.fs, racine, chargeEssai(), CREATION);
+    sensible.fs.deposer('documents', `${BASE.toUpperCase()}${SUFFIXES.journal}`, 'un autre fichier');
+    ouvert = await enregistrer(ouvert, modifier(ouvert.charge, 2), geste(2));
+    assert.deepEqual(ouvert.avertissements, []);
+    await sensible.fs.supprimer(racine, JOURNAL);
+    ouvert = await enregistrer(ouvert, modifier(ouvert.charge, 3), geste(3));
+    assert.deepEqual(ouvert.avertissements, [{ code: 'JOURNAL_RECREE', details: {} }]);
+    assert.equal(sensible.fs.contenu('documents', `${BASE.toUpperCase()}${SUFFIXES.journal}`), 'un autre fichier');
+  });
+
+  test("un dossier qui ne se liste plus au moment d'ajouter au journal lève ECRITURE sur le journal, sans rien écrire : ENOENT quand il a disparu, la cause d'une lecture refusée sinon", async () => {
+    for (const [nom, refus, cause] of [
+      ['disparu', (chemin) => new ErreurStockage('ABSENT', { chemin }), 'ENOENT'],
+      ['illisible', (chemin) => new ErreurStockage('LECTURE', { chemin, dossier: DOCUMENTS, cause: 'EACCES' }), 'EACCES'],
+    ]) {
+      const { disque, fs } = nouveauDisque();
+      const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+      const avant = await fichiersDe(disque);
+      const ecritures = fs.compteurs.ecritures;
+      fs.lister = async (racine, chemin) => {
+        throw refus(chemin);
+      };
+      const erreur = await echec(enregistrer(ouvert, modifier(ouvert.charge, 2), geste(2)), 'ECRITURE', nom);
+      assert.deepEqual(erreur.details, { chemin: JOURNAL, dossier: DOCUMENTS, cause }, nom);
+      assert.equal(fs.compteurs.ecritures, ecritures, nom);
+      assert.deepEqual(await fichiersDe(disque), avant, nom);
+    }
   });
 
   test("un geste refusé n'écrit rien : charge hors de sa forme, état qui ne se relirait pas, version absente, libellé ou nom vides", async () => {
@@ -1277,6 +1398,228 @@ describe('dépôt : un état illisible et ses secours (§ 8.8)', () => {
   });
 });
 
+describe('dépôt : des octets hors UTF-8 (§ 8.8)', () => {
+  test("un état aux octets hors UTF-8 lève ETAT_ILLISIBLE, raison ENCODAGE, avec ses secours, sans rien écrire ; lister le montre illisible, apparié par son .precedent", async () => {
+    const { fichiers } = await troisRevisions();
+    const { fs } = disqueAvecOctets(fichiers, ETAT, malEncode(texteDe(fichiers, ETAT)));
+    const erreur = await echec(ouvrir(fs, DOC, BASE), 'ETAT_ILLISIBLE');
+    assert.deepEqual(erreur.details, {
+      base: BASE,
+      raison: 'ENCODAGE',
+      chemin: null,
+      secours: { precedent: 2, journal: 3 },
+    });
+    assert.deepEqual(
+      (await lister(fs, DOC)).map(({ base, id, illisible, journal }) => [base, id, illisible, journal]),
+      [[BASE, 'evt-lucioles', 'ENCODAGE', BASE]],
+    );
+    assert.equal(fs.compteurs.ecritures, 0);
+  });
+
+  test("ouvert d'un secours, le premier geste met l'état aux octets hors UTF-8 dans un dossier neuf de la corbeille, daté du geste, ses octets intacts, puis écrit le journal et l'état ; un jalon n'écrit que le journal, sans toucher l'état", async () => {
+    const { fichiers } = await troisRevisions();
+    const octets = malEncode(texteDe(fichiers, ETAT));
+    const ecritureDuJournal = { journal: ['ajouterLigne', JOURNAL], precedent: ['ecrireAtomique', JOURNAL] };
+    for (const source of ['journal', 'precedent']) {
+      const { disque, fs } = disqueAvecOctets(fichiers, ETAT, octets);
+      // Le dossier de la même seconde, déjà pris pour le secours .precedent,
+      // fait prendre le rang suivant.
+      if (source === 'precedent') fs.deposerDossier('documents', 'corbeille/2031-05-17_08-04-00');
+      const corbeille = `corbeille/2031-05-17_08-04-00${source === 'precedent' ? '_2' : ''}`;
+      const ouvert = await ouvrirSecours(fs, DOC, BASE, source);
+      assert.deepEqual([ouvert.etatMalEncode, ouvert.texteEtat], [true, null], source);
+      const trace = tracer(fs);
+      const suite = await enregistrer(ouvert, modifier(ouvert.charge, 4), geste(4, { libelleReprise: REPRISE }));
+      assert.deepEqual(
+        trace,
+        [['creerDossier', corbeille], ['deplacer', ETAT], ecritureDuJournal[source], ['ecrireAtomique', ETAT]],
+        source,
+      );
+      assert.deepEqual(fs.octets('documents', `${corbeille}/${ETAT}`), octets, source);
+      assert.equal(fs.contenu('documents', PRECEDENT), texteDe(fichiers, PRECEDENT), source);
+      assert.equal(suite.etatMalEncode, false, source);
+      exigerEquivalence(fs, BASE);
+      const rouvert = await rouvrir(disque, BASE);
+      assert.deepEqual([rouvert.revision, rouvert.avertissements], [suite.revision, []], source);
+    }
+
+    const { fs } = disqueAvecOctets(fichiers, ETAT, octets);
+    const parJournal = await ouvrirSecours(fs, DOC, BASE, 'journal');
+    const trace = tracer(fs);
+    const nomme = await nommer(parJournal, { nom: 'Avant la reprise', horodatage: heure(5) });
+    assert.deepEqual(trace, [['ajouterLigne', JOURNAL]]);
+    assert.equal(nomme.etatMalEncode, true);
+    assert.deepEqual(fs.octets('documents', ETAT), octets);
+  });
+
+  test("un geste refusé après la mise de côté de l'état aux octets hors UTF-8 se réessaie du même Ouvert sans rien déplacer de nouveau : un seul dossier daté, qui garde les octets", async () => {
+    const { fichiers } = await troisRevisions();
+    const octets = malEncode(texteDe(fichiers, ETAT));
+    const { fs } = disqueAvecOctets(fichiers, ETAT, octets);
+    const ouvert = await ouvrirSecours(fs, DOC, BASE, 'journal');
+    const ajouter = fs.ajouterLigne;
+    fs.ajouterLigne = async (racine, chemin) => {
+      fs.ajouterLigne = ajouter;
+      throw new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EIO' });
+    };
+    const options = geste(4, { libelleReprise: REPRISE });
+    await echec(enregistrer(ouvert, modifier(ouvert.charge, 4), options), 'ECRITURE');
+    assert.equal(fs.contenu('documents', JOURNAL), texteDe(fichiers, JOURNAL));
+    const trace = tracer(fs);
+    await enregistrer(ouvert, modifier(ouvert.charge, 4), options);
+    assert.deepEqual(trace, [
+      ['ajouterLigne', JOURNAL],
+      ['ecrireAtomique', ETAT],
+    ]);
+    assert.deepEqual(
+      (await fs.lister(DOC, 'corbeille')).map(({ nom }) => nom),
+      ['2031-05-17_08-04-00'],
+    );
+    assert.deepEqual(fs.octets('documents', `corbeille/2031-05-17_08-04-00/${ETAT}`), octets);
+    exigerEquivalence(fs, BASE);
+  });
+
+  test("une corbeille qui ne se liste plus, au moment de mettre de côté l'état aux octets hors UTF-8, lève ECRITURE sur la corbeille sans rien écrire : l'état reste à sa place", async () => {
+    const { fichiers } = await troisRevisions();
+    const octets = malEncode(texteDe(fichiers, ETAT));
+    const { fs } = disqueAvecOctets(fichiers, ETAT, octets);
+    const ouvert = await ouvrirSecours(fs, DOC, BASE, 'journal');
+    const lister = fs.lister;
+    fs.lister = async (racine, dossier) => {
+      if (dossier !== 'corbeille') return lister(racine, dossier);
+      throw new ErreurStockage('LECTURE', { chemin: dossier, dossier: racine.chemin, cause: 'EACCES' });
+    };
+    const ecritures = fs.compteurs.ecritures;
+    const erreur = await echec(enregistrer(ouvert, modifier(ouvert.charge, 4), geste(4)), 'ECRITURE');
+    assert.deepEqual(erreur.details, { chemin: 'corbeille', dossier: DOCUMENTS, cause: 'EACCES' });
+    assert.equal(fs.compteurs.ecritures, ecritures);
+    assert.deepEqual(fs.octets('documents', ETAT), octets);
+  });
+
+  test("un .precedent aux octets hors UTF-8 ne gêne pas l'état lisible ; ouvert en secours, il lève ETAT_ILLISIBLE ENCODAGE ; un état illisible à côté de lui s'apparie par son journal", async () => {
+    const { fichiers } = await troisRevisions();
+    const { fs } = disqueAvecOctets(fichiers, PRECEDENT, malEncode(texteDe(fichiers, PRECEDENT)));
+    const ouvert = await ouvrir(fs, DOC, BASE);
+    assert.deepEqual([ouvert.revision, ouvert.etatMalEncode, ouvert.avertissements], [3, false, []]);
+    const erreur = await echec(ouvrirSecours(fs, DOC, BASE, 'precedent'), 'ETAT_ILLISIBLE');
+    assert.deepEqual(erreur.details, { raison: 'ENCODAGE', chemin: null });
+    fs.deposer('documents', ETAT, '');
+    const illisible = await echec(ouvrir(fs, DOC, BASE), 'ETAT_ILLISIBLE');
+    assert.deepEqual(illisible.details, {
+      base: BASE,
+      raison: 'VIDE',
+      chemin: null,
+      secours: { precedent: null, journal: 3 },
+    });
+    assert.deepEqual(
+      (await lister(fs, DOC)).map(({ base, id, illisible: raison }) => [base, id, raison]),
+      [[BASE, 'evt-lucioles', 'VIDE']],
+    );
+    assert.equal(fs.compteurs.ecritures, 0);
+  });
+
+  test("un journal dont la ligne d'ouverture n'est pas de l'UTF-8 n'empêche pas d'ouvrir l'état : il n'est ni lu, ni apparié, ni remplacé, JOURNAL_ILLISIBLE {raison: ENCODAGE} ; le premier geste écrit l'historique sous une base libre, que la réouverture apparie", async () => {
+    const { fichiers } = await troisRevisions();
+    const octets = ligneMalEncodee(texteDe(fichiers, JOURNAL), 0);
+    const { disque, fs } = disqueAvecOctets(fichiers, JOURNAL, octets);
+    const ouvert = await ouvrir(fs, DOC, BASE);
+    assert.equal(fs.compteurs.ecritures, 0);
+    assert.deepEqual([ouvert.revision, ouvert.journal, ouvert.baseJournal], [3, null, null]);
+    assert.deepEqual(ouvert.avertissements, [{ code: 'JOURNAL_ILLISIBLE', details: { raison: 'ENCODAGE' } }]);
+    assert.deepEqual(
+      (await lister(fs, DOC)).map(({ base, id, illisible, journal }) => [base, id, illisible, journal]),
+      [[BASE, 'evt-lucioles', null, null]],
+    );
+    const secours = await echec(ouvrirSecours(fs, DOC, BASE, 'journal'), 'ETAT_ILLISIBLE');
+    assert.deepEqual(secours.details, { raison: 'ENCODAGE', chemin: JOURNAL });
+
+    const suite = await enregistrer(ouvert, modifier(ouvert.charge, 4), geste(4, { libelleReprise: REPRISE }));
+    assert.notEqual(suite.baseJournal, BASE);
+    assert.deepEqual(fs.octets('documents', JOURNAL), octets);
+    const journal = exigerEquivalence(fs, BASE, { journal: suite.baseJournal });
+    assert.deepEqual(revisionsEtLibelles(journal), [
+      [3, REPRISE],
+      [4, 'Geste 4'],
+    ]);
+    const rouvert = await rouvrir(disque, BASE);
+    assert.deepEqual([rouvert.revision, rouvert.baseJournal, rouvert.avertissements], [4, suite.baseJournal, []]);
+    assert.deepEqual(
+      (await lister(fs, DOC)).map(({ base, journal: apparie }) => [base, apparie]),
+      [[BASE, suite.baseJournal]],
+    );
+  });
+
+  test("un journal seul dont la ligne d'ouverture n'est pas de l'UTF-8 se liste sans identifiant, et s'ouvre en ETAT_ILLISIBLE ABSENT sans secours, non en ABSENT : il existe", async () => {
+    const { fichiers } = await troisRevisions();
+    const { fs } = disqueAvecOctets([], JOURNAL, ligneMalEncodee(texteDe(fichiers, JOURNAL), 0));
+    assert.deepEqual(
+      (await lister(fs, DOC)).map(({ base, id, illisible, journal }) => [base, id, illisible, journal]),
+      [[BASE, null, 'ABSENT', BASE]],
+    );
+    const erreur = await echec(ouvrir(fs, DOC, BASE), 'ETAT_ILLISIBLE');
+    assert.deepEqual(erreur.details, {
+      base: BASE,
+      raison: 'ABSENT',
+      chemin: null,
+      secours: { precedent: null, journal: null },
+    });
+    assert.equal(fs.compteurs.ecritures, 0);
+  });
+
+  test("une dernière ligne de journal coupée au milieu d'un caractère de deux octets s'écarte comme une ligne illisible, JOURNAL_ECARTEES {n: 1} : le journal reste celui de l'événement, apparié et ouvrable en secours, et le premier geste le réécrit sans elle", async () => {
+    const { fichiers } = await troisRevisions();
+    const texte = texteDe(fichiers, JOURNAL);
+    const coupee = new TextEncoder().encode('{"type":"entree","revision":4,"libelle":"Ajout de Th');
+    const octets = new Uint8Array([...new TextEncoder().encode(texte), ...coupee, 0xc3]);
+    const { disque, fs } = disqueAvecOctets(fichiers, JOURNAL, octets);
+    const ouvert = await ouvrir(fs, DOC, BASE);
+    assert.equal(fs.compteurs.ecritures, 0);
+    assert.deepEqual([ouvert.revision, ouvert.baseJournal, ouvert.journalAReecrire], [3, BASE, true]);
+    assert.deepEqual(revisionsEtLibelles(ouvert.journal), revisionsEtLibelles(lireJournal(texte)));
+    assert.deepEqual(ouvert.avertissements, [{ code: 'JOURNAL_ECARTEES', details: { n: 1 } }]);
+    assert.deepEqual(
+      (await lister(fs, DOC)).map(({ base, id, illisible, journal }) => [base, id, illisible, journal]),
+      [[BASE, 'evt-lucioles', null, BASE]],
+    );
+    assert.equal((await ouvrirSecours(fs, DOC, BASE, 'journal')).revision, 3);
+    assert.equal(fs.compteurs.ecritures, 0);
+
+    const suite = await enregistrer(ouvert, modifier(ouvert.charge, 4), geste(4));
+    assert.equal(suite.baseJournal, BASE);
+    const journal = exigerEquivalence(fs, BASE);
+    assert.deepEqual(
+      journal.entrees.map(({ revision }) => revision),
+      [1, 2, 3, 4],
+    );
+    assert.deepEqual(
+      (await fichiersDe(disque)).map(([nom]) => nom),
+      [JOURNAL, ETAT, PRECEDENT],
+    );
+    const rouvert = await rouvrir(disque, BASE);
+    assert.deepEqual([rouvert.revision, rouvert.avertissements], [4, []]);
+  });
+
+  test("un octet hors UTF-8 dans l'entrée 37 d'un journal de 100 entrées arrête la lecture sur elle : 36 entrées retenues, 64 écartées et comptées, le journal toujours apparié", async () => {
+    const { disque, fs } = nouveauDisque();
+    let ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+    for (let n = 2; n <= 100; n += 1) ouvert = await enregistrer(ouvert, modifier(ouvert.charge, n), geste(n));
+    const texte = fs.contenu('documents', JOURNAL);
+    assert.equal(lireJournal(texte).entrees.length, 100);
+    fs.deposerOctets('documents', JOURNAL, ligneMalEncodee(texte, rangDeLEntree(texte, 37)));
+    const rouvert = await rouvrir(disque, BASE);
+    assert.deepEqual(
+      rouvert.journal.entrees.map(({ revision }) => revision),
+      Array.from({ length: 36 }, (_, i) => i + 1),
+    );
+    assert.equal(rouvert.journal.ecartees, 64);
+    assert.equal(rouvert.baseJournal, BASE);
+    assert.deepEqual(rouvert.avertissements, [
+      { code: 'JOURNAL_INCOMPLET', details: { etat: 100, journal: 36 } },
+      { code: 'JOURNAL_ECARTEES', details: { n: 64 } },
+    ]);
+  });
+});
+
 describe("dépôt : l'état sans journal, et le journal apparié par identifiant (§ 8.6)", () => {
   test("un état sans journal s'ouvre ; le premier geste crée le journal par une entrée de reprise, instantané de l'état trouvé", async () => {
     const charge = chargeEssai();
@@ -1713,6 +2056,58 @@ describe('dépôt : propositions fautives et périmées, retenu fautif (§ 8.9)'
       [[2, ['DOUBLON', 'MANQUANT']]],
     );
     assert.equal(ouvert.charge.participants.length, 4);
+  });
+
+  test("une proposition que l'en-tête compte sans que la liste la porte s'annonce par leur nombre, PROPOSITIONS_MANQUANTES {n}, et un retenu annoncé absent, RETENU_FAUTIF : le fichier s'ouvre ; rattrapé du journal, ou après un geste, plus rien ne manque", async () => {
+    const charge = chargeEssai();
+    charge.propositions.push(placement(2, [[1, 2], [3, 4]]));
+    charge.prochainsIds.proposition = 3;
+    charge.retenu = retenuDe(charge.propositions[0]);
+    const { disque, fs } = nouveauDisque();
+    const cree = await creer(fs, DOC, charge, CREATION);
+    await enregistrer(cree, modifier(cree.charge, 2), geste(2));
+    const fichiers = await fichiersDe(disque);
+    // L'état perd la proposition 1 et le retenu, ses comptes intacts.
+    const tronquer = (texte) => {
+      const fichier = JSON.parse(texte);
+      fichier.charge.propositions.shift();
+      fichier.charge.retenu = null;
+      return JSON.stringify(fichier);
+    };
+    const tronque = tronquer(texteDe(fichiers, ETAT));
+    assert.deepEqual(analyser(tronque).manquants, { propositions: 1, retenu: true });
+
+    const sansJournal = disqueAvec([[ETAT, tronque]]);
+    const ouvert = await rouvrir(sansJournal.disque, BASE);
+    assert.deepEqual(ouvert.avertissements, [
+      { code: 'RETENU_FAUTIF', details: {} },
+      { code: 'PROPOSITIONS_MANQUANTES', details: { n: 1 } },
+    ]);
+    assert.deepEqual([ouvert.charge.propositions.map(({ id }) => id), ouvert.charge.retenu], [[2], null]);
+    const suite = await enregistrer(ouvert, modifier(ouvert.charge, 3), geste(3, { libelleReprise: REPRISE }));
+    assert.deepEqual(suite.avertissements, []);
+    const relu = analyser(sansJournal.fs.contenu('documents', ETAT));
+    assert.deepEqual(relu.manquants, { propositions: 0, retenu: false });
+
+    // Le journal en avance d'une entrée rend sa charge, qui ne manque de rien.
+    const enRetard = tronquer(texteDe(fichiers, PRECEDENT));
+    const avecJournal = disqueAvec(remplacer(fichiers, ETAT, enRetard));
+    const rattrape = await rouvrir(avecJournal.disque, BASE);
+    assert.deepEqual(rattrape.avertissements, [{ code: 'JOURNAL_REPRIS', details: {} }]);
+    assert.deepEqual([rattrape.revision, rattrape.charge.propositions.length], [2, 2]);
+    assert.notEqual(rattrape.charge.retenu, null);
+  });
+
+  test("un en-tête qui annonce 2^40 propositions s'ouvre : PROPOSITIONS_MANQUANTES ne porte que leur nombre, jamais une liste de cette taille, à côté des fautives nommées", async () => {
+    const fichier = JSON.parse(etatTexte(avecFautive()));
+    fichier.entete.comptes.propositions = 2 ** 40;
+    const { disque } = disqueAvec([[ETAT, JSON.stringify(fichier)]]);
+    const ouvert = await rouvrir(disque, BASE);
+    assert.deepEqual(ouvert.avertissements, [
+      { code: 'PROPOSITIONS_FAUTIVES', details: { ids: [2] } },
+      { code: 'PROPOSITIONS_MANQUANTES', details: { n: 2 ** 40 - 2 } },
+    ]);
+    assert.ok(JSON.stringify(ouvert.avertissements).length < 200);
   });
 
   test('une proposition et un retenu périmés sont gardés et signalés, DERIVE : personne exclue, table supprimée, capacité réduite, tour retiré, personne ajoutée', async () => {
@@ -2455,9 +2850,19 @@ describe('dépôt : le verrou, et écrire ailleurs (§ 8.6, § 8.8)', () => {
     await echec(basesPrises(creerFichiersSimules({ disque: new Map() }), DOC), 'ABSENT');
   });
 
-  test("une lecture qui échoue autrement que sur un fichier absent remonte telle quelle : un chemin refusé lève CHEMIN_REFUSE", async () => {
+  test("une lecture qui échoue autrement que sur un fichier absent ou mal encodé remonte telle quelle : un chemin refusé lève CHEMIN_REFUSE, une lecture refusée LECTURE", async () => {
     const { fs } = nouveauDisque();
     await echec(ouvrir(fs, DOC, '../ailleurs'), 'CHEMIN_REFUSE');
-    assert.equal(fs.compteurs.ecritures, 0);
+    await creer(fs, DOC, chargeEssai(), CREATION);
+    const ecritures = fs.compteurs.ecritures;
+    fs.lireTexte = async (racine, chemin) => {
+      throw new ErreurStockage('LECTURE', { chemin, dossier: DOCUMENTS, cause: 'EACCES' });
+    };
+    assert.deepEqual((await echec(ouvrir(fs, DOC, BASE), 'LECTURE')).details, {
+      chemin: ETAT,
+      dossier: DOCUMENTS,
+      cause: 'EACCES',
+    });
+    assert.equal(fs.compteurs.ecritures, ecritures);
   });
 });

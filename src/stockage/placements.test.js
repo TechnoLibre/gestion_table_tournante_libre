@@ -209,8 +209,9 @@ function refusDe(appel) {
 // aucune valeur au-delà.
 const COMPTEUR_SATURE = Object.freeze({ code: 'COMPTEUR_SATURE', details: Object.freeze({ compteur: 'proposition' }) });
 
-// Une ligne attendue de la forme nommée.
-const ligne = (tour, idTable, numero, siege, participant, nom, prenom) => ({
+// Une ligne attendue de la forme nommée : sans table, une ligne de la
+// réserve, sauf quand enReserve dit le contraire.
+const ligne = (tour, idTable, numero, siege, participant, nom, prenom, enReserve = idTable === null) => ({
   tour,
   table: idTable,
   numero,
@@ -218,6 +219,7 @@ const ligne = (tour, idTable, numero, siege, participant, nom, prenom) => ({
   participant,
   nom,
   prenom,
+  reserve: enReserve,
 });
 
 describe('versFichier et planDepuisFichier : la proposition du moteur et sa forme positionnelle (§ 8.9)', () => {
@@ -1306,17 +1308,90 @@ describe('formeNommee : la lecture et le signalement (§ 8.9, point 4)', () => {
     ]);
   });
 
-  test("planDepuisFichier, derive et formeNommee refusent une proposition fautive par TypeError, au lieu d'en rendre une lecture fausse ; fautes ne lève jamais", () => {
+  test("un placement incohérent se rend pour le signalement de son défaut, une ligne par identifiant écrit, ses fautes à côté (fautes) : doublon, inconnu, liste au-delà de sa capacité, liste en trop sans table, liste ou tour en moins", () => {
+    const charge = chargePetite();
+    const casDe = (abimer) => {
+      const p = fichierParfait();
+      abimer(p);
+      return p;
+    };
+    const cas = [
+      [
+        'un assis aussi dans la réserve',
+        casDe((p) => { p.placement[0].reserve = [2]; }),
+        ['DOUBLON'],
+        (lignes) => {
+          assert.equal(lignes.length, 49);
+          assert.deepEqual(lignes.filter(({ tour, participant }) => tour === 1 && participant === 2), [
+            ligne(1, 1, 1, null, 2, 'Bruyère', 'Basile'),
+            ligne(1, null, null, null, 2, 'Bruyère', 'Basile'),
+          ]);
+        },
+      ],
+      [
+        "un inconnu à la place d'un déclaré",
+        casDe((p) => { p.placement[1].sieges[0][0] = 99; }),
+        ['INCONNU', 'MANQUANT'],
+        (lignes) => {
+          assert.equal(lignes.length, 48);
+          assert.deepEqual(lignes.filter(({ participant }) => participant === 99), [
+            ligne(2, 1, 1, null, 99, null, null),
+          ]);
+        },
+      ],
+      [
+        'une table au-delà de sa capacité, une liste en trop',
+        casDe((p) => {
+          p.siegesAttribues = true;
+          p.placement[0].sieges[0].push(4);
+          p.placement[0].sieges.push([5, 6]);
+        }),
+        ['LONGUEUR', 'LONGUEUR', 'DOUBLON', 'DOUBLON', 'DOUBLON'],
+        (lignes) => {
+          assert.equal(lignes.length, 51);
+          assert.deepEqual(lignes.filter(({ tour }) => tour === 1).slice(0, 4).map(({ siege, participant }) => [siege, participant]), [
+            [1, 1],
+            [2, 2],
+            [3, 3],
+            [4, 4],
+          ]);
+          assert.deepEqual(lignes.filter(({ tour }) => tour === 1).slice(-2), [
+            ligne(1, null, null, 1, 5, 'Églantine', 'Edmée', false),
+            ligne(1, null, null, 2, 6, 'Fougère', 'Firmin', false),
+          ]);
+        },
+      ],
+      [
+        'une liste et un tour en moins',
+        casDe((p) => {
+          p.placement[0].sieges.pop();
+          p.placement.pop();
+        }),
+        ['LONGUEUR', 'LONGUEUR', 'MANQUANT', 'MANQUANT', 'MANQUANT'],
+        (lignes) => {
+          assert.equal(lignes.length, 33);
+          assert.deepEqual([...new Set(lignes.map(({ tour }) => tour))], [1, 2, 3]);
+          assert.equal(lignes.filter(({ tour, table }) => tour === 1 && table === 4).length, 0);
+        },
+      ],
+    ];
+    for (const [nom, p, codes, verifier] of cas) {
+      assert.deepEqual(fautes(p).map(({ code }) => code), codes, nom);
+      verifier(formeNommee(p, charge));
+    }
+  });
+
+  test("planDepuisFichier et derive refusent une proposition fautive par TypeError, au lieu d'en rendre une lecture fausse ; formeNommee ne refuse qu'une forme fausse ; fautes ne lève jamais", () => {
     const charge = chargePetite();
     const abimee = fichierParfait();
     abimee.placement[0].sieges[0].pop();
     for (const [nom, appel] of [
       ['planDepuisFichier', () => planDepuisFichier(abimee)],
       ['derive', () => derive(abimee, charge)],
-      ['formeNommee', () => formeNommee(abimee, charge)],
     ]) {
       leveTypeError(appel, /"MANQUANT"/, nom);
     }
+    assert.equal(formeNommee(abimee, charge).length, 47);
     for (const illisible of [42, undefined, { ...fichierParfait(), placement: 'x' }]) {
       leveTypeError(() => planDepuisFichier(illisible), /"FORME"/, String(illisible));
       leveTypeError(() => derive(illisible, charge), /"FORME"/, String(illisible));

@@ -29,8 +29,10 @@
 //
 // Deux codes s'ajoutent à ceux de l'interface : LECTURE {chemin, dossier,
 // cause}, une lecture que le système refuse autrement que sur un absent — un
-// dossier illisible n'est pas un dossier vide —, et NON_DISPONIBLE {cause},
-// l'explorateur du système qui ne s'ouvre pas.
+// dossier illisible n'est pas un dossier vide —, ou un fichier dont les
+// octets ne sont pas de l'UTF-8, cause UTF8_INVALIDE, ses détails portant
+// alors aussi octets, un Uint8Array que l'IPC transporte ; et NON_DISPONIBLE
+// {cause}, l'explorateur du système qui ne s'ouvre pas.
 import { execFile } from 'node:child_process';
 import { realpath as realpathRappel } from 'node:fs';
 import { lstat, mkdir, open, readdir, readFile, rename, stat, unlink } from 'node:fs/promises';
@@ -104,9 +106,18 @@ const SEGMENT_ADMIS = /^[^\\:\u{0}]*[^\\:\u{0}. ]$/u;
 const ABSENCE = new Set(['ENOENT', 'ENOTDIR']);
 const ABSENCE_EN_LECTURE = new Set(['ENOENT', 'ENOTDIR', 'EISDIR']);
 
+// Décodage strict d'un fichier lu : un octet hors UTF-8 lève au lieu de se
+// lire U+FFFD, et la marque d'ordre d'octets reste dans le texte.
+const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
+// Le remplaçant JSON d'un détail : un Uint8Array devient « N octets », comme
+// dans le message d'une ErreurStockage.
+const sansOctets = (cle, valeur) => (valeur instanceof Uint8Array ? `${valeur.length} octets` : valeur);
+
 /**
  * Un échec que l'interface nomme : le code et les détails d'une
- * ErreurStockage (src/stockage/types.js en donne la table).
+ * ErreurStockage (src/stockage/types.js en donne la table). Le message écrit
+ * les détails en JSON, un détail en octets par son seul nombre d'octets.
  */
 export class RefusFichier extends Error {
   /**
@@ -114,7 +125,7 @@ export class RefusFichier extends Error {
    * @param {Object} details
    */
   constructor(code, details) {
-    super(`${code} ${JSON.stringify(details)}`);
+    super(`${code} ${JSON.stringify(details, sansOctets)}`);
     this.code = code;
     this.details = details;
   }
@@ -598,11 +609,18 @@ export function creerFichiers({
 
     async lireTexte(racine, chemin) {
       const loc = localiser(racine, chemin);
+      let octets;
       try {
         await confiner(loc);
-        return (await fs.readFile(loc.absolu)).toString('utf8');
+        octets = await fs.readFile(loc.absolu);
       } catch (erreur) {
         throw echecLecture(loc, erreur);
+      }
+      try {
+        return UTF8_STRICT.decode(octets);
+      } catch {
+        const details = { chemin: loc.chemin, dossier: loc.dossier, cause: 'UTF8_INVALIDE' };
+        throw new RefusFichier('LECTURE', { ...details, octets: new Uint8Array(octets) });
       }
     },
 

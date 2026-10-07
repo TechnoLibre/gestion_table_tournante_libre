@@ -710,6 +710,32 @@ describe('coquille, fichiers : lecture, liste, dossiers, déplacement, suppressi
     await refuse(fichiers.lireTexte(DOC, 'bom.csv'), 'LECTURE', { chemin: 'bom.csv', dossier: DOCUMENTS, cause: 'EACCES' });
   });
 
+  test("lireTexte décode strictement : des octets hors UTF-8 lèvent LECTURE {chemin, dossier, cause: UTF8_INVALIDE, octets}, sans rien remplacer par U+FFFD ; octets est un Uint8Array, que l'IPC transporte, et le message n'en dit que le nombre", async () => {
+    const { disque, fichiers } = preparer();
+    // Un « è » enregistré en windows-1252, l'octet E8, au milieu d'un texte.
+    const octets = new Uint8Array([0x7b, 0x22, 0x69, 0xe8, 0x22, 0x7d]);
+    disque.deposer(`${DOCUMENTS}/archives/soiree.gtt.json`, octets);
+    const refus = await refuse(fichiers.lireTexte(DOC, 'archives/soiree.gtt.json'), 'LECTURE', {
+      chemin: 'archives/soiree.gtt.json',
+      dossier: `${DOCUMENTS}/archives`,
+      cause: 'UTF8_INVALIDE',
+      octets,
+    });
+    assert.equal(Object.getPrototypeOf(refus.details.octets), Uint8Array.prototype);
+    assert.equal(
+      refus.message,
+      `LECTURE {"chemin":"archives/soiree.gtt.json","dossier":"${DOCUMENTS}/archives","cause":"UTF8_INVALIDE","octets":"6 octets"}`,
+    );
+    // Une suite tronquée en fin de fichier n'est pas de l'UTF-8 non plus.
+    disque.deposer(`${DOCUMENTS}/tronque.jsonl`, new Uint8Array([0x61, 0xc3]));
+    await refuse(fichiers.lireTexte(DOC, 'tronque.jsonl'), 'LECTURE', {
+      chemin: 'tronque.jsonl',
+      dossier: DOCUMENTS,
+      cause: 'UTF8_INVALIDE',
+      octets: new Uint8Array([0x61, 0xc3]),
+    });
+  });
+
   test("lister trie par unités UTF-16, type les entrées, donne 0 octet à un dossier et passe un lien sans cible", async () => {
     const { disque, fichiers } = preparer();
     disque.deposer(`${DOCUMENTS}/b.txt`, 'bb');

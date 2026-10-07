@@ -14,6 +14,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { STATUT, normaliser } from '../moteur/configuration.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { HISTORIQUE_PAR_DEFAUT } from '../moteur/recherche.js';
+import { texteLivre } from '../demo/livrees.js';
 import { VERSION } from '../version.genere.js';
 import { serialiser } from './canonique.js';
 import {
@@ -231,6 +232,16 @@ describe('ErreurStockage (erreurs.js)', () => {
     assert.deepEqual(sansDetails.details, {});
     assert.equal(sansDetails.message, 'CORRECTIF {}');
   });
+
+  test("le message d'un détail en octets n'en dit que le nombre : les octets d'un fichier entier ne s'écrivent pas dans une trace", () => {
+    const octets = new Uint8Array(1 << 20);
+    const erreur = new ErreurStockage('LECTURE', { chemin: 'veillee.gtt-journal.jsonl', cause: 'UTF8_INVALIDE', octets });
+    assert.equal(erreur.details.octets, octets);
+    assert.equal(
+      erreur.message,
+      'LECTURE {"chemin":"veillee.gtt-journal.jsonl","cause":"UTF8_INVALIDE","octets":"1048576 octets"}',
+    );
+  });
 });
 
 describe('creerCharge (§ 4, § 6.1, § 9)', () => {
@@ -299,7 +310,12 @@ describe('creerCharge (§ 4, § 6.1, § 9)', () => {
 describe('analyser : ce qui se lit (§ 8.8)', () => {
   test('le document valide se lit : son en-tête et sa charge tels que le texte les porte, au format courant', () => {
     const { entete, charge } = documentValide();
-    assert.deepEqual(analyser(JSON.stringify(documentValide())), { entete, charge, formatPlusRecent: false });
+    assert.deepEqual(analyser(JSON.stringify(documentValide())), {
+      entete,
+      charge,
+      formatPlusRecent: false,
+      manquants: { propositions: 0, retenu: false },
+    });
   });
 
   test('variantes admises : chacune se lit sans refus', () => {
@@ -645,7 +661,11 @@ describe('analyser : identifiants et tours (§ 4)', () => {
         modifier(attendu);
         attendu.entete.format = format;
         try {
-          assert.deepEqual(analyser(JSON.stringify(attendu)), { ...attendu, formatPlusRecent: format > FORMAT });
+          assert.deepEqual(analyser(JSON.stringify(attendu)), {
+            ...attendu,
+            formatPlusRecent: format > FORMAT,
+            manquants: { propositions: 0, retenu: false },
+          });
           return [];
         } catch (erreur) {
           return [`${libelle}, format ${format} : ${erreur.message.split('\n')[0]}`];
@@ -666,19 +686,33 @@ describe('analyser : identifiants et tours (§ 4)', () => {
 });
 
 describe('analyser : comptes de l\'en-tête (§ 8.8)', () => {
-  test('chaque compte se compare à sa liste, le retenu à 0 ou 1', () => {
+  test('les comptes de la saisie — participants, tables, réservations, titres — se comparent à leur liste et refusent le fichier', () => {
     assert.deepEqual(ecartsDeRefus([
       ['un participant perdu', abime((d) => { d.charge.participants.pop(); }), 'COMPTES', 'entete.comptes.participants'],
       ['une table annoncée en trop', abime((d) => { d.entete.comptes.tables = 3; }), 'COMPTES', 'entete.comptes.tables'],
       ['une réservation annoncée en moins',
         abime((d) => { d.entete.comptes.reservations = 1; }), 'COMPTES', 'entete.comptes.reservations'],
       ['un titre annoncé en trop', abime((d) => { d.entete.comptes.titres = 2; }), 'COMPTES', 'entete.comptes.titres'],
-      ['aucune proposition annoncée',
-        abime((d) => { d.entete.comptes.propositions = 0; }), 'COMPTES', 'entete.comptes.propositions'],
-      ['un retenu annoncé, aucun écrit', abime((d) => { d.entete.comptes.retenu = 1; }), 'COMPTES', 'entete.comptes.retenu'],
-      ['un retenu écrit, aucun annoncé',
-        abime((d) => { d.charge.retenu = retenuValide(); }), 'COMPTES', 'entete.comptes.retenu'],
     ]), []);
+  });
+
+  test("les comptes des propositions et du retenu ne refusent jamais le fichier (§ 8.9, point 3) : manquants rend les propositions annoncées au-delà de la liste et le retenu annoncé absent ; une liste plus longue que son compte se lit telle quelle", () => {
+    const manquantsDe = (modifier) => analyser(abime(modifier)).manquants;
+    assert.deepEqual(manquantsDe(() => {}), { propositions: 0, retenu: false });
+    assert.deepEqual(manquantsDe((d) => { d.charge.propositions = []; }), { propositions: 1, retenu: false });
+    assert.deepEqual(manquantsDe((d) => { d.entete.comptes.propositions = 3; }), { propositions: 2, retenu: false });
+    assert.deepEqual(manquantsDe((d) => { d.entete.comptes.retenu = 1; }), { propositions: 0, retenu: true });
+    assert.deepEqual(manquantsDe((d) => { d.entete.comptes.propositions = 0; }), { propositions: 0, retenu: false });
+    const retenuNonAnnonce = analyser(abime((d) => { d.charge.retenu = retenuValide(); }));
+    assert.deepEqual(retenuNonAnnonce.manquants, { propositions: 0, retenu: false });
+    assert.deepEqual(retenuNonAnnonce.charge.retenu, retenuValide());
+    // Au format plus récent de même.
+    const plusRecent = analyser(abime((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.propositions = [];
+      d.entete.comptes.retenu = 1;
+    }));
+    assert.deepEqual(plusRecent.manquants, { propositions: 1, retenu: true });
   });
 });
 
@@ -756,7 +790,12 @@ describe('analyser : format plus récent (§ 8.8, § 18.6)', () => {
       d.charge.propositions[0].note = 'refaite';
       d.charge.propositions[0].placement[0].commentaire = 'tour calme';
     }));
-    assert.deepEqual(etendu, { entete: { ...entete, format: 2 }, charge, formatPlusRecent: true });
+    assert.deepEqual(etendu, {
+      entete: { ...entete, format: 2 },
+      charge,
+      formatPlusRecent: true,
+      manquants: { propositions: 0, retenu: false },
+    });
   });
 
   test("dans un format plus récent, toute autre faute de forme lève FORMAT_PLUS_RECENT avec le format lu ; comptes et références gardent leur raison et portent le format lu", () => {
@@ -852,14 +891,28 @@ describe('configurationDepuisCharge (§ 6.1)', () => {
     });
   });
 
-  test("les listes gardent l'ordre de la charge : le rang d'une réservation que nomme une ErreurConfiguration est son rang dans la charge", () => {
+  test("les tables vont par identifiant croissant, l'ordre du texte canonique : une charge aux tables dans le désordre et sa copie canonique donnent la même configuration, donc à graine égale le même plan (§ 8.9)", () => {
+    const { charge } = analyser(texteLivre('grande-sans-exception'));
+    const desordre = structuredClone(charge);
+    [desordre.tables[0], desordre.tables[1]] = [desordre.tables[1], desordre.tables[0]];
+    desordre.tables.push(desordre.tables.shift());
+    assert.notDeepEqual(desordre.tables.map(({ id }) => id), charge.tables.map(({ id }) => id));
+    const canonique = configurationDepuisCharge(charge);
+    assert.deepEqual(configurationDepuisCharge(desordre), canonique);
+    assert.deepEqual(
+      canonique.tables.map(({ id }) => id),
+      charge.tables.map(({ id }) => id).sort((a, b) => a - b),
+    );
+  });
+
+  test("les participants et les réservations gardent l'ordre de la charge : le rang d'une réservation que nomme une ErreurConfiguration est son rang dans la charge", () => {
     const { charge } = documentValide();
     charge.participants.reverse();
     charge.tables.reverse();
     charge.reservations.reverse();
     const configuration = configurationDepuisCharge(charge);
     assert.deepEqual(configuration.participants.map(({ id }) => id), [5, 3, 2, 1]);
-    assert.deepEqual(configuration.tables.map(({ id }) => id), [3, 1]);
+    assert.deepEqual(configuration.tables.map(({ id }) => id), [1, 3]);
     assert.deepEqual(configuration.reservations.map(({ participant }) => participant), [2, 1]);
     // La seconde réservation de la charge désigne une table absente : le
     // moteur la nomme à son rang dans la charge, 1.

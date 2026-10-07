@@ -28,6 +28,14 @@
 //   EXISTE         {chemin}                  deplacer vers une cible existante
 //   CHEMIN_REFUSE  {chemin}                  chemin absolu ou remontant, racine
 //                                            inconnue
+//   LECTURE        {chemin, dossier, cause}  une lecture refusée autrement que
+//                                            sur un absent ; cause
+//                                            UTF8_INVALIDE pour un fichier dont
+//                                            les octets ne sont pas de l'UTF-8,
+//                                            que lireTexte ne lit jamais en
+//                                            U+FFFD ; les détails portent
+//                                            alors aussi octets, une copie
+//                                            des octets du fichier
 //
 // types.js donne la table entière des codes du stockage.
 import { ErreurStockage } from './erreurs.js';
@@ -92,7 +100,10 @@ import { ErreurStockage } from './erreurs.js';
  * @property {(r: Racine, chemin: string) => Promise<string>} lireTexte
  *           le texte tel qu'écrit : marque d'ordre d'octets, fins de ligne et
  *           forme de normalisation comprises ; ABSENT pour un fichier absent
- *           ou un dossier
+ *           ou un dossier. Le décodage est strict : des octets qui ne sont
+ *           pas de l'UTF-8 lèvent LECTURE {chemin, dossier, cause:
+ *           'UTF8_INVALIDE', octets}, octets étant un Uint8Array, copie des
+ *           octets du fichier, que le dépôt décode ligne par ligne
  * @property {(r: Racine, chemin: string, texte: string) => Promise<void>} ecrireAtomique
  *           <chemin>.ecriture, vidé sur le disque, renommé par-dessus ; réessaie
  *           le renommage ; un échec laisse la cible intacte (§ 8.8) ; là où

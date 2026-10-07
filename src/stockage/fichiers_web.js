@@ -70,10 +70,10 @@ const TYPE_DIFFERENT = 'TypeMismatchError';
 const RELECTURE_DIFFERENTE = 'RELECTURE_DIFFERENTE';
 
 // Un fichier s'écrit en UTF-8 sans marque d'ordre d'octets, et se lit sans
-// retirer celle qu'il porte, que Blob.text retirerait. Un octet qui n'est pas
-// de l'UTF-8 se lit U+FFFD.
+// retirer celle qu'il porte, que Blob.text retirerait. Le décodage est
+// strict : un octet qui n'est pas de l'UTF-8 ne se lit pas U+FFFD.
 const UTF8 = new TextEncoder();
-const DECODEUR = new TextDecoder('utf-8', { ignoreBOM: true });
+const DECODEUR = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 // Un nettoyage qui échoue ne masque pas l'échec qu'il suit.
 const ignorer = () => {};
@@ -180,8 +180,16 @@ async function retirer(dossier, nom) {
   }
 }
 
-// Texte d'un fichier : ses octets décodés tels quels.
-const lire = async (poignee) => DECODEUR.decode(await (await poignee.getFile()).arrayBuffer());
+// Ce que porte un fichier : { texte, octets }, ses octets et leur décodage
+// tel quel ; texte null quand ils ne sont pas de l'UTF-8.
+async function lire(poignee) {
+  const octets = new Uint8Array(await (await poignee.getFile()).arrayBuffer());
+  try {
+    return { texte: DECODEUR.decode(octets), octets };
+  } catch {
+    return { texte: null, octets };
+  }
+}
 
 // Écrit le fichier nom du dossier par un flux de l'OPFS, que remplir(flux,
 // poignee) alimente ; garder ouvre le flux sur le contenu présent, sinon sur
@@ -307,7 +315,7 @@ export function creerFichiersWeb() {
         dossier = await dossierDe([], true);
         await retirer(dossier, TEMOIN);
         await ecrireParFlux(dossier, TEMOIN, false, (flux) => flux.write(UTF8.encode(TEMOIN)));
-        const relu = await lire(await dossier.getFileHandle(TEMOIN));
+        const { texte: relu } = await lire(await dossier.getFileHandle(TEMOIN));
         await retirer(dossier, TEMOIN);
         return relu === TEMOIN
           ? { inscriptible: true, cause: null }
@@ -323,14 +331,22 @@ export function creerFichiersWeb() {
       return 'inconnu';
     },
 
+    // Des octets hors UTF-8 lèvent LECTURE, cause UTF8_INVALIDE, qui porte
+    // ces octets.
     lireTexte: async (racine, chemin) => {
       const loc = localiser(racine, chemin);
       if (loc.nom === null) throw absent(chemin);
+      let lu;
       try {
-        return await lire(await (await dossierDe(loc.parent)).getFileHandle(loc.nom));
+        lu = await lire(await (await dossierDe(loc.parent)).getFileHandle(loc.nom));
       } catch (erreur) {
         throw echecLecture(loc, erreur);
       }
+      if (lu.texte === null) {
+        const details = { chemin: loc.chemin, dossier: loc.dossier, cause: 'UTF8_INVALIDE', octets: lu.octets };
+        throw new ErreurStockage('LECTURE', details);
+      }
+      return lu.texte;
     },
 
     ecrireAtomique: async (racine, chemin, texte) => {

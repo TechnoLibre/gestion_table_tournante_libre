@@ -25,6 +25,7 @@ import {
   INTERVALLE_INSTANTANE,
   PLAFOND_ENTREES,
   PLANCHER_ENTREES,
+  decoderJournal,
   elaguer,
   estInstantane,
   fil,
@@ -891,6 +892,18 @@ describe('la lecture s’arrête à la première ligne illisible et compte ce qu
     assert.deepEqual(journal.entrees.map(({ revision }) => revision), [1, 2, 3, 4, 5]);
     assert.equal(fil(journal).position, 5);
     assert.equal(texteCanonique(reconstruire(journal, 5)), texteCanonique(etapes[4].apres));
+  });
+
+  test('decoderJournal décode les octets ligne par ligne : la première ligne hors UTF-8 arrête le texte, elle et les suivantes comptées comme lireJournal compte ; une ouverture hors UTF-8 ne laisse aucun texte', () => {
+    const octets = (...morceaux) =>
+      new Uint8Array(morceaux.flatMap((morceau) => (typeof morceau === 'string' ? [...new TextEncoder().encode(morceau)] : morceau)));
+    assert.deepEqual(decoderJournal(octets('a\n\u{E9}\n')), { texte: 'a\n\u{E9}\n', ecartees: 0 });
+    assert.deepEqual(decoderJournal(octets('a\nb')), { texte: 'a\nb', ecartees: 0 });
+    assert.deepEqual(decoderJournal(octets('\u{FEFF}a\nb', [0xc3])), { texte: '\u{FEFF}a\n', ecartees: 1 });
+    assert.deepEqual(decoderJournal(octets('a\nb\n', [0xe9], 'c\nd\ne')), { texte: 'a\nb\n', ecartees: 3 });
+    assert.deepEqual(decoderJournal(octets('a\n', [0xe9], '\nd\n')), { texte: 'a\n', ecartees: 2 });
+    assert.deepEqual(decoderJournal(octets([0xe9], '\nb\n')), { texte: null, ecartees: 2 });
+    assert.deepEqual(decoderJournal(octets([0xc3])), { texte: null, ecartees: 1 });
   });
 });
 

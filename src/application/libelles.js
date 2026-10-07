@@ -6,8 +6,10 @@
 // raisons, causes et remèdes de leurs détails — et chaque libellé figé d'une
 // entrée ou d'un jalon du journal a ici son texte français, qu'une fonction
 // compose de ses détails. Un code sans texte lève : l'écran ne montre jamais
-// un code brut. Une valeur codée d'un détail — raison, état, champ, mode,
-// échec — que la table ne connaît pas lève aussi, au lieu de se taire. Une
+// un code brut. Une valeur codée d'un détail — état, champ, mode, échec —
+// que la table ne connaît pas lève aussi, au lieu de se taire. Une raison
+// qu'un texte ne traite pas à part ne lève jamais : une phrase générique la
+// nomme, par son texte quand la table en porte un, telle quelle sinon. Une
 // cause que nomme le système, EROFS, ENOENT ou TypeMismatchError, n'est pas
 // un code de l'application : les textes la citent telle quelle, entre
 // parenthèses ; une cause que la table porte s'y lit par son texte.
@@ -104,10 +106,25 @@ const cheminDe = (racine) => (typeof racine === 'string' ? racine : racine?.chem
 const REMEDE_UTF8 = 'Réenregistrez le fichier en UTF-8 depuis le tableur, puis importez-le de nouveau.';
 const refusEncodage = (constat) => () => `${constat} ${REMEDE_UTF8}`;
 
+// Une raison codée en une phrase : son texte quand la table en porte un et
+// que les détails reçus lui suffisent ; sinon une phrase générique qui la
+// cite telle quelle. Un texte qui attend ses propres détails lève ou rend
+// « undefined » sans eux : la phrase générique le remplace alors.
+function phraseDeRaison(raison, details = {}) {
+  const generique = `La raison donnée est ${cite(String(raison))}.`;
+  if (!TEXTES.has(raison)) return generique;
+  try {
+    const texte = texteDe(raison, details);
+    return typeof texte === 'string' && !texte.includes('undefined') ? texte : generique;
+  } catch {
+    return generique;
+  }
+}
+
 // La raison d'un fichier d'état illisible, en une phrase.
 function raisonIllisible({ raison, ...details }) {
   if (raison === 'ABSENT') return "Le fichier d'état manque, à côté de son historique.";
-  return texteDe(raison, details);
+  return phraseDeRaison(raison, details);
 }
 
 // Les secours d'un fichier d'état illisible, quand l'erreur les nomme.
@@ -195,7 +212,14 @@ const TEXTES = new Map([
       if (raison === 'FORMAT' || raison === 'FORMAT_PLUS_RECENT') {
         return `${texteDe(raison)} Il s'ouvre en lecture seule, et aucun geste ne le modifie ici.`;
       }
-      throw new RangeError(`libelle : raison de lecture seule inconnue ${JSON.stringify(raison)}`);
+      if (raison === 'ENCODAGE') {
+        return (
+          `Le fichier d'état a changé sur le disque. ${texteDe('ENCODAGE')} ` +
+          "L'événement reste en lecture seule ; rouvert par une version de secours, son premier geste " +
+          "range ce fichier dans la corbeille avant d'écrire l'état."
+        );
+      }
+      return `${phraseDeRaison(raison)} L'événement reste en lecture seule, et aucun geste ne le modifie ici.`;
     },
   ],
   [
@@ -229,6 +253,10 @@ const TEXTES = new Map([
       const quel = Number.isInteger(format) ? ` (format ${format})` : '';
       return `Ce fichier vient d'une version plus récente du logiciel${quel}.`;
     },
+  ],
+  [
+    'ENCODAGE',
+    () => "Ses octets ne sont pas de l'UTF-8 : un éditeur l'a sans doute réenregistré dans un autre encodage.",
   ],
 
   // --- Les fautes d'un placement, et ses raisons de dérive (§ 8.9, § 9) ----
@@ -290,10 +318,22 @@ const TEXTES = new Map([
       'à partir de la première ligne illisible.',
   ],
   [
+    'JOURNAL_RECREE',
+    () =>
+      "Le fichier de l'historique avait disparu du dossier : il est réécrit en entier, " +
+      'tel que la séance le connaissait.',
+  ],
+  [
     'JOURNAL_FORMAT_PLUS_RECENT',
     ({ format }) =>
       `L'historique vient d'une version plus récente du logiciel (format ${format}) : ` +
       "il ne se lit pas, et l'événement reste en lecture seule.",
+  ],
+  [
+    'JOURNAL_ILLISIBLE',
+    ({ raison }) =>
+      `L'historique à côté de ce fichier ne se lit pas. ${phraseDeRaison(raison)} ` +
+      "Il est laissé tel quel, et le prochain geste commence l'historique dans un nouveau fichier.",
   ],
   [
     'JOURNAL_ETRANGER',
@@ -306,6 +346,12 @@ const TEXTES = new Map([
       ids.length <= 1
         ? `Une proposition incohérente est écartée (${numeros(ids)}).`
         : `${ids.length} propositions incohérentes sont écartées (${numeros(ids)}).`,
+  ],
+  [
+    'PROPOSITIONS_MANQUANTES',
+    ({ n }) =>
+      `${compte(n, "proposition que l'en-tête annonce manque", "propositions que l'en-tête annonce manquent")} ` +
+      'dans le fichier : celles qu\'il porte sont gardées.',
   ],
   [
     'DERIVE',
@@ -353,11 +399,13 @@ const TEXTES = new Map([
       "Sous la plateforme web, ni le renommage atomique ni le verrou n'existent : " +
       'une panne peut laisser un fichier incomplet, et deux onglets peuvent écrire le même événement.',
   ],
+  // dossier, quand il est donné, nomme le dossier où la séance écrit
+  // désormais (ecrireAilleurs) ; sans lui, le dossier de travail.
   [
     'SUPPORT_AMOVIBLE',
-    () =>
-      'Le dossier de travail est sur un support amovible : ' +
-      'retirer le support pendant une écriture peut la laisser incomplète.',
+    ({ dossier }) =>
+      `${typeof dossier === 'string' ? `Le dossier ${cite(dossier)}` : 'Le dossier de travail'} ` +
+      'est sur un support amovible : retirer le support pendant une écriture peut la laisser incomplète.',
   ],
   [
     'REGLAGES_ILLISIBLES',
@@ -455,6 +503,27 @@ const TEXTES = new Map([
     },
   ],
   ['SUPPORT_INTACT', () => "Le support prend encore les écritures : l'événement reste où il est."],
+  // Quitter l'événement d'un support rompu : la séance tient la seule copie
+  // que l'écriture ailleurs peut encore sauver ; ETAT_NON_ECRIT dit que son
+  // dernier geste n'est qu'à l'historique de ce support.
+  [
+    'SUPPORT_ROMPU_NON_SAUVE',
+    ({ echec, dossier }) => {
+      const geste =
+        echec === 'ETAT_NON_ECRIT' ? ", et son dernier geste n'y est inscrit qu'à l'historique" : '';
+      return (
+        `Le support ${cite(dossier)} ne prend plus les écritures${geste} : ` +
+        "l'événement ouvert n'est sauvé dans aucun autre dossier. " +
+        "« Écrire ailleurs » l'enregistre d'abord ; le quitter maintenant l'abandonne à ce support."
+      );
+    },
+  ],
+  [
+    'EVENEMENT_CHANGE',
+    ({ revision }) =>
+      `Une autre séance a modifié cet événement depuis son ouverture : il s'affiche tel qu'elle l'a laissé, ` +
+      `à la révision ${revision}, et les gestes suivants s'y ajoutent.`,
+  ],
   [
     'VERROU_REPRIS',
     ({ depuis }) => `Le verrou qu'une séance interrompue de ce poste avait laissé${depuisQuand(depuis)} est repris.`,
@@ -580,7 +649,8 @@ export const CODES = Object.freeze([...TEXTES.keys()].sort(comparerTextes));
  * @param {Object} [details]
  * @returns {string}
  * @throws {RangeError} un code sans texte, ou une valeur codée de ses détails
- *         — raison, état, champ, mode, échec — que la table ne connaît pas
+ *         — état, champ, mode, échec — que la table ne connaît pas ; jamais
+ *         une raison, qu'une phrase générique nomme
  */
 export function libelle(code, details = {}) {
   return texteDe(code, details);
