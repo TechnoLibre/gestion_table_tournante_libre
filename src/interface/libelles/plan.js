@@ -85,6 +85,18 @@ export const TABLE = new Map([
   ['plan.vue.pleinEcran', 'Plein écran'],
   ['plan.vue.dessin', 'Plan de salle'],
 
+  // --- Les gestes du pointeur (§ 5.8, § 7.1, § 7.3) -------------------------
+  // Le fantôme d'une personne glissée dit ce que le geste modifie : l'état
+  // des données, non le geste (§ 5.8). Le nom de la personne est une donnée,
+  // dans son propre nœud.
+  ['plan.fantome.reservations', 'pose une réservation'],
+  ['plan.fantome.retenu', 'déplace dans le placement retenu'],
+  ['plan.fantome.vueSeule', 'proposition en vue seule : rien ne change'],
+  // La place où un refus ou un avertissement du plan se pose.
+  ['plan.refus.table', ({ numero }) => `Table ${numero}`],
+  ['plan.refus.siege', ({ numero, siege }) => `Table ${numero}, siège ${siege}`],
+  ['plan.refus.fermer', 'Fermer'],
+
   // --- Les panneaux latéraux (§ 2.1, étape 8) --------------------------------
   ['plan.panneaux', 'Panneaux du plan'],
   ['plan.listesTravail.titre', 'Listes de travail'],

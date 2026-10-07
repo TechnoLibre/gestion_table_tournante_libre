@@ -717,3 +717,61 @@ describe('partiesLigne : les tspans d\u{2019}une ligne, dans l\u{2019}ordre', ()
     ]);
   });
 });
+
+// --- L'option poignee (I10) ------------------------------------------------------
+
+describe('modeleDessin : l\u{2019}option poignee dessine une table au nombre tiré, sans toucher l\u{2019}état (§ 7.1)', () => {
+  test('sans option, ou poignee null : chaque table à sa capacité', () => {
+    const charge = petite();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const sans = modeleDessin(etat, options(charge));
+    assert.deepEqual(modeleDessin(etat, options(charge, { poignee: null })), sans);
+    assert.equal(sans.tables.length, 4);
+    for (const table of sans.tables) assert.equal(table.lignes.length, etat.tables.find(({ id }) => id === table.id).capacite);
+  });
+
+  test('tirée vers plus : la table se dessine à places, chaises 1 à places, celles au-delà de sa capacité libres', () => {
+    const charge = petite();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const avant = JSON.stringify(etat);
+    const cible = etat.tables[1];
+    const capacite = cible.capacite;
+    const places = capacite + 3;
+    const modele = modeleDessin(etat, options(charge, { poignee: { table: cible.id, places } }));
+    assert.equal(JSON.stringify(etat), avant, 'l\u{2019}état des places n\u{2019}est pas touché');
+    const tiree = modele.tables[1];
+    assert.equal(tiree.id, cible.id);
+    assert.deepEqual(tiree.geometrie, geometrieTable(cible, places));
+    assert.equal(tiree.chaises.length, places);
+    assert.deepEqual(tiree.chaises.map(({ siege }) => siege), Array.from({ length: places }, (_, i) => i + 1));
+    for (const chaise of tiree.chaises.slice(capacite)) {
+      assert.equal(chaise.remplissage, 'normal');
+      assert.deepEqual(chaise.marques, []);
+      assert.equal(chaise.miseEnEvidence, false);
+    }
+    assert.equal(tiree.lignes.length, places);
+    for (const ligne of tiree.lignes.slice(capacite)) {
+      assert.deepEqual(ligne.etat, { cle: 'plan.ligne.libre', details: {} });
+      assert.equal(ligne.nom, null);
+    }
+    assert.deepEqual(tiree.lignes.slice(0, capacite), cible.chaises.map((chaise) => ligneListe(chaise, nomsDe(charge))));
+    assert.equal(tiree.nomAccessible.details.places, places);
+    const autres = modeleDessin(etat, options(charge));
+    for (const rang of [0, 2, 3]) assert.deepEqual(modele.tables[rang], autres.tables[rang], `table de rang ${rang} inchangée`);
+  });
+
+  test('tirée vers moins : chaises et lignes 1 à places ; le régime se lit sur la géométrie tirée', () => {
+    const charge = petite();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const cible = etat.tables[0];
+    const modele = modeleDessin(etat, options(charge, { poignee: { table: cible.id, places: 2 } }));
+    const tiree = modele.tables[0];
+    assert.equal(tiree.chaises.length, 2);
+    assert.equal(tiree.lignes.length, 2);
+    assert.equal(tiree.geometrie.chaises.length, 2);
+    for (const k of [0.2, 0.5, 1]) {
+      const auZoom = modeleDessin(etat, options(charge, { k, poignee: { table: cible.id, places: 30 } })).tables[0];
+      assert.equal(auZoom.regime, regimeCibles(k, geometrieTable(cible, 30)), `k = ${k}`);
+    }
+  });
+});

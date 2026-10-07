@@ -264,16 +264,28 @@ function bandeauDe(toutesEnConflit, diagnostic) {
   return entrees;
 }
 
-// Le dessin d'une table de l'état des places au zoom k.
-function tableDessin(etatTable, { k, miseEnEvidence, nomDe }) {
-  const { id, numero, capacite, gelee, surchargee, conflits } = etatTable;
-  const geometrie = geometrieTable(etatTable, capacite);
+// Une chaise libre au siège s : celle qu'ajoute la poignée au-delà de la
+// capacité, que rien ne tient ni n'occupe.
+const chaiseLibre = (siege) => ({ siege, occupant: null, reservation: null, titre: null, remplissage: 'normal', marques: [] });
+
+// Les chaises d'une table de l'état des places à places sièges : les siennes
+// jusqu'à sa capacité, des chaises libres au-delà.
+function chaisesA(etatTable, places) {
+  return Array.from({ length: places }, (_, i) => etatTable.chaises[i] ?? chaiseLibre(i + 1));
+}
+
+// Le dessin d'une table de l'état des places au zoom k ; places, le nombre
+// de sièges que la poignée montre, sinon sa capacité.
+function tableDessin(etatTable, { k, miseEnEvidence, nomDe }, places = etatTable.capacite) {
+  const { id, numero, gelee, surchargee, conflits } = etatTable;
+  const geometrie = geometrieTable(etatTable, places);
   const regime = regimeCibles(k, geometrie);
   const pastille = conflits === null ? 0 : conflits.nombre;
+  const etatChaises = chaisesA(etatTable, places);
   const chaises =
     regime === 'table'
       ? []
-      : etatTable.chaises.map((chaise, i) => {
+      : etatChaises.map((chaise, i) => {
           const { x, y, rayon } = geometrie.chaises[i];
           return {
             siege: chaise.siege,
@@ -295,11 +307,11 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe }) {
     surchargee,
     nomAccessible: {
       cle: 'plan.table.nom',
-      details: { numero, places: capacite, conflits: conflits === null ? null : conflits.nombre, gelee, surchargee },
+      details: { numero, places, conflits: conflits === null ? null : conflits.nombre, gelee, surchargee },
     },
     chaises,
     enTete: gelee ? { cle: 'plan.liste.gelee', details: {} } : null,
-    lignes: etatTable.chaises.map((chaise) => ligneListe(chaise, nomDe)),
+    lignes: etatChaises.map((chaise) => ligneListe(chaise, nomDe)),
   };
 }
 
@@ -318,14 +330,22 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe }) {
  * bloc de noms n'est pas dans le modèle : c'est LARGEUR_BLOC_NOMS_CM du
  * registre, que le dessin lit.
  *
+ * Pendant le tirage d'une poignée (option poignee), la table qu'elle désigne
+ * se dessine à places sièges — géométrie, régime, chaises, lignes et nom
+ * accessible —, ses chaises 1 à places, celles au-delà de sa capacité
+ * libres ; l'état des places n'est pas touché, et rien ne s'écrit (§ 7.1).
+ *
  * @param {Object} etatPlaces   EtatPlaces (A5)
  * @param {{k: number, listes: boolean, miseEnEvidence: number|null,
- *          nomDe: (id: number) => string, diagnostic?: Object|null}} options
+ *          nomDe: (id: number) => string, diagnostic?: Object|null,
+ *          poignee?: {table: number, places: number}|null}} options
  *        diagnostic : celui que rend diagnostiquer, compléments de M1 compris
  * @returns {Object}   ModeleDessin
  */
-export function modeleDessin(etatPlaces, { k, listes, miseEnEvidence, nomDe, diagnostic = null }) {
-  const tables = etatPlaces.tables.map((etatTable) => tableDessin(etatTable, { k, miseEnEvidence, nomDe }));
+export function modeleDessin(etatPlaces, { k, listes, miseEnEvidence, nomDe, diagnostic = null, poignee = null }) {
+  const tables = etatPlaces.tables.map((etatTable) =>
+    tableDessin(etatTable, { k, miseEnEvidence, nomDe }, poignee !== null && poignee.table === etatTable.id ? poignee.places : etatTable.capacite),
+  );
   const toutesEnConflit = tables.length > 0 && tables.every(({ conflit }) => conflit);
   return {
     tables,
