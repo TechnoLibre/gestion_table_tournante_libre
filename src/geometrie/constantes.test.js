@@ -14,7 +14,7 @@ const CONTRAT = [
   ['DUREE_PRESSION_LONGUE_MS', 500, 'ms', 'manuel'],
   ['SEUIL_SIEGES_LISIBLES', 16, 'places', 'banc'],
   ['K_LISTES', 0.3, 'px/cm', 'banc'],
-  ['LARGEUR_BLOC_NOMS_CM', 180, 'cm', 'manuel'],
+  ['LARGEUR_BLOC_NOMS_CM', 500, 'cm', 'manuel'],
   ['HAUTEUR_LIGNE', null, 'cm', 'execution'],
 ];
 
@@ -42,7 +42,7 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
   test('constante rend la valeur par le nom ; un nom inconnu lève', () => {
     assert.equal(constante('SEUIL_GLISSER_PX'), 4);
     assert.equal(constante('K_LISTES'), 0.3);
-    assert.equal(constante('LARGEUR_BLOC_NOMS_CM'), 180);
+    assert.equal(constante('LARGEUR_BLOC_NOMS_CM'), 500);
     assert.equal(constante('HAUTEUR_LIGNE'), null);
     assert.throws(() => constante('INCONNUE'), RangeError);
     assert.throws(() => constante('nom'), RangeError);

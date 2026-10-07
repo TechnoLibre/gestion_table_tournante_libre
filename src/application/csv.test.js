@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import * as apercu from '../csv/apercu.js';
+import * as colonnes from '../csv/colonnes.js';
 import * as encodage from '../csv/encodage.js';
 import * as exportCsv from '../csv/export.js';
 import * as importCsv from '../csv/import.js';
@@ -17,7 +18,7 @@ import * as relais from './csv.js';
 import { libelle } from './libelles.js';
 
 describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
-  test('decoder, apercevoir, exporterParticipants, bilanRemplacement et cleNormalisee sont ceux de src/csv', () => {
+  test('decoder, apercevoir, exporterParticipants, bilanRemplacement, cleNormalisee et CHAMPS sont ceux de src/csv', () => {
     const attendus = [
       ['decoder', encodage.decoder],
       ['apercevoir', apercu.apercevoir],
@@ -30,8 +31,9 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
       assert.equal(typeof fonction, 'function', nom);
       assert.equal(relais[nom], fonction, nom);
     }
+    assert.equal(relais.CHAMPS, colonnes.CHAMPS);
     assert.deepEqual(Object.keys(relais).sort(), [
-      'apercevoir', 'bilanRemplacement', 'cleNormalisee', 'decoder', 'exporterParticipants', 'exporterRefus',
+      'CHAMPS', 'apercevoir', 'bilanRemplacement', 'cleNormalisee', 'decoder', 'exporterParticipants', 'exporterRefus',
     ]);
   });
 

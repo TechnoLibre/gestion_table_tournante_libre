@@ -10,6 +10,7 @@ import { exporterRefus as exporterRefusCsv } from '../csv/import.js';
 import { libelle } from './libelles.js';
 
 export { apercevoir } from '../csv/apercu.js';
+export { CHAMPS } from '../csv/colonnes.js';
 export { decoder } from '../csv/encodage.js';
 export { exporterParticipants } from '../csv/export.js';
 export { bilanRemplacement } from '../csv/import.js';

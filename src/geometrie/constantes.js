@@ -83,10 +83,12 @@ export const CONSTANTES = Object.freeze(
     },
     {
       nom: 'LARGEUR_BLOC_NOMS_CM',
-      valeur: 180,
+      valeur: 500,
       unite: 'cm',
       mesure: "largeur, dans le dessin, du bloc de noms d'une table, où un nom trop long s'abrège",
-      raison: 'un nom tient sur une ligne du plan sans recouvrir la table voisine (§ 7.4)',
+      raison:
+        "la ligne entière d'une place réservée et titrée (numéro, état, nom, titre) tient sur une ligne " +
+        'du plan au corps des listes, la liste faisant foi (§ 7.4, § 7.6)',
       configuration: 'grande démonstration au zoom par défaut',
       proprietaire: 'manuel',
       statut: 'defautDeTravail',

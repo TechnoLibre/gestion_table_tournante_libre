@@ -420,6 +420,165 @@ describe("séance : le verrou, pris à l'entrée en écriture (§ 8.8)", () => {
   });
 });
 
+describe('séance : reprendre le verrou que la séance ne reprend pas seule (§ 8.8)', () => {
+  // Un verrou posé sur le disque partagé par une séance d'un autre poste, à
+  // l'instant depuis.
+  const verrouLointain = (seance, depuis) => `${JSON.stringify({ seance, pid: 41, hote: 'poste-lointain', depuis })}\n`;
+
+  // Une séance d'épreuve qui ouvre en lecture l'événement d'essai, créé par
+  // une première séance, déjà fermée, sur le même disque.
+  async function secondeSeance(disque, hote = 'autre-poste') {
+    const premier = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'createur' });
+    await premier.seance.creer({ nom: BASE, date: null, siegesParDefaut: 2, tours: 2 });
+    await premier.seance.fermer();
+    const second = monter({ fs: creerFichiersSimules({ disque, hote }), prefixe: 'reprise' });
+    await ouvrirSansEcrire(second);
+    return second;
+  }
+
+  test("le verrou d'un autre poste, refusé puis repris : il s'efface, la séance prend le sien et passe en écriture, VERROU_REPRIS le dit", async () => {
+    const disque = new Map();
+    const premier = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'premiere' });
+    await enEcriture(premier);
+    const { depuis } = verrouDe(premier.fs);
+    const lointain = monter({ fs: creerFichiersSimules({ disque, hote: 'autre-poste' }), prefixe: 'lointaine' });
+    await ouvrirSansEcrire(lointain);
+    await refus(lointain.seance.passerEnEcriture(), 'VERROU_PRIS', { seance: 'premiere-1', depuis, vivant: null, remede: null });
+    assert.deepEqual(lointain.seance.etat().verrouAutre, { seance: 'premiere-1', depuis, vivant: null });
+    const journal = lointain.fs.contenu('documents', JOURNAL);
+    const repris = [{ code: 'VERROU_REPRIS', details: { seance: 'premiere-1', depuis } }];
+    assert.deepEqual(await lointain.seance.reprendreVerrou(), { avertissements: repris });
+    assert.equal(lointain.seance.mode, 'ecriture');
+    assert.equal(verrouDe(lointain.fs).seance, 'lointaine-1');
+    assert.equal(lointain.fs.contenu('documents', JOURNAL), journal, 'reprendre n\u{2019}écrit aucune entrée');
+    const etat = lointain.seance.etat();
+    assert.equal(etat.verrouAutre, null);
+    assert.deepEqual(etat.avertissements, repris);
+    assert.equal(etat.refus, null);
+    await lointain.seance.executer('ajouterParticipant', { champs: { nom: 'Ombrelle', prenom: 'Iris' } });
+    assert.deepEqual(noms(etatDe(lointain.fs).charge), ['Ombrelle']);
+  });
+
+  test('un verrou illisible se reprend de même, sous VERROU_REPRIS {seance: null, depuis: null}', async () => {
+    const disque = new Map();
+    const second = await secondeSeance(disque, 'poste-epreuve');
+    second.fs.deposer('documents', VERROU, 'pas un verrou\n');
+    await refus(second.seance.passerEnEcriture(), 'VERROU_PRIS', { seance: null, depuis: null, vivant: null, remede: null });
+    const repris = [{ code: 'VERROU_REPRIS', details: { seance: null, depuis: null } }];
+    assert.deepEqual(await second.seance.reprendreVerrou(), { avertissements: repris });
+    assert.equal(second.seance.mode, 'ecriture');
+    assert.equal(verrouDe(second.fs).seance, 'reprise-1');
+  });
+
+  test("un verrou qui a changé depuis le refus ne s'efface pas : VERROU_PRIS nomme le nouveau, que verrouAutre garde", async () => {
+    const disque = new Map();
+    const second = await secondeSeance(disque);
+    const vu = '2031-05-17T09:00:00-04:00';
+    second.fs.deposer('documents', VERROU, verrouLointain('lointaine-1', vu));
+    await refus(second.seance.passerEnEcriture(), 'VERROU_PRIS', { seance: 'lointaine-1', depuis: vu, vivant: null, remede: null });
+    const pose = '2031-05-17T09:30:00-04:00';
+    const nouveau = verrouLointain('lointaine-2', pose);
+    second.fs.deposer('documents', VERROU, nouveau);
+    const details = { seance: 'lointaine-2', depuis: pose, vivant: null };
+    await refus(second.seance.reprendreVerrou(), 'VERROU_PRIS', { ...details, remede: null });
+    assert.equal(second.fs.contenu('documents', VERROU), nouveau);
+    assert.equal(second.seance.mode, 'lecture');
+    assert.deepEqual(second.seance.etat().verrouAutre, details);
+    const repris = [{ code: 'VERROU_REPRIS', details: { seance: 'lointaine-2', depuis: pose } }];
+    assert.deepEqual(await second.seance.reprendreVerrou(), { avertissements: repris });
+    assert.equal(verrouDe(second.fs).seance, 'reprise-1');
+  });
+
+  // Le verrou vu, puis remplacé par celui que décrit change : la reprise
+  // le refuse VERROU_PRIS avec les détails du nouveau, ne touche pas au
+  // fichier, et verrouAutre garde le nouveau.
+  async function repriseRefusee(seance, depuis) {
+    const second = await secondeSeance(new Map());
+    const vu = '2031-05-17T09:00:00-04:00';
+    second.fs.deposer('documents', VERROU, verrouLointain('lointaine-1', vu));
+    await refus(second.seance.passerEnEcriture(), 'VERROU_PRIS', { seance: 'lointaine-1', depuis: vu, vivant: null, remede: null });
+    const nouveau = verrouLointain(seance, depuis);
+    second.fs.deposer('documents', VERROU, nouveau);
+    const details = { seance, depuis, vivant: null };
+    await refus(second.seance.reprendreVerrou(), 'VERROU_PRIS', { ...details, remede: null });
+    assert.equal(second.fs.contenu('documents', VERROU), nouveau);
+    assert.equal(second.seance.mode, 'lecture');
+    assert.deepEqual(second.seance.etat().verrouAutre, details);
+  }
+
+  test("la même séance reprise à un instant plus tard : le verrou n'est plus celui que l'opérateur a vu, il ne s'efface pas", async () => {
+    await repriseRefusee('lointaine-1', '2031-05-17T09:45:00-04:00');
+  });
+
+  test("une autre séance au même instant : le verrou n'est plus celui que l'opérateur a vu, il ne s'efface pas", async () => {
+    await repriseRefusee('lointaine-5', '2031-05-17T09:00:00-04:00');
+  });
+
+  test("le verrou d'une séance vivante de ce poste ne se reprend jamais", async () => {
+    const disque = new Map();
+    const premier = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'premiere' });
+    await enEcriture(premier);
+    const { depuis } = verrouDe(premier.fs);
+    const voisin = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'voisine' });
+    await ouvrirSansEcrire(voisin);
+    const details = { seance: 'premiere-1', depuis, vivant: true };
+    await refus(voisin.seance.passerEnEcriture(), 'VERROU_PRIS', { ...details, remede: null });
+    await refus(voisin.seance.reprendreVerrou(), 'VERROU_PRIS', { ...details, remede: null });
+    assert.equal(verrouDe(voisin.fs).seance, 'premiere-1');
+    assert.equal(voisin.seance.mode, 'lecture');
+  });
+
+  test("sans verrou refusé, reprendre est passer en écriture : un verrou posé depuis n'est pas repris", async () => {
+    const second = await secondeSeance(new Map());
+    const pose = '2031-05-17T10:00:00-04:00';
+    second.fs.deposer('documents', VERROU, verrouLointain('lointaine-3', pose));
+    await refus(second.seance.reprendreVerrou(), 'VERROU_PRIS', { seance: 'lointaine-3', depuis: pose, vivant: null, remede: null });
+    assert.equal(verrouDe(second.fs).seance, 'lointaine-3');
+    const libre = await secondeSeance(new Map());
+    assert.deepEqual(await libre.seance.reprendreVerrou(), { avertissements: [] });
+    assert.deepEqual([libre.seance.mode, verrouDe(libre.fs).seance], ['ecriture', 'reprise-1']);
+  });
+
+  test('sur un plan bloqué, la reprise rend aussitôt le verrou : la séance reste en lecture, et débloquer passe ensuite', async () => {
+    const montage = monter({ prefixe: 'bloqueuse' });
+    const { fs, seance } = montage;
+    await enEcriture(montage);
+    await seance.executer('changerEtat', { etat: 'bloque' });
+    const depuis = '2031-05-17T11:00:00-04:00';
+    fs.deposer('documents', VERROU, verrouLointain('lointaine-4', depuis));
+    await refus(seance.debloquer(), 'VERROU_PRIS', { seance: 'lointaine-4', depuis, vivant: null, remede: null });
+    const journal = fs.contenu('documents', JOURNAL);
+    const repris = [{ code: 'VERROU_REPRIS', details: { seance: 'lointaine-4', depuis } }];
+    assert.deepEqual(await seance.reprendreVerrou(), { avertissements: repris });
+    assert.deepEqual([seance.mode, seance.charge.evenement.etat], ['lecture', 'bloque']);
+    assert.equal(verrouDe(fs), null);
+    assert.equal(fs.contenu('documents', JOURNAL), journal);
+    assert.deepEqual(seance.etat().avertissements, repris);
+    assert.deepEqual(seance.etat().refus, { code: 'LECTURE_SEULE', details: BLOQUE_SEUL });
+    await seance.debloquer();
+    assert.deepEqual([seance.mode, seance.charge.evenement.etat], ['ecriture', 'brouillon']);
+  });
+
+  test("en écriture, reprendre ne fait rien ; un format plus récent et un support rompu le refusent sans rien écrire", async () => {
+    const montage = monter();
+    await enEcriture(montage);
+    const avant = montage.fs.compteurs.ecritures;
+    assert.deepEqual(await montage.seance.reprendreVerrou(), { avertissements: [] });
+    assert.equal(montage.fs.compteurs.ecritures, avant);
+    montage.fs.pannes.ecriture('documents');
+    await refus(montage.seance.executer('ajouterParticipant', { champs: { nom: 'Pervenche' } }), 'ECRITURE');
+    await montage.seance.passerEnLecture();
+    const rompu = montage.fs.compteurs.ecritures;
+    await refus(montage.seance.reprendreVerrou(), 'SUPPORT_ROMPU');
+    assert.equal(montage.fs.compteurs.ecritures, rompu);
+    const fsRecent = creerFichiersSimules();
+    deposerAuFormat(fsRecent, FORMAT + 1);
+    const recent = monter({ fs: fsRecent });
+    await ouvrirSansEcrire(recent);
+    await refus(recent.seance.reprendreVerrou(), 'LECTURE_SEULE', FORMAT_SEUL);
+  });
+});
+
 describe("séance : l'inactivité (§ 8.4)", () => {
   test('au terme du délai, la séance revient seule en lecture et rend son verrou', async () => {
     const montage = monter();
@@ -2350,7 +2509,7 @@ describe("séance observable : le verrou d'une autre séance (§ 8.8, A2)", () =
     assert.deepEqual(second.seance.etat().avertissements, repris);
   });
 
-  test("le verrou d'une instance d'un autre hôte (vivant null) n'est jamais repris : VERROU_PRIS, remède null, le fichier inchangé, et aucun geste de la séance ne le reprend", async () => {
+  test("le verrou d'une instance d'un autre hôte (vivant null) n'est jamais repris : VERROU_PRIS, remède null, le fichier inchangé, et aucun geste ne le reprend seul : seul reprendreVerrou, que l'opérateur confirme, le reprend", async () => {
     const disque = new Map();
     const premier = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'premiere' });
     await enEcriture(premier);
@@ -2365,7 +2524,6 @@ describe("séance observable : le verrou d'une autre séance (§ 8.8, A2)", () =
     assert.equal(premier.fs.contenu('documents', VERROU), texte);
     assert.deepEqual(seance.etat().verrouAutre, { seance: 'premiere-1', depuis, vivant: null });
     assert.equal(seance.etat().mode, 'lecture');
-    assert.equal(seance.reprendreVerrou, undefined);
   });
 
   test("un verrou illisible n'est jamais repris : VERROU_PRIS, remède null, le fichier inchangé", async () => {
@@ -2641,7 +2799,7 @@ describe("séance observable : les textes des codes qu'elle ajoute (§ 14.6, A2)
     for (const motif of [/identifiant 3\b/, /tour 2\b/, /\b9 personnes\b/, /\b8 places\b/]) assert.match(texte, motif);
   });
 
-  test("la dérive nouvelle nomme le placement et sa raison ; l'invariant nomme la réservation ; la reprise d'un verrou le dit d'une séance interrompue", () => {
+  test("la dérive nouvelle nomme le placement et sa raison ; l'invariant nomme la réservation ; la reprise d'un verrou la dit d'une autre séance, d'un poste ou d'un autre", () => {
     const derive = libelle('DERIVE_NOUVELLE', EXEMPLES_A2[2][1]);
     assert.ok(derive.includes(libelle('PARTICIPANT_EXCLU', { participant: 3 })), derive);
     assert.match(derive, /n° 2/);
@@ -2649,7 +2807,11 @@ describe("séance observable : les textes des codes qu'elle ajoute (§ 14.6, A2)
     const viole = libelle('INVARIANT_VIOLE', EXEMPLES_A2[1][1]);
     assert.ok(viole.includes(libelle('RESERVATION_NON_HONOREE', { participant: 2, table: 2, tour: 1 })), viole);
     assert.match(viole, /n° 3/);
-    assert.match(libelle('VERROU_REPRIS', { seance: 's', depuis: null }), /interrompue/);
+    for (const details of [{ seance: 's', depuis: null }, { seance: null, depuis: null }]) {
+      const repris = libelle('VERROU_REPRIS', details);
+      assert.match(repris, /une autre séance/);
+      assert.doesNotMatch(repris, /interrompue|ce poste/);
+    }
     assert.match(libelle('CONFIGURATION_INCOHERENTE', { code: 'CODE_INVENTE', details: {} }), /« CODE_INVENTE »/);
   });
 });

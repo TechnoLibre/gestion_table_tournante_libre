@@ -92,7 +92,7 @@ export const TABLE = new Map([
   ],
   [
     'VERROU_REPRIS',
-    ({ depuis }, texte) => `Le verrou qu'une séance interrompue de ce poste avait laissé${depuisQuand(depuis, texte)} est repris.`,
+    ({ depuis }, texte) => `Le verrou qu'une autre séance tenait${depuisQuand(depuis, texte)} est repris.`,
   ],
   [
     'RETOUR_AUTOMATIQUE',

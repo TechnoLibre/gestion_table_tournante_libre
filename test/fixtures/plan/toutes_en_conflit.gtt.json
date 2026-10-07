@@ -1,0 +1,39 @@
+{
+  "entete": {"format":1,"produitVersion":"epreuve","revision":1,"comptes":{"participants":12,"tables":4,"reservations":0,"titres":0,"propositions":1,"retenu":0}},
+  "charge": {
+    "evenement": {"id":"epreuve:toutes-en-conflit","nom":"Toutes en conflit","date":null,"siegesParDefaut":3,"tours":4,"unite":"cm","etat":"propose","filiation":null},
+    "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
+    "prochainsIds": {"participant":13,"table":5,"proposition":2},
+    "participants": [
+      {"id":1,"nom":"Ombrelle","prenom":"Iris","appartenance":"Club des Merles","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":2,"nom":"Pervenche","prenom":"Théo","appartenance":"Cercle des Hérons","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":3,"nom":"Lacasse","prenom":"Ondine","appartenance":"Club des Merles","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":4,"nom":"Grisaille","prenom":null,"appartenance":"Cercle des Hérons","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":5,"nom":"Tourmaline","prenom":"Basile","appartenance":"Club des Merles","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":6,"nom":"Arrosoir","prenom":"Capucine","appartenance":"Cercle des Hérons","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":7,"nom":"Cerfeuil","prenom":"Aurèle","appartenance":"Club des Merles","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":8,"nom":"Bruyère","prenom":"Mélisande","appartenance":"Cercle des Hérons","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":9,"nom":"Galet","prenom":"Firmin","appartenance":"Club des Merles","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":10,"nom":"Mistral","prenom":"Clélia","appartenance":"Cercle des Hérons","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":11,"nom":"Houblon","prenom":"Anatole","appartenance":"Club des Merles","courriel":null,"titrePressenti":null,"notes":null,"exclu":false},
+      {"id":12,"nom":"Sarcelle","prenom":"Solveig","appartenance":"Cercle des Hérons","courriel":null,"titrePressenti":null,"notes":null,"exclu":false}
+    ],
+    "tables": [
+      {"id":1,"numero":1,"sieges":null,"forme":"ronde","position":{"x":0,"y":0}},
+      {"id":2,"numero":2,"sieges":null,"forme":"ronde","position":{"x":300,"y":0}},
+      {"id":3,"numero":3,"sieges":null,"forme":"ronde","position":{"x":600,"y":0}},
+      {"id":4,"numero":4,"sieges":null,"forme":"ronde","position":{"x":900,"y":0}}
+    ],
+    "reservations": [],
+    "titres": [],
+    "propositions": [
+      {"id":1,"graine":2215483850,"arret":4000,"historique":1000,"produitVersion":"epreuve","siegesAttribues":false,"tables":[1,2,3,4],"capacites":[3,3,3,3],"tours":4,"participants":[1,2,3,4,5,6,7,8,9,10,11,12],"placement":[
+        {"sieges":[[4,7,8],[5,6,10],[3,9,12],[1,2,11]],"reserve":[]},
+        {"sieges":[[2,7,12],[3,5,11],[1,4,10],[6,8,9]],"reserve":[]},
+        {"sieges":[[2,9,10],[7,8,11],[4,5,12],[1,3,6]],"reserve":[]},
+        {"sieges":[[9,11,12],[3,4,6],[5,7,10],[1,2,8]],"reserve":[]}
+      ]}
+    ],
+    "retenu": null
+  }
+}

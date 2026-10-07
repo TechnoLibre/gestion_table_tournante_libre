@@ -207,6 +207,41 @@ describe('fichiers simulés : racines et emplacements', () => {
     assert.equal(await fs.ouvrirDansExplorateur(DOC), undefined);
     await echoue(fs.ouvrirDansExplorateur(PORTABLE), 'CHEMIN_REFUSE', { chemin: '' });
   });
+
+  test("dossiersChoisis : choisirDossier rend chacun dans l'ordre, choisi-<n>, puis null ; la racine rendue s'inscrit, et n'existe qu'une fois créée", async () => {
+    const SECOURS = 'D:\\Secours';
+    const fs = creerFichiersSimules({ dossiersChoisis: [SECOURS, 'F:\\Repli'] });
+    const choisi = { id: 'choisi-1', chemin: SECOURS };
+    // Avant le choix, la racine n'est pas connue du système.
+    await echoue(fs.lister(choisi, ''), 'CHEMIN_REFUSE', { chemin: '' });
+    const avant = { ...fs.compteurs };
+    assert.deepEqual(await fs.choisirDossier(), choisi);
+    assert.deepEqual(await fs.choisirDossier(), { id: 'choisi-2', chemin: 'F:\\Repli' });
+    assert.equal(await fs.choisirDossier(), null);
+    assert.equal(await fs.choisirDossier(), null);
+    assert.deepEqual(fs.compteurs, avant, 'le dialogue ne compte pas');
+    assert.deepEqual(await fs.racines(), { portable: null, documents: DOC }, 'les racines du système restent les deux');
+    await echoue(fs.lister(choisi, ''), 'ABSENT', { chemin: '' });
+    const absent = { chemin: 'soiree.gtt.json', dossier: SECOURS, cause: 'ENOENT' };
+    await echoue(fs.ecrireAtomique(choisi, 'soiree.gtt.json', 'x'), 'ECRITURE', absent);
+    await fs.creerDossier(choisi, '');
+    await fs.ecrireAtomique(choisi, 'soiree.gtt.json', 'état');
+    assert.equal(fs.contenu('choisi-1', 'soiree.gtt.json'), 'état');
+    assert.deepEqual(noms(await fs.lister(choisi, '')), ['soiree.gtt.json']);
+    fs.pannes.ecriture('choisi-2');
+    await echoue(fs.creerDossier({ id: 'choisi-2', chemin: 'F:\\Repli' }, ''), 'ECRITURE', {
+      chemin: '',
+      dossier: 'F:\\Repli',
+      cause: 'EROFS',
+    });
+    await echoue(fs.lister({ id: 'choisi-3', chemin: 'G:\\' }, ''), 'CHEMIN_REFUSE', { chemin: '' });
+  });
+
+  test('dossiersChoisis : un chemin qui n\u{2019}est pas une chaîne non vide lève TypeError à la création', () => {
+    for (const fautif of [[''], [null], 'D:\\Secours']) {
+      assert.ok(erreurDe(() => creerFichiersSimules({ dossiersChoisis: fautif })) instanceof TypeError, JSON.stringify(fautif));
+    }
+  });
 });
 
 describe('fichiers simulés : casse des noms', () => {

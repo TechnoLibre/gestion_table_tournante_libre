@@ -88,6 +88,7 @@ import {
 import { FORMAT, analyser } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { fil, reconstruire } from '../stockage/journal.js';
+import { SUFFIXES } from '../stockage/noms.js';
 import { avecCadrage, cadrageDe, creerEcrivainDiffere, ecrireReglages, lireReglages } from '../stockage/reglages_locaux.js';
 import { avertissementsApres, invariantViole } from './avertissements.js';
 import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
@@ -429,21 +430,35 @@ export function creerSeance({
   // null) ou illisible ne se reprend pas : VERROU_PRIS {seance, depuis,
   // vivant}, remède null, que verrouAutre garde. Un système sans verrou le
   // rend toujours pris. Un support qui refuse d'écrire le verrou, ou
-  // d'effacer celui du mort, rompt le support sous l'échec
+  // d'effacer celui qu'il reprend, rompt le support sous l'échec
   // VERROU_NON_ECRIT, et son ECRITURE remonte (§ 8.6). Rend les
   // avertissements.
-  async function prendreVerrou(ouvert) {
+  //
+  // reprise : le verrou que l'opérateur a vu refusé et confirmé reprendre,
+  // {seance, depuis} de verrouAutre (reprendreVerrou), null sinon. Un verrou
+  // dont la vie ne se prouve pas (vivant null) s'efface alors, puis se prend,
+  // sous VERROU_REPRIS {seance, depuis} — mais seulement le verrou même que
+  // la reprise nomme, de même séance et de même instant : un verrou posé
+  // depuis, que l'opérateur n'a pas vu, se refuse VERROU_PRIS comme sans
+  // reprise. Un verrou vivant ne se reprend jamais.
+  async function prendreVerrou(ouvert, reprise = null) {
     let verrou;
     const avertissements = [];
     try {
       verrou = await verrouiller(ouvert, id);
       if (!verrou.pris && verrou.seance === id) verrou = { pris: true };
-      if (!verrou.pris && verrou.vivant === false) {
-        const mort = verrou;
-        await deverrouiller(ouvert, mort.seance);
+      const confirme =
+        !verrou.pris &&
+        reprise !== null &&
+        verrou.vivant === null &&
+        verrou.seance === reprise.seance &&
+        verrou.depuis === reprise.depuis;
+      if (!verrou.pris && (verrou.vivant === false || confirme)) {
+        const ancien = verrou;
+        await effacerVerrou(ouvert, ancien.seance);
         verrou = await verrouiller(ouvert, id);
         if (verrou.pris) {
-          avertissements.push(avertissement('VERROU_REPRIS', { seance: mort.seance, depuis: mort.depuis }));
+          avertissements.push(avertissement('VERROU_REPRIS', { seance: ancien.seance, depuis: ancien.depuis }));
         }
       }
     } catch (erreur) {
@@ -458,6 +473,18 @@ export function creerSeance({
     etat.verrouAutre = null;
     etat.verrouTenu = true;
     return avertissements;
+  }
+
+  // Efface le verrou d'une autre séance, que prendreVerrou reprend : celui
+  // de la séance nommée, par deverrouiller, qui n'efface que lui ; un verrou
+  // illisible (seance null) n'a pas de séance qui le rende, et son fichier
+  // s'efface.
+  async function effacerVerrou(ouvert, seance) {
+    if (seance !== null) {
+      await deverrouiller(ouvert, seance);
+      return;
+    }
+    await ouvert.fs.supprimer(ouvert.racine, ouvert.base + SUFFIXES.verrou);
   }
 
   // Rend le verrou que la séance tient sur l'événement de l'Ouvert. Un refus
@@ -911,7 +938,33 @@ export function creerSeance({
     if (estBloque(ouvert)) throw refusBloque();
     if (etat.mode === 'ecriture') return { avertissements: [] };
     exigerSupport();
-    const avertissements = await prendreVerrou(ouvert);
+    return entrerSousVerrou(ouvert, null);
+  }
+
+  // Reprendre le verrou (§ 8.8) : le passage en écriture qui reprend le
+  // verrou refusé que verrouAutre garde, une fois que l'opérateur l'a
+  // confirmé en voyant sa séance et depuis quand (prendreVerrou). Sans
+  // verrou refusé, c'est un passage en écriture. Le refus d'un débloquer
+  // admet la reprise : sur un plan bloqué, ou relu bloqué, le verrou repris
+  // se rend aussitôt, la séance reste en lecture, et VERROU_REPRIS se lit
+  // parmi les avertissements du dernier geste ; débloquer passe ensuite.
+  async function reprendreVerrou() {
+    const ouvert = exigerOuvert();
+    if (ouvert.formatPlusRecent) throw refusFormat();
+    if (etat.mode === 'ecriture') return { avertissements: [] };
+    exigerSupport();
+    const reprise = etat.verrouAutre;
+    return entrerSousVerrou(ouvert, reprise === null ? null : { seance: reprise.seance, depuis: reprise.depuis }, {
+      bloqueAdmis: true,
+    });
+  }
+
+  // Prend le verrou — en reprenant celui que reprise nomme —, relit
+  // l'événement, et passe en écriture. Relu d'un format plus récent, il rend
+  // le verrou et lève le refus ; relu bloqué, il rend le verrou, et lève le
+  // refus sauf bloqueAdmis, qui rend les avertissements.
+  async function entrerSousVerrou(ouvert, reprise, { bloqueAdmis = false } = {}) {
+    const avertissements = await prendreVerrou(ouvert, reprise);
     avertissements.push(...(await relireSousVerrou(ouvert)));
     const relu = etat.ouvert;
     let refus = null;
@@ -919,6 +972,7 @@ export function creerSeance({
     else if (estBloque(relu)) refus = refusBloque();
     if (refus !== null) {
       etat.avertissementsGeste = [...avertissements, ...(await rendreVerrou(relu))];
+      if (bloqueAdmis && !relu.formatPlusRecent) return { avertissements: [...etat.avertissementsGeste] };
       throw refus;
     }
     entrerEnEcriture();
@@ -1170,6 +1224,14 @@ export function creerSeance({
         return { avertissements };
       }),
     passerEnEcriture: () => enFile(passerEnEcriture),
+    /**
+     * Reprend le verrou que verrouAutre garde, après la confirmation de
+     * l'opérateur qui a vu sa séance et depuis quand (§ 8.8) : l'efface,
+     * prend celui de la séance et passe en écriture, sous VERROU_REPRIS
+     * {seance, depuis}. Un verrou qui a changé depuis le refus se refuse
+     * VERROU_PRIS ; un verrou vivant ne se reprend jamais.
+     */
+    reprendreVerrou: () => enFile(reprendreVerrou),
     passerEnLecture: () => enFile(passerEnLecture),
     executer: (nom, args = {}) => enFile(() => suivi(() => geste(nom, args))),
     debloquer: () => enFile(() => suivi(() => geste('debloquer', {}))),

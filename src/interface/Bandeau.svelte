@@ -15,7 +15,9 @@
   // gestes à appeler ; mode.js choisit les clés du libellé de mode et de
   // l'annonce. Le refus de « Liste des événements » passe par la primitive
   // Refus, qui pose son texte et son remède en Commande — écrire ailleurs
-  // sous un support rompu.
+  // sous un support rompu. Ce refus se pose sous les commandes, hors du
+  // flux : le bandeau garde sa hauteur, et l'écran de l'événement, sa place
+  // fixe comprise, ne bouge pas (§ 8.4).
   import { getContext } from 'svelte';
   import { cleAnnonceFormat, cleDeMode } from './mode.js';
   import Refus from './primitives/Refus.svelte';
@@ -93,8 +95,18 @@
 
   /* Le refus garde les couleurs de la page, sur lesquelles sa couleur et
      celles de sa commande tiennent leur contraste : le fond du bandeau ne
-     passe pas sous lui. */
+     passe pas sous lui. Posé sous les commandes, aligné à leur droite, il
+     recouvre l'écran au lieu de le pousser. Sa largeur bornée le tient à
+     droite, loin de la place fixe, qui ouvre l'écran à gauche, et dans la
+     fenêtre. */
   .refus-liste {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    width: max-content;
+    max-width: min(32rem, calc(100vw - 2 * var(--espace-4)));
+    margin-top: var(--espace-1);
+    border: 1px solid var(--couleur-page-filet);
     border-radius: var(--rayon-1);
     background-color: var(--couleur-page-fond);
     color: var(--couleur-page-texte);
@@ -109,6 +121,7 @@
   }
 
   .commandes {
+    position: relative;
     margin-left: auto;
   }
 

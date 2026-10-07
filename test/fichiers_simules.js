@@ -149,6 +149,12 @@ const estContenuVerrou = (contenu) =>
  *        ce que rend typeSupport, 'fixe' pour une racine absente de l'objet
  * @param {string} [reglages.hote]  machine du processus ; un verrou d'un autre
  *        hôte rend vivant à null
+ * @param {string[]} [reglages.dossiersChoisis]  chemins absolus que rend
+ *        choisirDossier, un par appel, dans l'ordre, puis null comme quand
+ *        l'opérateur annule : chacun sous l'identifiant choisi-<n>, n compté
+ *        depuis 1, et inscrit parmi les racines du système, comme le fait la
+ *        coquille (electron/fichiers.js). La racine choisie n'existe qu'une
+ *        fois créée ; racines() ne la rend pas
  * @returns {import('../src/stockage/systeme_fichiers.js').SystemeFichiers & Object}
  *   le système, et pour l'épreuve :
  *   - pid, hote : ceux du processus, qu'écrit son verrou ; les pid d'un disque
@@ -196,7 +202,11 @@ export function creerFichiersSimules({
   sonde = {},
   support = {},
   hote = 'poste-epreuve',
+  dossiersChoisis = [],
 } = {}) {
+  if (!Array.isArray(dossiersChoisis) || dossiersChoisis.some((chemin) => typeof chemin !== 'string' || chemin === '')) {
+    throw new TypeError('dossiersChoisis : un tableau de chemins, chaînes non vides');
+  }
   const etat = etatDuDisque(disque, insensibleCasse, separateur);
   const pid = etat.prochainPid;
   etat.prochainPid += 1;
@@ -205,6 +215,10 @@ export function creerFichiersSimules({
   const joindre = (dossier, nom) => (dossier.endsWith(separateur) ? dossier + nom : dossier + separateur + nom);
   const racines = new Map([['documents', documents]]);
   if (executable !== null) racines.set('portable', joindre(executable, 'data'));
+  // Les dossiers que le dialogue rendra encore, et le nombre de ceux qu'il a
+  // rendus.
+  const aChoisir = [...dossiersChoisis];
+  let choisis = 0;
 
   // Cause qui refuse toute écriture d'une racine : celle de sa sonde déclarée,
   // puis celle de pannes.ecriture. Renommages refusés restants d'une racine,
@@ -365,8 +379,17 @@ export function creerFichiersSimules({
       documents: { id: 'documents', chemin: documents },
     })),
 
-    // Les dialogues natifs rendent null, comme quand l'opérateur annule.
-    choisirDossier: primitive(null, () => null),
+    // Les dialogues natifs rendent null, comme quand l'opérateur annule ;
+    // choisirDossier rend d'abord les dossiersChoisis, chacun inscrit comme
+    // racine pour le reste du processus.
+    choisirDossier: primitive(null, () => {
+      if (aChoisir.length === 0) return null;
+      const chemin = aChoisir.shift();
+      choisis += 1;
+      const id = `choisi-${choisis}`;
+      racines.set(id, chemin);
+      return { id, chemin };
+    }),
 
     // Le témoin s'écrit par-dessus celui qu'une séance précédente a pu
     // laisser, puis s'efface ; sa relecture ne peut différer de ce qui vient

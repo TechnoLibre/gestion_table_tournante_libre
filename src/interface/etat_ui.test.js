@@ -20,6 +20,7 @@ const DEPART = {
   listes: true,
   pleinEcran: false,
   selection: null,
+  fiche: null,
 };
 
 // Un état et le relevé de ce que reçoit son abonné.
@@ -87,6 +88,7 @@ describe('état de navigation : chaque transition', () => {
     ui.basculerListes();
     ui.basculerPleinEcran();
     ui.selectionner({ table: 1, siege: 2 });
+    ui.ouvrirFiche(4);
     ui.ouvrirApropos();
     ui.reinitialiser();
     assert.deepEqual(ui.etat(), { ...DEPART, apropos: true });
@@ -143,11 +145,32 @@ describe('état de navigation : chaque transition', () => {
     assert.deepEqual(ui.etat(), DEPART);
   });
 
+  test('ouvrirFiche(id) mène à la section participants et ouvre la fiche ; ouvrirFiche(null) la referme, la section reste', () => {
+    const ui = creerEtatUi();
+    ui.allerA('plan');
+    ui.ouvrirFiche(7);
+    assert.deepEqual(ui.etat(), { ...DEPART, section: 'participants', fiche: 7 });
+    ui.allerA('tables');
+    ui.ouvrirFiche(null);
+    assert.deepEqual(ui.etat(), { ...DEPART, section: 'tables', fiche: null });
+  });
+
+  test('ouvrirFiche prend un identifiant entier positif ou null ; sinon RangeError sans rien changer', () => {
+    const ui = creerEtatUi();
+    ui.ouvrirFiche(3);
+    const avant = ui.etat();
+    for (const faute of [0, -2, 1.5, Number.NaN, '3', undefined]) {
+      assert.throws(() => ui.ouvrirFiche(faute), RangeError, String(faute));
+    }
+    assert.equal(ui.etat(), avant);
+  });
+
   test('une transition qui ne change rien ne publie pas d’état neuf', () => {
     const { ui, recus } = suivi();
     ui.allerA(SECTION_OUVERTURE);
     ui.fermerApropos();
     ui.mettreEnEvidence(null);
+    ui.ouvrirFiche(null);
     assert.equal(recus.length, 1);
   });
 });

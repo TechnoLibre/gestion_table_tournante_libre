@@ -4,7 +4,7 @@
 // L'état de navigation de l'interface : la section ouverte, le panneau « À
 // propos », le tour montré, la personne mise en évidence, la proposition
 // demandée au plan, le texte d'un import en attente, les listes de noms, le
-// plein écran, la place sélectionnée. Regarder n'écrit jamais (§ 8.4) : cet
+// plein écran, la place sélectionnée, la fiche ouverte. Regarder n'écrit jamais (§ 8.4) : cet
 // état ne reçoit ni la séance, ni la façade, ni un système de fichiers, et
 // rien de ce qu'il tient ne quitte la mémoire.
 //
@@ -25,6 +25,7 @@ import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
  * @property {boolean} listes             les listes de noms sont montrées
  * @property {boolean} pleinEcran
  * @property {Object|null} selection      la place sélectionnée
+ * @property {number|null} fiche          l'identifiant de la personne dont la fiche est ouverte
  */
 
 // L'état de navigation d'un événement qui s'ouvre, panneau « À propos »
@@ -38,6 +39,7 @@ const DEPART = Object.freeze({
   listes: true,
   pleinEcran: false,
   selection: null,
+  fiche: null,
 });
 
 /**
@@ -49,7 +51,7 @@ const DEPART = Object.freeze({
  *   montrerProposition: Function, ouvrirImport: Function,
  *   prendreImport: () => null|{texte: string, origine: string},
  *   basculerListes: Function, basculerPleinEcran: Function,
- *   selectionner: Function}}
+ *   selectionner: Function, ouvrirFiche: Function}}
  */
 export function creerEtatUi() {
   let etat = Object.freeze({ ...DEPART, apropos: false });
@@ -117,6 +119,17 @@ export function creerEtatUi() {
     },
     selectionner(place) {
       changer({ selection: place });
+    },
+    /** Ouvre la fiche de la personne id, entier positif, dans la section des
+     *  participants ; null referme la fiche, la section reste. RangeError
+     *  sinon. */
+    ouvrirFiche(id) {
+      if (id === null) {
+        changer({ fiche: null });
+        return;
+      }
+      if (!Number.isInteger(id) || id < 1) throw new RangeError(`fiche : entier positif ou null attendu, reçu ${String(id)}`);
+      changer({ fiche: id, section: 'participants' });
     },
   };
 }

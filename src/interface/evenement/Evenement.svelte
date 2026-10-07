@@ -2,9 +2,22 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // L'événement ouvert sous sa forme minimale : son nom, une commande par
-  // section, dans l'ordre du § 2.1, et la section ouverte de l'état de
-  // navigation. Aucune section n'en exige une autre.
+  // L'événement ouvert (§ 2.1, § 8.4) : le cadre de mode, qui entoure la
+  // surface de travail de toute section, et porte sous sa barre — place
+  // fixe, libellé, Défaire et Refaire — la tête de l'événement : son en-tête
+  // — nom et états du plan — et la navigation des sections, dans l'ordre du
+  // § 2.1. Rien ne précède le cadre dans l'écran : ce que la tête montre ne
+  // déplace pas la place fixe. Aucune section n'en exige une autre : la
+  // navigation les offre toutes, et la séance refuse elle-même ce qui ne
+  // peut pas se faire. Le plein écran du plan efface la tête, jamais le
+  // cadre ni sa place fixe.
+  //
+  // L'écran de l'événement tient dans la fenêtre, sous le bandeau : la page
+  // ne défile pas, la surface de travail défile dans le cadre, et le cadre,
+  // son libellé et sa place fixe restent où ils sont (§ 8.4). La règle
+  // globale ci-dessous donne pour cela une hauteur à l'ascendance de l'écran
+  // — le conteneur de l'application et son <main> — tant qu'il porte cet
+  // écran, et à lui seul.
   import { getContext } from 'svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import SectionGeneration from '../generation/SectionGeneration.svelte';
@@ -13,6 +26,10 @@
   import SectionPlan from '../plan/SectionPlan.svelte';
   import SectionPropositions from '../propositions/SectionPropositions.svelte';
   import SectionTables from '../tables/SectionTables.svelte';
+  import Avertissements from './Avertissements.svelte';
+  import CadreMode from './CadreMode.svelte';
+  import EnteteEvenement from './EnteteEvenement.svelte';
+  import SupportRompu from './SupportRompu.svelte';
   import { SECTIONS, cleDeSection } from './sections.js';
 
   const t = getContext('t');
@@ -33,8 +50,8 @@
   const Section = $derived(COMPOSANTS.get($ui.section));
 </script>
 
-<div class="evenement" data-ecran="evenement">
-  <h1>{$seance.evenement?.nom}</h1>
+{#snippet tete()}
+  <EnteteEvenement />
   <nav aria-label={t('coquille.navigation')}>
     {#each SECTIONS as nom (nom)}
       <button
@@ -46,10 +63,39 @@
       >
     {/each}
   </nav>
-  <Section />
+{/snippet}
+
+<div class="evenement" data-ecran="evenement">
+  <CadreMode tete={$ui.pleinEcran ? null : tete}>
+    {#if $seance.supportRompu !== null}
+      <SupportRompu />
+    {/if}
+    <Avertissements />
+    <Section />
+  </CadreMode>
 </div>
 
 <style>
+  /* L'ascendance de l'écran de l'événement prend la hauteur de la fenêtre :
+     le bandeau en haut, l'écran dessous, qui ne déborde pas. */
+  :global(div:has(> main > [data-ecran='evenement'])) {
+    height: 100vh;
+  }
+
+  :global(main:has(> [data-ecran='evenement'])) {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .evenement {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
   nav {
     display: flex;
     flex-wrap: wrap;
