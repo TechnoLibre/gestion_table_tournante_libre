@@ -399,6 +399,35 @@ const EXEMPLES = new Map([
   ['ENTREE_DEPLACER_DANS_RETENU', { personne: 'Iris Ombrelle', de: 4, vers: 7, siege: null, tour: 2 }],
   ['ENTREE_ECHANGER_DANS_RETENU', { a: 'Iris Ombrelle', deA: 4, b: 'Théo Pervenche', deB: null, tour: 2 }],
   ['ENTREE_RETIRER_DU_TOUR', { personne: 'Iris Ombrelle', numero: 4, tour: 2 }],
+  // Mobilier : saisies, capacité, sièges retirés, libellés figés
+  ['NON_ENTIER', { saisie: '8abc', remede: null }],
+  ['MOINS_DE_DEUX', { remede: null }],
+  ['MOINS_D_UN_TOUR', { tours: 0, remede: null }],
+  ['SOUS_RESERVATIONS', { table: 2, n: 7, tour: 1, remede: { geste: 'afficherTour', tour: 1, proposition: null } }],
+  ['SOUS_OCCUPES', { table: 2, n: 7, tour: 3, remede: { geste: 'afficherTour', tour: 3, proposition: null } }],
+  [
+    'SIEGES_RETIRES',
+    {
+      table: 2,
+      sieges: [
+        { siege: 8, cause: 'SIEGE_TITRE', libelle: 'animateur' },
+        { siege: 7, cause: 'SIEGE_RESERVE', participant: 1, suspendue: true },
+      ],
+      remede: { commande: 'retirerTitre', arguments: { table: 2, siege: 8 } },
+    },
+  ],
+  ['SIEGE_RESERVE', { siege: 7, participant: 1, suspendue: false }],
+  ['SIEGE_TITRE', { siege: 8, libelle: 'animateur' }],
+  ['SURNUMERAIRES', { table: 3, tour: 2, personnes: [16, 17] }],
+  ['AU_DELA_LISIBLE', { seuil: 16 }],
+  ['ENTREE_CREER_TABLE', { numero: 3 }],
+  ['ENTREE_SUPPRIMER_TABLE', { numero: 2, reservations: 2, titres: 1 }],
+  ['ENTREE_DEPLACER_TABLE', { numero: 3 }],
+  ['ENTREE_CHANGER_PLACES_TABLE', { numero: 5, sieges: 10 }],
+  ['ENTREE_REALIGNER_TABLE', { numero: 5, sieges: 8 }],
+  ['ENTREE_CHANGER_DEFAUT', { sieges: 10, realignees: 4 }],
+  ['ENTREE_CHANGER_TOURS', { tours: 3, retirees: 2 }],
+  ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerAppartenances', valeur: false }],
 ]);
 
 // Un texte composé ne laisse paraître ni valeur absente, ni booléen, ni

@@ -634,6 +634,14 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['deplacerDansRetenu', { tour: 1, participant: autre, table: tableAutre, siege: null }],
       ['echangerDansRetenu', { tour: 1, a: voisin, b: autre }],
       ['retirerDuTour', { tour: 1, participant: autre }],
+      ['creerTable', { forme: 'carree' }],
+      ['supprimerTable', { id: 2 }],
+      ['deplacerTable', { id: 1, position: { x: 40, y: 40 } }],
+      ['changerPlacesTable', { id: 2, sieges: 3, origine: 'champ' }],
+      ['realignerTable', { id: 1 }],
+      ['changerDefaut', { sieges: 3, realigner: false }],
+      ['changerTours', { tours: 3 }],
+      ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
     ]);
   }
 
