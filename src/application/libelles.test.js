@@ -16,11 +16,22 @@
 // La table se partage en fichiers, un par domaine, sous libelles/ : chacun
 // exporte TABLE, une Map, et libelles.js les assemble par ordre alphabétique
 // des fichiers ; les tables, comme l'assemblage, sont hors du balayage.
+//
+// src/moteur se relève à part, épreuves exclues : chaque littéral en
+// capitales de ses sources, hors commentaires, y est un code — celui d'une
+// ErreurConfiguration ou d'une violation de ses vérificateurs —, que le
+// moteur lève par une constante ou par une expression autant que par un
+// appel. Une seule exception, nommée : les valeurs de domine dans manque.js,
+// qui disent laquelle de deux propositions sert le mieux et ne s'affichent
+// pas comme un code.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
+import { CRITERES } from '../moteur/classement.js';
+import { TABLES_INTERFACE } from '../interface/libelles.js';
+import { creerTraduction } from './traduction.js';
 import { CODES, TABLES_APPLICATION, libelle } from './libelles.js';
 
 const RACINE = fileURLToPath(new URL('../..', import.meta.url));
@@ -90,8 +101,40 @@ function modulesDe(arbre) {
     .sort();
 }
 
+// --- Le relevé du moteur -----------------------------------------------------
+
+const MOTEUR = 'src/moteur';
+// Les littéraux en capitales du moteur qui ne sont pas des codes, par module.
+const PAS_DES_CODES = new Map([[join(MOTEUR, 'manque.js'), new Set(['A', 'B'])]]);
+// Les modules du moteur qui portent des codes.
+const MODULES_A_CODES = ['configuration.js', 'plafond.js', 'recherche.js', 'verification.js'].map((nom) => join(MOTEUR, nom));
+const LITTERAL_CODE = new RegExp(CODE, 'g');
+
+/** Chaque littéral en capitales d'un texte source, hors commentaires. */
+function litterauxEnCapitales(texte) {
+  return [...sansCommentaires(texte).matchAll(LITTERAL_CODE)].map((trouve) => trouve[1]);
+}
+
+// Relevé du moteur : chaque code de ses modules, hors exceptions nommées,
+// le module qui émet chacun en premier, et les modules qui en portent.
+function releverMoteur() {
+  const codes = new Set();
+  const emetteurs = new Map();
+  const porteurs = [];
+  for (const chemin of modulesDe(MOTEUR)) {
+    const exclus = PAS_DES_CODES.get(chemin) ?? new Set();
+    const trouves = litterauxEnCapitales(readFileSync(join(RACINE, chemin), 'utf8')).filter((code) => !exclus.has(code));
+    if (trouves.length > 0) porteurs.push(chemin);
+    for (const code of trouves) {
+      codes.add(code);
+      if (!emetteurs.has(code)) emetteurs.set(code, chemin);
+    }
+  }
+  return { codes, emetteurs, porteurs };
+}
+
 // Relevé de l'arbre réel : par arbre, les codes émis et le fichier qui émet
-// chacun en premier ; puis ceux des tables de contrat.
+// chacun en premier ; puis ceux des tables de contrat ; puis ceux du moteur.
 function releverArbre() {
   const parArbre = new Map();
   const emetteurs = new Map();
@@ -107,8 +150,14 @@ function releverArbre() {
   }
   const tables = new Set(TABLES.flatMap((chemin) => codesDesTables(readFileSync(join(RACINE, chemin), 'utf8'))));
   for (const code of tables) if (!emetteurs.has(code)) emetteurs.set(code, 'table de contrat');
+  const moteur = releverMoteur();
+  for (const [code, chemin] of moteur.emetteurs) if (!emetteurs.has(code)) emetteurs.set(code, chemin);
+  parArbre.set(MOTEUR, moteur.codes);
   return { parArbre, tables, emetteurs };
 }
+
+// Tous les codes relevés : tables de contrat, arbres balayés et moteur.
+const tousReleves = ({ parArbre, tables }) => new Set([...tables, ...[...parArbre.values()].flatMap((codes) => [...codes])]);
 
 describe('libellés : le balayage des codes (§ 14.6, § 14.2)', () => {
   test("le relevé lit le premier argument d'un appel, une clé code, un code de détail, et rien d'un commentaire", () => {
@@ -182,9 +231,10 @@ describe('libellés : le balayage des codes (§ 14.6, § 14.2)', () => {
     assert.ok(tables.has('VERROU_PRIS') && tables.has('IDENTIFIANT_HORS_COMPTEUR'));
   });
 
-  test('chaque code que src/stockage, src/csv et src/application émettent a son texte', () => {
-    const { parArbre, tables, emetteurs } = releverArbre();
-    const releves = new Set([...tables, ...ARBRES.flatMap((arbre) => [...parArbre.get(arbre)])]);
+  test('chaque code que src/stockage, src/csv, src/application et src/moteur émettent a son texte', () => {
+    const releve = releverArbre();
+    const { emetteurs } = releve;
+    const releves = tousReleves(releve);
     assert.ok(releves.size > 0, 'balayage vide');
     const connus = new Set(CODES);
     const sansTexte = [...releves].filter((code) => !connus.has(code)).sort();
@@ -196,8 +246,7 @@ describe('libellés : le balayage des codes (§ 14.6, § 14.2)', () => {
   });
 
   test('chaque texte de la table a un émetteur : aucune entrée morte', () => {
-    const { parArbre, tables } = releverArbre();
-    const releves = new Set([...tables, ...ARBRES.flatMap((arbre) => [...parArbre.get(arbre)])]);
+    const releves = tousReleves(releverArbre());
     assert.ok(CODES.length > 0, 'table vide');
     assert.deepEqual(CODES.filter((code) => !releves.has(code)), [], 'textes sans émetteur');
   });
@@ -334,6 +383,61 @@ const EXEMPLES = new Map([
   // Moteur
   ['PLACES_MANQUANTES', { placesManquantes: 3 }],
   ['SURRESERVATION', { table: 2, tour: 1, reservees: 9, capacite: 8, remede: null }],
+  ['CAPACITE', { table: 2, capacite: 1 }],
+  ['TOURS', { tours: 0 }],
+  ['PARTICIPANT_DOUBLON', { participant: 4 }],
+  ['TABLE_DOUBLON', { table: 3 }],
+  ['RESERVATION_INCONNUE', { reservation: 0, participant: 42 }],
+  ['RESERVATION_TOUR', { reservation: 2, tour: 5 }],
+  ['RESERVATION_CONFLIT', { participant: 4, tour: 2, tables: [1, 3] }],
+  ['ENUMERATION_TROP_GRANDE', { participant: 7, tablesAdmissibles: 40, toursLibres: 9, limite: 1000000 }],
+  ['PLAN_TOURS', { attendu: 4, tours: 3, reserves: 3 }],
+  ['PLAN_TABLE_INCONNUE', { table: 9 }],
+  ['PLAN_TABLE_DOUBLON', { table: 2 }],
+  ['PLAN_TABLE_ABSENTE', { table: 5 }],
+  ['PLAN_LISTES', { tour: 2, listes: 3, tables: 4 }],
+  ['PLAN_INCONNU', { participant: 42, tour: 1 }],
+  ['PLAN_EXCLU_PLACE', { participant: 3, tour: 2 }],
+  ['PLAN_DOUBLE_PLACE', { participant: 5, tour: 3 }],
+  ['PLAN_NON_ASSIS', { participant: 6, tour: 4 }],
+  ['TABLE_INCONNUE', { table: 9, detail: 'inconnue' }],
+  ['DOUBLE_PLACE', { participant: 5, tour: 3 }],
+  ['EXCLU_PLACE', { participant: 3, tour: 2 }],
+  ['NON_ASSIS', { participant: 6, tour: 4 }],
+  ['RESERVATION', { participant: 4, table: 5, tour: 1 }],
+  ['PLAFOND_A_PRIORI', { index: 2, participant: 3 }],
+  ['ORDRE_PLAFONDS', { index: 2, participant: 3 }],
+  ['PLAFOND_REALISE', { index: 0, participant: 1 }],
+  ['DEPASSEMENT', { index: 4, participant: 9 }],
+  // Génération
+  ['GENERATION_EN_COURS', { remede: null }],
+  ['AUCUN_PARTICIPANT', { remede: { geste: 'ouvrirSection', section: 'participants' } }],
+  ['AUCUNE_TABLE', { remede: { geste: 'ouvrirSection', section: 'tables' } }],
+  [
+    'CONFIRMATION_REQUISE',
+    {
+      estimation: {
+        secondes: 1200,
+        longue: true,
+        auDelaDuPlafond: false,
+        mesure: { dureeMs: 2000, mouvements: 1000000, participants: 260, nombre: 5, arret: 200000 },
+      },
+      remede: null,
+    },
+  ],
+  ['HORS_DOMAINE', { min: 1, max: null, remede: null }],
+  ['REGLAGE_HORS_DOMAINE', { reglage: 'arret', remede: null }],
+  [
+    'GENERATION_INVARIANT_VIOLE',
+    {
+      rang: 2,
+      violations: [
+        { code: 'RESERVATION', participant: 4, table: 5, tour: 1 },
+        { code: 'CAPACITE', table: 5, tour: 2 },
+      ],
+      remede: null,
+    },
+  ],
   // Refus et avertissements des commandes
   ['NOM_REQUIS', { remede: null }],
   ['DATE_INVALIDE', { date: '2031-02-30', remede: null }],
@@ -695,5 +799,144 @@ describe('libellés : les tables par domaine (§ 14.6)', () => {
     assert.equal(libelle('format.vide'), '\u{2014}');
     const toutes = TABLES_APPLICATION.flatMap((table) => [...table.keys()]).filter((cle) => FORME_CODE.test(cle));
     assert.deepEqual([...CODES], [...toutes].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+  });
+});
+
+// --- Le moteur et la génération (A6) -------------------------------------------
+
+describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7)', () => {
+  test('le relevé du moteur porte des codes, dans ses quatre modules à codes, et rien des valeurs de domine', () => {
+    const { codes, porteurs } = releverMoteur();
+    assert.ok(codes.size >= 20, `${codes.size} codes relevés`);
+    assert.deepEqual(porteurs, MODULES_A_CODES);
+    assert.ok(!codes.has('A') && !codes.has('B'));
+    for (const code of ['PLAN_EXCLU_PLACE', 'PLAN_INCONNU', 'ENUMERATION_TROP_GRANDE', 'PLACES_MANQUANTES', 'RESERVATION']) {
+      assert.ok(codes.has(code), code);
+    }
+    assert.deepEqual(litterauxEnCapitales("// 'DANS_UN_COMMENTAIRE'\nconst x = a ? 'PREMIER' : 'SECOND';"), ['PREMIER', 'SECOND']);
+  });
+
+  test("chaque code du moteur a sa clé, une seule ; un code que seul le moteur lève l'a dans libelles/moteur.js, aux exceptions nommées près", async () => {
+    const { codes } = releverMoteur();
+    const releve = releverArbre();
+    const ailleurs = new Set([...releve.tables, ...ARBRES.flatMap((arbre) => [...releve.parArbre.get(arbre)])]);
+    const { TABLE: MOTEUR_TABLE } = await import('./libelles/moteur.js');
+    const { TABLE: STOCKAGE_TABLE } = await import('./libelles/stockage.js');
+    // INCONNU est déjà la clé de la table d'A1, une faute de placement du
+    // stockage aux mêmes détails ; PLACES_MANQUANTES et SURRESERVATION sont
+    // dans libelles/moteur.js depuis la séance (A2), et ne s'y redéfinissent pas.
+    const EXCEPTIONS = new Map([['INCONNU', STOCKAGE_TABLE]]);
+    let comptes = 0;
+    for (const code of codes) {
+      comptes += 1;
+      const porteuses = TABLES_APPLICATION.filter((table) => table.has(code));
+      assert.equal(porteuses.length, 1, `${code} : ${porteuses.length} tables`);
+      if (EXCEPTIONS.has(code)) assert.equal(porteuses[0], EXCEPTIONS.get(code), code);
+      else if (!ailleurs.has(code)) assert.equal(porteuses[0], MOTEUR_TABLE, `${code} hors de libelles/moteur.js`);
+    }
+    assert.ok(comptes > 0);
+    for (const code of ['PLACES_MANQUANTES', 'SURRESERVATION']) assert.ok(MOTEUR_TABLE.has(code), code);
+  });
+
+  test('chaque critère de CRITERES a son libellé moteur.critere.<nom>', () => {
+    assert.ok(CRITERES.length > 0);
+    for (const critere of CRITERES) {
+      const texte = libelle(`moteur.critere.${critere}`);
+      assert.ok(texte.length > 0, critere);
+      for (const trace of TRACES) assert.doesNotMatch(texte, trace);
+    }
+    assert.equal(new Set(CRITERES.map((critere) => libelle(`moteur.critere.${critere}`))).size, CRITERES.length);
+  });
+
+  test("les tables de l'application et des écrans s'assemblent sans clé en double", () => {
+    assert.ok(TABLES_INTERFACE.length > 0);
+    assert.doesNotThrow(() => creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]));
+  });
+
+  test('CAPACITE et TOURS, levés sous deux formes, ont un seul texte qui les distingue par leurs détails', () => {
+    const configuration = libelle('CAPACITE', { table: 2, capacite: 1 });
+    const violation = libelle('CAPACITE', { table: 2, tour: 3 });
+    assert.notEqual(configuration, violation);
+    assert.match(configuration, /\b1\b/);
+    assert.match(violation, /tour 3/);
+    const tours = libelle('TOURS', { tours: 0 });
+    const toursViolation = libelle('TOURS', {});
+    assert.notEqual(tours, toursViolation);
+    for (const texte of [configuration, violation, tours, toursViolation]) for (const trace of TRACES) assert.doesNotMatch(texte, trace, texte);
+  });
+
+  test("une violation d'indicateur nomme la personne quand l'appelant la traduit, son rang sinon ; un détail de table inconnu lève", () => {
+    assert.match(libelle('DEPASSEMENT', { index: 4, participant: 9 }), /n° 9/);
+    assert.match(libelle('DEPASSEMENT', { index: 4 }), /rang 5/);
+    for (const detail of ['inconnue', 'doublon', 'absente']) assert.match(libelle('TABLE_INCONNUE', { table: 9, detail }), /9/);
+    assert.match(libelle('TABLE_INCONNUE', { tour: 2, detail: 'listes' }), /tour 2/);
+    assert.throws(() => libelle('TABLE_INCONNUE', { table: 9, detail: 'inventee' }), RangeError);
+  });
+
+  test('chaque refus de valider et de generer a son texte, dans la table de son domaine', async () => {
+    const parTable = new Map((await tablesDuDossier()).map(({ table, module }) => [table, module.TABLE]));
+    // Les refus que lèvent les épreuves de valider et de generer
+    // (generation.test.js), et la table qui porte chacun. Ceux de la séance,
+    // du stockage, du mobilier et du moteur sont relayés tels quels ;
+    // GENERATION_INVARIANT_VIOLE, propre à la génération, se distingue
+    // d'INVARIANT_VIOLE, la violation du retenu, que la séance porte.
+    const REFUS = [
+      ['NON_ENTIER', 'mobilier'],
+      ['HORS_DOMAINE', 'generation'],
+      ['AUCUN_EVENEMENT', 'seance'],
+      ['LECTURE_SEULE', 'stockage'],
+      ['MODE_LECTURE', 'seance'],
+      ['SUPPORT_ROMPU', 'seance'],
+      ['GENERATION_EN_COURS', 'generation'],
+      ['AUCUN_PARTICIPANT', 'generation'],
+      ['AUCUNE_TABLE', 'generation'],
+      ['SURRESERVATION', 'moteur'],
+      ['PLACES_MANQUANTES', 'moteur'],
+      ['CONFIRMATION_REQUISE', 'generation'],
+      ['REGLAGE_HORS_DOMAINE', 'generation'],
+      ['GENERATION_INVARIANT_VIOLE', 'generation'],
+      ['COMPTEUR_SATURE', 'stockage'],
+    ];
+    assert.equal(REFUS.length, 15);
+    for (const [code, table] of REFUS) {
+      assert.ok(parTable.get(table).has(code), `${code} hors de ${table}.js`);
+      assert.ok(libelle(code, EXEMPLES.get(code)).length > 0, code);
+    }
+  });
+
+  test("la confirmation d'une génération longue dit l'ordre de grandeur, la mesure, le plafond ; sans mesure, le seuil", () => {
+    const mesure = { dureeMs: 2000, mouvements: 1000000, participants: 260, nombre: 5, arret: 200000 };
+    const longue = libelle('CONFIRMATION_REQUISE', { estimation: { secondes: 1200, longue: true, auDelaDuPlafond: false, mesure }, remede: null });
+    assert.match(longue, /environ vingt minutes/);
+    assert.match(longue, /260 participants/);
+    assert.doesNotMatch(longue, /trente minutes/);
+    const plafond = libelle('CONFIRMATION_REQUISE', { estimation: { secondes: 7200, longue: true, auDelaDuPlafond: true, mesure }, remede: null });
+    assert.match(plafond, /trente minutes/);
+    const inconnue = libelle('CONFIRMATION_REQUISE', { estimation: { inconnue: true }, remede: null });
+    assert.match(inconnue, /dix fois le réglage par défaut/);
+    for (const texte of [longue, plafond, inconnue]) for (const trace of TRACES) assert.doesNotMatch(texte, trace, texte);
+  });
+
+  test("une violation d'invariant rendue par la génération nomme son rang et chaque règle, sans retenu ni dérive", () => {
+    const details = {
+      rang: 2,
+      violations: [
+        { code: 'RESERVATION', participant: 4, table: 5, tour: 1 },
+        { code: 'CAPACITE', table: 5, tour: 2 },
+      ],
+      remede: null,
+    };
+    const texte = libelle('GENERATION_INVARIANT_VIOLE', details);
+    assert.match(texte, /rang 2\b/);
+    assert.match(texte, /2 règles/);
+    assert.ok(texte.includes(libelle('RESERVATION', details.violations[0])), texte);
+    assert.ok(texte.includes(libelle('CAPACITE', details.violations[1])), texte);
+    assert.doesNotMatch(texte, /retenu|dérive|proposition n°/);
+    assert.match(libelle('GENERATION_INVARIANT_VIOLE', { ...details, violations: details.violations.slice(0, 1) }), /1 règle\b/);
+  });
+
+  test('un domaine borné nomme ses deux bornes, un domaine ouvert son minimum', () => {
+    assert.match(libelle('HORS_DOMAINE', { min: 0, max: 4294967295, remede: null }), /0 et 4\u{202F}294\u{202F}967\u{202F}295/u);
+    assert.match(libelle('HORS_DOMAINE', { min: 1, max: null, remede: null }), /au moins 1\b/);
   });
 });

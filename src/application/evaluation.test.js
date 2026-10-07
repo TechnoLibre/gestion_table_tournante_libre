@@ -1,0 +1,361 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Épreuves de la table d'évaluation (§ 5.4, § 5.5, § 5.7, § 8.9, § 12.6,
+// § 13.2, § 15.1, § 15.3, § 15.4, § 17) : la mesure qui fait foi, le
+// classement, les placements en dérive ou fautifs, les imposés. Les charges
+// partent des démonstrations livrées, et leurs propositions s'enregistrent
+// par la commande ; les plans construits à la main sont écrits ici, sur la
+// petite démonstration au conflit inévitable. La valeur attendue vient des
+// fonctions du moteur, sollicitées une seconde fois (§ 19.1).
+import assert from 'node:assert/strict';
+import { describe, test } from '../../test/lanceur.js';
+import { texteLivre } from '../demo/livrees.js';
+import { classer } from '../moteur/classement.js';
+import { indexerPlan, normaliser } from '../moteur/configuration.js';
+import { diagnostiquer } from '../moteur/diagnostic.js';
+import { ErreurConfiguration } from '../moteur/erreurs.js';
+import { mesurer } from '../moteur/indicateurs.js';
+import { ecartsAuPlafondAPriori } from '../moteur/manque.js';
+import { plafondsAPriori } from '../moteur/plafond.js';
+import { rechercher } from '../moteur/recherche.js';
+import { analyser, capacite, configurationDepuisCharge } from '../stockage/document.js';
+import { planDepuisFichier } from '../stockage/placements.js';
+import { VERSION } from '../version.genere.js';
+import { appliquerCommande } from './commandes.js';
+import { evaluer } from './evaluation.js';
+
+const V1 = VERSION.affichee;
+
+const chargeDemo = (cle) => analyser(texteLivre(cle)).charge;
+
+// La charge, une génération du moteur de plus, enregistrée par la commande.
+function generee(charge, reglages) {
+  const configuration = configurationDepuisCharge(charge);
+  const propositions = rechercher(configuration, reglages);
+  return appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
+}
+
+const executer = (charge, nom, args) => appliquerCommande(nom, charge, args).charge;
+
+// Une proposition écrite à la main, sièges non attribués, sur les tables de
+// la charge dans leur ordre ; ses listes et réserves telles que données.
+function propositionDe(charge, id, tours, reserves = tours.map(() => [])) {
+  const participants = charge.participants.filter(({ exclu }) => !exclu).map(({ id: p }) => p);
+  return {
+    id,
+    graine: id,
+    arret: 40,
+    historique: 1000,
+    produitVersion: V1,
+    siegesAttribues: false,
+    tables: charge.tables.map(({ id: t }) => t),
+    capacites: charge.tables.map((table) => capacite(charge, table)),
+    tours: tours.length,
+    participants,
+    placement: tours.map((listes, rang) => ({ sieges: listes.map((liste) => [...liste].sort((a, b) => a - b)), reserve: reserves[rang] })),
+  };
+}
+
+// Le retenu tiré d'une proposition.
+function retenuDe(proposition) {
+  const { id, siegesAttribues, tables, capacites, tours, participants, placement } = structuredClone(proposition);
+  return { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
+}
+
+// Gèle en profondeur : evaluer qui modifierait sa charge lèverait.
+function figer(valeur) {
+  if (valeur !== null && typeof valeur === 'object' && !Object.isFrozen(valeur)) {
+    Object.freeze(valeur);
+    for (const element of Object.values(valeur)) figer(element);
+  }
+  return valeur;
+}
+
+// Chaque nombre atteint depuis la valeur, à toute profondeur.
+function nombres(valeur, trouves = []) {
+  if (typeof valeur === 'number') trouves.push(valeur);
+  else if (valeur !== null && typeof valeur === 'object') for (const element of Object.values(valeur)) nombres(element, trouves);
+  return trouves;
+}
+
+// Les plans écrits à la main sur la petite démonstration au conflit
+// inévitable — appartenances de tailles 5, 4 et 3 —, nommés par leurs
+// collisions (cumulées, distinctes). Les trois premiers ont le même plus
+// grand écart au plafond a priori, 3 ; le quatrième garde ensemble, aux
+// quatre tours, les personnes 1, 2 et 3, d'appartenances distinctes, et ses
+// quatre collisions tombent sur quatre paires.
+const PLANS_CONFLIT = [
+  {
+    nom: '(4, 1)',
+    tours: [
+      [[2, 3, 10], [6, 8, 9], [4, 7, 12], [1, 5, 11]],
+      [[2, 7, 10], [4, 6, 8], [3, 11, 12], [1, 5, 9]],
+      [[7, 9, 12], [3, 8, 11], [4, 6, 10], [1, 2, 5]],
+      [[2, 7, 10], [3, 8, 9], [6, 11, 12], [1, 4, 5]],
+    ],
+    collisions: [4, 1],
+  },
+  {
+    nom: '(4, 2)',
+    tours: [
+      [[2, 6, 10], [3, 8, 9], [7, 11, 12], [1, 4, 5]],
+      [[4, 7, 10], [2, 6, 8], [1, 5, 11], [3, 9, 12]],
+      [[2, 6, 12], [4, 8, 10], [1, 3, 11], [5, 7, 9]],
+      [[2, 3, 12], [4, 8, 10], [1, 6, 9], [5, 7, 11]],
+    ],
+    collisions: [4, 2],
+  },
+  {
+    nom: '(6, 6)',
+    tours: [
+      [[3, 4, 12], [7, 8, 9], [2, 6, 10], [1, 5, 11]],
+      [[4, 6, 12], [2, 8, 10], [1, 7, 11], [3, 5, 9]],
+      [[2, 4, 10], [6, 8, 11], [1, 3, 12], [5, 7, 9]],
+      [[2, 7, 10], [5, 6, 8], [9, 11, 12], [1, 3, 4]],
+    ],
+    collisions: [6, 6],
+  },
+  {
+    nom: 'trio',
+    tours: [
+      [[1, 2, 3], [6, 9, 10], [7, 11, 12], [4, 5, 8]],
+      [[1, 2, 3], [5, 6, 9], [7, 11, 12], [4, 8, 10]],
+      [[1, 2, 3], [7, 8, 9], [10, 11, 12], [4, 5, 6]],
+      [[1, 2, 3], [7, 8, 9], [6, 10, 11], [4, 5, 12]],
+    ],
+    collisions: [4, 4],
+  },
+];
+
+describe("évaluation : la mesure qui fait foi (§ 5.10, § 13.2)", () => {
+  test('chaque ligne comparable porte mesurer, les plafonds, les trois chiffres ; le classement est celui de classer', () => {
+    const charge = figer(generee(chargeDemo('petite-conflit'), { graine: 5, nombre: 3, arret: 400 }));
+    const table = evaluer(charge);
+    const instance = normaliser(configurationDepuisCharge(charge));
+    const aPriori = plafondsAPriori(instance);
+    assert.deepEqual(table.population, instance.ids);
+    assert.equal(table.propositions.length, 3);
+    const entrees = [];
+    for (const proposition of charge.propositions) {
+      const ligne = table.propositions.find(({ id }) => id === proposition.id);
+      const mesures = mesurer(instance, indexerPlan(instance, planDepuisFichier(proposition)));
+      assert.equal(ligne.statut, 'comparable');
+      assert.deepEqual(ligne.raisons, []);
+      assert.deepEqual(ligne.violations, []);
+      assert.deepEqual(ligne.refusDessin, []);
+      assert.deepEqual(ligne.mesures, mesures);
+      assert.equal(ligne.plafondsRealises.length, 12);
+      assert.equal(ligne.minimumAtteint, false);
+      assert.deepEqual(Object.keys(ligne.troisChiffres).sort(), ['ecartItineraireMax', 'effectifManque', 'manqueMax']);
+      assert.equal(ligne.ecartAuPlafondAPrioriMax, Math.max(...ecartsAuPlafondAPriori(mesures, aPriori)));
+      entrees.push({ id: proposition.id, mesures, plafondsAPriori: aPriori });
+    }
+    assert.deepEqual(table.classement, classer(entrees));
+    assert.deepEqual(table.propositions.map(({ id }) => id), table.classement.ordre);
+    assert.equal(table.retenu, null);
+  });
+
+  test("trois plans au même premier critère se rangent par l'excédent, puis les cumulées ; le trio vient en dernier", () => {
+    const charge = structuredClone(chargeDemo('petite-conflit'));
+    charge.propositions = PLANS_CONFLIT.map(({ tours }, rang) => propositionDe(charge, rang + 1, tours));
+    charge.prochainsIds.proposition = 5;
+    charge.evenement.etat = 'propose';
+    const table = evaluer(figer(charge));
+    const parId = new Map(table.propositions.map((ligne) => [ligne.id, ligne]));
+    PLANS_CONFLIT.forEach(({ nom, collisions }, rang) => {
+      const { mesures } = parId.get(rang + 1);
+      assert.deepEqual([mesures.collisionsCumulees, mesures.pairesDistinctes], collisions, nom);
+    });
+    assert.deepEqual([1, 2, 3].map((id) => parId.get(id).ecartAuPlafondAPrioriMax), [3, 3, 3]);
+    assert.ok(parId.get(4).ecartAuPlafondAPrioriMax > 3);
+    assert.deepEqual(table.classement.ordre, [3, 2, 1, 4]);
+    assert.deepEqual(table.classement.criteresAppliques[0], 'ecartAuPlafondAPrioriMax');
+    for (const ligne of table.propositions) {
+      const ecarts = ecartsAuPlafondAPriori(ligne.mesures, plafondsAPriori(normaliser(configurationDepuisCharge(charge))));
+      assert.equal(ligne.ecartAuPlafondAPrioriMax, Math.max(...ecarts));
+    }
+  });
+
+  test('evaluer ne modifie pas la charge, et deux appels rendent la même table', () => {
+    const charge = figer(generee(chargeDemo('petite'), { graine: 2, nombre: 2, arret: 300 }));
+    assert.deepEqual(evaluer(charge), evaluer(charge));
+  });
+});
+
+describe('évaluation : une réservation que le plan ne tient pas (§ 5.8, § 12.6)', () => {
+  test("une réservation posée après la génération laisse la ligne comparable et classée, la violation RESERVATION nommée", () => {
+    const avant = generee(chargeDemo('petite'), { graine: 1, nombre: 1, arret: 200 });
+    const [proposition] = avant.propositions;
+    // La table de la personne 1 au premier tour, puis une autre où la réserver.
+    const listes = planDepuisFichier(proposition).tours[0];
+    const sienne = avant.tables[listes.findIndex((liste) => liste.includes(1))].id;
+    const autre = avant.tables.find(({ id }) => id !== sienne).id;
+    const charge = executer(avant, 'reserver', { participant: 1, table: autre, siege: null, portee: 'tour', tour: 1 });
+    const table = evaluer(figer(charge));
+    const [ligne] = table.propositions;
+    assert.equal(ligne.id, proposition.id);
+    assert.equal(ligne.statut, 'comparable');
+    assert.deepEqual(ligne.raisons, []);
+    assert.deepEqual(ligne.violations, [{ code: 'RESERVATION', participant: 1, table: autre, tour: 1 }]);
+    assert.notEqual(ligne.mesures, null);
+    assert.deepEqual(table.classement.ordre, [proposition.id]);
+  });
+});
+
+describe('évaluation : les formes closes ne corrigent rien (§ 5.4)', () => {
+  test("un retenu qui laisse une personne en réserve à trois tours mesure moins de collisions que le plancher, et la table porte la mesure", () => {
+    const charge = structuredClone(chargeDemo('petite-conflit'));
+    // Le plan parfait de la petite démonstration, la personne 10 en réserve
+    // aux tours 2 à 4 : elle seule fait deux membres d'une même appartenance
+    // à une table, au premier tour.
+    const tours = [
+      [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]],
+      [[6, 9, 12], [3, 8, 11], [2, 5], [1, 4, 7]],
+      [[4, 8], [2, 7, 12], [1, 6, 11], [3, 5, 9]],
+      [[5, 7, 11], [1, 9], [3, 4, 12], [2, 6, 8]],
+    ];
+    const proposition = propositionDe(charge, 1, tours, [[], [10], [10], [10]]);
+    charge.propositions = [proposition];
+    charge.retenu = retenuDe(proposition);
+    charge.prochainsIds.proposition = 2;
+    charge.evenement.etat = 'retenu';
+    const table = evaluer(figer(charge));
+    const plancher = diagnostiquer(configurationDepuisCharge(charge)).collisions.reduce((total, { plancherCumulees }) => total + plancherCumulees, 0);
+    assert.equal(plancher, 4);
+    assert.equal(table.retenu.statut, 'comparable');
+    assert.equal(table.retenu.id, 1);
+    assert.equal(table.retenu.mesures.collisionsCumulees, 1);
+    assert.ok(table.retenu.mesures.collisionsCumulees < plancher);
+  });
+});
+
+describe('évaluation : les populations différentes (§ 9, § 12.6)', () => {
+  test("générer, exclure une personne, générer encore : les premières sont en dérive, hors classement, leurs raisons nomment la personne", () => {
+    let charge = generee(chargeDemo('petite'), { graine: 1, nombre: 2, arret: 200 });
+    charge = executer(charge, 'exclureParticipant', { id: 4 });
+    charge = generee(charge, { graine: 2, nombre: 2, arret: 200 });
+    const table = evaluer(figer(charge));
+    assert.deepEqual(table.population, [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12]);
+    assert.deepEqual(table.classement.ordre.slice().sort(), [3, 4]);
+    for (const id of [1, 2]) {
+      const ligne = table.propositions.find((candidate) => candidate.id === id);
+      assert.equal(ligne.statut, 'derive');
+      assert.deepEqual(ligne.raisons, [{ code: 'PARTICIPANT_EXCLU', participant: 4 }]);
+      assert.deepEqual([ligne.mesures, ligne.plafondsRealises, ligne.troisChiffres, ligne.ecartAuPlafondAPrioriMax, ligne.minimumAtteint], [null, null, null, null, null]);
+      assert.deepEqual([ligne.violations, ligne.refusDessin], [[], []]);
+    }
+    assert.deepEqual(table.propositions.map(({ id }) => id), [...table.classement.ordre, 1, 2]);
+  });
+
+  test('une exclusion et un ajout, à effectif égal, mettent en dérive ; une table ajoutée aussi, TABLE_AJOUTEE', () => {
+    let charge = generee(chargeDemo('petite'), { graine: 1, nombre: 1, arret: 200 });
+    charge = executer(charge, 'exclureParticipant', { id: 4 });
+    charge = executer(charge, 'ajouterParticipant', { champs: { nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles' } });
+    const echange = evaluer(figer(charge));
+    assert.equal(echange.population.length, 12);
+    assert.equal(echange.propositions[0].statut, 'derive');
+    assert.deepEqual(echange.propositions[0].raisons.map(({ code }) => code), ['PARTICIPANT_EXCLU', 'PARTICIPANT_NON_PLACE']);
+    assert.deepEqual(echange.classement.ordre, []);
+    let ajout = generee(chargeDemo('petite'), { graine: 1, nombre: 1, arret: 200 });
+    ajout = executer(ajout, 'creerTable', { forme: 'ronde' });
+    const table = evaluer(figer(ajout));
+    assert.equal(table.propositions[0].statut, 'derive');
+    assert.deepEqual(table.propositions[0].raisons, [{ code: 'TABLE_AJOUTEE', table: 5 }]);
+  });
+});
+
+describe('évaluation : un placement fautif (§ 8.9, point 3)', () => {
+  test("un retenu dont une liste dépasse sa longueur déclarée est fautif, non mesuré, et les propositions se classent sans lui", () => {
+    const base = generee(chargeDemo('petite'), { graine: 3, nombre: 2, arret: 300 });
+    const attendue = evaluer(figer(structuredClone(base)));
+    const charge = structuredClone(base);
+    const retenu = retenuDe(charge.propositions[1]);
+    const [premiere, seconde] = retenu.placement[0].sieges;
+    premiere.push(seconde.shift());
+    charge.retenu = retenu;
+    charge.evenement.etat = 'retenu';
+    const table = evaluer(figer(charge));
+    assert.equal(table.retenu.statut, 'fautif');
+    assert.equal(table.retenu.id, charge.propositions[1].id);
+    assert.equal(table.retenu.mesures, null);
+    assert.ok(table.retenu.raisons.length > 0);
+    assert.ok(table.retenu.raisons.every(({ code }) => code === 'LONGUEUR'), JSON.stringify(table.retenu.raisons));
+    assert.deepEqual(table.propositions, attendue.propositions);
+    assert.deepEqual(table.classement, attendue.classement);
+  });
+});
+
+describe('évaluation : le plafond a priori inconnu (§ 17, point 4)', () => {
+  test("plafondsAPriori null : le premier critère est sauté et nommé ; écart d'itinéraire et certificat inconnus", () => {
+    const charge = figer(generee(chargeDemo('petite-conflit'), { graine: 5, nombre: 2, arret: 300 }));
+    const table = evaluer(charge, { plafondsAPriori: null });
+    assert.equal(table.classement.critereSaute, 'ecartAuPlafondAPrioriMax');
+    assert.equal(table.classement.criteresAppliques[0], 'excedentCollisions');
+    for (const ligne of table.propositions) {
+      assert.equal(ligne.troisChiffres.ecartItineraireMax, null);
+      assert.equal(ligne.minimumAtteint, null);
+      assert.equal(ligne.ecartAuPlafondAPrioriMax, null);
+    }
+    assert.throws(() => evaluer(charge, { plafondsAPriori: [] }), TypeError);
+  });
+});
+
+describe('évaluation : les imposés (§ 5.4, § 15.1)', () => {
+  test('la grande démonstration : 99 retours imposés, 33 ancrages qui en imposent, ceux de diagnostiquer', () => {
+    const charge = chargeDemo('grande');
+    const table = evaluer(figer(charge));
+    const diagnostic = diagnostiquer(configurationDepuisCharge(charge));
+    assert.deepEqual(table.imposes, { retours: 99, ancrages: 33 });
+    assert.deepEqual(table.imposes, { retours: diagnostic.retoursImposes, ancrages: diagnostic.ancragesImposantRetours });
+  });
+
+  test("deux personnes d'appartenances distinctes réservées ensemble : une rencontre répétée imposée par ligne, hors des choisies", () => {
+    const charge = structuredClone(chargeDemo('petite'));
+    charge.reservations = [1, 2].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+    const avec = generee(charge, { graine: 6, nombre: 3, arret: 500 });
+    const table = evaluer(figer(avec));
+    assert.equal(table.propositions.length, 3);
+    for (const ligne of table.propositions) {
+      assert.equal(ligne.mesures.rencontresRepetees.imposees, 1);
+      // Les paires réunies deux fois au moins, comptées sur le plan : celle
+      // des deux réservés n'est pas parmi les choisies.
+      const plan = planDepuisFichier(avec.propositions.find(({ id }) => id === ligne.id));
+      const fois = new Map();
+      for (const listes of plan.tours) {
+        for (const liste of listes) {
+          for (const a of liste) for (const b of liste) if (a < b) fois.set(`${a}-${b}`, (fois.get(`${a}-${b}`) ?? 0) + 1);
+        }
+      }
+      const repetees = [...fois.values()].filter((n) => n >= 2).length;
+      assert.equal(fois.get('1-2'), 4);
+      assert.equal(ligne.mesures.rencontresRepetees.choisies, repetees - 1);
+    }
+  });
+});
+
+describe('évaluation : une table, un tour (§ 15.4)', () => {
+  test('six personnes à une table de 6, un tour : rien de répété, aucun NaN ni infini', () => {
+    const charge = structuredClone(chargeDemo('petite'));
+    charge.participants = charge.participants.slice(0, 6);
+    charge.tables = charge.tables.slice(0, 1).map((table) => ({ ...table, sieges: 6 }));
+    charge.evenement.tours = 1;
+    const table = evaluer(figer(generee(charge, { graine: 1, nombre: 1, arret: 10 })));
+    const [ligne] = table.propositions;
+    assert.equal(ligne.statut, 'comparable');
+    assert.deepEqual(ligne.mesures.rencontresRepetees, { choisies: 0, imposees: 0 });
+    assert.equal(ligne.mesures.excedentCollisions, 0);
+    assert.equal(ligne.mesures.totalRetoursChoisis, 0);
+    const tous = nombres(table);
+    assert.ok(tous.length > 0);
+    assert.ok(tous.every(Number.isFinite), 'NaN ou infini dans la table');
+  });
+});
+
+describe("évaluation : une configuration qui ne se tient pas", () => {
+  test("evaluer lève l'ErreurConfiguration de normaliser", () => {
+    const charge = structuredClone(chargeDemo('petite'));
+    charge.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+    assert.throws(() => evaluer(figer(charge)), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION');
+  });
+});

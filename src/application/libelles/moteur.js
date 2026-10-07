@@ -2,8 +2,33 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les textes des codes du moteur qui n'ont pas leur table ailleurs, et les
-// libellés de ses critères (§ 5, § 14.6).
-import { compte } from './aides.js';
+// libellés de ses critères (§ 5, § 14.6) : les codes d'une
+// ErreurConfiguration, ceux des violations de verifierInvariants et de
+// verifierIndicateurs, et moteur.critere.<nom> pour chaque nom de CRITERES.
+// Un code garde un seul texte : CAPACITE et TOURS, que le moteur lève sous
+// deux formes de détails — ErreurConfiguration et violation —, se
+// distinguent par les détails qu'ils portent. Une réservation que le moteur
+// désigne sans identifiant l'est par son rang à partir de 0, que le texte
+// affiche à partir de 1 ; une personne qu'une violation d'indicateur désigne
+// par son index se nomme par participant quand l'appelant l'a traduit, par
+// son rang sinon. INCONNU, aux mêmes détails que la faute de placement du
+// stockage, a son texte dans libelles/stockage.js.
+import { capitale, compte, nomDans } from './aides.js';
+
+// Les cas d'une table que le plan ne rattache pas à l'instance, par detail.
+const CAS_DE_TABLE = new Map([
+  ['inconnue', (table) => `Le plan déclare la table d'identifiant ${table}, que l'événement n'a pas.`],
+  ['doublon', (table) => `Le plan déclare plus d'une fois la table d'identifiant ${table}.`],
+  ['absente', (table) => `Le plan ne déclare pas la table d'identifiant ${table}.`],
+]);
+
+// La personne d'une violation d'indicateur : son numéro, ou son rang dans
+// la population quand l'appelant ne l'a pas traduit.
+const personneDe = ({ index, participant }) =>
+  participant === undefined || participant === null ? `la personne de rang ${index + 1}` : `la personne n° ${participant}`;
+
+// Un rang de réservation, compté à partir de 0 par le moteur.
+const reservationDe = (rang) => `la réservation n° ${rang + 1}`;
 
 export const TABLE = new Map([
   // Une salle trop petite : avertissement d'un geste qui fait croître le
@@ -20,4 +45,110 @@ export const TABLE = new Map([
       `La table d'identifiant ${table} reçoit ${compte(reservees, 'personne réservée', 'personnes réservées')} ` +
       `au tour ${tour}, pour ${compte(capacite, 'place', 'places')}.`,
   ],
+
+  // --- La configuration (normaliser, § 4, § 5.2) ------------------------------
+  // CAPACITE {table, capacite} : une capacité refusée ; {table, tour} : une
+  // liste du plan plus longue que sa table.
+  [
+    'CAPACITE',
+    ({ table, capacite, tour }) =>
+      capacite === undefined
+        ? `Au tour ${tour}, la table d'identifiant ${table} reçoit plus de personnes qu'elle n'a de places.`
+        : `La table d'identifiant ${table} a une capacité de ${capacite} : une table compte au moins 2 places.`,
+  ],
+  // TOURS {tours} : un nombre de tours refusé ; {} : un plan qui n'a pas un
+  // tour par tour de l'événement.
+  [
+    'TOURS',
+    ({ tours }) =>
+      tours === undefined
+        ? "Le plan ne porte pas autant de tours que l'événement."
+        : `Le nombre de tours, ${tours}, n'est pas un entier d'au moins 1.`,
+  ],
+  ['PARTICIPANT_DOUBLON', ({ participant }) => `La personne n° ${participant} figure plus d'une fois dans la liste.`],
+  ['TABLE_DOUBLON', ({ table }) => `La table d'identifiant ${table} figure plus d'une fois.`],
+  [
+    'RESERVATION_INCONNUE',
+    ({ reservation, participant, table }) =>
+      participant === undefined
+        ? `${capitale(reservationDe(reservation))} désigne la table d'identifiant ${table}, que l'événement n'a pas.`
+        : `${capitale(reservationDe(reservation))} désigne la personne n° ${participant}, que la liste n'a pas.`,
+  ],
+  [
+    'RESERVATION_TOUR',
+    ({ reservation, tour }) => `${capitale(reservationDe(reservation))} désigne le tour ${tour}, que l'événement n'a pas.`,
+  ],
+  [
+    'RESERVATION_CONFLIT',
+    ({ participant, tour, tables }) =>
+      `La personne n° ${participant} est réservée au tour ${tour} à deux tables, ` +
+      `d'identifiants ${tables[0]} et ${tables[1]}.`,
+  ],
+  [
+    'ENUMERATION_TROP_GRANDE',
+    ({ participant, limite }) =>
+      `Le plafond a priori de la personne n° ${participant} demanderait d'énumérer plus de ${limite} itinéraires.`,
+  ],
+
+  // --- Le plan confronté à la configuration (indexerPlan) -------------------------
+  [
+    'PLAN_TOURS',
+    ({ attendu, tours, reserves }) =>
+      `Le plan porte ${compte(tours, 'tour', 'tours')} et ${compte(reserves, 'réserve', 'réserves')}, ` +
+      `pour ${compte(attendu, 'tour', 'tours')} dans l'événement.`,
+  ],
+  ['PLAN_TABLE_INCONNUE', ({ table }) => `Le plan déclare la table d'identifiant ${table}, que l'événement n'a pas.`],
+  ['PLAN_TABLE_DOUBLON', ({ table }) => `Le plan déclare plus d'une fois la table d'identifiant ${table}.`],
+  ['PLAN_TABLE_ABSENTE', ({ table }) => `Le plan ne déclare pas la table d'identifiant ${table}.`],
+  [
+    'PLAN_LISTES',
+    ({ tour, listes, tables }) =>
+      `Au tour ${tour}, le plan porte ${compte(listes, 'liste', 'listes')} pour ${compte(tables, 'table', 'tables')}.`,
+  ],
+  ['PLAN_INCONNU', ({ participant, tour }) => `Au tour ${tour}, le plan place la personne n° ${participant}, que la liste n'a pas.`],
+  ['PLAN_EXCLU_PLACE', ({ participant, tour }) => `Au tour ${tour}, le plan place la personne n° ${participant}, qui est exclue.`],
+  ['PLAN_DOUBLE_PLACE', ({ participant, tour }) => `Au tour ${tour}, le plan place plus d'une fois la personne n° ${participant}.`],
+  ['PLAN_NON_ASSIS', ({ participant, tour }) => `Au tour ${tour}, le plan ne place nulle part la personne n° ${participant}.`],
+
+  // --- Les violations de verifierInvariants (§ 14.12) -----------------------------
+  [
+    'TABLE_INCONNUE',
+    ({ table, tour, detail }) =>
+      detail === 'listes'
+        ? `Au tour ${tour}, le plan n'a pas une liste par table déclarée.`
+        : nomDans(CAS_DE_TABLE, detail, 'cas de table')(table),
+  ],
+  ['DOUBLE_PLACE', ({ participant, tour }) => `Au tour ${tour}, la personne n° ${participant} est placée plus d'une fois.`],
+  ['EXCLU_PLACE', ({ participant, tour }) => `Au tour ${tour}, la personne n° ${participant} est placée alors qu'elle est exclue.`],
+  ['NON_ASSIS', ({ participant, tour }) => `Au tour ${tour}, la personne n° ${participant} n'est assise à aucune table.`],
+  [
+    'RESERVATION',
+    ({ participant, table, tour }) =>
+      `Au tour ${tour}, la personne n° ${participant}, réservée à la table d'identifiant ${table}, est placée ailleurs.`,
+  ],
+
+  // --- Les violations de verifierIndicateurs (§ 12.3) -----------------------------
+  [
+    'PLAFOND_A_PRIORI',
+    (details) => `Le plafond a priori de ${personneDe(details)} dépasse le nombre des autres personnes : le calcul est faux.`,
+  ],
+  [
+    'ORDRE_PLAFONDS',
+    (details) => `Le plafond réalisé de ${personneDe(details)} dépasse son plafond a priori : le calcul est faux.`,
+  ],
+  [
+    'PLAFOND_REALISE',
+    (details) => `Le plafond réalisé de ${personneDe(details)} dépasse le nombre des autres personnes : le calcul est faux.`,
+  ],
+  [
+    'DEPASSEMENT',
+    (details) => `Les rencontres de ${personneDe(details)} dépassent son plafond réalisé : le calcul est faux.`,
+  ],
+
+  // --- Les critères du classement (§ 5.7) -----------------------------------------
+  ['moteur.critere.ecartAuPlafondAPrioriMax', 'écart au plafond a priori'],
+  ['moteur.critere.excedentCollisions', 'excédent de collisions'],
+  ['moteur.critere.collisionsCumulees', 'collisions cumulées'],
+  ['moteur.critere.rencontresRepetees', 'rencontres répétées'],
+  ['moteur.critere.redondance', "redondance d'appartenance"],
 ]);

@@ -44,6 +44,7 @@ import {
   regenerer,
   scoreComplet,
   scoreIncremental,
+  verifierReglages,
 } from './recherche.js';
 import { verifierInvariants } from './verification.js';
 
@@ -440,6 +441,33 @@ describe('rechercher : reproductibilité et identifiants (§ 5.7, § 19.4)', () 
         JSON.stringify(reglages),
       );
     }
+  });
+
+  test('verifierReglages : la règle de rechercher, la même RangeError, qui porte le nom du réglage', () => {
+    const cas = [
+      [{ graine: 2 ** 32, arret: 10, nombre: 1 }, 'graine'],
+      [{ graine: 1, arret: 2.5, nombre: 1 }, 'arret'],
+      [{ graine: 1, arret: 10, nombre: 0 }, 'nombre'],
+      [{ graine: 1, arret: 10, nombre: 1, historique: 0 }, 'historique'],
+      [{ graine: -1, arret: 0, nombre: 0, historique: 0 }, 'graine'],
+    ];
+    for (const [reglages, nom] of cas) {
+      let leve = null;
+      try {
+        verifierReglages(reglages);
+      } catch (erreur) {
+        leve = erreur;
+      }
+      assert.ok(leve instanceof RangeError, JSON.stringify(reglages));
+      assert.equal(leve.reglage, nom);
+      assert.throws(
+        () => rechercher(demo('petite'), reglages),
+        (erreur) => erreur instanceof RangeError && erreur.message === leve.message && erreur.reglage === nom,
+      );
+    }
+    // L'historique absent prend la valeur par défaut de rechercher.
+    assert.equal(verifierReglages({ graine: 0, arret: 1, nombre: 1 }), undefined);
+    assert.equal(verifierReglages({ graine: 2 ** 32 - 1, arret: 1, nombre: 1, historique: 1 }), undefined);
   });
 });
 

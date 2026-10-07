@@ -163,10 +163,13 @@ const decrire = (valeur) =>
   typeof valeur === 'number' ? String(valeur) : `${String(valeur)} (${typeof valeur})`;
 
 // Lève une RangeError qui nomme le réglage quand la valeur n'est pas un
-// entier de min à max.
+// entier de min à max : son message commence par le nom, et son champ
+// reglage le porte.
 function exigerReglage(nom, valeur, min, max) {
   if (!Number.isInteger(valeur) || valeur < min || valeur > max) {
-    throw new RangeError(`${nom} : entier de ${min} à ${max} attendu, reçu ${decrire(valeur)}`);
+    const erreur = new RangeError(`${nom} : entier de ${min} à ${max} attendu, reçu ${decrire(valeur)}`);
+    erreur.reglage = nom;
+    throw erreur;
   }
 }
 
@@ -601,9 +604,8 @@ function proposer(instance, structure, graineDerivee, options) {
  * @returns {Proposition[]}
  */
 export function rechercher(configuration, reglages, { signal, progression } = {}) {
+  verifierReglages(reglages);
   const { graine, arret, nombre, historique = HISTORIQUE_PAR_DEFAUT } = reglages;
-  exigerChampsProposition({ graine, arret, historique });
-  exigerReglage('nombre', nombre, 1, Number.MAX_SAFE_INTEGER);
   const instance = normaliser(configuration);
   const structure = preparer(instance);
   const graines = creerPcg32(graine, FLUX.GRAINES);
@@ -623,6 +625,21 @@ export function rechercher(configuration, reglages, { signal, progression } = {}
     propositions.push({ id, graine: graineDerivee, arret, historique, plan });
   }
   return propositions;
+}
+
+/**
+ * Le contrôle des réglages que rechercher applique avant tout calcul : graine
+ * de 0 à 2^32 − 1, puis arret, historique et nombre ≥ 1, un historique absent
+ * valant HISTORIQUE_PAR_DEFAUT. Lève, pour le premier réglage hors de son
+ * domaine dans cet ordre, une RangeError dont le message commence par son nom
+ * et dont le champ reglage le porte ; ne rend rien sinon. rechercher
+ * l'appelle : ce qu'il admet, rechercher l'admet.
+ *
+ * @param {ReglagesGeneration} reglages
+ */
+export function verifierReglages({ graine, arret, nombre, historique = HISTORIQUE_PAR_DEFAUT }) {
+  exigerChampsProposition({ graine, arret, historique });
+  exigerReglage('nombre', nombre, 1, Number.MAX_SAFE_INTEGER);
 }
 
 /**
