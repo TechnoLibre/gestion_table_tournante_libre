@@ -731,6 +731,30 @@ describe('importer selon l’état (§ 10.1, § 9)', () => {
     expect(pose.querySelector('[data-commande="modifier"]').textContent).toBe(t('communs.remede.modifier'));
     expect(ecritures(e)).toBe(avant);
   });
+
+  test('sous « Remplacer », bloqué puis en lecture : le refus à côté de la commande, avec son remède, aucune fenêtre, rien d’écrit', async () => {
+    const cas = [
+      ['LECTURE_SEULE', 'debloquer', { prepare: (seance) => seance.executer('changerEtat', { etat: 'bloque' }) }],
+      ['MODE_LECTURE', 'modifier', { ecriture: false }],
+    ];
+    for (const [code, remede, options] of cas) {
+      const e = await ouvrir({ participants: QUATRE(), ...options });
+      expect(e.m.seance.etat().refus?.code, code).toBe(code);
+      const avant = ecritures(e);
+      await choisir(e, 'tardif.csv', enUtf8(FICHIER));
+      choisirMode(e, 'remplacer');
+      commande(e, 'importer').click();
+      await vi.waitFor(() => expect(dans(e, `[data-refus="${code}"]`), code).not.toBeNull());
+      const pose = dans(e, `[data-refus="${code}"]`);
+      expect(commande(e, 'importer').parentElement.contains(pose), code).toBe(true);
+      expect(pose.querySelector(`[data-commande="${remede}"]`)?.textContent, code).toBe(t(`communs.remede.${remede}`));
+      expect(vu(pose), code).toBe(true);
+      expect(dans(e, 'dialog'), code).toBeNull();
+      expect(imports(e), code).toEqual([]);
+      expect(ecritures(e), code).toBe(avant);
+      expect(participantsDe(e).length, code).toBe(4);
+    }
+  });
 });
 
 describe('le collage en bloc passe par le même analyseur (§ 10.2, § 14.10)', () => {

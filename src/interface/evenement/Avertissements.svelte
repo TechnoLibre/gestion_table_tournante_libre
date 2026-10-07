@@ -74,7 +74,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--espace-2);
-    margin-bottom: var(--espace-3);
   }
 
   .avertissement {

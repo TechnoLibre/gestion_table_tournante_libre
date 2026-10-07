@@ -30,7 +30,7 @@ import { FORMAT, analyser, configurationDepuisCharge, etatDeduit } from '../../s
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { fixerCadre } from '../../../test/navigateur/entrees.js';
+import { fixerCadre, molette } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { visible } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -230,6 +230,11 @@ describe('un nom long ou de glyphes larges (point d’attention 3)', () => {
       expect(titre.textContent).toBe(nom);
       expect(document.documentElement.scrollWidth, motif).toBeLessThanOrEqual(window.innerWidth);
       expect(titre.getBoundingClientRect().right, motif).toBeLessThanOrEqual(window.innerWidth);
+      // Ni le titre ni la tête qui le porte ne débordent : la tête défile en
+      // hauteur, et un nom qui ne passerait pas à la ligne s'étendrait en
+      // largeur sous elle sans élargir la page.
+      const tete = titre.closest('header').parentElement;
+      expect([titre.scrollWidth, tete.scrollWidth], motif).toEqual([titre.clientWidth, tete.clientWidth]);
       expect(coin(fixe(m, 'modifier')), motif).toEqual(place);
       expect(visible(fixe(m, 'modifier')), motif).toBe(true);
       await m.seance.fermer();
@@ -578,6 +583,125 @@ describe('les annonces d’ouverture (§ 8.9, § 9)', () => {
   });
 });
 
+describe('l’écran tient dans la fenêtre, avertissements compris (§ 8.4)', () => {
+  // Ferme l'événement garni et généré de base, l'abîme, puis le rouvre : une
+  // proposition de longueur fausse, une périmée, et une entrée du journal
+  // abîmée lui donnent trois avertissements à l'ouverture, au moins.
+  async function rouvrirAbime(m, base) {
+    await m.seance.fermer();
+    reecrireEtat(m, base, (charge) => {
+      charge.propositions[0].placement.pop();
+      charge.participants[0].exclu = true;
+    });
+    const chemin = `${base}${SUFFIXES.journal}`;
+    const lignes = m.fs.contenu('documents', chemin).split('\n');
+    const rang = lignes.findIndex((ligne) => ligne.startsWith('{"type":"entree"') && JSON.parse(ligne).revision === 4);
+    expect(rang).toBeGreaterThan(0);
+    lignes[rang] = '{"type":"entree", abîmée';
+    m.fs.deposer('documents', chemin, lignes.join('\n'));
+    await m.seance.ouvrir(base);
+    flushSync();
+    await new Promise((resoudre) => requestAnimationFrame(resoudre));
+  }
+
+  test('à 1 366 × 700, trois avertissements et plus : la page ne défile pas, le plan garde sa hauteur ; les avertissements défilent à la molette, sans rien déplacer', async () => {
+    const m = await neuf();
+    await garnir(m);
+    await generer(m, { retenir: false });
+    const base = baseDe(m);
+    // La hauteur du dessin du plan sans aucune annonce : la mesure de
+    // référence de ce que les avertissements peuvent lui prendre.
+    m.ui.allerA('plan');
+    flushSync();
+    expect(dans(m, '[data-annonces]')).toBeNull();
+    const hauteurSeule = dans(m, '[data-plan]').getBoundingClientRect().height;
+    expect(hauteurSeule).toBeGreaterThan(0);
+    await rouvrirAbime(m, base);
+    expect(m.ui.etat().section).toBe('plan');
+    const montres = tous(m, '[data-avertissement]');
+    expect(montres.length).toBeGreaterThanOrEqual(3);
+    const boite = (element) => element.getBoundingClientRect().toJSON();
+    // La page ne défile pas : le cadre tient dans la fenêtre, et la section
+    // du plan dans le cadre, sans que la surface qui la porte ait à défiler.
+    expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight);
+    expect(cadre(m).getBoundingClientRect().bottom).toBeLessThanOrEqual(innerHeight);
+    const section = dans(m, '[data-section]');
+    const porteur = section.parentElement;
+    expect(section.getBoundingClientRect().bottom).toBeLessThanOrEqual(porteur.getBoundingClientRect().bottom);
+    expect(porteur.scrollHeight).toBeLessThanOrEqual(porteur.clientHeight);
+    expect(visible(dans(m, '[data-plan]'))).toBe(true);
+    // Le plan reste la surface de travail : les annonces ne prennent pas
+    // plus du quart de la hauteur de son dessin.
+    expect(dans(m, '[data-plan]').getBoundingClientRect().height).toBeGreaterThanOrEqual(hauteurSeule * 0.75);
+    // Les avertissements débordent leur zone, qui défile seule, à la
+    // molette, comme sous la main de l'opérateur : le dernier, amené dans la
+    // zone, se voit, et ni la page, ni la place fixe, ni la section n'ont
+    // bougé.
+    const zone = montres[0].closest('[data-annonces]');
+    expect(zone).not.toBeNull();
+    for (const montre of montres) expect(zone.contains(montre)).toBe(true);
+    expect(zone.scrollHeight).toBeGreaterThan(zone.clientHeight);
+    expect(['auto', 'scroll']).toContain(getComputedStyle(zone).overflowY);
+    expect(visible(montres[0])).toBe(true);
+    const place = coin(fixe(m, 'modifier'));
+    const avant = boite(section);
+    const surZone = zone.getBoundingClientRect();
+    await molette(surZone.left + surZone.width / 2, surZone.top + surZone.height / 2, zone.scrollHeight);
+    await attendre(() => expect(visible(montres.at(-1))).toBe(true));
+    expect(zone.scrollTop).toBeGreaterThan(0);
+    expect(window.scrollY).toBe(0);
+    expect(coin(fixe(m, 'modifier'))).toEqual(place);
+    expect(boite(section)).toEqual(avant);
+    // Sur chaque section, la page reste sans défilement, et la zone garde
+    // sa boîte.
+    const zoneAvant = boite(zone);
+    for (const nom of SECTIONS) {
+      m.ui.allerA(nom);
+      flushSync();
+      expect(document.documentElement.scrollHeight, nom).toBeLessThanOrEqual(innerHeight);
+      expect(boite(dans(m, '[data-annonces]')), nom).toEqual(zoneAvant);
+    }
+  });
+
+  test('à 1 366 × 700, un support rompu et trois avertissements et plus : chaque issue du support rompu se voit sans défiler, la page ne défile pas, et les avertissements défilent sous lui', async () => {
+    const m = await neuf();
+    await garnir(m);
+    await generer(m, { retenir: false });
+    await rouvrirAbime(m, baseDe(m));
+    expect(tous(m, '[data-avertissement]').length).toBeGreaterThanOrEqual(3);
+    fixe(m, 'modifier').click();
+    await attendre(() => expect(m.seance.etat().mode).toBe('ecriture'));
+    m.fs.pannes.ecriture('documents');
+    await expect(m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[0] } })).rejects.toMatchObject({ code: 'ECRITURE' });
+    flushSync();
+    await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    expect(m.seance.etat().supportRompu).not.toBeNull();
+    const montres = tous(m, '[data-avertissement]');
+    expect(montres.length).toBeGreaterThanOrEqual(3);
+    expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight);
+    expect(cadre(m).getBoundingClientRect().bottom).toBeLessThanOrEqual(innerHeight);
+    // Les issues du support rompu, seule sortie de l'opérateur, se voient
+    // sans que rien ne défile.
+    const message = dans(m, '[data-support-rompu]');
+    for (const nom of ['choisirDossier', 'abandonner']) {
+      const issue = message.querySelector(`[data-commande="${nom}"]`);
+      expect(issue, nom).not.toBeNull();
+      expect(visible(issue), nom).toBe(true);
+    }
+    expect(visible(fixe(m, 'lecture'))).toBe(true);
+    expect(visible(dans(m, '[data-plan]'))).toBe(true);
+    // Les avertissements restent dans la zone, qui défile seule : le
+    // dernier, amené à la molette, se voit, et la page n'a pas bougé.
+    const zone = message.closest('[data-annonces]');
+    expect(zone).not.toBeNull();
+    for (const montre of montres) expect(zone.contains(montre)).toBe(true);
+    const surZone = zone.getBoundingClientRect();
+    await molette(surZone.left + surZone.width / 2, surZone.top + surZone.height / 2, zone.scrollHeight);
+    await attendre(() => expect(visible(montres.at(-1))).toBe(true));
+    expect(window.scrollY).toBe(0);
+  });
+});
+
 describe('le journal (§ 8.6, § 8.2)', () => {
   test('cent entrées, la 37ᵉ abîmée : JOURNAL_ECARTEES {n: 64} s’affiche, son texte porte « 64 »', async () => {
     const m = await neuf();
@@ -742,6 +866,14 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
   const message = (m) => dans(m, '[data-support-rompu]');
   const commandeListe = (m) => dans(m, '[data-bandeau] [data-commande="liste"]');
 
+  // Le message offre exactement les issues noms, et chacune se voit au cadre
+  // de l'épreuve : c'est la seule sortie de l'opérateur d'un support rompu.
+  function issuesVisibles(m, noms) {
+    const offertes = [...message(m).querySelectorAll('[data-commande]')].map((issue) => issue.dataset.commande);
+    expect(offertes).toEqual(noms);
+    for (const nom of noms) expect(visible(message(m).querySelector(`[data-commande="${nom}"]`)), nom).toBe(true);
+  }
+
   // L'événement ouvert en écriture, puis le support de racine refuse
   // l'écriture d'un geste.
   async function rompre(m, racine) {
@@ -776,7 +908,7 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     expect(visible(fixe(m, 'lecture'))).toBe(true);
     expect(visible(dans(m, '[data-refus="liste"]'))).toBe(true);
     expect(m.seance.etat().evenement.base).toBe(base);
-    expect(message(m).querySelector('[data-commande="choisirDossier"]')).not.toBeNull();
+    issuesVisibles(m, ['ecrireDocuments', 'choisirDossier', 'abandonner']);
     message(m).querySelector('[data-commande="ecrireDocuments"]').click();
     await attendre(() => expect(m.seance.etat().supportRompu).toBeNull());
     const nouvelle = baseDe(m);
@@ -798,7 +930,7 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     const m = await neuf();
     await rompre(m, 'documents');
     expect(m.seance.etat().supportRompu.ailleurs).toBeNull();
-    expect(message(m).querySelector('[data-commande="ecrireDocuments"]')).toBeNull();
+    issuesVisibles(m, ['choisirDossier', 'abandonner']);
     const choisir = message(m).querySelector('[data-commande="choisirDossier"]');
     expect(choisir.textContent).toBe(t('communs.commande.choisirDossier'));
     choisir.click();
@@ -810,6 +942,7 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
   test('non publié, « Fermer sans écrire ailleurs », confirmé en place : la liste revient, sans aucune écriture', async () => {
     const m = await neuf();
     await rompre(m, 'documents');
+    issuesVisibles(m, ['choisirDossier', 'abandonner']);
     const avant = m.trace.length;
     const abandonner = () => message(m).querySelector('[data-commande="abandonner"]');
     expect(abandonner().textContent).toBe(t('evenement.supportRompu.abandonner'));
@@ -826,6 +959,7 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
   test('non publié, un dossier choisi : état et journal y sont écrits, le geste suivant aussi, et la liste le suit', async () => {
     const m = await neuf({ systeme: { dossiersChoisis: ['D:\\Secours'] } });
     await rompre(m, 'documents');
+    issuesVisibles(m, ['choisirDossier', 'abandonner']);
     message(m).querySelector('[data-commande="choisirDossier"]').click();
     await attendre(() => expect(m.seance.etat().supportRompu).toBeNull());
     expect(m.seance.etat().racine).toEqual({ id: 'choisi-1', chemin: 'D:\\Secours' });

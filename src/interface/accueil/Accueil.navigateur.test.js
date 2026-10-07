@@ -460,7 +460,11 @@ describe('signalements et récupération (§ 8.1, § 8.8)', () => {
       [b, 'Merles A'],
     ]) {
       expect(element.textContent).toContain(t('accueil.signalement.doublon', { autres: 1 }));
-      expect(element.querySelector(`[data-doublon="${CSS.escape(autre)}"]`)?.textContent).toBe(autre);
+      const doublon = element.querySelector(`[data-doublon="${CSS.escape(autre)}"]`);
+      expect(doublon?.textContent).toBe(autre);
+      // La base nommée se lit à l'écran, pas seulement dans l'arbre.
+      expect(visible(doublon), autre).toBe(true);
+      expect(atteint(doublon), autre).toBe(true);
       const noeuds = noeudsDeTexte(element).filter((texte) => texte.includes('Merles'));
       expect(noeuds).toEqual([autre]);
     }
@@ -678,7 +682,11 @@ describe('le dossier de travail (§ 8.5, § 8.6)', () => {
     const cheminAutre = `${SOUS_APPDATA}\\data`;
     expect(proposition.textContent).toContain(t('accueil.autre.proposition', { evenements: 2 }));
     // Le chemin est une donnée : son propre nœud de texte, à part de la phrase.
-    expect(dans(m, '[data-autre-chemin]')?.textContent).toBe(cheminAutre);
+    const chemin = dans(m, '[data-autre-chemin]');
+    expect(chemin?.textContent).toBe(cheminAutre);
+    // Le chemin se lit à l'écran, pas seulement dans l'arbre.
+    expect(visible(chemin)).toBe(true);
+    expect(atteint(chemin)).toBe(true);
     expect(noeudsDeTexte(proposition).filter((texte) => texte.includes('\\'))).toEqual([cheminAutre]);
     expect(proposition.textContent).toContain(t('accueil.autre.originaux'));
     // En tête : avant la création, les démonstrations et toute ligne.
@@ -802,6 +810,10 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     ]) {
       expect(signalement(base).textContent).toContain(t('accueil.signalement.doublon', { autres: 1 }));
       expect(noeudsDeTexte(signalement(base)).filter((texte) => texte.includes('Gala'))).toEqual([autre]);
+      const doublon = signalement(base).querySelector(`[data-doublon="${CSS.escape(autre)}"]`);
+      expect(doublon?.textContent).toBe(autre);
+      expect(visible(doublon), autre).toBe(true);
+      expect(atteint(doublon), autre).toBe(true);
     }
   });
 

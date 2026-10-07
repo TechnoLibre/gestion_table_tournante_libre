@@ -52,7 +52,6 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--espace-2);
-    margin-bottom: var(--espace-3);
     padding: var(--espace-2) var(--espace-3);
     border-left: 3px solid var(--couleur-refus);
     color: var(--couleur-refus);

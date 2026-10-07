@@ -354,6 +354,12 @@ describe('changer le défaut (§ 6.1, § 6.2, § 19.3 06)', () => {
     expect(fenetre()).toBeNull();
     const refus = enonce(m).querySelector('[data-refus-realigner]');
     expect(refus).not.toBeNull();
+    // L'en-tête est celui du réalignement refusé, qui laisse « Appliquer »
+    // offert, et non celui d'un défaut que rien n'applique.
+    const tete = refus.querySelector('[data-phrase]');
+    expect(tete?.textContent).toBe(t('tables.defaut.realignementRefuse', { avant: 8, apres: 10 }));
+    expect(visible(tete)).toBe(true);
+    expect(refus.textContent).not.toContain(t('tables.defaut.refusee', { avant: 8, apres: 10 }));
     expect(refus.textContent).toContain('Table 2');
     expect(refus.textContent).toContain('11 réservations');
     expect(ecritures(m)).toBe(avant);

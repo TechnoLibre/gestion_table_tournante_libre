@@ -8,10 +8,16 @@
   // à droite, la place fixe, le libellé de mode, puis « Défaire » et
   // « Refaire » (§ 8.3). Sous la barre vient la tête, tete, quand elle est
   // donnée — l'en-tête de l'événement et la navigation des sections —, puis
-  // la surface, children, qui défile seule. La barre ouvre le cadre : rien
-  // ne la précède dans l'écran de l'événement, si bien qu'un refus posé dans
-  // la tête, ou un nom qui s'étend sur plusieurs lignes, allonge la tête
-  // sans déplacer la place fixe (§ 8.4).
+  // les annonces, annonces, quand il y en a — support rompu et
+  // avertissements —, puis la surface, children. La barre ouvre le cadre :
+  // rien ne la précède dans l'écran de l'événement, si bien qu'un refus posé
+  // dans la tête, ou un nom qui s'étend sur plusieurs lignes, allonge la tête
+  // sans déplacer la place fixe (§ 8.4). Tête, annonces et surface défilent
+  // chacune dans sa zone : des avertissements nombreux ne poussent pas la
+  // surface hors du cadre, ni le cadre hors de la fenêtre. La surface porte
+  // le plan, que l'opérateur regarde : elle réclame les trois quarts du
+  // cadre avant que les annonces ne dépassent leur première ligne, sauf
+  // devant un support rompu, dont les issues restent en vue.
   //
   // La place fixe porte la commande que rend commandeFixe (modele.js) :
   // « Modifier », « Débloquer » — confirmé en place, par la Commande d'I2 —,
@@ -29,7 +35,7 @@
   import Refus from '../primitives/Refus.svelte';
   import { cadreDeMode, commandeFixe, repriseOfferte } from './modele.js';
 
-  let { children, tete = null } = $props();
+  let { children, tete = null, annonces = null } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -101,6 +107,11 @@
   {#if tete !== null}
     <div class="tete">
       {@render tete()}
+    </div>
+  {/if}
+  {#if annonces !== null}
+    <div class="annonces" class:rompu={$seance.supportRompu !== null} data-annonces>
+      {@render annonces()}
     </div>
   {/if}
   <div class="surface">
@@ -204,8 +215,37 @@
     border-bottom: 1px solid var(--couleur-page-filet);
   }
 
+  /* Les annonces ne prennent jamais plus du quart du cadre, et cèdent
+     d'abord leur hauteur à la surface : leur facteur de rétrécissement,
+     mille fois celui de la surface, leur fait absorber presque tout le
+     manque de place, jusqu'à leur hauteur minimale : un avertissement
+     d'une ligne en entier, et le haut du suivant, qui dit que la zone en
+     porte d'autres. Au-delà de leur hauteur, elles défilent dans leur
+     zone. */
+  .annonces {
+    display: flex;
+    flex: 0 1000 auto;
+    flex-direction: column;
+    gap: var(--espace-2);
+    min-height: 3rem;
+    max-height: 25%;
+    overflow-y: auto;
+    padding: var(--espace-2) var(--espace-3);
+    border-bottom: 1px solid var(--couleur-page-filet);
+  }
+
+  /* Le support rompu, en tête des annonces, porte les seules issues de
+     l'opérateur : tant qu'il est là, les annonces ne cèdent rien à la
+     surface, et gardent leur hauteur jusqu'au quart du cadre ; les
+     avertissements qui le suivent défilent sous lui. */
+  .annonces.rompu {
+    flex-shrink: 0;
+  }
+
+  /* La surface part des trois quarts du cadre, s'étend à ce qui reste, et
+     ne rétrécit, après les annonces, que pour la barre et la tête. */
   .surface {
-    flex: 1 1 auto;
+    flex: 1 1 75%;
     min-height: 0;
     overflow: auto;
     padding: var(--espace-3);

@@ -18,6 +18,12 @@
   // globale ci-dessous donne pour cela une hauteur à l'ascendance de l'écran
   // — le conteneur de l'application et son <main> — tant qu'il porte cet
   // écran, et à lui seul.
+  //
+  // Le support rompu et les avertissements se posent dans la zone des
+  // annonces du cadre, qui défile seule, et non au-dessus de la section : la
+  // section garde la hauteur de la surface, plan compris, quel que soit le
+  // nombre des avertissements, et le support rompu, en tête de la zone,
+  // garde ses issues en vue (CadreMode.svelte).
   import { getContext } from 'svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import SectionGeneration from '../generation/SectionGeneration.svelte';
@@ -30,6 +36,7 @@
   import CadreMode from './CadreMode.svelte';
   import EnteteEvenement from './EnteteEvenement.svelte';
   import SupportRompu from './SupportRompu.svelte';
+  import { avertissementsOrdonnes } from './modele.js';
   import { SECTIONS, cleDeSection } from './sections.js';
 
   const t = getContext('t');
@@ -48,6 +55,9 @@
   ]);
 
   const Section = $derived(COMPOSANTS.get($ui.section));
+  // La zone des annonces n'existe que lorsqu'elle a quelque chose à dire :
+  // sans annonce, le cadre ne lui garde ni hauteur ni trait.
+  const annoncer = $derived($seance.supportRompu !== null || avertissementsOrdonnes($seance).length > 0);
 </script>
 
 {#snippet tete()}
@@ -65,12 +75,15 @@
   </nav>
 {/snippet}
 
+{#snippet annonces()}
+  {#if $seance.supportRompu !== null}
+    <SupportRompu />
+  {/if}
+  <Avertissements />
+{/snippet}
+
 <div class="evenement" data-ecran="evenement">
-  <CadreMode tete={$ui.pleinEcran ? null : tete}>
-    {#if $seance.supportRompu !== null}
-      <SupportRompu />
-    {/if}
-    <Avertissements />
+  <CadreMode tete={$ui.pleinEcran ? null : tete} annonces={annoncer ? annonces : null}>
     <Section />
   </CadreMode>
 </div>
