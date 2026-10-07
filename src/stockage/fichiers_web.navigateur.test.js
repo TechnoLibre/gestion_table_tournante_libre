@@ -124,6 +124,27 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
     expect(await fs.typeSupport(DOCUMENTS)).toBe('inconnu');
   });
 
+  // Sous Linux, Chromium convertit le nom d'une entrée de l'OPFS par les
+  // paramètres régionaux de son processus. Hors UTF-8 — LANG absent,
+  // LC_ALL=C —, un nom hors ASCII ne se convertit pas et désigne le dossier
+  // qui le porte : un fichier y lève TypeMismatchError, un dossier y rend son
+  // parent. Les épreuves qui écrivent un nom accentué n'éprouvent alors plus
+  // le module ; celle-ci, sur l'OPFS seul, nomme la cause.
+  test("l'OPFS de ce Chromium nomme une entrée hors ASCII : un fichier et un dossier accentués se créent et se listent sous leur nom", async () => {
+    const racine = await opfs();
+    const cause = 'Chromium tourne sous des paramètres régionaux qui ne sont pas UTF-8 : lancer les épreuves sous LANG=C.UTF-8';
+    let refus = null;
+    try {
+      await racine.getFileHandle('\u{E9}t\u{E9}.txt', { create: true });
+    } catch (erreur) {
+      refus = erreur.name;
+    }
+    expect(refus, cause).toBeNull();
+    const dossier = await racine.getDirectoryHandle('\u{E9}', { create: true });
+    expect(await dossier.isSameEntry(racine), cause).toBe(false);
+    expect(await nomsOpfs(), cause).toStrictEqual(['\u{E9}', '\u{E9}t\u{E9}.txt']);
+  });
+
   test("la racine documents est le dossier gestion_table_tournante_libre de l'OPFS : ce qui s'y écrit s'y lit en UTF-8 sans marque d'ordre d'octets, et ce qui s'y pose se lit et se liste", async () => {
     const fs = await preparer();
     await fs.creerDossier(DOCUMENTS, 'corbeille');

@@ -57,17 +57,22 @@ function dossierTemporaire() {
 }
 
 // test du lanceur, dont chaque épreuve retire à sa fin les dossiers
-// temporaires qu'elle a ouverts.
+// temporaires qu'elle a ouverts ; le corps reçoit le contexte de l'épreuve.
 function testNettoye(nom, ...suite) {
   const corps = suite.pop();
-  test(nom, ...suite, async () => {
+  test(nom, ...suite, async (contexte) => {
     try {
-      await corps();
+      await corps(contexte);
     } finally {
       for (const dossier of ouverts.splice(0)) rmSync(dossier, { recursive: true, force: true });
     }
   });
 }
+
+// Ce que dit une commande lancée par spawnSync : l'exception qui l'a
+// empêchée de démarrer, sinon sa sortie d'erreur. Toujours une chaîne,
+// seul message que node:assert accepte.
+const ditPar = (lancee) => String(lancee.error?.message ?? lancee.stderr ?? '');
 
 // Charge electron/preload.cjs comme un rendu en bac à sable, contre un
 // electron dont invoke porte chaque appel au gestionnaire que servir a posé
@@ -350,7 +355,14 @@ describe('coquille sur un vrai disque', () => {
   testNettoye(
     "la lecture par ps (macOS) passe TZ=UTC et LC_ALL=C à la commande : le démarrage inscrit est en temps universel, et un processus d'un autre fuseau lit la séance vivante",
     { skip: SOUS_WINDOWS },
-    async () => {
+    async (contexte) => {
+      // L'épreuve joue macOS avec le ps de l'hôte. Sous Linux, la coquille
+      // lit /proc et ne demande pas ps, qu'une image de système minimale ne
+      // porte pas : sans lui, l'épreuve se saute et dit pourquoi.
+      if (spawnSync('ps', ['-p', String(process.pid)]).error?.code === 'ENOENT') {
+        contexte.skip("ps introuvable sur ce système : la lecture du démarrage par ps ne s'y éprouve pas");
+        return;
+      }
       const documents = join(dossierTemporaire(), 'Documents');
       mkdirSync(documents, { recursive: true });
       const fichiers = creerFichiers({
@@ -366,7 +378,7 @@ describe('coquille sur un vrai disque', () => {
         env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' },
         encoding: 'utf8',
       });
-      assert.equal(enUtc.status, 0, enUtc.stderr);
+      assert.equal(enUtc.status, 0, ditPar(enUtc));
       assert.equal(pose.demarrage, enUtc.stdout.trim());
 
       // Un second processus, dans un fuseau qui n'est pas celui de
@@ -387,7 +399,7 @@ describe('coquille sur un vrai disque', () => {
         },
         encoding: 'utf8',
       });
-      assert.equal(relu.status, 0, relu.stderr);
+      assert.equal(relu.status, 0, ditPar(relu));
       assert.deepEqual(JSON.parse(relu.stdout), {
         fuseau: autre,
         tenu: { pris: false, seance: 'seance-a', depuis: pose.depuis, vivant: true },

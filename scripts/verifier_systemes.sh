@@ -119,8 +119,15 @@ preparation() {
 
 # Étapes sous le compte dev, chacune annoncée par une ligne « === étape
 # statut » que le bilan relit. L'essai et le serveur de Vite ne se jouent
-# que sur une installation réussie.
+# que sur une installation réussie. Elles tournent sous LANG=C.UTF-8, des
+# paramètres régionaux UTF-8 comme ceux d'un poste de développement, que la
+# plupart des images ne posent pas : sous le « C » qu'elles laissent,
+# Chromium ne convertit plus un nom hors ASCII de l'OPFS, et les épreuves
+# du navigateur n'éprouvent plus le projet. C.UTF-8 vient avec la glibc,
+# sans paquet de langue ; une image qui ne le porterait pas retomberait sur
+# « C », comme sans la variable.
 ETAPES_DEV='
+export LANG=C.UTF-8
 etape() { local nom="$1"; shift; if "$@"; then echo "=== $nom ok"; else echo "=== $nom ÉCHEC"; return 1; fi; }
 cd "$HOME/projet"
 etape install_dev ./install_dev.sh || exit 1
