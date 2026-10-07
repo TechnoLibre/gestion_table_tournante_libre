@@ -5,7 +5,31 @@
 // figés que la séance écrit au journal : jalons, reprise, retours. Un libellé
 // d'entrée se compose une fois, à l'écriture du geste, et le journal en garde
 // le texte, jamais le code (§ 8.2).
-import { causeEntreParentheses, cite, depuisQuand, nomEtat, ouEcrire } from './aides.js';
+import {
+  capitale,
+  causeEntreParentheses,
+  cite,
+  compte,
+  depuisQuand,
+  enumeration,
+  nomEtat,
+  ouEcrire,
+  phraseDeRaison,
+} from './aides.js';
+
+// Le placement qu'une dérive touche : le retenu, ou une proposition par son
+// numéro.
+const nomDuPlacement = (id) => (id === 'retenu' ? 'le placement retenu' : `la proposition n° ${id}`);
+
+// Les raisons d'un placement, chacune par son texte.
+const phrasesDe = (raisons, texte) => raisons.map((raison) => phraseDeRaison(raison.code, raison, texte)).join(' ');
+
+// Une violation du retenu : la réservation qu'il ne tient pas par le texte
+// de RESERVATION_NON_HONOREE, toute autre par le texte de son code.
+const phraseDeViolation = (violation, texte) =>
+  violation.code === 'RESERVATION'
+    ? texte('RESERVATION_NON_HONOREE', violation)
+    : phraseDeRaison(violation.code, violation, texte);
 
 export const TABLE = new Map([
   // --- La séance (§ 8.3, § 8.4, § 8.5, § 8.6, § 8.8) -------------------------
@@ -69,6 +93,45 @@ export const TABLE = new Map([
   [
     'VERROU_REPRIS',
     ({ depuis }, texte) => `Le verrou qu'une séance interrompue de ce poste avait laissé${depuisQuand(depuis, texte)} est repris.`,
+  ],
+  [
+    'RETOUR_AUTOMATIQUE',
+    () =>
+      "Faute d'activité, l'événement est revenu seul en lecture ; chaque geste achevé était déjà enregistré. " +
+      '« Modifier » permet de reprendre.',
+  ],
+
+  // --- Ce qu'un geste fait naître (§ 5.9, § 9, § 14.12) ----------------------
+  [
+    'DERIVE_NOUVELLE',
+    ({ touchees }, texte) => {
+      const noms = touchees.map(({ id }) => nomDuPlacement(id));
+      const accord = touchees.length > 1 ? 'ne décrivent plus' : 'ne décrit plus';
+      const parPlacement = touchees.map(({ id, raisons }) => `${capitale(nomDuPlacement(id))} : ${phrasesDe(raisons, texte)}`);
+      return (
+        `Après ce geste, ${enumeration(noms)} ${accord} la liste ou les tables actuelles, et rien n'est effacé. ` +
+        parPlacement.join(' ')
+      );
+    },
+  ],
+  [
+    'RESERVATION_NON_HONOREE',
+    ({ participant, table, tour }) =>
+      `Le placement retenu n'honore pas la réservation de la personne n° ${participant} ` +
+      `à la table d'identifiant ${table} au tour ${tour} : il la place ailleurs.`,
+  ],
+  [
+    'INVARIANT_VIOLE',
+    ({ proposition, violations }, texte) =>
+      `Le placement retenu, issu de la proposition n° ${proposition}, enfreint ` +
+      `${compte(violations.length, 'règle', 'règles')} que la dérive ne dit pas. ` +
+      violations.map((violation) => phraseDeViolation(violation, texte)).join(' '),
+  ],
+  [
+    'CONFIGURATION_INCOHERENTE',
+    ({ code, details }, texte) =>
+      `Après ce geste, la configuration ne se tient plus : ${phraseDeRaison(code, details, texte)} ` +
+      'Le diagnostic et la génération la refusent tant que rien ne la corrige.',
   ],
   [
     'VERROU_NON_RENDU',

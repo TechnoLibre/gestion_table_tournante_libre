@@ -2,8 +2,9 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les textes de la création d'un événement, de ses états et du déblocage
-// (§ 8.1, § 9, § 14.6) : refus et libellés figés. Un état inconnu lève
-// RangeError, au lieu de se taire.
+// (§ 8.1, § 9, § 14.6), et ceux de la façade des événements (§ 8.6, § 8.7,
+// § 15) : refus et libellés figés. Un état inconnu lève RangeError, au lieu
+// de se taire.
 import { cite, nomEtat } from './aides.js';
 
 export const TABLE = new Map([
@@ -15,8 +16,25 @@ export const TABLE = new Map([
   ['AUCUNE_PROPOSITION', () => "Aucune proposition n'existe : l'état « Proposé » suit une génération."],
   ['AUCUN_RETENU', () => "Aucun placement n'est retenu : l'état « Retenu » suit le choix d'une proposition."],
 
+  // --- La façade des événements (§ 8.6) --------------------------------------
+  // question nomme le code de la question du dossier de travail qui attend.
+  [
+    'QUESTION_EN_ATTENTE',
+    () => "Le dossier de travail attend une réponse : la liste des événements s'ouvre une fois la question répondue.",
+  ],
+  [
+    'EXPLORATEUR_ABSENT',
+    () => "Sous la plateforme web, aucun explorateur de fichiers ne montre le dossier de travail : il vit dans le navigateur.",
+  ],
+
   // --- Les libellés figés du journal (§ 8.2, § 8.3) --------------------------
   ['ENTREE_CREATION', ({ nom }) => `Création de l'événement ${cite(nom)}`],
   ['ENTREE_CHANGER_ETAT', ({ etat }) => `Plan passé à l'état ${cite(nomEtat(etat))}`],
   ['ENTREE_DEBLOQUER', ({ etat }) => `Plan débloqué, état ${cite(nomEtat(etat))}`],
+  // source : le nom de l'événement copié ; instant : le libellé de l'instant
+  // copié (§ 8.7).
+  ['ENTREE_COPIE', ({ source, instant }) => `Créée par copie de ${cite(source)}, à l'instant ${cite(instant)}`],
+  ['ENTREE_RENOMMER', ({ ancien, nom }) => `Renommé de ${cite(ancien)} en ${cite(nom)}`],
+  // nom : celui de la démonstration au catalogue, sans rang (§ 15).
+  ['ENTREE_DEMONSTRATION', ({ nom }) => `Chargement de la démonstration ${cite(nom)}`],
 ]);

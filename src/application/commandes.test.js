@@ -96,20 +96,32 @@ const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
 const CSV_DEUX = 'nom;prenom;appartenance\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test('le registre porte les onze commandes du plan, chacune une fonction', () => {
-    assert.deepEqual([...COMMANDES.keys()].sort(), [
+  test("le registre porte les onze commandes d'A1, les dix des places et celles du mobilier, chacune une fonction", () => {
+    const attendues = [
       'ajouterParticipant',
       'changerEtat',
+      'convertirEnTous',
       'debloquer',
+      'deplacerDansRetenu',
+      'deplacerReservation',
+      'designer',
+      'echangerDansRetenu',
       'effacerPropositions',
       'enregistrerGeneration',
       'exclureParticipant',
       'importerParticipants',
       'modifierParticipant',
+      'poserTitre',
       'reintegrerParticipant',
+      'reserver',
       'retenirProposition',
+      'retirerDuTour',
+      'retirerReservation',
+      'retirerTitre',
       'supprimerParticipant',
-    ]);
+    ];
+    assert.equal(attendues.length, 21);
+    assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
   });
 
@@ -565,9 +577,41 @@ describe("commandes : la charge d'un événement neuf (§ 8.1)", () => {
 });
 
 describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
-  // Arguments d'exemple de chaque commande sur la charge riche ; debloquer
-  // reçoit la même charge, bloquée.
+  // Au tour 1 du retenu de la charge riche : le voisin d'Iris à sa table, et
+  // une personne de l'autre table, avec cette table. Lus dans le retenu, qui
+  // vient du moteur.
+  function auTour1({ retenu }) {
+    const { sieges } = retenu.placement[0];
+    const rang = sieges.findIndex((liste) => liste.includes(1));
+    assert.equal(sieges.length, 2);
+    return {
+      voisin: sieges[rang].find((id) => id !== null && id !== 1),
+      autre: sieges[1 - rang].find((id) => id !== null),
+      tableAutre: retenu.tables[1 - rang],
+    };
+  }
+
+  // La charge que reçoit chaque commande : la charge riche, sauf debloquer,
+  // qui la reçoit bloquée ; convertirEnTous, qui y trouve Théo réservé à la
+  // table 2 à chaque tour, en portée « tour » ; deplacerDansRetenu, qui y
+  // trouve l'autre personne du tour 1 retirée dans la réserve.
+  function recues(charge) {
+    const { autre } = auTour1(charge);
+    const reservee = structuredClone(charge);
+    reservee.reservations.push(
+      { participant: 3, table: 2, siege: null, portee: 'tour', tour: 1 },
+      { participant: 3, table: 2, siege: null, portee: 'tour', tour: 2 },
+    );
+    return new Map([
+      ['debloquer', { ...charge, evenement: { ...charge.evenement, etat: 'bloque' } }],
+      ['convertirEnTous', reservee],
+      ['deplacerDansRetenu', executer('retirerDuTour', charge, { tour: 1, participant: autre }).charge],
+    ]);
+  }
+
+  // Arguments d'exemple de chaque commande sur la charge qu'elle reçoit.
   function exemples(charge) {
+    const { voisin, autre, tableAutre } = auTour1(charge);
     return new Map([
       ['ajouterParticipant', { champs: { nom: 'Bruyère' } }],
       ['modifierParticipant', { id: 4, champs: { courriel: 'o@exemple.test' } }],
@@ -580,15 +624,26 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['enregistrerGeneration', generer(charge, 1, 5)],
       ['retenirProposition', { id: 2 }],
       ['effacerPropositions', {}],
+      ['reserver', { participant: 4, table: 2, siege: null, portee: 'tour', tour: 1 }],
+      ['retirerReservation', { participant: 1, table: 1, portee: 'tous', tour: null }],
+      ['deplacerReservation', { participant: 1, de: { table: 1, portee: 'tous', tour: null }, vers: { table: 2, siege: null } }],
+      ['poserTitre', { table: 2, siege: 1, libelle: 'accueil' }],
+      ['retirerTitre', { table: 1, siege: 1 }],
+      ['designer', { participant: 3, table: 2, siege: 2, libelle: 'accueil' }],
+      ['convertirEnTous', { participant: 3, table: 2 }],
+      ['deplacerDansRetenu', { tour: 1, participant: autre, table: tableAutre, siege: null }],
+      ['echangerDansRetenu', { tour: 1, a: voisin, b: autre }],
+      ['retirerDuTour', { tour: 1, participant: autre }],
     ]);
   }
 
   test("aucune commande ne modifie la charge qu'elle reçoit", () => {
     const charge = chargeRiche();
     const args = exemples(charge);
+    const particulieres = recues(charge);
     assert.deepEqual([...args.keys()].sort(), [...COMMANDES.keys()].sort());
     for (const [nom, commande] of COMMANDES) {
-      const recue = nom === 'debloquer' ? { ...charge, evenement: { ...charge.evenement, etat: 'bloque' } } : charge;
+      const recue = particulieres.get(nom) ?? charge;
       const copie = structuredClone(recue);
       const rendu = commande(figer(recue), args.get(nom));
       assert.deepEqual(recue, copie, nom);

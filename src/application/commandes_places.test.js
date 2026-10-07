@@ -1,0 +1,899 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Épreuves des commandes des places (§ 4, § 4.1, § 5.8, § 5.9, § 7.1, § 8.2,
+// § 8.9, § 9, § 14.12) : réservations, titres, désignation, conversion,
+// retouches du retenu et leur vérificateur d'invariants, rangement par siège
+// d'une génération. Les noms d'épreuve sont inventés ; la version vient du
+// module engendré.
+import assert from 'node:assert/strict';
+import { describe, test } from '../../test/lanceur.js';
+import { FLUX, creerPcg32 } from '../demo/prng.js';
+import { normaliser } from '../moteur/configuration.js';
+import { rechercher } from '../moteur/recherche.js';
+import { serialiser } from '../stockage/canonique.js';
+import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { derive, fautes } from '../stockage/placements.js';
+import { VERSION } from '../version.genere.js';
+import { avertissementsApres } from './avertissements.js';
+import { COMMANDES, appliquerCommande } from './commandes.js';
+import { COMMANDES_PLACES } from './commandes_places.js';
+import { ErreurCommande } from './erreurs.js';
+import { libelle } from './libelles.js';
+import { TABLE as TEXTES_DES_PLACES } from './libelles/places.js';
+import { conversionsPossibles } from './listes_travail.js';
+import { etatPlaces } from './places.js';
+
+const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
+
+const NOMS = [
+  ['Ombrelle', 'Iris'],
+  ['Pervenche', 'Théo'],
+  ['Lacasse', 'Ondine'],
+  ['Grisaille', null],
+  ['Bruyère', 'Anouk'],
+  ['Sarcelle', 'Capucine'],
+  ['Ancolie', 'Amandine'],
+  ['Mélèze', 'Basile'],
+  ['Quenouille', 'Hortense'],
+  ['Pivoine', 'Gaspard'],
+  ['Aubépine', 'Colombe'],
+  ['Lavande', 'Ysolde'],
+  ['Zéphyrin', 'Lucioles'],
+];
+
+const personne = (id, autres = {}) => ({
+  id,
+  nom: NOMS[(id - 1) % NOMS.length][0],
+  prenom: NOMS[(id - 1) % NOMS.length][1],
+  appartenance: null,
+  courriel: null,
+  titrePressenti: null,
+  notes: null,
+  exclu: false,
+  ...autres,
+});
+
+const resa = (participant, idTable, siege, tour = null) => ({
+  participant,
+  table: idTable,
+  siege,
+  portee: tour === null ? 'tous' : 'tour',
+  tour,
+});
+
+// Le refus d'une ErreurCommande levée par appel, de ce code ; ses détails
+// contiennent ceux donnés.
+function refuse(appel, code, attendus = {}) {
+  let leve = null;
+  try {
+    appel();
+  } catch (erreur) {
+    leve = erreur;
+  }
+  assert.ok(leve instanceof ErreurCommande, `ErreurCommande ${code} attendue, reçu ${leve}`);
+  assert.equal(leve.code, code, leve.message);
+  for (const [cle, valeur] of Object.entries(attendus)) assert.deepEqual(leve.details[cle], valeur, cle);
+  return leve;
+}
+
+// Gèle une valeur en profondeur : une commande qui la modifierait lèverait.
+function figer(valeur) {
+  if (valeur !== null && typeof valeur === 'object' && !Object.isFrozen(valeur)) {
+    Object.freeze(valeur);
+    for (const element of Object.values(valeur)) figer(element);
+  }
+  return valeur;
+}
+
+// Un plan de fichier ; la réserve de chaque tour porte les déclarés qu'aucune
+// liste n'assied.
+function planFichier({ tables, capacites, participants, tours, siegesAttribues }) {
+  return {
+    siegesAttribues,
+    tables,
+    capacites,
+    tours: tours.length,
+    participants,
+    placement: tours.map((listes) => {
+      const assis = new Set(listes.flat());
+      return { sieges: listes, reserve: participants.filter((id) => !assis.has(id)) };
+    }),
+  };
+}
+
+const DOUZE = Array.from({ length: 12 }, (_, rang) => rang + 1);
+
+// Douze personnes, trois tours, les tables numérotées 4 et 7 d'identifiants
+// 5 et 8, de huit places ; la proposition 1, retenue, que tours donne.
+function chargeRetenue({ siegesAttribues = true, tours, capacite = 8, reservations = [] } = {}) {
+  const charge = creerCharge({ id: 'evt-retenu', nom: 'Soirée des Lucioles', siegesParDefaut: capacite, tours: 3 });
+  charge.reglages.attribuerSieges = siegesAttribues;
+  charge.participants = DOUZE.map((id) => personne(id));
+  charge.tables = [
+    { id: 5, numero: 4, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
+    { id: 8, numero: 7, sieges: null, forme: 'carree', position: { x: 400, y: 0 } },
+  ];
+  charge.reservations = reservations;
+  const plan = planFichier({
+    tables: [5, 8],
+    capacites: [capacite, capacite],
+    participants: DOUZE,
+    siegesAttribues,
+    tours: tours ?? [
+      [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]],
+      [[1, 8, 9, 10, 11, 12], [7, 2, 3, 4, 5, 6]],
+      [[1, 2, 3, 7, 8, 9], [4, 5, 6, 10, 11, 12]],
+    ],
+  });
+  charge.propositions = [{ id: 1, graine: 48272, arret: 200000, historique: 1000, produitVersion: VERSION.affichee, ...plan }];
+  charge.retenu = { proposition: 1, ...structuredClone(plan) };
+  charge.evenement.etat = 'retenu';
+  charge.prochainsIds = { participant: 13, table: 9, proposition: 2 };
+  return charge;
+}
+
+const listes = (charge, tour) => charge.retenu.placement[tour - 1].sieges;
+const reserveDe = (charge, tour) => charge.retenu.placement[tour - 1].reserve;
+
+describe('commandes des places : le registre (§ 8.2)', () => {
+  test('COMMANDES_PLACES porte les dix commandes des places, réunies dans COMMANDES', () => {
+    assert.deepEqual([...COMMANDES_PLACES.keys()].sort(), [
+      'convertirEnTous',
+      'deplacerDansRetenu',
+      'deplacerReservation',
+      'designer',
+      'echangerDansRetenu',
+      'poserTitre',
+      'reserver',
+      'retirerDuTour',
+      'retirerReservation',
+      'retirerTitre',
+    ]);
+    for (const [nom, commande] of COMMANDES_PLACES) assert.equal(COMMANDES.get(nom), commande);
+  });
+
+  test('un plan bloqué refuse chaque commande des places, remède débloquer', () => {
+    const charge = chargeRetenue();
+    charge.evenement.etat = 'bloque';
+    const essais = [
+      ['reserver', { participant: 1, table: 5, siege: 1, portee: 'tous', tour: null }],
+      ['retirerReservation', { participant: 1, table: 5, portee: 'tous', tour: null }],
+      ['deplacerReservation', { participant: 1, de: { table: 5, portee: 'tous', tour: null }, vers: { table: 8, siege: 1 } }],
+      ['poserTitre', { table: 5, siege: 1, libelle: 'animation' }],
+      ['retirerTitre', { table: 5, siege: 1 }],
+      ['designer', { participant: 1, table: 5, siege: 1, libelle: 'animation' }],
+      ['convertirEnTous', { participant: 1, table: 5 }],
+      ['deplacerDansRetenu', { tour: 1, participant: 1, table: 8, siege: 7 }],
+      ['echangerDansRetenu', { tour: 1, a: 1, b: 7 }],
+      ['retirerDuTour', { tour: 1, participant: 1 }],
+    ];
+    assert.equal(essais.length, COMMANDES_PLACES.size);
+    for (const [nom, args] of essais) refuse(() => executer(nom, charge, args), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+  });
+});
+
+describe('commandes des places : réservations et libellés figés (§ 5.9, § 8.2)', () => {
+  test('reserver : la réservation, et le libellé qui nomme la personne et le numéro de la table', () => {
+    const charge = chargeRetenue();
+    const { charge: apres, libelle, avertissements } = executer('reserver', charge, {
+      participant: 2,
+      table: 5,
+      siege: 2,
+      portee: 'tour',
+      tour: 2,
+    });
+    assert.equal(libelle, 'Réservé Théo Pervenche à la table 4, siège 2, tour 2');
+    assert.deepEqual(apres.reservations, [resa(2, 5, 2, 2)]);
+    assert.deepEqual(avertissements, []);
+    assert.equal(
+      executer('reserver', charge, { participant: 4, table: 8, siege: null, portee: 'tous', tour: null }).libelle,
+      'Réservé Grisaille à la table 7, tous les tours',
+    );
+  });
+
+  test('reserver une réservation qui existe déjà : SANS_EFFET ; une table gelée avertit', () => {
+    const charge = chargeRetenue({ capacite: 2, tours: [[[1, 2], [3, 4]], [[1, 3], [2, 4]], [[1, 4], [2, 3]]] });
+    const une = executer('reserver', charge, { participant: 1, table: 5, siege: null, portee: 'tous', tour: null }).charge;
+    refuse(() => executer('reserver', une, { participant: 1, table: 5, siege: null, portee: 'tous', tour: null }), 'SANS_EFFET', {
+      commande: 'reserver',
+    });
+    const { avertissements } = executer('reserver', une, { participant: 2, table: 5, siege: null, portee: 'tous', tour: null });
+    assert.deepEqual(avertissements, [{ code: 'TABLE_GELEE', details: { table: 5 } }]);
+  });
+
+  test('retirer, déplacer : la réservation désignée par sa table et sa portée ; une réservation absente est refusée', () => {
+    const charge = chargeRetenue({ reservations: [resa(1, 5, 1), resa(2, 8, 2, 2)] });
+    const retiree = executer('retirerReservation', charge, { participant: 2, table: 8, portee: 'tour', tour: 2 });
+    assert.deepEqual(retiree.charge.reservations, [resa(1, 5, 1)]);
+    assert.equal(retiree.libelle, 'Réservation retirée : Théo Pervenche, table 7, tour 2');
+    refuse(() => executer('retirerReservation', charge, { participant: 2, table: 8, portee: 'tous', tour: null }), 'RESERVATION_ABSENTE', {
+      participant: 2,
+      remede: null,
+    });
+    const deplacee = executer('deplacerReservation', charge, {
+      participant: 1,
+      de: { table: 5, portee: 'tous', tour: null },
+      vers: { table: 8, siege: 3 },
+    });
+    assert.deepEqual(deplacee.charge.reservations, [resa(1, 8, 3), resa(2, 8, 2, 2)]);
+    assert.equal(deplacee.libelle, 'Réservation déplacée : Iris Ombrelle, de la table 4 à la table 7, siège 3, tous les tours');
+    refuse(
+      () => executer('deplacerReservation', charge, { participant: 1, de: { table: 5, portee: 'tous', tour: null }, vers: { table: 8, siege: 2 } }),
+      'PLACE_RESERVEE',
+      { titulaire: 2 },
+    );
+  });
+});
+
+describe('commandes des places : titres et désignation (§ 4, § 4.1, § 2.1 étape 6)', () => {
+  // Deux tables, l'une de 2 places, trois tours, sans retenu.
+  function chargeTitres(attribuerSieges = false) {
+    const charge = creerCharge({ id: 'evt-titres', nom: 'Soirée des Lucioles', siegesParDefaut: 6, tours: 3 });
+    charge.reglages.attribuerSieges = attribuerSieges;
+    charge.participants = [1, 2, 3, 4].map((id) => personne(id));
+    charge.tables = [
+      { id: 1, numero: 1, sieges: 2, forme: 'ronde', position: { x: 0, y: 0 } },
+      { id: 3, numero: 3, sieges: null, forme: 'ronde', position: { x: 400, y: 0 } },
+    ];
+    charge.prochainsIds = { participant: 5, table: 4, proposition: 1 };
+    return charge;
+  }
+
+  test('désigner Iris à la table 3 : une réservation « tous » et un titre au même siège, une entrée', () => {
+    const { charge, libelle } = executer('designer', chargeTitres(true), { participant: 1, table: 3, siege: 2, libelle: 'animatrice' });
+    assert.deepEqual(charge.reservations, [resa(1, 3, 2)]);
+    assert.deepEqual(charge.titres, [{ table: 3, siege: 2, libelle: 'animatrice' }]);
+    assert.equal(libelle, 'Désigné Iris Ombrelle à la table 3, siège 2 : « animatrice »');
+  });
+
+  test('un titre non pourvu déjà posé à cette place est pourvu, aucun second', () => {
+    const titree = executer('poserTitre', chargeTitres(), { table: 3, siege: 4, libelle: 'hôte' }).charge;
+    const { charge } = executer('designer', titree, { participant: 2, table: 3, siege: null, libelle: 'animateur' });
+    assert.deepEqual(charge.titres, [{ table: 3, siege: 4, libelle: 'hôte' }]);
+    assert.deepEqual(charge.reservations, [resa(2, 3, 4)]);
+    const deuxieme = executer('designer', charge, { participant: 3, table: 3, siege: null, libelle: 'veille' }).charge;
+    assert.deepEqual(deuxieme.titres, [{ table: 3, siege: 4, libelle: 'hôte' }, { table: 3, siege: 1, libelle: 'veille' }]);
+    assert.deepEqual(deuxieme.reservations.at(-1), resa(3, 3, 1));
+  });
+
+  test('poserTitre : vide refusé LIBELLE_VIDE sans écriture ; NFC sans blancs de bord ; place titrée PLACE_TITREE', () => {
+    const charge = figer(chargeTitres(true));
+    for (const libelle of ['', '  ']) {
+      refuse(() => executer('poserTitre', charge, { table: 3, siege: 1, libelle }), 'LIBELLE_VIDE', { remede: null });
+      refuse(() => executer('designer', charge, { participant: 1, table: 3, siege: 1, libelle }), 'LIBELLE_VIDE', { remede: null });
+    }
+    const nfd = '  Ho\u{0302}tesse\u{00A0}';
+    const { charge: titree, libelle } = executer('poserTitre', charge, { table: 3, siege: 1, libelle: nfd });
+    assert.deepEqual(titree.titres, [{ table: 3, siege: 1, libelle: 'H\u{00F4}tesse' }]);
+    assert.equal(libelle, 'Posé le titre « H\u{00F4}tesse » à la table 3, siège 1');
+    refuse(() => executer('poserTitre', titree, { table: 3, siege: 1, libelle: 'hôte' }), 'PLACE_TITREE', {
+      table: 3,
+      siege: 1,
+      libelle: 'H\u{00F4}tesse',
+      remede: { commande: 'retirerTitre', arguments: { table: 3, siege: 1 } },
+    });
+    refuse(() => executer('poserTitre', titree, { table: 3, siege: 7, libelle: 'hôte' }), 'SIEGE_INEXISTANT', { siege: 7, capacite: 6 });
+    const retire = executer('retirerTitre', titree, { table: 3, siege: 1 });
+    assert.deepEqual(retire.charge.titres, []);
+    assert.equal(retire.libelle, 'Retiré le titre « H\u{00F4}tesse » de la table 3, siège 1');
+    refuse(() => executer('retirerTitre', retire.charge, { table: 3, siege: 1 }), 'TITRE_ABSENT', { remede: null });
+  });
+
+  test('mode table : un titre sans siège prend le plus petit sans titre ; une table de 2 aux deux sièges titrés refuse AUCUN_SIEGE_SANS_TITRE', () => {
+    let charge = chargeTitres();
+    charge = executer('poserTitre', charge, { table: 1, siege: 2, libelle: 'accueil' }).charge;
+    charge = executer('poserTitre', charge, { table: 1, siege: null, libelle: 'animation' }).charge;
+    assert.deepEqual(charge.titres.at(-1), { table: 1, siege: 1, libelle: 'animation' });
+    refuse(() => executer('poserTitre', charge, { table: 1, siege: null, libelle: 'veille' }), 'AUCUN_SIEGE_SANS_TITRE', {
+      table: 1,
+      capacite: 2,
+      remede: { commande: 'changerPlacesTable', arguments: { id: 1, sieges: 3, origine: 'champ' } },
+    });
+  });
+
+  test('convertirEnTous : refusé sans les R réservations « tour » à une table ; libellé', () => {
+    let charge = chargeTitres();
+    refuse(() => executer('convertirEnTous', charge, { participant: 1, table: 3 }), 'CONVERSION_IMPOSSIBLE', { remede: null });
+    for (const tour of [1, 2, 3]) charge = executer('reserver', charge, { participant: 1, table: 3, siege: 5, portee: 'tour', tour }).charge;
+    const { charge: convertie, libelle } = executer('convertirEnTous', charge, { participant: 1, table: 3 });
+    assert.deepEqual(convertie.reservations, [resa(1, 3, 5)]);
+    assert.equal(libelle, 'Converti en « tous les tours » : Iris Ombrelle, table 3');
+  });
+});
+
+describe('commandes des places : les invariants des réservations (§ 5.9, § 14.12)', () => {
+  // Σ (c_t − k_t) − n de l'instance, et ses ancrés par table.
+  const ecart = ({ capacite, ancresParTable, n }) =>
+    capacite.reduce((somme, c) => somme + c, 0) - ancresParTable.reduce((somme, k) => somme + k, 0) - n;
+
+  // Une petite configuration tirée : deux à quatre tables de 2 à 5 places,
+  // un à trois tours, trois à douze personnes dont parfois une exclue.
+  function configurationTiree(rng) {
+    const tours = 1 + rng.borne(3);
+    const charge = creerCharge({ id: 'evt-grille', nom: 'Soirée des Lucioles', siegesParDefaut: 2 + rng.borne(4), tours });
+    charge.reglages.attribuerSieges = rng.borne(2) === 1;
+    const nombre = 3 + rng.borne(10);
+    charge.participants = Array.from({ length: nombre }, (_, rang) => personne(rang + 1, { exclu: rng.borne(6) === 0 }));
+    const tables = 2 + rng.borne(3);
+    charge.tables = Array.from({ length: tables }, (_, rang) => ({
+      id: rang + 1,
+      numero: rang + 1,
+      sieges: rng.borne(2) === 0 ? null : 2 + rng.borne(4),
+      forme: 'ronde',
+      position: { x: 300 * rang, y: 0 },
+    }));
+    charge.prochainsIds = { participant: nombre + 1, table: tables + 1, proposition: 1 };
+    return charge;
+  }
+
+  // Une commande de réservation tirée sur la charge, et les tables qu'elle
+  // touche : arguments valides en forme, que la commande accepte ou refuse.
+  function commandeTiree(rng, charge) {
+    const R = charge.evenement.tours;
+    const participant = 1 + rng.borne(charge.participants.length);
+    const idTable = 1 + rng.borne(charge.tables.length);
+    const siege = rng.borne(3) === 0 ? null : 1 + rng.borne(5);
+    const portee = rng.borne(2) === 0 ? 'tous' : 'tour';
+    const tour = portee === 'tous' ? null : 1 + rng.borne(R);
+    const existante = charge.reservations.length > 0 ? charge.reservations[rng.borne(charge.reservations.length)] : null;
+    const choix = rng.borne(6);
+    if (choix <= 1 || existante === null) return ['reserver', { participant, table: idTable, siege, portee, tour }, [idTable]];
+    if (choix === 2) {
+      const { participant: p, table: t, portee: po, tour: to } = existante;
+      return ['retirerReservation', { participant: p, table: t, portee: po, tour: to }, [t]];
+    }
+    if (choix === 3) {
+      const { participant: p, table: t, portee: po, tour: to } = existante;
+      return ['deplacerReservation', { participant: p, de: { table: t, portee: po, tour: to }, vers: { table: idTable, siege } }, [t, idTable]];
+    }
+    if (choix === 4) {
+      const possibles = conversionsPossibles(charge);
+      const cible = possibles.length > 0 ? possibles[rng.borne(possibles.length)] : { participant, table: idTable };
+      return ['convertirEnTous', cible, [cible.table]];
+    }
+    return ['designer', { participant, table: idTable, siege, libelle: 'animation' }, [idTable]];
+  }
+
+  test('Σ (c_t − k_t) − n ne change pas ; la charge rendue se relit et se normalise ; les ancrés ne bougent qu’aux tables touchées', () => {
+    assert.ok(!Object.values(FLUX).includes(7), 'le flux 7 est hors de FLUX');
+    const rng = creerPcg32(48271, 7);
+    let acceptees = 0;
+    const parCommande = new Map();
+    for (let essai = 0; essai < 300; essai += 1) {
+      let charge = configurationTiree(rng);
+      for (let geste = 0; geste < 6; geste += 1) {
+        const avant = normaliser(configurationDepuisCharge(charge));
+        const [nom, args, touchees] = commandeTiree(rng, charge);
+        let rendu;
+        try {
+          rendu = appliquerCommande(nom, charge, args);
+        } catch (erreur) {
+          if (erreur instanceof ErreurCommande) continue;
+          throw erreur;
+        }
+        acceptees += 1;
+        parCommande.set(nom, (parCommande.get(nom) ?? 0) + 1);
+        const texte = serialiser(rendu.charge, { revision: 1, produitVersion: 'essai' });
+        assert.doesNotThrow(() => analyser(texte), `${nom} ${JSON.stringify(args)}`);
+        const apres = normaliser(configurationDepuisCharge(rendu.charge));
+        assert.equal(ecart(apres), ecart(avant), `${nom} ${JSON.stringify(args)}`);
+        avant.ancresParTable.forEach((k, t) => {
+          const delta = apres.ancresParTable[t] - k;
+          const idTable = avant.idsTables[t];
+          if (nom === 'convertirEnTous' || !touchees.includes(idTable)) assert.equal(delta, 0, `${nom} table ${idTable}`);
+          else assert.ok(Math.abs(delta) <= 1, `${nom} table ${idTable} : ${delta}`);
+        });
+        charge = rendu.charge;
+      }
+    }
+    assert.ok(acceptees >= 200, `${acceptees} gestes acceptés`);
+    for (const nom of ['reserver', 'retirerReservation', 'deplacerReservation', 'convertirEnTous', 'designer']) {
+      assert.ok((parCommande.get(nom) ?? 0) > 0, `${nom} jamais accepté`);
+    }
+  });
+});
+
+describe('commandes des places : le retenu (§ 7.1, § 8.2, § 8.9)', () => {
+  test('au tour 2, déplacer, échanger, retirer ne changent que le tour 2 du retenu, jamais la proposition', () => {
+    const charge = figer(chargeRetenue());
+    const deplace = executer('deplacerDansRetenu', charge, { tour: 2, participant: 1, table: 8, siege: 7 });
+    assert.equal(deplace.libelle, 'Déplacé Iris Ombrelle de la table 4 à la table 7, tour 2');
+    assert.deepEqual(listes(deplace.charge, 2), [[null, 8, 9, 10, 11, 12], [7, 2, 3, 4, 5, 6, 1]]);
+    const echange = executer('echangerDansRetenu', charge, { tour: 2, a: 1, b: 2 });
+    assert.deepEqual(listes(echange.charge, 2), [[2, 8, 9, 10, 11, 12], [7, 1, 3, 4, 5, 6]]);
+    assert.equal(echange.libelle, 'Échangé Iris Ombrelle (table 4) et Théo Pervenche (table 7), tour 2');
+    const retire = executer('retirerDuTour', charge, { tour: 2, participant: 9 });
+    assert.equal(retire.libelle, 'Retiré Hortense Quenouille de la table 4, tour 2');
+    assert.deepEqual(reserveDe(retire.charge, 2), [9]);
+    assert.deepEqual(etatPlaces(retire.charge, { tour: 2 }).reserve, [9]);
+    for (const tour of [1, 3]) assert.deepEqual(etatPlaces(retire.charge, { tour }).reserve, []);
+    for (const { charge: apres } of [deplace, echange, retire]) {
+      assert.deepEqual(apres.propositions, charge.propositions);
+      for (const tour of [1, 3]) assert.deepEqual(apres.retenu.placement[tour - 1], charge.retenu.placement[tour - 1]);
+      assert.deepEqual(fautes(apres.retenu), []);
+    }
+  });
+
+  test('sièges attribués : un départ laisse sa chaise vide, et tout autre siège reste le même', () => {
+    const charge = chargeRetenue();
+    const sans3 = executer('retirerDuTour', charge, { tour: 1, participant: 3 }).charge;
+    assert.deepEqual(listes(sans3, 1)[0], [1, 2, null, 4, 5, 6]);
+    const sans6 = executer('retirerDuTour', sans3, { tour: 1, participant: 6 }).charge;
+    assert.deepEqual(listes(sans6, 1)[0], [1, 2, null, 4, 5]);
+    assert.deepEqual(fautes(sans6.retenu), []);
+    const retour = executer('deplacerDansRetenu', sans6, { tour: 1, participant: 12, table: 5, siege: 3 }).charge;
+    assert.deepEqual(listes(retour, 1), [[1, 2, 12, 4, 5], [7, 8, 9, 10, 11]]);
+    // La personne qui quitte sa table pour une autre libère aussi sa chaise.
+    const quitte = executer('deplacerDansRetenu', charge, { tour: 1, participant: 9, table: 5, siege: 7 }).charge;
+    assert.deepEqual(listes(quitte, 1), [[1, 2, 3, 4, 5, 6, 9], [7, 8, null, 10, 11, 12]]);
+  });
+
+  test('sièges attribués : un dépôt sur la chaise 8 d’une table de 8 qui en tient cinq, les rangs sautés à null', () => {
+    const charge = chargeRetenue({
+      tours: [
+        [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11, 12]],
+        [[1, 8, 9, 10, 11, 12], [7, 2, 3, 4, 5, 6]],
+        [[1, 2, 3, 7, 8, 9], [4, 5, 6, 10, 11, 12]],
+      ],
+    });
+    const { charge: apres } = executer('deplacerDansRetenu', charge, { tour: 1, participant: 6, table: 5, siege: 8 });
+    assert.deepEqual(listes(apres, 1), [[1, 2, 3, 4, 5, null, null, 6], [null, 7, 8, 9, 10, 11, 12]]);
+    assert.deepEqual(fautes(apres.retenu), []);
+    refuse(() => executer('deplacerDansRetenu', charge, { tour: 1, participant: 6, table: 5, siege: 2 }), 'SIEGE_OCCUPE', {
+      table: 5,
+      siege: 2,
+      tour: 1,
+      occupant: 2,
+      remede: { commande: 'echangerDansRetenu', arguments: { tour: 1, a: 6, b: 2 } },
+    });
+  });
+
+  test('sans attribution : la liste reste triée, une table pleine de présents refuse TABLE_PLEINE', () => {
+    const charge = figer(chargeRetenue({ siegesAttribues: false, capacite: 6 }));
+    // La table 4 tient six présents : refusée ; libérée d'un, elle reçoit.
+    refuse(() => executer('deplacerDansRetenu', charge, { tour: 1, participant: 12, table: 5, siege: null }), 'TABLE_PLEINE', {
+      table: 5,
+      tour: 1,
+      capacite: 6,
+      remede: { commande: 'changerPlacesTable', arguments: { id: 5, sieges: 7, origine: 'champ' } },
+    });
+    const libre = executer('retirerDuTour', charge, { tour: 1, participant: 2 }).charge;
+    assert.deepEqual(listes(libre, 1)[0], [1, 3, 4, 5, 6]);
+    const recue = executer('deplacerDansRetenu', libre, { tour: 1, participant: 12, table: 5, siege: null }).charge;
+    assert.deepEqual(listes(recue, 1), [[1, 3, 4, 5, 6, 12], [7, 8, 9, 10, 11]]);
+  });
+
+  test('une retouche qui assiérait cinq personnes à une table de 4 au tour 2 est refusée, sans écriture', () => {
+    const charge = figer(
+      chargeRetenue({
+        siegesAttribues: false,
+        capacite: 4,
+        tours: [
+          [[1, 2, 3, 4], [5, 6, 7, 8]],
+          [[1, 2, 3, 4], [5, 6, 7, 8]],
+          [[1, 2, 3, 4], [5, 6, 7, 8]],
+        ],
+      }),
+    );
+    refuse(() => appliquerCommande('deplacerDansRetenu', charge, { tour: 2, participant: 9, table: 5, siege: null }), 'TABLE_PLEINE');
+  });
+
+  test('la proposition montrée n’est jamais la cible : sans retenu, ou à un tour qu’il ne porte pas, une retouche est une faute du code', () => {
+    const sans = chargeRetenue();
+    sans.retenu = null;
+    assert.throws(() => executer('retirerDuTour', sans, { tour: 1, participant: 1 }), TypeError);
+    assert.throws(() => executer('retirerDuTour', chargeRetenue(), { tour: 4, participant: 1 }), TypeError);
+  });
+
+  test('un retenu fautif refuse ses retouches RETENU_FAUTIF, remède la version précédente', () => {
+    const charge = chargeRetenue();
+    charge.retenu.placement[0].reserve = [1];
+    for (const [nom, args] of [
+      ['deplacerDansRetenu', { tour: 2, participant: 1, table: 8, siege: 7 }],
+      ['echangerDansRetenu', { tour: 2, a: 1, b: 2 }],
+      ['retirerDuTour', { tour: 2, participant: 1 }],
+    ]) {
+      refuse(() => executer(nom, charge, args), 'RETENU_FAUTIF', { remede: { geste: 'ouvrirSecours', source: 'precedent' } });
+    }
+  });
+
+  test('une place réservée à B : refusée PLACE_RESERVEE par dépôt, puis par échange', () => {
+    const charge = chargeRetenue({ reservations: [resa(2, 8, 8, 2), resa(7, 8, 1)] });
+    refuse(() => executer('deplacerDansRetenu', charge, { tour: 2, participant: 9, table: 8, siege: 8 }), 'PLACE_RESERVEE', {
+      titulaire: 2,
+      table: 8,
+      siege: 8,
+    });
+    refuse(() => executer('echangerDansRetenu', charge, { tour: 2, a: 9, b: 7 }), 'PLACE_RESERVEE', { titulaire: 7, siege: 1 });
+    // Contre sa propre réservation : RESERVEE_AILLEURS.
+    refuse(() => executer('deplacerDansRetenu', charge, { tour: 2, participant: 7, table: 5, siege: 7 }), 'RESERVEE_AILLEURS', {
+      participant: 7,
+      tour: 2,
+    });
+  });
+});
+
+describe('commandes des places : le retenu et la dérive (§ 9, § 4.4)', () => {
+  test('une personne ajoutée après la retenue attend en réserve ; déplacée au tour 2, elle y est assise et attend aux autres', () => {
+    const charge = chargeRetenue();
+    charge.participants.push(personne(13));
+    charge.prochainsIds.participant = 14;
+    for (const tour of [1, 2, 3]) assert.ok(etatPlaces(charge, { tour }).reserve.includes(13));
+    const { charge: apres, libelle } = executer('deplacerDansRetenu', charge, { tour: 2, participant: 13, table: 8, siege: 8 });
+    assert.equal(libelle, 'Déplacé Lucioles Zéphyrin de la réserve à la table 7, tour 2');
+    assert.deepEqual(listes(apres, 2)[1], [7, 2, 3, 4, 5, 6, null, 13]);
+    assert.deepEqual(reserveDe(apres, 1), [13]);
+    assert.deepEqual(reserveDe(apres, 3), [13]);
+    assert.ok(apres.retenu.participants.includes(13));
+    assert.deepEqual(fautes(apres.retenu), []);
+    assert.ok(!derive(apres.retenu, apres).some(({ participant }) => participant === 13));
+    assert.equal(etatPlaces(apres, { tour: 2 }).tables[1].chaises[7].occupant, 13);
+  });
+
+  test('Iris, exclue après la retenue, au siège 3 du tour 2 : y déposer Théo l’envoie en réserve, sans renuméroter personne', () => {
+    const charge = chargeRetenue({
+      tours: [
+        [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]],
+        [[8, 9, 1, 10, 11, 12], [7, 2, 3, 4, 5, 6]],
+        [[1, 2, 3, 7, 8, 9], [4, 5, 6, 10, 11, 12]],
+      ],
+    });
+    charge.participants[0].exclu = true;
+    const { charge: apres } = executer('deplacerDansRetenu', charge, { tour: 2, participant: 2, table: 5, siege: 3 });
+    assert.deepEqual(listes(apres, 2), [[8, 9, 2, 10, 11, 12], [7, null, 3, 4, 5, 6]]);
+    assert.deepEqual(reserveDe(apres, 2), [1]);
+    refuse(() => executer('deplacerDansRetenu', charge, { tour: 2, participant: 1, table: 8, siege: 8 }), 'PERSONNE_EXCLUE', {
+      participant: 1,
+    });
+  });
+
+  test('sans attribution, une table pleine qui porte un exclu reçoit le dépôt ; l’exclu au plus petit identifiant va en réserve', () => {
+    const charge = chargeRetenue({ siegesAttribues: false, capacite: 6 });
+    charge.participants[1].exclu = true;
+    charge.participants[3].exclu = true;
+    const { charge: apres } = executer('deplacerDansRetenu', charge, { tour: 1, participant: 12, table: 5, siege: null });
+    assert.deepEqual(listes(apres, 1), [[1, 3, 4, 5, 6, 12], [7, 8, 9, 10, 11]]);
+    assert.deepEqual(reserveDe(apres, 1), [2]);
+  });
+
+  test('une table créée après la retenue, écrite comme creerTable la laissera, reçoit un dépôt', () => {
+    const charge = chargeRetenue();
+    charge.tables.push({ id: 9, numero: 9, sieges: null, forme: 'ronde', position: { x: 800, y: 0 } });
+    charge.prochainsIds.table = 10;
+    charge.retenu.tables.push(9);
+    charge.retenu.capacites.push(8);
+    for (const tour of charge.retenu.placement) tour.sieges.push([]);
+    const { charge: apres } = executer('deplacerDansRetenu', charge, { tour: 2, participant: 4, table: 9, siege: 1 });
+    assert.deepEqual(listes(apres, 2), [[1, 8, 9, 10, 11, 12], [7, 2, 3, null, 5, 6], [4]]);
+    assert.deepEqual(fautes(apres.retenu), []);
+  });
+
+  test('une table supprimée après la retenue : ses occupants attendent en réserve, et le remède de SIEGE_OCCUPE s’exécute tel quel', () => {
+    const charge = chargeRetenue();
+    charge.tables = charge.tables.filter(({ id }) => id !== 8);
+    assert.deepEqual(etatPlaces(charge, { tour: 1 }).reserve, [7, 8, 9, 10, 11, 12]);
+    const occupe = refuse(() => executer('deplacerDansRetenu', charge, { tour: 1, participant: 7, table: 5, siege: 1 }), 'SIEGE_OCCUPE', {
+      occupant: 1,
+    });
+    const { commande, arguments: args } = occupe.details.remede;
+    assert.deepEqual([commande, args], ['echangerDansRetenu', { tour: 1, a: 7, b: 1 }]);
+    const { charge: apres } = executer(commande, charge, args);
+    // 7 prend la chaise 1 ; 1 attend en réserve, et personne n'entre dans la
+    // liste de la table que la charge n'a plus.
+    assert.deepEqual(listes(apres, 1), [[7, 2, 3, 4, 5, 6], [null, 8, 9, 10, 11, 12]]);
+    assert.deepEqual(reserveDe(apres, 1), [1]);
+    assert.deepEqual(listes(apres, 2), listes(charge, 2));
+    const etat = etatPlaces(apres, { tour: 1 });
+    assert.equal(etat.tables.length, 1);
+    assert.equal(etat.tables[0].chaises[0].occupant, 7);
+    assert.deepEqual(etat.reserve, [1, 8, 9, 10, 11, 12]);
+  });
+
+  test('une table réduite après la retenue : un rang au-delà de sa capacité se lit comme la réserve, dans l’échange aussi', () => {
+    const charge = chargeRetenue();
+    charge.tables[0].sieges = 4;
+    assert.deepEqual(etatPlaces(charge, { tour: 1 }).reserve, [5, 6]);
+    const occupe = refuse(() => executer('deplacerDansRetenu', charge, { tour: 1, participant: 5, table: 5, siege: 1 }), 'SIEGE_OCCUPE', {
+      occupant: 1,
+    });
+    const { charge: apres } = executer(occupe.details.remede.commande, charge, occupe.details.remede.arguments);
+    assert.deepEqual(listes(apres, 1)[0], [5, 2, 3, 4, null, 6]);
+    assert.deepEqual(reserveDe(apres, 1), [1]);
+    assert.deepEqual(etatPlaces(apres, { tour: 1 }).reserve, [1, 6]);
+  });
+
+  test('sans attribution, une table réduite après la retenue : une personne que le plan montre en réserve s’y trouve pour déplacer et retirer', () => {
+    const charge = chargeRetenue({ siegesAttribues: false });
+    charge.tables[0].sieges = 4;
+    assert.deepEqual(etatPlaces(charge, { tour: 1 }).reserve, [5, 6]);
+    // La table affichée assied quatre présents : pleine, et non SANS_EFFET.
+    const pleine = refuse(() => executer('deplacerDansRetenu', charge, { tour: 1, participant: 6, table: 5, siege: null }), 'TABLE_PLEINE', {
+      table: 5,
+      tour: 1,
+      capacite: 4,
+    });
+    assert.deepEqual(pleine.details.remede, { commande: 'changerPlacesTable', arguments: { id: 5, sieges: 5, origine: 'champ' } });
+    // Déjà en réserve à l'affichage : retirer du tour n'a pas d'effet.
+    refuse(() => executer('retirerDuTour', charge, { tour: 1, participant: 6 }), 'SANS_EFFET');
+    // Vers une autre table, elle part de la réserve.
+    const { charge: apres, libelle } = executer('deplacerDansRetenu', charge, { tour: 1, participant: 6, table: 8, siege: null });
+    assert.equal(libelle, 'Déplacé Capucine Sarcelle de la réserve à la table 7, tour 1');
+    assert.deepEqual(listes(apres, 1), [[1, 2, 3, 4], [6, 7, 8, 9, 10, 11, 12]]);
+    assert.deepEqual(reserveDe(apres, 1), [5]);
+    assert.deepEqual(etatPlaces(apres, { tour: 1 }).reserve, [5]);
+  });
+
+  test('sans attribution, une table réduite après la retenue : chaque geste verse d’abord en réserve ceux que le plan n’y montre pas, et n’assied que ceux qu’il nomme', () => {
+    const charge = chargeRetenue({ siegesAttribues: false });
+    charge.tables[0].sieges = 4;
+    figer(charge);
+    const occupants = (apres) => etatPlaces(apres, { tour: 1 }).tables.map(({ chaises }) => chaises.map(({ occupant }) => occupant));
+    assert.deepEqual(occupants(charge), [
+      [1, 2, 3, 4],
+      [7, 8, 9, 10, 11, 12, null, null],
+    ]);
+    assert.deepEqual(etatPlaces(charge, { tour: 1 }).reserve, [5, 6]);
+
+    // 6, en réserve à l'affichage, prend la chaise de 2 ; 5 reste en réserve.
+    const echange = executer('echangerDansRetenu', charge, { tour: 1, a: 6, b: 2 }).charge;
+    assert.deepEqual(occupants(echange), [
+      [1, 3, 4, 6],
+      [7, 8, 9, 10, 11, 12, null, null],
+    ]);
+    assert.deepEqual(etatPlaces(echange, { tour: 1 }).reserve, [2, 5]);
+    assert.deepEqual(listes(echange, 1), [[1, 3, 4, 6], [7, 8, 9, 10, 11, 12]]);
+    assert.deepEqual(reserveDe(echange, 1), [2, 5]);
+
+    // 7, venu d'une autre table, prend la chaise de 2 et s'y voit assis.
+    const croise = executer('echangerDansRetenu', charge, { tour: 1, a: 7, b: 2 }).charge;
+    assert.deepEqual(occupants(croise), [
+      [1, 3, 4, 7],
+      [2, 8, 9, 10, 11, 12, null, null],
+    ]);
+    assert.deepEqual(etatPlaces(croise, { tour: 1 }).reserve, [5, 6]);
+
+    // 2, de la table réduite, prend la chaise de 7 : la table de a se verse
+    // aussi, et 7 s'assied à la chaise de 2 sans que 5 la lui dispute.
+    const inverse = executer('echangerDansRetenu', charge, { tour: 1, a: 2, b: 7 }).charge;
+    assert.deepEqual(occupants(inverse), [
+      [1, 3, 4, 7],
+      [2, 8, 9, 10, 11, 12, null, null],
+    ]);
+    assert.deepEqual(etatPlaces(inverse, { tour: 1 }).reserve, [5, 6]);
+    assert.deepEqual(listes(inverse, 1), [[1, 3, 4, 7], [2, 8, 9, 10, 11, 12]]);
+
+    // Le départ de 2 libère sa chaise : 5 ne s'y assied pas.
+    const retire = executer('retirerDuTour', charge, { tour: 1, participant: 2 }).charge;
+    assert.deepEqual(occupants(retire), [
+      [1, 3, 4, null],
+      [7, 8, 9, 10, 11, 12, null, null],
+    ]);
+    assert.deepEqual(etatPlaces(retire, { tour: 1 }).reserve, [2, 5, 6]);
+    assert.deepEqual(listes(retire, 1), [[1, 3, 4], [7, 8, 9, 10, 11, 12]]);
+
+    const deplace = executer('deplacerDansRetenu', charge, { tour: 1, participant: 2, table: 8, siege: null }).charge;
+    assert.deepEqual(occupants(deplace), [
+      [1, 3, 4, null],
+      [2, 7, 8, 9, 10, 11, 12, null],
+    ]);
+    assert.deepEqual(etatPlaces(deplace, { tour: 1 }).reserve, [5, 6]);
+    assert.deepEqual(listes(deplace, 1), [[1, 3, 4], [2, 7, 8, 9, 10, 11, 12]]);
+
+    for (const apres of [echange, croise, inverse, retire, deplace]) {
+      assert.deepEqual(fautes(apres.retenu), []);
+      for (const tour of [2, 3]) assert.deepEqual(apres.retenu.placement[tour - 1], charge.retenu.placement[tour - 1]);
+    }
+  });
+
+  test('sans attribution, une table réduite : la personne réservée à cette table y reste assise, et un autre départ ne la verse pas en réserve', () => {
+    // 6, réservé à la table 4 sans siège, est au-delà de ses quatre places
+    // dans la liste : l'affichage l'assied avant 4 et 5, sans réservation.
+    const charge = chargeRetenue({ siegesAttribues: false, reservations: [resa(6, 5, null)] });
+    charge.tables[0].sieges = 4;
+    figer(charge);
+    const occupantsTable4 = (etat) => etat.tables[0].chaises.map(({ occupant }) => occupant);
+    assert.deepEqual(occupantsTable4(etatPlaces(charge, { tour: 1 })), [1, 2, 3, 6]);
+    assert.deepEqual(etatPlaces(charge, { tour: 1 }).reserve, [4, 5]);
+    const { charge: apres } = executer('retirerDuTour', charge, { tour: 1, participant: 2 });
+    // Seule la chaise que 2 libère reste vide.
+    assert.deepEqual(occupantsTable4(etatPlaces(apres, { tour: 1 })), [1, 3, 6, null]);
+    assert.deepEqual(listes(apres, 1), [[1, 3, 6], [7, 8, 9, 10, 11, 12]]);
+    assert.deepEqual(reserveDe(apres, 1), [2, 4, 5]);
+    assert.deepEqual(etatPlaces(apres, { tour: 1 }).reserve, [2, 4, 5]);
+    assert.deepEqual(
+      avertissementsApres(charge, apres).filter(({ code }) => code === 'RESERVATION_NON_HONOREE'),
+      [],
+    );
+  });
+
+  test('sièges attribués, une table réduite après la retenue : le rang au-delà de sa capacité part de la réserve vers une chaise libre', () => {
+    const charge = chargeRetenue({
+      tours: [
+        [[1, null, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]],
+        [[1, 8, 9, 10, 11, 12], [7, 2, 3, 4, 5, 6]],
+        [[1, 2, 3, 7, 8, 9], [4, 5, 6, 10, 11, 12]],
+      ],
+    });
+    charge.tables[0].sieges = 4;
+    assert.deepEqual(etatPlaces(charge, { tour: 1 }).reserve, [2, 5, 6]);
+    refuse(() => executer('retirerDuTour', charge, { tour: 1, participant: 5 }), 'SANS_EFFET');
+    const { charge: apres, libelle } = executer('deplacerDansRetenu', charge, { tour: 1, participant: 5, table: 5, siege: 2 });
+    assert.equal(libelle, 'Déplacé Anouk Bruyère de la réserve à la table 4, tour 1');
+    assert.deepEqual(listes(apres, 1)[0], [1, 5, 3, 4, null, 6]);
+    assert.deepEqual(reserveDe(apres, 1), [2]);
+    assert.deepEqual(etatPlaces(apres, { tour: 1 }).reserve, [2, 6]);
+    assert.deepEqual(fautes(apres.retenu), []);
+  });
+});
+
+describe('commandes des places : le vérificateur d’invariants du retenu (§ 14.12, § 14.15)', () => {
+  test('retirer du tour une personne réservée à sa table : INVARIANT_VIOLE, les seules violations nouvelles, sans écriture', () => {
+    // Le retenu reçu porte déjà une violation : 7, réservé à la table 4 au
+    // tour 2, y est assis à la table 7 ; elle n'entre pas dans le refus.
+    const charge = figer(chargeRetenue({ reservations: [resa(4, 5, null, 1), resa(7, 5, null, 2)] }));
+    refuse(() => executer('retirerDuTour', charge, { tour: 1, participant: 4 }), 'INVARIANT_VIOLE', {
+      proposition: 1,
+      violations: [{ code: 'RESERVATION', participant: 4, table: 5, tour: 1 }],
+      remede: null,
+    });
+    const { charge: apres } = executer('retirerDuTour', charge, { tour: 1, participant: 5 });
+    assert.deepEqual(reserveDe(apres, 1), [5]);
+  });
+
+  test('une violation déjà présente, celle d’une dérive, ne bloque pas la retouche suivante', () => {
+    const charge = chargeRetenue({ reservations: [resa(4, 8, null, 1)] });
+    charge.participants.push(personne(13));
+    charge.prochainsIds.participant = 14;
+    const { charge: apres } = executer('retirerDuTour', charge, { tour: 2, participant: 9 });
+    assert.deepEqual(reserveDe(apres, 2), [9]);
+    const { charge: ensuite } = executer('echangerDansRetenu', apres, { tour: 2, a: 9, b: 10 });
+    assert.deepEqual(reserveDe(ensuite, 2), [10]);
+  });
+});
+
+describe('enregistrerGeneration : les sièges réservés dans une génération (§ 4, § 5.3, § 8.9)', () => {
+  // Douze personnes, deux tables, Théo réservé « tous » au siège siege de la
+  // table 2, sièges attribués.
+  function chargeGeneration({ siege, capacite = 8, attribuerSieges = true }) {
+    const charge = creerCharge({ id: 'evt-generation', nom: 'Soirée des Lucioles', siegesParDefaut: capacite, tours: 3 });
+    charge.reglages.attribuerSieges = attribuerSieges;
+    charge.participants = DOUZE.map((id) => personne(id));
+    charge.tables = [
+      { id: 1, numero: 1, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
+      { id: 2, numero: 2, sieges: null, forme: 'ronde', position: { x: 400, y: 0 } },
+    ];
+    charge.reservations = [resa(2, 2, siege)];
+    charge.prochainsIds = { participant: 13, table: 3, proposition: 1 };
+    return charge;
+  }
+
+  test('Théo, réservé au siège 3 de la table 2, y prend le rang 3 à chaque tour de chaque proposition', () => {
+    const charge = chargeGeneration({ siege: 3 });
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 7, arret: 60, nombre: 2 });
+    const { charge: apres } = executer('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee });
+    assert.equal(apres.propositions.length, 2);
+    for (const proposition of apres.propositions) {
+      assert.deepEqual(fautes(proposition), []);
+      const rang = proposition.tables.indexOf(2);
+      assert.equal(proposition.placement.length, 3);
+      for (const { sieges } of proposition.placement) {
+        assert.equal(sieges[rang][2], 2);
+        assert.notEqual(sieges[rang].at(-1), null);
+      }
+    }
+  });
+
+  test('réservé au siège 8 d’une table de 8 qui en assied six : au rang 8, les rangs 6 et 7 à null', () => {
+    const charge = chargeGeneration({ siege: 8 });
+    const configuration = configurationDepuisCharge(charge);
+    const tour = { tables: [1, 2], tours: [[1, 3, 4, 5, 6, 7], [12, 2, 8, 11, 9, 10]] };
+    const proposition = {
+      id: 1,
+      graine: 48271,
+      arret: 60,
+      historique: 1000,
+      plan: { tables: tour.tables, tours: [tour.tours, tour.tours, tour.tours], reserves: [[], [], []] },
+    };
+    const { charge: apres } = executer('enregistrerGeneration', charge, { propositions: [proposition], configuration, produitVersion: VERSION.affichee });
+    assert.equal(apres.propositions[0].placement.length, 3);
+    for (const { sieges } of apres.propositions[0].placement) {
+      assert.deepEqual(sieges, [[1, 3, 4, 5, 6, 7], [8, 9, 10, 11, 12, null, null, 2]]);
+    }
+    // Sans attribution, la liste reste triée par identifiant.
+    const libre = chargeGeneration({ siege: 8, attribuerSieges: false });
+    const { charge: triee } = executer('enregistrerGeneration', libre, {
+      propositions: [proposition],
+      configuration: configurationDepuisCharge(libre),
+      produitVersion: VERSION.affichee,
+    });
+    assert.deepEqual(triee.propositions[0].placement[0].sieges, [[1, 3, 4, 5, 6, 7], [2, 8, 9, 10, 11, 12]]);
+  });
+
+  test('une table supprimée et une capacité réduite pendant la génération : la proposition s’enregistre, rangée sur la configuration, en dérive', () => {
+    const charge = chargeGeneration({ siege: 3 });
+    charge.tables.push({ id: 3, numero: 3, sieges: null, forme: 'ronde', position: { x: 800, y: 0 } });
+    charge.prochainsIds.table = 4;
+    const configuration = configurationDepuisCharge(charge);
+    const tours = [[1, 3, 4], [5, 6, 2, 7, 8, 9, 10, 11], [12]];
+    const proposition = {
+      id: 1,
+      graine: 48271,
+      arret: 60,
+      historique: 1000,
+      plan: { tables: [1, 2, 3], tours: [tours, tours, tours], reserves: [[], [], []] },
+    };
+    // Entre la recherche et l'enregistrement : la table 3 disparaît, la
+    // table 2 passe à six places alors que la proposition y en assied huit.
+    charge.tables = charge.tables.filter(({ id }) => id !== 3);
+    charge.tables[1].sieges = 6;
+    const { charge: apres } = executer('enregistrerGeneration', charge, { propositions: [proposition], configuration, produitVersion: VERSION.affichee });
+    assert.equal(apres.propositions.length, 1);
+    const [enregistree] = apres.propositions;
+    assert.deepEqual(fautes(enregistree), []);
+    assert.equal(enregistree.placement.length, 3);
+    for (const { sieges } of enregistree.placement) assert.deepEqual(sieges, [[1, 3, 4], [5, 6, 2, 7, 8, 9, 10, 11], [12]]);
+    assert.ok(derive(enregistree, apres).length > 0);
+  });
+
+  test('une table agrandie pendant la génération, puis réservée à un siège nouveau : le rangement suit la capacité de la configuration', () => {
+    const charge = chargeGeneration({ siege: null });
+    charge.reservations = [];
+    const configuration = configurationDepuisCharge(charge);
+    const tours = [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]];
+    const proposition = {
+      id: 1,
+      graine: 48271,
+      arret: 60,
+      historique: 1000,
+      plan: { tables: [1, 2], tours: [tours, tours, tours], reserves: [[], [], []] },
+    };
+    // Entre la recherche et l'enregistrement : la table 2 passe à dix places,
+    // et 7 y est réservé au siège 9, au-delà des huit de la configuration.
+    charge.tables[1].sieges = 10;
+    charge.reservations = [resa(7, 2, 9)];
+    const { charge: apres } = executer('enregistrerGeneration', charge, { propositions: [proposition], configuration, produitVersion: VERSION.affichee });
+    assert.equal(apres.propositions.length, 1);
+    const [enregistree] = apres.propositions;
+    assert.deepEqual(fautes(enregistree), []);
+    assert.equal(enregistree.placement.length, 3);
+    // Le siège 9 n'existe pas dans la configuration : 7 se range par identifiant.
+    for (const { sieges } of enregistree.placement) assert.deepEqual(sieges, tours);
+  });
+});
+
+describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
+  // Détails d'exemple de chaque code de libelles/places.js, hors libellés
+  // figés, que les commandes composent ci-dessus.
+  const EXEMPLES = new Map([
+    ['SIEGE_INEXISTANT', [{ table: 2, siege: 9, capacite: 8 }, '9']],
+    ['DEUX_PLACES_MEME_TOUR', [{ participant: 1, tour: 2, autre: { table: 1, siege: null, portee: 'tous', tour: null } }, 'tour 2']],
+    ['PERSONNE_EXCLUE', [{ participant: 3 }, 'exclue']],
+    ['PLACE_RESERVEE', [{ table: 2, siege: 3, tour: 2, titulaire: 2, portee: 'tour' }, 'au tour 2']],
+    ['RESERVEE_AILLEURS', [{ participant: 1, tour: 2, reservation: { table: 1, siege: null, portee: 'tous', tour: null } }, 'tour 2']],
+    ['TABLE_GELEE', [{ table: 1 }, 'réservées']],
+    ['LIBELLE_VIDE', [{}, 'vide']],
+    ['PLACE_TITREE', [{ table: 3, siege: 1, libelle: 'hôte' }, '« hôte »']],
+    ['AUCUN_SIEGE_SANS_TITRE', [{ table: 1, capacite: 2 }, '2 sièges']],
+    ['TITRE_ABSENT', [{ table: 3, siege: 1 }, 'siège 1']],
+    ['RESERVATION_ABSENTE', [{ participant: 1, table: 3, portee: 'tour', tour: 2 }, 'réservation']],
+    ['CONVERSION_IMPOSSIBLE', [{ participant: 1, table: 3 }, 'convertir']],
+    ['PROPOSITION_MONTREE', [{ proposition: 4 }, 'n° 4']],
+    ['SIEGE_OCCUPE', [{ table: 5, siege: 2, tour: 1, occupant: 2 }, 'siège 2']],
+    ['TABLE_PLEINE', [{ table: 5, tour: 1, capacite: 6 }, '6 places']],
+  ]);
+
+  test('chaque code de la table des places a son texte, composé de ses détails', () => {
+    const codes = [...TEXTES_DES_PLACES.keys()].filter((cle) => /^[A-Z][A-Z0-9_]*$/.test(cle) && !cle.startsWith('ENTREE_'));
+    assert.ok(codes.length > 0);
+    assert.deepEqual(codes.sort(), [...EXEMPLES.keys()].sort());
+    for (const [code, [details, attendu]] of EXEMPLES) {
+      const texte = libelle(code, { ...details, remede: null });
+      assert.ok(texte.includes(attendu), `${code} : ${texte}`);
+      assert.ok(!texte.includes('undefined'), `${code} : ${texte}`);
+    }
+    assert.ok(libelle('PLACE_RESERVEE', { siege: 3, tour: null, portee: 'tous' }).includes('à tous les tours'));
+    assert.equal(libelle('places.titreParDefaut'), 'animateur');
+  });
+});

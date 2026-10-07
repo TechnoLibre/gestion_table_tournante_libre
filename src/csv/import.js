@@ -67,42 +67,121 @@ const ENTETE_MOTIF = 'motif';
 
 const parLigne = (a, b) => a.ligne - b.ligne;
 
-// Titres pourvus (§ 4.1, § 4.4). Un titre n'est pourvu que par la réservation
-// d'une personne non exclue, sur sa place, à un tour au moins : la
-// réservation d'une personne exclue est suspendue. La place se lit selon le
-// réglage attribuerSieges (§ 2.1, étape 6). Vrai, c'est un siège : une
-// réservation sans siège n'y pourvoit aucun titre. Faux, c'est la table, dont
-// les titres ne se distinguent pas : à un tour donné, une table de k titres
-// en a autant de pourvus que de personnes non exclues qui y sont réservées à
-// ce tour, k au plus, et ses titres pourvus sont ceux du tour qui en pourvoit
-// le plus.
-function titresPourvus({ evenement, reglages, participants, reservations, titres }) {
-  const presents = new Set(participants.filter(({ exclu }) => !exclu).map(({ id }) => id));
-  const actives = reservations.filter(({ participant }) => presents.has(participant));
-  if (reglages.attribuerSieges) {
-    // Un titre porte toujours un siège : la place d'une réservation sans
-    // siège, [table, null], n'est celle d'aucun titre.
-    const place = (table, siege) => JSON.stringify([table, siege]);
-    const occupees = new Set(actives.map(({ table, siege }) => place(table, siege)));
-    return titres.filter(({ table, siege }) => occupees.has(place(table, siege))).length;
+// L'ordre canonique des réservations, celui du schéma du fichier d'état :
+// participant, table, la portée « tous » avant « tour », puis le tour et le
+// siège, null en tête. Il départage, partout où la règle des titres et
+// l'état des places choisissent entre deux réservations.
+const rangDePortee = (portee) => (portee === 'tous' ? 0 : 1);
+const nulEnTete = (a, b) => (a === b ? 0 : a === null ? -1 : b === null ? 1 : a - b);
+export const ordreDesReservations = (a, b) =>
+  a.participant - b.participant ||
+  a.table - b.table ||
+  rangDePortee(a.portee) - rangDePortee(b.portee) ||
+  nulEnTete(a.tour, b.tour) ||
+  nulEnTete(a.siege, b.siege);
+
+// Deux chaînes, comparées unité UTF-16 par unité.
+const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+// Les titres d'une table, par rang dans charge.titres, rangés par siège puis
+// par libellé : l'ordre où les réservations sans siège les pourvoient.
+function titresParTable(titres) {
+  const parTable = new Map();
+  titres.forEach((titre, rang) => {
+    if (!parTable.has(titre.table)) parTable.set(titre.table, []);
+    parTable.get(titre.table).push(rang);
+  });
+  for (const rangs of parTable.values()) {
+    rangs.sort((a, b) => titres[a].siege - titres[b].siege || comparerTextes(titres[a].libelle, titres[b].libelle) || a - b);
   }
-  const titresParTable = new Map();
-  for (const { table } of titres) titresParTable.set(table, (titresParTable.get(table) ?? 0) + 1);
-  let pourvus = 0;
-  for (const [table, nombre] of titresParTable) {
-    let auMieux = 0;
-    for (let tour = 1; tour <= evenement.tours; tour += 1) {
-      const reserves = new Set(
-        actives
-          .filter((r) => r.table === table && (r.portee === 'tous' || r.tour === tour))
-          .map(({ participant }) => participant),
-      );
-      auMieux = Math.max(auMieux, Math.min(nombre, reserves.size));
-    }
-    pourvus += auMieux;
-  }
-  return pourvus;
+  return parTable;
 }
+
+// Répartit entre les titres d'une table — rangs, dans leur ordre — les
+// réservations couvrantes, déjà rangées dans l'ordre canonique, et rend
+// Map rang → réservation qui le pourvoit. D'abord chaque réservation à un
+// siège pourvoit les titres de ce siège encore libres. Puis, en mode table
+// seulement, chaque personne qu'aucune réservation à un siège de cette table
+// ne place pourvoit le premier titre resté libre : celles qui tiennent une
+// réservation « tous » d'abord, par identifiant croissant, puis les autres ;
+// une personne en pourvoit un au plus. Sous des sièges attribués, une
+// réservation sans siège ne pourvoit rien : un titre porte toujours un siège.
+function repartirTitres(rangs, titres, couvrantes, attribuerSieges) {
+  const pris = new Map();
+  const assises = new Set();
+  for (const reservation of couvrantes) {
+    if (reservation.siege === null) continue;
+    assises.add(reservation.participant);
+    for (const rang of rangs) {
+      if (!pris.has(rang) && titres[rang].siege === reservation.siege) pris.set(rang, reservation);
+    }
+  }
+  if (attribuerSieges) return pris;
+  const sansSiege = new Map();
+  for (const reservation of couvrantes) {
+    if (reservation.siege !== null || assises.has(reservation.participant)) continue;
+    const deja = sansSiege.get(reservation.participant);
+    if (deja === undefined || (deja.portee !== 'tous' && reservation.portee === 'tous')) {
+      sansSiege.set(reservation.participant, reservation);
+    }
+  }
+  const ordre = [...sansSiege.values()].sort(
+    (a, b) => rangDePortee(a.portee) - rangDePortee(b.portee) || a.participant - b.participant,
+  );
+  const libres = rangs.filter((rang) => !pris.has(rang));
+  ordre.forEach((reservation, i) => {
+    if (i < libres.length) pris.set(libres[i], reservation);
+  });
+  return pris;
+}
+
+/**
+ * La règle d'un titre pourvu (§ 4.1, § 4.4, § 2.1 étape 6), seule
+ * implémentation : bilanRemplacement en compte les titres, l'application en
+ * tire ses listes de travail et l'état de ses places. Un titre n'est pourvu
+ * que par la réservation d'une personne non exclue — la réservation d'une
+ * exclue est suspendue — qui tient sa place : même table, et même siège
+ * quand la réservation en porte un. Sous des sièges attribués, une
+ * réservation sans siège ne pourvoit aucun titre. En mode table, une
+ * réservation sans siège pourvoit au plus un titre de sa table, dans l'ordre
+ * des sièges des titres, après ceux que les réservations à un siège
+ * pourvoient (repartirTitres).
+ *
+ * Rend, rang à rang de charge.titres, { soiree, tours } : soiree, la
+ * réservation « tous les tours » qui le pourvoit pour la soirée, null sans
+ * elle — la répartition des seules réservations « tous », la même à chaque
+ * tour ; tours[r − 1], la réservation qui le pourvoit au tour r, parmi
+ * toutes celles qui couvrent ce tour, null sans elle. Une réservation d'un
+ * tour désigné pourvoit le titre à ce tour seulement. La charge n'est pas
+ * modifiée.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {Array<{soiree: Object|null, tours: Array<Object|null>}>}
+ */
+export function pourvoyeursDesTitres({ evenement, reglages, participants, reservations, titres }) {
+  const presents = new Set(participants.filter(({ exclu }) => !exclu).map(({ id }) => id));
+  const actives = reservations.filter(({ participant }) => presents.has(participant)).sort(ordreDesReservations);
+  const rendus = titres.map(() => ({ soiree: null, tours: Array.from({ length: evenement.tours }, () => null) }));
+  for (const [idTable, rangs] of titresParTable(titres)) {
+    const aLaTable = actives.filter(({ table }) => table === idTable);
+    const tous = aLaTable.filter(({ portee }) => portee === 'tous');
+    for (const [rang, reservation] of repartirTitres(rangs, titres, tous, reglages.attribuerSieges)) {
+      rendus[rang].soiree = reservation;
+    }
+    for (let tour = 1; tour <= evenement.tours; tour += 1) {
+      const couvrantes = aLaTable.filter((r) => r.portee === 'tous' || r.tour === tour);
+      for (const [rang, reservation] of repartirTitres(rangs, titres, couvrantes, reglages.attribuerSieges)) {
+        rendus[rang].tours[tour - 1] = reservation;
+      }
+    }
+  }
+  return rendus;
+}
+
+// Titres pourvus à un tour au moins (§ 4.1, § 4.4) : ceux qu'un
+// remplacement laisserait non pourvus.
+const titresPourvus = (charge) =>
+  pourvoyeursDesTitres(charge).filter(({ soiree, tours }) => soiree !== null || tours.some((r) => r !== null)).length;
 
 /**
  * Ce que remplacer détruirait, à annoncer avant d'agir (§ 10.1) : « 260
@@ -114,10 +193,9 @@ function titresPourvus({ evenement, reglages, participants, reservations, titres
  * - reservations : leurs réservations, suspendues comprises, soit toutes :
  *   chaque réservation d'une charge que l'analyse admet est celle d'un
  *   participant ;
- * - titresPourvus : les titres qu'une réservation pourvoit, et que le
- *   remplacement laisse non pourvus — par la réservation d'une personne non
- *   exclue, sur son siège quand les sièges sont attribués, sur sa table
- *   sinon, à un tour au moins ;
+ * - titresPourvus : les titres qu'une réservation pourvoit à un tour au
+ *   moins, et que le remplacement laisse non pourvus, selon la règle de
+ *   pourvoyeursDesTitres ;
  * - propositions : les propositions qui placent au moins une personne
  *   retirée. Le retenu n'y entre pas : l'import en état retenu porte
  *   l'avertissement de dérive.

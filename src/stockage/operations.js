@@ -113,11 +113,20 @@ function exigerSeance(seance) {
   }
 }
 
-// Libellé de l'instant que restitue l'Ouvert : celui de l'entrée de sa
-// révision au journal ; sans elle — un état sans journal, ou que le journal
-// ne rejoint pas —, libelleReprise, le texte qu'une écriture donnerait à
-// l'entrée de reprise de cet état. TypeError quand il le faut et qu'il manque.
-function libelleDeLInstant({ journal, revision }, libelleReprise) {
+/**
+ * Libellé de l'instant que restitue l'Ouvert : celui de l'entrée de sa
+ * révision au journal ; sans elle — un état sans journal, ou que le journal
+ * ne rejoint pas —, libelleReprise, le texte qu'une écriture donnerait à
+ * l'entrée de reprise de cet état. La filiation qu'écrit copier le porte, et
+ * l'appelant qui compose le libellé de l'entrée de copie le lit ici, avant
+ * l'appel.
+ *
+ * @param {{journal: Object|null, revision: number}} ouvert
+ * @param {string} [libelleReprise]
+ * @returns {string}
+ * @throws {TypeError} quand il le faut et qu'il manque
+ */
+export function libelleDeLInstant({ journal, revision }, libelleReprise) {
   const libelle = journal?.entrees.find((entree) => entree.revision === revision)?.libelle ?? libelleReprise;
   if (typeof libelle !== 'string' || libelle === '') {
     throw new TypeError(`copier : la révision ${revision} n'a pas d'entrée au journal, libelleReprise requis`);

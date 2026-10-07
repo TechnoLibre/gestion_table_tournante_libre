@@ -35,6 +35,8 @@ import { COMMANDES_PLACES } from './commandes_places.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { nomAffiche } from './personnes.js';
+import { couvre, repartirSieges, reservationsActives } from './places.js';
+import { controlerReintegration, leverRefus } from './pose.js';
 
 // Le refus d'une commande vit dans erreurs.js, le nom affiché d'une personne
 // dans personnes.js : les importateurs de ce module les y trouvent encore.
@@ -211,11 +213,18 @@ function exclureParticipant(charge, { id }) {
   };
 }
 
-/** reintegrerParticipant {id} (§ 4.4) : ses réservations et ses titres reviennent, RESERVATIONS_RETABLIES. */
+/**
+ * reintegrerParticipant {id} (§ 4.4) : ses réservations et ses titres
+ * reviennent, RESERVATIONS_RETABLIES. Ses réservations suspendues se
+ * contrôlent comme une pose (controlerReintegration, § 5.9) : le premier
+ * refus se lève, SURRESERVATION ou PLACE_RESERVEE, les suivants dans
+ * details.autres.
+ */
 function reintegrerParticipant(charge, { id }) {
   exigerModifiable(charge);
   const participant = participantDe(charge, id);
   if (!participant.exclu) throw refus('SANS_EFFET', { commande: 'reintegrerParticipant' });
+  leverRefus(controlerReintegration(charge, id));
   const suivante = avecParticipant(charge, id, (copie) => ({ ...copie, exclu: false }));
   const bilan = bilanExclusion(charge, suivante, participant);
   return {
@@ -330,13 +339,45 @@ function debloquer(charge) {
   return { charge: avecEtat(charge, etat), libelle: libelle('ENTREE_DEBLOQUER', { etat }), avertissements: [] };
 }
 
+// Le plan du moteur rangé par siège quand les sièges sont attribués (§ 4,
+// § 5.3, § 8.9) : chaque liste de table de chaque tour par repartirSieges —
+// la personne que sa réservation active, à un siège, couvrant ce tour à
+// cette table, y prend ce rang —, les null de fin retirés. Le moteur ignore
+// les sièges : sans ce rangement, la liste garde l'ordre du moteur,
+// croissant par identifiant. Les places sont celles de la configuration sur
+// laquelle le moteur a calculé, qui n'assied jamais plus : une table réduite
+// ou supprimée depuis ne change pas le rangement, et la proposition
+// s'enregistre avec sa dérive.
+function rangerParSiege(charge, plan, configuration) {
+  const places = new Map(configuration.tables.map(({ id, capacite: sieges }) => [id, sieges]));
+  const assises = reservationsActives(charge).filter(({ siege }) => siege !== null);
+  return {
+    ...plan,
+    tours: plan.tours.map((listes, rang) =>
+      listes.map((liste, i) => {
+        const idTable = plan.tables[i];
+        const siegeDe = new Map();
+        for (const reservation of assises) {
+          if (reservation.table === idTable && couvre(reservation, rang + 1) && !siegeDe.has(reservation.participant)) {
+            siegeDe.set(reservation.participant, reservation.siege);
+          }
+        }
+        const rangee = repartirSieges(liste, siegeDe, places.get(idTable) ?? 0);
+        while (rangee.length > 0 && rangee.at(-1) === null) rangee.pop();
+        return rangee;
+      }),
+    ),
+  };
+}
+
 /**
  * enregistrerGeneration {propositions, configuration, produitVersion} (§ 5.7,
  * § 8.9) : les propositions du moteur, mises en forme de fichier
  * (versFichier) sous les identifiants qui suivent prochainsIds.proposition —
  * la proposition d'identifiant k du moteur prend prochainsIds.proposition +
  * k − 1 —, s'ajoutent aux précédentes, et le compteur passe au-delà de la
- * dernière. Un brouillon passe à proposé.
+ * dernière. Sièges attribués, chaque liste se range d'abord par siège
+ * (rangerParSiege). Un brouillon passe à proposé.
  */
 function enregistrerGeneration(charge, { propositions, configuration, produitVersion }) {
   exigerModifiable(charge);
@@ -350,7 +391,10 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
   const options = { produitVersion, attribuerSieges: charge.reglages.attribuerSieges, decalage };
   let fichiers;
   try {
-    fichiers = propositions.map((proposition) => versFichier(proposition, configuration, options));
+    fichiers = propositions.map((proposition) => {
+      const rangee = options.attribuerSieges ? { ...proposition, plan: rangerParSiege(charge, proposition.plan, configuration) } : proposition;
+      return versFichier(rangee, configuration, options);
+    });
   } catch (erreur) {
     if (erreur instanceof ErreurStockage && erreur.code === 'COMPTEUR_SATURE') {
       throw refus('COMPTEUR_SATURE', erreur.details);

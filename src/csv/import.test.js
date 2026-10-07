@@ -14,7 +14,7 @@ import { VERSION } from '../version.genere.js';
 import { apercevoir } from './apercu.js';
 import { decoder } from './encodage.js';
 import { ErreurCsv } from './erreurs.js';
-import { appliquerImport, bilanRemplacement, exporterRefus } from './import.js';
+import { appliquerImport, bilanRemplacement, exporterRefus, pourvoyeursDesTitres } from './import.js';
 import { decouper } from './lecture.js';
 
 const MARQUE = '\u{FEFF}';
@@ -551,6 +551,36 @@ describe('appliquerImport : remplacer, et ce que remplacer annonce (§ 10.1)', (
     });
     assert.deepEqual(bilanRemplacement(charge), { participants: 8, reservations: 8, titresPourvus: 5, propositions: 0 });
     assert.equal(bilanRemplacement(chargeGarnie()).titresPourvus, 3);
+  });
+
+  test('lecture par table : une réservation qui porte un siège ne pourvoit que le titre de ce siège', () => {
+    const charge = chargeDe({
+      participants: [personne(1, 'Ombrelle', 'Iris'), personne(2, 'Pervenche', 'Théo')],
+      tables: [table(1)],
+      reservations: [reservation(1, 1, 5)],
+      titres: [titre(1, 1)],
+    });
+    charge.evenement.siegesParDefaut = 6;
+    assert.equal(bilanRemplacement(charge).titresPourvus, 0);
+    charge.reservations.push(reservation(2, 1, null));
+    assert.equal(bilanRemplacement(charge).titresPourvus, 1);
+  });
+
+  test('lecture par table, à un tour : les réservations à un siège pourvoient leur titre, puis chaque personne sans siège un des titres restants', () => {
+    const charge = chargeDe({
+      participants: [personne(1, 'Ombrelle', 'Iris'), personne(2, 'Pervenche', 'Théo'), personne(3, 'Lacasse', 'Ondine')],
+      tables: [table(1)],
+      reservations: [reservation(1, 1, null), reservation(2, 1, 1, 2)],
+      titres: [titre(1, 1), titre(1, 2), titre(1, 3)],
+    });
+    // Tour 1 : Iris pourvoit le premier titre ; tour 2 : Théo le titre de
+    // son siège, Iris le suivant. Deux titres pourvus à un tour au moins.
+    assert.deepEqual(pourvoyeursDesTitres(charge).map(({ soiree, tours }) => [soiree?.participant ?? null, tours.map((r) => r?.participant ?? null)]), [
+      [1, [1, 2]],
+      [null, [null, 1]],
+      [null, [null, null]],
+    ]);
+    assert.equal(bilanRemplacement(charge).titresPourvus, 2);
   });
 
   test("une proposition qui ne place aucune des personnes de la liste n'est pas touchée", () => {

@@ -37,7 +37,7 @@ import { choisirSeparateur, decouper, enregistrementVide } from './lecture.js';
 import { cleNormalisee } from './normalisation.js';
 
 /**
- * Modes de l'import (§ 10.1), que l'aperçu et l'import reçoivent tous deux.
+ * Modes de l'import, que l'aperçu et l'import reçoivent tous deux (§ 10.1).
  *
  * @type {readonly string[]}
  */

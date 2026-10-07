@@ -308,6 +308,32 @@ const EXEMPLES = new Map([
   ['PLAN_NON_BLOQUE', { remede: null }],
   ['JALON_NON_ECRIT', { chemin: 'Soirée des Lucioles.gtt-journal.jsonl', dossier: 'E:\\data', cause: 'EROFS' }],
   ['SANS_EFFET', { commande: 'modifierParticipant', remede: null }],
+  ['RETOUR_AUTOMATIQUE', {}],
+  [
+    'DERIVE_NOUVELLE',
+    {
+      touchees: [
+        { id: 'retenu', raisons: [{ code: 'TABLE_SUPPRIMEE', table: 2 }] },
+        { id: 3, raisons: [{ code: 'CAPACITE_CHANGEE', table: 1, avant: 8, maintenant: 6 }] },
+      ],
+    },
+  ],
+  ['RESERVATION_NON_HONOREE', { participant: 4, table: 5, tour: 1 }],
+  [
+    'INVARIANT_VIOLE',
+    {
+      proposition: 1,
+      violations: [
+        { code: 'RESERVATION', participant: 4, table: 5, tour: 1 },
+        { code: 'CAPACITE', table: 5, tour: 2 },
+      ],
+      remede: null,
+    },
+  ],
+  ['CONFIGURATION_INCOHERENTE', { code: 'SURRESERVATION', details: { table: 2, tour: 1, reservees: 9, capacite: 8 } }],
+  // Moteur
+  ['PLACES_MANQUANTES', { placesManquantes: 3 }],
+  ['SURRESERVATION', { table: 2, tour: 1, reservees: 9, capacite: 8, remede: null }],
   // Refus et avertissements des commandes
   ['NOM_REQUIS', { remede: null }],
   ['DATE_INVALIDE', { date: '2031-02-30', remede: null }],
@@ -321,6 +347,9 @@ const EXEMPLES = new Map([
   ['RESERVATIONS_RETABLIES', { participant: 1, personne: 'Iris Ombrelle', reservations: 2, titres: 1 }],
   ['RESERVATIONS_RETIREES', { participant: 1, personne: 'Iris Ombrelle', reservations: 1, titres: 1 }],
   ['IMPORT_EN_RETENU', {}],
+  // Façade des événements
+  ['QUESTION_EN_ATTENTE', { question: 'PORTABLE_NON_INSCRIPTIBLE', remede: null }],
+  ['EXPLORATEUR_ABSENT', { remede: null }],
   // Libellés figés du journal
   ['ENTREE_CREATION', { nom: "Soirée d'essai" }],
   ['JALON_CREATION', {}],
@@ -338,9 +367,38 @@ const EXEMPLES = new Map([
   ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
   ['ENTREE_CHANGER_ETAT', { etat: 'bloque' }],
   ['ENTREE_DEBLOQUER', { etat: 'retenu' }],
+  ['ENTREE_COPIE', { source: 'Soirée des Lucioles', instant: "Création de l'événement « Soirée des Lucioles »" }],
+  ['ENTREE_RENOMMER', { ancien: 'Soirée des Lucioles', nom: 'Soirée des Cerfs' }],
+  ['ENTREE_DEMONSTRATION', { nom: 'Petite démonstration' }],
   ['ENTREE_ENREGISTRER_GENERATION', { n: 5, premier: 3, dernier: 7 }],
   ['ENTREE_RETENIR_PROPOSITION', { id: 3 }],
   ['ENTREE_EFFACER_PROPOSITIONS', { n: 4, gardee: 2 }],
+  // Places : refus d'une pose, titres, réservations, retenu
+  ['SIEGE_INEXISTANT', { table: 2, siege: 9, capacite: 8, remede: null }],
+  ['DEUX_PLACES_MEME_TOUR', { participant: 1, tour: 2, autre: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
+  ['PERSONNE_EXCLUE', { participant: 3, remede: null }],
+  ['PLACE_RESERVEE', { table: 2, siege: 3, tour: 2, titulaire: 2, portee: 'tour', remede: null }],
+  ['RESERVEE_AILLEURS', { participant: 1, tour: 2, reservation: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
+  ['TABLE_GELEE', { table: 1 }],
+  ['LIBELLE_VIDE', { remede: null }],
+  ['PLACE_TITREE', { table: 3, siege: 1, libelle: 'accueil', remede: null }],
+  ['AUCUN_SIEGE_SANS_TITRE', { table: 1, capacite: 2, remede: null }],
+  ['TITRE_ABSENT', { table: 3, siege: 1, remede: null }],
+  ['RESERVATION_ABSENTE', { participant: 1, table: 3, portee: 'tour', tour: 2, remede: null }],
+  ['CONVERSION_IMPOSSIBLE', { participant: 1, table: 3, remede: null }],
+  ['PROPOSITION_MONTREE', { proposition: 4, remede: null }],
+  ['SIEGE_OCCUPE', { table: 5, siege: 2, tour: 1, occupant: 2, remede: null }],
+  ['TABLE_PLEINE', { table: 5, tour: 1, capacite: 6, remede: null }],
+  ['ENTREE_RESERVER', { personne: 'Théo Pervenche', numero: 4, siege: 2, portee: 'tour', tour: 2 }],
+  ['ENTREE_RETIRER_RESERVATION', { personne: 'Théo Pervenche', numero: 4, portee: 'tous', tour: null }],
+  ['ENTREE_DEPLACER_RESERVATION', { personne: 'Théo Pervenche', de: 4, vers: 7, siege: null, portee: 'tour', tour: 2 }],
+  ['ENTREE_POSER_TITRE', { libelle: 'accueil', numero: 3, siege: 1 }],
+  ['ENTREE_RETIRER_TITRE', { libelle: 'accueil', numero: 3, siege: 1 }],
+  ['ENTREE_DESIGNER', { personne: 'Iris Ombrelle', numero: 3, siege: 1, libelle: 'accueil' }],
+  ['ENTREE_CONVERTIR_EN_TOUS', { personne: 'Iris Ombrelle', numero: 3 }],
+  ['ENTREE_DEPLACER_DANS_RETENU', { personne: 'Iris Ombrelle', de: 4, vers: 7, siege: null, tour: 2 }],
+  ['ENTREE_ECHANGER_DANS_RETENU', { a: 'Iris Ombrelle', deA: 4, b: 'Théo Pervenche', deB: null, tour: 2 }],
+  ['ENTREE_RETIRER_DU_TOUR', { personne: 'Iris Ombrelle', numero: 4, tour: 2 }],
 ]);
 
 // Un texte composé ne laisse paraître ni valeur absente, ni booléen, ni
