@@ -1749,7 +1749,8 @@ describe('page : src/stockage/fichiers_electron.js', () => {
   test("à travers le vrai préchargement : chaque primitive de la page appelle son canal, et un refus de la coquille revient en ErreurStockage", async () => {
     const { disque, fichiers } = preparer();
     const { gtt, invoques } = parLePrechargement(fichiers);
-    assert.deepEqual(Object.keys(gtt), ['fichiers']);
+    assert.deepEqual(Object.keys(gtt), ['fichiers', 'copier']);
+    assert.equal(typeof gtt.copier, 'function');
     assert.deepEqual(Object.keys(gtt.fichiers), [...PRIMITIVES]);
     assert.ok(Object.values(gtt.fichiers).every((fonction) => typeof fonction === 'function'));
 

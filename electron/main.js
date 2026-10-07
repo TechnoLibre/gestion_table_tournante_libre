@@ -4,7 +4,9 @@
 // Processus principal de la coquille Electron (§ 13.1) : une fenêtre qui
 // charge la page construite par Vite dans www/, et le système de fichiers de
 // la plateforme (electron/fichiers.js), offert à la page par un canal IPC
-// par primitive, que electron/preload.cjs expose sous window.gtt.fichiers.
+// par primitive, que electron/preload.cjs expose sous window.gtt.fichiers ;
+// un canal de plus, gtt:copier, remet un texte au presse-papiers du système
+// (window.gtt.copier).
 //
 // La page n'a ni Node ni accès au disque : isolation de contexte active,
 // intégration de Node coupée, rendu en bac à sable. Elle n'atteint le
@@ -12,8 +14,8 @@
 // une racine que ce processus connaît et un chemin relatif à elle. Un nom
 // importé interprété comme du balisage reste ainsi une faute d'affichage, et
 // non un accès au disque.
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,6 +76,28 @@ const fichiers = creerFichiers({
   fenetre: () => fenetre,
 });
 servir(fichiers, (canal, gestionnaire) => ipcMain.handle(canal, gestionnaire));
+
+// Le presse-papiers : le texte reçu, une chaîne, remplace son contenu.
+ipcMain.handle('gtt:copier', (_evenement, texte) => {
+  if (typeof texte !== 'string') throw new TypeError("le texte à copier n'est pas une chaîne");
+  clipboard.writeText(texte);
+});
+
+// Les verrous que la page a pris et pas rendus s'effacent à la sortie (§ 8.8) :
+// la page ne survit pas au processus principal, et une fermeture de la fenêtre
+// ne lui laisse pas le temps de les rendre elle-même. Chacun se relit, de
+// façon synchrone comme le retrait du profil — Electron n'attend aucune
+// promesse d'un écouteur de sortie —, et ne s'efface que s'il porte encore la
+// séance qui l'a pris : un verrou repris par une autre séance reste.
+app.on('quit', () => {
+  for (const { chemin, seance } of fichiers.verrousTenus()) {
+    try {
+      if (JSON.parse(readFileSync(chemin, 'utf8'))?.seance === seance) rmSync(chemin, { force: true });
+    } catch {
+      // Absent, illisible ou inaccessible : rien à rendre.
+    }
+  }
+});
 
 function creerFenetre() {
   fenetre = new BrowserWindow({

@@ -16,7 +16,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, test } from '../test/lanceur.js';
 import {
   controler,
@@ -242,6 +242,7 @@ const MODULE = [
   'export const VERSION = Object.freeze({',
   "  affichee: '2026.10.05.01',",
   "  technique: '2026.1005.1',",
+  "  windows: '2026.1005.1.0',",
   '});',
   '',
 ].join('\n');
@@ -770,6 +771,20 @@ describe('version : contrôle du § 18.5, un défaut à la fois', () => {
 describe('version : engendrement', () => {
   test("engendrerModule rend le module, l'en-tête de licence en tête", () => {
     assert.equal(engendrerModule(VERSION), MODULE);
+  });
+
+  test('le module engendré porte les formes affichée, technique et Windows de deriver, et elles seules', async () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'version-module-'));
+    try {
+      const chemin = join(dossier, 'version.genere.js');
+      writeFileSync(chemin, engendrerModule('2026.10.06.02'));
+      const { VERSION: engendree } = await import(pathToFileURL(chemin).href);
+      const { affichee, technique, windows } = deriver('2026.10.06.02');
+      assert.deepEqual(engendree, { affichee, technique, windows });
+      assert.ok(Object.isFrozen(engendree));
+    } finally {
+      rmSync(dossier, { recursive: true, force: true });
+    }
   });
 
   test('engendrer réécrit le module, package.json et les deux champs du verrou', () =>

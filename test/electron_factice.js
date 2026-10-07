@@ -11,9 +11,13 @@
 // n'a plus rien à faire, le module joue le rôle de la page : il exécute
 // electron/preload.cjs dans une fonction qui reçoit require, module et
 // exports, et appelle chaque fonction du pont exposé, qui atteint les
-// gestionnaires posés par le processus principal. Il joue ensuite la sortie
-// de l'application — before-quit, will-quit, quit — puis imprime le journal
-// en JSON sur la sortie standard.
+// gestionnaires posés par le processus principal ; puis gtt.copier, avec un
+// texte d'épreuve, et gtt.fichiers.verrouiller sur la racine documents, deux
+// verrous réels que la page ne rend pas ; le contenu du second est récrit au
+// nom d'une autre séance, comme après une reprise. Il joue ensuite la sortie
+// de l'application — before-quit, will-quit, quit —, relève la présence de
+// ces deux verrous et de celui d'une autre séance, autre.gtt.verrou, avant et
+// après la sortie, puis imprime le journal en JSON sur la sortie standard.
 //
 // Seul require est restreint, à electron, comme dans un rendu en bac à
 // sable. Les globales de Node du processus d'épreuve, dont process et Buffer,
@@ -32,8 +36,9 @@
 // désigne par TMPDIR, et par TEMP et TMP sous Windows —, et des Documents et
 // un AppData qui y vivent ; app.getName, le nom de produit de package.json,
 // comme Electron. Les dialogues rendent une annulation ; l'explorateur
-// consigne le dossier qu'on lui demande d'ouvrir, et réussit.
-import { existsSync, readFileSync } from 'node:fs';
+// consigne le dossier qu'on lui demande d'ouvrir, et réussit ; le
+// presse-papiers consigne chaque texte qu'il reçoit.
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -48,6 +53,17 @@ registerHooks({
 });
 
 const PRECHARGEMENT = fileURLToPath(new URL('../electron/preload.cjs', import.meta.url));
+
+// Ce que la page copie, et les verrous qu'elle prend dans la racine
+// documents, à côté de celui d'une autre séance que l'épreuve y pose avant le
+// lancement. Le second verrou de la page est repris : son contenu porte
+// ensuite SEANCE_REPRISE.
+const TEXTE_COPIE = 'Bloc copié par la page factice';
+const VERROU_PAGE = 'soiree.gtt.verrou';
+const VERROU_REPRIS = 'reprise.gtt.verrou';
+const SEANCE_PAGE = 'seance-page';
+const SEANCE_REPRISE = 'seance-reprise';
+const VERROU_AUTRE = 'autre.gtt.verrou';
 const NOM_PRODUIT = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).productName;
 
 // Ce que rend app.getPath, par nom.
@@ -103,14 +119,21 @@ const journal = {
   dialogues: [],
   // Dossier de chaque shell.openPath.
   explorateur: [],
+  // Texte de chaque clipboard.writeText.
+  pressePapiers: [],
   // Réponse du gestionnaire d'ouverture de chaque fenêtre à une adresse
   // externe.
   ouvertures: [],
   // Pour chaque écouteur de will-navigate : la navigation est-elle annulée ?
   navigations: [],
   // Ce que fait le préchargement : modules requis, objets exposés, membres
-  // de gtt.fichiers, et pour chacun les canaux qu'il invoque et sa réponse.
+  // de gtt.fichiers, et pour chacun les canaux qu'il invoque et sa réponse ;
+  // puis l'appel de gtt.copier et ceux des deux verrous de la page, de même.
   prechargement: null,
+  // Présence du verrou de la page, de celui qu'une autre séance a repris et
+  // de celui de l'autre séance, avant puis après la sortie de l'application ;
+  // null quand la page n'a pas de racine documents.
+  verrous: null,
   // Le dossier userData existe-t-il avant la sortie de l'application, puis
   // après ; null sans app.setPath('userData').
   profil: null,
@@ -229,6 +252,12 @@ export const shell = {
   },
 };
 
+export const clipboard = {
+  writeText(texte) {
+    journal.pressePapiers.push(texte);
+  },
+};
+
 // Côté page : ce que require('electron') rend au préchargement. invoke se
 // consigne, atteint le gestionnaire posé par le processus principal pour ce
 // canal, et rejette comme Electron quand il n'y en a pas.
@@ -255,7 +284,7 @@ function electronDuRendu(exposes) {
 // une erreur par son message.
 async function appelerLePont(fichiers) {
   const appels = [];
-  let racines;
+  let racines = null;
   for (const membre of Object.keys(fichiers)) {
     const avant = journal.invocations.length;
     const appel = { membre, type: typeof fichiers[membre] };
@@ -268,7 +297,21 @@ async function appelerLePont(fichiers) {
     appel.canaux = journal.invocations.slice(avant);
     appels.push(appel);
   }
-  return appels;
+  return { appels, racines };
+}
+
+// Un appel de la page hors de la tournée du pont : sa réponse, ou le message
+// de son erreur, et les canaux qu'il invoque.
+async function appelerUne(fonction, parametres) {
+  const avant = journal.invocations.length;
+  const appel = {};
+  try {
+    appel.reponse = await fonction(...parametres);
+  } catch (erreur) {
+    appel.erreur = erreur.message;
+  }
+  appel.canaux = journal.invocations.slice(avant);
+  return appel;
 }
 
 async function jouerLePrechargement() {
@@ -285,12 +328,35 @@ async function jouerLePrechargement() {
     filename: PRECHARGEMENT,
   })(requerir, module, module.exports);
 
-  const fichiers = exposes.find(({ cle }) => cle === 'gtt')?.api?.fichiers;
+  const gtt = exposes.find(({ cle }) => cle === 'gtt')?.api;
+  const fichiers = gtt?.fichiers;
+  const { appels, racines } = fichiers === undefined ? { appels: [], racines: null } : await appelerLePont(fichiers);
+  const copie = {
+    type: typeof gtt?.copier,
+    texte: TEXTE_COPIE,
+    ...(typeof gtt?.copier === 'function' ? await appelerUne(gtt.copier, [TEXTE_COPIE]) : {}),
+  };
+  const documents = racines?.documents ?? null;
+  const verrou = documents === null || fichiers === undefined
+    ? null
+    : await appelerUne(fichiers.verrouiller, [documents, VERROU_PAGE, SEANCE_PAGE]);
+  const repris = documents === null || fichiers === undefined
+    ? null
+    : await appelerUne(fichiers.verrouiller, [documents, VERROU_REPRIS, SEANCE_PAGE]);
+  if (repris?.reponse?.ok === true) {
+    const chemin = join(documents.chemin, VERROU_REPRIS);
+    const contenu = JSON.parse(readFileSync(chemin, 'utf8'));
+    writeFileSync(chemin, `${JSON.stringify({ ...contenu, seance: SEANCE_REPRISE })}\n`);
+  }
   return {
     requis,
     exposes: exposes.map(({ cle, api }) => ({ cle, membres: Object.keys(api).sort() })),
     fichiers: fichiers === undefined ? null : Object.keys(fichiers),
-    appels: fichiers === undefined ? [] : await appelerLePont(fichiers),
+    appels,
+    copie,
+    verrou,
+    repris,
+    documents: documents?.chemin ?? null,
   };
 }
 
@@ -320,8 +386,20 @@ async function jouerLaPage() {
   }
   const profil = journal.setPath.find(({ nom }) => nom === 'userData')?.chemin;
   const avant = profil !== undefined && existsSync(profil);
+  const dossier = journal.prechargement?.documents ?? null;
+  const verrous = dossier === null ? null : [VERROU_PAGE, VERROU_REPRIS, VERROU_AUTRE].map((nom) => join(dossier, nom));
+  const presents = () => verrous.map((chemin) => existsSync(chemin));
+  const verrousAvant = verrous === null ? null : presents();
   sortir();
   journal.profil = profil === undefined ? null : { avant, apres: existsSync(profil) };
+  if (verrous !== null) {
+    const verrousApres = presents();
+    journal.verrous = {
+      page: { avant: verrousAvant[0], apres: verrousApres[0] },
+      repris: { avant: verrousAvant[1], apres: verrousApres[1] },
+      autre: { avant: verrousAvant[2], apres: verrousApres[2] },
+    };
+  }
   process.stdout.write(`${JSON.stringify(journal)}\n`);
 }
 

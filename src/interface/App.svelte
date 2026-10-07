@@ -2,27 +2,276 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // Racine de l'interface. Le bandeau d'application, présent sur tout écran,
-  // porte le nom, la version affichée et la provenance de la construction ;
-  // le nom suivi de la version affichée devient aussi le titre de la fenêtre
-  // (§ 8.4, § 18.6). La provenance vient du mode de Vite, que pose la
-  // commande de construction.
+  // Racine de l'interface (§ 13.4). Ses propriétés sont les dépendances de
+  // l'application — système de fichiers, horloge, exécuteur de génération,
+  // presse-papiers, identifiants, langue, provenance, démonstrations, format
+  // courant, version du produit, et en option le thème de départ — que
+  // src/main.js construit pour la machine et monterApp pour une épreuve : App
+  // ne choisit aucune plateforme.
+  //
+  // À son initialisation, App crée une fois chacun la séance, sans racine,
+  // le contrôleur de génération et la façade, et les donne aux composants par
+  // le contexte de Svelte — clés 'seance', 'facade', 'generation', 'ui', 't',
+  // 'format', 'horloge' et 'relireListe' —, posé de façon synchrone avant que
+  // la détermination du dossier de travail, asynchrone, ne rende. La façade
+  // pose la racine de la séance par changerRacine : aussitôt sans question,
+  // après la réponse sinon. App lit la liste du dossier de travail par la
+  // façade et la donne à l'accueil, une fois la détermination réglée — sans
+  // question au démarrage, après la réponse sinon : pret se résout quand la
+  // détermination est faite, la liste lue quand aucune question n'attend, et
+  // le premier écran — les lignes de la liste, ou la question — rendu.
+  //
+  // L'écran suit la séance : la liste sans événement ouvert, l'événement
+  // sinon ; le panneau « À propos » les remplace tant qu'il est ouvert. Chaque
+  // ouverture d'un événement remet l'état de navigation à son départ. Le
+  // bandeau, présent sur tout écran, ne défile pas : un écran plus haut que
+  // la fenêtre défile sous lui.
+  //
+  // Le thème part de la propriété themeInitial, ou de la préférence du
+  // système lue au montage ; le réglage de l'opérateur le change pour la
+  // séance, en mémoire, posé en data-theme sur <html> (§ 19.2). À la sortie
+  // de la page (pagehide), la séance ferme l'événement et rend son verrou,
+  // sans question ; aucun beforeunload ne retient la page (§ 8.4).
   import './jetons.css';
+  import { onDestroy, setContext, tick, untrack } from 'svelte';
+  import { creerFacade } from '../application/evenements.js';
+  import { creerFormat } from '../application/format.js';
+  import { creerControleurGeneration } from '../application/generation.js';
+  import { TABLES_APPLICATION } from '../application/libelles.js';
+  import { creerSeance } from '../application/seance.js';
+  import { creerTraduction } from '../application/traduction.js';
   import { VERSION } from '../version.genere.js';
-  import { libelleProvenance, titreAvecVersion } from './libelles.js';
+  import APropos from './APropos.svelte';
+  import Accueil from './accueil/Accueil.svelte';
+  import Bandeau from './Bandeau.svelte';
+  import Evenement from './evenement/Evenement.svelte';
+  import { blocAPropos, provenanceVisible, versionVisible } from './apropos.js';
+  import { creerEtatUi } from './etat_ui.js';
+  import { TABLES_INTERFACE } from './libelles.js';
+  import { themeInitial as themeDuSysteme } from './theme.js';
 
-  const titre = titreAvecVersion(VERSION.affichee);
-  const provenance = libelleProvenance(import.meta.env.MODE);
+  // Les dépendances se lisent une fois, au montage : App crée ses services
+  // une seule fois, et un changement de propriété ne les recrée pas.
+  const dependances = $props();
+  const {
+    fs,
+    horloge,
+    executeur,
+    pressePapiers,
+    identifiant,
+    langue = 'fr',
+    provenance,
+    demonstrations,
+    formatCourant,
+    produitVersion,
+    themeInitial,
+  } = untrack(() => dependances);
+
+  const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue });
+  const format = creerFormat(t);
+  const seanceApp = creerSeance({
+    fs,
+    horloge,
+    identifiant,
+    produitVersion,
+    planifier: horloge.planifier,
+    annuler: horloge.annuler,
+    formatCourant,
+  });
+  const generationApp = creerControleurGeneration({ seance: seanceApp, executeur, horloge, produitVersion });
+  const facadeApp = creerFacade({
+    fs,
+    horloge,
+    identifiant,
+    produitVersion,
+    demonstrations,
+    ouvert: () => seanceApp.etat().evenement?.base ?? null,
+    ouvrir: (base) => seanceApp.ouvrir(base),
+    fermer: () => seanceApp.fermer(),
+    creer: (champs) => seanceApp.creer(champs),
+    racine: () => seanceApp.etat().racine,
+    changerRacine: (racine) => seanceApp.changerRacine(racine),
+  });
+  // La façade que reçoivent les composants, et que rend l'export facade :
+  // celle de creerFacade, dont demarrer et repondre relisent la liste une
+  // fois la détermination réglée sans question. La façade appelle
+  // changerRacine avant de retirer sa question, si bien qu'une lecture
+  // lancée de ce rappel serait refusée (QUESTION_EN_ATTENTE). Une
+  // détermination refusée ne laisse rien : le demarrer suivant la refait, et
+  // relit alors la liste.
+  const facadeContexte = {
+    ...facadeApp,
+    demarrer: async () => {
+      const issue = await facadeApp.demarrer();
+      if (issue.dossier.question === null) await relireListe();
+      return issue;
+    },
+    repondre: async (choix) => {
+      const issue = await facadeApp.repondre(choix);
+      if (issue.dossier.question === null) await relireListe();
+      return issue;
+    },
+  };
+  const uiApp = creerEtatUi();
+
+  setContext('seance', seanceApp);
+  setContext('facade', facadeContexte);
+  setContext('relireListe', () => relireListe());
+  setContext('generation', generationApp);
+  setContext('ui', uiApp);
+  setContext('t', t);
+  setContext('format', format);
+  setContext('horloge', horloge);
+
+  // Un refus de la séance ou de la façade porte un code, que l'écran
+  // traduit ; toute autre erreur est une faute, qui remonte.
+  const estRefus = (erreur) => typeof erreur?.code === 'string';
+  const refusDe = (erreur) => ({ code: erreur.code, details: erreur.details });
+
+  // La liste du dossier de travail, que l'accueil montre, et le refus qui en
+  // tient lieu quand la façade refuse de la lire : une liste refusée ne
+  // montre plus les lignes d'une lecture d'avant. lecture est la promesse de
+  // la dernière lecture lancée, que preparer attend ; quand deux lectures se
+  // chevauchent, seule la dernière pose ce qu'elle lit. La lecture passe par
+  // facadeContexte, la façade que voient les composants et les épreuves.
+  let lignes = $state.raw([]);
+  let refusLecture = $state.raw(null);
+  let lecture = Promise.resolve();
+  let lectures = 0;
+
+  async function lireListe() {
+    lectures += 1;
+    const rang = lectures;
+    try {
+      const lues = await facadeContexte.lister();
+      if (rang !== lectures) return;
+      lignes = lues;
+      refusLecture = null;
+    } catch (erreur) {
+      if (!estRefus(erreur)) throw erreur;
+      if (rang !== lectures) return;
+      lignes = [];
+      refusLecture = refusDe(erreur);
+    }
+  }
+
+  // Lance une lecture de la liste, qui devient la dernière, et rend sa
+  // promesse. L'accueil l'appelle par le contexte après toute opération qui
+  // change le dossier de travail.
+  function relireListe() {
+    lecture = lireListe();
+    return lecture;
+  }
+
+  // L'état observable de la séance, et la base de l'événement ouvert : une
+  // base qui change vers un événement remet la navigation à son départ. Le
+  // refus de « Liste des événements » tient jusqu'au changement suivant.
+  // La liste se relit à chaque fermeture d'un événement, qui a pu en créer,
+  // en changer ou écrire ailleurs ; elle se lit aussi quand la détermination
+  // se règle — preparer sans question, repondre de facadeContexte après la
+  // réponse.
+  let etatSeance = $state.raw(seanceApp.etat());
+  let refusListe = $state.raw(null);
+  let baseOuverte = null;
+  const desabonner = seanceApp.subscribe((etat) => {
+    const base = etat.evenement?.base ?? null;
+    if (base !== null && base !== baseOuverte) uiApp.reinitialiser();
+    const fermeture = baseOuverte !== null && base === null;
+    baseOuverte = base;
+    etatSeance = etat;
+    refusListe = null;
+    if (fermeture) relireListe();
+  });
+  onDestroy(desabonner);
+
+  let theme = $state(themeInitial ?? themeDuSysteme(window.matchMedia('(prefers-color-scheme: dark)').matches));
+  $effect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  });
+
+  const titre = t('coquille.titre', { version: produitVersion });
+  const version = versionVisible(provenance, produitVersion, t);
+  const provenanceAffichee = provenanceVisible(provenance, t);
+  const bloc = blocAPropos({ version: VERSION, plateforme: fs.nature, provenance, format: formatCourant }, t);
+
+  // « Liste des événements » : ferme l'événement, sans question ; sous un
+  // support rompu, la séance le refuse, et le refus s'affiche à côté de la
+  // commande.
+  async function revenirALaListe() {
+    try {
+      await seanceApp.fermer();
+    } catch (erreur) {
+      if (!estRefus(erreur)) throw erreur;
+      refusListe = refusDe(erreur);
+    }
+  }
+
+  // La page se retire : la séance ferme l'événement et rend son verrou. Sous
+  // un support rompu, elle le refuse et rien ne s'écrit.
+  function quitterLaPage() {
+    seanceApp.fermer().catch((erreur) => {
+      if (!estRefus(erreur)) throw erreur;
+    });
+  }
+
+  // La détermination faite sans question, la liste du dossier retenu se
+  // lit ; une question laisse l'accueil sans lignes, jusqu'à la réponse. Un
+  // refus de la détermination s'affiche à la place de la liste.
+  async function preparer() {
+    try {
+      await facadeContexte.demarrer();
+    } catch (erreur) {
+      if (!estRefus(erreur)) throw erreur;
+      refusLecture = refusDe(erreur);
+    }
+    await lecture;
+    await tick();
+  }
+
+  /** Résolue quand la détermination du dossier de travail est faite et le
+   *  premier écran rendu : les lignes de la liste lue, ou la question. */
+  export const pret = preparer();
+  /** La séance de ce montage. */
+  export function seance() {
+    return seanceApp;
+  }
+  /** Le contrôleur de génération de ce montage. */
+  export function generation() {
+    return generationApp;
+  }
+  /** La façade des événements de ce montage. */
+  export const facade = facadeContexte;
+  /** L'état de navigation de ce montage. */
+  export const ui = uiApp;
 </script>
+
+<svelte:window onpagehide={quitterLaPage} />
 
 <svelte:head>
   <title>{titre}</title>
 </svelte:head>
 
-<header class="bandeau">
-  <span class="titre">{titre}</span>
-  <span class="provenance">{provenance}</span>
-</header>
+<div class="app">
+  <Bandeau
+    etat={etatSeance}
+    {version}
+    provenance={provenanceAffichee}
+    {theme}
+    {refusListe}
+    choisirTheme={(choix) => (theme = choix)}
+    ouvrirApropos={() => uiApp.ouvrirApropos()}
+    {revenirALaListe}
+  />
+  <main class="ecran">
+    {#if $uiApp.apropos}
+      <APropos {bloc} {pressePapiers} fermer={() => uiApp.fermerApropos()} />
+    {:else if etatSeance.evenement === null}
+      <Accueil {provenance} version={produitVersion} {demonstrations} {lignes} {refusLecture} />
+    {:else}
+      <Evenement />
+    {/if}
+  </main>
+</div>
 
 <style>
   :global(body) {
@@ -32,21 +281,14 @@
     font-family: var(--police-interface);
   }
 
-  .bandeau {
+  .app {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--espace-3);
-    padding: var(--espace-2) var(--espace-4);
-    border-bottom: 1px solid var(--couleur-bandeau-filet);
-    background-color: var(--couleur-bandeau-fond);
-    color: var(--couleur-bandeau-texte);
-    font-size: var(--taille-texte-bandeau);
+    flex-direction: column;
+    min-height: 100vh;
   }
 
-  .provenance {
-    padding: 0 var(--espace-2);
-    border: 1px solid var(--couleur-bandeau-filet);
-    border-radius: var(--rayon-1);
+  .ecran {
+    flex: 1;
+    padding: var(--espace-4);
   }
 </style>

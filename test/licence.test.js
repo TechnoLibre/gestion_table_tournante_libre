@@ -42,11 +42,12 @@ const COMMENTAIRE = new Map([
 const cle = (chemin) => (COMMENTAIRE.has(basename(chemin)) ? basename(chemin) : extname(chemin));
 
 // Périmètre : les fichiers de la racine et les arbres des sources, des
-// épreuves, des scripts et de la coquille. Les dépendances et les sorties de
+// épreuves, des scripts, de la coquille et des fichiers que Vite copie tels
+// quels dans la page (public/). Les dépendances et les sorties de
 // construction n'y entrent pas, ni les données d'épreuve, qui sont des
 // données et non des sources. Le séparateur final borne l'exclusion au
 // répertoire test/fixtures/ : un module test/fixtures.js reste une source.
-const ARBRES = ['src', 'test', 'scripts', 'electron'];
+const ARBRES = ['src', 'test', 'scripts', 'electron', 'public'];
 const DONNEES_EPREUVE = join(RACINE, 'test', 'fixtures') + sep;
 
 function fichiersSources() {
@@ -121,6 +122,11 @@ describe('licence', () => {
       .filter((chemin) => !porteLEnTete(readFileSync(chemin, 'utf8'), cle(chemin)))
       .map((chemin) => relative(RACINE, chemin));
     assert.deepEqual(sansEnTete, []);
+  });
+
+  test('le périmètre couvre les fichiers que la page charge tels quels, sous public/', () => {
+    const relatifs = fichiersSources().map((chemin) => relative(RACINE, chemin).split(sep).join('/'));
+    assert.ok(relatifs.includes('public/collecteur.js'), 'public/collecteur.js hors du périmètre');
   });
 
   test("l'en-tête tient en deux lignes de commentaire du langage du fichier", () => {

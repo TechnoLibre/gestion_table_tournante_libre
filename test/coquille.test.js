@@ -4,9 +4,11 @@
 // La coquille Electron (§ 13.1) : la fenêtre qu'ouvre le processus principal,
 // la page qu'elle charge, le profil de Chromium hors d'AppData (§ 8.6), le
 // pont étroit et nommé que le préchargement expose — une fonction par
-// primitive du système de fichiers, un canal par fonction —, et ce que le
-// processus principal y répond : emplacements, racines, dialogues,
-// explorateur.
+// primitive du système de fichiers, un canal par fonction, et la copie dans
+// le presse-papiers —, ce que le processus principal y répond : emplacements,
+// racines, dialogues, explorateur, presse-papiers ; et les verrous que la
+// page a pris, effacés à la sortie (§ 8.8). La page elle-même, index.html,
+// charge le collecteur d'erreurs avant son module d'entrée (§ 19.2).
 //
 // electron/main.js s'exécute sous Node, dans un processus à part, contre
 // test/electron_factice.js, qui consigne ce que la coquille demande à
@@ -29,6 +31,7 @@ const PRINCIPAL = join(RACINE, 'electron', 'main.js');
 const PRECHARGEMENT = join(RACINE, 'electron', 'preload.cjs');
 const NOM_PRODUIT = JSON.parse(readFileSync(join(RACINE, 'package.json'), 'utf8')).productName;
 const CANAUX = PRIMITIVES.map((primitive) => `gtt:fichiers:${primitive}`);
+const CANAL_COPIE = 'gtt:copier';
 
 // Dossier que publie le lanceur portable, et LOCALAPPDATA, dans le scénario
 // qui les donne. Aucun des deux n'est lu ni écrit.
@@ -64,6 +67,17 @@ const PROFIL_VIVANT = `gtt-profil-${process.pid}-Ef34Gh`;
 const AUTRE = 'gtt-profil-sans-pid';
 const DOSSIERS_POSES = ['Documents', PROFIL_TERMINE, PROFIL_VIVANT, AUTRE];
 
+// Le verrou qu'une autre séance tient dans les Documents du produit, posé
+// avant le lancement : la sortie de la coquille ne le touche pas.
+const VERROU_AUTRE = 'autre.gtt.verrou';
+const CONTENU_AUTRE = {
+  seance: 'seance-voisine',
+  pid: PID_TERMINE,
+  hote: 'poste-voisin',
+  depuis: '2026-10-06T19:00:00-04:00',
+  demarrage: null,
+};
+
 // Exécute la coquille contre le factice dans un scénario, et rend son
 // journal, son pid, le dossier temporaire qu'elle a reçu, et ce qu'elle y a
 // laissé. Le répertoire courant est un dossier vide hors du projet : dans
@@ -77,6 +91,7 @@ function executerLaCoquille(scenario) {
   const ailleurs = mkdtempSync(join(tmpdir(), 'coquille-'));
   const temporaire = mkdtempSync(join(tmpdir(), 'coquille-temp-'));
   mkdirSync(join(temporaire, 'Documents', NOM_PRODUIT), { recursive: true });
+  writeFileSync(join(temporaire, 'Documents', NOM_PRODUIT, VERROU_AUTRE), `${JSON.stringify(CONTENU_AUTRE)}\n`);
   for (const nom of [PROFIL_TERMINE, PROFIL_VIVANT, AUTRE]) {
     mkdirSync(join(temporaire, nom, 'Session Storage'), { recursive: true });
     writeFileSync(join(temporaire, nom, 'Local State'), '{}');
@@ -156,13 +171,13 @@ describe('coquille : processus principal', () => {
     ]);
   });
 
-  test('un canal gtt:fichiers:<primitive> par primitive, et aucun autre, chacun posé avant le chargement de la page', () => {
+  test('un canal gtt:fichiers:<primitive> par primitive, puis celui du presse-papiers, et aucun autre, chacun posé avant le chargement de la page', () => {
     const { canaux, sequence } = journalDeLaCoquille();
-    assert.deepEqual(canaux, CANAUX);
+    assert.deepEqual(canaux, [...CANAUX, CANAL_COPIE]);
     assert.equal(CANAUX.length, 17);
     const charge = sequence.indexOf('loadFile');
     assert.notEqual(charge, -1);
-    for (const canal of CANAUX) {
+    for (const canal of [...CANAUX, CANAL_COPIE]) {
       const pose = sequence.indexOf(`ipcMain.handle:${canal}`);
       assert.ok(pose !== -1 && pose < charge, `${canal} : ${sequence.join(', ')}`);
     }
@@ -188,6 +203,26 @@ describe('coquille : processus principal', () => {
     assert.deepEqual(journal.profil, { avant: true, apres: false });
   });
 
+  test("à la sortie, le verrou que la page a pris s'efface ; celui qu'une autre séance a repris depuis, et celui d'une autre séance, restent (§ 8.8)", () => {
+    for (const scenario of ['publie', 'absent']) {
+      const { prechargement, verrous } = journalDeLaCoquille(scenario);
+      assert.deepEqual(prechargement.verrou.reponse, { ok: true, valeur: { pris: true } }, scenario);
+      // Le second verrou de la page est au relevé de la coquille, mais son
+      // contenu porte désormais une autre séance : la sortie le relit et le
+      // laisse.
+      assert.deepEqual(prechargement.repris.reponse, { ok: true, valeur: { pris: true } }, scenario);
+      assert.deepEqual(
+        verrous,
+        {
+          page: { avant: true, apres: false },
+          repris: { avant: true, apres: true },
+          autre: { avant: true, apres: true },
+        },
+        scenario,
+      );
+    }
+  });
+
   test("au démarrage, les profils des séances terminées se retirent : ni celui d'une séance vivante, ni un dossier sans pid", () => {
     const { restes } = coquille();
     assert.deepEqual(restes, DOSSIERS_POSES.filter((nom) => nom !== PROFIL_TERMINE).sort());
@@ -195,11 +230,12 @@ describe('coquille : processus principal', () => {
 });
 
 describe('coquille : préchargement', () => {
-  test("n'expose que window.gtt.fichiers, une fonction par primitive, et ne requiert qu'electron", () => {
+  test("n'expose que window.gtt.fichiers, une fonction par primitive, et gtt.copier, une fonction ; ne requiert qu'electron", () => {
     const { prechargement } = journalDeLaCoquille();
     assert.equal(prechargement.erreur, undefined, prechargement.erreur);
     assert.deepEqual(prechargement.requis, ['electron']);
-    assert.deepEqual(prechargement.exposes, [{ cle: 'gtt', membres: ['fichiers'] }]);
+    assert.deepEqual(prechargement.exposes, [{ cle: 'gtt', membres: ['copier', 'fichiers'] }]);
+    assert.equal(prechargement.copie.type, 'function');
     assert.deepEqual(prechargement.fichiers, [...PRIMITIVES]);
     assert.deepEqual(
       prechargement.appels.map(({ membre, type }) => ({ membre, type })),
@@ -213,7 +249,13 @@ describe('coquille : préchargement', () => {
       journal.prechargement.appels.map(({ membre, canaux }) => ({ membre, canaux })),
       PRIMITIVES.map((membre) => ({ membre, canaux: [`gtt:fichiers:${membre}`] })),
     );
-    assert.deepEqual(journal.invocations, CANAUX);
+    // Après le pont : la copie, puis les deux verrous réels que prend la page.
+    assert.deepEqual(journal.invocations, [
+      ...CANAUX,
+      CANAL_COPIE,
+      'gtt:fichiers:verrouiller',
+      'gtt:fichiers:verrouiller',
+    ]);
     // Une racine que le processus principal ne connaît pas est refusée par
     // lui, en réponse et non en erreur.
     for (const [membre, chemin] of [
@@ -292,10 +334,29 @@ describe('coquille : préchargement', () => {
     }
   });
 
+  test('gtt.copier invoque le canal gtt:copier, une fois, et le presse-papiers reçoit le texte tel quel', () => {
+    const { prechargement, pressePapiers } = journalDeLaCoquille();
+    const { copie } = prechargement;
+    assert.deepEqual(copie.canaux, [CANAL_COPIE]);
+    assert.equal(copie.erreur, undefined, copie.erreur);
+    assert.equal(typeof copie.texte, 'string');
+    assert.notEqual(copie.texte, '');
+    assert.deepEqual(pressePapiers, [copie.texte]);
+  });
+
   test("l'explorateur s'ouvre sur la racine que la page désigne", () => {
     const journal = journalDeLaCoquille();
     assert.deepEqual(journal.explorateur, [join(journal.chemins.documents, NOM_PRODUIT)]);
     // La réponse porte valeur: undefined, que le journal en JSON ne garde pas.
     assert.deepEqual(appelDe(journal, 'ouvrirDansExplorateur').reponse, { ok: true });
+  });
+});
+
+describe('coquille : la page', () => {
+  test("index.html charge le collecteur d'erreurs, script classique, avant le module d'entrée (§ 19.2)", () => {
+    const page = readFileSync(join(RACINE, 'index.html'), 'utf8');
+    const scripts = [...page.matchAll(/<script\b([^>]*)>/g)].map(([, attributs]) => attributs.trim());
+    assert.deepEqual(scripts, ['src="./collecteur.js"', 'type="module" src="/src/main.js"']);
+    assert.ok(existsSync(join(RACINE, 'public', 'collecteur.js')), 'public/collecteur.js absent');
   });
 });

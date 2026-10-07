@@ -1,0 +1,36 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Le réglage de thème (§ 19.2). Chaque lancement repart de la préférence du
+// système ; le choix de l'opérateur vaut ensuite pour la séance, tenu en
+// mémoire par App, qui le pose en data-theme sur <html> (jetons.css). Rien ne
+// l'enregistre : ni fichier, ni stockage du navigateur.
+
+// Chaque thème et la clé de son nom, dans l'ordre du réglage.
+const CLES = new Map([
+  ['clair', 'coquille.theme.clair'],
+  ['sombre', 'coquille.theme.sombre'],
+]);
+
+/** Les deux thèmes, dans l'ordre du réglage. */
+export const THEMES = Object.freeze([...CLES.keys()]);
+
+/** Le thème d'un lancement : la préférence du système, à chaque lancement ; le
+ *  réglage de l'opérateur vaut ensuite pour la séance, en mémoire, et rien ne
+ *  l'enregistre. systemeSombre : la préférence sombre du système est posée. */
+export function themeInitial(systemeSombre) {
+  return systemeSombre === true ? 'sombre' : 'clair';
+}
+
+/**
+ * La clé du nom d'un thème, coquille.theme.<nom>.
+ *
+ * @param {string} theme
+ * @returns {string}
+ * @throws {RangeError} hors de THEMES
+ */
+export function cleDeTheme(theme) {
+  const cle = CLES.get(theme);
+  if (cle === undefined) throw new RangeError(`thème inconnu : ${JSON.stringify(theme)}`);
+  return cle;
+}

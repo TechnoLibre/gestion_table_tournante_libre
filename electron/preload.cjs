@@ -2,11 +2,13 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Préchargement de la coquille (§ 13.1) : le seul pont entre la page et le
-// processus principal. Il expose window.gtt.fichiers et rien d'autre : une
-// fonction par primitive du système de fichiers, qui invoque le canal de
-// cette primitive, gtt:fichiers:<primitive>, et rend la réponse du processus
-// principal (electron/fichiers.js). La page ne reçoit jamais ipcRenderer
-// lui-même, ni une fonction qui invoquerait un canal de son choix.
+// processus principal. Il expose window.gtt et rien d'autre : sous
+// gtt.fichiers, une fonction par primitive du système de fichiers, qui
+// invoque le canal de cette primitive, gtt:fichiers:<primitive>, et rend la
+// réponse du processus principal (electron/fichiers.js) ; gtt.copier(texte),
+// qui invoque le canal gtt:copier et remet le texte au presse-papiers du
+// système. La page ne reçoit jamais ipcRenderer lui-même, ni une fonction
+// qui invoquerait un canal de son choix.
 //
 // Un préchargement exécuté en bac à sable est un script CommonJS, d'où
 // l'extension .cjs dans un paquet de type module. Son require ne connaît
@@ -42,4 +44,6 @@ for (const primitive of PRIMITIVES) {
   fichiers[primitive] = (...parametres) => ipcRenderer.invoke(canal, ...parametres);
 }
 
-contextBridge.exposeInMainWorld('gtt', { fichiers });
+const copier = (texte) => ipcRenderer.invoke('gtt:copier', texte);
+
+contextBridge.exposeInMainWorld('gtt', { fichiers, copier });

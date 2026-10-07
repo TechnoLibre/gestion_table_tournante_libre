@@ -337,7 +337,8 @@ export function processusVivant(pid, signaler = (cible) => process.kill(cible, 0
  * @param {number} [reglages.pid]
  * @param {string} [reglages.hote]
  * @param {() => Date} [reglages.maintenant]
- * @returns {Object<string, Function>} les primitives, par nom
+ * @returns {Object<string, Function>} les primitives, par nom, et
+ *          verrousTenus(), qui n'en est pas une
  */
 export function creerFichiers({
   emplacements,
@@ -364,6 +365,9 @@ export function creerFichiers({
   const demarrageDe = demarrage ?? lireDemarrage;
   // Le démarrage du processus courant, lu une fois qu'il est connu.
   let demarrageCourant = null;
+  // Les verrous que verrouiller a pris et que deverrouiller n'a pas rendus :
+  // chemin absolu → séance, que verrousTenus rend au processus principal.
+  const tenus = new Map();
 
   // Ce que désigne un chemin relatif à une racine : ses segments, sa racine
   // et sa cible en absolu, et le dossier que nomme un échec — celui qui porte
@@ -857,6 +861,7 @@ export function creerFichiers({
             await effacer(loc.absolu).catch(() => {});
             throw erreur;
           }
+          tenus.set(loc.absolu, seance);
           return { pris: true };
         }
       } catch (erreur) {
@@ -875,13 +880,26 @@ export function creerFichiers({
         try {
           texte = (await fs.readFile(loc.absolu)).toString('utf8');
         } catch (erreur) {
-          if (ABSENCE_EN_LECTURE.has(erreur?.code)) return;
+          if (ABSENCE_EN_LECTURE.has(erreur?.code)) {
+            tenus.delete(loc.absolu);
+            return;
+          }
           throw erreur;
         }
-        if (analyserVerrou(texte)?.seance === seance) await effacer(loc.absolu);
+        if (analyserVerrou(texte)?.seance === seance) {
+          await effacer(loc.absolu);
+          tenus.delete(loc.absolu);
+        }
       } catch (erreur) {
         throw echecEcriture(loc, erreur);
       }
+    },
+
+    // Hors des primitives, que servir ne publie pas : les verrous pris et
+    // pas rendus, [{ chemin, seance }], chemin absolu, dans l'ordre de leur
+    // prise. Le processus principal les efface à sa sortie.
+    verrousTenus() {
+      return [...tenus].map(([chemin, seance]) => ({ chemin, seance }));
     },
 
     // shell.openPath rend '' quand l'explorateur s'ouvre, et sinon la raison
