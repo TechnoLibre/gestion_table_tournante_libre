@@ -753,6 +753,39 @@ describe('les seuils de rendu (§ 7.3, § 17 point 6, § 19.10)', () => {
 });
 
 describe('dessin et désignation (§ 7.3, § 13.5)', () => {
+  test('au seuil k = 24/pas de chaque table, la cible d’un siège a la taille du pas : à pas/2 − 1 px de sa chaise, vers sa voisine, le DOM et designer désignent la chaise ; à pas/2 + 1 px, ils désignent la même place', () => {
+    const charge = chargeDeTables([3, 8, 8, 12], { pas: 800, formes: ['ronde', 'ronde', 'carree', 'carree'] });
+    let points = 0;
+    for (const id of [1, 2, 3, 4]) {
+      const geometrie = modeleDe(charge, { k: 1 }).tables[id - 1].geometrie;
+      const k = (24 / geometrie.pas) * (1 + 1e-9);
+      const vue = { k, tx: innerWidth / 2 - k * geometrie.centre.x, ty: innerHeight / 2 };
+      const modele = modeleDe(charge, { k, listes: false });
+      expect(modele.tables[id - 1].regime).toBe('sieges');
+      const geometries = modele.tables.map(({ geometrie: g }) => g);
+      const { cadre, ecran } = monterPlan(modele, vue);
+      const { chaises } = geometries[id - 1];
+      chaises.forEach((chaise, i) => {
+        const voisine = chaises[(i + 1) % chaises.length];
+        const c = ecran(chaise.x, chaise.y);
+        const v = ecran(voisine.x, voisine.y);
+        const d = Math.hypot(v.x - c.x, v.y - c.y);
+        for (const [ecart, attendu] of [[-1, `${id}:${chaise.siege}`], [1, undefined]]) {
+          const portee = (geometrie.pas / 2) * k + ecart;
+          const p = { x: c.x + ((v.x - c.x) * portee) / d, y: c.y + ((v.y - c.y) * portee) / d };
+          const parDom = document.elementFromPoint(p.x, p.y)?.closest('[data-siege]')?.dataset.siege ?? null;
+          const designe = designer(dessinDepuisEcran(vue, cadre, p.x, p.y), geometries, k);
+          const parGeometrie = designe !== null && designe.siege !== undefined ? `${designe.table}:${designe.siege}` : null;
+          expect(parDom, `table ${id}, siège ${chaise.siege}, écart ${ecart}`).toBe(parGeometrie);
+          if (attendu !== undefined) expect(parDom, `table ${id}, siège ${chaise.siege}`).toBe(attendu);
+          points += 1;
+        }
+      });
+      demonterTout();
+    }
+    expect(points).toBe(2 * (3 + 8 + 8 + 12));
+  });
+
   test('le centre rendu de chaque siège est sa position ; aux points témoins, le DOM et designer désignent la même place ; une liste ne masque aucune chaise', () => {
     // La table 2 si près que la liste de la table 1 passe sur ses chaises de
     // gauche.

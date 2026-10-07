@@ -90,7 +90,7 @@ import { ErreurStockage } from '../stockage/erreurs.js';
 import { fil, reconstruire } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import { avecCadrage, cadrageDe, creerEcrivainDiffere, ecrireReglages, lireReglages } from '../stockage/reglages_locaux.js';
-import { avertissementsApres, invariantViole } from './avertissements.js';
+import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
 import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 import { libelle } from './libelles.js';
 
@@ -245,13 +245,14 @@ export function creerSeance({
   const annulations = new Set();
   let instantane = null;
   // Par Ouvert, sa charge et son examen figés, et INVARIANT_VIOLE : un
-  // Ouvert ne change jamais, ses copies se font une fois.
+  // Ouvert ne change jamais, ses copies se font une fois. L'examen de l'état
+  // nomme ses raisons de dérive sur la charge (examenNomme).
   const parOuvert = new WeakMap();
 
   function figesDe(ouvert) {
     let figes = parOuvert.get(ouvert);
     if (figes === undefined) {
-      const copie = structuredClone({ charge: ouvert.charge, examen: ouvert.examen });
+      const copie = structuredClone({ charge: ouvert.charge, examen: examenNomme(ouvert.examen, ouvert.charge) });
       figes = { ...figer(copie), invariant: figer(invariantViole(ouvert.charge, ouvert.examen)) };
       parOuvert.set(ouvert, figes);
     }
@@ -1245,6 +1246,13 @@ export function creerSeance({
      * lecture, admise dans tout mode, qui n'écrit rien.
      */
     formeNommee: (cible) => enFile(async () => formeNommeeDe(exigerOuvert().charge, cible)),
+    /**
+     * Une promesse résolue quand les appels déjà en file ont fini, réussis
+     * ou refusés : ce qu'un lecteur de etat() lit ensuite porte leurs
+     * écritures. Rien ne s'écrit ni ne se publie, et rien ne s'ajoute à la
+     * file ; elle ne rejette jamais.
+     */
+    attendre: () => file,
 
     // Les gestes et les calculs ouverts suspendent le compte d'inactivité ;
     // ils s'emboîtent, et un fini de trop ne compte pas.

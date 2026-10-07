@@ -41,6 +41,8 @@ export const TABLE = new Map([
     () => "Une table compte au moins 2 places : seule à sa table, une personne ne rencontrerait personne.",
   ],
   ['MOINS_D_UN_TOUR', () => 'Une soirée compte au moins un tour.'],
+  ['TROP_DE_PLACES', ({ max }) => `Une table compte au plus ${max} places : le plan ne dessinerait pas plus de chaises.`],
+  ['TROP_DE_TOURS', ({ max }) => `Une soirée compte au plus ${max} tours.`],
 
   // --- Les refus d'une capacité (§ 6.2, § 7.1) -------------------------------
   [

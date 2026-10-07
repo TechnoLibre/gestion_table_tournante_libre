@@ -9,7 +9,8 @@
 //
 // Un refus a la forme { code, details }, le remède dans details.remede. Ils
 // se contrôlent dans cet ordre, et le premier seul est rendu :
-// MOINS_DE_DEUX ; SOUS_RESERVATIONS, sous le plus grand compte de
+// MOINS_DE_DEUX ; TROP_DE_PLACES, au-delà de SIEGES_MAX, la borne que
+// l'analyse du fichier pose aussi ; SOUS_RESERVATIONS, sous le plus grand compte de
 // reservationsParTour ; SIEGES_RETIRES, un siège au-delà de la capacité qui
 // porte un titre ou une réservation, suspendue comprise — l'analyse du
 // fichier refuse un tel siège (§ 6.2) — ; SOUS_OCCUPES, pour la poignée, sous
@@ -37,7 +38,7 @@
 // fonction ne modifie ce qu'elle reçoit.
 import { ordreDesReservations } from '../csv/import.js';
 import { constante } from '../geometrie/constantes.js';
-import { capacite } from '../stockage/document.js';
+import { SIEGES_MAX, capacite } from '../stockage/document.js';
 import { fautes } from '../stockage/placements.js';
 import { couvre, etatPlaces, presents, repartirSieges, reservationsActives } from './places.js';
 import { reservationsParTour } from './pose.js';
@@ -148,6 +149,7 @@ function occupation(charge, idTable) {
 // Le premier refus d'une capacité, ou null.
 function refusDeCapacite(charge, idTable, sieges, origine) {
   if (sieges < 2) return refusDe('MOINS_DE_DEUX', {}, null);
+  if (sieges > SIEGES_MAX) return refusDe('TROP_DE_PLACES', { max: SIEGES_MAX }, null);
   const reservees = maximum(reservationsParTour(charge, idTable));
   if (sieges < reservees.n) {
     return refusDe('SOUS_RESERVATIONS', { table: idTable, ...reservees }, afficherTour(reservees.tour));
@@ -379,7 +381,8 @@ export function controlerCapacites(charge, changements, { origine }) {
  * verse aucune ; puis AU_DELA_LISIBLE {seuil} au-delà de
  * SEUIL_SIEGES_LISIBLES places.
  *
- * Refus : MOINS_DE_DEUX {}, remède null ; SOUS_RESERVATIONS {table, n,
+ * Refus : MOINS_DE_DEUX {}, remède null ; TROP_DE_PLACES {max}, au-delà de
+ * SIEGES_MAX, remède null ; SOUS_RESERVATIONS {table, n,
  * tour} et SOUS_OCCUPES {table, n, tour}, tour le premier qui atteint n,
  * remède { geste: 'afficherTour', tour, proposition: null } ;
  * SIEGES_RETIRES {table, sieges, titres?} — chaque siège retiré qui porte un

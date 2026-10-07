@@ -14,7 +14,7 @@ import { appliquerCommande } from '../../application/commandes.js';
 import { etatPlaces } from '../../application/places.js';
 import { geometrieTable } from '../../geometrie/tables.js';
 import { creerCharge } from '../../stockage/document.js';
-import { commandeDeDepot, deposer } from './depot.js';
+import { commandeDeDepot, deposer, reservationTenue } from './depot.js';
 
 const NOMS = [
   ['Ombrelle', 'Iris'],
@@ -112,6 +112,39 @@ describe('commandeDeDepot sous la cible « reservations » : avant la retenue (�
       commande: 'deplacerReservation',
       arguments: { participant: 1, de: { table: 1, portee: 'tous', tour: null }, vers: { table: 2, siege: 3 } },
     });
+  });
+
+  test('reservationTenue : la réservation qui tient la personne à sa chaise d’origine, sinon null', () => {
+    // Le fantôme et le dépôt la lisent de la même fonction : le libellé du
+    // geste dit la portée que deplacerReservation garde.
+    const tous = executer(chargeDepot(), 'reserver', { participant: 1, table: 1, siege: 1, portee: 'tous', tour: null });
+    const etat = etatPlaces(tous, { tour: 2, proposition: 1 });
+    assert.deepEqual(reservationTenue(etat, 1, { table: 1, siege: 1 }), { participant: 1, portee: 'tous', tour: null });
+    assert.equal(reservationTenue(etat, 2, { table: 1, siege: 1 }), null);
+    assert.equal(reservationTenue(etat, 1, { table: 2, siege: 1 }), null);
+    assert.equal(reservationTenue(etat, 1, null), null);
+    const tour = executer(chargeDepot(), 'reserver', { participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 });
+    assert.deepEqual(reservationTenue(etatPlaces(tour, { tour: 1, proposition: 1 }), 1, { table: 1, siege: 1 }), {
+      participant: 1,
+      portee: 'tour',
+      tour: 1,
+    });
+  });
+
+  test('sur le sol, une réservation « tous les tours » ne se retire pas : { refus } RESERVATION_TOUS_LES_TOURS, son remède retirerReservation de portée « tous », que la charge exécute', () => {
+    // Un geste fait à un tour ne change jamais en silence les autres tours :
+    // la réservation se défait par sa propre commande (§ 7.1).
+    const charge = executer(chargeDepot(), 'reserver', { participant: 1, table: 1, siege: 1, portee: 'tous', tour: null });
+    const remede = { commande: 'retirerReservation', arguments: { participant: 1, table: 1, portee: 'tous', tour: null } };
+    for (const tour of [1, 2]) {
+      const etat = etatPlaces(charge, { tour, proposition: 1 });
+      assert.equal(etat.cible, 'reservations');
+      assert.deepEqual(depot(etat, { table: 1, siege: 1 }, null, true), {
+        refus: { code: 'RESERVATION_TOUS_LES_TOURS', details: { participant: 1, table: 1, remede } },
+      });
+    }
+    const apres = executer(charge, remede.commande, remede.arguments);
+    assert.deepEqual(apres.reservations, []);
   });
 
   test('sur le sol → retirerReservation pour une personne réservée ; null pour une personne qui ne l’est pas', () => {

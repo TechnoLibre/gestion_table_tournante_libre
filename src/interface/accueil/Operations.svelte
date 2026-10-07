@@ -10,7 +10,10 @@
   // la corbeille et se confirme en place, par un second clic : aucune
   // fenêtre. Chaque refus s'affiche contre le champ ou à côté de sa
   // commande, sans remède (surLaListe) ; apresOperation() suit chaque
-  // opération réussie.
+  // opération réussie. Une validation en cours ne se relance pas : une
+  // seconde soumission pendant l'écriture ne fait rien, et le bouton de
+  // validation se dit occupé ; supprimer passe par la Commande, qui a la
+  // même garde.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
@@ -26,6 +29,8 @@
   // texte }, ou null ; et son refus.
   let saisie = $state(null);
   let refus = $state.raw(null);
+  // Vrai pendant l'écriture d'une copie ou d'un renommage.
+  let validationEnCours = $state(false);
   const surLeChamp = $derived(champDuRefus(refus) === 'nom');
 
   function ouvrirSaisie(operation) {
@@ -46,14 +51,18 @@
 
   async function valider(evenement) {
     evenement.preventDefault();
+    if (validationEnCours) return;
     refus = null;
     const { operation, texte } = saisie;
+    validationEnCours = true;
     try {
       await surLaListe(() => GESTES[operation](texte));
     } catch (erreur) {
       if (typeof erreur?.code !== 'string') throw erreur;
       refus = erreur;
       return;
+    } finally {
+      validationEnCours = false;
     }
     fermerSaisie();
     apresOperation();
@@ -87,7 +96,12 @@
         {/if}
       </div>
       <div class="commandes">
-        <button type="submit" data-commande={saisie.commande}>{t(saisie.valider)}</button>
+        <button
+          type="submit"
+          data-commande={saisie.commande}
+          aria-busy={validationEnCours ? 'true' : undefined}
+          aria-disabled={validationEnCours ? 'true' : undefined}>{t(saisie.valider)}</button
+        >
         <button type="button" data-commande="annuler" onclick={fermerSaisie}>{t('accueil.operation.annuler')}</button>
         {#if refus !== null && !surLeChamp}
           <Refus {refus} />
@@ -148,5 +162,11 @@
   button:focus-visible {
     outline: 2px solid var(--couleur-focus);
     outline-offset: 2px;
+  }
+
+  button[aria-disabled='true'] {
+    border-style: dashed;
+    color: var(--couleur-page-texte-secondaire);
+    cursor: progress;
   }
 </style>

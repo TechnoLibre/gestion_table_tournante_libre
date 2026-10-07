@@ -17,6 +17,33 @@ const table = (id, forme, x, y) => ({ id, numero: id, sieges: null, forme, posit
 
 const milieu = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
+// Écart sous le bord d'une cible, en cm.
+const EPS = 0.01;
+
+// Un point entre deux chaises voisines d'une table : leur milieu, éloigné de
+// 4 cm de la droite qui les joint, du côté opposé au centre de la table. Sur
+// un côté de carrée à sièges espacés du pas, le milieu est au bord des deux
+// cibles ; éloigné, il est hors des deux et reste dans l'emprise. Quand le
+// milieu est le centre — deux chaises opposées, de part et d'autre d'un côté
+// sans siège —, le point est sur ce côté, à la distance de la première
+// chaise plus 4 cm, du côté où tourne la première dans le sens horaire de
+// l'écran.
+function entre(g, a, b) {
+  const m = milieu(a, b);
+  const longueur = Math.hypot(b.x - a.x, b.y - a.y);
+  let nx = -(b.y - a.y) / longueur;
+  let ny = (b.x - a.x) / longueur;
+  const vers = { x: m.x - g.centre.x, y: m.y - g.centre.y };
+  const degenere = Math.hypot(vers.x, vers.y) < 1e-6;
+  const reference = degenere ? { x: -(a.y - g.centre.y), y: a.x - g.centre.x } : vers;
+  if (nx * reference.x + ny * reference.y < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const ecart = degenere ? Math.hypot(a.x - g.centre.x, a.y - g.centre.y) + 4 : 4;
+  return { x: m.x + nx * ecart, y: m.y + ny * ecart };
+}
+
 describe('regimeCibles (§ 7.3)', () => {
   test('le seuil est de 24 px', () => {
     assert.equal(CIBLE_MIN_PX, 24);
@@ -65,8 +92,15 @@ describe('l’emprise d’une carrée est un carré', () => {
     assert.equal(surLeSol(point, geometries), false);
   });
 
-  test('(140, 0) est le sol', () => {
+  test('(140, 0) : hors de l’emprise, mais à 28 cm du siège 5, en (112, 0), dans sa cible de rayon pas/2 = 30', () => {
     const point = { x: 140, y: 0 };
+    assert.equal(designer(point, geometries, 0.2), null);
+    assert.deepEqual(designer(point, geometries, 1), { table: 7, siege: 5 });
+    assert.equal(surLeSol(point, geometries), true);
+  });
+
+  test('(150, 0) est le sol', () => {
+    const point = { x: 150, y: 0 };
     assert.equal(designer(point, geometries, 0.2), null);
     assert.equal(designer(point, geometries, 1), null);
     assert.equal(surLeSol(point, geometries), true);
@@ -112,20 +146,42 @@ describe('le siège désigné est celui que le dessin pose (§ 7.3, § 14.10)', 
       assert.equal(chaises, ATTENDUES[nom]);
     });
 
-    test(`${nom}, k = 1 : ni le milieu de deux chaises voisines, ni le centre d’une table ne désigne rien`, () => {
-      let milieux = 0;
+    test(`${nom}, k = 1 : ni un point entre deux chaises voisines, à plus de pas/2 de chacune, ni le centre d’une table ne désigne rien`, () => {
+      let points = 0;
       for (const g of geometries) {
         const n = g.chaises.length;
         for (let i = 0; i < n; i += 1) {
-          const point = milieu(g.chaises[i], g.chaises[(i + 1) % n]);
+          const point = entre(g, g.chaises[i], g.chaises[(i + 1) % n]);
+          for (const voisine of [g.chaises[i], g.chaises[(i + 1) % n]]) {
+            assert.ok(Math.hypot(point.x - voisine.x, point.y - voisine.y) > g.pas / 2, `table ${g.id}, siège ${voisine.siege}`);
+          }
           assert.equal(designer(point, geometries, 1), null, `table ${g.id}, sièges ${i + 1} et ${((i + 1) % n) + 1}`);
           assert.equal(surLeSol(point, geometries), false);
-          milieux += 1;
+          points += 1;
         }
         assert.equal(designer(g.centre, geometries, 1), null, `centre de la table ${g.id}`);
         assert.equal(surLeSol(g.centre, geometries), false);
       }
-      assert.equal(milieux, ATTENDUES[nom]);
+      assert.equal(points, ATTENDUES[nom]);
+    });
+
+    test(`${nom}, au seuil k = 24/pas de chaque table : un point à pas/2 − ε d’une chaise, vers sa voisine, la désigne`, () => {
+      let points = 0;
+      for (const g of geometries) {
+        const k = (CIBLE_MIN_PX / g.pas) * (1 + 1e-12);
+        assert.equal(regimeCibles(k, g), 'sieges');
+        const n = g.chaises.length;
+        for (let i = 0; i < n; i += 1) {
+          const chaise = g.chaises[i];
+          const voisine = g.chaises[(i + 1) % n];
+          const d = Math.hypot(voisine.x - chaise.x, voisine.y - chaise.y);
+          const portee = g.pas / 2 - EPS;
+          const point = { x: chaise.x + ((voisine.x - chaise.x) * portee) / d, y: chaise.y + ((voisine.y - chaise.y) * portee) / d };
+          assert.deepEqual(designer(point, [g], k), { table: g.id, siege: chaise.siege }, `table ${g.id}, siège ${chaise.siege}`);
+          points += 1;
+        }
+      }
+      assert.equal(points, ATTENDUES[nom]);
     });
 
     test(`${nom} : un point à 10 m de tout est le sol`, () => {

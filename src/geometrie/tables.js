@@ -21,6 +21,8 @@ import { constante } from './constantes.js';
  * @property {number} pas             distance entre deux sièges voisins, au bord du plateau
  * @property {Array<{siege: number, x: number, y: number, rayon: number}>} chaises   sièges 1 à places
  * @property {{x: number, y: number}} poignee   centre du disque de la poignée
+ * @property {number} rayonCible      rayon du disque, centré sur une chaise, où un point désigne
+ *                                    son siège en régime sièges : max(RAYON_CHAISE, pas / 2)
  * @property {number} rayonEmprise    demiTaille + 2 × RAYON_CHAISE : rayon du disque d'emprise
  *                                    (ronde) ou demi-côté du carré d'emprise (carrée)
  * @property {{x: number, y: number}} origineListe   coin haut gauche du bloc de noms
@@ -61,42 +63,37 @@ const COTES = [
   { depart: { x: -1, y: 1 }, direction: { x: 0, y: -1 }, normale: { x: -1, y: 0 } },
 ];
 
-// Lève RangeError sur un nombre de places qui n'est pas un entier ≥ 1, ou un
-// diamètre ou côté saisi qui n'est pas un nombre fini > 0 : la géométrie
-// d'une table se calcule sans valeur de repli.
-function exigerPlaces(places, saisi) {
+// Lève RangeError sur un nombre de places qui n'est pas un entier ≥ 1 : la
+// géométrie d'une table se calcule sans valeur de repli.
+function exigerPlaces(places) {
   if (!Number.isInteger(places) || places < 1) {
     throw new RangeError(`nombre de places entier ≥ 1 attendu, reçu ${JSON.stringify(places)}`);
-  }
-  if (saisi !== null && !(Number.isFinite(saisi) && saisi > 0)) {
-    throw new RangeError(`dimension saisie > 0 attendue, reçu ${JSON.stringify(saisi)}`);
   }
 }
 
 /**
- * Diamètre d'une table ronde (§ 7.7) : max(70, places × 60 / π), ou le
- * diamètre saisi, qui l'emporte.
+ * Diamètre d'une table ronde (§ 7.7) : max(70, places × 60 / π). Le format 1
+ * ne porte aucun diamètre saisi : la formule dessine toute table, et le pas
+ * qu'en tire geometrieTable ne connaît qu'elle.
  *
  * @param {number} places  entier ≥ 1
- * @param {{saisi?: number|null}} [options]
  * @returns {number} cm
  */
-export function diametre(places, { saisi = null } = {}) {
-  exigerPlaces(places, saisi);
-  return saisi ?? Math.max(PLANCHER_DIAMETRE, (places * LARGEUR_PAR_PLACE) / Math.PI);
+export function diametre(places) {
+  exigerPlaces(places);
+  return Math.max(PLANCHER_DIAMETRE, (places * LARGEUR_PAR_PLACE) / Math.PI);
 }
 
 /**
  * Côté d'une table carrée : max(70, ⌈places / 4⌉ × 60) — le côté le plus
- * garni porte ⌈places / 4⌉ sièges —, ou le côté saisi, qui l'emporte.
+ * garni porte ⌈places / 4⌉ sièges.
  *
  * @param {number} places  entier ≥ 1
- * @param {{saisi?: number|null}} [options]
  * @returns {number} cm
  */
-export function cote(places, { saisi = null } = {}) {
-  exigerPlaces(places, saisi);
-  return saisi ?? Math.max(PLANCHER_DIAMETRE, Math.ceil(places / 4) * LARGEUR_PAR_PLACE);
+export function cote(places) {
+  exigerPlaces(places);
+  return Math.max(PLANCHER_DIAMETRE, Math.ceil(places / 4) * LARGEUR_PAR_PLACE);
 }
 
 // Chaises d'une ronde : sur le cercle de rayon demiTaille + RAYON_CHAISE,
@@ -144,6 +141,12 @@ function chaisesCarree(centre, demiTaille, places) {
  * sous le seuil. Le pas d'une carrée est son côté divisé par le nombre de
  * sièges du côté le plus garni.
  *
+ * La cible d'un siège est un disque de rayon max(RAYON_CHAISE, pas / 2)
+ * centré sur sa chaise : au zoom où le régime des cibles passe aux sièges,
+ * k × pas ≥ 24 px (designation.js), elle mesure au moins 24 px à l'écran.
+ * Deux chaises d'une même table sont à un pas au moins l'une de l'autre :
+ * deux cibles se touchent au plus, sans se recouvrir.
+ *
  * La poignée est un disque de rayon RAYON_POIGNEE sur la diagonale à +45°
  * (vers le bas à droite), son bord à ECART_POIGNEE de l'emprise : son centre
  * est à rayonEmprise + 23 cm du centre d'une ronde, à rayonEmprise × √2 + 23
@@ -178,6 +181,7 @@ export function geometrieTable(table, places) {
     demiTaille,
     pas,
     chaises,
+    rayonCible: Math.max(RAYON_CHAISE, pas / 2),
     poignee: { x: centre.x + decalage, y: centre.y + decalage },
     rayonEmprise,
     origineListe: { x: centre.x + rayonEmprise + ECART_LISTE, y: centre.y - demiTaille },
@@ -185,9 +189,13 @@ export function geometrieTable(table, places) {
 }
 
 /**
- * Rectangle englobant des emprises : pour chaque table, le carré de
- * demi-côté rayonEmprise centré sur elle, qui circonscrit le disque d'une
- * ronde et égale l'emprise d'une carrée.
+ * Rectangle englobant de ce que le dessin pose de chaque table et qui se
+ * pointe : le carré de demi-côté rayonEmprise centré sur elle — il
+ * circonscrit le disque d'une ronde et égale l'emprise d'une carrée —, le
+ * carré circonscrit à la cible de chaque siège, qui déborde l'emprise de
+ * pas / 2 − RAYON_CHAISE, et celui du disque de la poignée, posée au-delà du
+ * coin d'une carrée. L'ajustement (vue.js) le fait tenir dans le cadre :
+ * toute cible et toute poignée y restent visibles.
  *
  * @param {GeometrieTable[]} geometries
  * @returns {{minX: number, minY: number, maxX: number, maxY: number}|null}  null sans table
@@ -198,11 +206,16 @@ export function englobant(geometries) {
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const { centre, rayonEmprise } of geometries) {
-    minX = Math.min(minX, centre.x - rayonEmprise);
-    minY = Math.min(minY, centre.y - rayonEmprise);
-    maxX = Math.max(maxX, centre.x + rayonEmprise);
-    maxY = Math.max(maxY, centre.y + rayonEmprise);
+  const etendre = ({ x, y }, demi) => {
+    minX = Math.min(minX, x - demi);
+    minY = Math.min(minY, y - demi);
+    maxX = Math.max(maxX, x + demi);
+    maxY = Math.max(maxY, y + demi);
+  };
+  for (const { centre, rayonEmprise, chaises, rayonCible, poignee } of geometries) {
+    etendre(centre, rayonEmprise);
+    for (const chaise of chaises) etendre(chaise, rayonCible);
+    etendre(poignee, RAYON_POIGNEE);
   }
   return { minX, minY, maxX, maxY };
 }

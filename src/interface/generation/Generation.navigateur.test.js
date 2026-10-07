@@ -139,6 +139,7 @@ function executeurAMain() {
 const dans = (m, selecteur) => m.racine.querySelector(selecteur);
 const section = (m) => dans(m, '[data-section="generation"]');
 const champ = (m, cle) => section(m).querySelector(`input[data-champ="${cle}"]`);
+const bascule = (m, cle) => section(m).querySelector(`input[type="checkbox"][data-champ="${cle}"]`);
 const etiquette = (m, cle) => section(m).querySelector(`label[for="${champ(m, cle).id}"]`);
 const generer = (m) => section(m).querySelector('[data-commande="generer"]');
 const refusPres = (element, code) => element.parentElement.querySelector(`[data-refus="${code}"]`);
@@ -278,7 +279,7 @@ async function regler(m, reglages) {
 describe('les réglages (§ 5.7, § 5.10)', () => {
   test('exécuteur direct : quatre champs, chacun son libellé et son unité ; l’historique pré-rempli à 1 000 ; aucun champ de durée', async () => {
     const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
-    const entrees = [...section(m).querySelectorAll('input')];
+    const entrees = [...section(m).querySelectorAll('input:not([type="checkbox"])')];
     expect(entrees.length).toBe(4);
     expect(entrees.map((entree) => entree.dataset.champ)).toEqual(CHAMPS);
     for (const cle of CHAMPS) {
@@ -367,6 +368,137 @@ describe('les réglages (§ 5.7, § 5.10)', () => {
     expect(charge(m).propositions).toEqual([]);
     expect(m.trace.length).toBe(ecritures);
     expect(fenetre()).toBeNull();
+  });
+});
+
+describe('les contraintes et l’attribution des sièges (§ 5.3)', () => {
+  // Les cinq bascules, dans l'ordre du § 5.3.
+  const BASCULES = ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances', 'attribuerSieges'];
+  const NOMS_DU_SPEC = [
+    'Séparer les appartenances',
+    'Nouveaux voisins à chaque tour',
+    'Nouvelle table à chaque tour',
+    'Varier les appartenances rencontrées',
+    'Attribuer les sièges',
+  ];
+
+  test('direct : cinq bascules sous leur nom du § 5.3 ; chacune, une entrée, son réglage seul', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
+    const cases = [...section(m).querySelectorAll('input[type="checkbox"]')];
+    expect(cases.map((caseACocher) => caseACocher.dataset.champ)).toEqual(BASCULES);
+    BASCULES.forEach((cle, rang) => {
+      expect(etiquette(m, cle).textContent).toBe(t(`generation.contrainte.${cle}`));
+      expect(t(`generation.contrainte.${cle}`)).toBe(NOMS_DU_SPEC[rang]);
+      expect(bascule(m, cle).checked, cle).toBe(charge(m).reglages[cle]);
+    });
+    for (const cle of BASCULES) {
+      const avant = structuredClone(charge(m).reglages);
+      const r0 = revision(m);
+      const entrees = journalDe(m).entrees.length;
+      await cliquer(m, bascule(m, cle));
+      expect(revision(m), cle).toBe(r0 + 1);
+      expect(journalDe(m).entrees.length, cle).toBe(entrees + 1);
+      expect(charge(m).reglages, cle).toEqual({ ...avant, [cle]: !avant[cle] });
+      expect(bascule(m, cle).checked, cle).toBe(!avant[cle]);
+    }
+    // La barre d'espace bascule aussi, par le même geste.
+    const cle = BASCULES[0];
+    const avant = charge(m).reglages[cle];
+    bascule(m, cle).focus();
+    await touche(' ');
+    await passer(m);
+    expect(charge(m).reglages[cle]).toBe(!avant);
+    expect(bascule(m, cle).checked).toBe(!avant);
+  });
+
+  test('direct : bascule refusée en lecture (« Modifier ») et sur un plan bloqué (« Débloquer »), rien d’écrit', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect(), ecriture: false });
+    const cle = 'attribuerSieges';
+    const valeur = charge(m).reglages[cle];
+    const ecritures = m.trace.length;
+    await cliquer(m, bascule(m, cle));
+    const lecture = refusPres(bascule(m, cle), 'MODE_LECTURE');
+    expect(lecture).not.toBeNull();
+    expect(lecture.querySelector('[data-commande="modifier"]').textContent).toBe(t('communs.remede.modifier'));
+    expect(bascule(m, cle).checked).toBe(valeur);
+    expect(charge(m).reglages[cle]).toBe(valeur);
+    expect(m.trace.length).toBe(ecritures);
+
+    await m.seance.passerEnEcriture();
+    await m.seance.executer('changerEtat', { etat: 'bloque' });
+    flushSync();
+    const ecrituresBloque = m.trace.length;
+    await cliquer(m, bascule(m, 'nouvelleTable'));
+    const bloque = refusPres(bascule(m, 'nouvelleTable'), 'LECTURE_SEULE');
+    expect(bloque).not.toBeNull();
+    expect(bloque.querySelector('[data-commande="debloquer"]').textContent).toBe(t('communs.remede.debloquer'));
+    expect(bascule(m, 'nouvelleTable').checked).toBe(charge(m).reglages.nouvelleTable);
+    expect(m.trace.length).toBe(ecrituresBloque);
+    expect(fenetre()).toBeNull();
+  });
+});
+
+describe('« Générer » derrière la file de la séance (§ 5.10, § 8.2)', () => {
+  test('relevé, disque lent : « Générer » pressé en quittant le compte d’arrêt part après son écriture, sur l’arrêt saisi', async () => {
+    const { executeur, lancements } = releve(creerExecuteurDirect());
+    const m = await demonstration('petite', { executeur });
+    // Le disque tient chaque écriture jusqu'à ce que l'épreuve la libère.
+    const tenues = [];
+    for (const nom of ['ecrireAtomique', 'ajouterLigne']) {
+      const primitive = m.fs[nom];
+      m.fs[nom] = (...args) =>
+        new Promise((resoudre, rejeter) => {
+          tenues.push(() => Promise.resolve(primitive.apply(m.fs, args)).then(resoudre, rejeter));
+        });
+    }
+    const arret = champ(m, 'generation.arret');
+    await cliquer(m, arret);
+    arret.select();
+    for (const caractere of '1000') await touche(caractere);
+    const bouton = generer(m);
+    bouton.scrollIntoView({ block: 'center' });
+    const { left, top, width, height } = bouton.getBoundingClientRect();
+    await pointer('presser', left + width / 2, top + height / 2);
+    await pointer('relacher', left + width / 2, top + height / 2);
+    await images(5);
+    expect(tenues.length, 'une écriture tenue').toBeGreaterThan(0);
+    expect(lancements, 'rien ne part avant l’écriture du réglage').toEqual([]);
+    for (let image = 0; lancements.length === 0; image += 1) {
+      expect(image, 'images avant le lancement').toBeLessThan(600);
+      for (const liberer of tenues.splice(0)) liberer();
+      await images(1);
+    }
+    expect(lancements[0].reglages.arret).toBe(1000);
+    expect(charge(m).reglages.generation.arret).toBe(1000);
+    // Les écritures de l'enregistrement passent, et l'issue s'affiche.
+    for (let image = 0; dans(m, '[data-issue]') === null; image += 1) {
+      expect(image, 'images avant l’issue').toBeLessThan(600);
+      for (const liberer of tenues.splice(0)) liberer();
+      await images(1);
+    }
+  });
+});
+
+describe('le travailleur qui ne démarre pas (§ 5.9, § 5.10)', () => {
+  test('travailleur qui ne se charge pas : TRAVAILLEUR_EN_ECHEC près de « Générer », rien d’écrit', async () => {
+    const adresse = URL.createObjectURL(new Blob(['ceci ( ne se compile pas'], { type: 'text/javascript' }));
+    const suivi = { travailleurs: 0 };
+    const executeur = creerExecuteurTravailleur(() => {
+      suivi.travailleurs += 1;
+      return new Worker(adresse);
+    });
+    const m = await demonstration('petite', { executeur });
+    const ecritures = m.trace.length;
+    await cliquer(m, generer(m));
+    await attendre(() => expect(refusPres(generer(m), 'TRAVAILLEUR_EN_ECHEC')).not.toBeNull());
+    const refus = refusPres(generer(m), 'TRAVAILLEUR_EN_ECHEC');
+    expect(refus.querySelector('p').textContent).toBe(t('TRAVAILLEUR_EN_ECHEC', { remede: null }));
+    expect(suivi.travailleurs).toBe(1);
+    expect(enCours(m)).toBe(false);
+    expect(section(m).getAttribute('aria-busy')).toBe('false');
+    expect(m.trace.length).toBe(ecritures);
+    expect(fenetre()).toBeNull();
+    URL.revokeObjectURL(adresse);
   });
 });
 

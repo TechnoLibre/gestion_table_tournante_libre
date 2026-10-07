@@ -23,9 +23,12 @@
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { flushSync } from 'svelte';
+import { flushSync, mount, unmount } from 'svelte';
+import { get, writable } from 'svelte/store';
 import { appliquerCommande } from '../../application/commandes.js';
+import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { etatPlaces } from '../../application/places.js';
+import { creerTraduction } from '../../application/traduction.js';
 import { constante } from '../../geometrie/constantes.js';
 import { surLeSol } from '../../geometrie/designation.js';
 import { geometrieTable } from '../../geometrie/tables.js';
@@ -39,6 +42,8 @@ import TEXTE_HUIT from '../../../test/fixtures/plan/huit_tables_retenu.gtt.json?
 import TEXTE_CONFLIT from '../../../test/fixtures/plan/conflit_table_un.gtt.json?raw';
 import { fixerCadre, glisser, pointer, touche, toucher } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { TABLES_INTERFACE } from '../libelles.js';
+import ListesTravail from './ListesTravail.svelte';
 import { cadreDepuisRect, englobantDuTour } from './vue_plan.js';
 
 const BASE = 'soiree';
@@ -290,6 +295,34 @@ async function presserBouton(element) {
   element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   const boite = element.getBoundingClientRect();
   await cliquerPoint({ x: boite.left + boite.width / 2, y: boite.top + boite.height / 2 });
+}
+
+// Presse un bouton par le vrai pointeur, et dit s'il a reçu l'appui : un
+// bouton que le pointeur traverse laisse l'appui à ce qui est dessous.
+async function presseRecue(element) {
+  let recu = false;
+  const noter = () => {
+    recu = true;
+  };
+  element.addEventListener('pointerdown', noter);
+  try {
+    await presserBouton(element);
+  } finally {
+    element.removeEventListener('pointerdown', noter);
+  }
+  return recu;
+}
+
+// Presse au point depuis et avance jusqu'au point vers sans relâcher : le
+// fantôme reste montré.
+async function presserEtBouger(depuis, vers, { pas = 6 } = {}) {
+  await pointer('presser', depuis.x, depuis.y);
+  for (let i = 1; i <= pas; i += 1) {
+    const t = i / pas;
+    await pointer('bouger', depuis.x + (vers.x - depuis.x) * t, depuis.y + (vers.y - depuis.y) * t);
+    await images(1);
+  }
+  flushSync();
 }
 
 // Clique un bouton par son clic HTML, puis laisse la séance écrire.
@@ -888,6 +921,163 @@ describe('le menu fait ce que fait le geste (§ 7.1, § 10.2)', () => {
   });
 });
 
+// --- Deux titres identiques à une même place (§ 5.8) -----------------------------
+
+describe('les listes de travail tiennent deux titres identiques à une même place (§ 5.8)', () => {
+  test('deux titres « animateur » au siège 2 de la table 1, rendus par titresNonPourvus : deux lignes, aucune erreur de rendu', () => {
+    // Le panneau est monté seul, sur une séance d'épreuve qui porte la
+    // charge telle quelle : une charge que l'analyse admettrait ou non, le
+    // rendu ne doit pas tomber sur elle.
+    const charge = sansProposition();
+    charge.titres = [
+      { table: 1, siege: 2, libelle: 'animateur' },
+      { table: 1, siege: 2, libelle: 'animateur' },
+    ];
+    const seance = writable({ charge });
+    const etatUi = writable({ choix: null, selection: null });
+    const ui = { subscribe: etatUi.subscribe, etat: () => get(etatUi), selectionner: () => {}, choisir: () => {} };
+    const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+    const conteneur = document.createElement('div');
+    document.body.prepend(conteneur);
+    const contexte = new Map([['t', t], ['seance', seance], ['ui', ui]]);
+    let composant = null;
+    try {
+      composant = mount(ListesTravail, { target: conteneur, context: contexte });
+      flushSync();
+      const lignes = [...conteneur.querySelectorAll('[data-liste-travail="titres"] [data-titre="1:2"]')];
+      expect(lignes).toHaveLength(2);
+      expect(lignes.map(texteDe)).toEqual(['table 1 : titre animateur non pourvu', 'table 1 : titre animateur non pourvu']);
+    } finally {
+      if (composant !== null) unmount(composant);
+      conteneur.remove();
+    }
+  });
+});
+
+// --- Le plan dit le placement qu'il montre (§ 2.1 étape 11, § 5.8) ----------------
+
+describe('le plan dit le placement qu’il montre, et revient d’une proposition (§ 2.1 étape 11, § 5.8)', () => {
+  const source = (m) => texteDe(dans(m, '[data-source]'));
+  const reserve = (m) => [...dans(m, '[data-reserve]').querySelectorAll('[data-participant]')].map((e) => Number(e.dataset.participant));
+
+  test('avant la retenue : « Voir » une proposition, puis revenir aux réservations depuis le plan ; la réserve liste de nouveau les non-réservés', async () => {
+    const m = await ouvrir(huitAvantRetenue());
+    expect(source(m)).toBe('Réservations');
+    expect(dans(m, '[data-commande="quitterProposition"]')).toBeNull();
+    const nonReserves = reserve(m);
+    expect(nonReserves).toHaveLength(charge(m).participants.length);
+    m.ui.montrerProposition(1);
+    flushSync();
+    await images(2);
+    expect(source(m)).toBe('Proposition n° 1 : un geste y pose une réservation');
+    expect(reserve(m)).not.toEqual(nonReserves);
+    const quitter = dans(m, '[data-commande="quitterProposition"]');
+    expect(texteDe(quitter)).toBe('Revenir aux réservations');
+    await presserBouton(quitter);
+    flushSync();
+    await images(2);
+    expect(m.ui.etat().proposition).toBeNull();
+    expect(source(m)).toBe('Réservations');
+    expect(reserve(m)).toEqual(nonReserves);
+    expect(dans(m, '[data-commande="quitterProposition"]')).toBeNull();
+  });
+
+  test('après la retenue : la proposition montrée se dit en vue seule, et la commande revient au placement retenu', async () => {
+    const m = await ouvrir(huitRetenue());
+    expect(source(m)).toBe('Placement retenu');
+    m.ui.montrerProposition(1);
+    flushSync();
+    await images(2);
+    expect(source(m)).toBe('Proposition n° 1, vue seule');
+    const quitter = dans(m, '[data-commande="quitterProposition"]');
+    expect(texteDe(quitter)).toBe('Revenir au placement retenu');
+    await presserBouton(quitter);
+    flushSync();
+    await images(2);
+    expect(m.ui.etat().proposition).toBeNull();
+    expect(source(m)).toBe('Placement retenu');
+  });
+});
+
+// --- Un geste à un tour ne change pas les autres tours (§ 7.1, § 5.8) -----------
+
+describe('une réservation « tous les tours » ne se retire pas par un geste (§ 7.1)', () => {
+  test('sol ou « Retirer du tour » : refus sur la place, rien d’écrit ; le remède la retire ; « ce tour » se retire par le sol', async () => {
+    const base = executer(
+      executer(sansProposition(), 'reserver', { participant: IRIS, table: 3, siege: 1, portee: 'tous', tour: null }),
+      'reserver',
+      { participant: THEO, table: 4, siege: 2, portee: 'tour', tour: 1 },
+    );
+    const m = await ouvrir(base);
+    expect(etatMontre(m).cible).toBe('reservations');
+    const place = () => chaiseEl(m, 3, 1);
+    const refusSur = () => decrit(place())?.querySelector('[data-refus="RESERVATION_TOUS_LES_TOURS"]') ?? null;
+
+    let avant = fichiers(m);
+    await glisser(pointChaise(m, 3, 1), pointSol(m));
+    await attendre(() => expect(refusSur()).not.toBeNull());
+    expect(texteDe(decrit(place()))).toContain('tous les tours');
+    expect(texteDe(decrit(place()))).toContain(`Table ${charge(m).tables.find(({ id }) => id === 3).numero}, siège 1`);
+    await rienEcrit(m, avant);
+    expect(charge(m).reservations).toEqual(base.reservations);
+
+    // Le message laisse passer le pointeur, ses boutons le prennent : « Fermer »,
+    // pressé par le vrai pointeur, reçoit l'appui et retire la pose.
+    const fermer = decrit(place()).querySelector('button.fermer');
+    expect(fermer).not.toBeNull();
+    expect(await presseRecue(fermer)).toBe(true);
+    await attendre(() => expect(refusSur()).toBeNull());
+    expect(m.ui.etat().pose).toBeNull();
+    await rienEcrit(m, avant);
+
+    await activerSiegeAuClavier(m, 3, 1);
+    await presserBouton(dans(m, `[data-menu="${IRIS}"] [data-commande="retirerDuTour"]`));
+    await attendre(() => expect(refusSur()).not.toBeNull());
+    await rienEcrit(m, avant);
+
+    // Le remède, pressé par le vrai pointeur : il reçoit l'appui, et sa
+    // commande écrit une entrée.
+    const remede = refusSur().querySelector('[data-commande="retirerReservation"]');
+    expect(remede).not.toBeNull();
+    const r = fichiers(m).revision;
+    expect(await presseRecue(remede)).toBe(true);
+    await uneEntree(m, r);
+    expect(charge(m).reservations).toEqual([{ participant: THEO, table: 4, siege: 2, portee: 'tour', tour: 1 }]);
+
+    avant = fichiers(m);
+    await glisser(pointChaise(m, 4, 2), pointSol(m));
+    await uneEntree(m, avant.revision);
+    expect(charge(m).reservations).toEqual([]);
+  });
+
+  test('une personne réservée glissée vers une chaise libre : le fantôme dit qu’elle déplace sa réservation, et sa portée ; « tous les tours » se déplace à chaque tour', async () => {
+    const base = executer(
+      executer(sansProposition(), 'reserver', { participant: IRIS, table: 3, siege: 1, portee: 'tous', tour: null }),
+      'reserver',
+      { participant: THEO, table: 4, siege: 2, portee: 'tour', tour: 1 },
+    );
+    const m = await ouvrir(base);
+    expect(etatMontre(m).cible).toBe('reservations');
+    const etatDuFantome = () => texteDe(dans(m, '[data-fantome] [data-partie="etat"]'));
+
+    let r = fichiers(m).revision;
+    let vers = pointChaise(m, 4, 3);
+    await presserEtBouger(pointChaise(m, 3, 1), vers);
+    expect(etatDuFantome()).toBe('déplace sa réservation, à tous les tours');
+    await pointer('relacher', vers.x, vers.y);
+    await uneEntree(m, r);
+    expect(charge(m).reservations).toContainEqual({ participant: IRIS, table: 4, siege: 3, portee: 'tous', tour: null });
+
+    r = fichiers(m).revision;
+    vers = pointChaise(m, 4, 4);
+    await presserEtBouger(pointChaise(m, 4, 2), vers);
+    expect(etatDuFantome()).toBe('déplace sa réservation de ce tour');
+    await pointer('relacher', vers.x, vers.y);
+    await uneEntree(m, r);
+    expect(charge(m).reservations).toContainEqual({ participant: THEO, table: 4, siege: 4, portee: 'tour', tour: 1 });
+  });
+});
+
 // --- Réserver, titrer, désigner (§ 4, § 2.1 étape 6, § 5.8) ---------------------
 
 describe('réserver, titrer, désigner depuis le panneau (§ 4, § 2.1 étape 6)', () => {
@@ -1455,6 +1645,21 @@ describe('la mise en évidence d’une personne : posée et ôtée par un geste,
     await attendre(() => expect(chaiseMarquee(m)).toBeNull());
     expect(fichiers(m)).toEqual(avant);
     expect(m.seance.etat().mode).toBe('lecture');
+  });
+
+  test('une personne mise en évidence puis supprimée : la barre dit qu’elle n’est plus dans la liste, et offre toujours d’ôter la mise en évidence', async () => {
+    const m = await ouvrir(huitRetenue());
+    const personne = etatMontre(m).tables[1].chaises[0].occupant;
+    m.ui.mettreEnEvidence(personne);
+    flushSync();
+    await m.seance.executer('supprimerParticipant', { id: personne });
+    flushSync();
+    await images(2);
+    const barre = dans(m, '[data-evidence]');
+    expect(barre).not.toBeNull();
+    expect(texteDe(barre)).toContain('une personne qui n’est plus dans la liste');
+    await cliquer(barre.querySelector('[data-commande="oterEvidence"]'));
+    expect(dans(m, '[data-evidence]')).toBeNull();
   });
 
   test('depuis sa ligne de la grille des participants : « Voir sur le plan » ouvre le plan, sa chaise marquée ; rien d’écrit', async () => {

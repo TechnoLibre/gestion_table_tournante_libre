@@ -22,7 +22,9 @@
   // Un état qui ne s'ouvre pas (ETAT_ILLISIBLE) mène à la récupération, qui
   // tient lieu de liste jusqu'à son retour. Chaque refus s'affiche, traduit,
   // là où son geste a eu lieu, sans remède : sur la liste, aucun événement
-  // n'est ouvert pour l'exécuter (refusDeLaListe).
+  // n'est ouvert pour l'exécuter (refusDeLaListe). Un geste qui écrit ne se
+  // relance pas pendant qu'il s'écrit : la création, comme chaque commande,
+  // ignore une seconde demande et se dit occupée.
   import { getContext, onDestroy, untrack } from 'svelte';
   import { versionVisible } from '../apropos.js';
   import Commande from '../primitives/Commande.svelte';
@@ -59,6 +61,9 @@
   let nom = $state('');
   let date = $state('');
   let refusCreation = $state.raw(null);
+  // Vrai pendant l'écriture d'une création : une seconde soumission ne
+  // crée rien, et « Créer » se dit occupé.
+  let creationEnCours = $state(false);
   const champRefuse = $derived(champDuRefus(refusCreation));
 
   const question = $derived(issue?.dossier.question ?? null);
@@ -181,13 +186,17 @@
 
   async function creer(evenement) {
     evenement.preventDefault();
+    if (creationEnCours) return;
     refusCreation = null;
+    creationEnCours = true;
     try {
       await surLaListe(() => facade.creer({ nom, date }));
     } catch (refus) {
       if (typeof refus?.code !== 'string') throw refus;
       refusCreation = refus;
       return;
+    } finally {
+      creationEnCours = false;
     }
     apresOperation();
   }
@@ -254,7 +263,12 @@
           {/if}
         </div>
         <div class="commandes">
-          <button type="submit" data-commande="creer">{t('accueil.creation.creer')}</button>
+          <button
+            type="submit"
+            data-commande="creer"
+            aria-busy={creationEnCours ? 'true' : undefined}
+            aria-disabled={creationEnCours ? 'true' : undefined}>{t('accueil.creation.creer')}</button
+          >
           {#if refusCreation !== null && champRefuse === null}
             <Refus refus={refusCreation} />
           {/if}
@@ -346,5 +360,11 @@
     font: inherit;
     font-size: var(--taille-texte);
     cursor: pointer;
+  }
+
+  button[aria-disabled='true'] {
+    border-style: dashed;
+    color: var(--couleur-page-texte-secondaire);
+    cursor: progress;
   }
 </style>

@@ -10,7 +10,8 @@
   // écrit son attribut transform à chaque image, directement, et le montre
   // par la propriété fantome : le nom de la personne, dans son propre nœud,
   // puis le libellé de ce que le geste modifie — la clé que cleFantome
-  // (gestes.js) tire de la cible de l'état des places. Caché, il ne porte
+  // (gestes.js) tire de la cible de l'état des places et de la portée de la
+  // réservation qui tient la personne. Caché, il ne porte
   // rien ; montré ou non, il ne reçoit pas le pointeur.
   //
   // fantome : {nom, cle} | null ; element : le <g>, lié pour Plan.svelte.

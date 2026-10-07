@@ -48,6 +48,11 @@ function touchees({ ids, retenu }) {
   return { texte: capitale(enumeration(parties)), pluriel: (retenu ? 1 : 0) + ids.length > 1 };
 }
 
+// La personne d'une raison de dérive, par son nom affiché quand les détails
+// le portent ; la table, par son numéro de même.
+const laPersonne = ({ participant, personne = null }) => personne ?? `La personne n° ${participant}`;
+const laTable = ({ table, numero = null }) => (numero === null ? `La table d'identifiant ${table}` : `La table ${numero}`);
+
 export const TABLE = new Map([
   // --- Le système de fichiers et le dépôt (src/stockage/types.js) ------------
   [
@@ -175,18 +180,17 @@ export const TABLE = new Map([
   ['MANQUANT', ({ tour, participant }) => `Au tour ${tour}, la personne n° ${participant} n'est placée nulle part.`],
   ['IDENTIFIANT_REPETE', () => 'Une autre proposition porte déjà ce numéro.'],
   ['IDENTIFIANT_HORS_COMPTEUR', () => 'Ce numéro de proposition dépasse le compteur du fichier.'],
-  ['PARTICIPANT_EXCLU', ({ participant }) => `La personne n° ${participant} est exclue depuis.`],
-  ['PARTICIPANT_SUPPRIME', ({ participant }) => `La personne n° ${participant} a été supprimée depuis.`],
-  [
-    'PARTICIPANT_NON_PLACE',
-    ({ participant }) => `La personne n° ${participant}, ajoutée ou réintégrée depuis, n'y est pas placée.`,
-  ],
-  ['TABLE_SUPPRIMEE', ({ table }) => `La table d'identifiant ${table} a été supprimée depuis.`],
-  ['TABLE_AJOUTEE', ({ table }) => `La table d'identifiant ${table} a été ajoutée depuis.`],
+  // Une raison de dérive nomme la personne par personne et la table par
+  // numero quand ses détails les portent (raisonsNommees, de l'application) ;
+  // sinon par leur identifiant.
+  ['PARTICIPANT_EXCLU', (details) => `${laPersonne(details)} est exclue depuis.`],
+  ['PARTICIPANT_SUPPRIME', (details) => `${laPersonne(details)} a été supprimée depuis.`],
+  ['PARTICIPANT_NON_PLACE', (details) => `${laPersonne(details)}, ajoutée ou réintégrée depuis, n'y est pas placée.`],
+  ['TABLE_SUPPRIMEE', (details) => `${laTable(details)} a été supprimée depuis.`],
+  ['TABLE_AJOUTEE', (details) => `${laTable(details)} a été ajoutée depuis.`],
   [
     'CAPACITE_CHANGEE',
-    ({ table, avant, maintenant }) =>
-      `La table d'identifiant ${table} est passée de ${avant} à ${compte(maintenant, 'place', 'places')}.`,
+    ({ avant, maintenant, ...details }) => `${laTable(details)} est passée de ${avant} à ${compte(maintenant, 'place', 'places')}.`,
   ],
   ['TOURS_CHANGES', ({ avant, maintenant }) => `Le nombre de tours est passé de ${avant} à ${maintenant}.`],
 

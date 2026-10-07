@@ -27,9 +27,9 @@
 // retenu reçu est refusée (INVARIANT_VIOLE) ; une violation déjà présente,
 // celle d'une dérive (§ 9), ne bloque rien.
 import { ordreDesReservations, pourvoyeursDesTitres } from '../csv/import.js';
-import { verifierInvariants } from '../moteur/verification.js';
 import { capacite } from '../stockage/document.js';
-import { fautes, planDepuisFichier } from '../stockage/placements.js';
+import { fautes } from '../stockage/placements.js';
+import { violationsDuRetenu } from './avertissements.js';
 import { refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { conversionsPossibles } from './listes_travail.js';
@@ -418,18 +418,21 @@ function rangDeTable(retenu, idTable, places) {
   return retenu.tables.length - 1;
 }
 
-// Clé d'une violation : ses champs, dans un ordre fixe.
-const cleDeViolation = ({ code, participant, table, tour, detail }) => JSON.stringify([code, participant, table, tour, detail]);
+// Clé d'une violation : ses champs, dans un ordre fixe ; l'occupant d'un
+// siège réservé n'y entre pas, la réservation non tenue reste la même.
+const cleDeViolation = ({ code, participant, table, tour, detail, siege }) =>
+  JSON.stringify([code, participant, table, tour, detail, siege]);
 
-// Les violations de verifierInvariants que suivant ajoute au retenu
-// precedent, la réserve étant une place du plan (§ 12.6) : celles dont la
+// Les violations du retenu (violationsDuRetenu, celles de verifierInvariants,
+// la réserve étant une place du plan, et les réservations non tenues qu'il
+// ne relève pas) que suivant ajoute au retenu precedent : celles dont la
 // clé n'y apparaît pas. Un retenu lisible déclare chaque table et chaque
-// personne une fois, et verifierInvariants n'y rend jamais deux violations
-// de même clé. [] quand la configuration ne se normalise pas.
+// personne une fois, et n'y rend jamais deux violations de même clé. []
+// quand la configuration ne se normalise pas.
 function violationsNouvelles(charge, precedent, suivant) {
   const instance = instanceDe(charge);
   if (instance === null) return [];
-  const juger = (retenu) => verifierInvariants(instance, planDepuisFichier(retenu), { reserveAutorisee: true });
+  const juger = (retenu) => violationsDuRetenu(charge, retenu, instance);
   const connues = new Set(juger(precedent).map(cleDeViolation));
   return juger(suivant).filter((violation) => !connues.has(cleDeViolation(violation)));
 }
@@ -477,8 +480,9 @@ function numeroDuLieu(charge, tour, id) {
 /**
  * deplacerDansRetenu {tour, participant, table, siege|null} (§ 7.1, § 9) :
  * la personne s'assied à cette table au tour donné, et sa place d'avant se
- * libère. Sièges attribués, au siège donné — sans siège, la première chaise
- * libre —, les rangs sautés à null ; la chaise d'un présent refuse
+ * libère. Sièges attribués, au siège donné — sans siège, celui que sa
+ * réservation lui tient à cette table, sinon la première chaise libre que
+ * ne tient pas la réservation d'un autre —, les rangs sautés à null ; la chaise d'un présent refuse
  * SIEGE_OCCUPE, remède l'échange ; celle d'un absent — exclu, ou que la
  * charge n'a plus — l'envoie en réserve. Sans attribution, la liste reste
  * triée ; une table pleine de présents refuse TABLE_PLEINE, et, pleine
@@ -517,8 +521,25 @@ function deplacerDansRetenu(charge, { tour, participant, table: idTable, siege =
     const liste = etage.sieges[rangTable];
     let cible = siege;
     if (cible === null) {
-      cible = 1;
-      while (cible <= places && cible <= liste.length && liste[cible - 1] !== null && ids.has(liste[cible - 1])) cible += 1;
+      // Sans siège, la chaise que la réservation de la personne lui tient à
+      // cette table, sinon la première chaise libre — vide ou d'un absent —
+      // que ne tient pas la réservation active d'un autre : le contrôle de
+      // pose ne juge que le siège donné.
+      const tenues = siegesTenus(charge, tour, idTable);
+      const sienne = [...tenues.keys()].find((numero) => tenues.get(numero) === participant);
+      const libre = (numero) => {
+        const assis = liste[numero - 1] ?? null;
+        return (assis === null || !ids.has(assis)) && (!tenues.has(numero) || tenues.get(numero) === participant);
+      };
+      if (sienne !== undefined && (liste[sienne - 1] ?? null) === participant) {
+        throw refus('SANS_EFFET', { commande: 'deplacerDansRetenu' });
+      }
+      if (sienne !== undefined && libre(sienne)) {
+        cible = sienne;
+      } else {
+        cible = 1;
+        while (cible <= places && !libre(cible)) cible += 1;
+      }
       if (cible > places) throw refus('TABLE_PLEINE', { table: idTable, tour, capacite: places }, changerPlaces(idTable, places));
     }
     const occupant = liste[cible - 1] ?? null;
@@ -570,6 +591,13 @@ function deplacerDansRetenu(charge, { tour, participant, table: idTable, siege =
     }),
     avertissements: [],
   };
+}
+
+// Les sièges de la table idTable que tient au tour une réservation active,
+// tels que le plan les montre (etatPlaces) : Map siège → titulaire.
+function siegesTenus(charge, tour, idTable) {
+  const { chaises } = etatPlaces(charge, { tour }).tables.find(({ id }) => id === idTable);
+  return new Map(chaises.filter(({ reservation }) => reservation !== null).map(({ siege, reservation }) => [siege, reservation.participant]));
 }
 
 // Les personnes que le plan du tour montre assises (etatPlaces, source le

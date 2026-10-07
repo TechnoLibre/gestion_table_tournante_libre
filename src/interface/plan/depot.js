@@ -9,6 +9,16 @@
 // le geste modifie, et la commande juge la pose et la capacité.
 import { designer, surLeSol as horsDesTables } from '../../geometrie/designation.js';
 
+/**
+ * Codes d'un refus que le dépôt lève lui-même, leur texte dans
+ * src/application/libelles/places.js :
+ *   RESERVATION_TOUS_LES_TOURS {participant, table, remede} : sous la cible
+ *     'reservations', une personne que sa réservation « tous les tours » tient
+ *     à sa chaise, déposée hors des tables ; remède { commande:
+ *     'retirerReservation', arguments: {participant, table, portee: 'tous',
+ *     tour: null} }.
+ */
+
 // La chaise d'une table de l'état des places, ou undefined.
 function chaiseDe(etatPlaces, { table, siege }) {
   return etatPlaces.tables.find(({ id }) => id === table)?.chaises[siege - 1];
@@ -24,14 +34,37 @@ function premierLibre(etatPlaces, table, libre) {
 }
 
 /**
+ * La réservation qui tient une personne à sa chaise d'origine, telle que
+ * l'état des places la porte — {participant, portee, tour} —, sinon null :
+ * pas de chaise d'origine, une chaise que rien ne tient, ou que la
+ * réservation d'une autre tient. Le dépôt et le libellé du fantôme la lisent
+ * ici tous deux.
+ *
+ * @param {Object} etatPlaces   EtatPlaces du tour affiché
+ * @param {number} personne
+ * @param {{table: number, siege: number}|null} depuis
+ * @returns {{participant: number, portee: 'tous'|'tour', tour: number|null}|null}
+ */
+export function reservationTenue(etatPlaces, personne, depuis) {
+  const reservation = depuis === null ? null : (chaiseDe(etatPlaces, depuis)?.reservation ?? null);
+  return reservation?.participant === personne ? reservation : null;
+}
+
+/**
  * La commande d'un dépôt de personne, lue sur etatPlaces.cible (contrat,
  * « Source ») :
  *  - 'reservations' — avant la retenue, ou à un tour que le retenu ne porte
  *    pas — : une personne que sa chaise d'origine tient réservée déplace sa
- *    réservation (deplacerReservation), qui garde portée et tour ; une
+ *    réservation (deplacerReservation), qui garde portée et tour — le
+ *    fantôme le dit pendant le geste, « tous les tours » compris ; une
  *    autre reçoit une réservation de portée « tour » au tour affiché
- *    (reserver) ; sur le sol, la réservation glissée part
- *    (retirerReservation), et rien pour une personne non réservée. Un siège
+ *    (reserver) ; sur le sol, la réservation « ce tour » glissée part
+ *    (retirerReservation), et rien pour une personne non réservée. Une
+ *    réservation « tous les tours » ne part pas : un geste fait à un tour ne
+ *    change pas les autres tours en silence, et une réservation se défait
+ *    par sa propre commande (§ 7.1) ; le dépôt rend le refus
+ *    RESERVATION_TOUS_LES_TOURS {participant, table}, dont le remède est ce
+ *    retrait, de portée « tous ». Un siège
  *    qu'occupe une personne non réservée de la proposition montrée vaut un
  *    siège libre : la proposition reste identique, et dérive ;
  *  - 'retenu' : un siège libre → deplacerDansRetenu, un siège occupé par une
@@ -69,11 +102,12 @@ export function commandeDeDepot({ etatPlaces, tour, personne, depuis, cible, sur
     return { commande: 'deplacerDansRetenu', arguments: { tour, participant: personne, table: cible.table, siege } };
   }
 
-  const origine = depuis === null ? undefined : chaiseDe(etatPlaces, depuis);
-  const tenue = origine?.reservation?.participant === personne ? origine.reservation : null;
+  const tenue = reservationTenue(etatPlaces, personne, depuis);
   if (cible === null) {
     if (tenue === null) return null;
-    return { commande: 'retirerReservation', arguments: { participant: personne, table: depuis.table, portee: tenue.portee, tour: tenue.tour } };
+    const retrait = { commande: 'retirerReservation', arguments: { participant: personne, table: depuis.table, portee: tenue.portee, tour: tenue.tour } };
+    if (tenue.portee !== 'tous') return retrait;
+    return { refus: { code: 'RESERVATION_TOUS_LES_TOURS', details: { participant: personne, table: depuis.table, remede: retrait } } };
   }
   const siege = surSiege ? cible.siege : premierLibre(etatPlaces, cible.table, ({ reservation }) => reservation === null);
   if (tenue !== null) {

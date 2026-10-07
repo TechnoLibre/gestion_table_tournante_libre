@@ -26,6 +26,14 @@ export const TABLE = new Map([
   ['generation.reglage.arret', "Compte d'arrêt (mouvements évalués par proposition)"],
   ['generation.reglage.historique', "Historique d'acceptation (longueur, en mouvements)"],
 
+  // --- Les contraintes et l'attribution des sièges, sous leur nom du § 5.3 ---
+  ['generation.contraintes.titre', 'Contraintes de la génération'],
+  ['generation.contrainte.separerAppartenances', 'Séparer les appartenances'],
+  ['generation.contrainte.nouveauxVoisins', 'Nouveaux voisins à chaque tour'],
+  ['generation.contrainte.nouvelleTable', 'Nouvelle table à chaque tour'],
+  ['generation.contrainte.varierAppartenances', 'Varier les appartenances rencontrées'],
+  ['generation.contrainte.attribuerSieges', 'Attribuer les sièges'],
+
   // --- La durée du dernier calcul de cette séance (§ 5.10) --------------------
   [
     'generation.duree.inconnue',

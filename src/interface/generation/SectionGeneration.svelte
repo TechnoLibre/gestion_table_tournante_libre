@@ -85,12 +85,17 @@
   }
 
   // Lance une génération sur la graine saisie et les réglages de la charge ;
-  // confirmee : la réponse à la question d'une génération longue.
+  // confirmee : la réponse à la question d'une génération longue. Les
+  // réglages se lisent quand la file de la séance a passé ce qui s'y
+  // trouve : un réglage quitté par le clic même s'écrit d'abord, et la
+  // génération part sur lui, quelle que soit la lenteur du disque.
   async function lancer(confirmee) {
     refusGraine = null;
     issue = null;
     if (!confirmee) question = null;
-    const { reglages, refus } = generation.valider({ ...generation.reglagesProposes(), graine });
+    const saisie = graine;
+    await seance.attendre();
+    const { reglages, refus } = generation.valider({ ...generation.reglagesProposes(), graine: saisie });
     const deGraine = refus.find(({ champ }) => champ === 'graine');
     if (deGraine !== undefined) {
       refusGraine = { code: deGraine.code, details: deGraine.details };

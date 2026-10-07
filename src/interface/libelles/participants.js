@@ -81,6 +81,7 @@ export const TABLE = new Map([
   ['participants.fiche.itineraire', 'Placement retenu, tour par tour'],
   ['participants.fiche.tour', 'Tour'],
   ['participants.fiche.enReserve', 'en réserve'],
+  ['participants.fiche.horsRetenu', 'hors du placement retenu'],
   ['participants.fiche.siegeNonAttribue', 'non attribué'],
   ['participants.fiche.aucunRetenu', 'Aucun placement retenu ne la nomme.'],
 

@@ -13,7 +13,8 @@
   // machine de champ.js tient : Entrée, Tab ou la sortie du champ valident,
   // Échap rend la valeur enregistrée. Les notes s'éditent dans une zone de
   // texte, qui garde leurs sauts de ligne ; un champ d'une ligne les
-  // retirerait de toute note retouchée. Une validation qui change la valeur
+  // retirerait de toute note retouchée. Maj+Entrée y insère un saut de
+  // ligne, Entrée seule valide (entreeValide). Une validation qui change la valeur
   // exécute modifierParticipant par la séance, sur ce seul champ ; une
   // saisie qui se lit comme la valeur enregistrée — en NFC, sans blancs de
   // bord — n'exécute rien. Entrée sur la cellule d'exclusion exclut ou
@@ -34,7 +35,7 @@
   import Commande from '../primitives/Commande.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
-  import { COLONNES, celluleSuivante, cleDeColonne } from './grille.js';
+  import { COLONNES, celluleSuivante, cleDeColonne, entreeValide } from './grille.js';
 
   let { lignes, tri = $bindable(null), supprimer } = $props();
 
@@ -179,6 +180,7 @@
       evenement.preventDefault();
       abandonner();
     } else if (touche === 'Enter') {
+      if (!entreeValide({ maj: evenement.shiftKey, multiligne: edition.colonne === 'notes' })) return;
       evenement.preventDefault();
       valider();
     } else if (touche === 'Tab') {

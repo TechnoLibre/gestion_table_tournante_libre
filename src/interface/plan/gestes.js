@@ -232,17 +232,34 @@ const CLES_FANTOME = new Map([
   [null, 'plan.fantome.vueSeule'],
 ]);
 
+// Sous la cible 'reservations', la clé d'une personne que sa réservation
+// tient à sa chaise, par portée : son dépôt sur une chaise est
+// deplacerReservation, qui garde la portée.
+const CLES_RESERVATION_TENUE = new Map([
+  ['tour', 'plan.fantome.reservationTour'],
+  ['tous', 'plan.fantome.reservationTous'],
+]);
+
 /**
  * La clé du libellé que le fantôme porte pendant le glissement d'une
- * personne (§ 5.8) : « pose une réservation » sous la cible 'reservations',
- * « déplace dans le placement retenu » sous 'retenu', la vue seule sous une
- * cible null. Une autre valeur lève : elle ne prend aucun libellé par défaut.
+ * personne (§ 5.8, § 7.1) : sous la cible 'reservations', « pose une
+ * réservation » pour une personne que rien ne tient, sinon le déplacement
+ * de sa réservation et sa portée — « tous les tours » s'y dit ; « déplace
+ * dans le placement retenu » sous 'retenu' ; la vue seule sous une cible
+ * null. Une cible ou une portée hors du contrat lève : elle ne prend aucun
+ * libellé par défaut.
  *
  * @param {'reservations'|'retenu'|null} cible  EtatPlaces.cible
+ * @param {'tous'|'tour'|null} [portee]  la portée de la réservation qui tient
+ *   la personne à sa chaise d'origine (reservationTenue de depot.js), ou null
  * @returns {string}
  */
-export function cleFantome(cible) {
+export function cleFantome(cible, portee = null) {
   if (!CLES_FANTOME.has(cible)) throw new TypeError(`cible du fantôme hors du contrat : ${JSON.stringify(cible)}`);
+  if (portee !== null && !CLES_RESERVATION_TENUE.has(portee)) {
+    throw new TypeError(`portée du fantôme hors du contrat : ${JSON.stringify(portee)}`);
+  }
+  if (cible === 'reservations' && portee !== null) return CLES_RESERVATION_TENUE.get(portee);
   return CLES_FANTOME.get(cible);
 }
 

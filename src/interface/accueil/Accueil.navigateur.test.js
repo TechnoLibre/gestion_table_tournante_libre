@@ -184,6 +184,22 @@ async function creerParLeFormulaire(m, nom, date = '') {
   await cliquer(dans(m, '[data-commande="creer"]'));
 }
 
+// Retient les ajouts de ligne du système simulé — le journal s'écrit avant
+// l'état — jusqu'à liberer() : l'opération lancée reste en cours, comme sur
+// un support lent, sans délai ni minuterie.
+function retenirEcritures(m) {
+  const ajouterLigne = m.fs.ajouterLigne;
+  let liberer;
+  const porte = new Promise((resoudre) => {
+    liberer = resoudre;
+  });
+  m.fs.ajouterLigne = async (...parametres) => {
+    await porte;
+    return ajouterLigne.apply(m.fs, parametres);
+  };
+  return () => liberer();
+}
+
 // Aucune fenêtre ni boîte de dialogue dans le document.
 function aucuneFenetre() {
   expect(document.querySelectorAll('[role=dialog], [role=alertdialog], dialog[open]').length).toBe(0);
@@ -948,6 +964,55 @@ describe('les opérations de fichiers (§ 8.7)', () => {
 });
 
 // --- Les démonstrations (§ 15) -------------------------------------------------------------
+
+describe('un geste en cours ne se relance pas (§ 8.7, § 15)', () => {
+  test('créer : une seconde soumission pendant l’écriture ne crée rien ; « Créer » se dit occupé', async () => {
+    const m = await monter();
+    const liberer = retenirEcritures(m);
+    saisir(dans(m, '[data-champ="nom"]'), 'Soirée des Merles');
+    const creer = dans(m, '[data-commande="creer"]');
+    await cliquer(creer);
+    expect(creer.getAttribute('aria-busy')).toBe('true');
+    expect(creer.getAttribute('aria-disabled')).toBe('true');
+    await cliquer(creer);
+    dans(m, '[data-champ="nom"]').form.requestSubmit();
+    await tick();
+    liberer();
+    await attendreEvenement(m, ({ nom }) => nom === 'Soirée des Merles');
+    await revenirALaListe(m, 1);
+    expect(lignes(m)).toHaveLength(1);
+  });
+
+  test('une démonstration cliquée deux fois pendant son chargement n’en charge qu’une', async () => {
+    const m = await monter();
+    const nom = CATALOGUE.find(({ cle }) => cle === 'petite').nom;
+    const liberer = retenirEcritures(m);
+    const bouton = dans(m, '[data-demonstration="petite"]');
+    await cliquer(bouton);
+    expect(bouton.getAttribute('aria-busy')).toBe('true');
+    await cliquer(bouton);
+    liberer();
+    await attendreEvenement(m, (e) => e.nom === `${nom} 1`);
+    await revenirALaListe(m, 1);
+    expect(lignes(m).map((ligne) => colonne(ligne, 'nom'))).toEqual([`${nom} 1`]);
+  });
+
+  test('copier : une seconde validation pendant l’écriture ne fait pas de seconde copie', async () => {
+    const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
+    const ligne = ligneDe(m, 'bal');
+    await cliquer(ligne.querySelector('[data-commande="copier"]'));
+    saisir(ligne.querySelector('[data-champ="nomCopie"]'), 'Bal des Grisailles, variante');
+    const liberer = retenirEcritures(m);
+    const valider = ligne.querySelector('[data-commande="validerCopie"]');
+    await cliquer(valider);
+    expect(valider.getAttribute('aria-busy')).toBe('true');
+    await cliquer(valider);
+    liberer();
+    await attendreEvenement(m, ({ nom }) => nom === 'Bal des Grisailles, variante');
+    await revenirALaListe(m, 2);
+    expect(lignes(m)).toHaveLength(2);
+  });
+});
 
 describe('les démonstrations (§ 15)', () => {
   test('deux chargements : « Petite démonstration 1 » puis « … 2 », en lecture, la première intacte', async () => {

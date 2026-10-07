@@ -62,6 +62,14 @@ export const TABLE = new Map([
     () => "Aucune personne à placer : la liste des participants est vide, ou chacun en est exclu.",
   ],
   ['AUCUNE_TABLE', () => "Aucune table : la génération place les personnes autour des tables de l'événement."],
+  // Le travailleur de génération n'a pas démarré, ou s'est arrêté sans
+  // résultat : rien n'est enregistré, et aucun geste de la page ne le relance.
+  [
+    'TRAVAILLEUR_EN_ECHEC',
+    () =>
+      "Le calcul hors de la page n'a pas pu se faire : le navigateur n'a pas démarré le travailleur de génération, " +
+      "ou l'a arrêté sans résultat. Rien n'est enregistré ; relancer le logiciel le recharge.",
+  ],
   [
     'CONFIRMATION_REQUISE',
     ({ estimation }, texte) =>

@@ -36,9 +36,11 @@ import { CODES, TABLES_APPLICATION, libelle } from './libelles.js';
 
 const RACINE = fileURLToPath(new URL('../..', import.meta.url));
 
-// Les arbres balayés, et les fichiers qui portent une table de codes.
+// Les arbres balayés, et les fichiers qui portent une table de codes : le
+// dépôt du plan lève un refus que la commande n'a pas à lever, et son texte
+// vit ici, avec ceux des commandes des places.
 const ARBRES = ['src/stockage', 'src/csv', 'src/application'];
-const TABLES = ['src/stockage/types.js', 'src/csv/erreurs.js'];
+const TABLES = ['src/stockage/types.js', 'src/csv/erreurs.js', 'src/interface/plan/depot.js'];
 // L'assemblage et les tables des textes n'émettent rien : leurs clés sont ce
 // qu'on éprouve, et un texte qui en compose un autre le nomme sans l'émettre.
 const TABLE_DES_TEXTES = join('src', 'application', 'libelles.js');
@@ -411,6 +413,7 @@ const EXEMPLES = new Map([
   ['DEPASSEMENT', { index: 4, participant: 9 }],
   // Génération
   ['GENERATION_EN_COURS', { remede: null }],
+  ['TRAVAILLEUR_EN_ECHEC', { remede: null }],
   ['AUCUN_PARTICIPANT', { remede: { geste: 'ouvrirSection', section: 'participants' } }],
   ['AUCUNE_TABLE', { remede: { geste: 'ouvrirSection', section: 'tables' } }],
   [
@@ -493,6 +496,7 @@ const EXEMPLES = new Map([
   ['PROPOSITION_MONTREE', { proposition: 4, remede: null }],
   ['SIEGE_OCCUPE', { table: 5, siege: 2, tour: 1, occupant: 2, remede: null }],
   ['TABLE_PLEINE', { table: 5, tour: 1, capacite: 6, remede: null }],
+  ['RESERVATION_TOUS_LES_TOURS', { participant: 1, table: 3, remede: null }],
   ['ENTREE_RESERVER', { personne: 'Théo Pervenche', numero: 4, siege: 2, portee: 'tour', tour: 2 }],
   ['ENTREE_RETIRER_RESERVATION', { personne: 'Théo Pervenche', numero: 4, portee: 'tous', tour: null }],
   ['ENTREE_DEPLACER_RESERVATION', { personne: 'Théo Pervenche', de: 4, vers: 7, siege: null, portee: 'tour', tour: 2 }],
@@ -507,6 +511,8 @@ const EXEMPLES = new Map([
   ['NON_ENTIER', { saisie: '8abc', remede: null }],
   ['MOINS_DE_DEUX', { remede: null }],
   ['MOINS_D_UN_TOUR', { tours: 0, remede: null }],
+  ['TROP_DE_PLACES', { max: 1000, remede: null }],
+  ['TROP_DE_TOURS', { max: 100, remede: null }],
   ['SOUS_RESERVATIONS', { table: 2, n: 7, tour: 1, remede: { geste: 'afficherTour', tour: 1, proposition: null } }],
   ['SOUS_OCCUPES', { table: 2, n: 7, tour: 3, remede: { geste: 'afficherTour', tour: 3, proposition: null } }],
   [
@@ -602,6 +608,42 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
       libelle('RESERVATION_NON_HONOREE', { participant: 4, table: 5, tour: 1 }),
       "Le placement retenu n'honore pas la réservation de la personne n° 4 à la table d'identifiant 5 au tour 1 : il la place ailleurs.",
     );
+  });
+
+  test('RESERVATION_NON_HONOREE au siège nomme le siège et ce qu’il porte', () => {
+    assert.equal(
+      libelle('RESERVATION_NON_HONOREE', { participant: 4, table: 5, tour: 1, personne: 'Iris Ombrelle', numero: 3, siege: 2, occupant: 7 }),
+      "Le placement retenu n'honore pas la réservation de Iris Ombrelle au siège 2 de la table 3 au tour 1 : " +
+        "il l'assied à un autre siège de cette table, et donne le siège 2 à une autre personne.",
+    );
+    assert.equal(
+      libelle('RESERVATION_NON_HONOREE', { participant: 4, table: 5, tour: 1, siege: 2, occupant: null }),
+      "Le placement retenu n'honore pas la réservation de la personne n° 4 au siège 2 de la table d'identifiant 5 au tour 1 : " +
+        "il l'assied à un autre siège de cette table, et laisse le siège 2 vide.",
+    );
+  });
+
+  test('une raison de dérive nomme la personne et la table quand ses détails les portent, sinon leurs identifiants', () => {
+    const nommees = [
+      ['PARTICIPANT_EXCLU', { participant: 14, personne: 'Iris Ombrelle' }, 'Iris Ombrelle est exclue depuis.'],
+      ['PARTICIPANT_SUPPRIME', { participant: 14, personne: 'Iris Ombrelle' }, 'Iris Ombrelle a été supprimée depuis.'],
+      [
+        'PARTICIPANT_NON_PLACE',
+        { participant: 14, personne: 'Iris Ombrelle' },
+        "Iris Ombrelle, ajoutée ou réintégrée depuis, n'y est pas placée.",
+      ],
+      ['TABLE_SUPPRIMEE', { table: 9, numero: 3 }, 'La table 3 a été supprimée depuis.'],
+      ['TABLE_AJOUTEE', { table: 9, numero: 3 }, 'La table 3 a été ajoutée depuis.'],
+      ['CAPACITE_CHANGEE', { table: 9, numero: 3, avant: 8, maintenant: 6 }, 'La table 3 est passée de 8 à 6 places.'],
+    ];
+    assert.equal(nommees.length, 6);
+    for (const [code, details, attendu] of nommees) {
+      assert.equal(libelle(code, details), attendu, code);
+      const { personne, numero, ...nus } = details;
+      assert.doesNotMatch(libelle(code, nus), /Iris|table 3/, code);
+      assert.match(libelle(code, nus), personne === undefined ? /identifiant 9/ : /n° 14/, code);
+      void numero;
+    }
   });
 
   test('le séparateur introuvable nomme la ligne et la cause ; le guillemet ouvert tombe dès la ligne 2', () => {
@@ -899,6 +941,7 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
       ['MODE_LECTURE', 'seance'],
       ['SUPPORT_ROMPU', 'seance'],
       ['GENERATION_EN_COURS', 'generation'],
+      ['TRAVAILLEUR_EN_ECHEC', 'generation'],
       ['AUCUN_PARTICIPANT', 'generation'],
       ['AUCUNE_TABLE', 'generation'],
       ['SURRESERVATION', 'moteur'],
@@ -908,7 +951,7 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
       ['GENERATION_INVARIANT_VIOLE', 'generation'],
       ['COMPTEUR_SATURE', 'stockage'],
     ];
-    assert.equal(REFUS.length, 15);
+    assert.equal(REFUS.length, 16);
     for (const [code, table] of REFUS) {
       assert.ok(parTable.get(table).has(code), `${code} hors de ${table}.js`);
       assert.ok(libelle(code, EXEMPLES.get(code)).length > 0, code);

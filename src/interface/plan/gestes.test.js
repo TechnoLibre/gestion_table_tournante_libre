@@ -331,6 +331,23 @@ describe('les libellés d’un geste : le fantôme et la place d’une pose', ()
     for (const cible of ['reservations', 'retenu', null]) assert.equal(LIBELLES.has(cleFantome(cible)), true);
   });
 
+  test('cleFantome : sous les réservations, une personne réservée déplace sa réservation, et le libellé en dit la portée', () => {
+    // Le dépôt d'une personne réservée exécute deplacerReservation, qui garde
+    // la portée : « tous les tours » se dit pendant le geste (§ 5.8, § 7.1).
+    assert.equal(cleFantome('reservations', null), 'plan.fantome.reservations');
+    assert.equal(cleFantome('reservations', 'tour'), 'plan.fantome.reservationTour');
+    assert.equal(cleFantome('reservations', 'tous'), 'plan.fantome.reservationTous');
+    for (const portee of [null, 'tour', 'tous']) {
+      assert.equal(cleFantome('retenu', portee), 'plan.fantome.retenu');
+      assert.equal(cleFantome(null, portee), 'plan.fantome.vueSeule');
+      assert.equal(LIBELLES.has(cleFantome('reservations', portee)), true);
+    }
+    assert.match(LIBELLES.get(cleFantome('reservations', 'tous')), /tous les tours/);
+    for (const portee of ['Tous', 'tours', '', 0]) {
+      assert.throws(() => cleFantome('reservations', portee), { name: 'TypeError', message: /^portée du fantôme hors du contrat/ });
+    }
+  });
+
   test('cleFantome : une cible hors du contrat lève, au lieu de se dire « vue seule »', () => {
     for (const cible of ['reservation', 'Retenu', undefined, '', 0]) {
       assert.throws(() => cleFantome(cible), { name: 'TypeError', message: /^cible du fantôme hors du contrat/ });

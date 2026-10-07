@@ -127,3 +127,36 @@ export function nomDeCharge(charge) {
   const noms = new Map(charge.participants.map((participant) => [participant.id, nomAffiche(participant)]));
   return (id) => noms.get(id);
 }
+
+/**
+ * Ce que la barre de vue dit du placement que le plan montre (§ 2.1, étape
+ * 11 ; § 5.8), lu sur l'état des places du tour : le placement retenu, les
+ * seules réservations — ou un retenu qui ne se lit pas, sous lequel le plan
+ * montre les réservations —, une proposition dont les gestes posent des
+ * réservations (avant la retenue), ou une proposition en vue seule (après).
+ * Quand une proposition est demandée (ui.proposition), la barre offre de ne
+ * plus la montrer : revenir au retenu quand il existe, aux réservations
+ * sinon ; une proposition demandée qu'un tour ne porte pas laisse le plan
+ * sur sa source réelle, et la commande reste offerte.
+ *
+ * @param {{source: string, proposition: number|null, cible: string|null, refus: Object|null}} etat
+ *        EtatPlaces du tour affiché
+ * @param {number|null} demandee   la proposition demandée au plan
+ * @param {boolean} retenu         la charge porte un placement retenu
+ * @returns {{libelle: {cle: string, details: Object}, revenir: string|null}}
+ *          revenir : la clé du libellé de la commande, null sans proposition demandée
+ * @throws {TypeError} pour une source hors du contrat
+ */
+export function sourceMontree(etat, demandee, retenu) {
+  const revenir = demandee === null ? null : retenu ? 'plan.source.revenirRetenu' : 'plan.source.revenirReservations';
+  const avec = (cle, details = {}) => ({ libelle: { cle, details }, revenir });
+  if (etat.source === 'retenu') return avec('plan.source.retenu');
+  if (etat.source === 'proposition') {
+    const cle = etat.cible === 'reservations' ? 'plan.source.propositionReservations' : 'plan.source.propositionVueSeule';
+    return avec(cle, { proposition: etat.proposition });
+  }
+  if (etat.source === 'reservations') {
+    return avec(etat.refus?.code === 'RETENU_FAUTIF' ? 'plan.source.retenuFautif' : 'plan.source.reservations');
+  }
+  throw new TypeError(`source de l’état des places hors du contrat : ${JSON.stringify(etat.source)}`);
+}

@@ -10,9 +10,14 @@
 //   ← { type: 'avancement', fait, total }           remis aux abonnés
 //   ← { type: 'resultat', propositions }            résout le résultat
 //   ← { type: 'erreur', code, details }             rejette par ErreurGeneration
+//   ← { type: 'faute', message, pile }              rejette par une Error, une faute
+//   ✕ canal d'erreur du travailleur                 rejette par TRAVAILLEUR_EN_ECHEC
+//
+// Le travailleur poste ses fautes de calcul en message : son canal d'erreur
+// ne porte que l'échec de son script, qui ne se charge ou ne se compile pas.
 //
 // Chaque lancer prend un travailleur neuf de la fabrique et le termine à
-// l'issue : résultat, erreur, faute du travailleur ou annulation. Terminé,
+// l'issue : résultat, erreur, faute, échec du script ou annulation. Terminé,
 // le travailleur ne remet plus rien : un message déjà en file à cet instant
 // ne parvient ni aux abonnés ni au résultat. L'annulation est terminate(),
 // dans le même tour : immédiate, sans résultat partiel. La fabrique est un
@@ -32,8 +37,14 @@ import { ErreurAnnulee, ErreurGeneration } from './generation.js';
  *   lancer(configuration, reglages) rend une Execution : avancement →
  *   surAvancement ; resultat → la promesse résolue aux propositions reçues,
  *   puis terminate() ; erreur {code, details} → rejet par
- *   ErreurGeneration(code, details) ; faute du travailleur, son canal
- *   d'erreur, → rejet par une Error sans code, qui remonte comme une faute ;
+ *   ErreurGeneration(code, details) ; faute {message, pile} → rejet par
+ *   une Error sans code, dont le message porte celui du travailleur et la
+ *   pile la sienne : elle remonte comme une faute, comme sous l'exécuteur
+ *   direct ; canal d'erreur du travailleur — son script ne se charge ou ne
+ *   se compile pas —, → rejet par ErreurGeneration('TRAVAILLEUR_EN_ECHEC',
+ *   { remede: null }), l'événement traité : aucun geste de la page ne
+ *   relance un travailleur que le navigateur refuse, et le texte du refus
+ *   nomme sa cause (§ 5.9) ;
  *   annuler() → terminate() aussitôt, rejet par ErreurAnnulee, plus aucun
  *   avancement. Après l'issue, annuler() ne fait rien.
  */
@@ -69,11 +80,22 @@ export function creerExecuteurTravailleur(fabrique) {
         } else if (data.type === 'erreur') {
           rejeter(new ErreurGeneration(data.code, data.details));
           terminer();
+        } else if (data.type === 'faute') {
+          const faute = new Error(`travailleur de génération : ${data.message}`);
+          faute.stack = `${faute.stack}\n${data.pile}`;
+          rejeter(faute);
+          terminer();
         }
       };
+      // Le script du travailleur ne se charge ou ne se compile pas : le refus
+      // TRAVAILLEUR_EN_ECHEC, que la commande « Générer » pose à côté
+      // d'elle, jamais le message du moteur d'exécution. L'événement est
+      // traité : le navigateur ne le signale pas en plus comme une faute de
+      // la page. Une faute du calcul arrive en message, jamais ici.
       travailleur.onerror = (evenement) => {
+        evenement?.preventDefault?.();
         if (termine) return;
-        rejeter(new Error(`travailleur de génération : ${evenement?.message ?? 'faute sans message'}`));
+        rejeter(new ErreurGeneration('TRAVAILLEUR_EN_ECHEC', { remede: null }));
         terminer();
       };
       travailleur.postMessage({ type: 'lancer', configuration, reglages });

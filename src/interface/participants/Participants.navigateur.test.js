@@ -180,6 +180,15 @@ async function majTab() {
   await cdp().send('Input.dispatchKeyEvent', { type: 'keyUp', ...commun });
 }
 
+// Maj+Entrée réel, le saut de ligne d'une zone de texte ; 8 est le masque
+// de Maj.
+async function majEntree() {
+  const commun = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, modifiers: 8 };
+  await cdp().send('Input.dispatchKeyEvent', { type: 'keyDown', ...commun, text: '\r', unmodifiedText: '\r' });
+  await cdp().send('Input.dispatchKeyEvent', { type: 'keyUp', ...commun });
+  await rendu();
+}
+
 // La valeur de la fiche que nomme l'étiquette de clé donnée.
 function valeurDeFiche(m, cle) {
   const etiquette = [...fiche(m).querySelectorAll('dt')].find((dt) => dt.textContent === t(cle));
@@ -197,6 +206,23 @@ function ecart(a, b) {
   const dx = Math.max(0, ba.left - bb.right, bb.left - ba.right);
   const dy = Math.max(0, ba.top - bb.bottom, bb.top - ba.bottom);
   return Math.max(dx, dy);
+}
+
+// Retient les ajouts de ligne au journal du système simulé jusqu'à
+// liberer() : l'écriture d'un geste reste en cours, comme sur un support
+// lent, sans délai ni minuterie. L'application lit la primitive sur fs au
+// moment du geste.
+function retenirJournal(m) {
+  const ajouterLigne = m.fs.ajouterLigne;
+  let liberer;
+  const porte = new Promise((resoudre) => {
+    liberer = resoudre;
+  });
+  m.fs.ajouterLigne = async (...parametres) => {
+    await porte;
+    return ajouterLigne.apply(m.fs, parametres);
+  };
+  return () => liberer();
 }
 
 const aucuneFenetre = () => expect(document.querySelectorAll('dialog[open], [role=dialog], [role=alertdialog]').length).toBe(0);
@@ -225,6 +251,53 @@ describe('la saisie (§ 4, § 10.2)', () => {
     await ajouter(m, { nom: decompose });
     expect(entrees(m)).toHaveLength(avant + 2);
     expect(participants(m).at(-1).nom).toBe('Ombr\u{00E9}lle');
+  });
+
+  test('une seconde Entrée pendant l’écriture n’ajoute rien ; ce qui est tapé pendant l’écriture reste, ce qui a été envoyé se vide (§ 10.2)', async () => {
+    const m = await evenementOuvert();
+    const avant = entrees(m).length;
+    const liberer = retenirJournal(m);
+    const ajout = () => section(m).querySelector('form [data-commande="ajouter"]');
+    expect(ajout()).not.toBeNull();
+    const styleRepos = getComputedStyle(ajout()).borderTopStyle;
+    expect(ajout().getAttribute('aria-busy')).toBeNull();
+    expect(ajout().getAttribute('aria-disabled')).toBeNull();
+    await saisir(champ(m, 'nom'), 'Ombrelle');
+    await saisir(champ(m, 'notes'), 'arrive tard');
+    champ(m, 'nom').focus();
+    await touche('Enter');
+    await rendu();
+    // L'écriture retenue : « Ajouter » se dit occupé, d'un filet tireté.
+    expect(ajout().getAttribute('aria-busy')).toBe('true');
+    expect(ajout().getAttribute('aria-disabled')).toBe('true');
+    expect(getComputedStyle(ajout()).borderTopStyle).toBe('dashed');
+    expect(getComputedStyle(ajout()).borderTopStyle).not.toBe(styleRepos);
+    await touche('Enter');
+    await rendu();
+    // La personne suivante se tape pendant l'écriture de la première.
+    await saisir(champ(m, 'prenom'), 'Théo');
+    await saisir(champ(m, 'nom'), 'Pervenche');
+    liberer();
+    await vi.waitFor(() => expect(participants(m)).toHaveLength(1));
+    await attendreSeance(m);
+    await rendu();
+    expect(ajout().getAttribute('aria-busy')).toBeNull();
+    expect(ajout().getAttribute('aria-disabled')).toBeNull();
+    expect(getComputedStyle(ajout()).borderTopStyle).toBe(styleRepos);
+    expect(participants(m)).toHaveLength(1);
+    expect(participants(m)[0]).toMatchObject({ nom: 'Ombrelle', prenom: null, notes: 'arrive tard' });
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(champ(m, 'nom').value).toBe('Pervenche');
+    expect(champ(m, 'prenom').value).toBe('Théo');
+    expect(champ(m, 'notes').value).toBe('');
+    // La saisie gardée s'envoie à son tour.
+    champ(m, 'nom').focus();
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(participants(m).map((p) => [p.nom, p.prenom])).toEqual([
+      ['Ombrelle', null],
+      ['Pervenche', 'Théo'],
+    ]);
   });
 
   test('nom vide : « ␠␠ » pose sur le champ aria-invalid et un message visible qui le jouxte ; aucune fenêtre, zéro écriture', async () => {
@@ -260,6 +333,28 @@ describe('la saisie (§ 4, § 10.2)', () => {
     await saisir(champ(m, 'appartenance'), '');
     await ajouter(m, { nom: 'Grisaille' });
     expect(participants(m).at(-1).appartenance).toBeNull();
+  });
+
+  test('l’appartenance collante survit à un aller-retour par le plan et par « À propos » ; un autre événement repart d’un champ vide', async () => {
+    const m = await evenementOuvert();
+    await ajouter(m, { nom: 'Ombrelle', appartenance: CLUB });
+    m.ui.allerA('plan');
+    await rendu();
+    m.ui.allerA('participants');
+    await rendu();
+    expect(champ(m, 'appartenance').value).toBe(CLUB);
+    m.ui.ouvrirApropos();
+    await rendu();
+    m.ui.fermerApropos();
+    await rendu();
+    expect(champ(m, 'appartenance').value).toBe(CLUB);
+    await ajouter(m, { nom: 'Pervenche' });
+    expect(participants(m).at(-1).appartenance).toBe(CLUB);
+    await m.seance.fermer();
+    await m.seance.creer({ nom: 'Bal des Grisailles', date: null, siegesParDefaut: 8, tours: 2 });
+    m.ui.allerA('participants');
+    await rendu();
+    expect(champ(m, 'appartenance').value).toBe('');
   });
 
   test('une appartenance qui ne diffère d’une existante que par la casse et les blancs est signalée sur le champ, l’orthographe existante à reprendre ; rien ne fusionne seul', async () => {
@@ -408,6 +503,34 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     await attendreSeance(m);
     expect(entrees(m)).toHaveLength(avant + 1);
     expect(participants(m).find((p) => p.id === id).notes).toBe('arrive tard\nrepart tôt x');
+  });
+
+  test('une note saisie sur deux lignes : Maj+Entrée insère le saut de ligne, dans la grille comme au formulaire ; Entrée valide (§ 10.2, § 10.3)', async () => {
+    const m = await evenementOuvert();
+    // Au formulaire : la note de deux lignes, puis Entrée dans les notes envoie.
+    await saisir(champ(m, 'nom'), 'Lacasse');
+    champ(m, 'notes').focus();
+    for (const caractere of 'a') await touche(caractere);
+    await majEntree();
+    for (const caractere of 'b') await touche(caractere);
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(participants(m)).toHaveLength(1);
+    expect(participants(m)[0].notes).toBe('a\nb');
+    // Dans la grille : la cellule des notes, éditée, reçoit une troisième ligne.
+    const id = idDe(m, 'Lacasse');
+    const avant = entrees(m).length;
+    cellule(m, id, 'notes').focus();
+    await touche('Enter');
+    await rendu();
+    await majEntree();
+    for (const caractere of 'c') await touche(caractere);
+    await rendu();
+    expect(entrees(m)).toHaveLength(avant);
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(participants(m)[0].notes).toBe('a\nb\nc');
   });
 
   test('trier par nom, croissant puis décroissant, filtrer « merles » : l’ordre et les lignes suivent ; rien ne s’écrit, en écriture comme en lecture', async () => {
@@ -665,6 +788,34 @@ describe('la fiche (§ 4.2, § 7.4)', () => {
         .map((l) => (l.reserve ? [String(l.tour), t('participants.fiche.enReserve')] : [String(l.tour), String(l.numero), String(l.siege)]));
       expect(attendus).toHaveLength(3);
       expect(lus).toEqual(attendus);
+    }
+  });
+
+  test('retenu à 3 tours, l’événement passé à 4 : la fiche garde les tours du retenu, et dit le quatrième hors du retenu (§ 9)', async () => {
+    const m = await evenementOuvert({ sieges: 3, tours: 3, tables: 2, personnes: NOMS.slice(0, 6).map((nom) => ({ nom })) });
+    await m.seance.executer('modifierReglage', { cle: 'attribuerSieges', valeur: true });
+    await m.app.generation().generer({ graine: 1, nombre: 1, arret: 50, historique: 1000 });
+    const [proposition] = m.seance.etat().charge.propositions;
+    await m.seance.executer('retenirProposition', { id: proposition.id });
+    await m.seance.executer('changerTours', { tours: 4 });
+    await rendu();
+    const charge = m.seance.etat().charge;
+    expect(charge.evenement.tours).toBe(4);
+    expect(charge.retenu.placement).toHaveLength(3);
+    const forme = formeNommee(charge.retenu, charge);
+    expect(charge.participants).toHaveLength(6);
+    for (const { id: personne } of charge.participants) {
+      m.ui.ouvrirFiche(personne);
+      await rendu();
+      expect(fiche(m).textContent).not.toContain(t('participants.fiche.aucunRetenu'));
+      const tableau = tableauDeFiche(m, 'participants.fiche.itineraire');
+      expect(tableau).toBeDefined();
+      const lus = [...tableau.tBodies[0].rows].map((rangee) => [...rangee.cells].map((c) => c.textContent.trim()));
+      const attendus = forme
+        .filter((l) => l.participant === personne)
+        .map((l) => (l.reserve ? [String(l.tour), t('participants.fiche.enReserve')] : [String(l.tour), String(l.numero), String(l.siege)]));
+      expect(attendus).toHaveLength(3);
+      expect(lus).toEqual([...attendus, ['4', t('participants.fiche.horsRetenu')]]);
     }
   });
 

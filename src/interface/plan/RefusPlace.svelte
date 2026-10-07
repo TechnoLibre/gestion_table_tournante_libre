@@ -11,6 +11,11 @@
   // chacun avec la commande de son remède, puis chaque avertissement. La
   // place le désigne par aria-describedby, vers id.
   //
+  // Posé sur le plan, le message couvre d'autres places : seuls ses
+  // contrôles reçoivent le pointeur. Un appui sur le texte va au plan
+  // dessous, dont l'appui retire la pose et saisit ce qui est visé — le
+  // refus se ferme au geste suivant sans lui prendre sa cible.
+  //
   // pose : {id, numero, siege|null, refus|null, avertissements, x, y} — x et y
   // en px de la surface ; fermer : retire la pose ; gestes : ceux qu'un
   // remède emprunte à l'écran — le choix d'une place sur le plan —, que Refus
@@ -42,6 +47,7 @@
   .refus-place {
     position: absolute;
     z-index: 1;
+    pointer-events: none;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -55,6 +61,10 @@
     color: var(--couleur-page-texte);
     box-shadow: var(--ombre-1);
     font-size: var(--taille-texte);
+  }
+
+  .refus-place :global(button) {
+    pointer-events: auto;
   }
 
   p {

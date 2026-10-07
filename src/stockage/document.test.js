@@ -21,6 +21,8 @@ import {
   FORMAT,
   GENERATION_PAR_DEFAUT,
   SCHEMA,
+  SIEGES_MAX,
+  TOURS_MAX,
   analyser,
   capacite,
   configurationDepuisCharge,
@@ -401,6 +403,43 @@ describe('analyser : les refus que le plan nomme (§ 8.8)', () => {
         abime((d) => { d.charge.reservations[0].participant = 9; }), 'REFERENCE', 'charge.reservations[0].participant'],
       ['format 0', abime((d) => { d.entete.format = 0; }), 'FORMAT_INCONNU', 'entete.format'],
     ]), []);
+  });
+});
+
+describe('analyser : les bornes des places et des tours, et un titre par place et par libellé (§ 6.2, § 4.1)', () => {
+  test('SIEGES_MAX places et TOURS_MAX tours se lisent ; un de plus, au défaut, à une table ou aux tours, est FORME à son chemin', () => {
+    assert.equal(SIEGES_MAX, 1000);
+    assert.equal(TOURS_MAX, 100);
+    const admis = [
+      abime((d) => { d.charge.evenement.siegesParDefaut = SIEGES_MAX; }),
+      abime((d) => { d.charge.tables[1].sieges = SIEGES_MAX; }),
+      abime((d) => { d.charge.evenement.tours = TOURS_MAX; }),
+    ];
+    for (const texte of admis) assert.doesNotThrow(() => analyser(texte));
+    assert.deepEqual(ecartsDeRefus([
+      ['défaut au-delà', abime((d) => { d.charge.evenement.siegesParDefaut = SIEGES_MAX + 1; }), 'FORME', 'charge.evenement.siegesParDefaut'],
+      ['table au-delà', abime((d) => { d.charge.tables[1].sieges = SIEGES_MAX + 1; }), 'FORME', 'charge.tables[1].sieges'],
+      ['tours au-delà', abime((d) => { d.charge.evenement.tours = TOURS_MAX + 1; }), 'FORME', 'charge.evenement.tours'],
+      ['défaut à 2^32', abime((d) => { d.charge.evenement.siegesParDefaut = 2 ** 32; }), 'FORME', 'charge.evenement.siegesParDefaut'],
+    ]), []);
+  });
+
+  test('deux titres identiques à une même place sont FORME au second ; deux libellés distincts à la même place se lisent', () => {
+    const doublon = { table: 3, siege: 4, libelle: 'animation' };
+    assert.deepEqual(ecartsDeRefus([
+      ['titre répété', abime((d) => {
+        d.charge.titres.push({ ...doublon });
+        d.entete.comptes.titres = 2;
+      }), 'FORME', 'charge.titres[1]'],
+      ['titre répété, rangé avant un autre', abime((d) => {
+        d.charge.titres = [{ ...doublon }, { table: 1, siege: 1, libelle: 'accueil' }, { ...doublon }];
+        d.entete.comptes.titres = 3;
+      }), 'FORME', 'charge.titres[2]'],
+    ]), []);
+    assert.doesNotThrow(() => analyser(abime((d) => {
+      d.charge.titres.push({ ...doublon, libelle: 'accueil' });
+      d.entete.comptes.titres = 2;
+    })));
   });
 });
 

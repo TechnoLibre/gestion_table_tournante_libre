@@ -12,6 +12,7 @@
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { cdp } from 'vitest/browser';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import '../jetons.css';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
@@ -129,6 +130,41 @@ async function cliquer(element) {
 async function cliquerAilleurs() {
   await pointer('presser', 4, innerHeight - 4);
   await pointer('relacher', 4, innerHeight - 4);
+  await tick();
+}
+
+// Un double-clic réel au centre de l'élément : deux appuis, le second
+// annoncé par Chromium comme le deuxième clic d'une série (clickCount 2),
+// si bien que son événement click porte detail 2. Les coordonnées du cadre
+// de l'épreuve passent dans la fenêtre de la page qui le porte, d'un cadre
+// à son parent, comme dans test/navigateur/entrees.js.
+async function doubleCliquer(element) {
+  let { x, y } = centre(element);
+  for (let fenetre = window; fenetre !== fenetre.top; fenetre = fenetre.parent) {
+    const cadre = fenetre.frameElement;
+    const boite = cadre.getBoundingClientRect();
+    const style = fenetre.parent.getComputedStyle(cadre);
+    const echelle = cadre.offsetWidth > 0 ? boite.width / cadre.offsetWidth : 1;
+    x = boite.left + (cadre.clientLeft + parseFloat(style.paddingLeft) + x) * echelle;
+    y = boite.top + (cadre.clientTop + parseFloat(style.paddingTop) + y) * echelle;
+  }
+  for (const clickCount of [1, 2]) {
+    await cdp().send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount });
+    await cdp().send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount });
+  }
+  await tick();
+}
+
+// Une touche Entrée tenue : un premier appui, puis repetitions appuis que
+// Chromium marque répétés (autoRepeat, d'où repeat vrai sur keydown), comme
+// la répétition automatique du clavier, et un seul relâcher. Les événements
+// vont à l'élément qui a le focus.
+async function tenirEntree(repetitions) {
+  const entree = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 };
+  const appui = { type: 'keyDown', ...entree, text: '\r', unmodifiedText: '\r' };
+  await cdp().send('Input.dispatchKeyEvent', appui);
+  for (let n = 0; n < repetitions; n += 1) await cdp().send('Input.dispatchKeyEvent', { ...appui, autoRepeat: true });
+  await cdp().send('Input.dispatchKeyEvent', { type: 'keyUp', ...entree });
   await tick();
 }
 
@@ -539,6 +575,39 @@ describe('le remède « Débloquer » (§ 8.5)', () => {
     expect(montage.seance.etat().evenement.etat).toBe('bloque');
   });
 
+  test('un double-clic arme la commande sans débloquer : elle reste armée, rien d’écrit ; un clic simple ensuite débloque', async () => {
+    const montage = await preparer({ bloque: true });
+    const { message } = await refusAuPremierCaractere2(montage);
+    const bouton = message.querySelector('button');
+    const ecritures = montage.fs.compteurs.ecritures;
+    const clics = [];
+    bouton.addEventListener('click', (evenement) => clics.push(evenement.detail));
+    await doubleCliquer(bouton);
+    expect(clics).toEqual([1, 2]);
+    expect(bouton.textContent.trim()).toBe('Confirmer le déblocage');
+    expect(montage.fs.compteurs.ecritures).toBe(ecritures);
+    expect(montage.seance.etat().evenement.etat).toBe('bloque');
+    await cliquer(bouton);
+    await vi.waitFor(() => expect(montage.seance.etat().evenement.etat).not.toBe('bloque'));
+  });
+
+  test('Entrée tenue arme la commande sans débloquer : les appuis répétés du clavier ne confirment pas, rien d’écrit ; un appui simple ensuite débloque', async () => {
+    const montage = await preparer({ bloque: true });
+    const { message } = await refusAuPremierCaractere2(montage);
+    const bouton = message.querySelector('button');
+    const ecritures = montage.fs.compteurs.ecritures;
+    const appuis = [];
+    bouton.addEventListener('keydown', (evenement) => appuis.push(evenement.repeat));
+    bouton.focus();
+    await tenirEntree(3);
+    expect(montage.seance.etat().evenement.etat).toBe('bloque');
+    expect(montage.fs.compteurs.ecritures).toBe(ecritures);
+    expect(bouton.textContent.trim()).toBe('Confirmer le déblocage');
+    expect(appuis).toEqual([false, true, true, true]);
+    await tenirEntree(0);
+    await vi.waitFor(() => expect(montage.seance.etat().evenement.etat).not.toBe('bloque'));
+  });
+
   // Le refus d'un plan bloqué posé contre le champ par une frappe.
   async function refusAuPremierCaractere2(montage) {
     const { cible, entree } = monterChamp(montage);
@@ -824,6 +893,7 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
     const message = fenetre.querySelector('[data-refus]');
     expect(message.getAttribute('data-refus')).toBe('MODE_LECTURE');
     expect(visible(message)).toBe(true);
+    expect(fenetre.querySelectorAll('.issues button')).toHaveLength(2);
     for (const bouton of fenetre.querySelectorAll('.issues button')) expect(bouton.getAttribute('aria-disabled')).toBeNull();
     expect(montage.seance.etat().charge.participants).toHaveLength(1);
     await cliquer(fenetre.querySelector('[data-commande="renoncer"]'));
@@ -870,6 +940,7 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
     expect(fenetre.open).toBe(true);
     expect(fenetre.matches(':modal')).toBe(true);
     expect(fenetre.getAttribute('aria-busy')).toBe('true');
+    expect(fenetre.querySelectorAll('.issues button')).toHaveLength(2);
     for (const bouton of fenetre.querySelectorAll('.issues button')) expect(bouton.getAttribute('aria-disabled')).toBe('true');
     expect(montage.seance.etat().charge.participants).toHaveLength(1);
   }
@@ -905,6 +976,7 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
       expect(fenetre.matches(':modal')).toBe(true);
       expect(fenetre.querySelector('[data-refus]').getAttribute('data-refus')).toBe('MODE_LECTURE');
       expect(fenetre.getAttribute('aria-busy')).toBeNull();
+      expect(fenetre.querySelectorAll('.issues button')).toHaveLength(2);
       for (const bouton of fenetre.querySelectorAll('.issues button')) expect(bouton.getAttribute('aria-disabled')).toBeNull();
       expect(appels).toEqual(['confirmer']);
       await cliquer(fenetre.querySelector('[data-commande="renoncer"]'));
@@ -977,6 +1049,52 @@ describe('commande (§ 2.1)', () => {
     await vi.waitFor(() => expect(cible.querySelector('[data-refus]')).toBeNull());
     await cliquer(bouton);
     await vi.waitFor(() => expect(montage.seance.etat().charge.participants).toHaveLength(2));
+  });
+
+  test('pendant son exécution, un second clic réel ne relance rien : le bouton se dit occupé ; finie, un clic l’exécute de nouveau', async () => {
+    const montage = await preparer();
+    let appels = 0;
+    let liberer;
+    const cible = monter(
+      Commande,
+      {
+        cle: 'communs.remede.ajouterParticipant',
+        executer: () => {
+          appels += 1;
+          return new Promise((resoudre) => {
+            liberer = resoudre;
+          });
+        },
+      },
+      montage.contexte,
+    );
+    const bouton = cible.querySelector('button[data-commande="ajouterParticipant"]');
+    const styleRepos = getComputedStyle(bouton).borderTopStyle;
+    await cliquer(bouton);
+    expect(appels).toBe(1);
+    expect(bouton.getAttribute('aria-busy')).toBe('true');
+    expect(bouton.getAttribute('aria-disabled')).toBe('true');
+    expect(getComputedStyle(bouton).borderTopStyle).not.toBe(styleRepos);
+    await cliquer(bouton);
+    await doubleCliquer(bouton);
+    expect(appels).toBe(1);
+    liberer();
+    await vi.waitFor(() => expect(bouton.getAttribute('aria-busy')).toBeNull());
+    expect(bouton.getAttribute('aria-disabled')).toBeNull();
+    await cliquer(bouton);
+    expect(appels).toBe(2);
+    liberer();
+  });
+
+  test('une exécution sans promesse rend aussitôt la commande : deux clics de suite, deux exécutions', async () => {
+    const montage = await preparer();
+    let appels = 0;
+    const cible = monter(Commande, { cle: 'communs.commande.lecture', executer: () => void (appels += 1) }, montage.contexte);
+    const bouton = cible.querySelector('button');
+    bouton.click();
+    bouton.click();
+    expect(appels).toBe(2);
+    expect(bouton.getAttribute('aria-busy')).toBeNull();
   });
 
   test('sans refus, son libellé est celui de sa clé, et data-commande le dernier segment de la clé', async () => {

@@ -18,7 +18,8 @@
 // tout le reste parce qu'il dit comment lire le reste (FORME s'il manque,
 // FORMAT_INCONNU s'il n'est pas un entier ≥ 1) ; la forme de chaque champ,
 // dans l'ordre du schéma puis des rangs (FORME) ; les identifiants des
-// participants et des tables, et le tour des réservations (FORME) ; les
+// participants et des tables, le tour des réservations, et les titres
+// répétés à l'identique (FORME) ; les
 // comptes de la saisie dans l'en-tête — participants, tables, réservations,
 // titres — (COMPTES) ; les références (REFERENCE). Les comptes des
 // propositions et du retenu ne refusent jamais le fichier (§ 8.9, point 3) :
@@ -45,6 +46,25 @@ import { ErreurStockage } from './erreurs.js';
 
 /** Version de format que ce code écrit (§ 8.8). */
 export const FORMAT = 1;
+
+/**
+ * Le plus grand nombre de places d'une table, au défaut comme en surcharge
+ * (§ 6.2). Le plan dessine une chaise par place, et l'état des places en
+ * construit une par place et par table à chaque rendu : une capacité saisie
+ * au-delà rendrait l'événement inaffichable sans rien apporter — à 60 cm par
+ * place (§ 7.7), 1 000 places font une table ronde de 191 m de diamètre.
+ * L'analyse refuse au-delà, et les commandes refusent la saisie.
+ */
+export const SIEGES_MAX = 1000;
+
+/**
+ * Le plus grand nombre de tours d'une soirée (§ 2.1, étape 5). Le moteur
+ * réserve une case par participant et par tour dans ses tableaux, et le
+ * placement écrit une liste par table et par tour : cent tours de vingt
+ * minutes durent plus d'un jour. L'analyse refuse au-delà, et la commande
+ * refuse la saisie.
+ */
+export const TOURS_MAX = 100;
 
 /**
  * Réglages de génération d'une charge neuve : cinq propositions de 200 000
@@ -152,8 +172,8 @@ const EVENEMENT = objet([
   ['id', CHAINE],
   ['nom', CHAINE],
   ['date', DATE_OU_NUL],
-  ['siegesParDefaut', entier(2)],
-  ['tours', entier(1)],
+  ['siegesParDefaut', entier(2, SIEGES_MAX)],
+  ['tours', entier(1, TOURS_MAX)],
   ['unite', parmi('cm')],
   ['etat', parmi('brouillon', 'propose', 'retenu', 'bloque')],
   ['filiation', FILIATION],
@@ -182,7 +202,7 @@ const PARTICIPANT = objet([
 const TABLE = objet([
   ['id', IDENTIFIANT],
   ['numero', entier(1)],
-  ['sieges', entier(2, undefined, { nul: true })],
+  ['sieges', entier(2, SIEGES_MAX, { nul: true })],
   ['forme', parmi('ronde', 'carree')],
   ['position', objet([['x', NOMBRE], ['y', NOMBRE]])],
 ]);
@@ -511,6 +531,19 @@ function examinerIdentifiants({ prochainsIds, participants, tables }, faute) {
   }
 }
 
+// Titres : deux titres de même table, même siège et même libellé
+// s'écriraient pareil et ne se distingueraient sur aucun écran ; le second
+// est fautif. Deux libellés à une même place restent admis (§ 4.1).
+// faute(chemin) lève l'écart.
+function examinerTitres({ titres }, faute) {
+  const vus = new Set();
+  titres.forEach(({ table, siege, libelle }, rang) => {
+    const cle = JSON.stringify([table, siege, libelle]);
+    if (vus.has(cle)) faute(`charge.titres[${rang}]`);
+    vus.add(cle);
+  });
+}
+
 // Tour de chaque réservation : null pour la portée « tous », de 1 à R pour
 // la portée « tour » ; faute(chemin) lève l'écart.
 function examinerTours({ evenement, reservations }, faute) {
@@ -611,6 +644,7 @@ export function analyser(texte) {
   const { entete, charge } = fichier;
   examinerIdentifiants(charge, faute);
   examinerTours(charge, faute);
+  examinerTitres(charge, faute);
   const manquants = examinerComptes(entete.comptes, charge, plus);
   examinerReferences(charge, plus);
   return { entete, charge, formatPlusRecent, manquants };

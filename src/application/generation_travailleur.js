@@ -16,12 +16,17 @@
 //                                           versErreurGeneration, le code et
 //                                           les détails d'une
 //                                           ErreurConfiguration
+//   ← { type: 'faute', message, pile }     une erreur que versErreurGeneration
+//                                           ne convertit pas : une faute de
+//                                           programmation, son texte et sa
+//                                           pile, que l'exécuteur relève
+//                                           comme une faute
 //
 // L'annulation est terminate() du côté de l'interface : immédiate, sans
 // résultat partiel ; le travailleur ne lit aucun signal. Un message d'un
-// autre type ne lance rien. Une erreur que versErreurGeneration ne convertit
-// pas est relevée, et le travailleur la signale par son propre canal
-// d'erreur.
+// autre type ne lance rien. Le gestionnaire ne lève jamais : le canal
+// d'erreur du travailleur ne porte ainsi que l'échec de son script — qui ne
+// se charge ou ne se compile pas —, et l'exécuteur ne confond pas les deux.
 import { rechercher } from '../moteur/recherche.js';
 import { ErreurGeneration, exigerReglages, versErreurGeneration } from './generation.js';
 
@@ -42,16 +47,19 @@ export function brancherTravailleur(portee) {
       progressions += 1;
       if (progressions % CADENCE_AVANCEMENT === 0) portee.postMessage({ type: 'avancement', fait, total });
     };
-    let propositions;
     try {
       exigerReglages(data.reglages);
-      propositions = rechercher(data.configuration, data.reglages, { progression });
+      const propositions = rechercher(data.configuration, data.reglages, { progression });
+      portee.postMessage({ type: 'resultat', propositions });
     } catch (erreur) {
       const convertie = versErreurGeneration(erreur);
-      if (!(convertie instanceof ErreurGeneration)) throw convertie;
-      portee.postMessage({ type: 'erreur', code: convertie.code, details: convertie.details });
-      return;
+      if (convertie instanceof ErreurGeneration) {
+        portee.postMessage({ type: 'erreur', code: convertie.code, details: convertie.details });
+      } else {
+        const message = String(convertie);
+        const pile = typeof convertie?.stack === 'string' ? convertie.stack : message;
+        portee.postMessage({ type: 'faute', message, pile });
+      }
     }
-    portee.postMessage({ type: 'resultat', propositions });
   };
 }

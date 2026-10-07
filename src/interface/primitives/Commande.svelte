@@ -7,7 +7,17 @@
   // libellé de confirmation, un premier clic arme la commande — son libellé
   // devient celui de confirmer — et seul un second exécute ; armée, elle se
   // désarme au terme de DELAI_CONFIRMATION_MS, par l'horloge du contexte.
-  // La machine est celle de commande.js.
+  // La machine est celle de commande.js : le clic répété d'une série
+  // — detail supérieur à 1 — est sans effet (§ 8.5). Le clavier n'en porte
+  // pas : un appui d'Entrée ou d'Espace que la répétition automatique émet
+  // — keydown dont repeat est vrai — voit son action par défaut empêchée, et
+  // n'active pas le bouton. Une touche tenue n'active la commande qu'une
+  // fois, et ne confirme jamais celle qu'elle vient d'armer.
+  //
+  // Pendant qu'une exécution qui rend une promesse s'achève, la commande est
+  // occupée : un clic ne fait rien, et le bouton porte aria-busy et
+  // aria-disabled, dessiné d'un filet tireté. Une exécution sans promesse
+  // rend la commande aussitôt.
   //
   // Un refus — une erreur qui porte un code — s'affiche à côté du bouton,
   // avec son remède, et le bouton reste actif : jamais un bouton grisé muet.
@@ -27,6 +37,7 @@
   const machine = creerMachineCommande({ confirmer: untrack(() => confirmer) });
 
   let armee = $state(false);
+  let enCours = $state(false);
   let refus = $state(null);
   let minuterie = null;
 
@@ -45,9 +56,10 @@
     armee = machine.armee;
   }
 
-  async function cliquer() {
-    const { action } = machine.cliquer();
+  async function cliquer(evenement) {
+    const { action } = machine.cliquer({ repete: evenement.detail > 1 });
     armee = machine.armee;
+    if (action === 'aucune') return;
     if (action === 'armer') {
       minuterie = horloge.planifier(expirer, DELAI_CONFIRMATION_MS);
       return;
@@ -55,18 +67,36 @@
     desarmer();
     refus = null;
     try {
-      await executer();
+      const rendu = executer();
+      if (typeof rendu?.then === 'function') {
+        enCours = true;
+        await rendu;
+      }
     } catch (erreur) {
       if (typeof erreur?.code !== 'string') throw erreur;
       refus = { code: erreur.code, details: erreur.details ?? {} };
+    } finally {
+      machine.terminer();
+      enCours = false;
     }
+  }
+
+  function surTouche(evenement) {
+    if (evenement.repeat && (evenement.key === 'Enter' || evenement.key === ' ')) evenement.preventDefault();
   }
 
   onDestroy(desarmer);
 </script>
 
 <div class="commande">
-  <button type="button" data-commande={designation} onclick={cliquer}>{libelle}</button>
+  <button
+    type="button"
+    data-commande={designation}
+    aria-busy={enCours ? 'true' : undefined}
+    aria-disabled={enCours ? 'true' : undefined}
+    onkeydown={surTouche}
+    onclick={cliquer}>{libelle}</button
+  >
   {#if refus !== null}
     <Refus {refus} lever={() => (refus = null)} {gestes} />
   {/if}
@@ -89,6 +119,12 @@
     font: inherit;
     font-size: var(--taille-texte);
     cursor: pointer;
+  }
+
+  button[aria-disabled='true'] {
+    border-style: dashed;
+    color: var(--couleur-page-texte-secondaire);
+    cursor: progress;
   }
 
   button:focus-visible {

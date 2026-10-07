@@ -433,7 +433,8 @@ const porteUnRetenuAbime = (charge) =>
 // enregistrement, 1 et 2 en prennent la variante ; un booléen garde un
 // candidat. Les réservations et les titres qui ne tiennent plus dans la
 // charge s'écartent, comme la commande qui retire leur personne ou leur
-// table : la charge reste un fichier que l'analyse admet. Une à trois
+// table, et un titre répété à l'identique aussi : la charge reste un
+// fichier que l'analyse admet. Une à trois
 // propositions ; le retenu, null ou le plan d'une proposition, abîmé d'une
 // des façons d'ABIMER_LE_RETENU quand abime en désigne une. Renversées, les
 // collections arrivent hors de l'ordre canonique.
@@ -455,7 +456,15 @@ function construire(vivier, choisir) {
         (r.tour === null || r.tour <= evenement.tours),
     )
     .map(copie);
-  const titres = vivier.titres.filter((t, rang) => choisir('titres', rang) && tient(t.table, t.siege)).map(copie);
+  // Un titre répété à l'identique, que l'analyse refuse, ne se garde qu'une fois.
+  const vus = new Set();
+  const nouveau = ({ table, siege, libelle }) => {
+    const cle = JSON.stringify([table, siege, libelle]);
+    if (vus.has(cle)) return false;
+    vus.add(cle);
+    return true;
+  };
+  const titres = vivier.titres.filter((t, rang) => choisir('titres', rang) && tient(t.table, t.siege) && nouveau(t)).map(copie);
   const propositions = variantes('propositions');
   if (propositions.length === 0) propositions.push(copie(vivier.propositions[0][0]));
   const retenu = choisir('retenu') < 3 ? null : retenuDe(vivier.propositions[choisir('retenu') - 3][0]);

@@ -57,6 +57,18 @@ describe('travailleur de génération (§ 5.10)', () => {
     assert.deepEqual(postes, [{ type: 'erreur', code: 'REGLAGE_HORS_DOMAINE', details: { reglage: 'graine', remede: null } }]);
   });
 
+  test('une faute que versErreurGeneration ne convertit pas poste { type: faute, message, pile }, sans lever : le canal d’erreur du travailleur reste au script qui ne se charge pas', () => {
+    const { postes, envoyer } = porteeFactice();
+    assert.doesNotThrow(() => envoyer({ type: 'lancer', configuration: null, reglages: { graine: 1, nombre: 1, arret: 10 } }));
+    assert.equal(postes.length, 1);
+    const [faute] = postes;
+    assert.deepEqual(Object.keys(faute).sort(), ['message', 'pile', 'type']);
+    assert.equal(faute.type, 'faute');
+    assert.match(faute.message, /^TypeError: /);
+    assert.equal(typeof faute.pile, 'string');
+    assert.match(faute.pile, /TypeError/);
+  });
+
   test("un message d'un autre type ne lance rien", () => {
     const { postes, envoyer } = porteeFactice();
     envoyer({ type: 'inconnu' });

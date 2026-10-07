@@ -85,8 +85,10 @@ const PARFAIT = [
   [[4, 7, 12], [2, 8, 10], [3, 5, 11], [1, 6, 9]],
 ];
 const DOUZE = Array.from({ length: 12 }, (_, rang) => rang + 1);
+// Chaque appel rend des listes neuves : une épreuve qui modifie son plan ne
+// touche pas PARFAIT.
 const planParfait = (siegesAttribues = false) =>
-  planFichier({ tables: [1, 2, 3, 4], capacites: [3, 3, 3, 3], participants: DOUZE, tours: PARFAIT, siegesAttribues });
+  planFichier({ tables: [1, 2, 3, 4], capacites: [3, 3, 3, 3], participants: DOUZE, tours: structuredClone(PARFAIT), siegesAttribues });
 
 // La petite démonstration, son plan parfait proposé sous l'identifiant 1, et
 // retenu quand retenu est vrai.
@@ -457,6 +459,58 @@ describe('etatPlaces : titres, réservations et marques (§ 4.1, § 4.4, § 7.6)
     });
     charge.retenu = retenuDe(1, plan);
     assert.deepEqual(occupants(etatPlaces(charge, { tour: 1 }), 0), [12, null, 7, null]);
+  });
+});
+
+describe('etatPlaces : la réservation au siège que le placement ne tient pas (§ 5.8, § 7.6, § 14.12)', () => {
+  // La petite démonstration, son plan parfait retenu sous des sièges
+  // attribués : au tour 1, la table 1 assied 1, 2, 3 aux sièges 1 à 3.
+  function auxSieges() {
+    const charge = petite();
+    charge.reglages.attribuerSieges = true;
+    charge.propositions = [propositionDe(1, planParfait(true))];
+    charge.prochainsIds.proposition = 2;
+    charge.retenu = retenuDe(1, planParfait(true));
+    charge.evenement.etat = 'retenu';
+    return charge;
+  }
+
+  test("la chaise réservée à 2, qu'occupe 3 : la réservation se lit, mais ne la tient pas — hachure et cadenas fermé, l'anneau de sa portée ; la chaise de 2 reste sans marque", () => {
+    const charge = auxSieges();
+    charge.reservations.push(resa(2, 1, 3));
+    charge.titres.push({ table: 1, siege: 3, libelle: 'Animation' });
+    const [, deux, trois] = etatPlaces(charge, { tour: 1 }).tables[0].chaises;
+    assert.equal(trois.occupant, 3);
+    assert.deepEqual(trois.reservation, { participant: 2, portee: 'tous', tour: null });
+    assert.deepEqual([trois.remplissage, trois.marques], ['hachure', ['cadenasFerme', 'anneau']]);
+    assert.deepEqual([deux.occupant, deux.reservation, deux.remplissage, deux.marques], [2, null, 'normal', []]);
+  });
+
+  test('vide, la chaise réservée ne se tient pas non plus ; tenue par sa personne, elle est pleine', () => {
+    const vide = auxSieges();
+    vide.retenu.placement[0].sieges[0] = [1, 2];
+    vide.retenu.placement[0].reserve = [3];
+    vide.reservations.push(resa(2, 1, 3, 1));
+    const chaise = etatPlaces(vide, { tour: 1 }).tables[0].chaises[2];
+    assert.deepEqual([chaise.occupant, chaise.reservation?.participant, chaise.remplissage, chaise.marques], [null, 2, 'hachure', ['cadenasFerme']]);
+
+    const tenue = auxSieges();
+    tenue.reservations.push(resa(3, 1, 3));
+    const pleine = etatPlaces(tenue, { tour: 1 }).tables[0].chaises[2];
+    assert.deepEqual([pleine.occupant, pleine.remplissage, pleine.marques], [3, 'plein', ['cadenasFerme', 'anneau']]);
+  });
+
+  test("une réservation d'un tour que la chaise vide ne tient pas, et un titre que rien ne pourvoit : deux formes, cadenas fermé d'un côté, ouvert de l'autre (§ 7.6)", () => {
+    const charge = auxSieges();
+    charge.retenu.placement[0].sieges[0] = [1, 2];
+    charge.retenu.placement[0].reserve = [3];
+    charge.reservations.push(resa(2, 1, 3, 1));
+    charge.titres.push({ table: 2, siege: 1, libelle: 'Accueil' });
+    const etat = etatPlaces(charge, { tour: 1 });
+    const reservee = etat.tables[0].chaises[2];
+    const titree = etat.tables[1].chaises[0];
+    assert.deepEqual([reservee.reservation?.participant, reservee.titre, reservee.remplissage, reservee.marques], [2, null, 'hachure', ['cadenasFerme']]);
+    assert.deepEqual([titree.reservation, titree.titre, titree.remplissage, titree.marques], [null, { libelle: 'Accueil', pourvu: false }, 'hachure', ['cadenasOuvert']]);
   });
 });
 

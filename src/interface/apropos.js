@@ -16,14 +16,24 @@ import { aUnLibelle } from './libelles.js';
  * quand le mode n'en a pas ; la plateforme sous sa nature.
  *
  * @param {Object} champs
- * @param {{affichee: string, windows: string}} champs.version   VERSION
+ * @param {{affichee: string, windows: string}} champs.version   les deux formes
+ *        de la version, celles que reçoit App (produitVersion, versionWindows)
  * @param {string} champs.plateforme   la nature du système de fichiers
  * @param {string} champs.provenance   le mode de construction de Vite
  * @param {number} champs.format       la version de format des fichiers
  * @param {(cle: string, details?: Object) => string} t
  * @returns {string} sans saut de ligne
+ * @throws {RangeError} une forme de la version absente, vide ou qui n'est
+ *         pas une chaîne, en la nommant : une dépendance d'App oubliée
+ *         échoue au montage, plutôt que de donner un bloc copiable faux
  */
 export function blocAPropos({ version, plateforme, provenance, format }, t) {
+  for (const forme of ['affichee', 'windows']) {
+    const valeur = version[forme];
+    if (typeof valeur !== 'string' || valeur === '') {
+      throw new RangeError(`À propos : la version ${forme} manque (${JSON.stringify(valeur) ?? 'undefined'})`);
+    }
+  }
   return t('coquille.apropos.bloc', {
     affichee: version.affichee,
     windows: version.windows,

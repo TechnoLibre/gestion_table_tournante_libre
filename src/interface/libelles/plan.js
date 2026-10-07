@@ -84,12 +84,24 @@ export const TABLE = new Map([
   ['plan.vue.listes', 'Listes de noms'],
   ['plan.vue.pleinEcran', 'Plein écran'],
   ['plan.vue.dessin', 'Plan de salle'],
+  // Le placement que le plan montre, et la commande qui quitte une
+  // proposition montrée.
+  ['plan.source.retenu', 'Placement retenu'],
+  ['plan.source.reservations', 'Réservations'],
+  ['plan.source.retenuFautif', 'Réservations : le placement retenu ne se lit pas'],
+  ['plan.source.propositionReservations', ({ proposition }) => `Proposition n° ${proposition} : un geste y pose une réservation`],
+  ['plan.source.propositionVueSeule', ({ proposition }) => `Proposition n° ${proposition}, vue seule`],
+  ['plan.source.revenirRetenu', 'Revenir au placement retenu'],
+  ['plan.source.revenirReservations', 'Revenir aux réservations'],
 
   // --- Les gestes du pointeur (§ 5.8, § 7.1, § 7.3) -------------------------
   // Le fantôme d'une personne glissée dit ce que le geste modifie : l'état
-  // des données, non le geste (§ 5.8). Le nom de la personne est une donnée,
-  // dans son propre nœud.
+  // des données, non le geste (§ 5.8) ; une personne réservée déplace sa
+  // réservation, dont il dit la portée. Le nom de la personne est une
+  // donnée, dans son propre nœud.
   ['plan.fantome.reservations', 'pose une réservation'],
+  ['plan.fantome.reservationTour', 'déplace sa réservation de ce tour'],
+  ['plan.fantome.reservationTous', 'déplace sa réservation, à tous les tours'],
   ['plan.fantome.retenu', 'déplace dans le placement retenu'],
   ['plan.fantome.vueSeule', 'proposition en vue seule : rien ne change'],
   // La place où un refus ou un avertissement du plan se pose.
@@ -163,6 +175,7 @@ export const TABLE = new Map([
   // --- La mise en évidence d'une personne (§ 7.1, § 8.4) ----------------------
   // Le nom de la personne mise en évidence est une donnée dans son nœud.
   ['plan.evidence.personne', 'Mise en évidence : '],
+  ['plan.evidence.absente', 'une personne qui n\u{2019}est plus dans la liste'],
   ['plan.evidence.oter', 'Ôter la mise en évidence'],
   ['plan.evidence.voir', 'Voir sur le plan'],
 

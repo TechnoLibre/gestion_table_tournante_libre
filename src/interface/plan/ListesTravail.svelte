@@ -17,6 +17,8 @@
   //    réservations « tour » à une table qu'une seule « tous les tours »
   //    remplacerait. « Convertir » l'exécute ; « Ignorer » la retire de la
   //    liste jusqu'au prochain montage, sans rien écrire.
+  // Chaque ligne de titre a pour clé son rang : deux titres égaux à une
+  // même place restent deux lignes.
   // Le libellé d'un titre, le titre pressenti et le nom d'une personne sont
   // des données, chacun dans son nœud. Échap, sur le panneau ou l'un de ses
   // contrôles, oublie le choix en attente. Le panneau lit 'seance' et 'ui'
@@ -74,7 +76,7 @@
   {#if charge !== null}
     <h4 id="{uid}-titres">{t('plan.listesTravail.titres')}</h4>
     <ul data-liste-travail="titres" aria-labelledby="{uid}-titres">
-      {#each titres as titre (`${titre.table}:${titre.siege}:${titre.libelle}`)}
+      {#each titres as titre, rang (rang)}
         <li>
           <button type="button" data-titre="{titre.table}:{titre.siege}" onclick={(evenement) => allerAuTitre(evenement, titre)}
             ><span>{t('plan.listesTravail.titreNonPourvu', { numero: titre.numero })}</span><span class="donnee"

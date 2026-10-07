@@ -44,9 +44,10 @@
   // aucune mise en page ; pointerup achève, par au plus une commande de la
   // séance ; pointercancel, Échap — écouté sur document, en phase de
   // capture, le temps du geste — et le passage en lecture (surAnnulation)
-  // restaurent. Pendant le glissement, le composant écrit l'attribut
-  // transform directement — groupe de la vue, groupe d'une table et ses
-  // frères, fantôme — et ne confie le résultat au modèle qu'au relâcher :
+  // restaurent. Pendant un geste, la molette ne zoome pas : le geste se
+  // juge sur la vue de l'appui. Pendant le glissement, le composant écrit
+  // l'attribut transform directement — groupe de la vue, groupe d'une table
+  // et ses frères, fantôme — et ne confie le résultat au modèle qu'au relâcher :
   // aucun élément capturant n'est remplacé. La poignée passe son nombre au
   // modèle de dessin (option poignee), sans rien écrire. Un refus — du
   // dépôt, du contrôle de la poignée, de la commande — se pose sur la place
@@ -93,7 +94,7 @@
   import BandeauPlan from './BandeauPlan.svelte';
   import BarreVue from './BarreVue.svelte';
   import { toucheDuPlan, vueQuiMontre } from './clavier.js';
-  import { deposer } from './depot.js';
+  import { deposer, reservationTenue } from './depot.js';
   import EchellePlan from './EchellePlan.svelte';
   import Fantome from './Fantome.svelte';
   import { REPOS, cleFantome, geste, memoriser } from './gestes.js';
@@ -105,6 +106,7 @@
     cadreDepuisRect,
     englobantDuTour,
     nomDeCharge,
+    sourceMontree,
     vueApresCadre,
     vueInitiale,
     zoomerBouton,
@@ -156,6 +158,8 @@
   const pose = $derived($ui.pose);
   // La personne mise en évidence, que la barre de vue nomme : {id, nom}, nom
   // null pour une personne que la charge n'a plus ; null sans mise en évidence.
+  // Le placement que le plan montre, que la barre de vue nomme.
+  const source = $derived(sourceMontree(etat, $ui.proposition, charge.retenu !== null));
   const evidence = $derived($ui.miseEnEvidence === null ? null : { id: $ui.miseEnEvidence, nom: nomDe($ui.miseEnEvidence) ?? null });
   // L'élément actif que le dessin marque : sous un focus venu du clavier.
   const actifMontre = $derived(aLeFocus && auClavier ? actif : null);
@@ -381,6 +385,12 @@
   // retirerait le transform d'un second glissement de la même table.
   let commandeEnCours = false;
 
+  // Vrai de l'appui d'un geste à son relâcher ou à son annulation : la
+  // machine juge le geste entier sur la vue relevée à l'appui, et la
+  // molette ne zoome pas pendant ce temps — le point du relâcher se
+  // convertirait dans un autre repère que celui où le fantôme le montre.
+  let gesteEnCours = false;
+
   // Confie la commande d'un geste à la séance ; un refus se pose sur la
   // place. La cible apres se restaure une fois la charge rendue : la table
   // se dessine alors à sa nouvelle position, ou revient.
@@ -424,6 +434,7 @@
     });
     const surMolette = (evenement) => {
       evenement.preventDefault();
+      if (gesteEnCours) return;
       poserVue(zoomerMolette(vue, englobantPlan, cadreCourant(), evenement));
     };
     observateur.observe(element);
@@ -459,6 +470,7 @@
     function appliquer({ etat: suivant, effets }) {
       const pointeur = etatGeste.pointeur;
       etatGeste = suivant;
+      gesteEnCours = suivant.phase !== 'repos';
       // Un appui devenu glissement — au-delà du seuil, que la machine juge —
       // n'est plus une pression longue.
       if (suivant.phase === 'glisse') oublierPression();
@@ -483,7 +495,10 @@
             else for (const cible of elementsDeTable(effet.cible.table)) cible.setAttribute('transform', effet.transform);
             break;
           case 'montrerFantome':
-            fantome = { nom: nomDe(effet.participant), cle: cleFantome(etat.cible) };
+            fantome = {
+              nom: nomDe(effet.participant),
+              cle: cleFantome(etat.cible, reservationTenue(etat, effet.participant, effet.depuis)?.portee ?? null),
+            };
             break;
           case 'montrerPlaces':
             poignee = { table: effet.table, places: effet.places };
@@ -681,6 +696,7 @@
       oublierImage();
       document.removeEventListener('keydown', surTouche, true);
       if (etatGeste.phase !== 'repos') seance.finirGeste();
+      gesteEnCours = false;
     };
   });
 
@@ -696,7 +712,7 @@
 </script>
 
 <div class="plan">
-  <BarreVue {tour} {tours} {zoomer} {ajuster} {evidence} />
+  <BarreVue {tour} {tours} {zoomer} {ajuster} {evidence} {source} />
   <div class="surface" data-surface bind:this={surface}>
     <BandeauPlan bandeau={modele === null ? [] : modele.bandeau} />
     <!-- Le plan est un composant interactif à deux dimensions, que le

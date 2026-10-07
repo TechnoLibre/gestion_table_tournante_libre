@@ -5,7 +5,8 @@
 // propos », le tour montré, la personne mise en évidence, la proposition
 // demandée au plan, le texte d'un import en attente, les listes de noms, le
 // plein écran, la place sélectionnée, la fiche ouverte, le choix en attente
-// du plan et le refus posé sur une place. Regarder n'écrit jamais (§ 8.4) : cet
+// du plan, le refus posé sur une place et l'appartenance collante du
+// formulaire d'ajout. Ce qu'il tient survit au démontage des sections. Regarder n'écrit jamais (§ 8.4) : cet
 // état ne reçoit ni la séance, ni la façade, ni un système de fichiers, et
 // rien de ce qu'il tient ne quitte la mémoire.
 //
@@ -24,7 +25,7 @@ import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
  * @property {number|null} proposition    la proposition demandée au plan
  * @property {null|{texte: string, origine: string}} importEnAttente
  * @property {boolean} listes             les listes de noms sont montrées
- * @property {boolean} pleinEcran
+ * @property {boolean} pleinEcran       vrai seulement sur la section du plan
  * @property {Object|null} selection      la place sélectionnée
  * @property {number|null} fiche          l'identifiant de la personne dont la fiche est ouverte
  * @property {null|{genre: 'personne'|'reservation', participant: number,
@@ -38,6 +39,8 @@ import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
  *            avertissements: Object[]}} pose
  *           le refus, ou les avertissements, posés sur une place du plan, que
  *           Plan.svelte montre sur la place (§ 5.9)
+ * @property {string} appartenance        l'appartenance collante du formulaire d'ajout
+ *           des participants : celle du dernier ajout (§ 10.2), '' au départ
  */
 
 // L'état de navigation d'un événement qui s'ouvre, panneau « À propos »
@@ -54,6 +57,7 @@ const DEPART = Object.freeze({
   fiche: null,
   choix: null,
   pose: null,
+  appartenance: '',
 });
 
 const GENRES_CHOIX = new Set(['personne', 'reservation']);
@@ -98,16 +102,19 @@ function choixValide(choix) {
  *   prendreImport: () => null|{texte: string, origine: string},
  *   basculerListes: Function, basculerPleinEcran: Function,
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
- *   poserSurPlace: Function}}
+ *   poserSurPlace: Function, garderAppartenance: Function}}
  */
 export function creerEtatUi() {
   let etat = Object.freeze({ ...DEPART, apropos: false });
   const abonnes = new Set();
 
   // Publie l'état que donnent les changements, s'il diffère du courant sur
-  // l'une de ses propriétés.
+  // l'une de ses propriétés. Le plein écran ne vaut que pour le plan : hors
+  // de lui, il tombe, quelle que soit la transition qui quitte le plan, et
+  // la navigation des sections, que le plein écran efface, revient.
   function changer(changements) {
     const suivant = { ...etat, ...changements };
+    if (suivant.section !== 'plan') suivant.pleinEcran = false;
     if (Object.keys(suivant).every((cle) => Object.is(suivant[cle], etat[cle]))) return;
     etat = Object.freeze(suivant);
     for (const fn of [...abonnes]) fn(etat);
@@ -188,6 +195,12 @@ export function creerEtatUi() {
         throw new RangeError(`pose sans place : ${JSON.stringify(pose)}`);
       }
       changer({ pose: Object.freeze({ place, refus, avertissements }) });
+    },
+    /** Garde l'appartenance collante du formulaire d'ajout, une chaîne ;
+     *  RangeError sinon. */
+    garderAppartenance(texte) {
+      if (typeof texte !== 'string') throw new RangeError(`appartenance : chaîne attendue, reçu ${String(texte)}`);
+      changer({ appartenance: texte });
     },
     /** Ouvre la fiche de la personne id, entier positif, dans la section des
      *  participants ; null referme la fiche, la section reste. RangeError

@@ -5,9 +5,11 @@
   // Racine de l'interface (§ 13.4). Ses propriétés sont les dépendances de
   // l'application — système de fichiers, horloge, exécuteur de génération,
   // presse-papiers, identifiants, langue, provenance, démonstrations, format
-  // courant, version du produit, et en option le thème de départ — que
-  // src/main.js construit pour la machine et monterApp pour une épreuve : App
-  // ne choisit aucune plateforme.
+  // courant, version du produit et sa forme Windows, et en option le thème
+  // de départ — que src/main.js construit pour la machine et monterApp pour
+  // une épreuve : App ne choisit aucune plateforme, et ne lit la version que
+  // dans ses propriétés, la même au bandeau, au titre, à l'accueil et dans
+  // le bloc « À propos ».
   //
   // À son initialisation, App crée une fois chacun la séance, sans racine,
   // le contrôleur de génération et la façade, et les donne aux composants par
@@ -40,7 +42,6 @@
   import { TABLES_APPLICATION } from '../application/libelles.js';
   import { creerSeance } from '../application/seance.js';
   import { creerTraduction } from '../application/traduction.js';
-  import { VERSION } from '../version.genere.js';
   import APropos from './APropos.svelte';
   import Accueil from './accueil/Accueil.svelte';
   import Bandeau from './Bandeau.svelte';
@@ -64,11 +65,19 @@
     demonstrations,
     formatCourant,
     produitVersion,
+    versionWindows,
     themeInitial,
   } = untrack(() => dependances);
 
   const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue });
   const format = creerFormat(t);
+  // Le bloc « À propos » se compose au montage, avant toute séance : une
+  // forme de la version que les dépendances ne portent pas lève RangeError
+  // ici, et App ne se monte pas avec un bloc copiable faux (§ 18.6).
+  const bloc = blocAPropos(
+    { version: { affichee: produitVersion, windows: versionWindows }, plateforme: fs.nature, provenance, format: formatCourant },
+    t,
+  );
   const seanceApp = creerSeance({
     fs,
     horloge,
@@ -192,7 +201,6 @@
   const titre = t('coquille.titre', { version: produitVersion });
   const version = versionVisible(provenance, produitVersion, t);
   const provenanceAffichee = provenanceVisible(provenance, t);
-  const bloc = blocAPropos({ version: VERSION, plateforme: fs.nature, provenance, format: formatCourant }, t);
 
   // « Liste des événements » : ferme l'événement, sans question ; sous un
   // support rompu, la séance le refuse, et le refus s'affiche à côté de la

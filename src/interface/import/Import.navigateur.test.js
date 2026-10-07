@@ -34,6 +34,7 @@ import { creerCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
+import { pointer } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { visible } from '../../../test/navigateur/rendu.js';
 import urlCasLimites from '../../../exemples/participants_cas_limites.csv?url';
@@ -549,6 +550,41 @@ describe('une seule entrée, des doublons signalés, une mise à jour qui n’ef
     expect(entrees(e)).toBe(entreesAvant + 1);
     const etats = e.m.trace.slice(avant).filter(([primitive, , chemin]) => primitive === 'ecrireAtomique' && chemin === `${BASE}${SUFFIXES.etat}`);
     expect(etats.length).toBe(1);
+  });
+
+  test('deux clics réels sur « Importer » pendant l’écriture d’un support lent : la liste s’importe une fois, une entrée du journal', async () => {
+    const e = await ouvrir({ prepare: (seance) => seance.executer('creerTable', { forme: 'ronde' }) });
+    await coller(e, 'nom;prenom\nOmbrelle;Iris\nPervenche;Théo\nLacasse;Ondine');
+    dans(e, '[data-champ="mode"] input[value="ajouter"]').click();
+    flushSync();
+    const entreesAvant = entrees(e);
+    // Le journal du système simulé retient ses ajouts de ligne jusqu'à
+    // liberer() : l'import reste en cours d'écriture.
+    const ajouterLigne = e.m.fs.ajouterLigne;
+    let liberer;
+    const porte = new Promise((resoudre) => {
+      liberer = resoudre;
+    });
+    e.m.fs.ajouterLigne = async (...parametres) => {
+      await porte;
+      return ajouterLigne.apply(e.m.fs, parametres);
+    };
+    const bouton = commande(e, 'importer');
+    bouton.scrollIntoView({ block: 'center' });
+    const boite = bouton.getBoundingClientRect();
+    const [x, y] = [boite.left + boite.width / 2, boite.top + boite.height / 2];
+    for (let clic = 0; clic < 2; clic += 1) {
+      await pointer('presser', x, y);
+      await pointer('relacher', x, y);
+      flushSync();
+    }
+    await vi.waitFor(() => expect(imports(e).length).toBeGreaterThan(0));
+    expect(imports(e)).toHaveLength(1);
+    liberer();
+    await vi.waitFor(() => expect(dans(e, '[data-rapport]')).not.toBeNull());
+    await e.m.seance.formeNommee(null).catch(() => undefined);
+    expect(e.m.seance.etat().charge.participants.map(({ nom }) => nom)).toEqual(['Ombrelle', 'Pervenche', 'Lacasse']);
+    expect(entrees(e)).toBe(entreesAvant + 1);
   });
 
   test('deux lignes au même triplet et une égale à un existant : deux doublons ; en mode Ajouter, choisi, trois personnes de plus, d’identifiants distincts', async () => {

@@ -8,7 +8,19 @@
 // confirmer s'arme au premier clic — son libellé devient celui de la
 // confirmation — et n'exécute qu'au second ; le composant la désarme au
 // terme de DELAI_CONFIRMATION_MS, par l'horloge qu'il reçoit. Aucun chemin
-// n'exécute une commande à confirmer en un clic.
+// n'exécute une commande à confirmer en un clic (§ 8.5).
+//
+// Le clic répété d'une série — celui dont le compte de clics, detail,
+// dépasse 1 — est sans effet sur toute commande : il n'exécute, n'arme ni ne
+// confirme rien. Le second clic d'un double-clic tombe souvent sur une autre
+// commande que le premier, celle qu'a montée l'exécution à la même place
+// — « Revenir en lecture » à la place de « Modifier » —, et il n'est jamais
+// une seconde exécution voulue : « Défaire » double-cliqué ne rend qu'un
+// geste. Armée, une commande le reste ; un clic simple la confirme.
+//
+// Une commande n'est pas ré-entrante : de l'exécution lancée à terminer(),
+// que le composant appelle quand l'action rend la main, tout clic est sans
+// effet. Un second clic pendant une écriture lente ne relance rien.
 //
 // Un remède (contrat « Refus et avertissements ») est null, une commande
 // exécutable telle quelle, { commande, arguments }, ou un geste,
@@ -58,23 +70,36 @@ export const SECTIONS_REMEDE = Object.freeze([
  *
  * @param {{confirmer?: string|null}} [options]  la clé du libellé de
  *        confirmation ; null pour une commande qui exécute au premier clic
- * @returns {{readonly armee: boolean, cliquer: () => ({action: 'armer'}|{action: 'executer'}), expirer: () => void}}
- *   cliquer arme une commande à confirmer désarmée, et exécute sinon, en la
- *   désarmant ; expirer la désarme.
+ * @returns {{readonly armee: boolean, readonly enCours: boolean,
+ *   cliquer: (clic?: {repete?: boolean}) => ({action: 'armer'}|{action: 'executer'}|{action: 'aucune'}),
+ *   terminer: () => void, expirer: () => void}}
+ *   cliquer ne fait rien pendant une exécution, ni pour le clic répété
+ *   d'une série (repete vrai) ; sinon il arme une commande à confirmer
+ *   désarmée, et exécute, en la désarmant et en la marquant en cours ;
+ *   terminer la rend aux clics ; expirer la désarme.
  */
 export function creerMachineCommande({ confirmer = null } = {}) {
   let armee = false;
+  let enCours = false;
   return {
     get armee() {
       return armee;
     },
-    cliquer() {
+    get enCours() {
+      return enCours;
+    },
+    cliquer({ repete = false } = {}) {
+      if (enCours || repete) return { action: 'aucune' };
       if (confirmer !== null && !armee) {
         armee = true;
         return { action: 'armer' };
       }
       armee = false;
+      enCours = true;
       return { action: 'executer' };
+    },
+    terminer() {
+      enCours = false;
     },
     expirer() {
       armee = false;

@@ -6,7 +6,8 @@
   // l'ordre de la séance (avertissementsOrdonnes, modele.js) : chacun par le
   // texte de son code, puis ce qu'il nomme — les propositions écartées, leur
   // numéro et leurs fautes ; les placements en dérive et leurs raisons —,
-  // puis son remède en Commande, par actionRemede (primitives/commande.js).
+  // puis son remède en Commande, par actionRemede (primitives/commande.js),
+  // confirmé en place quand actionRemede le demande — « Débloquer ».
   // Un avertissement n'empêche rien.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -62,7 +63,13 @@
           </ul>
         {/if}
         {#if action !== null}
-          <Commande cle={action.cle} details={action.details} nom={action.nom} executer={action.executer} />
+          <Commande
+            cle={action.cle}
+            details={action.details}
+            nom={action.nom}
+            confirmer={action.confirmer}
+            executer={action.executer}
+          />
         {/if}
       </div>
     {/each}

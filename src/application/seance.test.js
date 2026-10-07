@@ -745,7 +745,7 @@ describe('séance : un geste, une entrée, un état (§ 2.1, § 8.2, § 10.1)', 
     await seance.executer('retenirProposition', { id: 1 });
     const plus = apercevoir('nom\nEpicéa\n', { participants: seance.charge.participants });
     const enRetenu = await seance.executer('importerParticipants', { apercu: plus, mode: 'ajouter' });
-    const nonPlace = [{ code: 'PARTICIPANT_NON_PLACE', participant: 8 }];
+    const nonPlace = [{ code: 'PARTICIPANT_NON_PLACE', participant: 8, personne: 'Epicéa' }];
     assert.deepEqual(enRetenu.avertissements, [
       { code: 'IMPORT_EN_RETENU', details: {} },
       { code: 'PLACES_MANQUANTES', details: { placesManquantes: 1 } },
@@ -2455,14 +2455,14 @@ describe("séance observable : les avertissements d'un geste (§ 5.9, § 9, A2)"
     await seance.executer('enregistrerGeneration', generer(seance.charge));
     await seance.executer('retenirProposition', { id: 1 });
     const exclusion = await seance.executer('exclureParticipant', { id: 3 });
-    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 3 }];
+    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 3, personne: 'Théo Pervenche' }];
     assert.deepEqual(exclusion.avertissements, [
       { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons }, { id: 2, raisons }, { id: 'retenu', raisons }] } },
     ]);
     const suivant = await seance.executer('modifierParticipant', { id: 4, champs: { nom: 'Lacasse-Ombrelle' } });
     assert.deepEqual(suivant.avertissements, []);
     const autre = await seance.executer('exclureParticipant', { id: 2 });
-    const nouvelle = [{ code: 'PARTICIPANT_EXCLU', participant: 2 }];
+    const nouvelle = [{ code: 'PARTICIPANT_EXCLU', participant: 2, personne: 'Grisaille' }];
     assert.deepEqual(autre.avertissements, [
       { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons: nouvelle }, { id: 2, raisons: nouvelle }, { id: 'retenu', raisons: nouvelle }] } },
     ]);
@@ -2731,6 +2731,51 @@ describe('séance observable : fautives et examen (§ 8.9, A2)', () => {
     assert.deepEqual(seance.etat().examen.fautives, []);
     await seance.fermer();
     assert.deepEqual(seance.etat().fautives, []);
+  });
+});
+
+describe('séance : attendre la file (§ 5.10, § 8.4)', () => {
+  test("attendre se résout quand les appels déjà en file ont fini, réussis ou refusés, sans rien écrire ni publier de plus", async () => {
+    const { seance, fs } = await ouvertSur();
+    await seance.passerEnEcriture();
+    const ecrit = seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
+    const refuse = seance.executer('ajouterParticipant', { champs: { nom: '' } }).catch((erreur) => erreur);
+    const avant = seance.charge.participants.length;
+    const ecritures = fs.compteurs.ecritures;
+    let publications = 0;
+    seance.subscribe(() => {
+      publications += 1;
+    });
+    publications = 0;
+    await seance.attendre();
+    assert.equal(seance.charge.participants.length, avant + 1);
+    assert.equal((await refuse).code !== undefined, true);
+    await ecrit;
+    const apres = publications;
+    const ecrituresApres = fs.compteurs.ecritures;
+    await seance.attendre();
+    assert.equal(publications, apres, 'attendre ne publie rien');
+    assert.equal(fs.compteurs.ecritures, ecrituresApres, 'attendre n’écrit rien');
+    assert.ok(ecrituresApres > ecritures);
+  });
+});
+
+describe('séance observable : la dérive nommée (§ 9, A2)', () => {
+  test("l'examen de l'état nomme chaque raison de dérive — la personne par son nom, la table par son numéro —, quand celui de l'Ouvert garde les identifiants", async () => {
+    const charge = avecRetenu(chargeEssai());
+    charge.participants[2].exclu = true;
+    charge.tables[1].numero = 7;
+    charge.tables[1].sieges = 3;
+    const { seance } = await ouvertSur(charge);
+    const { raisons } = seance.etat().examen.retenu;
+    assert.deepEqual(raisons, [
+      { code: 'CAPACITE_CHANGEE', table: 2, avant: 2, maintenant: 3, numero: 7 },
+      { code: 'PARTICIPANT_EXCLU', participant: 3, personne: 'Théo Pervenche' },
+    ]);
+    assert.deepEqual(
+      seance.ouvert.examen.retenu.raisons,
+      raisons.map(({ personne, numero, ...nue }) => nue),
+    );
   });
 });
 

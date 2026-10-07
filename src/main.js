@@ -57,5 +57,6 @@ mount(App, {
     demonstrations,
     formatCourant: FORMAT,
     produitVersion: VERSION.affichee,
+    versionWindows: VERSION.windows,
   },
 });

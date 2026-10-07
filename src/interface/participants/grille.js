@@ -179,20 +179,27 @@ export function orthographeExistante(saisie, participants, cleNormalisee) {
  * L'itinéraire d'une personne dans le retenu, pour la fiche : à chaque
  * tour, de 1 à tours, la table (numéro affiché) et le siège — null quand le
  * retenu n'attribue pas les sièges —, ou la réserve. Lu dans etatDuTour(r)
- * = etatPlaces(charge, {tour: r}), jamais recalculé ; null quand la source
- * n'y est pas 'retenu' à l'un des tours, ou que la personne n'y est ni
+ * = etatPlaces(charge, {tour: r}), jamais recalculé. Un tour dont la source
+ * n'est pas 'retenu' — le retenu gardé à moins de tours que l'événement
+ * n'en compte, après une hausse des tours (§ 9) — se dit hors du retenu,
+ * et les tours que le retenu porte restent. null quand le tour 1 n'a pas le
+ * retenu pour source, ou que la personne n'est, à un tour du retenu, ni
  * assise ni en réserve — une exclue, absente de tout tour.
  *
  * @param {number} id
  * @param {number} tours
  * @param {(tour: number) => Object} etatDuTour   l'EtatPlaces du tour
- * @returns {Array<{tour: number, numero: number, siege: number|null}|{tour: number, reserve: true}>|null}
+ * @returns {Array<{tour: number, numero: number, siege: number|null}|{tour: number, reserve: true}|{tour: number, horsRetenu: true}>|null}
  */
 export function itineraire(id, tours, etatDuTour) {
   const etapes = [];
   for (let tour = 1; tour <= tours; tour += 1) {
     const etat = etatDuTour(tour);
-    if (etat.source !== 'retenu') return null;
+    if (etat.source !== 'retenu') {
+      if (tour === 1) return null;
+      etapes.push({ tour, horsRetenu: true });
+      continue;
+    }
     let etape = null;
     for (const table of etat.tables) {
       const chaise = table.chaises.find(({ occupant }) => occupant === id);
@@ -206,6 +213,18 @@ export function itineraire(id, tours, etatDuTour) {
     etapes.push(etape);
   }
   return etapes;
+}
+
+/**
+ * Vrai quand Entrée valide la saisie : toujours, sauf Maj+Entrée dans une
+ * zone de texte — les notes —, qui y insère un saut de ligne.
+ *
+ * @param {{maj: boolean, multiligne: boolean}} touche   maj : Maj tenue ;
+ *        multiligne : la saisie est une zone de texte
+ * @returns {boolean}
+ */
+export function entreeValide({ maj, multiligne }) {
+  return !(maj && multiligne);
 }
 
 /**

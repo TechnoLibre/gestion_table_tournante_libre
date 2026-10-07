@@ -14,11 +14,18 @@
   // evidence : la personne mise en évidence, {id, nom} — nom null pour une
   // personne que la charge n'a plus —, ou null. La barre la nomme et offre
   // d'ôter la mise en évidence, que la personne soit assise au tour montré
-  // ou non ; le menu de la personne la pose (MenuPersonne).
+  // ou non ; le menu de la personne la pose (MenuPersonne). Une personne que
+  // la charge n'a plus se dit telle, sans nom.
+  //
+  // source : ce que la barre dit du placement montré, que rend sourceMontree
+  // (vue_plan.js) — {libelle, revenir} — : la barre le nomme, [data-source],
+  // et, quand une proposition est demandée, offre de ne plus la montrer
+  // (ui.montrerProposition(null)), sous le libellé revenir. Ni l'un ni
+  // l'autre n'écrit l'événement.
   import { getContext } from 'svelte';
   import { toursOfferts } from './vue_plan.js';
 
-  let { tour, tours, zoomer, ajuster, evidence = null } = $props();
+  let { tour, tours, zoomer, ajuster, evidence = null, source } = $props();
 
   const t = getContext('t');
   const ui = getContext('ui');
@@ -27,6 +34,12 @@
 </script>
 
 <div class="barre-vue" role="toolbar" aria-label={t('plan.vue.barre')}>
+  <p class="source" data-source>{t(source.libelle.cle, source.libelle.details)}</p>
+  {#if source.revenir !== null}
+    <button type="button" data-commande="quitterProposition" onclick={() => ui.montrerProposition(null)}
+      >{t(source.revenir)}</button
+    >
+  {/if}
   <label class="tour">
     <span>{t('plan.vue.tour')}</span>
     <select data-champ="tour" value={tour} onchange={(evenement) => ui.montrerTour(Number(evenement.currentTarget.value))}>
@@ -46,7 +59,9 @@
   >
   {#if evidence !== null}
     <p class="evidence" data-evidence={evidence.id}>
-      <span>{t('plan.evidence.personne')}</span>{#if evidence.nom !== null}<span>{evidence.nom}</span>{/if}
+      <span>{t('plan.evidence.personne')}</span>{#if evidence.nom !== null}<span>{evidence.nom}</span>{:else}<span
+          >{t('plan.evidence.absente')}</span
+        >{/if}
       <button type="button" data-commande="oterEvidence" onclick={() => ui.mettreEnEvidence(null)}>{t('plan.evidence.oter')}</button>
     </p>
   {/if}
@@ -58,6 +73,11 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--espace-2);
+  }
+
+  .source {
+    margin: 0;
+    font-weight: 700;
   }
 
   .evidence {

@@ -18,6 +18,7 @@
 // du support rompu. Le texte attendu vient de la même traduction que celle
 // de l'application ; les noms d'épreuve sont inventés.
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { cdp } from 'vitest/browser';
 import { flushSync } from 'svelte';
 import { TABLES_APPLICATION, libelle } from '../../application/libelles.js';
 import { INACTIVITE_MS } from '../../application/seance.js';
@@ -86,6 +87,38 @@ const auCentre = (element) => {
   const { left, top, width, height } = element.getBoundingClientRect();
   return document.elementFromPoint(left + width / 2, top + height / 2);
 };
+
+// Un appui réel annoncé par Chromium comme le rang-ième clic d'une série
+// (clickCount) : son événement click porte detail rang. cible est un élément,
+// visé en son centre, ou le point que rend l'appui précédent de la série. Les
+// coordonnées du cadre de l'épreuve passent dans la fenêtre de la page qui le
+// porte, d'un cadre à son parent, comme dans test/navigateur/entrees.js.
+async function cliquerEnSerie(cible, rang) {
+  let { x, y } = cible;
+  if (cible instanceof Element) {
+    const { left, top, width, height } = cible.getBoundingClientRect();
+    [x, y] = [left + width / 2, top + height / 2];
+    for (let fenetre = window; fenetre !== fenetre.top; fenetre = fenetre.parent) {
+      const porteur = fenetre.frameElement;
+      const boite = porteur.getBoundingClientRect();
+      const style = fenetre.parent.getComputedStyle(porteur);
+      const echelle = porteur.offsetWidth > 0 ? boite.width / porteur.offsetWidth : 1;
+      x = boite.left + (porteur.clientLeft + parseFloat(style.paddingLeft) + x) * echelle;
+      y = boite.top + (porteur.clientTop + parseFloat(style.paddingTop) + y) * echelle;
+    }
+  }
+  await cdp().send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: rang });
+  await cdp().send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: rang });
+  flushSync();
+  return { x, y };
+}
+
+// Attend que la file de la séance ait passé ce qui s'y trouve, par une
+// lecture admise dans tout mode, qui n'écrit rien.
+async function viderFile(m) {
+  await m.seance.formeNommee(null).catch(() => undefined);
+  flushSync();
+}
 
 // Le refus posé à côté d'un bouton de Commande : dans son conteneur.
 const refusPres = (bouton, code) => bouton.parentElement.querySelector(`[data-refus="${code}"]`);
@@ -213,6 +246,27 @@ describe('la place fixe (§ 8.4, § 8.5)', () => {
     expect(fixe(m, 'debloquer').textContent).toBe(t('communs.commande.debloquer'));
     expect(coin(fixe(m, 'debloquer'))).toEqual(coins[0]);
     expect(visible(fixe(m, 'debloquer'))).toBe(true);
+  });
+
+  test('un double-clic sur « Modifier » passe en écriture et y reste : le second clic de la série tombe sur « Revenir en lecture », venu à sa place, qui ne l’exécute pas', async () => {
+    const m = await neuf();
+    const avant = m.trace.length;
+    const clics = [];
+    m.racine.addEventListener('click', (evenement) => clics.push([evenement.target.dataset.commande, evenement.detail]), true);
+    const point = await cliquerEnSerie(fixe(m, 'modifier'), 1);
+    await attendre(() => expect(fixe(m, 'lecture')).not.toBeNull());
+    await viderFile(m);
+    await cliquerEnSerie(point, 2);
+    await viderFile(m);
+    expect(clics).toEqual([
+      ['modifier', 1],
+      ['lecture', 2],
+    ]);
+    expect(m.seance.etat().mode).toBe('ecriture');
+    expect(fixe(m, 'lecture')).not.toBeNull();
+    const verrous = m.trace.slice(avant).filter(([primitive]) => primitive === 'verrouiller' || primitive === 'deverrouiller');
+    expect(verrous.map(([primitive]) => primitive)).toEqual(['verrouiller']);
+    expect(fichier(m, SUFFIXES.verrou)).not.toBeNull();
   });
 });
 
@@ -480,6 +534,25 @@ describe('défaire, refaire (§ 8.3)', () => {
     await attendre(() => expect(historique(m, 'refaire')).toBeNull());
   });
 
+  test('un double-clic sur « Défaire » rend un seul geste : le second clic de la série, reçu une fois le premier retour écrit, n’en défait pas un autre', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    for (const nom of NOMS.slice(0, 3)) await m.seance.executer('ajouterParticipant', { champs: { nom } });
+    flushSync();
+    const { entrees } = journalDe(m);
+    const point = await cliquerEnSerie(historique(m, 'defaire'), 1);
+    await attendre(() => expect(nombre(m)).toBe(2));
+    await viderFile(m);
+    expect(historique(m, 'defaire').getAttribute('aria-busy')).toBeNull();
+    await cliquerEnSerie(point, 2);
+    await viderFile(m);
+    expect(nombre(m)).toBe(2);
+    expect(journalDe(m).entrees.length).toBe(entrees.length + 1);
+    // Un clic simple ensuite défait de nouveau.
+    await cliquerEnSerie(historique(m, 'defaire'), 1);
+    await attendre(() => expect(nombre(m)).toBe(1));
+  });
+
   test('un retour de 5 à 2, puis « Défaire » : la cible est le prédécesseur de 2 sur le fil, non la ligne précédente', async () => {
     const m = await neuf();
     await m.seance.passerEnEcriture();
@@ -555,6 +628,36 @@ describe('les annonces d’ouverture (§ 8.9, § 9)', () => {
     expect(etat.charge.propositions.map(({ id }) => id)).toEqual([seconde]);
     derive.querySelector('[data-commande="ouvrirSection"]').click();
     await attendre(() => expect(m.ui.etat().section).toBe('propositions'));
+  });
+
+  test('en plein écran, le remède d’une dérive mène à sa section, et la navigation des sections y revient : le plein écran ne vaut que pour le plan', async () => {
+    const m = await neuf();
+    await garnir(m);
+    await generer(m);
+    await m.seance.executer('changerTours', { tours: EVENEMENT.tours + 1 });
+    m.ui.allerA('plan');
+    flushSync();
+    expect(tous(m, '[data-commande="section"]')).toHaveLength(SECTIONS.length);
+    dans(m, '[data-commande="pleinEcran"]').click();
+    flushSync();
+    expect(tous(m, '[data-commande="section"]')).toHaveLength(0);
+    const remede = await attendre(() => {
+      const trouve = dans(m, '[data-annonces] [data-avertissement="DERIVE_NOUVELLE"] [data-commande="ouvrirSection"]');
+      expect(trouve).not.toBeNull();
+      return trouve;
+    });
+    remede.click();
+    await attendre(() => expect(m.ui.etat().section).not.toBe('plan'));
+    flushSync();
+    const navigation = tous(m, '[data-commande="section"]');
+    expect(navigation).toHaveLength(SECTIONS.length);
+    for (const bouton of navigation) expect(visible(bouton), bouton.dataset.cible).toBe(true);
+    navigation.find((bouton) => bouton.dataset.cible === 'tables').click();
+    flushSync();
+    expect(dans(m, '[data-section]').dataset.section).toBe('tables');
+    m.ui.allerA('plan');
+    flushSync();
+    expect(tous(m, '[data-commande="section"]')).toHaveLength(SECTIONS.length);
   });
 
   test('un retenu fautif : son message vient en premier et offre « Ouvrir la version précédente », qui l’ouvre en lecture sans rien écrire', async () => {
@@ -663,6 +766,51 @@ describe('l’écran tient dans la fenêtre, avertissements compris (§ 8.4)', (
     }
   });
 
+  test('à 1 366 × 700, les avertissements de dérive se posent à côté de la tête : le plan garde toute sa hauteur, et ses chaises au zoom ajusté', async () => {
+    const m = await monter();
+    await m.seance.creer({ nom: 'Bal des Grisailles', date: null, siegesParDefaut: 8, tours: 3 });
+    await m.seance.passerEnEcriture();
+    for (let n = 0; n < 18; n += 1) await m.seance.executer('ajouterParticipant', { champs: { nom: `${NOMS[n % NOMS.length]} ${n + 1}` } });
+    for (let n = 0; n < 3; n += 1) await m.seance.executer('creerTable', { forme: 'ronde' });
+    await generer(m);
+    m.ui.allerA('plan');
+    flushSync();
+    const ajuster = async () => {
+      dans(m, '[data-commande="ajuster"]').click();
+      flushSync();
+      await new Promise((resoudre) => requestAnimationFrame(resoudre));
+      flushSync();
+    };
+    await ajuster();
+    expect(dans(m, '[data-annonces]')).toBeNull();
+    const hauteurSeule = dans(m, '[data-plan]').getBoundingClientRect().height;
+    expect(hauteurSeule).toBeGreaterThan(0);
+    // Trois gestes admis sur le retenu, chacun une dérive annoncée.
+    await m.seance.executer('ajouterParticipant', { champs: { nom: 'Rouvraie' } });
+    await m.seance.executer('creerTable', { forme: 'ronde' });
+    await m.seance.executer('changerTours', { tours: 4 });
+    flushSync();
+    await ajuster();
+    const montres = tous(m, '[data-annonces] [data-avertissement]');
+    expect(montres.length).toBeGreaterThan(0);
+    // La zone se voit, et le premier avertissement s'ouvre dans elle.
+    const zone = dans(m, '[data-annonces]');
+    expect(visible(zone)).toBe(true);
+    const [boiteZone, premier] = [zone.getBoundingClientRect(), montres[0].getBoundingClientRect()];
+    expect(premier.top).toBeGreaterThanOrEqual(boiteZone.top);
+    expect(premier.top).toBeLessThan(boiteZone.bottom - 16);
+    expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight);
+    expect(dans(m, '[data-plan]').getBoundingClientRect().height).toBeGreaterThanOrEqual(hauteurSeule - 1);
+    const tables = tous(m, '[data-plan] [data-table]');
+    expect(tables.length).toBe(4);
+    expect(tous(m, '[data-plan] [data-siege]').length).toBe(4 * 8);
+    // La navigation et la place fixe restent atteintes.
+    const navigation = tous(m, '[data-commande="section"]');
+    expect(navigation).toHaveLength(SECTIONS.length);
+    for (const bouton of navigation) expect(visible(bouton), bouton.dataset.cible).toBe(true);
+    expect(fixe(m, 'lecture').contains(auCentre(fixe(m, 'lecture')))).toBe(true);
+  });
+
   test('à 1 366 × 700, un support rompu et trois avertissements et plus : chaque issue du support rompu se voit sans défiler, la page ne défile pas, et les avertissements défilent sous lui', async () => {
     const m = await neuf();
     await garnir(m);
@@ -758,7 +906,12 @@ describe('la dérive (§ 9)', () => {
     expect(nouvelle.details.touchees.map(({ id }) => id)).toContain('retenu');
     const element = avertissement(m, 'DERIVE_NOUVELLE');
     expect(element.textContent).toContain(t('DERIVE_NOUVELLE', nouvelle.details));
-    expect(element.textContent).toContain(t('PARTICIPANT_EXCLU', { participant: exclue }));
+    // La raison telle que la séance la rend, détails compris : son texte
+    // est celui que l'avertissement affiche.
+    const { raisons } = nouvelle.details.touchees.find(({ id }) => id === 'retenu');
+    const exclusion = raisons.find(({ code }) => code === 'PARTICIPANT_EXCLU');
+    expect(exclusion.participant).toBe(exclue);
+    expect(element.textContent).toContain(t('PARTICIPANT_EXCLU', exclusion));
     await m.seance.executer('ajouterParticipant', { champs: { nom: 'Rouvraie' } });
     expect(m.seance.etat().charge.participants.length).toBe(NOMS.length + 1);
   });
@@ -787,6 +940,43 @@ describe('la dérive (§ 9)', () => {
     await m.seance.executer('importerParticipants', { apercu, mode: 'ajouter' });
     flushSync();
     expect(avertissement(m, 'IMPORT_EN_RETENU').textContent).toContain(t('IMPORT_EN_RETENU', {}));
+  });
+});
+
+describe('la tête reste en place quand les annonces vont et viennent (§ 2.1, § 8.4)', () => {
+  test('une dérive affichée, l’écriture refusée : « Bloqué » cliqué reste le même élément, et porte à côté de lui le refus ECRITURE', async () => {
+    const m = await neuf();
+    await garnir(m);
+    await generer(m);
+    await m.seance.executer('changerTours', { tours: EVENEMENT.tours + 1 });
+    flushSync();
+    expect(avertissement(m, 'DERIVE_NOUVELLE')).not.toBeNull();
+    m.fs.pannes.ecriture('documents');
+    const avant = boutonEtat(m, 'bloque');
+    avant.click();
+    await attendre(() => expect(m.seance.etat().supportRompu).not.toBeNull());
+    await viderFile(m);
+    // Le support rompu fait passer les annonces sous la tête : le bouton du
+    // geste reste celui qu'a reçu le clic, et le refus se pose à côté de lui.
+    expect(boutonEtat(m, 'bloque')).toBe(avant);
+    expect(avant.isConnected).toBe(true);
+    await attendre(() => expect(refusPres(avant, 'ECRITURE')).not.toBeNull());
+    expect(visible(refusPres(avant, 'ECRITURE'))).toBe(true);
+  });
+
+  test('le premier avertissement venu, le focus du clavier reste sur le bouton de la tête qui le portait', async () => {
+    const m = await neuf();
+    await garnir(m);
+    await generer(m);
+    expect(dans(m, '[data-annonces]')).toBeNull();
+    const bouton = dans(m, '[data-commande="section"][data-cible="plan"]');
+    bouton.focus();
+    expect(document.activeElement).toBe(bouton);
+    await m.seance.executer('changerTours', { tours: EVENEMENT.tours + 1 });
+    flushSync();
+    expect(avertissement(m, 'DERIVE_NOUVELLE')).not.toBeNull();
+    expect(dans(m, '[data-commande="section"][data-cible="plan"]')).toBe(bouton);
+    expect(document.activeElement).toBe(bouton);
   });
 });
 

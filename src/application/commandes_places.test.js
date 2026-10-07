@@ -764,6 +764,53 @@ describe('commandes des places : le vérificateur d’invariants du retenu (§ 1
   });
 });
 
+describe('commandes des places : le dépôt sans siège et les réservations au siège (§ 5.9, § 8.9)', () => {
+  // À chaque tour, la table 4 assied 1, 2, 3 aux sièges 1 à 3, la table 7
+  // assied 4 à 11, et 12 attend en réserve.
+  const tours = [1, 2, 3].map(() => [[1, 2, 3], [4, 5, 6, 7, 8, 9, 10, 11]]);
+
+  test('sièges attribués, un dépôt sans siège saute la chaise que tient la réservation active d’un autre', () => {
+    const charge = figer(chargeRetenue({ tours, reservations: [resa(9, 5, 4)] }));
+    const { charge: apres } = executer('deplacerDansRetenu', charge, { tour: 1, participant: 12, table: 5, siege: null });
+    assert.deepEqual(listes(apres, 1)[0], [1, 2, 3, null, 12]);
+    const chaise4 = etatPlaces(apres, { tour: 1 }).tables[0].chaises[3];
+    assert.deepEqual([chaise4.occupant, chaise4.reservation?.participant], [null, 9]);
+  });
+
+  test('sièges attribués, sans siège, la personne réservée à un siège de la table y va ; déjà assise sur lui, SANS_EFFET', () => {
+    const charge = figer(chargeRetenue({ tours, reservations: [resa(10, 5, 6)] }));
+    const { charge: apres } = executer('deplacerDansRetenu', charge, { tour: 1, participant: 10, table: 5, siege: null });
+    assert.deepEqual(listes(apres, 1)[0], [1, 2, 3, null, null, 10]);
+    refuse(() => executer('deplacerDansRetenu', apres, { tour: 1, participant: 10, table: 5, siege: null }), 'SANS_EFFET');
+  });
+
+  test('une personne ajoutée après la retenue et réservée à une table : déposée à cette table au tour 2, elle y est assise, sans INVARIANT_VIOLE', () => {
+    const charge = chargeRetenue();
+    charge.participants.push(personne(13));
+    charge.prochainsIds.participant = 14;
+    charge.reservations.push(resa(13, 5, null));
+    const { charge: apres } = executer('deplacerDansRetenu', charge, { tour: 2, participant: 13, table: 5, siege: null });
+    assert.deepEqual(listes(apres, 2)[0], [1, 8, 9, 10, 11, 12, 13]);
+    assert.deepEqual(reserveDe(apres, 1), [13]);
+  });
+
+  test('sièges attribués, désigner au siège 3 la personne assise au siège 2 : le retenu reste tel quel, RESERVATION_NON_HONOREE au siège, et son remède, l’échange, la lève', () => {
+    const charge = chargeRetenue();
+    const { charge: designee } = appliquerCommande('designer', charge, { participant: 2, table: 5, siege: 3, libelle: 'Animation' });
+    assert.deepEqual(designee.retenu, charge.retenu);
+    // Au tour 2, le retenu assied 2 à la table 7 : la réservation n'y est
+    // pas tenue à sa table ; aux tours 1 et 3, à la table 4, mais au siège 2.
+    const nonTenues = (avant, apres) =>
+      avertissementsApres(avant, apres)
+        .filter(({ code }) => code === 'RESERVATION_NON_HONOREE')
+        .map(({ details }) => [details.tour, details.siege ?? null, details.occupant ?? null]);
+    assert.deepEqual(nonTenues(charge, designee), [[2, null, null], [1, 3, 3], [3, 3, 3]]);
+    const { charge: echangee } = executer('echangerDansRetenu', designee, { tour: 1, a: 2, b: 3 });
+    assert.deepEqual(listes(echangee, 1)[0], [1, 3, 2, 4, 5, 6]);
+    assert.deepEqual(nonTenues(charge, echangee), [[2, null, null], [3, 3, 3]]);
+  });
+});
+
 describe('enregistrerGeneration : les sièges réservés dans une génération (§ 4, § 5.3, § 8.9)', () => {
   // Douze personnes, deux tables, Théo réservé « tous » au siège siege de la
   // table 2, sièges attribués.
@@ -894,6 +941,8 @@ describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
     ['PROPOSITION_MONTREE', [{ proposition: 4 }, 'n° 4']],
     ['SIEGE_OCCUPE', [{ table: 5, siege: 2, tour: 1, occupant: 2 }, 'siège 2']],
     ['TABLE_PLEINE', [{ table: 5, tour: 1, capacite: 6 }, '6 places']],
+    // Le refus du dépôt sur le sol (src/interface/plan/depot.js), dont le texte vit ici.
+    ['RESERVATION_TOUS_LES_TOURS', [{ participant: 1, table: 3 }, 'tous les tours']],
   ]);
 
   test('chaque code de la table des places a son texte, composé de ses détails', () => {
@@ -906,6 +955,12 @@ describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
       assert.ok(!texte.includes('undefined'), `${code} : ${texte}`);
     }
     assert.ok(libelle('PLACE_RESERVEE', { siege: 3, tour: null, portee: 'tous' }).includes('à tous les tours'));
+    // Le refus du dépôt sur le sol dit ce que le sol ne fait pas, sans rien
+    // promettre du glissement vers une autre chaise : deplacerReservation y
+    // garde la portée « tous », et la déplace à chaque tour.
+    const tous = libelle('RESERVATION_TOUS_LES_TOURS', { participant: 1, table: 3, remede: null });
+    assert.ok(tous.includes('hors des tables'), tous);
+    assert.ok(!tous.includes('ne change que'), tous);
     assert.equal(libelle('places.titreParDefaut'), 'animateur');
   });
 });

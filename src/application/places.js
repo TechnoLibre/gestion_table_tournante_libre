@@ -138,13 +138,20 @@ function planEvalue(charge, instance, placement) {
   }
 }
 
-// Les places que les réservations actives couvrantes tiennent à une table :
-// tenu, Map siège → réservation, la première dans l'ordre canonique de
-// chaque siège dans la capacité, une personne n'en tenant qu'un ; sansSiege,
-// Map personne → réservation, pour chaque autre personne réservée à la
-// table — sans siège, ou dont le siège est pris : elle se lit comme une
-// réservation sans siège.
-function placesTenues(couvrantes, places) {
+/**
+ * Les places que les réservations actives couvrantes d'une table tiennent,
+ * la règle de l'affichage : tenu, Map siège → réservation, la première dans
+ * l'ordre canonique de chaque siège dans la capacité, une personne n'en
+ * tenant qu'un ; siegeDe, Map personne → son siège tenu ; sansSiege, Map
+ * personne → réservation, pour chaque autre personne réservée à la table —
+ * sans siège, ou dont le siège est pris : elle se lit comme une réservation
+ * sans siège.
+ *
+ * @param {Object[]} couvrantes   les réservations actives qui couvrent le tour à cette table, ordre canonique
+ * @param {number} places         la capacité courante de la table
+ * @returns {{tenu: Map<number, Object>, siegeDe: Map<number, number>, sansSiege: Map<number, Object>}}
+ */
+export function placesTenues(couvrantes, places) {
   const tenu = new Map();
   const siegeDe = new Map();
   const sansSiege = new Map();
@@ -163,13 +170,17 @@ function placesTenues(couvrantes, places) {
   return { tenu, siegeDe, sansSiege };
 }
 
-// Le remplissage et les marques d'une chaise (§ 7.6) : plein et cadenas
-// fermé quand une réservation tient la place, l'anneau en plus pour la portée
-// « tous les tours » ; sinon cadenas ouvert pour un titre, hachure quand rien
-// ne le pourvoit à ce tour.
-function aspect(reservation, titre) {
+// Le remplissage et les marques d'une chaise (§ 7.6) : une réservation
+// porte le cadenas fermé, l'anneau en plus pour la portée « tous les
+// tours » ; la chaise est pleine quand le placement la tient, hachurée — à
+// pourvoir — quand il la laisse vide ou y assied une autre personne. Le
+// cadenas ouvert reste au titre seul, hachuré quand rien ne le pourvoit à ce
+// tour : la forme distingue toujours une réservation d'un titre.
+function aspect(reservation, occupant, titre) {
   if (reservation !== null) {
-    return { remplissage: 'plein', marques: reservation.portee === 'tous' ? ['cadenasFerme', 'anneau'] : ['cadenasFerme'] };
+    const anneau = reservation.portee === 'tous' ? ['anneau'] : [];
+    const remplissage = reservation.participant === occupant ? 'plein' : 'hachure';
+    return { remplissage, marques: ['cadenasFerme', ...anneau] };
   }
   if (titre !== null) return { remplissage: titre.pourvu ? 'normal' : 'hachure', marques: ['cadenasOuvert'] };
   return { remplissage: 'normal', marques: [] };
@@ -184,7 +195,11 @@ function aspect(reservation, titre) {
  * réservations, repartirSieges répartit les occupants de la table, chacun à
  * son siège réservé, une personne réservée sans siège qui pourvoit un titre
  * au siège de ce titre ; quand la liste dépasse la capacité, les personnes
- * réservées à la table passent avant les autres. Un exclu, une personne que la charge n'a plus,
+ * réservées à la table passent avant les autres. Sièges attribués, la
+ * source se lit telle quelle : la réservation qui tient un siège que la
+ * liste donne à une autre personne, ou laisse vide, se lit sur la chaise
+ * sans la remplir — hachure et cadenas fermé —, et sa personne est là où
+ * la liste l'assied. Un exclu, une personne que la charge n'a plus,
  * n'occupe rien et n'attend pas ; une personne présente qu'aucune chaise ne
  * reçoit attend en réserve. Les conflits sont ceux de conflitsParTable au
  * tour, null quand la source est en dérive ou que la configuration ne se
@@ -271,7 +286,7 @@ export function etatPlaces(charge, { tour, proposition = null }) {
       const reservation = tenue === null ? null : { participant: tenue.participant, portee: tenue.portee, tour: tenue.tour };
       const rangTitre = titreDePlace.get(`${id}:${siege}`);
       const titre = rangTitre === undefined ? null : { libelle: titres[rangTitre].libelle, pourvu: pourvuAuTour(rangTitre) };
-      return { siege, occupant, reservation, titre, ...aspect(reservation, titre) };
+      return { siege, occupant, reservation, titre, ...aspect(reservation, occupant, titre) };
     });
 
     return {

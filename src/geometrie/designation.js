@@ -38,10 +38,13 @@ export function regimeCibles(k, geometrie) {
  * de la peinture : la première dont la surface peinte contient le point
  * décide. En régime table, la surface est l'emprise — disque d'une ronde,
  * carré d'une carrée — et la table est désignée. En régime sièges, elle est
- * le plateau et les chaises : un point dans une chaise désigne son siège ;
- * un point sur le plateau ne désigne rien, et cache les chaises des tables
- * peintes dessous ; entre les chaises, le point passe aux tables de dessous.
- * Deux chaises d'une même table ne se recouvrent pas.
+ * le plateau et les cibles des sièges : un point à rayonCible au plus du
+ * centre d'une chaise — max(RAYON_CHAISE, pas / 2), la cible a la taille du
+ * pas — désigne son siège ; un point sur le plateau hors de toute cible ne
+ * désigne rien, et cache les chaises des tables peintes dessous ; hors des
+ * cibles et du plateau, le point passe aux tables de dessous. Deux cibles
+ * d'une même table se touchent au plus : sur leur bord commun, le plus petit
+ * siège l'emporte.
  *
  * @param {{x: number, y: number}} point  cm
  * @param {import('./tables.js').GeometrieTable[]} geometries  dans l'ordre du dessin
@@ -55,7 +58,7 @@ export function designer(point, geometries, k) {
       if (dans(point, geometrie, geometrie.rayonEmprise)) return { table: geometrie.id };
       continue;
     }
-    const chaise = geometrie.chaises.find((c) => Math.hypot(point.x - c.x, point.y - c.y) <= c.rayon);
+    const chaise = geometrie.chaises.find((c) => Math.hypot(point.x - c.x, point.y - c.y) <= geometrie.rayonCible);
     if (chaise !== undefined) return { table: geometrie.id, siege: chaise.siege };
     if (dans(point, geometrie, geometrie.demiTaille)) return null;
   }

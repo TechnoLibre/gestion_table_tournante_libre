@@ -11,8 +11,9 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { examiner } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
-import { avertissementsApres, invariantViole } from './avertissements.js';
+import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
 
 const personne = (id, nom, exclu = false) => ({
   id,
@@ -184,7 +185,7 @@ describe('avertissements : la dérive que le geste ajoute (§ 9, § 8.9)', () =>
   test('exclure une personne : DERIVE_NOUVELLE nomme chaque proposition par identifiant, puis le retenu, et la raison', () => {
     const avant = petiteSoiree();
     const apres = avec(avant, (charge) => (charge.participants[2].exclu = true));
-    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 3 }];
+    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 3, personne: 'Pervenche' }];
     assert.deepEqual(avertissementsApres(avant, apres), [
       {
         code: 'DERIVE_NOUVELLE',
@@ -196,14 +197,14 @@ describe('avertissements : la dérive que le geste ajoute (§ 9, § 8.9)', () =>
   test("une raison que le placement portait déjà ne se redit pas ; une raison au champ changé est nouvelle", () => {
     const une = avec(petiteSoiree(), (charge) => (charge.participants[2].exclu = true));
     const deux = avec(une, (charge) => (charge.participants[3].exclu = true));
-    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 4 }];
+    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 4, personne: 'Lacasse' }];
     assert.deepEqual(avertissementsApres(une, deux), [
       { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons }, { id: 2, raisons }, { id: 'retenu', raisons }] } },
     ]);
     assert.deepEqual(avertissementsApres(deux, avec(deux, (charge) => (charge.participants[0].nom = 'Parasol'))), []);
     const trois = avec(petiteSoiree(), (charge) => (charge.tables[0].sieges = 3));
     const quatre = avec(trois, (charge) => (charge.tables[0].sieges = 4));
-    const changee = [{ code: 'CAPACITE_CHANGEE', table: 1, avant: 2, maintenant: 4 }];
+    const changee = [{ code: 'CAPACITE_CHANGEE', table: 1, avant: 2, maintenant: 4, numero: 1 }];
     assert.deepEqual(avertissementsApres(trois, quatre), [
       {
         code: 'DERIVE_NOUVELLE',
@@ -218,10 +219,60 @@ describe('avertissements : la dérive que le geste ajoute (§ 9, § 8.9)', () =>
       charge.participants[2].exclu = true;
       reserverGrisaille(charge);
     });
-    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 3 }];
+    const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 3, personne: 'Pervenche' }];
     assert.deepEqual(avertissementsApres(avant, apres), [
       { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons }, { id: 2, raisons }] } },
     ]);
+  });
+});
+
+describe('avertissements : la dérive nomme les personnes et les tables (§ 9)', () => {
+  test("une personne se nomme par son nom affiché, une table par son numéro ; celles que le geste retire, par la charge d'avant", () => {
+    const avant = avec(petiteSoiree(), (charge) => {
+      charge.tables[1].numero = 7;
+      charge.participants[1].prenom = 'Aubépine';
+    });
+    const supprimees = avec(avant, (charge) => {
+      charge.participants = charge.participants.filter(({ id }) => id !== 2);
+      charge.reservations = charge.reservations.filter(({ participant }) => participant !== 2);
+      charge.tables = charge.tables.filter(({ id }) => id !== 2);
+    });
+    const raisons = [
+      { code: 'PARTICIPANT_SUPPRIME', participant: 2, personne: 'Aubépine Grisaille' },
+      { code: 'TABLE_SUPPRIMEE', table: 2, numero: 7 },
+    ];
+    const [derive] = avertissementsApres(avant, supprimees).filter(({ code }) => code === 'DERIVE_NOUVELLE');
+    assert.deepEqual(derive.details.touchees, [{ id: 1, raisons }, { id: 2, raisons }, { id: 'retenu', raisons }]);
+
+    const ajoutees = avec(avant, (charge) => {
+      charge.participants.push(personne(5, 'Ancolie'));
+      charge.tables.push({ ...table(3, null), numero: 9 });
+      charge.prochainsIds.participant = 6;
+      charge.prochainsIds.table = 4;
+    });
+    const [nouvelle] = avertissementsApres(avant, ajoutees).filter(({ code }) => code === 'DERIVE_NOUVELLE');
+    assert.deepEqual(nouvelle.details.touchees[0].raisons, [
+      { code: 'PARTICIPANT_NON_PLACE', participant: 5, personne: 'Ancolie' },
+      { code: 'TABLE_AJOUTEE', table: 3, numero: 9 },
+    ]);
+  });
+
+  test("examenNomme nomme chaque raison de l'examen sur la charge, sans toucher l'examen reçu ; une personne ou une table que la charge n'a plus garde son identifiant", () => {
+    const charge = avec(petiteSoiree(), (copie) => {
+      copie.participants[2].exclu = true;
+      copie.participants.pop();
+    });
+    const examen = examiner(charge);
+    const copie = structuredClone(examen);
+    const nomme = examenNomme(examen, charge);
+    assert.deepEqual(examen, copie);
+    const attendues = [
+      { code: 'PARTICIPANT_EXCLU', participant: 3, personne: 'Pervenche' },
+      { code: 'PARTICIPANT_SUPPRIME', participant: 4 },
+    ];
+    assert.deepEqual(nomme.retenu.raisons, attendues);
+    assert.deepEqual(nomme.derives.map(({ raisons }) => raisons), [attendues, attendues]);
+    assert.deepEqual(nomme.fautives, examen.fautives);
   });
 });
 
@@ -330,5 +381,112 @@ describe('avertissements : les violations du retenu hors de la dérive (§ 14.12
       charge.reservations.push({ participant: 2, table: 1, siege: null, portee: 'tour', tour: 1 });
     });
     assert.equal(invariantViole(incoherente), null);
+  });
+});
+
+// Huit personnes, deux tables de quatre, un tour, sièges attribués : le
+// retenu assied 1 à 4 aux sièges 1 à 4 de la table 1, et 5 à 8 à la table 2.
+function soireeAuxSieges() {
+  const charge = creerCharge({ id: 'evt-sieges', nom: 'Soirée des Chaises', siegesParDefaut: 4, tours: 1 });
+  const ids = [1, 2, 3, 4, 5, 6, 7, 8];
+  charge.participants = ids.map((id) => personne(id, `Convive ${id}`));
+  charge.tables = [table(1, null), table(2, null)];
+  charge.reglages.attribuerSieges = true;
+  const plan = { tables: [1, 2], capacites: [4, 4], tours: 1, participants: ids, placement: [{ sieges: [[1, 2, 3, 4], [5, 6, 7, 8]], reserve: [] }] };
+  charge.propositions = [
+    { id: 1, graine: 1, arret: 40, historique: 1, produitVersion: VERSION.affichee, siegesAttribues: true, ...structuredClone(plan) },
+  ];
+  charge.retenu = { proposition: 1, siegesAttribues: true, ...structuredClone(plan) };
+  charge.prochainsIds = { participant: 9, table: 3, proposition: 2 };
+  charge.evenement.etat = 'retenu';
+  return charge;
+}
+
+const reserverAuSiege = (participant, idTable, siege) => (charge) =>
+  charge.reservations.push({ participant, table: idTable, siege, portee: 'tous', tour: null });
+const deCode = (code) => (avertissements) => avertissements.filter((avertissement) => avertissement.code === code);
+
+describe("avertissements : la réservation que le retenu n'honore pas au siège (§ 5.8, § 14.12)", () => {
+  test('sièges attribués, une réservation au siège 3 que le retenu donne à un autre, la personne assise à la même table : RESERVATION_NON_HONOREE au siège, avec son occupant', () => {
+    const avant = soireeAuxSieges();
+    const apres = avec(avant, reserverAuSiege(2, 1, 3));
+    assert.deepEqual(avertissementsApres(avant, apres), [
+      {
+        code: 'RESERVATION_NON_HONOREE',
+        details: { participant: 2, table: 1, tour: 1, personne: 'Convive 2', numero: 1, siege: 3, occupant: 3 },
+      },
+    ]);
+    assert.deepEqual(invariantViole(apres), {
+      code: 'INVARIANT_VIOLE',
+      details: { proposition: 1, violations: [{ code: 'RESERVATION', participant: 2, table: 1, tour: 1, siege: 3, occupant: 3 }] },
+    });
+    assert.deepEqual(avertissementsApres(apres, avec(apres, (charge) => (charge.participants[0].nom = 'Parasol'))), []);
+  });
+
+  test("la chaise réservée vide : l'occupant est null", () => {
+    const avant = avec(soireeAuxSieges(), (charge) => {
+      charge.retenu.placement[0].sieges[0] = [1, 2, null, 4];
+      charge.retenu.placement[0].reserve = [3];
+    });
+    const apres = avec(avant, reserverAuSiege(2, 1, 3));
+    assert.deepEqual(deCode('RESERVATION_NON_HONOREE')(avertissementsApres(avant, apres)), [
+      {
+        code: 'RESERVATION_NON_HONOREE',
+        details: { participant: 2, table: 1, tour: 1, personne: 'Convive 2', numero: 1, siege: 3, occupant: null },
+      },
+    ]);
+  });
+
+  test("tenue à son siège, réservée sans siège, ou sans attribution des sièges : rien au siège", () => {
+    const avant = soireeAuxSieges();
+    assert.deepEqual(avertissementsApres(avant, avec(avant, reserverAuSiege(3, 1, 3))), []);
+    assert.deepEqual(avertissementsApres(avant, avec(avant, reserverAuSiege(2, 1, null))), []);
+    const sansAttribution = avec(avant, (charge) => {
+      charge.reglages.attribuerSieges = false;
+      charge.retenu.siegesAttribues = false;
+      charge.propositions[0].siegesAttribues = false;
+    });
+    assert.deepEqual(avertissementsApres(sansAttribution, avec(sansAttribution, reserverAuSiege(2, 1, 3))), []);
+    assert.equal(invariantViole(avec(sansAttribution, reserverAuSiege(2, 1, 3))), null);
+  });
+
+  test('deux réservations au même siège : la première dans l’ordre canonique le tient, la seconde se lit sans siège', () => {
+    const avant = soireeAuxSieges();
+    const apres = avec(avant, (charge) => {
+      reserverAuSiege(3, 1, 3)(charge);
+      reserverAuSiege(4, 1, 3)(charge);
+    });
+    assert.deepEqual(avertissementsApres(avant, apres), []);
+  });
+});
+
+describe("avertissements : la réservation d'une personne que le retenu ne place pas (§ 9, § 14.12)", () => {
+  test("une personne ajoutée après la retenue et réservée : RESERVATION_NON_HONOREE, en plus de la dérive qui la dit non placée ; INVARIANT_VIOLE la garde", () => {
+    const avant = soireeAuxSieges();
+    const apres = avec(avant, (charge) => {
+      charge.participants.push(personne(9, 'Ancolie'));
+      charge.prochainsIds.participant = 10;
+      reserverAuSiege(9, 2, null)(charge);
+    });
+    const rendus = avertissementsApres(avant, apres);
+    assert.deepEqual(codes(rendus), ['PLACES_MANQUANTES', 'DERIVE_NOUVELLE', 'RESERVATION_NON_HONOREE']);
+    assert.deepEqual(deCode('RESERVATION_NON_HONOREE')(rendus)[0].details, {
+      participant: 9,
+      table: 2,
+      tour: 1,
+      personne: 'Ancolie',
+      numero: 2,
+    });
+    assert.deepEqual(invariantViole(apres).details.violations, [{ code: 'RESERVATION', participant: 9, table: 2, tour: 1 }]);
+  });
+
+  test("non réservée, la personne ajoutée ne relève que de la dérive", () => {
+    const avant = soireeAuxSieges();
+    const apres = avec(avant, (charge) => {
+      charge.participants.push(personne(9, 'Ancolie'));
+      charge.prochainsIds.participant = 10;
+    });
+    assert.deepEqual(deCode('RESERVATION_NON_HONOREE')(avertissementsApres(avant, apres)), []);
+    assert.equal(invariantViole(apres), null);
   });
 });

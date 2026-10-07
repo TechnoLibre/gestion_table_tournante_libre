@@ -13,9 +13,12 @@
   // En régime table, les chaises ne se dessinent pas : l'emprise entière se
   // peint au fond de la chaise et devient la seule cible, sous le plateau.
   // En régime sièges, chaque chaise est un groupe [data-siege="table:siège"]
-  // dont seul le disque reçoit le pointeur : ses marques, comme la pastille,
-  // ont pointer-events: none, et la cible d'une chaise est le disque même que
-  // la désignation lit (designation.js).
+  // dont la cible reçoit le pointeur : un disque sans peinture, de rayon
+  // rayonCible — max(RAYON_CHAISE, pas / 2), le disque même que la
+  // désignation lit (designation.js) —, dernier enfant du groupe, au-dessus
+  // de la chaise et de ses marques ; les marques, comme la pastille, ont
+  // pointer-events: none. La cible ne porte aucune marque et ne peint rien :
+  // le premier disque du groupe reste la chaise.
   //
   // Une table en conflit, quand le plan signale, porte un contour épaissi
   // (contourConflit) et une trame (trameConflit) par-dessus son plateau ; sa
@@ -139,6 +142,7 @@
       {#if chaise.focus}
         <rect class="focus" data-marque="focus" {...carreAutour(chaise, chaise.rayon + ECART_FOCUS)} />
       {/if}
+      <circle class="cible" cx={chaise.x} cy={chaise.y} r={table.geometrie.rayonCible} />
     </g>
   {/each}
 </g>
@@ -195,6 +199,14 @@
   .gel {
     fill: var(--couleur-gel);
     pointer-events: none;
+  }
+
+  /* La cible d'un siège : aucune peinture, le pointeur la reçoit tout de
+     même. */
+  .cible {
+    fill: none;
+    stroke: none;
+    pointer-events: all;
   }
 
   .chaise {

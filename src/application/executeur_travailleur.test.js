@@ -158,17 +158,51 @@ describe('exécuteur du travailleur (§ 5.10)', () => {
     assert.equal(travailleur.terminaisons, 1, 'une seconde annulation ne termine rien de plus');
   });
 
-  test('le canal d’erreur du travailleur : rejet par une erreur sans code, le travailleur terminé', async () => {
+  test('le canal d’erreur du travailleur — un script qui ne se charge ou ne se compile pas : rejet par ErreurGeneration TRAVAILLEUR_EN_ECHEC, remède null, sans le message ; l’événement est traité, le travailleur terminé', async () => {
     const { fabrique, travailleurs } = fabriqueFactice();
     const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
     const [travailleur] = travailleurs;
     assert.equal(typeof travailleur.onerror, 'function');
-    travailleur.onerror({ message: 'faute d’épreuve' });
+    const evenement = {
+      message: 'faute d’épreuve',
+      traite: false,
+      preventDefault() {
+        this.traite = true;
+      },
+    };
+    travailleur.onerror(evenement);
     const lue = await issue(execution.resultat);
     assert.equal(lue.etat, 'rejetee');
-    assert.ok(lue.erreur instanceof Error);
+    assert.ok(lue.erreur instanceof ErreurGeneration, String(lue.erreur));
+    assert.equal(lue.erreur.code, 'TRAVAILLEUR_EN_ECHEC');
+    assert.deepEqual(lue.erreur.details, { remede: null });
+    assert.doesNotMatch(JSON.stringify(lue.erreur.details), /épreuve/);
+    assert.equal(evenement.traite, true);
+    assert.equal(travailleur.terminaisons, 1);
+    // Un événement d'erreur sans preventDefault, comme le rendrait une portée factice, ne lève pas.
+    const seconde = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
+    travailleurs[1].onerror({});
+    assert.equal((await issue(seconde.resultat)).erreur.code, 'TRAVAILLEUR_EN_ECHEC');
+  });
+
+  test('une faute pendant le calcul, postée { type: faute, message, pile } : rejet par une Error sans code, qui porte le message et la pile du travailleur ; aucun refus, le travailleur terminé, la suite ignorée', async () => {
+    const { fabrique, travailleurs } = fabriqueFactice();
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
+    const avancements = [];
+    execution.surAvancement((fait, total) => avancements.push([fait, total]));
+    const [travailleur] = travailleurs;
+    travailleur.poster({ type: 'faute', message: 'TypeError: invariant d’épreuve rompu', pile: 'TypeError: invariant d’épreuve rompu\n    at calcul (épreuve.js:1:1)' });
+    travailleur.poster({ type: 'avancement', fait: 1, total: 2 });
+    travailleur.poster({ type: 'resultat', propositions: [] });
+    const lue = await issue(execution.resultat);
+    assert.equal(lue.etat, 'rejetee');
+    assert.ok(lue.erreur instanceof Error, String(lue.erreur));
+    assert.ok(!(lue.erreur instanceof ErreurGeneration), 'une faute n’est pas un refus');
+    assert.ok(!(lue.erreur instanceof ErreurAnnulee));
     assert.equal(lue.erreur.code, undefined);
-    assert.match(lue.erreur.message, /faute d’épreuve/);
+    assert.match(lue.erreur.message, /TypeError: invariant d’épreuve rompu/);
+    assert.match(lue.erreur.stack, /at calcul \(épreuve\.js:1:1\)/);
+    assert.deepEqual(avancements, []);
     assert.equal(travailleur.terminaisons, 1);
   });
 });

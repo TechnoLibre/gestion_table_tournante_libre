@@ -10,6 +10,10 @@
   //
   // demonstrations : [{ cle, nom }] ; charger(cle) : le geste de l'accueil ;
   // refus : { cle, refus } du dernier échec, ou null.
+  //
+  // Un chargement en cours ne se relance pas : tant que charger n'a pas
+  // rendu la main, un clic sur une démonstration ne fait rien, et celle qui
+  // se charge porte aria-busy et aria-disabled.
   import { getContext } from 'svelte';
   import Refus from '../primitives/Refus.svelte';
 
@@ -17,6 +21,19 @@
 
   const t = getContext('t');
   const uid = $props.id();
+
+  // La clé de la démonstration qui se charge, ou null.
+  let enCours = $state(null);
+
+  async function choisir(cle) {
+    if (enCours !== null) return;
+    enCours = cle;
+    try {
+      await charger(cle);
+    } finally {
+      enCours = null;
+    }
+  }
 </script>
 
 <section class="demonstrations" aria-labelledby={`${uid}-titre`}>
@@ -25,7 +42,13 @@
   <ul>
     {#each demonstrations as { cle, nom } (cle)}
       <li>
-        <button type="button" data-demonstration={cle} onclick={() => charger(cle)}>{nom}</button>
+        <button
+          type="button"
+          data-demonstration={cle}
+          aria-busy={enCours === cle ? 'true' : undefined}
+          aria-disabled={enCours === cle ? 'true' : undefined}
+          onclick={() => choisir(cle)}>{nom}</button
+        >
         {#if refus !== null && refus.cle === cle}
           <Refus refus={refus.refus} />
         {/if}
@@ -80,5 +103,11 @@
   button:focus-visible {
     outline: 2px solid var(--couleur-focus);
     outline-offset: 2px;
+  }
+
+  button[aria-disabled='true'] {
+    border-style: dashed;
+    color: var(--couleur-page-texte-secondaire);
+    cursor: progress;
   }
 </style>

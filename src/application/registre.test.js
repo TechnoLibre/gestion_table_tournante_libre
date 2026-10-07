@@ -105,6 +105,8 @@ const REMEDE_NUL_ADMIS = new Map([
   ['MOINS_DE_DEUX', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
   ['NON_ENTIER', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
   ['MOINS_D_UN_TOUR', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
+  ['TROP_DE_PLACES', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
+  ['TROP_DE_TOURS', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
   ['LIBELLE_VIDE', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
   ['NOM_REQUIS', 'le nom se saisit dans le champ même'],
   ['PARTICIPANT_INCONNU', "une personne retirée entre-temps : aucun geste ne la rend"],
@@ -893,24 +895,41 @@ describe('registre : un exemple sans effet est refusé SANS_EFFET {commande}, sa
 // --- Le vérificateur d'invariants -------------------------------------------------
 
 describe('registre : le vérificateur d’invariants juge les retouches et l’ouverture (§ 14.12, § 14.15)', () => {
-  test("une retouche qui assiérait à un tour plus de personnes qu'une table n'a de places est refusée, sans écriture", async () => {
+  test("une retouche que seul le vérificateur refuse : retirer du tour la personne que sa réservation tient à sa table lève INVARIANT_VIOLE, les seules violations nouvelles, sans écriture", async () => {
+    const ouvert = await ouvrirCopie((await departsPrets()).temoin, { ecriture: true });
+    const { fs, seance } = ouvert;
+    const { charge } = seance;
+    // La personne 1, désignée « tous les tours » à la table 1 : le retenu
+    // l'y assied, et le retrait du tour n'a aucun contrôle de pose.
+    assert.ok(charge.reservations.some(({ participant, table, portee }) => participant === 1 && table === 1 && portee === 'tous'));
+    assert.ok(charge.retenu.placement[0].sieges[charge.retenu.tables.indexOf(1)].includes(1));
+    const ecritures = fs.compteurs.ecritures;
+    const erreur = await refusDe(seance.executer('retirerDuTour', { tour: 1, participant: 1 }));
+    assert.notEqual(erreur, null, 'accepté');
+    assert.equal(erreur.code, 'INVARIANT_VIOLE', erreur.message);
+    assert.equal(erreur.details.proposition, charge.retenu.proposition);
+    const retire = structuredClone(charge);
+    const etage = retire.retenu.placement[0];
+    etage.sieges = etage.sieges.map((liste) => liste.filter((id) => id !== 1));
+    etage.reserve = [...etage.reserve, 1].sort(croissant);
+    assert.deepEqual(erreur.details.violations, violationsNouvelles(charge, retire));
+    assert.deepEqual(erreur.details.violations, [{ code: 'RESERVATION', participant: 1, table: 1, tour: 1 }]);
+    assert.equal(fs.compteurs.ecritures, ecritures);
+  });
+
+  test("le dépôt sur une table pleine se refuse au contrôle de pose de la retouche, TABLE_PLEINE et son remède, avant le vérificateur, sans écriture", async () => {
     const ouvert = await ouvrirCopie((await departsPrets()).temoin, { ecriture: true });
     const { fs, seance } = ouvert;
     const { charge } = seance;
     const personne = libresA(charge, 1, 2)[0];
     const rang = charge.retenu.tables.indexOf(3);
-    assert.equal(charge.retenu.placement[0].sieges[rang].length, tableDe(charge, 3).sieges ?? charge.evenement.siegesParDefaut);
+    const places = tableDe(charge, 3).sieges ?? charge.evenement.siegesParDefaut;
+    assert.equal(charge.retenu.placement[0].sieges[rang].length, places);
     const ecritures = fs.compteurs.ecritures;
     const erreur = await refusDe(seance.executer('deplacerDansRetenu', { tour: 1, participant: personne, table: 3, siege: null }));
     assert.notEqual(erreur, null, 'accepté');
-    // Un refus du contrôle de pose de la retouche, ou du vérificateur ; une
-    // faute du code ou du stockage n'en est pas un.
-    assert.ok(['TABLE_PLEINE', 'INVARIANT_VIOLE'].includes(erreur.code), erreur.message);
-    assert.ok(Object.hasOwn(erreur.details, 'remede'), erreur.message);
-    if (erreur.code === 'INVARIANT_VIOLE') {
-      assert.equal(erreur.details.proposition, charge.retenu.proposition);
-      assert.ok(erreur.details.violations.length > 0);
-    }
+    assert.equal(erreur.code, 'TABLE_PLEINE', erreur.message);
+    assert.deepEqual(erreur.details.remede, { commande: 'changerPlacesTable', arguments: { id: 3, sieges: places + 1, origine: 'champ' } });
     assert.equal(fs.compteurs.ecritures, ecritures);
   });
 

@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { nombrePlaces, normaliser } from '../moteur/configuration.js';
-import { configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { SIEGES_MAX, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
 import { bilanChangementDefaut, bilanSuppressionTable, bilanTours } from './bilans.js';
 import { COMMANDES } from './commandes.js';
 
@@ -123,6 +123,15 @@ describe('bilans : changer le défaut (§ 6.1)', () => {
     ]);
     assert.equal(bilan.totalApres, 18);
     assert.deepEqual(bilanChangementDefaut(charge, 1).refus, [{ table: null, code: 'MOINS_DE_DEUX', details: { remede: null } }]);
+  });
+
+  test("au-delà de SIEGES_MAX, un seul refus pour l'événement, TROP_DE_PLACES, même quand aucune table ne suit le défaut", () => {
+    const refus = [{ table: null, code: 'TROP_DE_PLACES', details: { max: SIEGES_MAX, remede: null } }];
+    const suivent = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 4 });
+    assert.deepEqual(bilanChangementDefaut(suivent, SIEGES_MAX + 1).refus, refus);
+    const surchargees = chargeDe({ tables: [{ id: 1, sieges: 6 }], n: 4 });
+    assert.deepEqual(bilanChangementDefaut(surchargees, SIEGES_MAX + 1).refus, refus);
+    assert.deepEqual(bilanChangementDefaut(suivent, SIEGES_MAX).refus, []);
   });
 
   test('une baisse sous un retenu occupé avertit SURNUMERAIRES : deux personnes de la table 3 au tour 2', () => {

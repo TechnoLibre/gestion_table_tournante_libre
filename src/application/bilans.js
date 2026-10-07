@@ -9,7 +9,7 @@
 // controlerCapacites (capacite.js), le seul contrôle. Aucune fonction ne
 // modifie ce qu'elle reçoit.
 import { ordreDesReservations } from '../csv/import.js';
-import { capacite } from '../stockage/document.js';
+import { SIEGES_MAX, capacite } from '../stockage/document.js';
 import { controlerCapacites } from './capacite.js';
 import { presents } from './places.js';
 
@@ -46,8 +46,10 @@ const identifiants = (placements, touche) =>
  * Chaque table dont la capacité change se contrôle comme une saisie au champ
  * (§ 6.2) : refus, le premier de chaque table qui refuse, {table, code,
  * details}, par ordre de charge.tables ; avertissements, de même, ceux des
- * autres — SURNUMERAIRES, AU_DELA_LISIBLE. Moins de 2 places refusent pour
- * l'événement entier : un seul refus, MOINS_DE_DEUX, table null.
+ * autres — SURNUMERAIRES, AU_DELA_LISIBLE. Moins de 2 places, ou plus de
+ * SIEGES_MAX, refusent pour l'événement entier, qu'une table suive le
+ * défaut ou non : un seul refus, MOINS_DE_DEUX ou TROP_DE_PLACES {max},
+ * table null.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {number} sieges
@@ -64,10 +66,11 @@ export function bilanChangementDefaut(charge, sieges, { realigner = false } = {}
   const changements = new Map(
     charge.tables.filter((table) => apresDe(table) !== capacite(charge, table)).map((table) => [table.id, apresDe(table)]),
   );
-  const controle =
-    sieges < 2
-      ? { refus: [{ table: null, code: 'MOINS_DE_DEUX', details: { remede: null } }], avertissements: [] }
-      : controlerCapacites(charge, changements, { origine: 'champ' });
+  const pourLEvenement = (code, details) => ({ refus: [{ table: null, code, details: { ...details, remede: null } }], avertissements: [] });
+  let controle;
+  if (sieges < 2) controle = pourLEvenement('MOINS_DE_DEUX', {});
+  else if (sieges > SIEGES_MAX) controle = pourLEvenement('TROP_DE_PLACES', { max: SIEGES_MAX });
+  else controle = controlerCapacites(charge, changements, { origine: 'champ' });
   return {
     suivent: charge.tables.filter((table) => table.sieges === null).length,
     avant: charge.evenement.siegesParDefaut,

@@ -4,7 +4,8 @@
 <script>
   // La fiche d'une personne à l'écran (§ 4, § 4.2, § 7.4) : nom, prénom,
   // appartenance, courriel, titre pressenti, notes, statut calculé, ses
-  // réservations, et sa table et son siège à chaque tour du retenu. La fiche
+  // réservations, et sa table et son siège à chaque tour du retenu ; un
+  // tour que le retenu ne porte pas se dit hors du retenu. La fiche
   // replie, ne tronque jamais : un nom de deux cents caractères s'y lit
   // entier, sur autant de lignes qu'il en faut. Chaque donnée occupe son
   // propre nœud de texte, et rien n'y est interprété comme du balisage.
@@ -115,6 +116,8 @@
             <td>{etape.tour}</td>
             {#if etape.reserve}
               <td colspan="2">{t('participants.fiche.enReserve')}</td>
+            {:else if etape.horsRetenu}
+              <td colspan="2">{t('participants.fiche.horsRetenu')}</td>
             {:else}
               <td>{etape.numero}</td>
               <td>

@@ -27,6 +27,7 @@ import {
   cadreDepuisRect,
   englobantDuTour,
   nomDeCharge,
+  sourceMontree,
   tourAffiche,
   toursOfferts,
   vueApresCadre,
@@ -247,5 +248,49 @@ describe('l’englobant d’un tour, le tour montré, les noms', () => {
     const nomDe = nomDeCharge(chargeDEpreuve());
     assert.equal(nomDe(1), 'Iris Ombrelle');
     assert.equal(nomDe(2), 'Grisaille');
+  });
+});
+
+describe('sourceMontree : ce que la barre de vue dit du placement montré (§ 2.1 étape 11, § 5.8)', () => {
+  // Les champs d'EtatPlaces que la barre lit : source, proposition, cible, refus.
+  const etat = (source, { proposition = null, cible = null, refus = null } = {}) => ({ source, proposition, cible, refus });
+
+  test('le retenu, les réservations, un retenu illisible : un libellé chacun, aucune commande sans proposition demandée', () => {
+    assert.deepEqual(sourceMontree(etat('retenu', { cible: 'retenu' }), null, true), {
+      libelle: { cle: 'plan.source.retenu', details: {} },
+      revenir: null,
+    });
+    assert.deepEqual(sourceMontree(etat('reservations', { cible: 'reservations' }), null, false), {
+      libelle: { cle: 'plan.source.reservations', details: {} },
+      revenir: null,
+    });
+    const fautif = etat('reservations', { refus: { code: 'RETENU_FAUTIF', details: {} } });
+    assert.deepEqual(sourceMontree(fautif, null, true).libelle, { cle: 'plan.source.retenuFautif', details: {} });
+  });
+
+  test('une proposition montrée avant la retenue : ses gestes posent des réservations ; la commande revient aux réservations', () => {
+    assert.deepEqual(sourceMontree(etat('proposition', { proposition: 3, cible: 'reservations' }), 3, false), {
+      libelle: { cle: 'plan.source.propositionReservations', details: { proposition: 3 } },
+      revenir: 'plan.source.revenirReservations',
+    });
+  });
+
+  test('une proposition montrée après la retenue : vue seule ; la commande revient au retenu', () => {
+    const refus = { code: 'PROPOSITION_MONTREE', details: { proposition: 2, remede: null } };
+    assert.deepEqual(sourceMontree(etat('proposition', { proposition: 2, refus }), 2, true), {
+      libelle: { cle: 'plan.source.propositionVueSeule', details: { proposition: 2 } },
+      revenir: 'plan.source.revenirRetenu',
+    });
+  });
+
+  test('une proposition demandée qu’un tour ne porte pas : le plan dit sa source réelle, et la commande reste offerte', () => {
+    assert.deepEqual(sourceMontree(etat('retenu', { cible: 'retenu' }), 2, true), {
+      libelle: { cle: 'plan.source.retenu', details: {} },
+      revenir: 'plan.source.revenirRetenu',
+    });
+  });
+
+  test('une source hors du contrat lève', () => {
+    assert.throws(() => sourceMontree(etat('autre'), null, false), TypeError);
   });
 });

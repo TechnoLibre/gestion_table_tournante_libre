@@ -30,8 +30,9 @@ const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
 
 // Les épreuves node qui lisent les composants de src/interface par le
 // système de fichiers — chaînes, couleurs, en-tête, jetons lus, écouteurs du
-// plan, version affichée, graphe des couches —, et celle qui importe
-// App.svelte pour en voir l'échec sous node.
+// plan, version affichée, graphe des couches, version qu'App reçoit par ses
+// propriétés —, et celle qui importe App.svelte pour en voir l'échec sous
+// node.
 const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/arborescence.test.js',
   'test/sources_interface.test.js',
@@ -40,6 +41,7 @@ const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/licence.test.js',
   'src/interface/palette.test.js',
   'src/interface/plan/ecouteurs.test.js',
+  'src/interface/apropos.test.js',
 ]);
 
 // Les épreuves node qui lisent la feuille des jetons par le système de
@@ -89,35 +91,44 @@ export default defineConfig({
       },
     },
     // Sous surveillance, une épreuve se relance quand un module de son graphe
-    // d'imports change. Les fichiers des motifs se lisent hors de tout
-    // graphe : le contrôle de version (§ 18.5) lit les premiers par le
-    // système de fichiers ; la coquille s'exécute dans un processus à part,
-    // la configuration d'electron-builder se charge par un require natif et
-    // lit capacitor.config.json, et le script de construction se lance
-    // depuis une copie. Les composants de src/interface et la feuille des
-    // jetons se lisent comme du texte par les gardes qui les balaient ;
-    // sous node, sans greffon Svelte, aucun graphe ne les parcourt. Chaque
-    // motif rattache ses fichiers aux épreuves qui les lisent, et au
-    // contrôle de version quand son point 6 les balaie. Un fichier qui
-    // répond à un motif ne relance que les épreuves nommées, et plus celles
-    // qui l'importeraient : un motif relance donc toute épreuve qui importe
-    // l'un de ses fichiers — test/fichiers_electron.test.js importe
-    // electron/fichiers.js, test/projets.test.js importe App.svelte —, et ne
-    // nomme aucune table de libellés, que le graphe suffit à suivre.
-    // test/arborescence.test.js garde cette règle, et relève toute épreuve
-    // de la série node dont le texte lit un composant ou une feuille de
-    // style de src/interface sans que son motif la relance. L'option se lit au
-    // niveau du lanceur : posée dans un projet, elle est ignorée sans
-    // avertissement.
+    // d'imports change. Les fichiers des motifs se lisent hors de tout graphe :
+    // le contrôle de version (§ 18.5) lit les premiers par le système de
+    // fichiers ; la coquille s'exécute dans un processus à part, la
+    // configuration d'electron-builder se charge par un require natif et lit
+    // capacitor.config.json, et le script de construction se lance depuis une
+    // copie ; le point d'entrée de la page et le montage des épreuves du
+    // navigateur, qu'aucune épreuve node n'importe, se lisent par le disque, la
+    // langue et les démonstrations qu'ils passent à App comprises
+    // (test/livrable.test.js). Les composants de src/interface et la feuille des
+    // jetons se lisent comme du texte par les gardes qui les balaient ; sous
+    // node, sans greffon Svelte, aucun graphe ne les parcourt. Chaque motif
+    // rattache ses fichiers aux épreuves qui les lisent, et au contrôle de
+    // version quand son point 6 les balaie. Un fichier qui répond à un motif ne
+    // relance que les épreuves nommées, et plus celles qui l'importeraient : un
+    // motif relance donc toute épreuve de la série node qui importe l'un de ses
+    // fichiers — test/fichiers_electron.test.js importe electron/fichiers.js,
+    // test/projets.test.js importe App.svelte —, et ne nomme aucune table de
+    // libellés, que le graphe suffit à suivre. test/arborescence.test.js garde
+    // cette règle, et relève toute épreuve de la série node dont le texte lit un
+    // composant ou une feuille de style de src/interface sans que son motif la
+    // relance. Les motifs ne servent que la série node, la seule que la commande
+    // surveillée lance (§ 14.4) : sous une surveillance du projet navigateur,
+    // lancée à la main, un composant ou la feuille des jetons modifiés ne
+    // relancent aucune épreuve du navigateur, que le motif tait ; elles se
+    // relancent à la main. L'option se lit au niveau du lanceur : posée dans un
+    // projet, elle est ignorée sans avertissement.
     watchTriggerPatterns: [
       { pattern: /(^|\/)(version\.json|package-lock\.json|CHANGELOG\.md|README\.md|GUIDE-[^/]*\.md)$/,
         testsToRun: () => 'scripts/version.test.js' },
       { pattern: /(^|\/)electron\/[^/]+$/,
-        testsToRun: () => ['test/coquille.test.js', 'test/fichiers_electron.test.js', 'test/livrable.test.js', 'scripts/version.test.js'] },
+        testsToRun: () => ['test/coquille.test.js', 'test/fichiers_electron.test.js', 'test/livrable.test.js',
+                           'scripts/essai_demarrage.test.js', 'scripts/version.test.js'] },
       { pattern: /(^|\/)test\/electron_factice\.js$/,
         testsToRun: () => ['test/coquille.test.js', 'scripts/version.test.js'] },
       { pattern: /(^|\/)(electron-builder\.config\.cjs|capacitor\.config\.json)$/,
         testsToRun: () => ['test/livrable.test.js', 'scripts/construire_windows.test.js', 'scripts/version.test.js'] },
+      { pattern: /(^|\/)(src\/main\.js|test\/navigateur\/montage\.js)$/,
+        testsToRun: () => ['test/livrable.test.js', 'test/arborescence.test.js', 'scripts/version.test.js'] },
       { pattern: /(^|\/)scripts\/construire_windows\.sh$/,
         testsToRun: () => ['scripts/construire_windows.test.js', 'scripts/version.test.js'] },
       { pattern: /(^|\/)src\/interface\/.+\.svelte$/,

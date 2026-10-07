@@ -160,6 +160,7 @@ export async function monterApp({
       demonstrations: demonstrations ?? DEMONSTRATIONS,
       formatCourant: formatCourant ?? FORMAT,
       produitVersion: VERSION.affichee,
+      versionWindows: VERSION.windows,
       ...(theme === null ? {} : { themeInitial: theme }),
     },
   });

@@ -22,7 +22,7 @@
 // proposition ne se réécrit jamais : elle dérive (§ 8.9, § 9). Supprimer une
 // table et changer les tours laissent propositions et retenu en dérive.
 import { caseLibre } from '../geometrie/tables.js';
-import { SCHEMA, capacite } from '../stockage/document.js';
+import { SCHEMA, TOURS_MAX, capacite } from '../stockage/document.js';
 import { fautes } from '../stockage/placements.js';
 import { bilanChangementDefaut } from './bilans.js';
 import { controlerCapacite, lireEntier, retenuAuxCapacites } from './capacite.js';
@@ -214,7 +214,8 @@ function changerDefaut(charge, { sieges: saisie, realigner } = {}) {
 
 /**
  * changerTours {tours} (§ 2.1 étape 5, § 4.3) : le nombre de tours, lu par
- * lireEntier ; MOINS_D_UN_TOUR {tours} sous 1, remède null. Retirer des tours
+ * lireEntier ; MOINS_D_UN_TOUR {tours} sous 1, TROP_DE_TOURS {max} au-delà
+ * de TOURS_MAX, la borne que l'analyse pose aussi, remède null. Retirer des tours
  * détruit les réservations « tour désigné » au-delà, dans la même entrée ;
  * la portée « tous » reste, symbolique. Propositions et retenu restent, en
  * dérive TOURS_CHANGES, jamais tronqués.
@@ -223,6 +224,7 @@ function changerTours(charge, { tours: saisie } = {}) {
   exigerModifiable(charge);
   const tours = entierSaisi(saisie);
   if (tours < 1) throw refus('MOINS_D_UN_TOUR', { tours });
+  if (tours > TOURS_MAX) throw refus('TROP_DE_TOURS', { max: TOURS_MAX });
   const suivante = structuredClone(charge);
   suivante.evenement.tours = tours;
   suivante.reservations = suivante.reservations.filter(({ portee, tour }) => portee === 'tous' || tour <= tours);

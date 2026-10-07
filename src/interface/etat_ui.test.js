@@ -23,6 +23,7 @@ const DEPART = {
   fiche: null,
   choix: null,
   pose: null,
+  appartenance: '',
 };
 
 // Un état et le relevé de ce que reçoit son abonné.
@@ -149,6 +150,29 @@ describe('état de navigation : chaque transition', () => {
     assert.deepEqual(ui.etat(), DEPART);
   });
 
+  test('le plein écran ne vaut que pour le plan : quitter le plan le retire, par allerA, ouvrirFiche ou ouvrirImport ; hors du plan, il ne se pose pas', () => {
+    const quitters = [
+      ...SECTIONS.filter((section) => section !== 'plan').map((section) => [`allerA ${section}`, (ui) => ui.allerA(section)]),
+      ['ouvrirFiche', (ui) => ui.ouvrirFiche(4)],
+      ['ouvrirImport', (ui) => ui.ouvrirImport({ texte: 'nom\nOmbrelle', origine: 'collage' })],
+    ];
+    assert.ok(SECTIONS.includes('plan'));
+    assert.equal(quitters.length, SECTIONS.length - 1 + 2);
+    for (const [nom, quitter] of quitters) {
+      const ui = creerEtatUi();
+      ui.allerA('plan');
+      ui.basculerPleinEcran();
+      assert.equal(ui.etat().pleinEcran, true, nom);
+      quitter(ui);
+      assert.notEqual(ui.etat().section, 'plan', nom);
+      assert.equal(ui.etat().pleinEcran, false, nom);
+      ui.basculerPleinEcran();
+      assert.equal(ui.etat().pleinEcran, false, `${nom} : hors du plan, la bascule ne pose rien`);
+      ui.allerA('plan');
+      assert.equal(ui.etat().pleinEcran, false, `${nom} : revenu au plan, la tête est là`);
+    }
+  });
+
   test('ouvrirFiche(id) mène à la section participants et ouvre la fiche ; ouvrirFiche(null) la referme, la section reste', () => {
     const ui = creerEtatUi();
     ui.allerA('plan');
@@ -167,6 +191,22 @@ describe('état de navigation : chaque transition', () => {
       assert.throws(() => ui.ouvrirFiche(faute), RangeError, String(faute));
     }
     assert.equal(ui.etat(), avant);
+  });
+
+  test('garderAppartenance tient l’appartenance collante du formulaire d’ajout (§ 10.2) : elle survit au changement de section, et un autre événement repart vide', () => {
+    const ui = creerEtatUi();
+    ui.allerA('participants');
+    ui.garderAppartenance('Club des Merles');
+    assert.equal(ui.etat().appartenance, 'Club des Merles');
+    ui.allerA('plan');
+    ui.allerA('participants');
+    ui.ouvrirApropos();
+    ui.fermerApropos();
+    assert.equal(ui.etat().appartenance, 'Club des Merles');
+    ui.reinitialiser();
+    assert.equal(ui.etat().appartenance, '');
+    for (const faute of [null, undefined, 3, {}]) assert.throws(() => ui.garderAppartenance(faute), RangeError, String(faute));
+    assert.equal(ui.etat().appartenance, '');
   });
 
   test('une transition qui ne change rien ne publie pas d’état neuf', () => {

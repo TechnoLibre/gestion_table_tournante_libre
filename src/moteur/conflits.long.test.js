@@ -5,15 +5,17 @@
 // par table, sommées sur un plan entier, rendent les chiffres de la mesure.
 // Σ des paires séparer = collisionsCumulees ; Σ des personnes nouvelle table
 // = totalRetoursChoisis ; paires distinctes nouveaux voisins =
-// rencontresRepetees.choisies. D'abord les propositions d'une génération sur
-// la grande démonstration, puis cent plans tirés sur de petites
-// configurations, chacun de sa propre graine.
+// rencontresRepetees.choisies. Les deux membres lisent le même parcours du
+// plan (parcourirTours) : chacun se confronte aussi à un oracle écrit ici,
+// sans le moteur, qui tient les règles d'exemption des réservations. D'abord
+// les propositions d'une génération sur la grande démonstration, puis cent
+// plans tirés sur de petites configurations, chacun de sa propre graine.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { FLUX, creerPcg32 } from '../demo/prng.js';
 import { conflitsParTable } from './conflits.js';
-import { LIBRE, indexerPlan, normaliser, planDepuisIndex } from './configuration.js';
+import { LIBRE, SANS_GROUPE, indexerPlan, normaliser, planDepuisIndex } from './configuration.js';
 import { mesurer } from './indicateurs.js';
 import { rechercher } from './recherche.js';
 import { verifierInvariants } from './verification.js';
@@ -31,7 +33,8 @@ const PLANS_ACCEPTES_MIN = 90;
 // graines écrites ci-dessus : 100 plans acceptés ; 69 dont les trois totaux
 // sont non nuls ; 32 où une paire réunie librement se retrouve à une table où
 // les deux sont réservés ; 41 où une personne assise librement à une table y
-// revient réservée.
+// revient réservée. Les deux derniers comptent les cas où les règles
+// d'exemption des réservations décident, que l'oracle juge.
 const TOUS_NON_NULS_MIN = 55;
 const PAIRE_PUIS_RESERVEE_MIN = 25;
 const PERSONNE_PUIS_RESERVEE_MIN = 32;
@@ -57,7 +60,47 @@ function sommer(conflits) {
   return { separer, nouvelleTable, nouveauxVoisins: revues.size };
 }
 
-// Les écarts entre les sommes par table et la mesure du même plan.
+// L'oracle des trois sommes d'un plan qui assied chacun, écrit sans le
+// moteur, par les règles de l'itération 1. Séparer : chaque paire de même
+// appartenance réunie, à chaque tour. Nouveaux voisins : une paire réunie
+// au moins deux fois est choisie quand une de ses rencontres a lieu hors
+// d'une table où les deux sont réservés. Nouvelle table : pour chaque
+// personne et chaque table qu'elle visite m fois, dont f réservée, m − 1
+// retours, dont max(0, f − 1) imposés, le reste choisi.
+function oracle({ N, T, R, groupe, fixe }, tableDe) {
+  let separer = 0;
+  let nouveauxVoisins = 0;
+  for (let a = 0; a < N; a += 1) {
+    for (let b = a + 1; b < N; b += 1) {
+      let rencontres = 0;
+      let horsReservation = false;
+      for (let r = 0; r < R; r += 1) {
+        const t = tableDe[a * R + r];
+        if (t !== tableDe[b * R + r]) continue;
+        rencontres += 1;
+        if (groupe[a] !== SANS_GROUPE && groupe[a] === groupe[b]) separer += 1;
+        if (fixe[a * R + r] !== t || fixe[b * R + r] !== t) horsReservation = true;
+      }
+      if (rencontres >= 2 && horsReservation) nouveauxVoisins += 1;
+    }
+  }
+  let nouvelleTable = 0;
+  for (let p = 0; p < N; p += 1) {
+    const visites = new Int32Array(T);
+    const reservees = new Int32Array(T);
+    for (let r = 0; r < R; r += 1) {
+      const t = tableDe[p * R + r];
+      visites[t] += 1;
+      if (fixe[p * R + r] === t) reservees[t] += 1;
+    }
+    for (let t = 0; t < T; t += 1) {
+      if (visites[t] > 0) nouvelleTable += visites[t] - 1 - Math.max(0, reservees[t] - 1);
+    }
+  }
+  return { separer, nouvelleTable, nouveauxVoisins };
+}
+
+// Les écarts entre les sommes par table, la mesure du même plan et l'oracle.
 function ecarts(nom, instance, tableDe) {
   const sommes = sommer(conflitsParTable(instance, tableDe));
   const mesures = mesurer(instance, tableDe);
@@ -66,10 +109,14 @@ function ecarts(nom, instance, tableDe) {
     nouvelleTable: mesures.totalRetoursChoisis,
     nouveauxVoisins: mesures.rencontresRepetees.choisies,
   };
+  const devine = oracle(instance, tableDe);
   const fautes = [];
   for (const cle of ['separer', 'nouvelleTable', 'nouveauxVoisins']) {
     if (sommes[cle] !== attendu[cle]) {
       fautes.push(`${nom} : ${cle} ${sommes[cle]} par table, ${attendu[cle]} mesurés`);
+    }
+    if (attendu[cle] !== devine[cle]) {
+      fautes.push(`${nom} : ${cle} ${attendu[cle]} mesurés, ${devine[cle]} par l'oracle`);
     }
   }
   return { fautes, sommes };

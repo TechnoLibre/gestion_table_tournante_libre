@@ -74,6 +74,12 @@ export const TABLE = new Map([
     ({ siege, tour }) => `Le siège ${siege} est occupé au tour ${tour} : déposer la personne sur l'autre les échange.`,
   ],
   ['TABLE_PLEINE', ({ capacite, tour }) => `La table est pleine au tour ${tour} : ses ${capacite} places sont occupées.`],
+  [
+    'RESERVATION_TOUS_LES_TOURS',
+    () =>
+      'Cette personne est réservée ici pour tous les tours : la déposer hors des tables ne retire pas sa réservation. ' +
+      '« Retirer la réservation » la retire de tous les tours.',
+  ],
 
   // --- Les libellés figés du journal (§ 8.2) ---------------------------------
   [

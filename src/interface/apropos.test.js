@@ -6,6 +6,7 @@
 // version de format —, et ce qui tient lieu de version à l'écran, la marque
 // de provenance dans une construction de documentation (§ 19.4).
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
 import { TABLES_APPLICATION } from '../application/libelles.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../application/traduction.js';
@@ -49,6 +50,23 @@ describe('blocAPropos (§ 18.6)', () => {
     }
   });
 
+  test('une forme de la version absente, vide ou qui n’est pas une chaîne lève RangeError en la nommant : jamais un bloc copiable faux', () => {
+    const fautes = [undefined, null, '', 7];
+    assert.equal(fautes.length, 4);
+    for (const faute of fautes) {
+      for (const [forme, version] of [
+        ['windows', { affichee: VERSION.affichee, windows: faute }],
+        ['affichee', { affichee: faute, windows: VERSION.windows }],
+      ]) {
+        assert.throws(
+          () => blocAPropos({ version, plateforme: 'web', provenance: 'test', format: FORMAT }, t),
+          (erreur) => erreur instanceof RangeError && erreur.message.includes(forme),
+          `${forme} ${String(faute)}`,
+        );
+      }
+    }
+  });
+
   test('en langue témoin, le bloc entier est encadré une fois', () => {
     const bloc = blocAPropos({ version: VERSION, plateforme: 'web', provenance: 'test', format: FORMAT }, temoin);
     const { ouverture, fermeture } = MARQUE_TEMOIN;
@@ -85,5 +103,19 @@ describe('provenanceVisible (§ 18.6)', () => {
     const { ouverture, fermeture } = MARQUE_TEMOIN;
     assert.equal(provenanceVisible('test', temoin), `${ouverture}${libelleProvenance('test')}${fermeture}`);
     assert.equal(provenanceVisible('production', temoin), 'production');
+  });
+});
+
+describe('la version de l’interface vient des dépendances (§ 13.4, § 18.6)', () => {
+  test('App.svelte ne lit pas la version engendrée : la version affichée et la forme Windows arrivent par ses propriétés, produitVersion et versionWindows', () => {
+    const source = readFileSync(new URL('./App.svelte', import.meta.url), 'utf8');
+    const imports = [...source.matchAll(/^\s*import\s[^;]*?from\s+'([^']+)'/gmu)].map(([, chemin]) => chemin);
+    assert.ok(imports.length > 0, 'des imports relevés');
+    assert.deepEqual(
+      imports.filter((chemin) => chemin.includes('version.genere')),
+      [],
+    );
+    assert.match(source, /\bversionWindows\b/u);
+    assert.match(source, /blocAPropos\(\s*\{\s*version:\s*\{\s*affichee:\s*produitVersion,\s*windows:\s*versionWindows\s*\}/u);
   });
 });

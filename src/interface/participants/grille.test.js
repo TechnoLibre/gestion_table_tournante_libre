@@ -14,6 +14,7 @@ import {
   celluleSuivante,
   cleDeColonne,
   cleDeStatut,
+  entreeValide,
   itineraire,
   lignesGrille,
   nomExport,
@@ -218,15 +219,34 @@ describe("itineraire : la personne dans le retenu, tour par tour (§ 7.4)", () =
     assert.deepEqual(itineraire(7, 1, (r) => etats.get(r)), [{ tour: 1, numero: 4, siege: null }]);
   });
 
-  test('source reservations ou proposition, à un tour : null', () => {
+  test('un tour que le retenu ne porte pas — tours haussés après la retenue — se dit hors du retenu ; les tours du retenu restent (§ 9)', () => {
     const retenu = etat('retenu', true, [tableDe(4, [7])], []);
     for (const source of ['reservations', 'proposition']) {
       const etats = new Map([
         [1, retenu],
-        [2, etat(source, true, [tableDe(4, [7])], [])],
+        [2, retenu],
+        [3, etat('retenu', true, [tableDe(4, [5])], [7])],
+        [4, etat(source, true, [tableDe(4, [7])], [])],
       ]);
-      assert.equal(itineraire(7, 2, (r) => etats.get(r)), null, source);
+      assert.deepEqual(
+        itineraire(7, 4, (r) => etats.get(r)),
+        [
+          { tour: 1, numero: 4, siege: 1 },
+          { tour: 2, numero: 4, siege: 1 },
+          { tour: 3, reserve: true },
+          { tour: 4, horsRetenu: true },
+        ],
+        source,
+      );
     }
+  });
+
+  test('sans retenu au tour 1 : null, quelle que soit la source des tours suivants', () => {
+    const etats = new Map([
+      [1, etat('reservations', true, [tableDe(4, [7])], [])],
+      [2, etat('retenu', true, [tableDe(4, [7])], [])],
+    ]);
+    assert.equal(itineraire(7, 2, (r) => etats.get(r)), null);
   });
 
   test("une personne qu'aucune chaise ne reçoit et qui n'attend pas — exclue — : null", () => {
@@ -301,5 +321,20 @@ describe("l'ordre de la grille est celui de l'export (§ 10.2)", () => {
     assert.equal(cleDeStatut('mobile'), 'participants.statut.mobile');
     assert.throws(() => cleDeColonne('id'), RangeError);
     assert.throws(() => cleDeStatut('exclu'), RangeError);
+  });
+});
+
+describe('entreeValide : Entrée valide, Maj+Entrée garde le saut de ligne des notes (§ 10.2, § 10.3)', () => {
+  test('Entrée seule valide, dans un champ d’une ligne comme dans une zone de texte', () => {
+    assert.equal(entreeValide({ maj: false, multiligne: false }), true);
+    assert.equal(entreeValide({ maj: false, multiligne: true }), true);
+  });
+
+  test('Maj+Entrée ne valide pas une zone de texte : elle y insère un saut de ligne', () => {
+    assert.equal(entreeValide({ maj: true, multiligne: true }), false);
+  });
+
+  test('Maj+Entrée valide un champ d’une ligne, qui n’a pas de saut de ligne', () => {
+    assert.equal(entreeValide({ maj: true, multiligne: false }), true);
   });
 });

@@ -93,6 +93,19 @@ const REMEDES = new Map([
   ['PLACES_MANQUANTES', Object.freeze({ geste: 'ouvrirSection', section: 'tables' })],
 ]);
 
+// Le remède d'un avertissement : celui de REMEDES, sauf une réservation que
+// le retenu ne tient pas à son siège (details.siege), que lève l'échange de
+// sa personne avec l'occupant, ou, chaise vide, son déplacement au siège.
+function remedeDe(code, details) {
+  if (code === 'RESERVATION_NON_HONOREE' && details.siege !== undefined) {
+    const { tour, participant, table, siege, occupant } = details;
+    return occupant === null
+      ? { commande: 'deplacerDansRetenu', arguments: { tour, participant, table, siege } }
+      : { commande: 'echangerDansRetenu', arguments: { tour, a: participant, b: occupant } };
+  }
+  return REMEDES.get(code) ?? null;
+}
+
 // Ce que l'examen de la séance dit de chaque placement que nomme une dérive
 // {ids, retenu} : le retenu d'abord, quand la dérive le nomme, puis chaque
 // proposition de ids, dans l'ordre de ids, avec ses raisons. Un placement
@@ -126,7 +139,7 @@ function derivesNommees({ ids = [], retenu = false }, examen) {
  */
 export function avertissementsOrdonnes(etatSeance) {
   return etatSeance.avertissements.map(({ code, details }) => {
-    const rendu = { code, details, remede: REMEDES.get(code) ?? null };
+    const rendu = { code, details, remede: remedeDe(code, details) };
     if (code === 'PROPOSITIONS_FAUTIVES') rendu.fautives = etatSeance.fautives;
     if (code === 'DERIVE') rendu.derives = derivesNommees(details, etatSeance.examen);
     return rendu;

@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { constante } from '../geometrie/constantes.js';
 import { serialiser } from '../stockage/canonique.js';
-import { analyser, creerCharge } from '../stockage/document.js';
+import { SIEGES_MAX, analyser, creerCharge } from '../stockage/document.js';
 import { controlerCapacite, lireEntier } from './capacite.js';
 import { COMMANDES } from './commandes.js';
 import { libelle } from './libelles.js';
@@ -94,6 +94,17 @@ describe("capacité : les refus d'une capacité (§ 6.2)", () => {
       assert.deepEqual(champ(charge, sieges).refus, { code: 'MOINS_DE_DEUX', details: { remede: null } });
     }
     assert.equal(champ(charge, 2).refus, null);
+  });
+
+  test('au-delà de SIEGES_MAX places : TROP_DE_PLACES {max}, remède null, au champ comme à la poignée ; SIEGES_MAX passe, et la charge se relit', () => {
+    const charge = chargeUneTable();
+    for (const sieges of [SIEGES_MAX + 1, 99_999_999_999, 2 ** 32]) {
+      assert.deepEqual(champ(charge, sieges).refus, { code: 'TROP_DE_PLACES', details: { max: SIEGES_MAX, remede: null } });
+      assert.deepEqual(poignee(charge, sieges).refus, { code: 'TROP_DE_PLACES', details: { max: SIEGES_MAX, remede: null } });
+    }
+    assert.equal(champ(charge, SIEGES_MAX).refus, null);
+    const { charge: rendue } = COMMANDES.get('changerPlacesTable')(charge, { id: 1, sieges: String(SIEGES_MAX), origine: 'champ' });
+    assert.doesNotThrow(() => analyser(serialiser(rendue, { revision: 1, produitVersion: 'essai' })));
   });
 
   test('sous les réservations : le plus grand compte de reservationsParTour, au premier tour qui l\'atteint', () => {

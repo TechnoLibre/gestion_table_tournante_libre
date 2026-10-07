@@ -11,6 +11,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { constante } from './constantes.js';
 import { surLeSol } from './designation.js';
 import { TAILLE_TEXTE_LISTE_CM } from './texte.js';
+import { MARGE_AJUSTEMENT_PX, ajuster, ecranDepuisDessin } from './vue.js';
 import {
   ECART_LISTE,
   ECART_POIGNEE,
@@ -114,9 +115,9 @@ describe('diametre (§ 7.7)', () => {
     assert.equal(Math.round(diametre(10)), 191);
   });
 
-  test('un diamètre saisi l’emporte', () => {
-    assert.equal(diametre(8, { saisi: 180 }), 180);
-    assert.equal(diametre(2, { saisi: 50 }), 50);
+  test('une seule formule : le format 1 ne porte aucun diamètre saisi, et une option ne change rien', () => {
+    assert.equal(diametre(8, { saisi: 180 }), diametre(8));
+    assert.equal(diametre(2, { saisi: 50 }), 70);
   });
 });
 
@@ -128,8 +129,8 @@ describe('cote', () => {
     assert.equal(cote(9), 180);
   });
 
-  test('un côté saisi l’emporte', () => {
-    assert.equal(cote(8, { saisi: 150 }), 150);
+  test('une seule formule : une option ne change pas le côté', () => {
+    assert.equal(cote(8, { saisi: 150 }), 120);
   });
 });
 
@@ -283,13 +284,34 @@ describe('la poignée ne touche aucune chaise (§ 7.1)', () => {
   });
 });
 
+describe('la cible d’un siège a la taille du pas (§ 7.3)', () => {
+  test('de 2 à 40 places, deux formes : rayon max(RAYON_CHAISE, pas/2) ; deux cibles ne se recouvrent pas ; le centre de la poignée n’est dans aucune', () => {
+    let tables = 0;
+    for (const forme of ['ronde', 'carree']) {
+      for (let places = 2; places <= 40; places += 1) {
+        const g = geometrieTable(table(1, forme, 10, -20), places);
+        assert.equal(g.rayonCible, Math.max(RAYON_CHAISE, g.pas / 2), `${forme} de ${places}`);
+        for (let i = 0; i < places; i += 1) {
+          for (let j = i + 1; j < places; j += 1) {
+            const d = distance(g.chaises[i], g.chaises[j]);
+            assert.ok(d >= 2 * g.rayonCible - EPSILON, `${forme} de ${places}, sièges ${i + 1} et ${j + 1} à ${d} cm`);
+          }
+          assert.ok(distance(g.poignee, g.chaises[i]) > g.rayonCible, `${forme} de ${places}, poignée et siège ${i + 1}`);
+        }
+        tables += 1;
+      }
+    }
+    assert.equal(tables, 78);
+  });
+});
+
 describe('aucune rotation (§ 7.1)', () => {
   test('la géométrie ne porte aucun angle et une seule poignée', () => {
     for (const forme of ['ronde', 'carree']) {
       const g = geometrieTable(table(1, forme, 0, 0), 8);
       assert.deepEqual(
         Object.keys(g).sort(),
-        ['centre', 'chaises', 'demiTaille', 'forme', 'id', 'numero', 'origineListe', 'pas', 'poignee', 'rayonEmprise'],
+        ['centre', 'chaises', 'demiTaille', 'forme', 'id', 'numero', 'origineListe', 'pas', 'poignee', 'rayonCible', 'rayonEmprise'],
       );
       assert.deepEqual(Object.keys(g.poignee).sort(), ['x', 'y']);
       for (const chaise of g.chaises) assert.deepEqual(Object.keys(chaise).sort(), ['rayon', 'siege', 'x', 'y']);
@@ -304,33 +326,64 @@ describe('geometrieTable refuse une table qu’elle ne sait pas dessiner', () =>
     assert.throws(() => geometrieTable(table(1, 'carree', 0, 0), 2.5), RangeError);
   });
 
-  test('diametre et cote : places invalides, dimension saisie nulle ou non finie', () => {
+  test('diametre et cote : places invalides', () => {
     assert.throws(() => diametre(0), RangeError);
     assert.throws(() => cote(1.5), RangeError);
-    assert.throws(() => diametre(8, { saisi: 0 }), RangeError);
-    assert.throws(() => cote(8, { saisi: Number.NaN }), RangeError);
-    assert.throws(() => diametre(8, { saisi: Infinity }), RangeError);
+    assert.throws(() => diametre(Number.NaN), RangeError);
   });
 });
 
-describe('englobant', () => {
+describe('englobant : tout ce que le dessin pose de pointable', () => {
   test('null sans table', () => {
     assert.equal(englobant([]), null);
   });
 
-  test('deux tables : min et max exacts de leurs emprises', () => {
-    // Ronde de 8 en (300, 600), emprise 240/π + 44 ; carrée de 8 en
-    // (−100, 50), emprise 104.
-    const r = 240 / Math.PI + 44;
+  test('deux tables : min et max exacts de leurs emprises, des cibles de leurs sièges et de leurs poignées', () => {
+    // Ronde de 8 en (300, 600) : chaises à r + 22 du centre, r = 240/π,
+    // cibles de rayon pas/2 = 30, soit r + 52 de chaque côté — la poignée,
+    // à (r + 67)/√2 + 15 ≈ 116,4 sur chaque axe, reste dedans. Carrée de 8
+    // en (−100, 50) : emprise 104 ; chaises de gauche en x = −182 et du haut
+    // en y = −32, cibles de rayon 30 : −212 et −62.
+    const r = 240 / Math.PI;
     const e = englobant([
       geometrieTable(table(1, 'ronde', 300, 600), 8),
       geometrieTable(table(2, 'carree', -100, 50), 8),
     ]);
     assert.deepEqual(Object.keys(e).sort(), ['maxX', 'maxY', 'minX', 'minY']);
-    proche(e.minX, -204, 'minX');
-    proche(e.minY, -54, 'minY');
-    proche(e.maxX, 300 + r, 'maxX');
-    proche(e.maxY, 600 + r, 'maxY');
+    proche(e.minX, -212, 'minX');
+    proche(e.minY, -62, 'minY');
+    proche(e.maxX, 300 + r + 52, 'maxX');
+    proche(e.maxY, 600 + r + 52, 'maxY');
+  });
+
+  test('une carrée seule : la poignée, au-delà du coin de l’emprise, borne le bas et la droite', () => {
+    // Carrée de 8 en (−100, 50) : centre de la poignée en (4 + 23/√2,
+    // 154 + 23/√2), son bord 15 cm plus loin ; les cibles du haut et de la
+    // gauche bornent l'autre coin.
+    const e = englobant([geometrieTable(table(2, 'carree', -100, 50), 8)]);
+    proche(e.minX, -212, 'minX');
+    proche(e.minY, -62, 'minY');
+    proche(e.maxX, 4 + 23 / Math.SQRT2 + RAYON_POIGNEE, 'maxX');
+    proche(e.maxY, 154 + 23 / Math.SQRT2 + RAYON_POIGNEE, 'maxY');
+  });
+
+  test('après ajuster, sur une carrée seule de 4 et de 8, le disque de la poignée et chaque cible tiennent dans le cadre moins ses marges', () => {
+    const cadre = { gauche: 0, haut: 0, largeur: 1366, hauteur: 700 };
+    const dedans = (vue, { x, y }, rayon, libelle) => {
+      const p = ecranDepuisDessin(vue, cadre, x, y);
+      const r = rayon * vue.k;
+      assert.ok(p.x - r >= MARGE_AJUSTEMENT_PX - EPSILON && p.x + r <= cadre.largeur - MARGE_AJUSTEMENT_PX + EPSILON, `${libelle}, x`);
+      assert.ok(p.y - r >= MARGE_AJUSTEMENT_PX - EPSILON && p.y + r <= cadre.hauteur - MARGE_AJUSTEMENT_PX + EPSILON, `${libelle}, y`);
+    };
+    let disques = 0;
+    for (const places of [4, 8]) {
+      const g = geometrieTable(table(1, 'carree', 0, 0), places);
+      const vue = ajuster(englobant([g]), cadre);
+      dedans(vue, g.poignee, RAYON_POIGNEE, `carrée de ${places}, poignée`);
+      for (const chaise of g.chaises) dedans(vue, chaise, g.rayonCible, `carrée de ${places}, siège ${chaise.siege}`);
+      disques += 1 + g.chaises.length;
+    }
+    assert.equal(disques, 14);
   });
 });
 

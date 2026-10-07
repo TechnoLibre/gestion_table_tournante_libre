@@ -65,10 +65,12 @@ describe('commande : la machine', () => {
     assert.equal(DELAI_CONFIRMATION_MS, 10_000);
   });
 
-  test('sans confirmer, chaque clic exécute, et la commande ne s’arme jamais', () => {
+  test('sans confirmer, chaque clic exécute une fois l’exécution précédente terminée, et la commande ne s’arme jamais', () => {
     const commande = creerMachineCommande();
     assert.deepEqual(commande.cliquer(), { action: 'executer' });
+    commande.terminer();
     assert.deepEqual(commande.cliquer(), { action: 'executer' });
+    commande.terminer();
     assert.equal(commande.armee, false);
   });
 
@@ -79,7 +81,53 @@ describe('commande : la machine', () => {
     assert.equal(commande.armee, true);
     assert.deepEqual(commande.cliquer(), { action: 'executer' });
     assert.equal(commande.armee, false);
+    commande.terminer();
     assert.deepEqual(commande.cliquer(), { action: 'armer' }, 'après exécution, le clic suivant arme de nouveau');
+  });
+
+  test('pendant l’exécution, un clic ne fait rien : ni seconde exécution, ni armement ; terminer() la rend', () => {
+    const simple = creerMachineCommande();
+    assert.deepEqual(simple.cliquer(), { action: 'executer' });
+    assert.equal(simple.enCours, true);
+    assert.deepEqual(simple.cliquer(), { action: 'aucune' });
+    assert.deepEqual(simple.cliquer({ repete: true }), { action: 'aucune' });
+    simple.terminer();
+    assert.equal(simple.enCours, false);
+    assert.deepEqual(simple.cliquer(), { action: 'executer' });
+
+    const confirmee = creerMachineCommande({ confirmer: CONFIRMATION_DEBLOCAGE });
+    confirmee.cliquer();
+    assert.deepEqual(confirmee.cliquer(), { action: 'executer' });
+    assert.deepEqual(confirmee.cliquer(), { action: 'aucune' }, 'occupée, le clic ne la réarme pas');
+    assert.equal(confirmee.armee, false);
+    confirmee.terminer();
+    assert.deepEqual(confirmee.cliquer(), { action: 'armer' });
+  });
+
+  test('armée, le clic répété d’un double-clic ne confirme pas : elle reste armée, et un clic simple ensuite exécute (§ 8.5)', () => {
+    const commande = creerMachineCommande({ confirmer: CONFIRMATION_DEBLOCAGE });
+    assert.deepEqual(commande.cliquer({ repete: false }), { action: 'armer' });
+    assert.deepEqual(commande.cliquer({ repete: true }), { action: 'aucune' });
+    assert.equal(commande.armee, true);
+    assert.equal(commande.enCours, false);
+    assert.deepEqual(commande.cliquer({ repete: true }), { action: 'aucune' }, 'un triple clic non plus');
+    assert.deepEqual(commande.cliquer({ repete: false }), { action: 'executer' });
+    assert.equal(commande.armee, false);
+  });
+
+  test('le clic répété d’une série n’exécute jamais, avec ou sans confirmer : il ne fait rien, et le clic simple suivant exécute', () => {
+    const simple = creerMachineCommande();
+    assert.deepEqual(simple.cliquer({ repete: true }), { action: 'aucune' }, 'reçu sans le premier clic de sa série');
+    assert.equal(simple.enCours, false);
+    assert.deepEqual(simple.cliquer({ repete: false }), { action: 'executer' });
+    simple.terminer();
+    assert.deepEqual(simple.cliquer({ repete: true }), { action: 'aucune' }, 'le second clic d’un double-clic');
+    assert.deepEqual(simple.cliquer({ repete: true }), { action: 'aucune' }, 'le troisième');
+    assert.deepEqual(simple.cliquer(), { action: 'executer' });
+
+    const confirmee = creerMachineCommande({ confirmer: CONFIRMATION_DEBLOCAGE });
+    assert.deepEqual(confirmee.cliquer({ repete: true }), { action: 'aucune' }, 'désarmée, le clic répété ne l’arme pas');
+    assert.equal(confirmee.armee, false);
   });
 
   test('armée puis expirer() : désarmée, et le clic suivant arme de nouveau, sans exécuter', () => {

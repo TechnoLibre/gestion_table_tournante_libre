@@ -10,23 +10,37 @@
   // refus — le mode, l'état du plan — se pose contre « Ajouter ».
   //
   // L'appartenance est collante : après un ajout, chaque champ se vide sauf
-  // elle. Une appartenance qui ne diffère d'une existante que par la casse,
+  // elle, et l'état de navigation la garde (garderAppartenance) : le
+  // formulaire remonté — retour d'une autre section, fermeture d'« À propos »
+  // — repart d'elle. Une appartenance qui ne diffère d'une existante que par la casse,
   // les accents ou les blancs (orthographeExistante, grille.js) est signalée
   // contre son champ, avec l'orthographe existante à reprendre d'un clic ;
   // rien ne fusionne seul.
   //
   // Une saisie non envoyée — un champ rempli, l'appartenance exceptée — est
   // un geste ouvert (geste.js), qui suspend le compte d'inactivité.
-  import { getContext, onDestroy, tick } from 'svelte';
+  //
+  // L'envoi n'est pas ré-entrant : tant que l'ajout s'écrit, une seconde
+  // soumission ne fait rien, et « Ajouter » porte aria-busy et
+  // aria-disabled. Le formulaire envoie une copie des champs ; l'ajout
+  // abouti, il ne vide que ceux qui portent encore la valeur envoyée : ce
+  // que l'opérateur tape pendant l'écriture, la personne suivante, reste.
+  // Le focus revient au nom quand rien n'a été tapé entre-temps.
+  //
+  // Les notes sont une zone de texte, qui garde les sauts de ligne :
+  // Maj+Entrée y insère un saut de ligne, Entrée seule envoie
+  // (entreeValide, grille.js).
+  import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { cleNormalisee } from '../../application/csv.js';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
-  import { cleDeColonne, orthographeExistante } from './grille.js';
+  import { cleDeColonne, entreeValide, orthographeExistante } from './grille.js';
 
   let { participants } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
+  const ui = getContext('ui');
   const uid = $props.id();
   const geste = creerGeste(seance);
 
@@ -35,10 +49,20 @@
   // Ceux qu'un ajout vide : tous, l'appartenance exceptée.
   const EPHEMERES = CHAMPS.filter((cle) => cle !== 'appartenance');
 
-  let valeurs = $state({ nom: '', prenom: '', appartenance: '', courriel: '', titrePressenti: '', notes: '' });
+  let valeurs = $state({
+    nom: '',
+    prenom: '',
+    appartenance: untrack(() => ui.etat().appartenance),
+    courriel: '',
+    titrePressenti: '',
+    notes: '',
+  });
   let refusNom = $state.raw(null);
   let refusAjout = $state.raw(null);
   let entreeNom = $state(null);
+  let formulaire;
+  // Vrai pendant l'écriture d'un ajout.
+  let envoiEnCours = $state(false);
 
   const orthographe = $derived(orthographeExistante(valeurs.appartenance, participants, cleNormalisee));
   const idRefusNom = `${uid}-refus-nom`;
@@ -55,6 +79,7 @@
 
   async function ajouter(evenement) {
     evenement.preventDefault();
+    if (envoiEnCours) return;
     refusNom = null;
     refusAjout = null;
     const champs = {
@@ -65,6 +90,7 @@
       titrePressenti: valeurs.titrePressenti,
       notes: valeurs.notes,
     };
+    envoiEnCours = true;
     try {
       await seance.executer('ajouterParticipant', { champs });
     } catch (erreur) {
@@ -73,10 +99,23 @@
       if (refus.code === 'NOM_REQUIS') refusNom = refus;
       else refusAjout = refus;
       return;
+    } finally {
+      envoiEnCours = false;
     }
-    valeurs = { nom: '', prenom: '', appartenance: valeurs.appartenance, courriel: '', titrePressenti: '', notes: '' };
+    ui.garderAppartenance(champs.appartenance);
+    const intacts = EPHEMERES.filter((cle) => valeurs[cle] === champs[cle]);
+    for (const cle of intacts) valeurs[cle] = '';
+    if (intacts.length < EPHEMERES.length) return;
     await tick();
     entreeNom?.focus();
+  }
+
+  // Entrée dans les notes envoie le formulaire ; Maj+Entrée y garde le
+  // saut de ligne de la zone de texte.
+  function surToucheNotes(evenement) {
+    if (evenement.key !== 'Enter' || !entreeValide({ maj: evenement.shiftKey, multiligne: true })) return;
+    evenement.preventDefault();
+    formulaire.requestSubmit();
   }
 
   function reprendre() {
@@ -86,7 +125,7 @@
   onDestroy(() => geste.liberer());
 </script>
 
-<form novalidate aria-labelledby={`${uid}-titre`} onsubmit={ajouter}>
+<form novalidate aria-labelledby={`${uid}-titre`} onsubmit={ajouter} bind:this={formulaire}>
   <h3 id={`${uid}-titre`}>{t('participants.formulaire.titre')}</h3>
   <div class="champs">
     {#each CHAMPS as cle (cle)}
@@ -122,6 +161,8 @@
               </button>
             </div>
           {/if}
+        {:else if cle === 'notes'}
+          <textarea id={`${uid}-${cle}`} rows="2" data-champ={cle} bind:value={valeurs.notes} onkeydown={surToucheNotes}></textarea>
         {:else}
           <input id={`${uid}-${cle}`} type="text" data-champ={cle} bind:value={valeurs[cle]} />
         {/if}
@@ -129,7 +170,12 @@
     {/each}
   </div>
   <div class="issue">
-    <button type="submit" data-commande="ajouter">{t('participants.formulaire.ajouter')}</button>
+    <button
+      type="submit"
+      data-commande="ajouter"
+      aria-busy={envoiEnCours ? 'true' : undefined}
+      aria-disabled={envoiEnCours ? 'true' : undefined}>{t('participants.formulaire.ajouter')}</button
+    >
     {#if refusAjout !== null}
       <Refus refus={refusAjout} lever={() => (refusAjout = null)} />
     {/if}
@@ -162,7 +208,8 @@
     max-width: 18rem;
   }
 
-  input {
+  input,
+  textarea {
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
     border-radius: var(--rayon-1);
@@ -177,6 +224,7 @@
   }
 
   input:focus-visible,
+  textarea:focus-visible,
   button:focus-visible {
     outline: 2px solid var(--couleur-focus);
     outline-offset: 1px;
@@ -217,5 +265,11 @@
     font: inherit;
     font-size: var(--taille-texte);
     cursor: pointer;
+  }
+
+  button[aria-disabled='true'] {
+    border-style: dashed;
+    color: var(--couleur-page-texte-secondaire);
+    cursor: progress;
   }
 </style>

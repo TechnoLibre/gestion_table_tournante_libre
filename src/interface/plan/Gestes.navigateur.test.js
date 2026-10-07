@@ -36,7 +36,7 @@ import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import TEXTE_HUIT from '../../../test/fixtures/plan/huit_tables_retenu.gtt.json?raw';
-import { fixerCadre, glisser, pointer, touche } from '../../../test/navigateur/entrees.js';
+import { fixerCadre, glisser, molette, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { cadreDepuisRect, englobantDuTour } from './vue_plan.js';
 
@@ -731,6 +731,39 @@ describe('les gestes d’une personne (§ 7.1, § 8.2, § 5.8)', () => {
   });
 });
 
+describe('un refus posé sur une place ne couvre pas la cible suivante (§ 5.9, § 7.3)', () => {
+  test('un appui sur une chaise que couvre le texte du refus atteint le plan : le refus se ferme, la chaise se sélectionne', async () => {
+    const m = await ouvrir(huitRetenue());
+    m.ui.montrerProposition(1);
+    flushSync();
+    await images(2);
+    await glisser(pointChaise(m, 3, 1), pointChaise(m, 7, 1));
+    const place = dans(m, '[data-siege="7:1"]');
+    await attendre(() => expect(decrit(place)).not.toBeNull());
+    const refus = decrit(place);
+    const boite = refus.getBoundingClientRect();
+    // Les chaises dont le centre tombe dans la boîte du refus, hors de ses
+    // boutons.
+    const couvertes = tous(m, '[data-siege]')
+      .map((chaise) => {
+        const [table, siege] = chaise.dataset.siege.split(':').map(Number);
+        return { chaise, point: pointChaise(m, table, siege) };
+      })
+      .filter(({ point: { x, y } }) => x > boite.left + 2 && x < boite.right - 2 && y > boite.top + 2 && y < boite.bottom - 2)
+      .filter(({ point: { x, y } }) => document.elementFromPoint(x, y)?.closest('button') === null);
+    expect(couvertes.length).toBeGreaterThan(0);
+    const { chaise, point } = couvertes[0];
+    const avant = fichiers(m);
+    await pointer('presser', point.x, point.y);
+    await pointer('relacher', point.x, point.y);
+    await images(2);
+    expect(decrit(place)).toBeNull();
+    const [table, siege] = chaise.dataset.siege.split(':').map(Number);
+    expect(m.ui.etat().selection).toEqual({ table, siege });
+    await rienEcrit(m, avant);
+  });
+});
+
 // --- Glisser une table (§ 7.1, § 9) ---------------------------------------------
 
 describe('glisser une table (§ 7.1, § 9)', () => {
@@ -1006,6 +1039,54 @@ describe('un clic n’est pas un glisser, la lecture, l’inactivité (§ 8.4)',
     await images(3);
     expect(entreesApres(m, avant.revision)).toEqual([]);
     expect(fichiers(m).etat).toBe(avant.etat);
+  });
+});
+
+describe('regarder pendant un geste et regarder sans appuyer (§ 7.2, § 7.3, § 8.4)', () => {
+  test('la molette pendant le glissement d’une personne ne change pas la vue : la commande nomme la chaise sous le pointeur au relâcher', async () => {
+    const m = await ouvrir(huitRetenue());
+    m.ui.montrerTour(2);
+    flushSync();
+    await avecVue(m, { k: 0.5, tx: 150, ty: 60 });
+    const commandes = releverCommandes(m);
+    const r = fichiers(m).revision;
+    const depart = pointChaise(m, 4, 1);
+    await presserEtBouger(depart, decale(depart, 30, 0));
+    const vue = groupe(m).getAttribute('transform');
+    const cadre = cadreDe(m);
+    await molette(cadre.gauche + cadre.largeur / 2, cadre.haut + cadre.hauteur / 2, -300);
+    await images(3);
+    expect(groupe(m).getAttribute('transform')).toBe(vue);
+    const vers = pointChaise(m, 7, 3);
+    await pointer('bouger', vers.x, vers.y);
+    await uneImage();
+    await pointer('relacher', vers.x, vers.y);
+    await uneEntree(m, r);
+    expect(commandes).toEqual([{ nom: 'deplacerDansRetenu', args: { tour: 2, participant: 1, table: 7, siege: 3 } }]);
+  });
+
+  test('la molette, « Zoom + », « Ajuster » et le changement de tour ne relancent pas le compte d’inactivité : le retour en lecture tombe à son heure', async () => {
+    const m = await ouvrir(huitRetenue());
+    expect(m.seance.etat().mode).toBe('ecriture');
+    m.horloge.avancer(INACTIVITE_MS - 1000);
+    await images(2);
+    const transform = groupe(m).getAttribute('transform');
+    const cadre = cadreDe(m);
+    await molette(cadre.gauche + cadre.largeur / 2, cadre.haut + cadre.hauteur / 2, -100);
+    await attendre(() => expect(groupe(m).getAttribute('transform')).not.toBe(transform));
+    dans(m, '[data-commande="zoomer"]').click();
+    flushSync();
+    dans(m, '[data-commande="ajuster"]').click();
+    flushSync();
+    const select = dans(m, '[data-champ="tour"]');
+    select.value = '2';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
+    expect(m.ui.etat().tour).toBe(2);
+    await images(2);
+    expect(m.seance.etat().mode).toBe('ecriture');
+    m.horloge.avancer(1001);
+    await attendre(() => expect(m.seance.etat().mode).toBe('lecture'));
   });
 });
 

@@ -242,6 +242,42 @@ describe('une table créée (§ 4, § 6.1)', () => {
   });
 });
 
+describe('un geste en cours ne se relance pas (§ 2.1)', () => {
+  test('« Créer une table » cliquée deux fois pendant l’écriture d’un support lent : une table, une entrée', async () => {
+    const m = await preparer(chargeDe({ n: 2 }));
+    const r0 = revision(m);
+    // Le système simulé retient ses écritures jusqu'à liberer() : le geste
+    // reste en cours d'écriture. Le premier geste crée le journal, par une
+    // écriture entière ; les suivants y ajoutent une ligne.
+    let liberer;
+    const porte = new Promise((resoudre) => {
+      liberer = resoudre;
+    });
+    for (const primitive of ['ajouterLigne', 'ecrireAtomique']) {
+      const ecrire = m.fs[primitive];
+      m.fs[primitive] = async (...parametres) => {
+        await porte;
+        return ecrire.apply(m.fs, parametres);
+      };
+    }
+    const bouton = commande(section(m), 'creerTableRonde');
+    bouton.scrollIntoView({ block: 'center' });
+    const boite = bouton.getBoundingClientRect();
+    const [x, y] = [boite.left + boite.width / 2, boite.top + boite.height / 2];
+    for (let clic = 0; clic < 2; clic += 1) {
+      await pointer('presser', x, y);
+      await pointer('relacher', x, y);
+      flushSync();
+    }
+    expect(bouton.getAttribute('aria-busy')).toBe('true');
+    liberer();
+    await attendre(m);
+    expect(charge(m).tables).toHaveLength(1);
+    expect(revision(m)).toBe(r0 + 1);
+    expect(bouton.getAttribute('aria-busy')).toBeNull();
+  });
+});
+
 describe('l’état, pas seulement la valeur (§ 6.1, § 19.3 05)', () => {
   test('deux tables à 8, l’une suit le défaut, l’autre surchargée à 8 : les états diffèrent, seule la seconde offre « Réaligner » ; réalignée, son état égale celui de la première', async () => {
     const m = await preparer(chargeDe({ tables: [{ id: 1 }, { id: 2, sieges: 8 }], n: 4 }));

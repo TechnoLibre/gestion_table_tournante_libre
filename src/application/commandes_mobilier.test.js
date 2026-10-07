@@ -19,7 +19,7 @@ import { STATUT, nombrePlacesManquantes, normaliser } from '../moteur/configurat
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
-import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { SIEGES_MAX, TOURS_MAX, analyser, capacite, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import { derive, examiner, fautes } from '../stockage/placements.js';
@@ -737,7 +737,11 @@ describe("mobilier : les places d'une table, par le champ et par la poignée (§
       });
       const surnumeraires = attendus.map(([, , personnes], rang) => ({ code: 'SURNUMERAIRES', details: { table: 1, tour: rang + 1, personnes } }));
       assert.deepEqual(avertissements, surnumeraires, nom);
-      assert.equal(invariantViole(apres), null, nom);
+      // La réduction n'ajoute aucune violation : un siège réservé que le
+      // retenu donnait déjà à un autre peut le rester, rien d'autre.
+      const violations = (etat) => (invariantViole(etat)?.details.violations ?? []).map((v) => JSON.stringify(v));
+      const deja = violations(charge);
+      assert.deepEqual(violations(apres).filter((v) => !deja.includes(v)), [], nom);
       // La réduction n'ajoute aucune raison de dérive ; un exclu garde la sienne.
       assert.deepEqual(derive(apres.retenu, apres), derive(charge.retenu, charge), nom);
       assert.deepEqual(fautes(apres.retenu), [], nom);
@@ -941,6 +945,29 @@ describe('mobilier : les tours (§ 2.1 étape 5, § 4.3)', () => {
     }
     assert.equal(ecritures(), avant);
     assert.equal(seance.charge.evenement.tours, 2);
+  });
+
+  test('au-delà de TOURS_MAX : TROP_DE_TOURS {max}, remède null, sans écriture ; TOURS_MAX passe', async () => {
+    const { seance, ecritures } = await seanceSur(chargeDe({ tables: [{ id: 1 }], n: 2, tours: 2 }));
+    const avant = ecritures();
+    for (const tours of [String(TOURS_MAX + 1), '99999999999']) {
+      await refuseAsync(seance.executer('changerTours', { tours }), 'TROP_DE_TOURS', { max: TOURS_MAX, remede: null });
+    }
+    assert.equal(ecritures(), avant);
+    await seance.executer('changerTours', { tours: String(TOURS_MAX) });
+    assert.equal(seance.charge.evenement.tours, TOURS_MAX);
+  });
+
+  test('au-delà de SIEGES_MAX, le défaut comme une table refusent TROP_DE_PLACES {max}, remède null, sans rien écrire', async () => {
+    const { seance, ecritures } = await seanceSur(chargeDe({ tables: [{ id: 1 }], n: 2, tours: 2 }));
+    const avant = ecritures();
+    await refuseAsync(seance.executer('changerDefaut', { sieges: '1000000', realigner: false }), 'TROP_DE_PLACES', { max: SIEGES_MAX, remede: null });
+    await refuseAsync(
+      seance.executer('changerPlacesTable', { id: 1, sieges: '99999999999', origine: 'champ' }),
+      'TROP_DE_PLACES',
+      { max: SIEGES_MAX, remede: null },
+    );
+    assert.equal(ecritures(), avant);
   });
 });
 

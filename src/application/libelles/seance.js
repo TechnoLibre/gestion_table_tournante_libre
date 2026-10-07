@@ -117,11 +117,22 @@ export const TABLE = new Map([
   // La personne se nomme par personne, et la table par numero, quand les
   // détails les portent (avertissementsApres les lit sur la charge) ; une
   // violation d'INVARIANT_VIOLE, qui ne les porte pas, garde les identifiants.
+  // Au siège, siege et occupant disent la chaise réservée et ce qu'elle
+  // porte : la personne est assise à la même table, à un autre siège.
   [
     'RESERVATION_NON_HONOREE',
-    ({ participant, table, tour, personne = null, numero = null }) =>
-      `Le placement retenu n'honore pas la réservation de ${personne ?? `la personne n° ${participant}`} ` +
-      `à la ${numero === null ? `table d'identifiant ${table}` : `table ${numero}`} au tour ${tour} : il la place ailleurs.`,
+    ({ participant, table, tour, personne = null, numero = null, siege, occupant = null }) => {
+      const qui = personne ?? `la personne n° ${participant}`;
+      const ou = numero === null ? `table d'identifiant ${table}` : `table ${numero}`;
+      if (siege === undefined) {
+        return `Le placement retenu n'honore pas la réservation de ${qui} à la ${ou} au tour ${tour} : il la place ailleurs.`;
+      }
+      const chaise = occupant === null ? `laisse le siège ${siege} vide` : `donne le siège ${siege} à une autre personne`;
+      return (
+        `Le placement retenu n'honore pas la réservation de ${qui} au siège ${siege} de la ${ou} au tour ${tour} : ` +
+        `il l'assied à un autre siège de cette table, et ${chaise}.`
+      );
+    },
   ],
   [
     'INVARIANT_VIOLE',

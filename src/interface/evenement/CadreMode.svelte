@@ -19,6 +19,20 @@
   // cadre avant que les annonces ne dépassent leur première ligne, sauf
   // devant un support rompu, dont les issues restent en vue.
   //
+  // Sous une tête, et hors d'un support rompu, les annonces se posent à
+  // côté d'elle, dans la place que sa navigation laisse à droite : leur zone
+  // prend la hauteur de la tête et défile dedans, si bien qu'un
+  // avertissement ne retire aucune hauteur à la surface, ni au plan qu'elle
+  // porte. Une fenêtre trop étroite pour les deux les passe à la ligne, et
+  // la zone garde alors sa hauteur minimale.
+  //
+  // La tête se rend en un seul point du DOM, quelle que soit la place des
+  // annonces : seules les annonces passent de côté à dessous quand une
+  // annonce vient, s'en va, ou que le support se rompt. Un rendu de la tête
+  // dans deux blocs la démonterait à chacun de ces passages — la Commande
+  // en cours détruite, le refus posé à côté du geste perdu (§ 2.1), le
+  // focus du clavier rendu au corps de la page.
+  //
   // La place fixe porte la commande que rend commandeFixe (modele.js) :
   // « Modifier », « Débloquer » — confirmé en place, par la Commande d'I2 —,
   // « Revenir en lecture », ou, pour un format plus récent, l'explication du
@@ -50,6 +64,8 @@
   const commande = $derived(commandeFixe($seance));
   const verrou = $derived($seance.mode === 'lecture' ? $seance.verrouAutre : null);
   const reprise = $derived(repriseOfferte($seance));
+  // Les annonces se posent à côté de la tête, ou dessous.
+  const aCote = $derived(tete !== null && annonces !== null && $seance.supportRompu === null);
 </script>
 
 <div class="cadre" data-mode={forme} data-marque={MARQUE_DE_LA_FORME[forme]} class:tirets={forme === 'tirets'} class:double={forme === 'double'}>
@@ -105,12 +121,21 @@
     {/if}
   </div>
   {#if tete !== null}
-    <div class="tete">
-      {@render tete()}
+    <div class="tete" class:cote={aCote}>
+      <div class="contenu">
+        {@render tete()}
+      </div>
+      {#if aCote}
+        <div class="place">
+          <div class="annonces" data-annonces>
+            {@render annonces()}
+          </div>
+        </div>
+      {/if}
     </div>
   {/if}
-  {#if annonces !== null}
-    <div class="annonces" class:rompu={$seance.supportRompu !== null} data-annonces>
+  {#if annonces !== null && !aCote}
+    <div class="annonces seules" class:rompu={$seance.supportRompu !== null} data-annonces>
       {@render annonces()}
     </div>
   {/if}
@@ -215,22 +240,66 @@
     border-bottom: 1px solid var(--couleur-page-filet);
   }
 
-  /* Les annonces ne prennent jamais plus du quart du cadre, et cèdent
-     d'abord leur hauteur à la surface : leur facteur de rétrécissement,
-     mille fois celui de la surface, leur fait absorber presque tout le
-     manque de place, jusqu'à leur hauteur minimale : un avertissement
-     d'une ligne en entier, et le haut du suivant, qui dit que la zone en
-     porte d'autres. Au-delà de leur hauteur, elles défilent dans leur
-     zone. */
+  /* Les annonces défilent dans leur zone, au-delà de sa hauteur. */
   .annonces {
     display: flex;
-    flex: 0 1000 auto;
     flex-direction: column;
     gap: var(--espace-2);
-    min-height: 3rem;
-    max-height: 25%;
     overflow-y: auto;
     padding: var(--espace-2) var(--espace-3);
+  }
+
+  /* À côté de la tête : la tête passe en ligne, son contenu à gauche, la
+     place des annonces à droite. La place ne donne à la ligne que sa
+     hauteur minimale ; la zone des annonces la remplit, posée en absolu,
+     et ne l'agrandit jamais : la ligne a la hauteur du contenu de la tête.
+     La place prend une part fixe de la largeur, et le contenu le reste :
+     la zone ne bouge pas d'une section à l'autre, quand le libellé de la
+     section ouverte, en gras, change la largeur de la navigation. Sous
+     30rem de contenu, la place passe à la ligne. */
+  .tete.cote {
+    flex-flow: row wrap;
+    align-items: stretch;
+    gap: 0 var(--espace-3);
+    padding-right: 0;
+    padding-block: 0;
+  }
+
+  .contenu {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+  }
+
+  .cote > .contenu {
+    flex: 1 1 0;
+    min-width: min(100%, 30rem);
+    padding-block: var(--espace-2);
+  }
+
+  .place {
+    position: relative;
+    flex: 0 0 32%;
+    min-width: 16rem;
+    min-height: 3rem;
+    border-left: 1px solid var(--couleur-page-filet);
+  }
+
+  .place > .annonces {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Seules — sans tête, en plein écran, ou devant un support rompu —, les
+     annonces ne prennent jamais plus du quart du cadre, et cèdent d'abord
+     leur hauteur à la surface : leur facteur de rétrécissement, mille fois
+     celui de la surface, leur fait absorber presque tout le manque de
+     place, jusqu'à leur hauteur minimale : un avertissement d'une ligne en
+     entier, et le haut du suivant, qui dit que la zone en porte d'autres. */
+  .annonces.seules {
+    flex: 0 1000 auto;
+    min-height: 3rem;
+    max-height: 25%;
     border-bottom: 1px solid var(--couleur-page-filet);
   }
 
