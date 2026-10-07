@@ -12,6 +12,7 @@ import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path, { dirname, join, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { decrireSysteme } from '../electron/fichiers.js';
 import { estSous } from '../src/stockage/dossier_travail.js';
 import { describe, test } from '../test/lanceur.js';
 import { donneesApplicativesSurExe, dossiersDEssai, environnementDEssai, estLanceDirectement } from './essai_demarrage.js';
@@ -125,6 +126,29 @@ describe('essai de démarrage : dossiers et environnement (§ 8.6)', () => {
     assert.deepEqual(donneesApplicativesSurExe({ ...envW, LOCALAPPDATA: 'd:\\ESSAIS' }, {}, 'win32'), ['d:\\ESSAIS']);
     // Sans exécutable publié, rien ne le porte.
     assert.deepEqual(donneesApplicativesSurExe({ TMPDIR: '/' }, {}, 'linux'), []);
+  });
+
+  test('la liste des données applicatives est celle que decrireSysteme compose : un emplacement qu’elle ajoute est jugé, et un app.getPath que l’essai ne sait pas émuler lève', () => {
+    const P = path.posix;
+    const R = P.join('/', 'racine-essai', 'gtt-essai-demarrage-x');
+    const dossiers = dossiersDEssai(R, P);
+    const env = environnementDEssai({ HOME: P.join('/', 'maison-originale') }, dossiers, P);
+    const autre = P.join('/', 'racine-essai');
+    // Une coquille qui range aussi GTT_DONNEES parmi ses données applicatives.
+    const avecUnDossier = (poste) => {
+      const decrit = decrireSysteme(poste);
+      const donneesApplicatives = [...decrit.emplacements.donneesApplicatives, poste.env.GTT_DONNEES];
+      return { ...decrit, emplacements: { ...decrit.emplacements, donneesApplicatives } };
+    };
+    assert.deepEqual(donneesApplicativesSurExe({ ...env, GTT_DONNEES: autre }, {}, 'linux', avecUnDossier), [autre]);
+    assert.deepEqual(donneesApplicativesSurExe({ ...env, GTT_DONNEES: P.join('/', 'ailleurs') }, {}, 'linux', avecUnDossier), []);
+    // Une coquille qui lit un autre dossier du système : l'essai le refuse
+    // plutôt que de juger une liste incomplète.
+    const avecUserData = (poste) => {
+      poste.cheminSysteme('userData');
+      return decrireSysteme(poste);
+    };
+    assert.throws(() => donneesApplicativesSurExe(env, {}, 'linux', avecUserData), /userData/);
   });
 });
 

@@ -1094,14 +1094,23 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
   });
 
   test('contrastes : chaque texte tient 4,5:1 sur son fond peint, dans les deux thèmes posés par le réglage ; les couleurs relues diffèrent d’un thème à l’autre', () => {
-    expect(atteints().reduce((n, r) => n + r.clair.textes.mesures + r.sombre.textes.mesures, 0)).toBeGreaterThan(0);
+    // Un compte par thème : un relevé vide dans l'un passerait sous la somme
+    // des deux, et la comparaison des couleurs n'aurait rien à comparer.
+    for (const theme of THEMES) {
+      expect(atteints().reduce((n, r) => n + r[theme].textes.mesures, 0), `textes mesurés [${theme}]`).toBeGreaterThan(0);
+    }
     const fautes = [];
+    let comparees = 0;
     for (const r of atteints()) {
       for (const theme of THEMES) fautes.push(...r[theme].textes.fautes.map((f) => `${r.nom} [${theme}] — ${f}`));
       for (const [cle, couleurs] of r.clair.textes.couleurs) {
-        if (r.sombre.textes.couleurs.get(cle) === couleurs) fautes.push(`${r.nom} — ${cle} : ${couleurs} dans les deux thèmes`);
+        const sombres = r.sombre.textes.couleurs.get(cle);
+        if (sombres === undefined) continue;
+        comparees += 1;
+        if (sombres === couleurs) fautes.push(`${r.nom} — ${cle} : ${couleurs} dans les deux thèmes`);
       }
     }
+    expect(comparees, 'couleurs relevées dans les deux thèmes').toBeGreaterThan(0);
     aucuneFaute([...new Set(fautes)], 'contrastes');
   });
 
@@ -1124,8 +1133,9 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
 
   test('aucune atténuation : ni opacité partielle, ni filtre, ni fusion, ni masque sur un texte, une marque ou leur ascendance, dans les deux thèmes', () => {
     for (const theme of THEMES) {
-      const mesures = atteints().reduce((n, r) => n + r[theme].textes.mesures + r[theme].marques.mesures, 0);
-      expect(mesures, `textes et marques mesurés [${theme}]`).toBeGreaterThan(0);
+      for (const sorte of ['textes', 'marques']) {
+        expect(atteints().reduce((n, r) => n + r[theme][sorte].mesures, 0), `${sorte} mesurés [${theme}]`).toBeGreaterThan(0);
+      }
     }
     const fautes = [];
     for (const r of atteints()) {

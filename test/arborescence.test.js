@@ -3,27 +3,32 @@
 
 // Gardes de l'arborescence, lues dans le texte des sources : le moteur, la
 // géométrie du plan, le générateur de démonstrations, le stockage et
-// l'analyseur CSV n'appellent aucune source non reproductible (§ 14.7), et ne parcourent les clés d'un
-// objet que par exception nommée (§ 15.5, point 4) ; le graphe d'imports de
-// chaque couche, l'interface et ses composants compris, ne rejoint que ce que
-// le § 13.4 lui permet ; seuls deux lecteurs nommés touchent le pont de la
-// coquille (§ 13.1) ; hors de l'horloge, l'interface et l'application
-// n'arment aucune minuterie et ne lisent ni l'heure, ni l'aléa, ni la langue
-// (§ 19.4) ; chaque paquet importé est déclaré dans devDependencies, et aucun
-// paquet refusé ne l'est (§ 13.3, § 14.8) ; une valeur du contrat de données
-// n'a qu'une définition, celle de configuration.js ; la mesure de la
-// couverture joue la série node, publie chaque module et tient ses seuils
-// durs sur des modules qui existent (§ 14.13) ; les épreuves s'écrivent
-// selon le § 14.8, la série surveillée n'attend ni n'écrit hors d'un
-// temporaire, et ses motifs de surveillance ne retirent aucune relance
-// (§ 14.14). Chaque relevé lit le texte entier, commentaires et chaînes
-// compris, hors ceux qui disent le contraire — les accès au navigateur et au
-// pont, et les relevés des épreuves, sautent les chaînes littérales : un
-// commentaire qui nomme un appel refusé fait échouer la garde comme l'appel
-// lui-même. Chaque garde déclare son périmètre, refuse de passer sur un
-// balayage vide (§ 14.2), et d'autres épreuves la font tourner sur des
-// arbres temporaires qui portent, à plus d'un niveau de profondeur, les
-// formes qu'elle refuse et des formes voisines qu'elle admet.
+// l'analyseur CSV n'appellent aucune source non reproductible (§ 14.7), et ne
+// parcourent les clés d'un objet que par exception nommée (§ 15.5, point 4) ;
+// le graphe d'imports de chaque couche, l'interface et ses composants compris,
+// ne rejoint que ce que le § 13.4 lui permet, et ni le moteur, ni la
+// géométrie, ni le générateur ne lisent la version engendrée (§ 14.7) ; seuls
+// deux lecteurs nommés touchent le pont de la coquille (§ 13.1) ; hors de
+// l'horloge, l'interface et l'application n'arment aucune minuterie et ne
+// lisent ni l'heure, ni l'aléa, ni la langue (§ 19.4) ; chaque paquet importé
+// est déclaré dans devDependencies, et aucun paquet refusé ne l'est (§ 13.3,
+// § 14.8) ; une valeur du contrat de données n'a qu'une définition, celle de
+// configuration.js ; la mesure de la couverture joue la série node, publie
+// chaque module et tient ses seuils durs sur des modules qui existent
+// (§ 14.13) ; les épreuves s'écrivent selon le § 14.8, la série surveillée
+// n'attend ni n'écrit hors d'un temporaire, et ses motifs de surveillance ne
+// retirent aucune relance (§ 14.14) ; dans le moteur, deux modules nommés
+// lisent les réservations (§ 5.2) ; src/, electron/ et scripts/ n'ont qu'une
+// langue (§ 13.2) ; une épreuve de src/ vit à côté de son module, et aucune
+// donnée d'épreuve ne double un fichier livré (§ 14.9) ; fast-check ne se
+// charge que dans les épreuves nommées (§ 14.12). Chaque relevé lit le texte
+// entier, commentaires et chaînes compris, hors ceux qui disent le contraire —
+// les accès au navigateur et au pont, et les relevés des épreuves, sautent les
+// chaînes littérales : un commentaire qui nomme un appel refusé fait échouer
+// la garde comme l'appel lui-même. Chaque garde déclare son périmètre, refuse
+// de passer sur un balayage vide (§ 14.2), et d'autres épreuves la font
+// tourner sur des arbres temporaires qui portent, à plus d'un niveau de
+// profondeur, les formes qu'elle refuse et des formes voisines qu'elle admet.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
@@ -498,7 +503,7 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // chacun dans son seul texte. Aucun module du parcours n'importe un fichier
 // admis : il ne passe qu'en paramètre, de la main de l'application.
 // composants : vrai quand ses composants Svelte sont des modules de la
-// couche, lus par leurs blocs de script.
+// couche, lus par leurs blocs de script et les import() de leur gabarit.
 //
 // Le moteur et la géométrie ne connaissent ni l'écran, ni les fichiers, ni ce
 // qui les commande. La géométrie est une couche à part, plus bas que le
@@ -513,19 +518,32 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // src/application/csv.js, et le moteur par la table d'évaluation, sans que
 // sa garde le lui reproche, l'application le faisant par construction ;
 // importés en direct, le stockage, le CSV, le moteur, les démonstrations et
-// test/ sont refusés.
+// test/ sont refusés. Le générateur de démonstrations lit le moteur et le
+// stockage, qui sérialise ses fichiers, mais ni l'application, ni
+// l'interface, ni le navigateur. Le moteur, la géométrie et le générateur ne
+// lisent pas la version engendrée (§ 14.7, § 18.5), à aucune profondeur :
+// une démonstration ou un placement qui en dépendrait changerait à chaque
+// livraison.
+const VERSION_ENGENDREE = 'src/version.genere.js';
 const COUCHES = [
   {
     arbres: ['src/moteur'],
     requis: ['src/moteur'],
-    exterieures: ['src/interface', 'src/application', 'src/stockage'],
+    exterieures: ['src/interface', 'src/application', 'src/stockage', VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/geometrie'],
     requis: ['src/geometrie'],
-    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/moteur', 'src/csv', 'src/demo'],
+    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/moteur', 'src/csv', 'src/demo', VERSION_ENGENDREE],
+    paquets: PAQUETS_DE_PLATEFORME,
+    navigateur: [],
+  },
+  {
+    arbres: ['src/demo'],
+    requis: ['src/demo'],
+    exterieures: ['src/interface', 'src/application', VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
@@ -700,7 +718,8 @@ function cibleDe(racine, fichier, specificateur) {
 const composantsDe = (dossier) => fichiersDe(dossier).filter((fichier) => extname(fichier) === '.svelte').sort();
 
 // Le texte qu'un relevé de chargements lit dans un fichier : celui de ses
-// blocs de script pour un composant Svelte, le texte entier sinon.
+// blocs de script et des import() de son gabarit pour un composant Svelte
+// (scriptsDe), le texte entier sinon.
 const texteDesChargements = (fichier, texte) => (extname(fichier) === '.svelte' ? scriptsDe(texte) : texte);
 
 // Relevé des refus de la frontière d'une couche dans son graphe d'imports.
@@ -1191,11 +1210,67 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
     ]);
   });
 
-  test('src/application peut manquer ; un src/moteur, un src/geometrie, un src/stockage, un src/csv ou un src/interface sans module fait échouer la garde ; un composant seul suffit à l’interface', () => {
+  test('ni le moteur, ni la géométrie, ni le générateur de démonstrations ne lisent la version engendrée (§ 14.7, § 18.5) ; l’interface et l’application la lisent ; le générateur n’importe ni l’interface, ni l’application, ni une plateforme, ni le navigateur', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/version.genere.js': "export const VERSION = Object.freeze({ affichee: '', technique: '' });\n",
+      'src/moteur/recherche.js': "import { VERSION } from '../version.genere.js';\n",
+      'src/geometrie/sous/vue.js': "import { VERSION } from '../../version.genere.js';\n",
+      'src/demo/catalogue.js': [
+        "import { VERSION } from '../version.genere.js';",
+        "import { ErreurConfiguration } from '../moteur/erreurs.js';",
+        "import { serialiser } from '../stockage/canonique.js';",
+        "import { t } from '../application/traduction.js';",
+        "import { x } from '../interface/x.js';",
+        "import { mount } from 'svelte';",
+        "import { readFileSync } from 'node:fs';",
+        'export const langue = navigator.language;',
+      ].join('\n'),
+      'src/demo/livrees.js': "import { CATALOGUE } from './catalogue.js';\nimport petite from './livrees/petite.gtt.json' with { type: 'json' };\n",
+      'src/moteur/erreurs.js': 'export class ErreurConfiguration extends Error {}\n',
+      'src/stockage/canonique.js': "import { VERSION } from '../version.genere.js';\nexport const serialiser = () => VERSION;\n",
+      'src/application/a.js': "import { VERSION } from '../version.genere.js';\n",
+      'src/interface/App.svelte': "<script>\n  import { VERSION } from '../version.genere.js';\n</script>\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/moteur/recherche.js:1 import ../version.genere.js',
+      'src/geometrie/sous/vue.js:1 import ../../version.genere.js',
+      'src/demo/catalogue.js:1 import ../version.genere.js',
+      'src/demo/catalogue.js:4 import ../application/traduction.js',
+      'src/demo/catalogue.js:5 import ../interface/x.js',
+      'src/demo/catalogue.js:6 import svelte',
+      'src/demo/catalogue.js:7 import node:fs',
+      'src/demo/catalogue.js:8 navigator.',
+      'src/demo/catalogue.js → src/stockage/canonique.js:1 import ../version.genere.js',
+    ]);
+  });
+
+  test('un import() du gabarit d’un composant se relève comme celui d’un bloc de script ; le mot « import » d’un nœud de texte non', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/interface/APropos.svelte': [
+        '<script>',
+        "  import { apropos } from './apropos.js';",
+        '</script>',
+        "<p>import('../stockage/texte.js') reste du texte</p>",
+        "{#await import('../stockage/depot.js') then depot}{/await}",
+        '{#if apropos}',
+        "  <button onclick={() => import('../moteur/recherche.js')}>{apropos}</button>",
+        '{/if}',
+      ].join('\n'),
+      'src/interface/apropos.js': 'export const apropos = 1;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/interface/APropos.svelte:5 import ../stockage/depot.js',
+      'src/interface/APropos.svelte:7 import ../moteur/recherche.js',
+    ]);
+  });
+
+  test('src/application peut manquer ; un src/moteur, un src/geometrie, un src/demo, un src/stockage, un src/csv ou un src/interface sans module fait échouer la garde ; un composant seul suffit à l’interface', () => {
     assert.deepEqual(avecArbre(MODULES_VIDES, releverFrontiere), []);
     const composantSeul = { ...sansArbre(MODULES_VIDES, 'src/interface'), 'src/interface/App.svelte': '<p></p>\n' };
     assert.deepEqual(avecArbre(composantSeul, releverFrontiere), []);
-    for (const arbre of ['src/moteur', 'src/geometrie', 'src/stockage', 'src/csv', 'src/interface']) {
+    for (const arbre of ['src/moteur', 'src/geometrie', 'src/demo', 'src/stockage', 'src/csv', 'src/interface']) {
       const sansModule = { ...sansArbre(MODULES_VIDES, arbre), [`${arbre}/a.test.js`]: '' };
       assert.throws(
         () => avecArbre(sansModule, releverFrontiere),
@@ -2206,17 +2281,44 @@ function delaisEt(texte, code, motifs) {
 }
 
 // Relevé des épreuves du navigateur, chaque *.navigateur.test.js du
-// projet : une assertion de classe ou un délai fixe, « fichier:ligne
-// refus ». Lève quand le projet n'en porte aucune.
+// projet, et des modules JavaScript de test/ qu'elles importent, à toute
+// profondeur, par un chemin relatif ou absolu depuis la racine : les aides
+// partagées de test/navigateur/ attendent et agissent pour elles. Un module
+// de src/ ne se parcourt pas : c'est le code éprouvé, que ses propres gardes
+// tiennent. Chaque assertion de classe ou délai fixe se lit « accès:ligne
+// refus », l'accès étant la suite des fichiers qui y mène depuis une
+// épreuve, comme dans releverEcritureDesEpreuves. Lève quand le projet n'en
+// porte aucune.
 function releverEpreuvesNavigateur(racine) {
   const epreuves = fichiersDuProjet(racine).filter((f) => EPREUVE_NAVIGATEUR.test(f));
   assert.ok(epreuves.length > 0, 'aucune épreuve du navigateur');
-  return epreuves.flatMap((fichier) => {
+  const sousTest = join(racine, 'test') + sep;
+  const aParcourir = [...epreuves];
+  const acces = new Map(epreuves.map((fichier) => [fichier, relative(racine, fichier)]));
+  const refus = [];
+  for (let i = 0; i < aParcourir.length; i += 1) {
+    const fichier = aParcourir[i];
     const texte = readFileSync(fichier, 'utf8');
-    return delaisEt(texte, sansChaines(texte), [...ASSERTIONS_DE_CLASSE, ...DELAIS]).map(
-      ({ ligne, motif }) => `${relative(racine, fichier)}:${ligne} ${motif}`,
+    const code = sansChaines(texte);
+    for (const { indice, specificateur } of chargementsLitteraux(texte)) {
+      const cible = cibleDe(racine, fichier, specificateur);
+      if (
+        estDuCode(code, indice) &&
+        cible !== null &&
+        cible.startsWith(sousTest) &&
+        !acces.has(cible) &&
+        EXTENSIONS_MODULE.has(extname(cible)) &&
+        existsSync(cible)
+      ) {
+        acces.set(cible, `${acces.get(fichier)} → ${relative(racine, cible)}`);
+        aParcourir.push(cible);
+      }
+    }
+    refus.push(
+      ...delaisEt(texte, code, [...ASSERTIONS_DE_CLASSE, ...DELAIS]).map(({ ligne, motif }) => `${acces.get(fichier)}:${ligne} ${motif}`),
     );
-  });
+  }
+  return refus;
 }
 
 describe('arborescence : écriture des épreuves (§ 14.8, § 14.2)', () => {
@@ -2316,6 +2418,30 @@ describe('arborescence : écriture des épreuves (§ 14.8, § 14.2)', () => {
       'test/navigateur/entrees.navigateur.test.js:1 setInterval',
     ]);
     assert.throws(() => avecArbre({ 'src/a.test.js': '' }, releverEpreuvesNavigateur), /aucune épreuve du navigateur/);
+  });
+
+  test('la garde des épreuves du navigateur suit leurs imports relatifs vers les modules de test/, à toute profondeur, et relève le refus avec son chemin d’accès ; un module de src/ ne se parcourt pas', () => {
+    const fichiers = {
+      'src/interface/plan/Plan.navigateur.test.js': [
+        "import { cliquer } from '../../../test/navigateur/aide.js';",
+        "import { horloge } from '../../application/horloge.js';",
+        "import { donnee } from '../../../test/fixtures/donnee.json' with { type: 'json' };",
+      ].join('\n'),
+      'test/navigateur/aide.js': [
+        "import { attendre } from './profond/attente.js';",
+        'export const cliquer = async () => {',
+        '  await new Promise((r) => setTimeout(r, 300));',
+        '};',
+      ].join('\n'),
+      'test/navigateur/profond/attente.js': "export const attendre = (e) => e.classList.contains('vu');\n",
+      'src/application/horloge.js': 'export const horloge = () => setTimeout(() => {}, 10);\n',
+      'test/fixtures/donnee.json': '{}\n',
+      'test/navigateur/aide.navigateur.test.js': "import { cliquer } from './aide.js';\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverEpreuvesNavigateur), [
+      'src/interface/plan/Plan.navigateur.test.js → test/navigateur/aide.js:3 setTimeout',
+      'src/interface/plan/Plan.navigateur.test.js → test/navigateur/aide.js → test/navigateur/profond/attente.js:1 classList.contains',
+    ]);
   });
 });
 
@@ -2740,5 +2866,418 @@ describe('arborescence : les motifs de surveillance (§ 14.14)', () => {
       /src\/interface ne fournit aucune feuille de style/,
     );
     assert.throws(() => releverSurveillance(RACINE, { watchTriggerPatterns: [], projects }), /aucun motif de surveillance/);
+  });
+});
+
+// --- Un seul chemin, un seul langage, des épreuves à leur place -------------
+
+// Le code d'un texte sans ses chaînes ni ses commentaires : sansChaines,
+// puis chaque commentaire « // … » et « /* … */ » blanchi, fins de ligne
+// gardées. Les chaînes déjà blanchies n'ouvrent plus aucun commentaire.
+function codeSeul(texte) {
+  return sansChaines(texte).replace(/\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g, (commentaire) => commentaire.replace(/[^\n]/g, ' '));
+}
+
+// Les seuls lecteurs des réservations dans le moteur (§ 5.2) : la
+// réservation est un prétraitement qui réduit l'instance — capacités,
+// mobiles, appartenances des ancrés —, jamais un second algorithme.
+const LECTEURS_DES_RESERVATIONS = [
+  {
+    fichier: 'src/moteur/configuration.js',
+    raison: 'normaliser fixe les réservations et réduit l’instance que la recherche résout',
+  },
+  {
+    fichier: 'src/moteur/diagnostic.js',
+    raison: 'le diagnostic sonde la configuration sous une partie de ses réservations pour nommer la cause',
+  },
+];
+
+// Une lecture des réservations : le nom reservations dans le code —
+// propriété, déstructuration, paramètre —, ou une propriété nommée par une
+// chaîne entre crochets.
+const LECTURE_DES_RESERVATIONS = /\breservations\b/g;
+const RESERVATIONS_ENTRE_CROCHETS = /\[\s*(['"`])reservations\1\s*\]/g;
+
+// Relevé des lectures des réservations dans les modules de src/moteur, à
+// toute profondeur, épreuves exclues, hors des lecteurs admis : chacune
+// « fichier:ligne reservations », ou « fichier:ligne ['reservations'] » pour
+// la forme à crochets, par fichier puis par ligne ; puis « exception sans
+// objet : fichier » pour un lecteur admis qui n'en lit aucune. Le nom se lit
+// dans le code sans chaînes ni commentaires : un typedef JSDoc qui le nomme
+// ne lit rien. Lève quand src/moteur ne fournit aucun module.
+function releverLecteursDesReservations(racine, admis = LECTEURS_DES_RESERVATIONS) {
+  const modules = modulesDe(join(racine, 'src', 'moteur'));
+  assert.ok(modules.length > 0, 'src/moteur ne fournit aucun module');
+  const lecteurs = new Set();
+  const refus = [];
+  for (const fichier of modules) {
+    const nom = enBarres(racine, fichier);
+    const texte = readFileSync(fichier, 'utf8');
+    const code = codeSeul(texte);
+    // Le crochet d'une lecture subsiste dans le code ; celui d'un
+    // commentaire est blanchi avec lui.
+    const trouves = [
+      ...[...code.matchAll(LECTURE_DES_RESERVATIONS)].map(({ index }) => ({ indice: index, rang: 0, motif: 'reservations' })),
+      ...[...texte.matchAll(RESERVATIONS_ENTRE_CROCHETS)]
+        .filter(({ index }) => code[index] === '[')
+        .map(({ index }) => ({ indice: index, rang: 1, motif: "['reservations']" })),
+    ];
+    if (trouves.length > 0) lecteurs.add(nom);
+    if (admis.some((e) => e.fichier === nom)) continue;
+    trouves.sort((a, b) => a.indice - b.indice || a.rang - b.rang);
+    refus.push(...trouves.map(({ indice, motif }) => `${nom}:${ligneDe(texte, indice)} ${motif}`));
+  }
+  const sansObjet = admis.filter(({ fichier }) => !lecteurs.has(fichier)).map(({ fichier }) => `exception sans objet : ${fichier}`);
+  return [...refus, ...sansObjet];
+}
+
+// Les arbres du code livré et de son outillage, où ne vit qu'une langue
+// (§ 13.2) : JavaScript, composants Svelte, feuilles de style, et des
+// données JSON, qui ne calculent rien.
+const ARBRES_D_UNE_LANGUE = ['src', 'electron', 'scripts'];
+const EXTENSIONS_D_UNE_LANGUE = new Set(['.js', '.cjs', '.mjs', '.svelte', '.css', '.json']);
+
+// Les scripts d'installation et de construction, chacun à sa place : ils
+// posent l'outillage ou le lancent, et ne refont aucun calcul du logiciel.
+const SCRIPTS_NOMMES = [
+  { fichier: 'scripts/construire_windows.sh', raison: 'construit l’exécutable Windows depuis Linux (§ 16)' },
+  { fichier: 'scripts/verifier_systemes.sh', raison: 'éprouve l’installation sur chaque système, dans un conteneur' },
+  { fichier: 'scripts/installation/avec_node.sh', raison: 'lance une commande avec le Node du projet' },
+  { fichier: 'scripts/installation/commun.sh', raison: 'fonctions communes des scripts d’installation' },
+  { fichier: 'scripts/installation/shell.nix', raison: 'environnement de développement sous NixOS' },
+  {
+    fichier: 'scripts/oracle/pcg32_reference.sh',
+    raison: 'compile et lance la référence de PCG32, oracle pris hors du code éprouvé (§ 14.11)',
+  },
+  { fichier: 'scripts/windows/avec_node.ps1', raison: 'lance une commande avec le Node du projet, sous Windows' },
+  { fichier: 'scripts/windows/commun.ps1', raison: 'fonctions communes des scripts Windows' },
+  { fichier: 'scripts/windows/installer.ps1', raison: 'installe le projet sous Windows' },
+  { fichier: 'scripts/windows/lancer.ps1', raison: 'lance le projet sous Windows' },
+];
+
+// Fichiers que le disque porte sans qu'ils soient du projet : un nom caché
+// (.DS_Store, l'échange .x.js.swp de Vim), une sauvegarde d'éditeur (x.js~,
+// #x.js#), un reste de fusion ou de correctif (x.js.orig, x.js.rej). Le relevé
+// des langues est le seul à admettre une extension par sa liste plutôt qu'à
+// choisir la sienne : sans ce filtre, il tombe sur un arbre conforme dès qu'un
+// éditeur est ouvert, et la série surveillée le relance à chaque sauvegarde.
+// La liste de git ne les écarte pas : ces noms ne sont pas ignorés par le
+// dépôt, et --others les rend comme tout fichier nouveau.
+const estArtefact = (nom) => nom.startsWith('.') || nom.endsWith('~') || /^#.*#$/.test(nom) || /\.(orig|rej)$/.test(nom);
+
+// Relevé des fichiers d'une autre langue sous src/, electron/ et scripts/, à
+// toute profondeur, artefacts d'éditeur et de fusion écartés : chacun
+// « chemin : extension », ou « chemin : sans extension », dans l'ordre des
+// chemins, hors des extensions admises et des scripts nommés ; puis
+// « exception sans objet : fichier » pour un script nommé absent. Lève quand
+// ces arbres ne portent aucun fichier.
+function releverLangages(racine, nommes = SCRIPTS_NOMMES) {
+  const fichiers = ARBRES_D_UNE_LANGUE.flatMap((arbre) => fichiersDe(join(racine, arbre)))
+    .filter((fichier) => !fichier.split(sep).includes('node_modules') && !estArtefact(basename(fichier)))
+    .map((fichier) => enBarres(racine, fichier))
+    .sort();
+  assert.ok(fichiers.length > 0, 'aucun fichier sous src/, electron/ et scripts/');
+  const presents = new Set(fichiers);
+  const refus = fichiers
+    .filter((chemin) => !EXTENSIONS_D_UNE_LANGUE.has(extname(chemin)) && !nommes.some((e) => e.fichier === chemin))
+    .map((chemin) => `${chemin} : ${extname(chemin) || 'sans extension'}`);
+  const sansObjet = nommes.filter(({ fichier }) => !presents.has(fichier)).map(({ fichier }) => `exception sans objet : ${fichier}`);
+  return [...refus, ...sansObjet];
+}
+
+// Les épreuves de src/ qui ne vivent pas à côté d'un module de leur
+// répertoire, chacune avec sa raison.
+const EPREUVES_SANS_VOISIN = [
+  {
+    fichier: 'src/interface/accueil/Accueil.navigateur.test.js',
+    raison: 'l’accueil n’existe qu’au sein de l’application : l’épreuve monte App par test/navigateur/montage.js',
+  },
+  {
+    fichier: 'src/interface/propositions/Propositions.navigateur.test.js',
+    raison: 'les propositions se lisent dans l’application montée, après génération : l’épreuve monte App',
+  },
+  {
+    fichier: 'src/interface/plan/ecouteurs.test.js',
+    raison: 'garde des sources : elle lit les composants de son répertoire par le disque, sans les importer',
+  },
+];
+
+// Relevé des épreuves de src/ éloignées de leur module (§ 14.9) : chaque
+// *.test.js de src/, à toute profondeur, dont aucun chargement de code ne
+// désigne un fichier existant de son propre répertoire qui ne soit pas une
+// épreuve — module ou composant ; le suffixe de Vite se retire, et
+// « ./travailleur.js?worker&inline » désigne le module voisin —, hors des
+// exceptions nommées : chacune « épreuve : aucun module de répertoire »,
+// dans l'ordre des chemins ; puis « exception sans objet : fichier » pour
+// une exception qui a désormais un voisin ou n'existe plus. Lève quand src/
+// ne porte aucune épreuve.
+function releverEpreuvesEloignees(racine, admis = EPREUVES_SANS_VOISIN) {
+  const epreuves = fichiersDe(join(racine, 'src'))
+    .filter((fichier) => EPREUVE.test(fichier))
+    .sort();
+  assert.ok(epreuves.length > 0, 'aucune épreuve sous src/');
+  const sansVoisin = epreuves.filter((fichier) => {
+    const texte = readFileSync(fichier, 'utf8');
+    const code = codeSeul(texte);
+    return !chargementsLitteraux(texte).some(({ indice, specificateur }) => {
+      const cible = cibleDe(racine, fichier, specificateur.replace(/\?.*$/, ''));
+      return (
+        estDuCode(code, indice) &&
+        cible !== null &&
+        dirname(cible) === dirname(fichier) &&
+        !EPREUVE.test(cible) &&
+        existsSync(cible)
+      );
+    });
+  });
+  const noms = sansVoisin.map((fichier) => enBarres(racine, fichier));
+  const refus = noms
+    .filter((nom) => !admis.some((e) => e.fichier === nom))
+    .map((nom) => `${nom} : aucun module de ${dirname(nom)}`);
+  const sansObjet = admis.filter(({ fichier }) => !noms.includes(fichier)).map(({ fichier }) => `exception sans objet : ${fichier}`);
+  return [...refus, ...sansObjet];
+}
+
+// Les fichiers livrés qu'une donnée d'épreuve ne double pas (§ 14.9) : les
+// exemples du § 10.3 et les démonstrations livrées.
+const ARBRES_LIVRES = ['exemples', 'src/demo/livrees'];
+
+// Relevé des données de test/fixtures/, à toute profondeur, égales octet
+// pour octet à un fichier livré : chacune « donnée = fichier livré », dans
+// l'ordre des chemins. Lève quand test/fixtures/ ou les arbres livrés ne
+// portent aucun fichier.
+function releverFixturesLivrees(racine) {
+  const fixtures = fichiersDe(join(racine, 'test', 'fixtures')).sort();
+  const livres = ARBRES_LIVRES.flatMap((arbre) => fichiersDe(join(racine, arbre))).sort();
+  assert.ok(fixtures.length > 0, 'test/fixtures/ ne porte aucune donnée');
+  assert.ok(livres.length > 0, 'aucun fichier livré sous exemples/ ni src/demo/livrees/');
+  const octets = new Map(livres.map((fichier) => [fichier, readFileSync(fichier)]));
+  return fixtures.flatMap((fixture) => {
+    const contenu = readFileSync(fixture);
+    return livres
+      .filter((livre) => octets.get(livre).equals(contenu))
+      .map((livre) => `${enBarres(racine, fixture)} = ${enBarres(racine, livre)}`);
+  });
+}
+
+// Les seules épreuves qui chargent fast-check (§ 14.12) : la formule du
+// plafond et la détection du séparateur, qui gagnent au rétrécissement ; et
+// deux propriétés du stockage, sur des paires de charges et des séances
+// tirées, dont le contre-exemple rétréci tient en quelques opérations.
+const CHARGEURS_DE_FAST_CHECK = [
+  { fichier: 'src/moteur/plafond.test.js', raison: 'la formule du plafond, arbitrée par énumération exhaustive' },
+  { fichier: 'src/moteur/plafond.long.test.js', raison: 'la grande grille du plafond, sous la même graine écrite' },
+  { fichier: 'src/csv/lecture.test.js', raison: 'la détection du séparateur, arbitrée par construction' },
+  {
+    fichier: 'src/stockage/correctifs.test.js',
+    raison: 'l’aller-retour appliquer(a, difference(a, b)) sur des paires de charges tirées',
+  },
+  {
+    fichier: 'src/stockage/journal.long.test.js',
+    raison: 'chaque instant d’une séance tirée se restitue tel qu’il s’est écrit',
+  },
+];
+
+// Relevé des chargements de fast-check, sous-chemins compris, dans les
+// fichiers JavaScript et les composants du projet, hors des épreuves
+// nommées : chacun « fichier:ligne spécificateur », par fichier puis dans
+// l'ordre du texte ; puis « exception sans objet : fichier » pour une
+// épreuve nommée qui ne le charge pas. Un chargement écrit dans une chaîne,
+// donnée d'épreuve, n'en est pas un. Lève quand le projet ne porte aucun
+// module.
+function releverFastCheck(racine, nommes = CHARGEURS_DE_FAST_CHECK) {
+  const fichiers = fichiersDuProjet(racine).filter(
+    (fichier) => EXTENSIONS_MODULE.has(extname(fichier)) || extname(fichier) === '.svelte',
+  );
+  assert.ok(fichiers.length > 0, 'aucun module dans le projet');
+  const chargeurs = new Set();
+  const refus = [];
+  for (const fichier of fichiers) {
+    const nom = enBarres(racine, fichier);
+    const texte = readFileSync(fichier, 'utf8');
+    const code = codeSansChaines(fichier, texte);
+    const trouves = chargementsLitteraux(texte).filter(
+      ({ indice, specificateur }) => estDuCode(code, indice) && nomDePaquet(specificateur) === 'fast-check',
+    );
+    if (trouves.length > 0) chargeurs.add(nom);
+    if (nommes.some((e) => e.fichier === nom)) continue;
+    refus.push(...trouves.map(({ indice, specificateur }) => `${nom}:${ligneDe(texte, indice)} ${specificateur}`));
+  }
+  const sansObjet = nommes.filter(({ fichier }) => !chargeurs.has(fichier)).map(({ fichier }) => `exception sans objet : ${fichier}`);
+  return [...refus, ...sansObjet];
+}
+
+describe('arborescence : un seul chemin de code pour les réservations (§ 5.2)', () => {
+  test('dans src/moteur, seuls configuration.js et diagnostic.js lisent les réservations', () => {
+    assert.deepEqual(releverLecteursDesReservations(RACINE), []);
+  });
+
+  test('la garde relève chaque lecture par sa ligne — propriété, déstructuration, crochet —, hors commentaires, chaînes et épreuves ; un lecteur admis qui ne lit plus est sans objet', () => {
+    const fichiers = {
+      'src/moteur/configuration.js': 'export const normaliser = ({ reservations }) => reservations.length;\n',
+      'src/moteur/diagnostic.js': 'export const sonder = (c) => c.reservations;\n',
+      'src/moteur/recherche.js': [
+        '// les reservations sont fixées avant la recherche',
+        'export const rechercher = (configuration) => {',
+        '  const { tables, reservations } = configuration;',
+        "  const motif = 'reservations';",
+        '  return configuration?.reservations ?? configuration["reservations"];',
+        '};',
+      ].join('\n'),
+      'src/moteur/types.js': '/** @property {Reservation[]} reservations */\nexport const fixerReservations = 1;\n',
+      'src/moteur/sous/profond.js': 'export const lire = (c) => c.reservations;\n',
+      'src/moteur/recherche.test.js': 'const r = configuration.reservations;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverLecteursDesReservations), [
+      'src/moteur/recherche.js:3 reservations',
+      'src/moteur/recherche.js:5 reservations',
+      "src/moteur/recherche.js:5 ['reservations']",
+      'src/moteur/sous/profond.js:1 reservations',
+    ]);
+    const sansLecture = { ...fichiers, 'src/moteur/diagnostic.js': 'export const sonder = (c) => c.tables;\n' };
+    assert.deepEqual(avecArbre(sansLecture, releverLecteursDesReservations).at(-1), 'exception sans objet : src/moteur/diagnostic.js');
+    assert.throws(() => avecArbre({ 'src/moteur/a.test.js': '' }, releverLecteursDesReservations), /src\/moteur ne fournit aucun module/);
+  });
+});
+
+describe('arborescence : une seule langue (§ 13.2)', () => {
+  test('sous src/, electron/ et scripts/, rien que du JavaScript, des composants Svelte, des feuilles de style, des données JSON et les scripts d’installation nommés', () => {
+    assert.deepEqual(releverLangages(RACINE), []);
+  });
+
+  test('la garde relève un second langage, à toute profondeur, et un fichier sans extension ; un script nommé hors de sa place l’est aussi ; un script nommé absent est sans objet', () => {
+    const fichiers = {
+      'src/moteur/a.js': '',
+      'src/moteur/b.mjs': '',
+      'electron/c.cjs': '',
+      'src/interface/D.svelte': '',
+      'src/interface/jetons.css': '',
+      'src/demo/livrees/e.gtt.json': '{}',
+      'src/moteur/calcul.py': '',
+      'src/geometrie/vue.ts': '',
+      'src/moteur/sous/recherche.wasm': '',
+      'electron/Makefile': '',
+      'scripts/outil.rb': '',
+      'scripts/construire_windows.sh': '',
+      'src/installation/avec_node.sh': '',
+      'test/aide.py': '',
+      'node_modules/p/x.py': '',
+    };
+    const releves = avecArbre(fichiers, releverLangages);
+    assert.deepEqual(
+      releves.filter((r) => !r.startsWith('exception sans objet')),
+      [
+        'electron/Makefile : sans extension',
+        'scripts/outil.rb : .rb',
+        'src/geometrie/vue.ts : .ts',
+        'src/installation/avec_node.sh : .sh',
+        'src/moteur/calcul.py : .py',
+        'src/moteur/sous/recherche.wasm : .wasm',
+      ],
+    );
+    assert.ok(releves.includes('exception sans objet : scripts/installation/avec_node.sh'));
+    assert.ok(!releves.includes('exception sans objet : scripts/construire_windows.sh'));
+    assert.throws(() => avecArbre({ 'test/a.js': '' }, releverLangages), /aucun fichier sous src\/, electron\/ et scripts\//);
+  });
+
+  test('les fichiers cachés et les restes d\u{2019}éditeur ou de fusion ne sont pas du projet : la garde les passe, et relève encore ce qui les côtoie', () => {
+    const fichiers = {
+      'src/moteur/recherche.js': '',
+      'src/moteur/.recherche.js.swp': '',
+      'src/interface/.DS_Store': '',
+      'src/moteur/recherche.js~': '',
+      'src/moteur/recherche.js.orig': '',
+      'electron/principal.cjs.rej': '',
+      'scripts/#notes.txt#': '',
+      'src/moteur/calcul.py': '',
+      'src/moteur/orig': '',
+      'src/moteur/calcul.py.bak': '',
+    };
+    const releves = avecArbre(fichiers, releverLangages).filter((r) => !r.startsWith('exception sans objet'));
+    assert.deepEqual(releves, ['src/moteur/calcul.py : .py', 'src/moteur/calcul.py.bak : .bak', 'src/moteur/orig : sans extension']);
+    assert.throws(
+      () => avecArbre({ 'src/moteur/.a.js.swp': '', 'electron/a.cjs~': '' }, releverLangages),
+      /aucun fichier sous src\/, electron\/ et scripts\//,
+    );
+  });
+});
+
+describe('arborescence : où vivent les épreuves (§ 14.9, § 14.12)', () => {
+  test('chaque épreuve de src/ importe un module de son propre répertoire, hors des exceptions nommées', () => {
+    assert.deepEqual(releverEpreuvesEloignees(RACINE), []);
+  });
+
+  test('la garde relève une épreuve qui n’importe que d’ailleurs — d’un sous-répertoire, d’un parent, une autre épreuve voisine —, à toute profondeur ; un composant voisin compte ; une exception sans objet se relève', () => {
+    const fichiers = {
+      'src/moteur/plafond.js': '',
+      'src/moteur/plafond.test.js': "import { plafond } from './plafond.js';\n",
+      'src/moteur/loin.test.js': "import { x } from '../csv/lecture.js';\nimport { y } from './sous/y.js';\n",
+      'src/moteur/sous/y.js': '',
+      'src/moteur/sous/y.long.test.js': "import { x } from '../plafond.js';\n",
+      'src/moteur/voisine.test.js': "import './plafond.test.js';\n// import { plafond } from './plafond.js';\n",
+      'src/csv/lecture.js': '',
+      'src/interface/Plan.svelte': '',
+      'src/interface/Plan.navigateur.test.js': "import Plan from './Plan.svelte';\n",
+      'src/interface/travailleur.js': '',
+      'src/interface/Travail.navigateur.test.js': "import Travailleur from './travailleur.js?worker&inline';\n",
+      'src/interface/Ecran.navigateur.test.js': "import { monter } from '../../test/montage.js';\n",
+      'test/a.test.js': "import { x } from '../src/csv/lecture.js';\n",
+    };
+    const exceptions = [
+      { fichier: 'src/interface/Ecran.navigateur.test.js', raison: 'monte l’application entière' },
+      { fichier: 'src/interface/Absente.navigateur.test.js', raison: 'disparue' },
+    ];
+    assert.deepEqual(avecArbre(fichiers, (racine) => releverEpreuvesEloignees(racine, exceptions)), [
+      'src/moteur/loin.test.js : aucun module de src/moteur',
+      'src/moteur/sous/y.long.test.js : aucun module de src/moteur/sous',
+      'src/moteur/voisine.test.js : aucun module de src/moteur',
+      'exception sans objet : src/interface/Absente.navigateur.test.js',
+    ]);
+    assert.throws(() => avecArbre({ 'src/a.js': '' }, releverEpreuvesEloignees), /aucune épreuve sous src\//);
+  });
+
+  test('aucune donnée de test/fixtures/ n’est, octet pour octet, un fichier d’exemples/ ou de src/demo/livrees/', () => {
+    assert.deepEqual(releverFixturesLivrees(RACINE), []);
+  });
+
+  test('la garde relève chaque donnée d’épreuve égale à un fichier livré, à toute profondeur, et rien pour un contenu voisin', () => {
+    const fichiers = {
+      'exemples/participants.csv': 'nom\nIris Ombrelle\n',
+      'src/demo/livrees/petite.gtt.json': '{"format":1}\n',
+      'test/fixtures/csv/copie.csv': 'nom\nIris Ombrelle\n',
+      'test/fixtures/plan/sous/petite.gtt.json': '{"format":1}\n',
+      'test/fixtures/csv/voisine.csv': 'nom\nIris Ombrelle\r\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFixturesLivrees), [
+      'test/fixtures/csv/copie.csv = exemples/participants.csv',
+      'test/fixtures/plan/sous/petite.gtt.json = src/demo/livrees/petite.gtt.json',
+    ]);
+    assert.throws(() => avecArbre({ 'exemples/a.csv': 'x' }, releverFixturesLivrees), /test\/fixtures\/ ne porte aucune donnée/);
+    assert.throws(() => avecArbre({ 'test/fixtures/a.csv': 'x' }, releverFixturesLivrees), /aucun fichier livré/);
+  });
+
+  test('fast-check ne se charge que dans les épreuves que le § 14.12 nomme', () => {
+    assert.deepEqual(releverFastCheck(RACINE), []);
+  });
+
+  test('la garde relève chaque chargement de fast-check hors de la liste, à toute profondeur, et non dans une chaîne ; un fichier nommé qui ne le charge plus est sans objet', () => {
+    const fichiers = {
+      'src/moteur/plafond.test.js': "import fc from 'fast-check';\n",
+      'src/moteur/recherche.test.js': "import fc from 'fast-check';\nconst arb = require('fast-check/lib/arbitrary');\n",
+      'src/stockage/sous/depot.long.test.js': 'const fc = await import(`fast-check`);\n',
+      'test/aide.js': "const texte = \"import fc from 'fast-check';\";\n",
+      'node_modules/p/x.js': "import fc from 'fast-check';\n",
+    };
+    const nommes = [
+      { fichier: 'src/moteur/plafond.test.js', raison: 'la formule du plafond' },
+      { fichier: 'src/csv/lecture.test.js', raison: 'la détection du séparateur' },
+    ];
+    assert.deepEqual(avecArbre(fichiers, (racine) => releverFastCheck(racine, nommes)), [
+      'src/moteur/recherche.test.js:1 fast-check',
+      'src/moteur/recherche.test.js:2 fast-check/lib/arbitrary',
+      'src/stockage/sous/depot.long.test.js:1 fast-check',
+      'exception sans objet : src/csv/lecture.test.js',
+    ]);
+    assert.throws(() => avecArbre({ 'README.md': '' }, releverFastCheck), /aucun module dans le projet/);
   });
 });

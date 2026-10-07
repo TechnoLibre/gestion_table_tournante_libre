@@ -57,6 +57,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync
 import { tmpdir } from 'node:os';
 import path, { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { decrireSysteme } from '../electron/fichiers.js';
 import { estSous } from '../src/stockage/dossier_travail.js';
 import { VERSION } from '../src/version.genere.js';
 import { titreAvecVersion } from '../src/interface/libelles.js';
@@ -114,21 +115,26 @@ export function environnementDEssai(env, { exe, home, temp }, chemins = path) {
 /**
  * Les données applicatives que la coquille lancée sous env retiendrait et
  * qui portent l'exécutable publié : vide quand le mode portable reste
- * possible. La liste est celle du § 8.6 point 2, que decrireSysteme
- * (electron/fichiers.js) compose : AppData, le LOCALAPPDATA de env, le
- * temporaire ; estSous compare comme le système. AppData prend chaque
- * valeur que app.getPath peut rendre : sous Windows, l'APPDATA de env et
- * celle de poste, dossier connu qu'aucune variable ne déplace ; sous macOS,
- * Library/Application Support sous l'un et l'autre HOME ; ailleurs,
- * XDG_CONFIG_HOME ou .config sous HOME. Le temporaire est TMP, puis TEMP,
- * sous Windows, TMPDIR, puis /tmp, ailleurs. L'ordre est celui de cette
- * liste, sans doublon ; sans exécutable publié, rien ne le porte.
+ * possible. La liste est celle que compose decrireSysteme
+ * (electron/fichiers.js, § 8.6 point 2), appelée comme la coquille l'appelle,
+ * et estSous compare comme le système, selon la casse et le séparateur
+ * qu'elle décrit. L'essai ne sait en propre que ce que rend app.getPath :
+ * appData prend chaque valeur qu'il peut rendre — sous Windows, l'APPDATA de
+ * env et celle du poste, dossier connu qu'aucune variable ne déplace ; sous
+ * macOS, Library/Application Support sous l'un et l'autre HOME ; ailleurs,
+ * XDG_CONFIG_HOME ou .config sous HOME —, decrireSysteme étant appelée une
+ * fois pour chacune ; temp est TMP, puis TEMP, sous Windows, TMPDIR, puis
+ * /tmp, ailleurs. Un autre nom demandé à app.getPath lève : l'essai
+ * jugerait une liste à laquelle il manque un emplacement. Les dossiers se
+ * rendent dans l'ordre des appels, sans doublon ; sans exécutable publié,
+ * rien ne le porte.
  * @param {Record<string, string|undefined>} env  l'environnement de la coquille
  * @param {Record<string, string|undefined>} poste  l'environnement du poste
  * @param {string} plateforme  process.platform
+ * @param {typeof decrireSysteme} [decrire]  la description du poste par la coquille
  * @returns {string[]}
  */
-export function donneesApplicativesSurExe(env, poste, plateforme) {
+export function donneesApplicativesSurExe(env, poste, plateforme, decrire = decrireSysteme) {
   const executable = env.PORTABLE_EXECUTABLE_DIR || null;
   if (executable === null) return [];
   const chemins = plateforme === 'win32' ? path.win32 : path.posix;
@@ -140,10 +146,15 @@ export function donneesApplicativesSurExe(env, poste, plateforme) {
         ? [env.HOME, poste.HOME].map((maison) => sousMaison(maison, 'Library', 'Application Support'))
         : [env.XDG_CONFIG_HOME || sousMaison(env.HOME, '.config')];
   const temp = plateforme === 'win32' ? env.TMP || env.TEMP : env.TMPDIR || '/tmp';
-  const systeme = { insensibleCasse: plateforme === 'win32' || plateforme === 'darwin', separateur: chemins.sep };
-  const portent = [...appData, env.LOCALAPPDATA, temp].filter(
-    (dossier) => typeof dossier === 'string' && dossier !== '' && estSous(executable, dossier, systeme),
-  );
+  const portent = appData.flatMap((dossierAppData) => {
+    const connus = { appData: dossierAppData, temp, documents: '' };
+    const cheminSysteme = (nom) => {
+      if (!Object.hasOwn(connus, nom)) throw new Error(`app.getPath('${nom}') : l'essai ne sait pas l'émuler`);
+      return connus[nom];
+    };
+    const { emplacements } = decrire({ env, plateforme, cheminSysteme, nomProduit: '' });
+    return emplacements.donneesApplicatives.filter((dossier) => estSous(executable, dossier, emplacements));
+  });
   return [...new Set(portent)];
 }
 

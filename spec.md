@@ -341,7 +341,9 @@ aperçoive**.
 
 Moyennant cet ajout, le moteur n'a **qu'un seul chemin de code** : la
 réservation est un prétraitement qui réduit les capacités, retire des
-participants et annote les tables — jamais un second algorithme.
+participants et annote les tables — jamais un second algorithme. Une garde de
+l'arborescence le tient : dans le moteur, seuls la normalisation de la
+configuration et le diagnostic lisent les réservations.
 
 ### 5.3 Les contraintes, activables une à une
 
@@ -393,9 +395,10 @@ une lecture et non un jugement :
 | **manque** | plafond réalisé − rencontres (§ 5.5) — la grandeur qui compare deux propositions (§ 12.10) |
 | **écart d'itinéraire** | plafond a priori − plafond réalisé (§ 5.5, § 12.10) |
 
-**Les agrégats portent sur tous les participants placés.** Le minimum se
-calcule sur l'ensemble, ancrés compris, et **deux lignes secondaires** donnent
-la même mesure restreinte aux **mobiles** et aux **ancrés**. Un participant partiellement fixé compte parmi les mobiles.
+**Les agrégats portent sur tous les participants placés.** Le minimum se calcule
+sur l'ensemble, ancrés compris, et **deux lignes secondaires** donnent la même
+mesure restreinte aux **mobiles** et aux **ancrés**. Un participant
+partiellement fixé compte parmi les mobiles.
 
 > Un ancré n'est pas structurellement désavantagé : à table de 8 avec un seul
 > ancré et R = 4, son plafond vaut 28, exactement celui d'un mobile visitant
@@ -680,8 +683,8 @@ dit, pour que l'opérateur sache lequel des deux il fait.
 **Le placement se prépare, il ne suit pas la salle.** Retirer une personne du
 placement retenu libère sa chaise, et personne d'autre ne change de siège ni de
 table : la chaise reste vide jusqu'à ce qu'un geste y assoie quelqu'un, et un
-geste n'assied que les personnes qu'il nomme. Quand les sièges sont attribués, le
-fichier écrit cette chaise vide à sa place (§ 8.9).
+geste n'assied que les personnes qu'il nomme. Quand les sièges sont attribués,
+le fichier écrit cette chaise vide à sa place (§ 8.9).
 
 **Il n'existe aucune commande qui répartit les animateurs sur les tables.**
 L'opérateur désigne lui-même quelle personne anime quelle table (§ 2.1,
@@ -738,8 +741,9 @@ proposition, une réservation, un titre, des réservations à convertir —,
 qu'aucune commande ne fait revenir et sur laquelle l'interface n'offre pas le
 geste ; d'un compteur au bout de sa règle, d'un plan qui n'est plus bloqué, d'un
 geste sans effet, et d'un refus du CSV relayé par l'import, qui se lève dans le
-fichier. Un remède posé pour la forme enverrait l'opérateur vers un geste qui ne
-change rien.
+fichier ou dans l'association de ses colonnes — `NOM_NON_ASSOCIE` quand aucune
+colonne n'est associée au nom. Un remède posé pour la forme enverrait
+l'opérateur vers un geste qui ne change rien.
 
 ### 5.10 Le coût d'évaluation
 
@@ -1088,9 +1092,10 @@ diamètre = max(70, places × 60 / π)        en centimètres
 Soit 115 cm pour 6 places, 153 pour 8, 191 pour 10. **Le plancher n'est pas
 cosmétique** : en deçà de quatre convives — la formule atteint 70 cm à 3,67
 places — ce n'est plus le périmètre qui borne la table mais le plateau, et la
-formule seule dessinerait des guéridons. Les deux
-valeurs sont des **réglages par défaut, non des normes vérifiées** ; un diamètre
-saisi à la main l'emporte.
+formule seule dessinerait des guéridons. Les deux valeurs sont des **réglages
+par défaut, non des normes vérifiées** ; un diamètre saisi à la main l'emporte,
+dès que le fichier d'état peut le porter : le format 1 n'a pas de champ pour
+lui, et toute table s'y dessine selon la formule.
 
 **Les étiquettes ne sont pas à l'échelle, le mobilier l'est.** Une liste de dix
 noms couvre plusieurs mètres carrés fictifs. **Le plan à l'échelle du bâtiment
@@ -1103,12 +1108,11 @@ table sans qu'aucune marque couvre la liste. Sa largeur est fixée dans le
 dessin, et un nom trop long s'y abrège (§ 7.4). **Aucune liste ne passe sur les
 chaises d'une voisine posée sur la grille** : une table créée prend la première
 case libre d'une grille dont les colonnes s'écartent d'une emprise, de deux
-écarts et d'un bloc de noms, à un pas entier au moins, sur l'un des deux axes, de
-toute table déjà posée, et les démonstrations (§ 15) sont rangées sur la même
-grille. Le prix est la place : au
-zoom ajusté, une grande salle descend sous le seuil qui retire les listes
-(§ 17, point 6), et un grand événement peut s'ouvrir sans listes de noms, qui se
-dessinent quand l'opérateur rapproche la vue.
+écarts et d'un bloc de noms, à un pas entier au moins, sur l'un des deux axes,
+de toute table déjà posée, et les démonstrations (§ 15) sont rangées sur la même
+grille. Le prix est la place : au zoom ajusté, une grande salle descend sous le
+seuil qui retire les listes (§ 17, point 6), et un grand événement peut s'ouvrir
+sans listes de noms, qui se dessinent quand l'opérateur rapproche la vue.
 
 **Tant qu'aucune dimension de salle n'est saisie, le plan est exact dans ses
 tables et arbitraire dans son cadre.** Le logiciel porte alors, sur le plan et
@@ -2918,11 +2922,12 @@ service.
 | `web` | la plateforme web de Capacitor, servie en local | le développement et les tests sous Linux |
 | `android` | la plateforme Android de Capacitor | ouverte, non requise pour la première livraison |
 
-**Capacitor ne porte pas l'exécutable Windows, et c'est délibéré.** Il ne fournit
-de plateforme de bureau que par une extension communautaire, et une plateforme
-dont la mise à jour ne dépend pas du projet fige le moteur d'exécution embarqué :
-l'exécutable livré porterait un Chromium que plus personne ne corrige. La coquille
-du projet tient en deux fichiers — le processus principal et le script de
+**Capacitor ne porte pas l'exécutable Windows, et c'est délibéré.** Il ne
+fournit de plateforme de bureau que par une extension communautaire, et une
+plateforme dont la mise à jour ne dépend pas du projet fige le moteur
+d'exécution embarqué : l'exécutable livré porterait un Chromium que plus
+personne ne corrige. La coquille du projet tient en trois fichiers — le
+processus principal, ses primitives de fichiers (`fichiers.js`) et le script de
 préchargement — et fixe elle-même sa version d'Electron, que la construction met
 à jour comme n'importe quelle dépendance.
 
@@ -2957,11 +2962,13 @@ navigateur.
 Tout — le moteur, la géométrie, l'interface — est écrit en **JavaScript**.
 Aucune partie du calcul n'est dupliquée dans un second langage.
 
-Cette propriété doit être **préservée délibérément**. Dès que la même
-arithmétique existe en deux endroits, une suite de tests peut prouver qu'ils
-s'accordent **sans jamais prouver qu'ils ont raison** : les deux dérivent
-ensemble et les tests restent verts. Une seule implémentation rend ce mode de
-défaillance impossible.
+Cette propriété doit être **préservée délibérément**, et une garde de
+l'arborescence la tient : sous `src/`, `electron/` et `scripts/`, rien d'autre
+que du JavaScript, des composants Svelte, des feuilles de style, des données
+JSON et les scripts d'installation nommés. Dès que la même arithmétique existe
+en deux endroits, une suite de tests peut prouver qu'ils s'accordent **sans
+jamais prouver qu'ils ont raison** : les deux dérivent ensemble et les tests
+restent verts. Une seule implémentation rend ce mode de défaillance impossible.
 
 **Une exception, nommée, et une seule** : le calcul incrémental des indicateurs
 du § 5.10. Elle tient à une condition écrite — **le recalcul complet est la
@@ -3028,9 +3035,9 @@ quelques secondes — et c'est la condition pour qu'il soit éprouvé sérieusem
 du rendu et placée plus bas que le moteur : elle n'importe ni le moteur, ni
 l'analyseur CSV, ni le générateur de démonstrations, ni l'application, ni
 l'interface, ni le stockage, et ne touche pas le navigateur. Elle est
-**requise** : sa garde échoue quand son arbre ne fournit aucun module. Le dessin,
-la désignation d'un siège et le dépôt partagent ses conversions et ses chaises
-(§ 7.2, § 7.3).
+**requise** : sa garde échoue quand son arbre ne fournit aucun module. Le
+dessin, la désignation d'un siège et le dépôt partagent ses conversions et ses
+chaises (§ 7.2, § 7.3).
 
 Les **deux frontières de plateforme** sont le système de fichiers et
 l'impression : une interface unique, deux implémentations — plus, pour le système
@@ -3056,10 +3063,10 @@ ou d'une plateforme ; que `src/geometrie` importe en outre du moteur, de
 de Svelte ; et que `src/interface` importe autre chose que Svelte, ses propres
 modules, `src/application` et `src/geometrie` — elle atteint le CSV et le moteur
 par l'application, jamais en direct. Un type que la documentation d'un module
-importe compte comme un import. Le projet `node` ne chargeant pas le greffon Svelte (§ 14.8), un test de
-moteur qui importerait un composant échoue au chargement — mais cette garde-là
-ne couvre que les composants, et un module qui touche `document` ne tomberait
-qu'à l'exécution de la branche fautive.
+importe compte comme un import. Le projet `node` ne chargeant pas le greffon
+Svelte (§ 14.8), un test de moteur qui importerait un composant échoue au
+chargement — mais cette garde-là ne couvre que les composants, et un module qui
+touche `document` ne tomberait qu'à l'exécution de la branche fautive.
 
 ### 13.5 Ce que le SVG donne et que le canvas ferait payer
 
@@ -3145,8 +3152,9 @@ suivante ; une règle qui fait échouer la construction tient.
 | **sa propre commande** | l'audit par mutation (§ 14.13) | avant une livraison, sous aucun budget |
 
 **La commande surveillée ne lance que le projet `node`.** Le lanceur en porte
-deux (§ 14.8) ; lancés ensemble, ils démarrent un navigateur à chaque
-modification, et le niveau navigateur reste à « avant chaque livraison ».
+trois (§ 14.8) — `node`, `node-long` et `navigateur` ; lancés ensemble, ils
+démarrent un navigateur et la série longue à chaque modification, et le niveau
+navigateur reste à « avant chaque livraison ».
 
 **Le partage entre les deux séries `node` est écrit avant la première mesure**,
 et non après. Trois familles tombent naturellement dans la série surveillée sans
@@ -3212,10 +3220,10 @@ l'**analyseur CSV**, qui reçoivent l'horloge et l'aléa en paramètre. Un test 
 l'arborescence le refuse, **et échoue si son balayage ne trouve aucun fichier**.
 Son périmètre est nommé : `src/moteur`, `src/geometrie`, `src/demo`,
 `src/stockage` et `src/csv`, à l'exclusion du code d'épreuve, où un tirage sert
-légitimement (§ 14.12). L'interdit ne porte pas sur
-le reste de l'application : l'application lit l'horloge pour horodater les
-entrées de l'historique, que le stockage écrit telles qu'il les reçoit, et le
-banc de mesure du § 19.10 relève des temps par image.
+légitimement (§ 14.12). L'interdit ne porte pas sur le reste de l'application :
+l'application lit l'horloge pour horodater les entrées de l'historique, que le
+stockage écrit telles qu'il les reçoit, et le banc de mesure du § 19.10 relève
+des temps par image.
 
 **Ce n'est pas une règle d'hygiène.** L'interdit de `performance.now` dans le
 moteur est ce qui rend vraie la phrase « à graine et entrée égales, placement
@@ -3230,22 +3238,25 @@ d'horloge à l'exécution (§ 18.5) : le moteur et le générateur ne la lisent 
 
 ### 14.8 L'outillage des épreuves
 
-**Un seul lanceur, deux projets : Vitest.** Le niveau `node` et le niveau
-navigateur du § 14.4 sont deux configurations du même lanceur, pas deux outils.
+**Un seul lanceur, trois projets : Vitest.** Les deux séries `node` et le niveau
+navigateur du § 14.4 sont trois configurations du même lanceur, pas trois
+outils.
 
 | projet | environnement | ce qu'il inclut | greffon Svelte |
 |---|---|---|---|
 | `node` | `node`, aucun DOM | `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`, `src/demo`, `src/pdf`, `src/application`, et les modules purs de `src/interface` | **absent** |
+| `node-long` | `node`, aucun DOM | les épreuves lourdes du niveau `node:long` (§ 14.4), suffixe `.long.test.js`, hors de la série surveillée | **absent** |
 | `navigateur` | un vrai moteur de rendu, piloté par le mode navigateur de Vitest | les composants de `src/interface`, les épreuves de coordonnées et de style calculé | présent |
 
-**Pourquoi Vitest.** Il lit la **configuration Vite qui construit le livrable** : un module importé par un test se résout exactement comme un module
+**Pourquoi Vitest.** Il lit la **configuration Vite qui construit le
+livrable** : un module importé par un test se résout exactement comme un module
 importé par l'application. Deux chaînes de résolution — l'une pour construire,
 l'autre pour éprouver — sont le mode de défaillance du § 13.2 transposé à
-l'outillage : le test passe sur un fichier que l'application ne charge jamais, un
-alias diverge, et rien ne le signale. Le lanceur observe en outre le **graphe de
-dépendances**, donc une modification du moteur ne rejoue que les tests du moteur,
-et son mode navigateur offre **la même API d'assertion** au niveau 2, de sorte
-que l'oracle de géométrie du § 7.2 s'écrit une fois.
+l'outillage : le test passe sur un fichier que l'application ne charge jamais,
+un alias diverge, et rien ne le signale. Le lanceur observe en outre le **graphe
+de dépendances**, donc une modification du moteur ne rejoue que les tests du
+moteur, et son mode navigateur offre **la même API d'assertion** au niveau 2, de
+sorte que l'oracle de géométrie du § 7.2 s'écrit une fois.
 
 **Les trois durées sont des cibles, mesurées la première semaine.** Le démarrage
 à froid, la relance sous surveillance et la série complète se mesurent sur un
@@ -3300,12 +3311,15 @@ une donnée d'épreuve qui emprunte une racine d'organisation plausible le fait
 échouer. Un test vérifie cette disjonction, faute de quoi la garde du § 15.6
 tombe au premier exemple écrit de bonne foi.
 
-**La co-localisation se garde.** Un test de la construction affirme que le paquet
-livré ne contient **aucun fichier de test ni aucun import du lanceur**. Le § 14.15
-pose que la suite n'est pas livrée ; avec des tests rangés dans `src/`, cette
-propriété tient par la seule analyse statique de Vite, c'est-à-dire par
-chance, jusqu'au jour où un module de production importe une
-donnée d'épreuve « pour un cas par défaut ».
+**La co-localisation se garde.** Un test de la construction affirme que le
+paquet livré ne contient **aucun fichier de test ni aucun import du lanceur**.
+Le § 14.15 pose que la suite n'est pas livrée ; avec des tests rangés dans
+`src/`, cette propriété tient par la seule analyse statique de Vite,
+c'est-à-dire par chance, jusqu'au jour où un module de production importe une
+donnée d'épreuve « pour un cas par défaut ». Une garde de l'arborescence exige
+aussi que chaque test de `src/` importe un module de son propre répertoire, hors
+d'exceptions nommées avec leur raison, et qu'aucune donnée de `test/fixtures/`
+n'égale, octet pour octet, un fichier livré.
 
 ### 14.10 La carte de ce qui s'éprouve
 
@@ -3387,14 +3401,15 @@ sait pas fragmenter un SVG ; c'est du code qu'il faut éprouver, pas une règle 
 style.
 
 **Au niveau navigateur**, la fonction pure est confrontée à
-`getScreenCTM().inverse()` sur un rendu réel, à plusieurs `k` et après défilement
-de la page, à un millième de pixel d'écran près (§ 7.2). **Les trois invariants du § 7.2 ont chacun leur test** : que le `<svg>`
-racine ne porte pas d'attribut `viewBox` ; que son style calculé donne une bordure
-et un remplissage intérieur nuls — `getBoundingClientRect` les inclut, donc
-l'origine du contenu s'en décale ; qu'aucun ancêtre, ni lui-même, ne porte de
-transformation CSS. Il refuse la feuille de style qui ajoute un jour
-`transform: translateZ(0)` « pour la fluidité » : le plan répondrait faux partout,
-et la cause serait cherchée dans le module de géométrie.
+`getScreenCTM().inverse()` sur un rendu réel, à plusieurs `k` et après
+défilement de la page, à un millième de pixel d'écran près (§ 7.2). **Les trois
+invariants du § 7.2 ont chacun leur test** : que le `<svg>` racine ne porte pas
+d'attribut `viewBox` ; que son style calculé donne une bordure et un remplissage
+intérieur nuls — `getBoundingClientRect` les inclut, donc l'origine du contenu
+s'en décale ; qu'aucun ancêtre, ni lui-même, ne porte de transformation CSS. Il
+refuse la feuille de style qui ajoute un jour `transform: translateZ(0)` « pour
+la fluidité » : le plan répondrait faux partout, et la cause serait cherchée
+dans le module de géométrie.
 
 #### Le stockage
 
@@ -3632,16 +3647,25 @@ produire une configuration à partir d'une graine. Une boucle sur une grille de
 graines et de tailles, appelant les deux vérificateurs, couvre l'essentiel sans
 dépendance nouvelle.
 
-**Une bibliothèque de propriétés se justifie à deux endroits, et seulement deux** :
-la formule du plafond et la détection du séparateur. Toutes deux prennent des
-entrées petites et combinatoires, toutes deux bénéficient du **rétrécissement** —
-quand une configuration à 120 participants échoue, l'outil rend un contre-exemple à
-trois tables, là où la réduction manuelle coûte une heure. Leurs oracles ne sont
-pas de même nature et le texte ne les confond pas : le plafond s'arbitre par
-**énumération exhaustive** ; le séparateur s'arbitre par **construction** — un
-tableau de champs engendré, rendu avec un séparateur connu, et la détection doit le
-retrouver. Ailleurs, non : une propriété sur la recherche rejouerait la partie
-lente et épuiserait le budget du § 14.14.
+**Une bibliothèque de propriétés se justifie à deux endroits du calcul, et
+seulement deux** : la formule du plafond et la détection du séparateur. Toutes
+deux prennent des entrées petites et combinatoires, toutes deux bénéficient du
+**rétrécissement** — quand une configuration à 120 participants échoue, l'outil
+rend un contre-exemple à trois tables, là où la réduction manuelle coûte une
+heure. Leurs oracles ne sont pas de même nature et le texte ne les confond pas :
+le plafond s'arbitre par **énumération exhaustive** ; le séparateur s'arbitre
+par **construction** — un tableau de champs engendré, rendu avec un séparateur
+connu, et la détection doit le retrouver. Ailleurs, non : une propriété sur la
+recherche rejouerait la partie lente et épuiserait le budget du § 14.14.
+
+**Le stockage l'emploie pour deux propriétés de plus, nommées.** L'aller-retour
+des correctifs du journal — appliquer à une charge la différence qui mène à une
+autre rend l'autre, sur des paires de charges tirées — et la restitution de
+chaque instant d'une séance tirée, qui vit dans la série longue parce que ses
+séances lancent des générations, à compte d'arrêt court. Leurs entrées sont des
+suites d'opérations, où le **rétrécissement** sert comme au plafond : le
+contre-exemple rendu tient en quelques opérations. La liste est fermée : une
+garde de l'arborescence refuse la bibliothèque hors de ces quatre familles.
 
 **La bibliothèque tourne sur une graine fixée.** Une bibliothèque de propriétés
 retire par défaut une graine neuve à chaque exécution : le même code échoue une
@@ -4298,10 +4322,12 @@ Tout le reste en dérive, par un script de construction :
 script puis compare — la même discipline qu'au § 15.5 pour les fichiers de
 démonstration (§ 13.1).
 
-**Le module porte aussi la provenance de la construction** — livraison, séance de
-développement, ou construction de documentation — posée par la commande qui
-l'engendre, jamais lue dans l'horloge ni dans l'environnement. Sans elle, une
-capture d'écran prise pendant le développement annonce un numéro déjà livré, et le
+**Le module engendré ne porte que la version.** La **provenance de la
+construction** — livraison, séance de développement, ou construction de
+documentation — est le mode de construction que pose la commande qui construit,
+celui de Vite, que l'application reçoit avec ses dépendances ; elle n'est jamais
+lue dans l'horloge ni dans l'environnement du poste. Sans elle, une capture
+d'écran prise pendant le développement annonce un numéro déjà livré, et le
 diagnostic porte sur un binaire que personne ne détient.
 
 ### 18.4 Le `CHANGELOG.md`
@@ -4474,12 +4500,13 @@ fois lors du premier geste suivant un remplacement d'exécutable, ce qui coûte 
 correctif et non du bruit à chaque geste. Il **n'est pas** la version de format,
 qui reste un nombre séparé, comparé selon ses propres règles.
 
-**Pendant une construction de documentation, le numéro est remplacé par une marque
-de provenance** — dans le bandeau, sur le premier écran, au pied des pages
-imprimées et sur la feuille de contrôle des badges. La raison est au § 19.4 : sans cette marque, le texte relevé
-de chaque capture d'écran change à chaque incrément de version, et toutes les
-images se réécrivent. Le manifeste, lui, enregistre la **version réelle**, et le
-contrôle de version de la livraison la compare (§ 19.7).
+**Pendant une construction de documentation, le numéro est remplacé par une
+marque de provenance** — dans le bandeau, sur le premier écran, au pied des
+pages imprimées et sur la feuille de contrôle des badges. La raison est au
+§ 19.4 : sans cette marque, le texte relevé de chaque capture d'écran change à
+chaque incrément de version, et toutes les images se réécrivent. Le manifeste,
+lui, enregistre la **version réelle**, et le contrôle de version de la livraison
+la compare (§ 19.7).
 
 ---
 

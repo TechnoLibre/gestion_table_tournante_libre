@@ -3,15 +3,19 @@
 
 // Le livrable tel qu'electron-builder.config.cjs le décrit : son nom (§ 18.2),
 // sa forme (§ 16), ce qu'il emporte (§ 14.15) et l'identité inscrite dans sa
-// ressource de version ; et le nom de l'application, un seul pour Electron,
-// pour Capacitor et pour le titre de la fenêtre (§ 18.6). La configuration se
-// charge ici comme electron-builder la charge, par require.
+// ressource de version ; le nom de l'application, un seul pour Electron,
+// pour Capacitor et pour le titre de la fenêtre (§ 18.6) ; le répertoire de
+// la page construite, www/, que Vite, Capacitor, la coquille et
+// electron-builder désignent ensemble (§ 13.1) ; la langue que la page passe
+// à App, jamais la langue témoin (§ 14.6) ; et les démonstrations, composées
+// dans src/main.js comme dans le montage des épreuves du navigateur. La
+// configuration se charge ici comme electron-builder la charge, par require.
 import assert from 'node:assert/strict';
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire, isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { deriver } from '../scripts/version.js';
 import { titreAvecVersion } from '../src/interface/libelles.js';
 import { VERSION } from '../src/version.genere.js';
@@ -217,5 +221,105 @@ describe('livrable : identité', () => {
       },
       { productName: nom, appName: nom },
     );
+  });
+});
+
+// Où vit la page construite, lu dans chaque fichier qui la désigne : la
+// sortie de la construction de Vite (vite.config.js, chargé comme Vite le
+// charge), le répertoire web de Capacitor, la page que la coquille charge
+// par loadFile — la constante que l'appel nomme, une adresse relative à
+// electron/main.js —, rendue relative à la racine, ou null quand l'appel ou
+// sa constante manquent ; et si electron-builder emporte www/ en entier.
+async function pageConstruite(racine) {
+  const { default: vite } = await import(pathToFileURL(join(racine, 'vite.config.js')).href);
+  const coquille = readFileSync(join(racine, 'electron', 'main.js'), 'utf8');
+  const appel = /\bloadFile\s*\(\s*([\p{L}_$][\p{L}\p{N}_$]*)\s*\)/u.exec(coquille);
+  const constante =
+    appel &&
+    new RegExp(
+      String.raw`\bconst\s+${appel[1]}\s*=\s*fileURLToPath\(\s*new\s+URL\(\s*(['"])([^'"]+)\1\s*,\s*import\.meta\.url\s*\)\s*\)`,
+    ).exec(coquille);
+  return {
+    sortieDeVite: vite.build?.outDir,
+    repertoireWeb: lireJson(racine, 'capacitor.config.json').webDir,
+    pageDeLaCoquille: constante ? relative(racine, resolve(racine, 'electron', constante[2])).split(sep).join('/') : null,
+    emporte: charger(racine).files.includes('www/**'),
+  };
+}
+
+// La langue que l'appel mount(App, …) d'un texte passe à App : le texte de
+// la valeur de sa clé langue, tel qu'écrit — « 'fr' » pour la chaîne —, ou
+// null sans appel ou sans clé écrite « langue: ». L'appel court jusqu'à la
+// ligne qui s'ouvre sur « }); ». Lève quand l'appel en porte deux.
+function langueDeLaPage(texte) {
+  const debut = texte.search(/\bmount\s*\(\s*App\s*,/);
+  if (debut === -1) return null;
+  const fin = texte.indexOf('\n});', debut);
+  const appel = texte.slice(debut, fin === -1 ? texte.length : fin);
+  const langues = [...appel.matchAll(/\blangue\s*:\s*([^,\n}]+?)\s*(?=[,\n}])/g)].map(([, valeur]) => valeur);
+  if (langues.length > 1) throw new Error(`deux langues passées à App : ${langues.join(', ')}`);
+  return langues[0] ?? null;
+}
+
+// L'expression qui compose les démonstrations d'App dans un texte : la
+// valeur de l'unique déclaration const dont l'initialiseur nomme LIVREES,
+// blancs ramenés à un seul, retirés après une parenthèse, une accolade ou un
+// crochet ouvrants et avant leurs fermants, virgule finale retirée. Lève
+// quand le texte n'en porte aucune, ou plusieurs.
+function compositionDesDemonstrations(texte) {
+  const compositions = [...texte.matchAll(/\bconst\s+[\p{L}_$][\p{L}\p{N}_$]*\s*=\s*([^;]*\bLIVREES\b[^;]*);/gu)].map(([, valeur]) =>
+    valeur
+      .replace(/\s+/g, ' ')
+      .replace(/,\s*([)}\]])/g, '$1')
+      .replace(/([({[])\s+/g, '$1')
+      .replace(/\s+([)}\]])/g, '$1')
+      .trim(),
+  );
+  if (compositions.length === 0) throw new Error('aucune composition de LIVREES');
+  if (compositions.length > 1) throw new Error('deux compositions de LIVREES');
+  return compositions[0];
+}
+
+describe('livrable : la page construite et ce que la coquille lui passe', () => {
+  test('la page construite vit dans www/ : la sortie de Vite, le répertoire web de Capacitor, la page que charge la coquille et ce qu’emporte electron-builder (§ 13.1)', async () => {
+    const page = await pageConstruite(RACINE);
+    assert.deepEqual(page, {
+      sortieDeVite: 'www',
+      repertoireWeb: 'www',
+      pageDeLaCoquille: 'www/index.html',
+      emporte: true,
+    });
+  });
+
+  test('src/main.js passe langue: \'fr\' à App : la construction livrée n’emploie jamais la langue témoin (§ 14.6)', () => {
+    assert.equal(langueDeLaPage(readFileSync(join(RACINE, 'src', 'main.js'), 'utf8')), "'fr'");
+  });
+
+  test('la langue lue est la seule que porte mount(App, …) : la langue témoin, une variable, une clé abrégée ou absente ne sont pas « fr »', () => {
+    const page = (ligne) => ["import App from './App.svelte';", 'mount(App, {', '  target: document.body,', '  props: {', ligne, '    demonstrations,', '  },', '});'].join('\n');
+    assert.equal(langueDeLaPage(page("    langue: 'fr',")), "'fr'");
+    assert.equal(langueDeLaPage(page("    langue: 'temoin',")), "'temoin'");
+    assert.equal(langueDeLaPage(page('    langue: LANGUE,')), 'LANGUE');
+    assert.equal(langueDeLaPage(page('    langue,')), null);
+    assert.equal(langueDeLaPage(page('')), null);
+    assert.equal(langueDeLaPage("const langue = 'fr';\nmount(Autre, { props: { langue: 'fr' } });\n"), null);
+    assert.throws(() => langueDeLaPage(page("    langue: 'fr',\n    langue: 'temoin',")), /deux langues/);
+  });
+
+  test('les démonstrations que monterApp donne à App se composent comme celles de src/main.js', () => {
+    const deMain = compositionDesDemonstrations(readFileSync(join(RACINE, 'src', 'main.js'), 'utf8'));
+    const duMontage = compositionDesDemonstrations(readFileSync(join(RACINE, 'test', 'navigateur', 'montage.js'), 'utf8'));
+    assert.ok(deMain.startsWith('LIVREES.'), deMain);
+    assert.equal(duMontage, deMain);
+  });
+
+  test('la composition se lit à blancs et virgule finale près ; un filtre, un autre ordre ou deux compositions se distinguent', () => {
+    const une = 'const d = LIVREES.map(({ cle, texte }) => ({\n  cle,\n  nom: CATALOGUE.find((e) => e.cle === cle).nom,\n  texte,\n}));\n';
+    const resserree = 'const demonstrations = LIVREES.map(({ cle, texte }) => ({ cle, nom: CATALOGUE.find((e) => e.cle === cle).nom, texte }));\n';
+    assert.equal(compositionDesDemonstrations(une), compositionDesDemonstrations(resserree));
+    const filtree = une.replace('LIVREES.map', "LIVREES.filter(({ cle }) => cle !== 'grande').map");
+    assert.notEqual(compositionDesDemonstrations(filtree), compositionDesDemonstrations(une));
+    assert.throws(() => compositionDesDemonstrations('const d = [];\n'), /aucune composition de LIVREES/);
+    assert.throws(() => compositionDesDemonstrations(une + une), /deux compositions de LIVREES/);
   });
 });

@@ -5,8 +5,9 @@
 // l'arborescence (test/arborescence.test.js) et du livrable
 // (test/livrable.test.js) : import et export statiques, import seul, import()
 // et require(). Un composant Svelte se lit par le texte de ses blocs de
-// script, que rend scriptsDe.
-//
+// script et des import() de son gabarit, que rend scriptsDe.
+import { parse } from 'svelte/compiler';
+
 // Le relevé lit le texte entier, commentaires et chaînes compris. Une
 // instruction à « from » se lit à partir de ce mot, que seuls import et
 // export font suivre d'une chaîne : un motif parti du mot-clé s'arrêterait à
@@ -58,19 +59,51 @@ export function blocsScript(texte) {
     });
 }
 
-// Le texte des blocs de script d'un composant Svelte, à la longueur du
-// composant : chaque caractère hors de ces blocs devient une espace, fins de
-// ligne gardées, si bien que les indices et les numéros de ligne restent
-// ceux du composant. Le balisage, le style et les expressions du gabarit ne
-// sont pas lus : un composant ne charge un module que dans un bloc de script,
-// et le texte d'un nœud — « import » dans une phrase — n'en charge aucun.
+// Les import() du gabarit d'un composant Svelte, en étendues { debut, fin }
+// dans l'ordre du texte : chaque nœud ImportExpression de l'arbre que rend
+// l'analyseur de Svelte (svelte/compiler) hors des blocs de script et de la
+// feuille de style — un bloc {#await import(…)}, un attribut, une
+// expression à toute profondeur. Le texte d'un nœud n'est pas une
+// expression : « import » dans une phrase n'en donne aucun. null quand
+// l'analyseur refuse le composant.
+function importsDuGabarit(texte) {
+  let arbre;
+  try {
+    arbre = parse(texte, { modern: true });
+  } catch {
+    return null;
+  }
+  const etendues = [];
+  const vus = new WeakSet();
+  const parcourir = (noeud) => {
+    if (noeud === null || typeof noeud !== 'object' || vus.has(noeud)) return;
+    vus.add(noeud);
+    if (noeud.type === 'ImportExpression') etendues.push({ debut: noeud.start, fin: noeud.end });
+    for (const valeur of Object.values(noeud)) parcourir(valeur);
+  };
+  parcourir(arbre.fragment);
+  return etendues.sort((a, b) => a.debut - b.debut);
+}
+
+// Le texte qu'un relevé de chargements lit dans un composant Svelte, à la
+// longueur du composant : ses blocs de script et les import() de son
+// gabarit gardés, tout autre caractère devenu une espace, fins de ligne
+// gardées, si bien que les indices et les numéros de ligne restent ceux du
+// composant. Le balisage, le style et les autres expressions du gabarit ne
+// sont pas lus : le texte d'un nœud — « import » dans une phrase — ne charge
+// aucun module. Un composant que l'analyseur de Svelte refuse se lit en
+// entier, gabarit compris : le relevé y trouve plus, jamais moins, et la
+// construction le refuse de toute façon.
 export function scriptsDe(texte) {
+  const gabarit = importsDuGabarit(texte);
+  if (gabarit === null) return texte;
   const blanc = (morceau) => morceau.replace(/[^\n]/g, ' ');
+  const gardes = [...blocsScript(texte), ...gabarit].sort((a, b) => a.debut - b.debut);
   let sortie = '';
   let fin = 0;
-  for (const bloc of blocsScript(texte)) {
-    sortie += blanc(texte.slice(fin, bloc.debut)) + texte.slice(bloc.debut, bloc.fin);
-    fin = bloc.fin;
+  for (const etendue of gardes) {
+    sortie += blanc(texte.slice(fin, etendue.debut)) + texte.slice(etendue.debut, etendue.fin);
+    fin = etendue.fin;
   }
   return sortie + blanc(texte.slice(fin));
 }

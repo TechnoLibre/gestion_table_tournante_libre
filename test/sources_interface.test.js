@@ -1176,6 +1176,11 @@ describe('sources de l’interface : les couleurs (§ 12.7, § 13.3, § 13.5)', 
   test('un arbre sans composant ni feuille fait échouer la garde', () => {
     assert.throws(() => avecArbre({ 'src/interface/jetons.css': JETONS_EPREUVE }, releverCouleurs), /couleurs : aucun fichier examiné/);
   });
+
+  test('une feuille des jetons sans jeton de couleur fait échouer la garde des thèmes', () => {
+    const fichiers = { 'src/interface/jetons.css': ':root, :root[data-theme="clair"] { --espace-1: 1px; }\n' };
+    assert.throws(() => avecArbre(fichiers, releverThemes), /thèmes : aucun jeton de couleur examiné/);
+  });
 });
 
 describe('sources de l’interface : balisage et fenêtres du navigateur (§ 13.1, § 2.1)', () => {

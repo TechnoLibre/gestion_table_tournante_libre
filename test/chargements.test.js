@@ -93,8 +93,8 @@ describe('chargements', () => {
 
 describe('chargements : les blocs de script d’un composant Svelte', () => {
   // Un composant à deux blocs, dont l'un sous attribut, du balisage qui écrit
-  // « import » en texte et en expression, un style à @import, et une balise
-  // de script en commentaire HTML.
+  // « import » en texte, un import() en expression du gabarit, un style à
+  // @import, et une balise de script en commentaire HTML.
   const COMPOSANT = [
     '<script module>',
     "  import { tirer } from './module.js';",
@@ -113,13 +113,38 @@ describe('chargements : les blocs de script d’un composant Svelte', () => {
     '</style>',
   ].join('\n');
 
-  test('le texte rendu garde la longueur et les lignes du composant ; seuls les blocs de script y restent', () => {
+  test('le texte rendu garde la longueur et les lignes du composant ; les blocs de script et les import() du gabarit y restent', () => {
     const scripts = scriptsDe(COMPOSANT);
     assert.equal(scripts.length, COMPOSANT.length);
     assert.equal(scripts.split('\n').length, COMPOSANT.split('\n').length);
-    assert.deepEqual(lus(scripts), ['2 ./module.js', '6 svelte', '7 ./Voisin.svelte']);
+    assert.deepEqual(lus(scripts), ['2 ./module.js', '6 svelte', '7 ./Voisin.svelte', '12 ./expression.js']);
     assert.deepEqual(scripts.split('\n')[5], "  import { onMount } from 'svelte';");
     assert.match(scripts.split('\n')[10], /^ *$/);
+    assert.equal(scripts.split('\n')[11], "    import('./expression.js')     ");
+  });
+
+  test('un import() du gabarit se lit à sa place, à toute profondeur — bloc {#await}, attribut, bloc imbriqué — ; le mot « import » d’un nœud de texte ou d’une chaîne ne se lit pas', () => {
+    const texte = [
+      '<script>',
+      "  let ouvert = $state(false);",
+      '</script>',
+      "{#await import('../stockage/depot.js') then depot}{/await}",
+      '{#if ouvert}',
+      "  <button onclick={() => import('./panneau.js')}>import(</button>",
+      '  {#each [1] as n}',
+      "    <p title={'import(\\'./chaine.js\\')'}>{n}</p>",
+      '  {/each}',
+      '{/if}',
+      "<p>import('./texte.js')</p>",
+    ].join('\n');
+    const scripts = scriptsDe(texte);
+    assert.equal(scripts.length, texte.length);
+    assert.deepEqual(lus(scripts), ['4 ../stockage/depot.js', '6 ./panneau.js']);
+  });
+
+  test('un composant que l’analyseur de Svelte refuse se lit en entier, gabarit compris : la garde relève plus, jamais moins', () => {
+    const texte = "<p>{import('./a.js')}</p>\n<div>\n<script>\nimport { b } from './b.js';";
+    assert.deepEqual(lus(scriptsDe(texte)), ['1 ./a.js', '4 ./b.js']);
   });
 
   test('les étendues désignent le contenu de chaque bloc, balises exclues, et un bloc non fermé court jusqu’à la fin', () => {
