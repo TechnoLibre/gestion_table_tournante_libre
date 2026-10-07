@@ -1565,7 +1565,12 @@ régénérable.
 Puis, **par tour** : la liste des tables, chacune étant la liste des
 **identifiants entiers** de ses occupants **dans l'ordre des sièges** ; et la
 **réserve**, la liste des identifiants assis nulle part à ce tour. Le numéro de
-siège n'est pas stocké : il est la position dans la liste.
+siège n'est pas stocké : il est la position dans la liste. Quand les sièges sont
+attribués, une chaise vide avant le dernier occupant, siège 1 compris, s'écrit
+`null` à sa position, et une liste ne finit jamais par `null` : retirer une
+personne libère sa chaise, et aucun autre siège ne change — le placement se
+prépare, il ne suit pas la salle.
+Sans attribution, aucune liste ne porte `null`.
 
 **Quand les sièges ne sont pas attribués** (§ 5.3), l'ordre à l'intérieur d'une
 table ne porte aucune information : le logiciel l'écrit **trié par identifiant

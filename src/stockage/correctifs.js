@@ -24,7 +24,9 @@
 // d'une proposition, la place d'une autre à une autre table touche les deux
 // listes de ces tables et rien d'autre : une entrée de chacune quand chaque
 // personne prend le rang de l'autre, ce que garde l'ordre des sièges quand
-// ils sont attribués. Sans attribution, chaque liste se trie par
+// ils sont attribués ; une personne qui quitte sa chaise sans être
+// remplacée y laisse null, le marqueur d'une chaise vide, une pose au rang
+// de la chaise. Sans attribution, chaque liste se trie par
 // identifiant, et l'entrée qui change de rang décale celles qu'elle
 // franchit ; une liste d'identifiants de même longueur se pose alors
 // entière dès que ses poses rang par rang pèsent plus que cette pose, et
@@ -64,12 +66,15 @@ import { ErreurStockage } from './erreurs.js';
  * @typedef {OperationPoser|OperationRetirer} Operation
  */
 
-// Règles de la charge, du retenu et d'un identifiant dans le schéma du
-// fichier d'état.
+// Règles de la charge, du retenu, d'un identifiant et de l'occupant d'une
+// liste de table — un identifiant, ou null pour une chaise vide — dans le
+// schéma du fichier d'état.
 const regleDuChamp = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
 const CHARGE = regleDuChamp(SCHEMA, 'charge');
 const RETENU = regleDuChamp(CHARGE, 'retenu');
-const IDENTIFIANT = regleDuChamp(regleDuChamp(CHARGE, 'propositions').element, 'id');
+const PROPOSITION = regleDuChamp(CHARGE, 'propositions').element;
+const IDENTIFIANT = regleDuChamp(PROPOSITION, 'id');
+const OCCUPANT = regleDuChamp(regleDuChamp(PROPOSITION, 'placement').element, 'sieges').element.element;
 
 // Vrai pour un objet qui n'est ni null ni une liste.
 const estObjet = (valeur) => typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
@@ -103,9 +108,9 @@ const poids = (operations) => JSON.stringify(operations).length;
 // objets se comparent champ par champ, dans l'ordre du schéma. Deux listes
 // d'enregistrements à identifiants distincts se comparent par identifiant ;
 // deux autres listes, de longueurs différentes, posent b entière, et de même
-// longueur se comparent rang par rang — deux listes d'identifiants
-// exceptées, qui posent b entière quand leurs poses rang par rang pèsent
-// plus que la sienne.
+// longueur se comparent rang par rang — deux listes d'identifiants ou
+// d'occupants exceptées, qui posent b entière quand leurs poses rang par
+// rang pèsent plus que la sienne.
 function comparer(a, b, regle, chemin, operations) {
   if (a === null || b === null || (regle.genre !== 'objet' && regle.genre !== 'liste')) {
     if (a !== b) operations.push({ op: 'poser', chemin, valeur: b });
@@ -117,23 +122,25 @@ function comparer(a, b, regle, chemin, operations) {
     comparerParIdentifiant(a, b, regle.element, chemin, operations);
   } else if (a.length !== b.length) {
     operations.push({ op: 'poser', chemin, valeur: b });
-  } else if (regle.element === IDENTIFIANT) {
-    comparerIdentifiants(a, b, chemin, operations);
+  } else if (regle.element === IDENTIFIANT || regle.element === OCCUPANT) {
+    comparerIdentifiants(a, b, regle.element, chemin, operations);
   } else {
     a.forEach((element, rang) => comparer(element, b[rang], regle.element, [...chemin, rang], operations));
   }
 }
 
 // Ajoute à operations ce qui mène de a à b, deux listes d'identifiants de
-// même longueur, au bout de chemin : une pose par rang qui change, ou b
-// entière quand ces poses pèsent plus que la sienne. Une liste triée par
-// identifiant — une liste de table sans attribution, une réserve, les
-// participants d'un plan — décale d'un rang chaque entrée qu'un identifiant
-// remplacé franchit, et ses poses rang par rang se multiplient ; ce qui
-// s'en écrit ne pèse jamais plus que la liste posée entière.
-function comparerIdentifiants(a, b, chemin, operations) {
+// même longueur, d'élément de règle regleElement, au bout de chemin : une
+// pose par rang qui change, ou b entière quand ces poses pèsent plus que la
+// sienne. Une liste triée par identifiant — une liste de table sans
+// attribution, une réserve, les participants d'un plan — décale d'un rang
+// chaque entrée qu'un identifiant remplacé franchit, et ses poses rang par
+// rang se multiplient ; ce qui s'en écrit ne pèse jamais plus que la liste
+// posée entière. Sous des sièges attribués, une chaise libérée ou reprise
+// ne change que son rang : une pose, de valeur null ou de l'occupant.
+function comparerIdentifiants(a, b, regleElement, chemin, operations) {
   const parRang = [];
-  a.forEach((id, rang) => comparer(id, b[rang], IDENTIFIANT, [...chemin, rang], parRang));
+  a.forEach((id, rang) => comparer(id, b[rang], regleElement, [...chemin, rang], parRang));
   const entiere = { op: 'poser', chemin, valeur: b };
   operations.push(...(poids(parRang) > poids([entiere]) ? [entiere] : parRang));
 }

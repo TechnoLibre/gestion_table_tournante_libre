@@ -1495,3 +1495,140 @@ describe('déterminisme (§ 8.8, § 14.7)', () => {
     assert.deepStrictEqual(fautes(alphaPuisZeta), [{ code: 'FORME', chemin: 'alpha' }]);
   });
 });
+
+// fichierParfait, sièges attribués, dont le tour 1 laisse vide le siège 2
+// de la table 1 : sa liste vaut [12, null, 7], et la personne 2 attend en
+// réserve. Une copie neuve à chaque appel.
+function fichierAChaiseVide() {
+  const p = fichierParfait();
+  p.siegesAttribues = true;
+  p.placement[0] = { sieges: [[12, null, 7], [4, 5, 6], [1, 8, 9], [10, 11, 3]], reserve: [2] };
+  return p;
+}
+
+describe('le marqueur de chaise vide : null avant le dernier occupant, sièges attribués (§ 8.9)', () => {
+  test("une liste [12, null, 7] est cohérente, proposition comme retenu : le null compte dans la longueur, n'est ni DOUBLON ni INCONNU, et planDepuisFichier le retire", () => {
+    const p = fichierAChaiseVide();
+    assert.deepStrictEqual(fautes(p), []);
+    assert.deepStrictEqual(fautes(retenuDe(p)), []);
+    assert.deepStrictEqual(planDepuisFichier(p).tours[0], [[7, 12], [4, 5, 6], [1, 8, 9], [3, 10, 11]]);
+    assert.deepStrictEqual(planDepuisFichier(retenuDe(p)).tours[0][0], [7, 12]);
+    // Deux chaises vides au même tour, à deux tables : aucune n'est un
+    // doublon de l'autre.
+    const deux = fichierAChaiseVide();
+    deux.placement[0] = { sieges: [[12, null, 7], [4, null, 6], [1, 8, 9], [10, 11, 3]], reserve: [2, 5] };
+    assert.deepStrictEqual(fautes(deux), []);
+    assert.deepStrictEqual(planDepuisFichier(deux).tours[0].slice(0, 2), [[7, 12], [4, 6]]);
+    // Le null occupe un siège : quatre éléments sur une capacité de 3.
+    const longue = fichierAChaiseVide();
+    longue.placement[0] = { sieges: [[12, null, 7, 9], [4, 5, 6], [1, 8], [10, 11, 3]], reserve: [2] };
+    assert.deepStrictEqual(fautes(longue), [{ code: 'LONGUEUR', tour: 1, table: 1, declare: 3, ecrit: 4 }]);
+  });
+
+  test("une chaise vide au siège 1, [null, 12, 7] ou [null, null, 7], est cohérente, proposition comme retenu : planDepuisFichier la retire, et formeNommee garde le siège de chaque occupant", () => {
+    const cas = [
+      [[null, 12, 7], [2], [7, 12], [ligne(1, 1, 1, 2, 12, 'Mélisse', 'Mathurin'), ligne(1, 1, 1, 3, 7, 'Giroflée', 'Gisèle')]],
+      [[null, null, 7], [2, 12], [7], [ligne(1, 1, 1, 3, 7, 'Giroflée', 'Gisèle')]],
+    ];
+    assert.ok(cas.length > 0);
+    for (const [liste, reserve, occupants, assis] of cas) {
+      const p = fichierAChaiseVide();
+      p.placement[0] = { sieges: [liste, [4, 5, 6], [1, 8, 9], [10, 11, 3]], reserve };
+      assert.deepStrictEqual(fautes(p), [], JSON.stringify(liste));
+      assert.deepStrictEqual(fautes(retenuDe(p)), [], JSON.stringify(liste));
+      assert.deepStrictEqual(planDepuisFichier(p).tours[0][0], occupants);
+      assert.deepStrictEqual(planDepuisFichier(retenuDe(p)).tours[0][0], occupants);
+      const lignes = formeNommee(p, chargePetite());
+      assert.deepStrictEqual(lignes.filter(({ tour, table: id }) => tour === 1 && id === 1), assis);
+      assert.deepStrictEqual(
+        lignes.filter(({ tour, reserve: enReserve }) => tour === 1 && enReserve).map(({ participant }) => participant),
+        reserve,
+      );
+    }
+  });
+
+  test("sans attribution, ou en fin de liste, null est une faute FORME qui nomme la chaise ; seul sous sa règle, il ne s'admet nulle part ailleurs dans un placement", () => {
+    const cas = [
+      ['sièges non attribués', (p) => { p.siegesAttribues = false; }, 'placement[0].sieges[0][1]'],
+      ['une liste qui finit par null', (p) => {
+        p.placement[0] = { sieges: [[12, null], [4, 5, 6], [1, 8, 9], [10, 11, 3]], reserve: [2, 7] };
+      }, 'placement[0].sieges[0][1]'],
+      ['une liste réduite à null', (p) => {
+        p.placement[1].sieges[3] = [null];
+        p.placement[1].reserve = [1, 4, 7];
+      }, 'placement[1].sieges[3][0]'],
+      ['une chaise vide admise au tour 1, puis une fin nulle au tour 3', (p) => {
+        p.placement[2].sieges[0] = [4, 8, null];
+        p.placement[2].reserve = [10];
+      }, 'placement[2].sieges[0][2]'],
+      ['une fin nulle au dernier tour, à la dernière table', (p) => {
+        p.placement[3].sieges[3] = [2, 6, null];
+        p.placement[3].reserve = [8];
+      }, 'placement[3].sieges[3][2]'],
+      ['sièges non attribués, une chaise vide au siège 1', (p) => {
+        p.siegesAttribues = false;
+        p.placement[0] = { sieges: [[null, 7, 12], [4, 5, 6], [1, 8, 9], [3, 10, 11]], reserve: [2] };
+      }, 'placement[0].sieges[0][0]'],
+      ['null dans la réserve', (p) => { p.placement[0].reserve = [2, null]; }, 'placement[0].reserve[1]'],
+      ['null parmi les participants', (p) => { p.participants[11] = null; }, 'participants[11]'],
+      ['null parmi les tables', (p) => { p.tables[3] = null; }, 'tables[3]'],
+    ];
+    assert.ok(cas.length > 0);
+    const ecarts = cas.flatMap(([libelle, abimer, chemin]) =>
+      [fichierAChaiseVide(), retenuDe(fichierAChaiseVide())].flatMap((p) => {
+        abimer(p);
+        const rendu = fautes(p);
+        const attendu = [{ code: 'FORME', chemin }];
+        return JSON.stringify(rendu) === JSON.stringify(attendu) ? [] : [`${libelle} : ${JSON.stringify(rendu)}`];
+      }),
+    );
+    assert.deepEqual(ecarts, []);
+    leveTypeError(() => planDepuisFichier({ ...fichierAChaiseVide(), siegesAttribues: false }), /FORME/);
+  });
+
+  test('formeNommee assied 12 au siège 1 et 7 au siège 3, sans ligne pour la chaise vide', () => {
+    const lignes = formeNommee(fichierAChaiseVide(), chargePetite());
+    assert.equal(lignes.length, 48);
+    assert.ok(lignes.every(({ participant }) => participant !== null));
+    assert.deepStrictEqual(lignes.filter(({ tour, table: id }) => tour === 1 && id === 1), [
+      ligne(1, 1, 1, 1, 12, 'Mélisse', 'Mathurin'),
+      ligne(1, 1, 1, 3, 7, 'Giroflée', 'Gisèle'),
+    ]);
+    assert.deepStrictEqual(
+      lignes.filter(({ tour, reserve }) => tour === 1 && reserve),
+      [ligne(1, null, null, null, 2, 'Bruyère', 'Basile')],
+    );
+  });
+
+  test('versFichier garde les chaises vides du plan reçu quand les sièges sont attribués, et lève sans attribution', () => {
+    const plan = {
+      tables: [1, 2, 3, 4],
+      tours: [[[12, null, 7], [4, 5, 6], [1, 8, 9], [10, 11, 3]], ...PLAN_PARFAIT_PETITE.tours.slice(1)],
+      reserves: [[2], [], [], []],
+    };
+    const proposition = { ...PARFAITE, plan };
+    const options = { produitVersion: VERSION.affichee, decalage: 0 };
+    const fichier = versFichier(proposition, petite(), { ...options, attribuerSieges: true });
+    assert.deepStrictEqual(fichier.placement[0].sieges, [[12, null, 7], [4, 5, 6], [1, 8, 9], [10, 11, 3]]);
+    assert.deepStrictEqual(fichier, fichierAChaiseVide());
+    leveTypeError(() => versFichier(proposition, petite(), { ...options, attribuerSieges: false }), /FORME/);
+  });
+
+  test("le fichier relu porte la liste telle quelle : examiner garde la proposition et le retenu sans faute, et écarte la proposition sans attribution qui porte null", () => {
+    const charge = chargePetite();
+    const proposition = fichierAChaiseVide();
+    charge.propositions = [proposition, { ...fichierAChaiseVide(), id: 2, siegesAttribues: false }];
+    charge.retenu = retenuDe(proposition);
+    charge.prochainsIds.proposition = 3;
+    charge.evenement.etat = 'retenu';
+    const relue = relire(charge);
+    assert.deepStrictEqual(relue.retenu.placement[0].sieges[0], [12, null, 7]);
+    assert.deepStrictEqual(relue.propositions[0].placement[0].sieges[0], [12, null, 7]);
+    const examen = examiner(relue);
+    assert.deepStrictEqual(examen.retenu, { fautes: [], raisons: [] });
+    assert.deepStrictEqual(examen.charge.propositions, [fichierAChaiseVide()]);
+    assert.deepStrictEqual(examen.fautives, [
+      { rang: 1, id: 2, fautes: [{ code: 'FORME', chemin: 'placement[0].sieges[0][0]' }] },
+    ]);
+  });
+});

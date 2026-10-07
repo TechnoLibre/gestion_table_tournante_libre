@@ -82,6 +82,12 @@ const NOMBRE = regle('nombre');
 // reste ainsi loin de 2^53, où l'analyse ne le relirait plus. Au-delà, la
 // valeur sort de sa règle.
 const IDENTIFIANT = entier(1, 2 ** 31 - 1);
+// L'occupant d'un siège dans une liste de table d'un placement :
+// l'identifiant d'une personne, ou null, le marqueur d'une chaise vide
+// (§ 8.9). La règle admet null à toute place d'une telle liste ; le
+// contrôle des placements (placements.js) ne l'admet que sous des sièges
+// attribués, et jamais en fin de liste.
+const OCCUPANT = entier(1, 2 ** 31 - 1, { nul: true });
 const DATE_OU_NUL = regle('date', { nul: true });
 
 // Ordres des listes de la charge (§ 8.8, § 8.9). canonique.js range les
@@ -196,15 +202,18 @@ const TITRE = objet([
 ]);
 
 // Le placement d'une proposition ou du retenu (§ 8.9) : un tour par élément,
-// chacun sur sa ligne. sieges porte une liste d'identifiants par table
+// chacun sur sa ligne. sieges porte une liste d'occupants par table
 // déclarée, dans l'ordre des sièges. Quand l'objet qui porte le placement a
 // siegesAttribues faux, cet ordre ne porte rien, et chaque liste se trie par
-// identifiant croissant ; vrai, il est celui des sièges et se garde. reserve
+// identifiant croissant ; vrai, il est celui des sièges et se garde : le
+// siège est le rang dans la liste, et une chaise vide avant le dernier
+// occupant, siège 1 compris, y porte null. Une liste qui ne finit jamais
+// par null a ainsi une seule écriture, que le tri ne touche pas. reserve
 // porte ceux qui ne sont assis nulle part à ce tour, un ensemble : elle se
 // trie par identifiant croissant, quel que soit le drapeau.
 const PLACEMENT = liste(
   objet([
-    ['sieges', liste(liste(IDENTIFIANT, { triSansAttribution: croissant }))],
+    ['sieges', liste(liste(OCCUPANT, { triSansAttribution: croissant }))],
     ['reserve', liste(IDENTIFIANT, { tri: croissant })],
   ]),
   { mise: 'lignes' },

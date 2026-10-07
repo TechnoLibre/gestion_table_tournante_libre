@@ -23,14 +23,18 @@
 // schéma du fichier d'état, dont l'analyse n'applique que celle du
 // conteneur : fautes applique les autres, avant toute cohérence, par le
 // parcours même de l'analyse, premiereFaute, qui nomme les chemins à sa
-// manière. Aucune fonction ne modifie ce qu'elle reçoit ; aucune ne lit
-// l'horloge ni un aléa.
+// manière. Une liste de table porte null à la place d'une chaise vide
+// (§ 8.9) : la règle l'admet à toute place, et fautes ne le garde que sous
+// des sièges attribués, avant le dernier occupant, siège 1 compris. Aucune
+// fonction ne modifie ce qu'elle reçoit ; aucune ne lit l'horloge ni un
+// aléa.
 import { SCHEMA, capacite, premiereFaute } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 
 /**
  * Une faute d'un placement ; types.js en donne la table des codes. FORME :
- * une valeur sort de sa règle, ou la déclaration se contredit ; chemin
+ * une valeur sort de sa règle, la déclaration se contredit, ou une chaise
+ * vide est mal placée — sans attribution des sièges, ou en fin de liste ; chemin
  * désigne l'élément fautif dans le placement, à la manière de l'analyse du
  * fichier, '' pour le placement lui-même. LONGUEUR : une longueur écrite
  * contredit celle que le placement déclare ; tour et table null désignent le
@@ -66,8 +70,9 @@ import { ErreurStockage } from './erreurs.js';
  * @property {number|null} numero    numéro affiché de la table dans la
  *                                   charge ; null pour la réserve et pour
  *                                   une table que la charge n'a plus
- * @property {number|null} siege     rang dans la liste, à partir de 1, quand
- *                                   les sièges sont attribués ; null sinon
+ * @property {number|null} siege     rang dans la liste, à partir de 1,
+ *                                   chaises vides comprises, quand les
+ *                                   sièges sont attribués ; null sinon
  * @property {number} participant
  * @property {string|null} nom       null pour une personne que la charge
  *                                   n'a plus
@@ -93,8 +98,9 @@ import { ErreurStockage } from './erreurs.js';
 const regleDuChamp = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
 const CHARGE = regleDuChamp(SCHEMA, 'charge');
 // Règles d'une proposition et du retenu. Aucune des valeurs qu'elles
-// contiennent n'admet null ; examiner traite le retenu nul, son absence,
-// avant de lire le retenu.
+// contiennent n'admet null, hors de l'occupant d'une liste de table, la
+// chaise vide ; examiner traite le retenu nul, son absence, avant de lire
+// le retenu.
 const PROPOSITION = regleDuChamp(CHARGE, 'propositions').element;
 const RETENU = regleDuChamp(CHARGE, 'retenu');
 const IDENTIFIANT = regleDuChamp(PROPOSITION, 'id');
@@ -127,14 +133,32 @@ function fauteDeDeclaration({ tables, capacites, participants }) {
   );
 }
 
+// Chemin de la première chaise vide mal placée d'un placement de forme et
+// de déclaration conformes, ou null, dans l'ordre des tours, des listes et
+// des rangs : un null sous siegesAttribues faux, où l'ordre d'une liste ne
+// dit aucun siège, ou au dernier rang d'une liste, qu'une écriture sans
+// lui dit pareil. Le chemin suit la convention de premiereFaute.
+function fauteDeChaiseVide({ siegesAttribues, placement }) {
+  for (let tour = 0; tour < placement.length; tour += 1) {
+    const { sieges } = placement[tour];
+    for (let table = 0; table < sieges.length; table += 1) {
+      const liste = sieges[table];
+      const rang = siegesAttribues ? liste.length - 1 : liste.indexOf(null);
+      if (rang >= 0 && liste[rang] === null) return `placement[${tour}].sieges[${table}][${rang}]`;
+    }
+  }
+  return null;
+}
+
 // Fautes de cohérence d'un placement de forme et de déclaration conformes
 // (§ 8.9, points 1 et 2). D'abord le nombre de tours écrits contre celui
 // déclaré. Puis, tour après tour : le nombre de listes de table contre celui
 // des tables déclarées ; la longueur de chaque liste appariée à une table
-// déclarée, dans l'ordre déclaré, contre sa capacité ; le multiensemble du
-// tour, listes de table et réserve comprises, où chaque identifiant déclaré
-// figure exactement une fois — doublons, inconnus, puis manquants, chacun
-// nommé une fois par tour, par identifiant croissant.
+// déclarée, dans l'ordre déclaré, contre sa capacité, chaises vides
+// comprises ; le multiensemble du tour, listes de table et réserve
+// comprises, où chaque identifiant déclaré figure exactement une fois —
+// doublons, inconnus, puis manquants, chacun nommé une fois par tour, par
+// identifiant croissant. Une chaise vide n'y entre pas.
 //
 // La capacité borne une liste sans la fixer : quand la salle offre plus de
 // sièges que de personnes, des tables gardent des places vides, et une liste
@@ -167,6 +191,7 @@ function fautesDeCoherence({ tables, capacites, tours, participants, placement }
     const inconnus = [];
     for (const ids of [...sieges, reserve]) {
       for (const id of ids) {
+        if (id === null) continue;
         const deja = occurrences.get(id) ?? 0;
         occurrences.set(id, deja + 1);
         if (deja === 0 && !estDeclare.has(id)) inconnus.push(id);
@@ -183,11 +208,11 @@ function fautesDeCoherence({ tables, capacites, tours, participants, placement }
   return liste;
 }
 
-// Fautes de valeur sous regle : la première faute de forme ou de
-// déclaration seule, qui rend la cohérence illisible ; sinon les fautes de
-// cohérence.
+// Fautes de valeur sous regle : la première faute de forme, de
+// déclaration ou de chaise vide seule, qui rend la cohérence illisible ;
+// sinon les fautes de cohérence.
 function fautesSelon(valeur, regle) {
-  const chemin = premiereFaute(valeur, regle) ?? fauteDeDeclaration(valeur);
+  const chemin = premiereFaute(valeur, regle) ?? fauteDeDeclaration(valeur) ?? fauteDeChaiseVide(valeur);
   return chemin === null ? fautesDeCoherence(valeur) : [{ code: 'FORME', chemin }];
 }
 
@@ -197,7 +222,9 @@ function fautesSelon(valeur, regle) {
  * retenu quand p porte la clé proposition, celle d'une proposition sinon.
  *
  * La forme se contrôle d'abord, dans l'ordre du schéma, puis la
- * déclaration : la première faute de l'une ou de l'autre est seule rendue,
+ * déclaration, puis les chaises vides : null, admis par la règle d'une
+ * liste de table, n'y est cohérent que sous des sièges attribués et avant
+ * le dernier rang. La première de ces fautes est seule rendue,
  * { code: 'FORME', chemin }. Sinon, dans l'ordre des tours puis des tables :
  * { code: 'LONGUEUR', tour, table, declare, ecrit } — tour null pour le
  * nombre de tours, rendu en premier ; table null pour le nombre de listes
@@ -248,8 +275,9 @@ function exigerCoherent(p, fonction) {
  * configuration, lue par identifiant ; le nombre de tours ; les participants
  * non exclus, par identifiant croissant. Le placement reprend le plan tour
  * par tour : sans attribution de sièges, chaque liste de table se trie par
- * identifiant croissant ; avec, elle garde son ordre, celui des sièges. La
- * réserve, un ensemble, se trie dans les deux cas. Les clés suivent l'ordre
+ * identifiant croissant ; avec, elle garde son ordre, celui des sièges, et
+ * ses chaises vides, null. La réserve, un ensemble, se trie dans les deux
+ * cas. Les clés suivent l'ordre
  * du schéma ; rien n'est partagé avec les arguments, qui ne sont pas
  * modifiés.
  *
@@ -263,7 +291,8 @@ function exigerCoherent(p, fonction) {
  * entier ≥ 0, ou quand la forme produite serait fautive : attribuerSieges
  * qui n'est pas un booléen, version vide ou absente, réglage hors de son
  * domaine, plan que la configuration contredit — table inconnue d'elle,
- * nombre de tours, personne non placée, liste au-delà d'une capacité.
+ * nombre de tours, personne non placée, liste au-delà d'une capacité,
+ * chaise vide sans attribution ou en fin de liste.
  *
  * @param {import('../moteur/recherche.js').Proposition} proposition
  * @param {import('../moteur/types.js').Configuration} configuration
@@ -309,9 +338,9 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
 
 /**
  * Plan du moteur d'un placement de fichier, proposition ou retenu : les
- * tables dans l'ordre déclaré, chaque liste de table et chaque réserve par
- * identifiant croissant, comme le moteur les rend ; l'ordre des sièges n'y
- * entre pas. Aucune liste n'est partagée avec p. Lève TypeError quand p
+ * tables dans l'ordre déclaré, chaque liste de table sans ses chaises
+ * vides, et chaque réserve, par identifiant croissant, comme le moteur les
+ * rend ; l'ordre des sièges n'y entre pas. Aucune liste n'est partagée avec p. Lève TypeError quand p
  * n'est pas cohérent (fautes).
  *
  * @param {import('./types.js').PropositionFichier|import('./types.js').Retenu} p
@@ -321,7 +350,7 @@ export function planDepuisFichier(p) {
   exigerCoherent(p, 'planDepuisFichier');
   return {
     tables: [...p.tables],
-    tours: p.placement.map(({ sieges }) => sieges.map((liste) => [...liste].sort(croissant))),
+    tours: p.placement.map(({ sieges }) => sieges.map((liste) => liste.filter((id) => id !== null).sort(croissant))),
     reserves: p.placement.map(({ reserve }) => [...reserve].sort(croissant)),
   };
 }
@@ -411,7 +440,8 @@ const ordreDesTables = (a, b) =>
  * l'identifiant départage deux numéros égaux —, puis par rang dans la
  * liste ; la réserve suit les tables de son tour, table et numéro null.
  * siege est le rang à partir de 1 quand le placement attribue les sièges,
- * null sinon et dans la réserve. Nom et prénom viennent de la charge ; une
+ * null sinon et dans la réserve ; une chaise vide, null dans la liste,
+ * garde son rang et n'a pas de ligne. Nom et prénom viennent de la charge ; une
  * personne qu'elle n'a plus, ou qu'elle n'a jamais eue, les a null.
  *
  * Un placement incohérent (fautes : LONGUEUR, DOUBLON, INCONNU, MANQUANT)
@@ -454,6 +484,7 @@ export function formeNommee(p, charge) {
   // au-delà des tables déclarées.
   const ajouterListe = (tour, ids, table, numero) => {
     ids.forEach((participant, position) => {
+      if (participant === null) return;
       ajouter(tour, table, numero, p.siegesAttribues ? position + 1 : null, participant, false);
     });
   };

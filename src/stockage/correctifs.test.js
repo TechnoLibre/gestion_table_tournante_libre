@@ -1662,3 +1662,90 @@ describe("appliquer : un correctif qui ne s'applique pas lève CORRECTIF avec le
     }
   });
 });
+
+describe('le marqueur de chaise vide : correctifs et forme canonique (§ 8.9)', () => {
+  // La petite démonstration, sa proposition 1 à sièges attribués, retenue
+  // telle quelle : au tour 1, la table 1 assied 9, 5 et 1, dans cet ordre
+  // de sièges. Une charge neuve à chaque appel.
+  function retenuAttribue() {
+    const charge = chargeDe('petite', [{ id: 1, siegesAttribues: true }]);
+    charge.propositions[0].placement[0].sieges[0] = [9, 5, 1];
+    charge.retenu = retenuDe(charge.propositions[0]);
+    charge.evenement.etat = 'retenu';
+    return charge;
+  }
+
+  // retenuAttribue, la personne 5 retirée du tour 1 du retenu : sa chaise,
+  // le siège 2 de la table 1, est libre, et elle attend en réserve.
+  function chaiseLiberee() {
+    const charge = retenuAttribue();
+    charge.retenu.placement[0].sieges[0] = [9, null, 1];
+    charge.retenu.placement[0].reserve = [5];
+    return charge;
+  }
+
+  test("libérer une chaise du retenu : une seule pose dans la liste, valeur null, au rang de la chaise ; appliquer rend la charge d'après, que canoniser garde dans l'ordre des sièges", () => {
+    const a = geler(retenuAttribue());
+    const b = geler(chaiseLiberee());
+    assert.deepStrictEqual(fautes(b.retenu), []);
+    const correctif = difference(a, b);
+    assert.deepStrictEqual(correctif, [
+      { op: 'poser', chemin: ['retenu', 'placement', 0, 'sieges', 0, 1], valeur: null },
+      { op: 'poser', chemin: ['retenu', 'placement', 0, 'reserve'], valeur: [5] },
+    ]);
+    const rendue = appliquer(a, correctif);
+    assert.deepStrictEqual(rendue, canoniser(b));
+    assert.deepStrictEqual(rendue.retenu.placement[0].sieges[0], [9, null, 1]);
+    assert.equal(serialiserCharge(rendue), serialiserCharge(b));
+    assert.deepStrictEqual(analyser(serialiser(rendue, ENTETE)).charge.retenu, rendue.retenu);
+    // Le retour : la chaise reprend son occupant, par une pose au même rang.
+    const retour = difference(b, a);
+    assert.deepStrictEqual(retour, [
+      { op: 'poser', chemin: ['retenu', 'placement', 0, 'sieges', 0, 1], valeur: 5 },
+      { op: 'poser', chemin: ['retenu', 'placement', 0, 'reserve'], valeur: [] },
+    ]);
+    assert.deepStrictEqual(appliquer(b, retour), canoniser(a));
+  });
+
+  test("dans une proposition aussi, une chaise libérée est une pose au rang de la chaise ; une liste qui change à chaque rang se pose entière, chaises vides comprises", () => {
+    const a = geler(retenuAttribue());
+    const b = retenuAttribue();
+    b.propositions[0].placement[0].sieges[0] = [9, null, 1];
+    b.propositions[0].placement[0].reserve = [5];
+    assert.deepStrictEqual(difference(a, geler(b)), [
+      { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', 0, 'sieges', 0, 1], valeur: null },
+      { op: 'poser', chemin: ['propositions', { id: 1 }, 'placement', 0, 'reserve'], valeur: [5] },
+    ]);
+    const c = chaiseLiberee();
+    c.retenu.placement[0].sieges[0] = [1, null, 9];
+    const correctif = difference(a, geler(c));
+    assert.deepStrictEqual(correctif, [
+      { op: 'poser', chemin: ['retenu', 'placement', 0, 'sieges', 0], valeur: [1, null, 9] },
+      { op: 'poser', chemin: ['retenu', 'placement', 0, 'reserve'], valeur: [5] },
+    ]);
+    assert.deepStrictEqual(appliquer(a, correctif), canoniser(c));
+  });
+
+  test("appliquer admet null dans une liste de table, comme la règle, et le refuse ailleurs dans un placement : réserve, tables, participants, capacités", () => {
+    const base = geler(chaiseLiberee());
+    const admises = [
+      ['retenu', 'placement', 1, 'sieges', 2, 1],
+      ['propositions', { id: 1 }, 'placement', 2, 'sieges', 0, 1],
+    ];
+    for (const chemin of admises) {
+      assert.equal(refusDe(base, [{ op: 'poser', chemin, valeur: null }]), 'aucun refus', JSON.stringify(chemin));
+    }
+    const refusees = [
+      ['retenu', 'placement', 0, 'reserve', 0],
+      ['retenu', 'tables', 0],
+      ['retenu', 'participants', 0],
+      ['retenu', 'capacites', 0],
+      ['propositions', { id: 1 }, 'placement', 1, 'sieges', 0],
+      ['propositions', { id: 1 }, 'participants', 3],
+    ];
+    assert.ok(refusees.length > 0);
+    for (const chemin of refusees) {
+      assert.deepEqual(refusDe(base, [{ op: 'poser', chemin, valeur: null }]), { rang: 0 }, JSON.stringify(chemin));
+    }
+  });
+});

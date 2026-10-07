@@ -1026,3 +1026,48 @@ describe('premiereFaute : le parcours de forme, sans lever (§ 8.8, § 8.9)', ()
     assert.equal(premiereFauteEnPlace({ ...evenement, nom: '' }, EVENEMENT, 'charge.evenement'), 'charge.evenement.nom');
   });
 });
+
+describe('le marqueur de chaise vide : la règle d\'une liste de table (§ 8.9)', () => {
+  // La proposition du document valide, sièges attribués, dont le tour 2
+  // laisse vide le siège 2 de la table 3 : sa liste vaut [1, null, 5].
+  const propositionAChaiseVide = () => {
+    const proposition = documentValide().charge.propositions[0];
+    proposition.siegesAttribues = true;
+    proposition.placement[1].sieges[1] = [1, null, 5];
+    return proposition;
+  };
+
+  test("premiereFaute admet null dans une liste de table, d'une proposition comme du retenu, et nulle part ailleurs dans un placement", () => {
+    const regleDe = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+    const CHARGE = regleDe(SCHEMA, 'charge');
+    const PROPOSITION = regleDe(CHARGE, 'propositions').element;
+    const RETENU = regleDe(CHARGE, 'retenu');
+    const proposition = propositionAChaiseVide();
+    const { id, graine, arret, historique, produitVersion, ...plan } = proposition;
+    const retenu = { proposition: id, ...plan };
+    assert.equal(premiereFaute(proposition, PROPOSITION), null);
+    assert.equal(premiereFaute(retenu, RETENU), null);
+    const cas = [
+      ['dans une réserve', (p) => { p.placement[0].reserve = [null]; }, 'placement[0].reserve[0]'],
+      ['parmi les participants', (p) => { p.participants[1] = null; }, 'participants[1]'],
+      ['parmi les tables', (p) => { p.tables[0] = null; }, 'tables[0]'],
+      ['parmi les capacités', (p) => { p.capacites[1] = null; }, 'capacites[1]'],
+      ['à la place d\'une liste de table', (p) => { p.placement[0].sieges[0] = null; }, 'placement[0].sieges[0]'],
+    ];
+    assert.ok(cas.length > 0);
+    for (const [libelle, abimer, chemin] of cas) {
+      const abimee = propositionAChaiseVide();
+      abimer(abimee);
+      assert.equal(premiereFaute(abimee, PROPOSITION), chemin, libelle);
+    }
+  });
+
+  test("l'analyse lit un fichier dont une proposition porte une chaise vide, et sa relecture rend la liste telle qu'écrite", () => {
+    const documentLu = documentValide();
+    documentLu.charge.propositions = [propositionAChaiseVide()];
+    const { charge } = analyser(JSON.stringify(documentLu));
+    assert.deepStrictEqual(charge.propositions[0].placement[1].sieges[1], [1, null, 5]);
+    const relue = analyser(serialiser(charge, { revision: 13, produitVersion: VERSION.affichee })).charge;
+    assert.deepStrictEqual(relue.propositions[0], propositionAChaiseVide());
+  });
+});
