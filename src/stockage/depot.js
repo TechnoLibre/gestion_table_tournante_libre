@@ -139,8 +139,11 @@ import { examiner } from './placements.js';
  * Un événement du dossier, tel que lister le résume.
  *
  * Les champs qui viennent de l'état lu — nom, date, etat, participants —
- * valent null quand il ne se lit pas ou qu'il manque ; id aussi, sauf pour un
- * journal sans état, dont il est l'événement que nomme sa première ligne.
+ * valent null quand il ne se lit pas ou qu'il manque. id est celui de l'état
+ * lu ; pour un état illisible, celui par lequel il s'apparie
+ * (identifiantSansEtat), null quand il n'en a aucun ; pour un journal sans
+ * état, l'événement que nomme sa première ligne. Un événement du dossier se
+ * reconnaît ainsi à son id, que son état se lise ou non.
  *
  * @typedef {Object} Resume
  * @property {string} base
@@ -542,9 +545,10 @@ async function refuser(vue, base, details) {
  * et qu'aucun état lisible ne porte son identifiant, illisible ABSENT ; il
  * ne se montre pas sinon : une copie d'un journal apparié, ou le journal
  * qu'un état illisible s'apparie par son .precedent. Un identifiant que
- * portent deux états lisibles les signale doublon. Résumés triés par nom,
- * les noms inconnus après les autres, puis par base, unités UTF-16
- * comparées.
+ * portent deux états lisibles les signale doublon ; le résumé d'un état
+ * illisible porte en id celui qui l'apparie, sans le compter en doublon.
+ * Résumés triés par nom, les noms inconnus après les autres, puis par base,
+ * unités UTF-16 comparées.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -578,7 +582,7 @@ export async function lister(fs, racine) {
     else if (id !== null) journal = (await apparier(vue, base, id))?.base ?? null;
     if (journal !== null) apparies.add(journal);
     if (lecture === null) {
-      resumes.push(sansLecture(base, null, modifie, journal, details.raison));
+      resumes.push(sansLecture(base, id, modifie, journal, details.raison));
       continue;
     }
     const { evenement, participants } = lecture.charge;

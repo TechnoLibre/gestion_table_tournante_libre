@@ -1,0 +1,461 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Les commandes nommées (§ 8.2) : toute modification d'un événement passe par
+// l'une d'elles. Une commande est une fonction pure (charge, arguments) →
+// { charge, libelle, avertissements } : la charge rendue est neuve, celle
+// reçue ne change jamais ; le libellé est le texte français que le journal
+// fige (libelles.js) ; les avertissements, { code, details }, disent ce que le
+// geste emporte de plus que son effet, sans rien empêcher. Un refus lève
+// ErreurCommande(code, details), où details.remede nomme le geste qui le lève,
+// null quand il n'y en a pas ; une faute du code — un argument de forme
+// fausse, un état ou un champ inconnus — lève TypeError. Aucune commande
+// n'écrit, ne lit l'horloge ni ne tire un aléa.
+//
+// La saisie entre en NFC, ses blancs de bord retirés, une chaîne vide valant
+// null (§ 10.2) ; la règle d'un champ est celle du schéma du fichier d'état,
+// que document.js tient seul. Les identifiants viennent de prochainsIds, qui
+// ne recule jamais : un identifiant retiré ne revient pas (§ 4, § 5.7). Un
+// plan bloqué refuse toute commande, débloquer excepté (§ 9).
+//
+// Les états du plan (§ 9) : brouillon, proposé et retenu se posent par
+// changerEtat sans rien détruire, proposé quand une proposition existe,
+// retenu quand un placement est retenu ; bloqué se pose de chacun d'eux, et
+// seul debloquer le lève, vers l'état que le contenu impose (etatDeduit). Une
+// génération fait passer un brouillon à proposé ; retenir pose retenu ;
+// effacer les propositions ramène un plan proposé sans retenu à brouillon.
+import { ErreurCsv } from '../csv/erreurs.js';
+import { appliquerImport, bilanRemplacement } from '../csv/import.js';
+import { serialiserCharge } from '../stockage/canonique.js';
+import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
+import { ErreurStockage } from '../stockage/erreurs.js';
+import { versFichier } from '../stockage/placements.js';
+import { libelle } from './libelles.js';
+
+/**
+ * Le refus d'une commande : son code, et des détails que l'appelant lit pour
+ * agir, remede compris. Le message, code et détails en JSON, sert aux traces ;
+ * le texte affiché vient de la table des libellés (§ 14.6).
+ */
+export class ErreurCommande extends Error {
+  /**
+   * @param {string} code
+   * @param {Object} [details]
+   */
+  constructor(code, details = {}) {
+    super(`${code} ${JSON.stringify(details)}`);
+    this.code = code;
+    this.details = details;
+  }
+}
+ErreurCommande.prototype.name = 'ErreurCommande';
+
+// Le refus de code donné : ses détails, puis le remède, null sans lui.
+const refus = (code, details = {}, remede = null) => new ErreurCommande(code, { ...details, remede });
+
+// Un avertissement : il n'empêche rien.
+const avertissement = (code, details) => ({ code, details });
+
+// Règles du schéma : celle d'un champ d'objet, puis celles de l'événement et
+// d'un participant.
+const regleDuChamp = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+const CHARGE = regleDuChamp(SCHEMA, 'charge');
+const EVENEMENT = regleDuChamp(CHARGE, 'evenement');
+const PARTICIPANT = regleDuChamp(CHARGE, 'participants').element;
+// Le plus grand identifiant qu'admet la règle : le compteur, qui la suit,
+// n'aurait plus de valeur au-delà de lui.
+const IDENTIFIANT_MAX = regleDuChamp(PARTICIPANT, 'id').max;
+
+const ETATS = ['brouillon', 'propose', 'retenu', 'bloque'];
+
+// Les champs de texte d'un participant que la saisie pose, dans l'ordre du
+// fichier.
+const CHAMPS_DE_SAISIE = ['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes'];
+
+// Une saisie de texte : en NFC, ses blancs de bord retirés, null quand il ne
+// reste rien ; null et l'absence valent null.
+function saisie(valeur, champ) {
+  if (valeur === undefined || valeur === null) return null;
+  if (typeof valeur !== 'string') {
+    throw new TypeError(`${champ} : chaîne ou null attendue, reçu ${JSON.stringify(valeur)}`);
+  }
+  const texte = valeur.normalize('NFC').trim();
+  return texte === '' ? null : texte;
+}
+
+// Les champs d'une saisie de participant : chaque champ de texte présent, lu
+// par saisie, et exclu quand admisExclu, un booléen. Un champ inconnu, ou
+// d'une autre sorte, est une faute du code.
+function lireChamps(champs, { admisExclu }) {
+  if (champs === null || typeof champs !== 'object' || Array.isArray(champs)) {
+    throw new TypeError(`champs : objet attendu, reçu ${JSON.stringify(champs)}`);
+  }
+  const permis = admisExclu ? [...CHAMPS_DE_SAISIE, 'exclu'] : CHAMPS_DE_SAISIE;
+  const inconnu = clesRangees(champs).find((cle) => !permis.includes(cle));
+  if (inconnu !== undefined) throw new TypeError(`champs : ${inconnu} n'est pas un champ de cette saisie`);
+  const lus = {};
+  for (const champ of CHAMPS_DE_SAISIE) if (Object.hasOwn(champs, champ)) lus[champ] = saisie(champs[champ], champ);
+  if (Object.hasOwn(champs, 'exclu')) {
+    if (typeof champs.exclu !== 'boolean') {
+      throw new TypeError(`exclu : booléen attendu, reçu ${JSON.stringify(champs.exclu)}`);
+    }
+    lus.exclu = champs.exclu;
+  }
+  return lus;
+}
+
+// Un participant tel que la saisie le pose : nom requis (NOM_REQUIS) ; toute
+// autre valeur hors de sa règle est une faute du code.
+function exigerParticipant(participant) {
+  if (premiereFaute(participant.nom, regleDuChamp(PARTICIPANT, 'nom')) !== null) throw refus('NOM_REQUIS');
+  const faute = premiereFaute(participant, PARTICIPANT);
+  if (faute !== null) throw new TypeError(`participant : ${faute} hors de sa règle`);
+}
+
+// Le participant d'identifiant id, ou PARTICIPANT_INCONNU.
+function participantDe(charge, id) {
+  if (!Number.isSafeInteger(id)) throw new TypeError(`id : entier attendu, reçu ${JSON.stringify(id)}`);
+  const participant = charge.participants.find((candidat) => candidat.id === id);
+  if (participant === undefined) throw refus('PARTICIPANT_INCONNU', { id });
+  return participant;
+}
+
+// Le nom d'une personne tel que les libellés l'écrivent : prénom, puis nom.
+const personneDe = ({ nom, prenom }) => (prenom === null ? nom : `${prenom} ${nom}`);
+
+// Un plan bloqué refuse toute modification ; débloquer seul le lève (§ 9).
+function exigerModifiable(charge) {
+  if (charge.evenement.etat === 'bloque') throw refus('PLAN_BLOQUE', {}, { geste: 'debloquer' });
+}
+
+// Titres de place pourvus (§ 4.1, § 4.4) : le compte que bilanRemplacement
+// tient pour l'import, seule implémentation de la règle (§ 13.2).
+const titresPourvus = (charge) => bilanRemplacement(charge).titresPourvus;
+
+// La charge reçue, copiée, son participant id remplacé par ce que rend
+// modifier de sa copie.
+function avecParticipant(charge, id, modifier) {
+  const suivante = structuredClone(charge);
+  suivante.participants = suivante.participants.map((participant) =>
+    participant.id === id ? modifier(participant) : participant,
+  );
+  return suivante;
+}
+
+// La charge reçue, copiée, à l'état donné.
+function avecEtat(charge, etat) {
+  const suivante = structuredClone(charge);
+  suivante.evenement.etat = etat;
+  return suivante;
+}
+
+/** ajouterParticipant {champs} : seul le nom est requis ; exclu vaut faux par défaut. */
+function ajouterParticipant(charge, { champs }) {
+  exigerModifiable(charge);
+  const lus = lireChamps(champs, { admisExclu: true });
+  const id = charge.prochainsIds.participant;
+  const participant = {
+    id,
+    nom: lus.nom ?? null,
+    prenom: lus.prenom ?? null,
+    appartenance: lus.appartenance ?? null,
+    courriel: lus.courriel ?? null,
+    titrePressenti: lus.titrePressenti ?? null,
+    notes: lus.notes ?? null,
+    exclu: lus.exclu ?? false,
+  };
+  exigerParticipant(participant);
+  if (id >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'participant' });
+  const suivante = structuredClone(charge);
+  suivante.participants.push(participant);
+  suivante.prochainsIds.participant = id + 1;
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_AJOUTER_PARTICIPANT', { personne: personneDe(participant) }),
+    avertissements: [],
+  };
+}
+
+/**
+ * modifierParticipant {id, champs} : les champs de texte donnés ; l'exclusion
+ * a ses deux commandes. Le libellé nomme la personne d'avant et chaque champ
+ * changé, puis le nouveau nom quand il change.
+ */
+function modifierParticipant(charge, { id, champs }) {
+  exigerModifiable(charge);
+  const avant = participantDe(charge, id);
+  const apres = { ...avant, ...lireChamps(champs, { admisExclu: false }) };
+  exigerParticipant(apres);
+  const changes = CHAMPS_DE_SAISIE.filter((champ) => apres[champ] !== avant[champ]);
+  if (changes.length === 0) throw refus('SANS_EFFET', { commande: 'modifierParticipant' });
+  const renomme = apres.nom !== avant.nom || apres.prenom !== avant.prenom;
+  return {
+    charge: avecParticipant(charge, id, () => apres),
+    libelle: libelle('ENTREE_MODIFIER_PARTICIPANT', {
+      personne: personneDe(avant),
+      champs: changes,
+      devenu: renomme ? personneDe(apres) : null,
+    }),
+    avertissements: [],
+  };
+}
+
+// Les comptes d'une exclusion ou d'une réintégration (§ 4.4) : les
+// réservations de la personne, que l'exclusion suspend sans les retirer, et
+// les titres que le geste cesse de pourvoir, ou pourvoit de nouveau.
+function bilanExclusion(avant, apres, participant) {
+  const reservations = avant.reservations.filter((reservation) => reservation.participant === participant.id).length;
+  const titres = Math.abs(titresPourvus(avant) - titresPourvus(apres));
+  return { participant: participant.id, personne: personneDe(participant), reservations, titres };
+}
+
+/**
+ * exclureParticipant {id} (§ 4.4) : ses réservations restent, suspendues ; ses
+ * places reviennent aux autres et ses titres ne sont plus pourvus, ce que
+ * RESERVATIONS_SUSPENDUES dit quand il en porte.
+ */
+function exclureParticipant(charge, { id }) {
+  exigerModifiable(charge);
+  const participant = participantDe(charge, id);
+  if (participant.exclu) throw refus('SANS_EFFET', { commande: 'exclureParticipant' });
+  const suivante = avecParticipant(charge, id, (copie) => ({ ...copie, exclu: true }));
+  const bilan = bilanExclusion(charge, suivante, participant);
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_EXCLURE_PARTICIPANT', { personne: bilan.personne }),
+    avertissements: bilan.reservations > 0 ? [avertissement('RESERVATIONS_SUSPENDUES', bilan)] : [],
+  };
+}
+
+/** reintegrerParticipant {id} (§ 4.4) : ses réservations et ses titres reviennent, RESERVATIONS_RETABLIES. */
+function reintegrerParticipant(charge, { id }) {
+  exigerModifiable(charge);
+  const participant = participantDe(charge, id);
+  if (!participant.exclu) throw refus('SANS_EFFET', { commande: 'reintegrerParticipant' });
+  const suivante = avecParticipant(charge, id, (copie) => ({ ...copie, exclu: false }));
+  const bilan = bilanExclusion(charge, suivante, participant);
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_REINTEGRER_PARTICIPANT', { personne: bilan.personne }),
+    avertissements: bilan.reservations > 0 ? [avertissement('RESERVATIONS_RETABLIES', bilan)] : [],
+  };
+}
+
+/**
+ * supprimerParticipant {id} : la personne et ses réservations partent dans la
+ * même entrée ; les titres restent à leurs places, les propositions et le
+ * retenu restent, en dérive (§ 9) ; le compteur ne recule pas.
+ */
+function supprimerParticipant(charge, { id }) {
+  exigerModifiable(charge);
+  const participant = participantDe(charge, id);
+  const suivante = structuredClone(charge);
+  suivante.participants = suivante.participants.filter((candidat) => candidat.id !== id);
+  suivante.reservations = suivante.reservations.filter((reservation) => reservation.participant !== id);
+  const reservations = charge.reservations.length - suivante.reservations.length;
+  const details = {
+    participant: id,
+    personne: personneDe(participant),
+    reservations,
+    titres: titresPourvus(charge) - titresPourvus(suivante),
+  };
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_SUPPRIMER_PARTICIPANT', { personne: details.personne }),
+    avertissements: reservations > 0 ? [avertissement('RESERVATIONS_RETIREES', details)] : [],
+  };
+}
+
+/**
+ * importerParticipants {apercu, mode} (§ 10.1) : l'aperçu appliqué selon le
+ * mode (appliquerImport), en une seule entrée. Le refus du CSV — un aperçu
+ * refusé ou ambigu — devient le refus de la commande, sous le même code. Le
+ * résumé suit le rendu, pour le rapport d'import et le CSV des refus. Selon
+ * l'état : sans avertissement en brouillon et proposé ; en retenu,
+ * l'avertissement de dérive IMPORT_EN_RETENU, quel que soit le mode, sur le
+ * signal resume.derive d'appliquerImport ; refusé en bloqué, PLAN_BLOQUE.
+ */
+function importerParticipants(charge, { apercu, mode }) {
+  exigerModifiable(charge);
+  let resultat;
+  try {
+    resultat = appliquerImport(charge, apercu, mode);
+  } catch (erreur) {
+    if (erreur instanceof ErreurCsv) throw new ErreurCommande(erreur.code, { ...erreur.details, remede: null });
+    throw erreur;
+  }
+  const { ajoutes, misAJour, retires, derive } = resultat.resume;
+  return {
+    charge: resultat.charge,
+    libelle: libelle('ENTREE_IMPORTER_PARTICIPANTS', { mode, ajoutes, misAJour, retires }),
+    avertissements: derive ? [avertissement('IMPORT_EN_RETENU', {})] : [],
+    resume: resultat.resume,
+  };
+}
+
+/** changerEtat {etat} (§ 9) : un état du plan, sans rien détruire ; bloque se pose de chacun. */
+function changerEtat(charge, { etat }) {
+  if (!ETATS.includes(etat)) throw new TypeError(`etat : ${ETATS.join(', ')} attendu, reçu ${JSON.stringify(etat)}`);
+  exigerModifiable(charge);
+  if (etat === charge.evenement.etat) throw refus('SANS_EFFET', { commande: 'changerEtat' });
+  if (etat === 'propose' && charge.propositions.length === 0) {
+    throw refus('AUCUNE_PROPOSITION', {}, { geste: 'ouvrirSection', section: 'generation' });
+  }
+  if (etat === 'retenu' && charge.retenu === null) {
+    throw refus('AUCUN_RETENU', {}, { geste: 'ouvrirSection', section: 'propositions' });
+  }
+  return { charge: avecEtat(charge, etat), libelle: libelle('ENTREE_CHANGER_ETAT', { etat }), avertissements: [] };
+}
+
+/** debloquer {} (§ 8.5, § 9) : l'état revient à celui que le contenu impose. */
+function debloquer(charge) {
+  if (charge.evenement.etat !== 'bloque') throw refus('PLAN_NON_BLOQUE');
+  const etat = etatDeduit(charge);
+  return { charge: avecEtat(charge, etat), libelle: libelle('ENTREE_DEBLOQUER', { etat }), avertissements: [] };
+}
+
+/**
+ * enregistrerGeneration {propositions, configuration, produitVersion} (§ 5.7,
+ * § 8.9) : les propositions du moteur, mises en forme de fichier
+ * (versFichier) sous les identifiants qui suivent prochainsIds.proposition —
+ * la proposition d'identifiant k du moteur prend prochainsIds.proposition +
+ * k − 1 —, s'ajoutent aux précédentes, et le compteur passe au-delà de la
+ * dernière. Un brouillon passe à proposé.
+ */
+function enregistrerGeneration(charge, { propositions, configuration, produitVersion }) {
+  exigerModifiable(charge);
+  if (!Array.isArray(propositions)) throw new TypeError('propositions : liste attendue');
+  if (propositions.length === 0) throw refus('SANS_EFFET', { commande: 'enregistrerGeneration' });
+  const rangs = propositions.map(({ id }) => id);
+  if (!rangs.every((id) => Number.isSafeInteger(id) && id >= 1) || new Set(rangs).size !== rangs.length) {
+    throw new TypeError('propositions : identifiants du moteur entiers, ≥ 1 et distincts attendus');
+  }
+  const decalage = charge.prochainsIds.proposition - 1;
+  const options = { produitVersion, attribuerSieges: charge.reglages.attribuerSieges, decalage };
+  let fichiers;
+  try {
+    fichiers = propositions.map((proposition) => versFichier(proposition, configuration, options));
+  } catch (erreur) {
+    if (erreur instanceof ErreurStockage && erreur.code === 'COMPTEUR_SATURE') {
+      throw refus('COMPTEUR_SATURE', erreur.details);
+    }
+    throw erreur;
+  }
+  const ids = fichiers.map(({ id }) => id);
+  const premier = Math.min(...ids);
+  const dernier = Math.max(...ids);
+  const suivante = structuredClone(charge);
+  suivante.propositions.push(...fichiers);
+  suivante.prochainsIds.proposition = dernier + 1;
+  if (suivante.evenement.etat === 'brouillon') suivante.evenement.etat = 'propose';
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_ENREGISTRER_GENERATION', { n: fichiers.length, premier, dernier }),
+    avertissements: [],
+  };
+}
+
+/**
+ * retenirProposition {id} (§ 5.7, § 9) : le placement de la proposition,
+ * copié, devient le retenu, que les retouches modifieront sans toucher la
+ * proposition ; le plan passe à retenu.
+ */
+function retenirProposition(charge, { id }) {
+  exigerModifiable(charge);
+  const proposition = charge.propositions.find((candidate) => candidate.id === id);
+  if (proposition === undefined) throw refus('PROPOSITION_INCONNUE', { id });
+  const { siegesAttribues, tables, capacites, tours, participants, placement } = structuredClone(proposition);
+  const suivante = avecEtat(charge, 'retenu');
+  suivante.retenu = { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
+  return { charge: suivante, libelle: libelle('ENTREE_RETENIR_PROPOSITION', { id }), avertissements: [] };
+}
+
+/**
+ * effacerPropositions {} (§ 5.7) : la liste se vide, la proposition d'où vient
+ * le retenu exceptée ; le compteur ne recule pas. Un plan proposé sans retenu
+ * revient à brouillon.
+ */
+function effacerPropositions(charge) {
+  exigerModifiable(charge);
+  const origine = charge.retenu?.proposition ?? null;
+  const gardees = charge.propositions.filter(({ id }) => id === origine);
+  const n = charge.propositions.length - gardees.length;
+  if (n === 0) throw refus('SANS_EFFET', { commande: 'effacerPropositions' });
+  const suivante = structuredClone(charge);
+  suivante.propositions = suivante.propositions.filter(({ id }) => id === origine);
+  if (suivante.retenu === null && suivante.evenement.etat === 'propose') suivante.evenement.etat = 'brouillon';
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_EFFACER_PROPOSITIONS', { n, gardee: gardees.length > 0 ? origine : null }),
+    avertissements: [],
+  };
+}
+
+/**
+ * Le registre des commandes, par nom : chacune (charge, arguments) →
+ * { charge, libelle, avertissements }, et importerParticipants y ajoute le
+ * résumé de l'import.
+ *
+ * @typedef {{code: string, details: Object}} Avertissement
+ * @typedef {{charge: Object, libelle: string, avertissements: Avertissement[]}} Rendu
+ * @type {Map<string, (charge: Object, args: Object) => Rendu>}
+ */
+export const COMMANDES = new Map([
+  ['ajouterParticipant', ajouterParticipant],
+  ['modifierParticipant', modifierParticipant],
+  ['exclureParticipant', exclureParticipant],
+  ['reintegrerParticipant', reintegrerParticipant],
+  ['supprimerParticipant', supprimerParticipant],
+  ['importerParticipants', importerParticipants],
+  ['changerEtat', changerEtat],
+  ['debloquer', debloquer],
+  ['enregistrerGeneration', enregistrerGeneration],
+  ['retenirProposition', retenirProposition],
+  ['effacerPropositions', effacerPropositions],
+]);
+
+/**
+ * Applique la commande nom à la charge : ce qu'elle rend, avertissements []
+ * quand elle n'en donne pas. Un geste dont la charge rendue s'écrit comme la
+ * charge reçue ne change rien, et n'est pas une entrée (§ 8.2) : SANS_EFFET.
+ *
+ * @param {string} nom
+ * @param {Object} charge
+ * @param {Object} [args]
+ * @returns {{charge: Object, libelle: string, avertissements: Array<{code: string, details: Object}>}}
+ * @throws {ErreurCommande} le refus de la commande, ou SANS_EFFET
+ * @throws {TypeError} une commande inconnue, un argument de forme fausse
+ */
+export function appliquerCommande(nom, charge, args = {}) {
+  const commande = COMMANDES.get(nom);
+  if (commande === undefined) throw new TypeError(`commande inconnue : ${JSON.stringify(nom)}`);
+  const rendu = commande(charge, args ?? {});
+  if (serialiserCharge(rendu.charge) === serialiserCharge(charge)) throw refus('SANS_EFFET', { commande: nom });
+  return { ...rendu, avertissements: rendu.avertissements ?? [] };
+}
+
+/**
+ * La charge d'un événement neuf (§ 8.1) et le libellé de sa création. Chaque
+ * champ se contrôle selon sa règle avant que l'identifiant ne se tire :
+ * NOM_REQUIS, DATE_INVALIDE {date}, SIEGES_INVALIDES {sieges},
+ * TOURS_INVALIDES {tours}. Le nom entre en NFC, ses blancs de bord retirés ;
+ * une date vide vaut null.
+ *
+ * @param {{nom: string, date?: string|null, siegesParDefaut: number, tours: number}} evenement
+ * @param {() => string} identifiant  tiré une fois, après les contrôles
+ * @returns {{charge: Object, libelle: string}}
+ * @throws {ErreurCommande}
+ */
+export function chargeNeuve({ nom, date = null, siegesParDefaut, tours }, identifiant) {
+  const regle = (cle) => regleDuChamp(EVENEMENT, cle);
+  const nomLu = saisie(nom, 'nom');
+  const dateLue = saisie(date, 'date');
+  if (premiereFaute(nomLu, regle('nom')) !== null) throw refus('NOM_REQUIS');
+  if (premiereFaute(dateLue, regle('date')) !== null) throw refus('DATE_INVALIDE', { date });
+  if (premiereFaute(siegesParDefaut, regle('siegesParDefaut')) !== null) {
+    throw refus('SIEGES_INVALIDES', { sieges: siegesParDefaut });
+  }
+  if (premiereFaute(tours, regle('tours')) !== null) throw refus('TOURS_INVALIDES', { tours });
+  const charge = creerCharge({ id: identifiant(), nom: nomLu, date: dateLue, siegesParDefaut, tours });
+  return { charge, libelle: libelle('ENTREE_CREATION', { nom: nomLu }) };
+}

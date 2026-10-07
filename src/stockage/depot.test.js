@@ -451,7 +451,7 @@ describe('dépôt : créer, ouvrir, lister', () => {
     ]);
   });
 
-  test("lister apparie par l'identifiant, jamais par le nom : journal renommé, état illisible, journal sans état, doublon, journal d'un autre", async () => {
+  test("lister apparie par l'identifiant, jamais par le nom : journal renommé, état illisible et l'identifiant qui l'apparie, journal sans état, doublon, journal d'un autre", async () => {
     const ouverture = (evenement) => `${ligneOuverture(evenement)}\n`;
     const etat = (id, nom) => etatTexte(chargeEssai({ id, nom }));
     const { fs } = disqueAvec([
@@ -478,6 +478,9 @@ describe('dépôt : créer, ouvrir, lister', () => {
       ['Hortensia.gtt.json', etat('evt-h', 'Hortensia'), 8000],
       // état illisible, ni .precedent ni journal
       ['Jacinthe.gtt.json', '{"entete":', 8500],
+      // état illisible, son .precedent lisible, sans journal
+      ['Kalmia.gtt.json', '{', 8600],
+      ['Kalmia.gtt.json.precedent', etat('evt-k', 'Kalmia'), 8601],
       // ni état ni journal
       ['notes.txt', 'à lire', 9000],
     ]);
@@ -512,11 +515,12 @@ describe('dépôt : créer, ouvrir, lister', () => {
       lisible('Dahlia bis', 'evt-d', 'Dahlia', 4001, null, true),
       lisible('Esquisse', 'evt-e', 'Esquisse', 5000, null),
       lisible('Hortensia', 'evt-h', 'Hortensia', 8000, 'Glycine'),
-      illisible('Bleuet', null, 2000, 'Bleuet', 'VIDE'),
+      illisible('Bleuet', 'evt-b', 2000, 'Bleuet', 'VIDE'),
       illisible('Capucine', 'evt-c', 3000, 'Capucine', 'ABSENT'),
       illisible('Fougere', null, 6000, 'Fougere', 'ABSENT'),
       illisible('Glycine', null, 7000, null, 'JSON'),
       illisible('Jacinthe', null, 8500, null, 'JSON'),
+      illisible('Kalmia', 'evt-k', 8600, null, 'JSON'),
     ]);
     assert.equal(fs.compteurs.ecritures, 0);
   });
