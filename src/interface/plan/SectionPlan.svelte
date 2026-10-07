@@ -14,6 +14,7 @@
   // surface que le cadre de mode lui laisse sous le bandeau (§ 18.6), et le
   // cadre l'entoure toujours (§ 8.4).
   import { getContext } from 'svelte';
+  import { diagnostiquerCharge } from '../../application/diagnostic.js';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import ListesTravail from './ListesTravail.svelte';
   import PanneauPlace from './PanneauPlace.svelte';
@@ -26,6 +27,11 @@
   const ui = getContext('ui');
 
   const evenement = $derived($seance.charge === null ? null : $seance.charge.evenement.id);
+  // Le diagnostic de la charge, que Plan donne au modèle de dessin : quand
+  // toutes les tables sont en conflit, le bandeau du plan en énonce les
+  // planchers (§ 7.5) ; null quand la configuration ne se normalise pas, et
+  // le bandeau ne porte que la phrase.
+  const diagnostic = $derived($seance.charge === null ? null : diagnostiquerCharge($seance.charge).diagnostic);
 </script>
 
 <section data-section="plan" class="section-plan">
@@ -35,7 +41,7 @@
   <div class="corps">
     {#if evenement !== null}
       {#key evenement}
-        <Plan diagnostic={null} />
+        <Plan {diagnostic} />
       {/key}
     {/if}
     {#if !$ui.pleinEcran}
