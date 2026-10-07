@@ -12,20 +12,27 @@
 // porte une. Chaque code relevé a son texte, chaque texte a un émetteur, et
 // un balayage vide échoue. Chaque texte se compose ensuite de détails
 // d'exemple. Les noms d'épreuve sont inventés.
+//
+// La table se partage en fichiers, un par domaine, sous libelles/ : chacun
+// exporte TABLE, une Map, et libelles.js les assemble par ordre alphabétique
+// des fichiers ; les tables, comme l'assemblage, sont hors du balayage.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
-import { CODES, libelle } from './libelles.js';
+import { CODES, TABLES_APPLICATION, libelle } from './libelles.js';
 
 const RACINE = fileURLToPath(new URL('../..', import.meta.url));
 
 // Les arbres balayés, et les fichiers qui portent une table de codes.
 const ARBRES = ['src/stockage', 'src/csv', 'src/application'];
 const TABLES = ['src/stockage/types.js', 'src/csv/erreurs.js'];
-// La table des textes elle-même n'émet rien : ses clés sont ce qu'on éprouve.
+// L'assemblage et les tables des textes n'émettent rien : leurs clés sont ce
+// qu'on éprouve, et un texte qui en compose un autre le nomme sans l'émettre.
 const TABLE_DES_TEXTES = join('src', 'application', 'libelles.js');
+const DOSSIER_DES_TABLES = join('src', 'application', 'libelles');
+const horsDesTextes = (chemin) => chemin !== TABLE_DES_TEXTES && !chemin.startsWith(DOSSIER_DES_TABLES + sep);
 
 // --- Le balayage ----------------------------------------------------------
 
@@ -79,7 +86,7 @@ function codesDesTables(texte) {
 function modulesDe(arbre) {
   return readdirSync(join(RACINE, arbre), { recursive: true })
     .map((nom) => join(arbre, nom))
-    .filter((chemin) => chemin.endsWith('.js') && !/\.test\.js$/.test(chemin) && chemin !== TABLE_DES_TEXTES)
+    .filter((chemin) => chemin.endsWith('.js') && !/\.test\.js$/.test(chemin) && horsDesTextes(chemin))
     .sort();
 }
 
@@ -156,6 +163,16 @@ describe('libellés : le balayage des codes (§ 14.6, § 14.2)', () => {
         assert.ok(!texte.includes('undefined'), `${code} / ${raison} : ${texte}`);
       }
     }
+  });
+
+  test("le balayage exclut l'assemblage et chaque table de libelles/, et garde les autres modules de l'application", () => {
+    const tables = readdirSync(join(RACINE, DOSSIER_DES_TABLES)).filter((nom) => nom.endsWith('.js'));
+    assert.ok(tables.length >= 10, `${DOSSIER_DES_TABLES} : ${tables.length} modules`);
+    const balayes = modulesDe('src/application');
+    assert.ok(balayes.length > 0, 'src/application : aucun module balayé');
+    const dossier = join('src', 'application', 'libelles');
+    assert.deepEqual(balayes.filter((chemin) => chemin === `${dossier}.js` || chemin.startsWith(dossier + sep)), []);
+    for (const garde of ['commandes.js', 'seance.js']) assert.ok(balayes.includes(join('src', 'application', garde)), garde);
   });
 
   test('chaque arbre émet des codes, et la table de contrat du stockage en porte', () => {
@@ -523,5 +540,72 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
     assert.equal(libelle('DERIVE', { ids: [], retenu: true }).startsWith('Le placement retenu ne décrit plus'), true);
     assert.match(libelle('DERIVE', { ids: [1, 2], retenu: true }), /^Le placement retenu et les propositions n° 1 et 2 ne décrivent plus/);
     assert.match(libelle('PROPOSITIONS_FAUTIVES', { ids: [3, null] }), /n° 3/);
+  });
+});
+
+// --- Les tables par domaine ---------------------------------------------------
+
+// Les deux formes de clé du contrat : un code, nu ; un libellé, préfixé du nom
+// de sa table, en camelCase.
+const FORME_CODE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/;
+const formeLibelle = (table) => new RegExp(`^${table}(?:\\.[a-z][A-Za-z0-9]*)+$`);
+
+// Les modules de table du dossier, aides et épreuves exceptées, par ordre
+// alphabétique, et ce que chacun exporte.
+async function tablesDuDossier() {
+  const noms = readdirSync(join(RACINE, DOSSIER_DES_TABLES))
+    .filter((nom) => nom.endsWith('.js') && !nom.endsWith('.test.js') && nom !== 'aides.js')
+    .sort();
+  return Promise.all(noms.map(async (nom) => ({ table: nom.slice(0, -3), module: await import(`./libelles/${nom}`) })));
+}
+
+describe('libellés : les tables par domaine (§ 14.6)', () => {
+  test('chaque module de libelles/, aides.js excepté, exporte TABLE, une Map ; TABLES_APPLICATION les assemble, dix, par ordre alphabétique', async () => {
+    const tables = await tablesDuDossier();
+    assert.equal(tables.length, 10);
+    assert.deepEqual(tables.map(({ table }) => table), [
+      'csv', 'evenements', 'format', 'generation', 'mobilier', 'moteur', 'participants', 'places', 'seance', 'stockage',
+    ]);
+    for (const { table, module } of tables) assert.ok(module.TABLE instanceof Map, table);
+    assert.equal(TABLES_APPLICATION.length, tables.length);
+    tables.forEach(({ table, module }, rang) => assert.equal(TABLES_APPLICATION[rang], module.TABLE, table));
+  });
+
+  test("chaque clé a l'une des deux formes ; un libellé commence par le nom de sa table ; participants et generation ne portent que des codes", async () => {
+    const tables = await tablesDuDossier();
+    let comptees = 0;
+    for (const { table, module } of tables) {
+      for (const cle of module.TABLE.keys()) {
+        comptees += 1;
+        const code = FORME_CODE.test(cle);
+        assert.ok(code || formeLibelle(table).test(cle), `${table} : clé ${JSON.stringify(cle)}`);
+        if (table === 'participants' || table === 'generation') assert.ok(code, `${table} : ${cle} n'est pas un code`);
+      }
+    }
+    assert.ok(comptees >= CODES.length, `${comptees} clés`);
+  });
+
+  test("chaque texte d'A1 est dans la table du domaine qui l'émet", async () => {
+    const parTable = new Map((await tablesDuDossier()).map(({ table, module }) => [table, module.TABLE]));
+    const ATTENDUS = [
+      ['stockage', ['ABSENT', 'VERROU_PRIS', 'LECTURE_SEULE', 'DERIVE', 'RELECTURE_DIFFERENTE', 'COMPTEUR_SATURE']],
+      ['csv', ['NOM_ABSENT', 'UTF8_INVALIDE', 'ENREGISTRER_EN_UTF8', 'PLAN_BLOQUE', 'AMBIGUITE']],
+      ['seance', ['MODE_LECTURE', 'SUPPORT_ROMPU', 'SANS_EFFET', 'ENTREE_DEFAIRE', 'JALON_CREATION']],
+      ['participants', ['NOM_REQUIS', 'PARTICIPANT_INCONNU', 'RESERVATIONS_SUSPENDUES', 'IMPORT_EN_RETENU', 'ENTREE_AJOUTER_PARTICIPANT']],
+      ['evenements', ['ENTREE_CREATION', 'DATE_INVALIDE', 'AUCUN_RETENU', 'PLAN_NON_BLOQUE', 'ENTREE_DEBLOQUER']],
+      ['generation', ['PROPOSITION_INCONNUE', 'ENTREE_ENREGISTRER_GENERATION', 'ENTREE_EFFACER_PROPOSITIONS']],
+      ['format', ['format.vide', 'format.duree.vingtMinutes']],
+    ];
+    assert.equal(ATTENDUS.length, 7);
+    for (const [table, cles] of ATTENDUS) for (const cle of cles) assert.ok(parTable.get(table).has(cle), `${cle} hors de ${table}.js`);
+  });
+
+  test("CODES ne compte que les clés de forme code ; libelle lit aussi un libellé de l'application", () => {
+    assert.ok(CODES.length > 0);
+    assert.deepEqual(CODES.filter((cle) => !FORME_CODE.test(cle)), []);
+    assert.ok(!CODES.includes('format.vide'));
+    assert.equal(libelle('format.vide'), '\u{2014}');
+    const toutes = TABLES_APPLICATION.flatMap((table) => [...table.keys()]).filter((cle) => FORME_CODE.test(cle));
+    assert.deepEqual([...CODES], [...toutes].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
   });
 });

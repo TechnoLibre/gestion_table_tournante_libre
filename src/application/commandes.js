@@ -30,28 +30,15 @@ import { serialiserCharge } from '../stockage/canonique.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { fautes, formeNommee, versFichier } from '../stockage/placements.js';
+import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
+import { COMMANDES_PLACES } from './commandes_places.js';
+import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
+import { nomAffiche } from './personnes.js';
 
-/**
- * Le refus d'une commande : son code, et des détails que l'appelant lit pour
- * agir, remede compris. Le message, code et détails en JSON, sert aux traces ;
- * le texte affiché vient de la table des libellés (§ 14.6).
- */
-export class ErreurCommande extends Error {
-  /**
-   * @param {string} code
-   * @param {Object} [details]
-   */
-  constructor(code, details = {}) {
-    super(`${code} ${JSON.stringify(details)}`);
-    this.code = code;
-    this.details = details;
-  }
-}
-ErreurCommande.prototype.name = 'ErreurCommande';
-
-// Le refus de code donné : ses détails, puis le remède, null sans lui.
-const refus = (code, details = {}, remede = null) => new ErreurCommande(code, { ...details, remede });
+// Le refus d'une commande vit dans erreurs.js, le nom affiché d'une personne
+// dans personnes.js : les importateurs de ce module les y trouvent encore.
+export { ErreurCommande, nomAffiche };
 
 // Un avertissement : il n'empêche rien.
 const avertissement = (code, details) => ({ code, details });
@@ -120,9 +107,6 @@ function participantDe(charge, id) {
   return participant;
 }
 
-// Le nom d'une personne tel que les libellés l'écrivent : prénom, puis nom.
-const personneDe = ({ nom, prenom }) => (prenom === null ? nom : `${prenom} ${nom}`);
-
 // Un plan bloqué refuse toute modification ; débloquer seul le lève (§ 9).
 function exigerModifiable(charge) {
   if (charge.evenement.etat === 'bloque') throw refus('PLAN_BLOQUE', {}, { geste: 'debloquer' });
@@ -171,7 +155,7 @@ function ajouterParticipant(charge, { champs }) {
   suivante.prochainsIds.participant = id + 1;
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_AJOUTER_PARTICIPANT', { personne: personneDe(participant) }),
+    libelle: libelle('ENTREE_AJOUTER_PARTICIPANT', { personne: nomAffiche(participant) }),
     avertissements: [],
   };
 }
@@ -192,9 +176,9 @@ function modifierParticipant(charge, { id, champs }) {
   return {
     charge: avecParticipant(charge, id, () => apres),
     libelle: libelle('ENTREE_MODIFIER_PARTICIPANT', {
-      personne: personneDe(avant),
+      personne: nomAffiche(avant),
       champs: changes,
-      devenu: renomme ? personneDe(apres) : null,
+      devenu: renomme ? nomAffiche(apres) : null,
     }),
     avertissements: [],
   };
@@ -206,7 +190,7 @@ function modifierParticipant(charge, { id, champs }) {
 function bilanExclusion(avant, apres, participant) {
   const reservations = avant.reservations.filter((reservation) => reservation.participant === participant.id).length;
   const titres = Math.abs(titresPourvus(avant) - titresPourvus(apres));
-  return { participant: participant.id, personne: personneDe(participant), reservations, titres };
+  return { participant: participant.id, personne: nomAffiche(participant), reservations, titres };
 }
 
 /**
@@ -255,7 +239,7 @@ function supprimerParticipant(charge, { id }) {
   const reservations = charge.reservations.length - suivante.reservations.length;
   const details = {
     participant: id,
-    personne: personneDe(participant),
+    personne: nomAffiche(participant),
     reservations,
     titres: titresPourvus(charge) - titresPourvus(suivante),
   };
@@ -424,27 +408,51 @@ function effacerPropositions(charge) {
 }
 
 /**
+ * Un registre réuni de plusieurs : chaque nom une fois, dans l'ordre des
+ * registres reçus, puis de chacun.
+ *
+ * @param {...Map<string, Function>} registres
+ * @returns {Map<string, Function>}
+ * @throws {RangeError} un nom porté par deux registres, qu'il nomme
+ */
+export function reunirCommandes(...registres) {
+  const reunies = new Map();
+  for (const registre of registres) {
+    for (const [nom, commande] of registre) {
+      if (reunies.has(nom)) throw new RangeError(`commandes : ${JSON.stringify(nom)} est dans deux registres`);
+      reunies.set(nom, commande);
+    }
+  }
+  return reunies;
+}
+
+/**
  * Le registre des commandes, par nom : chacune (charge, arguments) →
  * { charge, libelle, avertissements }, et importerParticipants y ajoute le
- * résumé de l'import.
+ * résumé de l'import. Il réunit les commandes de ce module, celles du
+ * mobilier et celles des places.
  *
  * @typedef {{code: string, details: Object}} Avertissement
  * @typedef {{charge: Object, libelle: string, avertissements: Avertissement[]}} Rendu
  * @type {Map<string, (charge: Object, args: Object) => Rendu>}
  */
-export const COMMANDES = new Map([
-  ['ajouterParticipant', ajouterParticipant],
-  ['modifierParticipant', modifierParticipant],
-  ['exclureParticipant', exclureParticipant],
-  ['reintegrerParticipant', reintegrerParticipant],
-  ['supprimerParticipant', supprimerParticipant],
-  ['importerParticipants', importerParticipants],
-  ['changerEtat', changerEtat],
-  ['debloquer', debloquer],
-  ['enregistrerGeneration', enregistrerGeneration],
-  ['retenirProposition', retenirProposition],
-  ['effacerPropositions', effacerPropositions],
-]);
+export const COMMANDES = reunirCommandes(
+  new Map([
+    ['ajouterParticipant', ajouterParticipant],
+    ['modifierParticipant', modifierParticipant],
+    ['exclureParticipant', exclureParticipant],
+    ['reintegrerParticipant', reintegrerParticipant],
+    ['supprimerParticipant', supprimerParticipant],
+    ['importerParticipants', importerParticipants],
+    ['changerEtat', changerEtat],
+    ['debloquer', debloquer],
+    ['enregistrerGeneration', enregistrerGeneration],
+    ['retenirProposition', retenirProposition],
+    ['effacerPropositions', effacerPropositions],
+  ]),
+  COMMANDES_MOBILIER,
+  COMMANDES_PLACES,
+);
 
 /**
  * Applique la commande nom à la charge : ce qu'elle rend, avertissements []

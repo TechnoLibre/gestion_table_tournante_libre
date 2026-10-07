@@ -14,7 +14,12 @@ import { rechercher } from '../moteur/recherche.js';
 import { configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { derive, fautes, formeNommee, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
-import { COMMANDES, ErreurCommande, appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
+import { readFileSync } from 'node:fs';
+import { chargements } from '../../test/chargements.js';
+import { COMMANDES, ErreurCommande, appliquerCommande, chargeNeuve, formeNommeeDe, reunirCommandes } from './commandes.js';
+import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
+import { COMMANDES_PLACES } from './commandes_places.js';
+import { ErreurCommande as ErreurDesErreurs, refus } from './erreurs.js';
 
 const V1 = VERSION.affichee;
 
@@ -600,6 +605,64 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
     for (const nom of COMMANDES.keys()) {
       if (nom === 'debloquer') continue;
       refuse(() => executer(nom, bloquee, args.get(nom)), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+    }
+  });
+});
+
+describe('commandes : les registres réunis et les erreurs partagées', () => {
+  test("reunirCommandes réunit des registres ; un nom de deux registres lève et le nomme", () => {
+    const premiere = () => null;
+    const seconde = () => null;
+    const reunies = reunirCommandes(new Map([['essaiUn', premiere]]), new Map([['essaiDeux', seconde]]));
+    assert.ok(reunies instanceof Map);
+    assert.deepEqual([...reunies.keys()], ['essaiUn', 'essaiDeux']);
+    assert.equal(reunies.get('essaiDeux'), seconde);
+    assert.throws(
+      () => reunirCommandes(new Map([['essaiPartage', premiere]]), new Map([['essaiPartage', seconde]])),
+      (erreur) => {
+        assert.match(erreur.message, /essaiPartage/);
+        return true;
+      },
+    );
+  });
+
+  test("COMMANDES réunit les onze commandes d'A1 et les deux registres de F1, vides tant que leurs tâches ne les remplissent pas", () => {
+    assert.equal(COMMANDES.size, 11 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size);
+    assert.ok(COMMANDES_MOBILIER instanceof Map);
+    assert.ok(COMMANDES_PLACES instanceof Map);
+    for (const registre of [COMMANDES_MOBILIER, COMMANDES_PLACES]) {
+      for (const [nom, commande] of registre) assert.equal(COMMANDES.get(nom), commande, nom);
+    }
+  });
+
+  test("ErreurCommande importée de commandes.js est celle d'erreurs.js ; refus pose details.remede", () => {
+    assert.equal(ErreurCommande, ErreurDesErreurs);
+    const sans = refus('NOM_REQUIS');
+    assert.ok(sans instanceof ErreurCommande);
+    assert.equal(sans.name, 'ErreurCommande');
+    assert.equal(sans.code, 'NOM_REQUIS');
+    assert.deepEqual(sans.details, { remede: null });
+    const avec = refus('PLAN_BLOQUE', { table: 2 }, { geste: 'debloquer' });
+    assert.deepEqual(avec.details, { table: 2, remede: { geste: 'debloquer' } });
+    refuse(() => executer('debloquer', chargeEssai(), {}), 'PLAN_NON_BLOQUE');
+  });
+
+  test("ni commandes_mobilier.js ni commandes_places.js n'atteignent commandes.js par leurs imports, à toute profondeur", () => {
+    const cible = new URL('./commandes.js', import.meta.url).href;
+    for (const depart of ['./commandes_mobilier.js', './commandes_places.js']) {
+      const vus = new Set();
+      const aVoir = [new URL(depart, import.meta.url).href];
+      while (aVoir.length > 0) {
+        const adresse = aVoir.pop();
+        if (vus.has(adresse)) continue;
+        vus.add(adresse);
+        for (const { specificateur, argument } of chargements(readFileSync(new URL(adresse), 'utf8'))) {
+          assert.equal(argument, undefined, `${adresse} : chargement calculé`);
+          if (specificateur.startsWith('.')) aVoir.push(new URL(specificateur, adresse).href);
+        }
+      }
+      assert.ok(vus.size >= 1, `${depart} : aucun module parcouru`);
+      assert.ok(!vus.has(cible), `${depart} atteint commandes.js`);
     }
   });
 });
