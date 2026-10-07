@@ -11,7 +11,10 @@
 import assert from 'node:assert/strict';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
-import { caseLibre } from '../geometrie/tables.js';
+import { texteLivre } from '../demo/livrees.js';
+import { constante } from '../geometrie/constantes.js';
+import { caseLibre, geometrieTable } from '../geometrie/tables.js';
+import { TAILLE_TEXTE_LISTE_CM } from '../geometrie/texte.js';
 import { STATUT, nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { serialiser } from '../stockage/canonique.js';
@@ -118,6 +121,45 @@ function seNormalise(charge) {
   }
 }
 
+// Hauteur de ligne d'une liste que suppose l'épreuve des bandes : 1,25 corps,
+// au-dessus de la hauteur d'encre du gabarit sur les polices courantes ; le
+// dessin la mesure au navigateur.
+const HAUTEUR_LIGNE_SUPPOSEE = 1.25 * TAILLE_TEXTE_LISTE_CM;
+
+// Les fautes « une liste passe sur une autre table » d'une charge : pour
+// chaque paire ordonnée de tables, la bande du bloc de noms de la première —
+// LARGEUR_BLOC_NOMS_CM de large depuis origineListe, capacité + 1 lignes de
+// haut, en-tête d'une table gelée compris — recoupe le carré d'emprise de la
+// seconde, bords exclus. Avec avec, seules les paires où figure la table
+// d'identifiant avec sont examinées. Rend les fautes et le nombre de paires
+// examinées.
+function fautesBandes(charge, { avec = null } = {}) {
+  const largeur = constante('LARGEUR_BLOC_NOMS_CM');
+  const geometries = charge.tables.map((table) => ({ g: geometrieTable(table, capacite(charge, table)), places: capacite(charge, table) }));
+  const fautes = [];
+  let paires = 0;
+  for (const { g, places } of geometries) {
+    const bande = {
+      gauche: g.origineListe.x,
+      droite: g.origineListe.x + largeur,
+      haut: g.origineListe.y,
+      bas: g.origineListe.y + (places + 1) * HAUTEUR_LIGNE_SUPPOSEE,
+    };
+    for (const { g: autre } of geometries) {
+      if (autre === g || (avec !== null && g.id !== avec && autre.id !== avec)) continue;
+      paires += 1;
+      const e = autre.rayonEmprise;
+      const recoupe =
+        autre.centre.x + e > bande.gauche &&
+        autre.centre.x - e < bande.droite &&
+        autre.centre.y + e > bande.haut &&
+        autre.centre.y - e < bande.bas;
+      if (recoupe) fautes.push(`bloc de la table ${g.id} (${g.centre.x}, ${g.centre.y}) sur la table ${autre.id} (${autre.centre.x}, ${autre.centre.y})`);
+    }
+  }
+  return { fautes, paires };
+}
+
 // Une commande acceptée, sur une copie gelée de la charge : la charge rendue
 // se relit, et se normalise quand la charge reçue se normalisait.
 function accepter(nom, charge, args) {
@@ -222,6 +264,56 @@ describe('mobilier : le registre (§ 8.2)', () => {
 });
 
 describe('mobilier : créer, déplacer et supprimer une table (§ 4, § 6.1, § 9)', () => {
+  test('une table créée se pose sur la grille des démonstrations : le pas tient compte des emprises et du bloc de noms, aucune liste ne passe sur une autre table', () => {
+    let charge = chargeDe();
+    for (let i = 0; i < 5; i += 1) charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
+    // Rondes de 8 : colonnes à 813 cm, rangées à 300 (ecartsGrille).
+    assert.deepEqual(
+      charge.tables.map(({ position }) => [position.x, position.y]),
+      [[0, 0], [813, 0], [0, 300], [813, 300], [1626, 0]],
+    );
+    // La bande du bloc de noms de chaque table, de toute sa largeur, ne
+    // recoupe l'emprise d'aucune autre.
+    assert.deepEqual(fautesBandes(charge), { fautes: [], paires: 5 * 4 });
+    // Une table passée à 16 places : le pas devient 966 × 430 ; toute case
+    // à moins d'un pas d'une table posée, sur les deux axes, est prise, la
+    // suivante est (1932, 430) : la table créée ne porte sa liste sur aucune
+    // table, et aucune liste ne passe sur elle. La table 5 agrandie reçoit
+    // la liste de sa voisine, ce que la création ne change pas.
+    charge = accepter('changerPlacesTable', charge, { id: 5, sieges: 16, origine: 'champ' }).charge;
+    charge = accepter('creerTable', charge, { forme: 'carree' }).charge;
+    assert.deepEqual(charge.tables.at(-1).position, { x: 1932, y: 430 });
+    assert.deepEqual(fautesBandes(charge, { avec: charge.tables.at(-1).id }), { fautes: [], paires: 2 * 5 });
+  });
+
+  test('dans la grande démonstration, la table 1 passée à 16 places : la table créée au pas 966 × 430 évite toute liste, (2898, 1720)', () => {
+    // La case (4830, 0) est à 765 cm de la table (4065, 0), dont la liste,
+    // de 4221,4 à 4721,4, couvrirait la table nouvelle, de 4709,6 à 4950,4 :
+    // elle est prise, comme toute case à moins d'un pas d'une table posée.
+    // La rangée 1720 est à 220 cm de la dernière rangée, de trois tables en
+    // 0, 813 et 1626 : la case (2898, 1720) est la première libre. Seules
+    // les paires où figure la table créée sont examinées : la table 1
+    // agrandie porte sa liste sur sa voisine, ce que la création ne change
+    // pas.
+    let charge = analyser(texteLivre('grande')).charge;
+    const premiere = charge.tables.find(({ numero }) => numero === 1);
+    assert.deepEqual(premiere.position, { x: 0, y: 0 });
+    charge = accepter('changerPlacesTable', charge, { id: premiere.id, sieges: 16, origine: 'champ' }).charge;
+    charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
+    assert.deepEqual(charge.tables.at(-1).position, { x: 2898, y: 1720 });
+    const creee = charge.tables.at(-1).id;
+    assert.deepEqual(fautesBandes(charge, { avec: creee }), { fautes: [], paires: 2 * 33 });
+  });
+
+  test('créée dans la grande démonstration, une table se pose sur la case suivante de sa grille, (2439, 1500)', () => {
+    // 33 rondes de 8 sur six colonnes à 813 cm et des rangées à 300 cm ; la
+    // trente-quatrième case, rang 33, est la colonne 3 de la rangée 5.
+    const grande = analyser(texteLivre('grande')).charge;
+    assert.equal(grande.tables.length, 33);
+    const { charge } = accepter('creerTable', grande, { forme: 'ronde' });
+    assert.deepEqual(charge.tables.at(-1).position, { x: 2439, y: 1500 });
+  });
+
   test("les identifiants ne se réutilisent jamais ; le numéro suit le plus grand, et le libellé nomme le numéro", () => {
     let charge = chargeDe();
     for (let i = 0; i < 3; i += 1) charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
@@ -234,7 +326,10 @@ describe('mobilier : créer, déplacer et supprimer une table (§ 4, § 6.1, § 
       numero: 3,
       sieges: null,
       forme: 'carree',
-      position: caseLibre(charge.tables.map(({ position }) => position)),
+      position: caseLibre(
+        charge.tables.map((table) => ({ position: table.position, forme: table.forme, places: capacite(charge, table) })),
+        { forme: 'carree', places: charge.evenement.siegesParDefaut },
+      ),
     });
     assert.equal(cree.charge.prochainsIds.table, 5);
     const deplace = accepter('deplacerTable', cree.charge, { id: 4, position: { x: 612.4, y: -0.4 } });
@@ -270,6 +365,20 @@ describe('mobilier : créer, déplacer et supprimer une table (§ 4, § 6.1, § 
     const huit = accepter('creerTable', chargeDe(), { forme: 'ronde' }).charge;
     const dix = accepter('changerDefaut', huit, { sieges: 10, realigner: false }).charge;
     assert.equal(capacite(dix, dix.tables[0]), 10);
+  });
+
+  test('une table créée se pose au pas de sa propre capacité, le défaut : sous un défaut de 16, à côté d’une ronde de 8, en (966, 0) et non en (813, 0)', () => {
+    // Une ronde de 8 posée en (0, 0) : la grille a deux colonnes, et la case
+    // (0, 0) est prise. Le pas se calcule sur la plus grande emprise, celle
+    // de la table nouvelle à 16 places : 966 cm entre colonnes, là où deux
+    // rondes de 8 n'en demandent que 813.
+    const charge = chargeDe({ tables: [{ id: 1, sieges: 8 }], defaut: 16 });
+    charge.tables[0].position = { x: 0, y: 0 };
+    const { charge: apres } = accepter('creerTable', charge, { forme: 'ronde' });
+    const creee = apres.tables.at(-1);
+    assert.equal(capacite(apres, creee), 16);
+    assert.deepEqual(creee.position, { x: 966, y: 0 });
+    assert.deepEqual(fautesBandes(apres), { fautes: [], paires: 2 });
   });
 
   test('une table créée après la retenue entre au retenu, vide à chaque tour ; les propositions dérivent TABLE_AJOUTEE', () => {

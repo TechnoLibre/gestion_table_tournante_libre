@@ -33,6 +33,8 @@
   //
   // diagnostic : celui que rend diagnostiquer, que SectionPlan passe, ou
   // null — le bandeau ne porte alors que la phrase des conflits (§ 7.5).
+  // etatTour : l'état des places du tour affiché (EtatPlaces, A5), que
+  // SectionPlan calcule pour le plan et les panneaux.
   //
   // Les gestes du pointeur (§ 7.1, § 7.3, § 8.4) passent par un seul
   // écouteur de chaque type, sur la racine : pointerdown identifie la source
@@ -86,7 +88,6 @@
   // suivant.
   import { getContext, tick, untrack } from 'svelte';
   import { controlerCapacite } from '../../application/capacite.js';
-  import { etatPlaces } from '../../application/places.js';
   import { constante } from '../../geometrie/constantes.js';
   import { ajuster as vueAjustee, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
   import BandeauPlan from './BandeauPlan.svelte';
@@ -104,14 +105,13 @@
     cadreDepuisRect,
     englobantDuTour,
     nomDeCharge,
-    tourAffiche,
     vueApresCadre,
     vueInitiale,
     zoomerBouton,
     zoomerMolette,
   } from './vue_plan.js';
 
-  let { diagnostic = null } = $props();
+  let { diagnostic = null, etatTour } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -148,12 +148,15 @@
 
   const charge = $derived($seance.charge);
   const tours = $derived(charge.evenement.tours);
-  const tour = $derived(tourAffiche($ui.tour, tours));
-  const etat = $derived(etatPlaces(charge, { tour, proposition: $ui.proposition }));
+  const etat = $derived(etatTour);
+  const tour = $derived(etat.tour);
   const englobantPlan = $derived(englobantDuTour(etat));
   const nomDe = $derived(nomDeCharge(charge));
   const selection = $derived($ui.selection);
   const pose = $derived($ui.pose);
+  // La personne mise en évidence, que la barre de vue nomme : {id, nom}, nom
+  // null pour une personne que la charge n'a plus ; null sans mise en évidence.
+  const evidence = $derived($ui.miseEnEvidence === null ? null : { id: $ui.miseEnEvidence, nom: nomDe($ui.miseEnEvidence) ?? null });
   // L'élément actif que le dessin marque : sous un focus venu du clavier.
   const actifMontre = $derived(aLeFocus && auClavier ? actif : null);
   const modele = $derived(
@@ -693,7 +696,7 @@
 </script>
 
 <div class="plan">
-  <BarreVue {tour} {tours} {zoomer} {ajuster} />
+  <BarreVue {tour} {tours} {zoomer} {ajuster} {evidence} />
   <div class="surface" data-surface bind:this={surface}>
     <BandeauPlan bandeau={modele === null ? [] : modele.bandeau} />
     <!-- Le plan est un composant interactif à deux dimensions, que le

@@ -21,6 +21,9 @@
   // lieu, avec son remède : celui de la séance, lu dans etat().refus avant
   // d'ouvrir l'édition, ou celui de la commande, la saisie gardée.
   //
+  // « Voir sur le plan » met la personne en évidence et ouvre le plan, au
+  // tour montré (§ 7.1, § 8.4) : un geste de regard, qui n'écrit rien.
+  //
   // L'en-tête trie : un clic sur une colonne la trie croissante, un second
   // décroissante ; le sens se lit en texte et dans aria-sort. Un collage sur
   // la grille, hors d'une cellule en édition, ouvre l'aperçu d'import (§
@@ -38,6 +41,11 @@
   const t = getContext('t');
   const seance = getContext('seance');
   const ui = getContext('ui');
+
+  function voirSurLePlan(id) {
+    ui.mettreEnEvidence(id);
+    ui.allerA('plan');
+  }
   const uid = $props.id();
   const geste = creerGeste(seance);
 
@@ -326,6 +334,9 @@
             <div class="commandes">
             <button type="button" data-commande="fiche" onclick={() => ui.ouvrirFiche(personne.id)}>
               {t('participants.commande.fiche')}
+            </button>
+            <button type="button" data-commande="voirSurLePlan" onclick={() => voirSurLePlan(personne.id)}>
+              {t('plan.evidence.voir')}
             </button>
             {#if personne.exclu}
               <Commande

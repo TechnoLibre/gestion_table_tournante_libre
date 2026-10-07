@@ -8,18 +8,21 @@
 // attendues se calculent à la main dans le commentaire qui les précède.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
+import { constante } from './constantes.js';
 import { surLeSol } from './designation.js';
+import { TAILLE_TEXTE_LISTE_CM } from './texte.js';
 import {
   ECART_LISTE,
   ECART_POIGNEE,
+  ECART_RANGEES,
   LARGEUR_PAR_PLACE,
-  PAS_GRILLE,
   PLANCHER_DIAMETRE,
   RAYON_CHAISE,
   RAYON_POIGNEE,
   caseLibre,
   cote,
   diametre,
+  ecartsGrille,
   englobant,
   geometrieTable,
   placesSousPoignee,
@@ -42,6 +45,48 @@ const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 // Une table du fichier d'état : identifiant, numéro, forme et centre.
 const table = (id, forme, x, y) => ({ id, numero: id, sieges: null, forme, position: { x, y } });
 
+// Hauteur de ligne d'une liste que suppose l'épreuve des bandes : 1,25 corps,
+// au-dessus de la hauteur d'encre du gabarit sur les polices courantes. Le
+// dessin la mesure au navigateur ; le module de géométrie ne la connaît pas.
+const HAUTEUR_LIGNE_SUPPOSEE = 1.25 * TAILLE_TEXTE_LISTE_CM;
+
+// Les fautes « une liste passe sur une autre table » d'un ensemble de tables
+// posées {position, forme, places} : pour chaque paire ordonnée, la bande du
+// bloc de noms de la première — LARGEUR_BLOC_NOMS_CM de large depuis
+// origineListe, places + 1 lignes de haut, en-tête d'une table gelée
+// compris — recoupe le carré d'emprise de la seconde, bords exclus. Avec
+// avec, seules les paires où figure la table de ce rang, compté depuis 1,
+// sont examinées. Rend les fautes et le nombre de paires examinées.
+function fautesBandes(posees, { avec = null } = {}) {
+  const largeur = constante('LARGEUR_BLOC_NOMS_CM');
+  const geometries = posees.map(({ position, forme, places }, rang) => ({
+    g: geometrieTable(table(rang + 1, forme, position.x, position.y), places),
+    places,
+  }));
+  const fautes = [];
+  let paires = 0;
+  for (const { g, places } of geometries) {
+    const bande = {
+      gauche: g.origineListe.x,
+      droite: g.origineListe.x + largeur,
+      haut: g.origineListe.y,
+      bas: g.origineListe.y + (places + 1) * HAUTEUR_LIGNE_SUPPOSEE,
+    };
+    for (const { g: autre } of geometries) {
+      if (autre === g || (avec !== null && g.id !== avec && autre.id !== avec)) continue;
+      paires += 1;
+      const e = autre.rayonEmprise;
+      const recoupe =
+        autre.centre.x + e > bande.gauche &&
+        autre.centre.x - e < bande.droite &&
+        autre.centre.y + e > bande.haut &&
+        autre.centre.y - e < bande.bas;
+      if (recoupe) fautes.push(`bloc de la table ${g.id} (${g.centre.x}, ${g.centre.y}) sur la table ${autre.id} (${autre.centre.x}, ${autre.centre.y})`);
+    }
+  }
+  return { fautes, paires };
+}
+
 describe('constantes', () => {
   test('les valeurs du contrat', () => {
     assert.equal(PLANCHER_DIAMETRE, 70);
@@ -50,7 +95,7 @@ describe('constantes', () => {
     assert.equal(RAYON_POIGNEE, 15);
     assert.equal(ECART_POIGNEE, 8);
     assert.equal(ECART_LISTE, 36);
-    assert.equal(PAS_GRILLE, 300);
+    assert.equal(ECART_RANGEES, 300);
   });
 });
 
@@ -289,27 +334,105 @@ describe('englobant', () => {
   });
 });
 
-describe('caseLibre', () => {
-  test('sans table, l’origine', () => {
-    assert.deepEqual(caseLibre([]), { x: 0, y: 0 });
+describe('ecartsGrille : le pas d\u{2019}une grille de tables (§ 7.4, § 7.7)', () => {
+  // colonnes = ⌈2 × emprise + 2 × ECART_LISTE + LARGEUR_BLOC_NOMS_CM⌉ ;
+  // rangées = max(ECART_RANGEES, ⌈2 × emprise + ECART_LISTE⌉), l'emprise la
+  // plus grande des tables données. LARGEUR_BLOC_NOMS_CM vaut 500.
+  test('la largeur du bloc de noms est celle du registre', () => {
+    assert.equal(constante('LARGEUR_BLOC_NOMS_CM'), 500);
   });
 
-  test('deux centres en (0, 0) et (300, 0) : deux colonnes, la case suivante est (0, 300)', () => {
-    assert.deepEqual(caseLibre([{ x: 0, y: 0 }, { x: 300, y: 0 }]), { x: 0, y: 300 });
+  test('ronde de 3 : emprise 79, colonnes 158 + 72 + 500 = 730, rangées 300', () => {
+    assert.deepEqual(ecartsGrille([{ forme: 'ronde', places: 3 }]), { colonnes: 730, rangees: 300 });
   });
 
-  test('un centre en (150, 0) prend les deux premières cases', () => {
-    assert.deepEqual(caseLibre([{ x: 150, y: 0 }]), { x: 0, y: 300 });
+  test('ronde de 8 : emprise 120,39, colonnes ⌈812,79⌉ = 813, rangées 300', () => {
+    // 2 × 120,3944 + 72 + 500 = 812,789 → 813 ; 2 × 120,3944 + 36 = 276,8 → 300.
+    assert.deepEqual(ecartsGrille([{ forme: 'ronde', places: 8 }]), { colonnes: 813, rangees: 300 });
   });
 
-  test('un centre à plus de PAS_GRILLE / 2 laisse la case libre', () => {
-    assert.deepEqual(caseLibre([{ x: 150.001, y: 0 }]), { x: 0, y: 0 });
+  test('carrée de 8 : côté 120, emprise 104, colonnes 780, rangées 300', () => {
+    assert.deepEqual(ecartsGrille([{ forme: 'carree', places: 8 }]), { colonnes: 780, rangees: 300 });
   });
 
-  test('quatre centres sur 2 × 2 : trois colonnes, la case suivante est (600, 0)', () => {
-    const centres = [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 0, y: 300 }, { x: 300, y: 300 }];
-    assert.deepEqual(caseLibre(centres.slice(0, 3)), { x: 300, y: 300 });
-    assert.deepEqual(caseLibre(centres), { x: 600, y: 0 });
+  test('la plus grande emprise décide : une ronde de 16 parmi des rondes de 8 → colonnes 966, rangées 430', () => {
+    // diamètre 16 × 60 / π = 305,577 ; emprise 152,789 + 44 = 196,789 ;
+    // 393,578 + 572 = 965,578 → 966 ; 393,578 + 36 = 429,578 → 430.
+    const tables = [{ forme: 'ronde', places: 8 }, { forme: 'ronde', places: 16 }, { forme: 'carree', places: 8 }];
+    assert.deepEqual(ecartsGrille(tables), { colonnes: 966, rangees: 430 });
+  });
+});
+
+describe('caseLibre : la place d\u{2019}une table créée, sur la grille des démonstrations', () => {
+  const huit = { forme: 'ronde', places: 8 };
+  const posee = (x, y, autres = huit) => ({ position: { x, y }, ...autres });
+
+  test('sans table, l\u{2019}origine', () => {
+    assert.deepEqual(caseLibre([], huit), { x: 0, y: 0 });
+  });
+
+  test('deux rondes de 8 en (0, 0) et (813, 0) : deux colonnes, la case suivante est (0, 300)', () => {
+    assert.deepEqual(caseLibre([posee(0, 0), posee(813, 0)], huit), { x: 0, y: 300 });
+  });
+
+  test('un centre à moins d\u{2019}un pas de colonne, (406,6 ; 0) ou (812,9 ; 0), prend les deux premières cases ; à 813, la première est libre', () => {
+    // À 406,6 de (0, 0), le bloc de la table nouvelle, de 156,4 à 656,4,
+    // couvrirait l'emprise posée, de 286,2 à 527 : la case est refusée.
+    assert.deepEqual(caseLibre([posee(406.6, 0)], huit), { x: 0, y: 300 });
+    assert.deepEqual(caseLibre([posee(812.9, 0)], huit), { x: 0, y: 300 });
+    assert.deepEqual(caseLibre([posee(813, 0)], huit), { x: 0, y: 0 });
+  });
+
+  test('un centre à moins d\u{2019}un pas de rangée, (0 ; 150,1) ou (0 ; 299,9), prend la case (0, 0) ; à 300, elle est libre', () => {
+    assert.deepEqual(caseLibre([posee(0, 150.1)], huit), { x: 813, y: 0 });
+    assert.deepEqual(caseLibre([posee(0, 299.9)], huit), { x: 813, y: 0 });
+    assert.deepEqual(caseLibre([posee(0, 300)], huit), { x: 0, y: 0 });
+  });
+
+  test('une table déplacée en (330, 0) prend aussi (813, 0) : la case suivante est (0, 300), et aucun bloc ne passe sur l\u{2019}autre table', () => {
+    // En (813, 0), à 483 cm, la liste de la table déplacée, de 486,4 à
+    // 986,4, couvrirait la table nouvelle, de 692,6 à 933,4.
+    const posees = [posee(330, 0)];
+    const position = caseLibre(posees, huit);
+    assert.deepEqual(position, { x: 0, y: 300 });
+    assert.deepEqual(fautesBandes([...posees, posee(position.x, position.y)]), { fautes: [], paires: 2 });
+  });
+
+  test('l\u{2019}épreuve des bandes voit la faute : une ronde de 8 en (330, 0) et une autre en (813, 0)', () => {
+    assert.equal(fautesBandes([posee(330, 0), posee(813, 0)]).fautes.length, 1);
+  });
+
+  test('une ronde de 8 agrandie à 16 au milieu de rondes de 8 : la table créée au nouveau pas ne porte ni ne subit aucune liste', () => {
+    // Vingt rondes de 8 sur cinq colonnes au pas 813 × 300, la première
+    // passée à 16 places : le pas devient 966 × 430, sur cinq colonnes. La
+    // case (3864, 0) est à 612 cm de la table (3252, 0), dont la liste, de
+    // 3408,4 à 3908,4, couvrirait la table nouvelle, de 3743,6 à 3984,4 :
+    // elle est prise, comme toute case à moins d'un pas d'une table posée,
+    // jusqu'à la rangée 1720, à 820 cm de la dernière. Seules les paires où
+    // figure la table nouvelle sont examinées : la table agrandie porte sa
+    // liste sur ses voisines, ce que la création ne change pas.
+    const posees = Array.from({ length: 20 }, (_, rang) => posee((rang % 5) * 813, Math.floor(rang / 5) * 300));
+    posees[0] = posee(0, 0, { forme: 'ronde', places: 16 });
+    const position = caseLibre(posees, huit);
+    assert.deepEqual(position, { x: 0, y: 1720 });
+    assert.deepEqual(fautesBandes([...posees, posee(position.x, position.y)], { avec: 21 }), { fautes: [], paires: 2 * 20 });
+  });
+
+  test('le pas suit la table à créer et les tables posées : une ronde de 16 posée écarte la case suivante à 966', () => {
+    assert.deepEqual(caseLibre([posee(0, 0, { forme: 'ronde', places: 16 })], huit), { x: 966, y: 0 });
+    assert.deepEqual(caseLibre([posee(0, 0)], { forme: 'ronde', places: 16 }), { x: 966, y: 0 });
+  });
+
+  test('trente-trois rondes de 8 créées une à une : les cases de la grille des démonstrations, et aucun bloc de noms ne passe sur une autre table', () => {
+    const posees = [];
+    for (let n = 0; n < 33; n += 1) posees.push(posee(...Object.values(caseLibre(posees, huit))));
+    assert.equal(posees.length, 33);
+    assert.equal(new Set(posees.map(({ position: { x, y } }) => `${x},${y}`)).size, 33);
+    for (const { position } of posees) {
+      assert.equal(position.x % 813, 0, `x ${position.x}`);
+      assert.equal(position.y % 300, 0, `y ${position.y}`);
+    }
+    assert.deepEqual(fautesBandes(posees), { fautes: [], paires: 33 * 32 });
   });
 });
 

@@ -156,7 +156,15 @@ export const TABLE = new Map([
   ['plan.menu.deplacerReservation', 'Déplacer sa réservation'],
   ['plan.menu.exclure', 'Exclure'],
   ['plan.menu.reintegrer', 'Réintégrer'],
+  ['plan.menu.mettreEnEvidence', 'Mettre en évidence'],
+  ['plan.menu.oterEvidence', 'Ôter la mise en évidence'],
   ['plan.menu.ouvrirFiche', 'Ouvrir la fiche'],
+
+  // --- La mise en évidence d'une personne (§ 7.1, § 8.4) ----------------------
+  // Le nom de la personne mise en évidence est une donnée dans son nœud.
+  ['plan.evidence.personne', 'Mise en évidence : '],
+  ['plan.evidence.oter', 'Ôter la mise en évidence'],
+  ['plan.evidence.voir', 'Voir sur le plan'],
 
   // --- Les listes de travail (§ 5.8, § 4.1, § 4.2) ---------------------------
   // Le libellé d'un titre, le titre pressenti et le nom d'une personne sont

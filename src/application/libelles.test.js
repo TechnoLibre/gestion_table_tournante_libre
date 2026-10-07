@@ -593,6 +593,17 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
     );
   });
 
+  test('RESERVATION_NON_HONOREE nomme la personne et le numéro de la table quand ils sont donnés, sinon leurs identifiants', () => {
+    assert.equal(
+      libelle('RESERVATION_NON_HONOREE', { participant: 4, table: 5, tour: 1, personne: 'Iris Ombrelle', numero: 3 }),
+      "Le placement retenu n'honore pas la réservation de Iris Ombrelle à la table 3 au tour 1 : il la place ailleurs.",
+    );
+    assert.equal(
+      libelle('RESERVATION_NON_HONOREE', { participant: 4, table: 5, tour: 1 }),
+      "Le placement retenu n'honore pas la réservation de la personne n° 4 à la table d'identifiant 5 au tour 1 : il la place ailleurs.",
+    );
+  });
+
   test('le séparateur introuvable nomme la ligne et la cause ; le guillemet ouvert tombe dès la ligne 2', () => {
     const nombre = libelle('SEPARATEUR_INTROUVABLE', { separateur: ';', ligne: 3, cause: 'NOMBRE_DE_CHAMPS' });
     assert.match(nombre, /la ligne 3 n'a pas le nombre de champs de l'en-tête/);

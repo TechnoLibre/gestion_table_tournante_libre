@@ -548,10 +548,6 @@ export function releverMarques(racine) {
 
 // --- Les listes de noms et les tables -----------------------------------------------
 
-// Les marques de désignation passagère que le clavier et le pointeur posent
-// autour d'une table ou d'une chaise : elles ne sont pas la table.
-const DESIGNATIONS = new Set(['focus', 'selection', 'miseEnEvidence']);
-
 // Côté de la grille de points qui couvre l'intersection de deux boîtes.
 const COTE_GRILLE = 7;
 
@@ -585,7 +581,8 @@ function couvreUnPoint(forme, { left, top, right, bottom }) {
  * Les listes de noms posées sur une table (§ 7.4) : chaque partie rendue
  * d'une ligne de [data-liste], par sa boîte à l'écran entière, contre
  * chaque forme marquée sous un [data-table] — emprise, plateau, trame, gel,
- * chaise et ses marques —, hors désignations passagères. Une partie est
+ * chaise et ses marques, focus, sélection et mise en évidence comprises :
+ * une désignation ne cache jamais un texte. Une partie est
  * posée sur une forme quand un point de la grille qui pave l'intersection
  * de leurs boîtes tombe dans la forme : le coin d'une boîte qui frôle un
  * cercle ne compte pas, un texte qui le traverse loin de son centre compte.
@@ -593,7 +590,7 @@ function couvreUnPoint(forme, { left, top, right, bottom }) {
  */
 export function releverListes(racine) {
   const formes = [...racine.querySelectorAll('[data-table] [data-marque]')]
-    .filter((f) => f instanceof SVGGeometryElement && !DESIGNATIONS.has(f.dataset.marque) && rendu(f))
+    .filter((f) => f instanceof SVGGeometryElement && rendu(f))
     .map((forme) => ({ forme, boite: boiteAvecTrait(forme) }));
   const fautes = [];
   let lues = 0;
@@ -980,6 +977,29 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(fautes).toEqual(['tspan[data-partie="nom"] dans text[data-liste="1"] « Wxyz Quorvel Tamberlune » sur circle[data-marque="contourChaise"] dans g[data-siege="2:1"]']);
   });
 
+  test('listes : un carré de focus ou de sélection qui couvre les premiers centimètres d\u{2019}une partie est relevé — une désignation ne cache jamais un texte', () => {
+    for (const marque of ['focus', 'selection', 'miseEnEvidence']) {
+      const { fautes, lues } = avecFragment(
+        '<svg width="400" height="160" style="font: 12px sans-serif">' +
+          `<g data-table="2"><rect data-marque="${marque}" x="0" y="0" width="30" height="30" style="fill:none;stroke:#000;stroke-width:2" /></g>` +
+          '<text data-liste="1"><tspan x="10" y="54"><tspan data-partie="nom">Wxyz Quorvel Tamberlune</tspan></tspan></text></svg>',
+        (c) => {
+          // Le carré se pose sur le début de la partie, loin de son centre.
+          const p = c.querySelector('tspan[data-partie]').getBBox();
+          expect(p.width).toBeGreaterThan(80);
+          const carre = c.querySelector('rect');
+          carre.setAttribute('x', String(p.x - 20));
+          carre.setAttribute('y', String(p.y + p.height / 2 - 15));
+          return releverListes(c);
+        },
+      );
+      expect(lues, marque).toBe(1);
+      expect(fautes, marque).toEqual([
+        `tspan[data-partie="nom"] dans text[data-liste="1"] « Wxyz Quorvel Tamberlune » sur rect[data-marque="${marque}"] dans g[data-table="2"]`,
+      ]);
+    }
+  });
+
   test('jamais la seule couleur : deux formes qui ne diffèrent que par la couleur ont la même signature', () => {
     const fautes = avecFragment(
       '<svg width="60" height="20"><circle id="a" cx="10" cy="10" r="8" style="fill:#000;stroke:#333;stroke-width:2" />' +
@@ -1028,6 +1048,7 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
 
 describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
   test('chaque écran s’atteint depuis le premier, et le collecteur ne reçoit rien', () => {
+    expect(ECRANS.length, 'écrans parcourus').toBeGreaterThan(0);
     expect(releves.length).toBe(ECRANS.length);
     const fautes = [
       ...releves.filter((r) => r.echec !== null).map((r) => `${r.nom} : ${r.echec}`),
@@ -1085,7 +1106,9 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
   });
 
   test('marques : chaque sorte de MARQUES est rendue au moins une fois, et chacune tient 3:1 contre ce qui est peint dessous, dans les deux thèmes', () => {
-    expect(atteints().reduce((n, r) => n + r.clair.marques.mesures, 0)).toBeGreaterThan(0);
+    for (const theme of THEMES) {
+      expect(atteints().reduce((n, r) => n + r[theme].marques.mesures, 0), `marques mesurées [${theme}]`).toBeGreaterThan(0);
+    }
     const vues = new Set(atteints().flatMap((r) => [...r.clair.marques.vues, ...r.sombre.marques.vues]));
     const fautes = MARQUES.filter(({ nom }) => !vues.has(nom)).map(({ nom }) => `${nom} : rendue sur aucun écran`);
     for (const r of atteints()) {
@@ -1235,6 +1258,7 @@ describe('transitions annulées (§ 19.2)', () => {
     } finally {
       feuille.remove();
     }
+    expect(atteintes, 'écrans atteints').toBeGreaterThan(0);
     expect(atteintes + fautes.length).toBe(ECRANS.length);
     aucuneFaute(fautes, 'transitions annulées');
   }, 900_000);

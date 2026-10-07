@@ -19,14 +19,15 @@
   // n'est pas assise (executerSurPlace), sinon à côté de la commande.
   //
   // participant : l'identifiant de la personne ; le menu porte data-menu.
+  // etatTour : l'état des places du tour affiché, que SectionPlan calcule et
+  // que le panneau de la place passe, ou null sans événement.
   import { getContext } from 'svelte';
-  import { etatPlaces } from '../../application/places.js';
   import Commande from '../primitives/Commande.svelte';
   import { commandeDeDepot } from './depot.js';
   import { actionsPersonne, executerSurPlace } from './modele.js';
-  import { nomDeCharge, tourAffiche } from './vue_plan.js';
+  import { nomDeCharge } from './vue_plan.js';
 
-  let { participant } = $props();
+  let { participant, etatTour } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -35,8 +36,8 @@
 
   const charge = $derived($seance.charge);
   const fiche = $derived(charge === null ? undefined : charge.participants.find(({ id }) => id === participant));
-  const tour = $derived(charge === null ? 1 : tourAffiche($ui.tour, charge.evenement.tours));
-  const etat = $derived(fiche === undefined ? null : etatPlaces(charge, { tour, proposition: $ui.proposition }));
+  const etat = $derived(fiche === undefined ? null : etatTour);
+  const tour = $derived(etatTour === null ? 1 : etatTour.tour);
   // La place que la personne occupe au tour montré, et sa chaise, ou null.
   const assise = $derived.by(() => {
     if (etat === null) return null;
@@ -51,7 +52,10 @@
       ? null
       : commandeDeDepot({ etatPlaces: etat, tour, personne: participant, depuis: assise.place, cible: null, surLeSol: true }),
   );
-  const actions = $derived(fiche === undefined ? [] : actionsPersonne({ exclu: fiche.exclu, chaise: assise?.chaise ?? null, retrait }));
+  const enEvidence = $derived($ui.miseEnEvidence === participant);
+  const actions = $derived(
+    fiche === undefined ? [] : actionsPersonne({ exclu: fiche.exclu, chaise: assise?.chaise ?? null, retrait, enEvidence }),
+  );
 
   const dependances = { seance, ui };
   // Où poser un refus : sa place, sinon la place sélectionnée.
@@ -87,6 +91,8 @@
     deplacerReservation,
     exclure: () => executerSurPlace(dependances, lieu(), 'exclureParticipant', { id: participant }),
     reintegrer: () => executerSurPlace(dependances, lieu(), 'reintegrerParticipant', { id: participant }),
+    mettreEnEvidence: () => ui.mettreEnEvidence(participant),
+    oterEvidence: () => ui.mettreEnEvidence(null),
     ouvrirFiche: () => ui.ouvrirFiche(participant),
   };
 </script>

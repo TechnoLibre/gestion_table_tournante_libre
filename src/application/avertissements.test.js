@@ -226,13 +226,24 @@ describe('avertissements : la dérive que le geste ajoute (§ 9, § 8.9)', () =>
 });
 
 describe("avertissements : la réservation que le retenu n'honore plus (§ 5.8, § 14.12)", () => {
-  test('une réservation posée après la retenue, que le retenu ne tient pas : RESERVATION_NON_HONOREE {participant, table, tour}', () => {
+  test('une réservation posée après la retenue, que le retenu ne tient pas : RESERVATION_NON_HONOREE {participant, table, tour, personne, numero}', () => {
     const avant = petiteSoiree();
     const apres = avec(avant, reserverGrisaille);
     assert.deepEqual(avertissementsApres(avant, apres), [
-      { code: 'RESERVATION_NON_HONOREE', details: { participant: 2, table: 2, tour: 1 } },
+      { code: 'RESERVATION_NON_HONOREE', details: { participant: 2, table: 2, tour: 1, personne: 'Grisaille', numero: 2 } },
     ]);
     assert.deepEqual(avertissementsApres(apres, avec(apres, (charge) => (charge.participants[0].nom = 'Parasol'))), []);
+  });
+
+  test('la personne se nomme par son nom affiché, et la table par son numéro, distinct de son identifiant', () => {
+    const avant = avec(petiteSoiree(), (charge) => {
+      charge.tables[1].numero = 7;
+      charge.participants[1].prenom = 'Aubépine';
+    });
+    const apres = avec(avant, reserverGrisaille);
+    assert.deepEqual(avertissementsApres(avant, apres), [
+      { code: 'RESERVATION_NON_HONOREE', details: { participant: 2, table: 2, tour: 1, personne: 'Aubépine Grisaille', numero: 7 } },
+    ]);
   });
 
   test("retenir une proposition qui ne tient pas une réservation : le retenu nul d'avant n'en comptait aucune", () => {
@@ -242,7 +253,7 @@ describe("avertissements : la réservation que le retenu n'honore plus (§ 5.8, 
       charge.evenement.etat = 'retenu';
     });
     assert.deepEqual(avertissementsApres(avant, apres), [
-      { code: 'RESERVATION_NON_HONOREE', details: { participant: 2, table: 2, tour: 1 } },
+      { code: 'RESERVATION_NON_HONOREE', details: { participant: 2, table: 2, tour: 1, personne: 'Grisaille', numero: 2 } },
     ]);
   });
 
@@ -250,7 +261,7 @@ describe("avertissements : la réservation que le retenu n'honore plus (§ 5.8, 
     const avant = avec(avec(petiteSoiree(), reserverGrisaille), rendreFautif);
     const apres = avec(avant, (charge) => (charge.retenu.placement[0].reserve = []));
     assert.deepEqual(avertissementsApres(avant, apres), [
-      { code: 'RESERVATION_NON_HONOREE', details: { participant: 2, table: 2, tour: 1 } },
+      { code: 'RESERVATION_NON_HONOREE', details: { participant: 2, table: 2, tour: 1, personne: 'Grisaille', numero: 2 } },
     ]);
   });
 

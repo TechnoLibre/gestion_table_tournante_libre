@@ -261,16 +261,24 @@ async function cliquerPoint({ x, y }) {
   await images(2);
 }
 
-// Un clic réel au centre d'une chaise. Quand un avertissement paru au-dessus
-// du plan l'a poussé sous le bas de la fenêtre, la page défile d'abord
-// jusqu'à la chaise.
+// Un clic réel au centre d'une chaise. Quand elle est hors du cadre du
+// plan — les annonces du cadre de mode, avertissements compris, prennent
+// leur hauteur à la surface —, la vue se déplace d'abord, par le cadrage de
+// la séance, pour poser la chaise au centre du cadre, au même k.
 async function cliquerChaise(m, table, siege) {
   const atteinte = () => {
     const { x, y } = pointChaise(m, table, siege);
     return chaiseEl(m, table, siege)?.contains(document.elementFromPoint(x, y)) ?? false;
   };
   if (!atteinte()) {
-    chaiseEl(m, table, siege).scrollIntoView({ block: 'center', inline: 'center' });
+    const vue = vueLue(m);
+    const cadre = cadreDe(m);
+    const { x, y } = pointChaise(m, table, siege);
+    await avecVue(m, {
+      k: vue.k,
+      tx: vue.tx + cadre.gauche + cadre.largeur / 2 - x,
+      ty: vue.ty + cadre.haut + cadre.hauteur / 2 - y,
+    });
     await attendre(() => expect(atteinte()).toBe(true));
   }
   await cliquerPoint(pointChaise(m, table, siege));
@@ -967,15 +975,16 @@ describe('réserver, titrer, désigner depuis le panneau (§ 4, § 2.1 étape 6)
     expect(apres.titres).toHaveLength(origine.titres.length + 1);
     expect(apres.retenu).toEqual(origine.retenu);
     expect(apres.propositions).toEqual(origine.propositions);
-    expect(m.seance.etat().avertissements).toContainEqual({ code: 'RESERVATION_NON_HONOREE', details: { participant: IRIS, table: 3, tour: 1 } });
+    expect(m.seance.etat().avertissements).toContainEqual({
+      code: 'RESERVATION_NON_HONOREE',
+      details: { participant: IRIS, table: 3, tour: 1, personne: 'Iris Ombrelle', numero: 3 },
+    });
     await attendre(() => expect(dans(m, '[data-avertissement="RESERVATION_NON_HONOREE"]')).not.toBeNull());
   });
 
-  // L'avertissement nomme Iris et la table 3 : son texte vient du libellé
-  // d'A2 et du composant des avertissements d'I4, que le correctif
-  // rapports/I11-avertissement-nomme.diff complète. L'épreuve échoue tant
-  // qu'il n'est pas appliqué ; appliqué, test.fails la signale à retourner.
-  test.fails('RESERVATION_NON_HONOREE nomme Iris Ombrelle et la table 3 (attend le correctif d’A2 et d’I4)', async () => {
+  // L'avertissement nomme Iris et la table 3 : ses détails portent le nom
+  // affiché de la personne et le numéro de la table (avertissementsApres).
+  test('RESERVATION_NON_HONOREE nomme Iris Ombrelle et la table 3', async () => {
     const base = chargeDe({
       id: 'evt-apres-generation',
       places: [4, 4, 4],
@@ -1386,5 +1395,84 @@ describe('les listes de travail mènent à la place ou à la personne (§ 5.8)',
     expect(dans(m, '[data-reserve]').dataset.reserve).toBe('2');
     expect(reserve()).toEqual([9]);
     expect(m.ui.etat().choix).toBeNull();
+  });
+});
+
+// --- La mise en évidence d'une personne (§ 7.1, § 8.2, § 8.4) ------------------------
+
+describe('la mise en évidence d’une personne : posée et ôtée par un geste, en lecture, sans rien écrire (§ 7.1, § 8.4)', () => {
+  // La chaise qui porte la marque de mise en évidence, ou null ; la marque
+  // se voit au style calculé.
+  const marquees = (m) => tous(m, '[data-marque="miseEnEvidence"]');
+  const chaiseMarquee = (m) => {
+    const [marque, ...autres] = marquees(m);
+    expect(autres).toEqual([]);
+    if (marque === undefined) return null;
+    expect(marque.checkVisibility({ opacityProperty: true, visibilityProperty: true })).toBe(true);
+    return marque.closest('[data-siege]').dataset.siege;
+  };
+  // La place qu'occupe une personne au tour montré, « table:siège ».
+  const placeDe = (m, personne) => {
+    for (const table of etatMontre(m).tables) {
+      const chaise = table.chaises.find(({ occupant }) => occupant === personne);
+      if (chaise !== undefined) return `${table.id}:${chaise.siege}`;
+    }
+    return null;
+  };
+
+  test('par le menu de la personne : sa chaise marquée, et elle seule, à chaque tour montré ; ôtée par le menu, puis posée et ôtée par la barre de vue', async () => {
+    const m = await ouvrir(huitRetenue(), { mode: 'lecture' });
+    expect(m.seance.etat().mode).toBe('lecture');
+    const avant = fichiers(m);
+    await cliquerChaise(m, 2, 1);
+    const personne = etatMontre(m).tables[1].chaises[0].occupant;
+    expect(personne).not.toBeNull();
+    expect(chaiseMarquee(m)).toBeNull();
+    await cliquer(dans(m, `[data-menu="${personne}"] [data-commande="mettreEnEvidence"]`));
+    await attendre(() => expect(chaiseMarquee(m)).toBe('2:1'));
+    expect(dans(m, `[data-menu="${personne}"] [data-commande="mettreEnEvidence"]`)).toBeNull();
+    // La barre de vue nomme la personne mise en évidence.
+    const barre = dans(m, '[data-evidence]');
+    expect(barre).not.toBeNull();
+    const { nom, prenom } = charge(m).participants.find(({ id }) => id === personne);
+    expect(texteDe(barre)).toContain(prenom === null ? nom : `${prenom} ${nom}`);
+    expect(Number(barre.dataset.evidence)).toBe(personne);
+    for (const tour of [2, 3, 1]) {
+      m.ui.montrerTour(tour);
+      flushSync();
+      await images(2);
+      expect(chaiseMarquee(m), `tour ${tour}`).toBe(placeDe(m, personne));
+    }
+    await cliquerChaise(m, 2, 1);
+    await cliquer(dans(m, `[data-menu="${personne}"] [data-commande="oterEvidence"]`));
+    await attendre(() => expect(chaiseMarquee(m)).toBeNull());
+    expect(dans(m, '[data-evidence]')).toBeNull();
+    expect(m.ui.etat().miseEnEvidence).toBeNull();
+
+    await cliquer(dans(m, `[data-menu="${personne}"] [data-commande="mettreEnEvidence"]`));
+    await attendre(() => expect(chaiseMarquee(m)).toBe('2:1'));
+    await cliquer(dans(m, '[data-evidence] [data-commande="oterEvidence"]'));
+    await attendre(() => expect(chaiseMarquee(m)).toBeNull());
+    expect(fichiers(m)).toEqual(avant);
+    expect(m.seance.etat().mode).toBe('lecture');
+  });
+
+  test('depuis sa ligne de la grille des participants : « Voir sur le plan » ouvre le plan, sa chaise marquée ; rien d’écrit', async () => {
+    const m = await ouvrir(huitRetenue(), { mode: 'lecture' });
+    const avant = fichiers(m);
+    const personne = etatMontre(m).tables[2].chaises[1].occupant;
+    m.ui.allerA('participants');
+    flushSync();
+    const voir = await attendre(() => {
+      const bouton = dans(m, `[data-participant="${personne}"] [data-commande="voirSurLePlan"]`);
+      expect(bouton).not.toBeNull();
+      return bouton;
+    });
+    await cliquer(voir);
+    await attendre(() => expect(m.ui.etat().section).toBe('plan'));
+    await attendre(() => expect(tous(m, '[data-table]').length).toBe(8));
+    await attendre(() => expect(chaiseMarquee(m)).toBe('3:2'));
+    expect(m.ui.etat().miseEnEvidence).toBe(personne);
+    expect(fichiers(m)).toEqual(avant);
   });
 });

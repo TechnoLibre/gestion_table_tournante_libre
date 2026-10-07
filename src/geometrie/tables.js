@@ -7,7 +7,9 @@
 // dessin pose les chaises par geometrieTable et la désignation d'un siège
 // (designation.js) lit les mêmes chaises : une seule implémentation, que le
 // dessin et le dépôt partagent. Aucune table ne tourne : la géométrie ne
-// porte aucun angle.
+// porte aucun angle. La grille où se posent les tables des démonstrations et
+// celles que l'opérateur crée a un seul pas, ecartsGrille.
+import { constante } from './constantes.js';
 
 /**
  * @typedef {Object} GeometrieTable   en cm
@@ -40,8 +42,9 @@ export const ECART_POIGNEE = 8;
  *  26 cm d'elle, plus la moitié de son trait ; le bloc commence au-delà, et
  *  aucune marque ne couvre la liste. */
 export const ECART_LISTE = 36;
-/** Distance entre deux cases de la grille des tables créées, en cm. */
-export const PAS_GRILLE = 300;
+/** Écart minimal entre les centres de deux rangées de la grille des tables,
+ *  en cm. */
+export const ECART_RANGEES = 300;
 
 // Accroissement du rayon d'une ronde pour une place de plus, au-dessus du
 // plancher : le périmètre croît de LARGEUR_PAR_PLACE, le rayon de 60 / 2π.
@@ -205,25 +208,62 @@ export function englobant(geometries) {
 }
 
 /**
+ * Le pas de la grille des tables, en cm entiers, pour la plus grande emprise
+ * E des tables données, chacune de sa forme et de son nombre de places :
+ * entre deux colonnes, ⌈2E + 2 × ECART_LISTE + LARGEUR_BLOC_NOMS_CM⌉ — le bloc
+ * de noms d'une table, à ECART_LISTE de son emprise et large de
+ * LARGEUR_BLOC_NOMS_CM, où toute ligne s'abrège, s'achève à ECART_LISTE de
+ * l'emprise de la colonne suivante : aucune liste ne passe sur une autre
+ * table de la grille, d'aucune rangée ; entre deux rangées,
+ * max(ECART_RANGEES, ⌈2E + ECART_LISTE⌉) — deux emprises voisines restent à
+ * ECART_LISTE l'une de l'autre, la marge du carré de focus.
+ *
+ * @param {Array<{forme: 'ronde'|'carree', places: number}>} tables  au moins une
+ * @returns {{colonnes: number, rangees: number}}
+ */
+export function ecartsGrille(tables) {
+  const emprise = Math.max(
+    ...tables.map(({ forme, places }) => geometrieTable({ id: 0, numero: 0, forme, position: { x: 0, y: 0 } }, places).rayonEmprise),
+  );
+  return {
+    colonnes: Math.ceil(2 * emprise + 2 * ECART_LISTE + constante('LARGEUR_BLOC_NOMS_CM')),
+    rangees: Math.max(ECART_RANGEES, Math.ceil(2 * emprise + ECART_LISTE)),
+  };
+}
+
+/**
  * Position d'une table créée : la première case libre, ligne par ligne, d'une
- * grille de PAS_GRILLE cm à ⌈√(T + 1)⌉ colonnes, T = centres.length, partant
- * de (0, 0) ; une case est prise quand un centre est à PAS_GRILLE / 2 ou
- * moins. centres : les positions de charge.tables, que l'appelant passe sans
- * construire de géométrie.
+ * grille à ⌈√(T + 1)⌉ colonnes, T = tables.length, partant de (0, 0), au pas
+ * d'ecartsGrille des tables posées et de la nouvelle — le pas des
+ * démonstrations (scripts/engendrer_livrables.js). Une case est prise quand
+ * une table posée est à moins d'un pas de son centre sur chacun des deux
+ * axes, bornes exclues. Une table à un pas de colonne ou plus a son emprise
+ * hors de la bande du bloc de noms de la table nouvelle, et la sienne
+ * s'achève avant l'emprise nouvelle, à ECART_LISTE au moins, quelle que soit
+ * la rangée : c'est le calcul d'ecartsGrille, fait sur la plus grande
+ * emprise des deux. Une table à un pas de rangée ou plus a son emprise à
+ * ECART_LISTE au moins de l'emprise nouvelle. Ainsi une table déplacée hors
+ * de la grille, ou une grille dont le pas a crû depuis qu'elle a été posée,
+ * ne reçoit pas la liste de la table nouvelle et ne lui porte pas la sienne
+ * à travers une colonne.
  *
- * La recherche s'arrête : un centre est à PAS_GRILLE / 2 ou moins d'au plus
- * deux cases, le plus petit disque qui contient trois cases ayant un rayon
- * d'au moins PAS_GRILLE / √2 ; l'une des 2T + 1 premières cases est donc
- * libre.
+ * La recherche s'arrête : un intervalle ouvert de largeur 2 × pas contient
+ * au plus deux multiples du pas, et une table prend donc au plus quatre
+ * cases ; l'une des 4T + 1 premières cases est libre.
  *
- * @param {Array<{x: number, y: number}>} centres
+ * @param {Array<{position: {x: number, y: number}, forme: 'ronde'|'carree', places: number}>} tables
+ *        les tables posées, chacune à sa capacité courante
+ * @param {{forme: 'ronde'|'carree', places: number}} nouvelle  la table à poser
  * @returns {{x: number, y: number}}
  */
-export function caseLibre(centres) {
-  const colonnes = Math.ceil(Math.sqrt(centres.length + 1));
+export function caseLibre(tables, nouvelle) {
+  const { colonnes: pasX, rangees: pasY } = ecartsGrille([...tables, nouvelle]);
+  const colonnes = Math.ceil(Math.sqrt(tables.length + 1));
   for (let rang = 0; ; rang += 1) {
-    const candidate = { x: (rang % colonnes) * PAS_GRILLE, y: Math.floor(rang / colonnes) * PAS_GRILLE };
-    const prise = centres.some(({ x, y }) => Math.hypot(x - candidate.x, y - candidate.y) <= PAS_GRILLE / 2);
+    const candidate = { x: (rang % colonnes) * pasX, y: Math.floor(rang / colonnes) * pasY };
+    const prise = tables.some(
+      ({ position: { x, y } }) => Math.abs(x - candidate.x) < pasX && Math.abs(y - candidate.y) < pasY,
+    );
     if (!prise) return candidate;
   }
 }

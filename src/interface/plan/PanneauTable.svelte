@@ -22,14 +22,17 @@
   // (executerSurPlace), LIBELLE_VIDE à côté du champ.
   //
   // Échap referme le panneau et rend le focus à la racine du plan. Le
-  // panneau lit 'seance' et 'ui' au contexte, sans propriété.
+  // panneau lit 'seance' et 'ui' au contexte ; etatTour, l'état des places
+  // du tour affiché, que SectionPlan calcule, ou null sans événement.
   import { getContext, tick, untrack } from 'svelte';
   import { comptesTitres } from '../../application/listes_travail.js';
-  import { etatPlaces, libellePropose } from '../../application/places.js';
+  import { libellePropose } from '../../application/places.js';
   import Commande from '../primitives/Commande.svelte';
   import { libellePlace } from './gestes.js';
   import { executerSurPlace, ligneListe, partiesLigne, textesLigne } from './modele.js';
-  import { nomDeCharge, tourAffiche } from './vue_plan.js';
+  import { nomDeCharge } from './vue_plan.js';
+
+  let { etatTour } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -39,8 +42,7 @@
   const charge = $derived($seance.charge);
   const selection = $derived($ui.selection);
   const table = $derived(charge !== null && selection !== null && (selection.siege ?? null) === null ? selection.table : null);
-  const tour = $derived(charge === null ? 1 : tourAffiche($ui.tour, charge.evenement.tours));
-  const etat = $derived(table === null ? null : etatPlaces(charge, { tour, proposition: $ui.proposition }));
+  const etat = $derived(table === null ? null : etatTour);
   const etatTable = $derived(etat === null ? undefined : etat.tables.find(({ id }) => id === table));
   const nomDe = $derived(charge === null ? null : nomDeCharge(charge));
   const comptes = $derived(etatTable === undefined ? null : comptesTitres(charge, table));

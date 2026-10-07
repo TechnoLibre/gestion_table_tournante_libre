@@ -17,6 +17,7 @@ import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { verifierInvariants } from '../moteur/verification.js';
 import { configurationDepuisCharge } from '../stockage/document.js';
 import { examiner, planDepuisFichier } from '../stockage/placements.js';
+import { nomAffiche } from './personnes.js';
 
 const avertissement = (code, details) => ({ code, details });
 
@@ -111,11 +112,13 @@ export function invariantViole(charge, examen = examiner(charge)) {
  *     raisons d'examiner(apres) — derives, retenu.raisons — qu'examiner(avant)
  *     ne portait pas, comparées champ pour champ ; les propositions par
  *     identifiant, puis le retenu, sous id 'retenu' ;
- *   RESERVATION_NON_HONOREE {participant, table, tour}   chaque violation
- *     RESERVATION de verifierInvariants(instance d'après,
+ *   RESERVATION_NON_HONOREE {participant, table, tour, personne, numero}
+ *     chaque violation RESERVATION de verifierInvariants(instance d'après,
  *     planDepuisFichier(apres.retenu)) absente du même calcul sur avant, qui
  *     n'en compte aucune quand son retenu est nul ou fautif, ou que sa
- *     configuration ne se normalisait pas.
+ *     configuration ne se normalisait pas ; personne est le nom affiché du
+ *     participant, numero celui de la table, lus sur la charge d'après, qui
+ *     porte l'une et l'autre puisque l'instance qui les viole en vient.
  *
  * @param {import('../stockage/types.js').Charge} avant
  * @param {import('../stockage/types.js').Charge} apres
@@ -151,7 +154,10 @@ export function avertissementsApres(avant, apres) {
   const tenues = reservations(avant, examenAvant, instanceAvant);
   for (const { participant, table, tour } of reservations(apres, examenApres, instance)) {
     const dejaLa = tenues.some((connue) => connue.participant === participant && connue.table === table && connue.tour === tour);
-    if (!dejaLa) rendus.push(avertissement('RESERVATION_NON_HONOREE', { participant, table, tour }));
+    if (dejaLa) continue;
+    const personne = nomAffiche(apres.participants.find(({ id }) => id === participant));
+    const { numero } = apres.tables.find(({ id }) => id === table);
+    rendus.push(avertissement('RESERVATION_NON_HONOREE', { participant, table, tour, personne, numero }));
   }
   return rendus;
 }

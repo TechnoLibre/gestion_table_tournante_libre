@@ -17,14 +17,11 @@
 // données sont tirées des démonstrations livrées et de commandes de
 // l'application, sans aléa : deux parcours rendent le même écran.
 //
-// Deux états s'atteignent sans geste de l'opérateur : la mise en évidence
-// d'une personne passe par l'état de navigation du montage
-// (ui.mettreEnEvidence), qui n'écrit rien ; la question du dossier de
+// Un état s'atteint sans geste de l'opérateur : la question du dossier de
 // travail, qui se pose au démarrage, par les options du système simulé.
 import { flushSync } from 'svelte';
 import { appliquerCommande } from '../../src/application/commandes.js';
 import { ErreurAnnulee } from '../../src/application/generation.js';
-import { etatPlaces } from '../../src/application/places.js';
 import { texteLivre } from '../../src/demo/livrees.js';
 import { rechercher } from '../../src/moteur/recherche.js';
 import { serialiser } from '../../src/stockage/canonique.js';
@@ -359,10 +356,9 @@ export const ECRANS = Object.freeze([
     mode: 'ecriture',
     async atteindre(contexte) {
       const m = await planEnEcriture(contexte);
-      const { tour, proposition } = m.ui.etat();
-      const occupant = etatPlaces(m.seance.etat().charge, { tour, proposition }).tables[3].chaises[0].occupant;
-      m.ui.mettreEnEvidence(occupant);
-      await element(m, '[data-marque="miseEnEvidence"]');
+      await cliquerPointeur(chaise(m, 4, 1));
+      await cliquer(m, '[data-panneau="place"] [data-menu] [data-commande="mettreEnEvidence"]');
+      await element(m, '[data-siege="4:1"] [data-marque="miseEnEvidence"]');
       return m.racine;
     },
   },

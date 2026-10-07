@@ -473,15 +473,16 @@ export function actionsPlace({ reservation, titre }, choix) {
  * montré ; retirer du tour quand le dépôt sur le sol rend une commande ou un
  * refus (retrait non null) ; réserver ici quand elle est assise sur une
  * place qu'aucune réservation ne tient ; déplacer sa réservation quand la
- * sienne tient sa chaise ; exclure, ou réintégrer une exclue ; ouvrir la
- * fiche.
+ * sienne tient sa chaise ; exclure, ou réintégrer une exclue ; la mettre en
+ * évidence, ou ôter sa mise en évidence quand elle l'est ; ouvrir la fiche.
  *
- * @param {{exclu: boolean, chaise: Object|null, retrait: Object|null}} personne
- *        chaise, l'EtatChaise qu'elle occupe au tour montré, null hors du dessin
+ * @param {{exclu: boolean, chaise: Object|null, retrait: Object|null, enEvidence: boolean}} personne
+ *        chaise, l'EtatChaise qu'elle occupe au tour montré, null hors du dessin ;
+ *        enEvidence, vrai quand elle est la personne mise en évidence (ui.miseEnEvidence)
  * @returns {string[]}   parmi deplacer, echanger, retirerDuTour, reserverIci,
- *   deplacerReservation, exclure, reintegrer, ouvrirFiche
+ *   deplacerReservation, exclure, reintegrer, mettreEnEvidence, oterEvidence, ouvrirFiche
  */
-export function actionsPersonne({ exclu, chaise, retrait }) {
+export function actionsPersonne({ exclu, chaise, retrait, enEvidence }) {
   const assise = chaise !== null;
   const tenue = assise && chaise.reservation !== null && chaise.reservation.participant === chaise.occupant;
   return [
@@ -492,6 +493,8 @@ export function actionsPersonne({ exclu, chaise, retrait }) {
     ['deplacerReservation', tenue],
     ['exclure', !exclu],
     ['reintegrer', exclu],
+    ['mettreEnEvidence', !enEvidence],
+    ['oterEvidence', enEvidence],
     ['ouvrirFiche', true],
   ]
     .filter(([, offerte]) => offerte)

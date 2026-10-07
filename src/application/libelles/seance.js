@@ -114,11 +114,14 @@ export const TABLE = new Map([
       );
     },
   ],
+  // La personne se nomme par personne, et la table par numero, quand les
+  // détails les portent (avertissementsApres les lit sur la charge) ; une
+  // violation d'INVARIANT_VIOLE, qui ne les porte pas, garde les identifiants.
   [
     'RESERVATION_NON_HONOREE',
-    ({ participant, table, tour }) =>
-      `Le placement retenu n'honore pas la réservation de la personne n° ${participant} ` +
-      `à la table d'identifiant ${table} au tour ${tour} : il la place ailleurs.`,
+    ({ participant, table, tour, personne = null, numero = null }) =>
+      `Le placement retenu n'honore pas la réservation de ${personne ?? `la personne n° ${participant}`} ` +
+      `à la ${numero === null ? `table d'identifiant ${table}` : `table ${numero}`} au tour ${tour} : il la place ailleurs.`,
   ],
   [
     'INVARIANT_VIOLE',

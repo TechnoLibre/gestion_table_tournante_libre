@@ -10,10 +10,15 @@
   // les zooms et l'ajustement par Plan.svelte, qui tient la vue :
   // zoomer(sens), sens valant 1 ou -1, et ajuster(). Un bouton à bascule dit
   // son état par aria-pressed, que la forme du bouton redit.
+  //
+  // evidence : la personne mise en évidence, {id, nom} — nom null pour une
+  // personne que la charge n'a plus —, ou null. La barre la nomme et offre
+  // d'ôter la mise en évidence, que la personne soit assise au tour montré
+  // ou non ; le menu de la personne la pose (MenuPersonne).
   import { getContext } from 'svelte';
   import { toursOfferts } from './vue_plan.js';
 
-  let { tour, tours, zoomer, ajuster } = $props();
+  let { tour, tours, zoomer, ajuster, evidence = null } = $props();
 
   const t = getContext('t');
   const ui = getContext('ui');
@@ -39,6 +44,12 @@
   <button type="button" data-commande="pleinEcran" aria-pressed={$ui.pleinEcran} onclick={() => ui.basculerPleinEcran()}
     >{t('plan.vue.pleinEcran')}</button
   >
+  {#if evidence !== null}
+    <p class="evidence" data-evidence={evidence.id}>
+      <span>{t('plan.evidence.personne')}</span>{#if evidence.nom !== null}<span>{evidence.nom}</span>{/if}
+      <button type="button" data-commande="oterEvidence" onclick={() => ui.mettreEnEvidence(null)}>{t('plan.evidence.oter')}</button>
+    </p>
+  {/if}
 </div>
 
 <style>
@@ -47,6 +58,13 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--espace-2);
+  }
+
+  .evidence {
+    display: flex;
+    align-items: center;
+    gap: var(--espace-1);
+    margin: 0;
   }
 
   .tour {

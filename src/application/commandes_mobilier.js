@@ -91,8 +91,9 @@ function exigerCapacite(charge, id, sieges, origine) {
 /**
  * creerTable {forme} (§ 4, § 6.1) : une table qui suit le défaut, d'identifiant
  * prochainsIds.table, numérotée après la plus grande, posée sur la première
- * case libre (caseLibre). Sous un retenu lisible, elle y entre avec sa
- * capacité et une liste vide à chaque tour.
+ * case libre (caseLibre) de la grille des démonstrations, au pas que donnent
+ * les tables posées, chacune à sa capacité, et la nouvelle. Sous un retenu
+ * lisible, elle y entre avec sa capacité et une liste vide à chaque tour.
  */
 function creerTable(charge, { forme } = {}) {
   exigerModifiable(charge);
@@ -100,7 +101,8 @@ function creerTable(charge, { forme } = {}) {
   const id = charge.prochainsIds.table;
   if (id >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'table' });
   const numero = Math.max(0, ...charge.tables.map((table) => table.numero)) + 1;
-  const position = caseLibre(charge.tables.map((table) => table.position));
+  const posees = charge.tables.map((table) => ({ position: table.position, forme: table.forme, places: capacite(charge, table) }));
+  const position = caseLibre(posees, { forme, places: charge.evenement.siegesParDefaut });
   const suivante = structuredClone(charge);
   suivante.tables.push({ id, numero, sieges: null, forme, position });
   suivante.prochainsIds.table = id + 1;

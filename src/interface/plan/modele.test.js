@@ -965,25 +965,42 @@ describe('actionsPersonne : le menu d’une personne (§ 7.1)', () => {
   const assise = { siege: 2, occupant: 4, reservation: null, titre: null };
   const retrait = { commande: 'retirerDuTour', arguments: { tour: 1, participant: 4 } };
 
-  test('assise, non réservée : déplacer, échanger, retirer du tour, réserver ici, exclure, ouvrir la fiche', () => {
-    assert.deepEqual(actionsPersonne({ exclu: false, chaise: assise, retrait }), [
+  test('assise, non réservée : déplacer, échanger, retirer du tour, réserver ici, exclure, mettre en évidence, ouvrir la fiche', () => {
+    assert.deepEqual(actionsPersonne({ exclu: false, chaise: assise, retrait, enEvidence: false }), [
       'deplacer',
       'echanger',
       'retirerDuTour',
       'reserverIci',
       'exclure',
+      'mettreEnEvidence',
       'ouvrirFiche',
     ]);
   });
 
   test('assise sur sa réservation : déplacer sa réservation, plus de « réserver ici » ; sans retrait possible, pas de « retirer du tour »', () => {
     const tenue = { ...assise, reservation: { participant: 4, portee: 'tous', tour: null } };
-    assert.deepEqual(actionsPersonne({ exclu: false, chaise: tenue, retrait: null }), ['deplacer', 'echanger', 'deplacerReservation', 'exclure', 'ouvrirFiche']);
+    assert.deepEqual(actionsPersonne({ exclu: false, chaise: tenue, retrait: null, enEvidence: false }), [
+      'deplacer',
+      'echanger',
+      'deplacerReservation',
+      'exclure',
+      'mettreEnEvidence',
+      'ouvrirFiche',
+    ]);
   });
 
-  test('hors du dessin — réserve, exclue — : déplacer, puis exclure ou réintégrer, et la fiche', () => {
-    assert.deepEqual(actionsPersonne({ exclu: false, chaise: null, retrait: null }), ['deplacer', 'exclure', 'ouvrirFiche']);
-    assert.deepEqual(actionsPersonne({ exclu: true, chaise: null, retrait: null }), ['deplacer', 'reintegrer', 'ouvrirFiche']);
+  test('hors du dessin — réserve, exclue — : déplacer, puis exclure ou réintégrer, la mise en évidence et la fiche', () => {
+    assert.deepEqual(actionsPersonne({ exclu: false, chaise: null, retrait: null, enEvidence: false }), ['deplacer', 'exclure', 'mettreEnEvidence', 'ouvrirFiche']);
+    assert.deepEqual(actionsPersonne({ exclu: true, chaise: null, retrait: null, enEvidence: false }), ['deplacer', 'reintegrer', 'mettreEnEvidence', 'ouvrirFiche']);
+  });
+
+  test('mise en évidence (§ 8.4) : la personne mise en évidence offre de l\u{2019}ôter, à la même place, et rien d\u{2019}autre ne change', () => {
+    for (const [chaise, sonRetrait] of [[assise, retrait], [null, null]]) {
+      const sans = actionsPersonne({ exclu: false, chaise, retrait: sonRetrait, enEvidence: false });
+      const avec = actionsPersonne({ exclu: false, chaise, retrait: sonRetrait, enEvidence: true });
+      assert.equal(sans.filter((action) => action === 'mettreEnEvidence').length, 1);
+      assert.deepEqual(avec, sans.map((action) => (action === 'mettreEnEvidence' ? 'oterEvidence' : action)));
+    }
   });
 });
 
@@ -1041,11 +1058,11 @@ describe('les clés que les panneaux composent existent (§ 14.6)', () => {
     const reservation = { genre: 'reservation', participant: 1, depuis: null, de: { table: 1, portee: 'tous', tour: null } };
     const actions = new Set([...actionsPlace(libre, reservation), ...actionsPlace(tenue, { genre: 'personne', participant: 2, depuis: null })]);
     const menu = new Set([
-      ...actionsPersonne({ exclu: false, chaise: { ...libre, occupant: 4 }, retrait: {} }),
-      ...actionsPersonne({ exclu: true, chaise: tenue, retrait: {} }),
+      ...actionsPersonne({ exclu: false, chaise: { ...libre, occupant: 4 }, retrait: {}, enEvidence: false }),
+      ...actionsPersonne({ exclu: true, chaise: tenue, retrait: {}, enEvidence: true }),
     ]);
     assert.equal(actions.size, 7);
-    assert.equal(menu.size, 8);
+    assert.equal(menu.size, 10);
     for (const action of actions) assert.equal(typeof t(`plan.action.${action}`), 'string', action);
     for (const action of menu) assert.equal(typeof t(`plan.menu.${action}`), 'string', action);
     for (const regle of ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable']) assert.equal(typeof t(`plan.infobulle.${regle}`), 'string');

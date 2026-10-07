@@ -11,10 +11,12 @@
   // d'une liste vers le plan : la place se choisit ensuite sur le plan. Un
   // changement de tour change la liste et oublie le choix (etat_ui.js) ;
   // Échap, sur la réserve ou l'un de ses boutons, l'oublie aussi.
-  // Le panneau lit 'seance' et 'ui' au contexte, sans propriété.
+  // Le panneau lit 'seance' et 'ui' au contexte ; etatTour, l'état des
+  // places du tour affiché, que SectionPlan calcule, ou null sans événement.
   import { getContext } from 'svelte';
-  import { etatPlaces } from '../../application/places.js';
-  import { nomDeCharge, tourAffiche } from './vue_plan.js';
+  import { nomDeCharge } from './vue_plan.js';
+
+  let { etatTour } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -22,8 +24,8 @@
   const uid = $props.id();
 
   const charge = $derived($seance.charge);
-  const tour = $derived(charge === null ? 1 : tourAffiche($ui.tour, charge.evenement.tours));
-  const reserve = $derived(charge === null ? [] : etatPlaces(charge, { tour, proposition: $ui.proposition }).reserve);
+  const tour = $derived(etatTour === null ? 1 : etatTour.tour);
+  const reserve = $derived(etatTour === null ? [] : etatTour.reserve);
   const nomDe = $derived(charge === null ? null : nomDeCharge(charge));
   const choix = $derived($ui.choix);
   const choisie = (id) => choix !== null && choix.genre === 'personne' && choix.participant === id;

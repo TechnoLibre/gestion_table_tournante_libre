@@ -569,7 +569,7 @@ describe('monté caché, cadre trop petit (§ 7.2, point d’attention 1)', () =
 });
 
 describe('le cadrage (§ 8.5, § 13.3)', () => {
-  test('des zooms rapprochés n’écrivent ni l’état ni le journal ; une seule écriture des réglages après DELAI_REGLAGES_MS, qui porte la vue rendue ; en lecture, puis sur un plan bloqué', async () => {
+  test('des zooms rapprochés n’écrivent ni l’état ni le journal ; une seule écriture des réglages après DELAI_REGLAGES_MS, qui porte la vue rendue ; en écriture, en lecture, puis sur un plan bloqué', async () => {
     const m = await petite();
     const verifier = async (gestes) => {
       const avant = fichiers(m);
@@ -590,15 +590,24 @@ describe('le cadrage (§ 8.5, § 13.3)', () => {
       const lue = vueLue(m);
       expect({ k: ecrit.k, tx: ecrit.tx, ty: ecrit.ty }).toEqual(lue);
     };
-    expect(m.seance.etat().mode).toBe('lecture');
-    await verifier(async () => {
+    const zooms = async () => {
       await cran(m, -100);
       await cran(m, -100);
       cliquer(m, 'zoomer');
       cliquer(m, 'dezoomer');
       cliquer(m, 'ajuster');
       await cran(m, 100);
-    });
+    };
+    // Le cas de base : l'écriture, sur un événement que rien ne bloque.
+    await m.seance.passerEnEcriture();
+    flushSync();
+    expect(m.seance.etat().mode).toBe('ecriture');
+    expect(m.seance.etat().evenement.etat).not.toBe('bloque');
+    await verifier(zooms);
+    await m.seance.passerEnLecture();
+    flushSync();
+    expect(m.seance.etat().mode).toBe('lecture');
+    await verifier(zooms);
     await m.seance.passerEnEcriture();
     await m.seance.executer('changerEtat', { etat: 'bloque' });
     flushSync();

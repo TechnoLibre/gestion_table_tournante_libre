@@ -15,6 +15,7 @@
 // (§ 14.8).
 import { afterEach, beforeAll, describe, expect, test } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
+import { SvelteMap } from 'svelte/reactivity';
 import '../jetons.css';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
@@ -36,6 +37,7 @@ import TEXTE_TOUTES_EN_CONFLIT from '../../../test/fixtures/plan/toutes_en_confl
 import { TABLES_INTERFACE } from '../libelles.js';
 import BandeauPlan from './BandeauPlan.svelte';
 import EchellePlan from './EchellePlan.svelte';
+import { creerMesureur } from './mesure_texte.js';
 import { LARGEUR_ECHELLE_PX, modeleDessin } from './modele.js';
 import PlanDessin from './PlanDessin.svelte';
 
@@ -71,8 +73,10 @@ afterEach(demonterTout);
 
 /** Monte PlanDessin dans un <svg data-plan> d'épreuve de la taille de la
  *  fenêtre, au début du corps, sous la vue donnée ; caché, le conteneur est
- *  en display: none, et conteneur.style.display = '' le montre. */
-function monterPlan(modele, vue = { k: 1, tx: 0, ty: 0 }, { cache = false } = {}) {
+ *  en display: none, et conteneur.style.display = '' le montre. props
+ *  remplace { modele } : un accesseur qui lit un état réactif change le
+ *  modèle du composant monté. */
+function monterPlan(modele, vue = { k: 1, tx: 0, ty: 0 }, { cache = false, props = { modele } } = {}) {
   const conteneur = document.createElement('div');
   conteneur.dataset.surface = '';
   if (cache) conteneur.style.display = 'none';
@@ -87,7 +91,7 @@ function monterPlan(modele, vue = { k: 1, tx: 0, ty: 0 }, { cache = false } = {}
   groupe.setAttribute('data-vue', '');
   groupe.setAttribute('transform', transformDe(vue));
   svg.append(groupe);
-  const composant = mount(PlanDessin, { target: groupe, props: { modele }, context: CONTEXTE });
+  const composant = mount(PlanDessin, { target: groupe, props, context: CONTEXTE });
   flushSync();
   montes.push({ composant, conteneur });
   const boite = svg.getBoundingClientRect();
@@ -482,6 +486,113 @@ describe('le plan monté caché (point d\u{2019}attention 1)', () => {
       const nom = ligne.querySelector('[data-partie=nom]').textContent;
       expect(nom.startsWith('W') && nom.endsWith(MARQUE)).toBe(true);
     }
+  });
+
+  test('montré, caché, son modèle changé pendant qu\u{2019}il est caché, puis remontré : chaque ligne tient, chaque nom long s\u{2019}abrège sur la marque', async () => {
+    const charge = chargeDeTables([4, 8]);
+    avecProposition(charge);
+    const reactif = new SvelteMap([['modele', modeleDe(charge, { proposition: 1 })]]);
+    const { svg, conteneur } = monterPlan(null, { k: 1, tx: 300, ty: 350 }, {
+      props: {
+        get modele() {
+          return reactif.get('modele');
+        },
+      },
+    });
+    await deuxImages();
+    flushSync();
+    expect(lignesDe(svg, 1).length).toBe(4);
+    conteneur.style.display = 'none';
+    await deuxImages();
+    flushSync();
+    // Un autre modèle, posé pendant que le plan est caché : quatre-vingts
+    // « W » pour chaque nom.
+    const longs = structuredClone(charge);
+    for (const p of longs.participants) {
+      p.prenom = null;
+      p.nom = 'W'.repeat(80);
+    }
+    reactif.set('modele', modeleDe(longs, { proposition: 1 }));
+    flushSync();
+    await deuxImages();
+    conteneur.style.display = '';
+    await deuxImages();
+    flushSync();
+    const lignes = tous(svg, '[data-liste] > tspan');
+    expect(lignes.length).toBe(12);
+    for (const ligne of lignes) {
+      expect(ligne.getComputedTextLength()).toBeLessThanOrEqual(LARGEUR + 1e-3);
+      const nom = ligne.querySelector('[data-partie=nom]').textContent;
+      expect(nom.startsWith('W') && nom.endsWith(MARQUE)).toBe(true);
+    }
+  });
+
+  test('creerMesureur : la largeur nulle d\u{2019}un texte non rendu ne se retient pas ; rendu, la chaîne se mesure', () => {
+    const conteneur = document.createElement('div');
+    conteneur.style.display = 'none';
+    document.body.prepend(conteneur);
+    try {
+      const svg = document.createElementNS(SVG, 'svg');
+      const texte = document.createElementNS(SVG, 'text');
+      texte.setAttribute('font-size', '18');
+      svg.append(texte);
+      conteneur.append(svg);
+      const mesurer = creerMesureur(texte);
+      expect(mesurer('Ombrelle')).toBe(0);
+      conteneur.style.display = '';
+      expect(mesurer('Ombrelle')).toBeGreaterThan(0);
+      expect(mesurer('')).toBe(0);
+    } finally {
+      conteneur.remove();
+    }
+  });
+});
+
+describe('un nom porteur de balisage, des homonymes (point d\u{2019}attention 3)', () => {
+  test('le balisage reste du texte, dans un seul nœud ; deux « Iris Ombrelle » ont chacune leur ligne et leur numéro', () => {
+    const BALISAGES = ['<tspan font-size="200">X</tspan>', '</text><circle r="999"/>'];
+    const charge = chargeDeTables([8, 4]);
+    charge.participants[1].prenom = 'Iris';
+    charge.participants[1].nom = 'Ombrelle';
+    charge.participants[2].prenom = null;
+    charge.participants[2].nom = BALISAGES[0];
+    charge.participants[3].prenom = null;
+    charge.participants[3].nom = BALISAGES[1];
+    // Une proposition qui assied les huit premiers à la table 1.
+    avecProposition(charge, {
+      id: 1,
+      graine: 1,
+      arret: 1,
+      historique: 1,
+      produitVersion: 'epreuve',
+      siegesAttribues: false,
+      tables: [1, 2],
+      capacites: [8, 4],
+      tours: 1,
+      participants: charge.participants.map(({ id }) => id),
+      placement: [{ sieges: [[1, 2, 3, 4, 5, 6, 7, 8], [9, 10, 11, 12]], reserve: [] }],
+    });
+    const { svg } = monterPlan(modeleDe(charge, { proposition: 1 }), { k: 1, tx: 300, ty: 350 });
+    const liste = svg.querySelector('[data-liste="1"]');
+    const lignes = lignesDe(svg, 1);
+    expect(lignes.length).toBe(8);
+    // Chaque ligne d'un occupant sans réservation ni titre : sa tête et son
+    // nom, deux tspan ; rien d'autre sous la liste.
+    expect(liste.querySelectorAll('*').length).toBe(8 * 3);
+    expect([...liste.querySelectorAll('*')].every((e) => e.localName === 'tspan')).toBe(true);
+    expect(svg.querySelectorAll('circle[r="999"], [font-size="200"]').length).toBe(0);
+    const noms = tous(liste, '[data-partie=nom]');
+    expect(noms.length).toBe(8);
+    for (const nom of noms) expect(nom.childElementCount).toBe(0);
+    for (const balisage of BALISAGES) {
+      const portes = noms.filter(({ textContent }) => textContent === balisage || (textContent.endsWith(MARQUE) && balisage.startsWith(textContent.slice(0, -MARQUE.length))));
+      expect(portes.length, balisage).toBe(1);
+    }
+    const homonymes = noms.filter(({ textContent }) => textContent === 'Iris Ombrelle');
+    expect(homonymes.length).toBe(2);
+    const numeros = homonymes.map((nom) => nom.previousElementSibling.textContent);
+    expect(numeros.every((tete) => /^\d+\. $/.test(tete))).toBe(true);
+    expect(new Set(numeros).size).toBe(2);
   });
 });
 
