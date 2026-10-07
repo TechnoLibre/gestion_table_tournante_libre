@@ -77,7 +77,7 @@ verifier: ## Contrôle la version, le nom du livrable et le changelog (§ 18.5)
 	$(AVEC_NODE) node scripts/version.js controler
 
 .PHONY: essai_demarrage
-essai_demarrage: ## Lance Electron, lit le titre de sa fenêtre et ferme
+essai_demarrage: ## Construit la page et joue une séance par gestes dans Electron, en mode portable
 	$(AVEC_NODE) node scripts/essai_demarrage.js
 
 ifeq ($(OS),Windows_NT)
