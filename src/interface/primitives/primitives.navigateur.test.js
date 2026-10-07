@@ -836,10 +836,32 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
   // entre elles : la seconde Échap ferme le <dialog> sans que cancel puisse
   // l'empêcher. La fenêtre fermée pendant l'attente se rouvre aussitôt,
   // modale et toujours occupée ; la fin de l'action seule décide.
-  async function echapEnRafale(fois) {
-    for (let i = 0; i < fois; i += 1) await touche('Escape');
-    // L'événement close part dans une tâche à lui, après la touche.
-    await new Promise((fin) => setTimeout(fin, 0));
+  //
+  // L'événement close part dans une tâche à lui, après la touche : la rafale
+  // compte les fermetures — l'attribut open retiré, que MutationObserver
+  // signale dès la touche traitée — et les événements close reçus, et attend
+  // que chaque fermeture ait eu le sien. Au moins une Échap ferme la fenêtre.
+  async function echapEnRafale(fenetre, fois) {
+    let fermetures = 0;
+    let evenements = 0;
+    const observateur = new MutationObserver((releves) => {
+      fermetures += releves.filter(({ oldValue }) => oldValue !== null).length;
+    });
+    const surClose = () => {
+      evenements += 1;
+    };
+    observateur.observe(fenetre, { attributes: true, attributeFilter: ['open'], attributeOldValue: true });
+    fenetre.addEventListener('close', surClose);
+    try {
+      for (let i = 0; i < fois; i += 1) await touche('Escape');
+      await vi.waitFor(() => {
+        expect(fermetures).toBeGreaterThan(0);
+        expect(evenements).toBe(fermetures);
+      });
+    } finally {
+      observateur.disconnect();
+      fenetre.removeEventListener('close', surClose);
+    }
     await tick();
   }
 
@@ -857,10 +879,10 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
       const montage = await preparer();
       const { fenetre, appels, attente } = monterConfirmationDifferee(montage);
       await cliquer(fenetre.querySelector('[data-commande="confirmer"]'));
-      await echapEnRafale(fois);
+      await echapEnRafale(fenetre, fois);
       attendreOccupee(montage, fenetre, appels);
       // Une seconde rafale, la fenêtre déjà rouverte une fois.
-      await echapEnRafale(fois);
+      await echapEnRafale(fenetre, fois);
       attendreOccupee(montage, fenetre, appels);
       attente.resoudre();
       await vi.waitFor(() => expect(montage.seance.etat().charge.participants).toHaveLength(0));
@@ -874,7 +896,7 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
       const montage = await preparer();
       const { fenetre, appels, attente } = monterConfirmationDifferee(montage);
       await cliquer(fenetre.querySelector('[data-commande="confirmer"]'));
-      await echapEnRafale(fois);
+      await echapEnRafale(fenetre, fois);
       attendreOccupee(montage, fenetre, appels);
       await montage.seance.passerEnLecture();
       attente.resoudre();

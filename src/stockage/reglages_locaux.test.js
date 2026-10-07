@@ -71,8 +71,10 @@ function planificateur() {
   };
 }
 
-// Laisse s'écouler les promesses en attente et les rejets non traités.
-const attendre = () => new Promise((resolve) => setTimeout(resolve, 0));
+// Laisse s'écouler les promesses en attente et les rejets non traités :
+// setImmediate rappelle une fois vidées les microtâches, et après l'annonce
+// des rejets que rien ne traite ; il n'attend aucune durée.
+const attendre = () => new Promise((resolve) => setImmediate(resolve));
 
 // Exécute travail en relevant chaque rejet de promesse que rien ne traite ;
 // rend ce relevé.

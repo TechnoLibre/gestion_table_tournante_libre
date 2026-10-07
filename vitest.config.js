@@ -22,9 +22,38 @@ import { coeursDisponibles, reglagesSeries } from './test/machine.js';
 
 // Les séries node suivent le nombre de cœurs de la machine (test/machine.js) :
 // en deçà de quatre, des threads sur tous les cœurs, et les épreuves lourdes
-// de la série surveillée passent dans la série longue (§ 14.14).
-const SERIES = reglagesSeries(coeursDisponibles());
+// de la série surveillée passent dans la série longue (§ 14.14). Sous la
+// mesure de la couverture, que process.argv annonce par --coverage, elles
+// restent dans node, où se mesurent les seuils qu'elles couvrent.
+const SERIES = reglagesSeries(coeursDisponibles(), { couverture: process.argv.includes('--coverage') });
 const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
+
+// Les épreuves node qui lisent les composants de src/interface par le
+// système de fichiers — chaînes, couleurs, en-tête, jetons lus, écouteurs du
+// plan, version affichée, graphe des couches —, et celle qui importe
+// App.svelte pour en voir l'échec sous node.
+const RELANCES_D_UN_COMPOSANT = Object.freeze([
+  'test/arborescence.test.js',
+  'test/sources_interface.test.js',
+  'scripts/version.test.js',
+  'test/projets.test.js',
+  'test/licence.test.js',
+  'src/interface/palette.test.js',
+  'src/interface/plan/ecouteurs.test.js',
+]);
+
+// Les épreuves node qui lisent la feuille des jetons par le système de
+// fichiers — palette validée par calcul, var(--…) déclarés, couleurs des
+// sources, en-tête, version affichée —, et la garde des motifs, qui balaie
+// les feuilles de style de src/interface.
+const RELANCES_DES_JETONS = Object.freeze([
+  'src/interface/palette.test.js',
+  'src/interface/marques.test.js',
+  'test/sources_interface.test.js',
+  'test/licence.test.js',
+  'scripts/version.test.js',
+  'test/arborescence.test.js',
+]);
 
 export default defineConfig({
   test: {
@@ -65,23 +94,36 @@ export default defineConfig({
     // système de fichiers ; la coquille s'exécute dans un processus à part,
     // la configuration d'electron-builder se charge par un require natif et
     // lit capacitor.config.json, et le script de construction se lance
-    // depuis une copie. Chaque motif rattache ses fichiers aux épreuves qui
-    // les lisent, et au contrôle de version quand son point 6 les balaie. Un
-    // fichier qui répond à un motif ne relance que les épreuves nommées, et
-    // plus celles qui l'importeraient : un motif ne nomme donc aucun fichier
-    // qu'une épreuve importe. L'option se lit au niveau du lanceur : posée
-    // dans un projet, elle est ignorée sans avertissement.
+    // depuis une copie. Les composants de src/interface et la feuille des
+    // jetons se lisent comme du texte par les gardes qui les balaient ;
+    // sous node, sans greffon Svelte, aucun graphe ne les parcourt. Chaque
+    // motif rattache ses fichiers aux épreuves qui les lisent, et au
+    // contrôle de version quand son point 6 les balaie. Un fichier qui
+    // répond à un motif ne relance que les épreuves nommées, et plus celles
+    // qui l'importeraient : un motif relance donc toute épreuve qui importe
+    // l'un de ses fichiers — test/fichiers_electron.test.js importe
+    // electron/fichiers.js, test/projets.test.js importe App.svelte —, et ne
+    // nomme aucune table de libellés, que le graphe suffit à suivre.
+    // test/arborescence.test.js garde cette règle, et relève toute épreuve
+    // de la série node dont le texte lit un composant ou une feuille de
+    // style de src/interface sans que son motif la relance. L'option se lit au
+    // niveau du lanceur : posée dans un projet, elle est ignorée sans
+    // avertissement.
     watchTriggerPatterns: [
       { pattern: /(^|\/)(version\.json|package-lock\.json|CHANGELOG\.md|README\.md|GUIDE-[^/]*\.md)$/,
         testsToRun: () => 'scripts/version.test.js' },
       { pattern: /(^|\/)electron\/[^/]+$/,
-        testsToRun: () => ['test/coquille.test.js', 'test/livrable.test.js', 'scripts/version.test.js'] },
+        testsToRun: () => ['test/coquille.test.js', 'test/fichiers_electron.test.js', 'test/livrable.test.js', 'scripts/version.test.js'] },
       { pattern: /(^|\/)test\/electron_factice\.js$/,
         testsToRun: () => ['test/coquille.test.js', 'scripts/version.test.js'] },
       { pattern: /(^|\/)(electron-builder\.config\.cjs|capacitor\.config\.json)$/,
         testsToRun: () => ['test/livrable.test.js', 'scripts/construire_windows.test.js', 'scripts/version.test.js'] },
       { pattern: /(^|\/)scripts\/construire_windows\.sh$/,
         testsToRun: () => ['scripts/construire_windows.test.js', 'scripts/version.test.js'] },
+      { pattern: /(^|\/)src\/interface\/.+\.svelte$/,
+        testsToRun: () => [...RELANCES_D_UN_COMPOSANT] },
+      { pattern: /(^|\/)src\/interface\/jetons\.css$/,
+        testsToRun: () => [...RELANCES_DES_JETONS] },
     ],
     projects: [
       { test: {

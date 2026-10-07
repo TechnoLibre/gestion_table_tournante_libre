@@ -574,6 +574,16 @@ describe('version : contrôle du § 18.5, un défaut à la fois', () => {
       exigerEchecs(racine, [6], [/^6\. src\/interface\/bandeau\.js, ligne 3 : « 2026\.10\.05\.01 », forme affichée/]);
     }));
 
+  test('point 6 : un composant de src/interface qui porte la version affichée en dur', () =>
+    surArbre((racine) => {
+      ecrire(
+        racine,
+        'src/interface/Bandeau.svelte',
+        "<script>\n  let { version } = $props();\n</script>\n\n<span class=\"version\">{version}</span>\n<span>v2026.10.05.01</span>\n",
+      );
+      exigerEchecs(racine, [6], [/^6\. src\/interface\/Bandeau\.svelte, ligne 6 : « 2026\.10\.05\.01 », forme affichée/]);
+    }));
+
   test('point 6 : une forme technique hors de package.json et du module engendré', () =>
     surArbre((racine) => {
       ecrire(racine, 'vite.config.js', "export default { define: { V: '2026.1005.1' } };\n");

@@ -3,11 +3,12 @@
 
 // L'analyseur des chargements, test/chargements.js, que lisent les gardes de
 // l'arborescence et du livrable. Chaque épreuve donne un texte et les
-// chargements qu'il demande, dans l'ordre du texte. Les spécificateurs nus
+// chargements qu'il demande, dans l'ordre du texte, ou un composant Svelte et
+// le texte de ses blocs de script. Les spécificateurs nus
 // des données sont des paquets de devDependencies ou des modules de Node :
 // la garde des dépendances lit aussi ce fichier.
 import assert from 'node:assert/strict';
-import { chargements } from './chargements.js';
+import { blocsScript, chargements, scriptsDe } from './chargements.js';
 import { describe, test } from './lanceur.js';
 
 // Numéro, à partir de 1, de la ligne qui porte le caractère d'indice donné.
@@ -87,5 +88,55 @@ describe('chargements', () => {
       "const mot = 'import';",
     ].join('\n');
     assert.deepEqual(lus(texte), []);
+  });
+});
+
+describe('chargements : les blocs de script d’un composant Svelte', () => {
+  // Un composant à deux blocs, dont l'un sous attribut, du balisage qui écrit
+  // « import » en texte et en expression, un style à @import, et une balise
+  // de script en commentaire HTML.
+  const COMPOSANT = [
+    '<script module>',
+    "  import { tirer } from './module.js';",
+    '</script>',
+    '',
+    '<script>',
+    "  import { onMount } from 'svelte';",
+    "  import Voisin from './Voisin.svelte';",
+    '</script>',
+    '',
+    "<!-- <script>import { cache } from './commentaire.js';</script> -->",
+    "<p>import { faux } from './texte.js';</p>",
+    "<p>{import('./expression.js')}</p>",
+    '<style>',
+    "  @import 'jetons.css';",
+    '</style>',
+  ].join('\n');
+
+  test('le texte rendu garde la longueur et les lignes du composant ; seuls les blocs de script y restent', () => {
+    const scripts = scriptsDe(COMPOSANT);
+    assert.equal(scripts.length, COMPOSANT.length);
+    assert.equal(scripts.split('\n').length, COMPOSANT.split('\n').length);
+    assert.deepEqual(lus(scripts), ['2 ./module.js', '6 svelte', '7 ./Voisin.svelte']);
+    assert.deepEqual(scripts.split('\n')[5], "  import { onMount } from 'svelte';");
+    assert.match(scripts.split('\n')[10], /^ *$/);
+  });
+
+  test('les étendues désignent le contenu de chaque bloc, balises exclues, et un bloc non fermé court jusqu’à la fin', () => {
+    const blocs = blocsScript(COMPOSANT);
+    assert.equal(blocs.length, 2);
+    assert.deepEqual(
+      blocs.map(({ debut, fin }) => COMPOSANT.slice(debut, fin)),
+      ["\n  import { tirer } from './module.js';\n", "\n  import { onMount } from 'svelte';\n  import Voisin from './Voisin.svelte';\n"],
+    );
+    const ouvert = "<p></p>\n<script lang=\"js\">\nimport { a } from './a.js';";
+    assert.deepEqual(lus(scriptsDe(ouvert)), ['3 ./a.js']);
+  });
+
+  test('un composant sans bloc de script ne charge rien ; une balise voisine n’ouvre aucun bloc', () => {
+    for (const texte of ["<p>import { x } from './x.js';</p>", "<scripts>import { x } from './x.js';</scripts>"]) {
+      assert.deepEqual(blocsScript(texte), [], texte);
+      assert.deepEqual(lus(scriptsDe(texte)), [], texte);
+    }
   });
 });

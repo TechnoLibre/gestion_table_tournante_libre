@@ -1981,7 +1981,9 @@ describe("séance : ni horloge ni minuterie lues en direct (§ 14.7)", () => {
 
 // Laisse passer les tâches en attente : l'écrivain différé des réglages
 // écrit à la suite de sa minuterie, sans que celle-ci rende sa promesse.
-const laisser = () => new Promise((resolve) => setTimeout(resolve, 0));
+// setImmediate rappelle une fois vidées les microtâches, où s'enchaînent
+// les écritures du système de fichiers d'épreuve ; il n'attend aucune durée.
+const laisser = () => new Promise((resolve) => setImmediate(resolve));
 
 // Compte les objets atteints depuis valeur, chacun une fois, en affirmant
 // que chacun est figé.

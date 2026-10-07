@@ -5,25 +5,33 @@
 // géométrie du plan, le générateur de démonstrations, le stockage et
 // l'analyseur CSV n'appellent aucune source non reproductible (§ 14.7), et ne parcourent les clés d'un
 // objet que par exception nommée (§ 15.5, point 4) ; le graphe d'imports de
-// chaque couche ne rejoint que ce que le § 13.4 lui permet ; chaque paquet
-// importé est déclaré dans devDependencies ; une valeur du contrat de données
+// chaque couche, l'interface et ses composants compris, ne rejoint que ce que
+// le § 13.4 lui permet ; seuls deux lecteurs nommés touchent le pont de la
+// coquille (§ 13.1) ; hors de l'horloge, l'interface et l'application
+// n'arment aucune minuterie et ne lisent ni l'heure, ni l'aléa, ni la langue
+// (§ 19.4) ; chaque paquet importé est déclaré dans devDependencies, et aucun
+// paquet refusé ne l'est (§ 13.3, § 14.8) ; une valeur du contrat de données
 // n'a qu'une définition, celle de configuration.js ; la mesure de la
 // couverture joue la série node, publie chaque module et tient ses seuils
-// durs sur des modules qui existent (§ 14.13). Chaque relevé lit le
-// texte entier, commentaires et chaînes compris, hors celui des accès au
-// navigateur, qui saute les chaînes littérales : un commentaire qui nomme un
-// appel refusé fait échouer la garde comme l'appel lui-même. Chaque garde
-// refuse de passer sur un balayage vide (§ 14.2), et d'autres épreuves la
-// font tourner sur des arbres temporaires qui portent, à plus d'un niveau de
-// profondeur, les formes qu'elle refuse et des formes voisines qu'elle admet.
+// durs sur des modules qui existent (§ 14.13) ; les épreuves s'écrivent
+// selon le § 14.8, la série surveillée n'attend ni n'écrit hors d'un
+// temporaire, et ses motifs de surveillance ne retirent aucune relance
+// (§ 14.14). Chaque relevé lit le texte entier, commentaires et chaînes
+// compris, hors ceux qui disent le contraire — les accès au navigateur et au
+// pont, et les relevés des épreuves, sautent les chaînes littérales : un
+// commentaire qui nomme un appel refusé fait échouer la garde comme l'appel
+// lui-même. Chaque garde déclare son périmètre, refuse de passer sur un
+// balayage vide (§ 14.2), et d'autres épreuves la font tourner sur des
+// arbres temporaires qui portent, à plus d'un niveau de profondeur, les
+// formes qu'elle refuse et des formes voisines qu'elle admet.
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, matchesGlob, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, join, matchesGlob, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import configuration from '../vitest.config.js';
-import { chargements } from './chargements.js';
+import { blocsScript, chargements, scriptsDe } from './chargements.js';
 import { describe, test } from './lanceur.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
@@ -195,6 +203,7 @@ function releverDeterminisme(racine, admis = PARCOURS_DE_CLES_ADMIS) {
 // d'épreuve y ajoute ce qu'elle éprouve, ou en retire un arbre (sansArbre)
 // pour éprouver le refus d'un balayage vide.
 const MODULES_VIDES = Object.freeze({
+  'src/interface/a.js': '',
   'src/moteur/a.js': '',
   'src/geometrie/a.js': '',
   'src/demo/a.js': '',
@@ -480,13 +489,16 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 
 // La frontière de chaque couche (§ 13.4), dans l'ordre du relevé. arbres :
 // ceux de ses modules, dont requis nomme ceux qui doivent en fournir au moins
-// un — une couche encore à écrire peut manquer. exterieures : les couches de
-// src/ qu'elle n'importe pas. paquets : ceux qu'elle refuse, outre les
-// modules natifs de Node, que la page n'a pas et qu'aucune couche ne charge.
-// navigateur : null quand la couche y accède librement ; sinon, les fichiers
-// admis à y accéder, chacun dans son seul texte. Aucun module du parcours
-// n'importe un fichier admis : il ne passe qu'en paramètre, de la main de
-// l'application.
+// un — une couche encore à écrire peut manquer. exterieures : les arbres,
+// relatifs à la racine, qu'elle n'importe pas. frontieres : les arbres
+// qu'elle importe sans que le parcours les suive, leur propre garde les
+// tenant. paquets : ceux qu'elle refuse, outre les modules natifs de Node,
+// que la page n'a pas et qu'aucune couche ne charge. navigateur : null quand
+// la couche y accède librement ; sinon, les fichiers admis à y accéder,
+// chacun dans son seul texte. Aucun module du parcours n'importe un fichier
+// admis : il ne passe qu'en paramètre, de la main de l'application.
+// composants : vrai quand ses composants Svelte sont des modules de la
+// couche, lus par leurs blocs de script.
 //
 // Le moteur et la géométrie ne connaissent ni l'écran, ni les fichiers, ni ce
 // qui les commande. La géométrie est une couche à part, plus bas que le
@@ -496,42 +508,56 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // navigateur, par l'OPFS sous web et par le pont window.gtt sous Electron.
 // L'analyseur CSV lit le modèle du stockage. L'application câble le moteur,
 // le stockage, le CSV et les systèmes de fichiers des plateformes, sous
-// l'interface.
+// l'interface. L'interface n'importe que svelte, ses propres modules,
+// l'application et la géométrie : elle atteint le CSV par
+// src/application/csv.js, et le moteur par la table d'évaluation, sans que
+// sa garde le lui reproche, l'application le faisant par construction ;
+// importés en direct, le stockage, le CSV, le moteur, les démonstrations et
+// test/ sont refusés.
 const COUCHES = [
   {
     arbres: ['src/moteur'],
     requis: ['src/moteur'],
-    exterieures: ['interface', 'application', 'stockage'],
+    exterieures: ['src/interface', 'src/application', 'src/stockage'],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/geometrie'],
     requis: ['src/geometrie'],
-    exterieures: ['interface', 'application', 'stockage', 'moteur', 'csv', 'demo'],
+    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/moteur', 'src/csv', 'src/demo'],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/stockage'],
     requis: ['src/stockage'],
-    exterieures: ['interface', 'application', 'csv'],
+    exterieures: ['src/interface', 'src/application', 'src/csv'],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: ['src/stockage/fichiers_web.js', 'src/stockage/fichiers_electron.js'],
   },
   {
     arbres: ['src/csv'],
     requis: ['src/csv'],
-    exterieures: ['interface', 'application'],
+    exterieures: ['src/interface', 'src/application'],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/application'],
     requis: [],
-    exterieures: ['interface'],
+    exterieures: ['src/interface'],
     paquets: /^svelte$/,
     navigateur: null,
+  },
+  {
+    arbres: ['src/interface'],
+    requis: ['src/interface'],
+    exterieures: ['src/stockage', 'src/csv', 'src/moteur', 'src/demo', 'test'],
+    frontieres: ['src/application', 'src/geometrie'],
+    paquets: /^(?!svelte$)/,
+    navigateur: null,
+    composants: true,
   },
 ];
 
@@ -670,33 +696,52 @@ function cibleDe(racine, fichier, specificateur) {
   return null;
 }
 
+// Composants Svelte d'un arbre, à toute profondeur, triés.
+const composantsDe = (dossier) => fichiersDe(dossier).filter((fichier) => extname(fichier) === '.svelte').sort();
+
+// Le texte qu'un relevé de chargements lit dans un fichier : celui de ses
+// blocs de script pour un composant Svelte, le texte entier sinon.
+const texteDesChargements = (fichier, texte) => (extname(fichier) === '.svelte' ? scriptsDe(texte) : texte);
+
 // Relevé des refus de la frontière d'une couche dans son graphe d'imports.
 // Le parcours part des modules de ses arbres, à toute profondeur, épreuves
-// exclues. Il suit chaque chemin relatif, ou absolu depuis la racine, vers un
-// module JavaScript existant, chaque module une fois. Un type que la JSDoc
-// importe par import(…) compte comme un import. Un fichier d'une couche
-// extérieure n'est pas parcouru : l'importer est déjà un refus, comme
-// importer un fichier admis au navigateur. Un chemin sans extension en est un
-// aussi : Node ne le résout pas (§ 14.8), et le parcours ne suit pas le
-// module que Vite y trouverait. Un module natif de Node, que reconnaît
-// isBuiltin, est refusé : la page où la couche s'exécute n'en a aucun. Un
-// accès au navigateur n'est admis que dans le texte d'un fichier admis, parti
-// de lui-même. Chaque refus se lit « accès:ligne refus », où l'accès est la
-// suite des modules qui mène d'un module de départ à celui qui refuse. Lève
-// quand un arbre requis ne fournit aucun module.
-function releverCouche(racine, { arbres, requis, exterieures, paquets, navigateur }) {
+// exclues, et de leurs composants Svelte pour une couche à composants. Il
+// suit chaque chemin relatif, ou absolu depuis la racine, vers un module
+// JavaScript existant — ou un composant, pour une couche à composants —,
+// chaque fichier une fois. Un type que la JSDoc importe par import(…) compte
+// comme un import. Un fichier d'une couche extérieure n'est pas parcouru :
+// l'importer est déjà un refus, comme importer un fichier admis au
+// navigateur. Un fichier d'une frontière admise n'est ni refusé ni parcouru.
+// Un chemin sans extension est un refus : Node ne le résout pas (§ 14.8), et
+// le parcours ne suit pas le module que Vite y trouverait. Un module natif de
+// Node, que reconnaît isBuiltin, est refusé : la page où la couche s'exécute
+// n'en a aucun. Un accès au navigateur n'est admis que dans le texte d'un
+// fichier admis, parti de lui-même. Chaque refus se lit « accès:ligne
+// refus », où l'accès est la suite des fichiers qui mène d'un fichier de
+// départ à celui qui refuse. Lève quand un arbre requis ne fournit aucun
+// module, ni composant pour une couche à composants.
+function releverCouche(racine, { arbres, requis, exterieures, frontieres = [], paquets, navigateur, composants = false }) {
+  const departs = (arbre) => [
+    ...modulesDe(join(racine, arbre)),
+    ...(composants ? composantsDe(join(racine, arbre)).filter((f) => !EPREUVE.test(f)) : []),
+  ];
   for (const arbre of requis) {
-    assert.ok(modulesDe(join(racine, arbre)).length > 0, `${arbre} ne fournit aucun module`);
+    assert.ok(departs(arbre).length > 0, `${arbre} ne fournit aucun module`);
   }
-  const couches = exterieures.map((couche) => join(racine, 'src', couche));
-  const exterieur = (chemin) => couches.some((c) => chemin === c || chemin.startsWith(c + sep));
+  const dans = (arbresDonnes) => {
+    const chemins = arbresDonnes.map((arbre) => join(racine, arbre));
+    return (chemin) => chemins.some((c) => chemin === c || chemin.startsWith(c + sep));
+  };
+  const exterieur = dans(exterieures);
+  const frontiere = dans(frontieres);
+  const parcourable = (chemin) => EXTENSIONS_MODULE.has(extname(chemin)) || (composants && extname(chemin) === '.svelte');
   const admis = new Set((navigateur ?? []).map((fichier) => join(racine, fichier)));
-  const aParcourir = arbres.flatMap((arbre) => modulesDe(join(racine, arbre)));
+  const aParcourir = arbres.flatMap(departs);
   const acces = new Map(aParcourir.map((fichier) => [fichier, relative(racine, fichier)]));
   const refus = [];
   for (let i = 0; i < aParcourir.length; i += 1) {
     const fichier = aParcourir[i];
-    const texte = readFileSync(fichier, 'utf8');
+    const texte = texteDesChargements(fichier, readFileSync(fichier, 'utf8'));
     const trouves =
       navigateur === null || admis.has(fichier)
         ? []
@@ -714,7 +759,7 @@ function releverCouche(racine, { arbres, requis, exterieures, paquets, navigateu
         trouves.push({ indice, motif: `import ${specificateur}` });
       } else if (extname(cible) === '') {
         trouves.push({ indice, motif: `import ${specificateur} sans extension` });
-      } else if (!acces.has(cible) && EXTENSIONS_MODULE.has(extname(cible)) && existsSync(cible)) {
+      } else if (!frontiere(cible) && !acces.has(cible) && parcourable(cible) && existsSync(cible)) {
         acces.set(cible, `${acces.get(fichier)} → ${relative(racine, cible)}`);
         aParcourir.push(cible);
       }
@@ -1064,9 +1109,93 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
     ]);
   });
 
-  test('src/application peut manquer ; un src/moteur, un src/geometrie, un src/stockage ou un src/csv sans module fait échouer la garde', () => {
+  test("src/interface n'importe que svelte, ses propres modules, l'application et la géométrie ; elle lit les blocs de script de ses composants, et ne parcourt pas les frontières admises", () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      // Les trois composants de l'arbre d'épreuve du plan : deux bibliothèques
+      // de dessin, le stockage en direct, puis l'application qui importe le
+      // moteur, admise.
+      'src/interface/plan/Zoom.svelte': [
+        '<script>',
+        // Un paquet non déclaré s'interpole : la garde des dépendances lit
+        // ce fichier.
+        `  import { zoom } from ${JSON.stringify('d3-zoom')};`,
+        `  import Konva from ${JSON.stringify('konva')};`,
+        '</script>',
+        '<svg data-plan></svg>',
+      ].join('\n'),
+      'src/interface/accueil/Liste.svelte': [
+        '<script>',
+        "  import { lireDepot } from '../../stockage/depot.js';",
+        '</script>',
+      ].join('\n'),
+      'src/interface/generation/Lancer.svelte': [
+        '<script>',
+        "  import { lancer } from '../../application/generation.js';",
+        "  import { onMount } from 'svelte';",
+        "  import { writable } from 'svelte/store';",
+        '</script>',
+        "<p>import {'{'} faux {'}'} from '../../csv/texte.js';</p>",
+      ].join('\n'),
+      'src/application/generation.js': "import { rechercher } from '../moteur/recherche.js';\nimport { decouper } from '../csv/lecture.js';\n",
+      'src/moteur/recherche.js': 'export const rechercher = () => [];\n',
+      'src/csv/lecture.js': 'export const decouper = () => [];\n',
+      // L'interface atteint le CSV par l'application, non en direct.
+      'src/interface/import/modele.js': [
+        "import { exporter } from '../../application/csv.js';",
+        "import { decouper } from '../../csv/lecture.js';",
+        "import { centre } from '../../geometrie/vue.js';",
+        "import Fiche from './Fiche.svelte';",
+        "import { voisin } from './voisin';",
+        "/** @param {import('../../stockage/types.js').Charge} charge */",
+      ].join('\n'),
+      'src/application/csv.js': "import { decouper } from '../csv/lecture.js';\n",
+      // La géométrie n'est pas parcourue depuis l'interface : sa propre garde
+      // relève son import du moteur.
+      'src/geometrie/vue.js': "import { rechercher } from '../moteur/recherche.js';\n",
+      // Un composant importé se parcourt, bloc de module compris ; une
+      // épreuve de l'interface ne se parcourt pas.
+      'src/interface/import/Fiche.svelte': [
+        '<script module>',
+        "  import { PCG } from '../../demo/prng.js';",
+        '</script>',
+        '<script>',
+        "  import { readFileSync } from 'node:fs';",
+        "  import { aide } from '../../../test/aide.js';",
+        "  import { mesurer } from '../../moteur/indicateurs.js';",
+        "  import { ipcRenderer } from 'electron';",
+        '</script>',
+      ].join('\n'),
+      'src/interface/import/modele.test.js': `import { lireDepot } from '../../stockage/depot.js';\nimport ${JSON.stringify('jsdom')};\n`,
+      'src/interface/import/Import.navigateur.test.js': "import { page } from 'vitest/browser';\n",
+      // Un module hors des couches se parcourt depuis l'interface, et un
+      // composant qu'il importe aussi.
+      'src/interface/a.js': "import { outil } from '../commun/outil.js';\n",
+      'src/commun/outil.js': "import Calque from './Calque.svelte';\nexport const outil = Calque;\n",
+      'src/commun/Calque.svelte': "<script>\n  import { noms } from '../stockage/noms.js';\n</script>\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/geometrie/vue.js:1 import ../moteur/recherche.js',
+      'src/interface/import/modele.js:2 import ../../csv/lecture.js',
+      'src/interface/import/modele.js:5 import ./voisin sans extension',
+      'src/interface/import/modele.js:6 import ../../stockage/types.js',
+      'src/interface/accueil/Liste.svelte:2 import ../../stockage/depot.js',
+      'src/interface/import/Fiche.svelte:2 import ../../demo/prng.js',
+      'src/interface/import/Fiche.svelte:5 import node:fs',
+      'src/interface/import/Fiche.svelte:6 import ../../../test/aide.js',
+      'src/interface/import/Fiche.svelte:7 import ../../moteur/indicateurs.js',
+      'src/interface/import/Fiche.svelte:8 import electron',
+      'src/interface/plan/Zoom.svelte:2 import d3-zoom',
+      'src/interface/plan/Zoom.svelte:3 import konva',
+      'src/interface/a.js → src/commun/outil.js → src/commun/Calque.svelte:2 import ../stockage/noms.js',
+    ]);
+  });
+
+  test('src/application peut manquer ; un src/moteur, un src/geometrie, un src/stockage, un src/csv ou un src/interface sans module fait échouer la garde ; un composant seul suffit à l’interface', () => {
     assert.deepEqual(avecArbre(MODULES_VIDES, releverFrontiere), []);
-    for (const arbre of ['src/moteur', 'src/geometrie', 'src/stockage', 'src/csv']) {
+    const composantSeul = { ...sansArbre(MODULES_VIDES, 'src/interface'), 'src/interface/App.svelte': '<p></p>\n' };
+    assert.deepEqual(avecArbre(composantSeul, releverFrontiere), []);
+    for (const arbre of ['src/moteur', 'src/geometrie', 'src/stockage', 'src/csv', 'src/interface']) {
       const sansModule = { ...sansArbre(MODULES_VIDES, arbre), [`${arbre}/a.test.js`]: '' };
       assert.throws(
         () => avecArbre(sansModule, releverFrontiere),
@@ -1502,5 +1631,1114 @@ describe('arborescence : la couverture (§ 14.13)', () => {
     for (const [reporter, attendu] of rapporteurs) {
       assert.deepEqual(relever(reporter), attendu, JSON.stringify(reporter));
     }
+  });
+});
+
+// Fichiers du projet, en chemins absolus triés : la racine et ses arbres, à
+// toute profondeur, hors des dépendances — node_modules, à toute
+// profondeur — et, à la racine, du dépôt git, des sorties de construction et
+// de mesure : www, dist-electron, coverage et le cache .vitest.
+const HORS_DU_PROJET_A_LA_RACINE = new Set(['.git', 'www', 'dist-electron', 'coverage', '.vitest']);
+function fichiersDuProjet(racine) {
+  const fichiers = [];
+  const parcourir = (dossier) => {
+    for (const entree of readdirSync(dossier, { withFileTypes: true })) {
+      const chemin = join(dossier, entree.name);
+      const exclu = entree.name === 'node_modules' || (dossier === racine && HORS_DU_PROJET_A_LA_RACINE.has(entree.name));
+      if (entree.isDirectory() && !exclu) parcourir(chemin);
+      else if (entree.isFile()) fichiers.push(chemin);
+    }
+  };
+  parcourir(racine);
+  return fichiers.sort();
+}
+
+// Chemin relatif à la racine, en barres obliques : la forme que lisent les
+// motifs de vitest.config.js, sur tout système.
+const enBarres = (racine, fichier) => relative(racine, fichier).split(sep).join('/');
+
+// Le texte d'un fichier où chaque chaîne littérale de code est blanchie
+// (sansChaines), indices et lignes gardés. Un composant Svelte n'a de code
+// que dans ses blocs de script : chacun est blanchi à part, et le balisage
+// reste tel quel.
+function codeSansChaines(fichier, texte) {
+  if (extname(fichier) !== '.svelte') return sansChaines(texte);
+  let sortie = '';
+  let fin = 0;
+  for (const { debut, fin: finBloc } of blocsScript(texte)) {
+    sortie += texte.slice(fin, debut) + sansChaines(texte.slice(debut, finBloc));
+    fin = finBloc;
+  }
+  return sortie + texte.slice(fin);
+}
+
+// Vrai quand le chargement relevé à cet indice est du code : son mot-clé —
+// from, import ou require — subsiste dans le texte sans ses chaînes. Une
+// instruction écrite dans une chaîne, donnée d'épreuve, n'en est pas un.
+const estDuCode = (code, indice) => LETTRE_DE_MOT.test(code[indice] ?? '');
+
+// Relevé « fichier:ligne motif » des motifs donnés dans un texte, par ligne
+// puis dans l'ordre des motifs ; chaque motif est [nom, expression à g].
+const releverMotifs = (nom, texte, motifs) =>
+  motifs
+    .flatMap(([motif, expression], rang) =>
+      [...texte.matchAll(expression)].map(({ index }) => ({ ligne: ligneDe(texte, index), rang, motif })),
+    )
+    .sort((a, b) => a.ligne - b.ligne || a.rang - b.rang)
+    .map(({ ligne, motif }) => `${nom}:${ligne} ${motif}`);
+
+// Le pont de la coquille (§ 13.1) : la page n'atteint le processus principal
+// que par window.gtt, et deux lecteurs nommés le lisent. Un accès se relève
+// par un nom de l'objet global — window, globalThis, self — suivi de
+// « .gtt », de « ?.gtt » ou de « ['gtt'] », ou par une déstructuration qui
+// en tire gtt. Le relevé à point lit le code sans ses chaînes : le nom d'un
+// fichier « ….gtt.json » est une chaîne ; celui à crochet lit le texte
+// entier, la chaîne y étant le nom même.
+const ACCES_AU_PONT = [
+  ['.gtt', /\b(window|globalThis|self)\s*\??\.\s*gtt\b/g, 'code'],
+  ["['gtt']", /\b(window|globalThis|self)\s*(?:\?\.)?\s*\[\s*(['"`])gtt\2\s*\]/g, 'texte'],
+  ['{ gtt }', /\{[^{}]*\bgtt\b[^{}]*\}\s*=\s*(window|globalThis|self)\b/g, 'code'],
+];
+
+// Les deux lecteurs du pont, chacun par son fichier : le relevé admet tout
+// accès de son texte.
+const LECTEURS_DU_PONT = [
+  {
+    fichier: join('src', 'main.js'),
+    raison: 'choisit la plateforme : construit le système de fichiers et le presse-papiers de la coquille',
+  },
+  {
+    fichier: join('src', 'stockage', 'fichiers_electron.js'),
+    raison: 'son paramètre par défaut lit window.gtt.fichiers ; nul ne l’importe hors de src/main.js',
+  },
+];
+
+// Relevé « fichier:ligne accès » des accès au pont dans les modules et les
+// composants de src/, épreuves exclues, hors des lecteurs nommés ; par
+// fichier, par ligne, puis dans l'ordre de ACCES_AU_PONT. Suit une ligne
+// « lecteur sans objet : fichier » par lecteur dont le texte n'accède pas au
+// pont. Lève quand src/ ne fournit aucun fichier.
+function releverPont(racine, lecteurs = LECTEURS_DU_PONT) {
+  const fichiers = fichiersDe(join(racine, 'src'))
+    .filter((f) => (EXTENSIONS_MODULE.has(extname(f)) || extname(f) === '.svelte') && !EPREUVE.test(f))
+    .sort();
+  assert.ok(fichiers.length > 0, 'src ne fournit aucun fichier');
+  const servis = new Set();
+  const releve = fichiers.flatMap((fichier) => {
+    const nom = relative(racine, fichier);
+    const texte = readFileSync(fichier, 'utf8');
+    const lus = { code: codeSansChaines(fichier, texte), texte };
+    const trouves = ACCES_AU_PONT.flatMap(([forme, motif, lu], rang) =>
+      [...lus[lu].matchAll(motif)].map(({ index, 1: objet }) => ({
+        ligne: ligneDe(texte, index),
+        rang,
+        acces: forme === '{ gtt }' ? `{ gtt } = ${objet}` : `${objet}${forme}`,
+      })),
+    );
+    if (lecteurs.some((l) => l.fichier === nom)) {
+      if (trouves.length > 0) servis.add(nom);
+      return [];
+    }
+    return trouves
+      .sort((a, b) => a.ligne - b.ligne || a.rang - b.rang)
+      .map(({ ligne, acces }) => `${nom}:${ligne} ${acces}`);
+  });
+  const sansObjet = lecteurs.filter(({ fichier }) => !servis.has(fichier)).map(({ fichier }) => `lecteur sans objet : ${fichier}`);
+  return [...releve, ...sansObjet];
+}
+
+describe('arborescence : le pont de la coquille (§ 13.1)', () => {
+  test('dans src/, seuls src/main.js et src/stockage/fichiers_electron.js lisent window.gtt', () => {
+    assert.deepEqual(releverPont(RACINE), []);
+  });
+
+  test('la garde relève chaque accès par sa ligne, composants compris, hors épreuves et hors chaînes ; un lecteur qui ne lit plus le pont est sans objet', () => {
+    const fichiers = {
+      'src/interface/primitives/Copier.svelte': [
+        '<script>',
+        '  const copier = (texte) => window.gtt.copier(texte);',
+        "  const nom = 'evenement.gtt.json';",
+        '</script>',
+        '<button onclick={() => window.gtt.copier(nom)}>{nom}</button>',
+      ].join('\n'),
+      'src/application/presse.js': [
+        "export const a = globalThis?.gtt ?? self.gtt;",
+        "export const b = window['gtt'].fichiers;",
+        'const { gtt } = window;',
+        "export const c = 'window.gtt' + `${'self.gtt'}`;",
+        '// window.gtt se lit aussi dans un commentaire',
+        'export const d = fenetre.gtt + windowgtt;',
+      ].join('\n'),
+      'src/interface/App.navigateur.test.js': 'window.gtt = pont;\n',
+      'src/application/presse.test.js': 'export const e = window.gtt;\n',
+      'src/main.js': 'const pont = window.gtt;\n',
+      'src/stockage/fichiers_electron.js': 'export const creer = (pont) => pont;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverPont), [
+      'src/application/presse.js:1 globalThis.gtt',
+      'src/application/presse.js:1 self.gtt',
+      "src/application/presse.js:2 window['gtt']",
+      'src/application/presse.js:3 { gtt } = window',
+      'src/application/presse.js:5 window.gtt',
+      'src/interface/primitives/Copier.svelte:2 window.gtt',
+      'src/interface/primitives/Copier.svelte:5 window.gtt',
+      `lecteur sans objet : ${join('src', 'stockage', 'fichiers_electron.js')}`,
+    ]);
+    assert.throws(() => avecArbre({ 'test/a.js': '' }, releverPont), /src ne fournit aucun fichier/);
+  });
+});
+
+// Les minuteries que seule l'horloge de l'application arme (§ 19.4).
+// requestAnimationFrame, qui regroupe les mouvements par image et ne mesure
+// rien, n'en est pas une.
+const MINUTERIES = [
+  ['setTimeout', /\bsetTimeout\b/g],
+  ['setInterval', /\bsetInterval\b/g],
+  ['requestIdleCallback', /\brequestIdleCallback\b/g],
+];
+
+// Les arbres où l'heure ne se lit que par src/application/horloge.js, et le
+// point d'entrée de la page, qui la construit.
+const ARBRES_D_UNE_HORLOGE = ['src/interface', 'src/application'];
+const ENTREE_DE_LA_PAGE = join('src', 'main.js');
+const HORLOGE = join('src', 'application', 'horloge.js');
+
+// Sources admises hors de l'horloge, chacune par son fichier et le nom de
+// l'appel tel que le relevé le nomme : elle admet chaque occurrence de cet
+// appel dans ce fichier, et rien d'autre.
+const SOURCES_ADMISES_HORS_HORLOGE = [
+  {
+    fichier: ENTREE_DE_LA_PAGE,
+    appel: 'crypto.randomUUID',
+    raison: "les identifiants d'événement, que src/main.js passe à App en propriété",
+  },
+];
+
+// Relevé « fichier:ligne appel » des minuteries et des sources non
+// reproductibles (SOURCES_NON_REPRODUCTIBLES : heure, aléa, tirages de
+// crypto, tri et mise en forme selon la langue) dans les modules et les
+// composants de src/interface et de src/application, épreuves exclues, et
+// dans src/main.js ; horloge.js est hors du relevé. Le texte se lit entier,
+// commentaires et chaînes compris, comme celui du déterminisme. Par fichier,
+// par ligne, puis dans l'ordre de MINUTERIES et de SOURCES_NON_REPRODUCTIBLES ;
+// suit une ligne « exception sans objet : fichier appel » par exception qui
+// n'admet rien. Lève quand l'un des arbres ne fournit aucun fichier.
+function releverHorloge(racine, admis = SOURCES_ADMISES_HORS_HORLOGE) {
+  const fichiers = ARBRES_D_UNE_HORLOGE.flatMap((arbre) => {
+    const trouves = [...modulesDe(join(racine, arbre)), ...composantsDe(join(racine, arbre)).filter((f) => !EPREUVE.test(f))];
+    assert.ok(trouves.length > 0, `${arbre} ne fournit aucun fichier`);
+    return trouves;
+  });
+  if (existsSync(join(racine, ENTREE_DE_LA_PAGE))) fichiers.push(join(racine, ENTREE_DE_LA_PAGE));
+  const servies = new Set();
+  const releve = fichiers
+    .filter((fichier) => relative(racine, fichier) !== HORLOGE)
+    .sort()
+    .flatMap((fichier) => {
+      const nom = relative(racine, fichier);
+      return releverMotifs(nom, readFileSync(fichier, 'utf8'), [...MINUTERIES, ...SOURCES_NON_REPRODUCTIBLES]).filter((ligne) => {
+        const exception = admis.find((e) => e.fichier === nom && ligne.endsWith(` ${e.appel}`));
+        if (exception !== undefined) servies.add(exception);
+        return exception === undefined;
+      });
+    });
+  const sansObjet = admis
+    .filter((exception) => !servies.has(exception))
+    .map(({ fichier, appel }) => `exception sans objet : ${fichier} ${appel}`);
+  return [...releve, ...sansObjet];
+}
+
+describe('arborescence : une horloge (§ 19.4, § 14.7)', () => {
+  test("hors d'horloge.js, ni src/interface, ni src/application, ni src/main.js n'arment une minuterie ni ne lisent l'heure, l'aléa ou la langue ; src/main.js tire les identifiants d'événement", () => {
+    assert.deepEqual(releverHorloge(RACINE), []);
+  });
+
+  test('la garde relève chaque appel par sa ligne, composants compris, à toute profondeur, hors épreuves et hors horloge.js ; requestAnimationFrame est admis ; une exception sans objet se relève', () => {
+    const fichiers = {
+      'src/interface/plan/Pression.svelte': [
+        '<script>',
+        "  import { getContext } from 'svelte';",
+        '  const minuterie = setTimeout(() => {}, 500);',
+        '  const image = requestAnimationFrame(() => {});',
+        '</script>',
+        '<p>{new Date().getFullYear()}</p>',
+      ].join('\n'),
+      'src/interface/plan/vue_plan.js': [
+        'export const a = setInterval(f, 10) + requestIdleCallback(f);',
+        "export const b = noms.sort((x, y) => x.localeCompare(y, 'fr'));",
+        'export const c = new Intl.NumberFormat().format(n) + n.toLocaleString();',
+        'export const d = Date.now() - performance.now();',
+        'export const e = cancelAnimationFrame(image) + Date.UTC(2000, 0, 1);',
+      ].join('\n'),
+      'src/application/sous/tirage.js': 'export const f = Math.random() + crypto.randomUUID();\n',
+      'src/application/horloge.js': 'export const g = () => setTimeout(f, 0) + new Date() + performance.now();\n',
+      'src/application/seance.test.js': 'const laisser = () => new Promise((r) => setTimeout(r, 0));\n',
+      'src/interface/App.navigateur.test.js': 'await new Promise((r) => setTimeout(r, 10));\n',
+      'src/main.js': 'const id = () => crypto.randomUUID();\nconst t = Date.now();\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverHorloge), [
+      'src/application/sous/tirage.js:1 Math.random',
+      'src/application/sous/tirage.js:1 crypto.randomUUID',
+      'src/interface/plan/Pression.svelte:3 setTimeout',
+      'src/interface/plan/Pression.svelte:6 new Date',
+      'src/interface/plan/vue_plan.js:1 setInterval',
+      'src/interface/plan/vue_plan.js:1 requestIdleCallback',
+      'src/interface/plan/vue_plan.js:2 localeCompare',
+      'src/interface/plan/vue_plan.js:3 toLocale…',
+      'src/interface/plan/vue_plan.js:3 Intl',
+      'src/interface/plan/vue_plan.js:4 Date.now',
+      'src/interface/plan/vue_plan.js:4 performance.now',
+      `${join('src', 'main.js')}:2 Date.now`,
+    ]);
+    const sansTirage = { ...fichiers, 'src/main.js': 'const t = 0;\n' };
+    assert.deepEqual(avecArbre(sansTirage, releverHorloge).at(-1), `exception sans objet : ${join('src', 'main.js')} crypto.randomUUID`);
+    for (const arbre of ARBRES_D_UNE_HORLOGE) {
+      const sansFichier = { ...sansArbre(fichiers, arbre), [`${arbre}/a.test.js`]: '' };
+      assert.throws(() => avecArbre(sansFichier, releverHorloge), new RegExp(`${arbre} ne fournit aucun fichier`), arbre);
+    }
+  });
+});
+
+// Paquets refusés (§ 13.3, § 14.8), chacun par le motif de son nom : un outil
+// qui déduit les styles en lisant les sources élague les classes d'état
+// composées à l'exécution ; D3 garde la transformation du zoom hors du
+// modèle ; jsdom et ses voisins n'ont pas de mise en page, et le style
+// calculé y devient une formalité ; les autres lanceurs et bibliothèques
+// d'assertion doublent Vitest et node:assert/strict.
+const PAQUETS_REFUSES = [
+  /^tailwindcss$/, /^@tailwindcss\//, /^unocss$/, /^windicss$/, /^purgecss$/, /^@fullhuman\/postcss-purgecss$/,
+  /^d3$/, /^d3-/,
+  /^jsdom$/, /^happy-dom$/, /^@testing-library\//,
+  /^jest$/, /^mocha$/, /^chai$/, /^sinon$/, /^nyc$/, /^karma$/, /^jasmine$/, /^qunit$/,
+];
+
+// Les champs de package.json qui déclarent un paquet.
+const CHAMPS_DE_PAQUETS = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+
+// Configurations, à la racine, d'un outil qui lit les sources pour en
+// déduire les styles.
+const CONFIGURATION_REFUSEE = /^(?:tailwind|uno|postcss)\.config\.[^/]+$/;
+
+// Ce que vite.config.js charge : Vite et le greffon Svelte, rien d'autre.
+const CHARGEMENTS_DE_VITE = new Set(['vite', '@sveltejs/vite-plugin-svelte']);
+
+// Éléments d'une liste écrite entre crochets, séparés par les virgules de
+// premier niveau, blancs de bord retirés, vides exclus.
+function elementsDeListe(liste) {
+  const elements = [];
+  let profondeur = 0;
+  let debut = 0;
+  for (let i = 0; i <= liste.length; i += 1) {
+    const c = liste[i];
+    if (c === '(' || c === '[' || c === '{') profondeur += 1;
+    else if (c === ')' || c === ']' || c === '}') profondeur -= 1;
+    else if (i === liste.length || (c === ',' && profondeur === 0)) {
+      elements.push(liste.slice(debut, i).trim());
+      debut = i + 1;
+    }
+  }
+  return elements.filter((element) => element !== '');
+}
+
+// Relevé des dépendances refusées : chaque paquet refusé de package.json,
+// champ par champ dans l'ordre de CHAMPS_DE_PAQUETS, « package.json champ
+// paquet » ; chaque configuration refusée de la racine, « fichier à la
+// racine » ; puis, dans vite.config.js, chaque chargement autre que Vite et
+// le greffon Svelte, « vite.config.js:ligne import x », et chaque greffon
+// autre qu'un appel à svelte, « vite.config.js:ligne greffon x ». Lève quand
+// package.json ne déclare aucun paquet, ou que vite.config.js manque.
+function releverDependancesRefusees(racine) {
+  const paquet = JSON.parse(readFileSync(join(racine, 'package.json'), 'utf8'));
+  const declares = CHAMPS_DE_PAQUETS.flatMap((champ) => Object.keys(paquet[champ] ?? {}).sort().map((nom) => ({ champ, nom })));
+  assert.ok(declares.length > 0, 'package.json ne déclare aucun paquet');
+  const refus = declares
+    .filter(({ nom }) => PAQUETS_REFUSES.some((motif) => motif.test(nom)))
+    .map(({ champ, nom }) => `package.json ${champ} ${nom}`);
+  const configurations = readdirSync(racine, { withFileTypes: true })
+    .filter((entree) => entree.isFile() && CONFIGURATION_REFUSEE.test(entree.name))
+    .map((entree) => entree.name)
+    .sort();
+  refus.push(...configurations.map((nom) => `${nom} à la racine`));
+  const texte = readFileSync(join(racine, 'vite.config.js'), 'utf8');
+  const code = sansChaines(texte);
+  for (const { indice, specificateur, argument } of chargements(texte)) {
+    if (estDuCode(code, indice) && !CHARGEMENTS_DE_VITE.has(specificateur)) {
+      refus.push(`vite.config.js:${ligneDe(texte, indice)} import ${specificateur ?? argument}`);
+    }
+  }
+  const greffons = /\bplugins\s*:\s*\[/.exec(code);
+  if (greffons === null) {
+    refus.push('vite.config.js : aucun greffon Svelte');
+  } else {
+    const debut = greffons.index + greffons[0].length;
+    let fin = debut;
+    for (let profondeur = 1; fin < code.length && profondeur > 0; fin += 1) {
+      if (code[fin] === '[') profondeur += 1;
+      if (code[fin] === ']') profondeur -= 1;
+    }
+    const liste = elementsDeListe(code.slice(debut, fin - 1));
+    if (!liste.some((element) => /^svelte\s*\(/.test(element))) refus.push('vite.config.js : aucun greffon Svelte');
+    for (const element of liste.filter((e) => !/^svelte\s*\(/.test(e))) {
+      refus.push(`vite.config.js:${ligneDe(code, code.indexOf(element, debut))} greffon ${element.replace(/\s+/g, ' ')}`);
+    }
+  }
+  return refus;
+}
+
+describe('arborescence : dépendances refusées (§ 13.3, § 14.8)', () => {
+  test('ni outil qui lit les sources pour les styles, ni D3, ni jsdom, ni autre lanceur ; vite.config.js ne charge que le greffon Svelte', () => {
+    assert.deepEqual(releverDependancesRefusees(RACINE), []);
+  });
+
+  test('la garde relève un paquet refusé dans chaque champ, une configuration refusée à la racine, et un greffon ou un chargement de plus dans vite.config.js', () => {
+    const vite = [
+      "import { defineConfig } from 'vite';",
+      "import { svelte } from '@sveltejs/vite-plugin-svelte';",
+      'export default defineConfig({ base: \'./\', plugins: [svelte()] });',
+    ].join('\n');
+    const conforme = {
+      'package.json': JSON.stringify({ devDependencies: { svelte: '^5', vite: '^8', vitest: '^5' } }),
+      'vite.config.js': vite,
+      'src/postcss.config.js': '',
+    };
+    assert.deepEqual(avecArbre(conforme, releverDependancesRefusees), []);
+    const avec = (devDependencies) => ({ ...conforme, 'package.json': JSON.stringify({ devDependencies }) });
+    assert.deepEqual(avecArbre(avec({ svelte: '^5', tailwindcss: '^4' }), releverDependancesRefusees), [
+      'package.json devDependencies tailwindcss',
+    ]);
+    assert.deepEqual(avecArbre(avec({ svelte: '^5', jsdom: '^26' }), releverDependancesRefusees), [
+      'package.json devDependencies jsdom',
+    ]);
+    const tout = {
+      ...conforme,
+      'package.json': JSON.stringify({
+        dependencies: { d3: '^7', 'd3-zoom': '^3' },
+        devDependencies: {
+          '@tailwindcss/vite': '^4', unocss: '^0', windicss: '^3', purgecss: '^7', '@fullhuman/postcss-purgecss': '^7',
+          'happy-dom': '^18', '@testing-library/svelte': '^5', jest: '^30', mocha: '^11', chai: '^5', sinon: '^21',
+          nyc: '^17', karma: '^6', jasmine: '^5', qunit: '^2', svelte: '^5', d3x: '^1', 'jest-voisin': '^1',
+        },
+        optionalDependencies: { 'd3-selection': '^3' },
+        peerDependencies: { tailwindcss: '^4' },
+      }),
+      'tailwind.config.js': '',
+      'uno.config.ts': '',
+      'postcss.config.cjs': '',
+      'vite.config.js': [
+        "import { defineConfig } from 'vite';",
+        "import { svelte } from '@sveltejs/vite-plugin-svelte';",
+        `import tailwind from ${JSON.stringify('@tailwindcss/vite')};`,
+        "import { greffon } from './greffon.js';",
+        'export default defineConfig({',
+        '  plugins: [',
+        '    svelte({ compilerOptions: {} }),',
+        '    tailwind(),',
+        '  ],',
+        '});',
+      ].join('\n'),
+    };
+    assert.deepEqual(avecArbre(tout, releverDependancesRefusees), [
+      'package.json dependencies d3',
+      'package.json dependencies d3-zoom',
+      'package.json devDependencies @fullhuman/postcss-purgecss',
+      'package.json devDependencies @tailwindcss/vite',
+      'package.json devDependencies @testing-library/svelte',
+      'package.json devDependencies chai',
+      'package.json devDependencies happy-dom',
+      'package.json devDependencies jasmine',
+      'package.json devDependencies jest',
+      'package.json devDependencies karma',
+      'package.json devDependencies mocha',
+      'package.json devDependencies nyc',
+      'package.json devDependencies purgecss',
+      'package.json devDependencies qunit',
+      'package.json devDependencies sinon',
+      'package.json devDependencies unocss',
+      'package.json devDependencies windicss',
+      'package.json optionalDependencies d3-selection',
+      'package.json peerDependencies tailwindcss',
+      'postcss.config.cjs à la racine',
+      'tailwind.config.js à la racine',
+      'uno.config.ts à la racine',
+      'vite.config.js:3 import @tailwindcss/vite',
+      'vite.config.js:4 import ./greffon.js',
+      'vite.config.js:8 greffon tailwind()',
+    ]);
+    const sansSvelte = { ...conforme, 'vite.config.js': "import { defineConfig } from 'vite';\nexport default defineConfig({});\n" };
+    assert.deepEqual(avecArbre(sansSvelte, releverDependancesRefusees), ['vite.config.js : aucun greffon Svelte']);
+    assert.throws(() => avecArbre({ ...conforme, 'package.json': '{}' }, releverDependancesRefusees), /package.json ne déclare aucun paquet/);
+  });
+});
+
+// Le lanceur d'épreuves : vitest, ses sous-chemins et ses paquets @vitest/.
+const LANCEUR_D_EPREUVES = /^(?:vitest(?:\/|$)|@vitest\/)/;
+const EPREUVE_NAVIGATEUR = /\.navigateur\.test\.[cm]?js$/;
+
+// Ce que le texte sans chaînes d'une épreuve node ne porte pas (§ 14.8) : les
+// assertions de Vitest, que node:assert/strict remplace, et l'objet env
+// d'import.meta, que Node ne fournit pas.
+const ECRITURE_NODE = [
+  ['expect', /\bexpect\s*(?:\?\.)?\s*\(/g],
+  ['import.meta.env', /\bimport\s*\.\s*meta\s*\??\.\s*env\b/g],
+];
+
+// Les chargements du lanceur admis, chacun par son fichier et son
+// spécificateur. test/lanceur.js réexporte test et describe, le point que
+// change le repli sous node --test (§ 14.8). vitest.config.js n'est pas une
+// épreuve : c'est la configuration du lanceur, que lisent les gardes qui
+// l'éprouvent — motifs de surveillance, séries selon la machine, rapporteur,
+// options de Chromium — et que les épreuves chargent telle que le lanceur la
+// charge ; sous node --test, ces gardes mêmes la lisent.
+const LANCEUR_ADMIS = [
+  {
+    fichier: join('test', 'lanceur.js'),
+    specificateur: 'vitest',
+    raison: 'réexporte test et describe de vitest ; remplacer sa ligne fait tourner la série sous node --test',
+  },
+  {
+    fichier: 'vitest.config.js',
+    specificateur: 'vitest/config',
+    raison: 'defineConfig, de la configuration du lanceur que les gardes chargent',
+  },
+  {
+    fichier: 'vitest.config.js',
+    specificateur: '@vitest/browser-playwright',
+    raison: 'le pilote du projet navigateur, de la configuration du lanceur que les gardes chargent',
+  },
+];
+
+// Relevé de l'écriture des épreuves node et node-long (§ 14.8) : chaque
+// *.test.js du projet hors des épreuves du navigateur, et chaque module
+// JavaScript qu'ils importent, à toute profondeur, par un chemin relatif ou
+// absolu depuis la racine — le parcours ne suit ni un composant ni un autre
+// fichier. Sur le texte sans chaînes, il relève les assertions de Vitest et
+// l'objet env d'import.meta ; parmi les chargements dont le mot-clé
+// subsiste dans ce texte, le lanceur d'épreuves, un spécificateur à suffixe
+// de Vite — « ?raw » comme tout autre — et un chemin sans extension. Chaque
+// refus se lit « accès:ligne refus », l'accès étant la suite des fichiers
+// qui y mène depuis une épreuve, comme dans releverCouche ; suit une ligne
+// « exception sans objet : fichier spécificateur » par chargement admis
+// qu'aucun fichier parcouru ne fait. Lève quand le projet ne porte aucune
+// épreuve node.
+function releverEcritureDesEpreuves(racine, admis = LANCEUR_ADMIS) {
+  const epreuves = fichiersDuProjet(racine).filter((f) => EPREUVE.test(f) && !EPREUVE_NAVIGATEUR.test(f));
+  assert.ok(epreuves.length > 0, 'aucune épreuve node');
+  const aParcourir = [...epreuves];
+  const acces = new Map(epreuves.map((fichier) => [fichier, relative(racine, fichier)]));
+  const servies = new Set();
+  const refus = [];
+  for (let i = 0; i < aParcourir.length; i += 1) {
+    const fichier = aParcourir[i];
+    const nom = relative(racine, fichier);
+    const texte = readFileSync(fichier, 'utf8');
+    const code = sansChaines(texte);
+    const trouves = ECRITURE_NODE.flatMap(([motif, expression]) =>
+      [...code.matchAll(expression)].map(({ index }) => ({ indice: index, motif })),
+    );
+    for (const { indice, specificateur } of chargementsLitteraux(texte)) {
+      if (!estDuCode(code, indice)) continue;
+      const cible = cibleDe(racine, fichier, specificateur);
+      if (LANCEUR_D_EPREUVES.test(specificateur)) {
+        const exception = admis.find((e) => e.fichier === nom && e.specificateur === specificateur);
+        if (exception === undefined) trouves.push({ indice, motif: `import ${specificateur}` });
+        else servies.add(exception);
+      } else if (specificateur.includes('?')) {
+        trouves.push({ indice, motif: `import ${specificateur} : suffixe de Vite` });
+      } else if (cible !== null && extname(cible) === '') {
+        trouves.push({ indice, motif: `import ${specificateur} sans extension` });
+      } else if (
+        cible !== null &&
+        !acces.has(cible) &&
+        EXTENSIONS_MODULE.has(extname(cible)) &&
+        !cible.split(sep).includes('node_modules') &&
+        existsSync(cible)
+      ) {
+        acces.set(cible, `${acces.get(fichier)} → ${relative(racine, cible)}`);
+        aParcourir.push(cible);
+      }
+    }
+    trouves.sort((a, b) => a.indice - b.indice);
+    refus.push(...trouves.map(({ indice, motif }) => `${acces.get(fichier)}:${ligneDe(texte, indice)} ${motif}`));
+  }
+  const sansObjet = admis
+    .filter((e) => !servies.has(e))
+    .map(({ fichier, specificateur }) => `exception sans objet : ${fichier} ${specificateur}`);
+  return [...refus, ...sansObjet];
+}
+
+// Ce qu'une épreuve du navigateur n'asserte pas : la présence d'une classe,
+// qui ne dit rien de ce qui est peint (§ 14.2).
+const ASSERTIONS_DE_CLASSE = [
+  ['classList.contains', /\bclassList\s*\??\.\s*contains\b/g],
+  ['toHaveClass', /\btoHaveClass\b/g],
+  ['className', /\bclassName\b/g],
+];
+
+// Les délais fixes, chacun par son appel : une épreuve attend un état, un
+// événement ou une image, jamais une durée (§ 14.14, § 19.3). Le module des
+// minuteurs de Node se relève à son chargement. Un setTimeout de zéro est un
+// délai : Node le porte à une milliseconde. setImmediate n'en est pas un : il
+// ne prend aucune durée, et rappelle une fois vidées les microtâches en
+// attente — une épreuve node l'attend pour que les promesses lancées sans
+// être rendues s'achèvent avant ses assertions.
+const DELAIS = [
+  ['setTimeout', /\bsetTimeout\s*(?:\?\.)?\s*\(/g],
+  ['setInterval', /\bsetInterval\s*(?:\?\.)?\s*\(/g],
+  ['waitForTimeout', /\bwaitForTimeout\s*(?:\?\.)?\s*\(/g],
+  ['sleep', /\bsleep\s*(?:\?\.)?\s*\(/g],
+];
+const MINUTEURS_DE_NODE = /^(?:node:)?timers(?:\/promises)?$/;
+
+// Ce que relèvent, dans un texte et son code sans chaînes, les motifs donnés
+// et les chargements du module des minuteurs dont le mot-clé subsiste dans
+// le code : chacun { ligne, motif }, par ligne, puis dans l'ordre des
+// motifs, le chargement après eux.
+function delaisEt(texte, code, motifs) {
+  const minuteurs = chargementsLitteraux(texte)
+    .filter(({ indice, specificateur }) => estDuCode(code, indice) && MINUTEURS_DE_NODE.test(specificateur))
+    .map(({ indice, specificateur }) => ({ ligne: ligneDe(texte, indice), rang: motifs.length, motif: `import ${specificateur}` }));
+  return [
+    ...motifs.flatMap(([motif, expression], rang) =>
+      [...code.matchAll(expression)].map(({ index }) => ({ ligne: ligneDe(texte, index), rang, motif })),
+    ),
+    ...minuteurs,
+  ].sort((a, b) => a.ligne - b.ligne || a.rang - b.rang);
+}
+
+// Relevé des épreuves du navigateur, chaque *.navigateur.test.js du
+// projet : une assertion de classe ou un délai fixe, « fichier:ligne
+// refus ». Lève quand le projet n'en porte aucune.
+function releverEpreuvesNavigateur(racine) {
+  const epreuves = fichiersDuProjet(racine).filter((f) => EPREUVE_NAVIGATEUR.test(f));
+  assert.ok(epreuves.length > 0, 'aucune épreuve du navigateur');
+  return epreuves.flatMap((fichier) => {
+    const texte = readFileSync(fichier, 'utf8');
+    return delaisEt(texte, sansChaines(texte), [...ASSERTIONS_DE_CLASSE, ...DELAIS]).map(
+      ({ ligne, motif }) => `${relative(racine, fichier)}:${ligne} ${motif}`,
+    );
+  });
+}
+
+describe('arborescence : écriture des épreuves (§ 14.8, § 14.2)', () => {
+  test('les épreuves node, et les modules qu’elles importent, n’emploient ni les assertions de Vitest, ni le lanceur hors de test/lanceur.js, ni syntaxe propre à Vite, ni chemin sans extension', () => {
+    assert.deepEqual(releverEcritureDesEpreuves(RACINE), []);
+  });
+
+  test('les épreuves du navigateur n’assertent aucune classe et n’attendent aucun délai fixe', () => {
+    assert.deepEqual(releverEpreuvesNavigateur(RACINE), []);
+  });
+
+  test('la garde des épreuves node relève chaque refus par sa ligne, dans les épreuves et les modules qu’elles importent, et non dans une chaîne ; un chargement admis ne vaut que pour son fichier et son spécificateur ; une exception sans objet se relève', () => {
+    const fichiers = {
+      'test/lanceur.js': "export { test, describe } from 'vitest';\nexport { vi } from 'vitest/node';\n",
+      'test/config.test.js': "import configuration from '../vitest.config.js';\n",
+      'vitest.config.js': [
+        "import { defineConfig } from 'vitest/config';",
+        "import { playwright } from '@vitest/browser-playwright';",
+        "import { createVitest } from 'vitest/node';",
+        "import { expect } from 'vitest';",
+      ].join('\n'),
+      'src/moteur/a.test.js': [
+        "import { test } from '../../test/lanceur.js';",
+        "import { expect } from 'vitest';",
+        "import { describe } from 'vitest/node';",
+        `import { page } from ${"'"}@vitest/browser/context${"'"};`,
+        "import gabarit from './gabarit.txt?raw';",
+        "import { aide } from './aide';",
+        "import { outil } from './outil.js';",
+        'expect(1).toBe(1);',
+        'const mode = import.meta.env.MODE;',
+        "const donnee = \"} from 'vitest';\" + 'expect(2)' + `import.meta.env`;",
+        '// import.meta.env se relève aussi dans un commentaire',
+        'const voisin = attendu.expected + importMeta.env + expectation;',
+      ].join('\n'),
+      'src/moteur/outil.js': "import { profond } from './sous/profond.js';\nimport Composant from './Composant.svelte';\n",
+      'src/moteur/sous/profond.js': 'export const profond = import.meta.env.DEV;\n',
+      'src/moteur/Composant.svelte': '<script>\n  import { expect } from \'vitest\';\n</script>\n',
+      'src/moteur/sous/b.long.test.js': "const v = await import('vitest');\n",
+      'src/interface/A.navigateur.test.js': "import { expect } from 'vitest';\nexpect(1).toBe(1);\n",
+      'node_modules/p/x.test.js': "import { expect } from 'vitest';\n",
+      'www/y.test.js': "import { expect } from 'vitest';\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverEcritureDesEpreuves), [
+      'src/moteur/a.test.js:2 import vitest',
+      'src/moteur/a.test.js:3 import vitest/node',
+      'src/moteur/a.test.js:4 import @vitest/browser/context',
+      'src/moteur/a.test.js:5 import ./gabarit.txt?raw : suffixe de Vite',
+      'src/moteur/a.test.js:6 import ./aide sans extension',
+      'src/moteur/a.test.js:8 expect',
+      'src/moteur/a.test.js:9 import.meta.env',
+      'src/moteur/a.test.js:11 import.meta.env',
+      'src/moteur/sous/b.long.test.js:1 import vitest',
+      'src/moteur/a.test.js → test/lanceur.js:2 import vitest/node',
+      'test/config.test.js → vitest.config.js:3 import vitest/node',
+      'test/config.test.js → vitest.config.js:4 import vitest',
+      'src/moteur/a.test.js → src/moteur/outil.js → src/moteur/sous/profond.js:1 import.meta.env',
+    ]);
+    const sansLanceur = {
+      ...fichiers,
+      'test/lanceur.js': "export { test, describe } from 'node:test';\n",
+      'test/config.test.js': "import { test } from './lanceur.js';\n",
+    };
+    assert.deepEqual(avecArbre(sansLanceur, releverEcritureDesEpreuves).slice(-3), [
+      `exception sans objet : ${join('test', 'lanceur.js')} vitest`,
+      'exception sans objet : vitest.config.js vitest/config',
+      'exception sans objet : vitest.config.js @vitest/browser-playwright',
+    ]);
+    assert.throws(() => avecArbre({ 'src/a.js': '', 'src/A.navigateur.test.js': '' }, releverEcritureDesEpreuves), /aucune épreuve node/);
+  });
+
+  test('la garde des épreuves du navigateur relève une assertion de classe et un délai fixe par leur ligne, et non dans une chaîne', () => {
+    const fichiers = {
+      'src/interface/plan/Plan.navigateur.test.js': [
+        "expect(table.classList.contains('conflit')).toBe(true);",
+        "await expect.element(table).toHaveClass('conflit');",
+        "expect(table.className).toContain('conflit');",
+        'await new Promise((fin) => setTimeout(fin, 50));',
+        'await page.waitForTimeout(100);',
+        'await sleep(20);',
+        "import { setTimeout as attendre } from 'node:timers/promises';",
+        "const mot = 'setTimeout(f) className';",
+        'await new Promise(requestAnimationFrame);',
+        'const style = getComputedStyle(table).backgroundColor;',
+      ].join('\n'),
+      'test/navigateur/entrees.navigateur.test.js': 'setInterval(f, 10);\n',
+      'src/interface/plan/gestes.test.js': 'await new Promise((fin) => setTimeout(fin, 50));\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverEpreuvesNavigateur), [
+      'src/interface/plan/Plan.navigateur.test.js:1 classList.contains',
+      'src/interface/plan/Plan.navigateur.test.js:2 toHaveClass',
+      'src/interface/plan/Plan.navigateur.test.js:3 className',
+      'src/interface/plan/Plan.navigateur.test.js:4 setTimeout',
+      'src/interface/plan/Plan.navigateur.test.js:5 waitForTimeout',
+      'src/interface/plan/Plan.navigateur.test.js:6 sleep',
+      'src/interface/plan/Plan.navigateur.test.js:7 import node:timers/promises',
+      'test/navigateur/entrees.navigateur.test.js:1 setInterval',
+    ]);
+    assert.throws(() => avecArbre({ 'src/a.test.js': '' }, releverEpreuvesNavigateur), /aucune épreuve du navigateur/);
+  });
+});
+
+// Le projet de la série surveillée dans une configuration de Vitest.
+const projetSurveille = (projets) => projets.find(({ test: { name } }) => name === 'node').test;
+
+// Épreuves d'un projet de Vitest, en chemins absolus triés : les fichiers du
+// projet que l'un de ses motifs include désigne et qu'aucun motif exclude
+// n'écarte, lus relatifs à la racine.
+function epreuvesDuProjet(racine, { include = [], exclude = [] }) {
+  const epreuves = fichiersDuProjet(racine).filter((fichier) => {
+    const chemin = enBarres(racine, fichier);
+    return repondA(chemin, include) && !repondA(chemin, exclude);
+  });
+  assert.ok(epreuves.length > 0, 'la série surveillée ne porte aucune épreuve');
+  return epreuves;
+}
+
+// Ce que la série surveillée n'appelle pas : la géométrie du rendu, qu'aucun
+// environnement node n'implémente (§ 14.4).
+const GEOMETRIE_DU_RENDU = [
+  ['getBBox', /\bgetBBox\s*(?:\?\.)?\s*\(/g],
+  ['getScreenCTM', /\bgetScreenCTM\s*(?:\?\.)?\s*\(/g],
+  ['getComputedTextLength', /\bgetComputedTextLength\s*(?:\?\.)?\s*\(/g],
+];
+
+// Les fonctions d'écriture de node:fs et de node:fs/promises, et leurs formes
+// synchrones. Un import du module entier — par défaut, par espace de noms, par
+// require ou import() sans déstructuration, ou de son objet promises — les
+// porte toutes.
+const MODULE_FS = /^(?:node:)?fs(?:\/promises)?$/;
+const ECRITURES_FS = new Set(
+  ['writeFile', 'appendFile', 'mkdir', 'rm', 'rename', 'copyFile', 'cp', 'symlink', 'unlink', 'createWriteStream'].flatMap(
+    (nom) => [nom, `${nom}Sync`],
+  ),
+);
+const TEMPORAIRE = /\bmkdtemp(?:Sync)?\s*(?:\?\.)?\s*\(/;
+
+// Noms d'une liste « a, b as c » ou « a, b: c », tels que le module les
+// exporte.
+const nomsImportes = (liste) =>
+  liste
+    .split(',')
+    .map((nom) => nom.trim().split(/\s+as\s+|\s*:\s*/)[0])
+    .filter((nom) => nom !== '');
+
+// Imports d'écriture de node:fs d'un texte, chacun { indice, ecrit } : ecrit
+// nomme les fonctions d'écriture importées par leur nom, ou « entier » pour
+// le module entier. Un chargement dont le mot-clé ne subsiste pas dans le
+// texte sans chaînes n'en est pas un, ni l'import du module seul.
+function importsDEcriture(texte, code) {
+  return chargementsLitteraux(texte).flatMap(({ indice, specificateur }) => {
+    if (!MODULE_FS.test(specificateur) || !estDuCode(code, indice)) return [];
+    let noms;
+    if (code.startsWith('from', indice)) {
+      const clause = code.slice(code.lastIndexOf('import', indice) + 'import'.length, indice);
+      const accolades = /\{([^}]*)\}/.exec(clause);
+      const reste = clause.replace(/\{[^}]*\}/, '').replace(/[\s,]/g, '');
+      noms = accolades !== null && reste === '' ? nomsImportes(accolades[1]) : null;
+    } else if (/^import\s+['"]/.test(texte.slice(indice))) {
+      return [];
+    } else {
+      const avant = /(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?$/.exec(code.slice(0, indice));
+      noms = avant === null ? null : nomsImportes(avant[1]);
+    }
+    if (noms?.some((nom) => nom === 'promises' || nom === 'default')) noms = null;
+    if (noms === null) return [{ indice, ecrit: `${specificateur} entier` }];
+    const ecrits = noms.filter((nom) => ECRITURES_FS.has(nom));
+    return ecrits.length === 0 ? [] : [{ indice, ecrit: `${specificateur} ${ecrits.join(', ')}` }];
+  });
+}
+
+// La commande surveillée : vitest sur le seul projet node (§ 14.4).
+const COMMANDES_SURVEILLEES = new Set(['vitest --project node', 'vitest --project=node']);
+
+// Relevé de la série surveillée (§ 14.4, § 14.14), sur les épreuves du
+// projet node donné : par épreuve, puis par ligne, un délai fixe, un appel de
+// la géométrie du rendu, et un import d'écriture de node:fs dans un fichier
+// qui n'appelle ni mkdtemp ni mkdtempSync, « fichier:ligne écrit sans
+// mkdtemp : module fonctions » ; puis le script test:surveille de
+// package.json quand il lance autre chose que vitest sur le projet node. La
+// garde voit l'import, non le chemin : l'écriture hors du temporaire d'un
+// fichier qui en crée un reste à la revue. Lève quand la série ne porte
+// aucune épreuve.
+function releverSerieSurveillee(racine, projet) {
+  const refus = epreuvesDuProjet(racine, projet).flatMap((fichier) => {
+    const texte = readFileSync(fichier, 'utf8');
+    const code = sansChaines(texte);
+    const ecritures = TEMPORAIRE.test(code)
+      ? []
+      : importsDEcriture(texte, code).map(({ indice, ecrit }) => ({
+          ligne: ligneDe(texte, indice),
+          motif: `écrit sans mkdtemp : ${ecrit}`,
+        }));
+    return [...ecritures, ...delaisEt(texte, code, [...DELAIS, ...GEOMETRIE_DU_RENDU])]
+      .sort((a, b) => a.ligne - b.ligne)
+      .map(({ ligne, motif }) => `${relative(racine, fichier)}:${ligne} ${motif}`);
+  });
+  const { scripts = {} } = JSON.parse(readFileSync(join(racine, 'package.json'), 'utf8'));
+  const surveille = (scripts['test:surveille'] ?? '').trim().split(/\s+/).join(' ');
+  if (!COMMANDES_SURVEILLEES.has(surveille)) {
+    refus.push(`package.json test:surveille : « ${surveille} » ne lance pas vitest --project node seul`);
+  }
+  return refus;
+}
+
+describe('arborescence : la série surveillée (§ 14.4, § 14.14)', () => {
+  test("aucune épreuve de la série surveillée n'attend un délai, n'appelle la géométrie du rendu, ni n'importe une écriture de node:fs sans créer de temporaire ; test:surveille ne lance que le projet node", () => {
+    assert.deepEqual(releverSerieSurveillee(RACINE, projetSurveille(configuration.test.projects)), []);
+  });
+
+  test('la garde relève chaque refus par sa ligne, dans les seules épreuves du projet, et le script surveillé qui lance autre chose', () => {
+    const projet = {
+      include: ['src/**/*.test.js', 'test/**/*.test.js'],
+      exclude: ['**/*.long.test.js', '**/*.navigateur.test.js', 'src/moteur/lourde.test.js'],
+    };
+    const fichiers = {
+      'package.json': JSON.stringify({ scripts: { 'test:surveille': 'vitest  --project node' } }),
+      'src/geometrie/vue.test.js': [
+        "import { writeFileSync, readFileSync as lire } from 'node:fs';",
+        'await new Promise((fin) => setTimeout(fin, 0));',
+        'const boite = element.getBBox();',
+        'const ctm = svg?.getScreenCTM?.();',
+        "// au navigateur, getComputedTextLength mesure le texte ; ce commentaire ne l'appelle pas",
+        "const longueur = texte.getComputedTextLength() + 'getBBox()'.length;",
+        "import { setTimeout as attendre } from 'node:timers/promises';",
+        'await new Promise((fin) => setImmediate(fin));',
+      ].join('\n'),
+      'test/ecrit.test.js': [
+        "import fs from 'node:fs';",
+        "import * as fsp from 'node:fs/promises';",
+        "import { promises } from 'fs';",
+        "const { rmSync, existsSync } = require('node:fs');",
+        "const module = await import('node:fs');",
+        "import { mkdir as creer, cpSync } from 'fs/promises';",
+        "import 'node:fs';",
+        "const donnee = \"import { writeFileSync } from 'node:fs';\";",
+      ].join('\n'),
+      'test/temporaire.test.js': [
+        "import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';",
+        "const racine = mkdtempSync('arbre-');",
+      ].join('\n'),
+      'test/lecture.test.js': "import { readFileSync, existsSync } from 'node:fs';\nconst { statSync } = require('fs');\n",
+      'src/moteur/lourde.test.js': 'await new Promise((fin) => setTimeout(fin, 0));\n',
+      'src/moteur/a.long.test.js': "import { writeFileSync } from 'node:fs';\n",
+      'src/interface/A.navigateur.test.js': 'element.getBBox();\n',
+      'src/stockage/ecrire.js': "import { writeFileSync } from 'node:fs';\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, (racine) => releverSerieSurveillee(racine, projet)), [
+      'src/geometrie/vue.test.js:1 écrit sans mkdtemp : node:fs writeFileSync',
+      'src/geometrie/vue.test.js:2 setTimeout',
+      'src/geometrie/vue.test.js:3 getBBox',
+      'src/geometrie/vue.test.js:4 getScreenCTM',
+      'src/geometrie/vue.test.js:6 getComputedTextLength',
+      'src/geometrie/vue.test.js:7 import node:timers/promises',
+      'test/ecrit.test.js:1 écrit sans mkdtemp : node:fs entier',
+      'test/ecrit.test.js:2 écrit sans mkdtemp : node:fs/promises entier',
+      'test/ecrit.test.js:3 écrit sans mkdtemp : fs entier',
+      'test/ecrit.test.js:4 écrit sans mkdtemp : node:fs rmSync',
+      'test/ecrit.test.js:5 écrit sans mkdtemp : node:fs entier',
+      'test/ecrit.test.js:6 écrit sans mkdtemp : fs/promises mkdir, cpSync',
+    ]);
+    for (const script of ['vitest', 'vitest --project node --project navigateur', 'vitest run --project node']) {
+      const autre = { ...fichiers, 'package.json': JSON.stringify({ scripts: { 'test:surveille': script } }) };
+      assert.deepEqual(
+        avecArbre(autre, (racine) => releverSerieSurveillee(racine, projet)).at(-1),
+        `package.json test:surveille : « ${script} » ne lance pas vitest --project node seul`,
+        script,
+      );
+    }
+    assert.throws(
+      () => avecArbre({ 'package.json': '{}', 'src/a.long.test.js': '' }, (racine) => releverSerieSurveillee(racine, projet)),
+      /la série surveillée ne porte aucune épreuve/,
+    );
+  });
+});
+
+// Ce que relance au moins un changement de composant de src/interface, et
+// d'une feuille de style de src/interface, quoi que lise le texte des
+// épreuves : les gardes des sources de l'interface, des couches et de la
+// palette, et celles dont le texte ne lie pas la lecture au fichier — le
+// contrôle de version balaie tout l'arbre src sans filtre d'extension,
+// test/projets.test.js importe App pour en voir l'échec sous node, quel que
+// soit le composant changé. Les épreuves qui lisent ces fichiers par le
+// disque s'y ajoutent (lecteursParLeDisque).
+const RELANCES_REQUISES_D_UN_COMPOSANT = [
+  'test/arborescence.test.js',
+  'test/sources_interface.test.js',
+  'scripts/version.test.js',
+  'test/projets.test.js',
+];
+const RELANCES_REQUISES_D_UNE_FEUILLE = [
+  'src/interface/palette.test.js',
+  'test/sources_interface.test.js',
+  'scripts/version.test.js',
+];
+
+// Une table de libellés : un module d'un dossier libelles/ de l'application
+// ou de l'interface. Les épreuves l'importent ; le graphe suffit.
+const TABLE_DE_LIBELLES = /^src\/(?:application|interface)\/libelles\/[^/]+\.[cm]?js$/;
+
+// Fichiers que chaque épreuve donnée importe, à toute profondeur, par un
+// chargement dont le mot-clé subsiste dans le texte sans chaînes et dont le
+// chemin, relatif ou absolu depuis la racine, désigne un fichier existant —
+// suffixe de Vite retiré. Le parcours suit les modules JavaScript hors de
+// node_modules ; un composant ou une feuille de style est importé sans être
+// parcouru, comme Vitest sous node, sans greffon Svelte. Rend une Map
+// fichier relatif → épreuves relatives qui l'importent.
+function importateurs(racine, epreuves) {
+  const voisins = new Map();
+  const cibles = (fichier) => {
+    if (!voisins.has(fichier)) {
+      const texte = readFileSync(fichier, 'utf8');
+      const code = sansChaines(texte);
+      voisins.set(
+        fichier,
+        chargementsLitteraux(texte)
+          .filter(({ indice }) => estDuCode(code, indice))
+          .map(({ specificateur }) => cibleDe(racine, fichier, specificateur.replace(/\?.*$/, '')))
+          .filter((cible) => cible !== null && statSync(cible, { throwIfNoEntry: false })?.isFile()),
+      );
+    }
+    return voisins.get(fichier);
+  };
+  const parFichier = new Map();
+  for (const epreuve of epreuves) {
+    const vus = new Set([epreuve]);
+    const aParcourir = [epreuve];
+    for (let i = 0; i < aParcourir.length; i += 1) {
+      for (const cible of cibles(aParcourir[i])) {
+        if (vus.has(cible)) continue;
+        vus.add(cible);
+        const chemin = enBarres(racine, cible);
+        parFichier.set(chemin, [...(parFichier.get(chemin) ?? []), enBarres(racine, epreuve)]);
+        if (EXTENSIONS_MODULE.has(extname(cible)) && !cible.split(sep).includes('node_modules')) aParcourir.push(cible);
+      }
+    }
+  }
+  return parFichier;
+}
+
+// Contenus des chaînes littérales d'un texte, lus aux places que sansChaines
+// blanchit : entre deux délimiteurs, ou entre un délimiteur et la
+// substitution d'un gabarit. Une place que sansChaines garde telle quelle —
+// un commentaire entre deux apostrophes — ne rend que des blancs, écartés.
+function chainesDe(texte) {
+  const code = sansChaines(texte);
+  return [...code.matchAll(/[`'"}]( +)(?=[`'"]|\$\{)/g)]
+    .map(({ 1: blancs, index }) => texte.slice(index + 1, index + 1 + blancs.length))
+    .filter((contenu) => contenu.trim() !== '');
+}
+
+// Un appel qui lit un fichier, et un appel qui balaie un dossier, dans le
+// texte sans chaînes d'un module.
+const LECTURE_D_UN_FICHIER = /\b(?:readFileSync|readFile)\s*\(/;
+const BALAYAGE_D_UN_DOSSIER = /\b(?:readdirSync|readdir|globSync|glob)\s*\(/;
+
+// Les épreuves qui lisent un fichier par le disque, hors de tout graphe
+// d'imports. Une épreuve le lit quand elle-même, ou l'un des modules
+// JavaScript du projet qu'elle importe à toute profondeur (parFichier, que
+// rend importateurs) : lit un fichier et porte une chaîne littérale qui finit
+// sur son nom (« ./jetons.css », « src/interface/jetons.css ») ; ou balaie
+// un dossier et nomme son extension, en chaîne littérale exacte (« .css »)
+// ou dans une expression régulière (« \.css », « \.(svelte|css) »). Le
+// relevé est textuel : un nom de fichier dans les données d'une épreuve
+// compte comme une lecture, d'où des noms inventés dans ces données ; un
+// balayage sans filtre d'extension, comme celui du contrôle de version, ne se
+// lie à aucun fichier et se déclare dans les relances requises. Rend une
+// fonction : chemin relatif → Set des épreuves relatives qui le lisent.
+function lecteursParLeDisque(racine, epreuves, parFichier) {
+  const chargeurs = new Map(epreuves.map((epreuve) => [enBarres(racine, epreuve), [enBarres(racine, epreuve)]]));
+  for (const [chemin, qui] of parFichier) {
+    if (!EXTENSIONS_MODULE.has(extname(chemin)) || chemin.split('/').includes('node_modules')) continue;
+    chargeurs.set(chemin, [...new Set([...(chargeurs.get(chemin) ?? []), ...qui])]);
+  }
+  const modules = [...chargeurs].map(([chemin, qui]) => {
+    const texte = readFileSync(join(racine, chemin), 'utf8');
+    const code = sansChaines(texte);
+    return { qui, code, chaines: chainesDe(texte), lit: LECTURE_D_UN_FICHIER.test(code), balaie: BALAYAGE_D_UN_DOSSIER.test(code) };
+  });
+  return (fichier) => {
+    const nom = basename(fichier);
+    const extension = extname(fichier);
+    const enExpression = new RegExp(String.raw`(?<![\w-])\\\.(?:\(\?:|\()?(?:\w+\|)*${extension.slice(1)}\b`);
+    const lisent = modules.filter(
+      ({ code, chaines, lit, balaie }) =>
+        (lit && chaines.some((contenu) => contenu === nom || contenu.endsWith(`/${nom}`))) ||
+        (balaie && (chaines.includes(extension) || enExpression.test(code))),
+    );
+    return new Set(lisent.flatMap(({ qui }) => qui));
+  };
+}
+
+// Relevé des motifs de surveillance (§ 14.14) d'une configuration de Vitest
+// — { watchTriggerPatterns, projects } — sur l'arbre donné. Un fichier qui
+// répond à un motif ne relance que les épreuves que le motif nomme, et plus
+// celles qui l'importent : par motif, dans l'ordre de la liste, chaque
+// fichier du projet qui y répond et qu'importe une épreuve de la série
+// surveillée que le motif ne relance pas, « motif n /…/ : fichier, qu'importe
+// épreuve, ne la relance pas » ; chaque table de libellés qu'il nomme ;
+// chaque épreuve qu'il relance et que l'arbre n'a pas. Puis les relances
+// requises des composants (.svelte) de src/interface, et de ses feuilles de
+// style (.css) : pour chaque fichier, celles de RELANCES_REQUISES_D_UN_COMPOSANT
+// ou de RELANCES_REQUISES_D_UNE_FEUILLE, et chaque épreuve de la série
+// surveillée qui le lit par le disque (lecteursParLeDisque). Par épreuve,
+// les requises d'abord, puis les autres triées : « aucun des n composants de
+// src/interface ne relance épreuve » quand tous la requièrent et qu'aucun ne
+// la relance, sinon « fichiers ne relance pas épreuve ». Lève quand la
+// configuration ne porte aucun motif, ou que src/interface n'a aucun
+// composant ou aucune feuille de style.
+function releverSurveillance(racine, { watchTriggerPatterns: motifs = [], projects }) {
+  assert.ok(motifs.length > 0, 'aucun motif de surveillance');
+  const fichiers = fichiersDuProjet(racine).map((fichier) => enBarres(racine, fichier));
+  const presents = new Set(fichiers);
+  const epreuves = epreuvesDuProjet(racine, projetSurveille(projects));
+  const parFichier = importateurs(racine, epreuves);
+  const repond = ({ pattern }, chemin) => new RegExp(pattern.source, pattern.flags.replace('g', '')).test(chemin);
+  const relances = (motif, chemin) => [motif.testsToRun(chemin) ?? []].flat();
+  const refus = [];
+  motifs.forEach((motif, rang) => {
+    const nom = `motif ${rang + 1} ${motif.pattern}`;
+    const absentes = new Set();
+    for (const chemin of fichiers.filter((f) => repond(motif, f))) {
+      const relancees = relances(motif, chemin);
+      if (TABLE_DE_LIBELLES.test(chemin) && !EPREUVE.test(chemin)) refus.push(`${nom} : nomme la table de libellés ${chemin}`);
+      for (const epreuve of [...(parFichier.get(chemin) ?? [])].sort()) {
+        if (!relancees.includes(epreuve)) refus.push(`${nom} : ${chemin}, qu'importe ${epreuve}, ne la relance pas`);
+      }
+      for (const epreuve of relancees) if (!presents.has(epreuve)) absentes.add(epreuve);
+    }
+    refus.push(...[...absentes].sort().map((epreuve) => `${nom} : relance ${epreuve}, absente de l'arbre`));
+  });
+  const relanceesPar = (chemin) => new Set(motifs.filter((m) => repond(m, chemin)).flatMap((m) => relances(m, chemin)));
+  const lecteurs = lecteursParLeDisque(racine, epreuves, parFichier);
+  const deSrcInterface = (extension) => fichiers.filter((f) => f.startsWith('src/interface/') && extname(f) === extension);
+  const familles = [
+    { membres: deSrcInterface('.svelte'), requises: RELANCES_REQUISES_D_UN_COMPOSANT, vide: 'aucun composant', tous: 'composants' },
+    { membres: deSrcInterface('.css'), requises: RELANCES_REQUISES_D_UNE_FEUILLE, vide: 'aucune feuille de style', tous: null },
+  ];
+  for (const { membres, requises, vide, tous } of familles) {
+    assert.ok(membres.length > 0, `src/interface ne fournit ${vide}`);
+    const exigees = new Map(membres.map((f) => [f, new Set([...requises, ...lecteurs(f)])]));
+    const autres = [...new Set([...exigees.values()].flatMap((s) => [...s]))].filter((e) => !requises.includes(e)).sort();
+    for (const epreuve of [...requises, ...autres]) {
+      const concernes = membres.filter((f) => exigees.get(f).has(epreuve));
+      const manquent = concernes.filter((f) => !relanceesPar(f).has(epreuve));
+      if (manquent.length === 0) continue;
+      if (tous !== null && manquent.length === membres.length && membres.length > 1) {
+        refus.push(`aucun des ${membres.length} ${tous} de src/interface ne relance ${epreuve}`);
+      } else {
+        refus.push(`${manquent.join(', ')} ne relance pas ${epreuve}`);
+      }
+    }
+  }
+  return refus;
+}
+
+describe('arborescence : les motifs de surveillance (§ 14.14)', () => {
+  test("un motif ne nomme aucun fichier qu'une épreuve importe sans qu'il la relance, ni une table de libellés ; les composants et les feuilles de style relancent les gardes requises et chaque épreuve qui les lit par le disque", () => {
+    assert.deepEqual(releverSurveillance(RACINE, configuration.test), []);
+  });
+
+  test('la garde relève un fichier importé que son motif ne relance pas, une table de libellés nommée, une épreuve absente, chaque relance requise qui manque et chaque lecteur par le disque non relancé', () => {
+    const projects = [{ test: { name: 'node', include: ['src/**/*.test.js', 'test/**/*.test.js'], exclude: ['**/*.navigateur.test.js'] } }];
+    const fichiers = {
+      'src/interface/App.svelte': '<p></p>\n',
+      'src/interface/plan/Plan.svelte': '<p></p>\n',
+      'src/interface/teintes.css': ':root {}\n',
+      'src/interface/libelles/plan.js': 'export const TABLE = new Map();\n',
+      'src/interface/palette.js': "import { TABLE } from './libelles/plan.js';\n",
+      'src/interface/palette.test.js': "import { TABLE } from './palette.js';\nconst donnee = \"import x from './modele.js';\";\n",
+      'src/interface/modele.js': 'export const x = 1;\n',
+      'src/interface/App.navigateur.test.js': "import App from './App.svelte';\n",
+      // Lit la feuille par son nom.
+      'src/interface/nuances.test.js': "import { readFileSync } from 'node:fs';\nconst feuille = readFileSync(new URL('./teintes.css', import.meta.url), 'utf8');\n",
+      // Balaie composants et feuilles par le module qu'elle importe.
+      'test/entetes.test.js': "import { lireTout } from './balayage.js';\nlireTout();\n",
+      'test/balayage.js': "import { readdirSync } from 'node:fs';\nexport const lireTout = () => readdirSync('src', { recursive: true }).filter((nom) => /\\.(svelte|css)$/.test(nom));\n",
+      // Nomme la feuille sans la lire, et lit une donnée qui la cite sans finir sur son nom.
+      'src/interface/nomme.test.js': "const chemin = './teintes.css';\n",
+      'src/interface/cite.test.js': "import { readFileSync } from 'node:fs';\nconst donnee = \"  @import 'teintes.css';\";\nreadFileSync(donnee);\n",
+      'test/projets.test.js': "const App = await import('../src/interface/App.svelte?inline');\n",
+      'test/arborescence.test.js': '',
+      'scripts/version.test.js': '',
+    };
+    const motifs = [
+      { pattern: /\.svelte$/, testsToRun: () => ['test/arborescence.test.js', 'scripts/version.test.js'] },
+      { pattern: /(^|\/)src\/interface\/libelles\/[^/]+$/, testsToRun: () => 'src/interface/palette.test.js' },
+      { pattern: /(^|\/)src\/interface\/(teintes\.css|modele\.js)$/, testsToRun: () => ['test/sources_interface.test.js'] },
+    ];
+    assert.deepEqual(avecArbre(fichiers, (racine) => releverSurveillance(racine, { watchTriggerPatterns: motifs, projects })), [
+      "motif 1 /\\.svelte$/ : src/interface/App.svelte, qu'importe test/projets.test.js, ne la relance pas",
+      'motif 2 /(^|\\/)src\\/interface\\/libelles\\/[^/]+$/ : nomme la table de libellés src/interface/libelles/plan.js',
+      "motif 3 /(^|\\/)src\\/interface\\/(teintes\\.css|modele\\.js)$/ : relance test/sources_interface.test.js, absente de l'arbre",
+      'aucun des 2 composants de src/interface ne relance test/sources_interface.test.js',
+      'aucun des 2 composants de src/interface ne relance test/projets.test.js',
+      'aucun des 2 composants de src/interface ne relance test/entetes.test.js',
+      'src/interface/teintes.css ne relance pas src/interface/palette.test.js',
+      'src/interface/teintes.css ne relance pas scripts/version.test.js',
+      'src/interface/teintes.css ne relance pas src/interface/nuances.test.js',
+      'src/interface/teintes.css ne relance pas test/entetes.test.js',
+    ]);
+    const conformes = [
+      { pattern: /(^|\/)src\/interface\/.*\.svelte$/, testsToRun: () => [...RELANCES_REQUISES_D_UN_COMPOSANT, 'test/entetes.test.js'] },
+      { pattern: /(^|\/)src\/interface\/teintes\.css$/,
+        testsToRun: () => [...RELANCES_REQUISES_D_UNE_FEUILLE, 'src/interface/nuances.test.js', 'test/entetes.test.js'] },
+      { pattern: /(^|\/)src\/interface\/plan\/Plan\.svelte$/, testsToRun: () => [] },
+    ];
+    const complets = { ...fichiers, 'test/sources_interface.test.js': '' };
+    assert.deepEqual(avecArbre(complets, (racine) => releverSurveillance(racine, { watchTriggerPatterns: conformes, projects })), []);
+    const partiel = [
+      { pattern: /App\.svelte$/, testsToRun: () => [...RELANCES_REQUISES_D_UN_COMPOSANT, 'test/entetes.test.js'] },
+      conformes[1],
+    ];
+    assert.deepEqual(
+      avecArbre(complets, (racine) => releverSurveillance(racine, { watchTriggerPatterns: partiel, projects })),
+      [...RELANCES_REQUISES_D_UN_COMPOSANT, 'test/entetes.test.js'].map((requise) => `src/interface/plan/Plan.svelte ne relance pas ${requise}`),
+    );
+    const { 'src/interface/teintes.css': _feuille, ...sansFeuille } = complets;
+    assert.throws(
+      () => avecArbre(sansFeuille, (racine) => releverSurveillance(racine, { watchTriggerPatterns: conformes, projects })),
+      /src\/interface ne fournit aucune feuille de style/,
+    );
+    assert.throws(() => releverSurveillance(RACINE, { watchTriggerPatterns: [], projects }), /aucun motif de surveillance/);
   });
 });

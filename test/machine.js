@@ -30,19 +30,28 @@ export const LOURDES = Object.freeze(['src/moteur/integration.test.js']);
 /**
  * Réglages des projets node et node-long pour un nombre de cœurs.
  *
+ * Sous la mesure de la couverture, aucune épreuve ne quitte la série node :
+ * les seuils de branches d'indicateurs.js et de plafond.js se mesurent avec
+ * l'épreuve de bout en bout, sur une petite machine comme sur une grande. La
+ * mesure ne relance rien sous surveillance ; le budget de relance n'y joue
+ * pas. Le reste des réglages ne change pas.
+ *
  * @param {number} coeurs  entier ≥ 1
+ * @param {{couverture?: boolean}} [options]  couverture vraie quand le
+ *          lanceur mesure la couverture (--coverage)
  * @returns {{petiteMachine: boolean, coeurs: number, pool: 'forks'|'threads',
  *            maxWorkers: number|undefined, horsSerieSurveillee: string[]}}
  *          maxWorkers undefined laisse au lanceur son défaut
  */
-export function reglagesSeries(coeurs) {
+export function reglagesSeries(coeurs, { couverture = false } = {}) {
   if (!Number.isInteger(coeurs) || coeurs < 1) {
     throw new RangeError(`nombre de cœurs ${String(coeurs)} : entier ≥ 1 attendu`);
   }
   if (coeurs >= SEUIL_COEURS) {
     return { petiteMachine: false, coeurs, pool: 'forks', maxWorkers: undefined, horsSerieSurveillee: [] };
   }
-  return { petiteMachine: true, coeurs, pool: 'threads', maxWorkers: coeurs, horsSerieSurveillee: [...LOURDES] };
+  const horsSerieSurveillee = couverture ? [] : [...LOURDES];
+  return { petiteMachine: true, coeurs, pool: 'threads', maxWorkers: coeurs, horsSerieSurveillee };
 }
 
 // Cœurs que ce processus peut occuper. availableParallelism suit l'affinité

@@ -25,7 +25,7 @@
   </pattern>
   <pattern id="{prefixe}-trame" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(-45)">
     <rect class="fond-table" width="12" height="12" />
-    <line class="trait-trame" x1="6" y1="0" x2="6" y2="12" />
+    <line class="trait-conflit" x1="6" y1="0" x2="6" y2="12" />
   </pattern>
 </defs>
 
@@ -43,7 +43,7 @@
     fill: var(--couleur-table-fond);
   }
 
-  .trait-trame {
+  .trait-conflit {
     stroke: var(--couleur-conflit);
     stroke-width: 3;
   }
