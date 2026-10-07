@@ -72,4 +72,21 @@ export const TABLE = new Map([
   ['plan.echelle.centimetres', 'cm'],
   ['plan.echelle.metres', 'm'],
   ['plan.echelle.kilometres', 'km'],
+
+  // --- La barre de vue (§ 7.2, § 7.7, § 8.4) ---------------------------------
+  // Le numéro d'un tour, dans le sélecteur, est une donnée : son option ne
+  // porte que lui.
+  ['plan.vue.barre', 'Vue du plan'],
+  ['plan.vue.tour', 'Tour affiché'],
+  ['plan.vue.zoomer', 'Zoom +'],
+  ['plan.vue.dezoomer', 'Zoom \u{2212}'],
+  ['plan.vue.ajuster', 'Ajuster'],
+  ['plan.vue.listes', 'Listes de noms'],
+  ['plan.vue.pleinEcran', 'Plein écran'],
+  ['plan.vue.dessin', 'Plan de salle'],
+
+  // --- Les panneaux latéraux (§ 2.1, étape 8) --------------------------------
+  ['plan.panneaux', 'Panneaux du plan'],
+  ['plan.listesTravail.titre', 'Listes de travail'],
+  ['plan.reserve.titre', 'Réserve'],
 ]);

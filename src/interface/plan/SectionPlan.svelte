@@ -2,12 +2,86 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // La section du plan sous sa forme minimale : son titre, tiré des libellés de la coquille.
+  // La section du plan (§ 2.1, étapes 7 et 8 ; § 7) : son titre, le plan et
+  // sa vue (Plan.svelte), et les panneaux latéraux — le diagnostic compact,
+  // dans [data-panneau-diagnostic], visible dès l'ouverture, sans clic ;
+  // les listes de travail, la réserve, le panneau d'une place et celui
+  // d'une table. Les panneaux lisent 'seance' et 'ui' au contexte : la
+  // section ne leur passe rien. Le plan se remonte pour chaque événement :
+  // un autre événement repart de sa propre vue, mémorisée ou ajustée.
+  //
+  // En plein écran, le titre et les panneaux s'effacent : le plan prend la
+  // surface que le cadre de mode lui laisse sous le bandeau (§ 18.6), et le
+  // cadre l'entoure toujours (§ 8.4).
   import { getContext } from 'svelte';
+  import Diagnostic from '../diagnostic/Diagnostic.svelte';
+  import ListesTravail from './ListesTravail.svelte';
+  import PanneauPlace from './PanneauPlace.svelte';
+  import PanneauTable from './PanneauTable.svelte';
+  import Plan from './Plan.svelte';
+  import Reserve from './Reserve.svelte';
 
   const t = getContext('t');
+  const seance = getContext('seance');
+  const ui = getContext('ui');
+
+  const evenement = $derived($seance.charge === null ? null : $seance.charge.evenement.id);
 </script>
 
-<section data-section="plan">
-  <h2>{t('coquille.section.plan')}</h2>
+<section data-section="plan" class="section-plan">
+  {#if !$ui.pleinEcran}
+    <h2>{t('coquille.section.plan')}</h2>
+  {/if}
+  <div class="corps">
+    {#if evenement !== null}
+      {#key evenement}
+        <Plan diagnostic={null} />
+      {/key}
+    {/if}
+    {#if !$ui.pleinEcran}
+      <aside class="panneaux" aria-label={t('plan.panneaux')}>
+        <div data-panneau-diagnostic>
+          <Diagnostic compact />
+        </div>
+        <ListesTravail />
+        <Reserve />
+        <PanneauPlace />
+        <PanneauTable />
+      </aside>
+    {/if}
+  </div>
 </section>
+
+<style>
+  /* La section prend la hauteur de la surface du cadre de mode : le plan
+     s'y étend, et c'est la surface du cadre qui défile, jamais la page. */
+  .section-plan {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+    box-sizing: border-box;
+    height: 100%;
+    min-height: 0;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: var(--taille-texte);
+  }
+
+  .corps {
+    display: flex;
+    flex: 1 1 auto;
+    gap: var(--espace-3);
+    min-height: 0;
+  }
+
+  .panneaux {
+    display: flex;
+    flex: 0 0 18rem;
+    flex-direction: column;
+    gap: var(--espace-3);
+    min-height: 0;
+    overflow-y: auto;
+  }
+</style>
