@@ -64,6 +64,10 @@ test_navigateur: ## Joue les épreuves du navigateur, sous Chromium
 test_tout: ## Joue les trois séries
 	$(AVEC_NODE) npm run test:tout
 
+.PHONY: couverture
+couverture: ## Mesure la couverture de la série node, module par module ; seuils durs du § 14.13
+	$(AVEC_NODE) npm run couverture
+
 .PHONY: build
 build: ## Construit la page dans www/
 	$(AVEC_NODE) npm run build

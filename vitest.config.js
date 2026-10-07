@@ -32,6 +32,32 @@ export default defineConfig({
     // l'exécution quand node ou node-long dépasse son plafond (§ 14.14). Un
     // chemin relatif se lit depuis la racine du projet.
     reporters: ['default', './test/rapporteur.js'],
+    // La couverture (§ 14.13), que lancent npm run couverture et make
+    // couverture : la série node sous l'instrumentation de V8, sans le
+    // rapporteur, dont les plafonds bornent la série surveillée et la série
+    // longue, non une mesure. Aucun seuil global : un pourcentage d'ensemble
+    // se satisfait en couvrant les modules faciles. Le tableau imprime une
+    // ligne par couche et par module de src/, pleins compris — que Vitest
+    // tait sinon quand un agent le lance — et à 0 % ceux qu'aucune épreuve ne
+    // charge ; coverage/index.html montre, ligne à ligne, ce qui n'est jamais
+    // exécuté. Quatre modules tiennent 100 % de branches, seuil dur : la
+    // commande échoue en deçà. Une branche nue s'y couvre par un cas ajouté,
+    // ou part avec le code mort ; le seuil ne s'abaisse pas, et
+    // test/arborescence.test.js garde ces quatre seuils, ces deux rapports
+    // et les deux commandes qui lancent la mesure.
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.js'],
+      exclude: ['src/**/*.test.js'],
+      reporter: [['text', { skipFull: false }], 'html'],
+      reportsDirectory: 'coverage',
+      thresholds: {
+        'src/moteur/indicateurs.js': { branches: 100 },
+        'src/moteur/plafond.js': { branches: 100 },
+        'src/stockage/depot.js': { branches: 100 },
+        'src/stockage/journal.js': { branches: 100 },
+      },
+    },
     // Sous surveillance, une épreuve se relance quand un module de son graphe
     // d'imports change. Les fichiers des motifs se lisent hors de tout
     // graphe : le contrôle de version (§ 18.5) lit les premiers par le

@@ -17,13 +17,15 @@
     "test:surveille": "vitest --project node",
     "test:long": "vitest run --project node-long",
     "test:navigateur": "vitest run --project navigateur",
-    "test:tout": "vitest run"
+    "test:tout": "vitest run",
+    "couverture": "vitest run --project node --coverage --reporter=default"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@vitest/browser-playwright": "^5.0.3",
+    "@vitest/coverage-v8": "^5.0.3",
     "electron": "^44.5.1",
     "electron-builder": "^26.15.3",
     "fast-check": "^4.10.2",
