@@ -61,10 +61,11 @@ Aucun des deux ne dépend de l'étape atteinte.
    jamais l'un sans l'autre (§ 8.2) ;
 2. il se reprend par un retour à un instant, et le journal ne se tronque jamais
    (§ 8.3) ;
-3. s'il est refusé, le refus nomme sa cause et le geste qui la lève, **là où le
-   geste a eu lieu** : sur la place pour un geste du plan (§ 5.9), dans
-   l'aperçu d'import pour une ligne de CSV (§ 10.1), sur le champ pour une
-   saisie. Seul un geste qui détruit de la saisie ouvre une fenêtre à confirmer.
+3. s'il est refusé, le refus nomme sa cause et, quand un geste la lève, ce
+   geste (§ 5.9), **là où le geste a eu lieu** : sur la place pour un geste du
+   plan, dans l'aperçu d'import pour une ligne de CSV (§ 10.1), sur le champ
+   pour une saisie. Seul un geste qui détruit de la saisie ouvre une fenêtre à
+   confirmer.
 
 Les étapes 8 et 10 — lire le diagnostic, comparer — ne modifient rien et restent
 vivantes en lecture (§ 8.4).
@@ -102,9 +103,10 @@ en bloc une baisse qu'une seule table refuse (§ 6.1).
 retrouve les **ancrages** intacts, parce que la portée « tous les tours » n'est
 jamais développée (§ 4.3). La protection s'arrête là, et le logiciel le dit
 **avant** d'appliquer : retirer le tour *r* détruit les réservations de portée
-« tour désigné » portant sur *r*, et les tours au-delà de *r* des placements
-déjà engendrés. Les annoncer après coup ferait découvrir la perte à
-l'impression.
+« tour désigné » portant sur *r*. Les placements déjà engendrés, eux, ne sont
+pas tronqués : ils ne portent plus le nombre de tours de la soirée, restent
+entiers **en dérive** (§ 9), et le logiciel nomme ceux que le changement
+touche. Les annoncer après coup ferait découvrir la perte à l'impression.
 
 **6. Désigner les animateurs, table par table.** *Facultative — une soirée sans
 aucun animateur est une configuration valide, et la petite démonstration en est
@@ -391,10 +393,9 @@ une lecture et non un jugement :
 | **manque** | plafond réalisé − rencontres (§ 5.5) — la grandeur qui compare deux propositions (§ 12.10) |
 | **écart d'itinéraire** | plafond a priori − plafond réalisé (§ 5.5, § 12.10) |
 
-**Les agrégats portent sur tous les participants placés.** Le minimum et la
-moyenne se calculent sur l'ensemble, ancrés compris, et **deux lignes
-secondaires** donnent la même mesure restreinte aux **mobiles** et aux
-**ancrés**. Un participant partiellement fixé compte parmi les mobiles.
+**Les agrégats portent sur tous les participants placés.** Le minimum se
+calcule sur l'ensemble, ancrés compris, et **deux lignes secondaires** donnent
+la même mesure restreinte aux **mobiles** et aux **ancrés**. Un participant partiellement fixé compte parmi les mobiles.
 
 > Un ancré n'est pas structurellement désavantagé : à table de 8 avec un seul
 > ancré et R = 4, son plafond vaut 28, exactement celui d'un mobile visitant
@@ -404,8 +405,16 @@ secondaires** donnent la même mesure restreinte aux **mobiles** et aux
 > global désigne un défaut qu'une relance corrige, ou la conséquence de son
 > propre plan de réservation.
 
-**Le minimum compte plus que la moyenne.** Il décrit le sort de la personne la
-plus mal servie, qui est celle qui se plaindra.
+**Des rencontres, le minimum s'affiche, jamais la moyenne.** Le minimum décrit
+le sort de la personne la plus mal servie, qui est celle qui se plaindra. La
+moyenne ne sépare rien : quand les tables sont pleines à chaque tour, le nombre
+de voisinages créés est fixé par le mobilier, et la moyenne est la même pour
+toutes les propositions (§ 12.8).
+
+**La redondance se lit par sa somme**, Σ r(p), la grandeur que la recherche et
+le classement lisent (§ 5.7). Elle va dans l'autre sens que les autres
+colonnes — plus elle est grande, pire est le sort —, et son minimum désignerait
+la personne la mieux servie.
 
 **Les deux unités de collision ne se mélangent jamais.** Un chiffre de collision
 cité quelque part — § 5.6, § 12.4, § 15.3, une étape du pilotage — **nomme son
@@ -668,6 +677,12 @@ Une fois un placement retenu, le même geste déplace une personne réelle. **Le
 geste est identique ; ce qui change est l'état des données**, et l'interface le
 dit, pour que l'opérateur sache lequel des deux il fait.
 
+**Le placement se prépare, il ne suit pas la salle.** Retirer une personne du
+placement retenu libère sa chaise, et personne d'autre ne change de siège ni de
+table : la chaise reste vide jusqu'à ce qu'un geste y assoie quelqu'un, et un
+geste n'assied que les personnes qu'il nomme. Quand les sièges sont attribués, le
+fichier écrit cette chaise vide à sa place (§ 8.9).
+
 **Il n'existe aucune commande qui répartit les animateurs sur les tables.**
 L'opérateur désigne lui-même quelle personne anime quelle table (§ 2.1,
 étape 6). Une commande qui attribuerait un animateur par numéro de table le
@@ -715,6 +730,17 @@ Un refus **nomme sa cause et propose le geste qui le lève**, et se manifeste
 détruit de la saisie ouvre une fenêtre à confirmer : une suite de modales
 apprend à cliquer sans lire, et le premier refus qui comptait passe inaperçu.
 
+**Quand aucun geste ne lève le refus, il nomme sa cause seule.** Ainsi d'une
+valeur qui se corrige dans le champ même, dont le texte dit la valeur attendue —
+moins de deux sièges, une saisie non entière, moins d'un tour, un libellé ou un
+nom vides ; d'une cible absente ou disparue entre-temps — une personne, une
+proposition, une réservation, un titre, des réservations à convertir —,
+qu'aucune commande ne fait revenir et sur laquelle l'interface n'offre pas le
+geste ; d'un compteur au bout de sa règle, d'un plan qui n'est plus bloqué, d'un
+geste sans effet, et d'un refus du CSV relayé par l'import, qui se lève dans le
+fichier. Un remède posé pour la forme enverrait l'opérateur vers un geste qui ne
+change rien.
+
 ### 5.10 Le coût d'évaluation
 
 A(p) et r(p) demandent de parcourir les personnes rencontrées par chacun.
@@ -737,15 +763,20 @@ d'écran (§ 19.4) tomberait avec. L'interdit de `performance.now` dans le moteu
 
 **Le compte est un réglage, et son plafond d'usage est de trente minutes.** Il
 est exposé dans les réglages de génération, avec son unité ; le logiciel affiche
-à côté la **durée réellement observée du dernier calcul sur cette machine**, qui
-est la seule façon d'étalonner un compte. Le réglage livré par défaut est celui
-qui, sur la machine de référence, reste bien en deçà de ce plafond.
+à côté la **durée réellement observée du dernier calcul de la séance**, qui est
+la seule façon d'étalonner un compte. Elle vaut pour la séance et ne se garde
+pas au-delà — rien ne survit à la séance hors du dossier de travail (§ 8.6) : au
+premier calcul d'un lancement, aucune mesure n'existe, et l'estimation se dit
+inconnue. Le réglage livré par défaut est celui qui, sur la machine de
+référence, reste bien en deçà de ce plafond.
 
 **Une génération longue s'annonce avant de partir.** À partir de la dernière
 durée mesurée, le logiciel énonce l'ordre de grandeur attendu — « environ vingt
-minutes à ce réglage » — et demande. Une recherche d'une demi-heure lancée par
-mégarde est une demi-heure de soirée perdue, et aucun réglage par défaut ne
-protège de cela.
+minutes à ce réglage » — et, **au-delà d'une minute estimée**, demande, par une
+question posée en place, sans fenêtre. Sans mesure, il demande dès que les
+mouvements demandés — propositions × compte d'arrêt — dépassent dix fois ceux du
+réglage par défaut. Une recherche d'une demi-heure lancée par mégarde est une
+demi-heure de soirée perdue, et aucun réglage par défaut ne protège de cela.
 
 **Pendant la recherche, l'application reste vivante.** Le calcul ne tient pas le
 fil d'exécution de l'interface : le plan reste lisible, la page de qualité des
@@ -821,10 +852,16 @@ table refuse, l'opération entière est refusée, nommément, et rien ne change.
   sièges disparaissent par numéro décroissant ; le refus les liste.
 - Une capacité non entière, négative, ou saisie en texte.
 
-Deux cas **avertissent sans refuser** : réduire sous le nombre de personnes
-assises (les surnuméraires vont dans la réserve visible, nommément listées,
-jamais effacées en silence) ; et dépasser le nombre de sièges au-delà duquel le
-dessin cesse d'être lisible — seuil **mesuré** au sens du § 14.1.
+Deux cas **avertissent sans refuser** : réduire **par le champ** sous le nombre
+de personnes assises (les surnuméraires vont dans la réserve visible, nommément
+listées, jamais effacées en silence) ; et dépasser le nombre de sièges au-delà
+duquel le dessin cesse d'être lisible — seuil **mesuré** au sens du § 14.1.
+
+**Le champ avertit, la poignée refuse.** Saisir une capacité est un geste
+délibéré, fait en lisant le nombre ; tirer une poignée est un geste de
+géométrie, fait sans regarder les autres tours : la même réduction y est refusée
+(§ 7.1). Un changement de défaut (§ 6.1) se contrôle, table par table, comme une
+saisie au champ.
 
 ---
 
@@ -840,7 +877,7 @@ l'opérateur agit directement dessus.
 | cliquer une chaise | sélectionne la place — l'assigner, la réserver, lui donner un titre |
 | glisser une personne sur un siège libre | la déplace |
 | glisser une personne sur une autre | les échange |
-| glisser une personne hors des tables | la retire du tour ; elle attend dans la **réserve** visible |
+| glisser une personne hors des tables | la retire du tour ; elle attend dans la **réserve** visible, et sa chaise reste vide (§ 5.8) |
 | glisser une table | change sa position |
 | tirer la poignée d'une table | **change son nombre de places** |
 | survoler une table en conflit | affiche le détail des règles violées |
@@ -858,7 +895,13 @@ chaises apparaissent et disparaissent sous le pointeur.
 **La poignée refuse de descendre sous le nombre de sièges occupés, tous tours
 confondus** — sinon un geste de géométrie désassoit deux personnes au troisième
 tour, que l'opérateur ne regarde pas. Le logiciel nomme le nombre bloquant et le
-tour concerné.
+tour concerné. Le champ de capacité, saisie délibérée, accepte la même réduction
+et l'annonce (§ 6.2).
+
+**Une personne qu'une réservation tient à sa table ne se retire pas du tour.**
+Le refus nomme la réservation et offre « Retirer la réservation » : une
+réservation se défait par sa propre commande, jamais en passant par un
+glissement.
 
 **La rotation d'une table carrée n'existe pas dans la première itération** :
 elle introduirait une orientation dans la numérotation des sièges et dans la
@@ -897,7 +940,10 @@ unités, et le plan répondrait faux partout.
 
 Une épreuve en navigateur confronte la fonction pure à
 `getScreenCTM().inverse()`. Ce n'est pas une seconde implémentation : c'est un
-**oracle** fourni par le moteur de rendu.
+**oracle** fourni par le moteur de rendu. L'écart admis est d'**un millième de
+pixel d'écran** : le moteur de rendu lit les nombres de l'attribut `transform`
+en flottants de 32 bits et compose sa matrice à cette précision, quand une
+violation de l'un des trois invariants décale le plan d'un pixel au moins.
 
 **Le zoom se fait sous le curseur**, sinon le contenu fuit vers un coin et
 l'opérateur poursuit la table qu'il visait.
@@ -954,6 +1000,13 @@ où la cible tomberait en deçà de 24 px, **les sièges cessent d'être des cib
 et la table devient la cible**, le siège se choisissant dans son panneau. Le
 logiciel le montre en cessant de dessiner les chaises individuellement, plutôt
 qu'en laissant l'opérateur manquer sa cible sans comprendre.
+
+**Le seuil se décide table par table**, sur le pas de chacune — la distance
+entre deux sièges voisins au bord du plateau. Au même zoom, une petite table
+ronde, dont le plancher du § 7.7 écarte les sièges de plus de 60 cm, garde ses
+sièges pour cibles quand ses voisines de 8 n'en ont plus. Un seuil unique, réglé
+sur la table la plus serrée, retirerait ses sièges à une table qui les montre
+pointables.
 
 **Il n'y a pas de survol au doigt** : le détail d'un conflit est accessible par
 survol, par focus clavier **et par pression longue** — un seul composant
@@ -1033,8 +1086,9 @@ diamètre = max(70, places × 60 / π)        en centimètres
 ```
 
 Soit 115 cm pour 6 places, 153 pour 8, 191 pour 10. **Le plancher n'est pas
-cosmétique** : en deçà de six convives ce n'est plus le périmètre qui borne la
-table mais le plateau, et la formule seule dessinerait des guéridons. Les deux
+cosmétique** : en deçà de quatre convives — la formule atteint 70 cm à 3,67
+places — ce n'est plus le périmètre qui borne la table mais le plateau, et la
+formule seule dessinerait des guéridons. Les deux
 valeurs sont des **réglages par défaut, non des normes vérifiées** ; un diamètre
 saisi à la main l'emporte.
 
@@ -1042,6 +1096,19 @@ saisi à la main l'emporte.
 noms couvre plusieurs mètres carrés fictifs. **Le plan à l'échelle du bâtiment
 est le plan listes masquées**, et le logiciel le dit sur chaque impression
 portant les listes.
+
+**Le bloc de noms d'une table se pose à droite de son emprise** — le plateau et
+ses chaises —, à 36 cm d'elle : l'écart laisse passer le contour de focus de la
+table sans qu'aucune marque couvre la liste. Sa largeur est fixée dans le
+dessin, et un nom trop long s'y abrège (§ 7.4). **Aucune liste ne passe sur les
+chaises d'une voisine posée sur la grille** : une table créée prend la première
+case libre d'une grille dont les colonnes s'écartent d'une emprise, de deux
+écarts et d'un bloc de noms, à un pas entier au moins, sur l'un des deux axes, de
+toute table déjà posée, et les démonstrations (§ 15) sont rangées sur la même
+grille. Le prix est la place : au
+zoom ajusté, une grande salle descend sous le seuil qui retire les listes
+(§ 17, point 6), et un grand événement peut s'ouvrir sans listes de noms, qui se
+dessinent quand l'opérateur rapproche la vue.
 
 **Tant qu'aucune dimension de salle n'est saisie, le plan est exact dans ses
 tables et arbitraire dans son cadre.** Le logiciel porte alors, sur le plan et
@@ -1201,6 +1268,14 @@ qu'un calcul tourne. Le retour **automatique** ne peut donc jamais tomber
 pendant un geste ; le retour **explicite**, lui, annule un glissement en cours
 comme le ferait un `pointercancel`.
 
+**Est une activité la fin d'un geste**, qui relance le compte : un geste achevé
+ou refusé, une saisie validée ou abandonnée, une fenêtre à confirmer refermée,
+et tout appui relâché sur le plan — un clic qui n'exécute rien et un déplacement
+de vue compris. Regarder sans appuyer n'en est pas une : zoomer à la molette,
+une commande de vue, changer de tour affiché ne relancent rien. Le retour
+automatique se voit au cadre, au libellé et au bandeau, et un avertissement non
+modal le dit jusqu'au passage en écriture suivant.
+
 **Le mode est visible sur la surface de travail elle-même** — un cadre et un
 libellé permanents autour du plan — et non dans un coin de barre d'outils :
 l'opérateur regarde le plan.
@@ -1299,7 +1374,9 @@ règle écrite, et l'affiche :
    sauvegarde est la copie d'un seul dossier.
 5. L'épreuve échoue, ou le point 2 l'a interrompue → le dossier de travail est
    un dossier nommé d'après le produit, dans les *Documents* de l'opérateur. Le
-   logiciel **dit pourquoi**, une fois, à la première ouverture, sans bloquer.
+   logiciel **dit pourquoi**, une fois par séance, sans bloquer : s'en souvenir
+   d'une séance à l'autre demanderait un réglage local de plus, et le § 8.5 les
+   borne à deux.
 
 **Le dossier retenu est éprouvé à son tour, et c'est cette épreuve qui le
 crée** : le dossier des *Documents* naît à la détermination, avant que la liste
@@ -1454,7 +1531,8 @@ plateforme**.
   parce que l'enregistrement automatique la rend définitive en une seconde.
 - **Version de format.** Un fichier **plus récent** s'ouvre en lecture seule
   sans passage possible en écriture ; un fichier **plus ancien** se convertit au
-  premier passage en écriture, jamais à l'ouverture.
+  premier geste qui l'écrit, jamais à l'ouverture ni au passage en écriture, qui
+  ne réécrit pas le fichier d'état.
 - **Une seule séance en écriture**, le verrou se prenant **à l'entrée en mode
   écriture** et non à l'ouverture.
 - **Contrôle de cohérence** : l'en-tête annonce ses comptes, sa révision, sa
@@ -2342,9 +2420,10 @@ perd ?*
 
 **Le minimum gouverne la page** : chaque vue place le cas le plus défavorable à
 une position **fixe et prévisible** — le premier point, la première ligne —
-jamais là où il faut le chercher. La moyenne l'accompagne en encre secondaire et
-n'apparaît jamais seule. Un placement où chacun rencontre 27 personnes sauf une
-qui en rencontre 14 a une excellente moyenne et un problème.
+jamais là où il faut le chercher. La moyenne des rencontres ne s'affiche pas : à
+tables pleines, elle est la même pour toutes les propositions (§ 12.8). Un
+placement où chacun rencontre 27 personnes sauf une qui en rencontre 14 a une
+excellente moyenne et un problème.
 
 ### 12.2 L'en-tête chiffré
 
@@ -2452,7 +2531,10 @@ et deux tris opposés dans une même page se contredisent devant l'opérateur.
 relâchant les contraintes : c'est une **borne inférieure**, jamais un fait.
 Nommer « évitable » le complément affirmerait qu'un meilleur placement le
 retire, et condamnerait l'opérateur à relancer indéfiniment sur un conflit
-qu'aucun placement ne retire.
+qu'aucun placement ne retire. Le mot garde son sens dans les remèdes du
+diagnostic (§ 5.6), et là seulement : une table de plus, ou une appartenance
+répartie autrement, « la rend évitable » parce qu'elle change la
+**configuration** — jamais parce qu'une relance ferait mieux.
 
 **Les participants sans appartenance ne forment pas un groupe** : sinon un
 pseudo-groupe de quarante personnes produit la plus longue barre, un plancher
@@ -2864,6 +2946,12 @@ doit afficher une version et non une importation manquante, et **contrôlé par
 rejeu du script**, parce qu'un fichier engendré et oublié affiche une version
 périmée avec l'assurance d'une constante.
 
+**Ce qui n'est pas un composant s'éprouve sous `node`** : `src/application` et
+les modules purs de `src/interface` — tri, filtre, mise en forme, modèle de
+dessin, navigation au clavier — entrent dans le projet `node` du § 14.8, à côté
+du moteur ; seuls les composants Svelte, et ce qu'ils peignent, passent au
+navigateur.
+
 ### 13.2 Une seule langue, et c'est une exigence
 
 Tout — le moteur, la géométrie, l'interface — est écrit en **JavaScript**.
@@ -2936,8 +3024,13 @@ message d'erreur**.
 listes, il rend des placements. C'est ce qui le rend testable sous `node`, en
 quelques secondes — et c'est la condition pour qu'il soit éprouvé sérieusement.
 
-**La géométrie du plan** est elle aussi un module de **fonctions pures**, séparé
-du rendu.
+**La géométrie du plan** est une couche à part, de **fonctions pures**, séparée
+du rendu et placée plus bas que le moteur : elle n'importe ni le moteur, ni
+l'analyseur CSV, ni le générateur de démonstrations, ni l'application, ni
+l'interface, ni le stockage, et ne touche pas le navigateur. Elle est
+**requise** : sa garde échoue quand son arbre ne fournit aucun module. Le dessin,
+la désignation d'un siège et le dépôt partagent ses conversions et ses chaises
+(§ 7.2, § 7.3).
 
 Les **deux frontières de plateforme** sont le système de fichiers et
 l'impression : une interface unique, deux implémentations — plus, pour le système
@@ -2958,9 +3051,12 @@ ou de `src/geometrie` importe de `src/interface`, de `src/application`, de
 d'une plateforme, ou touche le navigateur hors de ses deux implémentations du
 système de fichiers, qu'aucun autre de ses modules n'importe ; que `src/csv`,
 qui lit le modèle du stockage, importe de `src/application`, de `src/interface`
-ou d'une plateforme ; et que `src/application` importe de `src/interface` ou de
-Svelte. Un type que la documentation d'un module importe compte comme un
-import. Le projet `node` ne chargeant pas le greffon Svelte (§ 14.8), un test de
+ou d'une plateforme ; que `src/geometrie` importe en outre du moteur, de
+`src/csv` ou de `src/demo` ; que `src/application` importe de `src/interface` ou
+de Svelte ; et que `src/interface` importe autre chose que Svelte, ses propres
+modules, `src/application` et `src/geometrie` — elle atteint le CSV et le moteur
+par l'application, jamais en direct. Un type que la documentation d'un module
+importe compte comme un import. Le projet `node` ne chargeant pas le greffon Svelte (§ 14.8), un test de
 moteur qui importerait un composant échoue au chargement — mais cette garde-là
 ne couvre que les composants, et un module qui touche `document` ne tomberait
 qu'à l'exécution de la branche fautive.
@@ -3042,7 +3138,7 @@ suivante ; une règle qui fait échouer la construction tient.
 
 | niveau | ce qu'il couvre | quand |
 |---|---|---|
-| **`node`, série surveillée** | moteur, géométrie, CSV, indicateurs et plafonds — des fonctions pures ; cohérence des versions (§ 18.5) ; appariement captures/manifeste (§ 19.7) ; aller-retour et canonicité du stockage sur la petite démonstration ; **une** production de planche de badges avec contrôle de géométrie et de couche de texte ; grille de propriétés sur petites instances | **à chaque modification**, quelques secondes (§ 14.14) |
+| **`node`, série surveillée** | moteur, géométrie, CSV, indicateurs et plafonds — des fonctions pures ; l'application et les modules purs de l'interface, sur le système de fichiers simulé et l'horloge pilotée ; cohérence des versions (§ 18.5) ; appariement captures/manifeste (§ 19.7) ; aller-retour et canonicité du stockage sur la petite démonstration ; **une** production de planche de badges avec contrôle de géométrie et de couche de texte ; grille de propriétés sur petites instances | **à chaque modification**, quelques secondes (§ 14.14) |
 | **`node:long`** | accord de l'incrémental à 1, 10, 100, 1 000 et 10 000 mouvements ; rejeu du générateur et empreinte ; pagination des badges sur ses cinq comptes A4, ses quatre comptes Lettre et ses deux impositions ; reconstruction de tous les instants du journal ; aller-retour sur la grande démonstration ; coût d'enregistrement ; sonde d'écriture sur système de fichiers réel ; grande grille de propriétés | avant un commit, et à la construction |
 | **navigateur** | ce que l'interface dessine, ce que les gestes produisent, les coordonnées ; le scénario de pilotage (§ 19.3) ; le banc de mesure (§ 19.10) ; les épreuves de style calculé | avant chaque livraison |
 | **manuel** | une soirée complète, de la saisie à l'impression ; le décalage des imprimantes (§ 11.3) ; `pointercancel` et `touch-action` (§ 7.3) | avant chaque livraison au client |
@@ -3093,18 +3189,30 @@ chaîne venue de la table de traduction d'une chaîne écrite dans le composant 
 les deux s'affichent à l'identique. Les deux gardes sont un **balayage des
 sources** sous `node`, qui refuse une chaîne visible en dur et **échoue sur un
 balayage vide** (§ 14.2), et une **exécution en langue témoin** où chaque chaîne
-traduite est décorée d'une marque : tout ce qui apparaît à l'écran sans sa marque
-est écrit en dur.
+traduite est encadrée d'une marque — `⁅` et `⁆`, U+2045 et U+2046, une fois,
+autour du texte entier : tout ce qui apparaît à l'écran sans sa marque est écrit
+en dur. La langue témoin est un mode du mécanisme, que la construction livrée
+n'emploie jamais.
+
+**Un seul mécanisme, deux familles de tables.** Les textes de l'application —
+codes de refus et d'avertissement, mise en forme des nombres et des durées — et
+ceux des écrans vivent dans des tables distinctes, que réunit un seul mécanisme
+de traduction. Un code s'affiche par sa propre clé, un libellé par une clé qui
+nomme sa table ; une clé portée par deux tables, ou absente, lève — l'écran ne
+montre jamais une clé brute ni un texte vide. Un texte qui devient une donnée —
+le libellé figé d'une entrée du journal (§ 8.2), le motif du CSV des lignes
+refusées (§ 10.1) — se compose en français, sans la marque de la langue témoin.
 
 ### 14.7 Le déterminisme
 
 Aucune source non reproductible — `Math.random`, `Date.now`, `performance.now`,
-`crypto.getRandomValues` — dans le **moteur**, dans le **générateur de
-démonstrations**, ni dans le **stockage** et l'**analyseur CSV**, qui reçoivent
-l'horloge et l'aléa en paramètre. Un test de l'arborescence le refuse, **et
-échoue si son balayage ne trouve aucun fichier**. Son périmètre est nommé :
-`src/moteur`, `src/demo`, `src/stockage` et `src/csv`, à l'exclusion du code
-d'épreuve, où un tirage sert légitimement (§ 14.12). L'interdit ne porte pas sur
+`crypto.getRandomValues` — dans le **moteur**, dans la **géométrie du plan**,
+dans le **générateur de démonstrations**, ni dans le **stockage** et
+l'**analyseur CSV**, qui reçoivent l'horloge et l'aléa en paramètre. Un test de
+l'arborescence le refuse, **et échoue si son balayage ne trouve aucun fichier**.
+Son périmètre est nommé : `src/moteur`, `src/geometrie`, `src/demo`,
+`src/stockage` et `src/csv`, à l'exclusion du code d'épreuve, où un tirage sert
+légitimement (§ 14.12). L'interdit ne porte pas sur
 le reste de l'application : l'application lit l'horloge pour horodater les
 entrées de l'historique, que le stockage écrit telles qu'il les reçoit, et le
 banc de mesure du § 19.10 relève des temps par image.
@@ -3127,8 +3235,8 @@ navigateur du § 14.4 sont deux configurations du même lanceur, pas deux outils
 
 | projet | environnement | ce qu'il inclut | greffon Svelte |
 |---|---|---|---|
-| `node` | `node`, aucun DOM | `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`, `src/demo`, `src/pdf` | **absent** |
-| `navigateur` | un vrai moteur de rendu, piloté par le mode navigateur de Vitest | `src/interface`, les épreuves de coordonnées et de style calculé | présent |
+| `node` | `node`, aucun DOM | `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`, `src/demo`, `src/pdf`, `src/application`, et les modules purs de `src/interface` | **absent** |
+| `navigateur` | un vrai moteur de rendu, piloté par le mode navigateur de Vitest | les composants de `src/interface`, les épreuves de coordonnées et de style calculé | présent |
 
 **Pourquoi Vitest.** Il lit la **configuration Vite qui construit le livrable** : un module importé par un test se résout exactement comme un module
 importé par l'application. Deux chaînes de résolution — l'une pour construire,
@@ -3209,7 +3317,8 @@ donnée d'épreuve « pour un cas par défaut ».
 | analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des appartenances, lignes refusées, aller-retour |
 | générateur de démonstrations | `node` | vecteur du générateur pseudo-aléatoire, empreinte des fichiers livrés, refus, noms forgés |
 | PDF | `node` | couche de texte, pagination, police embarquée et table `ToUnicode`, géométrie de la planche, reproductibilité |
-| interface | navigateur | ce que les gestes produisent, le style calculé, les trois invariants du § 7.2 |
+| application | `node` | les commandes et leurs refus, la séance observable, les contrôles de pose et de capacité, la table d'évaluation — sur le système de fichiers simulé et l'horloge pilotée |
+| interface | navigateur ; ses modules purs sous `node` | ce que les gestes produisent, le style calculé, les trois invariants du § 7.2 |
 
 #### Le moteur
 
@@ -3279,7 +3388,7 @@ style.
 
 **Au niveau navigateur**, la fonction pure est confrontée à
 `getScreenCTM().inverse()` sur un rendu réel, à plusieurs `k` et après défilement
-de la page. **Les trois invariants du § 7.2 ont chacun leur test** : que le `<svg>`
+de la page, à un millième de pixel d'écran près (§ 7.2). **Les trois invariants du § 7.2 ont chacun leur test** : que le `<svg>`
 racine ne porte pas d'attribut `viewBox` ; que son style calculé donne une bordure
 et un remplissage intérieur nuls — `getBoundingClientRect` les inclut, donc
 l'origine du contenu s'en décale ; qu'aucun ancêtre, ni lui-même, ne porte de
@@ -4045,7 +4154,9 @@ valeur soit fixée ; un seul reste entièrement ouvert.
    les 33 tables avec listes. Aucune capture d'écran ne le mesure — une image est
    muette sur la durée qui l'a produite. Ce qui reste à dire est ce qu'est un temps
    par image **acceptable sur la machine de l'opérateur**, qui n'est pas celle du
-   développement.
+   développement. Sa valeur de travail a déjà une conséquence visible : sur un
+   écran de 1 366 × 700, la grande démonstration s'ajuste sous elle et s'ouvre
+   sans listes de noms, qui se dessinent en rapprochant la vue (§ 7.7).
 7. **OUVERT, et hors périmètre de la première itération — les dégagements de
    référence d'une salle.** Le mot « conforme » reste absent de l'interface et la
    mention « disposition relative » reste sur chaque impression du plan (§ 7.7).
@@ -4321,7 +4432,7 @@ question. Le logiciel fait donc en sorte qu'on n'ait pas à la chercher.
 | endroit | forme |
 |---|---|
 | **bandeau d'application**, sur tout écran (§ 8.4) | `2026.10.05.01`, avec la provenance et — quand un plan est ouvert — le libellé de mode |
-| **premier écran** (§ 8.1), liste des événements comme répertoire vide | `version 2026.10.05.01` |
+| **premier écran** (§ 8.1), liste des événements comme répertoire vide | `version 2026.10.05.01`, ou la marque de provenance d'une construction de documentation |
 | **titre de la fenêtre** | `Gestion table tournante Libre — 2026.10.05.01` |
 | **panneau « À propos »** | un bloc d'une ligne que l'opérateur **copie** |
 | **pied de chaque page imprimée** (§ 11.7) | la version, à côté de l'horodatage du placement |
@@ -4345,7 +4456,7 @@ moment où l'opérateur peut encore se ménager un retour en arrière, c'est-à-
 avant le premier geste.
 
 **Le bloc copiable** du panneau « À propos » tient en une ligne — version affichée,
-version technique, plateforme, provenance de la construction, version de format
+version Windows, plateforme, provenance de la construction, version de format
 des fichiers — et se colle dans un courriel. Un chiffre recopié à la main se
 recopie faux. Il porte les **deux** formes parce qu'un opérateur qui lit la fiche
 de propriétés du fichier sous Windows y trouve `2026.1005.1.0` et non
@@ -4364,8 +4475,8 @@ correctif et non du bruit à chaque geste. Il **n'est pas** la version de format
 qui reste un nombre séparé, comparé selon ses propres règles.
 
 **Pendant une construction de documentation, le numéro est remplacé par une marque
-de provenance** — dans le bandeau, au pied des pages imprimées et sur la feuille de
-contrôle des badges. La raison est au § 19.4 : sans cette marque, le texte relevé
+de provenance** — dans le bandeau, sur le premier écran, au pied des pages
+imprimées et sur la feuille de contrôle des badges. La raison est au § 19.4 : sans cette marque, le texte relevé
 de chaque capture d'écran change à chaque incrément de version, et toutes les
 images se réécrivent. Le manifeste, lui, enregistre la **version réelle**, et le
 contrôle de version de la livraison la compare (§ 19.7).
@@ -4439,8 +4550,10 @@ ne les offre de façon portable :
 - **L'émulation d'une préférence système.** Le logiciel règle son **propre**
   réglage de thème, qui est celui que l'opérateur manipule (§ 13.3), et injecte une
   feuille de style qui annule transitions et animations. La préférence système
-  n'est consultée qu'au premier lancement, que le profil neuf du § 19.4 produit à
-  chaque exécution : **le scénario la pose explicitement et ne la déduit jamais.**
+  est consultée à chaque lancement, et le réglage de l'opérateur vaut pour la
+  séance : rien ne l'enregistre, ni fichier ni stockage du navigateur (§ 8.6).
+  **Le scénario pose donc le thème par le réglage, à chaque exécution, et ne le
+  déduit jamais de la machine.**
 
 ### 19.3 Le parcours, et ce qu'il photographie
 
@@ -4548,7 +4661,7 @@ neutralise chaque source de variation nommément.
 | **le cadrage mémorisé** | le § 8.5 range le cadrage dans un fichier de réglages locaux : le scénario démarre sur un **profil neuf**, ce qui lui donne du même geste un dossier de travail neuf |
 | **le numéro d'ordre du nom de démonstration** | charger une démonstration crée « ‹nom› 2 » à la deuxième exécution (§ 15) ; le répertoire neuf ramène chaque exécution au premier ordinal |
 | **l'horloge** — horodatage d'historique, pied de page, « dernière modification », retour automatique en lecture | **une seule source d'horloge dans toute l'application hors moteur**, et **elle possède aussi les minuteries**. Un instant figé ne suffit pas : un compte à rebours bâti sur une minuterie du moteur d'exécution continue d'avancer sous une horloge gelée, et **le retour automatique en lecture tombe au milieu d'une étape**. Le scénario installe une horloge dont il contrôle l'avance, ce qui lui permet aussi d'éprouver les durées |
-| **le numéro de version affiché** | une construction de documentation pose une **marque de provenance à la place du numéro** (§ 18.6), dans le bandeau comme au pied des pages imprimées et sur la feuille de contrôle des badges. Sans elle, le texte relevé de chaque capture change à chaque livraison, l'empreinte d'étape change avec lui, et **toutes les images se réécrivent à chaque incrément** — précisément le bruit que la réécriture conditionnelle du § 19.5 existe pour supprimer |
+| **le numéro de version affiché** | une construction de documentation pose une **marque de provenance à la place du numéro** (§ 18.6), dans le bandeau, sur le premier écran, au pied des pages imprimées et sur la feuille de contrôle des badges. Sans elle, le texte relevé de chaque capture change à chaque livraison, l'empreinte d'étape change avec lui, et **toutes les images se réécrivent à chaque incrément** — précisément le bruit que la réécriture conditionnelle du § 19.5 existe pour supprimer |
 | **le chemin affiché** dans la liste des événements (§ 8.1) | racine de travail neutre, et le contrôle **refuse une capture dont le texte relevé — celui de tous les nœuds de texte de la région photographiée, pas des seuls éléments que l'étape nomme — porte un chemin hors de cette racine**. Un chemin réel porte un nom de compte, qu'une documentation publie |
 | **la police réellement rendue** | la police embarquée (§ 11.1) est celle du pilotage. Le scénario **mesure une chaîne témoin** par `getComputedTextLength()` et la compare à la valeur enregistrée **avec une tolérance relative, constante mesurée** (§ 14.1) — exiger l'égalité exacte reproduirait, sur une mesure de texte, l'erreur que cette section refuse sur les pixels. La tolérance se fixe au-dessous de l'écart qu'introduit un repli de police, qui est d'un tout autre ordre |
 | **le thème** | réglé par le réglage de l'application, non par une préférence système émulée (§ 19.2) |
