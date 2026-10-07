@@ -1,9 +1,9 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Gardes de l'arborescence, lues dans le texte des sources : le moteur, le
-// générateur de démonstrations, le stockage et l'analyseur CSV n'appellent
-// aucune source non reproductible (§ 14.7), et ne parcourent les clés d'un
+// Gardes de l'arborescence, lues dans le texte des sources : le moteur, la
+// géométrie du plan, le générateur de démonstrations, le stockage et
+// l'analyseur CSV n'appellent aucune source non reproductible (§ 14.7), et ne parcourent les clés d'un
 // objet que par exception nommée (§ 15.5, point 4) ; le graphe d'imports de
 // chaque couche ne rejoint que ce que le § 13.4 lui permet ; chaque paquet
 // importé est déclaré dans devDependencies ; une valeur du contrat de données
@@ -138,10 +138,10 @@ const PARCOURS_DE_CLES_ADMIS = [
 ];
 
 // Arbres dont les modules ne lisent aucune source non reproductible (§ 14.7) :
-// le moteur et le générateur de démonstrations, puis le stockage et
-// l'analyseur CSV, qui reçoivent l'horloge et l'aléa de l'application, en
-// paramètre.
-const ARBRES_DETERMINISTES = ['src/moteur', 'src/demo', 'src/stockage', 'src/csv'];
+// le moteur, la géométrie du plan et le générateur de démonstrations, puis le
+// stockage et l'analyseur CSV, qui reçoivent l'horloge et l'aléa de
+// l'application, en paramètre.
+const ARBRES_DETERMINISTES = ['src/moteur', 'src/geometrie', 'src/demo', 'src/stockage', 'src/csv'];
 
 // Vrai quand le motif se lit dans le texte à partir de l'indice donné, et non
 // plus loin : une copie collante du motif, ses drapeaux g et y retirés.
@@ -196,6 +196,7 @@ function releverDeterminisme(racine, admis = PARCOURS_DE_CLES_ADMIS) {
 // pour éprouver le refus d'un balayage vide.
 const MODULES_VIDES = Object.freeze({
   'src/moteur/a.js': '',
+  'src/geometrie/a.js': '',
   'src/demo/a.js': '',
   'src/stockage/a.js': '',
   'src/csv/a.js': '',
@@ -210,7 +211,7 @@ const sansArbre = (fichiers, arbre) =>
 const releverSansException = (racine) => releverDeterminisme(racine, []);
 
 describe('arborescence : déterminisme (§ 14.7)', () => {
-  test("ni src/moteur, ni src/demo, ni src/stockage, ni src/csv ne lisent une source non reproductible, ni ne parcourent les clés d'un objet hors des exceptions nommées", () => {
+  test("ni src/moteur, ni src/geometrie, ni src/demo, ni src/stockage, ni src/csv ne lisent une source non reproductible, ni ne parcourent les clés d'un objet hors des exceptions nommées", () => {
     assert.deepEqual(releverDeterminisme(RACINE), []);
   });
 
@@ -315,7 +316,7 @@ describe('arborescence : déterminisme (§ 14.7)', () => {
       'src/demo/tirage.cjs:1 Date.now',
       'src/demo/tirage.mjs:1 Math.random',
     ]);
-    for (const arbre of ['src/moteur', 'src/demo', 'src/stockage', 'src/csv']) {
+    for (const arbre of ['src/moteur', 'src/geometrie', 'src/demo', 'src/stockage', 'src/csv']) {
       const sansModule = { ...sansArbre(MODULES_VIDES, arbre), [`${arbre}/a.test.js`]: '' };
       assert.throws(
         () => avecArbre(sansModule, releverSansException),
@@ -323,6 +324,24 @@ describe('arborescence : déterminisme (§ 14.7)', () => {
         arbre,
       );
     }
+  });
+
+  test('src/geometrie se relève comme le moteur, à toute profondeur, hors épreuves', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/geometrie/vue.js': [
+        'export const a = Math.random();',
+        'export const b = (o) => Object.keys(o).map((cle) => o[cle]);',
+        'export const c = Math.min(1, 2) + Math.floor(2.5);',
+      ].join('\n'),
+      'src/geometrie/sous/texte.js': 'for (const champ in ligne) t.push(champ);\n',
+      'src/geometrie/vue.test.js': 'export const d = Math.random() + Object.keys(o).length;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverSansException), [
+      'src/geometrie/sous/texte.js:1 for…in',
+      'src/geometrie/vue.js:1 Math.random',
+      'src/geometrie/vue.js:2 Object.keys',
+    ]);
   });
 
   test('src/stockage et src/csv se relèvent comme le moteur et le générateur, à toute profondeur, hors épreuves', () => {
@@ -470,7 +489,9 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // l'application.
 //
 // Le moteur et la géométrie ne connaissent ni l'écran, ni les fichiers, ni ce
-// qui les commande. Le stockage lit et écrit par le système de fichiers qu'il
+// qui les commande. La géométrie est une couche à part, plus bas que le
+// moteur : des fonctions pures du plan, qui n'importent ni le moteur, ni
+// l'analyseur CSV, ni le générateur de démonstrations. Le stockage lit et écrit par le système de fichiers qu'il
 // reçoit ; seules ses deux implémentations de plateforme touchent le
 // navigateur, par l'OPFS sous web et par le pont window.gtt sous Electron.
 // L'analyseur CSV lit le modèle du stockage. L'application câble le moteur,
@@ -478,9 +499,16 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // l'interface.
 const COUCHES = [
   {
-    arbres: ['src/moteur', 'src/geometrie'],
+    arbres: ['src/moteur'],
     requis: ['src/moteur'],
     exterieures: ['interface', 'application', 'stockage'],
+    paquets: PAQUETS_DE_PLATEFORME,
+    navigateur: [],
+  },
+  {
+    arbres: ['src/geometrie'],
+    requis: ['src/geometrie'],
+    exterieures: ['interface', 'application', 'stockage', 'moteur', 'csv', 'demo'],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
@@ -815,10 +843,10 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
       'src/moteur/a.js:26 import ../application/seance.js',
       'src/moteur/b.js:4 import ../interface/App.svelte',
       'src/moteur/sous/c.js:1 import ../../interface/x.js',
+      'src/moteur/a.js → src/commun/aide.js:2 window.',
       'src/geometrie/echelle.js:1 window.',
       'src/geometrie/echelle.js:3 import ../application/commandes.js',
       'src/geometrie/echelle.js:4 import ../application/seance.js',
-      'src/moteur/a.js → src/commun/aide.js:2 window.',
       'src/geometrie/echelle.js → src/commun/racine.js:1 window.',
       'src/stockage/fichiers.js:1 import @capacitor/core',
     ]);
@@ -989,10 +1017,57 @@ describe('arborescence : frontière des couches (§ 13.4)', () => {
     ]);
   });
 
-  test('src/geometrie et src/application peuvent manquer ; un src/moteur, un src/stockage ou un src/csv sans module fait échouer la garde', () => {
+  test("src/geometrie n'importe ni le moteur, ni le CSV, ni les démonstrations : une couche à part, plus bas que le moteur", () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/geometrie/vue.js': [
+        "import { mesurer } from '../moteur/indicateurs.js';",
+        "import { decouper } from '../csv/lecture.js';",
+        "import { creerPcg32 } from '../demo/prng.js';",
+        "import { tronquer } from './texte.js';",
+      ].join('\n'),
+      'src/geometrie/texte.js': 'export const tronquer = (t) => t;\n',
+      'src/moteur/indicateurs.js': 'export const mesurer = () => 0;\n',
+      'src/csv/lecture.js': 'export const decouper = () => [];\n',
+      'src/demo/prng.js': 'export const creerPcg32 = () => null;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/geometrie/vue.js:1 import ../moteur/indicateurs.js',
+      'src/geometrie/vue.js:2 import ../csv/lecture.js',
+      'src/geometrie/vue.js:3 import ../demo/prng.js',
+    ]);
+  });
+
+  test("src/geometrie n'importe ni l'interface, ni l'application, ni le stockage, ni un paquet de plateforme", () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/geometrie/vue.js': [
+        "import { x } from '../interface/x.js';",
+        "import { y } from '../application/y.js';",
+        "import { lire } from '../stockage/document.js';",
+        "import { mount } from 'svelte';",
+        "import { writable } from 'svelte/store';",
+        "import { app } from 'electron';",
+        "import { Capacitor } from '@capacitor/core';",
+        "import { tronquer } from './texte.js';",
+      ].join('\n'),
+      'src/geometrie/texte.js': 'export const tronquer = (t) => t;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/geometrie/vue.js:1 import ../interface/x.js',
+      'src/geometrie/vue.js:2 import ../application/y.js',
+      'src/geometrie/vue.js:3 import ../stockage/document.js',
+      'src/geometrie/vue.js:4 import svelte',
+      'src/geometrie/vue.js:5 import svelte/store',
+      'src/geometrie/vue.js:6 import electron',
+      'src/geometrie/vue.js:7 import @capacitor/core',
+    ]);
+  });
+
+  test('src/application peut manquer ; un src/moteur, un src/geometrie, un src/stockage ou un src/csv sans module fait échouer la garde', () => {
     assert.deepEqual(avecArbre(MODULES_VIDES, releverFrontiere), []);
-    for (const arbre of ['src/moteur', 'src/stockage', 'src/csv']) {
-      const sansModule = { ...sansArbre(MODULES_VIDES, arbre), [`${arbre}/a.test.js`]: '', 'src/geometrie/echelle.js': '' };
+    for (const arbre of ['src/moteur', 'src/geometrie', 'src/stockage', 'src/csv']) {
+      const sansModule = { ...sansArbre(MODULES_VIDES, arbre), [`${arbre}/a.test.js`]: '' };
       assert.throws(
         () => avecArbre(sansModule, releverFrontiere),
         new RegExp(`${arbre} ne fournit aucun module`),
