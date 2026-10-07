@@ -1191,8 +1191,9 @@ tienne : si naviguer exigeait de passer en écriture, l'opérateur y resterait e
 permanence et le mode lecture ne protégerait plus rien.
 
 **On en sort par un seul geste délibéré** — une commande « Modifier » à place
-fixe — et le logiciel y retourne **seul après inactivité**. Ce retour ne coûte
-rien et ne perd rien, puisque tout geste achevé est déjà sur le disque.
+fixe — et le logiciel y retourne **seul après dix minutes d'inactivité**. Ce
+retour ne coûte rien et ne perd rien, puisque tout geste achevé est déjà sur le
+disque.
 
 **Le compteur d'inactivité ne court pas pendant un geste** : il est suspendu
 tant qu'un pointeur est enfoncé, qu'un champ contient une saisie non validée ou
@@ -1241,11 +1242,11 @@ involontaire, ou déplacer une personne dans un brouillon exigerait de
 « débloquer ».
 
 **Le cadrage se range avec le mode, hors du fichier** — dans un **fichier de
-réglages locaux** du dossier de travail (§ 8.6), distinct des fichiers
-d'événements. Écrire le zoom dans le fichier d'état contredirait l'équivalence du
-§ 8.2, et **zoomer sur un plan bloqué écrirait dans le fichier d'un plan qui
-refuse toute modification**. Ce réglage n'est ni transmis avec le fichier, ni
-restitué par un retour arrière.
+réglages locaux**, `reglages_locaux.json` à la racine du dossier de travail
+(§ 8.6), distinct des fichiers d'événements. Écrire le zoom dans le fichier
+d'état contredirait l'équivalence du § 8.2, et **zoomer sur un plan bloqué
+écrirait dans le fichier d'un plan qui refuse toute modification**. Ce réglage
+n'est ni transmis avec le fichier, ni restitué par un retour arrière.
 
 Ce fichier porte **deux choses, et deux seulement** :
 
@@ -1287,18 +1288,25 @@ règle écrite, et l'affiche :
    l'interdit. Le livrable est pour cette raison un **exécutable portable à
    fichier unique, non un installateur** (§ 16).
 3. Sinon, le logiciel **éprouve l'écriture** dans `data/` à côté de
-   l'exécutable : il écrit un fichier témoin, le relit, l'efface, et efface un
-   témoin resté d'une séance précédente. Un contrôle de droits ne répond pas à
-   la question posée — les droits effectifs dépendent d'héritages,
-   d'appartenances de groupe, de stratégies d'antivirus, et un support amovible
-   en lecture seule présente un dossier d'apparence inscriptible. Une écriture
-   suivie d'une relecture répond.
+   l'exécutable, qu'il crée au besoin : il écrit un fichier témoin, le relit,
+   l'efface, et efface un témoin resté d'une séance précédente. Un contrôle de
+   droits ne répond pas à la question posée — les droits effectifs dépendent
+   d'héritages, d'appartenances de groupe, de stratégies d'antivirus, et un
+   support amovible en lecture seule présente un dossier d'apparence
+   inscriptible. Une écriture suivie d'une relecture répond.
 4. L'épreuve réussit → `data/` est le dossier de travail. C'est le **mode
    portable** : l'exécutable et les événements se déplacent ensemble, et la
    sauvegarde est la copie d'un seul dossier.
 5. L'épreuve échoue, ou le point 2 l'a interrompue → le dossier de travail est
    un dossier nommé d'après le produit, dans les *Documents* de l'opérateur. Le
    logiciel **dit pourquoi**, une fois, à la première ouverture, sans bloquer.
+
+**Le dossier retenu est éprouvé à son tour, et c'est cette épreuve qui le
+crée** : le dossier des *Documents* naît à la détermination, avant que la liste
+des événements s'ouvre, et non à la première écriture. Aucun geste ne crée
+ensuite le dossier où il écrit : un dossier de travail qui disparaît en cours de
+séance ne renaît pas vide, en silence. Si l'épreuve échoue, le logiciel le dit
+avant d'ouvrir la liste, puisqu'aucun geste ne s'y écrirait.
 
 **Ce qui arrive ensuite est aussi réglé.**
 
@@ -1308,7 +1316,8 @@ règle écrite, et l'affiche :
   de la veille a disparu, et l'opérateur conclurait à une perte.
 - La même règle vaut **en cours de séance**, pas seulement au démarrage : une clé
   se retire. Quand une écriture échoue, le logiciel nomme le fichier et le
-  dossier, et propose d'écrire ailleurs. Il énonce alors que l'équivalence du
+  dossier, et propose d'écrire ailleurs, dans un dossier qu'il crée au besoin
+  puisque l'opérateur l'a désigné. Il énonce alors que l'équivalence du
   § 8.2 est rompue **par le support**, au lieu de laisser croire que le dernier
   geste est sur le disque.
 - Si le dossier de travail est neuf et vide alors que l'autre emplacement
@@ -1332,6 +1341,16 @@ propriétaire — et non du chemin.
 Ce que le logiciel refuse, inchangé : **jamais de répertoire de données caché**,
 jamais `AppData`, jamais un emplacement que l'opérateur ne peut pas nommer.
 
+**Le profil de Chromium n'est pas un répertoire de données.** Chromium,
+qu'emporte la coquille Electron, range par défaut son profil — cache,
+préférences, stockage de la page — dans un dossier persistant des données
+applicatives de l'utilisateur. Le logiciel n'y garde rien : la coquille pose ce
+profil dans un dossier neuf du dossier temporaire du système, et l'efface à la
+sortie ; chaque démarrage efface aussi ceux des séances terminées, que Chromium
+a récrits après la sortie ou qu'une séance coupée a laissés. Un exécutable
+portable ne laisse ainsi, hors du dossier de travail, rien qui survive à la
+séance suivante.
+
 **Deux fichiers par événement :**
 
 | fichier | contenu | écriture |
@@ -1347,12 +1366,20 @@ opaques est inutilisable dans un explorateur. La dérivation retire les
 caractères que Windows refuse, **refuse les noms réservés quelle que soit la
 casse**, **compare les collisions sans égard à la casse** (le système de
 livraison y est insensible, celui de développement non), **borne le chemin
-complet sur le plus long des deux suffixes** — `.gtt-journal.jsonl`, dix-neuf
-caractères, et non `.gtt.json`, neuf ; sinon l'état tient et son journal déborde
-—, et **retombe sur un nom générique** quand la dérivation ne laisse rien. **La
-dérivation reçoit la racine du dossier de travail en paramètre**, celle-ci
-n'étant plus connue à l'écriture du code, et son test l'exerce sur les deux
-issues. **L'autorité reste le nom inscrit dans le fichier.**
+complet sur le plus long chemin que l'événement écrit**, et **retombe sur un nom
+générique** quand la dérivation ne laisse rien. Ce plus long chemin assemble les
+plus longues parties qu'un fichier de l'événement peut porter : le dossier daté
+de la corbeille (§ 8.7) au rang de collision le plus long — deux suppressions
+dans la même seconde se départagent par `_2`, `_3`… jusqu'à `_99` —, le plus long
+suffixe, celui de la génération de secours, `.gtt.json.precedent`, dix-neuf
+caractères, et le suffixe `.ecriture` de l'écriture atomique (§ 8.8) :
+`corbeille/AAAA-MM-JJ_HH-MM-SS_99/<nom>.gtt.json.precedent.ecriture`, soixante
+et un caractères outre le nom. `.gtt-journal.jsonl` n'en compte que dix-huit, et
+`.gtt.json` neuf : une borne posée sur l'état ou sur le journal laisserait
+déborder tout le reste. **La dérivation reçoit la racine du dossier de travail
+en paramètre**, celle-ci n'étant plus connue à l'écriture du code, et son test
+l'exerce sur les deux issues. **L'autorité reste le nom inscrit dans le
+fichier.**
 
 **Pourquoi l'historique n'est pas dans le fichier d'état**, pour deux raisons
 distinctes. *La taille* : un plan de 260 personnes sur 4 tours pèse de l'ordre
@@ -1500,6 +1527,15 @@ Une proposition porte un **identifiant entier séquentiel**, et les propositions
 sont rangées **en liste ordonnée** — jamais en objet indexé par une clé, dont
 l'ordre n'est pas garanti par la forme. L'identifiant vient de la place dans la
 suite de graines dérivées (§ 5.7), et ne dérive ni de l'horloge ni d'un tirage.
+Il se compte à partir d'un compteur du fichier, `prochainsIds.proposition`, qui
+dépasse tout identifiant de proposition jamais attribué, celui d'où vient le
+placement retenu compris : une génération numérote ses propositions dans
+l'ordre de ses graines à partir de lui, puis le porte au-delà de la dernière. Le
+compteur ne recule jamais — ni quand une commande efface les propositions
+(§ 5.7), ni quand une main l'abaisse dans le fichier, l'ouverture le relevant
+au-delà de chaque identifiant qu'elle lit. Les générations s'accumulent ainsi
+sans qu'un identifiant se répète ni revienne, et le retenu désigne toujours la
+même proposition d'origine.
 
 Chaque proposition déclare, **une fois** :
 
@@ -1507,6 +1543,8 @@ Chaque proposition déclare, **une fois** :
 - la **liste des capacités** correspondantes ;
 - le **nombre de tours** ;
 - l'**ensemble des identifiants de participants** qu'elle place ;
+- le drapeau `siegesAttribues` : ses **sièges sont-ils attribués** (§ 5.3),
+  l'ordre d'une liste de table étant alors celui des sièges ;
 - sa **graine dérivée** (§ 5.7), le **compte d'arrêt** et la **longueur de
   l'historique** d'acceptation de la recherche qui l'a produite : les trois
   réglages qui la déterminent.
@@ -1532,7 +1570,13 @@ siège n'est pas stocké : il est la position dans la liste.
 **Quand les sièges ne sont pas attribués** (§ 5.3), l'ordre à l'intérieur d'une
 table ne porte aucune information : le logiciel l'écrit **trié par identifiant
 croissant**. Sans cette règle, deux états identiques produisent deux fichiers
-différents, et le § 8.8 est violé par la seule forme du stockage.
+différents, et le § 8.8 est violé par la seule forme du stockage. **C'est le
+drapeau de la proposition qui décide**, jamais le réglage courant de
+l'événement : changer le réglage n'efface pas l'ordre des sièges d'une
+proposition déjà produite. Le placement retenu a la même forme et son propre
+drapeau, avec l'identifiant de la proposition dont il vient. L'ensemble des
+participants et chaque réserve se trient par identifiant croissant dans tous
+les cas : ce sont des ensembles.
 
 ```
 # illustration, annotée ; le fichier livré est du JSON strict
@@ -1719,25 +1763,47 @@ Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents ni
 des espaces**. **Deux colonnes reconnues sous le même nom** ne se départagent
 pas toutes seules : le logiciel n'associe ni l'une ni l'autre et demande.
 
-**La valeur de `exclu`** appartient à une liste fermée ; toute autre valeur
-**refuse la ligne**. Traiter l'inconnu comme `non` placerait dans la salle une
-personne qui s'est désistée, et la chaise vide ne se verrait que le soir même.
+**La valeur de `exclu`** appartient à une liste fermée : `oui`, `o`, `vrai`,
+`1` ou `x` pour une exclusion ; `non`, `n`, `faux`, `0` ou vide pour aucune ;
+sans égard à la casse, aux accents ni aux espaces. Toute autre valeur **refuse
+la ligne**. Traiter l'inconnu comme `non` placerait dans la salle une personne
+qui s'est désistée, et la chaise vide ne se verrait que le soir même.
 
 **L'encodage se tranche en quatre temps, dans cet ordre :** marque d'ordre
 d'octets UTF-8 ; marque UTF-16 ; **un octet nul dans les quatre premiers
-kibioctets sans marque** → refus global avec le remède nommé ; sinon décodage
-UTF-8 strict, et repli sur windows-1252 en cas d'échec.
+kibioctets sans marque** → refus global avec le remède nommé
+(`UTF16_SANS_MARQUE`) ; sinon décodage UTF-8 strict, et repli sur windows-1252
+en cas d'échec.
 
-> L'étape 3 n'est pas une précaution de principe : **un texte UTF-16 dont le
-> contenu est latin est valide en UTF-8**, chaque octet nul s'y décodant comme
-> le caractère nul. Un ordre à trois temps produirait des noms entrelardés de
-> caractères nuls, qui ne font échouer aucun calcul. Le mode de défaillance est
-> muet : « Benoît » importé en « BenoÃ®t » se découvre sur le plan imprimé.
+**Une marque déclare l'encodage, et rien ne la dément.** Des octets qui ne sont
+pas l'UTF-8 ou l'UTF-16 qu'elle annonce — une séquence invalide, un nombre
+impair d'octets, un substitut isolé — refusent le fichier (`UTF8_INVALIDE`,
+`UTF16_INVALIDE`) : un repli sur windows-1252 changerait chaque accent de la
+partie valide en caractères parasites, « Benoît » en « BenoÃ®t », et un décodage
+indulgent sèmerait des caractères de remplacement dans les noms. Quel que soit
+le temps qui a décodé, **un texte qui porte le caractère nul est refusé**
+(`CARACTERE_NUL`) — un collage aussi, qui ne porte pas d'octets : le refus
+rattrape un octet nul au-delà des quatre kibioctets, et un fichier que sa marque
+fait lire sans erreur sous un autre encodage, la marque de l'UTF-32 LE
+commençant par celle de l'UTF-16 LE. Chaque refus d'encodage nomme le même
+remède : réenregistrer le fichier en UTF-8.
+
+> L'étape 3 n'est pas une précaution de principe : **un texte UTF-16 sans
+> marque se décode sans erreur dans l'un ou l'autre des temps suivants**. En
+> ASCII, il est de l'UTF-8 valide, chaque octet nul s'y décodant comme le
+> caractère nul ; accentué, il cesse de l'être et retombe sur windows-1252, qui
+> accepte tout octet. Dans les deux cas, les noms arrivent entrelardés de
+> caractères nuls, qui ne font échouer aucun calcul. Un ordre à trois temps
+> produirait ce défaut muet, qui ne se découvre que sur le plan imprimé.
 
 **Le séparateur** se choisit entre `;`, `,` et la tabulation, en **analysant**
 les vingt premiers enregistrements : le candidat retenu termine sans guillemet
 ouvert, donne le même nombre de champs partout, **et ce nombre dépasse 1**. À
-égalité, celui qui donne **le plus d'en-têtes reconnus**.
+égalité, celui qui donne **le plus d'en-têtes reconnus**. Quand aucun candidat
+ne convient et que la première ligne entière est un en-tête reconnu, **le
+fichier n'a qu'une colonne** — une liste de noms — et chaque ligne est un seul
+champ : un nom qui porte une virgule reste entier. Sinon, le fichier est
+refusé, et le refus nomme ce qui écarte le séparateur.
 
 > Les deux dernières conditions ne sont pas des raffinements. Sur un fichier
 > séparé par des virgules, `;` donne lui aussi un nombre de champs parfaitement
@@ -1759,11 +1825,16 @@ une appartenance nommée « ».
 **La ligne invalide : importer le reste.** Le logiciel importe les lignes
 valides et **réexporte les refusées** en un CSV reprenant les colonnes
 d'origine, augmenté de `ligne` et `motif` — deux colonnes qu'aucun en-tête ne
-reconnaît, donc le fichier corrigé se réimporte tel quel. Sur 260 lignes, un
-refus global coûterait l'import entier pour une faute en ligne 213.
+reconnaît, donc le fichier corrigé se réimporte tel quel. `ligne` porte le
+numéro de l'enregistrement, en-tête compris : celui qu'un tableur affiche, un
+champ cité sur plusieurs lignes du texte n'y comptant qu'une fois. Sur 260
+lignes, un refus global coûterait l'import entier pour une faute en ligne 213.
 
-Trois cas restent des refus **globaux** : aucun en-tête reconnaissable, aucune
-colonne associée à `nom`, zéro ligne valide.
+Hors de l'encodage et du séparateur, quatre cas restent des refus **globaux** :
+aucun en-tête reconnaissable, aucune colonne associée à `nom`, zéro ligne
+valide, et **un guillemet resté ouvert** jusqu'à la fin du texte
+(`GUILLEMET_OUVERT`, avec l'enregistrement où il s'ouvre) — tout ce qui le suit
+tiendrait dans un seul champ, et deux personnes se fondraient en une.
 
 **L'import entier est une seule entrée d'historique.**
 
@@ -2780,8 +2851,8 @@ complet au disque.
 
 Le code que Vite compile vit sous **`src/`**, en modules nommés d'après les
 couches du § 13.4 : `src/moteur`, `src/geometrie`, `src/stockage`, `src/csv`,
-`src/pdf`, `src/demo`, `src/interface`. À la racine du projet,
-**`version.json`** est l'unique source de la version (§ 18.3) et
+`src/pdf`, `src/demo`, `src/application`, `src/interface`. À la racine du
+projet, **`version.json`** est l'unique source de la version (§ 18.3) et
 **`src/version.genere.js`** le module qu'elle engendre — **versionné dans le
 dépôt**, parce qu'une séance de développement lancée sans l'étape de construction
 doit afficher une version et non une importation manquante, et **contrôlé par
@@ -2876,11 +2947,18 @@ qu'elle décide de l'endroit où vit la soirée.
 
 **La frontière des couches est gardée mécaniquement**, et pas seulement par
 discipline : un test du **graphe d'imports** refuse qu'un module de `src/moteur`
-ou de `src/geometrie` importe de `src/interface`, de `src/stockage` ou d'une
-interface de plateforme. Le projet `node` ne chargeant pas le greffon Svelte
-(§ 14.8), un test de moteur qui importerait un composant échoue au chargement —
-mais cette garde-là ne couvre que les composants, et un module qui touche
-`document` ne tomberait qu'à l'exécution de la branche fautive.
+ou de `src/geometrie` importe de `src/interface`, de `src/application`, de
+`src/stockage` ou d'une interface de plateforme. Il refuse de même que
+`src/stockage` importe de `src/csv`, de `src/application`, de `src/interface` ou
+d'une plateforme, ou touche le navigateur hors de ses deux implémentations du
+système de fichiers, qu'aucun autre de ses modules n'importe ; que `src/csv`,
+qui lit le modèle du stockage, importe de `src/application`, de `src/interface`
+ou d'une plateforme ; et que `src/application` importe de `src/interface` ou de
+Svelte. Un type que la documentation d'un module importe compte comme un
+import. Le projet `node` ne chargeant pas le greffon Svelte (§ 14.8), un test de
+moteur qui importerait un composant échoue au chargement — mais cette garde-là
+ne couvre que les composants, et un module qui touche `document` ne tomberait
+qu'à l'exécution de la branche fautive.
 
 ### 13.5 Ce que le SVG donne et que le canvas ferait payer
 
@@ -3016,12 +3094,15 @@ est écrit en dur.
 ### 14.7 Le déterminisme
 
 Aucune source non reproductible — `Math.random`, `Date.now`, `performance.now`,
-`crypto.getRandomValues` — dans le **moteur** ni dans le **générateur de
-démonstrations**. Un test de l'arborescence le refuse, **et échoue si son
-balayage ne trouve aucun fichier**. Son périmètre est nommé : `src/moteur` et
-`src/demo`, à l'exclusion du code d'épreuve, où un tirage sert légitimement
-(§ 14.12). L'interdit ne porte pas sur le reste de l'application : l'historique
-horodate ses entrées, et le banc de mesure du § 19.10 relève des temps par image.
+`crypto.getRandomValues` — dans le **moteur**, dans le **générateur de
+démonstrations**, ni dans le **stockage** et l'**analyseur CSV**, qui reçoivent
+l'horloge et l'aléa en paramètre. Un test de l'arborescence le refuse, **et
+échoue si son balayage ne trouve aucun fichier**. Son périmètre est nommé :
+`src/moteur`, `src/demo`, `src/stockage` et `src/csv`, à l'exclusion du code
+d'épreuve, où un tirage sert légitimement (§ 14.12). L'interdit ne porte pas sur
+le reste de l'application : l'application lit l'horloge pour horodater les
+entrées de l'historique, que le stockage écrit telles qu'il les reçoit, et le
+banc de mesure du § 19.10 relève des temps par image.
 
 **Ce n'est pas une règle d'hygiène.** L'interdit de `performance.now` dans le
 moteur est ce qui rend vraie la phrase « à graine et entrée égales, placement
@@ -3230,10 +3311,12 @@ fichiers, que recopier un dossier suffit à fausser.
 entrées corrompu à la trente-septième : trente-six entrées retenues,
 soixante-quatre annoncées écartées.
 
-**La dérivation des noms refuse `con` comme `CON`**, et borne le chemin sur
-`.gtt-journal.jsonl`, dix-neuf caractères, et non sur `.gtt.json`, neuf. Elle
-reçoit la racine en paramètre et son test l'exerce sur les **deux** dossiers de
-travail possibles (§ 8.6).
+**La dérivation des noms refuse `con` comme `CON`**, et borne le plus long
+chemin que l'événement écrit, corbeille et écriture atomique comprises (§ 8.6) :
+le test recompose ce chemin en entier, et échoue sur une borne posée sur
+`.gtt.json`, neuf caractères, sur le seul `.gtt-journal.jsonl`, dix-huit, ou qui
+oublie la corbeille ou l'écriture atomique. Elle reçoit la racine en paramètre et
+son test l'exerce sur les **deux** dossiers de travail possibles (§ 8.6).
 
 **Un renommage atomique qui échoue ne détruit pas la cible.** L'implémentation
 d'épreuve échoue au renommage : la cible conserve son contenu antérieur, et le
@@ -3472,6 +3555,19 @@ Ils sont petits, purs — le second à la condition d'injection du § 13.4 — e
 branche non couverte y est un cas que l'opérateur rencontre au pire moment. Une
 branche qu'on ne sait pas couvrir est soit du code mort — on le retire — soit un
 cas que la spécification n'a pas prévu — on l'écrit.
+
+**La mesure est sa propre commande**, `make couverture` : la série `node` sous
+instrumentation, hors des budgets du § 14.14. Elle publie un tableau par couche
+et par module, et un rapport à parcourir qui montre, ligne à ligne, ce qui n'est
+jamais exécuté. Les deux seuils portent sur quatre fichiers —
+`src/moteur/indicateurs.js` et `src/moteur/plafond.js`, `src/stockage/depot.js`
+et `src/stockage/journal.js` — et la commande échoue en deçà. Un test de
+l'arborescence refuse un seuil abaissé, un seuil global, et un seuil posé sur un
+fichier absent ou hors de la mesure : l'outil tiendrait ce dernier pour atteint,
+faute de branche à compter. Il refuse de même une commande qui ne mesure pas —
+sans instrumentation, la série passe et aucun seuil ne se lit —, une commande
+dont les arguments redéfinissent la mesure ou ce qu'elle exécute, un tableau qui
+tait les modules pleins, et l'absence du rapport ligne à ligne.
 
 **Ce qui l'empêche de devenir une case à cocher** ne vient pas de l'outil de
 couverture :
@@ -3874,6 +3970,42 @@ Le guide d'usage se rédige **à partir des configurations de démonstration**, 
 que le lecteur reproduise exactement ce qu'il lit. Il est relu par quelqu'un qui
 n'a pas écrit le logiciel ; un guide relu par son auteur ne révèle aucune étape
 manquante.
+
+### 16.2 Le poste de développement
+
+Le projet s'installe et se lance d'une commande, la même sur chaque système
+Linux, NixOS compris, et sous macOS ; Windows a la sienne. Une étape laissée à
+la main est celle qu'un nouveau venu oublie, sans savoir ensuite laquelle.
+
+| commande | ce qu'elle fait |
+|---|---|
+| `./install.sh` | pose les paquets du système qui manquent — par apt, dnf, zypper ou pacman, sous `sudo` —, puis le Node du projet et les dépendances que fixe `package-lock.json` ; relancée, ne refait que ce qui manque |
+| `./install_dev.sh` | ajoute le Chromium des épreuves du navigateur, des polices et, sur amd64, `podman`, sous lequel se construit l'exécutable |
+| `./run.sh` | lance la coquille Electron sur une session graphique ; sans écran, ou là où Electron n'est pas publié, sert l'application à un navigateur par le serveur de Vite |
+| `make` | lance l'application comme `./run.sh` ; `make help` nomme les autres cibles — les trois séries d'épreuves, la couverture (§ 14.13), la construction, le contrôle de version (§ 18.5), l'essai de démarrage |
+
+**Le Node du projet a une seule source** : la majeure écrite dans
+`.node-version`, que lisent les scripts bash, les scripts PowerShell et
+`shell.nix`. L'installation télécharge cette version de nodejs.org, la vérifie
+contre sa somme et la range hors du dépôt, dans le dossier de l'utilisateur :
+elle n'exige aucun droit d'administration et ne dépend pas du Node que porte —
+ou ne porte pas — le système. Chaque cible du `Makefile` passe par ce Node.
+
+**Sous Windows**, `install.cmd`, `install_dev.cmd` et `run.cmd` passent la main à
+des scripts PowerShell 5.1, la version que porte tout Windows. **Sous NixOS**,
+où les binaires téléchargés ne trouvent ni leur chargeur ni leurs bibliothèques
+aux chemins qu'ils attendent, `scripts/installation/shell.nix` déclare Node,
+Electron et Chromium d'un nixpkgs épinglé par révision et par somme ; les scripts
+du projet s'y relancent d'eux-mêmes.
+
+**`make verifier_systemes` éprouve l'installation elle-même.** Sur chaque système
+du catalogue — les familles Debian, Fedora, openSUSE et Arch, et Nix —, un
+conteneur `podman` exécute, sous un compte ordinaire qui passe par `sudo`,
+`./install_dev.sh`, puis les trois séries d'épreuves, l'essai de démarrage
+d'Electron et le serveur de Vite ; les scripts PowerShell s'y éprouvent sous
+`pwsh`. Ce qu'un conteneur n'éprouve pas est nommé, et reste à vérifier sur une
+machine : le bac à sable d'Electron, une autre architecture que celle de l'hôte,
+NixOS lui-même, une vraie session graphique, Windows et macOS réels.
 
 ---
 
