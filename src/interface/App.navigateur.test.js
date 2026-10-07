@@ -10,7 +10,8 @@
 // peintes que sans opacité partielle, filtre ni mode de fusion — ce qu'une
 // épreuve vérifie dans l'ascendance de chaque texte (§ 14.5). Les épreuves de
 // visibilité, de contraste et d'opacité passent par les deux thèmes, que
-// l'attribut data-theme de <html> choisit (§ 19.2). Le contraste est celui de
+// l'attribut data-theme de <html> choisit (§ 19.2). Les mesures viennent du
+// module partagé test/navigateur/rendu.js, dont le contraste est celui de
 // palette.js, seule formule des WCAG du dépôt.
 //
 // Le projet navigateur n'importe pas node:assert/strict : côté navigateur,
@@ -20,78 +21,21 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import App from './App.svelte';
-import { contraste } from './palette.js';
 import { VERSION } from '../version.genere.js';
+import {
+  attenuations,
+  composantes,
+  contraste,
+  couleurTexte,
+  designation,
+  fondPeintSous,
+  porteursDeTexte,
+  sousTheme,
+  visible,
+} from '../../test/navigateur/rendu.js';
 
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 const THEMES = ['clair', 'sombre'];
-
-// Composantes [r, g, b, a] d'une couleur calculée. Chromium la rend sous la
-// forme « rgb(r, g, b) » ou « rgba(r, g, b, a) » quand la source est une
-// couleur sRGB ; toute autre forme fait échouer l'épreuve plutôt que de la
-// laisser passer sans mesure.
-function composantes(couleur) {
-  const m = /^rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)$/.exec(couleur);
-  if (m === null) {
-    throw new Error(`couleur calculée illisible : ${couleur}`);
-  }
-  const alpha = m[4] === undefined ? 1 : Number(m[4]);
-  return [Number(m[1]), Number(m[2]), Number(m[3]), alpha];
-}
-
-// L'élément, puis chacun de ses ancêtres jusqu'à la racine du document.
-function ascendance(element) {
-  const chaine = [];
-  for (let n = element; n !== null; n = n.parentElement) {
-    chaine.push(n);
-  }
-  return chaine;
-}
-
-// Fond peint sous un élément : le premier fond non transparent de son
-// ascendance, ou null.
-function fondPeint(element) {
-  for (const n of ascendance(element)) {
-    const fond = composantes(getComputedStyle(n).backgroundColor);
-    if (fond[3] !== 0) {
-      return fond;
-    }
-  }
-  return null;
-}
-
-// Éléments du sous-arbre qui portent eux-mêmes un nœud de texte non vide.
-function porteursDeTexte(racine) {
-  return [racine, ...racine.querySelectorAll('*')].filter((el) =>
-    [...el.childNodes].some(
-      (n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== '',
-    ),
-  );
-}
-
-// Nom lisible d'un élément dans un message d'échec.
-function designation(element) {
-  const classe = element.getAttribute('class');
-  return classe ? `${element.localName}.${classe}` : element.localName;
-}
-
-// Exécute mesure() sous le thème demandé, posé par data-theme sur <html>, et
-// rend sa valeur. L'attribut retrouve ensuite sa valeur d'avant, ou son
-// absence, même quand mesure() lève : le test suivant part du même document.
-async function sousTheme(theme, mesure) {
-  const racine = document.documentElement;
-  const avant = racine.getAttribute('data-theme');
-  racine.setAttribute('data-theme', theme);
-  try {
-    return await mesure();
-  } finally {
-    if (avant === null) {
-      racine.removeAttribute('data-theme');
-    } else {
-      racine.setAttribute('data-theme', avant);
-    }
-  }
-}
 
 let composant;
 
@@ -108,9 +52,9 @@ function bandeau() {
   return document.body.querySelector('header.bandeau');
 }
 
-// Le bandeau, puis chacun des éléments qui y portent un texte.
+// Le bandeau, puis chacun de ses porteurs de texte.
 function bandeauEtTextes() {
-  return [...new Set([bandeau(), ...porteursDeTexte(bandeau())])];
+  return [{ element: bandeau(), pseudo: null }, ...porteursDeTexte(bandeau())];
 }
 
 describe("bandeau d'application", () => {
@@ -121,38 +65,17 @@ describe("bandeau d'application", () => {
 
   test('le bandeau et chacun de ses textes sont visibles dans la fenêtre, dans les deux thèmes (§ 14.2, § 18.6)', async () => {
     // Le texte, le titre et le style calculé se relisent sur un élément qui
-    // ne peint rien. L'épreuve interroge donc la mise en page : chaque élément
-    // est visible pour checkVisibility (display, visibility, opacité nulle,
-    // content-visibility), sa boîte est non vide et tient dans la fenêtre, et
-    // le point central de cette boîte atteint l'élément ou l'un de ses
-    // descendants — un élément recouvert, ou rogné par un ancêtre, laisse le
-    // point à un autre. elementFromPoint suit l'atteinte du pointeur : un
-    // élément en pointer-events: none n'y répond pas, et l'épreuve le refuse.
+    // ne peint rien. visible interroge donc la mise en page : checkVisibility,
+    // une boîte non vide dans la fenêtre, et le centre de cette boîte qui
+    // atteint l'élément ou l'un de ses descendants sans qu'un élément peint
+    // au-dessus y peigne — un élément recouvert, ou rogné par un ancêtre,
+    // échoue.
     for (const theme of THEMES) {
       await sousTheme(theme, () => {
-        const elements = bandeauEtTextes();
-        expect(elements.length).toBeGreaterThan(1);
-        for (const element of elements) {
-          const lieu = `${theme} : ${designation(element)}`;
-          expect(
-            element.checkVisibility({ opacityProperty: true, visibilityProperty: true }),
-            `${lieu} : checkVisibility`,
-          ).toBe(true);
-          const boite = element.getBoundingClientRect();
-          expect(boite.width, `${lieu} : largeur`).toBeGreaterThan(0);
-          expect(boite.height, `${lieu} : hauteur`).toBeGreaterThan(0);
-          expect(boite.left, `${lieu} : bord gauche`).toBeGreaterThanOrEqual(0);
-          expect(boite.top, `${lieu} : bord haut`).toBeGreaterThanOrEqual(0);
-          expect(boite.right, `${lieu} : bord droit`).toBeLessThanOrEqual(innerWidth);
-          expect(boite.bottom, `${lieu} : bord bas`).toBeLessThanOrEqual(innerHeight);
-          const atteint = document.elementFromPoint(
-            boite.left + boite.width / 2,
-            boite.top + boite.height / 2,
-          );
-          expect(
-            element.contains(atteint),
-            `${lieu} : le centre de sa boîte atteint ${atteint === null ? 'aucun élément' : designation(atteint)}`,
-          ).toBe(true);
+        const porteurs = bandeauEtTextes();
+        expect(porteurs.length).toBeGreaterThan(1);
+        for (const porteur of porteurs) {
+          expect(visible(porteur), `${theme} : ${designation(porteur)}`).toBe(true);
         }
       });
     }
@@ -175,24 +98,25 @@ describe("bandeau d'application", () => {
     expect(style.backgroundColor).not.toBe(TRANSPARENT);
   });
 
-  test('chaque texte du bandeau tient 4,5:1 sur un fond opaque, dans les deux thèmes (§ 14.5)', async () => {
+  test('chaque texte du bandeau tient 4,5:1 sur chaque couleur peinte sous lui, dans les deux thèmes (§ 14.5)', async () => {
     const couleursParTheme = [];
     for (const theme of THEMES) {
       const couleurs = await sousTheme(theme, () => {
         const textes = porteursDeTexte(bandeau());
         expect(textes.length).toBeGreaterThan(0);
-        for (const element of textes) {
-          const lieu = `${theme} : ${designation(element)}`;
-          const texte = composantes(getComputedStyle(element).color);
-          const fond = fondPeint(element);
-          expect(fond, lieu).not.toBeNull();
+        for (const porteur of textes) {
+          const lieu = `${theme} : ${designation(porteur)}`;
+          const texte = couleurTexte(porteur);
+          const fonds = fondPeintSous(porteur);
+          expect(fonds.length, `${lieu} : aucun fond opaque`).toBeGreaterThan(0);
           expect(texte[3], lieu).toBe(1);
-          expect(fond[3], lieu).toBe(1);
-          expect(contraste(texte, fond), lieu).toBeGreaterThanOrEqual(4.5);
+          for (const fond of fonds) {
+            expect(contraste(texte, fond), `${lieu} sur ${fond.join(', ')}`).toBeGreaterThanOrEqual(4.5);
+          }
         }
         return [document.body, bandeau()].map((el) => {
           const style = getComputedStyle(el);
-          return `${style.color} sur ${style.backgroundColor}`;
+          return `${composantes(style.color)} sur ${composantes(style.backgroundColor)}`;
         });
       });
       couleursParTheme.push(couleurs);
@@ -205,23 +129,19 @@ describe("bandeau d'application", () => {
     ).not.toEqual(couleursParTheme[0]);
   });
 
-  test("aucune opacité partielle, aucun filtre ni mode de fusion sous un texte, dans les deux thèmes (§ 14.5)", async () => {
+  test("aucune opacité partielle, aucun filtre, masque ni mode de fusion sous un texte, dans les deux thèmes (§ 14.5)", async () => {
     // opacity et filter ne s'héritent pas : posés sur un ancêtre, ils changent
-    // le pixel peint sans changer le style calculé du texte. Chaque niveau de
-    // l'ascendance est donc relu, jusqu'à la racine du document.
+    // le pixel peint sans changer le style calculé du texte. attenuations
+    // relit donc chaque niveau de l'ascendance, jusqu'à la racine du document.
     for (const theme of THEMES) {
       await sousTheme(theme, () => {
         const textes = porteursDeTexte(bandeau());
         expect(textes.length).toBeGreaterThan(0);
-        for (const element of textes) {
-          for (const n of ascendance(element)) {
-            const style = getComputedStyle(n);
-            const lieu = `${theme} : ${designation(n)} sous ${designation(element)}`;
-            expect(style.opacity, lieu).toBe('1');
-            expect(style.filter, lieu).toBe('none');
-            expect(style.backdropFilter, lieu).toBe('none');
-            expect(style.mixBlendMode, lieu).toBe('normal');
-          }
+        for (const porteur of textes) {
+          const fautes = attenuations(porteur).map(
+            (f) => `${designation({ element: f.element, pseudo: f.pseudo })} ${f.propriete}: ${f.valeur}`,
+          );
+          expect(fautes, `${theme} : ${designation(porteur)}`).toEqual([]);
         }
       });
     }

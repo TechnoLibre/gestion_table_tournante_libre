@@ -13,7 +13,8 @@
 // navigateur  un vrai moteur de rendu. Le projet étend vite.config.js : un
 //             module s'y résout par les mêmes greffons et réglages que dans la
 //             construction du livrable, sans seconde configuration à tenir
-//             d'accord avec la première.
+//             d'accord avec la première. Il joue les épreuves de src/ et
+//             celles de l'outillage partagé de test/navigateur/.
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { optionsChromium } from './test/chromium.js';
@@ -95,7 +96,7 @@ export default defineConfig({
       { extends: './vite.config.js',
         test: {
           name: 'navigateur',
-          include: ['src/**/*.navigateur.test.js'],
+          include: ['src/**/*.navigateur.test.js', 'test/**/*.navigateur.test.js'],
           browser: { enabled: true, headless: true, provider: playwright(optionsChromium(process.env)),
                      instances: [{ browser: 'chromium' }] } } },
     ],
