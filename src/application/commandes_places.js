@@ -435,16 +435,35 @@ function violationsNouvelles(charge, precedent, suivant) {
 }
 
 // La charge suivante d'une retouche, ou INVARIANT_VIOLE quand elle ajoute
-// une violation au retenu reçu. Le versement en réserve des personnes que le
-// plan n'assied pas (reduireAuxAssises, versLaReserveAffichee) n'en ajoute
+// une violation au retenu reçu, son remède celui que remedeDe(violations)
+// rend, null par défaut. Le versement en réserve des personnes que le plan
+// n'assied pas (reduireAuxAssises, versLaReserveAffichee) n'en ajoute
 // aucune : l'affichage assied d'abord, à leur table, les personnes qu'elle
 // réserve, et une capacité ne descend jamais sous ses réservations (§ 6.2).
-function retouche(charge, suivante) {
+function retouche(charge, suivante, remedeDe = () => null) {
   const violations = violationsNouvelles(charge, charge.retenu, suivante.retenu);
   if (violations.length > 0) {
-    throw refus('INVARIANT_VIOLE', { proposition: charge.retenu.proposition, violations });
+    throw refus('INVARIANT_VIOLE', { proposition: charge.retenu.proposition, violations }, remedeDe(violations));
   }
   return suivante;
+}
+
+// Le remède d'un retrait du tour que la réservation de la personne à sa
+// table interdit : le retrait de cette réservation, la première dans l'ordre
+// canonique qui tient la personne à la table de la violation au tour, « tous
+// les tours » avant « ce tour ». null quand aucune violation RESERVATION ne
+// nomme la personne.
+function remedeDuRetrait(charge, participant, tour, violations) {
+  const violation = violations.find((v) => v.code === 'RESERVATION' && v.participant === participant);
+  if (violation === undefined) return null;
+  const [tenue] = charge.reservations
+    .filter((r) => r.participant === participant && r.table === violation.table && (r.portee === 'tous' || r.tour === tour))
+    .sort(ordreDesReservations);
+  if (tenue === undefined) return null;
+  return {
+    commande: 'retirerReservation',
+    arguments: { participant, table: tenue.table, portee: tenue.portee, tour: tenue.tour },
+  };
 }
 
 // Le numéro de la table où le retenu place id à ce tour, null en réserve,
@@ -677,7 +696,9 @@ function echangerDansRetenu(charge, { tour, a, b } = {}) {
  * tour donné et attend dans la réserve de ce tour ; sa chaise se libère.
  * Une personne que le plan du tour ne montre pas assise (placeDe) — en
  * réserve, hors du retenu, à une table que la charge n'a plus ou à un rang
- * au-delà de sa capacité courante — refuse SANS_EFFET.
+ * au-delà de sa capacité courante — refuse SANS_EFFET. Une personne que sa
+ * réservation tient à cette table refuse INVARIANT_VIOLE, remède le retrait
+ * de cette réservation.
  */
 function retirerDuTour(charge, { tour, participant } = {}) {
   exigerModifiable(charge);
@@ -696,7 +717,7 @@ function retirerDuTour(charge, { tour, participant } = {}) {
   oter(suivante.retenu, tour, participant);
   enReserve(suivante.retenu, tour, participant);
   return {
-    charge: retouche(charge, suivante),
+    charge: retouche(charge, suivante, (violations) => remedeDuRetrait(charge, participant, tour, violations)),
     libelle: libelle('ENTREE_RETIRER_DU_TOUR', { personne: nomAffiche(personne), numero, tour }),
     avertissements: [],
   };

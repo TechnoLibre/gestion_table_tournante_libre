@@ -728,17 +728,29 @@ describe('commandes des places : le retenu et la dérive (§ 9, § 4.4)', () => 
 });
 
 describe('commandes des places : le vérificateur d’invariants du retenu (§ 14.12, § 14.15)', () => {
-  test('retirer du tour une personne réservée à sa table : INVARIANT_VIOLE, les seules violations nouvelles, sans écriture', () => {
+  test('retirer du tour une personne réservée à sa table : INVARIANT_VIOLE, les seules violations nouvelles, remède le retrait de la réservation', () => {
     // Le retenu reçu porte déjà une violation : 7, réservé à la table 4 au
     // tour 2, y est assis à la table 7 ; elle n'entre pas dans le refus.
     const charge = figer(chargeRetenue({ reservations: [resa(4, 5, null, 1), resa(7, 5, null, 2)] }));
-    refuse(() => executer('retirerDuTour', charge, { tour: 1, participant: 4 }), 'INVARIANT_VIOLE', {
+    const leve = refuse(() => executer('retirerDuTour', charge, { tour: 1, participant: 4 }), 'INVARIANT_VIOLE', {
       proposition: 1,
       violations: [{ code: 'RESERVATION', participant: 4, table: 5, tour: 1 }],
-      remede: null,
+      remede: { commande: 'retirerReservation', arguments: { participant: 4, table: 5, portee: 'tour', tour: 1 } },
     });
+    // Le remède lève le refus : la réservation retirée, le retrait passe.
+    const { commande, arguments: argumentsDuRemede } = leve.details.remede;
+    const { charge: sansReservation } = executer(commande, charge, argumentsDuRemede);
+    const { charge: retire } = executer('retirerDuTour', sansReservation, { tour: 1, participant: 4 });
+    assert.deepEqual(reserveDe(retire, 1), [4]);
     const { charge: apres } = executer('retirerDuTour', charge, { tour: 1, participant: 5 });
     assert.deepEqual(reserveDe(apres, 1), [5]);
+  });
+
+  test('retirer du tour une personne réservée « tous les tours » à sa table : le remède désigne cette réservation', () => {
+    const charge = figer(chargeRetenue({ reservations: [resa(4, 5, null)] }));
+    refuse(() => executer('retirerDuTour', charge, { tour: 1, participant: 4 }), 'INVARIANT_VIOLE', {
+      remede: { commande: 'retirerReservation', arguments: { participant: 4, table: 5, portee: 'tous', tour: null } },
+    });
   });
 
   test('une violation déjà présente, celle d’une dérive, ne bloque pas la retouche suivante', () => {
