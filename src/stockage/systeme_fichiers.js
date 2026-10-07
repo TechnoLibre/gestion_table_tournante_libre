@@ -72,9 +72,11 @@ import { ErreurStockage } from './erreurs.js';
 /**
  * Ce que rend verrouiller. pris : true quand l'appel a créé le verrou. Sinon,
  * la séance qui le tient, l'instant de sa prise, et vivant : vrai quand son
- * processus tourne sur la même machine, faux quand il y est mort, null quand
- * il tourne sur une autre machine. Un verrou qui ne se lit pas rend seance,
- * depuis et vivant à null.
+ * processus tourne sur cette machine avec l'heure de démarrage inscrite ;
+ * faux quand il est mort à coup sûr — aucun processus de ce pid, ou deux
+ * heures de démarrage connues qui diffèrent ; null sinon — verrou d'une autre
+ * machine, ou vie qui ne se prouve pas. Un verrou qui ne se lit pas rend
+ * seance, depuis et vivant à null.
  *
  * @typedef {{pris: true}
  *   | {pris: false, seance: string|null, depuis: string|null, vivant: boolean|null}} Verrou
@@ -133,8 +135,8 @@ import { ErreurStockage } from './erreurs.js';
  * @property {(r: Racine, chemin: string) => Promise<void>} supprimer
  *           un fichier ; un fichier absent n'est pas une faute
  * @property {(r: Racine, chemin: string, seance: string) => Promise<Verrou>} verrouiller
- *           création exclusive de {seance, pid, hote, depuis} : un verrou
- *           présent n'est jamais repris, fût-il de la même séance
+ *           création exclusive de {seance, pid, hote, depuis, demarrage} :
+ *           un verrou présent n'est jamais repris, fût-il de la même séance
  * @property {(r: Racine, chemin: string, seance: string) => Promise<void>} deverrouiller
  *           n'efface que le verrou de cette séance ; un verrou absent n'est
  *           pas une faute

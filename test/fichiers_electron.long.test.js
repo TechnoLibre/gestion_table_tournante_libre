@@ -9,9 +9,11 @@
 // Suivent la sonde d'écriture, qui ne s'éprouve utilement que contre un vrai
 // système de fichiers, un dossier en lecture seule, un lien qui sort de la
 // racine, un dossier voisin dont le nom prolonge celui de la racine, le
-// renommage qui remplace la cible, et le verrou d'un processus vivant ou
-// terminé. Chaque épreuve écrit sous ses propres dossiers
-// temporaires, retirés à sa fin, qu'elle passe ou non.
+// renommage qui remplace la cible, le verrou d'un processus vivant ou
+// terminé, sous Linux celui d'un pid vivant dont le démarrage n'est pas
+// celui qu'il inscrit, et le démarrage que ps écrit en temps universel quel
+// que soit le fuseau du processus qui le lit. Chaque épreuve écrit sous ses
+// propres dossiers temporaires, retirés à sa fin, qu'elle passe ou non.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
@@ -42,6 +44,7 @@ const NOM_PRODUIT = 'Gestion table tournante Libre';
 // un lien symbolique demande un privilège : un lien de dossier s'y pose en
 // jonction. Sous root, les droits d'un dossier n'arrêtent aucune écriture.
 const SOUS_WINDOWS = process.platform === 'win32';
+const SOUS_LINUX = process.platform === 'linux';
 const SOUS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
 
 // Dossiers temporaires de l'épreuve en cours.
@@ -303,4 +306,92 @@ describe('coquille sur un vrai disque', () => {
       vivant: false,
     });
   });
+
+  testNettoye(
+    "sous Linux, le verrou inscrit le champ 22 de /proc/<pid>/stat ; un pid vivant d'un autre démarrage est une séance morte, et un verrou sans démarrage laisse vivant inconnu",
+    { skip: !SOUS_LINUX },
+    async () => {
+      // Le démarrage d'un processus, lu ici sans passer par la coquille.
+      const demarrageDe = (cible) => {
+        const texte = readFileSync(`/proc/${cible}/stat`, 'utf8');
+        return texte.slice(texte.lastIndexOf(')') + 1).trim().split(/\s+/)[19];
+      };
+      const { fs, documents } = systemeSur(dossierTemporaire());
+      mkdirSync(documents, { recursive: true });
+      const racine = (await fs.racines()).documents;
+      await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a');
+      const pose = JSON.parse(readFileSync(join(documents, 'soiree.gtt.verrou'), 'utf8'));
+      assert.deepEqual(Object.keys(pose), ['seance', 'pid', 'hote', 'depuis', 'demarrage']);
+      assert.equal(pose.demarrage, demarrageDe(process.pid));
+
+      // Le processus parent vit ; un verrou à son pid ne vit qu'avec son
+      // démarrage, et sans démarrage inscrit, rien ne dit s'il vit encore.
+      const parent = process.ppid;
+      const depuis = '2026-10-06T19:02:11-04:00';
+      for (const [nom, inscrit, vivant] of [
+        ['son démarrage', { demarrage: demarrageDe(parent) }, true],
+        ['son démarrage, une clé étrangère', { demarrage: demarrageDe(parent), inconnue: 1 }, true],
+        ['un autre démarrage', { demarrage: `${demarrageDe(parent)}0` }, false],
+        ['sans démarrage', {}, null],
+      ]) {
+        writeFileSync(
+          join(documents, 'parent.gtt.verrou'),
+          `${JSON.stringify({ seance: 'seance-p', pid: parent, hote: hostname(), depuis, ...inscrit })}\n`,
+        );
+        assert.deepEqual(
+          await fs.verrouiller(racine, 'parent.gtt.verrou', 'seance-b'),
+          { pris: false, seance: 'seance-p', depuis, vivant },
+          nom,
+        );
+      }
+    },
+  );
+
+  testNettoye(
+    "la lecture par ps (macOS) passe TZ=UTC et LC_ALL=C à la commande : le démarrage inscrit est en temps universel, et un processus d'un autre fuseau lit la séance vivante",
+    { skip: SOUS_WINDOWS },
+    async () => {
+      const documents = join(dossierTemporaire(), 'Documents');
+      mkdirSync(documents, { recursive: true });
+      const fichiers = creerFichiers({
+        emplacements: {},
+        racines: { portable: null, documents },
+        dialog: SANS_APPEL,
+        shell: SANS_APPEL,
+        plateforme: 'darwin',
+      });
+      assert.deepEqual(await fichiers.verrouiller({ id: 'documents' }, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
+      const pose = JSON.parse(readFileSync(join(documents, 'soiree.gtt.verrou'), 'utf8'));
+      const enUtc = spawnSync('ps', ['-o', 'lstart=', '-p', String(process.pid)], {
+        env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' },
+        encoding: 'utf8',
+      });
+      assert.equal(enUtc.status, 0, enUtc.stderr);
+      assert.equal(pose.demarrage, enUtc.stdout.trim());
+
+      // Un second processus, dans un fuseau qui n'est pas celui de
+      // l'épreuve, relit le verrou par la même coquille.
+      const autre = Intl.DateTimeFormat().resolvedOptions().timeZone === 'Pacific/Kiritimati' ? 'Pacific/Pago_Pago' : 'Pacific/Kiritimati';
+      const lecteur = [
+        'const { creerFichiers } = await import(process.env.GTT_MODULE);',
+        'const fichiers = creerFichiers({ emplacements: {}, racines: { portable: null, documents: process.env.GTT_DOCUMENTS }, dialog: {}, shell: {}, plateforme: "darwin" });',
+        'const tenu = await fichiers.verrouiller({ id: "documents" }, "soiree.gtt.verrou", "seance-b");',
+        'process.stdout.write(JSON.stringify({ fuseau: Intl.DateTimeFormat().resolvedOptions().timeZone, tenu }));',
+      ].join('\n');
+      const relu = spawnSync(process.execPath, ['--input-type=module', '-e', lecteur], {
+        env: {
+          ...process.env,
+          TZ: autre,
+          GTT_MODULE: new URL('../electron/fichiers.js', import.meta.url).href,
+          GTT_DOCUMENTS: documents,
+        },
+        encoding: 'utf8',
+      });
+      assert.equal(relu.status, 0, relu.stderr);
+      assert.deepEqual(JSON.parse(relu.stdout), {
+        fuseau: autre,
+        tenu: { pris: false, seance: 'seance-a', depuis: pose.depuis, vivant: true },
+      });
+    },
+  );
 });

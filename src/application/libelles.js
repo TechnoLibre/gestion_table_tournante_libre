@@ -198,7 +198,7 @@ const TEXTES = new Map([
         );
       }
       return (
-        `Un verrou d'un autre poste, ou illisible, tient cet événement${depuisQuand(depuis)} : ` +
+        `Un verrou dont la séance ne se laisse pas vérifier — autre poste, verrou illisible, ou séance de ce poste dont la vie ne se prouve pas — tient cet événement${depuisQuand(depuis)} : ` +
         'il reste en lecture ici, et rien ne le reprend seul.'
       );
     },

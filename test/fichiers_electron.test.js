@@ -23,7 +23,7 @@ import {
   PAUSE_MAX_MS,
   PREFIXE_CANAL,
   PRIMITIVES,
-  REESSAIS_RENOMMAGE,
+  REESSAIS_PASSAGERS,
   RefusFichier,
   SUFFIXE_ECRITURE,
   TEMOIN,
@@ -338,7 +338,8 @@ function dialogueFactice(reponses = []) {
  * La coquille sur un disque en mémoire où la racine documents existe. Rend
  * le disque, les primitives, et ce que l'épreuve lit des injections : les
  * pauses demandées, les dossiers ouverts dans l'explorateur, les commandes
- * lancées, les pid signalés.
+ * lancées, les pid signalés. demarrage, quand il est donné, remplace la
+ * lecture de l'instant de démarrage d'un processus.
  */
 function preparer({
   disque = creerDisque(),
@@ -346,6 +347,7 @@ function preparer({
   ouvrir = async () => '',
   lancer = async () => '',
   signaler = () => {},
+  demarrage,
   plateforme = 'linux',
   hote = HOTE,
   fs = disque.fs,
@@ -380,11 +382,34 @@ function preparer({
       signaux.push(pid);
       return signaler(pid);
     },
+    demarrage,
     pid: PID,
     hote,
     maintenant: () => INSTANT,
   });
   return { disque, fichiers, dialog, pauses, ouvertures, commandes, signaux };
+}
+
+/**
+ * Une table de processus du poste : pid → instant de démarrage, null quand
+ * la plateforme ne le donne pas. signaler lève ESRCH pour un pid absent de
+ * la table ; demarrage rend l'instant de la table et consigne le pid lu.
+ *
+ * @param {Array<[number, string|null]>} entrees
+ */
+function tableDeProcessus(entrees) {
+  const table = new Map(entrees);
+  const lus = [];
+  return {
+    lus,
+    signaler(pid) {
+      if (!table.has(pid)) throw erreurSysteme('ESRCH', 'kill', '');
+    },
+    async demarrage(pid) {
+      lus.push(pid);
+      return table.has(pid) ? table.get(pid) : null;
+    },
+  };
 }
 
 // Rend la raison du rejet de la promesse ; échoue quand elle se résout.
@@ -468,7 +493,7 @@ describe('coquille, fichiers : écriture atomique (§ 8.8)', () => {
   });
 
   test('EPERM, EBUSY et EACCES se réessaient dix fois : dix refus passent, onze lèvent ECRITURE {chemin, dossier, cause}, la cible intacte, le temporaire retiré', async () => {
-    assert.equal(REESSAIS_RENOMMAGE, 10);
+    assert.equal(REESSAIS_PASSAGERS, 10);
     assert.deepEqual([PAUSE_INITIALE_MS, PAUSE_MAX_MS], [50, 500]);
     const PAUSES = [50, 100, 200, 400, 500, 500, 500, 500, 500, 500];
     for (const cause of ['EPERM', 'EBUSY', 'EACCES']) {
@@ -793,7 +818,7 @@ describe('coquille, fichiers : lecture, liste, dossiers, déplacement, suppressi
     assert.deepEqual(disque.noms(`${DATA}/corbeille`), ['2026-01-02_03-04-05']);
   });
 
-  test("deplacer porte un fichier ; EXISTE pour une cible présente, ABSENT pour une source absente, ECRITURE pour un dossier, un dossier de cible absent ou un renommage refusé, essayé une fois", async () => {
+  test("deplacer porte un fichier ; EXISTE pour une cible présente, ABSENT pour une source absente, ECRITURE pour un dossier, un dossier de cible absent ou un renommage refusé pour une cause durable, essayé une fois", async () => {
     const { disque, fichiers, pauses } = preparer();
     disque.deposer(`${DOCUMENTS}/soiree.gtt.json`, '\u{E9}tat');
     disque.deposerDossier(`${DOCUMENTS}/corbeille`);
@@ -811,8 +836,8 @@ describe('coquille, fichiers : lecture, liste, dossiers, déplacement, suppressi
       'ECRITURE',
       ecriture('disparu/source.txt', `${DOCUMENTS}/disparu`, 'ENOENT'),
     );
-    disque.panne('rename', 'EBUSY');
-    await refuse(fichiers.deplacer(DOC, 'source.txt', 'autre.txt'), 'ECRITURE', ecriture('source.txt', DOCUMENTS, 'EBUSY'));
+    disque.panne('rename', 'EROFS');
+    await refuse(fichiers.deplacer(DOC, 'source.txt', 'autre.txt'), 'ECRITURE', ecriture('source.txt', DOCUMENTS, 'EROFS'));
     assert.equal(disque.appels.filter((ligne) => ligne.startsWith(`rename ${DOCUMENTS}/source.txt`)).length, 1);
     assert.deepEqual(pauses, []);
     assert.equal(disque.contenu(`${DOCUMENTS}/source.txt`), 'source');
@@ -833,27 +858,153 @@ describe('coquille, fichiers : lecture, liste, dossiers, déplacement, suppressi
   });
 });
 
+describe('coquille, fichiers : réessais sur une cause passagère (§ 8.8)', () => {
+  const JOURNAL = `${DOCUMENTS}/soiree.gtt-journal.jsonl`;
+  const PAUSES = [50, 100, 200, 400, 500, 500, 500, 500, 500, 500];
+
+  // Chaque primitive, l'appel système qu'un antivirus ou un agent de
+  // synchronisation peut refuser sous Windows, le disque préparé, l'appel,
+  // ce qu'il laisse quand il réussit, et quand il échoue.
+  const CAS = [
+    {
+      primitive: 'ajouterLigne',
+      fonction: 'open',
+      chemin: JOURNAL,
+      poser: (disque) => disque.deposer(JOURNAL, '{"type":"journal"}\n'),
+      appeler: (fichiers) => fichiers.ajouterLigne(DOC, 'soiree.gtt-journal.jsonl', '{"revision":1}'),
+      reussi: (disque) => assert.equal(disque.contenu(JOURNAL), '{"type":"journal"}\n{"revision":1}\n'),
+      intact: (disque) => assert.equal(disque.contenu(JOURNAL), '{"type":"journal"}\n'),
+      refus: ecriture('soiree.gtt-journal.jsonl', DOCUMENTS, null),
+    },
+    {
+      primitive: 'deplacer',
+      fonction: 'rename',
+      chemin: `${DOCUMENTS}/soiree.gtt.json`,
+      poser: (disque) => {
+        disque.deposer(`${DOCUMENTS}/soiree.gtt.json`, '\u{E9}tat');
+        disque.deposerDossier(`${DOCUMENTS}/corbeille`);
+      },
+      appeler: (fichiers) => fichiers.deplacer(DOC, 'soiree.gtt.json', 'corbeille/soiree.gtt.json'),
+      reussi: (disque) => {
+        assert.equal(disque.contenu(`${DOCUMENTS}/corbeille/soiree.gtt.json`), '\u{E9}tat');
+        assert.equal(disque.existe(`${DOCUMENTS}/soiree.gtt.json`), false);
+      },
+      intact: (disque) => {
+        assert.equal(disque.contenu(`${DOCUMENTS}/soiree.gtt.json`), '\u{E9}tat');
+        assert.equal(disque.existe(`${DOCUMENTS}/corbeille/soiree.gtt.json`), false);
+      },
+      refus: ecriture('soiree.gtt.json', DOCUMENTS, null),
+    },
+    {
+      primitive: 'supprimer',
+      fonction: 'unlink',
+      chemin: `${DOCUMENTS}/ancienne.gtt.json`,
+      poser: (disque) => disque.deposer(`${DOCUMENTS}/ancienne.gtt.json`, 'x'),
+      appeler: (fichiers) => fichiers.supprimer(DOC, 'ancienne.gtt.json'),
+      reussi: (disque) => assert.equal(disque.existe(`${DOCUMENTS}/ancienne.gtt.json`), false),
+      intact: (disque) => assert.equal(disque.contenu(`${DOCUMENTS}/ancienne.gtt.json`), 'x'),
+      refus: ecriture('ancienne.gtt.json', DOCUMENTS, null),
+    },
+  ];
+  const essais = (disque, { fonction, chemin }) =>
+    disque.appels.filter((ligne) => ligne.startsWith(`${fonction} ${chemin}`)).length;
+
+  for (const cas of CAS) {
+    test(`${cas.primitive} : refusé deux fois sur une cause passagère puis accepté, réussit après des pauses de 50 puis 100 ms`, async () => {
+      for (const cause of ['EPERM', 'EBUSY', 'EACCES']) {
+        const { disque, fichiers, pauses } = preparer();
+        cas.poser(disque);
+        disque.panne(cas.fonction, cause, { fois: 2, chemin: cas.chemin });
+        await cas.appeler(fichiers);
+        cas.reussi(disque);
+        assert.deepEqual(pauses, [50, 100], cause);
+        assert.equal(essais(disque, cas), 3, cause);
+      }
+    });
+
+    test(`${cas.primitive} : toujours refusé sur une cause passagère, lève ECRITURE au onzième essai, après les pauses du renommage, et ne touche à rien`, async () => {
+      for (const cause of ['EPERM', 'EBUSY', 'EACCES']) {
+        const { disque, fichiers, pauses } = preparer();
+        cas.poser(disque);
+        disque.panne(cas.fonction, cause, { chemin: cas.chemin });
+        await refuse(cas.appeler(fichiers), 'ECRITURE', { ...cas.refus, cause }, cause);
+        cas.intact(disque);
+        assert.deepEqual(pauses, PAUSES, cause);
+        assert.equal(essais(disque, cas), REESSAIS_PASSAGERS + 1, cause);
+      }
+    });
+
+    test(`${cas.primitive} : une cause durable ne se réessaie pas`, async () => {
+      for (const cause of ['EROFS', 'ENOSPC', 'EIO']) {
+        const { disque, fichiers, pauses } = preparer();
+        cas.poser(disque);
+        disque.panne(cas.fonction, cause, { chemin: cas.chemin });
+        await refuse(cas.appeler(fichiers), 'ECRITURE', { ...cas.refus, cause }, cause);
+        cas.intact(disque);
+        assert.deepEqual(pauses, [], cause);
+        assert.equal(essais(disque, cas), 1, cause);
+      }
+    });
+  }
+
+  test("ajouterLigne ne réessaie que l'ouverture : une écriture refusée ne se répète pas, une ligne n'est jamais écrite deux fois", async () => {
+    const { disque, fichiers, pauses } = preparer();
+    disque.deposer(JOURNAL, '{"type":"journal"}\n');
+    disque.panne('write', 'EBUSY', { chemin: JOURNAL });
+    await refuse(fichiers.ajouterLigne(DOC, 'soiree.gtt-journal.jsonl', 'x'), 'ECRITURE', ecriture('soiree.gtt-journal.jsonl', DOCUMENTS, 'EBUSY'));
+    assert.deepEqual(pauses, []);
+    assert.equal(disque.appels.filter((ligne) => ligne.startsWith(`write ${JOURNAL}`)).length, 1);
+  });
+
+  test("supprimer : un fichier qui disparaît pendant les réessais est supprimé, sans faute", async () => {
+    const CIBLE = `${DOCUMENTS}/ancienne.gtt.json`;
+    const disque = creerDisque();
+    // Le premier effacement retire le fichier mais répond EBUSY, comme un
+    // effacement que le système ne fait qu'au dernier fichier fermé : le
+    // réessai trouve ENOENT.
+    let premier = true;
+    const fs = {
+      ...disque.fs,
+      async unlink(chemin) {
+        await disque.fs.unlink(chemin);
+        if (premier && chemin === CIBLE) {
+          premier = false;
+          throw erreurSysteme('EBUSY', 'unlink', chemin);
+        }
+      },
+    };
+    const { fichiers, pauses } = preparer({ disque, fs });
+    disque.deposer(CIBLE, 'x');
+    await fichiers.supprimer(DOC, 'ancienne.gtt.json');
+    assert.equal(disque.existe(CIBLE), false);
+    assert.deepEqual(pauses, [50]);
+    assert.equal(disque.appels.filter((ligne) => ligne.startsWith(`unlink ${CIBLE}`)).length, 2);
+  });
+});
+
 describe('coquille, fichiers : le verrou (§ 8.8)', () => {
   const VERROU = `${DOCUMENTS}/soiree.gtt.verrou`;
   const deposerVerrou = (disque, contenu) => disque.deposer(VERROU, `${JSON.stringify(contenu)}\n`);
 
-  test("se crée en exclusif, porte {seance, pid, hote, depuis} et une fin de ligne ; depuis est l'instant de l'horloge, à l'heure locale et avec son décalage", async () => {
-    const { disque, fichiers } = preparer();
+  test("se crée en exclusif, porte {seance, pid, hote, depuis, demarrage} et une fin de ligne ; depuis est l'instant de l'horloge, à l'heure locale et avec son décalage", async () => {
+    const processus = tableDeProcessus([[PID, '918273']]);
+    const { disque, fichiers } = preparer(processus);
     assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
     assert.deepEqual(ecritures(disque).slice(0, 4), [`open ${VERROU} wx`, `write ${VERROU}`, `sync ${VERROU}`, `close ${VERROU}`]);
     const texte = disque.contenu(VERROU);
     assert.ok(texte.endsWith('}\n'), texte);
     const contenu = JSON.parse(texte);
-    assert.deepEqual(Object.keys(contenu), ['seance', 'pid', 'hote', 'depuis']);
-    assert.deepEqual({ ...contenu, depuis: null }, { seance: 'seance-a', pid: PID, hote: HOTE, depuis: null });
+    assert.deepEqual(Object.keys(contenu), ['seance', 'pid', 'hote', 'depuis', 'demarrage']);
+    assert.deepEqual({ ...contenu, depuis: null }, { seance: 'seance-a', pid: PID, hote: HOTE, depuis: null, demarrage: '918273' });
+    assert.deepEqual(processus.lus, [PID]);
     assert.match(contenu.depuis, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
     assert.equal(Date.parse(contenu.depuis), INSTANT.getTime());
   });
 
-  test('un verrou présent rend sa séance : vivant quand son processus répond sur cette machine, même sans droit de le signaler', async () => {
+  test("un verrou présent rend sa séance : morte quand son pid ne répond pas ; sans démarrage inscrit, un pid qui répond, même sans droit de le signaler, laisse vivant inconnu", async () => {
     for (const [nom, signaler, vivant] of [
-      ['répond', () => {}, true],
-      ['EPERM', () => { throw erreurSysteme('EPERM', 'kill', ''); }, true],
+      ['répond', () => {}, null],
+      ['EPERM', () => { throw erreurSysteme('EPERM', 'kill', ''); }, null],
       ['ESRCH', () => { throw erreurSysteme('ESRCH', 'kill', ''); }, false],
     ]) {
       const { disque, fichiers, signaux } = preparer({ signaler });
@@ -865,6 +1016,181 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
       );
       assert.deepEqual(signaux, [777], nom);
     }
+  });
+
+  test("sans instant de démarrage que la plateforme donne, le verrou porte demarrage à null ; un démarrage courant inconnu se relit à la prise suivante, un connu ne se relit pas", async () => {
+    // Le démarrage du processus courant ne se lit pas la première fois.
+    const reponses = [null, '918273'];
+    const lus = [];
+    const { disque, fichiers } = preparer({
+      demarrage: async (cible) => {
+        lus.push(cible);
+        return reponses.length > 1 ? reponses.shift() : reponses[0];
+      },
+    });
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, null);
+    await fichiers.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, '918273');
+    await fichiers.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, '918273');
+    assert.deepEqual(lus, [PID, PID]);
+  });
+
+  test("vivant : faux seulement quand la mort est certaine — pid qui ne répond pas, ou deux démarrages connus et différents ; vrai pour deux démarrages connus et égaux ; inconnu (null) sinon", async () => {
+    const DEPUIS = '2026-10-06T19:02:11-04:00';
+    const tenu = (vivant) => ({ pris: false, seance: 'seance-a', depuis: DEPUIS, vivant });
+    // Un démarrage inscrit inconnu ne demande pas celui du pid. Une clé
+    // Une clé que le contenu d'un verrou ne définit pas ne compte pas.
+    for (const [nom, demarrageLu, inscrit, vivant, lus] of [
+      ['même démarrage', '5000', { demarrage: '5000' }, true, [PID, 777]],
+      ['pid réattribué', '5000', { demarrage: '4000' }, false, [PID, 777]],
+      ['démarrage inscrit inconnu', '5000', { demarrage: null }, null, [PID]],
+      ['verrou sans démarrage', '5000', {}, null, [PID]],
+      ['démarrage actuel inconnu', null, { demarrage: '4000' }, null, [PID, 777]],
+      ['même démarrage, clé étrangère', '5000', { demarrage: '5000', inconnue: 1 }, true, [PID, 777]],
+      ['démarrage actuel inconnu, clé étrangère', null, { demarrage: '4000', inconnue: 1 }, null, [PID, 777]],
+    ]) {
+      const processus = tableDeProcessus([[PID, '1'], [777, demarrageLu]]);
+      const { disque, fichiers } = preparer(processus);
+      deposerVerrou(disque, { seance: 'seance-a', pid: 777, hote: HOTE, depuis: DEPUIS, ...inscrit });
+      assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), tenu(vivant), nom);
+      // Le démarrage du processus courant se lit avant la prise, celui du
+      // pid inscrit une fois le verrou trouvé.
+      assert.deepEqual(processus.lus, lus, nom);
+    }
+    // Un pid qui ne répond pas est mort, sans lecture de son démarrage ; celui
+    // du processus courant, lu une fois, ne se relit pas.
+    const processus = tableDeProcessus([[PID, '1']]);
+    const { disque, fichiers } = preparer(processus);
+    deposerVerrou(disque, { seance: 'seance-a', pid: 777, hote: HOTE, depuis: DEPUIS, demarrage: '5000' });
+    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), tenu(false));
+    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), tenu(false));
+    assert.deepEqual(processus.lus, [PID]);
+  });
+
+  test("un démarrage inscrit qui n'est ni une chaîne ni null rend le verrou illisible", async () => {
+    const { disque, fichiers } = preparer(tableDeProcessus([[777, '5000']]));
+    for (const inscrit of [{ demarrage: 5000 }, { demarrage: true }, { demarrage: {} }]) {
+      deposerVerrou(disque, { seance: 'seance-a', pid: 777, hote: HOTE, depuis: 'x', ...inscrit });
+      assert.deepEqual(
+        await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'),
+        { pris: false, seance: null, depuis: null, vivant: null },
+        JSON.stringify(inscrit),
+      );
+    }
+  });
+
+  test("sous Linux, le démarrage est le champ 22 de /proc/<pid>/stat, compté après la parenthèse fermante du nom ; un fichier absent ou de forme fausse le rend inconnu, et vivant avec lui", async () => {
+    // Champs 3 à 22 : l'état, puis dix-huit nombres, le dernier étant le
+    // démarrage ; le nom porte une espace et une parenthèse fermante.
+    const stat = (pid, debut) => `${pid} (nom ) bizarre) S ${Array.from({ length: 18 }, (_, i) => i + 1).join(' ')} ${debut} 99 0\n`;
+    const disque = creerDisque();
+    disque.deposer(`/proc/${PID}/stat`, stat(PID, 31337));
+    disque.deposer('/proc/777/stat', stat(777, 5000));
+    disque.deposer('/proc/778/stat', stat(778, 4000));
+    disque.deposer('/proc/779/stat', '779 (court) S 1 2 3\n');
+    disque.deposer('/proc/780/stat', stat(780, 'x'));
+    // Sans parenthèse fermante, aucun champ ne se compte, même quand la
+    // ligne en porte assez.
+    disque.deposer('/proc/782/stat', stat(782, 5000).replace(/[()]/g, ''));
+    const { fichiers } = preparer({ disque, signaler: () => {} });
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, '31337');
+    for (const [pid, vivant] of [[777, true], [778, false], [779, null], [780, null], [781, null], [782, null]]) {
+      deposerVerrou(disque, { seance: 'seance-x', pid, hote: HOTE, depuis: 'x', demarrage: '5000' });
+      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b')).vivant, vivant, String(pid));
+    }
+  });
+
+  test("sous Windows, le démarrage est l'heure de création que rend PowerShell, le pid passé par l'environnement, borné à cinq secondes ; un échec le rend inconnu, et vivant avec lui", async () => {
+    const reponses = new Map([['777', '133725000000000000\r\n'], ['778', '133700000000000000\r\n'], ['779', '\r\n']]);
+    const { disque, fichiers, commandes } = preparer({
+      plateforme: 'win32',
+      lancer: async (_commande, _arguments, { variables }) => {
+        if (variables.GTT_PID === String(PID)) return '133725999999999999\r\n';
+        if (!reponses.has(variables.GTT_PID)) throw new Error('Get-Process : aucun processus');
+        return reponses.get(variables.GTT_PID);
+      },
+    });
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, '133725999999999999');
+    assert.deepEqual(commandes.map(({ commande }) => commande), ['powershell.exe']);
+    const [{ arguments_, options }] = commandes;
+    assert.deepEqual(arguments_.slice(0, 3), ['-NoProfile', '-NonInteractive', '-Command']);
+    assert.match(arguments_[3], /\$env:GTT_PID/);
+    assert.match(arguments_[3], /\.StartTime\.ToFileTimeUtc\(\)$/);
+    assert.deepEqual(options, { variables: { GTT_PID: String(PID) }, delai: DELAI_SUPPORT_MS });
+    for (const [pid, vivant] of [[777, true], [778, false], [779, null], [780, null]]) {
+      deposerVerrou(disque, { seance: 'seance-x', pid, hote: HOTE, depuis: 'x', demarrage: '133725000000000000' });
+      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b')).vivant, vivant, String(pid));
+    }
+  });
+
+  test("sous Windows, un pid qui refuse le signal et dont l'heure de création ne se lit pas — le processus d'un autre compte — laisse vivant inconnu, jamais faux", async () => {
+    const DEPUIS = '2026-10-06T19:02:11-04:00';
+    const { disque, fichiers, signaux } = preparer({
+      plateforme: 'win32',
+      signaler: () => {
+        throw erreurSysteme('EPERM', 'kill', '');
+      },
+      lancer: async (_commande, _arguments, { variables }) => {
+        if (variables.GTT_PID === String(PID)) return '133725999999999999\r\n';
+        throw new Error('Get-Process : accès refusé');
+      },
+    });
+    deposerVerrou(disque, { seance: 'seance-a', pid: 4312, hote: HOTE, depuis: DEPUIS, demarrage: '133725000000000000' });
+    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), {
+      pris: false,
+      seance: 'seance-a',
+      depuis: DEPUIS,
+      vivant: null,
+    });
+    assert.deepEqual(signaux, [4312]);
+  });
+
+  test("sous macOS, le démarrage est la colonne lstart de ps, en locale C et en temps universel ; une sortie vide le rend inconnu, et vivant avec lui ; ailleurs, inconnu, sans commande", async () => {
+    const sorties = new Map([['777', 'Tue Oct  6 19:02:11 2026\n'], ['779', '\n']]);
+    const { disque, fichiers, commandes } = preparer({
+      plateforme: 'darwin',
+      lancer: async (_commande, arguments_) => sorties.get(arguments_[3]) ?? 'Wed Oct  7 08:00:00 2026\n',
+    });
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, 'Wed Oct  7 08:00:00 2026');
+    assert.deepEqual(commandes[0], {
+      commande: 'ps',
+      arguments_: ['-o', 'lstart=', '-p', String(PID)],
+      options: { variables: { LC_ALL: 'C', TZ: 'UTC' }, delai: DELAI_SUPPORT_MS },
+    });
+    for (const [pid, vivant] of [[777, true], [778, false], [779, null]]) {
+      deposerVerrou(disque, { seance: 'seance-x', pid, hote: HOTE, depuis: 'x', demarrage: 'Tue Oct  6 19:02:11 2026' });
+      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b')).vivant, vivant, String(pid));
+    }
+
+    const ailleurs = preparer({ plateforme: 'freebsd' });
+    await ailleurs.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    assert.equal(JSON.parse(ailleurs.disque.contenu(VERROU)).demarrage, null);
+    assert.deepEqual(ailleurs.commandes, []);
+  });
+
+  test("sous macOS, une séance vivante reste vivante quand le fuseau du poste change entre la prise et la lecture", async () => {
+    // Un ps factice : le même démarrage, écrit dans le fuseau que donne TZ,
+    // ou à défaut dans celui du poste au moment de la commande.
+    const ecrit = new Map([
+      ['UTC', 'Tue Oct  6 23:02:11 2026'],
+      ['America/Montreal', 'Tue Oct  6 19:02:11 2026'],
+      ['Europe/Paris', 'Wed Oct  7 01:02:11 2026'],
+    ]);
+    let fuseauDuPoste = 'America/Montreal';
+    const lancer = async (_commande, _arguments, { variables }) => `${ecrit.get(variables.TZ ?? fuseauDuPoste)}\n`;
+    const premiere = preparer({ plateforme: 'darwin', lancer });
+    assert.deepEqual(await premiere.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
+    fuseauDuPoste = 'Europe/Paris';
+    const seconde = preparer({ disque: premiere.disque, plateforme: 'darwin', lancer });
+    const tenu = await seconde.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b');
+    assert.deepEqual({ seance: tenu.seance, vivant: tenu.vivant }, { seance: 'seance-a', vivant: true });
   });
 
   test("le verrou d'une autre machine rend vivant à null sans signaler personne ; un verrou illisible rend tout à null", async () => {

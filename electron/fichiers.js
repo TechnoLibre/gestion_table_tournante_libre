@@ -75,13 +75,15 @@ export const TEMOIN = '.gtt-temoin';
 const TEXTE_TEMOIN = 'T\u{E9}moin d\u{2019}\u{E9}criture de Gestion table tournante Libre.\n';
 
 /**
- * Le renommage de l'écriture atomique se réessaie, après son premier essai,
- * REESSAIS_RENOMMAGE fois sur une cause passagère : un antivirus ou un agent
- * de synchronisation qui tient la cible ouverte sous Windows (EPERM, EBUSY,
- * EACCES). La pause entre deux essais part de PAUSE_INITIALE_MS et double
- * jusqu'à PAUSE_MAX_MS : 3,75 s d'attente au plus avant de renoncer.
+ * Un appel système qu'un antivirus ou un agent de synchronisation peut
+ * refuser sous Windows, tant qu'il tient le fichier ouvert (EPERM, EBUSY,
+ * EACCES), se réessaie, après son premier essai, REESSAIS_PASSAGERS fois :
+ * le renommage de l'écriture atomique, l'ouverture en ajout d'ajouterLigne,
+ * le renommage de deplacer, l'effacement de supprimer. La pause entre deux
+ * essais part de PAUSE_INITIALE_MS et double jusqu'à PAUSE_MAX_MS : 3,75 s
+ * d'attente au plus avant de renoncer.
  */
-export const REESSAIS_RENOMMAGE = 10;
+export const REESSAIS_PASSAGERS = 10;
 export const PAUSE_INITIALE_MS = 50;
 export const PAUSE_MAX_MS = 500;
 const CAUSES_PASSAGERES = new Set(['EPERM', 'EBUSY', 'EACCES']);
@@ -93,6 +95,17 @@ export const DELAI_SUPPORT_MS = 5000;
 // chemin passe par l'environnement, jamais par le texte de la commande, où
 // une apostrophe le ferait lire autrement.
 const COMMANDE_LECTEUR = '[System.IO.DriveInfo]::new($env:GTT_RACINE).DriveType';
+
+// Lit l'heure de création du processus dont la variable GTT_PID porte le
+// pid, en FILETIME UTC : un entier, le même à chaque lecture. Un processus
+// absent, ou d'un autre compte — système, service, élevé — que .NET ne peut
+// ouvrir, ne rend aucun nombre : la vie de la séance reste alors inconnue.
+const COMMANDE_DEMARRAGE = '(Get-Process -Id $env:GTT_PID -ErrorAction Stop).StartTime.ToFileTimeUtc()';
+
+// Dans /proc/<pid>/stat, le démarrage est le champ 22 ; les champs se
+// comptent après la parenthèse fermante du nom, le champ 2, qui peut porter
+// des espaces et des parenthèses : le champ 3 y a le rang 0.
+const RANG_DEMARRAGE_STAT = 22 - 3;
 
 // La règle des segments d'exigerCheminRelatif (src/stockage/systeme_fichiers.js),
 // recopiée : un segment ne finit ni par un point ni par une espace — « . »,
@@ -240,9 +253,11 @@ function exigerSeance(seance) {
   if (typeof seance !== 'string' || seance === '') throw new TypeError("la séance n'est pas une chaîne non vide");
 }
 
-// Le contenu d'un verrou, {seance, pid, hote, depuis}, ou null quand le texte
-// n'en est pas un : JSON invalide, champ manquant ou de type faux, pid qui
-// ne désigne pas un processus — 0 et les négatifs désignent des groupes.
+// Le contenu d'un verrou, {seance, pid, hote, depuis, demarrage}, ou null
+// quand le texte n'en est pas un : JSON invalide, champ manquant ou de type
+// faux, pid qui ne désigne pas un processus — 0 et les négatifs désignent
+// des groupes. demarrage est une chaîne, null quand il est inconnu ; un
+// verrou qui ne le porte pas le laisse inconnu. Une autre clé ne compte pas.
 function analyserVerrou(texte) {
   let contenu;
   try {
@@ -256,8 +271,9 @@ function analyserVerrou(texte) {
     Number.isSafeInteger(contenu.pid) &&
     contenu.pid > 0 &&
     typeof contenu.hote === 'string' &&
-    typeof contenu.depuis === 'string';
-  return valide ? contenu : null;
+    typeof contenu.depuis === 'string' &&
+    (contenu.demarrage === undefined || contenu.demarrage === null || typeof contenu.demarrage === 'string');
+  return valide ? { ...contenu, demarrage: contenu.demarrage ?? null } : null;
 }
 
 // Un instant sous la forme de l'horloge de l'application,
@@ -315,6 +331,9 @@ export function processusVivant(pid, signaler = (cible) => process.kill(cible, 0
  *        delai}) → la sortie standard de la commande
  * @param {(ms: number) => Promise<void>} [reglages.attendre]
  * @param {(pid: number) => void} [reglages.signaler]  celui de processusVivant
+ * @param {(pid: number) => Promise<string|null>} [reglages.demarrage]
+ *        l'instant de démarrage d'un processus, null quand il ne se lit pas ;
+ *        par défaut, celui que lit la plateforme
  * @param {number} [reglages.pid]
  * @param {string} [reglages.hote]
  * @param {() => Date} [reglages.maintenant]
@@ -332,6 +351,7 @@ export function creerFichiers({
   lancer = lancerCommande,
   attendre = pause,
   signaler,
+  demarrage,
   pid = process.pid,
   hote = hostname(),
   maintenant = () => new Date(),
@@ -341,6 +361,9 @@ export function creerFichiers({
   const bases = new Map([['documents', documents]]);
   if (portable !== null) bases.set('portable', portable);
   let choisis = 0;
+  const demarrageDe = demarrage ?? lireDemarrage;
+  // Le démarrage du processus courant, lu une fois qu'il est connu.
+  let demarrageCourant = null;
 
   // Ce que désigne un chemin relatif à une racine : ses segments, sa racine
   // et sa cible en absolu, et le dossier que nomme un échec — celui qui porte
@@ -461,16 +484,17 @@ export function creerFichiers({
     }
   }
 
-  // Renomme, et réessaie sur une cause passagère, après une pause qui
-  // double ; la dernière erreur se lève.
-  async function renommer(de, vers) {
+  // Rend ce que rend l'opération, et la réessaie sur une cause passagère,
+  // après une pause qui double ; une autre cause, ou la dernière erreur des
+  // réessais, se lève. L'opération ne doit rien laisser derrière un échec :
+  // elle se rejoue entière.
+  async function reessayer(operation) {
     let attente = PAUSE_INITIALE_MS;
     for (let essai = 0; ; essai += 1) {
       try {
-        await fs.rename(de, vers);
-        return;
+        return await operation();
       } catch (erreur) {
-        if (essai === REESSAIS_RENOMMAGE || !CAUSES_PASSAGERES.has(erreur?.code)) throw erreur;
+        if (essai === REESSAIS_PASSAGERS || !CAUSES_PASSAGERES.has(erreur?.code)) throw erreur;
       }
       await attendre(attente);
       attente = Math.min(2 * attente, PAUSE_MAX_MS);
@@ -488,11 +512,72 @@ export function creerFichiers({
     const poignee = await fs.open(temporaire, 'wx');
     try {
       await ecrireDans(poignee, octets);
-      await renommer(temporaire, absolu);
+      await reessayer(() => fs.rename(temporaire, absolu));
     } catch (erreur) {
       await effacer(temporaire).catch(() => {});
       throw erreur;
     }
+  }
+
+  // L'instant de démarrage d'un processus de ce poste, tel que la plateforme
+  // le donne sans module natif : sous Linux le champ 22 de /proc/<pid>/stat,
+  // en tops d'horloge depuis l'amorçage ; sous Windows l'heure de création
+  // que lit PowerShell ; sous macOS la colonne lstart de ps, en locale C et
+  // en temps universel — ps l'écrit sinon dans le fuseau du poste, qui peut
+  // changer entre la prise du verrou et sa relecture. Une
+  // lecture qui échoue, une sortie de forme fausse ou une autre plateforme
+  // rendent null. Un pid réattribué, après un redémarrage, désigne un
+  // processus d'un autre démarrage.
+  async function lireDemarrage(cible) {
+    try {
+      if (plateforme === 'linux') {
+        const texte = (await fs.readFile(`/proc/${cible}/stat`)).toString('utf8');
+        const fin = texte.lastIndexOf(')');
+        if (fin < 0) return null;
+        const valeur = texte.slice(fin + 1).trim().split(/\s+/)[RANG_DEMARRAGE_STAT];
+        return /^\d+$/.test(valeur ?? '') ? valeur : null;
+      }
+      if (plateforme === 'win32') {
+        const sortie = await lancer('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', COMMANDE_DEMARRAGE], {
+          variables: { GTT_PID: String(cible) },
+          delai: DELAI_SUPPORT_MS,
+        });
+        const valeur = String(sortie).trim();
+        return /^\d+$/.test(valeur) ? valeur : null;
+      }
+      if (plateforme === 'darwin') {
+        const sortie = await lancer('ps', ['-o', 'lstart=', '-p', String(cible)], {
+          variables: { LC_ALL: 'C', TZ: 'UTC' },
+          delai: DELAI_SUPPORT_MS,
+        });
+        const valeur = String(sortie).trim();
+        return valeur === '' ? null : valeur;
+      }
+    } catch {
+      // Un processus disparu, une commande qui échoue ou dépasse son délai :
+      // le démarrage reste inconnu.
+    }
+    return null;
+  }
+
+  // Le démarrage du processus courant ; un inconnu se relit à l'appel
+  // suivant, un connu non.
+  async function monDemarrage() {
+    if (demarrageCourant === null) demarrageCourant = await demarrageDe(pid);
+    return demarrageCourant;
+  }
+
+  // La vie de la séance d'un verrou de ce poste. Faux seulement quand sa
+  // mort est certaine : aucun processus de ce pid ne répond, ou le
+  // démarrage inscrit et celui du processus actuel sont connus tous deux et
+  // diffèrent — le pid est passé à un autre processus. Vrai quand les deux
+  // démarrages sont connus et égaux. Null sinon : un démarrage inconnu d'un
+  // côté ou de l'autre ne prouve ni la vie ni la mort, et une séance dite
+  // morte à tort perdrait son verrou au profit d'un second écrivain.
+  async function seanceVivante(contenu) {
+    if (!processusVivant(contenu.pid, signaler)) return false;
+    const actuel = contenu.demarrage === null ? null : await demarrageDe(contenu.pid);
+    return actuel === null ? null : actuel === contenu.demarrage;
   }
 
   // Ce que rend verrouiller d'un verrou présent, ou null quand il a disparu
@@ -511,7 +596,7 @@ export function creerFichiers({
       pris: false,
       seance: contenu.seance,
       depuis: contenu.depuis,
-      vivant: contenu.hote === hote ? processusVivant(contenu.pid, signaler) : null,
+      vivant: contenu.hote === hote ? await seanceVivante(contenu) : null,
     };
   }
 
@@ -640,13 +725,15 @@ export function creerFichiers({
     },
 
     // Ouvre en ajout — le fichier absent se crée, son dossier jamais —,
-    // écrit la ligne et sa fin de ligne, vide sur le disque et ferme.
+    // écrit la ligne et sa fin de ligne, vide sur le disque et ferme. Seule
+    // l'ouverture se réessaie : une écriture refusée a pu laisser une partie
+    // de la ligne, qu'un second essai prolongerait.
     async ajouterLigne(racine, chemin, ligne) {
       exigerLigne(ligne);
       const loc = localiser(racine, chemin);
       try {
         await confiner(loc);
-        await ecrireDans(await fs.open(loc.absolu, 'a'), `${ligne}\n`);
+        await ecrireDans(await reessayer(() => fs.open(loc.absolu, 'a')), `${ligne}\n`);
       } catch (erreur) {
         throw echecEcriture(loc, erreur);
       }
@@ -696,7 +783,7 @@ export function creerFichiers({
       }
     },
 
-    // Un fichier, en un seul essai. rename écrase une cible existante sous
+    // Un fichier. rename écrase une cible existante sous
     // POSIX : sa présence se contrôle d'abord, comme le système compare les
     // noms, si bien que sans égard à la casse une autre casse du même nom
     // est une cible présente. Un dossier absent sous la cible nomme la
@@ -721,7 +808,7 @@ export function creerFichiers({
         throw echecEcriture(cible, erreur);
       }
       try {
-        await fs.rename(source.absolu, cible.absolu);
+        await reessayer(() => fs.rename(source.absolu, cible.absolu));
       } catch (erreur) {
         throw echecEcriture(source, erreur);
       }
@@ -733,21 +820,26 @@ export function creerFichiers({
         await confiner(loc);
         const etat = await etatDe(loc.absolu);
         if (etat?.isDirectory()) throw refus(loc, 'EISDIR');
-        if (etat !== null) await effacer(loc.absolu);
+        if (etat !== null) await reessayer(() => effacer(loc.absolu));
       } catch (erreur) {
         throw echecEcriture(loc, erreur);
       }
     },
 
-    // Création exclusive (wx), qui ne suit aucun lien. Un verrou présent se
-    // lit ; s'il disparaît entre la création refusée et sa lecture, la prise
-    // se tente une seconde fois. Un verrou écrit à moitié s'efface.
+    // Création exclusive (wx), qui ne suit aucun lien, d'un verrou qui
+    // inscrit la séance, le pid, l'hôte, l'instant de la prise et le
+    // démarrage du processus, lus avant la création : la création et
+    // l'écriture se suivent sans attente. Un verrou présent
+    // se lit ; s'il disparaît entre la création refusée et sa lecture, la
+    // prise se tente une seconde fois. Un verrou écrit à moitié s'efface.
     async verrouiller(racine, chemin, seance) {
       exigerSeance(seance);
       const loc = localiser(racine, chemin);
       try {
         await confiner(loc);
-        const contenu = `${JSON.stringify({ seance, pid, hote, depuis: horodatage(maintenant()) })}\n`;
+        const demarrageInscrit = await monDemarrage();
+        const inscrit = { seance, pid, hote, depuis: horodatage(maintenant()), demarrage: demarrageInscrit };
+        const contenu = `${JSON.stringify(inscrit)}\n`;
         for (let essai = 0; ; essai += 1) {
           let poignee;
           try {
