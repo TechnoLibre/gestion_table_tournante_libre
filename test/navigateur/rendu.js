@@ -226,11 +226,13 @@ function couleursDeLaPeinture(valeur, element) {
 
 /** fill et stroke calculés d'une forme SVG, chacun en liste de couleurs, sans
  *  doublon : vide pour none ou une couleur transparente ; un motif url(#…)
- *  rend les couleurs que peignent ses enfants, un dégradé ses arrêts. */
+ *  rend les couleurs que peignent ses enfants, un dégradé ses arrêts. Une
+ *  <line> n'a pas d'aire : elle ne peint que par son trait, et son fill
+ *  calculé, noir par défaut, rend une liste vide. */
 export function couleursPeintes(element) {
   const style = getComputedStyle(element);
   return {
-    fill: couleursDeLaPeinture(style.fill, element),
+    fill: element instanceof SVGLineElement ? [] : couleursDeLaPeinture(style.fill, element),
     stroke: couleursDeLaPeinture(style.stroke, element),
   };
 }

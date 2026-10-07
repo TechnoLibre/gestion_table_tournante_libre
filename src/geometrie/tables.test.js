@@ -49,7 +49,7 @@ describe('constantes', () => {
     assert.equal(RAYON_CHAISE, 22);
     assert.equal(RAYON_POIGNEE, 15);
     assert.equal(ECART_POIGNEE, 8);
-    assert.equal(ECART_LISTE, 10);
+    assert.equal(ECART_LISTE, 36);
     assert.equal(PAS_GRILLE, 300);
   });
 });
@@ -119,7 +119,7 @@ describe('geometrieTable, ronde', () => {
     proche(g.rayonEmprise, r + 44, 'rayon d’emprise');
     const ecart = (r + 44 + 23) / Math.SQRT2;
     procheDuPoint(g.poignee, { x: 300 + ecart, y: 600 + ecart }, 'poignée');
-    procheDuPoint(g.origineListe, { x: 300 + r + 54, y: 600 - r }, 'origine de la liste');
+    procheDuPoint(g.origineListe, { x: 300 + r + 80, y: 600 - r }, 'origine de la liste');
   });
 
   test('ronde de 3 : plancher de 70 cm, pas 70π/3', () => {
@@ -163,10 +163,10 @@ describe('geometrieTable, carrée', () => {
     });
   });
 
-  test('emprise 104, poignée au-delà du coin, liste en (414, 540)', () => {
+  test('emprise 104, poignée au-delà du coin, liste en (440, 540)', () => {
     assert.equal(g.rayonEmprise, 104);
     procheDuPoint(g.poignee, { x: 404 + 23 / Math.SQRT2, y: 704 + 23 / Math.SQRT2 }, 'poignée');
-    procheDuPoint(g.origineListe, { x: 414, y: 540 }, 'origine de la liste');
+    procheDuPoint(g.origineListe, { x: 440, y: 540 }, 'origine de la liste');
   });
 
   test('carrée de 3 : côtés garnis 1, 1, 1, 0 et pas 70', () => {

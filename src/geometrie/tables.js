@@ -35,8 +35,11 @@ export const RAYON_CHAISE = 22;
 export const RAYON_POIGNEE = 15;
 /** Distance entre l'emprise et le bord de la poignée, en cm. */
 export const ECART_POIGNEE = 8;
-/** Distance entre l'emprise et le bloc de noms, en cm. */
-export const ECART_LISTE = 10;
+/** Distance entre l'emprise et le bloc de noms, en cm : le carré du focus
+ *  que l'interface pose autour de l'emprise, ou d'une chaise, s'étend à
+ *  26 cm d'elle, plus la moitié de son trait ; le bloc commence au-delà, et
+ *  aucune marque ne couvre la liste. */
+export const ECART_LISTE = 36;
 /** Distance entre deux cases de la grille des tables créées, en cm. */
 export const PAS_GRILLE = 300;
 

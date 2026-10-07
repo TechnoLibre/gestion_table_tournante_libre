@@ -176,6 +176,24 @@ describe('couleursPeintes', () => {
       [20, 30, 90, 1],
     ]);
   });
+
+  test("une ligne ne peint que son trait : le noir par défaut de son fill n'est compté ni seul, ni dans un motif", () => {
+    monter(
+      `<svg xmlns="${SVG}" width="80" height="80"><defs>` +
+        `<pattern id="epreuve-hachure-ligne" width="8" height="8" patternUnits="userSpaceOnUse">` +
+        `<rect width="8" height="8" fill="rgb(250, 240, 200)"/>` +
+        `<line x1="4" y1="0" x2="4" y2="8" stroke="rgb(20, 30, 90)" stroke-width="3"/>` +
+        `</pattern></defs>` +
+        `<line data-ligne x1="0" y1="0" x2="80" y2="80" stroke="rgb(60, 70, 80)"/>` +
+        `<rect data-forme width="80" height="80" fill="url(#epreuve-hachure-ligne)"/></svg>`,
+    );
+    expect(getComputedStyle($('[data-ligne]')).fill).toBe('rgb(0, 0, 0)');
+    expect(couleursPeintes($('[data-ligne]'))).toEqual({ fill: [], stroke: [[60, 70, 80, 1]] });
+    expect(couleursPeintes($('[data-forme]')).fill).toEqual([
+      [250, 240, 200, 1],
+      [20, 30, 90, 1],
+    ]);
+  });
 });
 
 describe('fondPeintSous', () => {

@@ -86,7 +86,7 @@
   onDestroy(() => geste.liberer());
 </script>
 
-<form aria-labelledby={`${uid}-titre`} onsubmit={ajouter}>
+<form novalidate aria-labelledby={`${uid}-titre`} onsubmit={ajouter}>
   <h3 id={`${uid}-titre`}>{t('participants.formulaire.titre')}</h3>
   <div class="champs">
     {#each CHAMPS as cle (cle)}

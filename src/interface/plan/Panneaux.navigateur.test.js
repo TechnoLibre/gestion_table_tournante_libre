@@ -465,7 +465,10 @@ describe('le plan est un seul arrêt de tabulation (§ 7.3, § 13.5)', () => {
     const tables = charge(m).tables;
     const premiere = tables[0];
     expect(actif(m)).toBe(`table-${premiere.id}`);
-    const voisine = tables.find(({ position }) => position.x === premiere.position.x + 300 && position.y === premiere.position.y);
+    // La voisine de droite : la plus proche à droite, sur la même rangée.
+    const voisine = tables
+      .filter(({ position }) => position.y === premiere.position.y && position.x > premiere.position.x)
+      .reduce((plus, table) => (plus === undefined || table.position.x < plus.position.x ? table : plus), undefined);
     expect(voisine).toBeDefined();
     await touche('ArrowRight');
     flushSync();

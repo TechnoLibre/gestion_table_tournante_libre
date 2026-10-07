@@ -31,7 +31,7 @@ import { rechercher } from '../../moteur/recherche.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { versFichier } from '../../stockage/placements.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
-import { composantes, couleursPeintes, sousTheme, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, couleursPeintes, fondPeintSous, sousTheme, visible } from '../../../test/navigateur/rendu.js';
 import TEXTE_TOUTES_EN_CONFLIT from '../../../test/fixtures/plan/toutes_en_conflit.gtt.json?raw';
 import { TABLES_INTERFACE } from '../libelles.js';
 import BandeauPlan from './BandeauPlan.svelte';
@@ -510,6 +510,11 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
         expect(pastilles[0].textContent).toBe(String(tour2.tables[0].pastille));
         expect(visible(pastilles[0].querySelector('text'))).toBe(true);
         expect(couleursPeintes(pastilles[0].querySelector('[data-marque=pastille]')).fill).toEqual([jeton('--couleur-pastille-fond')]);
+        // La pastille se pose sur un socle du fond du plateau : la trame ne
+        // passe pas sous elle (§ 14.5), et reste peinte autour du socle.
+        expect(fondPeintSous(pastilles[0].querySelector('[data-marque=pastille]'))).toEqual([jeton('--couleur-table-fond')]);
+        const socle = trames[0].closest('[data-table]').querySelector('[data-socle]');
+        expect(Number(socle.getAttribute('r'))).toBeLessThan(Number(enConflit.getAttribute('r')));
         expect(getComputedStyle(pastilles[0]).pointerEvents).toBe('none');
         demonterTout();
 
@@ -638,7 +643,9 @@ describe('les seuils de rendu (§ 7.3, § 17 point 6, § 19.10)', () => {
 
 describe('dessin et désignation (§ 7.3, § 13.5)', () => {
   test('le centre rendu de chaque siège est sa position ; aux points témoins, le DOM et designer désignent la même place ; une liste ne masque aucune chaise', () => {
-    const charge = chargeDeTables([8, 8], { pas: 200 });
+    // La table 2 si près que la liste de la table 1 passe sur ses chaises de
+    // gauche.
+    const charge = chargeDeTables([8, 8], { pas: 280 });
     const vue = { k: 1.5, tx: 300, ty: 350 };
     const modele = modeleDe(charge, { k: vue.k });
     const { svg, cadre, ecran } = monterPlan(modele, vue);

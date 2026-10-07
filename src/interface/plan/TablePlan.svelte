@@ -19,7 +19,11 @@
   //
   // Une table en conflit, quand le plan signale, porte un contour épaissi
   // (contourConflit) et une trame (trameConflit) par-dessus son plateau ; sa
-  // pastille porte le nombre de violations, signalée ou non (§ 7.5).
+  // pastille porte le nombre de violations, signalée ou non (§ 7.5). Sur la
+  // trame, un socle [data-socle] du fond du plateau, centré sous la
+  // pastille, la sépare des traits de la trame : la pastille se mesure
+  // contre le fond du plateau (§ 14.5), et la trame reste peinte autour.
+  // Le socle précède la marque de gel, qui se peint sur lui.
   //
   // Le groupe de la table porte id="table-<id>", celui d'une chaise
   // id="siege-<table>-<siège>" : la racine du plan, seul arrêt de tabulation,
@@ -39,6 +43,7 @@
     ECART_FOCUS,
     ECART_MISE_EN_EVIDENCE,
     RAYON_PASTILLE,
+    RAYON_SOCLE_PASTILLE,
     TAILLE_TEXTE_PASTILLE_CM,
     TRACE_GEL,
     formesTable,
@@ -87,6 +92,7 @@
     {:else}
       <rect class="trame" data-marque="trameConflit" fill={trame} {...formes.plateau} />
     {/if}
+    <circle class="socle" data-socle cx={formes.pastille.x} cy={formes.pastille.y} r={RAYON_SOCLE_PASTILLE} />
   {/if}
   {#if table.gelee}
     <path class="gel" data-marque="gel" d={TRACE_GEL} transform="translate({formes.gel.x},{formes.gel.y})" />
@@ -176,6 +182,12 @@
   }
 
   .trame {
+    stroke: none;
+    pointer-events: none;
+  }
+
+  .socle {
+    fill: var(--couleur-table-fond);
     stroke: none;
     pointer-events: none;
   }

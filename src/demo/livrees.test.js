@@ -19,6 +19,8 @@ import { versionVoisine } from '../../test/version_voisine.js';
 import { apercevoir } from '../csv/apercu.js';
 import { decoder } from '../csv/encodage.js';
 import { exporterParticipants } from '../csv/export.js';
+import { constante } from '../geometrie/constantes.js';
+import { geometrieTable } from '../geometrie/tables.js';
 import { serialiser } from '../stockage/canonique.js';
 import { analyser } from '../stockage/document.js';
 import { examiner } from '../stockage/placements.js';
@@ -153,6 +155,25 @@ describe('démonstrations livrées : les fichiers (§ 15.5, point 5)', () => {
         cle,
       );
       assert.deepEqual([charge.propositions, charge.retenu], [[], null], cle);
+    }
+  });
+
+  test("le bloc de noms d'une table, de toute sa largeur, ne rencontre l'emprise d'aucune autre table, d'aucune rangée (§ 7.4)", () => {
+    // Le bloc s'étend de origineListe.x sur LARGEUR_BLOC_NOMS_CM, où toute
+    // ligne s'abrège ; sa hauteur, mesurée sur la police, ne se connaît pas
+    // ici : l'épreuve exige la bande verticale entière libre de toute emprise.
+    const largeur = constante('LARGEUR_BLOC_NOMS_CM');
+    for (const { cle, texte } of LIVREES) {
+      const { charge } = analyser(texte);
+      const geometries = charge.tables.map((table) => geometrieTable(table, table.sieges ?? charge.evenement.siegesParDefaut));
+      const rencontres = geometries.flatMap((g) =>
+        geometries
+          .filter((autre) => autre !== g)
+          .filter((autre) => autre.centre.x - autre.rayonEmprise < g.origineListe.x + largeur && autre.centre.x + autre.rayonEmprise > g.origineListe.x)
+          .map((autre) => `table ${g.numero} sur la table ${autre.numero}`),
+      );
+      assert.ok(geometries.length > 1, cle);
+      assert.deepEqual(rencontres, [], cle);
     }
   });
 });

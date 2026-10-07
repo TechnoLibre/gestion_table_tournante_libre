@@ -38,12 +38,15 @@
   // forme de la lecture, et n'a pas de libellé.
   const cadre = $derived(cadreDeMode($seance));
   const forme = $derived(cadre?.forme ?? 'tirets');
+  // Le trait du cadre est une marque (§ 14.5) : data-marque nomme l'entrée
+  // du registre (marques.js) qui porte le jeton de sa couleur.
+  const MARQUE_DE_LA_FORME = { tirets: 'cadreLecture', plein: 'cadreEcriture', double: 'cadreBloque' };
   const commande = $derived(commandeFixe($seance));
   const verrou = $derived($seance.mode === 'lecture' ? $seance.verrouAutre : null);
   const reprise = $derived(repriseOfferte($seance));
 </script>
 
-<div class="cadre" data-mode={forme} class:tirets={forme === 'tirets'} class:double={forme === 'double'}>
+<div class="cadre" data-mode={forme} data-marque={MARQUE_DE_LA_FORME[forme]} class:tirets={forme === 'tirets'} class:double={forme === 'double'}>
   <div class="barre" role="group" aria-label={t('evenement.cadre.commandes')}>
     <div class="ligne">
       <div class="fixe" data-place-fixe>

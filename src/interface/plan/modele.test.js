@@ -16,7 +16,7 @@ import { creerTraduction } from '../../application/traduction.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { constante } from '../../geometrie/constantes.js';
 import { regimeCibles } from '../../geometrie/designation.js';
-import { geometrieTable } from '../../geometrie/tables.js';
+import { PLANCHER_DIAMETRE, RAYON_POIGNEE, geometrieTable } from '../../geometrie/tables.js';
 import { indexerPlan } from '../../moteur/configuration.js';
 import { conflitsParTable } from '../../moteur/conflits.js';
 import { diagnostiquer } from '../../moteur/diagnostic.js';
@@ -26,7 +26,13 @@ import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage
 import { planDepuisFichier, versFichier } from '../../stockage/placements.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
+  ECART_ANNEAU,
+  ECART_DESIGNATION,
+  ECART_FOCUS,
+  ECART_MISE_EN_EVIDENCE,
   LARGEUR_ECHELLE_PX,
+  RAYON_PASTILLE,
+  RAYON_SOCLE_PASTILLE,
   actionsPersonne,
   actionsPlace,
   ajusterLigne,
@@ -705,6 +711,36 @@ describe('formesTable : les formes d\u{2019}une table, en attributs SVG (§ 7.1,
       assert.equal(gel.x, 10);
       assert.ok(gel.y < 20 && gel.y > 20 - geometrie.demiTaille, `${places} places : ${gel.y}`);
     }
+  });
+});
+
+describe('les marques autour d\u{2019}une table laissent la liste de noms à découvert (§ 7.4, § 14.5)', () => {
+  // Le trait du carré du focus fait 3 px à l'écran (TablePlan) : sa moitié
+  // extérieure couvre au plus 1,5 px, soit 1,5 / k cm, et les listes ne se
+  // rendent qu'à k ≥ K_LISTES.
+  const DEMI_TRAIT_FOCUS_CM = 1.5 / K_LISTES;
+
+  test('le focus, de la table ou de sa chaise la plus à droite, et la poignée finissent avant le bloc de noms', () => {
+    for (const forme of ['ronde', 'carree']) {
+      for (const places of [2, 3, 5, 8, 12, 16]) {
+        const g = geometrieTable({ id: 1, numero: 1, forme, position: { x: 40, y: -70 } }, places);
+        const droite = Math.max(...g.chaises.map((chaise) => chaise.x + chaise.rayon));
+        const bords = {
+          'focus de la table': g.centre.x + g.rayonEmprise + ECART_FOCUS + DEMI_TRAIT_FOCUS_CM,
+          'focus de la chaise': droite + ECART_FOCUS + DEMI_TRAIT_FOCUS_CM,
+          poignée: g.poignee.x + RAYON_POIGNEE,
+        };
+        for (const [quoi, bord] of Object.entries(bords)) {
+          assert.ok(bord < g.origineListe.x, `${forme} de ${places} : ${quoi} jusqu'à ${bord}, liste dès ${g.origineListe.x}`);
+        }
+      }
+    }
+  });
+
+  test('les autres marques d\u{2019}une chaise restent sous le focus ; le socle de la pastille, entre elle et le plus petit plateau', () => {
+    for (const ecart of [ECART_ANNEAU, ECART_MISE_EN_EVIDENCE, ECART_DESIGNATION]) assert.ok(ecart < ECART_FOCUS, String(ecart));
+    assert.ok(RAYON_PASTILLE < RAYON_SOCLE_PASTILLE);
+    assert.ok(RAYON_SOCLE_PASTILLE < PLANCHER_DIAMETRE / 2);
   });
 });
 

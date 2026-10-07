@@ -19,6 +19,11 @@ export const LARGEUR_ECHELLE_PX = 120;
 /** Rayon du disque de la pastille, en cm de dessin : sous la marque de gel
  *  d'une table de 2, la plus petite. */
 export const RAYON_PASTILLE = 15;
+/** Rayon du socle de la pastille, en cm de dessin : un disque du fond du
+ *  plateau, posé sur la trame d'une table signalée, sous la pastille, qui
+ *  l'en sépare (§ 14.5). Plus petit que le plateau le plus petit, de rayon
+ *  PLANCHER_DIAMETRE / 2 : la trame reste peinte autour. */
+export const RAYON_SOCLE_PASTILLE = 20;
 /** Corps du chiffre de la pastille, en cm de dessin. */
 export const TAILLE_TEXTE_PASTILLE_CM = 18;
 

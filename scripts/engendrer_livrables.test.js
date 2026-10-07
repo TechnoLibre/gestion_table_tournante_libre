@@ -209,18 +209,22 @@ describe("engendrer_livrables : la charge d'une démonstration (§ 15)", () => {
     });
   });
 
-  test('les tables : rondes, en grille rangée par rangée, centres à 300 cm, la dernière rangée seule incomplète', () => {
+  test('les tables : rondes, en grille rangée par rangée, la dernière rangée seule incomplète ; rangées à 300 cm, colonnes assez écartées pour le bloc de noms', () => {
+    // Écart des colonnes : 2 × l'emprise de la plus grande table, deux écarts
+    // de liste (36 cm) et la largeur du bloc de noms (500 cm), arrondi au cm
+    // supérieur — petite, 3 places, emprise 79 : 158 + 72 + 500 = 730 ;
+    // grande, 8 places, emprise 120,39 : ⌈240,79 + 72 + 500⌉ = 813.
     assert.deepEqual(chargeDeDemonstration(entreeDe('petite')).tables, [
       { id: 1, numero: 1, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
-      { id: 2, numero: 2, sieges: null, forme: 'ronde', position: { x: 300, y: 0 } },
+      { id: 2, numero: 2, sieges: null, forme: 'ronde', position: { x: 730, y: 0 } },
       { id: 3, numero: 3, sieges: null, forme: 'ronde', position: { x: 0, y: 300 } },
-      { id: 4, numero: 4, sieges: null, forme: 'ronde', position: { x: 300, y: 300 } },
+      { id: 4, numero: 4, sieges: null, forme: 'ronde', position: { x: 730, y: 300 } },
     ]);
     // 33 tables : six colonnes, cinq rangées pleines, puis trois tables.
     const { tables } = chargeDeDemonstration(entreeDe('grande'));
     const positions = tables.map(({ position: { x, y } }) => [x, y]);
-    assert.deepEqual(positions.slice(0, 7), [[0, 0], [300, 0], [600, 0], [900, 0], [1200, 0], [1500, 0], [0, 300]]);
-    assert.deepEqual(positions.slice(-4), [[1500, 1200], [0, 1500], [300, 1500], [600, 1500]]);
+    assert.deepEqual(positions.slice(0, 7), [[0, 0], [813, 0], [1626, 0], [2439, 0], [3252, 0], [4065, 0], [0, 300]]);
+    assert.deepEqual(positions.slice(-4), [[4065, 1200], [0, 1500], [813, 1500], [1626, 1500]]);
     assert.equal(new Set(positions.map(String)).size, 33);
     assert.ok(tables.every(({ forme }) => forme === 'ronde'));
     assert.deepEqual(tables.map(({ id, numero }) => [id, numero]), positions.map((_, rang) => [rang + 1, rang + 1]));

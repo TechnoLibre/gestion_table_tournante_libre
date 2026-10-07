@@ -28,9 +28,11 @@
 //   plus grande à égalité ; une table d'une autre capacité porte la sienne
 //   en surcharge (§ 6.1) ;
 // - les tables rondes, rangées en grille dans l'ordre de la configuration,
-//   rangée par rangée, leurs centres espacés de 300 cm ; la grille a la plus
-//   petite largeur dont le carré contient toutes les tables, et seule sa
-//   dernière rangée est incomplète ;
+//   rangée par rangée, leurs rangées espacées de 300 cm ; la grille a la
+//   plus petite largeur dont le carré contient toutes les tables, et seule
+//   sa dernière rangée est incomplète. Ses colonnes s'écartent assez pour
+//   que le bloc de noms d'une table, de toute sa largeur, tienne entre deux
+//   colonnes : aucune liste ne passe sur une autre table (§ 7.4) ;
 // - les contraintes de la configuration, les sièges non attribués, la
 //   génération par défaut de la recherche ;
 // - chaque réservation, celle d'un animateur, au siège 1 de sa table pour
@@ -47,6 +49,8 @@ import { decoder } from '../src/csv/encodage.js';
 import { SEPARATEUR, ecrireCsv, exporterParticipants } from '../src/csv/export.js';
 import { decouper } from '../src/csv/lecture.js';
 import { CATALOGUE } from '../src/demo/catalogue.js';
+import { constante } from '../src/geometrie/constantes.js';
+import { ECART_LISTE, geometrieTable } from '../src/geometrie/tables.js';
 import { serialiser, serialiserCharge } from '../src/stockage/canonique.js';
 import { analyser, creerCharge } from '../src/stockage/document.js';
 import { VERSION } from '../src/version.genere.js';
@@ -66,8 +70,8 @@ const DEMONSTRATIONS_EN_CSV = ['petite', 'grande'];
 // Séparateur de la variante windows-1252 (§ 10.3).
 const VIRGULE = ',';
 
-// Écart entre les centres de deux tables voisines de la grille, en cm.
-const ECART_CM = 300;
+// Écart entre les centres de deux rangées de la grille, en cm.
+const ECART_RANGEES_CM = 300;
 
 // Le siège de l'animateur, et le titre qu'il porte.
 const SIEGE_ANIMATEUR = 1;
@@ -94,6 +98,21 @@ function colonnesDe(nombre) {
   let colonnes = 1;
   while (colonnes * colonnes < nombre) colonnes += 1;
   return colonnes;
+}
+
+// Écart entre les centres de deux colonnes de la grille, en cm entiers : le
+// bloc de noms d'une table commence à ECART_LISTE de son emprise et s'étend
+// sur LARGEUR_BLOC_NOMS_CM, où toute ligne s'abrège ; il s'achève à
+// ECART_LISTE de l'emprise de la colonne suivante, pour la plus grande
+// emprise des capacités données. Aucune emprise, d'aucune rangée, ne
+// rencontre ainsi la bande du bloc.
+function ecartColonnes(capacites) {
+  const emprise = Math.max(
+    ...capacites.map(
+      (places) => geometrieTable({ id: 0, numero: 0, forme: 'ronde', position: { x: 0, y: 0 } }, places).rayonEmprise,
+    ),
+  );
+  return Math.ceil(2 * emprise + 2 * ECART_LISTE + constante('LARGEUR_BLOC_NOMS_CM'));
 }
 
 // Plus grand identifiant d'une liste d'enregistrements ; 0 pour une liste
@@ -134,6 +153,7 @@ export function chargeDeDemonstration({ cle, nom, construire }) {
   const animateurs = animateursDe(reservations, cle);
   const reserves = new Set(animateurs.values());
   const colonnes = colonnesDe(tables.length);
+  const ecart = ecartColonnes(tables.map(({ capacite }) => capacite));
   const { separerAppartenances, nouveauxVoisins, nouvelleTable, varierAppartenances } = contraintes;
   return {
     ...neuve,
@@ -154,7 +174,7 @@ export function chargeDeDemonstration({ cle, nom, construire }) {
       numero,
       sieges: capacite === siegesParDefaut ? null : capacite,
       forme: 'ronde',
-      position: { x: (rang % colonnes) * ECART_CM, y: Math.floor(rang / colonnes) * ECART_CM },
+      position: { x: (rang % colonnes) * ecart, y: Math.floor(rang / colonnes) * ECART_RANGEES_CM },
     })),
     reservations: [...animateurs].map(([table, participant]) => ({
       participant,
