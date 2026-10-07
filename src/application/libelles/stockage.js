@@ -271,6 +271,13 @@ export const TABLE = new Map([
   ],
   // Une cause de la sonde, que les textes citent entre parenthèses.
   ['RELECTURE_DIFFERENTE', () => "le fichier d'essai relu ne porte pas ce qui vient d'y être écrit"],
+  // Une cause de l'OPFS : sous des paramètres régionaux qui ne sont pas
+  // UTF-8, le navigateur ne nomme pas un dossier ou un fichier hors ASCII.
+  [
+    'NOM_NON_CONVERTI',
+    () =>
+      "le navigateur ne sait pas nommer un dossier ou un fichier aux caractères accentués sous les réglages de langue du système",
+  ],
   [
     'PORTABLE_NON_INSCRIPTIBLE',
     ({ racine, evenements, cause }, texte) => {

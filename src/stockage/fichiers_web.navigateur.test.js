@@ -246,6 +246,92 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
     expect(await fs.lireTexte(DOCUMENTS, 'note.txt')).toBe('note');
   });
 
+  // Sous des paramètres régionaux qui ne sont pas UTF-8, Chromium résout un
+  // nom de dossier hors ASCII sur le dossier qui le porte, sans lever. La
+  // doublure rend ce dossier pour le nom « é » : aucun geste ne lit ni n'écrit
+  // alors dans le dossier qui le porte, où un fichier de même nom attend.
+  test("un dossier dont la poignée est celle du dossier qui le porte lève NOM_NON_CONVERTI, ECRITURE à l'écriture et LECTURE à la lecture, et le dossier qui le porte reste intact", async () => {
+    const fs = await preparer();
+    await fs.ecrireAtomique(DOCUMENTS, 'etat.json', 'parent');
+    const poignee = FileSystemDirectoryHandle.prototype.getDirectoryHandle;
+    vi.spyOn(FileSystemDirectoryHandle.prototype, 'getDirectoryHandle').mockImplementation(
+      async function getDirectoryHandle(nom, options) {
+        return nom === '\u{E9}' ? this : poignee.call(this, nom, options);
+      },
+    );
+    const sous = `${CHEMIN_DOCUMENTS}/\u{E9}`;
+    const refus = (chemin, dossier = sous) => ({ chemin, dossier, cause: 'NOM_NON_CONVERTI' });
+    const enfant = '\u{E9}/etat.json';
+
+    await echoue(fs.creerDossier(DOCUMENTS, '\u{E9}'), 'ECRITURE', refus('\u{E9}', CHEMIN_DOCUMENTS), 'creerDossier');
+    await echoue(fs.creerDossier(DOCUMENTS, '\u{E9}/sous'), 'ECRITURE', refus('\u{E9}/sous'), 'creerDossier dessous');
+    await echoue(fs.ecrireAtomique(DOCUMENTS, enfant, 'enfant'), 'ECRITURE', refus(enfant), 'ecrireAtomique');
+    await echoue(fs.ajouterLigne(DOCUMENTS, enfant, 'enfant'), 'ECRITURE', refus(enfant), 'ajouterLigne');
+    await echoue(fs.supprimer(DOCUMENTS, enfant), 'ECRITURE', refus(enfant), 'supprimer');
+    await echoue(fs.deplacer(DOCUMENTS, enfant, 'copie.json'), 'ECRITURE', refus(enfant), 'deplacer depuis');
+    await echoue(fs.deplacer(DOCUMENTS, 'etat.json', '\u{E9}/neuf.json'), 'ECRITURE', refus('\u{E9}/neuf.json'), 'deplacer vers');
+    await echoue(fs.lireTexte(DOCUMENTS, enfant), 'LECTURE', refus(enfant), 'lireTexte');
+    await echoue(fs.lister(DOCUMENTS, '\u{E9}'), 'LECTURE', refus('\u{E9}', CHEMIN_DOCUMENTS), 'lister');
+    vi.restoreAllMocks();
+    expect(await fs.lister(DOCUMENTS, '')).toMatchObject([{ nom: 'etat.json', type: 'fichier' }]);
+    expect(await fs.lireTexte(DOCUMENTS, 'etat.json')).toBe('parent');
+
+    // Le dossier du produit se contrôle comme tout autre : une poignée qui
+    // serait la racine de l'OPFS fait échouer la sonde, qui n'y écrit rien.
+    vi.spyOn(FileSystemDirectoryHandle.prototype, 'getDirectoryHandle').mockImplementation(
+      async function getDirectoryHandle(nom, options) {
+        return nom === DOSSIER ? this : poignee.call(this, nom, options);
+      },
+    );
+    expect(await fs.sonder(DOCUMENTS)).toStrictEqual({ inscriptible: false, cause: 'NOM_NON_CONVERTI' });
+    await echoue(fs.lireTexte(DOCUMENTS, 'etat.json'), 'LECTURE', refus('etat.json', CHEMIN_DOCUMENTS), 'produit');
+    vi.restoreAllMocks();
+    expect(await nomsOpfs()).toStrictEqual([DOSSIER]);
+  });
+
+  // Sous les mêmes paramètres régionaux, un nom de fichier hors ASCII se
+  // résout lui aussi sur le dossier qui le porte : getFileHandle lève
+  // TypeMismatchError, et getDirectoryHandle rend ce dossier. La doublure
+  // reproduit les deux pour le nom « ô.txt ». Le refus n'est alors ni une
+  // absence ni une entrée d'un autre genre : un état présent ne se lit pas
+  // ABSENT, une cible libre ne se dit pas EXISTE.
+  test("un fichier que l'OPFS résout sur le dossier qui le porte lève NOM_NON_CONVERTI, LECTURE à la lecture et ECRITURE à l'écriture, jamais ABSENT ni EXISTE", async () => {
+    const fs = await preparer();
+    await fs.ecrireAtomique(DOCUMENTS, 'source.txt', 'source');
+    const nom = '\u{F4}.txt';
+    const fichier = FileSystemDirectoryHandle.prototype.getFileHandle;
+    const dossier = FileSystemDirectoryHandle.prototype.getDirectoryHandle;
+    vi.spyOn(FileSystemDirectoryHandle.prototype, 'getFileHandle').mockImplementation(
+      async function getFileHandle(entree, options) {
+        if (entree === nom) throw new DOMException(entree, 'TypeMismatchError');
+        return fichier.call(this, entree, options);
+      },
+    );
+    vi.spyOn(FileSystemDirectoryHandle.prototype, 'getDirectoryHandle').mockImplementation(
+      async function getDirectoryHandle(entree, options) {
+        return entree === nom ? this : dossier.call(this, entree, options);
+      },
+    );
+    const refus = { chemin: nom, dossier: CHEMIN_DOCUMENTS, cause: 'NOM_NON_CONVERTI' };
+
+    await echoue(fs.lireTexte(DOCUMENTS, nom), 'LECTURE', refus, 'lireTexte');
+    await echoue(fs.ecrireAtomique(DOCUMENTS, nom, 'x'), 'ECRITURE', refus, 'ecrireAtomique');
+    await echoue(fs.ajouterLigne(DOCUMENTS, nom, 'x'), 'ECRITURE', refus, 'ajouterLigne');
+    await echoue(fs.supprimer(DOCUMENTS, nom), 'ECRITURE', refus, 'supprimer');
+    await echoue(fs.deplacer(DOCUMENTS, nom, 'copie.txt'), 'ECRITURE', refus, 'deplacer depuis');
+    await echoue(fs.deplacer(DOCUMENTS, 'source.txt', nom), 'ECRITURE', refus, 'deplacer vers');
+
+    // Un vrai dossier reste une entrée d'un autre genre : ABSENT à la lecture.
+    await fs.creerDossier(DOCUMENTS, 'corbeille');
+    await echoue(fs.lireTexte(DOCUMENTS, 'corbeille'), 'ABSENT', { chemin: 'corbeille' }, 'vrai dossier');
+    vi.restoreAllMocks();
+    expect(await fs.lister(DOCUMENTS, '')).toMatchObject([
+      { nom: 'corbeille', type: 'dossier' },
+      { nom: 'source.txt', type: 'fichier' },
+    ]);
+    expect(await fs.lireTexte(DOCUMENTS, 'source.txt')).toBe('source');
+  });
+
   // Chaque panne frappe un temps de l'écriture par flux : son ouverture,
   // l'écriture, la fermeture qui porte le contenu sur la cible.
   const PANNES = [

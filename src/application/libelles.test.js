@@ -266,6 +266,7 @@ const EXEMPLES = new Map([
   ['DONNEES_APPLICATIVES', {}],
   ['SONDE_ECHOUEE', { cause: 'EROFS' }],
   ['RELECTURE_DIFFERENTE', {}],
+  ['NOM_NON_CONVERTI', {}],
   ['PORTABLE_NON_INSCRIPTIBLE', { racine: { id: 'portable', chemin: 'E:\\data' }, evenements: 3, cause: 'EROFS' }],
   ['DOCUMENTS_NON_INSCRIPTIBLE', { racine: { id: 'documents', chemin: 'C:\\Documents\\Table' }, evenements: 0, cause: 'EACCES' }],
   ['PLATEFORME_WEB', {}],

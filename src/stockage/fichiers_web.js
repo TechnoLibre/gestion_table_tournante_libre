@@ -33,15 +33,27 @@
 //
 // L'OPFS et le fichier choisi lèvent des DOMException, que le module traduit
 // en codes. Une lecture qui ne trouve pas l'entrée — NotFoundError, ou
-// TypeMismatchError pour une entrée d'un autre genre que celui demandé —
-// lève ABSENT ; toute autre exception d'une lecture lève LECTURE, car une
-// panne n'est pas une absence ; tout échec d'une écriture lève ECRITURE. Les
+// TypeMismatchError pour une entrée d'un autre genre que celui demandé, hors
+// le cas d'un nom non converti ci-dessous — lève ABSENT ; toute autre
+// exception d'une lecture lève LECTURE, car une panne n'est pas une
+// absence ; tout échec d'une écriture lève ECRITURE. Les
 // deux portent {chemin, dossier, cause}, dont la cause est le nom de
 // l'exception : SecurityError pour un OPFS que le navigateur refuse à
 // l'origine, NotReadableError pour un fichier qui change pendant qu'on le
 // lit, NotFoundError pour une écriture dans un dossier absent,
 // TypeMismatchError, QuotaExceededError… Le chemin '' désigne la racine
 // elle-même, un dossier.
+//
+// Sous des paramètres régionaux qui ne sont pas UTF-8, Chromium sous Linux
+// ne convertit pas un nom hors ASCII et le résout sur le dossier qui le
+// porte : un dossier de ce nom rend ce dossier sans lever, un fichier de ce
+// nom lève TypeMismatchError comme pour une entrée d'un autre genre. Chaque
+// dossier du chemin se compare donc au dossier qui le porte (isSameEntry) ;
+// une TypeMismatchError sur un fichier se départage en demandant le même nom
+// comme dossier, comparé de même. La même entrée lève, cause
+// NOM_NON_CONVERTI — LECTURE pour une lecture, ECRITURE pour une écriture —,
+// jamais ABSENT ni EXISTE : rien ne se lit ni ne s'écrit dans le dossier qui
+// le porte, et un fichier présent ne se lit pas absent.
 //
 // Sous web, ni explorateur ni dialogue de dossier : ouvrirDansExplorateur et
 // choisirDossier lèvent NON_DISPONIBLE {primitive}. choisirFichierAImporter
@@ -69,6 +81,10 @@ const TYPE_DIFFERENT = 'TypeMismatchError';
 // Cause d'une sonde dont le témoin relu diffère du texte écrit.
 const RELECTURE_DIFFERENTE = 'RELECTURE_DIFFERENTE';
 
+// Cause d'un nom, de dossier ou de fichier, que l'OPFS résout sur le dossier
+// qui le porte.
+const NOM_NON_CONVERTI = 'NOM_NON_CONVERTI';
+
 // Un fichier s'écrit en UTF-8 sans marque d'ordre d'octets, et se lit sans
 // retirer celle qu'il porte, que Blob.text retirerait. Le décodage est
 // strict : un octet qui n'est pas de l'UTF-8 ne se lit pas U+FFFD.
@@ -79,7 +95,9 @@ const DECODEUR = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 const ignorer = () => {};
 
 // Vrai pour l'exception de l'OPFS qui dit qu'une entrée manque : absente, ou
-// d'un autre genre que celui demandé.
+// d'un autre genre que celui demandé. Une TypeMismatchError de fichier passe
+// d'abord par fichierDe, qui lève NOM_NON_CONVERTI à sa place quand le nom
+// n'est pas converti.
 const estAbsence = (erreur) => erreur?.name === 'NotFoundError' || erreur?.name === TYPE_DIFFERENT;
 
 // Cause d'une ECRITURE ou d'une LECTURE : le nom de l'exception, ou son
@@ -134,17 +152,50 @@ async function ecrire(loc, travail) {
   }
 }
 
+// Poignée du dossier nom sous parent. Lève une DOMException de nom
+// NOM_NON_CONVERTI quand l'OPFS rend parent lui-même pour ce nom.
+async function sousDossier(parent, nom, options) {
+  const dossier = await parent.getDirectoryHandle(nom, options);
+  if (await dossier.isSameEntry(parent)) throw new DOMException(nom, NOM_NON_CONVERTI);
+  return dossier;
+}
+
+// Vrai quand l'OPFS résout nom, demandé comme dossier, sur dossier lui-même ;
+// faux pour toute autre poignée, ou quand la demande lève.
+async function resoutSurLuiMeme(dossier, nom) {
+  try {
+    return await (await dossier.getDirectoryHandle(nom)).isSameEntry(dossier);
+  } catch {
+    return false;
+  }
+}
+
+// Poignée du fichier nom du dossier. Lève l'exception de l'OPFS, sauf une
+// TypeMismatchError dont le nom se résout sur le dossier lui-même, qui
+// devient une DOMException de nom NOM_NON_CONVERTI.
+async function fichierDe(dossier, nom, options) {
+  try {
+    return await dossier.getFileHandle(nom, options);
+  } catch (erreur) {
+    if (erreur?.name === TYPE_DIFFERENT && (await resoutSurLuiMeme(dossier, nom))) {
+      throw new DOMException(nom, NOM_NON_CONVERTI);
+    }
+    throw erreur;
+  }
+}
+
 // Poignée du dossier que désignent les segments sous le dossier du produit ;
 // creer crée ce qui manque sous lui. Le dossier du produit lui-même ne se
 // crée que pour des segments vides, qui le désignent : un chemin sous un
 // dossier du produit absent lève NotFoundError (§ 8.6). Lève l'exception de
 // l'OPFS : NotFoundError pour un dossier absent, TypeMismatchError pour un
-// fichier à sa place.
+// fichier à sa place ; NOM_NON_CONVERTI pour un dossier résolu sur celui qui
+// le porte.
 async function dossierDe(segments, creer = false) {
   const options = { create: creer };
   const produit = { create: creer && segments.length === 0 };
-  let dossier = await (await navigator.storage.getDirectory()).getDirectoryHandle(DOSSIER_PRODUIT, produit);
-  for (const segment of segments) dossier = await dossier.getDirectoryHandle(segment, options);
+  let dossier = await sousDossier(await navigator.storage.getDirectory(), DOSSIER_PRODUIT, produit);
+  for (const segment of segments) dossier = await sousDossier(dossier, segment, options);
   return dossier;
 }
 
@@ -159,10 +210,10 @@ async function dossierExistant(segments) {
 }
 
 // Genre de l'entrée nom du dossier : 'fichier', 'dossier', ou null quand elle
-// n'existe pas.
+// n'existe pas. Un nom non converti lève NOM_NON_CONVERTI.
 async function genreDe(dossier, nom) {
   try {
-    await dossier.getFileHandle(nom);
+    await fichierDe(dossier, nom);
     return 'fichier';
   } catch (erreur) {
     if (erreur?.name === TYPE_DIFFERENT) return 'dossier';
@@ -200,7 +251,7 @@ async function ecrireParFlux(dossier, nom, garder, remplir) {
   let poignee;
   let cree = false;
   try {
-    poignee = await dossier.getFileHandle(nom);
+    poignee = await fichierDe(dossier, nom);
   } catch (erreur) {
     if (erreur?.name !== 'NotFoundError') throw erreur;
     poignee = await dossier.getFileHandle(nom, { create: true });
@@ -235,7 +286,8 @@ async function decrire(poignee) {
 const parNom = (a, b) => (a.nom < b.nom ? -1 : a.nom > b.nom ? 1 : 0);
 
 // La source de deplacer : le dossier qui la porte et ses octets. ABSENT quand
-// elle n'existe pas ; ECRITURE TypeMismatchError quand c'est un dossier.
+// elle n'existe pas ; ECRITURE TypeMismatchError quand c'est un dossier ;
+// NOM_NON_CONVERTI, que genreDe lève, avant toute lecture de ses octets.
 async function lireSource(loc) {
   if (loc.nom === null) throw refus(loc, TYPE_DIFFERENT);
   const dossier = await dossierExistant(loc.parent);
@@ -338,7 +390,7 @@ export function creerFichiersWeb() {
       if (loc.nom === null) throw absent(chemin);
       let lu;
       try {
-        lu = await lire(await (await dossierDe(loc.parent)).getFileHandle(loc.nom));
+        lu = await lire(await fichierDe(await dossierDe(loc.parent), loc.nom));
       } catch (erreur) {
         throw echecLecture(loc, erreur);
       }

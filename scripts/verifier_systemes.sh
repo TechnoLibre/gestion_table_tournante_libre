@@ -17,6 +17,12 @@
 # que celle de l'hôte, NixOS lui-même (l'image nix éprouve shell.nix, sur
 # une base qui n'est pas NixOS), une vraie session graphique.
 #
+# Les étapes tournent sous LANG=C.UTF-8, des paramètres régionaux UTF-8 que
+# la plupart des images ne posent pas, et sous lesquels Chromium nomme une
+# entrée hors ASCII de l'OPFS. La préparation installe ps (procps) là où
+# l'image ne le porte pas : une épreuve de la coquille lit par lui l'heure de
+# démarrage d'un processus.
+#
 # GTT_PARALLELES (4 par défaut) borne les conteneurs simultanés ; les
 # journaux vont dans GTT_JOURNAUX, un dossier temporaire par défaut. Les
 # téléchargements — npm, Electron, Chromium, Node — se partagent entre
@@ -103,17 +109,18 @@ rm -rf "$source_copie"
 mkdir -p "$source_copie"
 (cd "$racine" && git ls-files -co --exclude-standard -z | tar --null -cf - -T - | tar -xf - -C "$source_copie")
 
-# Préparation sous root, par famille : sudo et un compte ordinaire « dev »
-# qui l'emploie sans mot de passe, comme un poste de développement. Son uid
-# est le même dans chaque conteneur — 1500, libre aussi sous Ubuntu, dont
-# l'image donne 1000 à son propre compte — : les caches partagés ne
-# changent jamais de propriétaire.
+# Préparation sous root, par famille : sudo, ps quand l'image ne le porte
+# pas — procps-ng chez Fedora, AlmaLinux, Rocky et Arch, procps ailleurs —,
+# et un compte ordinaire « dev » qui emploie sudo sans mot de passe, comme un
+# poste de développement. Son uid est le même dans chaque conteneur — 1500,
+# libre aussi sous Ubuntu, dont l'image donne 1000 à son propre compte — :
+# les caches partagés ne changent jamais de propriétaire.
 preparation() {
   case "$1" in
-    ubuntu-* | debian-*) echo 'apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q sudo' ;;
-    fedora-* | almalinux-* | rocky-*) echo 'dnf install -y sudo shadow-utils' ;;
-    opensuse-*) echo 'zypper --non-interactive install sudo shadow' ;;
-    arch) echo 'pacman -Syu --noconfirm sudo' ;;
+    ubuntu-* | debian-*) echo 'apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q sudo $(command -v ps > /dev/null || echo procps)' ;;
+    fedora-* | almalinux-* | rocky-*) echo 'dnf install -y sudo shadow-utils $(command -v ps > /dev/null || echo procps-ng)' ;;
+    opensuse-*) echo 'zypper --non-interactive install sudo shadow $(command -v ps > /dev/null || echo procps)' ;;
+    arch) echo 'pacman -Syu --noconfirm sudo $(command -v ps > /dev/null || echo procps-ng)' ;;
   esac
 }
 
