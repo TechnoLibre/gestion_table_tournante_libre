@@ -11,6 +11,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
+import { conflitsParTable } from './conflits.js';
 import { LIBRE, STATUT, indexerPlan, normaliser } from './configuration.js';
 import { diagnostiquer } from './diagnostic.js';
 import { ErreurConfiguration } from './erreurs.js';
@@ -23,15 +24,31 @@ const SANS_CONTRAINTE = {
   nouvelleTable: false,
   varierAppartenances: false,
 };
+const TOUTES = {
+  separerAppartenances: true,
+  nouveauxVoisins: true,
+  nouvelleTable: true,
+  varierAppartenances: true,
+};
+const SEPARER = { ...SANS_CONTRAINTE, separerAppartenances: true };
+const TOUTES_SAUF_SEPARER = { ...TOUTES, separerAppartenances: false };
 
 /**
  * Configuration écrite à la main. tables porte une paire [id, capacité] par
  * table, dans l'ordre de la configuration, le numéro suivant la position ;
- * appartenances[j] est celle du participant d'id j + 1 ; exclus nomme des ids.
+ * appartenances[j] est celle du participant d'id j + 1 ; exclus nomme des ids ;
+ * contraintes, aucune par défaut.
  * Les identifiants de table diffèrent des index et des numéros : un index lu
  * comme un identifiant désigne une table absente.
  */
-function salle({ tables, appartenances, tours, reservations = [], exclus = [] }) {
+function salle({
+  tables,
+  appartenances,
+  tours,
+  reservations = [],
+  exclus = [],
+  contraintes = SANS_CONTRAINTE,
+}) {
   return {
     participants: appartenances.map((appartenance, j) => ({
       id: j + 1,
@@ -42,7 +59,7 @@ function salle({ tables, appartenances, tours, reservations = [], exclus = [] })
     tables: tables.map(([id, capacite], i) => ({ id, numero: i + 1, capacite })),
     tours,
     reservations,
-    contraintes: SANS_CONTRAINTE,
+    contraintes: { ...contraintes },
   };
 }
 
@@ -217,8 +234,20 @@ describe('diagnostic : le catalogue (§ 15)', () => {
         ancres: 1,
         capacite: t < 29 ? 8 : 7,
         gelee: false,
+        moitie: false,
       })),
     );
+    // 24 aux quatre animateurs des tables de 7, 28 à chacun des autres ; les
+    // 227 mobiles sont tous à 28.
+    assert.deepEqual(diagnostic.plafondAPriori.repartition, [
+      { valeur: 24, ancres: 4, mobiles: 0 },
+      { valeur: 28, ancres: 29, mobiles: 227 },
+    ]);
+    // Chacun des 33 animateurs revient trois fois à sa table.
+    assert.equal(diagnostic.ancragesImposantRetours, 33);
+    assert.equal(diagnostic.uneSeuleAppartenance, false);
+    assert.equal(diagnostic.collisionPartout, false);
+    assert.deepEqual(diagnostic.remedes, { toursSansRedondance: null });
   });
 
   // 264 sièges pour 260 membres : la configuration n'est pas tendue.
@@ -250,6 +279,7 @@ describe('diagnostic : le catalogue (§ 15)', () => {
         plancherCumulees: 4,
         plancherPairesDistinctes: 1,
         plancherExcedent: null,
+        tablesManquantes: 1,
       },
     ]);
   });
@@ -403,6 +433,7 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
         plancherCumulees: 5,
         plancherPairesDistinctes: 1,
         plancherExcedent: 2,
+        tablesManquantes: 1,
       },
     ]);
     assert.deepEqual(minimumsParGroupe(configuration).get('X'), {
@@ -430,7 +461,14 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
       tours: 4,
     });
     assert.deepEqual(diagnostiquer(configuration).collisions, [
-      { groupe: 'X', effectif: 6, plancherCumulees: 8, plancherPairesDistinctes: 2, plancherExcedent: null },
+      {
+        groupe: 'X',
+        effectif: 6,
+        plancherCumulees: 8,
+        plancherPairesDistinctes: 2,
+        plancherExcedent: null,
+        tablesManquantes: 2,
+      },
     ]);
   });
 
@@ -441,7 +479,14 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
       tours: 2,
     });
     assert.deepEqual(diagnostiquer(configuration).collisions, [
-      { groupe: 'X', effectif: 6, plancherCumulees: 12, plancherPairesDistinctes: 6, plancherExcedent: null },
+      {
+        groupe: 'X',
+        effectif: 6,
+        plancherCumulees: 12,
+        plancherPairesDistinctes: 6,
+        plancherExcedent: null,
+        tablesManquantes: 4,
+      },
     ]);
     const exacts = minimumsParGroupe(configuration).get('X');
     assert.equal(exacts.cumulees, 12);
@@ -455,7 +500,14 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
       tours: 3,
     });
     assert.deepEqual(diagnostiquer(configuration).collisions, [
-      { groupe: 'X', effectif: 5, plancherCumulees: 12, plancherPairesDistinctes: 4, plancherExcedent: 2 },
+      {
+        groupe: 'X',
+        effectif: 5,
+        plancherCumulees: 12,
+        plancherPairesDistinctes: 4,
+        plancherExcedent: 2,
+        tablesManquantes: 3,
+      },
     ]);
     assert.deepEqual(minimumsParGroupe(configuration).get('X'), { cumulees: 12, distinctes: 4, excedent: 2 });
   });
@@ -473,6 +525,7 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
         plancherCumulees: 4,
         plancherPairesDistinctes: 1,
         plancherExcedent: 1,
+        tablesManquantes: 1,
       },
     ]);
     assert.deepEqual(minimumsParGroupe(configuration).get('X'), {
@@ -502,6 +555,7 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
         plancherCumulees: 3,
         plancherPairesDistinctes: 1,
         plancherExcedent: null,
+        tablesManquantes: null,
       },
       {
         groupe: 'Y',
@@ -509,6 +563,7 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
         plancherCumulees: 1,
         plancherPairesDistinctes: 1,
         plancherExcedent: null,
+        tablesManquantes: null,
       },
     ]);
     const minimums = minimumsParGroupe(configuration);
@@ -532,6 +587,7 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
         plancherCumulees: 3,
         plancherPairesDistinctes: 1,
         plancherExcedent: 2,
+        tablesManquantes: null,
       },
     ]);
   });
@@ -552,6 +608,7 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
         plancherCumulees: 2,
         plancherPairesDistinctes: 1,
         plancherExcedent: null,
+        tablesManquantes: 1,
       },
     ]);
   });
@@ -933,9 +990,9 @@ describe('diagnostic : ancrage et retours imposés (§ 5.4, § 5.6)', () => {
       reservations: [ancrer(1, 30), ancrer(2, 30), ancrer(3, 10), ancrer(4, 10)],
     });
     assert.deepEqual(diagnostiquer(configuration).ancrage, [
-      { table: 30, ancres: 2, capacite: 2, gelee: true },
-      { table: 10, ancres: 2, capacite: 3, gelee: false },
-      { table: 20, ancres: 0, capacite: 2, gelee: false },
+      { table: 30, ancres: 2, capacite: 2, gelee: true, moitie: false },
+      { table: 10, ancres: 2, capacite: 3, gelee: false, moitie: true },
+      { table: 20, ancres: 0, capacite: 2, gelee: false, moitie: false },
     ]);
   });
 
@@ -964,6 +1021,8 @@ describe('diagnostic : ancrage et retours imposés (§ 5.4, § 5.6)', () => {
     });
     const diagnostic = diagnostiquer(configuration);
     assert.equal(diagnostic.retoursImposes, 7);
+    // 1, 2 et 5 portent des retours imposés ; 3 n'en porte aucun.
+    assert.equal(diagnostic.ancragesImposantRetours, 3);
     assert.deepEqual(
       diagnostic.ancrage.map(({ ancres }) => ancres),
       [2, 0],
@@ -998,25 +1057,34 @@ describe('diagnostic : population vide, forme, refus', () => {
   test('une population vide rend null, jamais 0, là où rien ne se mesure', () => {
     const attendu = {
       placesManquantes: 0,
-      plafondAPriori: { min: null, max: null, parPersonne: [] },
+      plafondAPriori: { min: null, max: null, parPersonne: [], repartition: [] },
       collisions: [],
       redondanceMinimale: null,
+      remedes: { toursSansRedondance: null },
       animateursMemeAppartenance: false,
       redondanceImposeeParAnimateurs: 0,
-      ancrage: [{ table: 10, ancres: 0, capacite: 4, gelee: false }],
+      uneSeuleAppartenance: false,
+      collisionPartout: false,
+      ancrage: [{ table: 10, ancres: 0, capacite: 4, gelee: false, moitie: false }],
       retoursImposes: 0,
+      ancragesImposantRetours: 0,
       ecartItineraire: null,
     };
-    const vide = salle({ tables: [[10, 4]], appartenances: [], tours: 2 });
-    assert.deepEqual(diagnostiquer(vide), attendu);
-    const tousExclus = salle({
-      tables: [[10, 4]],
-      appartenances: ['X', 'X', 'X'],
-      tours: 2,
-      reservations: [ancrer(1, 10), ancrer(2, 10)],
-      exclus: [1, 2, 3],
-    });
-    assert.deepEqual(diagnostiquer(tousExclus), attendu);
+    // Les mêmes chiffres, séparation active ou non : sans présent, aucune
+    // appartenance n'est portée par chacun, et aucune table n'est forcée.
+    for (const contraintes of [SANS_CONTRAINTE, TOUTES]) {
+      const vide = salle({ tables: [[10, 4]], appartenances: [], tours: 2, contraintes });
+      assert.deepEqual(diagnostiquer(vide), attendu);
+      const tousExclus = salle({
+        tables: [[10, 4]],
+        appartenances: ['X', 'X', 'X'],
+        tours: 2,
+        reservations: [ancrer(1, 10), ancrer(2, 10)],
+        exclus: [1, 2, 3],
+        contraintes,
+      });
+      assert.deepEqual(diagnostiquer(tousExclus), attendu);
+    }
   });
 
   test('le diagnostic ne modifie pas la configuration', () => {
@@ -1039,5 +1107,312 @@ describe('diagnostic : population vide, forme, refus', () => {
       () => diagnostiquer(configuration),
       (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION',
     );
+  });
+});
+
+describe('diagnostic : répartition du plafond a priori (§ 5.6)', () => {
+  // 1 et 2, sans appartenance, ancrés à la table 10 de 3 sièges ; quatre
+  // mobiles de X, deux tours : les ancrés plafonnent à 3, les mobiles à 4
+  // (voir « un affilié ne se compte pas parmi les affiliés qu'il
+  // rencontre »).
+  test('une ligne par valeur, croissante, ancrés et mobiles comptés à part', () => {
+    const configuration = salle({
+      tables: [[10, 3], [20, 3]],
+      appartenances: [null, null, ...fois(4, 'X')],
+      tours: 2,
+      reservations: [ancrer(1, 10), ancrer(2, 10)],
+    });
+    assert.deepEqual(diagnostiquer(configuration).plafondAPriori.repartition, [
+      { valeur: 3, ancres: 2, mobiles: 0 },
+      { valeur: 4, ancres: 0, mobiles: 4 },
+    ]);
+  });
+
+  // Un partiellement fixé compte parmi les mobiles (§ 5.4) : 1, réservé à la
+  // table 10 au seul tour 1, plafonne comme les autres, la table 10 restant
+  // libre à l'autre tour. Six personnes sur deux tables de 3, deux tours :
+  // chacun rencontre 2 voisins par tour, 4 en tout.
+  test('un partiellement fixé se compte parmi les mobiles', () => {
+    const configuration = salle({
+      tables: [[10, 3], [20, 3]],
+      appartenances: fois(6, null),
+      tours: 2,
+      reservations: [fixer(1, 10, 1)],
+    });
+    assert.deepEqual(diagnostiquer(configuration).plafondAPriori.repartition, [
+      { valeur: 4, ancres: 0, mobiles: 6 },
+    ]);
+  });
+});
+
+describe('diagnostic : tables manquantes (§ 5.6, § 15.3)', () => {
+  // Le remède compte des tables de la plus grande capacité présente ; le
+  // plancher, capacités relâchées, n'en dépend pas. Tables de 2 et de 6 :
+  // quatre membres de X pour deux tables, deux de plus les séparent.
+  test('des tables de capacités inégales : le compte ne lit que le plancher', () => {
+    const configuration = salle({
+      tables: [[10, 2], [20, 6]],
+      appartenances: [...fois(4, 'X'), ...fois(4, null)],
+      tours: 2,
+    });
+    assert.deepEqual(
+      diagnostiquer(configuration).collisions.map(({ tablesManquantes }) => tablesManquantes),
+      [2],
+    );
+  });
+
+  // Deux groupes : Y, réservé ensemble à la table 10 au tour 2, n'a pas de
+  // remède ; X, cinq membres libres sur trois tables, en a un, 2 tables.
+  test('un groupe sans remède n’empêche pas le remède d’un autre', () => {
+    const configuration = salle({
+      tables: [[10, 4], [20, 4], [30, 4]],
+      appartenances: [...fois(5, 'X'), 'Y', 'Y', null],
+      tours: 2,
+      reservations: [fixer(6, 10, 2), fixer(7, 10, 2)],
+    });
+    assert.deepEqual(
+      diagnostiquer(configuration).collisions.map(({ groupe, tablesManquantes }) => [groupe, tablesManquantes]),
+      [
+        ['X', 2],
+        ['Y', null],
+      ],
+    );
+  });
+});
+
+describe('diagnostic : remède en tours (§ 5.6)', () => {
+  // 28 personnes, dix appartenances de 2 et huit de 1, G = 18 ; quatre
+  // tables de 7. Un participant rencontre au plus 6 personnes par tour. En
+  // 4 tours : min(24, 27 affiliés autres que soi) − 18 = 6. En 3 tours :
+  // 18 − 18 = 0.
+  const DIX_PAIRES_HUIT_SEULS = [
+    ...Array.from({ length: 10 }, (_, g) => fois(2, `Grisaille ${g + 1}`)).flat(),
+    ...Array.from({ length: 8 }, (_, g) => `Club des Merles ${g + 1}`),
+  ];
+  const QUATRE_TABLES_DE_SEPT = [[10, 7], [20, 7], [30, 7], [40, 7]];
+
+  test('28 personnes en 18 appartenances, quatre tours : 6 redondances, aucune en 3 tours', () => {
+    assert.equal(DIX_PAIRES_HUIT_SEULS.length, 28);
+    const configuration = salle({
+      tables: QUATRE_TABLES_DE_SEPT,
+      appartenances: DIX_PAIRES_HUIT_SEULS,
+      tours: 4,
+    });
+    const diagnostic = diagnostiquer(configuration);
+    assert.equal(diagnostic.redondanceMinimale, 6);
+    assert.deepEqual(diagnostic.remedes, { toursSansRedondance: 3 });
+  });
+
+  // La réservation du tour 4 ne tient pas dans une configuration de 3
+  // tours : la sonde la retire, et celle d'un exclu aussi, au lieu de lever
+  // RESERVATION_TOUR. La réservation de portée « tous » couvre les trois.
+  test('une réservation d’un tour au-delà de R′ se retire de la sonde, sans lever', () => {
+    const configuration = salle({
+      tables: QUATRE_TABLES_DE_SEPT,
+      appartenances: [...DIX_PAIRES_HUIT_SEULS, 'Club des Merles 1'],
+      tours: 4,
+      reservations: [fixer(1, 10, 4), ancrer(2, 20), fixer(29, 30, 4)],
+      exclus: [29],
+    });
+    assert.deepEqual(diagnostiquer(configuration).remedes, { toursSansRedondance: 3 });
+  });
+
+  // Trois tables de 2, P1 sans appartenance, P2 et P3 de la même. En 3
+  // tours, P1, fixé à la table 3 à chaque tour, y retrouve P3 au tour 2 et
+  // P2 au tour 3 : 2 − 1 = 1. En 2 tours, P2 et P3 occupent la table 2 au
+  // tour 1 et P1 n'y retrouve que P3 au tour 2 : 1 − 1 = 0. Le remède, 2,
+  // tient aux réservations des tours 1 et 2, que la sonde garde.
+  test('les réservations d’un tour jusqu’à R′ restent dans la sonde', () => {
+    const configuration = salle({
+      tables: [[1, 2], [2, 2], [3, 2]],
+      appartenances: [null, 'Grisaille', 'Grisaille'],
+      tours: 3,
+      reservations: [
+        fixer(1, 3, 1), fixer(1, 3, 2), fixer(1, 3, 3),
+        fixer(2, 2, 1), fixer(2, 2, 2), fixer(2, 3, 3),
+        fixer(3, 2, 1), fixer(3, 3, 2), fixer(3, 2, 3),
+      ],
+      contraintes: TOUTES,
+    });
+    const diagnostic = diagnostiquer(configuration);
+    assert.equal(diagnostic.redondanceMinimale, 1);
+    assert.deepEqual(diagnostic.remedes, { toursSansRedondance: 2 });
+  });
+
+  // Deux tables de 3, P1 sans appartenance ancré à la table 10, P2 et P3 de
+  // la même appartenance, fixés aux tables 10 et 20 aux tours 1 et 2. En 3
+  // tours, le tour 3 libre réunit P1 et P3 : 2 − 1 = 1. En 2 tours, P1 ne
+  // rencontre que P2 : 0. Le remède, 2, tient à l'ancrage, qui couvre les
+  // tours de la sonde, et aux réservations du tour 2, R′ lui-même.
+  test('l’ancrage et les réservations du tour R′ lui-même restent dans la sonde', () => {
+    const configuration = salle({
+      tables: [[10, 3], [20, 3]],
+      appartenances: [null, 'Grisaille', 'Grisaille'],
+      tours: 3,
+      reservations: [ancrer(1, 10), fixer(2, 10, 1), fixer(3, 20, 1), fixer(2, 10, 2), fixer(3, 20, 2)],
+    });
+    const diagnostic = diagnostiquer(configuration);
+    assert.equal(diagnostic.redondanceMinimale, 1);
+    assert.deepEqual(diagnostic.remedes, { toursSansRedondance: 2 });
+  });
+
+  // Deux appartenances de 14 : en un seul tour, 6 − 2 = 4 ; aucun R′ ne
+  // l'annule.
+  test('deux appartenances de 14 : aucun nombre de tours n’annule la redondance', () => {
+    const configuration = salle({
+      tables: QUATRE_TABLES_DE_SEPT,
+      appartenances: [...fois(14, 'Grisaille'), ...fois(14, 'Club des Merles')],
+      tours: 4,
+    });
+    const diagnostic = diagnostiquer(configuration);
+    assert.equal(diagnostic.redondanceMinimale, 22);
+    assert.deepEqual(diagnostic.remedes, { toursSansRedondance: null });
+  });
+
+  test('sans affilié, ou à redondance déjà nulle : aucun remède', () => {
+    const sansAffilie = salle({ tables: QUATRE_TABLES_DE_SEPT, appartenances: fois(28, null), tours: 4 });
+    assert.deepEqual(diagnostiquer(sansAffilie).remedes, { toursSansRedondance: null });
+    const dejaNulle = salle({ tables: QUATRE_TABLES_DE_SEPT, appartenances: DIX_PAIRES_HUIT_SEULS, tours: 3 });
+    assert.equal(diagnostiquer(dejaNulle).redondanceMinimale, 0);
+    assert.deepEqual(diagnostiquer(dejaNulle).remedes, { toursSansRedondance: null });
+  });
+});
+
+describe('diagnostic : une seule appartenance (§ 15.4)', () => {
+  const tables = [[10, 3], [20, 3], [30, 3], [40, 3]];
+
+  test('douze personnes d’une appartenance, séparation active : annoncée ; désactivée : non', () => {
+    const active = salle({ tables, appartenances: fois(12, 'Grisaille'), tours: 4, contraintes: SEPARER });
+    assert.equal(diagnostiquer(active).uneSeuleAppartenance, true);
+    const inactive = salle({ tables, appartenances: fois(12, 'Grisaille'), tours: 4, contraintes: TOUTES_SAUF_SEPARER });
+    assert.equal(diagnostiquer(inactive).uneSeuleAppartenance, false);
+  });
+
+  // Les présents sans appartenance se séparent des trois membres : la
+  // séparation y garde un sens.
+  test('la même appartenance portée par 3 des 12 : faux', () => {
+    const configuration = salle({
+      tables,
+      appartenances: [...fois(3, 'Grisaille'), ...fois(9, null)],
+      tours: 4,
+      contraintes: SEPARER,
+    });
+    assert.equal(diagnostiquer(configuration).uneSeuleAppartenance, false);
+  });
+
+  // L'appartenance du seul membre exclu ne compte pas : les présents n'en
+  // portent qu'une.
+  test('un exclu d’une autre appartenance ne compte pas', () => {
+    const configuration = salle({
+      tables,
+      appartenances: [...fois(11, 'Grisaille'), 'Club des Merles'],
+      tours: 4,
+      contraintes: SEPARER,
+      exclus: [12],
+    });
+    assert.equal(diagnostiquer(configuration).uneSeuleAppartenance, true);
+  });
+});
+
+describe('diagnostic : collision à chaque table (§ 7.5)', () => {
+  // Douze personnes en deux appartenances de six, quatre tables de 3 : une
+  // table reçoit au moins 12 − 9 = 3 personnes, plus que G + U = 2.
+  const DEUX_FOIS_SIX = [...fois(6, 'Grisaille'), ...fois(6, 'Club des Merles')];
+  const QUATRE_DE_TROIS = [[10, 3], [20, 3], [30, 3], [40, 3]];
+
+  test('deux appartenances de six sur quatre tables de 3 : vrai ; désactivée, faux ; une cinquième table, faux', () => {
+    const active = salle({ tables: QUATRE_DE_TROIS, appartenances: DEUX_FOIS_SIX, tours: 4, contraintes: SEPARER });
+    assert.equal(diagnostiquer(active).collisionPartout, true);
+    const inactive = salle({
+      tables: QUATRE_DE_TROIS,
+      appartenances: DEUX_FOIS_SIX,
+      tours: 4,
+      contraintes: TOUTES_SAUF_SEPARER,
+    });
+    assert.equal(diagnostiquer(inactive).collisionPartout, false);
+    // Une table de 3 de plus : chaque table peut rester vide, 12 − 12 = 0.
+    const cinqTables = salle({
+      tables: [...QUATRE_DE_TROIS, [50, 3]],
+      appartenances: DEUX_FOIS_SIX,
+      tours: 4,
+      contraintes: SEPARER,
+    });
+    assert.equal(diagnostiquer(cinqTables).collisionPartout, false);
+  });
+
+  // Trois membres de chacune des trois appartenances par table de 3 : un
+  // plan sans collision existe, le plan parfait.
+  test('la petite : faux', () => {
+    assert.equal(diagnostiquer(construire('petite')).collisionPartout, false);
+  });
+
+  // Un présent sans appartenance : 6 − 3 = 3 places au moins par table, et
+  // G + U = 3 personnes s'y assoient sans collision.
+  test('un présent sans appartenance peut rompre la preuve : faux', () => {
+    const configuration = salle({
+      tables: [[10, 3], [20, 3]],
+      appartenances: ['Grisaille', 'Grisaille', 'Grisaille', 'Club des Merles', 'Club des Merles', null],
+      tours: 2,
+      contraintes: SEPARER,
+    });
+    assert.equal(diagnostiquer(configuration).collisionPartout, false);
+  });
+
+  // Sept personnes pour six sièges : aucun plan n'assied chacun, rien ne se
+  // prouve. Sans table, rien non plus.
+  test('des places manquantes, ou aucune table : faux', () => {
+    const tropPetite = salle({
+      tables: [[10, 3], [20, 3]],
+      appartenances: [...fois(4, 'Grisaille'), ...fois(3, 'Club des Merles')],
+      tours: 2,
+      contraintes: SEPARER,
+    });
+    assert.equal(diagnostiquer(tropPetite).placesManquantes, 1);
+    assert.equal(diagnostiquer(tropPetite).collisionPartout, false);
+    const sansTable = salle({ tables: [], appartenances: [], tours: 2, contraintes: SEPARER });
+    assert.equal(diagnostiquer(sansTable).collisionPartout, false);
+  });
+
+  // Deux appartenances de trois, deux tables de 3, deux tours : 6 − 3 = 3
+  // > 2. L'énumération le confirme sans lire le diagnostic : chacun des
+  // C(6, 3)² = 400 plans porte une violation de séparation à chaque table de
+  // chaque tour.
+  test('deux appartenances de trois sur deux tables de 3 : vrai, et chacun des 400 plans le confirme', () => {
+    const configuration = salle({
+      tables: [[10, 3], [20, 3]],
+      appartenances: [...fois(3, 'Grisaille'), ...fois(3, 'Club des Merles')],
+      tours: 2,
+      contraintes: SEPARER,
+    });
+    assert.equal(diagnostiquer(configuration).collisionPartout, true);
+    const instance = normaliser(configuration);
+    const fautes = [];
+    const plans = enumererPlans(instance, (tableDe) => {
+      const cases = conflitsParTable(instance, tableDe).flat();
+      if (cases.length !== 4) fautes.push(`${cases.length} cases`);
+      for (const { table, regles } of cases) {
+        if (regles.every(({ regle }) => regle !== 'separerAppartenances')) {
+          fautes.push(`table ${table} sans collision : ${Array.from(tableDe)}`);
+        }
+      }
+    });
+    assert.equal(plans, 400);
+    assert.deepEqual(fautes, []);
+  });
+});
+
+describe('diagnostic : ancrage par table (§ 5.6)', () => {
+  test('trois ancrés pour trois sièges : gelée, non à moitié ; deux pour quatre : à moitié', () => {
+    const configuration = salle({
+      tables: [[10, 3], [20, 4], [30, 4]],
+      appartenances: fois(9, null),
+      tours: 2,
+      reservations: [ancrer(1, 10), ancrer(2, 10), ancrer(3, 10), ancrer(4, 20), ancrer(5, 20), ancrer(6, 30)],
+    });
+    assert.deepEqual(diagnostiquer(configuration).ancrage, [
+      { table: 10, ancres: 3, capacite: 3, gelee: true, moitie: false },
+      { table: 20, ancres: 2, capacite: 4, gelee: false, moitie: true },
+      { table: 30, ancres: 1, capacite: 4, gelee: false, moitie: false },
+    ]);
   });
 });

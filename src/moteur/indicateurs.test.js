@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { indexerPlan, normaliser } from './configuration.js';
-import { mesurer } from './indicateurs.js';
+import { mesurer, parcourirTours } from './indicateurs.js';
 
 const SANS_CONTRAINTE = {
   separerAppartenances: false,
@@ -133,6 +133,18 @@ describe('mesurer', () => {
       aggRedondance: {
         tous: { min: 6, moyenne: 6, effectif: 12 },
         mobiles: { min: 6, moyenne: 6, effectif: 12 },
+        ancres: AUCUN,
+      },
+      // Chacun croise deux appartenances, la sienne exclue : A(p) = 2 pour
+      // huit affiliés rencontrés, d(p) = 2 / 8.
+      aggAppartenancesVues: {
+        tous: { min: 2, moyenne: 2, effectif: 12 },
+        mobiles: { min: 2, moyenne: 2, effectif: 12 },
+        ancres: AUCUN,
+      },
+      aggDiversite: {
+        tous: { min: 0.25, moyenne: 0.25, effectif: 12 },
+        mobiles: { min: 0.25, moyenne: 0.25, effectif: 12 },
         ancres: AUCUN,
       },
       totalRedondance: 72,
@@ -267,6 +279,46 @@ describe('mesurer', () => {
       tous: { min: 0, moyenne: 0, effectif: 3 },
       mobiles: { min: 0, moyenne: 0, effectif: 3 },
       ancres: AUCUN,
+    });
+    // A(p) se replie sur chacun ; d(p) sur les seuls qui rencontrent un
+    // affilié : 3 sort de l'effectif, et son null n'entre ni dans le minimum
+    // ni dans la moyenne.
+    assert.deepEqual(mesures.aggAppartenancesVues, {
+      tous: { min: 0, moyenne: 2 / 3, effectif: 3 },
+      mobiles: { min: 0, moyenne: 2 / 3, effectif: 3 },
+      ancres: AUCUN,
+    });
+    assert.deepEqual(mesures.aggDiversite, {
+      tous: { min: 1, moyenne: 1, effectif: 2 },
+      mobiles: { min: 1, moyenne: 1, effectif: 2 },
+      ancres: AUCUN,
+    });
+  });
+
+  test("le taux de diversité se replie par population : des mobiles qui ne croisent aucun affilié laissent leur ligne vide", () => {
+    // 1 et 2, sans appartenance, sont ancrés à la table 1 ; 3 et 4, de X et
+    // de Y, mobiles, la visitent tour à tour. 1 et 2 rencontrent chacun 3 et
+    // 4 : d = 2 / 2. 3 rencontre 1 et 2, sans appartenance, au tour 1, puis
+    // personne : il sort de l'effectif ; de même 4.
+    const mesures = mesurerPlan({
+      appartenance: [null, null, 'X', 'Y'],
+      capacite: 3,
+      tours: [
+        [[1, 2, 3], [4]],
+        [[1, 2, 4], [3]],
+      ],
+      reservations: [tous(1, 1), tous(2, 1)],
+    });
+    assert.deepEqual(mesures.diversite, [1, 1, null, null]);
+    assert.deepEqual(mesures.aggDiversite, {
+      tous: { min: 1, moyenne: 1, effectif: 2 },
+      mobiles: AUCUN,
+      ancres: { min: 1, moyenne: 1, effectif: 2 },
+    });
+    assert.deepEqual(mesures.aggAppartenancesVues, {
+      tous: { min: 0, moyenne: 1, effectif: 4 },
+      mobiles: { min: 0, moyenne: 0, effectif: 2 },
+      ancres: { min: 2, moyenne: 2, effectif: 2 },
     });
   });
 
@@ -521,6 +573,8 @@ describe('mesurer', () => {
       retoursImposes: [],
       aggRencontres: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
       aggRedondance: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
+      aggAppartenancesVues: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
+      aggDiversite: { tous: AUCUN, mobiles: AUCUN, ancres: AUCUN },
       totalRedondance: 0,
       collisionsCumulees: 0,
       pairesDistinctes: 0,
@@ -575,5 +629,86 @@ describe('mesurer', () => {
       { tableDe, fixe: instance.fixe, statut: instance.statut, groupe: instance.groupe },
       avant,
     );
+  });
+});
+
+// Quatre personnes, 1 et 2 de X, deux tables de 3, trois tours ; 4 attend en
+// réserve au tour 3. Les paires se rangent par rangPaire : (0, 1), (0, 2),
+// (0, 3), (1, 2), (1, 3), (2, 3), en index de personnes.
+const PARCOURS = {
+  appartenance: ['X', 'X', null, null],
+  capacite: 3,
+  tours: [
+    [[1, 2, 3], [4]],
+    [[1, 2], [3, 4]],
+    [[1, 3], [2]],
+  ],
+  reserves: [[], [], [4]],
+};
+
+describe('parcourirTours', () => {
+  test('chaque table de chaque tour : collègues, paires revues, personnes revenues, en index croissants', () => {
+    // Tour 1 : (0, 1) collègues, rien de revu, personne ne revient. Tour 2 :
+    // (0, 1) collègues et revus ; 0 et 1 reviennent à la table d'index 0, 3
+    // à celle d'index 1, que 2 découvre. Tour 3 : (0, 2) revus, réunis
+    // librement au tour 1 ; 0 revient une deuxième fois, 2 revient ; 1
+    // découvre la table d'index 1.
+    const { instance, tableDe } = preparer(PARCOURS);
+    const vide = { collegues: [], revues: [], revenus: [] };
+    assert.deepEqual(parcourirTours(instance, tableDe), {
+      parTour: [
+        [{ collegues: [[0, 1]], revues: [], revenus: [] }, vide],
+        [
+          { collegues: [[0, 1]], revues: [[0, 1]], revenus: [0, 1] },
+          { collegues: [], revues: [], revenus: [3] },
+        ],
+        [{ collegues: [], revues: [[0, 2]], revenus: [0, 2] }, vide],
+      ],
+      parPaire: Uint16Array.of(2, 2, 0, 1, 0, 1),
+      toursAssis: [3, 3, 3, 2],
+      retours: [2, 1, 1, 1],
+    });
+  });
+
+  test('une rencontre et une visite que les réservations imposent ne se signalent pas ; elles restent comptées', () => {
+    // 1 et 2 sont réservés à la table 1 aux tours 1 et 2 : leur rencontre du
+    // tour 2 ne répète qu'une rencontre réservée, et chacun y revient
+    // réservé, comme à sa visite du tour 1. Au tour 3, 1 y revient sans
+    // réservation : il est revenu. parPaire et retours comptent tout,
+    // imposé compris.
+    const { instance, tableDe } = preparer({
+      ...PARCOURS,
+      reservations: [auTour(1, 1, 1), auTour(2, 1, 1), auTour(1, 1, 2), auTour(2, 1, 2)],
+    });
+    const { parTour, parPaire, retours } = parcourirTours(instance, tableDe);
+    assert.deepEqual(parTour[1][0], { collegues: [[0, 1]], revues: [], revenus: [] });
+    assert.deepEqual(parTour[2][0], { collegues: [], revues: [[0, 2]], revenus: [0, 2] });
+    assert.deepEqual(Array.from(parPaire), [2, 2, 0, 1, 0, 1]);
+    assert.deepEqual(retours, [2, 1, 1, 1]);
+  });
+
+  test('une table, ses tours, et aucune personne présente : chaque case est vide', () => {
+    const instance = normaliser({
+      participants: [{ id: 1, nom: 'P1', appartenance: 'X', exclu: true }],
+      tables: [{ id: 1, numero: 1, capacite: 2 }],
+      tours: 2,
+      reservations: [],
+      contraintes: SANS_CONTRAINTE,
+    });
+    const vide = { collegues: [], revues: [], revenus: [] };
+    assert.deepEqual(parcourirTours(instance, new Int32Array(0)), {
+      parTour: [[vide], [vide]],
+      parPaire: new Uint16Array(0),
+      toursAssis: [],
+      retours: [],
+    });
+  });
+
+  test("lève ce que lève exigerPlanIndexe, et ne modifie ni l'instance ni le plan", () => {
+    const { instance, tableDe } = preparer(PARCOURS);
+    assert.throws(() => parcourirTours(instance, tableDe.subarray(1)), RangeError);
+    const avant = { tableDe: tableDe.slice(), fixe: instance.fixe.slice(), groupe: instance.groupe.slice() };
+    parcourirTours(instance, tableDe);
+    assert.deepEqual({ tableDe, fixe: instance.fixe, groupe: instance.groupe }, avant);
   });
 });

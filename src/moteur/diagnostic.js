@@ -14,6 +14,11 @@
 // configuration.js, plafond a priori de plafond.js, retours imposés de la
 // mesure d'indicateurs.js. Le diagnostic ne modifie pas la configuration et
 // lève ce que normaliser lève.
+//
+// Un remède se chiffre en sollicitant la même arithmétique sur une
+// configuration modifiée — plus de tables, moins de tours —, jamais par une
+// forme close de plus (§ 13.2) : la sonde passe par normaliser, puis par la
+// fonction qui chiffre la quantité sur la configuration elle-même.
 
 /**
  * @typedef {Object} PlancherCollisions
@@ -23,21 +28,39 @@
  * @property {number} plancherPairesDistinctes
  * @property {number|null} plancherExcedent     null quand il n'est pas
  *                                              strictement positif
+ * @property {number|null} tablesManquantes     plus petit nombre de tables, de
+ *           la plus grande capacité présente, dont l'ajout ramène ce plancher
+ *           à 0 ; null quand l'effectif du groupe n'y suffit pas : les
+ *           réservations assoient alors deux membres à une même table d'un tour
  *
  * @typedef {Object} Diagnostic
  * @property {number} placesManquantes          max(0, N − Σ c_t), par tour
- * @property {{min: number|null, max: number|null, parPersonne: number[]}} plafondAPriori
+ * @property {{min: number|null, max: number|null, parPersonne: number[],
+ *             repartition: Array<{valeur: number, ancres: number, mobiles: number}>}} plafondAPriori
  *           parPersonne dans l'ordre de instance.ids ; min et max null pour
- *           une population vide
+ *           une population vide ; repartition, une ligne par valeur
+ *           présente, valeurs croissantes, les partiellement fixés parmi les
+ *           mobiles
  * @property {PlancherCollisions[]} collisions  groupes dont le plancher de
  *           collisions cumulées est > 0, dans l'ordre de instance.groupes
  * @property {number|null} redondanceMinimale   null sans affilié
+ * @property {{toursSansRedondance: number|null}} remedes
+ *           toursSansRedondance : plus grand R′ < R où redondanceMinimale vaut
+ *           0 ; null quand elle vaut déjà 0 ou null, ou qu'aucun R′ ne l'annule
  * @property {boolean} animateursMemeAppartenance
  * @property {number} redondanceImposeeParAnimateurs   min(R, T) − 1 ou 0
- * @property {Array<{table: number, ancres: number, capacite: number, gelee: boolean}>} ancrage
+ * @property {boolean} uneSeuleAppartenance     séparation active, une seule
+ *           appartenance, portée par chaque présent (§ 15.4)
+ * @property {boolean} collisionPartout         tout plan qui assied chacun
+ *           porte une collision à chaque table de chaque tour (§ 7.5)
+ * @property {Array<{table: number, ancres: number, capacite: number, gelee: boolean,
+ *                   moitie: boolean}>} ancrage
  *           chaque table, par identifiant, dans l'ordre de la configuration ;
- *           gelee quand ses ancrés occupent tous ses sièges
+ *           gelee quand ses ancrés occupent tous ses sièges ; moitie quand ils
+ *           en occupent la moitié au moins, sans la geler
  * @property {number} retoursImposes
+ * @property {number} ancragesImposantRetours   personnes dont les réservations
+ *           imposent un retour
  * @property {{plancher: number, mobilesAuMoins: number}|null} ecartItineraire
  */
 import {
@@ -154,14 +177,110 @@ function animateursMemeAppartenance({ N, statut, groupe }) {
 
 // Ancrés et capacité de chaque table, dans l'ordre de l'instance, qui est
 // celui de la configuration ; gelee quand les ancrés occupent tous les sièges
-// (§ 5.9).
+// (§ 5.9) ; moitie quand ils en occupent la moitié au moins, 2 × a_t ≥ c_t,
+// sur une table qui tourne encore.
 function ancrage({ T, idsTables, capacite, ancresParTable }) {
-  return Array.from({ length: T }, (_, t) => ({
-    table: idsTables[t],
-    ancres: ancresParTable[t],
-    capacite: capacite[t],
-    gelee: ancresParTable[t] === capacite[t],
-  }));
+  return Array.from({ length: T }, (_, t) => {
+    const gelee = ancresParTable[t] === capacite[t];
+    return {
+      table: idsTables[t],
+      ancres: ancresParTable[t],
+      capacite: capacite[t],
+      gelee,
+      moitie: !gelee && 2 * ancresParTable[t] >= capacite[t],
+    };
+  });
+}
+
+// Plafonds a priori regroupés par valeur, valeurs croissantes : à chacune,
+// les ancrés et les mobiles, partiellement fixés compris (§ 5.4), qui la
+// portent. Les personnes se parcourent par plafond, puis par index.
+function repartition(aPriori, statut) {
+  const ordre = Array.from({ length: aPriori.length }, (_, p) => p);
+  ordre.sort((p, q) => aPriori[p] - aPriori[q] || p - q);
+  const lignes = [];
+  for (const p of ordre) {
+    let ligne = lignes[lignes.length - 1];
+    if (ligne === undefined || ligne.valeur !== aPriori[p]) {
+      ligne = { valeur: aPriori[p], ancres: 0, mobiles: 0 };
+      lignes.push(ligne);
+    }
+    if (statut[p] === STATUT.ANCRE) ligne.ancres += 1;
+    else ligne.mobiles += 1;
+  }
+  return lignes;
+}
+
+// Chaque plancher de collisions, complété de tablesManquantes. La sonde à m
+// tables ajoute m tables de la plus grande capacité présente, d'identifiants
+// au-delà du plus grand, et rechiffre les planchers par planchersCollisions :
+// le premier m où le groupe n'y figure plus est son remède. Un groupe de s
+// membres se sépare dès que s tables de plus s'offrent à ses membres libres,
+// sauf quand des réservations en assoient deux à une même table d'un tour :
+// au-delà de s, il garde null. Les capacités, relâchées dans le plancher, ne
+// changent pas le compte ; elles disent quelles tables ajouter. Un plancher
+// suppose une table au moins.
+function avecTablesManquantes(configuration, instance, planchers) {
+  const lignes = planchers.map((plancher) => ({ ...plancher, tablesManquantes: null }));
+  if (lignes.length === 0) return lignes;
+  const enAttente = (m) => lignes.some((l) => l.tablesManquantes === null && m <= l.effectif);
+  const capacite = Math.max(...instance.capacite);
+  const premierId = Math.max(...instance.idsTables) + 1;
+  const ajoutees = [];
+  for (let m = 1; enAttente(m); m += 1) {
+    ajoutees.push({ id: premierId + m - 1, numero: configuration.tables.length + m, capacite });
+    const sonde = normaliser({ ...configuration, tables: [...configuration.tables, ...ajoutees] });
+    const restants = new Set(planchersCollisions(sonde).map(({ groupe }) => groupe));
+    for (const ligne of lignes) {
+      if (ligne.tablesManquantes === null && m <= ligne.effectif && !restants.has(ligne.groupe)) {
+        ligne.tablesManquantes = m;
+      }
+    }
+  }
+  return lignes;
+}
+
+// Plus grand R′ < R où la redondance minimale s'annule, null quand elle vaut
+// déjà 0 ou null, ou qu'aucun R′ ne l'annule. La sonde à R′ tours garde les
+// réservations de portée « tous », qui couvrent alors ses R′ tours, et retire
+// celles d'un tour au-delà de R′, exclus compris : normaliser les refuserait
+// (RESERVATION_TOUR). Les R′ se sondent du plus grand au plus petit.
+function toursSansRedondance(configuration, R, minimale) {
+  if (minimale === null || minimale === 0) return null;
+  for (let tours = R - 1; tours >= 1; tours -= 1) {
+    const reservations = configuration.reservations.filter(
+      ({ portee, tour }) => portee !== 'tour' || tour <= tours,
+    );
+    const sonde = normaliser({ ...configuration, tours, reservations });
+    if (redondanceMinimale(sonde, plafondsAPriori(sonde)) === 0) return tours;
+  }
+  return null;
+}
+
+// Vrai quand la séparation est active et que les présents portent tous une
+// même appartenance, la seule (§ 15.4) ; faux dès qu'un présent est sans
+// appartenance : la séparation y garde un sens.
+function uneSeuleAppartenance({ groupe, groupes, contraintes }) {
+  return contraintes.separerAppartenances && groupes.length === 1 && !groupe.includes(SANS_GROUPE);
+}
+
+// Vrai quand tout plan qui assied chacun porte une collision à chaque table
+// de chaque tour (§ 7.5). Les autres tables tiennent au plus Σ c − c_t
+// personnes : la table t en reçoit au moins N − (Σ c − c_t). Sans collision,
+// elle n'assied qu'un membre de chacune des G appartenances et les U présents
+// sans appartenance : au-delà de G + U, la collision est forcée. Faux quand
+// la séparation est inactive, qu'une place manque — aucun plan n'assied
+// chacun —, ou sans table : rien ne le prouve.
+function collisionPartout(instance, placesManquantes) {
+  const { N, T, capacite, groupe, groupes, contraintes } = instance;
+  if (!contraintes.separerAppartenances || placesManquantes > 0 || T === 0) return false;
+  let sansAppartenance = 0;
+  for (let p = 0; p < N; p += 1) if (groupe[p] === SANS_GROUPE) sansAppartenance += 1;
+  const places = nombrePlaces(instance);
+  for (let t = 0; t < T; t += 1) {
+    if (N - (places - capacite[t]) <= groupes.length + sansAppartenance) return false;
+  }
+  return true;
 }
 
 // Plafond du meilleur itinéraire d'un mobile p qui passe par la table t : le
@@ -249,19 +368,23 @@ function etendue(valeurs) {
  *
  * - placesManquantes : nombrePlacesManquantes ; la recherche refuse une
  *   configuration où elles sont positives, le diagnostic les chiffre (§ 5.9).
- * - plafondAPriori : plafondsAPriori, et son étendue.
+ * - plafondAPriori : plafondsAPriori, son étendue et sa répartition par
+ *   valeur.
  * - collisions : planchers de collisions par groupe, posés sur les tours
- *   fixés, capacités relâchées.
+ *   fixés, capacités relâchées ; chacun avec les tables qui l'annulent.
  * - redondanceMinimale : max_p max(0, min(a priori(p), affiliés autres que
- *   p) − G).
+ *   p) − G) ; remedes.toursSansRedondance, le nombre de tours qui l'annule.
  * - animateursMemeAppartenance, et redondanceImposeeParAnimateurs : la forme
  *   close min(R, T) − 1 du § 5.6, qui compte un animateur à chaque table
  *   visitée ; 0 quand les animateurs ne partagent pas une appartenance.
- * - ancrage : ancrés, capacité et gel de chaque table.
+ * - uneSeuleAppartenance et collisionPartout : une séparation vide de sens,
+ *   une collision forcée à chaque table.
+ * - ancrage : ancrés, capacité, gel et demi-ancrage de chaque table.
  * - retoursImposes : la rangée de instance.fixe se lit comme le plan qui
  *   assied chacun aux seuls tours fixés, en réserve ailleurs ; sa mesure
  *   compte max(0, f − 1) retours pour f tours réservés à une même table, ce
- *   que mesure tout plan qui honore les réservations (§ 5.4).
+ *   que mesure tout plan qui honore les réservations (§ 5.4) ;
+ *   ancragesImposantRetours, les personnes qui en portent un au moins.
  * - ecartItineraire : plancher de l'écart d'itinéraire maximal, ou null.
  *
  * @param {import('./types.js').Configuration} configuration
@@ -271,15 +394,26 @@ export function diagnostiquer(configuration) {
   const instance = normaliser(configuration);
   const aPriori = plafondsAPriori(instance);
   const memeAppartenance = animateursMemeAppartenance(instance);
+  const placesManquantes = nombrePlacesManquantes(instance);
+  const minimale = redondanceMinimale(instance, aPriori);
+  const imposes = mesurer(instance, instance.fixe);
   return {
-    placesManquantes: nombrePlacesManquantes(instance),
-    plafondAPriori: { ...etendue(aPriori), parPersonne: aPriori },
-    collisions: planchersCollisions(instance),
-    redondanceMinimale: redondanceMinimale(instance, aPriori),
+    placesManquantes,
+    plafondAPriori: {
+      ...etendue(aPriori),
+      parPersonne: aPriori,
+      repartition: repartition(aPriori, instance.statut),
+    },
+    collisions: avecTablesManquantes(configuration, instance, planchersCollisions(instance)),
+    redondanceMinimale: minimale,
+    remedes: { toursSansRedondance: toursSansRedondance(configuration, instance.R, minimale) },
     animateursMemeAppartenance: memeAppartenance,
     redondanceImposeeParAnimateurs: memeAppartenance ? Math.min(instance.R, instance.T) - 1 : 0,
+    uneSeuleAppartenance: uneSeuleAppartenance(instance),
+    collisionPartout: collisionPartout(instance, placesManquantes),
     ancrage: ancrage(instance),
-    retoursImposes: mesurer(instance, instance.fixe).totalRetoursImposes,
+    retoursImposes: imposes.totalRetoursImposes,
+    ancragesImposantRetours: imposes.retoursImposes.filter((retours) => retours > 0).length,
     ecartItineraire: ecartItineraire(configuration, instance, aPriori),
   };
 }

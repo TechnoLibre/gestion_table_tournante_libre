@@ -14,6 +14,12 @@
 // sans appartenance ne sont pas collègues. Un ensemble vide rend null, jamais
 // 0 : le taux de diversité de qui ne rencontre aucun affilié, le minimum et la
 // moyenne d'une population sans membre.
+//
+// Une seule lecture du plan décide qu'une paire est réunie, collègue ou revue,
+// et qu'une personne revient : parcourirTours. mesurer en tire chacun de ses
+// chiffres, et conflitsParTable (conflits.js) le détail par table, si bien
+// que la somme des violations par table égale le compte de la mesure
+// (§ 13.2).
 import {
   RESERVE,
   SANS_GROUPE,
@@ -41,10 +47,15 @@ import {
  * @property {number[]} redondance          r(p) = |F(p)| − A(p)
  * @property {(number|null)[]} diversite    d(p) = A(p) / |F(p)|, null si |F(p)| = 0
  * @property {number[]} toursAssis
- * @property {number[]} retoursChoisis      par personne
- * @property {number[]} retoursImposes      par personne
+ * @property {number[]} retoursChoisis      par personne : ses occurrences
+ *                                          parmi les revenus de parcourirTours
+ * @property {number[]} retoursImposes      par personne : ses retours moins
+ *                                          ses retours choisis
  * @property {TroisAgregats} aggRencontres
  * @property {TroisAgregats} aggRedondance
+ * @property {TroisAgregats} aggAppartenancesVues   A(p)
+ * @property {TroisAgregats} aggDiversite   d(p), sur les seules personnes qui
+ *                                          rencontrent un affilié
  * @property {number} totalRedondance       Σ_p r(p), le seul total de la
  *                                          redondance : la recherche et le
  *                                          classement le lisent
@@ -53,7 +64,8 @@ import {
  * @property {number} excedentCollisions    cumulées − distinctes
  * @property {{choisies: number, imposees: number}} rencontresRepetees
  *           paires réunies ≥ 2 fois ; « imposée » quand chaque rencontre de la
- *           paire a lieu à une table où les deux sont réservés ce tour-là
+ *           paire a lieu à une table où les deux sont réservés ce tour-là ;
+ *           choisies, les paires distinctes des revues de parcourirTours
  * @property {number} maxRencontresPaire    sur toutes les paires ; 0 si aucune
  * @property {number} totalRetoursChoisis
  * @property {number} totalRetoursImposes
@@ -70,57 +82,122 @@ const UINT16_MAX = 0xffff;
 // (N − 1) + (N − 2) + … + (N − a) paires des lignes qui la précèdent.
 const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
 
-// Rencontres de chaque paire, rangées par rangPaire, en parcourant chaque
-// table de chaque tour. choisie vaut 1 pour une paire dont une rencontre au
-// moins a lieu hors d'une table où les deux sont réservés ce tour-là. Une
-// paire se réunit au plus une fois par tour : R borne chaque compte, qu'un
-// Uint16Array tient tant que R ≤ 65 535.
-function compterRencontres({ N, T, R, fixe }, tableDe) {
-  const paires = (N * (N - 1)) / 2;
-  const compte = R <= UINT16_MAX ? new Uint16Array(paires) : new Uint32Array(paires);
-  const choisie = new Uint8Array(paires);
+/**
+ * Le plan lu tour par tour, puis table par table, par index croissants : le
+ * seul code qui décide qu'une paire est réunie, de même appartenance ou
+ * revue, et qu'une personne revient. mesurer en tire chacun de ses chiffres,
+ * conflitsParTable (conflits.js) le détail par table.
+ *
+ * parTour[r][t], en index de personnes, chaque paire [a, b] avec a < b,
+ * chaque liste croissante — paires dans l'ordre de a, puis de b :
+ * - collegues : paires de même appartenance assises à t au tour r ;
+ * - revues : paires assises à t au tour r et réunies à un tour antérieur,
+ *   sauf quand chacune de leurs rencontres jusqu'à r a lieu à une table où
+ *   les deux sont réservés ce tour-là ;
+ * - revenus : personnes assises à t au tour r et à un tour antérieur, sauf
+ *   quand elles y sont réservées au tour r et lors d'une visite antérieure
+ *   à t.
+ * parPaire : les rencontres de chaque paire, rangées par rangPaire ; une
+ * paire se réunit au plus une fois par tour, R borne chaque compte, qu'un
+ * Uint16Array tient tant que R ≤ 65 535. toursAssis, et retours — visites
+ * d'une table déjà visitée, imposées comprises —, par personne.
+ *
+ * Ne modifie ni l'instance ni le plan ; lève ce que lève exigerPlanIndexe.
+ *
+ * @param {import('./types.js').Instance} instance
+ * @param {ArrayLike<number>} tableDe
+ * @returns {{parTour: Array<Array<{collegues: number[][], revues: number[][], revenus: number[]}>>,
+ *            parPaire: Uint16Array|Uint32Array, toursAssis: number[], retours: number[]}}
+ */
+export function parcourirTours(instance, tableDe) {
+  exigerPlanIndexe(instance, tableDe);
+  const { N, T, R, fixe, groupe } = instance;
+
+  // Personne par personne, ses tours dans l'ordre : visites[t] compte ses
+  // passages à la table t, reserveeAvant[t] note qu'un passage antérieur y
+  // était réservé. revenu[p × R + r] marque la visite répétée que la
+  // personne choisit. Le second parcours de ses tours remet à zéro les
+  // tables qu'elle a visitées : la personne suivante les trouve nulles.
+  const toursAssis = new Array(N).fill(0);
+  const retours = new Array(N).fill(0);
+  const revenu = new Uint8Array(N * R);
+  const visites = new Int32Array(T);
+  const reserveeAvant = new Uint8Array(T);
+  for (let p = 0; p < N; p += 1) {
+    for (let r = 0; r < R; r += 1) {
+      const t = tableDe[p * R + r];
+      if (t === RESERVE) continue;
+      toursAssis[p] += 1;
+      const reservee = fixe[p * R + r] === t;
+      if (visites[t] > 0) {
+        retours[p] += 1;
+        if (!reservee || reserveeAvant[t] === 0) revenu[p * R + r] = 1;
+      }
+      visites[t] += 1;
+      if (reservee) reserveeAvant[t] = 1;
+    }
+    for (let r = 0; r < R; r += 1) {
+      const t = tableDe[p * R + r];
+      if (t === RESERVE) continue;
+      visites[t] = 0;
+      reserveeAvant[t] = 0;
+    }
+  }
+
+  // Tour par tour : occupants de chaque table, par index croissants, a < b
+  // pour toute paire (liste[i], liste[j]) avec i < j. La boucle intérieure
+  // part du voisin suivant : une liste vide ou d'un seul occupant ne forme
+  // aucune paire, et nul n'est apparié à lui-même. libre[k] note qu'une
+  // rencontre de la paire, jusqu'au tour courant compris, a eu lieu hors
+  // d'une table où les deux sont réservés.
+  const nombrePaires = (N * (N - 1)) / 2;
+  const parPaire = R <= UINT16_MAX ? new Uint16Array(nombrePaires) : new Uint32Array(nombrePaires);
+  const libre = new Uint8Array(nombrePaires);
+  const parTour = [];
   for (let r = 0; r < R; r += 1) {
-    // Occupants de chaque table, par index croissants : a < b pour toute
-    // paire (liste[i], liste[j]) avec i < j. La boucle intérieure part du
-    // voisin suivant : une liste vide ou d'un seul occupant ne forme aucune
-    // paire, et nul n'est apparié à lui-même.
     const assis = Array.from({ length: T }, () => []);
     for (let p = 0; p < N; p += 1) {
       const t = tableDe[p * R + r];
       if (t !== RESERVE) assis[t].push(p);
     }
+    const tables = [];
     for (let t = 0; t < T; t += 1) {
       const liste = assis[t];
+      const collegues = [];
+      const revues = [];
+      const revenus = [];
       for (let i = 0; i < liste.length; i += 1) {
         const a = liste[i];
+        if (revenu[a * R + r] === 1) revenus.push(a);
         const aReserve = fixe[a * R + r] === t;
+        const g = groupe[a];
         for (let j = i + 1; j < liste.length; j += 1) {
           const b = liste[j];
           const k = rangPaire(N, a, b);
-          compte[k] += 1;
-          if (!aReserve || fixe[b * R + r] !== t) choisie[k] = 1;
+          parPaire[k] += 1;
+          if (!aReserve || fixe[b * R + r] !== t) libre[k] = 1;
+          if (g !== SANS_GROUPE && g === groupe[b]) collegues.push([a, b]);
+          if (parPaire[k] >= 2 && libre[k] === 1) revues.push([a, b]);
         }
       }
+      tables.push({ collegues, revues, revenus });
     }
+    parTour.push(tables);
   }
-  return { compte, choisie };
+  return { parTour, parPaire, toursAssis, retours };
 }
 
 // Lecture du triangle des paires, dans l'ordre de rangPaire. Par personne :
 // |met(p)|, |F(p)| et A(p), vu[p * G + g] notant que p a déjà croisé un
-// affilié du groupe g. Par groupe : une paire de collègues réunie n fois
-// porte n collisions cumulées et une paire distincte. Sur toutes les paires :
-// les rencontres répétées, choisies ou imposées, et le plus grand compte.
-function lirePaires({ N, groupe, groupes }, { compte, choisie }) {
+// affilié du groupe g. Sur toutes les paires : les paires réunies deux fois
+// au moins, et le plus grand compte.
+function lirePaires({ N, groupe, groupes }, parPaire) {
   const G = groupes.length;
   const rencontres = new Int32Array(N);
   const affilies = new Int32Array(N);
   const vues = new Int32Array(N);
   const vu = new Uint8Array(N * G);
-  const collisions = new Array(G).fill(0);
-  const distinctes = new Array(G).fill(0);
-  let choisies = 0;
-  let imposees = 0;
+  let repetees = 0;
   let maxRencontresPaire = 0;
 
   // p rencontre q : q compte dans met(p) ; un affilié compte aussi dans F(p),
@@ -140,70 +217,52 @@ function lirePaires({ N, groupe, groupes }, { compte, choisie }) {
   let k = 0;
   for (let a = 0; a < N; a += 1) {
     for (let b = a + 1; b < N; b += 1, k += 1) {
-      const n = compte[k];
+      const n = parPaire[k];
       if (n === 0) continue;
       rencontrer(a, b);
       rencontrer(b, a);
       if (n > maxRencontresPaire) maxRencontresPaire = n;
-      if (n >= 2) {
-        if (choisie[k] === 1) choisies += 1;
-        else imposees += 1;
-      }
-      const g = groupe[a];
-      if (g !== SANS_GROUPE && g === groupe[b]) {
-        collisions[g] += n;
-        distinctes[g] += 1;
-      }
+      if (n >= 2) repetees += 1;
     }
   }
-  return {
-    rencontres,
-    affilies,
-    vues,
-    collisions,
-    distinctes,
-    rencontresRepetees: { choisies, imposees },
-    maxRencontresPaire,
-  };
+  return { rencontres, affilies, vues, repetees, maxRencontresPaire };
 }
 
-// Tours assis et retours de chaque personne (§ 5.4). Pour une table visitée
-// m fois, dont f à un tour où la personne y est réservée : max(0, f − 1)
-// retours imposés et (m − 1) − imposés retours choisis. visites et reservees
-// comptent par table les tours de la personne en cours ; le second parcours
-// de ses tours solde chaque table à sa première occurrence et remet ses
-// compteurs à zéro, si bien que la personne suivante les trouve nuls.
-function compterRetours({ N, T, R, fixe }, tableDe) {
-  const toursAssis = [];
-  const retoursChoisis = [];
-  const retoursImposes = [];
-  const visites = new Int32Array(T);
-  const reservees = new Int32Array(T);
-  for (let p = 0; p < N; p += 1) {
-    let assis = 0;
-    for (let r = 0; r < R; r += 1) {
-      const t = tableDe[p * R + r];
-      if (t === RESERVE) continue;
-      assis += 1;
-      visites[t] += 1;
-      if (fixe[p * R + r] === t) reservees[t] += 1;
+// Lecture des listes de parcourirTours. Une paire de collègues réunie n fois
+// porte n collisions cumulées et compte une fois parmi les paires
+// distinctes de son groupe ; une paire revue compte une fois parmi les
+// rencontres répétées choisies, à quelque tour qu'elle le soit ; chaque
+// occurrence d'une personne revenue est un retour choisi.
+function lireTours({ N, groupe, groupes }, parTour) {
+  const nombrePaires = (N * (N - 1)) / 2;
+  const collisions = new Array(groupes.length).fill(0);
+  const distinctes = new Array(groupes.length).fill(0);
+  const collegueVu = new Uint8Array(nombrePaires);
+  const revueVue = new Uint8Array(nombrePaires);
+  const retoursChoisis = new Array(N).fill(0);
+  let choisies = 0;
+  for (const tables of parTour) {
+    for (const { collegues, revues, revenus } of tables) {
+      for (const [a, b] of collegues) {
+        const g = groupe[a];
+        const k = rangPaire(N, a, b);
+        collisions[g] += 1;
+        if (collegueVu[k] === 0) {
+          collegueVu[k] = 1;
+          distinctes[g] += 1;
+        }
+      }
+      for (const [a, b] of revues) {
+        const k = rangPaire(N, a, b);
+        if (revueVue[k] === 0) {
+          revueVue[k] = 1;
+          choisies += 1;
+        }
+      }
+      for (const p of revenus) retoursChoisis[p] += 1;
     }
-    let choisis = 0;
-    let imposes = 0;
-    for (let r = 0; r < R; r += 1) {
-      const t = tableDe[p * R + r];
-      if (t === RESERVE || visites[t] === 0) continue;
-      const imposesTable = Math.max(0, reservees[t] - 1);
-      imposes += imposesTable;
-      choisis += visites[t] - 1 - imposesTable;
-      visites[t] = 0;
-      reservees[t] = 0;
-    }
-    toursAssis.push(assis);
-    retoursChoisis.push(choisis);
-    retoursImposes.push(imposes);
   }
-  return { toursAssis, retoursChoisis, retoursImposes };
+  return { collisions, distinctes, choisies, retoursChoisis };
 }
 
 // Population sans membre. min reste null tant qu'aucune valeur n'y entre :
@@ -224,10 +283,14 @@ const conclure = ({ min, somme, effectif }) => ({
   effectif,
 });
 
+// La population, une valeur de plus quand elle en est une : null n'y entre
+// pas, et la personne qui le porte sort de l'effectif.
+const ajouterSiDefinie = (cumul, valeur) => (valeur === null ? cumul : ajouter(cumul, valeur));
+
 // Minimum, moyenne et effectif de valeurs[p] sur les trois populations du
-// § 5.4, que replierParPopulation forme.
-function troisAgregats(valeurs, statut) {
-  const { tous, mobiles, ancres } = replierParPopulation(valeurs, statut, VIDE, ajouter);
+// § 5.4, que replierParPopulation forme ; replier y range chaque valeur.
+function troisAgregats(valeurs, statut, replier = ajouter) {
+  const { tous, mobiles, ancres } = replierParPopulation(valeurs, statut, VIDE, replier);
   return { tous: conclure(tous), mobiles: conclure(mobiles), ancres: conclure(ancres) };
 }
 
@@ -245,16 +308,17 @@ const somme = (valeurs) => valeurs.reduce((total, valeur) => total + valeur, 0);
  * @returns {Mesures}
  */
 export function mesurer(instance, tableDe) {
-  exigerPlanIndexe(instance, tableDe);
   const { N, groupe, groupes, statut } = instance;
-  const paires = lirePaires(instance, compterRencontres(instance, tableDe));
-  const { collisions, distinctes } = paires;
+  const { parTour, parPaire, toursAssis, retours } = parcourirTours(instance, tableDe);
+  const paires = lirePaires(instance, parPaire);
+  const { collisions, distinctes, choisies, retoursChoisis } = lireTours(instance, parTour);
 
   const rencontres = Array.from(paires.rencontres);
   const affilies = Array.from(paires.affilies);
   const appartenancesVues = Array.from(paires.vues);
   const redondance = affilies.map((f, p) => f - appartenancesVues[p]);
   const diversite = affilies.map((f, p) => (f === 0 ? null : appartenancesVues[p] / f));
+  const retoursImposes = retours.map((total, p) => total - retoursChoisis[p]);
 
   const effectifs = new Array(groupes.length).fill(0);
   for (let p = 0; p < N; p += 1) {
@@ -270,8 +334,6 @@ export function mesurer(instance, tableDe) {
   const collisionsCumulees = somme(collisions);
   const pairesDistinctes = somme(distinctes);
 
-  const { toursAssis, retoursChoisis, retoursImposes } = compterRetours(instance, tableDe);
-
   return {
     rencontres,
     affilies,
@@ -283,11 +345,13 @@ export function mesurer(instance, tableDe) {
     retoursImposes,
     aggRencontres: troisAgregats(rencontres, statut),
     aggRedondance: troisAgregats(redondance, statut),
+    aggAppartenancesVues: troisAgregats(appartenancesVues, statut),
+    aggDiversite: troisAgregats(diversite, statut, ajouterSiDefinie),
     totalRedondance: somme(redondance),
     collisionsCumulees,
     pairesDistinctes,
     excedentCollisions: collisionsCumulees - pairesDistinctes,
-    rencontresRepetees: paires.rencontresRepetees,
+    rencontresRepetees: { choisies, imposees: paires.repetees - choisies },
     maxRencontresPaire: paires.maxRencontresPaire,
     totalRetoursChoisis: somme(retoursChoisis),
     totalRetoursImposes: somme(retoursImposes),
