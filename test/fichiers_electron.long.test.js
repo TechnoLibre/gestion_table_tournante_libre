@@ -180,6 +180,22 @@ describe('coquille sur un vrai disque', () => {
     assert.deepEqual(readdirSync(portable), ['garde.txt']);
   });
 
+  testNettoye("creerDossier de '' crée la racine, parents compris ; sous une racine absente, un autre chemin lève ECRITURE, ENOENT, sans rien créer", async () => {
+    const dossier = dossierTemporaire();
+    const { fs, portable } = systemeSur(dossier, { publie: join('cle', 'soirees') });
+    const racine = (await fs.racines()).portable;
+    await echoue(fs.creerDossier(racine, 'corbeille/2026-01-02_03-04-05'), 'ECRITURE', {
+      chemin: 'corbeille/2026-01-02_03-04-05',
+      dossier: join(portable, 'corbeille'),
+      cause: 'ENOENT',
+    });
+    assert.deepEqual(readdirSync(dossier), []);
+    await fs.creerDossier(racine, '');
+    assert.deepEqual(readdirSync(portable), []);
+    await fs.creerDossier(racine, 'corbeille/2026-01-02_03-04-05');
+    assert.deepEqual(readdirSync(join(portable, 'corbeille')), ['2026-01-02_03-04-05']);
+  });
+
   testNettoye(
     "un dossier en lecture seule fait échouer la sonde sur EACCES, qu'elle doive y écrire ou y créer la racine",
     { skip: SOUS_ROOT || SOUS_WINDOWS },

@@ -312,11 +312,21 @@
  * @property {string} hote
  * @property {string} depuis
  *
- * @typedef {Object} ReglagesLocaux   reglages_locaux.json
- * @property {number} format
+ * @typedef {Object} ReglagesLocaux   reglages_locaux.json (reglages_locaux.js),
+ *           JSON sur une ligne, les clés de chaque objet rangées par unités
+ *           UTF-16 ; une clé inconnue, à tout niveau, se garde à la réécriture
+ * @property {number} format            entier ≥ 1, gardé tel que lu
  * @property {null|'A4'|'Lettre'} papier
  * @property {Array<{evenement: string, k: number, tx: number, ty: number}>} cadrages
- *           triés par identifiant d'événement
+ *           triés par identifiant d'événement, un par événement ; k fini
+ *           > 0, tx et ty finis
+ *
+ * Avertissement de la lecture des réglages locaux, qui ne lève jamais :
+ *
+ *   REGLAGES_ILLISIBLES  {chemin, raison}       le fichier ne se lit pas, et
+ *                                               les défauts s'appliquent ;
+ *                                               raison JSON, FORME, ou le code
+ *                                               du refus de lecture
  */
 
 /**

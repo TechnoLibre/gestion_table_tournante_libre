@@ -182,7 +182,10 @@ function tenir(brut, limite) {
 // nom, qui se lisent pareil à l'écran. Une majuscule de plusieurs lettres (ß
 // donne SS) réunit des noms que Windows distingue : un rang de plus, jamais un
 // fichier écrasé.
-const cle = (base) => base.normalize('NFC').toUpperCase();
+// Exportée : supprimer et le rang d'une démonstration (operations.js)
+// comparent les noms de fichier par cette même clé.
+export const cleSansCasse = (base) => base.normalize('NFC').toUpperCase();
+const cle = cleSansCasse;
 
 /**
  * Base de nom de fichier d'un nom d'événement dans un dossier de travail

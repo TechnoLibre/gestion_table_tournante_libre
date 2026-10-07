@@ -49,7 +49,13 @@
 // geste : le journal en mémoire, en entier — suivi de l'entrée de reprise
 // quand il finit sur une autre révision que la charge ouverte —, puis l'état
 // que restitue sa dernière entrée, à sa révision. Rouvert là-bas,
-// l'événement rend la charge écrite sans rien rattraper.
+// l'événement rend la charge écrite sans rien rattraper. Avec un geste, la
+// paire porte l'entrée de ce geste à la suite du journal, et sa charge : le
+// renommage (§ 8.7) écrit ainsi la paire complète sous le nouveau nom, dans
+// le dossier même, sans toucher l'ancienne ni créer le dossier. Son
+// .precedent, l'état d'avant le geste, s'écrit avant le journal : la
+// nouvelle base appartient à l'événement dès que son journal existe, et
+// l'ancienne paire ne s'apparie jamais ce journal.
 //
 // Un état sur le disque, ou un journal de la base, d'un format plus récent
 // que FORMAT garde en lecture seule tout ce qui ouvre l'événement, secours
@@ -243,12 +249,27 @@ function formatPlusRecentDe(texte) {
   return Number.isSafeInteger(format) && format > FORMAT ? format : null;
 }
 
+/**
+ * Bases que portent les fichiers d'événement — état, .precedent, journal,
+ * verrou — à la racine de racine, dans l'ordre de sa liste, sans rien
+ * écrire : une base que l'un d'eux porte n'est pas libre (deriverBase). Une
+ * base revient une fois par fichier qui la porte.
+ *
+ * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
+ * @param {import('./systeme_fichiers.js').Racine} racine
+ * @returns {Promise<string[]>}
+ * @throws {ErreurStockage} ABSENT quand la racine n'existe pas
+ */
+export async function basesPrises(fs, racine) {
+  return basesDe(await fs.lister(racine, ''));
+}
+
 // Base que prend l'événement nommé nom dans racine (deriverBase) : aucune des
 // bases d'autres, ni de celles que portent les fichiers du dossier, à la casse
 // près.
 async function deriver(fs, racine, nom, autres) {
   const { separateur } = await fs.emplacements();
-  const existantes = [...autres, ...basesDe(await fs.lister(racine, ''))];
+  const existantes = [...autres, ...(await basesPrises(fs, racine))];
   return deriverBase(nom, { racine: racine.chemin, separateur, existantes });
 }
 
@@ -905,6 +926,29 @@ function apresEcriture(ouvert, { charge, revision, journal }) {
   };
 }
 
+// La ligne de l'entrée d'un geste à la suite du journal que preparer a
+// préparé, et sa révision, celle qui suit la dernière entrée de ce journal :
+// un correctif depuis la charge que restitue cette entrée, ou un instantané à
+// la cadence du journal ; produitVersion n'y paraît que quand la construction
+// change (versionNotee). Une ligne que la lecture refuserait lève TypeError
+// (ligneEntree), avant toute écriture.
+function ligneDuGeste(preparation, apres, { libelle, horodatage, produitVersion, sens, retour }) {
+  const derniere = preparation.journal.entrees.at(-1).revision;
+  const revision = derniere + 1;
+  const ligne = ligneEntree({
+    revision,
+    libelle,
+    horodatage,
+    sens,
+    retour,
+    produitVersion: versionNotee(produitVersion, preparation.journal, derniere),
+    avant: preparation.charge,
+    apres,
+    instantane: estInstantane(revision, preparation.journal.entrees[0].revision),
+  });
+  return { ligne, revision };
+}
+
 /**
  * Crée l'événement de charge dans racine (§ 8.1, § 8.2) : sa base dérive de
  * son nom (deriverBase), libre dans le dossier. Le journal d'abord, écrit
@@ -990,22 +1034,10 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
  *         refuserait, avant toute écriture
  */
 export async function enregistrer(ouvert, apres, options) {
-  const { libelle, horodatage, produitVersion, sens, retour, libelleReprise } = options;
+  const { horodatage, produitVersion, libelleReprise } = options;
   exigerEcriture(ouvert);
   const preparation = preparer(ouvert, { libelleReprise, horodatage });
-  const derniere = preparation.journal.entrees.at(-1).revision;
-  const revision = derniere + 1;
-  const ligne = ligneEntree({
-    revision,
-    libelle,
-    horodatage,
-    sens,
-    retour,
-    produitVersion: versionNotee(produitVersion, preparation.journal, derniere),
-    avant: preparation.charge,
-    apres,
-    instantane: estInstantane(revision, preparation.journal.entrees[0].revision),
-  });
+  const { ligne, revision } = ligneDuGeste(preparation, apres, options);
   const texteEtat = relisible(serialiser(apres, { revision, produitVersion }), 'enregistrer');
   const aligne = etatAligne(ouvert, preparation);
   const suite = aligne === null ? { depart: ouvert, preparation } : await aligner(ouvert, preparation, aligne);
@@ -1058,43 +1090,72 @@ export async function deverrouiller({ fs, racine, base }, seance) {
   await fs.deverrouiller(racine, base + SUFFIXES.verrou, seance);
 }
 
+// L'état d'avant un geste, que le .precedent garde (§ 8.8) : le texte de
+// l'état sur le disque quand il se lit ; sinon, pour un Ouvert de secours, la
+// charge ouverte sous son en-tête, celle que l'entrée de reprise restitue.
+// Une charge que l'analyse refuserait lève TypeError, avant toute écriture.
+function etatDAvant({ texteEtat, charge, revision, produitVersion }) {
+  return texteEtat ?? relisible(serialiser(charge, { revision, produitVersion }), 'enregistrerAilleurs');
+}
+
 // La paire qu'enregistrerAilleurs écrit, calculée sans rien écrire. Sans
-// journal, l'état seul : la charge ouverte, à sa révision et à sa version.
-// Sinon le journal préparé (preparer), suivi de l'entrée de reprise quand il
-// finit sur une autre révision que la charge ouverte, en entier et élagué
-// au-delà de PLAFOND_ENTREES (textePlein) ; puis l'état que restitue sa
-// dernière entrée, sous l'en-tête de celle-ci (enteteDeLaDerniere), comme
-// l'état qu'aligne un geste : la dernière entrée du journal écrit restitue
-// l'état écrit (§ 8.2), et la réouverture n'a rien à rattraper. Une reprise
-// sans libelleReprise lève TypeError (preparer).
-function paireAilleurs(ouvert, options) {
-  if (ouvert.journal === null) {
+// journal ni geste, l'état seul : la charge ouverte, à sa révision et à sa
+// version. Sinon le journal préparé (preparer), suivi de l'entrée de reprise
+// quand il finit sur une autre révision que la charge ouverte, ou qu'il
+// manque, puis de l'entrée du geste quand il y en a un (ligneDuGeste), en
+// entier et élagué au-delà de PLAFOND_ENTREES (textePlein) ; puis l'état que
+// restitue sa dernière entrée : la charge du geste, à sa révision et sous sa
+// version, comme l'écrit enregistrer ; sans geste, la charge préparée sous
+// l'en-tête de cette entrée (enteteDeLaDerniere), comme l'état qu'aligne un
+// geste. La dernière entrée du journal écrit restitue l'état écrit (§ 8.2),
+// et la réouverture n'a rien à rattraper. Une reprise sans libelleReprise, ou
+// un geste dont la ligne ne se relirait pas, lève TypeError.
+function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
+  if (ouvert.journal === null && geste === null) {
     const { charge, revision, produitVersion } = ouvert;
     return { journal: null, texteJournal: null, charge, chargeJournal: null, revision, produitVersion };
   }
-  const preparation = preparer(ouvert, options);
-  const { texte, journal } = textePlein(preparation.journal);
-  const { charge } = preparation;
-  return { journal, texteJournal: texte, charge, chargeJournal: charge, ...enteteDeLaDerniere(journal) };
+  const preparation = preparer(ouvert, { libelleReprise, horodatage });
+  if (geste === null) {
+    const { texte, journal } = textePlein(preparation.journal);
+    const { charge } = preparation;
+    return { journal, texteJournal: texte, charge, chargeJournal: charge, ...enteteDeLaDerniere(journal) };
+  }
+  const { apres, produitVersion } = geste;
+  const { ligne, revision } = ligneDuGeste(preparation, apres, { ...geste, horodatage });
+  const { texte, journal } = textePlein(avec(preparation.journal, ligne));
+  return { journal, texteJournal: texte, charge: apres, chargeJournal: canoniser(apres), revision, produitVersion };
 }
 
 /**
- * Écrit l'événement ouvert dans une autre racine (§ 8.6) : la réponse à une
- * écriture qui échoue, l'Ouvert reçu étant celui d'avant le geste refusé
- * (ECRITURE) ou l'Ouvert avancé d'ETAT_NON_ECRIT. L'opérateur a choisi cette
- * racine, que rien n'a sondée — documents en mode portable — : elle se crée
- * d'abord, parents compris, un dossier existant restant tel quel. Sa base
- * dérive du nom là-bas (deriverBase), libre parmi existantes et les bases du
+ * Écrit l'événement ouvert sous une base libre d'une racine : dans une autre
+ * racine (§ 8.6), la réponse à une écriture qui échoue, l'Ouvert reçu étant
+ * celui d'avant le geste refusé (ECRITURE) ou l'Ouvert avancé
+ * d'ETAT_NON_ECRIT ; ou, avec un geste, sous le nom que ce geste donne, dans
+ * le dossier même, ce qu'écrit le renommage (§ 8.7). Une racine que
+ * l'opérateur a choisie, que rien n'a sondée — documents en mode portable —,
+ * se crée d'abord, parents compris, un dossier existant restant tel quel ;
+ * creerRacine faux ne la crée pas : le dossier de travail qui disparaît en
+ * cours de séance ne renaît pas vide (§ 8.6). La base dérive du nom que porte
+ * la charge écrite (deriverBase), libre parmi existantes et les bases du
  * dossier. La paire s'y écrit alignée, comme après un geste (§ 8.2) : le
  * journal en mémoire, en entier — suivi d'une entrée de reprise, au libellé
  * libelleReprise, quand il finit sur une autre révision que la charge
- * ouverte, et élagué au-delà de PLAFOND_ENTREES —, puis l'état que restitue
- * sa dernière entrée, à la révision et à la version de celle-ci. Rouvert
- * là-bas, l'événement rend cette charge sans rien rattraper. Un événement
- * sans journal n'écrit que son état : la charge ouverte, à sa révision. Le
- * .precedent ne se recopie pas. Les lignes et le texte de l'état se
- * calculent, et se relisent, avant la première écriture, celle de la racine
- * comprise.
+ * ouverte, puis de l'entrée du geste, et élagué au-delà de PLAFOND_ENTREES —,
+ * puis l'état que restitue sa dernière entrée, à la révision et à la version
+ * de celle-ci. Rouvert là-bas, l'événement rend cette charge sans rien
+ * rattraper. Un événement sans journal ni geste n'écrit que son état : la
+ * charge ouverte, à sa révision ; avec un geste, l'entrée de reprise commence
+ * son journal. Le .precedent de l'Ouvert ne se recopie pas. Avec un geste, la
+ * nouvelle base reçoit d'abord le sien, l'état d'avant le geste (etatDAvant),
+ * comme enregistrer le pose, mais avant le journal : la base appartient alors
+ * à l'événement (proprietaire), si bien qu'aucun autre état de son
+ * identifiant — l'ancienne paire d'un renommage interrompu, dont le journal
+ * de la base n'est pas le sien — ne s'apparie le journal neuf (apparier). La
+ * paire va sous une base qu'aucun fichier du dossier ne porte : elle n'y
+ * remplace rien, pas même la paire de l'Ouvert quand ce dossier est le sien.
+ * Les lignes et les textes d'état se calculent, et se relisent, avant la
+ * première écriture, celle de la racine comprise.
  *
  * @param {Ouvert} ouvert
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -1104,25 +1165,41 @@ function paireAilleurs(ouvert, options) {
  * @param {string} [options.libelleReprise]   texte de l'entrée de reprise,
  *        requis quand elle a lieu
  * @param {string} [options.horodatage]       AAAA-MM-JJTHH:MM:SS±HH:MM de
- *        l'entrée de reprise, requis avec elle
+ *        l'entrée de reprise et de celle du geste, requis avec elles
+ * @param {{apres: import('./types.js').Charge, libelle: string, produitVersion: string}|null} [options.geste]
+ *        un geste à la suite de la charge ouverte, comme enregistrer le
+ *        reçoit : apres devient la charge écrite, à la révision qui suit la
+ *        dernière entrée du journal, l'entrée au libellé libelle, l'état
+ *        sous la version produitVersion ; null par défaut
+ * @param {boolean} [options.creerRacine]   faux : la racine n'est pas créée,
+ *        et doit exister ; vrai par défaut
  * @returns {Promise<Ouvert>}   l'Ouvert dans racine : le journal et la
  *          révision écrits, chargeJournal la charge de l'état écrit, et
  *          charge celle qu'en rend examiner
  * @throws {ErreurStockage} LECTURE_SEULE ; ECRITURE quand la racine ne se
- *         crée pas, rien d'autre n'étant écrit, ou que le journal n'a pas pu
- *         s'écrire ; ETAT_NON_ECRIT quand l'état n'a pas pu s'écrire, ouvert
- *         étant l'Ouvert dans racine ; CHEMIN_TROP_LONG
- * @throws {TypeError} une reprise sans libelleReprise ou horodatage, un état
- *         que la lecture refuserait, avant toute écriture
+ *         crée pas, ou que le .precedent d'un geste n'a pas pu s'écrire, rien
+ *         d'autre n'étant écrit, ou que le journal n'a pas pu s'écrire, le
+ *         .precedent d'un geste restant écrit avant lui ; ABSENT {chemin: ''}
+ *         quand creerRacine est faux et que la racine n'existe pas, rien
+ *         n'étant écrit ; ETAT_NON_ECRIT quand l'état n'a pas pu s'écrire,
+ *         ouvert étant l'Ouvert dans racine ; CHEMIN_TROP_LONG
+ * @throws {TypeError} une reprise sans libelleReprise ou horodatage, un geste
+ *         ou un état que la lecture refuserait, avant toute écriture
  */
-export async function enregistrerAilleurs(ouvert, racine, { existantes, libelleReprise, horodatage }) {
+export async function enregistrerAilleurs(
+  ouvert,
+  racine,
+  { existantes, libelleReprise, horodatage, geste = null, creerRacine = true },
+) {
   exigerEcriture(ouvert);
   const { fs } = ouvert;
-  const paire = paireAilleurs(ouvert, { libelleReprise, horodatage });
+  const paire = paireAilleurs(ouvert, { libelleReprise, horodatage, geste });
   const { journal, charge, revision, produitVersion } = paire;
   const texteEtat = relisible(serialiser(charge, { revision, produitVersion }), 'enregistrerAilleurs');
-  await fs.creerDossier(racine, '');
+  const precedent = geste === null ? null : etatDAvant(ouvert);
+  if (creerRacine) await fs.creerDossier(racine, '');
   const base = await deriver(fs, racine, charge.evenement.nom, [...existantes]);
+  if (precedent !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.precedent, precedent);
   if (journal !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.journal, paire.texteJournal);
   const ailleurs = {
     ...ouvert,

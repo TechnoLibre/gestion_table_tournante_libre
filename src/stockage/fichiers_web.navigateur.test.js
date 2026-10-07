@@ -152,19 +152,26 @@ describe('fichiers web : la plateforme et sa racine (§ 8.8, § 13.1)', () => {
     expect(await fs.lister(DOCUMENTS, '')).toStrictEqual([]);
   });
 
-  test("sans le dossier du produit : une écriture lève ECRITURE sans le recréer, une lecture ABSENT, supprimer ne fait rien ; creerDossier le crée", async () => {
+  test("sans le dossier du produit : une écriture lève ECRITURE sans le recréer, une lecture ABSENT, supprimer ne fait rien, creerDossier d'un chemin sous lui aussi ; creerDossier de '' le crée", async () => {
     const fs = creerFichiersWeb();
-    const refus = (chemin) => ({ chemin, dossier: CHEMIN_DOCUMENTS, cause: 'NotFoundError' });
+    const refus = (chemin, dossier = CHEMIN_DOCUMENTS) => ({ chemin, dossier, cause: 'NotFoundError' });
     await echoue(fs.ecrireAtomique(DOCUMENTS, 'etat.json', 'x'), 'ECRITURE', refus('etat.json'));
     await echoue(fs.ajouterLigne(DOCUMENTS, 'journal.jsonl', 'x'), 'ECRITURE', refus('journal.jsonl'));
     await echoue(fs.lireTexte(DOCUMENTS, 'etat.json'), 'ABSENT', { chemin: 'etat.json' });
     await echoue(fs.lister(DOCUMENTS, ''), 'ABSENT', { chemin: '' });
     await echoue(fs.deplacer(DOCUMENTS, 'etat.json', 'copie.json'), 'ABSENT', { chemin: 'etat.json' });
     await fs.supprimer(DOCUMENTS, 'etat.json');
+    await echoue(
+      fs.creerDossier(DOCUMENTS, 'corbeille/2026-01-02_03-04-05'),
+      'ECRITURE',
+      refus('corbeille/2026-01-02_03-04-05', `${CHEMIN_DOCUMENTS}/corbeille`),
+    );
     expect(await nomsOpfs()).toStrictEqual([]);
 
-    await fs.creerDossier(DOCUMENTS, 'corbeille/2026-01-02_03-04-05');
+    await fs.creerDossier(DOCUMENTS, '');
     expect(await nomsOpfs()).toStrictEqual([DOSSIER]);
+    expect(await fs.lister(DOCUMENTS, '')).toStrictEqual([]);
+    await fs.creerDossier(DOCUMENTS, 'corbeille/2026-01-02_03-04-05');
     expect(noms(await fs.lister(DOCUMENTS, 'corbeille'))).toStrictEqual(['2026-01-02_03-04-05']);
   });
 });

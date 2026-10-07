@@ -18,6 +18,7 @@ import { versionVoisine } from '../../test/version_voisine.js';
 import { VERSION } from '../version.genere.js';
 import { serialiser, serialiserCharge } from './canonique.js';
 import {
+  basesPrises,
   creer,
   deverrouiller,
   enregistrer,
@@ -2301,6 +2302,153 @@ describe('dépôt : le verrou, et écrire ailleurs (§ 8.6, § 8.8)', () => {
     assert.deepEqual(traceRacine, [['creerDossier', '']]);
     await echec(creerFichiersSimules({ disque: neuf }).lister(DOC, ''), 'ABSENT');
     assert.equal(sansDocuments.contenu('portable', ETAT), etatTexte(chargeEssai(), 4));
+  });
+
+  test("enregistrerAilleurs avec un geste, sans créer la racine : sous la base que dérive le nom du geste, l'état d'avant le geste au .precedent — le texte sur le disque, sinon la charge ouverte —, puis le journal recopié — reprise comprise quand il le faut — suivi de l'entrée du geste, puis l'état du geste ; la paire de l'Ouvert ne s'écrit pas et ne s'apparie pas le journal neuf, et une racine absente ne se crée pas", async () => {
+    const { disque, fs } = nouveauDisque();
+    let ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+    ouvert = await enregistrer(ouvert, modifier(ouvert.charge, 2), geste(2));
+    const avant = await fichiersDe(disque);
+    const nouvelle = 'Gala des Saules';
+    const renommee = (charge) => ({ ...charge, evenement: { ...charge.evenement, nom: nouvelle } });
+    const options = {
+      existantes: [],
+      horodatage: heure(3),
+      geste: { apres: renommee(ouvert.charge), libelle: 'Renommé', produitVersion: V2 },
+      creerRacine: false,
+    };
+    const ecritsSous = (base) => [
+      ['ecrireAtomique', `${base}${SUFFIXES.precedent}`],
+      ['ecrireAtomique', `${base}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${base}${SUFFIXES.etat}`],
+    ];
+    const trace = tracer(fs);
+    const ailleurs = await enregistrerAilleurs(ouvert, DOC, options);
+    assert.deepEqual(trace, ecritsSous(nouvelle));
+    assert.equal(fs.contenu('documents', `${nouvelle}${SUFFIXES.precedent}`), texteDe(avant, ETAT));
+    assert.deepEqual(
+      (await fichiersDe(disque)).filter(([nom]) => !nom.startsWith(nouvelle)),
+      avant,
+    );
+    assert.deepEqual(
+      [ailleurs.racine, ailleurs.base, ailleurs.baseJournal, ailleurs.revision, ailleurs.produitVersion],
+      [DOC, nouvelle, nouvelle, 3, V2],
+    );
+    assert.equal(texteDeCharge(ailleurs.charge), texteDeCharge(renommee(modifier(chargeEssai(), 2))));
+    const journal = exigerEquivalence(fs, nouvelle);
+    assert.deepEqual(revisionsEtLibelles(journal), [
+      [1, CREATION.libelle],
+      [2, 'Geste 2'],
+      [3, 'Renommé'],
+    ]);
+    assert.deepEqual(
+      journal.entrees.map(({ produitVersion }) => produitVersion),
+      [V1, null, V2],
+    );
+    assert.equal(analyser(fs.contenu('documents', `${nouvelle}${SUFFIXES.etat}`)).entete.produitVersion, V2);
+    const rouvert = await rouvrir(disque, nouvelle);
+    assert.deepEqual([rouvert.revision, rouvert.charge.evenement.nom, rouvert.avertissements], [3, nouvelle, []]);
+    const suite = await enregistrer(ailleurs, modifier(ailleurs.charge, 4), geste(4, { produitVersion: V2 }));
+    assert.deepEqual([suite.base, suite.revision], [nouvelle, 4]);
+    exigerEquivalence(fs, nouvelle);
+
+    // Un état sans journal, à la mise en page d'un autre outil : l'entrée de
+    // reprise, au libellé reçu, précède celle du geste ; sans ce libellé,
+    // TypeError avant toute écriture. Le .precedent neuf porte ses octets.
+    const enQuatre = JSON.stringify(JSON.parse(etatTexte(chargeEssai(), 4)), null, 4);
+    const importe = `${enQuatre.replaceAll('\n', '\r\n')}\r\n`;
+    const seul = disqueAvec([[ETAT, importe]]);
+    const sansJournal = await rouvrir(seul.disque, BASE);
+    const gesteSeul = { ...options, geste: { ...options.geste, apres: renommee(sansJournal.charge), produitVersion: V1 } };
+    await assert.rejects(enregistrerAilleurs(sansJournal, DOC, gesteSeul), TypeError);
+    assert.equal(sansJournal.fs.compteurs.ecritures, 0);
+    const repris = await enregistrerAilleurs(sansJournal, DOC, { ...gesteSeul, libelleReprise: REPRISE });
+    assert.deepEqual([repris.base, repris.revision], [nouvelle, 5]);
+    assert.deepEqual(revisionsEtLibelles(exigerEquivalence(sansJournal.fs, nouvelle)), [
+      [4, REPRISE],
+      [5, 'Renommé'],
+    ]);
+    assert.equal(sansJournal.fs.contenu('documents', ETAT), importe);
+    assert.equal(sansJournal.fs.contenu('documents', `${nouvelle}${SUFFIXES.precedent}`), importe);
+
+    // Coupée juste après le journal neuf, l'écriture laisse la nouvelle base
+    // à l'événement par son .precedent : l'état de l'Ouvert, qu'aucun journal
+    // de sa base ne suit, ne se l'apparie pas, et s'ouvre tel qu'il était ;
+    // la liste ne montre que lui.
+    const coupe = disqueAvec([[ETAT, etatTexte(chargeEssai(), 4)]]);
+    const avantCoupure = await rouvrir(coupe.disque, BASE);
+    const ecrire = avantCoupure.fs.ecrireAtomique;
+    avantCoupure.fs.ecrireAtomique = async (racine, chemin, texte) => {
+      await ecrire(racine, chemin, texte);
+      if (chemin === `${nouvelle}${SUFFIXES.journal}`) avantCoupure.fs.pannes.couperApres(0);
+    };
+    await assert.rejects(
+      enregistrerAilleurs(avantCoupure, DOC, { ...gesteSeul, libelleReprise: REPRISE }),
+      PanneSimulee,
+    );
+    const apresCoupure = await rouvrir(coupe.disque, BASE);
+    assert.deepEqual(
+      [apresCoupure.revision, apresCoupure.charge.evenement.nom, apresCoupure.journal, apresCoupure.avertissements],
+      [4, BASE, null, []],
+    );
+    assert.deepEqual(
+      (await lister(creerFichiersSimules({ disque: coupe.disque }), DOC)).map(({ base, journal }) => [base, journal]),
+      [[BASE, null]],
+    );
+
+    // Un Ouvert de secours, l'état sur le disque illisible : le .precedent
+    // de la nouvelle base reçoit la charge ouverte, à sa révision.
+    const secours = disqueAvec([
+      [ETAT, '{'],
+      [PRECEDENT, etatTexte(chargeEssai(), 4)],
+    ]);
+    const depuisPrecedent = await ouvrirSecours(secours.fs, DOC, BASE, 'precedent');
+    assert.equal(depuisPrecedent.texteEtat, null);
+    const traceSecours = tracer(secours.fs);
+    const gesteSecours = { ...gesteSeul.geste, apres: renommee(depuisPrecedent.charge) };
+    const renommeSecours = await enregistrerAilleurs(depuisPrecedent, DOC, {
+      ...gesteSeul,
+      geste: gesteSecours,
+      libelleReprise: REPRISE,
+    });
+    assert.deepEqual(traceSecours, ecritsSous(nouvelle));
+    assert.equal(secours.fs.contenu('documents', `${nouvelle}${SUFFIXES.precedent}`), etatTexte(chargeEssai(), 4));
+    assert.deepEqual([renommeSecours.base, renommeSecours.revision], [nouvelle, 5]);
+    assert.deepEqual(
+      [ETAT, PRECEDENT].map((nom) => secours.fs.contenu('documents', nom)),
+      ['{', etatTexte(chargeEssai(), 4)],
+    );
+
+    // Sur un disque où documents n'existe pas : creerRacine faux ne le crée
+    // pas, et sa liste lève ABSENT avant toute écriture.
+    const neuf = new Map();
+    const sansDocuments = creerFichiersSimules({ disque: neuf, executable: 'E:\\soirees' });
+    sansDocuments.deposer('portable', ETAT, etatTexte(chargeEssai(), 4));
+    const { portable, documents } = await sansDocuments.racines();
+    const portableSeul = await ouvrir(sansDocuments, portable, BASE);
+    const traceRacine = tracer(sansDocuments);
+    const absente = await echec(
+      enregistrerAilleurs(portableSeul, documents, { existantes: [], creerRacine: false }),
+      'ABSENT',
+    );
+    assert.deepEqual(absente.details, { chemin: '' });
+    assert.deepEqual(traceRacine, []);
+    await echec(creerFichiersSimules({ disque: neuf }).lister(DOC, ''), 'ABSENT');
+  });
+
+  test("basesPrises rend, sans rien écrire, la base de chaque fichier d'événement du dossier — état, .precedent, journal, verrou —, dans l'ordre de sa liste ; ABSENT quand la racine manque", async () => {
+    const { fs } = disqueAvec([
+      [ETAT, '{'],
+      [PRECEDENT, '{'],
+      ['Archives des Lucioles.gtt-journal.jsonl', '{'],
+      ['GALA DES SAULES.gtt.verrou', '{}\n'],
+      ['notes.txt', 'à garder'],
+      ['reglages_locaux.json', '{}\n'],
+    ]);
+    fs.deposerDossier('documents', 'corbeille');
+    assert.deepEqual(await basesPrises(fs, DOC), ['Archives des Lucioles', 'GALA DES SAULES', BASE, BASE]);
+    assert.equal(fs.compteurs.ecritures, 0);
+    await echec(basesPrises(creerFichiersSimules({ disque: new Map() }), DOC), 'ABSENT');
   });
 
   test("une lecture qui échoue autrement que sur un fichier absent remonte telle quelle : un chemin refusé lève CHEMIN_REFUSE", async () => {

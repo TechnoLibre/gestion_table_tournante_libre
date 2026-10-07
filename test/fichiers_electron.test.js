@@ -81,9 +81,10 @@ function erreurSysteme(code, syscall, chemin) {
  * cible absolue. fs porte les fonctions de node:fs/promises dont la coquille
  * se sert et lève les erreurs du système dans les mêmes cas — ENOENT,
  * ENOTDIR, EISDIR, EEXIST, ELOOP. Un lien se suit partout, sauf en dernier
- * segment de lstat, unlink, rename et d'une ouverture exclusive (wx). Les
- * noms que rend readdir sortent dans l'ordre inverse de leur création : un
- * tri omis se voit.
+ * segment de lstat, unlink, rename, mkdir sans recursive et d'une ouverture
+ * exclusive (wx). mkdir sans recursive crée un seul dossier, son parent
+ * présent ; avec, tous ceux qui manquent. Les noms que rend readdir sortent
+ * dans l'ordre inverse de leur création : un tri omis se voit.
  *
  *   appels   chaque appel, « fonction chemin [drapeaux | cible] », les
  *            écritures d'une poignée comprises (write, sync, close)
@@ -229,7 +230,13 @@ function creerDisque() {
     },
     async mkdir(chemin, options) {
       appel('mkdir', chemin);
-      assert.deepEqual(options, { recursive: true }, 'mkdir sans recursive');
+      if (options === undefined) {
+        const { chemin: resolu, noeud } = resoudre(chemin, false, 'mkdir');
+        if (noeud !== undefined) throw erreurSysteme('EEXIST', 'mkdir', chemin);
+        creer(resolu, 'dossier');
+        return;
+      }
+      assert.deepEqual(options, { recursive: true }, 'mkdir aux options inconnues');
       const segments = chemin.split('/').filter((segment) => segment !== '');
       let courant = '/';
       for (let i = 0; i < segments.length; i += 1) {
@@ -744,6 +751,20 @@ describe('coquille, fichiers : lecture, liste, dossiers, déplacement, suppressi
     disque.deposer(`${DOCUMENTS}/occupe`, 'x');
     await refuse(fichiers.creerDossier(DOC, 'occupe'), 'ECRITURE', ecriture('occupe', DOCUMENTS, 'EEXIST'));
     await refuse(fichiers.creerDossier(DOC, 'occupe/sous'), 'ECRITURE', ecriture('occupe/sous', `${DOCUMENTS}/occupe`, 'ENOTDIR'));
+  });
+
+  test("creerDossier de '' crée la racine, parents compris ; sous une racine absente, un autre chemin lève ECRITURE, ENOENT, sans rien créer", async () => {
+    const { disque, fichiers } = preparer();
+    await refuse(
+      fichiers.creerDossier(PORTABLE, 'corbeille/2026-01-02_03-04-05'),
+      'ECRITURE',
+      ecriture('corbeille/2026-01-02_03-04-05', `${DATA}/corbeille`, 'ENOENT'),
+    );
+    assert.equal(disque.existe(PUBLIE), false);
+    await fichiers.creerDossier(PORTABLE, '');
+    assert.deepEqual(disque.noms(DATA), []);
+    await fichiers.creerDossier(PORTABLE, 'corbeille/2026-01-02_03-04-05');
+    assert.deepEqual(disque.noms(`${DATA}/corbeille`), ['2026-01-02_03-04-05']);
   });
 
   test("deplacer porte un fichier ; EXISTE pour une cible présente, ABSENT pour une source absente, ECRITURE pour un dossier, un dossier de cible absent ou un renommage refusé, essayé une fois", async () => {

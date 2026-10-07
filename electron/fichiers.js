@@ -331,16 +331,18 @@ export function creerFichiers({
   if (portable !== null) bases.set('portable', portable);
   let choisis = 0;
 
-  // Ce que désigne un chemin relatif à une racine : sa racine et sa cible en
-  // absolu, et le dossier que nomme un échec — celui qui porte la cible, la
-  // racine elle-même pour ''. Seul le texte se lit : CHEMIN_REFUSE pour un
-  // chemin que la règle des segments refuse ou une racine inconnue.
+  // Ce que désigne un chemin relatif à une racine : ses segments, sa racine
+  // et sa cible en absolu, et le dossier que nomme un échec — celui qui porte
+  // la cible, la racine elle-même pour ''. Seul le texte se lit :
+  // CHEMIN_REFUSE pour un chemin que la règle des segments refuse ou une
+  // racine inconnue.
   function localiser(racine, chemin) {
     const segments = segmentsAdmis(chemin);
     const base = estObjet(racine) && typeof racine.id === 'string' ? bases.get(racine.id) : undefined;
     if (base === undefined) throw new RefusFichier('CHEMIN_REFUSE', { chemin });
     return {
       chemin,
+      segments,
       racine: chemins.join(base),
       absolu: chemins.join(base, ...segments),
       dossier: chemins.join(base, ...segments.slice(0, -1)),
@@ -650,11 +652,27 @@ export function creerFichiers({
       }
     },
 
+    // '' crée la racine, parents compris. Un autre chemin se crée dossier par
+    // dossier sous la racine, sans recursive : mkdir lève ENOENT quand son
+    // parent manque, si bien qu'une racine qui disparaît, même entre deux
+    // appels, ne renaît pas (§ 8.6). Un dossier présent passe ; un fichier en
+    // travers lève EEXIST sur le chemin même, ENOTDIR au-dessus.
     async creerDossier(racine, chemin) {
       const loc = localiser(racine, chemin);
+      const { segments } = loc;
       try {
         await confiner(loc);
-        await fs.mkdir(loc.absolu, { recursive: true });
+        if (segments.length === 0) await fs.mkdir(loc.absolu, { recursive: true });
+        for (let rang = 1; rang <= segments.length; rang += 1) {
+          const dossier = chemins.join(loc.racine, ...segments.slice(0, rang));
+          try {
+            await fs.mkdir(dossier);
+          } catch (erreur) {
+            if (erreur?.code !== 'EEXIST') throw erreur;
+            const cause = rang === segments.length ? 'EEXIST' : 'ENOTDIR';
+            if (!(await etatSuivi(dossier))?.isDirectory()) throw refus(loc, cause);
+          }
+        }
       } catch (erreur) {
         throw echecEcriture(loc, erreur);
       }

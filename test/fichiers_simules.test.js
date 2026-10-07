@@ -586,4 +586,18 @@ describe('fichiers simulés : préconditions et dossiers', () => {
     );
     assert.deepEqual(noms(await fs.lister(DOC, '')), ['corbeille', 'soiree.gtt.json']);
   });
+
+  test("creerDossier de '' crée la racine, parents compris ; sous une racine absente, un autre chemin lève ECRITURE, ENOENT, sans rien créer", async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    await echoue(fs.creerDossier(PORTABLE, 'corbeille/2026-01-02_03-04-05'), 'ECRITURE', {
+      chemin: 'corbeille/2026-01-02_03-04-05',
+      dossier: `${DATA}\\corbeille`,
+      cause: 'ENOENT',
+    });
+    await echoue(fs.lister(PORTABLE, ''), 'ABSENT', { chemin: '' });
+    await fs.creerDossier(PORTABLE, '');
+    assert.deepEqual(await fs.lister(PORTABLE, ''), []);
+    await fs.creerDossier(PORTABLE, 'corbeille/2026-01-02_03-04-05');
+    assert.deepEqual(noms(await fs.lister(PORTABLE, 'corbeille')), ['2026-01-02_03-04-05']);
+  });
 });

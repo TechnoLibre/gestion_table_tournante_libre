@@ -17,10 +17,11 @@
 // quand la casse ne compte pas ; à côté de lui, hors de la Map, son horloge et
 // sa table des processus. Les pannes et les compteurs sont ceux de l'instance.
 //
-// Une racine n'existe qu'une fois créée — par sonder, creerDossier ou, sans
-// compter, deposerDossier —, et aucune écriture ne crée le dossier qui porte
-// sa cible : l'épreuve voit ainsi le dossier de travail qu'aucun code n'a
-// créé, ou qui a disparu, comme le verrait la coquille.
+// Une racine n'existe qu'une fois créée — par sonder, creerDossier de '' ou,
+// sans compter, deposerDossier —, et aucune écriture ne crée le dossier qui
+// porte sa cible, ni creerDossier d'un autre chemin la racine : l'épreuve voit
+// ainsi le dossier de travail qu'aucun code n'a créé, ou qui a disparu, comme
+// le verrait la coquille.
 import { ErreurStockage } from '../src/stockage/erreurs.js';
 import { exigerCheminRelatif } from '../src/stockage/systeme_fichiers.js';
 
@@ -202,10 +203,10 @@ export function creerFichiersSimules({
   const maintenant = () => etat.horloge;
 
   // Ce que désigne un chemin relatif à une racine : son chemin absolu en
-  // parties, la clé dans le disque de chacun de ses préfixes, sa clé et celle
-  // de son parent, son nom, et le dossier que nomme une ECRITURE — celui qui le
-  // porte, ou la racine elle-même pour ''. CHEMIN_REFUSE pour un chemin refusé
-  // ou une racine inconnue.
+  // parties, la clé dans le disque de chacun de ses préfixes, sa clé, celle
+  // de son parent et celle de la racine, son nom, et le dossier que nomme une
+  // ECRITURE — celui qui le porte, ou la racine elle-même pour ''.
+  // CHEMIN_REFUSE pour un chemin refusé ou une racine inconnue.
   function localiser(racine, chemin) {
     const segments = exigerCheminRelatif(chemin);
     const base = racines.get(racine?.id);
@@ -221,6 +222,7 @@ export function creerFichiersSimules({
       cleDe,
       cle: cleDe(n),
       cleParent: n > 1 ? cleDe(n - 1) : null,
+      cleRacine: cleDe(n - segments.length),
       nom: parties[n - 1],
       dossier: absolu(segments.length > 0 ? n - 1 : n),
     };
@@ -418,9 +420,12 @@ export function creerFichiersSimules({
       return entrees.sort((a, b) => (a.nom < b.nom ? -1 : a.nom > b.nom ? 1 : 0));
     }),
 
+    // '' crée la racine, parents compris ; un autre chemin ne crée que ce qui
+    // manque sous elle, et une racine absente lève ECRITURE, ENOENT.
     creerDossier: primitive('ecritures', (racine, chemin) => {
       const loc = localiser(racine, chemin);
       exigerInscriptible(loc);
+      if (chemin !== '' && !disque.has(loc.cleRacine)) throw refus(loc, 'ENOENT');
       creerDossiers(loc, loc.parties.length, avancer);
     }),
 

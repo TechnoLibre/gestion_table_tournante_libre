@@ -109,7 +109,11 @@ import { ErreurStockage } from './erreurs.js';
  *           les entrées directes du dossier, triées par nom, unités UTF-16
  *           comparées une à une ; ABSENT pour un dossier absent
  * @property {(r: Racine, chemin: string) => Promise<void>} creerDossier
- *           parents compris ; un dossier existant n'est pas une faute
+ *           '' crée la racine elle-même, parents compris ; un autre chemin
+ *           crée ce qui lui manque sous la racine, qui doit exister : une
+ *           racine absente lève ECRITURE, sans rien créer, car un dossier de
+ *           travail disparu ne renaît pas en silence (§ 8.6). Un dossier
+ *           existant n'est pas une faute
  * @property {(r: Racine, de: string, vers: string) => Promise<void>} deplacer
  *           un fichier ; refuse une cible existante (EXISTE), comparée comme le
  *           système compare les noms, si bien que sans égard à la casse une

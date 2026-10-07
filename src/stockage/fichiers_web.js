@@ -135,12 +135,15 @@ async function ecrire(loc, travail) {
 }
 
 // Poignée du dossier que désignent les segments sous le dossier du produit ;
-// creer crée ce qui manque, dossier du produit compris. Lève l'exception de
+// creer crée ce qui manque sous lui. Le dossier du produit lui-même ne se
+// crée que pour des segments vides, qui le désignent : un chemin sous un
+// dossier du produit absent lève NotFoundError (§ 8.6). Lève l'exception de
 // l'OPFS : NotFoundError pour un dossier absent, TypeMismatchError pour un
 // fichier à sa place.
 async function dossierDe(segments, creer = false) {
   const options = { create: creer };
-  let dossier = await (await navigator.storage.getDirectory()).getDirectoryHandle(DOSSIER_PRODUIT, options);
+  const produit = { create: creer && segments.length === 0 };
+  let dossier = await (await navigator.storage.getDirectory()).getDirectoryHandle(DOSSIER_PRODUIT, produit);
   for (const segment of segments) dossier = await dossier.getDirectoryHandle(segment, options);
   return dossier;
 }
