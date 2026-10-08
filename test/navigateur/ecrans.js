@@ -542,6 +542,21 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'propositions.critereSurvole',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // Le pointeur réel sur un nom de critère de la phrase de l'ordre : la
+      // colonne qu'il désigne se surligne, en-tête souligné.
+      const m = await ouvrirEvenement(contexte, chargePrincipale(), { section: 'propositions' });
+      const { x, y } = await centre(await element(m, '[data-ordre] [data-critere="excedentCollisions"]'));
+      await pointer('bouger', x, y);
+      await attendre('la colonne surlignée', () =>
+        getComputedStyle(m.racine.querySelector('thead th[data-colonne="excedentCollisions"]')).textDecorationLine.includes('underline'),
+      );
+      return m.racine;
+    },
+  },
+  {
     nom: 'refus.modeLecture',
     mode: 'lecture',
     async atteindre(contexte) {

@@ -148,14 +148,63 @@ function ligneDe(ligne, table, idRetenu, rang = null) {
   };
 }
 
-// La phrase de l'ordre (§ 5.7) : le critère sauté et celui appliqué à sa
-// place quand le plafond a priori manque, puis les critères appliqués.
+// La colonne que désigne chaque critère du classement (§ 5.7) : celle qui
+// porte la grandeur qu'il compare. La Map ne sert qu'à retrouver la colonne
+// d'un critère ; la phrase suit l'ordre que le classement rend.
+const COLONNE_DU_CRITERE = new Map([
+  ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
+  ['excedentCollisions', 'excedentCollisions'],
+  ['collisionsCumulees', 'collisionsCumulees'],
+  ['rencontresRepetees', 'rencontresRepetees'],
+  ['redondance', 'totalRedondance'],
+  ['identifiant', 'proposition'],
+]);
+
+/**
+ * La colonne du tableau que désigne un critère du classement, ou
+ * 'identifiant', le dernier départage, qui désigne la colonne des
+ * propositions. Lève TypeError pour un critère sans colonne : un critère
+ * ajouté au classement doit dire laquelle il compare.
+ *
+ * @param {string} critere  un nom de CRITERES (moteur), ou 'identifiant'
+ * @returns {string}  le nom d'une colonne de COLONNES
+ */
+export function colonneDuCritere(critere) {
+  const colonne = COLONNE_DU_CRITERE.get(critere);
+  if (colonne === undefined) throw new TypeError(`critère sans colonne : ${critere}`);
+  return colonne;
+}
+
+// Un morceau de phrase : un texte de liaison, ou un nom qui désigne une
+// colonne.
+const liaison = (cle, details = {}) => ({ cle, details, critere: null, colonne: null });
+const designant = (critere, cle) => ({ cle, details: {}, critere, colonne: colonneDuCritere(critere) });
+
+// La phrase des critères appliqués, morceau par morceau : le début, chaque
+// critère par son nom moteur.critere.<nom>, puis l'identifiant croissant,
+// séparés, et la fin. Bout à bout, les morceaux traduits composent le texte
+// de propositions.ordre.criteres.
+function phraseDesCriteres(criteresAppliques) {
+  const noms = [
+    ...criteresAppliques.map((critere) => designant(critere, `moteur.critere.${critere}`)),
+    designant('identifiant', 'propositions.ordre.identifiant'),
+  ];
+  return [
+    liaison('propositions.ordre.debut'),
+    ...noms.flatMap((nom, rang) => (rang === 0 ? [nom] : [liaison('propositions.ordre.separateur'), nom])),
+    liaison('propositions.ordre.fin'),
+  ];
+}
+
+// Les phrases de l'ordre (§ 5.7), chacune une liste de morceaux : le critère
+// sauté et celui appliqué à sa place quand le plafond a priori manque, puis
+// les critères appliqués.
 function ordre({ criteresAppliques, critereSaute }) {
   const phrases = [];
   if (critereSaute !== null) {
-    phrases.push({ cle: 'propositions.ordre.saute', details: { saute: critereSaute, applique: criteresAppliques[0] } });
+    phrases.push([liaison('propositions.ordre.saute', { saute: critereSaute, applique: criteresAppliques[0] })]);
   }
-  phrases.push({ cle: 'propositions.ordre.criteres', details: { criteres: [...criteresAppliques] } });
+  phrases.push(phraseDesCriteres(criteresAppliques));
   return phrases;
 }
 
@@ -166,10 +215,15 @@ function ordre({ criteresAppliques, critereSaute }) {
  * @param {{ajuste?: boolean}} [options]  ajuste : le retenu ne porte plus le
  *   placement de sa proposition d'origine (retenuAjuste) ; il choisit le
  *   libellé de la ligne du retenu
- * @returns {{ordre: Array<{cle: string, details: Object}>, colonnes: typeof COLONNES,
+ * @returns {{ordre: Array<Array<{cle: string, details: Object, critere: string|null,
+ *   colonne: string|null}>>, colonnes: typeof COLONNES,
  *   etendueRaisons: number, lignes: Object[], horsClassement: Object[], retenu: Object|null}}
- *   lignes : les comparables dans l'ordre du classement, chacune
- *   { id, rang, retenue, comparable: true, cellules, imposes, violations } ;
+ *   ordre : les phrases de l'ordre, chacune une liste de morceaux que t
+ *   traduit et que l'affichage met bout à bout ; un morceau qui nomme un
+ *   critère, ou l'identifiant croissant, porte critere et la colonne qu'il
+ *   désigne, null pour un texte de liaison ; lignes : les comparables dans
+ *   l'ordre du classement, chacune { id, rang, retenue, comparable: true,
+ *   cellules, imposes, violations } ;
  *   horsClassement : les autres par identifiant, { id, rang: null, retenue,
  *   comparable: false, statut, raisons } — statut la clé de « non comparable »,
  *   raisons leurs codes, chacune { cle, details, participant }, participant

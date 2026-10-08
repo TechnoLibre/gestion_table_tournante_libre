@@ -19,12 +19,20 @@ export const TABLE = new Map([
   // --- La section (§ 5.7) ------------------------------------------------------
   ['propositions.tableau.titre', 'Propositions classées'],
   ['propositions.aucune', "Aucune proposition : la génération en produit, et chaque génération s'ajoute aux précédentes."],
+  // La phrase des critères se compose de morceaux, chacun sa clé : le début,
+  // les noms, leur séparateur, l'identifiant croissant et la fin. L'affichage
+  // les met bout à bout, chaque nom dans son propre élément ;
+  // propositions.ordre.criteres les assemble en une seule chaîne, la même.
+  ['propositions.ordre.debut', "Ordre du classement, chaque critère au plus faible d'abord : "],
+  ['propositions.ordre.separateur', ', puis '],
+  ['propositions.ordre.identifiant', "l'identifiant croissant"],
+  ['propositions.ordre.fin', '.'],
   [
     'propositions.ordre.criteres',
     ({ criteres }, texte) =>
-      `Ordre du classement, chaque critère au plus faible d'abord : ${criteres
-        .map((nom) => critere(nom, texte))
-        .join(', puis ')}, puis l'identifiant croissant.`,
+      texte('propositions.ordre.debut') +
+      [...criteres.map((nom) => critere(nom, texte)), texte('propositions.ordre.identifiant')].join(texte('propositions.ordre.separateur')) +
+      texte('propositions.ordre.fin'),
   ],
   [
     'propositions.ordre.saute',

@@ -29,7 +29,7 @@ import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../.
 import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { COLONNES, demandeConfirmation, evaluation, nomDe, retenuAjuste, tableau, texteCellule } from './modele.js';
+import { COLONNES, colonneDuCritere, demandeConfirmation, evaluation, nomDe, retenuAjuste, tableau, texteCellule } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
@@ -365,29 +365,81 @@ describe('tableau : les unités (§ 5.4)', () => {
 });
 
 describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
-  test('la phrase cite les cinq critères dans l’ordre, puis l’identifiant ; les trois plans d’A6 : (6, 6), (4, 2), (4, 1)', () => {
+  // La phrase de l'ordre telle qu'elle s'affiche : chaque morceau traduit,
+  // bout à bout.
+  const phraseDe = (morceaux) => morceaux.map(({ cle, details }) => t(cle, details)).join('');
+  // Les morceaux qui désignent une colonne : leur critère et leur colonne.
+  const designes = (morceaux) => morceaux.filter(({ colonne }) => colonne !== null).map(({ critere, colonne }) => [critere, colonne]);
+
+  test('la phrase cite les cinq critères dans l’ordre, puis l’identifiant, mot pour mot ; les trois plans d’A6 : (6, 6), (4, 2), (4, 1)', () => {
     const charge = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
     const vue = tableau(evaluer(charge));
     assert.deepEqual(vue.lignes.map(({ id }) => id), [3, 2, 1]);
-    assert.deepEqual(vue.ordre, [{ cle: 'propositions.ordre.criteres', details: { criteres: [...CRITERES] } }]);
-    const phrase = t(vue.ordre[0].cle, vue.ordre[0].details);
+    assert.equal(vue.ordre.length, 1);
+    const phrase = phraseDe(vue.ordre[0]);
+    assert.equal(
+      phrase,
+      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
+        "puis collisions cumulées, puis rencontres répétées, puis redondance d'appartenance, puis l'identifiant croissant.",
+    );
+    assert.equal(phrase, t('propositions.ordre.criteres', { criteres: [...CRITERES] }));
     const positions = CRITERES.map((nom) => phrase.indexOf(t(`moteur.critere.${nom}`)));
     assert.equal(positions.length, 5);
     assert.ok(positions.every((position, rang) => position >= 0 && (rang === 0 || position > positions[rang - 1])), phrase);
     assert.ok(phrase.indexOf('identifiant') > positions[4], phrase);
   });
 
-  test('a priori inconnu : la phrase nomme le critère sauté et « excédent de collisions » appliqué à sa place', () => {
+  test('chaque nom de critère, et l’identifiant croissant, désigne sa colonne du tableau, dans l’ordre de la phrase', () => {
+    const vue = tableau(evaluer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT)));
+    assert.deepEqual(designes(vue.ordre[0]), [
+      ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
+      ['excedentCollisions', 'excedentCollisions'],
+      ['collisionsCumulees', 'collisionsCumulees'],
+      ['rencontresRepetees', 'rencontresRepetees'],
+      ['redondance', 'totalRedondance'],
+      ['identifiant', 'proposition'],
+    ]);
+    for (const morceau of vue.ordre[0]) {
+      if (morceau.colonne === null) assert.equal(morceau.critere, null, morceau.cle);
+      else assert.equal(t(morceau.cle, morceau.details), morceau.critere === 'identifiant' ? "l'identifiant croissant" : t(`moteur.critere.${morceau.critere}`));
+    }
+  });
+
+  test('colonneDuCritere : chaque critère de CRITERES désigne une colonne de COLONNES ; un critère sans colonne lève', () => {
+    const noms = new Set(COLONNES.map(({ nom }) => nom));
+    assert.equal(CRITERES.length, 5);
+    for (const critere of CRITERES) assert.ok(noms.has(colonneDuCritere(critere)), critere);
+    assert.ok(noms.has(colonneDuCritere('identifiant')));
+    assert.equal(colonneDuCritere('identifiant'), 'proposition');
+    assert.throws(() => colonneDuCritere('moyenneRencontres'), TypeError);
+  });
+
+  test('a priori inconnu : la phrase nomme le critère sauté et « excédent de collisions » appliqué à sa place ; les critères appliqués désignent toujours leur colonne', () => {
     const charge = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
     const vue = tableau(evaluer(charge, { plafondsAPriori: null }));
     assert.equal(vue.ordre.length, 2);
-    assert.deepEqual(vue.ordre[0], {
-      cle: 'propositions.ordre.saute',
-      details: { saute: 'ecartAuPlafondAPrioriMax', applique: 'excedentCollisions' },
-    });
-    const saute = t(vue.ordre[0].cle, vue.ordre[0].details);
+    assert.deepEqual(vue.ordre[0], [
+      {
+        cle: 'propositions.ordre.saute',
+        details: { saute: 'ecartAuPlafondAPrioriMax', applique: 'excedentCollisions' },
+        critere: null,
+        colonne: null,
+      },
+    ]);
+    const saute = phraseDe(vue.ordre[0]);
     assert.ok(saute.indexOf('écart au plafond a priori') >= 0 && saute.indexOf('excédent de collisions') > saute.indexOf('écart au plafond a priori'), saute);
-    assert.equal(vue.ordre[1].details.criteres[0], 'excedentCollisions');
+    assert.equal(
+      phraseDe(vue.ordre[1]),
+      "Ordre du classement, chaque critère au plus faible d'abord : excédent de collisions, " +
+        "puis collisions cumulées, puis rencontres répétées, puis redondance d'appartenance, puis l'identifiant croissant.",
+    );
+    assert.deepEqual(designes(vue.ordre[1]), [
+      ['excedentCollisions', 'excedentCollisions'],
+      ['collisionsCumulees', 'collisionsCumulees'],
+      ['rencontresRepetees', 'rencontresRepetees'],
+      ['redondance', 'totalRedondance'],
+      ['identifiant', 'proposition'],
+    ]);
     for (const ligne of vue.lignes) assert.equal(texte(cellule(ligne, 'ecartItineraireMax')), 'inconnu');
   });
 });

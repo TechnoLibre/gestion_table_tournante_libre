@@ -23,6 +23,12 @@
   // s'exécute sans fenêtre, et son refus s'affiche. « Effacer » ne détruit
   // aucune saisie — chaque proposition se régénère de sa graine, et le geste
   // se défait — : il s'exécute sans fenêtre.
+  //
+  // La phrase de l'ordre se met bout à bout, morceau par morceau (modele.js) ;
+  // chaque nom de critère, et l'identifiant croissant, est un élément
+  // focalisable qui désigne sa colonne. Le survoler ou le focaliser surligne
+  // cette colonne dans le tableau ; le quitter — pointeur sorti, focus perdu —
+  // efface le surlignage qu'il a posé, et laisse celui d'un autre nom.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
@@ -68,6 +74,14 @@
     aConfirmer = null;
   }
 
+  // La colonne surlignée, celle du dernier nom survolé ou focalisé ; null
+  // sans surlignage.
+  let surlignee = $state(null);
+  const surligner = (colonne) => (surlignee = colonne);
+  function quitter(colonne) {
+    if (surlignee === colonne) surlignee = null;
+  }
+
   const effacer = () => seance.executer('effacerPropositions', {});
   const nommer = (id) => nomDe(charge, id);
 </script>
@@ -85,11 +99,32 @@
 
   {#if vue !== null}
     <div class="ordre" data-ordre>
-      {#each vue.ordre as phrase (phrase.cle)}
-        <p>{t(phrase.cle, phrase.details)}</p>
+      {#each vue.ordre as morceaux, rang (rang)}
+        <p>
+          {#each morceaux as morceau, place (place)}
+            {#if morceau.colonne === null}
+              {t(morceau.cle, morceau.details)}
+            {:else}
+              <!-- Le nom est un terme, non une commande : aucun rôle n'annonce
+                   d'action, et le focus ne sert qu'à montrer au clavier la
+                   colonne que le pointeur montre au survol. -->
+              <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+              <span
+                class="critere"
+                class:actif={surlignee === morceau.colonne}
+                data-critere={morceau.critere}
+                tabindex="0"
+                onmouseenter={() => surligner(morceau.colonne)}
+                onmouseleave={() => quitter(morceau.colonne)}
+                onfocus={() => surligner(morceau.colonne)}
+                onblur={() => quitter(morceau.colonne)}>{t(morceau.cle, morceau.details)}</span
+              >
+            {/if}
+          {/each}
+        </p>
       {/each}
     </div>
-    <TableauPropositions {vue} {nommer} {voir} {retenir} />
+    <TableauPropositions {vue} {surlignee} {nommer} {voir} {retenir} />
   {/if}
 
   {#if charge !== null && charge.propositions.length > 0}
@@ -130,6 +165,25 @@
     display: flex;
     flex-direction: column;
     gap: var(--espace-1);
+  }
+
+  /* Un nom qui désigne une colonne se signale par un soulignement pointillé ;
+     survolé ou focalisé, par un soulignement plein. Il ne se coupe pas d'une
+     ligne à l'autre : sa boîte, que le pointeur survole, reste d'un tenant. */
+  .critere {
+    white-space: nowrap;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+
+  .critere.actif {
+    text-decoration-style: solid;
+    text-decoration-thickness: 2px;
+  }
+
+  .critere:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
   }
 
   .effacer {

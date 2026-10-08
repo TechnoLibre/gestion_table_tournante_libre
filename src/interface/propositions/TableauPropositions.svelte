@@ -14,16 +14,27 @@
   // la charge n'a plus. voir(id) et
   // retenir(id) : les gestes d'une ligne, que la section câble ; voir(null)
   // montre le retenu. Un refus de « Retenir » se pose à côté du bouton, par
-  // la Commande.
+  // la Commande. surlignee : le nom de la colonne que la phrase de l'ordre
+  // désigne — une colonne de mesure, ou celle des propositions —, null sans
+  // surlignage ; son en-tête et chacune de ses cellules se surlignent, hors
+  // la cellule des raisons d'une ligne hors classement, qui en couvre
+  // plusieurs.
   //
   // Désignations : data-retenu sur la ligne du retenu, data-proposition sur
   // chaque autre ligne, data-colonne sur chaque cellule et chaque en-tête ;
   // data-classement et data-hors-classement sur les deux groupes de lignes.
+  // Une cellule surlignée porte data-marque="selection" : ses filets
+  // portent l'information, et la garde des marques (§ 14.5) les mesure à
+  // 3:1 contre le fond, dans les deux thèmes. Les autres n'en portent pas.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import { texteCellule } from './modele.js';
 
-  let { vue, nommer, voir, retenir } = $props();
+  let { vue, surlignee = null, nommer, voir, retenir } = $props();
+
+  // L'attribut data-marque d'une cellule de la colonne nommée : 'selection'
+  // quand elle est la colonne surlignée, undefined sinon, qui l'omet.
+  const marque = (nommee) => (nommee === surlignee ? 'selection' : undefined);
 
   const t = getContext('t');
   const format = getContext('format');
@@ -46,7 +57,7 @@
 {#snippet mesures(ligne)}
   {#if ligne.comparable}
     {#each ligne.cellules as cellule (cellule.colonne)}
-      <td data-colonne={cellule.colonne} class="nombre">{texteCellule(cellule, outils)}</td>
+      <td data-colonne={cellule.colonne} data-marque={marque(cellule.colonne)} class="nombre" class:surlignee={cellule.colonne === surlignee}>{texteCellule(cellule, outils)}</td>
     {/each}
     <td data-colonne="imposes">
       {#each ligne.imposes as phrase, rang (rang)}
@@ -59,7 +70,7 @@
 {/snippet}
 
 {#snippet identite(ligne)}
-  <td data-colonne="proposition">
+  <td data-colonne="proposition" data-marque={marque('proposition')} class:surlignee={surlignee === 'proposition'}>
     <span class="identifiant">{format.nombre(ligne.id)}</span>
     {#if ligne.retenue}
       <span class="marque">{t('propositions.marque.retenue')}</span>
@@ -87,7 +98,7 @@
     <thead>
       <tr>
         {#each vue.colonnes as colonne (colonne.nom)}
-          <th scope="col" data-colonne={colonne.nom}>{t(colonne.cle)}</th>
+          <th scope="col" data-colonne={colonne.nom} data-marque={marque(colonne.nom)} class:surlignee={colonne.nom === surlignee}>{t(colonne.cle)}</th>
         {/each}
       </tr>
     </thead>
@@ -95,7 +106,7 @@
       <tbody>
         <tr data-retenu={vue.retenu.id} class="retenu">
           <th scope="row" data-colonne="rang">{t('propositions.retenu.titre')}</th>
-          <td data-colonne="proposition">
+          <td data-colonne="proposition" data-marque={marque('proposition')} class:surlignee={surlignee === 'proposition'}>
             <span class="identifiant">{format.nombre(vue.retenu.id)}</span>
             <p>{t(vue.retenu.libelle.cle, vue.retenu.libelle.details)}</p>
           </td>
@@ -203,6 +214,23 @@
   .retenu > :first-child,
   .retenue > :first-child {
     border-left: 4px solid var(--couleur-page-texte);
+  }
+
+  /* La colonne que désigne la phrase de l'ordre : un filet de 2 px de la
+     couleur de sélection de chaque côté de son en-tête et de ses cellules,
+     plus épais que le filet ordinaire, et l'en-tête souligné. Ni le fond ni
+     la couleur du texte ne changent : les contrastes restent ceux du
+     tableau. */
+  th.surlignee,
+  td.surlignee {
+    border-left: 2px solid var(--couleur-selection);
+    border-right: 2px solid var(--couleur-selection);
+  }
+
+  thead th.surlignee {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.2em;
   }
 
   .marque {

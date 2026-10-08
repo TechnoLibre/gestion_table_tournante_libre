@@ -34,7 +34,8 @@ import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../.
 import { SUFFIXES } from '../../stockage/noms.js';
 import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
-import { fixerCadre } from '../../../test/navigateur/entrees.js';
+import { centre } from '../../../test/navigateur/ecrans.js';
+import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 
@@ -531,5 +532,160 @@ describe('en lecture et sur un plan bloqué', () => {
     effacer.click();
     await attendre(() => expect(refusPres(effacer, 'LECTURE_SEULE')).not.toBeNull());
     expect(m.trace.length).toBe(ecritures);
+  });
+});
+
+// --- La phrase de l'ordre désigne les colonnes (§ 5.7) ---------------------------
+
+// Chaque nom de la phrase et la colonne qu'il désigne, dans l'ordre de la
+// phrase : les cinq critères, puis l'identifiant croissant.
+const COLONNE_DESIGNEE = [
+  ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
+  ['excedentCollisions', 'excedentCollisions'],
+  ['collisionsCumulees', 'collisionsCumulees'],
+  ['rencontresRepetees', 'rencontresRepetees'],
+  ['redondance', 'totalRedondance'],
+  ['identifiant', 'proposition'],
+];
+
+// La couleur calculée d'un jeton, lue sur une sonde posée le temps d'une
+// lecture.
+function couleurDuJeton(jeton) {
+  const sonde = document.createElement('span');
+  sonde.style.color = `var(${jeton})`;
+  document.body.append(sonde);
+  try {
+    return getComputedStyle(sonde).color;
+  } finally {
+    sonde.remove();
+  }
+}
+
+// Une cellule porte-t-elle, à gauche et à droite, le filet de 2 px de la
+// couleur de sélection ? Un voisin n'en partage qu'un.
+function porteFilets(cellule, selection) {
+  const style = getComputedStyle(cellule);
+  return ['Left', 'Right'].every((cote) => style[`border${cote}Width`] === '2px' && style[`border${cote}Color`] === selection);
+}
+
+// Les cellules du tableau, en-têtes compris, que le rendu montre surlignées :
+// les deux filets de sélection, et l'en-tête souligné en plus.
+function surlignees(m) {
+  const selection = couleurDuJeton('--couleur-selection');
+  const cellulesLues = [...section(m).querySelectorAll('th[data-colonne], td[data-colonne]')];
+  expect(cellulesLues.length).toBeGreaterThan(0);
+  return cellulesLues.filter((cellule) => {
+    const souligne = cellule.closest('thead') === null || getComputedStyle(cellule).textDecorationLine.includes('underline');
+    return porteFilets(cellule, selection) && souligne;
+  });
+}
+
+// Les éléments du tableau que data-marque désigne : ceux que la garde des
+// marques (§ 14.5) mesure.
+const marquees = (m) => [...section(m).querySelectorAll('table [data-marque]')];
+
+// Les cellules d'une colonne : son en-tête et chacune de ses cellules.
+const colonne = (m, nom) => [...section(m).querySelectorAll(`th[data-colonne="${nom}"], td[data-colonne="${nom}"]`)];
+
+// Les noms de la phrase qui désignent une colonne, dans leur ordre.
+const nomsDesignants = (m) => [...section(m).querySelectorAll('[data-ordre] [data-critere]')];
+
+describe('la phrase de l’ordre désigne les colonnes (§ 5.7)', () => {
+  // Le retenu, sur sa ligne, au-dessus des trois propositions classées.
+  const chargeRetenue = () => executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 });
+
+  // Le pointeur réel reste où l'épreuve précédente l'a laissé : posé sur un
+  // nom de la phrase, il surlignerait sa colonne dès le montage suivant.
+  // Chaque épreuve part du coin du cadre, hors de la phrase.
+  beforeEach(async () => {
+    await pointer('bouger', 0, 0);
+  });
+
+  test('survoler chaque nom de critère, au pointeur réel, surligne sa colonne seule — en-tête, retenu et lignes classées — ; le quitter l’efface', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const noms = nomsDesignants(m);
+    expect(noms.map((nom) => nom.dataset.critere)).toEqual(COLONNE_DESIGNEE.map(([critere]) => critere));
+    expect(surlignees(m)).toEqual([]);
+    for (const [critere, nomColonne] of COLONNE_DESIGNEE) {
+      const nom = section(m).querySelector(`[data-ordre] [data-critere="${critere}"]`);
+      const { x, y } = await centre(nom);
+      await pointer('bouger', x, y);
+      const attendues = colonne(m, nomColonne);
+      expect(attendues.length, nomColonne).toBe(5);
+      await attendre(() => expect(surlignees(m), critere).toEqual(attendues));
+      // Chaque cellule surlignée, et elle seule, se désigne comme marque de
+      // sélection : la garde transversale mesure son filet à 3:1.
+      expect(marquees(m), critere).toEqual(attendues);
+      for (const cellule of attendues) expect(cellule.dataset.marque, critere).toBe('selection');
+    }
+    const titre = section(m).querySelector('h2');
+    const { x, y } = await centre(titre);
+    await pointer('bouger', x, y);
+    await attendre(() => expect(surlignees(m)).toEqual([]));
+    expect(marquees(m)).toEqual([]);
+  });
+
+  test('avec des propositions hors classement : l’identifiant surligne aussi leur cellule « proposition » ; un critère de mesure ne surligne jamais la cellule de leurs raisons', async () => {
+    let chargeLue = generee(chargeDemo('petite'), { graine: 1, nombre: 2, arret: 200 });
+    chargeLue = executer(chargeLue, 'exclureParticipant', { id: 4 });
+    chargeLue = generee(chargeLue, { graine: 2, nombre: 2, arret: 200 });
+    const m = await ouvrir(chargeLue);
+    const hors = [...section(m).querySelectorAll('[data-hors-classement] tr[data-proposition]')];
+    expect(hors.length).toBe(2);
+    const identites = hors.map((tr) => tr.querySelector('td[data-colonne="proposition"]'));
+    const raisons = hors.map((tr) => tr.querySelector('td[colspan]'));
+    for (const cellule of [...identites, ...raisons]) expect(cellule).not.toBeNull();
+
+    const nomIdentifiant = section(m).querySelector('[data-ordre] [data-critere="identifiant"]');
+    let point = await centre(nomIdentifiant);
+    await pointer('bouger', point.x, point.y);
+    const attendues = colonne(m, 'proposition');
+    for (const cellule of identites) expect(attendues).toContain(cellule);
+    await attendre(() => expect(surlignees(m)).toEqual(attendues));
+    expect(marquees(m)).toEqual(attendues);
+
+    const selection = couleurDuJeton('--couleur-selection');
+    for (const [critere, nomColonne] of COLONNE_DESIGNEE.filter(([, nomColonne]) => nomColonne !== 'proposition')) {
+      point = await centre(section(m).querySelector(`[data-ordre] [data-critere="${critere}"]`));
+      await pointer('bouger', point.x, point.y);
+      await attendre(() => expect(surlignees(m), critere).toEqual(colonne(m, nomColonne)));
+      for (const cellule of raisons) {
+        expect(porteFilets(cellule, selection), critere).toBe(false);
+        expect(cellule.dataset.marque, critere).toBeUndefined();
+      }
+    }
+  });
+
+  test('au clavier : chaque nom se focalise (tabindex 0) et surligne sa colonne seule ; Tab passe au suivant ; quitter le dernier l’efface', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const noms = nomsDesignants(m);
+    expect(noms.length).toBe(COLONNE_DESIGNEE.length);
+    for (const nom of noms) expect(nom.tabIndex).toBe(0);
+    noms[0].focus();
+    for (const [rang, [critere, nomColonne]] of COLONNE_DESIGNEE.entries()) {
+      if (rang > 0) await touche('Tab');
+      await attendre(() => expect(document.activeElement?.dataset?.critere).toBe(critere));
+      await attendre(() => expect(surlignees(m), critere).toEqual(colonne(m, nomColonne)));
+    }
+    await touche('Tab');
+    await attendre(() => expect(document.activeElement?.dataset?.critere).toBeUndefined());
+    await attendre(() => expect(surlignees(m)).toEqual([]));
+  });
+
+  test('le texte de la phrase reste celui de l’ordre, mot pour mot, et le surlignage ne change aucune couleur de texte', async () => {
+    const m = await ouvrir(chargeRetenue());
+    // Le texte brut, espaces compris : aucun blanc ne s'ajoute entre deux
+    // morceaux.
+    expect(section(m).querySelectorAll('[data-ordre] p').length).toBe(1);
+    expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
+      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
+        "puis collisions cumulées, puis rencontres répétées, puis redondance d'appartenance, puis l'identifiant croissant.",
+    );
+    const cible = colonne(m, 'excedentCollisions');
+    const avant = cible.map((cellule) => [getComputedStyle(cellule).color, getComputedStyle(cellule).backgroundColor]);
+    const { x, y } = await centre(section(m).querySelector('[data-ordre] [data-critere="excedentCollisions"]'));
+    await pointer('bouger', x, y);
+    await attendre(() => expect(surlignees(m)).toEqual(cible));
+    expect(cible.map((cellule) => [getComputedStyle(cellule).color, getComputedStyle(cellule).backgroundColor])).toEqual(avant);
   });
 });
