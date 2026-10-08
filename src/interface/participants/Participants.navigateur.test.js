@@ -5,7 +5,8 @@
 // § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'appartenance
 // collante, la grille au clavier, le tri, le filtre et le compte,
 // l'exclusion, le manque de places à l'ajout et à la réintégration, la fiche
-// et l'itinéraire, l'export et le collage. Chaque épreuve monte App par
+// et l'itinéraire, l'export, le collage, et la liste groupée par une
+// colonne ou plusieurs, ses groupes imbriqués, repliés et dépliés. Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé et l'horloge pilotée ; chaque
 // écriture se relève (trace) et chaque entrée se compte dans le journal. Les
 // gestes passent par des entrées que Chromium traite comme réelles
@@ -19,7 +20,8 @@ import { flushSync, tick } from 'svelte';
 import { bilanChangementDefaut } from '../../application/bilans.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
-import { apercevoir, decoder, exporterParticipants } from '../../application/csv.js';
+import { apercevoir, cleNormalisee, decoder, exporterParticipants } from '../../application/csv.js';
+import { statuts } from '../../application/places.js';
 import { STATUT, nombrePlacesManquantes, normaliser } from '../../moteur/configuration.js';
 import { configurationDepuisCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
@@ -30,7 +32,7 @@ import { pointer, touche } from '../../../test/navigateur/entrees.js';
 import { visible } from '../../../test/navigateur/rendu.js';
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { COLONNES, cleDeStatut } from './grille.js';
+import { COLONNES, GROUPEMENTS, cheminDe, cleDeGroupement, cleDeStatut, groupesGrille, lignesGrille, lignesVisibles } from './grille.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
@@ -889,5 +891,467 @@ describe('export et collage (§ 10.2)', () => {
     expect(m.ui.etat().section).toBe('import');
     await attendreSeance(m);
     expect(m.trace.length).toBe(trace);
+  });
+});
+
+describe('la liste groupée par une colonne ou plusieurs', () => {
+  // Cinq personnes : deux du Club des Merles sous deux orthographes, deux
+  // du Cercle des Pinsons dont une exclue, une sans appartenance.
+  const CINQ = [
+    { nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB, titre: 'hôtesse' },
+    { nom: 'Pervenche', prenom: 'Théo', appartenance: 'CLUB DES MERLES' },
+    { nom: 'Lacasse', prenom: 'Ondine' },
+    { nom: 'Grisaille', appartenance: 'Cercle des Pinsons', exclu: true },
+    { nom: 'Brindelle', appartenance: 'Cercle des Pinsons' },
+  ];
+  const PINSONS = 'texte:cercle des pinsons';
+  const MERLES = 'texte:club des merles';
+
+  // Le sélecteur du niveau donné, 1 pour le plus large, et tous ceux
+  // affichés.
+  const selecteur = (m, niveau = 1) => section(m).querySelector(`[data-champ="grouper"][data-niveau="${niveau}"]`);
+  const selecteurs = (m) => [...section(m).querySelectorAll('[data-champ="grouper"]')];
+  // Les en-têtes de groupe affichés, de tout niveau, dans l'ordre du rendu ;
+  // l'en-tête d'un groupe porte sa clé, chaque ligne celle du plus étroit
+  // groupe qui la compte.
+  const groupes = (m) => [...grille(m).querySelectorAll('[data-groupe]')];
+  const groupe = (m, cle) => grille(m).querySelector(`[data-groupe="${cle}"]`);
+  const bascule = (m, cle) => groupe(m, cle).querySelector('[data-commande="basculerGroupe"]');
+  const idsDuGroupe = (m, cle) =>
+    lignes(m)
+      .filter(({ dataset: { groupeLigne } }) => groupeLigne === cle || groupeLigne.startsWith(`${cle}/`))
+      .map((l) => Number(l.dataset.participant));
+  const ouverts = (m) => groupes(m).map((g) => bascule(m, g.dataset.groupe).getAttribute('aria-expanded'));
+  // Tous les groupes d'un arbre de groupesGrille, chacun avant ses
+  // sous-groupes : l'ordre des en-têtes déplié.
+  const aplatir = (arbre) => arbre.flatMap((g) => [g, ...(g.sousGroupes === null ? [] : aplatir(g.sousGroupes))]);
+  // Ce que montre l'en-tête d'un groupe : son libellé et son compte.
+  const entete = (m, cle) => ({
+    libelle: groupe(m, cle).querySelector('[data-groupe-libelle]').textContent,
+    compte: groupe(m, cle).querySelector('[data-groupe-compte]').textContent,
+  });
+  // Le libellé et le compte qu'un groupe de groupesGrille doit afficher.
+  const enteteAttendu = ({ libelle, cleLibelle, compte }) => ({
+    libelle: libelle ?? t(cleLibelle),
+    compte: t('participants.groupe.compte', { compte }),
+  });
+
+  // Choisit la colonne d'un niveau du groupement au clavier seul : le
+  // sélecteur de ce niveau prend le focus, puis les flèches le mènent à
+  // l'option voulue.
+  async function grouperPar(m, colonne, niveau = 1) {
+    const choix = selecteur(m, niveau);
+    const valeurs = [...choix.options].map((option) => option.value);
+    const cible = valeurs.indexOf(colonne);
+    expect(cible, colonne).toBeGreaterThanOrEqual(0);
+    choix.focus();
+    for (let essai = 0; essai < valeurs.length && choix.selectedIndex !== cible; essai += 1) {
+      await touche(choix.selectedIndex < cible ? 'ArrowDown' : 'ArrowUp');
+      await rendu();
+    }
+    expect(choix.value).toBe(colonne);
+    await rendu();
+  }
+
+  // Le groupement par appartenance puis par statut, Ombrelle ancrée par une
+  // réservation : les autres présentes sont mobiles.
+  async function appartenancePuisStatut() {
+    const m = await evenementOuvert({ tables: 1, personnes: CINQ });
+    const charge = m.seance.etat().charge;
+    await m.seance.executer('reserver', { participant: idDe(m, 'Ombrelle'), table: charge.tables[0].id, siege: null, portee: 'tous', tour: null });
+    await attendreSeance(m);
+    await grouperPar(m, 'appartenance', 1);
+    await grouperPar(m, 'statut', 2);
+    return m;
+  }
+
+  // Le journal, l'état et la trace d'écriture, à comparer après des gestes
+  // de regard.
+  const empreinte = (m) => ({ journal: texteJournal(m), etat: texteEtat(m), trace: m.trace.length });
+
+  test('le sélecteur offre « Aucun » puis chaque colonne groupable ; sans groupement, aucun en-tête de groupe', async () => {
+    const m = await evenementOuvert({ personnes: CINQ });
+    const options = [...selecteur(m).options];
+    expect(options.map((o) => o.value)).toEqual(['', ...GROUPEMENTS]);
+    expect(options.map((o) => o.textContent)).toEqual([t('participants.groupe.aucun'), ...GROUPEMENTS.map((c) => t(cleDeGroupement(c)))]);
+    expect(selecteur(m).value).toBe('');
+    expect(selecteurs(m)).toHaveLength(1);
+    expect(groupes(m)).toHaveLength(0);
+    expect(lignes(m)).toHaveLength(5);
+    expect(section(m).querySelector('[data-commande="toutReplier"]')).toBeNull();
+  });
+
+  test('chaque colonne choisie ouvre le niveau suivant, aux colonnes pas encore prises ; « Aucun » retire un niveau et les suivants', async () => {
+    const m = await evenementOuvert({ personnes: CINQ });
+    await grouperPar(m, 'appartenance', 1);
+    expect(selecteurs(m)).toHaveLength(2);
+    expect(selecteur(m, 2).value).toBe('');
+    const deuxieme = [...selecteur(m, 2).options];
+    expect(deuxieme.map((o) => o.value)).toEqual(['', ...GROUPEMENTS.filter((c) => c !== 'appartenance')]);
+    expect(deuxieme[0].textContent).toBe(t('participants.groupe.aucunSousGroupe'));
+    // Chaque sélecteur a son étiquette, distincte des autres.
+    const etiquettes = selecteurs(m).map((choix) => choix.labels[0]?.textContent);
+    expect(etiquettes).toEqual([t('participants.groupe.grouperPar'), t('participants.groupe.puisPar', { niveau: 2 })]);
+
+    await grouperPar(m, 'statut', 2);
+    expect(selecteurs(m).map((choix) => choix.value)).toEqual(['appartenance', 'statut', '']);
+    expect([...selecteur(m, 3).options].map((o) => o.value)).toEqual(['', ...GROUPEMENTS.filter((c) => c !== 'appartenance' && c !== 'statut')]);
+    expect(new Set(groupes(m).map((g) => g.dataset.niveau))).toEqual(new Set(['1', '2']));
+
+    // La colonne d'un niveau prise plus haut quitte le niveau plus bas.
+    await grouperPar(m, 'statut', 1);
+    expect(selecteurs(m).map((choix) => choix.value)).toEqual(['statut', '']);
+    await grouperPar(m, 'nom', 2);
+    await grouperPar(m, 'prenom', 3);
+    expect(selecteurs(m).map((choix) => choix.value)).toEqual(['statut', 'nom', 'prenom', '']);
+    await grouperPar(m, '', 2);
+    expect(selecteurs(m).map((choix) => choix.value)).toEqual(['statut', '']);
+    expect(new Set(groupes(m).map((g) => g.dataset.niveau))).toEqual(new Set(['1']));
+    await grouperPar(m, '', 1);
+    expect(selecteurs(m).map((choix) => choix.value)).toEqual(['']);
+    expect(groupes(m)).toHaveLength(0);
+    expect(lignes(m)).toHaveLength(5);
+
+    // Toutes les colonnes prises : aucun sélecteur de plus.
+    for (const [rang, colonne] of GROUPEMENTS.entries()) await grouperPar(m, colonne, rang + 1);
+    expect(selecteurs(m)).toHaveLength(GROUPEMENTS.length);
+  });
+
+  test('par appartenance : un en-tête par groupe, son libellé et son compte, ses lignes dessous ; puis chaque colonne groupable suit groupesGrille ; rien ne s’écrit', async () => {
+    const m = await evenementOuvert({ tables: 1, personnes: CINQ });
+    const charge = m.seance.etat().charge;
+    await m.seance.executer('reserver', { participant: idDe(m, 'Ombrelle'), table: charge.tables[0].id, siege: null, portee: 'tous', tour: null });
+    await attendreSeance(m);
+    const avant = empreinte(m);
+
+    await grouperPar(m, 'appartenance');
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS, MERLES, 'vide']);
+    expect(entete(m, PINSONS)).toEqual({ libelle: 'Cercle des Pinsons', compte: t('participants.groupe.compte', { compte: 2 }) });
+    expect(entete(m, MERLES)).toEqual({ libelle: CLUB, compte: t('participants.groupe.compte', { compte: 2 }) });
+    expect(entete(m, 'vide')).toEqual({ libelle: t('participants.groupe.vide'), compte: t('participants.groupe.compte', { compte: 1 }) });
+    expect(idsDuGroupe(m, PINSONS)).toEqual([idDe(m, 'Grisaille'), idDe(m, 'Brindelle')]);
+    expect(idsDuGroupe(m, MERLES)).toEqual([idDe(m, 'Ombrelle'), idDe(m, 'Pervenche')]);
+    expect(idsDuGroupe(m, 'vide')).toEqual([idDe(m, 'Lacasse')]);
+    // L'en-tête précède les lignes de son groupe, dans le rendu.
+    const premiere = ligne(m, idDe(m, 'Grisaille')).getBoundingClientRect();
+    expect(bascule(m, PINSONS).getBoundingClientRect().bottom).toBeLessThanOrEqual(premiere.top + 1);
+
+    await grouperPar(m, 'statut');
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual(['statut:ancre', 'statut:mobile', 'statut:exclue']);
+    expect(entete(m, 'statut:ancre').libelle).toBe(t('participants.statut.ancre'));
+    expect(idsDuGroupe(m, 'statut:ancre')).toEqual([idDe(m, 'Ombrelle')]);
+    expect(idsDuGroupe(m, 'statut:exclue')).toEqual([idDe(m, 'Grisaille')]);
+
+    expect(GROUPEMENTS.length).toBeGreaterThan(0);
+    const lignesAttendues = lignesGrille(participants(m), { tri: null, filtre: '' }, cleNormalisee);
+    for (const colonne of GROUPEMENTS) {
+      await grouperPar(m, colonne);
+      const attendus = groupesGrille(lignesAttendues, [colonne], { tri: null, cleNormalisee, statuts: statuts(m.seance.etat().charge).parId });
+      expect(attendus.length, colonne).toBeGreaterThan(0);
+      expect(groupes(m).map((g) => g.dataset.groupe), colonne).toEqual(attendus.map(({ cle }) => cle));
+      for (const attendu of attendus) {
+        expect(entete(m, attendu.cle), `${colonne} ${attendu.cle}`).toEqual(enteteAttendu(attendu));
+        expect(idsDuGroupe(m, attendu.cle), `${colonne} ${attendu.cle}`).toEqual(attendu.lignes.map(({ id }) => id));
+        expect(bascule(m, attendu.cle).getAttribute('aria-expanded')).toBe('true');
+      }
+    }
+    await grouperPar(m, '');
+    expect(groupes(m)).toHaveLength(0);
+    expect(lignes(m)).toHaveLength(5);
+    await attendreSeance(m);
+    expect(empreinte(m)).toEqual(avant);
+  });
+
+  test('replier masque exactement les lignes du groupe, déplier les rend ; Tout replier, Tout déplier ; l’état se lit en texte et dans aria-expanded ; rien ne s’écrit, en écriture comme en lecture', async () => {
+    const m = await evenementOuvert({ personnes: CINQ });
+    for (const mode of ['ecriture', 'lecture']) {
+      if (mode === 'lecture') {
+        await m.seance.passerEnLecture();
+        await rendu();
+      }
+      const avant = empreinte(m);
+      await grouperPar(m, 'appartenance');
+      const tous = idsAffiches(m);
+      expect(tous, mode).toHaveLength(5);
+      const merles = idsDuGroupe(m, MERLES);
+      expect(merles, mode).toHaveLength(2);
+      const texteOuvert = bascule(m, MERLES).querySelector('[data-groupe-etat]').textContent;
+
+      await cliquer(bascule(m, MERLES));
+      expect(bascule(m, MERLES).getAttribute('aria-expanded'), mode).toBe('false');
+      expect(idsDuGroupe(m, MERLES), mode).toEqual([]);
+      expect(idsAffiches(m), mode).toEqual(tous.filter((id) => !merles.includes(id)));
+      expect(entete(m, MERLES).compte, mode).toBe(t('participants.groupe.compte', { compte: 2 }));
+      // Replié et ouvert se distinguent par le texte, pas seulement par la couleur.
+      expect(bascule(m, MERLES).querySelector('[data-groupe-etat]').textContent, mode).not.toBe(texteOuvert);
+      expect(bascule(m, PINSONS).getAttribute('aria-expanded'), mode).toBe('true');
+
+      await cliquer(bascule(m, MERLES));
+      expect(bascule(m, MERLES).getAttribute('aria-expanded'), mode).toBe('true');
+      expect(idsAffiches(m), mode).toEqual(tous);
+
+      // Au clavier : Entrée sur le bouton replie.
+      bascule(m, PINSONS).focus();
+      await touche('Enter');
+      await rendu();
+      expect(bascule(m, PINSONS).getAttribute('aria-expanded'), mode).toBe('false');
+      expect(idsDuGroupe(m, PINSONS), mode).toEqual([]);
+      await touche(' ');
+      await rendu();
+      expect(bascule(m, PINSONS).getAttribute('aria-expanded'), mode).toBe('true');
+
+      await cliquer(section(m).querySelector('[data-commande="toutReplier"]'));
+      expect(lignes(m), mode).toHaveLength(0);
+      expect(groupes(m).map((g) => bascule(m, g.dataset.groupe).getAttribute('aria-expanded')), mode).toEqual(['false', 'false', 'false']);
+      await cliquer(section(m).querySelector('[data-commande="toutDeplier"]'));
+      expect(idsAffiches(m), mode).toEqual(tous);
+      expect(groupes(m).map((g) => bascule(m, g.dataset.groupe).getAttribute('aria-expanded')), mode).toEqual(['true', 'true', 'true']);
+
+      await attendreSeance(m);
+      expect(empreinte(m), mode).toEqual(avant);
+    }
+  });
+
+  test('le filtre passe d’abord : un groupe sans ligne disparaît, chaque compte est celui des lignes montrées ; trié par la colonne groupée, les groupes suivent le sens', async () => {
+    const m = await evenementOuvert({ personnes: CINQ });
+    await grouperPar(m, 'appartenance');
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'pinsons');
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS]);
+    expect(entete(m, PINSONS).compte).toBe(t('participants.groupe.compte', { compte: 2 }));
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'ondine');
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual(['vide']);
+    expect(entete(m, 'vide').compte).toBe(t('participants.groupe.compte', { compte: 1 }));
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'iris');
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([MERLES]);
+    expect(entete(m, MERLES).compte).toBe(t('participants.groupe.compte', { compte: 1 }));
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), '');
+
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="appartenance"]'));
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="appartenance"]'));
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([MERLES, PINSONS, 'vide']);
+    // Trié par nom décroissant : groupes croissants, lignes au tri dans chacun.
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="nom"]'));
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="nom"]'));
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS, MERLES, 'vide']);
+    expect(idsDuGroupe(m, PINSONS)).toEqual([idDe(m, 'Grisaille'), idDe(m, 'Brindelle')]);
+    expect(idsDuGroupe(m, MERLES)).toEqual([idDe(m, 'Pervenche'), idDe(m, 'Ombrelle')]);
+  });
+
+  test('au clavier, les flèches et Tab passent d’une ligne visible à la suivante, par-dessus les en-têtes et les groupes repliés', async () => {
+    const m = await evenementOuvert({ personnes: CINQ });
+    await grouperPar(m, 'appartenance');
+    await cliquer(bascule(m, MERLES));
+    const [grisaille, brindelle, lacasse] = ['Grisaille', 'Brindelle', 'Lacasse'].map((nom) => idDe(m, nom));
+    expect(idsAffiches(m)).toEqual([grisaille, brindelle, lacasse]);
+
+    const premiere = grille(m).querySelector('td[tabindex="0"]');
+    expect(premiere).toBe(cellule(m, grisaille, COLONNES[0]));
+    premiere.focus();
+    await touche('ArrowDown');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, brindelle, COLONNES[0]));
+    await touche('ArrowDown');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, lacasse, COLONNES[0]));
+    await touche('ArrowDown');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, lacasse, COLONNES[0]));
+    await touche('ArrowUp');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, brindelle, COLONNES[0]));
+
+    // Tab depuis la dernière cellule de Brindelle mène à la première de Lacasse.
+    cellule(m, brindelle, COLONNES.at(-1)).focus();
+    await touche('Tab');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, lacasse, COLONNES[0]));
+    // Une seule cellule de la grille dans l'ordre de tabulation.
+    expect(grille(m).querySelectorAll('td[tabindex="0"]')).toHaveLength(1);
+  });
+
+  test('une saisie qui change la valeur groupée mène la ligne à son nouveau groupe, la cellule garde le focus ; un groupe replié qui la reçoit se déplie ; une entrée par saisie', async () => {
+    const m = await evenementOuvert({ personnes: CINQ });
+    await grouperPar(m, 'appartenance');
+    const lacasse = idDe(m, 'Lacasse');
+    const brindelle = idDe(m, 'Brindelle');
+    const avant = entrees(m).length;
+
+    cellule(m, lacasse, 'appartenance').focus();
+    await touche('Enter');
+    await rendu();
+    await saisir(cellule(m, lacasse, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(idsDuGroupe(m, PINSONS)).toContain(lacasse);
+    expect(groupe(m, 'vide')).toBeNull();
+    expect(document.activeElement).toBe(cellule(m, lacasse, 'appartenance'));
+    expect(entete(m, PINSONS).compte).toBe(t('participants.groupe.compte', { compte: 3 }));
+
+    // Vers un groupe replié : il se déplie, et la cellule garde le focus.
+    await cliquer(bascule(m, MERLES));
+    expect(idsDuGroupe(m, MERLES)).toEqual([]);
+    cellule(m, brindelle, 'appartenance').focus();
+    await touche('Enter');
+    await rendu();
+    await saisir(cellule(m, brindelle, 'appartenance').querySelector('input'), CLUB);
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 2);
+    expect(bascule(m, MERLES).getAttribute('aria-expanded')).toBe('true');
+    expect(idsDuGroupe(m, MERLES)).toContain(brindelle);
+    expect(document.activeElement).toBe(cellule(m, brindelle, 'appartenance'));
+  });
+
+  test('changer de groupement déplie tout : d’une colonne à une autre, ou à l’ajout d’un niveau', async () => {
+    const m = await evenementOuvert({ personnes: CINQ });
+    await grouperPar(m, 'appartenance');
+    await cliquer(bascule(m, 'vide'));
+    expect(bascule(m, 'vide').getAttribute('aria-expanded')).toBe('false');
+    expect(idsAffiches(m)).toHaveLength(4);
+
+    // Le prénom a lui aussi un groupe « vide ».
+    await grouperPar(m, 'prenom');
+    expect(groupe(m, 'vide')).not.toBeNull();
+    expect(ouverts(m).length).toBeGreaterThan(0);
+    expect(ouverts(m).every((etat) => etat === 'true')).toBe(true);
+    expect(idsAffiches(m)).toHaveLength(5);
+
+    await cliquer(bascule(m, 'vide'));
+    expect(idsAffiches(m)).toHaveLength(3);
+    await grouperPar(m, 'statut', 2);
+    expect(ouverts(m).every((etat) => etat === 'true')).toBe(true);
+    expect(idsAffiches(m)).toHaveLength(5);
+  });
+
+  test('validée par la sortie du champ, le focus posé ailleurs y reste ; le groupe replié qui reçoit la ligne le reste', async () => {
+    const m = await evenementOuvert({ personnes: CINQ });
+    await grouperPar(m, 'appartenance');
+    const lacasse = idDe(m, 'Lacasse');
+    const ombrelle = idDe(m, 'Ombrelle');
+    const filtre = section(m).querySelector('[data-champ="filtre"]');
+    const avant = entrees(m).length;
+
+    cellule(m, lacasse, 'appartenance').focus();
+    await touche('Enter');
+    await rendu();
+    await saisir(cellule(m, lacasse, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await cliquer(filtre);
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(idsDuGroupe(m, PINSONS)).toContain(lacasse);
+    expect(document.activeElement).toBe(filtre);
+
+    // Le groupe qui reçoit la ligne, replié avant la saisie, le reste.
+    await cliquer(bascule(m, PINSONS));
+    cellule(m, ombrelle, 'appartenance').focus();
+    await touche('Enter');
+    await rendu();
+    await saisir(cellule(m, ombrelle, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await cliquer(filtre);
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 2);
+    expect(bascule(m, PINSONS).getAttribute('aria-expanded')).toBe('false');
+    expect(entete(m, PINSONS).compte).toBe(t('participants.groupe.compte', { compte: 4 }));
+    expect(idsAffiches(m)).not.toContain(ombrelle);
+    expect(document.activeElement).toBe(filtre);
+  });
+
+  test('appartenance puis statut : en-têtes imbriqués, comptes, repli du sous-groupe seul ou du parent entier ; rien ne s’écrit', async () => {
+    const m = await appartenancePuisStatut();
+    const avant = empreinte(m);
+    const [ombrelle, pervenche] = ['Ombrelle', 'Pervenche'].map((nom) => idDe(m, nom));
+    const attendus = groupesGrille(lignesGrille(participants(m), { tri: null, filtre: '' }, cleNormalisee), ['appartenance', 'statut'], {
+      tri: null,
+      cleNormalisee,
+      statuts: statuts(m.seance.etat().charge).parId,
+    });
+    const tous = aplatir(attendus);
+    expect(tous.some(({ niveau }) => niveau === 2)).toBe(true);
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual(tous.map(({ cle }) => cle));
+    expect(groupes(m).map((g) => Number(g.dataset.niveau))).toEqual(tous.map(({ niveau }) => niveau));
+    for (const attendu of tous) {
+      expect(entete(m, attendu.cle), attendu.cle).toEqual(enteteAttendu(attendu));
+      expect(idsDuGroupe(m, attendu.cle), attendu.cle).toEqual(lignesVisibles([attendu], new Set()).map(({ id }) => id));
+    }
+    expect(idsAffiches(m)).toEqual(lignesVisibles(attendus, new Set()).map(({ id }) => id));
+    expect(entete(m, MERLES).compte).toBe(t('participants.groupe.compte', { compte: 2 }));
+    expect(idsDuGroupe(m, `${MERLES}/statut:ancre`)).toEqual([ombrelle]);
+    expect(idsDuGroupe(m, `${MERLES}/statut:mobile`)).toEqual([pervenche]);
+    // Un en-tête de sous-groupe est en retrait de celui de son parent.
+    expect(bascule(m, `${MERLES}/statut:ancre`).getBoundingClientRect().left).toBeGreaterThan(bascule(m, MERLES).getBoundingClientRect().left);
+
+    await cliquer(bascule(m, `${MERLES}/statut:mobile`));
+    expect(bascule(m, `${MERLES}/statut:mobile`).getAttribute('aria-expanded')).toBe('false');
+    expect(idsDuGroupe(m, MERLES)).toEqual([ombrelle]);
+    expect(entete(m, MERLES).compte).toBe(t('participants.groupe.compte', { compte: 2 }));
+    expect(entete(m, `${MERLES}/statut:mobile`).compte).toBe(t('participants.groupe.compte', { compte: 1 }));
+    expect(bascule(m, MERLES).getAttribute('aria-expanded')).toBe('true');
+
+    await cliquer(bascule(m, MERLES));
+    expect(groupe(m, `${MERLES}/statut:ancre`)).toBeNull();
+    expect(groupe(m, `${MERLES}/statut:mobile`)).toBeNull();
+    expect(idsDuGroupe(m, MERLES)).toEqual([]);
+    expect(idsAffiches(m)).toEqual(lignesVisibles(attendus, new Set([MERLES])).map(({ id }) => id));
+    // Déplié, le parent rend ses sous-groupes dans l'état où il les a laissés.
+    await cliquer(bascule(m, MERLES));
+    expect(bascule(m, `${MERLES}/statut:mobile`).getAttribute('aria-expanded')).toBe('false');
+    expect(bascule(m, `${MERLES}/statut:ancre`).getAttribute('aria-expanded')).toBe('true');
+
+    // Tout replier replie le premier niveau ; Tout déplier déplie tous les niveaux.
+    await cliquer(section(m).querySelector('[data-commande="toutReplier"]'));
+    expect(lignes(m)).toHaveLength(0);
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual(attendus.map(({ cle }) => cle));
+    expect(ouverts(m).every((etat) => etat === 'false')).toBe(true);
+    // Un parent déplié après Tout replier montre ses sous-groupes dépliés.
+    await cliquer(bascule(m, MERLES));
+    expect(ouverts(m).filter((etat) => etat === 'true')).toHaveLength(3);
+    expect(idsDuGroupe(m, MERLES)).toEqual([ombrelle, pervenche]);
+    await cliquer(section(m).querySelector('[data-commande="toutDeplier"]'));
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual(tous.map(({ cle }) => cle));
+    expect(ouverts(m).every((etat) => etat === 'true')).toBe(true);
+    expect(idsAffiches(m)).toEqual(lignesVisibles(attendus, new Set()).map(({ id }) => id));
+
+    await attendreSeance(m);
+    expect(empreinte(m)).toEqual(avant);
+  });
+
+  test('imbriqués : les flèches sautent tout en-tête ; une ligne menée sous un parent et un sous-groupe repliés les déplie', async () => {
+    const m = await appartenancePuisStatut();
+    const [ombrelle, pervenche, lacasse, grisaille, brindelle] = ['Ombrelle', 'Pervenche', 'Lacasse', 'Grisaille', 'Brindelle'].map((nom) => idDe(m, nom));
+    await cliquer(bascule(m, `${MERLES}/statut:ancre`));
+    expect(idsAffiches(m)).toEqual([brindelle, grisaille, pervenche, lacasse]);
+    cellule(m, grisaille, COLONNES[0]).focus();
+    await touche('ArrowDown');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, pervenche, COLONNES[0]));
+    await touche('ArrowUp');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, grisaille, COLONNES[0]));
+    await cliquer(section(m).querySelector('[data-commande="toutDeplier"]'));
+    expect(idsAffiches(m)).toContain(ombrelle);
+
+    // Lacasse rejoint les Merles, mobile comme Pervenche : le sous-groupe
+    // et son parent, tous deux repliés, se déplient.
+    const destination = `${MERLES}/statut:mobile`;
+    expect(cheminDe(groupesGrille(lignesGrille(participants(m), { tri: null, filtre: '' }, cleNormalisee), ['appartenance', 'statut'], {
+      tri: null,
+      cleNormalisee,
+      statuts: statuts(m.seance.etat().charge).parId,
+    }), pervenche)).toEqual([MERLES, destination]);
+    await cliquer(bascule(m, destination));
+    await cliquer(bascule(m, MERLES));
+    const avant = entrees(m).length;
+    cellule(m, lacasse, 'appartenance').focus();
+    await touche('Enter');
+    await rendu();
+    await saisir(cellule(m, lacasse, 'appartenance').querySelector('input'), CLUB);
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(bascule(m, MERLES).getAttribute('aria-expanded')).toBe('true');
+    expect(bascule(m, destination).getAttribute('aria-expanded')).toBe('true');
+    expect(idsDuGroupe(m, destination)).toEqual([pervenche, lacasse]);
+    expect(document.activeElement).toBe(cellule(m, lacasse, 'appartenance'));
   });
 });

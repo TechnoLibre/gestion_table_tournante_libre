@@ -4,19 +4,29 @@
 // Les modules purs de la liste des participants (§ 4, § 7.4, § 10.2) : les
 // lignes de la grille, triées et filtrées, la navigation au clavier,
 // l'orthographe d'appartenance à reprendre, l'itinéraire d'une personne dans
-// le retenu, ses réservations, et l'ordre des colonnes, celui de l'export.
+// le retenu, ses réservations, l'ordre des colonnes, celui de l'export, et
+// les groupes de la liste groupée par une colonne ou plusieurs, imbriqués.
 // Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { cleNormalisee, decoder, exporterParticipants } from '../../application/csv.js';
 import {
   COLONNES,
+  GROUPEMENTS,
+  basculerGroupe,
   celluleSuivante,
+  cheminDe,
+  choisirGroupement,
   cleDeColonne,
+  cleDeGroupement,
   cleDeStatut,
+  colonnesOffertes,
   entreeValide,
+  groupesGrille,
   itineraire,
   lignesGrille,
+  lignesVisibles,
+  niveauxAffiches,
   nomExport,
   orthographeExistante,
   reservationsDe,
@@ -336,5 +346,444 @@ describe('entreeValide : Entrée valide, Maj+Entrée garde le saut de ligne des 
 
   test('Maj+Entrée valide un champ d’une ligne, qui n’a pas de saut de ligne', () => {
     assert.equal(entreeValide({ maj: true, multiligne: false }), true);
+  });
+});
+
+describe('groupesGrille : la liste groupée par une colonne', () => {
+  // Les lignes de la grille, triées et filtrées comme la section les rend.
+  const lignesDe = (liste, { tri = null, filtre = '' } = {}) => lignesGrille(liste, { tri, filtre }, cleNormalisee);
+  const grouper = (lignes, colonne, { tri = null, statuts = null } = {}) => groupesGrille(lignes, [colonne], { tri, cleNormalisee, statuts });
+  // Chaque groupe réduit à sa clé, son libellé, son compte et ses lignes.
+  const resume = (groupes) =>
+    groupes.map(({ cle, libelle, cleLibelle, compte, lignes }) => ({ cle, libelle, cleLibelle, compte, ids: ids(lignes) }));
+
+  const membres = [
+    personne(5, 'Lisonnet', { appartenance: 'club des  merles' }),
+    personne(4, 'Grisaille'),
+    personne(3, 'Ombrelle', { appartenance: 'Club des Merles' }),
+    personne(2, 'Lacasse', { appartenance: 'Cercle des Pinsons' }),
+    personne(1, 'Pervenche', { appartenance: 'CLUB DES MERLES' }),
+  ];
+
+  test('les colonnes groupables : celles de la grille, puis le statut calculé, chacune avec sa clé de libellé', () => {
+    assert.deepEqual(GROUPEMENTS, [...COLONNES, 'statut']);
+    assert.ok(GROUPEMENTS.length > 0);
+    for (const colonne of COLONNES) assert.equal(cleDeGroupement(colonne), cleDeColonne(colonne), colonne);
+    assert.equal(cleDeGroupement('statut'), 'participants.groupe.statut');
+    assert.throws(() => cleDeGroupement('id'), RangeError);
+  });
+
+  test('par appartenance : un groupe par clé normalisée, nommé par l’orthographe du plus petit identifiant ; le groupe vide en dernier', () => {
+    assert.deepEqual(resume(grouper(lignesDe(membres), 'appartenance')), [
+      { cle: 'texte:cercle des pinsons', libelle: 'Cercle des Pinsons', cleLibelle: null, compte: 1, ids: [2] },
+      { cle: 'texte:club des merles', libelle: 'CLUB DES MERLES', cleLibelle: null, compte: 3, ids: [1, 3, 5] },
+      { cle: 'vide', libelle: null, cleLibelle: 'participants.groupe.vide', compte: 1, ids: [4] },
+    ]);
+  });
+
+  test('le libellé ne dépend pas du tri : le plus petit identifiant le donne, croissant comme décroissant', () => {
+    for (const sens of ['croissant', 'decroissant']) {
+      const lignes = lignesDe(membres, { tri: { colonne: 'nom', sens } });
+      const merles = grouper(lignes, 'appartenance').find(({ cle }) => cle === 'texte:club des merles');
+      assert.equal(merles.libelle, 'CLUB DES MERLES', sens);
+    }
+  });
+
+  test('trié par la colonne groupée, les groupes suivent son sens ; le groupe vide reste après toute valeur', () => {
+    const tri = { colonne: 'appartenance', sens: 'decroissant' };
+    const groupes = grouper(lignesDe(membres, { tri }), 'appartenance', { tri });
+    assert.deepEqual(
+      groupes.map(({ cle }) => cle),
+      ['texte:club des merles', 'texte:cercle des pinsons', 'vide'],
+    );
+  });
+
+  test('trié par une autre colonne, les groupes sont croissants et chaque groupe garde l’ordre du tri', () => {
+    const tri = { colonne: 'nom', sens: 'decroissant' };
+    const groupes = grouper(lignesDe(membres, { tri }), 'appartenance', { tri });
+    assert.deepEqual(resume(groupes).map(({ cle, ids: suite }) => [cle, suite]), [
+      ['texte:cercle des pinsons', [2]],
+      ['texte:club des merles', [1, 3, 5]],
+      ['vide', [4]],
+    ]);
+    const parNom = grouper(lignesDe(membres, { tri: { colonne: 'nom', sens: 'croissant' } }), 'appartenance');
+    assert.deepEqual(parNom[1].lignes.map(({ nom }) => nom), ['Lisonnet', 'Ombrelle', 'Pervenche']);
+  });
+
+  test('le filtre passe d’abord : un groupe sans ligne disparaît, et chaque compte est celui des lignes montrées', () => {
+    const groupes = grouper(lignesDe(membres, { filtre: 'merles' }), 'appartenance');
+    assert.deepEqual(resume(groupes), [
+      { cle: 'texte:club des merles', libelle: 'CLUB DES MERLES', cleLibelle: null, compte: 3, ids: [1, 3, 5] },
+    ]);
+    const aucun = grouper(lignesDe(membres, { filtre: 'absent' }), 'appartenance');
+    assert.deepEqual(aucun, []);
+  });
+
+  test('chaque colonne de texte groupe par sa clé normalisée, le vide après toute valeur, dans les deux sens', () => {
+    const textes = COLONNES.filter((colonne) => colonne !== 'exclu' && colonne !== 'nom');
+    assert.ok(textes.length > 0);
+    for (const colonne of textes) {
+      const liste = [
+        personne(1, 'Ombrelle', { [colonne]: 'Zinnia' }),
+        personne(2, 'Pervenche'),
+        personne(3, 'Lacasse', { [colonne]: 'acacia' }),
+        personne(4, 'Grisaille', { [colonne]: 'ZINNIA' }),
+      ];
+      for (const sens of ['croissant', 'decroissant']) {
+        const tri = { colonne, sens };
+        const groupes = grouper(lignesDe(liste, { tri }), colonne, { tri });
+        const attendues = sens === 'croissant' ? ['texte:acacia', 'texte:zinnia', 'vide'] : ['texte:zinnia', 'texte:acacia', 'vide'];
+        assert.deepEqual(groupes.map(({ cle }) => cle), attendues, `${colonne} ${sens}`);
+        assert.equal(groupes.find(({ cle }) => cle === 'texte:zinnia').libelle, 'Zinnia', `${colonne} ${sens}`);
+      }
+    }
+    // Le nom n'est jamais null : deux homonymes forment un groupe.
+    const homonymes = grouper(lignesDe([personne(2, 'Ombrelle'), personne(1, 'OMBRELLE'), personne(3, 'Lacasse')]), 'nom');
+    assert.deepEqual(resume(homonymes).map(({ libelle, ids: suite }) => [libelle, suite]), [
+      ['Lacasse', [3]],
+      ['OMBRELLE', [1, 2]],
+    ]);
+  });
+
+  test('par exclusion : présentes avant exclues, exclues d’abord quand l’exclusion est triée décroissante', () => {
+    const liste = [personne(1, 'Ombrelle', { exclu: true }), personne(2, 'Pervenche'), personne(3, 'Lacasse')];
+    assert.deepEqual(resume(grouper(lignesDe(liste), 'exclu')), [
+      { cle: 'exclu:non', libelle: null, cleLibelle: 'participants.grille.presente', compte: 2, ids: [2, 3] },
+      { cle: 'exclu:oui', libelle: null, cleLibelle: 'participants.grille.exclue', compte: 1, ids: [1] },
+    ]);
+    const tri = { colonne: 'exclu', sens: 'decroissant' };
+    assert.deepEqual(
+      grouper(lignesDe(liste, { tri }), 'exclu', { tri }).map(({ cle }) => cle),
+      ['exclu:oui', 'exclu:non'],
+    );
+  });
+
+  test('par statut : ancré, partiellement fixé, mobile, puis exclue, puis non calculé, quel que soit le tri', () => {
+    const liste = [
+      personne(1, 'Ombrelle'),
+      personne(2, 'Pervenche'),
+      personne(3, 'Lacasse'),
+      personne(4, 'Grisaille', { exclu: true }),
+      personne(5, 'Lisonnet'),
+      personne(6, 'Brindelle'),
+    ];
+    // 5 manque aux statuts calculés : une configuration incohérente le
+    // laisse non calculé.
+    const statuts = new Map([
+      [1, 'mobile'],
+      [2, 'ancre'],
+      [3, 'partiel'],
+      [6, 'ancre'],
+    ]);
+    const attendu = [
+      { cle: 'statut:ancre', libelle: null, cleLibelle: 'participants.statut.ancre', compte: 2, ids: [2, 6] },
+      { cle: 'statut:partiel', libelle: null, cleLibelle: 'participants.statut.partiel', compte: 1, ids: [3] },
+      { cle: 'statut:mobile', libelle: null, cleLibelle: 'participants.statut.mobile', compte: 1, ids: [1] },
+      { cle: 'statut:exclue', libelle: null, cleLibelle: 'participants.grille.exclue', compte: 1, ids: [4] },
+      { cle: 'statut:inconnu', libelle: null, cleLibelle: 'participants.groupe.statutInconnu', compte: 1, ids: [5] },
+    ];
+    assert.deepEqual(resume(grouper(lignesDe(liste), 'statut', { statuts })), attendu);
+    const tri = { colonne: 'nom', sens: 'decroissant' };
+    const triees = grouper(lignesDe(liste, { tri }), 'statut', { tri, statuts });
+    assert.deepEqual(triees.map(({ cle }) => cle), attendu.map(({ cle }) => cle));
+    assert.deepEqual(ids(triees[0].lignes), [2, 6]);
+    // Sans statuts calculés, toute personne présente est non calculée.
+    assert.deepEqual(
+      grouper(lignesDe(liste), 'statut').map(({ cle, compte }) => [cle, compte]),
+      [
+        ['statut:exclue', 1],
+        ['statut:inconnu', 5],
+      ],
+    );
+  });
+
+  test('l’ordre reçu des participants ne change rien : mêmes groupes, mêmes lignes', () => {
+    const renverse = [...membres].reverse();
+    const tri = { colonne: 'appartenance', sens: 'croissant' };
+    assert.deepEqual(resume(grouper(lignesDe(renverse, { tri }), 'appartenance', { tri })), resume(grouper(lignesDe(membres, { tri }), 'appartenance', { tri })));
+  });
+
+  test('chaque ligne dans un seul groupe, aucune perdue ; la liste reçue reste intacte', () => {
+    const lignes = lignesDe(membres);
+    const copie = structuredClone(lignes);
+    assert.ok(GROUPEMENTS.length > 0);
+    for (const colonne of GROUPEMENTS) {
+      const groupes = grouper(lignes, colonne, { statuts: new Map() });
+      const toutes = groupes.flatMap(({ lignes: l }) => ids(l)).sort((a, b) => a - b);
+      assert.deepEqual(toutes, [1, 2, 3, 4, 5], colonne);
+      assert.ok(groupes.every(({ compte, lignes: l }) => compte === l.length && compte > 0), colonne);
+      assert.equal(new Set(groupes.map(({ cle }) => cle)).size, groupes.length, colonne);
+    }
+    assert.deepEqual(lignes, copie);
+  });
+
+  test('une colonne inconnue : RangeError', () => {
+    assert.throws(() => grouper(lignesDe(membres), 'id'), RangeError);
+  });
+
+  test('un seul niveau : chaque groupe est une feuille, de niveau 1, qui nomme sa colonne', () => {
+    const groupes = grouper(lignesDe(membres), 'appartenance');
+    assert.ok(groupes.length > 0);
+    for (const groupe of groupes) {
+      assert.equal(groupe.sousGroupes, null, groupe.cle);
+      assert.equal(groupe.niveau, 1, groupe.cle);
+      assert.equal(groupe.colonne, 'appartenance', groupe.cle);
+    }
+  });
+});
+
+describe('groupesGrille sur plusieurs colonnes : des groupes imbriqués', () => {
+  const lignesDe = (liste, { tri = null, filtre = '' } = {}) => lignesGrille(liste, { tri, filtre }, cleNormalisee);
+  const grouper = (lignes, colonnes, { tri = null, statuts = null } = {}) => groupesGrille(lignes, colonnes, { tri, cleNormalisee, statuts });
+  // L'arbre réduit à ce qui se lit : clé, niveau, colonne, libellé,
+  // compte, puis les sous-groupes, ou les lignes d'une feuille.
+  const arbre = (groupes) =>
+    groupes.map(({ cle, niveau, colonne, libelle, cleLibelle, compte, lignes, sousGroupes }) => ({
+      cle,
+      niveau,
+      colonne,
+      libelle,
+      cleLibelle,
+      compte,
+      ...(sousGroupes === null ? { ids: ids(lignes) } : { sous: arbre(sousGroupes) }),
+    }));
+  const feuilles = (groupes) => groupes.flatMap((g) => (g.sousGroupes === null ? [g] : feuilles(g.sousGroupes)));
+  const tous = (groupes) => groupes.flatMap((g) => [g, ...(g.sousGroupes === null ? [] : tous(g.sousGroupes))]);
+
+  const liste = [
+    personne(5, 'Lisonnet', { appartenance: 'club des merles' }),
+    personne(4, 'Grisaille'),
+    personne(3, 'Lacasse', { appartenance: 'Cercle des Pinsons' }),
+    personne(2, 'Pervenche', { appartenance: 'CLUB DES MERLES', exclu: true }),
+    personne(1, 'Ombrelle', { appartenance: 'Club des Merles' }),
+  ];
+  const statuts = new Map([
+    [1, 'ancre'],
+    [3, 'mobile'],
+    [4, 'mobile'],
+    [5, 'mobile'],
+  ]);
+
+  test('appartenance puis statut : chaque groupe d’appartenance porte ses groupes de statut, la clé d’un sous-groupe prolonge celle de son parent', () => {
+    const merles = 'texte:club des merles';
+    const pinsons = 'texte:cercle des pinsons';
+    assert.deepEqual(arbre(grouper(lignesDe(liste), ['appartenance', 'statut'], { statuts })), [
+      {
+        cle: pinsons,
+        niveau: 1,
+        colonne: 'appartenance',
+        libelle: 'Cercle des Pinsons',
+        cleLibelle: null,
+        compte: 1,
+        sous: [{ cle: `${pinsons}/statut:mobile`, niveau: 2, colonne: 'statut', libelle: null, cleLibelle: 'participants.statut.mobile', compte: 1, ids: [3] }],
+      },
+      {
+        cle: merles,
+        niveau: 1,
+        colonne: 'appartenance',
+        libelle: 'Club des Merles',
+        cleLibelle: null,
+        compte: 3,
+        sous: [
+          { cle: `${merles}/statut:ancre`, niveau: 2, colonne: 'statut', libelle: null, cleLibelle: 'participants.statut.ancre', compte: 1, ids: [1] },
+          { cle: `${merles}/statut:mobile`, niveau: 2, colonne: 'statut', libelle: null, cleLibelle: 'participants.statut.mobile', compte: 1, ids: [5] },
+          { cle: `${merles}/statut:exclue`, niveau: 2, colonne: 'statut', libelle: null, cleLibelle: 'participants.grille.exclue', compte: 1, ids: [2] },
+        ],
+      },
+      {
+        cle: 'vide',
+        niveau: 1,
+        colonne: 'appartenance',
+        libelle: null,
+        cleLibelle: 'participants.groupe.vide',
+        compte: 1,
+        sous: [{ cle: 'vide/statut:mobile', niveau: 2, colonne: 'statut', libelle: null, cleLibelle: 'participants.statut.mobile', compte: 1, ids: [4] }],
+      },
+    ]);
+  });
+
+  test('un groupe parent garde toutes ses lignes dans l’ordre reçu ; son compte est la somme de ceux de ses sous-groupes', () => {
+    const groupes = grouper(lignesDe(liste), ['appartenance', 'statut'], { statuts });
+    const merles = groupes.find(({ cle }) => cle === 'texte:club des merles');
+    assert.deepEqual(ids(merles.lignes), [1, 2, 5]);
+    for (const groupe of tous(groupes)) {
+      if (groupe.sousGroupes === null) continue;
+      assert.equal(groupe.compte, groupe.sousGroupes.reduce((somme, { compte }) => somme + compte, 0), groupe.cle);
+    }
+  });
+
+  test('chaque niveau s’ordonne sur sa colonne : dans le sens du tri quand il la trie, croissant sinon', () => {
+    const tri = { colonne: 'appartenance', sens: 'decroissant' };
+    const groupes = grouper(lignesDe(liste, { tri }), ['statut', 'appartenance'], { tri, statuts });
+    assert.deepEqual(
+      groupes.map(({ cle }) => cle),
+      ['statut:ancre', 'statut:mobile', 'statut:exclue'],
+    );
+    assert.deepEqual(
+      groupes[1].sousGroupes.map(({ cle }) => cle),
+      ['statut:mobile/texte:club des merles', 'statut:mobile/texte:cercle des pinsons', 'statut:mobile/vide'],
+    );
+    const croissants = grouper(lignesDe(liste), ['statut', 'appartenance'], { statuts });
+    assert.deepEqual(
+      croissants[1].sousGroupes.map(({ cle }) => cle),
+      ['statut:mobile/texte:cercle des pinsons', 'statut:mobile/texte:club des merles', 'statut:mobile/vide'],
+    );
+  });
+
+  test('toute paire de colonnes : chaque ligne dans une seule feuille, aucune perdue, des clés uniques à tout niveau, d’autant de segments que le niveau', () => {
+    const lignes = lignesDe(liste);
+    const copie = structuredClone(lignes);
+    let paires = 0;
+    for (const premiere of GROUPEMENTS) {
+      for (const seconde of GROUPEMENTS) {
+        if (premiere === seconde) continue;
+        paires += 1;
+        const groupes = grouper(lignes, [premiere, seconde], { statuts });
+        const cas = `${premiere} puis ${seconde}`;
+        assert.deepEqual(feuilles(groupes).flatMap(({ lignes: l }) => ids(l)).sort((a, b) => a - b), [1, 2, 3, 4, 5], cas);
+        const cles = tous(groupes).map(({ cle }) => cle);
+        assert.equal(new Set(cles).size, cles.length, cas);
+        for (const groupe of tous(groupes)) assert.equal(groupe.cle.split('/').length, groupe.niveau, `${cas} ${groupe.cle}`);
+        assert.ok(feuilles(groupes).every(({ niveau, colonne }) => niveau === 2 && colonne === seconde), cas);
+      }
+    }
+    assert.equal(paires, GROUPEMENTS.length * (GROUPEMENTS.length - 1));
+    assert.deepEqual(lignes, copie);
+  });
+
+  test('une valeur qui porte « / » ou « % » ne se lit jamais comme un séparateur : sa clé les échappe', () => {
+    const portees = [
+      personne(1, 'Ombrelle', { appartenance: 'Nord/Sud', prenom: 'Iris' }),
+      personne(2, 'Pervenche', { appartenance: 'Nord', prenom: 'Sud/Iris' }),
+      personne(3, 'Lacasse', { appartenance: '100%', prenom: 'Iris' }),
+    ];
+    const groupes = grouper(lignesDe(portees), ['appartenance', 'prenom']);
+    assert.deepEqual(
+      tous(groupes).map(({ cle }) => cle),
+      ['texte:100%25', 'texte:100%25/texte:iris', 'texte:nord', 'texte:nord/texte:sud%2Firis', 'texte:nord%2Fsud', 'texte:nord%2Fsud/texte:iris'],
+    );
+  });
+
+  test('aucune colonne, une colonne répétée, une colonne inconnue, une colonne seule hors d’une liste : RangeError', () => {
+    const lignes = lignesDe(liste);
+    assert.throws(() => grouper(lignes, []), RangeError);
+    assert.throws(() => grouper(lignes, ['statut', 'statut'], { statuts }), RangeError);
+    assert.throws(() => grouper(lignes, ['appartenance', 'id']), RangeError);
+    assert.throws(() => grouper(lignes, 'appartenance'), RangeError);
+  });
+});
+
+describe('lignesVisibles, cheminDe : les groupes repliés et la navigation', () => {
+  const liste = [
+    personne(1, 'Ombrelle', { appartenance: 'Club des Merles' }),
+    personne(2, 'Pervenche', { appartenance: 'Cercle des Pinsons' }),
+    personne(3, 'Lacasse', { appartenance: 'Club des Merles' }),
+    personne(4, 'Grisaille'),
+    personne(5, 'Lisonnet', { appartenance: 'Atelier des Grives' }),
+  ];
+  const groupes = groupesGrille(lignesGrille(liste, { tri: null, filtre: '' }, cleNormalisee), ['appartenance'], {
+    tri: null,
+    cleNormalisee,
+    statuts: null,
+  });
+
+  test('sans groupe replié, les lignes de chaque groupe, groupe après groupe', () => {
+    assert.deepEqual(ids(lignesVisibles(groupes, new Set())), [5, 2, 1, 3, 4]);
+  });
+
+  test('un groupe replié retire exactement ses lignes ; tout replier n’en laisse aucune', () => {
+    assert.deepEqual(ids(lignesVisibles(groupes, new Set(['texte:cercle des pinsons']))), [5, 1, 3, 4]);
+    assert.deepEqual(ids(lignesVisibles(groupes, new Set(['texte:club des merles', 'vide']))), [5, 2]);
+    assert.deepEqual(lignesVisibles(groupes, new Set(groupes.map(({ cle }) => cle))), []);
+    // Une clé sans groupe ne retire rien.
+    assert.deepEqual(ids(lignesVisibles(groupes, new Set(['texte:absent']))), [5, 2, 1, 3, 4]);
+  });
+
+  test('celluleSuivante sur les lignes visibles passe par-dessus un groupe replié', () => {
+    const visibles = lignesVisibles(groupes, new Set(['texte:cercle des pinsons']));
+    const taille = { lignes: visibles.length, colonnes: COLONNES.length };
+    const depuis = { ligne: ids(visibles).indexOf(5), colonne: 2 };
+    const arrivee = celluleSuivante(depuis, 'ArrowDown', taille);
+    assert.equal(visibles[arrivee.ligne].id, 1);
+    const fin = celluleSuivante({ ligne: visibles.length - 1, colonne: COLONNES.length - 1 }, 'Tab', taille);
+    assert.equal(fin, null);
+  });
+
+  test('basculerGroupe : replie un groupe déplié, déplie un groupe replié, sans toucher l’ensemble reçu', () => {
+    const replies = new Set(['vide']);
+    assert.deepEqual([...basculerGroupe(replies, 'texte:club des merles')], ['vide', 'texte:club des merles']);
+    assert.deepEqual([...basculerGroupe(replies, 'vide')], []);
+    assert.deepEqual([...replies], ['vide']);
+  });
+
+  test('cheminDe : la clé du groupe d’une personne, vide hors de tout groupe', () => {
+    assert.deepEqual(cheminDe(groupes, 3), ['texte:club des merles']);
+    assert.deepEqual(cheminDe(groupes, 4), ['vide']);
+    assert.deepEqual(cheminDe(groupes, 99), []);
+  });
+
+  // Les mêmes personnes groupées par appartenance puis par prénom.
+  const imbriques = groupesGrille(
+    lignesGrille(
+      liste.map((p) => ({ ...p, prenom: p.id % 2 === 0 ? 'Iris' : 'Théo' })),
+      { tri: null, filtre: '' },
+      cleNormalisee,
+    ),
+    ['appartenance', 'prenom'],
+    { tri: null, cleNormalisee, statuts: null },
+  );
+  const MERLES = 'texte:club des merles';
+
+  test('imbriqués : les lignes visibles suivent les sous-groupes ; replier un sous-groupe ne retire que les siennes, replier son parent retire tout le parent', () => {
+    assert.deepEqual(ids(lignesVisibles(imbriques, new Set())), [5, 2, 1, 3, 4]);
+    assert.deepEqual(ids(lignesVisibles(imbriques, new Set([`${MERLES}/texte:theo`]))), [5, 2, 4]);
+    assert.deepEqual(ids(lignesVisibles(imbriques, new Set([MERLES]))), [5, 2, 4]);
+    // Un sous-groupe déplié sous un parent replié reste caché.
+    assert.deepEqual(ids(lignesVisibles(imbriques, new Set([MERLES, 'vide/texte:iris']))), [5, 2]);
+  });
+
+  test('cheminDe imbriqué : les clés de chaque groupe qui compte la personne, du plus large au plus étroit', () => {
+    assert.deepEqual(cheminDe(imbriques, 3), [MERLES, `${MERLES}/texte:theo`]);
+    assert.deepEqual(cheminDe(imbriques, 4), ['vide', 'vide/texte:iris']);
+    assert.deepEqual(cheminDe(imbriques, 99), []);
+  });
+});
+
+describe('choisirGroupement, niveauxAffiches, colonnesOffertes : les niveaux du groupement', () => {
+  test('choisir une colonne au premier niveau libre l’ajoute ; la valeur vide à un niveau le retire, lui et ceux d’après', () => {
+    assert.deepEqual(choisirGroupement([], 0, 'appartenance'), ['appartenance']);
+    assert.deepEqual(choisirGroupement(['appartenance'], 1, 'statut'), ['appartenance', 'statut']);
+    assert.deepEqual(choisirGroupement(['appartenance', 'statut', 'nom'], 1, ''), ['appartenance']);
+    assert.deepEqual(choisirGroupement(['appartenance', 'statut'], 0, ''), []);
+  });
+
+  test('changer la colonne d’un niveau garde les suivants, hors celle qui y était déjà', () => {
+    assert.deepEqual(choisirGroupement(['appartenance', 'statut', 'nom'], 0, 'prenom'), ['prenom', 'statut', 'nom']);
+    assert.deepEqual(choisirGroupement(['appartenance', 'statut', 'nom'], 0, 'statut'), ['statut', 'nom']);
+    assert.deepEqual(choisirGroupement(['appartenance', 'statut', 'nom'], 1, 'nom'), ['appartenance', 'nom']);
+  });
+
+  test('ne modifie pas le groupement reçu ; une colonne inconnue, une prise plus haut, un niveau au-delà du premier libre : RangeError', () => {
+    const groupement = Object.freeze(['appartenance', 'statut']);
+    choisirGroupement(groupement, 1, 'nom');
+    assert.deepEqual(groupement, ['appartenance', 'statut']);
+    assert.throws(() => choisirGroupement(groupement, 1, 'id'), RangeError);
+    assert.throws(() => choisirGroupement(groupement, 1, 'appartenance'), RangeError);
+    assert.throws(() => choisirGroupement(groupement, 3, 'nom'), RangeError);
+    assert.throws(() => choisirGroupement(groupement, -1, 'nom'), RangeError);
+  });
+
+  test('les niveaux affichés : un par colonne choisie, puis le suivant tant qu’une colonne reste libre', () => {
+    assert.deepEqual(niveauxAffiches([]), [0]);
+    assert.deepEqual(niveauxAffiches(['appartenance', 'statut']), [0, 1, 2]);
+    assert.deepEqual(niveauxAffiches(GROUPEMENTS.slice(0, -1)), GROUPEMENTS.map((_, rang) => rang));
+    assert.deepEqual(niveauxAffiches(GROUPEMENTS), GROUPEMENTS.map((_, rang) => rang));
+  });
+
+  test('les colonnes offertes à un niveau : celles de GROUPEMENTS, dans leur ordre, hors celles des niveaux plus larges', () => {
+    assert.deepEqual(colonnesOffertes([], 0), GROUPEMENTS);
+    assert.deepEqual(colonnesOffertes(['appartenance', 'statut'], 0), GROUPEMENTS);
+    assert.deepEqual(colonnesOffertes(['appartenance', 'statut'], 1), GROUPEMENTS.filter((c) => c !== 'appartenance'));
+    assert.deepEqual(colonnesOffertes(['appartenance', 'statut'], 2), GROUPEMENTS.filter((c) => c !== 'appartenance' && c !== 'statut'));
   });
 });

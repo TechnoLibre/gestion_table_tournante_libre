@@ -4,8 +4,10 @@
 // Les modules purs de la liste des participants (§ 4, § 7.4, § 10.2), que
 // câblent SectionParticipants, Grille, Formulaire et Fiche : les colonnes de
 // la grille, ses lignes triées et filtrées, la cellule qu'atteint une
-// touche, l'orthographe d'appartenance à reprendre, l'itinéraire d'une
-// personne dans le retenu et ses réservations. Aucune fonction ne modifie ce
+// touche, les groupes, imbriqués, de la liste groupée par une colonne ou
+// plusieurs et les lignes que laissent voir les groupes repliés,
+// l'orthographe d'appartenance à reprendre, l'itinéraire d'une personne
+// dans le retenu et ses réservations. Aucune fonction ne modifie ce
 // qu'elle reçoit ; la clé normalisée vient de l'appelant, qui la tient de
 // src/application/csv.js.
 
@@ -113,6 +115,252 @@ export function lignesGrille(participants, { tri, filtre }, cleNormalisee) {
     return a.id - b.id;
   };
   return retenues.sort(comparer);
+}
+
+/** Les colonnes par lesquelles la liste se groupe : celles de la grille,
+ *  dans leur ordre, puis le statut calculé (§ 4.2), qui n'est pas une
+ *  colonne. */
+export const GROUPEMENTS = Object.freeze([...COLONNES, 'statut']);
+
+/**
+ * La clé du libellé d'une colonne de GROUPEMENTS : celle de sa colonne de
+ * la grille, ou celle du statut.
+ *
+ * @param {string} colonne
+ * @returns {string}
+ * @throws {RangeError} hors de GROUPEMENTS
+ */
+export function cleDeGroupement(colonne) {
+  return colonne === 'statut' ? 'participants.groupe.statut' : cleDeColonne(colonne);
+}
+
+/**
+ * Le groupement après le choix de colonne au niveau rang, compté depuis 0 :
+ * la liste des colonnes de GROUPEMENTS, la plus large d'abord. La valeur
+ * vide retire ce niveau et tous ceux d'après ; une colonne remplace celle
+ * du niveau, ou l'ajoute au premier niveau libre, et les niveaux suivants
+ * restent, hors celui qui la portait déjà. Rend une nouvelle liste.
+ *
+ * @param {Array<string>} groupement
+ * @param {number} rang      de 0 au nombre de niveaux
+ * @param {string} colonne   '' ou une colonne de colonnesOffertes(groupement, rang)
+ * @returns {Array<string>}
+ * @throws {RangeError} un rang au-delà du premier niveau libre, une colonne
+ *         hors de celles offertes à ce rang
+ */
+export function choisirGroupement(groupement, rang, colonne) {
+  if (!Number.isInteger(rang) || rang < 0 || rang > groupement.length) throw new RangeError(`niveau inconnu : ${rang}`);
+  const plusLarges = groupement.slice(0, rang);
+  if (colonne === '') return plusLarges;
+  if (!colonnesOffertes(groupement, rang).includes(colonne)) throw new RangeError(`groupement inconnu : ${JSON.stringify(colonne)}`);
+  return [...plusLarges, colonne, ...groupement.slice(rang + 1).filter((suivante) => suivante !== colonne)];
+}
+
+/**
+ * Les rangs, comptés depuis 0, des niveaux dont le groupement montre le
+ * sélecteur : un par colonne choisie, puis celui du niveau suivant tant
+ * qu'une colonne de GROUPEMENTS reste libre.
+ *
+ * @param {Array<string>} groupement
+ * @returns {Array<number>}
+ */
+export function niveauxAffiches(groupement) {
+  const nombre = groupement.length < GROUPEMENTS.length ? groupement.length + 1 : groupement.length;
+  return Array.from({ length: nombre }, (_, rang) => rang);
+}
+
+/**
+ * Les colonnes que le niveau rang du groupement peut prendre : celles de
+ * GROUPEMENTS, dans leur ordre, hors celles des niveaux plus larges.
+ *
+ * @param {Array<string>} groupement
+ * @param {number} rang   compté depuis 0
+ * @returns {Array<string>}
+ */
+export function colonnesOffertes(groupement, rang) {
+  const prises = groupement.slice(0, rang);
+  return GROUPEMENTS.filter((colonne) => !prises.includes(colonne));
+}
+
+// Les groupes d'un groupement par statut, dans leur ordre, et la clé du
+// libellé de chacun : les trois statuts calculés, une personne exclue, qui
+// n'en a aucun, puis une personne présente que le calcul ne nomme pas —
+// celui d'une configuration incohérente.
+const GROUPES_STATUT = new Map([
+  ['ancre', 'participants.statut.ancre'],
+  ['partiel', 'participants.statut.partiel'],
+  ['mobile', 'participants.statut.mobile'],
+  ['exclue', 'participants.grille.exclue'],
+  ['inconnu', 'participants.groupe.statutInconnu'],
+]);
+const RANGS_STATUT = new Map([...GROUPES_STATUT.keys()].map((statut, rang) => [statut, rang]));
+
+// Un segment de la clé d'un groupe : « % » et « / » s'y échappent, si
+// bien que « / » ne sépare jamais que deux niveaux.
+const segment = (texte) => texte.replaceAll('%', '%25').replaceAll('/', '%2F');
+
+/**
+ * Les groupes de la liste groupée par une ou plusieurs colonnes, imbriqués
+ * dans l'ordre de colonnes : un groupe par valeur distincte de la première
+ * parmi les lignes reçues, qui sont celles de lignesGrille — le filtre est
+ * déjà passé, et un groupe n'existe que par ses lignes —, puis, dans chaque
+ * groupe, un sous-groupe par valeur distincte de la colonne suivante, et
+ * ainsi de suite. Chaque groupe garde ses lignes dans l'ordre reçu, celui
+ * du tri.
+ *
+ * Une colonne de texte groupe par la clé normalisée, comme le tri la lit :
+ * le groupe se nomme par l'orthographe du plus petit identifiant qu'il
+ * compte, que ni le tri ni l'ordre reçu ne changent. Un champ null forme le
+ * groupe vide, après toute valeur dans les deux sens. L'exclusion groupe
+ * les présentes avant les exclues. Le statut groupe par statuts.get(id),
+ * dans l'ordre de GROUPES_STATUT : une exclue, absente des statuts
+ * calculés, dans son groupe ; une présente qui y manque, dans le groupe non
+ * calculé.
+ *
+ * Les groupes d'un niveau s'ordonnent sur leur valeur dans le sens du tri
+ * quand le tri porte sur la colonne de ce niveau, croissants sinon ; l'ordre
+ * est total, donc le même quel que soit l'ordre de découverte des valeurs.
+ *
+ * Un groupe rend sa clé, unique parmi tous les groupes de tous les niveaux
+ * et stable tant que les valeurs qui le désignent ne changent pas : celle
+ * de son parent, « / », puis le segment de sa valeur — 'texte:<clé
+ * normalisée>', où « % » et « / » s'échappent en %25 et %2F, 'vide',
+ * 'exclu:non', 'exclu:oui', 'statut:<statut>' ; au premier niveau, le seul
+ * segment. Il rend aussi son niveau, de 1 au nombre de colonnes, sa
+ * colonne, son libellé, qui est soit une donnée (libelle), soit la clé d'un
+ * texte de la table de traduction (cleLibelle), l'autre valant null, le
+ * nombre de ses lignes, ses lignes, et ses sous-groupes : null au dernier
+ * niveau, la liste des groupes de la colonne suivante sinon.
+ *
+ * @param {Array<Object>} lignes   les lignes de la grille, dans leur ordre
+ * @param {Array<string>} colonnes  des colonnes de GROUPEMENTS, distinctes,
+ *        au moins une, la plus large d'abord
+ * @param {{tri: null|{colonne: string, sens: 'croissant'|'decroissant'},
+ *          cleNormalisee: (texte: string) => string,
+ *          statuts: Map<number, 'ancre'|'partiel'|'mobile'>|null}} options
+ * @returns {Array<{cle: string, niveau: number, colonne: string, libelle: string|null,
+ *          cleLibelle: string|null, compte: number, lignes: Array<Object>, sousGroupes: Array<Object>|null}>}
+ * @throws {RangeError} colonnes qui n'est pas une liste, vide, répétée ou
+ *         hors de GROUPEMENTS
+ */
+export function groupesGrille(lignes, colonnes, { tri, cleNormalisee, statuts }) {
+  if (
+    !Array.isArray(colonnes) ||
+    colonnes.length === 0 ||
+    new Set(colonnes).size !== colonnes.length ||
+    !colonnes.every((colonne) => GROUPEMENTS.includes(colonne))
+  ) {
+    throw new RangeError(`groupement inconnu : ${JSON.stringify(colonnes)}`);
+  }
+  return grouperNiveau(lignes, colonnes, 1, null, { tri, cleNormalisee, statuts });
+}
+
+// Les groupes des lignes sur colonnes[niveau - 1], chacun sous-groupé par
+// les colonnes suivantes ; parent est la clé du groupe qui les contient,
+// null au premier niveau.
+function grouperNiveau(lignes, colonnes, niveau, parent, options) {
+  const { tri, cleNormalisee, statuts } = options;
+  const colonne = colonnes[niveau - 1];
+  const signe = tri !== null && tri.colonne === colonne ? SENS.get(tri.sens) : 1;
+
+  // La valeur d'une ligne : le segment de sa clé, son rang d'ordre — un
+  // nombre, une chaîne, ou null pour le groupe vide — et son libellé.
+  const valeurDe = (p) => {
+    if (colonne === 'statut') {
+      const statut = p.exclu ? 'exclue' : (statuts?.get(p.id) ?? 'inconnu');
+      return { segment: `statut:${statut}`, rang: RANGS_STATUT.get(statut), libelle: null, cleLibelle: GROUPES_STATUT.get(statut) };
+    }
+    if (colonne === 'exclu') {
+      return p.exclu
+        ? { segment: 'exclu:oui', rang: 1, libelle: null, cleLibelle: 'participants.grille.exclue' }
+        : { segment: 'exclu:non', rang: 0, libelle: null, cleLibelle: 'participants.grille.presente' };
+    }
+    if (p[colonne] === null) return { segment: 'vide', rang: null, libelle: null, cleLibelle: 'participants.groupe.vide' };
+    const cle = cleNormalisee(p[colonne]);
+    return { segment: `texte:${segment(cle)}`, rang: cle, libelle: p[colonne], cleLibelle: null };
+  };
+
+  const parSegment = new Map();
+  for (const p of lignes) {
+    const valeur = valeurDe(p);
+    const groupe = parSegment.get(valeur.segment);
+    if (groupe === undefined) {
+      parSegment.set(valeur.segment, { ...valeur, plusPetitId: p.id, lignes: [p] });
+      continue;
+    }
+    groupe.lignes.push(p);
+    if (p.id < groupe.plusPetitId) {
+      groupe.plusPetitId = p.id;
+      groupe.libelle = valeur.libelle;
+    }
+  }
+
+  // Deux groupes ont deux rangs distincts : la comparaison ne rend jamais 0.
+  const comparer = (a, b) => {
+    if (a.rang === null) return 1;
+    if (b.rang === null) return -1;
+    const ecart = typeof a.rang === 'number' ? a.rang - b.rang : comparerTextes(a.rang, b.rang);
+    return ecart * signe;
+  };
+  return [...parSegment.values()].sort(comparer).map(({ segment: propre, libelle, cleLibelle, lignes: membres }) => {
+    const cle = parent === null ? propre : `${parent}/${propre}`;
+    return {
+      cle,
+      niveau,
+      colonne,
+      libelle,
+      cleLibelle,
+      compte: membres.length,
+      lignes: membres,
+      sousGroupes: niveau === colonnes.length ? null : grouperNiveau(membres, colonnes, niveau + 1, cle, options),
+    };
+  });
+}
+
+/**
+ * Les lignes que montre la liste groupée : celles de chaque groupe, groupe
+ * après groupe, et dans un groupe sous-groupé, sous-groupe après
+ * sous-groupe, hors des groupes repliés et de tout ce qu'ils contiennent.
+ * La navigation au clavier ne parcourt qu'elles.
+ *
+ * @param {Array<{cle: string, lignes: Array<Object>, sousGroupes: Array<Object>|null}>} groupes   ceux de groupesGrille
+ * @param {Set<string>} replies   les clés des groupes repliés
+ * @returns {Array<Object>}
+ */
+export function lignesVisibles(groupes, replies) {
+  return groupes.flatMap(({ cle, lignes, sousGroupes }) => {
+    if (replies.has(cle)) return [];
+    return sousGroupes === null ? lignes : lignesVisibles(sousGroupes, replies);
+  });
+}
+
+/**
+ * Les groupes repliés après la bascule du groupe cle : replié, il se
+ * déplie ; déplié, il se replie. Rend un nouvel ensemble.
+ *
+ * @param {Set<string>} replies
+ * @param {string} cle
+ * @returns {Set<string>}
+ */
+export function basculerGroupe(replies, cle) {
+  const suivants = new Set(replies);
+  if (suivants.has(cle)) suivants.delete(cle);
+  else suivants.add(cle);
+  return suivants;
+}
+
+/**
+ * Les clés des groupes qui comptent la personne id, du premier niveau au
+ * dernier ; vide quand aucun ne la compte — le filtre l'a retirée.
+ *
+ * @param {Array<{cle: string, lignes: Array<{id: number}>, sousGroupes: Array<Object>|null}>} groupes
+ * @param {number} id
+ * @returns {Array<string>}
+ */
+export function cheminDe(groupes, id) {
+  const groupe = groupes.find(({ lignes }) => lignes.some((p) => p.id === id));
+  if (groupe === undefined) return [];
+  return [groupe.cle, ...(groupe.sousGroupes === null ? [] : cheminDe(groupe.sousGroupes, id))];
 }
 
 /**

@@ -7,7 +7,9 @@
 // participants.colonne.* nomme chaque colonne de COLONNES (grille.js), dans
 // l'en-tête de la grille, l'étiquette d'un champ du formulaire et celle
 // d'une valeur de la fiche ; participants.statut.* nomme chaque statut
-// calculé (§ 4.2), par cleDeStatut.
+// calculé (§ 4.2), par cleDeStatut ; participants.groupe.* porte le
+// groupement de la liste : le sélecteur de chaque niveau, l'en-tête d'un
+// groupe et ses commandes.
 
 // Un nombre suivi de son nom, au singulier pour 0 et 1.
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
@@ -46,6 +48,20 @@ export const TABLE = new Map([
   ['participants.grille.presente', 'présente'],
   ['participants.grille.vide', 'Aucun participant. Ajoutez une personne, ou collez une liste dans la grille.'],
   ['participants.grille.aucunResultat', 'Aucune personne ne correspond au filtre.'],
+
+  // --- La liste groupée par une colonne ou plusieurs ------------------------
+  ['participants.groupe.grouperPar', 'Grouper par'],
+  ['participants.groupe.puisPar', ({ niveau }) => `Puis par (niveau ${niveau})`],
+  ['participants.groupe.aucun', 'Aucun groupement'],
+  ['participants.groupe.aucunSousGroupe', 'Aucun sous-groupe'],
+  ['participants.groupe.statut', 'Statut'],
+  ['participants.groupe.vide', '(vide)'],
+  ['participants.groupe.statutInconnu', 'statut non calculé'],
+  ['participants.groupe.compte', ({ compte: n }) => compte(n, 'personne', 'personnes')],
+  ['participants.groupe.replier', 'Replier'],
+  ['participants.groupe.deplier', 'Déplier'],
+  ['participants.groupe.toutReplier', 'Tout replier'],
+  ['participants.groupe.toutDeplier', 'Tout déplier'],
 
   // --- Les commandes de la section ------------------------------------------
   ['participants.commande.fiche', 'Fiche'],

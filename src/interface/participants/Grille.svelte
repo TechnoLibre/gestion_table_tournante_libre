@@ -30,14 +30,26 @@
   // la grille, hors d'une cellule en édition, ouvre l'aperçu d'import (§
   // 10.2) : le texte part à l'état de navigation, intact, et rien ne
   // s'écrit ici.
+  //
+  // Groupée (groupes non null, ceux de groupesGrille), la grille porte un
+  // corps par groupe du premier niveau. Chaque groupe, de tout niveau, y
+  // rend un en-tête, en retrait selon son niveau, dont le bouton replie ou
+  // déplie le groupe et dit son état en texte et dans aria-expanded, puis,
+  // déplié, ses sous-groupes, ou ses lignes au dernier niveau. Une ligne
+  // porte la clé du plus étroit groupe qui la compte. Les lignes visibles
+  // sont celles de lignesVisibles : flèches et Tab ne parcourent qu'elles,
+  // jamais un en-tête ni une ligne repliée. Une saisie validée dont la
+  // ligne quitte le rendu — tri ou groupe changé — rend le focus à la même
+  // cellule de sa nouvelle ligne, et chaque groupe replié qui la reçoit, de
+  // tout niveau, se déplie. Replier et déplier n'écrivent rien.
   import { getContext, onDestroy, tick } from 'svelte';
   import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
-  import { COLONNES, celluleSuivante, cleDeColonne, entreeValide } from './grille.js';
+  import { COLONNES, basculerGroupe, celluleSuivante, cheminDe, cleDeColonne, entreeValide, lignesVisibles } from './grille.js';
 
-  let { lignes, tri = $bindable(null), supprimer } = $props();
+  let { lignes, groupes = null, replies = $bindable(new Set()), tri = $bindable(null), supprimer } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -61,11 +73,13 @@
   let tableau;
   let entree = $state(null);
 
+  // Les lignes que la grille montre, dans leur ordre, et le rang de chacune
+  // parmi elles, par identifiant.
+  const visibles = $derived(groupes === null ? lignes : lignesVisibles(groupes, replies));
+  const rangs = $derived(new Map(visibles.map(({ id }, rang) => [id, rang])));
+
   // Le rang de la ligne active ; la première quand l'active n'est plus affichée.
-  const rangActif = $derived.by(() => {
-    const rang = lignes.findIndex(({ id }) => id === actif.id);
-    return rang < 0 ? 0 : rang;
-  });
+  const rangActif = $derived(rangs.get(actif.id) ?? 0);
 
   const idRefus = (id, colonne) => `${uid}-refus-${id}-${colonne}`;
   const enEdition = (id, colonne) => edition !== null && edition.id === id && edition.colonne === colonne;
@@ -91,7 +105,7 @@
   }
 
   async function activer(rang, colonne) {
-    const ligne = lignes[rang];
+    const ligne = visibles[rang];
     actif = { id: ligne.id, colonne };
     await tick();
     cellule(ligne.id, COLONNES[colonne])?.focus();
@@ -146,8 +160,29 @@
     } catch (erreur) {
       return echouer(enCours, id, colonne, erreur);
     }
+    const garderFocus = entree !== null && document.activeElement === entree;
     fermerEdition();
-    return Promise.resolve(promesse).catch((erreur) => echouer(enCours, id, colonne, erreur));
+    return Promise.resolve(promesse).then(
+      () => suivreLigne(id, colonne, garderFocus),
+      (erreur) => echouer(enCours, id, colonne, erreur),
+    );
+  }
+
+  // Après une modification écrite, quand la cellule avait le focus : la
+  // ligne que la valeur a menée sous des groupes repliés, de tout niveau,
+  // les déplie, puis la cellule reprend le focus que le retrait de son
+  // ancienne ligne a rendu au document. Un focus posé ailleurs entre-temps
+  // reste où il est.
+  async function suivreLigne(id, colonne, garderFocus) {
+    if (!garderFocus) return;
+    await tick();
+    const chemin = groupes === null ? [] : cheminDe(groupes, id);
+    if (chemin.some((cle) => replies.has(cle))) {
+      replies = new Set([...replies].filter((cle) => !chemin.includes(cle)));
+      await tick();
+    }
+    const actuel = document.activeElement;
+    if (actuel === null || actuel === document.body) cellule(id, colonne)?.focus();
   }
 
   async function echouer(enCours, id, colonne, erreur) {
@@ -202,10 +237,10 @@
   // Tab mène à la première cellule de celle-ci, Maj+Tab à la dernière de la
   // ligne d'avant ; hors de la grille, le focus reste où il est.
   function tabulerDepuis(id, rangAvant, colonne, touche) {
-    const rang = lignes.findIndex((personne) => personne.id === id);
+    const rang = rangs.get(id) ?? -1;
     if (rang >= 0) return deplacer(rang, colonne, touche);
     const suivante = touche === 'Tab' ? { ligne: rangAvant, colonne: 0 } : { ligne: rangAvant - 1, colonne: COLONNES.length - 1 };
-    if (suivante.ligne < 0 || suivante.ligne >= lignes.length) return false;
+    if (suivante.ligne < 0 || suivante.ligne >= visibles.length) return false;
     activer(suivante.ligne, suivante.colonne);
     return true;
   }
@@ -216,7 +251,7 @@
   }
 
   function deplacer(rang, colonne, touche) {
-    const suivante = celluleSuivante({ ligne: rang, colonne }, touche, { lignes: lignes.length, colonnes: COLONNES.length });
+    const suivante = celluleSuivante({ ligne: rang, colonne }, touche, { lignes: visibles.length, colonnes: COLONNES.length });
     if (suivante === null) return false;
     activer(suivante.ligne, suivante.colonne);
     return true;
@@ -258,6 +293,117 @@
   onDestroy(() => geste.liberer());
 </script>
 
+{#snippet rangee(personne, rang, dans)}
+  <tr data-participant={personne.id} data-groupe-ligne={dans}>
+    {#each COLONNES as colonne, rangColonne (colonne)}
+      {@const refus = refusDe(personne.id, colonne)}
+      <td
+        role="gridcell"
+        data-champ={colonne}
+        tabindex={rang === rangActif && rangColonne === actif.colonne ? 0 : -1}
+        aria-describedby={refus === null || enEdition(personne.id, colonne) ? undefined : idRefus(personne.id, colonne)}
+        onfocus={(evenement) => {
+          if (evenement.target === evenement.currentTarget) actif = { id: personne.id, colonne: rangColonne };
+        }}
+        onkeydown={(evenement) => surToucheCellule(evenement, personne, rang, rangColonne)}
+      >
+        {#if enEdition(personne.id, colonne) && colonne === 'notes'}
+          <textarea
+            rows="3"
+            aria-label={t(cleDeColonne(colonne))}
+            value={saisie}
+            bind:this={entree}
+            aria-invalid={refus === null ? undefined : 'true'}
+            aria-describedby={refus === null ? undefined : idRefus(personne.id, colonne)}
+            oninput={surSaisie}
+            onkeydown={(evenement) => surToucheEntree(evenement, rang)}
+            onblur={surSortie}
+          ></textarea>
+        {:else if enEdition(personne.id, colonne)}
+          <input
+            type="text"
+            aria-label={t(cleDeColonne(colonne))}
+            value={saisie}
+            bind:this={entree}
+            aria-invalid={refus === null ? undefined : 'true'}
+            aria-describedby={refus === null ? undefined : idRefus(personne.id, colonne)}
+            oninput={surSaisie}
+            onkeydown={(evenement) => surToucheEntree(evenement, rang)}
+            onblur={surSortie}
+          />
+        {:else if colonne === 'exclu'}
+          <span class:exclue={personne.exclu}>
+            {t(personne.exclu ? 'participants.grille.exclue' : 'participants.grille.presente')}
+          </span>
+        {:else}
+          <span class="valeur">{personne[colonne] ?? ''}</span>
+        {/if}
+        {#if refus !== null}
+          <Refus id={idRefus(personne.id, colonne)} {refus} lever={() => (refusCellule = null)} />
+        {/if}
+      </td>
+    {/each}
+    <td role="gridcell">
+      <div class="commandes">
+      <button type="button" data-commande="fiche" onclick={() => ui.ouvrirFiche(personne.id)}>
+        {t('participants.commande.fiche')}
+      </button>
+      <button type="button" data-commande="voirSurLePlan" onclick={() => voirSurLePlan(personne.id)}>
+        {t('plan.evidence.voir')}
+      </button>
+      {#if personne.exclu}
+        <Commande
+          cle="participants.commande.reintegrer"
+          nom="reintegrerParticipant"
+          executer={() => seance.executer('reintegrerParticipant', { id: personne.id })}
+        />
+      {:else}
+        <Commande
+          cle="participants.commande.exclure"
+          nom="exclureParticipant"
+          executer={() => seance.executer('exclureParticipant', { id: personne.id })}
+        />
+      {/if}
+      <Commande cle="participants.commande.supprimer" nom="supprimerParticipant" executer={() => supprimer(personne)} />
+      </div>
+    </td>
+  </tr>
+{/snippet}
+
+{#snippet bloc(groupe)}
+  {@const replie = replies.has(groupe.cle)}
+  <tr class="groupe" data-groupe={groupe.cle} data-niveau={groupe.niveau}>
+    <th scope="rowgroup" colspan={COLONNES.length + 1}>
+      <button
+        type="button"
+        data-commande="basculerGroupe"
+        data-cible={groupe.cle}
+        aria-expanded={replie ? 'false' : 'true'}
+        onclick={() => (replies = basculerGroupe(replies, groupe.cle))}
+      >
+        <span class="etat" data-groupe-etat>{t(replie ? 'participants.groupe.deplier' : 'participants.groupe.replier')}</span>
+        {#if groupe.libelle === null}
+          <span class="libelle" data-groupe-libelle>{t(groupe.cleLibelle)}</span>
+        {:else}
+          <span class="libelle valeur" data-groupe-libelle>{groupe.libelle}</span>
+        {/if}
+        <span class="compte" data-groupe-compte>{t('participants.groupe.compte', { compte: groupe.compte })}</span>
+      </button>
+    </th>
+  </tr>
+  {#if !replie}
+    {#if groupe.sousGroupes === null}
+      {#each groupe.lignes as personne (personne.id)}
+        {@render rangee(personne, rangs.get(personne.id), groupe.cle)}
+      {/each}
+    {:else}
+      {#each groupe.sousGroupes as sousGroupe (sousGroupe.cle)}
+        {@render bloc(sousGroupe)}
+      {/each}
+    {/if}
+  {/if}
+{/snippet}
+
 <div class="defilement">
   <table
     role="grid"
@@ -281,84 +427,19 @@
         <th scope="col">{t('participants.grille.actions')}</th>
       </tr>
     </thead>
-    <tbody>
-      {#each lignes as personne, rang (personne.id)}
-        <tr data-participant={personne.id}>
-          {#each COLONNES as colonne, rangColonne (colonne)}
-            {@const refus = refusDe(personne.id, colonne)}
-            <td
-              role="gridcell"
-              data-champ={colonne}
-              tabindex={rang === rangActif && rangColonne === actif.colonne ? 0 : -1}
-              aria-describedby={refus === null || enEdition(personne.id, colonne) ? undefined : idRefus(personne.id, colonne)}
-              onfocus={(evenement) => {
-                if (evenement.target === evenement.currentTarget) actif = { id: personne.id, colonne: rangColonne };
-              }}
-              onkeydown={(evenement) => surToucheCellule(evenement, personne, rang, rangColonne)}
-            >
-              {#if enEdition(personne.id, colonne) && colonne === 'notes'}
-                <textarea
-                  rows="3"
-                  aria-label={t(cleDeColonne(colonne))}
-                  value={saisie}
-                  bind:this={entree}
-                  aria-invalid={refus === null ? undefined : 'true'}
-                  aria-describedby={refus === null ? undefined : idRefus(personne.id, colonne)}
-                  oninput={surSaisie}
-                  onkeydown={(evenement) => surToucheEntree(evenement, rang)}
-                  onblur={surSortie}
-                ></textarea>
-              {:else if enEdition(personne.id, colonne)}
-                <input
-                  type="text"
-                  aria-label={t(cleDeColonne(colonne))}
-                  value={saisie}
-                  bind:this={entree}
-                  aria-invalid={refus === null ? undefined : 'true'}
-                  aria-describedby={refus === null ? undefined : idRefus(personne.id, colonne)}
-                  oninput={surSaisie}
-                  onkeydown={(evenement) => surToucheEntree(evenement, rang)}
-                  onblur={surSortie}
-                />
-              {:else if colonne === 'exclu'}
-                <span class:exclue={personne.exclu}>
-                  {t(personne.exclu ? 'participants.grille.exclue' : 'participants.grille.presente')}
-                </span>
-              {:else}
-                <span class="valeur">{personne[colonne] ?? ''}</span>
-              {/if}
-              {#if refus !== null}
-                <Refus id={idRefus(personne.id, colonne)} {refus} lever={() => (refusCellule = null)} />
-              {/if}
-            </td>
-          {/each}
-          <td role="gridcell">
-            <div class="commandes">
-            <button type="button" data-commande="fiche" onclick={() => ui.ouvrirFiche(personne.id)}>
-              {t('participants.commande.fiche')}
-            </button>
-            <button type="button" data-commande="voirSurLePlan" onclick={() => voirSurLePlan(personne.id)}>
-              {t('plan.evidence.voir')}
-            </button>
-            {#if personne.exclu}
-              <Commande
-                cle="participants.commande.reintegrer"
-                nom="reintegrerParticipant"
-                executer={() => seance.executer('reintegrerParticipant', { id: personne.id })}
-              />
-            {:else}
-              <Commande
-                cle="participants.commande.exclure"
-                nom="exclureParticipant"
-                executer={() => seance.executer('exclureParticipant', { id: personne.id })}
-              />
-            {/if}
-            <Commande cle="participants.commande.supprimer" nom="supprimerParticipant" executer={() => supprimer(personne)} />
-            </div>
-          </td>
-        </tr>
+    {#if groupes === null}
+      <tbody>
+        {#each lignes as personne (personne.id)}
+          {@render rangee(personne, rangs.get(personne.id), undefined)}
+        {/each}
+      </tbody>
+    {:else}
+      {#each groupes as groupe (groupe.cle)}
+        <tbody>
+          {@render bloc(groupe)}
+        </tbody>
       {/each}
-    </tbody>
+    {/if}
   </table>
 </div>
 
@@ -409,6 +490,58 @@
 
   .sens {
     font-weight: normal;
+  }
+
+  /* L'en-tête d'un groupe : un bouton qui porte son état en texte, le
+     libellé du groupe en gras et son compte. */
+  .groupe button {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--espace-2);
+    padding: var(--espace-1) var(--espace-2);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-1);
+    background-color: var(--couleur-page-fond);
+    color: var(--couleur-page-texte);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  /* Le retrait d'un en-tête croît avec le niveau de son groupe, jusqu'au
+     dernier niveau possible, un par colonne de GROUPEMENTS. */
+  .groupe[data-niveau='2'] button {
+    margin-left: var(--espace-5);
+  }
+
+  .groupe[data-niveau='3'] button {
+    margin-left: calc(2 * var(--espace-5));
+  }
+
+  .groupe[data-niveau='4'] button {
+    margin-left: calc(3 * var(--espace-5));
+  }
+
+  .groupe[data-niveau='5'] button {
+    margin-left: calc(4 * var(--espace-5));
+  }
+
+  .groupe[data-niveau='6'] button {
+    margin-left: calc(5 * var(--espace-5));
+  }
+
+  .groupe[data-niveau='7'] button {
+    margin-left: calc(6 * var(--espace-5));
+  }
+
+  .groupe[data-niveau='8'] button {
+    margin-left: calc(7 * var(--espace-5));
+  }
+
+  .libelle {
+    font-weight: bold;
+    overflow-wrap: anywhere;
   }
 
   .commandes {

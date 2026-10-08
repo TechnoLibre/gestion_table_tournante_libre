@@ -474,6 +474,25 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'participants.groupes',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // La liste groupée par appartenance, choisie au clavier dans le
+      // sélecteur, puis le premier groupe replié.
+      const m = await ouvrirEvenement(contexte, chargePrincipale(), { ecriture: true, section: 'participants' });
+      const choix = await element(m, '[data-section="participants"] [data-champ="grouper"]');
+      choix.focus();
+      for (let essai = 0; essai < choix.options.length && choix.value !== 'appartenance'; essai += 1) {
+        await touche('ArrowDown');
+        flushSync();
+      }
+      await element(m, '[data-groupe] [data-commande="basculerGroupe"]');
+      const bouton = await cliquer(m, '[data-groupe] [data-commande="basculerGroupe"]');
+      await attendre('un groupe replié', () => bouton.getAttribute('aria-expanded') === 'false' && m.racine.querySelectorAll('[data-groupe]').length > 1);
+      return m.racine;
+    },
+  },
+  {
     nom: 'import.apercu',
     mode: 'ecriture',
     async atteindre(contexte) {

@@ -9,6 +9,19 @@
   // section : regarder, trier et filtrer n'écrivent rien, en écriture comme
   // en lecture. La fiche ouverte est celle de l'état de navigation, ui.fiche.
   //
+  // « Grouper par » groupe les lignes par une ou plusieurs colonnes de
+  // GROUPEMENTS, la plus large d'abord, en groupes imbriqués de
+  // groupesGrille, sur les lignes déjà filtrées et triées. Un sélecteur par
+  // niveau de niveauxAffiches : un par colonne choisie, puis celui du
+  // niveau suivant tant qu'une colonne reste libre ; chacun offre
+  // colonnesOffertes, et son choix passe par choisirGroupement — la valeur
+  // vide retire son niveau et ceux d'après. Le statut se lit dans statuts
+  // (src/application/places.js), calculé seulement quand il groupe.
+  // « Tout replier » replie les groupes du premier niveau, « Tout déplier »
+  // les groupes de tout niveau. Le groupement et les groupes repliés vivent
+  // dans la section, le temps qu'elle est ouverte : changer de groupement
+  // déplie tout, et rien ne s'écrit.
+  //
   // Supprimer une personne qui porte des réservations ouvre la fenêtre à
   // confirmer, qui les nomme ; sans réservation, ou quand la séance refuse
   // déjà tout geste modifiant, la commande part et la séance répond. L'export
@@ -22,7 +35,17 @@
   import Fiche from './Fiche.svelte';
   import Formulaire from './Formulaire.svelte';
   import Grille from './Grille.svelte';
-  import { lignesGrille, nomExport, reservationsDe } from './grille.js';
+  import { statuts } from '../../application/places.js';
+  import {
+    choisirGroupement,
+    cleDeGroupement,
+    colonnesOffertes,
+    groupesGrille,
+    lignesGrille,
+    niveauxAffiches,
+    nomExport,
+    reservationsDe,
+  } from './grille.js';
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -32,13 +55,25 @@
 
   let tri = $state.raw(null);
   let filtre = $state('');
+  // Les colonnes du groupement, la plus large d'abord, vide sans
+  // groupement, et les clés des groupes repliés.
+  let groupement = $state.raw([]);
+  let replies = $state.raw(new Set());
   // La suppression qui attend sa confirmation : {participant, reservations}.
   let aSupprimer = $state.raw(null);
 
   const charge = $derived($seance.charge);
   const participants = $derived(charge?.participants ?? []);
   const lignes = $derived(lignesGrille(participants, { tri, filtre }, cleNormalisee));
+  const parStatut = $derived(groupement.includes('statut') && charge !== null ? statuts(charge).parId : null);
+  const groupes = $derived(groupement.length === 0 ? null : groupesGrille(lignes, groupement, { tri, cleNormalisee, statuts: parStatut }));
+  const niveaux = $derived(niveauxAffiches(groupement));
   const personneFiche = $derived($ui.fiche === null ? null : (participants.find(({ id }) => id === $ui.fiche) ?? null));
+
+  function choisirNiveau(rang, colonne) {
+    groupement = choisirGroupement(groupement, rang, colonne);
+    replies = new Set();
+  }
 
   async function exporter() {
     const { evenement, charge: courante } = seance.etat();
@@ -70,13 +105,40 @@
       <label for={`${uid}-filtre`}>{t('participants.grille.filtre')}</label>
       <input id={`${uid}-filtre`} type="search" data-champ="filtre" bind:value={filtre} />
     </div>
+    {#each niveaux as rang (rang)}
+      <div class="filtre">
+        <label for={`${uid}-grouper-${rang + 1}`}>
+          {rang === 0 ? t('participants.groupe.grouperPar') : t('participants.groupe.puisPar', { niveau: rang + 1 })}
+        </label>
+        <select
+          id={`${uid}-grouper-${rang + 1}`}
+          data-champ="grouper"
+          data-niveau={rang + 1}
+          value={groupement[rang] ?? ''}
+          onchange={(evenement) => choisirNiveau(rang, evenement.currentTarget.value)}
+        >
+          <option value="">{t(rang === 0 ? 'participants.groupe.aucun' : 'participants.groupe.aucunSousGroupe')}</option>
+          {#each colonnesOffertes(groupement, rang) as colonne (colonne)}
+            <option value={colonne}>{t(cleDeGroupement(colonne))}</option>
+          {/each}
+        </select>
+      </div>
+    {/each}
+    {#if groupes !== null}
+      <button type="button" data-commande="toutReplier" onclick={() => (replies = new Set(groupes.map(({ cle }) => cle)))}>
+        {t('participants.groupe.toutReplier')}
+      </button>
+      <button type="button" data-commande="toutDeplier" onclick={() => (replies = new Set())}>
+        {t('participants.groupe.toutDeplier')}
+      </button>
+    {/if}
     <output>{t('participants.grille.compte', { total: participants.length, affiches: lignes.length })}</output>
     <Commande cle="participants.commande.exporter" nom="exporter" executer={exporter} />
   </div>
 
   <div class="corps">
     <div class="liste">
-      <Grille {lignes} bind:tri {supprimer} />
+      <Grille {lignes} {groupes} bind:replies bind:tri {supprimer} />
       {#if participants.length === 0}
         <p>{t('participants.grille.vide')}</p>
       {:else if lignes.length === 0}
@@ -124,7 +186,8 @@
     gap: var(--espace-1);
   }
 
-  input {
+  input,
+  select {
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
     border-radius: var(--rayon-1);
@@ -134,7 +197,20 @@
     font-size: var(--taille-texte);
   }
 
-  input:focus-visible {
+  .outils > button {
+    padding: var(--espace-1) var(--espace-3);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-1);
+    background-color: var(--couleur-page-fond);
+    color: var(--couleur-page-texte);
+    font: inherit;
+    font-size: var(--taille-texte);
+    cursor: pointer;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  .outils > button:focus-visible {
     outline: 2px solid var(--couleur-focus);
     outline-offset: 1px;
   }
