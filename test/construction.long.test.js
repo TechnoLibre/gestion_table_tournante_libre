@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'vite';
 import { describe, test } from './lanceur.js';
 
@@ -314,6 +314,22 @@ describe('construction', () => {
         `aucun module de src/ parmi ${modules.length} modules examinés`,
       );
       assert.deepEqual(modules.filter(moduleDEpreuve), []);
+
+      // La taille de chaque morceau tient sous le seuil d'avertissement de
+      // vite.config.js, en kilooctets de 1 000 octets comme Vite les compte :
+      // un paquet qui grossit au-delà fait tomber cette épreuve, et non
+      // seulement avertir la construction.
+      const { default: vite } = await import(pathToFileURL(join(RACINE, 'vite.config.js')).href);
+      const seuil = vite.build?.chunkSizeWarningLimit;
+      assert.equal(typeof seuil, 'number', 'vite.config.js ne pose aucun build.chunkSizeWarningLimit');
+      const morceaux = sorties.filter((s) => s.type === 'chunk');
+      assert.ok(morceaux.length > 0, `aucun morceau parmi ${sorties.length} sorties`);
+      assert.deepEqual(
+        morceaux
+          .filter((m) => Buffer.byteLength(m.code, 'utf8') > seuil * 1000)
+          .map((m) => `${m.fileName} : ${Math.ceil(Buffer.byteLength(m.code, 'utf8') / 1000)} ko > ${seuil} ko`),
+        [],
+      );
 
       // Un actif n'est pas un module : moduleIds ne le voit pas. Une donnée
       // jointe par new URL(…, import.meta.url) n'apparaît que là.
