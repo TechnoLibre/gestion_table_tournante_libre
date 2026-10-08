@@ -7,8 +7,11 @@
 // Elle se lit dans le tableau des propositions, sur la table d'évaluation
 // de la charge (evaluation et tableau, propositions/modele.js) : la même
 // mesure, le même classement et la même cellule que la section des
-// propositions affiche au rang 1 ; aucune valeur ne se recalcule ici.
+// propositions affiche au rang 1 ; aucune valeur ne se recalcule ici. Le
+// rang 1 est celui de premiereDuClassement (evaluation.js), la définition
+// que la liste des événements lit aussi par resumeDuMeilleur.
 
+import { premiereDuClassement } from '../../application/evaluation.js';
 import { evaluation, tableau } from '../propositions/modele.js';
 
 /** La colonne du tableau que l'annonce reprend. */
@@ -29,7 +32,8 @@ export const COLONNE_ANNONCEE = 'collisionsCumulees';
 export function meilleureProposition(charge) {
   const { table } = evaluation(charge);
   if (table === null) return null;
-  const [premiere] = tableau(table).lignes;
-  if (premiere === undefined) return null;
-  return { id: premiere.id, cellule: premiere.cellules.find(({ colonne }) => colonne === COLONNE_ANNONCEE) };
+  const premiere = premiereDuClassement(table);
+  if (premiere === null) return null;
+  const ligne = tableau(table).lignes.find(({ id }) => id === premiere.id);
+  return { id: premiere.id, cellule: ligne.cellules.find(({ colonne }) => colonne === COLONNE_ANNONCEE) };
 }

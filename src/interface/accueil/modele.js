@@ -4,11 +4,14 @@
 // Le modèle de l'accueil, pur (§ 8.1, § 8.6, § 8.8) : ce que les composants
 // de la liste des événements affichent, sans arithmétique ni texte. Une
 // ligne de la liste (LigneListe de la façade, A3) devient ses six
-// informations et les deux mesures de son retenu, mises en forme, et ses
-// signalements ; une question du dossier
+// informations, les deux mesures de son retenu et la meilleure proposition
+// de son classement, mises en forme, et ses signalements ; une question du
+// dossier
 // de travail, ses réponses ; un état illisible, ses secours ; un refus de la
 // façade, le refus affiché sur la liste. Chaque clé rendue est écrite ici en
 // entier : aucun composant ne compose une clé.
+import { COLONNE_ANNONCEE } from '../generation/meilleure.js';
+import { COLONNES } from '../propositions/modele.js';
 
 // Les états du plan (§ 9) et la clé de leur nom, dans l'ordre du § 9.
 const CLES_ETATS = new Map([
@@ -32,6 +35,25 @@ export const COLONNES_DU_RETENU = Object.freeze(
     Object.freeze({ colonne, cle: `accueil.colonne.${colonne}`, explication: `accueil.explication.${colonne}` }),
   ),
 );
+
+// La colonne du tableau des propositions que le bloc de la génération
+// annonce : son intitulé et son explication.
+const COLONNE_MEILLEURE = COLONNES.find(({ nom }) => nom === COLONNE_ANNONCEE);
+
+/**
+ * Les clés du bloc de la meilleure proposition du classement qu'une ligne
+ * montre (§ 5.4, § 5.7), celles du bloc de la génération : titre,
+ * explication du titre — ce que désigne le rang 1, et quand le bloc écrit
+ * « — » —, libellé de l'identifiant, intitulé des collisions cumulées et
+ * leur explication, celles de la colonne du tableau des propositions.
+ */
+export const MEILLEURE = Object.freeze({
+  titre: 'generation.meilleure.titre',
+  explication: 'accueil.explication.meilleure',
+  proposition: 'generation.meilleure.proposition',
+  collisions: COLONNE_MEILLEURE.cle,
+  explicationCollisions: COLONNE_MEILLEURE.explication,
+});
 
 // La clé de la valeur absente, celle de la mise en forme.
 const CLE_VIDE = 'format.vide';
@@ -108,8 +130,9 @@ export function signalementsDe(ligne) {
 }
 
 /**
- * Les six informations d'une ligne (§ 8.1), et les deux mesures de son
- * retenu, mises en forme, et ses signalements. nom : celui inscrit dans le fichier, ou la base quand l'état
+ * Les six informations d'une ligne (§ 8.1), les deux mesures de son retenu
+ * et la meilleure proposition de son classement, mises en forme, et ses
+ * signalements. nom : celui inscrit dans le fichier, ou la base quand l'état
  * ne se lit pas ; date, participants et dernière modification par format,
  * la valeur absente quand ils manquent — la dernière modification est
  * l'horodatage de la dernière entrée du journal, sur l'horloge de
@@ -117,13 +140,17 @@ export function signalementsDe(ligne) {
  * clé de son nom, que le composant traduit ; chemin : tel que la façade
  * l'affiche, en entier ; collisionsCumulees et diffRedondance : celles que
  * la façade rend dans mesuresDuRetenu, par format, la valeur absente sans
- * retenu mesurable — la différence se lit telle quelle, jamais refaite.
+ * retenu mesurable — la différence se lit telle quelle, jamais refaite ;
+ * meilleure : l'identifiant et les collisions cumulées que la façade rend
+ * dans meilleureDuClassement, par format, la valeur absente l'un et l'autre
+ * sans proposition classée.
  *
  * @param {Object} ligne   LigneListe (A3)
  * @param {ReturnType<import('../../application/format.js').creerFormat>} format
  * @returns {{nom: string, date: string, etat: string, participants: string,
  *            modification: string, chemin: string, collisionsCumulees: string,
- *            diffRedondance: string, signalements: Array<{cle: string, details: Object, noms: string[]}>}}
+ *            diffRedondance: string, meilleure: {id: string, collisions: string},
+ *            signalements: Array<{cle: string, details: Object, noms: string[]}>}}
  */
 export function ligneAffichee(ligne, format) {
   return {
@@ -135,6 +162,10 @@ export function ligneAffichee(ligne, format) {
     chemin: ligne.chemin,
     collisionsCumulees: format.nombre(ligne.mesuresDuRetenu?.collisionsCumulees ?? null),
     diffRedondance: format.nombre(ligne.mesuresDuRetenu?.diffRedondance ?? null),
+    meilleure: {
+      id: format.nombre(ligne.meilleureDuClassement?.id ?? null),
+      collisions: format.nombre(ligne.meilleureDuClassement?.collisionsCumulees ?? null),
+    },
     signalements: signalementsDe(ligne),
   };
 }

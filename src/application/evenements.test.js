@@ -20,9 +20,10 @@ import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/do
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
+import { examiner } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
-import { evaluer, resumeDuRetenu } from './evaluation.js';
+import { evaluer, resumeDuMeilleur, resumeDuRetenu } from './evaluation.js';
 import { creerFacade } from './evenements.js';
 import { creerHorlogePilotee } from './horloge.js';
 import { libelle } from './libelles.js';
@@ -432,6 +433,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
         doublonAvec: [],
         verrou: null,
         mesuresDuRetenu: null,
+        meilleureDuClassement: null,
       },
       {
         base: 'petite',
@@ -447,6 +449,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
         doublonAvec: [],
         verrou: null,
         mesuresDuRetenu: null,
+        meilleureDuClassement: null,
       },
     ]);
     assert.ok(petite.participants.length > 0);
@@ -600,6 +603,99 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.equal(par.derivee.mesuresDuRetenu, null);
     assert.notEqual(par.tronquee.illisible, null);
     assert.equal(par.tronquee.mesuresDuRetenu, null);
+  });
+
+  test('la meilleure proposition du classement : celle de resumeDuMeilleur, retenu ou non ; null sans proposition ; rien d’écrit', async () => {
+    const { fs, facade } = await deuxEvenements();
+    // Les mêmes propositions, sans retenu, sous un autre identifiant : deux
+    // événements distincts, aucun doublon.
+    const sansRetenu = texteRetenu((charge) => ({
+      ...charge,
+      retenu: null,
+      evenement: { ...charge.evenement, id: 'evt-proposee', etat: 'propose' },
+    }));
+    fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
+    fs.deposer('portable', `proposee${SUFFIXES.etat}`, sansRetenu);
+    const avant = ecritures(fs);
+    const lignes = await facade.lister();
+    assert.equal(ecritures(fs), avant);
+    assert.equal(lignes.length, 4);
+    const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
+    for (const [base, texte] of [
+      ['retenue', texteRetenu()],
+      ['proposee', sansRetenu],
+    ]) {
+      const charge = analyser(texte).charge;
+      const [premiere] = evaluer(charge).propositions;
+      assert.equal(premiere.statut, 'comparable', base);
+      assert.deepEqual(par[base].meilleureDuClassement, { id: premiere.id, collisionsCumulees: premiere.mesures.collisionsCumulees }, base);
+      assert.deepEqual(par[base].meilleureDuClassement, resumeDuMeilleur(charge), base);
+    }
+    assert.equal(par.proposee.mesuresDuRetenu, null);
+    assert.equal(par['soiree-a'].meilleureDuClassement, null);
+    assert.equal(par.petite.meilleureDuClassement, null);
+  });
+
+  test('le résumé du retenu et la meilleure proposition se lisent dans une seule lecture de l’état, après celle du dépôt', async () => {
+    const { fs, facade } = await deuxEvenements();
+    fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
+    const lireTexte = fs.lireTexte;
+    const lus = [];
+    fs.lireTexte = (racine, chemin) => {
+      lus.push(chemin);
+      return lireTexte.call(fs, racine, chemin);
+    };
+    const ligne = (await facade.lister()).find(({ base }) => base === 'retenue');
+    assert.notEqual(ligne.mesuresDuRetenu, null);
+    assert.notEqual(ligne.meilleureDuClassement, null);
+    assert.equal(lus.filter((chemin) => chemin === `retenue${SUFFIXES.etat}`).length, 2, lus.join());
+  });
+
+  // Un état que l'analyse admet et qu'examiner corrige (§ 8.9, point 3) :
+  // la ligne lit la charge que l'ouverture lit, examinée, et non la charge
+  // brute. Les propositions, sans retenu, sous modifier(charge).
+  const texteExamine = (modifier) => texteRetenu((charge) => modifier({ ...charge, retenu: null }));
+  const meilleureOuverte = (texte) => resumeDuMeilleur(examiner(analyser(texte).charge).charge);
+
+  test('un identifiant répété : la ligne rendue, avec la meilleure proposition de la charge examinée', async () => {
+    const { fs, facade } = await deuxEvenements();
+    const texte = texteExamine((charge) => {
+      const [premiere, seconde, ...reste] = charge.propositions;
+      return { ...charge, propositions: [premiere, { ...seconde, id: premiere.id }, ...reste] };
+    });
+    assert.equal(examiner(analyser(texte).charge).fautives[0].fautes[0].code, 'IDENTIFIANT_REPETE');
+    fs.deposer('portable', `repetee${SUFFIXES.etat}`, texte);
+    const ligne = (await facade.lister()).find(({ base }) => base === 'repetee');
+    assert.notEqual(ligne, undefined);
+    assert.notEqual(meilleureOuverte(texte), null);
+    assert.deepEqual(ligne.meilleureDuClassement, meilleureOuverte(texte));
+  });
+
+  test('une proposition hors du compteur : la ligne nomme la meilleure de la charge examinée, celle du bloc de génération', async () => {
+    const { fs, facade } = await deuxEvenements();
+    // Le compteur abaissé à l'identifiant de la proposition au rang 1 de la
+    // charge brute : examiner l'écarte, et le rang 1 change.
+    const rangUn = resumeDuMeilleur(analyser(texteExamine((charge) => charge)).charge);
+    const texte = texteExamine((charge) => ({ ...charge, prochainsIds: { ...charge.prochainsIds, proposition: rangUn.id } }));
+    assert.equal(examiner(analyser(texte).charge).fautives[0].fautes[0].code, 'IDENTIFIANT_HORS_COMPTEUR');
+    assert.notDeepEqual(meilleureOuverte(texte), resumeDuMeilleur(analyser(texte).charge));
+    fs.deposer('portable', `abaissee${SUFFIXES.etat}`, texte);
+    const ligne = (await facade.lister()).find(({ base }) => base === 'abaissee');
+    assert.deepEqual(ligne.meilleureDuClassement, meilleureOuverte(texte));
+  });
+
+  test('des propositions toutes en dérive, et un état illisible : null, la liste entière rendue', async () => {
+    const { fs, facade } = await deuxEvenements();
+    const derivee = texteRetenu((charge) => appliquerCommande('changerTours', charge, { tours: '3' }).charge);
+    assert.ok(evaluer(analyser(derivee).charge).propositions.every(({ statut }) => statut === 'derive'));
+    fs.deposer('portable', `derivee${SUFFIXES.etat}`, derivee);
+    fs.deposer('portable', `tronquee${SUFFIXES.etat}`, texteRetenu().slice(0, 40));
+    const lignes = await facade.lister();
+    assert.equal(lignes.length, 4);
+    const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
+    assert.equal(par.derivee.meilleureDuClassement, null);
+    assert.notEqual(par.tronquee.illisible, null);
+    assert.equal(par.tronquee.meilleureDuClassement, null);
   });
 });
 

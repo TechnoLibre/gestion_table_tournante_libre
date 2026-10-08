@@ -22,6 +22,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, tick } from 'svelte';
 import { appliquerCommande } from '../../application/commandes.js';
+import { evaluer } from '../../application/evaluation.js';
 import { creerFormat } from '../../application/format.js';
 import { creerHorlogePilotee } from '../../application/horloge.js';
 import { TABLES_APPLICATION, libelle } from '../../application/libelles.js';
@@ -41,7 +42,7 @@ import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
 import { centre } from '../../../test/navigateur/ecrans.js';
-import { pointer, touche } from '../../../test/navigateur/entrees.js';
+import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { visible as visibleDansLaFenetre } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -1087,43 +1088,66 @@ describe('la racine neutre et la liste qui défile (§ 18.6, § 19.4)', () => {
 
 // --- Les mesures du retenu (§ 5.4, § 8.1, § 8.9) ------------------------------------
 
-describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
-  // La petite démonstration au conflit inévitable, deux propositions du
-  // moteur, la seconde retenue par la commande.
-  function chargeRetenue() {
-    let charge = analyser(texteLivre('petite-conflit')).charge;
-    const configuration = configurationDepuisCharge(charge);
-    const propositions = rechercher(configuration, { graine: 6, nombre: 2, arret: 300 });
-    charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
-    return appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
-  }
+// La petite démonstration au conflit inévitable, deux propositions du
+// moteur, la seconde retenue par la commande.
+function chargeRetenue() {
+  let charge = analyser(texteLivre('petite-conflit')).charge;
+  const configuration = configurationDepuisCharge(charge);
+  const propositions = rechercher(configuration, { graine: 6, nombre: 2, arret: 300 });
+  charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+  return appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
+}
 
+const etat = (charge) => serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
+const TIRET = '\u{2014}';
+const terme = (ligne, nom) => ligne.querySelector(`[data-terme="${nom}"]`);
+const infobulles = () => [...document.querySelectorAll('[role="tooltip"]')];
+
+// L'infobulle unique, ouverte sur le terme : visible, au texte de la clé,
+// désignée par l'aria-describedby du terme et de nul autre.
+function exigerInfobulle(ancre, cle) {
+  const bulles = infobulles();
+  expect(bulles.length).toBe(1);
+  const [bulle] = bulles;
+  expect(bulle.hidden, cle).toBe(false);
+  expect(getComputedStyle(bulle).visibility, cle).toBe('visible');
+  expect(bulle.textContent.trim(), cle).toBe(t(cle));
+  expect(ancre.getAttribute('aria-describedby'), cle).toBe(bulle.id);
+  expect(document.querySelectorAll(`[aria-describedby~="${bulle.id}"]`).length, cle).toBe(1);
+  const b = bulle.getBoundingClientRect();
+  const a = ancre.getBoundingClientRect();
+  expect(b.width).toBeGreaterThan(0);
+  expect(b.left < a.right && a.left < b.right && b.top < a.bottom && a.top < b.bottom, `${cle} sur son terme`).toBe(false);
+}
+
+// Chaque terme de la ligne, survolé puis focalisé, ouvre l'infobulle sur sa
+// clé ; la sortie du pointeur et Échap la ferment, le focus reste au terme.
+async function eprouverTermes(ligne, cas) {
+  expect(cas.length).toBeGreaterThan(0);
+  await pointer('bouger', 0, 0);
+  for (const [nom, cle] of cas) {
+    const ancre = terme(ligne, nom);
+    ancre.scrollIntoView({ block: 'center' });
+    const { x, y } = await centre(ancre);
+    await pointer('bouger', x, y);
+    await vi.waitFor(() => exigerInfobulle(ancre, cle));
+    await pointer('bouger', 0, 0);
+    await vi.waitFor(() => expect(infobulles()[0].hidden).toBe(true));
+    expect(ancre.tabIndex).toBe(0);
+    ancre.focus();
+    await vi.waitFor(() => exigerInfobulle(ancre, cle));
+    await touche('Escape');
+    await vi.waitFor(() => expect(infobulles()[0].hidden).toBe(true));
+    expect(document.activeElement).toBe(ancre);
+    ancre.blur();
+  }
+}
+
+describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
   // Les mesures du retenu, par le moteur sollicité une seconde fois (§ 19.1).
   function mesuresDe(charge) {
     const instance = normaliser(configurationDepuisCharge(charge));
     return mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
-  }
-
-  const etat = (charge) => serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
-  const TIRET = '\u{2014}';
-  const terme = (ligne, colonne) => ligne.querySelector(`[data-terme="${colonne}"]`);
-  const infobulles = () => [...document.querySelectorAll('[role="tooltip"]')];
-
-  // L'infobulle unique, ouverte sur le terme : visible, au texte de la clé,
-  // désignée par l'aria-describedby du terme et de nul autre.
-  function exigerInfobulle(ancre, cle) {
-    const bulles = infobulles();
-    expect(bulles.length).toBe(1);
-    const [bulle] = bulles;
-    expect(bulle.hidden, cle).toBe(false);
-    expect(getComputedStyle(bulle).visibility, cle).toBe('visible');
-    expect(bulle.textContent.trim(), cle).toBe(t(cle));
-    expect(ancre.getAttribute('aria-describedby'), cle).toBe(bulle.id);
-    expect(document.querySelectorAll(`[aria-describedby~="${bulle.id}"]`).length, cle).toBe(1);
-    const b = bulle.getBoundingClientRect();
-    const a = ancre.getBoundingClientRect();
-    expect(b.width).toBeGreaterThan(0);
-    expect(b.left < a.right && a.left < b.right && b.top < a.bottom && a.top < b.bottom, `${cle} sur son terme`).toBe(false);
   }
 
   test('un événement retenu : ses collisions cumulées et |1000 \u{2212} Σ r(p)| ; sans retenu : « — » ; rien d’écrit', async () => {
@@ -1151,28 +1175,10 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(chargeRetenue()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     const retenue = ligneDe(m, 'retenue');
-    const cas = [
+    await eprouverTermes(retenue, [
       ['collisionsCumulees', 'accueil.explication.collisionsCumulees'],
       ['diffRedondance', 'accueil.explication.diffRedondance'],
-    ];
-    expect(cas.length).toBeGreaterThan(0);
-    await pointer('bouger', 0, 0);
-    for (const [nom, cle] of cas) {
-      const ancre = terme(retenue, nom);
-      ancre.scrollIntoView({ block: 'center' });
-      const { x, y } = await centre(ancre);
-      await pointer('bouger', x, y);
-      await vi.waitFor(() => exigerInfobulle(ancre, cle));
-      await pointer('bouger', 0, 0);
-      await vi.waitFor(() => expect(infobulles()[0].hidden).toBe(true));
-      expect(ancre.tabIndex).toBe(0);
-      ancre.focus();
-      await vi.waitFor(() => exigerInfobulle(ancre, cle));
-      await touche('Escape');
-      await vi.waitFor(() => expect(infobulles()[0].hidden).toBe(true));
-      expect(document.activeElement).toBe(ancre);
-      ancre.blur();
-    }
+    ]);
   });
 
   test('la cible changée dans les propositions, puis la liste : la différence se lit contre la nouvelle cible', async () => {
@@ -1195,5 +1201,128 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     await revenirALaListe(m, 1);
     await vi.waitFor(() => expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(25 - totalRedondance))));
     expect(colonne(ligneDe(m, 'retenue'), 'collisionsCumulees')).toBe(format.nombre(mesuresDe(charge).collisionsCumulees));
+  });
+});
+
+// --- La meilleure proposition du classement (§ 5.4, § 5.7, § 8.1) ------------------
+
+describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, § 8.1)', () => {
+  // Trois propositions du moteur sur la petite démonstration au conflit
+  // inévitable, sous l'identifiant d'événement id ; retenir : une autre que
+  // la première du classement est retenue.
+  function chargeClassee({ id = 'evt-classee', retenir = true } = {}) {
+    let charge = analyser(texteLivre('petite-conflit')).charge;
+    charge.evenement.id = id;
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 6, nombre: 3, arret: 300 });
+    charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+    if (!retenir) return charge;
+    const [premiere] = evaluer(charge).propositions;
+    const autre = charge.propositions.find((proposition) => proposition.id !== premiere.id);
+    return appliquerCommande('retenirProposition', charge, { id: autre.id }).charge;
+  }
+
+  const blocDe = (ligne) => ligne.querySelector('[data-meilleure]');
+  // Ce que le bloc d'une ligne, ou celui de la génération, écrit.
+  const lu = (bloc) => ({
+    id: bloc.querySelector('[data-meilleure-id]')?.textContent ?? null,
+    collisions: bloc.querySelector('[data-meilleure-collisions]')?.textContent ?? null,
+  });
+  const blocGeneration = (m) => dans(m, '[data-section="generation"] [data-meilleure]');
+
+  test('un événement classé : le rang 1, son identifiant et ses collisions cumulées, à part du retenu ; sans proposition, « — » ; rien d’écrit', async () => {
+    const charge = chargeClassee();
+    const table = evaluer(charge);
+    const [premiere] = table.propositions;
+    expect(premiere.statut).toBe('comparable');
+    expect(premiere.id).not.toBe(charge.retenu.proposition);
+    const m = await monter({
+      fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(charge)), fichier(`club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
+    });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(2));
+    const avant = ecritures(m);
+    const classee = ligneDe(m, 'classee');
+    const bloc = blocDe(classee);
+    expect(lu(bloc)).toEqual({ id: format.nombre(premiere.id), collisions: format.nombre(premiere.mesures.collisionsCumulees) });
+    expect(colonne(classee, 'collisionsCumulees')).toBe(format.nombre(table.retenu.mesures.collisionsCumulees));
+    expect(terme(classee, 'meilleure').textContent).toBe(t('generation.meilleure.titre'));
+    expect(bloc.querySelector('dt').textContent).toBe(t('generation.meilleure.proposition'));
+    expect(terme(classee, 'meilleureCollisions').textContent).toBe(t('propositions.colonne.collisionsCumulees'));
+    expect(bloc.getAttribute('role')).toBe('group');
+    expect(document.getElementById(bloc.getAttribute('aria-labelledby'))).toBe(terme(classee, 'meilleure'));
+    for (const valeur of ['[data-meilleure-id]', '[data-meilleure-collisions]']) {
+      expect(visible(bloc.querySelector(valeur)), valeur).toBe(true);
+      expect(atteint(bloc.querySelector(valeur)), valeur).toBe(true);
+    }
+    expect(lu(blocDe(ligneDe(m, 'club')))).toEqual({ id: TIRET, collisions: TIRET });
+    expect(ecritures(m)).toBe(avant);
+  });
+
+  test('le titre et l’intitulé des collisions s’expliquent : le survol puis le focus ouvrent l’infobulle, Échap et la sortie la ferment', async () => {
+    const m = await monter({ fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(1));
+    await eprouverTermes(ligneDe(m, 'classee'), [
+      ['meilleure', 'accueil.explication.meilleure'],
+      ['meilleureCollisions', 'propositions.explication.collisionsCumulees'],
+    ]);
+  });
+
+  test('la ligne écrit ce que le bloc de la génération écrit du même événement, sous les mêmes libellés, et de nouveau au retour', async () => {
+    const m = await monter({ fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(1));
+    const ligne = ligneDe(m, 'classee');
+    const deLaListe = lu(blocDe(ligne));
+    expect(deLaListe.id).toMatch(/\d/);
+    const libelles = [terme(ligne, 'meilleure'), blocDe(ligne).querySelector('dt'), terme(ligne, 'meilleureCollisions')].map(
+      (element) => element.textContent,
+    );
+    await ouvrirLigne(m, 'classee');
+    await attendreEvenement(m);
+    m.ui.allerA('generation');
+    await vi.waitFor(() => expect(blocGeneration(m)?.querySelector('[data-meilleure-id]')).not.toBeNull());
+    const bloc = blocGeneration(m);
+    expect(lu(bloc)).toEqual(deLaListe);
+    expect(
+      [bloc.querySelector('h3'), bloc.querySelector('[data-meilleure-libelle-id]'), bloc.querySelector('[data-terme]')].map(
+        (element) => element.textContent,
+      ),
+    ).toEqual(libelles);
+    await revenirALaListe(m, 1);
+    await vi.waitFor(() => expect(lu(blocDe(ligneDe(m, 'classee')))).toEqual(deLaListe));
+  });
+
+  test('des propositions toutes hors du classement : « — » à la liste, là où le bloc de la génération le dit en mots', async () => {
+    const classee = chargeClassee({ retenir: false });
+    const charge = appliquerCommande('exclureParticipant', classee, { id: classee.participants[0].id }).charge;
+    const statuts = evaluer(charge).propositions.map(({ statut }) => statut);
+    expect(statuts.length).toBe(3);
+    expect(statuts.every((statut) => statut !== 'comparable')).toBe(true);
+    const m = await monter({ fichiers: [fichier(`horsclassement${SUFFIXES.etat}`, etat(charge))] });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(1));
+    expect(lu(blocDe(ligneDe(m, 'horsclassement')))).toEqual({ id: TIRET, collisions: TIRET });
+    await ouvrirLigne(m, 'horsclassement');
+    await attendreEvenement(m);
+    m.ui.allerA('generation');
+    await vi.waitFor(() => expect(blocGeneration(m)?.querySelector('[data-meilleure-vide]')).not.toBeNull());
+  });
+
+  test('à 1366 × 700, six événements classés : la page ne défile pas en largeur, chaque bloc tient dans la sienne', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+    try {
+      const bases = ['un', 'deux', 'trois', 'quatre', 'cinq', 'six'];
+      const m = await monter({ fichiers: bases.map((base) => fichier(`${base}${SUFFIXES.etat}`, etat(chargeClassee({ id: `evt-${base}` })))) });
+      await vi.waitFor(() => expect(lignes(m).length).toBe(bases.length));
+      const blocs = lignes(m).map(blocDe);
+      expect(blocs.length).toBe(bases.length);
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
+      for (const bloc of blocs) {
+        expect(lu(bloc).id).toMatch(/\d/);
+        expect(bloc.scrollWidth).toBeLessThanOrEqual(bloc.clientWidth);
+        expect(bloc.getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth);
+      }
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
   });
 });

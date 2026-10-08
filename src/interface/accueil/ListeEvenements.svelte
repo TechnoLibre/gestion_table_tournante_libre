@@ -6,8 +6,12 @@
   // travail, dans l'ordre de la façade, que désigne data-evenement. Chaque
   // ligne porte la commande qui l'ouvre en lecture — son nom —, ses cinq
   // autres informations et les deux mesures de son retenu (COLONNES_DU_RETENU)
-  // sous leur intitulé, chacune dans son propre nœud (data-colonne), ses
-  // signalements traduits — les bases qu'un doublon
+  // sous leur intitulé, chacune dans son propre nœud (data-colonne), la
+  // meilleure proposition de son classement (MEILLEURE) — un groupe
+  // data-meilleure sous le titre et les libellés du bloc de la génération,
+  // l'identifiant dans data-meilleure-id, les collisions cumulées dans
+  // data-meilleure-collisions, « — » l'un et l'autre sans proposition
+  // classée —, ses signalements traduits — les bases qu'un doublon
   // nomme suivent son texte, chacune dans son propre nœud (data-doublon) —,
   // le refus de son ouverture, et ses opérations. Un dossier sans événement n'affiche pas de liste vide :
   // la création et les démonstrations de l'accueil en tiennent lieu.
@@ -16,8 +20,10 @@
   // l'accueil ; refusOuverture : { base, refus } du dernier échec, ou null ;
   // apresOperation() : à appeler quand une opération a changé le dossier.
   //
-  // L'intitulé de chaque mesure du retenu s'explique dans l'infobulle de la
-  // liste, une seule (Infobulle, primitive) : son terme (data-terme) se
+  // L'intitulé de chaque mesure du retenu, le titre de la meilleure
+  // proposition et l'intitulé de ses collisions s'expliquent dans
+  // l'infobulle de la liste, une seule (Infobulle, primitive) : chaque terme
+  // (data-terme, que pose le fragment termeExplique) se
   // focalise au clavier, son survol ou son focus ouvre l'explication, le
   // quitter la referme quand elle est encore la sienne, Échap aussi. Le
   // terme expliqué porte aria-describedby vers elle, et lui seul.
@@ -25,7 +31,7 @@
   import Infobulle from '../primitives/Infobulle.svelte';
   import Refus from '../primitives/Refus.svelte';
   import Operations from './Operations.svelte';
-  import { COLONNES_DU_RETENU, ligneAffichee } from './modele.js';
+  import { COLONNES_DU_RETENU, MEILLEURE, ligneAffichee } from './modele.js';
 
   let { lignes, ouvrir, refusOuverture, apresOperation } = $props();
 
@@ -49,10 +55,32 @@
   const decrit = (terme) => (expliquee?.terme === terme ? idExplication : undefined);
 </script>
 
+<!-- Un terme expliqué : nom est son data-terme, cle son intitulé,
+     explication la clé que l'infobulle montre ; id, celui qu'un groupe
+     nomme par aria-labelledby, ou undefined. -->
+{#snippet termeExplique(base, nom, cle, explication, id)}
+  {@const terme = `${base}:${nom}`}
+  <!-- L'intitulé est un terme, non une commande : le focus ne sert qu'à
+       montrer au clavier l'explication que le pointeur montre au survol. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+  <span
+    {id}
+    class="terme"
+    data-terme={nom}
+    tabindex="0"
+    aria-describedby={decrit(terme)}
+    onmouseenter={(evenement) => expliquer(evenement, terme, explication)}
+    onmouseleave={() => taire(terme)}
+    onfocus={(evenement) => expliquer(evenement, terme, explication)}
+    onblur={() => taire(terme)}>{t(cle)}</span
+  >
+{/snippet}
+
 {#if lignes.length > 0}
   <ul class="liste">
-    {#each lignes as ligne (ligne.base)}
+    {#each lignes as ligne, position (ligne.base)}
       {@const affichee = ligneAffichee(ligne, format)}
+      {@const idMeilleure = `${uid}-meilleure-${position}`}
       <li class="ligne" data-evenement={ligne.base}>
         <button type="button" class="ouvrir" data-commande="ouvrir" onclick={() => ouvrir(ligne)}
           ><span data-colonne="nom">{affichee.nom}</span></button
@@ -75,24 +103,8 @@
             <dd data-colonne="modification">{affichee.modification}</dd>
           </div>
           {#each COLONNES_DU_RETENU as { colonne, cle, explication } (colonne)}
-            {@const terme = `${ligne.base}:${colonne}`}
             <div>
-              <dt>
-                <!-- L'intitulé est un terme, non une commande : le focus ne
-                     sert qu'à montrer au clavier l'explication que le
-                     pointeur montre au survol. -->
-                <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
-                <span
-                  class="terme"
-                  data-terme={colonne}
-                  tabindex="0"
-                  aria-describedby={decrit(terme)}
-                  onmouseenter={(evenement) => expliquer(evenement, terme, explication)}
-                  onmouseleave={() => taire(terme)}
-                  onfocus={(evenement) => expliquer(evenement, terme, explication)}
-                  onblur={() => taire(terme)}>{t(cle)}</span
-                >
-              </dt>
+              <dt>{@render termeExplique(ligne.base, colonne, cle, explication, undefined)}</dt>
               <dd data-colonne={colonne}>{affichee[colonne]}</dd>
             </div>
           {/each}
@@ -101,6 +113,29 @@
             <dd data-colonne="chemin">{affichee.chemin}</dd>
           </div>
         </dl>
+        <div class="meilleure" role="group" data-meilleure aria-labelledby={idMeilleure}>
+          <span class="titre-meilleure"
+            >{@render termeExplique(ligne.base, 'meilleure', MEILLEURE.titre, MEILLEURE.explication, idMeilleure)}</span
+          >
+          <dl>
+            <div>
+              <dt>{t(MEILLEURE.proposition)}</dt>
+              <dd data-meilleure-id>{affichee.meilleure.id}</dd>
+            </div>
+            <div>
+              <dt>
+                {@render termeExplique(
+                  ligne.base,
+                  'meilleureCollisions',
+                  MEILLEURE.collisions,
+                  MEILLEURE.explicationCollisions,
+                  undefined,
+                )}
+              </dt>
+              <dd data-meilleure-collisions>{affichee.meilleure.collisions}</dd>
+            </div>
+          </dl>
+        </div>
         {#each affichee.signalements as { cle, details, noms }, rang (rang)}
           <div class="signalement" data-signalement={cle}>
             <p>{t(cle, details)}</p>
@@ -183,6 +218,41 @@
 
   .chemin dd {
     overflow-wrap: anywhere;
+  }
+
+  /* La meilleure proposition du classement : un groupe encadré d'un filet,
+     son titre en gras, puis chaque libellé suivi de sa valeur, en gras,
+     comme dans le bloc de la génération. */
+  .meilleure {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--espace-1) var(--espace-4);
+    padding: var(--espace-1) var(--espace-2);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-1);
+  }
+
+  .titre-meilleure {
+    font-weight: bold;
+  }
+
+  .meilleure dl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-1) var(--espace-4);
+    margin: 0;
+  }
+
+  .meilleure dl > div {
+    display: flex;
+    gap: var(--espace-2);
+    align-items: baseline;
+  }
+
+  .meilleure dd {
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
   }
 
   /* Un intitulé qui s'explique se signale par un soulignement pointillé ;

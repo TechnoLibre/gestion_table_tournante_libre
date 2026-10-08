@@ -302,16 +302,18 @@ export const ECRANS = Object.freeze([
     mode: null,
     async atteindre(contexte) {
       // La principale, sa proposition retenue : la ligne montre les deux
-      // mesures du retenu, et le pointeur réel sur l'intitulé de la
-      // différence ouvre son infobulle.
+      // mesures du retenu et la meilleure proposition du classement, et le
+      // pointeur réel sur l'intitulé de la différence ouvre son infobulle.
       const principale = chargePrincipale();
       const charge = executer(principale, 'retenirProposition', { id: principale.propositions[0].id });
       const m = await contexte.monter({ fichiers: [fichierEtat(charge)] });
       const ligne = `[data-evenement="${BASE}"]`;
-      await attendre('les mesures du retenu', () =>
-        ['collisionsCumulees', 'diffRedondance'].every((colonne) =>
-          /\d/.test(m.racine.querySelector(`${ligne} [data-colonne="${colonne}"]`)?.textContent ?? ''),
-        ),
+      await attendre('les mesures du retenu et la meilleure proposition', () =>
+        [
+          ...['collisionsCumulees', 'diffRedondance'].map((colonne) => `[data-colonne="${colonne}"]`),
+          '[data-meilleure-id]',
+          '[data-meilleure-collisions]',
+        ].every((valeur) => /\d/.test(m.racine.querySelector(`${ligne} ${valeur}`)?.textContent ?? '')),
       );
       const { x, y } = await centre(await element(m, `${ligne} [data-terme="diffRedondance"]`));
       await pointer('bouger', x, y);

@@ -9,13 +9,22 @@
 // traduction. Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
+import { appliquerCommande } from '../../application/commandes.js';
+import { resumeDuMeilleur } from '../../application/evaluation.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { texteLivre } from '../../demo/livrees.js';
+import { rechercher } from '../../moteur/recherche.js';
+import { analyser, configurationDepuisCharge } from '../../stockage/document.js';
+import { VERSION } from '../../version.genere.js';
+import { COLONNE_ANNONCEE, meilleureProposition } from '../generation/meilleure.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { COLONNES, texteCellule } from '../propositions/modele.js';
 import {
   COLONNES_DU_RETENU,
   ETATS,
+  MEILLEURE,
   SAISIES,
   champDuRefus,
   cleDEtat,
@@ -51,6 +60,7 @@ function ligne(champs = {}) {
     doublonAvec: [],
     verrou: null,
     mesuresDuRetenu: null,
+    meilleureDuClassement: null,
     ...champs,
   };
 }
@@ -64,6 +74,7 @@ describe('ligneAffichee : les six informations (§ 8.1)', () => {
       'date',
       'diffRedondance',
       'etat',
+      'meilleure',
       'modification',
       'nom',
       'participants',
@@ -340,5 +351,60 @@ describe('ligneAffichee : les mesures du retenu (§ 5.4, § 8.1, § 8.9)', () =>
     }
     assert.equal(t('accueil.colonne.collisionsCumulees'), 'Collisions cumulées (paire et tour)');
     assert.equal(t('accueil.colonne.diffRedondance'), "Diff somme d'appartenance");
+  });
+});
+
+describe('ligneAffichee : la meilleure proposition du classement (§ 5.4, § 5.7, § 8.1)', () => {
+  const executer = (charge, nom, args) => appliquerCommande(nom, charge, args).charge;
+  // La charge, une génération du moteur de plus, enregistrée par la commande.
+  function generee(charge, reglages) {
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, reglages);
+    return executer(charge, 'enregistrerGeneration', { propositions, configuration, produitVersion: VERSION.affichee });
+  }
+
+  test("l'identifiant et les collisions cumulées que rend la façade, mis en forme ; aucun ne se calcule ici", () => {
+    const affichee = ligneAffichee(ligne({ meilleureDuClassement: { id: 1234, collisionsCumulees: 5678 } }), format);
+    assert.deepEqual(affichee.meilleure, { id: format.nombre(1234), collisions: format.nombre(5678) });
+  });
+
+  test('sans proposition classée, et pour une ligne illisible, les deux valent « — »', () => {
+    for (const champs of [{}, { nom: null, etat: null, participants: null, illisible: { raison: 'VIDE', chemin: null } }]) {
+      assert.deepEqual(ligneAffichee(ligne(champs), format).meilleure, { id: VIDE, collisions: VIDE });
+    }
+  });
+
+  test('MEILLEURE : les libellés du bloc de la génération, son explication des collisions, et l’explication du titre, qui existent', () => {
+    const colonne = COLONNES.find(({ nom }) => nom === COLONNE_ANNONCEE);
+    assert.ok(Object.isFrozen(MEILLEURE));
+    assert.deepEqual(MEILLEURE, {
+      titre: 'generation.meilleure.titre',
+      explication: 'accueil.explication.meilleure',
+      proposition: 'generation.meilleure.proposition',
+      collisions: colonne.cle,
+      explicationCollisions: colonne.explication,
+    });
+    assert.equal(t(MEILLEURE.titre), 'Meilleure proposition du classement');
+    assert.equal(t(MEILLEURE.collisions), 'Collisions cumulées (paire et tour)');
+    for (const cle of Object.values(MEILLEURE)) assert.ok(t(cle).length > 0, cle);
+  });
+
+  test('le texte de la ligne est celui du bloc de la génération sur la même charge, classée ou non', () => {
+    const generees = generee(analyser(texteLivre('petite-conflit')).charge, { graine: 4, nombre: 3, arret: 300, historique: 1000 });
+    const retenue = executer(generees, 'retenirProposition', { id: generees.propositions.at(-1).id });
+    const derivees = executer(generees, 'exclureParticipant', { id: generees.participants[0].id });
+    const charges = [generees, retenue, derivees, analyser(texteLivre('petite')).charge];
+    let classees = 0;
+    for (const charge of charges) {
+      const affichee = ligneAffichee(ligne({ meilleureDuClassement: resumeDuMeilleur(charge) }), format);
+      const bloc = meilleureProposition(charge);
+      if (bloc === null) {
+        assert.deepEqual(affichee.meilleure, { id: VIDE, collisions: VIDE });
+        continue;
+      }
+      classees += 1;
+      assert.deepEqual(affichee.meilleure, { id: format.nombre(bloc.id), collisions: texteCellule(bloc.cellule, { t, format }) });
+    }
+    assert.equal(classees, 2);
   });
 });

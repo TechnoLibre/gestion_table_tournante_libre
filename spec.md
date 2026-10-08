@@ -1211,7 +1211,14 @@ tableau des propositions — et la cible celle de l'événement (§ 8.9), 1000 p
 défaut, réglable dans la section des propositions. Les deux se lisent dans la
 même mesure que le tableau, au moment de lister, sans rien écrire ; un événement
 sans retenu, ou dont le retenu est fautif ou en dérive (§ 8.9, § 9), y porte
-« — ». Chaque intitulé s'explique dans une infobulle.
+« — ». Chaque ligne porte aussi la **« Meilleure proposition du classement »**,
+sous les libellés du bloc que la section de la génération montre en tête :
+l'identifiant de la proposition au rang 1 du classement (§ 5.7) et ses
+collisions cumulées — la même proposition et le même nombre que ce bloc et que
+la première ligne du tableau des propositions, retenue ou non ; une proposition
+fautive, que l'ouverture écarte (§ 8.9, point 3), n'y entre pas. Sans proposition
+classée — aucune, ou aucune qui décrive encore la configuration —, l'un et
+l'autre valent « — ». Chaque intitulé s'explique dans une infobulle.
 **Un répertoire vide n'affiche pas une liste vide** : il présente la commande de
 création et les démonstrations — une liste vide sans issue est le premier écran
 que voit un opérateur qui lance l'exécutable.

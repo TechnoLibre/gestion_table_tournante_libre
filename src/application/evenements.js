@@ -15,10 +15,12 @@
 // épreuve la remplace après le montage.
 //
 // Lister ne fait que lire. Chaque ligne lisible porte le résumé de son
-// retenu (resumeDuRetenu, evaluation.js), lu dans l'état de l'événement au
-// moment de lister. Une opération qui écrit dérive ses refus lisibles
-// sans écrire — nom vide, plan bloqué, format plus récent — avant toute
-// écriture, sonde de verrou comprise. Renommer et supprimer ferment d'abord
+// retenu (resumeDuRetenu, evaluation.js) et la meilleure proposition de son
+// classement (resumeDuMeilleur), lus dans une seule lecture de l'état de
+// l'événement au moment de lister, sur sa charge examinée comme l'ouverture
+// l'examine. Une opération qui écrit dérive ses refus lisibles sans écrire
+// — nom vide, plan bloqué, format plus récent — avant toute écriture, sonde
+// de verrou comprise. Renommer et supprimer ferment d'abord
 // l'événement visé quand il est ouvert : la séance rend son verrou, et la
 // façade sonde alors celui du disque sous son propre identifiant de séance,
 // tiré une fois à sa création ; une séance vivante, ou dont la vie ne se
@@ -45,9 +47,10 @@ import {
   renommer as renommerSurDisque,
   supprimer as supprimerSurDisque,
 } from '../stockage/operations.js';
+import { examiner } from '../stockage/placements.js';
 import { lireReglages } from '../stockage/reglages_locaux.js';
 import { ErreurCommande, refus } from './erreurs.js';
-import { resumeDuRetenu } from './evaluation.js';
+import { resumeDuMeilleur, resumeDuRetenu } from './evaluation.js';
 import { libelle } from './libelles.js';
 
 /** Sièges par défaut et tours d'un événement neuf (§ 2.1, étapes 4 et 5). */
@@ -130,20 +133,30 @@ async function derniereModification(fs, racine, base) {
   return lireJournal(texte).entrees.at(-1)?.horodatage ?? null;
 }
 
-// Le résumé du retenu de l'événement base (resumeDuRetenu), lu dans son
-// état, sans rien écrire ; null pour un état illisible au moment de la
-// liste — un résumé illisible ne se relit pas —, et pour un état qui a
-// cessé de se lire depuis : la ligne en porte déjà la cause, ou la portera
-// à la liste suivante.
-async function mesuresDuRetenuDe(fs, racine, { base, illisible }) {
-  if (illisible !== null) return null;
+// Les deux résumés de l'événement base, lus dans une seule lecture de son
+// état, sans rien écrire : mesuresDuRetenu (resumeDuRetenu) et
+// meilleureDuClassement (resumeDuMeilleur). Ils lisent la charge examinée
+// (examiner, § 8.9, point 3), celle que l'ouverture de l'état garde : une
+// proposition fautive, dont l'identifiant se répète ou atteint le compteur,
+// n'entre pas au classement, qui lève sur un identifiant répété, et la
+// liste nomme la proposition au rang 1 que le bloc de génération de
+// l'événement ouvert nomme. Chacun vaut null pour un état
+// illisible au moment de la liste — un résumé illisible ne se relit pas —,
+// et pour un état qui a cessé de se lire depuis : la ligne en porte déjà la
+// cause, ou la portera à la liste suivante.
+const AUCUN_RESUME = Object.freeze({ mesuresDuRetenu: null, meilleureDuClassement: null });
+async function resumesDe(fs, racine, { base, illisible }) {
+  if (illisible !== null) return AUCUN_RESUME;
+  let charge;
   try {
     const texte = await fs.lireTexte(racine, base + SUFFIXES.etat);
-    return texte === null ? null : resumeDuRetenu(analyser(texte).charge);
+    if (texte === null) return AUCUN_RESUME;
+    charge = examiner(analyser(texte).charge).charge;
   } catch (erreur) {
-    if (erreur instanceof ErreurStockage) return null;
+    if (erreur instanceof ErreurStockage) return AUCUN_RESUME;
     throw erreur;
   }
+  return { mesuresDuRetenu: resumeDuRetenu(charge), meilleureDuClassement: resumeDuMeilleur(charge) };
 }
 
 // Pourquoi l'état d'un résumé illisible ne s'ouvre pas : les détails de
@@ -303,7 +316,7 @@ export function creerFacade({
           ? resumes.filter((autre) => autre !== resume && autre.doublon && autre.id === id).map((autre) => autre.base)
           : [],
         verrou: await verrouDe(fs, courante, base),
-        mesuresDuRetenu: await mesuresDuRetenuDe(fs, courante, resume),
+        ...(await resumesDe(fs, courante, resume)),
       });
     }
     return lignes;
@@ -485,7 +498,9 @@ export function creerFacade({
     /**
      * Les lignes de la liste (§ 8.1), dans l'ordre du dépôt ; n'écrit rien.
      * mesuresDuRetenu porte resumeDuRetenu de l'état, null sans retenu
-     * mesurable ou pour un état illisible.
+     * mesurable ou pour un état illisible ; meilleureDuClassement,
+     * resumeDuMeilleur de l'état, null sans proposition classée ou pour un
+     * état illisible.
      */
     lister,
     /** Crée et ouvre en lecture l'événement { nom, date } (§ 2.1, étape 1). */

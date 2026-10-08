@@ -21,6 +21,10 @@
 // resumeDuRetenu donne à la liste des événements deux nombres du retenu,
 // lus dans la même mesure que sa ligne du tableau, sans le diagnostic ni
 // les plafonds : la liste en résume chaque événement du dossier.
+// premiereDuClassement est la seule définition de la proposition au rang 1
+// : la section de la génération la lit dans sa table, resumeDuMeilleur la
+// donne à la liste, sur la même table d'évaluation, diagnostic compris — le
+// premier critère du classement lit le plafond a priori.
 import { classer } from '../moteur/classement.js';
 import { indexerPlan, normaliser } from '../moteur/configuration.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
@@ -177,4 +181,43 @@ export function resumeDuRetenu(charge) {
   const { collisionsCumulees, totalRedondance } = mesurer(instance, indexerPlan(instance, planDepuisFichier(retenu)));
   const cible = cibleRedondance(charge);
   return { collisionsCumulees, totalRedondance, cibleRedondance: cible, diffRedondance: Math.abs(cible - totalRedondance) };
+}
+
+/**
+ * La proposition au rang 1 du classement d'une table d'évaluation (§ 5.7) :
+ * la première de ses propositions quand elle se compare — les comparables
+ * ouvrent la liste, dans l'ordre du classement —, null quand aucune ne se
+ * classe.
+ *
+ * @param {TableEvaluation} table
+ * @returns {LigneEvaluation|null}
+ */
+export function premiereDuClassement(table) {
+  const [premiere] = table.propositions;
+  return premiere !== undefined && premiere.statut === 'comparable' ? premiere : null;
+}
+
+/**
+ * La meilleure proposition du classement que montre la liste des
+ * événements (§ 5.4, § 5.7, § 8.1) : l'identifiant de la proposition au
+ * rang 1 (premiereDuClassement) et ses collisions cumulées, celles de sa
+ * ligne d'evaluer. null sans proposition, quand aucune ne se compare —
+ * toutes fautives ou en dérive —, et quand la configuration ne se normalise
+ * pas : la liste écrit alors « — ». Le retenu n'y entre pas. Ne modifie pas
+ * la charge.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {{id: number, collisionsCumulees: number}|null}
+ */
+export function resumeDuMeilleur(charge) {
+  if (charge.propositions.length === 0) return null;
+  let table;
+  try {
+    table = evaluer(charge);
+  } catch (erreur) {
+    if (erreur instanceof ErreurConfiguration) return null;
+    throw erreur;
+  }
+  const premiere = premiereDuClassement(table);
+  return premiere === null ? null : { id: premiere.id, collisionsCumulees: premiere.mesures.collisionsCumulees };
 }

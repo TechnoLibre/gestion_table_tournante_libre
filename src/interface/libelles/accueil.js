@@ -44,6 +44,19 @@ export const TABLE = new Map([
       "propositions. « \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit plus la configuration.",
   ],
 
+  // La meilleure proposition du classement de chaque événement (§ 5.4,
+  // § 5.7) : son titre, l'identifiant et les collisions s'écrivent sous les
+  // libellés du bloc de la génération ; l'explication du titre est propre à
+  // la liste, qui l'écrit « — » quand rien n'est classé.
+  [
+    'accueil.explication.meilleure',
+    "La proposition au rang 1 du classement de l'événement, celle que la section de la génération annonce en tête : " +
+      'son identifiant et ses collisions cumulées. Le classement range les propositions comparables, retenue comprise ; ' +
+      'le placement retenu se lit à part, sous ses propres intitulés. ' +
+      "« \u{2014} » quand aucune proposition n'est classée : aucune proposition, ou aucune qui décrive encore la " +
+      'configuration.',
+  ],
+
   // Le nom d'un état du plan (§ 9), que rend cleDEtat (modele.js).
   ['accueil.etat.brouillon', 'Brouillon'],
   ['accueil.etat.propose', 'Proposé'],

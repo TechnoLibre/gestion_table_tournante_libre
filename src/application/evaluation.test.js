@@ -23,7 +23,14 @@ import { analyser, capacite, configurationDepuisCharge } from '../stockage/docum
 import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
-import { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance, evaluer, resumeDuRetenu } from './evaluation.js';
+import {
+  CIBLE_REDONDANCE_PAR_DEFAUT,
+  cibleRedondance,
+  evaluer,
+  premiereDuClassement,
+  resumeDuMeilleur,
+  resumeDuRetenu,
+} from './evaluation.js';
 
 const V1 = VERSION.affichee;
 
@@ -422,5 +429,70 @@ describe('resumeDuRetenu : les mesures du retenu que lit la liste des événemen
     charge.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table, siege: null, portee: 'tous', tour: null }));
     assert.throws(() => evaluer(charge), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION');
     assert.equal(resumeDuRetenu(charge), null);
+  });
+});
+
+describe('resumeDuMeilleur : la proposition au rang 1 que lit la liste des événements (§ 5.4, § 5.7, § 8.1)', () => {
+  test("le rang 1 du classement, ni le plus petit identifiant ni le moins de collisions : son identifiant et ses collisions cumulées", () => {
+    // Le classement range les plans écrits à la main 3, 2, 1, 4 : la 3 vient
+    // en tête avec 6 collisions cumulées, quand la 1 n'en porte que 4.
+    const charge = structuredClone(chargeDemo('petite-conflit'));
+    charge.propositions = PLANS_CONFLIT.map(({ tours }, rang) => propositionDe(charge, rang + 1, tours));
+    charge.prochainsIds.proposition = 5;
+    figer(charge);
+    const table = evaluer(charge);
+    assert.deepEqual(table.classement.ordre, [3, 2, 1, 4]);
+    assert.deepEqual(resumeDuMeilleur(charge), { id: 3, collisionsCumulees: 6 });
+    assert.equal(premiereDuClassement(table), table.propositions[0]);
+    assert.equal(premiereDuClassement(table).mesures.collisionsCumulees, 6);
+  });
+
+  test("après des générations : la première ligne d'evaluer, comparable, et le retenu n'y change rien", () => {
+    let charge = generee(chargeDemo('petite-conflit'), { graine: 4, nombre: 3, arret: 300 });
+    charge = generee(charge, { graine: 9, nombre: 2, arret: 300 });
+    const [premiere] = evaluer(charge).propositions;
+    assert.equal(premiere.statut, 'comparable');
+    const attendu = { id: premiere.id, collisionsCumulees: premiere.mesures.collisionsCumulees };
+    assert.deepEqual(resumeDuMeilleur(figer(charge)), attendu);
+    const derniere = charge.propositions.at(-1).id;
+    const retenue = executer(charge, 'retenirProposition', { id: derniere });
+    assert.deepEqual(resumeDuMeilleur(retenue), attendu);
+  });
+
+  test('sans proposition, null, retenu ou non ; premiereDuClassement d’une table sans comparable, null', () => {
+    assert.equal(resumeDuMeilleur(chargeDemo('petite')), null);
+    const generees = generee(chargeDemo('petite-conflit'), { graine: 3, nombre: 2, arret: 300 });
+    const retenue = executer(generees, 'retenirProposition', { id: generees.propositions[0].id });
+    // Un retenu seul : la liste vidée à la main, la commande gardant la
+    // proposition d'origine du retenu.
+    const retenuSeul = structuredClone(retenue);
+    retenuSeul.propositions = [];
+    assert.equal(evaluer(retenuSeul).retenu.statut, 'comparable');
+    assert.equal(resumeDuMeilleur(retenuSeul), null);
+    assert.equal(premiereDuClassement(evaluer(retenuSeul)), null);
+  });
+
+  test('des propositions toutes hors du classement — population changée, ou fautives — : null, sans lever', () => {
+    const generees = generee(chargeDemo('petite'), { graine: 3, nombre: 2, arret: 300 });
+    assert.notEqual(resumeDuMeilleur(generees), null);
+    const exclue = executer(generees, 'exclureParticipant', { id: generees.participants[0].id });
+    const table = evaluer(exclue);
+    assert.equal(table.propositions.length, 2);
+    assert.ok(table.propositions.every(({ statut }) => statut === 'derive'));
+    assert.equal(premiereDuClassement(table), null);
+    assert.equal(resumeDuMeilleur(exclue), null);
+
+    const fautives = structuredClone(generees);
+    for (const proposition of fautives.propositions) proposition.placement[0].reserve.push(proposition.participants[0]);
+    assert.ok(evaluer(fautives).propositions.every(({ statut }) => statut === 'fautif'));
+    assert.equal(resumeDuMeilleur(fautives), null);
+  });
+
+  test('une configuration qui ne se normalise pas rend null là où evaluer lève', () => {
+    const charge = structuredClone(generee(chargeDemo('petite-conflit'), { graine: 3, nombre: 2, arret: 300 }));
+    const table = charge.tables[0].id;
+    charge.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table, siege: null, portee: 'tous', tour: null }));
+    assert.throws(() => evaluer(charge), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION');
+    assert.equal(resumeDuMeilleur(charge), null);
   });
 });
