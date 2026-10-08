@@ -96,6 +96,10 @@
  *                                       propre siegesAttribues
  * @property {{nombre: number, arret: number, historique: number}} generation
  *                                       entiers ≥ 1
+ * @property {number} [cibleRedondance]  entier ≥ 0, facultatif : la cible
+ *                                       de la somme de redondance ; absent,
+ *                                       elle vaut CIBLE_REDONDANCE_PAR_DEFAUT,
+ *                                       que rend la fonction cibleRedondance
  *
  * @typedef {Object} ProchainsIds   entiers de 1 à 2^31 − 1, au-delà de tout
  *                                  identifiant attribué ; ils ne reculent
@@ -229,6 +233,8 @@
  *           chaine : non vide ; nombre : fini ; parmi : l'une de valeurs ;
  *           date : AAAA-MM-JJ d'un jour du calendrier
  * @property {boolean} nul                   null est admis
+ * @property {boolean} optionnel             le champ peut manquer à son
+ *           objet : absent, il ne s'écrit pas et ne se compare pas
  * @property {Array<[string, Regle]>} [champs]   objet : ses champs, dans
  *           l'ordre des clés du texte canonique
  * @property {Set<string>} [cles]            objet : les clés de ses champs

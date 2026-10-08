@@ -73,11 +73,20 @@ export const TOURS_MAX = 100;
  */
 export const GENERATION_PAR_DEFAUT = Object.freeze({ nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT });
 
+/**
+ * La cible de la somme de redondance d'un événement quand ses réglages n'en
+ * portent pas (§ 8.9) : la liste des événements la compare à Σ r(p) du
+ * placement retenu. Un fichier sans le champ se lit à cette valeur.
+ */
+export const CIBLE_REDONDANCE_PAR_DEFAUT = 1000;
+
 // Une règle du schéma ; types.js en décrit les propriétés (Regle). Un objet
 // porte ses champs, paires [clé, règle] dans l'ordre des clés, et l'ensemble
-// de leurs clés ; une liste porte la règle de ses éléments.
+// de leurs clés ; une liste porte la règle de ses éléments. Un champ
+// facultatif (optionnel) peut manquer à son objet : absent, il ne s'écrit
+// pas, et sa valeur par défaut se lit par la fonction qui le nomme.
 function regle(genre, proprietes) {
-  return Object.freeze({ genre, nul: false, ...proprietes });
+  return Object.freeze({ genre, nul: false, optionnel: false, ...proprietes });
 }
 const chaine = (options) => regle('chaine', options);
 const entier = (min, max = Infinity, options = {}) => regle('entier', { min, max, ...options });
@@ -186,6 +195,9 @@ const REGLAGES = objet([
   ['varierAppartenances', BOOLEEN],
   ['attribuerSieges', BOOLEEN],
   ['generation', objet([['nombre', entier(1)], ['arret', entier(1)], ['historique', entier(1)]])],
+  // Facultatif, en dernier : un fichier qui ne le porte pas s'écrit sans
+  // lui, octet pour octet comme avant qu'il existe (cibleRedondance).
+  ['cibleRedondance', entier(0, Infinity, { optionnel: true })],
 ]);
 
 const PARTICIPANT = objet([
@@ -454,6 +466,7 @@ function reduire(valeur, regleDeValeur) {
 // vrai fait examiner tout le contenu de la règle donnée, même aPart, et
 // faux la lit à sa place sous une autre, comme l'analyse.
 function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
+  if (valeur === undefined && regleDeValeur.optionnel) return null;
   if (valeur === null && regleDeValeur.nul) return null;
   if (!conforme(valeur, regleDeValeur)) return chemin;
   if (regleDeValeur.aPart && !racine) return null;
@@ -479,8 +492,9 @@ function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
  * quand valeur est conforme ; ne lève jamais. D'un objet, chaque champ dans
  * l'ordre du schéma, puis la plus petite de ses clés inconnues ; d'une
  * liste, chaque élément dans l'ordre des rangs. null est conforme à une
- * règle qui l'admet. Un champ absent se lit undefined, qu'aucune règle
- * n'admet, et se nomme par son chemin comme une valeur fautive. Le chemin
+ * règle qui l'admet. Un champ absent se lit undefined, qu'admet seule une
+ * règle facultative ; ailleurs, il se nomme par son chemin comme une valeur
+ * fautive. Le chemin
  * suit la convention d'analyser, à partir de chemin, '' par défaut.
  *
  * Une règle aPart rencontrée sous une autre n'examine que son conteneur :
@@ -697,6 +711,18 @@ export function configurationDepuisCharge(charge) {
 export function etatDeduit({ retenu, propositions }) {
   if (retenu !== null) return 'retenu';
   return propositions.length > 0 ? 'propose' : 'brouillon';
+}
+
+/**
+ * La cible de la somme de redondance de l'événement (§ 8.9) : le réglage
+ * cibleRedondance quand la charge le porte, CIBLE_REDONDANCE_PAR_DEFAUT
+ * sinon. C'est la seule lecture de ce réglage.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @returns {number}
+ */
+export function cibleRedondance(charge) {
+  return charge.reglages.cibleRedondance ?? CIBLE_REDONDANCE_PAR_DEFAUT;
 }
 
 /**

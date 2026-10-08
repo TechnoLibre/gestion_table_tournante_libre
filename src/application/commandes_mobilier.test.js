@@ -19,7 +19,15 @@ import { STATUT, nombrePlacesManquantes, normaliser } from '../moteur/configurat
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
-import { SIEGES_MAX, TOURS_MAX, analyser, capacite, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import {
+  SIEGES_MAX,
+  TOURS_MAX,
+  analyser,
+  capacite,
+  cibleRedondance,
+  configurationDepuisCharge,
+  creerCharge,
+} from '../stockage/document.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import { derive, examiner, fautes } from '../stockage/placements.js';
@@ -237,8 +245,18 @@ async function seanceSur(charge) {
 // --- Les épreuves -----------------------------------------------------------
 
 describe('mobilier : le registre (§ 8.2)', () => {
-  test('COMMANDES_MOBILIER porte les huit commandes du mobilier, réunies dans COMMANDES', () => {
-    const noms = ['creerTable', 'supprimerTable', 'deplacerTable', 'changerPlacesTable', 'realignerTable', 'changerDefaut', 'changerTours', 'modifierReglage'];
+  test('COMMANDES_MOBILIER porte les neuf commandes du mobilier, réunies dans COMMANDES', () => {
+    const noms = [
+      'creerTable',
+      'supprimerTable',
+      'deplacerTable',
+      'changerPlacesTable',
+      'realignerTable',
+      'changerDefaut',
+      'changerTours',
+      'modifierReglage',
+      'changerCibleRedondance',
+    ];
     assert.deepEqual([...COMMANDES_MOBILIER.keys()], noms);
     for (const nom of noms) assert.equal(COMMANDES.get(nom), COMMANDES_MOBILIER.get(nom), nom);
   });
@@ -255,6 +273,7 @@ describe('mobilier : le registre (§ 8.2)', () => {
       ['changerDefaut', { sieges: 6, realigner: false }],
       ['changerTours', { tours: 3 }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
+      ['changerCibleRedondance', { cible: '1200' }],
     ];
     assert.equal(gestes.length, COMMANDES_MOBILIER.size);
     for (const [nom, args] of gestes) {
@@ -1002,5 +1021,48 @@ describe('mobilier : les réglages (§ 5.3, § 15.4)', () => {
     assert.throws(() => COMMANDES.get('modifierReglage')(charge, { cle: 'nouveauxVoisins', valeur: 'non' }), TypeError);
     assert.throws(() => COMMANDES.get('modifierReglage')(charge, { cle: 'generation.nombre', valeur: 0 }), TypeError);
     refuse(() => appliquerCommande('modifierReglage', charge, { cle: 'nouveauxVoisins', valeur: true }), 'SANS_EFFET');
+  });
+});
+
+describe('mobilier : la cible de la somme de redondance (§ 5.4, § 8.1, § 8.9)', () => {
+  test('« Cible de la somme de redondance : 1200 », une entrée ; défaire rend la charge sans le champ', async () => {
+    const { seance, entrees } = await seanceSur(chargeDe({ tables: [{ id: 1 }], n: 2 }));
+    const avant = entrees();
+    assert.equal(Object.hasOwn(seance.charge.reglages, 'cibleRedondance'), false);
+    const rendu = await seance.executer('changerCibleRedondance', { cible: '1200' });
+    assert.equal(rendu.libelle, 'Cible de la somme de redondance : 1200');
+    assert.equal(entrees() - avant, 1);
+    assert.equal(seance.charge.reglages.cibleRedondance, 1200);
+    await seance.defaire();
+    assert.equal(Object.hasOwn(seance.charge.reglages, 'cibleRedondance'), false);
+    assert.equal(cibleRedondance(seance.charge), 1000);
+  });
+
+  test('la saisie se lit par lireEntier, 0 compris ; revenir à 1000 retire le champ, et la charge s’écrit comme sans lui', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2 });
+    const zero = accepter('changerCibleRedondance', charge, { cible: ' 0 ' });
+    assert.equal(zero.charge.reglages.cibleRedondance, 0);
+    assert.equal(zero.libelle, 'Cible de la somme de redondance : 0');
+    const nombre = accepter('changerCibleRedondance', charge, { cible: 750 });
+    assert.equal(nombre.charge.reglages.cibleRedondance, 750);
+    const retour = accepter('changerCibleRedondance', nombre.charge, { cible: '1000' });
+    assert.equal(Object.hasOwn(retour.charge.reglages, 'cibleRedondance'), false);
+    assert.equal(retour.libelle, 'Cible de la somme de redondance : 1000');
+    assert.equal(serialiser(retour.charge, { revision: 1, produitVersion: V1 }), serialiser(charge, { revision: 1, produitVersion: V1 }));
+  });
+
+  test('une saisie négative, décimale ou vide est refusée NON_ENTIER {saisie}, remède null ; la même valeur, SANS_EFFET', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2 });
+    const saisies = ['-5', '2,5', '', 'mille'];
+    assert.ok(saisies.length > 0);
+    for (const saisie of saisies) {
+      refuse(() => COMMANDES.get('changerCibleRedondance')(charge, { cible: saisie }), 'NON_ENTIER', { saisie, remede: null });
+    }
+    refuse(() => appliquerCommande('changerCibleRedondance', charge, { cible: '1000' }), 'SANS_EFFET', {
+      commande: 'changerCibleRedondance',
+    });
+    const posee = accepter('changerCibleRedondance', charge, { cible: '640' }).charge;
+    refuse(() => appliquerCommande('changerCibleRedondance', posee, { cible: '640' }), 'SANS_EFFET');
+    assert.throws(() => COMMANDES.get('changerCibleRedondance')(charge, { cible: null }), TypeError);
   });
 });

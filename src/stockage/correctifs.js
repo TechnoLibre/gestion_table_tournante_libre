@@ -7,7 +7,8 @@
 //
 // Une opération pose une valeur au bout d'un chemin, ou retire
 // l'enregistrement qu'il désigne : { op: 'poser', chemin, valeur } ou
-// { op: 'retirer', chemin }. Un chemin est une liste d'étapes depuis la
+// { op: 'retirer', chemin }. Un champ facultatif du schéma (optionnel) se
+// pose aussi quand son objet ne le porte pas, et se retire par sa clé. Un chemin est une liste d'étapes depuis la
 // charge : une clé d'objet, chaîne ; un rang de liste, entier ≥ 0 ; ou
 // { id }, qui désigne dans une liste d'enregistrements à identifiant —
 // participants, tables, propositions — l'enregistrement de cet identifiant,
@@ -61,7 +62,8 @@ import { ErreurStockage } from './erreurs.js';
  *
  * @typedef {Object} OperationRetirer
  * @property {'retirer'} op
- * @property {Etape[]} chemin   non vide, terminé par { id }
+ * @property {Etape[]} chemin   non vide, terminé par { id }, ou par la clé
+ *                              d'un champ facultatif
  *
  * @typedef {OperationPoser|OperationRetirer} Operation
  */
@@ -110,14 +112,24 @@ const poids = (operations) => JSON.stringify(operations).length;
 // deux autres listes, de longueurs différentes, posent b entière, et de même
 // longueur se comparent rang par rang — deux listes d'identifiants ou
 // d'occupants exceptées, qui posent b entière quand leurs poses rang par
-// rang pèsent plus que la sienne.
+// rang pèsent plus que la sienne. Un champ facultatif absent d'un côté se
+// pose quand b le porte, et se retire quand b ne le porte pas.
 function comparer(a, b, regle, chemin, operations) {
   if (a === null || b === null || (regle.genre !== 'objet' && regle.genre !== 'liste')) {
     if (a !== b) operations.push({ op: 'poser', chemin, valeur: b });
   } else if (retenuHorsDeSaRegle(a, regle) || retenuHorsDeSaRegle(b, regle)) {
     if (JSON.stringify(a) !== JSON.stringify(b)) operations.push({ op: 'poser', chemin, valeur: b });
   } else if (regle.genre === 'objet') {
-    for (const [cle, regleDeCle] of regle.champs) comparer(a[cle], b[cle], regleDeCle, [...chemin, cle], operations);
+    for (const [cle, regleDeCle] of regle.champs) {
+      const place = [...chemin, cle];
+      if (regleDeCle.optionnel && b[cle] === undefined) {
+        if (a[cle] !== undefined) operations.push({ op: 'retirer', chemin: place });
+      } else if (regleDeCle.optionnel && a[cle] === undefined) {
+        operations.push({ op: 'poser', chemin: place, valeur: b[cle] });
+      } else {
+        comparer(a[cle], b[cle], regleDeCle, place, operations);
+      }
+    }
   } else if (identifiantsDistincts(a) && identifiantsDistincts(b)) {
     comparerParIdentifiant(a, b, regle.element, chemin, operations);
   } else if (a.length !== b.length) {
@@ -286,13 +298,16 @@ function descendre(conteneur, etape) {
 }
 
 // Pose une copie de valeur à la place que désigne etape dans conteneur :
-// une clé qu'il porte déjà, un rang qu'il contient, ou { id } absent de la
-// liste, quand valeur, un enregistrement que valeurAdmise a contrôlé, porte
-// cet id ; l'enregistrement s'insère alors avant le premier d'id plus
-// grand, ce qui garde une liste rangée par identifiant croissant. Rend faux
-// quand etape ne désigne aucune de ces places.
-function poser(conteneur, etape, valeur) {
-  if (estCleDe(conteneur, etape) || estRangDe(conteneur, etape)) {
+// une clé qu'il porte déjà, ou la clé d'un champ facultatif — regle, celle
+// de la place, le dit — qu'un objet ne porte pas ; un rang qu'il contient ;
+// ou { id } absent de la liste, quand valeur, un enregistrement que
+// valeurAdmise a contrôlé, porte cet id ; l'enregistrement s'insère alors
+// avant le premier d'id plus grand, ce qui garde une liste rangée par
+// identifiant croissant. Rend faux quand etape ne désigne aucune de ces
+// places.
+function poser(conteneur, etape, valeur, regle) {
+  const facultatifAbsent = regle.optionnel && typeof etape === 'string' && estObjet(conteneur);
+  if (estCleDe(conteneur, etape) || estRangDe(conteneur, etape) || facultatifAbsent) {
     conteneur[etape] = structuredClone(valeur);
     return true;
   }
@@ -302,11 +317,17 @@ function poser(conteneur, etape, valeur) {
   return true;
 }
 
-// Retire de conteneur l'enregistrement que désigne l'étape { id } ; rend
-// faux quand elle n'en désigne pas exactement un. Une clé ou un rang ne se
-// retirent pas : les objets de la charge ont les clés du schéma, et une
-// liste sans identifiants se pose entière quand sa longueur change.
-function retirer(conteneur, etape) {
+// Retire de conteneur l'enregistrement que désigne l'étape { id }, ou le
+// champ facultatif de la clé etape qu'il porte — regle, celle de la place,
+// le dit ; rend faux quand elle n'en désigne pas exactement un. Une autre
+// clé ou un rang ne se retirent pas : les objets de la charge ont les clés
+// obligatoires du schéma, et une liste sans identifiants se pose entière
+// quand sa longueur change.
+function retirer(conteneur, etape, regle) {
+  if (regle?.optionnel && estCleDe(conteneur, etape)) {
+    delete conteneur[etape];
+    return true;
+  }
   const rangs = rangsDe(conteneur, etape);
   if (rangs?.length !== 1) return false;
   conteneur.splice(rangs[0], 1);
@@ -333,9 +354,9 @@ function executer(charge, operation) {
   const derniere = chemin[chemin.length - 1];
   if (op === 'poser') {
     if (valeur === undefined || !valeurAdmise(charge, chemin, lecture.regle, valeur)) return false;
-    return poser(conteneur, derniere, valeur);
+    return poser(conteneur, derniere, valeur, lecture.regle);
   }
-  if (op === 'retirer') return retirer(conteneur, derniere);
+  if (op === 'retirer') return retirer(conteneur, derniere, lecture.regle);
   return false;
 }
 
@@ -354,15 +375,15 @@ function executer(charge, operation) {
  * tables et des propositions, même dans une liste vide ; une étape qui ne
  * trouve pas sa clé, que l'objet porte en propre et n'hérite pas, son rang
  * ou exactement un enregistrement ; poser à une clé que l'objet ne porte
- * pas ou au-delà de la fin d'une liste ; poser par { id } un identifiant
- * déjà présent, ou une valeur qui n'est pas l'enregistrement de cet
- * identifiant ; poser une valeur qui sort de la règle de sa place, en
- * genre, en domaine, null compris, ou en clés, jusque dans les propositions
- * et le retenu ; à la place du retenu, autre chose qu'un objet ou null ;
- * sous un retenu que sa règle refuse, quoi que ce soit ; retirer autre
- * chose qu'un enregistrement par { id }. Une charge rendue garde ainsi
- * chaque proposition dans sa règle, et canoniser, difference et serialiser
- * la lisent sans lever. Le contrôle porte sur la forme : une opération ne
+ * pas, hors d'un champ facultatif, ou au-delà de la fin d'une liste ; poser
+ * par { id } un identifiant déjà présent, ou une valeur qui n'est pas
+ * l'enregistrement de cet identifiant ; poser une valeur qui sort de la
+ * règle de sa place, en genre, en domaine, null compris, ou en clés, jusque
+ * dans les propositions et le retenu ; à la place du retenu, autre chose
+ * qu'un objet ou null ; sous un retenu que sa règle refuse, quoi que ce
+ * soit ; retirer autre chose qu'un enregistrement par { id } ou un champ
+ * facultatif présent. Une charge rendue garde ainsi chaque proposition dans
+ * sa règle, et canoniser, difference et serialiser la lisent sans lever. Le contrôle porte sur la forme : une opération ne
  * porte pas la valeur qu'elle remplace, et un correctif dont chaque chemin
  * existe aussi dans une autre charge s'y applique sans lever. Un correctif
  * qui n'est pas une liste lève TypeError.

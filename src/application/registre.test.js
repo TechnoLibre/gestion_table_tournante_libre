@@ -337,6 +337,14 @@ const EXEMPLES = new Map([
     },
   ],
   [
+    'changerCibleRedondance',
+    {
+      accepte: { args: { cible: '1200' } },
+      refuse: { args: { cible: '-1' }, code: 'NON_ENTIER', remede: null },
+      sansEffet: { args: { cible: '1000' } },
+    },
+  ],
+  [
     'reserver',
     {
       accepte: { args: { participant: 5, table: 2, siege: null, portee: 'tour', tour: 2 } },

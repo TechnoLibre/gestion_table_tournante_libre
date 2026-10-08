@@ -173,7 +173,9 @@ quoi que ce soit.* L'opérateur lit la page de qualité (§ 12), compare deux
 propositions sur le même axe — celui du **manque** (§ 12.10) —, retient celle
 qu'il préfère. Le logiciel sépare ce que le moteur a décidé de ce que les
 réservations imposent (§ 5.4). Retenir fait passer le plan à l'état *Retenu*
-(§ 9) ; les propositions non retenues restent disponibles.
+(§ 9) ; les propositions non retenues restent disponibles. Le retenu se résume
+ensuite dans la liste des événements, par ses collisions cumulées et la
+différence absolue de sa somme de redondance à la cible de l'événement (§ 8.1).
 
 **11. Ajuster à la main.** *Facultative, reprenable.* Le même geste qu'à
 l'étape 7 déplace maintenant une personne réelle dans le placement retenu. **Le
@@ -1201,6 +1203,15 @@ qui est dedans, sans son complément, laisse l'implémenteur ajouter.
 
 Le logiciel ouvre sur une **liste des événements**, avec pour chacun le nom, la
 date, l'état, le nombre de participants, la dernière modification et le chemin.
+Deux colonnes résument en plus le **placement retenu** : « Collisions cumulées
+(paire et tour) », les collisions cumulées du retenu (§ 5.4), et « Diff somme
+d'appartenance », |cible − Σ r(p)|, où Σ r(p) est la somme de redondance du
+retenu — le nombre de la colonne « Redondance d'appartenance, somme Σ r(p) » du
+tableau des propositions — et la cible celle de l'événement (§ 8.9), 1000 par
+défaut, réglable dans la section des propositions. Les deux se lisent dans la
+même mesure que le tableau, au moment de lister, sans rien écrire ; un événement
+sans retenu, ou dont le retenu est fautif ou en dérive (§ 8.9, § 9), y porte
+« — ». Chaque intitulé s'explique dans une infobulle.
 **Un répertoire vide n'affiche pas une liste vide** : il présente la commande de
 création et les démonstrations — une liste vide sans issue est le premier écran
 que voit un opérateur qui lance l'exécutable.
@@ -1639,6 +1650,21 @@ retrouve-t-il ?*
 |---|---|---|
 | participants, tables, tours, réservations, titres de place, filiation | **champs nommés**, un objet par chose | c'est de la saisie d'opérateur : perdue, elle est perdue, et elle doit se lire à l'œil quand un fichier s'abîme. Elle est petite — de l'ordre de 40 ko pour 260 personnes avec courriels |
 | placements engendrés | **forme positionnelle** | c'est la partie volumineuse, et la seule qui se **recalcule** : une proposition perdue coûte une relance |
+
+#### Un réglage facultatif : la cible de la somme de redondance
+
+Les réglages de l'événement portent un champ **facultatif**,
+`cibleRedondance`, un entier ≥ 0 : la cible à laquelle la liste des événements
+compare la somme de redondance Σ r(p) du retenu (§ 8.1). **Absent, il vaut
+1000.** Le format reste le format 1 : un fichier qui ne le porte pas — chaque
+fichier écrit avant lui, chaque démonstration livrée — se lit tel quel, à la
+cible 1000, et s'écrit octet pour octet comme avant. Une valeur négative, non
+entière, hors des entiers exacts ou d'une autre sorte est une faute de forme du
+fichier (§ 8.8). La commande « Cible de la somme de redondance », un champ de la
+section des propositions, le pose — une entrée d'historique, refusée en lecture
+et sur un plan bloqué — et le retire quand la cible revient à 1000 : deux
+fichiers de même cible s'écrivent pareil. Un correctif du journal (§ 8.6) le
+pose quand il apparaît et le retire quand il disparaît.
 
 #### La forme positionnelle
 

@@ -14,6 +14,7 @@ import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
+  COLONNES_DU_RETENU,
   ETATS,
   SAISIES,
   champDuRefus,
@@ -49,6 +50,7 @@ function ligne(champs = {}) {
     journalSeul: false,
     doublonAvec: [],
     verrou: null,
+    mesuresDuRetenu: null,
     ...champs,
   };
 }
@@ -58,7 +60,9 @@ describe('ligneAffichee : les six informations (§ 8.1)', () => {
     const affichee = ligneAffichee(ligne(), format);
     assert.deepEqual(Object.keys(affichee).sort(), [
       'chemin',
+      'collisionsCumulees',
       'date',
+      'diffRedondance',
       'etat',
       'modification',
       'nom',
@@ -299,5 +303,42 @@ describe('saisieDe : la saisie d’un nom pour copier ou renommer (§ 8.7)', () 
       assert.equal(typeof t(saisie.valider), 'string');
     }
     assert.throws(() => saisieDe('supprimer', 'x'), RangeError);
+  });
+});
+
+describe('ligneAffichee : les mesures du retenu (§ 5.4, § 8.1, § 8.9)', () => {
+  test('les collisions cumulées et la différence à la cible, celles de la façade, mises en forme ; aucune ne se calcule ici', () => {
+    const mesuresDuRetenu = { collisionsCumulees: 1234, totalRedondance: 1500, cibleRedondance: 1000, diffRedondance: 500 };
+    const affichee = ligneAffichee(ligne({ mesuresDuRetenu }), format);
+    assert.equal(affichee.collisionsCumulees, format.nombre(1234));
+    assert.equal(affichee.diffRedondance, format.nombre(500));
+    // La différence se lit telle que la façade la rend, jamais refaite
+    // depuis la cible et la somme.
+    const telleQuelle = ligneAffichee(ligne({ mesuresDuRetenu: { ...mesuresDuRetenu, diffRedondance: 7 } }), format);
+    assert.equal(telleQuelle.diffRedondance, format.nombre(7));
+  });
+
+  test('sans retenu mesurable, et pour une ligne illisible, les deux valent « — »', () => {
+    for (const champs of [{}, { nom: null, etat: null, participants: null, illisible: { raison: 'VIDE', chemin: null } }]) {
+      const affichee = ligneAffichee(ligne(champs), format);
+      assert.equal(affichee.collisionsCumulees, VIDE);
+      assert.equal(affichee.diffRedondance, VIDE);
+    }
+  });
+
+  test('COLONNES_DU_RETENU : les deux colonnes, dans leur ordre, chacune avec son intitulé et son explication, qui existent', () => {
+    assert.deepEqual(
+      COLONNES_DU_RETENU.map(({ colonne }) => colonne),
+      ['collisionsCumulees', 'diffRedondance'],
+    );
+    assert.ok(Object.isFrozen(COLONNES_DU_RETENU));
+    for (const { colonne, cle, explication } of COLONNES_DU_RETENU) {
+      assert.equal(cle, `accueil.colonne.${colonne}`);
+      assert.equal(explication, `accueil.explication.${colonne}`);
+      assert.ok(t(cle).length > 0);
+      assert.ok(t(explication).length > 0);
+    }
+    assert.equal(t('accueil.colonne.collisionsCumulees'), 'Collisions cumulées (paire et tour)');
+    assert.equal(t('accueil.colonne.diffRedondance'), "Diff somme d'appartenance");
   });
 });

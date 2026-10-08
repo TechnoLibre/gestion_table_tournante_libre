@@ -538,6 +538,7 @@ const EXEMPLES = new Map([
   ['ENTREE_CHANGER_DEFAUT', { sieges: 10, realignees: 4 }],
   ['ENTREE_CHANGER_TOURS', { tours: 3, retirees: 2 }],
   ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerAppartenances', valeur: false }],
+  ['ENTREE_CHANGER_CIBLE_REDONDANCE', { cible: 1200 }],
 ]);
 
 // Un texte composé ne laisse paraître ni valeur absente, ni booléen, ni

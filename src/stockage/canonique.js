@@ -70,9 +70,9 @@ function copierHorsDuSchema(valeur) {
 // à ce qu'il contient : ses listes de table ne se trient que quand il vaut
 // faux. Le réglage attribuerSieges de la charge n'y entre pas. Les clés hors
 // du schéma ne sont pas copiées. Un retenu que sa règle refuse se copie hors
-// du schéma, entier. Ailleurs, une clé du schéma absente lève TypeError en
-// nommant son chemin : JSON.stringify la tairait, et le texte ne se relirait
-// pas.
+// du schéma, entier. Un champ facultatif absent reste absent de la copie ;
+// ailleurs, une clé du schéma absente lève TypeError en nommant son chemin :
+// JSON.stringify la tairait, et le texte ne se relirait pas.
 function copier(valeur, regle, chemin, siegesAttribues) {
   if (valeur === null) return null;
   if (retenuHorsDeSaRegle(valeur, regle)) return copierHorsDuSchema(valeur);
@@ -81,6 +81,7 @@ function copier(valeur, regle, chemin, siegesAttribues) {
     const copie = {};
     for (const [cle, regleDeCle] of regle.champs) {
       const cheminDeCle = `${chemin}.${cle}`;
+      if (valeur[cle] === undefined && regleDeCle.optionnel) continue;
       if (valeur[cle] === undefined) throw new TypeError(`${cheminDeCle} absente`);
       copie[cle] = copier(valeur[cle], regleDeCle, cheminDeCle, drapeau);
     }
@@ -109,15 +110,17 @@ function rendre(valeur, regle, retrait) {
     const lignes = valeur.map((element) => dedans + rendre(element, regle.element, retrait + 2));
     return `[\n${lignes.join(',\n')}\n${fin}]`;
   }
+  // Un champ facultatif absent ne s'écrit pas.
+  const presents = regle.champs.filter(([cle, regleDeCle]) => !(regleDeCle.optionnel && valeur[cle] === undefined));
   if (regle.mise === 'lignes') {
-    const lignes = regle.champs.map(
+    const lignes = presents.map(
       ([cle, regleDeCle]) => `${dedans}${JSON.stringify(cle)}: ${rendre(valeur[cle], regleDeCle, retrait + 2)}`,
     );
     return `{\n${lignes.join(',\n')}\n${fin}}`;
   }
   // Mise « ouverte » : la syntaxe compacte, chaque champ selon sa règle au
   // retrait de l'objet.
-  const champs = regle.champs.map(
+  const champs = presents.map(
     ([cle, regleDeCle]) => `${JSON.stringify(cle)}:${rendre(valeur[cle], regleDeCle, retrait)}`,
   );
   return `{${champs.join(',')}}`;

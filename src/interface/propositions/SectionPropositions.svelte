@@ -36,7 +36,15 @@
   // encore la sienne, Échap aussi. Un critère et sa colonne partagent leur
   // explication (explicationDeColonne, modele.js). Le terme expliqué porte
   // aria-describedby vers elle, et lui seul.
+  //
+  // Le champ de la cible de la somme de redondance montre la cible de
+  // l'événement (cibleRedondance), et exécute changerCibleRedondance à la
+  // sortie du champ — une entrée ; la saisie se lit par lireEntier, et un
+  // refus se pose contre le champ (Champ).
   import { getContext } from 'svelte';
+  import { lireEntier } from '../../application/capacite.js';
+  import { cibleRedondance } from '../../application/evaluation.js';
+  import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
   import Infobulle from '../primitives/Infobulle.svelte';
@@ -118,6 +126,7 @@
   }
 
   const effacer = () => seance.executer('effacerPropositions', {});
+  const changerCible = (cible) => seance.executer('changerCibleRedondance', { cible });
   const nommer = (id) => nomDe(charge, id);
 </script>
 
@@ -164,6 +173,19 @@
   {/if}
 
   <Infobulle id={idExplication} ouverte={expliquee} fermer={fermerExplication} />
+
+  {#if charge !== null}
+    <div class="cible" data-cible-redondance>
+      <Champ
+        cle="cibleRedondance"
+        etiquette="propositions.cible.etiquette"
+        valeur={cibleRedondance(charge)}
+        lire={lireEntier}
+        executer={changerCible}
+      />
+      <p>{t('propositions.cible.aide')}</p>
+    </div>
+  {/if}
 
   {#if charge !== null && charge.propositions.length > 0}
     <div class="effacer">
@@ -226,5 +248,12 @@
 
   .effacer {
     display: flex;
+  }
+
+  .cible {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--espace-1);
   }
 </style>

@@ -1758,3 +1758,47 @@ describe('le marqueur de chaise vide : correctifs et forme canonique (§ 8.9)', 
     }
   });
 });
+
+describe('la cible de la somme de redondance : un champ facultatif dans un correctif (§ 8.6, § 8.9)', () => {
+  // Une charge neuve, sans la cible, et la même portant la cible donnée.
+  const sans = () => creerCharge({ id: 'evt-cible', nom: 'Veillée des Grives', siegesParDefaut: 6, tours: 2 });
+  const avec = (cible) => {
+    const charge = sans();
+    charge.reglages.cibleRedondance = cible;
+    return charge;
+  };
+  const CHEMIN = ['reglages', 'cibleRedondance'];
+
+  test('absente puis posée : une pose ; posée puis retirée : un retrait ; changée : une pose ; absente des deux côtés : rien', () => {
+    const cas = [
+      [sans(), avec(1200), [{ op: 'poser', chemin: CHEMIN, valeur: 1200 }]],
+      [avec(1200), sans(), [{ op: 'retirer', chemin: CHEMIN }]],
+      [avec(1200), avec(0), [{ op: 'poser', chemin: CHEMIN, valeur: 0 }]],
+      [sans(), sans(), []],
+    ];
+    assert.ok(cas.length > 0);
+    for (const [a, b, attendu] of cas) {
+      const correctif = difference(a, b);
+      assert.deepEqual(correctif, attendu);
+      const rendue = appliquer(a, JSON.parse(JSON.stringify(correctif)));
+      assert.deepEqual(rendue, canoniser(b));
+      assert.equal(serialiser(rendue, ENTETE), serialiser(b, ENTETE));
+    }
+  });
+
+  test('une cible hors de sa règle, un retrait de cible absente ou de tout autre champ, une pose sous une clé inconnue lèvent CORRECTIF', () => {
+    const cas = [
+      ['cible négative', sans(), { op: 'poser', chemin: CHEMIN, valeur: -1 }],
+      ['cible non entière', avec(10), { op: 'poser', chemin: CHEMIN, valeur: 2.5 }],
+      ['cible nulle', sans(), { op: 'poser', chemin: CHEMIN, valeur: null }],
+      ['retrait de la cible absente', sans(), { op: 'retirer', chemin: CHEMIN }],
+      ["retrait d'un réglage obligatoire", avec(10), { op: 'retirer', chemin: ['reglages', 'attribuerSieges'] }],
+      ['pose sous une clé inconnue', sans(), { op: 'poser', chemin: ['reglages', 'cibleInconnue'], valeur: 3 }],
+      ['pose de la cible hors des réglages', sans(), { op: 'poser', chemin: ['evenement', 'cibleRedondance'], valeur: 3 }],
+    ];
+    assert.ok(cas.length > 0);
+    for (const [libelle, charge, operation] of cas) {
+      assert.deepEqual(refusDe(charge, [operation]), { rang: 0 }, libelle);
+    }
+  });
+});

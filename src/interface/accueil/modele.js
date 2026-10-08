@@ -4,7 +4,8 @@
 // Le modèle de l'accueil, pur (§ 8.1, § 8.6, § 8.8) : ce que les composants
 // de la liste des événements affichent, sans arithmétique ni texte. Une
 // ligne de la liste (LigneListe de la façade, A3) devient ses six
-// informations mises en forme et ses signalements ; une question du dossier
+// informations et les deux mesures de son retenu, mises en forme, et ses
+// signalements ; une question du dossier
 // de travail, ses réponses ; un état illisible, ses secours ; un refus de la
 // façade, le refus affiché sur la liste. Chaque clé rendue est écrite ici en
 // entier : aucun composant ne compose une clé.
@@ -19,6 +20,18 @@ const CLES_ETATS = new Map([
 
 /** Les états du plan, dans l'ordre du § 9. */
 export const ETATS = Object.freeze([...CLES_ETATS.keys()]);
+
+/**
+ * Les deux mesures du placement retenu qu'une ligne montre (§ 5.4, § 8.9),
+ * dans l'ordre d'affichage : chacune { colonne, cle, explication } — le nom
+ * de sa valeur dans ligneAffichee et son data-colonne, la clé de son
+ * intitulé, celle de son explication, que l'infobulle de l'intitulé montre.
+ */
+export const COLONNES_DU_RETENU = Object.freeze(
+  ['collisionsCumulees', 'diffRedondance'].map((colonne) =>
+    Object.freeze({ colonne, cle: `accueil.colonne.${colonne}`, explication: `accueil.explication.${colonne}` }),
+  ),
+);
 
 // La clé de la valeur absente, celle de la mise en forme.
 const CLE_VIDE = 'format.vide';
@@ -95,20 +108,22 @@ export function signalementsDe(ligne) {
 }
 
 /**
- * Les six informations d'une ligne (§ 8.1), mises en forme, et ses
- * signalements. nom : celui inscrit dans le fichier, ou la base quand l'état
+ * Les six informations d'une ligne (§ 8.1), et les deux mesures de son
+ * retenu, mises en forme, et ses signalements. nom : celui inscrit dans le fichier, ou la base quand l'état
  * ne se lit pas ; date, participants et dernière modification par format,
  * la valeur absente quand ils manquent — la dernière modification est
  * l'horodatage de la dernière entrée du journal, sur l'horloge de
  * l'application, jamais la date du système de fichiers (§ 19.4) ; etat : la
  * clé de son nom, que le composant traduit ; chemin : tel que la façade
- * l'affiche, en entier.
+ * l'affiche, en entier ; collisionsCumulees et diffRedondance : celles que
+ * la façade rend dans mesuresDuRetenu, par format, la valeur absente sans
+ * retenu mesurable — la différence se lit telle quelle, jamais refaite.
  *
  * @param {Object} ligne   LigneListe (A3)
  * @param {ReturnType<import('../../application/format.js').creerFormat>} format
  * @returns {{nom: string, date: string, etat: string, participants: string,
- *            modification: string, chemin: string,
- *            signalements: Array<{cle: string, details: Object, noms: string[]}>}}
+ *            modification: string, chemin: string, collisionsCumulees: string,
+ *            diffRedondance: string, signalements: Array<{cle: string, details: Object, noms: string[]}>}}
  */
 export function ligneAffichee(ligne, format) {
   return {
@@ -118,6 +133,8 @@ export function ligneAffichee(ligne, format) {
     participants: format.nombre(ligne.participants),
     modification: ligne.derniereModification === null ? format.nombre(null) : format.horodatage(ligne.derniereModification),
     chemin: ligne.chemin,
+    collisionsCumulees: format.nombre(ligne.mesuresDuRetenu?.collisionsCumulees ?? null),
+    diffRedondance: format.nombre(ligne.mesuresDuRetenu?.diffRedondance ?? null),
     signalements: signalementsDe(ligne),
   };
 }

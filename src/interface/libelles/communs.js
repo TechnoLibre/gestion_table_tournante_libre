@@ -74,6 +74,7 @@ export const TABLE = new Map([
   ['communs.remede.changerDefaut', 'Changer le nombre de places par défaut'],
   ['communs.remede.changerTours', 'Changer le nombre de tours'],
   ['communs.remede.modifierReglage', 'Modifier le réglage'],
+  ['communs.remede.changerCibleRedondance', 'Changer la cible de la somme de redondance'],
   ['communs.remede.reserver', 'Réserver la place'],
   ['communs.remede.retirerReservation', 'Retirer la réservation'],
   ['communs.remede.deplacerReservation', 'Déplacer la réservation'],

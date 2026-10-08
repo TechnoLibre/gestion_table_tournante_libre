@@ -1,8 +1,9 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Le registre des commandes du mobilier — tables, sièges, tours, réglages
-// (§ 4, § 6, § 7.1, § 8.2, § 9), que commandes.js réunit aux autres. Ses
+// Le registre des commandes du mobilier — tables, sièges, tours, réglages,
+// cible de la somme de redondance (§ 4, § 6, § 7.1, § 8.2, § 8.9, § 9), que
+// commandes.js réunit aux autres. Ses
 // imports n'atteignent jamais commandes.js : le registre réuni dépend de lui,
 // non l'inverse.
 //
@@ -22,7 +23,7 @@
 // proposition ne se réécrit jamais : elle dérive (§ 8.9, § 9). Supprimer une
 // table et changer les tours laissent propositions et retenu en dérive.
 import { caseLibre } from '../geometrie/tables.js';
-import { SCHEMA, TOURS_MAX, capacite } from '../stockage/document.js';
+import { CIBLE_REDONDANCE_PAR_DEFAUT, SCHEMA, TOURS_MAX, capacite } from '../stockage/document.js';
 import { fautes } from '../stockage/placements.js';
 import { bilanChangementDefaut } from './bilans.js';
 import { controlerCapacite, lireEntier, retenuAuxCapacites } from './capacite.js';
@@ -257,6 +258,24 @@ function modifierReglage(charge, { cle, valeur } = {}) {
   return { charge: suivante, libelle: libelle('ENTREE_MODIFIER_REGLAGE', { cle, valeur }), avertissements: [] };
 }
 
+/**
+ * changerCibleRedondance {cible} (§ 5.4, § 8.1, § 8.9) : la cible de la
+ * somme de redondance de l'événement, que la liste des événements compare à
+ * Σ r(p) du retenu ; une saisie lue par lireEntier, un entier ≥ 0, NON_ENTIER
+ * sinon — un signe moins compris —, remède null. La valeur par défaut,
+ * CIBLE_REDONDANCE_PAR_DEFAUT, retire le champ des réglages : la charge
+ * s'écrit alors comme une charge qui ne l'a jamais porté, et la même valeur
+ * que la cible courante est sans effet.
+ */
+function changerCibleRedondance(charge, { cible: saisie } = {}) {
+  exigerModifiable(charge);
+  const cible = entierSaisi(saisie);
+  const suivante = structuredClone(charge);
+  if (cible === CIBLE_REDONDANCE_PAR_DEFAUT) delete suivante.reglages.cibleRedondance;
+  else suivante.reglages.cibleRedondance = cible;
+  return { charge: suivante, libelle: libelle('ENTREE_CHANGER_CIBLE_REDONDANCE', { cible }), avertissements: [] };
+}
+
 /** @type {Map<string, (charge: Object, args: Object) => Object>} */
 export const COMMANDES_MOBILIER = new Map([
   ['creerTable', creerTable],
@@ -267,4 +286,5 @@ export const COMMANDES_MOBILIER = new Map([
   ['changerDefaut', changerDefaut],
   ['changerTours', changerTours],
   ['modifierReglage', modifierReglage],
+  ['changerCibleRedondance', changerCibleRedondance],
 ]);

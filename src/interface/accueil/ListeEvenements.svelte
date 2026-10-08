@@ -5,8 +5,9 @@
   // La liste des événements (§ 8.1) : une ligne par événement du dossier de
   // travail, dans l'ordre de la façade, que désigne data-evenement. Chaque
   // ligne porte la commande qui l'ouvre en lecture — son nom —, ses cinq
-  // autres informations sous leur intitulé, chacune dans son propre nœud
-  // (data-colonne), ses signalements traduits — les bases qu'un doublon
+  // autres informations et les deux mesures de son retenu (COLONNES_DU_RETENU)
+  // sous leur intitulé, chacune dans son propre nœud (data-colonne), ses
+  // signalements traduits — les bases qu'un doublon
   // nomme suivent son texte, chacune dans son propre nœud (data-doublon) —,
   // le refus de son ouverture, et ses opérations. Un dossier sans événement n'affiche pas de liste vide :
   // la création et les démonstrations de l'accueil en tiennent lieu.
@@ -14,15 +15,38 @@
   // lignes : LigneListe[] de la façade ; ouvrir(ligne) : le geste de
   // l'accueil ; refusOuverture : { base, refus } du dernier échec, ou null ;
   // apresOperation() : à appeler quand une opération a changé le dossier.
+  //
+  // L'intitulé de chaque mesure du retenu s'explique dans l'infobulle de la
+  // liste, une seule (Infobulle, primitive) : son terme (data-terme) se
+  // focalise au clavier, son survol ou son focus ouvre l'explication, le
+  // quitter la referme quand elle est encore la sienne, Échap aussi. Le
+  // terme expliqué porte aria-describedby vers elle, et lui seul.
   import { getContext } from 'svelte';
+  import Infobulle from '../primitives/Infobulle.svelte';
   import Refus from '../primitives/Refus.svelte';
   import Operations from './Operations.svelte';
-  import { ligneAffichee } from './modele.js';
+  import { COLONNES_DU_RETENU, ligneAffichee } from './modele.js';
 
   let { lignes, ouvrir, refusOuverture, apresOperation } = $props();
 
   const t = getContext('t');
   const format = getContext('format');
+
+  // Le terme expliqué : {ancre, terme, cle, details} — son élément, sa
+  // désignation '<base>:<colonne>' et la clé de son explication — ; null
+  // sans infobulle.
+  const uid = $props.id();
+  const idExplication = `${uid}-explication`;
+  let expliquee = $state(null);
+  function expliquer(evenement, terme, cle) {
+    expliquee = { ancre: evenement.currentTarget, terme, cle, details: {} };
+  }
+  function taire(terme) {
+    if (expliquee?.terme === terme) expliquee = null;
+  }
+  const fermerExplication = () => (expliquee = null);
+  // L'aria-describedby d'un terme : l'infobulle quand elle l'explique.
+  const decrit = (terme) => (expliquee?.terme === terme ? idExplication : undefined);
 </script>
 
 {#if lignes.length > 0}
@@ -50,6 +74,28 @@
             <dt>{t('accueil.colonne.modification')}</dt>
             <dd data-colonne="modification">{affichee.modification}</dd>
           </div>
+          {#each COLONNES_DU_RETENU as { colonne, cle, explication } (colonne)}
+            {@const terme = `${ligne.base}:${colonne}`}
+            <div>
+              <dt>
+                <!-- L'intitulé est un terme, non une commande : le focus ne
+                     sert qu'à montrer au clavier l'explication que le
+                     pointeur montre au survol. -->
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+                <span
+                  class="terme"
+                  data-terme={colonne}
+                  tabindex="0"
+                  aria-describedby={decrit(terme)}
+                  onmouseenter={(evenement) => expliquer(evenement, terme, explication)}
+                  onmouseleave={() => taire(terme)}
+                  onfocus={(evenement) => expliquer(evenement, terme, explication)}
+                  onblur={() => taire(terme)}>{t(cle)}</span
+                >
+              </dt>
+              <dd data-colonne={colonne}>{affichee[colonne]}</dd>
+            </div>
+          {/each}
           <div class="chemin">
             <dt>{t('accueil.colonne.chemin')}</dt>
             <dd data-colonne="chemin">{affichee.chemin}</dd>
@@ -74,6 +120,7 @@
       </li>
     {/each}
   </ul>
+  <Infobulle id={idExplication} ouverte={expliquee} fermer={fermerExplication} />
 {/if}
 
 <style>
@@ -136,6 +183,18 @@
 
   .chemin dd {
     overflow-wrap: anywhere;
+  }
+
+  /* Un intitulé qui s'explique se signale par un soulignement pointillé ;
+     focalisé, par le contour du focus. */
+  .terme {
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+
+  .terme:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
   }
 
   .signalement {

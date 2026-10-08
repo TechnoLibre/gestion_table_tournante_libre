@@ -18,6 +18,7 @@ import { texteLivre } from '../demo/livrees.js';
 import { VERSION } from '../version.genere.js';
 import { serialiser } from './canonique.js';
 import {
+  CIBLE_REDONDANCE_PAR_DEFAUT,
   FORMAT,
   GENERATION_PAR_DEFAUT,
   SCHEMA,
@@ -25,6 +26,7 @@ import {
   TOURS_MAX,
   analyser,
   capacite,
+  cibleRedondance,
   configurationDepuisCharge,
   creerCharge,
   etatDeduit,
@@ -1108,5 +1110,76 @@ describe('le marqueur de chaise vide : la règle d\'une liste de table (§ 8.9)'
     assert.deepStrictEqual(charge.propositions[0].placement[1].sieges[1], [1, null, 5]);
     const relue = analyser(serialiser(charge, { revision: 13, produitVersion: VERSION.affichee })).charge;
     assert.deepStrictEqual(relue.propositions[0], propositionAChaiseVide());
+  });
+});
+
+describe('la cible de la somme de redondance : un réglage facultatif (§ 8.9)', () => {
+  const REGLAGES = (() => {
+    const CHARGE = SCHEMA.champs.find(([nom]) => nom === 'charge')[1];
+    return CHARGE.champs.find(([nom]) => nom === 'reglages')[1];
+  })();
+  const CHEMIN = 'charge.reglages.cibleRedondance';
+
+  test('sans le champ, le fichier se lit, la charge ne le porte pas, et la cible vaut 1000', () => {
+    assert.equal(CIBLE_REDONDANCE_PAR_DEFAUT, 1000);
+    const { charge } = analyser(JSON.stringify(documentValide()));
+    assert.equal(Object.hasOwn(charge.reglages, 'cibleRedondance'), false);
+    assert.equal(cibleRedondance(charge), 1000);
+    assert.equal(premiereFaute(charge.reglages, REGLAGES), null);
+    const neuve = creerCharge({ id: 'evt-neuf', nom: 'Atelier', siegesParDefaut: 8, tours: 3 });
+    assert.equal(Object.hasOwn(neuve.reglages, 'cibleRedondance'), false);
+    assert.equal(cibleRedondance(neuve), 1000);
+  });
+
+  test('un entier ≥ 0, sûr, se lit tel quel et fait la cible, 1000 écrit compris', () => {
+    const valeurs = [0, 1, 1000, 1234, Number.MAX_SAFE_INTEGER];
+    assert.ok(valeurs.length > 0);
+    for (const valeur of valeurs) {
+      const { charge } = analyser(abime((d) => { d.charge.reglages.cibleRedondance = valeur; }));
+      assert.equal(charge.reglages.cibleRedondance, valeur);
+      assert.equal(cibleRedondance(charge), valeur);
+    }
+  });
+
+  test('une valeur négative, non entière, hors des entiers sûrs ou d\'une autre sorte est refusée FORME, par son chemin', () => {
+    const cas = [
+      ['négative', -1],
+      ['non entière', 2.5],
+      ['au-delà des entiers sûrs', 2 ** 53],
+      ['en texte', '1000'],
+      ['booléenne', true],
+      ['nulle', null],
+      ['une liste', [1000]],
+    ];
+    assert.deepEqual(ecartsDeRefus(cas.map(([libelle, valeur]) => [
+      libelle,
+      abime((d) => { d.charge.reglages.cibleRedondance = valeur; }),
+      'FORME',
+      CHEMIN,
+    ])), []);
+  });
+
+  test("absente, la charge s'écrit sans le champ ; posée, il s'écrit après la génération, et la relecture rend la même charge", () => {
+    const { charge } = analyser(JSON.stringify(documentValide()));
+    const sans = serialiser(charge, { revision: 12, produitVersion: VERSION.affichee });
+    assert.equal(sans.includes('cibleRedondance'), false);
+    const posee = structuredClone(charge);
+    posee.reglages = { cibleRedondance: 1200, ...posee.reglages };
+    const avec = serialiser(posee, { revision: 12, produitVersion: VERSION.affichee });
+    assert.ok(avec.includes('"generation":{"nombre":3,"arret":50000,"historique":500},"cibleRedondance":1200}'), avec);
+    assert.deepEqual(analyser(avec).charge, analyser(serialiser(analyser(avec).charge, { revision: 12, produitVersion: VERSION.affichee })).charge);
+    assert.equal(cibleRedondance(analyser(avec).charge), 1200);
+  });
+
+  test("un fichier d'un format plus récent garde la cible qu'il porte, réduite aux clés connues", () => {
+    const texte = abime((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.reglages.cibleRedondance = 750;
+      d.charge.reglages.autreReglage = true;
+    });
+    const lecture = analyser(texte);
+    assert.equal(lecture.formatPlusRecent, true);
+    assert.equal(cibleRedondance(lecture.charge), 750);
+    assert.equal(Object.hasOwn(lecture.charge.reglages, 'autreReglage'), false);
   });
 });

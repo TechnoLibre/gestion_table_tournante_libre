@@ -14,7 +14,9 @@
 // système de fichiers se lit sur fs à l'appel, jamais à la création : une
 // épreuve la remplace après le montage.
 //
-// Lister ne fait que lire. Une opération qui écrit dérive ses refus lisibles
+// Lister ne fait que lire. Chaque ligne lisible porte le résumé de son
+// retenu (resumeDuRetenu, evaluation.js), lu dans l'état de l'événement au
+// moment de lister. Une opération qui écrit dérive ses refus lisibles
 // sans écrire — nom vide, plan bloqué, format plus récent — avant toute
 // écriture, sonde de verrou comprise. Renommer et supprimer ferment d'abord
 // l'événement visé quand il est ouvert : la séance rend son verrou, et la
@@ -28,6 +30,7 @@
 // libelle, en français ; aucune autre chaîne visible n'en sort : refus, avis
 // et questions sont des codes et leurs détails.
 import { deverrouiller, lister as listerDepot, ouvrir as ouvrirDepot, verrouiller } from '../stockage/depot.js';
+import { analyser } from '../stockage/document.js';
 import { determinerDossierTravail } from '../stockage/dossier_travail.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { decoderJournal, lireJournal } from '../stockage/journal.js';
@@ -44,6 +47,7 @@ import {
 } from '../stockage/operations.js';
 import { lireReglages } from '../stockage/reglages_locaux.js';
 import { ErreurCommande, refus } from './erreurs.js';
+import { resumeDuRetenu } from './evaluation.js';
 import { libelle } from './libelles.js';
 
 /** Sièges par défaut et tours d'un événement neuf (§ 2.1, étapes 4 et 5). */
@@ -124,6 +128,22 @@ async function derniereModification(fs, racine, base) {
   }
   if (texte === null) return null;
   return lireJournal(texte).entrees.at(-1)?.horodatage ?? null;
+}
+
+// Le résumé du retenu de l'événement base (resumeDuRetenu), lu dans son
+// état, sans rien écrire ; null pour un état illisible au moment de la
+// liste — un résumé illisible ne se relit pas —, et pour un état qui a
+// cessé de se lire depuis : la ligne en porte déjà la cause, ou la portera
+// à la liste suivante.
+async function mesuresDuRetenuDe(fs, racine, { base, illisible }) {
+  if (illisible !== null) return null;
+  try {
+    const texte = await fs.lireTexte(racine, base + SUFFIXES.etat);
+    return texte === null ? null : resumeDuRetenu(analyser(texte).charge);
+  } catch (erreur) {
+    if (erreur instanceof ErreurStockage) return null;
+    throw erreur;
+  }
 }
 
 // Pourquoi l'état d'un résumé illisible ne s'ouvre pas : les détails de
@@ -283,6 +303,7 @@ export function creerFacade({
           ? resumes.filter((autre) => autre !== resume && autre.doublon && autre.id === id).map((autre) => autre.base)
           : [],
         verrou: await verrouDe(fs, courante, base),
+        mesuresDuRetenu: await mesuresDuRetenuDe(fs, courante, resume),
       });
     }
     return lignes;
@@ -461,7 +482,11 @@ export function creerFacade({
      * @param {'reessayer'|'documents'|'continuer'} choix
      */
     repondre,
-    /** Les lignes de la liste (§ 8.1), dans l'ordre du dépôt ; n'écrit rien. */
+    /**
+     * Les lignes de la liste (§ 8.1), dans l'ordre du dépôt ; n'écrit rien.
+     * mesuresDuRetenu porte resumeDuRetenu de l'état, null sans retenu
+     * mesurable ou pour un état illisible.
+     */
     lister,
     /** Crée et ouvre en lecture l'événement { nom, date } (§ 2.1, étape 1). */
     creer: creerEvenement,

@@ -17,6 +17,10 @@
 // Les imposés viennent du diagnostic, les mêmes pour toute ligne ; les
 // rencontres répétées imposées dépendent du plan, et chaque ligne les lit
 // dans ses mesures, à part des choisies.
+//
+// resumeDuRetenu donne à la liste des événements deux nombres du retenu,
+// lus dans la même mesure que sa ligne du tableau, sans le diagnostic ni
+// les plafonds : la liste en résume chaque événement du dossier.
 import { classer } from '../moteur/classement.js';
 import { indexerPlan, normaliser } from '../moteur/configuration.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
@@ -24,8 +28,11 @@ import { mesurer } from '../moteur/indicateurs.js';
 import { ecartsAuPlafondAPriori, minimumAtteint, troisChiffres } from '../moteur/manque.js';
 import { plafondsRealises } from '../moteur/plafond.js';
 import { verifierIndicateurs, verifierInvariants } from '../moteur/verification.js';
-import { configurationDepuisCharge } from '../stockage/document.js';
+import { ErreurConfiguration } from '../moteur/erreurs.js';
+import { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance, configurationDepuisCharge } from '../stockage/document.js';
 import { derive, fautes, planDepuisFichier } from '../stockage/placements.js';
+
+export { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance };
 
 /**
  * @typedef {Object} LigneEvaluation
@@ -61,6 +68,11 @@ function plusGrand(valeurs) {
   for (const valeur of valeurs) if (valeur > plus) plus = valeur;
   return plus;
 }
+
+// Vrai quand le placement se compare à la configuration courante : sans
+// faute, puis sans dérive — derive lève sur une faute, et ne la reçoit
+// jamais.
+const seCompare = (placement, charge) => fautes(placement).length === 0 && derive(placement, charge).length === 0;
 
 // Une ligne qui ne se mesure pas.
 const nonMesuree = (id, statut, raisons) => ({
@@ -137,4 +149,32 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
     classement,
     imposes: { retours: diagnostic.retoursImposes, ancrages: diagnostic.ancragesImposantRetours },
   };
+}
+
+/**
+ * Le résumé du retenu que montre la liste des événements (§ 5.4, § 8.1,
+ * § 8.9) : ses collisions cumulées et sa somme de redondance Σ r(p), celles
+ * de mesurer, que la ligne du retenu d'evaluer porte aussi ; la cible de
+ * l'événement (cibleRedondance) ; et diffRedondance, la valeur absolue de la
+ * cible moins Σ r(p). null sans retenu, pour un retenu fautif ou en dérive,
+ * et quand la configuration ne se normalise pas : rien ne s'y mesure, et
+ * la liste écrit « — ». Ne modifie pas la charge.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {{collisionsCumulees: number, totalRedondance: number,
+ *            cibleRedondance: number, diffRedondance: number}|null}
+ */
+export function resumeDuRetenu(charge) {
+  const { retenu } = charge;
+  if (retenu === null || !seCompare(retenu, charge)) return null;
+  let instance;
+  try {
+    instance = normaliser(configurationDepuisCharge(charge));
+  } catch (erreur) {
+    if (erreur instanceof ErreurConfiguration) return null;
+    throw erreur;
+  }
+  const { collisionsCumulees, totalRedondance } = mesurer(instance, indexerPlan(instance, planDepuisFichier(retenu)));
+  const cible = cibleRedondance(charge);
+  return { collisionsCumulees, totalRedondance, cibleRedondance: cible, diffRedondance: Math.abs(cible - totalRedondance) };
 }

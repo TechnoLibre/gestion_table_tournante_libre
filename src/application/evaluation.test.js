@@ -23,7 +23,7 @@ import { analyser, capacite, configurationDepuisCharge } from '../stockage/docum
 import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
-import { evaluer } from './evaluation.js';
+import { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance, evaluer, resumeDuRetenu } from './evaluation.js';
 
 const V1 = VERSION.affichee;
 
@@ -357,5 +357,70 @@ describe("évaluation : une configuration qui ne se tient pas", () => {
     const charge = structuredClone(chargeDemo('petite'));
     charge.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
     assert.throws(() => evaluer(figer(charge)), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION');
+  });
+});
+
+describe('resumeDuRetenu : les mesures du retenu que lit la liste des événements (§ 5.4, § 8.1, § 8.9)', () => {
+  // La petite démonstration, trois propositions générées, la deuxième retenue.
+  function retenue() {
+    const generees = generee(chargeDemo('petite-conflit'), { graine: 3, nombre: 3, arret: 300 });
+    return executer(generees, 'retenirProposition', { id: generees.propositions[1].id });
+  }
+
+  test("les collisions cumulées et Σ r(p) du retenu, celles de la ligne du retenu d'evaluer, et la cible, 1000 par défaut", () => {
+    const charge = figer(retenue());
+    const resume = resumeDuRetenu(charge);
+    const { mesures } = evaluer(charge).retenu;
+    assert.ok(mesures.collisionsCumulees > 0, 'la petite démonstration en conflit compte des collisions');
+    assert.deepEqual(resume, {
+      collisionsCumulees: mesures.collisionsCumulees,
+      totalRedondance: mesures.totalRedondance,
+      cibleRedondance: 1000,
+      diffRedondance: Math.abs(1000 - mesures.totalRedondance),
+    });
+    const instance = normaliser(configurationDepuisCharge(charge));
+    const attendues = mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
+    assert.equal(resume.totalRedondance, attendues.totalRedondance);
+    assert.equal(resume.collisionsCumulees, attendues.collisionsCumulees);
+    assert.equal(CIBLE_REDONDANCE_PAR_DEFAUT, 1000);
+    assert.equal(cibleRedondance(charge), 1000);
+  });
+
+  test("une cible propre à l'événement : la différence se lit contre elle, en valeur absolue, des deux côtés", () => {
+    const charge = retenue();
+    const total = resumeDuRetenu(charge).totalRedondance;
+    for (const cible of [0, total, total + 7, 5_000]) {
+      const avecCible = executer(charge, 'changerCibleRedondance', { cible: String(cible) });
+      assert.equal(cibleRedondance(avecCible), cible);
+      const resume = resumeDuRetenu(avecCible);
+      assert.equal(resume.cibleRedondance, cible);
+      assert.equal(resume.diffRedondance, Math.abs(cible - total), String(cible));
+    }
+    const dessous = executer(charge, 'changerCibleRedondance', { cible: '0' });
+    assert.equal(resumeDuRetenu(dessous).diffRedondance, total);
+  });
+
+  test('sans retenu, null ; un retenu fautif ou en dérive, null, sans lever', () => {
+    const sansRetenu = generee(chargeDemo('petite-conflit'), { graine: 3, nombre: 1, arret: 200 });
+    assert.equal(sansRetenu.retenu, null);
+    assert.equal(resumeDuRetenu(sansRetenu), null);
+    assert.equal(resumeDuRetenu(chargeDemo('petite')), null);
+
+    const fautif = structuredClone(retenue());
+    fautif.retenu.placement[0].reserve.push(fautif.retenu.participants[0]);
+    assert.equal(evaluer(fautif).retenu.statut, 'fautif');
+    assert.equal(resumeDuRetenu(fautif), null);
+
+    const enDerive = executer(retenue(), 'changerTours', { tours: '3' });
+    assert.equal(evaluer(enDerive).retenu.statut, 'derive');
+    assert.equal(resumeDuRetenu(enDerive), null);
+  });
+
+  test('une configuration qui ne se normalise pas rend null là où evaluer lève', () => {
+    const charge = structuredClone(retenue());
+    const table = charge.tables[0].id;
+    charge.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table, siege: null, portee: 'tous', tour: null }));
+    assert.throws(() => evaluer(charge), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION');
+    assert.equal(resumeDuRetenu(charge), null);
   });
 });

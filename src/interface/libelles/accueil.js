@@ -10,6 +10,8 @@
 // Une donnée — un chemin, une base — n'entre dans aucun libellé d'écran :
 // le composant la rend dans son propre nœud, à côté du texte traduit
 // (§ 14.6). Un compte s'accorde dans la phrase qui le porte.
+import { CIBLE_REDONDANCE_PAR_DEFAUT } from '../../application/evaluation.js';
+
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
 
 export const TABLE = new Map([
@@ -21,6 +23,26 @@ export const TABLE = new Map([
   ['accueil.colonne.participants', 'Participants'],
   ['accueil.colonne.modification', 'Dernière modification'],
   ['accueil.colonne.chemin', 'Fichier'],
+  // Les deux mesures du placement retenu (§ 5.4, § 8.9), et l'explication
+  // que l'infobulle de leur intitulé donne : ce que compte le nombre, d'où
+  // il vient, et quand il vaut « — ».
+  ['accueil.colonne.collisionsCumulees', 'Collisions cumulées (paire et tour)'],
+  ['accueil.colonne.diffRedondance', "Diff somme d'appartenance"],
+  [
+    'accueil.explication.collisionsCumulees',
+    'Celles du placement retenu : chaque fois que deux personnes de la même appartenance partagent une table, ' +
+      'compté une fois par paire et par tour ; deux collègues ensemble aux quatre tours font 4. Le même nombre que la ' +
+      "colonne « Collisions cumulées » du tableau des propositions. Plus il est bas, mieux c'est. " +
+      "« \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit plus la configuration.",
+  ],
+  [
+    'accueil.explication.diffRedondance',
+    '|cible \u{2212} Σ r(p)| : la différence, sans signe, entre la cible de la soirée et la somme Σ r(p) du placement ' +
+      "retenu, celle de la colonne « Redondance d'appartenance, somme Σ r(p) » du tableau des propositions. r(p) compte " +
+      "les personnes que p rencontre et qui ont une appartenance, moins le nombre d'appartenances différentes qu'elles " +
+      `portent. La cible vaut ${CIBLE_REDONDANCE_PAR_DEFAUT} tant qu'on ne la change pas, dans la section des ` +
+      "propositions. « \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit plus la configuration.",
+  ],
 
   // Le nom d'un état du plan (§ 9), que rend cleDEtat (modele.js).
   ['accueil.etat.brouillon', 'Brouillon'],

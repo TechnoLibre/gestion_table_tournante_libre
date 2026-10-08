@@ -13,13 +13,16 @@ import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { LIVREES, texteLivre } from '../demo/livrees.js';
+import { rechercher } from '../moteur/recherche.js';
 import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
-import { analyser, creerCharge } from '../stockage/document.js';
+import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import { VERSION } from '../version.genere.js';
+import { appliquerCommande } from './commandes.js';
+import { evaluer, resumeDuRetenu } from './evaluation.js';
 import { creerFacade } from './evenements.js';
 import { creerHorlogePilotee } from './horloge.js';
 import { libelle } from './libelles.js';
@@ -428,6 +431,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
         journalSeul: false,
         doublonAvec: [],
         verrou: null,
+        mesuresDuRetenu: null,
       },
       {
         base: 'petite',
@@ -442,6 +446,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
         journalSeul: false,
         doublonAvec: [],
         verrou: null,
+        mesuresDuRetenu: null,
       },
     ]);
     assert.ok(petite.participants.length > 0);
@@ -529,6 +534,72 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.deepEqual(par['Merles B'].doublonAvec, ['Merles A']);
     assert.equal(par['Merles A'].illisible, null);
     assert.equal(par['Soirée vide'].doublonAvec.length, 0);
+  });
+
+  // La petite démonstration au conflit inévitable, deux propositions
+  // générées par le moteur et la seconde retenue, par les commandes ;
+  // modifier(charge) l'ajuste avant l'écriture.
+  function texteRetenu(modifier = (charge) => charge) {
+    let charge = analyser(texteLivre('petite-conflit')).charge;
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 4, nombre: 2, arret: 300 });
+    charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
+    charge = appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
+    return serialiser(modifier(charge), { revision: 3, produitVersion: V1 });
+  }
+
+  test('les mesures du retenu : collisions cumulées, Σ r(p), la cible et la différence, celles de resumeDuRetenu ; null sans retenu ; rien d’écrit', async () => {
+    const { fs, facade } = await deuxEvenements();
+    fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
+    const avant = ecritures(fs);
+    const lignes = await facade.lister();
+    assert.equal(ecritures(fs), avant);
+    const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
+    const charge = analyser(texteRetenu()).charge;
+    const { mesures } = evaluer(charge).retenu;
+    assert.deepEqual(par.retenue.mesuresDuRetenu, {
+      collisionsCumulees: mesures.collisionsCumulees,
+      totalRedondance: mesures.totalRedondance,
+      cibleRedondance: 1000,
+      diffRedondance: Math.abs(1000 - mesures.totalRedondance),
+    });
+    assert.deepEqual(par.retenue.mesuresDuRetenu, resumeDuRetenu(charge));
+    assert.equal(par['soiree-a'].mesuresDuRetenu, null);
+    assert.equal(par.petite.mesuresDuRetenu, null);
+  });
+
+  test("une cible propre à l'événement : la différence se lit contre elle", async () => {
+    const { fs, facade } = await deuxEvenements();
+    const texte = texteRetenu((charge) => appliquerCommande('changerCibleRedondance', charge, { cible: '25' }).charge);
+    fs.deposer('portable', `retenue${SUFFIXES.etat}`, texte);
+    const ligne = (await facade.lister()).find(({ base }) => base === 'retenue');
+    const { totalRedondance } = evaluer(analyser(texte).charge).retenu.mesures;
+    assert.equal(ligne.mesuresDuRetenu.cibleRedondance, 25);
+    assert.equal(ligne.mesuresDuRetenu.diffRedondance, Math.abs(25 - totalRedondance));
+  });
+
+  test('un retenu fautif, ou en dérive, et un état illisible : null, la liste entière rendue, rien d’écrit', async () => {
+    const { fs, facade } = await deuxEvenements();
+    fs.deposer(
+      'portable',
+      `fautive${SUFFIXES.etat}`,
+      texteRetenu((charge) => {
+        charge.retenu.placement[0].reserve.push(charge.retenu.participants[0]);
+        return charge;
+      }),
+    );
+    fs.deposer('portable', `derivee${SUFFIXES.etat}`, texteRetenu((charge) => appliquerCommande('changerTours', charge, { tours: '3' }).charge));
+    fs.deposer('portable', `tronquee${SUFFIXES.etat}`, texteRetenu().slice(0, 40));
+    const avant = ecritures(fs);
+    const lignes = await facade.lister();
+    assert.equal(ecritures(fs), avant);
+    assert.equal(lignes.length, 5);
+    const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
+    assert.equal(par.fautive.illisible, null);
+    assert.equal(par.fautive.mesuresDuRetenu, null);
+    assert.equal(par.derivee.mesuresDuRetenu, null);
+    assert.notEqual(par.tronquee.illisible, null);
+    assert.equal(par.tronquee.mesuresDuRetenu, null);
   });
 });
 

@@ -298,6 +298,31 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'accueil.mesuresRetenu',
+    mode: null,
+    async atteindre(contexte) {
+      // La principale, sa proposition retenue : la ligne montre les deux
+      // mesures du retenu, et le pointeur réel sur l'intitulé de la
+      // différence ouvre son infobulle.
+      const principale = chargePrincipale();
+      const charge = executer(principale, 'retenirProposition', { id: principale.propositions[0].id });
+      const m = await contexte.monter({ fichiers: [fichierEtat(charge)] });
+      const ligne = `[data-evenement="${BASE}"]`;
+      await attendre('les mesures du retenu', () =>
+        ['collisionsCumulees', 'diffRedondance'].every((colonne) =>
+          /\d/.test(m.racine.querySelector(`${ligne} [data-colonne="${colonne}"]`)?.textContent ?? ''),
+        ),
+      );
+      const { x, y } = await centre(await element(m, `${ligne} [data-terme="diffRedondance"]`));
+      await pointer('bouger', x, y);
+      await attendre("l'infobulle de la différence", () => {
+        const bulle = m.racine.querySelector('[data-ecran="accueil"] [role="tooltip"]');
+        return bulle !== null && !bulle.hidden && getComputedStyle(bulle).visibility === 'visible';
+      });
+      return m.racine;
+    },
+  },
+  {
     nom: 'accueil.vide',
     mode: null,
     async atteindre(contexte) {

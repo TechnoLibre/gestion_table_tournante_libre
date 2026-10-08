@@ -21,20 +21,27 @@
 // (voir src/interface/App.navigateur.test.js).
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, tick } from 'svelte';
+import { appliquerCommande } from '../../application/commandes.js';
 import { creerFormat } from '../../application/format.js';
 import { creerHorlogePilotee } from '../../application/horloge.js';
 import { TABLES_APPLICATION, libelle } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { CATALOGUE } from '../../demo/catalogue.js';
-import { LIVREES } from '../../demo/livrees.js';
+import { LIVREES, texteLivre } from '../../demo/livrees.js';
+import { indexerPlan, normaliser } from '../../moteur/configuration.js';
+import { mesurer } from '../../moteur/indicateurs.js';
+import { rechercher } from '../../moteur/recherche.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { creer as creerDansLeDepot, ouvrir as ouvrirDansLeDepot } from '../../stockage/depot.js';
-import { analyser, creerCharge } from '../../stockage/document.js';
+import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { libelleDeLInstant } from '../../stockage/operations.js';
+import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
+import { centre } from '../../../test/navigateur/ecrans.js';
+import { pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { visible as visibleDansLaFenetre } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -1075,5 +1082,118 @@ describe('la racine neutre et la liste qui défile (§ 18.6, § 19.4)', () => {
     expect(boite.bottom).toBeLessThanOrEqual(window.innerHeight);
     const touche = document.elementFromPoint(boite.left + boite.width / 2, boite.top + boite.height / 2);
     expect(bandeau.contains(touche)).toBe(true);
+  });
+});
+
+// --- Les mesures du retenu (§ 5.4, § 8.1, § 8.9) ------------------------------------
+
+describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
+  // La petite démonstration au conflit inévitable, deux propositions du
+  // moteur, la seconde retenue par la commande.
+  function chargeRetenue() {
+    let charge = analyser(texteLivre('petite-conflit')).charge;
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 6, nombre: 2, arret: 300 });
+    charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+    return appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
+  }
+
+  // Les mesures du retenu, par le moteur sollicité une seconde fois (§ 19.1).
+  function mesuresDe(charge) {
+    const instance = normaliser(configurationDepuisCharge(charge));
+    return mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
+  }
+
+  const etat = (charge) => serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
+  const TIRET = '\u{2014}';
+  const terme = (ligne, colonne) => ligne.querySelector(`[data-terme="${colonne}"]`);
+  const infobulles = () => [...document.querySelectorAll('[role="tooltip"]')];
+
+  // L'infobulle unique, ouverte sur le terme : visible, au texte de la clé,
+  // désignée par l'aria-describedby du terme et de nul autre.
+  function exigerInfobulle(ancre, cle) {
+    const bulles = infobulles();
+    expect(bulles.length).toBe(1);
+    const [bulle] = bulles;
+    expect(bulle.hidden, cle).toBe(false);
+    expect(getComputedStyle(bulle).visibility, cle).toBe('visible');
+    expect(bulle.textContent.trim(), cle).toBe(t(cle));
+    expect(ancre.getAttribute('aria-describedby'), cle).toBe(bulle.id);
+    expect(document.querySelectorAll(`[aria-describedby~="${bulle.id}"]`).length, cle).toBe(1);
+    const b = bulle.getBoundingClientRect();
+    const a = ancre.getBoundingClientRect();
+    expect(b.width).toBeGreaterThan(0);
+    expect(b.left < a.right && a.left < b.right && b.top < a.bottom && a.top < b.bottom, `${cle} sur son terme`).toBe(false);
+  }
+
+  test('un événement retenu : ses collisions cumulées et |1000 \u{2212} Σ r(p)| ; sans retenu : « — » ; rien d’écrit', async () => {
+    const charge = chargeRetenue();
+    const mesures = mesuresDe(charge);
+    expect(mesures.collisionsCumulees).toBeGreaterThan(0);
+    const m = await monter({
+      fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(charge)), fichier(`club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
+    });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(2));
+    const avant = ecritures(m);
+    const retenue = ligneDe(m, 'retenue');
+    expect(colonne(retenue, 'collisionsCumulees')).toBe(format.nombre(mesures.collisionsCumulees));
+    expect(colonne(retenue, 'diffRedondance')).toBe(format.nombre(Math.abs(1000 - mesures.totalRedondance)));
+    const club = ligneDe(m, 'club');
+    expect(colonne(club, 'collisionsCumulees')).toBe(TIRET);
+    expect(colonne(club, 'diffRedondance')).toBe(TIRET);
+    expect(terme(retenue, 'collisionsCumulees').textContent).toBe(t('accueil.colonne.collisionsCumulees'));
+    expect(terme(retenue, 'diffRedondance').textContent).toBe(t('accueil.colonne.diffRedondance'));
+    expect(visible(retenue.querySelector('[data-colonne="diffRedondance"]'))).toBe(true);
+    expect(ecritures(m)).toBe(avant);
+  });
+
+  test('chaque intitulé s’explique : le survol puis le focus ouvrent son infobulle, Échap et la sortie la ferment', async () => {
+    const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(chargeRetenue()))] });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(1));
+    const retenue = ligneDe(m, 'retenue');
+    const cas = [
+      ['collisionsCumulees', 'accueil.explication.collisionsCumulees'],
+      ['diffRedondance', 'accueil.explication.diffRedondance'],
+    ];
+    expect(cas.length).toBeGreaterThan(0);
+    await pointer('bouger', 0, 0);
+    for (const [nom, cle] of cas) {
+      const ancre = terme(retenue, nom);
+      ancre.scrollIntoView({ block: 'center' });
+      const { x, y } = await centre(ancre);
+      await pointer('bouger', x, y);
+      await vi.waitFor(() => exigerInfobulle(ancre, cle));
+      await pointer('bouger', 0, 0);
+      await vi.waitFor(() => expect(infobulles()[0].hidden).toBe(true));
+      expect(ancre.tabIndex).toBe(0);
+      ancre.focus();
+      await vi.waitFor(() => exigerInfobulle(ancre, cle));
+      await touche('Escape');
+      await vi.waitFor(() => expect(infobulles()[0].hidden).toBe(true));
+      expect(document.activeElement).toBe(ancre);
+      ancre.blur();
+    }
+  });
+
+  test('la cible changée dans les propositions, puis la liste : la différence se lit contre la nouvelle cible', async () => {
+    const charge = chargeRetenue();
+    const { totalRedondance } = mesuresDe(charge);
+    const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(charge))] });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(1));
+    expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(1000 - totalRedondance)));
+    await ouvrirLigne(m, 'retenue');
+    await attendreEvenement(m);
+    await m.seance.passerEnEcriture();
+    m.ui.allerA('propositions');
+    await vi.waitFor(() => expect(dans(m, '[data-section="propositions"] [data-champ="cibleRedondance"]')).not.toBeNull());
+    const entree = dans(m, '[data-champ="cibleRedondance"]');
+    expect(entree.value).toBe('1000');
+    entree.focus();
+    saisir(entree, '25');
+    entree.blur();
+    await vi.waitFor(() => expect(m.seance.etat().charge.reglages.cibleRedondance).toBe(25));
+    await revenirALaListe(m, 1);
+    await vi.waitFor(() => expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(25 - totalRedondance))));
+    expect(colonne(ligneDe(m, 'retenue'), 'collisionsCumulees')).toBe(format.nombre(mesuresDe(charge).collisionsCumulees));
   });
 });

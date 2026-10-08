@@ -113,4 +113,5 @@ export const TABLE = new Map([
     'ENTREE_MODIFIER_REGLAGE',
     ({ cle, valeur }) => `${nomDans(NOMS_DES_REGLAGES, cle, 'réglage')} : ${valeurDeReglage(valeur)}`,
   ],
+  ['ENTREE_CHANGER_CIBLE_REDONDANCE', ({ cible }) => `Cible de la somme de redondance : ${cible}`],
 ]);
