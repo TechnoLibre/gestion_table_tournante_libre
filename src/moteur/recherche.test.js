@@ -40,6 +40,7 @@ import {
   creerEtat,
   defaire,
   proposerEtAppliquer,
+  proposerUne,
   rechercher,
   regenerer,
   scoreComplet,
@@ -468,6 +469,108 @@ describe('rechercher : reproductibilité et identifiants (§ 5.7, § 19.4)', () 
     // L'historique absent prend la valeur par défaut de rechercher.
     assert.equal(verifierReglages({ graine: 0, arret: 1, nombre: 1 }), undefined);
     assert.equal(verifierReglages({ graine: 2 ** 32 - 1, arret: 1, nombre: 1, historique: 1 }), undefined);
+  });
+});
+
+describe('proposerUne : une proposition par son rang (§ 5.7, § 5.10)', () => {
+  test('pour chaque rang de 1 à nombre, la proposition de ce rang de rechercher, octet pour octet', () => {
+    const cles = ['petite', 'petite-conflit'];
+    assert.equal(cles.length, 2);
+    for (const cle of cles) {
+      const reglages = { graine: 4_242, arret: 3_000, nombre: 5, historique: 200 };
+      const attendues = rechercher(demo(cle), reglages);
+      assert.equal(attendues.length, 5);
+      for (let rang = 1; rang <= reglages.nombre; rang += 1) {
+        const une = proposerUne(demo(cle), reglages, rang);
+        assert.equal(JSON.stringify(une), JSON.stringify(attendues[rang - 1]), `${cle}, rang ${rang}`);
+        assert.deepStrictEqual(une, attendues[rang - 1]);
+      }
+    }
+  });
+
+  test("le rang dans un ordre quelconque, l'historique absent : la même proposition, à l'historique par défaut", () => {
+    const reglages = { graine: 9, arret: 1_500, nombre: 4 };
+    const attendues = rechercher(demo('petite'), reglages);
+    const desordre = [3, 1, 4, 2].map((rang) => proposerUne(demo('petite'), reglages, rang));
+    assert.deepStrictEqual(
+      [...desordre].sort((a, b) => a.id - b.id),
+      attendues,
+    );
+    assert.deepEqual(desordre.map(({ historique }) => historique), [1_000, 1_000, 1_000, 1_000]);
+  });
+
+  test("l'avancement se compte dans la seule proposition : fait de 1 000 en 1 000, sur arret", () => {
+    const etapes = [];
+    proposerUne(
+      demo('petite-conflit'),
+      { graine: 3, arret: 2_500, nombre: 3 },
+      2,
+      { progression: (fait, total) => etapes.push([fait, total]) },
+    );
+    assert.deepEqual(etapes, [
+      [1_000, 2_500],
+      [2_000, 2_500],
+    ]);
+  });
+
+  test('un signal levé avant le départ, ou à sa deuxième lecture, fait lever ErreurAnnulee sans rien rendre', () => {
+    assert.throws(
+      () => proposerUne(demo('petite'), { graine: 3, arret: 5_000, nombre: 2 }, 1, { signal: { aborted: true } }),
+      ErreurAnnulee,
+    );
+    let lectures = 0;
+    const signal = {
+      get aborted() {
+        lectures += 1;
+        return lectures >= 2;
+      },
+    };
+    const etapes = [];
+    assert.throws(
+      () =>
+        proposerUne(
+          demo('petite-conflit'),
+          { graine: 3, arret: 5_000, nombre: 2 },
+          2,
+          { signal, progression: (fait, total) => etapes.push([fait, total]) },
+        ),
+      ErreurAnnulee,
+    );
+    assert.equal(lectures, 2);
+    assert.deepEqual(etapes, [[1_000, 5_000]]);
+  });
+
+  test('un rang hors de 1 à nombre, ou non entier, lève une RangeError qui nomme rang ; un réglage hors de son domaine, celle de verifierReglages', () => {
+    const reglages = { graine: 1, arret: 10, nombre: 3 };
+    const rangs = [0, 4, 1.5, '1', -1];
+    assert.equal(rangs.length, 5);
+    for (const rang of rangs) {
+      assert.throws(
+        () => proposerUne(demo('petite'), reglages, rang),
+        (erreur) => erreur instanceof RangeError && erreur.reglage === 'rang' && erreur.message.startsWith('rang :'),
+        String(rang),
+      );
+    }
+    assert.throws(
+      () => proposerUne(demo('petite'), { ...reglages, graine: 2 ** 32 }, 1),
+      (erreur) => erreur instanceof RangeError && erreur.reglage === 'graine',
+    );
+    assert.throws(
+      () => proposerUne(demo('petite'), { ...reglages, nombre: 0 }, 1),
+      (erreur) => erreur instanceof RangeError && erreur.reglage === 'nombre',
+    );
+  });
+
+  test('ne modifie pas la configuration reçue ; une salle trop petite lève PLACES_MANQUANTES comme rechercher', () => {
+    const configuration = salleReservee();
+    proposerUne(configuration, { graine: 1, arret: 500, nombre: 2 }, 2);
+    assert.deepStrictEqual(configuration, salleReservee());
+    const petite = demo('petite');
+    petite.tables = petite.tables.slice(1);
+    assert.throws(
+      () => proposerUne(petite, { graine: 1, arret: 10, nombre: 1 }, 1),
+      (erreur) => erreur.code === 'PLACES_MANQUANTES' && erreur.details.placesManquantes === 3,
+    );
   });
 });
 

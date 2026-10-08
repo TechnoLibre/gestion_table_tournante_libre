@@ -17,8 +17,15 @@ const NOMS_DES_REGLAGES = new Map([
   ['historique', "Historique d'acceptation"],
 ]);
 
-// L'estimation d'une génération longue, en mots : l'ordre de grandeur et la
-// mesure dont il vient, ou le seuil d'une génération sans mesure.
+// Les cœurs d'un calcul, dits quand il en emploie plus d'un : « , sur
+// 4 cœurs » ; rien pour un seul, ou quand le nombre n'est pas donné.
+function surCoeurs(coeurs, texte) {
+  return typeof coeurs === 'number' && coeurs > 1 ? `, sur ${creerFormat(texte).nombre(coeurs)} cœurs` : '';
+}
+
+// L'estimation d'une génération longue, en mots : l'ordre de grandeur et les
+// cœurs qu'elle emploierait, puis la mesure dont il vient ; ou le seuil d'une
+// génération sans mesure.
 function phraseEstimation(estimation, texte) {
   if (estimation.inconnue === true) {
     return (
@@ -30,9 +37,10 @@ function phraseEstimation(estimation, texte) {
   const { mesure } = estimation;
   const plafond = estimation.auDelaDuPlafond ? ", au-delà du plafond d'usage de trente minutes" : '';
   return (
-    `Ce réglage prendrait ${format.ordreDeGrandeur(estimation.secondes)}${plafond}, d'après le dernier calcul, ` +
+    `Ce réglage prendrait ${format.ordreDeGrandeur(estimation.secondes)}${surCoeurs(estimation.coeurs, texte)}` +
+    `${plafond}, d'après le dernier calcul, ` +
     `${format.duree(mesure.dureeMs)} pour ${format.nombre(mesure.mouvements)} mouvements ` +
-    `sur ${compte(mesure.participants, 'participant', 'participants')}`
+    `sur ${compte(mesure.participants, 'participant', 'participants')}${surCoeurs(mesure.coeurs, texte)}`
   );
 }
 

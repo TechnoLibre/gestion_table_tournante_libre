@@ -4,7 +4,9 @@
 // La section de la génération dans un vrai moteur de rendu (§ 5.7, § 5.9,
 // § 5.10, § 2.1 étape 9 et « ce qui doit avoir eu lieu », § 15.4, § 8.4,
 // § 9) : ses réglages, leur libellé et leur unité ; la graine, saisie de la
-// commande ; le travailleur, qui rend ce que rend rechercher ; l'application
+// commande ; les cœurs de calcul, un réglage du poste qui n'écrit rien ; le
+// groupe de travailleurs, qui rend ce que rend rechercher, sur un cœur comme
+// sur deux ; l'application
 // vivante pendant le calcul ; l'annulation ; les refus posés à côté de
 // « Générer » avec leur remède ; la durée observée ; la génération longue,
 // annoncée en place.
@@ -63,25 +65,30 @@ afterEach(() => {
 
 // --- Les exécuteurs ---------------------------------------------------------------
 
-// L'exécuteur du travailleur, celui de src/main.js ; travailleurs compte les
-// travailleurs créés.
-function executeurTravailleur() {
+// L'exécuteur du travailleur, celui de src/main.js, qui annonce
+// coeursDisponibles ; travailleurs compte les travailleurs créés.
+function executeurTravailleur({ coeursDisponibles } = {}) {
   const suivi = { travailleurs: 0 };
-  const executeur = creerExecuteurTravailleur(() => {
-    suivi.travailleurs += 1;
-    return new Travailleur();
-  });
+  const executeur = creerExecuteurTravailleur(
+    () => {
+      suivi.travailleurs += 1;
+      return new Travailleur();
+    },
+    { coeursDisponibles },
+  );
   return { executeur, suivi };
 }
 
-// Un exécuteur dont chaque lancer est relevé : configuration, reglages, et
-// ce que rend son résultat. lancements en garde la liste.
+// Un exécuteur dont chaque lancer est relevé : configuration, reglages,
+// options, et ce que rend son résultat. lancements en garde la liste. Il
+// annonce les cœurs de base.
 function releve(base) {
   const lancements = [];
   const executeur = {
-    lancer(configuration, reglages) {
-      const execution = base.lancer(configuration, reglages);
-      const lancement = { configuration, reglages, propositions: null };
+    coeursDisponibles: base.coeursDisponibles,
+    lancer(configuration, reglages, options) {
+      const execution = base.lancer(configuration, reglages, options);
+      const lancement = { configuration, reglages, options, propositions: null };
       lancements.push(lancement);
       execution.resultat.then(
         (propositions) => {
@@ -96,11 +103,14 @@ function releve(base) {
 }
 
 // Un exécuteur que l'épreuve résout à la main : chaque lancer est relevé,
-// avec resoudre(propositions), avancer(fait, total) et annulee.
-function executeurAMain() {
+// avec resoudre(propositions), avancer(fait, total) et annulee. Il annonce
+// coeursDisponibles, et chaque exécution dit employer les cœurs que le
+// lancer lui demande.
+function executeurAMain({ coeursDisponibles } = {}) {
   const executions = [];
   const executeur = {
-    lancer(configuration, reglages) {
+    coeursDisponibles,
+    lancer(configuration, reglages, options) {
       const abonnes = new Set();
       let resoudre;
       let rejeter;
@@ -128,6 +138,7 @@ function executeurAMain() {
           execution.annulee = true;
           rejeter(new ErreurAnnulee());
         },
+        coeurs: options?.coeurs,
       };
     },
   };
@@ -147,6 +158,8 @@ const fenetre = () => document.querySelector('dialog[open]');
 const duree = (m) => section(m).querySelector('[data-duree]');
 const question = (m) => section(m).querySelector('[data-question="longue"]');
 const barre = (m) => section(m)?.querySelector('[data-avancement] [role="progressbar"]') ?? null;
+const champCoeurs = (m) => section(m).querySelector('input[data-champ="coeurs"]');
+const disponiblesAffiches = (m) => section(m).querySelector('[data-coeurs-disponibles]');
 
 const tous = (m, selecteur) => [...m.racine.querySelectorAll(selecteur)];
 const versSection = (m, cible) => dans(m, `[data-commande="section"][data-cible="${cible}"]`);
@@ -385,7 +398,7 @@ describe('les contraintes et l’attribution des sièges (§ 5.3)', () => {
   test('direct : cinq bascules sous leur nom du § 5.3 ; chacune, une entrée, son réglage seul', async () => {
     const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
     const cases = [...section(m).querySelectorAll('input[type="checkbox"]')];
-    expect(cases.map((caseACocher) => caseACocher.dataset.champ)).toEqual(BASCULES);
+    expect(cases.map((caseACocher) => caseACocher.dataset.champ)).toEqual([...BASCULES, 'coeursAutomatiques']);
     BASCULES.forEach((cle, rang) => {
       expect(etiquette(m, cle).textContent).toBe(t(`generation.contrainte.${cle}`));
       expect(t(`generation.contrainte.${cle}`)).toBe(NOMS_DU_SPEC[rang]);
@@ -522,8 +535,8 @@ describe('le travailleur (§ 5.7, § 5.10, § 15.5)', () => {
     expect(charge(m).propositions.map(({ graine }) => graine)).toEqual(attendues.map(({ graine }) => graine));
   }, 60_000);
 
-  test('exécuteur du travailleur : grande démonstration, compte élevé — pendant le calcul, la navigation et le changement du tour affiché mettent le DOM à jour ; l’avancement croît, aria-busy suit le calcul', async () => {
-    const { executeur } = executeurTravailleur();
+  test('exécuteur du travailleur, deux cœurs : grande démonstration, compte élevé — pendant le calcul, la navigation et le changement du tour affiché mettent le DOM à jour ; une seule barre, dont l’avancement croît ; aria-busy suit le calcul', async () => {
+    const { executeur, suivi } = executeurTravailleur({ coeursDisponibles: 2 });
     const m = await demonstration('grande', { executeur });
     await regler(m, { nombre: 4, arret: 400000 });
     // Une réservation du seul tour 1, à un siège : une marque et une ligne
@@ -579,13 +592,14 @@ describe('le travailleur (§ 5.7, § 5.10, § 15.5)', () => {
     }
     expect(valeurs.length).toBeGreaterThanOrEqual(2);
     for (let i = 1; i < valeurs.length; i += 1) expect(valeurs[i]).toBeGreaterThan(valeurs[i - 1]);
+    expect(suivi.travailleurs).toBe(2);
     await attendre(() => expect(section(m).getAttribute('aria-busy')).toBe('false'));
     expect(barre(m)).toBeNull();
     await attendre(() => expect(charge(m).propositions.length).toBeGreaterThan(0));
   }, 120_000);
 
-  test('exécuteur du travailleur : annuler est immédiat ; plus aucun avancement ; l’état prêt revient ; propositions, journal et état sur le disque inchangés', async () => {
-    const { executeur } = executeurTravailleur();
+  test('exécuteur du travailleur, deux cœurs : annuler est immédiat ; plus aucun avancement ; l’état prêt revient ; propositions, journal et état sur le disque inchangés', async () => {
+    const { executeur } = executeurTravailleur({ coeursDisponibles: 2 });
     const m = await demonstration('grande', { executeur });
     await regler(m, { nombre: 4, arret: 400000 });
     const avant = { propositions: charge(m).propositions, journal: journalDe(m), etat: etatSurDisque(m) };
@@ -607,6 +621,149 @@ describe('le travailleur (§ 5.7, § 5.10, § 15.5)', () => {
     expect(etatSurDisque(m)).toBe(avant.etat);
     expect(fenetre()).toBeNull();
   }, 60_000);
+});
+
+describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
+  test('quatre cœurs annoncés : « Cœurs automatiques » cochée, aucun champ de nombre ; la valeur automatique et la note affichées', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect({ coeursDisponibles: 4 }) });
+    const automatique = bascule(m, 'coeursAutomatiques');
+    expect(automatique).not.toBeNull();
+    expect(automatique.checked).toBe(true);
+    expect(etiquette(m, 'coeursAutomatiques').textContent).toBe(t('generation.coeurs.automatique'));
+    expect(champCoeurs(m)).toBeNull();
+    expect(disponiblesAffiches(m).textContent).toBe(t('generation.coeurs.disponibles', { disponibles: 4 }));
+    expect(disponiblesAffiches(m).textContent).toContain('4 cœurs');
+    expect(section(m).querySelector('[data-coeurs]').textContent).toContain(t('generation.coeurs.note'));
+    expect(controleur(m).coeurs()).toEqual({ automatique: true, manuel: 4, disponibles: 4, nombre: 4 });
+  });
+
+  test('décocher montre « Nombre de cœurs », pré-rempli ; hors de 1 à 4 ou non entier, refus contre le champ ; 2 accepté ; recocher le cache et garde 2 ; rien n’est écrit, aucune entrée du journal', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect({ coeursDisponibles: 4 }) });
+    const ecritures = m.trace.length;
+    const entrees = journalDe(m).entrees.length;
+    const r0 = revision(m);
+    await cliquer(m, bascule(m, 'coeursAutomatiques'));
+    expect(bascule(m, 'coeursAutomatiques').checked).toBe(false);
+    expect(controleur(m).coeurs().automatique).toBe(false);
+    expect(champCoeurs(m)).not.toBeNull();
+    expect(champCoeurs(m).value).toBe('4');
+    expect(etiquette(m, 'coeurs').textContent).toBe(t('generation.coeurs.nombre', { disponibles: 4 }));
+    expect(disponiblesAffiches(m).textContent).toBe(t('generation.coeurs.disponibles', { disponibles: 4 }));
+    const refusees = [
+      ['0', 'HORS_DOMAINE', { min: 1, max: 4, remede: null }],
+      ['5', 'HORS_DOMAINE', { min: 1, max: 4, remede: null }],
+      ['x', 'NON_ENTIER', { saisie: 'x', remede: null }],
+    ];
+    expect(refusees.length).toBe(3);
+    for (const [saisie, code, details] of refusees) {
+      await saisir(m, champCoeurs(m), saisie);
+      const refus = refusPres(champCoeurs(m), code);
+      expect(refus, saisie).not.toBeNull();
+      expect(refus.querySelector('p').textContent).toBe(t(code, details));
+      expect(champCoeurs(m).getAttribute('aria-invalid')).toBe('true');
+      expect(champCoeurs(m).value).toBe(saisie);
+      expect(controleur(m).coeurs().nombre, saisie).toBe(4);
+    }
+    await saisir(m, champCoeurs(m), '2', { fin: 'Enter' });
+    expect(champCoeurs(m).parentElement.querySelector('[data-refus]')).toBeNull();
+    expect(champCoeurs(m).hasAttribute('aria-invalid')).toBe(false);
+    expect(controleur(m).coeurs()).toEqual({ automatique: false, manuel: 2, disponibles: 4, nombre: 2 });
+    await cliquer(m, bascule(m, 'coeursAutomatiques'));
+    expect(champCoeurs(m)).toBeNull();
+    expect(controleur(m).coeurs()).toEqual({ automatique: true, manuel: 2, disponibles: 4, nombre: 4 });
+    await cliquer(m, bascule(m, 'coeursAutomatiques'));
+    expect(champCoeurs(m).value).toBe('2');
+    expect(m.trace.length).toBe(ecritures);
+    expect(journalDe(m).entrees.length).toBe(entrees);
+    expect(revision(m)).toBe(r0);
+    expect(fenetre()).toBeNull();
+  });
+
+  test('en lecture, le réglage se change sans refus ni écriture ; il survit au départ de la section', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect({ coeursDisponibles: 3 }), ecriture: false });
+    const ecritures = m.trace.length;
+    await cliquer(m, bascule(m, 'coeursAutomatiques'));
+    await saisir(m, champCoeurs(m), '1');
+    expect(section(m).querySelector('[data-coeurs] [data-refus]')).toBeNull();
+    expect(controleur(m).coeurs().nombre).toBe(1);
+    await cliquer(m, versSection(m, 'participants'));
+    expect(section(m)).toBeNull();
+    await cliquer(m, versSection(m, 'generation'));
+    expect(bascule(m, 'coeursAutomatiques').checked).toBe(false);
+    expect(champCoeurs(m).value).toBe('1');
+    expect(m.trace.length).toBe(ecritures);
+  });
+
+  test('« Générer » quand le nombre de cœurs est refusé : rien ne part, le refus reste contre le champ ; corrigé, la génération part sur lui', async () => {
+    const { executeur, lancements } = releve(creerExecuteurDirect({ coeursDisponibles: 2 }));
+    const m = await demonstration('petite', { executeur });
+    await regler(m, { nombre: 2, arret: 2000 });
+    await cliquer(m, bascule(m, 'coeursAutomatiques'));
+    // Saisi puis quitté : le refus est posé, et « Générer » ne bouge plus
+    // sous le pointeur quand on le presse.
+    await saisir(m, champCoeurs(m), '3');
+    expect(refusPres(champCoeurs(m), 'HORS_DOMAINE')).not.toBeNull();
+    await cliquer(m, generer(m));
+    await images(2);
+    expect(refusPres(champCoeurs(m), 'HORS_DOMAINE')).not.toBeNull();
+    expect(lancements).toEqual([]);
+    expect(charge(m).propositions).toEqual([]);
+    await saisir(m, champCoeurs(m), '1');
+    await cliquer(m, generer(m));
+    await attendre(() => expect(charge(m).propositions.length).toBe(2));
+    expect(lancements.map(({ options }) => options)).toEqual([{ coeurs: 1 }]);
+  });
+
+  test('vrais travailleurs : deux cœurs, puis un seul — deux travailleurs, puis un ; les mêmes propositions, celles de rechercher', async () => {
+    const reglages = { graine: 1, nombre: 3, arret: 20000, historique: 1000 };
+    const propositions = [];
+    for (const coeurs of [2, 1]) {
+      const { executeur: travailleur, suivi } = executeurTravailleur({ coeursDisponibles: 2 });
+      const { executeur, lancements } = releve(travailleur);
+      const m = await demonstration('petite', { executeur });
+      await regler(m, { nombre: reglages.nombre, arret: reglages.arret });
+      if (coeurs === 1) {
+        await cliquer(m, bascule(m, 'coeursAutomatiques'));
+        await saisir(m, champCoeurs(m), '1');
+      }
+      await cliquer(m, generer(m));
+      await attendre(() => expect(lancements[0]?.propositions ?? null).not.toBeNull());
+      expect(lancements[0].options).toEqual({ coeurs });
+      expect(suivi.travailleurs).toBe(coeurs);
+      expect(lancements[0].reglages).toEqual(reglages);
+      expect(lancements[0].propositions).toEqual(rechercher(lancements[0].configuration, reglages));
+      await attendre(() => expect(charge(m).propositions.length).toBe(3));
+      propositions.push(charge(m).propositions);
+    }
+    expect(propositions.length).toBe(2);
+    expect(JSON.stringify(propositions[1])).toBe(JSON.stringify(propositions[0]));
+  }, 60_000);
+
+  test('la durée et l’estimation disent les cœurs : mesure sur 4 cœurs, puis l’estimation sur 1 cœur, recalculée sans relancer', async () => {
+    const { executeur, executions } = executeurAMain({ coeursDisponibles: 4 });
+    const m = await demonstration('petite', { executeur });
+    await cliquer(m, generer(m));
+    expect(executions.length).toBe(1);
+    m.horloge.avancer(2000);
+    executions[0].resoudre([]);
+    await attendre(() => expect(enCours(m)).toBe(false));
+    const mesure = controleur(m).derniereGeneration();
+    expect(mesure).toMatchObject({ dureeMs: 2000, nombre: 5, coeurs: 4 });
+    expect(duree(m).textContent).toBe(t('generation.duree.observee', mesure));
+    expect(duree(m).textContent).toContain('sur 4 cœurs');
+    const estimation = () => section(m).querySelector('[data-estimation]');
+    const reglages = charge(m).reglages.generation;
+    expect(estimation().textContent).toBe(t('generation.duree.estimee', controleur(m).estimer(reglages)));
+    expect(controleur(m).estimer(reglages).coeurs).toBe(4);
+    await cliquer(m, bascule(m, 'coeursAutomatiques'));
+    await saisir(m, champCoeurs(m), '1');
+    const surUn = controleur(m).estimer(reglages);
+    expect(surUn.coeurs).toBe(1);
+    expect(surUn.secondes).toBeCloseTo(5, 9);
+    await attendre(() => expect(estimation().textContent).toBe(t('generation.duree.estimee', surUn)));
+    expect(estimation().textContent).not.toContain('cœur');
+    expect(executions.length).toBe(1);
+  });
 });
 
 describe('les refus à la commande (§ 5.9, § 15.4, § 9)', () => {

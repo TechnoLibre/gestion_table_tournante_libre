@@ -15,7 +15,9 @@
 // l'historique, trois réglages qu'elle porte : la proposition 2 d'une demande
 // de 3 est celle d'une demande de 5, quel que soit l'ordre dans lequel les
 // propositions s'achèvent, et regenerer en rend le plan à partir de ces trois
-// champs seuls (§ 8.9). Les deux passent par la même descente, proposer.
+// champs seuls (§ 8.9). proposerUne calcule la proposition d'un seul rang, ce
+// qui répartit une génération entre plusieurs fils. Les trois passent par la
+// même descente, proposer.
 //
 // Sièges. Chaque tour offre S = Σ c_t sièges, rangés table par table dans
 // l'ordre des tables. Les personnes que instance.fixe impose à un tour
@@ -625,6 +627,52 @@ export function rechercher(configuration, reglages, { signal, progression } = {}
     propositions.push({ id, graine: graineDerivee, arret, historique, plan });
   }
   return propositions;
+}
+
+/**
+ * La proposition de rang rang d'une génération (§ 5.7) : celle que
+ * rechercher(configuration, reglages) rend à l'indice rang − 1, octet pour
+ * octet. Sa graine dérivée est le rang-ième tirage de creerPcg32(graine,
+ * FLUX.GRAINES), et sa descente celle de rechercher : le résultat ne dépend
+ * ni de l'ordre dans lequel les rangs se calculent, ni du fil qui les
+ * calcule. Plusieurs fils calculent ainsi les propositions d'une même
+ * génération, chacun les siennes, et les rangent par identifiant.
+ *
+ * Toutes les 1 000 itérations, progression(fait, total) reçoit le rang du
+ * mouvement en cours dans cette seule proposition, total valant arret. Le
+ * signal se lit avant la descente et à chacun de ces instants : vrai, il
+ * fait lever ErreurAnnulee, et rien n'est rendu (§ 5.10).
+ *
+ * Lève ce que rechercher lève : la RangeError de verifierReglages,
+ * ErreurConfiguration de normaliser, PLACES_MANQUANTES ; et une RangeError
+ * qui nomme rang, champ reglage compris, quand rang n'est pas un entier de
+ * 1 à reglages.nombre.
+ *
+ * @param {import('./types.js').Configuration} configuration
+ * @param {ReglagesGeneration} reglages
+ * @param {number} rang   1 à reglages.nombre
+ * @param {{signal?: {aborted: boolean}, progression?: function(number, number): void}} [options]
+ * @returns {Proposition}
+ */
+export function proposerUne(configuration, reglages, rang, { signal, progression } = {}) {
+  verifierReglages(reglages);
+  const { graine, arret, nombre, historique = HISTORIQUE_PAR_DEFAUT } = reglages;
+  exigerReglage('rang', rang, 1, nombre);
+  const instance = normaliser(configuration);
+  const structure = preparer(instance);
+  const graines = creerPcg32(graine, FLUX.GRAINES);
+  let graineDerivee = 0;
+  for (let tirage = 1; tirage <= rang; tirage += 1) graineDerivee = graines.suivant();
+  lireSignal(signal);
+  const plan = proposer(instance, structure, graineDerivee, {
+    arret,
+    historique,
+    dejaFaits: 0,
+    total: arret,
+    signal,
+    progression,
+  });
+  return { id: rang, graine: graineDerivee, arret, historique, plan };
 }
 
 /**

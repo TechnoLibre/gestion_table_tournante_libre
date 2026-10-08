@@ -767,8 +767,8 @@ d'écran (§ 19.4) tomberait avec. L'interdit de `performance.now` dans le moteu
 
 **Le compte est un réglage, et son plafond d'usage est de trente minutes.** Il
 est exposé dans les réglages de génération, avec son unité ; le logiciel affiche
-à côté la **durée réellement observée du dernier calcul de la séance**, qui est
-la seule façon d'étalonner un compte. Elle vaut pour la séance et ne se garde
+à côté la **durée réellement observée du dernier calcul de la séance**, et les
+cœurs qu'il a employés, qui est la seule façon d'étalonner un compte. Elle vaut pour la séance et ne se garde
 pas au-delà — rien ne survit à la séance hors du dossier de travail (§ 8.6) : au
 premier calcul d'un lancement, aucune mesure n'existe, et l'estimation se dit
 inconnue. Le réglage livré par défaut est celui qui, sur la machine de
@@ -777,9 +777,11 @@ référence, reste bien en deçà de ce plafond.
 **Une génération longue s'annonce avant de partir.** À partir de la dernière
 durée mesurée, le logiciel énonce l'ordre de grandeur attendu — « environ vingt
 minutes à ce réglage » — et, **au-delà d'une minute estimée**, demande, par une
-question posée en place, sans fenêtre. Sans mesure, il demande dès que les
-mouvements demandés — propositions × compte d'arrêt — dépassent dix fois ceux du
-réglage par défaut. Une recherche d'une demi-heure lancée par mégarde est une
+question posée en place, sans fenêtre. L'estimation compte les mouvements qui se
+suivent sur un même cœur — le compte d'arrêt pour chacune des ⌈propositions /
+cœurs⌉ vagues de propositions calculées ensemble —, ceux de la dernière mesure
+ramenés de même aux cœurs qu'elle a employés. Sans mesure, il demande dès que ces
+mouvements dépassent dix fois ceux du réglage par défaut. Une recherche d'une demi-heure lancée par mégarde est une
 demi-heure de soirée perdue, et aucun réglage par défaut ne protège de cela.
 
 **Pendant la recherche, l'application reste vivante.** Le calcul ne tient pas le
@@ -789,6 +791,23 @@ demi-heure de fenêtre figée se lit comme un plantage, et l'opérateur tue le
 logiciel — ce qui perd exactement ce que la recherche avait trouvé. Le compteur
 d'inactivité du § 8.4 est suspendu tant qu'un calcul tourne, donc le retour
 automatique en lecture ne tombe jamais au milieu d'une génération.
+
+**Les propositions d'une génération se calculent en parallèle, sur les cœurs du
+poste.** Chaque proposition ne dépend que de sa graine dérivée (§ 5.7) : un
+groupe de fils d'exécution, hors de celui de l'interface, s'en partage les rangs,
+chacun prenant le suivant dès qu'il a rendu le sien, et le résultat, rangé par
+identifiant, est octet pour octet celui d'un calcul sur un seul fil, quel que
+soit le nombre de cœurs. Ce nombre est un **réglage du poste, non de
+l'événement** : une case « Cœurs automatiques », cochée par défaut, en emploie un
+par processeur logique, hyperthreads compris ; décochée, elle laisse saisir un
+« Nombre de cœurs », un entier de 1 au nombre de processeurs logiques, la valeur
+automatique affichée à côté, et refuse toute autre saisie là où elle a eu lieu.
+Le réglage vaut pour la séance du logiciel, comme la durée observée : il ne
+s'écrit ni dans le fichier d'état ni dans le journal, et se règle en lecture
+comme en écriture. Une génération n'emploie jamais plus de cœurs que de
+propositions demandées. L'avancement reste une seule barre, la somme des
+mouvements évalués de toutes les propositions ; l'annulation arrête tous les fils
+à la fois, et l'échec de l'un les arrête tous, sans résultat partiel.
 
 **Une commande annule une génération en cours, et elle écarte le résultat
 partiel.** L'annulation est immédiate — elle n'attend pas la fin d'une itération
@@ -3070,6 +3089,13 @@ d'inscriptibilité **en cours de séance**, et un support amovible. Sans elle, l
 100 % de branches exigés des chemins de reprise (§ 14.13) ne s'écrivent pas, et
 la règle à cinq issues du § 8.6 reste le code le moins éprouvé du logiciel alors
 qu'elle décide de l'endroit où vit la soirée.
+
+**Les fils de la génération sont un paramètre, comme le système de fichiers.**
+L'exécuteur qui répartit les propositions entre ses fils (§ 5.10) reçoit de quoi
+en faire naître et le nombre de processeurs logiques du poste ; seul le point
+d'entrée de la page lit ce nombre de la plateforme. Les épreuves donnent le leur,
+et des fils simulés qui s'achèvent dans l'ordre qu'elles choisissent : c'est
+ainsi que s'éprouve un résultat indépendant de l'ordre d'achèvement (§ 5.7).
 
 **La frontière des couches est gardée mécaniquement**, et pas seulement par
 discipline : un test du **graphe d'imports** refuse qu'un module de `src/moteur`

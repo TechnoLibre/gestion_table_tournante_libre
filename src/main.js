@@ -14,8 +14,13 @@
 //
 // Il est le seul module qui importe le travailleur de génération, par
 // « ?worker&inline » : Vite l'inclut dans la page, que la coquille charge
-// par file://, sans fichier de travailleur à côté. Chaque génération en
-// prend un neuf, que l'exécuteur termine à son issue (§ 5.10).
+// par file://, sans fichier de travailleur à côté. Chaque génération fait
+// naître un groupe de travailleurs neufs, un par cœur employé, que
+// l'exécuteur termine à son issue (§ 5.10). Il est aussi le seul à lire le
+// nombre de processeurs logiques du poste, navigator.hardwareConcurrency,
+// hyperthreads compris : l'exécuteur l'annonce au contrôleur, qui en fait
+// la valeur des cœurs automatiques ; une épreuve donne le sien à
+// l'exécuteur qu'elle monte.
 import { mount } from 'svelte';
 import { creerExecuteurTravailleur } from './application/executeur_travailleur.js';
 import { creerHorlogeSysteme } from './application/horloge.js';
@@ -49,7 +54,9 @@ mount(App, {
   props: {
     fs,
     horloge: creerHorlogeSysteme(),
-    executeur: creerExecuteurTravailleur(() => new Travailleur()),
+    executeur: creerExecuteurTravailleur(() => new Travailleur(), {
+      coeursDisponibles: navigator.hardwareConcurrency,
+    }),
     pressePapiers,
     identifiant: () => crypto.randomUUID(),
     langue: 'fr',

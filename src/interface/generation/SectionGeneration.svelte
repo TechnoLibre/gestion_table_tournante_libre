@@ -19,6 +19,9 @@
   // frappe dans la graine, au clic de « Générer », et dès que la charge
   // change : elle ne vaut que pour les réglages qu'elle nomme.
   //
+  // Le nombre de cœurs refusé — refusCoeurs, que Reglages pose contre son
+  // champ — retient « Générer » : rien ne part tant qu'il est posé.
+  //
   // La graine est pré-remplie de controleur.grainePropose() au montage, puis,
   // à chaque lancement, de la graine suivante. Pendant le calcul, la section
   // porte aria-busy="true" et montre l'avancement ; « Générer » reste offert,
@@ -44,6 +47,7 @@
   let refusGraine = $state.raw(null);
   let question = $state.raw(null);
   let issue = $state.raw(null);
+  let refusCoeurs = $state.raw(null);
 
   // Un lancement — enCours qui passe à vrai — met dans le champ la graine
   // suivante et retire la question, le refus de la graine et l'issue d'avant.
@@ -69,15 +73,17 @@
     });
   });
 
-  // La mesure du dernier calcul de la séance, relue à chaque publication du
-  // contrôleur, et l'estimation des réglages de la charge qu'elle donne.
+  // La mesure du dernier calcul de la séance, et l'estimation des réglages
+  // de la charge qu'elle donne sur les cœurs réglés, relues à chaque
+  // publication du contrôleur — un changement des cœurs compris.
   const mesure = $derived.by(() => {
     void $generation;
     return generation.derniereGeneration();
   });
-  const estimation = $derived(
-    mesure === null || charge === null ? null : generation.estimer(charge.reglages.generation),
-  );
+  const estimation = $derived.by(() => {
+    void $generation;
+    return mesure === null || charge === null ? null : generation.estimer(charge.reglages.generation);
+  });
 
   function saisirGraine() {
     refusGraine = null;
@@ -90,6 +96,7 @@
   // trouve : un réglage quitté par le clic même s'écrit d'abord, et la
   // génération part sur lui, quelle que soit la lenteur du disque.
   async function lancer(confirmee) {
+    if (refusCoeurs !== null) return;
     refusGraine = null;
     issue = null;
     if (!confirmee) question = null;
@@ -120,7 +127,7 @@
 <section data-section="generation" aria-busy={$generation.enCours ? 'true' : 'false'}>
   <h2>{t('coquille.section.generation')}</h2>
   {#if charge !== null}
-    <Reglages {charge} {mesure} {estimation} bind:graine {refusGraine} {saisirGraine} />
+    <Reglages {charge} {mesure} {estimation} bind:graine {refusGraine} {saisirGraine} bind:refusCoeurs />
     <div class="lancer">
       <Commande cle="generation.commande.generer" nom="generer" executer={() => lancer(false)} />
     </div>

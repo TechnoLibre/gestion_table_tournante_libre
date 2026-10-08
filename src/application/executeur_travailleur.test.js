@@ -1,24 +1,34 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Épreuves de l'exécuteur du travailleur (§ 5.10) : creerExecuteurTravailleur
-// sur une fabrique de travailleurs factices. Un travailleur factice garde
-// chaque message reçu et compte ses terminate() ; l'épreuve lui fait poster
-// les messages du contrat de données par son onmessage, comme le ferait le
-// vrai travailleur. Aucun calcul n'a lieu : les propositions et la
-// configuration sont des objets d'épreuve.
+// Épreuves de l'exécuteur du travailleur (§ 5.7, § 5.10) : le groupe de
+// travailleurs de creerExecuteurTravailleur, sur une fabrique de
+// travailleurs factices. Un travailleur factice garde chaque message reçu et
+// compte ses terminate() ; l'épreuve lui fait poster les messages du contrat
+// par son onmessage, comme le ferait le vrai travailleur. Les travailleurs
+// calculants, eux, répondent par brancherTravailleur, le vrai côté
+// travailleur, dans l'ordre que l'épreuve choisit : la valeur attendue est
+// alors celle de rechercher, sollicité une seconde fois.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
+import { texteLivre } from '../demo/livrees.js';
+import { rechercher } from '../moteur/recherche.js';
+import { analyser, configurationDepuisCharge } from '../stockage/document.js';
 import { creerExecuteurTravailleur } from './executeur_travailleur.js';
 import { ErreurAnnulee, ErreurGeneration } from './generation.js';
+import { brancherTravailleur } from './generation_travailleur.js';
 
 const CONFIGURATION = Object.freeze({ marque: 'configuration d’épreuve', tours: 3 });
 const REGLAGES = Object.freeze({ graine: 11, nombre: 2, arret: 40_000, historique: 1000 });
 
+// Une proposition d'épreuve du rang donné, sans calcul.
+const propositionDe = (rang) => ({ id: rang, graine: 100 + rang, arret: 40_000, historique: 1000, plan: [[[rang]]] });
+
 // Une fabrique de travailleurs factices, et les travailleurs qu'elle a
 // rendus, dans l'ordre. Chacun : recus, les messages reçus, clonés ;
 // terminaisons, le compte de terminate() ; poster(data), un message du
-// travailleur, remis à son onmessage courant.
+// travailleur, remis à son onmessage courant ; rang(), celui du dernier
+// proposer reçu.
 function fabriqueFactice() {
   const travailleurs = [];
   const fabrique = () => {
@@ -35,11 +45,54 @@ function fabriqueFactice() {
       poster(data) {
         this.onmessage?.({ data });
       },
+      rang() {
+        return this.recus.at(-1)?.rang ?? null;
+      },
+      // Poste la proposition du rang en cours.
+      rendre() {
+        this.poster({ type: 'proposition', proposition: propositionDe(this.rang()) });
+      },
     };
     travailleurs.push(travailleur);
     return travailleur;
   };
   return { fabrique, travailleurs };
+}
+
+// Une fabrique de travailleurs calculants : chaque proposer reçu attend que
+// l'épreuve le serve ; servir(choisir) traite les demandes en attente une à
+// une, choisir désignant chaque fois l'indice de la suivante parmi elles, et
+// remet au travailleur ce que brancherTravailleur a posté. Un travailleur
+// terminé ne reçoit plus rien.
+function fabriqueCalculante() {
+  const enAttente = [];
+  let crees = 0;
+  const fabrique = () => {
+    crees += 1;
+    const travailleur = {
+      onmessage: null,
+      termine: false,
+      postMessage(message) {
+        enAttente.push({ travailleur, message: structuredClone(message) });
+      },
+      terminate() {
+        travailleur.termine = true;
+      },
+    };
+    return travailleur;
+  };
+  function servir(choisir) {
+    while (enAttente.length > 0) {
+      const [{ travailleur, message }] = enAttente.splice(choisir(enAttente.length), 1);
+      if (travailleur.termine) continue;
+      const postes = [];
+      const portee = { onmessage: null, postMessage: (m) => postes.push(structuredClone(m)) };
+      brancherTravailleur(portee);
+      portee.onmessage({ data: message });
+      for (const data of postes) if (!travailleur.termine) travailleur.onmessage?.({ data });
+    }
+  }
+  return { fabrique, servir, crees: () => crees };
 }
 
 // L'issue d'une promesse, sans attendre plus d'un tour de la file des
@@ -60,28 +113,141 @@ async function issue(promesse) {
   return lue;
 }
 
-describe('exécuteur du travailleur (§ 5.10)', () => {
-  test('un travailleur neuf par lancer, dont le premier message est { type: lancer, configuration, reglages }', () => {
+const configurationDe = (cle) => configurationDepuisCharge(analyser(texteLivre(cle)).charge);
+
+describe('exécuteur du travailleur : le groupe (§ 5.7, § 5.10)', () => {
+  test('coeursDisponibles : un entier d’au moins 1 tel quel, toute autre valeur 1 ; 1 sans option', () => {
+    const { fabrique } = fabriqueFactice();
+    const cas = [
+      [8, 8],
+      [1, 1],
+      [undefined, 1],
+      [0, 1],
+      [2.5, 1],
+      ['4', 1],
+      [null, 1],
+    ];
+    assert.equal(cas.length, 7);
+    for (const [donnee, attendue] of cas) {
+      assert.equal(creerExecuteurTravailleur(fabrique, { coeursDisponibles: donnee }).coeursDisponibles, attendue, String(donnee));
+    }
+    assert.equal(creerExecuteurTravailleur(fabrique).coeursDisponibles, 1);
+  });
+
+  test('min(nombre, coeurs) travailleurs, nés au lancer ; le travailleur k reçoit d’abord le rang k ; sans option, un seul', () => {
+    const cas = [
+      { coeurs: 3, nombre: 5, attendus: 3 },
+      { coeurs: 8, nombre: 3, attendus: 3 },
+      { coeurs: 1, nombre: 5, attendus: 1 },
+      { coeurs: undefined, nombre: 4, attendus: 1 },
+    ];
+    assert.equal(cas.length, 4);
+    for (const { coeurs, nombre, attendus } of cas) {
+      const { fabrique, travailleurs } = fabriqueFactice();
+      const executeur = creerExecuteurTravailleur(fabrique, { coeursDisponibles: 16 });
+      assert.equal(travailleurs.length, 0, 'aucun travailleur avant le lancer');
+      const reglages = { ...REGLAGES, nombre };
+      const execution = executeur.lancer(CONFIGURATION, reglages, coeurs === undefined ? undefined : { coeurs });
+      execution.resultat.catch(() => undefined);
+      assert.equal(travailleurs.length, attendus, JSON.stringify({ coeurs, nombre }));
+      assert.equal(execution.coeurs, attendus);
+      assert.equal(new Set(travailleurs).size, attendus);
+      travailleurs.forEach((travailleur, k) => {
+        assert.deepEqual(travailleur.recus, [{ type: 'proposer', configuration: CONFIGURATION, reglages, rang: k + 1 }]);
+        assert.equal(travailleur.terminaisons, 0);
+      });
+      execution.annuler();
+    }
+  });
+
+  test('le rang suivant va au premier travailleur libéré ; celui qui n’a plus rien à faire est terminé ; le résultat suit les identifiants, non l’ordre d’achèvement', async () => {
     const { fabrique, travailleurs } = fabriqueFactice();
-    const executeur = creerExecuteurTravailleur(fabrique);
-    assert.equal(travailleurs.length, 0, 'aucun travailleur avant le premier lancer');
-    const premiere = executeur.lancer(CONFIGURATION, REGLAGES);
-    const seconde = executeur.lancer(CONFIGURATION, { ...REGLAGES, graine: 12 });
-    premiere.resultat.catch(() => undefined);
-    seconde.resultat.catch(() => undefined);
-    assert.equal(travailleurs.length, 2);
-    assert.notEqual(travailleurs[0], travailleurs[1]);
-    assert.deepEqual(travailleurs[0].recus, [{ type: 'lancer', configuration: CONFIGURATION, reglages: REGLAGES }]);
-    assert.deepEqual(travailleurs[1].recus, [
-      { type: 'lancer', configuration: CONFIGURATION, reglages: { ...REGLAGES, graine: 12 } },
-    ]);
+    const reglages = { ...REGLAGES, nombre: 5 };
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, reglages, { coeurs: 2 });
+    const [premier, second] = travailleurs;
+    second.rendre(); // rang 2
+    assert.equal(second.rang(), 3);
+    second.rendre(); // rang 3
+    assert.equal(second.rang(), 4);
+    premier.rendre(); // rang 1
+    assert.equal(premier.rang(), 5);
+    premier.rendre(); // rang 5 : plus rien pour le premier
+    assert.equal(premier.terminaisons, 1);
+    assert.equal(second.terminaisons, 0);
+    assert.equal((await issue(execution.resultat)).etat, 'attente');
+    second.rendre(); // rang 4
+    const lue = await issue(execution.resultat);
+    assert.equal(lue.etat, 'resolue');
+    assert.deepEqual(lue.valeur, [1, 2, 3, 4, 5].map(propositionDe));
     assert.deepEqual(
       travailleurs.map(({ terminaisons }) => terminaisons),
-      [0, 0],
+      [1, 1],
+    );
+    assert.deepEqual(
+      travailleurs.map(({ recus }) => recus.map(({ rang }) => rang)),
+      [
+        [1, 5],
+        [2, 3, 4],
+      ],
+    );
+    execution.annuler();
+    assert.deepEqual(
+      travailleurs.map(({ terminaisons }) => terminaisons),
+      [1, 1],
+      'annuler après le résultat ne termine rien de plus',
     );
   });
 
-  test('deux avancements parviennent à surAvancement dans leur ordre ; un abonné retiré ne reçoit plus rien', () => {
+  test('travailleurs calculants : pour 1, 2 et 3 cœurs et 5 propositions, servis dans trois ordres, le résultat sérialisé égale celui de rechercher, octet pour octet', async () => {
+    const configuration = configurationDe('petite-conflit');
+    const reglages = { graine: 77, nombre: 5, arret: 3_000, historique: 1000 };
+    const attendu = JSON.stringify(rechercher(configuration, reglages));
+    const ordres = {
+      fifo: () => 0,
+      lifo: (n) => n - 1,
+      milieu: (n) => Math.floor(n / 2),
+    };
+    const coeurs = [1, 2, 3];
+    let comparaisons = 0;
+    for (const w of coeurs) {
+      for (const [nom, choisir] of Object.entries(ordres)) {
+        const { fabrique, servir, crees } = fabriqueCalculante();
+        const execution = creerExecuteurTravailleur(fabrique).lancer(configuration, reglages, { coeurs: w });
+        assert.equal(crees(), w);
+        servir(choisir);
+        const lue = await issue(execution.resultat);
+        assert.equal(lue.etat, 'resolue', `${w} cœurs, ${nom}`);
+        assert.equal(JSON.stringify(lue.valeur), attendu, `${w} cœurs, ${nom}`);
+        comparaisons += 1;
+      }
+    }
+    assert.equal(comparaisons, 9);
+  });
+
+  test('l’avancement est la somme des avancements de chaque proposition, sur nombre × arret ; une proposition rendue compte pour son arret entier', () => {
+    const { fabrique, travailleurs } = fabriqueFactice();
+    const reglages = { ...REGLAGES, nombre: 3, arret: 100 };
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, reglages, { coeurs: 2 });
+    execution.resultat.catch(() => undefined);
+    const recus = [];
+    execution.surAvancement((fait, total) => recus.push([fait, total]));
+    const [premier, second] = travailleurs;
+    premier.poster({ type: 'avancement', fait: 40, total: 100 });
+    second.poster({ type: 'avancement', fait: 30, total: 100 });
+    premier.poster({ type: 'proposition', proposition: propositionDe(1) });
+    premier.poster({ type: 'avancement', fait: 50, total: 100 });
+    second.poster({ type: 'avancement', fait: 90, total: 100 });
+    assert.deepEqual(recus, [
+      [40, 300],
+      [70, 300],
+      [130, 300],
+      [180, 300],
+      [240, 300],
+    ]);
+    execution.annuler();
+  });
+
+  test('un abonné retiré ne reçoit plus rien', () => {
     const { fabrique, travailleurs } = fabriqueFactice();
     const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
     execution.resultat.catch(() => undefined);
@@ -90,79 +256,79 @@ describe('exécuteur du travailleur (§ 5.10)', () => {
     execution.surAvancement((fait, total) => recus.push([fait, total]));
     const desabonner = execution.surAvancement((fait, total) => retires.push([fait, total]));
     const [travailleur] = travailleurs;
-    travailleur.poster({ type: 'avancement', fait: 50_000, total: 80_000 });
+    travailleur.poster({ type: 'avancement', fait: 20_000, total: 40_000 });
     desabonner();
-    travailleur.poster({ type: 'avancement', fait: 80_000, total: 80_000 });
+    travailleur.poster({ type: 'avancement', fait: 30_000, total: 40_000 });
     assert.deepEqual(recus, [
-      [50_000, 80_000],
-      [80_000, 80_000],
+      [20_000, 80_000],
+      [30_000, 80_000],
     ]);
-    assert.deepEqual(retires, [[50_000, 80_000]]);
+    assert.deepEqual(retires, [[20_000, 80_000]]);
+    execution.annuler();
   });
 
-  test('resultat : la promesse se résout aux propositions reçues, puis le travailleur est terminé ; un message tardif ne change rien', async () => {
+  test("annuler : chaque travailleur terminé aussitôt, rejet par ErreurAnnulee ; rien de ce qu'un travailleur poste ensuite n'atteint plus rien", async () => {
     const { fabrique, travailleurs } = fabriqueFactice();
-    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, { ...REGLAGES, nombre: 5 }, { coeurs: 3 });
+    const avancements = [];
+    execution.surAvancement((fait, total) => avancements.push([fait, total]));
+    // Les gestionnaires posés au lancement : un message déjà en file chez
+    // le navigateur au moment de l'annulation les atteindrait encore.
+    const gestionnaires = travailleurs.map(({ onmessage }) => onmessage);
+    travailleurs[1].poster({ type: 'avancement', fait: 10_000, total: 40_000 });
+    execution.annuler();
+    assert.deepEqual(
+      travailleurs.map(({ terminaisons }) => terminaisons),
+      [1, 1, 1],
+      'terminate() de chacun dans le même tour que annuler()',
+    );
+    for (const gestionnaire of gestionnaires) {
+      gestionnaire({ data: { type: 'avancement', fait: 40_000, total: 40_000 } });
+      gestionnaire({ data: { type: 'proposition', proposition: propositionDe(1) } });
+    }
+    const lue = await issue(execution.resultat);
+    assert.equal(lue.etat, 'rejetee');
+    assert.ok(lue.erreur instanceof ErreurAnnulee, String(lue.erreur));
+    assert.deepEqual(avancements, [[10_000, 200_000]]);
+    assert.deepEqual(
+      travailleurs.map(({ recus }) => recus.length),
+      [1, 1, 1],
+      'aucun rang donné après l’annulation',
+    );
+    execution.annuler();
+    assert.deepEqual(
+      travailleurs.map(({ terminaisons }) => terminaisons),
+      [1, 1, 1],
+      'une seconde annulation ne termine rien de plus',
+    );
+  });
+
+  test('erreur { code, details } d’un travailleur : rejet par une ErreurGeneration de ce code et de ces détails, chaque travailleur terminé, la suite ignorée', async () => {
+    const { fabrique, travailleurs } = fabriqueFactice();
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, { ...REGLAGES, nombre: 4 }, { coeurs: 3 });
     const avancements = [];
     execution.surAvancement((fait) => avancements.push(fait));
-    const [travailleur] = travailleurs;
-    const propositions = [
-      { id: 1, graine: 101, arret: 40_000, historique: 1000, plan: [[[1, 2]]] },
-      { id: 2, graine: 102, arret: 40_000, historique: 1000, plan: [[[2, 1]]] },
-    ];
-    assert.equal((await issue(execution.resultat)).etat, 'attente');
-    travailleur.poster({ type: 'resultat', propositions });
-    const lue = await issue(execution.resultat);
-    assert.equal(lue.etat, 'resolue');
-    assert.deepEqual(lue.valeur, propositions);
-    assert.equal(travailleur.terminaisons, 1);
-    travailleur.poster({ type: 'avancement', fait: 1, total: 2 });
-    execution.annuler();
-    assert.deepEqual(avancements, []);
-    assert.equal(travailleur.terminaisons, 1, 'annuler après le résultat ne termine pas une seconde fois');
-  });
-
-  test('erreur { code, details } : rejet par une ErreurGeneration de ce code et de ces détails, le travailleur terminé', async () => {
-    const { fabrique, travailleurs } = fabriqueFactice();
-    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
-    const [travailleur] = travailleurs;
-    travailleur.poster({ type: 'erreur', code: 'PLACES_MANQUANTES', details: { placesManquantes: 1 } });
+    travailleurs[0].rendre();
+    travailleurs[1].poster({ type: 'erreur', code: 'PLACES_MANQUANTES', details: { placesManquantes: 1 } });
+    travailleurs[2].rendre();
+    travailleurs[0].poster({ type: 'avancement', fait: 1, total: 2 });
     const lue = await issue(execution.resultat);
     assert.equal(lue.etat, 'rejetee');
     assert.ok(lue.erreur instanceof ErreurGeneration, String(lue.erreur));
     assert.equal(lue.erreur.code, 'PLACES_MANQUANTES');
     assert.deepEqual(lue.erreur.details, { placesManquantes: 1 });
-    assert.equal(travailleur.terminaisons, 1);
+    assert.deepEqual(
+      travailleurs.map(({ terminaisons }) => terminaisons),
+      [1, 1, 1],
+    );
+    assert.deepEqual(avancements, [40_000]);
   });
 
-  test("annuler : terminate() aussitôt, rejet par ErreurAnnulee ; un avancement ou un résultat posté ensuite n'atteint plus rien", async () => {
+  test('le canal d’erreur d’un travailleur — un script qui ne se charge ou ne se compile pas : rejet par ErreurGeneration TRAVAILLEUR_EN_ECHEC, remède null, sans le message ; l’événement est traité, chaque travailleur terminé', async () => {
     const { fabrique, travailleurs } = fabriqueFactice();
-    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
-    const avancements = [];
-    execution.surAvancement((fait, total) => avancements.push([fait, total]));
-    const [travailleur] = travailleurs;
-    // Le gestionnaire posé au lancement : un message déjà en file chez le
-    // navigateur au moment de l'annulation l'atteindrait encore.
-    const gestionnaire = travailleur.onmessage;
-    travailleur.poster({ type: 'avancement', fait: 50_000, total: 80_000 });
-    execution.annuler();
-    assert.equal(travailleur.terminaisons, 1, 'terminate() dans le même tour que annuler()');
-    gestionnaire({ data: { type: 'avancement', fait: 80_000, total: 80_000 } });
-    gestionnaire({ data: { type: 'resultat', propositions: [] } });
-    travailleur.poster({ type: 'avancement', fait: 80_000, total: 80_000 });
-    const lue = await issue(execution.resultat);
-    assert.equal(lue.etat, 'rejetee');
-    assert.ok(lue.erreur instanceof ErreurAnnulee, String(lue.erreur));
-    assert.deepEqual(avancements, [[50_000, 80_000]]);
-    execution.annuler();
-    assert.equal(travailleur.terminaisons, 1, 'une seconde annulation ne termine rien de plus');
-  });
-
-  test('le canal d’erreur du travailleur — un script qui ne se charge ou ne se compile pas : rejet par ErreurGeneration TRAVAILLEUR_EN_ECHEC, remède null, sans le message ; l’événement est traité, le travailleur terminé', async () => {
-    const { fabrique, travailleurs } = fabriqueFactice();
-    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
-    const [travailleur] = travailleurs;
-    assert.equal(typeof travailleur.onerror, 'function');
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES, { coeurs: 2 });
+    assert.equal(travailleurs.length, 2);
+    assert.ok(travailleurs.every(({ onerror }) => typeof onerror === 'function'));
     const evenement = {
       message: 'faute d’épreuve',
       traite: false,
@@ -170,7 +336,7 @@ describe('exécuteur du travailleur (§ 5.10)', () => {
         this.traite = true;
       },
     };
-    travailleur.onerror(evenement);
+    travailleurs[1].onerror(evenement);
     const lue = await issue(execution.resultat);
     assert.equal(lue.etat, 'rejetee');
     assert.ok(lue.erreur instanceof ErreurGeneration, String(lue.erreur));
@@ -178,22 +344,25 @@ describe('exécuteur du travailleur (§ 5.10)', () => {
     assert.deepEqual(lue.erreur.details, { remede: null });
     assert.doesNotMatch(JSON.stringify(lue.erreur.details), /épreuve/);
     assert.equal(evenement.traite, true);
-    assert.equal(travailleur.terminaisons, 1);
+    assert.deepEqual(
+      travailleurs.map(({ terminaisons }) => terminaisons),
+      [1, 1],
+    );
     // Un événement d'erreur sans preventDefault, comme le rendrait une portée factice, ne lève pas.
     const seconde = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
-    travailleurs[1].onerror({});
+    travailleurs[2].onerror({});
     assert.equal((await issue(seconde.resultat)).erreur.code, 'TRAVAILLEUR_EN_ECHEC');
   });
 
-  test('une faute pendant le calcul, postée { type: faute, message, pile } : rejet par une Error sans code, qui porte le message et la pile du travailleur ; aucun refus, le travailleur terminé, la suite ignorée', async () => {
+  test('une faute pendant le calcul, postée { type: faute, message, pile } : rejet par une Error sans code, qui porte le message et la pile du travailleur ; aucun refus, chaque travailleur terminé, la suite ignorée', async () => {
     const { fabrique, travailleurs } = fabriqueFactice();
-    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES, { coeurs: 2 });
     const avancements = [];
     execution.surAvancement((fait, total) => avancements.push([fait, total]));
-    const [travailleur] = travailleurs;
+    const [travailleur, autre] = travailleurs;
     travailleur.poster({ type: 'faute', message: 'TypeError: invariant d’épreuve rompu', pile: 'TypeError: invariant d’épreuve rompu\n    at calcul (épreuve.js:1:1)' });
     travailleur.poster({ type: 'avancement', fait: 1, total: 2 });
-    travailleur.poster({ type: 'resultat', propositions: [] });
+    autre.rendre();
     const lue = await issue(execution.resultat);
     assert.equal(lue.etat, 'rejetee');
     assert.ok(lue.erreur instanceof Error, String(lue.erreur));
@@ -203,6 +372,25 @@ describe('exécuteur du travailleur (§ 5.10)', () => {
     assert.match(lue.erreur.message, /TypeError: invariant d’épreuve rompu/);
     assert.match(lue.erreur.stack, /at calcul \(épreuve\.js:1:1\)/);
     assert.deepEqual(avancements, []);
-    assert.equal(travailleur.terminaisons, 1);
+    assert.deepEqual(
+      travailleurs.map(({ terminaisons }) => terminaisons),
+      [1, 1],
+    );
+  });
+
+  test('un réglage hors de son domaine rejette REGLAGE_HORS_DOMAINE sans faire naître de travailleur ; un nombre de cœurs qui n’est pas un entier d’au moins 1 lève une RangeError', async () => {
+    const { fabrique, travailleurs } = fabriqueFactice();
+    const executeur = creerExecuteurTravailleur(fabrique, { coeursDisponibles: 4 });
+    const execution = executeur.lancer(CONFIGURATION, { ...REGLAGES, nombre: 0 }, { coeurs: 2 });
+    const lue = await issue(execution.resultat);
+    assert.equal(lue.etat, 'rejetee');
+    assert.equal(lue.erreur.code, 'REGLAGE_HORS_DOMAINE');
+    assert.deepEqual(lue.erreur.details, { reglage: 'nombre', remede: null });
+    assert.equal(execution.coeurs, 0);
+    assert.doesNotThrow(() => execution.annuler());
+    for (const coeurs of [0, 1.5, '2']) {
+      assert.throws(() => executeur.lancer(CONFIGURATION, REGLAGES, { coeurs }), RangeError, String(coeurs));
+    }
+    assert.equal(travailleurs.length, 0);
   });
 });

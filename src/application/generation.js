@@ -13,6 +13,14 @@
 // et s'annule par terminate(). Une erreur de la recherche devient la même
 // dans les deux, par versErreurGeneration.
 //
+// Le contrôleur tient aussi le réglage des cœurs de calcul, un réglage du
+// poste qui vaut pour la séance de l'application et ne s'écrit nulle part :
+// automatique, la génération emploie autant de cœurs que l'exécuteur annonce
+// de processeurs logiques (coeursDisponibles, que src/main.js lit de la
+// plateforme) ; sinon le nombre saisi, de 1 à ces disponibles. Un lancement
+// en emploie min(nombre de propositions, cœurs réglés), et l'estimation
+// compte en vagues de propositions calculées ensemble.
+//
 // Le contrôleur ne numérote rien et ne mesure aucun plan. Il refuse avant
 // tout lancement un réglage hors de son domaine (REGLAGE_HORS_DOMAINE), puis
 // ce que l'enregistrement refuserait — les refus de la séance, lus dans son
@@ -105,6 +113,18 @@ export function exigerReglages(reglages) {
 }
 
 /**
+ * Le nombre de processeurs logiques d'un poste, tel que la plateforme le
+ * donne — hyperthreads compris —, rendu utilisable : un entier d'au moins 1
+ * tel quel, 1 pour toute autre valeur, absente comprise.
+ *
+ * @param {unknown} valeur
+ * @returns {number}
+ */
+export function coeursDe(valeur) {
+  return Number.isInteger(valeur) && valeur >= 1 ? valeur : 1;
+}
+
+/**
  * L'erreur d'une recherche, la même dans les deux exécuteurs : ErreurAnnulee
  * telle quelle ; une ErreurConfiguration devient ErreurGeneration de son code
  * et de ses détails ; toute autre, RangeError comprise, est rendue telle
@@ -127,10 +147,16 @@ export function versErreurGeneration(erreur) {
  *           abonne fn aux avancements ; rend la fonction qui désabonne
  * @property {Promise<import('../moteur/recherche.js').Proposition[]>} resultat
  *           rejetée par ErreurAnnulee à l'annulation, par ErreurGeneration sur
- *           une erreur du moteur
+ *           une erreur du moteur ; les propositions par identifiant croissant
  * @property {() => void} annuler   sans résultat partiel
+ * @property {number} [coeurs]       les cœurs que le calcul emploie ; 1 s'il
+ *           ne le dit pas
  *
- * @typedef {{lancer: (configuration: Object, reglages: Object) => Execution}} Executeur
+ * @typedef {Object} Executeur
+ * @property {(configuration: Object, reglages: Object, options?: {coeurs?: number}) => Execution} lancer
+ *           options.coeurs : les cœurs que le calcul peut employer, 1 par défaut
+ * @property {number} [coeursDisponibles]   les processeurs logiques du poste ;
+ *           1 s'il ne le dit pas
  */
 
 /**
@@ -139,12 +165,17 @@ export function versErreurGeneration(erreur) {
  * ou depuis un rappel d'avancement, fait lever ErreurAnnulee à la lecture
  * suivante du signal par le moteur : avant la proposition suivante, au plus
  * 1 000 mouvements plus tard. Chaque avancement est celui du moteur, toutes
- * les 1 000 itérations.
+ * les 1 000 itérations. Il calcule une proposition après l'autre quel que
+ * soit options.coeurs, et chaque exécution dit n'employer qu'un cœur ; il
+ * annonce les cœurs qu'on lui donne, par coeursDe, pour qu'une épreuve règle
+ * ce que le contrôleur en lit.
  *
+ * @param {{coeursDisponibles?: unknown}} [options]
  * @returns {Executeur}
  */
-export function creerExecuteurDirect() {
+export function creerExecuteurDirect({ coeursDisponibles } = {}) {
   return {
+    coeursDisponibles: coeursDe(coeursDisponibles),
     lancer(configuration, reglages) {
       const signal = { aborted: false };
       const abonnes = new Set();
@@ -170,6 +201,7 @@ export function creerExecuteurDirect() {
         annuler() {
           signal.aborted = true;
         },
+        coeurs: 1,
       };
     },
   };
@@ -189,23 +221,35 @@ function planRange(proposition, configuration, produitVersion) {
  * @param {Object} parametres
  * @param {Object} parametres.seance        la séance d'A1 et A2 : etat,
  *        subscribe, surAnnulation, executer, debuterCalcul, finirCalcul
- * @param {Executeur} parametres.executeur
+ * @param {Executeur} parametres.executeur   coeursDisponibles, qu'il annonce,
+ *        borne le réglage des cœurs
  * @param {import('./horloge.js').Horloge} parametres.horloge   instant() mesure
  *        la durée d'un calcul
  * @param {string} parametres.produitVersion
  * @returns {Object} le contrôleur : grainePropose, reglagesProposes, valider,
- *          estimer, derniereGeneration, generer, annuler, subscribe
+ *          estimer, derniereGeneration, generer, annuler, coeurs,
+ *          reglerCoeurs, subscribe
  */
 export function creerControleurGeneration({ seance, executeur, horloge, produitVersion }) {
   // graine : la graine proposée ; base : celle de l'événement ouvert, null
   // sans événement ; mesure : le dernier calcul abouti, null avant lui ;
   // execution : celle en cours, null hors génération ; enCours vaut vrai du
   // lancement à la fin de l'enregistrement.
+  // coeurs : le réglage des cœurs de calcul, que l'observable porte —
+  // automatique, le nombre saisi (manuel), les disponibles, et nombre, les
+  // cœurs réglés.
   let graine = 1;
   let base = null;
   let mesure = null;
   let execution = null;
-  let observable = { enCours: false, fait: 0, total: 0, annulee: null };
+  const disponibles = coeursDe(executeur.coeursDisponibles);
+  let reglageCoeurs = { automatique: true, manuel: disponibles };
+  const coeurs = () => ({
+    ...reglageCoeurs,
+    disponibles,
+    nombre: reglageCoeurs.automatique ? disponibles : reglageCoeurs.manuel,
+  });
+  let observable = { enCours: false, fait: 0, total: 0, annulee: null, coeurs: coeurs() };
   const abonnes = new Set();
 
   function publier(changements) {
@@ -232,22 +276,37 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     courante.annuler();
   }
 
+  // Les cœurs qu'un lancement de nombre propositions emploie.
+  const coeursPour = (nombre) => Math.min(nombre, coeurs().nombre);
+
+  // Les mouvements d'une génération qui se suivent sur un même cœur : arret
+  // pour chacune des ⌈nombre / cœurs⌉ vagues de propositions calculées
+  // ensemble.
+  const mouvementsParCoeur = (nombre, arret, parallele) => Math.ceil(nombre / parallele) * arret;
+
+  // La durée d'une génération, proportionnelle aux mouvements qui se suivent
+  // sur un même cœur, ceux de la mesure ramenés aux cœurs qu'elle a employés.
   function estimer({ nombre, arret }) {
-    const mouvements = nombre * arret;
     if (mesure === null) return { inconnue: true };
-    const secondes = (mouvements * mesure.dureeMs) / (mesure.mouvements * 1000);
+    const parallele = coeursPour(nombre);
+    const secondes =
+      (mouvementsParCoeur(nombre, arret, parallele) * mesure.dureeMs) /
+      (mouvementsParCoeur(mesure.nombre, mesure.arret, mesure.coeurs) * 1000);
     return {
       secondes,
       longue: secondes > SEUIL_GENERATION_LONGUE_S,
       auDelaDuPlafond: secondes > PLAFOND_USAGE_S,
       mesure: { ...mesure },
+      coeurs: parallele,
     };
   }
 
-  // Longue : au-delà du seuil estimé, ou, sans mesure, au-delà de dix fois
-  // le réglage par défaut.
+  // Longue : au-delà du seuil estimé, ou, sans mesure, quand les mouvements
+  // qui se suivent sur un même cœur dépassent dix fois le réglage par défaut.
   function estLongue(reglages, estimation) {
-    if (estimation.inconnue === true) return reglages.nombre * reglages.arret > MOUVEMENTS_SANS_MESURE;
+    if (estimation.inconnue === true) {
+      return mouvementsParCoeur(reglages.nombre, reglages.arret, coeursPour(reglages.nombre)) > MOUVEMENTS_SANS_MESURE;
+    }
     return estimation.longue;
   }
 
@@ -290,13 +349,14 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
   // résultat entre-temps.
   async function calculer(configuration, reglages) {
     const debut = horloge.instant();
-    execution = executeur.lancer(configuration, reglages);
+    execution = executeur.lancer(configuration, reglages, { coeurs: coeursPour(reglages.nombre) });
+    const employes = coeursDe(execution.coeurs);
     const desabonner = execution.surAvancement((fait, total) => publier({ fait, total }));
     const desannuler = seance.surAnnulation(() => annulerAvec('seance'));
     try {
       const propositions = await execution.resultat;
       if (observable.annulee !== null) throw new ErreurAnnulee();
-      return { propositions, dureeMs: horloge.instant() - debut };
+      return { propositions, dureeMs: horloge.instant() - debut, coeurs: employes };
     } finally {
       desabonner();
       desannuler();
@@ -349,13 +409,14 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     publier({ enCours: true, fait: 0, total: reglages.nombre * reglages.arret, annulee: null });
     seance.debuterCalcul();
     try {
-      const { propositions, dureeMs } = await calculer(configuration, reglages);
+      const { propositions, dureeMs, coeurs: employes } = await calculer(configuration, reglages);
       mesure = {
         dureeMs,
         mouvements: reglages.nombre * reglages.arret,
         participants: instance.N,
         nombre: reglages.nombre,
         arret: reglages.arret,
+        coeurs: employes,
       };
       const { gardees, identiques } = trier(propositions, configuration, instance);
       if (gardees.length === 0) return { ajoutees: [], identiques, dureeMs };
@@ -404,12 +465,19 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
       return { reglages: refus.length === 0 ? reglages : null, refus };
     },
     /**
-     * L'estimation des réglages, proportionnelle aux mouvements de la
-     * dernière mesure : { inconnue: true } sans elle, sinon { secondes,
-     * longue, auDelaDuPlafond, mesure }.
+     * L'estimation des réglages, proportionnelle aux mouvements qui se
+     * suivent sur un même cœur — arret × ⌈nombre / cœurs⌉ —, ceux de la
+     * dernière mesure ramenés de même aux cœurs qu'elle a employés :
+     * { inconnue: true } sans elle, sinon { secondes, longue,
+     * auDelaDuPlafond, mesure, coeurs }, coeurs étant ceux que ces réglages
+     * emploieraient.
      */
     estimer,
-    /** La mesure du dernier calcul abouti de ce contrôleur, en mémoire ; null avant lui. */
+    /**
+     * La mesure du dernier calcul abouti de ce contrôleur, en mémoire ; null
+     * avant lui : { dureeMs, mouvements, participants, nombre, arret,
+     * coeurs }, coeurs étant ceux que l'exécution a employés.
+     */
     derniereGeneration: () => (mesure === null ? null : { ...mesure }),
     /**
      * Lance une génération et l'enregistre : { ajoutees, identiques, dureeMs }.
@@ -426,9 +494,41 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     /** Annule la génération en cours, sans résultat partiel ; annulee vaut 'commande'. */
     annuler: () => annulerAvec('commande'),
     /**
-     * Le contrat des magasins de Svelte sur { enCours, fait, total, annulee } :
-     * annulee, la cause de la dernière annulation, 'commande' ou 'seance',
-     * null dès le lancement suivant.
+     * Le réglage des cœurs de calcul : { automatique, manuel, disponibles,
+     * nombre } — automatique vrai à la création ; manuel, le dernier nombre
+     * saisi, les disponibles avant toute saisie ; disponibles, ceux
+     * qu'annonce l'exécuteur, par coeursDe ; nombre, les cœurs réglés,
+     * disponibles en automatique, manuel sinon.
+     */
+    coeurs,
+    /**
+     * Règle les cœurs de calcul, pour la séance de l'application : rien ne
+     * s'écrit, ni état, ni journal. saisie, quand elle est donnée, se lit
+     * par lireEntier (NON_ENTIER {saisie}), puis se borne de 1 aux
+     * disponibles (HORS_DOMAINE {min: 1, max}), remède null ; refusée, rien
+     * ne change, automatique compris. Rend { refus: null } ou { refus:
+     * {code, details} } ; un réglage accepté se publie aux abonnés.
+     */
+    reglerCoeurs({ automatique, saisie } = {}) {
+      const suivant = { ...reglageCoeurs };
+      if (saisie !== undefined) {
+        const lu = lireEntier(saisie);
+        if (lu.refus !== undefined) return { refus: { code: lu.refus.code, details: lu.refus.details } };
+        if (lu.valeur < 1 || lu.valeur > disponibles) {
+          return { refus: { code: 'HORS_DOMAINE', details: { min: 1, max: disponibles, remede: null } } };
+        }
+        suivant.manuel = lu.valeur;
+      }
+      if (automatique !== undefined) suivant.automatique = automatique === true;
+      reglageCoeurs = suivant;
+      publier({ coeurs: coeurs() });
+      return { refus: null };
+    },
+    /**
+     * Le contrat des magasins de Svelte sur { enCours, fait, total, annulee,
+     * coeurs } : annulee, la cause de la dernière annulation, 'commande' ou
+     * 'seance', null dès le lancement suivant ; coeurs, le réglage des
+     * cœurs de calcul, celui que rend coeurs().
      */
     subscribe(fn) {
       abonnes.add(fn);

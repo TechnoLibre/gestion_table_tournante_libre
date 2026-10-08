@@ -24,15 +24,18 @@ import { SUFFIXES } from '../stockage/noms.js';
 import { derive, planDepuisFichier, versFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { ErreurCommande } from './erreurs.js';
+import { creerExecuteurTravailleur } from './executeur_travailleur.js';
 import {
   ErreurAnnulee,
   ErreurGeneration,
   PLAFOND_USAGE_S,
   SEUIL_GENERATION_LONGUE_S,
   creerControleurGeneration,
+  coeursDe,
   creerExecuteurDirect,
   versErreurGeneration,
 } from './generation.js';
+import { brancherTravailleur } from './generation_travailleur.js';
 import { creerHorlogePilotee } from './horloge.js';
 import { libelle } from './libelles.js';
 import { INACTIVITE_MS, creerSeance } from './seance.js';
@@ -85,14 +88,16 @@ function chargeDe({ n = 0, exclus = [], tables = 0, sieges = 3, tours = 2, nom =
 
 // --- Les exécuteurs d'épreuve ---------------------------------------------------
 
-// Un exécuteur qui note chaque lancement avant de le confier à interne.
+// Un exécuteur qui note chaque lancement, options comprises, avant de le
+// confier à interne ; il porte les cœurs disponibles d'interne.
 function espionner(interne = creerExecuteurDirect()) {
   const lancements = [];
   return {
     lancements,
-    lancer(configuration, reglages) {
-      lancements.push({ configuration, reglages });
-      return interne.lancer(configuration, reglages);
+    coeursDisponibles: interne.coeursDisponibles,
+    lancer(configuration, reglages, options) {
+      lancements.push({ configuration, reglages, options });
+      return interne.lancer(configuration, reglages, options);
     },
   };
 }
@@ -102,11 +107,14 @@ function espionner(interne = creerExecuteurDirect()) {
 // rejette ErreurAnnulee, comme le travailleur qu'on termine ; differer
 // vrai, elle ne fait que compter, et l'épreuve rejette quand elle veut,
 // comme l'exécuteur direct qui n'arrête qu'à la lecture suivante du signal.
-function executeurManuel({ differer = false } = {}) {
+// coeursDisponibles : ceux qu'il annonce ; chaque exécution emploie les
+// cœurs que le lancer lui demande (options.coeurs).
+function executeurManuel({ differer = false, coeursDisponibles } = {}) {
   const executions = [];
   return {
     executions,
-    lancer(configuration, reglages) {
+    coeursDisponibles,
+    lancer(configuration, reglages, options) {
       const abonnes = new Set();
       let resoudre;
       let rejeter;
@@ -117,6 +125,7 @@ function executeurManuel({ differer = false } = {}) {
       const execution = {
         configuration,
         reglages,
+        coeurs: options?.coeurs,
         annulations: 0,
         resultat,
         resoudre,
@@ -226,6 +235,8 @@ const planRange = (proposition, configuration) =>
 
 const ids = (charge) => charge.propositions.map(({ id }) => id);
 const COURT = { graine: 1, nombre: 1, arret: 50, historique: 1000 };
+// Le réglage des cœurs d'un contrôleur dont l'exécuteur n'en annonce pas.
+const UN_COEUR = Object.freeze({ automatique: true, manuel: 1, disponibles: 1, nombre: 1 });
 
 // --- valider (§ 5.7) ------------------------------------------------------------
 
@@ -807,7 +818,7 @@ describe("génération : l'annulation (§ 5.10, § 8.4)", () => {
       montage.controleur.subscribe((etatControleur) => {
         vu = etatControleur;
       });
-      assert.deepEqual(vu, { enCours: false, fait: 0, total: COURT.nombre * COURT.arret, annulee: 'seance' });
+      assert.deepEqual(vu, { enCours: false, fait: 0, total: COURT.nombre * COURT.arret, annulee: 'seance', coeurs: UN_COEUR });
       assert.deepEqual(montage.journal(), journal);
       assert.equal(montage.etatDisque(), etat);
     });
@@ -849,17 +860,17 @@ describe("génération : l'annulation (§ 5.10, § 8.4)", () => {
     const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel });
     const vus = [];
     montage.controleur.subscribe((etat) => vus.push(etat));
-    assert.deepEqual(vus[0], { enCours: false, fait: 0, total: 0, annulee: null });
+    assert.deepEqual(vus[0], { enCours: false, fait: 0, total: 0, annulee: null, coeurs: UN_COEUR });
     const enCours = montage.controleur.generer(COURT);
     await Promise.resolve();
     manuel.executions[0].avancer(20, 50);
-    assert.deepEqual(vus.at(-1), { enCours: true, fait: 20, total: 50, annulee: null });
+    assert.deepEqual(vus.at(-1), { enCours: true, fait: 20, total: 50, annulee: null, coeurs: UN_COEUR });
     montage.controleur.annuler();
     await rejet(enCours);
-    assert.deepEqual(vus.at(-1), { enCours: false, fait: 20, total: 50, annulee: 'commande' });
+    assert.deepEqual(vus.at(-1), { enCours: false, fait: 20, total: 50, annulee: 'commande', coeurs: UN_COEUR });
     const suivante = montage.controleur.generer(COURT);
     await Promise.resolve();
-    assert.deepEqual(vus.at(-1), { enCours: true, fait: 0, total: 50, annulee: null });
+    assert.deepEqual(vus.at(-1), { enCours: true, fait: 0, total: 50, annulee: null, coeurs: UN_COEUR });
     manuel.executions[1].resoudreParLeMoteur();
     await suivante;
     assert.equal(vus.at(-1).enCours, false);
@@ -971,6 +982,7 @@ describe('génération : la durée observée, en mémoire (§ 5.10)', () => {
       participants: 12,
       nombre: 5,
       arret: 200000,
+      coeurs: 1,
     });
     const neuf = creerControleurGeneration({
       seance: montage.seance,
@@ -1009,12 +1021,14 @@ describe("génération : l'estimation et la génération longue (§ 5.10)", () =
       longue: true,
       auDelaDuPlafond: false,
       mesure,
+      coeurs: 1,
     });
     assert.deepEqual(controleur.estimer({ graine: 1, nombre: 5, arret: 200000, historique: 1000 }), {
       secondes: 2,
       longue: false,
       auDelaDuPlafond: false,
       mesure,
+      coeurs: 1,
     });
     assert.equal(controleur.estimer({ graine: 1, nombre: 5000, arret: 200000, historique: 1000 }).auDelaDuPlafond, true);
     assert.equal(controleur.estimer({ graine: 1, nombre: 150, arret: 200000, historique: 1000 }).longue, false);
@@ -1047,6 +1061,268 @@ describe("génération : l'estimation et la génération longue (§ 5.10)", () =
     assert.equal(espion.lancements.length, lances + 1);
     controleur.annuler();
     await rejet(confirmee);
+  });
+});
+
+// --- Les cœurs de calcul (§ 5.7, § 5.10) -------------------------------------------------
+
+// Une fabrique de travailleurs qui calculent par brancherTravailleur, le
+// vrai côté travailleur : la proposition de rang r rend sa réponse après
+// (8 − r) tours de la file des microtâches, et les derniers rangs
+// s'achèvent ainsi avant les premiers.
+function travailleursCalculants() {
+  return () => {
+    const travailleur = {
+      onmessage: null,
+      termine: false,
+      postMessage(message) {
+        const copie = structuredClone(message);
+        let attente = 8 - copie.rang;
+        const tour = () => {
+          if (attente > 0) {
+            attente -= 1;
+            return Promise.resolve().then(tour);
+          }
+          if (travailleur.termine) return undefined;
+          const portee = { onmessage: null, postMessage: (data) => !travailleur.termine && travailleur.onmessage?.({ data: structuredClone(data) }) };
+          brancherTravailleur(portee);
+          portee.onmessage({ data: copie });
+          return undefined;
+        };
+        Promise.resolve().then(tour);
+      },
+      terminate() {
+        travailleur.termine = true;
+      },
+    };
+    return travailleur;
+  };
+}
+
+describe('génération : les cœurs de calcul, un réglage du poste pour la séance (§ 5.7, § 5.10)', () => {
+  test("automatiques à la création : autant que l'exécuteur en annonce ; 1 quand il n'en annonce pas", async () => {
+    const montage = await monter({ charges: [chargeDemo('petite')], executeur: creerExecuteurDirect({ coeursDisponibles: 6 }) });
+    assert.deepEqual(montage.controleur.coeurs(), { automatique: true, manuel: 6, disponibles: 6, nombre: 6 });
+    const sans = await monter({ charges: [chargeDemo('petite')], executeur: executeurManuel() });
+    assert.deepEqual(sans.controleur.coeurs(), UN_COEUR);
+  });
+
+  test('reglerCoeurs : une saisie de 1 à disponibles, ou le refus de lireEntier ou HORS_DOMAINE {min: 1, max}, remède null, sans rien changer ; automatique rend les disponibles et garde le manuel', async () => {
+    const montage = await monter({ charges: [chargeDemo('petite')], executeur: creerExecuteurDirect({ coeursDisponibles: 6 }) });
+    const { controleur } = montage;
+    const vus = [];
+    controleur.subscribe((etat) => vus.push(etat.coeurs));
+    assert.deepEqual(controleur.reglerCoeurs({ automatique: false }), { refus: null });
+    assert.deepEqual(controleur.coeurs(), { automatique: false, manuel: 6, disponibles: 6, nombre: 6 });
+    assert.deepEqual(controleur.reglerCoeurs({ saisie: ' 3 ' }), { refus: null });
+    assert.deepEqual(controleur.coeurs(), { automatique: false, manuel: 3, disponibles: 6, nombre: 3 });
+    const refusees = [
+      ['0', 'HORS_DOMAINE', { min: 1, max: 6, remede: null }],
+      ['7', 'HORS_DOMAINE', { min: 1, max: 6, remede: null }],
+      ['x', 'NON_ENTIER', { saisie: 'x', remede: null }],
+      ['1,5', 'NON_ENTIER', { saisie: '1,5', remede: null }],
+      ['-1', 'NON_ENTIER', { saisie: '-1', remede: null }],
+      ['', 'NON_ENTIER', { saisie: '', remede: null }],
+    ];
+    assert.equal(refusees.length, 6);
+    for (const [saisie, code, details] of refusees) {
+      const { refus } = controleur.reglerCoeurs({ saisie, automatique: true });
+      assert.deepEqual(refus, { code, details }, saisie);
+      assert.equal(typeof libelle(code, details), 'string');
+      assert.deepEqual(controleur.coeurs(), { automatique: false, manuel: 3, disponibles: 6, nombre: 3 }, saisie);
+    }
+    assert.deepEqual(controleur.reglerCoeurs({ saisie: '6' }), { refus: null });
+    assert.deepEqual(controleur.reglerCoeurs({ saisie: '1' }), { refus: null });
+    assert.deepEqual(controleur.reglerCoeurs({ automatique: true }), { refus: null });
+    assert.deepEqual(controleur.coeurs(), { automatique: true, manuel: 1, disponibles: 6, nombre: 6 });
+    assert.deepEqual(vus, [
+      { automatique: true, manuel: 6, disponibles: 6, nombre: 6 },
+      { automatique: false, manuel: 6, disponibles: 6, nombre: 6 },
+      { automatique: false, manuel: 3, disponibles: 6, nombre: 3 },
+      { automatique: false, manuel: 6, disponibles: 6, nombre: 6 },
+      { automatique: false, manuel: 1, disponibles: 6, nombre: 1 },
+      { automatique: true, manuel: 1, disponibles: 6, nombre: 6 },
+    ]);
+  });
+
+  test("régler les cœurs n'écrit rien : ni état, ni entrée du journal, ni révision, en écriture comme en lecture", async () => {
+    for (const ecriture of [true, false]) {
+      const montage = await monter({ charges: [chargeDemo('petite')], executeur: creerExecuteurDirect({ coeursDisponibles: 4 }), ecriture });
+      const ecritures = montage.fs.compteurs.ecritures;
+      const journal = montage.journal();
+      const etat = montage.etatDisque();
+      const revision = montage.seance.etat().evenement.revision;
+      montage.controleur.reglerCoeurs({ automatique: false });
+      assert.deepEqual(montage.controleur.reglerCoeurs({ saisie: '2' }), { refus: null });
+      montage.controleur.reglerCoeurs({ saisie: '9' });
+      montage.controleur.reglerCoeurs({ automatique: true });
+      await montage.seance.attendre();
+      assert.equal(montage.fs.compteurs.ecritures, ecritures, `écriture ${ecriture}`);
+      assert.deepEqual(montage.journal(), journal);
+      assert.equal(montage.etatDisque(), etat);
+      assert.equal(montage.seance.etat().evenement.revision, revision);
+    }
+  });
+
+  test('le réglage vaut pour la séance : il survit à la fermeture et à l’ouverture d’un autre événement', async () => {
+    const montage = await monter({
+      charges: [chargeDemo('petite'), chargeDemo('petite-conflit', AUTRE)],
+      executeur: creerExecuteurDirect({ coeursDisponibles: 4 }),
+    });
+    montage.controleur.reglerCoeurs({ automatique: false });
+    montage.controleur.reglerCoeurs({ saisie: '2' });
+    await montage.seance.fermer();
+    await montage.seance.ouvrir(AUTRE);
+    assert.deepEqual(montage.controleur.coeurs(), { automatique: false, manuel: 2, disponibles: 4, nombre: 2 });
+  });
+
+  test('generer confie à lancer coeurs = min(nombre de propositions, cœurs réglés)', async () => {
+    const montage = await monter({ charges: [chargeDemo('petite')], executeur: creerExecuteurDirect({ coeursDisponibles: 4 }) });
+    const { controleur, espion } = montage;
+    const cas = [
+      { reglage: { automatique: true }, nombre: 3, attendus: 3 },
+      { reglage: { automatique: true }, nombre: 6, attendus: 4 },
+      { reglage: { automatique: false, saisie: '2' }, nombre: 5, attendus: 2 },
+      { reglage: { automatique: false, saisie: '1' }, nombre: 2, attendus: 1 },
+    ];
+    assert.equal(cas.length, 4);
+    for (const [k, { reglage, nombre, attendus }] of cas.entries()) {
+      controleur.reglerCoeurs(reglage);
+      await controleur.generer({ graine: 10 + k, nombre, arret: 50, historique: 1000 });
+      assert.deepEqual(espion.lancements.at(-1).options, { coeurs: attendus }, JSON.stringify(reglage));
+    }
+  });
+
+  test("par le groupe de travailleurs, 1 cœur ou 3 : le même état écrit, octet pour octet, et les propositions de rechercher", async () => {
+    const etats = [];
+    for (const coeurs of [1, 3]) {
+      const executeur = creerExecuteurTravailleur(travailleursCalculants(), { coeursDisponibles: 3 });
+      const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur });
+      montage.controleur.reglerCoeurs({ automatique: false });
+      montage.controleur.reglerCoeurs({ saisie: String(coeurs) });
+      const reglages = { graine: 5, nombre: 5, arret: 2000, historique: 1000 };
+      const bilan = await montage.controleur.generer(reglages);
+      assert.deepEqual(bilan.ajoutees, [1, 2, 3, 4, 5]);
+      assert.deepEqual(montage.espion.lancements.at(-1).options, { coeurs });
+      const attendues = rechercher(configurationDepuisCharge(montage.charge()), reglages);
+      assert.deepEqual(
+        montage.charge().propositions.map(({ graine }) => graine),
+        attendues.map(({ graine }) => graine),
+      );
+      assert.deepEqual(montage.charge().propositions.map(planDepuisFichier), attendues.map((p) => planRange(p, configurationDepuisCharge(montage.charge()))));
+      assert.equal(montage.controleur.derniereGeneration().coeurs, coeurs);
+      etats.push(montage.etatDisque());
+    }
+    assert.equal(etats.length, 2);
+    assert.equal(etats[1], etats[0]);
+  });
+
+  test("la mesure porte les cœurs que l'exécution a employés ; 1 quand elle ne le dit pas", async () => {
+    const manuel = executeurManuel({ coeursDisponibles: 4 });
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel });
+    await genererEn(montage, manuel, { graine: 1, nombre: 5, arret: 200000, historique: 1000 }, 2000);
+    assert.equal(montage.controleur.derniereGeneration().coeurs, 4);
+    const muet = executeurTransforme((propositions) => propositions);
+    const autre = await monter({ charges: [chargeDemo('petite-conflit')], executeur: muet });
+    await autre.controleur.generer(COURT);
+    assert.equal(autre.controleur.derniereGeneration().coeurs, 1);
+  });
+
+  test("l'estimation compte en vagues : coût d'une proposition × ⌈nombre / cœurs⌉, la mesure ramenée à ses propres vagues", async () => {
+    const manuel = executeurManuel({ coeursDisponibles: 8 });
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel });
+    const { controleur } = montage;
+    controleur.reglerCoeurs({ automatique: false });
+    controleur.reglerCoeurs({ saisie: '1' });
+    // 5 × 200 000 mouvements en 2 s sur 1 cœur : 0,4 s par proposition.
+    await genererEn(montage, manuel, { graine: 1, nombre: 5, arret: 200000, historique: 1000 }, 2000);
+    const sur1 = controleur.derniereGeneration();
+    assert.equal(sur1.coeurs, 1);
+    controleur.reglerCoeurs({ saisie: '2' });
+    const deux = controleur.estimer({ graine: 1, nombre: 5, arret: 200000, historique: 1000 });
+    assert.equal(deux.coeurs, 2);
+    assert.ok(Math.abs(deux.secondes - 1.2) < 1e-9, String(deux.secondes));
+    assert.deepEqual(deux.mesure, sur1);
+    assert.ok(Math.abs(controleur.estimer({ graine: 1, nombre: 4, arret: 200000 }).secondes - 0.8) < 1e-9);
+    controleur.reglerCoeurs({ automatique: true });
+    const automatique = controleur.estimer({ graine: 1, nombre: 5, arret: 200000 });
+    assert.equal(automatique.coeurs, 5);
+    assert.ok(Math.abs(automatique.secondes - 0.4) < 1e-9, String(automatique.secondes));
+    // Longue au-delà de 60 s : 3 000 propositions, 1 200 s sur 1 cœur, 300 s
+    // sur 4, et 0,4 × ⌈3 000 / 8⌉ = 150 s sur 8.
+    controleur.reglerCoeurs({ automatique: false });
+    controleur.reglerCoeurs({ saisie: '4' });
+    const quatre = controleur.estimer({ graine: 1, nombre: 3000, arret: 200000 });
+    assert.ok(Math.abs(quatre.secondes - 300) < 1e-9, String(quatre.secondes));
+    assert.equal(quatre.longue, true);
+    controleur.reglerCoeurs({ automatique: true });
+    assert.ok(Math.abs(controleur.estimer({ graine: 1, nombre: 3000, arret: 200000 }).secondes - 150) < 1e-9);
+    // Une mesure prise sur 5 cœurs, 5 propositions : une seule vague de
+    // 200 000 mouvements en 2 s ; sur 1 cœur, 5 vagues, 10 s.
+    await genererEn(montage, manuel, { graine: 1, nombre: 5, arret: 200000, historique: 1000 }, 2000);
+    assert.equal(controleur.derniereGeneration().coeurs, 5);
+    controleur.reglerCoeurs({ automatique: false });
+    controleur.reglerCoeurs({ saisie: '1' });
+    assert.ok(Math.abs(controleur.estimer({ graine: 1, nombre: 5, arret: 200000 }).secondes - 10) < 1e-9);
+  });
+
+  test('sans mesure, la question part au-delà de 10 000 000 mouvements par cœur : ⌈nombre / cœurs⌉ × arret', async () => {
+    const manuel = executeurManuel({ coeursDisponibles: 2 });
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel });
+    const { controleur, espion } = montage;
+    await refuseSansRien(montage, 'CONFIRMATION_REQUISE', { estimation: { inconnue: true }, remede: null }, {
+      graine: 1,
+      nombre: 10,
+      arret: 2000001,
+      historique: 1000,
+    });
+    const juste = controleur.generer({ graine: 1, nombre: 10, arret: 2000000, historique: 1000 });
+    await Promise.resolve();
+    assert.equal(espion.lancements.length, 1);
+    controleur.annuler();
+    await rejet(juste);
+  });
+
+  test('le texte de CONFIRMATION_REQUISE dit les cœurs de l’estimation et ceux de la mesure, seulement au-delà d’un', () => {
+    const mesure = { dureeMs: 2000, mouvements: 1000000, participants: 12, nombre: 5, arret: 200000, coeurs: 2 };
+    const plusieurs = libelle('CONFIRMATION_REQUISE', {
+      estimation: { secondes: 1200, longue: true, auDelaDuPlafond: false, mesure, coeurs: 4 },
+      remede: null,
+    });
+    assert.match(plusieurs, /environ vingt minutes, sur 4 cœurs, d'après/);
+    assert.match(plusieurs, /12 participants, sur 2 cœurs/);
+    const un = libelle('CONFIRMATION_REQUISE', {
+      estimation: { secondes: 1200, longue: true, auDelaDuPlafond: false, mesure: { ...mesure, coeurs: 1 }, coeurs: 1 },
+      remede: null,
+    });
+    assert.doesNotMatch(un, /cœur/);
+  });
+
+  test("l'exécuteur direct annonce ses cœurs par coeursDe, calcule dans le fil quel que soit coeurs, et n'emploie qu'un cœur", async () => {
+    assert.equal(creerExecuteurDirect().coeursDisponibles, 1);
+    assert.equal(creerExecuteurDirect({ coeursDisponibles: 12 }).coeursDisponibles, 12);
+    assert.equal(creerExecuteurDirect({ coeursDisponibles: 0 }).coeursDisponibles, 1);
+    const configuration = configurationDepuisCharge(chargeDemo('petite-conflit'));
+    const reglages = { graine: 4, nombre: 3, arret: 2000 };
+    const execution = creerExecuteurDirect({ coeursDisponibles: 4 }).lancer(configuration, reglages, { coeurs: 3 });
+    assert.equal(execution.coeurs, 1);
+    assert.deepEqual(await execution.resultat, rechercher(configuration, reglages));
+  });
+
+  test('coeursDe : un entier d’au moins 1 tel quel, toute autre valeur 1', () => {
+    const cas = [
+      [4, 4],
+      [1, 1],
+      [0, 1],
+      [-2, 1],
+      [1.5, 1],
+      ['8', 1],
+      [undefined, 1],
+      [null, 1],
+      [Number.NaN, 1],
+    ];
+    assert.equal(cas.length, 9);
+    for (const [valeur, attendue] of cas) assert.equal(coeursDe(valeur), attendue, String(valeur));
   });
 });
 
