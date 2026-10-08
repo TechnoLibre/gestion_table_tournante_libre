@@ -41,15 +41,36 @@
   // jamais un en-tête ni une ligne repliée. Une saisie validée dont la
   // ligne quitte le rendu — tri ou groupe changé — rend le focus à la même
   // cellule de sa nouvelle ligne, et chaque groupe replié qui la reçoit, de
-  // tout niveau, se déplie. Replier et déplier n'écrivent rien.
+  // tout niveau, se déplie. Replier et déplier n'écrivent rien. Entrée sur
+  // la cellule d'exclusion suit sa ligne de même : la personne exclue ou
+  // réintégrée passe dans son nouveau groupe, et sa cellule garde le focus.
+  //
+  // Les conflits du placement montré (conflits, clé d'un groupe → ses
+  // lignes de conflit ; enConflit, identifiant → ses règles), que la section
+  // ne donne que groupée : l'en-tête d'un groupe en conflit, de tout niveau,
+  // porte une marque, un cadre plein qui dit en texte le nombre de ses
+  // conflits ; un groupe du dernier niveau, déplié, écrit au-dessus de ses
+  // lignes une ligne par conflit — lieu, noms, raison —, chaque nom dans son
+  // propre nœud ; la cellule du nom d'une personne en conflit nomme ses
+  // règles. Aucune couleur ne les distingue : la teinte de conflit reste au
+  // plan.
   import { getContext, onDestroy, tick } from 'svelte';
   import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
+  import { cleDeRaison } from './conflits.js';
   import { COLONNES, basculerGroupe, celluleSuivante, cheminDe, cleDeColonne, entreeValide, lignesVisibles } from './grille.js';
 
-  let { lignes, groupes = null, replies = $bindable(new Set()), tri = $bindable(null), supprimer } = $props();
+  let {
+    lignes,
+    groupes = null,
+    replies = $bindable(new Set()),
+    tri = $bindable(null),
+    supprimer,
+    conflits = new Map(),
+    enConflit = new Map(),
+  } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -257,11 +278,17 @@
     return true;
   }
 
+  // Exclut ou réintègre la personne ; écrit, la ligne suit son nouveau
+  // groupe, comme après une saisie validée, quand sa cellule avait le focus.
   function basculerExclusion(personne) {
     const nom = personne.exclu ? 'reintegrerParticipant' : 'exclureParticipant';
     refusCellule = null;
+    const garderFocus = document.activeElement === cellule(personne.id, 'exclu');
     try {
-      Promise.resolve(seance.executer(nom, { id: personne.id })).catch((erreur) => refuser(personne.id, 'exclu', erreur));
+      Promise.resolve(seance.executer(nom, { id: personne.id })).then(
+        () => suivreLigne(personne.id, 'exclu', garderFocus),
+        (erreur) => refuser(personne.id, 'exclu', erreur),
+      );
     } catch (erreur) {
       refuser(personne.id, 'exclu', erreur);
     }
@@ -337,6 +364,9 @@
           </span>
         {:else}
           <span class="valeur">{personne[colonne] ?? ''}</span>
+          {#if colonne === 'nom' && enConflit.has(personne.id)}
+            <span class="marque-conflit" data-conflit-personne>{t('participants.conflit.personne', { regles: enConflit.get(personne.id) })}</span>
+          {/if}
         {/if}
         {#if refus !== null}
           <Refus id={idRefus(personne.id, colonne)} {refus} lever={() => (refusCellule = null)} />
@@ -388,10 +418,29 @@
           <span class="libelle valeur" data-groupe-libelle>{groupe.libelle}</span>
         {/if}
         <span class="compte" data-groupe-compte>{t('participants.groupe.compte', { compte: groupe.compte })}</span>
+        {#if conflits.has(groupe.cle)}
+          <span class="marque-conflit" data-groupe-conflits>{t('participants.conflit.groupe', { nombre: conflits.get(groupe.cle).length })}</span>
+        {/if}
       </button>
     </th>
   </tr>
   {#if !replie}
+    {#if groupe.sousGroupes === null && conflits.has(groupe.cle)}
+      <tr class="conflits" data-conflits={groupe.cle}>
+        <td colspan={COLONNES.length + 1}>
+          <ul>
+            {#each conflits.get(groupe.cle) as conflit (conflit.cle)}
+              <li data-conflit>
+                <span>{t('participants.conflit.lieu', { tour: conflit.tour, numero: conflit.numero })}</span>
+                {#each conflit.noms as nom, rang (rang)}{' '}{#if rang > 0}<span>{t('participants.conflit.et')}</span>{' '}{/if}<span
+                    class="valeur">{nom}</span
+                  >{/each}{' '}<span>{t(cleDeRaison(conflit.regle), { numero: conflit.numero, deja: conflit.deja })}</span>
+              </li>
+            {/each}
+          </ul>
+        </td>
+      </tr>
+    {/if}
     {#if groupe.sousGroupes === null}
       {#each groupe.lignes as personne (personne.id)}
         {@render rangee(personne, rangs.get(personne.id), groupe.cle)}
@@ -542,6 +591,23 @@
   .libelle {
     font-weight: bold;
     overflow-wrap: anywhere;
+  }
+
+  /* La marque d'un conflit : un cadre plein, de l'encre du texte, autour
+     d'un texte qui nomme le conflit ; la forme ne dépend d'aucune couleur. */
+  .marque-conflit {
+    display: inline-block;
+    padding: 0 var(--espace-1);
+    border: 2px solid var(--couleur-page-texte);
+    border-radius: var(--rayon-1);
+    background-color: var(--couleur-page-fond);
+    color: var(--couleur-page-texte);
+    font-weight: bold;
+  }
+
+  .conflits ul {
+    margin: 0;
+    padding-left: var(--espace-5);
   }
 
   .commandes {

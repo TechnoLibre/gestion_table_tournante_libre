@@ -22,6 +22,14 @@
   // dans la section, le temps qu'elle est ouverte : changer de groupement
   // déplie tout, et rien ne s'écrit.
   //
+  // Groupée, la liste lit les conflits du placement que le plan montre —
+  // la proposition demandée, ui.proposition, sinon le retenu — par
+  // conflitsDuPlacement (src/application/conflits_placement.js), recalculés
+  // à chaque changement de la charge, du groupement ou de la proposition
+  // montrée, puis rangés sous les groupes par conflitsDesGroupes, que Grille
+  // écrit. Sans groupement, ou sans placement montré, aucun conflit ne se
+  // lit.
+  //
   // Supprimer une personne qui porte des réservations ouvre la fenêtre à
   // confirmer, qui les nomme ; sans réservation, ou quand la séance refuse
   // déjà tout geste modifiant, la commande part et la séance répond. L'export
@@ -36,6 +44,8 @@
   import Formulaire from './Formulaire.svelte';
   import Grille from './Grille.svelte';
   import { statuts } from '../../application/places.js';
+  import { conflitsDuPlacement } from '../../application/conflits_placement.js';
+  import { conflitsDesGroupes, lignesDeConflit, reglesParPersonne } from './conflits.js';
   import {
     choisirGroupement,
     cleDeGroupement,
@@ -68,6 +78,11 @@
   const parStatut = $derived(groupement.includes('statut') && charge !== null ? statuts(charge).parId : null);
   const groupes = $derived(groupement.length === 0 ? null : groupesGrille(lignes, groupement, { tri, cleNormalisee, statuts: parStatut }));
   const niveaux = $derived(niveauxAffiches(groupement));
+  const conflits = $derived(
+    groupes === null || charge === null ? null : lignesDeConflit(conflitsDuPlacement(charge, { proposition: $ui.proposition }), participants),
+  );
+  const conflitsParGroupe = $derived(groupes === null ? new Map() : conflitsDesGroupes(groupes, conflits));
+  const enConflit = $derived(reglesParPersonne(conflits));
   const personneFiche = $derived($ui.fiche === null ? null : (participants.find(({ id }) => id === $ui.fiche) ?? null));
 
   function choisirNiveau(rang, colonne) {
@@ -138,7 +153,7 @@
 
   <div class="corps">
     <div class="liste">
-      <Grille {lignes} {groupes} bind:replies bind:tri {supprimer} />
+      <Grille {lignes} {groupes} bind:replies bind:tri {supprimer} conflits={conflitsParGroupe} {enConflit} />
       {#if participants.length === 0}
         <p>{t('participants.grille.vide')}</p>
       {:else if lignes.length === 0}

@@ -9,13 +9,37 @@
 // d'une valeur de la fiche ; participants.statut.* nomme chaque statut
 // calculé (§ 4.2), par cleDeStatut ; participants.groupe.* porte le
 // groupement de la liste : le sélecteur de chaque niveau, l'en-tête d'un
-// groupe et ses commandes.
+// groupe et ses commandes ; participants.conflit.* les conflits du
+// placement montré dans la liste groupée : la marque d'un groupe et celle
+// d'une personne, puis chaque ligne de conflit — son lieu, la liaison de
+// deux noms, sa raison par règle.
 
 // Un nombre suivi de son nom, au singulier pour 0 et 1.
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
 
 // La portée d'une réservation : tous les tours, ou le tour désigné.
 const portee = ({ portee: genre, tour }) => (genre === 'tous' ? 'tous les tours' : `tour ${tour}`);
+
+// Les tours antérieurs d'une personne revenue, entre parenthèses : « (déjà
+// au tour 1) », « (déjà aux tours 1 et 2) », « (déjà aux tours 1, 2 et
+// 3) » ; rien sans tour.
+function dejaAux(tours) {
+  if (tours.length === 0) return '';
+  if (tours.length === 1) return ` (déjà au tour ${tours[0]})`;
+  return ` (déjà aux tours ${tours.slice(0, -1).join(', ')} et ${tours.at(-1)})`;
+}
+
+// Les rencontres antérieures d'une paire revue, entre parenthèses : « (déjà
+// à la table 1 au tour 1, à la table 2 au tour 3) » ; rien sans rencontre.
+const dejaReunis = (deja) =>
+  deja.length === 0 ? '' : ` (déjà ${deja.map(({ tour, numero }) => `à la table ${numero} au tour ${tour}`).join(', ')})`;
+
+// Le texte court de chaque règle dans la marque d'une personne en conflit.
+const REGLES_COURTES = new Map([
+  ['separerAppartenances', 'même appartenance'],
+  ['nouveauxVoisins', 'se revoient'],
+  ['nouvelleTable', 'revient à une table'],
+]);
 
 export const TABLE = new Map([
   // --- Les colonnes, que la grille, le formulaire et la fiche partagent ------
@@ -62,6 +86,21 @@ export const TABLE = new Map([
   ['participants.groupe.deplier', 'Déplier'],
   ['participants.groupe.toutReplier', 'Tout replier'],
   ['participants.groupe.toutDeplier', 'Tout déplier'],
+
+  // --- Les conflits du placement montré, dans la liste groupée (§ 7.5) -----
+  ['participants.conflit.groupe', ({ nombre }) => `en conflit : ${compte(nombre, 'conflit', 'conflits')}`],
+  ['participants.conflit.personne', ({ regles }) => `en conflit : ${regles.map((regle) => REGLES_COURTES.get(regle)).join(', ')}`],
+  ['participants.conflit.lieu', ({ tour, numero }) => `Tour ${tour}, table ${numero} :`],
+  ['participants.conflit.et', 'et'],
+  ['participants.conflit.raison.separerAppartenances', '\u{2014} même appartenance'],
+  [
+    'participants.conflit.raison.nouveauxVoisins',
+    ({ deja }) => `\u{2014} se revoient${dejaReunis(deja)}`,
+  ],
+  [
+    'participants.conflit.raison.nouvelleTable',
+    ({ numero, deja }) => `\u{2014} revient à la table ${numero}${dejaAux(deja.map(({ tour }) => tour))}`,
+  ],
 
   // --- Les commandes de la section ------------------------------------------
   ['participants.commande.fiche', 'Fiche'],

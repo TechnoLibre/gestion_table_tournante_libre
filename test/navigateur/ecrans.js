@@ -493,6 +493,26 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'participants.conflits',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // La liste groupée par appartenance, choisie au clavier, sous la
+      // proposition montrée au plan : un groupe en conflit porte sa marque,
+      // ses lignes de conflit et celles de ses personnes.
+      const m = await ouvrirEvenement(contexte, chargePrincipale(), { ecriture: true, section: 'participants' });
+      const choix = await element(m, '[data-section="participants"] [data-champ="grouper"]');
+      choix.focus();
+      for (let essai = 0; essai < choix.options.length && choix.value !== 'appartenance'; essai += 1) {
+        await touche('ArrowDown');
+        flushSync();
+      }
+      await element(m, '[data-groupe] [data-groupe-conflits]');
+      await element(m, '[data-conflits] [data-conflit]');
+      await element(m, '[data-participant] [data-conflit-personne]');
+      return m.racine;
+    },
+  },
+  {
     nom: 'import.apercu',
     mode: 'ecriture',
     async atteindre(contexte) {

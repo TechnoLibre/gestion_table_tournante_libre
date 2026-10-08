@@ -6,7 +6,8 @@
 // collante, la grille au clavier, le tri, le filtre et le compte,
 // l'exclusion, le manque de places à l'ajout et à la réintégration, la fiche
 // et l'itinéraire, l'export, le collage, et la liste groupée par une
-// colonne ou plusieurs, ses groupes imbriqués, repliés et dépliés. Chaque épreuve monte App par
+// colonne ou plusieurs, ses groupes imbriqués, repliés et dépliés, et les
+// conflits du placement montré sous ses groupes. Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé et l'horloge pilotée ; chaque
 // écriture se relève (trace) et chaque entrée se compte dans le journal. Les
 // gestes passent par des entrées que Chromium traite comme réelles
@@ -23,10 +24,12 @@ import { creerTraduction } from '../../application/traduction.js';
 import { apercevoir, cleNormalisee, decoder, exporterParticipants } from '../../application/csv.js';
 import { statuts } from '../../application/places.js';
 import { STATUT, nombrePlacesManquantes, normaliser } from '../../moteur/configuration.js';
-import { configurationDepuisCharge } from '../../stockage/document.js';
+import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
+import { serialiser } from '../../stockage/canonique.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { formeNommee } from '../../stockage/placements.js';
+import { VERSION } from '../../version.genere.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { pointer, touche } from '../../../test/navigateur/entrees.js';
 import { visible } from '../../../test/navigateur/rendu.js';
@@ -1353,5 +1356,248 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     expect(bascule(m, destination).getAttribute('aria-expanded')).toBe('true');
     expect(idsDuGroupe(m, destination)).toEqual([pervenche, lacasse]);
     expect(document.activeElement).toBe(cellule(m, lacasse, 'appartenance'));
+  });
+
+  test('groupée par exclusion, Entrée sur l’exclusion : la ligne change de groupe, garde le focus, déplie son groupe', async () => {
+    const m = await evenementOuvert({ tables: 1, personnes: CINQ });
+    await grouperPar(m, 'exclu');
+    const lacasse = idDe(m, 'Lacasse');
+    const avant = entrees(m).length;
+
+    cellule(m, lacasse, 'exclu').focus();
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(participants(m).find(({ id }) => id === lacasse).exclu).toBe(true);
+    expect(idsDuGroupe(m, 'exclu:oui')).toContain(lacasse);
+    expect(document.activeElement).toBe(cellule(m, lacasse, 'exclu'));
+
+    // Vers le groupe des présentes, replié : il se déplie, la cellule garde
+    // le focus.
+    await cliquer(bascule(m, 'exclu:non'));
+    expect(bascule(m, 'exclu:non').getAttribute('aria-expanded')).toBe('false');
+    cellule(m, lacasse, 'exclu').focus();
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(entrees(m)).toHaveLength(avant + 2);
+    expect(participants(m).find(({ id }) => id === lacasse).exclu).toBe(false);
+    expect(bascule(m, 'exclu:non').getAttribute('aria-expanded')).toBe('true');
+    expect(idsDuGroupe(m, 'exclu:non')).toContain(lacasse);
+    expect(document.activeElement).toBe(cellule(m, lacasse, 'exclu'));
+  });
+
+  describe('les conflits du placement montré (§ 7.5)', () => {
+    // Deux tables de trois places, numérotées 4 (identifiant 1) et 1
+    // (identifiant 2), deux tours. 1 et 2 du Club des Merles, 3 et 4 du
+    // Cercle des Pinsons, 5 et 6 sans appartenance, 7 des Pinsons, exclue.
+    const SEPT = [
+      ['Ombrelle', 'Iris', CLUB],
+      ['Fontaine', 'Noé', CLUB],
+      ['Pervenche', 'Théo', 'Cercle des Pinsons'],
+      ['Lacasse', 'Ondine', 'Cercle des Pinsons'],
+      ['Grisaille', null, null],
+      ['Bruyère', 'Anouk', null],
+      ['Sarcelle', 'Capucine', 'Cercle des Pinsons'],
+    ];
+    // Proposition 1 : au tour 1, 1 et 2, collègues, à la table 4 ; au tour
+    // 2, 4 et 5 se revoient à la table 4, 2 et 3 à la table 1, 1 revient à
+    // la table 4 et 6 à la table 1. Proposition 2 : au tour 2, 2 et 3 se
+    // revoient à la table 4 et y reviennent, 4 et 5 de même à la table 1.
+    const PLANS = [
+      [
+        [[1, 2, 3], [4, 5, 6]],
+        [[1, 4, 5], [2, 3, 6]],
+      ],
+      [
+        [[1, 2, 3], [4, 5, 6]],
+        [[2, 3, 6], [1, 4, 5]],
+      ],
+    ];
+    const TIRET = '\u{2014}';
+
+    const planFichier = (tours) => ({
+      siegesAttribues: false,
+      tables: [1, 2],
+      capacites: [3, 3],
+      tours: tours.length,
+      participants: [1, 2, 3, 4, 5, 6],
+      placement: tours.map((listes) => ({ sieges: structuredClone(listes), reserve: [] })),
+    });
+
+    function chargeSept() {
+      const charge = creerCharge({ id: 'evt-conflits', nom: EVENEMENT, siegesParDefaut: 3, tours: 2 });
+      charge.participants = SEPT.map(([nom, prenom, appartenance], rang) => ({
+        id: rang + 1,
+        nom,
+        prenom,
+        appartenance,
+        courriel: null,
+        titrePressenti: null,
+        notes: null,
+        exclu: rang === 6,
+      }));
+      charge.tables = [
+        { id: 1, numero: 4, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
+        { id: 2, numero: 1, sieges: null, forme: 'ronde', position: { x: 300, y: 0 } },
+      ];
+      charge.propositions = PLANS.map((tours, rang) => ({
+        id: rang + 1,
+        graine: rang + 1,
+        arret: 40,
+        historique: 1000,
+        produitVersion: VERSION.affichee,
+        ...planFichier(tours),
+      }));
+      charge.prochainsIds = { participant: 8, table: 3, proposition: 3 };
+      charge.evenement.etat = 'propose';
+      return charge;
+    }
+
+    // L'événement de la charge, ouvert depuis le disque simulé, en écriture,
+    // la section des participants ouverte.
+    async function ouvrirSept() {
+      const texte = serialiser(chargeSept(), { revision: 1, produitVersion: VERSION.affichee });
+      const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `soiree${SUFFIXES.etat}`, texte }] });
+      montes.push(m);
+      await m.seance.ouvrir('soiree');
+      await m.seance.passerEnEcriture();
+      m.ui.allerA('participants');
+      await rendu();
+      return m;
+    }
+
+    // Un geste de la ligne d'une proposition dans sa section, puis le retour
+    // aux participants par la navigation des sections.
+    async function gesteDeProposition(m, id, nom) {
+      m.ui.allerA('propositions');
+      await rendu();
+      await cliquer(m.racine.querySelector(`[data-section="propositions"] [data-proposition="${id}"] [data-commande="${nom}"]`));
+      await attendreSeance(m);
+      await cliquer(m.racine.querySelector('[data-commande="section"][data-cible="participants"]'));
+      expect(section(m)).not.toBeNull();
+    }
+
+    const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
+    const marqueDeGroupe = (m, cle) => groupe(m, cle).querySelector('[data-groupe-conflits]');
+    const conflitsDuGroupe = (m, cle) => [...grille(m).querySelectorAll(`[data-conflits="${cle}"] [data-conflit]`)].map(texteDe);
+    const marqueDePersonne = (m, id) => ligne(m, id).querySelector('[data-conflit-personne]');
+    const toutesLesMarques = (m) => grille(m).querySelectorAll('[data-groupe-conflits], [data-conflits], [data-conflit], [data-conflit-personne]');
+
+    // Ce que montre la liste groupée par appartenance sous la proposition 1,
+    // ou sous un retenu du même plan.
+    const SOUS_LE_PLAN_1 = {
+      [MERLES]: [
+        `Tour 1, table 4 : Iris Ombrelle et Noé Fontaine ${TIRET} même appartenance`,
+        `Tour 2, table 4 : Iris Ombrelle ${TIRET} revient à la table 4 (déjà au tour 1)`,
+        `Tour 2, table 1 : Noé Fontaine et Théo Pervenche ${TIRET} se revoient (déjà à la table 4 au tour 1)`,
+      ],
+      [PINSONS]: [
+        `Tour 2, table 4 : Ondine Lacasse et Grisaille ${TIRET} se revoient (déjà à la table 1 au tour 1)`,
+        `Tour 2, table 1 : Noé Fontaine et Théo Pervenche ${TIRET} se revoient (déjà à la table 4 au tour 1)`,
+      ],
+      vide: [
+        `Tour 2, table 4 : Ondine Lacasse et Grisaille ${TIRET} se revoient (déjà à la table 1 au tour 1)`,
+        `Tour 2, table 1 : Anouk Bruyère ${TIRET} revient à la table 1 (déjà au tour 1)`,
+      ],
+    };
+
+    async function attendreSousLePlan1(m) {
+      for (const [cle, attendues] of Object.entries(SOUS_LE_PLAN_1)) {
+        expect(texteDe(marqueDeGroupe(m, cle)), cle).toBe(t('participants.conflit.groupe', { nombre: attendues.length }));
+        expect(conflitsDuGroupe(m, cle), cle).toEqual(attendues);
+      }
+      expect(texteDe(marqueDePersonne(m, 1))).toBe('en conflit : même appartenance, revient à une table');
+      expect(texteDe(marqueDePersonne(m, 3))).toBe('en conflit : se revoient');
+      expect(marqueDePersonne(m, 7)).toBeNull();
+    }
+
+    test('voir la proposition 1 : marque et nombre par groupe, une ligne par conflit, dans chaque groupe touché ; rien ne s’écrit', async () => {
+      const m = await ouvrirSept();
+      await gesteDeProposition(m, 1, 'voir');
+      expect(m.ui.etat().proposition).toBe(1);
+      const avant = { journal: texteJournal(m), etat: texteEtat(m) };
+      await grouperPar(m, 'appartenance');
+      expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS, MERLES, 'vide']);
+      await attendreSousLePlan1(m);
+
+      // La marque se lit en texte, dans une forme : un cadre de trait plein,
+      // non une seule couleur.
+      const marque = getComputedStyle(marqueDeGroupe(m, MERLES));
+      expect(marque.borderTopStyle).toBe('solid');
+      expect(Number.parseFloat(marque.borderTopWidth)).toBeGreaterThanOrEqual(2);
+      // Les lignes de conflit d'un groupe précèdent ses lignes de personnes.
+      const premiere = grille(m).querySelector(`[data-conflits="${MERLES}"]`);
+      expect(premiere.compareDocumentPosition(ligne(m, 1)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(premiere.compareDocumentPosition(groupe(m, MERLES)) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+
+      // Replié, le groupe garde sa marque et retire ses lignes de conflit.
+      await cliquer(bascule(m, MERLES));
+      expect(texteDe(marqueDeGroupe(m, MERLES))).toBe(t('participants.conflit.groupe', { nombre: 3 }));
+      expect(conflitsDuGroupe(m, MERLES)).toEqual([]);
+      expect({ journal: texteJournal(m), etat: texteEtat(m) }).toEqual(avant);
+    });
+
+    test('imbriqués : un en-tête compte son sous-arbre, les lignes vont au plus étroit groupe', async () => {
+      const m = await ouvrirSept();
+      await gesteDeProposition(m, 1, 'voir');
+      await grouperPar(m, 'appartenance');
+      await grouperPar(m, 'prenom', 2);
+      expect(texteDe(marqueDeGroupe(m, MERLES))).toBe(t('participants.conflit.groupe', { nombre: 3 }));
+      expect(conflitsDuGroupe(m, MERLES)).toEqual([]);
+      const [iris, noe] = ['texte:iris', 'texte:noe'].map((segment) => `${MERLES}/${segment}`);
+      expect(texteDe(marqueDeGroupe(m, iris))).toBe(t('participants.conflit.groupe', { nombre: 2 }));
+      expect(conflitsDuGroupe(m, iris)).toEqual([SOUS_LE_PLAN_1[MERLES][0], SOUS_LE_PLAN_1[MERLES][1]]);
+      expect(conflitsDuGroupe(m, noe)).toEqual([SOUS_LE_PLAN_1[MERLES][0], SOUS_LE_PLAN_1[MERLES][2]]);
+      // Capucine Sarcelle, exclue, n'est dans aucun conflit : son groupe n'a
+      // pas de marque.
+      expect(marqueDeGroupe(m, `${PINSONS}/texte:capucine`)).toBeNull();
+    });
+
+    test('retenir la 1 : mêmes marques, lues sur le retenu ; voir la 2 montre les siennes', async () => {
+      const m = await ouvrirSept();
+      await gesteDeProposition(m, 1, 'retenir');
+      expect(m.seance.etat().charge.retenu?.proposition).toBe(1);
+      expect(m.ui.etat().proposition).toBeNull();
+      await grouperPar(m, 'appartenance');
+      await attendreSousLePlan1(m);
+
+      await gesteDeProposition(m, 2, 'voir');
+      expect(m.ui.etat().proposition).toBe(2);
+      await grouperPar(m, 'appartenance');
+      expect(texteDe(marqueDeGroupe(m, PINSONS))).toBe(t('participants.conflit.groupe', { nombre: 4 }));
+      expect(conflitsDuGroupe(m, PINSONS)).toEqual([
+        `Tour 2, table 4 : Noé Fontaine et Théo Pervenche ${TIRET} se revoient (déjà à la table 4 au tour 1)`,
+        `Tour 2, table 4 : Théo Pervenche ${TIRET} revient à la table 4 (déjà au tour 1)`,
+        `Tour 2, table 1 : Ondine Lacasse et Grisaille ${TIRET} se revoient (déjà à la table 1 au tour 1)`,
+        `Tour 2, table 1 : Ondine Lacasse ${TIRET} revient à la table 1 (déjà au tour 1)`,
+      ]);
+    });
+
+    test('une règle désactivée retire ses conflits des groupes et des personnes', async () => {
+      const m = await ouvrirSept();
+      await gesteDeProposition(m, 1, 'voir');
+      await grouperPar(m, 'appartenance');
+      expect(texteDe(marqueDeGroupe(m, MERLES))).toBe(t('participants.conflit.groupe', { nombre: 3 }));
+      await m.seance.executer('modifierReglage', { cle: 'separerAppartenances', valeur: false });
+      await attendreSeance(m);
+      expect(texteDe(marqueDeGroupe(m, MERLES))).toBe(t('participants.conflit.groupe', { nombre: 2 }));
+      expect(conflitsDuGroupe(m, MERLES)).toEqual(SOUS_LE_PLAN_1[MERLES].slice(1));
+      expect(texteDe(marqueDePersonne(m, 1))).toBe('en conflit : revient à une table');
+    });
+
+    test('ni proposition montrée ni retenu : aucune marque ; sans groupement, rien ne change', async () => {
+      const m = await ouvrirSept();
+      expect(m.ui.etat().proposition).toBeNull();
+      await grouperPar(m, 'appartenance');
+      expect(groupes(m)).toHaveLength(3);
+      expect(toutesLesMarques(m)).toHaveLength(0);
+
+      await gesteDeProposition(m, 1, 'voir');
+      expect(m.ui.etat().proposition).toBe(1);
+      expect(selecteur(m).value).toBe('');
+      expect(lignes(m)).toHaveLength(7);
+      expect(toutesLesMarques(m)).toHaveLength(0);
+      expect(texteDe(cellule(m, 1, 'nom'))).toBe('Ombrelle');
+    });
   });
 });
