@@ -4,12 +4,12 @@
 // Le modèle de l'accueil, pur (§ 8.1, § 8.6, § 8.8) : ce que les composants
 // de la liste des événements affichent, sans arithmétique ni texte. Une
 // ligne de la liste (LigneListe de la façade, A3) devient ses six
-// informations, les deux mesures de son retenu et la meilleure proposition
-// de son classement, mises en forme, et ses signalements ; une question du
-// dossier
-// de travail, ses réponses ; un état illisible, ses secours ; un refus de la
-// façade, le refus affiché sur la liste. Chaque clé rendue est écrite ici en
-// entier : aucun composant ne compose une clé.
+// informations et ses signalements, mis en forme, puis, son résumé reçu, les
+// deux mesures de son retenu et la meilleure proposition de son
+// classement ; une question du dossier de travail, ses réponses ; un état
+// illisible, ses secours ; un refus de la façade, le refus affiché sur la
+// liste. Chaque clé rendue est écrite ici en entier : aucun composant ne
+// compose une clé.
 import { COLONNE_ANNONCEE } from '../generation/meilleure.js';
 import { COLONNES } from '../propositions/modele.js';
 
@@ -138,21 +138,28 @@ export function signalementsDe(ligne) {
  * l'horodatage de la dernière entrée du journal, sur l'horloge de
  * l'application, jamais la date du système de fichiers (§ 19.4) ; etat : la
  * clé de son nom, que le composant traduit ; chemin : tel que la façade
- * l'affiche, en entier ; collisionsCumulees et diffRedondance : celles que
- * la façade rend dans mesuresDuRetenu, par format, la valeur absente sans
- * retenu mesurable — la différence se lit telle quelle, jamais refaite ;
- * meilleure : l'identifiant et les collisions cumulées que la façade rend
- * dans meilleureDuClassement, par format, la valeur absente l'un et l'autre
- * sans proposition classée.
+ * l'affiche, en entier.
+ *
+ * Les quatre valeurs de résumé lisent resume, ce que facade.resumer a rendu
+ * pour la ligne : collisionsCumulees et diffRedondance celles de
+ * mesuresDuRetenu, par format, la valeur absente sans retenu mesurable — la
+ * différence se lit telle quelle, jamais refaite ; meilleure, l'identifiant
+ * et les collisions cumulées de meilleureDuClassement, par format, la valeur
+ * absente l'un et l'autre sans proposition classée. Sans resume, la ligne
+ * est enAttente : son résumé se calcule encore, et les quatre valeurs
+ * valent la valeur absente, que le composant remplace par le signe du
+ * chargement.
  *
  * @param {Object} ligne   LigneListe (A3)
  * @param {ReturnType<import('../../application/format.js').creerFormat>} format
+ * @param {{mesuresDuRetenu: Object|null, meilleureDuClassement: Object|null}} [resume]
  * @returns {{nom: string, date: string, etat: string, participants: string,
- *            modification: string, chemin: string, collisionsCumulees: string,
- *            diffRedondance: string, meilleure: {id: string, collisions: string},
+ *            modification: string, chemin: string, enAttente: boolean,
+ *            collisionsCumulees: string, diffRedondance: string,
+ *            meilleure: {id: string, collisions: string},
  *            signalements: Array<{cle: string, details: Object, noms: string[]}>}}
  */
-export function ligneAffichee(ligne, format) {
+export function ligneAffichee(ligne, format, resume) {
   return {
     nom: ligne.nom ?? ligne.base,
     date: ligne.date === null ? format.nombre(null) : format.date(ligne.date),
@@ -160,11 +167,12 @@ export function ligneAffichee(ligne, format) {
     participants: format.nombre(ligne.participants),
     modification: ligne.derniereModification === null ? format.nombre(null) : format.horodatage(ligne.derniereModification),
     chemin: ligne.chemin,
-    collisionsCumulees: format.nombre(ligne.mesuresDuRetenu?.collisionsCumulees ?? null),
-    diffRedondance: format.nombre(ligne.mesuresDuRetenu?.diffRedondance ?? null),
+    enAttente: resume === undefined,
+    collisionsCumulees: format.nombre(resume?.mesuresDuRetenu?.collisionsCumulees ?? null),
+    diffRedondance: format.nombre(resume?.mesuresDuRetenu?.diffRedondance ?? null),
     meilleure: {
-      id: format.nombre(ligne.meilleureDuClassement?.id ?? null),
-      collisions: format.nombre(ligne.meilleureDuClassement?.collisionsCumulees ?? null),
+      id: format.nombre(resume?.meilleureDuClassement?.id ?? null),
+      collisions: format.nombre(resume?.meilleureDuClassement?.collisionsCumulees ?? null),
     },
     signalements: signalementsDe(ligne),
   };

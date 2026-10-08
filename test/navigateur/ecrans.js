@@ -50,15 +50,21 @@ const PUBLIE = 'E:\\soirees-epreuve';
 // démonstration.
 const IMAGES_MAX = 900;
 
+// Images attendues au plus pour qu'un résumé de la liste arrive : bien
+// au-delà d'une relecture du système simulé et d'un pas par événement, et
+// sous le délai d'une épreuve, que IMAGES_MAX atteint à 60 images par
+// seconde : un résumé qui ne vient pas se nomme au lieu d'épuiser ce délai.
+const IMAGES_RESUME = 300;
+
 // --- L'attente et les gestes -------------------------------------------------
 
 const uneImage = () => new Promise((resoudre) => requestAnimationFrame(resoudre));
 
 /** Attend, image après image, que condition() rende une valeur vraie sans
- *  lever, et la rend ; lève en nommant quoi après IMAGES_MAX images. */
-export async function attendre(quoi, condition) {
+ *  lever, et la rend ; lève en nommant quoi après images images. */
+export async function attendre(quoi, condition, images = IMAGES_MAX) {
   let derniere = null;
-  for (let image = 0; image < IMAGES_MAX; image += 1) {
+  for (let image = 0; image < images; image += 1) {
     flushSync();
     try {
       const valeur = condition();
@@ -82,6 +88,46 @@ export async function cliquer(m, selecteur) {
   flushSync();
   await uneImage();
   return bouton;
+}
+
+/** Mène le chargement des résumés de la liste à son terme (§ 8.1) : l'horloge
+ *  pilotée du montage tient chaque pas du chargement, et avance d'un pas à
+ *  chaque image jusqu'à ce qu'aucun signe du chargement ne reste. */
+export async function chargerResumes(m) {
+  await attendre('les résumés de la liste', () => {
+    if (m.racine.querySelector('[data-chargement]') === null) return true;
+    m.horloge.avancer(0);
+    return false;
+  });
+}
+
+/** Suit les résumés que la liste du montage reçoit à partir de cet appel :
+ *  chaque flux que l'application lance par m.facade.resumer rapporte, en
+ *  plus, chaque base dont il pose le résumé. Rend resumeRecu(base), qui
+ *  attend, l'horloge pilotée avancée d'un pas à chaque image, que la liste
+ *  ait reçu un résumé de base depuis le suivi, le rendu à jour : un résumé
+ *  posé avant le suivi, d'une liste plus ancienne, n'y répond pas. */
+export function suivreResumes(m) {
+  const recues = new Set();
+  const resumer = m.facade.resumer;
+  m.facade.resumer = (lues, options) =>
+    resumer(lues, {
+      ...options,
+      recevoir(base, resume) {
+        options.recevoir(base, resume);
+        recues.add(base);
+      },
+    });
+  return (base) =>
+    attendre(
+      `le résumé de ${base} reçu par la liste`,
+      () => {
+        if (recues.has(base)) return true;
+        m.horloge.avancer(0);
+        return false;
+      },
+      IMAGES_RESUME,
+    );
 }
 
 /** Le centre de la boîte d'un élément, en coordonnées de la fenêtre, une
@@ -294,6 +340,23 @@ export const ECRANS = Object.freeze([
     async atteindre(contexte) {
       const m = await contexte.monter({ fichiers: [fichierEtat(chargePrincipale()), fichierEtat(chargeGelee(), 'gelee')] });
       await element(m, `[data-evenement="${BASE}"]`);
+      await chargerResumes(m);
+      return m.racine;
+    },
+  },
+  {
+    nom: 'accueil.chargement',
+    mode: null,
+    async atteindre(contexte) {
+      // La liste paraît avant ses résumés : tant que l'horloge pilotée
+      // n'avance pas, chaque valeur de résumé porte le signe du chargement.
+      // Rien ici ne l'avance : les signes restent pendant les relevés des
+      // deux thèmes, où le trait de chacun se mesure comme la marque
+      // « chargement ».
+      const m = await contexte.monter({ fichiers: [fichierEtat(chargePrincipale()), fichierEtat(chargeGelee(), 'gelee')] });
+      await attendre('le signe du chargement dans chaque valeur de résumé', () =>
+        [BASE, 'gelee'].every((base) => m.racine.querySelectorAll(`[data-evenement="${base}"] [aria-busy="true"] [data-chargement]`).length === 4),
+      );
       return m.racine;
     },
   },
@@ -308,6 +371,7 @@ export const ECRANS = Object.freeze([
       const charge = executer(principale, 'retenirProposition', { id: principale.propositions[0].id });
       const m = await contexte.monter({ fichiers: [fichierEtat(charge)] });
       const ligne = `[data-evenement="${BASE}"]`;
+      await chargerResumes(m);
       await attendre('les mesures du retenu et la meilleure proposition', () =>
         [
           ...['collisionsCumulees', 'diffRedondance'].map((colonne) => `[data-colonne="${colonne}"]`),

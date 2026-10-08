@@ -21,7 +21,9 @@
   // façade et la donne à l'accueil, une fois la détermination réglée — sans
   // question au démarrage, après la réponse sinon : pret se résout quand la
   // détermination est faite, la liste lue quand aucune question n'attend, et
-  // le premier écran — les lignes de la liste, ou la question — rendu.
+  // le premier écran — les lignes de la liste, ou la question — rendu. Les
+  // résumés des lignes n'en sont pas : ils se calculent ensuite, un
+  // événement après l'autre, et l'accueil montre chacun dès qu'il arrive.
   //
   // L'écran suit la séance : la liste sans événement ouvert, l'événement
   // sinon ; le panneau « À propos » les remplace tant qu'il est ouvert. Chaque
@@ -36,6 +38,7 @@
   // sans question ; aucun beforeunload ne retient la page (§ 8.4).
   import './jetons.css';
   import { onDestroy, setContext, tick, untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import { creerFacade } from '../application/evenements.js';
   import { creerFormat } from '../application/format.js';
   import { creerControleurGeneration } from '../application/generation.js';
@@ -44,6 +47,7 @@
   import { creerTraduction } from '../application/traduction.js';
   import APropos from './APropos.svelte';
   import Accueil from './accueil/Accueil.svelte';
+  import { creerPas } from './accueil/chargement.js';
   import Bandeau from './Bandeau.svelte';
   import Evenement from './evenement/Evenement.svelte';
   import { blocAPropos, provenanceVisible, versionVisible } from './apropos.js';
@@ -148,14 +152,42 @@
   let lecture = Promise.resolve();
   let lectures = 0;
 
+  // Les résumés des lignes lues, par base, que facade.resumer rend un
+  // événement après l'autre, chaque pas attendant l'image puis l'horloge
+  // (creerPas) ; chargement est son flux en cours, ou null. Une lecture qui
+  // commence abandonne le flux de la précédente, comme l'ouverture d'un
+  // événement et le démontage : un résumé calculé pour une liste ne se pose
+  // jamais sur une plus récente. Une lecture qui s'achève sous un événement
+  // ouvert pose ses lignes sans lancer de flux : la fermeture relit la
+  // liste, et ses résumés avec elle. Le flux lit dans le dossier de travail de
+  // sa liste, et un changement de dossier relit la liste. Une faute d'un
+  // calcul rejette fin, que rien ne retient : la page la reçoit comme toute
+  // faute, et la ligne écrit « — ».
+  const resumes = new SvelteMap();
+  let chargement = null;
+  function abandonnerResumes() {
+    chargement?.abandonner();
+    chargement = null;
+  }
+  function chargerResumes(lues) {
+    resumes.clear();
+    chargement = facadeContexte.resumer(lues, {
+      ceder: creerPas(horloge, (rappel) => requestAnimationFrame(rappel)),
+      recevoir: (base, resume) => resumes.set(base, resume),
+    });
+  }
+  onDestroy(abandonnerResumes);
+
   async function lireListe() {
     lectures += 1;
     const rang = lectures;
+    abandonnerResumes();
     try {
       const lues = await facadeContexte.lister();
       if (rang !== lectures) return;
       lignes = lues;
       refusLecture = null;
+      if (seanceApp.etat().evenement === null) chargerResumes(lues);
     } catch (erreur) {
       if (!estRefus(erreur)) throw erreur;
       if (rang !== lectures) return;
@@ -184,6 +216,7 @@
   let baseOuverte = null;
   const desabonner = seanceApp.subscribe((etat) => {
     const base = etat.evenement?.base ?? null;
+    if (base !== null) abandonnerResumes();
     if (base !== null && base !== baseOuverte) uiApp.reinitialiser();
     const fermeture = baseOuverte !== null && base === null;
     baseOuverte = base;
@@ -274,7 +307,7 @@
     {#if $uiApp.apropos}
       <APropos {bloc} {pressePapiers} fermer={() => uiApp.fermerApropos()} />
     {:else if etatSeance.evenement === null}
-      <Accueil {provenance} version={produitVersion} {demonstrations} {lignes} {refusLecture} />
+      <Accueil {provenance} version={produitVersion} {demonstrations} {lignes} {resumes} {refusLecture} />
     {:else}
       <Evenement />
     {/if}

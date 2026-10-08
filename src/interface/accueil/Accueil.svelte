@@ -10,8 +10,9 @@
   // et il ne lit ni n'écrit rien lui-même.
   //
   // Les lignes viennent d'App, qui lit la liste par la façade une fois la
-  // détermination du dossier de travail réglée, et refusLecture est le refus
-  // qu'App a reçu en la lisant. L'accueil prend la détermination par
+  // détermination du dossier de travail réglée, puis leurs résumés, qu'App
+  // reçoit un événement après l'autre (resumes, par base) ; refusLecture est
+  // le refus qu'App a reçu en la lisant. L'accueil prend la détermination par
   // facade.demarrer — la même pour toute la séance, sans nouvelle sonde — et
   // en montre la question, puis l'autre emplacement, les avis et le dossier.
   // Les avis ne se disent qu'au premier accueil de la séance (premiereAnnonce)
@@ -41,7 +42,7 @@
   const seance = getContext('seance');
   const relireListe = getContext('relireListe');
 
-  let { provenance, version, demonstrations, lignes, refusLecture } = $props();
+  let { provenance, version, demonstrations, lignes, resumes, refusLecture } = $props();
 
   // Vrai au premier accueil de la séance : ses avis s'y disent.
   const annoncer = premiereAnnonce(facade);
@@ -229,7 +230,7 @@
       />
     {/if}
 
-    <ListeEvenements {lignes} {ouvrir} {refusOuverture} {apresOperation} />
+    <ListeEvenements {lignes} {resumes} {ouvrir} {refusOuverture} {apresOperation} />
 
     <section class="creation" aria-labelledby={`${uid}-creation`}>
       <h2 id={`${uid}-creation`}>{t('accueil.creation.titre')}</h2>

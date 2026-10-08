@@ -4,7 +4,8 @@
 // La coquille de l'application dans un vrai moteur de rendu : le titre de la
 // fenêtre et le bandeau (§ 8.4, § 18.6), « Liste des événements » (§ 8.1),
 // le panneau « À propos », le réglage de thème (§ 19.2), le collecteur
-// d'erreurs, l'injection des plateformes (§ 13.4), l'ordre du montage, et la
+// d'erreurs, l'injection des plateformes (§ 13.4), l'ordre du montage, la
+// liste relue et l'abandon des résumés d'une liste dépassée (§ 8.1), et la
 // fermeture sans question (§ 8.4, § 8.8). Chaque épreuve monte App par
 // monterApp (test/navigateur/montage.js), sur le système de fichiers simulé.
 //
@@ -27,10 +28,15 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cdp } from 'vitest/browser';
 import { flushSync } from 'svelte';
+import { appliquerCommande } from '../application/commandes.js';
+import { cibleRedondance, evaluer } from '../application/evaluation.js';
+import { creerFormat } from '../application/format.js';
 import { TABLES_APPLICATION } from '../application/libelles.js';
 import { creerTraduction } from '../application/traduction.js';
 import { LIVREES } from '../demo/livrees.js';
-import { FORMAT } from '../stockage/document.js';
+import { rechercher } from '../moteur/recherche.js';
+import { serialiser } from '../stockage/canonique.js';
+import { FORMAT, analyser, configurationDepuisCharge } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { VERSION } from '../version.genere.js';
 import COLLECTEUR from '../../public/collecteur.js?raw';
@@ -52,6 +58,7 @@ import { SECTION_OUVERTURE } from './evenement/sections.js';
 import { cleDeMode } from './mode.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+const format = creerFormat(t);
 
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 const THEMES = ['clair', 'sombre'];
@@ -381,6 +388,142 @@ describe('la liste relue', () => {
     await new Promise((resoudre) => requestAnimationFrame(() => resoudre()));
     flushSync();
     expect(m.racine.querySelectorAll('[data-evenement]').length).toBe(2);
+  });
+});
+
+describe('les résumés de la liste relue (§ 8.1)', () => {
+  // La petite démonstration au conflit inévitable, deux propositions du
+  // moteur, la seconde retenue, sous la cible de redondance donnée ; la
+  // cible par défaut n'a pas de réglage écrit.
+  function texteRetenu(cible) {
+    let charge = analyser(CONFLIT).charge;
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 6, nombre: 2, arret: 300 });
+    charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+    charge = appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
+    if (cible !== cibleRedondance(charge)) {
+      charge = appliquerCommande('changerCibleRedondance', charge, { cible: String(cible) }).charge;
+    }
+    return serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
+  }
+  // La différence à la cible que la ligne d'un texte d'état écrit.
+  const difference = (texte) => {
+    const charge = analyser(texte).charge;
+    return format.nombre(Math.abs(cibleRedondance(charge) - evaluer(charge).retenu.mesures.totalRedondance));
+  };
+  const cellule = (m) => dans(m, '[data-evenement="bal"] [data-colonne="diffRedondance"]');
+  const uneImage = () => new Promise((resoudre) => requestAnimationFrame(() => resoudre()));
+
+  // Retient la prochaine lecture de l'état de « bal » : elle lit le disque à
+  // son appel, et ne rend ce qu'elle a lu qu'à liberer().
+  function retenirLecture(m) {
+    const lireTexte = m.fs.lireTexte;
+    let liberer;
+    const barriere = new Promise((resoudre) => {
+      liberer = resoudre;
+    });
+    const retenue = { promesse: null, liberer: () => liberer() };
+    m.fs.lireTexte = (racine, chemin) => {
+      if (chemin === 'bal.gtt.json' && retenue.promesse === null) {
+        const lue = lireTexte.call(m.fs, racine, chemin);
+        retenue.promesse = barriere.then(() => lue);
+        return retenue.promesse;
+      }
+      return lireTexte.call(m.fs, racine, chemin);
+    };
+    return retenue;
+  }
+
+  test('une relecture pendant le chargement : la ligne ne montre jamais la valeur de l’ancienne lecture, même finie la dernière', async () => {
+    const ancien = texteRetenu(1000);
+    const nouveau = texteRetenu(25);
+    expect(difference(ancien)).not.toBe(difference(nouveau));
+    const m = await monter({ fichiers: [{ racine: 'documents', chemin: 'bal.gtt.json', texte: ancien }] });
+    const retenue = retenirLecture(m);
+    // Le premier pas de la première lecture lit l'état, et reste suspendu.
+    await vi.waitFor(async () => {
+      await uneImage();
+      m.horloge.avancer(0);
+      expect(retenue.promesse).not.toBeNull();
+    });
+    m.fs.deposer('documents', 'bal.gtt.json', nouveau);
+    await m.facade.demarrer();
+    flushSync();
+    expect(cellule(m).querySelector('[data-chargement]')).not.toBeNull();
+    await vi.waitFor(async () => {
+      await uneImage();
+      m.horloge.avancer(0);
+      flushSync();
+      expect(cellule(m).textContent).toBe(difference(nouveau));
+    });
+    // La lecture d'avant s'achève : son calcul ne se pose pas.
+    retenue.liberer();
+    await retenue.promesse;
+    for (let image = 0; image < 3; image += 1) await uneImage();
+    m.horloge.avancer(0);
+    flushSync();
+    expect(cellule(m).textContent).toBe(difference(nouveau));
+  });
+
+  test('un événement ouvert pendant le chargement l’abandonne : l’horloge avancée ne relit plus aucun état', async () => {
+    const m = await monter({
+      fichiers: [
+        { racine: 'documents', chemin: 'bal.gtt.json', texte: texteRetenu(1000) },
+        { racine: 'documents', chemin: 'club.gtt.json', texte: evenement('Club des Merles', { texte: CONFLIT }) },
+      ],
+    });
+    expect(m.racine.querySelectorAll('[data-chargement]').length).toBeGreaterThan(0);
+    await m.seance.ouvrir('bal');
+    flushSync();
+    const lireTexte = m.fs.lireTexte;
+    const etats = [];
+    m.fs.lireTexte = (racine, chemin) => {
+      if (chemin.endsWith('.gtt.json')) etats.push(chemin);
+      return lireTexte.call(m.fs, racine, chemin);
+    };
+    for (let pas = 0; pas < 4; pas += 1) {
+      await uneImage();
+      m.horloge.avancer(0);
+    }
+    expect(etats).toEqual([]);
+  });
+
+  test('une lecture de la liste qui s’achève sous un événement ouvert ne lance aucun chargement', async () => {
+    const m = await monter({
+      fichiers: [
+        { racine: 'documents', chemin: 'bal.gtt.json', texte: texteRetenu(1000) },
+        { racine: 'documents', chemin: 'club.gtt.json', texte: evenement('Club des Merles', { texte: CONFLIT }) },
+      ],
+    });
+    await m.seance.ouvrir('bal');
+    flushSync();
+    // La lecture de la liste que lance la fermeture lit le dossier à son
+    // appel, et ne rend ce qu'elle a lu qu'à liberer().
+    const lister = m.facade.lister;
+    let liberer;
+    const barriere = new Promise((resoudre) => {
+      liberer = resoudre;
+    });
+    m.facade.lister = (...arguments_) => {
+      const lue = lister(...arguments_);
+      return barriere.then(() => lue);
+    };
+    await m.seance.fermer();
+    await m.seance.ouvrir('club');
+    flushSync();
+    const lireTexte = m.fs.lireTexte;
+    const etats = [];
+    m.fs.lireTexte = (racine, chemin) => {
+      if (chemin.endsWith('.gtt.json')) etats.push(chemin);
+      return lireTexte.call(m.fs, racine, chemin);
+    };
+    liberer();
+    for (let pas = 0; pas < 4; pas += 1) {
+      await uneImage();
+      m.horloge.avancer(0);
+    }
+    expect(m.seance.etat().evenement?.base).toBe('club');
+    expect(etats).toEqual([]);
   });
 });
 

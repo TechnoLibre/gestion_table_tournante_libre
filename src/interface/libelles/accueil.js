@@ -57,6 +57,10 @@ export const TABLE = new Map([
       'configuration.',
   ],
 
+  // L'annonce de la région d'état de la liste tant que le résumé d'une de
+  // ses lignes se calcule (§ 8.1) ; les signes de chaque valeur sont muets.
+  ['accueil.chargement', 'Calcul des colonnes de la liste\u{2026}'],
+
   // Le nom d'un état du plan (§ 9), que rend cleDEtat (modele.js).
   ['accueil.etat.brouillon', 'Brouillon'],
   ['accueil.etat.propose', 'Proposé'],

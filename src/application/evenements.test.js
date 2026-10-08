@@ -398,6 +398,16 @@ describe('les questions du dossier de travail (§ 8.6)', () => {
 
 // --- La liste (§ 8.1, § 19.4) -----------------------------------------------
 
+// Les lignes de la liste, chacune complétée des deux résumés que resumer
+// rend pour elle, le flux mené à son terme sans attendre d'horloge.
+async function listerResume(facade) {
+  const lignes = await facade.lister();
+  const resumes = new Map();
+  await facade.resumer(lignes, { ceder: async () => undefined, recevoir: (base, resume) => resumes.set(base, resume) }).fin;
+  assert.equal(resumes.size, lignes.length);
+  return lignes.map((ligne) => ({ ...ligne, ...resumes.get(ligne.base) }));
+}
+
 describe('lister (§ 8.1, § 19.4)', () => {
   // Publié en E:\soirees, data/ inscriptible : la petite démonstration
   // déposée sans journal, et un événement renommé à la main.
@@ -432,8 +442,6 @@ describe('lister (§ 8.1, § 19.4)', () => {
         journalSeul: false,
         doublonAvec: [],
         verrou: null,
-        mesuresDuRetenu: null,
-        meilleureDuClassement: null,
       },
       {
         base: 'petite',
@@ -448,8 +456,6 @@ describe('lister (§ 8.1, § 19.4)', () => {
         journalSeul: false,
         doublonAvec: [],
         verrou: null,
-        mesuresDuRetenu: null,
-        meilleureDuClassement: null,
       },
     ]);
     assert.ok(petite.participants.length > 0);
@@ -555,7 +561,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     const { fs, facade } = await deuxEvenements();
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
     const avant = ecritures(fs);
-    const lignes = await facade.lister();
+    const lignes = await listerResume(facade);
     assert.equal(ecritures(fs), avant);
     const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
     const charge = analyser(texteRetenu()).charge;
@@ -575,7 +581,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     const { fs, facade } = await deuxEvenements();
     const texte = texteRetenu((charge) => appliquerCommande('changerCibleRedondance', charge, { cible: '25' }).charge);
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, texte);
-    const ligne = (await facade.lister()).find(({ base }) => base === 'retenue');
+    const ligne = (await listerResume(facade)).find(({ base }) => base === 'retenue');
     const { totalRedondance } = evaluer(analyser(texte).charge).retenu.mesures;
     assert.equal(ligne.mesuresDuRetenu.cibleRedondance, 25);
     assert.equal(ligne.mesuresDuRetenu.diffRedondance, Math.abs(25 - totalRedondance));
@@ -594,7 +600,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     fs.deposer('portable', `derivee${SUFFIXES.etat}`, texteRetenu((charge) => appliquerCommande('changerTours', charge, { tours: '3' }).charge));
     fs.deposer('portable', `tronquee${SUFFIXES.etat}`, texteRetenu().slice(0, 40));
     const avant = ecritures(fs);
-    const lignes = await facade.lister();
+    const lignes = await listerResume(facade);
     assert.equal(ecritures(fs), avant);
     assert.equal(lignes.length, 5);
     const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
@@ -617,7 +623,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
     fs.deposer('portable', `proposee${SUFFIXES.etat}`, sansRetenu);
     const avant = ecritures(fs);
-    const lignes = await facade.lister();
+    const lignes = await listerResume(facade);
     assert.equal(ecritures(fs), avant);
     assert.equal(lignes.length, 4);
     const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
@@ -636,7 +642,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.equal(par.petite.meilleureDuClassement, null);
   });
 
-  test('le résumé du retenu et la meilleure proposition se lisent dans une seule lecture de l’état, après celle du dépôt', async () => {
+  test('lister lit chaque état une fois, celle du dépôt ; resumer le relit une fois de plus pour ses deux résumés', async () => {
     const { fs, facade } = await deuxEvenements();
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
     const lireTexte = fs.lireTexte;
@@ -645,10 +651,14 @@ describe('lister (§ 8.1, § 19.4)', () => {
       lus.push(chemin);
       return lireTexte.call(fs, racine, chemin);
     };
-    const ligne = (await facade.lister()).find(({ base }) => base === 'retenue');
+    const lues = await facade.lister();
+    assert.equal(lues.length, 3);
+    const etats = () => lus.filter((chemin) => chemin === `retenue${SUFFIXES.etat}`).length;
+    assert.equal(etats(), 1, lus.join());
+    const ligne = (await listerResume(facade)).find(({ base }) => base === 'retenue');
     assert.notEqual(ligne.mesuresDuRetenu, null);
     assert.notEqual(ligne.meilleureDuClassement, null);
-    assert.equal(lus.filter((chemin) => chemin === `retenue${SUFFIXES.etat}`).length, 2, lus.join());
+    assert.equal(etats(), 3, lus.join());
   });
 
   // Un état que l'analyse admet et qu'examiner corrige (§ 8.9, point 3) :
@@ -665,7 +675,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     });
     assert.equal(examiner(analyser(texte).charge).fautives[0].fautes[0].code, 'IDENTIFIANT_REPETE');
     fs.deposer('portable', `repetee${SUFFIXES.etat}`, texte);
-    const ligne = (await facade.lister()).find(({ base }) => base === 'repetee');
+    const ligne = (await listerResume(facade)).find(({ base }) => base === 'repetee');
     assert.notEqual(ligne, undefined);
     assert.notEqual(meilleureOuverte(texte), null);
     assert.deepEqual(ligne.meilleureDuClassement, meilleureOuverte(texte));
@@ -680,7 +690,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.equal(examiner(analyser(texte).charge).fautives[0].fautes[0].code, 'IDENTIFIANT_HORS_COMPTEUR');
     assert.notDeepEqual(meilleureOuverte(texte), resumeDuMeilleur(analyser(texte).charge));
     fs.deposer('portable', `abaissee${SUFFIXES.etat}`, texte);
-    const ligne = (await facade.lister()).find(({ base }) => base === 'abaissee');
+    const ligne = (await listerResume(facade)).find(({ base }) => base === 'abaissee');
     assert.deepEqual(ligne.meilleureDuClassement, meilleureOuverte(texte));
   });
 
@@ -690,12 +700,192 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.ok(evaluer(analyser(derivee).charge).propositions.every(({ statut }) => statut === 'derive'));
     fs.deposer('portable', `derivee${SUFFIXES.etat}`, derivee);
     fs.deposer('portable', `tronquee${SUFFIXES.etat}`, texteRetenu().slice(0, 40));
-    const lignes = await facade.lister();
+    const lignes = await listerResume(facade);
     assert.equal(lignes.length, 4);
     const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
     assert.equal(par.derivee.meilleureDuClassement, null);
     assert.notEqual(par.tronquee.illisible, null);
     assert.equal(par.tronquee.meilleureDuClassement, null);
+  });
+
+  // --- resumer : les résumés, un événement après l'autre ---------------------
+
+  // Un pas que tient l'horloge pilotée : sa promesse se résout à la prochaine
+  // avance de l'horloge, comme le pas de l'interface à sa minuterie.
+  const pasDe = (horloge) => () =>
+    new Promise((reprendre) => {
+      horloge.planifier(reprendre, 0);
+    });
+  // setImmediate rappelle une fois vidées les microtâches, où s'enchaînent
+  // les lectures du système simulé et le calcul qu'un pas libère.
+  const laisser = () => new Promise((resolve) => setImmediate(resolve));
+  async function unPas(horloge) {
+    horloge.avancer(0);
+    await laisser();
+  }
+  const AUCUN = { mesuresDuRetenu: null, meilleureDuClassement: null };
+  // Les deux résumés d'un texte d'état, sur sa charge examinée, celle que
+  // l'ouverture lit.
+  function resumesAttendus(texte) {
+    const charge = examiner(analyser(texte).charge).charge;
+    return { mesuresDuRetenu: resumeDuRetenu(charge), meilleureDuClassement: resumeDuMeilleur(charge) };
+  }
+
+  // Le dossier de deuxEvenements, plus un retenu, des propositions sans
+  // retenu et un état tronqué.
+  async function dossierAResumer() {
+    const montage = await deuxEvenements();
+    const sansRetenu = texteRetenu((charge) => ({
+      ...charge,
+      retenu: null,
+      evenement: { ...charge.evenement, id: 'evt-proposee', etat: 'propose' },
+    }));
+    montage.fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
+    montage.fs.deposer('portable', `proposee${SUFFIXES.etat}`, sansRetenu);
+    montage.fs.deposer('portable', `tronquee${SUFFIXES.etat}`, texteRetenu().slice(0, 40));
+    return { ...montage, textes: { retenue: texteRetenu(), proposee: sansRetenu } };
+  }
+
+  test('lister rend ses lignes sans résumé ; resumer rend l’état illisible aussitôt, puis un événement par pas, dans l’ordre de la liste, rien d’écrit', async () => {
+    const { fs, horloge, facade, textes } = await dossierAResumer();
+    const avant = ecritures(fs);
+    const lignes = await facade.lister();
+    assert.equal(lignes.length, 5);
+    for (const ligne of lignes) {
+      assert.equal('mesuresDuRetenu' in ligne, false, ligne.base);
+      assert.equal('meilleureDuClassement' in ligne, false, ligne.base);
+    }
+    const recus = [];
+    const flux = facade.resumer(lignes, { ceder: pasDe(horloge), recevoir: (base, resume) => recus.push([base, resume]) });
+    // Un état illisible n'a rien à résumer : son résumé vide vient avant
+    // tout pas.
+    assert.deepEqual(recus, [['tronquee', AUCUN]]);
+    await laisser();
+    assert.equal(recus.length, 1);
+    const lisibles = lignes.filter(({ illisible }) => illisible === null).map(({ base }) => base);
+    assert.equal(lisibles.length, 4);
+    for (let pas = 1; pas <= lisibles.length; pas += 1) {
+      await unPas(horloge);
+      assert.deepEqual(
+        recus.slice(1).map(([base]) => base),
+        lisibles.slice(0, pas),
+      );
+    }
+    await flux.fin;
+    const par = new Map(recus);
+    assert.equal(par.size, 5);
+    for (const base of ['retenue', 'proposee']) assert.deepEqual(par.get(base), resumesAttendus(textes[base]), base);
+    assert.notEqual(par.get('retenue').mesuresDuRetenu, null);
+    assert.notEqual(par.get('proposee').meilleureDuClassement, null);
+    assert.deepEqual(par.get('petite'), AUCUN);
+    assert.deepEqual(par.get('soiree-a'), AUCUN);
+    assert.equal(ecritures(fs), avant);
+  });
+
+  test('rien ne s’évalue avant le pas : un état réécrit entre la liste et son pas se résume tel que le pas le lit', async () => {
+    const { fs, horloge, facade } = await dossierAResumer();
+    const lignes = await facade.lister();
+    const recus = new Map();
+    const flux = facade.resumer(lignes, { ceder: pasDe(horloge), recevoir: (base, resume) => recus.set(base, resume) });
+    // La cible de l'événement passe à 25 après la liste : le résumé du pas
+    // la lit, et non celle que la liste a vue.
+    const plusTard = texteRetenu((charge) => appliquerCommande('changerCibleRedondance', charge, { cible: '25' }).charge);
+    fs.deposer('portable', `retenue${SUFFIXES.etat}`, plusTard);
+    for (let pas = 0; pas < lignes.length; pas += 1) await unPas(horloge);
+    await flux.fin;
+    assert.equal(recus.get('retenue').mesuresDuRetenu.cibleRedondance, 25);
+    assert.deepEqual(recus.get('retenue'), resumesAttendus(plusTard));
+  });
+
+  test('abandonner : le calcul en cours ne se reçoit pas, et aucune lecture ne part ensuite', async () => {
+    const { fs, horloge, facade } = await dossierAResumer();
+    const lignes = await facade.lister();
+    const lisibles = lignes.filter(({ illisible }) => illisible === null).map(({ base }) => base);
+    // La lecture du deuxième état lisible reste suspendue jusqu'à liberer().
+    const lireTexte = fs.lireTexte;
+    let liberer;
+    const barriere = new Promise((resoudre) => {
+      liberer = resoudre;
+    });
+    let suspendue = null;
+    fs.lireTexte = (racine, chemin) => {
+      if (chemin === lisibles[1] + SUFFIXES.etat && suspendue === null) {
+        suspendue = barriere.then(() => lireTexte.call(fs, racine, chemin));
+        return suspendue;
+      }
+      return lireTexte.call(fs, racine, chemin);
+    };
+    const recus = [];
+    const flux = facade.resumer(lignes, { ceder: pasDe(horloge), recevoir: (base) => recus.push(base) });
+    await unPas(horloge);
+    await unPas(horloge);
+    assert.notEqual(suspendue, null);
+    assert.deepEqual(recus, ['tronquee', lisibles[0]]);
+    flux.abandonner();
+    // La lecture suspendue s'achève et compte ; aucune ne part après elle.
+    liberer();
+    await laisser();
+    const lectures = fs.compteurs.lectures;
+    for (let pas = 0; pas < lignes.length; pas += 1) await unPas(horloge);
+    await flux.fin;
+    assert.deepEqual(recus, ['tronquee', lisibles[0]]);
+    assert.equal(fs.compteurs.lectures, lectures);
+  });
+
+  test('sans dossier de travail, resumer lève RangeError sans rien recevoir', () => {
+    const { facade } = monter();
+    const recus = [];
+    assert.throws(
+      () => facade.resumer([{ base: 'x', illisible: { raison: 'VIDE' } }], { ceder: async () => undefined, recevoir: (base) => recus.push(base) }),
+      RangeError,
+    );
+    assert.deepEqual(recus, []);
+  });
+
+  test('abandonné avant son premier pas, le flux ne lit rien et ne rend que les résumés vides des états illisibles', async () => {
+    const { fs, horloge, facade } = await dossierAResumer();
+    const lignes = await facade.lister();
+    const lectures = fs.compteurs.lectures;
+    const recus = [];
+    const flux = facade.resumer(lignes, { ceder: pasDe(horloge), recevoir: (base) => recus.push(base) });
+    flux.abandonner();
+    for (let pas = 0; pas < lignes.length; pas += 1) await unPas(horloge);
+    await flux.fin;
+    assert.deepEqual(recus, ['tronquee']);
+    assert.equal(fs.compteurs.lectures, lectures);
+  });
+
+  test('un état qui ne se relit plus rend son résumé vide, les autres le leur ; une faute de même, puis fin la rejette', async () => {
+    const { fs, horloge, facade, textes } = await dossierAResumer();
+    const lignes = await facade.lister();
+    // Tronqué après la liste : la relecture du pas le trouve illisible.
+    fs.deposer('portable', `proposee${SUFFIXES.etat}`, textes.proposee.slice(0, 40));
+    const recus = new Map();
+    const flux = facade.resumer(lignes, { ceder: pasDe(horloge), recevoir: (base, resume) => recus.set(base, resume) });
+    for (let pas = 0; pas < lignes.length; pas += 1) await unPas(horloge);
+    await flux.fin;
+    assert.deepEqual(recus.get('proposee'), AUCUN);
+    assert.deepEqual(recus.get('retenue'), resumesAttendus(textes.retenue));
+
+    // Une faute — une erreur qui n'est pas un refus du stockage — sur un
+    // seul état : son résumé vide, les suivants rendus, puis fin la rejette.
+    fs.deposer('portable', `proposee${SUFFIXES.etat}`, textes.proposee);
+    const faute = new TypeError('faute d’épreuve');
+    const lireTexte = fs.lireTexte;
+    fs.lireTexte = (racine, chemin) => (chemin === `petite${SUFFIXES.etat}` ? Promise.reject(faute) : lireTexte.call(fs, racine, chemin));
+    const apres = new Map();
+    const suivant = facade.resumer(lignes, { ceder: pasDe(horloge), recevoir: (base, resume) => apres.set(base, resume) });
+    const issue = suivant.fin.then(
+      () => null,
+      (erreur) => erreur,
+    );
+    for (let pas = 0; pas < lignes.length; pas += 1) await unPas(horloge);
+    assert.equal(await issue, faute);
+    assert.equal(apres.size, 5);
+    assert.deepEqual(apres.get('petite'), AUCUN);
+    assert.deepEqual(apres.get('retenue'), resumesAttendus(textes.retenue));
+    assert.deepEqual(apres.get('proposee'), resumesAttendus(textes.proposee));
+    assert.notEqual(apres.get('proposee').meilleureDuClassement, null);
   });
 });
 

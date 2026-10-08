@@ -1209,16 +1209,23 @@ d'appartenance », |cible − Σ r(p)|, où Σ r(p) est la somme de redondance d
 retenu — le nombre de la colonne « Redondance d'appartenance, somme Σ r(p) » du
 tableau des propositions — et la cible celle de l'événement (§ 8.9), 1000 par
 défaut, réglable dans la section des propositions. Les deux se lisent dans la
-même mesure que le tableau, au moment de lister, sans rien écrire ; un événement
-sans retenu, ou dont le retenu est fautif ou en dérive (§ 8.9, § 9), y porte
-« — ». Chaque ligne porte aussi la **« Meilleure proposition du classement »**,
-sous les libellés du bloc que la section de la génération montre en tête :
-l'identifiant de la proposition au rang 1 du classement (§ 5.7) et ses
+même mesure que le tableau, sans rien écrire ; un événement sans retenu, ou dont
+le retenu est fautif ou en dérive (§ 8.9, § 9), y porte « — ». Chaque ligne
+porte aussi la **« Meilleure proposition du classement »**, sous les libellés
+du bloc que la section de la génération montre en tête : l'identifiant de la
+proposition au rang 1 du classement (§ 5.7) et ses
 collisions cumulées — la même proposition et le même nombre que ce bloc et que
 la première ligne du tableau des propositions, retenue ou non ; une proposition
 fautive, que l'ouverture écarte (§ 8.9, point 3), n'y entre pas. Sans proposition
 classée — aucune, ou aucune qui décrive encore la configuration —, l'un et
 l'autre valent « — ». Chaque intitulé s'explique dans une infobulle.
+**La liste paraît avant ses colonnes calculées** : ses lignes s'affichent dès le
+relevé du dossier, et les mesures du retenu et la meilleure proposition, qui
+évaluent chaque événement, se calculent ensuite, un événement après l'autre, la
+main rendue au navigateur entre deux. Tant que celles d'une ligne se calculent,
+chacune de ses valeurs porte un signe de chargement qui tourne ; chaque ligne
+montre les siennes dès qu'elles sont obtenues, et une liste relue abandonne les
+calculs de la précédente.
 **Un répertoire vide n'affiche pas une liste vide** : il présente la commande de
 création et les démonstrations — une liste vide sans issue est le premier écran
 que voit un opérateur qui lance l'exécutable.
@@ -4656,9 +4663,13 @@ ne les offre de façon portable :
   n'attrape pas : une promesse rejetée sans gestionnaire.
 - **L'émulation d'une préférence système.** Le logiciel règle son **propre**
   réglage de thème, qui est celui que l'opérateur manipule (§ 13.3), et injecte une
-  feuille de style qui annule transitions et animations. La préférence système
-  est consultée à chaque lancement, et le réglage de l'opérateur vaut pour la
-  séance : rien ne l'enregistre, ni fichier ni stockage du navigateur (§ 8.6).
+  feuille de style qui annule transitions et animations. L'interface n'en porte
+  qu'une : la rotation du signe de chargement de la liste des événements
+  (§ 8.1), qu'aucun état n'attend et dont rien ne lit le rendu ; elle s'arrête
+  sous la préférence de mouvement réduit, et cette feuille l'annule comme toute
+  autre. La préférence système est consultée à chaque lancement, et le réglage
+  de l'opérateur vaut pour la séance : rien ne l'enregistre, ni fichier ni
+  stockage du navigateur (§ 8.6).
   **Le scénario pose donc le thème par le réglage, à chaque exécution, et ne le
   déduit jamais de la machine.**
 

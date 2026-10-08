@@ -14,13 +14,17 @@
 // système de fichiers se lit sur fs à l'appel, jamais à la création : une
 // épreuve la remplace après le montage.
 //
-// Lister ne fait que lire. Chaque ligne lisible porte le résumé de son
-// retenu (resumeDuRetenu, evaluation.js) et la meilleure proposition de son
-// classement (resumeDuMeilleur), lus dans une seule lecture de l'état de
-// l'événement au moment de lister, sur sa charge examinée comme l'ouverture
-// l'examine. Une opération qui écrit dérive ses refus lisibles sans écrire
-// — nom vide, plan bloqué, format plus récent — avant toute écriture, sonde
-// de verrou comprise. Renommer et supprimer ferment d'abord
+// Lister ne fait que lire, et n'évalue rien : la liste paraît sans attendre
+// aucune évaluation. Les deux résumés d'une
+// ligne — celui de son retenu (resumeDuRetenu, evaluation.js) et la
+// meilleure proposition de son classement (resumeDuMeilleur) — se calculent
+// ensuite, un événement après l'autre, par resumer : chacun relit l'état de
+// son événement une fois, examine sa charge comme l'ouverture l'examine, et
+// rend la main entre deux événements.
+//
+// Une opération qui écrit dérive ses refus lisibles sans écrire — nom vide,
+// plan bloqué, format plus récent — avant toute écriture, sonde de verrou
+// comprise. Renommer et supprimer ferment d'abord
 // l'événement visé quand il est ouvert : la séance rend son verrou, et la
 // façade sonde alors celui du disque sous son propre identifiant de séance,
 // tiré une fois à sa création ; une séance vivante, ou dont la vie ne se
@@ -133,30 +137,28 @@ async function derniereModification(fs, racine, base) {
   return lireJournal(texte).entrees.at(-1)?.horodatage ?? null;
 }
 
-// Les deux résumés de l'événement base, lus dans une seule lecture de son
-// état, sans rien écrire : mesuresDuRetenu (resumeDuRetenu) et
-// meilleureDuClassement (resumeDuMeilleur). Ils lisent la charge examinée
-// (examiner, § 8.9, point 3), celle que l'ouverture de l'état garde : une
-// proposition fautive, dont l'identifiant se répète ou atteint le compteur,
-// n'entre pas au classement, qui lève sur un identifiant répété, et la
-// liste nomme la proposition au rang 1 que le bloc de génération de
-// l'événement ouvert nomme. Chacun vaut null pour un état
-// illisible au moment de la liste — un résumé illisible ne se relit pas —,
-// et pour un état qui a cessé de se lire depuis : la ligne en porte déjà la
-// cause, ou la portera à la liste suivante.
+// Les deux résumés d'un événement : mesuresDuRetenu (resumeDuRetenu) et
+// meilleureDuClassement (resumeDuMeilleur). AUCUN_RESUME est celui d'un état
+// qui ne se lit pas — illisible au relevé du dépôt, ou depuis : la ligne en
+// porte déjà la cause, ou la portera à la liste suivante —, et celui que la
+// liste montre pour un événement dont le calcul a fauté.
 const AUCUN_RESUME = Object.freeze({ mesuresDuRetenu: null, meilleureDuClassement: null });
-async function resumesDe(fs, racine, { base, illisible }) {
-  if (illisible !== null) return AUCUN_RESUME;
-  let charge;
+
+// La charge examinée de l'état base, lue sans rien écrire (examiner, § 8.9,
+// point 3) : celle que l'ouverture garde, où une proposition fautive, dont
+// l'identifiant se répète ou atteint le compteur, n'entre pas au classement —
+// qui lève sur un identifiant répété —, si bien que la liste nomme la
+// proposition au rang 1 que le bloc de génération de l'événement ouvert
+// nomme. null pour un état absent ou qui ne se lit pas.
+async function chargeExaminee(fs, racine, base) {
   try {
     const texte = await fs.lireTexte(racine, base + SUFFIXES.etat);
-    if (texte === null) return AUCUN_RESUME;
-    charge = examiner(analyser(texte).charge).charge;
+    if (texte === null) return null;
+    return examiner(analyser(texte).charge).charge;
   } catch (erreur) {
-    if (erreur instanceof ErreurStockage) return AUCUN_RESUME;
+    if (erreur instanceof ErreurStockage) return null;
     throw erreur;
   }
-  return { mesuresDuRetenu: resumeDuRetenu(charge), meilleureDuClassement: resumeDuMeilleur(charge) };
 }
 
 // Pourquoi l'état d'un résumé illisible ne s'ouvre pas : les détails de
@@ -316,10 +318,48 @@ export function creerFacade({
           ? resumes.filter((autre) => autre !== resume && autre.doublon && autre.id === id).map((autre) => autre.base)
           : [],
         verrou: await verrouDe(fs, courante, base),
-        ...(await resumesDe(fs, courante, resume)),
       });
     }
     return lignes;
+  }
+
+  // Les résumés des lignes, dans le dossier de travail de l'appel : ceux des
+  // états illisibles aussitôt, puis un événement lisible par pas, dans
+  // l'ordre des lignes. Chaque pas attend ceder(), lit l'état, puis calcule ;
+  // abandonné, le flux ne lit ni ne calcule plus rien, et le calcul en cours
+  // ne se reçoit pas. Une faute d'un événement lui donne AUCUN_RESUME, le
+  // flux continue, et fin la rejette une fois le flux arrêté.
+  function resumer(lignes, { ceder, recevoir }) {
+    const courante = racine();
+    if (courante === null) throw new RangeError("resumer : aucun dossier de travail, demarrer n'a pas abouti");
+    let abandonne = false;
+    for (const { base, illisible } of lignes) if (illisible !== null) recevoir(base, AUCUN_RESUME);
+    const lisibles = lignes.filter(({ illisible }) => illisible === null).map(({ base }) => base);
+    async function parcourir() {
+      let faute = null;
+      for (const base of lisibles) {
+        await ceder();
+        if (abandonne) break;
+        let resume = AUCUN_RESUME;
+        try {
+          const charge = await chargeExaminee(fs, courante, base);
+          if (!abandonne && charge !== null) {
+            resume = { mesuresDuRetenu: resumeDuRetenu(charge), meilleureDuClassement: resumeDuMeilleur(charge) };
+          }
+        } catch (erreur) {
+          faute ??= erreur;
+        }
+        if (abandonne) break;
+        recevoir(base, resume);
+      }
+      if (faute !== null) throw faute;
+    }
+    return {
+      abandonner() {
+        abandonne = true;
+      },
+      fin: parcourir(),
+    };
   }
 
   // Le verrou de l'événement cible pris sous la séance de la façade. Le sien,
@@ -496,13 +536,29 @@ export function creerFacade({
      */
     repondre,
     /**
-     * Les lignes de la liste (§ 8.1), dans l'ordre du dépôt ; n'écrit rien.
-     * mesuresDuRetenu porte resumeDuRetenu de l'état, null sans retenu
-     * mesurable ou pour un état illisible ; meilleureDuClassement,
-     * resumeDuMeilleur de l'état, null sans proposition classée ou pour un
-     * état illisible.
+     * Les lignes de la liste (§ 8.1), dans l'ordre du dépôt, telles que le
+     * relevé du dépôt les donne ; n'écrit rien, et n'évalue rien : leurs
+     * résumés viennent de resumer.
      */
     lister,
+    /**
+     * Les résumés des lignes de lister (§ 8.1), un événement après l'autre,
+     * sans rien écrire : recevoir(base, { mesuresDuRetenu,
+     * meilleureDuClassement }) une fois par ligne — resumeDuRetenu et
+     * resumeDuMeilleur de sa charge examinée, chacun null sans retenu
+     * mesurable ou sans proposition classée, l'un et l'autre null pour un
+     * état illisible. Une ligne illisible reçoit le sien avant le retour ;
+     * chaque ligne lisible attend la promesse de ceder(), puis relit son
+     * état et se calcule. abandonner() arrête le flux : plus rien ne se lit,
+     * ne se calcule ni ne se reçoit. fin se résout quand le flux s'arrête, et
+     * rejette par la première faute d'un calcul, dont la ligne a reçu les
+     * deux résumés à null. RangeError sans dossier de travail.
+     *
+     * @param {Array<{base: string, illisible: object|null}>} lignes
+     * @param {{ceder: () => Promise<unknown>, recevoir: (base: string, resume: Object) => void}} rappels
+     * @returns {{abandonner: () => void, fin: Promise<void>}}
+     */
+    resumer,
     /** Crée et ouvre en lecture l'événement { nom, date } (§ 2.1, étape 1). */
     creer: creerEvenement,
     /** Charge la démonstration de clé donnée sous « ‹nom› N », ouverte en lecture (§ 15). */

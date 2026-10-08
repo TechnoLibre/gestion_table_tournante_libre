@@ -93,6 +93,9 @@ export const MARQUES = Object.freeze([
   // chaises.
   marque('echelle', 'echelle', ['sol', 'page-fond']),
   marque('fantome', 'fantome', ['sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  // Le signe du chargement d'une valeur de la liste des événements (§ 8.1) :
+  // un arc tracé de l'encre secondaire, sur la page.
+  marque('chargement', 'page-texte-secondaire', ['page-fond']),
 ]);
 
 /** Les textes et leurs fonds, même forme, seuil 4,5 : page, secondaire, bandeau, refus,

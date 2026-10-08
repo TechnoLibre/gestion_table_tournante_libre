@@ -730,18 +730,44 @@ function nomDeDirective(noeud) {
 // Déclarations d'animation admises : celles qui l'éteignent.
 const ANIMATION_ETEINTE = /^\s*(?:none|0m?s)\s*$/i;
 
+// Les animations admises, chacune nommée par son fichier, le sélecteur de sa
+// règle et le nom de ses images clés, avec sa raison. Une exception admet,
+// dans son seul fichier, les déclarations animation… de sa règle et les
+// @keyframes de son nom ; toute autre animation du fichier, et toute
+// transition, restent relevées. La règle admise s'éteint sous
+// prefers-reduced-motion: reduce, sinon elle se relève ; la feuille qui
+// annule transitions et animations (§ 19.2) l'éteint comme toute autre. Une
+// exception que rien ne sert se relève « sans objet ».
+const ANIMATIONS_ADMISES = [
+  {
+    fichier: 'src/interface/accueil/Chargement.svelte',
+    selecteur: '.rouet',
+    images: 'rotation',
+    raison:
+      "le signe du chargement des résumés de la liste (§ 8.1) tourne pour dire qu'un calcul se poursuit : aucun état " +
+      "n'en dépend ni n'attend sa fin, et rien ne lit son rendu",
+  },
+];
+
+// Vrai sous une règle @media qui demande le mouvement réduit.
+const sousMouvementReduit = (ancetres) =>
+  ancetres.some((a) => a.type === 'Atrule' && a.name === 'media' && /prefers-reduced-motion\s*:\s*reduce/.test(a.prelude));
+
 // Relevé de textLength et lengthAdjust sous src/interface et src/geometrie, de
 // transitionend et animationend sous src/interface, et de toute transition
 // ou animation de l'interface : déclaration transition…, animation… ou
 // @keyframes d'une feuille, directive transition:, in:, out: ou animate:
-// d'un composant. Un état qui attendrait la fin d'une transition ne
-// s'atteindrait plus sous la feuille qui les annule (§ 19.2).
-function releverTexteEtAnimation(racine) {
+// d'un composant —, hors des animations admises (exceptions), suivi d'une
+// ligne « exception sans objet » par exception que rien ne sert. Un état qui
+// attendrait la fin d'une transition ne s'atteindrait plus sous la feuille
+// qui les annule (§ 19.2).
+function releverTexteEtAnimation(racine, exceptions = ANIMATIONS_ADMISES) {
   const chemins = exigerNonVide(
     sources(racine, ['src/interface', 'src/geometrie'], ['.svelte', '.js', '.css']),
     'texte et animation',
   );
   const releves = [];
+  const servies = new Set();
   for (const chemin of chemins) {
     const interface_ = chemin.startsWith('src/interface/');
     const motifs = interface_ ? ['textLength', 'lengthAdjust', 'transitionend', 'animationend'] : ['textLength', 'lengthAdjust'];
@@ -768,15 +794,38 @@ function releverTexteEtAnimation(racine) {
       const directive = nomDeDirective(noeud);
       if (directive !== null) relever(noeud.start, `directive ${directive}:${noeud.name}`);
     });
-    parcourir(css, (noeud) => {
+    // L'exception de ce fichier, la première déclaration qu'elle admet, et
+    // vrai quand sa règle s'éteint sous le mouvement réduit.
+    const admise = exceptions.find(({ fichier }) => fichier === chemin) ?? null;
+    let premiereAdmise = null;
+    let arretee = false;
+    parcourir(css, (noeud, ancetres) => {
       const anime = noeud.type === 'Declaration' && /^(?:transition|animation)(?:-|$)/.test(noeud.property);
+      const regle = ancetres.findLast((a) => a.type === 'Rule');
+      const selecteur = regle === undefined ? '' : texte.slice(regle.prelude.start, regle.prelude.end).trim();
+      const deLAdmise = anime && admise !== null && selecteur === admise.selecteur && noeud.property.startsWith('animation');
       if (anime && !ANIMATION_ETEINTE.test(noeud.value)) {
-        relever(noeud.start, `${noeud.property}: ${noeud.value}`);
+        if (deLAdmise) {
+          servies.add(admise);
+          premiereAdmise ??= noeud.start;
+        } else {
+          relever(noeud.start, `${noeud.property}: ${noeud.value}`);
+        }
       }
-      if (noeud.type === 'Atrule' && /keyframes$/i.test(noeud.name)) relever(noeud.start, `@${noeud.name}`);
+      if (deLAdmise && ANIMATION_ETEINTE.test(noeud.value) && sousMouvementReduit(ancetres)) arretee = true;
+      if (noeud.type === 'Atrule' && /keyframes$/i.test(noeud.name)) {
+        if (admise !== null && noeud.prelude.trim() === admise.images) servies.add(admise);
+        else relever(noeud.start, `@${noeud.name}`);
+      }
     });
+    if (premiereAdmise !== null && !arretee) {
+      relever(premiereAdmise, `animation admise sans arrêt sous prefers-reduced-motion : ${admise.selecteur}`);
+    }
   }
-  return trier(releves);
+  const sansObjet = exceptions
+    .filter((exception) => !servies.has(exception))
+    .map(({ fichier, selecteur }) => `exception sans objet : ${fichier} ${selecteur}`);
+  return [...trier(releves), ...sansObjet];
 }
 
 // --- Garde 7 : le câblage (§ 12.9, § 13.3) ------------------------------------
@@ -1289,7 +1338,7 @@ describe('sources de l’interface : texte comprimé et animations (§ 7.4, § 1
       'src/application/c.js': "export const f = 'textLength';\n",
       'src/interface/A.navigateur.test.js': "export const f = '[textLength], [lengthAdjust]';\n",
     };
-    assert.deepEqual(avecArbre(fichiers, releverTexteEtAnimation), [
+    assert.deepEqual(avecArbre(fichiers, (racine) => releverTexteEtAnimation(racine, [])), [
       'src/geometrie/texte.js:1 textLength',
       'src/geometrie/texte.js:4 textLength',
       'src/interface/b.js:1 animationend',
@@ -1306,6 +1355,45 @@ describe('sources de l’interface : texte comprimé et animations (§ 7.4, § 1
 
   test('un arbre sans source fait échouer la garde', () => {
     assert.throws(() => avecArbre({ 'src/application/a.js': '' }, releverTexteEtAnimation), /aucun fichier examiné/);
+  });
+
+  test('l’animation admise : celle du signe du chargement, par son fichier et son sélecteur, arrêtée sous prefers-reduced-motion', () => {
+    assert.equal(ANIMATIONS_ADMISES.length, 1);
+    const [admise] = ANIMATIONS_ADMISES;
+    assert.equal(admise.fichier, 'src/interface/accueil/Chargement.svelte');
+    assert.ok(admise.raison.length > 0);
+    const tourne = `  ${admise.selecteur} { animation: ${admise.images} 1s linear infinite; }`;
+    const images = `  @keyframes ${admise.images} { to { transform: rotate(1turn); } }`;
+    const arret = `  @media (prefers-reduced-motion: reduce) { ${admise.selecteur} { animation: none; } }`;
+    const style = (...regles) => composant({ gabarit: '<svg></svg>', style: regles.join('\n') });
+    const ailleurs = 'src/interface/accueil/Autre.svelte';
+    // Le fichier admis, sa règle, ses images et son arrêt : rien à relever.
+    assert.deepEqual(avecArbre({ [admise.fichier]: style(tourne, images, arret) }, releverTexteEtAnimation), []);
+    // Une autre règle du même fichier, une transition de la règle admise, et
+    // la même règle dans un autre fichier restent relevées.
+    assert.deepEqual(
+      avecArbre(
+        {
+          [admise.fichier]: style(tourne, images, arret, '  .autre { animation: clignote 1s; }', `  ${admise.selecteur} { transition: transform 1s; }`),
+          [ailleurs]: style(tourne, images),
+        },
+        releverTexteEtAnimation,
+      ),
+      [
+        `${ailleurs}:3 animation: ${admise.images} 1s linear infinite`,
+        `${ailleurs}:4 @keyframes`,
+        `${admise.fichier}:6 animation: clignote 1s`,
+        `${admise.fichier}:7 transition: transform 1s`,
+      ],
+    );
+    // Sans son arrêt sous prefers-reduced-motion, l'animation admise se relève.
+    assert.deepEqual(avecArbre({ [admise.fichier]: style(tourne, images) }, releverTexteEtAnimation), [
+      `${admise.fichier}:3 animation admise sans arrêt sous prefers-reduced-motion : ${admise.selecteur}`,
+    ]);
+    // Un arbre qui ne la porte plus : l'exception est sans objet.
+    assert.deepEqual(avecArbre({ [ailleurs]: style() }, releverTexteEtAnimation), [
+      `exception sans objet : ${admise.fichier} ${admise.selecteur}`,
+    ]);
   });
 });
 

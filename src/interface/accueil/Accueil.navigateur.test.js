@@ -7,10 +7,11 @@
 // événement ouvert, ouvrir sans écrire, les signalements, la récupération,
 // l'ouverture en lecture, les réglages illisibles, le dossier de travail, ses
 // avis et ses questions, l'explorateur, l'autre emplacement, copier,
-// renommer, importer, supprimer, les démonstrations, la racine neutre, et la
-// liste qui défile sous le bandeau. Chaque épreuve monte App par monterApp
-// (test/navigateur/montage.js), sur le système de fichiers simulé, et lit
-// le relevé de ses écritures.
+// renommer, importer, supprimer, les démonstrations, la racine neutre, la
+// liste qui défile sous le bandeau, et le chargement des résumés de la liste,
+// dont l'horloge pilotée du montage tient chaque pas. Chaque épreuve monte
+// App par monterApp (test/navigateur/montage.js), sur le système de fichiers
+// simulé, et lit le relevé de ses écritures.
 //
 // Le test interroge le rendu et le disque, jamais une classe : le texte, la
 // visibilité, l'élément qu'atteint le centre d'une boîte, les fichiers du
@@ -20,6 +21,7 @@
 // Le projet navigateur emploie expect, et prend test et describe chez Vitest
 // (voir src/interface/App.navigateur.test.js).
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { cdp } from 'vitest/browser';
 import { flushSync, tick } from 'svelte';
 import { appliquerCommande } from '../../application/commandes.js';
 import { evaluer } from '../../application/evaluation.js';
@@ -35,16 +37,24 @@ import { rechercher } from '../../moteur/recherche.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { creer as creerDansLeDepot, ouvrir as ouvrirDansLeDepot } from '../../stockage/depot.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
+import { ErreurStockage } from '../../stockage/erreurs.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { libelleDeLInstant } from '../../stockage/operations.js';
 import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
-import { centre } from '../../../test/navigateur/ecrans.js';
+import { centre, chargerResumes, suivreResumes } from '../../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { visible as visibleDansLaFenetre } from '../../../test/navigateur/rendu.js';
+import {
+  attenuations,
+  composantes,
+  contraste,
+  fondPeintSous,
+  sousTheme,
+  visible as visibleDansLaFenetre,
+} from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -231,6 +241,10 @@ async function photographier(m, racine, dossier = '') {
   }
   return photo;
 }
+
+// Les signes du chargement des résumés d'un montage.
+const signes = (m) => tous(m, '[data-chargement]');
+const uneImage = () => new Promise((resoudre) => requestAnimationFrame(() => resoudre()));
 
 // --- Le premier écran (§ 8.1, § 18.6) ---------------------------------------------
 
@@ -1158,6 +1172,7 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
       fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(charge)), fichier(`club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
     });
     await vi.waitFor(() => expect(lignes(m).length).toBe(2));
+    await chargerResumes(m);
     const avant = ecritures(m);
     const retenue = ligneDe(m, 'retenue');
     expect(colonne(retenue, 'collisionsCumulees')).toBe(format.nombre(mesures.collisionsCumulees));
@@ -1186,6 +1201,7 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     const { totalRedondance } = mesuresDe(charge);
     const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(charge))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
+    await chargerResumes(m);
     expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(1000 - totalRedondance)));
     await ouvrirLigne(m, 'retenue');
     await attendreEvenement(m);
@@ -1198,8 +1214,12 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     saisir(entree, '25');
     entree.blur();
     await vi.waitFor(() => expect(m.seance.etat().charge.reglages.cibleRedondance).toBe(25));
+    // Le résumé que la liste relue reçoit, non celui de la lecture d'avant,
+    // que la ligne montre encore tant que la relecture ne s'est pas posée.
+    const resumeRecu = suivreResumes(m);
     await revenirALaListe(m, 1);
-    await vi.waitFor(() => expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(25 - totalRedondance))));
+    await resumeRecu('retenue');
+    expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(25 - totalRedondance)));
     expect(colonne(ligneDe(m, 'retenue'), 'collisionsCumulees')).toBe(format.nombre(mesuresDe(charge).collisionsCumulees));
   });
 });
@@ -1240,6 +1260,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
       fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(charge)), fichier(`club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
     });
     await vi.waitFor(() => expect(lignes(m).length).toBe(2));
+    await chargerResumes(m);
     const avant = ecritures(m);
     const classee = ligneDe(m, 'classee');
     const bloc = blocDe(classee);
@@ -1270,6 +1291,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
   test('la ligne écrit ce que le bloc de la génération écrit du même événement, sous les mêmes libellés, et de nouveau au retour', async () => {
     const m = await monter({ fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
+    await chargerResumes(m);
     const ligne = ligneDe(m, 'classee');
     const deLaListe = lu(blocDe(ligne));
     expect(deLaListe.id).toMatch(/\d/);
@@ -1287,8 +1309,12 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
         (element) => element.textContent,
       ),
     ).toEqual(libelles);
+    // Le même résumé, mais reçu de la liste relue au retour : celui d'avant
+    // l'ouverture écrirait les mêmes valeurs sans rien prouver.
+    const resumeRecu = suivreResumes(m);
     await revenirALaListe(m, 1);
-    await vi.waitFor(() => expect(lu(blocDe(ligneDe(m, 'classee')))).toEqual(deLaListe));
+    await resumeRecu('classee');
+    expect(lu(blocDe(ligneDe(m, 'classee')))).toEqual(deLaListe);
   });
 
   test('des propositions toutes hors du classement : « — » à la liste, là où le bloc de la génération le dit en mots', async () => {
@@ -1299,6 +1325,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     expect(statuts.every((statut) => statut !== 'comparable')).toBe(true);
     const m = await monter({ fichiers: [fichier(`horsclassement${SUFFIXES.etat}`, etat(charge))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
+    await chargerResumes(m);
     expect(lu(blocDe(ligneDe(m, 'horsclassement')))).toEqual({ id: TIRET, collisions: TIRET });
     await ouvrirLigne(m, 'horsclassement');
     await attendreEvenement(m);
@@ -1313,6 +1340,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
       const bases = ['un', 'deux', 'trois', 'quatre', 'cinq', 'six'];
       const m = await monter({ fichiers: bases.map((base) => fichier(`${base}${SUFFIXES.etat}`, etat(chargeClassee({ id: `evt-${base}` })))) });
       await vi.waitFor(() => expect(lignes(m).length).toBe(bases.length));
+      await chargerResumes(m);
       const blocs = lignes(m).map(blocDe);
       expect(blocs.length).toBe(bases.length);
       expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
@@ -1323,6 +1351,157 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
       }
     } finally {
       await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+});
+
+// --- Le chargement des résumés (§ 8.1, § 14.5, § 19.2) ------------------------------
+
+describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', () => {
+  // La petite démonstration au conflit inévitable, sous l'identifiant id,
+  // trois propositions du moteur et la deuxième retenue.
+  function chargeResumee(id) {
+    let charge = analyser(texteLivre('petite-conflit')).charge;
+    charge.evenement.id = id;
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 6, nombre: 3, arret: 300 });
+    charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+    return appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
+  }
+
+  // Les quatre valeurs de résumé d'une ligne, dans l'ordre du rendu.
+  const CELLULES = ['[data-colonne="collisionsCumulees"]', '[data-colonne="diffRedondance"]', '[data-meilleure-id]', '[data-meilleure-collisions]'];
+  const cellules = (ligne) => CELLULES.map((selecteur) => ligne.querySelector(selecteur));
+  // Ce que la ligne d'une charge écrit, par la table d'évaluation sollicitée
+  // une seconde fois (§ 19.1).
+  function attendues(charge) {
+    const table = evaluer(charge);
+    const [premiere] = table.propositions;
+    const { collisionsCumulees, totalRedondance } = table.retenu.mesures;
+    return [collisionsCumulees, Math.abs(1000 - totalRedondance), premiere.id, premiere.mesures.collisionsCumulees].map((n) => format.nombre(n));
+  }
+  // Chaque valeur de la ligne attend : la cellule se dit occupée, porte un
+  // seul signe, muet pour l'accessibilité (aria-hidden, sans rôle ni nom),
+  // et aucun texte.
+  function enAttente(ligne) {
+    for (const cellule of cellules(ligne)) {
+      expect(cellule.getAttribute('aria-busy')).toBe('true');
+      const signe = cellule.querySelectorAll('[data-chargement]');
+      expect(signe.length).toBe(1);
+      expect(signe[0].getAttribute('aria-hidden')).toBe('true');
+      expect(signe[0].hasAttribute('role')).toBe(false);
+      expect(signe[0].hasAttribute('aria-label')).toBe(false);
+      expect(signe[0] instanceof SVGSVGElement).toBe(true);
+      expect(cellule.textContent.trim()).toBe('');
+    }
+  }
+  // La région d'état de la liste, la seule que la liste porte : l'annonce
+  // du chargement s'y écrit une fois pour toutes les lignes.
+  function regionEtat(m) {
+    const regions = tous(m, '[data-chargement-liste]');
+    expect(regions.length).toBe(1);
+    expect(regions[0].getAttribute('role')).toBe('status');
+    expect(tous(m, '.liste [role="status"], .liste [role="img"]')).toEqual([]);
+    return regions[0];
+  }
+  const resolue = (ligne, valeurs) => {
+    expect(cellules(ligne).map((cellule) => cellule.textContent)).toEqual(valeurs);
+    for (const cellule of cellules(ligne)) {
+      expect(cellule.hasAttribute('aria-busy')).toBe(false);
+      expect(cellule.querySelector('[data-chargement]')).toBeNull();
+    }
+  };
+
+  test('la liste paraît avant ses résumés, un signe muet par valeur, une seule annonce ; chaque pas de l’horloge résout une ligne, dans l’ordre, aux valeurs de l’évaluation ; rien d’écrit', async () => {
+    const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
+    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}${SUFFIXES.etat}`, etat(charge))) });
+    const avant = ecritures(m);
+    // pret résolu : les lignes et leurs informations sont là, chaque valeur
+    // de résumé attend, et le reste tant que l'horloge n'avance pas.
+    expect(lignes(m).map((ligne) => ligne.dataset.evenement)).toEqual(['alpha', 'beta']);
+    for (const ligne of lignes(m)) {
+      expect(colonne(ligne, 'nom')).toBe(charges[ligne.dataset.evenement].evenement.nom);
+      expect(colonne(ligne, 'participants')).toBe(format.nombre(charges[ligne.dataset.evenement].participants.length));
+      enAttente(ligne);
+    }
+    expect(signes(m).length).toBe(8);
+    const region = regionEtat(m);
+    expect(region.textContent).toBe(t('accueil.chargement'));
+    for (let image = 0; image < 3; image += 1) await uneImage();
+    flushSync();
+    expect(signes(m).length).toBe(8);
+    m.horloge.avancer(0);
+    await vi.waitFor(() => resolue(ligneDe(m, 'alpha'), attendues(charges.alpha)));
+    enAttente(ligneDe(m, 'beta'));
+    expect(regionEtat(m)).toBe(region);
+    expect(region.textContent).toBe(t('accueil.chargement'));
+    m.horloge.avancer(0);
+    await vi.waitFor(() => resolue(ligneDe(m, 'beta'), attendues(charges.beta)));
+    expect(signes(m).length).toBe(0);
+    // La fin du chargement vide la région, qui reste là pour le suivant.
+    expect(regionEtat(m)).toBe(region);
+    expect(region.textContent).toBe('');
+    expect(ecritures(m)).toBe(avant);
+  });
+
+  test('un état qui ne se relit pas pendant le chargement : « — » dans ses quatre valeurs, et l’autre ligne résolue', async () => {
+    const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
+    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}${SUFFIXES.etat}`, etat(charge))) });
+    const lireTexte = m.fs.lireTexte;
+    m.fs.lireTexte = (racine, chemin) =>
+      chemin === `alpha${SUFFIXES.etat}`
+        ? Promise.reject(new ErreurStockage('LECTURE', { chemin, cause: 'EIO' }))
+        : lireTexte.call(m.fs, racine, chemin);
+    await chargerResumes(m);
+    resolue(ligneDe(m, 'alpha'), [TIRET, TIRET, TIRET, TIRET]);
+    resolue(ligneDe(m, 'beta'), attendues(charges.beta));
+  });
+
+  test('le signe tourne par une animation CSS sans fin ; immobile sous prefers-reduced-motion: reduce, et sous la feuille qui annule les animations', async () => {
+    const m = await monter({ fichiers: [fichier(`alpha${SUFFIXES.etat}`, etat(chargeResumee('evt-alpha')))] });
+    const [signe] = signes(m);
+    expect(signe).toBeDefined();
+    const tourne = () => signe.getAnimations().filter((animation) => animation.playState === 'running');
+    expect(tourne().length).toBe(1);
+    expect(tourne()[0].effect.getTiming().iterations).toBe(Infinity);
+    expect(getComputedStyle(signe).animationName).not.toBe('none');
+    await cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    try {
+      expect(matchMedia('(prefers-reduced-motion: reduce)').matches).toBe(true);
+      await vi.waitFor(() => expect(tourne().length).toBe(0));
+      expect(getComputedStyle(signe).animationName).toBe('none');
+    } finally {
+      await cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: '' }] });
+    }
+    await vi.waitFor(() => expect(tourne().length).toBe(1));
+    const feuille = document.createElement('style');
+    feuille.textContent = '*,*::before,*::after{transition:none!important;animation:none!important}';
+    document.head.append(feuille);
+    try {
+      await vi.waitFor(() => expect(tourne().length).toBe(0));
+    } finally {
+      feuille.remove();
+    }
+  });
+
+  test('le signe se voit : il tient 3:1 sur ce qui l’entoure dans les deux thèmes, sans atténuation', async () => {
+    const m = await monter({ fichiers: [fichier(`alpha${SUFFIXES.etat}`, etat(chargeResumee('evt-alpha')))] });
+    const traces = tous(m, '[data-chargement] path');
+    expect(traces.length).toBe(4);
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        for (const trace of traces) {
+          const signe = trace.ownerSVGElement;
+          signe.scrollIntoView({ block: 'center' });
+          expect(visibleDansLaFenetre(signe), theme).toBe(true);
+          expect(attenuations(trace), theme).toEqual([]);
+          expect(getComputedStyle(trace).fill, theme).toBe('none');
+          const couleur = composantes(getComputedStyle(trace).stroke);
+          const autour = fondPeintSous(signe);
+          expect(autour.length, theme).toBeGreaterThan(0);
+          for (const fond of autour) expect(contraste(couleur, fond), `${theme} sur ${fond.join(', ')}`).toBeGreaterThanOrEqual(3);
+        }
+      });
     }
   });
 });

@@ -16,8 +16,15 @@
   // le refus de son ouverture, et ses opérations. Un dossier sans événement n'affiche pas de liste vide :
   // la création et les démonstrations de l'accueil en tiennent lieu.
   //
-  // lignes : LigneListe[] de la façade ; ouvrir(ligne) : le geste de
-  // l'accueil ; refusOuverture : { base, refus } du dernier échec, ou null ;
+  // lignes : LigneListe[] de la façade ; resumes : les résumés reçus de
+  // facade.resumer, par base — une ligne sans le sien attend, et chacune de
+  // ses quatre valeurs de résumé porte le signe du chargement (Chargement),
+  // décoratif, dans une cellule qui se dit occupée (aria-busy), jusqu'à ce
+  // qu'il arrive. La région d'état qui suit la liste (data-chargement-liste)
+  // existe tant que la liste a des lignes, et écrit « accueil.chargement »
+  // tant qu'une ligne attend : le chargement s'annonce une fois pour la
+  // liste, et sa fin la vide. ouvrir(ligne) : le geste de l'accueil ;
+  // refusOuverture : { base, refus } du dernier échec, ou null ;
   // apresOperation() : à appeler quand une opération a changé le dossier.
   //
   // L'intitulé de chaque mesure du retenu, le titre de la meilleure
@@ -30,13 +37,17 @@
   import { getContext } from 'svelte';
   import Infobulle from '../primitives/Infobulle.svelte';
   import Refus from '../primitives/Refus.svelte';
+  import Chargement from './Chargement.svelte';
   import Operations from './Operations.svelte';
   import { COLONNES_DU_RETENU, MEILLEURE, ligneAffichee } from './modele.js';
 
-  let { lignes, ouvrir, refusOuverture, apresOperation } = $props();
+  let { lignes, resumes, ouvrir, refusOuverture, apresOperation } = $props();
 
   const t = getContext('t');
   const format = getContext('format');
+
+  // Une ligne au moins attend son résumé.
+  const enChargement = $derived(lignes.some((ligne) => ligneAffichee(ligne, format, resumes.get(ligne.base)).enAttente));
 
   // Le terme expliqué : {ancre, terme, cle, details} — son élément, sa
   // désignation '<base>:<colonne>' et la clé de son explication — ; null
@@ -58,6 +69,12 @@
 <!-- Un terme expliqué : nom est son data-terme, cle son intitulé,
      explication la clé que l'infobulle montre ; id, celui qu'un groupe
      nomme par aria-labelledby, ou undefined. -->
+<!-- Une valeur de résumé : le signe du chargement tant que la ligne
+     attend, sa valeur ensuite. -->
+{#snippet resume(affichee, valeur)}
+  {#if affichee.enAttente}<Chargement />{:else}{valeur}{/if}
+{/snippet}
+
 {#snippet termeExplique(base, nom, cle, explication, id)}
   {@const terme = `${base}:${nom}`}
   <!-- L'intitulé est un terme, non une commande : le focus ne sert qu'à
@@ -79,7 +96,8 @@
 {#if lignes.length > 0}
   <ul class="liste">
     {#each lignes as ligne, position (ligne.base)}
-      {@const affichee = ligneAffichee(ligne, format)}
+      {@const affichee = ligneAffichee(ligne, format, resumes.get(ligne.base))}
+      {@const occupee = affichee.enAttente ? 'true' : undefined}
       {@const idMeilleure = `${uid}-meilleure-${position}`}
       <li class="ligne" data-evenement={ligne.base}>
         <button type="button" class="ouvrir" data-commande="ouvrir" onclick={() => ouvrir(ligne)}
@@ -105,7 +123,7 @@
           {#each COLONNES_DU_RETENU as { colonne, cle, explication } (colonne)}
             <div>
               <dt>{@render termeExplique(ligne.base, colonne, cle, explication, undefined)}</dt>
-              <dd data-colonne={colonne}>{affichee[colonne]}</dd>
+              <dd data-colonne={colonne} aria-busy={occupee}>{@render resume(affichee, affichee[colonne])}</dd>
             </div>
           {/each}
           <div class="chemin">
@@ -120,7 +138,7 @@
           <dl>
             <div>
               <dt>{t(MEILLEURE.proposition)}</dt>
-              <dd data-meilleure-id>{affichee.meilleure.id}</dd>
+              <dd data-meilleure-id aria-busy={occupee}>{@render resume(affichee, affichee.meilleure.id)}</dd>
             </div>
             <div>
               <dt>
@@ -132,7 +150,7 @@
                   undefined,
                 )}
               </dt>
-              <dd data-meilleure-collisions>{affichee.meilleure.collisions}</dd>
+              <dd data-meilleure-collisions aria-busy={occupee}>{@render resume(affichee, affichee.meilleure.collisions)}</dd>
             </div>
           </dl>
         </div>
@@ -155,6 +173,7 @@
       </li>
     {/each}
   </ul>
+  <p class="chargement" role="status" data-chargement-liste>{#if enChargement}{t('accueil.chargement')}{/if}</p>
   <Infobulle id={idExplication} ouverte={expliquee} fermer={fermerExplication} />
 {/if}
 
@@ -277,6 +296,11 @@
 
   .signalement p {
     margin: 0;
+  }
+
+  .chargement {
+    margin: 0;
+    color: var(--couleur-page-texte-secondaire);
   }
 
   .noms {
