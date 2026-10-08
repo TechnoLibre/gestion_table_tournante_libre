@@ -25,6 +25,7 @@ import { serialiser } from '../../stockage/canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { planDepuisFichier, versFichier } from '../../stockage/placements.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { CONFLITS } from '../marques.js';
 import {
   ECART_ANNEAU,
   ECART_DESIGNATION,
@@ -39,6 +40,7 @@ import {
   detailConflits,
   executerSurPlace,
   formesTable,
+  legendeConflits,
   libelleLongueur,
   ligneListe,
   modeleDessin,
@@ -880,38 +882,175 @@ describe('modeleDessin : les options selection et actif marquent leur chaise, ou
 
 // --- Le détail d'une table en conflit (I11) --------------------------------------
 
+// L'appartenance de chaque participant de la charge, par identifiant.
+const appartenancesDe = (charge) => {
+  const appartenances = new Map(charge.participants.map(({ id, appartenance }) => [id, appartenance]));
+  return (id) => appartenances.get(id) ?? null;
+};
+
 describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3)', () => {
-  test('petite démonstration en conflit : chaque règle violée, ses paires ou ses personnes, dans l’ordre du moteur', () => {
+  // Les lignes attendues d'une table : séparer les appartenances, une ligne
+  // par appartenance, dans l'ordre de leur première paire ; les autres
+  // règles, une ligne chacune.
+  function lignesAttendues(table, nomDe, appartenanceDe) {
+    const lignes = [];
+    for (const regle of table.conflits.regles) {
+      const cle = `plan.infobulle.${regle.regle}`;
+      if (regle.regle !== 'separerAppartenances') {
+        const groupes = (regle.paires ?? regle.personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe));
+        lignes.push({ regle: regle.regle, cle, appartenance: null, groupes });
+        continue;
+      }
+      for (const [a, b] of regle.paires) {
+        const appartenance = appartenanceDe(a);
+        assert.equal(appartenanceDe(b), appartenance);
+        const ligne = lignes.find((l) => l.regle === regle.regle && l.appartenance === appartenance);
+        if (ligne === undefined) lignes.push({ regle: regle.regle, cle, appartenance, groupes: [[nomDe(a), nomDe(b)]] });
+        else ligne.groupes.push([nomDe(a), nomDe(b)]);
+      }
+    }
+    return lignes;
+  }
+
+  test('petite démonstration en conflit : chaque règle violée, ses paires ou ses personnes, dans l’ordre du moteur ; chaque paire réunie nomme son appartenance', () => {
     const charge = avecPropositions(petite('petite-conflit'));
     const nomDe = nomsDe(charge);
+    const appartenanceDe = appartenancesDe(charge);
     let vus = 0;
+    let separees = 0;
     for (let tour = 1; tour <= charge.evenement.tours; tour += 1) {
       for (const table of etatPlaces(charge, { tour, proposition: 1 }).tables) {
-        const detail = detailConflits(table, nomDe);
+        const detail = detailConflits(table, nomDe, appartenanceDe);
         if (table.conflits.nombre === 0) {
           assert.equal(detail, null);
           continue;
         }
         vus += 1;
-        assert.deepEqual(detail, {
-          numero: table.numero,
-          nombre: table.conflits.nombre,
-          regles: table.conflits.regles.map((regle) => ({
-            cle: `plan.infobulle.${regle.regle}`,
-            groupes: (regle.paires ?? regle.personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe)),
-          })),
-        });
-        for (const { cle } of detail.regles) assert.ok(typeof t(cle) === 'string' && t(cle).length > 0, cle);
+        assert.deepEqual(detail, { numero: table.numero, nombre: table.conflits.nombre, lignes: lignesAttendues(table, nomDe, appartenanceDe) });
+        for (const ligne of detail.lignes) {
+          assert.ok(typeof t(ligne.cle) === 'string' && t(ligne.cle).length > 0, ligne.cle);
+          if (ligne.regle === 'separerAppartenances') {
+            separees += 1;
+            assert.equal(typeof ligne.appartenance, 'string');
+          }
+        }
       }
     }
     assert.ok(vus > 0, 'au moins une table en conflit');
+    assert.ok(separees > 0, 'au moins une paire réunie');
+  });
+
+  test('séparer les appartenances : une ligne par appartenance, ses paires dans l’ordre du moteur ; l’appartenance telle que la liste la porte', () => {
+    const noms = new Map([[1, 'Iris Ombrelle'], [2, 'Théo Pervenche'], [3, 'Ondine Lacasse'], [4, 'Grisaille'], [5, 'Basile Tourmaline']]);
+    const appartenances = new Map([[1, 'Club des Merles'], [2, 'cercle des Hérons '], [3, 'Club des Merles'], [4, 'cercle des Hérons '], [5, 'Club des Merles']]);
+    const table = {
+      numero: 7,
+      conflits: {
+        nombre: 6,
+        regles: [
+          { regle: 'separerAppartenances', paires: [[1, 3], [1, 5], [2, 4], [3, 5]] },
+          { regle: 'nouveauxVoisins', paires: [[1, 2]] },
+          { regle: 'nouvelleTable', personnes: [4] },
+        ],
+      },
+    };
+    const detail = detailConflits(table, (id) => noms.get(id), (id) => appartenances.get(id));
+    assert.deepEqual(detail, {
+      numero: 7,
+      nombre: 6,
+      lignes: [
+        {
+          regle: 'separerAppartenances',
+          cle: 'plan.infobulle.separerAppartenances',
+          appartenance: 'Club des Merles',
+          groupes: [['Iris Ombrelle', 'Ondine Lacasse'], ['Iris Ombrelle', 'Basile Tourmaline'], ['Ondine Lacasse', 'Basile Tourmaline']],
+        },
+        { regle: 'separerAppartenances', cle: 'plan.infobulle.separerAppartenances', appartenance: 'cercle des Hérons ', groupes: [['Théo Pervenche', 'Grisaille']] },
+        { regle: 'nouveauxVoisins', cle: 'plan.infobulle.nouveauxVoisins', appartenance: null, groupes: [['Iris Ombrelle', 'Théo Pervenche']] },
+        { regle: 'nouvelleTable', cle: 'plan.infobulle.nouvelleTable', appartenance: null, groupes: [['Grisaille']] },
+      ],
+    });
   });
 
   test('conflits non évalués, ou nuls : null', () => {
     const charge = petite();
     const [table] = etatPlaces(charge, { tour: 1 }).tables;
-    assert.equal(detailConflits({ ...table, conflits: null }, nomsDe(charge)), null);
-    assert.equal(detailConflits({ ...table, conflits: { nombre: 0, regles: [] } }, nomsDe(charge)), null);
+    assert.equal(detailConflits({ ...table, conflits: null }, nomsDe(charge), appartenancesDe(charge)), null);
+    assert.equal(detailConflits({ ...table, conflits: { nombre: 0, regles: [] } }, nomsDe(charge), appartenancesDe(charge)), null);
+  });
+});
+
+// --- Les trois sortes de conflit : trames et légende ----------------------------
+
+describe('les trames de conflit : une par règle violée, sa marque et son jeton (§ 7.5, § 12.7)', () => {
+  const PAR_REGLE = new Map(CONFLITS.map((c) => [c.regle, c]));
+
+  test('petite démonstration en conflit, chaque tour : les trames d’une table sont les règles qu’elle viole, dans l’ordre du moteur ; aucune pour une table saine', () => {
+    const charge = avecPropositions(petite('petite-conflit'));
+    const sortes = new Set();
+    let multiples = 0;
+    let saines = 0;
+    for (let tour = 1; tour <= charge.evenement.tours; tour += 1) {
+      const etat = etatPlaces(charge, { tour, proposition: 1 });
+      const modele = modeleDessin(etat, options(charge));
+      assert.equal(modele.tables.length, etat.tables.length);
+      etat.tables.forEach((table, i) => {
+        const attendu = table.conflits.regles.map(({ regle }) => ({ ...PAR_REGLE.get(regle) }));
+        assert.deepEqual(modele.tables[i].trames, attendu, `tour ${tour}, table ${table.id}`);
+        for (const { regle } of attendu) sortes.add(regle);
+        if (attendu.length > 1) multiples += 1;
+        if (attendu.length === 0) saines += 1;
+      });
+    }
+    assert.deepEqual([...sortes].sort(), ['nouveauxVoisins', 'nouvelleTable', 'separerAppartenances']);
+    assert.ok(multiples > 0, 'une table au moins viole plusieurs règles');
+    assert.ok(saines > 0, 'une table au moins est saine');
+  });
+
+  test('conflits non évalués : aucune trame', () => {
+    const charge = petite();
+    const etat = etatPlaces(charge, { tour: 1 });
+    const modele = modeleDessin({ ...etat, tables: etat.tables.map((table) => ({ ...table, conflits: null })) }, options(charge));
+    assert.ok(modele.tables.length > 0);
+    assert.ok(modele.tables.every(({ trames, conflit, pastille }) => trames.length === 0 && !conflit && pastille === 0));
+  });
+});
+
+describe('legendeConflits : les règles actives, leur marque et leur libellé (§ 7.5)', () => {
+  const reglages = (actives) => ({
+    separerAppartenances: actives.includes('separerAppartenances'),
+    nouveauxVoisins: actives.includes('nouveauxVoisins'),
+    nouvelleTable: actives.includes('nouvelleTable'),
+    varierAppartenances: true,
+    attribuerSieges: false,
+  });
+  const entree = (regle) => {
+    const { marque, jeton, forme } = CONFLITS.find((c) => c.regle === regle);
+    return { regle, marque, jeton, forme, cle: `plan.legende.${regle}`, cleForme: `plan.legende.forme.${forme}` };
+  };
+
+  test('les trois règles actives, dans l’ordre du moteur', () => {
+    assert.deepEqual(legendeConflits(reglages(['nouvelleTable', 'separerAppartenances', 'nouveauxVoisins'])), [
+      entree('separerAppartenances'),
+      entree('nouveauxVoisins'),
+      entree('nouvelleTable'),
+    ]);
+  });
+
+  test('une règle inactive n’y paraît pas ; aucune règle active, une légende vide ; varier les appartenances ne se localise pas', () => {
+    assert.deepEqual(legendeConflits(reglages(['separerAppartenances', 'nouvelleTable'])), [entree('separerAppartenances'), entree('nouvelleTable')]);
+    assert.deepEqual(legendeConflits(reglages(['nouveauxVoisins'])), [entree('nouveauxVoisins')]);
+    assert.deepEqual(legendeConflits(reglages([])), []);
+  });
+
+  test('chaque libellé de la légende existe', () => {
+    for (const { regle, forme } of CONFLITS) {
+      assert.ok(t(`plan.legende.${regle}`).length > 0, regle);
+      assert.ok(t(`plan.legende.forme.${forme}`).length > 0, forme);
+    }
+    for (const cle of ['plan.legende.titre', 'plan.legende.ouvrir', 'plan.legende.pastille', 'plan.legende.pastilleExemple', 'plan.legende.aucune']) {
+      assert.ok(t(cle).length > 0, cle);
+    }
   });
 });
 
@@ -1066,5 +1205,6 @@ describe('les clés que les panneaux composent existent (§ 14.6)', () => {
     for (const action of actions) assert.equal(typeof t(`plan.action.${action}`), 'string', action);
     for (const action of menu) assert.equal(typeof t(`plan.menu.${action}`), 'string', action);
     for (const regle of ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable']) assert.equal(typeof t(`plan.infobulle.${regle}`), 'string');
+    assert.equal(typeof t('plan.infobulle.finAppartenance'), 'string');
   });
 });

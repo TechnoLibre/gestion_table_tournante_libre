@@ -32,13 +32,15 @@ import { rechercher } from '../../moteur/recherche.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { versFichier } from '../../stockage/placements.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
-import { composantes, couleursPeintes, fondPeintSous, sousTheme, visible } from '../../../test/navigateur/rendu.js';
+import { composantes, contraste, couleurTexte, couleursPeintes, fondPeintSous, sousTheme, visible } from '../../../test/navigateur/rendu.js';
 import TEXTE_TOUTES_EN_CONFLIT from '../../../test/fixtures/plan/toutes_en_conflit.gtt.json?raw';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { CONFLITS } from '../marques.js';
 import BandeauPlan from './BandeauPlan.svelte';
+import Legende from './Legende.svelte';
 import EchellePlan from './EchellePlan.svelte';
 import { creerMesureur } from './mesure_texte.js';
-import { LARGEUR_ECHELLE_PX, modeleDessin } from './modele.js';
+import { LARGEUR_ECHELLE_PX, legendeConflits, modeleDessin } from './modele.js';
 import PlanDessin from './PlanDessin.svelte';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -227,6 +229,8 @@ function rencontreRepetee() {
 // --- Lectures --------------------------------------------------------------------
 
 const tous = (racine, selecteur) => [...racine.querySelectorAll(selecteur)];
+// Les trames de conflit, des trois sortes (CONFLITS).
+const TRAMES = CONFLITS.map(({ marque }) => `[data-marque=${marque}]`).join(', ');
 const plateauDe = (svg, id) => svg.querySelector(`[data-table="${id}"] :is([data-marque=contourTable], [data-marque=contourConflit])`);
 const centre = (element) => {
   const b = element.getBoundingClientRect();
@@ -610,11 +614,13 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
         expect(enConflit.dataset.marque).toBe('contourConflit');
         expect(parseFloat(getComputedStyle(enConflit).strokeWidth)).toBeGreaterThan(parseFloat(getComputedStyle(saine).strokeWidth));
         expect(couleursPeintes(enConflit).stroke).not.toEqual(couleursPeintes(saine).stroke);
-        const trames = tous(svg, '[data-marque=trameConflit]');
+        // La seule règle active, nouveaux voisins : sa trame seule.
+        const trames = tous(svg, TRAMES);
         expect(trames.length).toBe(1);
+        expect(trames[0].dataset.marque).toBe('trameVoisins');
         expect(trames[0].closest('[data-table]').dataset.table).toBe('1');
         expect(getComputedStyle(trames[0]).fill).toMatch(/^url\("?#/);
-        expect(couleursPeintes(trames[0]).fill.some((c) => memeCouleur(c, jeton('--couleur-conflit')))).toBe(true);
+        expect(couleursPeintes(trames[0]).fill.some((c) => memeCouleur(c, jeton('--couleur-conflit-voisins')))).toBe(true);
         const pastilles = tous(svg, '[data-pastille]');
         expect(pastilles.length).toBe(1);
         expect(pastilles[0].dataset.pastille).toBe('1');
@@ -631,7 +637,7 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
 
         const tour1 = monterPlan(modeleDe(charge, { tour: 1, proposition: 1, k: 1.5 }), vue).svg;
         expect(plateauDe(tour1, 1).dataset.marque).toBe('contourTable');
-        expect(tous(tour1, '[data-marque=trameConflit], [data-pastille]').length).toBe(0);
+        expect(tous(tour1, `${TRAMES}, [data-pastille]`).length).toBe(0);
         expect(getComputedStyle(plateauDe(tour1, 1)).strokeWidth).toBe(getComputedStyle(plateauDe(tour1, 2)).strokeWidth);
 
         const reserve = chargeDeTables([8]);
@@ -648,7 +654,7 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
     const modele = modeleDe(charge, { proposition: 1, k: 1 });
     expect(modele.signalerConflits).toBe(false);
     const { svg } = monterPlan(modele, { k: 1, tx: 150, ty: 250 });
-    expect(tous(svg, '[data-marque=contourConflit], [data-marque=trameConflit]').length).toBe(0);
+    expect(tous(svg, `[data-marque=contourConflit], ${TRAMES}`).length).toBe(0);
     const saine = monterPlan(modeleDe(chargeDeTables([3]), { k: 1 }), { k: 1, tx: 150, ty: 600 }).svg;
     const reference = getComputedStyle(plateauDe(saine, 1));
     for (const id of [1, 2, 3, 4]) {
@@ -679,6 +685,139 @@ describe('le signal de conflit (§ 7.5, § 13.3)', () => {
     const noeuds = [...entrees[1].querySelectorAll('*')].map((e) => e.textContent);
     expect(noeuds).toContain('Club des Merles');
     expect(noeuds).toContain(t('plan.bandeau.plancherGroupe', bandeau[1].details));
+  });
+});
+
+// --- Les trois sortes de conflit (§ 7.5, § 7.6, § 12.7) ---------------------------
+
+// Le motif d'une trame : le <pattern> que désigne son remplissage.
+function motifDe(trame) {
+  const id = /^url\("?#([^")]+)"?\)/.exec(getComputedStyle(trame).fill)?.[1];
+  return id === undefined ? null : document.getElementById(id);
+}
+
+// La forme d'un motif, lue dans le document : 'points' pour des disques ;
+// pour des traits, leur sens à l'écran — la direction d'un trait du carreau
+// passée par patternTransform —, 'hachuresDescendantes' quand il descend
+// vers la droite, 'hachuresMontantes' quand il monte.
+function formeDe(motif) {
+  const formes = [...motif.children].filter((n) => n instanceof SVGGeometryElement);
+  if (formes.length > 0 && formes.every((n) => n.localName === 'circle')) return 'points';
+  if (formes.length === 0 || !formes.every((n) => n.localName === 'line')) return `formes ${formes.map((n) => n.localName)}`;
+  const [trait] = formes;
+  const dx = trait.x2.baseVal.value - trait.x1.baseVal.value;
+  const dy = trait.y2.baseVal.value - trait.y1.baseVal.value;
+  const m = motif.patternTransform.baseVal.consolidate()?.matrix ?? new DOMMatrix();
+  const [ex, ey] = [m.a * dx + m.c * dy, m.b * dx + m.d * dy];
+  if (Math.abs(ex) < 1e-6 || Math.abs(ey) < 1e-6) return 'traits droits';
+  return ex * ey > 0 ? 'hachuresDescendantes' : 'hachuresMontantes';
+}
+
+// Les couleurs d'une trame, en texte trié, pour une comparaison d'ensembles.
+const couleursEnTexte = (couleurs) => couleurs.map((c) => c.slice(0, 3).join(',')).sort();
+
+// La petite démonstration en conflit, une proposition de rechercher, graine
+// 3 : son tour 3 signale les trois sortes, une table saine, une table qui
+// viole les trois règles et une qui en viole deux.
+function troisSortes() {
+  const charge = analyser(texteLivre('petite-conflit')).charge;
+  const configuration = configurationDepuisCharge(charge);
+  const [proposition] = rechercher(configuration, { graine: 3, nombre: 1, arret: 300, historique: 1000 });
+  return avecProposition(charge, versFichier(proposition, configuration, { produitVersion: 'epreuve', attribuerSieges: false, decalage: 0 }));
+}
+
+describe('les trois sortes de conflit : une forme et une teinte par règle (§ 7.5, § 7.6, § 12.7)', () => {
+  for (const theme of ['clair', 'sombre']) {
+    test(`thème ${theme} : chaque règle dessine sa forme dans sa teinte, sur le fond du plateau ; une table qui en viole plusieurs les superpose, dans l\u{2019}ordre du moteur`, async () => {
+      await sousTheme(theme, async () => {
+        const charge = troisSortes();
+        const fond = couleursEnTexte([jeton('--couleur-table-fond')]);
+        const formes = new Map();
+        let superposees = 0;
+        for (let tour = 1; tour <= charge.evenement.tours; tour += 1) {
+          const modele = modeleDe(charge, { tour, proposition: 1, k: 1 });
+          if (!modele.signalerConflits) continue;
+          const { svg } = monterPlan(modele, { k: 1, tx: 150, ty: 250 });
+          for (const table of modele.tables) {
+            const trames = tous(svg, `[data-table="${table.id}"] :is(${TRAMES})`);
+            expect(trames.map((e) => e.dataset.marque), `tour ${tour}, table ${table.id}`).toEqual(table.trames.map(({ marque }) => marque));
+            if (trames.length > 1) superposees += 1;
+            for (const [rang, trame] of trames.entries()) {
+              const { regle, jeton: nom, forme } = table.trames[rang];
+              expect(trame.checkVisibility({ opacityProperty: true, visibilityProperty: true })).toBe(true);
+              const motif = motifDe(trame);
+              expect(motif?.localName, regle).toBe('pattern');
+              expect(formeDe(motif), regle).toBe(forme);
+              // Le motif ne peint que sa teinte et le fond du plateau : le
+              // halo de ses traits, qui les détache d'une trame dessous.
+              expect(couleursEnTexte(couleursPeintes(trame).fill), regle).toEqual([...couleursEnTexte([jeton(nom)]), ...fond].sort());
+              formes.set(regle, forme);
+            }
+            // Les trames suivent le plateau, et la pastille reste sur son socle.
+            if (trames.length > 0) {
+              const plateau = plateauDe(svg, table.id);
+              expect(trames.every((e) => plateau.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+              const pastille = svg.querySelector(`[data-pastille="${table.id}"] [data-marque=pastille]`);
+              expect(fondPeintSous(pastille)).toEqual([jeton('--couleur-table-fond')]);
+            }
+          }
+          demonterTout();
+        }
+        expect(Object.fromEntries(formes)).toEqual(Object.fromEntries(CONFLITS.map(({ regle, forme }) => [regle, forme])));
+        expect(new Set(formes.values()).size).toBe(3);
+        expect(superposees).toBeGreaterThan(0);
+      });
+    });
+  }
+});
+
+describe('la légende des conflits (§ 7.5, § 14.5)', () => {
+  const REGLAGES = { separerAppartenances: true, nouveauxVoisins: true, nouvelleTable: true, varierAppartenances: true, attribuerSieges: false };
+
+  for (const theme of ['clair', 'sombre']) {
+    test(`thème ${theme} : un échantillon par règle active, de la forme et de la teinte du plan, et son nom ; la pastille et ce qu\u{2019}elle compte ; texte à 4,5:1`, async () => {
+      await sousTheme(theme, async () => {
+        const entrees = legendeConflits(REGLAGES);
+        expect(entrees.length).toBe(3);
+        const conteneur = monterHtml(Legende, { entrees });
+        const legende = conteneur.querySelector('[data-legende]');
+        expect(visible(legende.querySelector('h3, h2, p, span'))).toBe(true);
+        const items = tous(legende, '[data-legende-regle]');
+        expect(items.map((e) => e.dataset.legendeRegle)).toEqual(CONFLITS.map(({ regle }) => regle));
+        for (const [rang, item] of items.entries()) {
+          const { marque, jeton: nom, forme, cle, cleForme } = entrees[rang];
+          const trame = item.querySelector(`svg [data-marque="${marque}"]`);
+          expect(trame, marque).not.toBeNull();
+          expect(trame.checkVisibility({ opacityProperty: true, visibilityProperty: true })).toBe(true);
+          expect(formeDe(motifDe(trame))).toBe(forme);
+          expect(couleursEnTexte(couleursPeintes(trame).fill)).toEqual([...couleursEnTexte([jeton(nom)]), ...couleursEnTexte([jeton('--couleur-table-fond')])].sort());
+          expect(item.textContent).toContain(t(cle));
+          expect(item.textContent).toContain(t(cleForme));
+          expect(item.querySelectorAll('svg [data-marque="contourConflit"]').length).toBe(1);
+        }
+        const pastille = legende.querySelector('[data-legende-pastille]');
+        expect(pastille.querySelector('svg [data-marque="pastille"]')).not.toBeNull();
+        expect(pastille.textContent).toContain(t('plan.legende.pastille'));
+        expect(pastille.querySelector('svg text').textContent).toBe(t('plan.legende.pastilleExemple'));
+        // Chaque texte HTML de la légende tient 4,5:1 sur son fond peint.
+        const textes = tous(legende, '*').filter((e) => !(e instanceof SVGElement) && [...e.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim() !== ''));
+        expect(textes.length).toBeGreaterThan(3);
+        for (const element of textes) {
+          const [fond] = fondPeintSous(element);
+          expect(contraste(couleurTexte(element), fond), element.textContent).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+    });
+  }
+
+  test('une règle inactive n\u{2019}y paraît pas ; aucune règle active : la légende le dit, et garde la pastille', () => {
+    const deux = monterHtml(Legende, { entrees: legendeConflits({ ...REGLAGES, nouveauxVoisins: false }) });
+    expect(tous(deux, '[data-legende-regle]').map((e) => e.dataset.legendeRegle)).toEqual(['separerAppartenances', 'nouvelleTable']);
+    expect(deux.querySelector('[data-marque="trameVoisins"]')).toBeNull();
+    const aucune = monterHtml(Legende, { entrees: legendeConflits({ ...REGLAGES, separerAppartenances: false, nouveauxVoisins: false, nouvelleTable: false }) });
+    expect(tous(aucune, '[data-legende-regle]').length).toBe(0);
+    expect(aucune.querySelector('[data-legende]').textContent).toContain(t('plan.legende.aucune'));
+    expect(aucune.querySelector('[data-legende-pastille]')).not.toBeNull();
   });
 });
 

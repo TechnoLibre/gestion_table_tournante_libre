@@ -113,14 +113,37 @@ export const TABLE = new Map([
   // Le plan est un seul arrêt de tabulation : sa description dit comment s'y
   // déplacer. L'infobulle d'une table en conflit nomme chaque règle violée,
   // puis ses groupes : les noms sont des données, chacun dans son nœud,
-  // reliés par « et » dans une paire et séparés d'un groupe à l'autre.
+  // reliés par « et » dans une paire et séparés d'un groupe à l'autre. Une
+  // ligne de séparer les appartenances nomme l'appartenance de ses paires,
+  // une donnée dans son nœud, entre separerAppartenances et finAppartenance.
   ['plan.vue.role', 'plan de salle interactif'],
   ['plan.infobulle.entete', ({ numero, nombre }) => `Table ${numero} : ${compte(nombre, 'conflit', 'conflits')}`],
-  ['plan.infobulle.separerAppartenances', 'appartenances réunies : '],
+  ['plan.infobulle.separerAppartenances', 'Même appartenance ('],
+  ['plan.infobulle.finAppartenance', ') : '],
   ['plan.infobulle.nouveauxVoisins', 'voisins revus : '],
   ['plan.infobulle.nouvelleTable', 'table revue : '],
   ['plan.infobulle.et', ' et '],
   ['plan.infobulle.separateur', ', '],
+
+  // --- La légende des conflits (§ 7.5) --------------------------------------
+  // Une entrée par règle active : son échantillon, son nom, puis la forme de
+  // sa trame, qui la distingue sans la couleur. L'exemple de la pastille est
+  // le chiffre que porte son échantillon.
+  ['plan.legende.ouvrir', 'Légende'],
+  ['plan.legende.titre', 'Légende des conflits'],
+  ['plan.legende.separerAppartenances', 'Séparer les appartenances : même appartenance à la table'],
+  ['plan.legende.nouveauxVoisins', 'Nouveaux voisins à chaque tour : voisins revus'],
+  ['plan.legende.nouvelleTable', 'Nouvelle table à chaque tour : table revue'],
+  ['plan.legende.forme.hachuresDescendantes', '(hachures descendantes)'],
+  ['plan.legende.forme.hachuresMontantes', '(hachures montantes)'],
+  ['plan.legende.forme.points', '(points)'],
+  ['plan.legende.aucune', 'Aucune règle de conflit n\u{2019}est active.'],
+  [
+    'plan.legende.superposition',
+    'Une table qui viole plusieurs règles superpose leurs trames ; son contour épaissi la signale quelle que soit la règle.',
+  ],
+  ['plan.legende.pastille', 'Pastille : le nombre de conflits de la table à ce tour, toutes règles confondues.'],
+  ['plan.legende.pastilleExemple', '2'],
 
   // --- Les panneaux latéraux (§ 2.1, étape 8) --------------------------------
   ['plan.panneaux', 'Panneaux du plan'],

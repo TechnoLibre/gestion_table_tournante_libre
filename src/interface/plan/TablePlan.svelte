@@ -21,12 +21,15 @@
   // le premier disque du groupe reste la chaise.
   //
   // Une table en conflit, quand le plan signale, porte un contour épaissi
-  // (contourConflit) et une trame (trameConflit) par-dessus son plateau ; sa
-  // pastille porte le nombre de violations, signalée ou non (§ 7.5). Sur la
-  // trame, un socle [data-socle] du fond du plateau, centré sous la
-  // pastille, la sépare des traits de la trame : la pastille se mesure
-  // contre le fond du plateau (§ 14.5), et la trame reste peinte autour.
-  // Le socle précède la marque de gel, qui se peint sur lui.
+  // (contourConflit), commun aux trois règles, et, par-dessus son plateau,
+  // une trame par règle violée (table.trames, dans l'ordre du moteur) : la
+  // forme et la teinte de sa sorte (CONFLITS, Motifs.svelte), superposées
+  // quand elle en viole plusieurs. Sa pastille porte le nombre de
+  // violations, signalée ou non (§ 7.5). Sur les trames, un socle
+  // [data-socle] du fond du plateau, centré sous la pastille, la sépare de
+  // leurs traits : la pastille se mesure contre le fond du plateau (§ 14.5),
+  // et les trames restent peintes autour. Le socle précède la marque de gel,
+  // qui se peint sur lui.
   //
   // Le groupe de la table porte id="table-<id>", celui d'une chaise
   // id="siege-<table>-<siège>" : la racine du plan, seul arrêt de tabulation,
@@ -65,7 +68,6 @@
   const poignee = $derived(table.geometrie.poignee);
   const signal = $derived(signaler && table.conflit);
   const hachure = $derived(`url(#${prefixe}-hachure)`);
-  const trame = $derived(`url(#${prefixe}-trame)`);
   // Les marques de désignation de la table, autour de l'emprise.
   const autour = $derived(formesTable({ ...table.geometrie, rayonEmprise: table.geometrie.rayonEmprise + ECART_DESIGNATION }));
   const cadreFocus = $derived(carreAutour(table.geometrie.centre, table.geometrie.rayonEmprise + ECART_FOCUS));
@@ -90,11 +92,13 @@
     <rect class="plateau" class:conflit={signal} data-marque={signal ? 'contourConflit' : 'contourTable'} {...formes.plateau} />
   {/if}
   {#if signal}
-    {#if formes.ronde}
-      <circle class="trame" data-marque="trameConflit" fill={trame} {...formes.plateau} />
-    {:else}
-      <rect class="trame" data-marque="trameConflit" fill={trame} {...formes.plateau} />
-    {/if}
+    {#each table.trames as trame (trame.regle)}
+      {#if formes.ronde}
+        <circle class="trame" data-marque={trame.marque} fill="url(#{prefixe}-trame-{trame.regle})" {...formes.plateau} />
+      {:else}
+        <rect class="trame" data-marque={trame.marque} fill="url(#{prefixe}-trame-{trame.regle})" {...formes.plateau} />
+      {/if}
+    {/each}
     <circle class="socle" data-socle cx={formes.pastille.x} cy={formes.pastille.y} r={RAYON_SOCLE_PASTILLE} />
   {/if}
   {#if table.gelee}
@@ -180,8 +184,10 @@
     stroke: var(--couleur-table-trait);
   }
 
+  /* Le contour d'une table en conflit : épaissi, de l'encre forte du plan ;
+     les teintes des règles sont sur les trames. */
   .plateau.conflit {
-    stroke: var(--couleur-conflit);
+    stroke: var(--couleur-contour-fort);
     stroke-width: 4;
   }
 

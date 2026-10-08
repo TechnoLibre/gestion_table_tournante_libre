@@ -5,21 +5,25 @@
 // réservée (§ 12.7, § 13.3, § 14.5). Les fonctions s'éprouvent d'abord sur des
 // feuilles d'épreuve écrites ici, où chaque défaut est posé exprès, puis sur
 // le vrai fichier de jetons : ses familles, ses deux thèmes, les jetons que
-// lisent les composants, la teinte du conflit.
+// lisent les composants, les teintes des trois sortes de conflit.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
+import { CONFLITS, JETONS_CONFLIT } from './marques.js';
 import {
   SIMULATIONS,
   contraste,
+  ecartPercu,
   lireBlocs,
   lireJetons,
+  oklab,
   simuler,
   teinte,
   verifierPalette,
-  verifierTeinteReservee,
+  verifierSeparation,
+  verifierTeintesReservees,
 } from './palette.js';
 
 const DOSSIER = fileURLToPath(new URL('.', import.meta.url));
@@ -228,7 +232,7 @@ describe('verifierPalette', () => {
   });
 });
 
-describe('teinte et verifierTeinteReservee (§ 12.7)', () => {
+describe('teinte et verifierTeintesReservees (§ 12.7)', () => {
   test('la teinte HSL ne vaut que pour une couleur dont les composantes s’écartent de 26 au moins', () => {
     assert.equal(teinte([255, 0, 0, 1]), 0);
     assert.equal(teinte([0, 255, 0, 1]), 120);
@@ -239,28 +243,47 @@ describe('teinte et verifierTeinteReservee (§ 12.7)', () => {
     assert.notEqual(teinte([126, 100, 100, 1]), null); // écart 26 : chromatique
   });
 
-  test('un refus de la teinte du conflit et d’une autre clarté est refusé, valeurs pourtant distinctes', () => {
+  test('un refus de la teinte d’un conflit et d’une autre clarté est refusé, valeurs pourtant distinctes', () => {
     const conflit = '#c62828';
     const refus = '#5a1212';
     assert.notEqual(conflit, refus);
     assert.ok(Math.abs(teinte(hex(conflit)) - teinte(hex(refus))) < 1);
     const css = feuille({
-      '--couleur-conflit': conflit,
-      '--couleur-conflit-trame': '#e57373',
+      '--couleur-conflit-a': conflit,
+      '--couleur-conflit-b': '#1f8a3a',
       '--couleur-refus': refus,
       '--couleur-gris-rose': '#8a7d7d',
       '--couleur-bleu': '#1f3a5f',
     });
-    const fautes = verifierTeinteReservee(css, ['--couleur-conflit', '--couleur-conflit-trame']);
-    assert.deepEqual(fautes.map((f) => `${f.theme}:${f.jeton}`), ['clair:--couleur-refus', 'sombre:--couleur-refus']);
+    const fautes = verifierTeintesReservees(css, ['--couleur-conflit-a', '--couleur-conflit-b']);
+    assert.deepEqual(fautes.map((f) => `${f.theme}:${f.reservee}:${f.jeton}`), [
+      'clair:--couleur-conflit-a:--couleur-refus',
+      'sombre:--couleur-conflit-a:--couleur-refus',
+    ]);
     assert.ok(fautes.every((f) => f.ecart < 30));
   });
 
-  test('le jeton de conflit lui-même doit être chromatique ; une teinte à 30° passe, à 29° non ; le cercle se referme', () => {
+  test('chaque teinte réservée est une référence : un jeton proche de la seconde est refusé ; deux teintes réservées ne se mesurent pas entre elles', () => {
+    // Rouge à 0°, vert à 120° : le jeton à 135° n'est proche que du vert.
+    const css = feuille({
+      '--couleur-conflit-a': '#ff0000',
+      '--couleur-conflit-b': '#00ff00',
+      '--couleur-conflit-c': '#ff1000',
+      '--couleur-sarcelle': '#00ff40',
+      '--couleur-bleu': '#0000ff',
+    });
+    const fautes = verifierTeintesReservees(css, ['--couleur-conflit-a', '--couleur-conflit-b', '--couleur-conflit-c']);
+    assert.deepEqual(fautes.map((f) => `${f.theme}:${f.reservee}:${f.jeton}`), [
+      'clair:--couleur-conflit-b:--couleur-sarcelle',
+      'sombre:--couleur-conflit-b:--couleur-sarcelle',
+    ]);
+  });
+
+  test('une teinte réservée doit être chromatique ; une teinte à 30° passe, à 29° non ; le cercle se referme', () => {
     const gris = feuille({ '--couleur-conflit': '#808080', '--couleur-bleu': '#1f3a5f' });
-    assert.deepEqual(verifierTeinteReservee(gris, ['--couleur-conflit']), [
-      { theme: 'clair', jeton: '--couleur-conflit', ecart: null },
-      { theme: 'sombre', jeton: '--couleur-conflit', ecart: null },
+    assert.deepEqual(verifierTeintesReservees(gris, ['--couleur-conflit']), [
+      { theme: 'clair', reservee: '--couleur-conflit', jeton: '--couleur-conflit', ecart: null },
+      { theme: 'sombre', reservee: '--couleur-conflit', jeton: '--couleur-conflit', ecart: null },
     ]);
     // Conflit à 0° ; 30° et 330° passent, 29° et 331° non.
     const css = feuille({
@@ -270,10 +293,62 @@ describe('teinte et verifierTeinteReservee (§ 12.7)', () => {
       '--couleur-c': '#ff0080', // 329,9°
       '--couleur-d': '#ff0079', // 331,5°
     });
-    const fautes = verifierTeinteReservee(css, ['--couleur-conflit']);
+    const fautes = verifierTeintesReservees(css, ['--couleur-conflit']);
     assert.deepEqual(fautes.map((f) => `${f.theme}:${f.jeton}`), [
       'clair:--couleur-b', 'clair:--couleur-d', 'sombre:--couleur-b', 'sombre:--couleur-d',
     ]);
+  });
+});
+
+describe('ecartPercu et verifierSeparation (§ 12.7 : simuler d’abord, puis mesurer l’écart)', () => {
+  test('OKLab : le blanc vaut L = 1, le noir L = 0, un gris n’a ni a ni b ; l’écart du noir au blanc vaut 100, d’une couleur à elle-même 0, dans les deux sens', () => {
+    const blanc = oklab([255, 255, 255, 1]);
+    const noir = oklab([0, 0, 0, 1]);
+    assert.ok(Math.abs(blanc[0] - 1) < 1e-4 && Math.abs(noir[0]) < 1e-9);
+    const gris = oklab([118, 118, 118, 1]);
+    assert.ok(Math.abs(gris[1]) < 1e-4 && Math.abs(gris[2]) < 1e-4, `${gris}`);
+    assert.ok(Math.abs(ecartPercu([0, 0, 0, 1], [255, 255, 255, 1]) - 100) < 0.01);
+    assert.equal(ecartPercu([90, 120, 30, 1], [90, 120, 30, 1]), 0);
+    assert.equal(ecartPercu([200, 30, 30, 1], [30, 120, 200, 1]), ecartPercu([30, 120, 200, 1], [200, 30, 30, 1]));
+  });
+
+  test('un rouge et un vert de même clarté se séparent en couleurs d’origine et se confondent sous la deutéranopie : la faute n’est relevée que simulée', () => {
+    // Cherche un vert de la clarté d'un rouge donné : leurs écarts d'origine
+    // sont grands, et la deutéranopie les rapproche.
+    const rouge = [200, 40, 40, 1];
+    let vert = null;
+    for (let v = 40; v <= 255 && vert === null; v += 1) {
+      const candidat = [40, v, 40, 1];
+      if (Math.abs(oklab(candidat)[0] - oklab(rouge)[0]) < 0.01) vert = candidat;
+    }
+    assert.notEqual(vert, null);
+    assert.ok(ecartPercu(rouge, vert) > 20);
+    assert.ok(ecartPercu(simuler(rouge, 'deuteranopie'), simuler(vert, 'deuteranopie')) < 10);
+    const css = feuille({ '--couleur-rouge': enHex(rouge.slice(0, 3)), '--couleur-vert': enHex(vert.slice(0, 3)) });
+    const fautes = verifierSeparation(css, ['--couleur-rouge', '--couleur-vert'], [], 10);
+    assert.ok(fautes.length > 0);
+    assert.ok(fautes.every((f) => f.simulation !== 'origine' && f.ecart < 10 && f.seuil === 10), JSON.stringify(fautes));
+    assert.ok(fautes.some((f) => f.simulation === 'deuteranopie'));
+    assert.ok(fautes.every((f) => f.jeton === '--couleur-rouge' && f.autre === '--couleur-vert'));
+    assert.deepEqual([...new Set(fautes.map((f) => f.theme))], ['clair', 'sombre']);
+  });
+
+  test('chaque paire des jetons, puis chaque jeton contre chacun des autres ; les autres ne se mesurent pas entre eux ; un jeton absent lève', () => {
+    const css = feuille({
+      '--couleur-a': '#c01010',
+      '--couleur-b': '#c11111',
+      '--couleur-x': '#1010c0',
+      '--couleur-y': '#1111c1',
+    });
+    const fautes = verifierSeparation(css, ['--couleur-a', '--couleur-x'], ['--couleur-b', '--couleur-y'], 5);
+    // Origine et trois simulations, deux thèmes : a contre b et x contre y
+    // se confondent partout ; a contre x, a contre y, x contre b se séparent.
+    assert.deepEqual(
+      [...new Set(fautes.map((f) => `${f.jeton}/${f.autre}`))],
+      ['--couleur-a/--couleur-b', '--couleur-x/--couleur-y'],
+    );
+    assert.equal(fautes.length, 2 * 2 * 4);
+    assert.throws(() => verifierSeparation(css, ['--couleur-a'], ['--couleur-absente'], 5), /--couleur-absente/);
   });
 });
 
@@ -342,15 +417,21 @@ describe('jetons.css', () => {
     }
   });
 
-  test('la teinte du conflit est réservée (§ 12.7) : chromatique, sa valeur à lui seul, à 30° de tout autre jeton chromatique', () => {
+  test('les trois teintes de conflit sont réservées (§ 12.7) : chromatiques, chacune sa valeur, à 30° de tout autre jeton chromatique', () => {
+    assert.deepEqual(JETONS_CONFLIT, ['--couleur-conflit-appartenance', '--couleur-conflit-voisins', '--couleur-conflit-table']);
     for (const theme of ['clair', 'sombre']) {
       const jetons = lireJetons(JETONS, theme);
-      const conflit = jetons.get('--couleur-conflit');
-      assert.notEqual(conflit, undefined, theme);
-      assert.notEqual(teinte(conflit), null, `${theme} : conflit achromatique`);
-      const memeValeur = [...jetons].filter(([n, c]) => n !== '--couleur-conflit' && String(c) === String(conflit));
-      assert.deepEqual(memeValeur.map(([n]) => n), [], theme);
+      for (const nom of JETONS_CONFLIT) {
+        const couleur = jetons.get(nom);
+        assert.notEqual(couleur, undefined, `${theme} : ${nom}`);
+        assert.notEqual(teinte(couleur), null, `${theme} : ${nom} achromatique`);
+        const memeValeur = [...jetons].filter(([n, c]) => n !== nom && String(c) === String(couleur));
+        assert.deepEqual(memeValeur.map(([n]) => n), [], `${theme} : ${nom}`);
+      }
+      // Aucun autre jeton ne porte le préfixe des teintes de conflit.
+      assert.deepEqual([...jetons.keys()].filter((n) => n.startsWith('--couleur-conflit')), JETONS_CONFLIT, theme);
     }
-    assert.deepEqual(verifierTeinteReservee(JETONS, ['--couleur-conflit']), []);
+    assert.deepEqual(verifierTeintesReservees(JETONS, JETONS_CONFLIT), []);
+    assert.deepEqual(CONFLITS.map(({ jeton }) => jeton), JETONS_CONFLIT);
   });
 });

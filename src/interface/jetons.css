@@ -19,8 +19,16 @@
    les trois dichromaties. Aucun jeton de texte ou de marque n'a de canal
    alpha : la couleur relue dans le style calculé est alors la couleur peinte.
 
-   La teinte de --couleur-conflit est réservée (§ 12.7) : tout autre jeton
-   chromatique s'en tient à 30° au moins, et aucun ne porte sa valeur.
+   Trois teintes sont réservées aux conflits (§ 7.5, § 12.7), une par règle
+   que le plan localise : --couleur-conflit-appartenance (séparer les
+   appartenances), --couleur-conflit-voisins (nouveaux voisins) et
+   --couleur-conflit-table (nouvelle table). Chacune ne peint que la trame de
+   sa règle ; tout autre jeton chromatique se tient à 30° au moins de chacune,
+   et aucun ne porte la valeur de l'une. Elles se distinguent entre elles et
+   des autres marques du plan sous les trois dichromaties (SEPARATIONS,
+   marques.js), et tiennent 3:1 sur le fond du plateau, qui borde leurs
+   traits. Le contour épaissi d'une table en conflit, commun aux trois, est
+   de l'encre forte du plan, --couleur-contour-fort.
 
    La hachure d'une place à pourvoir peint des traits --couleur-hachure sur le
    fond de la chaise, --couleur-chaise-fond : ce sont ses deux couleurs. */
@@ -91,7 +99,10 @@
   --couleur-chaise-pleine: #1f1f1f;
   --couleur-hachure: #1f1f1f;
   --couleur-marque: #767676;
-  --couleur-conflit: #b3261e;
+  --couleur-contour-fort: #2b2f36;
+  --couleur-conflit-appartenance: #8f1d14;
+  --couleur-conflit-voisins: #c0189f;
+  --couleur-conflit-table: #6a9400;
   --couleur-pastille-fond: #2b2f36;
   --couleur-pastille-texte: #ffffff;
   --couleur-poignee: #4a5059;
@@ -133,7 +144,10 @@
   --couleur-chaise-pleine: #e8e8e8;
   --couleur-hachure: #ededed;
   --couleur-marque: #7a7a7a;
-  --couleur-conflit: #ff8a80;
+  --couleur-contour-fort: #e6e8eb;
+  --couleur-conflit-appartenance: #fc9890;
+  --couleur-conflit-voisins: #c0689c;
+  --couleur-conflit-table: #549c00;
   --couleur-pastille-fond: #e6e8eb;
   --couleur-pastille-texte: #15181c;
   --couleur-poignee: #c5ccd6;

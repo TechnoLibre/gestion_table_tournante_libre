@@ -2,9 +2,9 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // La barre de vue du plan (§ 7.2, § 7.7, § 8.4) : le sélecteur de tour,
-  // « Zoom + », « Zoom moins », « Ajuster », l'affichage des listes et le plein
-  // écran. Des contrôles HTML, hors du <svg data-plan>, tous vivants en
+  // La barre de vue du plan (§ 7.2, § 7.5, § 7.7, § 8.4) : le sélecteur de
+  // tour, « Zoom + », « Zoom moins », « Ajuster », l'affichage des listes, le
+  // plein écran et la légende des conflits. Des contrôles HTML, hors du <svg data-plan>, tous vivants en
   // lecture comme sur un plan bloqué : aucun n'écrit l'événement. Le tour,
   // les listes et le plein écran passent par l'état de navigation ('ui') ;
   // les zooms et l'ajustement par Plan.svelte, qui tient la vue :
@@ -17,6 +17,12 @@
   // ou non ; le menu de la personne la pose (MenuPersonne). Une personne que
   // la charge n'a plus se dit telle, sans nom.
   //
+  // legende : vrai quand la légende des conflits est ouverte ; basculerLegende
+  // l'ouvre ou la ferme ; idLegende, l'identifiant de la légende, que le
+  // bouton désigne par aria-controls. Plan.svelte tient cet état : ouvrir la
+  // légende n'écrit rien. Le plein écran reste le dernier contrôle de la
+  // barre, celui qui précède le plan dans l'ordre de tabulation.
+  //
   // source : ce que la barre dit du placement montré, que rend sourceMontree
   // (vue_plan.js) — {libelle, revenir} — : la barre le nomme, [data-source],
   // et, quand une proposition est demandée, offre de ne plus la montrer
@@ -25,7 +31,7 @@
   import { getContext } from 'svelte';
   import { toursOfferts } from './vue_plan.js';
 
-  let { tour, tours, zoomer, ajuster, evidence = null, source } = $props();
+  let { tour, tours, zoomer, ajuster, evidence = null, source, legende = false, basculerLegende = () => {}, idLegende = undefined } = $props();
 
   const t = getContext('t');
   const ui = getContext('ui');
@@ -53,6 +59,9 @@
   <button type="button" data-commande="ajuster" onclick={() => ajuster()}>{t('plan.vue.ajuster')}</button>
   <button type="button" data-commande="listes" aria-pressed={$ui.listes} onclick={() => ui.basculerListes()}
     >{t('plan.vue.listes')}</button
+  >
+  <button type="button" data-commande="legende" aria-pressed={legende} aria-controls={idLegende} onclick={() => basculerLegende()}
+    >{t('plan.legende.ouvrir')}</button
   >
   <button type="button" data-commande="pleinEcran" aria-pressed={$ui.pleinEcran} onclick={() => ui.basculerPleinEcran()}
     >{t('plan.vue.pleinEcran')}</button

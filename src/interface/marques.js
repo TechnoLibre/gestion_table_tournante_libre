@@ -23,6 +23,38 @@ function entree(nom, jeton, fonds, seuil) {
 const marque = (nom, jeton, fonds) => entree(nom, jeton, fonds, 3);
 const texte = (nom, jeton, fonds) => entree(nom, jeton, fonds, 4.5);
 
+// Les sortes de conflit : règle, marque de la trame, jeton court, forme.
+const SORTES_CONFLIT = [
+  ['separerAppartenances', 'trameAppartenance', 'conflit-appartenance', 'hachuresDescendantes'],
+  ['nouveauxVoisins', 'trameVoisins', 'conflit-voisins', 'hachuresMontantes'],
+  ['nouvelleTable', 'trameTable', 'conflit-table', 'points'],
+];
+
+/** Les trois sortes de conflit qu'une table porte (§ 7.5, § 12.7), une par
+ *  règle que le moteur localise (conflitsParTable), dans son ordre — l'ordre
+ *  du dessin, de la légende et de l'infobulle : { regle, marque, jeton,
+ *  forme } — la règle du moteur, la marque data-marque de sa trame, le jeton
+ *  de sa teinte, réservée à cette trame, et la forme de son motif
+ *  (Motifs.svelte), qui la distingue sans la couleur. Deux règles violées à
+ *  une même table superposent leurs trames : les hachures descendantes et
+ *  montantes se croisent en quadrillage, les points se posent par-dessus. */
+export const CONFLITS = Object.freeze(
+  SORTES_CONFLIT.map(([regle, trame, jeton, forme]) => Object.freeze({ regle, marque: trame, jeton: c(jeton), forme })),
+);
+
+/** Les jetons des teintes de conflit, dans l'ordre de CONFLITS. */
+export const JETONS_CONFLIT = Object.freeze(CONFLITS.map(({ jeton }) => jeton));
+
+/** Écarts perçus minimaux d'une teinte de conflit, en distance OKLab × 100
+ *  mesurée en couleurs d'origine et sous chaque dichromatie (ecartPercu,
+ *  palette.js) : entreConflits, d'une teinte de conflit à une autre — la
+ *  couleur redit la forme de la règle ; autresMarques, d'une teinte de
+ *  conflit à chaque autre marque du plan. Le second seuil est plus bas : les
+ *  gris du mobilier occupent la clarté où une teinte de conflit tient 3:1
+ *  sur le plateau sombre, et la forme distingue toujours la trame de ce
+ *  qu'elle côtoie. */
+export const SEPARATIONS = Object.freeze({ entreConflits: 12, autresMarques: 5 });
+
 /** Les marques porteuses d'information (§ 14.5) : { nom, jeton, fonds, seuil: 3 } — nom, la
  *  désignation data-marque ; jeton, celui qui la peint ; fonds, chaque jeton sur lequel elle
  *  se peint, chaque remplissage d'une chaise pour une marque qui passe sur une chaise. */
@@ -34,10 +66,12 @@ export const MARQUES = Object.freeze([
   marque('anneau', 'marque', ['sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
   marque('hachure', 'hachure', ['chaise-fond']),
   marque('remplissagePlein', 'chaise-pleine', ['sol', 'table-fond']),
-  // Le conflit (§ 7.5) : contour épaissi sur le sol, trame sur le plateau,
-  // pastille chiffrée près de la table.
-  marque('contourConflit', 'conflit', ['sol', 'table-fond']),
-  marque('trameConflit', 'conflit', ['table-fond']),
+  // Le conflit (§ 7.5) : contour épaissi sur le sol, commun aux trois
+  // règles et peint de l'encre forte du plan ; une trame par règle violée
+  // sur le plateau, chacune de sa teinte, ses traits détachés par un halo
+  // du fond du plateau ; pastille chiffrée près de la table.
+  marque('contourConflit', 'contour-fort', ['sol', 'table-fond']),
+  ...SORTES_CONFLIT.map(([, trame, jeton]) => marque(trame, jeton, ['table-fond'])),
   marque('pastille', 'pastille-fond', ['sol', 'table-fond']),
   marque('poignee', 'poignee', ['sol']),
   marque('gel', 'gel', ['sol', 'table-fond']),

@@ -454,6 +454,31 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'plan.troisConflits',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // La petite démonstration en conflit et une proposition, graine 3,
+      // montrée au tour 3, choisi au clavier : la table 1 viole les trois
+      // règles et superpose leurs trames, la table 2 est saine ; puis la
+      // légende des conflits, ouverte par la barre de vue.
+      let charge = demonstration('petite-conflit');
+      const configuration = configurationDepuisCharge(charge);
+      const propositions = rechercher(configuration, { graine: 3, nombre: 1, arret: 300, historique: 1000 });
+      charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'plan' });
+      const choix = await element(m, '[data-champ="tour"]');
+      choix.focus();
+      for (let essai = 0; essai < choix.options.length && choix.value !== '3'; essai += 1) {
+        await touche('ArrowDown');
+        flushSync();
+      }
+      for (const marque of ['trameAppartenance', 'trameVoisins', 'trameTable']) await element(m, `[data-table="1"] [data-marque="${marque}"]`);
+      await cliquer(m, '[data-commande="legende"]');
+      await element(m, '[data-legende] [data-legende-regle="nouvelleTable"]');
+      return m.racine;
+    },
+  },
+  {
     nom: 'participants.refusChamp',
     mode: 'ecriture',
     async atteindre(contexte) {

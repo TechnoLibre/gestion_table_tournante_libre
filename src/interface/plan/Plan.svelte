@@ -2,9 +2,12 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // Le plan de salle et sa vue (§ 7.2, § 7.3, § 7.7, § 8.4, § 8.5) : la
-  // barre de vue, puis la surface [data-surface] qui porte le bandeau du
-  // plan, le <svg data-plan> et l'échelle graphique. Le <svg> racine n'a ni
+  // Le plan de salle et sa vue (§ 7.2, § 7.3, § 7.5, § 7.7, § 8.4, § 8.5) :
+  // la barre de vue, la légende des conflits quand elle est ouverte — les
+  // règles actives des réglages (legendeConflits) —, puis la surface
+  // [data-surface] qui porte le bandeau du plan, le <svg data-plan> et
+  // l'échelle graphique. Ouvrir la légende change la taille du cadre, que le
+  // ResizeObserver relit comme tout autre changement. Le <svg> racine n'a ni
   // viewBox, ni bordure, ni remplissage : son unité est le pixel CSS, et le
   // dessin vit dans un seul groupe <g data-vue>, dont l'attribut transform
   // est la vue, {k, tx, ty}. Un zoom n'écrit que cet attribut sous la
@@ -99,10 +102,12 @@
   import Fantome from './Fantome.svelte';
   import { REPOS, cleFantome, geste, memoriser } from './gestes.js';
   import Infobulle from './Infobulle.svelte';
-  import { detailConflits, modeleDessin } from './modele.js';
+  import Legende from './Legende.svelte';
+  import { detailConflits, legendeConflits, modeleDessin } from './modele.js';
   import PlanDessin from './PlanDessin.svelte';
   import RefusPlace from './RefusPlace.svelte';
   import {
+    appartenanceDeCharge,
     cadreDepuisRect,
     englobantDuTour,
     nomDeCharge,
@@ -147,6 +152,11 @@
   const prefixe = $props.id();
   const idPose = `${prefixe}-pose`;
   const idInfobulle = `${prefixe}-infobulle`;
+  const idLegende = `${prefixe}-legende`;
+
+  // La légende des conflits, ouverte ou non : un état de la vue, que le
+  // bouton de la barre bascule ; rien ne s'écrit.
+  let legendeOuverte = $state(false);
 
   const charge = $derived($seance.charge);
   const tours = $derived(charge.evenement.tours);
@@ -154,6 +164,9 @@
   const tour = $derived(etat.tour);
   const englobantPlan = $derived(englobantDuTour(etat));
   const nomDe = $derived(nomDeCharge(charge));
+  const appartenanceDe = $derived(appartenanceDeCharge(charge));
+  // Les règles actives des réglages, que la légende montre.
+  const legende = $derived(legendeConflits(charge.reglages));
   const selection = $derived($ui.selection);
   const pose = $derived($ui.pose);
   // La personne mise en évidence, que la barre de vue nomme : {id, nom}, nom
@@ -197,7 +210,7 @@
     const etatTable = etat.tables.find(({ id }) => id === infobulleTable);
     const dessin = modele.tables.find(({ id }) => id === infobulleTable);
     if (etatTable === undefined || dessin === undefined) return null;
-    const detail = detailConflits(etatTable, nomDe);
+    const detail = detailConflits(etatTable, nomDe, appartenanceDe);
     if (detail === null) return null;
     const { centre, rayonEmprise } = dessin.geometrie;
     const { x, y } = ecranDepuisDessin(vue, origineSvg, centre.x + rayonEmprise, centre.y - rayonEmprise);
@@ -712,7 +725,20 @@
 </script>
 
 <div class="plan">
-  <BarreVue {tour} {tours} {zoomer} {ajuster} {evidence} {source} />
+  <BarreVue
+    {tour}
+    {tours}
+    {zoomer}
+    {ajuster}
+    {evidence}
+    {source}
+    legende={legendeOuverte}
+    basculerLegende={() => (legendeOuverte = !legendeOuverte)}
+    {idLegende}
+  />
+  {#if legendeOuverte}
+    <Legende entrees={legende} id={idLegende} />
+  {/if}
   <div class="surface" data-surface bind:this={surface}>
     <BandeauPlan bandeau={modele === null ? [] : modele.bandeau} />
     <!-- Le plan est un composant interactif à deux dimensions, que le

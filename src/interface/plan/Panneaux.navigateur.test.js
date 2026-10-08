@@ -574,6 +574,75 @@ describe('le plan est un seul arrêt de tabulation (§ 7.3, § 13.5)', () => {
   });
 });
 
+// --- L'appartenance nommée, la légende des conflits (§ 7.5) -------------------
+
+describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légende des conflits (§ 7.5)', () => {
+  const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+
+  // Deux tables de trois, six personnes, un tour : la table 1 réunit Iris
+  // et Théo, du Club des Merles ; la table 2, Basile et Capucine, d'une
+  // appartenance écrite avec une minuscule et un blanc final, telle que la
+  // liste la porte.
+  function deuxAppartenances(reglages = {}) {
+    const charge = chargeDe({ id: 'evt-appartenances', defaut: 3, places: [null, null], personnes: 6, nombreTours: 1, tours: [[[1, 2, 4], [3, 5, 6]]] });
+    const appartenances = new Map([[1, 'Club des Merles'], [2, 'Club des Merles'], [5, 'cercle des Hérons '], [6, 'cercle des Hérons ']]);
+    for (const personne of charge.participants) personne.appartenance = appartenances.get(personne.id) ?? null;
+    Object.assign(charge.reglages, reglages);
+    return charge;
+  }
+
+  test('le survol d’une table en conflit d’appartenance : « Même appartenance (…) : … et … », l’appartenance dans son propre nœud', async () => {
+    const m = await ouvrir(deuxAppartenances());
+    expect(etatMontre(m).tables.map(({ conflits }) => conflits.nombre)).toEqual([1, 1]);
+    const infobulle = () => document.querySelector('[role="tooltip"]');
+    // Le pointeur part du sol : un survol commence par un mouvement.
+    await pointer('bouger', pointSol(m).x, pointSol(m).y);
+    for (const [table, appartenance, noms] of [
+      [1, 'Club des Merles', ['Iris Ombrelle', 'Théo Pervenche']],
+      [2, 'cercle des Hérons ', ['Basile Tourmaline', 'Capucine Arrosoir']],
+    ]) {
+      const point = pointTable(m, table);
+      await pointer('bouger', point.x, point.y);
+      await attendre(() => expect(infobulleVisible(infobulle())).toBe(true));
+      const lignes = [...infobulle().querySelectorAll('p')];
+      expect(lignes.map((p) => p.textContent)).toEqual([
+        t('plan.infobulle.entete', { numero: table, nombre: 1 }),
+        `${t('plan.infobulle.separerAppartenances')}${appartenance}${t('plan.infobulle.finAppartenance')}${noms.join(t('plan.infobulle.et'))}`,
+      ]);
+      expect(lignes[1].textContent).toMatch(/^Même appartenance \(/);
+      const noeuds = [...lignes[1].children].map((e) => e.textContent);
+      expect(noeuds).toContain(appartenance);
+      for (const nom of noms) expect(noeuds).toContain(nom);
+      await pointer('bouger', pointSol(m).x, pointSol(m).y);
+      await attendre(() => expect(infobulleVisible(infobulle())).toBe(false));
+    }
+  });
+
+  for (const mode of ['ecriture', 'lecture']) {
+    test(`mode ${mode} : le bouton « Légende » de la barre de vue ouvre la légende des seules règles actives, et la referme ; rien ne s’écrit`, async () => {
+      const m = await ouvrir(deuxAppartenances({ nouvelleTable: false }), { mode });
+      const revision = m.seance.etat().evenement.revision;
+      const bouton = dans(m, '[data-commande="legende"]');
+      expect(bouton).not.toBeNull();
+      expect(bouton.closest('[role="toolbar"]')).not.toBeNull();
+      expect(bouton.textContent).toBe(t('plan.legende.ouvrir'));
+      expect(bouton.getAttribute('aria-pressed')).toBe('false');
+      expect(dans(m, '[data-legende]')).toBeNull();
+      await cliquer(bouton);
+      await attendre(() => expect(dans(m, '[data-legende]')).not.toBeNull());
+      expect(bouton.getAttribute('aria-pressed')).toBe('true');
+      expect(bouton.getAttribute('aria-controls')).toBe(dans(m, '[data-legende]').id);
+      expect(tous(m, '[data-legende] [data-legende-regle]').map((e) => e.dataset.legendeRegle)).toEqual(['separerAppartenances', 'nouveauxVoisins']);
+      expect(dans(m, '[data-legende] [data-marque="trameTable"]')).toBeNull();
+      expect(infobulleVisible(dans(m, '[data-legende]'))).toBe(true);
+      await cliquer(bouton);
+      await attendre(() => expect(dans(m, '[data-legende]')).toBeNull());
+      expect(bouton.getAttribute('aria-pressed')).toBe('false');
+      expect(m.seance.etat().evenement.revision).toBe(revision);
+    });
+  }
+});
+
 // --- L'infobulle (§ 7.1, § 7.3, § 19.4) ---------------------------------------
 
 describe('l’infobulle : un composant, trois déclencheurs (§ 7.1, § 7.3)', () => {

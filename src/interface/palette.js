@@ -3,9 +3,10 @@
 
 // La palette se valide par calcul (§ 12.7, § 14.5). Le module lit les jetons
 // de couleur dans le texte de jetons.css, simule les trois dichromaties,
-// mesure le contraste au sens des WCAG et contrôle la teinte réservée au
-// conflit. Il est pur : il reçoit le texte de la feuille, ne lit aucun
-// fichier et ne touche pas le document.
+// mesure le contraste au sens des WCAG et l'écart perçu entre deux
+// couleurs, et contrôle les teintes réservées aux conflits. Il est pur : il
+// reçoit le texte de la feuille, ne lit aucun fichier et ne touche pas le
+// document.
 //
 // Une couleur est un tableau [r, g, b, a] : composantes sRGB de 0 à 255,
 // alpha de 0 à 1.
@@ -262,30 +263,92 @@ export function teinte(couleur) {
   return degres < 0 ? degres + 360 : degres;
 }
 
-/** § 12.7 : la teinte de chaque jeton chromatique se tient à ECART_TEINTE
- *  degrés au moins de celle du conflit, dans chaque thème. jetonsDuConflit :
- *  le jeton de conflit d'abord, puis ceux qui ne peignent que les marques de
- *  conflit, que le contrôle ne mesure pas. Rend les fautes [{theme, jeton,
- *  ecart}], ecart en degrés sur le cercle ; un jeton de conflit achromatique
- *  est lui-même une faute, d'écart null — aucune teinte n'est alors réservée. */
-export function verifierTeinteReservee(texteCss, jetonsDuConflit) {
-  const [conflit] = jetonsDuConflit;
+/** § 12.7 : chaque teinte réservée — celles des conflits — est chromatique,
+ *  et la teinte de chaque autre jeton chromatique se tient à ECART_TEINTE
+ *  degrés au moins de chacune, dans chaque thème. Les teintes réservées ne
+ *  se mesurent pas entre elles : verifierSeparation les distingue. Rend les
+ *  fautes [{theme, reservee, jeton, ecart}], ecart en degrés sur le cercle,
+ *  dans l'ordre thème, teinte réservée, jeton ; une teinte réservée
+ *  achromatique est elle-même une faute, jeton égal à reservee et ecart
+ *  null — aucune teinte n'est alors réservée. Un jeton réservé absent d'un
+ *  thème lève. */
+export function verifierTeintesReservees(texteCss, reservees) {
   const fautes = [];
   for (const theme of THEMES) {
     const jetons = lireJetons(texteCss, theme);
-    if (!jetons.has(conflit)) throw new Error(`jeton absent du thème ${theme} : ${conflit}`);
-    const reference = teinte(jetons.get(conflit));
-    if (reference === null) {
-      fautes.push({ theme, jeton: conflit, ecart: null });
-      continue;
+    for (const reservee of reservees) {
+      if (!jetons.has(reservee)) throw new Error(`jeton absent du thème ${theme} : ${reservee}`);
+      const reference = teinte(jetons.get(reservee));
+      if (reference === null) {
+        fautes.push({ theme, reservee, jeton: reservee, ecart: null });
+        continue;
+      }
+      for (const [nom, couleur] of jetons) {
+        if (reservees.includes(nom)) continue;
+        const h = teinte(couleur);
+        if (h === null) continue;
+        const brut = Math.abs(h - reference);
+        const ecart = Math.min(brut, 360 - brut);
+        if (ecart < ECART_TEINTE) fautes.push({ theme, reservee, jeton: nom, ecart });
+      }
     }
-    for (const [nom, couleur] of jetons) {
-      if (jetonsDuConflit.includes(nom)) continue;
-      const h = teinte(couleur);
-      if (h === null) continue;
-      const brut = Math.abs(h - reference);
-      const ecart = Math.min(brut, 360 - brut);
-      if (ecart < ECART_TEINTE) fautes.push({ theme, jeton: nom, ecart });
+  }
+  return fautes;
+}
+
+/** Les coordonnées OKLab [L, a, b] d'une couleur sRGB (Ottosson) : L vaut 0
+ *  pour le noir et 1 pour le blanc, a et b sont nuls pour un gris. Les
+ *  composantes passent en RGB linéaire, puis dans l'espace LMS, dont la
+ *  racine cubique se recompose en L, a, b. Alpha ignoré. */
+export function oklab(couleur) {
+  const [r, g, b] = couleur.slice(0, 3).map(versLineaire);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+/** L'écart perçu entre deux couleurs : la distance euclidienne de leurs
+ *  coordonnées OKLab, multipliée par 100 — 100 du noir au blanc, 0 d'une
+ *  couleur à elle-même. Symétrique. Sous une dichromatie, il se mesure sur
+ *  les couleurs simulées (§ 12.7 : simuler d'abord, puis mesurer). */
+export function ecartPercu(a, b) {
+  const [la, aa, ba] = oklab(a);
+  const [lb, ab, bb] = oklab(b);
+  return 100 * Math.hypot(la - lb, aa - ab, ba - bb);
+}
+
+/** Les jetons se distinguent, sur les couleurs d'origine puis sous chaque
+ *  simulation, dans les deux thèmes : chaque paire de jetons, puis chaque
+ *  jeton contre chacun des autres, tient un écart perçu (ecartPercu) d'au
+ *  moins seuil ; les autres ne se mesurent pas entre eux. Rend les fautes
+ *  [{theme, simulation, jeton, autre, ecart, seuil}], simulation valant
+ *  'origine' pour les couleurs d'origine, dans l'ordre thème, simulation,
+ *  paires de jetons, puis jetons contre autres ; [] quand tout tient. Un
+ *  jeton absent d'un thème lève. */
+export function verifierSeparation(texteCss, jetons, autres, seuil) {
+  const paires = [];
+  jetons.forEach((jeton, i) => {
+    for (const autre of jetons.slice(i + 1)) paires.push([jeton, autre]);
+  });
+  for (const jeton of jetons) for (const autre of autres) paires.push([jeton, autre]);
+  const fautes = [];
+  for (const theme of THEMES) {
+    const lus = lireJetons(texteCss, theme);
+    const lire = (nom) => {
+      if (!lus.has(nom)) throw new Error(`jeton absent du thème ${theme} : ${nom}`);
+      return lus.get(nom);
+    };
+    for (const simulation of ['origine', ...ORDRE_SIMULATIONS]) {
+      const vue = (c) => (simulation === 'origine' ? c : simuler(c, simulation));
+      for (const [jeton, autre] of paires) {
+        const ecart = ecartPercu(vue(lire(jeton)), vue(lire(autre)));
+        if (ecart < seuil) fautes.push({ theme, simulation, jeton, autre, ecart, seuil });
+      }
     }
   }
   return fautes;

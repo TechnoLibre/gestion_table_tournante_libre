@@ -57,7 +57,7 @@ import {
 } from '../../test/navigateur/rendu.js';
 import { provenanceVisible } from './apropos.js';
 import { TABLES_INTERFACE } from './libelles.js';
-import { MARQUES } from './marques.js';
+import { CONFLITS, MARQUES } from './marques.js';
 
 const { t: tTemoin } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue: 'temoin' });
 const { ouverture: OUVERTURE, fermeture: FERMETURE } = MARQUE_TEMOIN;
@@ -78,8 +78,9 @@ const TEXTES_NON_PEINTS = new Set(['script', 'style', 'template', 'noscript', 't
 // Conteneurs SVG qui ne peignent qu'à travers une référence.
 const CONTENEURS_DE_REFERENCE = 'defs, pattern, clipPath, mask, marker, symbol, linearGradient, radialGradient';
 
-// Les marques que la teinte du conflit peint seules (§ 12.7, § 7.5).
-const MARQUES_DU_CONFLIT = new Set(['contourConflit', 'trameConflit']);
+// Les trames de conflit, et le jeton que chacune peint seule (§ 12.7, § 7.5) :
+// une teinte de conflit ne peint que la trame de sa règle.
+const JETON_DE_TRAME = new Map(CONFLITS.map(({ marque, jeton }) => [marque, jeton]));
 
 const PICTOGRAPHIQUE = /\p{Extended_Pictographic}/u;
 const LETTRE = /\p{L}/u;
@@ -651,26 +652,48 @@ function peinturesDe(element) {
   return peintures;
 }
 
-/** Fautes de la teinte réservée sous racine (§ 12.7, § 7.5) : un élément
- *  rendu qui peint la couleur de conflit sans être une marque de conflit.
- *  → { fautes, lus }, lus le nombre d'éléments rendus, hors marques de
- *  conflit, qui peignent au moins une couleur. */
-export function fautesTeinte(racine, conflit) {
+/** Fautes des teintes réservées sous racine (§ 12.7, § 7.5) : un élément
+ *  rendu qui peint une teinte de conflit sans être la trame de sa règle —
+ *  aucun autre élément, ni la trame d'une autre règle. teintes : [{ jeton,
+ *  couleur }], la couleur résolue de chaque jeton de conflit dans le thème
+ *  courant. → { fautes, lus }, lus le nombre d'éléments rendus qui peignent
+ *  au moins une couleur. */
+export function fautesTeinte(racine, teintes) {
   const fautes = [];
   let lus = 0;
   for (const element of [racine, ...racine.querySelectorAll('*')]) {
     if (element.closest(CONTENEURS_DE_REFERENCE) !== null || !rendu(element)) continue;
-    if (MARQUES_DU_CONFLIT.has(element.dataset?.marque)) continue;
+    const sienne = JETON_DE_TRAME.get(element.dataset?.marque) ?? null;
     const peintures = peinturesDe(element);
     if (peintures.some(({ couleurs }) => couleurs.length > 0)) lus += 1;
     for (const { propriete, couleurs } of peintures) {
-      if (couleurs.some((c) => egales(c, conflit))) fautes.push(`${situer(element)} : ${propriete} ${rgb(conflit)}`);
+      for (const { jeton, couleur } of teintes) {
+        if (jeton !== sienne && couleurs.some((c) => egales(c, couleur))) fautes.push(`${situer(element)} : ${propriete} ${rgb(couleur)} (${jeton})`);
+      }
     }
   }
   return { fautes, lus };
 }
 
+/** Les teintes de conflit du thème courant : [{ jeton, couleur }]. */
+const teintesDeConflit = () => CONFLITS.map(({ jeton }) => ({ jeton, couleur: couleurDeJeton(jeton) }));
+
 // --- Jamais la seule couleur ------------------------------------------------------------
+
+// La géométrie d'un motif, sans ses couleurs : sa transformation, son
+// carreau, et chacune de ses formes — balise, attributs de géométrie,
+// épaisseur de trait. Deux trames qui ne diffèrent que par la couleur de
+// leur motif ont la même.
+const GEOMETRIE = ['x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'width', 'height', 'd'];
+function formeDuMotif(element) {
+  const id = /^url\("?#([^")]+)"?\)/.exec(getComputedStyle(element).fill)?.[1];
+  const motif = id === undefined ? null : element.ownerDocument.getElementById(id);
+  if (motif === null) return 'motif absent';
+  const formes = [...motif.querySelectorAll('*')].map((n) =>
+    [n.localName, ...GEOMETRIE.map((a) => n.getAttribute(a) ?? ''), getComputedStyle(n).strokeWidth].join(' '),
+  );
+  return `motif ${motif.getAttribute('patternTransform') ?? ''} ${motif.getAttribute('width')}×${motif.getAttribute('height')} [${formes.join(', ')}]`;
+}
 
 /**
  * La signature non chromatique d'un état : pour chaque élément rendu des
@@ -692,7 +715,7 @@ export function signature(racines) {
         [
           n.localName,
           svg && s.stroke !== 'none' ? `trait ${s.strokeWidth} ${s.strokeDasharray}` : '',
-          svg ? `remplissage ${s.fill === 'none' ? 'aucun' : /^url\(/.test(s.fill) ? 'motif' : 'aplat'}` : '',
+          svg ? `remplissage ${s.fill === 'none' ? 'aucun' : /^url\(/.test(s.fill) ? formeDuMotif(n) : 'aplat'}` : '',
           svg ? '' : `bords ${s.borderTopStyle} ${s.borderTopWidth}`,
           texte,
         ].join('|'),
@@ -707,7 +730,7 @@ export function signature(racines) {
 // signature, classé par l'état des places que l'application calcule.
 function releverEtats(m) {
   const racine = m.racine;
-  const etats = { saine: [], conflit: [], libre: [], reservee: [], nonPourvu: [], tour: [], tous: [] };
+  const etats = { saine: [], conflit: [], libre: [], reservee: [], nonPourvu: [], tour: [], tous: [], trames: Object.fromEntries(CONFLITS.map(({ marque }) => [marque, []])) };
   const charge = m.seance.etat().charge;
   if (charge === null || racine.querySelector('[data-plan]') === null) return etats;
   const { tour, proposition } = m.ui.etat();
@@ -718,6 +741,10 @@ function releverEtats(m) {
     const pastille = racine.querySelector(`[data-pastille="${table.id}"]`);
     const sig = signature([...propres, ...(pastille === null ? [] : [pastille])]);
     etats[(table.conflits?.nombre ?? 0) > 0 ? 'conflit' : 'saine'].push({ ou: `table ${table.id}`, sig });
+    // Chaque trame de conflit, par sa sorte.
+    for (const trame of groupe.querySelectorAll(CONFLITS.map(({ marque }) => `[data-marque="${marque}"]`).join(', '))) {
+      if (rendu(trame)) etats.trames[trame.dataset.marque].push({ ou: `trame de la table ${table.id}`, sig: signature([trame]) });
+    }
     for (const place of table.chaises) {
       const element = racine.querySelector(`[data-siege="${table.id}:${place.siege}"]`);
       if (element === null) continue;
@@ -829,7 +856,7 @@ function releverTheme(racine) {
   try {
     const textes = releverTextes(racine);
     const marques = releverMarques(racine);
-    return { textes, marques, teinte: fautesTeinte(racine, couleurDeJeton('--couleur-conflit')) };
+    return { textes, marques, teinte: fautesTeinte(racine, teintesDeConflit()) };
   } finally {
     window.scrollTo(0, 0);
   }
@@ -942,10 +969,17 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(fautes[2]).toContain('1.00:1');
   });
 
-  test('teinte réservée : un texte peint de la couleur de conflit est relevé', () => {
-    const { fautes, lus } = avecFragment('<p style="color:var(--couleur-conflit)">alerte</p>', (c) => fautesTeinte(c, couleurDeJeton('--couleur-conflit')));
-    expect(lus).toBeGreaterThan(0);
-    expect(fautes).toHaveLength(1);
+  test('teintes réservées : un texte peint d’une teinte de conflit, et la trame d’une règle peinte de la teinte d’une autre, sont relevés ; une trame de sa propre teinte passe', () => {
+    const { fautes, lus } = avecFragment(
+      '<p style="color:var(--couleur-conflit-voisins)">alerte</p>' +
+        '<svg width="80" height="20"><rect data-marque="trameAppartenance" width="20" height="20" style="fill:var(--couleur-conflit-table)" />' +
+        '<rect data-marque="trameTable" x="40" width="20" height="20" style="fill:var(--couleur-conflit-table)" /></svg>',
+      (c) => fautesTeinte(c, teintesDeConflit()),
+    );
+    expect(lus).toBeGreaterThan(2);
+    expect(fautes).toHaveLength(2);
+    expect(fautes[0]).toContain('--couleur-conflit-voisins');
+    expect(fautes[1]).toMatch(/trameAppartenance.*--couleur-conflit-table/);
   });
 
   test('listes : une partie qui traverse une chaise loin de son centre est relevée ; une boîte qui n’entre que dans le coin d’un cercle passe', () => {
@@ -1008,6 +1042,20 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     );
     expect(fautes).toEqual(['paire : a et b ne diffèrent que par la couleur']);
     expect(fautesPaire('vide', [], [{ ou: 'b', sig: '' }])).toHaveLength(1);
+  });
+
+  test('jamais la seule couleur : deux trames dont les motifs ne diffèrent que par la couleur ont la même signature ; deux formes de motif, deux signatures', () => {
+    const motif = (id, angle, teinte) =>
+      `<pattern id="${id}" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(${angle})">` +
+      `<line x1="6" y1="0" x2="6" y2="12" style="stroke:${teinte};stroke-width:4" /></pattern>`;
+    const sigs = avecFragment(
+      `<svg width="120" height="40"><defs>${motif('m-a', -45, '#a00')}${motif('m-b', -45, '#0a0')}${motif('m-c', 45, '#a00')}</defs>` +
+        '<rect id="a" width="30" height="30" style="fill:url(#m-a)" /><rect id="b" x="40" width="30" height="30" style="fill:url(#m-b)" />' +
+        '<rect id="c" x="80" width="30" height="30" style="fill:url(#m-c)" /></svg>',
+      (c) => ['a', 'b', 'c'].map((id) => signature([c.querySelector(`#${id}`)])),
+    );
+    expect(sigs[0]).toBe(sigs[1]);
+    expect(sigs[0]).not.toBe(sigs[2]);
   });
 
   test('bandeau et formulaires : une version absente, un formulaire validé par le navigateur et un champ de fichier visible sont relevés', () => {
@@ -1146,7 +1194,7 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     aucuneFaute([...new Set(fautes)], 'atténuations');
   });
 
-  test('jamais la seule couleur : table saine et en conflit, place libre, réservée et à titre non pourvu, portée tour et tous, cadre en lecture, en écriture et bloqué', () => {
+  test('jamais la seule couleur : table saine et en conflit, les trois sortes de conflit, place libre, réservée et à titre non pourvu, portée tour et tous, cadre en lecture, en écriture et bloqué', () => {
     const plan = atteints().find((r) => r.nom === 'evenement.plan.ecriture');
     expect(plan, 'le plan en écriture relevé').toBeDefined();
     const e = plan.etats;
@@ -1157,6 +1205,11 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
       ...fautesPaire('place réservée / titre non pourvu', e.reservee, e.nonPourvu),
       ...fautesPaire('portée tour / tous', e.tour, e.tous),
     ];
+    // Les trois sortes de conflit, sur le plan qui les montre ensemble.
+    const trois = atteints().find((r) => r.nom === 'plan.troisConflits');
+    expect(trois, 'le plan des trois sortes de conflit relevé').toBeDefined();
+    const [a, b, c] = CONFLITS.map(({ marque }) => trois.etats.trames[marque]);
+    fautes.push(...fautesPaire('trame appartenance / voisins', a, b), ...fautesPaire('trame appartenance / table', a, c), ...fautesPaire('trame voisins / table', b, c));
     const cadres = ['lecture', 'ecriture', 'bloque'].map((mode) => {
       const r = atteints().find((x) => x.nom === `evenement.plan.${mode}`);
       return { ou: `cadre ${mode}`, sig: r?.cadre ?? null };
@@ -1168,12 +1221,12 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     aucuneFaute(fautes, 'jamais la seule couleur');
   });
 
-  test('teinte réservée : la couleur calculée de conflit ne peint que les marques de conflit, dans les deux thèmes', () => {
+  test('teintes réservées : chaque teinte de conflit calculée ne peint que la trame de sa règle, dans les deux thèmes', () => {
     for (const theme of THEMES) {
       expect(atteints().reduce((n, r) => n + r[theme].teinte.lus, 0), `éléments peints lus [${theme}]`).toBeGreaterThan(0);
     }
     const fautes = atteints().flatMap((r) => THEMES.flatMap((theme) => r[theme].teinte.fautes.map((f) => `${r.nom} [${theme}] — ${f}`)));
-    aucuneFaute([...new Set(fautes)], 'teinte réservée');
+    aucuneFaute([...new Set(fautes)], 'teintes réservées');
   });
 
   test('aucun emoji au rendu', () => {

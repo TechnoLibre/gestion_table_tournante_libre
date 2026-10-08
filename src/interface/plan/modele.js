@@ -12,6 +12,7 @@ import { constante } from '../../geometrie/constantes.js';
 import { regimeCibles } from '../../geometrie/designation.js';
 import { geometrieTable } from '../../geometrie/tables.js';
 import { decalagesLignes, tronquer } from '../../geometrie/texte.js';
+import { CONFLITS } from '../marques.js';
 
 /** Largeur maximale de la barre de l'échelle graphique, en px d'écran. */
 export const LARGEUR_ECHELLE_PX = 120;
@@ -289,6 +290,9 @@ function bandeauDe(toutesEnConflit, diagnostic) {
   return entrees;
 }
 
+// La sorte de conflit de chaque règle du moteur (CONFLITS).
+const SORTE_DE_REGLE = new Map(CONFLITS.map((sorte) => [sorte.regle, sorte]));
+
 // Une chaise libre au siège s : celle qu'ajoute la poignée au-delà de la
 // capacité, que rien ne tient ni n'occupe.
 const chaiseLibre = (siege) => ({ siege, occupant: null, reservation: null, titre: null, remplissage: 'normal', marques: [] });
@@ -314,6 +318,7 @@ function porteurDe(place, id, regime) {
 function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, actif = null }, places = etatTable.capacite) {
   const { id, numero, gelee, surchargee, conflits } = etatTable;
   const geometrie = geometrieTable(etatTable, places);
+  const trames = conflits === null ? [] : conflits.regles.map(({ regle }) => ({ ...SORTE_DE_REGLE.get(regle) }));
   const regime = regimeCibles(k, geometrie);
   const pastille = conflits === null ? 0 : conflits.nombre;
   const etatChaises = chaisesA(etatTable, places);
@@ -342,6 +347,7 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
     regime,
     conflit: pastille > 0,
     pastille,
+    trames,
     selection: selectionnee === 'table',
     focus: active === 'table',
     gelee,
@@ -362,7 +368,9 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
  * Chaque table, dans l'ordre de l'état des places, porte sa géométrie
  * (geometrieTable, P2), son régime des cibles au zoom k (regimeCibles) —
  * aucune chaise dessinée en régime table —, son conflit et sa pastille, lus
- * dans conflits — null : ni conflit, ni pastille —, son nom accessible, et
+ * dans conflits — null : ni conflit, ni pastille —, ses trames — la sorte
+ * de conflit (CONFLITS, marques.js) de chaque règle violée, {regle, marque,
+ * jeton, forme}, dans l'ordre du moteur —, son nom accessible, et
  * une ligne par siège, de 1 à la capacité, précédée de l'en-tête d'une
  * table gelée. Quand toutes les tables sont en conflit, aucune n'est
  * signalée — signalerConflits faux — et le bandeau énonce le diagnostic ;
@@ -412,28 +420,65 @@ export function modeleDessin(
 }
 
 /**
- * Le détail des conflits d'une table au tour montré (§ 7.1, § 7.3), que
- * l'infobulle énonce : son numéro, le nombre de violations, et chaque règle
- * violée dans l'ordre du moteur (conflitsParTable, M1), sa clé de libellé
- * plan.infobulle.<règle> et ses groupes nommés — une paire de noms pour
- * séparer les appartenances et nouveaux voisins, un nom seul pour nouvelle
- * table. Les noms sont des données : l'infobulle pose chacun dans son nœud.
- * null quand les conflits ne s'évaluent pas ou qu'il n'y en a aucun.
+ * Le détail des conflits d'une table au tour montré (§ 7.1, § 7.3, § 7.5),
+ * que l'infobulle énonce : son numéro, le nombre de violations, puis ses
+ * lignes, dans l'ordre des règles du moteur (conflitsParTable, M1). Chaque
+ * ligne porte sa règle, sa clé de libellé plan.infobulle.<règle>, une
+ * appartenance et ses groupes nommés. Séparer les appartenances donne une
+ * ligne par appartenance, dans l'ordre de sa première paire, qui nomme
+ * l'appartenance qu'ont en commun les deux personnes de chacune de ses
+ * paires — le moteur ne réunit que des personnes de même appartenance non
+ * nulle, la chaîne même que la liste porte — ; nouveaux voisins et nouvelle
+ * table, une ligne chacune, appartenance null, une paire de noms ou un nom
+ * seul par groupe. Les noms et l'appartenance sont des données :
+ * l'infobulle pose chacun dans son nœud. null quand les conflits ne
+ * s'évaluent pas ou qu'il n'y en a aucun.
  *
  * @param {Object} etatTable   EtatTable (A5)
  * @param {(id: number) => string} nomDe
- * @returns {null|{numero: number, nombre: number, regles: Array<{cle: string, groupes: string[][]}>}}
+ * @param {(id: number) => string|null} appartenanceDe
+ * @returns {null|{numero: number, nombre: number,
+ *   lignes: Array<{regle: string, cle: string, appartenance: string|null, groupes: string[][]}>}}
  */
-export function detailConflits({ numero, conflits }, nomDe) {
+export function detailConflits({ numero, conflits }, nomDe, appartenanceDe) {
   if (conflits === null || conflits.nombre === 0) return null;
-  return {
-    numero,
-    nombre: conflits.nombre,
-    regles: conflits.regles.map((regle) => ({
-      cle: `plan.infobulle.${regle.regle}`,
-      groupes: (regle.paires ?? regle.personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe)),
-    })),
-  };
+  const lignes = [];
+  for (const { regle, paires, personnes } of conflits.regles) {
+    const cle = `plan.infobulle.${regle}`;
+    if (regle !== 'separerAppartenances') {
+      lignes.push({ regle, cle, appartenance: null, groupes: (paires ?? personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe)) });
+      continue;
+    }
+    const parAppartenance = new Map();
+    for (const paire of paires) {
+      const appartenance = appartenanceDe(paire[0]);
+      if (!parAppartenance.has(appartenance)) {
+        const ligne = { regle, cle, appartenance, groupes: [] };
+        parAppartenance.set(appartenance, ligne);
+        lignes.push(ligne);
+      }
+      parAppartenance.get(appartenance).groupes.push(paire.map(nomDe));
+    }
+  }
+  return { numero, nombre: conflits.nombre, lignes };
+}
+
+/**
+ * La légende des conflits (§ 7.5) : la sorte de conflit (CONFLITS) de
+ * chaque règle active des réglages, dans l'ordre du moteur, avec la clé de
+ * son nom, plan.legende.<règle>, et celle de sa forme,
+ * plan.legende.forme.<forme>. Une règle inactive n'y paraît pas ; varier
+ * les appartenances, qui ne se localise pas à une table, n'a pas de sorte.
+ *
+ * @param {{separerAppartenances: boolean, nouveauxVoisins: boolean, nouvelleTable: boolean}} reglages
+ * @returns {Array<{regle: string, marque: string, jeton: string, forme: string, cle: string, cleForme: string}>}
+ */
+export function legendeConflits(reglages) {
+  return CONFLITS.filter(({ regle }) => reglages[regle] === true).map((sorte) => ({
+    ...sorte,
+    cle: `plan.legende.${sorte.regle}`,
+    cleForme: `plan.legende.forme.${sorte.forme}`,
+  }));
 }
 
 /**

@@ -8,9 +8,11 @@
   // trois déclencheurs — le survol, le focus du clavier, la pression longue —
   // et lui passe le détail des conflits (detailConflits, modele.js) et sa
   // position dans la surface, en px. Elle énonce la table et son nombre de
-  // violations, puis chaque règle violée et ses groupes : chaque nom occupe
-  // son propre nœud, relié à l'autre nom d'une paire par « et », séparé du
-  // groupe suivant.
+  // violations, puis chaque ligne du détail et ses groupes : chaque nom
+  // occupe son propre nœud, relié à l'autre nom d'une paire par « et »,
+  // séparé du groupe suivant. Une ligne qui porte une appartenance — séparer
+  // les appartenances — la nomme dans son propre nœud, entre son libellé et
+  // finAppartenance.
   //
   // infobulle : null, ou {detail, x, y} ; id : l'identifiant que la racine
   // du plan désigne par aria-describedby quand l'infobulle s'ouvre par le
@@ -32,9 +34,11 @@
 >
   {#if infobulle !== null}
     <p class="entete">{t('plan.infobulle.entete', { numero: infobulle.detail.numero, nombre: infobulle.detail.nombre })}</p>
-    {#each infobulle.detail.regles as regle, rang (rang)}
+    {#each infobulle.detail.lignes as ligne, rang (rang)}
       <p>
-        <span>{t(regle.cle)}</span>{#each regle.groupes as groupe, g (g)}{#if g > 0}<span
+        <span>{t(ligne.cle)}</span>{#if ligne.appartenance !== null}<span class="donnee">{ligne.appartenance}</span><span
+            >{t('plan.infobulle.finAppartenance')}</span
+          >{/if}{#each ligne.groupes as groupe, g (g)}{#if g > 0}<span
               >{t('plan.infobulle.separateur')}</span
             >{/if}{#each groupe as nom, n (n)}{#if n > 0}<span>{t('plan.infobulle.et')}</span>{/if}<span class="donnee"
               >{nom}</span

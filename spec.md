@@ -1057,6 +1057,24 @@ Le signal **ne repose pas sur la seule couleur** : contour épaissi, trame, et
 une **pastille portant le nombre de violations**. Une part notable des
 opérateurs ne distingue pas un rouge d'un vert.
 
+**Chaque règle a sa trame, d'une forme et d'une teinte propres** — hachures
+descendantes pour « séparer les appartenances », hachures montantes pour
+« nouveaux voisins », points pour « nouvelle table ». La forme suffit sans la
+couleur ; la teinte la redit. Une table qui viole plusieurs règles superpose
+leurs trames — les deux hachures se croisent en quadrillage — sous un même
+contour épaissi, commun aux trois règles ; la pastille compte toutes ses
+violations.
+
+**Une légende des conflits reste accessible depuis le plan**, par la barre de
+vue : pour chaque règle active, un échantillon de sa trame — la forme et la
+teinte que le plan peint — et son nom ; elle dit aussi ce que compte la
+pastille. Une règle inactive n'y paraît pas.
+
+Le détail d'une table en conflit nomme les personnes de chaque violation ;
+pour « séparer les appartenances », il nomme aussi **l'appartenance qui les
+réunit**, telle que la liste la porte : « Même appartenance (Club des Merles) :
+Iris Ombrelle et Théo Pervenche ».
+
 **Quand toutes les tables sont en conflit, le plan cesse de signaler quoi que ce
 soit** — cas que le diagnostic sait prédire. La pastille chiffrée garde sa
 valeur puisqu'elle ordonne les tables entre elles, et le bandeau énonce le
@@ -2603,8 +2621,11 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 - **L'identité d'une série ne repose jamais sur la seule couleur** : au plus
   deux séries, **étiquetées directement sur le tracé** en plus de la légende. La
   page s'imprime, souvent en noir et blanc.
-- **Les couleurs d'état sont réservées** : la teinte qui signale un conflit ici
-  est **la même** que sur le plan de salle, et ne sert à rien d'autre.
+- **Les couleurs d'état sont réservées** : **les teintes de conflit** — trois,
+  une par règle que le plan localise (§ 7.5) — sont ici **les mêmes** que sur
+  le plan de salle, et ne servent à rien d'autre ; chacune ne peint que les
+  marques de sa règle. Elles se distinguent entre elles et des autres marques
+  du plan **une fois les trois dichromaties simulées**.
 - **Une échelle séquentielle est une seule teinte, du clair au foncé.** Jamais
   d'arc-en-ciel : un dégradé multicolore invente des frontières là où la
   grandeur est continue.

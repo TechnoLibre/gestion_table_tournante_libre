@@ -129,6 +129,18 @@ export function nomDeCharge(charge) {
 }
 
 /**
+ * La fonction appartenanceDe de l'infobulle (detailConflits) : l'identifiant
+ * d'un participant de la charge vers son appartenance, la chaîne même que la
+ * liste porte, ou null — sans appartenance, ou pour un identifiant que la
+ * charge n'a pas.
+ * @returns {(id: number) => string|null}
+ */
+export function appartenanceDeCharge(charge) {
+  const appartenances = new Map(charge.participants.map(({ id, appartenance }) => [id, appartenance]));
+  return (id) => appartenances.get(id) ?? null;
+}
+
+/**
  * Ce que la barre de vue dit du placement que le plan montre (§ 2.1, étape
  * 11 ; § 5.8), lu sur l'état des places du tour : le placement retenu, les
  * seules réservations — ou un retenu qui ne se lit pas, sous lequel le plan

@@ -24,6 +24,7 @@ import {
 import { creerCharge } from '../../stockage/document.js';
 import {
   FACTEUR_BOUTON,
+  appartenanceDeCharge,
   cadreDepuisRect,
   englobantDuTour,
   nomDeCharge,
@@ -248,6 +249,15 @@ describe('l’englobant d’un tour, le tour montré, les noms', () => {
     const nomDe = nomDeCharge(chargeDEpreuve());
     assert.equal(nomDe(1), 'Iris Ombrelle');
     assert.equal(nomDe(2), 'Grisaille');
+  });
+
+  test('appartenanceDeCharge : l’appartenance de chaque participant telle que la liste la porte, null sans appartenance ni participant', () => {
+    const charge = chargeDEpreuve();
+    charge.participants[0].appartenance = ' Cercle des Hérons';
+    const appartenanceDe = appartenanceDeCharge(charge);
+    assert.equal(appartenanceDe(1), ' Cercle des Hérons');
+    assert.equal(appartenanceDe(2), null);
+    assert.equal(appartenanceDe(99), null);
   });
 });
 

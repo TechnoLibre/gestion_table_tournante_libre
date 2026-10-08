@@ -8,15 +8,15 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
-import { MARQUES, TEXTES } from './marques.js';
-import { lireBlocs, lireJetons, verifierPalette } from './palette.js';
+import { CONFLITS, JETONS_CONFLIT, MARQUES, SEPARATIONS, TEXTES } from './marques.js';
+import { lireBlocs, lireJetons, verifierPalette, verifierSeparation } from './palette.js';
 
 const JETONS = readFileSync(new URL('./jetons.css', import.meta.url), 'utf8');
 const THEMES = ['clair', 'sombre'];
 
 const NOMS_MARQUES = [
   'cadenasFerme', 'cadenasOuvert', 'anneau', 'hachure', 'remplissagePlein',
-  'contourConflit', 'trameConflit', 'pastille', 'poignee', 'gel', 'miseEnEvidence',
+  'contourConflit', 'trameAppartenance', 'trameVoisins', 'trameTable', 'pastille', 'poignee', 'gel', 'miseEnEvidence',
   'selection', 'cadreLecture', 'cadreEcriture', 'cadreBloque', 'focus',
   'contourTable', 'contourChaise', 'echelle', 'fantome',
 ];
@@ -39,7 +39,7 @@ const FONDS_REQUIS = {
 const parNom = (registre, nom) => registre.find((e) => e.nom === nom);
 
 describe('registre des marques', () => {
-  test('les vingt marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
+  test('les vingt-deux marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
     assert.equal(MARQUES.length, NOMS_MARQUES.length);
     assert.deepEqual(MARQUES.map((m) => m.nom), NOMS_MARQUES);
     assert.equal(new Set(MARQUES.map((m) => m.nom)).size, MARQUES.length);
@@ -91,6 +91,44 @@ describe('registre des marques', () => {
   });
 });
 
+describe('les trois sortes de conflit (§ 7.5, § 12.7)', () => {
+  test('une par règle localisable, dans l’ordre du moteur : sa règle, la marque de sa trame, le jeton de sa teinte, la forme de son motif', () => {
+    assert.deepEqual(
+      CONFLITS.map((c) => [c.regle, c.marque, c.jeton, c.forme]),
+      [
+        ['separerAppartenances', 'trameAppartenance', '--couleur-conflit-appartenance', 'hachuresDescendantes'],
+        ['nouveauxVoisins', 'trameVoisins', '--couleur-conflit-voisins', 'hachuresMontantes'],
+        ['nouvelleTable', 'trameTable', '--couleur-conflit-table', 'points'],
+      ],
+    );
+    assert.ok(CONFLITS.every((c) => Object.keys(c).sort().join() === 'forme,jeton,marque,regle'));
+    assert.ok(Object.isFrozen(CONFLITS) && CONFLITS.every((c) => Object.isFrozen(c)));
+    assert.deepEqual(JETONS_CONFLIT, CONFLITS.map(({ jeton }) => jeton));
+    assert.ok(Object.isFrozen(JETONS_CONFLIT));
+    // Les seuils d'écart perçu : entre deux teintes de conflit, et d'une
+    // teinte de conflit à une autre marque du plan.
+    assert.deepEqual(SEPARATIONS, { entreConflits: 12, autresMarques: 5 });
+    assert.ok(Object.isFrozen(SEPARATIONS));
+  });
+
+  test('chaque trame est au registre, peinte de son jeton sur le fond du plateau', () => {
+    for (const { marque, jeton } of CONFLITS) {
+      const entree = parNom(MARQUES, marque);
+      assert.notEqual(entree, undefined, marque);
+      assert.equal(entree.jeton, jeton, marque);
+      assert.deepEqual(entree.fonds, ['--couleur-table-fond'], marque);
+    }
+  });
+
+  test('teinte réservée au registre : une teinte de conflit ne peint que sa trame, aucune autre marque ni aucun texte', () => {
+    const peintes = [...MARQUES, ...TEXTES].filter((e) => JETONS_CONFLIT.includes(e.jeton) || e.fonds.some((f) => JETONS_CONFLIT.includes(f)));
+    assert.deepEqual(peintes.map((e) => e.nom), CONFLITS.map(({ marque }) => marque));
+    // Le contour épaissi d'une table en conflit est commun aux trois règles :
+    // il ne porte aucune de leurs teintes.
+    assert.ok(!JETONS_CONFLIT.includes(parNom(MARQUES, 'contourConflit').jeton));
+  });
+});
+
 describe('registre des textes', () => {
   test('page, secondaire, bandeau, refus, avis, listes du plan, pastille ; seuil 4,5', () => {
     assert.deepEqual(TEXTES.map((t) => t.nom), ['page', 'secondaire', 'bandeau', 'refus', 'avis', 'listes', 'pastille']);
@@ -128,5 +166,26 @@ describe('palette de jetons.css validée par calcul (§ 12.7, § 14.5)', () => {
 
   test('chaque texte tient 4,5:1 sur chacun de ses fonds, dans les deux thèmes, sous les trois simulations', () => {
     assert.deepEqual(verifierPalette(JETONS, TEXTES), []);
+  });
+
+  // Les autres marques du plan : celles qui se peignent sur le sol, le
+  // plateau ou une chaise, trames de conflit exceptées, chaque jeton une fois.
+  const FONDS_DU_PLAN = new Set(['--couleur-sol', '--couleur-table-fond', ...REMPLISSAGES_CHAISE]);
+  const autresMarquesDuPlan = () => [
+    ...new Set(MARQUES.filter((m) => !JETONS_CONFLIT.includes(m.jeton) && m.fonds.some((f) => FONDS_DU_PLAN.has(f))).map((m) => m.jeton)),
+  ];
+
+  test(`les trois teintes de conflit se séparent deux à deux de ${SEPARATIONS.entreConflits} au moins (OKLab × 100), dans les deux thèmes, en couleurs d’origine et sous les trois simulations`, () => {
+    assert.equal(JETONS_CONFLIT.length, 3);
+    assert.deepEqual(verifierSeparation(JETONS, JETONS_CONFLIT, [], SEPARATIONS.entreConflits), []);
+  });
+
+  test(`chaque teinte de conflit se sépare de ${SEPARATIONS.autresMarques} au moins de chaque autre marque du plan, dans les deux thèmes, sous les trois simulations`, () => {
+    const autres = autresMarquesDuPlan();
+    assert.ok(autres.length >= 10, `${autres.length} autres marques`);
+    for (const jeton of ['--couleur-gel', '--couleur-mise-en-evidence', '--couleur-selection', '--couleur-focus', '--couleur-fantome', '--couleur-pastille-fond']) {
+      assert.ok(autres.includes(jeton), jeton);
+    }
+    assert.deepEqual(verifierSeparation(JETONS, JETONS_CONFLIT, autres, SEPARATIONS.autresMarques), []);
   });
 });

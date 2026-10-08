@@ -427,7 +427,11 @@ function localisateur(racine) {
 // --- Garde 4 : les couleurs (§ 12.7, § 13.3, § 13.5) --------------------------
 
 const FEUILLE_DES_JETONS = 'src/interface/jetons.css';
-const JETON_CONFLIT = '--couleur-conflit';
+// La famille des teintes de conflit (§ 7.5, § 12.7) : --couleur-conflit et
+// chaque --couleur-conflit-…, une par règle que le plan localise ; un nom
+// qui les prolonge sans tiret n'en est pas.
+const JETON_CONFLIT = /--couleur-conflit(?:-[\w-]+)?(?![\w-])/;
+const litConflit = (valeur) => JETON_CONFLIT.test(valeur);
 
 // Les couleurs nommées de CSS, et les couleurs du système : chacune est un
 // littéral. transparent et currentColor ne portent aucune teinte et restent
@@ -530,8 +534,8 @@ function regleDeConflit(chemin, prelude) {
 
 // Relevé des couleurs : littéral de couleur dans une feuille, un attribut
 // style ou de couleur, une directive style:, ou une chaîne du script d'un
-// composant ; déclaration de jeton hors de la feuille des jetons ; lecture du
-// jeton de conflit hors des règles de conflit du plan. Les composants de
+// composant ; déclaration de jeton hors de la feuille des jetons ; lecture
+// d'une teinte de conflit hors des règles de conflit du plan. Les composants de
 // src/interface et les feuilles .css de src/ sont lus, la feuille des jetons
 // exceptée.
 function releverCouleurs(racine) {
@@ -549,7 +553,7 @@ function releverCouleurs(racine) {
       const couleur = couleurLitterale(valeur);
       if (couleur !== null) relever(debut, `couleur ${extrait(couleur)} dans ${propriete}`);
       if (propriete.startsWith('--')) relever(debut, `jeton déclaré ${propriete}`);
-      if (valeur.includes(JETON_CONFLIT) && (enLigne || !regleDeConflit(chemin, prelude))) {
+      if (litConflit(valeur) && (enLigne || !regleDeConflit(chemin, prelude))) {
         relever(debut, `jeton de conflit hors d'une règle de conflit du plan, ${enLigne ? 'en ligne' : extrait(selecteur)}`);
       }
     };
@@ -581,7 +585,7 @@ function releverCouleurs(racine) {
             for (const { valeur, debut } of valeurs) {
               const couleur = couleurLitterale(valeur);
               if (couleur !== null) relever(debut, `couleur ${extrait(couleur)} dans ${noeud.name}`);
-              if (valeur.includes(JETON_CONFLIT)) relever(debut, "jeton de conflit hors d'une règle de conflit du plan, en ligne");
+              if (litConflit(valeur)) relever(debut, "jeton de conflit hors d'une règle de conflit du plan, en ligne");
             }
           }
         }
@@ -594,7 +598,7 @@ function releverCouleurs(racine) {
         if (COULEUR_ENTIERE.test(valeur)) {
           relever(noeud.start, `couleur ${extrait(valeur)} dans le script`);
         }
-        if (valeur.includes(JETON_CONFLIT)) relever(noeud.start, "jeton de conflit hors d'une règle de conflit du plan, dans le script");
+        if (litConflit(valeur)) relever(noeud.start, "jeton de conflit hors d'une règle de conflit du plan, dans le script");
       });
     }
   }
@@ -890,8 +894,8 @@ const composant = ({ script = '', gabarit = '', style = '' }) =>
 
 // Une feuille des jetons minimale, ses deux thèmes complets.
 const JETONS_EPREUVE = [
-  ':root, :root[data-theme="clair"] { --couleur-a: #ffffff; --couleur-conflit: #b3261e; }',
-  ":root[data-theme='sombre'] { --couleur-a: #000000; --couleur-conflit: #ff8a80; }",
+  ':root, :root[data-theme="clair"] { --couleur-a: #ffffff; --couleur-conflit: #b3261e; --couleur-conflit-voisins: #c0189f; --couleur-conflit-table: #6a9400; }',
+  ":root[data-theme='sombre'] { --couleur-a: #000000; --couleur-conflit: #ff8a80; --couleur-conflit-voisins: #c0689c; --couleur-conflit-table: #549c00; }",
   '',
 ].join('\n');
 
@@ -1155,6 +1159,33 @@ describe('sources de l’interface : les couleurs (§ 12.7, § 13.3, § 13.5)', 
       "src/interface/plan/Trou.svelte:5 jeton de conflit hors d'une règle de conflit du plan, « .non-conflit »",
       "src/interface/plan/Trou.svelte:6 jeton de conflit hors d'une règle de conflit du plan, « .a, .b.conflit »",
       "src/interface/plan/Trou.svelte:7 jeton de conflit hors d'une règle de conflit du plan, « .conflit-leve »",
+    ]);
+  });
+
+  test('la garde relève chaque teinte de conflit — toute la famille --couleur-conflit-… — lue hors d’une règle de conflit du plan, et l’admet dans une règle de conflit du plan', () => {
+    const fichiers = {
+      'src/interface/jetons.css': JETONS_EPREUVE,
+      'src/interface/accueil/Alerte.svelte': composant({
+        script: "  const teinte = 'var(--couleur-conflit-table)';",
+        gabarit: '<p class="alerte">x</p>',
+        style: '  .alerte { color: var(--couleur-conflit-voisins); }',
+      }),
+      'src/interface/plan/Motif.svelte': composant({
+        gabarit: '<svg><line class="trait voisins-conflit" /><line class="trait table-conflit" /><circle class="trait" style="fill: var(--couleur-conflit-table)" /></svg>',
+        style: [
+          '  .trait.voisins-conflit { stroke: var(--couleur-conflit-voisins); }',
+          '  .trait.table-conflit { stroke: var(--couleur-conflit-table); }',
+          '  .trait { fill: var(--couleur-conflit-voisins); }',
+          '  .conflit-voisins { fill: var(--couleur-conflit-table); }',
+        ].join('\n'),
+      }),
+    };
+    assert.deepEqual(avecArbre(fichiers, releverCouleurs), [
+      "src/interface/accueil/Alerte.svelte:2 jeton de conflit hors d'une règle de conflit du plan, dans le script",
+      "src/interface/accueil/Alerte.svelte:6 jeton de conflit hors d'une règle de conflit du plan, « .alerte »",
+      "src/interface/plan/Motif.svelte:1 jeton de conflit hors d'une règle de conflit du plan, en ligne",
+      "src/interface/plan/Motif.svelte:5 jeton de conflit hors d'une règle de conflit du plan, « .trait »",
+      "src/interface/plan/Motif.svelte:6 jeton de conflit hors d'une règle de conflit du plan, « .conflit-voisins »",
     ]);
   });
 
