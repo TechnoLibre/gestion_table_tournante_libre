@@ -3,7 +3,8 @@
 
 <script>
   // La section de la génération (§ 2.1 étape 9, § 5.7, § 5.9, § 5.10,
-  // § 15.4) : les réglages, « Générer », la question d'une génération longue,
+  // § 15.4) : en tête, la meilleure proposition du classement ; puis les
+  // réglages, « Générer », la question d'une génération longue,
   // l'avancement d'un calcul et l'issue du dernier. Tout passe par le
   // contrôleur de génération du contexte, qui seul contrôle, lance, mesure et
   // enregistre ; la section ne refait aucun de ses contrôles.
@@ -29,14 +30,30 @@
   // refus : l'état prêt revient, et l'issue le dit. Le contrôleur vit plus
   // longtemps que la section : remontée pendant un calcul, elle en retrouve
   // l'avancement par subscribe.
+  //
+  // La meilleure proposition (§ 5.4, § 5.7) est un bloc d'information en
+  // lecture seule : l'identifiant de la proposition au rang 1 du classement
+  // et ses collisions cumulées, la cellule même que le tableau des
+  // propositions porte à ce rang (meilleureProposition, meilleure.js), relue
+  // à chaque charge écrite — une génération enregistrée, des propositions
+  // effacées. Sans proposition classée, il le dit en mots. Il se lit en
+  // lecture, sur un plan bloqué et pendant un calcul, où il montre le
+  // classement tel qu'il est. Le libellé des collisions est l'en-tête de la
+  // colonne du tableau ; son survol ou son focus ouvre l'infobulle de la
+  // section, une seule, sur l'explication de cette colonne, et le quitter la
+  // referme ; le terme expliqué porte aria-describedby vers elle.
   import { getContext, onDestroy, untrack } from 'svelte';
   import { ErreurCommande } from '../../application/erreurs.js';
   import { ErreurAnnulee } from '../../application/generation.js';
   import Commande from '../primitives/Commande.svelte';
+  import Infobulle from '../primitives/Infobulle.svelte';
+  import { explicationDeColonne, texteCellule } from '../propositions/modele.js';
   import Avancement from './Avancement.svelte';
   import Reglages from './Reglages.svelte';
+  import { COLONNE_ANNONCEE, meilleureProposition } from './meilleure.js';
 
   const t = getContext('t');
+  const format = getContext('format');
   const seance = getContext('seance');
   const generation = getContext('generation');
 
@@ -64,6 +81,21 @@
   onDestroy(desabonner);
 
   const charge = $derived($seance.charge);
+
+  // La proposition au rang 1, { id, cellule }, ou null sans proposition
+  // classée.
+  const meilleure = $derived(charge === null ? null : meilleureProposition(charge));
+
+  const uid = $props.id();
+  const idTitreMeilleure = `${uid}-meilleure`;
+  const idExplication = `${uid}-explication`;
+  // L'explication ouverte, {ancre, cle, details}, ou null : celle du libellé
+  // des collisions cumulées, le seul terme expliqué de la section.
+  let expliquee = $state.raw(null);
+  function expliquer(evenement) {
+    expliquee = { ancre: evenement.currentTarget, cle: explicationDeColonne(COLONNE_ANNONCEE), details: {} };
+  }
+  const taire = () => (expliquee = null);
 
   // La question tombe quand la charge change.
   $effect.pre(() => {
@@ -127,6 +159,37 @@
 <section data-section="generation" aria-busy={$generation.enCours ? 'true' : 'false'}>
   <h2>{t('coquille.section.generation')}</h2>
   {#if charge !== null}
+    <section class="meilleure" data-meilleure aria-labelledby={idTitreMeilleure}>
+      <h3 id={idTitreMeilleure}>{t('generation.meilleure.titre')}</h3>
+      {#if meilleure === null}
+        <p data-meilleure-vide>{t('generation.meilleure.aucune')}</p>
+      {:else}
+        <dl>
+          <div>
+            <dt data-meilleure-libelle-id>{t('generation.meilleure.proposition')}</dt>
+            <dd data-meilleure-id>{format.nombre(meilleure.id)}</dd>
+          </div>
+          <div>
+            <!-- Le libellé est un terme, non une commande : le focus ne sert
+                 qu'à montrer au clavier l'explication que le pointeur montre
+                 au survol. -->
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+            <dt
+              class="terme"
+              data-terme={COLONNE_ANNONCEE}
+              tabindex="0"
+              aria-describedby={expliquee === null ? undefined : idExplication}
+              onmouseenter={expliquer}
+              onmouseleave={taire}
+              onfocus={expliquer}
+              onblur={taire}>{t('propositions.colonne.collisionsCumulees')}</dt
+            >
+            <dd data-meilleure-collisions>{texteCellule(meilleure.cellule, { t, format })}</dd>
+          </div>
+        </dl>
+      {/if}
+    </section>
+    <Infobulle id={idExplication} ouverte={expliquee} fermer={taire} />
     <Reglages {charge} {mesure} {estimation} bind:graine {refusGraine} {saisirGraine} bind:refusCoeurs />
     <div class="lancer">
       <Commande cle="generation.commande.generer" nom="generer" executer={() => lancer(false)} />
@@ -162,6 +225,53 @@
   h2 {
     margin: 0;
     font-size: var(--taille-titre);
+  }
+
+  /* La meilleure proposition : un bloc d'information encadré d'un filet,
+     sur le fond de la page ; chaque libellé suivi de sa valeur, en gras. */
+  .meilleure {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-1);
+  }
+
+  h3 {
+    margin: 0;
+    font-size: var(--taille-texte);
+  }
+
+  dl {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-2) var(--espace-5);
+    margin: 0;
+  }
+
+  dl > div {
+    display: flex;
+    gap: var(--espace-2);
+    align-items: baseline;
+  }
+
+  dd {
+    margin: 0;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Le terme expliqué se signale par un soulignement pointillé, comme un
+     en-tête de colonne du tableau des propositions. */
+  .terme {
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+
+  .terme:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
   }
 
   .question {

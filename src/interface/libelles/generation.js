@@ -1,9 +1,9 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les libellés de la génération : réglages, cœurs de calcul, durée observée,
-// question d'une génération longue, avancement et issue (§ 5.7, § 5.10,
-// § 14.6). Chaque
+// Les libellés de la génération : meilleure proposition du classement,
+// réglages, cœurs de calcul, durée observée, question d'une génération
+// longue, avancement et issue (§ 5.4, § 5.7, § 5.10, § 14.6). Chaque
 // clé commence par « generation. ». Le libellé d'un réglage porte son unité,
 // entre parenthèses : l'étiquette du champ la dit, et le nom accessible du
 // champ avec elle. Un nombre et une durée se mettent en forme par
@@ -30,6 +30,16 @@ function calculMesure({ dureeMs, nombre, arret, coeurs }, texte) {
 }
 
 export const TABLE = new Map([
+  // --- La meilleure proposition, en tête de la section (§ 5.4, § 5.7) --------
+  // Le libellé de ses collisions cumulées et son explication sont ceux de la
+  // colonne du tableau des propositions, sous leurs clés propositions.….
+  ['generation.meilleure.titre', 'Meilleure proposition du classement'],
+  ['generation.meilleure.proposition', 'Proposition au rang 1'],
+  [
+    'generation.meilleure.aucune',
+    "Aucune proposition classée : sans proposition comparable, le classement n'en désigne aucune.",
+  ],
+
   // --- Les réglages (§ 5.7, § 5.10) ---------------------------------------------
   ['generation.reglage.graine', 'Graine (nombre entier, de 0 à 4\u{202F}294\u{202F}967\u{202F}295)'],
   ['generation.reglage.nombre', 'Propositions par génération (nombre de propositions)'],
