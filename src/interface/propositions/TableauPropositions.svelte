@@ -20,6 +20,12 @@
   // la cellule des raisons d'une ligne hors classement, qui en couvre
   // plusieurs.
   //
+  // Chaque en-tête explique sa colonne dans l'infobulle de la section : il se
+  // focalise au clavier (tabindex 0), et son survol ou son focus appelle
+  // expliquer(evenement, 'colonne:<nom>', nom), le quitter taire('colonne:<nom>').
+  // decrit('colonne:<nom>') rend l'identifiant de l'infobulle quand elle
+  // explique cet en-tête, pour son aria-describedby, undefined sinon.
+  //
   // Désignations : data-retenu sur la ligne du retenu, data-proposition sur
   // chaque autre ligne, data-colonne sur chaque cellule et chaque en-tête ;
   // data-classement et data-hors-classement sur les deux groupes de lignes.
@@ -30,7 +36,7 @@
   import Commande from '../primitives/Commande.svelte';
   import { texteCellule } from './modele.js';
 
-  let { vue, surlignee = null, nommer, voir, retenir } = $props();
+  let { vue, surlignee = null, nommer, voir, retenir, expliquer, taire, decrit } = $props();
 
   // L'attribut data-marque d'une cellule de la colonne nommée : 'selection'
   // quand elle est la colonne surlignée, undefined sinon, qui l'omet.
@@ -98,7 +104,21 @@
     <thead>
       <tr>
         {#each vue.colonnes as colonne (colonne.nom)}
-          <th scope="col" data-colonne={colonne.nom} data-marque={marque(colonne.nom)} class:surlignee={colonne.nom === surlignee}>{t(colonne.cle)}</th>
+          {@const terme = `colonne:${colonne.nom}`}
+          <!-- L'en-tête se focalise pour montrer au clavier l'explication que
+               le pointeur montre au survol ; il n'agit sur rien. -->
+          <th
+            scope="col"
+            data-colonne={colonne.nom}
+            data-marque={marque(colonne.nom)}
+            class:surlignee={colonne.nom === surlignee}
+            tabindex="0"
+            aria-describedby={decrit(terme)}
+            onmouseenter={(evenement) => expliquer(evenement, terme, colonne.nom)}
+            onmouseleave={() => taire(terme)}
+            onfocus={(evenement) => expliquer(evenement, terme, colonne.nom)}
+            onblur={() => taire(terme)}>{t(colonne.cle)}</th
+          >
         {/each}
       </tr>
     </thead>
@@ -225,6 +245,13 @@
   td.surlignee {
     border-left: 2px solid var(--couleur-selection);
     border-right: 2px solid var(--couleur-selection);
+  }
+
+  /* L'anneau de focus se pose dans la cellule : le conteneur défilant ne le
+     rogne pas. */
+  thead th:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: -2px;
   }
 
   thead th.surlignee {

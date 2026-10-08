@@ -621,6 +621,27 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'propositions.infobulleColonne',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // Le pointeur réel sur un en-tête de colonne : l'infobulle qui
+      // l'explique paraît, visible, de largeur non nulle.
+      const m = await ouvrirEvenement(contexte, chargePrincipale(), { section: 'propositions' });
+      const { x, y } = await centre(await element(m, 'thead th[data-colonne="excedentCollisions"]'));
+      await pointer('bouger', x, y);
+      await attendre("l'infobulle de la colonne", () => {
+        const bulle = m.racine.querySelector('[data-section="propositions"] [role="tooltip"]');
+        return (
+          bulle !== null &&
+          !bulle.hidden &&
+          bulle.getBoundingClientRect().width > 0 &&
+          getComputedStyle(bulle).visibility === 'visible'
+        );
+      });
+      return m.racine;
+    },
+  },
+  {
     nom: 'refus.modeLecture',
     mode: 'lecture',
     async atteindre(contexte) {

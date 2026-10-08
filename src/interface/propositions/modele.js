@@ -64,13 +64,29 @@ const DECIMALES = new Map([['diversite', 2]]);
 
 /** Les colonnes du tableau, dans l'ordre d'affichage : le rang et
  *  l'identifiant, puis les mesures — les trois minimums des rencontres en
- *  tête —, le certificat, les imposés et les commandes. Chacune porte son nom
- *  et la clé de son en-tête, qui nomme son unité. */
+ *  tête —, le certificat, les imposés et les commandes. Chacune porte son nom,
+ *  la clé de son en-tête, qui nomme son unité, et celle de son explication,
+ *  le texte de l'infobulle de son en-tête et du critère qui la désigne. */
 export const COLONNES = Object.freeze(
   ['rang', 'proposition', ...LECTURES.keys(), 'imposes', 'commandes'].map((nom) =>
-    Object.freeze({ nom, cle: `propositions.colonne.${nom}` }),
+    Object.freeze({ nom, cle: `propositions.colonne.${nom}`, explication: `propositions.explication.${nom}` }),
   ),
 );
+
+/**
+ * La clé de l'explication d'une colonne : le texte de l'infobulle de son
+ * en-tête, et celui du nom de critère qui la désigne dans la phrase de
+ * l'ordre (colonneDuCritere) — un critère et sa colonne partagent la même.
+ * Lève TypeError pour un nom qui n'est pas une colonne de COLONNES.
+ *
+ * @param {string} nom  le nom d'une colonne
+ * @returns {string}
+ */
+export function explicationDeColonne(nom) {
+  const colonne = COLONNES.find((candidate) => candidate.nom === nom);
+  if (colonne === undefined) throw new TypeError(`colonne inconnue : ${nom}`);
+  return colonne.explication;
+}
 
 // Une cellule de nombre : null s'écrit « — ».
 const nombre = (colonne, valeur) => ({

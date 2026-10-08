@@ -64,6 +64,136 @@ export const TABLE = new Map([
   ['propositions.colonne.imposes', 'Imposé par les réservations'],
   ['propositions.colonne.commandes', 'Commandes'],
 
+  // --- Les explications, une par colonne (§ 5.4, § 5.5, § 5.7, § 12.10.4) --------
+  // Le texte de l'infobulle d'un en-tête, et celui du nom de critère qui
+  // désigne la colonne dans la phrase de l'ordre : un critère et sa colonne
+  // partagent la clé. Chacune dit ce que la colonne compte, sur quelle
+  // population, et dans quel sens elle sert le mieux quand ce sens existe ;
+  // les termes sont ceux du glossaire du § 5.5.
+  [
+    'propositions.explication.rang',
+    "La place de la proposition dans le classement, 1 pour la première, selon l'ordre écrit au-dessus du tableau. " +
+      "Une proposition hors classement n'a pas de rang.",
+  ],
+  [
+    'propositions.explication.proposition',
+    'Le numéro de la proposition, donné à sa génération ; un numéro effacé ne revient jamais. ' +
+      'Il sert de dernier départage : deux propositions égales sur tous les critères se rangent par numéro croissant.',
+  ],
+  [
+    'propositions.explication.rencontresTous',
+    'Le nombre de personnes différentes que rencontre, sur toute la soirée, la personne la moins bien servie : ' +
+      "quelqu'un revu à plusieurs tours compte une fois. Il porte sur toutes les personnes placées, ancrées comprises. " +
+      "Plus il est grand, mieux c'est.",
+  ],
+  [
+    'propositions.explication.rencontresMobiles',
+    "Le même minimum, sur les seules personnes mobiles, celles qu'aucune réservation n'assied à la même table à tous les tours, " +
+      "partiellement fixées comprises ; « \u{2014} » s'il n'y en a aucune. Comparé aux deux autres, il dit si un minimum bas vient " +
+      "du placement ou des réservations. Plus il est grand, mieux c'est.",
+  ],
+  [
+    'propositions.explication.rencontresAncres',
+    "Le même minimum, sur les seules personnes ancrées, celles qu'une réservation assied à la même table à chaque tour ; " +
+      "« \u{2014} » s'il n'y en a aucune. Plus il est grand, mieux c'est.",
+  ],
+  [
+    'propositions.explication.collisionsCumulees',
+    'Chaque fois que deux personnes de la même appartenance partagent une table, compté une fois par paire et par tour : ' +
+      "deux collègues ensemble aux quatre tours font 4. Critère du classement après l'excédent, il départage deux " +
+      "propositions de même excédent. Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.pairesDistinctes',
+    'Le nombre de paires différentes de personnes de la même appartenance réunies au moins une fois : deux collègues ' +
+      "ensemble aux quatre tours font 1. Ce n'est pas un critère du classement : il vaut les collisions cumulées moins " +
+      "l'excédent.",
+  ],
+  [
+    'propositions.explication.excedentCollisions',
+    'Les retrouvailles entre personnes de la même appartenance au-delà de leur première rencontre, soit les collisions ' +
+      'cumulées moins les paires distinctes : deux collègues ensemble aux quatre tours font 3, six collègues croisés une ' +
+      'fois chacun font 0. Critère du classement avant les collisions cumulées, car passer la soirée avec le même ' +
+      "collègue est pire que croiser six collègues une fois. Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.rencontresRepetees',
+    "Le nombre de paires de personnes réunies à plus d'un tour que le placement a choisies ; celles qu'imposent les " +
+      'réservations sont dans la colonne des imposés. Critère du classement après les collisions cumulées. ' +
+      "Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.maxRencontresPaire',
+    'Le plus grand nombre de tours que passe une même paire de personnes à la même table, réservations comprises ; ' +
+      "à 1, personne ne retrouve personne. Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.retoursChoisis',
+    "Le nombre de fois où une personne revient à une table où elle s'est déjà assise, additionné sur toutes les personnes. " +
+      "Seuls comptent les retours que le placement a choisis ; ceux qu'imposent les réservations sont dans la colonne " +
+      "des imposés. Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.appartenancesVues',
+    "A(p) : le nombre d'appartenances différentes parmi les personnes que p rencontre et qui en ont une, la sienne " +
+      "comptée dès qu'elle rencontre un collègue. La colonne donne le plus petit A(p), celui de la personne qui en voit " +
+      "le moins. Plus il est grand, mieux c'est.",
+  ],
+  [
+    'propositions.explication.totalRedondance',
+    "r(p) : le nombre de personnes que p rencontre et qui ont une appartenance, moins A(p), le nombre d'appartenances " +
+      "différentes qu'elles portent ; à 0, aucune appartenance n'est recroisée. La colonne donne la somme sur toutes les " +
+      "personnes, Σ r(p), dernier critère du classement avant le numéro. Plus elle est basse, mieux c'est.",
+  ],
+  [
+    'propositions.explication.diversite',
+    "d(p) : A(p) divisé par le nombre de personnes que p rencontre et qui ont une appartenance ; à 1, elles portent " +
+      "toutes des appartenances différentes. La colonne donne le plus petit d(p), « \u{2014} » quand personne ne rencontre " +
+      "quelqu'un qui en a une. Plus il est grand, mieux c'est.",
+  ],
+  [
+    'propositions.explication.manqueMax',
+    "Le manque d'une personne : son plafond réalisé, le plus de rencontres que permettent les tables où la proposition " +
+      "l'assoit et leur occupation, moins ses rencontres. La colonne donne le plus grand manque ; un manque nul ne dit " +
+      "rien d'un itinéraire bas, que l'écart d'itinéraire montre. Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.effectifManque',
+    "Le nombre de personnes dont le manque vaut au moins 1 ; 0 veut dire que personne n'a de manque. " +
+      "Il dit si le plus grand manque touche une personne ou beaucoup : déplacer quelqu'un, ou ajouter une table. " +
+      "Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.ecartItineraireMax',
+    "L'écart d'itinéraire d'une personne : son plafond a priori moins son plafond réalisé, ce que son itinéraire lui " +
+      'retire avant toute rencontre \u{2014} moins de tables différentes, des tables incomplètes, des tours en réserve. ' +
+      "La colonne donne le plus grand, « inconnu » quand le plafond a priori n'a pas pu être calculé. " +
+      "Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.ecartAuPlafondAPriori',
+    "L'écart au plafond a priori d'une personne : son plafond a priori, le plus de rencontres que permettent les " +
+      "capacités des tables sur le meilleur itinéraire, moins ses rencontres, soit son manque plus son écart d'itinéraire. " +
+      "La colonne donne le plus grand, premier critère du classement, sauté quand le plafond a priori n'a pas pu être " +
+      "calculé, la cellule écrivant alors « inconnu ». Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.certificat',
+    '« minimum atteint » quand chaque personne rencontre autant de monde que son plafond a priori le permet : ' +
+      'personne ne peut en rencontrer davantage. Sinon, « atteignabilité inconnue » : le logiciel ne sait pas si un ' +
+      'placement peut y parvenir pour tous.',
+  ],
+  [
+    'propositions.explication.imposes',
+    'Ce que les réservations imposent, compté à part et jamais ajouté aux colonnes du placement : les retours à une ' +
+      'table que fixent les ancrages, et les rencontres répétées entre personnes réservées ensemble à la même table.',
+  ],
+  [
+    'propositions.explication.commandes',
+    '« Voir sur le plan » montre la proposition sur le plan de salle, sans rien écrire. « Retenir » en fait le ' +
+      "placement retenu, celui qu'on ajuste à la main ; les autres propositions restent dans la liste.",
+  ],
+
   // --- Les valeurs écrites en mots (§ 5.5, § 12.6) ------------------------------
   ['propositions.valeur.inconnu', 'inconnu'],
   ['propositions.certificat.atteint', 'minimum atteint'],

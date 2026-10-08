@@ -29,12 +29,20 @@
   // focalisable qui désigne sa colonne. Le survoler ou le focaliser surligne
   // cette colonne dans le tableau ; le quitter — pointeur sorti, focus perdu —
   // efface le surlignage qu'il a posé, et laisse celui d'un autre nom.
+  //
+  // Chaque nom de critère et chaque en-tête de colonne s'expliquent dans
+  // l'infobulle de la section, une seule (Infobulle, primitive) : le survol
+  // ou le focus l'ouvre sur le terme, le quitter la referme quand elle est
+  // encore la sienne, Échap aussi. Un critère et sa colonne partagent leur
+  // explication (explicationDeColonne, modele.js). Le terme expliqué porte
+  // aria-describedby vers elle, et lui seul.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
+  import Infobulle from '../primitives/Infobulle.svelte';
   import Refus from '../primitives/Refus.svelte';
   import TableauPropositions from './TableauPropositions.svelte';
-  import { demandeConfirmation, evaluation, nomDe, retenuAjuste, tableau } from './modele.js';
+  import { demandeConfirmation, evaluation, explicationDeColonne, nomDe, retenuAjuste, tableau } from './modele.js';
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -82,6 +90,33 @@
     if (surlignee === colonne) surlignee = null;
   }
 
+  // Le terme expliqué : {ancre, terme, cle, details} — son élément, sa
+  // désignation, 'critere:<critère>' pour un nom de la phrase ou
+  // 'colonne:<nom>' pour un en-tête, et la clé de son explication — ; null
+  // sans infobulle. Ouvrir sur un terme remplace l'explication d'un autre ;
+  // quitter un terme ne ferme que la sienne.
+  const uid = $props.id();
+  const idExplication = `${uid}-explication`;
+  let expliquee = $state(null);
+  function expliquer(evenement, terme, colonne) {
+    expliquee = { ancre: evenement.currentTarget, terme, cle: explicationDeColonne(colonne), details: {} };
+  }
+  function taire(terme) {
+    if (expliquee?.terme === terme) expliquee = null;
+  }
+  const fermerExplication = () => (expliquee = null);
+  // L'aria-describedby d'un terme : l'infobulle quand elle l'explique.
+  const decrit = (terme) => (expliquee?.terme === terme ? idExplication : undefined);
+
+  function entrer(evenement, { critere, colonne }) {
+    surligner(colonne);
+    expliquer(evenement, `critere:${critere}`, colonne);
+  }
+  function sortir({ critere, colonne }) {
+    quitter(colonne);
+    taire(`critere:${critere}`);
+  }
+
   const effacer = () => seance.executer('effacerPropositions', {});
   const nommer = (id) => nomDe(charge, id);
 </script>
@@ -114,18 +149,21 @@
                 class:actif={surlignee === morceau.colonne}
                 data-critere={morceau.critere}
                 tabindex="0"
-                onmouseenter={() => surligner(morceau.colonne)}
-                onmouseleave={() => quitter(morceau.colonne)}
-                onfocus={() => surligner(morceau.colonne)}
-                onblur={() => quitter(morceau.colonne)}>{t(morceau.cle, morceau.details)}</span
+                aria-describedby={decrit(`critere:${morceau.critere}`)}
+                onmouseenter={(evenement) => entrer(evenement, morceau)}
+                onmouseleave={() => sortir(morceau)}
+                onfocus={(evenement) => entrer(evenement, morceau)}
+                onblur={() => sortir(morceau)}>{t(morceau.cle, morceau.details)}</span
               >
             {/if}
           {/each}
         </p>
       {/each}
     </div>
-    <TableauPropositions {vue} {surlignee} {nommer} {voir} {retenir} />
+    <TableauPropositions {vue} {surlignee} {nommer} {voir} {retenir} {expliquer} {taire} {decrit} />
   {/if}
+
+  <Infobulle id={idExplication} ouverte={expliquee} fermer={fermerExplication} />
 
   {#if charge !== null && charge.propositions.length > 0}
     <div class="effacer">

@@ -689,3 +689,192 @@ describe('la phrase de l’ordre désigne les colonnes (§ 5.7)', () => {
     expect(cible.map((cellule) => [getComputedStyle(cellule).color, getComputedStyle(cellule).backgroundColor])).toEqual(avant);
   });
 });
+
+// --- Les infobulles d'explication (§ 5.4, § 5.5, § 5.7, § 12.7) -------------------
+
+// La clé de l'explication d'une colonne, celle du contrat de modele.js, que
+// l'épreuve node du modèle confronte à COLONNES ; t lève sur une clé absente.
+const explicationDeColonne = (nom) => `propositions.explication.${nom}`;
+
+// Les colonnes du tableau, dans l'ordre d'affichage.
+const NOMS_DES_COLONNES = [
+  'rang',
+  'proposition',
+  'rencontresTous',
+  'rencontresMobiles',
+  'rencontresAncres',
+  'collisionsCumulees',
+  'pairesDistinctes',
+  'excedentCollisions',
+  'rencontresRepetees',
+  'maxRencontresPaire',
+  'retoursChoisis',
+  'appartenancesVues',
+  'totalRedondance',
+  'diversite',
+  'manqueMax',
+  'effectifManque',
+  'ecartItineraireMax',
+  'ecartAuPlafondAPriori',
+  'certificat',
+  'imposes',
+  'commandes',
+];
+
+// Les infobulles du document : une seule, [role=tooltip], que chaque nom de
+// la phrase et chaque en-tête de colonne ouvrent tour à tour.
+const infobulles = () => [...document.querySelectorAll('[role="tooltip"]')];
+
+// L'infobulle unique, ouverte sur l'ancre donnée : visible, au texte de la
+// clé, désignée par l'aria-describedby de l'ancre et de nulle autre, dans
+// la fenêtre, et hors du rectangle de l'ancre.
+function exigerInfobulle(ancre, cle) {
+  const bulles = infobulles();
+  expect(bulles.length).toBe(1);
+  const [bulle] = bulles;
+  expect(bulle.hidden, cle).toBe(false);
+  expect(getComputedStyle(bulle).visibility, cle).toBe('visible');
+  expect(texteDe(bulle), cle).toBe(t(cle));
+  expect(bulle.id, cle).not.toBe('');
+  expect(ancre.getAttribute('aria-describedby'), cle).toBe(bulle.id);
+  expect(document.querySelectorAll(`[aria-describedby~="${bulle.id}"]`).length, cle).toBe(1);
+  const b = bulle.getBoundingClientRect();
+  const a = ancre.getBoundingClientRect();
+  expect(b.width, cle).toBeGreaterThan(0);
+  expect(b.height, cle).toBeGreaterThan(0);
+  const racine = document.documentElement;
+  expect(b.left >= 0 && b.top >= 0 && b.right <= racine.clientWidth && b.bottom <= racine.clientHeight, `${cle} dans la fenêtre`).toBe(true);
+  const recouvre = b.left < a.right && a.left < b.right && b.top < a.bottom && a.top < b.bottom;
+  expect(recouvre, `${cle} sur son ancre`).toBe(false);
+}
+
+// L'infobulle fermée : cachée, et aucun élément ne la désigne.
+function exigerFermee() {
+  const bulles = infobulles();
+  expect(bulles.length).toBe(1);
+  const [bulle] = bulles;
+  expect(bulle.hidden || bulle.getBoundingClientRect().width === 0).toBe(true);
+  expect(document.querySelectorAll(`[aria-describedby~="${bulle.id}"]`).length).toBe(0);
+}
+
+const enTetes = (m) => [...section(m).querySelectorAll('thead th[data-colonne]')];
+
+describe('les infobulles d’explication : chaque nom de critère, chaque en-tête de colonne', () => {
+  const chargeRetenue = () => executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 });
+
+  // Le pointeur réel part du coin du cadre, hors de la phrase et du tableau.
+  beforeEach(async () => {
+    await pointer('bouger', 0, 0);
+  });
+
+  test('survoler chaque nom de critère ouvre l’explication de sa colonne, qui se surligne toujours ; le quitter la ferme', async () => {
+    const m = await ouvrir(chargeRetenue());
+    exigerFermee();
+    expect(nomsDesignants(m).length).toBe(COLONNE_DESIGNEE.length);
+    for (const [critere, nomColonne] of COLONNE_DESIGNEE) {
+      const nom = section(m).querySelector(`[data-ordre] [data-critere="${critere}"]`);
+      const { x, y } = await centre(nom);
+      await pointer('bouger', x, y);
+      await attendre(() => exigerInfobulle(nom, explicationDeColonne(nomColonne)));
+      await attendre(() => expect(surlignees(m), critere).toEqual(colonne(m, nomColonne)));
+    }
+    const { x, y } = await centre(section(m).querySelector('h2'));
+    await pointer('bouger', x, y);
+    await attendre(() => exigerFermee());
+    await attendre(() => expect(surlignees(m)).toEqual([]));
+  });
+
+  test('survoler chaque en-tête de colonne ouvre son explication, dans la fenêtre, hors de l’en-tête ; le quitter la ferme', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const ths = enTetes(m);
+    expect(ths.map((th) => th.dataset.colonne)).toEqual(NOMS_DES_COLONNES);
+    // Le pointeur quitte le tableau pour le titre de la section : aucun
+    // terme n'est plus survolé, l'infobulle se ferme.
+    const sortir = async () => {
+      const { x, y } = await centre(section(m).querySelector('h2'));
+      await pointer('bouger', x, y);
+      await attendre(() => exigerFermee());
+    };
+    for (const th of ths) {
+      const { x, y } = await centre(th);
+      await pointer('bouger', x, y);
+      await attendre(() => exigerInfobulle(th, explicationDeColonne(th.dataset.colonne)));
+    }
+    await sortir();
+    // Le dernier en-tête, collé au bord droit de la fenêtre : l'infobulle
+    // recule dans la fenêtre.
+    const dernier = ths.at(-1);
+    dernier.scrollIntoView({ block: 'nearest', inline: 'end' });
+    const b = dernier.getBoundingClientRect();
+    await pointer('bouger', b.right - 4, b.top + b.height / 2);
+    await attendre(() => exigerInfobulle(dernier, explicationDeColonne(dernier.dataset.colonne)));
+    await sortir();
+  });
+
+  test('au clavier : Tab focalise chaque nom puis chaque en-tête et ouvre son explication ; Échap la ferme, le focus reste ; sortir la ferme', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const ancres = [...nomsDesignants(m), ...enTetes(m)];
+    expect(ancres.length).toBe(COLONNE_DESIGNEE.length + NOMS_DES_COLONNES.length);
+    for (const ancre of ancres) expect(ancre.tabIndex).toBe(0);
+    const cleDe = (ancre) =>
+      explicationDeColonne(ancre.dataset.critere === undefined ? ancre.dataset.colonne : COLONNE_DESIGNEE.find(([critere]) => critere === ancre.dataset.critere)[1]);
+    ancres[0].focus();
+    for (const [rang, ancre] of ancres.entries()) {
+      if (rang > 0) await touche('Tab');
+      await attendre(() => expect(document.activeElement).toBe(ancre));
+      await attendre(() => exigerInfobulle(ancre, cleDe(ancre)));
+      if (rang === 2 || rang === COLONNE_DESIGNEE.length + 1) {
+        await touche('Escape');
+        await attendre(() => exigerFermee());
+        expect(document.activeElement).toBe(ancre);
+      }
+    }
+    await touche('Tab');
+    await attendre(() => expect(ancres).not.toContain(document.activeElement));
+    await attendre(() => exigerFermee());
+  });
+
+  test('le tableau défile sous un en-tête focalisé : l’infobulle suit son en-tête', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const th = enTetes(m).find((cellule) => cellule.dataset.colonne === 'retoursChoisis');
+    const defilement = th.closest('table').parentElement;
+    expect(defilement.scrollWidth).toBeGreaterThan(defilement.clientWidth + 200);
+    th.scrollIntoView({ block: 'nearest', inline: 'center' });
+    th.focus({ preventScroll: true });
+    await attendre(() => exigerInfobulle(th, explicationDeColonne('retoursChoisis')));
+    const [bulle] = infobulles();
+    const decalage = () => bulle.getBoundingClientRect().left - th.getBoundingClientRect().left;
+    expect(decalage()).toBe(0);
+    const avant = th.getBoundingClientRect().left;
+    defilement.scrollLeft += 150;
+    await attendre(() => expect(th.getBoundingClientRect().left).not.toBe(avant));
+    await attendre(() => expect(decalage()).toBe(0));
+    exigerInfobulle(th, explicationDeColonne('retoursChoisis'));
+  });
+
+  test('un nom trop près du bas de la fenêtre : l’infobulle s’ouvre au-dessus de lui', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const nom = () => section(m).querySelector('[data-ordre] [data-critere="ecartAuPlafondAPrioriMax"]');
+    await fixerCadre(1366, Math.ceil(nom().getBoundingClientRect().bottom) + 40);
+    await attendre(() => expect(nom().getBoundingClientRect().bottom).toBeLessThanOrEqual(document.documentElement.clientHeight));
+    const { x, y } = await centre(nom());
+    await pointer('bouger', x, y);
+    await attendre(() => exigerInfobulle(nom(), explicationDeColonne('ecartAuPlafondAPriori')));
+    const [bulle] = infobulles();
+    expect(bulle.getBoundingClientRect().bottom).toBeLessThanOrEqual(nom().getBoundingClientRect().top);
+  });
+
+  test('Échap ferme l’infobulle ouverte au survol ; un autre nom survolé la rouvre sur le sien', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const premier = section(m).querySelector('[data-ordre] [data-critere="excedentCollisions"]');
+    const second = enTetes(m).find((th) => th.dataset.colonne === 'pairesDistinctes');
+    let point = await centre(premier);
+    await pointer('bouger', point.x, point.y);
+    await attendre(() => exigerInfobulle(premier, explicationDeColonne('excedentCollisions')));
+    await touche('Escape');
+    await attendre(() => exigerFermee());
+    point = await centre(second);
+    await pointer('bouger', point.x, point.y);
+    await attendre(() => exigerInfobulle(second, explicationDeColonne('pairesDistinctes')));
+  });
+});

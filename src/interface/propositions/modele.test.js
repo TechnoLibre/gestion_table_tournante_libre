@@ -29,7 +29,17 @@ import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../.
 import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { COLONNES, colonneDuCritere, demandeConfirmation, evaluation, nomDe, retenuAjuste, tableau, texteCellule } from './modele.js';
+import {
+  COLONNES,
+  colonneDuCritere,
+  demandeConfirmation,
+  evaluation,
+  explicationDeColonne,
+  nomDe,
+  retenuAjuste,
+  tableau,
+  texteCellule,
+} from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
@@ -654,5 +664,98 @@ describe('evaluation : la table d’une charge, ou ce qui l’empêche', () => {
     const { table, refus } = evaluation(charge);
     assert.equal(table, null);
     assert.equal(refus.code, 'SURRESERVATION');
+  });
+});
+
+describe('les explications des colonnes et des critères (infobulles, § 5.4, § 5.5, § 5.7)', () => {
+  // Le sens de chaque colonne : 'bas' quand la plus faible valeur sert le
+  // mieux, 'grand' quand c'est la plus forte ; null quand l'explication ne
+  // dit aucun sens — le rang, le numéro, les paires distinctes, que l'ordre
+  // ne lit pas et dont le compte le plus faible n'est pas le meilleur
+  // (§ 5.4), le certificat, les imposés et les commandes.
+  const SENS = new Map([
+    ['rang', null],
+    ['proposition', null],
+    ['rencontresTous', 'grand'],
+    ['rencontresMobiles', 'grand'],
+    ['rencontresAncres', 'grand'],
+    ['collisionsCumulees', 'bas'],
+    ['pairesDistinctes', null],
+    ['excedentCollisions', 'bas'],
+    ['rencontresRepetees', 'bas'],
+    ['maxRencontresPaire', 'bas'],
+    ['retoursChoisis', 'bas'],
+    ['appartenancesVues', 'grand'],
+    ['totalRedondance', 'bas'],
+    ['diversite', 'grand'],
+    ['manqueMax', 'bas'],
+    ['effectifManque', 'bas'],
+    ['ecartItineraireMax', 'bas'],
+    ['ecartAuPlafondAPriori', 'bas'],
+    ['certificat', null],
+    ['imposes', null],
+    ['commandes', null],
+  ]);
+  const MIEUX = new Map([
+    ['bas', /Plus (?:il|elle) est (?:bas|basse), mieux c'est\./],
+    ['grand', /Plus (?:il|elle) est (?:grand|grande), mieux c'est\./],
+  ]);
+  // Les phrases d'un texte : un point, puis un blanc, puis une capitale ou
+  // un guillemet ouvrant.
+  const phrases = (texte) => texte.split(/(?<=\.)\s+(?=[\p{Lu}\u{00AB}])/u);
+
+  test('chaque colonne de COLONNES, sans exception, porte la clé de son explication : elle existe, compte une à trois phrases, et diffère de l’en-tête et des autres explications', () => {
+    assert.equal(COLONNES.length, 21);
+    assert.deepEqual(COLONNES.map(({ nom }) => nom), [...SENS.keys()]);
+    const textes = new Set();
+    for (const { nom, cle, explication } of COLONNES) {
+      assert.equal(explication, `propositions.explication.${nom}`, nom);
+      assert.equal(explicationDeColonne(nom), explication, nom);
+      const texte = t(explication);
+      const nombre = phrases(texte).length;
+      assert.ok(nombre >= 1 && nombre <= 3, `${nom} : ${nombre} phrases`);
+      assert.ok(texte.length <= 420, `${nom} : ${texte.length} caractères`);
+      assert.notEqual(texte, t(cle), nom);
+      textes.add(texte);
+    }
+    assert.equal(textes.size, COLONNES.length);
+  });
+
+  test('chaque explication dit dans quel sens la colonne sert le mieux, et seulement quand ce sens existe', () => {
+    assert.ok(SENS.size > 0);
+    for (const [nom, sens] of SENS) {
+      const texte = t(explicationDeColonne(nom));
+      for (const [autre, motif] of MIEUX) {
+        if (autre === sens) assert.match(texte, motif, nom);
+        else assert.doesNotMatch(texte, motif, nom);
+      }
+      if (sens === null) assert.doesNotMatch(texte, /mieux c'est/, nom);
+    }
+  });
+
+  test('chaque critère, et l’identifiant croissant, partage l’explication de la colonne qu’il désigne ; seule l’explication d’un critère le dit critère du classement', () => {
+    const criteres = new Set(CRITERES.map(colonneDuCritere));
+    assert.equal(criteres.size, 5);
+    for (const { nom } of COLONNES) {
+      const texte = t(explicationDeColonne(nom));
+      if (criteres.has(nom)) assert.match(texte, /critère du classement/i, nom);
+      else assert.doesNotMatch(texte, /(?<!pas un )critère du classement/i, nom);
+    }
+    assert.match(t(explicationDeColonne(colonneDuCritere('identifiant'))), /départage/, 'identifiant');
+    for (const options of [{}, { plafondsAPriori: null }]) {
+      const vue = tableau(evaluer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), options));
+      const designants = vue.ordre.flat().filter(({ colonne }) => colonne !== null);
+      assert.ok(designants.length >= 5);
+      for (const { critere, colonne } of designants) {
+        assert.equal(explicationDeColonne(colonne), explicationDeColonne(colonneDuCritere(critere)), critere);
+        assert.ok(t(explicationDeColonne(colonne)).length > 0, critere);
+      }
+    }
+  });
+
+  test('explicationDeColonne lève pour un nom qui n’est pas une colonne', () => {
+    assert.equal(explicationDeColonne('rang'), 'propositions.explication.rang');
+    assert.throws(() => explicationDeColonne('redondance'), TypeError);
+    assert.throws(() => explicationDeColonne('moyenneRencontres'), TypeError);
   });
 });
