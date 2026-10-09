@@ -15,6 +15,10 @@ import { eprouverContrat } from './contrat_fichiers.js';
 import { PanneSimulee, creerFichiersSimules } from './fichiers_simules.js';
 import { describe, test } from './lanceur.js';
 
+// L'instant de prise d'un verrou que reçoit verrouiller, de la forme
+// qu'écrit l'horloge de l'application.
+const DEPUIS = '2031-05-17T19:42:07-04:00';
+
 // Rend la raison du rejet de la promesse ; échoue quand elle se résout.
 async function rejette(promesse, message) {
   let raison;
@@ -167,7 +171,7 @@ describe('fichiers simulés : racines et emplacements', () => {
     await echoue(fs.lister(DOC, ''), 'ABSENT', { chemin: '' });
     await echoue(fs.ecrireAtomique(DOC, 'soiree.gtt.json', 'x'), 'ECRITURE', absent('soiree.gtt.json'));
     await echoue(fs.ajouterLigne(DOC, 'soiree.gtt-journal.jsonl', 'x'), 'ECRITURE', absent('soiree.gtt-journal.jsonl'));
-    await echoue(fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a'), 'ECRITURE', absent('soiree.gtt.verrou'));
+    await echoue(fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', DEPUIS), 'ECRITURE', absent('soiree.gtt.verrou'));
     assert.deepEqual(await fs.sonder(DOC), { inscriptible: true, cause: null });
     assert.deepEqual(await fs.lister(DOC, ''), []);
   });
@@ -237,8 +241,8 @@ describe('fichiers simulés : racines et emplacements', () => {
     await echoue(fs.lister({ id: 'choisi-3', chemin: 'G:\\' }, ''), 'CHEMIN_REFUSE', { chemin: '' });
   });
 
-  test('dossiersChoisis : un chemin qui n\u{2019}est pas une chaîne non vide lève TypeError à la création', () => {
-    for (const fautif of [[''], [null], 'D:\\Secours']) {
+  test('dossiersChoisis : un chemin qui n\u{2019}est pas une chaîne non vide, ou pas un chemin absolu, lève TypeError à la création', () => {
+    for (const fautif of [[''], [null], 'D:\\Secours', ['Secours'], ['secours\\soirees'], ['D:\\Secours', './Repli']]) {
       assert.ok(erreurDe(() => creerFichiersSimules({ dossiersChoisis: fautif })) instanceof TypeError, JSON.stringify(fautif));
     }
   });
@@ -369,7 +373,7 @@ describe("fichiers simulés : support qui refuse l'écriture", () => {
     await echoue(fs.creerDossier(PORTABLE, 'corbeille'), 'ECRITURE', refus('corbeille'));
     await echoue(fs.deplacer(PORTABLE, 'soiree.gtt.json', 'autre.gtt.json'), 'ECRITURE', refus('soiree.gtt.json'));
     await echoue(fs.supprimer(PORTABLE, 'soiree.gtt.json'), 'ECRITURE', refus('soiree.gtt.json'));
-    await echoue(fs.verrouiller(PORTABLE, 'neuf.gtt.verrou', 'seance-b'), 'ECRITURE', refus('neuf.gtt.verrou'));
+    await echoue(fs.verrouiller(PORTABLE, 'neuf.gtt.verrou', 'seance-b', DEPUIS), 'ECRITURE', refus('neuf.gtt.verrou'));
     await echoue(fs.deverrouiller(PORTABLE, 'soiree.gtt.verrou', 'seance-a'), 'ECRITURE', refus('soiree.gtt.verrou'));
     assert.deepEqual(await fs.sonder(PORTABLE), { inscriptible: false, cause: 'EROFS' });
 
@@ -448,29 +452,26 @@ describe('fichiers simulés : processus coupé (couperApres)', () => {
 });
 
 describe('fichiers simulés : verrou', () => {
-  test("le fichier de verrou porte la séance, le pid et l'hôte du processus, et l'instant de sa prise", async () => {
+  test("le fichier de verrou porte la séance, le pid et l'hôte du processus, et l'instant de sa prise qu'il a reçu, tel quel", async () => {
     const fs = preparer();
-    assert.deepEqual(await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
+    const avant = fs.compteurs.ecritures;
+    assert.deepEqual(await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', DEPUIS), { pris: true });
     const texte = fs.contenu('documents', 'soiree.gtt.verrou');
-    assert.match(
-      texte,
-      /^\{"seance":"seance-a","pid":\d+,"hote":"poste-epreuve","depuis":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00"\}\n$/,
-    );
-    const { pid, depuis } = JSON.parse(texte);
-    assert.equal(pid, fs.pid);
+    assert.equal(texte, `${JSON.stringify({ seance: 'seance-a', pid: fs.pid, hote: 'poste-epreuve', depuis: DEPUIS })}\n`);
     assert.equal(fs.hote, 'poste-epreuve');
-    assert.deepEqual(await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), {
+    assert.deepEqual(await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', '2031-05-17T20:00:00-04:00'), {
       pris: false,
       seance: 'seance-a',
-      depuis,
+      depuis: DEPUIS,
       vivant: true,
     });
+    assert.equal(fs.compteurs.ecritures, avant + 2);
   });
 
   test('la création est exclusive, même pour la séance qui tient le verrou', async () => {
     const fs = preparer();
-    await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
-    const second = await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', DEPUIS);
+    const second = await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', DEPUIS);
     assert.deepEqual([second.pris, second.seance, second.vivant], [false, 'seance-a', true]);
   });
 
@@ -482,22 +483,22 @@ describe('fichiers simulés : verrou', () => {
     a.deposerDossier('documents');
     assert.notEqual(a.pid, b.pid);
 
-    await a.verrouiller(DOC, 'a.gtt.verrou', 'seance-a');
-    const vuDeB = await b.verrouiller(DOC, 'a.gtt.verrou', 'seance-b');
+    await a.verrouiller(DOC, 'a.gtt.verrou', 'seance-a', DEPUIS);
+    const vuDeB = await b.verrouiller(DOC, 'a.gtt.verrou', 'seance-b', DEPUIS);
     assert.deepEqual([vuDeB.seance, vuDeB.vivant], ['seance-a', true]);
 
-    await ailleurs.verrouiller(DOC, 'c.gtt.verrou', 'seance-c');
-    const vuDeA = await a.verrouiller(DOC, 'c.gtt.verrou', 'seance-x');
+    await ailleurs.verrouiller(DOC, 'c.gtt.verrou', 'seance-c', DEPUIS);
+    const vuDeA = await a.verrouiller(DOC, 'c.gtt.verrou', 'seance-x', DEPUIS);
     assert.deepEqual([vuDeA.seance, vuDeA.vivant], ['seance-c', null]);
 
     // Le pid d'un processus de l'autre machine ne désigne aucun processus de
     // celle-ci.
     const usurpe = { seance: 'seance-u', pid: ailleurs.pid, hote: 'poste-epreuve', depuis: '2026-01-01T08:00:00+00:00' };
     a.deposer('documents', 'u.gtt.verrou', JSON.stringify(usurpe));
-    assert.equal((await a.verrouiller(DOC, 'u.gtt.verrou', 'seance-x')).vivant, false);
+    assert.equal((await a.verrouiller(DOC, 'u.gtt.verrou', 'seance-x', DEPUIS)).vivant, false);
 
     a.pannes.couperApres(0);
-    const apresCoupure = await b.verrouiller(DOC, 'a.gtt.verrou', 'seance-b');
+    const apresCoupure = await b.verrouiller(DOC, 'a.gtt.verrou', 'seance-b', DEPUIS);
     assert.deepEqual([apresCoupure.seance, apresCoupure.vivant], ['seance-a', false]);
   });
 
@@ -505,16 +506,16 @@ describe('fichiers simulés : verrou', () => {
     const fs = preparer();
     const illisible = { pris: false, seance: null, depuis: null, vivant: null };
     fs.deposer('documents', 'tronque.gtt.verrou', '{"seance":');
-    assert.deepEqual(await fs.verrouiller(DOC, 'tronque.gtt.verrou', 'seance-a'), illisible);
+    assert.deepEqual(await fs.verrouiller(DOC, 'tronque.gtt.verrou', 'seance-a', DEPUIS), illisible);
     await fs.deverrouiller(DOC, 'tronque.gtt.verrou', 'seance-a');
     assert.equal(fs.contenu('documents', 'tronque.gtt.verrou'), '{"seance":');
 
     fs.deposer('documents', 'forme.gtt.verrou', '{"seance":"seance-a","pid":"7","hote":"poste-epreuve","depuis":"x"}');
-    assert.deepEqual(await fs.verrouiller(DOC, 'forme.gtt.verrou', 'seance-b'), illisible);
+    assert.deepEqual(await fs.verrouiller(DOC, 'forme.gtt.verrou', 'seance-b', DEPUIS), illisible);
 
     const ancien = { seance: 'ancienne', pid: 4242, hote: 'poste-epreuve', depuis: '2026-01-01T08:00:00+00:00' };
     fs.deposer('documents', 'mort.gtt.verrou', JSON.stringify(ancien));
-    assert.deepEqual(await fs.verrouiller(DOC, 'mort.gtt.verrou', 'seance-b'), {
+    assert.deepEqual(await fs.verrouiller(DOC, 'mort.gtt.verrou', 'seance-b', DEPUIS), {
       pris: false,
       seance: 'ancienne',
       depuis: '2026-01-01T08:00:00+00:00',
@@ -525,8 +526,8 @@ describe('fichiers simulés : verrou', () => {
   test("sans verrou disponible, verrouiller rend pris sans rien écrire et deverrouiller n'efface rien", async () => {
     const fs = preparer({ verrouDisponible: false });
     fs.deposer('documents', 'soiree.gtt.verrou', '{"seance":"seance-a"}');
-    assert.deepEqual(await fs.verrouiller(DOC, 'neuf.gtt.verrou', 'seance-a'), { pris: true });
-    assert.deepEqual(await fs.verrouiller(DOC, 'neuf.gtt.verrou', 'seance-b'), { pris: true });
+    assert.deepEqual(await fs.verrouiller(DOC, 'neuf.gtt.verrou', 'seance-a', DEPUIS), { pris: true });
+    assert.deepEqual(await fs.verrouiller(DOC, 'neuf.gtt.verrou', 'seance-b', DEPUIS), { pris: true });
     await fs.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
     assert.deepEqual(noms(await fs.lister(DOC, '')), ['soiree.gtt.verrou']);
   });
@@ -540,7 +541,7 @@ describe('fichiers simulés : compteurs, préparation, horloge', () => {
     await fs.creerDossier(DOC, 'corbeille');
     await fs.deplacer(DOC, 'a.txt', 'corbeille/a.txt');
     await fs.supprimer(DOC, 'corbeille/a.txt');
-    await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', DEPUIS);
     await fs.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
     await fs.sonder(DOC);
     await assert.rejects(fs.ecrireAtomique(DOC, '../a.txt', 'a'));
@@ -638,7 +639,7 @@ describe('fichiers simulés : octets déposés et décodage strict', () => {
   test("un verrou aux octets hors UTF-8 se lit comme un verrou illisible", async () => {
     const fs = preparer();
     fs.deposerOctets('documents', 'soiree.gtt.verrou', HORS_UTF8);
-    assert.deepEqual(await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), {
+    assert.deepEqual(await fs.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', DEPUIS), {
       pris: false,
       seance: null,
       depuis: null,
@@ -655,7 +656,7 @@ describe('fichiers simulés : préconditions et dossiers', () => {
     await assert.rejects(fs.ajouterLigne(DOC, 'journal.jsonl', 'a\nb'), TypeError);
     await assert.rejects(fs.ajouterLigne(DOC, 'journal.jsonl', 'a\r'), TypeError);
     await assert.rejects(fs.ecrireAtomique(DOC, 'etat.json', new Uint8Array([0x61])), TypeError);
-    await assert.rejects(fs.verrouiller(DOC, 'soiree.gtt.verrou', ''), TypeError);
+    await assert.rejects(fs.verrouiller(DOC, 'soiree.gtt.verrou', '', DEPUIS), TypeError);
     assert.deepEqual(await fs.lister(DOC, ''), []);
   });
 
@@ -668,7 +669,7 @@ describe('fichiers simulés : préconditions et dossiers', () => {
     await echoue(fs.lister(DOC, 'soiree.gtt.json'), 'ABSENT', { chemin: 'soiree.gtt.json' });
     await echoue(fs.ecrireAtomique(DOC, 'corbeille', 'x'), 'ECRITURE', refus('corbeille', 'EISDIR'));
     await echoue(fs.ajouterLigne(DOC, 'corbeille', 'x'), 'ECRITURE', refus('corbeille', 'EISDIR'));
-    await echoue(fs.verrouiller(DOC, 'corbeille', 'seance-a'), 'ECRITURE', refus('corbeille', 'EISDIR'));
+    await echoue(fs.verrouiller(DOC, 'corbeille', 'seance-a', DEPUIS), 'ECRITURE', refus('corbeille', 'EISDIR'));
     await echoue(fs.deplacer(DOC, 'corbeille', 'ailleurs'), 'ECRITURE', refus('corbeille', 'EISDIR'));
     await echoue(fs.supprimer(DOC, 'corbeille'), 'ECRITURE', refus('corbeille', 'EISDIR'));
     await echoue(fs.creerDossier(DOC, 'soiree.gtt.json'), 'ECRITURE', refus('soiree.gtt.json', 'EEXIST'));

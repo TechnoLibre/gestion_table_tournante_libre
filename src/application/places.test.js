@@ -475,7 +475,7 @@ describe('etatPlaces : la réservation au siège que le placement ne tient pas (
     return charge;
   }
 
-  test("la chaise réservée à 2, qu'occupe 3 : la réservation se lit, mais ne la tient pas — hachure et cadenas fermé, l'anneau de sa portée ; la chaise de 2 reste sans marque", () => {
+  test("la chaise réservée à 2, qu'occupe 3 : la réservation se lit, mais ne la tient pas — hachure et cadenas fermé, l'anneau de sa portée, le titre pourvu ; la chaise de 2 reste sans marque", () => {
     const charge = auxSieges();
     charge.reservations.push(resa(2, 1, 3));
     charge.titres.push({ table: 1, siege: 3, libelle: 'Animation' });
@@ -483,6 +483,9 @@ describe('etatPlaces : la réservation au siège que le placement ne tient pas (
     assert.equal(trois.occupant, 3);
     assert.deepEqual(trois.reservation, { participant: 2, portee: 'tous', tour: null });
     assert.deepEqual([trois.remplissage, trois.marques], ['hachure', ['cadenasFerme', 'anneau']]);
+    // La hachure dit la réservation non tenue, non le titre : 3, assis au
+    // siège titré, le pourvoit (§ 4.1).
+    assert.deepEqual(trois.titre, { libelle: 'Animation', pourvu: true });
     assert.deepEqual([deux.occupant, deux.reservation, deux.remplissage, deux.marques], [2, null, 'normal', []]);
   });
 

@@ -10,6 +10,8 @@
 // témoin, il est encadré de la marque une fois. Un nombre, qui ne porte
 // aucune lettre, n'y passe pas.
 
+import { estHorodatage } from '../stockage/journal.js';
+
 const ESPACE_FINE = '\u{202F}';
 const MOINS = '\u{2212}';
 
@@ -30,7 +32,6 @@ const PAS = [
 ];
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const HORODATAGE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})[+-](\d{2}):(\d{2})$/;
 
 // Le nombre de jours d'un mois du calendrier grégorien.
 function joursDuMois(annee, mois) {
@@ -45,6 +46,31 @@ function lireDate(annee, mois, jour, texte) {
     throw new RangeError(`format : ${JSON.stringify(texte)} n'est pas un jour du calendrier`);
   }
   return lue;
+}
+
+/**
+ * La seule lecture d'un horodatage sous src/application : sa forme est celle
+ * d'estHorodatage (src/stockage/journal.js), dont les champs, de largeur
+ * fixe, se lisent par leur position ; la date doit être un jour du
+ * calendrier, l'heure une heure du jour, le décalage au plus ±23:59.
+ *
+ * @param {unknown} texte  AAAA-MM-JJTHH:MM:SS±HH:MM
+ * @returns {{annee: number, mois: number, jour: number, heure: number, minute: number,
+ *            seconde: number, decalage: number}}  decalage en minutes à l'est de UTC
+ * @throws {RangeError} une autre forme, un jour hors du calendrier, une heure
+ *         ou un décalage hors de leurs bornes
+ */
+export function lireHorodatage(texte) {
+  if (!estHorodatage(texte)) {
+    throw new RangeError(`format : horodatage AAAA-MM-JJTHH:MM:SS±HH:MM attendu, reçu ${JSON.stringify(texte)}`);
+  }
+  const champ = (debut, fin) => Number(texte.slice(debut, fin));
+  const [heure, minute, seconde, decalageH, decalageM] = [champ(11, 13), champ(14, 16), champ(17, 19), champ(20, 22), champ(23, 25)];
+  if (heure > 23 || minute > 59 || seconde > 59 || decalageH > 23 || decalageM > 59) {
+    throw new RangeError(`format : ${JSON.stringify(texte)} n'est pas une heure du jour`);
+  }
+  const decalage = (texte[19] === '-' ? -1 : 1) * (decalageH * 60 + decalageM);
+  return { ...lireDate(texte.slice(0, 4), texte.slice(5, 7), texte.slice(8, 10), texte), heure, minute, seconde, decalage };
 }
 
 // Un nombre fini, ou l'erreur qui dit pourquoi il ne se met pas en forme.
@@ -134,15 +160,8 @@ export function creerFormat(t) {
    * qu'il porte : la date, puis l'heure et la minute.
    */
   function horodatage(texte) {
-    const morceaux = HORODATAGE.exec(String(texte));
-    if (morceaux === null) {
-      throw new RangeError(`format : horodatage AAAA-MM-JJTHH:MM:SS±HH:MM attendu, reçu ${JSON.stringify(texte)}`);
-    }
-    const [heure, minute, seconde, decalageH, decalageM] = morceaux.slice(4).map(Number);
-    if (heure > 23 || minute > 59 || seconde > 59 || decalageH > 23 || decalageM > 59) {
-      throw new RangeError(`format : ${JSON.stringify(texte)} n'est pas une heure du jour`);
-    }
-    return t('format.horodatage', { ...lireDate(...morceaux.slice(1, 4), texte), heure, minute });
+    const { annee, mois, jour, heure, minute } = lireHorodatage(texte);
+    return t('format.horodatage', { annee, mois, jour, heure, minute });
   }
 
   return { nombre, duree, ordreDeGrandeur, date, horodatage };

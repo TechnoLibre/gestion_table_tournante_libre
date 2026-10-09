@@ -582,7 +582,7 @@ export async function supprimer(fs, racine, base, { horodatage, seance }) {
   const dossier = dossierCorbeille(horodatage, existants);
   // La sonde vise le verrou sous son nom sur le disque, celui qui part.
   const nomDuVerrou = nomSurDisque(presents, verrou, insensibleCasse) ?? verrou;
-  const sonde = await fs.verrouiller(racine, nomDuVerrou, seance);
+  const sonde = await fs.verrouiller(racine, nomDuVerrou, seance, horodatage);
   if (!sonde.pris && sonde.seance !== seance && sonde.vivant !== false) {
     throw new ErreurStockage('VERROU_PRIS', { seance: sonde.seance, depuis: sonde.depuis, vivant: sonde.vivant });
   }

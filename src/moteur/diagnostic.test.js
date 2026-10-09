@@ -13,7 +13,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { conflitsParTable } from './conflits.js';
 import { LIBRE, STATUT, indexerPlan, normaliser } from './configuration.js';
-import { diagnostiquer } from './diagnostic.js';
+import { diagnostiquer, planchersCollisions } from './diagnostic.js';
 import { ErreurConfiguration } from './erreurs.js';
 import { mesurer } from './indicateurs.js';
 import { plafondItineraire, plafondsAPriori, plafondsRealises } from './plafond.js';
@@ -590,6 +590,28 @@ describe('diagnostic : planchers de collisions (§ 5.6)', () => {
         tablesManquantes: null,
       },
     ]);
+  });
+
+  // Trente membres de X, dont deux ancrés à la même table : la paire qu'ils
+  // forment ne se défait par aucune table ajoutée. Le remède ne se sonde pas
+  // jusqu'à l'effectif : un chiffrage de plus, celui des seules places
+  // réservées, suffit à le dire sans remède.
+  test('un groupe que ses réservations réunissent ne se sonde pas table après table : deux chiffrages au plus', () => {
+    const configuration = salle({
+      tables: [[10, 20], [20, 20]],
+      appartenances: fois(30, 'X'),
+      tours: 2,
+      reservations: [ancrer(1, 10), ancrer(2, 10)],
+    });
+    let chiffrages = 0;
+    const espion = (...parametres) => {
+      chiffrages += 1;
+      return planchersCollisions(...parametres);
+    };
+    const { collisions } = diagnostiquer(configuration, { planchersCollisions: espion });
+    assert.deepEqual(collisions, diagnostiquer(configuration).collisions);
+    assert.deepEqual(collisions.map(({ groupe, effectif, tablesManquantes }) => [groupe, effectif, tablesManquantes]), [['X', 30, null]]);
+    assert.ok(chiffrages <= 2, `${chiffrages} chiffrages`);
   });
 
   // X compte quatre membres dont un exclu : trois sur deux tables, une paire

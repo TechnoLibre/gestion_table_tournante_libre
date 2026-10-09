@@ -84,6 +84,12 @@ export const TABLE = new Map([
     'AU_DELA_LISIBLE',
     ({ seuil }) => `Au-delà de ${seuil} places, la liste des noms de la table cesse d'être lisible sur le plan.`,
   ],
+  [
+    'LISTE_SUR_VOISINE',
+    ({ numero, numeroVoisine }) =>
+      `Agrandie, la table ${numero} et la table ${numeroVoisine} se chevauchent sur le plan : ` +
+      `une liste de noms passe sur l'autre table. Déplacer la table ${numeroVoisine} la pose sur une case libre.`,
+  ],
 
   // --- Les libellés figés du journal (§ 8.2) ---------------------------------
   ['ENTREE_CREER_TABLE', ({ numero }) => `Ajouté la table ${numero}`],

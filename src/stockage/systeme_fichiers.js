@@ -39,6 +39,7 @@
 //
 // types.js donne la table entière des codes du stockage.
 import { ErreurStockage } from './erreurs.js';
+import { estHorodatage } from './journal.js';
 
 /**
  * Une racine : un dossier que l'implémentation connaît par son identifiant
@@ -134,9 +135,13 @@ import { ErreurStockage } from './erreurs.js';
  *           source absente ; le dossier de la cible doit exister
  * @property {(r: Racine, chemin: string) => Promise<void>} supprimer
  *           un fichier ; un fichier absent n'est pas une faute
- * @property {(r: Racine, chemin: string, seance: string) => Promise<Verrou>} verrouiller
+ * @property {(r: Racine, chemin: string, seance: string, depuis: string) => Promise<Verrou>} verrouiller
  *           création exclusive de {seance, pid, hote, depuis, demarrage} :
- *           un verrou présent n'est jamais repris, fût-il de la même séance
+ *           un verrou présent n'est jamais repris, fût-il de la même séance.
+ *           depuis, l'instant de la prise que donne l'horloge de
+ *           l'application, s'inscrit tel quel ; un depuis qui n'a pas la
+ *           forme d'un horodatage lève TypeError sans rien créer, là où
+ *           verrouDisponible est faux comme ailleurs (exigerDepuis)
  * @property {(r: Racine, chemin: string, seance: string) => Promise<void>} deverrouiller
  *           n'efface que le verrou de cette séance ; un verrou absent n'est
  *           pas une faute
@@ -175,4 +180,16 @@ export function exigerCheminRelatif(chemin) {
     throw new ErreurStockage('CHEMIN_REFUSE', { chemin });
   }
   return segments;
+}
+
+/**
+ * Lève TypeError quand depuis, l'instant de prise d'un verrou, n'a pas la
+ * forme d'un horodatage (estHorodatage) : chaque implémentation de
+ * verrouiller l'appelle avant de rien lire ou créer.
+ *
+ * @param {unknown} depuis
+ * @throws {TypeError}
+ */
+export function exigerDepuis(depuis) {
+  if (!estHorodatage(depuis)) throw new TypeError(`instant de prise : horodatage attendu, reçu ${JSON.stringify(depuis)}`);
 }

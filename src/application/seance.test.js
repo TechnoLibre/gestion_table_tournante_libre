@@ -210,7 +210,7 @@ async function refus(promesse, code, details) {
   return erreur;
 }
 
-// Les refus de lecture seule de la séance, remède compris (A2).
+// Les refus de lecture seule de la séance, remède compris.
 const FORMAT_SEUL = { raison: 'FORMAT', remede: null };
 const BLOQUE_SEUL = { raison: 'BLOQUE', remede: { geste: 'debloquer' } };
 const ENCODAGE_SEUL = { raison: 'ENCODAGE', remede: { geste: 'ouvrirSecours', source: 'precedent' } };
@@ -371,6 +371,17 @@ describe("séance : le verrou, pris à l'entrée en écriture (§ 8.8)", () => {
     await refus(second.seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'MODE_LECTURE');
   });
 
+  test("le verrou porte l'instant de l'horloge de la séance : VERROU_PRIS le rend à une seconde séance", async () => {
+    const disque = new Map();
+    const pilote = '2031-05-17T19:42:00-04:00';
+    const premier = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'premiere', horloge: { horodatage: () => pilote } });
+    await enEcriture(premier);
+    assert.equal(verrouDe(premier.fs).depuis, pilote);
+    const second = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'seconde' });
+    await ouvrirSansEcrire(second);
+    await refus(second.seance.passerEnEcriture(), 'VERROU_PRIS', { seance: 'premiere-1', depuis: pilote, vivant: true, remede: null });
+  });
+
   test("le verrou d'une séance morte du même poste se reprend, et l'avertissement le dit", async () => {
     const disque = new Map();
     const premier = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'premiere' });
@@ -470,6 +481,56 @@ describe('séance : reprendre le verrou que la séance ne reprend pas seule (§ 
     assert.equal(verrouDe(second.fs).seance, 'reprise-1');
   });
 
+  test("un verrou illisible remplacé par un valide entre sa relecture et son effacement : le valide reste, et VERROU_PRIS le nomme", async () => {
+    const disque = new Map();
+    const second = await secondeSeance(disque, 'poste-epreuve');
+    second.fs.deposer('documents', VERROU, 'pas un verrou\n');
+    await refus(second.seance.passerEnEcriture(), 'VERROU_PRIS', { seance: null, depuis: null, vivant: null, remede: null });
+    // Le système de la séance pose un verrou valide juste après avoir rendu
+    // l'illisible à la reprise, comme une autre séance qui le prendrait
+    // entre deux appels.
+    const pose = '2031-05-17T09:15:00-04:00';
+    const valide = verrouLointain('lointaine-6', pose);
+    const verrouiller = second.fs.verrouiller;
+    let substituer = true;
+    second.fs.verrouiller = async (...parametres) => {
+      const rendu = await verrouiller(...parametres);
+      if (substituer && rendu.pris === false && rendu.seance === null) {
+        substituer = false;
+        second.fs.deposer('documents', VERROU, valide);
+      }
+      return rendu;
+    };
+    const details = { seance: 'lointaine-6', depuis: pose, vivant: null };
+    await refus(second.seance.reprendreVerrou(), 'VERROU_PRIS', { ...details, remede: null });
+    assert.equal(second.fs.contenu('documents', VERROU), valide);
+    assert.equal(second.seance.mode, 'lecture');
+    assert.deepEqual(second.seance.etat().verrouAutre, details);
+  });
+
+  test('un verrou illisible disparu entre le refus et sa relecture : la relecture prend le verrou, la séance le reconnaît comme le sien, VERROU_REPRIS puis écriture', async () => {
+    const disque = new Map();
+    const second = await secondeSeance(disque, 'poste-epreuve');
+    second.fs.deposer('documents', VERROU, 'pas un verrou\n');
+    await refus(second.seance.passerEnEcriture(), 'VERROU_PRIS', { seance: null, depuis: null, vivant: null, remede: null });
+    // Le fichier disparaît juste avant le deuxième appel de la reprise, la
+    // relecture d'effacerVerrou, qui pose alors le verrou de la séance.
+    const verrouiller = second.fs.verrouiller;
+    let appels = 0;
+    second.fs.verrouiller = async (racine, chemin, ...reste) => {
+      appels += 1;
+      if (appels === 2) await second.fs.supprimer(racine, chemin);
+      return verrouiller(racine, chemin, ...reste);
+    };
+    const repris = [{ code: 'VERROU_REPRIS', details: { seance: null, depuis: null } }];
+    assert.deepEqual(await second.seance.reprendreVerrou(), { avertissements: repris });
+    assert.equal(second.seance.mode, 'ecriture');
+    assert.equal(verrouDe(second.fs).seance, 'reprise-1');
+    assert.equal(second.seance.etat().verrouAutre, null);
+    await second.seance.executer('ajouterParticipant', { champs: { nom: 'Ombrelle', prenom: 'Iris' } });
+    assert.deepEqual(noms(etatDe(second.fs).charge), ['Ombrelle']);
+  });
+
   test("un verrou qui a changé depuis le refus ne s'efface pas : VERROU_PRIS nomme le nouveau, que verrouAutre garde", async () => {
     const disque = new Map();
     const second = await secondeSeance(disque);
@@ -537,6 +598,19 @@ describe('séance : reprendre le verrou que la séance ne reprend pas seule (§ 
     const libre = await secondeSeance(new Map());
     assert.deepEqual(await libre.seance.reprendreVerrou(), { avertissements: [] });
     assert.deepEqual([libre.seance.mode, verrouDe(libre.fs).seance], ['ecriture', 'reprise-1']);
+  });
+
+  test('sans verrou refusé, reprendre sur un plan bloqué lève LECTURE_SEULE BLOQUE comme passer en écriture, sans rien écrire', async () => {
+    const montage = monter();
+    const { fs, seance } = montage;
+    await enEcriture(montage);
+    await seance.executer('changerEtat', { etat: 'bloque' });
+    await seance.passerEnLecture();
+    assert.equal(seance.etat().verrouAutre, null);
+    const avant = fs.compteurs.ecritures;
+    await refus(seance.reprendreVerrou(), 'LECTURE_SEULE', BLOQUE_SEUL);
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.deepEqual([seance.mode, seance.charge.evenement.etat, verrouDe(fs)], ['lecture', 'bloque', null]);
   });
 
   test('sur un plan bloqué, la reprise rend aussitôt le verrou : la séance reste en lecture, et débloquer passe ensuite', async () => {
@@ -1629,6 +1703,19 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     assert.deepEqual(noms(etatDe(fs).charge), ['Ancolie', 'Bruyère']);
   });
 
+  test("le cadrage en attente quand le support rompt s'écrit dans les réglages de la racine nouvelle, après écrire ailleurs", async () => {
+    const { fs, seance, planificateur } = await surPortable();
+    fs.pannes.ecriture('portable');
+    seance.demanderCadrage({ k: 1.25, tx: 30, ty: -12 });
+    await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Bruyère' } }), 'ECRITURE');
+    await seance.ecrireAilleurs(DOC);
+    await planificateur.avancer(DELAI_REGLAGES_MS);
+    await laisser();
+    const evenement = seance.charge.evenement.id;
+    assert.deepEqual(JSON.parse(fs.contenu('documents', FICHIER_REGLAGES)).cadrages, [{ evenement, k: 1.25, tx: 30, ty: -12 }]);
+    assert.equal(fs.contenu('portable', FICHIER_REGLAGES), null);
+  });
+
   test("un état qui ne s'écrit pas : le geste est au journal, la séance en montre la charge, et écrire ailleurs la garde", async () => {
     const { fs, seance } = await surPortable();
     fs.pannes.renommage('portable');
@@ -1740,9 +1827,9 @@ describe('séance : la perte du support en cours de séance (§ 8.6)', () => {
     // Les Documents prennent la paire, mais refusent le verrou.
     const details = { chemin: VERROU, dossier: DOCUMENTS, cause: 'EACCES' };
     const verrouiller = fs.verrouiller;
-    fs.verrouiller = async (racine, chemin, jeton) => {
+    fs.verrouiller = async (racine, chemin, jeton, depuis) => {
       if (racine.id === 'documents') throw new ErreurStockage('ECRITURE', details);
-      return verrouiller(racine, chemin, jeton);
+      return verrouiller(racine, chemin, jeton, depuis);
     };
     const { base, avertissements } = await seance.ecrireAilleurs(DOC);
     assert.equal(base, BASE);
@@ -1977,7 +2064,7 @@ describe("séance : ni horloge ni minuterie lues en direct (§ 14.7)", () => {
   });
 });
 
-// --- La séance observable (A2) -----------------------------------------------
+// --- La séance observable ----------------------------------------------------
 
 // Laisse passer les tâches en attente : l'écrivain différé des réglages
 // écrit à la suite de sa minuterie, sans que celle-ci rende sa promesse.
@@ -2049,7 +2136,7 @@ function deposerAuFormat(fs, format, charge = chargeEssai()) {
 const MODIFIER = { geste: 'modifier' };
 const DEBLOQUER = { geste: 'debloquer' };
 
-describe('séance observable : etat() et subscribe (§ 8.4, A2)', () => {
+describe('séance observable : etat() et subscribe (§ 8.4)', () => {
   test('subscribe appelle aussitôt, puis après ouvrir, passer en écriture, un geste et passer en lecture ; désabonné, plus rien', async () => {
     const fs = creerFichiersSimules();
     await deposerEssai(fs);
@@ -2116,7 +2203,7 @@ describe('séance observable : etat() et subscribe (§ 8.4, A2)', () => {
   });
 });
 
-describe('séance observable : la racine (§ 8.6, A2)', () => {
+describe('séance observable : la racine (§ 8.6)', () => {
   test("une séance créée sans racine n'en a pas ; changerRacine la pose sans rien écrire", async () => {
     const fs = creerFichiersSimules();
     fs.deposerDossier('documents');
@@ -2145,7 +2232,7 @@ describe('séance observable : la racine (§ 8.6, A2)', () => {
   });
 });
 
-describe('séance observable : la version de format (§ 8.8, § 18.6, A2)', () => {
+describe('séance observable : la version de format (§ 8.8, § 18.6)', () => {
   test("un fichier d'un format plus récent s'annonce 'plusRecent' ; passer en écriture et un geste sont refusés LECTURE_SEULE FORMAT, remède null, jamais MODE_LECTURE", async () => {
     const fs = creerFichiersSimules();
     deposerAuFormat(fs, FORMAT + 1);
@@ -2181,7 +2268,7 @@ describe('séance observable : la version de format (§ 8.8, § 18.6, A2)', () =
   });
 });
 
-describe('séance observable : bloquer et débloquer (§ 8.5, § 9, A2)', () => {
+describe('séance observable : bloquer et débloquer (§ 8.5, § 9)', () => {
   test("sur un plan bloqué, passer en écriture, changer l'état et défaire sont refusés BLOQUE, remède debloquer, jamais MODE_LECTURE, sans écriture", async () => {
     const montage = await ouvertSur(chargeBloquee());
     const { fs, seance } = montage;
@@ -2231,7 +2318,7 @@ describe('séance observable : bloquer et débloquer (§ 8.5, § 9, A2)', () => 
   });
 });
 
-describe("séance observable : l'annulation et le retour automatique (§ 8.4, A2)", () => {
+describe("séance observable : l'annulation et le retour automatique (§ 8.4)", () => {
   test('surAnnulation est appelé au passage en lecture explicite pendant un geste, au retour automatique et à la fermeture ; désabonné, plus rien', async () => {
     const montage = monter();
     const { seance, planificateur } = montage;
@@ -2282,7 +2369,7 @@ describe("séance observable : l'annulation et le retour automatique (§ 8.4, A2
   });
 });
 
-describe('séance observable : le cadrage (§ 8.5, A2)', () => {
+describe('séance observable : le cadrage (§ 8.5)', () => {
   const REGLAGES = `{"cadrages":[{"evenement":"evt-lucioles","k":2,"tx":10,"ty":-5}],"format":1,"papier":null}\n`;
   const lireCadrages = (fs) => JSON.parse(fs.contenu('documents', FICHIER_REGLAGES)).cadrages;
 
@@ -2421,7 +2508,7 @@ describe('séance observable : le cadrage (§ 8.5, A2)', () => {
   });
 });
 
-describe("séance observable : les avertissements d'un geste (§ 5.9, § 9, A2)", () => {
+describe("séance observable : les avertissements d'un geste (§ 5.9, § 9)", () => {
   // Deux tables de huit et seize convives : la salle est pleine.
   function sallePleine() {
     const charge = creerCharge({ id: 'evt-lucioles', nom: BASE, siegesParDefaut: 8, tours: 2 });
@@ -2484,7 +2571,7 @@ describe("séance observable : les avertissements d'un geste (§ 5.9, § 9, A2)"
   });
 });
 
-describe("séance observable : le verrou d'une autre séance (§ 8.8, A2)", () => {
+describe("séance observable : le verrou d'une autre séance (§ 8.8)", () => {
   test('la seconde séance ouvre en lecture sans refus ; son passage en écriture est refusé VERROU_PRIS, remède null, et verrouAutre porte la séance et depuis', async () => {
     const disque = new Map();
     const premier = monter({ fs: creerFichiersSimules({ disque }), prefixe: 'premiere' });
@@ -2556,7 +2643,7 @@ describe("séance observable : le verrou d'une autre séance (§ 8.8, A2)", () =
   });
 });
 
-describe('séance observable : le support rompu (§ 8.6, § 8.2, A2)', () => {
+describe('séance observable : le support rompu (§ 8.6, § 8.2)', () => {
   // Un événement du disque portable, en écriture, après un premier geste.
   async function surPortable() {
     const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
@@ -2654,7 +2741,7 @@ describe('séance observable : le support rompu (§ 8.6, § 8.2, A2)', () => {
   });
 });
 
-describe('séance observable : le refus courant (§ 2.1, garantie 3, A2)', () => {
+describe('séance observable : le refus courant (§ 2.1, garantie 3)', () => {
   test("null sans événement et en écriture ; sinon, en profondeur, le code et les détails qu'executer lève, remède compris", async () => {
     assert.equal(monter().seance.etat().refus, null);
     const enEcritureMontage = await ouvertSur();
@@ -2698,7 +2785,7 @@ describe('séance observable : le refus courant (§ 2.1, garantie 3, A2)', () =>
   });
 });
 
-describe('séance observable : fautives et examen (§ 8.9, A2)', () => {
+describe('séance observable : fautives et examen (§ 8.9)', () => {
   test("les propositions que l'ouverture écarte restent dans fautives après un geste, et partent à la fermeture ; l'examen d'après un geste n'en porte aucune", async () => {
     const charge = chargeEssai();
     charge.prochainsIds.proposition = 2;
@@ -2760,7 +2847,7 @@ describe('séance : attendre la file (§ 5.10, § 8.4)', () => {
   });
 });
 
-describe('séance observable : la dérive nommée (§ 9, A2)', () => {
+describe('séance observable : la dérive nommée (§ 9)', () => {
   test("l'examen de l'état nomme chaque raison de dérive — la personne par son nom, la table par son numéro —, quand celui de l'Ouvert garde les identifiants", async () => {
     const charge = avecRetenu(chargeEssai());
     charge.participants[2].exclu = true;
@@ -2779,7 +2866,7 @@ describe('séance observable : la dérive nommée (§ 9, A2)', () => {
   });
 });
 
-describe('séance observable : les invariants du retenu (§ 14.12, § 14.15, A2)', () => {
+describe('séance observable : les invariants du retenu (§ 14.12, § 14.15)', () => {
   test("un retenu qui laisse une réservation d'un tour non honorée s'ouvre avec INVARIANT_VIOLE, sans les violations que la dérive nomme, sans écriture ; de même après défaire, refaire et revenir", async () => {
     const fs = creerFichiersSimules();
     const charge = reserverGrisaille(avecRetenu(chargeEssai()));
@@ -2818,27 +2905,11 @@ describe('séance observable : les invariants du retenu (§ 14.12, § 14.15, A2)
   });
 });
 
-describe("séance observable : les textes des codes qu'elle ajoute (§ 14.6, A2)", () => {
-  const TRACES_A2 = [/\bundefined\b/, /\bnull\b/, /\bNaN\b/, /\b(?:true|false)\b/, /\[object /];
-  const EXEMPLES_A2 = [
-    ['RETOUR_AUTOMATIQUE', {}],
-    ['INVARIANT_VIOLE', { proposition: 3, violations: [{ code: 'RESERVATION', participant: 2, table: 2, tour: 1 }, { code: 'DOUBLE_PLACE', participant: 4, tour: 2 }] }],
-    ['DERIVE_NOUVELLE', { touchees: [{ id: 2, raisons: [{ code: 'PARTICIPANT_EXCLU', participant: 3 }] }, { id: 'retenu', raisons: [{ code: 'TABLE_AJOUTEE', table: 5 }] }] }],
-    ['RESERVATION_NON_HONOREE', { participant: 2, table: 2, tour: 1 }],
-    ['CONFIGURATION_INCOHERENTE', { code: 'RESERVATION_CONFLIT', details: { participant: 1, tour: 1, tables: [1, 2] } }],
-    ['PLACES_MANQUANTES', { placesManquantes: 4 }],
-    ['SURRESERVATION', { table: 3, tour: 2, reservees: 9, capacite: 8 }],
-  ];
-
-  test('chaque code se compose de ses détails, sans trace de valeur absente', () => {
-    assert.equal(EXEMPLES_A2.length, 7);
-    for (const [code, details] of EXEMPLES_A2) {
-      const texte = libelle(code, details);
-      assert.ok(texte.trim().length > 0 && texte !== code, code);
-      for (const trace of TRACES_A2) assert.doesNotMatch(texte, trace, `${code} : « ${texte} »`);
-    }
-  });
-
+// Les textes des codes que la séance ajoute se composent, sans trace de
+// valeur absente, sous les détails d'exemple de la table que
+// libelles.test.js partage pour chaque code ; les épreuves qui suivent
+// lisent ce que chaque texte nomme.
+describe("séance observable : les textes des codes qu'elle ajoute (§ 14.6)", () => {
   test('le manque dit son nombre ; la surréservation nomme la table, le tour, les réservées et la capacité', () => {
     assert.match(libelle('PLACES_MANQUANTES', { placesManquantes: 1 }), /\b1 place\b/);
     assert.match(libelle('PLACES_MANQUANTES', { placesManquantes: 4 }), /\b4 places\b/);
@@ -2847,11 +2918,22 @@ describe("séance observable : les textes des codes qu'elle ajoute (§ 14.6, A2)
   });
 
   test("la dérive nouvelle nomme le placement et sa raison ; l'invariant nomme la réservation ; la reprise d'un verrou la dit d'une autre séance, d'un poste ou d'un autre", () => {
-    const derive = libelle('DERIVE_NOUVELLE', EXEMPLES_A2[2][1]);
+    const derive = libelle('DERIVE_NOUVELLE', {
+      touchees: [
+        { id: 2, raisons: [{ code: 'PARTICIPANT_EXCLU', participant: 3 }] },
+        { id: 'retenu', raisons: [{ code: 'TABLE_AJOUTEE', table: 5 }] },
+      ],
+    });
     assert.ok(derive.includes(libelle('PARTICIPANT_EXCLU', { participant: 3 })), derive);
     assert.match(derive, /n° 2/);
     assert.match(derive, /retenu/);
-    const viole = libelle('INVARIANT_VIOLE', EXEMPLES_A2[1][1]);
+    const viole = libelle('INVARIANT_VIOLE', {
+      proposition: 3,
+      violations: [
+        { code: 'RESERVATION', participant: 2, table: 2, tour: 1 },
+        { code: 'DOUBLE_PLACE', participant: 4, tour: 2 },
+      ],
+    });
     assert.ok(viole.includes(libelle('RESERVATION_NON_HONOREE', { participant: 2, table: 2, tour: 1 })), viole);
     assert.match(viole, /n° 3/);
     for (const details of [{ seance: 's', depuis: null }, { seance: null, depuis: null }]) {

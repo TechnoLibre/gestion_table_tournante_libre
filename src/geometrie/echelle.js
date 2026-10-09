@@ -14,13 +14,21 @@ const MANTISSES = [5, 2, 1];
 // par 10ⁿ, qu'elle arrondit.
 const ronde = (m, n) => (n >= 0 ? m * 10 ** n : m / 10 ** -n);
 
+// Le plus petit nombre flottant normal, 2⁻¹⁰²² : sous lui, 10⁻ⁿ déborde et
+// ronde rend 0.
+const PLUS_PETIT_NORMAL = 2 ** -1022;
+
 /**
  * La plus grande longueur ronde — 1, 2 ou 5 × 10ⁿ cm, n entier de signe
  * quelconque — dont la barre tient dans largeurMaxPx à l'échelle k, et la
  * largeur de cette barre, longueurCm × k. La recherche part de la décade
  * au-dessus de largeurMaxPx / k et descend, mantisse par mantisse, jusqu'à la
  * première longueur qui tient : l'arrondi du logarithme ne fait rien manquer.
- * Lève RangeError quand k ou largeurMaxPx n'est pas un nombre fini > 0.
+ * Lève RangeError quand k ou largeurMaxPx n'est pas un nombre fini > 0, et
+ * quand le rapport largeurMaxPx / k n'est pas un nombre fini au moins égal au
+ * plus petit nombre normal : au-delà, aucune décade ne s'atteint et la
+ * recherche ne finirait pas ; en deçà, la longueur ronde s'arrondit à 0, une
+ * barre vide. Toute longueur rendue est finie et > 0.
  * @param {number} k  px/cm
  * @param {number} largeurMaxPx
  * @returns {{longueurCm: number, largeurPx: number}}
@@ -31,7 +39,11 @@ export function echelleGraphique(k, largeurMaxPx) {
       throw new RangeError(`${nom} : nombre fini > 0 attendu, reçu ${String(valeur)}`);
     }
   }
-  for (let n = Math.floor(Math.log10(largeurMaxPx / k)) + 1; ; n -= 1) {
+  const rapport = largeurMaxPx / k;
+  if (!Number.isFinite(rapport) || rapport < PLUS_PETIT_NORMAL) {
+    throw new RangeError(`largeur / k hors des nombres représentables : ${String(largeurMaxPx)} / ${String(k)}`);
+  }
+  for (let n = Math.floor(Math.log10(rapport)) + 1; ; n -= 1) {
     for (const m of MANTISSES) {
       const longueurCm = ronde(m, n);
       if (longueurCm * k <= largeurMaxPx) return { longueurCm, largeurPx: longueurCm * k };

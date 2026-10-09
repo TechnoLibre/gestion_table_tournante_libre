@@ -10,6 +10,7 @@
 // porte aucun angle. La grille où se posent les tables des démonstrations et
 // celles que l'opérateur crée a un seul pas, ecartsGrille.
 import { constante } from './constantes.js';
+import { TAILLE_TEXTE_LISTE_CM } from './texte.js';
 
 /**
  * @typedef {Object} GeometrieTable   en cm
@@ -39,14 +40,20 @@ export const RAYON_CHAISE = 22;
 export const RAYON_POIGNEE = 15;
 /** Distance entre l'emprise et le bord de la poignée, en cm. */
 export const ECART_POIGNEE = 8;
-/** Distance entre l'emprise et le bloc de noms, en cm : le carré du focus
- *  que l'interface pose autour de l'emprise, ou d'une chaise, s'étend à
- *  26 cm d'elle, plus la moitié de son trait ; le bloc commence au-delà, et
- *  aucune marque ne couvre la liste. */
+/** Distance entre l'emprise et le bloc de noms, en cm. Le carré du focus
+ *  que l'interface pose autour de l'emprise, ou d'une chaise, s'en écarte
+ *  de ECART_FOCUS (src/interface/plan/modele.js), plus la moitié de son
+ *  trait, en deçà de cette distance : le bloc commence au-delà, et aucune
+ *  marque ne couvre la liste. */
 export const ECART_LISTE = 36;
 /** Écart minimal entre les centres de deux rangées de la grille des tables,
  *  en cm. */
 export const ECART_RANGEES = 300;
+/** Hauteur d'une ligne de liste que la géométrie suppose, en cm : 1,25
+ *  corps, au-dessus de la hauteur d'encre du gabarit sur les polices
+ *  courantes. Le dessin mesure la sienne au navigateur (HAUTEUR_LIGNE, du
+ *  registre) ; un calcul pur qui juge où descend une liste lit celle-ci. */
+export const HAUTEUR_LIGNE_SUPPOSEE = 1.25 * TAILLE_TEXTE_LISTE_CM;
 
 // Accroissement du rayon d'une ronde pour une place de plus, au-dessus du
 // plancher : le périmètre croît de LARGEUR_PAR_PLACE, le rayon de 60 / 2π.
@@ -255,10 +262,13 @@ export function ecartsGrille(tables) {
  * s'achève avant l'emprise nouvelle, à ECART_LISTE au moins, quelle que soit
  * la rangée : c'est le calcul d'ecartsGrille, fait sur la plus grande
  * emprise des deux. Une table à un pas de rangée ou plus a son emprise à
- * ECART_LISTE au moins de l'emprise nouvelle. Ainsi une table déplacée hors
- * de la grille, ou une grille dont le pas a crû depuis qu'elle a été posée,
- * ne reçoit pas la liste de la table nouvelle et ne lui porte pas la sienne
- * à travers une colonne.
+ * ECART_LISTE au moins de l'emprise nouvelle. Ainsi, à travers une colonne,
+ * une table déplacée hors de la grille, ou une grille dont le pas a crû
+ * depuis qu'elle a été posée, ne reçoit pas la liste de la table nouvelle et
+ * ne lui porte pas la sienne. Le pas de rangée ne sépare que les emprises :
+ * une liste plus haute que lui, celle d'une table de beaucoup de places,
+ * descend sur une table posée hors de la grille dessous, dans la bande de
+ * son bloc ; listeSurTable juge ce recouvrement.
  *
  * La recherche s'arrête : un intervalle ouvert de largeur 2 × pas contient
  * au plus deux multiples du pas, et une table prend donc au plus quatre
@@ -282,14 +292,44 @@ export function caseLibre(tables, nouvelle) {
 }
 
 /**
+ * Vrai quand le bloc de noms de la table geometrie, à places places, recoupe
+ * l'emprise de la table autre, bords exclus : la bande du bloc, large de
+ * LARGEUR_BLOC_NOMS_CM depuis origineListe, haute de places + 1 lignes de
+ * HAUTEUR_LIGNE_SUPPOSEE — l'en-tête d'une table gelée compris —, contre le
+ * carré de demi-côté rayonEmprise centré sur autre, qui circonscrit le
+ * disque d'une ronde. La seule mesure de ce recouvrement : le mobilier en
+ * tire LISTE_SUR_VOISINE.
+ *
+ * @param {GeometrieTable} geometrie  la table dont la liste se juge
+ * @param {number} places             sa capacité courante
+ * @param {GeometrieTable} autre
+ * @returns {boolean}
+ */
+export function listeSurTable(geometrie, places, autre) {
+  const gauche = geometrie.origineListe.x;
+  const haut = geometrie.origineListe.y;
+  const droite = gauche + constante('LARGEUR_BLOC_NOMS_CM');
+  const bas = haut + (places + 1) * HAUTEUR_LIGNE_SUPPOSEE;
+  const { centre, rayonEmprise: e } = autre;
+  return centre.x + e > gauche && centre.x - e < droite && centre.y + e > haut && centre.y - e < bas;
+}
+
+/**
  * Nombre de places sous la poignée : placesInitiales + round(ecartRadial ×
  * 2π / 60), jamais sous 2. L'écart se compte depuis le début du geste
- * (§ 7.2) ; un demi-pas exact s'arrondit vers le haut (Math.round).
+ * (§ 7.2) ; un demi-pas exact s'arrondit vers le haut (Math.round). Lève
+ * RangeError sur des places initiales qui ne sont pas un entier ≥ 1, ou sur
+ * un écart non fini : le résultat serait NaN, ou un nombre non entier.
  *
  * @param {number} placesInitiales  les places au début du geste
- * @param {number} ecartRadial      cm, projeté sur l'axe de la poignée, positif en s'éloignant du centre
+ * @param {number} ecartRadial      cm, projeté sur l'axe de la poignée, positif
+ *        en s'éloignant du centre
  * @returns {number} entier ≥ 2
  */
 export function placesSousPoignee(placesInitiales, ecartRadial) {
+  exigerPlaces(placesInitiales);
+  if (typeof ecartRadial !== 'number' || !Number.isFinite(ecartRadial)) {
+    throw new RangeError(`écart radial : nombre fini attendu, reçu ${String(ecartRadial)}`);
+  }
   return Math.max(2, placesInitiales + Math.round(ecartRadial / RAYON_PAR_PLACE));
 }

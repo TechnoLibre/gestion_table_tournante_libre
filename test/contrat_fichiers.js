@@ -20,7 +20,8 @@
 // ne se provoquent que sur l'implémentation d'épreuve, et s'éprouvent à côté
 // d'elle (test/fichiers_simules.test.js). Là où verrouDisponible est faux, la
 // suite exige du verrou ce que la plateforme promet à la place : verrouiller
-// rend { pris: true } à chaque appel, et deverrouiller ne lève pas.
+// rend { pris: true } à chaque appel, et deverrouiller ne lève pas. Partout,
+// l'instant de prise que verrouiller reçoit a la forme d'un horodatage.
 import { ErreurStockage } from '../src/stockage/erreurs.js';
 
 // Les primitives de l'interface, dans l'ordre où elle les déclare.
@@ -44,6 +45,15 @@ const PRIMITIVES = [
   'enregistrerSous',
 ];
 
+// Instants de prise d'un verrou, de la forme qu'écrit l'horloge de
+// l'application : le verrou les inscrit tels quels, décalage compris.
+const DEPUIS = '2031-05-17T19:42:07-04:00';
+const DEPUIS_LOINTAIN = '2031-05-18T06:12:00+05:30';
+
+// Des valeurs qui n'ont pas la forme d'un horodatage : absente, vide, sans
+// décalage, en temps universel, un instant en millisecondes, une date seule.
+const DEPUIS_FAUTIFS = [undefined, null, '', '2031-05-17 19:42:07', '2031-05-17T19:42:07Z', 1_950_000_000_000, '2031-05-17'];
+
 // Chemins qu'aucune implémentation n'accepte : remontant, absolu sous Unix,
 // absolu sous Windows, remontant après un détour.
 const CHEMINS_REFUSES = ['../x', '/x', 'C:\\x', 'a/../../x'];
@@ -61,7 +71,7 @@ const APPELS_A_CHEMIN = [
   ['deplacer, source', (fs, racine, chemin) => fs.deplacer(racine, chemin, 'ailleurs.txt')],
   ['deplacer, cible', (fs, racine, chemin) => fs.deplacer(racine, 'ici.txt', chemin)],
   ['supprimer', (fs, racine, chemin) => fs.supprimer(racine, chemin)],
-  ['verrouiller', (fs, racine, chemin) => fs.verrouiller(racine, chemin, 'seance-a')],
+  ['verrouiller', (fs, racine, chemin) => fs.verrouiller(racine, chemin, 'seance-a', DEPUIS)],
   ['deverrouiller', (fs, racine, chemin) => fs.deverrouiller(racine, chemin, 'seance-a')],
 ];
 
@@ -275,31 +285,40 @@ export function eprouverContrat(nom, fabrique, { describe, test, egal, vrai, rej
       egal(await fs.lireTexte(racine, 'ici.txt'), 'ici');
     });
 
-    test('verrouiller est exclusif : un second appel rend la séance du premier, vivante', async () => {
+    test("verrouiller est exclusif : un second appel rend la séance du premier, vivante, et l'instant qu'il a reçu, tel quel", async () => {
       const { fs, racine } = await fabrique();
-      egal(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
-      const second = await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-b');
+      egal(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a', DEPUIS_LOINTAIN), { pris: true });
+      const second = await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-b', DEPUIS);
       if (!fs.verrouDisponible) {
         egal(second, { pris: true });
         return;
       }
-      vrai(typeof second.depuis === 'string' && second.depuis !== '', `depuis ${second.depuis}`);
-      egal(second, { pris: false, seance: 'seance-a', depuis: second.depuis, vivant: true });
+      egal(second, { pris: false, seance: 'seance-a', depuis: DEPUIS_LOINTAIN, vivant: true });
+    });
+
+    test("verrouiller refuse un instant qui n'a pas la forme d'un horodatage : TypeError, et rien ne se crée", async () => {
+      const { fs, racine } = await fabrique();
+      for (const depuis of DEPUIS_FAUTIFS) {
+        const raison = await rejette(fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a', depuis), String(depuis));
+        vrai(raison instanceof TypeError, `${String(depuis)} : ${raison}`);
+      }
+      egal(noms(await fs.lister(racine, '')), []);
+      egal(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a', DEPUIS), { pris: true });
     });
 
     test("deverrouiller n'efface que le verrou de sa séance, et un verrou absent n'est pas une faute", async () => {
       const { fs, racine } = await fabrique();
       await fs.deverrouiller(racine, 'soiree.gtt.verrou', 'seance-a');
-      await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a');
+      await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a', DEPUIS);
       await fs.deverrouiller(racine, 'soiree.gtt.verrou', 'seance-b');
       if (!fs.verrouDisponible) {
-        egal(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-c'), { pris: true });
+        egal(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-c', DEPUIS), { pris: true });
         return;
       }
-      const tenu = await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-c');
-      egal([tenu.pris, tenu.seance], [false, 'seance-a']);
+      const tenu = await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-c', DEPUIS_LOINTAIN);
+      egal([tenu.pris, tenu.seance, tenu.depuis], [false, 'seance-a', DEPUIS]);
       await fs.deverrouiller(racine, 'soiree.gtt.verrou', 'seance-a');
-      egal(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-c'), { pris: true });
+      egal(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-c', DEPUIS), { pris: true });
     });
 
     test('sonder rend inscriptible, efface le témoin resté et laisse les autres fichiers', async () => {

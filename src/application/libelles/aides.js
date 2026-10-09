@@ -9,6 +9,7 @@
 //
 // Les aides ne lisent ni l'horloge ni la langue du système : un horodatage se
 // met en mots à partir de sa seule forme, AAAA-MM-JJTHH:MM:SS±HH:MM.
+import { lireHorodatage } from '../format.js';
 
 const NOMS_DES_ETATS = new Map([
   ['brouillon', 'Brouillon'],
@@ -80,20 +81,21 @@ export function phraseDeRaison(raison, details, texte) {
 /** Des numéros de proposition, un illisible nommé comme tel. */
 export const numeros = (ids) => enumeration(ids.map((id) => (id === null ? 'sans numéro lisible' : `n° ${id}`)));
 
-// La forme d'un horodatage : date, heure et minute se lisent, les secondes et
-// le décalage se taisent.
-const HORODATAGE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):\d{2}[+-]\d{2}:\d{2}$/;
-
 /**
  * Un horodatage AAAA-MM-JJTHH:MM:SS±HH:MM en mots, « le 17 mai 2031 à
  * 8 h 05 », à l'heure qu'il porte, par les textes de la mise en forme
- * (format.date, format.heure) ; une autre forme se cite telle quelle.
+ * (format.date, format.heure) : date, heure et minute se lisent, les
+ * secondes et le décalage se taisent. Il se lit par lireHorodatage
+ * (format.js) ; ce qu'elle refuse se cite tel quel.
  */
 export function dater(horodatage, texte) {
-  const morceaux = HORODATAGE.exec(String(horodatage));
-  if (morceaux === null) return String(horodatage);
-  const [annee, mois, jour, heure, minute] = morceaux.slice(1).map(Number);
-  if (mois < 1 || mois > 12) return String(horodatage);
+  let lu;
+  try {
+    lu = lireHorodatage(horodatage);
+  } catch {
+    return String(horodatage);
+  }
+  const { annee, mois, jour, heure, minute } = lu;
   return `le ${texte('format.date', { annee, mois, jour })} à ${texte('format.heure', { heure, minute })}`;
 }
 

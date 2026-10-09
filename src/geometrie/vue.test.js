@@ -185,18 +185,21 @@ describe("vue : l'ajustement et les bornes relatives du zoom (§ 7.2, § 14.10)"
   test('200 englobants et cadres tirés, nuls et vides compris : chaque nombre rendu est fini, chaque k > 0, ou le résultat vaut null', () => {
     const GRAINE = 20260;
     const alea = creerPcg32(GRAINE, FLUX.DEMO);
-    let nuls = 0;
-    let rendus = 0;
+    // Les natures tirées : 0, un cadre plus étroit que ses marges ; 1, un
+    // cadre de hauteur nulle ; 2, un englobant plat ; 3 et 4, un englobant
+    // quelconque ; 5, un plan vide. Chaque nature compte ses tirages nuls et
+    // rendus.
+    const comptes = Array.from({ length: 6 }, () => ({ nuls: 0, rendus: 0 }));
     for (let i = 0; i < 200; i += 1) {
-      const nature = i % 5;
+      const nature = i % 6;
       const cadre = {
         gauche: alea.borne(2000) - 1000,
         haut: alea.borne(2000) - 1000,
-        largeur: nature === 0 ? alea.borne(33) : alea.borne(3000),
-        hauteur: nature === 1 ? 0 : alea.borne(3000),
+        largeur: nature === 0 ? alea.borne(33) : 33 + alea.borne(3000),
+        hauteur: nature === 1 ? 0 : 33 + alea.borne(3000),
       };
       let englobant = null;
-      if (nature >= 2) {
+      if (nature >= 2 && nature <= 4) {
         const minX = alea.borne(20000) - 10000;
         const minY = alea.borne(20000) - 10000;
         const plat = nature === 2;
@@ -211,16 +214,21 @@ describe("vue : l'ajustement et les bornes relatives du zoom (§ 7.2, § 14.10)"
       const vue = ajuster(englobant, cadre);
       if (k === null) {
         assert.equal(vue, null, `tirage ${i}`);
-        nuls += 1;
+        comptes[nature].nuls += 1;
         continue;
       }
-      rendus += 1;
+      comptes[nature].rendus += 1;
       assert.ok(Number.isFinite(k) && k > 0 && k <= K_MAX, `tirage ${i} : k ${k}`);
       assert.ok([vue.k, vue.tx, vue.ty].every(Number.isFinite) && vue.k > 0, `tirage ${i} : ${JSON.stringify(vue)}`);
       const bornes = bornesZoom(k);
       assert.ok(Number.isFinite(bornes.kMin) && bornes.kMin > 0, `tirage ${i}`);
     }
-    assert.ok(nuls > 0 && rendus > 0, `${nuls} nuls, ${rendus} rendus`);
+    // Un cadre trop petit ne s'ajuste jamais ; chaque autre nature rend au
+    // moins un tirage, le plan vide sur un cadre valide compris.
+    const resume = JSON.stringify(comptes);
+    for (const nature of [0, 1]) assert.equal(comptes[nature].rendus, 0, resume);
+    for (const nature of [0, 1, 2, 3, 4, 5]) assert.ok(comptes[nature].nuls + comptes[nature].rendus > 0, resume);
+    for (const nature of [2, 3, 4, 5]) assert.ok(comptes[nature].rendus > 0, resume);
   });
 
   test('un cadrage hors des bornes est ramené dans elles, le centre du cadre fixe', () => {
@@ -324,6 +332,25 @@ describe("vue : la molette et l'attribut transform", () => {
     assert.throws(() => facteurMolette(-100, 3), RangeError);
   });
 
+  test('une molette démesurée rend un facteur fini > 0 : zoomerSous ne lève pas et atteint la borne', () => {
+    const cadre = { gauche: 0, haut: 0, largeur: 800, hauteur: 600 };
+    const bornes = { kMin: 0.2, kMax: 10 };
+    const vue = { k: 1, tx: 0, ty: 0 };
+    for (const [deltaY, deltaMode, kAttendu] of [[1e6, 0, 0.2], [-1e6, 0, 10], [1e6, 2, 0.2], [-1e6, 2, 10], [-Number.MAX_VALUE, 1, 10]]) {
+      for (const facteur of [facteurMolette(deltaY, deltaMode), facteurMolette(deltaY, deltaMode, bornes)]) {
+        assert.ok(Number.isFinite(facteur) && facteur > 0, `${deltaY}, ${deltaMode} : ${facteur}`);
+        assert.equal(zoomerSous(vue, cadre, 400, 300, facteur, bornes).k, kAttendu, `${deltaY}, ${deltaMode}`);
+      }
+    }
+  });
+
+  test('sous des bornes données, le facteur se borne à leur rapport : un geste ne va pas plus loin que de kMin à kMax', () => {
+    const bornes = { kMin: 0.2, kMax: 10 };
+    assert.equal(facteurMolette(-1e6, 0, bornes), 50);
+    assert.equal(facteurMolette(1e6, 0, bornes), 1 / 50);
+    assert.ok(proches(facteurMolette(-100, 0, bornes), 1.1));
+  });
+
   test('transformDe et vueDepuisTransform font l\'aller-retour ; une autre forme lève', () => {
     const vues = [
       { k: 2, tx: 10, ty: 20 },
@@ -341,6 +368,9 @@ describe("vue : la molette et l'attribut transform", () => {
       'translate(10,20) scale(-2)',
       'translate(a,20) scale(2)',
       'translate(10,20) scale(2) rotate(3)',
+      'translate(1e999,0) scale(2)',
+      'translate(0,-1e999) scale(2)',
+      'translate(10,20) scale(1e999)',
     ]) {
       assert.throws(() => vueDepuisTransform(texte), SyntaxError, texte);
     }

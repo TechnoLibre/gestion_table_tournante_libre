@@ -2425,18 +2425,20 @@ describe('dépôt : format plus récent, élagage', () => {
 });
 
 describe('dépôt : le verrou, et écrire ailleurs (§ 8.6, § 8.8)', () => {
-  test("le verrou de la séance se prend, se refuse à une autre séance avec ce que le système en dit, et se rend", async () => {
+  test("le verrou de la séance se prend à l'instant qu'elle donne, se refuse à une autre séance avec ce que le système en dit, et se rend", async () => {
     const { disque, fs } = nouveauDisque();
     const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
-    assert.deepEqual(await verrouiller(ouvert, 'seance-a'), { pris: true });
+    const depuis = '2031-05-17T08:30:00-04:00';
+    assert.deepEqual(await verrouiller(ouvert, 'seance-a', depuis), { pris: true });
     const texte = fs.contenu('documents', VERROU);
-    const { depuis } = JSON.parse(texte);
+    assert.equal(JSON.parse(texte).depuis, depuis);
 
     const voisin = await rouvrir(disque, BASE);
-    assert.deepEqual(await verrouiller(voisin, 'seance-b'), { pris: false, seance: 'seance-a', depuis, vivant: true });
+    const plusTard = '2031-05-17T08:31:00-04:00';
+    assert.deepEqual(await verrouiller(voisin, 'seance-b', plusTard), { pris: false, seance: 'seance-a', depuis, vivant: true });
     const lointain = await ouvrir(creerFichiersSimules({ disque, hote: 'autre-poste' }), DOC, BASE);
     assert.equal(lointain.fs.compteurs.ecritures, 0, 'ouvrir écrit');
-    assert.deepEqual(await verrouiller(lointain, 'seance-c'), {
+    assert.deepEqual(await verrouiller(lointain, 'seance-c', plusTard), {
       pris: false,
       seance: 'seance-a',
       depuis,
@@ -2448,9 +2450,9 @@ describe('dépôt : le verrou, et écrire ailleurs (§ 8.6, § 8.8)', () => {
     await deverrouiller(ouvert, 'seance-a');
     assert.equal(fs.contenu('documents', VERROU), null);
 
-    assert.deepEqual(await verrouiller(voisin, 'seance-b'), { pris: true });
+    assert.deepEqual(await verrouiller(voisin, 'seance-b', plusTard), { pris: true });
     voisin.fs.pannes.couperApres(0);
-    const vuDApres = await verrouiller(ouvert, 'seance-a');
+    const vuDApres = await verrouiller(ouvert, 'seance-a', plusTard);
     assert.deepEqual([vuDApres.pris, vuDApres.seance, vuDApres.vivant], [false, 'seance-b', false]);
   });
 

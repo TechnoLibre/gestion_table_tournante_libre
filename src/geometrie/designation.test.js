@@ -227,6 +227,22 @@ describe('tables qui se recouvrent : la dernière reçue, peinte au-dessus', () 
     assert.deepEqual(designer(premiere.chaises[6], [premiere, seconde], 1), { table: 1, siege: 7 });
   });
 
+  test('régime sièges : le plateau d’une carrée cache la chaise de dessous jusque dans ses coins, hors de son disque inscrit', () => {
+    // Ronde de 8 en (0, 0) : son siège 4 est à 98,394 cm du centre, à 45°,
+    // en (69,574 ; 69,574). Carrée de 8 en (15, 15), côté 120 : le siège est
+    // à (54,574 ; 54,574) de son centre, dans le plateau, à 77,2 cm du centre,
+    // hors du disque inscrit de rayon 60, et à plus de 36 cm de chacune de ses
+    // chaises, au-delà de leur cible de rayon 30.
+    const ronde = geometrieTable(table(1, 'ronde', 0, 0), 8);
+    const carree = geometrieTable(table(2, 'carree', 15, 15), 8);
+    const coin = ronde.chaises[3];
+    assert.equal(carree.demiTaille, 60);
+    assert.ok(Math.hypot(coin.x - 15, coin.y - 15) > carree.demiTaille);
+    assert.ok(carree.chaises.every((c) => Math.hypot(coin.x - c.x, coin.y - c.y) > carree.rayonCible));
+    assert.equal(designer(coin, [ronde, carree], 1), null);
+    assert.deepEqual(designer(coin, [carree, ronde], 1), { table: 1, siege: 4 });
+  });
+
   test('régimes différents : chaque table se juge sur son propre pas', () => {
     // À k = 0,35, la ronde de 8 (pas 60) est en régime table, la carrée de 3
     // (pas 70) en régime sièges.

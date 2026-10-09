@@ -52,4 +52,21 @@ describe("échelle : l'échelle graphique (§ 7.7)", () => {
       assert.throws(() => echelleGraphique(k, largeur), RangeError, `${k}, ${largeur}`);
     }
   });
+
+  test("un rapport largeur / k qui sort des nombres flottants finis et non nuls est refusé, sans boucle", () => {
+    // 1e-300 / 1e300 vaut 0, et 1e-300 / 1e10 tombe sous le plus petit
+    // nombre normal : la plus grande longueur ronde y serait 0, une barre
+    // vide. 1e300 / 1e-300 vaut Infinity, et aucune décade ne s'y atteint.
+    const horsDomaine = [[1e300, 1e-300], [1e10, 1e-300], [1e-300, 1e300], [Number.MIN_VALUE, Number.MAX_VALUE]];
+    for (const [k, largeur] of horsDomaine) {
+      assert.throws(() => echelleGraphique(k, largeur), RangeError, `${k}, ${largeur}`);
+    }
+  });
+
+  test('aux bords du domaine admis, la longueur reste ronde, finie et non nulle', () => {
+    for (const [k, largeur] of [[1e-150, 1e150], [1e150, 1e-150], [1, Number.MAX_VALUE], [1, 2 ** -1022]]) {
+      const { longueurCm, largeurPx } = echelleGraphique(k, largeur);
+      assert.ok(Number.isFinite(longueurCm) && longueurCm > 0 && largeurPx <= largeur, `${k}, ${largeur} : ${longueurCm}`);
+    }
+  });
 });

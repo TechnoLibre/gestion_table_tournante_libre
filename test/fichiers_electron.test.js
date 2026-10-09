@@ -48,8 +48,9 @@ const DEV_DISQUE = 0x801n;
 const HOTE = 'poste-essai';
 const PID = 4242;
 
-// Instant que rend l'horloge injectée.
-const INSTANT = new Date(Date.UTC(2026, 9, 6, 23, 2, 11));
+// L'instant de prise qu'un verrou reçoit, de la forme qu'écrit l'horloge de
+// l'application.
+const PRISE = '2026-10-06T19:02:11-04:00';
 
 // Les racines de l'épreuve, et ce que les échecs y nomment.
 const DOCUMENTS = '/poste/exemple/Documents/Gestion table tournante Libre';
@@ -200,6 +201,21 @@ function creerDisque() {
       if (noeud === undefined) throw erreurSysteme('ENOENT', 'open', chemin);
       if (noeud.type === 'dossier') throw erreurSysteme('EISDIR', 'read', chemin);
       return Buffer.from(noeud.octets);
+    },
+    // Les deux appels synchrones de la sortie de la coquille.
+    readFileSync(chemin) {
+      appel('readFileSync', chemin);
+      const { noeud } = resoudre(chemin, true, 'open');
+      if (noeud === undefined) throw erreurSysteme('ENOENT', 'open', chemin);
+      if (noeud.type === 'dossier') throw erreurSysteme('EISDIR', 'read', chemin);
+      return Buffer.from(noeud.octets);
+    },
+    unlinkSync(chemin) {
+      appel('unlinkSync', chemin);
+      const { chemin: resolu, noeud } = resoudre(chemin, false, 'unlink');
+      if (noeud === undefined) throw erreurSysteme('ENOENT', 'unlink', chemin);
+      if (noeud.type === 'dossier') throw erreurSysteme('EISDIR', 'unlink', chemin);
+      noeuds.delete(resolu);
     },
     async open(chemin, drapeaux) {
       appel('open', chemin, drapeaux);
@@ -385,7 +401,6 @@ function preparer({
     demarrage,
     pid: PID,
     hote,
-    maintenant: () => INSTANT,
   });
   return { disque, fichiers, dialog, pauses, ouvertures, commandes, signaux };
 }
@@ -451,7 +466,7 @@ const APPELS_A_CHEMIN = [
   ['deplacer, source', (fichiers, racine, chemin) => fichiers.deplacer(racine, chemin, 'libre.txt')],
   ['deplacer, cible', (fichiers, racine, chemin) => fichiers.deplacer(racine, 'ici.txt', chemin)],
   ['supprimer', (fichiers, racine, chemin) => fichiers.supprimer(racine, chemin)],
-  ['verrouiller', (fichiers, racine, chemin) => fichiers.verrouiller(racine, chemin, 'seance-a')],
+  ['verrouiller', (fichiers, racine, chemin) => fichiers.verrouiller(racine, chemin, 'seance-a', PRISE)],
   ['deverrouiller', (fichiers, racine, chemin) => fichiers.deverrouiller(racine, chemin, 'seance-a')],
 ];
 
@@ -986,19 +1001,69 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
   const VERROU = `${DOCUMENTS}/soiree.gtt.verrou`;
   const deposerVerrou = (disque, contenu) => disque.deposer(VERROU, `${JSON.stringify(contenu)}\n`);
 
-  test("se crée en exclusif, porte {seance, pid, hote, depuis, demarrage} et une fin de ligne ; depuis est l'instant de l'horloge, à l'heure locale et avec son décalage", async () => {
+  test("se crée en exclusif, porte {seance, pid, hote, depuis, demarrage} et une fin de ligne ; depuis est l'instant reçu, tel quel", async () => {
     const processus = tableDeProcessus([[PID, '918273']]);
     const { disque, fichiers } = preparer(processus);
-    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
+    const recu = '2026-10-07T04:32:11+05:30';
+    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', recu), { pris: true });
     assert.deepEqual(ecritures(disque).slice(0, 4), [`open ${VERROU} wx`, `write ${VERROU}`, `sync ${VERROU}`, `close ${VERROU}`]);
     const texte = disque.contenu(VERROU);
     assert.ok(texte.endsWith('}\n'), texte);
     const contenu = JSON.parse(texte);
     assert.deepEqual(Object.keys(contenu), ['seance', 'pid', 'hote', 'depuis', 'demarrage']);
-    assert.deepEqual({ ...contenu, depuis: null }, { seance: 'seance-a', pid: PID, hote: HOTE, depuis: null, demarrage: '918273' });
+    assert.deepEqual(contenu, { seance: 'seance-a', pid: PID, hote: HOTE, depuis: recu, demarrage: '918273' });
     assert.deepEqual(processus.lus, [PID]);
-    assert.match(contenu.depuis, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
-    assert.equal(Date.parse(contenu.depuis), INSTANT.getTime());
+  });
+
+  test("un instant de prise qui n'est pas une chaîne lève TypeError, sans rien lire ni créer", async () => {
+    const { disque, fichiers } = preparer();
+    for (const depuis of [undefined, null, 1_950_000_000_000, new Date(0)]) {
+      await assert.rejects(fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', depuis), TypeError, String(depuis));
+    }
+    assert.deepEqual(disque.appels, []);
+  });
+
+  test("rendreVerrousTenus efface, d'un trait et sans attendre, chaque verrou pris et pas rendu qui porte encore sa séance ; un verrou repris, illisible ou absent reste tel", async () => {
+    const { disque, fichiers } = preparer();
+    const chemin = (nom) => `${DOCUMENTS}/${nom}`;
+    for (const nom of ['garde.gtt.verrou', 'repris.gtt.verrou', 'illisible.gtt.verrou', 'parti.gtt.verrou', 'rendu.gtt.verrou']) {
+      assert.deepEqual(await fichiers.verrouiller(DOC, nom, 'seance-a', PRISE), { pris: true }, nom);
+    }
+    await fichiers.deverrouiller(DOC, 'rendu.gtt.verrou', 'seance-a');
+    const reprise = `${JSON.stringify({ seance: 'seance-b', pid: 777, hote: HOTE, depuis: PRISE, demarrage: null })}\n`;
+    disque.deposer(chemin('repris.gtt.verrou'), reprise);
+    disque.deposer(chemin('illisible.gtt.verrou'), '{"seance":');
+    await fichiers.supprimer(DOC, 'parti.gtt.verrou');
+    disque.deposer(chemin('rendu.gtt.verrou'), reprise.replace('seance-b', 'seance-a'));
+    const avant = disque.appels.length;
+    assert.equal(fichiers.rendreVerrousTenus(), undefined);
+    assert.deepEqual(disque.appels.slice(avant), [
+      `readFileSync ${chemin('garde.gtt.verrou')}`,
+      `unlinkSync ${chemin('garde.gtt.verrou')}`,
+      `readFileSync ${chemin('repris.gtt.verrou')}`,
+      `readFileSync ${chemin('illisible.gtt.verrou')}`,
+      `readFileSync ${chemin('parti.gtt.verrou')}`,
+    ]);
+    assert.equal(disque.existe(chemin('garde.gtt.verrou')), false);
+    assert.equal(disque.contenu(chemin('repris.gtt.verrou')), reprise);
+    assert.equal(disque.contenu(chemin('illisible.gtt.verrou')), '{"seance":');
+    // Le verrou rendu par deverrouiller n'est plus tenu : un verrou de même
+    // séance posé depuis à sa place reste.
+    assert.notEqual(disque.contenu(chemin('rendu.gtt.verrou')), null);
+    // Un second appel n'a plus rien à rendre.
+    const apres = disque.appels.length;
+    fichiers.rendreVerrousTenus();
+    assert.deepEqual(disque.appels.slice(apres), []);
+  });
+
+  test("rendreVerrousTenus ne lève pas : une lecture ou un effacement refusés laissent le verrou, et les suivants se rendent", async () => {
+    const { disque, fichiers } = preparer();
+    const chemin = (nom) => `${DOCUMENTS}/${nom}`;
+    for (const nom of ['a.gtt.verrou', 'b.gtt.verrou', 'c.gtt.verrou']) await fichiers.verrouiller(DOC, nom, 'seance-a', PRISE);
+    disque.panne('readFileSync', 'EACCES', { chemin: chemin('a.gtt.verrou') });
+    disque.panne('unlinkSync', 'EBUSY', { chemin: chemin('b.gtt.verrou') });
+    fichiers.rendreVerrousTenus();
+    assert.deepEqual(['a', 'b', 'c'].map((nom) => disque.existe(chemin(`${nom}.gtt.verrou`))), [true, true, false]);
   });
 
   test("un verrou présent rend sa séance : morte quand son pid ne répond pas ; sans démarrage inscrit, un pid qui répond, même sans droit de le signaler, laisse vivant inconnu", async () => {
@@ -1010,7 +1075,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
       const { disque, fichiers, signaux } = preparer({ signaler });
       deposerVerrou(disque, { seance: 'seance-a', pid: 777, hote: HOTE, depuis: '2026-10-06T19:02:11-04:00' });
       assert.deepEqual(
-        await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'),
+        await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE),
         { pris: false, seance: 'seance-a', depuis: '2026-10-06T19:02:11-04:00', vivant },
         nom,
       );
@@ -1028,13 +1093,13 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
         return reponses.length > 1 ? reponses.shift() : reponses[0];
       },
     });
-    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE);
     assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, null);
     await fichiers.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
-    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE);
     assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, '918273');
     await fichiers.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
-    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE);
     assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, '918273');
     assert.deepEqual(lus, [PID, PID]);
   });
@@ -1056,7 +1121,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
       const processus = tableDeProcessus([[PID, '1'], [777, demarrageLu]]);
       const { disque, fichiers } = preparer(processus);
       deposerVerrou(disque, { seance: 'seance-a', pid: 777, hote: HOTE, depuis: DEPUIS, ...inscrit });
-      assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), tenu(vivant), nom);
+      assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE), tenu(vivant), nom);
       // Le démarrage du processus courant se lit avant la prise, celui du
       // pid inscrit une fois le verrou trouvé.
       assert.deepEqual(processus.lus, lus, nom);
@@ -1066,8 +1131,8 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
     const processus = tableDeProcessus([[PID, '1']]);
     const { disque, fichiers } = preparer(processus);
     deposerVerrou(disque, { seance: 'seance-a', pid: 777, hote: HOTE, depuis: DEPUIS, demarrage: '5000' });
-    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), tenu(false));
-    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), tenu(false));
+    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE), tenu(false));
+    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE), tenu(false));
     assert.deepEqual(processus.lus, [PID]);
   });
 
@@ -1076,7 +1141,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
     for (const inscrit of [{ demarrage: 5000 }, { demarrage: true }, { demarrage: {} }]) {
       deposerVerrou(disque, { seance: 'seance-a', pid: 777, hote: HOTE, depuis: 'x', ...inscrit });
       assert.deepEqual(
-        await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'),
+        await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE),
         { pris: false, seance: null, depuis: null, vivant: null },
         JSON.stringify(inscrit),
       );
@@ -1097,11 +1162,11 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
     // ligne en porte assez.
     disque.deposer('/proc/782/stat', stat(782, 5000).replace(/[()]/g, ''));
     const { fichiers } = preparer({ disque, signaler: () => {} });
-    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE);
     assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, '31337');
     for (const [pid, vivant] of [[777, true], [778, false], [779, null], [780, null], [781, null], [782, null]]) {
       deposerVerrou(disque, { seance: 'seance-x', pid, hote: HOTE, depuis: 'x', demarrage: '5000' });
-      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b')).vivant, vivant, String(pid));
+      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE)).vivant, vivant, String(pid));
     }
   });
 
@@ -1115,7 +1180,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
         return reponses.get(variables.GTT_PID);
       },
     });
-    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE);
     assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, '133725999999999999');
     assert.deepEqual(commandes.map(({ commande }) => commande), ['powershell.exe']);
     const [{ arguments_, options }] = commandes;
@@ -1125,7 +1190,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
     assert.deepEqual(options, { variables: { GTT_PID: String(PID) }, delai: DELAI_SUPPORT_MS });
     for (const [pid, vivant] of [[777, true], [778, false], [779, null], [780, null]]) {
       deposerVerrou(disque, { seance: 'seance-x', pid, hote: HOTE, depuis: 'x', demarrage: '133725000000000000' });
-      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b')).vivant, vivant, String(pid));
+      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE)).vivant, vivant, String(pid));
     }
   });
 
@@ -1142,7 +1207,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
       },
     });
     deposerVerrou(disque, { seance: 'seance-a', pid: 4312, hote: HOTE, depuis: DEPUIS, demarrage: '133725000000000000' });
-    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), {
+    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE), {
       pris: false,
       seance: 'seance-a',
       depuis: DEPUIS,
@@ -1157,7 +1222,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
       plateforme: 'darwin',
       lancer: async (_commande, arguments_) => sorties.get(arguments_[3]) ?? 'Wed Oct  7 08:00:00 2026\n',
     });
-    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE);
     assert.equal(JSON.parse(disque.contenu(VERROU)).demarrage, 'Wed Oct  7 08:00:00 2026');
     assert.deepEqual(commandes[0], {
       commande: 'ps',
@@ -1166,11 +1231,11 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
     });
     for (const [pid, vivant] of [[777, true], [778, false], [779, null]]) {
       deposerVerrou(disque, { seance: 'seance-x', pid, hote: HOTE, depuis: 'x', demarrage: 'Tue Oct  6 19:02:11 2026' });
-      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b')).vivant, vivant, String(pid));
+      assert.equal((await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE)).vivant, vivant, String(pid));
     }
 
     const ailleurs = preparer({ plateforme: 'freebsd' });
-    await ailleurs.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await ailleurs.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE);
     assert.equal(JSON.parse(ailleurs.disque.contenu(VERROU)).demarrage, null);
     assert.deepEqual(ailleurs.commandes, []);
   });
@@ -1186,17 +1251,17 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
     let fuseauDuPoste = 'America/Montreal';
     const lancer = async (_commande, _arguments, { variables }) => `${ecrit.get(variables.TZ ?? fuseauDuPoste)}\n`;
     const premiere = preparer({ plateforme: 'darwin', lancer });
-    assert.deepEqual(await premiere.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
+    assert.deepEqual(await premiere.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE), { pris: true });
     fuseauDuPoste = 'Europe/Paris';
     const seconde = preparer({ disque: premiere.disque, plateforme: 'darwin', lancer });
-    const tenu = await seconde.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b');
+    const tenu = await seconde.fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE);
     assert.deepEqual({ seance: tenu.seance, vivant: tenu.vivant }, { seance: 'seance-a', vivant: true });
   });
 
   test("le verrou d'une autre machine rend vivant à null sans signaler personne ; un verrou illisible rend tout à null", async () => {
     const { disque, fichiers, signaux } = preparer();
     deposerVerrou(disque, { seance: 'seance-a', pid: 777, hote: 'poste-voisin', depuis: '2026-10-06T19:02:11-04:00' });
-    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), {
+    assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE), {
       pris: false,
       seance: 'seance-a',
       depuis: '2026-10-06T19:02:11-04:00',
@@ -1206,7 +1271,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
     const illisible = { pris: false, seance: null, depuis: null, vivant: null };
     for (const texte of ['{"seance":"seance-a"', '{"seance":"seance-a","pid":0,"hote":"poste-essai","depuis":"x"}', '[]']) {
       disque.deposer(VERROU, texte);
-      assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b'), illisible, texte);
+      assert.deepEqual(await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-b', PRISE), illisible, texte);
     }
     assert.deepEqual(signaux, []);
   });
@@ -1214,7 +1279,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
   test("deverrouiller n'efface que le verrou de sa séance ; ni un absent ni un illisible ne sont des fautes", async () => {
     const { disque, fichiers } = preparer();
     await fichiers.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
-    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
+    await fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE);
     await fichiers.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-b');
     assert.equal(disque.existe(VERROU), true);
     await fichiers.deverrouiller(DOC, 'soiree.gtt.verrou', 'seance-a');
@@ -1227,10 +1292,10 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
   test("un verrou qui ne s'écrit pas jusqu'au bout est retiré, et lève ECRITURE ; un dossier à sa place lève ECRITURE", async () => {
     const { disque, fichiers } = preparer();
     disque.panne('write', 'ENOSPC', { chemin: VERROU });
-    await refuse(fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a'), 'ECRITURE', ecriture('soiree.gtt.verrou', DOCUMENTS, 'ENOSPC'));
+    await refuse(fichiers.verrouiller(DOC, 'soiree.gtt.verrou', 'seance-a', PRISE), 'ECRITURE', ecriture('soiree.gtt.verrou', DOCUMENTS, 'ENOSPC'));
     assert.equal(disque.existe(VERROU), false);
     disque.deposerDossier(`${DOCUMENTS}/dossier.gtt.verrou`);
-    await refuse(fichiers.verrouiller(DOC, 'dossier.gtt.verrou', 'seance-a'), 'ECRITURE', ecriture('dossier.gtt.verrou', DOCUMENTS, 'EISDIR'));
+    await refuse(fichiers.verrouiller(DOC, 'dossier.gtt.verrou', 'seance-a', PRISE), 'ECRITURE', ecriture('dossier.gtt.verrou', DOCUMENTS, 'EISDIR'));
   });
 
   test("processusVivant : un processus qui répond au signal 0 vit, comme celui qu'on n'a pas le droit de signaler ; un absent non", () => {
@@ -1249,7 +1314,7 @@ describe('coquille, fichiers : le verrou (§ 8.8)', () => {
   test('la séance est une chaîne non vide', async () => {
     const { disque, fichiers } = preparer();
     for (const seance of ['', null, 7]) {
-      await assert.rejects(fichiers.verrouiller(DOC, 'soiree.gtt.verrou', seance), TypeError, String(seance));
+      await assert.rejects(fichiers.verrouiller(DOC, 'soiree.gtt.verrou', seance, PRISE), TypeError, String(seance));
       await assert.rejects(fichiers.deverrouiller(DOC, 'soiree.gtt.verrou', seance), TypeError, String(seance));
     }
     assert.deepEqual(disque.appels, []);
@@ -1712,7 +1777,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
       ['creerDossier', [DOC, 'corbeille']],
       ['deplacer', [DOC, 'a.txt', 'b.txt']],
       ['supprimer', [DOC, 'a.txt']],
-      ['verrouiller', [DOC, 'a.gtt.verrou', 'seance-a']],
+      ['verrouiller', [DOC, 'a.gtt.verrou', 'seance-a', PRISE]],
       ['deverrouiller', [DOC, 'a.gtt.verrou', 'seance-a']],
       ['ouvrirDansExplorateur', [DOC]],
       ['choisirFichierAImporter', []],
@@ -1724,6 +1789,16 @@ describe('page : src/stockage/fichiers_electron.js', () => {
       assert.equal(await fs[primitive](...parametres, 'argument en trop'), rang, primitive);
     }
     assert.deepEqual(recus, appels.map(([primitive, parametres]) => [primitive, ...parametres]));
+  });
+
+  test("verrouiller refuse, avant le pont, un instant de prise qui n'a pas la forme d'un horodatage : TypeError", async () => {
+    const { pont, appels } = pontFactice([]);
+    const fs = creerFichiersElectron(pont);
+    for (const depuis of [undefined, '', '2026-10-06T19:02:11Z', '2026-10-06 19:02:11-04:00']) {
+      const erreur = await rejette(fs.verrouiller(DOC, 'a.gtt.verrou', 'seance-a', depuis));
+      assert.ok(erreur instanceof TypeError, `${String(depuis)} : ${erreur}`);
+    }
+    assert.deepEqual(appels, []);
   });
 
   test("une réponse { ok: false } devient l'ErreurStockage de ce code et de ces détails ; une réponse d'une autre forme, une TypeError", async () => {

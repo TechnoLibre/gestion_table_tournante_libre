@@ -340,8 +340,8 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
  * Plan du moteur d'un placement de fichier, proposition ou retenu : les
  * tables dans l'ordre déclaré, chaque liste de table sans ses chaises
  * vides, et chaque réserve, par identifiant croissant, comme le moteur les
- * rend ; l'ordre des sièges n'y entre pas. Aucune liste n'est partagée avec p. Lève TypeError quand p
- * n'est pas cohérent (fautes).
+ * rend ; l'ordre des sièges n'y entre pas. Aucune liste n'est partagée avec
+ * p. Lève TypeError quand p n'est pas cohérent (fautes).
  *
  * @param {import('./types.js').PropositionFichier|import('./types.js').Retenu} p
  * @returns {import('../moteur/types.js').Plan}

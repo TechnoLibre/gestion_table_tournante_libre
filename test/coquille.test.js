@@ -223,6 +223,12 @@ describe('coquille : processus principal', () => {
     }
   });
 
+  test("à la sortie, la coquille confie les verrous tenus à rendreVerrousTenus, seul lecteur de leur format : elle n'en analyse aucun", () => {
+    const texte = readFileSync(PRINCIPAL, 'utf8');
+    assert.match(texte, /app\.on\('quit', \(\) => fichiers\.rendreVerrousTenus\(\)\)/);
+    assert.doesNotMatch(texte, /JSON\.parse|\.verrousTenus\(/);
+  });
+
   test("au démarrage, les profils des séances terminées se retirent : ni celui d'une séance vivante, ni un dossier sans pid", () => {
     const { restes } = coquille();
     assert.deepEqual(restes, DOSSIERS_POSES.filter((nom) => nom !== PROFIL_TERMINE).sort());

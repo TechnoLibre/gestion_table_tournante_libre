@@ -64,6 +64,9 @@ const VERROU_REPRIS = 'reprise.gtt.verrou';
 const SEANCE_PAGE = 'seance-page';
 const SEANCE_REPRISE = 'seance-reprise';
 const VERROU_AUTRE = 'autre.gtt.verrou';
+// L'instant de prise que la page passe avec chaque verrou, celui de son
+// horloge.
+const DEPUIS_PAGE = '2026-10-06T19:00:00-04:00';
 const NOM_PRODUIT = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).productName;
 
 // Ce que rend app.getPath, par nom.
@@ -90,7 +93,7 @@ const ARGUMENTS_DE_LA_PAGE = {
   creerDossier: () => [INCONNUE, 'corbeille'],
   deplacer: () => [INCONNUE, 'soiree.gtt.json', 'corbeille/soiree.gtt.json'],
   supprimer: () => [INCONNUE, 'soiree.gtt.json'],
-  verrouiller: () => [INCONNUE, 'soiree.gtt.verrou', 'seance-factice'],
+  verrouiller: () => [INCONNUE, 'soiree.gtt.verrou', 'seance-factice', DEPUIS_PAGE],
   deverrouiller: () => [INCONNUE, 'soiree.gtt.verrou', 'seance-factice'],
   ouvrirDansExplorateur: (racines) => [racines?.documents],
   enregistrerSous: () => ['liste.csv', new Uint8Array([0x6e, 0x6f, 0x6d])],
@@ -339,10 +342,10 @@ async function jouerLePrechargement() {
   const documents = racines?.documents ?? null;
   const verrou = documents === null || fichiers === undefined
     ? null
-    : await appelerUne(fichiers.verrouiller, [documents, VERROU_PAGE, SEANCE_PAGE]);
+    : await appelerUne(fichiers.verrouiller, [documents, VERROU_PAGE, SEANCE_PAGE, DEPUIS_PAGE]);
   const repris = documents === null || fichiers === undefined
     ? null
-    : await appelerUne(fichiers.verrouiller, [documents, VERROU_REPRIS, SEANCE_PAGE]);
+    : await appelerUne(fichiers.verrouiller, [documents, VERROU_REPRIS, SEANCE_PAGE, DEPUIS_PAGE]);
   if (repris?.reponse?.ok === true) {
     const chemin = join(documents.chemin, VERROU_REPRIS);
     const contenu = JSON.parse(readFileSync(chemin, 'utf8'));

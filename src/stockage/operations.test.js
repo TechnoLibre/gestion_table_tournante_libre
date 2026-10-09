@@ -481,7 +481,7 @@ describe('opérations : copier (§ 8.7)', () => {
 describe('opérations : renommer (§ 8.7)', () => {
   test("renommer écrit d'abord la paire complète sous la nouvelle base — l'état d'avant au .precedent, le journal recopié avec l'entrée du renommage, puis l'état —, sans écrire l'ancienne ni créer le dossier, puis supprime l'ancienne : état, .precedent, journal ; le verrou reste à la séance, et le geste suivant continue sous la nouvelle base", async () => {
     const { disque, fs, ouvert } = await deuxRevisions();
-    assert.deepEqual(await verrouiller(ouvert, 'seance-a'), { pris: true });
+    assert.deepEqual(await verrouiller(ouvert, 'seance-a', HEURE_SUPPRESSION), { pris: true });
     const verrou = fs.contenu('documents', VERROU);
     const etatAvant = fs.contenu('documents', ETAT);
     const nouvelle = 'Gala des Saules';
@@ -1255,7 +1255,7 @@ describe("opérations : importer depuis l'autre emplacement (§ 8.6)", () => {
 describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
   test("supprimer déplace l'état, le .precedent, le journal apparié, le verrou et les écritures restées dans un seul dossier daté, créé d'abord, l'état en dernier ; listerCorbeille le montre ; le reste du dossier ne bouge pas", async () => {
     const { disque, fs, ouvert } = await deuxRevisions();
-    await verrouiller(ouvert, 'seance-a');
+    await verrouiller(ouvert, 'seance-a', HEURE_SUPPRESSION);
     fs.deposer('documents', `${ETAT}.ecriture`, 'partiel');
     fs.deposer('documents', `${JOURNAL}.ecriture`, 'partiel aussi');
     await creer(fs, DOC, chargeEssai({ id: 'evt-herons', nom: 'Bal des Hérons' }), CREATION);
@@ -1516,7 +1516,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
   test('une coupure à chaque écriture de la suppression laisse chaque fichier de l’événement à sa place ou dans la corbeille, son texte intact, jamais perdu', async () => {
     for (let n = 0; ; n += 1) {
       const { disque, fs, ouvert } = await deuxRevisions();
-      await verrouiller(ouvert, 'seance-a');
+      await verrouiller(ouvert, 'seance-a', HEURE_SUPPRESSION);
       fs.deposer('documents', `${ETAT}.ecriture`, 'partiel');
       const avant = await arbre(disque);
       fs.pannes.couperApres(n);
@@ -1603,10 +1603,10 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
 
   test("supprimer sonde le verrou sous la séance qui supprime : une autre séance vivante, d'un autre poste ou au verrou illisible lève VERROU_PRIS {seance, depuis, vivant} sans rien déplacer ; un verrou mort, le sien, ou celui que la sonde prend partent avec le reste", async () => {
     const refuses = [
-      ['une autre séance vivante', (fs, ouvert) => verrouiller(ouvert, 'seance-b'), { seance: 'seance-b', vivant: true }],
+      ['une autre séance vivante', (fs, ouvert) => verrouiller(ouvert, 'seance-b', HEURE_SUPPRESSION), { seance: 'seance-b', vivant: true }],
       [
         "une séance d'un autre poste",
-        (fs, ouvert, disque) => verrouiller({ ...ouvert, fs: creerFichiersSimules({ disque, hote: 'poste-voisin' }) }, 'seance-c'),
+        (fs, ouvert, disque) => verrouiller({ ...ouvert, fs: creerFichiersSimules({ disque, hote: 'poste-voisin' }) }, 'seance-c', HEURE_SUPPRESSION),
         { seance: 'seance-c', vivant: null },
       ],
       ['un verrou illisible', (fs) => fs.deposer('documents', VERROU, '{'), { seance: null, vivant: null }],
@@ -1627,7 +1627,7 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
     // Deux processus sur un même disque : le premier tient l'événement en
     // écriture et continue ses gestes ; le second ne le supprime pas.
     const partage = await deuxRevisions();
-    await verrouiller(partage.ouvert, SEANCE);
+    await verrouiller(partage.ouvert, SEANCE, HEURE_SUPPRESSION);
     const second = creerFichiersSimules({ disque: partage.disque });
     const refus = await echec(supprimer(second, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: 'seance-b' }), 'VERROU_PRIS');
     assert.deepEqual([refus.details.seance, refus.details.vivant], [SEANCE, true]);
@@ -1643,12 +1643,12 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
         "une séance coupée",
         async (disque) => {
           const coupee = creerFichiersSimules({ disque });
-          await coupee.verrouiller(DOC, VERROU, 'seance-morte');
+          await coupee.verrouiller(DOC, VERROU, 'seance-morte', HEURE_SUPPRESSION);
           coupee.pannes.couperApres(0);
           return 'seance-morte';
         },
       ],
-      ['la séance qui supprime', async (disque, fs, ouvert) => (await verrouiller(ouvert, SEANCE), SEANCE)],
+      ['la séance qui supprime', async (disque, fs, ouvert) => (await verrouiller(ouvert, SEANCE, HEURE_SUPPRESSION), SEANCE)],
       ['aucun verrou', async () => SEANCE],
     ];
     for (const [nom, poser] of acceptes) {
@@ -1656,7 +1656,8 @@ describe('opérations : supprimer vers la corbeille (§ 8.7)', () => {
       const tenant = await poser(disque, fs, ouvert);
       assert.deepEqual(await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE }, nom);
       assert.deepEqual(await listerCorbeille(fs, DOC), [{ dossier: DATE, fichiers: [JOURNAL, ETAT, PRECEDENT, VERROU] }], nom);
-      assert.equal(JSON.parse(fs.contenu('documents', `${DATE}/${VERROU}`)).seance, tenant, nom);
+      const parti = JSON.parse(fs.contenu('documents', `${DATE}/${VERROU}`));
+      assert.deepEqual([parti.seance, parti.depuis], [tenant, HEURE_SUPPRESSION], nom);
       assert.deepEqual(await lister(fs, DOC), [], nom);
     }
   });

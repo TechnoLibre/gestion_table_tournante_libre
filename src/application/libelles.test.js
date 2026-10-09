@@ -530,6 +530,7 @@ const EXEMPLES = new Map([
   ['SIEGE_TITRE', { siege: 8, libelle: 'animateur' }],
   ['SURNUMERAIRES', { table: 3, tour: 2, personnes: [16, 17] }],
   ['AU_DELA_LISIBLE', { seuil: 16 }],
+  ['LISTE_SUR_VOISINE', { table: 4, voisine: 7, numero: 3, numeroVoisine: 5, remede: { commande: 'deplacerTable', arguments: { id: 7, position: { x: 1626, y: 0 } } } }],
   ['ENTREE_CREER_TABLE', { numero: 3 }],
   ['ENTREE_SUPPRIMER_TABLE', { numero: 2, reservations: 2, titres: 1 }],
   ['ENTREE_DEPLACER_TABLE', { numero: 3 }],
@@ -566,6 +567,18 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
       assert.notEqual(texte, code, `${code} : le code brut tient lieu de texte`);
       for (const trace of TRACES) assert.doesNotMatch(texte, trace, `${code} : « ${texte} »`);
     }
+  });
+
+  test("RESERVATION_TOUS_LES_TOURS ne nomme aucun geste : le même refus suit un dépôt sur le sol et « Retirer du tour », où rien ne se dépose", () => {
+    const texte = libelle('RESERVATION_TOUS_LES_TOURS', { participant: 1, table: 3, remede: null });
+    assert.doesNotMatch(texte, /d[ée]pos/i);
+    assert.match(texte, /tous les tours/);
+    assert.match(texte, /« Retirer la réservation »/);
+  });
+
+  test('CONVERSION_IMPOSSIBLE nomme chacune de ses raisons : des tours non couverts, une réservation « tous les tours » déjà là, une personne exclue', () => {
+    const texte = libelle('CONVERSION_IMPOSSIBLE', { participant: 1, table: 3, remede: null });
+    for (const motif of [/chaque tour/, /« tous les tours »/, /exclue/]) assert.match(texte, motif);
   });
 
   test('la table est triée, sans doublon, et figée', () => {
@@ -831,7 +844,7 @@ describe('libellés : les tables par domaine (§ 14.6)', () => {
     assert.ok(comptees >= CODES.length, `${comptees} clés`);
   });
 
-  test("chaque texte d'A1 est dans la table du domaine qui l'émet", async () => {
+  test("chaque texte est dans la table du domaine qui l'émet", async () => {
     const parTable = new Map((await tablesDuDossier()).map(({ table, module }) => [table, module.TABLE]));
     const ATTENDUS = [
       ['stockage', ['ABSENT', 'VERROU_PRIS', 'LECTURE_SEULE', 'DERIVE', 'RELECTURE_DIFFERENTE', 'COMPTEUR_SATURE']],
@@ -856,7 +869,7 @@ describe('libellés : les tables par domaine (§ 14.6)', () => {
   });
 });
 
-// --- Le moteur et la génération (A6) -------------------------------------------
+// --- Le moteur et la génération ----------------------------------------------
 
 describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7)', () => {
   test('le relevé du moteur porte des codes, dans ses quatre modules à codes, et rien des valeurs de domine', () => {
@@ -876,9 +889,10 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
     const ailleurs = new Set([...releve.tables, ...ARBRES.flatMap((arbre) => [...releve.parArbre.get(arbre)])]);
     const { TABLE: MOTEUR_TABLE } = await import('./libelles/moteur.js');
     const { TABLE: STOCKAGE_TABLE } = await import('./libelles/stockage.js');
-    // INCONNU est déjà la clé de la table d'A1, une faute de placement du
-    // stockage aux mêmes détails ; PLACES_MANQUANTES et SURRESERVATION sont
-    // dans libelles/moteur.js depuis la séance (A2), et ne s'y redéfinissent pas.
+    // INCONNU est déjà une clé de la table du stockage, une faute de
+    // placement aux mêmes détails ; PLACES_MANQUANTES et SURRESERVATION,
+    // que la séance émet aussi, sont dans libelles/moteur.js, et ne s'y
+    // redéfinissent pas.
     const EXCEPTIONS = new Map([['INCONNU', STOCKAGE_TABLE]]);
     let comptes = 0;
     for (const code of codes) {

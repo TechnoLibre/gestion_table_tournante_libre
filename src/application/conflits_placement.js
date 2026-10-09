@@ -44,19 +44,30 @@ import { etatPlaces } from './places.js';
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {{proposition?: number|null}} demande   la proposition demandée au plan
+ * @param {{etatPlaces?: typeof etatPlaces}} [lecture]  la lecture d'un tour,
+ *        etatPlaces par défaut ; une épreuve y compte les lectures
  * @returns {ConflitPlacement[]|null}
  */
-export function conflitsDuPlacement(charge, { proposition = null } = {}) {
+export function conflitsDuPlacement(charge, { proposition = null } = {}, { etatPlaces: lire = etatPlaces } = {}) {
   const conflits = [];
   // Chaque tour déjà lu : sa source, sa proposition, et la table de chaque
   // personne assise, {id, numero}.
   const lus = [];
+  // Les tours relus dans une autre source que la leur, par proposition de
+  // la source (null pour le retenu) puis par rang : chacun ne se relit
+  // qu'une fois.
+  const relus = new Map();
   let lu = false;
   for (let tour = 1; tour <= charge.evenement.tours; tour += 1) {
-    const etat = etatPlaces(charge, { tour, proposition });
+    const etat = lire(charge, { tour, proposition });
     if (etat.source !== 'reservations' && etat.evalue) {
       lu = true;
-      const tablesParTour = historique(charge, etat, lus);
+      const tablesParTour = historique(etat, lus, (rang) => {
+        if (!relus.has(etat.proposition)) relus.set(etat.proposition, new Map());
+        const deLaSource = relus.get(etat.proposition);
+        if (!deLaSource.has(rang)) deLaSource.set(rang, tablesDe(lire(charge, { tour: rang + 1, proposition: etat.proposition })));
+        return deLaSource.get(rang);
+      });
       for (const { id: table, numero, conflits: deTable } of etat.tables) {
         for (const regle of deTable?.regles ?? []) {
           for (const personnes of regle.paires ?? regle.personnes.map((p) => [p])) {
@@ -87,15 +98,13 @@ function tablesDe(etat) {
 }
 
 // La table de chaque personne aux tours qui précèdent celui d'etat, lus dans
-// la source d'etat : un tour lu dans une autre source se relit par
-// etatPlaces avec la proposition d'etat, null pour le retenu. La source
-// d'etat porte son tour, donc tous ceux qui le précèdent, et la relecture
-// rend la même source.
-function historique(charge, etat, lus) {
+// la source d'etat : un tour lu dans une autre source se relit par relire(rang),
+// la lecture du tour avec la proposition d'etat, null pour le retenu, que
+// l'appelant garde. La source d'etat porte son tour, donc tous ceux qui le
+// précèdent, et la relecture rend la même source.
+function historique(etat, lus, relire) {
   return lus.map(({ source, proposition, tableDe }, rang) =>
-    source === etat.source && proposition === etat.proposition
-      ? tableDe
-      : tablesDe(etatPlaces(charge, { tour: rang + 1, proposition: etat.proposition })),
+    source === etat.source && proposition === etat.proposition ? tableDe : relire(rang),
   );
 }
 

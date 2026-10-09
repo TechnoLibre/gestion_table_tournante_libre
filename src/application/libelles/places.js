@@ -60,7 +60,9 @@ export const TABLE = new Map([
   ['RESERVATION_ABSENTE', () => "Cette réservation n'existe pas."],
   [
     'CONVERSION_IMPOSSIBLE',
-    () => "Ces réservations ne couvrent pas chaque tour à cette table : il n'y a rien à convertir.",
+    () =>
+      "Il n'y a rien à convertir : ces réservations ne couvrent pas chaque tour à cette table, " +
+      "une réservation « tous les tours » l'y tient déjà, ou la personne est exclue.",
   ],
 
   // --- Le retenu (§ 5.8, § 7.1) ----------------------------------------------
@@ -77,7 +79,7 @@ export const TABLE = new Map([
   [
     'RESERVATION_TOUS_LES_TOURS',
     () =>
-      'Cette personne est réservée ici pour tous les tours : la déposer hors des tables ne retire pas sa réservation. ' +
+      'Cette personne est réservée ici pour tous les tours : la retirer de cette table pour un seul tour ne retire pas sa réservation. ' +
       '« Retirer la réservation » la retire de tous les tours.',
   ],
 

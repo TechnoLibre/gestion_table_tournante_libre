@@ -1103,6 +1103,22 @@ describe('le marqueur de chaise vide : la règle d\'une liste de table (§ 8.9)'
     }
   });
 
+  test("à la place d'un occupant, 0, 1,5, −1 et 2^31 sont fautifs, comme tout identifiant ; 2^31 − 1 se lit", () => {
+    const regleDe = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+    const PROPOSITION = regleDe(regleDe(SCHEMA, 'charge'), 'propositions').element;
+    for (const occupant of [0, 1.5, 2 ** 31, -1]) {
+      const abimee = propositionAChaiseVide();
+      abimee.placement[1].sieges[1][1] = occupant;
+      assert.equal(premiereFaute(abimee, PROPOSITION), 'placement[1].sieges[1][1]', String(occupant));
+    }
+    const limite = propositionAChaiseVide();
+    limite.placement[1].sieges[1][1] = 2 ** 31 - 1;
+    assert.equal(premiereFaute(limite, PROPOSITION), null);
+    const occupant = regleDe(regleDe(PROPOSITION, 'placement').element, 'sieges').element.element;
+    const identifiant = regleDe(PROPOSITION, 'participants').element;
+    assert.deepEqual([occupant.min, occupant.max, occupant.nul], [identifiant.min, identifiant.max, true]);
+  });
+
   test("l'analyse lit un fichier dont une proposition porte une chaise vide, et sa relecture rend la liste telle qu'écrite", () => {
     const documentLu = documentValide();
     documentLu.charge.propositions = [propositionAChaiseVide()];

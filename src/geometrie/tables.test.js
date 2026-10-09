@@ -7,6 +7,7 @@
 // d'une table créée et nombre de places sous la poignée. Les valeurs
 // attendues se calculent à la main dans le commentaire qui les précède.
 import assert from 'node:assert/strict';
+import { HAUTEUR_LIGNE_SUPPOSEE, fautesBandes } from '../../test/bandes.js';
 import { describe, test } from '../../test/lanceur.js';
 import { constante } from './constantes.js';
 import { surLeSol } from './designation.js';
@@ -26,6 +27,7 @@ import {
   ecartsGrille,
   englobant,
   geometrieTable,
+  listeSurTable,
   placesSousPoignee,
 } from './tables.js';
 
@@ -46,48 +48,6 @@ const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 // Une table du fichier d'état : identifiant, numéro, forme et centre.
 const table = (id, forme, x, y) => ({ id, numero: id, sieges: null, forme, position: { x, y } });
 
-// Hauteur de ligne d'une liste que suppose l'épreuve des bandes : 1,25 corps,
-// au-dessus de la hauteur d'encre du gabarit sur les polices courantes. Le
-// dessin la mesure au navigateur ; le module de géométrie ne la connaît pas.
-const HAUTEUR_LIGNE_SUPPOSEE = 1.25 * TAILLE_TEXTE_LISTE_CM;
-
-// Les fautes « une liste passe sur une autre table » d'un ensemble de tables
-// posées {position, forme, places} : pour chaque paire ordonnée, la bande du
-// bloc de noms de la première — LARGEUR_BLOC_NOMS_CM de large depuis
-// origineListe, places + 1 lignes de haut, en-tête d'une table gelée
-// compris — recoupe le carré d'emprise de la seconde, bords exclus. Avec
-// avec, seules les paires où figure la table de ce rang, compté depuis 1,
-// sont examinées. Rend les fautes et le nombre de paires examinées.
-function fautesBandes(posees, { avec = null } = {}) {
-  const largeur = constante('LARGEUR_BLOC_NOMS_CM');
-  const geometries = posees.map(({ position, forme, places }, rang) => ({
-    g: geometrieTable(table(rang + 1, forme, position.x, position.y), places),
-    places,
-  }));
-  const fautes = [];
-  let paires = 0;
-  for (const { g, places } of geometries) {
-    const bande = {
-      gauche: g.origineListe.x,
-      droite: g.origineListe.x + largeur,
-      haut: g.origineListe.y,
-      bas: g.origineListe.y + (places + 1) * HAUTEUR_LIGNE_SUPPOSEE,
-    };
-    for (const { g: autre } of geometries) {
-      if (autre === g || (avec !== null && g.id !== avec && autre.id !== avec)) continue;
-      paires += 1;
-      const e = autre.rayonEmprise;
-      const recoupe =
-        autre.centre.x + e > bande.gauche &&
-        autre.centre.x - e < bande.droite &&
-        autre.centre.y + e > bande.haut &&
-        autre.centre.y - e < bande.bas;
-      if (recoupe) fautes.push(`bloc de la table ${g.id} (${g.centre.x}, ${g.centre.y}) sur la table ${autre.id} (${autre.centre.x}, ${autre.centre.y})`);
-    }
-  }
-  return { fautes, paires };
-}
-
 describe('constantes', () => {
   test('les valeurs du contrat', () => {
     assert.equal(PLANCHER_DIAMETRE, 70);
@@ -97,6 +57,7 @@ describe('constantes', () => {
     assert.equal(ECART_POIGNEE, 8);
     assert.equal(ECART_LISTE, 36);
     assert.equal(ECART_RANGEES, 300);
+    assert.equal(HAUTEUR_LIGNE_SUPPOSEE, 1.25 * TAILLE_TEXTE_LISTE_CM);
   });
 });
 
@@ -489,6 +450,55 @@ describe('caseLibre : la place d\u{2019}une table créée, sur la grille des dé
   });
 });
 
+describe('listeSurTable : la liste d\u{2019}une table passe sur une autre', () => {
+  const ronde = (id, x, y, places = 8) => ({ id, forme: 'ronde', position: { x, y }, places });
+  const geometrie = ({ id, forme, position, places }) => geometrieTable(table(id, forme, position.x, position.y), places);
+
+  test('une ronde de 8 en (330, 0) porte sa liste sur une autre en (813, 0), non l\u{2019}inverse ; au pas de 813, rien ne se couvre', () => {
+    // La liste de la première, de 486,4 à 986,4, couvre l'emprise de la
+    // seconde, de 692,6 à 933,4 ; celle de la seconde part vers la droite.
+    const [a, b] = [ronde(1, 330, 0), ronde(2, 813, 0)];
+    assert.equal(listeSurTable(geometrie(a), 8, geometrie(b)), true);
+    assert.equal(listeSurTable(geometrie(b), 8, geometrie(a)), false);
+    const [c, d] = [ronde(1, 0, 0), ronde(2, 813, 0)];
+    assert.equal(listeSurTable(geometrie(c), 8, geometrie(d)), false);
+    assert.equal(listeSurTable(geometrie(d), 8, geometrie(c)), false);
+  });
+
+  test('bords exclus : une emprise qui touche la bande ne la recoupe pas ; un centimètre de plus, si', () => {
+    // La bande d'une ronde de 8 en (0, 0) va de 156,4 à 656,4 : une table
+    // dont l'emprise commence exactement à 656,4 ne la recoupe pas.
+    const a = geometrie(ronde(1, 0, 0));
+    const largeur = constante('LARGEUR_BLOC_NOMS_CM');
+    const bord = a.origineListe.x + largeur;
+    const juste = geometrie(ronde(2, bord + a.rayonEmprise, 0));
+    assert.equal(listeSurTable(a, 8, juste), false);
+    const dedans = geometrie(ronde(2, bord + a.rayonEmprise - 1, 0));
+    assert.equal(listeSurTable(a, 8, dedans), true);
+    // En bas, la bande compte places + 1 lignes de HAUTEUR_LIGNE_SUPPOSEE.
+    const bas = a.origineListe.y + 9 * HAUTEUR_LIGNE_SUPPOSEE;
+    assert.equal(listeSurTable(a, 8, geometrie(ronde(2, 400, bas + a.rayonEmprise))), false);
+    assert.equal(listeSurTable(a, 8, geometrie(ronde(2, 400, bas + a.rayonEmprise - 1))), true);
+  });
+
+  test("l'épreuve des bandes et listeSurTable disent la même chose sur 300 paires tirées", () => {
+    let graine = 7;
+    const tirer = (n) => {
+      graine = (graine * 1103515245 + 12345) % 2147483648;
+      return graine % n;
+    };
+    let couvertes = 0;
+    for (let i = 0; i < 300; i += 1) {
+      const a = { id: 1, forme: tirer(2) === 0 ? 'ronde' : 'carree', position: { x: 0, y: 0 }, places: 2 + tirer(20) };
+      const b = { id: 2, forme: tirer(2) === 0 ? 'ronde' : 'carree', position: { x: tirer(1600) - 200, y: tirer(1200) - 600 }, places: 2 + tirer(20) };
+      const attendu = fautesBandes([a, b]).fautes.some((faute) => faute.startsWith('bloc de la table 1 '));
+      assert.equal(listeSurTable(geometrie(a), a.places, geometrie(b)), attendu, JSON.stringify([a, b]));
+      if (attendu) couvertes += 1;
+    }
+    assert.ok(couvertes > 20 && couvertes < 280, `${couvertes} paires couvertes`);
+  });
+});
+
 describe('placesSousPoignee', () => {
   const PAS_RAYON = 60 / (2 * Math.PI);
 
@@ -503,5 +513,11 @@ describe('placesSousPoignee', () => {
     assert.equal(placesSousPoignee(8, 0.4 * PAS_RAYON), 8);
     assert.equal(placesSousPoignee(8, 0.6 * PAS_RAYON), 9);
     assert.equal(placesSousPoignee(8, -0.6 * PAS_RAYON), 7);
+  });
+
+  test('un nombre de places qui n’est pas un entier ≥ 1, ou un écart non fini, lève RangeError', () => {
+    for (const [places, ecart] of [[8, Number.NaN], [2.5, 0], [8, Number.POSITIVE_INFINITY], [8, Number.NEGATIVE_INFINITY], [Number.NaN, 0], [0, 0], ['8', 0]]) {
+      assert.throws(() => placesSousPoignee(places, ecart), RangeError, `${String(places)}, ${String(ecart)}`);
+    }
   });
 });

@@ -482,11 +482,15 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
   });
 });
 
+// L'instant de prise qu'un verrou reçoit, de la forme qu'écrit l'horloge de
+// l'application ; la plateforme ne l'écrit nulle part.
+const PRISE = '2031-05-17T19:42:07-04:00';
+
 describe('fichiers web : ni verrou, ni explorateur, ni dossier choisi (§ 8.8)', () => {
   test("verrouiller rend { pris: true } sans rien écrire, et deverrouiller n'efface aucun verrou", async () => {
     const fs = await preparer();
-    expect(await fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', 'seance-a')).toStrictEqual({ pris: true });
-    expect(await fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', 'seance-a')).toStrictEqual({ pris: true });
+    expect(await fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', 'seance-a', PRISE)).toStrictEqual({ pris: true });
+    expect(await fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', 'seance-a', PRISE)).toStrictEqual({ pris: true });
     expect(await fs.lister(DOCUMENTS, '')).toStrictEqual([]);
 
     // Un verrou venu d'un dossier de la coquille reste où il est.
@@ -494,7 +498,7 @@ describe('fichiers web : ni verrou, ni explorateur, ni dossier choisi (§ 8.8)',
     await fs.ecrireAtomique(DOCUMENTS, 'soiree.gtt.verrou', verrou);
     await fs.deverrouiller(DOCUMENTS, 'soiree.gtt.verrou', 'seance-b');
     expect(await fs.lireTexte(DOCUMENTS, 'soiree.gtt.verrou')).toBe(verrou);
-    expect(await fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', 'seance-c')).toStrictEqual({ pris: true });
+    expect(await fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', 'seance-c', PRISE)).toStrictEqual({ pris: true });
     expect(await fs.lireTexte(DOCUMENTS, 'soiree.gtt.verrou')).toBe(verrou);
   });
 
@@ -609,7 +613,8 @@ describe('fichiers web : fautes de programmation', () => {
       () => fs.ajouterLigne(DOCUMENTS, 'journal.jsonl', 42),
       () => fs.ajouterLigne(DOCUMENTS, 'journal.jsonl', 'deux\nlignes'),
       () => fs.ajouterLigne(DOCUMENTS, 'journal.jsonl', 'retour\rchariot'),
-      () => fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', ''),
+      () => fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', '', PRISE),
+      () => fs.verrouiller(DOCUMENTS, 'soiree.gtt.verrou', 'seance-a', '2031-05-17T19:42:07Z'),
       () => fs.deverrouiller(DOCUMENTS, 'soiree.gtt.verrou', null),
       () => fs.enregistrerSous('', BRUTS),
       () => fs.enregistrerSous('liste.csv', 'nom;prenom'),

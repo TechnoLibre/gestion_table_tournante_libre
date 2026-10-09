@@ -23,7 +23,7 @@
 // ainsi le dossier de travail qu'aucun code n'a créé, ou qui a disparu, comme
 // le verrait la coquille.
 import { ErreurStockage } from '../src/stockage/erreurs.js';
-import { exigerCheminRelatif } from '../src/stockage/systeme_fichiers.js';
+import { exigerCheminRelatif, exigerDepuis } from '../src/stockage/systeme_fichiers.js';
 
 /**
  * Levée par chaque primitive d'une instance dont le processus est coupé
@@ -48,8 +48,9 @@ const REESSAIS_RENOMMAGE = 10;
 
 // Horloge d'un disque neuf, en millisecondes depuis l'époque Unix : le
 // 1er janvier 2026 à minuit UTC. Chaque fichier ou dossier qu'écrit une
-// primitive l'avance d'une seconde, si bien que modifie et la prise d'un
-// verrou ne dépendent que de la suite des écritures.
+// primitive l'avance d'une seconde, si bien que modifie ne dépend que de la
+// suite des écritures. L'instant de prise d'un verrou est celui que
+// verrouiller reçoit, et non celui de cette horloge.
 const ORIGINE_HORLOGE = Date.UTC(2026, 0, 1);
 const PAS_HORLOGE = 1000;
 
@@ -101,10 +102,6 @@ function replier(texte) {
   }).join('');
 }
 
-// Un instant de l'horloge sous la forme de celle de l'application,
-// AAAA-MM-JJTHH:MM:SS±HH:MM.
-const horodatage = (millisecondes) => `${new Date(millisecondes).toISOString().slice(0, 19)}+00:00`;
-
 function exigerChaine(valeur, quoi) {
   if (typeof valeur !== 'string') throw new TypeError(`${quoi} n'est pas une chaîne`);
 }
@@ -112,6 +109,10 @@ function exigerChaine(valeur, quoi) {
 function exigerSeance(seance) {
   if (typeof seance !== 'string' || seance === '') throw new TypeError("la séance n'est pas une chaîne non vide");
 }
+
+// Un chemin absolu, comme le rend un dialogue de dossier : un lecteur suivi
+// d'un séparateur, ou un séparateur en tête.
+const CHEMIN_ABSOLU = /^(?:[A-Za-z]:[\\/]|[\\/])/;
 
 // Vrai pour le contenu lu d'un verrou : {seance, pid, hote, depuis}.
 const estContenuVerrou = (contenu) =>
@@ -150,7 +151,8 @@ const estContenuVerrou = (contenu) =>
  * @param {string} [reglages.hote]  machine du processus ; un verrou d'un autre
  *        hôte rend vivant à null
  * @param {string[]} [reglages.dossiersChoisis]  chemins absolus que rend
- *        choisirDossier, un par appel, dans l'ordre, puis null comme quand
+ *        choisirDossier — un autre chemin lève TypeError à la création —, un
+ *        par appel, dans l'ordre, puis null comme quand
  *        l'opérateur annule : chacun sous l'identifiant choisi-<n>, n compté
  *        depuis 1, et inscrit parmi les racines du système, comme le fait la
  *        coquille (electron/fichiers.js). La racine choisie n'existe qu'une
@@ -204,8 +206,8 @@ export function creerFichiersSimules({
   hote = 'poste-epreuve',
   dossiersChoisis = [],
 } = {}) {
-  if (!Array.isArray(dossiersChoisis) || dossiersChoisis.some((chemin) => typeof chemin !== 'string' || chemin === '')) {
-    throw new TypeError('dossiersChoisis : un tableau de chemins, chaînes non vides');
+  if (!Array.isArray(dossiersChoisis) || dossiersChoisis.some((chemin) => typeof chemin !== 'string' || !CHEMIN_ABSOLU.test(chemin))) {
+    throw new TypeError('dossiersChoisis : un tableau de chemins absolus');
   }
   const etat = etatDuDisque(disque, insensibleCasse, separateur);
   const pid = etat.prochainPid;
@@ -511,8 +513,9 @@ export function creerFichiersSimules({
       disque.delete(loc.cle);
     }),
 
-    verrouiller: primitive('ecritures', (racine, chemin, seance) => {
+    verrouiller: primitive('ecritures', (racine, chemin, seance, depuis) => {
       exigerSeance(seance);
+      exigerDepuis(depuis);
       const loc = localiser(racine, chemin);
       if (!verrouDisponible) return { pris: true };
       exigerInscriptible(loc);
@@ -520,8 +523,7 @@ export function creerFichiersSimules({
       exigerPasDossier(loc);
       const present = disque.get(loc.cle);
       if (present !== undefined) return verrouPresent(texteDuNoeud(present));
-      const prise = avancer();
-      poserFichier(loc, `${JSON.stringify({ seance, pid, hote, depuis: horodatage(prise) })}\n`, prise);
+      poserFichier(loc, `${JSON.stringify({ seance, pid, hote, depuis })}\n`, avancer());
       return { pris: true };
     }),
 

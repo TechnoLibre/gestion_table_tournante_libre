@@ -176,15 +176,23 @@ export function deplacerVue(vueInitiale, pointeurInitial, pointeur) {
  * nombre de crans, un cran valant 100 px, 3 lignes ou une page selon deltaMode
  * (0, 1, 2) ; > 1 vers le haut (deltaY négatif), 1 sans mouvement. Lève
  * RangeError sur un autre deltaMode.
+ *
+ * Le facteur rendu est fini et > 0, ce que zoomerSous exige : un deltaY
+ * démesuré le porterait à 0 ou à Infinity. Sous des bornes, il se borne à
+ * [kMin / kMax, kMax / kMin], le plus grand pas qu'un geste fasse d'une borne
+ * à l'autre ; sans elles, à [1 / Number.MAX_VALUE, Number.MAX_VALUE]. Dans
+ * les deux cas, le k borné que zoomerSous en tire est celui du facteur exact.
  * @param {number} deltaY  @param {number} deltaMode
+ * @param {{kMin: number, kMax: number}|null} [bornes]
  * @returns {number}
  */
-export function facteurMolette(deltaY, deltaMode) {
+export function facteurMolette(deltaY, deltaMode, bornes = null) {
   const cran = CRAN_PAR_MODE[deltaMode];
   if (!Number.isInteger(deltaMode) || cran === undefined) {
     throw new RangeError(`deltaMode : 0, 1 ou 2 attendu, reçu ${String(deltaMode)}`);
   }
-  return FACTEUR_CRAN ** (-deltaY / cran);
+  const plafond = bornes === null ? Number.MAX_VALUE : bornes.kMax / bornes.kMin;
+  return Math.min(plafond, Math.max(1 / plafond, FACTEUR_CRAN ** (-deltaY / cran)));
 }
 
 /**
@@ -204,15 +212,17 @@ const FORME_TRANSFORM = new RegExp(`^translate\\((${NOMBRE}),(${NOMBRE})\\) scal
 
 /**
  * La vue que décrit un attribut transform de la forme qu'écrit transformDe.
- * Lève SyntaxError sur toute autre forme, et sur un k qui n'est pas > 0.
+ * Lève SyntaxError sur toute autre forme, sur un k qui n'est pas un nombre
+ * fini > 0, et sur un tx ou un ty non fini : « 1e999 » a la forme d'un nombre
+ * et se lit Infinity.
  * @param {string} texte
  * @returns {Vue}
  */
 export function vueDepuisTransform(texte) {
   const lu = FORME_TRANSFORM.exec(texte);
-  const k = lu === null ? Number.NaN : Number(lu[3]);
-  if (lu === null || !(k > 0) || !Number.isFinite(k)) {
+  const [tx, ty, k] = lu === null ? [] : [Number(lu[1]), Number(lu[2]), Number(lu[3])];
+  if (lu === null || !(k > 0) || ![k, tx, ty].every(Number.isFinite)) {
     throw new SyntaxError(`transform de vue attendu, reçu ${JSON.stringify(texte)}`);
   }
-  return { k, tx: Number(lu[1]), ty: Number(lu[2]) };
+  return { k, tx, ty };
 }

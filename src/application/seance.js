@@ -237,7 +237,7 @@ export function creerSeance({
     cadrage: null,
   };
 
-  // --- L'observation (A2) -----------------------------------------------------
+  // --- L'observation ------------------------------------------------------------
 
   // Les abonnés de subscribe, ceux de surAnnulation, et l'instantané rendu
   // depuis le dernier changement, null quand il est à refaire.
@@ -361,7 +361,7 @@ export function creerSeance({
 
   // Le cadrage mémorisé de l'événement ouvert, relu dans les réglages de la
   // racine ; null quand ils n'en portent pas, et pour des réglages que la
-  // lecture ne prend pas — la façade annonce REGLAGES_ILLISIBLES (A3).
+  // lecture ne prend pas — la façade annonce REGLAGES_ILLISIBLES.
   async function cadrageMemorise(ouvert) {
     try {
       const { reglages } = await lireReglages(fs, ouvert.racine);
@@ -445,9 +445,16 @@ export function creerSeance({
   async function prendreVerrou(ouvert, reprise = null) {
     let verrou;
     const avertissements = [];
+    const depuis = horloge.horodatage();
+    // Un verrou que le fichier porte au nom de cette séance est le sien, à
+    // chaque prise : celle d'après l'effacement le trouve ainsi quand la
+    // relecture d'effacerVerrou l'a posé.
+    const prendre = async () => {
+      const rendu = await verrouiller(ouvert, id, depuis);
+      return !rendu.pris && rendu.seance === id ? { pris: true } : rendu;
+    };
     try {
-      verrou = await verrouiller(ouvert, id);
-      if (!verrou.pris && verrou.seance === id) verrou = { pris: true };
+      verrou = await prendre();
       const confirme =
         !verrou.pris &&
         reprise !== null &&
@@ -456,8 +463,8 @@ export function creerSeance({
         verrou.depuis === reprise.depuis;
       if (!verrou.pris && (verrou.vivant === false || confirme)) {
         const ancien = verrou;
-        await effacerVerrou(ouvert, ancien.seance);
-        verrou = await verrouiller(ouvert, id);
+        await effacerVerrou(ouvert, ancien.seance, depuis);
+        verrou = await prendre();
         if (verrou.pris) {
           avertissements.push(avertissement('VERROU_REPRIS', { seance: ancien.seance, depuis: ancien.depuis }));
         }
@@ -477,14 +484,21 @@ export function creerSeance({
   }
 
   // Efface le verrou d'une autre séance, que prendreVerrou reprend : celui
-  // de la séance nommée, par deverrouiller, qui n'efface que lui ; un verrou
-  // illisible (seance null) n'a pas de séance qui le rende, et son fichier
-  // s'efface.
-  async function effacerVerrou(ouvert, seance) {
+  // de la séance nommée, par deverrouiller, qui n'efface que lui. Un verrou
+  // illisible (seance null) n'a pas de séance qui le rende : il se relit
+  // juste avant l'effacement, par verrouiller, et son fichier ne s'efface que
+  // s'il est toujours illisible. Un verrou valide posé depuis par une autre
+  // séance reste, et prendreVerrou le refuse ; un fichier disparu depuis
+  // laisse la prise à cette séance, que la prise suivante reconnaît comme la
+  // sienne. Entre la relecture et l'effacement reste une fenêtre de la durée
+  // d'un appel au système de fichiers.
+  async function effacerVerrou(ouvert, seance, depuis) {
     if (seance !== null) {
       await deverrouiller(ouvert, seance);
       return;
     }
+    const relu = await verrouiller(ouvert, id, depuis);
+    if (relu.pris || relu.seance !== null) return;
     await ouvert.fs.supprimer(ouvert.racine, ouvert.base + SUFFIXES.verrou);
   }
 
@@ -945,19 +959,19 @@ export function creerSeance({
   // Reprendre le verrou (§ 8.8) : le passage en écriture qui reprend le
   // verrou refusé que verrouAutre garde, une fois que l'opérateur l'a
   // confirmé en voyant sa séance et depuis quand (prendreVerrou). Sans
-  // verrou refusé, c'est un passage en écriture. Le refus d'un débloquer
-  // admet la reprise : sur un plan bloqué, ou relu bloqué, le verrou repris
-  // se rend aussitôt, la séance reste en lecture, et VERROU_REPRIS se lit
-  // parmi les avertissements du dernier geste ; débloquer passe ensuite.
+  // verrou refusé, c'est passerEnEcriture, ses refus compris : un plan
+  // bloqué lève LECTURE_SEULE BLOQUE. Le refus d'un débloquer admet la
+  // reprise : sur un plan bloqué, ou relu bloqué, le verrou repris se rend
+  // aussitôt, la séance reste en lecture, et VERROU_REPRIS se lit parmi les
+  // avertissements du dernier geste ; débloquer passe ensuite.
   async function reprendreVerrou() {
     const ouvert = exigerOuvert();
+    if (etat.verrouAutre === null) return passerEnEcriture();
     if (ouvert.formatPlusRecent) throw refusFormat();
     if (etat.mode === 'ecriture') return { avertissements: [] };
     exigerSupport();
-    const reprise = etat.verrouAutre;
-    return entrerSousVerrou(ouvert, reprise === null ? null : { seance: reprise.seance, depuis: reprise.depuis }, {
-      bloqueAdmis: true,
-    });
+    const { seance, depuis } = etat.verrouAutre;
+    return entrerSousVerrou(ouvert, { seance, depuis }, { bloqueAdmis: true });
   }
 
   // Prend le verrou — en reprenant celui que reprise nomme —, relit
@@ -1040,7 +1054,8 @@ export function creerSeance({
   // laisse tout en l'état, le support toujours rompu. Réussi, il demande le
   // type du support de la racine nouvelle, et SUPPORT_AMOVIBLE {dossier}
   // annonce la garantie affaiblie d'un support amovible, comme la règle du
-  // dossier de travail au démarrage (§ 8.8).
+  // dossier de travail au démarrage (§ 8.8). Le cadrage de l'événement se
+  // demande alors pour les réglages de la racine nouvelle (§ 8.5).
   //
   // Sans racine, le dossier se demande à l'opérateur par fs.choisirDossier ;
   // son annulation ne change rien, et rend null.
@@ -1076,6 +1091,12 @@ export function creerSeance({
       ailleurs: null,
       formatLu: null,
     });
+    // Le cadrage de l'événement suit la séance : demandé de nouveau pour la
+    // racine nouvelle, il y remplace celui qui attendait l'ancienne, que son
+    // support refuse.
+    if (etat.cadrage !== null) {
+      ecrivain.demander({ racine: nouvelle, evenement: ailleurs.charge.evenement.id, cadrage: etat.cadrage });
+    }
     if (etat.mode === 'ecriture') {
       try {
         avertissements.push(...(await prendreVerrou(ailleurs)));

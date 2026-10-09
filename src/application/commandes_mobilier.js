@@ -22,8 +22,8 @@
 // entre, vide à chaque tour : il ne gagne aucune raison de dérive. Une
 // proposition ne se réécrit jamais : elle dérive (§ 8.9, § 9). Supprimer une
 // table et changer les tours laissent propositions et retenu en dérive.
-import { caseLibre } from '../geometrie/tables.js';
-import { CIBLE_REDONDANCE_PAR_DEFAUT, SCHEMA, TOURS_MAX, capacite } from '../stockage/document.js';
+import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js';
+import { CIBLE_REDONDANCE_PAR_DEFAUT, SCHEMA, TOURS_MAX, capacite, cibleRedondance } from '../stockage/document.js';
 import { fautes } from '../stockage/placements.js';
 import { bilanChangementDefaut } from './bilans.js';
 import { controlerCapacite, lireEntier, retenuAuxCapacites } from './capacite.js';
@@ -79,6 +79,67 @@ function avecSieges(charge, changements, defaut = charge.evenement.siegesParDefa
   );
   suivante.retenu = structuredClone(retenuAuxCapacites(charge, touchees));
   return suivante;
+}
+
+// Les recouvrements qu'un agrandissement fait naître : pour chaque
+// table dont la capacité croît d'avant à apres, chaque autre table que sa
+// liste couvre désormais, ou dont la liste couvre désormais son emprise
+// agrandie — listeSurTable, d'un côté ou de l'autre —, quand ce
+// recouvrement n'existait pas avant le geste. LISTE_SUR_VOISINE {table,
+// voisine, numero, numeroVoisine}, remède le déplacement de la voisine vers
+// caseLibre des autres tables, chacune à sa capacité d'apres : un geste ne
+// bouge que ce qu'il nomme, et l'opérateur choisit.
+//
+// Une paire de tables se dit une fois, quel que soit le nombre de ses
+// tables agrandies : deux remèdes, l'un déplaçant chaque table, se
+// contrediraient. table est toujours une table agrandie, que le texte dit
+// telle. Quand les deux le sont, table est celle dont la liste couvre
+// l'autre, et le remède déplace la couverte ; si chacune couvre l'autre, la
+// première de la charge. Dans l'ordre des tables agrandies, puis des
+// voisines, celui de la charge.
+function listesSurVoisines(avant, apres) {
+  const geometrieDe = (charge, table) => geometrieTable(table, capacite(charge, table));
+  const listeSur = (charge, a, b) => listeSurTable(geometrieDe(charge, a), capacite(charge, a), geometrieDe(charge, b));
+  const couvre = (charge, a, b) => listeSur(charge, a, b) || listeSur(charge, b, a);
+  const anterieure = (table) => avant.tables.find(({ id }) => id === table.id);
+  const agrandie = (table) => capacite(apres, table) > capacite(avant, anterieure(table));
+  const dites = new Set();
+  // Les remèdes se suivent : une voisine déjà envoyée ailleurs compte à sa
+  // destination, pour que deux remèdes ne visent jamais la même case.
+  const destinations = new Map();
+  const avertissements = [];
+  for (const grande of apres.tables) {
+    if (!agrandie(grande)) continue;
+    for (const autre of apres.tables) {
+      if (autre.id === grande.id || !couvre(apres, grande, autre)) continue;
+      const paire = `${Math.min(grande.id, autre.id)}:${Math.max(grande.id, autre.id)}`;
+      if (dites.has(paire) || couvre(avant, anterieure(grande), anterieure(autre))) continue;
+      dites.add(paire);
+      const inverse = !listeSur(apres, grande, autre) && agrandie(autre) && listeSur(apres, autre, grande);
+      const [table, voisine] = inverse ? [autre, grande] : [grande, autre];
+      const autres = apres.tables
+        .filter(({ id }) => id !== voisine.id)
+        .map((place) => ({
+          position: destinations.get(place.id) ?? place.position,
+          forme: place.forme,
+          places: capacite(apres, place),
+        }));
+      const position = destinations.get(voisine.id)
+        ?? caseLibre(autres, { forme: voisine.forme, places: capacite(apres, voisine) });
+      destinations.set(voisine.id, position);
+      avertissements.push({
+        code: 'LISTE_SUR_VOISINE',
+        details: {
+          table: table.id,
+          voisine: voisine.id,
+          numero: table.numero,
+          numeroVoisine: voisine.numero,
+          remede: { commande: 'deplacerTable', arguments: { id: voisine.id, position } },
+        },
+      });
+    }
+  }
+  return avertissements;
 }
 
 // Le rendu d'un contrôle de capacité accepté : ses avertissements, ou son
@@ -153,7 +214,9 @@ function deplacerTable(charge, { id, position } = {}) {
 /**
  * changerPlacesTable {id, sieges, origine: 'champ'|'poignee'} (§ 6.2, § 7.1) :
  * la table est surchargée à sieges places, lues par lireEntier, contrôlées
- * par controlerCapacite selon leur origine ; le retenu suit.
+ * par controlerCapacite selon leur origine ; le retenu suit. Un
+ * agrandissement qui porte une liste sur une voisine le dit, après les
+ * avertissements de la capacité : LISTE_SUR_VOISINE (listesSurVoisines).
  */
 function changerPlacesTable(charge, { id, sieges: saisie, origine } = {}) {
   exigerModifiable(charge);
@@ -161,10 +224,11 @@ function changerPlacesTable(charge, { id, sieges: saisie, origine } = {}) {
   if (!ORIGINES.has(origine)) throw new TypeError(`origine : 'champ' ou 'poignee' attendue, reçu ${JSON.stringify(origine)}`);
   const sieges = entierSaisi(saisie);
   const avertissements = exigerCapacite(charge, id, sieges, origine);
+  const suivante = avecSieges(charge, new Map([[id, sieges]]));
   return {
-    charge: avecSieges(charge, new Map([[id, sieges]])),
+    charge: suivante,
     libelle: libelle('ENTREE_CHANGER_PLACES_TABLE', { numero: table.numero, sieges }),
-    avertissements,
+    avertissements: [...avertissements, ...listesSurVoisines(charge, suivante)],
   };
 }
 
@@ -178,10 +242,11 @@ function realignerTable(charge, { id } = {}) {
   const table = tableDe(charge, id);
   const sieges = charge.evenement.siegesParDefaut;
   const avertissements = exigerCapacite(charge, id, sieges, 'champ');
+  const suivante = avecSieges(charge, new Map([[id, null]]));
   return {
-    charge: avecSieges(charge, new Map([[id, null]])),
+    charge: suivante,
     libelle: libelle('ENTREE_REALIGNER_TABLE', { numero: table.numero, sieges }),
-    avertissements,
+    avertissements: [...avertissements, ...listesSurVoisines(charge, suivante)],
   };
 }
 
@@ -206,8 +271,10 @@ function changerDefaut(charge, { sieges: saisie, realigner } = {}) {
     avertissements.push({ code, details });
   }
   const realignees = realigner ? charge.tables.filter((table) => table.sieges !== null) : [];
+  const suivante = avecSieges(charge, new Map(realignees.map((table) => [table.id, null])), sieges);
+  avertissements.push(...listesSurVoisines(charge, suivante));
   return {
-    charge: avecSieges(charge, new Map(realignees.map((table) => [table.id, null])), sieges),
+    charge: suivante,
     libelle: libelle('ENTREE_CHANGER_DEFAUT', { sieges, realignees: realignees.length }),
     avertissements,
   };
@@ -264,12 +331,15 @@ function modifierReglage(charge, { cle, valeur } = {}) {
  * Σ r(p) du retenu ; une saisie lue par lireEntier, un entier ≥ 0, NON_ENTIER
  * sinon — un signe moins compris —, remède null. La valeur par défaut,
  * CIBLE_REDONDANCE_PAR_DEFAUT, retire le champ des réglages : la charge
- * s'écrit alors comme une charge qui ne l'a jamais porté, et la même valeur
- * que la cible courante est sans effet.
+ * s'écrit alors comme une charge qui ne l'a jamais porté. La même valeur que
+ * la cible courante, lue par cibleRedondance, est SANS_EFFET, champ écrit ou
+ * non : une cible de 1000 écrite au fichier ne se retire pas par une saisie
+ * qui ne change rien.
  */
 function changerCibleRedondance(charge, { cible: saisie } = {}) {
   exigerModifiable(charge);
   const cible = entierSaisi(saisie);
+  if (cible === cibleRedondance(charge)) throw refus('SANS_EFFET', { commande: 'changerCibleRedondance' });
   const suivante = structuredClone(charge);
   if (cible === CIBLE_REDONDANCE_PAR_DEFAUT) delete suivante.reglages.cibleRedondance;
   else suivante.reglages.cibleRedondance = cible;

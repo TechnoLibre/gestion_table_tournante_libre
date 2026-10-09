@@ -64,7 +64,7 @@
 // le fichier sans dire où ni si l'opérateur y renonce, et la primitive rend
 // le nom proposé.
 import { ErreurStockage } from './erreurs.js';
-import { exigerCheminRelatif } from './systeme_fichiers.js';
+import { exigerCheminRelatif, exigerDepuis } from './systeme_fichiers.js';
 
 // Le dossier du produit dans l'OPFS, et la racine documents qui le désigne.
 const DOSSIER_PRODUIT = 'gestion_table_tournante_libre';
@@ -475,8 +475,9 @@ export function creerFichiersWeb() {
       });
     },
 
-    verrouiller: async (racine, chemin, seance) => {
+    verrouiller: async (racine, chemin, seance, depuis) => {
       exigerSeance(seance);
+      exigerDepuis(depuis);
       localiser(racine, chemin);
       return { pris: true };
     },

@@ -15,8 +15,8 @@ import { CATALOGUE } from '../demo/catalogue.js';
 import { LIVREES, texteLivre } from '../demo/livrees.js';
 import { rechercher } from '../moteur/recherche.js';
 import { serialiser } from '../stockage/canonique.js';
-import { creer as creerDansLeDepot } from '../stockage/depot.js';
-import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { creer as creerDansLeDepot, enregistrer as enregistrerDansLeDepot } from '../stockage/depot.js';
+import { FORMAT, analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
@@ -181,7 +181,7 @@ describe('demarrer : une détermination par séance (§ 8.6)', () => {
     assert.deepEqual(appels, [['changerRacine', DOC]]);
   });
 
-  test('les cinq issues de S8 rendent leurs avis, dans l’ordre d’Avis', async () => {
+  test('les cinq issues du dossier de travail rendent leurs avis, dans l’ordre d’Avis', async () => {
     const cas = [
       [{}, [{ code: 'NON_PUBLIE', details: {} }]],
       [{ executable: SOUS_APPDATA }, [{ code: 'DONNEES_APPLICATIVES', details: {} }]],
@@ -213,7 +213,7 @@ describe('demarrer : une détermination par séance (§ 8.6)', () => {
     assert.deepEqual(facade.explorateur(), { disponible: true, raison: null });
   });
 
-  test('des réglages locaux corrompus ajoutent REGLAGES_ILLISIBLES après les avis de S8', async () => {
+  test('des réglages locaux corrompus ajoutent REGLAGES_ILLISIBLES après les avis du dossier de travail', async () => {
     const fs = creerFichiersSimules();
     fs.deposer('documents', 'reglages_locaux.json', '{ pas du JSON');
     const { facade } = monter({ fs });
@@ -246,6 +246,28 @@ describe('demarrer : une détermination par séance (§ 8.6)', () => {
 });
 
 // --- Les questions (§ 8.6) ---------------------------------------------------
+
+describe('une opération lancée pendant demarrer', () => {
+  test('attend la détermination en cours, et lit le dossier retenu ; une seule détermination', async () => {
+    const fs = creerFichiersSimules();
+    const sondes = [];
+    const sonder = fs.sonder;
+    fs.sonder = async (racine) => {
+      sondes.push(racine.id);
+      return sonder(racine);
+    };
+    const { facade } = monter({ fs });
+    fs.deposerDossier('documents');
+    await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+    const demarrage = facade.demarrer();
+    const [lignes, corbeille] = await Promise.all([facade.lister(), facade.corbeille()]);
+    assert.deepEqual(lignes.map(({ base }) => base), [LUCIOLES]);
+    assert.deepEqual(corbeille, []);
+    assert.equal((await demarrage).dossier.racine.id, 'documents');
+    assert.equal(await facade.demarrer(), await demarrage);
+    assert.deepEqual(sondes, ['documents']);
+  });
+});
 
 describe('les questions du dossier de travail (§ 8.6)', () => {
   // data/ porte deux événements, posés par un premier processus ; le second,
@@ -282,6 +304,33 @@ describe('les questions du dossier de travail (§ 8.6)', () => {
     assert.equal(refus.code, 'QUESTION_EN_ATTENTE');
     assert.deepEqual(refus.details, { question: 'PORTABLE_NON_INSCRIPTIBLE', remede: null });
     assert.equal(typeof libelle(refus.code, refus.details), 'string');
+  });
+
+  test('tant que la question attend, chaque opération qui lit ou écrit le dossier se refuse QUESTION_EN_ATTENTE, sans rien écrire', async () => {
+    const { fs } = await dataQuiRefuse();
+    const { facade, appels } = monter({ fs });
+    await facade.demarrer();
+    const avant = ecritures(fs);
+    const operations = [
+      ['lister', () => facade.lister()],
+      ['creer', () => facade.creer({ nom: 'Soirée des Merles' })],
+      ['chargerDemonstration', () => facade.chargerDemonstration(DEMONSTRATIONS[0].cle)],
+      ['copier', () => facade.copier(LUCIOLES, { nom: 'Variante' })],
+      ['renommer', () => facade.renommer(LUCIOLES, { nom: 'Variante' })],
+      ['supprimer', () => facade.supprimer(LUCIOLES)],
+      ['corbeille', () => facade.corbeille()],
+      ['importerFichier', () => facade.importerFichier()],
+      ['importerDepuisAutre', () => facade.importerDepuisAutre()],
+      ['ouvrirExplorateur', () => facade.ouvrirExplorateur()],
+    ];
+    assert.equal(operations.length, 10);
+    for (const [nom, operation] of operations) {
+      const refus = await refusDe(operation());
+      assert.equal(refus.code, 'QUESTION_EN_ATTENTE', nom);
+      assert.deepEqual(refus.details, { question: 'PORTABLE_NON_INSCRIPTIBLE', remede: null }, nom);
+    }
+    assert.equal(ecritures(fs), avant);
+    assert.deepEqual(appels, []);
   });
 
   test('« reessayer » refait la détermination : deux sondes de plus, la même question', async () => {
@@ -507,6 +556,39 @@ describe('lister (§ 8.1, § 19.4)', () => {
     );
   });
 
+  test("un .gtt.verrou dont la lecture échoue autrement qu'ABSENT se dit illisible, sans écrire ; un absent n'est pas un verrou", async () => {
+    const { fs, facade } = await deuxEvenements();
+    fs.deposer('portable', `soiree-a${SUFFIXES.verrou}`, '{}');
+    const lireTexte = fs.lireTexte;
+    fs.lireTexte = async (racine, chemin) => {
+      if (chemin === `soiree-a${SUFFIXES.verrou}`) throw new ErreurStockage('LECTURE', { chemin, dossier: PORTABLE.chemin, cause: 'EACCES' });
+      return lireTexte(racine, chemin);
+    };
+    const avant = ecritures(fs);
+    const lignes = await facade.lister();
+    assert.equal(ecritures(fs), avant);
+    assert.deepEqual(
+      lignes.map(({ base, verrou }) => [base, verrou]),
+      [
+        ['soiree-a', { seance: null, depuis: null }],
+        ['petite', null],
+      ],
+    );
+  });
+
+  test("un journal dont une ligne n'est pas de l'UTF-8 : la dernière modification est celle de la dernière entrée lue avant elle", async () => {
+    const fs = creerFichiersSimules();
+    const { facade } = monter({ fs });
+    await facade.demarrer();
+    const base = await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+    const journal = UTF8.encode(fs.contenu('documents', base + SUFFIXES.journal));
+    fs.deposerOctets('documents', base + SUFFIXES.journal, new Uint8Array([...journal, 0xff, 0xfe, 0x0a]));
+    const avant = ecritures(fs);
+    const [ligne] = await facade.lister();
+    assert.equal(ecritures(fs), avant);
+    assert.equal(ligne.derniereModification, '2031-05-17T08:00:00-04:00');
+  });
+
   test('signalements : état vide, journal seul, doublons ; rien pour les autres fichiers', async () => {
     const fs = creerFichiersSimules();
     const { facade } = monter({ fs });
@@ -640,6 +722,36 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.equal(par.proposee.mesuresDuRetenu, null);
     assert.equal(par['soiree-a'].meilleureDuClassement, null);
     assert.equal(par.petite.meilleureDuClassement, null);
+  });
+
+  test("un journal en avance d'une entrée : la ligne porte la proposition et le nombre que montre le bloc après ouverture, sans rien écrire", async () => {
+    const montage = await deuxEvenements();
+    const { fs, facade } = montage;
+    // L'état d'une soirée sans proposition ; le journal porte en plus la
+    // génération dont l'état ne s'est pas écrit.
+    const charge = analyser(texteLivre('petite-conflit')).charge;
+    charge.evenement = { ...charge.evenement, id: 'evt-avance', nom: 'Soirée en avance' };
+    const ouvert = await creerDansLeDepot(fs, PORTABLE, charge, {
+      libelle: libelle('ENTREE_CREATION', { nom: charge.evenement.nom }),
+      nomJalon: libelle('JALON_CREATION'),
+      horodatage: DEPART,
+      produitVersion: V1,
+    });
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 4, nombre: 2, arret: 300 });
+    const apres = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
+    fs.pannes.renommage('portable', 11);
+    const refus = await refusDe(enregistrerDansLeDepot(ouvert, apres, { libelle: 'Génération', horodatage: DEPART, produitVersion: V1 }));
+    assert.equal(refus.code, 'ETAT_NON_ECRIT');
+    assert.equal(analyser(fs.contenu('portable', ouvert.base + SUFFIXES.etat)).charge.propositions.length, 0);
+    const avant = ecritures(fs);
+    const ligne = (await listerResume(facade)).find(({ base }) => base === ouvert.base);
+    assert.equal(ecritures(fs), avant);
+    await montage.seance.ouvrir(ouvert.base);
+    const bloc = resumeDuMeilleur(montage.seance.charge);
+    assert.notEqual(bloc, null);
+    assert.deepEqual(ligne.meilleureDuClassement, bloc);
+    assert.equal(ecritures(fs), avant);
   });
 
   test('lister lit chaque état une fois, celle du dépôt ; resumer le relit une fois de plus pour ses deux résumés', async () => {
@@ -1068,6 +1180,18 @@ describe('copier (§ 8.7)', () => {
     assert.equal(fs.contenu('documents', NFD + SUFFIXES.etat), null);
   });
 
+  test("d'un format plus récent : LECTURE_SEULE relayée avec remede null, rien d'écrit", async () => {
+    const { fs, facade } = monter();
+    await facade.demarrer();
+    const texte = texteEtat({ id: 'evt-lucioles', nom: LUCIOLES }).replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`);
+    fs.deposer('documents', LUCIOLES + SUFFIXES.etat, texte);
+    const avant = ecritures(fs);
+    const refus = await refusDe(facade.copier(LUCIOLES, { nom: 'Variante des Lucioles' }));
+    assert.equal(refus.code, 'LECTURE_SEULE');
+    assert.deepEqual(refus.details, { raison: 'FORMAT_PLUS_RECENT', remede: null });
+    assert.equal(ecritures(fs), avant);
+  });
+
   test('des Documents trop profonds pour le nom : CHEMIN_TROP_LONG, rien d’écrit', async () => {
     const { fs, facade } = monter({ fs: creerFichiersSimules({ documents: PROFOND }) });
     await facade.demarrer();
@@ -1218,6 +1342,39 @@ describe('renommer (§ 8.7, § 8.8)', () => {
     assert.equal(montage.fs.contenu('documents', LUCIOLES + SUFFIXES.verrou), null);
   });
 
+  test("l'événement ouvert, renommé d'un nom que les Documents ne portent pas : refusé, il se rouvre en lecture sous sa base", async () => {
+    const montage = monter({ fs: creerFichiersSimules({ documents: PROFOND }) });
+    const { fs, facade, appels } = montage;
+    await facade.demarrer();
+    fs.deposer('documents', `Court${SUFFIXES.etat}`, texteEtat({ id: 'evt-court', nom: 'Court' }));
+    await montage.seance.ouvrir('Court');
+    appels.length = 0;
+    const refus = await refusDe(facade.renommer('Court', { nom: 'x'.repeat(120) }));
+    assert.equal(refus.code, 'CHEMIN_TROP_LONG');
+    assert.deepEqual(appels, [['fermer'], ['ouvrir', 'Court']]);
+    assert.deepEqual([montage.seance.ouvert.base, montage.seance.mode], ['Court', 'lecture']);
+    assert.equal(fs.contenu('documents', `Court${SUFFIXES.verrou}`), null);
+  });
+
+  test('bloqué par une autre séance entre le contrôle et le verrou : la relecture sous le verrou le refuse, et le verrou se rend', async () => {
+    const { fs, facade } = monter();
+    await facade.demarrer();
+    await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+    const bloque = texteEtat({ id: 'evt-lucioles', nom: LUCIOLES }).replace('"etat":"brouillon"', '"etat":"bloque"');
+    assert.notEqual(bloque, texteEtat({ id: 'evt-lucioles', nom: LUCIOLES }));
+    const verrouiller = fs.verrouiller;
+    fs.verrouiller = async (...parametres) => {
+      fs.deposer('documents', LUCIOLES + SUFFIXES.etat, bloque);
+      return verrouiller(...parametres);
+    };
+    const refus = await refusDe(facade.renommer(LUCIOLES, { nom: CERFS }));
+    assert.equal(refus.code, 'LECTURE_SEULE');
+    assert.deepEqual(refus.details, { raison: 'BLOQUE', remede: { geste: 'debloquer' } });
+    assert.equal(fs.contenu('documents', LUCIOLES + SUFFIXES.verrou), null);
+    assert.equal(fs.contenu('documents', CERFS + SUFFIXES.etat), null);
+    assert.equal(fs.contenu('documents', LUCIOLES + SUFFIXES.etat), bloque);
+  });
+
   test('le verrou d’une séance vivante : VERROU_PRIS, rien ne bouge ; celui d’une séance morte s’efface', async () => {
     const disque = new Map();
     const fs = creerFichiersSimules({ disque });
@@ -1225,7 +1382,7 @@ describe('renommer (§ 8.7, § 8.8)', () => {
     await facade.demarrer();
     await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
     const voisin = creerFichiersSimules({ disque });
-    await voisin.verrouiller(DOC, LUCIOLES + SUFFIXES.verrou, 'seance-voisine');
+    await voisin.verrouiller(DOC, LUCIOLES + SUFFIXES.verrou, 'seance-voisine', '2031-05-17T09:30:00-04:00');
     const avant = await photographier(fs, DOC);
     assert.equal(Object.keys(avant).length, 3);
     const ecrituresAvant = ecritures(fs);
@@ -1286,7 +1443,7 @@ describe('supprimer (§ 8.7, § 8.8)', () => {
     await facade.demarrer();
     await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
     const mort = creerFichiersSimules({ disque });
-    await mort.verrouiller(DOC, LUCIOLES + SUFFIXES.verrou, 'seance-morte');
+    await mort.verrouiller(DOC, LUCIOLES + SUFFIXES.verrou, 'seance-morte', '2031-05-17T09:30:00-04:00');
     mort.pannes.couperApres(0);
     const avant = ecritures(fs);
     await facade.supprimer(LUCIOLES);
@@ -1329,13 +1486,14 @@ describe('supprimer (§ 8.7, § 8.8)', () => {
       await facade.demarrer();
       await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
       const autre = creerFichiersSimules({ disque, ...reglages });
-      await autre.verrouiller(DOC, LUCIOLES + SUFFIXES.verrou, 'seance-autre');
+      await autre.verrouiller(DOC, LUCIOLES + SUFFIXES.verrou, 'seance-autre', '2031-05-17T09:30:00-04:00');
       const avant = await photographier(fs, DOC);
       assert.equal(Object.keys(avant).length, 3);
       const ecrituresAvant = ecritures(fs);
       const refus = await refusDe(facade.supprimer(LUCIOLES));
       assert.equal(refus.code, 'VERROU_PRIS');
       assert.equal(refus.details.vivant, vivant);
+      assert.equal(refus.details.remede, null);
       // La seule sonde, refusée.
       assert.equal(ecritures(fs), ecrituresAvant + 1);
       assert.deepEqual(await photographier(fs, DOC), avant);

@@ -408,7 +408,7 @@ function enReserve(retenu, tour, id) {
 
 // Le rang de la table idTable dans le retenu, la table ajoutée vide à chaque
 // tour quand il ne la déclare pas encore — une table créée après la
-// retenue (A4 l'y ajoute aussi).
+// retenue, que creerTable y ajoute aussi.
 function rangDeTable(retenu, idTable, places) {
   const rang = retenu.tables.indexOf(idTable);
   if (rang >= 0) return rang;
@@ -452,16 +452,19 @@ function retouche(charge, suivante, remedeDe = () => null) {
 }
 
 // Le remède d'un retrait du tour que la réservation de la personne à sa
-// table interdit : le retrait de cette réservation, la première dans l'ordre
-// canonique qui tient la personne à la table de la violation au tour, « tous
-// les tours » avant « ce tour ». null quand aucune violation RESERVATION ne
-// nomme la personne.
+// table interdit : le retrait de cette réservation, celle qui tient la
+// personne à la table de la violation au tour, la plus étroite d'abord —
+// « ce tour » avant « tous les tours », puis l'ordre canonique. Quand les
+// deux portées coexistent, retirer « ce tour » lève le refus et garde les
+// autres tours, que retirer « tous les tours » perdrait. null quand aucune
+// violation RESERVATION ne nomme la personne.
 function remedeDuRetrait(charge, participant, tour, violations) {
   const violation = violations.find((v) => v.code === 'RESERVATION' && v.participant === participant);
   if (violation === undefined) return null;
+  const largeur = ({ portee }) => (portee === 'tous' ? 1 : 0);
   const [tenue] = charge.reservations
     .filter((r) => r.participant === participant && r.table === violation.table && (r.portee === 'tous' || r.tour === tour))
-    .sort(ordreDesReservations);
+    .sort((a, b) => largeur(a) - largeur(b) || ordreDesReservations(a, b));
   if (tenue === undefined) return null;
   return {
     commande: 'retirerReservation',

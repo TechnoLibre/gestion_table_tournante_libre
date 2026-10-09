@@ -26,6 +26,8 @@
  * @property {(id: unknown) => void} annuler
  */
 
+import { lireHorodatage } from './format.js';
+
 const deux = (n) => String(n).padStart(2, '0');
 
 // Un décalage en minutes à l'est de UTC, écrit ±HH:MM.
@@ -74,7 +76,6 @@ export function creerHorlogeSysteme() {
 // l'horloge du système. Les jours se comptent depuis cette origine.
 
 const MS_PAR_JOUR = 86_400_000;
-const FORME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})([+-])(\d{2}):(\d{2})$/;
 
 // Le nombre de jours depuis 1970-01-01 d'une date civile.
 function joursDepuisOrigine(annee, mois, jour) {
@@ -101,19 +102,12 @@ function dateCivile(jours) {
   return { annee: anneeDEre + ere * 400 + (mois <= 2 ? 1 : 0), mois, jour };
 }
 
-// Un horodatage de départ lu : l'instant UTC en millisecondes et le décalage
-// en minutes à l'est de UTC. Une date hors du calendrier lève.
+// Un horodatage de départ lu par lireHorodatage (format.js) : l'instant UTC
+// en millisecondes et le décalage en minutes à l'est de UTC. Une autre
+// forme, ou une date hors du calendrier, lève RangeError.
 function lireDepart(depart) {
-  const morceaux = FORME.exec(String(depart));
-  if (morceaux === null) throw new RangeError(`horloge : départ AAAA-MM-JJTHH:MM:SS±HH:MM attendu, reçu ${depart}`);
-  const [annee, mois, jour, heure, minute, seconde] = morceaux.slice(1, 7).map(Number);
-  const decalage = (morceaux[7] === '-' ? -1 : 1) * (Number(morceaux[8]) * 60 + Number(morceaux[9]));
-  const jours = joursDepuisOrigine(annee, mois, jour);
-  const relue = dateCivile(jours);
-  if (mois < 1 || mois > 12 || relue.mois !== mois || relue.jour !== jour || heure > 23 || minute > 59 || seconde > 59) {
-    throw new RangeError(`horloge : ${depart} n'est pas un instant du calendrier`);
-  }
-  const local = jours * MS_PAR_JOUR + ((heure * 60 + minute) * 60 + seconde) * 1000;
+  const { annee, mois, jour, heure, minute, seconde, decalage } = lireHorodatage(depart);
+  const local = joursDepuisOrigine(annee, mois, jour) * MS_PAR_JOUR + ((heure * 60 + minute) * 60 + seconde) * 1000;
   return { utc: local - decalage * 60_000, decalage };
 }
 
@@ -125,7 +119,8 @@ function lireDepart(depart) {
  * qui échoit dans la fenêtre part dans le même avancer ; à son retour,
  * l'horloge a avancé de ms exactement. Il n'attend aucune promesse : l'épreuve
  * attend elle-même ce que les rappels lancent. Un rappel qui lève arrête
- * avancer à son échéance, et l'erreur remonte.
+ * avancer à son échéance, et l'erreur remonte. Un rappel qui appelle avancer
+ * lève : instant() ne recule jamais.
  *
  * horodatage() garde le décalage du départ ; instant() part de 0.
  *
@@ -174,18 +169,28 @@ export function creerHorlogePilotee({ depart = '2026-10-06T19:00:00-04:00' } = {
     return choisie;
   }
 
+  // Vrai pendant qu'avancer déclenche ses minuteries : un rappel qui
+  // avancerait à son tour ferait reculer instant() au retour.
+  let enCours = false;
+
   function avancer(ms) {
     if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) {
       throw new RangeError(`horloge : avancer attend un délai fini et positif, reçu ${String(ms)}`);
     }
-    const fin = ecoule + ms;
-    for (let suivante = prochaine(fin); suivante !== null; suivante = prochaine(fin)) {
-      const { fn } = enAttente.get(suivante.id);
-      enAttente.delete(suivante.id);
-      ecoule = suivante.echeance;
-      fn();
+    if (enCours) throw new Error('horloge : avancer ré-entrant, appelé depuis un rappel');
+    enCours = true;
+    try {
+      const fin = ecoule + ms;
+      for (let suivante = prochaine(fin); suivante !== null; suivante = prochaine(fin)) {
+        const { fn } = enAttente.get(suivante.id);
+        enAttente.delete(suivante.id);
+        ecoule = suivante.echeance;
+        fn();
+      }
+      ecoule = fin;
+    } finally {
+      enCours = false;
     }
-    ecoule = fin;
     return undefined;
   }
 

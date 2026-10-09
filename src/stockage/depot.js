@@ -562,21 +562,38 @@ function avertir({ examen, journal, revision, rattrape, ecartees, recree, format
   return avertissements;
 }
 
+/**
+ * La règle du rattrapage d'un journal en avance (§ 8.8), pure : le dernier
+ * instant restituable du journal apparié, quand sa révision suit d'une seule
+ * celle de l'état, donne la charge, canonisée, la révision et la version de
+ * l'état rattrapé en mémoire, et ce que l'en-tête de l'état annonce sans que
+ * sa charge le porte ne compte plus. Sinon l'état reste tel quel. Rien ne
+ * s'écrit : l'ouverture la suit, et le premier geste réécrit l'état.
+ *
+ * @param {{charge: Object, revision: number, produitVersion: string, manquants: Object}} etat
+ * @param {{charge: Object, revision: number, journal: Object}|null} instant
+ *        le dernier instant restituable du journal, null sans journal
+ * @returns {{charge: Object, revision: number, produitVersion: string, manquants: Object, rattrape: boolean}}
+ */
+export function rattraper(etat, instant) {
+  const { charge, revision, produitVersion, manquants } = etat;
+  if (instant === null || instant.revision !== revision + 1) return { charge, revision, produitVersion, manquants, rattrape: false };
+  return {
+    charge: canoniser(instant.charge),
+    revision: instant.revision,
+    produitVersion: versionDe(instant.journal, instant.revision),
+    manquants: AUCUN_MANQUANT,
+    rattrape: true,
+  };
+}
+
 // L'Ouvert d'une source — état, .precedent ou instant du journal — et du
-// journal trouvé pour elle. rattraper : un journal en avance d'une seule
-// entrée sur la source donne sa charge, sa révision et sa version, et ce que
-// l'en-tête de la source annonce sans que sa charge le porte ne compte plus.
-// La source d'un format plus récent, ou un journal d'un format plus récent,
-// gardent l'Ouvert en lecture seule.
-function assembler({ fs, racine, base, source, trouve, instant, rattraper }) {
-  let { charge, revision, produitVersion, manquants } = source;
-  const rattrape = rattraper && instant !== null && instant.revision === revision + 1;
-  if (rattrape) {
-    charge = canoniser(instant.charge);
-    revision = instant.revision;
-    produitVersion = versionDe(instant.journal, revision);
-    manquants = AUCUN_MANQUANT;
-  }
+// journal trouvé pour elle. avecRattrapage : la source suit la règle de
+// rattraper. La source d'un format plus récent, ou un journal d'un format
+// plus récent, gardent l'Ouvert en lecture seule.
+function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage }) {
+  const lu = avecRattrapage ? rattraper(source, instant) : { ...source, rattrape: false };
+  const { charge, revision, produitVersion, manquants, rattrape } = lu;
   const journal = instant?.journal ?? null;
   const ecartees = journal?.ecartees ?? trouve.lu?.ecartees ?? 0;
   const examen = examiner(charge);
@@ -746,7 +763,7 @@ export async function ouvrir(fs, racine, base) {
   if (etat.lecture === null) throw await refuser(vue, base, etat.details ?? { raison: 'ABSENT', chemin: null });
   const trouve = await journalDe(vue, base, etat.lecture.charge.evenement.id);
   const source = depuisLecture(etat.lecture, surDisque(etat.texte, etat));
-  return assembler({ fs, racine, base, source, trouve, instant: instantDe(trouve.lu), rattraper: true });
+  return assembler({ fs, racine, base, source, trouve, instant: instantDe(trouve.lu), avecRattrapage: true });
 }
 
 /**
@@ -799,7 +816,7 @@ export async function ouvrirSecours(fs, racine, base, source) {
     const { lecture } = precedent;
     const trouve = await journalDe(vue, base, lecture.charge.evenement.id);
     const depuis = depuisLecture(lecture, disque);
-    return assembler({ fs, racine, base, source: depuis, trouve, instant: instantDe(trouve.lu), rattraper: false });
+    return assembler({ fs, racine, base, source: depuis, trouve, instant: instantDe(trouve.lu), avecRattrapage: false });
   }
   const trouve = await (etat.lecture === null
     ? journalSansEtat(vue, base)
@@ -823,7 +840,7 @@ export async function ouvrirSecours(fs, racine, base, source) {
     manquants: AUCUN_MANQUANT,
     ...disque,
   };
-  return assembler({ fs, racine, base, source: depuis, trouve, instant, rattraper: false });
+  return assembler({ fs, racine, base, source: depuis, trouve, instant, avecRattrapage: false });
 }
 
 // Un Ouvert en lecture seule — un fichier qu'il a lu est d'un format plus
@@ -1265,15 +1282,18 @@ export async function nommer(ouvert, { nom, horodatage, libelleReprise }) {
 }
 
 /**
- * Prend le verrou de la séance sur l'événement (§ 8.8) : le Verrou que rend
- * le système de fichiers, tel quel.
+ * Prend le verrou de la séance sur l'événement (§ 8.8), daté de depuis, que
+ * la séance lit à son horloge : le Verrou que rend le système de fichiers,
+ * tel quel.
  *
  * @param {Ouvert} ouvert
  * @param {string} seance
+ * @param {string} depuis  AAAA-MM-JJTHH:MM:SS±HH:MM ; une autre forme lève
+ *        TypeError sans rien créer
  * @returns {Promise<import('./systeme_fichiers.js').Verrou>}
  */
-export async function verrouiller({ fs, racine, base }, seance) {
-  return fs.verrouiller(racine, base + SUFFIXES.verrou, seance);
+export async function verrouiller({ fs, racine, base }, seance, depuis) {
+  return fs.verrouiller(racine, base + SUFFIXES.verrou, seance, depuis);
 }
 
 /**

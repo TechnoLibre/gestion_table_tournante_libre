@@ -8,8 +8,9 @@
 // Une opération pose une valeur au bout d'un chemin, ou retire
 // l'enregistrement qu'il désigne : { op: 'poser', chemin, valeur } ou
 // { op: 'retirer', chemin }. Un champ facultatif du schéma (optionnel) se
-// pose aussi quand son objet ne le porte pas, et se retire par sa clé. Un chemin est une liste d'étapes depuis la
-// charge : une clé d'objet, chaîne ; un rang de liste, entier ≥ 0 ; ou
+// pose aussi quand son objet ne le porte pas, et se retire par sa clé. Un
+// chemin est une liste d'étapes depuis la charge : une clé d'objet, chaîne ;
+// un rang de liste, entier ≥ 0 ; ou
 // { id }, qui désigne dans une liste d'enregistrements à identifiant —
 // participants, tables, propositions — l'enregistrement de cet identifiant,
 // et non une place.
@@ -135,24 +136,26 @@ function comparer(a, b, regle, chemin, operations) {
   } else if (a.length !== b.length) {
     operations.push({ op: 'poser', chemin, valeur: b });
   } else if (regle.element === IDENTIFIANT || regle.element === OCCUPANT) {
-    comparerIdentifiants(a, b, regle.element, chemin, operations);
+    comparerIdentifiants(a, b, chemin, operations);
   } else {
     a.forEach((element, rang) => comparer(element, b[rang], regle.element, [...chemin, rang], operations));
   }
 }
 
-// Ajoute à operations ce qui mène de a à b, deux listes d'identifiants de
-// même longueur, d'élément de règle regleElement, au bout de chemin : une
-// pose par rang qui change, ou b entière quand ces poses pèsent plus que la
+// Ajoute à operations ce qui mène de a à b, deux listes de même longueur
+// d'identifiants ou d'occupants, des scalaires, au bout de chemin : une pose
+// par rang qui change, ou b entière quand ces poses pèsent plus que la
 // sienne. Une liste triée par identifiant — une liste de table sans
 // attribution, une réserve, les participants d'un plan — décale d'un rang
 // chaque entrée qu'un identifiant remplacé franchit, et ses poses rang par
 // rang se multiplient ; ce qui s'en écrit ne pèse jamais plus que la liste
 // posée entière. Sous des sièges attribués, une chaise libérée ou reprise
 // ne change que son rang : une pose, de valeur null ou de l'occupant.
-function comparerIdentifiants(a, b, regleElement, chemin, operations) {
+function comparerIdentifiants(a, b, chemin, operations) {
   const parRang = [];
-  a.forEach((id, rang) => comparer(id, b[rang], regleElement, [...chemin, rang], parRang));
+  a.forEach((id, rang) => {
+    if (id !== b[rang]) parRang.push({ op: 'poser', chemin: [...chemin, rang], valeur: b[rang] });
+  });
   const entiere = { op: 'poser', chemin, valeur: b };
   operations.push(...(poids(parRang) > poids([entiere]) ? [entiere] : parRang));
 }
@@ -383,10 +386,11 @@ function executer(charge, operation) {
  * qu'un objet ou null ; sous un retenu que sa règle refuse, quoi que ce
  * soit ; retirer autre chose qu'un enregistrement par { id } ou un champ
  * facultatif présent. Une charge rendue garde ainsi chaque proposition dans
- * sa règle, et canoniser, difference et serialiser la lisent sans lever. Le contrôle porte sur la forme : une opération ne
- * porte pas la valeur qu'elle remplace, et un correctif dont chaque chemin
- * existe aussi dans une autre charge s'y applique sans lever. Un correctif
- * qui n'est pas une liste lève TypeError.
+ * sa règle, et canoniser, difference et serialiser la lisent sans lever. Le
+ * contrôle porte sur la forme : une opération ne porte pas la valeur qu'elle
+ * remplace, et un correctif dont chaque chemin existe aussi dans une autre
+ * charge s'y applique sans lever. Un correctif qui n'est pas une liste lève
+ * TypeError.
  *
  * @param {import('./types.js').Charge} a
  * @param {Operation[]} correctif

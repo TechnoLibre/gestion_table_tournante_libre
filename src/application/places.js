@@ -147,7 +147,8 @@ function planEvalue(charge, instance, placement) {
  * sans siège, ou dont le siège est pris : elle se lit comme une réservation
  * sans siège.
  *
- * @param {Object[]} couvrantes   les réservations actives qui couvrent le tour à cette table, ordre canonique
+ * @param {Object[]} couvrantes   les réservations actives qui couvrent le tour à
+ *        cette table, ordre canonique
  * @param {number} places         la capacité courante de la table
  * @returns {{tenu: Map<number, Object>, siegeDe: Map<number, number>, sansSiege: Map<number, Object>}}
  */
@@ -172,10 +173,12 @@ export function placesTenues(couvrantes, places) {
 
 // Le remplissage et les marques d'une chaise (§ 7.6) : une réservation
 // porte le cadenas fermé, l'anneau en plus pour la portée « tous les
-// tours » ; la chaise est pleine quand le placement la tient, hachurée — à
-// pourvoir — quand il la laisse vide ou y assied une autre personne. Le
-// cadenas ouvert reste au titre seul, hachuré quand rien ne le pourvoit à ce
-// tour : la forme distingue toujours une réservation d'un titre.
+// tours » ; la chaise est pleine quand le placement la tient, hachurée quand
+// il la laisse vide ou y assied une autre personne — la réservation n'y est
+// pas tenue. Cette hachure ne dit rien du titre de la chaise, que la chaise
+// porte à part, pourvu ou non selon pourvoyeursDesTitres (§ 4.1). Le cadenas
+// ouvert reste au titre seul, hachuré quand rien ne le pourvoit à ce tour :
+// la forme distingue toujours une réservation d'un titre.
 function aspect(reservation, occupant, titre) {
   if (reservation !== null) {
     const anneau = reservation.portee === 'tous' ? ['anneau'] : [];
@@ -191,19 +194,21 @@ function aspect(reservation, occupant, titre) {
  * — la proposition demandée, le retenu, ou les seules réservations —, ce
  * qu'un geste de personne y modifie, chaque table de la charge dans son
  * ordre avec ses chaises, et la réserve. Sièges attribués, la chaise s porte
- * le rang s de la liste de la source ; sinon, et sous les seules
- * réservations, repartirSieges répartit les occupants de la table, chacun à
- * son siège réservé, une personne réservée sans siège qui pourvoit un titre
- * au siège de ce titre ; quand la liste dépasse la capacité, les personnes
- * réservées à la table passent avant les autres. Sièges attribués, la
- * source se lit telle quelle : la réservation qui tient un siège que la
- * liste donne à une autre personne, ou laisse vide, se lit sur la chaise
- * sans la remplir — hachure et cadenas fermé —, et sa personne est là où
- * la liste l'assied. Un exclu, une personne que la charge n'a plus,
- * n'occupe rien et n'attend pas ; une personne présente qu'aucune chaise ne
- * reçoit attend en réserve. Les conflits sont ceux de conflitsParTable au
- * tour, null quand la source est en dérive ou que la configuration ne se
- * normalise pas.
+ * le rang s de la liste de la source, et la source se lit telle quelle : la
+ * réservation qui tient un siège que la liste donne à une autre personne,
+ * ou laisse vide, se lit sur la chaise sans la remplir — hachure et cadenas
+ * fermé —, et sa personne est là où la liste l'assied. Sans attribution,
+ * repartirSieges répartit les occupants de la liste, chacun à son siège
+ * réservé, une personne réservée sans siège qui pourvoit un titre au siège
+ * de ce titre ; quand la liste dépasse la capacité, les personnes réservées
+ * à la table passent avant les autres. Sous les seules réservations, les
+ * personnes que les réservations du tour tiennent à la table s'y répartissent
+ * de même. Un exclu, une personne que la charge n'a plus, n'occupe rien et
+ * n'attend pas ; une personne déjà assise à une table précédente de la
+ * charge ne s'assied pas une seconde fois ; une personne présente qu'aucune
+ * chaise ne reçoit attend en réserve. Les conflits sont ceux de
+ * conflitsParTable au tour, null quand la source est en dérive ou que la
+ * configuration ne se normalise pas ; evalue le dit.
  *
  * Ne lève sur aucune charge que l'analyse admet, pour tout tour de 1 à R.
  *

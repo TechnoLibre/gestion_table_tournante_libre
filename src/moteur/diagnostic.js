@@ -109,7 +109,12 @@ function pairesMinimales(poses, libres) {
 // la somme des minimums les collisions cumulées. Un groupe de s membres
 // n'offre que C(s, 2) paires distinctes : l'excédent, cumulées − distinctes,
 // ne descend pas sous plancherCumulees − C(s, 2), écrit quand c'est positif.
-function planchersCollisions({ N, T, R, groupe, groupes, fixe }) {
+// Exporté pour qu'une épreuve en compte les appels (diagnostiquer).
+//
+// avecLibres faux : les membres libres ne comptent pas. Le plancher est
+// alors celui des seules places réservées, la limite du plancher quand les
+// tables ajoutées sont assez nombreuses pour asseoir chaque libre seul.
+export function planchersCollisions({ N, T, R, groupe, groupes, fixe }, { avecLibres = true } = {}) {
   const membres = groupes.map(() => []);
   for (let p = 0; p < N; p += 1) if (groupe[p] !== SANS_GROUPE) membres[groupe[p]].push(p);
   const planchers = [];
@@ -121,8 +126,8 @@ function planchersCollisions({ N, T, R, groupe, groupes, fixe }) {
       let libres = 0;
       for (const p of membres[g]) {
         const t = fixe[p * R + r];
-        if (t === LIBRE) libres += 1;
-        else poses[t] += 1;
+        if (t !== LIBRE) poses[t] += 1;
+        else if (avecLibres) libres += 1;
       }
       const minimum = pairesMinimales(poses, libres);
       cumulees += minimum;
@@ -213,26 +218,29 @@ function repartition(aPriori, statut) {
 
 // Chaque plancher de collisions, complété de tablesManquantes. La sonde à m
 // tables ajoute m tables de la plus grande capacité présente, d'identifiants
-// au-delà du plus grand, et rechiffre les planchers par planchersCollisions :
-// le premier m où le groupe n'y figure plus est son remède. Un groupe de s
+// au-delà du plus grand, et rechiffre les planchers par chiffrer : le
+// premier m où le groupe n'y figure plus est son remède. Un groupe de s
 // membres se sépare dès que s tables de plus s'offrent à ses membres libres,
 // sauf quand des réservations en assoient deux à une même table d'un tour :
-// au-delà de s, il garde null. Les capacités, relâchées dans le plancher, ne
-// changent pas le compte ; elles disent quelles tables ajouter. Un plancher
-// suppose une table au moins.
-function avecTablesManquantes(configuration, instance, planchers) {
+// le plancher des seules places réservées (avecLibres faux), qu'aucune table
+// ajoutée n'abaisse, le dit d'un seul chiffrage, et le groupe garde null
+// sans être sondé. Les capacités, relâchées dans le plancher, ne changent
+// pas le compte ; elles disent quelles tables ajouter. Un plancher suppose
+// une table au moins.
+function avecTablesManquantes(configuration, instance, planchers, chiffrer) {
   const lignes = planchers.map((plancher) => ({ ...plancher, tablesManquantes: null }));
   if (lignes.length === 0) return lignes;
-  const enAttente = (m) => lignes.some((l) => l.tablesManquantes === null && m <= l.effectif);
+  const sansRemede = new Set(chiffrer(instance, { avecLibres: false }).map(({ groupe }) => groupe));
+  const enAttente = (m) => lignes.some((l) => l.tablesManquantes === null && !sansRemede.has(l.groupe) && m <= l.effectif);
   const capacite = Math.max(...instance.capacite);
   const premierId = Math.max(...instance.idsTables) + 1;
   const ajoutees = [];
   for (let m = 1; enAttente(m); m += 1) {
     ajoutees.push({ id: premierId + m - 1, numero: configuration.tables.length + m, capacite });
     const sonde = normaliser({ ...configuration, tables: [...configuration.tables, ...ajoutees] });
-    const restants = new Set(planchersCollisions(sonde).map(({ groupe }) => groupe));
+    const restants = new Set(chiffrer(sonde).map(({ groupe }) => groupe));
     for (const ligne of lignes) {
-      if (ligne.tablesManquantes === null && m <= ligne.effectif && !restants.has(ligne.groupe)) {
+      if (ligne.tablesManquantes === null && !sansRemede.has(ligne.groupe) && m <= ligne.effectif && !restants.has(ligne.groupe)) {
         ligne.tablesManquantes = m;
       }
     }
@@ -388,9 +396,12 @@ function etendue(valeurs) {
  * - ecartItineraire : plancher de l'écart d'itinéraire maximal, ou null.
  *
  * @param {import('./types.js').Configuration} configuration
+ * @param {{planchersCollisions?: typeof planchersCollisions}} [calcul]
+ *        le chiffrage des planchers de collisions, planchersCollisions par
+ *        défaut ; une épreuve y compte les appels
  * @returns {Diagnostic}
  */
-export function diagnostiquer(configuration) {
+export function diagnostiquer(configuration, { planchersCollisions: chiffrer = planchersCollisions } = {}) {
   const instance = normaliser(configuration);
   const aPriori = plafondsAPriori(instance);
   const memeAppartenance = animateursMemeAppartenance(instance);
@@ -404,7 +415,7 @@ export function diagnostiquer(configuration) {
       parPersonne: aPriori,
       repartition: repartition(aPriori, instance.statut),
     },
-    collisions: avecTablesManquantes(configuration, instance, planchersCollisions(instance)),
+    collisions: avecTablesManquantes(configuration, instance, chiffrer(instance), chiffrer),
     redondanceMinimale: minimale,
     remedes: { toursSansRedondance: toursSansRedondance(configuration, instance.R, minimale) },
     animateursMemeAppartenance: memeAppartenance,

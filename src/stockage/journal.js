@@ -14,10 +14,10 @@
 // texte entier d'un journal, en décode les octets ligne par ligne, restitue
 // la charge d'un instant, suit le fil courant et élague. Une table par sorte
 // de ligne — OUVERTURE, ENTREE, JALON — donne à la fois l'ordre des clés à
-// l'écriture et la règle de chaque clé à la lecture : l'écriture refuse par TypeError la ligne dont la lecture
-// refuserait la forme. La suite des révisions et la cadence des instantanés,
-// que la lecture contrôle aussi, dépendent des lignes voisines : elles
-// appartiennent à l'appelant.
+// l'écriture et la règle de chaque clé à la lecture : l'écriture refuse par
+// TypeError la ligne dont la lecture refuserait la forme. La suite des
+// révisions et la cadence des instantanés, que la lecture contrôle aussi,
+// dépendent des lignes voisines : elles appartiennent à l'appelant.
 //
 // Une entrée porte soit l'instantané de la charge qui en résulte, soit le
 // correctif qui y mène depuis la charge de l'entrée qui la précède dans
@@ -76,7 +76,17 @@ const SENS = [null, 'defaire', 'refaire', 'revenir'];
 const estObjet = (valeur) => typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
 const estRevision = (valeur) => Number.isSafeInteger(valeur) && valeur >= 1;
 const estTexte = (valeur) => typeof valeur === 'string' && valeur !== '';
-const estHorodatage = (valeur) => typeof valeur === 'string' && HORODATAGE.test(valeur);
+
+/**
+ * Vrai pour une chaîne de la forme AAAA-MM-JJTHH:MM:SS±HH:MM, celle que rend
+ * l'horloge de l'application : la seule définition de la forme d'un
+ * horodatage, que le journal, le verrou et le placement daté partagent. Ni
+ * le calendrier ni les bornes des heures ne se contrôlent ici.
+ *
+ * @param {unknown} valeur
+ * @returns {boolean}
+ */
+export const estHorodatage = (valeur) => typeof valeur === 'string' && HORODATAGE.test(valeur);
 
 // Chemin de la première valeur de charge que l'analyse du fichier d'état
 // refuserait, ou null : la forme de la charge, propositions et retenu lus

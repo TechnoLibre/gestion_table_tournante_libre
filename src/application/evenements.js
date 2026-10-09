@@ -36,7 +36,6 @@
 // libelle, en français ; aucune autre chaîne visible n'en sort : refus, avis
 // et questions sont des codes et leurs détails.
 import { deverrouiller, lister as listerDepot, ouvrir as ouvrirDepot, verrouiller } from '../stockage/depot.js';
-import { analyser } from '../stockage/document.js';
 import { determinerDossierTravail } from '../stockage/dossier_travail.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { decoderJournal, lireJournal } from '../stockage/journal.js';
@@ -51,7 +50,6 @@ import {
   renommer as renommerSurDisque,
   supprimer as supprimerSurDisque,
 } from '../stockage/operations.js';
-import { examiner } from '../stockage/placements.js';
 import { lireReglages } from '../stockage/reglages_locaux.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { resumeDuMeilleur, resumeDuRetenu } from './evaluation.js';
@@ -144,17 +142,17 @@ async function derniereModification(fs, racine, base) {
 // liste montre pour un événement dont le calcul a fauté.
 const AUCUN_RESUME = Object.freeze({ mesuresDuRetenu: null, meilleureDuClassement: null });
 
-// La charge examinée de l'état base, lue sans rien écrire (examiner, § 8.9,
-// point 3) : celle que l'ouverture garde, où une proposition fautive, dont
-// l'identifiant se répète ou atteint le compteur, n'entre pas au classement —
-// qui lève sur un identifiant répété —, si bien que la liste nomme la
-// proposition au rang 1 que le bloc de génération de l'événement ouvert
-// nomme. null pour un état absent ou qui ne se lit pas.
+// La charge de l'événement base telle que l'ouverture la lit, sans rien
+// écrire (ouvrir du dépôt, § 8.8) : un journal en avance d'une entrée la
+// rattrape en mémoire, par la règle de rattraper, et examiner (§ 8.9, point
+// 3) en écarte une proposition fautive, dont l'identifiant se répète ou
+// atteint le compteur — le classement lève sur un identifiant répété. La
+// liste nomme ainsi la proposition au rang 1, et son nombre, que le bloc de
+// génération de l'événement ouvert nomme (§ 8.1). null pour un état absent
+// ou qui ne s'ouvre pas.
 async function chargeExaminee(fs, racine, base) {
   try {
-    const texte = await fs.lireTexte(racine, base + SUFFIXES.etat);
-    if (texte === null) return null;
-    return examiner(analyser(texte).charge).charge;
+    return (await ouvrirDepot(fs, racine, base)).charge;
   } catch (erreur) {
     if (erreur instanceof ErreurStockage) return null;
     throw erreur;
@@ -199,7 +197,7 @@ async function verrouDe(fs, racine, base) {
 }
 
 /**
- * La façade des événements, branchée par App sur la séance (I1).
+ * La façade des événements, branchée par App sur la séance.
  *
  * @param {Object} parametres
  * @param {import('../stockage/systeme_fichiers.js').SystemeFichiers} parametres.fs
@@ -362,16 +360,17 @@ export function creerFacade({
     };
   }
 
-  // Le verrou de l'événement cible pris sous la séance de la façade. Le sien,
-  // resté d'un rendu refusé, est déjà pris ; celui d'une séance morte
-  // (vivant faux) s'efface en son nom, puis se prend ; tout autre lève
-  // VERROU_PRIS, sans rien changer.
+  // Le verrou de l'événement cible pris sous la séance de la façade, daté de
+  // l'horloge lue une fois. Le sien, resté d'un rendu refusé, est déjà pris ;
+  // celui d'une séance morte (vivant faux) s'efface en son nom, puis se
+  // prend ; tout autre lève VERROU_PRIS, sans rien changer.
   async function prendreVerrou(cible) {
-    let verrou = await verrouiller(cible, seance);
+    const depuis = horloge.horodatage();
+    let verrou = await verrouiller(cible, seance, depuis);
     if (!verrou.pris && verrou.seance === seance) return;
     if (!verrou.pris && verrou.vivant === false) {
       await deverrouiller(cible, verrou.seance);
-      verrou = await verrouiller(cible, seance);
+      verrou = await verrouiller(cible, seance, depuis);
     }
     if (!verrou.pris) {
       const { seance: tenue, depuis, vivant } = verrou;
@@ -406,21 +405,31 @@ export function creerFacade({
     return { base: charge.base };
   }
 
+  // Une source d'un format plus récent ne se copie pas : la LECTURE_SEULE du
+  // dépôt se relaie avec remede null, comme les refus propres de la façade.
   async function copier(base, { nom }) {
     const texte = nomSaisi(nom);
     const courante = await exigerDossier();
     const source = await ouvrirDepot(fs, courante, base);
     // L'instant copié, par la règle même qui l'inscrit à la filiation.
     const instant = libelleDeLInstant(source, libelleReprise);
-    const copie = await copierSurDisque(source, {
-      id: identifiant(),
-      nom: texte,
-      libelle: libelle('ENTREE_COPIE', { source: source.charge.evenement.nom, instant }),
-      nomJalon,
-      horodatage: horloge.horodatage(),
-      produitVersion,
-      libelleReprise,
-    });
+    let copie;
+    try {
+      copie = await copierSurDisque(source, {
+        id: identifiant(),
+        nom: texte,
+        libelle: libelle('ENTREE_COPIE', { source: source.charge.evenement.nom, instant }),
+        nomJalon,
+        horodatage: horloge.horodatage(),
+        produitVersion,
+        libelleReprise,
+      });
+    } catch (erreur) {
+      if (erreur instanceof ErreurStockage && erreur.code === 'LECTURE_SEULE') {
+        throw new ErreurStockage('LECTURE_SEULE', { ...erreur.details, remede: null });
+      }
+      throw erreur;
+    }
     await ouvrir(copie.base);
     return { base: copie.base };
   }

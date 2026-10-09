@@ -162,14 +162,16 @@
  * correspondent rang à rang ; placement porte un tour par élément :
  * sieges[i] liste les occupants de tables[i] dans l'ordre des sièges —
  * triés par identifiant quand siegesAttribues est faux —, reserve ceux qui
- * ne sont assis nulle part à ce tour. siegesAttribues appartient à la
+ * ne sont assis nulle part à ce tour. Sous des sièges attribués, null marque
+ * une chaise vide, avant le dernier occupant, siège 1 compris : il compte
+ * dans la longueur de la liste. siegesAttribues appartient à la
  * proposition, ou au retenu, et non au réglage courant : changer le réglage
  * ne détruit pas l'ordre des sièges d'une proposition déjà produite.
  * participants et chaque reserve sont des ensembles, triés par identifiant
  * croissant quel que soit siegesAttribues.
  *
  * @typedef {Object} TourDePlacement
- * @property {number[][]} sieges
+ * @property {(number|null)[][]} sieges   null : une chaise vide
  * @property {number[]} reserve       triée par identifiant croissant
  *
  * @typedef {Object} PropositionFichier
@@ -452,9 +454,12 @@
  * signalé et gardé (§ 8.9, point 3). Les raisons de dérive d'un placement
  * cohérent sont décrites avec derive (placements.js, Raison).
  *
- *   FORME               {chemin}          une valeur sort de sa règle, ou la
- *                                         déclaration se contredit ; chemin
- *                                         dans le placement, '' pour lui-même
+ *   FORME               {chemin}          une valeur sort de sa règle, la
+ *                                         déclaration se contredit, ou une
+ *                                         chaise vide est mal placée — sans
+ *                                         attribution des sièges, ou en fin
+ *                                         de liste ; chemin dans le
+ *                                         placement, '' pour lui-même
  *   LONGUEUR            {tour, table,     une longueur écrite contredit celle
  *                        declare, ecrit}  que le placement déclare : nombre de
  *                                         tours (tour et table null), de listes

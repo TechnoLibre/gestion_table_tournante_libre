@@ -1569,6 +1569,10 @@ describe('le marqueur de chaise vide : null avant le dernier occupant, sièges a
         p.siegesAttribues = false;
         p.placement[0] = { sieges: [[null, 7, 12], [4, 5, 6], [1, 8, 9], [3, 10, 11]], reserve: [2] };
       }, 'placement[0].sieges[0][0]'],
+      ['sièges non attribués, deux chaises vides : la première est nommée', (p) => {
+        p.siegesAttribues = false;
+        p.placement[0] = { sieges: [[null, null, 7], [4, 5, 6], [1, 8, 9], [3, 10, 11]], reserve: [2, 12] };
+      }, 'placement[0].sieges[0][0]'],
       ['null dans la réserve', (p) => { p.placement[0].reserve = [2, null]; }, 'placement[0].reserve[1]'],
       ['null parmi les participants', (p) => { p.participants[11] = null; }, 'participants[11]'],
       ['null parmi les tables', (p) => { p.tables[3] = null; }, 'tables[3]'],

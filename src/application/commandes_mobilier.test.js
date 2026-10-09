@@ -9,12 +9,11 @@
 // passent par seance.executer sur le système de fichiers d'épreuve. Les noms
 // d'épreuve sont inventés ; la version vient du module engendré.
 import assert from 'node:assert/strict';
+import { fautesBandes as fautesBandesPosees } from '../../test/bandes.js';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
-import { constante } from '../geometrie/constantes.js';
-import { caseLibre, geometrieTable } from '../geometrie/tables.js';
-import { TAILLE_TEXTE_LISTE_CM } from '../geometrie/texte.js';
+import { caseLibre } from '../geometrie/tables.js';
 import { STATUT, nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { serialiser } from '../stockage/canonique.js';
@@ -129,44 +128,14 @@ function seNormalise(charge) {
   }
 }
 
-// Hauteur de ligne d'une liste que suppose l'épreuve des bandes : 1,25 corps,
-// au-dessus de la hauteur d'encre du gabarit sur les polices courantes ; le
-// dessin la mesure au navigateur.
-const HAUTEUR_LIGNE_SUPPOSEE = 1.25 * TAILLE_TEXTE_LISTE_CM;
-
-// Les fautes « une liste passe sur une autre table » d'une charge : pour
-// chaque paire ordonnée de tables, la bande du bloc de noms de la première —
-// LARGEUR_BLOC_NOMS_CM de large depuis origineListe, capacité + 1 lignes de
-// haut, en-tête d'une table gelée compris — recoupe le carré d'emprise de la
-// seconde, bords exclus. Avec avec, seules les paires où figure la table
-// d'identifiant avec sont examinées. Rend les fautes et le nombre de paires
-// examinées.
-function fautesBandes(charge, { avec = null } = {}) {
-  const largeur = constante('LARGEUR_BLOC_NOMS_CM');
-  const geometries = charge.tables.map((table) => ({ g: geometrieTable(table, capacite(charge, table)), places: capacite(charge, table) }));
-  const fautes = [];
-  let paires = 0;
-  for (const { g, places } of geometries) {
-    const bande = {
-      gauche: g.origineListe.x,
-      droite: g.origineListe.x + largeur,
-      haut: g.origineListe.y,
-      bas: g.origineListe.y + (places + 1) * HAUTEUR_LIGNE_SUPPOSEE,
-    };
-    for (const { g: autre } of geometries) {
-      if (autre === g || (avec !== null && g.id !== avec && autre.id !== avec)) continue;
-      paires += 1;
-      const e = autre.rayonEmprise;
-      const recoupe =
-        autre.centre.x + e > bande.gauche &&
-        autre.centre.x - e < bande.droite &&
-        autre.centre.y + e > bande.haut &&
-        autre.centre.y - e < bande.bas;
-      if (recoupe) fautes.push(`bloc de la table ${g.id} (${g.centre.x}, ${g.centre.y}) sur la table ${autre.id} (${autre.centre.x}, ${autre.centre.y})`);
-    }
-  }
-  return { fautes, paires };
-}
+// Les fautes « une liste passe sur une autre table » des tables d'une
+// charge, chacune à sa capacité (test/bandes.js) ; avec, l'identifiant de la
+// table dont seules les paires s'examinent.
+const fautesBandes = (charge, options) =>
+  fautesBandesPosees(
+    charge.tables.map((table) => ({ id: table.id, position: table.position, forme: table.forme, places: capacite(charge, table) })),
+    options,
+  );
 
 // Une commande acceptée, sur une copie gelée de la charge : la charge rendue
 // se relit, et se normalise quand la charge reçue se normalisait.
@@ -298,8 +267,11 @@ describe('mobilier : créer, déplacer et supprimer une table (§ 4, § 6.1, § 
     // à moins d'un pas d'une table posée, sur les deux axes, est prise, la
     // suivante est (1932, 430) : la table créée ne porte sa liste sur aucune
     // table, et aucune liste ne passe sur elle. La table 5 agrandie reçoit
-    // la liste de sa voisine, ce que la création ne change pas.
-    charge = accepter('changerPlacesTable', charge, { id: 5, sieges: 16, origine: 'champ' }).charge;
+    // la liste de sa voisine, la table 2 : l'agrandissement le dit
+    // (LISTE_SUR_VOISINE), et la création ne le change pas.
+    const agrandie = accepter('changerPlacesTable', charge, { id: 5, sieges: 16, origine: 'champ' });
+    assert.deepEqual(agrandie.avertissements.map(({ code, details }) => [code, details.table, details.voisine]), [['LISTE_SUR_VOISINE', 5, 2]]);
+    charge = agrandie.charge;
     charge = accepter('creerTable', charge, { forme: 'carree' }).charge;
     assert.deepEqual(charge.tables.at(-1).position, { x: 1932, y: 430 });
     assert.deepEqual(fautesBandes(charge, { avec: charge.tables.at(-1).id }), { fautes: [], paires: 2 * 5 });
@@ -317,11 +289,139 @@ describe('mobilier : créer, déplacer et supprimer une table (§ 4, § 6.1, § 
     let charge = analyser(texteLivre('grande')).charge;
     const premiere = charge.tables.find(({ numero }) => numero === 1);
     assert.deepEqual(premiere.position, { x: 0, y: 0 });
-    charge = accepter('changerPlacesTable', charge, { id: premiere.id, sieges: 16, origine: 'champ' }).charge;
+    const agrandie = accepter('changerPlacesTable', charge, { id: premiere.id, sieges: 16, origine: 'champ' });
+    // Chaque voisine que la liste agrandie couvre est nommée, et ce sont
+    // celles que l'épreuve des bandes voit.
+    const couvertes = agrandie.avertissements.filter(({ code }) => code === 'LISTE_SUR_VOISINE').map(({ details }) => details.voisine);
+    assert.ok(couvertes.length > 0);
+    const vues = new Set(
+      agrandie.charge.tables
+        .filter(({ id }) => id !== premiere.id && fautesBandes(agrandie.charge, { avec: id }).fautes.some((faute) => faute.includes(`table ${premiere.id} `)))
+        .map(({ id }) => id),
+    );
+    assert.deepEqual(couvertes, [...vues]);
+    // Les remèdes se suivent : chacun envoie sa voisine sur une case que ni
+    // une table posée ni un remède précédent n'occupe, et les appliquer tous
+    // dans l'ordre réussit sans qu'une table en recouvre une autre.
+    const remedes = agrandie.avertissements
+      .filter(({ code }) => code === 'LISTE_SUR_VOISINE')
+      .map(({ details }) => details.remede.arguments);
+    const cases = remedes.map(({ position }) => `${position.x},${position.y}`);
+    assert.equal(new Set(cases).size, remedes.length);
+    let suivie = agrandie.charge;
+    for (const argumentsRemede of remedes) suivie = accepter('deplacerTable', suivie, argumentsRemede).charge;
+    const posees = new Set(suivie.tables.map(({ position }) => `${position.x},${position.y}`));
+    assert.equal(posees.size, suivie.tables.length);
+    charge = agrandie.charge;
     charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
     assert.deepEqual(charge.tables.at(-1).position, { x: 2898, y: 1720 });
     const creee = charge.tables.at(-1).id;
     assert.deepEqual(fautesBandes(charge, { avec: creee }), { fautes: [], paires: 2 * 33 });
+  });
+
+  test('agrandie, une table dont la liste couvre la voisine : LISTE_SUR_VOISINE {table, voisine}, remède le déplacement de la voisine vers une case libre, qui lève la faute', () => {
+    let charge = chargeDe();
+    for (let i = 0; i < 2; i += 1) charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
+    assert.deepEqual(charge.tables.map(({ position }) => [position.x, position.y]), [[0, 0], [813, 0]]);
+    // Ronde de 16 en (0, 0) : sa liste, de 232,8 à 732,8, couvre l'emprise
+    // de la voisine, de 692,6 à 933,4.
+    const { charge: apres, avertissements } = accepter('changerPlacesTable', charge, { id: 1, sieges: 16, origine: 'champ' });
+    const autres = apres.tables
+      .filter(({ id }) => id !== 2)
+      .map((table) => ({ position: table.position, forme: table.forme, places: capacite(apres, table) }));
+    const position = caseLibre(autres, { forme: 'ronde', places: 8 });
+    assert.deepEqual(avertissements, [
+      {
+        code: 'LISTE_SUR_VOISINE',
+        details: {
+          table: 1,
+          voisine: 2,
+          numero: 1,
+          numeroVoisine: 2,
+          remede: { commande: 'deplacerTable', arguments: { id: 2, position } },
+        },
+      },
+    ]);
+    assert.equal(fautesBandes(apres).fautes.length, 1);
+    const { commande, arguments: argumentsDuRemede } = avertissements[0].details.remede;
+    const deplacee = accepter(commande, apres, argumentsDuRemede).charge;
+    assert.deepEqual(fautesBandes(deplacee), { fautes: [], paires: 2 });
+    const texte = libelle('LISTE_SUR_VOISINE', avertissements[0].details);
+    assert.match(texte, /table 1\b/);
+    assert.match(texte, /table 2\b/);
+  });
+
+  test('agrandie sans rien couvrir, ou réduite : aucun LISTE_SUR_VOISINE', () => {
+    let charge = chargeDe();
+    for (let i = 0; i < 2; i += 1) charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
+    // La table de droite, à 10 places : sa liste part vers la droite, où il
+    // n'y a rien, et son emprise reste hors de la liste de la première.
+    const droite = accepter('changerPlacesTable', charge, { id: 2, sieges: 10, origine: 'champ' });
+    assert.deepEqual(droite.avertissements.filter(({ code }) => code === 'LISTE_SUR_VOISINE'), []);
+    assert.deepEqual(fautesBandes(droite.charge).fautes, []);
+    const reduite = accepter('changerPlacesTable', charge, { id: 1, sieges: 6, origine: 'champ' });
+    assert.deepEqual(reduite.avertissements, []);
+    // Un recouvrement qui existait avant le geste n'est pas le sien.
+    const serree = accepter('deplacerTable', charge, { id: 2, position: { x: 600, y: 0 } }).charge;
+    assert.equal(fautesBandes(serree).fautes.length, 1);
+    const encore = accepter('changerPlacesTable', serree, { id: 1, sieges: 9, origine: 'champ' });
+    assert.deepEqual(encore.avertissements.filter(({ code }) => code === 'LISTE_SUR_VOISINE'), []);
+  });
+
+  test("réalignée sous un défaut plus grand, une table surchargée dont la liste couvre la voisine : LISTE_SUR_VOISINE", () => {
+    let charge = chargeDe();
+    for (let i = 0; i < 2; i += 1) charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
+    // Les deux tables surchargées, à 6 et 8 places : le défaut passé à 16 ne
+    // touche aucune d'elles, et ne dit rien.
+    charge = accepter('changerPlacesTable', charge, { id: 1, sieges: 6, origine: 'champ' }).charge;
+    charge = accepter('changerPlacesTable', charge, { id: 2, sieges: 8, origine: 'champ' }).charge;
+    const defaut = accepter('changerDefaut', charge, { sieges: 16, realigner: false });
+    assert.deepEqual(defaut.avertissements.filter(({ code }) => code === 'LISTE_SUR_VOISINE'), []);
+    // Réalignée, la table 1 passe à 16 places : sa liste couvre la table 2.
+    const { charge: apres, avertissements } = accepter('realignerTable', defaut.charge, { id: 1 });
+    const autres = apres.tables
+      .filter(({ id }) => id !== 2)
+      .map((table) => ({ position: table.position, forme: table.forme, places: capacite(apres, table) }));
+    const position = caseLibre(autres, { forme: 'ronde', places: 8 });
+    assert.deepEqual(
+      avertissements.filter(({ code }) => code === 'LISTE_SUR_VOISINE').map(({ details }) => [details.table, details.voisine, details.remede]),
+      [[1, 2, { commande: 'deplacerTable', arguments: { id: 2, position } }]],
+    );
+  });
+
+  test("le défaut agrandit deux voisines dans le même geste : leur recouvrement n'est dit qu'une fois, sous la table dont la liste couvre l'autre, remède le déplacement de la couverte", () => {
+    let charge = chargeDe();
+    for (let i = 0; i < 2; i += 1) charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
+    const { charge: apres, avertissements } = accepter('changerDefaut', charge, { sieges: 16, realigner: false });
+    const autres = apres.tables
+      .filter(({ id }) => id !== 2)
+      .map((table) => ({ position: table.position, forme: table.forme, places: capacite(apres, table) }));
+    const position = caseLibre(autres, { forme: 'ronde', places: 16 });
+    assert.deepEqual(
+      avertissements.filter(({ code }) => code === 'LISTE_SUR_VOISINE').map(({ details }) => [details.table, details.voisine, details.remede]),
+      [[1, 2, { commande: 'deplacerTable', arguments: { id: 2, position } }]],
+    );
+    // Le remède suivi lève la faute.
+    const { commande, arguments: argumentsDuRemede } = avertissements.find(({ code }) => code === 'LISTE_SUR_VOISINE').details.remede;
+    assert.deepEqual(fautesBandes(accepter(commande, apres, argumentsDuRemede).charge).fautes, []);
+  });
+
+  test("le défaut agrandit deux voisines dont la seconde de la charge porte sa liste sur la première : l'avertissement se dit sous la seconde, remède le déplacement de la première", () => {
+    let charge = chargeDe();
+    for (let i = 0; i < 2; i += 1) charge = accepter('creerTable', charge, { forme: 'ronde' }).charge;
+    // La table 1 passe à droite de la table 2 : la liste de la 2, tournée
+    // vers la droite, va vers elle.
+    charge = accepter('deplacerTable', charge, { id: 1, position: { x: 1626, y: 0 } }).charge;
+    assert.deepEqual(fautesBandes(charge).fautes, []);
+    const { charge: apres, avertissements } = accepter('changerDefaut', charge, { sieges: 16, realigner: false });
+    const autres = apres.tables
+      .filter(({ id }) => id !== 1)
+      .map((table) => ({ position: table.position, forme: table.forme, places: capacite(apres, table) }));
+    const position = caseLibre(autres, { forme: 'ronde', places: 16 });
+    assert.deepEqual(
+      avertissements.filter(({ code }) => code === 'LISTE_SUR_VOISINE').map(({ details }) => [details.table, details.voisine, details.remede]),
+      [[2, 1, { commande: 'deplacerTable', arguments: { id: 1, position } }]],
+    );
   });
 
   test('créée dans la grande démonstration, une table se pose sur la case suivante de sa grille, (2439, 1500)', () => {
@@ -370,9 +470,18 @@ describe('mobilier : créer, déplacer et supprimer une table (§ 4, § 6.1, § 
 
   test('une forme inconnue, une table inconnue ou une position non finie sont des fautes du code', () => {
     const charge = chargeDe({ tables: [{ id: 1 }] });
-    assert.throws(() => COMMANDES.get('creerTable')(charge, { forme: 'ovale' }), TypeError);
-    assert.throws(() => COMMANDES.get('supprimerTable')(charge, { id: 7 }), TypeError);
-    assert.throws(() => COMMANDES.get('deplacerTable')(charge, { id: 1, position: { x: Number.NaN, y: 0 } }), TypeError);
+    // Le message nomme la faute : une TypeError levée par une lecture de
+    // propriété sur undefined ne passerait pas pour elle.
+    assert.throws(() => COMMANDES.get('creerTable')(charge, { forme: 'ovale' }), { name: 'TypeError', message: /^forme : / });
+    assert.throws(() => COMMANDES.get('supprimerTable')(charge, { id: 7 }), { name: 'TypeError', message: 'table inconnue : 7' });
+    assert.throws(() => COMMANDES.get('deplacerTable')(charge, { id: 7, position: { x: 0, y: 0 } }), {
+      name: 'TypeError',
+      message: 'table inconnue : 7',
+    });
+    assert.throws(() => COMMANDES.get('deplacerTable')(charge, { id: 1, position: { x: Number.NaN, y: 0 } }), {
+      name: 'TypeError',
+      message: /^position : /,
+    });
   });
 
   test('une table créée suit le défaut : sieges null, 8 places sous un défaut de 8, 10 sous un défaut de 10', () => {
@@ -674,13 +783,18 @@ describe("mobilier : les places d'une table, par le champ et par la poignée (§
     assert.deepEqual(apres.retenu.placement[0].reserve, [4, 7]);
     assert.deepEqual(avertissements, [{ code: 'SURNUMERAIRES', details: { table: 1, tour: 1, personnes: [7] } }]);
 
-    // Réaligner une table surchargée à 10, la personne 10 réservée sans siège.
-    const dix = chargeDe({ tables: [{ id: 1, sieges: 10 }, { id: 2 }], n: 14, tours: 1, attribuerSieges: true, reservations: [resa(10, 1, null)] });
-    placer(dix, [[suite(1, 10), suite(11, 14)]], { id: 1, retenu: true });
-    const realignee = accepter('realignerTable', dix, { id: 1 });
-    assert.equal(invariantViole(realignee.charge), null);
-    assert.deepEqual(realignee.charge.retenu.placement[0].sieges[0], [1, 2, 3, 4, 5, 6, 7, 10]);
-    assert.deepEqual(realignee.avertissements, [{ code: 'SURNUMERAIRES', details: { table: 1, tour: 1, personnes: [8, 9] } }]);
+    // Réaligner une table surchargée à 10, la personne 10 réservée sans
+    // siège, sous des sièges attribués comme sans attribution : la même liste.
+    for (const attribuerSieges of [true, false]) {
+      const dix = chargeDe({ tables: [{ id: 1, sieges: 10 }, { id: 2 }], n: 14, tours: 1, attribuerSieges, reservations: [resa(10, 1, null)] });
+      placer(dix, [[suite(1, 10), suite(11, 14)]], { id: 1, retenu: true });
+      const realignee = accepter('realignerTable', dix, { id: 1 });
+      const cas = `realignerTable, attribuerSieges ${attribuerSieges}`;
+      assert.equal(invariantViole(realignee.charge), null, cas);
+      assert.deepEqual(realignee.charge.retenu.placement[0].sieges[0], [1, 2, 3, 4, 5, 6, 7, 10], cas);
+      assert.deepEqual(realignee.charge.retenu.placement[0].reserve, [8, 9], cas);
+      assert.deepEqual(realignee.avertissements, [{ code: 'SURNUMERAIRES', details: { table: 1, tour: 1, personnes: [8, 9] } }], cas);
+    }
   });
 
   test('sièges attribués, le retour des réservés : siège voulu, chaise libre ou d\'un absent, non-réservé du plus haut rang, ordre des rangs, tour couvert', () => {
@@ -1064,5 +1178,16 @@ describe('mobilier : la cible de la somme de redondance (§ 5.4, § 8.1, § 8.9)
     const posee = accepter('changerCibleRedondance', charge, { cible: '640' }).charge;
     refuse(() => appliquerCommande('changerCibleRedondance', posee, { cible: '640' }), 'SANS_EFFET');
     assert.throws(() => COMMANDES.get('changerCibleRedondance')(charge, { cible: null }), TypeError);
+  });
+
+  test('une cible de 1000 écrite au fichier, saisie de nouveau à 1000 : SANS_EFFET, sans retirer le champ ni faire d’entrée', () => {
+    const explicite = chargeDe({ tables: [{ id: 1 }], n: 2 });
+    explicite.reglages.cibleRedondance = 1000;
+    analyser(serialiser(explicite, { revision: 1, produitVersion: V1 }));
+    refuse(() => appliquerCommande('changerCibleRedondance', explicite, { cible: '1000' }), 'SANS_EFFET', {
+      commande: 'changerCibleRedondance',
+    });
+    refuse(() => COMMANDES.get('changerCibleRedondance')(explicite, { cible: 1000 }), 'SANS_EFFET');
+    assert.equal(explicite.reglages.cibleRedondance, 1000);
   });
 });

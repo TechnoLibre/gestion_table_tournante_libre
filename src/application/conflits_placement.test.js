@@ -207,6 +207,24 @@ describe('conflitsDuPlacement : la proposition montrée, sinon le retenu (§ 7.5
     ]);
   });
 
+  test('une proposition plus courte que R : chaque tour se lit une fois, et ses tours une fois de plus dans le retenu, non à chaque tour du retenu', () => {
+    // La proposition 1 porte deux tours sur cinq : les tours 3 à 5 se lisent
+    // dans le retenu, et l'histoire de leurs conflits relit les tours 1 et 2
+    // dans le retenu. Borne : R lectures, plus une par tour relu.
+    const suite = [[[2, 3, 4], [1, 5, 6]], [[1, 3, 5], [2, 4, 6]], [[1, 4, 6], [2, 3, 5]]];
+    const c = charge({ plans: [AUTRE, [...PLAN, ...suite]], retenu: 1, tours: 5 });
+    const lus = [];
+    const espion = (charge_, demande) => {
+      lus.push(demande);
+      return etatPlaces(charge_, demande);
+    };
+    const conflits = conflitsDuPlacement(c, { proposition: 1 }, { etatPlaces: espion });
+    assert.deepEqual(conflits, conflitsDuPlacement(c, { proposition: 1 }));
+    assert.ok(conflits.some(({ tour }) => tour === 5));
+    assert.ok(lus.length <= 5 + 2, JSON.stringify(lus));
+    assert.equal(lus.length, 7);
+  });
+
   test('un retenu en dérive — une personne ajoutée qu’il ne place pas — ne s’évalue pas : null, comme les pastilles absentes du plan', () => {
     const c = executer('ajouterParticipant', charge({ retenu: 0 }), { champs: { nom: 'Sarcelle', prenom: 'Capucine' } }).charge;
     assert.ok(etatPlaces(c, { tour: 1 }).evalue === false);

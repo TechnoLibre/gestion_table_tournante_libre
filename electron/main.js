@@ -15,7 +15,7 @@
 // importé interprété comme du balisage reste ainsi une faute d'affichage, et
 // non un accès au disque.
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, shell } from 'electron';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -85,19 +85,10 @@ ipcMain.handle('gtt:copier', (_evenement, texte) => {
 
 // Les verrous que la page a pris et pas rendus s'effacent à la sortie (§ 8.8) :
 // la page ne survit pas au processus principal, et une fermeture de la fenêtre
-// ne lui laisse pas le temps de les rendre elle-même. Chacun se relit, de
-// façon synchrone comme le retrait du profil — Electron n'attend aucune
-// promesse d'un écouteur de sortie —, et ne s'efface que s'il porte encore la
-// séance qui l'a pris : un verrou repris par une autre séance reste.
-app.on('quit', () => {
-  for (const { chemin, seance } of fichiers.verrousTenus()) {
-    try {
-      if (JSON.parse(readFileSync(chemin, 'utf8'))?.seance === seance) rmSync(chemin, { force: true });
-    } catch {
-      // Absent, illisible ou inaccessible : rien à rendre.
-    }
-  }
-});
+// ne lui laisse pas le temps de les rendre elle-même. rendreVerrousTenus les
+// relit et les efface de façon synchrone, comme le retrait du profil, chacun
+// seulement s'il porte encore la séance qui l'a pris.
+app.on('quit', () => fichiers.rendreVerrousTenus());
 
 function creerFenetre() {
   fenetre = new BrowserWindow({

@@ -13,6 +13,7 @@
 //
 // L'écriture atomique et le verrou du § 8.8 sont ceux de la coquille.
 import { ErreurStockage } from './erreurs.js';
+import { exigerDepuis } from './systeme_fichiers.js';
 
 /**
  * Le système de fichiers de la plateforme electron.
@@ -50,7 +51,13 @@ export function creerFichiersElectron(pont = window.gtt.fichiers) {
     creerDossier: (racine, chemin) => appeler('creerDossier', racine, chemin),
     deplacer: (racine, de, vers) => appeler('deplacer', racine, de, vers),
     supprimer: (racine, chemin) => appeler('supprimer', racine, chemin),
-    verrouiller: (racine, chemin, seance) => appeler('verrouiller', racine, chemin, seance),
+    // La forme de l'instant de prise se juge ici, avant le pont : le
+    // processus principal, qui n'importe rien de src/, n'en contrôle que le
+    // type.
+    verrouiller: async (racine, chemin, seance, depuis) => {
+      exigerDepuis(depuis);
+      return appeler('verrouiller', racine, chemin, seance, depuis);
+    },
     deverrouiller: (racine, chemin, seance) => appeler('deverrouiller', racine, chemin, seance),
     ouvrirDansExplorateur: (racine) => appeler('ouvrirDansExplorateur', racine),
     choisirFichierAImporter: () => appeler('choisirFichierAImporter'),

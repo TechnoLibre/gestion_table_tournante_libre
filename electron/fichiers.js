@@ -34,7 +34,7 @@
 // alors aussi octets, un Uint8Array que l'IPC transporte ; et NON_DISPONIBLE
 // {cause}, l'explorateur du système qui ne s'ouvre pas.
 import { execFile } from 'node:child_process';
-import { realpath as realpathRappel } from 'node:fs';
+import { readFileSync, realpath as realpathRappel, unlinkSync } from 'node:fs';
 import { lstat, mkdir, open, readdir, readFile, rename, stat, unlink } from 'node:fs/promises';
 import { hostname } from 'node:os';
 import path from 'node:path';
@@ -205,7 +205,9 @@ export function decrireSysteme({ env, plateforme, cheminSysteme, nomProduit }) {
 // Les fonctions de node:fs/promises dont les primitives se servent. realpath
 // est celle de node:fs, qui résout les liens segment par segment ; celle de
 // node:fs/promises demande au système le chemin final d'un fichier ouvert,
-// ce que des lecteurs de Windows refusent.
+// ce que des lecteurs de Windows refusent. readFileSync et unlinkSync, de
+// node:fs, servent à rendreVerrousTenus : un écouteur de sortie d'Electron
+// n'attend aucune promesse.
 const FS_NODE = Object.freeze({
   lstat,
   stat,
@@ -216,6 +218,8 @@ const FS_NODE = Object.freeze({
   unlink,
   mkdir,
   readdir,
+  readFileSync,
+  unlinkSync,
 });
 
 // Lance une commande sans shell, ces variables ajoutées à l'environnement du
@@ -276,19 +280,6 @@ function analyserVerrou(texte) {
   return valide ? { ...contenu, demarrage: contenu.demarrage ?? null } : null;
 }
 
-// Un instant sous la forme de l'horloge de l'application,
-// AAAA-MM-JJTHH:MM:SS±HH:MM, à l'heure locale du poste et avec son décalage.
-function horodatage(instant) {
-  const deux = (n) => String(n).padStart(2, '0');
-  const decalage = -instant.getTimezoneOffset();
-  const ecart = Math.abs(decalage);
-  return (
-    `${instant.getFullYear()}-${deux(instant.getMonth() + 1)}-${deux(instant.getDate())}` +
-    `T${deux(instant.getHours())}:${deux(instant.getMinutes())}:${deux(instant.getSeconds())}` +
-    `${decalage < 0 ? '-' : '+'}${deux(Math.floor(ecart / 60))}:${deux(ecart % 60)}`
-  );
-}
-
 const parNom = (a, b) => (a.nom < b.nom ? -1 : a.nom > b.nom ? 1 : 0);
 
 /**
@@ -324,7 +315,8 @@ export function processusVivant(pid, signaler = (cible) => process.kill(cible, 0
  * @param {() => Object|null} [reglages.fenetre]  la fenêtre parente des dialogues
  * Le reste remplace le système, pour l'épreuve :
  * @param {Object} [reglages.fs]  lstat, stat, realpath, readFile, open,
- *        rename, unlink, mkdir, readdir, comme ceux de node:fs/promises
+ *        rename, unlink, mkdir, readdir, comme ceux de node:fs/promises, et
+ *        readFileSync, unlinkSync, comme ceux de node:fs
  * @param {Object} [reglages.chemins]  node:path, ou l'une de ses variantes
  * @param {string} [reglages.plateforme]  process.platform
  * @param {Function} [reglages.lancer]  (commande, arguments, {variables,
@@ -336,9 +328,8 @@ export function processusVivant(pid, signaler = (cible) => process.kill(cible, 0
  *        par défaut, celui que lit la plateforme
  * @param {number} [reglages.pid]
  * @param {string} [reglages.hote]
- * @param {() => Date} [reglages.maintenant]
  * @returns {Object<string, Function>} les primitives, par nom, et
- *          verrousTenus(), qui n'en est pas une
+ *          rendreVerrousTenus(), qui n'en est pas une
  */
 export function creerFichiers({
   emplacements,
@@ -355,7 +346,6 @@ export function creerFichiers({
   demarrage,
   pid = process.pid,
   hote = hostname(),
-  maintenant = () => new Date(),
 }) {
   // Chemin absolu de chaque racine connue, par identifiant. Une Map : un
   // identifiant reçu de la page ne rencontre aucune propriété héritée.
@@ -366,7 +356,7 @@ export function creerFichiers({
   // Le démarrage du processus courant, lu une fois qu'il est connu.
   let demarrageCourant = null;
   // Les verrous que verrouiller a pris et que deverrouiller n'a pas rendus :
-  // chemin absolu → séance, que verrousTenus rend au processus principal.
+  // chemin absolu → séance, que rendreVerrousTenus efface à la sortie.
   const tenus = new Map();
 
   // Ce que désigne un chemin relatif à une racine : ses segments, sa racine
@@ -831,18 +821,22 @@ export function creerFichiers({
     },
 
     // Création exclusive (wx), qui ne suit aucun lien, d'un verrou qui
-    // inscrit la séance, le pid, l'hôte, l'instant de la prise et le
-    // démarrage du processus, lus avant la création : la création et
-    // l'écriture se suivent sans attente. Un verrou présent
+    // inscrit la séance, le pid, l'hôte, l'instant de la prise reçu de la
+    // page, tel quel, et le démarrage du processus, lu avant la création :
+    // la création et l'écriture se suivent sans attente. Un verrou présent
     // se lit ; s'il disparaît entre la création refusée et sa lecture, la
     // prise se tente une seconde fois. Un verrou écrit à moitié s'efface.
-    async verrouiller(racine, chemin, seance) {
+    // L'instant n'est contrôlé que pour son type : sa forme se juge dans la
+    // page (src/stockage/fichiers_electron.js), et le processus principal
+    // n'importe rien de src/.
+    async verrouiller(racine, chemin, seance, depuis) {
       exigerSeance(seance);
+      exigerTexte(depuis, "l'instant de prise");
       const loc = localiser(racine, chemin);
       try {
         await confiner(loc);
         const demarrageInscrit = await monDemarrage();
-        const inscrit = { seance, pid, hote, depuis: horodatage(maintenant()), demarrage: demarrageInscrit };
+        const inscrit = { seance, pid, hote, depuis, demarrage: demarrageInscrit };
         const contenu = `${JSON.stringify(inscrit)}\n`;
         for (let essai = 0; ; essai += 1) {
           let poignee;
@@ -895,11 +889,23 @@ export function creerFichiers({
       }
     },
 
-    // Hors des primitives, que servir ne publie pas : les verrous pris et
-    // pas rendus, [{ chemin, seance }], chemin absolu, dans l'ordre de leur
-    // prise. Le processus principal les efface à sa sortie.
-    verrousTenus() {
-      return [...tenus].map(([chemin, seance]) => ({ chemin, seance }));
+    // Hors des primitives, que servir ne publie pas : rend les verrous pris
+    // et pas rendus, dans l'ordre de leur prise, à la sortie du processus
+    // principal (§ 8.8). Synchrone, comme le retrait du profil : Electron
+    // n'attend aucune promesse d'un écouteur de sortie. Chacun se relit et
+    // ne s'efface que s'il porte encore la séance qui l'a pris, lu par
+    // analyserVerrou, le seul lecteur de leur format : un verrou repris par
+    // une autre séance, illisible ou absent reste tel. Un échec de lecture
+    // ou d'effacement laisse le verrou et passe au suivant ; rien ne lève.
+    rendreVerrousTenus() {
+      for (const [absolu, seance] of tenus) {
+        try {
+          if (analyserVerrou(fs.readFileSync(absolu).toString('utf8'))?.seance === seance) fs.unlinkSync(absolu);
+        } catch {
+          // Absent, illisible ou inaccessible : rien à rendre.
+        }
+      }
+      tenus.clear();
     },
 
     // shell.openPath rend '' quand l'explorateur s'ouvre, et sinon la raison

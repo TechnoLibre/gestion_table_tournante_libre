@@ -753,6 +753,26 @@ describe('commandes des places : le vérificateur d’invariants du retenu (§ 1
     });
   });
 
+  test('deux réservations de la personne à sa table, « tous les tours » et « ce tour » : le remède retire la plus étroite d’abord, puis l’autre, et le retrait passe', () => {
+    // Chacune tient à elle seule la personne à la table au tour 1 : aucun
+    // retrait unique ne lève le refus. Le premier remède garde « tous les
+    // tours », qui réserve encore les tours 2 et 3 ; le refus qui suit
+    // nomme alors celle-ci.
+    const charge = figer(chargeRetenue({ reservations: [resa(4, 5, null), resa(4, 5, null, 1)] }));
+    const remede = (portee, tour) => ({ commande: 'retirerReservation', arguments: { participant: 4, table: 5, portee, tour } });
+    const premier = refuse(() => executer('retirerDuTour', charge, { tour: 1, participant: 4 }), 'INVARIANT_VIOLE', {
+      remede: remede('tour', 1),
+    });
+    const { charge: sansTour } = executer(premier.details.remede.commande, charge, premier.details.remede.arguments);
+    assert.deepEqual(sansTour.reservations, [resa(4, 5, null)]);
+    const second = refuse(() => executer('retirerDuTour', sansTour, { tour: 1, participant: 4 }), 'INVARIANT_VIOLE', {
+      remede: remede('tous', null),
+    });
+    const { charge: sansReservation } = executer(second.details.remede.commande, sansTour, second.details.remede.arguments);
+    const { charge: retire } = executer('retirerDuTour', sansReservation, { tour: 1, participant: 4 });
+    assert.deepEqual(reserveDe(retire, 1), [4]);
+  });
+
   test('une violation déjà présente, celle d’une dérive, ne bloque pas la retouche suivante', () => {
     const charge = chargeRetenue({ reservations: [resa(4, 8, null, 1)] });
     charge.participants.push(personne(13));
@@ -941,7 +961,8 @@ describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
     ['PROPOSITION_MONTREE', [{ proposition: 4 }, 'n° 4']],
     ['SIEGE_OCCUPE', [{ table: 5, siege: 2, tour: 1, occupant: 2 }, 'siège 2']],
     ['TABLE_PLEINE', [{ table: 5, tour: 1, capacite: 6 }, '6 places']],
-    // Le refus du dépôt sur le sol (src/interface/plan/depot.js), dont le texte vit ici.
+    // Le refus du dépôt sur le sol (src/interface/plan/depot.js) et de
+    // « Retirer du tour », dont le texte vit ici.
     ['RESERVATION_TOUS_LES_TOURS', [{ participant: 1, table: 3 }, 'tous les tours']],
   ]);
 
@@ -955,11 +976,12 @@ describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
       assert.ok(!texte.includes('undefined'), `${code} : ${texte}`);
     }
     assert.ok(libelle('PLACE_RESERVEE', { siege: 3, tour: null, portee: 'tous' }).includes('à tous les tours'));
-    // Le refus du dépôt sur le sol dit ce que le sol ne fait pas, sans rien
-    // promettre du glissement vers une autre chaise : deplacerReservation y
-    // garde la portée « tous », et la déplace à chaque tour.
+    // Le refus du dépôt sur le sol, et de « Retirer du tour », dit ce que le
+    // retrait d'un seul tour ne fait pas, sans rien promettre du glissement
+    // vers une autre chaise : deplacerReservation y garde la portée « tous »,
+    // et la déplace à chaque tour.
     const tous = libelle('RESERVATION_TOUS_LES_TOURS', { participant: 1, table: 3, remede: null });
-    assert.ok(tous.includes('hors des tables'), tous);
+    assert.ok(tous.includes('pour un seul tour'), tous);
     assert.ok(!tous.includes('ne change que'), tous);
     assert.equal(libelle('places.titreParDefaut'), 'animateur');
   });

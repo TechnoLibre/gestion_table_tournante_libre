@@ -6,8 +6,12 @@
 // nombre non fini lève ; l'échelle des ordres de grandeur et ses frontières ;
 // en langue témoin, un texte qui porte une lettre est encadré de la marque.
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
-import { creerFormat } from './format.js';
+import { creerFormat, lireHorodatage } from './format.js';
+import { dater } from './libelles/aides.js';
 import { TABLES_APPLICATION } from './libelles.js';
 import { MARQUE_TEMOIN, creerTraduction } from './traduction.js';
 
@@ -157,6 +161,45 @@ describe('format : les dates et les horodatages (§ 18.4)', () => {
     for (const horodatage of ['2026-10-06T19:02:11', '2026-10-06T24:00:00-04:00', '2026-10-06T19:60:00-04:00', '2026-10-06']) {
       assert.throws(() => format.horodatage(horodatage), RangeError, horodatage);
     }
+  });
+
+  test('un décalage hors de ses bornes, +24:00 ou −04:60, lève ; +23:59 et −12:00 se lisent', () => {
+    for (const horodatage of ['2026-10-06T19:02:11+24:00', '2026-10-06T19:02:11-04:60', '2026-10-06T19:02:61-04:00']) {
+      assert.throws(() => format.horodatage(horodatage), RangeError, horodatage);
+      assert.throws(() => lireHorodatage(horodatage), RangeError, horodatage);
+    }
+    assert.equal(format.horodatage('2026-10-06T19:02:11+23:59'), '6 octobre 2026, 19 h 02');
+    assert.deepEqual(lireHorodatage('2026-10-06T19:02:11-12:00'), {
+      annee: 2026,
+      mois: 10,
+      jour: 6,
+      heure: 19,
+      minute: 2,
+      seconde: 11,
+      decalage: -720,
+    });
+  });
+
+  test("dater lit l'horodatage par lireHorodatage : ce qu'elle refuse se cite tel quel", () => {
+    const texte = francais.t;
+    assert.equal(dater('2031-05-17T08:05:00-04:00', texte), `le ${texte('format.date', { annee: 2031, mois: 5, jour: 17 })} à ${texte('format.heure', { heure: 8, minute: 5 })}`);
+    for (const fautif of ['2031-05-17T08:05:00+24:00', '2031-02-30T08:05:00-04:00', '2031-05-17T25:05:00-04:00', '2031-05-17 08:05', null]) {
+      assert.throws(() => lireHorodatage(fautif), RangeError, String(fautif));
+      assert.equal(dater(fautif, texte), String(fautif), String(fautif));
+    }
+  });
+
+  test("lireHorodatage est la seule lecture d'un horodatage sous src/application : aucun autre module n'en porte l'expression", () => {
+    const racine = fileURLToPath(new URL('.', import.meta.url));
+    const sources = readdirSync(racine, { recursive: true })
+      .filter((nom) => nom.endsWith('.js') && !nom.endsWith('.test.js'))
+      .sort();
+    assert.ok(sources.length > 0, 'balayage vide');
+    // Une expression d'horodatage : deux chiffres, deux-points, deux
+    // chiffres, écrits en classes de chiffres.
+    const EXPRESSION = /\\d\{2\}\)?:\(?\\d\{2\}/;
+    const porteurs = sources.filter((nom) => EXPRESSION.test(readFileSync(join(racine, nom), 'utf8')));
+    assert.deepEqual(porteurs, []);
   });
 
   test('en langue témoin, une date et un horodatage sont encadrés de la marque, une fois', () => {

@@ -43,6 +43,10 @@ const NOM_PRODUIT = 'Gestion table tournante Libre';
 // Sous Windows, un dossier ne passe pas en lecture seule par ses droits, et
 // un lien symbolique demande un privilège : un lien de dossier s'y pose en
 // jonction. Sous root, les droits d'un dossier n'arrêtent aucune écriture.
+// L'instant de prise qu'un verrou reçoit, de la forme qu'écrit l'horloge de
+// l'application.
+const PRISE = '2026-10-06T19:00:00-04:00';
+
 const SOUS_WINDOWS = process.platform === 'win32';
 const SOUS_LINUX = process.platform === 'linux';
 const SOUS_ROOT = typeof process.getuid === 'function' && process.getuid() === 0;
@@ -244,7 +248,7 @@ describe('coquille sur un vrai disque', () => {
     await echoue(fs.ajouterLigne(racine, 'lien/secret.txt', 'x'), 'CHEMIN_REFUSE', { chemin: 'lien/secret.txt' });
     await echoue(fs.lister(racine, 'lien'), 'CHEMIN_REFUSE', { chemin: 'lien' });
     await echoue(fs.deplacer(racine, 'ici.txt', 'lien/vole.txt'), 'CHEMIN_REFUSE', { chemin: 'lien/vole.txt' });
-    await echoue(fs.verrouiller(racine, 'lien/neuf.gtt.verrou', 'seance-a'), 'CHEMIN_REFUSE', { chemin: 'lien/neuf.gtt.verrou' });
+    await echoue(fs.verrouiller(racine, 'lien/neuf.gtt.verrou', 'seance-a', PRISE), 'CHEMIN_REFUSE', { chemin: 'lien/neuf.gtt.verrou' });
     await echoue(fs.deverrouiller(racine, 'lien/soiree.gtt.verrou', 'seance-a'), 'CHEMIN_REFUSE', { chemin: 'lien/soiree.gtt.verrou' });
     if (!SOUS_WINDOWS) {
       symlinkSync(join(dehors, 'secret.txt'), join(documents, 'secret.txt'));
@@ -291,10 +295,10 @@ describe('coquille sur un vrai disque', () => {
     const { fs, documents } = systemeSur(dossierTemporaire());
     mkdirSync(documents, { recursive: true });
     const racine = (await fs.racines()).documents;
-    assert.deepEqual(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
+    assert.deepEqual(await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a', PRISE), { pris: true });
     const pose = JSON.parse(readFileSync(join(documents, 'soiree.gtt.verrou'), 'utf8'));
     assert.deepEqual([pose.pid, pose.hote], [process.pid, hostname()]);
-    const tenu = await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-b');
+    const tenu = await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-b', PRISE);
     assert.deepEqual(tenu, { pris: false, seance: 'seance-a', depuis: pose.depuis, vivant: true });
 
     const termine = spawnSync(process.execPath, ['-e', '']);
@@ -304,7 +308,7 @@ describe('coquille sur un vrai disque', () => {
       join(documents, 'ancienne.gtt.verrou'),
       `${JSON.stringify({ seance: 'seance-terminee', pid: termine.pid, hote: hostname(), depuis })}\n`,
     );
-    assert.deepEqual(await fs.verrouiller(racine, 'ancienne.gtt.verrou', 'seance-b'), {
+    assert.deepEqual(await fs.verrouiller(racine, 'ancienne.gtt.verrou', 'seance-b', PRISE), {
       pris: false,
       seance: 'seance-terminee',
       depuis,
@@ -324,7 +328,7 @@ describe('coquille sur un vrai disque', () => {
       const { fs, documents } = systemeSur(dossierTemporaire());
       mkdirSync(documents, { recursive: true });
       const racine = (await fs.racines()).documents;
-      await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a');
+      await fs.verrouiller(racine, 'soiree.gtt.verrou', 'seance-a', PRISE);
       const pose = JSON.parse(readFileSync(join(documents, 'soiree.gtt.verrou'), 'utf8'));
       assert.deepEqual(Object.keys(pose), ['seance', 'pid', 'hote', 'depuis', 'demarrage']);
       assert.equal(pose.demarrage, demarrageDe(process.pid));
@@ -344,7 +348,7 @@ describe('coquille sur un vrai disque', () => {
           `${JSON.stringify({ seance: 'seance-p', pid: parent, hote: hostname(), depuis, ...inscrit })}\n`,
         );
         assert.deepEqual(
-          await fs.verrouiller(racine, 'parent.gtt.verrou', 'seance-b'),
+          await fs.verrouiller(racine, 'parent.gtt.verrou', 'seance-b', PRISE),
           { pris: false, seance: 'seance-p', depuis, vivant },
           nom,
         );
@@ -372,7 +376,7 @@ describe('coquille sur un vrai disque', () => {
         shell: SANS_APPEL,
         plateforme: 'darwin',
       });
-      assert.deepEqual(await fichiers.verrouiller({ id: 'documents' }, 'soiree.gtt.verrou', 'seance-a'), { pris: true });
+      assert.deepEqual(await fichiers.verrouiller({ id: 'documents' }, 'soiree.gtt.verrou', 'seance-a', PRISE), { pris: true });
       const pose = JSON.parse(readFileSync(join(documents, 'soiree.gtt.verrou'), 'utf8'));
       const enUtc = spawnSync('ps', ['-o', 'lstart=', '-p', String(process.pid)], {
         env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' },
@@ -387,7 +391,7 @@ describe('coquille sur un vrai disque', () => {
       const lecteur = [
         'const { creerFichiers } = await import(process.env.GTT_MODULE);',
         'const fichiers = creerFichiers({ emplacements: {}, racines: { portable: null, documents: process.env.GTT_DOCUMENTS }, dialog: {}, shell: {}, plateforme: "darwin" });',
-        'const tenu = await fichiers.verrouiller({ id: "documents" }, "soiree.gtt.verrou", "seance-b");',
+        'const tenu = await fichiers.verrouiller({ id: "documents" }, "soiree.gtt.verrou", "seance-b", "2026-10-06T19:05:00-04:00");',
         'process.stdout.write(JSON.stringify({ fuseau: Intl.DateTimeFormat().resolvedOptions().timeZone, tenu }));',
       ].join('\n');
       const relu = spawnSync(process.execPath, ['--input-type=module', '-e', lecteur], {

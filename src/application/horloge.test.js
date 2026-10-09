@@ -7,6 +7,7 @@
 // aucune épreuve n'attend qu'une de ses minuteries parte. Les quatre lectures
 // de chaque horloge répondent détachées de leur objet.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { describe, test } from '../../test/lanceur.js';
 import { creerHorlogePilotee, creerHorlogeSysteme } from './horloge.js';
 
@@ -125,6 +126,20 @@ describe('horloge pilotée : les minuteries (§ 19.4)', () => {
     }
   });
 
+  test("avancer ré-entrant, depuis un rappel, lève : instant() ne recule jamais, et l'horloge reste utilisable", () => {
+    const horloge = creerHorlogePilotee();
+    const lus = [];
+    horloge.planifier(() => {
+      lus.push(horloge.instant());
+      horloge.avancer(10 * MINUTE);
+    }, MINUTE);
+    assert.throws(() => horloge.avancer(2 * MINUTE), { name: 'Error', message: /ré-entrant/ });
+    assert.deepEqual(lus, [MINUTE]);
+    assert.equal(horloge.instant(), MINUTE);
+    horloge.avancer(MINUTE);
+    assert.equal(horloge.instant(), 2 * MINUTE);
+  });
+
   test('planifier refuse un délai négatif ou non fini, et un rappel qui ne se lance pas', () => {
     const horloge = creerHorlogePilotee();
     assert.throws(() => horloge.planifier(() => {}, -5), RangeError);
@@ -157,6 +172,56 @@ describe('horloge système (§ 19.4, § 14.14)', () => {
     assert.equal(horloge.annuler(id), undefined, 'un identifiant déjà annulé est sans effet');
     assert.equal(horloge.annuler('inconnu'), undefined);
     assert.equal(partie, false);
+  });
+});
+
+describe('horloge système : ses minuteries passent par setTimeout et clearTimeout', () => {
+  // Remplace un temporisateur global par un espion qui le consigne et lui
+  // délègue, le temps de corps ; le rend ensuite, quoi qu'il arrive.
+  function espionner(nom, corps) {
+    const original = globalThis[nom];
+    const appels = [];
+    globalThis[nom] = (...parametres) => {
+      appels.push(parametres);
+      return original(...parametres);
+    };
+    try {
+      corps(appels);
+    } finally {
+      globalThis[nom] = original;
+    }
+  }
+
+  test("annuler rend l'identifiant à clearTimeout, une fois", () => {
+    const horloge = creerHorlogeSysteme();
+    const id = horloge.planifier(() => {
+      throw new Error('une minuterie annulée est partie');
+    }, 60 * MINUTE);
+    espionner('clearTimeout', (appels) => {
+      horloge.annuler(id);
+      assert.deepEqual(appels, [[id]]);
+    });
+  });
+
+  test("planifier refuse un délai négatif ou non fini, et un rappel qui ne se lance pas, sans armer setTimeout", () => {
+    const horloge = creerHorlogeSysteme();
+    espionner('setTimeout', (appels) => {
+      assert.throws(() => horloge.planifier(() => {}, -1), RangeError);
+      assert.throws(() => horloge.planifier(() => {}, Number.POSITIVE_INFINITY), RangeError);
+      assert.throws(() => horloge.planifier('rappel', 5), TypeError);
+      assert.deepEqual(appels, []);
+    });
+  });
+
+  test("le décalage local se lit du fuseau du processus : Etc/GMT+4 donne −04:00, UTC +00:00", () => {
+    const module = new URL('./horloge.js', import.meta.url).href;
+    const code = `const { creerHorlogeSysteme } = await import(${JSON.stringify(module)}); process.stdout.write(creerHorlogeSysteme().horodatage());`;
+    for (const [fuseau, fin] of [['Etc/GMT+4', '-04:00'], ['UTC', '+00:00'], ['Etc/GMT-5', '+05:00']]) {
+      const lu = spawnSync(process.execPath, ['--input-type=module', '-e', code], { env: { ...process.env, TZ: fuseau }, encoding: 'utf8' });
+      assert.equal(lu.status, 0, lu.stderr);
+      assert.match(lu.stdout, FORME, fuseau);
+      assert.ok(lu.stdout.endsWith(fin), `${fuseau} : ${lu.stdout}`);
+    }
   });
 });
 
