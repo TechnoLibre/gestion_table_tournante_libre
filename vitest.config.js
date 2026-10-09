@@ -31,8 +31,9 @@ const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
 // Les épreuves node qui lisent les composants de src/interface par le
 // système de fichiers — chaînes, couleurs, en-tête, jetons lus, écouteurs du
 // plan, version affichée, graphe des couches, version qu'App reçoit par ses
-// propriétés —, et celle qui importe App.svelte pour en voir l'échec sous
-// node.
+// propriétés —, celle qui importe App.svelte pour en voir l'échec sous
+// node, et la garde du banc, qui balaie l'arbre à côté des motifs de ce
+// fichier.
 const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/arborescence.test.js',
   'test/sources_interface.test.js',
@@ -42,6 +43,7 @@ const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'src/interface/palette.test.js',
   'src/interface/plan/ecouteurs.test.js',
   'src/interface/apropos.test.js',
+  'scripts/banc/banc.test.js',
 ]);
 
 // Les épreuves node qui lisent la feuille des jetons par le système de

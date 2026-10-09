@@ -18,7 +18,8 @@
     "test:long": "vitest run --project node-long",
     "test:navigateur": "vitest run --project navigateur",
     "test:tout": "vitest run",
-    "couverture": "vitest run --project node --coverage --reporter=default"
+    "couverture": "vitest run --project node --coverage --reporter=default",
+    "banc": "node scripts/banc/lancer.js"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.2",

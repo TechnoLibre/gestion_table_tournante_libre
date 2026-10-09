@@ -68,6 +68,10 @@ test_tout: ## Joue les trois séries
 couverture: ## Mesure la couverture de la série node, module par module ; seuils durs du § 14.13
 	$(AVEC_NODE) npm run couverture
 
+.PHONY: banc
+banc: ## Relève les constantes du banc de mesure (§ 19.10), avant une livraison
+	$(AVEC_NODE) npm run banc
+
 .PHONY: build
 build: ## Construit la page dans www/
 	$(AVEC_NODE) npm run build
