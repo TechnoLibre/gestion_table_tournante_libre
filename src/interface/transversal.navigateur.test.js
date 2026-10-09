@@ -5,7 +5,9 @@
 // § 19.11, § 12.7, § 7.6, § 13.1, § 2, § 19.2, § 8.4, § 18.6) : langue
 // témoin, erreurs par leur libellé, contrastes et marques dans les deux
 // thèmes, aucune atténuation, jamais la seule couleur, teinte réservée, aucun
-// emoji, balisage littéral, bandeau, formulaires, transitions annulées.
+// emoji, balisage littéral, bandeau, formulaires, transitions annulées ;
+// puis le mécanisme des captures d'écran (§ 19.4, § 19.5, § 19.7, § 19.11),
+// chaque contrôle montré en train d'échouer sur un dossier d'épreuve.
 //
 // Un parcours unique, en langue témoin, au cadre de 1 366 × 700, atteint
 // chaque écran de test/navigateur/ecrans.js et y fait ses relevés, une fois
@@ -20,6 +22,8 @@
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { commands } from 'vitest/browser';
+import { creerExecuteurDirect } from '../application/generation.js';
 import { TABLES_APPLICATION } from '../application/libelles.js';
 import { nomAffiche } from '../application/personnes.js';
 import { etatPlaces } from '../application/places.js';
@@ -44,17 +48,26 @@ import {
   ouvrirEvenement,
 } from '../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer } from '../../test/navigateur/entrees.js';
+import { monterApp } from '../../test/navigateur/montage.js';
 import {
-  attenuations,
-  composantes,
-  contraste,
-  couleurTexte,
-  couleursPeintes,
-  designation,
-  fondPeintSous,
-  porteursDeTexte,
-  visible,
-} from '../../test/navigateur/rendu.js';
+  CADRE,
+  CHAMPS,
+  bordsPeints,
+  couleurDeJeton,
+  egales,
+  extrait,
+  releverMarques,
+  releverTextes,
+  rendu,
+  rgb,
+  cloreCaptures,
+  photographier,
+  situer,
+  stylesDuTheme,
+  texteReleve,
+} from '../../test/navigateur/captures.js';
+import { poserFeuille } from '../../test/navigateur/feuilles.js';
+import { composantes, couleursPeintes, designation, sousTheme, visible } from '../../test/navigateur/rendu.js';
 import { provenanceVisible } from './apropos.js';
 import { TABLES_INTERFACE } from './libelles.js';
 import { CONFLITS, MARQUES } from './marques.js';
@@ -63,10 +76,6 @@ const { t: tTemoin } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFA
 const { ouverture: OUVERTURE, fermeture: FERMETURE } = MARQUE_TEMOIN;
 const PROVENANCE = 'test';
 const THEMES = ['clair', 'sombre'];
-
-// Seuils du § 14.5.
-const SEUIL_TEXTE = 4.5;
-const SEUIL_MARQUE = 3;
 
 // Attributs annoncés : lus par l'accessibilité, ils sont du texte visible
 // au sens du § 14.6 (contrainte 7).
@@ -84,25 +93,6 @@ const JETON_DE_TRAME = new Map(CONFLITS.map(({ marque, jeton }) => [marque, jeto
 
 const PICTOGRAPHIQUE = /\p{Extended_Pictographic}/u;
 const LETTRE = /\p{L}/u;
-
-// Une couleur en texte, pour un message.
-const rgb = (c) => `rgb(${c.slice(0, 3).join(', ')}${c[3] === 1 ? '' : `, ${c[3]}`})`;
-const egales = (a, b) => a.join() === b.join();
-const extrait = (texte) => {
-  const plat = texte.replace(/\s+/g, ' ').trim();
-  return plat.length > 60 ? `${plat.slice(0, 57)}…` : plat;
-};
-const rendu = (element) => element.checkVisibility({ visibilityProperty: true, opacityProperty: true });
-
-// Les conteneurs désignés qui situent un élément dans son écran.
-const REPERES = '[data-liste], [data-siege], [data-table], [data-pastille], [data-panneau], [data-menu], [data-section], [data-ecran], [data-bandeau]';
-
-// Le nom d'un élément, suivi de celui du plus proche conteneur désigné qui
-// le porte : un tspan se situe par sa liste, une pastille par sa table.
-function situer(element) {
-  const repere = element.parentElement?.closest(REPERES) ?? null;
-  return repere === null ? designation(element) : `${designation(element)} dans ${designation(repere)}`;
-}
 
 // --- Les données connues de l'épreuve ------------------------------------------
 
@@ -255,297 +245,6 @@ export function fautesEmoji(racine, { titre = null } = {}) {
   if (titre !== null) textes.push({ ou: 'document.title', texte: titre });
   const fautes = textes.filter(({ texte }) => PICTOGRAPHIQUE.test(texte)).map(({ ou, texte }) => `${ou} : « ${extrait(texte)} »`);
   return { fautes, lus: textes.length };
-}
-
-// --- Les contrastes des textes et les atténuations --------------------------------
-
-// Amène un élément dans la fenêtre, s'il en sort.
-function amener(element) {
-  const b = element.getBoundingClientRect();
-  if (b.left < 0 || b.top < 0 || b.right > innerWidth || b.bottom > innerHeight) {
-    element.scrollIntoView({ block: 'center', inline: 'nearest' });
-  }
-}
-
-// Le <svg> le plus extérieur qui contient un élément SVG.
-function svgExterieur(element) {
-  let svg = element.ownerSVGElement ?? element;
-  while (svg.ownerSVGElement !== null) svg = svg.ownerSVGElement;
-  return svg;
-}
-
-// Feuille qui rend chaque élément atteignable le temps d'une lecture, comme
-// celle de rendu.js : elementsFromPoint suit l'atteinte du pointeur.
-const ATTEIGNABLE = '*, *::before, *::after { pointer-events: auto !important; }';
-
-// Le point (x, y) de la fenêtre montre-t-il le dessin qui porte l'élément ?
-// Dans la fenêtre, et le <svg> extérieur, ou l'un de ses descendants, parmi
-// les éléments présents au point : un ancêtre qui défile rogne ce qui
-// déborde de sa boîte, et le point rogné n'atteint plus le dessin.
-function montreLeDessin(element, x, y) {
-  if (!(x >= 0 && y >= 0 && x < innerWidth && y < innerHeight)) return false;
-  const svg = svgExterieur(element);
-  const feuille = document.createElement('style');
-  feuille.textContent = ATTEIGNABLE;
-  document.head.append(feuille);
-  try {
-    return document.elementsFromPoint(x, y).some((n) => svg.contains(n));
-  } finally {
-    feuille.remove();
-  }
-}
-
-// Le centre de la boîte d'un élément SVG montre-t-il son dessin ?
-function centreDansLeDessin(element) {
-  const b = element.getBoundingClientRect();
-  return montreLeDessin(element, b.left + b.width / 2, b.top + b.height / 2);
-}
-
-// Le plus faible contraste d'une couleur sur une liste de fonds.
-const pire = (couleur, fonds) =>
-  fonds.map((fond) => ({ fond, ratio: contraste(couleur, fond) })).reduce((a, b) => (b.ratio < a.ratio ? b : a));
-
-// Les champs de saisie dont la valeur ou le texte indicatif se peint.
-const CHAMPS = 'input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):not([type="hidden"]), select, textarea';
-
-/**
- * Contrastes des textes rendus sous racine (§ 14.5) : chaque porteur de
- * texte et chaque champ de saisie, son texte indicatif compris, sur le fond
- * peint dessous ; un texte SVG par son fill sur la forme dessous. Un porteur
- * que l'œil ne voit pas — couvert, rogné, de boîte vide — n'est pas mesuré.
- * → { fautes, attenuations, couleurs: Map(clé → couleurs), mesures }
- */
-export function releverTextes(racine) {
-  const fautes = [];
-  const fautesAttenuation = [];
-  const couleurs = new Map();
-  let mesures = 0;
-  const mesurer = (cle, nom, couleurDe, fondDe, cible) => {
-    let couleur;
-    let fonds;
-    try {
-      couleur = couleurDe();
-      fonds = fondDe();
-    } catch (erreur) {
-      fautes.push(`${nom} : ${erreur.message}`);
-      return;
-    }
-    mesures += 1;
-    if (fonds.length === 0) {
-      fautes.push(`${nom} : aucun fond opaque dessous`);
-      return;
-    }
-    try {
-      const { fond, ratio } = pire(couleur, fonds);
-      if (ratio < SEUIL_TEXTE) fautes.push(`${nom} : ${ratio.toFixed(2)}:1, ${rgb(couleur)} sur ${rgb(fond)}`);
-    } catch (erreur) {
-      fautes.push(`${nom} : ${erreur.message}`);
-    }
-    couleurs.set(cle, `${rgb(couleur)} sur ${fonds.map(rgb).join(' + ')}`);
-    for (const a of attenuations(cible)) fautesAttenuation.push(`${nom} : ${designation(a)} ${a.propriete}: ${a.valeur}`);
-  };
-  for (const [rang, porteur] of porteursDeTexte(racine).entries()) {
-    const { element } = porteur;
-    if (!rendu(element)) continue;
-    const b = element.getBoundingClientRect();
-    if (b.width === 0 || b.height === 0) continue;
-    amener(element);
-    const svg = element instanceof SVGElement;
-    if (!svg && visible(porteur) !== true) continue;
-    // Un texte SVG se lit par la géométrie du dessin, non par l'atteinte
-    // d'un point : son centre doit tomber dans le <svg> extérieur, qui rogne
-    // ce qui le déborde, et dans la fenêtre.
-    if (svg && !centreDansLeDessin(element)) continue;
-    const texte = porteur.pseudo === null ? [...element.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join('') : '';
-    const nom = `${situer(element)}${porteur.pseudo ?? ''} « ${extrait(texte)} »`;
-    mesurer(`${rang}:${designation(porteur)}`, nom, () => couleurTexte(porteur), () => fondPeintSous(porteur), porteur);
-  }
-  for (const [rang, champ] of [...racine.querySelectorAll(CHAMPS)].entries()) {
-    if (!rendu(champ)) continue;
-    amener(champ);
-    if (visible(champ) !== true) continue;
-    const nom = designation(champ);
-    mesurer(`champ ${rang}:${nom}`, `${nom} (valeur)`, () => composantes(getComputedStyle(champ).color), () => fondPeintSous(champ), champ);
-    if ((champ.getAttribute('placeholder') ?? '') !== '') {
-      mesurer(`indicatif ${rang}:${nom}`, `${nom}::placeholder`, () => composantes(getComputedStyle(champ, '::placeholder').color), () => fondPeintSous(champ), champ);
-    }
-  }
-  return { fautes, attenuations: fautesAttenuation, couleurs, mesures };
-}
-
-// --- Les marques -------------------------------------------------------------------
-
-/** La couleur résolue d'un jeton dans le thème courant. */
-export function couleurDeJeton(jeton) {
-  const sonde = document.createElement('span');
-  sonde.style.color = `var(${jeton})`;
-  document.body.append(sonde);
-  try {
-    return composantes(getComputedStyle(sonde).color);
-  } finally {
-    sonde.remove();
-  }
-}
-
-// Des points, dans le repère propre d'une forme, où elle peint quoi
-// ('fill' ou 'stroke') et que la fenêtre montre, POINTS_MAX au plus : le
-// centre de sa boîte, les milieux de ses bords, puis une grille de neuf sur
-// neuf, dans cet ordre ; aucun pour une forme rognée en entier.
-const POINTS_MAX = 8;
-function pointsPeints(forme, quoi) {
-  const b = forme.getBBox();
-  const candidats = [
-    [b.x + b.width / 2, b.y + b.height / 2],
-    [b.x + b.width / 2, b.y],
-    [b.x + b.width, b.y + b.height / 2],
-    [b.x + b.width / 2, b.y + b.height],
-    [b.x, b.y + b.height / 2],
-  ];
-  for (let i = 0; i <= 8; i += 1) for (let j = 0; j <= 8; j += 1) candidats.push([b.x + (b.width * i) / 8, b.y + (b.height * j) / 8]);
-  const versEcran = forme.getScreenCTM();
-  const points = [];
-  for (const [x, y] of candidats) {
-    const point = new DOMPoint(x, y);
-    if (!(quoi === 'stroke' ? forme.isPointInStroke(point) : forme.isPointInFill(point))) continue;
-    const ecran = point.matrixTransform(versEcran);
-    if (montreLeDessin(forme, ecran.x, ecran.y)) points.push(point);
-    if (points.length === POINTS_MAX) break;
-  }
-  return points;
-}
-
-// Ce qui est peint sous la plupart des points où la forme peint : les
-// couleurs dessous en chaque point, puis la liste la plus fréquente, la
-// première à égalité. Un trait qui croise un autre trait en un point se
-// juge sur ce qui l'entoure, non sur ce croisement.
-function dessousLePlusFrequent(forme, quoi) {
-  const comptes = new Map();
-  const points = pointsPeints(forme, quoi);
-  if (points.length === 0) return null;
-  for (const point of points) {
-    const couleurs = dessousAuPoint(forme, point);
-    const cle = couleurs.map(rgb).join(' + ');
-    const vu = comptes.get(cle) ?? { couleurs, n: 0 };
-    vu.n += 1;
-    comptes.set(cle, vu);
-  }
-  return [...comptes.values()].reduce((a, b) => (b.n > a.n ? b : a)).couleurs;
-}
-
-// Les couleurs peintes sous une forme SVG au point donné de son repère : une
-// sonde sans peinture, posée juste avant elle chez son parent, se mesure par
-// fondPeintSous, qui lit les formes peintes avant elle à ce point, puis ce
-// qui est sous le dessin.
-function dessousAuPoint(forme, point) {
-  const ecran = point.matrixTransform(forme.getScreenCTM());
-  const parent = forme.parentNode;
-  const matrice = parent.getScreenCTM();
-  const local = ecran.matrixTransform(matrice.inverse());
-  const cote = 0.5 / Math.hypot(matrice.a, matrice.b);
-  const sonde = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  sonde.setAttribute('x', String(local.x - cote / 2));
-  sonde.setAttribute('y', String(local.y - cote / 2));
-  sonde.setAttribute('width', String(cote));
-  sonde.setAttribute('height', String(cote));
-  sonde.style.fill = 'none';
-  sonde.style.stroke = 'none';
-  parent.insertBefore(sonde, forme);
-  try {
-    return fondPeintSous(sonde);
-  } finally {
-    sonde.remove();
-  }
-}
-
-// Les bords d'un élément HTML qui se peignent, et leurs couleurs.
-function bordsPeints(style) {
-  return ['top', 'right', 'bottom', 'left']
-    .filter((cote) => style.getPropertyValue(`border-${cote}-style`) !== 'none' && parseFloat(style.getPropertyValue(`border-${cote}-width`)) > 0)
-    .map((cote) => composantes(style.getPropertyValue(`border-${cote}-color`)));
-}
-
-/**
- * Ce qu'une marque peint de son jeton, et ce qui l'entoure : { peinture,
- * voisins }. Une forme SVG : son remplissage — une trame se mesure contre
- * les autres couleurs de son motif, un aplat contre ce qui est peint dessous
- * en un point qu'il couvre — ou son trait, contre ce qui est dessous en un
- * point du trait et contre son propre remplissage. Un élément HTML : sa
- * bordure ou son fond, contre ce qui est peint sous son parent, et son fond
- * propre pour une bordure. peinture null : le jeton n'est peint nulle part.
- */
-function voisinage(element, jeton) {
-  if (element instanceof SVGGeometryElement) {
-    const motif = /^url\(/.test(getComputedStyle(element).fill);
-    const { fill, stroke } = couleursPeintes(element);
-    if (fill.some((c) => egales(c, jeton))) {
-      if (motif) return { peinture: 'trame', voisins: fill.filter((c) => !egales(c, jeton)) };
-      const dessous = dessousLePlusFrequent(element, 'fill');
-      return dessous === null ? { peinture: 'cachee', voisins: [] } : { peinture: 'remplissage', voisins: dessous };
-    }
-    if (stroke.some((c) => egales(c, jeton))) {
-      const dessous = dessousLePlusFrequent(element, 'stroke');
-      return dessous === null ? { peinture: 'cachee', voisins: [] } : { peinture: 'trait', voisins: [...dessous, ...fill] };
-    }
-    return { peinture: null, voisins: [] };
-  }
-  const style = getComputedStyle(element);
-  const fond = composantes(style.backgroundColor);
-  if (bordsPeints(style).some((c) => egales(c, jeton))) {
-    return { peinture: 'bordure', voisins: [...(fond[3] === 1 ? [fond] : []), ...fondPeintSous(element.parentElement)] };
-  }
-  if (egales(fond, jeton)) return { peinture: 'fond', voisins: fondPeintSous(element.parentElement) };
-  return { peinture: null, voisins: [] };
-}
-
-/**
- * Les marques rendues sous racine (§ 14.5, § 19.5) : chacune nommée au
- * registre, peinte de son jeton, à 3:1 de ce qui l'entoure, sans
- * atténuation. → { vues: string[], fautes, attenuations, mesures }
- */
-export function releverMarques(racine) {
-  const vues = new Set();
-  const fautes = [];
-  const fautesAttenuation = [];
-  let mesures = 0;
-  for (const element of racine.querySelectorAll('[data-marque]')) {
-    if (!rendu(element)) continue;
-    const nom = element.dataset.marque;
-    const entree = MARQUES.find((m) => m.nom === nom);
-    if (entree === undefined) {
-      fautes.push(`${situer(element)} : marque hors du registre MARQUES`);
-      continue;
-    }
-    for (const a of attenuations(element)) fautesAttenuation.push(`${situer(element)} : ${designation(a)} ${a.propriete}: ${a.valeur}`);
-    // Sous une fenêtre modale, la page est inerte et le test d'atteinte
-    // rencontre la fenêtre d'abord : une marque HTML de la page ne s'y
-    // mesure pas, comme ses textes, et se mesure sur les écrans sans
-    // fenêtre. Le dessin SVG, lu par sa géométrie, se mesure partout. Une
-    // marque ne compte comme vue que là où elle se mesure.
-    const modale = document.querySelector('dialog:modal');
-    if (modale !== null && !(element instanceof SVGElement) && !modale.contains(element)) continue;
-    vues.add(nom);
-    amener(element);
-    const jeton = couleurDeJeton(entree.jeton);
-    try {
-      const { peinture, voisins } = voisinage(element, jeton);
-      if (peinture === null) {
-        fautes.push(`${situer(element)} : ne peint pas son jeton ${entree.jeton} (${rgb(jeton)})`);
-        continue;
-      }
-      // Rognée par un ancêtre qui défile, la marque ne se voit pas ici.
-      if (peinture === 'cachee') continue;
-      if (voisins.length === 0) {
-        fautes.push(`${situer(element)} : ${peinture} sans rien d'opaque autour`);
-        continue;
-      }
-      mesures += 1;
-      const { fond, ratio } = pire(jeton, voisins);
-      if (ratio < SEUIL_MARQUE) fautes.push(`${situer(element)} (${peinture}) : ${ratio.toFixed(2)}:1, ${rgb(jeton)} contre ${rgb(fond)}`);
-    } catch (erreur) {
-      fautes.push(`${situer(element)} : ${erreur.message}`);
-    }
-  }
-  return { vues: [...vues], fautes, attenuations: fautesAttenuation, mesures };
 }
 
 // --- Les listes de noms et les tables -----------------------------------------------
@@ -1135,13 +834,11 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
       return finie;
     };
     expect(await attendTransition()).toBe(true);
-    const feuille = document.createElement('style');
-    feuille.textContent = '*,*::before,*::after{transition:none!important;animation:none!important}';
-    document.head.append(feuille);
+    const retirer = poserFeuille();
     try {
       expect(await attendTransition()).toBe(false);
     } finally {
-      feuille.remove();
+      retirer();
     }
   });
 });
@@ -1360,9 +1057,7 @@ describe('balisage littéral (§ 13.1)', () => {
 describe('transitions annulées (§ 19.2)', () => {
   test('sous une feuille qui annule transitions et animations, chaque écran s’atteint', async () => {
     await fixerCadre(1366, 700);
-    const feuille = document.createElement('style');
-    feuille.textContent = '*,*::before,*::after{transition:none!important;animation:none!important}';
-    document.head.append(feuille);
+    const retirer = poserFeuille();
     const fautes = [];
     let atteintes = 0;
     try {
@@ -1378,10 +1073,326 @@ describe('transitions annulées (§ 19.2)', () => {
         }
       }
     } finally {
-      feuille.remove();
+      retirer();
     }
     expect(atteintes, 'écrans atteints').toBeGreaterThan(0);
     expect(atteintes + fautes.length).toBe(ECRANS.length);
     aucuneFaute(fautes, 'transitions annulées');
   }, 900_000);
+});
+
+// --- Les captures d'écran : le mécanisme ------------------------------------------------------
+
+describe('les captures d’écran : chaque contrôle échoue en nommant la capture (§ 19.4, § 19.5, § 19.7, § 19.11)', () => {
+  const ACCUEIL = '[data-ecran="accueil"]';
+  const ADRESSE_INVENTEE = 'http://192.0.2.1/';
+  let retirer = null;
+
+  beforeAll(async () => {
+    await fixerCadre(CADRE.largeur, CADRE.hauteur);
+    retirer = poserFeuille();
+    await commands.requetesHorsBoucle();
+  });
+
+  afterAll(() => {
+    retirer?.();
+  });
+
+  // Un montage du premier écran, sous la provenance des captures, sur un
+  // dossier d'épreuve neuf ; tout deux défaits à la fin.
+  async function avecMontage(faire) {
+    const racine = await commands.dossierEpreuve();
+    const m = await monterApp({ provenance: 'documentation', executeur: creerExecuteurDirect({ coeursDisponibles: 4 }) });
+    try {
+      await attendre('le premier écran', () => m.racine.querySelector(`${ACCUEIL} [data-dossier-travail]`));
+      const racineNeutre = m.seance.etat().racine.chemin;
+      return await faire(m, { racine, racineNeutre, ecrire: { mode: 'ecrire', racine }, verifier: { mode: 'verifier', racine } });
+    } finally {
+      m.demonter();
+      await commands.effacerDossierEpreuve(racine);
+    }
+  }
+
+  // Pose un élément dans le premier écran, le temps d'une capture.
+  function poser(m, html) {
+    const gabarit = document.createElement('template');
+    gabarit.innerHTML = html;
+    const element = gabarit.content.firstElementChild;
+    m.racine.querySelector(ACCUEIL).append(element);
+    return element;
+  }
+
+  // Une requête vers une adresse inventée hors de la boucle locale : l'erreur
+  // qu'elle rend.
+  async function requeteInventee() {
+    try {
+      await fetch(ADRESSE_INVENTEE, { mode: 'no-cors', signal: AbortSignal.timeout(10_000) });
+      return null;
+    } catch (erreur) {
+      return erreur;
+    }
+  }
+
+  // Les échecs hors boucle que node relève, attendus image après image : ils
+  // lui arrivent par le protocole de débogage, au plus quelques images
+  // après le rejet que la page a reçu, et après la requête elle-même.
+  async function echecsReleves() {
+    const echecs = [];
+    for (let image = 0; image < 60 && echecs.length === 0; image += 1) {
+      echecs.push(...(await commands.echecsHorsBoucle()));
+      await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    }
+    return echecs;
+  }
+
+  // Le mandataire mort de test/chromium.js refuse la connexion : la requête
+  // n'est jamais partie de la machine, et Chromium le dit par sa cause.
+  test('réseau : une requête vers une adresse littérale inventée échoue en connexion au mandataire mort, la page de la boucle locale se charge, le relevé la nomme', async () => {
+    expect((await fetch('/collecteur.js')).ok).toBe(true);
+    expect(await commands.requetesHorsBoucle()).toEqual([]);
+    await commands.echecsHorsBoucle();
+    const erreur = await requeteInventee();
+    expect(erreur?.name, String(erreur)).toBe('TypeError');
+    expect(await echecsReleves()).toEqual([{ adresse: ADRESSE_INVENTEE, cause: 'net::ERR_PROXY_CONNECTION_FAILED' }]);
+    expect(await commands.requetesHorsBoucle()).toEqual([ADRESSE_INVENTEE]);
+  });
+
+  test('un sélecteur manquant, une erreur au collecteur, une requête hors boucle : chacun échoue en nommant la capture', async () => {
+    await avecMontage(async (m, { ecrire }) => {
+      await expect(photographier(m, '01-premier-ecran', { ...ecrire, condition: '[data-absent]' })).rejects.toThrow(
+        'capture 01-premier-ecran : sélecteur absent « [data-absent] »',
+      );
+      await requeteInventee();
+      expect(await echecsReleves()).toHaveLength(1);
+      await expect(photographier(m, '01-premier-ecran', ecrire)).rejects.toThrow(
+        `capture 01-premier-ecran : requête hors de la boucle locale : ${ADRESSE_INVENTEE}`,
+      );
+      console.error('erreur provoquée par l’épreuve');
+      await expect(photographier(m, '01-premier-ecran', ecrire)).rejects.toThrow(
+        'capture 01-premier-ecran : collecteur : console.error « erreur provoquée par l’épreuve »',
+      );
+    });
+  });
+
+  test('un chemin hors de la racine neutre, un élément de texte vide, une clé brute, une marque de la langue témoin : chacun échoue', async () => {
+    await avecMontage(async (m, { ecrire }) => {
+      const cas = [
+        ['<p>/home/exemple/notes.txt</p>', 'chemin hors de la racine neutre : « /home/exemple/notes.txt »'],
+        ['<p>Rangé sous C:\\Users\\Autre\\soiree.gtt.json</p>', 'chemin hors de la racine neutre : « C:\\Users\\Autre\\soiree.gtt.json »'],
+        ['<button type="button"></button>', 'élément de texte vide : button dans '],
+        ['<p>plan.echelle.mention</p>', 'clé brute affichée : « plan.echelle.mention »'],
+        [`<p>${OUVERTURE}Libellé${FERMETURE}</p>`, `marque de la langue témoin : « ${OUVERTURE}Libellé${FERMETURE} »`],
+      ];
+      for (const [html, nature] of cas) {
+        const element = poser(m, html);
+        try {
+          await expect(photographier(m, '01-premier-ecran', ecrire), html).rejects.toThrow(`capture 01-premier-ecran : ${nature}`);
+        } finally {
+          element.remove();
+        }
+      }
+    });
+  });
+
+  test('publication : zéro capture échoue ; une étape en échec ne publie rien — attente jetée, manifeste et images inchangés', async () => {
+    await avecMontage(async (m, { racine, racineNeutre, ecrire }) => {
+      const declarees = ['01-premier-ecran', '01b-passer-en-ecriture'];
+      await expect(commands.publierCaptures({ declarees: [], racine, racineNeutre })).rejects.toThrow('aucune capture déclarée');
+      await expect(commands.publierCaptures({ declarees, racine, racineNeutre })).rejects.toThrow('aucune capture déposée');
+      for (const fichier of declarees) await photographier(m, fichier, ecrire);
+      const bilan = await commands.publierCaptures({ declarees, racine, racineNeutre });
+      expect(bilan).toEqual({ ecrites: declarees, gardees: [], retirees: [], manifeste: true });
+      const publie = await commands.empreintesDossier({ racine });
+      expect(publie.map(([chemin]) => chemin)).toEqual([
+        'doc/captures/01-premier-ecran.png',
+        'doc/captures/01b-passer-en-ecriture.png',
+        'doc/captures/manifeste.json',
+      ]);
+
+      poser(m, '<p>Iris Ombrelle</p>');
+      await photographier(m, '01-premier-ecran', ecrire);
+      await expect(photographier(m, '01b-passer-en-ecriture', { ...ecrire, condition: '[data-absent]' })).rejects.toThrow();
+      expect((await commands.empreintesDossier({ racine })).map(([chemin]) => chemin)).toContain('doc/captures/.attente/01-premier-ecran.json');
+      await expect(commands.publierCaptures({ declarees, racine, racineNeutre })).rejects.toThrow(
+        'étapes sans capture déposée, rien n’est publié : 01b-passer-en-ecriture',
+      );
+      expect(await commands.empreintesDossier({ racine })).toEqual(publie);
+    });
+  });
+
+  test('publication : une empreinte d’étape inchangée laisse les octets de l’image ; changée, l’image se réécrit', async () => {
+    await avecMontage(async (m, { racine, racineNeutre, ecrire }) => {
+      const declarees = ['01-premier-ecran'];
+      const image = async () => new Map(await commands.empreintesDossier({ racine })).get('doc/captures/01-premier-ecran.png');
+      await photographier(m, '01-premier-ecran', ecrire);
+      await commands.publierCaptures({ declarees, racine, racineNeutre });
+      const premiere = await image();
+      expect(premiere).toMatch(/^[0-9a-f]{64}$/);
+
+      // Une pastille sans texte ni marque, dans un coin vide : les pixels
+      // changent, l'entrée non.
+      poser(m, '<div style="position: fixed; right: 0; bottom: 0; width: 6px; height: 6px; background: rgb(200, 30, 30)"></div>');
+      await photographier(m, '01-premier-ecran', ecrire);
+      const deposee = new Map(await commands.empreintesDossier({ racine })).get('doc/captures/.attente/01-premier-ecran.png');
+      expect(deposee).not.toBe(premiere);
+      expect(await commands.publierCaptures({ declarees, racine, racineNeutre })).toEqual({
+        ecrites: [],
+        gardees: declarees,
+        retirees: [],
+        manifeste: false,
+      });
+      expect(await image()).toBe(premiere);
+
+      // Un texte de plus : l'entrée change, l'image se réécrit.
+      poser(m, '<p>Théo Pervenche</p>');
+      await photographier(m, '01-premier-ecran', ecrire);
+      expect(await commands.publierCaptures({ declarees, racine, racineNeutre })).toEqual({
+        ecrites: declarees,
+        gardees: [],
+        retirees: [],
+        manifeste: true,
+      });
+      expect(await image()).not.toBe(premiere);
+    });
+  });
+
+  test('vérification : la même étape passe ; un libellé modifié est un écart qui nomme l’étape et le texte', async () => {
+    await avecMontage(async (m, { racine, racineNeutre, ecrire, verifier }) => {
+      await photographier(m, '01-premier-ecran', ecrire);
+      await commands.publierCaptures({ declarees: ['01-premier-ecran'], racine, racineNeutre });
+      await photographier(m, '01-premier-ecran', verifier);
+      const titre = m.racine.querySelector(`${ACCUEIL} h2`);
+      const avant = titre.textContent;
+      titre.textContent = `${avant} modifié`;
+      await expect(photographier(m, '01-premier-ecran', verifier)).rejects.toThrow(
+        `01-premier-ecran (étape 1) : écart de texte, rang ${texteReleve(m.racine).indexOf(`${avant} modifié`)} : « ${avant} modifié » au lieu de « ${avant} »`,
+      );
+    });
+  });
+
+  test('cadre, facteur d’échelle, thème, chaîne témoin, feuille, contraste : chacun échoue en nommant la capture', async () => {
+    await avecMontage(async (m, { ecrire }) => {
+      const refus = (nature) => expect(photographier(m, '01-premier-ecran', ecrire)).rejects.toThrow(nature);
+      await fixerCadre(CADRE.largeur, CADRE.hauteur - 1);
+      try {
+        await refus(`capture 01-premier-ecran : cadre ${CADRE.largeur} × ${CADRE.hauteur - 1}, attendu ${CADRE.largeur} × ${CADRE.hauteur}`);
+      } finally {
+        await fixerCadre(CADRE.largeur, CADRE.hauteur);
+      }
+      // Le facteur que la page lit, remplacé le temps d'une capture.
+      const facteur = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
+      Object.defineProperty(window, 'devicePixelRatio', { value: 2, configurable: true });
+      try {
+        await refus('capture 01-premier-ecran : facteur d’échelle 2, attendu 1');
+      } finally {
+        if (facteur === undefined) delete window.devicePixelRatio;
+        else Object.defineProperty(window, 'devicePixelRatio', facteur);
+      }
+      expect(devicePixelRatio).toBe(1);
+      const documentRacine = document.documentElement;
+      const theme = documentRacine.getAttribute('data-theme');
+      documentRacine.setAttribute('data-theme', 'sombre');
+      try {
+        await refus('capture 01-premier-ecran : thème « sombre », l’image se prend en thème clair');
+      } finally {
+        documentRacine.setAttribute('data-theme', theme);
+      }
+      m.racine.style.setProperty('--police-interface', 'serif');
+      try {
+        await refus(/^capture 01-premier-ecran : chaîne témoin à [\d.]+ px/);
+      } finally {
+        m.racine.style.removeProperty('--police-interface');
+      }
+      retirer();
+      try {
+        await refus('capture 01-premier-ecran : la feuille qui annule transitions et animations n’est pas posée');
+      } finally {
+        retirer = poserFeuille();
+      }
+      const pale = poser(m, '<p style="position: fixed; left: 600px; top: 300px; z-index: 2147483647; margin: 0; color: rgb(210, 210, 210); background: rgb(255, 255, 255)">Gris pâle</p>');
+      try {
+        await refus(/^capture 01-premier-ecran : thème clair : \d+ faute\(s\) de contraste[^]*« Gris pâle »/);
+      } finally {
+        pale.remove();
+      }
+      await photographier(m, '01-premier-ecran', ecrire);
+    });
+  });
+
+  test('relevé des styles : un porteur à demi hors de la fenêtre ne fait rien défiler et n’entre pas dans les styles', async () => {
+    await avecMontage(async (m) => {
+      const releve = async () => {
+        const styles = {};
+        for (const nom of THEMES) styles[nom] = (await sousTheme(nom, () => stylesDuTheme(m.racine))).styles;
+        return styles;
+      };
+      const defilements = () => [document.scrollingElement, ...m.racine.querySelectorAll('*')].map((e) => `${e.scrollTop},${e.scrollLeft}`).join(';');
+      const sans = await releve();
+      // Le porteur se pose six pixels au-dessus du bord bas de la fenêtre,
+      // son centre au-dessous ; une cale le descend, une queue fait défiler.
+      const bloc = poser(m, '<div><div data-cale></div><p style="margin: 0; line-height: 40px; color: rgb(20, 60, 20)">Texte à demi caché</p><div style="height: 1500px"></div></div>');
+      const cale = bloc.querySelector('[data-cale]');
+      const porteur = bloc.querySelector('p');
+      cale.style.height = `${innerHeight - 6 - porteur.getBoundingClientRect().top}px`;
+      try {
+        expect(Math.round(porteur.getBoundingClientRect().top)).toBe(innerHeight - 6);
+        const avant = defilements();
+        const avec = await releve();
+        expect(defilements()).toBe(avant);
+        expect(avec).toEqual(sans);
+      } finally {
+        bloc.remove();
+      }
+    });
+  });
+
+  test('clôture : une épreuve du parcours en échec ne publie rien, jette l’attente et se nomme ; sans échec, la clôture publie', async () => {
+    await avecMontage(async (m, { racine, racineNeutre, ecrire }) => {
+      const declarees = ['01-premier-ecran'];
+      const clore = (echecs) => cloreCaptures({ echecs, declarees, mode: 'ecrire', racine, racineNeutre });
+      await photographier(m, '01-premier-ecran', ecrire);
+      await expect(clore(['20 « Défaire » en lecture'])).rejects.toThrow('captures non publiées : 1 épreuve(s) du parcours en échec : « 20 « Défaire » en lecture »');
+      expect(await commands.empreintesDossier({ racine })).toEqual([]);
+      await photographier(m, '01-premier-ecran', ecrire);
+      expect(await clore([])).toEqual({ declarees, bilan: { ecrites: declarees, gardees: [], retirees: [], manifeste: true } });
+    });
+  });
+
+  test('publication : un dépôt qui nomme un chemin de la machine est refusé par la garde de la contrainte 27, le chemin nommé', async () => {
+    await avecMontage(async (m, { racine, racineNeutre, ecrire }) => {
+      const entree = await photographier(m, '01-premier-ecran', ecrire);
+      const forgee = { ...entree, texte: [...entree.texte, '/home/exemple/x'] };
+      await commands.deposerCapture({ fichier: '01-premier-ecran', entree: forgee, chemin: `${racine}/doc/captures/.attente/01-premier-ecran.png`, racine });
+      await expect(commands.publierCaptures({ declarees: ['01-premier-ecran'], racine, racineNeutre })).rejects.toThrow(
+        'doc/captures/01-premier-ecran.png : chemin hors de la racine neutre : « /home/exemple/x »',
+      );
+      expect(await commands.empreintesDossier({ racine })).toEqual([]);
+    });
+  });
+
+  test('publication : une image qui n’est plus déclarée part ; une image remplacée, à empreinte d’étape égale, se réécrit', async () => {
+    await avecMontage(async (m, { racine, racineNeutre, ecrire }) => {
+      const declarees = ['01-premier-ecran'];
+      const empreintes = async () => new Map(await commands.empreintesDossier({ racine }));
+      await photographier(m, '01-premier-ecran', ecrire);
+      await commands.copierDansEpreuve({ racine, depuis: 'doc/captures/.attente/01-premier-ecran.png', vers: 'doc/captures/09-refus-sur-place.png' });
+      expect((await empreintes()).has('doc/captures/09-refus-sur-place.png')).toBe(true);
+      const bilan = await commands.publierCaptures({ declarees, racine, racineNeutre });
+      expect(bilan.retirees).toEqual(['09-refus-sur-place']);
+      expect([...(await empreintes()).keys()]).toEqual(['doc/captures/01-premier-ecran.png', 'doc/captures/manifeste.json']);
+      const publiee = (await empreintes()).get('doc/captures/01-premier-ecran.png');
+
+      // Une autre image prend la place de la publiée : une pastille change
+      // les pixels, l'entrée non.
+      const pastille = poser(m, '<div style="position: fixed; right: 0; bottom: 0; width: 6px; height: 6px; background: rgb(200, 30, 30)"></div>');
+      await photographier(m, '01-premier-ecran', ecrire);
+      pastille.remove();
+      await commands.copierDansEpreuve({ racine, depuis: 'doc/captures/.attente/01-premier-ecran.png', vers: 'doc/captures/01-premier-ecran.png' });
+      const remplacee = (await empreintes()).get('doc/captures/01-premier-ecran.png');
+      expect(remplacee).not.toBe(publiee);
+      await photographier(m, '01-premier-ecran', ecrire);
+      expect(await commands.publierCaptures({ declarees, racine, racineNeutre })).toMatchObject({ ecrites: declarees, gardees: [], retirees: [] });
+      expect((await empreintes()).get('doc/captures/01-premier-ecran.png')).not.toBe(remplacee);
+    });
+  });
 });

@@ -15,9 +15,16 @@
 //             construction du livrable, sans seconde configuration à tenir
 //             d'accord avec la première. Il joue les épreuves de src/ et
 //             celles de l'outillage partagé de test/navigateur/.
+//             Chromium y tourne sans réseau hors de la boucle locale, au
+//             facteur d'échelle 1 (test/chromium.js). Les commandes des
+//             captures d'écran (test/navigateur/commandes_documentation.js)
+//             y sont déclarées, et le mode des captures, que GTT_CAPTURES
+//             choisit — verifier par défaut, ecrire sous make captures —,
+//             arrive à la page par provide (§ 19.5).
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
-import { optionsChromium } from './test/chromium.js';
+import { optionsNavigateur } from './test/chromium.js';
+import * as commandesDocumentation from './test/navigateur/commandes_documentation.js';
 import { coeursDisponibles, reglagesSeries } from './test/machine.js';
 
 // Les séries node suivent le nombre de cœurs de la machine (test/machine.js) :
@@ -33,7 +40,11 @@ const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
 // plan, version affichée, graphe des couches, version qu'App reçoit par ses
 // propriétés —, celle qui importe App.svelte pour en voir l'échec sous
 // node, et la garde du banc, qui balaie l'arbre à côté des motifs de ce
-// fichier.
+// fichier. S'y ajoutent les épreuves qui chargent ce fichier : il nomme les
+// composants dans son motif, et son graphe porte les commandes des captures
+// d'écran, qui balaient doc/captures ; la garde des lecteurs par le disque
+// (test/arborescence.test.js), textuelle, les compte parmi les lecteurs des
+// composants.
 const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/arborescence.test.js',
   'test/sources_interface.test.js',
@@ -44,6 +55,9 @@ const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'src/interface/plan/ecouteurs.test.js',
   'src/interface/apropos.test.js',
   'scripts/banc/banc.test.js',
+  'test/chromium.test.js',
+  'test/machine.test.js',
+  'test/rapporteur.test.js',
 ]);
 
 // Les épreuves node qui lisent la feuille des jetons par le système de
@@ -158,8 +172,10 @@ export default defineConfig({
         test: {
           name: 'navigateur',
           include: ['src/**/*.navigateur.test.js', 'test/**/*.navigateur.test.js'],
-          browser: { enabled: true, headless: true, provider: playwright(optionsChromium(process.env)),
-                     instances: [{ browser: 'chromium' }] } } },
+          provide: { captures: { mode: commandesDocumentation.modeCaptures(process.env) } },
+          browser: { enabled: true, headless: true, provider: playwright(optionsNavigateur(process.env)),
+                     instances: [{ browser: 'chromium' }],
+                     commands: Object.fromEntries(commandesDocumentation.COMMANDES.map((nom) => [nom, commandesDocumentation[nom]])) } } },
     ],
   },
 });

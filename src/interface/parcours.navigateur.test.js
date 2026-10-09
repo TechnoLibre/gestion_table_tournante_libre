@@ -11,8 +11,10 @@
 // laissé, affirme sa condition avant la suivante, et finit sur un collecteur
 // d'erreurs vide.
 //
-// Le parcours suit les captures du § 19.3 qui relèvent de l'itération — 01,
-// 01b, 02 à 09, 11, 19, 20 —, puis l'ordre de lecture du § 2.1 sur
+// Le parcours est le parcours photographié (§ 19.1, § 19.3) : il suit les
+// captures du § 19.3 que l'itération photographie — 01, 01b, 02, 02b, 03 à
+// 07, 07b, 08 à 10, les deux 07a sur la grande démonstration que 10 a
+// chargée, 11, 19, 20 —, puis l'ordre de lecture du § 2.1 sur
 // l'événement retenu, les fenêtres — aucune pendant un geste non
 // destructeur, une qui nomme ce qui part pour chaque geste qui détruit —,
 // enfin chaque famille de geste modifiant en lecture puis sur un plan
@@ -21,24 +23,39 @@
 // que celle de l'application. Aucun délai fixe : chaque étape attend un
 // état du document (§ 19.3).
 //
+// Une épreuve qui porte une capture finit, ses conditions affirmées, par
+// photographier (test/navigateur/captures.js) ; une épreuve qui continue
+// au-delà de l'écran photographié se coupe en deux. Rien de la machine
+// n'entre dans une région photographiée : la provenance « documentation »
+// tient lieu de version (§ 18.6), l'exécuteur direct annonce quatre cœurs,
+// l'horloge est pilotée, la feuille qui annule transitions et animations
+// est posée (test/navigateur/feuilles.js). La dernière épreuve du fichier
+// publie les captures d'un bloc sous make captures (§ 19.5), et les
+// compare au manifeste sinon (§ 19.7).
+//
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest';
-import { cdp } from 'vitest/browser';
+import { cdp, commands } from 'vitest/browser';
 import { flushSync } from 'svelte';
 import { bilanRemplacement, cleNormalisee } from '../application/csv.js';
+import { creerExecuteurDirect } from '../application/generation.js';
 import { TABLES_APPLICATION } from '../application/libelles.js';
 import { nomAffiche } from '../application/personnes.js';
 import { etatPlaces } from '../application/places.js';
 import { creerTraduction } from '../application/traduction.js';
+import { versionVisible } from '../application/version.js';
 import { apercevoir } from '../csv/apercu.js';
 import { decoder } from '../csv/encodage.js';
+import { decouper } from '../csv/lecture.js';
 import { CATALOGUE } from '../demo/catalogue.js';
+import { regimeCibles } from '../geometrie/designation.js';
 import { echelleGraphique } from '../geometrie/echelle.js';
-import { diametre } from '../geometrie/tables.js';
+import { diametre, geometrieTable } from '../geometrie/tables.js';
 import { vueDepuisTransform } from '../geometrie/vue.js';
 import { CRITERES, classer } from '../moteur/classement.js';
 import { indexerPlan, nombrePlaces, normaliser } from '../moteur/configuration.js';
+import { diagnostiquer } from '../moteur/diagnostic.js';
 import { mesurer } from '../moteur/indicateurs.js';
 import { plafondsAPriori } from '../moteur/plafond.js';
 import { rechercher } from '../moteur/recherche.js';
@@ -48,8 +65,11 @@ import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
+import urlCp1252 from '../../exemples/participants_cas_limites_cp1252.csv?url';
+import { CADRE, capturesPrises, cloreCaptures, modeFourni, photographier } from '../../test/navigateur/captures.js';
 import { NOM_CAS_LIMITES, attendre, centre, octetsCasLimites } from '../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
+import { poserFeuille } from '../../test/navigateur/feuilles.js';
 import { monterApp } from '../../test/navigateur/montage.js';
 import { visible } from '../../test/navigateur/rendu.js';
 import { ENCODAGES, SEPARATEURS } from './import/modele.js';
@@ -63,6 +83,12 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const NOM_SOIREE = 'Soirée d\u{2019}essai';
 const GRAINE = 4242;
 const ARRET = 300;
+
+// Le CSV des cas limites enregistré en windows-1252 (§ 10.3, capture 02b).
+const NOM_CP1252 = 'participants_cas_limites_cp1252.csv';
+
+// Ce qui tient lieu de version dans une construction de documentation.
+const MARQUE_PROVENANCE = versionVisible('documentation', VERSION.affichee, t);
 
 // La personne que l'ordre de lecture ajoute : un nom inventé.
 const AJOUTEE = { nom: 'Ombrelle', prenom: 'Iris' };
@@ -100,15 +126,24 @@ const DUREE = 120_000;
 // Le montage du parcours, que chaque épreuve reprend où la précédente l'a
 // laissé ; les relevés des fenêtres.
 let m = null;
+let retirerFeuille = null;
 const gestesSurveilles = new Set();
 const fenetresVues = [];
+// Les épreuves du fichier qui ont échoué, test ou crochet : la dernière
+// épreuve refuse de publier tant qu'une seule y figure.
+const epreuvesEnEchec = [];
 // Ce que les étapes se transmettent : la personne désignée, la table et la
 // proposition retenue, la charge d'avant l'ajustement de 19.
 const memoire = {};
 
+// En écriture, le dossier d'attente part vide : le dépôt d'un passage
+// interrompu ne se publie jamais avec celui-ci.
 beforeAll(async () => {
-  await fixerCadre(1366, 700);
-  m = await monterApp();
+  await fixerCadre(CADRE.largeur, CADRE.hauteur);
+  retirerFeuille = poserFeuille();
+  await commands.requetesHorsBoucle();
+  if (modeFourni() === 'ecrire') await commands.viderAttente();
+  m = await monterApp({ provenance: 'documentation', executeur: creerExecuteurDirect({ coeursDisponibles: 4 }) });
 });
 
 // La capture d'un échec prend pour nom de fichier le titre de son groupe et
@@ -118,7 +153,10 @@ beforeAll(async () => {
 // cette limite.
 const TITRE_MAX_OCTETS = 200;
 
-beforeEach(({ task }) => {
+beforeEach(({ task, onTestFailed }) => {
+  onTestFailed(() => {
+    epreuvesEnEchec.push(task.name);
+  });
   const titre = `${task.suite?.name ?? ''} ${task.name}`;
   expect(new TextEncoder().encode(titre).length, titre).toBeLessThanOrEqual(TITRE_MAX_OCTETS);
 });
@@ -129,6 +167,7 @@ afterEach(() => {
 
 afterAll(async () => {
   m?.demonter();
+  retirerFeuille?.();
   window.scrollTo(0, 0);
 });
 
@@ -140,7 +179,8 @@ const etat = () => m.seance.etat();
 const charge = () => etat().charge;
 const revision = () => etat().evenement.revision;
 const base = () => etat().evenement.base;
-const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
+const plat = (texte) => texte.replace(/\s+/g, ' ').trim();
+const texteDe = (element) => plat(element.textContent);
 
 // Le texte de l'état et du journal de l'événement ouvert, et sa révision.
 function fichiers() {
@@ -248,6 +288,54 @@ async function glisserVers(depuis, vers) {
   flushSync();
   await images(3);
 }
+
+// Ferme l'aperçu d'import ouvert, puis ouvre celui du fichier donné ; rend
+// l'aperçu, son nom de fichier affiché.
+async function ouvrirApercu(nom, octets) {
+  if (dans('[data-apercu]') !== null) {
+    await cliquer('[data-apercu] [data-commande="fermerApercu"]');
+    await attendre('l’aperçu fermé', () => dans('[data-apercu]') === null);
+  }
+  m.fs.choisirFichierAImporter = async () => ({ nom, octets });
+  await cliquer('[data-section="import"] [data-commande="choisirFichier"]');
+  return attendre(`l’aperçu de ${nom}`, () => dans('[data-apercu] [data-fichier]')?.textContent.trim() === nom && dans('[data-apercu]'));
+}
+
+// Les crans de « Zoom + » au-delà du premier zoom où chaque table de la
+// grande démonstration passe au régime des sièges (capture 07a). À ce
+// premier zoom, une chaise mesure environ 18 px : le trait de la chaise 3,
+// d'épaisseur fixe à l'écran, longe celui du plateau qu'elle touche sur une
+// bande où tombent la plupart des points que le relevé des marques
+// échantillonne (captures.js), et la marque s'y mesure contre un trait de sa
+// propre couleur. Deux crans plus haut, la bande ne retient plus qu'une
+// minorité de ces points.
+const CRANS_AU_DESSUS = 2;
+
+// Le zoom lu sur le groupe de la vue du plan.
+const zoomLu = () => vueDepuisTransform(dans('[data-vue]').getAttribute('transform')).k;
+
+// Le régime des cibles de chaque table montrée, au zoom lu.
+const regimes = () => etatMontre().tables.map((table) => regimeCibles(zoomLu(), geometrieTable(table, table.capacite)));
+
+// Clique la commande de zoom jusqu'à ce que chaque table soit au régime
+// voulu, en au plus crans clics.
+async function zoomerJusqua(regime, commande, crans = 40) {
+  for (let cran = 0; regimes().some((r) => r !== regime); cran += 1) {
+    expect(cran, `crans de ${commande} jusqu’au régime ${regime}`).toBeLessThan(crans);
+    await cliquer(`[data-commande="${commande}"]`);
+    await images(2);
+  }
+}
+
+// Ramène en haut chaque ancêtre qui défile d'un élément.
+function enHaut(element) {
+  for (let ancetre = element.parentElement; ancetre !== null; ancetre = ancetre.parentElement) {
+    if (ancetre.scrollHeight > ancetre.clientHeight) ancetre.scrollTop = 0;
+  }
+}
+
+// L'élément du document qu'atteint le point (x, y) de la fenêtre.
+const atteintAuPoint = ({ x, y }) => document.elementFromPoint(x, y);
 
 // Ouvre une section de l'événement par sa navigation.
 async function ouvrirSection(nom) {
@@ -421,7 +509,7 @@ async function refusPres(porteur, code, remede, geste) {
 // --- Le parcours (§ 2.1, § 19.3) ------------------------------------------------------
 
 describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE }, () => {
-  test('01 le répertoire vide : le catalogue offert, la version, le chemin ; « Soirée d’essai » créée s’ouvre en lecture', async () => {
+  test('01 le répertoire vide : le catalogue offert, la marque de provenance à la place de la version, le chemin', async () => {
     await attendre('le premier écran', () => dans('[data-ecran="accueil"] [data-dossier-travail]'));
     expect(tous('[data-evenement]')).toHaveLength(0);
     const offertes = tous('[data-demonstration]');
@@ -431,12 +519,17 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       expect(texteDe(entree)).toBe(CATALOGUE[rang].nom);
       expect(visible(entree)).toBe(true);
     });
-    expect(dans('[data-version]').textContent).toContain(VERSION.affichee);
-    expect(dans('[data-bandeau]').textContent).toContain(VERSION.affichee);
+    for (const porteur of ['[data-version]', '[data-bandeau]']) {
+      expect(dans(porteur).textContent, porteur).toContain(MARQUE_PROVENANCE);
+      expect(dans(porteur).textContent, porteur).not.toContain(VERSION.affichee);
+    }
     const chemin = dans('[data-dossier-travail]').textContent;
     expect(chemin.length).toBeGreaterThan(0);
     expect(chemin).toBe(etat().racine.chemin);
+    await photographier(m, '01-premier-ecran', { condition: ['[data-dossier-travail]', '[data-version]', '[data-demonstration]'] });
+  });
 
+  test('01 « Soirée d’essai » créée s’ouvre en lecture', async () => {
     await taper(dans('[data-ecran="accueil"] input[data-champ="nom"]'), NOM_SOIREE);
     await cliquer('[data-ecran="accueil"] [data-commande="creer"]');
     await attendre('l’événement ouvert', () => dans('[data-ecran="evenement"]') && etat().evenement !== null);
@@ -445,7 +538,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(charge().participants).toHaveLength(0);
   });
 
-  test('01b une modification refusée avant « Modifier », à côté de son geste ; acceptée après ; le cadre visible', async () => {
+  test('01b une modification refusée en lecture, à côté de son geste, avec « Modifier » pour remède ; le cadre de lecture', async () => {
     await ouvrirSection('tables');
     const avant = fichiers();
     expect(dans('[data-mode]').dataset.marque).toBe('cadreLecture');
@@ -454,7 +547,12 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(document.querySelectorAll(FENETRE)).toHaveLength(0);
     await rienEcrit(avant, 'créer une table en lecture');
     expect(charge().tables).toHaveLength(0);
+    await photographier(m, '01b-passer-en-ecriture', {
+      condition: ['[data-place-fixe] [data-commande="modifier"]', '[data-refus="MODE_LECTURE"]', '[data-mode-libelle="cadre"]'],
+    });
+  });
 
+  test('01b « Modifier » : l’écriture et son cadre ; la même modification passe', async () => {
     await cliquer('[data-place-fixe] [data-commande="modifier"]');
     await attendre('l’écriture', () => etat().mode === 'ecriture' && dans('[data-place-fixe] [data-commande="lecture"]'));
     const cadre = dans('[data-mode]');
@@ -486,9 +584,32 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(apercu.querySelectorAll('[data-refusees] [data-ligne]').length).toBeGreaterThanOrEqual(1);
     expect(apercu.querySelector('[data-commande="importer"]')).not.toBeNull();
     await rienEcrit(avant, 'l’aperçu');
+    await photographier(m, '02-import-apercu', { condition: ['[data-apercu] [data-encodage]', '[data-apercu] [data-separateur]'] });
+  });
+
+  test('02b l’aperçu d’un CSV en windows-1252 : l’encodage nommé, chaque caractère accentué intact', async () => {
+    const octets = new Uint8Array(await (await fetch(urlCp1252)).arrayBuffer());
+    const avant = fichiers();
+    const apercu = await ouvrirApercu(NOM_CP1252, octets);
+    const { texte, encodage } = decoder(octets);
+    expect(encodage).toBe('windows-1252');
+    expect(texteDe(apercu.querySelector('[data-encodage]'))).toBe(t(ENCODAGES.get(encodage)));
+    // Les cellules hors ASCII du fichier, décodées par l'analyseur : celles
+    // que l'aperçu montre y sont entières ; aucun caractère de remplacement,
+    // aucune séquence UTF-8 lue en windows-1252.
+    const accentuees = decouper(texte, apercevoir(texte).separateur)
+      .enregistrements.flat()
+      .map((cellule) => cellule.trim())
+      .filter((cellule) => /[^\u{0}-\u{7F}]/u.test(cellule));
+    const montrees = accentuees.filter((cellule) => apercu.textContent.includes(cellule));
+    expect(montrees.length, accentuees.join(' | ')).toBeGreaterThan(0);
+    expect(apercu.textContent).not.toMatch(/\u{FFFD}|\u{C3}[\u{80}-\u{BF}]/u);
+    await rienEcrit(avant, 'l’aperçu en windows-1252');
+    await photographier(m, '02b-import-cp1252', { condition: ['[data-apercu] [data-encodage]', '[data-apercu] [data-fichier]'] });
   });
 
   test('03 le rapport : une entrée, les lignes valides comptées, le groupe fondu et la ligne refusée', async () => {
+    await ouvrirApercu(NOM_CAS_LIMITES, await octetsCasLimites());
     const r = revision();
     await cliquer('[data-apercu] [data-commande="importer"]');
     const rapport = await attendre('le rapport', () => dans('[data-rapport]'));
@@ -499,6 +620,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(rapport.querySelectorAll('[data-fusion]').length).toBeGreaterThanOrEqual(1);
     expect(rapport.querySelectorAll('[data-refusees] [data-ligne]').length).toBeGreaterThanOrEqual(1);
     memoire.importes = ajoutes;
+    await photographier(m, '03-import-rapport', { condition: ['[data-rapport] [data-compte="ajoutes"]'] });
   });
 
   test('04 la grille : le compte égal à l’import, une personne exclue ; trier, filtrer ; modifier, exclure, réintégrer sans fenêtre', async () => {
@@ -571,6 +693,14 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       await uneEntree(r, 'réintégrer');
     });
     expect(charge().participants.find((p) => p.id === cible.id).exclu).toBe(false);
+    // La capture montre le haut de la grille, son tri et son filtre : le
+    // focus de la dernière cellule saisie part, la grille revient en haut.
+    document.activeElement?.blur();
+    enHaut(section().querySelector('[role="grid"]'));
+    await images(2);
+    await photographier(m, '04-grille-participants', {
+      condition: ['[data-section="participants"] [data-champ="filtre"]', '[data-section="participants"] [data-commande="trier"][data-cible="nom"]'],
+    });
   });
 
   test('05 deux tables à 8, l’une au défaut, l’autre surchargée à 8 : leurs états diffèrent à valeur égale', async () => {
@@ -595,17 +725,25 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(visible(etatDe(premiere.id))).toBe(true);
     expect(visible(etatDe(seconde.id))).toBe(true);
     expect(texteDe(etatDe(premiere.id))).not.toBe(texteDe(etatDe(seconde.id)));
+    await photographier(m, '05-tables-etat', {
+      condition: [`[data-section="tables"] [data-table="${premiere.id}"] [data-etat-table]`, `[data-section="tables"] [data-table="${seconde.id}"] [data-etat-table]`],
+    });
   });
 
-  test('06 l’énoncé d’un changement de défaut, son total égal au moteur ; étape 5, le nombre de tours', async () => {
+  test('06 l’énoncé d’un changement de défaut, chiffré avant toute application : rien d’écrit', async () => {
     const avant = fichiers();
     await saisir(dans('[data-section="tables"] input[data-champ="siegesParDefaut"]'), '10');
     const enonce = await attendre('l’énoncé', () => dans('[data-enonce="defaut"]'));
     expect(visible(enonce)).toBe(true);
     await rienEcrit(avant, 'l’énoncé');
-    const phrase = [...enonce.querySelectorAll('[data-phrase]')].map(texteDe).join(' ');
+    memoire.phrase = [...enonce.querySelectorAll('[data-phrase]')].map(texteDe).join(' ');
+    expect(memoire.phrase).toMatch(/(\d+)\s*\u{2192}\s*(\d+)/u);
+    await photographier(m, '06-defaut-consequence', { condition: ['[data-enonce="defaut"]', '[data-enonce="defaut"] [data-commande="appliquer"]'] });
+  });
+
+  test('06 appliquer le défaut : le total annoncé égal au moteur ; étape 5, le nombre de tours', async () => {
+    const { phrase } = memoire;
     const total = phrase.match(/(\d+)\s*\u{2192}\s*(\d+)/u);
-    expect(total, phrase).not.toBeNull();
     await sansFenetre('appliquerDefaut', async () => {
       const r = revision();
       await cliquer('[data-enonce="defaut"] [data-commande="appliquer"]');
@@ -645,6 +783,54 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     const mention = [...dans('[data-surface]').querySelectorAll('p')].find((p) => texteDe(p) === t('plan.echelle.mention'));
     expect(mention).toBeDefined();
     expect(visible(mention)).toBe(true);
+    await photographier(m, '07-plan-tables', { condition: ['[data-surface] [data-marque="echelle"]', '[data-plan]'] });
+  });
+
+  // Étape 5 : retirer un tour qui porte une réservation « tour désigné »
+  // l'annonce avant d'écrire ; la réservation posée pour l'annonce part
+  // ensuite par « Défaire ».
+  test('07b retirer un tour : l’annonce nomme la réservation détruite, avant toute écriture', async () => {
+    await ouvrirPlan();
+    const selecteurTour = dans('[data-champ="tour"]');
+    selecteurTour.value = '3';
+    selecteurTour.dispatchEvent(new Event('change', { bubbles: true }));
+    await attendre('le tour 3 montré', () => m.ui.etat().tour === 3);
+    await images(2);
+    await regimeSieges();
+    let r = revision();
+    const reservee = await choisir('[data-reserve]');
+    const libre = chaiseVue((c) => c.occupant === null && c.reservation === null && c.titre === null);
+    await cliquerPointeur(chaise(libre.table, libre.siege));
+    await appuyer(actionPlace('reserver'), 'réserver au tour 3');
+    await uneEntree(r, 'réserver au tour 3');
+    const avantAnnonce = charge();
+    expect(avantAnnonce.reservations).toContainEqual(expect.objectContaining({ participant: reservee, portee: 'tour', tour: 3 }));
+    selecteurTour.value = '1';
+    selecteurTour.dispatchEvent(new Event('change', { bubbles: true }));
+    await attendre('le tour 1 montré', () => m.ui.etat().tour === 1);
+
+    await ouvrirSection('tables');
+    const avant = fichiers();
+    await saisir(dans('[data-section="tables"] input[data-champ="tours"]'), '2');
+    const fenetre = await attendre('l’annonce', () => dans('dialog[open]'));
+    const numero = avantAnnonce.tables.find(({ id }) => id === libre.table).numero;
+    const nom = nomAffiche(avantAnnonce.participants.find(({ id }) => id === reservee));
+    expect(texteDe(fenetre.querySelector('h2'))).toBe(plat(t('tables.tours.confirmation', { avant: 3, apres: 2 })));
+    expect([...fenetre.querySelectorAll('li')].map(texteDe)).toContain(
+      plat(t('tables.tours.reservation', { nom, numero, tour: 3 })),
+    );
+    await rienEcrit(avant, 'l’annonce');
+    await photographier(m, '07b-nombre-de-tours', { condition: ['dialog[open] h2', 'dialog[open] [data-commande="renoncer"]'] });
+
+    await appuyer(fenetre.querySelector('[data-commande="renoncer"]'), 'renoncer');
+    await attendre('l’annonce fermée', () => dans('dialog[open]') === null);
+    await rienEcrit(avant, 'renoncer');
+    r = revision();
+    await cliquer('[data-historique] [data-commande="defaire"]');
+    await uneEntree(r, 'défaire la réservation');
+    expect(charge().reservations).toEqual([]);
+    expect(charge().evenement.tours).toBe(3);
+    await ouvrirPlan();
   });
 
   test('08 deux animateurs — cadenas fermé et anneau, hachuré et cadenas ouvert —, leurs lignes, les deux listes de travail', async () => {
@@ -708,6 +894,9 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(titres.map((b) => b.dataset.titre.split(':')[0])).toEqual([String(t2)]);
     expect(texteDe(titres[0])).toContain(titre);
     expect(tous('[data-liste-travail="pressentis"] [data-participant]').length).toBeGreaterThan(0);
+    await photographier(m, '08-animateurs-designes', {
+      condition: [`[data-siege="${designee[0].dataset.siege}"]`, `[data-siege="${titree[0].dataset.siege}"]`],
+    });
   });
 
   test('09 un refus sur la place, sa cause et son remède, sans fenêtre ni écriture', async () => {
@@ -732,10 +921,71 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(visible(message)).toBe(true);
     expect(vues).toEqual([]);
     await rienEcrit(avant, 'le refus sur la place');
+    await photographier(m, '09-refus-sur-place', { condition: [`[data-siege="${t1}:${reservee.siege}"]`] });
     await oublierChoix();
   });
 
-  test('11 générer, graine écrite, compte réduit : trois propositions du moteur, dans l’ordre de sa clé ; diversité ; retenir', async () => {
+  // La grande démonstration, chargée depuis le premier écran : l'échelle est
+  // le propos (§ 19.3), et le diagnostic se lit avant toute génération.
+  test('10 la grande démonstration, chargée depuis le premier écran : 99 retours imposés, plafond 24, plancher d’écart, égaux au moteur', async () => {
+    memoire.base = base();
+    await cliquer('[data-bandeau] [data-commande="liste"]');
+    await attendre('le premier écran', () => dans('[data-ecran="accueil"] [data-demonstration="grande"]'));
+    await cliquer('[data-demonstration="grande"]');
+    await attendre('la grande démonstration ouverte', () => dans('[data-ecran="evenement"]') && etat().evenement !== null && etat().evenement.base !== memoire.base);
+    await ouvrirSection('diagnostic');
+    const diagnostic = diagnostiquer(configurationDepuisCharge(charge()));
+    expect(diagnostic.retoursImposes).toBe(99);
+    expect(diagnostic.plafondAPriori.repartition[0]).toEqual({ valeur: 24, ancres: 4, mobiles: 0 });
+    expect(diagnostic.ecartItineraire?.plancher).toBe(1);
+    const phrases = tous('[data-section="diagnostic"] [data-phrase]').map(texteDe);
+    for (const attendue of [
+      t('diagnostic.plafond', diagnostic.plafondAPriori.repartition[0]),
+      t('diagnostic.imposes', { retoursImposes: diagnostic.retoursImposes, ancragesImposantRetours: diagnostic.ancragesImposantRetours }),
+      t('diagnostic.ecartItineraire', diagnostic.ecartItineraire),
+    ]) {
+      expect(phrases).toContain(plat(attendue));
+    }
+    await photographier(m, '10-diagnostic', { condition: ['[data-section="diagnostic"] [data-phrase]'] });
+  });
+
+  // Le seuil de CIBLE_MIN_PX (§ 7.3, § 19.10), au-dessus puis au-dessous,
+  // sur la grande démonstration : au zoom ajusté de la soirée construite, ses
+  // tables restent au régime des sièges jusqu'au zoom minimal, la moitié du
+  // zoom ajusté. Le point du centre d'une chaise atteint la chaise au
+  // régime des sièges, la table au régime de la table.
+  test('07a les sièges cibles, sur la grande démonstration : zoomée jusqu’au régime des sièges, le centre d’une chaise atteint la chaise', async () => {
+    await ouvrirPlan();
+    await zoomerJusqua('sieges', 'zoomer');
+    for (let cran = 0; cran < CRANS_AU_DESSUS; cran += 1) await cliquer('[data-commande="zoomer"]');
+    await images(2);
+    const vue = chaiseVue(() => true);
+    const disque = chaise(vue.table, vue.siege).querySelector('circle');
+    const point = await centre(disque);
+    expect(atteintAuPoint(point)?.closest('[data-siege]'), 'l’élément au centre de la chaise').toBe(chaise(vue.table, vue.siege));
+    memoire.centreChaise = { table: vue.table, x: Number(disque.getAttribute('cx')), y: Number(disque.getAttribute('cy')) };
+    await photographier(m, '07a-cibles-sieges', { condition: [`[data-siege="${vue.table}:${vue.siege}"]`] });
+  });
+
+  test('07a la table cible, sur la grande démonstration : au zoom ajusté, régime de la table, le même point atteint la table, aucune chaise', async () => {
+    await cliquer('[data-commande="ajuster"]');
+    await images(2);
+    expect(regimes().every((regime) => regime === 'table'), regimes().join(' ')).toBe(true);
+    expect(tous('[data-plan] [data-siege]')).toHaveLength(0);
+    const { table, x, y } = memoire.centreChaise;
+    const point = new DOMPoint(x, y).matrixTransform(dans('[data-vue]').getScreenCTM());
+    const atteint = atteintAuPoint(point);
+    expect(atteint?.closest('[data-siege]') ?? null).toBeNull();
+    expect(atteint?.closest('[data-table]')?.dataset.table, 'la table au point de sa chaise').toBe(String(table));
+    await photographier(m, '07a-cibles-tables', { condition: [`[data-plan] [data-table="${table}"]`] });
+  });
+
+  test('11 rouvrir la soirée ; générer, graine écrite, compte réduit : trois propositions du moteur, dans l’ordre de sa clé ; diversité ; retenir', async () => {
+    await cliquer('[data-bandeau] [data-commande="liste"]');
+    await cliquer(`[data-evenement="${memoire.base}"] [data-commande="ouvrir"]`);
+    await attendre('la soirée rouverte', () => dans('[data-ecran="evenement"]') && etat().evenement?.base === memoire.base);
+    await cliquer('[data-place-fixe] [data-commande="modifier"]');
+    await attendre('l’écriture', () => etat().mode === 'ecriture');
     await ouvrirSection('generation');
     await taper(dans('[data-section="generation"] input[data-champ="graine"]'), String(GRAINE));
     let r = revision();
@@ -783,18 +1033,30 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(charge().retenu.proposition).toBe(ordre[0]);
     expect(charge().evenement.etat).toBe('retenu');
     await attendre('la ligne du retenu', () => section.querySelector(`tr[data-retenu="${ordre[0]}"]`));
+    await photographier(m, '11-propositions', { condition: ['[data-section="propositions"] [data-ordre]'], graine: GRAINE });
   });
 
-  test('19 un ajustement : le glissement dit lequel des deux gestes est en cours, une entrée, le retenu changé', async () => {
+  test('19 un ajustement en cours : le glissement dit lequel des deux gestes, celui du placement retenu', async () => {
     await ouvrirPlan();
     memoire.avantAjustement = serialiserCharge(charge());
     const [t1, t2] = charge().tables.map(({ id }) => id);
     const depuis = chaiseOccupee(t1);
-    const vers = chaiseLibre(t2);
-    const r = revision();
+    // La chaise libre de t2 la plus à gauche : le libellé du fantôme, à
+    // droite du pointeur, reste dans le cadre du plan.
+    const libres = chaisesMontrees().filter((c) => c.table === t2 && c.occupant === null && c.reservation === null && c.titre === null);
+    expect(libres.length).toBeGreaterThan(0);
+    const gauche = (c) => chaise(t2, c.siege).getBoundingClientRect().left;
+    const vers = libres.reduce((a, b) => (gauche(b) < gauche(a) ? b : a));
+    memoire.ajustement = { depuis, vers, revision: revision() };
     await presserEtBouger(await centre(chaise(t1, depuis.siege)), await centre(chaise(t2, vers.siege)));
     const etatDonnees = await attendre('le libellé de l’état des données', () => dans('[data-fantome] [data-partie="etat"]'));
     expect(texteDe(etatDonnees)).toBe(t('plan.fantome.retenu'));
+    await photographier(m, '19-ajustement', { condition: ['[data-fantome] [data-partie="etat"]'], graine: GRAINE });
+  });
+
+  test('19 le dépôt : une entrée qui nomme la personne, le retenu changé', async () => {
+    const [, t2] = charge().tables.map(({ id }) => id);
+    const { depuis, vers, revision: r } = memoire.ajustement;
     const point = await centre(chaise(t2, vers.siege));
     await pointer('relacher', point.x, point.y);
     const libelle = await uneEntree(r, 'ajuster');
@@ -804,12 +1066,12 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
   });
 
   // Glisser une personne, une table, tirer une poignée, poser une réservation.
-  test('20 la lecture : quatre gestes du plan, empreinte inchangée ; « Défaire » refusé avec « Modifier », puis rend 19', async () => {
+  test('20 la lecture : quatre gestes du plan, empreinte inchangée ; le cadre, son libellé et le bandeau', async () => {
     await cliquer('[data-place-fixe] [data-commande="lecture"]');
     await attendre('la lecture', () => etat().mode === 'lecture');
     expect(dans('[data-mode]').dataset.marque).toBe('cadreLecture');
     expect(visible(dans('[data-mode-libelle="cadre"]'))).toBe(true);
-    expect(dans('[data-bandeau]').textContent).toContain(VERSION.affichee);
+    expect(dans('[data-bandeau]').textContent).toContain(MARQUE_PROVENANCE);
     const empreinte = serialiserCharge(charge());
     const avant = fichiers();
     const [t1, t2] = charge().tables.map(({ id }) => id);
@@ -831,7 +1093,12 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await rienEcrit(avant, 'les quatre gestes en lecture');
     expect(dans(`[data-table="${t2}"]`).getAttribute('transform')).toBeNull();
     for (const t of etatMontre().tables) expect(tous(`[data-siege^="${t.id}:"]`), `table ${t.numero}`).toHaveLength(t.capacite);
+    await photographier(m, '20-mode-lecture', { condition: ['[data-mode-libelle="cadre"]', '[data-mode-libelle="bandeau"]'], graine: GRAINE });
+  });
 
+  test('20 « Défaire » en lecture : refusé avec « Modifier » ; en écriture, rend l’état d’avant 19', async () => {
+    expect(etat().mode).toBe('lecture');
+    const avant = fichiers();
     // « Défaire » en lecture : refusé à côté de lui, « Modifier » pour remède.
     const defaire = dans('[data-historique] [data-commande="defaire"]');
     await appuyer(defaire, 'défaire en lecture');
@@ -1264,5 +1531,21 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
     await regarderReste();
     expect(serialiserCharge(charge())).toBe(empreinte);
     await rienEcrit(avant, 'bloqué, regarder');
+  });
+});
+
+// --- Les captures d'écran du parcours (§ 19.5, § 19.7) ----------------------------------------
+
+// La dernière épreuve du fichier. Une épreuve du fichier en échec, même
+// après sa photographie ou sans capture, la fait échouer en la nommant, et
+// rien n'est publié (§ 19.1). En écriture, elle publie d'un bloc : la
+// publication refuse quand une étape déclarée n'a rien déposé, et jette le
+// dépôt dans tous les cas. En vérification, chaque étape déclarée a été
+// comparée à son entrée du manifeste, qui n'en porte aucune autre. Zéro
+// capture n'est jamais un succès (§ 19.7).
+describe('les captures d’écran du parcours (§ 19.5, § 19.7)', () => {
+  test('chaque capture déclarée photographiée : publiées d’un bloc en écriture, conformes au manifeste en vérification', async () => {
+    const { declarees } = await cloreCaptures({ echecs: epreuvesEnEchec, racineNeutre: m?.seance.etat().racine?.chemin ?? null });
+    expect([...capturesPrises()].sort()).toEqual([...declarees].sort());
   });
 });

@@ -76,6 +76,13 @@ mutation: ## Audit par mutation du moteur, avant une livraison (§ 14.13)
 banc: ## Relève les constantes du banc de mesure (§ 19.10), avant une livraison
 	$(AVEC_NODE) npm run banc
 
+# GTT_CAPTURES, exportée pour la seule recette, se pose de la même façon sous
+# Windows : le projet navigateur publie doc/captures au lieu de le comparer.
+.PHONY: captures
+captures: export GTT_CAPTURES := ecrire
+captures: ## Photographie le parcours et publie doc/captures (§ 19.5)
+	$(AVEC_NODE) npx vitest run --project navigateur src/interface/parcours.navigateur.test.js
+
 .PHONY: build
 build: ## Construit la page dans www/
 	$(AVEC_NODE) npm run build

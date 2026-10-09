@@ -51,10 +51,18 @@ const CSV_DE_DEMONSTRATION = new Set([
   join('exemples', 'participants_demo_grande.csv'),
 ]);
 
-// Vrai pour les listes du générateur et pour un fichier que
-// scripts/engendrer_livrables.js en engendre.
+// Le manifeste des captures, que make captures écrit : il relève les textes
+// visibles du parcours photographié, qui joue les démonstrations livrées.
+const MANIFESTE_DES_CAPTURES = join('doc', 'captures', 'manifeste.json');
+
+// Vrai pour les listes du générateur, pour un fichier que
+// scripts/engendrer_livrables.js en engendre, et pour le manifeste des
+// captures.
 const porteLesNomsParConstruction = (chemin) =>
-  chemin === LISTES || chemin.startsWith(DEMONSTRATIONS_LIVREES) || CSV_DE_DEMONSTRATION.has(chemin);
+  chemin === LISTES ||
+  chemin.startsWith(DEMONSTRATIONS_LIVREES) ||
+  CSV_DE_DEMONSTRATION.has(chemin) ||
+  chemin === MANIFESTE_DES_CAPTURES;
 
 // Répertoires hors balayage, à toute profondeur : .git, les dépendances, les
 // caches des outils, et les sorties de construction, qui portent une copie
@@ -215,6 +223,7 @@ describe('noms forgés : balayage du projet (§ 15.6)', () => {
       [join('src', 'demo', 'livrees', 'grande.gtt.json'), patronyme],
       [join('exemples', 'participants_demo_petite.csv'), patronyme],
       [join('exemples', 'participants_demo_grande.csv'), patronyme],
+      [join('doc', 'captures', 'manifeste.json'), patronyme],
     ];
     // Un fichier sous chaque répertoire exclu, à la racine et plus profond ;
     // chacun porte un nom forgé.

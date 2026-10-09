@@ -8,3 +8,4 @@ ios/
 .vitest/
 coverage/
 scripts/banc/sorties/
+doc/captures/.attente/
