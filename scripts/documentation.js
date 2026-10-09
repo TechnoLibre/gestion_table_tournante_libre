@@ -74,10 +74,12 @@ export const RACINE = fileURLToPath(new URL('..', import.meta.url));
 /**
  * Les fichiers porteurs de régions, relatifs à la racine : la liste fermée
  * des documents que verifier et engendrer lisent. Chacun porte au moins une
- * région.
+ * région : README.md les tableaux de mesure (contrastes, constantes), le
+ * guide d'usage ses annexes. GUIDE-WINDOWS.md n'y figure pas : il décrit des
+ * écrans qu'aucun scénario ne produit, et ne porte aucune région (§ 16.1).
  * @type {ReadonlyArray<string>}
  */
-export const PORTEURS = Object.freeze([]);
+export const PORTEURS = Object.freeze(['README.md', 'GUIDE-USAGE.md']);
 
 /** Une faute de structure des régions : la liste de ses fautes, par région. */
 export class ErreurRegions extends Error {

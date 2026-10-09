@@ -137,7 +137,9 @@ export default defineConfig({
     // projet, elle est ignorée sans avertissement.
     watchTriggerPatterns: [
       { pattern: /(^|\/)(version\.json|package-lock\.json|CHANGELOG\.md|README\.md|GUIDE-[^/]*\.md)$/,
-        testsToRun: () => 'scripts/version.test.js' },
+        testsToRun: () => ['scripts/version.test.js', 'test/documentation.test.js'] },
+      { pattern: /(^|\/)(package\.json|doc\/captures\/[^/]+|src\/interface\/parcours\.navigateur\.test\.js)$/,
+        testsToRun: () => 'test/documentation.test.js' },
       { pattern: /(^|\/)electron\/[^/]+$/,
         testsToRun: () => ['test/coquille.test.js', 'test/fichiers_electron.test.js', 'test/livrable.test.js',
                            'scripts/essai_demarrage.test.js', 'scripts/version.test.js'] },

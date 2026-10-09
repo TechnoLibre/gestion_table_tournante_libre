@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "vite --mode developpement",
     "build": "vite build --mode developpement",
-    "build:livraison": "node scripts/version.js controler && vite build --mode livraison",
+    "build:livraison": "node scripts/version.js controler && node scripts/documentation.js verifier --livraison && vite build --mode livraison",
     "build:documentation": "vite build --mode documentation",
     "test": "vitest run --project node",
     "test:surveille": "vitest --project node",
