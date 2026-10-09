@@ -1,0 +1,67 @@
+{
+  "format": 1,
+  "pilote": {
+    "navigateur": "chromium",
+    "versionNavigateur": "inventee",
+    "mode": "chromium-headless-shell",
+    "facteurEchelle": 1,
+    "cadre": { "largeur": 1366, "hauteur": 700 }
+  },
+  "captures": [
+    {
+      "fichier": "01-premier-ecran",
+      "etape": "1",
+      "source": "navigateur",
+      "graine": null,
+      "cadre": { "largeur": 1366, "hauteur": 700 },
+      "facteurEchelle": 1,
+      "mode": "chromium-headless-shell",
+      "theme": "clair",
+      "instant": "2030-03-14T19:30:00-04:00",
+      "texte": ["Gestion table tournante Libre", "Créer un événement"],
+      "styles": {
+        "clair": [
+          { "jeton": "encre", "role": "texte", "ratio": 12.6, "seuil": 4.5 },
+          { "jeton": "encre-douce", "role": "texte", "ratio": 5.2, "seuil": 4.5 },
+          { "jeton": "focus", "role": "marque", "ratio": 3.4, "seuil": 3 }
+        ],
+        "sombre": [
+          { "jeton": "encre", "role": "texte", "ratio": 11.2, "seuil": 4.5 },
+          { "jeton": "encre-douce", "role": "texte", "ratio": 4.9, "seuil": 4.5 }
+        ]
+      },
+      "etat": null,
+      "pdf": null,
+      "image": { "sha256": "0000000000000000000000000000000000000000000000000000000000000001", "largeur": 1366, "hauteur": 700 },
+      "empreinte": "0000000000000000000000000000000000000000000000000000000000000002"
+    },
+    {
+      "fichier": "02-import-apercu",
+      "etape": "2",
+      "source": "navigateur",
+      "graine": null,
+      "cadre": { "largeur": 1366, "hauteur": 700 },
+      "facteurEchelle": 1,
+      "mode": "chromium-headless-shell",
+      "theme": "clair",
+      "instant": "2030-03-14T19:30:00-04:00",
+      "texte": ["Importer des participants", "Club des Merles"],
+      "styles": {
+        "clair": [
+          { "jeton": "encre", "role": "texte", "ratio": 9.81, "seuil": 4.5 },
+          { "jeton": "focus", "role": "marque", "ratio": 3.4, "seuil": 3 }
+        ],
+        "sombre": [
+          { "jeton": "encre-douce", "role": "texte", "ratio": 4.62, "seuil": 4.5 },
+          { "jeton": "focus", "role": "marque", "ratio": 3.9, "seuil": 3 },
+          { "jeton": "encre", "role": "marque", "ratio": 5.5, "seuil": 3 }
+        ]
+      },
+      "etat": null,
+      "pdf": null,
+      "image": { "sha256": "0000000000000000000000000000000000000000000000000000000000000003", "largeur": 1366, "hauteur": 700 },
+      "empreinte": "0000000000000000000000000000000000000000000000000000000000000004"
+    }
+  ],
+  "reportees": []
+}

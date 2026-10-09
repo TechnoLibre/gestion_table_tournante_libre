@@ -139,6 +139,10 @@ export default defineConfig({
         testsToRun: () => [...RELANCES_D_UN_COMPOSANT] },
       { pattern: /(^|\/)src\/interface\/jetons\.css$/,
         testsToRun: () => [...RELANCES_DES_JETONS] },
+      // Les documents porteurs de régions engendrées et le manifeste des
+      // captures, que scripts/documentation.js lit par le disque (§ 19.8).
+      { pattern: /(^|\/)(README\.md|GUIDE-[^/]*\.md|doc\/captures\/manifeste\.json)$/,
+        testsToRun: () => 'scripts/documentation.test.js' },
     ],
     projects: [
       { test: {
