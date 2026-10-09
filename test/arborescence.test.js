@@ -3644,9 +3644,11 @@ function releverFixturesLivrees(racine) {
 }
 
 // Les seules épreuves qui chargent fast-check (§ 14.12) : la formule du
-// plafond et la détection du séparateur, qui gagnent au rétrécissement ; et
+// plafond et la détection du séparateur, qui gagnent au rétrécissement ;
 // deux propriétés du stockage, sur des paires de charges et des séances
-// tirées, dont le contre-exemple rétréci tient en quelques opérations.
+// tirées, dont le contre-exemple rétréci tient en quelques opérations ; et
+// la découpe du plan en pages, dont les tuiles se juxtaposent à l'égalité
+// exacte sur des englobants, papiers et seuils tirés.
 const CHARGEURS_DE_FAST_CHECK = [
   { fichier: 'src/moteur/plafond.test.js', raison: 'la formule du plafond, arbitrée par énumération exhaustive' },
   { fichier: 'src/moteur/plafond.long.test.js', raison: 'la grande grille du plafond, sous la même graine écrite' },
@@ -3658,6 +3660,10 @@ const CHARGEURS_DE_FAST_CHECK = [
   {
     fichier: 'src/stockage/journal.long.test.js',
     raison: 'chaque instant d’une séance tirée se restitue tel qu’il s’est écrit',
+  },
+  {
+    fichier: 'src/geometrie/pages.test.js',
+    raison: 'les tuiles de la découpe, contiguës à l’égalité exacte, sur des englobants tirés',
   },
 ];
 

@@ -228,6 +228,57 @@ export function englobant(geometries) {
 }
 
 /**
+ * Le rectangle du bloc de noms d'une table sur le plan imprimé, en cm : de
+ * origineListe vers la droite et le bas, large de listes.largeur, haut de la
+ * hauteur que listes.hauteurs porte pour la table. La seule mesure de ce
+ * rectangle : englobantImpression l'ajoute à l'englobant, la découpe en
+ * pages (pages.js) le confronte à chaque tuile. Lève RangeError quand la
+ * largeur ou la hauteur n'est pas un nombre fini ≥ 0, ou quand la table n'a
+ * pas de hauteur : un bloc absent ferait disparaître sa liste d'une page
+ * sans rien dire.
+ *
+ * @param {GeometrieTable} geometrie
+ * @param {{largeur: number, hauteurs: Map<number, number>}} listes  cm
+ * @returns {{minX: number, minY: number, maxX: number, maxY: number}}
+ */
+export function blocNoms(geometrie, listes) {
+  const { largeur, hauteurs } = listes;
+  const hauteur = hauteurs.get(geometrie.id);
+  for (const [nom, valeur] of [['largeur', largeur], [`hauteur de la table ${geometrie.id}`, hauteur]]) {
+    if (typeof valeur !== 'number' || !Number.isFinite(valeur) || valeur < 0) {
+      throw new RangeError(`liste : ${nom}, nombre fini ≥ 0 attendu, reçu ${String(valeur)}`);
+    }
+  }
+  const { x, y } = geometrie.origineListe;
+  return { minX: x, minY: y, maxX: x + largeur, maxY: y + hauteur };
+}
+
+/**
+ * L'englobant du plan imprimé : sans listes, englobant(geometries) tel quel ;
+ * avec, étendu du bloc de noms de chaque table (blocNoms). Les étiquettes ne
+ * sont pas à l'échelle (§ 7.7) : un plan imprimé avec ses listes couvre plus
+ * de papier que son mobilier, et la découpe en pages en tient compte.
+ *
+ * @param {GeometrieTable[]} geometries
+ * @param {{listes?: null|{largeur: number, hauteurs: Map<number, number>}}} [options]
+ *        listes : largeur des blocs et hauteur de chacun, par identifiant de table, en cm
+ * @returns {{minX: number, minY: number, maxX: number, maxY: number}|null}  null sans table
+ */
+export function englobantImpression(geometries, { listes = null } = {}) {
+  const dessin = englobant(geometries);
+  if (dessin === null || listes === null) return dessin;
+  let { minX, minY, maxX, maxY } = dessin;
+  for (const geometrie of geometries) {
+    const bloc = blocNoms(geometrie, listes);
+    minX = Math.min(minX, bloc.minX);
+    minY = Math.min(minY, bloc.minY);
+    maxX = Math.max(maxX, bloc.maxX);
+    maxY = Math.max(maxY, bloc.maxY);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/**
  * Le pas de la grille des tables, en cm entiers, pour la plus grande emprise
  * E des tables données, chacune de sa forme et de son nombre de places :
  * entre deux colonnes, ⌈2E + 2 × ECART_LISTE + LARGEUR_BLOC_NOMS_CM⌉ — le bloc

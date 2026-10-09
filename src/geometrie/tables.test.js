@@ -26,6 +26,7 @@ import {
   diametre,
   ecartsGrille,
   englobant,
+  englobantImpression,
   geometrieTable,
   listeSurTable,
   placesSousPoignee,
@@ -345,6 +346,56 @@ describe('englobant : tout ce que le dessin pose de pointable', () => {
       disques += 1 + g.chaises.length;
     }
     assert.equal(disques, 14);
+  });
+});
+
+describe('englobantImpression : l’englobant du plan imprimé, ses listes comprises (§ 7.7, § 11.7)', () => {
+  // Ronde de 8 en (300, 600) : r = 240/π ≈ 76,39, emprise r + 44, origine de
+  // la liste en (300 + r + 44 + 36, 600 − r) ; carrée de 8 en (−100, 50) :
+  // emprise 104, origine de la liste en (40, −10).
+  const r = 240 / Math.PI;
+  const geometries = () => [geometrieTable(table(1, 'ronde', 300, 600), 8), geometrieTable(table(2, 'carree', -100, 50), 8)];
+
+  test('null sans table, avec ou sans listes', () => {
+    assert.equal(englobantImpression([]), null);
+    assert.equal(englobantImpression([], { listes: { largeur: 500, hauteurs: new Map() } }), null);
+  });
+
+  test('sans listes, l’englobant du dessin, tel quel', () => {
+    assert.deepEqual(englobantImpression(geometries()), englobant(geometries()));
+    assert.deepEqual(englobantImpression(geometries(), { listes: null }), englobant(geometries()));
+  });
+
+  test('avec listes : maxX au bord du bloc le plus à droite, maxY au pied du plus bas, le reste inchangé', () => {
+    // Bloc de la ronde : x de 380 + r à 880 + r, y de 600 − r à 900 − r ;
+    // bloc de la carrée : x de 40 à 540, y de −10 à 1 990, sous la ronde.
+    const listes = { largeur: 500, hauteurs: new Map([[1, 300], [2, 2000]]) };
+    const e = englobantImpression(geometries(), { listes });
+    const dessin = englobant(geometries());
+    proche(e.maxX, 300 + r + 44 + 36 + 500, 'maxX');
+    proche(e.maxY, -10 + 2000, 'maxY');
+    assert.equal(e.minX, dessin.minX);
+    assert.equal(e.minY, dessin.minY);
+  });
+
+  test('un bloc au-dessus et à gauche de tout ne se pose pas : il part de origineListe, vers la droite et le bas', () => {
+    // Hauteurs nulles : chaque bloc se réduit à son origine, dans l'emprise
+    // en y et à droite d'elle en x ; seul maxX peut croître.
+    const listes = { largeur: 0, hauteurs: new Map([[1, 0], [2, 0]]) };
+    const e = englobantImpression(geometries(), { listes });
+    const dessin = englobant(geometries());
+    assert.deepEqual([e.minX, e.minY, e.maxY], [dessin.minX, dessin.minY, dessin.maxY]);
+    proche(e.maxX, Math.max(dessin.maxX, 300 + r + 80), 'maxX');
+  });
+
+  test('une table sans hauteur de liste, une largeur ou une hauteur négative ou non finie : RangeError', () => {
+    const hauteurs = new Map([[1, 300]]);
+    assert.throws(() => englobantImpression(geometries(), { listes: { largeur: 500, hauteurs } }), RangeError);
+    const deux = new Map([[1, 300], [2, 100]]);
+    assert.throws(() => englobantImpression(geometries(), { listes: { largeur: -1, hauteurs: deux } }), RangeError);
+    assert.throws(() => englobantImpression(geometries(), { listes: { largeur: Infinity, hauteurs: deux } }), RangeError);
+    const negative = new Map([[1, 300], [2, -5]]);
+    assert.throws(() => englobantImpression(geometries(), { listes: { largeur: 500, hauteurs: negative } }), RangeError);
   });
 });
 
