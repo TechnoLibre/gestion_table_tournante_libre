@@ -371,6 +371,27 @@ describe("fichiers web : ce que l'OPFS refuse", () => {
     expect(await fs.lireTexte(DOCUMENTS, 'etat.json')).toBe('avant');
   });
 
+  test("ecrireOctetsAtomique écrit les octets tels quels par un flux ; une panne de l'OPFS lève ECRITURE avec le nom de son exception, laisse la cible intacte et ne laisse aucun fichier neuf", async () => {
+    const fs = await preparer();
+    await fs.ecrireOctetsAtomique(DOCUMENTS, 'planche.pdf', new Uint8Array(40).fill(0x41));
+    await fs.ecrireOctetsAtomique(DOCUMENTS, 'planche.pdf', BRUTS);
+    expect(await octetsOpfs('planche.pdf')).toStrictEqual(BRUTS);
+    for (const [temps, prototype, methode, cause] of PANNES) {
+      vi.spyOn(prototype(), methode).mockRejectedValue(new DOMException(temps, cause));
+      for (const chemin of ['planche.pdf', 'neuve.pdf']) {
+        await echoue(
+          fs.ecrireOctetsAtomique(DOCUMENTS, chemin, new Uint8Array([0x25, 0x50])),
+          'ECRITURE',
+          { chemin, dossier: CHEMIN_DOCUMENTS, cause },
+          `${temps} : ${chemin}`,
+        );
+      }
+      vi.restoreAllMocks();
+      expect(await octetsOpfs('planche.pdf'), temps).toStrictEqual(BRUTS);
+      expect(noms(await fs.lister(DOCUMENTS, '')), temps).toStrictEqual(['planche.pdf']);
+    }
+  });
+
   test('deplacer copie les octets de la source puis la retire ; un échec de la copie ou du retrait laisse la source seule', async () => {
     const fs = await preparer();
     await fs.creerDossier(DOCUMENTS, 'corbeille');
@@ -618,6 +639,8 @@ describe('fichiers web : fautes de programmation', () => {
       () => fs.deverrouiller(DOCUMENTS, 'soiree.gtt.verrou', null),
       () => fs.enregistrerSous('', BRUTS),
       () => fs.enregistrerSous('liste.csv', 'nom;prenom'),
+      () => fs.ecrireOctetsAtomique(DOCUMENTS, 'planche.pdf', 'texte'),
+      () => fs.ecrireOctetsAtomique(DOCUMENTS, 'planche.pdf', new ArrayBuffer(2)),
     ];
     for (const faute of fautes) await expect(faute(), String(faute)).rejects.toThrow(TypeError);
     expect(creer).not.toHaveBeenCalled();

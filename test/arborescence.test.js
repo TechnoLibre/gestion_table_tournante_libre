@@ -3740,6 +3740,107 @@ describe('arborescence : une seule composition des démonstrations (§ 15)', () 
   });
 });
 
+// Le corps de mount(App, { props: { … } }) d'un module, '' sans lui.
+const proprietesDApp = (code) => /\bmount\(App, \{[\s\S]*?\bprops: \{([\s\S]*?)\n\s*\},\n/.exec(code)?.[1] ?? '';
+// L'objet que rend monterApp, '' sans lui : de « return { » à « }; » au
+// premier niveau du corps de la fonction.
+const renduDuMontage = (code) => /\n {2}return \{\n([\s\S]*?)\n {2}\};\n\}/.exec(code)?.[1] ?? '';
+// Le corps de la déstructuration des dépendances d'App, '' sans lui.
+const dependancesDApp = (code) => /\bconst \{\n([\s\S]*?)\n\s*\} = untrack\(\(\) => dependances\);/.exec(code)?.[1] ?? '';
+const NOMMEE_SEULE = (nom) => new RegExp(`^\\s*${nom},$`, 'm');
+
+// Le câblage de l'imprimante (§ 13.4) : par fichier, chaque pièce qu'il
+// porte, commentaires ôtés — [ce qui manque, vrai quand la pièce est là].
+// src/main.js construit l'imprimante de la plateforme, celle d'electron sur
+// le pont window.gtt sous la coquille, celle du navigateur sur la fenêtre
+// sinon, et la passe à App ; le montage des épreuves prend l'imprimante
+// d'épreuve par défaut, la passe à App et la rend, sans rien importer de
+// src/impression ; App la reçoit dans ses dépendances et la donne aux
+// composants sous la clé de contexte 'imprimante'. Un motif d'import
+// s'écrit « fro[m] », que la garde des dépendances ne prend pas pour un
+// chargement.
+const CABLAGE_DE_L_IMPRIMANTE = new Map([
+  [
+    'src/main.js',
+    [
+      ['import de creerImprimanteElectron absent', (code) => /^import \{ creerImprimanteElectron \} fro[m] '\.\/impression\/imprimante_electron\.js';$/m.test(code)],
+      ['import de creerImprimanteWeb absent', (code) => /^import \{ creerImprimanteWeb \} fro[m] '\.\/impression\/imprimante_web\.js';$/m.test(code)],
+      ['pont window.gtt absent', (code) => /^const pont = window\.gtt;$/m.test(code)],
+      [
+        'imprimante de la plateforme absente',
+        (code) => /^const imprimante = sousElectron \? creerImprimanteElectron\(pont\) : creerImprimanteWeb\(window\);$/m.test(code),
+      ],
+      ['imprimante non passée à App', (code) => NOMMEE_SEULE('imprimante').test(proprietesDApp(code))],
+    ],
+  ],
+  [
+    'test/navigateur/montage.js',
+    [
+      ['import de creerImprimanteSimulee absent', (code) => /^import \{ creerImprimanteSimulee \} fro[m] '\.\.\/imprimante_simulee\.js';$/m.test(code)],
+      ["imprimante d'épreuve par défaut absente", (code) => /^\s*imprimante = creerImprimanteSimulee\(\),$/m.test(code)],
+      ['imprimante non passée à App', (code) => NOMMEE_SEULE('imprimante').test(proprietesDApp(code))],
+      ['imprimante non rendue', (code) => NOMMEE_SEULE('imprimante').test(renduDuMontage(code))],
+      ['src/impression importé', (code) => !/src\/impression\//.test(code)],
+    ],
+  ],
+  [
+    'src/interface/App.svelte',
+    [
+      ['imprimante absente des dépendances', (code) => NOMMEE_SEULE('imprimante').test(dependancesDApp(code))],
+      ["contexte 'imprimante' non posé", (code) => /^\s*setContext\('imprimante', imprimante\);$/m.test(code)],
+    ],
+  ],
+]);
+
+// Relevé du câblage de l'imprimante : « fichier : ce qui manque », dans
+// l'ordre de la table puis de ses pièces ; « fichier : fichier absent » pour
+// un fichier que l'arbre n'a pas.
+function releverCablageImprimante(racine, cablage = CABLAGE_DE_L_IMPRIMANTE) {
+  const releves = [];
+  for (const [chemin, pieces] of cablage) {
+    if (!existsSync(join(racine, chemin))) {
+      releves.push(`${chemin} : fichier absent`);
+      continue;
+    }
+    const code = texteSansCommentaires(chemin, readFileSync(join(racine, chemin), 'utf8'));
+    for (const [manque, presente] of pieces) if (!presente(code)) releves.push(`${chemin} : ${manque}`);
+  }
+  return releves;
+}
+
+describe("arborescence : le câblage de l'imprimante (§ 13.4)", () => {
+  test("src/main.js construit l'imprimante de la plateforme, le montage des épreuves l'imprimante d'épreuve, chacun la passe à App, qui la donne aux composants sous la clé 'imprimante'", () => {
+    assert.deepEqual(releverCablageImprimante(RACINE), []);
+  });
+
+  test("la garde relève chaque pièce absente, fichier par fichier, et un fichier absent ; un commentaire ne compte pas", () => {
+    const releves = avecArbre(
+      {
+        'src/main.js':
+          "import { creerImprimanteWeb } from './impression/imprimante_web.js';\n" +
+          'const pont = window.gtt;\nconst imprimante = creerImprimanteWeb(window);\n' +
+          'mount(App, {\n  target: document.body,\n  props: {\n    fs,\n  },\n});\nconst autre = { imprimante,\n};\n',
+        'test/navigateur/montage.js':
+          "import { creerImprimanteSimulee } from '../imprimante_simulee.js';\nimport { x } from '../../src/impression/imprimante_web.js';\n" +
+          'export function monterApp({\n  imprimante = creerImprimanteSimulee(),\n} = {}) {\n' +
+          '  const app = mount(App, {\n    target,\n    props: {\n      imprimante,\n    },\n  });\n  return {\n    app,\n  };\n}\n',
+        'src/interface/App.svelte':
+          "<script>\n  const {\n    fs,\n    imprimante,\n  } = untrack(() => dependances);\n  // setContext('imprimante', imprimante);\n</script>\n",
+      },
+      (racine) => [...releverCablageImprimante(racine), ...releverCablageImprimante(racine, new Map([['src/absent.js', []]]))],
+    );
+    assert.deepEqual(releves, [
+      'src/main.js : import de creerImprimanteElectron absent',
+      'src/main.js : imprimante de la plateforme absente',
+      'src/main.js : imprimante non passée à App',
+      'test/navigateur/montage.js : imprimante non rendue',
+      'test/navigateur/montage.js : src/impression importé',
+      "src/interface/App.svelte : contexte 'imprimante' non posé",
+      'src/absent.js : fichier absent',
+    ]);
+  });
+});
+
 describe('arborescence : un seul chemin de code pour les réservations (§ 5.2)', () => {
   test('dans src/moteur, seuls configuration.js et diagnostic.js lisent les réservations', () => {
     assert.deepEqual(releverLecteursDesReservations(RACINE), []);

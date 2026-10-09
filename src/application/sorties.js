@@ -5,9 +5,10 @@
 // toute sortie — page imprimée, planche de badges, feuille de contrôle — lit
 // de la charge pour dire quel placement elle porte. L'horodatage du
 // placement, la règle du filigrane BROUILLON et le pied de page n'ont ici
-// qu'une implémentation, que l'aperçu et la planche partagent (§ 13.2).
-// Chaque fonction lit la charge et rien d'autre : ni horloge, ni disque, ni
-// tirage ; deux appels sur la même charge rendent les mêmes valeurs.
+// qu'une implémentation, que l'aperçu et la planche partagent (§ 13.2). Le
+// refus que rend l'issue d'une impression s'y lit aussi. Chaque fonction lit
+// ce qu'elle reçoit et rien d'autre : ni horloge, ni disque, ni tirage ;
+// deux appels sur les mêmes arguments rendent les mêmes valeurs.
 //
 // Une sortie imprime l'une des trois sources de l'état des places : le
 // retenu, une proposition désignée par son identifiant, ou les seules
@@ -118,4 +119,32 @@ export function piedDePage(charge, { source, proposition = null, tour, provenanc
     horodatage: horodatagePlacement(charge, { source, proposition }),
     version: versionVisible(provenance, version, texte),
   };
+}
+
+// Les issues que rend l'imprimante de la plateforme (§ 13.4) ; seul un échec
+// porte une cause, une chaîne ou null.
+const ISSUES_IMPRESSION = new Set(['envoye', 'annule', 'echec', 'inconnue']);
+
+/**
+ * Le refus que rend l'issue d'une impression (§ 11.7, § 13.4), que l'aperçu
+ * pose sur sa commande « Imprimer » : null pour une impression envoyée,
+ * annulée par l'opérateur ou d'issue inconnue, qui n'appellent aucun
+ * message ; pour un échec, IMPRESSION_ECHEC, qui porte la cause que donne le
+ * système d'impression — null quand il n'en donne aucune —, sans remède.
+ *
+ * @param {{issue: 'envoye'|'annule'|'echec'|'inconnue', cause: string|null}} resultat
+ *        ce que rend Imprimante.imprimer
+ * @returns {import('./erreurs.js').ErreurCommande|null}
+ * @throws {TypeError} une issue inconnue, une cause absente, une cause qui
+ *         n'est ni une chaîne ni null, une cause pour une issue autre qu'un
+ *         échec
+ */
+export function refusImpression(resultat) {
+  if (resultat === null || typeof resultat !== 'object') throw new TypeError("refusImpression : l'issue n'est pas un objet");
+  const { issue, cause } = resultat;
+  if (!ISSUES_IMPRESSION.has(issue)) throw new TypeError(`refusImpression : issue inconnue ${JSON.stringify(issue)}`);
+  if (!(cause === null || (issue === 'echec' && typeof cause === 'string'))) {
+    throw new TypeError(`refusImpression : cause ${JSON.stringify(cause)} pour l'issue ${issue}`);
+  }
+  return issue === 'echec' ? refus('IMPRESSION_ECHEC', { cause }) : null;
 }

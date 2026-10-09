@@ -7,15 +7,17 @@
 // invoque le canal de cette primitive, gtt:fichiers:<primitive>, et rend la
 // réponse du processus principal (electron/fichiers.js) ; gtt.copier(texte),
 // qui invoque le canal gtt:copier et remet le texte au presse-papiers du
-// système. La page ne reçoit jamais ipcRenderer lui-même, ni une fonction
-// qui invoquerait un canal de son choix.
+// système ; gtt.imprimer({papier, orientation}), qui invoque le canal
+// gtt:imprimer et rend l'issue de l'impression (electron/impression.js). La
+// page ne reçoit jamais ipcRenderer lui-même, ni une fonction qui
+// invoquerait un canal de son choix.
 //
 // Un préchargement exécuté en bac à sable est un script CommonJS, d'où
 // l'extension .cjs dans un paquet de type module. Son require ne connaît
 // qu'electron et quelques modules de Node, et non les fichiers du projet :
-// les primitives s'écrivent donc ici, dans l'ordre de l'interface, et
-// test/coquille.test.js éprouve qu'elles sont celles des canaux que pose le
-// processus principal.
+// les primitives et les noms des canaux s'écrivent donc ici, les primitives
+// dans l'ordre de l'interface, et test/coquille.test.js éprouve qu'ils sont
+// ceux des canaux que pose le processus principal.
 const { contextBridge, ipcRenderer } = require('electron');
 
 const PRIMITIVES = [
@@ -26,6 +28,7 @@ const PRIMITIVES = [
   'typeSupport',
   'lireTexte',
   'ecrireAtomique',
+  'ecrireOctetsAtomique',
   'ajouterLigne',
   'lister',
   'creerDossier',
@@ -46,4 +49,6 @@ for (const primitive of PRIMITIVES) {
 
 const copier = (texte) => ipcRenderer.invoke('gtt:copier', texte);
 
-contextBridge.exposeInMainWorld('gtt', { fichiers, copier });
+const imprimer = (demande) => ipcRenderer.invoke('gtt:imprimer', demande);
+
+contextBridge.exposeInMainWorld('gtt', { fichiers, copier, imprimer });

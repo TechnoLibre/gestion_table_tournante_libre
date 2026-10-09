@@ -2,11 +2,12 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les noms des fichiers d'un événement (§ 8.6, § 8.7) : leurs suffixes, la
-// base que le nom de l'événement donne dans un dossier de travail, et le
-// dossier daté de la corbeille. Le module est pur : il ne touche aucun
-// fichier, ne lit ni horloge ni aléa, et ne dépend d'aucune langue — la casse
-// se compare par toUpperCase ou toLowerCase, jamais par une comparaison
-// localisée.
+// base que le nom de l'événement donne dans un dossier de travail, le
+// dossier daté de la corbeille, et le nom de la planche de badges que
+// l'événement produit à côté de ses fichiers (§ 11.6). Le module est pur :
+// il ne touche aucun fichier, ne lit ni horloge ni aléa, et ne dépend
+// d'aucune langue — la casse se compare par toUpperCase ou toLowerCase,
+// jamais par une comparaison localisée.
 //
 // Les longueurs se comptent en unités UTF-16, comme MAX_PATH de Windows, et
 // une coupe ne sépare jamais une paire de substitution. Le chemin complet
@@ -15,7 +16,11 @@
 // l'événement écrit : un fichier de la corbeille datée, au suffixe le plus
 // long, que l'écriture atomique prolonge de SUFFIXE_ECRITURE. Une base qui ne
 // tiendrait que pour l'état laisserait déborder le journal, le fichier
-// précédent et leurs fichiers d'écriture.
+// précédent et leurs fichiers d'écriture. Le nom de la planche, posé à la
+// racine du dossier de travail, tient sous la même borne : son plus long
+// suffixe, prolongé de SUFFIXE_ECRITURE, ne dépasse pas la partie fixe de
+// longueurRelativeMax.
+import { PAPIERS } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 
 // Suffixes des fichiers d'un événement, que précède la base de son nom.
@@ -245,6 +250,18 @@ export function deriverBase(nom, { racine, separateur, existantes }) {
 // chemin du dossier ne retient que les chiffres du jour et de l'heure.
 const HORODATAGE = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})[+-]\d{2}:\d{2}$/;
 
+// Le jour et l'heure d'un horodatage, AAAA-MM-JJ_HH-MM-SS : tels qu'écrits,
+// sans le décalage, les deux-points, que Windows refuse dans un nom, devenus
+// des traits d'union. TypeError pour une autre forme.
+function jourEtHeure(horodatage) {
+  const lu = typeof horodatage === 'string' ? HORODATAGE.exec(horodatage) : null;
+  if (lu === null) {
+    throw new TypeError(`horodatage AAAA-MM-JJTHH:MM:SS±HH:MM attendu, reçu ${JSON.stringify(horodatage)}`);
+  }
+  const [, jour, heures, minutes, secondes] = lu;
+  return `${jour}_${heures}-${minutes}-${secondes}`;
+}
+
 const PREFIXE_CORBEILLE = `${DOSSIER_CORBEILLE}/`;
 
 /**
@@ -266,12 +283,7 @@ const PREFIXE_CORBEILLE = `${DOSSIER_CORBEILLE}/`;
  *           à 99 sont pris ; dossier est le chemin relatif du nom sans rang
  */
 export function dossierCorbeille(horodatage, existants) {
-  const lu = typeof horodatage === 'string' ? HORODATAGE.exec(horodatage) : null;
-  if (lu === null) {
-    throw new TypeError(`horodatage AAAA-MM-JJTHH:MM:SS±HH:MM attendu, reçu ${JSON.stringify(horodatage)}`);
-  }
-  const [, jour, heures, minutes, secondes] = lu;
-  const nom = `${jour}_${heures}-${minutes}-${secondes}`;
+  const nom = jourEtHeure(horodatage);
   const pris = new Set(
     Array.from(existants, (entree) =>
       entree.startsWith(PREFIXE_CORBEILLE) ? entree.slice(PREFIXE_CORBEILLE.length) : entree,
@@ -287,4 +299,58 @@ export function dossierCorbeille(horodatage, existants) {
     throw new ErreurStockage('CORBEILLE_SATUREE', { dossier: `${PREFIXE_CORBEILLE}${nom}` });
   }
   return `${PREFIXE_CORBEILLE}${candidat}`;
+}
+
+// Les impositions de la planche (§ 11.6), telles que le nom du fichier les
+// écrit.
+const IMPOSITIONS = Object.freeze(['feuille', 'pile']);
+
+// Une réédition compte au plus REEDITION_MAX badges, quatre chiffres : le
+// plus long suffixe de la planche, « .badges-9999_<papier>_feuille_<date>.pdf »,
+// en tient compte sous la borne du chemin.
+const REEDITION_MAX = 9999;
+
+// Ce qui tient lieu de date et d'heure quand le placement n'en porte pas.
+const HORODATAGE_INCONNU = 'horodatage-inconnu';
+
+/**
+ * Nom du fichier de la planche de badges (§ 11.6), posé à la racine du
+ * dossier de travail : <base>.badges[-<k>]_<papier>_<imposition>_<date>.pdf,
+ * où k est le nombre de badges d'une réédition, papier une clé de PAPIERS,
+ * imposition feuille ou pile, et date le jour et l'heure de l'horodatage du
+ * placement, AAAA-MM-JJ_HH-MM-SS, décalage retiré — « horodatage-inconnu »
+ * quand il manque. Le nom ne porte aucun deux-points. Même base, même
+ * papier, même imposition, même placement : même nom. Le plus long suffixe,
+ * 51 unités, prolongé de SUFFIXE_ECRITURE, tient sous la partie fixe de
+ * longueurRelativeMax : la base d'un événement, que deriverBase borne, laisse
+ * donc place à sa planche.
+ *
+ * @param {string} base  celle de l'événement, que rend deriverBase
+ * @param {Object} options
+ * @param {import('../geometrie/papiers.js').Papier} options.papier
+ * @param {'feuille'|'pile'} options.imposition
+ * @param {string|null} options.horodatage  AAAA-MM-JJTHH:MM:SS±HH:MM, ou null
+ * @param {null|{ids: number[]}} [options.reedition]  les badges réédités ;
+ *        null ou absent pour une planche entière
+ * @returns {string}
+ * @throws {TypeError} une base vide ou autre chose qu'une chaîne, un papier
+ *         hors de PAPIERS, une imposition hors de feuille et pile, un
+ *         horodatage d'une autre forme, une réédition sans tableau ids
+ * @throws {RangeError} une réédition de 0 badge ou de plus de 9 999
+ */
+export function nomPlanche(base, { papier, imposition, horodatage, reedition = null } = {}) {
+  if (typeof base !== 'string' || base === '') throw new TypeError(`nomPlanche : base attendue, reçu ${JSON.stringify(base)}`);
+  if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
+    throw new TypeError(`nomPlanche : papier inconnu ${JSON.stringify(papier)}`);
+  }
+  if (!IMPOSITIONS.includes(imposition)) throw new TypeError(`nomPlanche : imposition inconnue ${JSON.stringify(imposition)}`);
+  const date = horodatage === null ? HORODATAGE_INCONNU : jourEtHeure(horodatage);
+  let rang = '';
+  if (reedition !== null) {
+    if (!Array.isArray(reedition?.ids)) throw new TypeError('nomPlanche : réédition sans tableau ids');
+    const k = reedition.ids.length;
+    if (k < 1 || k > REEDITION_MAX) throw new RangeError(`nomPlanche : réédition de ${k} badges, de 1 à ${REEDITION_MAX} admis`);
+    rang = `-${k}`;
+  }
+  return `${base}.badges${rang}_${papier}_${imposition}_${date}.pdf`;
 }

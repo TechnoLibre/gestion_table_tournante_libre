@@ -33,6 +33,7 @@ const PRIMITIVES = [
   'typeSupport',
   'lireTexte',
   'ecrireAtomique',
+  'ecrireOctetsAtomique',
   'ajouterLigne',
   'lister',
   'creerDossier',
@@ -54,6 +55,18 @@ const DEPUIS_LOINTAIN = '2031-05-18T06:12:00+05:30';
 // décalage, en temps universel, un instant en millisecondes, une date seule.
 const DEPUIS_FAUTIFS = [undefined, null, '', '2031-05-17 19:42:07', '2031-05-17T19:42:07Z', 1_950_000_000_000, '2031-05-17'];
 
+// Octets d'un fichier binaire : l'en-tête d'un PDF, dont la ligne de
+// commentaire porte des octets hors UTF-8, puis un nul, un 0xFF et un CRLF.
+// Les octets d'un texte en UTF-8, accent et fin de ligne CRLF compris.
+const OCTETS_BINAIRES = Object.freeze([
+  0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a, 0x00, 0xff, 0x0d, 0x0a,
+]);
+const TEXTE_EN_OCTETS = 'Soir\u{E9}e\r\n';
+
+// Des octets d'une autre forme qu'un Uint8Array : un texte, un tableau de
+// nombres, un tampon nu, rien.
+const OCTETS_FAUTIFS = [() => 'texte', () => [0x25, 0x50], () => new ArrayBuffer(2), () => null, () => undefined];
+
 // Chemins qu'aucune implémentation n'accepte : remontant, absolu sous Unix,
 // absolu sous Windows, remontant après un détour.
 const CHEMINS_REFUSES = ['../x', '/x', 'C:\\x', 'a/../../x'];
@@ -65,6 +78,7 @@ const CHEMINS_REFUSES = ['../x', '/x', 'C:\\x', 'a/../../x'];
 const APPELS_A_CHEMIN = [
   ['lireTexte', (fs, racine, chemin) => fs.lireTexte(racine, chemin)],
   ['ecrireAtomique', (fs, racine, chemin) => fs.ecrireAtomique(racine, chemin, 'texte')],
+  ['ecrireOctetsAtomique', (fs, racine, chemin) => fs.ecrireOctetsAtomique(racine, chemin, new Uint8Array([0x25]))],
   ['ajouterLigne', (fs, racine, chemin) => fs.ajouterLigne(racine, chemin, 'ligne')],
   ['lister', (fs, racine, chemin) => fs.lister(racine, chemin)],
   ['creerDossier', (fs, racine, chemin) => fs.creerDossier(racine, chemin)],
@@ -119,7 +133,7 @@ export function eprouverContrat(nom, fabrique, { describe, test, egal, vrai, rej
   }
 
   describe(`contrat du système de fichiers : ${nom}`, () => {
-    test("l'interface porte sa nature, ses deux garanties et ses dix-sept primitives, et décrit ses emplacements et ses racines", async () => {
+    test("l'interface porte sa nature, ses deux garanties et ses dix-huit primitives, et décrit ses emplacements et ses racines", async () => {
       const { fs, racine } = await fabrique();
       vrai(['electron', 'web', 'epreuve'].includes(fs.nature), `nature ${fs.nature}`);
       egal(typeof fs.renommageAtomique, 'boolean', 'renommageAtomique');
@@ -156,6 +170,47 @@ export function eprouverContrat(nom, fabrique, { describe, test, egal, vrai, rej
       await fs.ecrireAtomique(racine, 'etat.json', 'second');
       egal(await fs.lireTexte(racine, 'etat.json'), 'second');
       egal(noms(await fs.lister(racine, '')), ['etat.json']);
+    });
+
+    test("ecrireOctetsAtomique écrit les octets tels quels : relus, ce sont les mêmes, hors UTF-8 compris ; il remplace le contenu entier, ne garde pas le tableau reçu et ne laisse aucun fichier .ecriture", async () => {
+      const { fs, racine } = await fabrique();
+      await fs.ecrireOctetsAtomique(racine, 'planche.pdf', new Uint8Array(64).fill(0x41));
+      const octets = new Uint8Array(OCTETS_BINAIRES);
+      await fs.ecrireOctetsAtomique(racine, 'planche.pdf', octets);
+      // L'appelant réemploie son tableau : le fichier n'en dépend plus.
+      octets.fill(0);
+      // Des octets hors UTF-8 se relisent par le refus de lireTexte, qui en
+      // porte une copie.
+      const { details } = await echoue(fs.lireTexte(racine, 'planche.pdf'), 'LECTURE');
+      egal(details.cause, 'UTF8_INVALIDE');
+      egal(details.chemin, 'planche.pdf');
+      egal([...details.octets], [...OCTETS_BINAIRES]);
+      egal(
+        (await fs.lister(racine, '')).map(({ nom: nomEntree, type, taille }) => ({ nom: nomEntree, type, taille })),
+        [{ nom: 'planche.pdf', type: 'fichier', taille: OCTETS_BINAIRES.length }],
+      );
+
+      // Des octets d'UTF-8 se relisent en texte, tels qu'écrits.
+      await fs.ecrireOctetsAtomique(racine, 'liste.csv', new TextEncoder().encode(TEXTE_EN_OCTETS));
+      egal(await fs.lireTexte(racine, 'liste.csv'), TEXTE_EN_OCTETS);
+      egal(noms(await fs.lister(racine, '')), ['liste.csv', 'planche.pdf']);
+    });
+
+    test('ecrireOctetsAtomique dans un dossier absent lève ECRITURE, sans créer le dossier ni toucher aux autres fichiers', async () => {
+      const { fs, racine } = await fabrique();
+      await fs.ecrireAtomique(racine, 'ici.txt', 'ici');
+      await refuseEcriture(fs.ecrireOctetsAtomique(racine, 'disparu/planche.pdf', new Uint8Array(OCTETS_BINAIRES)), 'disparu/planche.pdf');
+      egal(noms(await fs.lister(racine, '')), ['ici.txt']);
+      egal(await fs.lireTexte(racine, 'ici.txt'), 'ici');
+    });
+
+    test("ecrireOctetsAtomique refuse des octets d'une autre forme qu'un Uint8Array : TypeError, et rien ne s'écrit", async () => {
+      const { fs, racine } = await fabrique();
+      for (const fautifs of OCTETS_FAUTIFS) {
+        const raison = await rejette(fs.ecrireOctetsAtomique(racine, 'planche.pdf', fautifs()), String(fautifs));
+        vrai(raison instanceof TypeError, `${String(fautifs)} : ${raison}`);
+      }
+      egal(await fs.lister(racine, ''), []);
     });
 
     test('ajouterLigne ajoute la ligne et une fin de ligne LF après le dernier octet, et crée le fichier absent', async () => {

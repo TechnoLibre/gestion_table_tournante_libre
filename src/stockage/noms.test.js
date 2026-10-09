@@ -6,8 +6,9 @@
 // écrit, la dérivation de la base d'un nom — caractères invisibles et
 // demi-paires isolées, noms réservés, caractères que Windows refuse, composition
 // en NFC, collisions comparées par la majuscule, borne du chemin complet — et
-// le dossier daté de la corbeille, jusqu'à son dernier rang. Chaque épreuve de
-// dérivation se joue sur les deux dossiers de travail possibles du § 8.6.
+// le dossier daté de la corbeille, jusqu'à son dernier rang, et le nom du
+// fichier de la planche de badges (§ 11.6). Chaque épreuve de dérivation se
+// joue sur les deux dossiers de travail possibles du § 8.6.
 //
 // La borne s'éprouve contre un oracle écrit ici : chaque chemin qu'un
 // événement écrit se recompose en entier, de la racine au suffixe, avec des
@@ -17,6 +18,7 @@
 // en clair : ce qu'on ne voit pas ne se relit pas.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
+import { PAPIERS } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 import {
   DOSSIER_CORBEILLE,
@@ -26,6 +28,7 @@ import {
   deriverBase,
   dossierCorbeille,
   longueurRelativeMax,
+  nomPlanche,
 } from './noms.js';
 
 // Les deux dossiers de travail possibles (§ 8.6) : le dossier du produit dans
@@ -992,7 +995,7 @@ function sansSourcesVariables(fonction) {
 }
 
 describe('déterminisme et pureté (§ 14.7)', () => {
-  test('longueurRelativeMax, deriverBase et dossierCorbeille ne lisent ni horloge, ni aléa, ni comparaison localisée', () => {
+  test('longueurRelativeMax, deriverBase, dossierCorbeille et nomPlanche ne lisent ni horloge, ni aléa, ni comparaison localisée', () => {
     // Le filet est éprouvé d'abord : chaque source lève pendant qu'il est tendu.
     for (const lecture of [
       () => Math.random(),
@@ -1015,6 +1018,8 @@ describe('déterminisme et pureté (§ 14.7)', () => {
       derive(lettres(400), DOSSIERS[1], []),
       derive('Con.soirée', DOSSIERS[0], ['con_.soirée']),
       dossierCorbeille('2026-10-06T19:02:11-04:00', ['2026-10-06_19-02-11']),
+      nomPlanche('Gala', { papier: 'A4', imposition: 'pile', horodatage: '2026-10-06T19:02:11-04:00', reedition: { ids: [4, 9] } }),
+      nomPlanche('Gala', { papier: 'A4', imposition: 'feuille', horodatage: null, reedition: null }),
     ];
     assert.deepEqual(sansSourcesVariables(rendre), rendre());
   });
@@ -1026,5 +1031,106 @@ describe('déterminisme et pureté (§ 14.7)', () => {
     assert.equal(premier, 'Gala (3)');
     assert.equal(deriverBase('Gala', dossier), premier);
     assert.deepEqual([...existantes], ['gala', 'GALA (2)']);
+  });
+});
+
+describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () => {
+  const BASE = 'Soir\u{E9}e des Lucioles';
+  const HORODATAGE = '2031-05-17T20:15:07-04:00';
+  // Une réédition de k badges, sous la forme du modèle de la planche.
+  const reeditionDe = (k) => ({ ids: Array.from({ length: k }, (_, i) => i + 1) });
+
+  test('les quatre combinaisons papier × imposition : la base, « .badges », le papier, l’imposition, la date et l’heure du placement sans décalage, puis « .pdf »', () => {
+    const cas = [
+      ['A4', 'feuille', `${BASE}.badges_A4_feuille_2031-05-17_20-15-07.pdf`],
+      ['A4', 'pile', `${BASE}.badges_A4_pile_2031-05-17_20-15-07.pdf`],
+      ['Lettre', 'feuille', `${BASE}.badges_Lettre_feuille_2031-05-17_20-15-07.pdf`],
+      ['Lettre', 'pile', `${BASE}.badges_Lettre_pile_2031-05-17_20-15-07.pdf`],
+    ];
+    assert.deepEqual(cas.map(([papier]) => papier).filter((p, i, t) => t.indexOf(p) === i), Object.keys(PAPIERS));
+    for (const [papier, imposition, attendu] of cas) {
+      assert.equal(nomPlanche(BASE, { papier, imposition, horodatage: HORODATAGE, reedition: null }), attendu);
+    }
+  });
+
+  test('une réédition de k badges porte « -<k> » après « .badges » ; sans réédition, rien', () => {
+    const nom = (reedition) => nomPlanche(BASE, { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, reedition });
+    assert.equal(nom({ ids: [3, 8, 12] }), `${BASE}.badges-3_A4_feuille_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom(reeditionDe(1)), `${BASE}.badges-1_A4_feuille_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom(reeditionDe(9999)), `${BASE}.badges-9999_A4_feuille_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom(null), `${BASE}.badges_A4_feuille_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom(undefined), `${BASE}.badges_A4_feuille_2031-05-17_20-15-07.pdf`);
+  });
+
+  test('un horodatage inconnu donne « _horodatage-inconnu » ; un décalage, quel qu’il soit, ne change pas le nom ; aucun « : »', () => {
+    assert.equal(
+      nomPlanche(BASE, { papier: 'Lettre', imposition: 'pile', horodatage: null, reedition: null }),
+      `${BASE}.badges_Lettre_pile_horodatage-inconnu.pdf`,
+    );
+    for (const horodatage of ['2031-05-17T20:15:07+05:30', '2031-05-17T20:15:07+00:00', HORODATAGE]) {
+      const nom = nomPlanche(BASE, { papier: 'A4', imposition: 'feuille', horodatage, reedition: reeditionDe(2) });
+      assert.equal(nom, `${BASE}.badges-2_A4_feuille_2031-05-17_20-15-07.pdf`, horodatage);
+      assert.ok(!nom.includes(':'), nom);
+    }
+  });
+
+  test('même placement, même papier, même imposition : même nom ; un autre placement, un autre nom', () => {
+    const options = { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, reedition: null };
+    assert.equal(nomPlanche(BASE, options), nomPlanche(BASE, { ...options }));
+    assert.notEqual(nomPlanche(BASE, options), nomPlanche(BASE, { ...options, horodatage: '2031-05-17T20:15:08-04:00' }));
+  });
+
+  test('le plus long suffixe, 51 unités, plus le suffixe d’écriture tient sous la partie fixe de longueurRelativeMax : la planche d’une base à la borne ne dépasse pas 259 unités', () => {
+    const suffixes = [];
+    for (const papier of Object.keys(PAPIERS)) {
+      for (const imposition of ['feuille', 'pile']) {
+        for (const horodatage of [HORODATAGE, null]) {
+          for (const reedition of [null, reeditionDe(9), reeditionDe(9999)]) {
+            suffixes.push(nomPlanche('b', { papier, imposition, horodatage, reedition }).slice(1));
+          }
+        }
+      }
+    }
+    assert.equal(suffixes.length, 24);
+    const plusLong = suffixes.reduce((a, b) => (b.length > a.length ? b : a));
+    assert.equal(plusLong, '.badges-9999_Lettre_feuille_2031-05-17_20-15-07.pdf');
+    assert.equal(plusLong.length, 51);
+    assert.ok(
+      plusLong.length + SUFFIXE_ECRITURE.length <= longueurRelativeMax(''),
+      `${plusLong.length} + ${SUFFIXE_ECRITURE.length} > ${longueurRelativeMax('')}`,
+    );
+    // Recomposé en entier, à côté des fichiers de l'événement, sur une base
+    // que deriverBase pousse à la borne.
+    for (const dossier of DOSSIERS) {
+      const base = deriverBase(lettres(400), { ...dossier, existantes: [] });
+      assert.equal(base.length, longueurMaxDeBase(dossier));
+      const nom = nomPlanche(base, { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: reeditionDe(9999) });
+      const chemin = `${dossier.racine}${dossier.separateur}${nom}.ecriture`;
+      assert.ok(chemin.length <= LONGUEUR_CHEMIN_MAX, `${dossier.racine} : ${chemin.length} unités`);
+    }
+  });
+
+  test('un domaine hors contrat lève sans rien rendre : base, papier, imposition ou horodatage, TypeError ; réédition vide, de plus de 9 999 badges ou d’une autre forme, RangeError ou TypeError', () => {
+    const valides = { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, reedition: null };
+    const fautes = [
+      [TypeError, '', valides],
+      [TypeError, 42, valides],
+      [TypeError, BASE, { ...valides, papier: 'A3' }],
+      [TypeError, BASE, { ...valides, papier: 'toString' }],
+      [TypeError, BASE, { ...valides, papier: undefined }],
+      [TypeError, BASE, { ...valides, imposition: 'massicot' }],
+      [TypeError, BASE, { ...valides, imposition: undefined }],
+      [TypeError, BASE, { ...valides, horodatage: '2031-05-17T20:15:07Z' }],
+      [TypeError, BASE, { ...valides, horodatage: '2031-05-17 20:15:07-04:00' }],
+      [TypeError, BASE, { ...valides, horodatage: undefined }],
+      [TypeError, BASE, { ...valides, reedition: 3 }],
+      [TypeError, BASE, { ...valides, reedition: { ids: 'abc' } }],
+      [RangeError, BASE, { ...valides, reedition: { ids: [] } }],
+      [RangeError, BASE, { ...valides, reedition: reeditionDe(10000) }],
+    ];
+    for (const [type, base, options] of fautes) {
+      assert.throws(() => nomPlanche(base, options), type, `${JSON.stringify(base)} ${JSON.stringify(options).slice(0, 120)}`);
+    }
+    assert.throws(() => nomPlanche(BASE), TypeError);
   });
 });

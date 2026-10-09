@@ -6,7 +6,9 @@
 // la plateforme (electron/fichiers.js), offert à la page par un canal IPC
 // par primitive, que electron/preload.cjs expose sous window.gtt.fichiers ;
 // un canal de plus, gtt:copier, remet un texte au presse-papiers du système
-// (window.gtt.copier).
+// (window.gtt.copier) ; un dernier, gtt:imprimer, imprime la page sur le
+// papier et dans l'orientation qu'elle demande (electron/impression.js,
+// window.gtt.imprimer).
 //
 // La page n'a ni Node ni accès au disque : isolation de contexte active,
 // intégration de Node coupée, rendu en bac à sable. Elle n'atteint le
@@ -20,6 +22,7 @@ import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { creerFichiers, decrireSysteme, processusVivant, servir } from './fichiers.js';
+import { servirImpression } from './impression.js';
 
 // Chemins relatifs à ce module : ils valent dans le dépôt comme dans
 // l'archive app.asar de l'exécutable, qui reproduit electron/ et www/.
@@ -82,6 +85,10 @@ ipcMain.handle('gtt:copier', (_evenement, texte) => {
   if (typeof texte !== 'string') throw new TypeError("le texte à copier n'est pas une chaîne");
   clipboard.writeText(texte);
 });
+
+// L'impression : la page qui la demande s'imprime, par la boîte de dialogue
+// du système, sur le papier et dans l'orientation reçus, et rien d'autre.
+servirImpression((canal, gestionnaire) => ipcMain.handle(canal, gestionnaire));
 
 // Les verrous que la page a pris et pas rendus s'effacent à la sortie (§ 8.8) :
 // la page ne survit pas au processus principal, et une fermeture de la fenêtre

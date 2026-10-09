@@ -5,7 +5,9 @@
 // § 14.10) : App reçoit des plateformes d'épreuve par ses propriétés, comme
 // src/main.js lui donne celles de la machine — le système de fichiers simulé
 // de test/fichiers_simules.js, l'horloge pilotée, l'exécuteur direct de la
-// génération, un presse-papiers qui enregistre. Chaque montage vit dans son
+// génération, un presse-papiers qui enregistre, l'imprimante d'épreuve de
+// test/imprimante_simulee.js, qui relève ce qu'on lui demande d'imprimer.
+// Chaque montage vit dans son
 // propre conteneur, ajouté au corps du document : deux montages simultanés
 // ne partagent ni système, ni séance, ni identifiants.
 //
@@ -33,12 +35,14 @@ import { attendrePolices, chargerPolices } from '../../src/polices/chargement.js
 import { FORMAT } from '../../src/stockage/document.js';
 import { VERSION } from '../../src/version.genere.js';
 import { creerFichiersSimules } from '../fichiers_simules.js';
+import { creerImprimanteSimulee } from '../imprimante_simulee.js';
 
 /** Les primitives que le système simulé compte comme écritures, celles que
  *  tracer relève. */
 export const PRIMITIVES_TRACEES = Object.freeze([
   'sonder',
   'ecrireAtomique',
+  'ecrireOctetsAtomique',
   'ajouterLigne',
   'creerDossier',
   'deplacer',
@@ -69,9 +73,10 @@ function installerCollecteur() {
   return installation;
 }
 
-/** Enveloppe les huit primitives d'écriture du système simulé — sonder,
- *  ecrireAtomique, ajouterLigne, creerDossier, deplacer, supprimer,
- *  verrouiller, deverrouiller — et rend leur relevé, dans l'ordre des appels :
+/** Enveloppe les neuf primitives d'écriture du système simulé — sonder,
+ *  ecrireAtomique, ecrireOctetsAtomique, ajouterLigne, creerDossier,
+ *  deplacer, supprimer, verrouiller, deverrouiller — et rend leur relevé,
+ *  dans l'ordre des appels :
  *  [primitive, racine.id, chemin], '' pour sonder, qui ne prend pas de chemin.
  *  Un appel se relève avant de s'exécuter, refusé ou non. */
 export function tracer(fs) {
@@ -111,9 +116,12 @@ export function tracer(fs) {
  * @param {Array<{cle: string, nom: string, texte: string}>} [options.demonstrations]
  * @param {() => Promise<{regulier: Uint8Array, gras: Uint8Array}>} [options.polices]
  *        sinon chargerPolices, celui de src/main.js
+ * @param {Object} [options.imprimante]  l'imprimante qu'App reçoit ; sinon
+ *        une imprimante d'épreuve neuve, dont chaque impression est envoyée
  * @returns {Promise<Object>} { app, racine, fs, disque, trace, horloge,
- *   presse, polices, seance, facade, ui, erreurs(), demonter() } — polices
- *   est le chargement de la police qu'App a reçu ; seance est un
+ *   presse, polices, imprimante, seance, facade, ui, erreurs(), demonter() }
+ *   — polices est le chargement de la police qu'App a reçu, imprimante
+ *   l'imprimante qu'il a reçue ; seance est un
  *   accesseur de app.seance() ; presse.copies, les textes copiés ;
  *   erreurs(), ce que le collecteur a reçu depuis ce montage ; demonter()
  *   démonte App, retire le conteneur et rend à <html> son data-theme d'avant
@@ -130,6 +138,7 @@ export async function monterApp({
   formatCourant,
   demonstrations,
   polices = chargerPolices,
+  imprimante = creerImprimanteSimulee(),
 } = {}) {
   await installerCollecteur();
   await attendrePolices(document);
@@ -179,6 +188,7 @@ export async function monterApp({
       produitVersion: VERSION.affichee,
       versionWindows: VERSION.windows,
       polices,
+      imprimante,
       ...(theme === null ? {} : { themeInitial: theme }),
     },
   });
@@ -193,6 +203,7 @@ export async function monterApp({
     horloge: horlogeMontage,
     presse,
     polices,
+    imprimante,
     get seance() {
       return app.seance();
     },

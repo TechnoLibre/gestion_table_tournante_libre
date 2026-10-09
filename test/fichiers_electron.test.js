@@ -307,6 +307,12 @@ function creerDisque() {
       const { noeud } = resoudre(chemin, true, 'contenu');
       return noeud?.type === 'fichier' ? noeud.octets.toString('utf8') : null;
     },
+    // Les octets d'un fichier, copiés en Uint8Array, liens suivis ; null pour
+    // un absent ou un dossier.
+    octets(chemin) {
+      const { noeud } = resoudre(chemin, true, 'octets');
+      return noeud?.type === 'fichier' ? new Uint8Array(noeud.octets) : null;
+    },
     // Vrai quand le chemin désigne un nœud, liens des dossiers parents
     // suivis, celui du dernier segment non.
     existe(chemin) {
@@ -460,6 +466,7 @@ const ecriture = (chemin, dossier, cause) => ({ chemin, dossier, cause });
 const APPELS_A_CHEMIN = [
   ['lireTexte', (fichiers, racine, chemin) => fichiers.lireTexte(racine, chemin)],
   ['ecrireAtomique', (fichiers, racine, chemin) => fichiers.ecrireAtomique(racine, chemin, 'x')],
+  ['ecrireOctetsAtomique', (fichiers, racine, chemin) => fichiers.ecrireOctetsAtomique(racine, chemin, new Uint8Array([0x25]))],
   ['ajouterLigne', (fichiers, racine, chemin) => fichiers.ajouterLigne(racine, chemin, 'x')],
   ['lister', (fichiers, racine, chemin) => fichiers.lister(racine, chemin)],
   ['creerDossier', (fichiers, racine, chemin) => fichiers.creerDossier(racine, chemin)],
@@ -594,6 +601,87 @@ describe('coquille, fichiers : écriture atomique (§ 8.8)', () => {
   test("le texte doit être une chaîne : autre chose lève TypeError, sans toucher au disque", async () => {
     const { disque, fichiers } = preparer();
     await assert.rejects(fichiers.ecrireAtomique(DOC, 'etat.json', 42), TypeError);
+    assert.deepEqual(disque.appels, []);
+  });
+});
+
+describe('coquille, fichiers : écriture atomique des octets (§ 8.8)', () => {
+  const CIBLE = `${DOCUMENTS}/planche.pdf`;
+  const TEMPORAIRE = `${CIBLE}${SUFFIXE_ECRITURE}`;
+  // L'en-tête d'un PDF, octets hors UTF-8 compris, et ceux d'une planche
+  // précédente.
+  const OCTETS = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a, 0x00, 0xff]);
+  const ANCIENS = 'ancienne planche';
+
+  test("écrit les octets tels quels dans <chemin>.ecriture, le vide sur le disque, le ferme, puis le renomme par-dessus la cible, qui n'est jamais ouverte", async () => {
+    const { disque, fichiers, pauses } = preparer();
+    disque.deposer(CIBLE, ANCIENS);
+    await fichiers.ecrireOctetsAtomique(DOC, 'planche.pdf', OCTETS);
+    assert.deepEqual(disque.octets(CIBLE), OCTETS);
+    assert.equal(disque.existe(TEMPORAIRE), false);
+    assert.deepEqual(
+      ecritures(disque).filter((ligne) => !ligne.startsWith('unlink ')),
+      [
+        `open ${TEMPORAIRE} wx`,
+        `write ${TEMPORAIRE}`,
+        `sync ${TEMPORAIRE}`,
+        `close ${TEMPORAIRE}`,
+        `rename ${TEMPORAIRE} ${CIBLE}`,
+      ],
+    );
+    assert.deepEqual(disque.appels.filter((ligne) => ligne.startsWith(`open ${CIBLE} `)), []);
+    assert.deepEqual(pauses, []);
+  });
+
+  test('un renommage refusé sur une cause passagère se réessaie comme celui du texte : onze refus lèvent ECRITURE, la cible intacte, le temporaire retiré', async () => {
+    const passe = preparer();
+    passe.disque.deposer(CIBLE, ANCIENS);
+    passe.disque.panne('rename', 'EBUSY', { fois: 2 });
+    await passe.fichiers.ecrireOctetsAtomique(DOC, 'planche.pdf', OCTETS);
+    assert.deepEqual(passe.disque.octets(CIBLE), OCTETS);
+    assert.deepEqual(passe.pauses, [50, 100]);
+
+    const echoue = preparer();
+    echoue.disque.deposer(CIBLE, ANCIENS);
+    echoue.disque.panne('rename', 'EBUSY', { fois: 11 });
+    await refuse(echoue.fichiers.ecrireOctetsAtomique(DOC, 'planche.pdf', OCTETS), 'ECRITURE', ecriture('planche.pdf', DOCUMENTS, 'EBUSY'));
+    assert.equal(echoue.disque.contenu(CIBLE), ANCIENS);
+    assert.equal(echoue.disque.existe(TEMPORAIRE), false);
+    assert.equal(echoue.disque.appels.filter((ligne) => ligne.startsWith('rename ')).length, 11);
+  });
+
+  test("un temporaire qui ne s'écrit, ne se vide ou ne se ferme pas est retiré sans renommage, et la cible reste intacte", async () => {
+    for (const [fonction, cause] of [['open', 'EROFS'], ['write', 'ENOSPC'], ['sync', 'EIO'], ['close', 'EIO']]) {
+      const { disque, fichiers } = preparer();
+      disque.deposer(CIBLE, ANCIENS);
+      disque.panne(fonction, cause, { chemin: TEMPORAIRE });
+      await refuse(fichiers.ecrireOctetsAtomique(DOC, 'planche.pdf', OCTETS), 'ECRITURE', ecriture('planche.pdf', DOCUMENTS, cause), fonction);
+      assert.equal(disque.contenu(CIBLE), ANCIENS, fonction);
+      assert.equal(disque.existe(TEMPORAIRE), false, fonction);
+      assert.deepEqual(disque.appels.filter((ligne) => ligne.startsWith('rename ')), [], fonction);
+    }
+  });
+
+  test("le dossier de la cible doit exister, et une cible qui est un dossier n'est pas remplacée", async () => {
+    const { disque, fichiers } = preparer();
+    await refuse(
+      fichiers.ecrireOctetsAtomique(DOC, 'disparu/planche.pdf', OCTETS),
+      'ECRITURE',
+      ecriture('disparu/planche.pdf', `${DOCUMENTS}/disparu`, 'ENOENT'),
+    );
+    assert.equal(disque.existe(`${DOCUMENTS}/disparu`), false);
+    disque.deposerDossier(`${DOCUMENTS}/planches`);
+    const avant = disque.appels.length;
+    await refuse(fichiers.ecrireOctetsAtomique(DOC, 'planches', OCTETS), 'ECRITURE', ecriture('planches', DOCUMENTS, 'EISDIR'));
+    assert.deepEqual(ecritures({ appels: disque.appels.slice(avant) }), []);
+    assert.deepEqual(disque.noms(DOCUMENTS), ['planches']);
+  });
+
+  test("des octets d'une autre forme qu'un Uint8Array lèvent TypeError, sans toucher au disque", async () => {
+    const { disque, fichiers } = preparer();
+    for (const fautifs of ['%PDF', [0x25], new ArrayBuffer(1), null]) {
+      await assert.rejects(fichiers.ecrireOctetsAtomique(DOC, 'planche.pdf', fautifs), TypeError, String(fautifs));
+    }
     assert.deepEqual(disque.appels, []);
   });
 });
@@ -1630,7 +1718,8 @@ describe('coquille, fichiers : le service IPC', () => {
       canaux.push(canal);
     });
     assert.deepEqual(canaux, PRIMITIVES.map((primitive) => `gtt:fichiers:${primitive}`));
-    assert.equal(PRIMITIVES.length, 17);
+    assert.equal(PRIMITIVES.length, 18);
+    assert.equal(PRIMITIVES.indexOf('ecrireOctetsAtomique'), PRIMITIVES.indexOf('ecrireAtomique') + 1);
     assert.ok(Object.isFrozen(PRIMITIVES));
   });
 
@@ -1750,7 +1839,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
     return { pont, appels };
   }
 
-  test('nature electron, renommage atomique et verrou ; les dix-sept primitives, dans l\u{2019}ordre de la coquille', () => {
+  test('nature electron, renommage atomique et verrou ; les dix-huit primitives, dans l\u{2019}ordre de la coquille', () => {
     const fs = creerFichiersElectron(pontFactice([]).pont);
     assert.deepEqual(
       { nature: fs.nature, renommageAtomique: fs.renommageAtomique, verrouDisponible: fs.verrouDisponible },
@@ -1772,6 +1861,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
       ['typeSupport', [DOC]],
       ['lireTexte', [DOC, 'a.txt']],
       ['ecrireAtomique', [DOC, 'a.txt', 'texte']],
+      ['ecrireOctetsAtomique', [DOC, 'a.pdf', octets]],
       ['ajouterLigne', [DOC, 'a.jsonl', 'ligne']],
       ['lister', [DOC, '']],
       ['creerDossier', [DOC, 'corbeille']],
@@ -1801,6 +1891,16 @@ describe('page : src/stockage/fichiers_electron.js', () => {
     assert.deepEqual(appels, []);
   });
 
+  test("ecrireOctetsAtomique refuse, avant le pont, des octets d'une autre forme qu'un Uint8Array : TypeError", async () => {
+    const { pont, appels } = pontFactice([]);
+    const fs = creerFichiersElectron(pont);
+    for (const fautifs of ['%PDF', [0x25], new ArrayBuffer(1), undefined]) {
+      const erreur = await rejette(fs.ecrireOctetsAtomique(DOC, 'a.pdf', fautifs));
+      assert.ok(erreur instanceof TypeError, `${String(fautifs)} : ${erreur}`);
+    }
+    assert.deepEqual(appels, []);
+  });
+
   test("une réponse { ok: false } devient l'ErreurStockage de ce code et de ces détails ; une réponse d'une autre forme, une TypeError", async () => {
     const { pont } = pontFactice([
       { ok: false, code: 'ECRITURE', details: { chemin: 'a.txt', dossier: DOCUMENTS, cause: 'EBUSY' } },
@@ -1824,12 +1924,16 @@ describe('page : src/stockage/fichiers_electron.js', () => {
   test("à travers le vrai préchargement : chaque primitive de la page appelle son canal, et un refus de la coquille revient en ErreurStockage", async () => {
     const { disque, fichiers } = preparer();
     const { gtt, invoques } = parLePrechargement(fichiers);
-    assert.deepEqual(Object.keys(gtt), ['fichiers', 'copier']);
+    assert.deepEqual(Object.keys(gtt), ['fichiers', 'copier', 'imprimer']);
     assert.equal(typeof gtt.copier, 'function');
+    assert.equal(typeof gtt.imprimer, 'function');
     assert.deepEqual(Object.keys(gtt.fichiers), [...PRIMITIVES]);
     assert.ok(Object.values(gtt.fichiers).every((fonction) => typeof fonction === 'function'));
 
     const fs = creerFichiersElectron(gtt.fichiers);
+    const planche = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x0a, 0xe2, 0xe3, 0x00, 0xff]);
+    await fs.ecrireOctetsAtomique(DOC, 'soiree.badges.pdf', planche);
+    assert.deepEqual(disque.octets(`${DOCUMENTS}/soiree.badges.pdf`), planche);
     await fs.ecrireAtomique(DOC, 'soiree.gtt.json', '{"entete":{}}\n');
     assert.equal(await fs.lireTexte(DOC, 'soiree.gtt.json'), '{"entete":{}}\n');
     assert.equal(disque.contenu(`${DOCUMENTS}/soiree.gtt.json`), '{"entete":{}}\n');
@@ -1840,6 +1944,7 @@ describe('page : src/stockage/fichiers_electron.js', () => {
     assert.ok(!(faute instanceof ErreurStockage), String(faute));
     assert.match(faute.message, /gtt:fichiers:ecrireAtomique/);
     assert.deepEqual(invoques, [
+      'gtt:fichiers:ecrireOctetsAtomique',
       'gtt:fichiers:ecrireAtomique',
       'gtt:fichiers:lireTexte',
       'gtt:fichiers:deplacer',

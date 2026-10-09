@@ -23,7 +23,7 @@
 // ainsi le dossier de travail qu'aucun code n'a créé, ou qui a disparu, comme
 // le verrait la coquille.
 import { ErreurStockage } from '../src/stockage/erreurs.js';
-import { exigerCheminRelatif, exigerDepuis } from '../src/stockage/systeme_fichiers.js';
+import { exigerCheminRelatif, exigerDepuis, exigerOctets } from '../src/stockage/systeme_fichiers.js';
 
 /**
  * Levée par chaque primitive d'une instance dont le processus est coupé
@@ -55,7 +55,8 @@ const ORIGINE_HORLOGE = Date.UTC(2026, 0, 1);
 const PAS_HORLOGE = 1000;
 
 // La taille d'un fichier compte les octets de son texte en UTF-8. Un fichier
-// porte un texte, ou les octets que deposerOctets a posés tels quels : ceux-ci
+// porte un texte, ou des octets tels quels — ceux qu'écrit
+// ecrireOctetsAtomique, ceux que deposerOctets pose — : ceux-ci
 // se décodent strictement, comme la coquille et la plateforme web les
 // décodent, la marque d'ordre d'octets gardée dans le texte.
 const UTF8 = new TextEncoder();
@@ -162,8 +163,8 @@ const estContenuVerrou = (contenu) =>
  *   - pid, hote : ceux du processus, qu'écrit son verrou ; les pid d'un disque
  *     se suivent, 1, 2, 3…, dans l'ordre de création des instances ;
  *   - pannes.renommage(racineId, n = Infinity, cause = 'EBUSY') : les n
- *     prochains renommages de la racine sont refusés — chaque essai de
- *     l'écriture atomique, qui en fait onze, et deplacer ;
+ *     prochains renommages de la racine sont refusés — chaque essai d'une
+ *     écriture atomique, texte ou octets, qui en fait onze, et deplacer ;
  *   - pannes.ecriture(racineId, cause = 'EROFS') : dès lors, toute primitive
  *     d'écriture de la racine lève ECRITURE, et sa sonde rend la cause ;
  *   - pannes.couperApres(n) : après n primitives d'écriture réussies —
@@ -171,8 +172,9 @@ const estContenuVerrou = (contenu) =>
  *     est mort, la table des processus du disque le dit à ses verrous, et
  *     l'on rouvre par une nouvelle instance sur le même disque ;
  *   - compteurs.ecritures, compteurs.lectures : les appels des primitives
- *     d'écriture (ecrireAtomique, ajouterLigne, creerDossier, deplacer,
- *     supprimer, verrouiller, deverrouiller, sonder) et de lecture (lireTexte,
+ *     d'écriture (ecrireAtomique, ecrireOctetsAtomique, ajouterLigne,
+ *     creerDossier, deplacer, supprimer, verrouiller, deverrouiller, sonder)
+ *     et de lecture (lireTexte,
  *     lister), refusés compris ; les autres ne comptent pas ;
  *   - deposer(racineId, chemin, texte, modifie = l'instant courant) : pose un
  *     fichier, dossiers parents compris, sans compter ni avancer l'horloge ;
@@ -319,6 +321,34 @@ export function creerFichiersSimules({
     disque.set(cible.cle, { ...noeud, nom: cible.nom, parent: cible.cleParent });
   }
 
+  // L'écriture atomique d'un contenu, texte ou octets déjà copiés, sous ce
+  // chemin : <chemin>.ecriture, puis le renommage par-dessus la cible, réessayé
+  // comme celui de la coquille ; tous les essais refusés retirent le fichier
+  // d'écriture et lèvent ECRITURE, la cible intacte. Sans renommage atomique,
+  // le contenu va droit sur la cible.
+  function remplacer(racine, chemin, contenu) {
+    const cible = localiser(racine, chemin);
+    exigerInscriptible(cible);
+    exigerDossierParent(cible);
+    exigerPasDossier(cible);
+    if (!renommageAtomique) {
+      poserFichier(cible, contenu, avancer());
+      return;
+    }
+    const ecriture = localiser(racine, chemin + SUFFIXE_ECRITURE);
+    poserFichier(ecriture, contenu, avancer());
+    let cause = null;
+    for (let essai = 0; essai <= REESSAIS_RENOMMAGE; essai += 1) {
+      cause = renommageRefuse(cible.racine);
+      if (cause === null) {
+        renommer(ecriture, cible);
+        return;
+      }
+    }
+    disque.delete(ecriture.cle);
+    throw refus(cible, cause);
+  }
+
   // Cause du refus du prochain renommage de la racine, ou null ; chaque refus
   // en consomme un.
   function renommageRefuse(racineId) {
@@ -434,26 +464,13 @@ export function creerFichiersSimules({
 
     ecrireAtomique: primitive('ecritures', (racine, chemin, texte) => {
       exigerChaine(texte, 'le texte');
-      const cible = localiser(racine, chemin);
-      exigerInscriptible(cible);
-      exigerDossierParent(cible);
-      exigerPasDossier(cible);
-      if (!renommageAtomique) {
-        poserFichier(cible, texte, avancer());
-        return;
-      }
-      const ecriture = localiser(racine, chemin + SUFFIXE_ECRITURE);
-      poserFichier(ecriture, texte, avancer());
-      let cause = null;
-      for (let essai = 0; essai <= REESSAIS_RENOMMAGE; essai += 1) {
-        cause = renommageRefuse(cible.racine);
-        if (cause === null) {
-          renommer(ecriture, cible);
-          return;
-        }
-      }
-      disque.delete(ecriture.cle);
-      throw refus(cible, cause);
+      remplacer(racine, chemin, texte);
+    }),
+
+    // Le fichier reçoit une copie des octets : l'appelant garde son tableau.
+    ecrireOctetsAtomique: primitive('ecritures', (racine, chemin, octets) => {
+      exigerOctets(octets);
+      remplacer(racine, chemin, new Uint8Array(octets));
     }),
 
     ajouterLigne: primitive('ecritures', (racine, chemin, ligne) => {

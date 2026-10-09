@@ -4,18 +4,20 @@
 // La coquille Electron (§ 13.1) : la fenêtre qu'ouvre le processus principal,
 // la page qu'elle charge, le profil de Chromium hors d'AppData (§ 8.6), le
 // pont étroit et nommé que le préchargement expose — une fonction par
-// primitive du système de fichiers, un canal par fonction, et la copie dans
-// le presse-papiers —, ce que le processus principal y répond : emplacements,
-// racines, dialogues, explorateur, presse-papiers ; et les verrous que la
-// page a pris, effacés à la sortie (§ 8.8). La page elle-même, index.html,
-// charge le collecteur d'erreurs avant son module d'entrée (§ 19.2).
+// primitive du système de fichiers, un canal par fonction, la copie dans
+// le presse-papiers et l'impression —, ce que le processus principal y
+// répond : emplacements, racines, dialogues, explorateur, presse-papiers,
+// impression (§ 11.7, § 13.4) ; et les verrous que la page a pris, effacés
+// à la sortie (§ 8.8). La page elle-même, index.html, charge le collecteur
+// d'erreurs avant son module d'entrée (§ 19.2).
 //
 // electron/main.js s'exécute sous Node, dans un processus à part, contre
 // test/electron_factice.js, qui consigne ce que la coquille demande à
 // Electron puis rend son journal en JSON. Ce qui s'éprouve ici est ce que la
 // coquille demande ; qu'Electron l'applique relève d'une épreuve dans un vrai
 // Electron (make essai_demarrage). Les primitives elles-mêmes s'éprouvent
-// dans test/fichiers_electron.test.js.
+// dans test/fichiers_electron.test.js ; le gestionnaire d'impression
+// (electron/impression.js) s'éprouve ici, sur un contenu de fenêtre factice.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -23,6 +25,8 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { PRIMITIVES } from '../electron/fichiers.js';
+import { CANAL_IMPRESSION, FORMATS_DE_PAGE, imprimer, optionsImpression, servirImpression } from '../electron/impression.js';
+import { PAPIERS } from '../src/geometrie/papiers.js';
 import { describe, test } from './lanceur.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
@@ -32,6 +36,7 @@ const PRECHARGEMENT = join(RACINE, 'electron', 'preload.cjs');
 const NOM_PRODUIT = JSON.parse(readFileSync(join(RACINE, 'package.json'), 'utf8')).productName;
 const CANAUX = PRIMITIVES.map((primitive) => `gtt:fichiers:${primitive}`);
 const CANAL_COPIE = 'gtt:copier';
+const CANAL_IMPRIMER = 'gtt:imprimer';
 
 // Dossier que publie le lanceur portable, et LOCALAPPDATA, dans le scénario
 // qui les donne. Aucun des deux n'est lu ni écrit.
@@ -171,13 +176,14 @@ describe('coquille : processus principal', () => {
     ]);
   });
 
-  test('un canal gtt:fichiers:<primitive> par primitive, puis celui du presse-papiers, et aucun autre, chacun posé avant le chargement de la page', () => {
+  test("un canal gtt:fichiers:<primitive> par primitive, puis celui du presse-papiers, puis celui de l'impression, et aucun autre, chacun posé avant le chargement de la page", () => {
     const { canaux, sequence } = journalDeLaCoquille();
-    assert.deepEqual(canaux, [...CANAUX, CANAL_COPIE]);
-    assert.equal(CANAUX.length, 17);
+    assert.equal(CANAL_IMPRESSION, CANAL_IMPRIMER);
+    assert.deepEqual(canaux, [...CANAUX, CANAL_COPIE, CANAL_IMPRIMER]);
+    assert.equal(CANAUX.length, 18);
     const charge = sequence.indexOf('loadFile');
     assert.notEqual(charge, -1);
-    for (const canal of [...CANAUX, CANAL_COPIE]) {
+    for (const canal of [...CANAUX, CANAL_COPIE, CANAL_IMPRIMER]) {
       const pose = sequence.indexOf(`ipcMain.handle:${canal}`);
       assert.ok(pose !== -1 && pose < charge, `${canal} : ${sequence.join(', ')}`);
     }
@@ -236,12 +242,13 @@ describe('coquille : processus principal', () => {
 });
 
 describe('coquille : préchargement', () => {
-  test("n'expose que window.gtt.fichiers, une fonction par primitive, et gtt.copier, une fonction ; ne requiert qu'electron", () => {
+  test("n'expose que window.gtt.fichiers, une fonction par primitive, gtt.copier et gtt.imprimer, deux fonctions ; ne requiert qu'electron", () => {
     const { prechargement } = journalDeLaCoquille();
     assert.equal(prechargement.erreur, undefined, prechargement.erreur);
     assert.deepEqual(prechargement.requis, ['electron']);
-    assert.deepEqual(prechargement.exposes, [{ cle: 'gtt', membres: ['copier', 'fichiers'] }]);
+    assert.deepEqual(prechargement.exposes, [{ cle: 'gtt', membres: ['copier', 'fichiers', 'imprimer'] }]);
     assert.equal(prechargement.copie.type, 'function');
+    assert.equal(prechargement.impression.type, 'function');
     assert.deepEqual(prechargement.fichiers, [...PRIMITIVES]);
     assert.deepEqual(
       prechargement.appels.map(({ membre, type }) => ({ membre, type })),
@@ -255,12 +262,14 @@ describe('coquille : préchargement', () => {
       journal.prechargement.appels.map(({ membre, canaux }) => ({ membre, canaux })),
       PRIMITIVES.map((membre) => ({ membre, canaux: [`gtt:fichiers:${membre}`] })),
     );
-    // Après le pont : la copie, puis les deux verrous réels que prend la page.
+    // Après le pont : la copie, les deux verrous réels que prend la page,
+    // puis ses cinq demandes d'impression.
     assert.deepEqual(journal.invocations, [
       ...CANAUX,
       CANAL_COPIE,
       'gtt:fichiers:verrouiller',
       'gtt:fichiers:verrouiller',
+      ...Array(5).fill(CANAL_IMPRIMER),
     ]);
     // Une racine que le processus principal ne connaît pas est refusée par
     // lui, en réponse et non en erreur.
@@ -269,6 +278,7 @@ describe('coquille : préchargement', () => {
       ['typeSupport', ''],
       ['lireTexte', 'soiree.gtt.json'],
       ['ecrireAtomique', 'soiree.gtt.json'],
+      ['ecrireOctetsAtomique', 'soiree.badges.pdf'],
       ['ajouterLigne', 'soiree.gtt-journal.jsonl'],
       ['lister', ''],
       ['creerDossier', 'corbeille'],
@@ -350,6 +360,34 @@ describe('coquille : préchargement', () => {
     assert.deepEqual(pressePapiers, [copie.texte]);
   });
 
+  test("gtt.imprimer invoque le canal gtt:imprimer, une fois par appel : le processus principal imprime la fenêtre qui le demande, avec le papier et l'orientation reçus, et rend l'issue du rappel", () => {
+    const { prechargement, impressions, sequence } = journalDeLaCoquille();
+    const { appels } = prechargement.impression;
+    assert.deepEqual(
+      appels.map(({ canaux }) => canaux),
+      appels.map(() => [CANAL_IMPRIMER]),
+    );
+    assert.deepEqual(
+      appels.slice(0, 3).map(({ reponse, erreur }) => ({ reponse, erreur })),
+      [
+        { reponse: { issue: 'envoye', cause: null }, erreur: undefined },
+        { reponse: { issue: 'annule', cause: null }, erreur: undefined },
+        { reponse: { issue: 'echec', cause: 'failed' }, erreur: undefined },
+      ],
+    );
+    assert.deepEqual(impressions, [
+      { silent: false, printBackground: true, pageSize: 'A4', landscape: false },
+      { silent: false, printBackground: true, pageSize: 'Letter', landscape: true },
+      { silent: false, printBackground: true, pageSize: 'A4', landscape: true },
+    ]);
+    // Une option de print brute, un papier inconnu : refusés, sans imprimer.
+    for (const { options, reponse, erreur } of appels.slice(3)) {
+      assert.equal(reponse, undefined, JSON.stringify(options));
+      assert.equal(typeof erreur, 'string', JSON.stringify(options));
+    }
+    assert.equal(sequence.filter((appel) => appel === 'webContents.print').length, 3);
+  });
+
   test("l'explorateur s'ouvre sur la racine que la page désigne", () => {
     const journal = journalDeLaCoquille();
     assert.deepEqual(journal.explorateur, [join(journal.chemins.documents, NOM_PRODUIT)]);
@@ -364,5 +402,100 @@ describe('coquille : la page', () => {
     const scripts = [...page.matchAll(/<script\b([^>]*)>/g)].map(([, attributs]) => attributs.trim());
     assert.deepEqual(scripts, ['src="./collecteur.js"', 'type="module" src="/src/main.js"']);
     assert.ok(existsSync(join(RACINE, 'public', 'collecteur.js')), 'public/collecteur.js absent');
+  });
+});
+
+describe('coquille : le gestionnaire d’impression (§ 11.7, § 13.4)', () => {
+  // Le contenu d'une fenêtre qui consigne les options de chaque print et
+  // répond à son rappel par (succes, raison), ou lève l'erreur donnée.
+  function contenuFactice(succes = true, raison = '', leve = null) {
+    const contenu = {
+      options: [],
+      print(options, rappel) {
+        contenu.options.push(options);
+        if (leve !== null) throw leve;
+        queueMicrotask(() => rappel(succes, raison));
+      },
+    };
+    return contenu;
+  }
+
+  test('un format de page par papier, que la coquille recopie des clés de PAPIERS : A4 reste A4, Lettre devient Letter', () => {
+    assert.deepEqual(FORMATS_DE_PAGE, { A4: 'A4', Lettre: 'Letter' });
+    assert.deepEqual(Object.keys(FORMATS_DE_PAGE), Object.keys(PAPIERS));
+    assert.ok(Object.isFrozen(FORMATS_DE_PAGE));
+  });
+
+  test("le papier et l'orientation deviennent les seules options de print : boîte de dialogue montrée, fonds imprimés, format de page du papier, paysage pour paysage", () => {
+    for (const papier of Object.keys(PAPIERS)) {
+      for (const [orientation, landscape] of [['portrait', false], ['paysage', true]]) {
+        assert.deepEqual(optionsImpression({ papier, orientation }), {
+          silent: false,
+          printBackground: true,
+          pageSize: FORMATS_DE_PAGE[papier],
+          landscape,
+        });
+      }
+    }
+  });
+
+  test('toute autre option est refusée par TypeError, sans appeler print : une option de print brute, un papier ou une orientation hors domaine, une demande qui n’est pas un objet', async () => {
+    const refusees = [
+      { papier: 'A4', orientation: 'portrait', silent: true },
+      { papier: 'A4', orientation: 'portrait', deviceName: 'imprimante-voisine' },
+      { papier: 'A4', orientation: 'portrait', pageSize: 'A3' },
+      { papier: 'A3', orientation: 'portrait' },
+      { papier: 'Letter', orientation: 'portrait' },
+      { papier: 'toString', orientation: 'portrait' },
+      { papier: 'A4', orientation: 'landscape' },
+      { papier: 'A4' },
+      {},
+      null,
+      'A4',
+      ['A4', 'portrait'],
+      undefined,
+    ];
+    for (const demande of refusees) {
+      const contenu = contenuFactice();
+      await assert.rejects(imprimer(contenu, demande), TypeError, JSON.stringify(demande));
+      assert.deepEqual(contenu.options, [], JSON.stringify(demande));
+    }
+  });
+
+  test('le rappel donne l’issue : succès → envoyé ; « cancelled » → annulé ; une autre raison → échec, qu’elle nomme ; un print qui lève → échec sans cause, le message gardé pour la console', async () => {
+    const cas = [
+      [[true, ''], { issue: 'envoye', cause: null }],
+      [[false, 'cancelled'], { issue: 'annule', cause: null }],
+      [[false, 'failed'], { issue: 'echec', cause: 'failed' }],
+      [[false, 'Invalid printer settings'], { issue: 'echec', cause: 'Invalid printer settings' }],
+      [[false, ''], { issue: 'echec', cause: null }],
+      [[false, undefined], { issue: 'echec', cause: null }],
+    ];
+    for (const [[succes, raison], attendu] of cas) {
+      const contenu = contenuFactice(succes, raison);
+      assert.deepEqual(await imprimer(contenu, { papier: 'Lettre', orientation: 'paysage' }), attendu, String(raison));
+      assert.equal(contenu.options.length, 1);
+    }
+    const leve = contenuFactice(true, '', new Error('Object has been destroyed'));
+    const console0 = console.error;
+    const journal = [];
+    console.error = (...valeurs) => journal.push(valeurs);
+    try {
+      assert.deepEqual(await imprimer(leve, { papier: 'A4', orientation: 'portrait' }), { issue: 'echec', cause: null });
+    } finally {
+      console.error = console0;
+    }
+    assert.equal(journal.length, 1);
+    assert.ok(String(journal[0].at(-1)?.message ?? journal[0].at(-1)).includes('Object has been destroyed'));
+  });
+
+  test('servirImpression pose le seul canal gtt:imprimer ; son gestionnaire imprime l’expéditeur de la demande', async () => {
+    const poses = [];
+    servirImpression((canal, gestionnaire) => poses.push({ canal, gestionnaire }));
+    assert.deepEqual(poses.map(({ canal }) => canal), [CANAL_IMPRIMER]);
+    const contenu = contenuFactice(false, 'cancelled');
+    const issue = await poses[0].gestionnaire({ sender: contenu }, { papier: 'A4', orientation: 'portrait' });
+    assert.deepEqual(issue, { issue: 'annule', cause: null });
+    assert.deepEqual(contenu.options, [{ silent: false, printBackground: true, pageSize: 'A4', landscape: false }]);
   });
 });

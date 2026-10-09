@@ -114,6 +114,15 @@ import { estHorodatage } from './journal.js';
  *           dossier qui porte la cible doit exister : un dossier absent lève
  *           ECRITURE, car un dossier de travail disparu — un support retiré —
  *           ne se recrée pas en silence
+ * @property {(r: Racine, chemin: string, octets: Uint8Array) => Promise<void>} ecrireOctetsAtomique
+ *           les octets tels quels, avec les garanties d'ecrireAtomique : même
+ *           fichier .ecriture, même renommage et mêmes réessais, même cible
+ *           intacte après un échec, même ECRITURE pour un dossier absent ; là
+ *           où renommageAtomique est faux, l'écriture va droit sur la cible.
+ *           Le fichier ne garde aucun lien au tableau reçu, que l'appelant peut
+ *           réemployer. Des octets d'une autre forme qu'un Uint8Array lèvent
+ *           TypeError sans rien écrire (exigerOctets). C'est l'écriture d'un
+ *           fichier qui n'est pas un texte : la planche de badges (§ 11.6)
  * @property {(r: Racine, chemin: string, ligne: string) => Promise<void>} ajouterLigne
  *           ajoute la ligne puis une fin de ligne LF après le dernier octet du
  *           fichier, sans rien insérer avant, vidé sur le disque ; crée le
@@ -192,4 +201,18 @@ export function exigerCheminRelatif(chemin) {
  */
 export function exigerDepuis(depuis) {
   if (!estHorodatage(depuis)) throw new TypeError(`instant de prise : horodatage attendu, reçu ${JSON.stringify(depuis)}`);
+}
+
+/**
+ * Lève TypeError quand octets n'est pas un Uint8Array — un Buffer de Node en
+ * est un — : chaque implémentation d'ecrireOctetsAtomique l'appelle avant de
+ * rien écrire, et celle de la coquille avant de passer le pont.
+ *
+ * @param {unknown} octets
+ * @throws {TypeError}
+ */
+export function exigerOctets(octets) {
+  if (!(octets instanceof Uint8Array)) {
+    throw new TypeError(`octets : Uint8Array attendu, reçu ${Object.prototype.toString.call(octets)}`);
+  }
 }

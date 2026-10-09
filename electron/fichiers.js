@@ -1,7 +1,7 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Le système de fichiers de la coquille (§ 8.6, § 8.8, § 13.1) : les dix-sept
+// Le système de fichiers de la coquille (§ 8.6, § 8.8, § 13.1) : les dix-huit
 // primitives de l'interface de src/stockage/systeme_fichiers.js, exécutées
 // sous Node par le processus principal, et le service qui les offre à la
 // page, un canal IPC par primitive, gtt:fichiers:<primitive>.
@@ -49,6 +49,7 @@ export const PRIMITIVES = Object.freeze([
   'typeSupport',
   'lireTexte',
   'ecrireAtomique',
+  'ecrireOctetsAtomique',
   'ajouterLigne',
   'lister',
   'creerDossier',
@@ -713,6 +714,21 @@ export function creerFichiers({
         await confiner(loc);
         if ((await etatDe(loc.absolu))?.isDirectory()) throw refus(loc, 'EISDIR');
         await remplacer(loc.absolu, Buffer.from(texte, 'utf8'));
+      } catch (erreur) {
+        throw echecEcriture(loc, erreur);
+      }
+    },
+
+    // Les octets tels quels, par la même écriture atomique que le texte. Les
+    // octets que l'IPC a copiés sont à ce seul appel : ils s'écrivent sans
+    // autre copie.
+    async ecrireOctetsAtomique(racine, chemin, octets) {
+      if (!(octets instanceof Uint8Array)) throw new TypeError('les octets ne sont pas un Uint8Array');
+      const loc = localiser(racine, chemin);
+      try {
+        await confiner(loc);
+        if ((await etatDe(loc.absolu))?.isDirectory()) throw refus(loc, 'EISDIR');
+        await remplacer(loc.absolu, octets);
       } catch (erreur) {
         throw echecEcriture(loc, erreur);
       }

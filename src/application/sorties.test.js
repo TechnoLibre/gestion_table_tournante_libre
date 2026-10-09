@@ -6,7 +6,8 @@
 // BROUILLON, sur la table complète des états et des sources ; le pied de
 // page, ses cinq éléments, la version remplacée par la marque dans une
 // construction de documentation, et aucune lecture d'horloge. Les noms
-// d'épreuve sont inventés ; la version vient du module engendré.
+// d'épreuve sont inventés ; la version vient du module engendré. Enfin le
+// refus que rend l'issue d'une impression, que l'aperçu affiche.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { TABLES_INTERFACE } from '../interface/libelles.js';
@@ -15,7 +16,7 @@ import { VERSION } from '../version.genere.js';
 import { ErreurCommande } from './erreurs.js';
 import { creerHorlogePilotee } from './horloge.js';
 import { TABLES_APPLICATION, libelle } from './libelles.js';
-import { SOURCES_SORTIE, estBrouillon, horodatagePlacement, piedDePage } from './sorties.js';
+import { SOURCES_SORTIE, estBrouillon, horodatagePlacement, piedDePage, refusImpression } from './sorties.js';
 import { creerTraduction } from './traduction.js';
 
 const H = '2031-05-17T20:15:00-04:00';
@@ -192,5 +193,35 @@ describe('piedDePage : les cinq éléments de toute page imprimée (§ 11.7, § 
     assert.throws(() => piedDePage(soiree(), { ...base, source: 'retenu', tour: 0 }), TypeError);
     assert.throws(() => piedDePage(soiree(), { ...base, source: 'inventee', tour: 1 }), TypeError);
     assert.throws(() => piedDePage(soiree(), { ...base, source: 'proposition', proposition: 7, tour: 1 }), ErreurCommande);
+  });
+});
+
+describe("refusImpression : le refus que rend l'issue d'une impression (§ 11.7, § 13.4)", () => {
+  test('une impression envoyée, annulée par l’opérateur ou d’issue inconnue ne rend aucun refus', () => {
+    for (const issue of ['envoye', 'annule', 'inconnue']) assert.equal(refusImpression({ issue, cause: null }), null, issue);
+  });
+
+  test('un échec rend IMPRESSION_ECHEC, sa cause et aucun remède ; le texte nomme la cause, ou s’en passe', () => {
+    const avecCause = refusImpression({ issue: 'echec', cause: 'Imprimante hors ligne' });
+    assert.ok(avecCause instanceof ErreurCommande);
+    assert.equal(avecCause.code, 'IMPRESSION_ECHEC');
+    assert.deepEqual(avecCause.details, { cause: 'Imprimante hors ligne', remede: null });
+    assert.match(libelle(avecCause.code, avecCause.details), /\(Imprimante hors ligne\)/);
+    const sansCause = refusImpression({ issue: 'echec', cause: null });
+    assert.deepEqual(sansCause.details, { cause: null, remede: null });
+    assert.doesNotMatch(libelle(sansCause.code, sansCause.details), /\(|null|undefined/);
+  });
+
+  test('une issue hors du contrat de l’imprimante lève TypeError', () => {
+    for (const issue of [
+      { issue: 'imprime', cause: null },
+      { issue: 'echec', cause: 3 },
+      { issue: 'echec' },
+      { issue: 'annule', cause: 'cancelled' },
+      null,
+      undefined,
+    ]) {
+      assert.throws(() => refusImpression(issue), TypeError, JSON.stringify(issue));
+    }
   });
 });

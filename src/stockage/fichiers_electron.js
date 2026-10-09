@@ -13,7 +13,7 @@
 //
 // L'écriture atomique et le verrou du § 8.8 sont ceux de la coquille.
 import { ErreurStockage } from './erreurs.js';
-import { exigerDepuis } from './systeme_fichiers.js';
+import { exigerDepuis, exigerOctets } from './systeme_fichiers.js';
 
 /**
  * Le système de fichiers de la plateforme electron.
@@ -46,6 +46,12 @@ export function creerFichiersElectron(pont = window.gtt.fichiers) {
     typeSupport: (racine) => appeler('typeSupport', racine),
     lireTexte: (racine, chemin) => appeler('lireTexte', racine, chemin),
     ecrireAtomique: (racine, chemin, texte) => appeler('ecrireAtomique', racine, chemin, texte),
+    // La forme des octets se juge ici, avant le pont : une TypeError levée
+    // dans le processus principal n'en ressortirait que par son message.
+    ecrireOctetsAtomique: async (racine, chemin, octets) => {
+      exigerOctets(octets);
+      return appeler('ecrireOctetsAtomique', racine, chemin, octets);
+    },
     ajouterLigne: (racine, chemin, ligne) => appeler('ajouterLigne', racine, chemin, ligne),
     lister: (racine, dossier) => appeler('lister', racine, dossier),
     creerDossier: (racine, chemin) => appeler('creerDossier', racine, chemin),

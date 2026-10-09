@@ -14,7 +14,9 @@
 // gestionnaires posés par le processus principal ; puis gtt.copier, avec un
 // texte d'épreuve, et gtt.fichiers.verrouiller sur la racine documents, deux
 // verrous réels que la page ne rend pas ; le contenu du second est récrit au
-// nom d'une autre séance, comme après une reprise. Il joue ensuite la sortie
+// nom d'une autre séance, comme après une reprise ; puis gtt.imprimer, une
+// fois par jeu d'options d'IMPRESSIONS_DE_LA_PAGE, que le processus principal
+// porte au print de la fenêtre qui l'a demandé. Il joue ensuite la sortie
 // de l'application — before-quit, will-quit, quit —, relève la présence de
 // ces deux verrous et de celui d'une autre séance, autre.gtt.verrou, avant et
 // après la sortie, puis imprime le journal en JSON sur la sortie standard.
@@ -37,7 +39,10 @@
 // un AppData qui y vivent ; app.getName, le nom de produit de package.json,
 // comme Electron. Les dialogues rendent une annulation ; l'explorateur
 // consigne le dossier qu'on lui demande d'ouvrir, et réussit ; le
-// presse-papiers consigne chaque texte qu'il reçoit.
+// presse-papiers consigne chaque texte qu'il reçoit ; le print d'une fenêtre
+// consigne ses options et répond à son rappel, dans une microtâche, par
+// l'issue suivante d'ISSUES_DE_PRINT. Un appel de la page parvient à son
+// gestionnaire avec, pour expéditeur, le contenu de la fenêtre.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -67,6 +72,23 @@ const VERROU_AUTRE = 'autre.gtt.verrou';
 // L'instant de prise que la page passe avec chaque verrou, celui de son
 // horloge.
 const DEPUIS_PAGE = '2026-10-06T19:00:00-04:00';
+// Ce que la page demande d'imprimer, dans l'ordre : trois jeux admis, puis
+// un jeu qui porte une option de print brute et un papier inconnu, que le
+// processus principal refuse sans imprimer.
+const IMPRESSIONS_DE_LA_PAGE = [
+  { papier: 'A4', orientation: 'portrait' },
+  { papier: 'Lettre', orientation: 'paysage' },
+  { papier: 'A4', orientation: 'paysage' },
+  { papier: 'A4', orientation: 'portrait', silent: true },
+  { papier: 'A3', orientation: 'portrait' },
+];
+// Ce que le print rend à son rappel, (succès, raison de l'échec), par appel :
+// envoyé, annulé par l'opérateur, échoué.
+const ISSUES_DE_PRINT = [
+  [true, ''],
+  [false, 'cancelled'],
+  [false, 'failed'],
+];
 const NOM_PRODUIT = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).productName;
 
 // Ce que rend app.getPath, par nom.
@@ -96,6 +118,7 @@ const ARGUMENTS_DE_LA_PAGE = {
   verrouiller: () => [INCONNUE, 'soiree.gtt.verrou', 'seance-factice', DEPUIS_PAGE],
   deverrouiller: () => [INCONNUE, 'soiree.gtt.verrou', 'seance-factice'],
   ouvrirDansExplorateur: (racines) => [racines?.documents],
+  ecrireOctetsAtomique: () => [INCONNUE, 'soiree.badges.pdf', new Uint8Array([0x25, 0x50, 0x44, 0x46])],
   enregistrerSous: () => ['liste.csv', new Uint8Array([0x6e, 0x6f, 0x6d])],
 };
 
@@ -124,6 +147,8 @@ const journal = {
   explorateur: [],
   // Texte de chaque clipboard.writeText.
   pressePapiers: [],
+  // Options de chaque webContents.print.
+  impressions: [],
   // Réponse du gestionnaire d'ouverture de chaque fenêtre à une adresse
   // externe.
   ouvertures: [],
@@ -131,7 +156,8 @@ const journal = {
   navigations: [],
   // Ce que fait le préchargement : modules requis, objets exposés, membres
   // de gtt.fichiers, et pour chacun les canaux qu'il invoque et sa réponse ;
-  // puis l'appel de gtt.copier et ceux des deux verrous de la page, de même.
+  // puis l'appel de gtt.copier et ceux des deux verrous de la page, de même ;
+  // enfin le type de gtt.imprimer et chacun de ses appels.
   prechargement: null,
   // Présence du verrou de la page, de celui qu'une autre séance a repris et
   // de celui de l'autre séance, avant puis après la sortie de l'application ;
@@ -190,7 +216,7 @@ export class BrowserWindow {
     if (!pret) throw new Error('Cannot create BrowserWindow before app is ready');
     journal.sequence.push('new BrowserWindow');
     journal.fenetres.push(options);
-    const page = { ouverture: null, ecouteurs: [] };
+    const page = { ouverture: null, ecouteurs: [], contenu: null };
     pageDeFenetre.push(page);
     this.webContents = {
       setWindowOpenHandler(gestionnaire) {
@@ -199,7 +225,14 @@ export class BrowserWindow {
       on(evenement, ecouteur) {
         page.ecouteurs.push({ evenement, ecouteur });
       },
+      print(options, rappel) {
+        journal.sequence.push('webContents.print');
+        journal.impressions.push(options);
+        const [succes, raison] = ISSUES_DE_PRINT[journal.impressions.length - 1] ?? [true, ''];
+        queueMicrotask(() => rappel(succes, raison));
+      },
     };
+    page.contenu = this.webContents;
   }
 
   loadFile(chemin) {
@@ -276,7 +309,7 @@ function electronDuRendu(exposes) {
         journal.invocations.push(canal);
         const gestionnaire = gestionnaires.get(canal);
         if (gestionnaire === undefined) throw new Error(`No handler registered for '${canal}'`);
-        return gestionnaire({ sender: null }, ...arguments_);
+        return gestionnaire({ sender: pageDeFenetre[0]?.contenu ?? null }, ...arguments_);
       },
     },
   };
@@ -351,6 +384,12 @@ async function jouerLePrechargement() {
     const contenu = JSON.parse(readFileSync(chemin, 'utf8'));
     writeFileSync(chemin, `${JSON.stringify({ ...contenu, seance: SEANCE_REPRISE })}\n`);
   }
+  const impression = { type: typeof gtt?.imprimer, appels: [] };
+  if (typeof gtt?.imprimer === 'function') {
+    for (const options of IMPRESSIONS_DE_LA_PAGE) {
+      impression.appels.push({ options, ...(await appelerUne(gtt.imprimer, [options])) });
+    }
+  }
   return {
     requis,
     exposes: exposes.map(({ cle, api }) => ({ cle, membres: Object.keys(api).sort() })),
@@ -359,6 +398,7 @@ async function jouerLePrechargement() {
     copie,
     verrou,
     repris,
+    impression,
     documents: documents?.chemin ?? null,
   };
 }

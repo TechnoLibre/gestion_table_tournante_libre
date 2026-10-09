@@ -551,6 +551,8 @@ const EXEMPLES = new Map([
   ],
   ['PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }],
   ['PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } }],
+  // Sorties
+  ['IMPRESSION_ECHEC', { cause: 'failed', remede: null }],
 ]);
 
 // Un texte composé ne laisse paraître ni valeur absente, ni booléen, ni

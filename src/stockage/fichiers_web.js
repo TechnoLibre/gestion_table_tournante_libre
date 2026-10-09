@@ -15,8 +15,9 @@
 //
 // La plateforme n'offre ni renommage atomique ni verrou (§ 8.8) et le dit :
 // renommageAtomique et verrouDisponible sont faux, et l'application
-// l'annonce au démarrage. ecrireAtomique et ajouterLigne écrivent par un flux
-// de l'OPFS ouvert sur la cible (createWritable) : le contenu n'atteint la
+// l'annonce au démarrage. ecrireAtomique, ecrireOctetsAtomique et ajouterLigne
+// écrivent par un flux de l'OPFS ouvert sur la cible (createWritable) : le
+// contenu n'atteint la
 // cible qu'à la fermeture du flux ; un échec avant elle abandonne le flux et
 // retire le fichier que l'appel a créé, si bien que la cible reste telle
 // qu'avant l'appel. Rien ne garantit ce que devient une fermeture
@@ -64,7 +65,7 @@
 // le fichier sans dire où ni si l'opérateur y renonce, et la primitive rend
 // le nom proposé.
 import { ErreurStockage } from './erreurs.js';
-import { exigerCheminRelatif, exigerDepuis } from './systeme_fichiers.js';
+import { exigerCheminRelatif, exigerDepuis, exigerOctets } from './systeme_fichiers.js';
 
 // Le dossier du produit dans l'OPFS, et la racine documents qui le désigne.
 const DOSSIER_PRODUIT = 'gestion_table_tournante_libre';
@@ -408,6 +409,18 @@ export function creerFichiersWeb() {
         if (loc.nom === null) throw refus(loc, TYPE_DIFFERENT);
         const octets = UTF8.encode(texte);
         await ecrireParFlux(await dossierDe(loc.parent), loc.nom, false, (flux) => flux.write(octets));
+      });
+    },
+
+    // Le flux reçoit une copie des octets, prise avant toute attente :
+    // l'appelant qui réemploie son tableau ne change pas le fichier.
+    ecrireOctetsAtomique: async (racine, chemin, octets) => {
+      exigerOctets(octets);
+      const copie = new Uint8Array(octets);
+      const loc = localiser(racine, chemin);
+      await ecrire(loc, async () => {
+        if (loc.nom === null) throw refus(loc, TYPE_DIFFERENT);
+        await ecrireParFlux(await dossierDe(loc.parent), loc.nom, false, (flux) => flux.write(copie));
       });
     },
 

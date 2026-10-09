@@ -6,8 +6,8 @@
   // l'application — système de fichiers, horloge, exécuteur de génération,
   // presse-papiers, identifiants, langue, provenance, démonstrations, format
   // courant, version du produit et sa forme Windows, chargement de la police
-  // embarquée, et en option le thème de départ — que src/main.js construit
-  // pour la machine et monterApp pour
+  // embarquée, imprimante de la plateforme, et en option le thème de
+  // départ — que src/main.js construit pour la machine et monterApp pour
   // une épreuve : App ne choisit aucune plateforme, et ne lit la version que
   // dans ses propriétés, la même au bandeau, au titre, à l'accueil et dans
   // le bloc « À propos ».
@@ -15,11 +15,12 @@
   // À son initialisation, App crée une fois chacun la séance, sans racine,
   // le contrôleur de génération et la façade, et les donne aux composants par
   // le contexte de Svelte — clés 'seance', 'facade', 'generation', 'ui', 't',
-  // 'format', 'horloge' et 'relireListe' —, posé de façon synchrone avant que
-  // la détermination du dossier de travail, asynchrone, ne rende. La façade
-  // pose la racine de la séance par changerRacine : aussitôt sans question,
-  // après la réponse sinon. App lit la liste du dossier de travail par la
-  // façade et la donne à l'accueil, une fois la détermination réglée — sans
+  // 'format', 'horloge', 'imprimante' et 'relireListe' —, posé de façon
+  // synchrone avant que la détermination du dossier de travail, asynchrone,
+  // ne rende. La façade pose la racine de la séance par changerRacine :
+  // aussitôt sans question, après la réponse sinon. App lit la liste du
+  // dossier de travail par la façade et la donne à l'accueil, une fois la
+  // détermination réglée — sans
   // question au démarrage, après la réponse sinon : pret se résout quand la
   // détermination est faite, la liste lue quand aucune question n'attend, et
   // le premier écran — les lignes de la liste, ou la question — rendu. Les
@@ -74,6 +75,10 @@
     // () => Promise<{regulier: Uint8Array, gras: Uint8Array}> : les octets
     // de la police que la production de la planche embarque (§ 11.1).
     polices,
+    // { imprimer({papier, orientation}) → Promise<{issue, cause}> } : la
+    // frontière « impression » de la plateforme (§ 13.4), que les
+    // composants reçoivent par le contexte, sans importer src/impression.
+    imprimante,
     themeInitial,
   } = untrack(() => dependances);
 
@@ -139,6 +144,7 @@
   setContext('t', t);
   setContext('format', format);
   setContext('horloge', horloge);
+  setContext('imprimante', imprimante);
 
   // Un refus de la séance ou de la façade porte un code, que l'écran
   // traduit ; toute autre erreur est une faute, qui remonte.

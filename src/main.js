@@ -3,14 +3,15 @@
 
 // Point d'entrée de la page : le seul module de src/ qui choisit la
 // plateforme (§ 13.4). Sous la coquille Electron, le préchargement expose
-// window.gtt — le système de fichiers du processus principal et la copie
-// dans le presse-papiers ; sans lui, la page est la plateforme web, sur
-// l'OPFS et le presse-papiers du navigateur. Il construit les dépendances
-// d'App — l'horloge du système, l'exécuteur de la génération sur le
-// travailleur, les identifiants tirés par crypto.randomUUID, les
+// window.gtt — le système de fichiers du processus principal, la copie
+// dans le presse-papiers et l'impression ; sans lui, la page est la
+// plateforme web, sur l'OPFS, le presse-papiers et la boîte d'impression
+// du navigateur. L'imprimante (src/impression), frontière de plateforme
+// comme le système de fichiers, ne s'importe que d'ici. Il construit les
+// dépendances d'App — l'horloge du système, l'exécuteur de la génération sur
+// le travailleur, les identifiants tirés par crypto.randomUUID, les
 // démonstrations livrées nommées par le catalogue, le chargement de la
-// police embarquée — et monte App dans le
-// corps du document. Le thème de départ est laissé à App, qui lit la
+// police embarquée, l'imprimante — et monte App dans le corps du document. Le thème de départ est laissé à App, qui lit la
 // préférence du système.
 //
 // Il est le seul module qui importe le travailleur de génération, par
@@ -36,6 +37,8 @@ import { mount } from 'svelte';
 import { creerExecuteurTravailleur } from './application/executeur_travailleur.js';
 import { creerHorlogeSysteme } from './application/horloge.js';
 import { demonstrationsLivrees } from './demo/livrees.js';
+import { creerImprimanteElectron } from './impression/imprimante_electron.js';
+import { creerImprimanteWeb } from './impression/imprimante_web.js';
 import App from './interface/App.svelte';
 import Travailleur from './interface/generation/travailleur.js?worker&inline';
 import { attendrePolices, chargerPolices } from './polices/chargement.js';
@@ -51,6 +54,7 @@ const fs = sousElectron ? creerFichiersElectron(pont.fichiers) : creerFichiersWe
 const pressePapiers = sousElectron
   ? { copier: async (texte) => void (await pont.copier(texte)) }
   : { copier: (texte) => navigator.clipboard.writeText(texte) };
+const imprimante = sousElectron ? creerImprimanteElectron(pont) : creerImprimanteWeb(window);
 
 try {
   await attendrePolices(document);
@@ -75,5 +79,6 @@ mount(App, {
     produitVersion: VERSION.affichee,
     versionWindows: VERSION.windows,
     polices: chargerPolices,
+    imprimante,
   },
 });
