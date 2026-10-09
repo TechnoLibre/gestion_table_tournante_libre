@@ -20,6 +20,7 @@ import { TABLE as IMPORT } from './libelles/import.js';
 import { TABLE as PARTICIPANTS } from './libelles/participants.js';
 import { TABLE as PLAN } from './libelles/plan.js';
 import { TABLE as PROPOSITIONS } from './libelles/propositions.js';
+import { TABLE as RACCOURCIS } from './libelles/raccourcis.js';
 import { TABLE as TABLES } from './libelles/tables.js';
 
 /** Les tables de libelles/, dans l'ordre alphabétique de leurs fichiers. */
@@ -34,6 +35,7 @@ export const TABLES_INTERFACE = Object.freeze([
   PARTICIPANTS,
   PLAN,
   PROPOSITIONS,
+  RACCOURCIS,
   TABLES,
 ]);
 

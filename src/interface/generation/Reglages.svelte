@@ -8,7 +8,15 @@
   // calcul de la séance, et ce qu'elle laisse attendre des réglages courants.
   // Aucun champ ne prend une durée : la recherche s'arrête sur un compte.
   //
-  // Les trois réglages de la charge (generation.nombre, generation.arret,
+  // Les réglages de la charge sont ceux de definition, par défaut
+  // REGLAGES_GENERATION (reglages.js), la définition dont s'engendre aussi
+  // le tableau de la documentation : chaque entrée de la section
+  // 'generation' paraît, dans son ordre, champ ou bascule selon son genre,
+  // sous son libellé et désignée par sa clé (data-champ) ; une entrée d'une
+  // autre section appartient à un autre écran. Une épreuve passe une
+  // définition à elle.
+  //
+  // Les champs (generation.nombre, generation.arret,
   // generation.historique) sont des Champ : une saisie se lit par la
   // validation du contrôleur de génération, la même que celle de
   // « Générer », et s'écrit à la sortie du champ par modifierReglage — une
@@ -35,11 +43,14 @@
   // du dernier nombre accepté. La saisie se valide à la sortie du champ ou
   // par Entrée, par controleur.reglerCoeurs ; son refus se pose contre le
   // champ, saisie gardée, et le parent le lit (refusCoeurs, lié) : un refus
-  // posé, « Générer » ne part pas. Échap rend le dernier nombre accepté. La
-  // valeur automatique du poste s'affiche à côté, dans les deux états.
+  // posé, « Générer » ne part pas. Échap rend le dernier nombre accepté ; les
+  // deux touches sont celles du contexte 'champ' de la table des raccourcis.
+  // La valeur automatique du poste s'affiche à côté, dans les deux états.
   import { getContext, untrack } from 'svelte';
   import Champ from '../primitives/Champ.svelte';
   import Refus from '../primitives/Refus.svelte';
+  import { effetDe } from '../raccourcis.js';
+  import { REGLAGES_GENERATION, reglagesDeSection, reglagesDuGenre, valeurDuReglage } from './reglages.js';
 
   let {
     charge,
@@ -49,6 +60,7 @@
     refusGraine = null,
     saisirGraine,
     refusCoeurs = $bindable(null),
+    definition = REGLAGES_GENERATION,
   } = $props();
 
   const t = getContext('t');
@@ -82,15 +94,19 @@
   }
 
   function toucheCoeurs(evenement) {
-    if (evenement.key === 'Escape') rendreCoeurs();
-    else if (evenement.key === 'Enter') {
+    const effet = effetDe('champ', evenement.key);
+    if (effet === 'rendre') rendreCoeurs();
+    else if (effet === 'valider') {
       evenement.preventDefault();
       validerCoeurs();
     }
   }
 
-  // Les réglages de la charge, dans l'ordre de l'écran.
-  const REGLAGES = ['nombre', 'arret', 'historique'];
+  // Les champs et les bascules de la section de la génération, chacun dans
+  // l'ordre de la définition.
+  const deLaGeneration = $derived(reglagesDeSection(definition, 'generation'));
+  const champs = $derived(reglagesDuGenre(deLaGeneration, 'champ'));
+  const bascules = $derived(reglagesDuGenre(deLaGeneration, 'bascule'));
 
   // La lecture d'une saisie du réglage nom : la validation du contrôleur sur
   // les réglages proposés, ce réglage remplacé par la saisie ; son refus, ou
@@ -102,17 +118,7 @@
     return { valeur: reglages[nom] };
   };
 
-  const ecrire = (nom) => (valeur) => seance.executer('modifierReglage', { cle: `generation.${nom}`, valeur });
-
-  // Les bascules, dans l'ordre du § 5.3 : la clé du réglage et celle de son
-  // libellé.
-  const BASCULES = [
-    { cle: 'separerAppartenances', etiquette: 'generation.contrainte.separerAppartenances' },
-    { cle: 'nouveauxVoisins', etiquette: 'generation.contrainte.nouveauxVoisins' },
-    { cle: 'nouvelleTable', etiquette: 'generation.contrainte.nouvelleTable' },
-    { cle: 'varierAppartenances', etiquette: 'generation.contrainte.varierAppartenances' },
-    { cle: 'attribuerSieges', etiquette: 'generation.contrainte.attribuerSieges' },
-  ];
+  const ecrire = (cle) => (valeur) => seance.executer('modifierReglage', { cle, valeur });
 
   // Le refus de la dernière bascule, { cle, refus }, posé à côté d'elle.
   let refusBascule = $state.raw(null);
@@ -121,16 +127,17 @@
   // la charge ; à l'issue, la case montre celle de la charge, écrite ou
   // inchangée. Annuler le clic ne suffirait pas : la séance peut avoir écrit
   // avant que le navigateur rétablisse la case, à la fin de l'événement.
-  async function basculer(evenement, cle) {
+  async function basculer(evenement, entree) {
     const caseACocher = evenement.currentTarget;
+    const { cle } = entree;
     refusBascule = null;
     try {
-      await seance.executer('modifierReglage', { cle, valeur: !charge.reglages[cle] });
+      await seance.executer('modifierReglage', { cle, valeur: !valeurDuReglage(charge.reglages, entree) });
     } catch (erreur) {
       if (typeof erreur?.code !== 'string') throw erreur;
       refusBascule = { cle, refus: { code: erreur.code, details: erreur.details ?? {} } };
     } finally {
-      caseACocher.checked = charge.reglages[cle];
+      caseACocher.checked = valeurDuReglage(charge.reglages, entree);
     }
   }
 </script>
@@ -152,26 +159,27 @@
         <Refus id={idRefusGraine} refus={refusGraine} />
       {/if}
     </div>
-    {#each REGLAGES as nom (nom)}
+    {#each champs as entree (entree.cle)}
       <Champ
-        cle={`generation.${nom}`}
-        etiquette={`generation.reglage.${nom}`}
-        valeur={charge.reglages.generation[nom]}
-        lire={lecteur(nom)}
-        executer={ecrire(nom)}
+        cle={entree.cle}
+        etiquette={entree.etiquette}
+        valeur={valeurDuReglage(charge.reglages, entree)}
+        lire={lecteur(entree.nom)}
+        executer={ecrire(entree.cle)}
       />
     {/each}
   </div>
   <fieldset class="bascules">
     <legend>{t('generation.contraintes.titre')}</legend>
-    {#each BASCULES as { cle, etiquette } (cle)}
+    {#each bascules as entree (entree.cle)}
+      {@const { cle, etiquette } = entree}
       <div class="bascule">
         <input
           id={`${uid}-${cle}`}
           type="checkbox"
           data-champ={cle}
-          checked={charge.reglages[cle]}
-          onclick={(evenement) => basculer(evenement, cle)}
+          checked={valeurDuReglage(charge.reglages, entree)}
+          onclick={(evenement) => basculer(evenement, entree)}
         />
         <label for={`${uid}-${cle}`}>{t(etiquette)}</label>
         {#if refusBascule !== null && refusBascule.cle === cle}

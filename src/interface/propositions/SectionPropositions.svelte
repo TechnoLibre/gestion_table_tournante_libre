@@ -46,6 +46,7 @@
   import { getContext } from 'svelte';
   import { lireEntier } from '../../application/capacite.js';
   import { cibleRedondance } from '../../application/evaluation.js';
+  import { REGLAGES_GENERATION, reglagesDeSection } from '../generation/reglages.js';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
@@ -55,6 +56,9 @@
   import { demandeConfirmation, evaluation, explicationDeColonne, nomDe, retenuAjuste, surlignee as colonneSurlignee, tableau } from './modele.js';
 
   const t = getContext('t');
+  // Le champ de la cible lit l'entrée que lit aussi le tableau des réglages
+  // de la documentation (§ 19.8).
+  const [entreeCible] = reglagesDeSection(REGLAGES_GENERATION, 'propositions');
   const seance = getContext('seance');
   const ui = getContext('ui');
 
@@ -180,8 +184,8 @@
   {#if charge !== null}
     <div class="cible" data-cible-redondance>
       <Champ
-        cle="cibleRedondance"
-        etiquette="propositions.cible.etiquette"
+        cle={entreeCible.cle}
+        etiquette={entreeCible.etiquette}
         valeur={cibleRedondance(charge)}
         lire={lireEntier}
         executer={changerCible}

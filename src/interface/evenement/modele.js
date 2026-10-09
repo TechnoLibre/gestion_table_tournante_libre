@@ -93,10 +93,13 @@ const REMEDES = new Map([
   ['PLACES_MANQUANTES', Object.freeze({ geste: 'ouvrirSection', section: 'tables' })],
 ]);
 
-// Le remède d'un avertissement : celui de REMEDES, sauf une réservation que
-// le retenu ne tient pas à son siège (details.siege), que lève l'échange de
-// sa personne avec l'occupant, ou, chaise vide, son déplacement au siège.
+// Le remède d'un avertissement : celui qu'il porte en details.remede quand
+// il en porte un — LISTE_SUR_VOISINE, le déplacement de la voisine que la
+// commande a choisi —, sinon celui de REMEDES, sauf une réservation que le
+// retenu ne tient pas à son siège (details.siege), que lève l'échange de sa
+// personne avec l'occupant, ou, chaise vide, son déplacement au siège.
 function remedeDe(code, details) {
+  if (details?.remede !== undefined && details.remede !== null) return details.remede;
   if (code === 'RESERVATION_NON_HONOREE' && details.siege !== undefined) {
     const { tour, participant, table, siege, occupant } = details;
     return occupant === null

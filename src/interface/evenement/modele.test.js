@@ -208,6 +208,24 @@ describe('avertissementsOrdonnes (§ 8.6, § 8.8, § 8.9, § 9)', () => {
     assert.deepEqual(sansExamen.derives, []);
   });
 
+  test('un avertissement qui porte son remède en details.remede le garde : LISTE_SUR_VOISINE déplace la voisine (§ 7.1)', () => {
+    const remede = { commande: 'deplacerTable', arguments: { id: 2, position: { x: 1626, y: 0 } } };
+    const details = { table: 1, voisine: 2, numero: 1, numeroVoisine: 2, remede };
+    const [rendu] = avertissementsOrdonnes(etat({ avertissements: [{ code: 'LISTE_SUR_VOISINE', details }] }));
+    assert.deepEqual(rendu, { code: 'LISTE_SUR_VOISINE', details, remede });
+    // Un remède null ou absent laisse celui de REMEDES, ou aucun.
+    const [derive, verrou] = avertissementsOrdonnes(
+      etat({
+        avertissements: [
+          { code: 'DERIVE', details: { ids: [], retenu: false, remede: null } },
+          { code: 'VERROU_REPRIS', details: { seance: 'b', depuis: null } },
+        ],
+      }),
+    );
+    assert.deepEqual(derive.remede, REMEDES.get('DERIVE'));
+    assert.equal(verrou.remede, null);
+  });
+
   test('chaque remède rendu se traduit : sa clé existe', () => {
     const rendus = avertissementsOrdonnes(etat({ avertissements: CODES.map(avertissement) }));
     const avecRemede = rendus.filter(({ remede }) => remede !== null);

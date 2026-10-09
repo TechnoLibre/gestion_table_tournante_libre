@@ -9,20 +9,30 @@
 
 import { cleEntete } from './normalisation.js';
 
-/** Champs d'un participant que porte un CSV, dans l'ordre de l'export. */
-export const CHAMPS = Object.freeze(['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes']);
+// Un champ et ses en-têtes, figés.
+const champ = (nom, entetes) => Object.freeze([nom, Object.freeze(entetes)]);
 
-// En-têtes de chaque champ tels que le § 10.1 les écrit : son nom, puis ses
-// synonymes.
-const ENTETES_DES_CHAMPS = [
-  ['nom', ['nom']],
-  ['prenom', ['prenom']],
-  ['appartenance', ['appartenance', 'organisation', 'entreprise', 'équipe']],
-  ['courriel', ['courriel']],
-  ['titre_pressenti', ['titre_pressenti', 'titre', 'rôle']],
-  ['exclu', ['exclu']],
-  ['notes', ['notes']],
-];
+/**
+ * La table des colonnes reconnues (§ 10.1, § 19.8), seule source des champs
+ * du CSV et de leurs synonymes : chaque champ, dans l'ordre de l'export, avec
+ * ses en-têtes tels que le § 10.1 les écrit — son nom, puis ses synonymes.
+ * CHAMPS et la reconnaissance en dérivent, et le tableau des colonnes de la
+ * documentation s'en engendre. Figée à toute profondeur.
+ *
+ * @type {ReadonlyArray<readonly [string, ReadonlyArray<string>]>}
+ */
+export const ENTETES_DES_CHAMPS = Object.freeze([
+  champ('nom', ['nom']),
+  champ('prenom', ['prenom']),
+  champ('appartenance', ['appartenance', 'organisation', 'entreprise', 'équipe']),
+  champ('courriel', ['courriel']),
+  champ('titre_pressenti', ['titre_pressenti', 'titre', 'rôle']),
+  champ('exclu', ['exclu']),
+  champ('notes', ['notes']),
+]);
+
+/** Champs d'un participant que porte un CSV, dans l'ordre de l'export. */
+export const CHAMPS = Object.freeze(ENTETES_DES_CHAMPS.map(([nom]) => nom));
 
 // Champ de chaque clé d'en-tête, la clé tirée de l'écriture du § 10.1 par la
 // même règle que celle d'un en-tête lu.

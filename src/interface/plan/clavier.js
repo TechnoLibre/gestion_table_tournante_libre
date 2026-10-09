@@ -6,8 +6,11 @@
 // d'une table, {table, siege|null} — se déplace par les flèches, selon la
 // position des tables sur le plan ; l'entrée descend dans les sièges,
 // l'échappement remonte. Aucune fonction ne lit le DOM : Plan.svelte
-// applique l'élément actif rendu et l'effet qui l'accompagne.
+// applique l'élément actif rendu et l'effet qui l'accompagne. Les touches
+// se lisent dans la table des raccourcis, contexte 'plan' : ce module n'en
+// nomme aucune.
 import { ecranDepuisDessin } from '../../geometrie/vue.js';
+import { effetDe } from '../raccourcis.js';
 
 /** Les directions des flèches, sur l'écran (y vers le bas). */
 const VECTEURS = new Map([
@@ -17,15 +20,16 @@ const VECTEURS = new Map([
   ['bas', { x: 0, y: 1 }],
 ]);
 
-/** La direction de chaque flèche, et le sens où elle fait tourner les sièges. */
+/**
+ * Chaque effet de flèche de la table des raccourcis : la direction où il
+ * mène sur le plan, et le sens où il fait tourner les sièges.
+ */
 const FLECHES = new Map([
-  ['ArrowRight', { direction: 'droite', sens: 1 }],
-  ['ArrowDown', { direction: 'bas', sens: 1 }],
-  ['ArrowLeft', { direction: 'gauche', sens: -1 }],
-  ['ArrowUp', { direction: 'haut', sens: -1 }],
+  ['droite', { direction: 'droite', sens: 1 }],
+  ['bas', { direction: 'bas', sens: 1 }],
+  ['gauche', { direction: 'gauche', sens: -1 }],
+  ['haut', { direction: 'haut', sens: -1 }],
 ]);
-
-const ENTREES = new Set(['Enter', ' ']);
 
 /**
  * La table voisine dans la direction d'une flèche : la plus proche, par la
@@ -89,7 +93,9 @@ export function siegeVoisin(capacite, siege, sens) {
  * gauche et haut au précédent ; l'entrée rend l'effet selectionner de la
  * place. L'échappement remonte du siège à sa table, puis, sur une table,
  * rend l'effet remonter : le choix en attente et la sélection s'oublient.
- * Un siège d'une table passée en régime table se lit comme sa table.
+ * Un siège d'une table passée en régime table se lit comme sa table. Les
+ * flèches, l'entrée et l'échappement sont les touches des effets droite,
+ * bas, gauche, haut, entrer et remonter du contexte 'plan' de RACCOURCIS.
  *
  * @param {{table: number, siege: number|null}|null} actif
  * @param {string} cle   KeyboardEvent.key
@@ -101,9 +107,10 @@ export function siegeVoisin(capacite, siege, sens) {
  *   null pour une touche que le plan ne prend pas, ou sans table
  */
 export function toucheDuPlan(actif, cle, { geometries, regimeDe, capaciteDe }) {
-  const fleche = FLECHES.get(cle);
-  const entree = ENTREES.has(cle);
-  const echap = cle === 'Escape';
+  const effet = effetDe('plan', cle);
+  const fleche = effet === null ? undefined : FLECHES.get(effet);
+  const entree = effet === 'entrer';
+  const echap = effet === 'remonter';
   if (fleche === undefined && !entree && !echap) return null;
   if (geometries.length === 0) return null;
 

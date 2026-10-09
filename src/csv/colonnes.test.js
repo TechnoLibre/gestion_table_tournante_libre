@@ -7,12 +7,48 @@
 // colonnes revendiquent tant qu'un choix ne tranche pas.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
-import { CHAMPS, associer, reconnaitre } from './colonnes.js';
+import { CHAMPS, ENTETES_DES_CHAMPS, associer, reconnaitre } from './colonnes.js';
 
 describe('CHAMPS', () => {
   test('les sept champs du § 10.1, dans leur ordre, figés', () => {
     assert.deepEqual(CHAMPS, ['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes']);
     assert.ok(Object.isFrozen(CHAMPS));
+  });
+});
+
+describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§ 10.1, § 19.8)', () => {
+  test('chaque champ de CHAMPS, dans son ordre, avec son nom en tête de ses en-têtes, puis ses synonymes', () => {
+    assert.deepEqual(
+      ENTETES_DES_CHAMPS.map(([champ, entetes]) => [champ, [...entetes]]),
+      [
+        ['nom', ['nom']],
+        ['prenom', ['prenom']],
+        ['appartenance', ['appartenance', 'organisation', 'entreprise', 'équipe']],
+        ['courriel', ['courriel']],
+        ['titre_pressenti', ['titre_pressenti', 'titre', 'rôle']],
+        ['exclu', ['exclu']],
+        ['notes', ['notes']],
+      ],
+    );
+    assert.deepEqual(ENTETES_DES_CHAMPS.map(([champ]) => champ), [...CHAMPS]);
+  });
+
+  test('figée à toute profondeur : ni la table, ni une paire, ni une liste d’en-têtes ne change', () => {
+    assert.ok(ENTETES_DES_CHAMPS.length > 0);
+    assert.ok(Object.isFrozen(ENTETES_DES_CHAMPS));
+    for (const paire of ENTETES_DES_CHAMPS) {
+      assert.ok(Object.isFrozen(paire), paire[0]);
+      assert.ok(Object.isFrozen(paire[1]), paire[0]);
+    }
+    assert.throws(() => ENTETES_DES_CHAMPS.push(['ligne', ['ligne']]), TypeError);
+    assert.throws(() => ENTETES_DES_CHAMPS[2][1].push('club'), TypeError);
+    assert.equal(reconnaitre('club'), null);
+  });
+
+  test('chaque en-tête de la table est reconnu sous son champ : la reconnaissance la lit', () => {
+    const paires = ENTETES_DES_CHAMPS.flatMap(([champ, entetes]) => entetes.map((entete) => [entete, champ]));
+    assert.equal(paires.length, 12);
+    for (const [entete, champ] of paires) assert.equal(reconnaitre(entete), champ, entete);
   });
 });
 
