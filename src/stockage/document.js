@@ -80,6 +80,24 @@ export const GENERATION_PAR_DEFAUT = Object.freeze({ nombre: 5, arret: 200_000, 
  */
 export const CIBLE_REDONDANCE_PAR_DEFAUT = 1000;
 
+// AAAA-MM-JJTHH:MM:SS±HH:MM, la forme que rend l'horloge de l'application.
+// Le calendrier ne se contrôle pas : un horodatage ne décide d'aucun ordre.
+const HORODATAGE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/;
+
+/**
+ * Vrai pour une chaîne de la forme AAAA-MM-JJTHH:MM:SS±HH:MM, celle que rend
+ * l'horloge de l'application : la forme d'un horodatage, que le placement
+ * daté, le journal et le verrou partagent. Ni le calendrier ni les bornes
+ * des heures ne se contrôlent ici. Elle vit dans ce module : le schéma en a
+ * besoin dès son évaluation, et ce module ne peut importer le journal, qui
+ * lit le schéma dès la sienne ; le journal la réexporte, et le code qui
+ * n'est pas le schéma la prend de lui.
+ *
+ * @param {unknown} valeur
+ * @returns {boolean}
+ */
+export const estHorodatage = (valeur) => typeof valeur === 'string' && HORODATAGE.test(valeur);
+
 // Une règle du schéma ; types.js en décrit les propriétés (Regle). Un objet
 // porte ses champs, paires [clé, règle] dans l'ordre des clés, et l'ensemble
 // de leurs clés ; une liste porte la règle de ses éléments. Un champ
@@ -119,6 +137,9 @@ const IDENTIFIANT = entier(1, 2 ** 31 - 1);
 // attribués, et jamais en fin de liste.
 const OCCUPANT = regle('entier', { ...IDENTIFIANT, nul: true });
 const DATE_OU_NUL = regle('date', { nul: true });
+// L'instant où un placement a pris sa forme courante (§ 8.9) : facultatif,
+// absent quand il est inconnu, null refusé comme toute autre forme.
+const HORODATAGE_FACULTATIF = regle('horodatage', { optionnel: true });
 
 // Ordres des listes de la charge (§ 8.8, § 8.9). canonique.js range les
 // copies canoniques des éléments : clés dans l'ordre du schéma, listes
@@ -255,13 +276,18 @@ const PLACEMENT = liste(
 // Champs qu'une proposition et le retenu partagent, après ce qui les
 // identifie : tables et capacités se correspondent rang à rang, et leur
 // ordre se garde ; participants est l'ensemble des identifiants que le plan
-// place, rangé par identifiant croissant.
+// place, rangé par identifiant croissant. horodatage, facultatif et en
+// dernier, date le placement : pour le retenu, l'instant où il a pris sa
+// forme courante ; pour une proposition, celui de la génération qui l'a
+// produite. Absent, l'objet s'écrit octet pour octet comme avant qu'il
+// existe.
 const PLAN = [
   ['tables', liste(IDENTIFIANT)],
   ['capacites', liste(entier(2))],
   ['tours', entier(1)],
   ['participants', liste(IDENTIFIANT, { tri: croissant })],
   ['placement', PLACEMENT],
+  ['horodatage', HORODATAGE_FACULTATIF],
 ];
 
 const PROPOSITION = objet(
@@ -409,6 +435,8 @@ function conforme(valeur, { genre, min, max, valeurs }) {
       return valeurs.includes(valeur);
     case 'date':
       return typeof valeur === 'string' && estJour(valeur);
+    case 'horodatage':
+      return estHorodatage(valeur);
   }
 }
 

@@ -730,3 +730,105 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     }
   });
 });
+
+describe('commandes : le placement daté (§ 8.9, § 11.8, Q2)', () => {
+  const H = '2031-05-17T20:15:00-04:00';
+  const H2 = '2031-05-17T21:40:00-04:00';
+  const H3 = '2031-05-17T22:05:00-04:00';
+  const dater = (nom, charge, args, horodatage) => appliquerCommande(nom, charge, args, { horodatage });
+  const horodatages = (charge) => charge.propositions.map((p) => [p.id, p.horodatage ?? null]);
+
+  // La charge d'essai, la table 2 surchargée à trois places et une troisième
+  // table de deux places : deux propositions engendrées sous H, la première
+  // retenue sous H.
+  function chargeDatee() {
+    const charge = chargeEssai();
+    charge.tables[1].sieges = 3;
+    charge.tables.push(table(3, 500));
+    charge.prochainsIds.table = 4;
+    const generee = dater('enregistrerGeneration', charge, generer(charge, 2), H).charge;
+    return dater('retenirProposition', generee, { id: 1 }, H).charge;
+  }
+
+  test('enregistrerGeneration date les seules propositions nouvelles ; retenirProposition date le retenu, sans toucher les propositions', () => {
+    const premiere = dater('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 2), H).charge;
+    assert.deepEqual(horodatages(premiere), [[1, H], [2, H]]);
+    const seconde = dater('enregistrerGeneration', premiere, generer(premiere, 2, 11), H2).charge;
+    assert.deepEqual(horodatages(seconde), [[1, H], [2, H], [3, H2], [4, H2]]);
+    const retenue = dater('retenirProposition', seconde, { id: 3 }, H3).charge;
+    assert.equal(retenue.retenu.horodatage, H3);
+    assert.deepEqual(retenue.propositions, seconde.propositions);
+  });
+
+  test('deplacerDansRetenu et realignerTable, qui changent le retenu, le datent de leur geste', () => {
+    const charge = chargeDatee();
+    assert.equal(charge.retenu.horodatage, H);
+    const assises = charge.retenu.placement[0].sieges;
+    const arrivee = assises.findIndex((liste, rang) => !liste.includes(3) && liste.length < charge.retenu.capacites[rang]);
+    assert.ok(arrivee >= 0, 'une table d’arrivée libre');
+    const deplace = dater('deplacerDansRetenu', charge, { tour: 1, participant: 3, table: charge.retenu.tables[arrivee], siege: null }, H2).charge;
+    assert.notDeepEqual(deplace.retenu.placement, charge.retenu.placement);
+    assert.equal(deplace.retenu.horodatage, H2);
+    assert.deepEqual(horodatages(deplace), horodatages(charge));
+    const realignee = dater('realignerTable', charge, { id: 2 }, H3).charge;
+    assert.notDeepEqual(realignee.retenu.capacites, charge.retenu.capacites);
+    assert.equal(realignee.retenu.horodatage, H3);
+  });
+
+  test('une commande qui ne touche pas le placement le garde daté de son instant : corriger un nom, déplacer une table', () => {
+    const charge = chargeDatee();
+    const renommee = dater('modifierParticipant', charge, { id: 3, champs: { nom: 'Pervenche-Lacasse' } }, H2).charge;
+    assert.equal(renommee.participants.find(({ id }) => id === 3).nom, 'Pervenche-Lacasse');
+    assert.equal(renommee.retenu.horodatage, H);
+    assert.deepEqual(horodatages(renommee), [[1, H], [2, H]]);
+    const deplacee = dater('deplacerTable', charge, { id: 3, position: { x: 700, y: 0 } }, H2).charge;
+    assert.equal(deplacee.retenu.horodatage, H);
+  });
+
+  test("une commande qui reconstruit le retenu à l'identique garde son horodatage, présent ou absent", () => {
+    const proposee = dater('changerEtat', chargeDatee(), { etat: 'propose' }, H2).charge;
+    assert.equal(proposee.retenu.horodatage, H);
+    const reprise = dater('retenirProposition', proposee, { id: 1 }, H3).charge;
+    assert.equal(reprise.evenement.etat, 'retenu');
+    assert.equal(reprise.retenu.horodatage, H);
+    const ancienne = structuredClone(proposee);
+    delete ancienne.retenu.horodatage;
+    const repriseAncienne = dater('retenirProposition', ancienne, { id: 1 }, H3).charge;
+    assert.equal(Object.hasOwn(repriseAncienne.retenu, 'horodatage'), false);
+    const autre = dater('retenirProposition', proposee, { id: 2 }, H3).charge;
+    assert.equal(autre.retenu.horodatage, H3);
+    // Sans instant, la même reconstruction garde aussi l'horodatage reçu, et
+    // SANS_EFFET rend le même verdict qu'avec un instant.
+    const repriseSansInstant = dater('retenirProposition', proposee, { id: 1 }, null).charge;
+    assert.equal(repriseSansInstant.retenu.horodatage, H);
+    refuse(() => dater('retenirProposition', chargeDatee(), { id: 1 }, null), 'SANS_EFFET', { commande: 'retenirProposition', remede: null });
+  });
+
+  test('SANS_EFFET se juge avant la datation : retenir de nouveau le même retenu, ou poser le même état, sous un autre instant', () => {
+    const charge = chargeDatee();
+    refuse(() => dater('retenirProposition', charge, { id: 1 }, H2), 'SANS_EFFET', { commande: 'retenirProposition', remede: null });
+    refuse(() => dater('changerEtat', charge, { etat: 'retenu' }, H2), 'SANS_EFFET', { commande: 'changerEtat', remede: null });
+  });
+
+  test("horodatage null, ou absent : rien n'est posé ni retiré", () => {
+    const generee = appliquerCommande('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 2)).charge;
+    assert.deepEqual(horodatages(generee), [[1, null], [2, null]]);
+    const retenue = dater('retenirProposition', generee, { id: 1 }, null).charge;
+    assert.equal(Object.hasOwn(retenue.retenu, 'horodatage'), false);
+    const datee = chargeDatee();
+    const renommee = dater('modifierParticipant', datee, { id: 3, champs: { nom: 'Pervenche-Lacasse' } }, null).charge;
+    assert.equal(renommee.retenu.horodatage, H);
+    assert.deepEqual(horodatages(renommee), [[1, H], [2, H]]);
+  });
+
+  test("la charge reçue ne change pas ; un horodatage d'une autre forme est une faute du code", () => {
+    const charge = figer(chargeDatee());
+    const avant = structuredClone(charge);
+    dater('deplacerTable', charge, { id: 3, position: { x: 700, y: 0 } }, H2);
+    dater('retenirProposition', figer(dater('changerEtat', charge, { etat: 'propose' }, H2).charge), { id: 2 }, H3);
+    assert.deepEqual(charge, avant);
+    for (const faux of ['2031-05-17 20:15', 12, '']) {
+      assert.throws(() => dater('deplacerTable', charge, { id: 3, position: { x: 700, y: 0 } }, faux), TypeError, JSON.stringify(faux));
+    }
+  });
+});

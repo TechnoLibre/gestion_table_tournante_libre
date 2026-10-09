@@ -6,8 +6,10 @@
 // formes de la version, l'affichée et celle que montrent les propriétés du
 // fichier sous Windows, que scripts/version.js engendre. Sa composition est
 // une seule clé de la table de la coquille : la langue témoin l'encadre une
-// fois, en entier.
-import { aUnLibelle } from './libelles.js';
+// fois, en entier. La version et la provenance à l'écran se définissent
+// dans l'application (version.js), que le papier lit aussi : ce module les
+// réexporte.
+export { provenanceVisible, versionVisible } from '../application/version.js';
 
 /**
  * Bloc d'une ligne du panneau « À propos » (§ 18.6) : nom, version affichée,
@@ -41,31 +43,4 @@ export function blocAPropos({ version, plateforme, provenance, format }, t) {
     provenance,
     format,
   });
-}
-
-/**
- * Ce qui tient lieu de version à l'écran : la marque de provenance dans une
- * construction de documentation, dont les captures d'écran ne changent pas
- * d'une livraison à l'autre (§ 19.4) ; la version affichée sinon.
- *
- * @param {string} provenance   le mode de construction de Vite
- * @param {string} version      la version affichée
- * @param {(cle: string) => string} t
- * @returns {string}
- */
-export function versionVisible(provenance, version, t) {
-  return provenance === 'documentation' ? t('coquille.version.documentation') : version;
-}
-
-/**
- * La provenance à l'écran : le libellé du mode de construction par la
- * traduction reçue, ou le mode lui-même quand il n'en a pas — celui d'un
- * « vite build » lancé sans --mode —, qui s'affiche alors comme une donnée.
- *
- * @param {string} provenance   le mode de construction de Vite
- * @param {(cle: string) => string} t
- * @returns {string}
- */
-export function provenanceVisible(provenance, t) {
-  return aUnLibelle(provenance) ? t(`coquille.provenance.${provenance}`) : provenance;
 }

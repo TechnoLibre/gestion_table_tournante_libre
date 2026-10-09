@@ -16,10 +16,10 @@ export const TABLE = new Map([
   ['coquille.provenance.documentation', 'documentation'],
   ['coquille.provenance.test', 'épreuve'],
 
-  // La version à l'écran : le mot qui la précède au premier écran, et la
-  // marque qui la remplace dans une construction de documentation (§ 19.4).
+  // Le mot qui précède la version au premier écran. La marque qui la
+  // remplace dans une construction de documentation est une clé de
+  // l'application (sorties.version.documentation) : le papier la lit aussi.
   ['coquille.version.libelle', 'version'],
-  ['coquille.version.documentation', 'construction de documentation'],
 
   // Le libellé de mode, que rend cleDeMode (mode.js).
   ['coquille.mode.lecture', 'Lecture'],

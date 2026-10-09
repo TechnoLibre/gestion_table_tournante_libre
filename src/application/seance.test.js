@@ -2944,3 +2944,192 @@ describe("séance observable : les textes des codes qu'elle ajoute (§ 14.6)", (
     assert.match(libelle('CONFIGURATION_INCOHERENTE', { code: 'CODE_INVENTE', details: {} }), /« CODE_INVENTE »/);
   });
 });
+
+describe('séance : le placement daté (§ 8.9, § 11.8, Q2)', () => {
+  // L'horodatage de la dernière entrée du journal sur le disque.
+  const derniereDate = (fs) => journalDe(fs).entrees.at(-1).horodatage;
+
+  test("chaque geste date le placement de l'instant de son entrée, une lecture d'horloge ; corriger un nom ne date rien ; défaire restitue l'ancien", async () => {
+    const { fs, seance } = await ouvertSur();
+    await seance.passerEnEcriture();
+    await seance.executer('enregistrerGeneration', generer(seance.charge));
+    const generation = derniereDate(fs);
+    assert.deepEqual(seance.charge.propositions.map((p) => p.horodatage), [generation, generation]);
+    await seance.executer('retenirProposition', { id: 1 });
+    const premier = derniereDate(fs);
+    assert.notEqual(premier, generation);
+    assert.equal(seance.charge.retenu.horodatage, premier);
+    assert.equal(etatDe(fs).charge.retenu.horodatage, premier);
+    await seance.executer('modifierParticipant', { id: 3, champs: { nom: 'Pervenche-Lacasse' } });
+    assert.equal(seance.charge.retenu.horodatage, premier);
+    await seance.executer('retenirProposition', { id: 2 });
+    const second = derniereDate(fs);
+    assert.notEqual(second, premier);
+    assert.deepEqual([seance.charge.retenu.proposition, seance.charge.retenu.horodatage], [2, second]);
+    assert.deepEqual(seance.charge.propositions.map((p) => p.horodatage), [generation, generation]);
+    await seance.defaire();
+    assert.deepEqual([seance.charge.retenu.proposition, seance.charge.retenu.horodatage], [1, premier]);
+    assert.equal(etatDe(fs).charge.retenu.horodatage, premier);
+  });
+
+  test('débloquer, depuis la lecture, garde le placement daté de son instant', async () => {
+    const charge = avecRetenu(chargeEssai());
+    charge.retenu.horodatage = '2031-05-17T07:30:00-04:00';
+    charge.evenement.etat = 'bloque';
+    const { seance } = await ouvertSur(charge);
+    await seance.debloquer();
+    assert.deepEqual([seance.charge.evenement.etat, seance.charge.retenu.horodatage], ['retenu', '2031-05-17T07:30:00-04:00']);
+  });
+});
+
+describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
+  const papierLu = (fs) => JSON.parse(fs.contenu('documents', FICHIER_REGLAGES)).papier;
+  // Le texte de l'état et du journal sur le disque, null pour un absent.
+  const evenementSurDisque = (fs) => [fs.contenu('documents', ETAT), fs.contenu('documents', JOURNAL)];
+
+  test("null au départ ; choisirPapier écrit les seuls réglages, et une séance neuve sur la même racine le lit, jamais redemandé", async () => {
+    const { fs, seance } = await ouvertSur();
+    assert.equal(seance.etat().papier, null);
+    const avant = fs.compteurs.ecritures;
+    const textes = evenementSurDisque(fs);
+    await seance.choisirPapier('Lettre');
+    assert.equal(fs.compteurs.ecritures, avant + 1);
+    assert.deepEqual(evenementSurDisque(fs), textes);
+    assert.equal(papierLu(fs), 'Lettre');
+    assert.equal(seance.etat().papier, 'Lettre');
+    const neuve = monter({ fs, racine: null, prefixe: 'neuve' });
+    assert.equal(neuve.seance.etat().papier, null, 'sans racine');
+    await neuve.seance.changerRacine(DOC);
+    assert.equal(neuve.seance.etat().papier, 'Lettre');
+    const surRacine = monter({ fs, prefixe: 'sur-racine' });
+    await surRacine.seance.attendre();
+    assert.equal(surRacine.seance.etat().papier, 'Lettre');
+  });
+
+  test("vivant en lecture, en écriture, sur un plan bloqué et sans événement ; jamais l'état ni le journal", async () => {
+    const bloque = chargeEssai();
+    bloque.evenement.etat = 'bloque';
+    const cas = [
+      ['lecture', async () => ouvertSur()],
+      ['écriture', async () => {
+        const montage = await ouvertSur();
+        await montage.seance.passerEnEcriture();
+        return montage;
+      }],
+      ['bloqué', async () => ouvertSur(bloque)],
+      ['sans événement', async () => monter()],
+    ];
+    assert.equal(cas.length, 4);
+    for (const [libelleCas, monterCas] of cas) {
+      const { fs, seance } = await monterCas();
+      const textes = evenementSurDisque(fs);
+      const avant = fs.compteurs.ecritures;
+      for (const [rang, papier] of ['A4', 'Lettre'].entries()) {
+        await seance.choisirPapier(papier);
+        assert.equal(fs.compteurs.ecritures, avant + rang + 1, libelleCas);
+        assert.deepEqual([papierLu(fs), seance.etat().papier], [papier, papier], libelleCas);
+      }
+      assert.deepEqual(evenementSurDisque(fs), textes, libelleCas);
+    }
+  });
+
+  test('un papier hors du domaine est une faute du code, et rien ne s’écrit', async () => {
+    const { fs, seance } = await ouvertSur();
+    const avant = fs.compteurs.ecritures;
+    for (const faux of ['A3', 'a4', 'lettre', null, undefined, 4]) {
+      await assert.rejects(seance.choisirPapier(faux), TypeError, String(faux));
+    }
+    assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(seance.etat().papier, null);
+  });
+
+  test('des réglages illisibles refusent le choix REGLAGES_ILLISIBLES, comme le cadrage : le fichier intact, le papier inchangé', async () => {
+    for (const corrompu of ['pas du json\n', '{"cadrages":[],"format":1,"papier":"A5"}\n']) {
+      const { fs, seance } = await ouvertSur();
+      fs.deposer('documents', FICHIER_REGLAGES, corrompu);
+      await refus(seance.choisirPapier('A4'), 'REGLAGES_ILLISIBLES');
+      assert.equal(fs.contenu('documents', FICHIER_REGLAGES), corrompu);
+      assert.equal(seance.etat().papier, null);
+    }
+  });
+
+  test("un cadrage différé et le choix du papier écrits ensemble : les deux restent, l'un après l'autre", async () => {
+    const { fs, seance, planificateur } = await ouvertSur();
+    seance.demanderCadrage({ k: 1.5, tx: 3, ty: 4 });
+    const cadrage = planificateur.avancer(DELAI_REGLAGES_MS);
+    const papier = seance.choisirPapier('Lettre');
+    await cadrage;
+    await papier;
+    await seance.fermer();
+    await laisser();
+    const relus = JSON.parse(fs.contenu('documents', FICHIER_REGLAGES));
+    assert.equal(relus.papier, 'Lettre');
+    assert.deepEqual(relus.cadrages, [{ evenement: 'evt-lucioles', k: 1.5, tx: 3, ty: 4 }]);
+  });
+
+  test("le papier qu'une autre séance a choisi se lit après l'écriture suivante de cette séance, cadrage compris", async () => {
+    const { fs, seance, planificateur } = await ouvertSur();
+    const autre = monter({ fs, prefixe: 'autre' });
+    await autre.seance.choisirPapier('A4');
+    assert.equal(seance.etat().papier, null);
+    seance.demanderCadrage({ k: 2, tx: 0, ty: 0 });
+    await planificateur.avancer(DELAI_REGLAGES_MS);
+    await laisser();
+    assert.equal(seance.etat().papier, 'A4');
+    assert.equal(papierLu(fs), 'A4');
+  });
+
+  // Retient la réponse de la première lecture de reglages_locaux.json qui
+  // suit : la lecture se fait aussitôt, sa réponse attend liberer().
+  function retenirLectureReglages(fs) {
+    const lireTexte = fs.lireTexte;
+    let liberer = null;
+    const retenue = new Promise((resolve) => {
+      liberer = resolve;
+    });
+    let prise = false;
+    fs.lireTexte = async (racine, chemin) => {
+      if (prise || chemin !== FICHIER_REGLAGES) return lireTexte(racine, chemin);
+      prise = true;
+      const reponse = await lireTexte(racine, chemin);
+      await retenue;
+      return reponse;
+    };
+    return { liberer: () => liberer(), prise: () => prise };
+  }
+
+  test("une relecture du papier partie avant un choix ne l'écrase pas : à la création, l'état suit le fichier", async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4"}\n');
+    const lecture = retenirLectureReglages(fs);
+    const { seance } = monter({ fs });
+    await laisser();
+    assert.equal(lecture.prise(), true, 'la relecture de la création est partie');
+    const choix = seance.choisirPapier('Lettre');
+    await laisser();
+    lecture.liberer();
+    await choix;
+    await seance.attendre();
+    assert.deepEqual([papierLu(fs), seance.etat().papier], ['Lettre', 'Lettre']);
+  });
+
+  test("une relecture du papier partie avant un choix ne l'écrase pas : au changement de racine, l'état suit le fichier", async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"A4"}\n');
+    const lecture = retenirLectureReglages(fs);
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(lecture.prise(), true, 'la relecture du changement de racine est partie');
+    const choix = seance.choisirPapier('Lettre');
+    await laisser();
+    lecture.liberer();
+    await changement;
+    await choix;
+    await seance.attendre();
+    assert.equal(JSON.parse(fs.contenu(PORTABLE.id, FICHIER_REGLAGES)).papier, 'Lettre');
+    assert.equal(seance.etat().papier, 'Lettre');
+  });
+});

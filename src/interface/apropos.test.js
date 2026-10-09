@@ -3,8 +3,9 @@
 
 // Le bloc « À propos » (§ 18.6) : une ligne que l'opérateur copie dans un
 // courriel — nom, version affichée, version Windows, plateforme, provenance,
-// version de format —, et ce qui tient lieu de version à l'écran, la marque
-// de provenance dans une construction de documentation (§ 19.4).
+// version de format. Ce qui tient lieu de version à l'écran, et la
+// provenance, s'éprouvent avec leur définition (src/application/version.js),
+// que ce module réexporte.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
@@ -12,7 +13,7 @@ import { TABLES_APPLICATION } from '../application/libelles.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../application/traduction.js';
 import { FORMAT } from '../stockage/document.js';
 import { VERSION } from '../version.genere.js';
-import { blocAPropos, provenanceVisible, versionVisible } from './apropos.js';
+import { blocAPropos } from './apropos.js';
 import { TABLES_INTERFACE, libelleProvenance } from './libelles.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -73,36 +74,6 @@ describe('blocAPropos (§ 18.6)', () => {
     assert.ok(bloc.startsWith(ouverture) && bloc.endsWith(fermeture), bloc);
     assert.equal(bloc.split(ouverture).length, 2, bloc);
     assert.equal(bloc.split(fermeture).length, 2, bloc);
-  });
-});
-
-describe('versionVisible (§ 18.6, § 19.4)', () => {
-  test('la version affichée, hors d’une construction de documentation', () => {
-    for (const provenance of ['developpement', 'livraison', 'test']) {
-      assert.equal(versionVisible(provenance, VERSION.affichee, t), VERSION.affichee, provenance);
-    }
-  });
-
-  test('la marque de provenance, sans le numéro, dans une construction de documentation', () => {
-    const marque = versionVisible('documentation', VERSION.affichee, t);
-    assert.equal(marque, t('coquille.version.documentation'));
-    assert.ok(!marque.includes(VERSION.affichee), marque);
-  });
-});
-
-describe('provenanceVisible (§ 18.6)', () => {
-  test('le libellé du mode par la traduction reçue ; un mode sans libellé sous son propre nom', () => {
-    for (const mode of ['developpement', 'livraison', 'documentation', 'test']) {
-      assert.equal(provenanceVisible(mode, t), libelleProvenance(mode), mode);
-    }
-    assert.equal(provenanceVisible('production', t), 'production');
-    assert.equal(provenanceVisible('constructor', t), 'constructor');
-  });
-
-  test('en langue témoin, le libellé est encadré, le mode sans libellé non : il est une donnée', () => {
-    const { ouverture, fermeture } = MARQUE_TEMOIN;
-    assert.equal(provenanceVisible('test', temoin), `${ouverture}${libelleProvenance('test')}${fermeture}`);
-    assert.equal(provenanceVisible('production', temoin), 'production');
   });
 });
 

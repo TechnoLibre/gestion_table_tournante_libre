@@ -21,6 +21,7 @@ import { canoniser, serialiser, serialiserCharge } from './canonique.js';
 import { appliquer, difference } from './correctifs.js';
 import { analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { ligneEntree, ligneOuverture, lireJournal, reconstruire } from './journal.js';
 import { examiner, fautes } from './placements.js';
 
 // En-tête sous lequel une charge d'épreuve s'écrit pour être relue.
@@ -1800,5 +1801,83 @@ describe('la cible de la somme de redondance : un champ facultatif dans un corre
     for (const [libelle, charge, operation] of cas) {
       assert.deepEqual(refusDe(charge, [operation]), { rang: 0 }, libelle);
     }
+  });
+});
+
+describe('le placement daté : un champ facultatif du retenu et des propositions dans un correctif (§ 8.6, § 8.9, Q2)', () => {
+  const H = '2031-05-17T20:15:00-04:00';
+  const H2 = '2031-05-17T21:40:00-04:00';
+  const RETENU = ['retenu', 'horodatage'];
+  const PROPOSITION = ['propositions', { id: 1 }, 'horodatage'];
+
+  // La petite démonstration, sa proposition 1 retenue ; horodatage, quand il
+  // est donné, date le retenu.
+  function retenue(horodatage) {
+    const charge = petite();
+    charge.evenement.etat = 'retenu';
+    charge.retenu = retenuDe(charge.propositions[0]);
+    if (horodatage !== undefined) charge.retenu.horodatage = horodatage;
+    return charge;
+  }
+  // La même, sa proposition 1 datée.
+  function propositionDatee(horodatage) {
+    const charge = retenue(H);
+    charge.propositions[0].horodatage = horodatage;
+    return charge;
+  }
+
+  test('un correctif pose, change et retire le champ du retenu et d’une proposition, et rien quand il ne change pas', () => {
+    const cas = [
+      ['posé sur le retenu', retenue(), retenue(H), [{ op: 'poser', chemin: RETENU, valeur: H }]],
+      ['changé sur le retenu', retenue(H), retenue(H2), [{ op: 'poser', chemin: RETENU, valeur: H2 }]],
+      ['retiré du retenu', retenue(H2), retenue(), [{ op: 'retirer', chemin: RETENU }]],
+      ['inchangé', retenue(H), retenue(H), []],
+      ['posé sur une proposition', retenue(H), propositionDatee(H2), [{ op: 'poser', chemin: PROPOSITION, valeur: H2 }]],
+      ['retiré d’une proposition', propositionDatee(H2), retenue(H), [{ op: 'retirer', chemin: PROPOSITION }]],
+    ];
+    assert.equal(cas.length, 6);
+    for (const [libelle, a, b, attendu] of cas) {
+      const correctif = difference(a, b);
+      assert.deepEqual(correctif, attendu, libelle);
+      const rendue = appliquer(a, JSON.parse(JSON.stringify(correctif)));
+      assert.deepEqual(rendue, canoniser(b), libelle);
+      assert.equal(serialiser(rendue, ENTETE), serialiser(b, ENTETE), libelle);
+    }
+  });
+
+  test('un horodatage hors de sa forme, ou le retrait d’un horodatage absent, lèvent CORRECTIF', () => {
+    const cas = [
+      ['date sans heure', retenue(H), { op: 'poser', chemin: RETENU, valeur: '2026-10-09 19:00' }],
+      ['un nombre', retenue(), { op: 'poser', chemin: RETENU, valeur: 12 }],
+      ['null', retenue(H), { op: 'poser', chemin: RETENU, valeur: null }],
+      ['sur une proposition, sans décalage', retenue(H), { op: 'poser', chemin: PROPOSITION, valeur: '2031-05-17T20:15:00' }],
+      ['retrait du retenu qui ne le porte pas', retenue(), { op: 'retirer', chemin: RETENU }],
+      ['retrait de la proposition qui ne le porte pas', retenue(H), { op: 'retirer', chemin: PROPOSITION }],
+    ];
+    assert.equal(cas.length, 6);
+    for (const [libelle, charge, operation] of cas) {
+      assert.deepEqual(refusDe(charge, [operation]), { rang: 0 }, libelle);
+    }
+  });
+
+  test('reconstruire redonne chaque charge du journal : le retenu daté, redaté, puis sans date', () => {
+    const charges = [retenue(), retenue(H), propositionDatee(H2), retenue(H2), retenue()];
+    const lignes = [ligneOuverture('demo-petite')];
+    charges.forEach((apres, rang) => {
+      lignes.push(ligneEntree({
+        revision: rang + 1,
+        libelle: `Geste ${rang + 1}`,
+        horodatage: H,
+        produitVersion: rang === 0 ? VERSION.affichee : null,
+        avant: rang === 0 ? undefined : charges[rang - 1],
+        apres,
+        instantane: rang === 0,
+      }));
+    });
+    const journal = lireJournal(`${lignes.join('\n')}\n`);
+    assert.equal(journal.entrees.length, charges.length);
+    charges.forEach((charge, rang) => {
+      assert.deepEqual(reconstruire(journal, rang + 1), canoniser(charge), `révision ${rang + 1}`);
+    });
   });
 });

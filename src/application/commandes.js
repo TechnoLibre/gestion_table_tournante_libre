@@ -10,7 +10,8 @@
 // ErreurCommande(code, details), où details.remede nomme le geste qui le lève,
 // null quand il n'y en a pas ; une faute du code — un argument de forme
 // fausse, un état ou un champ inconnus — lève TypeError. Aucune commande
-// n'écrit, ne lit l'horloge ni ne tire un aléa.
+// n'écrit, ne lit l'horloge ni ne tire un aléa : appliquerCommande date le
+// placement de l'instant que la séance lui passe (§ 8.9).
 //
 // La saisie entre en NFC, ses blancs de bord retirés, une chaîne vide valant
 // null (§ 10.2) ; la règle d'un champ est celle du schéma du fichier d'état,
@@ -29,6 +30,7 @@ import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
+import { estHorodatage } from '../stockage/journal.js';
 import { fautes, formeNommee, versFichier } from '../stockage/placements.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
@@ -498,6 +500,32 @@ export const COMMANDES = reunirCommandes(
   COMMANDES_PLACES,
 );
 
+// Le retenu sans son horodatage : une copie de premier niveau, que la
+// comparaison des placements lit sans le modifier.
+function sansHorodatage(retenu) {
+  const { horodatage, ...reste } = retenu;
+  return reste;
+}
+
+// Le texte canonique du retenu, horodatage retiré, sous une charge vidée de
+// tout le reste : deux retenus de même texte décrivent le même placement,
+// quel que soit l'ordre de leurs clés ou des listes que la canonisation
+// range. La copie canonique d'un retenu ne lit que lui.
+const VIDE = { participants: [], tables: [], reservations: [], titres: [], propositions: [] };
+const texteDuPlacement = (charge, retenu) => serialiserCharge({ ...charge, ...VIDE, retenu: sansHorodatage(retenu) });
+
+// La charge rendue datée de horodatage (§ 8.9) : le retenu quand retenuNeuf,
+// et chaque proposition dont l'identifiant manque à la charge reçue. Les
+// objets datés sont neufs : ni la charge rendue ni la reçue ne changent.
+function dater(recue, rendue, horodatage, retenuNeuf) {
+  const anciennes = new Set(recue.propositions.map(({ id }) => id));
+  return {
+    ...rendue,
+    propositions: rendue.propositions.map((p) => (anciennes.has(p.id) ? p : { ...p, horodatage })),
+    retenu: retenuNeuf ? { ...rendue.retenu, horodatage } : rendue.retenu,
+  };
+}
+
 /**
  * Applique la commande nom à la charge : ce qu'elle rend, avertissements []
  * quand elle n'en donne pas. Un geste dont la charge rendue s'écrit comme la
@@ -506,20 +534,49 @@ export const COMMANDES = reunirCommandes(
  * à lire — l'import dont seules des lignes refusées auraient changé la
  * liste : il passe tel quel, et rien ne s'écrit.
  *
+ * horodatage, l'instant du geste que la séance lit à son horloge, date le
+ * placement (§ 8.9, § 11.8). Un retenu que la commande rend inchangé à
+ * l'horodatage près garde celui du reçu, présent ou absent, même quand elle
+ * l'a reconstruit sans lui ; SANS_EFFET se juge ensuite, avant toute
+ * datation : un geste sans effet ne le devient pas par son instant. Puis le
+ * retenu qui change, ou qui apparaît, prend horodatage, et chaque proposition
+ * dont l'identifiant manque à la charge reçue aussi ; les autres gardent le
+ * leur. Corriger un nom ne date rien : l'horodatage date le placement, non
+ * la page. horodatage null, le défaut, ne pose ni ne retire rien : un
+ * retenu reconstruit à l'identique garde l'horodatage reçu, et aucun autre
+ * n'est posé.
+ *
  * @param {string} nom
  * @param {Object} charge
  * @param {Object} [args]
+ * @param {{horodatage?: string|null}} [options]   horodatage de la forme
+ *        d'estHorodatage, ou null
  * @returns {{charge: Object, libelle: string|null, avertissements: Array<{code: string, details: Object}>}}
  * @throws {ErreurCommande} le refus de la commande, ou SANS_EFFET
- * @throws {TypeError} une commande inconnue, un argument de forme fausse
+ * @throws {TypeError} une commande inconnue, un argument de forme fausse, un
+ *         horodatage ni null ni de la forme d'estHorodatage
  */
-export function appliquerCommande(nom, charge, args = {}) {
+export function appliquerCommande(nom, charge, args = {}, { horodatage = null } = {}) {
   const commande = COMMANDES.get(nom);
   if (commande === undefined) throw new TypeError(`commande inconnue : ${JSON.stringify(nom)}`);
+  if (horodatage !== null && !estHorodatage(horodatage)) {
+    throw new TypeError(`horodatage : AAAA-MM-JJTHH:MM:SS±HH:MM ou null attendu, reçu ${JSON.stringify(horodatage)}`);
+  }
   const rendu = commande(charge, args ?? {});
   if (rendu.libelle === null) return { ...rendu, avertissements: rendu.avertissements ?? [] };
-  if (serialiserCharge(rendu.charge) === serialiserCharge(charge)) throw refus('SANS_EFFET', { commande: nom });
-  return { ...rendu, avertissements: rendu.avertissements ?? [] };
+  let suivante = rendu.charge;
+  const { retenu } = suivante;
+  const memePlacement =
+    retenu !== null &&
+    charge.retenu !== null &&
+    texteDuPlacement(charge, charge.retenu) === texteDuPlacement(charge, retenu);
+  if (memePlacement) {
+    const { horodatage: recu } = charge.retenu;
+    suivante = { ...suivante, retenu: recu === undefined ? sansHorodatage(retenu) : { ...sansHorodatage(retenu), horodatage: recu } };
+  }
+  if (serialiserCharge(suivante) === serialiserCharge(charge)) throw refus('SANS_EFFET', { commande: nom });
+  if (horodatage !== null) suivante = dater(charge, suivante, horodatage, retenu !== null && !memePlacement);
+  return { ...rendu, charge: suivante, avertissements: rendu.avertissements ?? [] };
 }
 
 /**

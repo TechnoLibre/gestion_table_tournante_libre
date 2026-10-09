@@ -10,6 +10,7 @@
 // correctifs. Les textes d'épreuve sont du JSON compact : l'analyse ne
 // dépend pas de la mise en page. Les noms sont inventés.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
 import { STATUT, normaliser } from '../moteur/configuration.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
@@ -34,6 +35,7 @@ import {
   premiereFauteEnPlace,
 } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { fautes as fautesDePlacement } from './placements.js';
 
 // Un document valide : quatre participants, dont un exclu, l'identifiant 4
 // retiré et jamais réattribué ; deux tables, dont une surchargée ; une
@@ -1197,5 +1199,94 @@ describe('la cible de la somme de redondance : un réglage facultatif (§ 8.9)',
     assert.equal(lecture.formatPlusRecent, true);
     assert.equal(cibleRedondance(lecture.charge), 750);
     assert.equal(Object.hasOwn(lecture.charge.reglages, 'autreReglage'), false);
+  });
+});
+
+describe('le placement daté : un champ facultatif du retenu et des propositions (§ 8.9, Q2)', () => {
+  const regleDe = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+  const CHARGE = regleDe(SCHEMA, 'charge');
+  const RETENU = regleDe(CHARGE, 'retenu');
+  const PROPOSITION = regleDe(CHARGE, 'propositions').element;
+  const H = '2031-05-17T20:15:00-04:00';
+  const H2 = '2031-05-17T21:40:00+02:00';
+  const ENTETE = { revision: 12, produitVersion: VERSION.affichee };
+
+  // Le document valide, son retenu posé ; modifier passe sur lui.
+  function avecRetenu(modifier = () => {}) {
+    const copie = documentValide();
+    copie.entete.comptes.retenu = 1;
+    copie.charge.evenement.etat = 'retenu';
+    copie.charge.retenu = retenuValide();
+    modifier(copie);
+    return copie;
+  }
+
+  test('posé sur le retenu et sur une proposition, il se lit, s’écrit après placement, en dernière clé, et se relit pareil', () => {
+    const lu = analyser(JSON.stringify(avecRetenu((d) => {
+      d.charge.retenu.horodatage = H;
+      d.charge.propositions[0].horodatage = H2;
+    })));
+    assert.equal(lu.charge.retenu.horodatage, H);
+    assert.equal(lu.charge.propositions[0].horodatage, H2);
+    assert.equal(premiereFaute(lu.charge.retenu, RETENU), null);
+    assert.equal(premiereFaute(lu.charge.propositions[0], PROPOSITION), null);
+    assert.deepEqual(RETENU.champs.at(-1)[0], 'horodatage');
+    assert.deepEqual(PROPOSITION.champs.at(-1)[0], 'horodatage');
+    const texte = serialiser(lu.charge, ENTETE);
+    assert.equal(texte.split('"horodatage"').length, 3, texte);
+    assert.ok(texte.includes(`\n    ],"horodatage":${JSON.stringify(H)}}\n`), texte);
+    assert.ok(texte.includes(`\n      ],"horodatage":${JSON.stringify(H2)}}\n`), texte);
+    assert.equal(serialiser(analyser(texte).charge, ENTETE), texte);
+  });
+
+  test('absent, la charge ne le porte pas et s’écrit sans lui ; posé puis retiré, le texte revient octet pour octet', () => {
+    const sans = analyser(JSON.stringify(avecRetenu())).charge;
+    assert.equal(Object.hasOwn(sans.retenu, 'horodatage'), false);
+    assert.equal(Object.hasOwn(sans.propositions[0], 'horodatage'), false);
+    const texteSans = serialiser(sans, ENTETE);
+    assert.equal(texteSans.includes('horodatage'), false);
+    const date = structuredClone(sans);
+    date.retenu.horodatage = H;
+    date.propositions[0].horodatage = H2;
+    assert.notEqual(serialiser(date, ENTETE), texteSans);
+    delete date.retenu.horodatage;
+    delete date.propositions[0].horodatage;
+    assert.equal(serialiser(date, ENTETE), texteSans);
+  });
+
+  test('chaque démonstration livrée se relit et se réécrit octet pour octet, sans horodatage', () => {
+    const livrees = ['grande', 'grande-sans-exception', 'petite', 'petite-conflit'];
+    assert.equal(livrees.length, 4);
+    for (const cle of livrees) {
+      const surDisque = readFileSync(new URL(`../demo/livrees/${cle}.gtt.json`, import.meta.url), 'utf8');
+      assert.equal(texteLivre(cle), surDisque, cle);
+      const { entete, charge } = analyser(surDisque);
+      assert.equal(serialiser(charge, entete), surDisque, cle);
+      assert.equal(surDisque.includes('horodatage'), false, cle);
+    }
+  });
+
+  test('une valeur d’une autre forme est une faute FORME de son placement, nommée par son chemin', () => {
+    const fautives = ['2026-10-09 19:00', 12, null, '', '2031-05-17T20:15:00', '2031-05-17T20:15:00Z', ' 2031-05-17T20:15:00-04:00', [H]];
+    assert.equal(fautives.length, 8);
+    for (const valeur of fautives) {
+      const retenu = { ...retenuValide(), horodatage: valeur };
+      assert.equal(premiereFaute(retenu, RETENU), 'horodatage', JSON.stringify(valeur));
+      const proposition = { ...documentValide().charge.propositions[0], horodatage: valeur };
+      assert.equal(premiereFaute(proposition, PROPOSITION, 'charge.propositions[0]'), 'charge.propositions[0].horodatage', JSON.stringify(valeur));
+      assert.deepEqual(fautesDePlacement(proposition), [{ code: 'FORME', chemin: 'horodatage' }], JSON.stringify(valeur));
+      assert.deepEqual(fautesDePlacement(retenu), [{ code: 'FORME', chemin: 'horodatage' }], JSON.stringify(valeur));
+    }
+  });
+
+  test('un fichier d’un format plus récent garde l’horodatage qu’il porte, réduit aux clés connues', () => {
+    const lecture = analyser(JSON.stringify(avecRetenu((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.retenu.horodatage = H;
+      d.charge.retenu.autreCle = 1;
+    })));
+    assert.equal(lecture.formatPlusRecent, true);
+    assert.equal(lecture.charge.retenu.horodatage, H);
+    assert.equal(Object.hasOwn(lecture.charge.retenu, 'autreCle'), false);
   });
 });

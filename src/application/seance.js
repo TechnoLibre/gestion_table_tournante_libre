@@ -67,7 +67,13 @@
 // neuf à chaque changement et le même entre deux, et subscribe suit le
 // contrat des magasins de Svelte. Le cadrage de l'événement ouvert se range
 // hors du fichier, dans reglages_locaux.json, par un écrivain différé
-// (§ 8.5) : regarder n'écrit jamais l'événement.
+// (§ 8.5) : regarder n'écrit jamais l'événement. Le papier des planches, de
+// la machine et non du plan, s'y range aussi, dans tout mode, avec ou sans
+// événement (§ 8.5, § 11.2) ; une seule file y écrit, que le cadrage et le
+// papier partagent.
+//
+// Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
+// date aussi le placement qu'il change (§ 8.9, § 11.8).
 //
 // Les appels qui lisent ou écrivent l'événement passent l'un après l'autre,
 // dans l'ordre de leur appel : chacun part de l'Ouvert que le précédent a
@@ -89,7 +95,7 @@ import { FORMAT, analyser } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { fil, reconstruire } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
-import { avecCadrage, cadrageDe, creerEcrivainDiffere, ecrireReglages, lireReglages } from '../stockage/reglages_locaux.js';
+import { avecCadrage, avecPapier, cadrageDe, creerEcrivainDiffere, ecrireReglages, lireReglages } from '../stockage/reglages_locaux.js';
 import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
 import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 import { libelle } from './libelles.js';
@@ -216,7 +222,10 @@ export function creerSeance({
   // une autre ; fautives : les propositions que l'ouverture a écartées ;
   // formatLu : le format de l'état relu, null dès qu'un geste l'a écrit ;
   // retourAutomatique : le dernier retour en lecture est celui de
-  // l'inactivité ; cadrage : celui de l'événement ouvert, lu ou demandé.
+  // l'inactivité ; cadrage : celui de l'événement ouvert, lu ou demandé ;
+  // papier : celui que portent les réglages de la racine, relu à chaque
+  // changement de racine et après chaque écriture des réglages, null sans
+  // racine ou sans choix.
   const etat = {
     racine,
     ouvert: null,
@@ -235,6 +244,7 @@ export function creerSeance({
     formatLu: null,
     retourAutomatique: false,
     cadrage: null,
+    papier: null,
   };
 
   // --- L'observation ------------------------------------------------------------
@@ -303,6 +313,7 @@ export function creerSeance({
       supportRompu: etat.supportRompu ? { ...etat.refusSupport, ailleurs: etat.ailleurs } : null,
       calculEnCours: etat.calculs > 0,
       verrouAutre: etat.verrouAutre,
+      papier: etat.papier,
     });
     return figer({
       racine: petit.racine,
@@ -317,6 +328,7 @@ export function creerSeance({
       supportRompu: petit.supportRompu,
       calculEnCours: petit.calculEnCours,
       verrouAutre: petit.verrouAutre,
+      papier: petit.papier,
     });
   }
 
@@ -341,19 +353,71 @@ export function creerSeance({
     for (const fonction of [...annulations]) fonction();
   }
 
-  // --- Le cadrage (§ 8.5) -----------------------------------------------------
+  // --- Les réglages locaux : le cadrage et le papier (§ 8.5) --------------------
 
-  // Écrit le cadrage demandé dans les réglages de sa racine, relus au moment
-  // d'écrire : un cadrage qu'une autre séance y a posé entre-temps reste.
-  // Des réglages que la lecture ne prend pas (REGLAGES_ILLISIBLES : lecture
-  // refusée, JSON ou forme fautifs) ne s'écrasent pas des défauts, qui
-  // perdraient le papier et les autres cadrages : le refus lève, et
-  // l'écrivain garde le cadrage en attente pour la demande suivante.
-  async function ecrireCadrage({ racine: dossier, evenement, cadrage }) {
-    const { reglages, avertissement } = await lireReglages(fs, dossier);
-    if (avertissement !== null) throw new ErreurSeance(avertissement.code, avertissement.details);
-    await ecrireReglages(fs, dossier, avecCadrage(reglages, evenement, cadrage));
+  // La file unique des accès à reglages_locaux.json, écritures et relectures
+  // du papier : chacun part quand le précédent a fini, réussi ou non. Deux
+  // écrivains qui liraient le fichier avant que l'autre l'ait écrit
+  // perdraient l'un des deux réglages ; une relecture partie avant une
+  // écriture et rendue après remettrait dans l'état le papier d'avant.
+  let fileReglages = Promise.resolve();
+
+  // Met travail à son tour dans la file des réglages et rend sa promesse ;
+  // la file continue après un refus.
+  function enFileReglages(travail) {
+    const suite = fileReglages.then(travail);
+    fileReglages = suite.then(
+      () => undefined,
+      () => undefined,
+    );
+    return suite;
   }
+
+  // À son tour dans la file, relit les réglages de dossier, leur applique
+  // transformer et écrit ce qu'il rend : un réglage qu'une autre séance y a
+  // posé entre-temps reste. Des réglages que la lecture ne prend pas
+  // (REGLAGES_ILLISIBLES : lecture refusée, JSON ou forme fautifs) ne
+  // s'écrasent pas des défauts, qui perdraient le papier et les cadrages :
+  // le refus lève, ErreurSeance de l'avertissement, et rien ne s'écrit.
+  // L'écriture faite, le papier de la séance est celui qu'elle a écrit quand
+  // dossier est la racine de la séance.
+  function ecrireReglagesLocaux(dossier, transformer) {
+    return enFileReglages(async () => {
+      const { reglages, avertissement } = await lireReglages(fs, dossier);
+      if (avertissement !== null) throw new ErreurSeance(avertissement.code, avertissement.details);
+      const ecrits = transformer(reglages);
+      await ecrireReglages(fs, dossier, ecrits);
+      if (memeRacine(dossier, etat.racine)) {
+        etat.papier = ecrits.papier;
+        publier();
+      }
+    });
+  }
+
+  // À son tour dans la file des réglages, relit le papier des réglages de
+  // dossier — null sans dossier, sans choix, et pour des réglages que la
+  // lecture ne prend pas — et le pose dans l'état quand dossier est encore
+  // la racine de la séance. Ne lève jamais ; ne publie pas : l'appelant
+  // est un travail de la file des appels, qui publie en finissant.
+  function relirePapier(dossier) {
+    return enFileReglages(async () => {
+      let papier = null;
+      if (dossier !== null) {
+        try {
+          papier = (await lireReglages(fs, dossier)).reglages.papier;
+        } catch {
+          papier = null;
+        }
+      }
+      if (memeRacine(dossier, etat.racine)) etat.papier = papier;
+    });
+  }
+
+  // Le cadrage demandé, écrit par la file dans les réglages de sa racine. Un
+  // refus remonte à l'écrivain, qui garde le cadrage en attente pour la
+  // demande suivante.
+  const ecrireCadrage = ({ racine: dossier, evenement, cadrage }) =>
+    ecrireReglagesLocaux(dossier, (reglages) => avecCadrage(reglages, evenement, cadrage));
 
   // Le refus d'une écriture lancée par la minuterie se tait : le cadrage
   // n'est qu'une commodité, et l'écrivain le réessaie à la demande suivante.
@@ -677,13 +741,13 @@ export function creerSeance({
   // Écrit un geste depuis l'Ouvert depart : le jalon jalonAvant sur l'instant
   // courant quand il est donné, puis l'entrée et l'état, puis, quand l'état
   // du plan change, le jalon qui le nomme (§ 8.3). Un horodatage pour tout
-  // le geste. Le jalon d'état qu'un refus empêche laisse le geste
+  // le geste : options.horodatage, celui qui a daté la commande, ou une
+  // lecture de l'horloge. Le jalon d'état qu'un refus empêche laisse le geste
   // enregistré : JALON_NON_ECRIT s'ajoute aux avertissements, et le support
   // est rompu sous ce même échec. Rend le libellé ; les avertissements
   // deviennent ceux du dernier geste.
   async function ecrireGeste(depart, { charge, libelle: texte, avertissements }, options = {}) {
-    const { sens = null, retour = null, jalonAvant = null } = options;
-    const horodatage = horloge.horodatage();
+    const { sens = null, retour = null, jalonAvant = null, horodatage = horloge.horodatage() } = options;
     const commun = { horodatage, libelleReprise };
     let ouvert = depart;
     if (jalonAvant !== null) ouvert = await ecrire(ouvert, (o) => nommerSurDisque(o, { nom: jalonAvant, ...commun }));
@@ -724,11 +788,12 @@ export function creerSeance({
   // commande s'applique alors à ce qui est relu. Celui-ci d'un format plus
   // récent, ou que la commande refuse — une autre séance l'a débloqué —,
   // rend le verrou, la séance restant en lecture sur ce qu'elle a relu, et
-  // le refus remonte. Sinon l'entrée et le jalon de l'état rendu s'écrivent,
+  // le refus remonte. Sinon l'horloge se lit, le verrou pris : la commande
+  // datée de cet instant, l'entrée et le jalon de l'état rendu s'écrivent,
   // et la séance reste en écriture.
   async function debloquerPlan(ouvert, args) {
     exigerSupport();
-    let resultat = appliquerCommande('debloquer', ouvert.charge, args);
+    appliquerCommande('debloquer', ouvert.charge, args);
     let depart = ouvert;
     const avertissements = [];
     if (etat.mode !== 'ecriture') {
@@ -737,14 +802,17 @@ export function creerSeance({
       depart = etat.ouvert;
       try {
         if (depart.formatPlusRecent) throw refusFormat();
-        resultat = appliquerCommande('debloquer', depart.charge, args);
+        appliquerCommande('debloquer', depart.charge, args);
       } catch (erreur) {
         etat.avertissementsGeste = [...avertissements, ...(await rendreVerrou(depart))];
         throw erreur;
       }
     }
+    const horodatage = horloge.horodatage();
+    const resultat = appliquerCommande('debloquer', depart.charge, args, { horodatage });
     entrerEnEcriture();
-    return ecrireGeste(depart, { ...resultat, avertissements: [...avertissements, ...resultat.avertissements] });
+    const tous = [...avertissements, ...resultat.avertissements];
+    return ecrireGeste(depart, { ...resultat, avertissements: tous }, { horodatage });
   }
 
   // La séance passe en écriture : le retour automatique précédent ne se dit
@@ -764,14 +832,15 @@ export function creerSeance({
       return { libelle: await debloquerPlan(ouvert, args) };
     }
     exigerEcriture();
-    const resultat = appliquerCommande(nom, ouvert.charge, args);
+    const horodatage = horloge.horodatage();
+    const resultat = appliquerCommande(nom, ouvert.charge, args, { horodatage });
     if (resultat.libelle === null) {
       etat.avertissementsGeste = [...resultat.avertissements];
       return { libelle: null, resume: resultat.resume };
     }
     const jalonAvant = nom === 'enregistrerGeneration' ? libelle('JALON_AVANT_GENERATION') : null;
     const avertissements = [...resultat.avertissements, ...avertissementsApres(ouvert.charge, resultat.charge)];
-    const texte = await ecrireGeste(ouvert, { ...resultat, avertissements }, { jalonAvant });
+    const texte = await ecrireGeste(ouvert, { ...resultat, avertissements }, { jalonAvant, horodatage });
     return resultat.resume === undefined ? { libelle: texte } : { libelle: texte, resume: resultat.resume };
   }
 
@@ -1091,6 +1160,7 @@ export function creerSeance({
       ailleurs: null,
       formatLu: null,
     });
+    await relirePapier(nouvelle);
     // Le cadrage de l'événement suit la séance : demandé de nouveau pour la
     // racine nouvelle, il y remplace celui qui attendait l'ancienne, que son
     // support refuse.
@@ -1125,6 +1195,10 @@ export function creerSeance({
       return 'inconnu';
     }
   }
+
+  // Le papier de la racine reçue se lit à son tour dans la file des appels,
+  // puis dans celle des réglages, comme à un changement de racine.
+  if (racine !== null) enFile(() => relirePapier(racine));
 
   return {
     /** L'identifiant de la séance, qui signe son verrou. */
@@ -1221,6 +1295,32 @@ export function creerSeance({
       etat.cadrage = cadrage;
       ecrivain.demander({ racine: etat.ouvert.racine, evenement, cadrage });
     },
+    /**
+     * Choisit le papier des planches de la machine (§ 8.5, § 11.2) :
+     * l'écrit dans reglages_locaux.json de la racine, par la file des
+     * réglages, puis EtatSeance.papier le porte. Vivant dans tout mode, avec
+     * ou sans événement, sur un plan bloqué comme sous un format plus
+     * récent : l'état et le journal ne s'écrivent pas. Le domaine est celui
+     * d'avecPapier ; null, qui y efface le choix, ne se choisit pas.
+     *
+     * @param {'A4'|'Lettre'} papier
+     * @returns {Promise<void>}
+     * @throws {TypeError} un papier hors du domaine, ou une séance sans
+     *         dossier de travail, sans rien lire ni écrire
+     * @throws {ErreurSeance} REGLAGES_ILLISIBLES {chemin, raison} : les
+     *         réglages ne se lisent pas, ni ne s'écrasent ; le papier de la
+     *         séance reste celui d'avant
+     * @throws {ErreurStockage} ECRITURE, le fichier intact
+     */
+    async choisirPapier(papier) {
+      if (papier === null) throw new TypeError('choisirPapier : un papier attendu, reçu null');
+      const choisir = (reglages) => avecPapier(reglages, papier);
+      // Essayé sur des réglages vides, avecPapier lève sur un papier hors du
+      // domaine avant que rien ne se lise.
+      choisir({ format: 1, papier: null, cadrages: [] });
+      if (etat.racine === null) throw new TypeError('choisirPapier : aucun dossier de travail');
+      await ecrireReglagesLocaux(etat.racine, choisir);
+    },
 
     // quitter.abandonner : vrai pour quitter l'événement d'un support rompu
     // (exigerSauve).
@@ -1235,14 +1335,15 @@ export function creerSeance({
       }),
     /**
      * Ferme l'événement ouvert, comme fermer, puis fait de racine le dossier
-     * de travail, où la séance ouvre et crée désormais ; rien ne s'écrit
-     * sans événement ouvert.
+     * de travail, où la séance ouvre et crée désormais, et relit le papier
+     * de ses réglages ; rien ne s'écrit sans événement ouvert.
      */
     changerRacine: (nouvelle, quitter) =>
       enFile(async () => {
         exigerSauve(quitter);
         const avertissements = await fermerEvenement();
         etat.racine = nouvelle;
+        await relirePapier(nouvelle);
         return { avertissements };
       }),
     passerEnEcriture: () => enFile(passerEnEcriture),

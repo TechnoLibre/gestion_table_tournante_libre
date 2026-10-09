@@ -312,7 +312,7 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
     const m = await monter({ provenance: 'documentation' });
     const version = dans(m, '[data-version]').textContent;
     expect(version).toContain(t('coquille.version.libelle'));
-    expect(version).toContain(t('coquille.version.documentation'));
+    expect(version).toContain(t('sorties.version.documentation'));
     expect(version).not.toContain(VERSION.affichee);
   });
 

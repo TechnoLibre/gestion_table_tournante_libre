@@ -34,7 +34,7 @@
 // suivre un correctif à un instant qui n'est pas le sien (§ 8.6).
 import { canoniser } from './canonique.js';
 import { appliquer, difference } from './correctifs.js';
-import { FORMAT, SCHEMA, clesRangees, premiereFaute } from './document.js';
+import { FORMAT, SCHEMA, clesRangees, estHorodatage, premiereFaute } from './document.js';
 
 /** Révisions d'un instantané au suivant (§ 8.6). */
 export const INTERVALLE_INSTANTANE = 50;
@@ -68,25 +68,16 @@ const LF = 0x0a;
 // Décodage strict d'une ligne : un octet hors UTF-8 lève, et la marque
 // d'ordre d'octets reste dans le texte, que la lecture retire.
 const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
-// AAAA-MM-JJTHH:MM:SS±HH:MM, la forme que rend l'horloge de l'application.
-// Le calendrier ne se contrôle pas : un horodatage ne décide d'aucun ordre.
-const HORODATAGE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/;
 const SENS = [null, 'defaire', 'refaire', 'revenir'];
 
 const estObjet = (valeur) => typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
 const estRevision = (valeur) => Number.isSafeInteger(valeur) && valeur >= 1;
 const estTexte = (valeur) => typeof valeur === 'string' && valeur !== '';
 
-/**
- * Vrai pour une chaîne de la forme AAAA-MM-JJTHH:MM:SS±HH:MM, celle que rend
- * l'horloge de l'application : la seule définition de la forme d'un
- * horodatage, que le journal, le verrou et le placement daté partagent. Ni
- * le calendrier ni les bornes des heures ne se contrôlent ici.
- *
- * @param {unknown} valeur
- * @returns {boolean}
- */
-export const estHorodatage = (valeur) => typeof valeur === 'string' && HORODATAGE.test(valeur);
+// La forme d'un horodatage se définit avec le schéma du fichier d'état, qui
+// la lit pour le placement daté ; le journal, le verrou et le format la
+// reprennent d'ici.
+export { estHorodatage };
 
 // Chemin de la première valeur de charge que l'analyse du fichier d'état
 // refuserait, ou null : la forme de la charge, propositions et retenu lus

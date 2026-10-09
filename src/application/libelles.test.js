@@ -819,11 +819,11 @@ async function tablesDuDossier() {
 }
 
 describe('libellés : les tables par domaine (§ 14.6)', () => {
-  test('chaque module de libelles/, aides.js excepté, exporte TABLE, une Map ; TABLES_APPLICATION les assemble, dix, par ordre alphabétique', async () => {
+  test('chaque module de libelles/, aides.js excepté, exporte TABLE, une Map ; TABLES_APPLICATION les assemble, onze, par ordre alphabétique', async () => {
     const tables = await tablesDuDossier();
-    assert.equal(tables.length, 10);
+    assert.equal(tables.length, 11);
     assert.deepEqual(tables.map(({ table }) => table), [
-      'csv', 'evenements', 'format', 'generation', 'mobilier', 'moteur', 'participants', 'places', 'seance', 'stockage',
+      'csv', 'evenements', 'format', 'generation', 'mobilier', 'moteur', 'participants', 'places', 'seance', 'sorties', 'stockage',
     ]);
     for (const { table, module } of tables) assert.ok(module.TABLE instanceof Map, table);
     assert.equal(TABLES_APPLICATION.length, tables.length);

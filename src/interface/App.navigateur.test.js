@@ -166,17 +166,17 @@ describe('titre et bandeau (§ 8.4, § 18.6)', () => {
   test('construction de documentation : la marque remplace le numéro ; en livraison, le numéro', async () => {
     const documentation = await monter({ provenance: 'documentation' });
     expect(bandeau(documentation).textContent).not.toContain(VERSION.affichee);
-    expect(bandeau(documentation).textContent).toContain(t('coquille.version.documentation'));
+    expect(bandeau(documentation).textContent).toContain(t('sorties.version.documentation'));
     const accueil = (m) => dans(m, '[data-ecran="accueil"]');
     expect(accueil(documentation).textContent).not.toContain(VERSION.affichee);
-    expect(accueil(documentation).textContent).toContain(t('coquille.version.documentation'));
+    expect(accueil(documentation).textContent).toContain(t('sorties.version.documentation'));
     documentation.demonter();
     montes = [];
     const livraison = await monter({ provenance: 'livraison' });
     expect(bandeau(livraison).textContent).toContain(VERSION.affichee);
     expect(bandeau(livraison).textContent).toContain(libelleProvenance('livraison'));
     expect(accueil(livraison).textContent).toContain(VERSION.affichee);
-    expect(accueil(livraison).textContent).not.toContain(t('coquille.version.documentation'));
+    expect(accueil(livraison).textContent).not.toContain(t('sorties.version.documentation'));
   });
 });
 
