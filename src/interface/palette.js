@@ -27,8 +27,13 @@ const ECART_TEINTE = 30;
 const PREFIXE_COULEUR = '--couleur-';
 
 // Les seuls sélecteurs sous lesquels une couleur se déclare : :root, ce qui
-// s'applique sans attribut, et un bloc par thème.
+// s'applique sans attribut, et un bloc par thème. Le document imprimé
+// (§ 11.7) redéclare les jetons du clair sur lui-même : [data-impression]
+// ne se pose que sur le bloc du clair, et le papier reste clair dans les
+// deux thèmes.
 const SELECTEURS_COULEUR = [':root', ...THEMES.map((t) => `:root[data-theme='${t}']`)];
+const SELECTEUR_CLAIR = ":root[data-theme='clair']";
+const SELECTEUR_PAPIER = '[data-impression]';
 
 /** Matrices de Machado, Oliveira et Fernandes (2009), sévérité 1, appliquées en
  *  RGB linéaire. Chaque ligne somme à 1 : le blanc et le noir sont des points
@@ -125,12 +130,14 @@ function couleurLitterale(valeur) {
  *  est :root seul, ce qui s'applique sans attribut. Lève sur un thème sans
  *  bloc, une valeur illisible, un renvoi sans cible ou circulaire, et sur un
  *  bloc qui déclare une couleur sous un autre sélecteur que :root et
- *  :root[data-theme='clair' | 'sombre'] : dans le navigateur, il masquerait
- *  le jeton que la lecture mesure. */
+ *  :root[data-theme='clair' | 'sombre'] — [data-impression] excepté, sur le
+ *  bloc du clair seul : dans le navigateur, il masquerait le jeton que la
+ *  lecture mesure. */
 export function lireJetons(texteCss, theme) {
   const tous = lireBlocs(texteCss);
   for (const bloc of tous) {
-    const autres = bloc.selecteurs.filter((s) => !SELECTEURS_COULEUR.includes(s));
+    const papierClair = bloc.selecteurs.includes(SELECTEUR_CLAIR);
+    const autres = bloc.selecteurs.filter((s) => !SELECTEURS_COULEUR.includes(s) && !(s === SELECTEUR_PAPIER && papierClair));
     const couleur = [...bloc.declarations.keys()].find((n) => n.startsWith(PREFIXE_COULEUR));
     if (autres.length > 0 && couleur !== undefined) {
       throw new Error(`couleur ${couleur} déclarée sous un sélecteur non lu : ${autres.join(', ')}`);

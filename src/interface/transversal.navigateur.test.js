@@ -705,6 +705,24 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(fautes[2]).toContain('1.00:1');
   });
 
+  test('marques : un texte au trait du registre — le filigrane — se mesure à son contour sur ce qui est peint sous lui, non comme un texte ; un contour noyé dans son fond est relevé ; un texte du document imprimé ne se compare pas d’un thème à l’autre', () => {
+    const fragment = (fond) =>
+      `<div data-impression style="background:${fond};padding:8px"><p style="color:#1c2128">papier</p>` +
+      '<svg width="240" height="60"><text data-marque="filigrane" x="10" y="40" ' +
+      'style="fill:none;stroke:var(--couleur-filigrane);stroke-width:1px;font-size:30px">BROUILLON</text></svg></div>';
+    const lire = (fond) => avecFragment(fragment(fond), (c) => ({ marques: releverMarques(c), textes: releverTextes(c) }));
+    const net = lire('#ffffff');
+    expect(net.marques.vues).toEqual(['filigrane']);
+    expect(net.marques.mesures).toBe(1);
+    expect(net.marques.fautes).toEqual([]);
+    expect(net.textes.mesures).toBe(1);
+    expect(net.textes.fautes).toEqual([]);
+    expect([...net.textes.couleurs]).toEqual([]);
+    const noye = lire(rgb(couleurDeJeton('--couleur-filigrane')));
+    expect(noye.marques.fautes).toHaveLength(1);
+    expect(noye.marques.fautes[0]).toContain('1.00:1');
+  });
+
   test('marques sous une fenêtre modale : une marque HTML de la page, qui ne s’y mesure pas, ne compte pas comme vue ; une marque dans la fenêtre, si', () => {
     const { vues } = avecFragment(
       '<p data-marque="gel" style="border:2px solid var(--couleur-gel)">dehors</p>' +

@@ -12,12 +12,17 @@
   // sous lui. Le nom se coupe où il le faut, même sans espace : un nom long
   // de glyphes larges passe à la ligne au lieu d'élargir la page. Chaque état
   // est un bloc : la commande et son refus en sont.
+  //
+  // « Imprimer… » ouvre l'aperçu avant impression (§ 11.7) sur le plan, au
+  // tour montré : toute impression passe par lui. Vivante dans tout mode,
+  // elle n'écrit rien.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import { ETATS_PLAN, cleEtat } from './modele.js';
 
   const t = getContext('t');
   const seance = getContext('seance');
+  const ui = getContext('ui');
 
   const courant = $derived($seance.evenement?.etat ?? null);
 </script>
@@ -31,6 +36,7 @@
       </div>
     {/each}
   </div>
+  <Commande cle="impression.commande.ouvrir" nom="apercu" executer={() => ui.ouvrirApercu({ vue: 'plan', tour: $ui.tour })} />
 </header>
 
 <style>

@@ -18,7 +18,7 @@ const NOMS_MARQUES = [
   'cadenasFerme', 'cadenasOuvert', 'anneau', 'hachure', 'remplissagePlein',
   'contourConflit', 'trameAppartenance', 'trameVoisins', 'trameTable', 'pastille', 'poignee', 'gel', 'miseEnEvidence',
   'selection', 'cadreLecture', 'cadreEcriture', 'cadreBloque', 'focus',
-  'contourTable', 'contourChaise', 'echelle', 'fantome', 'chargement',
+  'contourTable', 'contourChaise', 'echelle', 'fantome', 'chargement', 'filigrane',
 ];
 
 // Les remplissages d'une chaise : fond, pleine, et les deux couleurs de la
@@ -39,7 +39,7 @@ const FONDS_REQUIS = {
 const parNom = (registre, nom) => registre.find((e) => e.nom === nom);
 
 describe('registre des marques', () => {
-  test('les vingt-trois marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
+  test('les vingt-quatre marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
     assert.equal(MARQUES.length, NOMS_MARQUES.length);
     assert.deepEqual(MARQUES.map((m) => m.nom), NOMS_MARQUES);
     assert.equal(new Set(MARQUES.map((m) => m.nom)).size, MARQUES.length);
@@ -88,6 +88,27 @@ describe('registre des marques', () => {
         }
       }
     }
+  });
+});
+
+describe('le filigrane BROUILLON sur le papier (§ 11.7, § 14.5)', () => {
+  test('une marque du registre, peinte de --couleur-filigrane sur le papier, à 3:1', () => {
+    const filigrane = parNom(MARQUES, 'filigrane');
+    assert.deepEqual({ ...filigrane, fonds: [...filigrane.fonds] }, {
+      nom: 'filigrane',
+      jeton: '--couleur-filigrane',
+      fonds: ['--couleur-papier'],
+      seuil: 3,
+    });
+  });
+
+  test('le papier est clair dans les deux thèmes : le filigrane et le papier gardent leur valeur d’un thème à l’autre, et le papier est celle du clair', () => {
+    const [clair, sombre] = THEMES.map((theme) => lireJetons(JETONS, theme));
+    for (const nom of ['--couleur-filigrane', '--couleur-papier']) {
+      assert.notEqual(clair.get(nom), undefined, nom);
+      assert.deepEqual(sombre.get(nom), clair.get(nom), nom);
+    }
+    assert.deepEqual(clair.get('--couleur-papier'), [255, 255, 255, 1]);
   });
 });
 

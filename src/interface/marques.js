@@ -99,6 +99,10 @@ export const MARQUES = Object.freeze([
   // Le signe du chargement d'une valeur de la liste des événements (§ 8.1) :
   // un arc tracé de l'encre secondaire, sur la page.
   marque('chargement', 'page-texte-secondaire', ['page-fond']),
+  // Le filigrane BROUILLON (§ 11.7) : un texte au trait, par-dessus le
+  // contenu d'une feuille imprimée, mesuré sur le papier, clair dans les
+  // deux thèmes.
+  marque('filigrane', 'filigrane', ['papier']),
 ]);
 
 /** Les textes et leurs fonds, même forme, seuil 4,5 : page, secondaire, bandeau, refus,

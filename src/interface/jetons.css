@@ -33,6 +33,13 @@
    La hachure d'une place à pourvoir peint des traits --couleur-hachure sur le
    fond de la chaise, --couleur-chaise-fond : ce sont ses deux couleurs.
 
+   Le papier est clair quel que soit le thème (§ 11.7) : le bloc du clair
+   porte aussi le sélecteur [data-impression], et le document imprimé de
+   l'aperçu redéclare sur lui-même chaque jeton du clair, à l'écran comme
+   sur la page. Le fond d'une feuille, --couleur-papier, et le contour du
+   filigrane BROUILLON, --couleur-filigrane, ne se peignent que sur ce
+   document : chacun garde la même valeur dans les deux thèmes.
+
    La police de l'interface est la police embarquée, Noto Sans (§ 11.1,
    § 19.4) : deux faces, 400 et 700, dont les fichiers sont ceux de
    src/polices, que la production de la planche embarque aussi. La
@@ -105,7 +112,8 @@ textarea {
 }
 
 :root,
-:root[data-theme='clair'] {
+:root[data-theme='clair'],
+[data-impression] {
   color-scheme: light;
 
   /* Page. */
@@ -156,6 +164,10 @@ textarea {
   --couleur-liste-texte: #1c2128;
   --couleur-echelle: #1c2128;
   --couleur-fantome: #b040f0;
+
+  /* Le document imprimé : le papier, et le contour du filigrane. */
+  --couleur-papier: #ffffff;
+  --couleur-filigrane: #6e6e6e;
 }
 
 :root[data-theme='sombre'] {
@@ -201,4 +213,7 @@ textarea {
   --couleur-liste-texte: #e3e6ea;
   --couleur-echelle: #e3e6ea;
   --couleur-fantome: #b040f0;
+
+  --couleur-papier: #ffffff;
+  --couleur-filigrane: #6e6e6e;
 }

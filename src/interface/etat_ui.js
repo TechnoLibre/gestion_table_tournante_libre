@@ -5,8 +5,9 @@
 // propos », le tour montré, la personne mise en évidence, la proposition
 // demandée au plan, le texte d'un import en attente, les listes de noms, le
 // plein écran, la place sélectionnée, la fiche ouverte, le choix en attente
-// du plan, le refus posé sur une place et l'appartenance collante du
-// formulaire d'ajout. Ce qu'il tient survit au démontage des sections.
+// du plan, le refus posé sur une place, l'appartenance collante du
+// formulaire d'ajout et l'aperçu avant impression. Ce qu'il tient survit au
+// démontage des sections.
 // Regarder n'écrit jamais (§ 8.4) : cet état ne reçoit ni la séance, ni la
 // façade, ni un système de fichiers, et rien de ce qu'il tient ne quitte la
 // mémoire.
@@ -42,6 +43,12 @@ import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
  *           Plan.svelte montre sur la place (§ 5.9)
  * @property {string} appartenance        l'appartenance collante du formulaire d'ajout
  *           des participants : celle du dernier ajout (§ 10.2), '' au départ
+ * @property {null|{vue: 'plan'|'accueil'|'tables', tour: number|'tous', listes: boolean,
+ *            decoupe: 'auto'|'unePage'|'decoupe', parTour: boolean, retour: string}} apercu
+ *           l'aperçu avant impression ouvert (§ 11.7), null fermé : la vue imprimée ; le
+ *           tour du plan, 'tous' pour une vue de la soirée, jamais pour le plan ; les
+ *           listes de noms du plan ; sa découpe en pages ; la feuille par table, une
+ *           par tour ou la soirée en colonnes ; la section où l'aperçu se referme
  */
 
 // L'état de navigation d'un événement qui s'ouvre, panneau « À propos »
@@ -59,6 +66,22 @@ const DEPART = Object.freeze({
   choix: null,
   pose: null,
   appartenance: '',
+  apercu: null,
+});
+
+/** Les vues que l'aperçu imprime (§ 11.7). */
+export const VUES_IMPRESSION = Object.freeze(['plan', 'accueil', 'tables']);
+
+/** Les découpes du plan imprimé, celles de decouperPlan (src/geometrie/pages.js). */
+export const DECOUPES = Object.freeze(['auto', 'unePage', 'decoupe']);
+
+// Le domaine de chaque réglage de l'aperçu que reglerApercu change.
+const REGLAGES_APERCU = Object.freeze({
+  vue: (v) => VUES_IMPRESSION.includes(v),
+  tour: (v) => v === 'tous' || entierPositif(v),
+  listes: (v) => typeof v === 'boolean',
+  decoupe: (v) => DECOUPES.includes(v),
+  parTour: (v) => typeof v === 'boolean',
 });
 
 const GENRES_CHOIX = new Set(['personne', 'reservation']);
@@ -70,6 +93,23 @@ const entierPositif = (n) => Number.isInteger(n) && n >= 1;
 // entier positif ou null.
 const estPlace = (place) =>
   place !== null && typeof place === 'object' && entierPositif(place.table) && (place.siege === null || entierPositif(place.siege));
+
+// L'aperçu que donnent les changements reçus sur courant, figé ; RangeError
+// pour un réglage inconnu ou hors de son domaine, et pour le plan à « tous » :
+// le plan s'imprime tour par tour.
+function apercuValide(courant, changements) {
+  if (changements === null || typeof changements !== 'object') {
+    throw new RangeError(`aperçu : réglages attendus, reçu ${String(changements)}`);
+  }
+  for (const [nom, valeur] of Object.entries(changements)) {
+    if (!Object.hasOwn(REGLAGES_APERCU, nom) || !REGLAGES_APERCU[nom](valeur)) {
+      throw new RangeError(`aperçu : ${nom} hors du domaine, reçu ${JSON.stringify(valeur)}`);
+    }
+  }
+  const suivant = { ...courant, ...changements };
+  if (suivant.vue === 'plan' && suivant.tour === 'tous') throw new RangeError('aperçu : le plan s’imprime à un tour, non à « tous »');
+  return Object.freeze(suivant);
+}
 
 // Le choix du contrat, figé ; RangeError hors du contrat.
 function choixValide(choix) {
@@ -103,7 +143,8 @@ function choixValide(choix) {
  *   prendreImport: () => null|{texte: string, origine: string},
  *   basculerListes: Function, basculerPleinEcran: Function,
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
- *   poserSurPlace: Function, garderAppartenance: Function}}
+ *   poserSurPlace: Function, garderAppartenance: Function,
+ *   ouvrirApercu: Function, reglerApercu: Function, fermerApercu: Function}}
  */
 export function creerEtatUi() {
   let etat = Object.freeze({ ...DEPART, apropos: false });
@@ -202,6 +243,30 @@ export function creerEtatUi() {
     garderAppartenance(texte) {
       if (typeof texte !== 'string') throw new RangeError(`appartenance : chaîne attendue, reçu ${String(texte)}`);
       changer({ appartenance: texte });
+    },
+    /** Ouvre l'aperçu avant impression sur la vue et le tour reçus : les
+     *  listes du plan telles que l'écran les montre, la découpe proposée par
+     *  défaut, la feuille par table couvrant la soirée ; la section courante
+     *  est celle où il se refermera. RangeError hors du domaine
+     *  (reglerApercu), sans rien changer. */
+    ouvrirApercu(demande) {
+      if (demande === null || typeof demande !== 'object' || !Object.hasOwn(demande, 'vue') || !Object.hasOwn(demande, 'tour')) {
+        throw new RangeError(`aperçu : { vue, tour } attendu, reçu ${JSON.stringify(demande)}`);
+      }
+      const depart = { vue: 'plan', tour: 1, listes: etat.listes, decoupe: 'auto', parTour: false, retour: etat.section };
+      changer({ apercu: apercuValide(depart, { vue: demande.vue, tour: demande.tour }) });
+    },
+    /** Change les réglages de l'aperçu ouvert — vue, tour, listes, decoupe,
+     *  parTour — chacun dans son domaine ; RangeError hors de lui, pour un
+     *  autre nom, ou sans aperçu ouvert, sans rien changer. */
+    reglerApercu(changements) {
+      if (etat.apercu === null) throw new RangeError('aperçu : aucun aperçu ouvert');
+      changer({ apercu: apercuValide(etat.apercu, changements) });
+    },
+    /** Ferme l'aperçu et rend la section d'où il s'est ouvert. */
+    fermerApercu() {
+      if (etat.apercu === null) return;
+      changer({ apercu: null, section: etat.apercu.retour });
     },
     /** Ouvre la fiche de la personne id, entier positif, dans la section des
      *  participants ; null referme la fiche, la section reste. RangeError

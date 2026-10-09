@@ -52,6 +52,17 @@ function hex(valeur) {
 const enHex = (c) => `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 
 describe('lireBlocs et lireJetons', () => {
+  test('le bloc du clair porte aussi [data-impression] : ses couleurs se lisent comme celles du clair, le papier imprimé les redéclare', () => {
+    const css = [
+      ":root, :root[data-theme='clair'], [data-impression] { --couleur-a: #ffffff; --couleur-b: #102030; }",
+      ':root[data-theme="sombre"] { --couleur-a: #000000; --couleur-b: #a0b0c0; }',
+    ].join('\n');
+    assert.deepEqual(lireBlocs(css)[0].selecteurs, [':root', ":root[data-theme='clair']", '[data-impression]']);
+    assert.deepEqual([...lireJetons(css, 'clair')], [['--couleur-a', [255, 255, 255, 1]], ['--couleur-b', [16, 32, 48, 1]]]);
+    assert.deepEqual(lireJetons(css, null), lireJetons(css, 'clair'));
+    assert.deepEqual([...lireJetons(css, 'sombre')], [['--couleur-a', [0, 0, 0, 1]], ['--couleur-b', [160, 176, 192, 1]]]);
+  });
+
   test('lit les blocs dans leur ordre, commentaires ôtés, et les couleurs de chaque thème', () => {
     const css = [
       "/* { un commentaire n'ouvre aucun bloc } */",
@@ -122,6 +133,17 @@ describe('lireBlocs et lireJetons', () => {
         assert.throws(() => lireJetons(css, theme), /sélecteur/, `${theme} : ${intrus}`);
       }
       assert.throws(() => lireJetons(`${JETONS}\n${intrus}`, 'sombre'), /sélecteur/, intrus);
+    }
+    // Le document imprimé ne prend que les jetons du clair : [data-impression]
+    // seul, ou posé sur le bloc du sombre, masquerait le jeton lu.
+    for (const intrus of [
+      '[data-impression] { --couleur-sol: #ff8a80; }',
+      ":root[data-theme='sombre'], [data-impression] { --couleur-sol: #ff8a80; --couleur-focus: #e8e8e8; }",
+      ':root, [data-impression] { --couleur-sol: #ff8a80; }',
+    ]) {
+      for (const theme of ['clair', 'sombre', null]) {
+        assert.throws(() => lireJetons(`${base}\n${intrus}`, theme), /sélecteur/, `${theme} : ${intrus}`);
+      }
     }
     // Un autre sélecteur sans couleur n'est pas lu, et ne lève pas.
     assert.deepEqual(lireJetons(`${base}\n.plan { --espace-1: 1rem; }`, 'clair'), lireJetons(base, 'clair'));
@@ -376,6 +398,13 @@ describe('jetons.css', () => {
       blocs().flatMap((b) => [...b.declarations].filter(([n]) => n.startsWith('--taille-')).map(([, v]) => v)),
     );
     assert.ok(tailles.size >= 3, `${tailles.size} tailles distinctes`);
+  });
+
+  test('le document imprimé prend les jetons du clair dans les deux thèmes (§ 11.7) : le bloc du clair porte [data-impression], aucun autre', () => {
+    const avecPapier = blocs().filter((b) => b.selecteurs.includes('[data-impression]'));
+    assert.equal(avecPapier.length, 1);
+    assert.ok(avecPapier[0].selecteurs.includes(":root[data-theme='clair']"));
+    assert.ok([...avecPapier[0].declarations.keys()].some((nom) => nom.startsWith('--couleur-')));
   });
 
   test('deux thèmes posés par data-theme, de mêmes jetons de couleur ; sans attribut, le clair ; aucune préférence du système lue', () => {

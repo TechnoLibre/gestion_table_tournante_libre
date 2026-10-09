@@ -24,6 +24,7 @@ const DEPART = {
   choix: null,
   pose: null,
   appartenance: '',
+  apercu: null,
 };
 
 // Un état et le relevé de ce que reçoit son abonné.
@@ -306,5 +307,99 @@ describe('état de navigation : le choix en attente (§ 5.8, § 7.1)', () => {
     assert.deepEqual(ui.etat().pose, pose, 'la même section');
     ui.allerA('tables');
     assert.equal(ui.etat().pose, null, 'une autre section');
+  });
+});
+
+describe('état de navigation : l’aperçu avant impression (§ 11.7)', () => {
+  test('ouvrirApercu ouvre la vue demandée au tour demandé, les listes du plan, la découpe proposée, la soirée en colonnes, et retient la section d’origine ; l’état est figé', () => {
+    const ui = creerEtatUi();
+    ui.allerA('propositions');
+    ui.basculerListes();
+    ui.ouvrirApercu({ vue: 'plan', tour: 2 });
+    assert.deepEqual(ui.etat(), {
+      ...DEPART,
+      section: 'propositions',
+      listes: false,
+      apercu: { vue: 'plan', tour: 2, listes: false, decoupe: 'auto', parTour: false, retour: 'propositions' },
+    });
+    assert.ok(Object.isFrozen(ui.etat().apercu));
+    ui.ouvrirApercu({ vue: 'accueil', tour: 'tous' });
+    assert.deepEqual(ui.etat().apercu, { vue: 'accueil', tour: 'tous', listes: false, decoupe: 'auto', parTour: false, retour: 'propositions' });
+  });
+
+  test('ouvrirApercu refuse une vue inconnue, un tour qui n’est ni un entier positif ni « tous », et « tous » pour le plan, sans rien changer', () => {
+    const ui = creerEtatUi();
+    const avant = ui.etat();
+    const fautes = [
+      { vue: 'badges', tour: 1 },
+      { vue: 'Plan', tour: 1 },
+      { vue: 'plan', tour: 0 },
+      { vue: 'plan', tour: 1.5 },
+      { vue: 'plan', tour: '2' },
+      { vue: 'plan', tour: 'tous' },
+      { vue: 'tables', tour: null },
+      { tour: 1 },
+      null,
+      undefined,
+    ];
+    for (const faute of fautes) assert.throws(() => ui.ouvrirApercu(faute), RangeError, JSON.stringify(faute));
+    assert.equal(ui.etat(), avant);
+  });
+
+  test('reglerApercu change la vue, le tour, les listes, la découpe et la feuille par tour, chacun dans son domaine ; hors de lui, ou sans aperçu ouvert, RangeError sans rien changer', () => {
+    const ui = creerEtatUi();
+    assert.throws(() => ui.reglerApercu({ vue: 'accueil' }), RangeError);
+    ui.ouvrirApercu({ vue: 'plan', tour: 1 });
+    ui.reglerApercu({ tour: 3 });
+    ui.reglerApercu({ listes: false, decoupe: 'unePage' });
+    ui.reglerApercu({ vue: 'tables', parTour: true });
+    assert.deepEqual(ui.etat().apercu, { vue: 'tables', tour: 3, listes: false, decoupe: 'unePage', parTour: true, retour: DEPART.section });
+    assert.ok(Object.isFrozen(ui.etat().apercu));
+    const avant = ui.etat();
+    for (const faute of [
+      { vue: 'badges' },
+      { tour: 0 },
+      { listes: 'oui' },
+      { decoupe: 'deux' },
+      { parTour: 1 },
+      { retour: 'plan' },
+      { inconnu: true },
+      null,
+    ]) {
+      assert.throws(() => ui.reglerApercu(faute), RangeError, JSON.stringify(faute));
+    }
+    ui.reglerApercu({ vue: 'accueil', tour: 'tous' });
+    assert.throws(() => ui.reglerApercu({ vue: 'plan' }), RangeError, 'le plan à « tous »');
+    ui.reglerApercu({ vue: 'plan', tour: 2 });
+    assert.equal(ui.etat().apercu.vue, 'plan');
+    assert.notEqual(ui.etat(), avant);
+  });
+
+  test('fermerApercu ferme l’aperçu et rend la section d’où il s’est ouvert ; fermé, il ne publie rien', () => {
+    const { ui, recus } = suivi();
+    ui.allerA('participants');
+    ui.ouvrirApercu({ vue: 'plan', tour: 1 });
+    ui.fermerApercu();
+    assert.deepEqual(ui.etat(), { ...DEPART, section: 'participants' });
+    const publies = recus.length;
+    ui.fermerApercu();
+    assert.equal(recus.length, publies);
+  });
+
+  test('fermerApercu rend la section d’origine même quand une autre s’est ouverte pendant l’aperçu — par le remède d’un refus', () => {
+    const ui = creerEtatUi();
+    ui.allerA('tables');
+    ui.ouvrirApercu({ vue: 'accueil', tour: 'tous' });
+    ui.allerA('propositions');
+    ui.fermerApercu();
+    assert.equal(ui.etat().section, 'tables');
+    assert.equal(ui.etat().apercu, null);
+  });
+
+  test('reinitialiser ferme l’aperçu : un autre événement s’ouvre sur sa section d’ouverture', () => {
+    const ui = creerEtatUi();
+    ui.ouvrirApercu({ vue: 'tables', tour: 'tous' });
+    ui.reinitialiser();
+    assert.equal(ui.etat().apercu, null);
   });
 });

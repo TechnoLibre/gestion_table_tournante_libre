@@ -28,10 +28,13 @@
   // événement après l'autre, et l'accueil montre chacun dès qu'il arrive.
   //
   // L'écran suit la séance : la liste sans événement ouvert, l'événement
-  // sinon ; le panneau « À propos » les remplace tant qu'il est ouvert. Chaque
-  // ouverture d'un événement remet l'état de navigation à son départ. Le
-  // bandeau, présent sur tout écran, ne défile pas : un écran plus haut que
-  // la fenêtre défile sous lui.
+  // sinon ; le panneau « À propos » les remplace tant qu'il est ouvert, et
+  // l'aperçu avant impression remplace l'événement tant que l'état de
+  // navigation en porte un (§ 11.7). Fermer l'aperçu rend la section d'où il
+  // s'est ouvert et le focus à sa commande « Imprimer… ». Chaque ouverture
+  // d'un événement remet l'état de navigation à son départ. Le bandeau,
+  // présent sur tout écran, ne défile pas : un écran plus haut que la
+  // fenêtre défile sous lui.
   //
   // Le thème part de la propriété themeInitial, ou de la préférence du
   // système lue au montage ; le réglage de l'opérateur le change pour la
@@ -52,6 +55,7 @@
   import { creerPas } from './accueil/chargement.js';
   import Bandeau from './Bandeau.svelte';
   import Evenement from './evenement/Evenement.svelte';
+  import Apercu from './impression/Apercu.svelte';
   import { blocAPropos, provenanceVisible, versionVisible } from './apropos.js';
   import { creerEtatUi } from './etat_ui.js';
   import { TABLES_INTERFACE } from './libelles.js';
@@ -245,6 +249,17 @@
   const version = versionVisible(provenance, produitVersion, t);
   const provenanceAffichee = provenanceVisible(provenance, t);
 
+  // L'élément racine de l'application, où le focus se rend après l'aperçu.
+  let racineApp = $state(null);
+
+  // Ferme l'aperçu : l'événement revient sur la section d'origine, et le
+  // focus sur la commande « Imprimer… » de sa tête.
+  async function fermerApercu() {
+    uiApp.fermerApercu();
+    await tick();
+    racineApp?.querySelector('[data-ecran="evenement"] [data-commande="apercu"]')?.focus();
+  }
+
   // « Liste des événements » : ferme l'événement, sans question ; sous un
   // support rompu, la séance le refuse, et le refus s'affiche à côté de la
   // commande.
@@ -302,7 +317,7 @@
   <title>{titre}</title>
 </svelte:head>
 
-<div class="app">
+<div class="app" bind:this={racineApp}>
   <Bandeau
     etat={etatSeance}
     {version}
@@ -318,6 +333,8 @@
       <APropos {bloc} {pressePapiers} fermer={() => uiApp.fermerApropos()} />
     {:else if etatSeance.evenement === null}
       <Accueil {provenance} version={produitVersion} {demonstrations} {lignes} {resumes} {refusLecture} />
+    {:else if $uiApp.apercu !== null}
+      <Apercu {provenance} version={produitVersion} fermer={fermerApercu} />
     {:else}
       <Evenement />
     {/if}

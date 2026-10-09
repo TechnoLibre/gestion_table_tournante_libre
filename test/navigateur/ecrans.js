@@ -27,6 +27,7 @@ import { rechercher } from '../../src/moteur/recherche.js';
 import { serialiser } from '../../src/stockage/canonique.js';
 import { analyser, capacite, configurationDepuisCharge } from '../../src/stockage/document.js';
 import { SUFFIXES } from '../../src/stockage/noms.js';
+import { FICHIER_REGLAGES, serialiserReglages } from '../../src/stockage/reglages_locaux.js';
 import { VERSION } from '../../src/version.genere.js';
 import urlCasLimites from '../../exemples/participants_cas_limites.csv?url';
 import { pointer, touche } from './entrees.js';
@@ -219,8 +220,8 @@ function avecTours(charge, tours) {
   return suivante;
 }
 
-// La principale, sa proposition retenue, puis le plan bloqué.
-function chargeBloquee() {
+/** La principale, sa proposition retenue, puis le plan bloqué. */
+export function chargeBloquee() {
   const principale = chargePrincipale();
   const charge = executer(principale, 'retenirProposition', { id: principale.propositions[0].id });
   return executer(charge, 'changerEtat', { etat: 'bloque' });
@@ -249,6 +250,14 @@ export const fichierEtat = (charge, base = BASE) => ({
   racine: 'documents',
   chemin: `${base}${SUFFIXES.etat}`,
   texte: serialiser(charge, { revision: 1, produitVersion: VERSION.affichee }),
+});
+
+/** Les réglages locaux de la machine, posés dans les Documents, le
+ *  dossier de travail des épreuves : le papier choisi, aucun cadrage. */
+export const fichierReglages = (papier) => ({
+  racine: 'documents',
+  chemin: FICHIER_REGLAGES,
+  texte: serialiserReglages({ format: 1, papier, cadrages: [] }),
 });
 
 /** Les octets du CSV des cas limites, tels que le fichier les porte. */
@@ -312,6 +321,26 @@ export async function ouvrirEvenement(contexte, charge, { ecriture = false, sect
       return vue?.getAttribute('transform') && m.racine.querySelectorAll('[data-table]').length === charge.tables.length;
     });
   }
+  return m;
+}
+
+/**
+ * Ouvre l'événement de la charge, sur la section donnée, puis l'aperçu
+ * avant impression par la commande « Imprimer… » de sa tête (§ 11.7), et
+ * rend le montage. Le papier de la machine est posé avant le montage dans
+ * les réglages locaux ; null n'en pose aucun, et l'aperçu s'ouvre sur la
+ * question du papier. Avec un papier, l'aperçu rend son document.
+ *
+ * @param {Object} contexte
+ * @param {Object} charge
+ * @param {{papier?: 'A4'|'Lettre'|null, ecriture?: boolean, section?: string, options?: Object}} [reglages]
+ */
+export async function ouvrirApercu(contexte, charge, { papier = 'A4', ecriture = false, section = 'plan', options = {} } = {}) {
+  const fichiers = [...(papier === null ? [] : [fichierReglages(papier)]), ...(options.fichiers ?? [])];
+  const m = await ouvrirEvenement(contexte, charge, { ecriture, section, options: { ...options, fichiers } });
+  await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+  await element(m, '[data-ecran="apercu"]');
+  if (papier !== null) await element(m, '[data-impression] [data-feuille]');
   return m;
 }
 
@@ -763,6 +792,17 @@ export const ECRANS = Object.freeze([
           getComputedStyle(bulle).visibility === 'visible'
         );
       });
+      return m.racine;
+    },
+  },
+  {
+    nom: 'apercu',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // L'aperçu avant impression du plan de la principale, sa proposition
+      // montrée : un brouillon, chaque feuille sous son filigrane.
+      const m = await ouvrirApercu(contexte, chargePrincipale(), { section: 'participants' });
+      await element(m, '[data-impression] [data-filigrane]');
       return m.racine;
     },
   },

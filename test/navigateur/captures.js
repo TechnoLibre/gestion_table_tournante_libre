@@ -152,7 +152,12 @@ export const CHAMPS = 'input:not([type="radio"]):not([type="checkbox"]):not([typ
  * Contrastes des textes rendus sous racine (§ 14.5) : chaque porteur de
  * texte et chaque champ de saisie, son texte indicatif compris, sur le fond
  * peint dessous ; un texte SVG par son fill sur la forme dessous. Un porteur
- * que l'œil ne voit pas — couvert, rogné, de boîte vide — n'est pas mesuré.
+ * que l'œil ne voit pas — couvert, rogné, de boîte vide — n'est pas mesuré,
+ * ni un texte SVG du registre des marques — le filigrane BROUILLON, un texte
+ * au trait —, que releverMarques mesure à 3:1. Les textes du document
+ * imprimé de l'aperçu ([data-impression]) se mesurent, mais n'entrent pas
+ * dans couleurs : le papier est clair dans les deux thèmes (§ 11.7), et
+ * leurs couleurs ne diffèrent pas d'un thème à l'autre.
  * → { fautes, attenuations, couleurs: Map(clé → couleurs), mesures, ratios },
  * ratios : { couleur, fond, ratio } de chaque texte mesuré, le fond le plus
  * défavorable, dans l'ordre des mesures. fenetre vrai : seuls les éléments
@@ -165,6 +170,7 @@ export function releverTextes(racine, { fenetre = false } = {}) {
   const couleurs = new Map();
   const ratios = [];
   let mesures = 0;
+  // cle null : un texte qui ne se compare pas d'un thème à l'autre.
   const mesurer = (cle, nom, couleurDe, fondDe, cible) => {
     let couleur;
     let fonds;
@@ -187,13 +193,14 @@ export function releverTextes(racine, { fenetre = false } = {}) {
     } catch (erreur) {
       fautes.push(`${nom} : ${erreur.message}`);
     }
-    couleurs.set(cle, `${rgb(couleur)} sur ${fonds.map(rgb).join(' + ')}`);
+    if (cle !== null) couleurs.set(cle, `${rgb(couleur)} sur ${fonds.map(rgb).join(' + ')}`);
     for (const a of attenuations(cible)) fautesAttenuation.push(`${nom} : ${designation(a)} ${a.propriete}: ${a.valeur}`);
   };
   for (const [rang, porteur] of porteursDeTexte(racine).entries()) {
     const { element } = porteur;
     if (fenetre && !coupeLaFenetre(element)) continue;
     if (!rendu(element)) continue;
+    if (element instanceof SVGTextContentElement && element.hasAttribute('data-marque')) continue;
     const b = element.getBoundingClientRect();
     if (b.width === 0 || b.height === 0) continue;
     if (!fenetre) amener(element);
@@ -205,7 +212,8 @@ export function releverTextes(racine, { fenetre = false } = {}) {
     if (svg && !centreDansLeDessin(element)) continue;
     const texte = porteur.pseudo === null ? [...element.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join('') : '';
     const nom = `${situer(element)}${porteur.pseudo ?? ''} « ${extrait(texte)} »`;
-    mesurer(`${rang}:${designation(porteur)}`, nom, () => couleurTexte(porteur), () => fondPeintSous(porteur), porteur);
+    const cle = element.closest('[data-impression]') === null ? `${rang}:${designation(porteur)}` : null;
+    mesurer(cle, nom, () => couleurTexte(porteur), () => fondPeintSous(porteur), porteur);
   }
   for (const [rang, champ] of [...racine.querySelectorAll(CHAMPS)].entries()) {
     if (fenetre && !coupeLaFenetre(champ)) continue;
@@ -317,11 +325,18 @@ export function bordsPeints(style) {
  * voisins }. Une forme SVG : son remplissage — une trame se mesure contre
  * les autres couleurs de son motif, un aplat contre ce qui est peint dessous
  * en un point qu'il couvre — ou son trait, contre ce qui est dessous en un
- * point du trait et contre son propre remplissage. Un élément HTML : sa
- * bordure ou son fond, contre ce qui est peint sous son parent, et son fond
- * propre pour une bordure. peinture null : le jeton n'est peint nulle part.
+ * point du trait et contre son propre remplissage. Un texte SVG au trait —
+ * le filigrane — : son contour, contre ce qui est peint sous le centre de sa
+ * boîte. Un élément HTML : sa bordure ou son fond, contre ce qui est peint
+ * sous son parent, et son fond propre pour une bordure. peinture null : le
+ * jeton n'est peint nulle part.
  */
 function voisinage(element, jeton) {
+  if (element instanceof SVGTextContentElement) {
+    const { stroke } = couleursPeintes(element);
+    const trace = Number.parseFloat(getComputedStyle(element).strokeWidth) > 0;
+    return trace && stroke.some((c) => egales(c, jeton)) ? { peinture: 'trait', voisins: fondPeintSous(element) } : { peinture: null, voisins: [] };
+  }
   if (element instanceof SVGGeometryElement) {
     const motif = /^url\(/.test(getComputedStyle(element).fill);
     const { fill, stroke } = couleursPeintes(element);

@@ -17,6 +17,7 @@ import { TABLE as DIAGNOSTIC } from './libelles/diagnostic.js';
 import { TABLE as EVENEMENT } from './libelles/evenement.js';
 import { TABLE as GENERATION } from './libelles/generation.js';
 import { TABLE as IMPORT } from './libelles/import.js';
+import { TABLE as IMPRESSION } from './libelles/impression.js';
 import { TABLE as PARTICIPANTS } from './libelles/participants.js';
 import { TABLE as PLAN } from './libelles/plan.js';
 import { TABLE as PROPOSITIONS } from './libelles/propositions.js';
@@ -32,6 +33,7 @@ export const TABLES_INTERFACE = Object.freeze([
   EVENEMENT,
   GENERATION,
   IMPORT,
+  IMPRESSION,
   PARTICIPANTS,
   PLAN,
   PROPOSITIONS,
