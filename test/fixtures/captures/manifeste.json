@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "pilote": {
+    "navigateur": "chromium",
+    "versionNavigateur": "140.0.7339.16",
+    "mode": "chromium-headless-shell",
+    "facteurEchelle": 1,
+    "cadre": { "largeur": 1366, "hauteur": 700 }
+  },
+  "captures": [
+    {
+      "fichier": "01-premier-ecran",
+      "etape": "1",
+      "source": "navigateur",
+      "graine": null,
+      "cadre": { "largeur": 1366, "hauteur": 700 },
+      "facteurEchelle": 1,
+      "mode": "chromium-headless-shell",
+      "theme": "clair",
+      "instant": "2030-03-14T19:30:00-04:00",
+      "texte": ["Gestion table tournante Libre", "Créer un événement", "Dossier de travail", "C:\\Racine\\Tablees"],
+      "styles": { "clair": [{ "role": "texte", "ratio": 12.6, "seuil": 4.5 }], "sombre": [{ "role": "texte", "ratio": 11.2, "seuil": 4.5 }] },
+      "etat": null,
+      "pdf": null,
+      "image": { "sha256": "27c4b2aa8562382048c2d25b16d00544cc39abb2606c9a637826db75480eb901", "largeur": 1366, "hauteur": 700 },
+      "empreinte": "332e986cf44506d6d29585d312e6af59a490857c5150bda25e4d732b98321ede"
+    },
+    {
+      "fichier": "02-import-apercu",
+      "etape": "2",
+      "source": "navigateur",
+      "graine": null,
+      "cadre": { "largeur": 1366, "hauteur": 700 },
+      "facteurEchelle": 1,
+      "mode": "chromium-headless-shell",
+      "theme": "clair",
+      "instant": "2030-03-14T19:31:00-04:00",
+      "texte": ["Aperçu de l’import", "Encodage : UTF-8", "Séparateur : point-virgule", "Iris Ombrelle", "Club des Merles", "Théo Pervenche", "Grisaille"],
+      "styles": { "clair": [], "sombre": [] },
+      "etat": "8f9c8272621ab35209365aca60702e2f123297e7875b2700d4859d3a70c98d0b",
+      "pdf": null,
+      "image": { "sha256": "84e2c14ed43e0c88461391fd60699be418deeacd9404a44899c5373c4171a564", "largeur": 1366, "hauteur": 700 },
+      "empreinte": "82d4af1b90aa0dc136dec6e407969cf40702b3ad97a83e3bfbf19a9f20d4fbde"
+    }
+  ],
+  "reportees": [{ "fichier": "12-qualite-profil", "etape": "10", "raison": "iteration5" }]
+}
