@@ -124,6 +124,14 @@ describe('classer : les critères et leur ordre (§ 5.7)', () => {
     assert.deepEqual(classer(entrees).ordre, [2, 1]);
   });
 
+  test("le plus grand écart se lit sur toute la liste, non sur sa première valeur non nulle", () => {
+    // Écarts au plafond a priori, personne par personne :
+    // 1 : 1, 3, 0 ; le plus grand 3, la première valeur non nulle 1.
+    // 2 : 2, 2, 2 ; le plus grand 2.
+    const entrees = [proposition(1, { rencontres: [7, 5, 8] }), proposition(2, { rencontres: [6, 6, 6] })];
+    assert.deepEqual(classer(entrees).ordre, [2, 1]);
+  });
+
   test('seules les rencontres répétées que le moteur a choisies comptent (§ 5.4)', () => {
     // 1 : une répétition choisie ; 2 : cinq qu'imposent les réservations.
     const entrees = [proposition(1, { repetees: 1 }), proposition(2, { imposees: 5 })];

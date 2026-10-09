@@ -368,6 +368,23 @@ describe('mesurer', () => {
     });
   });
 
+  test("le minimum d'une population est sa plus petite valeur, où qu'elle se trouve dans l'ordre des personnes", () => {
+    // 1 seul à la table 1 ; 2, 3 et 4 ensemble à la table 2. Le plus petit
+    // nombre de rencontres est celui de la première personne : un minimum
+    // qui retiendrait la dernière valeur lue rendrait 2.
+    const mesures = mesurerPlan({
+      appartenance: [null, null, null, null],
+      capacite: 3,
+      tours: [[[1], [2, 3, 4]]],
+    });
+    assert.deepEqual(mesures.rencontres, [0, 2, 2, 2]);
+    assert.deepEqual(mesures.aggRencontres, {
+      tous: { min: 0, moyenne: 6 / 4, effectif: 4 },
+      mobiles: { min: 0, moyenne: 6 / 4, effectif: 4 },
+      ancres: AUCUN,
+    });
+  });
+
   test('une population vide rend null, jamais 0 ni Infinity', () => {
     const sansAncre = mesurerPlan({ appartenance: PETITE, capacite: 3, tours: PLAN_PARFAIT });
     assert.deepEqual(sansAncre.aggRencontres.ancres, AUCUN);
@@ -521,6 +538,46 @@ describe('mesurer', () => {
     assert.equal(mesures.maxRencontresPaire, R);
     assert.deepEqual(mesures.rencontres, [1, 1]);
     assert.deepEqual(mesures.rencontresRepetees, { choisies: 1, imposees: 0 });
+  });
+
+  test('maxRencontresPaire est le plus grand compte des paires, non celui de la dernière paire réunie', () => {
+    // (1, 2) se réunit aux tours 1 et 2, (2, 3) au seul tour 3. Dans l'ordre
+    // des paires, (2, 3) vient après (1, 2) : le maximum reste 2.
+    const mesures = mesurerPlan({
+      appartenance: [null, null, null],
+      capacite: 2,
+      tours: [
+        [[1, 2], [3]],
+        [[1, 2], [3]],
+        [[1], [2, 3]],
+      ],
+    });
+    assert.deepEqual(mesures.rencontres, [1, 2, 1]);
+    assert.equal(mesures.maxRencontresPaire, 2);
+    assert.deepEqual(mesures.rencontresRepetees, { choisies: 1, imposees: 0 });
+  });
+
+  test("les comptes par paire tiennent dans un Uint16Array jusqu'à 65 535 tours, dans un Uint32Array au-delà", () => {
+    // Deux participants à la même table à chaque tour : le compte de leur
+    // paire vaut R. À R = 65 535, le plus grand compte qu'un Uint16Array
+    // tient, la mémoire des paires reste à deux octets par paire.
+    const deux = (R) =>
+      normaliser({
+        participants: [
+          { id: 1, nom: 'P1', appartenance: null },
+          { id: 2, nom: 'P2', appartenance: null },
+        ],
+        tables: [{ id: 1, numero: 1, capacite: 2 }],
+        tours: R,
+        reservations: [],
+        contraintes: SANS_CONTRAINTE,
+      });
+    const a = parcourirTours(deux(65_535), new Int32Array(2 * 65_535)).parPaire;
+    assert.ok(a instanceof Uint16Array, `${a.constructor.name} à 65 535 tours`);
+    assert.deepEqual(Array.from(a), [65_535]);
+    const b = parcourirTours(deux(65_536), new Int32Array(2 * 65_536)).parPaire;
+    assert.ok(b instanceof Uint32Array, `${b.constructor.name} à 65 536 tours`);
+    assert.deepEqual(Array.from(b), [65_536]);
   });
 
   test('personne à la même table : aucune rencontre, maximum par paire à 0', () => {

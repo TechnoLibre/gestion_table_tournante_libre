@@ -337,6 +337,45 @@ describe('plafonds : valeurs exactes (§ 5.5, § 15)', () => {
     assert.equal(plafondsAPrioriParEnumeration(instance)[p], 27);
   });
 
+  test('le plafond a priori se mémoïse sur la rangée de la personne, et sur elle seule', () => {
+    // Tables d'index 0 et 1 : 8 sièges, v = 7 ; table d'index 2 : 7 sièges,
+    // v = 6. Aucun ancré, 24 participants, 2 tours : n_p = 23, N − 1 = 23.
+    // Les dix premiers ont pour rangée, index par index :
+    //   0 [libre, libre]   1 [1, libre]   2 [1, libre]   3 [libre, libre]
+    //   4 [0, 2]           5 à 7 [libre, libre]          8 [0, libre]
+    //   9 [2, libre]
+    // les suivants sont mobiles. [0, 2] vaut 7 + 6 = 13, [2, libre] 6 + 7 =
+    // 13 ; un tour libre prend une table de 8, et toute autre rangée vaut
+    // 7 + 7 = 14. Les voisins de 4 et de 8 sont posés pour que [0, 2] et
+    // [0, libre] se confondent sous une clé qui lirait, au lieu de la rangée
+    // de la personne, la case de la suivante, celle de la précédente ou une
+    // case d'un autre rang : l'une recevrait alors le plafond de l'autre.
+    const { instance } = forme({
+      capacites: [8, 8, 7],
+      ancres: [0, 0, 0],
+      autres: 24,
+      tours: 2,
+      partiels: [
+        [LIBRE, LIBRE],
+        [1, LIBRE],
+        [1, LIBRE],
+        [LIBRE, LIBRE],
+        [0, 2],
+        [LIBRE, LIBRE],
+        [LIBRE, LIBRE],
+        [LIBRE, LIBRE],
+        [0, LIBRE],
+        [2, LIBRE],
+      ],
+    });
+    const attendu = new Array(24).fill(14);
+    attendu[4] = 13;
+    attendu[9] = 13;
+    assert.deepEqual(instance.ids, suite(1, 24));
+    assert.deepEqual(plafondsAPriori(instance), attendu);
+    assert.deepEqual(plafondsAPrioriParEnumeration(instance), attendu);
+  });
+
   test("une table pleine d'ancrés n'est pas admissible ; un partiellement fixé compte parmi les mobiles", () => {
     // Table d'index 0 : 5 sièges, aucun ancré. Table d'index 1 : 2 sièges,
     // 2 ancrés, pleine. Le partiellement fixé est fixé au tour 1 à la table
@@ -516,6 +555,36 @@ describe("plafond a priori : la programmation dynamique contre l'énumération (
       },
     );
     // N − 1 = 1 borne les deux mobiles.
+    assert.deepEqual(plafondsAPriori(instance), [1, 1]);
+  });
+
+  test("l'énumération visite chaque multiensemble, celui qui répète une table du milieu compris", () => {
+    // Tables d'index 0 et 2 : 2 sièges, un ancré, v = 0 ; table d'index 1 :
+    // 6 sièges, aucun ancré, v = 5. 20 mobiles, 3 tours : n_p = 19. Le seul
+    // meilleur itinéraire d'un mobile passe trois fois par la table 1 :
+    // 5 + 5 + 5 = 15. Tout autre multiensemble vaut au plus 1 ancré + 5 + 5
+    // = 11 : une énumération qui sauterait {1, 1, 1} — en ne ramenant pas
+    // chaque rang qui suit celui qu'elle avance — rendrait 11. Un ancré
+    // tient sa table, 1 siège par tour : 3.
+    const { instance, ancres } = forme({ capacites: [2, 6, 2], ancres: [1, 0, 1], autres: 20, tours: 3 });
+    const attendu = new Array(22).fill(15);
+    for (const [p] of [ancres[0], ancres[2]]) attendu[p] = 3;
+    assert.deepEqual(plafondsAPrioriParEnumeration(instance), attendu);
+    assert.deepEqual(plafondsAPriori(instance), attendu);
+  });
+
+  test("à 299 925 multiensembles, sous la limite, l'énumération répond", () => {
+    // 774 tables admissibles et 2 tours libres : C(775, 2) = 299 925, sous
+    // les 300 000. Le compte avance par 774, puis 774 × 775 / 2 ; un compte
+    // qui partirait de 2, ou d'un autre facteur que A − 1 + i, franchirait
+    // la limite et refuserait à tort. N − 1 = 1 borne les deux mobiles.
+    const { instance } = forme({
+      capacites: Array(774).fill(2),
+      ancres: Array(774).fill(0),
+      autres: 2,
+      tours: 2,
+    });
+    assert.deepEqual(plafondsAPrioriParEnumeration(instance), [1, 1]);
     assert.deepEqual(plafondsAPriori(instance), [1, 1]);
   });
 

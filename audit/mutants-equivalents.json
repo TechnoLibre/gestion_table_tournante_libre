@@ -1,0 +1,246 @@
+[
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:00c7051f9d2508f1:0",
+    "raison": "indicateurs.js, parcourirTours, visites[t] += 2 au lieu de 1 : visites[t] ne se lit que par visites[t] > 0 et se remet à 0 après chaque personne ; un pas de 2 garde le signe, aucune sortie ne change."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:7501d61d37d5e2f8:0",
+    "raison": "indicateurs.js, parcourirTours, reserveeAvant[t] = 2 au lieu de 1 : la marque ne se lit que par reserveeAvant[t] === 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:8d0d1504ba708607:1",
+    "raison": "indicateurs.js, parcourirTours, remise à zéro jusqu'à r <= R : le tour de trop lit la première case de la personne suivante, dont la table vaut 0 dans visites et reserveeAvant sauf si la personne courante l'a visitée, auquel cas la boucle la remet à 0 de toute façon ; pour la dernière personne la case est undefined, et une écriture à l'index undefined pose une propriété hors des éléments du tableau typé, que rien ne lit."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:si-faux:032af4d6881bbbc2:1",
+    "raison": "indicateurs.js, parcourirTours, remise à zéro sans le continue des cases RESERVE : la case −1 écrit visites[−1] et reserveeAvant[−1] ; un index hors des éléments d'un tableau typé n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:corps-si:0bf37874b7af9907:1",
+    "raison": "indicateurs.js, parcourirTours, if (t === RESERVE) {} : même effet que le mutant si-faux du même if — visites[−1] et reserveeAvant[−1] ; un index hors des éléments d'un tableau typé n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:540d595717113ffa:0",
+    "raison": "indicateurs.js, parcourirTours, i <= liste.length : le tour de trop lit a = undefined ; revenu[NaN] et fixe[NaN] sont undefined, rien n'est poussé, et la boucle intérieure part de j = length + 1, au-delà de la liste."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:cde969d8987ccd53:0",
+    "raison": "indicateurs.js, parcourirTours, j <= liste.length : le tour de trop lit b = undefined ; k = rangPaire(N, a, undefined) vaut NaN, parPaire[NaN] et libre[NaN] n'écrivent rien sur un tableau typé, groupe[undefined] n'égale aucun groupe et parPaire[NaN] >= 2 est faux : ni collègue ni revue n'est poussé."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:227d5e978a2c6f6e:0",
+    "raison": "indicateurs.js, lirePaires, vu[p * G + g] = 2 au lieu de 1 : la marque ne se lit que par === 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:344134eea29f143b:0",
+    "raison": "indicateurs.js, lirePaires, a <= N : pour a = N, la boucle intérieure (b de N + 1 à N − 1) ne tourne pas, et k n'avance pas."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:d9e6e8ece30ea311:0",
+    "raison": "indicateurs.js, lirePaires, n >= maxRencontresPaire : à égalité, l'affectation écrit la valeur déjà retenue."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:arithmetique:4883685ba05bd48f:1",
+    "raison": "indicateurs.js, lireTours, nombrePaires = N(N + 1)/2 : ne dimensionne que collegueVu et revueVue, indexés par rangPaire, toujours < N(N − 1)/2 ; un tableau plus long garde les mêmes cases utiles, les autres ne se lisent jamais."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-zero:4883685ba05bd48f:1",
+    "raison": "indicateurs.js, lireTours, nombrePaires = N·N/2 : même raison que N(N + 1)/2 — une longueur au moins égale (tronquée à l'entier par le constructeur du tableau typé) pour des index rangPaire < N(N − 1)/2."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:arithmetique:9befd8786dbb9e8f:1",
+    "raison": "indicateurs.js, lireTours, nombrePaires = 2N(N − 1) : longueur au moins égale à N(N − 1)/2, mêmes cases utiles, les autres jamais lues."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:3ab1dfff408dce14:0",
+    "raison": "indicateurs.js, lireTours, collegueVu[k] = 2 au lieu de 1 : la marque ne se lit que par === 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:nombre-plus-un:b13533cdd354d276:0",
+    "raison": "indicateurs.js, lireTours, revueVue[k] = 2 au lieu de 1 : la marque ne se lit que par === 0."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:c87986ba8e01803b:0",
+    "raison": "indicateurs.js, ajouter, valeur <= min : à égalité, le minimum retenu est la même valeur."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:frontiere:6f32f41253f60a4b:2",
+    "raison": "indicateurs.js, mesurer, p <= N au compte des effectifs : groupe[N] est undefined, différent de SANS_GROUPE ; effectifs[undefined] += 1 pose une propriété « undefined » sur un tableau ordinaire, et parGroupe ne lit que les index 0 à G − 1."
+  },
+  {
+    "cle": "src/moteur/indicateurs.js:si-vrai:fcd03735b3f47217:0",
+    "raison": "indicateurs.js, mesurer, if (true) au compte des effectifs : une personne sans appartenance incrémente effectifs[SANS_GROUPE], soit effectifs[−1], propriété hors des index d'un tableau ordinaire ; parGroupe ne lit que les index 0 à G − 1."
+  },
+  {
+    "cle": "src/moteur/plafond.js:arithmetique:4ff9d4aad2110e83:0",
+    "raison": "plafond.js, borne, min(N + 1, …) : le terme Σ a_t + min(n_p, S) ne dépasse jamais N − 1. Les ancrés des tables distinctes, p exclu, sont au plus k − 1 pour un ancré et k sinon ; n_p vaut n pour un ancré et n − 1 sinon ; la somme vaut au plus k + n − 1 = N − 1 (n = N − k, configuration.js). Le min extérieur ne mord jamais, que sa borne soit N − 1 ou plus."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:4ff9d4aad2110e83:0",
+    "raison": "plafond.js, borne, min(N − 0, …) : même raison que min(N + 1, …) — le terme intérieur vaut au plus N − 1."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "plafond.js, ancrageDe, −2 au lieu de −1 pour un non-ancré : l'ancrage ne sert qu'à t === ancrage, où t est un index de table ≥ 0, et à la clé de signature, où −2 remplace −1 pour tous les non-ancrés à la fois : aucune comparaison ni aucun regroupement ne change."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:66f4a0fe878c0caf:0",
+    "raison": "plafond.js, tablesAdmissibles, t <= T : ancresParTable[T] et capacite[T] sont undefined, undefined < undefined est faux, rien ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:6f32f41253f60a4b:0",
+    "raison": "plafond.js, plafondsRealises, p <= N : la case N × R + r est hors du plan (undefined, différent de RESERVE) ; occupation[NaN] += 1 n'écrit rien sur un Int32Array."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:f99905fb09a97ec2:0",
+    "raison": "plafond.js, plafondsRealises, if (true) : une case RESERVE (−1) écrit occupation[−R + r], index négatif puisque r < R ; un index hors des éléments d'un tableau typé n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:4e2d29d60a734ece:0",
+    "raison": "plafond.js, signature, chaque case poussée, LIBRE comprise : le nombre de cases LIBRE vaut R moins le nombre de tours fixés, que le multiensemble des tables fixées donne déjà ; deux clés sont égales sous le mutant si et seulement si elles le sont sans lui."
+  },
+  {
+    "cle": "src/moteur/plafond.js:arithmetique:1e3e1be34f22da4b:0",
+    "raison": "plafond.js, signature, tri par x + y : le tri ne sert qu'à rendre la clé indépendante de l'ordre des tours. Un ordre faux peut séparer deux rangées de même multiensemble en deux clés, jamais réunir deux multiensembles distincts — la clé garde ses éléments — : la valeur mémoïsée reste exacte, seul le partage se perd."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:d0a020f0a45907d8:0",
+    "raison": "plafond.js, maximiser, vMax part de 1 : vMax ne sert qu'à W, qui grandit ou reste. Tout W' ≥ W rend le même plafond : sans écrêtage (W' ≥ f·vMax) la programmation dynamique est exacte, et un écrêtage à W' ≥ cap ne fond que des états où min(n_p, sieges0 + w) vaut déjà n_p."
+  },
+  {
+    "cle": "src/moteur/plafond.js:min-max:921cce52c896cad6:0",
+    "raison": "plafond.js, maximiser, W = max(cap, f·vMax) : W grandit ou reste ; même raison que vMax partant de 1 — tout W' ≥ W rend le même plafond."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:6aaa76d38a359d8b:0",
+    "raison": "plafond.js, maximiser, cap = max(1, n_p − sieges0) : W grandit ou reste ; tout W' ≥ W rend le même plafond (voir vMax partant de 1)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:arithmetique:bf9f37f58ec637aa:0",
+    "raison": "plafond.js, maximiser, cap = max(0, n_p + sieges0) : sieges0 ≥ 0 (v ≥ 0 pour toute table qu'un plan valide fixe), donc W grandit ou reste ; tout W' ≥ W rend le même plafond (voir vMax partant de 1)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:0bde1efec9ee24ca:0",
+    "raison": "plafond.js, maximiser, largeur = W + 2 : une colonne de plus par rangée, jamais écrite (cible ≤ W) ni lue (w ≤ W) ; chaque état garde une case distincte."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:6a44835bbd054679:0",
+    "raison": "plafond.js, maximiser, (f + 2) × largeur cases : une rangée de plus en fin de tableau, jamais lue ni écrite (s + m ≤ f)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:1bad6b8cf97131fc:1",
+    "raison": "plafond.js, maximiser, fill(−2) : le marqueur d'état inatteignable ne se lit que par < 0 et >= 0, et tout atteint + gain ≥ 0 le dépasse ; −2 se comporte comme −1."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:ebba58ec39728177:0",
+    "raison": "plafond.js, maximiser, s <= f : à s = f, la boucle sur m (s + m ≤ f) ne tourne pas."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:f0a78f7a10078a9f:0",
+    "raison": "plafond.js, maximiser, atteint + gain >= suivant[cible] : à égalité, l'affectation écrit la valeur déjà présente."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:1bad6b8cf97131fc:2",
+    "raison": "plafond.js, maximiser, plafond part de −2 : l'état (f, W) est toujours atteint — la table de plus grand v prise f fois — avec une somme d'ancrés ≥ 0, et sa borne vaut au moins 0 ; le maximum ne dépend pas de la valeur initiale, pourvu qu'elle ne dépasse pas 0."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:1bad6b8cf97131fc:2",
+    "raison": "plafond.js, maximiser, plafond part de −0 : même raison que −2 — un état atteint donne une borne x ≥ 0, et Math.max(−0, x) = x."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:717790d7ce1ce378:0",
+    "raison": "plafond.js, maximiser, if (true) sur ajout >= 0 : un état inatteignable porte −1, soit ancres0 − 1, à un w ≤ W ; l'état (f, W) est atteint avec une somme ≥ 0, et la borne, croissante en ses deux termes, y vaut au moins autant : un état inatteignable ne l'emporte jamais."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:8d0d1504ba708607:4",
+    "raison": "plafond.js, enumerer, r <= R : itineraire[R] est undefined, qui n'égale pas LIBRE ; aucun tour libre ne s'ajoute."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:1bad6b8cf97131fc:3",
+    "raison": "plafond.js, enumerer, plafond part de −2 : au moins un itinéraire s'évalue (f > 0 et A > 0), et son plafond est ≥ 0 ; la valeur initiale ne l'emporte jamais."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:1bad6b8cf97131fc:3",
+    "raison": "plafond.js, enumerer, plafond part de −0 : au moins un itinéraire s'évalue, de plafond x ≥ 0, et Math.max(−0, x) = x."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:8f48d3d06744671e:0",
+    "raison": "plafond.js, enumerer, i <= f : libres[f] est undefined ; itineraire[undefined] = … pose une propriété hors des index de l'Int32Array, que plafondItineraire ne lit pas (il lit length et les index 0 à R − 1)."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-zero:3cdd668f03bae9c9:0",
+    "raison": "plafond.js, enumerer, j = i + 0 : le premier tour écrit choix[i] = choix[i], sans effet ; les tours suivants sont ceux du code."
+  },
+  {
+    "cle": "src/moteur/plafond.js:frontiere:2ad7eaa66ad4393a:0",
+    "raison": "plafond.js, enumerer, j <= f : choix[f] est hors d'un Int32Array de f cases ; un index hors des éléments d'un tableau typé n'écrit rien."
+  },
+  {
+    "cle": "src/moteur/plafond.js:arithmetique:c621ca71e6b7f974:6",
+    "raison": "plafond.js, plafondsAPrioriParEnumeration, clé subarray(p / R, …) : l'index de début se tronque, et la clé devient une tranche qui finit par la rangée de p. Pour R ≥ 2 sa longueur, (p + 1)R − ⌊p/R⌋, croît strictement avec p : aucune clé n'est partagée, chaque plafond se calcule et reste exact ; pour R = 1, la tranche est la rangée même."
+  },
+  {
+    "cle": "src/moteur/plafond.js:nombre-plus-un:722cded1530bd637:1",
+    "raison": "plafond.js, plafondsAPrioriParEnumeration, clé subarray(pR, (p + 2)R) : la clé ajoute la rangée suivante (rien pour la dernière personne, dont la clé a R cases contre 2R) ; deux clés égales ont même longueur et même début, donc même rangée : le regroupement se fait plus fin, jamais plus large."
+  },
+  {
+    "cle": "src/moteur/plafond.js:si-vrai:b5e28aed44dacc4e:1",
+    "raison": "plafond.js, plafondsAPrioriParEnumeration, if (true) : le plafond se recalcule pour chaque personne au lieu d'être repris de sa rangée ; même valeur, seule la mémoïsation de l'oracle se perd, et l'oracle n'a pas de budget de temps."
+  },
+  {
+    "cle": "src/moteur/classement.js:frontiere:d2e0232a8a610afd:0",
+    "raison": "classement.js, plusGrand, valeur >= plus : à égalité, l'affectation écrit la valeur déjà retenue."
+  },
+  {
+    "cle": "src/moteur/classement.js:frontiere:6d8294f499162f5c:0",
+    "raison": "classement.js, comparerCles, i <= a.length : a[length] et b[length] sont tous deux undefined, donc égaux ; la boucle finit et rend 0, comme sans le tour de trop."
+  },
+  {
+    "cle": "src/moteur/classement.js:frontiere:d5d8d6548f2d9d52:0",
+    "raison": "classement.js, comparerCles, a[i] <= b[i] sous a[i] !== b[i] : pour deux nombres différents, <= et < coïncident. Une clé ne mêle jamais null et nombre : le premier critère vaut null pour une liste d'écarts vide, et toutes les entrées ont des listes de même longueur (exigerMemeTaille), toutes vides ou aucune."
+  },
+  {
+    "cle": "src/moteur/classement.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "classement.js, comparerCles, −2 au lieu de −1 : le résultat ne se lit que par son signe, dans sort et dans le || du départage par identifiant."
+  },
+  {
+    "cle": "src/moteur/classement.js:nombre-plus-un:394f51f11873175b:0",
+    "raison": "classement.js, comparerCles, 2 au lieu de 1 : le résultat ne se lit que par son signe, dans sort et dans le || du départage par identifiant."
+  },
+  {
+    "cle": "src/moteur/manque.js:frontiere:616dbb8c2f18776c:0",
+    "raison": "manque.js, plusGrand, valeur >= cumul : à égalité, le cumul retenu est la même valeur."
+  },
+  {
+    "cle": "src/moteur/manque.js:arithmetique:ebfa5f19c5ac6881:0",
+    "raison": "manque.js, profilManque, départage a.id + b.id : à manque et plafond réalisé égaux, le comparateur rend un nombre positif. Le tri de V8 ne lit que « < 0 » et est stable : un positif s'y lit comme 0, et l'ordre reçu reste, celui de instance.ids, que normaliser trie par identifiant croissant et sans doublon — l'ordre de a.id − b.id. Une liste reçue dans un autre ordre ne peut pas se construire : profilManque parcourt instance.ids."
+  },
+  {
+    "cle": "src/moteur/manque.js:frontiere:a42a37da6acfc1b0:0",
+    "raison": "manque.js, comparerProfils, difference <= 0 : la ligne ne s'atteint que pour difference !== 0, où <= 0 et < 0 coïncident."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:a42a37da6acfc1b0:0",
+    "raison": "manque.js, comparerProfils, difference < 1 : un manque est un entier (plafond réalisé − rencontres, deux comptes), et la ligne ne s'atteint que pour difference !== 0 : < 1 et < 0 coïncident."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:1bad6b8cf97131fc:0",
+    "raison": "manque.js, comparerProfils, signeRang = −2 au lieu de −1 : signeRang ne se lit que par < 0 et par comparaison à signe, qui reçoit les mêmes valeurs ; signe ne se rend pas."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:499febce3e9d753b:0",
+    "raison": "manque.js, comparerProfils, signeRang = 2 au lieu de 1 : signeRang ne se lit que par < 0 et par comparaison à signe, qui reçoit les mêmes valeurs ; signe ne se rend pas."
+  },
+  {
+    "cle": "src/moteur/manque.js:frontiere:09493d576cddf072:0",
+    "raison": "manque.js, comparerProfils, signeRang <= 0 : signeRang vaut −1 ou 1, jamais 0."
+  },
+  {
+    "cle": "src/moteur/manque.js:nombre-plus-un:09493d576cddf072:0",
+    "raison": "manque.js, comparerProfils, signeRang < 1 : signeRang vaut −1 ou 1 ; < 1 et < 0 coïncident."
+  },
+  {
+    "cle": "src/moteur/manque.js:si-vrai:3f2ec15cfbc2d410:0",
+    "raison": "manque.js, comparerProfils, bascule posée à chaque changement : rangBascule ne la rend que pour changements === 1, où la première et la dernière affectation sont la même."
+  }
+]
