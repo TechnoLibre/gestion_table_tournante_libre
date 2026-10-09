@@ -5,11 +5,16 @@
 // programmation dynamique et de l'énumération sur une grille plus large que
 // celle de la série node, jusqu'à 8 tables et 5 tours ; la forme de la grande
 // démonstration et sa variante, arbitrées par l'énumération ; la limite de
-// l'énumération à sa frontière exacte.
+// l'énumération à sa frontière exacte ; le coût du plafond a priori et du
+// diagnostic sur la grande démonstration, sa variante et la configuration
+// pessimiste, chacun sous un seuil tiré de sa référence (§ 17, point 4).
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
+import { configurationPessimiste, FORME_PESSIMISTE } from '../../test/fixtures/banc/pessimiste.js';
 import { describe, test } from '../../test/lanceur.js';
+import { CATALOGUE } from '../demo/catalogue.js';
 import { LIBRE, STATUT, normaliser } from './configuration.js';
+import { diagnostiquer } from './diagnostic.js';
 import { ErreurConfiguration } from './erreurs.js';
 import { plafondsAPriori, plafondsAPrioriParEnumeration } from './plafond.js';
 
@@ -196,4 +201,134 @@ describe("plafond a priori : la programmation dynamique contre l'énumération, 
       (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'ENUMERATION_TROP_GRANDE',
     );
   });
+});
+
+// Le coût du plafond a priori (§ 17, point 4). L'application le calcule à
+// chaque évaluation (src/application/evaluation.js) et diagnostiquer le
+// rappelle dans ses sondes, dans le fil de l'interface : ces épreuves
+// empêchent une régression de rendre nécessaire le chemin « inconnu » que le
+// moteur garde (§ 12.10.9, § 5.7). Le relevé de la mesure est celui du banc
+// (scripts/banc/plafond.js) ; ici, une garde.
+//
+// L'échantillonnage suit celui de src/stockage/depot.long.test.js : après un
+// appel de chauffe, ESSAIS appels mesurés, puis d'autres tant que le plus
+// court dépasse le seuil, jusqu'à ESSAIS_AU_PLUS appels ou la fin de
+// FENETRE_MESURE_MS, ce qui vient d'abord. Le seuil porte sur le plus court :
+// le minimum écarte ce qu'une machine occupée ajoute à un appel, une
+// régression allonge chacun.
+const ESSAIS = 5;
+const ESSAIS_AU_PLUS = 25;
+const FENETRE_MESURE_MS = 10_000;
+
+// Les références, en millisecondes, par configuration : le plus court des ESSAIS appels que
+// mesurent ces épreuves, le fichier lancé seul, le plus grand de plusieurs
+// lancements arrondi au-dessus à deux chiffres significatifs, sur un
+// processeur x86-64 de bureau de génération Zen 3, seize cœurs virtuels sous
+// KVM, sous Linux et Node 26. plafonds mesure plafondsAPriori sur l'instance
+// normalisée ; diagnostic, diagnostiquer sur la configuration, normalisation
+// et sondes comprises.
+//
+// MARGE, le facteur qui tire chaque seuil de sa référence, couvre quatre
+// séries node-long lancées ensemble sur la machine des références, comme
+// celle de depot.long.test.js. Elle reste assez basse pour que retirer la
+// mémoïsation par signature de plafondsAPriori dépasse les seuils de la
+// grande démonstration et de sa variante, où des centaines de personnes
+// partagent une signature. La pessimiste n'a que des signatures distinctes :
+// la mémoïsation n'y épargne rien, et son seuil garde la programmation
+// dynamique elle-même, 260 fois sur 8 tours libres.
+//
+// Propriétaire (§ 14.1) : la série node-long, où ces épreuves relèvent la
+// mesure à chaque exécution et la nomment quand elle dépasse son seuil.
+const REFERENCES_MS = Object.freeze([
+  Object.freeze({ cle: 'grande', plafonds: 0.19, diagnostic: 1.7 }),
+  Object.freeze({ cle: 'grande-sans-exception', plafonds: 0.085, diagnostic: 0.94 }),
+  Object.freeze({ cle: 'pessimiste', plafonds: 13, diagnostic: 8.8 }),
+]);
+const MARGE = 4;
+
+const croissant = (a, b) => a - b;
+const ms = (duree) => `${duree.toFixed(3).replace('.', ',')} ms`;
+
+// La mesure échantillonnée d'un appel : faire s'exécute une fois pour
+// chauffer, puis ESSAIS fois mesuré, puis tant que le plus court dépasse
+// seuil, jusqu'à ESSAIS_AU_PLUS mesures ou la fin de FENETRE_MESURE_MS,
+// comptée depuis la première. Rend les durées, dans l'ordre des appels, et
+// ce qui a clos une mesure restée au-delà du seuil.
+function mesurer(faire, seuil) {
+  faire();
+  const durees = [];
+  const debut = performance.now();
+  const ouverte = () => performance.now() - debut < FENETRE_MESURE_MS;
+  while (durees.length < ESSAIS || (Math.min(...durees) > seuil && durees.length < ESSAIS_AU_PLUS && ouverte())) {
+    const avant = performance.now();
+    faire();
+    durees.push(performance.now() - avant);
+  }
+  const arret =
+    durees.length >= ESSAIS_AU_PLUS
+      ? `plafond de ${ESSAIS_AU_PLUS} mesures atteint`
+      : `fenêtre de ${FENETRE_MESURE_MS / 1000} s écoulée`;
+  return { durees, arret };
+}
+
+// Le message d'un seuil dépassé : le minimum, le nombre de mesures, leur
+// médiane et la plus longue, ce qui a clos la mesure, le seuil et la
+// référence dont MARGE le tire.
+function depasse(quoi, { durees, arret }, seuil, reference) {
+  const triees = [...durees].sort(croissant);
+  return (
+    `${quoi} prend ${ms(triees[0])} au minimum de ${durees.length} mesures ` +
+    `(médiane ${ms(triees[Math.floor((triees.length - 1) / 2)])}, la plus longue ${ms(triees.at(-1))} ; ` +
+    `${arret}), au-delà du seuil de ${ms(seuil)} (§ 17, point 4) : référence ${ms(reference)}, MARGE ${MARGE}`
+  );
+}
+
+// La configuration de clé donnée : une démonstration du catalogue, ou la
+// pessimiste.
+function configurationDe(cle) {
+  if (cle === 'pessimiste') return configurationPessimiste();
+  return CATALOGUE.find((entree) => entree.cle === cle).construire();
+}
+
+describe("plafond a priori : le coût, sous un seuil tiré d'une référence (§ 17, point 4)", () => {
+  test('la configuration pessimiste : 260 personnes sur 33 tables de 8 et 10 tours, deux tours fixés chacune, 260 signatures distinctes', () => {
+    const instance = normaliser(configurationPessimiste());
+    assert.deepEqual(
+      { N: instance.N, T: instance.T, R: instance.R },
+      { N: FORME_PESSIMISTE.personnes, T: FORME_PESSIMISTE.tables, R: FORME_PESSIMISTE.tours },
+    );
+    assert.deepEqual([...instance.capacite], Array(FORME_PESSIMISTE.tables).fill(FORME_PESSIMISTE.capacite));
+    // La signature est le statut, l'ancrage et le multiensemble des tables
+    // fixées : sans ancré, chaque personne partiellement fixée, des
+    // multiensembles distincts font des signatures distinctes.
+    assert.equal(instance.k, 0);
+    const multiensembles = new Set();
+    for (let p = 0; p < instance.N; p += 1) {
+      assert.equal(instance.statut[p], STATUT.PARTIELLEMENT_FIXE);
+      const fixees = [...instance.fixe.subarray(p * instance.R, (p + 1) * instance.R)].filter((t) => t !== LIBRE);
+      assert.equal(fixees.length, 2);
+      multiensembles.add(fixees.sort(croissant).join(','));
+    }
+    assert.equal(multiensembles.size, FORME_PESSIMISTE.personnes);
+  });
+
+  for (const reference of REFERENCES_MS) {
+    const { cle } = reference;
+    const seuilPlafonds = reference.plafonds * MARGE;
+    const seuilDiagnostic = reference.diagnostic * MARGE;
+    test(`${cle} : plafondsAPriori en au plus ${ms(seuilPlafonds)}, diagnostiquer en au plus ${ms(seuilDiagnostic)}, chacun au minimum de ${ESSAIS} à ${ESSAIS_AU_PLUS} mesures après un appel de chauffe`, () => {
+      const configuration = configurationDe(cle);
+      const instance = normaliser(configuration);
+      const plafonds = mesurer(() => plafondsAPriori(instance), seuilPlafonds);
+      const diagnostic = mesurer(() => diagnostiquer(configuration), seuilDiagnostic);
+      assert.ok(
+        Math.min(...plafonds.durees) <= seuilPlafonds,
+        depasse(`plafondsAPriori sur ${cle}`, plafonds, seuilPlafonds, reference.plafonds),
+      );
+      assert.ok(
+        Math.min(...diagnostic.durees) <= seuilDiagnostic,
+        depasse(`diagnostiquer sur ${cle}`, diagnostic, seuilDiagnostic, reference.diagnostic),
+      );
+    });
+  }
 });
