@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
+import { constante } from '../geometrie/constantes.js';
 import { normaliser } from '../moteur/configuration.js';
 import { ErreurAnnulee as ErreurAnnuleeDuMoteur, ErreurConfiguration } from '../moteur/erreurs.js';
 import { rechercher, regenerer } from '../moteur/recherche.js';
@@ -33,6 +34,7 @@ import {
   creerControleurGeneration,
   coeursDe,
   creerExecuteurDirect,
+  ralentissement,
   versErreurGeneration,
 } from './generation.js';
 import { brancherTravailleur } from './generation_travailleur.js';
@@ -173,8 +175,17 @@ async function deposer(fs, charge) {
 }
 
 // Une séance sur les charges données, la première ouverte — en écriture
-// sauf ecriture faux — et un contrôleur sur un exécuteur espionné.
-async function monter({ charges, executeur = creerExecuteurDirect(), ecriture = true, fs = creerFichiersSimules(), disque = true } = {}) {
+// sauf ecriture faux — et un contrôleur sur un exécuteur espionné ;
+// lireConstante, quand il est donné, remplace la lecture du registre des
+// constantes par le contrôleur.
+async function monter({
+  charges,
+  executeur = creerExecuteurDirect(),
+  ecriture = true,
+  fs = creerFichiersSimules(),
+  disque = true,
+  lireConstante,
+} = {}) {
   fs.deposerDossier('documents');
   if (disque) for (const charge of charges) await deposer(fs, charge);
   const horloge = creerHorlogePilotee();
@@ -192,7 +203,13 @@ async function monter({ charges, executeur = creerExecuteurDirect(), ecriture = 
     annuler: horloge.annuler,
   });
   const espion = espionner(executeur);
-  const controleur = creerControleurGeneration({ seance, executeur: espion, horloge, produitVersion: V1 });
+  const controleur = creerControleurGeneration({
+    seance,
+    executeur: espion,
+    horloge,
+    produitVersion: V1,
+    ...(lireConstante === undefined ? {} : { constante: lireConstante }),
+  });
   const base = charges[0].evenement.nom;
   await seance.ouvrir(base);
   if (ecriture) await seance.passerEnEcriture();
@@ -237,6 +254,14 @@ const ids = (charge) => charge.propositions.map(({ id }) => id);
 const COURT = { graine: 1, nombre: 1, arret: 50, historique: 1000 };
 // Le réglage des cœurs d'un contrôleur dont l'exécuteur n'en annonce pas.
 const UN_COEUR = Object.freeze({ automatique: true, manuel: 1, disponibles: 1, nombre: 1 });
+// Le ralentissement d'un cœur quand tous les processeurs logiques
+// travaillent, tel que le registre le porte (§ 5.10, Q14).
+const RHO = constante('RALENTISSEMENT_PLEINE_CHARGE');
+// Une lecture du registre où la constante du ralentissement vaut rho, les
+// autres celles du registre ; un objet { rho } se lit à chaque appel, et
+// l'épreuve le change en cours de route.
+const lireAvec = (rho) => (nom) =>
+  nom === 'RALENTISSEMENT_PLEINE_CHARGE' ? (typeof rho === 'number' ? rho : rho.rho) : constante(nom);
 
 // --- valider (§ 5.7) ------------------------------------------------------------
 
@@ -458,6 +483,10 @@ describe("génération : les refus d'avant lancement (§ 2.1, § 5.9, § 8.4, §
     // En lecture, le réglage d'abord.
     const lecture = await monter({ charges: [chargeDemo('petite')], ecriture: false });
     await refuseSansRien(lecture, 'REGLAGE_HORS_DOMAINE', { reglage: 'nombre', remede: null }, { ...COURT, nombre: 0 });
+    // Sans événement, le réglage encore d'abord : AUCUN_EVENEMENT vient après lui.
+    await lecture.seance.fermer();
+    await refuseSansRien(lecture, 'REGLAGE_HORS_DOMAINE', { reglage: 'arret', remede: null }, { ...COURT, arret: 0 });
+    await refuseSansRien(lecture, 'AUCUN_EVENEMENT', { remede: null });
   });
 
   test('une génération en cours sur un plan passé en lecture : MODE_LECTURE, la séance avant GENERATION_EN_COURS', async () => {
@@ -1228,55 +1257,58 @@ describe('génération : les cœurs de calcul, un réglage du poste pour la séa
     assert.equal(autre.controleur.derniereGeneration().coeurs, 1);
   });
 
-  test("l'estimation compte en vagues : coût d'une proposition × ⌈nombre / cœurs⌉, la mesure ramenée à ses propres vagues", async () => {
+  test("l'estimation compte en vagues, chacune au ralentissement de ses cœurs : coût d'une proposition × ⌈nombre / cœurs⌉ × ρ(cœurs), la mesure ramenée de même", async () => {
     const manuel = executeurManuel({ coeursDisponibles: 8 });
     const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel });
     const { controleur } = montage;
+    // ρ(W) sur 8 processeurs logiques, ρ(8) étant la valeur du registre.
+    const rho = (w) => 1 + ((RHO - 1) * (w - 1)) / 7;
+    const proche = (valeur, attendue) => assert.ok(Math.abs(valeur - attendue) < 1e-9, `${valeur} ≠ ${attendue}`);
     controleur.reglerCoeurs({ automatique: false });
     controleur.reglerCoeurs({ saisie: '1' });
-    // 5 × 200 000 mouvements en 2 s sur 1 cœur : 0,4 s par proposition.
+    // 5 × 200 000 mouvements en 2 s sur 1 cœur, ρ(1) = 1 : 0,4 s par proposition.
     await genererEn(montage, manuel, { graine: 1, nombre: 5, arret: 200000, historique: 1000 }, 2000);
     const sur1 = controleur.derniereGeneration();
     assert.equal(sur1.coeurs, 1);
     controleur.reglerCoeurs({ saisie: '2' });
     const deux = controleur.estimer({ graine: 1, nombre: 5, arret: 200000, historique: 1000 });
     assert.equal(deux.coeurs, 2);
-    assert.ok(Math.abs(deux.secondes - 1.2) < 1e-9, String(deux.secondes));
+    proche(deux.secondes, 0.4 * 3 * rho(2));
     assert.deepEqual(deux.mesure, sur1);
-    assert.ok(Math.abs(controleur.estimer({ graine: 1, nombre: 4, arret: 200000 }).secondes - 0.8) < 1e-9);
+    proche(controleur.estimer({ graine: 1, nombre: 4, arret: 200000 }).secondes, 0.4 * 2 * rho(2));
     controleur.reglerCoeurs({ automatique: true });
     const automatique = controleur.estimer({ graine: 1, nombre: 5, arret: 200000 });
     assert.equal(automatique.coeurs, 5);
-    assert.ok(Math.abs(automatique.secondes - 0.4) < 1e-9, String(automatique.secondes));
-    // Longue au-delà de 60 s : 3 000 propositions, 1 200 s sur 1 cœur, 300 s
-    // sur 4, et 0,4 × ⌈3 000 / 8⌉ = 150 s sur 8.
+    proche(automatique.secondes, 0.4 * rho(5));
+    // 3 000 propositions : 1 200 s sur 1 cœur ; 750 vagues sur 4, 375 sur 8.
     controleur.reglerCoeurs({ automatique: false });
     controleur.reglerCoeurs({ saisie: '4' });
     const quatre = controleur.estimer({ graine: 1, nombre: 3000, arret: 200000 });
-    assert.ok(Math.abs(quatre.secondes - 300) < 1e-9, String(quatre.secondes));
+    proche(quatre.secondes, 0.4 * 750 * rho(4));
     assert.equal(quatre.longue, true);
     controleur.reglerCoeurs({ automatique: true });
-    assert.ok(Math.abs(controleur.estimer({ graine: 1, nombre: 3000, arret: 200000 }).secondes - 150) < 1e-9);
+    proche(controleur.estimer({ graine: 1, nombre: 3000, arret: 200000 }).secondes, 0.4 * 375 * RHO);
     // Une mesure prise sur 5 cœurs, 5 propositions : une seule vague de
-    // 200 000 mouvements en 2 s ; sur 1 cœur, 5 vagues, 10 s.
+    // 200 000 mouvements à ρ(5) en 2 s ; sur 1 cœur, 5 vagues à ρ(1).
     await genererEn(montage, manuel, { graine: 1, nombre: 5, arret: 200000, historique: 1000 }, 2000);
     assert.equal(controleur.derniereGeneration().coeurs, 5);
     controleur.reglerCoeurs({ automatique: false });
     controleur.reglerCoeurs({ saisie: '1' });
-    assert.ok(Math.abs(controleur.estimer({ graine: 1, nombre: 5, arret: 200000 }).secondes - 10) < 1e-9);
+    proche(controleur.estimer({ graine: 1, nombre: 5, arret: 200000 }).secondes, (2 * 5) / rho(5));
   });
 
-  test('sans mesure, la question part au-delà de 10 000 000 mouvements par cœur : ⌈nombre / cœurs⌉ × arret', async () => {
+  test('sans mesure, la question part au-delà de 10 000 000 mouvements par cœur, ralentissement compris : ⌈nombre / cœurs⌉ × arret × ρ(cœurs)', async () => {
+    // 2 processeurs logiques, ρ(2) = ρ à pleine charge, que l'épreuve fixe à 2.
     const manuel = executeurManuel({ coeursDisponibles: 2 });
-    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel });
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel, lireConstante: lireAvec(2) });
     const { controleur, espion } = montage;
     await refuseSansRien(montage, 'CONFIRMATION_REQUISE', { estimation: { inconnue: true }, remede: null }, {
       graine: 1,
       nombre: 10,
-      arret: 2000001,
+      arret: 1000001,
       historique: 1000,
     });
-    const juste = controleur.generer({ graine: 1, nombre: 10, arret: 2000000, historique: 1000 });
+    const juste = controleur.generer({ graine: 1, nombre: 10, arret: 1000000, historique: 1000 });
     await Promise.resolve();
     assert.equal(espion.lancements.length, 1);
     controleur.annuler();
@@ -1323,6 +1355,120 @@ describe('génération : les cœurs de calcul, un réglage du poste pour la séa
     ];
     assert.equal(cas.length, 9);
     for (const [valeur, attendue] of cas) assert.equal(coeursDe(valeur), attendue, String(valeur));
+  });
+});
+
+// --- Le ralentissement d'un cœur chargé (§ 5.10, Q14) -----------------------------------------
+
+describe("génération : l'estimation compte le ralentissement d'un cœur chargé (§ 5.10, Q14)", () => {
+  const proche = (valeur, attendue, message) =>
+    assert.ok(Math.abs(valeur - attendue) < 1e-9, `${message ?? ''} ${valeur} ≠ ${attendue}`);
+  const DEFAUT = { graine: 1, nombre: 5, arret: 200000, historique: 1000 };
+
+  test('ralentissement(W, L, ρmax) : 1 + (ρmax − 1)(W − 1)/(L − 1), 1 sur un seul processeur logique', () => {
+    const cas = [
+      [1, 16, 2, 1],
+      [16, 16, 2, 2],
+      [2, 8, 2, 1 + 1 / 7],
+      [5, 5, 2, 2],
+      [3, 5, 1.5, 1.25],
+      [4, 7, 3, 2],
+      [1, 1, 3, 1],
+      [1, 1, 1, 1],
+    ];
+    assert.equal(cas.length, 8);
+    for (const [w, l, rhoMax, attendu] of cas) proche(ralentissement(w, l, rhoMax), attendu, `ρ(${w}, ${l}, ${rhoMax})`);
+  });
+
+  test("même nombre de cœurs à la mesure et à l'estimation : la durée sans ralentissement, au flottant près — au défaut, 5 propositions sur 5 cœurs", async () => {
+    const manuel = executeurManuel({ coeursDisponibles: 5 });
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel, lireConstante: lireAvec(3) });
+    const { controleur } = montage;
+    await genererEn(montage, manuel, DEFAUT, 2000);
+    assert.equal(controleur.derniereGeneration().coeurs, 5);
+    const memes = controleur.estimer(DEFAUT);
+    assert.equal(memes.coeurs, 5);
+    proche(memes.secondes, 2);
+    // Deux vagues sur les mêmes cinq cœurs : le double.
+    proche(controleur.estimer({ ...DEFAUT, nombre: 10 }).secondes, 4);
+    proche(controleur.estimer({ ...DEFAUT, nombre: 6, arret: 50000 }).secondes, 1);
+  });
+
+  test("plus de cœurs à l'estimation qu'à la mesure : la durée multipliée par ρ(W') / ρ(Wm) > 1 ; moins, divisée", async () => {
+    const manuel = executeurManuel({ coeursDisponibles: 8 });
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel, lireConstante: lireAvec(2) });
+    const { controleur } = montage;
+    controleur.reglerCoeurs({ automatique: false });
+    controleur.reglerCoeurs({ saisie: '1' });
+    await genererEn(montage, manuel, { ...DEFAUT, nombre: 4 }, 1600);
+    // 0,4 s par proposition sur 1 cœur ; une vague de 4 sur 4 cœurs, ρ(4) = 1 + 3/7.
+    controleur.reglerCoeurs({ saisie: '4' });
+    const quatre = controleur.estimer({ ...DEFAUT, nombre: 4 });
+    assert.equal(quatre.coeurs, 4);
+    proche(quatre.secondes, 0.4 * (10 / 7));
+    assert.ok(quatre.secondes > 0.4);
+    // Mesurée sur 8 cœurs, ρ(8) = 2 : estimée sur 1, chaque vague deux fois plus rapide.
+    controleur.reglerCoeurs({ saisie: '8' });
+    await genererEn(montage, manuel, { ...DEFAUT, nombre: 8 }, 2000);
+    assert.equal(controleur.derniereGeneration().coeurs, 8);
+    controleur.reglerCoeurs({ saisie: '1' });
+    proche(controleur.estimer({ ...DEFAUT, nombre: 8 }).secondes, (8 * 2) / 2);
+  });
+
+  test("un seul processeur logique : aucun facteur, quel que soit ρ à pleine charge", async () => {
+    const manuel = executeurManuel();
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel, lireConstante: lireAvec(5) });
+    const { controleur } = montage;
+    await genererEn(montage, manuel, DEFAUT, 2000);
+    proche(controleur.estimer({ ...DEFAUT, nombre: 3000 }).secondes, 1200);
+    proche(controleur.estimer({ ...DEFAUT, nombre: 7, arret: 100000 }).secondes, 1.4);
+    // Sans mesure, le seuil est celui d'avant : 10 000 000 mouvements.
+    const neuf = await monter({ charges: [chargeDemo('petite-conflit')], executeur: executeurManuel(), lireConstante: lireAvec(5) });
+    await refuseSansRien(neuf, 'CONFIRMATION_REQUISE', { estimation: { inconnue: true }, remede: null }, { ...DEFAUT, arret: 2000001 });
+    const juste = neuf.controleur.generer({ ...DEFAUT, arret: 2000000 });
+    await Promise.resolve();
+    assert.equal(neuf.espion.lancements.length, 1);
+    neuf.controleur.annuler();
+    await rejet(juste);
+  });
+
+  test('sans mesure, le seuil compte ρ : la question part plus tôt quand ρ à pleine charge grandit', async () => {
+    // 4 processeurs logiques, 4 propositions : une vague, ρ(4) = ρ à pleine charge.
+    const reglages = (arret) => ({ graine: 1, nombre: 4, arret, historique: 1000 });
+    const sous = await monter({ charges: [chargeDemo('petite-conflit')], executeur: executeurManuel({ coeursDisponibles: 4 }), lireConstante: lireAvec(4) });
+    await refuseSansRien(sous, 'CONFIRMATION_REQUISE', { estimation: { inconnue: true }, remede: null }, reglages(2500001));
+    const juste = sous.controleur.generer(reglages(2500000));
+    await Promise.resolve();
+    assert.equal(sous.espion.lancements.length, 1);
+    sous.controleur.annuler();
+    await rejet(juste);
+  });
+
+  test("ρ se lit au registre à chaque estimation, jamais recopié : la valeur changée par l'épreuve change l'estimation", async () => {
+    // Le contrôleur sans lecture injectée lit le registre lui-même.
+    const parDefaut = executeurManuel({ coeursDisponibles: 4 });
+    const lu = await monter({ charges: [chargeDemo('petite-conflit')], executeur: parDefaut });
+    lu.controleur.reglerCoeurs({ automatique: false });
+    lu.controleur.reglerCoeurs({ saisie: '1' });
+    await genererEn(lu, parDefaut, { ...DEFAUT, nombre: 4 }, 1600);
+    lu.controleur.reglerCoeurs({ automatique: true });
+    proche(lu.controleur.estimer({ ...DEFAUT, nombre: 4 }).secondes, 0.4 * RHO);
+
+    // Une lecture dont l'épreuve change la valeur entre deux estimations.
+    const valeur = { rho: 2 };
+    const manuel = executeurManuel({ coeursDisponibles: 4 });
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel, lireConstante: lireAvec(valeur) });
+    const { controleur } = montage;
+    controleur.reglerCoeurs({ automatique: false });
+    controleur.reglerCoeurs({ saisie: '1' });
+    await genererEn(montage, manuel, { ...DEFAUT, nombre: 4 }, 1600);
+    controleur.reglerCoeurs({ automatique: true });
+    proche(controleur.estimer({ ...DEFAUT, nombre: 4 }).secondes, 0.8);
+    valeur.rho = 3.5;
+    proche(controleur.estimer({ ...DEFAUT, nombre: 4 }).secondes, 1.4);
+    assert.equal(controleur.estimer({ ...DEFAUT, nombre: 4 }).longue, false);
+    valeur.rho = 1;
+    proche(controleur.estimer({ ...DEFAUT, nombre: 4 }).secondes, 0.4);
   });
 });
 

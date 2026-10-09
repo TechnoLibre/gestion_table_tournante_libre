@@ -29,6 +29,7 @@ import { creerExecuteurTravailleur } from '../../application/executeur_travaille
 import { ErreurAnnulee, creerExecuteurDirect } from '../../application/generation.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { constante } from '../../geometrie/constantes.js';
 import { rechercher } from '../../moteur/recherche.js';
 import { configurationDepuisCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
@@ -777,7 +778,7 @@ describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
     await saisir(m, champCoeurs(m), '1');
     const surUn = controleur(m).estimer(reglages);
     expect(surUn.coeurs).toBe(1);
-    expect(surUn.secondes).toBeCloseTo(5, 9);
+    expect(surUn.secondes).toBeCloseTo(5 / constante('RALENTISSEMENT_PLEINE_CHARGE'), 9);
     await attendre(() => expect(estimation().textContent).toBe(t('generation.duree.estimee', surUn)));
     expect(estimation().textContent).not.toContain('cœur');
     expect(executions.length).toBe(1);

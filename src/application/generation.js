@@ -19,7 +19,10 @@
 // de processeurs logiques (coeursDisponibles, que src/main.js lit de la
 // plateforme) ; sinon le nombre saisi, de 1 à ces disponibles. Un lancement
 // en emploie min(nombre de propositions, cœurs réglés), et l'estimation
-// compte en vagues de propositions calculées ensemble.
+// compte en vagues de propositions calculées ensemble, chacune ralentie de
+// ρ(W) : un cœur va moins vite quand ses voisins travaillent aussi. ρ croît
+// de 1, sur un cœur seul, à RALENTISSEMENT_PLEINE_CHARGE du registre des
+// constantes, quand les L processeurs logiques travaillent (ralentissement).
 //
 // Le contrôleur ne numérote rien et ne mesure aucun plan. Il refuse avant
 // tout lancement un réglage hors de son domaine (REGLAGE_HORS_DOMAINE), puis
@@ -36,6 +39,7 @@
 // génération (debuterCalcul), et repart à sa fin, quelle qu'elle soit
 // (finirCalcul, dans un finally). Passer en lecture, ou fermer l'événement,
 // annule la génération en cours (surAnnulation).
+import { constante } from '../geometrie/constantes.js';
 import { normaliser, nombrePlacesManquantes } from '../moteur/configuration.js';
 import { ErreurAnnulee, ErreurConfiguration } from '../moteur/erreurs.js';
 import { rechercher, verifierReglages } from '../moteur/recherche.js';
@@ -54,8 +58,14 @@ export const SEUIL_GENERATION_LONGUE_S = 60;
 export const PLAFOND_USAGE_S = 30 * 60;
 
 // Sans durée mesurée, une génération de plus de mouvements que ce compte —
-// dix fois le réglage par défaut — demande confirmation.
+// dix fois le réglage par défaut —, ralentissement compris, demande
+// confirmation.
 const MOUVEMENTS_SANS_MESURE = 10 * GENERATION_PAR_DEFAUT.nombre * GENERATION_PAR_DEFAUT.arret;
+
+// Le ralentissement d'un cœur quand tous les processeurs logiques
+// travaillent, nommé dans le registre des constantes mesurées (§ 14.1) : un
+// nom de constante, que la table des libellés ne connaît pas.
+const RALENTISSEMENT = Object.freeze({ nom: 'RALENTISSEMENT_PLEINE_CHARGE' });
 
 // La plus grande graine, et le modulo de la suivante.
 const GRAINE_MAX = 2 ** 32 - 1;
@@ -122,6 +132,23 @@ export function exigerReglages(reglages) {
  */
 export function coeursDe(valeur) {
   return Number.isInteger(valeur) && valeur >= 1 ? valeur : 1;
+}
+
+/**
+ * Le ralentissement d'un cœur quand W cœurs travaillent ensemble sur un
+ * poste de L processeurs logiques : le rapport de la durée d'une même
+ * proposition sur l'un d'eux à sa durée sur un cœur seul. Il croît en ligne
+ * droite de 1, à W = 1, à rhoMax, à W = L : 1 + (rhoMax − 1)(W − 1)/(L − 1).
+ * Un poste d'un seul processeur logique n'a aucun ralentissement : 1.
+ *
+ * @param {number} W   les cœurs employés, de 1 à L
+ * @param {number} L   les processeurs logiques du poste, au moins 1
+ * @param {number} rhoMax   le ralentissement à pleine charge, W = L
+ * @returns {number}
+ */
+export function ralentissement(W, L, rhoMax) {
+  if (L === 1) return 1;
+  return 1 + ((rhoMax - 1) * (W - 1)) / (L - 1);
 }
 
 /**
@@ -226,11 +253,15 @@ function planRange(proposition, configuration, produitVersion) {
  * @param {import('./horloge.js').Horloge} parametres.horloge   instant() mesure
  *        la durée d'un calcul
  * @param {string} parametres.produitVersion
+ * @param {(nom: string) => number|null} [parametres.constante]   la lecture
+ *        du registre des constantes, constante de constantes.js par défaut ;
+ *        le contrôleur y lit RALENTISSEMENT_PLEINE_CHARGE à chaque
+ *        estimation, sans en garder la valeur
  * @returns {Object} le contrôleur : grainePropose, reglagesProposes, valider,
  *          estimer, derniereGeneration, generer, annuler, coeurs,
  *          reglerCoeurs, subscribe
  */
-export function creerControleurGeneration({ seance, executeur, horloge, produitVersion }) {
+export function creerControleurGeneration({ seance, executeur, horloge, produitVersion, constante: lireConstante = constante }) {
   // graine : la graine proposée ; base : celle de l'événement ouvert, null
   // sans événement ; mesure : le dernier calcul abouti, null avant lui ;
   // execution : celle en cours, null hors génération ; enCours vaut vrai du
@@ -284,14 +315,21 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
   // ensemble.
   const mouvementsParCoeur = (nombre, arret, parallele) => Math.ceil(nombre / parallele) * arret;
 
-  // La durée d'une génération, proportionnelle aux mouvements qui se suivent
-  // sur un même cœur, ceux de la mesure ramenés aux cœurs qu'elle a employés.
+  // Le coût d'une génération sur parallele cœurs, en mouvements d'un cœur
+  // seul : ceux qui se suivent sur un même cœur, ralentis de ρ(parallele)
+  // sur les processeurs logiques du poste. ρ à pleine charge se lit au
+  // registre à chaque appel.
+  const cout = (nombre, arret, parallele) =>
+    mouvementsParCoeur(nombre, arret, parallele) * ralentissement(parallele, disponibles, lireConstante(RALENTISSEMENT.nom));
+
+  // La durée d'une génération, proportionnelle à son coût, celui de la
+  // mesure ramené aux cœurs qu'elle a employés : à cœurs égaux, le
+  // ralentissement se simplifie.
   function estimer({ nombre, arret }) {
     if (mesure === null) return { inconnue: true };
     const parallele = coeursPour(nombre);
     const secondes =
-      (mouvementsParCoeur(nombre, arret, parallele) * mesure.dureeMs) /
-      (mouvementsParCoeur(mesure.nombre, mesure.arret, mesure.coeurs) * 1000);
+      (cout(nombre, arret, parallele) * mesure.dureeMs) / (cout(mesure.nombre, mesure.arret, mesure.coeurs) * 1000);
     return {
       secondes,
       longue: secondes > SEUIL_GENERATION_LONGUE_S,
@@ -301,11 +339,12 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     };
   }
 
-  // Longue : au-delà du seuil estimé, ou, sans mesure, quand les mouvements
-  // qui se suivent sur un même cœur dépassent dix fois le réglage par défaut.
+  // Longue : au-delà du seuil estimé, ou, sans mesure, quand le coût — les
+  // mouvements qui se suivent sur un même cœur, ralentis de ρ — dépasse dix
+  // fois le réglage par défaut.
   function estLongue(reglages, estimation) {
     if (estimation.inconnue === true) {
-      return mouvementsParCoeur(reglages.nombre, reglages.arret, coeursPour(reglages.nombre)) > MOUVEMENTS_SANS_MESURE;
+      return cout(reglages.nombre, reglages.arret, coeursPour(reglages.nombre)) > MOUVEMENTS_SANS_MESURE;
     }
     return estimation.longue;
   }
@@ -466,8 +505,9 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     },
     /**
      * L'estimation des réglages, proportionnelle aux mouvements qui se
-     * suivent sur un même cœur — arret × ⌈nombre / cœurs⌉ —, ceux de la
-     * dernière mesure ramenés de même aux cœurs qu'elle a employés :
+     * suivent sur un même cœur — arret × ⌈nombre / cœurs⌉ — ralentis de
+     * ρ(cœurs) (ralentissement), ceux de la dernière mesure ramenés de même
+     * aux cœurs qu'elle a employés :
      * { inconnue: true } sans elle, sinon { secondes, longue,
      * auDelaDuPlafond, mesure, coeurs }, coeurs étant ceux que ces réglages
      * emploieraient.
