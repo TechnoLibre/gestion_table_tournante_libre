@@ -31,6 +31,8 @@ import { compile, parse, parseCss } from 'svelte/compiler';
 import { TABLES_APPLICATION } from '../src/application/libelles.js';
 import { creerTraduction } from '../src/application/traduction.js';
 import { TABLES_INTERFACE } from '../src/interface/libelles.js';
+import { JETONS_CONFLIT } from '../src/interface/marques.js';
+import { DESIGNATIONS } from './navigateur/designations.js';
 import { describe, test } from './lanceur.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
@@ -126,9 +128,11 @@ const partiesCode = (ast) => [ast.module, ast.instance, ast.fragment];
 // Les chaînes littérales qu'une expression peut rendre telle quelle : un
 // littéral, les morceaux fixes d'un gabarit de chaîne, les deux branches
 // d'une condition, les opérandes d'une concaténation et d'un « || » ou « ?? »,
-// le second d'un « && », le dernier terme d'une séquence. Un appel, un
-// membre, un identifiant ne rendent aucun littéral : t('cle') n'affiche pas
-// sa clé. Rend [{ valeur, debut }].
+// le second d'un « && », le dernier terme d'une séquence, et chaque élément
+// d'un tableau ou chaque valeur d'un objet littéral dont l'expression lit un
+// membre (« ['Oui', 'Non'][i] »). Un appel, un autre membre, un identifiant
+// ne rendent aucun littéral : t('cle') n'affiche pas sa clé. Rend
+// [{ valeur, debut }].
 function litterauxRendus(expression) {
   if (expression === null || typeof expression !== 'object') return [];
   switch (expression.type) {
@@ -151,6 +155,12 @@ function litterauxRendus(expression) {
         : [];
     case 'SequenceExpression':
       return litterauxRendus(expression.expressions.at(-1));
+    case 'MemberExpression':
+      if (expression.object.type === 'ArrayExpression') return expression.object.elements.flatMap(litterauxRendus);
+      if (expression.object.type === 'ObjectExpression') {
+        return expression.object.properties.flatMap((propriete) => (propriete.type === 'Property' ? litterauxRendus(propriete.value) : []));
+      }
+      return [];
     default:
       return [];
   }
@@ -184,6 +194,17 @@ const dansUnAttribut = (ancetres) => ancetres.some((a) => DANS_UN_ATTRIBUT.has(a
 const LETTRE = /\p{L}/u;
 // Attributs qu'une technologie d'assistance annonce, ou que la page montre.
 const ATTRIBUTS_ANNONCES = new Set(['aria-label', 'aria-roledescription', 'title', 'placeholder', 'alt']);
+// Les types d'<input> dont la page montre la value comme libellé.
+const INPUTS_BOUTONS = new Set(['button', 'submit', 'reset']);
+
+// Vrai quand l'attribut est la value d'un <input> bouton : un type statique
+// button, submit ou reset.
+function valeurDeBouton(attribut, element) {
+  if (attribut.name !== 'value' || element?.type !== 'RegularElement' || element.name !== 'input') return false;
+  const type = element.attributes.find((a) => a.type === 'Attribute' && a.name === 'type');
+  const [morceau] = type === undefined ? [] : morceauxAttribut(type);
+  return morceau !== undefined && 'statique' in morceau && INPUTS_BOUTONS.has(morceau.statique.trim().toLowerCase());
+}
 // Éléments du SVG dont le contenu est un texte : tout contenu statique non
 // blanc y est une chaîne visible, ponctuation comprise.
 const TEXTES_SVG = new Set(['title', 'desc', 'text', 'tspan']);
@@ -203,8 +224,9 @@ function texteVisible(texte, element) {
 const contenuLettre = (valeur) => [...valeur.matchAll(CHAINE_CSS)].some(([, , chaine]) => LETTRE.test(chaine));
 
 // Relevé des chaînes visibles écrites dans les composants de src/interface :
-// texte statique, attribut annoncé, contenu d'un texte du SVG, déclaration
-// « content » lettrée, littéral que rend une expression du gabarit.
+// texte statique, attribut annoncé ou value d'un <input> bouton, contenu
+// d'un texte du SVG, déclaration « content » lettrée, littéral que rend une
+// expression du gabarit.
 function releverChainesEnDur(racine) {
   const chemins = exigerNonVide(sources(racine, ['src/interface'], ['.svelte']), 'chaînes en dur');
   const releves = [];
@@ -221,7 +243,7 @@ function releverChainesEnDur(racine) {
         for (const { valeur, debut } of litterauxRendus(noeud.expression)) {
           if (texteVisible(valeur, element)) relever(debut, 'expression littérale', valeur);
         }
-      } else if (noeud.type === 'Attribute' && ATTRIBUTS_ANNONCES.has(noeud.name)) {
+      } else if (noeud.type === 'Attribute' && (ATTRIBUTS_ANNONCES.has(noeud.name) || valeurDeBouton(noeud, elementParent(ancetres)))) {
         for (const morceau of morceauxAttribut(noeud)) {
           const valeurs = 'statique' in morceau
             ? [{ valeur: morceau.statique, debut: morceau.debut }]
@@ -432,6 +454,8 @@ const FEUILLE_DES_JETONS = 'src/interface/jetons.css';
 // qui les prolonge sans tiret n'en est pas.
 const JETON_CONFLIT = /--couleur-conflit(?:-[\w-]+)?(?![\w-])/;
 const litConflit = (valeur) => JETON_CONFLIT.test(valeur);
+// Les jetons de conflit qu'une valeur lit, chacun une fois.
+const jetonsLus = (valeur) => [...new Set(valeur.match(new RegExp(JETON_CONFLIT.source, 'g')))];
 
 // Les couleurs nommées de CSS, et les couleurs du système : chacune est un
 // littéral. transparent et currentColor ne portent aucune teinte et restent
@@ -508,39 +532,48 @@ const declarationsEnLigne = (statique, debut) =>
     .filter((d) => d !== null)
     .map(([, propriete, valeur]) => ({ propriete, valeur, debut }));
 
-// Une classe qui nomme l'état de conflit : « conflit », ou un nom en
-// « -conflit » dont aucun segment ne le nie (« sans-conflit », « non-conflit »).
-// « conflit-leve » ne finit pas par « -conflit » et ne le nomme pas.
-const NEGATIONS = new Set(['sans', 'non', 'hors', 'pas', 'aucun']);
-function classeDeConflit(nom) {
-  const segments = nom.toLowerCase().split('-');
-  return segments.at(-1) === 'conflit' && !segments.some((segment) => NEGATIONS.has(segment));
-}
+// Les classes de conflit, liste fermée, et le jeton que chacune lit :
+// « conflit », l'état d'une table en conflit, --couleur-conflit ; puis
+// « <sorte>-conflit », la trame d'une sorte de CONFLITS (marques.js), le
+// jeton de cette sorte, --couleur-conflit-<sorte>. Une autre classe —
+// « sans-conflit », « fin-de-conflit », « conflit-leve » — ne nomme pas un
+// conflit.
+const CLASSES_DE_CONFLIT = new Map([
+  ['conflit', '--couleur-conflit'],
+  ...JETONS_CONFLIT.map((jeton) => [`${jeton.slice('--couleur-conflit-'.length)}-conflit`, jeton]),
+]);
 
-// Vrai quand une déclaration du jeton de conflit est l'une des règles de
-// conflit du plan : dans un composant de src/interface/plan/, sous une règle
-// dont CHAQUE sélecteur de la liste porte, dans l'un de ses sélecteurs
-// composés, une classe de conflit. Seules les classes posées directement sur
-// un composé comptent : celles qu'un :not(…), un :is(…) ou un :global(…)
-// enveloppe sont des arguments et ne qualifient pas la règle.
-function regleDeConflit(chemin, prelude) {
+// Vrai quand une déclaration qui lit les jetons de conflit jetons est l'une
+// des règles de conflit du plan : dans un composant de src/interface/plan/,
+// sous une règle dont CHAQUE sélecteur de la liste porte, dans l'un de ses
+// sélecteurs composés, une classe de conflit dont le jeton est l'un de ceux
+// lus, et dont aucun jeton lu n'appartient à une autre règle : la trame d'une
+// sorte ne lit que la teinte de sa sorte. Seules les classes posées
+// directement sur un composé comptent : celles qu'un :not(…), un :is(…) ou un
+// :global(…) enveloppe sont des arguments et ne qualifient pas la règle.
+function regleDeConflit(chemin, prelude, jetons) {
   if (!chemin.startsWith('src/interface/plan/') || prelude?.type !== 'SelectorList') return false;
-  return prelude.children.every((complexe) =>
-    complexe.children.some((relatif) =>
-      relatif.selectors.some((simple) => simple.type === 'ClassSelector' && classeDeConflit(simple.name)),
-    ),
-  );
+  return prelude.children.every((complexe) => {
+    const lus = complexe.children.flatMap((relatif) =>
+      relatif.selectors.filter((simple) => simple.type === 'ClassSelector' && CLASSES_DE_CONFLIT.has(simple.name)),
+    );
+    const permis = new Set(lus.map(({ name }) => CLASSES_DE_CONFLIT.get(name)));
+    return lus.length > 0 && jetons.every((jeton) => permis.has(jeton));
+  });
 }
 
 // Relevé des couleurs : littéral de couleur dans une feuille, un attribut
 // style ou de couleur, une directive style:, ou une chaîne du script d'un
 // composant ; déclaration de jeton hors de la feuille des jetons ; lecture
-// d'une teinte de conflit hors des règles de conflit du plan. Les composants de
-// src/interface et les feuilles .css de src/ sont lus, la feuille des jetons
-// exceptée.
+// d'une teinte de conflit hors des règles de conflit du plan. Les composants et
+// les modules JavaScript de src/interface, épreuves exclues, et les feuilles
+// .css de src/ sont lus, la feuille des jetons exceptée : une chaîne d'un
+// module voisin atteint fill ou stroke par une expression.
 function releverCouleurs(racine) {
   const chemins = exigerNonVide(
-    sources(racine, ['src'], ['.svelte', '.css']).filter((c) => c !== FEUILLE_DES_JETONS && (c.endsWith('.css') || c.startsWith('src/interface/'))),
+    sources(racine, ['src'], ['.svelte', '.css', '.js']).filter(
+      (c) => c !== FEUILLE_DES_JETONS && (c.endsWith('.css') || c.startsWith('src/interface/')),
+    ),
     'couleurs',
   );
   const releves = [];
@@ -553,14 +586,28 @@ function releverCouleurs(racine) {
       const couleur = couleurLitterale(valeur);
       if (couleur !== null) relever(debut, `couleur ${extrait(couleur)} dans ${propriete}`);
       if (propriete.startsWith('--')) relever(debut, `jeton déclaré ${propriete}`);
-      if (litConflit(valeur) && (enLigne || !regleDeConflit(chemin, prelude))) {
+      if (litConflit(valeur) && (enLigne || !regleDeConflit(chemin, prelude, jetonsLus(valeur)))) {
         relever(debut, `jeton de conflit hors d'une règle de conflit du plan, ${enLigne ? 'en ligne' : extrait(selecteur)}`);
       }
+    };
+    // Une chaîne du script qui est en entier un littéral de couleur, ou qui
+    // nomme le jeton de conflit.
+    const examinerScript = (noeud) => {
+      if (noeud.type !== 'Literal' || typeof noeud.value !== 'string') return;
+      const valeur = noeud.value.trim();
+      if (COULEUR_ENTIERE.test(valeur)) {
+        relever(noeud.start, `couleur ${extrait(valeur)} dans le script`);
+      }
+      if (litConflit(valeur)) relever(noeud.start, "jeton de conflit hors d'une règle de conflit du plan, dans le script");
     };
     if (chemin.endsWith('.css')) {
       texte = readFileSync(join(racine, chemin), 'utf8');
       decls = declarations(parseCss(texte), texte);
       for (const d of decls) examiner(d, false);
+    } else if (chemin.endsWith('.js')) {
+      const analyse = analyserModule(racine, chemin);
+      texte = analyse.texte;
+      parcourir(analyse.ast, examinerScript);
     } else {
       const analyse = analyserComposant(racine, chemin);
       texte = analyse.texte;
@@ -590,16 +637,7 @@ function releverCouleurs(racine) {
           }
         }
       });
-      // Une chaîne du script qui est en entier un littéral de couleur, ou qui
-      // nomme le jeton de conflit.
-      parcourir([analyse.ast.module, analyse.ast.instance], (noeud) => {
-        if (noeud.type !== 'Literal' || typeof noeud.value !== 'string') return;
-        const valeur = noeud.value.trim();
-        if (COULEUR_ENTIERE.test(valeur)) {
-          relever(noeud.start, `couleur ${extrait(valeur)} dans le script`);
-        }
-        if (litConflit(valeur)) relever(noeud.start, "jeton de conflit hors d'une règle de conflit du plan, dans le script");
-      });
+      parcourir([analyse.ast.module, analyse.ast.instance], examinerScript);
     }
   }
   return trier(releves);
@@ -749,9 +787,13 @@ const ANIMATIONS_ADMISES = [
   },
 ];
 
-// Vrai sous une règle @media qui demande le mouvement réduit.
+// Vrai sous une règle @media qui demande le mouvement réduit, et lui seul :
+// sa requête entière est (prefers-reduced-motion: reduce), à la casse et aux
+// espaces près. Une requête niée, d'une autre préférence, ou jointe à une
+// autre par une virgule ne l'est pas.
+const REQUETE_MOUVEMENT_REDUIT = /^\(\s*prefers-reduced-motion\s*:\s*reduce\s*\)$/i;
 const sousMouvementReduit = (ancetres) =>
-  ancetres.some((a) => a.type === 'Atrule' && a.name === 'media' && /prefers-reduced-motion\s*:\s*reduce/.test(a.prelude));
+  ancetres.some((a) => a.type === 'Atrule' && a.name === 'media' && REQUETE_MOUVEMENT_REDUIT.test(a.prelude.trim()));
 
 // Relevé de textLength et lengthAdjust sous src/interface et src/geometrie, de
 // transitionend et animationend sous src/interface, et de toute transition
@@ -915,6 +957,102 @@ function releverSelecteursElagues(racine) {
   return trier(releves);
 }
 
+// --- Les désignations stables (contrainte 16) -------------------------------
+
+// Les poses d'un attribut data-… par le script, dans un arbre de JavaScript :
+// element.setAttribute('data-x', valeur), element.toggleAttribute('data-x')
+// et element.dataset.x = valeur (dataset['x'] aussi), le nom de dataset
+// rendu en data-… à tirets. Chacune { debut, nom, valeur } : nom null quand il
+// se calcule, valeur la chaîne littérale posée, '' pour toggleAttribute, null
+// quand elle se calcule. Une lecture — getAttribute, dataset.x lu — n'est pas
+// une pose.
+function posesParLeScript(arbre) {
+  const poses = [];
+  const chaineDe = (noeud) => {
+    if (noeud?.type === 'Literal' && typeof noeud.value === 'string') return noeud.value;
+    if (noeud?.type === 'TemplateLiteral' && noeud.expressions.length === 0) return noeud.quasis[0].value.cooked;
+    return null;
+  };
+  parcourir(arbre, (noeud) => {
+    if (noeud.type === 'CallExpression' && noeud.callee.type === 'MemberExpression' && !noeud.callee.computed) {
+      const methode = noeud.callee.property.name;
+      if (methode !== 'setAttribute' && methode !== 'toggleAttribute') return;
+      const [premier, second] = noeud.arguments;
+      const nom = chaineDe(premier);
+      const calcule = nom === null && premier?.type === 'TemplateLiteral' && premier.quasis[0].value.cooked.startsWith('data-');
+      if (calcule) poses.push({ debut: noeud.start, nom: null, valeur: null });
+      else if (nom?.startsWith('data-')) poses.push({ debut: noeud.start, nom, valeur: methode === 'toggleAttribute' ? '' : chaineDe(second) });
+    } else if (noeud.type === 'AssignmentExpression' && noeud.left.type === 'MemberExpression') {
+      const { object, property, computed } = noeud.left;
+      if (object.type !== 'MemberExpression' || object.computed || object.property.name !== 'dataset') return;
+      const propre = computed ? chaineDe(property) : property.name;
+      const nom = propre === null ? null : `data-${propre.replace(/[A-Z]/g, (lettre) => `-${lettre.toLowerCase()}`)}`;
+      poses.push({ debut: noeud.start, nom, valeur: chaineDe(noeud.right) });
+    }
+  });
+  return poses;
+}
+
+// Relevé des désignations : chaque attribut data-… que pose un composant de
+// src/interface, par son gabarit ou par son script, et chaque module
+// JavaScript de src/interface, épreuves exclues, par son code
+// (posesParLeScript), comparé à la liste fermée designations
+// (test/navigateur/designations.js), dans les deux sens — « chemin:ligne
+// attribut hors de la liste » ; « chemin:ligne data-… : nom calculé » pour un
+// nom que le script compose ; pour une entrée à valeurs fermées, une valeur
+// littérale hors de la liste, ou une pose calculée ; puis « attribut : aucun
+// composant ne le pose » et « attribut="valeur" : aucun composant ne la
+// pose ». Lève quand la liste est vide.
+function releverDesignations(racine, designations = DESIGNATIONS) {
+  assert.ok(designations.size > 0, 'désignations : liste vide');
+  const chemins = exigerNonVide(sources(racine, ['src/interface'], ['.svelte', '.js']), 'désignations');
+  const releves = [];
+  const posees = new Map();
+  // Une pose : valeur null quand elle se calcule.
+  const noter = (ou, nom, valeur) => {
+    const entree = designations.get(nom);
+    if (entree === undefined) {
+      releves.push(`${ou} hors de la liste`);
+      return;
+    }
+    const valeurs = posees.get(nom) ?? new Set();
+    posees.set(nom, valeurs);
+    if (valeur === null) {
+      if (entree.valeurs !== null) releves.push(`${ou} : valeur calculée sous une liste fermée`);
+      return;
+    }
+    valeurs.add(valeur);
+    if (entree.valeurs !== null && !entree.valeurs.includes(valeur)) releves.push(`${ou}="${valeur}" hors des valeurs de la liste`);
+  };
+  for (const chemin of chemins) {
+    const composant = chemin.endsWith('.svelte');
+    const { texte, ast } = composant ? analyserComposant(racine, chemin) : analyserModule(racine, chemin);
+    if (composant) {
+      parcourir(ast.fragment, (noeud) => {
+        if (noeud.type !== 'Attribute' || !noeud.name.startsWith('data-')) return;
+        const morceaux = noeud.value === true ? [] : [noeud.value].flat();
+        const litterale = morceaux.every((morceau) => morceau.type === 'Text');
+        noter(`${chemin}:${ligneDe(texte, noeud.start)} ${noeud.name}`, noeud.name, litterale ? morceaux.map((morceau) => morceau.data).join('') : null);
+      });
+    }
+    for (const { debut, nom, valeur } of posesParLeScript(composant ? [ast.module, ast.instance] : ast)) {
+      const ligne = `${chemin}:${ligneDe(texte, debut)}`;
+      if (nom === null) releves.push(`${ligne} data-\u{2026} : nom calculé`);
+      else noter(`${ligne} ${nom}`, nom, valeur);
+    }
+  }
+  for (const [attribut, { valeurs }] of designations) {
+    if (!posees.has(attribut)) {
+      releves.push(`${attribut} : aucun composant ne le pose`);
+      continue;
+    }
+    for (const valeur of valeurs ?? []) {
+      if (!posees.get(attribut).has(valeur)) releves.push(`${attribut}="${valeur}" : aucun composant ne la pose`);
+    }
+  }
+  return releves;
+}
+
 // --- Arbres d'épreuve ---------------------------------------------------------
 
 // Écrit dans un répertoire temporaire l'arbre { chemin relatif: contenu }, le
@@ -966,6 +1104,8 @@ describe('sources de l’interface : les chaînes visibles en dur (§ 14.6)', ()
           '<span class="vide" data-x="Nom">{x} / {x}</span><img alt="" />',
           '<span style="content: \'Note\'">.</span>',
           '<!-- Commentaire écrit en dur -->',
+          '<input type="button" value="Envoyer" /><input type="text" value="Nom" /><input type="submit" value={x ? \'Valider\' : t(\'k.v\')} />',
+          '<span>{[\'Oui\', \'Non\'][x ? 0 : 1]}</span><span>{({ a: \'Ouvert\' }).a}</span><span>{[1, 2][0]}</span>',
         ].join('\n'),
         style: '  .vide::after { content: "Fin"; }\n  .vide::before { content: counter(rang) ". "; }',
       }),
@@ -985,7 +1125,12 @@ describe('sources de l’interface : les chaînes visibles en dur (§ 14.6)', ()
       'src/interface/plan/sous/B.svelte:8 expression littérale « Plein »',
       'src/interface/plan/sous/B.svelte:8 expression littérale « places »',
       'src/interface/plan/sous/B.svelte:10 content « content: \'Note\' »',
-      'src/interface/plan/sous/B.svelte:13 content « "Fin" »',
+      'src/interface/plan/sous/B.svelte:12 attribut value « Envoyer »',
+      'src/interface/plan/sous/B.svelte:12 attribut value « Valider »',
+      'src/interface/plan/sous/B.svelte:13 expression littérale « Non »',
+      'src/interface/plan/sous/B.svelte:13 expression littérale « Oui »',
+      'src/interface/plan/sous/B.svelte:13 expression littérale « Ouvert »',
+      'src/interface/plan/sous/B.svelte:15 content « "Fin" »',
     ]);
   });
 
@@ -1158,6 +1303,9 @@ describe('sources de l’interface : les couleurs (§ 12.7, § 13.3, § 13.5)', 
       }),
       'src/interface/autre.css': '.x { color: #123456; }\n',
       'src/interface/C.navigateur.test.js': "const c = 'stroke: #c00';\n",
+      // Un module voisin : sa chaîne atteint fill ou stroke par une expression.
+      'src/interface/plan/teinte.js': "export const TEINTE = '#c00';\nexport const TRAME = 'var(--couleur-conflit)';\nexport const SORTE = 'mobile';\n",
+      'src/interface/plan/teinte.test.js': "export const TEINTE = '#c00';\n",
     };
     assert.deepEqual(avecArbre(fichiers, releverCouleurs), [
       'src/interface/accueil/sous/B.svelte:2 couleur « #ABCDEF » dans le script',
@@ -1173,6 +1321,8 @@ describe('sources de l’interface : les couleurs (§ 12.7, § 13.3, § 13.5)', 
       'src/interface/plan/A.svelte:5 couleur « rgb( » dans color',
       'src/interface/plan/A.svelte:6 couleur « white » dans outline-color',
       'src/interface/plan/A.svelte:6 jeton déclaré --rang',
+      'src/interface/plan/teinte.js:1 couleur « #c00 » dans le script',
+      "src/interface/plan/teinte.js:2 jeton de conflit hors d'une règle de conflit du plan, dans le script",
     ]);
   });
 
@@ -1195,7 +1345,9 @@ describe('sources de l’interface : les couleurs (§ 12.7, § 13.3, § 13.5)', 
           '  .non-conflit { color: var(--couleur-conflit); }',
           '  .a, .b.conflit { fill: var(--couleur-conflit); }',
           '  .conflit-leve { fill: var(--couleur-conflit); }',
-          '  .b.conflit, .b .trait-conflit, .plateau-en-conflit { stroke: var(--couleur-conflit); }',
+          '  .b.conflit, .c .conflit { stroke: var(--couleur-conflit); }',
+          '  .fin-de-conflit { fill: var(--couleur-conflit); }',
+          '  .trait-conflit { fill: var(--couleur-conflit); }',
         ].join('\n'),
       }),
     };
@@ -1208,6 +1360,8 @@ describe('sources de l’interface : les couleurs (§ 12.7, § 13.3, § 13.5)', 
       "src/interface/plan/Trou.svelte:5 jeton de conflit hors d'une règle de conflit du plan, « .non-conflit »",
       "src/interface/plan/Trou.svelte:6 jeton de conflit hors d'une règle de conflit du plan, « .a, .b.conflit »",
       "src/interface/plan/Trou.svelte:7 jeton de conflit hors d'une règle de conflit du plan, « .conflit-leve »",
+      "src/interface/plan/Trou.svelte:9 jeton de conflit hors d'une règle de conflit du plan, « .fin-de-conflit »",
+      "src/interface/plan/Trou.svelte:10 jeton de conflit hors d'une règle de conflit du plan, « .trait-conflit »",
     ]);
   });
 
@@ -1226,6 +1380,7 @@ describe('sources de l’interface : les couleurs (§ 12.7, § 13.3, § 13.5)', 
           '  .trait.table-conflit { stroke: var(--couleur-conflit-table); }',
           '  .trait { fill: var(--couleur-conflit-voisins); }',
           '  .conflit-voisins { fill: var(--couleur-conflit-table); }',
+          '  .trait.table-conflit { fill: var(--couleur-conflit-voisins); }',
         ].join('\n'),
       }),
     };
@@ -1235,6 +1390,7 @@ describe('sources de l’interface : les couleurs (§ 12.7, § 13.3, § 13.5)', 
       "src/interface/plan/Motif.svelte:1 jeton de conflit hors d'une règle de conflit du plan, en ligne",
       "src/interface/plan/Motif.svelte:5 jeton de conflit hors d'une règle de conflit du plan, « .trait »",
       "src/interface/plan/Motif.svelte:6 jeton de conflit hors d'une règle de conflit du plan, « .conflit-voisins »",
+      "src/interface/plan/Motif.svelte:7 jeton de conflit hors d'une règle de conflit du plan, « .trait.table-conflit »",
     ]);
   });
 
@@ -1390,6 +1546,17 @@ describe('sources de l’interface : texte comprimé et animations (§ 7.4, § 1
     assert.deepEqual(avecArbre({ [admise.fichier]: style(tourne, images) }, releverTexteEtAnimation), [
       `${admise.fichier}:3 animation admise sans arrêt sous prefers-reduced-motion : ${admise.selecteur}`,
     ]);
+    // Un arrêt sous une requête qui ne demande pas le mouvement réduit — niée,
+    // ou de l'autre préférence — n'en est pas un.
+    for (const requete of ['not (prefers-reduced-motion: reduce)', '(prefers-reduced-motion: no-preference)', 'print, (prefers-reduced-motion: reduce)']) {
+      const faux = `  @media ${requete} { ${admise.selecteur} { animation: none; } }`;
+      assert.deepEqual(avecArbre({ [admise.fichier]: style(tourne, images, faux) }, releverTexteEtAnimation), [
+        `${admise.fichier}:3 animation admise sans arrêt sous prefers-reduced-motion : ${admise.selecteur}`,
+      ], requete);
+    }
+    // La requête admise, en minuscules ou non, avec ou sans espaces.
+    const serre = `  @media (PREFERS-REDUCED-MOTION:reduce) { ${admise.selecteur} { animation: none; } }`;
+    assert.deepEqual(avecArbre({ [admise.fichier]: style(tourne, images, serre) }, releverTexteEtAnimation), []);
     // Un arbre qui ne la porte plus : l'exception est sans objet.
     assert.deepEqual(avecArbre({ [ailleurs]: style() }, releverTexteEtAnimation), [
       `exception sans objet : ${admise.fichier} ${admise.selecteur}`,
@@ -1460,5 +1627,66 @@ describe('sources de l’interface : les sélecteurs élagués (§ 13.3, § 14.2
 
   test('un arbre sans composant fait échouer la garde', () => {
     assert.throws(() => avecArbre({ 'src/interface/a.js': '' }, releverSelecteursElagues), /aucun fichier examiné/);
+  });
+});
+
+describe('sources de l’interface : les désignations stables (contrainte 16)', () => {
+  test('chaque data-… que pose src/interface — gabarit ou script d’un composant, code d’un module — est dans DESIGNATIONS, et chaque entrée est posée quelque part', () => {
+    assert.ok(DESIGNATIONS.size > 100, `${DESIGNATIONS.size} désignations`);
+    exigerVide(releverDesignations(RACINE), 'désignations');
+  });
+
+  test('la garde relève un attribut inventé, par le gabarit, le script ou un module, un nom composé, une valeur hors d’une liste fermée, une pose calculée sous elle, et une entrée que rien ne pose', () => {
+    const designations = new Map([
+      ['data-ecran', { porteur: 'un écran', valeurs: ['accueil'] }],
+      ['data-commande', { porteur: 'une commande', valeurs: null }],
+      ['data-section', { porteur: 'une section', valeurs: ['plan', 'tables'] }],
+      ['data-absente', { porteur: 'rien', valeurs: null }],
+      ['data-theme', { porteur: 'posé par le script seul', valeurs: null }],
+    ]);
+    const fichiers = {
+      // Des poses par le script d'un composant, et par un module voisin.
+      'src/interface/Theme.svelte': composant({
+        script: [
+          "  document.documentElement.setAttribute('data-theme', theme);",
+          "  element.dataset.jeuDeDonnees = '';",
+          "  element.setAttribute('data-section', cle);",
+          "  element.setAttribute(`data-${nom}`, '');",
+          "  const lu = element.getAttribute('data-lue');",
+        ].join('\n'),
+        gabarit: '<p></p>',
+      }),
+      'src/interface/pose.js': "export const poser = (element) => element.setAttribute('data-module', 'oui');\n",
+      'src/interface/pose.test.js': "element.setAttribute('data-epreuve', '');\n",
+      'src/interface/Ecran.svelte': composant({
+        gabarit: [
+          '<section data-ecran="accueil" data-section="plan">',
+          '  <button data-commande={nom} data-invente>x</button>',
+          '  <p data-ecran="ailleurs"></p>',
+          '  <div data-section={cle}></div>',
+          '</section>',
+        ].join('\n'),
+      }),
+    };
+    assert.deepEqual(avecArbre(fichiers, (racine) => releverDesignations(racine, designations)), [
+      'src/interface/Ecran.svelte:2 data-invente hors de la liste',
+      'src/interface/Ecran.svelte:3 data-ecran="ailleurs" hors des valeurs de la liste',
+      'src/interface/Ecran.svelte:4 data-section : valeur calculée sous une liste fermée',
+      'src/interface/Theme.svelte:3 data-jeu-de-donnees hors de la liste',
+      'src/interface/Theme.svelte:4 data-section : valeur calculée sous une liste fermée',
+      'src/interface/Theme.svelte:5 data-… : nom calculé',
+      'src/interface/pose.js:1 data-module hors de la liste',
+      'data-section="tables" : aucun composant ne la pose',
+      'data-absente : aucun composant ne le pose',
+    ]);
+    assert.throws(() => releverDesignations(RACINE, new Map()), /désignations : liste vide/);
+  });
+
+  test('DESIGNATIONS est gelée : ni ajout, ni retrait, ni entrée modifiable', () => {
+    assert.throws(() => DESIGNATIONS.set('data-x', {}), TypeError);
+    assert.throws(() => DESIGNATIONS.delete('data-ecran'), TypeError);
+    assert.throws(() => DESIGNATIONS.clear(), TypeError);
+    assert.ok(Object.isFrozen(DESIGNATIONS.get('data-ecran')));
+    assert.ok(Object.isFrozen(DESIGNATIONS.get('data-ecran').valeurs));
   });
 });

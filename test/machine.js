@@ -60,11 +60,14 @@ export function reglagesSeries(coeurs, { couverture = false } = {}) {
 export const coeursDisponibles = () => availableParallelism();
 
 // Ligne que le rapporteur imprime, pour qu'un développeur sache sur quelle
-// série sa relance a porté.
+// série sa relance a porté. Une petite machine sans épreuve hors de la série
+// surveillée — sous la mesure de la couverture — la dit entière.
 export function ligneMachine({ petiteMachine, coeurs, horsSerieSurveillee }) {
   const compte = coeurs === 1 ? '1 cœur' : `${coeurs} cœurs`;
   if (!petiteMachine) return `Machine : ${compte} — processus complets, série surveillée entière.`;
   const ou = coeurs === 1 ? 'sur son seul cœur' : `sur les ${coeurs} cœurs`;
-  return `Machine : ${compte}, en deçà de ${SEUIL_COEURS} — threads ${ou} ; `
-    + `en série longue : ${horsSerieSurveillee.join(', ')}.`;
+  const serie = horsSerieSurveillee.length === 0
+    ? 'série surveillée entière'
+    : `en série longue : ${horsSerieSurveillee.join(', ')}`;
+  return `Machine : ${compte}, en deçà de ${SEUIL_COEURS} — threads ${ou} ; ${serie}.`;
 }

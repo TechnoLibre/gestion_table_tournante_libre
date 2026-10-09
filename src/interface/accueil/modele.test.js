@@ -48,7 +48,7 @@ const RACINE = 'C:\\Epreuve\\Tablees';
 // proposition classée.
 const AUCUN = Object.freeze({ mesuresDuRetenu: null, meilleureDuClassement: null });
 
-// Une ligne de la liste telle que la façade la rend (LigneListe, A3), lisible.
+// Une ligne de la liste telle que la façade la rend (LigneListe, evenements.js), lisible.
 function ligne(champs = {}) {
   return {
     base: 'Bal des Grisailles',
@@ -170,6 +170,13 @@ describe('signalementsDe (§ 8.1, § 8.8)', () => {
     const [signalement] = signalementsDe(recue);
     signalement.noms.push('Merles Z');
     assert.deepEqual(recue.doublonAvec, ['Merles B']);
+    // Les secours d'un état illisible sont copiés eux aussi.
+    const illisible = { base: 'Soirée vide', raison: 'VIDE', chemin: null, secours: { precedent: 2, journal: null } };
+    const lue = ligne({ base: 'Soirée vide', nom: null, illisible });
+    const [etat] = signalementsDe(lue);
+    assert.notEqual(etat.details.secours, illisible.secours);
+    etat.details.secours.journal = 7;
+    assert.deepEqual(lue.illisible.secours, { precedent: 2, journal: null });
   });
 });
 

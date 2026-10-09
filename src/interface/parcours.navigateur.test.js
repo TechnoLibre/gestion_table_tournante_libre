@@ -23,7 +23,7 @@
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { cdp } from 'vitest/browser';
 import { flushSync } from 'svelte';
 import { bilanRemplacement, cleNormalisee } from '../application/csv.js';
@@ -109,6 +109,18 @@ const memoire = {};
 beforeAll(async () => {
   await fixerCadre(1366, 700);
   m = await monterApp();
+});
+
+// La capture d'un échec prend pour nom de fichier le titre de son groupe et
+// celui de l'épreuve, un caractère pour un caractère ; un nom de plus de
+// 255 octets lève ENAMETOOLONG, et l'échec perd sa capture. Le titre complet,
+// compté en octets UTF-8 — une borne haute du nom —, garde une marge sous
+// cette limite.
+const TITRE_MAX_OCTETS = 200;
+
+beforeEach(({ task }) => {
+  const titre = `${task.suite?.name ?? ''} ${task.name}`;
+  expect(new TextEncoder().encode(titre).length, titre).toBeLessThanOrEqual(TITRE_MAX_OCTETS);
 });
 
 afterEach(() => {
@@ -363,8 +375,8 @@ async function choisir(conteneur, participant = null) {
 async function oublierChoix() {
   if (m.ui.etat().choix === null) return;
   const oublier = actionPlace('oublierChoix');
-  if (oublier !== null) await appuyer(oublier, 'oublier le choix');
-  else m.ui.choisir(null);
+  expect(oublier, 'la commande qui oublie le choix').not.toBeNull();
+  await appuyer(oublier, 'oublier le choix');
   await attendre('le choix oublié', () => m.ui.etat().choix === null);
 }
 
@@ -393,8 +405,9 @@ async function refusSurLePlan(poseAvant, attendue, code, remede, geste) {
 // plan, il couvrirait l'élément que vise le geste suivant.
 async function fermerLaPose() {
   if (m.ui.etat().pose === null) return;
-  const fermer = [...tous('[data-surface] button')].find((bouton) => texteDe(bouton) === t('plan.refus.fermer'));
-  if (fermer !== undefined) await appuyer(fermer, 'fermer le refus posé');
+  const fermer = dans('[data-surface] [data-commande="fermerPose"]');
+  expect(fermer, 'la commande qui ferme la pose').not.toBeNull();
+  await appuyer(fermer, 'fermer le refus posé');
   await attendre('la pose fermée', () => m.ui.etat().pose === null);
 }
 
@@ -407,8 +420,8 @@ async function refusPres(porteur, code, remede, geste) {
 
 // --- Le parcours (§ 2.1, § 19.3) ------------------------------------------------------
 
-describe('le parcours, depuis un répertoire neuf, par gestes seulement', { timeout: DUREE }, () => {
-  test('01 le répertoire vide : chaque démonstration du catalogue offerte, la version, le chemin ; créer « Soirée d’essai » l’ouvre en lecture', async () => {
+describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE }, () => {
+  test('01 le répertoire vide : le catalogue offert, la version, le chemin ; « Soirée d’essai » créée s’ouvre en lecture', async () => {
     await attendre('le premier écran', () => dans('[data-ecran="accueil"] [data-dossier-travail]'));
     expect(tous('[data-evenement]')).toHaveLength(0);
     const offertes = tous('[data-demonstration]');
@@ -459,7 +472,7 @@ describe('le parcours, depuis un répertoire neuf, par gestes seulement', { time
     expect(charge().tables[0].sieges).toBeNull();
   });
 
-  test('02 l’aperçu de l’import des cas limites : encodage et séparateur nommés, ceux de l’analyseur ; un groupe d’orthographes fondu, une ligne refusée', async () => {
+  test('02 l’aperçu des cas limites : encodage et séparateur de l’analyseur ; un groupe fondu, une ligne refusée', async () => {
     await ouvrirSection('import');
     const octets = await octetsCasLimites();
     m.fs.choisirFichierAImporter = async () => ({ nom: NOM_CAS_LIMITES, octets });
@@ -614,7 +627,7 @@ describe('le parcours, depuis un répertoire neuf, par gestes seulement', { time
     expect(charge().evenement.tours).toBe(3);
   });
 
-  test('07 le plan à l’échelle : chaque plateau mesure son diamètre au zoom lu, l’échelle graphique, la mention « disposition relative »', async () => {
+  test('07 le plan à l’échelle : chaque plateau à son diamètre au zoom lu, l’échelle, « disposition relative »', async () => {
     await ouvrirPlan();
     const { k } = vueDepuisTransform(dans('[data-vue]').getAttribute('transform'));
     expect(k).toBeGreaterThan(0);
@@ -722,7 +735,7 @@ describe('le parcours, depuis un répertoire neuf, par gestes seulement', { time
     await oublierChoix();
   });
 
-  test('11 générer à la graine écrite et au compte réduit : trois propositions au moins, celles du moteur ; l’ordre écrit, celui de la clé du moteur ; les colonnes de diversité ; retenir', async () => {
+  test('11 générer, graine écrite, compte réduit : trois propositions du moteur, dans l’ordre de sa clé ; diversité ; retenir', async () => {
     await ouvrirSection('generation');
     await taper(dans('[data-section="generation"] input[data-champ="graine"]'), String(GRAINE));
     let r = revision();
@@ -790,7 +803,8 @@ describe('le parcours, depuis un répertoire neuf, par gestes seulement', { time
     expect(charge().retenu.proposition).toBe(memoire.retenue);
   });
 
-  test('20 la lecture : glisser une personne, une table, tirer une poignée, poser une réservation — empreinte inchangée ; « Défaire » refusé avec « Modifier », puis rend l’état d’avant 19', async () => {
+  // Glisser une personne, une table, tirer une poignée, poser une réservation.
+  test('20 la lecture : quatre gestes du plan, empreinte inchangée ; « Défaire » refusé avec « Modifier », puis rend 19', async () => {
     await cliquer('[data-place-fixe] [data-commande="lecture"]');
     await attendre('la lecture', () => etat().mode === 'lecture');
     expect(dans('[data-mode]').dataset.marque).toBe('cadreLecture');
@@ -835,7 +849,9 @@ describe('le parcours, depuis un répertoire neuf, par gestes seulement', { time
 // --- L'ordre de lecture (§ 2.1) ---------------------------------------------------------
 
 describe('l’ordre de lecture, pas une séquence imposée', { timeout: DUREE }, () => {
-  test('sur l’événement retenu, en écriture : ajouter une personne, créer une table, désigner une animatrice, changer le nombre de tours — une entrée chacun, sans « Suivant »', async () => {
+  // Ajouter une personne, créer une table, désigner une animatrice, changer
+  // le nombre de tours.
+  test('sur le retenu, en écriture : une personne, une table, une animatrice, les tours — une entrée chacun, sans « Suivant »', async () => {
     expect(etat().mode).toBe('ecriture');
     expect(charge().retenu).not.toBeNull();
 
@@ -901,14 +917,17 @@ describe('l’ordre de lecture, pas une séquence imposée', { timeout: DUREE },
 
 // --- Les fenêtres (§ 2.1, § 5.9) --------------------------------------------------------
 
-describe('les fenêtres : seul un geste qui détruit de la saisie en ouvre une', { timeout: DUREE }, () => {
+describe('les fenêtres : seul un geste qui détruit en ouvre une', { timeout: DUREE }, () => {
   test('aucune fenêtre pendant les gestes non destructeurs du parcours, chacun exécuté', () => {
     expect(GESTES_NON_DESTRUCTEURS.length).toBeGreaterThan(0);
     expect([...gestesSurveilles].sort()).toEqual([...GESTES_NON_DESTRUCTEURS].sort());
     expect(fenetresVues).toEqual([]);
   });
 
-  test('« Remplacer », « Appliquer et réaligner », retirer un tour réservé, supprimer une personne ou une table réservées, « Retenir » sur un retenu ajusté : une fenêtre qui nomme ce qui part ; Annuler n’écrit rien', async () => {
+  // « Remplacer », « Appliquer et réaligner », retirer un tour réservé,
+  // supprimer une personne ou une table réservées, « Retenir » sur un retenu
+  // ajusté.
+  test('cinq gestes destructeurs : une fenêtre qui nomme ce qui part ; Annuler n’écrit rien', async () => {
     expect(etat().mode).toBe('ecriture');
     const [t1] = charge().tables.map(({ id }) => id);
 
@@ -1050,7 +1069,7 @@ describe('les fenêtres : seul un geste qui détruit de la saisie en ouvre une',
 
 // --- Lecture et bloqué, toutes familles (§ 8.4, § 9, § 19.3 20) -------------------------
 
-describe('lecture et bloqué : chaque famille de geste modifiant refusée, rien d’écrit', { timeout: DUREE }, () => {
+describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', { timeout: DUREE }, () => {
   // Chaque famille, tentée par son geste : le refus se pose là où le geste
   // a eu lieu, avec le remède attendu.
   async function toutesFamilles(code, remede) {
@@ -1212,7 +1231,7 @@ describe('lecture et bloqué : chaque famille de geste modifiant refusée, rien 
   // différé dans reglages_locaux.json (contrainte 4).
   const ecrituresDepuis = (rang) => m.trace.slice(rang).filter(([, , chemin]) => chemin !== '' && !chemin.endsWith('reglages_locaux.json'));
 
-  test('en lecture : quatorze familles refusées avec « Modifier », la charge et les fichiers inchangés ; le tri, le filtre, les listes de travail vivants', async () => {
+  test('en lecture : quatorze familles refusées avec « Modifier », rien d’écrit ; tri, filtre, listes de travail vivants', async () => {
     await cliquer('[data-place-fixe] [data-commande="lecture"]');
     await attendre('la lecture', () => etat().mode === 'lecture');
     const empreinte = serialiserCharge(charge());
@@ -1227,7 +1246,7 @@ describe('lecture et bloqué : chaque famille de geste modifiant refusée, rien 
     await rienEcrit(avant, 'lecture, regarder');
   });
 
-  test('sur un plan bloqué : quatorze familles refusées avec « Débloquer », la charge et les fichiers inchangés ; le tri, le filtre, les listes de travail vivants', async () => {
+  test('plan bloqué : quatorze familles refusées avec « Débloquer », rien d’écrit ; tri, filtre, listes de travail vivants', async () => {
     await cliquer('[data-place-fixe] [data-commande="modifier"]');
     await attendre('l’écriture', () => etat().mode === 'ecriture');
     const r = revision();

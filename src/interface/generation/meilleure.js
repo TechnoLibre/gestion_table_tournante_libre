@@ -12,10 +12,14 @@
 // que la liste des événements lit aussi par resumeDuMeilleur.
 
 import { premiereDuClassement } from '../../application/evaluation.js';
-import { evaluation, tableau } from '../propositions/modele.js';
+import { COLONNES, evaluation, tableau } from '../propositions/modele.js';
 
 /** La colonne du tableau que l'annonce reprend. */
 export const COLONNE_ANNONCEE = 'collisionsCumulees';
+
+/** La clé de l'intitulé de l'annonce : l'en-tête de sa colonne, tel que le
+ *  tableau des propositions l'écrit. */
+export const CLE_ANNONCEE = COLONNES.find(({ nom }) => nom === COLONNE_ANNONCEE).cle;
 
 /**
  * La proposition au rang 1 du classement, et sa cellule des collisions

@@ -26,6 +26,7 @@ import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage
 import { planDepuisFichier, versFichier } from '../../stockage/placements.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { CONFLITS } from '../marques.js';
+import { appartenanceDeCharge, nomDeCharge } from './vue_plan.js';
 import {
   ECART_ANNEAU,
   ECART_DESIGNATION,
@@ -115,11 +116,9 @@ const FIXTURE = new URL('../../../test/fixtures/plan/toutes_en_conflit.gtt.json'
 // La petite démonstration livrée, relue en mémoire.
 const petite = (cle = 'petite') => analyser(texteLivre(cle)).charge;
 
-// nomDe sur les participants de la charge : prénom et nom, ou le nom seul.
-const nomsDe = (charge) => {
-  const noms = new Map(charge.participants.map(({ id, nom, prenom }) => [id, prenom === null ? nom : `${prenom} ${nom}`]));
-  return (id) => noms.get(id);
-};
+// nomDe sur les participants de la charge : le nom affiché, celui que le
+// plan reçoit.
+const nomsDe = nomDeCharge;
 
 const options = (charge, autres = {}) => ({ k: 1, listes: true, miseEnEvidence: null, nomDe: nomsDe(charge), ...autres });
 
@@ -761,7 +760,7 @@ describe('partiesLigne : les tspans d\u{2019}une ligne, dans l\u{2019}ordre', ()
   });
 });
 
-// --- L'option poignee (I10) ------------------------------------------------------
+// --- L'option poignee -----------------------------------------------------------
 
 describe('modeleDessin : l\u{2019}option poignee dessine une table au nombre tiré, sans toucher l\u{2019}état (§ 7.1)', () => {
   test('sans option, ou poignee null : chaque table à sa capacité', () => {
@@ -819,7 +818,7 @@ describe('modeleDessin : l\u{2019}option poignee dessine une table au nombre tir
   });
 });
 
-// --- La sélection et l'élément actif (I11) ---------------------------------------
+// --- La sélection et l'élément actif ---------------------------------------------
 
 describe('modeleDessin : les options selection et actif marquent leur chaise, ou leur table, et elle seule (§ 7.1, § 7.3)', () => {
   // Les porteurs d'une marque : 'table:<id>' ou 'siege:<id>:<siège>'.
@@ -880,36 +879,40 @@ describe('modeleDessin : les options selection et actif marquent leur chaise, ou
   });
 });
 
-// --- Le détail d'une table en conflit (I11) --------------------------------------
+// --- Le détail d'une table en conflit --------------------------------------------
 
-// L'appartenance de chaque participant de la charge, par identifiant.
-const appartenancesDe = (charge) => {
-  const appartenances = new Map(charge.participants.map(({ id, appartenance }) => [id, appartenance]));
-  return (id) => appartenances.get(id) ?? null;
-};
+// L'appartenance de chaque participant de la charge, par identifiant : celle
+// que l'infobulle reçoit.
+const appartenancesDe = appartenanceDeCharge;
 
 describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3)', () => {
-  // Les lignes attendues d'une table : séparer les appartenances, une ligne
-  // par appartenance, dans l'ordre de leur première paire ; les autres
-  // règles, une ligne chacune.
-  function lignesAttendues(table, nomDe, appartenanceDe) {
-    const lignes = [];
+  // Ce que le détail d'une table doit tenir, jugé sans en refaire le calcul :
+  // les règles dans l'ordre du moteur, une ligne par règle hors séparer, et,
+  // pour séparer, des lignes d'appartenances deux à deux distinctes dont la
+  // suite des groupes, ligne après ligne, est une permutation stable des
+  // paires du moteur, chaque paire sous l'appartenance de ses deux personnes.
+  function verifierDetail(detail, table, nomDe, appartenanceDe) {
+    assert.equal(detail.numero, table.numero);
+    assert.equal(detail.nombre, table.conflits.nombre);
+    const regles = [...new Set(detail.lignes.map(({ regle }) => regle))];
+    assert.deepEqual(regles, table.conflits.regles.map(({ regle }) => regle));
     for (const regle of table.conflits.regles) {
-      const cle = `plan.infobulle.${regle.regle}`;
+      const lignes = detail.lignes.filter((ligne) => ligne.regle === regle.regle);
+      for (const ligne of lignes) assert.equal(ligne.cle, `plan.infobulle.${regle.regle}`);
+      const groupes = (regle.paires ?? regle.personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe));
       if (regle.regle !== 'separerAppartenances') {
-        const groupes = (regle.paires ?? regle.personnes.map((id) => [id])).map((groupe) => groupe.map(nomDe));
-        lignes.push({ regle: regle.regle, cle, appartenance: null, groupes });
+        assert.deepEqual(lignes, [{ regle: regle.regle, cle: lignes[0].cle, appartenance: null, groupes }]);
         continue;
       }
-      for (const [a, b] of regle.paires) {
-        const appartenance = appartenanceDe(a);
-        assert.equal(appartenanceDe(b), appartenance);
-        const ligne = lignes.find((l) => l.regle === regle.regle && l.appartenance === appartenance);
-        if (ligne === undefined) lignes.push({ regle: regle.regle, cle, appartenance, groupes: [[nomDe(a), nomDe(b)]] });
-        else ligne.groupes.push([nomDe(a), nomDe(b)]);
+      const appartenances = lignes.map(({ appartenance }) => appartenance);
+      assert.deepEqual(appartenances, [...new Set(regle.paires.map(([a]) => appartenanceDe(a)))]);
+      for (const ligne of lignes) {
+        const paires = regle.paires.filter(([a]) => appartenanceDe(a) === ligne.appartenance);
+        for (const [a, b] of paires) assert.equal(appartenanceDe(b), ligne.appartenance);
+        assert.deepEqual(ligne.groupes, paires.map((paire) => paire.map(nomDe)));
       }
+      assert.equal(lignes.reduce((n, ligne) => n + ligne.groupes.length, 0), groupes.length);
     }
-    return lignes;
   }
 
   test('petite démonstration en conflit : chaque règle violée, ses paires ou ses personnes, dans l’ordre du moteur ; chaque paire réunie nomme son appartenance', () => {
@@ -926,7 +929,7 @@ describe('detailConflits : le détail que rend le moteur, nommé (§ 7.1, § 7.3
           continue;
         }
         vus += 1;
-        assert.deepEqual(detail, { numero: table.numero, nombre: table.conflits.nombre, lignes: lignesAttendues(table, nomDe, appartenanceDe) });
+        verifierDetail(detail, table, nomDe, appartenanceDe);
         for (const ligne of detail.lignes) {
           assert.ok(typeof t(ligne.cle) === 'string' && t(ligne.cle).length > 0, ligne.cle);
           if (ligne.regle === 'separerAppartenances') {
@@ -1054,7 +1057,7 @@ describe('legendeConflits : les règles actives, leur marque et leur libellé (�
   });
 });
 
-// --- Le texte entier d'une ligne, et les actions des panneaux (I11) --------------
+// --- Le texte entier d'une ligne, et les actions des panneaux --------------------
 
 describe('texteLigne : la ligne d’une chaise en un texte, nom accessible du siège', () => {
   const nomDe = (id) => ({ 1: 'Iris Ombrelle', 2: 'Théo Pervenche' })[id];
@@ -1206,5 +1209,11 @@ describe('les clés que les panneaux composent existent (§ 14.6)', () => {
     for (const action of menu) assert.equal(typeof t(`plan.menu.${action}`), 'string', action);
     for (const regle of ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable']) assert.equal(typeof t(`plan.infobulle.${regle}`), 'string');
     assert.equal(typeof t('plan.infobulle.finAppartenance'), 'string');
+  });
+
+  test('plan.infobulle.<règle> : chaque ligne de l’infobulle s’ouvre sur une capitale, la même casse pour toutes', () => {
+    for (const regle of ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable']) {
+      assert.match(t(`plan.infobulle.${regle}`), /^\p{Lu}/u, regle);
+    }
   });
 });

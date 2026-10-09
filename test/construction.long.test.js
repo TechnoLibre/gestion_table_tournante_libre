@@ -247,6 +247,9 @@ describe('construction : le relevé des adresses chargées', () => {
       "var d=`<div style=\"background: url('https://exemple.invalid/n.png')\">${x}</div>`;",
       'var s="<svg xmlns=\\"http://www.w3.org/2000/svg\\"><use href=\\"#a\\"/></svg>";',
       'var o=new URL(e,import.meta.url);',
+      // url( précédé d'un point, d'un mot ou d'un $ est un appel de méthode
+      // ou de fonction, non une feuille : rien à relever.
+      'var y=x.url("https://exemple.invalid/u.png"),z=$url("https://exemple.invalid/v.png"),c=curl(\'https://exemple.invalid/w.png\');',
       // Le guillemet d'une valeur d'attribut écrit en entité HTML, comme
       // Svelte compile style='background: url("…")'.
       'var p=$.from_html(`<div style="background: url(&quot;https://exemple.invalid/o.png&quot;)"></div>`);',

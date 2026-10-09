@@ -50,7 +50,7 @@
   import { explicationDeColonne, texteCellule } from '../propositions/modele.js';
   import Avancement from './Avancement.svelte';
   import Reglages from './Reglages.svelte';
-  import { COLONNE_ANNONCEE, meilleureProposition } from './meilleure.js';
+  import { CLE_ANNONCEE, COLONNE_ANNONCEE, meilleureProposition } from './meilleure.js';
 
   const t = getContext('t');
   const format = getContext('format');
@@ -182,7 +182,7 @@
               onmouseenter={expliquer}
               onmouseleave={taire}
               onfocus={expliquer}
-              onblur={taire}>{t('propositions.colonne.collisionsCumulees')}</dt
+              onblur={taire}>{t(CLE_ANNONCEE)}</dt
             >
             <dd data-meilleure-collisions>{texteCellule(meilleure.cellule, { t, format })}</dd>
           </div>

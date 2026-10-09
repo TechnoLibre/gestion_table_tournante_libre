@@ -24,8 +24,7 @@
 import { mount } from 'svelte';
 import { creerExecuteurTravailleur } from './application/executeur_travailleur.js';
 import { creerHorlogeSysteme } from './application/horloge.js';
-import { CATALOGUE } from './demo/catalogue.js';
-import { LIVREES } from './demo/livrees.js';
+import { demonstrationsLivrees } from './demo/livrees.js';
 import App from './interface/App.svelte';
 import Travailleur from './interface/generation/travailleur.js?worker&inline';
 import { FORMAT } from './stockage/document.js';
@@ -41,14 +40,6 @@ const pressePapiers = sousElectron
   ? { copier: async (texte) => void (await pont.copier(texte)) }
   : { copier: (texte) => navigator.clipboard.writeText(texte) };
 
-// Chaque démonstration livrée, nommée par l'entrée de même clé du catalogue,
-// dans l'ordre du catalogue.
-const demonstrations = LIVREES.map(({ cle, texte }) => ({
-  cle,
-  nom: CATALOGUE.find((entree) => entree.cle === cle).nom,
-  texte,
-}));
-
 mount(App, {
   target: document.body,
   props: {
@@ -61,7 +52,7 @@ mount(App, {
     identifiant: () => crypto.randomUUID(),
     langue: 'fr',
     provenance: import.meta.env.MODE,
-    demonstrations,
+    demonstrations: demonstrationsLivrees(),
     formatCourant: FORMAT,
     produitVersion: VERSION.affichee,
     versionWindows: VERSION.windows,

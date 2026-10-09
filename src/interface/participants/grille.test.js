@@ -20,12 +20,15 @@ import {
   cleDeColonne,
   cleDeGroupement,
   cleDeStatut,
+  clesPremierNiveau,
   colonnesOffertes,
+  deplierChemin,
   entreeValide,
   groupesGrille,
   itineraire,
   lignesGrille,
   lignesVisibles,
+  ligneVoisine,
   niveauxAffiches,
   nomExport,
   orthographeExistante,
@@ -389,6 +392,24 @@ describe('groupesGrille : la liste groupée par une colonne', () => {
     }
   });
 
+  test('le libellé ne dépend pas du filtre : toutes les lignes, avant le filtre, nomment chaque groupe, à chaque niveau', () => {
+    // Le filtre ne garde qu'une personne du groupe, qui n'en est pas le plus petit identifiant.
+    const filtrees = lignesDe(membres, { filtre: 'ombrelle' });
+    assert.deepEqual(ids(filtrees), [3]);
+    assert.equal(grouper(filtrees, 'appartenance')[0].libelle, 'Club des Merles');
+    const toutes = lignesDe(membres);
+    const options = { tri: null, cleNormalisee, statuts: null, toutes };
+    assert.deepEqual(resume(groupesGrille(filtrees, ['appartenance'], options)), [
+      { cle: 'texte:club des merles', libelle: 'CLUB DES MERLES', cleLibelle: null, compte: 1, ids: [3] },
+    ]);
+    const [present] = groupesGrille(filtrees, ['exclu', 'appartenance'], options);
+    assert.deepEqual(resume(present.sousGroupes), [
+      { cle: 'exclu:non/texte:club des merles', libelle: 'CLUB DES MERLES', cleLibelle: null, compte: 1, ids: [3] },
+    ]);
+    // Sans filtre, les mêmes groupes que sans l'option.
+    assert.deepEqual(groupesGrille(toutes, ['appartenance'], options), grouper(toutes, 'appartenance'));
+  });
+
   test('trié par la colonne groupée, les groupes suivent son sens ; le groupe vide reste après toute valeur', () => {
     const tri = { colonne: 'appartenance', sens: 'decroissant' };
     const groupes = grouper(lignesDe(membres, { tri }), 'appartenance', { tri });
@@ -716,6 +737,29 @@ describe('lignesVisibles, cheminDe : les groupes repliés et la navigation', () 
     assert.deepEqual([...replies], ['vide']);
   });
 
+  test('deplierChemin : retire des repliés chaque clé du chemin ; sans clé repliée sur le chemin, l’ensemble reçu lui-même', () => {
+    const replies = new Set(['vide', 'texte:club des merles', 'texte:cercle des pinsons']);
+    const deplies = deplierChemin(replies, cheminDe(groupes, 3));
+    assert.deepEqual([...deplies], ['vide', 'texte:cercle des pinsons']);
+    assert.deepEqual([...replies], ['vide', 'texte:club des merles', 'texte:cercle des pinsons']);
+    // Rien à déplier : le même ensemble, que la grille ne réécrit pas.
+    assert.equal(deplierChemin(deplies, cheminDe(groupes, 3)), deplies);
+    assert.equal(deplierChemin(replies, []), replies);
+  });
+
+  test('clesPremierNiveau : les clés des groupes du premier niveau, dans leur ordre, sans leurs sous-groupes', () => {
+    assert.deepEqual(clesPremierNiveau(groupes), groupes.map(({ cle }) => cle));
+    assert.deepEqual(clesPremierNiveau([]), []);
+  });
+
+  test('ligneVoisine : le rang qu’une ligne sortie de la liste laisse à sa suivante, la dernière quand elle fermait la liste ; null sur une liste vide', () => {
+    assert.equal(ligneVoisine(0, 3), 0);
+    assert.equal(ligneVoisine(2, 3), 2);
+    assert.equal(ligneVoisine(3, 3), 2);
+    assert.equal(ligneVoisine(5, 1), 0);
+    assert.equal(ligneVoisine(0, 0), null);
+  });
+
   test('cheminDe : la clé du groupe d’une personne, vide hors de tout groupe', () => {
     assert.deepEqual(cheminDe(groupes, 3), ['texte:club des merles']);
     assert.deepEqual(cheminDe(groupes, 4), ['vide']);
@@ -733,6 +777,15 @@ describe('lignesVisibles, cheminDe : les groupes repliés et la navigation', () 
     { tri: null, cleNormalisee, statuts: null },
   );
   const MERLES = 'texte:club des merles';
+
+  test('imbriqués : clesPremierNiveau ne rend aucun sous-groupe ; deplierChemin déplie chaque niveau du chemin', () => {
+    const premiers = clesPremierNiveau(imbriques);
+    assert.deepEqual(premiers, imbriques.map(({ cle }) => cle));
+    assert.ok(premiers.every((cle) => !cle.includes('/')));
+    const chemin = cheminDe(imbriques, 3);
+    assert.equal(chemin.length, 2);
+    assert.deepEqual([...deplierChemin(new Set([...chemin, 'vide']), chemin)], ['vide']);
+  });
 
   test('imbriqués : les lignes visibles suivent les sous-groupes ; replier un sous-groupe ne retire que les siennes, replier son parent retire tout le parent', () => {
     assert.deepEqual(ids(lignesVisibles(imbriques, new Set())), [5, 2, 1, 3, 4]);

@@ -8,6 +8,8 @@
   // table d'évaluation ; puis celles hors classement, « non comparables »,
   // avec leurs raisons et les personnes qu'elles nomment. Chaque cellule
   // s'écrit par texteCellule (modele.js) ; aucune valeur ne se calcule ici.
+  // Les violations d'une ligne comparable — retenu compris — se lisent sous
+  // son identifiant.
   //
   // vue : ce que rend tableau(), libellés et étendues compris. nommer(id) :
   // le nom affiché d'une personne, null pour id null ou pour une personne que
@@ -75,17 +77,21 @@
   {/if}
 {/snippet}
 
+{#snippet violations(ligne)}
+  {#if ligne.comparable}
+    {#each ligne.violations as violation, rang (rang)}
+      <p>{t(violation.cle, violation.details)}</p>
+    {/each}
+  {/if}
+{/snippet}
+
 {#snippet identite(ligne)}
   <td data-colonne="proposition" data-marque={marque('proposition')} class:surlignee={surlignee === 'proposition'}>
     <span class="identifiant">{format.nombre(ligne.id)}</span>
     {#if ligne.retenue}
       <span class="marque">{t('propositions.marque.retenue')}</span>
     {/if}
-    {#if ligne.comparable}
-      {#each ligne.violations as violation, rang (rang)}
-        <p>{t(violation.cle, violation.details)}</p>
-      {/each}
-    {/if}
+    {@render violations(ligne)}
   </td>
 {/snippet}
 
@@ -129,6 +135,7 @@
           <td data-colonne="proposition" data-marque={marque('proposition')} class:surlignee={surlignee === 'proposition'}>
             <span class="identifiant">{format.nombre(vue.retenu.id)}</span>
             <p>{t(vue.retenu.libelle.cle, vue.retenu.libelle.details)}</p>
+            {@render violations(vue.retenu)}
           </td>
           {@render mesures(vue.retenu)}
           <td data-colonne="commandes">

@@ -15,8 +15,8 @@ import { texteLivre } from '../../demo/livrees.js';
 import { rechercher } from '../../moteur/recherche.js';
 import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { VERSION } from '../../version.genere.js';
-import { tableau } from '../propositions/modele.js';
-import { meilleureProposition } from './meilleure.js';
+import { evaluation, tableau } from '../propositions/modele.js';
+import { CLE_ANNONCEE, meilleureProposition } from './meilleure.js';
 
 const chargeDemo = (cle) => analyser(texteLivre(cle)).charge;
 const executer = (charge, nom, args) => appliquerCommande(nom, charge, args).charge;
@@ -90,6 +90,10 @@ function rangUn(charge) {
 }
 
 describe('la meilleure proposition (§ 5.4, § 5.7)', () => {
+  test('l’annonce s’intitule par l’en-tête de sa colonne du tableau, la même dont elle reprend la cellule', () => {
+    assert.equal(CLE_ANNONCEE, 'propositions.colonne.collisionsCumulees');
+  });
+
   test('sans proposition ni retenu : null', () => {
     assert.equal(meilleureProposition(chargeDemo('petite')), null);
     assert.equal(meilleureProposition(chargeSix()), null);
@@ -129,6 +133,35 @@ describe('la meilleure proposition (§ 5.4, § 5.7)', () => {
     assert.equal(rendu.id, 2);
     assert.equal(rendu.cellule.valeur, 4);
     assert.deepEqual(rendu, rangUn(charge));
+  });
+
+  test('le retenu ne change pas le rang 1 : la 1 retenue reste derrière la 2 ; seule à se classer, elle l’est', () => {
+    const charge = chargeSix();
+    charge.propositions = [propositionDe(charge, 1, SEPARES), propositionDe(charge, 2, ENSEMBLE)];
+    charge.prochainsIds.proposition = 3;
+    const retenue = executer(charge, 'retenirProposition', { id: 1 });
+    assert.equal(retenue.retenu.proposition, 1);
+    const rendu = meilleureProposition(retenue);
+    assert.equal(rendu.id, 2);
+    assert.equal(rendu.cellule.valeur, 4);
+    assert.deepEqual(rendu, rangUn(retenue));
+    // Effacer les propositions garde la retenue, seule au classement.
+    const seule = executer(retenue, 'effacerPropositions', {});
+    assert.deepEqual(seule.propositions.map(({ id }) => id), [1]);
+    assert.deepEqual(meilleureProposition(seule), { ...rangUn(seule), id: 1 });
+    assert.equal(meilleureProposition(seule).cellule.valeur, 0);
+  });
+
+  test('une configuration que la mesure refuse : null, sans lever, là où l’évaluation rend son refus', () => {
+    const charge = chargeSix();
+    charge.propositions = [propositionDe(charge, 1, SEPARES)];
+    charge.prochainsIds.proposition = 2;
+    assert.notEqual(meilleureProposition(charge), null);
+    // Quatre personnes réservées à la table 1, de trois places, à chaque tour.
+    const refusee = structuredClone(charge);
+    refusee.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+    assert.equal(evaluation(refusee).refus?.code, 'SURRESERVATION');
+    assert.equal(meilleureProposition(refusee), null);
   });
 
   test('aucune proposition comparable — population changée — : null', () => {

@@ -21,6 +21,7 @@
 // Chaque texte décrit l'événement demo:<clé>, à la révision 1, en brouillon,
 // sans proposition.
 import { serialiser } from '../stockage/canonique.js';
+import { CATALOGUE } from './catalogue.js';
 import grande from './livrees/grande.gtt.json' with { type: 'json' };
 import grandeSansException from './livrees/grande-sans-exception.gtt.json' with { type: 'json' };
 import petite from './livrees/petite.gtt.json' with { type: 'json' };
@@ -54,4 +55,17 @@ export function texteLivre(cle) {
   const livree = LIVREES.find((candidate) => candidate.cle === cle);
   if (livree === undefined) throw new RangeError(`aucune démonstration livrée de clé ${JSON.stringify(cle)}`);
   return livree.texte;
+}
+
+/**
+ * Les démonstrations qu'App offre (§ 15) : chaque démonstration livrée, dans
+ * l'ordre de LIVREES, nommée par l'entrée de même clé du catalogue — { cle,
+ * nom, texte }, un tableau neuf à chaque appel. src/main.js et le montage
+ * des épreuves du navigateur les passent tous deux à App : la composition
+ * vit ici seule.
+ *
+ * @returns {Array<{cle: string, nom: string, texte: string}>}
+ */
+export function demonstrationsLivrees() {
+  return LIVREES.map(({ cle, texte }) => ({ cle, nom: CATALOGUE.find((entree) => entree.cle === cle).nom, texte }));
 }

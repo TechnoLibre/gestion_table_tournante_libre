@@ -210,7 +210,10 @@ const segment = (texte) => texte.replaceAll('%', '%25').replaceAll('/', '%2F');
  *
  * Une colonne de texte groupe par la clé normalisée, comme le tri la lit :
  * le groupe se nomme par l'orthographe du plus petit identifiant qu'il
- * compte, que ni le tri ni l'ordre reçu ne changent. Un champ null forme le
+ * compte parmi toutes les lignes (options.toutes, celles d'avant le filtre,
+ * les lignes reçues sans elles), que ni le tri, ni l'ordre reçu, ni le
+ * filtre ne changent : à chaque niveau, les lignes de toutes qui portent les
+ * valeurs du chemin du groupe le nomment. Un champ null forme le
  * groupe vide, après toute valeur dans les deux sens. L'exclusion groupe
  * les présentes avant les exclues. Le statut groupe par statuts.get(id),
  * dans l'ordre de GROUPES_STATUT : une exclue, absente des statuts
@@ -237,13 +240,15 @@ const segment = (texte) => texte.replaceAll('%', '%25').replaceAll('/', '%2F');
  *        au moins une, la plus large d'abord
  * @param {{tri: null|{colonne: string, sens: 'croissant'|'decroissant'},
  *          cleNormalisee: (texte: string) => string,
- *          statuts: Map<number, 'ancre'|'partiel'|'mobile'>|null}} options
+ *          statuts: Map<number, 'ancre'|'partiel'|'mobile'>|null,
+ *          toutes?: Array<Object>}} options   toutes : les lignes d'avant le
+ *        filtre, qui contiennent celles reçues ; elles ne font que nommer
  * @returns {Array<{cle: string, niveau: number, colonne: string, libelle: string|null,
  *          cleLibelle: string|null, compte: number, lignes: Array<Object>, sousGroupes: Array<Object>|null}>}
  * @throws {RangeError} colonnes qui n'est pas une liste, vide, répétée ou
  *         hors de GROUPEMENTS
  */
-export function groupesGrille(lignes, colonnes, { tri, cleNormalisee, statuts }) {
+export function groupesGrille(lignes, colonnes, { tri, cleNormalisee, statuts, toutes = lignes }) {
   if (
     !Array.isArray(colonnes) ||
     colonnes.length === 0 ||
@@ -252,13 +257,14 @@ export function groupesGrille(lignes, colonnes, { tri, cleNormalisee, statuts })
   ) {
     throw new RangeError(`groupement inconnu : ${JSON.stringify(colonnes)}`);
   }
-  return grouperNiveau(lignes, colonnes, 1, null, { tri, cleNormalisee, statuts });
+  return grouperNiveau(lignes, toutes, colonnes, 1, null, { tri, cleNormalisee, statuts });
 }
 
 // Les groupes des lignes sur colonnes[niveau - 1], chacun sous-groupé par
-// les colonnes suivantes ; parent est la clé du groupe qui les contient,
-// null au premier niveau.
-function grouperNiveau(lignes, colonnes, niveau, parent, options) {
+// les colonnes suivantes et nommé par les lignes de toutes qui portent sa
+// valeur ; parent est la clé du groupe qui les contient, null au premier
+// niveau.
+function grouperNiveau(lignes, toutes, colonnes, niveau, parent, options) {
   const { tri, cleNormalisee, statuts } = options;
   const colonne = colonnes[niveau - 1];
   const signe = tri !== null && tri.colonne === colonne ? SENS.get(tri.sens) : 1;
@@ -280,20 +286,26 @@ function grouperNiveau(lignes, colonnes, niveau, parent, options) {
     return { segment: `texte:${segment(cle)}`, rang: cle, libelle: p[colonne], cleLibelle: null };
   };
 
-  const parSegment = new Map();
-  for (const p of lignes) {
-    const valeur = valeurDe(p);
-    const groupe = parSegment.get(valeur.segment);
-    if (groupe === undefined) {
-      parSegment.set(valeur.segment, { ...valeur, plusPetitId: p.id, lignes: [p] });
-      continue;
+  // Les lignes par segment, chaque segment nommé par son plus petit identifiant.
+  const parValeur = (liste) => {
+    const parSegment = new Map();
+    for (const p of liste) {
+      const valeur = valeurDe(p);
+      const groupe = parSegment.get(valeur.segment);
+      if (groupe === undefined) {
+        parSegment.set(valeur.segment, { ...valeur, plusPetitId: p.id, lignes: [p] });
+        continue;
+      }
+      groupe.lignes.push(p);
+      if (p.id < groupe.plusPetitId) {
+        groupe.plusPetitId = p.id;
+        groupe.libelle = valeur.libelle;
+      }
     }
-    groupe.lignes.push(p);
-    if (p.id < groupe.plusPetitId) {
-      groupe.plusPetitId = p.id;
-      groupe.libelle = valeur.libelle;
-    }
-  }
+    return parSegment;
+  };
+  const parSegment = parValeur(lignes);
+  const nommes = toutes === lignes ? parSegment : parValeur(toutes);
 
   // Deux groupes ont deux rangs distincts : la comparaison ne rend jamais 0.
   const comparer = (a, b) => {
@@ -304,15 +316,17 @@ function grouperNiveau(lignes, colonnes, niveau, parent, options) {
   };
   return [...parSegment.values()].sort(comparer).map(({ segment: propre, libelle, cleLibelle, lignes: membres }) => {
     const cle = parent === null ? propre : `${parent}/${propre}`;
+    const nomme = nommes.get(propre);
+    const semblables = nomme === undefined ? membres : nomme.lignes;
     return {
       cle,
       niveau,
       colonne,
-      libelle,
+      libelle: nomme === undefined ? libelle : nomme.libelle,
       cleLibelle,
       compte: membres.length,
       lignes: membres,
-      sousGroupes: niveau === colonnes.length ? null : grouperNiveau(membres, colonnes, niveau + 1, cle, options),
+      sousGroupes: niveau === colonnes.length ? null : grouperNiveau(membres, semblables, colonnes, niveau + 1, cle, options),
     };
   });
 }
@@ -347,6 +361,47 @@ export function basculerGroupe(replies, cle) {
   if (suivants.has(cle)) suivants.delete(cle);
   else suivants.add(cle);
   return suivants;
+}
+
+/**
+ * Les groupes repliés une fois déplié chaque groupe du chemin — celui d'une
+ * ligne que la grille doit montrer, de cheminDe. Sans clé repliée sur le
+ * chemin, l'ensemble reçu lui-même, que la grille n'a pas à réécrire ; sinon
+ * un nouvel ensemble.
+ *
+ * @param {Set<string>} replies
+ * @param {Array<string>} chemin
+ * @returns {Set<string>}
+ */
+export function deplierChemin(replies, chemin) {
+  if (!chemin.some((cle) => replies.has(cle))) return replies;
+  return new Set([...replies].filter((cle) => !chemin.includes(cle)));
+}
+
+/**
+ * Le rang de la ligne qui prend la place d'une ligne sortie de la liste —
+ * le filtre ne la montre plus —, au rang rangAvant qu'elle occupait : la
+ * suivante, qui a glissé à ce rang, ou la dernière quand elle fermait la
+ * liste ; null quand la liste, de nombre lignes, est vide.
+ *
+ * @param {number} rangAvant
+ * @param {number} nombre
+ * @returns {number|null}
+ */
+export function ligneVoisine(rangAvant, nombre) {
+  if (nombre === 0) return null;
+  return Math.min(rangAvant, nombre - 1);
+}
+
+/**
+ * Les clés des groupes du premier niveau, dans leur ordre : celles que
+ * « Tout replier » replie, leurs sous-groupes se cachant avec eux.
+ *
+ * @param {Array<{cle: string}>} groupes   ceux de groupesGrille
+ * @returns {Array<string>}
+ */
+export function clesPremierNiveau(groupes) {
+  return groupes.map(({ cle }) => cle);
 }
 
 /**

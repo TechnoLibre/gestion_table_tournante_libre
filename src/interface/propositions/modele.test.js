@@ -37,6 +37,7 @@ import {
   explicationDeColonne,
   nomDe,
   retenuAjuste,
+  surlignee,
   tableau,
   texteCellule,
 } from './modele.js';
@@ -116,7 +117,7 @@ const DEUX_COLLEGUES = [
 
 // Trois plans de la petite démonstration au conflit inévitable, nommés par
 // leurs collisions (cumulées, distinctes), au même plus grand écart au
-// plafond a priori : ceux de l'épreuve de la table d'évaluation (A6).
+// plafond a priori : ceux de l'épreuve de la table d'évaluation.
 const PLANS_CONFLIT = [
   {
     nom: '(4, 1)',
@@ -381,7 +382,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
   // Les morceaux qui désignent une colonne : leur critère et leur colonne.
   const designes = (morceaux) => morceaux.filter(({ colonne }) => colonne !== null).map(({ critere, colonne }) => [critere, colonne]);
 
-  test('la phrase cite les cinq critères dans l’ordre, puis l’identifiant, mot pour mot ; les trois plans d’A6 : (6, 6), (4, 2), (4, 1)', () => {
+  test('la phrase cite les cinq critères dans l’ordre, puis l’identifiant, mot pour mot ; les trois plans de PLANS_CONFLIT : (6, 6), (4, 2), (4, 1)', () => {
     const charge = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
     const vue = tableau(evaluer(charge));
     assert.deepEqual(vue.lignes.map(({ id }) => id), [3, 2, 1]);
@@ -757,5 +758,14 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
     assert.equal(explicationDeColonne('rang'), 'propositions.explication.rang');
     assert.throws(() => explicationDeColonne('redondance'), TypeError);
     assert.throws(() => explicationDeColonne('moyenneRencontres'), TypeError);
+  });
+});
+
+describe('surlignee : la colonne surlignée, du survol et du focus (§ 5.7)', () => {
+  test('le nom survolé l’emporte ; sans survol, celui qui a le focus ; ni l’un ni l’autre, rien', () => {
+    assert.equal(surlignee('excedentCollisions', 'proposition'), 'excedentCollisions');
+    assert.equal(surlignee(null, 'proposition'), 'proposition');
+    assert.equal(surlignee('excedentCollisions', null), 'excedentCollisions');
+    assert.equal(surlignee(null, null), null);
   });
 });

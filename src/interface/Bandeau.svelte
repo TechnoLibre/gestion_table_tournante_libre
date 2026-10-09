@@ -17,7 +17,8 @@
   // Refus, qui pose son texte et son remède en Commande — écrire ailleurs
   // sous un support rompu. Ce refus se pose sous les commandes, hors du
   // flux : le bandeau garde sa hauteur, et l'écran de l'événement, sa place
-  // fixe comprise, ne bouge pas (§ 8.4).
+  // fixe comprise, ne bouge pas (§ 8.4). Le refus est un bloc : les
+  // commandes qui le portent sont un <div>, non un <span>.
   import { getContext } from 'svelte';
   import { cleAnnonceFormat, cleDeMode } from './mode.js';
   import Refus from './primitives/Refus.svelte';
@@ -41,7 +42,7 @@
   {#if cleAnnonce !== null}
     <span class="annonce" data-avertissement="annonceFormat">{t(cleAnnonce)}</span>
   {/if}
-  <span class="commandes">
+  <div class="commandes">
     {#if etat.evenement !== null}
       <button type="button" data-commande="liste" onclick={revenirALaListe}>{t('coquille.liste')}</button>
       {#if refusListe !== null}
@@ -62,7 +63,7 @@
       {/each}
     </span>
     <button type="button" data-commande="apropos" onclick={ouvrirApropos}>{t('coquille.apropos.titre')}</button>
-  </span>
+  </div>
 </header>
 
 <style>

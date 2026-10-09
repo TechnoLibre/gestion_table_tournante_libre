@@ -3,7 +3,7 @@
 
 // Le modèle de l'accueil, pur (§ 8.1, § 8.6, § 8.8) : ce que les composants
 // de la liste des événements affichent, sans arithmétique ni texte. Une
-// ligne de la liste (LigneListe de la façade, A3) devient ses six
+// ligne de la liste (LigneListe de la façade, evenements.js) devient ses six
 // informations et ses signalements, mis en forme, puis, son résumé reçu, les
 // deux mesures de son retenu et la meilleure proposition de son
 // classement ; une question du dossier de travail, ses réponses ; un état
@@ -60,7 +60,7 @@ const CLE_VIDE = 'format.vide';
 
 // Les réponses de chaque question du dossier de travail, dans l'ordre où
 // l'accueil les offre, et la clé de leur libellé : celles qu'admet
-// facade.repondre (A3).
+// facade.repondre (evenements.js).
 const REPONSES = new Map([
   [
     'PORTABLE_NON_INSCRIPTIBLE',
@@ -102,25 +102,27 @@ export function cleDEtat(etat) {
 }
 
 /**
- * Les signalements d'une ligne (§ 8.1, § 8.8), chacun { cle, details, noms }
- * : la traduction compose cle et details, et noms sont les données qu'il
- * nomme hors de son texte, que le composant rend chacune dans son propre
- * nœud (§ 14.6). ETAT_ILLISIBLE pour un état qui ne s'ouvre pas — un journal
- * sans état compris, de raison ABSENT —, avec la base, la raison et les
- * secours lus par la façade, et aucun nom à part ;
+ * Les signalements d'une ligne (§ 8.1, § 8.8), chacun { cle, details,
+ * noms } : la traduction compose cle et details, et noms sont les données
+ * qu'il nomme hors de son texte, que le composant rend chacune dans son
+ * propre nœud (§ 14.6). ETAT_ILLISIBLE pour un état qui ne s'ouvre pas — un
+ * journal sans état compris, de raison ABSENT —, avec la base, la raison et
+ * les secours lus par la façade, et aucun nom à part ;
  * accueil.signalement.doublon pour un état dont d'autres bases portent
  * l'identifiant, avec leur nombre, et ces bases pour noms, dans l'ordre de la
- * façade.
- * Un verrou présent ne se signale pas : seule la sonde d'une opération dit si
- * sa séance vit. Les détails et les noms sont des copies.
+ * façade. Un verrou présent ne se signale pas : seule la sonde d'une
+ * opération dit si sa séance vit. Les détails, leurs secours compris, et les
+ * noms sont des copies.
  *
- * @param {Object} ligne  LigneListe (A3)
+ * @param {Object} ligne  LigneListe (evenements.js)
  * @returns {Array<{cle: string, details: Object, noms: string[]}>}
  */
 export function signalementsDe(ligne) {
   const signalements = [];
   if (ligne.illisible !== null) {
-    signalements.push({ cle: 'ETAT_ILLISIBLE', details: { base: ligne.base, ...ligne.illisible }, noms: [] });
+    const { secours = null } = ligne.illisible;
+    const details = { base: ligne.base, ...ligne.illisible, secours: secours === null ? null : { ...secours } };
+    signalements.push({ cle: 'ETAT_ILLISIBLE', details, noms: [] });
   }
   if (ligne.doublonAvec.length > 0) {
     const noms = [...ligne.doublonAvec];
@@ -150,7 +152,7 @@ export function signalementsDe(ligne) {
  * valent la valeur absente, que le composant remplace par le signe du
  * chargement.
  *
- * @param {Object} ligne   LigneListe (A3)
+ * @param {Object} ligne   LigneListe (evenements.js)
  * @param {ReturnType<import('../../application/format.js').creerFormat>} format
  * @param {{mesuresDuRetenu: Object|null, meilleureDuClassement: Object|null}} [resume]
  * @returns {{nom: string, date: string, etat: string, participants: string,

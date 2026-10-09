@@ -261,25 +261,6 @@ function langueDeLaPage(texte) {
   return langues[0] ?? null;
 }
 
-// L'expression qui compose les démonstrations d'App dans un texte : la
-// valeur de l'unique déclaration const dont l'initialiseur nomme LIVREES,
-// blancs ramenés à un seul, retirés après une parenthèse, une accolade ou un
-// crochet ouvrants et avant leurs fermants, virgule finale retirée. Lève
-// quand le texte n'en porte aucune, ou plusieurs.
-function compositionDesDemonstrations(texte) {
-  const compositions = [...texte.matchAll(/\bconst\s+[\p{L}_$][\p{L}\p{N}_$]*\s*=\s*([^;]*\bLIVREES\b[^;]*);/gu)].map(([, valeur]) =>
-    valeur
-      .replace(/\s+/g, ' ')
-      .replace(/,\s*([)}\]])/g, '$1')
-      .replace(/([({[])\s+/g, '$1')
-      .replace(/\s+([)}\]])/g, '$1')
-      .trim(),
-  );
-  if (compositions.length === 0) throw new Error('aucune composition de LIVREES');
-  if (compositions.length > 1) throw new Error('deux compositions de LIVREES');
-  return compositions[0];
-}
-
 describe('livrable : la page construite et ce que la coquille lui passe', () => {
   test('la page construite vit dans www/ : la sortie de Vite, le répertoire web de Capacitor, la page que charge la coquille et ce qu’emporte electron-builder (§ 13.1)', async () => {
     const page = await pageConstruite(RACINE);
@@ -304,22 +285,5 @@ describe('livrable : la page construite et ce que la coquille lui passe', () => 
     assert.equal(langueDeLaPage(page('')), null);
     assert.equal(langueDeLaPage("const langue = 'fr';\nmount(Autre, { props: { langue: 'fr' } });\n"), null);
     assert.throws(() => langueDeLaPage(page("    langue: 'fr',\n    langue: 'temoin',")), /deux langues/);
-  });
-
-  test('les démonstrations que monterApp donne à App se composent comme celles de src/main.js', () => {
-    const deMain = compositionDesDemonstrations(readFileSync(join(RACINE, 'src', 'main.js'), 'utf8'));
-    const duMontage = compositionDesDemonstrations(readFileSync(join(RACINE, 'test', 'navigateur', 'montage.js'), 'utf8'));
-    assert.ok(deMain.startsWith('LIVREES.'), deMain);
-    assert.equal(duMontage, deMain);
-  });
-
-  test('la composition se lit à blancs et virgule finale près ; un filtre, un autre ordre ou deux compositions se distinguent', () => {
-    const une = 'const d = LIVREES.map(({ cle, texte }) => ({\n  cle,\n  nom: CATALOGUE.find((e) => e.cle === cle).nom,\n  texte,\n}));\n';
-    const resserree = 'const demonstrations = LIVREES.map(({ cle, texte }) => ({ cle, nom: CATALOGUE.find((e) => e.cle === cle).nom, texte }));\n';
-    assert.equal(compositionDesDemonstrations(une), compositionDesDemonstrations(resserree));
-    const filtree = une.replace('LIVREES.map', "LIVREES.filter(({ cle }) => cle !== 'grande').map");
-    assert.notEqual(compositionDesDemonstrations(filtree), compositionDesDemonstrations(une));
-    assert.throws(() => compositionDesDemonstrations('const d = [];\n'), /aucune composition de LIVREES/);
-    assert.throws(() => compositionDesDemonstrations(une + une), /deux compositions de LIVREES/);
   });
 });

@@ -12,8 +12,11 @@
   // refus : { cle, refus } du dernier échec, ou null.
   //
   // Un chargement en cours ne se relance pas : tant que charger n'a pas
-  // rendu la main, un clic sur une démonstration ne fait rien, et celle qui
-  // se charge porte aria-busy et aria-disabled.
+  // rendu la main, chaque démonstration porte aria-disabled, celle qui se
+  // charge aussi aria-busy, et un clic ne charge rien. Un clic sur une autre
+  // se dit : sous elle, un message [data-attente-demonstration] nomme celle
+  // qui se charge, et le bouton le désigne par aria-describedby. Le message
+  // part avec le chargement.
   import { getContext } from 'svelte';
   import Refus from '../primitives/Refus.svelte';
 
@@ -22,16 +25,24 @@
   const t = getContext('t');
   const uid = $props.id();
 
-  // La clé de la démonstration qui se charge, ou null.
+  // La clé de la démonstration qui se charge, ou null ; celle d'une autre
+  // cliquée pendant ce temps, ou null.
   let enCours = $state(null);
+  let attente = $state(null);
+
+  const nomDe = (cle) => demonstrations.find((demonstration) => demonstration.cle === cle)?.nom ?? '';
 
   async function choisir(cle) {
-    if (enCours !== null) return;
+    if (enCours !== null) {
+      if (cle !== enCours) attente = cle;
+      return;
+    }
     enCours = cle;
     try {
       await charger(cle);
     } finally {
       enCours = null;
+      attente = null;
     }
   }
 </script>
@@ -46,9 +57,15 @@
           type="button"
           data-demonstration={cle}
           aria-busy={enCours === cle ? 'true' : undefined}
-          aria-disabled={enCours === cle ? 'true' : undefined}
+          aria-disabled={enCours !== null ? 'true' : undefined}
+          aria-describedby={attente === cle ? `${uid}-attente` : undefined}
           onclick={() => choisir(cle)}>{nom}</button
         >
+        {#if attente === cle}
+          <p id={`${uid}-attente`} role="status" data-attente-demonstration
+            >{t('accueil.demonstrations.enCours', { nom: nomDe(enCours) })}</p
+          >
+        {/if}
         {#if refus !== null && refus.cle === cle}
           <Refus refus={refus.refus} />
         {/if}

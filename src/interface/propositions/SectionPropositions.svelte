@@ -9,7 +9,7 @@
   // « Retenir » et « Effacer », le refus posé à côté du bouton.
   //
   // La table d'évaluation se lit dans la charge de l'état observable, par
-  // evaluation (modele.js) : une seule mesure, celle d'evaluer (A6), refaite
+  // evaluation (modele.js) : une seule mesure, celle d'evaluer (evaluation.js), refaite
   // à chaque charge écrite ; les indicateurs du retenu suivent donc
   // l'ajustement (§ 2.1 étape 11).
   //
@@ -27,8 +27,10 @@
   // La phrase de l'ordre se met bout à bout, morceau par morceau (modele.js) ;
   // chaque nom de critère, et l'identifiant croissant, est un élément
   // focalisable qui désigne sa colonne. Le survoler ou le focaliser surligne
-  // cette colonne dans le tableau ; le quitter — pointeur sorti, focus perdu —
-  // efface le surlignage qu'il a posé, et laisse celui d'un autre nom.
+  // cette colonne dans le tableau. Le survol et le focus se tiennent à part,
+  // et surlignee (modele.js) choisit : le nom survolé, sinon celui qui a le
+  // focus. Quitter un nom — pointeur sorti, focus perdu — n'efface que l'état
+  // qu'il tenait, et laisse l'autre.
   //
   // Chaque nom de critère et chaque en-tête de colonne s'expliquent dans
   // l'infobulle de la section, une seule (Infobulle, primitive) : le survol
@@ -50,7 +52,7 @@
   import Infobulle from '../primitives/Infobulle.svelte';
   import Refus from '../primitives/Refus.svelte';
   import TableauPropositions from './TableauPropositions.svelte';
-  import { demandeConfirmation, evaluation, explicationDeColonne, nomDe, retenuAjuste, tableau } from './modele.js';
+  import { demandeConfirmation, evaluation, explicationDeColonne, nomDe, retenuAjuste, surlignee as colonneSurlignee, tableau } from './modele.js';
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -90,13 +92,11 @@
     aConfirmer = null;
   }
 
-  // La colonne surlignée, celle du dernier nom survolé ou focalisé ; null
-  // sans surlignage.
-  let surlignee = $state(null);
-  const surligner = (colonne) => (surlignee = colonne);
-  function quitter(colonne) {
-    if (surlignee === colonne) surlignee = null;
-  }
+  // Les colonnes du nom survolé et du nom focalisé, null sans lui ; la
+  // colonne surlignée s'en déduit.
+  let survolee = $state(null);
+  let focalisee = $state(null);
+  const surlignee = $derived(colonneSurlignee(survolee, focalisee));
 
   // Le terme expliqué : {ancre, terme, cle, details} — son élément, sa
   // désignation, 'critere:<critère>' pour un nom de la phrase ou
@@ -116,12 +116,15 @@
   // L'aria-describedby d'un terme : l'infobulle quand elle l'explique.
   const decrit = (terme) => (expliquee?.terme === terme ? idExplication : undefined);
 
-  function entrer(evenement, { critere, colonne }) {
-    surligner(colonne);
+  // L'entrée sur un nom, par le pointeur ou par le focus, et sa sortie.
+  function entrer(evenement, { critere, colonne }, parFocus) {
+    if (parFocus) focalisee = colonne;
+    else survolee = colonne;
     expliquer(evenement, `critere:${critere}`, colonne);
   }
-  function sortir({ critere, colonne }) {
-    quitter(colonne);
+  function sortir({ critere }, parFocus) {
+    if (parFocus) focalisee = null;
+    else survolee = null;
     taire(`critere:${critere}`);
   }
 
@@ -159,10 +162,10 @@
                 data-critere={morceau.critere}
                 tabindex="0"
                 aria-describedby={decrit(`critere:${morceau.critere}`)}
-                onmouseenter={(evenement) => entrer(evenement, morceau)}
-                onmouseleave={() => sortir(morceau)}
-                onfocus={(evenement) => entrer(evenement, morceau)}
-                onblur={() => sortir(morceau)}>{t(morceau.cle, morceau.details)}</span
+                onmouseenter={(evenement) => entrer(evenement, morceau, false)}
+                onmouseleave={() => sortir(morceau, false)}
+                onfocus={(evenement) => entrer(evenement, morceau, true)}
+                onblur={() => sortir(morceau, true)}>{t(morceau.cle, morceau.details)}</span
               >
             {/if}
           {/each}

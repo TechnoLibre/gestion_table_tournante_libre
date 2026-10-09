@@ -5,7 +5,7 @@
 // § 12.6, § 12.9), pur : SectionPropositions.svelte et
 // TableauPropositions.svelte le câblent.
 //
-// Le tableau lit la table d'évaluation d'evaluer (A6), la seule mesure : chaque
+// Le tableau lit la table d'évaluation d'evaluer (evaluation.js), la seule mesure : chaque
 // cellule porte la valeur que la table rend, telle quelle, et sa clé de mise
 // en forme ; aucune arithmétique ne s'y fait, aucun plafond ne s'y recompose.
 // Des rencontres, il ne porte que le minimum, sur les trois populations du
@@ -225,7 +225,7 @@ function ordre({ criteresAppliques, critereSaute }) {
 }
 
 /**
- * Le tableau d'une table d'évaluation (A6).
+ * Le tableau d'une table d'évaluation (evaluer, evaluation.js).
  *
  * @param {import('../../application/evaluation.js').TableEvaluation} tableEvaluation
  * @param {{ajuste?: boolean}} [options]  ajuste : le retenu ne porte plus le
@@ -253,9 +253,7 @@ export function tableau(tableEvaluation, { ajuste = false } = {}) {
   const idRetenu = tableEvaluation.retenu?.id ?? null;
   // Les comparables ouvrent la liste, dans l'ordre du classement : leur
   // place y est leur rang.
-  const toutes = tableEvaluation.propositions.map((ligne, place) =>
-    ligneDe(ligne, tableEvaluation, idRetenu, ligne.statut === 'comparable' ? place + 1 : null),
-  );
+  const toutes = tableEvaluation.propositions.map((ligne, place) => ligneDe(ligne, tableEvaluation, idRetenu, place + 1));
   return {
     ordre: ordre(tableEvaluation.classement),
     colonnes: COLONNES,
@@ -271,6 +269,20 @@ export function tableau(tableEvaluation, { ajuste = false } = {}) {
 function ligneDuRetenu(tableEvaluation, idRetenu, ajuste) {
   const cle = ajuste ? 'propositions.retenu.ajuste' : 'propositions.retenu.origine';
   return { ...ligneDe(tableEvaluation.retenu, tableEvaluation, idRetenu), libelle: { cle, details: { proposition: idRetenu } } };
+}
+
+/**
+ * La colonne que la phrase de l'ordre surligne (§ 5.7), de deux états
+ * tenus à part : celle du nom survolé, sinon celle du nom qui a le focus,
+ * sinon null. Quitter l'un rend l'autre : un survol qui passe ne retire pas
+ * le surlignage du focus.
+ *
+ * @param {string|null} survolee   la colonne du nom sous le pointeur
+ * @param {string|null} focalisee  la colonne du nom qui a le focus
+ * @returns {string|null}
+ */
+export function surlignee(survolee, focalisee) {
+  return survolee ?? focalisee;
 }
 
 /**

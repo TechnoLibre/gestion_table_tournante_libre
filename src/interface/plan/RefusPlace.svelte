@@ -19,7 +19,7 @@
   // pose : {id, numero, siege|null, refus|null, avertissements, x, y} — x et y
   // en px de la surface ; fermer : retire la pose ; gestes : ceux qu'un
   // remède emprunte à l'écran — le choix d'une place sur le plan —, que Refus
-  // reçoit tels quels.
+  // reçoit tels quels. « Fermer » se désigne par data-commande="fermerPose".
   import { getContext } from 'svelte';
   import Refus from '../primitives/Refus.svelte';
   import { libellePlace } from './gestes.js';
@@ -40,7 +40,7 @@
   {#each pose.avertissements as avertissement, rang (rang)}
     <p class="avertissement" role="status" data-avertissement={avertissement.code}>{t(avertissement.code, avertissement.details)}</p>
   {/each}
-  <button type="button" class="fermer" onclick={fermer}>{t('plan.refus.fermer')}</button>
+  <button type="button" class="fermer" data-commande="fermerPose" onclick={fermer}>{t('plan.refus.fermer')}</button>
 </div>
 
 <style>

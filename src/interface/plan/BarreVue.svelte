@@ -3,13 +3,14 @@
 
 <script>
   // La barre de vue du plan (§ 7.2, § 7.5, § 7.7, § 8.4) : le sélecteur de
-  // tour, « Zoom + », « Zoom moins », « Ajuster », l'affichage des listes, le
-  // plein écran et la légende des conflits. Des contrôles HTML, hors du <svg data-plan>, tous vivants en
-  // lecture comme sur un plan bloqué : aucun n'écrit l'événement. Le tour,
-  // les listes et le plein écran passent par l'état de navigation ('ui') ;
-  // les zooms et l'ajustement par Plan.svelte, qui tient la vue :
-  // zoomer(sens), sens valant 1 ou -1, et ajuster(). Un bouton à bascule dit
-  // son état par aria-pressed, que la forme du bouton redit.
+  // tour, « Zoom + », « Zoom − », « Ajuster », l'affichage des listes, la
+  // légende des conflits et le plein écran. Des contrôles HTML, hors du
+  // <svg data-plan>, tous vivants en lecture comme sur un plan bloqué : aucun
+  // n'écrit l'événement. Le tour, les listes et le plein écran passent par
+  // l'état de navigation ('ui') ; les zooms et l'ajustement par Plan.svelte,
+  // qui tient la vue : zoomer(sens), sens valant 1 ou -1, et ajuster(). Un
+  // bouton à bascule dit son état par aria-pressed, le bouton de la légende,
+  // qui dévoile, par aria-expanded ; la forme du bouton redit l'un et l'autre.
   //
   // evidence : la personne mise en évidence, {id, nom} — nom null pour une
   // personne que la charge n'a plus —, ou null. La barre la nomme et offre
@@ -19,9 +20,10 @@
   //
   // legende : vrai quand la légende des conflits est ouverte ; basculerLegende
   // l'ouvre ou la ferme ; idLegende, l'identifiant de la légende, que le
-  // bouton désigne par aria-controls. Plan.svelte tient cet état : ouvrir la
-  // légende n'écrit rien. Le plein écran reste le dernier contrôle de la
-  // barre, celui qui précède le plan dans l'ordre de tabulation.
+  // bouton désigne par aria-controls tant qu'elle est ouverte — fermée, elle
+  // n'est pas dans le DOM, et l'attribut n'est pas posé. Plan.svelte tient
+  // cet état : ouvrir la légende n'écrit rien. Le plein écran est la dernière
+  // commande de vue ; une mise en évidence pose après lui son nom et « ôter ».
   //
   // source : ce que la barre dit du placement montré, que rend sourceMontree
   // (vue_plan.js) — {libelle, revenir} — : la barre le nomme, [data-source],
@@ -60,7 +62,12 @@
   <button type="button" data-commande="listes" aria-pressed={$ui.listes} onclick={() => ui.basculerListes()}
     >{t('plan.vue.listes')}</button
   >
-  <button type="button" data-commande="legende" aria-pressed={legende} aria-controls={idLegende} onclick={() => basculerLegende()}
+  <button
+    type="button"
+    data-commande="legende"
+    aria-expanded={legende}
+    aria-controls={legende ? idLegende : undefined}
+    onclick={() => basculerLegende()}
     >{t('plan.legende.ouvrir')}</button
   >
   <button type="button" data-commande="pleinEcran" aria-pressed={$ui.pleinEcran} onclick={() => ui.basculerPleinEcran()}
@@ -116,9 +123,11 @@
     cursor: pointer;
   }
 
-  /* Une bascule active se distingue par sa forme : trait intérieur épais,
-     texte souligné ; sa boîte ne change pas, et la barre ne bouge pas. */
-  button[aria-pressed='true'] {
+  /* Une bascule active, ou la légende dévoilée, se distingue par sa forme :
+     trait intérieur épais, texte souligné ; sa boîte ne change pas, et la
+     barre ne bouge pas. */
+  button[aria-pressed='true'],
+  button[aria-expanded='true'] {
     box-shadow: inset 0 0 0 2px var(--couleur-page-texte);
     text-decoration: underline;
   }

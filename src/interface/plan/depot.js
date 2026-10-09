@@ -4,7 +4,7 @@
 // Le dépôt d'une personne glissée sur le plan (§ 5.8, § 5.9, § 7.1, § 7.3,
 // § 14.10), pur : la place se désigne par la géométrie des tables — celles
 // mêmes que le dessin pose —, jamais dans le DOM, et la commande se lit sur
-// la cible de l'état des places (EtatPlaces.cible, A5), jamais sur la
+// la cible de l'état des places (EtatPlaces.cible, places.js), jamais sur la
 // présence d'un retenu. L'interface ne choisit rien : la cible dit ce que
 // le geste modifie, et la commande juge la pose et la capacité.
 import { designer, surLeSol as horsDesTables } from '../../geometrie/designation.js';
@@ -64,9 +64,9 @@ export function reservationTenue(etatPlaces, personne, depuis) {
  *    change pas les autres tours en silence, et une réservation se défait
  *    par sa propre commande (§ 7.1) ; le dépôt rend le refus
  *    RESERVATION_TOUS_LES_TOURS {participant, table}, dont le remède est ce
- *    retrait, de portée « tous ». Un siège
- *    qu'occupe une personne non réservée de la proposition montrée vaut un
- *    siège libre : la proposition reste identique, et dérive ;
+ *    retrait, de portée « tous ». Un siège qu'occupe une personne non
+ *    réservée de la proposition montrée vaut un siège libre : la proposition
+ *    reste identique, et dérive ;
  *  - 'retenu' : un siège libre → deplacerDansRetenu, un siège occupé par une
  *    autre → echangerDansRetenu, le sol → retirerDuTour ;
  *  - null — proposition montrée après la retenue, retenu fautif — : un dépôt
@@ -124,20 +124,38 @@ export function commandeDeDepot({ etatPlaces, tour, personne, depuis, cible, sur
 }
 
 /**
- * Le dépôt au point de dessin : la place que désignent designer et surLeSol
- * sur les géométries du modèle de dessin, au zoom k, et la commande de
+ * Ce que désigne un point de dessin, tel que le dépôt le lit : la place de
+ * designer sur les géométries au zoom k, et surLeSol, vrai seulement quand
+ * aucune place n'est désignée et que le point tombe hors de toute table.
+ * Entre deux chaises ou sur un plateau, les deux disent rien. Le dépôt et le
+ * libellé du fantôme pendant le geste le lisent ici tous deux.
+ *
+ * @param {{x: number, y: number}} point   cm
+ * @param {Object[]} geometries   TableDessin.geometrie de chaque table, dans
+ *   l'ordre du dessin
+ * @param {number} k
+ * @returns {{cible: {table: number, siege?: number}|null, surLeSol: boolean}}
+ */
+export function designerAuPoint(point, geometries, k) {
+  const cible = designer(point, geometries, k);
+  return { cible, surLeSol: cible === null && horsDesTables(point, geometries) };
+}
+
+/**
+ * Le dépôt au point de dessin : la place que désigne designerAuPoint sur
+ * les géométries du modèle de dessin, au zoom k, et la commande de
  * commandeDeDepot. place est la place où poser un refus : la place
  * désignée — chaise ou table —, sinon la chaise d'origine.
  *
  * @param {Object} options   ceux de commandeDeDepot, cible et surLeSol exceptés, plus :
  * @param {{x: number, y: number}} options.point   cm
- * @param {Object[]} options.geometries   TableDessin.geometrie de chaque table, dans l'ordre du dessin
+ * @param {Object[]} options.geometries   TableDessin.geometrie de chaque table,
+ *   dans l'ordre du dessin
  * @param {number} options.k
  * @returns {{resultat: ReturnType<typeof commandeDeDepot>, place: Object|null}}
  */
 export function deposer({ etatPlaces, tour, personne, depuis, point, geometries, k }) {
-  const cible = designer(point, geometries, k);
-  const sol = cible === null && horsDesTables(point, geometries);
-  const resultat = commandeDeDepot({ etatPlaces, tour, personne, depuis, cible, surLeSol: sol });
+  const { cible, surLeSol } = designerAuPoint(point, geometries, k);
+  const resultat = commandeDeDepot({ etatPlaces, tour, personne, depuis, cible, surLeSol });
   return { resultat, place: cible ?? depuis };
 }

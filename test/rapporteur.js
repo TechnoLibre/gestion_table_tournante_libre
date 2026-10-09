@@ -185,7 +185,7 @@ export default class Rapporteur {
     );
     const { lignes, refus } = bilan({ duree, projets, epreuves, plafonds: this.#plafonds });
     for (const ligne of lignes) this.#journal.log(ligne);
-    this.#journal.log(ligneMachine(reglagesSeries(coeursDisponibles())));
+    this.#journal.log(ligneMachine(reglagesSeries(coeursDisponibles(), { couverture: process.argv.includes('--coverage') })));
     if (raison === 'interrupted') return;
     for (const message of refus) this.#journal.error(message);
     if (refus.length > 0) process.exitCode = 1;

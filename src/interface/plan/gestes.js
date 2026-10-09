@@ -89,7 +89,11 @@ function glisser(etat, point, contexte, entree) {
     effets.push({ type: 'ecrireTransform', cible: 'vue', transform: transformDe(deplacerVue(vue, depart, point)) });
   } else if (source.genre === 'personne') {
     if (source.participant !== null) {
-      if (entree) effets.push({ type: 'montrerFantome', participant: source.participant, depuis: placeDe(source) });
+      const surLeSol = contexte.surLeSol(dessinDepuisEcran(vue, cadre, point.x, point.y));
+      if (entree || surLeSol !== etat.surLeSol) {
+        effets.push({ type: 'montrerFantome', participant: source.participant, depuis: placeDe(source), surLeSol });
+        suivant = { ...etat, surLeSol };
+      }
       const transform = `translate(${point.x - cadre.gauche},${point.y - cadre.haut})`;
       effets.push({ type: 'ecrireTransform', cible: 'fantome', transform });
     }
@@ -165,9 +169,11 @@ function achever(etat, point, contexte) {
  *   annuler {cause: 'pointercancel'|'echap'|'lecture'}.
  * Contexte : controlerPlaces(table, places) → {refus, avertissements}, le contrôle de
  * capacité d'origine 'poignee' sur la charge du geste ; deposer(source, point) → {resultat,
- * place}, le dépôt d'une personne au point de dessin (depot.js).
+ * place}, le dépôt d'une personne au point de dessin (depot.js) ; surLeSol(point) → boolean,
+ * vrai quand le point de dessin tombe sur le sol, là où le dépôt retire ou refuse.
  * Effets, chacun par son type : capturer {pointeur}, debuterGeste, finirGeste,
- * ecrireTransform {cible, transform}, montrerFantome {participant, depuis},
+ * ecrireTransform {cible, transform}, montrerFantome {participant, depuis, surLeSol} — au
+ * franchissement du seuil, puis chaque fois que le pointeur passe sur le sol ou le quitte —,
  * montrerPlaces {table, places, avertissements}, montrerRefus {place, refus} — refus null
  * efface —, restaurer {cible}, poserVue {vue}, selectionner {place}, executer {commande,
  * arguments, place, apres} — place, où poser un refus de la commande ; apres, la cible à
@@ -240,27 +246,39 @@ const CLES_RESERVATION_TENUE = new Map([
   ['tous', 'plan.fantome.reservationTous'],
 ]);
 
+// La même personne au-dessus du sol, par portée : le dépôt y retire une
+// réservation « ce tour » et refuse une « tous les tours »
+// (RESERVATION_TOUS_LES_TOURS, depot.js).
+const CLES_RESERVATION_SUR_LE_SOL = new Map([
+  ['tour', 'plan.fantome.retireReservationTour'],
+  ['tous', 'plan.fantome.refuseTous'],
+]);
+
 /**
  * La clé du libellé que le fantôme porte pendant le glissement d'une
- * personne (§ 5.8, § 7.1) : sous la cible 'reservations', « pose une
- * réservation » pour une personne que rien ne tient, sinon le déplacement
- * de sa réservation et sa portée — « tous les tours » s'y dit ; « déplace
- * dans le placement retenu » sous 'retenu' ; la vue seule sous une cible
- * null. Une cible ou une portée hors du contrat lève : elle ne prend aucun
- * libellé par défaut.
+ * personne (§ 5.8, § 7.1), qui dit ce que le relâcher au point courant
+ * modifie : sous la cible 'reservations', « pose une réservation » pour une
+ * personne que rien ne tient, sinon le déplacement de sa réservation et sa
+ * portée — « tous les tours » s'y dit — ; au-dessus du sol, la même
+ * réservation se dit retirée (« ce tour ») ou refusée (« tous les tours ») ;
+ * « déplace dans le placement retenu » sous 'retenu' ; la vue seule sous une
+ * cible null. Une cible, une portée ou un sol hors du contrat lève : il ne
+ * prend aucun libellé par défaut.
  *
  * @param {'reservations'|'retenu'|null} cible  EtatPlaces.cible
  * @param {'tous'|'tour'|null} [portee]  la portée de la réservation qui tient
  *   la personne à sa chaise d'origine (reservationTenue de depot.js), ou null
+ * @param {boolean} [surLeSol]  vrai quand le pointeur est au-dessus du sol
  * @returns {string}
  */
-export function cleFantome(cible, portee = null) {
+export function cleFantome(cible, portee = null, surLeSol = false) {
   if (!CLES_FANTOME.has(cible)) throw new TypeError(`cible du fantôme hors du contrat : ${JSON.stringify(cible)}`);
   if (portee !== null && !CLES_RESERVATION_TENUE.has(portee)) {
     throw new TypeError(`portée du fantôme hors du contrat : ${JSON.stringify(portee)}`);
   }
-  if (cible === 'reservations' && portee !== null) return CLES_RESERVATION_TENUE.get(portee);
-  return CLES_FANTOME.get(cible);
+  if (typeof surLeSol !== 'boolean') throw new TypeError(`sol du fantôme hors du contrat : ${JSON.stringify(surLeSol)}`);
+  if (cible !== 'reservations' || portee === null) return CLES_FANTOME.get(cible);
+  return (surLeSol ? CLES_RESERVATION_SUR_LE_SOL : CLES_RESERVATION_TENUE).get(portee);
 }
 
 /**

@@ -25,7 +25,7 @@ import { ErreurAnnulee } from '../../src/application/generation.js';
 import { texteLivre } from '../../src/demo/livrees.js';
 import { rechercher } from '../../src/moteur/recherche.js';
 import { serialiser } from '../../src/stockage/canonique.js';
-import { analyser, configurationDepuisCharge } from '../../src/stockage/document.js';
+import { analyser, capacite, configurationDepuisCharge } from '../../src/stockage/document.js';
 import { SUFFIXES } from '../../src/stockage/noms.js';
 import { VERSION } from '../../src/version.genere.js';
 import urlCasLimites from '../../exemples/participants_cas_limites.csv?url';
@@ -180,6 +180,43 @@ export function chargePrincipale() {
   const configuration = configurationDepuisCharge(charge);
   const propositions = rechercher(configuration, { graine: 2, nombre: 1, arret: 300, historique: 1000 });
   return appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+}
+
+// Un placement de la petite démonstration en conflit, quatre tours de
+// quatre tables de trois, sièges non attribués : au tour 3, la table 1 réunit
+// une même appartenance, des voisins revus et un retour à sa table, la
+// table 2 aucun conflit. Écrit tel quel, il ne dépend d'aucun chemin de la
+// recherche.
+const TROIS_CONFLITS = Object.freeze([
+  [[1, 2, 11], [4, 9, 10], [3, 5, 12], [6, 7, 8]],
+  [[9, 10, 11], [2, 4, 8], [3, 5, 6], [1, 7, 12]],
+  [[4, 5, 10], [6, 11, 12], [1, 7, 9], [2, 3, 8]],
+  [[1, 8, 10], [2, 9, 12], [3, 4, 6], [5, 7, 11]],
+]);
+
+// La charge reçue et une proposition écrite à la main, la seule : tours,
+// par tour, la liste des personnes de chaque table, dans l'ordre des tables
+// de la charge, sièges non attribués ; le plan devient proposé.
+function avecTours(charge, tours) {
+  const suivante = structuredClone(charge);
+  suivante.propositions = [
+    {
+      id: 1,
+      graine: 1,
+      arret: 300,
+      historique: 1000,
+      produitVersion: VERSION.affichee,
+      siegesAttribues: false,
+      tables: suivante.tables.map(({ id }) => id),
+      capacites: suivante.tables.map((table) => capacite(suivante, table)),
+      tours: tours.length,
+      participants: suivante.participants.filter(({ exclu }) => !exclu).map(({ id }) => id),
+      placement: tours.map((listes) => ({ sieges: listes.map((liste) => [...liste]), reserve: [] })),
+    },
+  ];
+  suivante.prochainsIds.proposition = 2;
+  suivante.evenement.etat = 'propose';
+  return suivante;
 }
 
 // La principale, sa proposition retenue, puis le plan bloqué.
@@ -548,14 +585,11 @@ export const ECRANS = Object.freeze([
     nom: 'plan.troisConflits',
     mode: 'ecriture',
     async atteindre(contexte) {
-      // La petite démonstration en conflit et une proposition, graine 3,
-      // montrée au tour 3, choisi au clavier : la table 1 viole les trois
-      // règles et superpose leurs trames, la table 2 est saine ; puis la
-      // légende des conflits, ouverte par la barre de vue.
-      let charge = demonstration('petite-conflit');
-      const configuration = configurationDepuisCharge(charge);
-      const propositions = rechercher(configuration, { graine: 3, nombre: 1, arret: 300, historique: 1000 });
-      charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+      // La petite démonstration en conflit et la proposition TROIS_CONFLITS,
+      // écrite à la main, montrée au tour 3, choisi au clavier : la table 1
+      // viole les trois règles et superpose leurs trames, la table 2 est
+      // saine ; puis la légende des conflits, ouverte par la barre de vue.
+      const charge = avecTours(demonstration('petite-conflit'), TROIS_CONFLITS);
       const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'plan' });
       const choix = await element(m, '[data-champ="tour"]');
       choix.focus();

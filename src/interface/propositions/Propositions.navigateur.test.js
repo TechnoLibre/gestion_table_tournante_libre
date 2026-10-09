@@ -38,6 +38,7 @@ import { centre } from '../../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { evaluation, tableau } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
@@ -89,7 +90,7 @@ function avecPlans(charge, plans) {
 
 // Trois plans de la petite démonstration au conflit inévitable, dans l'ordre
 // des identifiants : (4, 1), (4, 2), (6, 6) collisions (cumulées,
-// distinctes), au même plus grand écart au plafond a priori (A6).
+// distinctes), au même plus grand écart au plafond a priori.
 const PLANS_CONFLIT = [
   [
     [[2, 3, 10], [6, 8, 9], [4, 7, 12], [1, 5, 11]],
@@ -265,7 +266,7 @@ function exigerChiffres(tr, attendue) {
 // --- Le tableau classé (§ 5.4, § 5.7, § 19.3 capture 11) --------------------------
 
 describe('le tableau classé', () => {
-  test('les trois plans d’A6 : (6, 6), (4, 2), (4, 1) ; la phrase cite les cinq critères puis l’identifiant ; chaque chiffre est celui du moteur', async () => {
+  test('les trois plans de PLANS_CONFLIT : (6, 6), (4, 2), (4, 1) ; la phrase cite les cinq critères puis l’identifiant ; chaque chiffre est celui du moteur', async () => {
     const chargeLue = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
     const m = await ouvrir(chargeLue);
     expect(ids(m)).toEqual([3, 2, 1]);
@@ -380,6 +381,36 @@ describe('retenir, voir sur le plan', () => {
     flushSync();
     await exigerPlanMontre(m, charge(m).retenu);
     expect(occupantsDuPlacement(charge(m), charge(m).retenu)).not.toEqual(occupantsDuPlacement(charge(m), proposition(1)));
+  });
+
+  test('la ligne du retenu montre ses violations ; la colonne rang se lit, « Retenu » puis 1 à n dans l’ordre', async () => {
+    const base = executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 });
+    // Une réservation que le retenu n'honore pas : la personne 1, assise
+    // ailleurs qu'à la première table.
+    base.reservations = [{ participant: 1, table: base.tables[0].id, siege: 1, portee: 'tous', tour: null }];
+    const m = await ouvrir(base);
+    const vue = tableau(evaluation(charge(m)).table);
+    expect(vue.retenu.violations.length).toBeGreaterThan(0);
+    const cellule = ligneRetenu(m).querySelector('td[data-colonne="proposition"]');
+    for (const violation of vue.retenu.violations) {
+      expect(texteDe(cellule)).toContain(t(violation.cle, violation.details).replace(/\s+/g, ' ').trim());
+    }
+    expect(texteDe(ligneRetenu(m).querySelector('[data-colonne="rang"]'))).toBe(t('propositions.retenu.titre'));
+    expect(lignes(m).map((tr) => texteDe(tr.querySelector('[data-colonne="rang"]')))).toEqual(vue.lignes.map((_, rang) => format.nombre(rang + 1)));
+    expect(ids(m)).toEqual(vue.lignes.map(({ id }) => id));
+  });
+
+  test('« Voir » de la ligne du retenu montre le retenu sur le plan, après une proposition demandée, sans écriture', async () => {
+    const m = await ouvrir(executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 }));
+    m.ui.montrerProposition(1);
+    const ecritures = m.trace.length;
+    const voir = commande(ligneRetenu(m), 'voir');
+    expect(texteDe(voir)).toBe(t('propositions.commande.voir'));
+    voir.click();
+    await attendre(() => expect(m.racine.querySelector('[data-section="plan"]')).not.toBeNull());
+    expect(m.ui.etat().proposition).toBe(null);
+    await exigerPlanMontre(m, charge(m).retenu);
+    expect(m.trace.length).toBe(ecritures);
   });
 
   test('les indicateurs suivent l’ajustement : la ligne du retenu égale sa mesure, celle de la proposition 2 n’a pas changé', async () => {
@@ -672,6 +703,36 @@ describe('la phrase de l’ordre désigne les colonnes (§ 5.7)', () => {
     await attendre(() => expect(surlignees(m)).toEqual([]));
   });
 
+  test('le survol et le focus tiennent chacun leur nom : quitter le survolé rend la colonne du focalisé, et le nom actif se souligne plein', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const nom = (critere) => section(m).querySelector(`[data-ordre] [data-critere="${critere}"]`);
+    const [[a, colonneA], [b, colonneB]] = COLONNE_DESIGNEE;
+    // Focus sur B, puis survol de A et sortie : B reste surlignée.
+    nom(b).focus();
+    await attendre(() => expect(surlignees(m)).toEqual(colonne(m, colonneB)));
+    expect(getComputedStyle(nom(b)).textDecorationStyle).toBe('solid');
+    let point = await centre(nom(a));
+    await pointer('bouger', point.x, point.y);
+    await attendre(() => expect(surlignees(m)).toEqual(colonne(m, colonneA)));
+    expect(getComputedStyle(nom(a)).textDecorationStyle).toBe('solid');
+    expect(getComputedStyle(nom(b)).textDecorationStyle).toBe('dotted');
+    await pointer('bouger', 0, 0);
+    await attendre(() => expect(surlignees(m)).toEqual(colonne(m, colonneB)));
+    // Survol de A, puis Tab vers B, puis sortie de A : B reste surlignée.
+    nom(b).blur();
+    await attendre(() => expect(surlignees(m)).toEqual([]));
+    point = await centre(nom(a));
+    await pointer('bouger', point.x, point.y);
+    nom(a).focus();
+    await touche('Tab');
+    await attendre(() => expect(document.activeElement).toBe(nom(b)));
+    await pointer('bouger', 0, 0);
+    await attendre(() => expect(surlignees(m)).toEqual(colonne(m, colonneB)));
+    // Le focus perdu, plus rien.
+    nom(b).blur();
+    await attendre(() => expect(surlignees(m)).toEqual([]));
+  });
+
   test('le texte de la phrase reste celui de l’ordre, mot pour mot, et le surlignage ne change aucune couleur de texte', async () => {
     const m = await ouvrir(chargeRetenue());
     // Le texte brut, espaces compris : aucun blanc ne s'ajoute entre deux
@@ -782,6 +843,24 @@ describe('les infobulles d’explication : chaque nom de critère, chaque en-tê
     await pointer('bouger', x, y);
     await attendre(() => exigerFermee());
     await attendre(() => expect(surlignees(m)).toEqual([]));
+  });
+
+  test('quitter un terme ne ferme que sa propre explication : survol d’un nom, focus d’un en-tête, puis le pointeur sort du nom — l’en-tête garde la sienne', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const [[critere, nomColonne]] = COLONNE_DESIGNEE;
+    const nom = section(m).querySelector(`[data-ordre] [data-critere="${critere}"]`);
+    const th = enTetes(m).find((candidat) => candidat.dataset.colonne !== nomColonne);
+    const { x, y } = await centre(nom);
+    await pointer('bouger', x, y);
+    await attendre(() => exigerInfobulle(nom, explicationDeColonne(nomColonne)));
+    th.focus();
+    await attendre(() => exigerInfobulle(th, explicationDeColonne(th.dataset.colonne)));
+    await pointer('bouger', 0, 0);
+    await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    flushSync();
+    exigerInfobulle(th, explicationDeColonne(th.dataset.colonne));
+    th.blur();
+    await attendre(() => exigerFermee());
   });
 
   test('survoler chaque en-tête de colonne ouvre son explication, dans la fenêtre, hors de l’en-tête ; le quitter la ferme', async () => {

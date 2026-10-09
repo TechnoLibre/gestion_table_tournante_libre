@@ -30,9 +30,14 @@ import { TABLES_INTERFACE } from '../libelles.js';
 import Champ from './Champ.svelte';
 import Commande from './Commande.svelte';
 import Confirmation from './Confirmation.svelte';
+import Infobulle from './Infobulle.svelte';
 import { DELAI_CONFIRMATION_MS } from './commande.js';
+import { MARGE_INFOBULLE_PX, placerInfobulle } from './infobulle.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
+
+// Les deux issues d'une fenêtre à confirmer, par leurs désignations.
+const ISSUES = '[data-commande="renoncer"], [data-commande="confirmer"]';
 
 const EVENEMENT = 'Soirée des Merles';
 const NOM = 'Ombrelle';
@@ -135,22 +140,12 @@ async function cliquerAilleurs() {
 
 // Un double-clic réel au centre de l'élément : deux appuis, le second
 // annoncé par Chromium comme le deuxième clic d'une série (clickCount 2),
-// si bien que son événement click porte detail 2. Les coordonnées du cadre
-// de l'épreuve passent dans la fenêtre de la page qui le porte, d'un cadre
-// à son parent, comme dans test/navigateur/entrees.js.
+// si bien que son événement click porte detail 2.
 async function doubleCliquer(element) {
-  let { x, y } = centre(element);
-  for (let fenetre = window; fenetre !== fenetre.top; fenetre = fenetre.parent) {
-    const cadre = fenetre.frameElement;
-    const boite = cadre.getBoundingClientRect();
-    const style = fenetre.parent.getComputedStyle(cadre);
-    const echelle = cadre.offsetWidth > 0 ? boite.width / cadre.offsetWidth : 1;
-    x = boite.left + (cadre.clientLeft + parseFloat(style.paddingLeft) + x) * echelle;
-    y = boite.top + (cadre.clientTop + parseFloat(style.paddingTop) + y) * echelle;
-  }
+  const { x, y } = centre(element);
   for (const clickCount of [1, 2]) {
-    await cdp().send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount });
-    await cdp().send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount });
+    await pointer('presser', x, y, { clickCount });
+    await pointer('relacher', x, y, { clickCount });
   }
   await tick();
 }
@@ -893,8 +888,8 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
     const message = fenetre.querySelector('[data-refus]');
     expect(message.getAttribute('data-refus')).toBe('MODE_LECTURE');
     expect(visible(message)).toBe(true);
-    expect(fenetre.querySelectorAll('.issues button')).toHaveLength(2);
-    for (const bouton of fenetre.querySelectorAll('.issues button')) expect(bouton.getAttribute('aria-disabled')).toBeNull();
+    expect(fenetre.querySelectorAll(ISSUES)).toHaveLength(2);
+    for (const bouton of fenetre.querySelectorAll(ISSUES)) expect(bouton.getAttribute('aria-disabled')).toBeNull();
     expect(montage.seance.etat().charge.participants).toHaveLength(1);
     await cliquer(fenetre.querySelector('[data-commande="renoncer"]'));
     expect(appels).toEqual(['confirmer', 'annuler']);
@@ -940,8 +935,8 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
     expect(fenetre.open).toBe(true);
     expect(fenetre.matches(':modal')).toBe(true);
     expect(fenetre.getAttribute('aria-busy')).toBe('true');
-    expect(fenetre.querySelectorAll('.issues button')).toHaveLength(2);
-    for (const bouton of fenetre.querySelectorAll('.issues button')) expect(bouton.getAttribute('aria-disabled')).toBe('true');
+    expect(fenetre.querySelectorAll(ISSUES)).toHaveLength(2);
+    for (const bouton of fenetre.querySelectorAll(ISSUES)) expect(bouton.getAttribute('aria-disabled')).toBe('true');
     expect(montage.seance.etat().charge.participants).toHaveLength(1);
   }
 
@@ -976,8 +971,8 @@ describe('fenêtre à confirmer (§ 2.1)', () => {
       expect(fenetre.matches(':modal')).toBe(true);
       expect(fenetre.querySelector('[data-refus]').getAttribute('data-refus')).toBe('MODE_LECTURE');
       expect(fenetre.getAttribute('aria-busy')).toBeNull();
-      expect(fenetre.querySelectorAll('.issues button')).toHaveLength(2);
-      for (const bouton of fenetre.querySelectorAll('.issues button')) expect(bouton.getAttribute('aria-disabled')).toBeNull();
+      expect(fenetre.querySelectorAll(ISSUES)).toHaveLength(2);
+      for (const bouton of fenetre.querySelectorAll(ISSUES)) expect(bouton.getAttribute('aria-disabled')).toBeNull();
       expect(appels).toEqual(['confirmer']);
       await cliquer(fenetre.querySelector('[data-commande="renoncer"]'));
       expect(appels).toEqual(['confirmer', 'annuler']);
@@ -1086,7 +1081,7 @@ describe('commande (§ 2.1)', () => {
     liberer();
   });
 
-  test('une exécution sans promesse rend aussitôt la commande : deux clics de suite, deux exécutions', async () => {
+  test('une exécution sans promesse rend aussitôt la commande : deux click() synthétiques, chacun hors d’une série de clics, deux exécutions', async () => {
     const montage = await preparer();
     let appels = 0;
     const cible = monter(Commande, { cle: 'communs.commande.lecture', executer: () => void (appels += 1) }, montage.contexte);
@@ -1104,5 +1099,89 @@ describe('commande (§ 2.1)', () => {
     expect(bouton.textContent.trim()).toBe('Revenir en lecture');
     expect(bouton.getAttribute('data-commande')).toBe('lecture');
     expect(bouton.getAttribute('type')).toBe('button');
+  });
+});
+
+describe('infobulle (§ 12.7, § 14.5)', () => {
+  // Un terme posé en position fixe au point (gauche, haut) de la fenêtre,
+  // et l'infobulle ouverte sur lui ; fermer est compté.
+  function ouvrirSur({ gauche, haut, texte = 'terme' }) {
+    const ancre = document.createElement('span');
+    ancre.textContent = texte;
+    Object.assign(ancre.style, { position: 'fixed', left: `${gauche}px`, top: `${haut}px` });
+    document.body.append(ancre);
+    const fermetures = [];
+    const cible = monter(
+      Infobulle,
+      { id: 'infobulle-epreuve', ouverte: { ancre, cle: 'propositions.explication.rencontresTous', details: {} }, fermer: () => fermetures.push(1) },
+      new Map([['t', t]]),
+    );
+    const bulle = cible.querySelector('[role="tooltip"]');
+    return { ancre, bulle, fermetures, retirer: () => ancre.remove() };
+  }
+
+  // La place que placerInfobulle donne à l'infobulle, sur les rectangles du rendu.
+  function placeAttendue(ancre, bulle) {
+    const a = ancre.getBoundingClientRect();
+    const b = bulle.getBoundingClientRect();
+    const fenetre = document.documentElement;
+    return placerInfobulle(
+      { gauche: a.left, haut: a.top, droite: a.right, bas: a.bottom },
+      { largeur: b.width, hauteur: b.height },
+      { largeur: fenetre.clientWidth, hauteur: fenetre.clientHeight },
+    );
+  }
+  // La place écrite dans le style, que le navigateur sérialise au millième
+  // de px : elle se compare à la place attendue à ce grain.
+  const placeLue = (bulle) => ({ gauche: parseFloat(bulle.style.left), haut: parseFloat(bulle.style.top) });
+  function exigerPlace(bulle, attendue) {
+    const lue = placeLue(bulle);
+    expect(lue.gauche).toBeCloseTo(attendue.gauche, 2);
+    expect(lue.haut).toBeCloseTo(attendue.haut, 2);
+  }
+
+  test('un terme au coin bas droit de la fenêtre : l’infobulle reste dans le cadre, à la marge de chaque bord', async () => {
+    const { ancre, bulle, retirer } = ouvrirSur({ gauche: innerWidth - 20, haut: innerHeight - 20 });
+    try {
+      await vi.waitFor(() => expect(bulle.style.left).not.toBe(''));
+      const boite = bulle.getBoundingClientRect();
+      const fenetre = document.documentElement;
+      expect(boite.right).toBeLessThanOrEqual(fenetre.clientWidth - MARGE_INFOBULLE_PX + 0.5);
+      expect(boite.left).toBeGreaterThanOrEqual(MARGE_INFOBULLE_PX - 0.5);
+      expect(boite.bottom).toBeLessThanOrEqual(fenetre.clientHeight - MARGE_INFOBULLE_PX + 0.5);
+      expect(boite.top).toBeGreaterThanOrEqual(MARGE_INFOBULLE_PX - 0.5);
+      // Au-dessus du terme, qu'elle ne couvre pas.
+      expect(boite.bottom).toBeLessThanOrEqual(ancre.getBoundingClientRect().top);
+    } finally {
+      retirer();
+    }
+  });
+
+  test('la fenêtre redimensionnée : l’infobulle se replace sur les rectangles relus', async () => {
+    const { ancre, bulle, retirer } = ouvrirSur({ gauche: 40, haut: 40 });
+    try {
+      await vi.waitFor(() => expect(bulle.style.left).not.toBe(''));
+      exigerPlace(bulle, placeAttendue(ancre, bulle));
+      // Le terme suit le bas de la fenêtre ; seul resize le dit à l'infobulle.
+      Object.assign(ancre.style, { top: `${innerHeight - 30}px` });
+      const avant = placeLue(bulle);
+      window.dispatchEvent(new Event('resize'));
+      flushSync();
+      const attendue = placeAttendue(ancre, bulle);
+      expect(Math.abs(attendue.haut - avant.haut)).toBeGreaterThan(1);
+      exigerPlace(bulle, attendue);
+    } finally {
+      retirer();
+    }
+  });
+
+  test('l’ancre retirée du document : le prochain replacement ferme l’infobulle, une fois', async () => {
+    const { bulle, fermetures, retirer } = ouvrirSur({ gauche: 40, haut: 40 });
+    await vi.waitFor(() => expect(bulle.style.left).not.toBe(''));
+    expect(fermetures).toEqual([]);
+    retirer();
+    window.dispatchEvent(new Event('resize'));
+    flushSync();
+    expect(fermetures).toEqual([1]);
   });
 });

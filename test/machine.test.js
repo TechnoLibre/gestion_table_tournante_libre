@@ -87,6 +87,11 @@ describe('machine : les réglages selon le nombre de cœurs (§ 14.14)', () => {
         + 'en série longue : src/moteur/integration.test.js.',
     );
     assert.equal(ligneMachine(reglagesSeries(16)), 'Machine : 16 cœurs — processus complets, série surveillée entière.');
+    // Sous la mesure de la couverture, la petite machine garde tout en série node.
+    assert.equal(
+      ligneMachine(reglagesSeries(2, { couverture: true })),
+      'Machine : 2 cœurs, en deçà de 4 — threads sur les 2 cœurs ; série surveillée entière.',
+    );
   });
 });
 

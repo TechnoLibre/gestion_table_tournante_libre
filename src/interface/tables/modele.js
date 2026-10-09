@@ -3,11 +3,11 @@
 
 // Le modèle de la section des tables et des tours (§ 4, § 6, § 2.1 étapes 4
 // et 5), pur : les composants de tables/ le câblent. Il lit la charge et les
-// bilans d'A4 — bilanChangementDefaut, bilanTours, bilanSuppressionTable —
-// et rend des clés de libellé et leurs détails, jamais un texte : la
-// traduction les compose. Il ne refait aucun contrôle : un refus vient d'un
-// bilan ou de la commande elle-même, essayée sur la charge sans rien écrire.
-// Aucune fonction ne modifie ce qu'elle reçoit.
+// bilans de src/application/bilans.js — bilanChangementDefaut, bilanTours,
+// bilanSuppressionTable — et rend des clés de libellé et leurs détails,
+// jamais un texte : la traduction les compose. Il ne refait aucun contrôle :
+// un refus vient d'un bilan ou de la commande elle-même, essayée sur la
+// charge sans rien écrire. Aucune fonction ne modifie ce qu'elle reçoit.
 import { appliquerCommande } from '../../application/commandes.js';
 import { nomAffiche } from '../../application/personnes.js';
 
@@ -130,11 +130,12 @@ export function surchargesPerdues(charge) {
 }
 
 /**
- * Vrai quand le changement de avant à apres tours détruit de la saisie :
- * une réservation « tour désigné » au-delà, ou, pour une baisse, les tours
- * retirés d'un placement engendré (§ 2.1 étape 5). Une hausse ne détruit
- * rien : les placements qu'elle laisse en dérive restent entiers, et la
- * séance en avertit (DERIVE_NOUVELLE) sans fenêtre (§ 5.9).
+ * Vrai quand le changement de avant à apres tours s'annonce avant d'être
+ * appliqué (§ 2.1 étape 5) : il détruit une réservation « tour désigné »
+ * au-delà, ou, pour une baisse, il laisse en dérive un placement engendré,
+ * entier mais qui porte des tours que l'événement n'a plus. Une hausse ne
+ * détruit rien : les placements qu'elle laisse en dérive restent entiers,
+ * et la séance en avertit (DERIVE_NOUVELLE) sans fenêtre (§ 5.9).
  *
  * @param {ReturnType<import('../../application/bilans.js').bilanTours>} bilan
  * @param {number} avant   le nombre de tours enregistré

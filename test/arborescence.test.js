@@ -35,6 +35,8 @@ import { isBuiltin } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, matchesGlob, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CATALOGUE } from '../src/demo/catalogue.js';
+import { LIVREES, demonstrationsLivrees } from '../src/demo/livrees.js';
 import configuration from '../vitest.config.js';
 import { blocsScript, chargements, scriptsDe } from './chargements.js';
 import { describe, test } from './lanceur.js';
@@ -508,9 +510,10 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // Le moteur et la géométrie ne connaissent ni l'écran, ni les fichiers, ni ce
 // qui les commande. La géométrie est une couche à part, plus bas que le
 // moteur : des fonctions pures du plan, qui n'importent ni le moteur, ni
-// l'analyseur CSV, ni le générateur de démonstrations. Le stockage lit et écrit par le système de fichiers qu'il
-// reçoit ; seules ses deux implémentations de plateforme touchent le
-// navigateur, par l'OPFS sous web et par le pont window.gtt sous Electron.
+// l'analyseur CSV, ni le générateur de démonstrations. Le stockage lit et
+// écrit par le système de fichiers qu'il reçoit ; seules ses deux
+// implémentations de plateforme touchent le navigateur, par l'OPFS sous web
+// et par le pont window.gtt sous Electron.
 // L'analyseur CSV lit le modèle du stockage. L'application câble le moteur,
 // le stockage, le CSV et les systèmes de fichiers des plateformes, sous
 // l'interface. L'interface n'importe que svelte, ses propres modules,
@@ -2520,7 +2523,8 @@ const COMMANDES_SURVEILLEES = new Set(['vitest --project node', 'vitest --projec
 // Relevé de la série surveillée (§ 14.4, § 14.14), sur les épreuves du
 // projet node donné : par épreuve, puis par ligne, un délai fixe, un appel de
 // la géométrie du rendu, et un import d'écriture de node:fs dans un fichier
-// qui n'appelle ni mkdtemp ni mkdtempSync, « fichier:ligne écrit sans
+// dont le code — commentaires et chaînes exclus — n'appelle ni mkdtemp ni
+// mkdtempSync, « fichier:ligne écrit sans
 // mkdtemp : module fonctions » ; puis le script test:surveille de
 // package.json quand il lance autre chose que vitest sur le projet node. La
 // garde voit l'import, non le chemin : l'écriture hors du temporaire d'un
@@ -2530,7 +2534,7 @@ function releverSerieSurveillee(racine, projet) {
   const refus = epreuvesDuProjet(racine, projet).flatMap((fichier) => {
     const texte = readFileSync(fichier, 'utf8');
     const code = sansChaines(texte);
-    const ecritures = TEMPORAIRE.test(code)
+    const ecritures = TEMPORAIRE.test(codeSeul(texte))
       ? []
       : importsDEcriture(texte, code).map(({ indice, ecrit }) => ({
           ligne: ligneDe(texte, indice),
@@ -2584,6 +2588,11 @@ describe('arborescence : la série surveillée (§ 14.4, § 14.14)', () => {
         "import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';",
         "const racine = mkdtempSync('arbre-');",
       ].join('\n'),
+      // Seul un commentaire nomme mkdtempSync( : le fichier n'en crée aucun.
+      'test/commente.test.js': [
+        "import { writeFileSync } from 'node:fs';",
+        '// mkdtempSync( se lit ici, sans être appelé',
+      ].join('\n'),
       'test/lecture.test.js': "import { readFileSync, existsSync } from 'node:fs';\nconst { statSync } = require('fs');\n",
       'src/moteur/lourde.test.js': 'await new Promise((fin) => setTimeout(fin, 0));\n',
       'src/moteur/a.long.test.js': "import { writeFileSync } from 'node:fs';\n",
@@ -2597,6 +2606,7 @@ describe('arborescence : la série surveillée (§ 14.4, § 14.14)', () => {
       'src/geometrie/vue.test.js:4 getScreenCTM',
       'src/geometrie/vue.test.js:6 getComputedTextLength',
       'src/geometrie/vue.test.js:7 import node:timers/promises',
+      'test/commente.test.js:1 écrit sans mkdtemp : node:fs writeFileSync',
       'test/ecrit.test.js:1 écrit sans mkdtemp : node:fs entier',
       'test/ecrit.test.js:2 écrit sans mkdtemp : node:fs/promises entier',
       'test/ecrit.test.js:3 écrit sans mkdtemp : fs entier',
@@ -2700,38 +2710,55 @@ const LECTURE_D_UN_FICHIER = /\b(?:readFileSync|readFile)\s*\(/;
 const BALAYAGE_D_UN_DOSSIER = /\b(?:readdirSync|readdir|globSync|glob)\s*\(/;
 
 // Les épreuves qui lisent un fichier par le disque, hors de tout graphe
-// d'imports. Une épreuve le lit quand elle-même, ou l'un des modules
-// JavaScript du projet qu'elle importe à toute profondeur (parFichier, que
-// rend importateurs) : lit un fichier et porte une chaîne littérale qui finit
-// sur son nom (« ./jetons.css », « src/interface/jetons.css ») ; ou balaie
-// un dossier et nomme son extension, en chaîne littérale exacte (« .css »)
-// ou dans une expression régulière (« \.css », « \.(svelte|css) »). Le
-// relevé est textuel : un nom de fichier dans les données d'une épreuve
-// compte comme une lecture, d'où des noms inventés dans ces données ; un
-// balayage sans filtre d'extension, comme celui du contrôle de version, ne se
+// d'imports. Une épreuve se juge avec les modules JavaScript du projet
+// qu'elle importe à toute profondeur (parFichier, que rend importateurs),
+// pris ensemble : elle lit un fichier quand l'un d'eux lit un fichier et que
+// l'un d'eux — le même ou un autre — porte une chaîne littérale qui finit
+// sur son nom (« ./jetons.css », « src/interface/jetons.css ») ; ou quand
+// l'un d'eux balaie un dossier et que l'un d'eux nomme son extension, en
+// chaîne littérale exacte (« .css ») ou dans une expression régulière
+// (« \.css », « \.(svelte|css) »). Une épreuve qui nomme la feuille et
+// passe le nom à une aide qui la lit la lit donc. Le relevé est textuel : un
+// nom de fichier dans les données d'une épreuve qui lit compte comme une
+// lecture, d'où des noms inventés dans ces données ; un balayage sans filtre
+// d'extension ni extension nommée, comme celui du contrôle de version, ne se
 // lie à aucun fichier et se déclare dans les relances requises. Rend une
 // fonction : chemin relatif → Set des épreuves relatives qui le lisent.
 function lecteursParLeDisque(racine, epreuves, parFichier) {
-  const chargeurs = new Map(epreuves.map((epreuve) => [enBarres(racine, epreuve), [enBarres(racine, epreuve)]]));
+  const modulesDe = new Map(epreuves.map((epreuve) => [enBarres(racine, epreuve), [enBarres(racine, epreuve)]]));
   for (const [chemin, qui] of parFichier) {
     if (!EXTENSIONS_MODULE.has(extname(chemin)) || chemin.split('/').includes('node_modules')) continue;
-    chargeurs.set(chemin, [...new Set([...(chargeurs.get(chemin) ?? []), ...qui])]);
+    for (const epreuve of qui) modulesDe.get(epreuve).push(chemin);
   }
-  const modules = [...chargeurs].map(([chemin, qui]) => {
-    const texte = readFileSync(join(racine, chemin), 'utf8');
-    const code = sansChaines(texte);
-    return { qui, code, chaines: chainesDe(texte), lit: LECTURE_D_UN_FICHIER.test(code), balaie: BALAYAGE_D_UN_DOSSIER.test(code) };
+  const resumes = new Map();
+  const resume = (chemin) => {
+    if (!resumes.has(chemin)) {
+      const texte = readFileSync(join(racine, chemin), 'utf8');
+      const code = sansChaines(texte);
+      resumes.set(chemin, { code, chaines: chainesDe(texte), lit: LECTURE_D_UN_FICHIER.test(code), balaie: BALAYAGE_D_UN_DOSSIER.test(code) });
+    }
+    return resumes.get(chemin);
+  };
+  const ensembles = [...modulesDe].map(([epreuve, chemins]) => {
+    const membres = chemins.map(resume);
+    return {
+      epreuve,
+      codes: membres.map(({ code }) => code),
+      chaines: membres.flatMap(({ chaines }) => chaines),
+      lit: membres.some(({ lit }) => lit),
+      balaie: membres.some(({ balaie }) => balaie),
+    };
   });
   return (fichier) => {
     const nom = basename(fichier);
     const extension = extname(fichier);
     const enExpression = new RegExp(String.raw`(?<![\w-])\\\.(?:\(\?:|\()?(?:\w+\|)*${extension.slice(1)}\b`);
-    const lisent = modules.filter(
-      ({ code, chaines, lit, balaie }) =>
+    const lisent = ensembles.filter(
+      ({ codes, chaines, lit, balaie }) =>
         (lit && chaines.some((contenu) => contenu === nom || contenu.endsWith(`/${nom}`))) ||
-        (balaie && (chaines.includes(extension) || enExpression.test(code))),
+        (balaie && (chaines.includes(extension) || codes.some((code) => enExpression.test(code)))),
     );
-    return new Set(lisent.flatMap(({ qui }) => qui));
+    return new Set(lisent.map(({ epreuve }) => epreuve));
   };
 }
 
@@ -2741,7 +2768,8 @@ function lecteursParLeDisque(racine, epreuves, parFichier) {
 // celles qui l'importent : par motif, dans l'ordre de la liste, chaque
 // fichier du projet qui y répond et qu'importe une épreuve de la série
 // surveillée que le motif ne relance pas, « motif n /…/ : fichier, qu'importe
-// épreuve, ne la relance pas » ; chaque table de libellés qu'il nomme ;
+// épreuve, ne la relance pas » ; « motif n /…/ : ne répond à aucun fichier »
+// quand aucun fichier de l'arbre n'y répond ; chaque table de libellés qu'il nomme ;
 // chaque épreuve qu'il relance et que l'arbre n'a pas. Puis les relances
 // requises des composants (.svelte) de src/interface, et de ses feuilles de
 // style (.css) : pour chaque fichier, celles de RELANCES_REQUISES_D_UN_COMPOSANT
@@ -2764,7 +2792,9 @@ function releverSurveillance(racine, { watchTriggerPatterns: motifs = [], projec
   motifs.forEach((motif, rang) => {
     const nom = `motif ${rang + 1} ${motif.pattern}`;
     const absentes = new Set();
-    for (const chemin of fichiers.filter((f) => repond(motif, f))) {
+    const repondants = fichiers.filter((f) => repond(motif, f));
+    if (repondants.length === 0) refus.push(`${nom} : ne répond à aucun fichier`);
+    for (const chemin of repondants) {
       const relancees = relances(motif, chemin);
       if (TABLE_DE_LIBELLES.test(chemin) && !EPREUVE.test(chemin)) refus.push(`${nom} : nomme la table de libellés ${chemin}`);
       for (const epreuve of [...(parFichier.get(chemin) ?? [])].sort()) {
@@ -2823,6 +2853,12 @@ describe('arborescence : les motifs de surveillance (§ 14.14)', () => {
       // Nomme la feuille sans la lire, et lit une donnée qui la cite sans finir sur son nom.
       'src/interface/nomme.test.js': "const chemin = './teintes.css';\n",
       'src/interface/cite.test.js': "import { readFileSync } from 'node:fs';\nconst donnee = \"  @import 'teintes.css';\";\nreadFileSync(donnee);\n",
+      // Nomme la feuille ; le module qu'elle importe la lit.
+      'src/interface/combine.test.js': "import { lireFeuille } from '../../test/lecture.js';\nlireFeuille('./teintes.css');\n",
+      'test/lecture.js': "import { readFileSync } from 'node:fs';\nexport const lireFeuille = (chemin) => readFileSync(chemin, 'utf8');\n",
+      // Nomme l'extension ; le module qu'elle importe balaie, sans filtre.
+      'src/interface/extension.test.js': "import { tout } from '../../test/inventaire.js';\nconst feuilles = tout().filter((nom) => nom.endsWith('.css'));\n",
+      'test/inventaire.js': "import { readdirSync } from 'node:fs';\nexport const tout = () => readdirSync('src', { recursive: true });\n",
       'test/projets.test.js': "const App = await import('../src/interface/App.svelte?inline');\n",
       'test/arborescence.test.js': '',
       'scripts/version.test.js': '',
@@ -2831,23 +2867,34 @@ describe('arborescence : les motifs de surveillance (§ 14.14)', () => {
       { pattern: /\.svelte$/, testsToRun: () => ['test/arborescence.test.js', 'scripts/version.test.js'] },
       { pattern: /(^|\/)src\/interface\/libelles\/[^/]+$/, testsToRun: () => 'src/interface/palette.test.js' },
       { pattern: /(^|\/)src\/interface\/(teintes\.css|modele\.js)$/, testsToRun: () => ['test/sources_interface.test.js'] },
+      // Mal écrit : aucun fichier n'y répond.
+      { pattern: /(^|\/)electrn\/[^/]+$/, testsToRun: () => ['test/coquille.test.js'] },
     ];
     assert.deepEqual(avecArbre(fichiers, (racine) => releverSurveillance(racine, { watchTriggerPatterns: motifs, projects })), [
       "motif 1 /\\.svelte$/ : src/interface/App.svelte, qu'importe test/projets.test.js, ne la relance pas",
       'motif 2 /(^|\\/)src\\/interface\\/libelles\\/[^/]+$/ : nomme la table de libellés src/interface/libelles/plan.js',
       "motif 3 /(^|\\/)src\\/interface\\/(teintes\\.css|modele\\.js)$/ : relance test/sources_interface.test.js, absente de l'arbre",
+      'motif 4 /(^|\\/)electrn\\/[^/]+$/ : ne répond à aucun fichier',
       'aucun des 2 composants de src/interface ne relance test/sources_interface.test.js',
       'aucun des 2 composants de src/interface ne relance test/projets.test.js',
       'aucun des 2 composants de src/interface ne relance test/entetes.test.js',
       'src/interface/teintes.css ne relance pas src/interface/palette.test.js',
       'src/interface/teintes.css ne relance pas scripts/version.test.js',
+      'src/interface/teintes.css ne relance pas src/interface/combine.test.js',
+      'src/interface/teintes.css ne relance pas src/interface/extension.test.js',
       'src/interface/teintes.css ne relance pas src/interface/nuances.test.js',
       'src/interface/teintes.css ne relance pas test/entetes.test.js',
     ]);
     const conformes = [
       { pattern: /(^|\/)src\/interface\/.*\.svelte$/, testsToRun: () => [...RELANCES_REQUISES_D_UN_COMPOSANT, 'test/entetes.test.js'] },
       { pattern: /(^|\/)src\/interface\/teintes\.css$/,
-        testsToRun: () => [...RELANCES_REQUISES_D_UNE_FEUILLE, 'src/interface/nuances.test.js', 'test/entetes.test.js'] },
+        testsToRun: () => [
+          ...RELANCES_REQUISES_D_UNE_FEUILLE,
+          'src/interface/combine.test.js',
+          'src/interface/extension.test.js',
+          'src/interface/nuances.test.js',
+          'test/entetes.test.js',
+        ] },
       { pattern: /(^|\/)src\/interface\/plan\/Plan\.svelte$/, testsToRun: () => [] },
     ];
     const complets = { ...fichiers, 'test/sources_interface.test.js': '' };
@@ -2955,15 +3002,23 @@ const SCRIPTS_NOMMES = [
   { fichier: 'scripts/windows/lancer.ps1', raison: 'lance le projet sous Windows' },
 ];
 
-// Fichiers que le disque porte sans qu'ils soient du projet : un nom caché
-// (.DS_Store, l'échange .x.js.swp de Vim), une sauvegarde d'éditeur (x.js~,
-// #x.js#), un reste de fusion ou de correctif (x.js.orig, x.js.rej). Le relevé
-// des langues est le seul à admettre une extension par sa liste plutôt qu'à
-// choisir la sienne : sans ce filtre, il tombe sur un arbre conforme dès qu'un
-// éditeur est ouvert, et la série surveillée le relance à chaque sauvegarde.
-// La liste de git ne les écarte pas : ces noms ne sont pas ignorés par le
-// dépôt, et --others les rend comme tout fichier nouveau.
-const estArtefact = (nom) => nom.startsWith('.') || nom.endsWith('~') || /^#.*#$/.test(nom) || /\.(orig|rej)$/.test(nom);
+// Fichiers que le disque porte sans qu'ils soient du projet : l'index de
+// dossier .DS_Store, l'échange de Vim (.x.js.swp, .x.js.swo…), le verrou
+// d'Emacs (.#x.js), une sauvegarde d'éditeur (x.js~, #x.js#), un reste de
+// fusion ou de correctif (x.js.orig, x.js.rej). Un autre nom caché est un
+// fichier comme un autre : .calcul.py porte un second langage. Le relevé des
+// langues est le seul à admettre une extension par sa liste plutôt qu'à
+// choisir la sienne : sans ce filtre, il tombe sur un arbre conforme dès
+// qu'un éditeur est ouvert, et la série surveillée le relance à chaque
+// sauvegarde. La liste de git ne les écarte pas : ces noms ne sont pas
+// ignorés par le dépôt, et --others les rend comme tout fichier nouveau.
+const estArtefact = (nom) =>
+  nom === '.DS_Store' ||
+  /^\..+\.sw[a-p]$/.test(nom) ||
+  nom.startsWith('.#') ||
+  nom.endsWith('~') ||
+  /^#.*#$/.test(nom) ||
+  /\.(orig|rej)$/.test(nom);
 
 // Relevé des fichiers d'une autre langue sous src/, electron/ et scripts/, à
 // toute profondeur, artefacts d'éditeur et de fusion écartés : chacun
@@ -2991,10 +3046,6 @@ const EPREUVES_SANS_VOISIN = [
   {
     fichier: 'src/interface/accueil/Accueil.navigateur.test.js',
     raison: 'l’accueil n’existe qu’au sein de l’application : l’épreuve monte App par test/navigateur/montage.js',
-  },
-  {
-    fichier: 'src/interface/propositions/Propositions.navigateur.test.js',
-    raison: 'les propositions se lisent dans l’application montée, après génération : l’épreuve monte App',
   },
   {
     fichier: 'src/interface/plan/ecouteurs.test.js',
@@ -3107,6 +3158,50 @@ function releverFastCheck(racine, nommes = CHARGEURS_DE_FAST_CHECK) {
   return [...refus, ...sansObjet];
 }
 
+// Les fichiers qui passent les démonstrations à App : la page et le montage
+// des épreuves du navigateur.
+const PORTEURS_DES_DEMONSTRATIONS = ['src/main.js', 'test/navigateur/montage.js'];
+
+// Relevé des compositions de démonstrations hors de src/demo/livrees.js :
+// chaque porteur qui ne passe pas demonstrationsLivrees() à App, ou qui lit
+// LIVREES ou CATALOGUE lui-même — « fichier : raison ».
+function releverCompositions(racine, porteurs = PORTEURS_DES_DEMONSTRATIONS) {
+  const releves = [];
+  for (const chemin of porteurs) {
+    const texte = readFileSync(join(racine, chemin), 'utf8');
+    if (!/\bdemonstrationsLivrees\(\)/.test(texte)) releves.push(`${chemin} : demonstrationsLivrees() absent`);
+    for (const nom of ['LIVREES', 'CATALOGUE']) if (new RegExp(`\\b${nom}\\b`).test(texte)) releves.push(`${chemin} : ${nom} lu`);
+  }
+  return releves;
+}
+
+describe('arborescence : une seule composition des démonstrations (§ 15)', () => {
+  test('src/main.js et le montage des épreuves passent demonstrationsLivrees() à App, et ne composent rien eux-mêmes', () => {
+    assert.deepEqual(releverCompositions(RACINE), []);
+  });
+
+  test('la garde relève un porteur qui recompose LIVREES par le catalogue, et un qui ne passe pas demonstrationsLivrees()', () => {
+    const recompose =
+      "import { CATALOGUE } from './demo/catalogue.js';\nimport { LIVREES } from './demo/livrees.js';\n" +
+      'const demonstrations = LIVREES.map(({ cle, texte }) => ({ cle, nom: CATALOGUE.find((e) => e.cle === cle).nom, texte }));\n';
+    const releves = avecArbre(
+      { 'src/main.js': recompose, 'test/navigateur/montage.js': 'const d = demonstrationsLivrees();\n' },
+      (racine) => releverCompositions(racine),
+    );
+    assert.deepEqual(releves, ['src/main.js : demonstrationsLivrees() absent', 'src/main.js : LIVREES lu', 'src/main.js : CATALOGUE lu']);
+  });
+
+  test('demonstrationsLivrees : chaque démonstration livrée, dans l’ordre de LIVREES, nommée par le catalogue ; un tableau neuf à chaque appel', () => {
+    const rendues = demonstrationsLivrees();
+    assert.deepEqual(rendues.map(({ cle }) => cle), LIVREES.map(({ cle }) => cle));
+    for (const { cle, nom, texte } of rendues) {
+      assert.equal(nom, CATALOGUE.find((entree) => entree.cle === cle).nom, cle);
+      assert.equal(texte, LIVREES.find((livree) => livree.cle === cle).texte, cle);
+    }
+    assert.notEqual(demonstrationsLivrees(), rendues);
+  });
+});
+
 describe('arborescence : un seul chemin de code pour les réservations (§ 5.2)', () => {
   test('dans src/moteur, seuls configuration.js et diagnostic.js lisent les réservations', () => {
     assert.deepEqual(releverLecteursDesReservations(RACINE), []);
@@ -3184,6 +3279,8 @@ describe('arborescence : une seule langue (§ 13.2)', () => {
     const fichiers = {
       'src/moteur/recherche.js': '',
       'src/moteur/.recherche.js.swp': '',
+      'src/moteur/.recherche.js.swo': '',
+      'src/moteur/.#recherche.js': '',
       'src/interface/.DS_Store': '',
       'src/moteur/recherche.js~': '',
       'src/moteur/recherche.js.orig': '',
@@ -3192,9 +3289,19 @@ describe('arborescence : une seule langue (§ 13.2)', () => {
       'src/moteur/calcul.py': '',
       'src/moteur/orig': '',
       'src/moteur/calcul.py.bak': '',
+      // Un nom caché n'est pas pour autant un reste d'éditeur : un second
+      // langage s'y cacherait.
+      'src/moteur/.calcul.py': '',
+      'src/moteur/.cache': '',
     };
     const releves = avecArbre(fichiers, releverLangages).filter((r) => !r.startsWith('exception sans objet'));
-    assert.deepEqual(releves, ['src/moteur/calcul.py : .py', 'src/moteur/calcul.py.bak : .bak', 'src/moteur/orig : sans extension']);
+    assert.deepEqual(releves, [
+      'src/moteur/.cache : sans extension',
+      'src/moteur/.calcul.py : .py',
+      'src/moteur/calcul.py : .py',
+      'src/moteur/calcul.py.bak : .bak',
+      'src/moteur/orig : sans extension',
+    ]);
     assert.throws(
       () => avecArbre({ 'src/moteur/.a.js.swp': '', 'electron/a.cjs~': '' }, releverLangages),
       /aucun fichier sous src\/, electron\/ et scripts\//,

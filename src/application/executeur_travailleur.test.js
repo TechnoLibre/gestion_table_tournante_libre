@@ -247,6 +247,29 @@ describe('exécuteur du travailleur : le groupe (§ 5.7, § 5.10)', () => {
     execution.annuler();
   });
 
+  test('l’avancement ne décroît jamais : un avancement plus petit, ou égal, que le dernier de sa proposition ne publie rien', () => {
+    const { fabrique, travailleurs } = fabriqueFactice();
+    const reglages = { ...REGLAGES, nombre: 2, arret: 100 };
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, reglages, { coeurs: 2 });
+    execution.resultat.catch(() => undefined);
+    const recus = [];
+    execution.surAvancement((fait, total) => recus.push([fait, total]));
+    const [premier, second] = travailleurs;
+    premier.poster({ type: 'avancement', fait: 60, total: 100 });
+    premier.poster({ type: 'avancement', fait: 20, total: 100 });
+    second.poster({ type: 'avancement', fait: 50, total: 100 });
+    second.poster({ type: 'avancement', fait: 50, total: 100 });
+    premier.poster({ type: 'proposition', proposition: propositionDe(1) });
+    second.poster({ type: 'avancement', fait: 40, total: 100 });
+    assert.deepEqual(recus, [
+      [60, 200],
+      [110, 200],
+      [150, 200],
+    ]);
+    for (let i = 1; i < recus.length; i += 1) assert.ok(recus[i][0] >= recus[i - 1][0], `avancement ${i}`);
+    execution.annuler();
+  });
+
   test('un abonné retiré ne reçoit plus rien', () => {
     const { fabrique, travailleurs } = fabriqueFactice();
     const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, REGLAGES);

@@ -128,6 +128,31 @@ describe('essai de démarrage : dossiers et environnement (§ 8.6)', () => {
     assert.deepEqual(donneesApplicativesSurExe({ TMPDIR: '/' }, {}, 'linux'), []);
   });
 
+  test('sous macOS, Application Support de la coquille et du poste ; sous Windows, TMP l’emporte sur TEMP', () => {
+    // macOS : un essai rangé sous le dossier Application Support du poste,
+    // que le HOME de la coquille ne déplace pas, puis sous celui de la
+    // coquille.
+    const P = path.posix;
+    const maison = P.join('/', 'maison-essai');
+    const support = P.join(maison, 'Library', 'Application Support');
+    const dossiers = dossiersDEssai(P.join(support, 'gtt-essai-demarrage-x'), P);
+    const env = environnementDEssai({ HOME: maison }, dossiers, P);
+    assert.deepEqual(donneesApplicativesSurExe(env, {}, 'darwin'), []);
+    assert.deepEqual(donneesApplicativesSurExe(env, { HOME: maison }, 'darwin'), [support]);
+    assert.deepEqual(donneesApplicativesSurExe({ ...env, HOME: maison }, {}, 'darwin'), [support]);
+    // Sous Linux, le même poste ne range rien sous Application Support.
+    assert.deepEqual(donneesApplicativesSurExe(env, { HOME: maison }, 'linux'), []);
+    // Windows : le temporaire est TMP, puis TEMP à défaut.
+    const W = path.win32;
+    const racine = W.join('D:\\', 'essais', 'gtt-essai-demarrage-x');
+    const envW = environnementDEssai({}, dossiersDEssai(racine, W), W);
+    const dessus = W.join('D:\\', 'essais');
+    const ailleurs = W.join('E:\\', 'temporaire');
+    assert.deepEqual(donneesApplicativesSurExe({ ...envW, TMP: dessus, TEMP: ailleurs }, {}, 'win32'), [dessus]);
+    assert.deepEqual(donneesApplicativesSurExe({ ...envW, TMP: ailleurs, TEMP: dessus }, {}, 'win32'), []);
+    assert.deepEqual(donneesApplicativesSurExe({ ...envW, TMP: '', TEMP: dessus }, {}, 'win32'), [dessus]);
+  });
+
   test('la liste des données applicatives est celle que decrireSysteme compose : un emplacement qu’elle ajoute est jugé, et un app.getPath que l’essai ne sait pas émuler lève', () => {
     const P = path.posix;
     const R = P.join('/', 'racine-essai', 'gtt-essai-demarrage-x');

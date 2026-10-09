@@ -99,7 +99,7 @@ const csv = (personnes) =>
     ...personnes.map((p) => [p.nom, p.prenom ?? '', p.appartenance ?? '', p.exclu ? 'oui' : '', p.titre ?? '', p.notes ?? ''].join(';')),
   ].join('\n');
 
-// Importe un texte par la commande, comme le ferait l'aperçu (I6).
+// Importe un texte par la commande, comme le ferait l'aperçu.
 const importer = (m, texte) => m.seance.executer('importerParticipants', { apercu: apercevoir(texte), mode: 'ajouter' });
 
 // Les octets d'un CSV livré, lus par son adresse.
@@ -475,6 +475,44 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     await attendreSeance(m);
     expect(idsAffiches(m)).toEqual([second]);
     expect(document.activeElement).toBe(cellule(m, second, COLONNES[0]));
+  });
+
+  test('Entrée sur une saisie qui retire la ligne du filtre : la même colonne de la personne qui la suivait prend le focus, non le document', async () => {
+    const m = await evenementOuvert({ personnes: TROIS });
+    await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="nom"]'));
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'merles');
+    const [premier, second] = idsAffiches(m);
+
+    cellule(m, premier, 'appartenance').focus();
+    await touche('Enter');
+    await rendu();
+    await saisir(cellule(m, premier, 'appartenance').querySelector('input'), 'Cercle des Pinsons');
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(idsAffiches(m)).toEqual([second]);
+    await vi.waitFor(() => expect(document.activeElement).toBe(cellule(m, second, 'appartenance')));
+  });
+
+  test('Tab sur une saisie refusée : une seule commande, l’édition et le focus restent dans le champ, le refus contre lui', async () => {
+    const m = await evenementOuvert({ personnes: TROIS });
+    const premier = idsAffiches(m)[0];
+    cellule(m, premier, 'nom').focus();
+    await touche('Enter');
+    await rendu();
+    const champ = cellule(m, premier, 'nom').querySelector('input');
+    await saisir(champ, '   ');
+    const executer = vi.spyOn(m.seance, 'executer');
+    const avant = entrees(m).length;
+    await touche('Tab');
+    await attendreSeance(m);
+    await rendu();
+    expect(executer).toHaveBeenCalledTimes(1);
+    const refuse = cellule(m, premier, 'nom').querySelector('input');
+    expect(refuse).not.toBeNull();
+    expect(document.activeElement).toBe(refuse);
+    expect(refuse.getAttribute('aria-invalid')).toBe('true');
+    expect(cellule(m, premier, 'nom').querySelector('[data-refus]')).not.toBeNull();
+    expect(entrees(m)).toHaveLength(avant);
   });
 
   test('Maj+Tab après une saisie qui retire la ligne du filtre mène à la dernière cellule de la personne qui la précédait', async () => {
@@ -1117,7 +1155,12 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
 
   test('le filtre passe d’abord : un groupe sans ligne disparaît, chaque compte est celui des lignes montrées ; trié par la colonne groupée, les groupes suivent le sens', async () => {
     const m = await evenementOuvert({ personnes: CINQ });
+    // Deux orthographes du même groupe : la plus ancienne personne le nomme.
+    await m.seance.executer('modifierParticipant', { id: idDe(m, 'Pervenche'), champs: { appartenance: 'CLUB DES MERLES' } });
     await grouperPar(m, 'appartenance');
+    const libelleEntier = entete(m, MERLES).libelle;
+    expect(participants(m).find(({ nom }) => nom === 'Pervenche').appartenance).toBe('CLUB DES MERLES');
+    expect(libelleEntier).toBe(CLUB);
     await saisir(section(m).querySelector('[data-champ="filtre"]'), 'pinsons');
     expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS]);
     expect(entete(m, PINSONS).compte).toBe(t('participants.groupe.compte', { compte: 2 }));
@@ -1127,7 +1170,19 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     await saisir(section(m).querySelector('[data-champ="filtre"]'), 'iris');
     expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([MERLES]);
     expect(entete(m, MERLES).compte).toBe(t('participants.groupe.compte', { compte: 1 }));
+    // Le libellé ne suit pas le filtre : chacune des deux orthographes seule
+    // montrée, le groupe garde celui de la liste entière.
+    expect(entete(m, MERLES).libelle).toBe(libelleEntier);
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'pervenche');
+    expect(entete(m, MERLES).libelle).toBe(libelleEntier);
+    // Tout replier vise chaque groupe, même ceux que le filtre cache.
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'pinsons');
+    await cliquer(section(m).querySelector('[data-commande="toutReplier"]'));
     await saisir(section(m).querySelector('[data-champ="filtre"]'), '');
+    expect(groupes(m).map((g) => g.dataset.groupe)).toEqual([PINSONS, MERLES, 'vide']);
+    expect(ouverts(m)).toEqual(['false', 'false', 'false']);
+    expect(lignes(m)).toHaveLength(0);
+    await cliquer(section(m).querySelector('[data-commande="toutDeplier"]'));
 
     await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="appartenance"]'));
     await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="appartenance"]'));
@@ -1281,6 +1336,11 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
     expect(entete(m, MERLES).compte).toBe(t('participants.groupe.compte', { compte: 2 }));
     expect(idsDuGroupe(m, `${MERLES}/statut:ancre`)).toEqual([ombrelle]);
     expect(idsDuGroupe(m, `${MERLES}/statut:mobile`)).toEqual([pervenche]);
+    // Seul l'en-tête d'un groupe du premier niveau couvre son corps
+    // (rowgroup) ; celui d'un sous-groupe ne nomme que sa ligne (§ 14.5).
+    for (const g of groupes(m)) {
+      expect(g.querySelector('th').getAttribute('scope'), g.dataset.groupe).toBe(g.dataset.niveau === '1' ? 'rowgroup' : 'row');
+    }
     // Un en-tête de sous-groupe est en retrait de celui de son parent.
     expect(bascule(m, `${MERLES}/statut:ancre`).getBoundingClientRect().left).toBeGreaterThan(bascule(m, MERLES).getBoundingClientRect().left);
 

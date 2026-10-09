@@ -134,6 +134,8 @@ describe('avertissementsOrdonnes (§ 8.6, § 8.8, § 8.9, § 9)', () => {
     'JALON_NON_ECRIT',
     'SUPPORT_AMOVIBLE',
     'RESERVATIONS_SUSPENDUES',
+    'RESERVATIONS_RETABLIES',
+    'RESERVATIONS_RETIREES',
     'IMPORT_EN_RETENU',
     'PLACES_MANQUANTES',
     'DERIVE_NOUVELLE',

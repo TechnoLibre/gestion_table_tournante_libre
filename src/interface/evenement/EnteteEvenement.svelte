@@ -10,7 +10,8 @@
   // « Proposé » sans proposition — s'affiche à côté de l'état cliqué, avec
   // son remède. L'état courant se distingue par sa forme : gras, et un trait
   // sous lui. Le nom se coupe où il le faut, même sans espace : un nom long
-  // de glyphes larges passe à la ligne au lieu d'élargir la page.
+  // de glyphes larges passe à la ligne au lieu d'élargir la page. Chaque état
+  // est un bloc : la commande et son refus en sont.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import { ETATS_PLAN, cleEtat } from './modele.js';
@@ -25,9 +26,9 @@
   <h1>{$seance.evenement?.nom}</h1>
   <div class="etats" role="group" aria-label={t('evenement.etat.titre')}>
     {#each ETATS_PLAN as etat (etat)}
-      <span class="etat" class:courant={courant === etat} data-etat={etat}>
+      <div class="etat" class:courant={courant === etat} data-etat={etat}>
         <Commande cle={cleEtat(etat)} nom="etat" executer={() => seance.executer('changerEtat', { etat })} />
-      </span>
+      </div>
     {/each}
   </div>
 </header>

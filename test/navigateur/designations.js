@@ -1,0 +1,179 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Les désignations stables de l'interface (contrainte 16) : la liste fermée
+// des attributs data-… que src/interface pose — gabarit ou script d'un
+// composant, code d'un module —, et par lesquels les épreuves atteignent un
+// élément sans lire sa classe ni son texte traduit.
+// test/sources_interface.test.js la compare au code dans les deux sens : un
+// attribut posé hors de la liste se relève, une entrée que rien ne pose
+// aussi. Un attribut nouveau entre ici avec le code qui le pose.
+//
+// Chaque entrée : attribut → { porteur, valeurs }. porteur dit l'élément qui
+// le porte ; valeurs vaut null quand la valeur se calcule — un identifiant,
+// un code, une clé —, sinon la liste fermée des valeurs littérales que le
+// code écrit, '' pour un attribut posé sans valeur. Une liste fermée ne vaut
+// que pour un attribut dont chaque pose est littérale ; la garde le vérifie.
+// Le module est pur : il se lit sous node comme dans le navigateur.
+
+// [attribut, porteur, valeurs], dans l'ordre des attributs.
+const ENTREES = [
+  ['data-affichee', 'import : la valeur affichée d’une cellule de l’aperçu', ['']],
+  ['data-annonces', 'événement : la zone des annonces à côté de la tête', ['']],
+  ['data-apercu', 'import : l’aperçu d’un fichier ou d’un collage', ['']],
+  ['data-attente-demonstration', 'accueil : le message d’une démonstration cliquée pendant un chargement', ['']],
+  ['data-autre', 'accueil : le choix d’un autre dossier de travail', ['']],
+  ['data-autre-chemin', 'accueil : le chemin de l’autre dossier de travail', ['']],
+  ['data-avancement', 'génération : la barre d’avancement', ['']],
+  ['data-avertissement', 'un avertissement, par son code', null],
+  ['data-bandeau', 'le bandeau d’application', ['']],
+  ['data-bandeau-plan', 'plan : le bandeau au-dessus de la surface', ['']],
+  ['data-bloc', 'à propos : le bloc de version à copier', ['']],
+  ['data-cellule', 'import : une cellule de l’aperçu, par son champ', null],
+  ['data-champ', 'un champ de saisie ou un sélecteur, par son nom', null],
+  ['data-chargement', 'accueil : le signe d’un calcul en cours', ['']],
+  ['data-chargement-liste', 'accueil : l’annonce du calcul des colonnes de la liste', ['']],
+  ['data-choix-siege', 'plan : un siège offert par le panneau d’une table, par son rang', null],
+  ['data-cible', 'la cible d’une commande : section, groupe ou colonne', null],
+  ['data-cible-redondance', 'propositions : le champ de la cible de redondance', ['']],
+  ['data-classement', 'propositions : les lignes classées', ['']],
+  ['data-coeurs', 'génération : le réglage des cœurs de calcul', ['']],
+  ['data-coeurs-disponibles', 'génération : la valeur automatique des cœurs', ['']],
+  ['data-collage', 'import : l’origine collage de l’aperçu', ['']],
+  ['data-colonne', 'une colonne d’un tableau, par son nom', null],
+  ['data-colonnes', 'import : l’association des colonnes', ['']],
+  ['data-commande', 'un bouton de commande, par son nom', null],
+  ['data-compte', 'import : un compte du rapport, par son nom', null],
+  ['data-conflit', 'participants : une ligne de conflit d’un groupe', ['']],
+  ['data-conflit-personne', 'participants : les règles d’une personne en conflit', ['']],
+  ['data-conflits', 'participants : les conflits d’un groupe, par sa clé', null],
+  ['data-conversion', 'plan : une conversion offerte par une liste de travail', null],
+  ['data-corbeille', 'accueil : la corbeille', ['']],
+  ['data-corbeille-dossier', 'accueil : un dossier de la corbeille', null],
+  ['data-critere', 'propositions : un nom de critère de la phrase de l’ordre', null],
+  ['data-defaut', 'tables : le réglage du défaut de places', ['']],
+  ['data-demonstration', 'accueil : une démonstration, par sa clé', null],
+  ['data-derive', 'événement : un placement en dérive, par son identifiant', null],
+  ['data-devient', 'import : ce que devient une ligne', ['']],
+  ['data-donnee', 'diagnostic : une donnée nommée dans une phrase', ['']],
+  ['data-dossier', 'accueil : le dossier de travail montré', ['']],
+  ['data-dossier-travail', 'accueil : le bloc du dossier de travail', ['']],
+  ['data-doublon', 'un doublon : base de la liste, ou ligne de l’aperçu', null],
+  ['data-doublons', 'import : les doublons de l’aperçu', ['']],
+  ['data-duree', 'génération : la durée estimée', ['']],
+  ['data-ecran', 'un écran de l’application', ['accueil', 'apropos', 'evenement', 'recuperation']],
+  ['data-encodage', 'import : l’encodage nommé', ['']],
+  ['data-enonce', 'un énoncé : diagnostic, ou défaut des tables', null],
+  ['data-enregistre', 'import : le chemin des refus enregistrés', ['']],
+  ['data-entete', 'import : la ligne d’en-tête lue', ['']],
+  ['data-estimation', 'génération : l’estimation de la durée', ['']],
+  ['data-etat', 'événement : un état du plan dans la tête', null],
+  ['data-etat-table', 'tables : l’état d’une table', ['']],
+  ['data-evenement', 'accueil : une ligne de la liste, par sa base', null],
+  ['data-evidence', 'plan : la personne mise en évidence', null],
+  ['data-fantome', 'plan : le fantôme d’une personne glissée', ['']],
+  ['data-fautive', 'événement : une proposition fautive', null],
+  ['data-fiche', 'participants : la fiche d’une personne', null],
+  ['data-fichier', 'import : le fichier lu', ['']],
+  ['data-focus-initial', 'plan : le siège qui reçoit le focus à l’ouverture du panneau', null],
+  ['data-fusion', 'import : un groupe d’orthographes fondu', ['']],
+  ['data-fusions', 'import : les groupes d’orthographes', ['']],
+  ['data-groupe', 'participants : l’en-tête d’un groupe, par sa clé', null],
+  ['data-groupe-compte', 'participants : le compte d’un groupe', ['']],
+  ['data-groupe-conflits', 'participants : la marque de conflit d’un groupe', ['']],
+  ['data-groupe-etat', 'participants : l’état replié ou déplié d’un groupe', ['']],
+  ['data-groupe-libelle', 'participants : le libellé d’un groupe', ['']],
+  ['data-groupe-ligne', 'participants : le groupe qui compte une ligne', null],
+  ['data-historique', 'événement : la commande de l’historique', ['']],
+  ['data-homonyme', 'import : une ligne homonyme', null],
+  ['data-hors-classement', 'propositions : les lignes hors classement', ['']],
+  ['data-issue', 'génération : l’issue de la dernière génération', ['']],
+  ['data-legende', 'plan : la légende des conflits', ['']],
+  ['data-legende-pastille', 'plan : la pastille de la légende', ['']],
+  ['data-legende-regle', 'plan : une entrée de la légende, par sa règle', null],
+  ['data-ligne', 'import : une ligne de l’aperçu, par son rang', null],
+  ['data-lignes', 'import : le tableau des lignes', ['']],
+  ['data-liste', 'plan : la liste de noms d’une table', null],
+  ['data-liste-travail', 'plan : une liste de travail', ['pressentis', 'titres']],
+  ['data-marque', 'une marque porteuse d’information, par son nom au registre', null],
+  ['data-meilleure', 'la meilleure proposition : accueil ou génération', ['']],
+  ['data-meilleure-collisions', 'les collisions de la meilleure proposition', ['']],
+  ['data-meilleure-id', 'l’identifiant de la meilleure proposition', ['']],
+  ['data-meilleure-libelle-id', 'génération : le libellé de l’identifiant de la meilleure', ['']],
+  ['data-meilleure-vide', 'génération : la meilleure absente', ['']],
+  ['data-menu', 'plan : le menu d’une personne', null],
+  ['data-mode', 'événement : le cadre de mode, par sa forme', null],
+  ['data-mode-libelle', 'le libellé de mode', ['bandeau', 'cadre']],
+  ['data-motif', 'import : le motif d’une ligne refusée', ['']],
+  ['data-multiligne', 'import : une ligne sur plusieurs lignes de texte', null],
+  ['data-niveau', 'participants : le niveau d’un groupe ou d’un sélecteur', null],
+  ['data-nombre', 'import : un nombre affiché', ['']],
+  ['data-ordre', 'propositions : la phrase de l’ordre', ['']],
+  ['data-orthographe', 'import : une orthographe d’un groupe', ['']],
+  ['data-panneau', 'plan : un panneau', ['place', 'table']],
+  ['data-panneau-diagnostic', 'plan : le panneau du diagnostic', ['']],
+  ['data-participant', 'une personne, par son identifiant', null],
+  ['data-partie', 'plan : une partie d’une ligne de liste ou du fantôme', null],
+  ['data-pastille', 'plan : la pastille d’une table', null],
+  ['data-phrase', 'une phrase : diagnostic ou défaut des tables', ['']],
+  ['data-place-fixe', 'événement : la place fixe du cadre de mode', ['']],
+  ['data-plan', 'plan : le <svg> du plan', ['']],
+  ['data-poignee', 'plan : la poignée d’une table', null],
+  ['data-proposition', 'propositions : une ligne, par son identifiant', null],
+  ['data-question', 'une question posée : dossier de travail ou durée longue', null],
+  ['data-rapport', 'import : le rapport', ['']],
+  ['data-refus', 'un refus, par son code ou sa place', null],
+  ['data-refus-realigner', 'tables : le refus du réalignement', ['']],
+  ['data-refusees', 'import : les lignes refusées', ['']],
+  ['data-reglages', 'génération : les réglages', ['']],
+  ['data-remede', 'diagnostic : un remède', ['']],
+  ['data-reserve', 'plan : la réserve d’un tour', null],
+  ['data-retenu', 'propositions : la ligne du retenu', null],
+  ['data-secours', 'récupération : une source de secours', null],
+  ['data-section', 'une section de l’événement', ['diagnostic', 'generation', 'import', 'participants', 'plan', 'propositions', 'tables']],
+  ['data-separateur', 'import : le séparateur nommé', ['']],
+  ['data-siege', 'plan : un siège, par sa table et son numéro', null],
+  ['data-sieges-retires', 'tables : les sièges retirés', ['']],
+  ['data-signalement', 'accueil : un signalement d’une ligne', null],
+  ['data-socle', 'plan : le socle d’une pastille', ['']],
+  ['data-source', 'plan : le placement montré, dans la barre de vue', ['']],
+  ['data-support-rompu', 'événement : le message du support rompu', ['']],
+  ['data-surface', 'plan : la surface du plan', ['']],
+  ['data-table', 'une table, par son identifiant', null],
+  ['data-table-panneau', 'plan : la table d’un panneau', null],
+  ['data-terme', 'un terme expliqué par une infobulle', null],
+  ['data-texte', 'import : le texte d’une ligne', ['']],
+  ['data-theme', '<html> : le thème, clair ou sombre, que pose le script d’App', null],
+  ['data-theme-choix', 'le bandeau : un choix de thème', null],
+  ['data-titre', 'plan : un titre non pourvu d’une liste de travail', null],
+  ['data-tours', 'tables : le réglage du nombre de tours', ['']],
+  ['data-valides', 'import : le compte des lignes valides', ['']],
+  ['data-verrou', 'événement : le verrou d’une autre séance', ['']],
+  ['data-verrou-depuis', 'événement : l’instant du verrou', ['']],
+  ['data-verrou-seance', 'événement : la séance du verrou', ['']],
+  ['data-version', 'accueil : la version affichée', ['']],
+  ['data-vue', 'plan : le groupe de la vue', ['']],
+];
+
+// La Map des entrées, gelée : Object.freeze ne gèle pas le contenu d'une
+// Map, et ses modificateurs lèvent ici.
+function geler(carte) {
+  for (const nom of ['set', 'delete', 'clear']) {
+    Object.defineProperty(carte, nom, {
+      value: () => {
+        throw new TypeError(`DESIGNATIONS est gelée : ${nom} refusé`);
+      },
+    });
+  }
+  return Object.freeze(carte);
+}
+
+/** Les désignations stables : attribut → { porteur, valeurs }, gelées. */
+export const DESIGNATIONS = geler(
+  new Map(
+    ENTREES.map(([attribut, porteur, valeurs]) => [
+      attribut,
+      Object.freeze({ porteur, valeurs: valeurs === null ? null : Object.freeze([...valeurs]) }),
+    ]),
+  ),
+);

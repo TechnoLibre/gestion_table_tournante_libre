@@ -30,13 +30,14 @@ const SOURCES = {
   sol: { genre: 'sol', table: null, siege: null, participant: null },
 };
 
-// Un contexte dont le contrôle accepte tout, et dont le dépôt rend la
-// commande donnée.
-function contexte({ controlerPlaces = () => ({ refus: null, avertissements: [] }), depot = null } = {}) {
+// Un contexte dont le contrôle accepte tout, dont le dépôt rend la commande
+// donnée, et dont le sol est ce que dit surLeSol au point de dessin.
+function contexte({ controlerPlaces = () => ({ refus: null, avertissements: [] }), depot = null, surLeSol = () => false } = {}) {
   const deposes = [];
   return {
     deposes,
     controlerPlaces,
+    surLeSol,
     deposer(source, point) {
       deposes.push({ source, point });
       return depot ?? { resultat: { commande: 'deplacerDansRetenu', arguments: { tour: 1 } }, place: { table: 4, siege: 1 } };
@@ -194,7 +195,7 @@ describe('geste : glisser une personne (§ 7.1, § 7.3, § 5.8)', () => {
   test('le fantôme se montre au franchissement du seuil, suit le pointeur en px du <svg>, et le dépôt se demande au point de dessin', () => {
     const ctx = contexte();
     const { effets } = jouer([presser(SOURCES.personne), bouger(10, 0), bouger(50, 30), relacher(50, 30)], ctx);
-    assert.deepEqual(effets[1][0], { type: 'montrerFantome', participant: 11, depuis: { table: 3, siege: 2 } });
+    assert.deepEqual(effets[1][0], { type: 'montrerFantome', participant: 11, depuis: { table: 3, siege: 2 }, surLeSol: false });
     assert.deepEqual(effets[1][1], { type: 'ecrireTransform', cible: 'fantome', transform: `translate(${DEPART.x + 10 - CADRE.gauche},${DEPART.y - CADRE.haut})` });
     assert.equal(ctx.deposes.length, 1);
     assert.deepEqual(ctx.deposes[0].point, dessinDepuisEcran(VUE, CADRE, DEPART.x + 50, DEPART.y + 30));
@@ -217,6 +218,25 @@ describe('geste : glisser une personne (§ 7.1, § 7.3, § 5.8)', () => {
     assert.deepEqual(types(effets[2]), ['ecrireTransform', 'restaurer', 'montrerRefus', 'finirGeste']);
     assert.deepEqual(deType(tous, 'montrerRefus'), [{ type: 'montrerRefus', place: { table: 5, siege: 3 }, refus }]);
     assert.equal(deType(tous, 'executer').length, 0);
+  });
+
+  test('le fantôme se redit quand le pointeur passe sur le sol ou le quitte, jugé au point de dessin, et seulement alors', () => {
+    // Le sol à droite de x = 450 px : le libellé change à son passage, dans
+    // un sens puis dans l'autre ; un mouvement qui reste du même côté ne le
+    // redit pas.
+    const points = [];
+    const surLeSol = (point) => {
+      points.push(point);
+      return point.x > dessinDepuisEcran(VUE, CADRE, 450, 0).x;
+    };
+    const { effets } = jouer([presser(SOURCES.personne), bouger(10, 0), bouger(20, 0), bouger(80, 0), bouger(90, 0), bouger(30, 0)], contexte({ surLeSol }));
+    const fantomes = effets.map((pas) => deType(pas, 'montrerFantome').map(({ surLeSol: sol }) => sol));
+    assert.deepEqual(fantomes, [[], [false], [], [true], [], [false]]);
+    assert.deepEqual(points[0], dessinDepuisEcran(VUE, CADRE, DEPART.x + 10, DEPART.y));
+    assert.equal(points.length, 5);
+    for (const pas of effets.slice(3)) {
+      for (const effet of deType(pas, 'montrerFantome')) assert.deepEqual(effet.depuis, { table: 3, siege: 2 });
+    }
   });
 
   test('un dépôt manqué (null) : la personne revient, rien d’autre', () => {
@@ -345,6 +365,26 @@ describe('les libellés d’un geste : le fantôme et la place d’une pose', ()
     assert.match(LIBELLES.get(cleFantome('reservations', 'tous')), /tous les tours/);
     for (const portee of ['Tous', 'tours', '', 0]) {
       assert.throws(() => cleFantome('reservations', portee), { name: 'TypeError', message: /^portée du fantôme hors du contrat/ });
+    }
+  });
+
+  test('cleFantome : au-dessus du sol, une réservation « ce tour » se dit retirée, une « tous les tours » refusée (§ 5.8)', () => {
+    // Le dépôt sur le sol retire la première et refuse la seconde : le
+    // fantôme dit ce qui arrivera au relâcher, non ce qui arrive sur une
+    // chaise. Une personne que rien ne tient, et les autres cibles, gardent
+    // leur libellé.
+    assert.equal(cleFantome('reservations', 'tour', true), 'plan.fantome.retireReservationTour');
+    assert.equal(cleFantome('reservations', 'tous', true), 'plan.fantome.refuseTous');
+    assert.equal(cleFantome('reservations', 'tour', false), 'plan.fantome.reservationTour');
+    assert.equal(cleFantome('reservations', 'tous', false), 'plan.fantome.reservationTous');
+    assert.equal(cleFantome('reservations', null, true), 'plan.fantome.reservations');
+    assert.equal(cleFantome('retenu', null, true), 'plan.fantome.retenu');
+    assert.equal(cleFantome(null, 'tous', true), 'plan.fantome.vueSeule');
+    assert.match(LIBELLES.get('plan.fantome.retireReservationTour'), /retire/);
+    assert.match(LIBELLES.get('plan.fantome.refuseTous'), /refusé/);
+    assert.match(LIBELLES.get('plan.fantome.refuseTous'), /tous les tours/);
+    for (const sol of [0, 'oui', null]) {
+      assert.throws(() => cleFantome('reservations', 'tour', sol), { name: 'TypeError', message: /^sol du fantôme hors du contrat/ });
     }
   });
 

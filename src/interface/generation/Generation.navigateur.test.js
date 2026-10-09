@@ -317,7 +317,6 @@ describe('les réglages (§ 5.7, § 5.10)', () => {
     // de la démonstration.
     const saisies = { nombre: 3, arret: 40000, historique: 500 };
     const noms = Object.keys(saisies);
-    expect(noms.length).toBe(3);
     for (const nom of noms) {
       const avant = { ...charge(m).reglages.generation };
       expect(avant[nom], nom).not.toBe(saisies[nom]);
@@ -364,7 +363,6 @@ describe('les réglages (§ 5.7, § 5.10)', () => {
     const m = await demonstration('petite', { executeur });
     const ecritures = m.trace.length;
     const saisies = ['-1', '1,5', String(2 ** 32)];
-    expect(saisies.length).toBe(3);
     for (const saisie of saisies) {
       const attendu = controleur(m).valider({ ...controleur(m).reglagesProposes(), graine: saisie }).refus;
       expect(attendu.map(({ champ: nom }) => nom)).toEqual(['graine']);
@@ -654,7 +652,6 @@ describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
       ['5', 'HORS_DOMAINE', { min: 1, max: 4, remede: null }],
       ['x', 'NON_ENTIER', { saisie: 'x', remede: null }],
     ];
-    expect(refusees.length).toBe(3);
     for (const [saisie, code, details] of refusees) {
       await saisir(m, champCoeurs(m), saisie);
       const refus = refusPres(champCoeurs(m), code);
@@ -677,6 +674,27 @@ describe('les cœurs de calcul, un réglage du poste (§ 5.7, § 5.10)', () => {
     expect(journalDe(m).entrees.length).toBe(entrees);
     expect(revision(m)).toBe(r0);
     expect(fenetre()).toBeNull();
+  });
+
+  test('Échap dans « Nombre de cœurs » rend le dernier nombre accepté : une saisie en cours, puis une saisie refusée, son refus retiré ; le focus reste, rien n’est écrit', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect({ coeursDisponibles: 4 }) });
+    const ecritures = m.trace.length;
+    await cliquer(m, bascule(m, 'coeursAutomatiques'));
+    await saisir(m, champCoeurs(m), '2', { fin: 'Enter' });
+    expect(controleur(m).coeurs().nombre).toBe(2);
+    await saisir(m, champCoeurs(m), '3', { fin: 'Escape' });
+    expect(champCoeurs(m).value).toBe('2');
+    expect(document.activeElement).toBe(champCoeurs(m));
+    expect(controleur(m).coeurs().nombre).toBe(2);
+    await saisir(m, champCoeurs(m), '9', { fin: 'Enter' });
+    expect(refusPres(champCoeurs(m), 'HORS_DOMAINE')).not.toBeNull();
+    await touche('Escape');
+    await passer(m);
+    expect(champCoeurs(m).value).toBe('2');
+    expect(champCoeurs(m).parentElement.querySelector('[data-refus]')).toBeNull();
+    expect(champCoeurs(m).hasAttribute('aria-invalid')).toBe(false);
+    expect(controleur(m).coeurs()).toEqual({ automatique: false, manuel: 2, disponibles: 4, nombre: 2 });
+    expect(m.trace.length).toBe(ecritures);
   });
 
   test('en lecture, le réglage se change sans refus ni écriture ; il survit au départ de la section', async () => {

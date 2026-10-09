@@ -6,9 +6,10 @@
 // demandée au plan, le texte d'un import en attente, les listes de noms, le
 // plein écran, la place sélectionnée, la fiche ouverte, le choix en attente
 // du plan, le refus posé sur une place et l'appartenance collante du
-// formulaire d'ajout. Ce qu'il tient survit au démontage des sections. Regarder n'écrit jamais (§ 8.4) : cet
-// état ne reçoit ni la séance, ni la façade, ni un système de fichiers, et
-// rien de ce qu'il tient ne quitte la mémoire.
+// formulaire d'ajout. Ce qu'il tient survit au démontage des sections.
+// Regarder n'écrit jamais (§ 8.4) : cet état ne reçoit ni la séance, ni la
+// façade, ni un système de fichiers, et rien de ce qu'il tient ne quitte la
+// mémoire.
 //
 // Il suit le contrat des magasins de Svelte : subscribe(fn) appelle fn(etat)
 // tout de suite, puis à chaque nouvel état ; un état est figé, et une

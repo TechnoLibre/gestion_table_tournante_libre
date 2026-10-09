@@ -52,7 +52,10 @@ export const JETONS_CONFLIT = Object.freeze(CONFLITS.map(({ jeton }) => jeton));
  *  conflit à chaque autre marque du plan. Le second seuil est plus bas : les
  *  gris du mobilier occupent la clarté où une teinte de conflit tient 3:1
  *  sur le plateau sombre, et la forme distingue toujours la trame de ce
- *  qu'elle côtoie. */
+ *  qu'elle côtoie. Sa valeur, 5, ne vient d'aucune référence de perception :
+ *  elle se pose juste sous la plus petite séparation que la palette tient
+ *  entre une teinte de conflit et une autre marque, et garde la palette de
+ *  reculer sans établir qu'un écart de 5 se perçoit. */
 export const SEPARATIONS = Object.freeze({ entreConflits: 12, autresMarques: 5 });
 
 /** Les marques porteuses d'information (§ 14.5) : { nom, jeton, fonds, seuil: 3 } — nom, la

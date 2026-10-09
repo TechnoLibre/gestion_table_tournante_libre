@@ -41,6 +41,7 @@ import Legende from './Legende.svelte';
 import EchellePlan from './EchellePlan.svelte';
 import { creerMesureur } from './mesure_texte.js';
 import { LARGEUR_ECHELLE_PX, legendeConflits, modeleDessin } from './modele.js';
+import { nomDeCharge } from './vue_plan.js';
 import PlanDessin from './PlanDessin.svelte';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -143,10 +144,7 @@ const personne = (id, nom, prenom, appartenance = null) => ({
   exclu: false,
 });
 
-const nomsDe = (charge) => {
-  const noms = new Map(charge.participants.map(({ id, nom, prenom }) => [id, prenom === null ? nom : `${prenom} ${nom}`]));
-  return (id) => noms.get(id);
-};
+const nomsDe = nomDeCharge;
 
 /** Le modèle d'un tour de la charge, sous la source demandée. */
 function modeleDe(charge, { tour = 1, proposition = null, ...options } = {}) {
@@ -384,6 +382,36 @@ describe('la liste fait foi (§ 7.6)', () => {
     expect(getComputedStyle(titre).fontStyle).toBe('italic');
     expect(getComputedStyle(lignes[0].querySelector('[data-partie=nom]')).fontStyle).toBe('normal');
     expect(lignes[1].textContent).toBe('2. (libre) \u{2014} titre animateur non pourvu');
+  });
+
+  test('« réservée à … » porte deux noms de « W » : la ligne tient sous LARGEUR_BLOC_NOMS_CM, et l\u{2019}occupant s\u{2019}abrège avant la titulaire', () => {
+    // La ligne 2 de la table 1 : la titulaire, réservée là pour tous les
+    // tours, que la proposition assied ailleurs, et l'occupant qu'elle y met.
+    function ligneReservee(longueurTitulaire, longueurOccupant) {
+      const charge = avecProposition(chargeDeTables([8, 8]));
+      const etat = etatPlaces(charge, { tour: 1, proposition: 1 });
+      const assis = new Set(etat.tables[0].chaises.map(({ occupant }) => occupant));
+      const titulaire = charge.participants.find(({ id }) => !assis.has(id)).id;
+      const occupant = etat.tables[0].chaises[1].occupant;
+      expect(occupant).not.toBeNull();
+      Object.assign(charge.participants.find(({ id }) => id === titulaire), { nom: 'W'.repeat(longueurTitulaire), prenom: null });
+      Object.assign(charge.participants.find(({ id }) => id === occupant), { nom: 'W'.repeat(longueurOccupant), prenom: null });
+      charge.reservations = [{ participant: titulaire, table: 1, siege: 2, portee: 'tous', tour: null }];
+      const { svg } = monterPlan(modeleDe(charge, { proposition: 1 }), { k: 1, tx: 400, ty: 350 });
+      const ligne = lignesDe(svg, 1)[1];
+      expect(ligne.getComputedTextLength()).toBeLessThanOrEqual(LARGEUR + 1e-3);
+      const partie = (nom) => ligne.querySelector(`[data-partie=${nom}]`)?.textContent ?? null;
+      return { titulaire: partie('titulaire'), occupant: partie('nom') };
+    }
+    // Une titulaire courte reste entière ; l'occupant s'abrège à sa suite.
+    const courte = ligneReservee(6, 80);
+    expect(courte.titulaire).toBe('W'.repeat(6));
+    expect(courte.occupant).toMatch(new RegExp(`^W+${MARQUE}$`));
+    // Deux noms de 80 « W » : l'occupant tombé, la titulaire s'abrège à son
+    // tour, et la ligne tient encore.
+    const longues = ligneReservee(80, 80);
+    expect(longues.occupant).toBeNull();
+    expect(longues.titulaire).toMatch(new RegExp(`^W+${MARQUE}$`));
   });
 
   test('grande démonstration livrée, tour 1, modèle tel quel : chaque ligne tient, chaque place occupée garde son nom, chaque titre son libellé', () => {

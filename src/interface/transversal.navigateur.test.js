@@ -515,14 +515,15 @@ export function releverMarques(racine) {
       fautes.push(`${situer(element)} : marque hors du registre MARQUES`);
       continue;
     }
-    vues.add(nom);
     for (const a of attenuations(element)) fautesAttenuation.push(`${situer(element)} : ${designation(a)} ${a.propriete}: ${a.valeur}`);
     // Sous une fenêtre modale, la page est inerte et le test d'atteinte
     // rencontre la fenêtre d'abord : une marque HTML de la page ne s'y
     // mesure pas, comme ses textes, et se mesure sur les écrans sans
-    // fenêtre. Le dessin SVG, lu par sa géométrie, se mesure partout.
+    // fenêtre. Le dessin SVG, lu par sa géométrie, se mesure partout. Une
+    // marque ne compte comme vue que là où elle se mesure.
     const modale = document.querySelector('dialog:modal');
     if (modale !== null && !(element instanceof SVGElement) && !modale.contains(element)) continue;
+    vues.add(nom);
     amener(element);
     const jeton = couleurDeJeton(entree.jeton);
     try {
@@ -822,6 +823,25 @@ export function fautesBandeau(racine, mode, { version = VERSION.affichee, proven
   return fautes;
 }
 
+// Les éléments HTML de flux qu'un contenu de phrase ne peut porter, et les
+// éléments dont le contenu est de phrase seulement.
+const BLOCS = 'div, p, section, article, aside, nav, header, footer, form, fieldset, ul, ol, dl, table, figure, blockquote, pre, h1, h2, h3, h4, h5, h6';
+const PHRASES = 'span, button, label, p, h1, h2, h3, h4, h5, h6';
+
+/** Fautes d'imbrication sous racine : un bloc porté par un élément de
+ *  phrase — un <div> dans un <span> —, que l'analyseur HTML déplacerait ou
+ *  que le validateur refuse. L'espace de noms SVG n'est pas lu.
+ *  → { fautes, lus }, lus le nombre de blocs lus. */
+export function fautesImbrication(racine) {
+  const fautes = [];
+  const blocs = [...racine.querySelectorAll(BLOCS)].filter((element) => element.namespaceURI === 'http://www.w3.org/1999/xhtml');
+  for (const bloc of blocs) {
+    const parent = bloc.parentElement?.closest(PHRASES);
+    if (parent !== null && parent !== undefined && racine.contains(parent)) fautes.push(`${designation(bloc)} dans ${designation(parent)}`);
+  }
+  return { fautes, lus: blocs.length };
+}
+
 /** Fautes des formulaires sous racine (§ 2, § 14.10) : un <form> sans
  *  novalidate, un input[type=file] rendu. → { fautes, formulaires },
  *  formulaires le nombre de <form> lus. */
@@ -879,6 +899,7 @@ beforeAll(async () => {
       releve.emoji = fautesEmoji(racine, { titre: document.title });
       releve.bandeau = fautesBandeau(racine, ecran.mode);
       releve.formulaires = fautesFormulaires(racine);
+      releve.imbrication = fautesImbrication(racine);
       releve.refus = releverRefus(racine).map((r) => ({ ...r, restes: horsMarques(r.texte).filter((x) => !estDonnee(x, connues)) }));
       releve.etats = releverEtats(m);
       releve.listes = releverListes(racine);
@@ -938,6 +959,22 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(fautes).toEqual(['p : « Bonjour »', 'p : « Table 3 »', 'button[aria-label] : « Fermer »']);
   });
 
+  test('imbrication : un bloc dans un <span>, un <p> dans un <p> par le DOM, une liste dans un <button> sont relevés ; un <span> dans un <div> et le SVG passent', () => {
+    const { fautes, lus } = avecFragment('<div><span>a</span></div><span class="x"><div>b</div></span><svg><g><text>c</text></g></svg>', (c) => {
+      const p = document.createElement('p');
+      p.append(document.createElement('p'));
+      const bouton = document.createElement('button');
+      bouton.append(document.createElement('ul'));
+      c.append(p, bouton);
+      return fautesImbrication(c);
+    });
+    expect(lus).toBe(5);
+    expect(fautes).toHaveLength(3);
+    expect(fautes[0]).toMatch(/^div.* dans span/);
+    expect(fautes[1]).toMatch(/^p.* dans p/);
+    expect(fautes[2]).toMatch(/^ul.* dans button/);
+  });
+
   test('emoji : un pictogramme dans un texte est relevé', () => {
     const { fautes, lus } = avecFragment(`<p>${OUVERTURE}Prêt${FERMETURE} \u{1F642}</p><p>${OUVERTURE}2 + 2${FERMETURE}</p>`, (c) => fautesEmoji(c));
     expect(lus).toBe(2);
@@ -967,6 +1004,23 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(fautes[0]).toContain('hors du registre');
     expect(fautes[1]).toContain('ne peint pas son jeton');
     expect(fautes[2]).toContain('1.00:1');
+  });
+
+  test('marques sous une fenêtre modale : une marque HTML de la page, qui ne s’y mesure pas, ne compte pas comme vue ; une marque dans la fenêtre, si', () => {
+    const { vues } = avecFragment(
+      '<p data-marque="gel" style="border:2px solid var(--couleur-gel)">dehors</p>' +
+        '<dialog><p data-marque="selection" style="border:2px solid var(--couleur-selection)">dedans</p></dialog>',
+      (c) => {
+        const fenetre = c.querySelector('dialog');
+        fenetre.showModal();
+        try {
+          return releverMarques(c);
+        } finally {
+          fenetre.close();
+        }
+      },
+    );
+    expect(vues).toEqual(['selection']);
   });
 
   test('teintes réservées : un texte peint d’une teinte de conflit, et la trame d’une règle peinte de la teinte d’une autre, sont relevés ; une trame de sa propre teinte passe', () => {
@@ -1237,6 +1291,11 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
   test('le bandeau sur tout écran : visible, version et provenance ; libellé de mode absent de la liste, égal à celui du cadre sur un événement', () => {
     expect(atteints().some((r) => r.mode === null) && atteints().some((r) => r.mode !== null)).toBe(true);
     aucuneFaute(atteints().flatMap((r) => r.bandeau.map((f) => `${r.nom} — ${f}`)), 'bandeau');
+  });
+
+  test('imbrication : aucun bloc dans un élément de phrase', () => {
+    expect(atteints().reduce((n, r) => n + r.imbrication.lus, 0), 'blocs lus').toBeGreaterThan(0);
+    aucuneFaute([...new Set(atteints().flatMap((r) => r.imbrication.fautes.map((f) => `${r.nom} — ${f}`)))], 'imbrication');
   });
 
   test('formulaires : chaque <form> porte novalidate, aucun input[type=file] visible ; la page se déclare en français', () => {

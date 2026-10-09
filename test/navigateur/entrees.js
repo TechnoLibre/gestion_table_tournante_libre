@@ -78,20 +78,24 @@ function bouton(masque) {
 /** Un événement de pointeur réel au point (x, y) du cadre. type : 'presser',
  *  'bouger' ou 'relacher'. boutons, le masque de buttons : par défaut, 1 au
  *  presser, les boutons tenus pour bouger et relacher. genre : 'souris' ou
- *  'stylet' ; le doigt passe par toucher. */
-export async function pointer(type, x, y, { boutons, genre = 'souris' } = {}) {
+ *  'stylet' ; le doigt passe par toucher. clickCount, le rang de l'appui
+ *  dans une série de clics, 1 par défaut, porté au presser et au relâcher :
+ *  Chromium le rend en detail sur l'événement click — 2 pour le second clic
+ *  d'un double-clic. Un rang qui n'est pas un entier d'au moins 1 lève. */
+export async function pointer(type, x, y, { boutons, genre = 'souris', clickCount = 1 } = {}) {
   const typeCdp = TYPES_POINTEUR[type];
   if (typeCdp === undefined) throw new Error(`pointer : type inconnu « ${type} »`);
   const pointerType = GENRES[genre];
   if (pointerType === undefined) throw new Error(`pointer : genre inconnu « ${genre} »`);
+  if (!Number.isInteger(clickCount) || clickCount < 1) throw new Error(`pointer : clickCount hors d'un entier d'au moins 1 « ${clickCount} »`);
   const masque = boutons ?? (type === 'presser' ? 1 : boutonsEnfonces);
   const { x: px, y: py } = versPage(x, y);
   const evenement = { type: typeCdp, x: px, y: py, pointerType, button: bouton(masque), buttons: masque };
   if (type === 'presser') {
-    evenement.clickCount = 1;
+    evenement.clickCount = clickCount;
     boutonsEnfonces = masque;
   } else if (type === 'relacher') {
-    evenement.clickCount = 1;
+    evenement.clickCount = clickCount;
     evenement.buttons = 0;
     boutonsEnfonces = 0;
   }

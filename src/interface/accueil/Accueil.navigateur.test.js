@@ -1019,6 +1019,60 @@ describe('un geste en cours ne se relance pas (§ 8.7, § 15)', () => {
     expect(lignes(m).map((ligne) => colonne(ligne, 'nom'))).toEqual([`${nom} 1`]);
   });
 
+  test('une autre démonstration cliquée pendant un chargement : refusée et dite, rien de plus chargé ; l’explication part avec le chargement', async () => {
+    const m = await monter();
+    const nom = CATALOGUE.find(({ cle }) => cle === 'petite').nom;
+    const autre = CATALOGUE.find(({ cle }) => cle !== 'petite').cle;
+    const liberer = retenirEcritures(m);
+    const bouton = dans(m, '[data-demonstration="petite"]');
+    const second = dans(m, `[data-demonstration="${autre}"]`);
+    await cliquer(bouton);
+    // Toutes les démonstrations se disent indisponibles ; seule la chargée
+    // est occupée.
+    expect(second.getAttribute('aria-disabled')).toBe('true');
+    expect(second.hasAttribute('aria-busy')).toBe(false);
+    expect(dans(m, '[data-attente-demonstration]')).toBeNull();
+    await cliquer(second);
+    const attente = await vi.waitFor(() => {
+      const lue = dans(m, '[data-attente-demonstration]');
+      expect(lue).not.toBeNull();
+      return lue;
+    });
+    expect(attente.getAttribute('role')).toBe('status');
+    expect(attente.textContent).toBe(t('accueil.demonstrations.enCours', { nom }));
+    expect(second.getAttribute('aria-describedby')).toBe(attente.id);
+    liberer();
+    await attendreEvenement(m, (e) => e.nom === `${nom} 1`);
+    await revenirALaListe(m, 1);
+    expect(lignes(m).map((ligne) => colonne(ligne, 'nom'))).toEqual([`${nom} 1`]);
+    expect(dans(m, '[data-attente-demonstration]')).toBeNull();
+    expect(dans(m, `[data-demonstration="${autre}"]`).hasAttribute('aria-disabled')).toBe(false);
+  });
+
+  test('un chargement refusé, l’accueil resté monté : l’explication de l’autre démonstration part avec le refus, et plus rien n’est indisponible', async () => {
+    const m = await monter();
+    const autre = CATALOGUE.find(({ cle }) => cle !== 'petite').cle;
+    const liberer = retenirEcritures(m);
+    await cliquer(dans(m, '[data-demonstration="petite"]'));
+    await cliquer(dans(m, `[data-demonstration="${autre}"]`));
+    await vi.waitFor(() => expect(dans(m, '[data-attente-demonstration]')).not.toBeNull());
+    // L'écriture retenue échoue une fois libérée : le chargement est refusé.
+    m.fs.pannes.ecriture('documents');
+    liberer();
+    const refus = await vi.waitFor(() => {
+      const lu = dans(m, '[data-demonstration="petite"]').parentElement.querySelector('[data-refus]');
+      expect(lu).not.toBeNull();
+      return lu;
+    });
+    expect(refus.isConnected).toBe(true);
+    expect(dans(m, '[data-attente-demonstration]')).toBeNull();
+    expect(dans(m, `[data-demonstration="${autre}"]`).hasAttribute('aria-describedby')).toBe(false);
+    for (const bouton of m.racine.querySelectorAll('[data-demonstration]')) {
+      expect(bouton.hasAttribute('aria-disabled'), bouton.dataset.demonstration).toBe(false);
+      expect(bouton.hasAttribute('aria-busy'), bouton.dataset.demonstration).toBe(false);
+    }
+  });
+
   test('copier : une seconde validation pendant l’écriture ne fait pas de seconde copie', async () => {
     const m = await monter({ fichiers: [fichier(`bal${SUFFIXES.etat}`, texteRenomme('Bal des Grisailles'))] });
     const ligne = ligneDe(m, 'bal');
@@ -1442,6 +1496,26 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
     expect(regionEtat(m)).toBe(region);
     expect(region.textContent).toBe('');
     expect(ecritures(m)).toBe(avant);
+  });
+
+  test('démontée avant le premier pas, l’application arrête le flux des résumés : aucun état ne se relit ensuite', async () => {
+    const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
+    const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}${SUFFIXES.etat}`, etat(charge))) });
+    expect(signes(m).length).toBe(8);
+    const relus = [];
+    const lireTexte = m.fs.lireTexte;
+    m.fs.lireTexte = (racine, chemin) => {
+      if (chemin.endsWith(SUFFIXES.etat)) relus.push(chemin);
+      return lireTexte.call(m.fs, racine, chemin);
+    };
+    m.demonter();
+    montes = montes.filter((monte) => monte !== m);
+    for (let pas = 0; pas < 4; pas += 1) {
+      await uneImage();
+      m.horloge.avancer(0);
+    }
+    await uneImage();
+    expect(relus).toEqual([]);
   });
 
   test('un état qui ne se relit pas pendant le chargement : « — » dans ses quatre valeurs, et l’autre ligne résolue', async () => {

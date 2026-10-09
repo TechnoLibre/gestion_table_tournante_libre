@@ -144,7 +144,9 @@
   // la charge sans rien écrire (appliquerCommande, le calcul même que
   // seance.executer applique) — une ambiguïté non tranchée, AMBIGUITE —
   // se posent à côté de la commande, et la fenêtre n'annonce jamais une
-  // destruction qui n'aura pas lieu.
+  // destruction qui n'aura pas lieu. Le refus vaut pour l'aperçu qui l'a
+  // reçu : un choix de colonne ou de mode, qui en fait un autre, le retire
+  // (la commande se recrée sous {#key apercu}).
   async function importer() {
     const applique = apercu;
     const sonMode = mode;
@@ -210,7 +212,9 @@
             <Commande cle="import.commande.ordreDeLaGrille" nom="ordreDeLaGrille" executer={lireDansLOrdreDeLaGrille} />
           {/if}
           {#if modele.global === null}
-            <Commande cle="import.commande.importer" nom="importer" executer={importer} />
+            {#key apercu}
+              <Commande cle="import.commande.importer" nom="importer" executer={importer} />
+            {/key}
           {/if}
           {#if modele.refusees.length > 0}
             <Commande

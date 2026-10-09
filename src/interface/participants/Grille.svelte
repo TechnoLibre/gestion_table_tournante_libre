@@ -32,8 +32,10 @@
   // s'écrit ici.
   //
   // Groupée (groupes non null, ceux de groupesGrille), la grille porte un
-  // corps par groupe du premier niveau. Chaque groupe, de tout niveau, y
-  // rend un en-tête, en retrait selon son niveau, dont le bouton replie ou
+  // corps par groupe du premier niveau, dont l'en-tête porte
+  // scope="rowgroup" ; celui d'un sous-groupe porte scope="row", et ses
+  // lignes n'héritent pas des en-têtes de ses aînés. Chaque groupe, de tout
+  // niveau, y rend un en-tête, en retrait selon son niveau, dont le bouton replie ou
   // déplie le groupe et dit son état en texte et dans aria-expanded, puis,
   // déplié, ses sous-groupes, ou ses lignes au dernier niveau. Une ligne
   // porte la clé du plus étroit groupe qui la compte. Les lignes visibles
@@ -60,7 +62,7 @@
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
   import { cleDeRaison } from './conflits.js';
-  import { COLONNES, basculerGroupe, celluleSuivante, cheminDe, cleDeColonne, entreeValide, lignesVisibles } from './grille.js';
+  import { COLONNES, basculerGroupe, celluleSuivante, cheminDe, cleDeColonne, deplierChemin, entreeValide, lignesVisibles, ligneVoisine } from './grille.js';
 
   let {
     lignes,
@@ -166,44 +168,61 @@
   }
 
   // Valide la saisie de la cellule en édition : rien quand elle se lit comme
-  // la valeur enregistrée, la commande sinon. Refusée, l'édition reste
-  // ouverte sur la saisie, le refus contre elle.
-  function valider() {
-    if (edition === null) return null;
+  // la valeur enregistrée, la commande sinon. Rend une promesse de vrai quand
+  // l'édition se clôt, de faux quand la commande est refusée : l'édition
+  // reste alors ouverte sur la saisie, le refus contre elle, le focus dans
+  // le champ.
+  async function valider() {
+    if (edition === null) return true;
     const { id, colonne } = edition;
     const rendu = machine.valider();
     saisie = machine.saisie;
-    if (rendu.action !== 'executer') return fermerEdition();
+    if (rendu.action !== 'executer') {
+      await fermerEdition();
+      return true;
+    }
     const enCours = machine;
+    const rangAvant = rangs.get(id) ?? 0;
     let promesse;
     try {
       promesse = seance.executer('modifierParticipant', { id, champs: { [colonne]: rendu.valeur } });
     } catch (erreur) {
-      return echouer(enCours, id, colonne, erreur);
+      await echouer(enCours, id, colonne, erreur);
+      return false;
     }
     const garderFocus = entree !== null && document.activeElement === entree;
     fermerEdition();
-    return Promise.resolve(promesse).then(
-      () => suivreLigne(id, colonne, garderFocus),
-      (erreur) => echouer(enCours, id, colonne, erreur),
-    );
+    try {
+      await promesse;
+    } catch (erreur) {
+      await echouer(enCours, id, colonne, erreur);
+      return false;
+    }
+    await suivreLigne(id, colonne, garderFocus, rangAvant);
+    return true;
   }
 
   // Après une modification écrite, quand la cellule avait le focus : la
   // ligne que la valeur a menée sous des groupes repliés, de tout niveau,
   // les déplie, puis la cellule reprend le focus que le retrait de son
-  // ancienne ligne a rendu au document. Un focus posé ailleurs entre-temps
-  // reste où il est.
-  async function suivreLigne(id, colonne, garderFocus) {
+  // ancienne ligne a rendu au document. Une ligne que le filtre ne montre
+  // plus a laissé son rang, rangAvant, à la ligne qui la suivait — à la
+  // dernière quand elle fermait la grille — : la même colonne de cette
+  // voisine prend le focus. Un focus posé ailleurs entre-temps reste où il
+  // est.
+  async function suivreLigne(id, colonne, garderFocus, rangAvant) {
     if (!garderFocus) return;
     await tick();
-    const chemin = groupes === null ? [] : cheminDe(groupes, id);
-    if (chemin.some((cle) => replies.has(cle))) {
-      replies = new Set([...replies].filter((cle) => !chemin.includes(cle)));
+    const deplies = groupes === null ? replies : deplierChemin(replies, cheminDe(groupes, id));
+    if (deplies !== replies) {
+      replies = deplies;
       await tick();
     }
     const actuel = document.activeElement;
-    if (actuel === null || actuel === document.body) cellule(id, colonne)?.focus();
+    if (actuel !== null && actuel !== document.body) return;
+    const voisine = ligneVoisine(rangAvant, visibles.length);
+    if (rangs.has(id)) cellule(id, colonne)?.focus();
+    else if (voisine !== null) activer(voisine, COLONNES.indexOf(colonne));
   }
 
   async function echouer(enCours, id, colonne, erreur) {
@@ -240,11 +259,13 @@
       evenement.preventDefault();
       valider();
     } else if (touche === 'Tab') {
+      // Une saisie refusée garde l'édition et le focus : Tab ne quitte pas
+      // le champ, dont la sortie validerait une seconde fois.
       evenement.preventDefault();
       const { id } = edition;
       const colonne = COLONNES.indexOf(edition.colonne);
       const sens = evenement.shiftKey ? 'Maj+Tab' : 'Tab';
-      await valider();
+      if (!(await valider())) return;
       await tick();
       tabulerDepuis(id, rang, colonne, sens);
     }
@@ -284,9 +305,10 @@
     const nom = personne.exclu ? 'reintegrerParticipant' : 'exclureParticipant';
     refusCellule = null;
     const garderFocus = document.activeElement === cellule(personne.id, 'exclu');
+    const rangAvant = rangs.get(personne.id) ?? 0;
     try {
       Promise.resolve(seance.executer(nom, { id: personne.id })).then(
-        () => suivreLigne(personne.id, 'exclu', garderFocus),
+        () => suivreLigne(personne.id, 'exclu', garderFocus, rangAvant),
         (erreur) => refuser(personne.id, 'exclu', erreur),
       );
     } catch (erreur) {
@@ -403,7 +425,7 @@
 {#snippet bloc(groupe)}
   {@const replie = replies.has(groupe.cle)}
   <tr class="groupe" data-groupe={groupe.cle} data-niveau={groupe.niveau}>
-    <th scope="rowgroup" colspan={COLONNES.length + 1}>
+    <th scope={groupe.niveau === 1 ? 'rowgroup' : 'row'} colspan={COLONNES.length + 1}>
       <button
         type="button"
         data-commande="basculerGroupe"

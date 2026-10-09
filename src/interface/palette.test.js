@@ -11,7 +11,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
-import { CONFLITS, JETONS_CONFLIT } from './marques.js';
+import { JETONS_CONFLIT } from './marques.js';
 import {
   SIMULATIONS,
   contraste,
@@ -432,6 +432,5 @@ describe('jetons.css', () => {
       assert.deepEqual([...jetons.keys()].filter((n) => n.startsWith('--couleur-conflit')), JETONS_CONFLIT, theme);
     }
     assert.deepEqual(verifierTeintesReservees(JETONS, JETONS_CONFLIT), []);
-    assert.deepEqual(CONFLITS.map(({ jeton }) => jeton), JETONS_CONFLIT);
   });
 });

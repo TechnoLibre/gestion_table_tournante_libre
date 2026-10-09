@@ -173,7 +173,7 @@ describe('rapporteur : branché sur les événements de Vitest', () => {
       '   19000 ms  node-long  src/c.long.test.js > c > trois',
       '       7 ms  node  src/a.test.js > a > un',
       // Le bilan finit sur le mode que cette machine fait retenir.
-      ligneMachine(reglagesSeries(coeursDisponibles())),
+      ligneMachine(reglagesSeries(coeursDisponibles(), { couverture: process.argv.includes('--coverage') })),
     ]);
     assert.deepEqual(journal.erreurs, ['Le projet node dure 30,80 s au mur, au-delà de son plafond de 30,00 s (§ 14.14).']);
 

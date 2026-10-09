@@ -22,7 +22,7 @@
   // changement de taille : tant que la vue est null, il la calcule par
   // vueInitiale, du cadrage que la séance a mémorisé ; ensuite par
   // vueApresCadre. Ni l'une ni l'autre ne s'écrit : seul un geste de
-  // l'opérateur — molette, « Zoom + », « Zoom moins », « Ajuster » — confie sa
+  // l'opérateur — molette, « Zoom + », « Zoom − », « Ajuster » — confie sa
   // vue à seance.demanderCadrage, qui l'écrit, différée, dans
   // reglages_locaux.json, jamais dans l'événement.
   //
@@ -36,7 +36,7 @@
   //
   // diagnostic : celui que rend diagnostiquer, que SectionPlan passe, ou
   // null — le bandeau ne porte alors que la phrase des conflits (§ 7.5).
-  // etatTour : l'état des places du tour affiché (EtatPlaces, A5), que
+  // etatTour : l'état des places du tour affiché (EtatPlaces, places.js), que
   // SectionPlan calcule pour le plan et les panneaux.
   //
   // Les gestes du pointeur (§ 7.1, § 7.3, § 8.4) passent par un seul
@@ -97,7 +97,7 @@
   import BandeauPlan from './BandeauPlan.svelte';
   import BarreVue from './BarreVue.svelte';
   import { toucheDuPlan, vueQuiMontre } from './clavier.js';
-  import { deposer, reservationTenue } from './depot.js';
+  import { deposer, designerAuPoint, reservationTenue } from './depot.js';
   import EchellePlan from './EchellePlan.svelte';
   import Fantome from './Fantome.svelte';
   import { REPOS, cleFantome, geste, memoriser } from './gestes.js';
@@ -169,10 +169,10 @@
   const legende = $derived(legendeConflits(charge.reglages));
   const selection = $derived($ui.selection);
   const pose = $derived($ui.pose);
-  // La personne mise en évidence, que la barre de vue nomme : {id, nom}, nom
-  // null pour une personne que la charge n'a plus ; null sans mise en évidence.
   // Le placement que le plan montre, que la barre de vue nomme.
   const source = $derived(sourceMontree(etat, $ui.proposition, charge.retenu !== null));
+  // La personne mise en évidence, que la barre de vue nomme : {id, nom}, nom
+  // null pour une personne que la charge n'a plus ; null sans mise en évidence.
   const evidence = $derived($ui.miseEnEvidence === null ? null : { id: $ui.miseEnEvidence, nom: nomDe($ui.miseEnEvidence) ?? null });
   // L'élément actif que le dessin marque : sous un focus venu du clavier.
   const actifMontre = $derived(aLeFocus && auClavier ? actif : null);
@@ -510,7 +510,7 @@
           case 'montrerFantome':
             fantome = {
               nom: nomDe(effet.participant),
-              cle: cleFantome(etat.cible, reservationTenue(etat, effet.participant, effet.depuis)?.portee ?? null),
+              cle: cleFantome(etat.cible, reservationTenue(etat, effet.participant, effet.depuis)?.portee ?? null, effet.surLeSol),
             };
             break;
           case 'montrerPlaces':
@@ -590,6 +590,7 @@
             geometries,
             k,
           }),
+        surLeSol: (point) => designerAuPoint(point, geometries, k).surLeSol,
       };
       const point = { x: evenement.clientX, y: evenement.clientY };
       appliquer(geste(etatGeste, { type: 'presser', source, pointeur: evenement.pointerId, point, vue, cadre }, contexte));
@@ -662,12 +663,15 @@
     };
 
     // Une touche sur la racine, hors d'un geste : Échap d'un geste en cours
-    // passe d'abord par surTouche, en phase de capture.
+    // passe d'abord par surTouche, en phase de capture. Échap d'un siège
+    // remonte à sa table et garde la personne choisie : c'est le seul chemin
+    // du clavier vers une autre table. Échap sur une table, ou sans élément
+    // actif, l'oublie.
     const surToucheClavier = (evenement) => {
       if (etatGeste.phase !== 'repos' || modele === null || evenement.altKey || evenement.ctrlKey || evenement.metaKey) return;
       auClavier = true;
-      if (evenement.key === 'Escape') ui.choisir(null);
       const rendu = toucheDuPlan(actif, evenement.key, contexteClavier());
+      if (evenement.key === 'Escape' && (rendu === null || rendu.effet !== null)) ui.choisir(null);
       if (rendu === null) return;
       evenement.preventDefault();
       actif = rendu.actif;

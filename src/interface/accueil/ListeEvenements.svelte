@@ -13,8 +13,9 @@
   // data-meilleure-collisions, « — » l'un et l'autre sans proposition
   // classée —, ses signalements traduits — les bases qu'un doublon
   // nomme suivent son texte, chacune dans son propre nœud (data-doublon) —,
-  // le refus de son ouverture, et ses opérations. Un dossier sans événement n'affiche pas de liste vide :
-  // la création et les démonstrations de l'accueil en tiennent lieu.
+  // le refus de son ouverture, et ses opérations. Un dossier sans événement
+  // n'affiche pas de liste vide : la création et les démonstrations de
+  // l'accueil en tiennent lieu.
   //
   // lignes : LigneListe[] de la façade ; resumes : les résumés reçus de
   // facade.resumer, par base — une ligne sans le sien attend, et chacune de

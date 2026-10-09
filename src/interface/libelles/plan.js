@@ -95,13 +95,16 @@ export const TABLE = new Map([
   ['plan.source.revenirReservations', 'Revenir aux réservations'],
 
   // --- Les gestes du pointeur (§ 5.8, § 7.1, § 7.3) -------------------------
-  // Le fantôme d'une personne glissée dit ce que le geste modifie : l'état
-  // des données, non le geste (§ 5.8) ; une personne réservée déplace sa
-  // réservation, dont il dit la portée. Le nom de la personne est une
-  // donnée, dans son propre nœud.
+  // Le fantôme d'une personne glissée dit ce que le relâcher au point
+  // courant modifie : l'état des données, non le geste (§ 5.8) ; une
+  // personne réservée déplace sa réservation, dont il dit la portée, et
+  // au-dessus du sol la retire (« ce tour ») ou se la voit refuser (« tous
+  // les tours »). Le nom de la personne est une donnée, dans son propre nœud.
   ['plan.fantome.reservations', 'pose une réservation'],
   ['plan.fantome.reservationTour', 'déplace sa réservation de ce tour'],
   ['plan.fantome.reservationTous', 'déplace sa réservation, à tous les tours'],
+  ['plan.fantome.retireReservationTour', 'retire sa réservation de ce tour'],
+  ['plan.fantome.refuseTous', 'refusé : sa réservation vaut pour tous les tours'],
   ['plan.fantome.retenu', 'déplace dans le placement retenu'],
   ['plan.fantome.vueSeule', 'proposition en vue seule : rien ne change'],
   // La place où un refus ou un avertissement du plan se pose.
@@ -115,13 +118,15 @@ export const TABLE = new Map([
   // puis ses groupes : les noms sont des données, chacun dans son nœud,
   // reliés par « et » dans une paire et séparés d'un groupe à l'autre. Une
   // ligne de séparer les appartenances nomme l'appartenance de ses paires,
-  // une donnée dans son nœud, entre separerAppartenances et finAppartenance.
+  // une donnée dans son nœud, entre separerAppartenances et finAppartenance :
+  // la phrase se partage en deux clés autour d'elle. Chaque ligne s'ouvre sur
+  // une capitale.
   ['plan.vue.role', 'plan de salle interactif'],
   ['plan.infobulle.entete', ({ numero, nombre }) => `Table ${numero} : ${compte(nombre, 'conflit', 'conflits')}`],
   ['plan.infobulle.separerAppartenances', 'Même appartenance ('],
   ['plan.infobulle.finAppartenance', ') : '],
-  ['plan.infobulle.nouveauxVoisins', 'voisins revus : '],
-  ['plan.infobulle.nouvelleTable', 'table revue : '],
+  ['plan.infobulle.nouveauxVoisins', 'Voisins revus : '],
+  ['plan.infobulle.nouvelleTable', 'Table revue : '],
   ['plan.infobulle.et', ' et '],
   ['plan.infobulle.separateur', ', '],
 

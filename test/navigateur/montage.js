@@ -11,16 +11,20 @@
 //
 // Le collecteur d'erreurs de la page (public/collecteur.js), que index.html
 // charge avant le module d'entrée, ne l'est pas dans la page des épreuves :
-// monterApp l'y installe, une fois par page, dans un <script> classique.
+// monterApp l'y installe, une fois par page, dans un <script> classique. Son
+// texte se lit où le serveur de Vite sert le dossier public, à la racine :
+// Vite refuse d'importer un script de public/, et l'importer par son chemin
+// de fichier l'avertit à chaque série.
+//
+// Les démonstrations sont celles que src/main.js passe à App,
+// demonstrationsLivrees() : une seule composition, celle de src/demo.
 import { mount, unmount } from 'svelte';
 import { creerExecuteurDirect } from '../../src/application/generation.js';
 import { creerHorlogePilotee } from '../../src/application/horloge.js';
-import { CATALOGUE } from '../../src/demo/catalogue.js';
-import { LIVREES } from '../../src/demo/livrees.js';
+import { demonstrationsLivrees } from '../../src/demo/livrees.js';
 import App from '../../src/interface/App.svelte';
 import { FORMAT } from '../../src/stockage/document.js';
 import { VERSION } from '../../src/version.genere.js';
-import COLLECTEUR from '../../public/collecteur.js?raw';
 import { creerFichiersSimules } from '../fichiers_simules.js';
 
 /** Les primitives que le système simulé compte comme écritures, celles que
@@ -36,25 +40,26 @@ export const PRIMITIVES_TRACEES = Object.freeze([
   'deverrouiller',
 ]);
 
-// Les démonstrations du contrat de données : LIVREES, chacune nommée par
-// l'entrée de même clé du catalogue, dans l'ordre du catalogue.
-const DEMONSTRATIONS = LIVREES.map(({ cle, texte }) => ({
-  cle,
-  nom: CATALOGUE.find((entree) => entree.cle === cle).nom,
-  texte,
-}));
-
 // Le rang du dernier montage de la page : il préfixe les identifiants que
 // tire chaque montage.
 let montages = 0;
 
 // Pose public/collecteur.js dans la page, une fois : un script classique
-// inséré s'exécute aussitôt, dans le contexte de la page.
+// inséré s'exécute aussitôt, dans le contexte de la page. Deux montages
+// lancés ensemble attendent la même installation. Un collecteur que le
+// serveur ne rend pas lève, en le nommant.
+let installation = null;
 function installerCollecteur() {
-  if (globalThis.__gttErreurs !== undefined) return;
-  const script = document.createElement('script');
-  script.textContent = COLLECTEUR;
-  document.head.append(script);
+  if (globalThis.__gttErreurs !== undefined) return Promise.resolve();
+  installation ??= (async () => {
+    const reponse = await fetch('/collecteur.js');
+    if (!reponse.ok) throw new Error(`collecteur.js : réponse ${reponse.status} du serveur des épreuves`);
+    const script = document.createElement('script');
+    script.textContent = await reponse.text();
+    document.head.append(script);
+    if (globalThis.__gttErreurs === undefined) throw new Error('collecteur.js : le script posé n’a pas installé __gttErreurs');
+  })();
+  return installation;
 }
 
 /** Enveloppe les huit primitives d'écriture du système simulé — sonder,
@@ -115,7 +120,7 @@ export async function monterApp({
   formatCourant,
   demonstrations,
 } = {}) {
-  installerCollecteur();
+  await installerCollecteur();
   montages += 1;
   const numero = montages;
   const premiereErreur = globalThis.__gttErreurs.length;
@@ -157,7 +162,7 @@ export async function monterApp({
       identifiant,
       langue,
       provenance,
-      demonstrations: demonstrations ?? DEMONSTRATIONS,
+      demonstrations: demonstrations ?? demonstrationsLivrees(),
       formatCourant: formatCourant ?? FORMAT,
       produitVersion: VERSION.affichee,
       versionWindows: VERSION.windows,

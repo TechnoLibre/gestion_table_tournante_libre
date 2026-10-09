@@ -132,7 +132,7 @@ async function choisir(e, nom, octets) {
   await vi.waitFor(() => expect(dans(e, '[data-apercu] [data-fichier]')?.textContent).toBe(nom));
 }
 
-// Remet un texte comme le collage de la grille (I5) : ui.ouvrirImport,
+// Remet un texte comme le collage de la grille : ui.ouvrirImport,
 // puis ui.allerA('import').
 async function coller(e, texte) {
   e.m.ui.ouvrirImport({ texte, origine: 'collage' });
@@ -184,12 +184,16 @@ function entrees({ m }) {
   return texte === null ? 0 : lireJournal(texte).entrees.length;
 }
 
-// Les comptes du rapport, chacun lu à son [data-compte] ; et ceux qu'il
-// doit afficher : le résumé que rend seance.executer, par format.nombre.
+// Les comptes du rapport, chacun lu à son [data-compte] — le nombre, puis
+// son libellé — ; et ceux qu'il doit afficher : le résumé que rend
+// seance.executer, par format.nombre, et le libellé accordé au nombre.
 const COMPTES_DU_RAPPORT = ['ajoutes', 'misAJour', 'inchanges', 'retires', 'reservationsRetirees'];
 const comptesAffiches = (e) =>
-  COMPTES_DU_RAPPORT.map((nom) => [nom, dans(e, `[data-rapport] [data-compte="${nom}"] [data-nombre]`).textContent]);
-const comptesDu = (resume) => COMPTES_DU_RAPPORT.map((nom) => [nom, format.nombre(resume[nom])]);
+  COMPTES_DU_RAPPORT.map((nom) => {
+    const compte = dans(e, `[data-rapport] [data-compte="${nom}"]`);
+    return [nom, compte.querySelector('[data-nombre]').textContent, compte.querySelector('[data-nombre] + span').textContent];
+  });
+const comptesDu = (resume) => COMPTES_DU_RAPPORT.map((nom) => [nom, format.nombre(resume[nom]), t(`import.rapport.${nom}`, { n: resume[nom] })]);
 
 // Un glissement sur la fenêtre, portant un fichier ou un texte seul : rend
 // l'événement distribué, dont defaultPrevented dit s'il a été accepté.
@@ -325,6 +329,8 @@ describe('les colonnes s’associent par leur en-tête (§ 10.1)', () => {
     flushSync();
     expect(new Map(association(dans(e, '[data-apercu]'))).get('entreprise')).toBe(t('import.champ.appartenance'));
     expect(dans(e, '[data-champ="choix-appartenance"]')).toBeNull();
+    // Le refus valait pour l'ambiguïté : tranchée, il ne reste pas affiché.
+    expect(dans(e, '[data-refus="AMBIGUITE"]')).toBeNull();
     const { rendu } = await importer(e);
     expect(rendu.resume.ajoutes).toBe(1);
     expect(participantsDe(e).map(({ nom, appartenance }) => [nom, appartenance])).toEqual([['Ombrelle', 'Grisaille']]);
@@ -344,6 +350,7 @@ describe('les colonnes s’associent par leur en-tête (§ 10.1)', () => {
 
     dans(e, '[data-champ="choix-appartenance"] input[value="1"]').click();
     flushSync();
+    expect(dans(e, '[data-refus="AMBIGUITE"]')).toBeNull();
     commande(e, 'importer').click();
     await vi.waitFor(() => expect(dans(e, 'dialog')?.open).toBe(true));
     dans(e, 'dialog [data-commande="renoncer"]').click();
@@ -616,12 +623,15 @@ describe('une seule entrée, des doublons signalés, une mise à jour qui n’ef
     await choisir(
       e,
       'noms_prenoms.csv',
-      enUtf8('nom;prenom\r\nOmbrelle;Iris\r\nLacasse;\r\nPervenche;Théo\r\nPervenche;\r\nMorillon;Aurèle\r\n'),
+      enUtf8('nom;prenom;appartenance\r\nOmbrelle;Iris;Club des Merles\r\nLacasse;;\r\nPervenche;Théo;\r\nPervenche;;\r\nMorillon;Aurèle;\r\n'),
     );
     expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
     const { rendu } = await importer(e);
-    expect(rendu.resume).toMatchObject({ ajoutes: 1, misAJour: 0, inchanges: 2, retires: 0, reservationsRetirees: 0 });
+    // Iris reçoit une appartenance : une mise à jour ; Théo, sans valeur
+    // nouvelle, reste inchangé.
+    expect(rendu.resume).toMatchObject({ ajoutes: 1, misAJour: 1, inchanges: 1, retires: 0, reservationsRetirees: 0 });
     expect(comptesAffiches(e)).toEqual(comptesDu(rendu.resume));
+    expect(participantsDe(e).find(({ id }) => id === 1).appartenance).toBe('Club des Merles');
     const courriels = new Map(participantsDe(e).map(({ id, courriel }) => [id, courriel]));
     expect([courriels.get(1), courriels.get(2), courriels.get(4)]).toEqual(['iris@exemple.test', 'ondine@exemple.test', 'theo@exemple.test']);
     const rapport = dans(e, '[data-rapport]');

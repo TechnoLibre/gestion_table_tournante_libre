@@ -17,8 +17,11 @@
   // colonnesOffertes, et son choix passe par choisirGroupement — la valeur
   // vide retire son niveau et ceux d'après. Le statut se lit dans statuts
   // (src/application/places.js), calculé seulement quand il groupe.
-  // « Tout replier » replie les groupes du premier niveau, « Tout déplier »
-  // les groupes de tout niveau. Le groupement et les groupes repliés vivent
+  // Le libellé d'un groupe se lit sur la liste entière, avant le filtre, et
+  // ne change pas avec lui. « Tout replier » replie les groupes du premier
+  // niveau de la liste entière, ceux que le filtre cache compris : effacer
+  // le filtre les montre repliés. « Tout déplier » déplie les groupes de tout
+  // niveau. Le groupement et les groupes repliés vivent
   // dans la section, le temps qu'elle est ouverte : changer de groupement
   // déplie tout, et rien ne s'écrit.
   //
@@ -49,6 +52,7 @@
   import {
     choisirGroupement,
     cleDeGroupement,
+    clesPremierNiveau,
     colonnesOffertes,
     groupesGrille,
     lignesGrille,
@@ -75,8 +79,15 @@
   const charge = $derived($seance.charge);
   const participants = $derived(charge?.participants ?? []);
   const lignes = $derived(lignesGrille(participants, { tri, filtre }, cleNormalisee));
+  const toutes = $derived(lignesGrille(participants, { tri, filtre: '' }, cleNormalisee));
   const parStatut = $derived(groupement.includes('statut') && charge !== null ? statuts(charge).parId : null);
-  const groupes = $derived(groupement.length === 0 ? null : groupesGrille(lignes, groupement, { tri, cleNormalisee, statuts: parStatut }));
+  const groupes = $derived(
+    groupement.length === 0 ? null : groupesGrille(lignes, groupement, { tri, cleNormalisee, statuts: parStatut, toutes }),
+  );
+  // Les groupes de la liste entière, que « Tout replier » replie.
+  const groupesEntiers = $derived(
+    groupement.length === 0 ? null : groupesGrille(toutes, groupement, { tri, cleNormalisee, statuts: parStatut }),
+  );
   const niveaux = $derived(niveauxAffiches(groupement));
   const conflits = $derived(
     groupes === null || charge === null ? null : lignesDeConflit(conflitsDuPlacement(charge, { proposition: $ui.proposition }), participants),
@@ -140,7 +151,7 @@
       </div>
     {/each}
     {#if groupes !== null}
-      <button type="button" data-commande="toutReplier" onclick={() => (replies = new Set(groupes.map(({ cle }) => cle)))}>
+      <button type="button" data-commande="toutReplier" onclick={() => (replies = new Set(clesPremierNiveau(groupesEntiers)))}>
         {t('participants.groupe.toutReplier')}
       </button>
       <button type="button" data-commande="toutDeplier" onclick={() => (replies = new Set())}>

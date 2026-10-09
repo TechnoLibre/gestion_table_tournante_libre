@@ -34,7 +34,7 @@
   // focus du clavier rendu au corps de la page.
   //
   // La place fixe porte la commande que rend commandeFixe (modele.js) :
-  // « Modifier », « Débloquer » — confirmé en place, par la Commande d'I2 —,
+  // « Modifier », « Débloquer » — confirmé en place, par la primitive Commande —,
   // « Revenir en lecture », ou, pour un format plus récent, l'explication du
   // refus courant à la place de toute commande. Le verrou d'une autre séance
   // qui a refusé le passage en écriture s'y nomme à côté du refus — sa
@@ -227,7 +227,7 @@
     font-weight: bold;
   }
 
-  /* La tête ne prend jamais plus du tiers du cadre : au-delà, elle défile,
+  /* La tête ne prend jamais plus de 35 % du cadre : au-delà, elle défile,
      et la surface garde sa place. */
   .tete {
     display: flex;

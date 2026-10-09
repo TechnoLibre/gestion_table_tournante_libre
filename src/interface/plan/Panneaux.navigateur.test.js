@@ -27,6 +27,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { get, writable } from 'svelte/store';
 import { appliquerCommande } from '../../application/commandes.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
+import { nomAffiche } from '../../application/personnes.js';
 import { etatPlaces } from '../../application/places.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { constante } from '../../geometrie/constantes.js';
@@ -44,7 +45,8 @@ import { fixerCadre, glisser, pointer, touche, toucher } from '../../../test/nav
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import ListesTravail from './ListesTravail.svelte';
-import { cadreDepuisRect, englobantDuTour } from './vue_plan.js';
+import { detailConflits } from './modele.js';
+import { appartenanceDeCharge, cadreDepuisRect, englobantDuTour, nomDeCharge } from './vue_plan.js';
 
 const BASE = 'soiree';
 const DUREE_PRESSION = constante('DUREE_PRESSION_LONGUE_MS');
@@ -63,7 +65,7 @@ const IRIS = 1;
 const THEO = 2;
 const ONDINE = 3;
 
-// La charge du fichier d'épreuve d'I10 : huit rondes de trois, en deux
+// La charge de huit_tables_retenu.gtt.json : huit rondes de trois, en deux
 // rangées de quatre, vingt personnes, trois tours, la proposition 1
 // retenue. Au tour 1, la table 2 assied 4, 5 et 6 ; la table 8, la seule
 // personne 20 : ses sièges 2 et 3 sont libres.
@@ -233,6 +235,7 @@ const cadreDe = (m) => cadreDepuisRect(racinePlan(m).getBoundingClientRect());
 const vueLue = (m) => vueDepuisTransform(groupe(m).getAttribute('transform'));
 const charge = (m) => m.seance.etat().charge;
 const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
+const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const actif = (m) => racinePlan(m).getAttribute('aria-activedescendant');
 
 // Les commandes d'un conteneur : la valeur de data-commande de chaque
@@ -577,7 +580,6 @@ describe('le plan est un seul arrêt de tabulation (§ 7.3, § 13.5)', () => {
 // --- L'appartenance nommée, la légende des conflits (§ 7.5) -------------------
 
 describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légende des conflits (§ 7.5)', () => {
-  const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
   // Deux tables de trois, six personnes, un tour : la table 1 réunit Iris
   // et Théo, du Club des Merles ; la table 2, Basile et Capucine, d'une
@@ -626,18 +628,23 @@ describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légen
       expect(bouton).not.toBeNull();
       expect(bouton.closest('[role="toolbar"]')).not.toBeNull();
       expect(bouton.textContent).toBe(t('plan.legende.ouvrir'));
-      expect(bouton.getAttribute('aria-pressed')).toBe('false');
+      // Un dévoilement : aria-expanded, et non aria-pressed ; aria-controls ne
+      // désigne la légende que lorsqu'elle est dans le DOM.
+      expect(bouton.hasAttribute('aria-pressed')).toBe(false);
+      expect(bouton.getAttribute('aria-expanded')).toBe('false');
+      expect(bouton.hasAttribute('aria-controls')).toBe(false);
       expect(dans(m, '[data-legende]')).toBeNull();
       await cliquer(bouton);
       await attendre(() => expect(dans(m, '[data-legende]')).not.toBeNull());
-      expect(bouton.getAttribute('aria-pressed')).toBe('true');
+      expect(bouton.getAttribute('aria-expanded')).toBe('true');
       expect(bouton.getAttribute('aria-controls')).toBe(dans(m, '[data-legende]').id);
       expect(tous(m, '[data-legende] [data-legende-regle]').map((e) => e.dataset.legendeRegle)).toEqual(['separerAppartenances', 'nouveauxVoisins']);
       expect(dans(m, '[data-legende] [data-marque="trameTable"]')).toBeNull();
       expect(infobulleVisible(dans(m, '[data-legende]'))).toBe(true);
       await cliquer(bouton);
       await attendre(() => expect(dans(m, '[data-legende]')).toBeNull());
-      expect(bouton.getAttribute('aria-pressed')).toBe('false');
+      expect(bouton.getAttribute('aria-expanded')).toBe('false');
+      expect(bouton.hasAttribute('aria-controls')).toBe(false);
       expect(m.seance.etat().evenement.revision).toBe(revision);
     });
   }
@@ -646,19 +653,24 @@ describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légen
 // --- L'infobulle (§ 7.1, § 7.3, § 19.4) ---------------------------------------
 
 describe('l’infobulle : un composant, trois déclencheurs (§ 7.1, § 7.3)', () => {
-  // Le détail que rend le moteur pour la table 1 au tour 2, en mots.
-  const LIBELLES = { separerAppartenances: 'appartenances réunies : ', nouveauxVoisins: 'voisins revus : ', nouvelleTable: 'table revue : ' };
+  // Le détail que rend le moteur pour la table 1 au tour 2, nommé par
+  // detailConflits, en mots : chaque ligne de l'infobulle, telle que ses
+  // nœuds la composent.
   function detailAttendu(m) {
     const table = etatMontre(m).tables.find(({ id }) => id === 1);
-    const nom = (id) => {
-      const { nom: n, prenom } = charge(m).participants.find((p) => p.id === id);
-      return prenom === null ? n : `${prenom} ${n}`;
-    };
     expect(table.conflits.nombre).toBeGreaterThan(0);
+    const detail = detailConflits(table, nomDeCharge(charge(m)), appartenanceDeCharge(charge(m)));
     return [
-      `Table 1 : ${table.conflits.nombre} conflits`,
-      ...table.conflits.regles.map(
-        (regle) => `${LIBELLES[regle.regle]}${(regle.paires ?? regle.personnes.map((id) => [id])).map((g) => g.map(nom).join(' et ')).join(', ')}`,
+      t('plan.infobulle.entete', { numero: detail.numero, nombre: detail.nombre }),
+      ...detail.lignes.map(({ cle, appartenance, groupes }) =>
+        [
+          t(cle),
+          ...(appartenance === null ? [] : [appartenance, t('plan.infobulle.finAppartenance')]),
+          groupes.map((groupe) => groupe.join(t('plan.infobulle.et'))).join(t('plan.infobulle.separateur')),
+        ]
+          .join('')
+          .replace(/\s+/g, ' ')
+          .trim(),
       ),
     ];
   }
@@ -821,7 +833,7 @@ describe('assigner, par le choix en attente (§ 7.1, § 5.8)', () => {
 });
 
 describe('Échap oublie le choix en attente (§ 7.1, § 7.3)', () => {
-  test('choisie dans la réserve, puis dans les pressentis : Échap sur son bouton l’oublie ; sur le plan, Échap l’oublie depuis une table active comme depuis un siège actif, qui remonte à sa table', async () => {
+  test('choisie dans la réserve, puis dans les pressentis : Échap sur son bouton l’oublie ; sur le plan, Échap d’un siège remonte à sa table et garde le choix, Échap sur la table l’oublie', async () => {
     const base = sansProposition();
     base.participants[ONDINE - 1].titrePressenti = 'hôte';
     const m = await ouvrir(base);
@@ -854,6 +866,10 @@ describe('Échap oublie le choix en attente (§ 7.1, § 7.3)', () => {
     await touche('Escape');
     flushSync();
     expect(actif(m)).toBe(`table-${siege.split('-')[1]}`);
+    // Au clavier, Échap est le seul chemin d'un siège vers une autre table :
+    // remonter ne perd pas la personne choisie.
+    expect(m.ui.etat().choix?.participant).toBe(THEO);
+    await touche('Escape');
     await attendre(() => expect(m.ui.etat().choix).toBeNull());
   });
 });
@@ -1005,7 +1021,6 @@ describe('les listes de travail tiennent deux titres identiques à une même pla
     const seance = writable({ charge });
     const etatUi = writable({ choix: null, selection: null });
     const ui = { subscribe: etatUi.subscribe, etat: () => get(etatUi), selectionner: () => {}, choisir: () => {} };
-    const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
     const conteneur = document.createElement('div');
     document.body.prepend(conteneur);
     const contexte = new Map([['t', t], ['seance', seance], ['ui', ui]]);
@@ -1085,15 +1100,16 @@ describe('une réservation « tous les tours » ne se retire pas par un geste (�
     let avant = fichiers(m);
     await glisser(pointChaise(m, 3, 1), pointSol(m));
     await attendre(() => expect(refusSur()).not.toBeNull());
-    expect(texteDe(decrit(place()))).toContain('tous les tours');
+    expect(texteDe(decrit(place()))).toContain(t('RESERVATION_TOUS_LES_TOURS', { participant: IRIS, table: 3 }).replace(/\s+/g, ' ').trim());
     expect(texteDe(decrit(place()))).toContain(`Table ${charge(m).tables.find(({ id }) => id === 3).numero}, siège 1`);
     await rienEcrit(m, avant);
     expect(charge(m).reservations).toEqual(base.reservations);
 
     // Le message laisse passer le pointeur, ses boutons le prennent : « Fermer »,
     // pressé par le vrai pointeur, reçoit l'appui et retire la pose.
-    const fermer = decrit(place()).querySelector('button.fermer');
+    const fermer = decrit(place()).querySelector('[data-commande="fermerPose"]');
     expect(fermer).not.toBeNull();
+    expect(texteDe(fermer)).toBe(t('plan.refus.fermer'));
     expect(await presseRecue(fermer)).toBe(true);
     await attendre(() => expect(refusSur()).toBeNull());
     expect(m.ui.etat().pose).toBeNull();
@@ -1144,6 +1160,52 @@ describe('une réservation « tous les tours » ne se retire pas par un geste (�
     await pointer('relacher', vers.x, vers.y);
     await uneEntree(m, r);
     expect(charge(m).reservations).toContainEqual({ participant: THEO, table: 4, siege: 4, portee: 'tour', tour: 1 });
+  });
+});
+
+// Mène le pointeur, déjà pressé, de depuis à vers en six pas, une image
+// entre deux.
+async function mener(depuis, vers, pas = 6) {
+  for (let i = 1; i <= pas; i += 1) {
+    await pointer('bouger', depuis.x + (vers.x - depuis.x) * (i / pas), depuis.y + (vers.y - depuis.y) * (i / pas));
+    await images(1);
+  }
+  flushSync();
+}
+
+describe('le fantôme d’une personne réservée au-dessus du sol (§ 5.8)', () => {
+  test('« ce tour » se dit retirée, « tous les tours » refusée ; revenue sur une chaise libre, le fantôme redit le déplacement ; rien d’écrit', async () => {
+    const base = executer(
+      executer(sansProposition(), 'reserver', { participant: IRIS, table: 3, siege: 1, portee: 'tous', tour: null }),
+      'reserver',
+      { participant: THEO, table: 4, siege: 2, portee: 'tour', tour: 1 },
+    );
+    const m = await ouvrir(base);
+    expect(etatMontre(m).cible).toBe('reservations');
+    const etatDuFantome = () => texteDe(dans(m, '[data-fantome] [data-partie="etat"]'));
+    const avant = fichiers(m);
+    const cas = [
+      { depuis: [3, 1], surLeSol: 'plan.fantome.refuseTous', surUneChaise: 'plan.fantome.reservationTous' },
+      { depuis: [4, 2], surLeSol: 'plan.fantome.retireReservationTour', surUneChaise: 'plan.fantome.reservationTour' },
+    ];
+    for (const { depuis, surLeSol, surUneChaise } of cas) {
+      const origine = pointChaise(m, ...depuis);
+      const libre = pointChaise(m, 4, 3);
+      const sol = pointSol(m);
+      await presserEtBouger(origine, libre);
+      expect(etatDuFantome(), surUneChaise).toBe(t(surUneChaise));
+      await mener(libre, sol);
+      expect(etatDuFantome(), surLeSol).toBe(t(surLeSol));
+      await mener(sol, libre);
+      expect(etatDuFantome(), surUneChaise).toBe(t(surUneChaise));
+      // Rendue à sa chaise, la personne n'a pas bougé.
+      await mener(libre, origine);
+      await pointer('relacher', origine.x, origine.y);
+      await images(2);
+      await attendre(() => expect(dans(m, '[data-fantome] [data-partie="etat"]')).toBeNull());
+    }
+    await rienEcrit(m, avant);
+    expect(charge(m).reservations).toEqual(base.reservations);
   });
 });
 
@@ -1693,8 +1755,7 @@ describe('la mise en évidence d’une personne : posée et ôtée par un geste,
     // La barre de vue nomme la personne mise en évidence.
     const barre = dans(m, '[data-evidence]');
     expect(barre).not.toBeNull();
-    const { nom, prenom } = charge(m).participants.find(({ id }) => id === personne);
-    expect(texteDe(barre)).toContain(prenom === null ? nom : `${prenom} ${nom}`);
+    expect(texteDe(barre)).toContain(nomAffiche(charge(m).participants.find(({ id }) => id === personne)));
     expect(Number(barre.dataset.evidence)).toBe(personne);
     for (const tour of [2, 3, 1]) {
       m.ui.montrerTour(tour);

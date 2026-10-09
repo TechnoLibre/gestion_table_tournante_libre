@@ -321,7 +321,7 @@ describe('les trois invariants du <svg data-plan> (§ 7.2)', () => {
   });
 });
 
-// Zoome à la molette, par « Zoom + » et par « Zoom moins » en restant au-dessus
+// Zoome à la molette, puis par les deux boutons de zoom, en restant au-dessus
 // des seuils de rendu, sous un MutationObserver posé sur la racine ; rend
 // ses relevés et la largeur de la barre d'échelle avant et après.
 async function zoomsObserves(m) {
@@ -342,7 +342,7 @@ async function zoomsObserves(m) {
 }
 
 describe('zoomer écrit un attribut sur un élément (§ 7.2)', () => {
-  test('molette, « Zoom + » et « Zoom moins » : seul le transform du groupe change sous la racine, il décrit la vue tenue, et la barre d’échelle, hors du <svg>, change de longueur', async () => {
+  test('molette, « Zoom + » et « Zoom \u{2212} » : seul le transform du groupe change sous la racine, il décrit la vue tenue, et la barre d’échelle, hors du <svg>, change de longueur', async () => {
     const m = await petite();
     cliquer(m, 'ajuster');
     await deuxImages();
@@ -501,7 +501,8 @@ const transformFiniOuAbsent = (m) => {
 };
 
 describe('monté caché, cadre trop petit (§ 7.2, point d’attention 1)', () => {
-  test('surface en display: none → aucun transform non fini ; montrée → vueInitiale dans le cadre rendu ; 683 × 700 → vueApresCadre', async () => {
+  test('surface en display: none → aucun transform non fini ; montrée → vueInitiale dans le cadre rendu ; dézoomée à fond puis élargie → vueApresCadre', async () => {
+    await fixerCadre(683, 700);
     const montrer = feuille('[data-surface] { display: none !important; }');
     const m = await monter();
     await m.facade.chargerDemonstration('petite');
@@ -513,12 +514,21 @@ describe('monté caché, cadre trop petit (§ 7.2, point d’attention 1)', () =
     montrer();
     await attendre(() => expect(groupe(m).getAttribute('transform')).not.toBeNull());
     expect(groupe(m).getAttribute('transform')).toBe(transformDe(vueInitiale(m.seance.cadrage(), englobantDe(m), cadreDe(m))));
+    // Un cadre qui rétrécit laisse la vue telle quelle : seul un cadre qui
+    // s'élargit sous une vue dézoomée à fond la change. La vue attendue
+    // diffère de celle d'avant : l'assertion ne tient qu'une fois le
+    // recadrage fait, et l'attente le guette au lieu de compter des images.
+    for (let precedent = null; precedent !== vueLue(m).k; ) {
+      precedent = vueLue(m).k;
+      cliquer(m, 'dezoomer');
+    }
     const avant = vueLue(m);
     const largeurAvant = cadreDe(m).largeur;
-    await fixerCadre(683, 700);
+    await fixerCadre(1366, 700);
     await attendre(() => expect(cadreDe(m).largeur).not.toBe(largeurAvant));
-    await deuxImages();
-    expect(groupe(m).getAttribute('transform')).toBe(transformDe(vueApresCadre(avant, englobantDe(m), cadreDe(m))));
+    const attendue = transformDe(vueApresCadre(avant, englobantDe(m), cadreDe(m)));
+    expect(attendue).not.toBe(transformDe(avant));
+    await attendre(() => expect(groupe(m).getAttribute('transform')).toBe(attendue));
   });
 
   test('dézoomé à k_min à 683 × 700, puis élargi à 1 366 × 700 → vueApresCadre relève k au k_min du nouveau cadre', async () => {

@@ -104,6 +104,9 @@ export const TABLE = new Map([
     'Chacune se charge comme un nouvel événement, numéroté et ouvert en lecture ; ' +
       'aucun autre événement n\u{2019}est touché.',
   ],
+  // Une autre démonstration cliquée pendant un chargement : le nom de celle
+  // qui se charge est une donnée.
+  ['accueil.demonstrations.enCours', ({ nom }) => `${nom} se charge : attendre qu\u{2019}elle s\u{2019}ouvre.`],
 
   // --- La corbeille (§ 8.7) --------------------------------------------------
   ['accueil.corbeille.titre', 'Corbeille'],

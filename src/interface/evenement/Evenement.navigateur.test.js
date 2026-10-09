@@ -18,7 +18,6 @@
 // du support rompu. Le texte attendu vient de la même traduction que celle
 // de l'application ; les noms d'épreuve sont inventés.
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-import { cdp } from 'vitest/browser';
 import { flushSync } from 'svelte';
 import { TABLES_APPLICATION, libelle } from '../../application/libelles.js';
 import { INACTIVITE_MS } from '../../application/seance.js';
@@ -31,7 +30,7 @@ import { FORMAT, analyser, configurationDepuisCharge, etatDeduit } from '../../s
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { fixerCadre, molette } from '../../../test/navigateur/entrees.js';
+import { fixerCadre, molette, pointer } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { visible } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -90,25 +89,16 @@ const auCentre = (element) => {
 
 // Un appui réel annoncé par Chromium comme le rang-ième clic d'une série
 // (clickCount) : son événement click porte detail rang. cible est un élément,
-// visé en son centre, ou le point que rend l'appui précédent de la série. Les
-// coordonnées du cadre de l'épreuve passent dans la fenêtre de la page qui le
-// porte, d'un cadre à son parent, comme dans test/navigateur/entrees.js.
+// visé en son centre, ou le point que rend l'appui précédent de la série,
+// dans le repère du cadre de l'épreuve.
 async function cliquerEnSerie(cible, rang) {
   let { x, y } = cible;
   if (cible instanceof Element) {
     const { left, top, width, height } = cible.getBoundingClientRect();
     [x, y] = [left + width / 2, top + height / 2];
-    for (let fenetre = window; fenetre !== fenetre.top; fenetre = fenetre.parent) {
-      const porteur = fenetre.frameElement;
-      const boite = porteur.getBoundingClientRect();
-      const style = fenetre.parent.getComputedStyle(porteur);
-      const echelle = porteur.offsetWidth > 0 ? boite.width / porteur.offsetWidth : 1;
-      x = boite.left + (porteur.clientLeft + parseFloat(style.paddingLeft) + x) * echelle;
-      y = boite.top + (porteur.clientTop + parseFloat(style.paddingTop) + y) * echelle;
-    }
   }
-  await cdp().send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: rang });
-  await cdp().send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: rang });
+  await pointer('presser', x, y, { clickCount: rang });
+  await pointer('relacher', x, y, { clickCount: rang });
   flushSync();
   return { x, y };
 }
@@ -889,7 +879,11 @@ describe('le journal (§ 8.6, § 8.2)', () => {
     flushSync();
     expect(m.seance.etat().charge.participants.map(({ nom }) => nom)).toEqual(NOMS.slice(0, 2));
     expect(m.seance.etat().evenement.revision).toBe(3);
-    expect(avertissement(m, 'JOURNAL_REPRIS').textContent).toContain(t('JOURNAL_REPRIS', {}));
+    // L'avertissement se lit comme le reste de l'écran : rendu, et son texte
+    // celui de la table.
+    const repris = avertissement(m, 'JOURNAL_REPRIS');
+    expect(visible(repris)).toBe(true);
+    expect(repris.textContent).toContain(t('JOURNAL_REPRIS', {}));
     expect(m.trace.length).toBe(avant);
   });
 });
@@ -1097,10 +1091,16 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     expect(coin(fixe(m, 'lecture'))).toEqual(place);
     expect(visible(fixe(m, 'lecture'))).toBe(true);
     expect(visible(dans(m, '[data-refus="liste"]'))).toBe(true);
+    // Le refus est un bloc : aucun <span> ne le contient (HTML valide).
+    expect(dans(m, '[data-bandeau] span [data-refus="liste"]')).toBeNull();
     expect(m.seance.etat().evenement.base).toBe(base);
     issuesVisibles(m, ['ecrireDocuments', 'choisirDossier', 'abandonner']);
     message(m).querySelector('[data-commande="ecrireDocuments"]').click();
     await attendre(() => expect(m.seance.etat().supportRompu).toBeNull());
+    // Le refus de « Liste » valait pour l'état d'avant : le changement
+    // suivant de la séance l'efface.
+    flushSync();
+    expect(dans(m, '[data-refus="liste"]')).toBeNull();
     const nouvelle = baseDe(m);
     expect(m.fs.contenu('documents', `${nouvelle}${SUFFIXES.etat}`)).not.toBeNull();
     const entrees = journalDe(m, 'documents').entrees.length;
@@ -1123,9 +1123,16 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     issuesVisibles(m, ['choisirDossier', 'abandonner']);
     const choisir = message(m).querySelector('[data-commande="choisirDossier"]');
     expect(choisir.textContent).toBe(t('communs.commande.choisirDossier'));
+    const rompu = m.seance.etat().supportRompu;
+    const avant = m.trace.length;
     choisir.click();
-    await new Promise((resoudre) => requestAnimationFrame(resoudre));
-    await attendre(() => expect(m.seance.etat().supportRompu).not.toBeNull());
+    flushSync();
+    // Le geste commence, puis s'achève sur le dialogue annulé : on attend sa
+    // fin avant de juger que rien n'a changé.
+    expect(choisir.getAttribute('aria-busy')).toBe('true');
+    await attendre(() => expect(choisir.hasAttribute('aria-busy')).toBe(false));
+    expect(m.seance.etat().supportRompu).toEqual(rompu);
+    expect(m.trace.length).toBe(avant);
     expect(visible(message(m))).toBe(true);
   });
 
