@@ -9,7 +9,7 @@
 // seule forme, sans horloge ni langue du système. Le nom d'un papier arrive
 // dans les détails : cette table n'en écrit aucun.
 import { lireHorodatage } from '../format.js';
-import { compte, enumeration, nomDans, phraseDeRaison } from './aides.js';
+import { compte, enumeration, nomDans, ouEcrire, phraseDeRaison } from './aides.js';
 
 // Les impositions de la planche (§ 11.6), comme la feuille de contrôle les
 // nomme.
@@ -68,6 +68,14 @@ export const TABLE = new Map([
       `Le nom de ${laPersonne(details)} ne tient pas sur son badge, même replié sur trois lignes au plus petit corps : ` +
       'la planche ne se produit pas, plutôt que de tronquer ses tours.',
   ],
+
+  // --- Les refus de la production (§ 8.5, § 11.6, décision 13) -------------
+  [
+    'PLANCHE_NON_ECRITE',
+    (details, texte) =>
+      `La planche n'a pas pu s'écrire : ${ouEcrire(details, texte)}. « Enregistrer sous… » la dépose ailleurs.`,
+  ],
+  ['PAPIER_REQUIS', () => "Choisissez le papier de l'imprimante avant de produire la planche : l'imposition en dépend."],
 
   // --- Les lignes de tour d'un badge (§ 11.4, § 11.5) ------------------------
   // Une ligne : le tour, ou « Toute la soirée » pour un itinéraire constant,

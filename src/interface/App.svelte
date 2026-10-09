@@ -103,6 +103,10 @@
     planifier: horloge.planifier,
     annuler: horloge.annuler,
     formatCourant,
+    // La planche de badges embarque la police, et sa feuille de contrôle lit
+    // la provenance pour la version visible (§ 11.4, § 19.4).
+    polices,
+    provenance,
   });
   const generationApp = creerControleurGeneration({ seance: seanceApp, executeur, horloge, produitVersion });
   const facadeApp = creerFacade({

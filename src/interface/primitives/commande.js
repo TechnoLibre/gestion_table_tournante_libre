@@ -30,7 +30,9 @@
 // d'ecrireAilleurs — documents quand elle est donnée, choisi quand
 // l'opérateur la désigne —, la section d'ouvrirSection. Son action passe par
 // la séance, par l'état de navigation pour ce qui ne fait que montrer, ou
-// par un geste que l'écran fournit : choisirPlace se choisit sur le plan.
+// par un geste que l'écran fournit : choisirPlace se choisit sur le plan,
+// enregistrerSous reprend la planche que l'écran a demandée, choisirPapier
+// pose la question du papier.
 
 import { COMMANDES } from '../../application/commandes.js';
 
@@ -49,6 +51,8 @@ export const GESTES = Object.freeze([
   'choisirPlace',
   'ouvrirSecours',
   'ecrireAilleurs',
+  'enregistrerSous',
+  'choisirPapier',
 ]);
 
 /** Les sources d'un secours (seance.ouvrirSecours). */
@@ -171,10 +175,11 @@ function executionDuGeste(remede, seance, ui) {
 /**
  * L'action qu'offre un remède : de quoi poser une Commande à côté du refus.
  * Un geste que gestes fournit passe par lui, avant tout autre chemin ;
- * choisirPlace n'a pas d'autre chemin. Un remède de commande s'exécute par
- * seance.executer, tel quel ; modifier, debloquer, ouvrirSecours et
- * ecrireAilleurs par la méthode de la séance de même nom — passerEnEcriture
- * pour modifier, la base de l'événement ouvert pour ouvrirSecours ;
+ * choisirPlace, enregistrerSous et choisirPapier n'en ont pas d'autre. Un
+ * remède de commande s'exécute par seance.executer, tel quel ; modifier,
+ * debloquer, ouvrirSecours et ecrireAilleurs par la méthode de la séance de
+ * même nom — passerEnEcriture pour modifier, la base de l'événement ouvert
+ * pour ouvrirSecours ;
  * afficherTour et ouvrirSection par l'état de navigation, ui.
  *
  * @param {Object|null} remede

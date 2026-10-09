@@ -12,7 +12,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
+import { H_RETENU, personne as personneBadge, soiree, table as tableBadge } from '../../test/fixtures/badges/cas.js';
 import { describe, test } from '../../test/lanceur.js';
+import { lirePolices } from '../../test/polices.js';
 import { apercevoir } from '../csv/apercu.js';
 import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { rechercher } from '../moteur/recherche.js';
@@ -21,7 +23,7 @@ import { creer as creerDansLeDepot, ouvrir as ouvrirDansLeDepot } from '../stock
 import { FORMAT, analyser, configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { ligneEntree, ligneOuverture, lireJournal, reconstruire } from '../stockage/journal.js';
-import { SUFFIXES } from '../stockage/noms.js';
+import { SUFFIXES, nomPlanche } from '../stockage/noms.js';
 import { FICHIER_REGLAGES } from '../stockage/reglages_locaux.js';
 import { VERSION } from '../version.genere.js';
 import { libelle } from './libelles.js';
@@ -3131,5 +3133,81 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     await seance.attendre();
     assert.equal(JSON.parse(fs.contenu(PORTABLE.id, FICHIER_REGLAGES)).papier, 'Lettre');
     assert.equal(seance.etat().papier, 'Lettre');
+  });
+});
+
+describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13.4)', () => {
+  // Une soirée retenue de quatre personnes sur deux tables de deux places,
+  // deux tours, le retenu daté de H_RETENU.
+  const PLAN = [{ sieges: [[1, 2], [3, 4]] }, { sieges: [[1, 3], [2, 4]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [
+        personneBadge(1, 'Iris', 'Ombrelle'),
+        personneBadge(2, 'Théo', 'Pervenche'),
+        personneBadge(3, 'Ondine', 'Lacasse'),
+        personneBadge(4, null, 'Grisaille'),
+      ],
+      tables: [tableBadge(1, 1, 2), tableBadge(2, 2, 2)],
+      plan: PLAN,
+      propositions: [[1, PLAN]],
+    });
+
+  test('preparerPlanche lancé derrière un geste lit la charge que le geste laisse ; la police se charge une fois par séance', async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs, chargeRetenue());
+    let chargements = 0;
+    const polices = async () => {
+      chargements += 1;
+      return lirePolices();
+    };
+    const { seance } = monter({ fs, polices, provenance: 'production' });
+    await seance.choisirPapier('A4');
+    await seance.ouvrir(BASE);
+    await seance.passerEnEcriture();
+    const geste = seance.executer('echangerDansRetenu', { tour: 1, a: 1, b: 3 });
+    const annonce = seance.preparerPlanche();
+    await geste;
+    const horodatage = seance.charge.retenu.horodatage;
+    assert.notEqual(horodatage, H_RETENU);
+    const attendu = nomPlanche(BASE, { papier: 'A4', imposition: 'feuille', horodatage, reedition: null });
+    assert.equal((await annonce).nom, attendu);
+    assert.equal((await seance.preparerPlanche()).nom, attendu);
+    assert.equal(chargements, 1);
+  });
+
+  test('un papier choisi sans être attendu compte pour la planche demandée juste après : la planche attend les écritures de réglages déjà demandées', async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs, chargeRetenue());
+    const { seance } = monter({ fs, polices: async () => lirePolices(), provenance: 'production' });
+    await seance.ouvrir(BASE);
+    const choix = seance.choisirPapier('Lettre');
+    const annonce = await seance.preparerPlanche();
+    await choix;
+    assert.deepEqual([annonce.refus, annonce.papier], [null, 'Lettre']);
+  });
+
+  test('sans police ni provenance, préparer lève TypeError ; un chargement refusé remonte, et le suivant réessaie', async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs, chargeRetenue());
+    const sansPolices = monter({ fs, provenance: 'production' }).seance;
+    await sansPolices.ouvrir(BASE);
+    await assert.rejects(sansPolices.preparerPlanche(), (erreur) => erreur instanceof TypeError && /polices/.test(erreur.message));
+    const sansProvenance = monter({ fs, prefixe: 'sans-provenance', polices: async () => lirePolices() }).seance;
+    await sansProvenance.ouvrir(BASE);
+    await assert.rejects(sansProvenance.preparerPlanche(), TypeError);
+
+    let essais = 0;
+    const polices = async () => {
+      essais += 1;
+      if (essais === 1) throw new Error('police illisible');
+      return lirePolices();
+    };
+    const { seance } = monter({ fs, prefixe: 'reessai', polices, provenance: 'production' });
+    await seance.ouvrir(BASE);
+    await assert.rejects(seance.preparerPlanche(), /police illisible/);
+    const annonce = await seance.preparerPlanche();
+    assert.equal(annonce.refus.code, 'PAPIER_REQUIS');
+    assert.equal(essais, 2);
   });
 });

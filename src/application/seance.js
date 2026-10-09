@@ -75,6 +75,11 @@
 // Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
 // date aussi le placement qu'il change (§ 8.9, § 11.8).
 //
+// La planche de badges se prépare, se produit et s'enregistre ailleurs dans
+// tout mode (planche_seance.js) : elle lit l'événement ouvert sans le verrou
+// d'écriture, à son tour dans la file des appels, et n'écrit que son PDF
+// (§ 11.6, § 8.4, § 9).
+//
 // Les appels qui lisent ou écrivent l'événement passent l'un après l'autre,
 // dans l'ordre de leur appel : chacun part de l'Ouvert que le précédent a
 // laissé. L'horloge et les minuteries entrent en paramètre : la séance ne lit
@@ -99,6 +104,7 @@ import { avecCadrage, avecPapier, cadrageDe, creerEcrivainDiffere, ecrireReglage
 import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
 import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 import { libelle } from './libelles.js';
+import { creerPlanches } from './planche_seance.js';
 
 /** Inactivité au terme de laquelle la séance revient seule en lecture (§ 8.4). */
 export const INACTIVITE_MS = 10 * 60 * 1000;
@@ -193,6 +199,12 @@ function libelleDuRetour(sens, instant) {
  *        stockage n'écrit que FORMAT
  * @param {number} [parametres.delaiReglagesMs]   délai de l'écriture différée
  *        du cadrage
+ * @param {(() => Promise<{regulier: Uint8Array, gras: Uint8Array}>)|null} [parametres.polices]
+ *        charge les octets de la police que la planche embarque ; null : la
+ *        planche se refuse TypeError
+ * @param {string|null} [parametres.provenance]   le mode de construction,
+ *        que la feuille de contrôle lit pour la version visible ; null : la
+ *        planche se refuse TypeError
  */
 export function creerSeance({
   fs,
@@ -205,8 +217,11 @@ export function creerSeance({
   inactiviteMs = INACTIVITE_MS,
   formatCourant = FORMAT,
   delaiReglagesMs = DELAI_REGLAGES_MS,
+  polices = null,
+  provenance = null,
 }) {
   const id = identifiant();
+  const planches = creerPlanches({ polices, provenance, version: produitVersion });
   const libelleReprise = libelle('ENTREE_REPRISE');
 
   // L'état de la séance. ouvert : l'Ouvert courant, null sans événement ;
@@ -1196,6 +1211,17 @@ export function creerSeance({
     }
   }
 
+  // Ce que la planche lit de l'événement ouvert, à son tour dans la file des
+  // appels, une fois faites les écritures de réglages déjà demandées : le
+  // papier qu'un choix vient de poser compte. AUCUN_EVENEMENT sans
+  // événement.
+  async function lecturePlanche() {
+    exigerOuvert();
+    await fileReglages;
+    const { charge, base, fs: systeme, racine: dossier } = exigerOuvert();
+    return { charge, base, fs: systeme, racine: dossier, papier: etat.papier };
+  }
+
   // Le papier de la racine reçue se lit à son tour dans la file des appels,
   // puis dans celle des réglages, comme à un changement de racine.
   if (racine !== null) enFile(() => relirePapier(racine));
@@ -1368,6 +1394,22 @@ export function creerSeance({
      * lecture, admise dans tout mode, qui n'écrit rien.
      */
     formeNommee: (cible) => enFile(async () => formeNommeeDe(exigerOuvert().charge, cible)),
+    /**
+     * L'annonce de la planche de badges (planche_seance.js), avant de
+     * produire : une lecture, admise dans tout mode, qui n'écrit rien.
+     */
+    preparerPlanche: (demande) => enFile(async () => planches.preparer(await lecturePlanche(), demande)),
+    /**
+     * Produit la planche et dépose son PDF à côté des fichiers d'événement,
+     * ou le télécharge sous web : {chemin, nom}. Admis dans tout mode ;
+     * l'état et le journal ne s'écrivent pas.
+     */
+    produirePlanche: (demande) => enFile(async () => planches.produire(await lecturePlanche(), demande)),
+    /**
+     * Produit la planche et la confie au dialogue d'enregistrement : le
+     * chemin choisi, null quand l'opérateur annule.
+     */
+    enregistrerPlancheSous: (demande) => enFile(async () => planches.enregistrerSous(await lecturePlanche(), demande)),
     /**
      * Une promesse résolue quand les appels déjà en file ont fini, réussis
      * ou refusés : ce qu'un lecteur de etat() lit ensuite porte leurs

@@ -37,6 +37,8 @@ export const TABLE = new Map([
   ['communs.remede.reprendreVerrou', 'Reprendre le verrou'],
   ['communs.remede.afficherTour', ({ tour }) => `Afficher le tour ${tour}`],
   ['communs.remede.choisirPlace', 'Choisir une place'],
+  ['communs.remede.enregistrerSous', 'Enregistrer sous\u{2026}'],
+  ['communs.remede.choisirPapier', 'Choisir le papier'],
   ['communs.remede.ouvrirSecours.precedent', meme('communs.commande.ouvrirPrecedent')],
   ['communs.remede.ouvrirSecours.journal', meme('communs.commande.ouvrirJournal')],
   ['communs.remede.ecrireAilleurs.documents', meme('communs.commande.ecrireDocuments')],

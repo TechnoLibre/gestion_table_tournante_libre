@@ -186,6 +186,7 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
   test('chaque geste du contrat, chaque variante comprise, a son libellé', () => {
     assert.deepEqual([...GESTES], [
       'modifier', 'debloquer', 'afficherTour', 'ouvrirSection', 'choisirPlace', 'ouvrirSecours', 'ecrireAilleurs',
+      'enregistrerSous', 'choisirPapier',
     ]);
     assert.deepEqual([...SOURCES_SECOURS], ['precedent', 'journal']);
     assert.deepEqual([...SECTIONS_REMEDE], ['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions']);
@@ -198,8 +199,10 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
       ...SOURCES_SECOURS.map((source) => ({ geste: 'ouvrirSecours', source })),
       { geste: 'ecrireAilleurs', racine: RACINE },
       { geste: 'ecrireAilleurs', racine: null },
+      { geste: 'enregistrerSous' },
+      { geste: 'choisirPapier' },
     ];
-    assert.equal(remedes.length, 15);
+    assert.equal(remedes.length, 17);
     const textes = remedes.map((remede) => {
       const { cle, details } = libelleRemede(remede);
       return t(cle, details);
@@ -207,6 +210,13 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
     for (const texte of textes) assert.ok(texte.length > 0 && !texte.includes('undefined'), texte);
     assert.equal(t('communs.remede.afficherTour', { tour: 3 }), 'Afficher le tour 3');
     assert.equal(new Set(textes).size, textes.length, 'deux variantes ne se confondent pas');
+  });
+
+  test('les remèdes de la planche : enregistrerSous et choisirPapier ont leur clé, sans variante', () => {
+    assert.deepEqual(libelleRemede({ geste: 'enregistrerSous' }), { cle: 'communs.remede.enregistrerSous', details: {} });
+    assert.deepEqual(libelleRemede({ geste: 'choisirPapier' }), { cle: 'communs.remede.choisirPapier', details: {} });
+    assert.equal(t('communs.remede.enregistrerSous'), 'Enregistrer sous\u{2026}');
+    assert.equal(t('communs.remede.choisirPapier'), 'Choisir le papier');
   });
 
   test('reprendreVerrou, offert à côté de VERROU_PRIS, a sa clé', () => {
@@ -225,6 +235,8 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
       ...SOURCES_SECOURS.map((source) => libelleRemede({ geste: 'ouvrirSecours', source }).cle),
       libelleRemede({ geste: 'ecrireAilleurs', racine: RACINE }).cle,
       libelleRemede({ geste: 'ecrireAilleurs', racine: null }).cle,
+      libelleRemede({ geste: 'enregistrerSous' }).cle,
+      libelleRemede({ geste: 'choisirPapier' }).cle,
     ]);
     const posees = [...COMMUNS.keys()].filter((cle) => cle.startsWith('communs.remede.'));
     assert.ok(posees.length > 0);
@@ -309,6 +321,19 @@ describe('commande : l’action d’un remède', () => {
     actionRemede({ geste: 'ouvrirSection', section: 'participants' }, { seance, ui }).executer();
     assert.deepEqual(ui.appels, [['montrerProposition', null], ['montrerTour', 2], ['allerA', 'participants']]);
     assert.equal(actionRemede({ geste: 'ouvrirSection', section: 'tables' }, { seance }), null);
+    assert.deepEqual(seance.appels, []);
+  });
+
+  test('enregistrerSous et choisirPapier passent par les gestes de l’écran, qui sait la planche et le papier ; sans eux, aucune action', () => {
+    const seance = seanceEnregistreuse();
+    const recus = [];
+    for (const geste of ['enregistrerSous', 'choisirPapier']) {
+      assert.equal(actionRemede({ geste }, { seance, ui: uiEnregistreur() }), null, geste);
+      const action = actionRemede({ geste }, { seance, gestes: { [geste]: (remede) => recus.push(remede) } });
+      assert.deepEqual([action.nom, action.cle, action.confirmer], [geste, `communs.remede.${geste}`, null]);
+      action.executer();
+    }
+    assert.deepEqual(recus, [{ geste: 'enregistrerSous' }, { geste: 'choisirPapier' }]);
     assert.deepEqual(seance.appels, []);
   });
 

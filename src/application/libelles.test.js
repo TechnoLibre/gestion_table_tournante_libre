@@ -551,6 +551,8 @@ const EXEMPLES = new Map([
   ],
   ['PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }],
   ['PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } }],
+  ['PLANCHE_NON_ECRITE', { chemin: 'Soirée des Lucioles.badges_A4_feuille_2031-05-17_20-15-07.pdf', dossier: 'E:\\data', cause: 'EROFS', remede: { geste: 'enregistrerSous' } }],
+  ['PAPIER_REQUIS', { remede: { geste: 'choisirPapier' } }],
   // Sorties
   ['IMPRESSION_ECHEC', { cause: 'failed', remede: null }],
 ]);
