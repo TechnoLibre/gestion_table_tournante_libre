@@ -3,9 +3,14 @@
 
 // Épreuves du registre des constantes mesurées (§ 14.1, § 19.10) : les
 // dix-huit entrées du contrat de données, chacune complète et de statut
-// épinglé, et la vérification qui nomme l'entrée et le champ d'une faute.
+// épinglé, la vérification qui nomme l'entrée et le champ d'une faute, et
+// l'accord du registre avec le relevé committé du banc : le banc écrit un
+// relevé, jamais le registre, et une constante du banc déclarée mesurée
+// porte la valeur que le relevé propose, sur la configuration qu'il décrit.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
+import { accordRegistre } from '../../scripts/banc/releve.js';
+import releveCommite from '../../scripts/banc/releve.json' with { type: 'json' };
 import { CONSTANTES, constante, verifierRegistre } from './constantes.js';
 
 // Le contrat de données : nom, valeur de départ, unité, propriétaire,
@@ -126,5 +131,12 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
     delete sansProtocole.protocole;
     assert.deepEqual(verifierRegistre([sansProtocole]), [{ nom: 'ZONE_SILENCE_MM', champ: 'protocole' }]);
     assert.deepEqual(verifierRegistre([{ ...CONSTANTES[6], protocole: '' }]), [{ nom: 'ZONE_SILENCE_MM', champ: 'protocole' }]);
+  });
+});
+
+describe('constantes : accord avec le relevé du banc (§ 19.10, § 14.1)', () => {
+  test('chaque constante du banc déclarée mesurée porte la valeur du relevé committé et cite sa configuration', () => {
+    assert.ok(CONSTANTES.some((c) => c.proprietaire === 'banc'), 'le registre ne porte aucune constante du banc');
+    assert.deepEqual(accordRegistre(CONSTANTES, releveCommite), []);
   });
 });

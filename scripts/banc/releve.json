@@ -1,0 +1,13 @@
+{
+  "format": 1,
+  "configuration": {
+    "cadre": { "largeur": 1366, "hauteur": 700 },
+    "facteurEchelle": 1,
+    "navigateur": null,
+    "node": null,
+    "processeursLogiques": null,
+    "ralentissementCpu": 4,
+    "police": "Noto Sans"
+  },
+  "mesures": []
+}
