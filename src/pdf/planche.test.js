@@ -1,0 +1,421 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// La production de la planche (§ 11.1 à § 11.4), éprouvée sur le fichier
+// produit, relu comme un lecteur réel le lit (test/pdf.js) : les boîtes de
+// page, /Info et /ID, les filets mesurés sous la matrice courante, l'ordre
+// des noms dans la couche de texte, la zone de silence, les caractères
+// extraits un à un, le filigrane, la feuille de contrôle et sa graduation,
+// des octets identiques d'un export à l'autre.
+//
+// La série surveillée borne le coût (§ 14.4) : trois productions sur de
+// petits modèles écrits à la main, que toutes les épreuves du fichier
+// lisent — A4, cinq badges, feuille par feuille, brouillon, horodatage
+// connu, produite deux fois ; Lettre, trois badges, en pile, retenu,
+// horodatage inconnu. Les lignes de contrôle viennent de textesControle, le
+// mot du filigrane de libelle, comme la séance les passera.
+import assert from 'node:assert/strict';
+import { PDFDocument, PDFName } from 'pdf-lib';
+import { lirePdf } from '../../test/pdf.js';
+import { lirePolices } from '../../test/polices.js';
+import { describe, test } from '../../test/lanceur.js';
+import { libelle } from '../application/libelles.js';
+import { textesControle } from '../application/planche.js';
+import { constante } from '../geometrie/constantes.js';
+import { PAPIERS } from '../geometrie/papiers.js';
+import { VERSION } from '../version.genere.js';
+import { cellules, filets, imposer, nombrePlanches } from './imposition.js';
+import { analyserPlanche, produirePlanche } from './planche.js';
+
+const TOLERANCE = 1e-6;
+const ZONE = constante('ZONE_SILENCE_MM');
+const MARGE = constante('MARGE_PAGE_MM');
+const FILIGRANE = libelle('planche.brouillon');
+const TIRET = '\u{2014}';
+const polices = lirePolices();
+
+const EVENEMENT = { nom: 'Souper du Club des Merles', date: '2026-10-09' };
+const HORODATAGE = '2026-10-09T19:00:00-04:00';
+
+/** Un badge écrit à la main : ses textes tels que BA1 les compose. */
+function badge(participant, nom, { appartenance = null, tours = 2, horodatage = HORODATAGE } = {}) {
+  const lignes = Array.from({ length: tours }, (_, i) => ({ tour: i + 1, table: participant + i, siege: null, titre: null }));
+  const ligneHorodatage = horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
+  return {
+    participant,
+    nom,
+    appartenance,
+    lignes,
+    identifiant: null,
+    textes: {
+      nom,
+      lignes: lignes.map((ligne) => libelle('planche.tour', ligne)),
+      appartenance,
+      pied: [libelle('planche.pied.evenement', EVENEMENT), ligneHorodatage],
+      piedReduit: [libelle('planche.pied.date', EVENEMENT), ligneHorodatage],
+    },
+  };
+}
+
+/** Un modèle de planche écrit à la main. */
+function modele(badges, { horodatage = HORODATAGE, brouillon = false, exclus = 0 } = {}) {
+  return {
+    badges,
+    evenement: EVENEMENT,
+    horodatage,
+    brouillon,
+    comptes: { participants: badges.length + exclus, exclus, produits: badges.length },
+    homonymes: [],
+    reedition: null,
+    version: VERSION.affichee,
+  };
+}
+
+const NOMS_A4 = ['Iris Ombrelle', 'Ôjgq Æ Grisaille', 'Théo Pervenche', 'Ondine Lacasse', 'Merle Bleuet'];
+const MODELE_A4 = modele(
+  NOMS_A4.map((nom, i) => badge(i + 1, nom, { appartenance: i % 2 === 0 ? 'Club des Merles' : null })),
+  { brouillon: true, exclus: 1 },
+);
+const NOMS_LETTRE = ['Aube Sarcelle', 'Côme Pervenche', 'Ysée Lacasse'];
+const MODELE_LETTRE = modele(
+  NOMS_LETTRE.map((nom, i) => badge(i + 10, nom, { horodatage: null, tours: 3 })),
+  { horodatage: null },
+);
+
+const entrees = (m, papier, imposition) => ({
+  modele: m,
+  papier,
+  imposition,
+  polices,
+  controle: textesControle(m, { papier, imposition, planches: nombrePlanches(m.badges.length, papier) }),
+  filigrane: FILIGRANE,
+});
+
+// Les trois productions de la série surveillée.
+const octetsA4 = await produirePlanche(entrees(MODELE_A4, 'A4', 'feuille'));
+const octetsA4Bis = await produirePlanche(entrees(MODELE_A4, 'A4', 'feuille'));
+const octetsLettre = await produirePlanche(entrees(MODELE_LETTRE, 'Lettre', 'pile'));
+const A4 = await lirePdf(octetsA4);
+const LETTRE = await lirePdf(octetsLettre);
+const PRODUCTIONS = [
+  { nom: 'A4', papier: 'A4', imposition: 'feuille', lu: A4, modele: MODELE_A4 },
+  { nom: 'Lettre', papier: 'Lettre', imposition: 'pile', lu: LETTRE, modele: MODELE_LETTRE },
+];
+
+// Le centre d'un fragment de texte, et la cellule qui le contient.
+const centre = ({ x, y, l, h }) => [x + l / 2, y + h / 2];
+const dans = ([cx, cy], { x, y, largeur, hauteur }) => cx > x && cx < x + largeur && cy > y && cy < y + hauteur;
+
+// Les noms lus dans chaque cellule d'une page de planche, null pour une
+// cellule où aucun nom du modèle ne se lit.
+function nomsParCellule(page, papier, noms) {
+  return cellules(papier).map((cellule) => {
+    const lus = page.textes.filter((t) => noms.includes(t.texte) && dans(centre(t), cellule)).map((t) => t.texte);
+    assert.ok(lus.length <= 1, `plusieurs noms dans une cellule : ${lus.join(', ')}`);
+    return lus[0] ?? null;
+  });
+}
+
+// La distance d'une boîte de texte à un segment parallèle à un axe.
+function distance({ x, y, l, h }, { x1, y1, x2, y2 }) {
+  const dx = Math.max(0, Math.min(x1, x2) - (x + l), x - Math.max(x1, x2));
+  const dy = Math.max(0, Math.min(y1, y2) - (y + h), y - Math.max(y1, y2));
+  return Math.hypot(dx, dy);
+}
+
+// Deux segments colinéaires qui se chevauchent sur une longueur non nulle.
+function surLeMemeAxe(a, b) {
+  const vertical = (s) => Math.abs(s.x1 - s.x2) < TOLERANCE;
+  const horizontal = (s) => Math.abs(s.y1 - s.y2) < TOLERANCE;
+  const recouvre = (a1, a2, b1, b2) => Math.min(Math.max(a1, a2), Math.max(b1, b2)) - Math.max(Math.min(a1, a2), Math.min(b1, b2)) > TOLERANCE;
+  if (vertical(a) && vertical(b)) return Math.abs(a.x1 - b.x1) < 0.01 && recouvre(a.y1, a.y2, b.y1, b.y2);
+  if (horizontal(a) && horizontal(b)) return Math.abs(a.y1 - b.y1) < 0.01 && recouvre(a.x1, a.x2, b.x1, b.x2);
+  return false;
+}
+
+// Les segments d'une page en [x1, y1, x2, y2], arrondis au centième de
+// millimètre, chacun de son extrémité la plus haut à gauche, triés dans
+// l'ordre lexicographique : une forme comparable à un attendu.
+function normaliser(segments) {
+  const centieme = (v) => Math.round(v * 100) / 100 + 0; // + 0 : -0 devient 0
+  const lexicographique = (s, t) => {
+    const i = s.findIndex((v, k) => v !== t[k]);
+    return i < 0 ? 0 : s[i] - t[i];
+  };
+  return segments
+    .map(({ x1, y1, x2, y2 }) => {
+      const [a, b] = [[x1, y1], [x2, y2]].map((p) => p.map(centieme)).sort(lexicographique);
+      return [...a, ...b];
+    })
+    .sort(lexicographique);
+}
+
+describe('produirePlanche : le document (§ 11.1)', () => {
+  test('boîtes 210 × 297 et 215,9 × 279,4 à 0,1 mm près sur chaque page ; ni CropBox ni UserUnit ; ni /ID', () => {
+    for (const { papier, lu, modele: m } of PRODUCTIONS) {
+      assert.equal(lu.pages.length, 1 + nombrePlanches(m.badges.length, papier), papier);
+      for (const page of lu.pages) {
+        assert.ok(Math.abs(page.boite.largeur - PAPIERS[papier].largeur) < 0.1, `${papier} largeur ${page.boite.largeur}`);
+        assert.ok(Math.abs(page.boite.hauteur - PAPIERS[papier].hauteur) < 0.1, `${papier} hauteur ${page.boite.hauteur}`);
+        assert.equal(page.cropBox, null);
+        assert.equal(page.userUnit, null);
+      }
+      assert.equal(lu.id, false, papier);
+    }
+  });
+
+  test("/Info ne porte que CreationDate quand l'horodatage est connu, et n'existe pas quand il est inconnu", () => {
+    assert.deepEqual(A4.info, ['CreationDate']);
+    assert.deepEqual(LETTRE.info, []);
+  });
+
+  test("CreationDate se compose du texte de l'horodatage du placement, décalage local gardé", async () => {
+    const document = await PDFDocument.load(octetsA4, { updateMetadata: false });
+    assert.equal(document.getInfoDict().lookup(PDFName.of('CreationDate')).asString(), "D:20261009190000-04'00'");
+  });
+
+  test('les deux exports A4 du même modèle : mêmes octets', () => {
+    assert.equal(octetsA4.length, octetsA4Bis.length);
+    assert.ok(Buffer.from(octetsA4).equals(Buffer.from(octetsA4Bis)), 'deux exports diffèrent');
+  });
+
+  test('chaque police porte une ToUnicode ; les deux graisses sont embarquées', () => {
+    for (const { papier, lu } of PRODUCTIONS) {
+      for (const { nom, toUnicode } of lu.polices) assert.ok(toUnicode, `${papier} : ${nom} sans ToUnicode`);
+      assert.equal(lu.polices.length, 2, papier);
+    }
+  });
+
+  test('« Ôjgq » et « Æ » se lisent caractère par caractère dans la couche de texte', () => {
+    const lus = A4.pages.slice(1).flatMap(({ textes }) => textes.map(({ texte }) => texte));
+    const nom = lus.find((texte) => texte.includes('Ôjgq'));
+    assert.ok(nom !== undefined, `aucun fragment ne porte « Ôjgq » : ${lus.join(' | ')}`);
+    assert.deepEqual([...nom], [...'Ôjgq Æ Grisaille']);
+  });
+});
+
+describe('produirePlanche : les filets mesurés (§ 11.2, § 11.3)', () => {
+  test('A4, planche pleine : x = 105 de 0 à 296 ; y = 148 et y = 296 de 0 à 210 — trois axes, rien d\u{2019}autre', () => {
+    assert.deepEqual(normaliser(A4.pages[1].segments), [
+      [0, 148, 210, 148],
+      [0, 296, 210, 296],
+      [105, 0, 105, 296],
+    ]);
+  });
+
+  test("A4, planche d'un badge : seuls les segments qui bordent la cellule occupée", () => {
+    assert.deepEqual(normaliser(A4.pages[2].segments), [
+      [0, 148, 105, 148],
+      [105, 0, 105, 148],
+    ]);
+  });
+
+  test('Lettre, planche pleine : les cinq axes de l\u{2019}encadrement complet', () => {
+    assert.deepEqual(normaliser(LETTRE.pages[1].segments), [
+      [33.95, 34.7, 33.95, 244.7],
+      [33.95, 34.7, 181.95, 34.7],
+      [33.95, 139.7, 181.95, 139.7],
+      [33.95, 244.7, 181.95, 244.7],
+      [181.95, 34.7, 181.95, 244.7],
+    ]);
+  });
+
+  test("Lettre, planche d'un badge : l'encadrement de la seule cellule occupée", () => {
+    assert.deepEqual(normaliser(LETTRE.pages[2].segments), [
+      [33.95, 34.7, 33.95, 139.7],
+      [33.95, 34.7, 181.95, 34.7],
+      [33.95, 139.7, 181.95, 139.7],
+      [181.95, 34.7, 181.95, 139.7],
+    ]);
+  });
+
+  test('page 1 : aucun segment sur un axe de coupe', () => {
+    for (const { papier, lu } of PRODUCTIONS) {
+      const axes = filets(papier, cellules(papier).map(() => true));
+      for (const segment of lu.pages[0].segments) {
+        assert.ok(!axes.some((axe) => surLeMemeAxe(segment, axe)), `${papier} : ${JSON.stringify(segment)}`);
+      }
+    }
+  });
+
+  test('aucun motif de tirets, aucun remplissage, aucune couleur hors des gris, sur aucune page', () => {
+    for (const { papier, lu } of PRODUCTIONS) {
+      lu.pages.forEach((page, rang) => {
+        assert.equal(page.tirets, false, `${papier} page ${rang + 1}`);
+        assert.equal(page.remplissages, 0, `${papier} page ${rang + 1}`);
+        for (const [r, g, b] of page.couleurs) assert.ok(r === g && g === b, `${papier} page ${rang + 1} : ${[r, g, b]}`);
+      });
+    }
+  });
+});
+
+describe('produirePlanche : les badges (§ 11.3, § 11.4, § 11.6)', () => {
+  test("l'ordre des noms dans la couche de texte, cellule par cellule, égale imposer : feuille en A4, pile en Lettre", () => {
+    for (const { papier, imposition, lu, modele: m } of PRODUCTIONS) {
+      const noms = m.badges.map(({ nom }) => nom);
+      const attendu = imposer(noms.length, papier, imposition).map((planche) => planche.map((i) => (i === null ? null : noms[i])));
+      assert.deepEqual(
+        lu.pages.slice(1).map((page) => nomsParCellule(page, papier, noms)),
+        attendu,
+        papier,
+      );
+    }
+  });
+
+  test("aucun fragment de texte, filigrane compris, à moins de ZONE_SILENCE_MM d'un axe de coupe ou d'un bord de feuille", () => {
+    for (const { papier, lu } of PRODUCTIONS) {
+      const { largeur: W, hauteur: H } = PAPIERS[papier];
+      const bords = [
+        { x1: 0, y1: 0, x2: W, y2: 0 },
+        { x1: 0, y1: H, x2: W, y2: H },
+        { x1: 0, y1: 0, x2: 0, y2: H },
+        { x1: W, y1: 0, x2: W, y2: H },
+      ];
+      const axes = [...filets(papier, cellules(papier).map(() => true)), ...bords];
+      lu.pages.slice(1).forEach((page, rang) => {
+        assert.ok(page.textes.length > 0);
+        for (const fragment of page.textes) {
+          const plusProche = Math.min(...axes.map((axe) => distance(fragment, axe)));
+          assert.ok(plusProche >= ZONE - TOLERANCE, `${papier} planche ${rang + 1}, « ${fragment.texte} » à ${plusProche} mm`);
+        }
+      });
+    }
+  });
+
+  test('Lettre : les badges sont à plat, leur texte monte de bas en haut, leur haut à gauche', () => {
+    const [premiere] = LETTRE.pages.slice(1);
+    const nom = premiere.textes.find(({ texte }) => texte === NOMS_LETTRE[0]);
+    assert.ok(nom.h > nom.l, JSON.stringify(nom));
+    const premiereLigne = premiere.textes.find(({ texte }) => texte.startsWith('Tour 1'));
+    // Le nom est en haut du badge : plus à gauche que les lignes de tour.
+    assert.ok(nom.x < premiereLigne.x, `${nom.x} contre ${premiereLigne.x}`);
+  });
+
+  test('BROUILLON : une fois dans chaque cellule occupée de l\u{2019}A4, aucune dans une cellule vide ; nulle part dans le Lettre retenu', () => {
+    for (const page of A4.pages.slice(1)) {
+      const occupees = nomsParCellule(page, 'A4', NOMS_A4).map((nom) => nom !== null);
+      cellules('A4').forEach((cellule, rang) => {
+        const marques = page.textes.filter((t) => t.texte === FILIGRANE && dans(centre(t), cellule));
+        assert.equal(marques.length, occupees[rang] ? 1 : 0, `cellule ${rang}`);
+        if (!occupees[rang]) assert.deepEqual(page.textes.filter((t) => dans(centre(t), cellule)), []);
+      });
+    }
+    const lus = LETTRE.pages.flatMap(({ textes }) => textes.map(({ texte }) => texte)).join(' ');
+    assert.ok(!lus.includes(FILIGRANE), lus);
+  });
+
+  test('BROUILLON au trait (mode de rendu 1) : une fois par cellule occupée de chaque planche A4 et une fois sur sa feuille de contrôle ; le Lettre retenu ne le porte jamais', () => {
+    const [controle, ...planches] = A4.pages;
+    assert.equal(controle.modesTexte.filter((mode) => mode === 1).length, 1, 'A4 page 1');
+    planches.forEach((page, rang) => {
+      const occupees = nomsParCellule(page, 'A4', NOMS_A4).filter((nom) => nom !== null).length;
+      assert.ok(occupees > 0);
+      assert.equal(page.modesTexte.filter((mode) => mode === 1).length, occupees, `A4 planche ${rang + 1}`);
+    });
+    LETTRE.pages.forEach((page, rang) => {
+      assert.ok(page.modesTexte.length > 0);
+      assert.deepEqual(page.modesTexte.filter((mode) => mode !== 0), [], `Lettre page ${rang + 1}`);
+    });
+  });
+
+  test('chaque texte du badge se lit dans la couche de texte : nom, appartenance, tours, pied', () => {
+    const page = A4.pages[1];
+    const lus = new Set(page.textes.map(({ texte }) => texte));
+    const [premier] = MODELE_A4.badges;
+    for (const texte of [premier.textes.nom, premier.textes.appartenance, ...premier.textes.lignes, ...premier.textes.pied]) {
+      assert.ok(lus.has(texte), `« ${texte} » absent : ${[...lus].join(' | ')}`);
+    }
+    assert.ok([...lus].some((texte) => texte.includes(`Tour 2 ${TIRET} table`)));
+  });
+});
+
+describe('produirePlanche : la feuille de contrôle, page 1 (§ 11.3)', () => {
+  // La graduation : le segment horizontal de 100 mm, et les repères qui le
+  // touchent, verticaux.
+  function graduation(page) {
+    const horizontaux = page.segments.filter(({ y1, y2 }) => Math.abs(y1 - y2) < TOLERANCE);
+    const regles = horizontaux.filter(({ x1, x2 }) => Math.abs(Math.abs(x2 - x1) - 100) < 0.5);
+    assert.equal(regles.length, 1, JSON.stringify(horizontaux));
+    const [regle] = regles;
+    const reperes = page.segments.filter(
+      ({ x1, x2, y1, y2 }) => Math.abs(x1 - x2) < TOLERANCE && Math.abs(Math.max(y1, y2) - regle.y1) < TOLERANCE,
+    );
+    return { regle, reperes };
+  }
+
+  test('graduation de 0 à 100 mm, repérée tous les 10 mm, mesurée sur les segments', () => {
+    for (const { papier, lu } of PRODUCTIONS) {
+      const { regle, reperes } = graduation(lu.pages[0]);
+      const debut = Math.min(regle.x1, regle.x2);
+      assert.ok(Math.abs(Math.abs(regle.x2 - regle.x1) - 100) < 0.01, `${papier} : ${JSON.stringify(regle)}`);
+      const abscisses = reperes.map(({ x1 }) => x1).sort((a, b) => a - b);
+      assert.equal(abscisses.length, 11, papier);
+      abscisses.forEach((x, k) => assert.ok(Math.abs(x - (debut + 10 * k)) < 0.01, `${papier} repère ${k} : ${x}`));
+      // Dans la marge de la page : la graduation se lit entière.
+      assert.ok(debut >= MARGE - TOLERANCE && Math.min(...reperes.flatMap(({ y1, y2 }) => [y1, y2])) >= MARGE - TOLERANCE);
+    }
+  });
+
+  test("les lignes de contrôle se lisent dans la couche de texte : comptes, horodatage, version, papier", () => {
+    for (const { papier, imposition, lu, modele: m } of PRODUCTIONS) {
+      const lus = new Set(lu.pages[0].textes.map(({ texte }) => texte));
+      const lignes = textesControle(m, { papier, imposition, planches: nombrePlanches(m.badges.length, papier) });
+      for (const ligne of lignes) assert.ok(lus.has(ligne), `${papier} : « ${ligne} » absente de ${[...lus].join(' | ')}`);
+    }
+    const lusA4 = A4.pages[0].textes.map(({ texte }) => texte);
+    assert.ok(lusA4.includes(libelle('planche.controle.comptes', MODELE_A4.comptes)));
+    assert.ok(lusA4.includes(libelle('planche.pied.horodatage', { horodatage: HORODATAGE })));
+    assert.ok(LETTRE.pages[0].textes.some(({ texte }) => texte === libelle('planche.pied.horodatageInconnu')));
+  });
+
+  test('BROUILLON sur la feuille de contrôle du brouillon : sa ligne et le filigrane, une fois, hors de la graduation', () => {
+    const page = A4.pages[0];
+    const marques = page.textes.filter(({ texte }) => texte === FILIGRANE);
+    assert.equal(marques.length, 2, JSON.stringify(marques));
+    const { regle, reperes } = graduation(page);
+    const xs = [regle.x1, regle.x2];
+    const ys = reperes.flatMap(({ y1, y2 }) => [y1, y2]);
+    const zone = { x: Math.min(...xs), y: Math.min(...ys), l: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    for (const marque of marques) {
+      const separees =
+        marque.x > zone.x + zone.l || marque.x + marque.l < zone.x || marque.y > zone.y + zone.h || marque.y + marque.h < zone.y;
+      assert.ok(separees, `${JSON.stringify(marque)} sur la graduation ${JSON.stringify(zone)}`);
+    }
+  });
+});
+
+describe('analyserPlanche : avant de produire (§ 11.5, décision 12)', () => {
+  test('un nom à glyphe absent : absents le nomme, une fois, et rien ne refuse', async () => {
+    const m = modele([badge(1, 'Ondine 李'), badge(2, 'Théo 李 Pervenche')]);
+    assert.deepEqual(await analyserPlanche({ modele: m, polices }), { refus: null, absents: ['李'] });
+  });
+
+  test('un badge à 100 tours : refus PLANCHE_TROP_DE_TOURS, et son rang dans le modèle', async () => {
+    const m = modele([badge(1, 'Iris Ombrelle'), badge(2, 'Théo Pervenche', { tours: 100 }), badge(3, 'Ondine Lacasse', { tours: 100 })]);
+    assert.deepEqual(await analyserPlanche({ modele: m, polices }), {
+      refus: { code: 'PLANCHE_TROP_DE_TOURS', details: { tours: 100 }, rang: 1 },
+      absents: [],
+    });
+  });
+
+  test('produirePlanche refuse un modèle que la mise en page refuse, sans rien produire', async () => {
+    const m = modele([badge(1, 'Iris Ombrelle', { tours: 100 })]);
+    await assert.rejects(produirePlanche(entrees(m, 'A4', 'feuille')), /PLANCHE_TROP_DE_TOURS/);
+  });
+});
+
+describe('produirePlanche : les entrées hors de leur domaine', () => {
+  test('un papier ou une imposition inconnus, des lignes de contrôle qui ne sont pas des chaînes : TypeError', async () => {
+    const base = entrees(MODELE_LETTRE, 'Lettre', 'pile');
+    await assert.rejects(produirePlanche({ ...base, papier: 'A5' }), TypeError);
+    await assert.rejects(produirePlanche({ ...base, imposition: 'damier' }), TypeError);
+    await assert.rejects(produirePlanche({ ...base, controle: [1] }), TypeError);
+  });
+
+  test("un brouillon sans le mot de son filigrane : TypeError ; un horodatage d'une autre forme : TypeError", async () => {
+    await assert.rejects(produirePlanche({ ...entrees(MODELE_A4, 'A4', 'feuille'), filigrane: undefined }), TypeError);
+    await assert.rejects(produirePlanche({ ...entrees(MODELE_A4, 'A4', 'feuille'), filigrane: '' }), TypeError);
+    const horsForme = { ...MODELE_LETTRE, horodatage: '2026-10-09 19:00' };
+    await assert.rejects(produirePlanche({ ...entrees(MODELE_LETTRE, 'Lettre', 'pile'), modele: horsForme }), TypeError);
+  });
+});
