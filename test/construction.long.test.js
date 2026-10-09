@@ -12,10 +12,18 @@
 // incruste en chaîne dans le module principal, n'apparaît pas dans les
 // moduleIds de celui-ci : un greffon posé par l'option worker.plugins relève
 // les modules et le code de ses morceaux, qui passent par les mêmes relevés.
+//
+// Les sorties (§ 11.1, § 14.15) : la police embarquée voyage dans deux
+// morceaux différés, un par graisse, incrustée octet pour octet ; pdf-lib et
+// fontkit, quand la page les importe, tiennent chacun leur morceau, sous le
+// seuil ; aucun de ces morceaux n'est chargé ni préchargé au lancement ; les
+// avis de licence sont copiés dans www/licences/, et chaque paquet des
+// morceaux construits y a le sien, sous la licence de son package.json.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { extname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'vite';
 import { describe, test } from './lanceur.js';
@@ -404,5 +412,229 @@ describe('construction', () => {
     } finally {
       rmSync(sortie, { recursive: true, force: true });
     }
+  });
+});
+
+// Le paquet de node_modules d'où vient un module construit : le dernier
+// segment node_modules de son chemin, et le répertoire qui porte son
+// package.json ; null pour un module du projet.
+function paquetDe(id) {
+  const lu = /^(.*[\\/]node_modules[\\/])((?:@[^\\/]+[\\/])?[^\\/]+)/.exec(id.replace(/\?.*$/, ''));
+  if (lu === null) return null;
+  return { nom: lu[2].split(sep).join('/'), dossier: lu[1] + lu[2] };
+}
+
+// Les sections « paquet : nom version » de TIERS.txt et leur ligne
+// « licence : … », dans l'ordre du texte.
+function sectionsDesTiers(texte) {
+  return [...texte.matchAll(/^paquet : (\S+) (\S+)\nlicence : (.+)$/gm)].map(([, nom, version, licence]) => ({
+    nom,
+    version,
+    licence,
+  }));
+}
+
+// Les paquets que vite.config.js range dans un groupe de morceaux, et le
+// groupe qui les prend : name et test de chaque groupe, dans leur ordre.
+const groupeDe = (groupes, id) =>
+  groupes.find(({ test: motif }) => (typeof motif === 'function' ? motif(id) : new RegExp(motif).test(id)))?.name ?? null;
+
+// Modules témoins des deux groupes de la production PDF, chemins comme
+// Rolldown les nomme, et un module qui n'est d'aucun groupe.
+const TEMOINS_DES_GROUPES = [
+  ['/projet/node_modules/@pdf-lib/fontkit/dist/fontkit.es.js', 'fontkit'],
+  ['/projet/node_modules/pdf-lib/es/api/PDFDocument.js', 'pdf-lib'],
+  ['/projet/node_modules/pako/lib/deflate.js', 'pdf-lib'],
+  ['/projet/node_modules/pdf-lib/node_modules/tslib/tslib.es6.js', 'pdf-lib'],
+  ['/projet/node_modules/@pdf-lib/standard-fonts/es/index.js', 'pdf-lib'],
+  ['/projet/node_modules/@pdf-lib/upng/UPNG.js', 'pdf-lib'],
+  ['/projet/node_modules/svelte/src/index-client.js', null],
+  ['/projet/src/pdf/imposition.js', null],
+];
+const DU_PDF = /[\\/]node_modules[\\/](?:pdf-lib|pako|tslib|@pdf-lib[\\/](?:fontkit|standard-fonts|upng))[\\/]/;
+
+describe('construction : les sorties (§ 11.1, § 14.15)', () => {
+  test('vite.config.js range fontkit dans un morceau, pdf-lib et ce qu’il tire dans un autre, et rien d’autre', async () => {
+    const { default: vite } = await import(pathToFileURL(join(RACINE, 'vite.config.js')).href);
+    const groupes = vite.build?.rolldownOptions?.output?.codeSplitting?.groups ?? [];
+    assert.deepEqual(groupes.map(({ name }) => name), ['fontkit', 'pdf-lib']);
+    assert.deepEqual(
+      TEMOINS_DES_GROUPES.map(([id]) => [id, groupeDe(groupes, id)]),
+      TEMOINS_DES_GROUPES,
+    );
+  });
+
+  test('la police voyage dans deux morceaux différés, octet pour octet ; aucun morceau des sorties n’est chargé ni préchargé au lancement ; les avis de licence sont dans www/licences/, et chaque paquet construit y a le sien', async () => {
+    const sortie = mkdtempSync(join(tmpdir(), 'construction-sorties-'));
+    const travailleur = releveDuTravailleur();
+    try {
+      const resultat = await construireLivraison(sortie, travailleur);
+      const sorties = (Array.isArray(resultat) ? resultat : [resultat]).flatMap((r) => r.output);
+      const morceaux = sorties.filter((s) => s.type === 'chunk');
+
+      // Une graisse, un morceau : chargé par import() différé, il porte la
+      // police en URL data:, dont le décodage est le fichier de src/polices.
+      const sha256 = (octets) => createHash('sha256').update(octets).digest('hex');
+      const morceauxDePolice = [];
+      for (const [module, fichier] of [['regulier.js', 'NotoSans-Regular.ttf'], ['gras.js', 'NotoSans-Bold.ttf']]) {
+        const id = join(RACINE, 'src', 'polices', module);
+        const porteurs = morceaux.filter((m) => m.moduleIds.includes(id));
+        assert.equal(porteurs.length, 1, `${module} dans ${porteurs.length} morceaux`);
+        const [morceau] = porteurs;
+        assert.ok(morceau.isDynamicEntry && !morceau.isEntry, `${morceau.fileName} n'est pas un morceau différé`);
+        const donnees = [...morceau.code.matchAll(/data:font\/ttf;base64,([A-Za-z0-9+/]+=*)/g)].map((m) => m[1]);
+        assert.equal(donnees.length, 1, `${morceau.fileName} : ${donnees.length} polices incrustées`);
+        assert.equal(
+          sha256(Buffer.from(donnees[0], 'base64')),
+          sha256(readFileSync(join(RACINE, 'src', 'polices', fichier))),
+          fichier,
+        );
+        morceauxDePolice.push(morceau.fileName);
+      }
+      assert.notEqual(morceauxDePolice[0], morceauxDePolice[1]);
+
+      // Les morceaux des sorties : la police, et tout morceau qui porte un
+      // module de pdf-lib, de fontkit ou de ce qu'ils tirent. Quand la page
+      // les importe, fontkit et pdf-lib tiennent chacun un morceau à part.
+      const deLaProduction = morceaux.filter((m) => m.moduleIds.some((id) => DU_PDF.test(id)));
+      for (const morceau of deLaProduction) {
+        const nomsDePaquets = new Set(morceau.moduleIds.map((id) => paquetDe(id)?.nom ?? 'projet'));
+        const attendu = nomsDePaquets.has('@pdf-lib/fontkit') ? 'fontkit' : 'pdf-lib';
+        assert.ok(basename(morceau.fileName).startsWith(`${attendu}-`), `${morceau.fileName} : ${[...nomsDePaquets]}`);
+        assert.ok(!(nomsDePaquets.has('@pdf-lib/fontkit') && nomsDePaquets.has('pdf-lib')), morceau.fileName);
+      }
+      const desSorties = new Set([...morceauxDePolice, ...deLaProduction.map((m) => m.fileName)]);
+
+      // Au lancement, la page charge les scripts du HTML et les imports
+      // statiques de son point d'entrée, et précharge les modulepreload.
+      const entrees = morceaux.filter((m) => m.isEntry);
+      assert.ok(entrees.length > 0, 'aucun point d’entrée');
+      const statiques = new Set();
+      const aSuivre = entrees.map((m) => m.fileName);
+      while (aSuivre.length > 0) {
+        const nom = aSuivre.pop();
+        if (statiques.has(nom)) continue;
+        statiques.add(nom);
+        aSuivre.push(...(morceaux.find((m) => m.fileName === nom)?.imports ?? []));
+      }
+      const html = readFileSync(join(sortie, 'index.html'), 'utf8');
+      const prechargements = [...html.matchAll(/<link\b[^>]*\brel=["']?modulepreload\b[^>]*>/gi)].map(
+        ([balise]) => /\shref\s*=\s*["']?\.?\/?([^"'\s>]+)/i.exec(balise)?.[1] ?? '',
+      );
+      const auLancement = [...statiques, ...prechargements, ...scriptsDe(html).map((s) => (s.src ?? '').replace(/^\.\//, ''))];
+      assert.deepEqual(auLancement.filter((nom) => desSorties.has(nom)), []);
+
+      // Les avis : copiés tels quels de public/licences/.
+      for (const avis of ['NotoSans-OFL.txt', 'TIERS.txt']) {
+        assert.equal(
+          readFileSync(join(sortie, 'licences', avis), 'utf8'),
+          readFileSync(join(RACINE, 'public', 'licences', avis), 'utf8'),
+          avis,
+        );
+      }
+
+      // Chaque paquet des morceaux construits, travailleur compris, a sa
+      // section dans TIERS.txt, à la version et sous la licence de son
+      // package.json.
+      const tiers = sectionsDesTiers(readFileSync(join(RACINE, 'public', 'licences', 'TIERS.txt'), 'utf8'));
+      const ids = [...morceaux, ...travailleur.morceaux].flatMap((m) => m.moduleIds);
+      const construits = new Map();
+      for (const id of ids) {
+        const paquet = paquetDe(id);
+        if (paquet !== null) construits.set(paquet.nom, paquet.dossier);
+      }
+      assert.ok(construits.has('svelte'), `svelte absent des ${construits.size} paquets construits`);
+      const manquants = [...construits]
+        .map(([nom, dossier]) => {
+          const { version, license } = JSON.parse(readFileSync(join(dossier, 'package.json'), 'utf8'));
+          return { nom, version, licence: license };
+        })
+        .filter(({ nom, version, licence }) => !tiers.some((s) => s.nom === nom && s.version === version && s.licence === licence))
+        .map(({ nom, version, licence }) => `${nom} ${version} — ${licence}`);
+      assert.deepEqual(manquants, []);
+
+      // Une police émise en fichier est l'une des deux, octet pour octet ; une
+      // feuille qui en nomme une la trouve dans www/.
+      const fichiers = readdirSync(sortie, { recursive: true, withFileTypes: true })
+        .filter((e) => e.isFile())
+        .map((e) => join(e.parentPath, e.name));
+      const sources = new Set(
+        ['NotoSans-Regular.ttf', 'NotoSans-Bold.ttf'].map((f) => sha256(readFileSync(join(RACINE, 'src', 'polices', f)))),
+      );
+      assert.deepEqual(
+        fichiers.filter((f) => extname(f) === '.ttf' && !sources.has(sha256(readFileSync(f)))).map((f) => relative(sortie, f)),
+        [],
+      );
+      for (const feuille of fichiers.filter((f) => extname(f) === '.css')) {
+        for (const adresse of adressesChargees('css', readFileSync(feuille, 'utf8')).filter((a) => /\.ttf$/i.test(a))) {
+          const cible = resolve(dirname(feuille), adresse);
+          assert.ok(fichiers.includes(cible), `${relative(sortie, feuille)} : ${adresse} absent de la construction`);
+        }
+      }
+    } finally {
+      rmSync(sortie, { recursive: true, force: true });
+    }
+  });
+
+  test('chaque section de TIERS.txt nomme un paquet du verrou, à sa version, sous la licence que porte son package.json', () => {
+    const { packages: paquets } = JSON.parse(readFileSync(join(RACINE, 'package-lock.json'), 'utf8'));
+    const tiers = sectionsDesTiers(readFileSync(join(RACINE, 'public', 'licences', 'TIERS.txt'), 'utf8'));
+    assert.ok(tiers.length > 0, 'TIERS.txt ne porte aucune section de paquet');
+    const fautes = tiers
+      .filter(({ nom, version, licence }) => {
+        const entrees = Object.entries(paquets).filter(
+          ([chemin, entree]) => chemin.endsWith(`node_modules/${nom}`) && entree.version === version,
+        );
+        return !entrees.some(([, entree]) => entree.license === licence);
+      })
+      .map(({ nom, version, licence }) => `${nom} ${version} — ${licence}`);
+    assert.deepEqual(fautes, []);
+    // Les paquets de la production PDF ont leur avis, même quand aucune
+    // page ne les importe encore.
+    for (const nom of ['pdf-lib', '@pdf-lib/fontkit', '@pdf-lib/standard-fonts', '@pdf-lib/upng', 'pako', 'tslib']) {
+      assert.ok(tiers.some((s) => s.nom === nom), `${nom} sans avis`);
+    }
+  });
+
+  // La construction minifiée retire les commentaires ordinaires : l'avis
+  // qu'un code incorporé porte en tête n'arrive dans www/ que par TIERS.txt.
+  // Chaque ligne « Copyright … » d'un commentaire de la construction publiée
+  // de fontkit y figure donc telle quelle, et une section « incorporé » qui
+  // nomme Apache porte le texte entier de l'Apache License 2.0. Une ligne
+  // « Copyright » est le texte du titulaire : aucune incise française n'y
+  // entre, elle va dans l'en-tête de la section.
+  test('TIERS.txt porte mot pour mot les avis que les commentaires de fontkit incorporent, et le texte de leur licence', () => {
+    const tiers = readFileSync(join(RACINE, 'public', 'licences', 'TIERS.txt'), 'utf8');
+    const lignes = new Set(tiers.split('\n').map((l) => l.trim()));
+    const dossier = join(RACINE, 'node_modules', '@pdf-lib', 'fontkit');
+    const { module: entree } = JSON.parse(readFileSync(join(dossier, 'package.json'), 'utf8'));
+    const code = readFileSync(join(dossier, entree), 'utf8');
+    const avis = [
+      ...code.matchAll(/^\s*(?:\/\/|\/\*|\*)\s*(Copyright\b.*\S)\s*$/gm),
+    ].map(([, ligne]) => ligne);
+    assert.ok(avis.length > 0, `aucun avis dans ${entree}`);
+    assert.deepEqual([...new Set(avis)].filter((ligne) => !lignes.has(ligne)), []);
+
+    const incorporees = tiers.split(/^=+$/m).filter((section) => /^\s*incorporé à /.test(section));
+    assert.ok(incorporees.length > 0, 'aucune section « incorporé »');
+    const TERMES_APACHE = [
+      'Version 2.0, January 2004',
+      'TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION',
+      ...['Definitions', 'Grant of Copyright License', 'Grant of Patent License', 'Redistribution', 'Submission of Contributions', 'Trademarks', 'Disclaimer of Warranty', 'Limitation of Liability', 'Accepting Warranty or Additional Liability'].map(
+        (titre, i) => `${i + 1}. ${titre}.`,
+      ),
+      'END OF TERMS AND CONDITIONS',
+    ];
+    const sansTexteApache = incorporees
+      .filter((section) => /Apache/.test(section))
+      .filter((section) => TERMES_APACHE.some((terme) => !section.includes(terme)))
+      .map((section) => section.trim().split('\n')[0]);
+    assert.deepEqual(sansTexteApache, []);
+    if (/Licensed under the Apache License/.test(code)) {
+      assert.ok(incorporees.some((section) => /Apache/.test(section)), 'du code Apache-2.0 sans section qui le nomme');
+    }
+
+    const incises = tiers.split('\n').filter((l) => /^Copyright\b/.test(l) && /[àâçéèêëîïôûùüœ]/.test(l));
+    assert.deepEqual(incises, []);
   });
 });

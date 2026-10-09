@@ -5,8 +5,9 @@
   // Racine de l'interface (§ 13.4). Ses propriétés sont les dépendances de
   // l'application — système de fichiers, horloge, exécuteur de génération,
   // presse-papiers, identifiants, langue, provenance, démonstrations, format
-  // courant, version du produit et sa forme Windows, et en option le thème
-  // de départ — que src/main.js construit pour la machine et monterApp pour
+  // courant, version du produit et sa forme Windows, chargement de la police
+  // embarquée, et en option le thème de départ — que src/main.js construit
+  // pour la machine et monterApp pour
   // une épreuve : App ne choisit aucune plateforme, et ne lit la version que
   // dans ses propriétés, la même au bandeau, au titre, à l'accueil et dans
   // le bloc « À propos ».
@@ -70,6 +71,9 @@
     formatCourant,
     produitVersion,
     versionWindows,
+    // () => Promise<{regulier: Uint8Array, gras: Uint8Array}> : les octets
+    // de la police que la production de la planche embarque (§ 11.1).
+    polices,
     themeInitial,
   } = untrack(() => dependances);
 

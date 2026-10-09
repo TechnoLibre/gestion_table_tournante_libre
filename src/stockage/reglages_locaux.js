@@ -22,6 +22,7 @@
 // fin de ligne finale. L'écriture en est différée (§ 8.2, § 8.5) : un
 // écrivain regroupe les demandes d'un délai borné, si bien qu'un zoom
 // continu écrit une fois par délai, jamais à chaque image.
+import { PAPIERS } from '../geometrie/papiers.js';
 import { clesRangees } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 
@@ -31,9 +32,6 @@ export const FICHIER_REGLAGES = 'reglages_locaux.json';
 // Format d'un fichier que ce code crée.
 const FORMAT_REGLAGES = 1;
 
-// Les papiers d'une planche (§ 11.2).
-const PAPIERS = ['A4', 'Lettre'];
-
 const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
 
 /**
@@ -41,7 +39,7 @@ const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
  *
  * @typedef {Object} ReglagesLocaux
  * @property {number} format              entier ≥ 1, gardé tel que lu
- * @property {null|'A4'|'Lettre'} papier
+ * @property {null|import('../geometrie/papiers.js').Papier} papier   une clé de PAPIERS
  * @property {Array<{evenement: string, k: number, tx: number, ty: number}>} cadrages
  *           un par événement, triés par identifiant ; evenement non vide, k
  *           nombre fini > 0, tx et ty nombres finis. Toute autre clé, à tout
@@ -51,6 +49,13 @@ const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
 // Deux chaînes, comparées unité UTF-16 par unité.
 const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const parEvenement = (a, b) => comparerTextes(a.evenement, b.evenement);
+
+// Le domaine du papier : les clés de PAPIERS (src/geometrie/papiers.js),
+// rangées par comparerTextes — le message d'un refus les nomme dans cet
+// ordre, qui ne dépend que de leur ensemble. Une clé héritée
+// d'Object.prototype n'en est pas une.
+const NOMS_PAPIERS = Object.keys(PAPIERS).sort(comparerTextes);
+const estPapier = (papier) => typeof papier === 'string' && Object.hasOwn(PAPIERS, papier);
 
 // Vrai pour un objet qui n'est ni null ni une liste.
 const estObjet = (valeur) => typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
@@ -77,7 +82,7 @@ function fauteDeReglages(reglages) {
   if (!estObjet(reglages)) return '';
   const { format, papier, cadrages } = reglages;
   if (!Number.isSafeInteger(format) || format < 1) return 'format';
-  if (papier !== null && !PAPIERS.includes(papier)) return 'papier';
+  if (papier !== null && !estPapier(papier)) return 'papier';
   if (!Array.isArray(cadrages)) return 'cadrages';
   const vus = new Set();
   for (let rang = 0; rang < cadrages.length; rang += 1) {
@@ -114,7 +119,7 @@ const illisibles = (raison) => ({
  * fichier illisible rend les défauts et l'avertissement REGLAGES_ILLISIBLES
  * {chemin, raison} : raison JSON pour un texte qui ne se lit pas, vide
  * compris ; FORME pour une valeur connue hors de sa règle — un format qui
- * n'est pas un entier ≥ 1, un papier hors de null, A4 et Lettre, un cadrage
+ * n'est pas un entier ≥ 1, un papier hors de null et des clés de PAPIERS, un cadrage
  * fautif ou en double ; le code d'une lecture que le système de fichiers
  * refuse autrement que par ABSENT. Une marque d'ordre d'octets en tête est
  * ignorée. Les réglages lus gardent leurs clés inconnues et leur format ;
@@ -180,13 +185,13 @@ export function avecCadrage(reglages, evenement, { k, tx, ty }) {
  * Les réglages reçus, le papier remplacé ; ceux reçus ne changent pas.
  *
  * @param {ReglagesLocaux} reglages
- * @param {null|'A4'|'Lettre'} papier
+ * @param {null|import('../geometrie/papiers.js').Papier} papier
  * @returns {ReglagesLocaux}
  * @throws {TypeError} un autre papier
  */
 export function avecPapier(reglages, papier) {
-  if (papier !== null && !PAPIERS.includes(papier)) {
-    throw new TypeError(`avecPapier : papier null, A4 ou Lettre attendu, reçu ${JSON.stringify(papier)}`);
+  if (papier !== null && !estPapier(papier)) {
+    throw new TypeError(`avecPapier : papier null, ${NOMS_PAPIERS.join(' ou ')} attendu, reçu ${JSON.stringify(papier)}`);
   }
   return { ...reglages, papier };
 }

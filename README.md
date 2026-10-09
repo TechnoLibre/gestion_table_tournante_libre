@@ -58,3 +58,11 @@ L'exécutable porte la version datée du logiciel dans son nom, selon le gabarit
 
 © 2026 TechnoLibre. GNU Affero General Public License, version 3 ou ultérieure ;
 texte complet dans `LICENSE`.
+
+L'application embarque la police **Noto Sans** (Regular et Bold), sous la
+**SIL Open Font License 1.1**, sans nom de police réservé : elle sert à la
+planche de badges et à l'interface. Son texte est dans
+`public/licences/NotoSans-OFL.txt`, sa provenance dans `src/polices/PROVENANCE`.
+Les avis des paquets que la page incorpore — Svelte, pdf-lib, fontkit et ce
+qu'ils tirent — sont dans `public/licences/TIERS.txt`. Les deux fichiers
+voyagent avec la page, dans `www/licences/`.

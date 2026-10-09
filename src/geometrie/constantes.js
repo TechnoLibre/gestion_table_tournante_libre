@@ -73,13 +73,16 @@ export const CONSTANTES = Object.freeze(
       valeur: 0.3,
       unite: 'px/cm',
       mesure: 'échelle sous laquelle le plan retire les listes de noms',
-      raison: "sous elle, dessiner les listes coûte plus d'une image par déplacement de vue (§ 17, point 6)",
-      configuration: 'banc de mesure, grande démonstration, 33 tables avec listes',
-      proprietaire: 'banc',
+      raison:
+        "sous elle, les listes de la grande démonstration ne se lisent plus : les dessiner n'apporte rien " +
+        "à l'opérateur et charge chaque image (§ 17, point 6). Leur coût ne dépend pas du zoom : le temps " +
+        'par image reste une garde du banc, pas son arbitre',
+      configuration: 'grande démonstration, 33 tables avec listes, machine de référence, cadre de 1 366 × 700 px',
+      proprietaire: 'manuel',
       statut: 'defautDeTravail',
       protocole:
-        'banc de mesure : temps par image pendant un déplacement de vue sur la grande démonstration, 33 tables ' +
-        'avec listes, à plusieurs k ; le plus petit k qui tient le critère de temps par image, écrit dans ce registre',
+        "une personne qui n'a pas écrit le logiciel lit les listes de la grande démonstration sur la machine " +
+        'de référence à k décroissant ; le plus petit k où elle les lit sans erreur, écrit dans ce registre',
     },
     {
       nom: 'LARGEUR_BLOC_NOMS_CM',
@@ -109,6 +112,171 @@ export const CONSTANTES = Object.freeze(
         'mesurée à chaque montage du plan : measureText du gabarit « Ôjgq Æ W » sur la police calculée des ' +
         "listes ; aucune valeur n'est écrite dans ce registre",
     },
+    {
+      nom: 'ZONE_SILENCE_MM',
+      valeur: 8,
+      unite: 'mm',
+      mesure: "distance en deçà de laquelle aucun texte ni aucune marque ne s'approche d'un bord de badge",
+      raison:
+        'la garantie de la coupe (§ 11.3), qui couvre deux bornes différentes selon le bord : sur un bord de ' +
+        "coupe, le décalage de l'imprimante, qui déplace la planche entière, plus l'erreur de main, qui " +
+        "déplace la lame ; sur un bord de feuille, la marge non imprimable de l'imprimante et le biais " +
+        "d'entraînement du papier. La plus grande des deux se relève, et ne se calcule pas",
+      configuration: 'imprimantes visées, chaque papier des sorties, massicot et ciseaux',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        'sur chaque imprimante visée : une planche de filets imprimée, son décalage mesuré à la règle, plus ' +
+        "l'erreur de dix coupes ; puis sa marge non imprimable et le biais d'entraînement sur dix feuilles. " +
+        'La plus grande des deux bornes, arrondie au millimètre supérieur, écrite dans ce registre',
+    },
+    {
+      nom: 'HAUTEUR_CAPITALE_NOM_MAX_MM',
+      valeur: 9,
+      unite: 'mm',
+      mesure: "hauteur de capitale du nom sur le badge, au plus grand corps que la mise en page lui donne",
+      raison: "le nom se lit à un mètre (§ 11.4) ; au-delà, il replie trop tôt sans se lire mieux",
+      configuration: 'badge A6 imprimé, police embarquée, lecture à un mètre',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche ; lecture à un mètre par une personne qui n'a pas écrit le " +
+        'logiciel ; la hauteur retenue, écrite dans ce registre',
+    },
+    {
+      nom: 'HAUTEUR_CAPITALE_NOM_PLANCHER_MM',
+      valeur: 4,
+      unite: 'mm',
+      mesure: 'hauteur de capitale du nom sous laquelle la mise en page ne descend pas : un nom plus long replie',
+      raison: "sous elle, le nom ne se lit plus à un mètre (§ 11.5) ; elle se convertit en corps par la hauteur de capitale de la police embarquée",
+      configuration: 'badge A6 imprimé, police embarquée, lecture à un mètre',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche à hauteurs décroissantes ; lecture à un mètre par une personne qui " +
+        "n'a pas écrit le logiciel ; la plus petite lue sans erreur, écrite dans ce registre",
+    },
+    {
+      nom: 'CORPS_TOURS_PT',
+      valeur: 14,
+      unite: 'pt',
+      mesure: 'corps des lignes de tour du badge',
+      raison: 'la table et le siège de chaque tour se lisent en main, badge au cou (§ 11.4)',
+      configuration: 'badge A6 imprimé, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche ; lecture en main par une personne qui n'a pas écrit le logiciel ; " +
+        'le corps retenu, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_TOURS_PLANCHER_PT',
+      valeur: 10,
+      unite: 'pt',
+      mesure: 'corps sous lequel les lignes de tour ne descendent pas',
+      raison: 'au-delà, des tours trop nombreux se refusent plutôt que de devenir illisibles (§ 11.5)',
+      configuration: 'badge A6 imprimé, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche à corps décroissants ; lecture en main par une personne qui n'a pas " +
+        'écrit le logiciel ; le plus petit corps lu sans erreur, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_APPARTENANCE_PT',
+      valeur: 12,
+      unite: 'pt',
+      mesure: "corps de la ligne d'appartenance du badge",
+      raison: "l'appartenance se lit en main, sous le nom, sans lui disputer la lecture à un mètre (§ 11.4)",
+      configuration: 'badge A6 imprimé, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche ; lecture en main par une personne qui n'a pas écrit le logiciel ; " +
+        'le corps retenu, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_PIED_PT',
+      valeur: 8,
+      unite: 'pt',
+      mesure: "corps du pied du badge : nom et date de l'événement, horodatage du placement",
+      raison: "le pied se lit en main, à l'accueil, et ne prend pas la place du nom (§ 11.4)",
+      configuration: 'badge A6 imprimé, police embarquée, lecture en main',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "impression réelle d'une planche ; lecture en main par une personne qui n'a pas écrit le logiciel ; " +
+        'le corps retenu, écrit dans ce registre',
+    },
+    {
+      nom: 'CORPS_MIN_IMPRESSION_MM',
+      valeur: 2.5,
+      unite: 'mm',
+      mesure: 'hauteur de caractère du plan imprimé en deçà de laquelle le plan se découpe en pages',
+      raison:
+        "un plan réduit sur une page n'est utile que s'il se lit. Un banc de navigateur ne mesure pas une " +
+        'imprimante, pas plus que la zone de silence (§ 11.3) : la mesure relève du niveau manuel',
+      configuration: 'imprimante visée, chaque papier des sorties, lecture à bout de bras',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "page d'essai à corps décroissants imprimée sur l'imprimante visée, lue à bout de bras ; le plus " +
+        'petit corps lu sans erreur, écrit dans ce registre',
+    },
+    {
+      nom: 'MARGE_PAGE_MM',
+      valeur: 10,
+      unite: 'mm',
+      mesure: "marge de chaque bord d'une page imprimée par l'aperçu",
+      raison: "le contenu d'une page tient hors de la marge non imprimable de toute imprimante visée (§ 11.7)",
+      configuration: 'imprimantes visées, chaque papier des sorties',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "marge non imprimable mesurée sur chaque imprimante visée (une page de filets à 1 mm d'écart, lue " +
+        'à la règle) ; la plus grande, écrite dans ce registre',
+    },
+    {
+      nom: 'HAUTEUR_BANDE_IMPRESSION',
+      valeur: null,
+      unite: 'mm',
+      mesure: 'hauteur de ce que porte une feuille imprimée hors de sa zone de contenu : pied, mentions, barre, cartouche',
+      raison: "la hauteur utile d'une page en dépend ; elle suit la police et le rendu, et se lit donc sur la page (§ 14.1)",
+      configuration: "rendu de l'aperçu, relevé à chaque ouverture",
+      proprietaire: 'execution',
+      statut: 'mesuree',
+      protocole:
+        "mesurée à l'ouverture de l'aperçu : tout ce qu'une feuille porte hors de [data-contenu] ; aucune " +
+        "valeur n'est écrite dans ce registre",
+    },
+    {
+      nom: 'TOLERANCE_CHAINE_TEMOIN',
+      valeur: 0.01,
+      unite: 'rapport',
+      mesure: 'écart relatif admis entre la longueur rendue de la chaîne témoin et celle que donnent les avances de la police',
+      raison:
+        "la mesure du § 19.4 trahit une police de repli ; trop serrée, elle échoue sur la gigue du rendu, trop " +
+        'large, elle laisse passer le repli',
+      configuration: 'banc de mesure, Chromium du projet, cadre de 1 366 × 700 px, facteur 1',
+      proprietaire: 'banc',
+      statut: 'defautDeTravail',
+      protocole:
+        "banc de mesure : le quart de l'écart relatif entre la police embarquée et une famille de repli " +
+        'forcée, et au moins trois fois la gigue de dix mesures ; écrit dans ce registre',
+    },
+    {
+      nom: 'RALENTISSEMENT_PLEINE_CHARGE',
+      valeur: 2,
+      unite: '×',
+      mesure: "ralentissement d'une génération quand tous les processeurs logiques travaillent, t(L) / t(1)",
+      raison: "l'estimation de durée d'une génération parallèle compte un cœur chargé plus lent qu'un cœur seul",
+      configuration: "banc de mesure, exécuteur de production dans Chromium, L processeurs logiques",
+      proprietaire: 'banc',
+      statut: 'defautDeTravail',
+      protocole:
+        "banc de mesure : durée d'une même génération sur un travailleur, puis sur L travailleurs ; le " +
+        'rapport ρ des médianes, écrit dans ce registre',
+    },
   ].map((entree) => Object.freeze(entree)),
 );
 
@@ -135,7 +303,9 @@ export function constante(nom) {
  * type Constante. Un nom vide, ou déjà porté par une entrée précédente, est
  * une faute ; la valeur est un nombre fini, et null pour une constante
  * relevée à l'exécution seulement ; les champs textuels ne sont pas vides ;
- * propriétaire et statut prennent une valeur de leur liste.
+ * propriétaire et statut prennent une valeur de leur liste, et une
+ * constante relevée à l'exécution est mesurée : sa valeur vient du rendu à
+ * chaque relevé, jamais d'un défaut de travail.
  * @param {ReadonlyArray<Constante>} liste
  * @returns {Array<{nom: string, champ: string}>}
  */
@@ -153,7 +323,7 @@ export function verifierRegistre(liste) {
       if (!estTexte(entree[champ])) faute(champ);
     }
     if (!PROPRIETAIRES.has(entree.proprietaire)) faute('proprietaire');
-    if (!STATUTS.has(entree.statut)) faute('statut');
+    if (!STATUTS.has(entree.statut) || (execution && entree.statut !== 'mesuree')) faute('statut');
     if (!estTexte(entree.protocole)) faute('protocole');
   }
   return fautes;

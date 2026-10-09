@@ -17,12 +17,16 @@
 // de fichier l'avertit à chaque série.
 //
 // Les démonstrations sont celles que src/main.js passe à App,
-// demonstrationsLivrees() : une seule composition, celle de src/demo.
+// demonstrationsLivrees() : une seule composition, celle de src/demo. La
+// police est chargée comme src/main.js la charge, par chargerPolices : sous
+// le serveur de Vite des épreuves, « ?inline » rend les mêmes octets que
+// dans la construction.
 import { mount, unmount } from 'svelte';
 import { creerExecuteurDirect } from '../../src/application/generation.js';
 import { creerHorlogePilotee } from '../../src/application/horloge.js';
 import { demonstrationsLivrees } from '../../src/demo/livrees.js';
 import App from '../../src/interface/App.svelte';
+import { chargerPolices } from '../../src/polices/chargement.js';
 import { FORMAT } from '../../src/stockage/document.js';
 import { VERSION } from '../../src/version.genere.js';
 import { creerFichiersSimules } from '../fichiers_simules.js';
@@ -102,6 +106,8 @@ export function tracer(fs) {
  * @param {string} [options.provenance]
  * @param {number} [options.formatCourant]
  * @param {Array<{cle: string, nom: string, texte: string}>} [options.demonstrations]
+ * @param {() => Promise<{regulier: Uint8Array, gras: Uint8Array}>} [options.polices]
+ *        sinon chargerPolices, celui de src/main.js
  * @returns {Promise<Object>} { app, racine, fs, disque, trace, horloge,
  *   presse, seance, facade, ui, erreurs(), demonter() } — seance est un
  *   accesseur de app.seance() ; presse.copies, les textes copiés ;
@@ -119,6 +125,7 @@ export async function monterApp({
   provenance = 'test',
   formatCourant,
   demonstrations,
+  polices = chargerPolices,
 } = {}) {
   await installerCollecteur();
   montages += 1;
@@ -166,6 +173,7 @@ export async function monterApp({
       formatCourant: formatCourant ?? FORMAT,
       produitVersion: VERSION.affichee,
       versionWindows: VERSION.windows,
+      polices,
       ...(theme === null ? {} : { themeInitial: theme }),
     },
   });

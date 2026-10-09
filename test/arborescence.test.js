@@ -2,8 +2,9 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Gardes de l'arborescence, lues dans le texte des sources : le moteur, la
-// géométrie du plan, le générateur de démonstrations, le stockage et
-// l'analyseur CSV n'appellent aucune source non reproductible (§ 14.7), et ne
+// géométrie du plan, le générateur de démonstrations, le stockage,
+// l'analyseur CSV et la production PDF n'appellent aucune source non
+// reproductible (§ 14.7), et ne
 // parcourent les clés d'un objet que par exception nommée (§ 15.5, point 4) ;
 // le graphe d'imports de chaque couche, l'interface et ses composants compris,
 // ne rejoint que ce que le § 13.4 lui permet, et ni le moteur, ni la
@@ -150,13 +151,22 @@ const PARCOURS_DE_CLES_ADMIS = [
       "les clés propres d'un objet, rangées sur-le-champ par comparerTextes, un ordre total des chaînes ; " +
       'le résultat ne dépend que de leur ensemble',
   },
+  {
+    fichier: join('src', 'stockage', 'reglages_locaux.js'),
+    motif: /Object\s*\.\s*keys\s*\(\s*PAPIERS\s*\)\s*\.\s*sort\s*\(\s*comparerTextes\s*\)/,
+    raison:
+      'le domaine du papier, tiré de src/geometrie/papiers.js, sa seule définition : les clés de PAPIERS, ' +
+      "rangées sur-le-champ par comparerTextes ; le message d'un refus ne dépend que de leur ensemble",
+  },
 ];
 
 // Arbres dont les modules ne lisent aucune source non reproductible (§ 14.7) :
 // le moteur, la géométrie du plan et le générateur de démonstrations, puis le
 // stockage et l'analyseur CSV, qui reçoivent l'horloge et l'aléa de
-// l'application, en paramètre.
-const ARBRES_DETERMINISTES = ['src/moteur', 'src/geometrie', 'src/demo', 'src/stockage', 'src/csv'];
+// l'application, en paramètre, et la production PDF, dont la date du
+// document entre en paramètre : deux productions du même modèle rendent les
+// mêmes octets.
+const ARBRES_DETERMINISTES = ['src/moteur', 'src/geometrie', 'src/demo', 'src/stockage', 'src/csv', 'src/pdf'];
 
 // Vrai quand le motif se lit dans le texte à partir de l'indice donné, et non
 // plus loin : une copie collante du motif, ses drapeaux g et y retirés.
@@ -216,6 +226,9 @@ const MODULES_VIDES = Object.freeze({
   'src/demo/a.js': '',
   'src/stockage/a.js': '',
   'src/csv/a.js': '',
+  'src/pdf/a.js': '',
+  'src/impression/a.js': '',
+  'src/polices/a.js': '',
 });
 
 // Les fichiers donnés, sans ceux de l'arbre nommé.
@@ -227,7 +240,7 @@ const sansArbre = (fichiers, arbre) =>
 const releverSansException = (racine) => releverDeterminisme(racine, []);
 
 describe('arborescence : déterminisme (§ 14.7)', () => {
-  test("ni src/moteur, ni src/geometrie, ni src/demo, ni src/stockage, ni src/csv ne lisent une source non reproductible, ni ne parcourent les clés d'un objet hors des exceptions nommées", () => {
+  test("ni src/moteur, ni src/geometrie, ni src/demo, ni src/stockage, ni src/csv, ni src/pdf ne lisent une source non reproductible, ni ne parcourent les clés d'un objet hors des exceptions nommées", () => {
     assert.deepEqual(releverDeterminisme(RACINE), []);
   });
 
@@ -332,7 +345,7 @@ describe('arborescence : déterminisme (§ 14.7)', () => {
       'src/demo/tirage.cjs:1 Date.now',
       'src/demo/tirage.mjs:1 Math.random',
     ]);
-    for (const arbre of ['src/moteur', 'src/geometrie', 'src/demo', 'src/stockage', 'src/csv']) {
+    for (const arbre of ARBRES_DETERMINISTES) {
       const sansModule = { ...sansArbre(MODULES_VIDES, arbre), [`${arbre}/a.test.js`]: '' };
       assert.throws(
         () => avecArbre(sansModule, releverSansException),
@@ -357,6 +370,24 @@ describe('arborescence : déterminisme (§ 14.7)', () => {
       'src/geometrie/sous/texte.js:1 for…in',
       'src/geometrie/vue.js:1 Math.random',
       'src/geometrie/vue.js:2 Object.keys',
+    ]);
+  });
+
+  test('src/pdf se relève comme le moteur : une date de document lue ou un parcours de clés y tombent, à toute profondeur, hors épreuves', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/pdf/planche.js': [
+        'export const date = () => new Date();',
+        'export const ordre = (o) => Object.entries(o);',
+        'export const mesure = () => Math.ceil(2.5) + Date.UTC(2000, 0, 1);',
+      ].join('\n'),
+      'src/pdf/sous/filigrane.js': 'export const angle = () => Math.random() * 90;\n',
+      'src/pdf/planche.test.js': 'export const t = Date.now() + Object.keys(o).length;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverSansException), [
+      'src/pdf/planche.js:1 new Date',
+      'src/pdf/planche.js:2 Object.entries',
+      'src/pdf/sous/filigrane.js:1 Math.random',
     ]);
   });
 
@@ -527,58 +558,91 @@ const PAQUETS_DE_PLATEFORME = /^(?:svelte|electron|@capacitor\/.+)$/;
 // lisent pas la version engendrée (§ 14.7, § 18.5), à aucune profondeur :
 // une démonstration ou un placement qui en dépendrait changerait à chaque
 // livraison.
+//
+// Les trois couches des sorties n'importent, hors d'elles, que ce que leur
+// liste seulement nomme : tout autre fichier du projet est refusé, sans être
+// parcouru, et les fichiers nommés sont des frontières que leur propre
+// garde tient. La production PDF (src/pdf) n'importe que pdf-lib, fontkit,
+// le registre des constantes et les papiers, et ne touche pas le navigateur :
+// elle tourne sous node, dans le cycle court (§ 11.1). L'impression
+// (src/impression), frontière de plateforme, n'importe que les papiers ; la
+// police (src/polices) n'importe rien. Ni l'une ni l'autre ne s'importe
+// depuis une autre couche : src/main.js seul les câble (IMPORTATEURS_RESERVES).
 const VERSION_ENGENDREE = 'src/version.genere.js';
+const SORTIES = ['src/pdf', 'src/impression', 'src/polices'];
 const COUCHES = [
   {
     arbres: ['src/moteur'],
     requis: ['src/moteur'],
-    exterieures: ['src/interface', 'src/application', 'src/stockage', VERSION_ENGENDREE],
+    exterieures: ['src/interface', 'src/application', 'src/stockage', ...SORTIES, VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/geometrie'],
     requis: ['src/geometrie'],
-    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/moteur', 'src/csv', 'src/demo', VERSION_ENGENDREE],
+    exterieures: ['src/interface', 'src/application', 'src/stockage', 'src/moteur', 'src/csv', 'src/demo', ...SORTIES, VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/demo'],
     requis: ['src/demo'],
-    exterieures: ['src/interface', 'src/application', VERSION_ENGENDREE],
+    exterieures: ['src/interface', 'src/application', ...SORTIES, VERSION_ENGENDREE],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/stockage'],
     requis: ['src/stockage'],
-    exterieures: ['src/interface', 'src/application', 'src/csv'],
+    exterieures: ['src/interface', 'src/application', 'src/csv', ...SORTIES],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: ['src/stockage/fichiers_web.js', 'src/stockage/fichiers_electron.js'],
   },
   {
     arbres: ['src/csv'],
     requis: ['src/csv'],
-    exterieures: ['src/interface', 'src/application'],
+    exterieures: ['src/interface', 'src/application', ...SORTIES],
     paquets: PAQUETS_DE_PLATEFORME,
     navigateur: [],
   },
   {
     arbres: ['src/application'],
     requis: [],
-    exterieures: ['src/interface'],
+    exterieures: ['src/interface', 'src/impression', 'src/polices'],
+    frontieres: ['src/pdf'],
     paquets: /^svelte$/,
     navigateur: null,
   },
   {
     arbres: ['src/interface'],
     requis: ['src/interface'],
-    exterieures: ['src/stockage', 'src/csv', 'src/moteur', 'src/demo', 'test'],
+    exterieures: ['src/stockage', 'src/csv', 'src/moteur', 'src/demo', 'test', ...SORTIES],
     frontieres: ['src/application', 'src/geometrie'],
     paquets: /^(?!svelte$)/,
     navigateur: null,
     composants: true,
+  },
+  {
+    arbres: ['src/pdf'],
+    requis: ['src/pdf'],
+    seulement: ['src/geometrie/constantes.js', 'src/geometrie/papiers.js'],
+    paquets: /^(?!(?:pdf-lib|@pdf-lib\/fontkit)$)/,
+    navigateur: [],
+  },
+  {
+    arbres: ['src/impression'],
+    requis: ['src/impression'],
+    seulement: ['src/geometrie/papiers.js'],
+    paquets: /^/,
+    navigateur: null,
+  },
+  {
+    arbres: ['src/polices'],
+    requis: ['src/polices'],
+    seulement: [],
+    paquets: /^/,
+    navigateur: null,
   },
 ];
 
@@ -726,6 +790,8 @@ const composantsDe = (dossier) => fichiersDe(dossier).filter((fichier) => extnam
 const texteDesChargements = (fichier, texte) => (extname(fichier) === '.svelte' ? scriptsDe(texte) : texte);
 
 // Relevé des refus de la frontière d'une couche dans son graphe d'imports.
+// Une couche à liste seulement refuse tout fichier du projet hors de ses
+// arbres et de cette liste, et ne parcourt pas les fichiers qu'elle nomme.
 // Le parcours part des modules de ses arbres, à toute profondeur, épreuves
 // exclues, et de leurs composants Svelte pour une couche à composants. Il
 // suit chaque chemin relatif, ou absolu depuis la racine, vers un module
@@ -742,7 +808,10 @@ const texteDesChargements = (fichier, texte) => (extname(fichier) === '.svelte' 
 // refus », où l'accès est la suite des fichiers qui mène d'un fichier de
 // départ à celui qui refuse. Lève quand un arbre requis ne fournit aucun
 // module, ni composant pour une couche à composants.
-function releverCouche(racine, { arbres, requis, exterieures, frontieres = [], paquets, navigateur, composants = false }) {
+function releverCouche(
+  racine,
+  { arbres, requis, exterieures = [], frontieres = [], seulement = null, paquets, navigateur, composants = false },
+) {
   const departs = (arbre) => [
     ...modulesDe(join(racine, arbre)),
     ...(composants ? composantsDe(join(racine, arbre)).filter((f) => !EPREUVE.test(f)) : []),
@@ -754,8 +823,13 @@ function releverCouche(racine, { arbres, requis, exterieures, frontieres = [], p
     const chemins = arbresDonnes.map((arbre) => join(racine, arbre));
     return (chemin) => chemins.some((c) => chemin === c || chemin.startsWith(c + sep));
   };
-  const exterieur = dans(exterieures);
-  const frontiere = dans(frontieres);
+  const propre = dans(arbres);
+  const nomme = dans(seulement ?? []);
+  const exterieure = dans(exterieures);
+  const frontiereAdmise = dans(frontieres);
+  const horsListe = (cible) => seulement !== null && !propre(cible) && !nomme(cible);
+  const exterieur = (cible) => exterieure(cible) || horsListe(cible);
+  const frontiere = (cible) => frontiereAdmise(cible) || (seulement !== null && nomme(cible));
   const parcourable = (chemin) => EXTENSIONS_MODULE.has(extname(chemin)) || (composants && extname(chemin) === '.svelte');
   const admis = new Set((navigateur ?? []).map((fichier) => join(racine, fichier)));
   const aParcourir = arbres.flatMap(departs);
@@ -1411,6 +1485,455 @@ describe('arborescence : dépendances déclarées', () => {
   test('un périmètre sans spécificateur nu fait échouer la garde', () => {
     const fichiers = { 'package.json': '{}', 'src/a.js': "import './b.js';\n" };
     assert.throws(() => avecArbre(fichiers, releverDependances), /aucun spécificateur nu/);
+  });
+});
+
+// Les paquets de développement, liste fermée : ceux de l'outillage, puis
+// ceux des sorties — pdf-lib et fontkit, que la page incorpore pour la
+// planche, pdfjs-dist, outil d'épreuve qui relit le PDF (§ 11.1, § 17,
+// point 2). Le projet n'a aucune dépendance d'exécution : Vite incorpore ce
+// que la page importe. Les paquets des sorties sont épinglés à une version
+// exacte, et ni eux ni ce qu'ils tirent ne portent de script d'installation.
+const DEPENDANCES_DE_DEVELOPPEMENT = [
+  '@capacitor/cli',
+  '@capacitor/core',
+  '@pdf-lib/fontkit',
+  '@sveltejs/vite-plugin-svelte',
+  '@vitest/browser-playwright',
+  '@vitest/coverage-v8',
+  'electron',
+  'electron-builder',
+  'fast-check',
+  'pdf-lib',
+  'pdfjs-dist',
+  'playwright',
+  'svelte',
+  'vite',
+  'vitest',
+];
+const PAQUETS_EPINGLES = ['pdf-lib', '@pdf-lib/fontkit', 'pdfjs-dist'];
+const SCRIPTS_ADMIS = { 'electron-winstaller': false };
+const VERSION_EXACTE = /^\d+\.\d+\.\d+$/;
+
+// Le chemin, dans les paquets du verrou, du paquet nom que tire l'entrée
+// située en depuis : node_modules imbriqués d'abord, en remontant, comme
+// Node le résout ; null quand le verrou ne le porte pas.
+function cheminDansLeVerrou(paquets, depuis, nom) {
+  for (let base = depuis; ; ) {
+    const chemin = `${base === '' ? '' : `${base}/`}node_modules/${nom}`;
+    if (Object.hasOwn(paquets, chemin)) return chemin;
+    if (base === '') return null;
+    const coupe = base.lastIndexOf('/node_modules/');
+    base = coupe === -1 ? '' : base.slice(0, coupe);
+  }
+}
+
+// Relevé des paquets déclarés : chaque paquet de devDependencies hors de la
+// liste fermée, « devDependencies nom : hors de la liste » ; chaque paquet
+// de la liste qui manque, « devDependencies nom : absent » ; chaque paquet de
+// dependencies ; chaque paquet épinglé dont la version n'est pas exacte ;
+// allowScripts qui diffère de SCRIPTS_ADMIS ; puis chaque entrée du verrou
+// que tirent les paquets épinglés, à toute profondeur, dépendances
+// facultatives comprises, et qui porte un script d'installation.
+function releverPaquetsDeclares(racine, liste = DEPENDANCES_DE_DEVELOPPEMENT) {
+  const paquet = JSON.parse(readFileSync(join(racine, 'package.json'), 'utf8'));
+  const declares = Object.keys(paquet.devDependencies ?? {}).sort();
+  const refus = [
+    ...declares.filter((nom) => !liste.includes(nom)).map((nom) => `devDependencies ${nom} : hors de la liste`),
+    ...liste.filter((nom) => !declares.includes(nom)).map((nom) => `devDependencies ${nom} : absent`),
+    ...Object.keys(paquet.dependencies ?? {}).sort().map((nom) => `dependencies ${nom}`),
+    ...PAQUETS_EPINGLES.filter((nom) => nom in (paquet.devDependencies ?? {}))
+      .filter((nom) => !VERSION_EXACTE.test(paquet.devDependencies[nom]))
+      .map((nom) => `devDependencies ${nom} : ${paquet.devDependencies[nom]} n'est pas une version exacte`),
+  ];
+  if (JSON.stringify(paquet.allowScripts ?? {}) !== JSON.stringify(SCRIPTS_ADMIS)) {
+    refus.push(`allowScripts : ${JSON.stringify(paquet.allowScripts ?? {})}`);
+  }
+  const { packages: paquets = {} } = JSON.parse(readFileSync(join(racine, 'package-lock.json'), 'utf8'));
+  const vus = new Set();
+  const aParcourir = PAQUETS_EPINGLES.map((nom) => cheminDansLeVerrou(paquets, '', nom)).filter((c) => c !== null);
+  for (let i = 0; i < aParcourir.length; i += 1) {
+    const chemin = aParcourir[i];
+    if (vus.has(chemin)) continue;
+    vus.add(chemin);
+    const entree = paquets[chemin];
+    if (entree.hasInstallScript) refus.push(`${chemin} : script d'installation`);
+    for (const nom of Object.keys({ ...entree.dependencies, ...entree.optionalDependencies }).sort()) {
+      const cible = cheminDansLeVerrou(paquets, chemin, nom);
+      if (cible !== null) aParcourir.push(cible);
+    }
+  }
+  assert.ok(vus.size > 0, 'aucun paquet épinglé dans le verrou');
+  return refus;
+}
+
+// Les paquets réservés à une place : chacun ne se charge que sous les arbres
+// admis, relatifs à la racine. pdf-lib et fontkit dessinent la planche dans
+// src/pdf, seule couche de la page qui les importe ; les épreuves les
+// relisent. pdfjs-dist, lecteur qui relit le PDF comme un lecteur réel, ne
+// sert qu'aux épreuves et aux commandes de Vitest, sous test/ : un module
+// livré qui l'importerait l'emporterait dans la page.
+const PAQUETS_RESERVES = [
+  { paquets: ['pdf-lib', '@pdf-lib/fontkit'], admis: ['src/pdf', 'test'] },
+  { paquets: ['pdfjs-dist'], admis: ['test'] },
+];
+
+// Relevé « fichier:ligne spécificateur » des chargements d'un paquet
+// réservé hors de ses arbres admis, dans le périmètre des dépendances
+// (sourcesDuProjet), par fichier puis par ligne. Un chargement écrit dans
+// une chaîne, donnée d'épreuve, n'en est pas un. Lève quand le périmètre ne
+// porte aucun fichier.
+function releverPaquetsReserves(racine, reserves = PAQUETS_RESERVES) {
+  const fichiers = sourcesDuProjet(racine);
+  assert.ok(fichiers.length > 0, 'aucun fichier source');
+  return fichiers.flatMap((fichier) => {
+    const nom = enBarres(racine, fichier);
+    const texte = readFileSync(fichier, 'utf8');
+    const code = codeSansChaines(fichier, texte);
+    return chargementsLitteraux(texte)
+      .filter(({ indice, specificateur }) => estDuCode(code, indice) && estNu(specificateur))
+      .filter(({ specificateur }) => {
+        const reserve = reserves.find(({ paquets }) => paquets.includes(nomDePaquet(specificateur)));
+        return reserve !== undefined && !reserve.admis.some((arbre) => nom.startsWith(`${arbre}/`));
+      })
+      .map(({ indice, specificateur }) => `${nom}:${ligneDe(texte, indice)} ${specificateur}`);
+  });
+}
+
+// Les couches que seuls des importateurs nommés chargent, hors de leurs
+// propres fichiers : la police, que src/main.js et le montage des épreuves
+// passent à App ; l'impression, frontière de plateforme que src/main.js
+// choisit (§ 13.4).
+const IMPORTATEURS_RESERVES = [
+  { arbre: 'src/polices', importateurs: ['src/main.js', 'test/navigateur/montage.js'] },
+  { arbre: 'src/impression', importateurs: ['src/main.js'] },
+];
+
+// Relevé « fichier:ligne spécificateur » des chargements d'un fichier d'un
+// arbre réservé par un fichier qui n'est ni de cet arbre ni l'un de ses
+// importateurs, dans le périmètre des dépendances ; le suffixe de Vite se
+// retire, et un type que la JSDoc importe compte. Lève quand le périmètre ne
+// porte aucun fichier.
+function releverImportateursReserves(racine, reserves = IMPORTATEURS_RESERVES) {
+  const fichiers = sourcesDuProjet(racine);
+  assert.ok(fichiers.length > 0, 'aucun fichier source');
+  return fichiers.flatMap((fichier) => {
+    const nom = enBarres(racine, fichier);
+    const texte = readFileSync(fichier, 'utf8');
+    const code = codeSansChaines(fichier, texte);
+    return chargementsLitteraux(texte)
+      .filter(({ indice }) => estDuCode(code, indice))
+      .filter(({ specificateur }) => {
+        const cible = cibleDe(racine, fichier, specificateur.replace(/\?.*$/, ''));
+        if (cible === null) return false;
+        const vise = enBarres(racine, cible);
+        return reserves.some(
+          ({ arbre, importateurs }) =>
+            vise.startsWith(`${arbre}/`) && !nom.startsWith(`${arbre}/`) && !importateurs.includes(nom),
+        );
+      })
+      .map(({ indice, specificateur }) => `${nom}:${ligneDe(texte, indice)} ${specificateur}`);
+  });
+}
+
+// Le nom d'un papier, que seul src/geometrie/papiers.js définit (§ 13.2) :
+// le stockage, l'application, l'imposition et l'impression tirent leur
+// domaine de PAPIERS. Le relevé lit « Lettre », mot entier, dans le code
+// des modules et des composants de src/ — chaînes, gabarits, noms et
+// balisage compris, commentaires exclus —, hors de papiers.js, des tables
+// de libellés, qui portent le texte affiché, et des épreuves.
+const PORTEURS_DES_NOMS_DE_PAPIER = ['src/geometrie/papiers.js'];
+const NOM_DE_PAPIER = /\bLettre\b/g;
+
+// Le texte d'un code JavaScript où chaque commentaire devient blanc, fins de
+// ligne gardées, chaînes intactes : les commentaires se repèrent dans le
+// texte sans chaînes (sansChaines), où une chaîne n'en ouvre aucun.
+function sansCommentaires(texte) {
+  const blancs = texte.split('');
+  for (const { 0: commentaire, index } of sansChaines(texte).matchAll(/\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/g)) {
+    for (let i = index; i < index + commentaire.length; i += 1) if (blancs[i] !== '\n') blancs[i] = ' ';
+  }
+  return blancs.join('');
+}
+
+// Le texte d'un module sans ses commentaires ; d'un composant Svelte, sans
+// ses commentaires HTML ni ceux de ses blocs de script.
+function texteSansCommentaires(fichier, texte) {
+  if (extname(fichier) !== '.svelte') return sansCommentaires(texte);
+  let sortie = texte.replace(/<!--[\s\S]*?(?:-->|$)/g, (commentaire) => commentaire.replace(/[^\n]/g, ' '));
+  for (const { debut, fin } of blocsScript(sortie)) {
+    sortie = sortie.slice(0, debut) + sansCommentaires(sortie.slice(debut, fin)) + sortie.slice(fin);
+  }
+  return sortie;
+}
+
+// Relevé « fichier:ligne Lettre » des noms de papier hors de leurs porteurs,
+// par fichier puis par ligne ; puis « porteur sans objet : fichier » pour un
+// porteur qui ne nomme plus aucun papier. Lève quand src/ ne porte aucun
+// module.
+function releverNomsDePapier(racine, porteurs = PORTEURS_DES_NOMS_DE_PAPIER) {
+  const fichiers = fichiersDe(join(racine, 'src'))
+    .filter((f) => (EXTENSIONS_MODULE.has(extname(f)) || extname(f) === '.svelte') && !EPREUVE.test(f))
+    .sort();
+  assert.ok(fichiers.length > 0, 'src ne fournit aucun module');
+  const servis = new Set();
+  const releve = fichiers.flatMap((fichier) => {
+    const nom = enBarres(racine, fichier);
+    if (TABLE_DE_LIBELLES.test(nom)) return [];
+    const texte = readFileSync(fichier, 'utf8');
+    const trouves = [...texteSansCommentaires(fichier, texte).matchAll(NOM_DE_PAPIER)];
+    if (porteurs.includes(nom)) {
+      if (trouves.length > 0) servis.add(nom);
+      return [];
+    }
+    return trouves.map(({ index }) => `${nom}:${ligneDe(texte, index)} Lettre`);
+  });
+  const sansObjet = porteurs.filter((p) => !servis.has(p)).map((p) => `porteur sans objet : ${p}`);
+  return [...releve, ...sansObjet];
+}
+
+describe('arborescence : les sorties — PDF, impression, police (§ 11.1, § 13.4, § 17 point 2)', () => {
+  test('les paquets de développement sont ceux de la liste fermée, les trois paquets des sorties épinglés exacts, sans script d’installation ; aucune dépendance d’exécution', () => {
+    assert.deepEqual(releverPaquetsDeclares(RACINE), []);
+  });
+
+  test('la garde des paquets déclarés relève un paquet de plus, un paquet manquant, une version non exacte, une dépendance d’exécution, allowScripts changé et un script d’installation tiré par un paquet épinglé', () => {
+    const verrou = {
+      packages: {
+        '': {},
+        'node_modules/pdf-lib': { dependencies: { pako: '^1.0.11', tslib: '^1.11.1' } },
+        'node_modules/pdf-lib/node_modules/tslib': { hasInstallScript: true },
+        'node_modules/tslib': {},
+        'node_modules/pako': {},
+        'node_modules/pdfjs-dist': { optionalDependencies: { canevas: '1.0.0' } },
+        'node_modules/canevas': { hasInstallScript: true },
+        'node_modules/sans-rapport': { hasInstallScript: true },
+      },
+    };
+    const fichiers = {
+      'package.json': JSON.stringify({
+        dependencies: { 'pdf-lib': '1.17.1' },
+        devDependencies: { vite: '^8.3.2', 'pdf-lib': '^1.17.1', 'pdfjs-dist': '6.4.299', 'outil-de-trop': '1.0.0' },
+        allowScripts: { 'electron-winstaller': false, canevas: true },
+      }),
+      'package-lock.json': JSON.stringify(verrou),
+    };
+    assert.deepEqual(
+      avecArbre(fichiers, (racine) => releverPaquetsDeclares(racine, ['vite', 'pdf-lib', 'pdfjs-dist', 'svelte'])),
+      [
+        'devDependencies outil-de-trop : hors de la liste',
+        'devDependencies svelte : absent',
+        'dependencies pdf-lib',
+        "devDependencies pdf-lib : ^1.17.1 n'est pas une version exacte",
+        'allowScripts : {"electron-winstaller":false,"canevas":true}',
+        "node_modules/pdf-lib/node_modules/tslib : script d'installation",
+        "node_modules/canevas : script d'installation",
+      ],
+    );
+  });
+
+  test('pdf-lib et fontkit ne se chargent que sous src/pdf et test/, pdfjs-dist que sous test/', () => {
+    assert.deepEqual(releverPaquetsReserves(RACINE), []);
+  });
+
+  test('la garde des paquets réservés relève src/interface ou src/application qui importent pdf-lib, et un module livré qui importe pdfjs-dist ; une chaîne n’est pas un chargement', () => {
+    const fichiers = {
+      'src/interface/Badges.svelte': "<script>\n  import { PDFDocument } from 'pdf-lib';\n</script>\n",
+      'src/application/planche.js': [
+        "import fontkit from '@pdf-lib/fontkit';",
+        "const lecteur = await import('pdfjs-dist/legacy/build/pdf.mjs');",
+        "const exemple = \"import 'pdf-lib'\";",
+      ].join('\n'),
+      'src/pdf/planche.js': "import { PDFDocument } from 'pdf-lib';\nimport fontkit from '@pdf-lib/fontkit';\n",
+      'src/pdf/planche.test.js': "import { getDocument } from 'pdfjs-dist';\n",
+      'scripts/documentation/tramer.js': "import { getDocument } from 'pdfjs-dist';\n",
+      'electron/impression.js': "const { PDFDocument } = require('pdf-lib');\n",
+      'test/pdf.js': "import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';\nimport { PDFDocument } from 'pdf-lib';\n",
+      'vite.config.js': "import { defineConfig } from 'vite';\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverPaquetsReserves), [
+      'electron/impression.js:1 pdf-lib',
+      'scripts/documentation/tramer.js:1 pdfjs-dist',
+      'src/application/planche.js:1 @pdf-lib/fontkit',
+      'src/application/planche.js:2 pdfjs-dist/legacy/build/pdf.mjs',
+      'src/interface/Badges.svelte:2 pdf-lib',
+      'src/pdf/planche.test.js:1 pdfjs-dist',
+    ]);
+  });
+
+  test('src/polices ne se charge que par src/main.js et le montage des épreuves, src/impression que par src/main.js', () => {
+    assert.deepEqual(releverImportateursReserves(RACINE), []);
+  });
+
+  test('la garde des importateurs relève une autre couche, une épreuve ou un script qui chargent la police ou l’impression, type JSDoc compris ; leurs propres fichiers et les importateurs nommés passent', () => {
+    const fichiers = {
+      'src/main.js': [
+        "import { chargerPolices } from './polices/chargement.js';",
+        "import { creerImprimanteWeb } from './impression/imprimante_web.js';",
+      ].join('\n'),
+      'test/navigateur/montage.js': [
+        "import { chargerPolices } from '../../src/polices/chargement.js';",
+        "import { creerImprimanteWeb } from '../../src/impression/imprimante_web.js';",
+      ].join('\n'),
+      'src/polices/chargement.js': "const r = () => import('./regulier.js');\n",
+      'src/polices/regulier.js': "export { default } from './NotoSans-Regular.ttf?inline';\n",
+      'src/polices/chargement.navigateur.test.js': "import { chargerPolices } from './chargement.js';\n",
+      'src/interface/App.svelte': [
+        '<script>',
+        "  /** @type {import('../impression/imprimante_web.js').Imprimante} */",
+        '  let imprimante;',
+        '</script>',
+      ].join('\n'),
+      'src/application/planche_seance.js': "const polices = () => import('../polices/chargement.js');\n",
+      'scripts/banc/police.js': "import regulier from '../../src/polices/NotoSans-Regular.ttf?inline';\n",
+      'test/aide.js': "const texte = \"import x from '../src/polices/chargement.js'\";\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverImportateursReserves), [
+      'scripts/banc/police.js:1 ../../src/polices/NotoSans-Regular.ttf?inline',
+      'src/application/planche_seance.js:1 ../polices/chargement.js',
+      'src/interface/App.svelte:2 ../impression/imprimante_web.js',
+      'test/navigateur/montage.js:2 ../../src/impression/imprimante_web.js',
+    ]);
+  });
+
+  test('hors de src/geometrie/papiers.js, des tables de libellés et des épreuves, aucun code de src/ ne nomme le papier Lettre', () => {
+    assert.deepEqual(releverNomsDePapier(RACINE), []);
+  });
+
+  test('la garde des noms de papier relève chaîne, gabarit, nom et balisage, à toute profondeur ; commentaires, mots voisins, libellés et épreuves passent ; un porteur muet est sans objet', () => {
+    const fichiers = {
+      'src/geometrie/papiers.js': "export const PAPIERS = { A4: {}, Lettre: {} };\n",
+      'src/stockage/reglages_locaux.js': [
+        "const PAPIERS = ['A4', 'Lettre'];",
+        '// le papier Lettre se lit ici dans un commentaire',
+        '/** @property {null|\'A4\'|\'Lettre\'} papier */',
+        'const message = `papier ${a} ou Lettre`;',
+        'export const lettres = 1, Lettres = 2, uneLettre = 3;',
+      ].join('\n'),
+      'src/impression/sous/papier.js': 'export const lettre = PAPIERS.Lettre;\n',
+      'src/interface/Papier.svelte': [
+        '<!-- Lettre, dans un commentaire HTML -->',
+        '<script>',
+        '  // Lettre, dans un commentaire de script',
+        "  const choix = 'Lettre';",
+        '</script>',
+        '<p>Lettre</p>',
+      ].join('\n'),
+      'src/interface/libelles/papier.js': "export const LIBELLES = { lettre: 'Lettre' };\n",
+      'src/application/planche.test.js': "const papier = 'Lettre';\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverNomsDePapier), [
+      'src/impression/sous/papier.js:1 Lettre',
+      'src/interface/Papier.svelte:4 Lettre',
+      'src/interface/Papier.svelte:6 Lettre',
+      'src/stockage/reglages_locaux.js:1 Lettre',
+      'src/stockage/reglages_locaux.js:4 Lettre',
+    ]);
+    const muet = { 'src/geometrie/papiers.js': 'export const PAPIERS = {};\n' };
+    assert.deepEqual(avecArbre(muet, releverNomsDePapier), ['porteur sans objet : src/geometrie/papiers.js']);
+  });
+
+  test('src/pdf n’importe que ses modules, pdf-lib, fontkit, constantes.js et papiers.js, et ne touche pas le navigateur', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/pdf/planche.js': [
+        "import { PDFDocument } from 'pdf-lib';",
+        "import fontkit from '@pdf-lib/fontkit';",
+        "import { constante } from '../geometrie/constantes.js';",
+        "import { PAPIERS } from '../geometrie/papiers.js';",
+        "import { mettreEnPage } from './mise_en_page.js';",
+        "import { modelePlanche } from '../application/planche.js';",
+        "import { englobant } from '../geometrie/tables.js';",
+        "import { getDocument } from 'pdfjs-dist';",
+        "import { mount } from 'svelte';",
+        "import { readFileSync } from 'node:fs';",
+        'export const corps = () => document.body;',
+        "import { VERSION } from '../version.genere.js';",
+      ].join('\n'),
+      'src/pdf/mise_en_page.js': "export const mettreEnPage = () => window.devicePixelRatio;\n",
+      'src/pdf/planche.test.js': "import { modelePlanche } from '../application/planche.js';\nexport const c = document.body;\n",
+      'src/application/planche.js': 'export const modelePlanche = () => null;\n',
+      'src/geometrie/tables.js': 'export const englobant = () => null;\n',
+      'src/geometrie/constantes.js': 'export const constante = () => 8;\n',
+      'src/geometrie/papiers.js': 'export const PAPIERS = {};\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/pdf/mise_en_page.js:1 window.',
+      'src/pdf/planche.js:6 import ../application/planche.js',
+      'src/pdf/planche.js:7 import ../geometrie/tables.js',
+      'src/pdf/planche.js:8 import pdfjs-dist',
+      'src/pdf/planche.js:9 import svelte',
+      'src/pdf/planche.js:10 import node:fs',
+      'src/pdf/planche.js:11 document.',
+      'src/pdf/planche.js:12 import ../version.genere.js',
+    ]);
+  });
+
+  test('src/impression n’importe que papiers.js et aucun paquet, et touche le navigateur ; src/polices n’importe que ses fichiers', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/impression/imprimante_web.js': [
+        "import { PAPIERS } from '../geometrie/papiers.js';",
+        "import { decouperPlan } from '../geometrie/pages.js';",
+        "import { estBrouillon } from '../application/sorties.js';",
+        "import { ipcRenderer } from 'electron';",
+        'export const imprimer = () => window.print();',
+      ].join('\n'),
+      'src/polices/chargement.js': [
+        "export const regulier = () => import('./regulier.js');",
+        "import { t } from '../interface/libelles.js';",
+        "import { mount } from 'svelte';",
+        "export const attendre = () => document.fonts.ready;",
+      ].join('\n'),
+      'src/polices/regulier.js': "export { default } from './NotoSans-Regular.ttf?inline';\n",
+      'src/geometrie/papiers.js': 'export const PAPIERS = {};\n',
+      'src/geometrie/pages.js': 'export const decouperPlan = () => null;\n',
+      'src/application/sorties.js': 'export const estBrouillon = () => true;\n',
+      'src/interface/libelles.js': 'export const t = () => "";\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/impression/imprimante_web.js:2 import ../geometrie/pages.js',
+      'src/impression/imprimante_web.js:3 import ../application/sorties.js',
+      'src/impression/imprimante_web.js:4 import electron',
+      'src/polices/chargement.js:2 import ../interface/libelles.js',
+      'src/polices/chargement.js:3 import svelte',
+    ]);
+  });
+
+  test('ni l’interface ni une couche du cœur n’importent les sorties ; l’application importe src/pdf sans le parcourir, jamais l’impression ni la police', () => {
+    const fichiers = {
+      ...MODULES_VIDES,
+      'src/interface/Badges.svelte': [
+        '<script>',
+        "  import { cellules } from '../pdf/imposition.js';",
+        "  import { PDFDocument } from 'pdf-lib';",
+        '</script>',
+      ].join('\n'),
+      'src/geometrie/vue.js': "import { cellules } from '../pdf/imposition.js';\n",
+      'src/stockage/noms.js': "import { PAPIERS } from '../impression/papiers.js';\n",
+      'src/application/planche.js': [
+        "const production = () => import('../pdf/planche.js');",
+        "import { chargerPolices } from '../polices/chargement.js';",
+        "import { creerImprimanteWeb } from '../impression/imprimante_web.js';",
+      ].join('\n'),
+      'src/pdf/planche.js': "import { PDFDocument } from 'pdf-lib';\n",
+      'src/pdf/imposition.js': 'export const cellules = () => [];\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverFrontiere), [
+      'src/geometrie/vue.js:1 import ../pdf/imposition.js',
+      'src/stockage/noms.js:1 import ../impression/papiers.js',
+      'src/application/planche.js:2 import ../polices/chargement.js',
+      'src/application/planche.js:3 import ../impression/imprimante_web.js',
+      'src/interface/Badges.svelte:2 import ../pdf/imposition.js',
+      'src/interface/Badges.svelte:3 import pdf-lib',
+    ]);
+  });
+
+  test('un src/pdf, un src/impression ou un src/polices sans module fait échouer la garde des couches', () => {
+    for (const arbre of SORTIES) {
+      const sansModule = { ...sansArbre(MODULES_VIDES, arbre), [`${arbre}/a.test.js`]: '' };
+      assert.throws(() => avecArbre(sansModule, releverFrontiere), new RegExp(`${arbre} ne fournit aucun module`), arbre);
+    }
   });
 });
 
@@ -3002,6 +3525,15 @@ const SCRIPTS_NOMMES = [
   { fichier: 'scripts/windows/lancer.ps1', raison: 'lance le projet sous Windows' },
 ];
 
+// Les données de la police embarquée, à leur seule place : les deux
+// fichiers de police, que Vite incruste, et leur provenance, que lit
+// test/polices.test.js. Ce sont des données, qui ne calculent rien.
+const DONNEES_NOMMEES = [
+  { fichier: 'src/polices/NotoSans-Regular.ttf', raison: 'la police embarquée, graisse normale (§ 11.1, § 14.15)' },
+  { fichier: 'src/polices/NotoSans-Bold.ttf', raison: 'la police embarquée, graisse grasse (§ 11.1, § 14.15)' },
+  { fichier: 'src/polices/PROVENANCE', raison: 'version amont, adresse et empreinte de chaque fichier de la police' },
+];
+
 // Fichiers que le disque porte sans qu'ils soient du projet : l'index de
 // dossier .DS_Store, l'échange de Vim (.x.js.swp, .x.js.swo…), le verrou
 // d'Emacs (.#x.js), une sauvegarde d'éditeur (x.js~, #x.js#), un reste de
@@ -3023,10 +3555,10 @@ const estArtefact = (nom) =>
 // Relevé des fichiers d'une autre langue sous src/, electron/ et scripts/, à
 // toute profondeur, artefacts d'éditeur et de fusion écartés : chacun
 // « chemin : extension », ou « chemin : sans extension », dans l'ordre des
-// chemins, hors des extensions admises et des scripts nommés ; puis
-// « exception sans objet : fichier » pour un script nommé absent. Lève quand
+// chemins, hors des extensions admises, des scripts et des données nommés ;
+// puis « exception sans objet : fichier » pour un fichier nommé absent. Lève quand
 // ces arbres ne portent aucun fichier.
-function releverLangages(racine, nommes = SCRIPTS_NOMMES) {
+function releverLangages(racine, nommes = [...SCRIPTS_NOMMES, ...DONNEES_NOMMEES]) {
   const fichiers = ARBRES_D_UNE_LANGUE.flatMap((arbre) => fichiersDe(join(racine, arbre)))
     .filter((fichier) => !fichier.split(sep).includes('node_modules') && !estArtefact(basename(fichier)))
     .map((fichier) => enBarres(racine, fichier))
@@ -3236,7 +3768,7 @@ describe('arborescence : un seul chemin de code pour les réservations (§ 5.2)'
 });
 
 describe('arborescence : une seule langue (§ 13.2)', () => {
-  test('sous src/, electron/ et scripts/, rien que du JavaScript, des composants Svelte, des feuilles de style, des données JSON et les scripts d’installation nommés', () => {
+  test('sous src/, electron/ et scripts/, rien que du JavaScript, des composants Svelte, des feuilles de style, des données JSON, les scripts d’installation nommés et les données nommées de la police', () => {
     assert.deepEqual(releverLangages(RACINE), []);
   });
 

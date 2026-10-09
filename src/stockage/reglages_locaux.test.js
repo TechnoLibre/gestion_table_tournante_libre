@@ -10,6 +10,7 @@
 import assert from 'node:assert/strict';
 import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
+import { PAPIERS } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 import {
   FICHIER_REGLAGES,
@@ -223,6 +224,23 @@ describe('réglages locaux : la forme canonique et l’écriture', () => {
       ['un papier inconnu', () => avecPapier(DEFAUTS, 'A3')],
     ];
     for (const [nom, appel] of refus) assert.throws(appel, TypeError, nom);
+  });
+
+  test('le domaine du papier est celui de PAPIERS (src/geometrie/papiers.js) : chaque papier défini se pose, s’écrit et se relit ; une clé héritée ne passe pas', async () => {
+    const definis = Object.keys(PAPIERS);
+    assert.ok(definis.length > 0);
+    for (const papier of definis) {
+      const fs = disque();
+      await ecrireReglages(fs, DOC, avecPapier(DEFAUTS, papier));
+      assert.deepEqual(await lireReglages(fs, DOC), { reglages: { ...DEFAUTS, papier }, avertissement: null }, papier);
+    }
+    for (const papier of ['toString', '__proto__', 'constructor', 'hasOwnProperty', 'a4', 'Letter', 0]) {
+      assert.throws(() => avecPapier(DEFAUTS, papier), TypeError, String(papier));
+      assert.throws(() => serialiserReglages({ ...DEFAUTS, papier }), TypeError, String(papier));
+      const lu = await lireReglages(disque(`{"cadrages":[],"format":1,"papier":${JSON.stringify(papier)}}\n`), DOC);
+      assert.deepEqual(lu.avertissement, illisibles('FORME'), String(papier));
+    }
+    assert.throws(() => avecPapier(DEFAUTS, 'A3'), new RegExp(`papier null, ${definis.join(' ou ')} attendu`));
   });
 
   test("ecrireReglages écrit le texte canonique par une seule écriture atomique à la racine, sans créer un dossier de travail qui manque", async () => {

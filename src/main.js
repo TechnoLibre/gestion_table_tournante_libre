@@ -8,7 +8,8 @@
 // l'OPFS et le presse-papiers du navigateur. Il construit les dépendances
 // d'App — l'horloge du système, l'exécuteur de la génération sur le
 // travailleur, les identifiants tirés par crypto.randomUUID, les
-// démonstrations livrées nommées par le catalogue — et monte App dans le
+// démonstrations livrées nommées par le catalogue, le chargement de la
+// police embarquée — et monte App dans le
 // corps du document. Le thème de départ est laissé à App, qui lit la
 // préférence du système.
 //
@@ -21,12 +22,17 @@
 // hyperthreads compris : l'exécuteur l'annonce au contrôleur, qui en fait
 // la valeur des cœurs automatiques ; une épreuve donne le sien à
 // l'exécuteur qu'elle monte.
+//
+// La police embarquée (src/polices) n'est importée que d'ici et du montage
+// des épreuves : App reçoit chargerPolices, dont les deux import() différés
+// ne chargent les graisses qu'à la première production qui les demande.
 import { mount } from 'svelte';
 import { creerExecuteurTravailleur } from './application/executeur_travailleur.js';
 import { creerHorlogeSysteme } from './application/horloge.js';
 import { demonstrationsLivrees } from './demo/livrees.js';
 import App from './interface/App.svelte';
 import Travailleur from './interface/generation/travailleur.js?worker&inline';
+import { chargerPolices } from './polices/chargement.js';
 import { FORMAT } from './stockage/document.js';
 import { creerFichiersElectron } from './stockage/fichiers_electron.js';
 import { creerFichiersWeb } from './stockage/fichiers_web.js';
@@ -56,5 +62,6 @@ mount(App, {
     formatCourant: FORMAT,
     produitVersion: VERSION.affichee,
     versionWindows: VERSION.windows,
+    polices: chargerPolices,
   },
 });
