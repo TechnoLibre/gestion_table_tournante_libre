@@ -6,10 +6,17 @@
 // couvre le latin étendu du français et ses ligatures, lu par fontkit ;
 // regulier.js et gras.js nomment ces fichiers ; la licence voyage à côté, à
 // son seul emplacement, public/licences/. La longueur de la chaîne témoin se
-// calcule des avances de la police, sans crénage (contrainte 26).
+// calcule des avances de la police, sans crénage (contrainte 26). Le point
+// d'entrée de la page et le montage des épreuves passent le chargement de la
+// police à App, et attendent ses deux faces avant de la monter ;
+// jetons.css déclare ces faces sur les mêmes fichiers que regulier.js et
+// gras.js, et fait de Noto Sans la police de l'interface. Que la page les
+// charge et les rende se lit dans le navigateur
+// (src/interface/Police.navigateur.test.js).
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fontkit from '@pdf-lib/fontkit';
 import { describe, test } from './lanceur.js';
@@ -128,5 +135,92 @@ describe('polices : la chaîne témoin (§ 19.4, contrainte 26)', () => {
     for (const corps of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '16']) {
       assert.throws(() => longueurTemoin(regulier, corps), RangeError, String(corps));
     }
+  });
+});
+
+// Le texte d'un module du projet, lu par le disque : le point d'entrée de la
+// page et le montage des épreuves ne se chargent pas sous node.
+const texteDe = (chemin) => readFileSync(`${RACINE}${chemin}`, 'utf8');
+
+// Le texte d'un module sans ses commentaires de ligne ni de bloc : un appel
+// cité dans un commentaire ne compte pas.
+const sansCommentaires = (texte) => texte.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+
+describe('polices : le montage d’App (§ 13.4, § 19.4)', () => {
+  const ENTREES = [
+    { chemin: 'src/main.js', passe: /^\s*polices: chargerPolices,$/m },
+    { chemin: 'test/navigateur/montage.js', passe: /^\s*polices,$/m },
+  ];
+
+  test('src/main.js et le montage des épreuves importent chargerPolices et attendrePolices de src/polices/chargement.js, et passent le chargement à App', () => {
+    for (const { chemin, passe } of ENTREES) {
+      const code = sansCommentaires(texteDe(chemin));
+      const imports = [...code.matchAll(/^import \{([^}]*)\} fro[m] '[./]*(?:src\/)?polices\/chargement\.js';$/gm)];
+      assert.equal(imports.length, 1, `${chemin} : un import de polices/chargement.js`);
+      const noms = imports[0][1].split(',').map((nom) => nom.trim()).filter(Boolean).sort();
+      assert.deepEqual(noms, ['attendrePolices', 'chargerPolices'], chemin);
+      const [, proprietes] = /\bmount\(App, \{[\s\S]*?\bprops: \{([\s\S]*?)\n\s*\},\n/.exec(code) ?? [];
+      assert.ok(proprietes !== undefined, `${chemin} : mount(App, { props: { … } })`);
+      assert.match(proprietes, passe, `${chemin} : polices passé à App`);
+    }
+    // Le montage prend chargerPolices par défaut, comme src/main.js.
+    assert.match(sansCommentaires(texteDe('test/navigateur/montage.js')), /^\s*polices = chargerPolices,$/m);
+  });
+
+  test('chacun attend attendrePolices(document) avant de monter App, une seule fois', () => {
+    for (const { chemin } of ENTREES) {
+      const code = sansCommentaires(texteDe(chemin));
+      const attentes = [...code.matchAll(/\battendrePolices\(document\)/g)].map((m) => m.index);
+      const montages = [...code.matchAll(/\bmount\(App\b/g)].map((m) => m.index);
+      assert.equal(attentes.length, 1, `${chemin} : ${attentes.length} appels à attendrePolices(document)`);
+      assert.equal(montages.length, 1, `${chemin} : ${montages.length} montages d’App`);
+      assert.ok(attentes[0] < montages[0], `${chemin} : l’attente suit le montage`);
+      assert.match(code.slice(attentes[0] - 'await '.length, attentes[0]), /^await $/, `${chemin} : attendrePolices non attendue`);
+    }
+  });
+});
+
+// Les règles @font-face d'une feuille, dans leur ordre : chacune rend ses
+// descripteurs, nom en minuscules, valeur telle qu'écrite, commentaires ôtés.
+function reglesFontFace(feuille) {
+  const sansCommentaires = feuille.replace(/\/\*[\s\S]*?\*\//g, '');
+  return [...sansCommentaires.matchAll(/@font-face\s*\{([^}]*)\}/g)].map(([, corps]) =>
+    Object.fromEntries(
+      corps
+        .split(';')
+        .map((declaration) => declaration.trim())
+        .filter(Boolean)
+        .map((declaration) => {
+          const deuxPoints = declaration.indexOf(':');
+          return [declaration.slice(0, deuxPoints).trim().toLowerCase(), declaration.slice(deuxPoints + 1).trim()];
+        }),
+    ),
+  );
+}
+
+describe('polices : la police de l’interface (§ 19.4, Q4)', () => {
+  const JETONS = 'src/interface/jetons.css';
+
+  test('jetons.css déclare Noto Sans en deux faces, 400 puis 700, de style normal, chacune sur le fichier que regulier.js ou gras.js incruste', () => {
+    const regles = reglesFontFace(lire(JETONS).toString('utf8'));
+    assert.equal(regles.length, 2, `${regles.length} règles @font-face`);
+    const attendues = [
+      ['400', FICHIERS_POLICES.regulier],
+      ['700', FICHIERS_POLICES.gras],
+    ];
+    for (const [rang, [graisse, nom]] of attendues.entries()) {
+      const regle = regles[rang];
+      assert.equal(regle['font-family'].replace(/^(["'])(.*)\1$/, '$2'), 'Noto Sans', graisse);
+      assert.equal(regle['font-weight'], graisse);
+      assert.equal(regle['font-style'], 'normal', graisse);
+      const adresses = [...regle.src.matchAll(/url\(\s*(["']?)([^"')]+)\1\s*\)/g)].map((m) => m[2]);
+      assert.equal(adresses.length, 1, `${graisse} : ${regle.src}`);
+      assert.equal(join(dirname(`${RACINE}${JETONS}`), adresses[0]), cheminPolice(nom), graisse);
+    }
+  });
+
+  test('--police-interface nomme Noto Sans en tête, puis les replis du système', () => {
+    const declarations = [...lire(JETONS).toString('utf8').matchAll(/--police-interface:\s*([^;]+);/g)].map((m) => m[1].trim());
+    assert.deepEqual(declarations, ["'Noto Sans', system-ui, sans-serif"]);
   });
 });

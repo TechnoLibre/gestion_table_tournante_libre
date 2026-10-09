@@ -14,6 +14,12 @@
 // des épreuves du navigateur, qui le passent à App (Dependances.polices) ;
 // les épreuves node lisent les mêmes fichiers par le disque
 // (test/polices.js), node ne connaissant pas « ?inline ».
+//
+// La même police est celle de l'interface : jetons.css déclare ses deux
+// faces sur les mêmes fichiers. attendrePolices attend qu'elles soient
+// chargées dans le document ; src/main.js et monterApp l'attendent avant de
+// monter App, car un mesureur de texte créé plus tôt (plan/mesure_texte.js)
+// lirait la police de repli et garderait sa largeur.
 
 // Une URL data: en base64 : un type, des paramètres éventuels, « ;base64, »,
 // puis l'alphabet base64 et son remplissage.
@@ -49,4 +55,35 @@ export function decoderDonnees(texte) {
 export async function chargerPolices() {
   const [{ default: regulier }, { default: gras }] = await Promise.all([import('./regulier.js'), import('./gras.js')]);
   return { regulier: decoderDonnees(regulier), gras: decoderDonnees(gras) };
+}
+
+/** Les faces de la police d'interface que attendrePolices charge, sous la
+ *  forme d'une déclaration font : graisse, corps, famille. Le corps ne sert
+ *  qu'à la syntaxe : une face se charge pour tout corps. */
+export const FACES_INTERFACE = Object.freeze(['400 16px "Noto Sans"', '700 16px "Noto Sans"']);
+
+/**
+ * Attend que les deux faces de la police d'interface, déclarées par
+ * jetons.css, soient chargées dans document : les deux demandes à
+ * document.fonts.load partent ensemble, et la promesse se résout quand
+ * chacune rend au moins une face, toutes au statut « loaded ».
+ *
+ * @param {Document} document
+ * @returns {Promise<void>}
+ * @throws {TypeError} (rejet) un document sans ensemble de polices, sans
+ *         rien demander
+ * @throws {Error} (rejet) une face qu'aucune feuille du document ne déclare
+ *         — load ne rend alors aucune face —, ou rendue sans être chargée :
+ *         le message nomme chaque face en faute ; un chargement que le
+ *         navigateur refuse rejette avec son erreur, telle quelle
+ */
+export async function attendrePolices(document) {
+  if (typeof document?.fonts?.load !== 'function') {
+    throw new TypeError('attendrePolices : un document dont fonts.load est une fonction est attendu');
+  }
+  const rendues = await Promise.all(FACES_INTERFACE.map((face) => document.fonts.load(face)));
+  const enFaute = FACES_INTERFACE.filter(
+    (_, rang) => rendues[rang].length === 0 || rendues[rang].some(({ status }) => status !== 'loaded'),
+  );
+  if (enFaute.length > 0) throw new Error(`attendrePolices : face non chargée — ${enFaute.join(' ; ')}`);
 }

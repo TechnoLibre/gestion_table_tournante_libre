@@ -46,8 +46,9 @@ const RELANCES_D_UN_COMPOSANT = Object.freeze([
 
 // Les épreuves node qui lisent la feuille des jetons par le système de
 // fichiers — palette validée par calcul, var(--…) déclarés, couleurs des
-// sources, en-tête, version affichée —, et la garde des motifs, qui balaie
-// les feuilles de style de src/interface.
+// sources, en-tête, version affichée, faces de la police de l'interface —,
+// et la garde des motifs, qui balaie les feuilles de style de
+// src/interface.
 const RELANCES_DES_JETONS = Object.freeze([
   'src/interface/palette.test.js',
   'src/interface/marques.test.js',
@@ -55,6 +56,7 @@ const RELANCES_DES_JETONS = Object.freeze([
   'test/licence.test.js',
   'scripts/version.test.js',
   'test/arborescence.test.js',
+  'test/polices.test.js',
 ]);
 
 export default defineConfig({

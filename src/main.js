@@ -26,13 +26,19 @@
 // La police embarquée (src/polices) n'est importée que d'ici et du montage
 // des épreuves : App reçoit chargerPolices, dont les deux import() différés
 // ne chargent les graisses qu'à la première production qui les demande.
+// La même police est celle de l'interface, que jetons.css déclare : App ne
+// se monte qu'une fois ses deux faces chargées (attendrePolices), sans quoi
+// un mesureur de texte créé au premier rendu lirait la police de repli et
+// garderait sa largeur. Une face qui ne se charge pas ne retient pas
+// l'application : l'erreur va au collecteur (reportError), et App se monte
+// sur les replis du système.
 import { mount } from 'svelte';
 import { creerExecuteurTravailleur } from './application/executeur_travailleur.js';
 import { creerHorlogeSysteme } from './application/horloge.js';
 import { demonstrationsLivrees } from './demo/livrees.js';
 import App from './interface/App.svelte';
 import Travailleur from './interface/generation/travailleur.js?worker&inline';
-import { chargerPolices } from './polices/chargement.js';
+import { attendrePolices, chargerPolices } from './polices/chargement.js';
 import { FORMAT } from './stockage/document.js';
 import { creerFichiersElectron } from './stockage/fichiers_electron.js';
 import { creerFichiersWeb } from './stockage/fichiers_web.js';
@@ -45,6 +51,12 @@ const fs = sousElectron ? creerFichiersElectron(pont.fichiers) : creerFichiersWe
 const pressePapiers = sousElectron
   ? { copier: async (texte) => void (await pont.copier(texte)) }
   : { copier: (texte) => navigator.clipboard.writeText(texte) };
+
+try {
+  await attendrePolices(document);
+} catch (erreur) {
+  reportError(erreur);
+}
 
 mount(App, {
   target: document.body,

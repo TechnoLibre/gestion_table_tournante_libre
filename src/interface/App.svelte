@@ -324,6 +324,7 @@
     background-color: var(--couleur-page-fond);
     color: var(--couleur-page-texte);
     font-family: var(--police-interface);
+    line-height: var(--police-interligne);
   }
 
   .app {

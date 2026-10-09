@@ -255,8 +255,11 @@
      et ne l'agrandit jamais : la ligne a la hauteur du contenu de la tête.
      La place prend une part fixe de la largeur, et le contenu le reste :
      la zone ne bouge pas d'une section à l'autre, quand le libellé de la
-     section ouverte, en gras, change la largeur de la navigation. Sous
-     30rem de contenu, la place passe à la ligne. */
+     section ouverte, en gras, change la largeur de la navigation. Sa part,
+     36 %, tient en deux lignes de Noto Sans chacun des deux avertissements
+     d'un journal tronqué dans une fenêtre de 1 366 px : le second paraît
+     dans la hauteur de la tête. Sous 30rem de contenu, la place passe à la
+     ligne. */
   .tete.cote {
     flex-flow: row wrap;
     align-items: stretch;
@@ -279,7 +282,7 @@
 
   .place {
     position: relative;
-    flex: 0 0 32%;
+    flex: 0 0 36%;
     min-width: 16rem;
     min-height: 3rem;
     border-left: 1px solid var(--couleur-page-filet);
@@ -312,11 +315,14 @@
   }
 
   /* La surface part des trois quarts du cadre, s'étend à ce qui reste, et
-     ne rétrécit, après les annonces, que pour la barre et la tête. */
+     ne rétrécit, après les annonces, que pour la barre et la tête. Sa
+     hauteur ne dépend pas de son contenu : elle est un conteneur de taille,
+     dont une section borne un panneau à la hauteur visible (unités cqb). */
   .surface {
     flex: 1 1 75%;
     min-height: 0;
     overflow: auto;
     padding: var(--espace-3);
+    container-type: size;
   }
 </style>

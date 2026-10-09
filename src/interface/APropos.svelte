@@ -44,7 +44,6 @@
     padding: var(--espace-2) var(--espace-3);
     border: 1px solid var(--couleur-page-filet);
     border-radius: var(--rayon-1);
-    font-family: monospace;
     user-select: all;
     overflow-wrap: anywhere;
   }

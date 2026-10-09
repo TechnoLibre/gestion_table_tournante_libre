@@ -1,6 +1,11 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
+// La police que l'essai relève dans la page chargée sous file:// (§ 19.4) :
+// les deux faces de Noto Sans chargées, le corps du document en Noto Sans,
+// et la chaîne témoin à la longueur des avances, dans la tolérance ; chaque
+// écart se nomme.
+//
 // L'environnement où l'essai de démarrage lance la coquille (§ 8.6) : trois
 // dossiers distincts sous la racine de l'essai, aucun sous un autre ; le
 // lanceur portable publie exe, le poste a home pour dossier personnel et
@@ -15,7 +20,13 @@ import { fileURLToPath } from 'node:url';
 import { decrireSysteme } from '../electron/fichiers.js';
 import { estSous } from '../src/stockage/dossier_travail.js';
 import { describe, test } from '../test/lanceur.js';
-import { donneesApplicativesSurExe, dossiersDEssai, environnementDEssai, estLanceDirectement } from './essai_demarrage.js';
+import {
+  donneesApplicativesSurExe,
+  dossiersDEssai,
+  environnementDEssai,
+  estLanceDirectement,
+  fautesDePolice,
+} from './essai_demarrage.js';
 
 const RACINE_ESSAI = join('/', 'racine-essai', 'gtt-essai-demarrage-x');
 
@@ -198,5 +209,49 @@ describe('essai de démarrage : lancement direct', () => {
     assert.equal(estLanceDirectement(fileURLToPath(import.meta.url)), false);
     assert.equal(estLanceDirectement(join(tmpdir(), 'gtt-essai-absent', 'essai_demarrage.js')), false);
     assert.equal(estLanceDirectement(undefined), false);
+  });
+});
+
+describe('essai de démarrage : la police de la page (§ 19.4)', () => {
+  // Un relevé conforme : les deux faces chargées, une face d'une autre
+  // famille, le corps en Noto Sans, la chaîne témoin à 1 000 px.
+  const RELEVE = Object.freeze({
+    faces: [
+      { famille: 'Noto Sans', graisse: '400', style: 'normal', etat: 'loaded' },
+      { famille: '"Noto Sans"', graisse: '700', style: 'normal', etat: 'loaded' },
+      { famille: 'Famille Inventée', graisse: '400', style: 'normal', etat: 'unloaded' },
+    ],
+    familleCorps: '"Noto Sans", system-ui, sans-serif',
+    largeurTemoin: 1000,
+  });
+  const TEMOIN = Object.freeze({ longueurAttendue: 1000, tolerance: 0.01 });
+
+  test('un relevé conforme ne porte aucune faute ; un écart égal à la tolérance est admis', () => {
+    assert.deepEqual(fautesDePolice(RELEVE, TEMOIN), []);
+    assert.deepEqual(fautesDePolice({ ...RELEVE, largeurTemoin: 1010 }, TEMOIN), []);
+    assert.deepEqual(fautesDePolice({ ...RELEVE, largeurTemoin: 990 }, TEMOIN), []);
+  });
+
+  test('une face absente ou non chargée se nomme par sa graisse ; une autre famille n’y entre pas', () => {
+    const sans700 = RELEVE.faces.filter(({ graisse, famille }) => !(graisse === '700' && famille.includes('Noto')));
+    assert.deepEqual(fautesDePolice({ ...RELEVE, faces: sans700 }, TEMOIN), ['face 700 de Noto Sans absente']);
+    const enErreur = RELEVE.faces.map((face) => (face.graisse === '400' && face.famille === 'Noto Sans' ? { ...face, etat: 'error' } : face));
+    assert.deepEqual(fautesDePolice({ ...RELEVE, faces: enErreur }, TEMOIN), ['face 400 de Noto Sans : error']);
+    assert.deepEqual(fautesDePolice({ ...RELEVE, faces: [] }, TEMOIN), [
+      'face 400 de Noto Sans absente',
+      'face 700 de Noto Sans absente',
+    ]);
+  });
+
+  test('un corps du document dans une autre famille se nomme, telle que la page la calcule', () => {
+    assert.deepEqual(fautesDePolice({ ...RELEVE, familleCorps: 'system-ui, sans-serif' }, TEMOIN), [
+      'corps du document en system-ui, sans-serif',
+    ]);
+  });
+
+  test('une chaîne témoin hors de la tolérance se nomme, mesurée et attendue', () => {
+    assert.deepEqual(fautesDePolice({ ...RELEVE, largeurTemoin: 1010.5 }, TEMOIN), ['chaîne témoin : 1010.5 px pour 1000 px']);
+    assert.deepEqual(fautesDePolice({ ...RELEVE, largeurTemoin: 960 }, TEMOIN), ['chaîne témoin : 960 px pour 1000 px']);
+    assert.deepEqual(fautesDePolice({ ...RELEVE, largeurTemoin: 0 }, TEMOIN), ['chaîne témoin : 0 px pour 1000 px']);
   });
 });

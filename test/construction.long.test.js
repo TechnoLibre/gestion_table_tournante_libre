@@ -18,7 +18,10 @@
 // fontkit, quand la page les importe, tiennent chacun leur morceau, sous le
 // seuil ; aucun de ces morceaux n'est chargé ni préchargé au lancement ; les
 // avis de licence sont copiés dans www/licences/, et chaque paquet des
-// morceaux construits y a le sien, sous la licence de son package.json.
+// morceaux construits y a le sien, sous la licence de son package.json. Les
+// deux fichiers de la police sont aussi émis dans www/, octet pour octet,
+// et nommés par la feuille construite : jetons.css en fait la police de
+// l'interface.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
@@ -464,7 +467,7 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
     );
   });
 
-  test('la police voyage dans deux morceaux différés, octet pour octet ; aucun morceau des sorties n’est chargé ni préchargé au lancement ; les avis de licence sont dans www/licences/, et chaque paquet construit y a le sien', async () => {
+  test('la police voyage dans deux morceaux différés, octet pour octet, et ses deux fichiers sont émis dans www/, nommés par la feuille construite ; aucun morceau des sorties n’est chargé ni préchargé au lancement ; les avis de licence sont dans www/licences/, et chaque paquet construit y a le sien', async () => {
     const sortie = mkdtempSync(join(tmpdir(), 'construction-sorties-'));
     const travailleur = releveDuTravailleur();
     try {
@@ -553,24 +556,29 @@ describe('construction : les sorties (§ 11.1, § 14.15)', () => {
         .map(({ nom, version, licence }) => `${nom} ${version} — ${licence}`);
       assert.deepEqual(manquants, []);
 
-      // Une police émise en fichier est l'une des deux, octet pour octet ; une
-      // feuille qui en nomme une la trouve dans www/.
+      // La police de l'interface (jetons.css) : les deux fichiers de
+      // src/polices sont émis dans www/, chacun une fois, octet pour octet,
+      // et aucune autre police ; une feuille qui en nomme une la trouve dans
+      // www/, et les deux sont nommées.
       const fichiers = readdirSync(sortie, { recursive: true, withFileTypes: true })
         .filter((e) => e.isFile())
         .map((e) => join(e.parentPath, e.name));
-      const sources = new Set(
-        ['NotoSans-Regular.ttf', 'NotoSans-Bold.ttf'].map((f) => sha256(readFileSync(join(RACINE, 'src', 'polices', f)))),
-      );
+      const sources = ['NotoSans-Regular.ttf', 'NotoSans-Bold.ttf'].map((f) => sha256(readFileSync(join(RACINE, 'src', 'polices', f))));
+      const polices = fichiers.filter((f) => extname(f) === '.ttf');
       assert.deepEqual(
-        fichiers.filter((f) => extname(f) === '.ttf' && !sources.has(sha256(readFileSync(f)))).map((f) => relative(sortie, f)),
-        [],
+        polices.map((f) => sha256(readFileSync(f))).sort(),
+        [...sources].sort(),
+        `polices émises : ${polices.map((f) => relative(sortie, f)).join(', ') || 'aucune'}`,
       );
+      const nommees = new Set();
       for (const feuille of fichiers.filter((f) => extname(f) === '.css')) {
         for (const adresse of adressesChargees('css', readFileSync(feuille, 'utf8')).filter((a) => /\.ttf$/i.test(a))) {
           const cible = resolve(dirname(feuille), adresse);
           assert.ok(fichiers.includes(cible), `${relative(sortie, feuille)} : ${adresse} absent de la construction`);
+          nommees.add(cible);
         }
       }
+      assert.deepEqual([...nommees].sort(), [...polices].sort(), 'polices que les feuilles nomment');
     } finally {
       rmSync(sortie, { recursive: true, force: true });
     }

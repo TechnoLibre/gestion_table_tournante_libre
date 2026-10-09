@@ -92,7 +92,11 @@
     font-size: var(--taille-titre);
   }
 
+  /* Les démonstrations se rangent en ligne, et passent à la ligne quand la
+     largeur manque : en colonne, quatre entrées repoussent la dernière
+     au-dessous d'une fenêtre de 700 px de haut. */
   ul {
+    flex-flow: row wrap;
     margin: 0;
     padding: 0;
     list-style: none;

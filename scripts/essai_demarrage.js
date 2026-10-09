@@ -7,14 +7,18 @@
 // qu'Electron démarre sur ce système, avec ses bibliothèques, y charge la
 // page, que l'application y monte, que la détermination du dossier de
 // travail retient le mode portable, qu'un travailleur de génération naît et
-// rend son issue dans la page chargée sous file://, et que la sortie rend
-// les verrous.
+// rend son issue dans la page chargée sous file://, que la police de
+// l'interface s'y charge, et que la sortie rend les verrous.
 //
 //   node scripts/essai_demarrage.js
 //
 // La séance, dans l'ordre :
 //  1. le titre de la fenêtre vaut le nom suivi de la version affichée, le
 //     bandeau porte la version affichée, le collecteur d'erreurs est posé ;
+//     dans la page chargée sous file://, les deux faces de Noto Sans sont
+//     chargées, le corps du document est en Noto Sans, et la chaîne témoin
+//     y a la longueur des avances de la police, dans
+//     TOLERANCE_CHAINE_TEMOIN (§ 19.4) ;
 //  2. la liste affiche le dossier de travail exe/data ; créer un événement,
 //     qui s'ouvre, revenir à la liste, puis charger la petite
 //     démonstration, qui s'ouvre ;
@@ -58,9 +62,12 @@ import { tmpdir } from 'node:os';
 import path, { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { decrireSysteme } from '../electron/fichiers.js';
+import { constante } from '../src/geometrie/constantes.js';
 import { estSous } from '../src/stockage/dossier_travail.js';
 import { VERSION } from '../src/version.genere.js';
 import { titreAvecVersion } from '../src/interface/libelles.js';
+import { lirePolices } from '../test/polices.js';
+import { CHAINE_TEMOIN, longueurTemoin } from '../test/temoin.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
 const ATTENTE_MS = 60_000;
@@ -70,6 +77,59 @@ const SONDAGE_MS = 100;
 const NOM_EVENEMENT = "Soirée d'essai";
 const DEMONSTRATION = 'petite';
 const ARRET = 2000;
+
+// La police de l'interface, ses graisses, et le corps en px où la chaîne
+// témoin se mesure.
+const FAMILLE = 'Noto Sans';
+const GRAISSES = ['400', '700'];
+const CORPS_TEMOIN = 100;
+
+/**
+ * Les fautes de la police d'interface relevée dans la page, [] quand elle
+ * est conforme, dans cet ordre : par graisse, 400 puis 700, une face de
+ * Noto Sans absente de document.fonts ou dont le statut n'est pas
+ * « loaded » ; le corps du document dont la première famille calculée n'est
+ * pas Noto Sans ; la chaîne témoin dont l'écart relatif à la longueur
+ * attendue passe la tolérance. Une famille se compare sans ses guillemets ;
+ * les faces des autres familles n'entrent pas en compte.
+ * @param {{faces: Array<{famille: string, graisse: string, style: string, etat: string}>,
+ *          familleCorps: string, largeurTemoin: number}} releve
+ * @param {{longueurAttendue: number, tolerance: number}} temoin
+ * @returns {string[]}
+ */
+export function fautesDePolice({ faces, familleCorps, largeurTemoin }, { longueurAttendue, tolerance }) {
+  const sansGuillemets = (texte) => texte.trim().replace(/^(["'])(.*)\1$/, '$2');
+  const fautes = [];
+  for (const graisse of GRAISSES) {
+    const siennes = faces.filter((face) => sansGuillemets(face.famille) === FAMILLE && String(face.graisse) === graisse);
+    if (siennes.length === 0) fautes.push(`face ${graisse} de ${FAMILLE} absente`);
+    for (const { etat } of siennes) if (etat !== 'loaded') fautes.push(`face ${graisse} de ${FAMILLE} : ${etat}`);
+  }
+  if (sansGuillemets(familleCorps.split(',')[0]) !== FAMILLE) fautes.push(`corps du document en ${familleCorps}`);
+  const ecart = Math.abs(largeurTemoin - longueurAttendue) / longueurAttendue;
+  if (!(ecart <= tolerance)) fautes.push(`chaîne témoin : ${largeurTemoin} px pour ${longueurAttendue} px`);
+  return fautes;
+}
+
+// Relève dans la page les faces de document.fonts, la famille calculée du
+// corps, et la longueur de la chaîne témoin au corps donné, crénage et
+// ligatures coupés, sur un <text> de la police de l'interface posé le temps
+// de la mesure.
+function releverPolice({ chaine, corps }) {
+  const faces = [...document.fonts].map((face) => ({ famille: face.family, graisse: face.weight, style: face.style, etat: face.status }));
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const texte = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  texte.setAttribute(
+    'style',
+    `font-family: var(--police-interface); font-size: ${corps}px; font-kerning: none; font-variant-ligatures: none`,
+  );
+  texte.textContent = chaine;
+  svg.append(texte);
+  document.body.append(svg);
+  const largeurTemoin = texte.getComputedTextLength();
+  svg.remove();
+  return { faces, familleCorps: getComputedStyle(document.body).fontFamily, largeurTemoin };
+}
 
 /**
  * Les trois dossiers distincts de l'essai, sous racine.
@@ -223,6 +283,19 @@ async function seance(application, dossiers) {
   constater('bandeau portant la version affichée', bandeau.includes(VERSION.affichee), bandeau);
   const erreursAuDepart = await collecteur();
   constater('collecteur posé et vide', Array.isArray(erreursAuDepart) && erreursAuDepart.length === 0, JSON.stringify(erreursAuDepart));
+  // La police de l'interface, dans la page chargée sous file:// : la
+  // longueur attendue vient des avances de la police embarquée, lue ici.
+  constater('page chargée sous file://', fenetre.url().startsWith('file:'), fenetre.url());
+  const police = await fenetre.evaluate(releverPolice, { chaine: CHAINE_TEMOIN, corps: CORPS_TEMOIN });
+  const fautes = fautesDePolice(police, {
+    longueurAttendue: longueurTemoin(lirePolices().regulier, CORPS_TEMOIN),
+    tolerance: constante('TOLERANCE_CHAINE_TEMOIN'),
+  });
+  constater(
+    'police de l’interface chargée : Noto Sans 400 et 700, corps du document, chaîne témoin',
+    fautes.length === 0,
+    fautes.length === 0 ? `${police.largeurTemoin} px à ${CORPS_TEMOIN} px` : fautes.join(' ; '),
+  );
 
   // 2. Le dossier affiché, un événement créé, la démonstration chargée.
   const affiche = (await fenetre.locator('[data-dossier-travail]').textContent()).trim();

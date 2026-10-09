@@ -144,6 +144,11 @@
     font-size: var(--taille-texte);
     line-height: 1.4;
     overflow-wrap: anywhere;
+    /* Jamais plus haute que la surface qui la porte (CadreMode) : ouverte
+       sous la grille, dans une fenêtre étroite, elle se montre en entier,
+       et son contenu défile en elle. */
+    max-height: 100cqb;
+    overflow-y: auto;
   }
 
   .entete {

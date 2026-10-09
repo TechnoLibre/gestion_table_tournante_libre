@@ -31,10 +31,56 @@
    de l'encre forte du plan, --couleur-contour-fort.
 
    La hachure d'une place à pourvoir peint des traits --couleur-hachure sur le
-   fond de la chaise, --couleur-chaise-fond : ce sont ses deux couleurs. */
+   fond de la chaise, --couleur-chaise-fond : ce sont ses deux couleurs.
+
+   La police de l'interface est la police embarquée, Noto Sans (§ 11.1,
+   § 19.4) : deux faces, 400 et 700, dont les fichiers sont ceux de
+   src/polices, que la production de la planche embarque aussi. La
+   construction les émet en fichiers à côté de la feuille, que la page lit
+   sous file:// comme sous http://. Les replis du système ne servent qu'à une
+   face qui ne se charge pas : src/main.js attend les deux faces avant de
+   monter l'application (attendrePolices, src/polices/chargement.js).
+
+   Le corps porte la police (App) ; les contrôles de formulaire — button,
+   input, select, textarea — n'en héritent pas d'eux-mêmes : le moteur leur
+   donne sa propre police, de son propre corps. La règle sous les faces les
+   fait hériter de leur parent, police, corps et interligne ; le style d'un
+   composant, plus spécifique, règle ensuite le corps qu'il veut.
+
+   L'interligne du texte courant est fixé, --police-interligne, et non
+   laissé à « normal », que chaque police calcule de ses propres métriques :
+   celui de Noto Sans vaut 1,362 corps, et une police de repli en donnerait
+   un autre. Fixé, il rend les mêmes hauteurs de ligne quelle que soit la
+   face rendue. À 1,3, une ligne de Noto Sans s'étend de 1,038 corps
+   au-dessus de sa ligne de base à 0,262 au-dessous : les capitales
+   accentuées (0,944) et les jambages (0,244) du latin y tiennent ; seules
+   les capitales à deux diacritiques superposés (jusqu'à 1,059) en
+   débordent. */
+
+@font-face {
+  font-family: 'Noto Sans';
+  font-style: normal;
+  font-weight: 400;
+  src: url('../polices/NotoSans-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Noto Sans';
+  font-style: normal;
+  font-weight: 700;
+  src: url('../polices/NotoSans-Bold.ttf') format('truetype');
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
 
 :root {
-  --police-interface: system-ui, sans-serif;
+  --police-interface: 'Noto Sans', system-ui, sans-serif;
+  --police-interligne: 1.3;
 
   /* Échelle typographique, du plus petit au plus grand. */
   --taille-texte-petit: 0.8125rem;
