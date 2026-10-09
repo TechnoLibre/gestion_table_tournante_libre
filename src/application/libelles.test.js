@@ -540,6 +540,17 @@ const EXEMPLES = new Map([
   ['ENTREE_CHANGER_TOURS', { tours: 3, retirees: 2 }],
   ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerAppartenances', valeur: false }],
   ['ENTREE_CHANGER_CIBLE_REDONDANCE', { cible: 1200 }],
+  // Planche de badges
+  ['PLANCHE_SANS_PLACEMENT', { remede: { geste: 'ouvrirSection', section: 'propositions' } }],
+  [
+    'PLANCHE_DERIVE',
+    {
+      raisons: [{ code: 'PARTICIPANT_NON_PLACE', participant: 6, personne: 'Ondine Grisaille' }],
+      remede: { geste: 'ouvrirSection', section: 'propositions' },
+    },
+  ],
+  ['PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }],
+  ['PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } }],
 ]);
 
 // Un texte composé ne laisse paraître ni valeur absente, ni booléen, ni
@@ -819,11 +830,11 @@ async function tablesDuDossier() {
 }
 
 describe('libellés : les tables par domaine (§ 14.6)', () => {
-  test('chaque module de libelles/, aides.js excepté, exporte TABLE, une Map ; TABLES_APPLICATION les assemble, onze, par ordre alphabétique', async () => {
+  test('chaque module de libelles/, aides.js excepté, exporte TABLE, une Map ; TABLES_APPLICATION les assemble, douze, par ordre alphabétique', async () => {
     const tables = await tablesDuDossier();
-    assert.equal(tables.length, 11);
+    assert.equal(tables.length, 12);
     assert.deepEqual(tables.map(({ table }) => table), [
-      'csv', 'evenements', 'format', 'generation', 'mobilier', 'moteur', 'participants', 'places', 'seance', 'sorties', 'stockage',
+      'csv', 'evenements', 'format', 'generation', 'mobilier', 'moteur', 'participants', 'places', 'planche', 'seance', 'sorties', 'stockage',
     ]);
     for (const { table, module } of tables) assert.ok(module.TABLE instanceof Map, table);
     assert.equal(TABLES_APPLICATION.length, tables.length);

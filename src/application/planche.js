@@ -1,0 +1,441 @@
+// © 2026 TechnoLibre (http://www.technolibre.ca)
+// License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
+
+// Le modèle de la planche de badges (§ 11.3 à § 11.8) : ce que chaque badge
+// imprime, dans l'ordre de la pile, et les lignes de la feuille de contrôle.
+// Le modèle se lit de la charge et rien d'autre — ni horloge, ni disque, ni
+// tirage, ni langue du système — : deux appels sur la même charge rendent
+// des modèles égaux, et un badge réédité égale celui de la première planche
+// tant que le placement n'a pas bougé. Chaque texte se compose par libelle,
+// en français, jamais décoré par la langue témoin (contrainte 25) ; la mise
+// en page et le PDF (src/pdf) ne composent aucun mot.
+//
+// La planche imprime une source : le placement retenu, ou une proposition
+// désignée par son identifiant (Q3), qui sort toujours en BROUILLON. Elle se
+// refuse sans placement, sur un placement qui se contredit ou qui ne décrit
+// plus la soirée, avant de produire (§ 11.8).
+import { pourvoyeursDesTitres } from '../csv/import.js';
+import { cleNormalisee } from '../csv/normalisation.js';
+import { BADGE, PAPIERS } from '../geometrie/papiers.js';
+import { derive, fautes } from '../stockage/placements.js';
+import { raisonsNommees } from './avertissements.js';
+import { formeNommeeDe } from './commandes.js';
+import { ErreurCommande, refus } from './erreurs.js';
+import { libelle } from './libelles.js';
+import { nomAffiche } from './personnes.js';
+import { estBrouillon, horodatagePlacement } from './sorties.js';
+import { versionVisible } from './version.js';
+
+/**
+ * @typedef {'feuille'|'pile'} Imposition
+ * @typedef {'alphabetique'|'table'} Ordre
+ * @typedef {Object} LigneTour
+ * @property {number|null} tour     null : « Toute la soirée », un itinéraire
+ *                                  constant sur R ≥ 2 tours
+ * @property {number|null} table    le numéro affiché ; null : « pas de table »
+ * @property {number|null} siege    sous sièges attribués seulement
+ * @property {string|null} titre    le titre dont une réservation fait la
+ *                                  personne titulaire à ce tour
+ * @typedef {Object} Badge
+ * @property {number} participant
+ * @property {string} nom                 le nom affiché, en NFC
+ * @property {string|null} appartenance   en NFC ; null : la ligne n'existe pas
+ * @property {LigneTour[]} lignes
+ * @property {number|null} identifiant    celui d'un homonyme que rien ne sépare
+ * @property {{nom: string, lignes: string[], appartenance: string|null,
+ *             pied: string[], piedReduit: string[]}} textes
+ * @typedef {Object} ModelePlanche
+ * @property {Badge[]} badges             dans l'ordre de la pile
+ * @property {{nom: string, date: string|null}} evenement
+ * @property {string|null} horodatage
+ * @property {boolean} brouillon
+ * @property {{participants: number, exclus: number, produits: number}} comptes
+ * @property {Array<{nom: string, ids: number[]}>} homonymes
+ * @property {null|{ids: number[]}} reedition
+ * @property {string} version
+ */
+
+/** Les sources d'une planche (Q3). */
+export const SOURCES_PLANCHE = Object.freeze(['retenu', 'proposition']);
+/** Les ordres de la pile (§ 11.6, décision 9). */
+export const ORDRES = Object.freeze(['alphabetique', 'table']);
+/** Les impositions de la planche (§ 11.6). */
+export const IMPOSITIONS = Object.freeze(['feuille', 'pile']);
+
+// Les refus de la mise en page, que la production relaie (refusProduction).
+const TROP_DE_TOURS = 'PLANCHE_TROP_DE_TOURS';
+const NOM_TROP_LONG = 'PLANCHE_NOM_TROP_LONG';
+
+// Le remède des refus qui renvoient aux propositions : en choisir une, ou en
+// produire de nouvelles. Un objet neuf à chaque refus.
+const versPropositions = () => ({ geste: 'ouvrirSection', section: 'propositions' });
+
+/**
+ * Compare deux chaînes point de code par point de code : -1, 0 ou 1. « < »
+ * compare des unités UTF-16, et range une lettre du plan astral — codée
+ * par une paire de substitution, de U+D800 à U+DFFF — avant un caractère de
+ * U+E000 à U+FFFF : l'ordre de la pile en dépendrait. Une chaîne qui en
+ * prolonge une autre vient après elle.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {-1|0|1}
+ * @throws {TypeError} un argument qui n'est pas une chaîne
+ */
+export function comparerPointsDeCode(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') {
+    throw new TypeError(`comparerPointsDeCode : deux chaînes attendues, reçu ${typeof a} et ${typeof b}`);
+  }
+  // codePointAt lit, à l'indice d'une unité haute, le point de code entier :
+  // deux chaînes qui diffèrent par une paire se départagent là. À l'indice
+  // d'une unité basse, il ne se lit qu'après une unité haute égale, et deux
+  // unités basses se comparent alors comme leurs points de code.
+  for (let i = 0; i < a.length && i < b.length; i += 1) {
+    const [pa, pb] = [a.codePointAt(i), b.codePointAt(i)];
+    if (pa !== pb) return pa < pb ? -1 : 1;
+  }
+  if (a.length === b.length) return 0;
+  return a.length < b.length ? -1 : 1;
+}
+
+// La clé d'appartenance d'une personne : la clé normalisée, vide sans
+// appartenance ou pour une appartenance faite de blancs.
+const cleAppartenance = ({ appartenance }) => cleNormalisee(appartenance ?? '');
+
+/**
+ * Les homonymes que rien ne sépare sur un badge (§ 11.4, décision 7) : les
+ * personnes non exclues de même nom affiché normalisé et de même
+ * appartenance normalisée, ou toutes deux sans appartenance. Un groupe par
+ * collision : nom, le nom affiché en NFC de sa personne d'identifiant le
+ * plus petit ; ids, croissants. Les groupes se rangent par clé de nom, puis
+ * d'appartenance, par points de code. Le calcul porte sur toute la soirée,
+ * jamais sur une sélection : un badge réédité garde son identifiant.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {Array<{nom: string, ids: number[]}>}
+ */
+export function homonymesDe(charge) {
+  const groupes = new Map();
+  const triees = charge.participants.filter(({ exclu }) => !exclu).sort((a, b) => a.id - b.id);
+  for (const personne of triees) {
+    const cles = [cleNormalisee(nomAffiche(personne)), cleAppartenance(personne)];
+    const cle = JSON.stringify(cles);
+    if (!groupes.has(cle)) groupes.set(cle, { cles, nom: nomAffiche(personne).normalize('NFC'), ids: [] });
+    groupes.get(cle).ids.push(personne.id);
+  }
+  return [...groupes.values()]
+    .filter(({ ids }) => ids.length > 1)
+    .sort((a, b) => comparerPointsDeCode(a.cles[0], b.cles[0]) || comparerPointsDeCode(a.cles[1], b.cles[1]))
+    .map(({ nom, ids }) => ({ nom, ids }));
+}
+
+// La source contrôlée et le placement qu'elle désigne : le retenu, null sans
+// lui ; la proposition d'identifiant proposition, null quand aucune n'est
+// désignée.
+function placementDeSource(charge, source, proposition) {
+  if (!SOURCES_PLANCHE.includes(source)) {
+    throw new TypeError(`source : ${SOURCES_PLANCHE.join(' ou ')} attendue, reçu ${JSON.stringify(source)}`);
+  }
+  if (source === 'retenu') return charge.retenu;
+  if (proposition === null) return null;
+  if (!Number.isSafeInteger(proposition)) {
+    throw new TypeError(`proposition : identifiant entier ou null attendu, reçu ${JSON.stringify(proposition)}`);
+  }
+  const designee = charge.propositions.find(({ id }) => id === proposition);
+  if (designee === undefined) throw refus('PROPOSITION_INCONNUE', { id: proposition });
+  return designee;
+}
+
+/**
+ * Le refus qui garde la planche avant de produire (§ 11.8, Q3), le premier
+ * dans cet ordre : PLANCHE_SANS_PLACEMENT {} — la source retenu sans retenu,
+ * ou la source proposition sans proposition désignée ; RETENU_FAUTIF {},
+ * relayé tel que les places le lèvent, quand le placement de la source se
+ * contredit ; PLANCHE_DERIVE {raisons}, les raisons de dérive de la source
+ * nommées (raisonsNommees) quand elle ne décrit plus la soirée. null quand
+ * la planche se produit. Les détails portent le remède.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {{source?: 'retenu'|'proposition', proposition?: number|null}} [options]
+ * @returns {null|{code: string, details: Object}}
+ * @throws {TypeError} une source inconnue, un identifiant qui n'est ni un
+ *         entier ni null
+ * @throws {ErreurCommande} PROPOSITION_INCONNUE {id}
+ */
+export function refusPlanche(charge, { source = 'retenu', proposition = null } = {}) {
+  const placement = placementDeSource(charge, source, proposition);
+  if (placement === null) return { code: 'PLANCHE_SANS_PLACEMENT', details: { remede: versPropositions() } };
+  if (fautes(placement).length > 0) {
+    return { code: 'RETENU_FAUTIF', details: { remede: { geste: 'ouvrirSecours', source: 'precedent' } } };
+  }
+  const raisons = derive(placement, charge);
+  if (raisons.length > 0) {
+    return { code: 'PLANCHE_DERIVE', details: { raisons: raisonsNommees(raisons, charge), remede: versPropositions() } };
+  }
+  return null;
+}
+
+/**
+ * Un refus de la mise en page (§ 11.5), que la production relaie avec le
+ * remède du contrat : PLANCHE_TROP_DE_TOURS {tours}, sans remède ;
+ * PLANCHE_NOM_TROP_LONG {participant}, vers la liste des participants, où
+ * le nom se corrige. Les détails reçus restent, personne comprise quand
+ * l'appelant la nomme.
+ *
+ * @param {string} code
+ * @param {Object} details
+ * @returns {{code: string, details: Object}}
+ * @throws {TypeError} un autre code
+ */
+export function refusProduction(code, details) {
+  if (code === TROP_DE_TOURS) return { code, details: { ...details, remede: null } };
+  if (code === NOM_TROP_LONG) {
+    return { code, details: { ...details, remede: { geste: 'ouvrirSection', section: 'participants' } } };
+  }
+  throw new TypeError(`refusProduction : ${TROP_DE_TOURS} ou ${NOM_TROP_LONG} attendu, reçu ${JSON.stringify(code)}`);
+}
+
+// Où chaque personne s'assied à chaque tour du placement, lu de sa forme
+// nommée : Map participant → tableau par tour de { table (identifiant),
+// numero, siege } ; table et numero null dans la réserve.
+function placesParTour(charge, cible, tours) {
+  const places = new Map();
+  for (const { tour, table, numero, siege, participant } of formeNommeeDe(charge, cible).lignes) {
+    if (!places.has(participant)) places.set(participant, Array.from({ length: tours }, () => null));
+    places.get(participant)[tour - 1] = { table, numero, siege };
+  }
+  return places;
+}
+
+// Les titres imprimés (§ 4.1, § 11.4, décision 11) : Map « participant/tour »
+// → libellés, pour chaque titre dont une réservation fait la personne
+// titulaire à ce tour (pourvoyeursDesTitres) ET que le placement assied à la
+// table du titre — et à son siège quand il attribue les sièges. Un titre
+// posé sur une chaise que le placement fait seulement occuper ne s'imprime
+// pas : ce serait désigner le titulaire par tirage.
+function titresImprimes(charge, places, siegesAttribues) {
+  const titres = new Map();
+  pourvoyeursDesTitres(charge).forEach(({ tours }, rang) => {
+    const titre = charge.titres[rang];
+    tours.forEach((reservation, indice) => {
+      if (reservation === null) return;
+      // La réservation d'une personne non exclue, que le placement cohérent
+      // et sans dérive assied à chaque tour.
+      const place = places.get(reservation.participant)[indice];
+      if (place.table !== titre.table) return;
+      if (siegesAttribues && place.siege !== titre.siege) return;
+      const cle = `${reservation.participant}/${indice + 1}`;
+      titres.set(cle, [...(titres.get(cle) ?? []), titre.libelle.normalize('NFC')]);
+    });
+  });
+  return titres;
+}
+
+// Les lignes de tour d'une personne : une par tour, ou une seule « Toute la
+// soirée » quand R ≥ 2 et que table, siège et titre ne changent pas.
+function lignesDe(id, places, titres) {
+  const lignes = places.get(id).map((place, indice) => ({
+    tour: indice + 1,
+    table: place.numero,
+    siege: place.siege,
+    titre: titres.get(`${id}/${indice + 1}`)?.join(', ') ?? null,
+  }));
+  const [premiere] = lignes;
+  const constante = lignes.every(
+    ({ table, siege, titre }) => table === premiere.table && siege === premiere.siege && titre === premiere.titre,
+  );
+  if (lignes.length >= 2 && constante) return [{ ...premiere, tour: null }];
+  return lignes;
+}
+
+// Les textes d'un badge (§ 11.4, décision 8), composés par libelle : le pied
+// porte l'événement et sa date, l'horodatage, puis l'identifiant d'un
+// homonyme ; piedReduit, le même sans le nom de l'événement, date gardée.
+// Aucun ne porte la version, ni le tour.
+function textesDe({ nom, appartenance, lignes, identifiant }, evenement, horodatage) {
+  const ligneHorodatage =
+    horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
+  const ligneIdentifiant = identifiant === null ? [] : [libelle('planche.pied.identifiant', { identifiant })];
+  const ligneDate = evenement.date === null ? [] : [libelle('planche.pied.date', { date: evenement.date })];
+  return {
+    nom,
+    lignes: lignes.map((ligne) => libelle(ligne.tour === null ? 'planche.touteLaSoiree' : 'planche.tour', ligne)),
+    appartenance,
+    pied: [libelle('planche.pied.evenement', evenement), ligneHorodatage, ...ligneIdentifiant],
+    piedReduit: [...ligneDate, ligneHorodatage, ...ligneIdentifiant],
+  };
+}
+
+// L'ordre alphabétique de la pile (§ 11.6, § 15.5) : la clé normalisée du
+// nom, puis celle du prénom, par points de code, puis l'identifiant.
+const ordreAlphabetique = (a, b) =>
+  comparerPointsDeCode(cleNormalisee(a.personne.nom), cleNormalisee(b.personne.nom)) ||
+  comparerPointsDeCode(cleNormalisee(a.personne.prenom ?? ''), cleNormalisee(b.personne.prenom ?? '')) ||
+  a.personne.id - b.personne.id;
+
+// L'ordre par table (décision 9) : le numéro de la table du tour 1, la
+// réserve de ce tour en dernier, l'identifiant de table pour deux numéros
+// égaux, puis l'ordre alphabétique.
+function ordreParTable(a, b) {
+  const [pa, pb] = [a.places[0], b.places[0]];
+  const enReserve = (pa.table === null) - (pb.table === null);
+  if (enReserve !== 0) return enReserve;
+  if (pa.table !== null && pa.table !== pb.table) return pa.numero - pb.numero || pa.table - pb.table;
+  return ordreAlphabetique(a, b);
+}
+
+// La sélection d'une réédition, contrôlée : null, ou des identifiants
+// entiers, au moins un, sans doublon, chacun d'une personne non exclue.
+function selectionLue(charge, selection) {
+  if (selection === null) return null;
+  const forme =
+    Array.isArray(selection) &&
+    selection.length > 0 &&
+    selection.every(Number.isSafeInteger) &&
+    new Set(selection).size === selection.length;
+  if (!forme) throw new TypeError(`selection : null ou identifiants entiers distincts attendus, reçu ${JSON.stringify(selection)}`);
+  for (const id of selection) {
+    const personne = charge.participants.find((candidate) => candidate.id === id);
+    if (personne === undefined) throw refus('PARTICIPANT_INCONNU', { id });
+    if (personne.exclu) {
+      throw refus('PERSONNE_EXCLUE', { participant: id }, { commande: 'reintegrerParticipant', arguments: { id } });
+    }
+  }
+  return new Set(selection);
+}
+
+/**
+ * Le modèle de la planche (§ 11.4 à § 11.8) : un badge par personne non
+ * exclue — ou par personne de la sélection, pour une réédition —, dans
+ * l'ordre demandé, ses lignes de tour lues du placement de la source, ses
+ * textes composés. horodatage : horodatagePlacement de la source ;
+ * brouillon : estBrouillon sur toute la soirée, toujours vrai pour une
+ * proposition ; version : versionVisible, que la feuille de contrôle
+ * imprime et le badge jamais. Les comptes sont ceux de la soirée, produits
+ * celui des badges du modèle. La charge n'est pas modifiée.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {Object} options
+ * @param {'retenu'|'proposition'} [options.source]
+ * @param {number|null} [options.proposition]   la proposition imprimée
+ * @param {Ordre} [options.ordre]
+ * @param {number[]|null} [options.selection]   les personnes à rééditer
+ * @param {string} options.provenance           le mode de construction
+ * @param {string} options.version              la version affichée
+ * @returns {ModelePlanche}
+ * @throws {TypeError} une option hors de son domaine
+ * @throws {ErreurCommande} le refus de refusPlanche ; PROPOSITION_INCONNUE
+ *         {id} ; PARTICIPANT_INCONNU {id} ou PERSONNE_EXCLUE {participant}
+ *         pour une personne de la sélection
+ */
+export function modelePlanche(
+  charge,
+  { source = 'retenu', proposition = null, ordre = 'alphabetique', selection = null, provenance, version },
+) {
+  if (!ORDRES.includes(ordre)) throw new TypeError(`ordre : ${ORDRES.join(' ou ')} attendu, reçu ${JSON.stringify(ordre)}`);
+  if (typeof provenance !== 'string' || typeof version !== 'string') {
+    throw new TypeError('modelePlanche : provenance et version, deux chaînes, attendues');
+  }
+  const rejet = refusPlanche(charge, { source, proposition });
+  if (rejet !== null) throw new ErreurCommande(rejet.code, rejet.details);
+  const choisies = selectionLue(charge, selection);
+
+  const placement = placementDeSource(charge, source, proposition);
+  const cible = source === 'retenu' ? { retenu: true } : { proposition };
+  const places = placesParTour(charge, cible, placement.tours);
+  const titres = titresImprimes(charge, places, placement.siegesAttribues);
+  const homonymes = homonymesDe(charge);
+  const identifiants = new Set(homonymes.flatMap(({ ids }) => ids));
+  const evenement = { nom: charge.evenement.nom.normalize('NFC'), date: charge.evenement.date };
+  const horodatage = horodatagePlacement(charge, { source, proposition });
+
+  const retenues = charge.participants
+    .filter(({ exclu, id }) => !exclu && (choisies === null || choisies.has(id)))
+    .map((personne) => ({ personne, places: places.get(personne.id) }))
+    .sort(ordre === 'table' ? ordreParTable : ordreAlphabetique);
+  const badges = retenues.map(({ personne }) => {
+    const appartenance = cleAppartenance(personne) === '' ? null : personne.appartenance.normalize('NFC');
+    const badge = {
+      participant: personne.id,
+      nom: nomAffiche(personne).normalize('NFC'),
+      appartenance,
+      lignes: lignesDe(personne.id, places, titres),
+      identifiant: identifiants.has(personne.id) ? personne.id : null,
+    };
+    return { ...badge, textes: textesDe(badge, evenement, horodatage) };
+  });
+
+  const exclus = charge.participants.filter(({ exclu }) => exclu).length;
+  return {
+    badges,
+    evenement,
+    horodatage,
+    brouillon: estBrouillon(charge, { source, tour: 'tous' }),
+    comptes: { participants: charge.participants.length, exclus, produits: badges.length },
+    homonymes,
+    reedition: choisies === null ? null : { ids: badges.map(({ participant }) => participant) },
+    version: versionVisible(provenance, version, libelle),
+  };
+}
+
+// Le point de code d'un caractère, écrit U+XXXX, quatre chiffres au moins.
+const pointDeCode = (caractere) => `U+${caractere.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+
+// Un texte dont chaque caractère absent de la police s'écrit par son point
+// de code : la police le dessinerait comme une case vide.
+const sansAbsents = (texte, absents) => [...texte].map((c) => (absents.has(c) ? pointDeCode(c) : c)).join('');
+
+/**
+ * Les lignes de la feuille de contrôle (§ 11.3, § 11.5, § 11.8), page 1 de
+ * la planche : les cotes du badge, le papier et ses cotes, l'imposition, le
+ * nombre de planches, le compte produit et le compte attendu, l'événement
+ * et sa date, l'horodatage du placement, la version, la consigne
+ * d'impression ; BROUILLON s'il y a lieu ; pour une réédition, son compte
+ * puis les noms réédités dans l'ordre de la pile ; les caractères absents
+ * de la police, quand il y en a, par leur point de code. Dans toutes les
+ * lignes, un caractère absent s'écrit « U+674E », jamais tel quel.
+ *
+ * @param {ModelePlanche} modele
+ * @param {Object} options
+ * @param {import('../geometrie/papiers.js').Papier} options.papier
+ * @param {Imposition} options.imposition
+ * @param {number} options.planches        entier ≥ 0
+ * @param {string[]} [options.absents]     un caractère chacun, doublons admis
+ * @returns {string[]}
+ * @throws {TypeError} une option hors de son domaine
+ */
+export function textesControle(modele, { papier, imposition, planches, absents = [] }) {
+  if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
+    throw new TypeError(`papier : clé de PAPIERS attendue, reçu ${JSON.stringify(papier)}`);
+  }
+  if (!IMPOSITIONS.includes(imposition)) {
+    throw new TypeError(`imposition : ${IMPOSITIONS.join(' ou ')} attendue, reçu ${JSON.stringify(imposition)}`);
+  }
+  if (!Number.isSafeInteger(planches) || planches < 0) {
+    throw new TypeError(`planches : entier ≥ 0 attendu, reçu ${JSON.stringify(planches)}`);
+  }
+  const unCaractere = (c) => typeof c === 'string' && [...c].length === 1;
+  if (!Array.isArray(absents) || !absents.every(unCaractere)) {
+    throw new TypeError(`absents : caractères attendus, reçu ${JSON.stringify(absents)}`);
+  }
+  const { badges, evenement, horodatage, brouillon, comptes, reedition, version } = modele;
+  const lignes = [
+    libelle('planche.controle.badge', BADGE),
+    libelle('planche.controle.papier', { papier, ...PAPIERS[papier] }),
+    libelle('planche.controle.imposition', { imposition }),
+    libelle('planche.controle.planches', { planches }),
+    libelle('planche.controle.comptes', comptes),
+    libelle('planche.controle.evenement', evenement),
+    horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage }),
+    libelle('planche.controle.version', { version }),
+    libelle('planche.controle.consigne'),
+  ];
+  if (brouillon) lignes.push(libelle('planche.brouillon'));
+  if (reedition !== null) {
+    lignes.push(libelle('planche.controle.reedition', { n: reedition.ids.length }), ...badges.map(({ textes }) => textes.nom));
+  }
+  const uniques = new Set(absents);
+  const ecrites = lignes.map((ligne) => sansAbsents(ligne, uniques));
+  if (uniques.size > 0) ecrites.push(libelle('planche.controle.absents', { points: [...uniques].map(pointDeCode) }));
+  return ecrites;
+}

@@ -26,6 +26,7 @@ import { TABLE as MOBILIER } from './libelles/mobilier.js';
 import { TABLE as MOTEUR } from './libelles/moteur.js';
 import { TABLE as PARTICIPANTS } from './libelles/participants.js';
 import { TABLE as PLACES } from './libelles/places.js';
+import { TABLE as PLANCHE } from './libelles/planche.js';
 import { TABLE as SEANCE } from './libelles/seance.js';
 import { TABLE as SORTIES } from './libelles/sorties.js';
 import { TABLE as STOCKAGE } from './libelles/stockage.js';
@@ -41,6 +42,7 @@ export const TABLES_APPLICATION = Object.freeze([
   MOTEUR,
   PARTICIPANTS,
   PLACES,
+  PLANCHE,
   SEANCE,
   SORTIES,
   STOCKAGE,
