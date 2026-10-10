@@ -32,17 +32,29 @@
   // (mesurerListes). Une ligne encore plus haute qu'une page — un nom fait
   // de nombreux mots courts — resserre les groupes de sa feuille
   // (resserrerGroupes), et la passe se refait ; sinon paginerFeuilles en
-  // fait les pages. Une ligne qui passe la page sous un seul tour par
-  // groupe, sa colonne à toute la largeur que la place laisse, reste seule
-  // sur sa page.
+  // fait les pages. Une ligne qui passe encore la page sous un seul tour
+  // par groupe, sa colonne à toute la largeur que la place laisse — un nom
+  // de milliers de caractères —, ne se coupe pas au bord de la page : la
+  // même passe en essaie les morceaux sur la ligne rendue (couperLigne), et
+  // la ligne se continue, un morceau par page, sous l'en-tête répété et le
+  // numéro de sa place (morcelerPages, trancher).
   //
   // La source est celle de l'aperçu, tour par tour (etatsDesTours).
   //
   // Sans bandeMm, la vue rend sa feuille gabarit, que l'aperçu mesure.
   import { getContext, tick } from 'svelte';
   import Feuille from './Feuille.svelte';
-  import { etatsDesTours, feuilleDuTour, feuillesTables, grouperTours, largeursColonnes, resserrerGroupes, toursParGroupe } from './listes.js';
-  import { mesurerListes, mesurerPlace, paginerFeuilles } from './pagination.js';
+  import {
+    etatsDesTours,
+    feuilleDuTour,
+    feuillesTables,
+    grouperTours,
+    largeursColonnes,
+    resserrerGroupes,
+    textesCellule,
+    toursParGroupe,
+  } from './listes.js';
+  import { couperLigne, mesurerListes, mesurerPlace, morcelerPages, paginerFeuilles, trancher } from './pagination.js';
 
   let { etat, options, feuille, bandeMm = null, orientation = $bindable(null) } = $props();
 
@@ -63,7 +75,9 @@
   const groupes = $derived(parGroupe === null ? null : grouperTours(listes, parGroupe));
   const cleGroupes = $derived(JSON.stringify([cle, parGroupe]));
   let mesures = $state(null);
-  const pages = $derived(mesures !== null && mesures.cle === cleGroupes ? paginerFeuilles(mesures.feuilles, mesures.utile) : null);
+  const pages = $derived(
+    mesures !== null && mesures.cle === cleGroupes ? morcelerPages(paginerFeuilles(mesures.feuilles, mesures.utile), mesures.coupures) : null,
+  );
   const feuilleMesure = $derived({ ...feuille, filigrane: false });
   // Les sondes de la première passe, une par feuille.
   let sondes = $state([]);
@@ -71,8 +85,9 @@
   // Mesure la feuille de mesure une fois le rendu à jour (tick) : la clé
   // lue alors est celle des valeurs que le DOM porte. Sans tailles à jour,
   // lit les sondes ; avec elles, les hauteurs des groupes, qui donnent les
-  // pages ou des tailles resserrées. La lecture des clés relance la mesure
-  // quand l'une change avant que les pages viennent.
+  // pages ou des tailles resserrées, et les morceaux de chaque ligne encore
+  // seule. La lecture des clés relance la mesure quand l'une change avant
+  // que les pages viennent.
   function mesurer(conteneur) {
     const voulue = cleGroupes;
     const valeurs = parGroupe;
@@ -87,9 +102,20 @@
         return;
       }
       const lues = mesurerListes(contenu);
-      const resserrees = resserrerGroupes(valeurs, groupesLus, paginerFeuilles(lues.feuilles, lues.utile));
-      if (resserrees === null) mesures = { cle: voulue, ...lues };
-      else tailles = { cle, valeurs: resserrees };
+      const paginees = paginerFeuilles(lues.feuilles, lues.utile);
+      const resserrees = resserrerGroupes(valeurs, groupesLus, paginees);
+      if (resserrees !== null) {
+        tailles = { cle, valeurs: resserrees };
+        return;
+      }
+      const listesRendues = contenu.querySelectorAll('[data-liste-imprimee]');
+      const coupures = [];
+      for (const { feuille: rang, debut, seule } of paginees) {
+        if (!seule) continue;
+        const ligne = listesRendues[rang].querySelector('tbody').rows[debut];
+        coupures.push({ feuille: rang, ligne: debut, bornes: couperLigne(ligne, lues.utile - lues.feuilles[rang].entete) });
+      }
+      mesures = { cle: voulue, ...lues, coupures };
     });
     return () => {
       active = false;
@@ -107,18 +133,25 @@
   });
 </script>
 
-{#snippet celluleTour(cellule)}
+<!-- Une cellule de tour : ses textes entiers (textesCellule), ou les parts
+     de ses textes qu'une page porte d'une ligne continuée. -->
+{#snippet celluleTour(cellule, parts = null)}
+  {@const [nom, titre, nonPourvu] = parts ?? textesCellule(cellule, t)}
   <td>
-    {#if cellule.nom === null}
-      <span class="vide" data-place-vide>{t('feuilles.tables.vide')}</span>
-    {:else}
-      <span class="nom" data-nom-imprime>{cellule.nom}</span>
+    {#if nom !== ''}
+      {#if cellule.nom === null}
+        <span class="vide" data-place-vide>{nom}</span>
+      {:else}
+        <span class="nom" data-nom-imprime>{nom}</span>
+      {/if}
     {/if}
-    {#if cellule.titre !== null}
+    {#if titre !== '' || nonPourvu !== ''}
       <span class="titre-place">
-        <span class="libelle-titre">{cellule.titre.libelle}</span>
-        {#if !cellule.titre.pourvu}
-          <span>{t('feuilles.tables.titreNonPourvu')}</span>
+        {#if titre !== ''}
+          <span class="libelle-titre">{titre}</span>
+        {/if}
+        {#if nonPourvu !== ''}
+          <span>{nonPourvu}</span>
         {/if}
       </span>
     {/if}
@@ -142,7 +175,7 @@
   </table>
 {/snippet}
 
-{#snippet blocTable(liste, rangListe, debut, fin)}
+{#snippet blocTable(liste, rangListe, debut, fin, morceau = null)}
   <div class="liste" data-liste-imprimee={rangListe} data-table={liste.table}>
     <p class="titre">{t('feuilles.tables.titre', { table: liste.numero })}</p>
     <table>
@@ -161,10 +194,14 @@
       </thead>
       <tbody>
         {#each liste.lignes.slice(debut, fin) as ligne, rang (ligne.place)}
+          <!-- Le morceau {debut, fin} d'une ligne continuée porte sur les
+               textes de ses cellules mis bout à bout, dans l'ordre du
+               document, comme couperLigne les lit : trois par cellule. -->
+          {@const parts = morceau === null ? null : trancher(ligne.cellules.flatMap((cellule) => textesCellule(cellule, t)), morceau.debut, morceau.fin)}
           <tr data-ligne-imprimee={debut + rang}>
             <th scope="row">{ligne.place}</th>
-            {#each ligne.cellules as cellule (cellule.tour)}
-              {@render celluleTour(cellule)}
+            {#each ligne.cellules as cellule, rangCellule (cellule.tour)}
+              {@render celluleTour(cellule, parts === null ? null : parts.slice(3 * rangCellule, 3 * rangCellule + 3))}
             {/each}
           </tr>
         {/each}
@@ -201,7 +238,7 @@
   {#each pages as page (page.rang)}
     <Feuille rang={page.rang} papier={options.papier} orientation="portrait" feuille={feuilleDeListe(groupes[page.feuille])} {bandeMm}>
       {#snippet contenu()}
-        {@render blocTable(groupes[page.feuille], page.feuille, page.debut, page.fin)}
+        {@render blocTable(groupes[page.feuille], page.feuille, page.debut, page.fin, page.morceau)}
       {/snippet}
     </Feuille>
   {/each}

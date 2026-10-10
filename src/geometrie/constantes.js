@@ -57,16 +57,19 @@ export const CONSTANTES = Object.freeze(
     },
     {
       nom: 'SEUIL_SIEGES_LISIBLES',
-      valeur: 16,
+      valeur: 18,
       unite: 'places',
       mesure: "plus grand nombre de places d'une table dont la liste de noms reste lisible",
       raison: "au-delà, le dessin d'une table cesse d'être lisible, et l'application le signale (§ 6.2)",
-      configuration: 'banc de mesure, cadre de 1 366 × 700 px',
+      configuration:
+        'banc de mesure, cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, ' +
+        '16 processeurs logiques, processeur non ralenti, police Noto Sans',
       proprietaire: 'banc',
-      statut: 'defautDeTravail',
+      statut: 'mesuree',
       protocole:
         'banc de mesure, cadre de 1 366 × 700 px : le plus grand nombre de places dont la liste, à la hauteur ' +
-        "de ligne mesurée, tient dans la hauteur du cadre au zoom ajusté d'une table seule ; écrit dans ce registre",
+        "de ligne mesurée, tient dans la hauteur du cadre au zoom ajusté d'une table seule, ronde puis carrée, " +
+        'par dichotomie ; le plus petit des deux seuils, écrit dans ce registre',
     },
     {
       nom: 'K_LISTES',
@@ -251,18 +254,21 @@ export const CONSTANTES = Object.freeze(
     },
     {
       nom: 'TOLERANCE_CHAINE_TEMOIN',
-      valeur: 0.01,
+      valeur: 0.011,
       unite: 'rapport',
       mesure: 'écart relatif admis entre la longueur rendue de la chaîne témoin et celle que donnent les avances de la police',
       raison:
         "la mesure du § 19.4 trahit une police de repli ; trop serrée, elle échoue sur la gigue du rendu, trop " +
         'large, elle laisse passer le repli',
-      configuration: 'banc de mesure, Chromium du projet, cadre de 1 366 × 700 px, facteur 1',
+      configuration:
+        'banc de mesure, cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, ' +
+        '16 processeurs logiques, processeur non ralenti, police Noto Sans',
       proprietaire: 'banc',
-      statut: 'defautDeTravail',
+      statut: 'mesuree',
       protocole:
         "banc de mesure : le quart de l'écart relatif entre la police embarquée et une famille de repli " +
-        'forcée, et au moins trois fois la gigue de dix mesures ; écrit dans ce registre',
+        'forcée, et au moins trois fois la gigue de dix mesures, chaîne témoin à 16 px, crénage et ligatures ' +
+        'coupés ; arrondi par excès à deux chiffres significatifs, écrit dans ce registre',
     },
     {
       nom: 'RALENTISSEMENT_PLEINE_CHARGE',

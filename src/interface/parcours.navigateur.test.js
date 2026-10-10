@@ -17,7 +17,8 @@
 // chargée, 11, 19, 20, puis 22 et 23, l'aperçu avant impression d'une
 // proposition et du retenu, puis 24 et 25, la feuille de contrôle et la
 // première planche du PDF que la section Badges produit, tramées sous node
-// (§ 19.6) —, puis l'ordre de lecture du § 2.1 sur
+// (§ 19.6) —, ces sorties en lecture puis sur un plan bloqué, qui n'écrivent
+// que la planche et reglages_locaux.json (§ 11.6), puis l'ordre de lecture du § 2.1 sur
 // l'événement retenu, les fenêtres — aucune pendant un geste non
 // destructeur, une qui nomme ce qui part pour chaque geste qui détruit —,
 // enfin chaque famille de geste modifiant en lecture puis sur un plan
@@ -714,6 +715,60 @@ async function photographierPdf(octets, { page, fichier }, conditions) {
     expect(ecarts, `capture ${fichier} : écart au manifeste`).toEqual([]);
   }
   capturesPdf.add(fichier);
+}
+
+// --- Sortir sans modifier (§ 11.6, § 8.4) ------------------------------------------
+
+// Les sorties d'un événement ouvert : l'aperçu de chaque vue, envoyé à
+// l'imprimante d'épreuve ; le papier de la machine changé, puis rendu ;
+// la planche de badges produite par la section Badges. Le parcours
+// reprend sur le plan. Rend le nom du PDF écrit.
+async function sortir() {
+  const impressions = m.imprimante.appels().length;
+  const rang = m.trace.length;
+  await ouvrirSection('plan');
+  await cliquer('[data-ecran="evenement"] [data-commande="apercu"]');
+  await attendre('le document imprimé', () => dans('[data-impression] [data-feuille]'));
+  for (const vue of ['plan', 'accueil', 'tables']) {
+    await cliquer(`[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`);
+    await attendre(`la vue ${vue}`, () => dans(`[data-impression][data-vue-impression="${vue}"] [data-feuille]`));
+    await cliquer('[data-ecran="apercu"] [data-commande="imprimer"]');
+  }
+  await attendre('trois impressions', () => m.imprimante.appels().length === impressions + 3);
+  for (const papier of ['Lettre', 'A4']) {
+    await cliquer('[data-ecran="apercu"] [data-papier="choisi"] [data-commande="changerPapier"]');
+    await attendre('la question du papier', () => dans('[data-ecran="apercu"] [data-papier="question"]'));
+    await cliquer(`[data-papier="question"] [data-cible="${papier}"] [data-commande="choisirPapier"]`);
+    await attendre(`le papier ${papier}`, () => etat().papier === papier && dans('[data-papier="choisi"]') && dans('[data-impression] [data-feuille]'));
+  }
+  await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
+  await attendre('l’événement, de retour', () => dans('[data-ecran="evenement"]'));
+  await ouvrirSection('badges');
+  await cliquer('[data-section="badges"] [data-commande="produirePlanche"]');
+  await attendre('la planche produite', () => dans('[data-section="badges"] [data-chemin-planche]'), IMAGES_PLANCHE);
+  const planches = cheminsEcrits(rang).filter((chemin) => chemin.endsWith('.pdf'));
+  expect(planches, 'une planche écrite').toHaveLength(1);
+  await ouvrirSection('plan');
+  return planches[0];
+}
+
+// « Regarder n'écrit jamais » (§ 8.2, § 8.4, § 11.6) : les deux écritures
+// que regarder et sortir admettent — reglages_locaux.json, où s'écrivent
+// le cadrage différé et le papier de la machine, et la planche de
+// l'événement, <base>.badges…pdf. Rien d'autre.
+const ecritureAdmise = (chemin) =>
+  chemin === 'reglages_locaux.json' || (chemin.startsWith(`${base()}.badges`) && chemin.endsWith('.pdf'));
+
+// Sort, puis affirme que seules les deux écritures admises ont eu lieu,
+// chacune au moins une fois : rien de l'événement.
+async function sortirSansEcrire(avant, empreinte, geste) {
+  const rang = m.trace.length;
+  const planche = await sortir();
+  const interdites = m.trace.slice(rang).filter(([, , chemin]) => chemin !== '' && !ecritureAdmise(chemin));
+  expect(interdites, geste).toEqual([]);
+  expect(cheminsEcrits(rang).sort(), geste).toEqual([planche, 'reglages_locaux.json'].sort());
+  expect(serialiserCharge(charge())).toBe(empreinte);
+  await rienEcrit(avant, geste);
 }
 
 // --- Le parcours (§ 2.1, § 19.3) ------------------------------------------------------
@@ -1529,14 +1584,57 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await ouvrirSection('plan');
   });
 
-  // Un échec de 22 à 25 laisse l'aperçu ouvert, la proposition montrée, la
-  // section Badges ouverte ou la fenêtre défilée : l'état est rendu ici,
-  // pour que les épreuves suivantes jugent leurs propres gardes et non ce
-  // reste.
+  // Les sorties vivent en lecture et sur un plan bloqué, et n'écrivent que
+  // la planche et le papier de la machine (§ 11.6, § 8.4, § 9) ; le plan
+  // débloqué, le parcours reprend sur le retenu, en écriture.
+  test('lecture, puis bloqué : aperçu, impression, papier et planche ; seuls le PDF et reglages_locaux.json s’écrivent', async () => {
+    expect(charge().evenement.etat).toBe('retenu');
+    await cliquer('[data-place-fixe] [data-commande="lecture"]');
+    await attendre('la lecture', () => etat().mode === 'lecture');
+    await sortirSansEcrire(fichiers(), serialiserCharge(charge()), 'lecture, sortir');
+
+    await cliquer('[data-place-fixe] [data-commande="modifier"]');
+    await attendre('l’écriture', () => etat().mode === 'ecriture');
+    let r = revision();
+    await cliquer('[data-etat="bloque"] [data-commande="etat"]');
+    await uneEntree(r, 'bloquer');
+    expect(charge().evenement.etat).toBe('bloque');
+    await sortirSansEcrire(fichiers(), serialiserCharge(charge()), 'bloqué, sortir');
+
+    r = revision();
+    // « Débloquer » se confirme sur place : armée au premier appui, la
+    // commande exécute au second.
+    await cliquer('[data-place-fixe] [data-commande="debloquer"]');
+    await cliquer('[data-place-fixe] [data-commande="debloquer"]');
+    await uneEntree(r, 'débloquer');
+    expect(charge().evenement.etat).toBe('retenu');
+    if (etat().mode !== 'ecriture') {
+      await cliquer('[data-place-fixe] [data-commande="modifier"]');
+      await attendre('l’écriture', () => etat().mode === 'ecriture');
+    }
+  });
+
+  // Un échec de 22 aux sorties en lecture laisse l'aperçu ouvert, la
+  // proposition montrée, la section Badges ouverte, la fenêtre défilée, le
+  // plan bloqué ou en lecture : l'état est rendu ici, pour que les épreuves
+  // suivantes jugent leurs propres gardes et non ce reste.
   afterAll(async () => {
     if (dans('[data-ecran="apercu"] [data-commande="fermerApercu"]') !== null) {
       await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
       await attendre('le plan, de retour', () => dans('[data-ecran="evenement"]'));
+    }
+    if (etat().mode === 'lecture' && dans('[data-place-fixe] [data-commande="modifier"]') !== null) {
+      await cliquer('[data-place-fixe] [data-commande="modifier"]');
+      await attendre('l’écriture', () => etat().mode === 'ecriture');
+    }
+    if (charge().evenement.etat === 'bloque' && dans('[data-place-fixe] [data-commande="debloquer"]') !== null) {
+      await cliquer('[data-place-fixe] [data-commande="debloquer"]');
+      await cliquer('[data-place-fixe] [data-commande="debloquer"]');
+      await attendre('le plan débloqué', () => charge().evenement.etat !== 'bloque');
+    }
+    if (etat().mode === 'lecture' && dans('[data-place-fixe] [data-commande="modifier"]') !== null) {
+      await cliquer('[data-place-fixe] [data-commande="modifier"]');
+      await attendre('l’écriture', () => etat().mode === 'ecriture');
     }
     if (m.ui.etat().proposition !== null && dans('[data-commande="quitterProposition"]') !== null) {
       await cliquer('[data-commande="quitterProposition"]');
@@ -1928,9 +2026,9 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
     await oublierChoix();
   }
 
-  // Les écritures relevées depuis le rang donné, hors du cadrage qui s'écrit
-  // différé dans reglages_locaux.json (contrainte 4).
-  const ecrituresDepuis = (rang) => m.trace.slice(rang).filter(([, , chemin]) => chemin !== '' && !chemin.endsWith('reglages_locaux.json'));
+  // Les écritures relevées depuis le rang donné, hors des deux que
+  // regarder admet (ecritureAdmise).
+  const ecrituresDepuis = (rang) => m.trace.slice(rang).filter(([, , chemin]) => chemin !== '' && !ecritureAdmise(chemin));
 
   test('en lecture : quatorze familles refusées avec « Modifier », rien d’écrit ; tri, filtre, listes de travail vivants', async () => {
     await cliquer('[data-place-fixe] [data-commande="lecture"]');
@@ -1945,6 +2043,7 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
     await regarderReste();
     expect(serialiserCharge(charge())).toBe(empreinte);
     await rienEcrit(avant, 'lecture, regarder');
+    expect(ecrituresDepuis(rang)).toEqual([]);
   });
 
   test('plan bloqué : quatorze familles refusées avec « Débloquer », rien d’écrit ; tri, filtre, listes de travail vivants', async () => {
@@ -1965,6 +2064,7 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
     await regarderReste();
     expect(serialiserCharge(charge())).toBe(empreinte);
     await rienEcrit(avant, 'bloqué, regarder');
+    expect(ecrituresDepuis(rang)).toEqual([]);
   });
 });
 

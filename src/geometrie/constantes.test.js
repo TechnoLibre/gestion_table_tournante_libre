@@ -7,6 +7,10 @@
 // l'accord du registre avec le relevé committé du banc : le banc écrit un
 // relevé, jamais le registre, et une constante du banc déclarée mesurée
 // porte la valeur que le relevé propose, sur la configuration qu'il décrit.
+// Deux valeurs du relevé sont adoptées — le seuil de sièges lisibles et la
+// tolérance de la chaîne témoin — ; le ralentissement à pleine charge garde
+// son défaut de travail : la machine de référence est le poste de
+// développement, ρ à son défaut (Q13 b).
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { accordRegistre } from '../../scripts/banc/releve.js';
@@ -18,7 +22,7 @@ import { CONSTANTES, constante, verifierRegistre } from './constantes.js';
 const CONTRAT = [
   ['SEUIL_GLISSER_PX', 4, 'px', 'manuel', 'defautDeTravail'],
   ['DUREE_PRESSION_LONGUE_MS', 500, 'ms', 'manuel', 'defautDeTravail'],
-  ['SEUIL_SIEGES_LISIBLES', 16, 'places', 'banc', 'defautDeTravail'],
+  ['SEUIL_SIEGES_LISIBLES', 18, 'places', 'banc', 'mesuree'],
   ['K_LISTES', 0.3, 'px/cm', 'manuel', 'defautDeTravail'],
   ['LARGEUR_BLOC_NOMS_CM', 500, 'cm', 'manuel', 'defautDeTravail'],
   ['HAUTEUR_LIGNE', null, 'cm', 'execution', 'mesuree'],
@@ -32,9 +36,12 @@ const CONTRAT = [
   ['CORPS_MIN_IMPRESSION_MM', 2.5, 'mm', 'manuel', 'defautDeTravail'],
   ['MARGE_PAGE_MM', 10, 'mm', 'manuel', 'defautDeTravail'],
   ['HAUTEUR_BANDE_IMPRESSION', null, 'mm', 'execution', 'mesuree'],
-  ['TOLERANCE_CHAINE_TEMOIN', 0.01, 'rapport', 'banc', 'defautDeTravail'],
+  ['TOLERANCE_CHAINE_TEMOIN', 0.011, 'rapport', 'banc', 'mesuree'],
   ['RALENTISSEMENT_PLEINE_CHARGE', 2, '×', 'banc', 'defautDeTravail'],
 ];
+
+// Les constantes du banc dont le registre a adopté la valeur relevée.
+const ADOPTEES = ['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN'];
 
 // Une copie du registre, entrée par entrée, que l'épreuve peut altérer.
 const copie = () => CONSTANTES.map((entree) => ({ ...entree }));
@@ -52,9 +59,10 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
     }
   });
 
-  test('tant que son propriétaire ne l\'a pas relevée, une constante se déclare défaut de travail ; une constante relevée à l\'exécution est mesurée', () => {
+  test('tant que son propriétaire ne l\'a pas relevée, une constante se déclare défaut de travail ; une constante relevée à l\'exécution, ou adoptée du relevé, est mesurée', () => {
     for (const { nom, proprietaire, statut } of CONSTANTES) {
-      assert.equal(statut, proprietaire === 'execution' ? 'mesuree' : 'defautDeTravail', nom);
+      const mesuree = proprietaire === 'execution' || ADOPTEES.includes(nom);
+      assert.equal(statut, mesuree ? 'mesuree' : 'defautDeTravail', nom);
     }
   });
 
@@ -137,6 +145,32 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
 describe('constantes : accord avec le relevé du banc (§ 19.10, § 14.1)', () => {
   test('chaque constante du banc déclarée mesurée porte la valeur du relevé committé et cite sa configuration', () => {
     assert.ok(CONSTANTES.some((c) => c.proprietaire === 'banc'), 'le registre ne porte aucune constante du banc');
+    // L'accord n'examine que les constantes mesurées : sans elles, il serait
+    // vert sans rien éprouver (§ 14.2).
+    assert.deepEqual(
+      CONSTANTES.filter((c) => c.proprietaire === 'banc' && c.statut === 'mesuree').map(({ nom }) => nom),
+      ADOPTEES,
+    );
     assert.deepEqual(accordRegistre(CONSTANTES, releveCommite), []);
+  });
+
+  test('une adoption porte la valeur proposée par le relevé, et sa configuration cite le cadre, le navigateur et la police du relevé', () => {
+    for (const nom of ADOPTEES) {
+      const entree = CONSTANTES.find((c) => c.nom === nom);
+      const mesure = releveCommite.mesures.find((m) => m.nom === nom);
+      assert.equal(entree.valeur, mesure.valeurProposee, nom);
+      assert.ok(entree.configuration.includes(releveCommite.configuration.navigateur), nom);
+      assert.ok(entree.configuration.includes(`police ${mesure.police}`), nom);
+      assert.match(entree.configuration, /cadre de 1 366 × 700 px, facteur 1/, nom);
+    }
+    // Une valeur du registre qui s'écarte du relevé est une faute de l'accord.
+    const ecartee = CONSTANTES.map((c) => (c.nom === 'SEUIL_SIEGES_LISIBLES' ? { ...c, valeur: 16 } : c));
+    assert.deepEqual(accordRegistre(ecartee, releveCommite), [{ nom: 'SEUIL_SIEGES_LISIBLES', faute: 'valeur' }]);
+  });
+
+  test('le ralentissement à pleine charge garde sa valeur de départ, défaut de travail, quoi que le relevé propose (Q13 b)', () => {
+    const entree = CONSTANTES.find((c) => c.nom === 'RALENTISSEMENT_PLEINE_CHARGE');
+    assert.deepEqual([entree.valeur, entree.statut], [2, 'defautDeTravail']);
+    assert.notEqual(releveCommite.mesures.find((m) => m.nom === 'RALENTISSEMENT_PLEINE_CHARGE').valeurProposee, entree.valeur);
   });
 });

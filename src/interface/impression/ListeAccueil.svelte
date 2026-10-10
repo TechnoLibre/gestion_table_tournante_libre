@@ -19,6 +19,14 @@
   // les lignes changent. Les colonnes ont des largeurs fixées
   // (largeursColonnes) : la mesure et les pages replient de même.
   //
+  // Une ligne plus haute qu'une page — un nom de milliers de caractères —
+  // ne se coupe pas au bord de la page : la même passe en essaie les
+  // morceaux sur la ligne rendue (couperLigne), et la ligne se continue, un
+  // morceau par page, sous l'en-tête répété. Ses textes se suivent dans
+  // l'ordre de ses cellules — nom, prénom, appartenance, places
+  // (textesLigneAccueil) — et chaque page pose de chaque cellule la part qui
+  // tombe dans son morceau (morcelerPages, trancher).
+  //
   // Les colonnes de tour se règlent sur leur texte. La feuille de mesure
   // porte une sonde : un tableau d'une colonne, sans repli, qui réunit chaque
   // libellé de place et chaque tête de tour. Sa largeur, sur celle de la
@@ -35,8 +43,8 @@
   import { getContext, tick } from 'svelte';
   import { cleNormalisee } from '../../application/csv.js';
   import Feuille from './Feuille.svelte';
-  import { etatsDesTours, largeursColonnes, libellePlace, lignesAccueil } from './listes.js';
-  import { mesurerListes, mesurerPlace, paginerFeuilles } from './pagination.js';
+  import { etatsDesTours, largeursColonnes, libellePlace, lignesAccueil, textesLigneAccueil } from './listes.js';
+  import { couperLigne, mesurerListes, mesurerPlace, morcelerPages, paginerFeuilles, trancher } from './pagination.js';
 
   let { etat, options, feuille, bandeMm = null, orientation = $bindable(null) } = $props();
 
@@ -68,14 +76,17 @@
   let mesures = $state(null);
   const largeurs = $derived(largeursColonnes('accueil', tours.length, part !== null && part.cle === cle ? part.valeur : null));
   let sonde = $state(null);
-  const pages = $derived(mesures !== null && mesures.cle === cle ? paginerFeuilles(mesures.feuilles, mesures.utile) : null);
+  const pages = $derived(
+    mesures !== null && mesures.cle === cle ? morcelerPages(paginerFeuilles(mesures.feuilles, mesures.utile), mesures.coupures) : null,
+  );
   const feuilleMesure = $derived({ ...feuille, filigrane: false });
 
   // Mesure la feuille de mesure une fois le rendu à jour (tick) : la
   // clé lue alors est celle des valeurs que le DOM porte. Sans part à jour,
   // lit la part d'un tour ; avec elle, les hauteurs de la liste rendue à ses
-  // largeurs. La lecture de cle et de part relance la mesure quand l'une
-  // change avant que les pages viennent.
+  // largeurs, et les morceaux de chaque ligne seule sur sa page. La lecture
+  // de cle et de part relance la mesure quand l'une change avant que les
+  // pages viennent.
   function mesurer(conteneur) {
     const voulue = cle;
     const partLue = part;
@@ -86,7 +97,12 @@
       if (partLue === null || partLue.cle !== cle) {
         part = { cle, valeur: mesurerPlace(sonde, contenu.querySelector('[data-liste-imprimee] table')) };
       } else {
-        mesures = { cle, ...mesurerListes(contenu) };
+        const lues = mesurerListes(contenu);
+        const corps = contenu.querySelector('[data-liste-imprimee] tbody');
+        const coupures = paginerFeuilles(lues.feuilles, lues.utile)
+          .filter(({ seule }) => seule)
+          .map(({ feuille, debut }) => ({ feuille, ligne: debut, bornes: couperLigne(corps.rows[debut], lues.utile - lues.feuilles[feuille].entete) }));
+        mesures = { cle, ...lues, coupures };
       }
     });
     return () => {
@@ -99,7 +115,10 @@
   });
 </script>
 
-{#snippet liste(debut, fin)}
+<!-- La liste, de la ligne debut (comprise) à fin (exclue) ; sous un
+     morceau {debut, fin}, chaque cellule de la ligne continuée ne pose que
+     la part de ses textes (textesLigneAccueil) qui tombe dans ce morceau. -->
+{#snippet liste(debut, fin, morceau = null)}
   <div class="liste" data-liste-imprimee={0}>
     <p class="titre">{t('feuilles.accueil.titre')}</p>
     <table>
@@ -120,17 +139,16 @@
       </thead>
       <tbody>
         {#each lignes.slice(debut, fin) as ligne, rang (ligne.participant)}
+          {@const textes = textesLigneAccueil(ligne, t)}
+          {@const [nom, prenom, appartenance, ...places] = morceau === null ? textes : trancher(textes, morceau.debut, morceau.fin)}
           <tr data-ligne-imprimee={debut + rang} data-participant={ligne.participant}>
-            <td><span class="nom" data-nom-imprime>{ligne.nom}</span></td>
             <td>
-              {#if ligne.prenom !== null}{ligne.prenom}{/if}
+              {#if nom !== ''}<span class="nom" data-nom-imprime>{nom}</span>{/if}
             </td>
-            <td>
-              {#if ligne.appartenance !== null}{ligne.appartenance}{/if}
-            </td>
-            {#each ligne.places as place (place.tour)}
-              {@const libelle = libellePlace(place)}
-              <td>{t(libelle.cle, libelle.details)}</td>
+            <td>{prenom}</td>
+            <td>{appartenance}</td>
+            {#each places as place, rangPlace (rangPlace)}
+              <td>{place}</td>
             {/each}
           </tr>
         {/each}
@@ -163,7 +181,7 @@
   {#each pages as page (page.rang)}
     <Feuille rang={page.rang} papier={options.papier} orientation="portrait" {feuille} {bandeMm}>
       {#snippet contenu()}
-        {@render liste(page.debut, page.fin)}
+        {@render liste(page.debut, page.fin, page.morceau)}
       {/snippet}
     </Feuille>
   {/each}

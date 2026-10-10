@@ -16,7 +16,11 @@
 // largeur de son plus long mot ; une soirée dont les tours n'y tiennent
 // pas, ou dont une ligne passerait la hauteur d'une page, se scinde en
 // groupes de tours, chaque groupe sous ses têtes de tour, chaque tour une
-// fois par table, et aucune ligne ne déborde de sa page.
+// fois par table, et aucune ligne ne déborde de sa page. Une ligne plus
+// haute qu'une page, sur la feuille par table comme sur la liste d'accueil,
+// se continue sur les feuilles suivantes : rien d'elle hors des zones de
+// contenu, et ses parts mises bout à bout redonnent la ligne entière, chaque
+// texte une fois.
 //
 // App est montée par test/navigateur/ecrans.js sur le système de fichiers
 // simulé, au cadre de 1 366 × 700 ; le texte attendu vient de la même
@@ -27,6 +31,7 @@
 // (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { appliquerCommande } from '../../application/commandes.js';
+import { cleNormalisee } from '../../application/csv.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
 import { estBrouillon } from '../../application/sorties.js';
@@ -36,6 +41,7 @@ import { analyser } from '../../stockage/document.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { attendre, chargeBloquee, chargePrincipale, cliquer, creerContexte, ouvrirApercu } from '../../../test/navigateur/ecrans.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { etatsDesTours, feuillesTables, lignesAccueil, textesCellule, textesLigneAccueil } from './listes.js';
 import { paginer } from './pagination.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -408,5 +414,124 @@ describe('la feuille par table : des tours nombreux sous un nom long (§ 7.4)', 
     await choisirVue(m, 'tables');
     const attendues = Array.from({ length: charge.evenement.tours }, (_, rang) => t('feuilles.tour', { tour: rang + 1 }));
     for (const [table, suite] of groupesParTable(m)) expect(suite, `table ${table}`).toEqual([attendues]);
+  });
+});
+
+// Les lignes plus hautes qu'une page (§ 7.4) : un nom de milliers de
+// caractères en mots courts, que même une colonne à toute la largeur que la
+// place laisse ne tient pas sur une page.
+const NOM_DE_PAGES = 'Ombrelle Pervenche '.repeat(1500).trim();
+
+// La principale, la personne 1 renommée du nom de pages, à tours tours.
+function chargeNomDePages(tours) {
+  return appliquerCommande(
+    'changerTours',
+    appliquerCommande('modifierParticipant', chargePrincipale(), { id: 1, champs: { nom: NOM_DE_PAGES } }).charge,
+    { tours },
+  ).charge;
+}
+
+// Vérifie que rien d'une ligne ne tombe hors de la zone de contenu de sa
+// feuille — ni sa boîte, ni aucun fragment de son texte —, et que chaque
+// feuille porte un en-tête de liste.
+function verifierDansLesZones(m) {
+  for (const feuille of feuilles(m)) {
+    const zone = boite(feuille.querySelector('[data-contenu]'));
+    expect(feuille.querySelectorAll('[data-entete-liste]'), 'un en-tête par feuille').toHaveLength(1);
+    for (const ligne of tous(feuille, '[data-ligne-imprimee]')) {
+      const plage = document.createRange();
+      plage.selectNodeContents(ligne);
+      for (const rect of [boite(ligne), ...plage.getClientRects()]) {
+        const ou = `feuille ${feuille.dataset.feuille}, ligne ${ligne.dataset.ligneImprimee}`;
+        expect(rect.top, ou).toBeGreaterThanOrEqual(zone.top - JEU_PX);
+        expect(rect.bottom, ou).toBeLessThanOrEqual(zone.bottom + JEU_PX);
+      }
+    }
+  }
+}
+
+// Ce que les cellules de données d'une ligne rendue posent : ses nœuds de
+// texte non blancs, dans l'ordre du document, mis bout à bout.
+function texteDesDonnees(ligne) {
+  return [...ligne.cells]
+    .filter((cellule) => cellule.tagName === 'TD')
+    .flatMap((cellule) => {
+      const lus = [];
+      const parcours = document.createTreeWalker(cellule, NodeFilter.SHOW_TEXT);
+      for (let noeud = parcours.nextNode(); noeud !== null; noeud = parcours.nextNode()) if (noeud.data.trim() !== '') lus.push(noeud.data);
+      return lus;
+    })
+    .join('');
+}
+
+describe('la feuille par table : une ligne plus haute qu’une page sous un seul tour (§ 7.4)', () => {
+  test('deux tours, A4 : continuée sous l’en-tête répété, dans les zones ; le nom, puis le titre une fois', async () => {
+    const charge = chargeNomDePages(2);
+    const m = await ouvrirApercu(contexte, charge);
+    await choisirVue(m, 'tables');
+    const attendu = plat(nomAffiche(charge.participants.find(({ id }) => id === 1)));
+    verifierDansLesZones(m);
+
+    // La ligne du nom, à chaque tour : continuée sur plusieurs feuilles, ses
+    // morceaux mis bout à bout redonnent le nom entier, sans marque
+    // d'abréviation.
+    const morceaux = tous(m.racine, '[data-impression] [data-nom-imprime]').filter((noeud) => noeud.textContent.includes('Ombrelle Pervenche Ombrelle'));
+    const parListe = new Map();
+    for (const morceau of morceaux) {
+      const liste = morceau.closest('[data-liste-imprimee]').dataset.listeImprimee;
+      if (!parListe.has(liste)) parListe.set(liste, []);
+      parListe.get(liste).push(morceau);
+    }
+    expect(parListe.size, 'la ligne du nom à chacun des deux tours').toBe(2);
+    // Ce que la cellule de la ligne continuée pose entière : le nom, le
+    // titre de la place, « non pourvu » s'il y a lieu (textesCellule), lu
+    // sur la source de l'aperçu.
+    const donnees = feuillesTables(charge, etatsDesTours(charge, m.ui.etat().proposition));
+    const tours = Array.from({ length: charge.evenement.tours }, (_, rang) => rang + 1);
+    for (const [liste, suite] of parListe) {
+      const pages = new Set(suite.map((morceau) => morceau.closest('[data-feuille]').dataset.feuille));
+      expect(pages.size, `liste ${liste} : la ligne continuée sur plusieurs feuilles`).toBeGreaterThan(1);
+      expect(plat(suite.map((morceau) => morceau.textContent).join('')), `liste ${liste} : le nom entier`).toBe(attendu);
+
+      // La même ligne sur chacune de ses feuilles, dans leur ordre : ses
+      // parts mises bout à bout redonnent la cellule entière — le titre une
+      // seule fois, après le dernier morceau du nom.
+      const bloc = suite[0].closest('[data-liste-imprimee]');
+      const rang = Number(suite[0].closest('[data-ligne-imprimee]').dataset.ligneImprimee);
+      const entete = [...bloc.querySelector('[data-entete-liste] tr').cells].slice(1).map(texte);
+      expect(entete, `liste ${liste} : un seul tour`).toHaveLength(1);
+      const tour = tours.find((candidat) => t('feuilles.tour', { tour: candidat }) === entete[0]);
+      const cellule = donnees.find(({ table }) => table === Number(bloc.dataset.table)).lignes[rang].cellules.find((c) => c.tour === tour);
+      expect(cellule.occupant, `liste ${liste}`).toBe(1);
+      expect(cellule.titre, `liste ${liste} : la place porte un titre`).not.toBeNull();
+      const lignes = tous(m.racine, `[data-impression] [data-liste-imprimee="${liste}"] [data-ligne-imprimee="${rang}"]`);
+      expect(lignes.length, `liste ${liste}`).toBe(pages.size);
+      expect(lignes.map(texteDesDonnees).join(''), `liste ${liste} : la cellule entière`).toBe(textesCellule(cellule, t).join(''));
+    }
+    expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
+  });
+});
+
+describe('la liste d’accueil : une ligne plus haute qu’une page (§ 7.4)', () => {
+  test('deux tours, A4 : continuée sous l’en-tête répété, dans les zones ; chaque texte une fois, dans l’ordre', async () => {
+    const charge = chargeNomDePages(2);
+    const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
+    await choisirVue(m, 'accueil');
+    verifierDansLesZones(m);
+
+    const lignes = tous(m.racine, '[data-impression] [data-participant="1"]');
+    const pages = new Set(lignes.map((ligne) => ligne.closest('[data-feuille]').dataset.feuille));
+    expect(pages.size, 'la ligne continuée sur plusieurs feuilles').toBeGreaterThan(1);
+    expect(lignes.length).toBe(pages.size);
+    expect(
+      lignes.map((ligne) => ligne.querySelector('[data-nom-imprime]')?.textContent ?? '').join(''),
+      'le nom entier',
+    ).toBe(NOM_DE_PAGES);
+    const ligne = lignesAccueil(charge, etatsDesTours(charge, m.ui.etat().proposition), cleNormalisee).find(({ participant }) => participant === 1);
+    expect(lignes.map(texteDesDonnees).join(''), 'la ligne entière').toBe(textesLigneAccueil(ligne, t).join(''));
+    // Chaque autre personne garde sa ligne entière, sur une feuille.
+    const autres = tous(m.racine, '[data-impression] [data-participant]').filter((autre) => autre.dataset.participant !== '1');
+    expect(autres).toHaveLength(charge.participants.filter(({ id, exclu }) => id !== 1 && !exclu).length);
+    expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
   });
 });

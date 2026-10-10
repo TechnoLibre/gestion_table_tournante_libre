@@ -143,6 +143,55 @@ export function feuillesTables(charge, etatsParTour, { parTour = false } = {}) {
 }
 
 /**
+ * Les textes qu'une cellule de la feuille par table pose, dans l'ordre du
+ * document : le nom de l'occupant, ou la place vide ; le libellé du titre
+ * de la place ; « non pourvu » quand rien ne le pourvoit. Le texte vide
+ * pour ce que la cellule ne porte pas. Une ligne plus haute qu'une page se
+ * continue sur les suivantes par morceaux de cette suite (couperTexte,
+ * trancher).
+ *
+ * @param {{nom: string|null, titre: {libelle: string, pourvu: boolean}|null}} cellule
+ * @param {(cle: string) => string} t
+ * @returns {[string, string, string]}
+ */
+export function textesCellule({ nom, titre }, t) {
+  return [
+    nom ?? t('feuilles.tables.vide'),
+    titre?.libelle ?? '',
+    titre !== null && !titre.pourvu ? t('feuilles.tables.titreNonPourvu') : '',
+  ];
+}
+
+// Un champ de la liste d'accueil tel qu'une ligne le pose : le texte vide
+// pour un champ absent ou fait de blancs, qui ne pose aucun nœud de texte
+// que couperLigne lise.
+const champPose = (texte) => (texte === null || texte.trim() === '' ? '' : texte);
+
+/**
+ * Les textes qu'une ligne de la liste d'accueil pose, dans l'ordre du
+ * document : le nom, le prénom, l'appartenance, puis le libellé de la place
+ * à chaque tour (libellePlace). Le texte vide pour un champ absent ou fait
+ * de blancs. Une ligne plus haute qu'une page se continue sur les suivantes
+ * par morceaux de cette suite (couperLigne, trancher).
+ *
+ * @param {{nom: string, prenom: string|null, appartenance: string|null,
+ *          places: Array<{table: number|null, siege: number|null}>}} ligne   lignesAccueil
+ * @param {(cle: string, details?: Object) => string} t
+ * @returns {string[]}
+ */
+export function textesLigneAccueil({ nom, prenom, appartenance, places }, t) {
+  return [
+    champPose(nom),
+    champPose(prenom),
+    champPose(appartenance),
+    ...places.map((place) => {
+      const { cle, details } = libellePlace(place);
+      return t(cle, details);
+    }),
+  ];
+}
+
+/**
  * La feuille d'une page qui ne couvre qu'un tour (Q6 c) : le pied reçu
  * (feuilleDe), dont le nom de l'événement, sa date et la version restent,
  * au tour de l'état, daté de l'horodatage de sa source (horodatagePlacement),

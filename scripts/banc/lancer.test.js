@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CONSTANTES } from '../../src/geometrie/constantes.js';
 import { projetBanc } from './projet.js';
-import { verifierReleve } from './releve.js';
+import { accordRegistre, verifierReleve } from './releve.js';
 import releveCommite from './releve.json' with { type: 'json' };
 import {
   ATTENDUES,
@@ -312,13 +312,22 @@ describe('lancer : executer, sur des effets factices', () => {
     assert.deepEqual(noms(releve), [...ATTENDUES]);
     const texte = p.lignes.join('\n');
     assert.ok(texte.includes(regionConstantes({ releve })));
-    assert.match(texte, /SEUIL_SIEGES_LISIBLES : registre 16 places, relevé 17 places — à adopter/);
+    // Les valeurs du registre se lisent au registre : une adoption ne change
+    // pas ce que l'épreuve éprouve.
+    const registre = (nom) => CONSTANTES.find((c) => c.nom === nom).valeur;
+    assert.ok(texte.includes(`SEUIL_SIEGES_LISIBLES : registre ${registre('SEUIL_SIEGES_LISIBLES')} places, relevé 17 places — à adopter`));
     assert.match(
       texte,
       /RALENTISSEMENT_PLEINE_CHARGE : registre 2 ×, relevé 2,5 × — relevé, non adopté : défaut de travail sous la machine de référence/,
     );
     assert.doesNotMatch(texte, /RALENTISSEMENT_PLEINE_CHARGE : .*à adopter/);
-    assert.match(texte, /Accord du registre avec le relevé : aucun écart/);
+    // L'accord imprimé est celui du registre avec le relevé écrit : une
+    // constante adoptée que ce relevé inventé contredit y est nommée.
+    const ecarts = accordRegistre(CONSTANTES, releve);
+    const accord = ecarts.length === 0
+      ? 'Accord du registre avec le relevé : aucun écart.'
+      : ['Accord du registre avec le relevé :', ...ecarts.map(({ nom, faute }) => `- ${nom} : ${faute}`)].join('\n');
+    assert.ok(texte.includes(accord), accord);
   });
 
   test('une épreuve du banc tombée (un contrôle du harnais) : code 1, aucun relevé écrit', async () => {

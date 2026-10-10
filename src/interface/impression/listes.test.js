@@ -7,7 +7,9 @@
 // chaque tour ; les feuilles par table, les tours en colonnes ou une feuille
 // par tour (Q6 c) ; le pied et le filigrane d'une feuille d'un seul tour ;
 // les groupes de tours de la feuille par table, leur taille tirée de la
-// part mesurée d'un tour, et leur resserrement sous une page seule.
+// part mesurée d'un tour, et leur resserrement sous une page seule ; les
+// textes d'une cellule de la feuille par table et d'une ligne de la liste
+// d'accueil, dans l'ordre où elles les posent.
 // Les noms d'épreuve sont inventés, hors du réservoir des démonstrations.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
@@ -26,6 +28,8 @@ import {
   libellePlace,
   lignesAccueil,
   resserrerGroupes,
+  textesCellule,
+  textesLigneAccueil,
   toursParGroupe,
 } from './listes.js';
 
@@ -402,5 +406,45 @@ describe('les groupes de tours de la feuille par table', () => {
     const seuleDUnTour = unParGroupe.map((_, feuille) => ({ feuille, seule: feuille === 0 }));
     assert.equal(resserrerGroupes([1, 5], unParGroupe, seuleDUnTour), null);
     assert.deepEqual(resserrerGroupes([1, 5], unParGroupe, [...seuleDUnTour, { feuille: unParGroupe.length - 1, seule: true }]), [1, 3]);
+  });
+});
+
+describe('textesCellule : les textes d’une cellule de la feuille par table, dans l’ordre où elle les pose', () => {
+  test('le nom ou la place vide, puis le libellé du titre, puis « non pourvu » ; le texte vide pour ce qui manque', () => {
+    assert.deepEqual(textesCellule({ tour: 1, occupant: 1, nom: 'Iris Ombrelle', titre: { libelle: 'animateur', pourvu: true } }, t), [
+      'Iris Ombrelle',
+      'animateur',
+      '',
+    ]);
+    assert.deepEqual(textesCellule({ tour: 1, occupant: null, nom: null, titre: { libelle: 'hôte', pourvu: false } }, t), [
+      t('feuilles.tables.vide'),
+      'hôte',
+      t('feuilles.tables.titreNonPourvu'),
+    ]);
+    assert.deepEqual(textesCellule({ tour: 2, occupant: 3, nom: 'Théo Pervenche', titre: null }, t), ['Théo Pervenche', '', '']);
+  });
+});
+
+describe('textesLigneAccueil : les textes d’une ligne de la liste d’accueil, dans l’ordre où elle les pose', () => {
+  test('le nom, le prénom, l’appartenance, puis le libellé de la place à chaque tour ; le texte vide pour un champ absent ou blanc', () => {
+    const places = [
+      { tour: 1, table: 2, siege: null },
+      { tour: 2, table: null, siege: null },
+      { tour: 3, table: 4, siege: 5 },
+    ];
+    assert.deepEqual(textesLigneAccueil({ participant: 1, nom: 'Ombrelle', prenom: 'Iris', appartenance: 'Club des Merles', places }, t), [
+      'Ombrelle',
+      'Iris',
+      'Club des Merles',
+      t('feuilles.accueil.table', { table: 2 }),
+      t('feuilles.accueil.reserve'),
+      t('feuilles.accueil.tableSiege', { table: 4, siege: 5 }),
+    ]);
+    assert.deepEqual(textesLigneAccueil({ participant: 2, nom: 'Pervenche', prenom: null, appartenance: ' ', places: places.slice(1, 2) }, t), [
+      'Pervenche',
+      '',
+      '',
+      t('feuilles.accueil.reserve'),
+    ]);
   });
 });
