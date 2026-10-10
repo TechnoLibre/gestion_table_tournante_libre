@@ -11,10 +11,13 @@
 // géométrie, ni le générateur ne lisent la version engendrée (§ 14.7) ; seuls
 // deux lecteurs nommés touchent le pont de la coquille (§ 13.1) ; hors de
 // l'horloge, l'interface et l'application n'arment aucune minuterie et ne
-// lisent ni l'heure, ni l'aléa, ni la langue (§ 19.4) ; chaque paquet importé
-// est déclaré dans devDependencies, et aucun paquet refusé ne l'est (§ 13.3,
-// § 14.8) ; une valeur du contrat de données n'a qu'une définition, celle de
-// configuration.js ; la mesure de la couverture joue la série node, publie
+// lisent ni l'heure, ni l'aléa, ni la langue (§ 19.4) ; seul le point
+// d'entrée lit le nombre de processeurs logiques (§ 13.4) ; seul l'aperçu lit
+// le contexte 'imprimante' et appelle imprimer, et ni l'interface ni
+// l'application ne touchent print (§ 11.7) ; chaque paquet importé est déclaré dans devDependencies, et aucun
+// paquet refusé ne l'est (§ 13.3, § 14.8) ; une valeur du contrat de données
+// n'a qu'une définition, celle de configuration.js ; la mesure de la
+// couverture joue la série node sous le seul rapporteur default, publie
 // chaque module et tient ses seuils durs sur des modules qui existent
 // (§ 14.13) ; les épreuves s'écrivent selon le § 14.8, la série surveillée
 // n'attend ni n'écrit hors d'un temporaire, et ses motifs de surveillance ne
@@ -25,7 +28,8 @@
 // charge que dans les épreuves nommées (§ 14.12). Chaque relevé lit le texte
 // entier, commentaires et chaînes compris, hors ceux qui disent le contraire —
 // les accès au navigateur et au pont, et les relevés des épreuves, sautent les
-// chaînes littérales : un commentaire qui nomme un appel refusé fait échouer
+// chaînes littérales ; les lectures du nombre de processeurs et de
+// l'imprimante sautent chaînes et commentaires : un commentaire qui nomme un appel refusé fait échouer
 // la garde comme l'appel lui-même. Chaque garde déclare son périmètre, refuse
 // de passer sur un balayage vide (§ 14.2), et d'autres épreuves la font
 // tourner sur des arbres temporaires qui portent, à plus d'un niveau de
@@ -2028,16 +2032,21 @@ const SEUILS_GLOBAUX = ['statements', 'branches', 'functions', 'lines', '100', '
 const repondA = (chemin, motifs = []) => motifs.some((motif) => matchesGlob(chemin, motif));
 
 // La commande de la mesure : make couverture passe la main à npm run
-// couverture, qui lance vitest run sur la série node, couverture active.
-// Sans --coverage, la série passe et aucun seuil ne se lit. Outre ces deux
-// arguments, le script n'admet que le choix du rapporteur des épreuves : une
-// option --coverage.* redéfinirait, pour cette exécution, les seuils, include
-// ou exclude que relève releverCouverture, et --changed, --config ou un
-// filtre de fichiers changeraient ce qui se mesure. Une option et sa valeur
-// se lisent en un argument : « --project node » comme « --project=node ».
+// couverture, qui lance vitest run sur la série node, couverture active, sous
+// le seul rapporteur default. Sans --coverage, la série passe et aucun seuil
+// ne se lit. Sans --reporter default, vitest.config.js remet
+// ./test/rapporteur.js, dont les plafonds de durée (§ 14.14) bornent la
+// série surveillée et la série longue, et feraient échouer la série
+// instrumentée, plus lente. Le script n'admet rien d'autre que ces trois
+// arguments : un second rapporteur, ou un autre, ramènerait ces plafonds ou
+// changerait le bilan ; une option --coverage.* redéfinirait, pour cette
+// exécution, les seuils, include ou exclude que relève releverCouverture, et
+// --changed, --config ou un filtre de fichiers changeraient ce qui se
+// mesure. Une option et sa valeur se lisent en un argument : « --project
+// node » comme « --project=node ».
 const RECETTE_DE_MESURE = '$(AVEC_NODE) npm run couverture';
-const ARGUMENTS_REQUIS = ['--project=node', '--coverage'];
-const ARGUMENT_ADMIS = /^(?:--project=node|--coverage|--reporter=\S+)$/;
+const ARGUMENTS_REQUIS = ['--project=node', '--coverage', '--reporter=default'];
+const ARGUMENT_ADMIS = /^(?:--project=node|--coverage|--reporter=default)$/;
 const OPTION_A_VALEUR = /^--(?:project|reporter)$/;
 
 // Écarts de la commande de la mesure sous la racine : la recette de la cible
@@ -2139,7 +2148,7 @@ const COUVERTURE_CONFORME = Object.freeze({
 });
 
 describe('arborescence : la couverture (§ 14.13)', () => {
-  test("make couverture et npm run couverture mesurent la série node ; le rapport montre chaque module ; aucun seuil global ; 100 % de branches sur chaque module nommé, présent dans l'arbre et dans la mesure", () => {
+  test("make couverture et npm run couverture mesurent la série node, sous le seul rapporteur default ; le rapport montre chaque module ; aucun seuil global ; 100 % de branches sur chaque module nommé, présent dans l'arbre et dans la mesure", () => {
     assert.deepEqual(releverCouverture(RACINE, configuration.test.coverage), []);
   });
 
@@ -2180,7 +2189,7 @@ describe('arborescence : la couverture (§ 14.13)', () => {
     assert.throws(() => releverCouverture(RACINE, undefined), /aucune configuration de couverture/);
   });
 
-  test('la garde relève une commande qui ne mesure pas la série node, ou qui redéfinit la mesure ; make couverture passe par npm run couverture', () => {
+  test('la garde relève une commande qui ne mesure pas la série node, qui redéfinit la mesure, ou qui la lance sous un autre rapporteur que default ; make couverture passe par npm run couverture', () => {
     const relever = (fichiers) =>
       avecArbre({ ...MODULES_MESURES, ...COMMANDE_CONFORME, ...fichiers }, (racine) =>
         releverCouverture(racine, COUVERTURE_CONFORME),
@@ -2190,21 +2199,30 @@ describe('arborescence : la couverture (§ 14.13)', () => {
     const scripts = [
       ['vitest run --project node --reporter=default', ['npm run couverture : sans --coverage']],
       [
-        'vitest run --project node --coverage --coverage.include=src/moteur/indicateurs.js --coverage.exclude=src/stockage/journal.js',
+        'vitest run --project node --coverage --reporter=default --coverage.include=src/moteur/indicateurs.js --coverage.exclude=src/stockage/journal.js',
         [
           'npm run couverture : argument non admis --coverage.include=src/moteur/indicateurs.js',
           'npm run couverture : argument non admis --coverage.exclude=src/stockage/journal.js',
         ],
       ],
       [
-        'vitest run --project node-long --coverage',
+        'vitest run --project node-long --coverage --reporter=default',
         ['npm run couverture : sans --project node', 'npm run couverture : argument non admis --project=node-long'],
       ],
       [
-        'vitest run --project node --coverage --changed src/moteur',
+        'vitest run --project node --coverage --reporter=default --changed src/moteur',
         ['npm run couverture : argument non admis --changed', 'npm run couverture : argument non admis src/moteur'],
       ],
       ['vitest --project node --coverage', ['npm run couverture : ne lance pas vitest run']],
+      ['vitest run --project node --coverage', ['npm run couverture : sans --reporter default']],
+      [
+        'vitest run --project node --coverage --reporter=./test/rapporteur.js',
+        ['npm run couverture : sans --reporter default', 'npm run couverture : argument non admis --reporter=./test/rapporteur.js'],
+      ],
+      [
+        'vitest run --project node --coverage --reporter=default --reporter verbose',
+        ['npm run couverture : argument non admis --reporter=verbose'],
+      ],
     ];
     for (const [script, attendu] of scripts) {
       assert.deepEqual(relever({ 'package.json': scriptDeMesure(script) }), attendu, script);
@@ -2497,6 +2515,113 @@ describe('arborescence : une horloge (§ 19.4, § 14.7)', () => {
       const sansFichier = { ...sansArbre(fichiers, arbre), [`${arbre}/a.test.js`]: '' };
       assert.throws(() => avecArbre(sansFichier, releverHorloge), new RegExp(`${arbre} ne fournit aucun fichier`), arbre);
     }
+  });
+});
+
+// Relevé « fichier:ligne forme » des formes données dans les modules et les
+// composants des arbres, à toute profondeur, épreuves exclues ; par fichier,
+// par ligne, puis dans l'ordre des formes. Une forme est [nom, expression à
+// g, lu]. Lue dans le 'code', elle se cherche dans le texte sans chaînes ni
+// commentaires ; lue dans le 'texte', parce qu'une chaîne est son nom même,
+// elle se cherche dans le texte sans commentaires et ne compte que si son
+// premier caractère subsiste dans le code : celle qu'une chaîne contient est
+// blanchie avec elle. Un composant se lit sans ses commentaires HTML, ses
+// blocs de script comme un module, son balisage tel quel. Un lecteur admis,
+// {fichier, forme}, admet chaque occurrence de cette forme dans ce fichier,
+// et rien d'autre ; suit une ligne « lecteur sans objet : fichier forme » par
+// lecteur qui n'en porte aucune. Lève quand un arbre ne fournit aucun
+// fichier.
+function releverLectures(racine, { arbres, formes, lecteurs }) {
+  const fichiers = arbres
+    .flatMap((arbre) => {
+      const trouves = fichiersDe(join(racine, arbre)).filter(
+        (f) => (EXTENSIONS_MODULE.has(extname(f)) || extname(f) === '.svelte') && !EPREUVE.test(f),
+      );
+      assert.ok(trouves.length > 0, `${arbre} ne fournit aucun fichier`);
+      return trouves;
+    })
+    .sort();
+  const servis = new Set();
+  const releve = fichiers.flatMap((fichier) => {
+    const nom = enBarres(racine, fichier);
+    const texte = texteSansCommentaires(fichier, readFileSync(fichier, 'utf8'));
+    const lus = { texte, code: codeSansChaines(fichier, texte) };
+    return formes
+      .flatMap(([forme, motif, lu], rang) =>
+        [...lus[lu].matchAll(motif)]
+          .filter(({ index }) => lus.code[index] === texte[index])
+          .map(({ index }) => ({ ligne: ligneDe(texte, index), rang, forme })),
+      )
+      .filter(({ forme }) => {
+        const lecteur = lecteurs.find((l) => l.fichier === nom && l.forme === forme);
+        if (lecteur !== undefined) servis.add(lecteur);
+        return lecteur === undefined;
+      })
+      .sort((a, b) => a.ligne - b.ligne || a.rang - b.rang)
+      .map(({ ligne, forme }) => `${nom}:${ligne} ${forme}`);
+  });
+  const sansObjet = lecteurs.filter((l) => !servis.has(l)).map(({ fichier, forme }) => `lecteur sans objet : ${fichier} ${forme}`);
+  return [...releve, ...sansObjet];
+}
+
+// Le nombre de processeurs logiques du poste (§ 13.4) est une donnée de la
+// plateforme : src/main.js le lit et le passe à l'exécuteur de la génération
+// (coeursDisponibles). Ailleurs dans src/, une lecture ferait dépendre du
+// poste un module que les épreuves et le banc pilotent par ce paramètre. Il
+// se lit par le nom du champ — point, chaînage optionnel, déstructuration —
+// ou par une chaîne entre crochets.
+const LECTURES_DES_COEURS = [
+  ['hardwareConcurrency', /\bhardwareConcurrency\b/g, 'code'],
+  ["['hardwareConcurrency']", /\[\s*(['"`])hardwareConcurrency\1\s*\]/g, 'texte'],
+];
+const LECTEURS_DES_COEURS = [
+  {
+    fichier: 'src/main.js',
+    forme: 'hardwareConcurrency',
+    raison: "construit l'exécuteur de la génération avec le nombre de processeurs logiques du poste",
+  },
+];
+const releverLecteursDesCoeurs = (racine) =>
+  releverLectures(racine, { arbres: ['src'], formes: LECTURES_DES_COEURS, lecteurs: LECTEURS_DES_COEURS });
+
+describe('arborescence : un seul lecteur du nombre de processeurs logiques (§ 13.4)', () => {
+  test('hors de src/main.js, aucun module de src/ ne lit hardwareConcurrency', () => {
+    assert.deepEqual(releverLecteursDesCoeurs(RACINE), []);
+  });
+
+  test('la garde relève chaque lecture par sa ligne, composants compris, à toute profondeur, hors épreuves, chaînes et commentaires ; src/main.js ne lit que par le point ; un lecteur qui ne lit plus le champ est sans objet', () => {
+    const fichiers = {
+      'src/interface/generation/Coeurs.svelte': [
+        '<script>',
+        '  const coeurs = navigator.hardwareConcurrency;',
+        '  // navigator.hardwareConcurrency se lit aussi dans un commentaire',
+        "  const nom = 'navigator.hardwareConcurrency';",
+        '</script>',
+        '<!-- {navigator.hardwareConcurrency} -->',
+        '<p>{navigator?.hardwareConcurrency}</p>',
+      ].join('\n'),
+      'src/application/sous/parallele.js': [
+        "export const a = globalThis.navigator['hardwareConcurrency'];",
+        'const { hardwareConcurrency } = navigator;',
+        'export const b = "[\'hardwareConcurrency\']" + hardwareConcurrencyMax;',
+        '/* navigator.hardwareConcurrency */',
+      ].join('\n'),
+      'src/stockage/reserve.js': 'export const c = self.navigator.hardwareConcurrency ?? 1;\n',
+      'src/application/generation.test.js': 'const n = navigator.hardwareConcurrency;\n',
+      'src/interface/App.navigateur.test.js': "const n = navigator['hardwareConcurrency'];\n",
+      'src/main.js': "const coeurs = navigator.hardwareConcurrency;\nconst autre = navigator['hardwareConcurrency'];\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverLecteursDesCoeurs), [
+      "src/application/sous/parallele.js:1 ['hardwareConcurrency']",
+      'src/application/sous/parallele.js:2 hardwareConcurrency',
+      'src/interface/generation/Coeurs.svelte:2 hardwareConcurrency',
+      'src/interface/generation/Coeurs.svelte:7 hardwareConcurrency',
+      "src/main.js:2 ['hardwareConcurrency']",
+      'src/stockage/reserve.js:1 hardwareConcurrency',
+    ]);
+    const sansLecteur = { ...fichiers, 'src/main.js': 'const coeurs = 4;\n' };
+    assert.deepEqual(avecArbre(sansLecteur, releverLecteursDesCoeurs).at(-1), 'lecteur sans objet : src/main.js hardwareConcurrency');
+    assert.throws(() => avecArbre({ 'src/a.test.js': '', 'test/b.js': '' }, releverLecteursDesCoeurs), /src ne fournit aucun fichier/);
   });
 });
 
@@ -3838,6 +3963,139 @@ describe("arborescence : le câblage de l'imprimante (§ 13.4)", () => {
       "src/interface/App.svelte : contexte 'imprimante' non posé",
       'src/absent.js : fichier absent',
     ]);
+  });
+});
+
+// La porte d'impression (§ 11.7) : toute impression passe par l'écran
+// d'aperçu. App.svelte reçoit l'imprimante et la pose sous la clé de contexte
+// 'imprimante' ; dans src/interface et src/application, seul l'aperçu lit ce
+// contexte et appelle la fonction imprimer de l'imprimante, et aucun module
+// ne touche print — que seule l'imprimante web de src/impression appelle, sur
+// la fenêtre. Une lecture du contexte se reconnaît à getContext et à la clé
+// entre apostrophes, guillemets ou accents graves. print se relève au nom
+// suivi d'une parenthèse, chaînage optionnel compris, quel que soit l'objet
+// qui le porte ; à toute mention sur l'objet global écrit par son nom —
+// window, globalThis, self —, appelée ou non, une référence ainsi passée à un
+// bouton étant une impression différée ; à une chaîne entre crochets ; à une
+// déstructuration qui le tire. Une référence nue au print global, ou prise
+// sur un alias de window, n'est pas relevée. imprimer se relève de même : par le point,
+// appelé ou non, par une chaîne entre crochets ou par une déstructuration ;
+// la fonction de l'aperçu qui porte ce nom n'est pas un passage. Le balisage
+// d'un composant se lit tel quel, ses attributs entre guillemets compris :
+// un « .imprimer » suivi d'un guillemet y clôt une valeur, comme la clé de
+// libellé « impression.commande.imprimer », et ne se relève pas.
+const ARBRES_D_UNE_PORTE = ['src/interface', 'src/application'];
+const PORTE_D_IMPRESSION = 'src/interface/impression/Apercu.svelte';
+const PASSAGES_D_IMPRESSION = [
+  ["getContext('imprimante')", /\bgetContext\s*\(\s*(['"`])imprimante\1\s*\)/g, 'texte'],
+  ['print()', /\bprint\s*(?:\?\.\s*)?\(/g, 'code'],
+  ['.print', /\b(?:window|globalThis|self)\s*\??\.\s*print\b/g, 'code'],
+  ["['print']", /\[\s*(['"`])print\1\s*\]/g, 'texte'],
+  ['{ print }', /\{[^{}]*\bprint\b[^{}]*\}\s*=/g, 'code'],
+  ['.imprimer', /\.\s*imprimer\b(?!\s*['"`])/g, 'code'],
+  ["['imprimer']", /\[\s*(['"`])imprimer\1\s*\]/g, 'texte'],
+  ['{ imprimer }', /\{[^{}]*\bimprimer\b[^{}]*\}\s*=/g, 'code'],
+];
+const RAISON_DE_LA_PORTE = "l'écran d'aperçu, d'où part toute impression : la page qu'il montre est celle qui s'imprime";
+const LECTEURS_DE_L_IMPRIMANTE = [
+  { fichier: PORTE_D_IMPRESSION, forme: "getContext('imprimante')", raison: RAISON_DE_LA_PORTE },
+  { fichier: PORTE_D_IMPRESSION, forme: '.imprimer', raison: RAISON_DE_LA_PORTE },
+];
+const releverPortesDImpression = (racine) =>
+  releverLectures(racine, { arbres: ARBRES_D_UNE_PORTE, formes: PASSAGES_D_IMPRESSION, lecteurs: LECTEURS_DE_L_IMPRIMANTE });
+
+describe("arborescence : une seule porte d'impression (§ 11.7)", () => {
+  test("seul src/interface/impression/Apercu.svelte lit le contexte 'imprimante' et appelle imprimer, et aucun module de src/interface ni de src/application ne touche print", () => {
+    assert.deepEqual(releverPortesDImpression(RACINE), []);
+  });
+
+  test("la garde relève chaque lecture du contexte, chaque appel ou référence de print et chaque passage par imprimer, par sa ligne, composants compris, à toute profondeur, hors épreuves, chaînes et commentaires ; l'aperçu n'appelle pas print() ; un lecteur qui ne lit plus le contexte ou n'imprime plus est sans objet", () => {
+    const fichiers = {
+      'src/interface/badges/Tiroir.svelte': [
+        '<script>',
+        "  import { getContext } from 'svelte';",
+        "  const imprimante = getContext('imprimante');",
+        "  // getContext('imprimante') se lit aussi dans un commentaire",
+        '  const nom = "getContext(\'imprimante\')";',
+        "  const voisine = getContext('imprimanteDeSecours');",
+        '</script>',
+        '<!-- <button onclick={() => window.print()}> -->',
+        '<button onclick={() => window.print()}>Imprimer</button>',
+        '<button onclick={window.print}>Imprimer</button>',
+        '<Commande cle="impression.commande.imprimer" executer={imprimer} />',
+      ].join('\n'),
+      'src/application/sous/sortie.js': [
+        'export const a = () => window.print();',
+        'export const b = () => globalThis?.print?.();',
+        "export const c = window['print'];",
+        'const { print } = window;',
+        "export const d = 'window.print()' + 'imprimante.imprimer()' + reprint(x) + print_(y) + w.printer + x.reimprimer() + y.imprimerTout();",
+        '/* window.print() */',
+        'export const e = getContext("imprimante");',
+        'const p = window.print;',
+        'export const f = () => p.call(window) + self?.print;',
+        "export const g = (i) => i['imprimer'](o) + i?.imprimer;",
+        'const { imprimer } = imprimante;',
+      ].join('\n'),
+      'src/interface/App.svelte': [
+        '<script>',
+        "  setContext('imprimante', imprimante);",
+        "  const direct = () => imprimante.imprimer({ papier: 'A4' });",
+        '</script>',
+      ].join('\n'),
+      'src/interface/impression/Apercu.svelte': [
+        '<script>',
+        "  const imprimante = getContext('imprimante');",
+        '  const envoyer = () => print();',
+        '  async function imprimer() {',
+        '    return imprimante.imprimer({ papier });',
+        '  }',
+        '</script>',
+        '<button onclick={imprimer}>Imprimer</button>',
+      ].join('\n'),
+      'src/interface/impression/Apercu.navigateur.test.js': "window.print = () => {};\nconst i = getContext('imprimante');\n",
+      'src/application/seance.test.js': 'const e = window.print();\n',
+      'src/impression/imprimante_web.js': 'export const imprimer = (fenetre) => fenetre.print();\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverPortesDImpression), [
+      'src/application/sous/sortie.js:1 print()',
+      'src/application/sous/sortie.js:1 .print',
+      'src/application/sous/sortie.js:2 print()',
+      'src/application/sous/sortie.js:2 .print',
+      "src/application/sous/sortie.js:3 ['print']",
+      'src/application/sous/sortie.js:4 { print }',
+      "src/application/sous/sortie.js:7 getContext('imprimante')",
+      'src/application/sous/sortie.js:8 .print',
+      'src/application/sous/sortie.js:9 .print',
+      'src/application/sous/sortie.js:10 .imprimer',
+      "src/application/sous/sortie.js:10 ['imprimer']",
+      'src/application/sous/sortie.js:11 { imprimer }',
+      'src/interface/App.svelte:3 .imprimer',
+      "src/interface/badges/Tiroir.svelte:3 getContext('imprimante')",
+      'src/interface/badges/Tiroir.svelte:9 print()',
+      'src/interface/badges/Tiroir.svelte:9 .print',
+      'src/interface/badges/Tiroir.svelte:10 .print',
+      'src/interface/impression/Apercu.svelte:3 print()',
+    ]);
+    const sansLecteur = { ...fichiers, 'src/interface/impression/Apercu.svelte': '<script>\n  const imprimante = null;\n</script>\n' };
+    assert.deepEqual(avecArbre(sansLecteur, releverPortesDImpression).slice(-2), [
+      `lecteur sans objet : ${PORTE_D_IMPRESSION} getContext('imprimante')`,
+      `lecteur sans objet : ${PORTE_D_IMPRESSION} .imprimer`,
+    ]);
+    const sansEnvoi = {
+      ...fichiers,
+      'src/interface/impression/Apercu.svelte': [
+        '<script>',
+        "  const imprimante = getContext('imprimante');",
+        '</script>',
+        '<Commande cle="impression.commande.imprimer" />',
+      ].join('\n'),
+    };
+    assert.equal(avecArbre(sansEnvoi, releverPortesDImpression).at(-1), `lecteur sans objet : ${PORTE_D_IMPRESSION} .imprimer`);
+    for (const arbre of ARBRES_D_UNE_PORTE) {
+      const sansFichier = { ...sansArbre(fichiers, arbre), [`${arbre}/a.test.js`]: '' };
+      assert.throws(() => avecArbre(sansFichier, releverPortesDImpression), new RegExp(`${arbre} ne fournit aucun fichier`), arbre);
+    }
   });
 });
 
