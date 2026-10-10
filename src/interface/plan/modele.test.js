@@ -1217,3 +1217,92 @@ describe('les clés que les panneaux composent existent (§ 14.6)', () => {
     }
   });
 });
+
+describe('modeleDessin, option impression : le plan imprimé (§ 11.7, § 13.5)', () => {
+  // La grande démonstration au tour 1, sa proposition montrée : des tables
+  // de toutes tailles, dont le régime à l'écran dépend de k.
+  const grande = () => analyser(texteLivre('grande')).charge;
+
+  test('régime des sièges pour chaque table, quel que soit k ; chaque chaise dessinée, de 1 à la capacité', () => {
+    const charge = grande();
+    const etat = etatPlaces(charge, { tour: 1 });
+    // À l'écran, au plus petit zoom, aucune chaise ne se dessine.
+    const ecran = modeleDessin(etat, options(charge, { k: 0.01 }));
+    assert.ok(ecran.tables.every(({ regime }) => regime === 'table'));
+    for (const k of [undefined, 0.01, 5]) {
+      const modele = modeleDessin(etat, options(charge, { k, impression: true }));
+      assert.equal(modele.tables.length, etat.tables.length);
+      for (const [rang, table] of modele.tables.entries()) {
+        assert.equal(table.regime, 'sieges', `table ${table.id}, k = ${String(k)}`);
+        assert.deepEqual(
+          table.chaises.map(({ siege }) => siege),
+          etat.tables[rang].chaises.map(({ siege }) => siege),
+        );
+      }
+    }
+  });
+
+  test('ni sélection, ni focus, ni mise en évidence : les options de l’écran sont sans effet', () => {
+    const charge = avecPropositions(petite());
+    const etat = etatPlaces(charge, { tour: 1, proposition: charge.propositions[0].id });
+    const [premiere, deuxieme] = etat.tables;
+    const occupant = premiere.chaises.find((chaise) => chaise.occupant !== null).occupant;
+    const ecran = {
+      selection: { table: premiere.id, siege: 1 },
+      actif: { table: deuxieme.id, siege: null },
+      miseEnEvidence: occupant,
+      poignee: { table: premiere.id, places: 1 },
+    };
+    // À l'écran, ces options marquent leur porteur.
+    const marque = modeleDessin(etat, options(charge, { k: 5, ...ecran }));
+    assert.ok(marque.tables.some((table) => table.focus || table.chaises.some((chaise) => chaise.selection || chaise.miseEnEvidence)));
+    const modele = modeleDessin(etat, options(charge, { impression: true, ...ecran }));
+    for (const table of modele.tables) {
+      assert.equal(table.selection, false);
+      assert.equal(table.focus, false);
+      for (const chaise of table.chaises) {
+        assert.deepEqual([chaise.selection, chaise.focus, chaise.miseEnEvidence], [false, false, false], `table ${table.id}`);
+      }
+    }
+    // La poignée ne retire aucune chaise au papier : la table tenue garde sa capacité.
+    assert.deepEqual(
+      modele.tables[0].chaises.map(({ siege }) => siege),
+      Array.from({ length: premiere.capacite }, (_, rang) => rang + 1),
+    );
+  });
+
+  test('les listes se rendent quand elles sont demandées, sans égard à K_LISTES', () => {
+    const charge = avecPropositions(petite());
+    const etat = etatPlaces(charge, { tour: 1 });
+    assert.equal(modeleDessin(etat, options(charge, { k: K_LISTES - 0.01, impression: true })).listesRendues, true);
+    assert.equal(modeleDessin(etat, options(charge, { impression: true })).listesRendues, true);
+    assert.equal(modeleDessin(etat, options(charge, { impression: true, listes: false })).listesRendues, false);
+  });
+
+  test('le modèle se dit imprimé, et l’écran ne l’est pas : le dessin y lit l’absence de poignée, d’identifiant et de cible', () => {
+    const charge = avecPropositions(petite());
+    const etat = etatPlaces(charge, { tour: 1 });
+    assert.equal(modeleDessin(etat, options(charge, { impression: true })).impression, true);
+    assert.equal(modeleDessin(etat, options(charge)).impression, false);
+  });
+
+  test('les conflits, les pastilles, les marques et les lignes sont ceux de l’écran', () => {
+    const charge = avecPropositions(petite('petite-conflit'));
+    const etat = etatPlaces(charge, { tour: 1, proposition: charge.propositions[0].id });
+    const ecran = modeleDessin(etat, options(charge, { k: 5 }));
+    const imprime = modeleDessin(etat, options(charge, { impression: true }));
+    assert.ok(imprime.tables.some(({ conflit }) => conflit), 'une table en conflit au moins');
+    assert.equal(imprime.signalerConflits, ecran.signalerConflits);
+    for (const [rang, table] of imprime.tables.entries()) {
+      const voisine = ecran.tables[rang];
+      assert.deepEqual(
+        [table.conflit, table.pastille, table.trames, table.lignes, table.enTete],
+        [voisine.conflit, voisine.pastille, voisine.trames, voisine.lignes, voisine.enTete],
+      );
+      assert.deepEqual(
+        table.chaises.map(({ remplissage, marques }) => [remplissage, marques]),
+        voisine.chaises.map(({ remplissage, marques }) => [remplissage, marques]),
+      );
+    }
+  });
+});

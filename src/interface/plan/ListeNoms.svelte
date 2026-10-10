@@ -17,6 +17,13 @@
   // Le texte est en white-space: pre, pour que les espaces des parties
   // comptent comme elles ont été mesurées : le gabarit n'a aucun blanc entre
   // les balises du <text>.
+  //
+  // Le texte se compose en text-rendering: geometricPrecision, comme la
+  // sonde qui le mesure (PlanDessin) : le moteur de rendu le met alors en
+  // page à son corps du dessin, sans le recomposer au corps qu'il prend à
+  // l'écran. Sans lui, la largeur mesurée suit l'échelle d'affichage — le
+  // zoom du plan, l'échelle d'une page imprimée —, et une même ligne
+  // s'abrège à des longueurs différentes à l'écran et sur le papier (§ 7.4).
   import { getContext } from 'svelte';
   import { TAILLE_TEXTE_LISTE_CM } from '../../geometrie/texte.js';
   import { ajusterLigne, ordonneesLignes, partiesLigne, textesLigne } from './modele.js';
@@ -52,6 +59,7 @@
   .liste {
     fill: var(--couleur-liste-texte);
     font-family: var(--police-interface);
+    text-rendering: geometricPrecision;
     white-space: pre;
     pointer-events: none;
   }

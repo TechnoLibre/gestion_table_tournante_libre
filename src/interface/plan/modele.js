@@ -314,12 +314,13 @@ function porteurDe(place, id, regime) {
 }
 
 // Le dessin d'une table de l'état des places au zoom k ; places, le nombre
-// de sièges que la poignée montre, sinon sa capacité.
-function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, actif = null }, places = etatTable.capacite) {
+// de sièges que la poignée montre, sinon sa capacité. Imprimée, la table
+// est en régime sièges, quel que soit k.
+function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, actif = null, impression = false }, places = etatTable.capacite) {
   const { id, numero, gelee, surchargee, conflits } = etatTable;
   const geometrie = geometrieTable(etatTable, places);
   const trames = conflits === null ? [] : conflits.regles.map(({ regle }) => ({ ...SORTE_DE_REGLE.get(regle) }));
-  const regime = regimeCibles(k, geometrie);
+  const regime = impression ? 'sieges' : regimeCibles(k, geometrie);
   const pastille = conflits === null ? 0 : conflits.nombre;
   const etatChaises = chaisesA(etatTable, places);
   const selectionnee = porteurDe(selection, id, regime);
@@ -390,24 +391,34 @@ function tableDessin(etatTable, { k, miseEnEvidence, nomDe, selection = null, ac
  * accessible —, ses chaises 1 à places, celles au-delà de sa capacité
  * libres ; l'état des places n'est pas touché, et rien ne s'écrit (§ 7.1).
  *
+ * L'option impression rend le plan imprimé (§ 11.7) : k n'y entre pas,
+ * chaque table est en régime sièges, ses chaises de 1 à sa capacité, et les
+ * listes se rendent dès qu'elles sont demandées. Le papier ne reçoit aucun
+ * geste : poignee, selection, actif et miseEnEvidence sont sans effet, et
+ * aucun porteur n'est marqué. Le modèle porte impression, que le dessin lit
+ * pour ne poser ni poignée, ni cible, ni identifiant, ni rôle.
+ *
  * @param {Object} etatPlaces   EtatPlaces (A5)
- * @param {{k: number, listes: boolean, miseEnEvidence: number|null,
+ * @param {{k?: number, listes: boolean, miseEnEvidence?: number|null,
  *          nomDe: (id: number) => string, diagnostic?: Object|null,
  *          poignee?: {table: number, places: number}|null,
  *          selection?: {table: number, siege?: number|null}|null,
- *          actif?: {table: number, siege: number|null}|null}} options
- *        diagnostic : celui que rend diagnostiquer, compléments de M1 compris
+ *          actif?: {table: number, siege: number|null}|null,
+ *          impression?: boolean}} options
+ *        diagnostic : celui que rend diagnostiquer, compléments de M1 compris ;
+ *        k : exigé hors de l'impression ; miseEnEvidence : null par défaut
  * @returns {Object}   ModeleDessin
  */
 export function modeleDessin(
   etatPlaces,
-  { k, listes, miseEnEvidence, nomDe, diagnostic = null, poignee = null, selection = null, actif = null },
+  { k, listes, miseEnEvidence = null, nomDe, diagnostic = null, poignee = null, selection = null, actif = null, impression = false },
 ) {
+  const gestes = impression ? { miseEnEvidence: null, selection: null, actif: null } : { miseEnEvidence, selection, actif };
   const tables = etatPlaces.tables.map((etatTable) =>
     tableDessin(
       etatTable,
-      { k, miseEnEvidence, nomDe, selection, actif },
-      poignee !== null && poignee.table === etatTable.id ? poignee.places : etatTable.capacite,
+      { k, nomDe, impression, ...gestes },
+      !impression && poignee !== null && poignee.table === etatTable.id ? poignee.places : etatTable.capacite,
     ),
   );
   const toutesEnConflit = tables.length > 0 && tables.every(({ conflit }) => conflit);
@@ -415,7 +426,8 @@ export function modeleDessin(
     tables,
     signalerConflits: !toutesEnConflit,
     bandeau: bandeauDe(toutesEnConflit, diagnostic),
-    listesRendues: listes && k >= constante('K_LISTES'),
+    listesRendues: listes && (impression || k >= constante('K_LISTES')),
+    impression,
   };
 }
 

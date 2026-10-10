@@ -39,6 +39,12 @@
   // actif du clavier, la marque focus, un carré : deux formes, que la
   // couleur ne porte pas seule. Sur la chaise que le modèle désigne, ou sur
   // l'emprise de la table quand la place n'a pas de chaise dessinée.
+  //
+  // Imprimée (impression vrai, § 11.7), la table ne reçoit aucun geste : ni
+  // identifiant, ni rôle, ni nom accessible — le <svg> de la page porte le
+  // sien, et son contenu est caché aux technologies d'assistance —, ni
+  // poignée, ni cible. Le plateau, les chaises, les marques, les trames et
+  // la pastille sont ceux de l'écran : le noir et blanc se lit par la forme.
   import { getContext } from 'svelte';
   import { RAYON_POIGNEE } from '../../geometrie/tables.js';
   import {
@@ -56,7 +62,7 @@
     texteLigne,
   } from './modele.js';
 
-  let { table, signaler, prefixe } = $props();
+  let { table, signaler, prefixe, impression = false } = $props();
 
   const t = getContext('t');
 
@@ -78,7 +84,12 @@
   }
 </script>
 
-<g id="table-{table.id}" data-table={table.id} role="group" aria-label={t(table.nomAccessible.cle, table.nomAccessible.details)}>
+<g
+  id={impression ? undefined : `table-${table.id}`}
+  data-table={table.id}
+  role={impression ? undefined : 'group'}
+  aria-label={impression ? undefined : t(table.nomAccessible.cle, table.nomAccessible.details)}
+>
   {#if table.regime === 'table'}
     {#if formes.ronde}
       <circle class="emprise" data-marque="contourChaise" {...formes.emprise} />
@@ -116,10 +127,10 @@
   {/if}
   {#each table.chaises as chaise (chaise.siege)}
     <g
-      id="siege-{table.id}-{chaise.siege}"
+      id={impression ? undefined : `siege-${table.id}-${chaise.siege}`}
       data-siege="{table.id}:{chaise.siege}"
-      role="img"
-      aria-label={texteLigne(table.lignes[chaise.siege - 1], t)}
+      role={impression ? undefined : 'img'}
+      aria-label={impression ? undefined : texteLigne(table.lignes[chaise.siege - 1], t)}
     >
       <circle
         class="chaise"
@@ -146,11 +157,15 @@
       {#if chaise.focus}
         <rect class="focus" data-marque="focus" {...carreAutour(chaise, chaise.rayon + ECART_FOCUS)} />
       {/if}
-      <circle class="cible" cx={chaise.x} cy={chaise.y} r={table.geometrie.rayonCible} />
+      {#if !impression}
+        <circle class="cible" cx={chaise.x} cy={chaise.y} r={table.geometrie.rayonCible} />
+      {/if}
     </g>
   {/each}
 </g>
-<circle class="poignee" data-poignee={table.id} data-marque="poignee" cx={poignee.x} cy={poignee.y} r={RAYON_POIGNEE} />
+{#if !impression}
+  <circle class="poignee" data-poignee={table.id} data-marque="poignee" cx={poignee.x} cy={poignee.y} r={RAYON_POIGNEE} />
+{/if}
 {#if table.pastille > 0}
   <g class="pastille" data-pastille={table.id}>
     <circle class="disque" data-marque="pastille" cx={formes.pastille.x} cy={formes.pastille.y} r={RAYON_PASTILLE} />

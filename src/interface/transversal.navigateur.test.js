@@ -723,6 +723,26 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(noye.marques.fautes[0]).toContain('1.00:1');
   });
 
+  test('marques : sous le document imprimé, une marque se mesure au jeton du papier — celui du clair, dans les deux thèmes —, non à celui de la page', () => {
+    const racine = document.documentElement;
+    const theme = racine.getAttribute('data-theme');
+    racine.setAttribute('data-theme', 'sombre');
+    try {
+      const { vues, fautes, mesures } = avecFragment(
+        '<div data-impression style="background:var(--couleur-papier);padding:8px"><svg width="60" height="40">' +
+          '<circle data-marque="contourTable" cx="20" cy="20" r="12" style="fill:var(--couleur-papier);stroke:var(--couleur-table-trait);stroke-width:3px" />' +
+          '</svg></div>',
+        (c) => releverMarques(c),
+      );
+      expect(vues).toEqual(['contourTable']);
+      expect(fautes).toEqual([]);
+      expect(mesures).toBe(1);
+    } finally {
+      if (theme === null) racine.removeAttribute('data-theme');
+      else racine.setAttribute('data-theme', theme);
+    }
+  });
+
   test('marques sous une fenêtre modale : une marque HTML de la page, qui ne s’y mesure pas, ne compte pas comme vue ; une marque dans la fenêtre, si', () => {
     const { vues } = avecFragment(
       '<p data-marque="gel" style="border:2px solid var(--couleur-gel)">dehors</p>' +

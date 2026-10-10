@@ -23,6 +23,10 @@
   // taille du <svg> qui porte le dessin, qu'un ResizeObserver signale : un
   // plan qui se cache perd ses mesures, et ses listes, et les reprend en se
   // montrant.
+  //
+  // Le modèle du plan imprimé (modele.impression, § 11.7) se dessine de
+  // même, chaque table sans poignée, ni cible, ni identifiant (TablePlan) ;
+  // ses listes ont la largeur et la troncature de l'écran (§ 7.4).
   import { untrack } from 'svelte';
   import { constante } from '../../geometrie/constantes.js';
   import { TAILLE_TEXTE_LISTE_CM } from '../../geometrie/texte.js';
@@ -60,7 +64,7 @@
 
 <Motifs {prefixe} />
 {#each modele.tables as table (table.id)}
-  <TablePlan {table} signaler={modele.signalerConflits} {prefixe} />
+  <TablePlan {table} signaler={modele.signalerConflits} {prefixe} impression={modele.impression === true} />
 {/each}
 <text class="sonde" font-size={TAILLE_TEXTE_LISTE_CM} aria-hidden="true" bind:this={sonde}
   ><tspan class="titre" bind:this={sondeItalique}></tspan></text
@@ -76,6 +80,7 @@
      et ne porte de texte que le temps d'une mesure. */
   .sonde {
     font-family: var(--police-interface);
+    text-rendering: geometricPrecision;
     white-space: pre;
     visibility: hidden;
     pointer-events: none;

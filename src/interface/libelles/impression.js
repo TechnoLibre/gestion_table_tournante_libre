@@ -51,8 +51,22 @@ export const TABLE = new Map([
   ['impression.pied.placementInconnu', 'Placement non daté'],
   ['impression.pied.version', 'Version'],
 
-  // --- Les vues, avant leur mise en page (§ 11.7) ------------------------------
+  // --- Le plan imprimé (§ 7.7, § 11.7) ---------------------------------------
   ['impression.plan.page', ({ page, total }) => `Plan, page ${page} sur ${total}`],
+  [
+    'impression.plan.cartouche',
+    ({ page, total, colonne, rangee }) => `Page ${page} sur ${total} \u{2014} colonne ${colonne}, rangée ${rangee}`,
+  ],
+  ['impression.plan.renvoi.haut', ({ page }) => `au-dessus : page ${page}`],
+  ['impression.plan.renvoi.droite', ({ page }) => `à droite : page ${page}`],
+  ['impression.plan.renvoi.bas', ({ page }) => `au-dessous : page ${page}`],
+  ['impression.plan.renvoi.gauche', ({ page }) => `à gauche : page ${page}`],
+  [
+    'impression.plan.listes',
+    "listes de noms hors d'échelle \u{2014} le plan à l'échelle du bâtiment s'imprime listes masquées",
+  ],
+
+  // --- Les vues, avant leur mise en page (§ 11.7) ------------------------------
   ['impression.accueil.titre', "Liste d'accueil"],
   ['impression.tables.titre', 'Feuilles par table'],
 ]);

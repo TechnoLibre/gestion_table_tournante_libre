@@ -231,11 +231,13 @@ export function releverTextes(racine, { fenetre = false } = {}) {
 
 // --- Les marques -------------------------------------------------------------------
 
-/** La couleur résolue d'un jeton dans le thème courant. */
-export function couleurDeJeton(jeton) {
+/** La couleur résolue d'un jeton dans le thème courant, ou sous hote : un
+ *  élément qui redéclare les jetons — le document imprimé de l'aperçu,
+ *  [data-impression], porte ceux du clair dans les deux thèmes (§ 11.7). */
+export function couleurDeJeton(jeton, hote = document.body) {
   const sonde = document.createElement('span');
   sonde.style.color = `var(${jeton})`;
-  document.body.append(sonde);
+  hote.append(sonde);
   try {
     return composantes(getComputedStyle(sonde).color);
   } finally {
@@ -363,7 +365,9 @@ function voisinage(element, jeton) {
 /**
  * Les marques rendues sous racine (§ 14.5, § 19.5) : chacune nommée au
  * registre, peinte de son jeton, à 3:1 de ce qui l'entoure, sans
- * atténuation. → { vues: string[], fautes, attenuations, mesures, ratios },
+ * atténuation. Sous le document imprimé de l'aperçu, le jeton se résout
+ * comme le papier le résout : au clair, dans les deux thèmes.
+ * → { vues: string[], fautes, attenuations, mesures, ratios },
  * ratios : { marque, jeton, ratio } de chaque marque mesurée, contre ce qui
  * l'entoure de plus défavorable, dans l'ordre des mesures. fenetre vrai :
  * seules les marques que la fenêtre montre entières se lisent, sans rien
@@ -397,7 +401,7 @@ export function releverMarques(racine, { fenetre = false } = {}) {
     if (modale !== null && !(element instanceof SVGElement) && !modale.contains(element)) continue;
     vues.add(nom);
     if (!fenetre) amener(element);
-    const jeton = couleurDeJeton(entree.jeton);
+    const jeton = couleurDeJeton(entree.jeton, element.closest('[data-impression]') ?? document.body);
     try {
       const { peinture, voisins } = voisinage(element, jeton);
       if (peinture === null) {
