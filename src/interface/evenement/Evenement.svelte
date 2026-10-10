@@ -25,6 +25,7 @@
   // nombre des avertissements, et le support rompu, en tête de la zone,
   // garde ses issues en vue (CadreMode.svelte).
   import { getContext } from 'svelte';
+  import SectionBadges from '../badges/SectionBadges.svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import SectionGeneration from '../generation/SectionGeneration.svelte';
   import SectionImport from '../import/SectionImport.svelte';
@@ -52,6 +53,7 @@
     ['diagnostic', Diagnostic],
     ['generation', SectionGeneration],
     ['propositions', SectionPropositions],
+    ['badges', SectionBadges],
   ]);
 
   const Section = $derived(COMPOSANTS.get($ui.section));
@@ -115,8 +117,12 @@
     gap: var(--espace-2);
   }
 
+  /* Le retrait latéral des boutons de section vaut --espace-2 : les huit
+     sections tiennent sur une ligne à côté de la place des annonces dans
+     une fenêtre de 1 366 px, et un avertissement ne retire donc aucune
+     hauteur au plan (CadreMode.svelte). */
   button {
-    padding: var(--espace-1) var(--espace-3);
+    padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
     border-radius: var(--rayon-1);
     background-color: var(--couleur-page-fond);

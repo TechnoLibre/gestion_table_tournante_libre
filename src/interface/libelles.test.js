@@ -65,11 +65,11 @@ async function tablesDuDossier() {
 }
 
 describe('libellés : les tables des écrans (§ 14.6)', () => {
-  test('chaque module de libelles/ exporte TABLE, une Map ; TABLES_INTERFACE les assemble, quatorze, par ordre alphabétique', async () => {
+  test('chaque module de libelles/ exporte TABLE, une Map ; TABLES_INTERFACE les assemble, quinze, par ordre alphabétique', async () => {
     const tables = await tablesDuDossier();
-    assert.equal(tables.length, 14);
+    assert.equal(tables.length, 15);
     assert.deepEqual(tables.map(({ table }) => table), [
-      'accueil', 'communs', 'coquille', 'diagnostic', 'evenement', 'feuilles', 'generation',
+      'accueil', 'badges', 'communs', 'coquille', 'diagnostic', 'evenement', 'feuilles', 'generation',
       'import', 'impression', 'participants', 'plan', 'propositions', 'raccourcis', 'tables',
     ]);
     for (const { table, module } of tables) assert.ok(module.TABLE instanceof Map, table);

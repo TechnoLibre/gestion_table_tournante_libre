@@ -15,11 +15,13 @@ const CLES = new Map([
   ['diagnostic', 'coquille.section.diagnostic'],
   ['generation', 'coquille.section.generation'],
   ['propositions', 'coquille.section.propositions'],
+  ['badges', 'coquille.section.badges'],
 ]);
 
-/** Les sections de l'itération, dans l'ordre du § 2.1 : import,
- *  participants, tables, plan, diagnostic, generation, propositions. Aucune
- *  n'en exige une autre. Le titre et le nom de navigation de chacune sont la
+/** Les sections de l'événement, dans l'ordre du § 2.1 : import,
+ *  participants, tables, plan, diagnostic, generation, propositions, badges
+ *  — la planche, dernière étape (§ 2.1 étape 12). Aucune n'en exige une
+ *  autre. Le titre et le nom de navigation de chacune sont la
  *  clé coquille.section.<nom> de coquille.js. */
 export const SECTIONS = Object.freeze([...CLES.keys()]);
 

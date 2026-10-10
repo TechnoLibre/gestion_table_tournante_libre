@@ -1,8 +1,9 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les sections de l'événement ouvert (§ 2.1) : sept noms distincts, dans
-// l'ordre du parcours de l'opérateur, chacun nommé par sa clé
+// Les sections de l'événement ouvert (§ 2.1) : huit noms distincts, dans
+// l'ordre du parcours de l'opérateur — les badges, dernière étape, après les
+// propositions (§ 2.1 étape 12) —, chacun nommé par sa clé
 // coquille.section.<nom> de la table de la coquille ; la section d'ouverture
 // en est une.
 import assert from 'node:assert/strict';
@@ -11,9 +12,9 @@ import { TABLE as COQUILLE } from '../libelles/coquille.js';
 import { SECTION_OUVERTURE, SECTIONS, cleDeSection } from './sections.js';
 
 describe('sections de l’événement (§ 2.1)', () => {
-  test('sept noms distincts, dans l’ordre du parcours, figés', () => {
-    assert.deepEqual(SECTIONS, ['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions']);
-    assert.equal(new Set(SECTIONS).size, 7);
+  test('huit noms distincts, dans l’ordre du parcours, les badges après les propositions, figés', () => {
+    assert.deepEqual(SECTIONS, ['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions', 'badges']);
+    assert.equal(new Set(SECTIONS).size, 8);
     assert.ok(Object.isFrozen(SECTIONS));
   });
 

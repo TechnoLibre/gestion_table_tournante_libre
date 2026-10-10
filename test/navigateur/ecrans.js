@@ -23,6 +23,7 @@ import { flushSync } from 'svelte';
 import { appliquerCommande } from '../../src/application/commandes.js';
 import { ErreurAnnulee } from '../../src/application/generation.js';
 import { texteLivre } from '../../src/demo/livrees.js';
+import { SECTIONS } from '../../src/interface/evenement/sections.js';
 import { rechercher } from '../../src/moteur/recherche.js';
 import { serialiser } from '../../src/stockage/canonique.js';
 import { analyser, capacite, configurationDepuisCharge } from '../../src/stockage/document.js';
@@ -39,8 +40,10 @@ export const BASE = 'soiree';
 /** Le nom du CSV des cas limites que sert le dialogue d'import. */
 export const NOM_CAS_LIMITES = 'participants_cas_limites.csv';
 
-/** Les sections d'un événement, dans l'ordre de la navigation. */
-export const SECTIONS_EVENEMENT = Object.freeze(['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions']);
+/** Les sections d'un événement, dans l'ordre de la navigation : celles
+ *  que l'application offre, si bien qu'une section ajoutée se visite à
+ *  chaque mode sans retouche ici. */
+export const SECTIONS_EVENEMENT = SECTIONS;
 
 // L'exécutable publié du système simulé : son dossier data/ refuse
 // l'écriture, et la question du dossier de travail se pose au démarrage.

@@ -71,4 +71,5 @@ export const TABLE = new Map([
   ['coquille.section.diagnostic', 'Diagnostic'],
   ['coquille.section.generation', 'Génération'],
   ['coquille.section.propositions', 'Propositions'],
+  ['coquille.section.badges', 'Badges'],
 ]);

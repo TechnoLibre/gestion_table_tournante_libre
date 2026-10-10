@@ -11,6 +11,7 @@
 // démarrage et le livrable les appellent sans connaître la traduction.
 import { creerTraduction } from '../application/traduction.js';
 import { TABLE as ACCUEIL } from './libelles/accueil.js';
+import { TABLE as BADGES } from './libelles/badges.js';
 import { TABLE as COMMUNS } from './libelles/communs.js';
 import { TABLE as COQUILLE } from './libelles/coquille.js';
 import { TABLE as DIAGNOSTIC } from './libelles/diagnostic.js';
@@ -28,6 +29,7 @@ import { TABLE as TABLES } from './libelles/tables.js';
 /** Les tables de libelles/, dans l'ordre alphabétique de leurs fichiers. */
 export const TABLES_INTERFACE = Object.freeze([
   ACCUEIL,
+  BADGES,
   COMMUNS,
   COQUILLE,
   DIAGNOSTIC,

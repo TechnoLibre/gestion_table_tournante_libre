@@ -19,6 +19,7 @@
 // [attribut, porteur, valeurs], dans l'ordre des attributs.
 const ENTREES = [
   ['data-affichee', 'import : la valeur affichée d’une cellule de l’aperçu', ['']],
+  ['data-annonce-planche', 'badges : l’annonce de la planche, avant de produire', ['']],
   ['data-annonces', 'événement : la zone des annonces à côté de la tête', ['']],
   ['data-apercu', 'import : l’aperçu d’un fichier ou d’un collage', ['']],
   ['data-attente-demonstration', 'accueil : le message d’une démonstration cliquée pendant un chargement', ['']],
@@ -34,6 +35,7 @@ const ENTREES = [
   ['data-champ', 'un champ de saisie ou un sélecteur, par son nom', null],
   ['data-chargement', 'accueil : le signe d’un calcul en cours', ['']],
   ['data-chargement-liste', 'accueil : l’annonce du calcul des colonnes de la liste', ['']],
+  ['data-chemin-planche', 'badges : le chemin de la planche produite, ou son nom téléchargé', ['']],
   ['data-choix-siege', 'plan : un siège offert par le panneau d’une table, par son rang', null],
   ['data-cible', 'la cible d’une commande : section, groupe, colonne, vue imprimée ou papier', null],
   ['data-cible-redondance', 'propositions : le champ de la cible de redondance', ['']],
@@ -143,7 +145,7 @@ const ENTREES = [
   ['data-reserve', 'plan : la réserve d’un tour', null],
   ['data-retenu', 'propositions : la ligne du retenu', null],
   ['data-secours', 'récupération : une source de secours', null],
-  ['data-section', 'une section de l’événement', ['diagnostic', 'generation', 'import', 'participants', 'plan', 'propositions', 'tables']],
+  ['data-section', 'une section de l’événement', ['badges', 'diagnostic', 'generation', 'import', 'participants', 'plan', 'propositions', 'tables']],
   ['data-separateur', 'import : le séparateur nommé', ['']],
   ['data-siege', 'plan : un siège, par sa table et son numéro', null],
   ['data-sieges-retires', 'tables : les sièges retirés', ['']],
