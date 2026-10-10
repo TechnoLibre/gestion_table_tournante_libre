@@ -22,6 +22,7 @@ import { cadreUtile, cellules, filets, imposer, nombrePlanches } from './imposit
 import { produirePlanche } from './planche.js';
 
 const ZONE = constante('ZONE_SILENCE_MM');
+const MARGE = constante('MARGE_PAGE_MM');
 const TOLERANCE = 1e-6;
 const FILIGRANE = libelle('planche.brouillon');
 const polices = lirePolices();
@@ -156,7 +157,7 @@ describe('produirePlanche : la géométrie du Lettre et le témoin (§ 11.2, § 
 });
 
 describe('produirePlanche : une feuille de contrôle plus longue qu\u{2019}une page (§ 11.3)', () => {
-  test('les lignes qui débordent continuent sur une page de contrôle sans règle ni filet, avant les planches', async () => {
+  test('les lignes qui débordent continuent sur une page de contrôle sans règle ni filet, avant les planches, chaque page remplie dans ses marges', async () => {
     const m = modele(150, { brouillon: true, reedition: true });
     const controle = textesControle(m, { papier: 'A4', imposition: 'feuille', planches: nombrePlanches(150, 'A4') });
     const lu = await produireEtLire(m, 'A4', 'feuille');
@@ -173,6 +174,16 @@ describe('produirePlanche : une feuille de contrôle plus longue qu\u{2019}une p
     assert.deepEqual(controleLu, ['0', '50', '100', ...controle]);
     for (const page of lu.pages.slice(0, pagesControle)) assert.equal(page.textes.filter(estFiligrane).length, 1);
     for (const page of lu.pages.slice(1, pagesControle)) assert.deepEqual(page.segments, []);
+    // Chaque texte des pages de contrôle dans les quatre marges : la page
+    // de suite commence sous la marge haute, et une page ne se remplit que
+    // jusqu'à la marge basse — la ligne qui la passerait part à la suivante.
+    const { largeur: W, hauteur: H } = PAPIERS.A4;
+    lu.pages.slice(0, pagesControle).forEach((page, rang) => {
+      for (const { texte, x, y, l, h } of page.textes) {
+        const dedans = x >= MARGE - TOLERANCE && y >= MARGE - TOLERANCE && x + l <= W - MARGE + TOLERANCE && y + h <= H - MARGE + TOLERANCE;
+        assert.ok(dedans, `page ${rang + 1} : « ${texte} » en ${JSON.stringify({ x, y, l, h })}`);
+      }
+    });
     const attendu = imposer(150, 'A4', 'feuille').map((planche) => planche.map((i) => (i === null ? null : nomTemoin(i))));
     assert.deepEqual(nomsLus(lu.pages.slice(pagesControle), 'A4'), attendu);
   });

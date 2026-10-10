@@ -13,12 +13,15 @@
 // productions de PDF au plus dans ce fichier, sur une soirée de quatre
 // personnes — trois pour les trois modes, trois pour la stabilité des
 // octets, une réédition, deux refus d'écriture et l'enregistrement sous,
-// une sous web, une proposition. Celle sous web sort en Lettre, en pile,
-// par table : sur deux badges par planche, l'imposition et l'ordre demandés
-// se lisent dans la place de chaque nom. La réédition porte un caractère
-// sans glyphe, que sa feuille de contrôle nomme. Le témoin de 257 ne
-// s'analyse que pour son annonce. Les noms sont inventés ; la version vient
-// du module engendré.
+// une sous web, une proposition. L'imposition et l'ordre se lisent dans la
+// place de chaque nom, et le papier, l'imposition et le nombre de planches
+// dans la feuille de contrôle : la première production, sous la demande
+// par défaut, en A4 — l'ordre alphabétique ; la proposition, sous la
+// demande par défaut, en Lettre — feuille par feuille sur deux planches ;
+// celle sous web en Lettre, en pile, par table. La réédition porte un
+// caractère sans glyphe, que sa feuille de contrôle nomme. Le témoin de 257
+// ne s'analyse que pour son annonce. Les noms sont inventés ; la version
+// vient du module engendré.
 import assert from 'node:assert/strict';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_PROPOSITION, H_RETENU, personne, soiree, table } from '../../test/fixtures/badges/cas.js';
@@ -26,6 +29,8 @@ import { FORME_TEMOIN, chargeTemoin } from '../../test/fixtures/badges/temoin.js
 import { describe, test } from '../../test/lanceur.js';
 import { lirePdf } from '../../test/pdf.js';
 import { lirePolices } from '../../test/polices.js';
+import { PAPIERS } from '../geometrie/papiers.js';
+import { cellules } from '../pdf/imposition.js';
 import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { FORMAT } from '../stockage/document.js';
@@ -161,16 +166,32 @@ async function refusee(promesse, code, details) {
 
 // Les textes d'une page du PDF relu, et si l'un d'eux s'écrit au trait.
 const textesDe = (page) => page.textes.map(({ texte }) => texte);
-
-// Les noms d'une page de badges, parmi ceux donnés, du haut vers le bas puis
-// de gauche à droite : l'ordre des cellules sur la feuille. Dans les boîtes
-// que rend lirePdf, y croît vers le pied de la page.
-const nomsDe = (page, noms) =>
-  page.textes
-    .filter(({ texte }) => noms.includes(texte))
-    .sort((a, b) => a.y - b.y || a.x - b.x)
-    .map(({ texte }) => texte);
 const auTrait = (pdf) => pdf.pages.some((page) => page.modesTexte.includes(1));
+
+// Les noms d'une page de badges, parmi ceux donnés, cellule par cellule
+// dans l'ordre de cellules(papier) ; null pour une cellule où aucun ne se
+// lit. Un nom appartient à la cellule qui contient le centre de sa boîte.
+const NOMS = ['Iris Ombrelle', 'Théo Pervenche', 'Ondine Lacasse', 'Grisaille'];
+function nomsParCellule(page, papier, noms = NOMS) {
+  return cellules(papier).map(({ x, y, largeur, hauteur }) => {
+    const lus = page.textes
+      .filter((t) => noms.includes(t.texte))
+      .filter((t) => t.x + t.l / 2 > x && t.x + t.l / 2 < x + largeur && t.y + t.h / 2 > y && t.y + t.h / 2 < y + hauteur)
+      .map(({ texte }) => texte);
+    assert.ok(lus.length <= 1, `plusieurs noms dans une cellule : ${lus.join(', ')}`);
+    return lus[0] ?? null;
+  });
+}
+
+// Les lignes de la feuille de contrôle qui disent le papier, l'imposition et
+// le nombre de planches d'une production.
+const lignesDeSortie = ({ papier, imposition, planches }) => [
+  libelle('planche.controle.papier', { papier, ...PAPIERS[papier] }),
+  libelle('planche.controle.imposition', { imposition }),
+  libelle('planche.controle.planches', { planches }),
+];
+// Celles que porte la page de contrôle relue, parmi les trois.
+const sortieLue = (pdf, sortie) => lignesDeSortie(sortie).filter((ligne) => textesDe(pdf.pages[0]).includes(ligne));
 
 describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, § 8.4, § 9)', () => {
   test('produire en lecture, sur un plan bloqué, sous un format plus récent : la trace ne porte que le .pdf, déposé à côté de l’événement', async () => {
@@ -213,6 +234,12 @@ describe('planche dans la séance : sortir n’est pas modifier (contrainte 24, 
     const pdf = await lirePdf(retenu);
     assert.ok(!pdf.pages.some((page) => textesDe(page).includes(FILIGRANE)));
     assert.equal(auTrait(pdf), false);
+    // La demande par défaut : l'ordre alphabétique, par nom puis prénom, sur
+    // l'unique planche A4, feuille par feuille.
+    const sortie = { papier: 'A4', imposition: 'feuille', planches: 1 };
+    assert.deepEqual(sortieLue(pdf, sortie), lignesDeSortie(sortie), textesDe(pdf.pages[0]).join(' | '));
+    assert.equal(pdf.pages.length, 2);
+    assert.deepEqual(nomsParCellule(pdf.pages[1], 'A4'), ['Grisaille', 'Ondine Lacasse', 'Iris Ombrelle', 'Théo Pervenche']);
   });
 
   test('sans papier choisi : PAPIER_REQUIS avant toute écriture ; choisi, le nom et l’annonce le portent, et une autre séance de la racine ne le redemande pas', async () => {
@@ -376,13 +403,25 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
     assert.equal(pdf.pages.length, 2);
   });
 
-  test('une proposition produite porte le mot du filigrane au trait ; sa feuille de contrôle aussi', async () => {
-    const { fs, seance } = await monter();
+  test('une proposition produite porte le mot du filigrane au trait, sa feuille de contrôle aussi ; en Lettre sous la demande par défaut, feuille par feuille, dans l’ordre alphabétique', async () => {
+    const { fs, seance } = await monter(chargeLucioles(), { papier: 'Lettre' });
     const rendu = await seance.produirePlanche({ source: 'proposition', proposition: 2 });
-    assert.equal(rendu.nom, nomDe({ horodatage: H_PROPOSITION }));
+    assert.equal(rendu.nom, nomDe({ papier: 'Lettre', horodatage: H_PROPOSITION }));
     const pdf = await lirePdf(fs.octets('documents', rendu.nom));
     assert.ok(pdf.pages.every((page) => textesDe(page).includes(FILIGRANE)));
     assert.equal(auTrait(pdf), true);
+    // Deux badges par planche : feuille par feuille, la planche p porte les
+    // badges 2p − 1 et 2p de l'ordre alphabétique — en pile, ce seraient p
+    // et p + 2 ; par table, la proposition 2 assied Ombrelle avec Grisaille.
+    const sortie = { papier: 'Lettre', imposition: 'feuille', planches: 2 };
+    assert.deepEqual(sortieLue(pdf, sortie), lignesDeSortie(sortie), textesDe(pdf.pages[0]).join(' | '));
+    assert.deepEqual(
+      pdf.pages.slice(1).map((page) => nomsParCellule(page, 'Lettre')),
+      [
+        ['Grisaille', 'Ondine Lacasse'],
+        ['Iris Ombrelle', 'Théo Pervenche'],
+      ],
+    );
   });
 });
 
@@ -448,10 +487,11 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
     // Grisaille, Lacasse (table 2) ; en pile sur deux planches, la planche p
     // porte les badges p et p + 2 de cet ordre.
     const pdf = await lirePdf(recus[0][1]);
-    const noms = ['Iris Ombrelle', 'Théo Pervenche', 'Ondine Lacasse', 'Grisaille'];
     assert.equal(pdf.pages.length, 3);
+    const sortie = { papier: 'Lettre', imposition: 'pile', planches: 2 };
+    assert.deepEqual(sortieLue(pdf, sortie), lignesDeSortie(sortie), textesDe(pdf.pages[0]).join(' | '));
     assert.deepEqual(
-      pdf.pages.slice(1).map((page) => nomsDe(page, noms)),
+      pdf.pages.slice(1).map((page) => nomsParCellule(page, 'Lettre')),
       [
         ['Iris Ombrelle', 'Grisaille'],
         ['Théo Pervenche', 'Ondine Lacasse'],

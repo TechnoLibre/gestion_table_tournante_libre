@@ -12,9 +12,13 @@
 // petits modèles écrits à la main, que toutes les épreuves du fichier
 // lisent — A4, cinq badges, feuille par feuille, brouillon, horodatage
 // connu, produite deux fois ; Lettre, trois badges, en pile, retenu,
-// horodatage inconnu. Les lignes de contrôle viennent de textesControle, le
-// mot du filigrane de libelle, comme la séance les passera.
+// horodatage inconnu, sous un nom d'événement plus large que la page, dont
+// la ligne de contrôle se replie aux espaces, reporte entier un mot qui
+// tient seul, puis coupe un mot qui ne tient pas seul. Les lignes de
+// contrôle viennent de textesControle, le mot du filigrane de libelle,
+// comme la séance les passera.
 import assert from 'node:assert/strict';
+import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, PDFName } from 'pdf-lib';
 import { lirePdf } from '../../test/pdf.js';
 import { lirePolices } from '../../test/polices.js';
@@ -25,6 +29,7 @@ import { constante } from '../geometrie/constantes.js';
 import { PAPIERS } from '../geometrie/papiers.js';
 import { VERSION } from '../version.genere.js';
 import { cellules, filets, imposer, nombrePlanches } from './imposition.js';
+import { metriquesDe } from './mise_en_page.js';
 import { analyserPlanche, produirePlanche } from './planche.js';
 
 const TOLERANCE = 1e-6;
@@ -35,10 +40,18 @@ const TIRET = '\u{2014}';
 const polices = lirePolices();
 
 const EVENEMENT = { nom: 'Souper du Club des Merles', date: '2026-10-09' };
+// Un nom d'événement plus large que la largeur utile d'une page : des mots,
+// dont un mot long qui tient seul sur une ligne mais déborde en fin de
+// ligne là où quelques-unes de ses grappes tiendraient encore, puis un mot
+// composé sans espace, plus large à lui seul qu'une ligne.
+const EVENEMENT_LONG = {
+  nom: `Grand souper annuel des amis du Club des Merles et de la Pervenche, au profit des Ombrellebleuetières, Merles${'-Lucioles'.repeat(14)}`,
+  date: '2026-10-09',
+};
 const HORODATAGE = '2026-10-09T19:00:00-04:00';
 
 /** Un badge écrit à la main : ses textes tels que BA1 les compose. */
-function badge(participant, nom, { appartenance = null, tours = 2, horodatage = HORODATAGE } = {}) {
+function badge(participant, nom, { appartenance = null, tours = 2, horodatage = HORODATAGE, evenement = EVENEMENT } = {}) {
   const lignes = Array.from({ length: tours }, (_, i) => ({ tour: i + 1, table: participant + i, siege: null, titre: null }));
   const ligneHorodatage = horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
   return {
@@ -51,17 +64,17 @@ function badge(participant, nom, { appartenance = null, tours = 2, horodatage = 
       nom,
       lignes: lignes.map((ligne) => libelle('planche.tour', ligne)),
       appartenance,
-      pied: [libelle('planche.pied.evenement', EVENEMENT), ligneHorodatage],
-      piedReduit: [libelle('planche.pied.date', EVENEMENT), ligneHorodatage],
+      pied: [libelle('planche.pied.evenement', evenement), ligneHorodatage],
+      piedReduit: [libelle('planche.pied.date', evenement), ligneHorodatage],
     },
   };
 }
 
 /** Un modèle de planche écrit à la main. */
-function modele(badges, { horodatage = HORODATAGE, brouillon = false, exclus = 0 } = {}) {
+function modele(badges, { horodatage = HORODATAGE, brouillon = false, exclus = 0, evenement = EVENEMENT } = {}) {
   return {
     badges,
-    evenement: EVENEMENT,
+    evenement,
     horodatage,
     brouillon,
     comptes: { participants: badges.length + exclus, exclus, produits: badges.length },
@@ -78,8 +91,8 @@ const MODELE_A4 = modele(
 );
 const NOMS_LETTRE = ['Aube Sarcelle', 'Côme Pervenche', 'Ysée Lacasse'];
 const MODELE_LETTRE = modele(
-  NOMS_LETTRE.map((nom, i) => badge(i + 10, nom, { horodatage: null, tours: 3 })),
-  { horodatage: null },
+  NOMS_LETTRE.map((nom, i) => badge(i + 10, nom, { horodatage: null, tours: 3, evenement: EVENEMENT_LONG })),
+  { horodatage: null, evenement: EVENEMENT_LONG },
 );
 
 const entrees = (m, papier, imposition) => ({
@@ -329,6 +342,17 @@ describe('produirePlanche : les badges (§ 11.3, § 11.4, § 11.6)', () => {
   });
 });
 
+// La mesure de la police embarquée, celle que la production emploie :
+// les deux graisses chargées par pdf-lib et fontkit dans un document
+// neuf, qui ne s'enregistre pas.
+const documentDeMesure = await PDFDocument.create({ updateMetadata: false });
+documentDeMesure.registerFontkit(fontkit);
+const metriques = metriquesDe({
+  regulier: await documentDeMesure.embedFont(polices.regulier, { subset: true }),
+  gras: await documentDeMesure.embedFont(polices.gras, { subset: true }),
+});
+const MM_PAR_PT = 25.4 / 72;
+
 describe('produirePlanche : la feuille de contrôle, page 1 (§ 11.3)', () => {
   // La graduation : le segment horizontal de 100 mm, et les repères qui le
   // touchent, verticaux.
@@ -341,6 +365,48 @@ describe('produirePlanche : la feuille de contrôle, page 1 (§ 11.3)', () => {
       ({ x1, x2, y1, y2 }) => Math.abs(x1 - x2) < TOLERANCE && Math.abs(Math.max(y1, y2) - regle.y1) < TOLERANCE,
     );
     return { regle, reperes };
+  }
+
+  // Les lignes de contrôle d'une page : ses fragments dans l'ordre du flux,
+  // sans les chiffres de la règle, posés d'abord, ni le filigrane, que sa
+  // rotation rend plus haut qu'aucune ligne.
+  const CHIFFRES_REGLE = ['0', '50', '100'];
+  function fragmentsDeControle(page) {
+    const sansFiligrane = page.textes.filter(({ texte, h }) => !(texte === FILIGRANE && h > 20));
+    assert.deepEqual(sansFiligrane.slice(0, CHIFFRES_REGLE.length).map(({ texte }) => texte), CHIFFRES_REGLE);
+    return sansFiligrane.slice(CHIFFRES_REGLE.length);
+  }
+
+  // Les fragments rapportés aux lignes attendues, dans l'ordre : chaque ligne
+  // se lit d'un ou de plusieurs fragments consécutifs, accolés quand la coupe
+  // tombe dans un mot, séparés par une espace quand elle tombe sur une
+  // espace — aucun caractère perdu, ajouté ni déplacé, aucun fragment de
+  // reste. Rend, par ligne, ses morceaux, l'indice dans la ligne où chacun
+  // commence et la nature de chaque coupe.
+  function recomposer(fragments, lignes) {
+    let k = 0;
+    const recomposees = lignes.map((ligne) => {
+      const morceaux = [];
+      const debuts = [];
+      const coupes = [];
+      let position = 0;
+      while (position < ligne.length) {
+        const fragment = fragments[k];
+        assert.ok(fragment !== undefined && ligne.startsWith(fragment.texte, position), `« ${ligne} » à ${position} : « ${fragment?.texte} »`);
+        morceaux.push(fragment);
+        debuts.push(position);
+        k += 1;
+        position += fragment.texte.length;
+        if (position < ligne.length) {
+          const surEspace = ligne[position] === ' ';
+          coupes.push(surEspace ? 'espace' : 'mot');
+          if (surEspace) position += 1;
+        }
+      }
+      return { ligne, morceaux, debuts, coupes };
+    });
+    assert.deepEqual(fragments.slice(k).map(({ texte }) => texte), [], 'fragments de reste');
+    return recomposees;
   }
 
   test('graduation de 0 à 100 mm, repérée tous les 10 mm, mesurée sur les segments', () => {
@@ -356,16 +422,73 @@ describe('produirePlanche : la feuille de contrôle, page 1 (§ 11.3)', () => {
     }
   });
 
-  test("les lignes de contrôle se lisent dans la couche de texte : comptes, horodatage, version, papier", () => {
+  test("les lignes de contrôle se lisent dans la couche de texte, dans l'ordre et entières : comptes, horodatage, version, papier", () => {
     for (const { papier, imposition, lu, modele: m } of PRODUCTIONS) {
-      const lus = new Set(lu.pages[0].textes.map(({ texte }) => texte));
       const lignes = textesControle(m, { papier, imposition, planches: nombrePlanches(m.badges.length, papier) });
-      for (const ligne of lignes) assert.ok(lus.has(ligne), `${papier} : « ${ligne} » absente de ${[...lus].join(' | ')}`);
+      recomposer(fragmentsDeControle(lu.pages[0]), lignes);
     }
     const lusA4 = A4.pages[0].textes.map(({ texte }) => texte);
     assert.ok(lusA4.includes(libelle('planche.controle.comptes', MODELE_A4.comptes)));
     assert.ok(lusA4.includes(libelle('planche.pied.horodatage', { horodatage: HORODATAGE })));
     assert.ok(LETTRE.pages[0].textes.some(({ texte }) => texte === libelle('planche.pied.horodatageInconnu')));
+  });
+
+  test("une ligne plus large que la page se replie dans la largeur utile : aux espaces, puis dans le mot qui ne tient pas seul ; chaque morceau aussi plein qu'il se peut", () => {
+    const largeurUtile = PAPIERS.Lettre.largeur - 2 * MARGE;
+    const lignes = textesControle(MODELE_LETTRE, { papier: 'Lettre', imposition: 'pile', planches: nombrePlanches(3, 'Lettre') });
+    const recomposees = recomposer(fragmentsDeControle(LETTRE.pages[0]), lignes);
+    const evenement = recomposees.find(({ ligne }) => ligne === libelle('planche.controle.evenement', EVENEMENT_LONG));
+    assert.ok(evenement.coupes.includes('espace') && evenement.coupes.includes('mot'), JSON.stringify(evenement.coupes));
+    for (const { ligne, morceaux, debuts, coupes } of recomposees) {
+      if (ligne !== evenement.ligne) assert.equal(morceaux.length, 1, ligne);
+      const corps = morceaux[0].h / MM_PAR_PT;
+      const largeur = (texte) => metriques.largeur(texte, corps, false);
+      for (const morceau of morceaux) {
+        // La mesure de l'épreuve est celle du fichier : l'avance relue.
+        assert.ok(Math.abs(largeur(morceau.texte) - morceau.l) < 0.01, `« ${morceau.texte} » : ${largeur(morceau.texte)} contre ${morceau.l}`);
+        assert.ok(morceau.l <= largeurUtile + TOLERANCE, `« ${morceau.texte} » large de ${morceau.l} mm`);
+      }
+      // Une coupe ne tombe que là où la suite déborde : le premier mot (ou
+      // la première grappe) du morceau suivant, ajouté, passe la largeur.
+      coupes.forEach((coupe, i) => {
+        const suivant = morceaux[i + 1].texte;
+        const ajout = coupe === 'espace' ? ` ${suivant.split(' ')[0]}` : suivant.match(/\P{M}\p{M}*/u)[0];
+        assert.ok(largeur(morceaux[i].texte + ajout) > largeurUtile, `coupe ${coupe} trop tôt après « ${morceaux[i].texte} »`);
+      });
+      // Une coupe dans un mot ne tombe que dans un mot plus large à lui seul
+      // que la ligne, et ce mot ouvre le morceau qui porte son début : un mot
+      // qui tient seul passe entier à la ligne suivante.
+      coupes.forEach((coupe, i) => {
+        if (coupe !== 'mot') return;
+        const position = debuts[i] + morceaux[i].texte.length;
+        const debutMot = ligne.lastIndexOf(' ', position - 1) + 1;
+        const finMot = ligne.indexOf(' ', position);
+        const mot = ligne.slice(debutMot, finMot === -1 ? ligne.length : finMot);
+        assert.ok(largeur(mot) > largeurUtile, `« ${mot} », large de ${largeur(mot)} mm, coupé après « ${morceaux[i].texte} »`);
+        const porteur = debuts.findLastIndex((debut) => debut <= debutMot);
+        assert.equal(debuts[porteur], debutMot, `« ${mot} » commence dans « ${morceaux[porteur].texte} »`);
+      });
+    }
+    // Les données éprouvent le report d'un mot entier : le mot long, qui
+    // tient seul sur une ligne, ouvre un morceau alors que sa première
+    // grappe tenait encore au bout du morceau précédent.
+    const long = 'Ombrellebleuetières,';
+    const largeurLue = (texte) => metriques.largeur(texte, evenement.morceaux[0].h / MM_PAR_PT, false);
+    const avant = evenement.morceaux.findIndex(({ texte }) => texte.startsWith(long)) - 1;
+    assert.ok(avant >= 0, JSON.stringify(evenement.morceaux.map(({ texte }) => texte)));
+    assert.ok(largeurLue(long) <= largeurUtile && largeurLue(`${evenement.morceaux[avant].texte} ${long[0]}`) <= largeurUtile);
+  });
+
+  test('chaque texte de la feuille de contrôle, chiffres et filigrane compris, tient dans les marges ; chaque ligne part de la marge gauche', () => {
+    for (const { papier, lu } of PRODUCTIONS) {
+      const { largeur: W, hauteur: H } = PAPIERS[papier];
+      const [page] = lu.pages;
+      for (const { texte, x, y, l, h } of page.textes) {
+        const dedans = x >= MARGE - TOLERANCE && y >= MARGE - TOLERANCE && x + l <= W - MARGE + TOLERANCE && y + h <= H - MARGE + TOLERANCE;
+        assert.ok(dedans, `${papier} : « ${texte} » en ${JSON.stringify({ x, y, l, h })}`);
+      }
+      for (const { texte, x } of fragmentsDeControle(page)) assert.ok(Math.abs(x - MARGE) < TOLERANCE, `${papier} : « ${texte} » part de ${x} mm`);
+    }
   });
 
   test('BROUILLON sur la feuille de contrôle du brouillon : sa ligne et le filigrane, une fois, hors de la graduation', () => {
