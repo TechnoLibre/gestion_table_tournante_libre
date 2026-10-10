@@ -4,8 +4,9 @@
 // L'aide d'extraction des PDF (test/pdf.js), éprouvée sur des documents
 // faits à la main par pdf-lib, dont chaque cote se calcule de tête : la
 // boîte d'un texte tourné, le mode de rendu des textes, les segments sous
-// la matrice courante, les remplissages, les tirets et les couleurs, les boîtes de page, les polices
-// et leur ToUnicode, le dictionnaire /Info et l'identifiant du fichier.
+// la matrice courante et leur épaisseur, les remplissages, les tirets et les
+// couleurs, les boîtes de page, les polices, leur ToUnicode et la longueur de
+// leur programme embarqué, le dictionnaire /Info et l'identifiant du fichier.
 import assert from 'node:assert/strict';
 import fontkit from '@pdf-lib/fontkit';
 import {
@@ -19,10 +20,14 @@ import {
   concatTransformationMatrix,
   degrees,
   grayscale,
+  lineTo,
+  moveTo,
   popGraphicsState,
   pushGraphicsState,
   rgb,
+  setLineWidth,
   setTextRenderingMode,
+  stroke,
   TextRenderingMode,
 } from 'pdf-lib';
 import { lirePdf } from './pdf.js';
@@ -133,6 +138,27 @@ describe('lirePdf : les chemins, sous la matrice courante', () => {
     });
   });
 
+  test("l'épaisseur d'un trait se lit en millimètres : celle de setLineWidth sous la matrice courante, mesurée en travers du trait ; 1 pt par défaut, rendue par Q", async () => {
+    const octets = await document((page) => {
+      page.drawLine({ start: { x: 72, y: 700 }, end: { x: 144, y: 700 }, thickness: 0.5 });
+      page.pushOperators(pushGraphicsState(), concatTransformationMatrix(2, 0, 0, 2, 0, 0));
+      page.drawLine({ start: { x: 72, y: 100 }, end: { x: 72, y: 172 }, thickness: 0.5 });
+      page.pushOperators(popGraphicsState(), pushGraphicsState(), concatTransformationMatrix(3, 0, 0, 1, 0, 0));
+      // Une échelle de 3 en x seulement : un trait horizontal garde son
+      // épaisseur, un trait vertical la triple.
+      page.drawLine({ start: { x: 10, y: 600 }, end: { x: 50, y: 600 }, thickness: 0.5 });
+      page.drawLine({ start: { x: 10, y: 500 }, end: { x: 10, y: 550 }, thickness: 0.5 });
+      page.pushOperators(popGraphicsState());
+      // Hors de tout drawLine : l'épaisseur par défaut, puis celle posée.
+      page.pushOperators(moveTo(10, 300), lineTo(20, 300), stroke());
+      page.pushOperators(setLineWidth(2), moveTo(10, 200), lineTo(20, 200), stroke());
+    });
+    const { segments } = (await lirePdf(octets)).pages[0];
+    const attendues = [0.5, 1, 0.5, 1.5, 1, 2].map((pt) => pt * MM_PAR_PT);
+    assert.equal(segments.length, attendues.length);
+    segments.forEach(({ epaisseur }, i) => assert.ok(proche(epaisseur, attendues[i]), `segment ${i} : ${epaisseur} contre ${attendues[i]}`));
+  });
+
   test("un rectangle tracé donne ses quatre côtés ; un rectangle rempli compte un remplissage et aucun segment", async () => {
     const octets = await document((page) => {
       page.drawRectangle({ x: 72, y: 72, width: 72, height: 144, borderWidth: 1, borderColor: grayscale(0) });
@@ -191,6 +217,21 @@ describe('lirePdf : les boîtes, les polices, /Info et /ID', () => {
     const parNom = (motif) => polices.find(({ nom }) => motif.test(nom));
     assert.equal(parNom(/NotoSans/).toUnicode, true);
     assert.equal(parNom(/^Helvetica$/).toUnicode, false);
+  });
+
+  test("chaque police de page rend la longueur de son programme FontFile2, décodé : le .ttf entier hors sous-ensemble, moins en sous-ensemble ; null sans programme", async () => {
+    const { regulier, gras } = lirePolices();
+    const octets = await document(async (page, pdf) => {
+      page.drawText('a', { x: 10, y: 10, size: 10, font: await pdf.embedFont(regulier, { subset: true }) });
+      page.drawText('b', { x: 10, y: 30, size: 10, font: await pdf.embedFont(gras, { subset: false }) });
+      page.drawText('c', { x: 10, y: 50, size: 10, font: await pdf.embedFont(StandardFonts.Helvetica) });
+    });
+    const { polices } = await lirePdf(octets);
+    const parNom = (motif) => polices.find(({ nom }) => motif.test(nom));
+    assert.equal(parNom(/NotoSans-Bold/).fontFile2, gras.length);
+    const sousEnsemble = parNom(/NotoSans-Regular/).fontFile2;
+    assert.ok(sousEnsemble > 0 && sousEnsemble < regulier.length / 10, `sous-ensemble de ${sousEnsemble} octets`);
+    assert.equal(parNom(/^Helvetica$/).fontFile2, null);
   });
 
   test("/Info absent : [] ; posé : ses clés ; /ID se voit dans la remorque", async () => {

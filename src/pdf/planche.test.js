@@ -3,7 +3,8 @@
 
 // La production de la planche (§ 11.1 à § 11.4), éprouvée sur le fichier
 // produit, relu comme un lecteur réel le lit (test/pdf.js) : les boîtes de
-// page, /Info et /ID, les filets mesurés sous la matrice courante, l'ordre
+// page, /Info et /ID, la police en sous-ensemble, les filets mesurés sous
+// la matrice courante et leur épaisseur, l'ordre
 // des noms dans la couche de texte, la zone de silence, les caractères
 // extraits un à un, le filigrane, la feuille de contrôle et sa graduation,
 // des octets identiques d'un export à l'autre.
@@ -199,6 +200,20 @@ describe('produirePlanche : le document (§ 11.1)', () => {
     }
   });
 
+  test('chaque police embarquée est un sous-ensemble : son FontFile2 pèse moins d\u{2019}un dixième du .ttf de sa graisse', () => {
+    const graisses = [
+      { motif: /NotoSans-Regular/, ttf: polices.regulier },
+      { motif: /NotoSans-Bold/, ttf: polices.gras },
+    ];
+    for (const { papier, lu } of PRODUCTIONS) {
+      for (const { motif, ttf } of graisses) {
+        const police = lu.polices.find(({ nom }) => motif.test(nom));
+        assert.ok(police !== undefined, `${papier} : aucune police ${motif} parmi ${lu.polices.map(({ nom }) => nom).join(', ')}`);
+        assert.ok(police.fontFile2 !== null && police.fontFile2 < ttf.length / 10, `${papier} : ${police.nom} embarque ${police.fontFile2} octets sur ${ttf.length}`);
+      }
+    }
+  });
+
   test('« Ôjgq » et « Æ » se lisent caractère par caractère dans la couche de texte', () => {
     const lus = A4.pages.slice(1).flatMap(({ textes }) => textes.map(({ texte }) => texte));
     const nom = lus.find((texte) => texte.includes('Ôjgq'));
@@ -240,6 +255,17 @@ describe('produirePlanche : les filets mesurés (§ 11.2, § 11.3)', () => {
       [33.95, 139.7, 181.95, 139.7],
       [181.95, 34.7, 181.95, 139.7],
     ]);
+  });
+
+  test('chaque filet de coupe est fin : une épaisseur non nulle, d\u{2019}au plus 0,1 mm, sur chaque planche A4 et Lettre', () => {
+    for (const { papier, lu } of PRODUCTIONS) {
+      lu.pages.slice(1).forEach((page, rang) => {
+        assert.ok(page.segments.length > 0, `${papier} planche ${rang + 1}`);
+        for (const { epaisseur, ...segment } of page.segments) {
+          assert.ok(epaisseur > 0 && epaisseur <= 0.1, `${papier} planche ${rang + 1} : ${epaisseur} mm sur ${JSON.stringify(segment)}`);
+        }
+      });
+    }
   });
 
   test('page 1 : aucun segment sur un axe de coupe', () => {
