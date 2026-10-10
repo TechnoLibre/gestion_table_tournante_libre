@@ -27,6 +27,7 @@
   import { getContext, untrack } from 'svelte';
   import { libellePropose } from '../../application/places.js';
   import Commande from '../primitives/Commande.svelte';
+  import { effetDe } from '../raccourcis.js';
   import { commandeDeDepot } from './depot.js';
   import { libellePlace } from './gestes.js';
   import MenuPersonne from './MenuPersonne.svelte';
@@ -154,7 +155,7 @@
 
   // Échap referme le panneau et rend le focus à la racine du plan.
   function surTouche(evenement) {
-    if (evenement.key !== 'Escape') return;
+    if (effetDe('fenetre', evenement.key) !== 'fermer') return;
     evenement.preventDefault();
     const racine = evenement.currentTarget.closest('[data-section]')?.querySelector('[data-plan]') ?? null;
     ui.selectionner(null);

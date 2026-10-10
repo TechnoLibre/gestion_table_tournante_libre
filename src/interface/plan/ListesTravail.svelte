@@ -26,6 +26,7 @@
   import { getContext, tick } from 'svelte';
   import { conversionsPossibles, pressentisNonReserves, titresNonPourvus } from '../../application/listes_travail.js';
   import Commande from '../primitives/Commande.svelte';
+  import { effetDe } from '../raccourcis.js';
   import { nomDeCharge } from './vue_plan.js';
 
   const t = getContext('t');
@@ -63,7 +64,7 @@
   }
 
   function surTouche(evenement) {
-    if (evenement.key !== 'Escape' || choix === null) return;
+    if (effetDe('plan', evenement.key) !== 'remonter' || choix === null) return;
     evenement.preventDefault();
     ui.choisir(null);
   }

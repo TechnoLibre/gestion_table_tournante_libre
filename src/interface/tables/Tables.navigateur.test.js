@@ -494,6 +494,28 @@ describe('la capacité d’une table, saisie au champ (§ 6.2)', () => {
     expect(ecritures(m)).toBe(avant);
   });
 
+  test('sièges retirés puis Échap dans le champ : le refus et la liste des sièges retirés partent ensemble ; rien d’écrit', async () => {
+    const m = await preparer(
+      chargeDe({
+        tables: [{ id: 1 }],
+        n: 4,
+        attribuerSieges: true,
+        reservations: [resa(1, 1, 7)],
+        titres: [{ table: 1, siege: 8, libelle: 'animateur' }],
+      }),
+    );
+    const avant = ecritures(m);
+    await saisir(m, champTable(m, 1), '6');
+    expect(ligne(m, 1).querySelector('[data-refus="SIEGES_RETIRES"]')).not.toBeNull();
+    expect(ligne(m, 1).querySelector('[data-sieges-retires]')).not.toBeNull();
+    expect(document.activeElement).toBe(champTable(m, 1));
+    await touche('Escape');
+    await attendre(m);
+    expect(ligne(m, 1).querySelector('[data-refus="SIEGES_RETIRES"]')).toBeNull();
+    expect(ligne(m, 1).querySelector('[data-sieges-retires]')).toBeNull();
+    expect(ecritures(m)).toBe(avant);
+  });
+
   test('surnuméraires et lisibilité : un retenu assied huit personnes à la table 3 au tour 2 ; 6 accepté, l’avertissement nomme les deux personnes versées en réserve ; S + 1 avertit de S ; S, non', async () => {
     const donnees = chargeDe({ tables: [{ id: 1 }, { id: 2 }, { id: 3 }], n: 18 });
     placer(

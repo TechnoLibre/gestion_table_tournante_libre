@@ -33,7 +33,6 @@ import { TABLES_APPLICATION } from '../src/application/libelles.js';
 import { creerTraduction } from '../src/application/traduction.js';
 import { TABLES_INTERFACE } from '../src/interface/libelles.js';
 import { JETONS_CONFLIT } from '../src/interface/marques.js';
-import { CONTEXTES_RACCOURCIS, RACCOURCIS } from '../src/interface/raccourcis.js';
 import { DESIGNATIONS } from './navigateur/designations.js';
 import { describe, test } from './lanceur.js';
 
@@ -1079,98 +1078,21 @@ function valeurDeChaine(noeud) {
   return null;
 }
 
-// Les fichiers de src/interface qui nomment encore leurs touches, chacun avec
-// les contextes de RACCOURCIS où il agit et le relevé de ses touches, ligne
-// omise, trié : la garde les admet tels quels. Un écart — une touche de
-// plus, une de moins — relève les touches du fichier et demande de revoir
-// son entrée ; une entrée dont le fichier ne nomme plus rien est sans objet.
-// Faire lire RACCOURCIS à l'un d'eux retire son entrée. Tant qu'il ne la lit
-// pas, chacune de ses touches a son entrée dans RACCOURCIS sous l'un de ses
-// contextes : le tableau engendré décrit ce que le fichier fait, et une
-// entrée retirée ou renommée dans la table se relève ici.
-const enAttente = (contextes, touches) => Object.freeze({ contextes: Object.freeze(contextes), touches: Object.freeze(touches) });
-const TOUCHES_EN_ATTENTE = new Map([
-  ['src/interface/participants/Formulaire.svelte', enAttente(['champ'], ['touche "Enter"'])],
-  [
-    'src/interface/participants/Grille.svelte',
-    enAttente(
-      ['grille', 'champ'],
-      [
-        'touche "ArrowDown"',
-        'touche "ArrowLeft"',
-        'touche "ArrowRight"',
-        'touche "ArrowUp"',
-        'touche "Enter"',
-        'touche "Enter"',
-        'touche "Escape"',
-        'touche "Escape"',
-        'touche "F2"',
-        'touche "Maj+Tab"',
-        'touche "Maj+Tab"',
-        'touche "Maj+Tab"',
-        'touche "Tab"',
-        'touche "Tab"',
-        'touche "Tab"',
-        'touche "Tab"',
-        'touche "Tab"',
-      ],
-    ),
-  ],
-  [
-    'src/interface/participants/grille.js',
-    enAttente(
-      ['grille'],
-      ['touche "ArrowDown"', 'touche "ArrowLeft"', 'touche "ArrowRight"', 'touche "ArrowUp"', 'touche "Maj+Tab"', 'touche "Tab"'],
-    ),
-  ],
-  ['src/interface/plan/ListesTravail.svelte', enAttente(['plan'], ['touche "Escape"'])],
-  ['src/interface/plan/PanneauPlace.svelte', enAttente(['fenetre'], ['touche "Escape"'])],
-  ['src/interface/plan/PanneauTable.svelte', enAttente(['fenetre'], ['touche "Escape"'])],
-  ['src/interface/plan/Plan.svelte', enAttente(['plan', 'geste'], ['touche "Escape"', 'touche "Escape"'])],
-  ['src/interface/plan/Reserve.svelte', enAttente(['plan'], ['touche "Escape"'])],
-  ['src/interface/primitives/Champ.svelte', enAttente(['champ'], ['touche "Enter"', 'touche "Escape"'])],
-  ['src/interface/primitives/Commande.svelte', enAttente(['commande'], ['touche " "', 'touche "Enter"'])],
-  ['src/interface/primitives/Infobulle.svelte', enAttente(['fenetre'], ['touche "Escape"'])],
-  ['src/interface/tables/ListeTables.svelte', enAttente(['champ'], ['touche "Escape"'])],
-]);
-
-// Les touches des fichiers en attente qu'aucune entrée de raccourcis ne
-// décrit sous un des contextes du fichier : « chemin touche "…" hors de
-// RACCOURCIS (contextes) », trié. Un contexte qui n'est pas dans
-// contextesConnus se relève aussi.
-function touchesSansEntree(raccourcis, contextesConnus, enAttenteDe = TOUCHES_EN_ATTENTE) {
-  const decrites = new Set(raccourcis.map(({ contexte, touche }) => `${contexte}:${touche}`));
-  const releves = [];
-  for (const [chemin, { contextes, touches }] of enAttenteDe) {
-    for (const contexte of contextes) {
-      if (!contextesConnus.includes(contexte)) releves.push(`${chemin} contexte ${JSON.stringify(contexte)} inconnu`);
-    }
-    for (const motif of new Set(touches)) {
-      const touche = JSON.parse(motif.slice('touche '.length));
-      if (!contextes.some((contexte) => decrites.has(`${contexte}:${touche}`))) {
-        releves.push(`${chemin} ${motif} hors de RACCOURCIS (${contextes.join(', ')})`);
-      }
-    }
-  }
-  return releves.sort();
-}
-
 // Relevé des touches nommées dans les composants et les modules de
 // src/interface, hors de la table des raccourcis : une chaîne qui nomme une
 // touche (TOUCHE_NOMMEE), où qu'elle soit dans le code, et toute chaîne —
 // l'espace, une lettre — comparée à une lecture de key ou cas d'un switch
 // sur elle. Une touche se relève une fois, sous la forme « touche "…" ».
-// Puis les fichiers en attente : admis quand leur relevé est le leur.
-function releverTouches(racine, enAttenteDe = TOUCHES_EN_ATTENTE) {
+// Aucun fichier n'est admis : le code répond à une touche par effetDe.
+function releverTouches(racine) {
   const chemins = exigerNonVide(
     sources(racine, ['src/interface'], ['.svelte', '.js']).filter((chemin) => chemin !== TABLE_RACCOURCIS),
     'touches nommées',
   );
-  const parFichier = new Map();
+  const releves = [];
   for (const chemin of chemins) {
     const composant = chemin.endsWith('.svelte');
     const { texte, ast } = composant ? analyserComposant(racine, chemin) : analyserModule(racine, chemin);
-    const releves = [];
     const vus = new Set();
     const relever = (noeud) => {
       const valeur = valeurDeChaine(noeud);
@@ -1188,19 +1110,8 @@ function releverTouches(racine, enAttenteDe = TOUCHES_EN_ATTENTE) {
         relever(noeud);
       }
     });
-    if (releves.length > 0) parFichier.set(chemin, releves);
   }
-  const releves = [];
-  const aRevoir = [];
-  for (const [chemin, deFichier] of parFichier) {
-    const admis = enAttenteDe.get(chemin)?.touches;
-    const motifs = deFichier.map(({ texte }) => texte).sort();
-    if (admis !== undefined && JSON.stringify(motifs) === JSON.stringify([...admis].sort())) continue;
-    releves.push(...deFichier);
-    if (admis !== undefined) aRevoir.push(`${chemin} : en attente, entrée à revoir`);
-  }
-  const sansObjet = [...enAttenteDe.keys()].filter((chemin) => !parFichier.has(chemin)).map((chemin) => `${chemin} : en attente sans objet`);
-  return [...trier(releves), ...[...aRevoir, ...sansObjet].sort()];
+  return trier(releves);
 }
 
 // --- Arbres d'épreuve ---------------------------------------------------------
@@ -1842,7 +1753,7 @@ describe('sources de l’interface : les désignations stables (contrainte 16)',
 });
 
 describe('sources de l’interface : les touches nommées (§ 7.3, § 19.8)', () => {
-  test('aucune touche nommée sous src/interface hors de raccourcis.js, sauf les fichiers en attente, tels quels', () => {
+  test('aucune touche nommée sous src/interface hors de raccourcis.js : chaque fichier lit ses touches par effetDe', () => {
     exigerVide(releverTouches(RACINE), 'touches nommées');
   });
 
@@ -1867,7 +1778,7 @@ describe('sources de l’interface : les touches nommées (§ 7.3, § 19.8)', ()
       'src/interface/A.test.js': "if (e.key === 'Escape') f();\n",
       'src/application/c.js': "export const k = (e) => e.key === 'Escape';\n",
     };
-    assert.deepEqual(avecArbre(fichiers, (racine) => releverTouches(racine, new Map())), [
+    assert.deepEqual(avecArbre(fichiers, releverTouches), [
       'src/interface/A.svelte:2 touche "Enter"',
       'src/interface/A.svelte:4 touche "Tab"',
       'src/interface/plan/sous/b.js:2 touche "Escape"',
@@ -1877,53 +1788,6 @@ describe('sources de l’interface : les touches nommées (§ 7.3, § 19.8)', ()
       'src/interface/plan/sous/b.js:5 touche "ArrowLeft"',
       'src/interface/plan/sous/b.js:5 touche "Maj+Tab"',
       'src/interface/plan/sous/b.js:7 touche "F2"',
-    ]);
-  });
-
-  test('un fichier en attente n’est admis qu’avec son relevé exact ; un écart relève ses touches, une entrée que rien ne sert est sans objet', () => {
-    const fichiers = {
-      'src/interface/x.js': "export const f = (e) => e.key === 'Escape' || e.key === 'Enter';\n",
-      'src/interface/y.js': "export const g = (e) => e.key === 'Escape';\n",
-      'src/interface/z.js': 'export const h = 1;\n',
-    };
-    const attente = new Map([
-      ['src/interface/x.js', enAttente(['champ'], ['touche "Escape"', 'touche "Enter"'])],
-      ['src/interface/y.js', enAttente(['champ'], ['touche "Escape"', 'touche "Tab"'])],
-      ['src/interface/z.js', enAttente(['champ'], ['touche "Escape"'])],
-      ['src/interface/w.js', enAttente(['champ'], ['touche "Escape"'])],
-    ]);
-    assert.deepEqual(avecArbre(fichiers, (racine) => releverTouches(racine, attente)), [
-      'src/interface/y.js:1 touche "Escape"',
-      'src/interface/w.js : en attente sans objet',
-      'src/interface/y.js : en attente, entrée à revoir',
-      'src/interface/z.js : en attente sans objet',
-    ]);
-  });
-
-  test('chaque touche d’un fichier en attente a son entrée dans RACCOURCIS sous un des contextes du fichier : le tableau engendré décrit ce qu’il fait', () => {
-    assert.ok(TOUCHES_EN_ATTENTE.size > 0 || RACCOURCIS.length > 0);
-    exigerVide(touchesSansEntree(RACCOURCIS, CONTEXTES_RACCOURCIS), 'touches en attente sans entrée');
-  });
-
-  test('une touche en attente que la table ne décrit plus sous les contextes du fichier se relève, comme un contexte inconnu', () => {
-    const raccourcis = [
-      { touche: 'Escape', contexte: 'fenetre', effet: 'fermer' },
-      { touche: 'Enter', contexte: 'champ', effet: 'valider' },
-      { touche: 'q', contexte: 'geste', effet: 'annuler' },
-    ];
-    const attente = new Map([
-      ['src/interface/a.svelte', enAttente(['fenetre'], ['touche "Escape"', 'touche "Escape"'])],
-      ['src/interface/b.svelte', enAttente(['geste', 'champ'], ['touche "Enter"', 'touche "Escape"'])],
-      ['src/interface/c.svelte', enAttente(['fenetre', 'tiroir'], ['touche "Escape"'])],
-    ]);
-    assert.deepEqual(touchesSansEntree(raccourcis, ['champ', 'geste', 'fenetre'], attente), [
-      'src/interface/b.svelte touche "Escape" hors de RACCOURCIS (geste, champ)',
-      'src/interface/c.svelte contexte "tiroir" inconnu',
-    ]);
-    // La table où Échap de la fenêtre devient « q » : le fichier qui ferme sur Échap se relève.
-    const deplacee = raccourcis.map((entree) => (entree.contexte === 'fenetre' ? { ...entree, touche: 'q' } : entree));
-    assert.deepEqual(touchesSansEntree(deplacee, ['champ', 'geste', 'fenetre'], new Map([...attente].slice(0, 1))), [
-      'src/interface/a.svelte touche "Escape" hors de RACCOURCIS (fenetre)',
     ]);
   });
 

@@ -61,6 +61,7 @@
   import Commande from '../primitives/Commande.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
+  import { effetDe } from '../raccourcis.js';
   import { cleDeRaison } from './conflits.js';
   import { COLONNES, basculerGroupe, celluleSuivante, cheminDe, cleDeColonne, deplierChemin, entreeValide, lignesVisibles, ligneVoisine } from './grille.js';
 
@@ -249,25 +250,41 @@
     geste.tenir(machine.enCours);
   }
 
+  // Les effets de la grille qui mènent à une autre cellule (celluleSuivante).
+  const DEPLACEMENTS = new Set(['haut', 'bas', 'gauche', 'droite', 'suivante', 'precedente']);
+
+  // La touche d'un appui telle que RACCOURCIS la nomme dans la grille :
+  // « Maj+ » devant la touche quand la table donne à la majuscule son effet
+  // propre (Maj+Tab), la touche seule sinon — Maj+flèche se lit comme la
+  // flèche.
+  function toucheDeGrille(evenement) {
+    const majuscule = `Maj+${evenement.key}`;
+    return evenement.shiftKey && effetDe('grille', majuscule) !== null ? majuscule : evenement.key;
+  }
+
+  // Dans une cellule en édition, les effets du contexte 'champ' — valider,
+  // rendre — passent d'abord ; seuls suivante et precedente de la grille
+  // s'y ajoutent.
   async function surToucheEntree(evenement, rang) {
-    const touche = evenement.key;
-    if (touche === 'Escape') {
+    const touche = toucheDeGrille(evenement);
+    const saisie = effetDe('champ', evenement.key);
+    const tabulation = effetDe('grille', touche);
+    if (saisie === 'rendre') {
       evenement.preventDefault();
       abandonner();
-    } else if (touche === 'Enter') {
+    } else if (saisie === 'valider') {
       if (!entreeValide({ maj: evenement.shiftKey, multiligne: edition.colonne === 'notes' })) return;
       evenement.preventDefault();
       valider();
-    } else if (touche === 'Tab') {
+    } else if (tabulation === 'suivante' || tabulation === 'precedente') {
       // Une saisie refusée garde l'édition et le focus : Tab ne quitte pas
       // le champ, dont la sortie validerait une seconde fois.
       evenement.preventDefault();
       const { id } = edition;
       const colonne = COLONNES.indexOf(edition.colonne);
-      const sens = evenement.shiftKey ? 'Maj+Tab' : 'Tab';
       if (!(await valider())) return;
       await tick();
-      tabulerDepuis(id, rang, colonne, sens);
+      tabulerDepuis(id, rang, colonne, touche);
     }
   }
 
@@ -281,7 +298,7 @@
   function tabulerDepuis(id, rangAvant, colonne, touche) {
     const rang = rangs.get(id) ?? -1;
     if (rang >= 0) return deplacer(rang, colonne, touche);
-    const suivante = touche === 'Tab' ? { ligne: rangAvant, colonne: 0 } : { ligne: rangAvant - 1, colonne: COLONNES.length - 1 };
+    const suivante = effetDe('grille', touche) === 'suivante' ? { ligne: rangAvant, colonne: 0 } : { ligne: rangAvant - 1, colonne: COLONNES.length - 1 };
     if (suivante.ligne < 0 || suivante.ligne >= visibles.length) return false;
     activer(suivante.ligne, suivante.colonne);
     return true;
@@ -318,14 +335,15 @@
 
   function surToucheCellule(evenement, personne, rang, colonne) {
     if (evenement.target !== evenement.currentTarget) return;
-    const touche = evenement.key === 'Tab' && evenement.shiftKey ? 'Maj+Tab' : evenement.key;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab', 'Maj+Tab'].includes(touche)) {
+    const touche = toucheDeGrille(evenement);
+    const effet = effetDe('grille', touche);
+    if (DEPLACEMENTS.has(effet)) {
       if (deplacer(rang, colonne, touche)) evenement.preventDefault();
-    } else if (touche === 'Enter' || touche === 'F2') {
+    } else if (effet === 'editer') {
       evenement.preventDefault();
       if (COLONNES[colonne] === 'exclu') basculerExclusion(personne);
       else ouvrirEdition(personne, COLONNES[colonne]);
-    } else if (touche === 'Escape') {
+    } else if (effet === 'effacer') {
       refusCellule = null;
     }
   }

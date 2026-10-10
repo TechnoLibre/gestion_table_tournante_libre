@@ -94,6 +94,7 @@
   import { controlerCapacite } from '../../application/capacite.js';
   import { constante } from '../../geometrie/constantes.js';
   import { ajuster as vueAjustee, ecranDepuisDessin, transformDe } from '../../geometrie/vue.js';
+  import { effetDe } from '../raccourcis.js';
   import BandeauPlan from './BandeauPlan.svelte';
   import BarreVue from './BarreVue.svelte';
   import { toucheDuPlan, vueQuiMontre } from './clavier.js';
@@ -544,7 +545,7 @@
     };
 
     function surTouche(evenement) {
-      if (evenement.key !== 'Escape' || etatGeste.phase === 'repos') return;
+      if (effetDe('geste', evenement.key) !== 'annuler' || etatGeste.phase === 'repos') return;
       evenement.stopPropagation();
       evenement.preventDefault();
       annulerGeste('echap');
@@ -671,7 +672,7 @@
       if (etatGeste.phase !== 'repos' || modele === null || evenement.altKey || evenement.ctrlKey || evenement.metaKey) return;
       auClavier = true;
       const rendu = toucheDuPlan(actif, evenement.key, contexteClavier());
-      if (evenement.key === 'Escape' && (rendu === null || rendu.effet !== null)) ui.choisir(null);
+      if (effetDe('plan', evenement.key) === 'remonter' && (rendu === null || rendu.effet !== null)) ui.choisir(null);
       if (rendu === null) return;
       evenement.preventDefault();
       actif = rendu.actif;

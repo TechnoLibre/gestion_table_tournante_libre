@@ -27,6 +27,7 @@
   // confirmer se lit au montage : une commande qui change de confirmation se
   // remonte.
   import { getContext, onDestroy, untrack } from 'svelte';
+  import { effetDe } from '../raccourcis.js';
   import { DELAI_CONFIRMATION_MS, creerMachineCommande } from './commande.js';
   import Refus from './Refus.svelte';
 
@@ -82,7 +83,7 @@
   }
 
   function surTouche(evenement) {
-    if (evenement.repeat && (evenement.key === 'Enter' || evenement.key === ' ')) evenement.preventDefault();
+    if (evenement.repeat && effetDe('commande', evenement.key) === 'activer') evenement.preventDefault();
   }
 
   onDestroy(desarmer);

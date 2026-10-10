@@ -28,6 +28,7 @@
   import { comptesTitres } from '../../application/listes_travail.js';
   import { libellePropose } from '../../application/places.js';
   import Commande from '../primitives/Commande.svelte';
+  import { effetDe } from '../raccourcis.js';
   import { libellePlace } from './gestes.js';
   import { executerSurPlace, ligneListe, partiesLigne, textesLigne } from './modele.js';
   import { nomDeCharge } from './vue_plan.js';
@@ -103,7 +104,7 @@
   }
 
   function surTouche(evenement) {
-    if (evenement.key !== 'Escape') return;
+    if (effetDe('fenetre', evenement.key) !== 'fermer') return;
     evenement.preventDefault();
     const racine = evenement.currentTarget.closest('[data-section]')?.querySelector('[data-plan]') ?? null;
     ui.selectionner(null);

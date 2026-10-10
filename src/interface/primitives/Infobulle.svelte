@@ -23,6 +23,7 @@
   // n'est pas placée, elle reste invisible. Une ancre retirée du document la
   // referme. Elle ne capte aucun pointeur : le terme reste survolé.
   import { getContext } from 'svelte';
+  import { effetDe } from '../raccourcis.js';
   import { placerInfobulle } from './infobulle.js';
 
   let { id, ouverte = null, fermer } = $props();
@@ -60,7 +61,7 @@
   });
 
   function surTouche(evenement) {
-    if (ouverte !== null && evenement.key === 'Escape') fermer();
+    if (ouverte !== null && effetDe('fenetre', evenement.key) === 'fermer') fermer();
   }
 </script>
 

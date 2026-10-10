@@ -27,6 +27,7 @@
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
+  import { effetDe } from '../raccourcis.js';
   import {
     annonceSuppression,
     avertissementsNommes,
@@ -109,7 +110,7 @@
     const arrets = [
       on(element, 'input', () => oublier(id)),
       on(element, 'keydown', (evenement) => {
-        if (evenement.key === 'Escape') oublier(id);
+        if (effetDe('champ', evenement.key) === 'rendre') oublier(id);
       }),
     ];
     return () => {

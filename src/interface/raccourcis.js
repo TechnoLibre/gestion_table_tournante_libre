@@ -3,10 +3,10 @@
 
 // La table des raccourcis clavier de l'interface (§ 7.3, § 13.5, § 19.8) :
 // la seule source du tableau des raccourcis de la documentation. Le code qui
-// répond à une touche la lit par effetDe ; les fichiers que la garde de
-// test/sources_interface.test.js admet encore nomment leurs touches eux-mêmes,
-// et chacune de ces touches doit avoir son entrée ici, sans quoi la garde la
-// relève comme absente du tableau.
+// répond à une touche la lit par effetDe, et la garde de
+// test/sources_interface.test.js relève toute touche nommée hors d'ici :
+// l'interface ne répond qu'aux touches de la table, et le tableau décrit
+// chacune de ses réponses.
 //
 // Une entrée est { touche, contexte, effet, cle } :
 //   touche    la valeur de KeyboardEvent.key, précédée de « Maj+ » quand la

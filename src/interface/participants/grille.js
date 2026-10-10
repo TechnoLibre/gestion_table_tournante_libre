@@ -11,6 +11,8 @@
 // qu'elle reçoit ; la clé normalisée vient de l'appelant, qui la tient de
 // src/application/csv.js.
 
+import { effetDe } from '../raccourcis.js';
+
 /** Les colonnes de la grille, propriétés d'un participant, dans l'ordre des
  *  colonnes de l'export : « l'ordre de la grille » que relit l'import. */
 export const COLONNES = Object.freeze(['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'exclu', 'notes']);
@@ -420,16 +422,18 @@ export function cheminDe(groupes, id) {
 
 /**
  * La cellule qu'atteint une touche depuis la cellule position, dans une
- * grille de lignes × colonnes. Les flèches bougent d'une cellule et restent
- * sur place au bord ; Tab avance dans la ligne puis passe au début de la
- * suivante, Maj+Tab recule de même. Tab après la dernière cellule, Maj+Tab
- * avant la première, rendent null : le focus quitte la grille, et le
- * navigateur le mène à l'élément suivant. Une autre touche ne bouge rien.
- * Une grille sans ligne n'a pas de cellule : null.
+ * grille de lignes × colonnes. La touche se lit par effetDe dans le
+ * contexte 'grille' de RACCOURCIS. Les flèches — effets haut, bas, gauche,
+ * droite — bougent d'une cellule et restent sur place au bord ; Tab (effet
+ * suivante) avance dans la ligne puis passe au début de la suivante,
+ * Maj+Tab (effet precedente) recule de même. Tab après la dernière cellule,
+ * Maj+Tab avant la première, rendent null : le focus quitte la grille, et
+ * le navigateur le mène à l'élément suivant. Une autre touche ne bouge
+ * rien. Une grille sans ligne n'a pas de cellule : null.
  *
  * @param {{ligne: number, colonne: number}} position
- * @param {string} touche   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
- *   'Tab' ou 'Maj+Tab'
+ * @param {string} touche   la touche telle que RACCOURCIS la nomme :
+ *   KeyboardEvent.key, « Maj+ » devant quand la majuscule change l'effet
  * @param {{lignes: number, colonnes: number}} taille
  * @returns {{ligne: number, colonne: number}|null}
  */
@@ -437,18 +441,18 @@ export function celluleSuivante({ ligne, colonne }, touche, { lignes, colonnes }
   if (lignes === 0 || colonnes === 0) return null;
   const borner = (valeur, max) => (valeur < 0 ? 0 : valeur > max ? max : valeur);
   const rang = ligne * colonnes + colonne;
-  switch (touche) {
-    case 'ArrowUp':
+  switch (effetDe('grille', touche)) {
+    case 'haut':
       return { ligne: borner(ligne - 1, lignes - 1), colonne };
-    case 'ArrowDown':
+    case 'bas':
       return { ligne: borner(ligne + 1, lignes - 1), colonne };
-    case 'ArrowLeft':
+    case 'gauche':
       return { ligne, colonne: borner(colonne - 1, colonnes - 1) };
-    case 'ArrowRight':
+    case 'droite':
       return { ligne, colonne: borner(colonne + 1, colonnes - 1) };
-    case 'Tab':
+    case 'suivante':
       return rang + 1 >= lignes * colonnes ? null : { ligne: Math.floor((rang + 1) / colonnes), colonne: (rang + 1) % colonnes };
-    case 'Maj+Tab':
+    case 'precedente':
       return rang === 0 ? null : { ligne: Math.floor((rang - 1) / colonnes), colonne: (rang - 1) % colonnes };
     default:
       return { ligne, colonne };

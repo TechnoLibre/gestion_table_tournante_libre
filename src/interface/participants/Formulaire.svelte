@@ -34,6 +34,7 @@
   import { cleNormalisee } from '../../application/csv.js';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
+  import { effetDe } from '../raccourcis.js';
   import { cleDeColonne, entreeValide, orthographeExistante } from './grille.js';
 
   let { participants } = $props();
@@ -113,7 +114,7 @@
   // Entrée dans les notes envoie le formulaire ; Maj+Entrée y garde le
   // saut de ligne de la zone de texte.
   function surToucheNotes(evenement) {
-    if (evenement.key !== 'Enter' || !entreeValide({ maj: evenement.shiftKey, multiligne: true })) return;
+    if (effetDe('champ', evenement.key) !== 'valider' || !entreeValide({ maj: evenement.shiftKey, multiligne: true })) return;
     evenement.preventDefault();
     formulaire.requestSubmit();
   }

@@ -14,6 +14,7 @@
   // Le panneau lit 'seance' et 'ui' au contexte ; etatTour, l'état des
   // places du tour affiché, que SectionPlan calcule, ou null sans événement.
   import { getContext } from 'svelte';
+  import { effetDe } from '../raccourcis.js';
   import { nomDeCharge } from './vue_plan.js';
 
   let { etatTour } = $props();
@@ -35,7 +36,7 @@
   }
 
   function surTouche(evenement) {
-    if (evenement.key !== 'Escape' || choix === null) return;
+    if (effetDe('plan', evenement.key) !== 'remonter' || choix === null) return;
     evenement.preventDefault();
     ui.choisir(null);
   }

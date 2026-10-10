@@ -32,6 +32,7 @@
   // retire pas un refus : son remède, qu'un clic atteint, resterait sinon
   // hors de portée.
   import { getContext, onDestroy, untrack } from 'svelte';
+  import { effetDe } from '../raccourcis.js';
   import { creerMachineChamp, estRefusSeance, refusSeanceCourant } from './champ.js';
   import { creerGeste } from './geste.js';
   import Refus from './Refus.svelte';
@@ -168,8 +169,9 @@
   }
 
   function surTouche(evenement) {
-    if (evenement.key === 'Escape') abandonner(evenement.currentTarget);
-    else if (evenement.key === 'Enter') {
+    const effet = effetDe('champ', evenement.key);
+    if (effet === 'rendre') abandonner(evenement.currentTarget);
+    else if (effet === 'valider') {
       evenement.preventDefault();
       valider();
     }

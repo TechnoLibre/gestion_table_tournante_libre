@@ -872,6 +872,19 @@ describe('Échap oublie le choix en attente (§ 7.1, § 7.3)', () => {
     await touche('Escape');
     await attendre(() => expect(m.ui.etat().choix).toBeNull());
   });
+
+  test('choisie d’un vrai clic dans la réserve : Échap sur le plan sans élément actif l’oublie', async () => {
+    const m = await ouvrir(sansProposition());
+    // Le vrai pointeur ne rend pas le focus suivant focus-visible : la
+    // racine du plan, focalisée ensuite, n'a aucun élément actif.
+    await presserBouton(dans(m, `[data-reserve] [data-participant="${THEO}"]`));
+    await attendre(() => expect(m.ui.etat().choix?.participant).toBe(THEO));
+    racinePlan(m).focus();
+    flushSync();
+    expect(actif(m)).toBeNull();
+    await touche('Escape');
+    await attendre(() => expect(m.ui.etat().choix).toBeNull());
+  });
 });
 
 describe('un clic ne déplace pas la vue (§ 7.3, § 8.4)', () => {

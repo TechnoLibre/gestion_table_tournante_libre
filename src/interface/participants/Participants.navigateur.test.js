@@ -443,6 +443,18 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     expect(m.trace.length).toBe(trace);
   });
 
+  test('Flèche gauche sur une cellule hors édition mène à la cellule précédente de la ligne, et s’arrête à la première', async () => {
+    const m = await evenementOuvert({ personnes: TROIS });
+    const premier = idsAffiches(m)[0];
+    cellule(m, premier, COLONNES[1]).focus();
+    await touche('ArrowLeft');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, premier, COLONNES[0]));
+    await touche('ArrowLeft');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, premier, COLONNES[0]));
+  });
+
   test('Tab après une saisie qui déplace la ligne au tri mène à la cellule suivante de la même personne', async () => {
     const m = await evenementOuvert({ personnes: TROIS });
     await cliquer(section(m).querySelector('[data-commande="trier"][data-cible="nom"]'));
@@ -530,6 +542,37 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     await attendreSeance(m);
     expect(idsAffiches(m)).toEqual([premier]);
     expect(document.activeElement).toBe(cellule(m, premier, COLONNES.at(-1)));
+  });
+
+  test('hors édition, Maj+Tab mène de la première cellule d’une ligne à la dernière de la ligne d’avant, Tab l’y ramène', async () => {
+    const m = await evenementOuvert({ personnes: TROIS });
+    const [premier, second] = idsAffiches(m);
+    cellule(m, second, COLONNES[0]).focus();
+    await rendu();
+    await majTab();
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, premier, COLONNES.at(-1)));
+    expect(cellule(m, premier, COLONNES.at(-1)).querySelector('input, textarea')).toBeNull();
+    await touche('Tab');
+    await rendu();
+    expect(document.activeElement).toBe(cellule(m, second, COLONNES[0]));
+  });
+
+  test('hors édition, Échap efface le refus de la cellule : Entrée en lecture le pose sans ouvrir de champ, la cellule garde le focus', async () => {
+    const m = await evenementOuvert({ personnes: TROIS });
+    await m.seance.passerEnLecture();
+    await rendu();
+    const cible = cellule(m, idsAffiches(m)[0], 'nom');
+    cible.focus();
+    await touche('Enter');
+    await rendu();
+    expect(cible.querySelector('input')).toBeNull();
+    expect(cible.querySelector('[data-refus]')).not.toBeNull();
+    expect(document.activeElement).toBe(cible);
+    await touche('Escape');
+    await rendu();
+    expect(cible.querySelector('[data-refus]')).toBeNull();
+    expect(cible.hasAttribute('aria-describedby')).toBe(false);
   });
 
   test('une note de deux lignes, retouchée dans la grille, garde son saut de ligne', async () => {
