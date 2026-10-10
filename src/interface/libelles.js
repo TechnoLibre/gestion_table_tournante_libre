@@ -15,6 +15,7 @@ import { TABLE as COMMUNS } from './libelles/communs.js';
 import { TABLE as COQUILLE } from './libelles/coquille.js';
 import { TABLE as DIAGNOSTIC } from './libelles/diagnostic.js';
 import { TABLE as EVENEMENT } from './libelles/evenement.js';
+import { TABLE as FEUILLES } from './libelles/feuilles.js';
 import { TABLE as GENERATION } from './libelles/generation.js';
 import { TABLE as IMPORT } from './libelles/import.js';
 import { TABLE as IMPRESSION } from './libelles/impression.js';
@@ -31,6 +32,7 @@ export const TABLES_INTERFACE = Object.freeze([
   COQUILLE,
   DIAGNOSTIC,
   EVENEMENT,
+  FEUILLES,
   GENERATION,
   IMPORT,
   IMPRESSION,
