@@ -19,3 +19,13 @@ dans une copie temporaire.
 <!-- engendre:fin contrastes -->
 
 Le texte qui suit la région ne bouge pas quand elle s'engendre.
+
+## Captures
+
+Chaque capture du manifeste est citée ici : la vérification refuse une
+capture inscrite que nul porteur ne montre. Les deux images sont des aplats
+inventés, aux dimensions du cadre.
+
+![Le premier écran](doc/captures/01-premier-ecran.png)
+
+![L’aperçu d’un import](doc/captures/02-import-apercu.png)

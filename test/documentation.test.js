@@ -4,7 +4,10 @@
 // Épreuves des documents livrés, sur les vrais fichiers (§ 16.1, § 19.7 à
 // § 19.9) : GUIDE-USAGE.md suit les étapes du parcours et apparie ses images
 // au manifeste et au disque ; les régions engendrées de README.md et du guide
-// sont telles qu'engendrer les écrirait ; la section sur l'algorithme cite
+// sont telles qu'engendrer les écrirait ; README.md et le guide n'affichent
+// que des captures doc/captures/<nom>.png, et chaque PNG publié a
+// l'empreinte et les dimensions que le manifeste inscrit, au niveau de
+// l'épreuve comme de verifier ; la section sur l'algorithme cite
 // des nombres que l'arithmétique et le diagnostic des démonstrations livrées
 // recalculent, et ne cite ni code, ni identifiant exporté, ni module ;
 // GUIDE-WINDOWS.md, texte seul, cite le gabarit du nom de l'exécutable et la
@@ -33,6 +36,9 @@ import {
   PRODUCTEURS,
   RACINE,
   engendrerArbre,
+  executer,
+  fautesImagesCitees,
+  imagesCitees,
   lireRegions,
   tableauRegistre,
   verifierArbre,
@@ -46,6 +52,7 @@ import {
   REPORTEES,
   cheminImage,
   cheminsHorsRacine,
+  fautesDImage,
   imagesReferencees,
   verifierAppariement,
   verifierOrdre,
@@ -57,6 +64,7 @@ const GUIDE_WINDOWS = 'GUIDE-WINDOWS.md';
 const README = 'README.md';
 
 const lire = (chemin) => readFileSync(join(RACINE, chemin), 'utf8');
+const lireOctets = (chemin) => readFileSync(join(RACINE, chemin));
 const lireManifeste = () => JSON.parse(lire(CHEMIN_MANIFESTE));
 
 // Les images PNG du dossier des captures, en chemins relatifs à la racine.
@@ -220,6 +228,161 @@ describe('documentation : le guide d’usage suit les étapes et apparie ses ima
     const deplacee = cheminImage('10-diagnostic');
     const avancee = texte.replace('## Étape 1b \u{2014}', `![](${deplacee})\n\n## Étape 1b \u{2014}`);
     assert.deepEqual(fautesEtapes(avancee, manifeste), [`${deplacee} : citée d'abord hors de la section de l'étape 8 (1)`]);
+  });
+});
+
+// --- Les images que la documentation affiche (§ 19.1, § 19.7) -----------------------
+
+// Un lecteur de l'arbre réel où un document est remplacé par un texte donné.
+const lireAvec = (remplace, texte) => (chemin) => (chemin === remplace ? texte : lire(chemin));
+
+describe('documentation : les documents n’affichent que les captures, telles que le manifeste les inscrit (§ 19.1, § 19.7)', () => {
+  test('le guide d’usage et README.md ne citent aucune image hors de doc/captures', () => {
+    for (const document of [GUIDE_USAGE, README]) assert.deepEqual(fautesImagesCitees(document, lire(document)), [], document);
+    // Le relevé n'est pas vide : il voit chaque image que l'appariement voit.
+    const cibles = imagesCitees(lire(GUIDE_USAGE)).map((citee) => citee.cible);
+    assert.deepEqual([...new Set(cibles)].sort(), [...imagesReferencees(lire(GUIDE_USAGE))].sort());
+    assert.equal(new Set(cibles).size, CAPTURES.length);
+  });
+
+  test('rouge : une image hors de doc/captures, ou qui n’y est pas un PNG, se relève en mémoire, chacune nommée', () => {
+    const texte = lire(GUIDE_USAGE);
+    const altere = `${texte}\n![Un ancien écran](images/ancienne.png)\n\n![Un autre](doc/captures/x.jpg)\n`;
+    const fautes = fautesImagesCitees(GUIDE_USAGE, altere);
+    assert.deepEqual(fautes.map((f) => f.chemin), [GUIDE_USAGE, GUIDE_USAGE]);
+    assert.match(fautes[0].faute, /image hors de doc\/captures : « images\/ancienne\.png »/);
+    assert.match(fautes[1].faute, /image hors de doc\/captures : « doc\/captures\/x\.jpg »/);
+    // La construction refuse aussi : verifier lit les mêmes fautes.
+    const bilan = verifierArbre({ lire: lireAvec(GUIDE_USAGE, altere) });
+    assert.deepEqual(bilan.fautes, fautes);
+    assert.equal(bilan.code, 1);
+  });
+
+  test('rouge : les autres formes d’image — balise, référence, lien vers une image — se relèvent dans README.md', () => {
+    const texte = lire(README);
+    const avec = (ajout) => fautesImagesCitees(README, `${texte}\n${ajout}\n`).map((f) => f.faute.replace(/^ligne \d+ : /, ''));
+    assert.deepEqual(avec('<img alt="ancien" src="images/ancienne.png">'), ['image hors de doc/captures : « images/ancienne.png »']);
+    assert.deepEqual(avec("<IMG src='doc/captures/01-premier-ecran.png' srcset=\"images/grande.png 2x\">"), [
+      'image en srcset : seules les captures doc/captures/<nom>.png s’affichent',
+    ]);
+    assert.deepEqual(avec('<img alt="sans source">'), ['balise <img> sans src lisible']);
+    assert.deepEqual(avec('![Un écran][ancien]\n\n[ancien]: images/ancienne.png'), ['image hors de doc/captures : « images/ancienne.png »']);
+    // Une image par référence se relève aussi quand sa cible n'a pas
+    // d'extension d'image : c'est la syntaxe qui l'affiche.
+    assert.deepEqual(avec('![Un écran][Distante]\n\n[distante]: <https://images.exemple.invalid/ecran>'), [
+      'image hors de doc/captures : « https://images.exemple.invalid/ecran »',
+    ]);
+    assert.deepEqual(avec('Voir [l’ancien écran](images/ancienne.png).'), ['image hors de doc/captures : « images/ancienne.png »']);
+    // Un texte entre crochets coupé à la ligne, ou qui porte des crochets,
+    // imbriqués ou échappés, n'arrête pas le relevé : CommonMark affiche
+    // ces images et ces liens.
+    // Une cible sans extension d'image ne se relève que comme image : aucun
+    // lien ne la rattrape.
+    const distante = 'https://images.exemple.invalid/ecran';
+    const formes = [
+      ['![Un ancien\nécran](images/ancienne.png)', 'images/ancienne.png'],
+      ['![Écran [ancien]](images/ancienne.png)', 'images/ancienne.png'],
+      [`![Écran \\[ancien](${distante})`, distante],
+      [`![Écran \\]](${distante})`, distante],
+      ['Voir [l’ancien\nécran](images/ancienne.png).', 'images/ancienne.png'],
+      [`![Un\nécran][Distante]\n\n[distante]: <${distante}>`, distante],
+      [`![Un écran][Image\ndistante]\n\n[image distante]: <${distante}>`, distante],
+    ];
+    assert.deepEqual(
+      formes.map(([forme]) => [forme, avec(forme)]),
+      formes.map(([forme, cible]) => [forme, [`image hors de doc/captures : « ${cible} »`]]),
+    );
+    // Une ligne vide ferme le paragraphe : ni image ni lien ne la franchit.
+    assert.deepEqual(avec('![Un ancien\n\nécran](images/ancienne.png)'), []);
+    assert.deepEqual(avec('![Un écran](doc/captures/01-premier-ecran.png "titre")'), []);
+    // Un lien vers un document qui n'est pas une image n'en est pas une.
+    assert.deepEqual(avec('Voir [le guide](GUIDE-USAGE.md).'), []);
+  });
+
+  test('chaque image du manifeste a sur le disque l’empreinte et les dimensions qu’il inscrit', () => {
+    const { captures } = lireManifeste();
+    assert.equal(captures.length, CAPTURES.length - A_VENIR.length);
+    for (const capture of captures) assert.deepEqual(fautesDImage(capture, lireOctets(cheminImage(capture.fichier))), [], capture.fichier);
+  });
+
+  test('rouge : les octets de 04-grille-participants passés pour 05-tables-etat donnent une faute qui nomme 05', () => {
+    const entree = lireManifeste().captures.find((c) => c.fichier === '05-tables-etat');
+    const fautes = fautesDImage(entree, lireOctets(cheminImage('04-grille-participants')));
+    assert.deepEqual(fautes.map((f) => f.chemin), [cheminImage('05-tables-etat')]);
+    assert.match(fautes[0].faute, /^image remplacée/);
+  });
+
+  test('verifier, sur l’arbre réel : chaque image citée par un porteur est contrôlée, aucune faute', () => {
+    const bilan = verifierArbre();
+    assert.equal(bilan.images, CAPTURES.length - A_VENIR.length);
+    assert.deepEqual(bilan.fautes, []);
+    const lignes = [];
+    assert.equal(executer(['verifier'], { sortie: (ligne) => lignes.push(ligne) }), 0);
+    assert.match(lignes.at(-1), new RegExp(`, ${bilan.images} image\\(s\\), 0 faute\\(s\\)$`));
+  });
+
+  test('rouge : une capture du manifeste que nul porteur ne cite est une faute de verifier ; zéro citée n’est pas zéro périmée', () => {
+    const fichiers = lireManifeste().captures.map((capture) => cheminImage(capture.fichier));
+    const nonCitee = (chemin) => ({ chemin, faute: 'inscrite au manifeste, citée par aucun porteur' });
+    // Le guide privé de ses images : seuls ses liens vers une capture restent.
+    const sansImages = lire(GUIDE_USAGE)
+      .split('\n')
+      .filter((ligne) => !/^!\[[^\]]*\]\(doc\/captures\//.test(ligne))
+      .join('\n');
+    const restantes = new Set(imagesCitees(sansImages).map((citee) => citee.cible));
+    assert.ok(restantes.size > 0 && restantes.size < fichiers.length, `${restantes.size}`);
+    // Puis privé aussi de ces liens : aucune capture citée.
+    const sansCitation = sansImages.replace(/\]\(doc\/captures\/[^)]*\)/g, '](#)');
+    assert.deepEqual(imagesCitees(sansCitation), []);
+    for (const livraison of [false, true]) {
+      const partiel = verifierArbre({ livraison, lire: lireAvec(GUIDE_USAGE, sansImages) });
+      assert.deepEqual(partiel.fautes, fichiers.filter((chemin) => !restantes.has(chemin)).map(nonCitee));
+      assert.deepEqual([partiel.images, partiel.code], [restantes.size, 1]);
+      const vide = verifierArbre({ livraison, lire: lireAvec(GUIDE_USAGE, sansCitation) });
+      assert.deepEqual(vide.fautes, fichiers.map(nonCitee));
+      assert.deepEqual([vide.images, vide.code], [0, 1]);
+    }
+    // Restreinte par --porteur, la vérification ne juge pas les citations des
+    // porteurs qu'elle ne lit pas : le seul README, sur l'arbre réel, passe.
+    const restreinte = verifierArbre({ porteurs: ['README.md'] });
+    assert.deepEqual([restreinte.fautes, restreinte.code], [[], 0]);
+    assert.equal(executer(['verifier', '--porteur', 'README.md'], { sortie: () => {} }), 0);
+  });
+
+  test('rouge : un PNG publié remplacé par un autre, le manifeste inchangé, fait échouer verifier et la livraison', () => {
+    const remplacee = cheminImage('05-tables-etat');
+    const ancienne = (chemin) => lireOctets(chemin === remplacee ? cheminImage('04-grille-participants') : chemin);
+    for (const livraison of [false, true]) {
+      const bilan = verifierArbre({ livraison, lireOctets: ancienne });
+      assert.deepEqual(bilan.fautes.map((f) => f.chemin), [remplacee]);
+      assert.match(bilan.fautes[0].faute, /^image remplacée/);
+      assert.equal(bilan.code, 1);
+    }
+    const lignes = [];
+    assert.equal(executer(['verifier', '--livraison'], { lireOctets: ancienne, sortie: (ligne) => lignes.push(ligne) }), 1);
+    assert.ok(lignes.some((ligne) => ligne.startsWith(`${remplacee} : image remplacée`)), lignes.join('\n'));
+  });
+
+  test('rouge : une image citée absente du disque, ou absente du manifeste, est une faute de verifier', () => {
+    const absente = cheminImage('05-tables-etat');
+    const sansFichier = (chemin) => {
+      if (chemin === absente) throw Object.assign(new Error(`absent : ${chemin}`), { code: 'ENOENT' });
+      return lireOctets(chemin);
+    };
+    const surDisque = verifierArbre({ lireOctets: sansFichier });
+    assert.deepEqual(surDisque.fautes, [{ chemin: absente, faute: `citée par ${GUIDE_USAGE}, absente du disque` }]);
+    // Un nom inventé, ni au manifeste ni sur le disque : le manifeste suffit à
+    // le refuser, aucun octet ne se lit.
+    const inventee = cheminImage('05z-table-inventee');
+    const lus = [];
+    const horsManifeste = verifierArbre({
+      lire: lireAvec(GUIDE_USAGE, `${lire(GUIDE_USAGE)}\n![Une table inventée](${inventee})\n`),
+      lireOctets: (chemin) => (lus.push(chemin), lireOctets(chemin)),
+    });
+    assert.deepEqual(horsManifeste.fautes, [{ chemin: inventee, faute: `citée par ${GUIDE_USAGE}, absente du manifeste` }]);
+    assert.equal(horsManifeste.code, 1);
+    assert.ok(!lus.includes(inventee));
+    assert.equal(lus.length, CAPTURES.length - A_VENIR.length);
   });
 });
 

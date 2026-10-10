@@ -30,13 +30,26 @@
 // ferme une autre région, une région ouverte dans une autre, un nom en
 // double ou inconnu sont des fautes ; un porteur sans région aussi, et une
 // liste de porteurs vide : un balayage vide ne passe pas (§ 14.2). Seuls les
-// fichiers de PORTEURS se lisent.
+// fichiers de PORTEURS se lisent, avec le manifeste et les captures qu'ils
+// citent.
 //
 // verifier mesure aussi l'écart entre la version réelle inscrite au
 // manifeste des captures et celle de la construction (ecartDeVersion,
 // documentation/manifeste.js) : affiché et non bloquant au cycle court,
 // bloquant sous --livraison (§ 19.7). Un manifeste absent ne prouve aucune
 // version, et compte pour un écart.
+//
+// verifier contrôle enfin les images que les porteurs affichent (§ 19.1,
+// § 19.7). Toute image citée — image Markdown, en ligne ou par référence,
+// balise <img>, lien vers un fichier image — a la forme
+// doc/captures/<nom>.png ; toute autre cible est une faute qui la nomme.
+// Chaque capture citée a son entrée au manifeste, son fichier sur le disque,
+// et ce fichier a l'empreinte et les dimensions que l'entrée inscrit
+// (fautesDImage) : un PNG remplacé par une version antérieure, le manifeste
+// inchangé, fait échouer la vérification, donc la construction de livraison.
+// Réciproquement, chaque capture inscrite au manifeste est citée par un
+// porteur : un document privé de ses images ne passe pas sur un balayage
+// vide.
 //
 // Ligne de commande, depuis la racine du projet ou d'ailleurs :
 //   node scripts/documentation.js engendrer | verifier [--livraison]
@@ -62,7 +75,7 @@ import { RACCOURCIS } from '../src/interface/raccourcis.js';
 import { diagnostiquer } from '../src/moteur/diagnostic.js';
 import { analyser, configurationDepuisCharge } from '../src/stockage/document.js';
 import { VERSION } from '../src/version.genere.js';
-import { CHEMIN_MANIFESTE, ecartDeVersion } from './documentation/manifeste.js';
+import { CHEMIN_MANIFESTE, cheminImage, ecartDeVersion, fautesDImage } from './documentation/manifeste.js';
 import { tableauConstantes } from './banc/releve.js';
 
 /** @typedef {{nom: string, debut: number, fin: number, contenu: string}} Region
@@ -617,6 +630,154 @@ export function producteursDe(contexte) {
   );
 }
 
+// --- Les images que les porteurs affichent (§ 19.1, § 19.7) -----------------------
+
+// La seule forme d'une image affichée : une capture du parcours, en PNG.
+const FORME_CAPTURE = /^doc\/captures\/[A-Za-z0-9._-]+\.png$/;
+// L'extension d'un fichier image : un lien vers un tel fichier montre une
+// image au lecteur, comme une image en ligne.
+const EXTENSION_IMAGE = /\.(?:png|jpe?g|gif|svg|webp|avif|bmp|ico|tiff?)$/i;
+
+// La cible d'une image ou d'un lien Markdown : entre chevrons, ou sans blanc
+// avec au plus un niveau de parenthèses ; puis un titre facultatif.
+const CIBLE = String.raw`\s*(<[^>\n]*>|[^\s()<>]*(?:\([^\s()]*\)[^\s()<>]*)*)(?:\s+(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\)))?\s*\)`;
+// Un caractère du texte entre crochets : un caractère échappé, crochet
+// compris, ou tout autre qu'un crochet ; un saut de ligne seul, que ne suit
+// pas une ligne vide, car une ligne vide ferme le paragraphe et ni image ni
+// lien ne la franchit. Les quatre formes s'excluent : aucun retour en
+// arrière ne se multiplie.
+const CARACTERE = String.raw`(?:\\[^\n]|\\(?=\n)|[^\[\]\\\n]|\n(?![ \t\r]*\n))`;
+// Le texte entre crochets, avec au plus un niveau de crochets imbriqués :
+// une image dans un lien, [![…](…)](…), garde ses deux cibles, et le texte
+// d'une image, ![Écran [ancien]](…), peut en porter.
+const CROCHETS = String.raw`\[((?:${CARACTERE}|\[${CARACTERE}*\])*)\]`;
+// Une étiquette de référence : sans crochet non échappé (CommonMark).
+const ETIQUETTE = String.raw`\[(${CARACTERE}*)\]`;
+const IMAGE_EN_LIGNE = new RegExp(String.raw`!${CROCHETS}\(${CIBLE}`, 'g');
+const LIEN_EN_LIGNE = new RegExp(String.raw`(?<!!)${CROCHETS}\(${CIBLE}`, 'g');
+// Une définition de référence, en tête de ligne : [étiquette]: cible.
+const DEFINITION = /^ {0,3}\[([^\]\n]+)\]:[ \t]*(<[^>\n]*>|\S+)/gm;
+// Une image par référence : ![texte][étiquette], ![texte][] ou ![texte],
+// pourvu que ce dernier ne s'ouvre pas sur une cible en ligne.
+const IMAGE_PAR_REFERENCE = new RegExp(String.raw`!${CROCHETS}(?:${ETIQUETTE}|(?![(\[]))`, 'g');
+// Une balise HTML d'image, ou une source d'une balise <picture>.
+const BALISE_IMAGE = /<(img|source)\b[^>]*>/gi;
+const ATTRIBUT_SRC = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/i;
+const ATTRIBUT_SRCSET = /\bsrcset\s*=/i;
+
+// Une étiquette de référence comparable : sans casse, blancs réduits.
+const etiquette = (texte) => texte.trim().replace(/\s+/g, ' ').toLowerCase();
+// Une cible sans ses chevrons.
+const sansChevrons = (cible) => (cible.startsWith('<') && cible.endsWith('>') ? cible.slice(1, -1) : cible);
+
+/**
+ * Les images qu'un document Markdown affiche, dans l'ordre du texte : les
+ * images en ligne et par référence, les balises <img> et <source>, les
+ * liens dont la cible a une extension d'image. Chaque citation est
+ * { cible, sorte, indice } : cible est le chemin cité, null pour une balise
+ * sans src lisible ou qui porte un srcset ; sorte est 'image', 'reference',
+ * 'lien', 'balise' ou 'srcset' ; indice est la position dans le texte. Un
+ * texte de code n'est pas mis à part : un exemple d'image se cite aussi.
+ *
+ * @param {string} texte
+ * @returns {Array<{cible: string|null, sorte: string, indice: number}>}
+ */
+export function imagesCitees(texte) {
+  if (typeof texte !== 'string') throw new TypeError('les images se relèvent dans une chaîne');
+  const citees = [];
+  for (const trouve of texte.matchAll(IMAGE_EN_LIGNE)) citees.push({ cible: sansChevrons(trouve[2]), sorte: 'image', indice: trouve.index });
+  for (const trouve of texte.matchAll(LIEN_EN_LIGNE)) {
+    const cible = sansChevrons(trouve[2]);
+    if (EXTENSION_IMAGE.test(cible.replace(/[?#].*$/, ''))) citees.push({ cible, sorte: 'lien', indice: trouve.index });
+  }
+  const definitions = new Map();
+  for (const trouve of texte.matchAll(DEFINITION)) {
+    const cle = etiquette(trouve[1]);
+    if (!definitions.has(cle)) definitions.set(cle, { cible: sansChevrons(trouve[2]), indice: trouve.index, utilisee: false });
+  }
+  for (const trouve of texte.matchAll(IMAGE_PAR_REFERENCE)) {
+    const definition = definitions.get(etiquette(trouve[2] || trouve[1]));
+    if (definition === undefined) continue;
+    definition.utilisee = true;
+    citees.push({ cible: definition.cible, sorte: 'reference', indice: trouve.index });
+  }
+  // Une définition vers un fichier image sert un lien par référence, ou
+  // une image : elle est citée une fois, à sa place, si aucune image ne l'a
+  // déjà prise.
+  for (const { cible, indice, utilisee } of definitions.values()) {
+    if (!utilisee && EXTENSION_IMAGE.test(cible.replace(/[?#].*$/, ''))) citees.push({ cible, sorte: 'lien', indice });
+  }
+  for (const trouve of texte.matchAll(BALISE_IMAGE)) {
+    const balise = trouve[0];
+    if (ATTRIBUT_SRCSET.test(balise)) citees.push({ cible: null, sorte: 'srcset', indice: trouve.index });
+    const src = ATTRIBUT_SRC.exec(balise);
+    if (src !== null) citees.push({ cible: src[1] ?? src[2] ?? src[3], sorte: 'balise', indice: trouve.index });
+    else if (trouve[1].toLowerCase() === 'img') citees.push({ cible: null, sorte: 'balise', indice: trouve.index });
+  }
+  return citees.sort((a, b) => a.indice - b.indice);
+}
+
+/** Vrai pour une cible citée qu'un document a le droit d'afficher. */
+export const estCapture = (cible) => typeof cible === 'string' && FORME_CAPTURE.test(cible);
+
+/**
+ * Les fautes des images d'un document : chaque citation dont la cible n'a
+ * pas la forme doc/captures/<nom>.png, nommée avec sa ligne ; une balise
+ * sans src lisible ; un srcset, dont les cibles échappent au contrôle.
+ *
+ * @param {string} chemin   le document, relatif à la racine
+ * @param {string} texte
+ * @returns {Faute[]}
+ */
+export function fautesImagesCitees(chemin, texte) {
+  const fautes = [];
+  for (const { cible, sorte, indice } of imagesCitees(texte)) {
+    const ligne = `ligne ${ligneDe(texte, indice)} : `;
+    if (sorte === 'srcset') fautes.push({ chemin, faute: `${ligne}image en srcset : seules les captures doc/captures/<nom>.png s’affichent` });
+    else if (cible === null) fautes.push({ chemin, faute: `${ligne}balise <img> sans src lisible` });
+    else if (!estCapture(cible)) fautes.push({ chemin, faute: `${ligne}image hors de doc/captures : « ${cible} »` });
+  }
+  return fautes;
+}
+
+// Les fautes des captures que les porteurs citent, contre le manifeste et le
+// disque : chaque image une fois, dans l'ordre de sa première citation.
+// Une image absente du manifeste ne se lit pas ; une image présente se lit
+// et passe fautesDImage. Quand tous les porteurs de PORTEURS sont lus
+// (complet), suivent, dans l'ordre du manifeste, ses captures que nul
+// porteur ne cite : une capture inscrite et jamais montrée n'est pas
+// examinée, et zéro capture examinée n'est pas zéro capture périmée (§ 19.7).
+// Une vérification restreinte par --porteur ne juge pas les citations des
+// porteurs qu'elle ne lit pas.
+function fautesDesCaptures(citees, manifeste, lireOctets, complet) {
+  const entrees = new Map();
+  for (const entree of Array.isArray(manifeste?.captures) ? manifeste.captures : []) {
+    const chemin = cheminImage(entree?.fichier);
+    if (!entrees.has(chemin)) entrees.set(chemin, entree);
+  }
+  const fautes = [];
+  for (const [image, porteur] of citees) {
+    const entree = entrees.get(image);
+    if (entree === undefined) {
+      fautes.push({ chemin: image, faute: `citée par ${porteur}, absente du manifeste` });
+      continue;
+    }
+    let octets;
+    try {
+      octets = lireOctets(image);
+    } catch (erreur) {
+      if (!estAbsent(erreur)) throw erreur;
+      fautes.push({ chemin: image, faute: `citée par ${porteur}, absente du disque` });
+      continue;
+    }
+    fautes.push(...fautesDImage(entree, octets));
+  }
+  for (const image of complet ? entrees.keys() : []) {
+    if (!citees.has(image)) fautes.push({ chemin: image, faute: 'inscrite au manifeste, citée par aucun porteur' });
+  }
+  return fautes;
+}
+
 // --- L'arbre ---------------------------------------------------------------------
 
 // Vrai pour l'erreur d'un fichier absent.
@@ -624,6 +785,9 @@ const estAbsent = (erreur) => erreur?.code === 'ENOENT';
 
 // Le lecteur par défaut d'une racine : le texte UTF-8 d'un chemin relatif.
 const lecteurDe = (racine) => (chemin) => readFileSync(join(racine, chemin), 'utf8');
+// Le lecteur d'octets par défaut d'une racine : le contenu d'un chemin
+// relatif, en Uint8Array.
+const lecteurOctetsDe = (racine) => (chemin) => readFileSync(join(racine, chemin));
 
 // Le lecteur d'un fichier JSON de l'arbre, lu au premier besoin, une fois :
 // l'objet lu, ou null quand le fichier manque. Un texte qui n'est pas du
@@ -674,20 +838,34 @@ function lirePorteur(lire, chemin) {
 }
 
 /**
- * La vérification d'un arbre : les régions de chaque porteur, puis l'écart
- * de version du manifeste. Seuls les porteurs et le manifeste se lisent.
+ * La vérification d'un arbre : les régions et les images citées de chaque
+ * porteur, l'écart de version du manifeste, puis chaque capture citée contre
+ * son entrée du manifeste et son fichier, et, quand PORTEURS est lu en
+ * entier, chaque entrée du manifeste contre les citations. Se lisent : les porteurs et le
+ * manifeste par lire, les seules captures citées par lireOctets.
  *
  * @param {{racine?: string, porteurs?: ReadonlyArray<string>, livraison?: boolean,
- *          version?: string, lire?: (chemin: string) => string}} options
+ *          version?: string, lire?: (chemin: string) => string,
+ *          lireOctets?: (chemin: string) => Uint8Array}} options
  * @returns {{fautes: Faute[], ecart: null|{manifeste: string|null, construction: string},
- *            regions: number, code: 0|1}}
- *   code 1 sur une faute, ou sur un écart sous livraison
+ *            regions: number, images: number, code: 0|1}}
+ *   images : le nombre de captures citées, chacune comptée une fois ; code 1
+ *   sur une faute, ou sur un écart sous livraison
  */
-export function verifierArbre({ racine = RACINE, porteurs = PORTEURS, livraison = false, version = VERSION.affichee, lire = lecteurDe(racine) } = {}) {
+export function verifierArbre({
+  racine = RACINE,
+  porteurs = PORTEURS,
+  livraison = false,
+  version = VERSION.affichee,
+  lire = lecteurDe(racine),
+  lireOctets = lecteurOctetsDe(racine),
+} = {}) {
   const contexte = contexteDe(lire);
   const producteurs = producteursDe(contexte);
   const fautes = porteurs.length === 0 ? [SANS_PORTEUR] : [];
   let regions = 0;
+  // Chaque capture citée, au premier porteur qui la cite.
+  const citees = new Map();
   for (const chemin of porteurs) {
     const { texte, faute } = lirePorteur(lire, chemin);
     if (faute !== null) {
@@ -700,16 +878,19 @@ export function verifierArbre({ racine = RACINE, porteurs = PORTEURS, livraison 
     } catch (erreur) {
       if (!(erreur instanceof ErreurRegions)) throw erreur;
     }
+    fautes.push(...fautesImagesCitees(chemin, texte));
+    for (const { cible } of imagesCitees(texte)) if (estCapture(cible) && !citees.has(cible)) citees.set(cible, chemin);
   }
   let ecart = null;
   try {
     const manifeste = contexte.manifeste();
     ecart = manifeste === null ? { manifeste: null, construction: version } : ecartDeVersion(manifeste, version);
+    fautes.push(...fautesDesCaptures(citees, manifeste, lireOctets, PORTEURS.every((porteur) => porteurs.includes(porteur))));
   } catch (erreur) {
     fautes.push({ chemin: CHEMIN_MANIFESTE, faute: erreur.message });
   }
   const code = fautes.length > 0 || (livraison && ecart !== null) ? 1 : 0;
-  return { fautes, ecart, regions, code };
+  return { fautes, ecart, regions, images: citees.size, code };
 }
 
 /**
@@ -780,11 +961,12 @@ function lireArguments(argv) {
  *
  * @param {string[]} argv   sans l'exécutable ni le script
  * @param {{racine?: string, porteurs?: ReadonlyArray<string>, version?: string,
- *          lire?: (chemin: string) => string, ecrire?: (chemin: string, texte: string) => void,
+ *          lire?: (chemin: string) => string, lireOctets?: (chemin: string) => Uint8Array,
+ *          ecrire?: (chemin: string, texte: string) => void,
  *          sortie?: (ligne: string) => void}} [options]
  * @returns {0|1|2}   2 pour des arguments illisibles, sans rien lire
  */
-export function executer(argv, { racine = RACINE, porteurs = PORTEURS, version, lire, ecrire, sortie = (ligne) => process.stdout.write(`${ligne}\n`) } = {}) {
+export function executer(argv, { racine = RACINE, porteurs = PORTEURS, version, lire, lireOctets, ecrire, sortie = (ligne) => process.stdout.write(`${ligne}\n`) } = {}) {
   const lus = lireArguments(argv);
   if (lus === null) {
     sortie(USAGE);
@@ -803,14 +985,19 @@ export function executer(argv, { racine = RACINE, porteurs = PORTEURS, version, 
     sortie(`engendrer : ${options.porteurs.length} porteur(s), ${bilan.ecrits.length} réécrit(s), ${bilan.fautes.length} faute(s)`);
     return bilan.code;
   }
-  const bilan = verifierArbre({ ...options, livraison: lus.livraison, ...(version === undefined ? {} : { version }) });
+  const bilan = verifierArbre({
+    ...options,
+    livraison: lus.livraison,
+    ...(version === undefined ? {} : { version }),
+    ...(lireOctets === undefined ? {} : { lireOctets }),
+  });
   ecrireFautes(bilan.fautes);
   if (bilan.ecart !== null) {
     const portee = lus.livraison ? 'bloquant' : 'non bloquant';
     const manifeste = bilan.ecart.manifeste ?? 'aucune (manifeste absent ou sans capture)';
     sortie(`écart de version (${portee}) : manifeste ${manifeste}, construction ${bilan.ecart.construction}`);
   }
-  sortie(`verifier : ${options.porteurs.length} porteur(s), ${bilan.regions} région(s), ${bilan.fautes.length} faute(s)`);
+  sortie(`verifier : ${options.porteurs.length} porteur(s), ${bilan.regions} région(s), ${bilan.images} image(s), ${bilan.fautes.length} faute(s)`);
   return bilan.code;
 }
 
