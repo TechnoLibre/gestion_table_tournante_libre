@@ -378,6 +378,33 @@ Revenu au placement retenu, l’aperçu sort sans filigrane :
 porte l’instant de ce placement. C’est cette page qui part à l’imprimante pour
 le montage de la salle.*
 
+La planche se produit dans la section « Badges » de l’événement. On y choisit
+l’imposition — feuille par feuille, ou en pile pour un massicot qui tranche
+toute la rame — et l’ordre des badges, alphabétique ou par table du premier
+tour. « Préparer » annonce ce qui sortira : le nombre de badges et de planches,
+les homonymes, les caractères que la police ne dessine pas. « Produire la
+planche » écrit le PDF à côté des fichiers de l’événement et en affiche le
+chemin ; dans un navigateur, le PDF se télécharge. Sa première page est la
+feuille de contrôle :
+
+![La feuille de contrôle de la planche : la règle de 100 mm, puis les comptes de la soirée](doc/captures/24-badges-controle.png)
+
+*La règle du haut mesure 100 mm sur le papier : posez-y une vraie règle. Si les
+deux ne coïncident pas, l’imprimante a mis la page à l’échelle, et les badges
+ne tomberont pas sur les traits de coupe. Suivent le format du badge et du
+papier, l’imposition, le nombre de planches, les comptes de la soirée — un
+badge par personne présente, les exclus comptés à part —, l’instant du
+placement et la version du logiciel.*
+
+Viennent ensuite les planches, quatre badges A6 par feuille A4 :
+
+![La première planche : quatre badges A6 et leurs traits de coupe](doc/captures/25-badges-planche.png)
+
+*Chaque badge porte le nom, l’appartenance et la table de chaque tour ; en
+pied, le nom de l’événement et l’instant du placement. Les traits fins
+marquent la coupe : un vertical au milieu de la feuille, un horizontal sous
+chaque rangée de badges.*
+
 Une fois le plan imprimé, bloquez-le : choisissez l’état « Bloqué » en haut de
 l’événement. Plus rien ne le modifie, jusqu’à « Débloquer ».
 

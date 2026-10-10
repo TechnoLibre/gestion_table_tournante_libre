@@ -29,8 +29,20 @@
 //
 // Le mode de vérification compare l'entrée d'une étape à celle du
 // manifeste (comparerCapture) et n'écrit rien.
+//
+// Les images de la planche (§ 19.6) ne viennent pas du navigateur : la page
+// passe le PDF produit, en base64, à tramerPdf, qui lit chaque page demandée
+// par pdfjs-dist — sa couche de texte et ses traits (test/pdf.js), sa taille
+// à 96 ppp — et, en écriture, la trame en PNG sous le dossier d'attente, par
+// le canevas natif que pdfjs-dist charge lui-même, @napi-rs/canvas, sa
+// dépendance optionnelle. Seul make captures exige ce canevas : la lecture
+// s'en passe, et le tramage refuse en le nommant quand il manque. pdfjs-dist
+// et test/pdf.js se chargent au premier appel : la configuration du lanceur
+// importe ce module sans eux. La publication tire son pilote des seules
+// captures du navigateur : une page de PDF a la taille de sa page.
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +83,7 @@ export const COMMANDES = Object.freeze([
   'effacerDossierEpreuve',
   'empreintesDossier',
   'copierDansEpreuve',
+  'tramerPdf',
 ]);
 
 /**
@@ -293,10 +306,14 @@ async function deposees(attente) {
 }
 
 // Le pilote du manifeste : le navigateur et sa version, le mode nommé, le
-// facteur d'échelle et le cadre, communs à toutes les captures.
+// facteur d'échelle et le cadre, communs à toutes les captures du
+// navigateur. Une page de PDF n'en relève pas : son cadre est sa page à
+// PPP_TRAMAGE (§ 19.6). Sans capture du navigateur, aucun pilote : refus.
 function piloteDe(context, captures) {
-  const [premiere] = captures;
-  for (const capture of captures) {
+  const duNavigateur = captures.filter(({ source }) => source !== 'pdf');
+  const [premiere] = duNavigateur;
+  if (premiere === undefined) throw new Error('publication : aucune capture du navigateur — le manifeste n’aurait aucun pilote');
+  for (const capture of duNavigateur) {
     if (capture.facteurEchelle !== premiere.facteurEchelle || canonique(capture.cadre) !== canonique(premiere.cadre)) {
       throw new Error(`publication : ${capture.fichier} n’a pas le cadre ni le facteur d’échelle de ${premiere.fichier}`);
     }
@@ -475,4 +492,183 @@ export async function empreintesDossier(_context, { racine = null } = {}) {
   }
   await parcourir(join(base, DOSSIER_CAPTURES));
   return fichiers.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
+// --- Le tramage des pages de la planche (§ 19.6) ---------------------------------
+
+/** La résolution du tramage, en points par pouce : celle du pixel CSS, que
+ *  mesurent les captures du navigateur. */
+export const PPP_TRAMAGE = 96;
+
+/** Le mode qu'inscrit l'entrée d'une page de PDF : le lecteur qui la trame et
+ *  sa résolution, là où une capture du navigateur inscrit son mode
+ *  d'affichage. */
+export const MODE_TRAMAGE = `pdfjs-dist-${PPP_TRAMAGE}ppp`;
+
+// Le canevas natif que pdfjs-dist charge pour tramer sous node, sa
+// dépendance optionnelle ; le point PDF et le millimètre, par pouce.
+const CANEVAS = '@napi-rs/canvas';
+const PT_PAR_POUCE = 72;
+const MM_PAR_POUCE = 25.4;
+
+// Le chargeur CommonJS du paquet pdfjs-dist : un module qu'il résout est
+// celui que pdfjs-dist charge lui-même.
+const depuisPdfjs = () => createRequire(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
+
+// Les polices standard de pdfjs-dist, lues du disque quand un document en
+// appelle une sans l'embarquer, comme test/pdf.js les lui donne.
+const policesStandard = () => `${join(dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json')), 'standard_fonts')}/`;
+
+/** Le canevas natif de pdfjs-dist, chargé depuis son paquet. Lève quand il
+ *  manque, ou que sa liaison native n'existe pas pour ce système. */
+export function chargerCanevas() {
+  return depuisPdfjs()(CANEVAS);
+}
+
+/** Vrai quand le canevas natif de pdfjs-dist se charge sur ce système. */
+export function canevasDisponible() {
+  try {
+    chargerCanevas();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Les octets que porte un texte base64 ; lève sur un texte vide ou qui
+// n'est pas du base64 canonique, que la relecture ne rendrait pas tel quel.
+function octetsDe(octetsB64) {
+  if (typeof octetsB64 !== 'string' || octetsB64.length === 0) {
+    throw new TypeError('tramerPdf : octetsB64 est le texte base64, non vide, du PDF');
+  }
+  const octets = Buffer.from(octetsB64, 'base64');
+  if (octets.toString('base64') !== octetsB64) throw new TypeError('tramerPdf : octetsB64 n’est pas du base64');
+  return new Uint8Array(octets.buffer, octets.byteOffset, octets.byteLength);
+}
+
+// Les pages demandées, [{page, fichier}] : au moins une, chaque nom de
+// capture valide et une seule fois, chaque page un entier.
+function pagesDemandees(pages) {
+  if (!Array.isArray(pages) || pages.length === 0) throw new Error('tramerPdf : aucune page demandée');
+  const vus = new Set();
+  return pages.map(({ page, fichier }) => {
+    exigerNom(fichier);
+    if (vus.has(fichier)) throw new Error(`tramerPdf : « ${fichier} » demandée deux fois`);
+    vus.add(fichier);
+    if (!Number.isSafeInteger(page)) throw new TypeError(`tramerPdf : page ${JSON.stringify(page)}, un entier attendu`);
+    return { page, fichier };
+  });
+}
+
+// La taille en pixels d'une longueur en millimètres, à PPP_TRAMAGE.
+const enPixels = (mm) => Math.round((mm * PPP_TRAMAGE) / MM_PAR_POUCE);
+
+// Trame les pages données, [{page, cadre}], en PNG, dans l'ordre : chaque
+// page sur un canevas de son cadre, fond blanc, à PPP_TRAMAGE. Rend leurs
+// octets ; lève quand la page tramée n'a pas la taille de son cadre — une
+// page tournée par /Rotate, que le cadre lu des boîtes ne suit pas.
+async function tramerPages(octets, pages, canevas) {
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const tache = getDocument({
+    data: new Uint8Array(octets),
+    verbosity: 0,
+    isEvalSupported: false,
+    disableFontFace: true,
+    useSystemFonts: false,
+    standardFontDataUrl: policesStandard(),
+  });
+  const document = await tache.promise;
+  try {
+    const images = [];
+    for (const { page: rang, cadre } of pages) {
+      const page = await document.getPage(rang);
+      const viewport = page.getViewport({ scale: PPP_TRAMAGE / PT_PAR_POUCE });
+      const largeur = Math.round(viewport.width);
+      const hauteur = Math.round(viewport.height);
+      if (largeur !== cadre.largeur || hauteur !== cadre.hauteur) {
+        throw new Error(`tramerPdf : page ${rang} tramée à ${largeur} × ${hauteur}, son cadre est ${cadre.largeur} × ${cadre.hauteur}`);
+      }
+      const toile = canevas.createCanvas(largeur, hauteur);
+      const contexte = toile.getContext('2d');
+      await page.render({ canvasContext: contexte, canvas: toile, viewport, background: '#ffffff' }).promise;
+      images.push(new Uint8Array(await toile.encode('png')));
+    }
+    return images;
+  } finally {
+    await tache.destroy();
+  }
+}
+
+/**
+ * Lit les pages demandées d'un PDF et, quand ecrire est vrai, les trame en
+ * PNG sous le dossier d'attente de la racine, à <fichier>.png (§ 19.6).
+ * Dans l'ordre : les pages demandées et les octets se contrôlent, le PDF se
+ * lit (test/pdf.js), chaque page doit exister ; puis, en écriture, le
+ * canevas se charge — absent, le refus le nomme et rien ne s'écrit —, toutes
+ * les pages se trament, et alors seulement les images s'écrivent. Sans
+ * écriture, aucun canevas n'est chargé.
+ *
+ * @param {{octetsB64: string, pages: Array<{page: number, fichier: string}>,
+ *          racine?: string|null, ecrire?: boolean}} demande
+ * @param {{chargerCanevas?: () => Object}} [options]  le chargeur du canevas
+ * @returns {Promise<{pdf: string, mode: string, pages: Array<{fichier: string,
+ *   page: number, cadre: {largeur: number, hauteur: number}, chemin: string|null,
+ *   textes: string[], segments: Array<{x1: number, y1: number, x2: number, y2: number}>}>}>}
+ *   pdf : le SHA-256 des octets ; cadre : la boîte de média à PPP_TRAMAGE,
+ *   en pixels arrondis ; chemin : l'image écrite, null sans écriture ;
+ *   textes : les fragments de la couche de texte, dans l'ordre du flux ;
+ *   segments : les traits droits, en mm, l'origine au coin haut gauche
+ */
+export async function tramer({ octetsB64, pages, racine = null, ecrire = true }, { chargerCanevas: charger = chargerCanevas } = {}) {
+  const base = racineDe(racine);
+  const demandees = pagesDemandees(pages);
+  const octets = octetsDe(octetsB64);
+  const { lirePdf } = await import('../pdf.js');
+  let lu;
+  try {
+    lu = await lirePdf(octets);
+  } catch (erreur) {
+    throw new Error(`tramerPdf : PDF illisible : ${erreur.message}`);
+  }
+  for (const { page } of demandees) {
+    if (page < 1 || page > lu.pages.length) throw new Error(`tramerPdf : page ${page} hors du document de ${lu.pages.length} pages`);
+  }
+  const lues = demandees.map(({ page, fichier }) => {
+    const { boite, textes, segments } = lu.pages[page - 1];
+    return {
+      fichier,
+      page,
+      cadre: { largeur: enPixels(boite.largeur), hauteur: enPixels(boite.hauteur) },
+      chemin: null,
+      textes: textes.map(({ texte }) => texte),
+      segments,
+    };
+  });
+  if (ecrire) {
+    let canevas;
+    try {
+      canevas = charger();
+    } catch (erreur) {
+      throw new Error(
+        `tramerPdf : le canevas « ${CANEVAS} » manque — make captures l’exige pour tramer les pages du PDF ; rien n’est écrit (${erreur.message})`,
+      );
+    }
+    const images = await tramerPages(octets, lues, canevas);
+    const dossier = join(base, ATTENTE);
+    await mkdir(dossier, { recursive: true });
+    for (const [rang, lue] of lues.entries()) {
+      lue.chemin = join(dossier, `${lue.fichier}.png`);
+      await ecrireAtomique(lue.chemin, images[rang]);
+    }
+  }
+  return { pdf: sha256(octets), mode: MODE_TRAMAGE, pages: lues };
+}
+
+/**
+ * La commande de la page : tramer, sur le PDF que la page passe en base64
+ * (octetsB64) — aucun octet ne traverse en Uint8Array. Rend ce que le PDF
+ * donne à lire et les chemins des images, jamais d'octets.
+ */
+export async function tramerPdf(_context, demande) {
+  return tramer(demande ?? {});
 }

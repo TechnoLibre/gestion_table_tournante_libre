@@ -15,7 +15,9 @@
 // captures du § 19.3 que l'itération photographie — 01, 01b, 02, 02b, 03 à
 // 07, 07b, 08 à 10, les deux 07a sur la grande démonstration que 10 a
 // chargée, 11, 19, 20, puis 22 et 23, l'aperçu avant impression d'une
-// proposition et du retenu —, puis l'ordre de lecture du § 2.1 sur
+// proposition et du retenu, puis 24 et 25, la feuille de contrôle et la
+// première planche du PDF que la section Badges produit, tramées sous node
+// (§ 19.6) —, puis l'ordre de lecture du § 2.1 sur
 // l'événement retenu, les fenêtres — aucune pendant un geste non
 // destructeur, une qui nomme ce qui part pour chaque geste qui détruit —,
 // enfin chaque famille de geste modifiant en lecture puis sur un plan
@@ -25,7 +27,8 @@
 // état du document (§ 19.3).
 //
 // Une épreuve qui porte une capture finit, ses conditions affirmées, par
-// photographier (test/navigateur/captures.js) ; une épreuve qui continue
+// photographier (test/navigateur/captures.js), ou, pour une page du PDF de
+// la planche, par photographierPdf ; une épreuve qui continue
 // au-delà de l'écran photographié se coupe en deux. Rien de la machine
 // n'entre dans une région photographiée : la provenance « documentation »
 // tient lieu de version (§ 18.6), l'exécuteur direct annonce quatre cœurs,
@@ -42,7 +45,7 @@ import { flushSync } from 'svelte';
 import { bilanRemplacement, cleNormalisee } from '../application/csv.js';
 import { creerFormat } from '../application/format.js';
 import { creerExecuteurDirect } from '../application/generation.js';
-import { TABLES_APPLICATION } from '../application/libelles.js';
+import { TABLES_APPLICATION, libelle } from '../application/libelles.js';
 import { nomAffiche } from '../application/personnes.js';
 import { etatPlaces } from '../application/places.js';
 import { estBrouillon } from '../application/sorties.js';
@@ -69,7 +72,15 @@ import { SUFFIXES } from '../stockage/noms.js';
 import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import urlCp1252 from '../../exemples/participants_cas_limites_cp1252.csv?url';
-import { CADRE, capturesPrises, cloreCaptures, entiereDansLaFenetre, modeFourni, photographier } from '../../test/navigateur/captures.js';
+import {
+  CADRE,
+  capturesPrises,
+  cloreCaptures,
+  empreinteEtat,
+  entiereDansLaFenetre,
+  modeFourni,
+  photographier,
+} from '../../test/navigateur/captures.js';
 import { NOM_CAS_LIMITES, attendre, centre, octetsCasLimites } from '../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
 import { poserFeuille } from '../../test/navigateur/feuilles.js';
@@ -588,6 +599,121 @@ async function cadrerSur(elements) {
   expect(bas - haut, 'les éléments à montrer tiennent dans la hauteur de la fenêtre').toBeLessThanOrEqual(innerHeight);
   window.scrollBy(0, Math.round((haut + bas - innerHeight) / 2));
   await images(2);
+}
+
+// --- La planche de badges photographiée (§ 19.6) --------------------------------------
+
+// Les images de la planche (§ 19.3, § 19.6) : la feuille de contrôle, page 1
+// du PDF, et la première planche, page 2.
+const PAGE_CONTROLE = Object.freeze({ page: 1, fichier: '24-badges-controle' });
+const PAGE_PLANCHE = Object.freeze({ page: 2, fichier: '25-badges-planche' });
+
+// Les images que la production de la planche attend au plus : la police et
+// pdf-lib se chargent à la première production.
+const IMAGES_PLANCHE = 1800;
+
+// L'écart de l'horloge pilotée entre deux productions de la même planche :
+// une date du document tirée de l'horloge, et non du placement, les
+// séparerait à la seconde.
+const ECART_PRODUCTIONS_MS = 60 * 1000;
+
+// Les captures tramées du PDF que le parcours a menées à leur terme.
+const capturesPdf = new Set();
+
+// Le texte base64 d'octets : le PDF traverse ainsi le RPC des commandes,
+// qui sérialiserait un Uint8Array en objet.
+function enBase64(octets) {
+  let binaire = '';
+  for (let debut = 0; debut < octets.length; debut += 0x8000) {
+    binaire += String.fromCharCode(...octets.subarray(debut, debut + 0x8000));
+  }
+  return btoa(binaire);
+}
+
+// Le SHA-256 hexadécimal d'octets.
+async function empreinte(octets) {
+  const tampon = await crypto.subtle.digest('SHA-256', octets);
+  return [...new Uint8Array(tampon)].map((octet) => octet.toString(16).padStart(2, '0')).join('');
+}
+
+// Le texte d'une page de PDF lue, ses fragments joints, blancs réduits.
+const texteDePage = (lue) => plat(lue.textes.join(' '));
+
+// Les traits droits d'une page de PDF lue, en mm : les abscisses des
+// verticaux et les ordonnées des horizontaux, puis les longueurs des
+// horizontaux, au centième, chacune une fois, croissantes.
+function axesDe(lue) {
+  const centieme = (valeur) => Math.round(valeur * 100) / 100;
+  const uniques = (valeurs) => [...new Set(valeurs.map(centieme))].sort((a, b) => a - b);
+  const verticaux = lue.segments.filter(({ x1, x2 }) => Math.abs(x1 - x2) < 1e-3);
+  const horizontaux = lue.segments.filter(({ y1, y2 }) => Math.abs(y1 - y2) < 1e-3);
+  return {
+    x: uniques(verticaux.map(({ x1 }) => x1)),
+    y: uniques(horizontaux.map(({ y1 }) => y1)),
+    longueurs: uniques(horizontaux.map(({ x1, x2 }) => Math.abs(x2 - x1))),
+  };
+}
+
+// Compare deux textes point de code par point de code, sans tenir compte
+// de la langue, comme l'ordre alphabétique de la planche (§ 11.6, § 15.5).
+function parPointsDeCode(a, b) {
+  const [x, y] = [[...a], [...b]];
+  for (let rang = 0; rang < Math.min(x.length, y.length); rang += 1) {
+    const ecart = x[rang].codePointAt(0) - y[rang].codePointAt(0);
+    if (ecart !== 0) return ecart;
+  }
+  return x.length - y.length;
+}
+
+/**
+ * Photographie une page du PDF de la planche (§ 19.6) : tramerPdf la lit
+ * d'abord sans rien écrire, conditions(lue) affirme ce qu'elle montre, puis,
+ * en écriture, la trame en PNG sous le dossier d'attente et dépose l'entrée ;
+ * en vérification, compare l'entrée au manifeste. L'entrée porte la source
+ * pdf, la taille de la page à 96 ppp pour cadre, la couche de texte de la
+ * page pour texte, aucun style — le PDF n'a pas de thème d'écran — et le
+ * SHA-256 des octets pour pdf.
+ *
+ * @param {Uint8Array} octets  le PDF produit
+ * @param {{page: number, fichier: string}} quoi
+ * @param {(lue: Object) => void} conditions
+ */
+async function photographierPdf(octets, { page, fichier }, conditions) {
+  const { captures } = await commands.declarationsCaptures();
+  const declaree = captures.find((capture) => capture.fichier === fichier);
+  expect(declaree, `${fichier} déclarée`).toMatchObject({ source: 'pdf' });
+  const octetsB64 = enBase64(octets);
+  const lu = await commands.tramerPdf({ octetsB64, pages: [{ page, fichier }], ecrire: false });
+  expect(lu.pdf).toBe(await empreinte(octets));
+  const [lue] = lu.pages;
+  conditions(lue);
+  const racineNeutre = etat().racine.chemin;
+  expect(await commands.cheminsHorsRacine({ texte: lue.textes, racine: racineNeutre }), fichier).toEqual([]);
+  const entree = {
+    fichier,
+    etape: declaree.etape,
+    source: 'pdf',
+    versionReelle: VERSION.affichee,
+    graine: GRAINE,
+    cadre: lue.cadre,
+    facteurEchelle: 1,
+    mode: lu.mode,
+    theme: 'clair',
+    instant: m.horloge.horodatage(),
+    texte: lue.textes,
+    styles: { clair: [], sombre: [] },
+    etat: await empreinteEtat(m),
+    pdf: lu.pdf,
+  };
+  if (modeFourni() === 'ecrire') {
+    const tramee = await commands.tramerPdf({ octetsB64, pages: [{ page, fichier }], ecrire: true });
+    expect(tramee.pdf).toBe(lu.pdf);
+    await commands.deposerCapture({ fichier, entree, chemin: tramee.pages[0].chemin });
+  } else {
+    const { ecarts } = await commands.comparerCapture({ fichier, entree });
+    expect(ecarts, `capture ${fichier} : écart au manifeste`).toEqual([]);
+  }
+  capturesPdf.add(fichier);
 }
 
 // --- Le parcours (§ 2.1, § 19.3) ------------------------------------------------------
@@ -1318,9 +1444,95 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await images(2);
   });
 
-  // Un échec de 22 ou de 23 laisse l'aperçu ouvert, la proposition montrée
-  // et la fenêtre défilée : l'état est rendu ici, pour que les épreuves
-  // suivantes jugent leurs propres gardes et non ce reste.
+  // La planche du retenu, produite par la section Badges sur le papier que
+  // 22 a choisi, puis tramée sous node (§ 19.6) : la feuille de contrôle,
+  // puis la première planche. Produire n'écrit que le PDF ; deux
+  // productions sous l'horloge pilotée donnent les mêmes octets, que
+  // l'empreinte du manifeste suit.
+  test('24 la planche du retenu par la section Badges : seul le PDF s’écrit, deux productions identiques ; la feuille de contrôle', async () => {
+    expect(charge().evenement.etat).toBe('retenu');
+    expect(etat().papier).toBe('A4');
+    const avant = fichiers();
+    let rang = m.trace.length;
+    await ouvrirSection('badges');
+    await cliquer('[data-section="badges"] [data-commande="produirePlanche"]');
+    const affiche = await attendre('la planche produite', () => dans('[data-section="badges"] [data-chemin-planche]'), IMAGES_PLANCHE);
+    const ecrits = cheminsEcrits(rang);
+    expect(ecrits).toHaveLength(1);
+    const [nom] = ecrits;
+    expect(nom.startsWith(`${base()}.badges_A4_feuille_`), nom).toBe(true);
+    expect(nom.endsWith('.pdf'), nom).toBe(true);
+    const { separateur } = await m.fs.emplacements();
+    expect(texteDe(affiche)).toBe(`${etat().racine.chemin}${separateur}${nom}`);
+    const premiere = m.fs.octets('documents', nom);
+    expect(new TextDecoder().decode(premiere.slice(0, 5))).toBe('%PDF-');
+
+    // Une seconde production, l'horloge avancée : le même fichier, les
+    // mêmes octets. L'avance échoit aussi l'écriture différée du cadrage
+    // (reglages_locaux.json), que le plan a laissée en attente : elle passe
+    // avant que la trace de la seconde production ne commence.
+    m.horloge.avancer(ECART_PRODUCTIONS_MS);
+    await images(4);
+    rang = m.trace.length;
+    await cliquer('[data-section="badges"] [data-commande="produirePlanche"]');
+    await attendre(
+      'la seconde planche',
+      () => cheminsEcrits(rang).length > 0 && dans('[data-section="badges"] [data-chemin-planche]'),
+      IMAGES_PLANCHE,
+    );
+    expect(cheminsEcrits(rang)).toEqual([nom]);
+    const seconde = m.fs.octets('documents', nom);
+    expect(await empreinte(seconde)).toBe(await empreinte(premiere));
+    await rienEcrit(avant, 'la production de la planche');
+    memoire.planche = seconde;
+
+    // La feuille de contrôle : la règle de 100 mm, les comptes de la
+    // soirée, la marque de provenance à la place de la version, aucun
+    // BROUILLON sur le retenu.
+    const participants = charge().participants.length;
+    const exclus = charge().participants.filter(({ exclu }) => exclu).length;
+    const produits = participants - exclus;
+    const version = versionVisible('documentation', VERSION.affichee, libelle);
+    await photographierPdf(seconde, PAGE_CONTROLE, (lue) => {
+      const texte = texteDePage(lue);
+      expect(axesDe(lue).longueurs).toContain(100);
+      expect(texte).toContain(plat(libelle('planche.controle.comptes', { produits, participants, exclus })));
+      expect(texte).toContain(plat(libelle('planche.controle.planches', { planches: Math.ceil(produits / 4) })));
+      expect(texte).toContain(plat(libelle('planche.controle.version', { version })));
+      expect(texte).not.toContain(VERSION.affichee);
+      expect(texte).not.toContain(libelle('planche.brouillon'));
+    });
+  });
+
+  test('25 la première planche : quatre A6, ses trois filets de coupe, les quatre premiers noms dans l’ordre alphabétique', async () => {
+    expect(memoire.planche, 'la planche de 24').toBeInstanceOf(Uint8Array);
+    const presents = charge().participants.filter(({ exclu }) => !exclu);
+    expect(presents.length).toBeGreaterThanOrEqual(4);
+    // L'ordre alphabétique de la planche : le nom, puis le prénom, leurs
+    // clés normalisées comparées par points de code, puis l'identifiant.
+    const cle = (texte) => cleNormalisee(texte ?? '');
+    const premiers = [...presents]
+      .sort((a, b) => parPointsDeCode(cle(a.nom), cle(b.nom)) || parPointsDeCode(cle(a.prenom), cle(b.prenom)) || a.id - b.id)
+      .slice(0, 4)
+      .map((personne) => nomAffiche(personne).normalize('NFC'));
+    await photographierPdf(memoire.planche, PAGE_PLANCHE, (lue) => {
+      // A4, planche pleine : la coupe verticale au milieu, les deux
+      // horizontales sous chaque rangée de badges (§ 11.6).
+      const { x, y } = axesDe(lue);
+      expect(x).toEqual([105]);
+      expect(y).toEqual([148, 296]);
+      const texte = texteDePage(lue);
+      for (const nomBadge of premiers) expect(texte, nomBadge).toContain(plat(nomBadge));
+      expect(texte).not.toContain(libelle('planche.brouillon'));
+    });
+    // Le parcours reprend sur le plan, comme 23 l'a laissé.
+    await ouvrirSection('plan');
+  });
+
+  // Un échec de 22 à 25 laisse l'aperçu ouvert, la proposition montrée, la
+  // section Badges ouverte ou la fenêtre défilée : l'état est rendu ici,
+  // pour que les épreuves suivantes jugent leurs propres gardes et non ce
+  // reste.
   afterAll(async () => {
     if (dans('[data-ecran="apercu"] [data-commande="fermerApercu"]') !== null) {
       await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
@@ -1330,6 +1542,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       await cliquer('[data-commande="quitterProposition"]');
       await attendre('le retenu montré', () => m.ui.etat().proposition === null);
     }
+    if (dans('[data-section="plan"]') === null) await ouvrirSection('plan');
     window.scrollTo(0, 0);
   });
 });
@@ -1767,6 +1980,6 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
 describe('les captures d’écran du parcours (§ 19.5, § 19.7)', () => {
   test('chaque capture déclarée photographiée : publiées d’un bloc en écriture, conformes au manifeste en vérification', async () => {
     const { declarees } = await cloreCaptures({ echecs: epreuvesEnEchec, racineNeutre: m?.seance.etat().racine?.chemin ?? null });
-    expect([...capturesPrises()].sort()).toEqual([...declarees].sort());
+    expect([...capturesPrises(), ...capturesPdf].sort()).toEqual([...declarees].sort());
   });
 });

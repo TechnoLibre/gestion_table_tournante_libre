@@ -20,9 +20,10 @@
 //             captures d'écran (test/navigateur/commandes_documentation.js)
 //             y sont déclarées, et le mode des captures, que GTT_CAPTURES
 //             choisit — verifier par défaut, ecrire sous make captures —,
-//             arrive à la page par provide (§ 19.5). La commande
-//             d'impression (test/navigateur/commandes_impression.js), qui
-//             imprime le document d'une épreuve en PDF par le moteur de
+//             arrive à la page par provide (§ 19.5). Parmi elles, tramerPdf
+//             trame sous node les pages du PDF de la planche (§ 19.6). La
+//             commande d'impression (test/navigateur/commandes_impression.js),
+//             qui imprime le document d'une épreuve en PDF par le moteur de
 //             Chromium (§ 11.7), y est déclarée aussi.
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';

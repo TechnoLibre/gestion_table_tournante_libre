@@ -80,7 +80,8 @@ export const REPORTEES = Object.freeze([
 
 // Captures déclarées dans CAPTURES et pas encore photographiées : la
 // publication et le contrôle d'ordre les admettent absentes du manifeste.
-export const A_VENIR = Object.freeze(['24-badges-controle', '25-badges-planche']);
+// Vide : le parcours photographie chaque capture déclarée.
+export const A_VENIR = Object.freeze([]);
 
 // --- Forme canonique et empreintes ---------------------------------------------
 
