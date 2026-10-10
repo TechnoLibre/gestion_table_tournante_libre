@@ -71,6 +71,32 @@ describe('releve : verifierReleve (§ 19.10, § 14.2)', () => {
     assert.deepEqual(verifierReleve({ ...minimal, configuration: inconnue }), []);
   });
 
+  test('la configuration est la liste fermée du contrat : ni le système ni le modèle du processeur ne s’y écrivent (contrainte 27)', () => {
+    for (const champ of ['systeme', 'processeur']) {
+      const r = releve();
+      r.configuration[champ] = 'Exemple';
+      const fautes = verifierReleve(r);
+      assert.deepEqual(chemins(fautes), [`configuration.${champ}`], champ);
+      assert.match(
+        fautes[0].faute,
+        /hors de la configuration admise : cadre, facteurEchelle, navigateur, node, processeursLogiques, ralentissementCpu, police$/,
+      );
+    }
+  });
+
+  test('le ralentissement propre à une mesure : un nombre ≥ 1 ou null, comme celui de la configuration', () => {
+    const r = releve();
+    r.mesures[0].ralentissementCpu = 1;
+    r.mesures[1].ralentissementCpu = null;
+    r.mesures[2].ralentissementCpu = 4;
+    assert.deepEqual(verifierReleve(r), []);
+    for (const fautif of [0.5, '4', Number.NaN]) {
+      const autre = releve();
+      autre.mesures[1].ralentissementCpu = fautif;
+      assert.deepEqual(verifierReleve(autre), [{ chemin: 'mesures[1].ralentissementCpu', faute: 'nombre ≥ 1 ou null attendu' }], String(fautif));
+    }
+  });
+
   test('un relevé sans mesure se refuse : un relevé vide ne prouve rien', () => {
     const fautes = verifierReleve({ ...releve(), mesures: [] });
     assert.deepEqual(chemins(fautes), ['mesures']);
@@ -98,22 +124,43 @@ describe('releve : verifierReleve (§ 19.10, § 14.2)', () => {
     for (const { faute } of fautes) assert.match(faute, /chemin de compte/);
   });
 
+  // Chaque branche du chemin de compte, et la casse qu'un système de
+  // fichiers insensible à la casse admet. Les chemins sont inventés.
+  for (const chemin of [
+    '/root/.cache/navigateurs/chromium/chrome',
+    'lancé sous /root',
+    '/HOME/exemple/banc',
+    '/users/exemple/banc',
+    'c:\\users\\exemple\\banc',
+    'D:/Documents and Settings/Exemple/banc',
+    'c:\\documents and settings\\exemple',
+  ]) {
+    test(`un chemin de compte écrit ${chemin} se refuse`, () => {
+      const r = releve();
+      r.mesures[0].critere = chemin;
+      const fautes = verifierReleve(r);
+      assert.deepEqual(chemins(fautes), ['mesures[0].critere']);
+      assert.match(fautes[0].faute, /chemin de compte/);
+    });
+  }
+
   test('les chemins voisins hors des comptes passent', () => {
     const r = releve();
     r.configuration.navigateur = '/opt/homebrew/chromium/chrome';
     r.configuration.police = '/usr/share/fonts/noto/NotoSans-Regular.ttf';
     r.mesures[0].critere = 'C:\\Program Files\\Chromium : liste dans la hauteur du plan';
+    r.mesures[1].critere = '/rootfs/usr/lib/chromium, /root-exemple et /homebrew';
     assert.deepEqual(verifierReleve(r), []);
   });
 
   test('un champ hote se refuse, dans la configuration, au sommet et dans une mesure ; tout champ hors de la configuration admise aussi', () => {
     const r = releve();
     r.configuration.hote = 'poste-exemple';
-    r.configuration.systeme = 'linux';
+    r.configuration.disque = 'ssd';
     r.hote = 'poste-exemple';
     r.mesures[1].utilisateur = 'exemple';
     const fautes = verifierReleve(r);
-    assert.deepEqual(chemins(fautes), ['configuration.systeme', 'configuration.hote', 'hote', 'mesures[1].utilisateur']);
+    assert.deepEqual(chemins(fautes), ['configuration.disque', 'configuration.hote', 'hote', 'mesures[1].utilisateur']);
     assert.match(fautes[0].faute, /hors de la configuration admise/);
     assert.match(fautes[1].faute, /ne nomme pas sa machine/);
     assert.match(fautes[2].faute, /ne nomme pas sa machine/);
@@ -154,6 +201,17 @@ describe('releve : verifierReleve (§ 19.10, § 14.2)', () => {
     'horodatage',
     'timestamp',
     'instant',
+    'nomHôte',
+    'HÔTE',
+    'machineName',
+    'utilisateurCourant',
+    'currentUser',
+    'HOSTName',
+    'PCUser',
+    'releveDate',
+    'nomCompte',
+    'nomDuPoste',
+    'instant_prise',
   ]) {
     test(`un champ ${cle} se refuse dans une mesure, ouverte par ailleurs`, () => {
       const r = releve();
@@ -166,7 +224,10 @@ describe('releve : verifierReleve (§ 19.10, § 14.2)', () => {
 
   test('les champs voisins qui ne nomment ni hôte, ni utilisateur, ni instant passent', () => {
     const r = releve();
-    Object.assign(r.mesures[2].courbe[0], { compteur: 3, posterieur: true, update: 1, mandat: 'aucun' });
+    Object.assign(r.mesures[2].courbe[0], { compteur: 3, posterieur: true, update: 1, mandat: 'aucun', instantane: 1 });
+    // userAgent nomme le navigateur, pas une personne : « user » n'y est
+    // pas un mot seul.
+    r.mesures[2].courbe[1].userAgent = 'Mozilla/5.0 (X11; Linux x86_64) Chromium/140.0';
     r.plafondAPriori[0].postes = 2;
     assert.deepEqual(verifierReleve(r), []);
   });
@@ -299,6 +360,18 @@ describe('releve : accordRegistre (§ 19.10, § 14.1)', () => {
     ]);
   });
 
+  test('la configuration citée est celle de la mesure : son ralentissement propre l’emporte sur celui du relevé', () => {
+    const r = releve();
+    r.mesures[0].ralentissementCpu = 1;
+    const aUn = resumeConfiguration({ ...configuration(), ralentissementCpu: 1 });
+    const aQuatre = resumeConfiguration(configuration());
+    const citant = (resume) => avec('SEUIL_SIEGES_LISIBLES', { statut: 'mesuree', valeur: 18, configuration: `banc de mesure, ${resume}` });
+    assert.deepEqual(accordRegistre(citant(aUn), r), []);
+    assert.deepEqual(accordRegistre(citant(aQuatre), r), [{ nom: 'SEUIL_SIEGES_LISIBLES', faute: 'configuration' }]);
+    const tolerance = avec('TOLERANCE_CHAINE_TEMOIN', { statut: 'mesuree', valeur: 0.02, configuration: aQuatre });
+    assert.deepEqual(accordRegistre(tolerance, r), []);
+  });
+
   test('ni une constante défaut de travail, ni une constante mesurée hors du banc ne produisent de faute ; les fautes suivent le registre', () => {
     const r = releve();
     assert.deepEqual(accordRegistre(avec('SEUIL_SIEGES_LISIBLES', { valeur: 12 }), r), []);
@@ -337,6 +410,14 @@ describe('releve : resumeConfiguration', () => {
     const { police, cadre, ...reste } = configuration();
     assert.equal(resumeConfiguration({ police, ...reste, cadre }), resumeConfiguration(configuration()));
     assert.throws(() => resumeConfiguration(null), TypeError);
+  });
+
+  test('une configuration sans cadre, ou au cadre mal formé, se refuse en nommant le cadre', () => {
+    const { cadre, ...sansCadre } = configuration();
+    for (const autre of [sansCadre, { ...configuration(), cadre: null }, { ...configuration(), cadre: { largeur: 1366 } }]) {
+      assert.throws(() => resumeConfiguration(autre), { name: 'TypeError', message: /cadre/ });
+      assert.throws(() => tableauConstantes(registre(), { ...releve(), configuration: autre }), { name: 'TypeError', message: /cadre/ });
+    }
   });
 });
 
@@ -395,6 +476,18 @@ describe('releve : tableauConstantes (§ 19.8, § 19.10)', () => {
       assert.equal(lignes[i][7], c.proprietaire === 'banc' ? resume : c.configuration, c.nom);
       assert.ok(lignes[i][7].length > 0, c.nom);
     });
+  });
+
+  test('une mesure qui porte son ralentissement le fait citer à sa ligne : à ×1, « processeur non ralenti » sous une configuration à ×4', () => {
+    const r = releve();
+    r.mesures[0].ralentissementCpu = 1;
+    const lignes = tableauConstantes(liste, r).split('\n').slice(2).map(cellules);
+    const configurationDe = (nom) => lignes.find((l) => l[0] === `\`${nom}\``)[7];
+    assert.equal(configurationDe('SEUIL_SIEGES_LISIBLES'), resumeConfiguration({ ...configuration(), ralentissementCpu: 1 }));
+    assert.match(configurationDe('SEUIL_SIEGES_LISIBLES'), /, processeur non ralenti, /);
+    assert.doesNotMatch(configurationDe('SEUIL_SIEGES_LISIBLES'), /×4/);
+    assert.equal(configurationDe('TOLERANCE_CHAINE_TEMOIN'), resumeConfiguration(configuration()));
+    assert.equal(configurationDe('RALENTISSEMENT_PLEINE_CHARGE'), resumeConfiguration(configuration()));
   });
 
   test('une barre verticale ou un saut de ligne dans un texte ne cassent pas le tableau ; un registre vide se refuse', () => {

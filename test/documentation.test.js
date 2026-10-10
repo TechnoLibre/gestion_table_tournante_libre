@@ -26,7 +26,17 @@ import { TABLES_INTERFACE } from '../src/interface/libelles.js';
 import { diagnostiquer } from '../src/moteur/diagnostic.js';
 import { analyser, configurationDepuisCharge } from '../src/stockage/document.js';
 import { VERSION } from '../src/version.genere.js';
-import { PORTEURS, PRODUCTEURS, RACINE, lireRegions, verifierArbre } from '../scripts/documentation.js';
+import { CONSTANTES } from '../src/geometrie/constantes.js';
+import { tableauConstantes } from '../scripts/banc/releve.js';
+import {
+  PORTEURS,
+  PRODUCTEURS,
+  RACINE,
+  engendrerArbre,
+  lireRegions,
+  tableauRegistre,
+  verifierArbre,
+} from '../scripts/documentation.js';
 import {
   A_VENIR,
   CAPTURES,
@@ -259,6 +269,65 @@ describe('documentation : les régions engendrées des documents livrés (§ 19.
     const bilan = verifierArbre({ porteurs: [GUIDE_USAGE], lire: (chemin) => (chemin === GUIDE_USAGE ? corrige : lire(chemin)) });
     assert.deepEqual(bilan.fautes.map((f) => f.chemin), [GUIDE_USAGE]);
     assert.match(bilan.fautes[0].faute, /région « reglages » : diffère de ce que le producteur engendre/);
+  });
+});
+
+// --- La région des constantes et le relevé du banc (§ 19.8, § 19.10) ----------------
+
+describe('documentation : la région « constantes » lit le relevé du banc quand il existe (§ 19.10)', () => {
+  const RELEVE = 'scripts/banc/releve.json';
+  const PORTEUR = 'README.md';
+  const TEXTE = '# Essai\n\n<!-- engendre:debut constantes -->\n<!-- engendre:fin constantes -->\n';
+
+  // Un relevé inventé, d'une mesure du banc.
+  const releve = {
+    format: 1,
+    configuration: {
+      cadre: { largeur: 1366, hauteur: 700 },
+      facteurEchelle: 1,
+      navigateur: 'Chromium 140.0',
+      node: 'v26.10.0',
+      processeursLogiques: 8,
+      ralentissementCpu: 4,
+      police: 'Noto Sans',
+    },
+    mesures: [{ nom: 'SEUIL_SIEGES_LISIBLES', unite: 'places', valeurProposee: 17, critere: 'liste dans la hauteur du plan' }],
+  };
+
+  // Engendre le porteur d'essai sur un arbre en mémoire où le relevé vaut
+  // texteReleve, ou manque quand il vaut null ; rend le bilan et le texte
+  // écrit.
+  function engendrer(texteReleve) {
+    const ecrits = new Map();
+    const lire = (chemin) => {
+      if (chemin === PORTEUR) return TEXTE;
+      if (chemin === RELEVE && texteReleve !== null) return texteReleve;
+      throw Object.assign(new Error(`absent : ${chemin}`), { code: 'ENOENT' });
+    };
+    const bilan = engendrerArbre({ porteurs: [PORTEUR], lire, ecrire: (chemin, texte) => ecrits.set(chemin, texte) });
+    return { bilan, ecrit: ecrits.get(PORTEUR) };
+  }
+
+  const region = (texte) => lireRegions(texte)[0].contenu.trim();
+
+  test('sans relevé, la région est le tableau du registre seul', () => {
+    const { bilan, ecrit } = engendrer(null);
+    assert.equal(bilan.code, 0);
+    assert.equal(region(ecrit), tableauRegistre());
+  });
+
+  test('avec un relevé, la région est le tableau des constantes, la valeur proposée à côté de celle du registre', () => {
+    const { bilan, ecrit } = engendrer(JSON.stringify(releve));
+    assert.equal(bilan.code, 0);
+    assert.equal(region(ecrit), tableauConstantes(CONSTANTES, releve));
+    assert.match(region(ecrit), /\| `SEUIL_SIEGES_LISIBLES` \|.*\| 17 places \| cadre de 1 366 × 700 px/);
+  });
+
+  test('un relevé illisible fait échouer la production, en nommant son chemin, et rien ne s’écrit', () => {
+    const { bilan, ecrit } = engendrer('{ format: 1');
+    assert.equal(bilan.code, 1);
+    assert.equal(ecrit, undefined);
+    assert.match(bilan.fautes[0].faute, /scripts\/banc\/releve\.json : JSON illisible/);
   });
 });
 

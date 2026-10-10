@@ -8,8 +8,12 @@
 // fait citer à la configuration de l'entrée le résumé de celle du relevé.
 // accordRegistre refuse ensuite toute constante du banc mesurée que le relevé
 // ne soutient pas. Le relevé ne nomme pas sa machine : sa configuration est
-// une liste fermée de champs, et aucun texte n'y porte un chemin de compte
-// ni une date. Fonctions pures, sans lecture de fichier ni horloge.
+// une liste fermée de champs — cadre, facteur d'échelle, versions, nombre
+// de processeurs logiques, ralentissement, police —, et aucun texte n'y
+// porte un chemin de compte ni une date. Une mesure peut porter son propre
+// ralentissement, celui sous lequel elle s'est prise : c'est lui que cite
+// la configuration de sa constante. Fonctions pures, sans lecture de
+// fichier ni horloge.
 
 import { CONSTANTES } from '../../src/geometrie/constantes.js';
 
@@ -19,7 +23,7 @@ import { CONSTANTES } from '../../src/geometrie/constantes.js';
  *   navigateur: string|null, node: string|null, processeursLogiques: number|null,
  *   ralentissementCpu: number|null, police: string|null}} ConfigurationReleve
  * @typedef {{nom: string, unite: string, valeurProposee: number|null, critere: string,
- *   courbe?: object[], verdict?: 'tenu'|'nonTenu'}} MesureReleve
+ *   courbe?: object[], verdict?: 'tenu'|'nonTenu', ralentissementCpu?: number|null}} MesureReleve
  * @typedef {{format: 1, configuration: ConfigurationReleve, mesures: MesureReleve[],
  *   plafondAPriori?: object[], parallele?: object[]}} Releve
  */
@@ -38,23 +42,41 @@ const CHAMPS_CONFIGURATION = [
 ];
 
 // Les noms de champ qui désignent l'hôte, son utilisateur ou un instant,
-// refusés à toute profondeur du relevé. Un nom se lit en minuscules, sans
-// tiret bas ni tiret : « Hostname », « host_name » et « nom-hote » se
-// valent. Il est identifiant quand il contient un mot de MOT_IDENTIFIANT
-// (nomMachine, computerName), commence par un préfixe de
-// PREFIXE_IDENTIFIANT (dateReleve, userName), ou vaut un nom de
-// NOM_IDENTIFIANT. Ces derniers ne se lisent qu'entiers, leur début
-// commençant des mots ordinaires : compteur, postérieur.
+// refusés à toute profondeur du relevé. Un nom se coupe en mots — au tiret
+// bas, au tiret, à l'espace et à chaque majuscule qui suit une minuscule ou
+// un chiffre, ou qui ouvre un mot après un sigle (« HOSTName » : host,
+// name) —, puis se lit sans accent et en minuscules : « nomHôte »,
+// « nom_hote » et « NOM-HOTE » se valent. Il est identifiant quand le nom
+// entier, mots recollés, contient un mot de MOT_IDENTIFIANT (hostname,
+// nomMachine), quand l'un de ses mots commence par un préfixe de
+// PREFIXE_IDENTIFIANT (userName, currentUser, releveDate), ou quand l'un de
+// ses mots vaut un nom de NOM_IDENTIFIANT (nomDuPoste, nomCompte). Ces
+// derniers ne se lisent qu'entiers, leur début commençant des mots
+// ordinaires : compteur, postérieur, instantané. NOM_ADMIS lève le soupçon
+// sur un nom entier qui ne désigne personne : userAgent nomme le navigateur.
 const MOT_IDENTIFIANT = ['host', 'hote', 'machine', 'computer', 'utilisateur', 'horodatage', 'timestamp'];
 const PREFIXE_IDENTIFIANT = ['user', 'date', 'login'];
 const NOM_IDENTIFIANT = new Set(['poste', 'compte', 'instant']);
+const NOM_ADMIS = new Set(['useragent']);
+
+// Les mots d'un nom de champ, sans accent et en minuscules.
+const motsDe = (cle) =>
+  cle
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/([\p{Ll}\d])(\p{Lu})/gu, '$1 $2')
+    .replace(/(\p{Lu})(\p{Lu}\p{Ll})/gu, '$1 $2')
+    .toLowerCase()
+    .split(/[\s_-]+/)
+    .filter((mot) => mot !== '');
 
 function estChampIdentifiant(cle) {
-  const nom = cle.toLowerCase().replace(/[_-]/g, '');
+  const mots = motsDe(cle);
+  const nom = mots.join('');
+  if (NOM_ADMIS.has(nom)) return false;
   return (
     MOT_IDENTIFIANT.some((mot) => nom.includes(mot)) ||
-    PREFIXE_IDENTIFIANT.some((prefixe) => nom.startsWith(prefixe)) ||
-    NOM_IDENTIFIANT.has(nom)
+    mots.some((mot) => PREFIXE_IDENTIFIANT.some((prefixe) => mot.startsWith(prefixe)) || NOM_IDENTIFIANT.has(mot))
   );
 }
 
@@ -84,6 +106,10 @@ const estEntierPositif = (valeur) => Number.isInteger(valeur) && valeur > 0;
 // dépend pas de l'ordre d'écriture du fichier.
 const clesTriees = (objet) => Object.keys(objet).sort();
 
+// Un ralentissement du processeur : un facteur ≥ 1, ou null pour inconnu.
+const estRalentissement = (v) => v === null || (Number.isFinite(v) && v >= 1);
+const FAUTE_RALENTISSEMENT = 'nombre ≥ 1 ou null attendu';
+
 // Chaque champ de la configuration, avec ce qu'il admet et la faute qu'il
 // porte sinon. null vaut « inconnu » pour les champs qui le permettent : un
 // relevé qui ne connaît pas encore son navigateur reste vérifiable.
@@ -96,7 +122,7 @@ const REGLES_CONFIGURATION = {
   navigateur: [(v) => v === null || estTexte(v), 'texte non vide ou null attendu'],
   node: [(v) => v === null || estTexte(v), 'texte non vide ou null attendu'],
   processeursLogiques: [(v) => v === null || estEntierPositif(v), 'entier positif ou null attendu'],
-  ralentissementCpu: [(v) => v === null || (Number.isFinite(v) && v >= 1), 'nombre ≥ 1 ou null attendu'],
+  ralentissementCpu: [estRalentissement, FAUTE_RALENTISSEMENT],
   police: [(v) => v === null || estTexte(v), 'texte non vide ou null attendu'],
 };
 
@@ -152,6 +178,9 @@ function fautesMesure(mesure, rang, vus, constantes) {
   if (Object.hasOwn(mesure, 'courbe') && !Array.isArray(mesure.courbe)) faute('courbe', 'liste attendue');
   if (Object.hasOwn(mesure, 'verdict') && mesure.verdict !== 'tenu' && mesure.verdict !== 'nonTenu') {
     faute('verdict', '« tenu » ou « nonTenu » attendu');
+  }
+  if (Object.hasOwn(mesure, 'ralentissementCpu') && !estRalentissement(mesure.ralentissementCpu)) {
+    faute('ralentissementCpu', FAUTE_RALENTISSEMENT);
   }
   return fautes;
 }
@@ -211,9 +240,13 @@ export function verifierReleve(releve, constantes = CONSTANTES) {
   return fautesIdentifiantes(releve, '', fautes);
 }
 
-// Un nombre écrit à la française : la virgule décimale, les milliers
-// séparés par une espace, comme le registre les écrit (« 1 366 »).
-function nombre(valeur) {
+/**
+ * Un nombre écrit à la française : la virgule décimale, les milliers
+ * séparés par une espace, comme le registre les écrit (« 1 366 »).
+ * @param {number} valeur
+ * @returns {string}
+ */
+export function nombre(valeur) {
   const [entiere, decimale] = String(valeur).split('.');
   const groupee = entiere.replace(/\B(?=(\d{3})+$)/g, ' ');
   return decimale === undefined ? groupee : `${groupee},${decimale}`;
@@ -226,11 +259,16 @@ function nombre(valeur) {
  * ordre quel que soit celui des champs. Un champ null se dit inconnu.
  * @param {ConfigurationReleve} configuration
  * @returns {string}
- * @throws {TypeError} sur ce qui n'est pas un objet
+ * @throws {TypeError} sur ce qui n'est pas un objet, ou dont le cadre n'est
+ *   pas un objet aux largeur et hauteur numériques
  */
 export function resumeConfiguration(configuration) {
   if (!estObjet(configuration)) throw new TypeError('configuration de relevé : objet attendu');
-  const { cadre, facteurEchelle, navigateur, node, processeursLogiques: p, ralentissementCpu: r, police } = configuration;
+  const { cadre, facteurEchelle, navigateur, node } = configuration;
+  const { processeursLogiques: p, ralentissementCpu: r, police } = configuration;
+  if (!estObjet(cadre) || !Number.isFinite(cadre.largeur) || !Number.isFinite(cadre.hauteur)) {
+    throw new TypeError('configuration de relevé : cadre absent ou sans largeur et hauteur numériques');
+  }
   const processeurs =
     p === null ? 'processeurs logiques inconnus' : `${nombre(p)} ${p === 1 ? 'processeur logique' : 'processeurs logiques'}`;
   let ralentissement = `processeur ralenti ×${nombre(r)}`;
@@ -250,20 +288,32 @@ export function resumeConfiguration(configuration) {
 // La mesure que le relevé porte pour une constante, undefined sinon.
 const mesureDe = (releve, nom) => (Array.isArray(releve.mesures) ? releve.mesures : []).find((m) => m?.nom === nom);
 
+// Le résumé que cite une constante du banc : celui de la configuration du
+// relevé, au ralentissement de sa mesure quand elle en porte un — une
+// mesure prise sans ralentissement sous un relevé dont la machine de
+// référence est ralentie se dit « non ralenti ». Sans mesure, ou sans
+// ralentissement propre, celui de la configuration.
+function resumeDeMesure(releve, mesure) {
+  if (mesure === undefined || !Object.hasOwn(mesure, 'ralentissementCpu')) return resumeConfiguration(releve.configuration);
+  return resumeConfiguration({ ...releve.configuration, ralentissementCpu: mesure.ralentissementCpu });
+}
+
 /**
  * L'accord du registre avec un relevé : pour chaque constante du banc
  * déclarée mesurée, dans l'ordre du registre, « absente » quand le relevé ne
  * la porte pas ou n'en propose aucune valeur ; sinon « valeur » quand le
  * registre porte une autre valeur que la proposée, puis « configuration »
  * quand la configuration de l'entrée ne cite pas le résumé de celle du
- * relevé. Une constante défaut de travail, ou d'un autre propriétaire, ne
+ * relevé, au ralentissement propre de la mesure quand elle en porte un. Une constante défaut de travail, ou d'un autre propriétaire, ne
  * produit rien : le relevé ne la soutient ni ne la contredit.
  * @param {ReadonlyArray<import('../../src/geometrie/constantes.js').Constante>} constantes
  * @param {Releve} releve
  * @returns {Array<{nom: string, faute: 'absente'|'valeur'|'configuration'}>}
  */
 export function accordRegistre(constantes, releve) {
-  const resume = resumeConfiguration(releve.configuration);
+  // Une configuration que le résumé refuse lève d'emblée, qu'une constante
+  // la cite ou non.
+  resumeConfiguration(releve.configuration);
   const fautes = [];
   for (const { nom, valeur, configuration, proprietaire, statut } of constantes) {
     if (proprietaire !== 'banc' || statut !== 'mesuree') continue;
@@ -273,7 +323,7 @@ export function accordRegistre(constantes, releve) {
       continue;
     }
     if (mesure.valeurProposee !== valeur) fautes.push({ nom, faute: 'valeur' });
-    if (!configuration.includes(resume)) fautes.push({ nom, faute: 'configuration' });
+    if (!configuration.includes(resumeDeMesure(releve, mesure))) fautes.push({ nom, faute: 'configuration' });
   }
   return fautes;
 }
@@ -315,8 +365,9 @@ function valeurProposee(constante, releve) {
  * constante du registre, dans son ordre — ce qu'elle mesure, sa valeur
  * (« relevée à l'exécution » sans valeur), son statut en toutes lettres, son
  * propriétaire, son protocole, la valeur que le relevé propose, et la
- * configuration : le résumé de celle du relevé pour une constante du banc,
- * celle du registre pour les autres. Lignes jointes par un saut de ligne,
+ * configuration : pour une constante du banc, le résumé de celle du relevé
+ * au ralentissement propre de sa mesure quand elle en porte un ; celle du
+ * registre pour les autres. Lignes jointes par un saut de ligne,
  * sans saut final.
  * @param {ReadonlyArray<import('../../src/geometrie/constantes.js').Constante>} constantes
  * @param {Releve} releve
@@ -325,7 +376,9 @@ function valeurProposee(constante, releve) {
  */
 export function tableauConstantes(constantes, releve) {
   if (constantes.length === 0) throw new RangeError('tableau des constantes : registre vide');
-  const resume = resumeConfiguration(releve.configuration);
+  // Une configuration que le résumé refuse lève d'emblée, qu'une constante
+  // la cite ou non.
+  resumeConfiguration(releve.configuration);
   const lignes = constantes.map((c) =>
     ligne([
       `\`${c.nom}\``,
@@ -335,7 +388,7 @@ export function tableauConstantes(constantes, releve) {
       PROPRIETAIRES[c.proprietaire],
       c.protocole,
       valeurProposee(c, releve),
-      c.proprietaire === 'banc' ? resume : c.configuration,
+      c.proprietaire === 'banc' ? resumeDeMesure(releve, mesureDe(releve, c.nom)) : c.configuration,
     ]),
   );
   return [ligne(ENTETE), ligne(ENTETE.map(() => '---')), ...lignes].join('\n');

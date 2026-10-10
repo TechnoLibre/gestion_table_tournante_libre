@@ -13,7 +13,8 @@
 // définition des réglages, la table des colonnes du CSV, le registre des
 // commandes et leurs libellés figés, la table des raccourcis, les
 // démonstrations livrées passées au diagnostic, les styles relevés au
-// manifeste des captures, le registre des constantes. Aucune valeur de ces
+// manifeste des captures, le registre des constantes, avec le relevé du
+// banc quand il existe (scripts/banc/releve.json). Aucune valeur de ces
 // tableaux ne s'écrit ici : elle se lit, ou se compose par la traduction.
 // Seul s'écrit ici ce qui appartient au document : les en-têtes de colonnes,
 // le nom d'un contexte, d'une touche, d'un statut ou de l'état d'une
@@ -62,6 +63,7 @@ import { diagnostiquer } from '../src/moteur/diagnostic.js';
 import { analyser, configurationDepuisCharge } from '../src/stockage/document.js';
 import { VERSION } from '../src/version.genere.js';
 import { CHEMIN_MANIFESTE, ecartDeVersion } from './documentation/manifeste.js';
+import { tableauConstantes } from './banc/releve.js';
 
 /** @typedef {{nom: string, debut: number, fin: number, contenu: string}} Region
  *  debut et fin bornent le contenu dans le texte : texte.slice(debut, fin). */
@@ -570,9 +572,13 @@ export function tableauRegistre(constantes = CONSTANTES) {
 
 // --- Les producteurs --------------------------------------------------------------
 
+/** Le relevé du banc de mesure, relatif à la racine (§ 19.10). */
+export const CHEMIN_RELEVE = 'scripts/banc/releve.json';
+
 /**
- * @typedef {{manifeste: () => object|null}} Contexte
- *   manifeste : le manifeste des captures lu, null quand il manque
+ * @typedef {{manifeste: () => object|null, releve: () => object|null}} Contexte
+ *   manifeste : le manifeste des captures lu, null quand il manque ;
+ *   releve : le relevé du banc lu, null quand il manque
  */
 
 const producteur = (nom, produire) => Object.freeze({ nom, produire });
@@ -589,7 +595,10 @@ export const PRODUCTEURS = Object.freeze([
   producteur('raccourcis', () => tableauRaccourcis()),
   producteur('demonstrations', () => tableauDemonstrations()),
   producteur('contrastes', (contexte) => tableauContrastes(contexte.manifeste())),
-  producteur('constantes', () => tableauRegistre()),
+  producteur('constantes', (contexte) => {
+    const releve = contexte.releve();
+    return releve === null ? tableauRegistre() : tableauConstantes(CONSTANTES, releve);
+  }),
 ]);
 
 /**
@@ -616,29 +625,33 @@ const estAbsent = (erreur) => erreur?.code === 'ENOENT';
 // Le lecteur par défaut d'une racine : le texte UTF-8 d'un chemin relatif.
 const lecteurDe = (racine) => (chemin) => readFileSync(join(racine, chemin), 'utf8');
 
-// Le contexte d'un arbre : le manifeste, lu au premier besoin, une fois ;
-// null quand il manque. Un manifeste qui n'est pas du JSON lève.
-function contexteDe(lire) {
+// Le lecteur d'un fichier JSON de l'arbre, lu au premier besoin, une fois :
+// l'objet lu, ou null quand le fichier manque. Un texte qui n'est pas du
+// JSON lève en nommant le chemin.
+function lecteurJson(lire, chemin) {
   let lu;
-  return {
-    manifeste() {
-      if (lu !== undefined) return lu;
-      let texte;
-      try {
-        texte = lire(CHEMIN_MANIFESTE);
-      } catch (erreur) {
-        if (!estAbsent(erreur)) throw erreur;
-        lu = null;
-        return lu;
-      }
-      try {
-        lu = JSON.parse(texte);
-      } catch {
-        throw new Error(`${CHEMIN_MANIFESTE} : JSON illisible`);
-      }
+  return () => {
+    if (lu !== undefined) return lu;
+    let texte;
+    try {
+      texte = lire(chemin);
+    } catch (erreur) {
+      if (!estAbsent(erreur)) throw erreur;
+      lu = null;
       return lu;
-    },
+    }
+    try {
+      lu = JSON.parse(texte);
+    } catch {
+      throw new Error(`${chemin} : JSON illisible`);
+    }
+    return lu;
   };
+}
+
+// Le contexte d'un arbre : le manifeste des captures et le relevé du banc.
+function contexteDe(lire) {
+  return { manifeste: lecteurJson(lire, CHEMIN_MANIFESTE), releve: lecteurJson(lire, CHEMIN_RELEVE) };
 }
 
 // Une faute de région, au chemin de son porteur.
