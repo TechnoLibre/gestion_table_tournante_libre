@@ -5,7 +5,9 @@
 // § 11.4, § 7.4, § 15.5), sans DOM : l'ordre de la liste d'accueil par la clé
 // normalisée injectée, jamais localeCompare ; ce que chaque ligne dit de
 // chaque tour ; les feuilles par table, les tours en colonnes ou une feuille
-// par tour (Q6 c) ; le pied et le filigrane d'une feuille d'un seul tour.
+// par tour (Q6 c) ; le pied et le filigrane d'une feuille d'un seul tour ;
+// les groupes de tours de la feuille par table, leur taille tirée de la
+// part mesurée d'un tour, et leur resserrement sous une page seule.
 // Les noms d'épreuve sont inventés, hors du réservoir des démonstrations.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
@@ -19,9 +21,12 @@ import {
   etatsDesTours,
   feuilleDuTour,
   feuillesTables,
+  grouperTours,
   largeursColonnes,
   libellePlace,
   lignesAccueil,
+  resserrerGroupes,
+  toursParGroupe,
 } from './listes.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -326,5 +331,76 @@ describe('largeursColonnes : les colonnes d’une liste imprimée, en pour cent'
       assert.throws(() => largeursColonnes('accueil', 2, part), RangeError, String(part));
     }
     assert.throws(() => largeursColonnes('tables', 2, 10), RangeError);
+  });
+});
+
+describe('les groupes de tours de la feuille par table', () => {
+  // Une feuille de deux places et de tours tours, numérotés de 1 ; chaque
+  // cellule porte son tour et sa place.
+  const feuilleDeTours = (table, tours) => ({
+    table,
+    numero: table,
+    tours: Array.from({ length: tours }, (_, rang) => rang + 1),
+    lignes: [1, 2].map((place) => ({
+      place,
+      cellules: Array.from({ length: tours }, (_, rang) => ({ tour: rang + 1, occupant: place, nom: `n${place}`, titre: null })),
+    })),
+  });
+
+  test('toursParGroupe : autant de colonnes que la part de la place en laisse à chacune, entre 1 et les tours', () => {
+    assert.equal(toursParGroupe(22, 4), 4);
+    assert.equal(toursParGroupe(22, 10), 4);
+    assert.equal(toursParGroupe(88 / 6, 10), 6);
+    assert.equal(toursParGroupe(14.7, 10), 5);
+    assert.equal(toursParGroupe(89, 10), 1);
+    assert.equal(toursParGroupe(500, 3), 1);
+    assert.equal(toursParGroupe(1, 3), 3);
+    for (const part of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '10']) assert.throws(() => toursParGroupe(part, 3), RangeError, String(part));
+    for (const tours of [0, 1.5, Number.NaN]) assert.throws(() => toursParGroupe(10, tours), RangeError, String(tours));
+  });
+
+  test('grouperTours : des groupes consécutifs, de tailles égales à un près, les plus grands d’abord ; chaque cellule suit son tour', () => {
+    const feuilles = [feuilleDeTours(1, 10), feuilleDeTours(2, 7), feuilleDeTours(3, 4)];
+    const groupes = grouperTours(feuilles, [6, 3, 4]);
+    assert.deepEqual(
+      groupes.map(({ table, tours, source }) => [table, tours, source]),
+      [
+        [1, [1, 2, 3, 4, 5], 0],
+        [1, [6, 7, 8, 9, 10], 0],
+        [2, [1, 2, 3], 1],
+        [2, [4, 5], 1],
+        [2, [6, 7], 1],
+        [3, [1, 2, 3, 4], 2],
+      ],
+    );
+    for (const groupe of groupes) {
+      for (const { place, cellules } of groupe.lignes) {
+        assert.deepEqual(
+          cellules.map(({ tour }) => tour),
+          groupe.tours,
+          `table ${groupe.table}, place ${place}`,
+        );
+      }
+    }
+    assert.deepEqual(
+      grouperTours(feuilles, [1, 7, 9]).map(({ tours }) => tours.length),
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 7, 4],
+    );
+    assert.throws(() => grouperTours(feuilles, [1, 2]), RangeError, 'un compte autre');
+    assert.throws(() => grouperTours(feuilles, [1, 0, 2]), RangeError, 'une taille nulle');
+  });
+
+  test('resserrerGroupes : une page seule ramène sa feuille à la moitié de son plus grand groupe ; un groupe d’un tour reste ; rien de seul, null', () => {
+    const feuilles = [feuilleDeTours(1, 10), feuilleDeTours(2, 10)];
+    const parGroupe = [5, 5];
+    const groupes = grouperTours(feuilles, parGroupe);
+    const pages = groupes.map((_, feuille) => ({ feuille, seule: false }));
+    assert.equal(resserrerGroupes(parGroupe, groupes, pages), null);
+    const seule = pages.map((page) => (page.feuille === 3 ? { ...page, seule: true } : page));
+    assert.deepEqual(resserrerGroupes(parGroupe, groupes, seule), [5, 3]);
+    const unParGroupe = grouperTours(feuilles, [1, 5]);
+    const seuleDUnTour = unParGroupe.map((_, feuille) => ({ feuille, seule: feuille === 0 }));
+    assert.equal(resserrerGroupes([1, 5], unParGroupe, seuleDUnTour), null);
+    assert.deepEqual(resserrerGroupes([1, 5], unParGroupe, [...seuleDUnTour, { feuille: unParGroupe.length - 1, seule: true }]), [1, 3]);
   });
 });

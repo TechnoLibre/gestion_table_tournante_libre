@@ -219,3 +219,102 @@ export function largeursColonnes(vue, tours, partTour = null) {
   const noms = 100 - tours * tour;
   return [...fixes.map((part) => (part * noms) / somme), ...Array.from({ length: tours }, () => tour)];
 }
+
+// La part de la largeur que les colonnes de tour de la feuille par table
+// se partagent, en pour cent : ce que le numéro de la place laisse.
+const PART_TOURS_TABLES = 100 - COLONNES_FIXES.get('tables').reduce((a, b) => a + b, 0);
+
+/**
+ * Le nombre de colonnes de tour qu'une feuille par table garde côte à côte
+ * quand chacune doit prendre au moins part de la largeur de la liste — la
+ * part de son plus long mot (mesurerPlace) : le plus grand n de 1 à tours
+ * dont les n colonnes, à parts égales de ce que la place laisse
+ * (largeursColonnes), en reçoivent chacune au moins part. Un mot plus large
+ * que toute cette part donne 1 : il replie dans la plus large colonne
+ * possible.
+ *
+ * @param {number} part   en pour cent, finie, > 0
+ * @param {number} tours   le nombre de tours de la feuille, entier ≥ 1
+ * @returns {number}
+ * @throws {RangeError} une part ou un nombre de tours hors du domaine
+ */
+export function toursParGroupe(part, tours) {
+  if (typeof part !== 'number' || !Number.isFinite(part) || part <= 0) {
+    throw new RangeError(`toursParGroupe : part finie > 0 attendue, reçu ${String(part)}`);
+  }
+  if (!Number.isSafeInteger(tours) || tours < 1) throw new RangeError(`toursParGroupe : tours entier ≥ 1 attendu, reçu ${String(tours)}`);
+  return Math.max(1, Math.min(tours, Math.floor((PART_TOURS_TABLES + BRUIT) / part)));
+}
+
+/**
+ * Les feuilles par table, chacune scindée en groupes de tours consécutifs
+ * (§ 7.4) : la feuille de rang i en ⌈T / parGroupe[i]⌉ groupes, T ses tours,
+ * de tailles égales à un près, les plus grands d'abord — dix tours par six
+ * donnent deux groupes de cinq. Chaque groupe est une feuille à part
+ * entière : la table, son numéro, ses tours, et chaque place avec les
+ * cellules de ces tours seuls ; source est le rang de la feuille d'où il
+ * vient. Une feuille qui garde tous ses tours donne un seul groupe, égal à
+ * elle.
+ *
+ * @param {ReturnType<typeof feuillesTables>} feuilles
+ * @param {number[]} parGroupe   un par feuille, entiers ≥ 1
+ * @returns {Array<ReturnType<typeof feuillesTables>[number] & {source: number}>}
+ * @throws {RangeError} un compte qui n'est pas celui des feuilles ; une
+ *         taille de groupe hors du domaine
+ */
+export function grouperTours(feuilles, parGroupe) {
+  if (!Array.isArray(parGroupe) || parGroupe.length !== feuilles.length) {
+    throw new RangeError(`grouperTours : une taille de groupe par feuille attendue, ${feuilles.length} feuille(s)`);
+  }
+  return feuilles.flatMap((feuille, source) => {
+    const taille = parGroupe[source];
+    if (!Number.isSafeInteger(taille) || taille < 1) throw new RangeError(`grouperTours : taille ${String(taille)} pour la feuille ${source}`);
+    const total = feuille.tours.length;
+    const groupes = Math.max(1, Math.ceil(total / taille));
+    const petite = Math.floor(total / groupes);
+    const grandes = total % groupes;
+    let debut = 0;
+    return Array.from({ length: groupes }, (_, rang) => {
+      const fin = debut + petite + (rang < grandes ? 1 : 0);
+      const groupe = {
+        table: feuille.table,
+        numero: feuille.numero,
+        tours: feuille.tours.slice(debut, fin),
+        lignes: feuille.lignes.map(({ place, cellules }) => ({ place, cellules: cellules.slice(debut, fin) })),
+        source,
+      };
+      debut = fin;
+      return groupe;
+    });
+  });
+}
+
+/**
+ * Les tailles de groupe resserrées d'après la pagination (§ 7.4) : une
+ * feuille dont un groupe porte une page seule — une ligne plus haute que la
+ * page (paginer) — et dont un groupe porte plus d'un tour voit sa taille
+ * ramenée à la moitié, arrondie au-dessus, de son plus grand groupe : ses
+ * colonnes s'élargissent, ses lignes raccourcissent. null quand aucune
+ * taille ne change : les groupes sont ceux que l'on imprime.
+ *
+ * @param {number[]} parGroupe   la taille de chaque feuille
+ * @param {ReturnType<typeof grouperTours>} groupes   grouperTours(feuilles, parGroupe)
+ * @param {Array<{feuille: number, seule: boolean}>} pages   paginerFeuilles des groupes
+ * @returns {number[]|null}
+ */
+export function resserrerGroupes(parGroupe, groupes, pages) {
+  const suivants = [...parGroupe];
+  let change = false;
+  for (const { feuille, seule } of pages) {
+    if (!seule) continue;
+    const { source } = groupes[feuille];
+    const plusGrand = Math.max(...groupes.filter((groupe) => groupe.source === source).map(({ tours }) => tours.length));
+    if (plusGrand === 1) continue;
+    const resserre = Math.ceil(plusGrand / 2);
+    if (resserre < suivants[source]) {
+      suivants[source] = resserre;
+      change = true;
+    }
+  }
+  return change ? suivants : null;
+}

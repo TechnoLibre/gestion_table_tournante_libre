@@ -8,7 +8,8 @@
 // page, que l'application y monte, que la détermination du dossier de
 // travail retient le mode portable, qu'un travailleur de génération naît et
 // rend son issue dans la page chargée sous file://, que la police de
-// l'interface s'y charge, et que la sortie rend les verrous.
+// l'interface s'y charge, que l'aperçu s'y imprime une page par feuille, et
+// que la sortie rend les verrous.
 //
 //   node scripts/essai_demarrage.js
 //
@@ -23,7 +24,11 @@
 //     qui s'ouvre, revenir à la liste, puis charger la petite
 //     démonstration, qui s'ouvre ;
 //  3. le mode portable : leurs deux .gtt.json sous exe/data, aucun sous home
-//     ni sous temp ;
+//     ni sous temp ; puis « Imprimer… » ouvre l'aperçu, le papier A4
+//     choisi, et le processus principal imprime en PDF le plan, puis la
+//     feuille par table (webContents.printToPDF, à la taille de page de la
+//     feuille de style) : une page par feuille de l'aperçu, chacune aux
+//     dimensions de la sienne à TOLERANCE_PAGE_MM près ; l'aperçu se ferme ;
 //  4. « Modifier » prend un verrou sous exe/data ; le compte d'arrêt passe à
 //     2 000 mouvements par son champ, puis « Générer », dans la page chargée
 //     sous file://, fait naître un travailleur et ajoute des propositions,
@@ -66,8 +71,10 @@ import { constante } from '../src/geometrie/constantes.js';
 import { estSous } from '../src/stockage/dossier_travail.js';
 import { VERSION } from '../src/version.genere.js';
 import { titreAvecVersion } from '../src/interface/libelles.js';
+import { MM_PAR_PX } from '../src/interface/impression/modele.js';
 import { lirePolices } from '../test/polices.js';
 import { CHAINE_TEMOIN, longueurTemoin } from '../test/temoin.js';
+import { TOLERANCE_PAGE_MM, lireImpression } from '../test/navigateur/commandes_impression.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
 const ATTENTE_MS = 60_000;
@@ -77,6 +84,11 @@ const SONDAGE_MS = 100;
 const NOM_EVENEMENT = "Soirée d'essai";
 const DEMONSTRATION = 'petite';
 const ARRET = 2000;
+
+// Les vues de l'aperçu que la coquille imprime, dans l'ordre : le plan,
+// dans l'orientation de sa découpe, puis la feuille par table, en portrait,
+// une page au moins par table.
+const VUES_IMPRIMEES = ['plan', 'tables'];
 
 // La police de l'interface, ses graisses, et le corps en px où la chaîne
 // témoin se mesure.
@@ -129,6 +141,40 @@ function releverPolice({ chaine, corps }) {
   const largeurTemoin = texte.getComputedTextLength();
   svg.remove();
   return { faces, familleCorps: getComputedStyle(document.body).fontFamily, largeurTemoin };
+}
+
+/**
+ * Les fautes d'une impression de l'aperçu, [] quand elle est conforme : un
+ * aperçu sans feuille ; un compte de pages qui n'est pas celui des feuilles,
+ * et rien d'autre alors ; sinon, dans l'ordre des pages, chaque page dont la
+ * largeur ou la hauteur s'écarte de plus de tolerance de celles de sa
+ * feuille. Les dimensions sont en mm.
+ * @param {Array<{largeur: number, hauteur: number}>} feuilles  celles de l'aperçu, dans l'ordre
+ * @param {Array<{largeur: number, hauteur: number}>} pages  les boîtes de média du PDF
+ * @param {number} tolerance
+ * @returns {string[]}
+ */
+export function fautesDImpression(feuilles, pages, tolerance) {
+  if (feuilles.length === 0) return ['aucune feuille dans l’aperçu'];
+  if (pages.length !== feuilles.length) return [`${pages.length} page(s) pour ${feuilles.length} feuille(s)`];
+  return pages.flatMap((page, rang) => {
+    const feuille = feuilles[rang];
+    const ecart = Math.max(Math.abs(page.largeur - feuille.largeur), Math.abs(page.hauteur - feuille.hauteur));
+    return ecart <= tolerance
+      ? []
+      : [`page ${rang + 1} : ${page.largeur} × ${page.hauteur} mm pour une feuille de ${feuille.largeur} × ${feuille.hauteur} mm`];
+  });
+}
+
+// Relève dans la page les dimensions rendues de chaque feuille de l'aperçu,
+// en mm, dans l'ordre du document ; mmParPx, les millimètres par px CSS,
+// vient du processus de l'essai (MM_PAR_PX), la fonction s'exécutant dans
+// la page.
+function releverFeuilles(mmParPx) {
+  return [...document.querySelectorAll('[data-impression] [data-feuille]')].map((feuille) => {
+    const { width, height } = feuille.getBoundingClientRect();
+    return { largeur: width * mmParPx, hauteur: height * mmParPx };
+  });
 }
 
 /**
@@ -316,6 +362,30 @@ async function seance(application, dossiers) {
   constater('deux .gtt.json sous exe/data', etats.length === 2, etats.join(', '));
   const egares = [dossiers.home, dossiers.temp].flatMap((d) => fichiersSous(d, '.gtt.json').map((f) => join(d, f)));
   constater('aucun .gtt.json sous home ni temp', egares.length === 0, egares.join(', ') || 'aucun');
+  // L'aperçu, imprimé par le processus principal : le plan, puis la
+  // feuille par table.
+  await fenetre.locator('[data-ecran="evenement"] [data-commande="apercu"]').click();
+  await fenetre.locator('[data-ecran="apercu"] [data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]').click();
+  for (const vue of VUES_IMPRIMEES) {
+    await fenetre.locator(`[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`).click();
+    await fenetre.locator(`[data-impression][data-vue-impression="${vue}"] [data-feuille]`).first().waitFor({ timeout: ATTENTE_MS });
+    await fenetre.evaluate(() => document.fonts.ready.then(() => undefined));
+    const feuilles = await fenetre.evaluate(releverFeuilles, MM_PAR_PX);
+    const pdf = await application.evaluate(async ({ BrowserWindow }) => {
+      const octets = await BrowserWindow.getAllWindows()[0].webContents.printToPDF({ preferCSSPageSize: true, printBackground: true });
+      return octets.toString('base64');
+    });
+    const lu = await lireImpression(new Uint8Array(Buffer.from(pdf, 'base64')));
+    const fautesImpression = fautesDImpression(feuilles, lu.mediaBox, TOLERANCE_PAGE_MM);
+    const dimensions = ({ largeur, hauteur }) => `${largeur.toFixed(2)} × ${hauteur.toFixed(2)} mm`;
+    constater(
+      `aperçu « ${vue} » imprimé par la coquille : une page par feuille, chacune aux dimensions de la sienne`,
+      fautesImpression.length === 0,
+      fautesImpression.length === 0 ? `${lu.pages} page(s) : ${lu.mediaBox.map(dimensions).join(', ')}` : fautesImpression.join(' ; '),
+    );
+  }
+  await fenetre.locator('[data-ecran="apercu"] [data-commande="fermerApercu"]').click();
+  await fenetre.locator('[data-ecran="evenement"]').waitFor({ timeout: ATTENTE_MS });
 
   // 4. « Modifier », le compte d'arrêt, « Générer ».
   await fenetre.locator('[data-commande="modifier"]').first().click();

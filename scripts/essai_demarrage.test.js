@@ -12,6 +12,10 @@
 // temp pour dossier temporaire, et la configuration XDG du poste réel n'y
 // entre pas. Le module se charge sans rien lancer : l'essai ne part que
 // lorsque node l'exécute.
+//
+// L'impression de l'aperçu par la coquille (§ 11.7) : une page du PDF par
+// feuille de l'aperçu, chacune aux dimensions de la sienne à la tolérance
+// près ; chaque écart se nomme.
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,6 +29,7 @@ import {
   dossiersDEssai,
   environnementDEssai,
   estLanceDirectement,
+  fautesDImpression,
   fautesDePolice,
 } from './essai_demarrage.js';
 
@@ -253,5 +258,43 @@ describe('essai de démarrage : la police de la page (§ 19.4)', () => {
     assert.deepEqual(fautesDePolice({ ...RELEVE, largeurTemoin: 1010.5 }, TEMOIN), ['chaîne témoin : 1010.5 px pour 1000 px']);
     assert.deepEqual(fautesDePolice({ ...RELEVE, largeurTemoin: 960 }, TEMOIN), ['chaîne témoin : 960 px pour 1000 px']);
     assert.deepEqual(fautesDePolice({ ...RELEVE, largeurTemoin: 0 }, TEMOIN), ['chaîne témoin : 0 px pour 1000 px']);
+  });
+});
+
+describe('essai de démarrage : l’impression de l’aperçu (§ 11.7)', () => {
+  // Trois feuilles de 210 × 297 mm et la troisième à plat, et les boîtes de
+  // média qui leur répondent, chacune décalée de moins que la tolérance.
+  const FEUILLES = Object.freeze([
+    { largeur: 210, hauteur: 297 },
+    { largeur: 210, hauteur: 297 },
+    { largeur: 297, hauteur: 210 },
+  ]);
+  const PAGES = Object.freeze([
+    { largeur: 209.9, hauteur: 297.1 },
+    { largeur: 210, hauteur: 297 },
+    { largeur: 297.2, hauteur: 209.8 },
+  ]);
+  const TOLERANCE = 0.25;
+
+  test('une page par feuille, chacune aux dimensions de la sienne : aucune faute ; un écart égal à la tolérance est admis', () => {
+    assert.deepEqual(fautesDImpression(FEUILLES, PAGES, TOLERANCE), []);
+    const auBord = PAGES.map(({ largeur, hauteur }, rang) => (rang === 0 ? { largeur: 210.25, hauteur: 296.75 } : { largeur, hauteur }));
+    assert.deepEqual(fautesDImpression(FEUILLES, auBord, TOLERANCE), []);
+  });
+
+  test('un compte de pages qui n’est pas celui des feuilles se nomme, et rien d’autre ne se compare', () => {
+    assert.deepEqual(fautesDImpression(FEUILLES, PAGES.slice(0, 1), TOLERANCE), ['1 page(s) pour 3 feuille(s)']);
+    assert.deepEqual(fautesDImpression(FEUILLES.slice(0, 1), PAGES, TOLERANCE), ['3 page(s) pour 1 feuille(s)']);
+  });
+
+  test('une page hors de la tolérance se nomme par son rang, lue puis attendue ; une orientation inversée aussi', () => {
+    const large = PAGES.map((page, rang) => (rang === 1 ? { largeur: 210.3, hauteur: 297 } : page));
+    assert.deepEqual(fautesDImpression(FEUILLES, large, TOLERANCE), ['page 2 : 210.3 × 297 mm pour une feuille de 210 × 297 mm']);
+    const debout = PAGES.map((page, rang) => (rang === 2 ? { largeur: 210, hauteur: 297 } : page));
+    assert.deepEqual(fautesDImpression(FEUILLES, debout, TOLERANCE), ['page 3 : 210 × 297 mm pour une feuille de 297 × 210 mm']);
+  });
+
+  test('un aperçu sans feuille est une faute, même sans page', () => {
+    assert.deepEqual(fautesDImpression([], [], TOLERANCE), ['aucune feuille dans l’aperçu']);
   });
 });

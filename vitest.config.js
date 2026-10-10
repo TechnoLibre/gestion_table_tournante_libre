@@ -20,12 +20,22 @@
 //             captures d'écran (test/navigateur/commandes_documentation.js)
 //             y sont déclarées, et le mode des captures, que GTT_CAPTURES
 //             choisit — verifier par défaut, ecrire sous make captures —,
-//             arrive à la page par provide (§ 19.5).
+//             arrive à la page par provide (§ 19.5). La commande
+//             d'impression (test/navigateur/commandes_impression.js), qui
+//             imprime le document d'une épreuve en PDF par le moteur de
+//             Chromium (§ 11.7), y est déclarée aussi.
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { optionsNavigateur } from './test/chromium.js';
 import * as commandesDocumentation from './test/navigateur/commandes_documentation.js';
+import * as commandesImpression from './test/navigateur/commandes_impression.js';
 import { coeursDisponibles, reglagesSeries } from './test/machine.js';
+
+// Les commandes du projet navigateur, chacune sous son nom : celles des
+// captures d'écran, puis celle de l'impression.
+const COMMANDES_NAVIGATEUR = Object.fromEntries(
+  [commandesDocumentation, commandesImpression].flatMap((module) => module.COMMANDES.map((nom) => [nom, module[nom]])),
+);
 
 // Les séries node suivent le nombre de cœurs de la machine (test/machine.js) :
 // en deçà de quatre, des threads sur tous les cœurs, et les épreuves lourdes
@@ -181,7 +191,7 @@ export default defineConfig({
           provide: { captures: { mode: commandesDocumentation.modeCaptures(process.env) } },
           browser: { enabled: true, headless: true, provider: playwright(optionsNavigateur(process.env)),
                      instances: [{ browser: 'chromium' }],
-                     commands: Object.fromEntries(commandesDocumentation.COMMANDES.map((nom) => [nom, commandesDocumentation[nom]])) } } },
+                     commands: COMMANDES_NAVIGATEUR } } },
     ],
   },
 });

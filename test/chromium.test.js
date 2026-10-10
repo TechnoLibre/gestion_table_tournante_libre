@@ -6,8 +6,8 @@
 // sont pas UTF-8, il reçoit l'environnement sous LANG=C.UTF-8. Le projet
 // navigateur le lance sans réseau hors de la boucle locale, au facteur
 // d'échelle 1 (§ 19.2, § 19.4), et lui donne les commandes et le mode des
-// captures d'écran (§ 19.5). vitest.config.js applique la règle ; le Makefile
-// lance la publication.
+// captures d'écran (§ 19.5), et la commande d'impression (§ 11.7).
+// vitest.config.js applique la règle ; le Makefile lance la publication.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,6 +16,7 @@ import configuration from '../vitest.config.js';
 import { ARGUMENTS_NAVIGATEUR, horsBoucle, optionsChromium, optionsNavigateur, suivreRequetes } from './chromium.js';
 import { describe, test } from './lanceur.js';
 import * as commandesDocumentation from './navigateur/commandes_documentation.js';
+import * as commandesImpression from './navigateur/commandes_impression.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
 
@@ -185,15 +186,21 @@ describe('le projet navigateur : les commandes et le mode des captures d’écra
     assert.throws(() => commandesDocumentation.modeCaptures({ GTT_CAPTURES: 'ecrir' }), /GTT_CAPTURES.*« ecrir »/);
   });
 
-  test('vitest.config.js fournit le mode à la page par provide, et déclare chaque commande de commandes_documentation.js', () => {
+  test('vitest.config.js fournit le mode à la page par provide, et déclare chaque commande de commandes_documentation.js et de commandes_impression.js, et elles seules', () => {
     assert.deepEqual(navigateur.test.provide, { captures: { mode: commandesDocumentation.modeCaptures(process.env) } });
     const declarees = navigateur.test.browser.commands;
-    assert.deepEqual(Object.keys(declarees).sort(), [...commandesDocumentation.COMMANDES].sort());
-    for (const nom of commandesDocumentation.COMMANDES) {
-      assert.equal(typeof commandesDocumentation[nom], 'function', nom);
-      assert.equal(declarees[nom], commandesDocumentation[nom], nom);
+    const modules = [commandesDocumentation, commandesImpression];
+    const noms = modules.flatMap(({ COMMANDES }) => COMMANDES);
+    assert.equal(new Set(noms).size, noms.length, 'un nom de commande dans deux modules');
+    assert.deepEqual(Object.keys(declarees).sort(), [...noms].sort());
+    for (const module of modules) {
+      assert.ok(module.COMMANDES.length > 0);
+      for (const nom of module.COMMANDES) {
+        assert.equal(typeof module[nom], 'function', nom);
+        assert.equal(declarees[nom], module[nom], nom);
+      }
     }
-    assert.ok(commandesDocumentation.COMMANDES.length > 0);
+    assert.deepEqual(commandesImpression.COMMANDES, ['imprimerEnPdf']);
   });
 
   test('make captures lance le parcours du projet navigateur sous GTT_CAPTURES=ecrire, par avec_node ; .gitignore tait le dossier d’attente', () => {

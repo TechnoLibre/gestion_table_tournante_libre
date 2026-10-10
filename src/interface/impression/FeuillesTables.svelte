@@ -13,22 +13,36 @@
   // son tour, et le filigrane de la règle du brouillon à ce tour
   // (feuilleDuTour).
   //
-  // Rien ne se tronque : un nom long replie dans sa colonne (§ 7.4). Chaque
-  // table commence une page ; une table plus longue qu'une page continue sur
-  // la suivante, sous son en-tête répété. La pagination se fait sur les
-  // hauteurs rendues, comme celle de la liste d'accueil : toutes les tables
-  // se rendent d'abord, hors de la vue, dans une feuille de la bande reçue,
-  // où se lisent la hauteur utile, et pour chaque table celle de son
-  // en-tête et de chacune de ses lignes (mesurerListes) ; paginerFeuilles en
-  // fait les pages. Une soirée sans table imprime une feuille qui le dit.
+  // Rien ne se tronque : un nom long replie dans sa colonne (§ 7.4). Une
+  // colonne de tour garde au moins la largeur du plus long mot de ses
+  // cellules ; les tours d'une feuille qui n'y tiennent pas tous côte à
+  // côte se scindent en groupes de tours consécutifs, chaque groupe sous ses
+  // propres têtes de tour (toursParGroupe, grouperTours). Chaque groupe
+  // commence une page ; un groupe plus long qu'une page continue sur la
+  // suivante, sous son en-tête répété. Une soirée sans table imprime une
+  // feuille qui le dit.
+  //
+  // Tout se décide sur le rendu, hors de la vue, dans une feuille de la
+  // bande reçue, en passes successives. La première rend une sonde par
+  // feuille : un tableau d'une colonne, à la largeur de son contenu sans
+  // repli dans les mots, qui porte chaque cellule et chaque tête de tour de
+  // la feuille ; sa part de la largeur (mesurerPlace) donne la taille de ses
+  // groupes. Les suivantes rendent les groupes et lisent la hauteur utile,
+  // et pour chaque groupe celle de son en-tête et de chacune de ses lignes
+  // (mesurerListes). Une ligne encore plus haute qu'une page — un nom fait
+  // de nombreux mots courts — resserre les groupes de sa feuille
+  // (resserrerGroupes), et la passe se refait ; sinon paginerFeuilles en
+  // fait les pages. Une ligne qui passe la page sous un seul tour par
+  // groupe, sa colonne à toute la largeur que la place laisse, reste seule
+  // sur sa page.
   //
   // La source est celle de l'aperçu, tour par tour (etatsDesTours).
   //
   // Sans bandeMm, la vue rend sa feuille gabarit, que l'aperçu mesure.
   import { getContext, tick } from 'svelte';
   import Feuille from './Feuille.svelte';
-  import { etatsDesTours, feuilleDuTour, feuillesTables, largeursColonnes } from './listes.js';
-  import { mesurerListes, paginerFeuilles } from './pagination.js';
+  import { etatsDesTours, feuilleDuTour, feuillesTables, grouperTours, largeursColonnes, resserrerGroupes, toursParGroupe } from './listes.js';
+  import { mesurerListes, mesurerPlace, paginerFeuilles } from './pagination.js';
 
   let { etat, options, feuille, bandeMm = null, orientation = $bindable(null) } = $props();
 
@@ -39,21 +53,43 @@
   const etats = $derived(etatsDesTours(charge, etat.proposition));
   const listes = $derived(feuillesTables(charge, etats, { parTour: options.parTour }));
 
-  // Les mesures de la feuille de mesure, et ce qu'elles mesuraient ; les
-  // pages, null tant qu'elles ne sont pas celles des listes courantes.
+  // La taille de groupe de chaque feuille et ce qu'elle mesurait, null
+  // avant la passe des sondes ; les groupes qui en suivent ; les mesures des
+  // groupes et ce qu'elles mesuraient ; les pages, null tant qu'elles ne
+  // sont pas celles des groupes courants.
   const cle = $derived(JSON.stringify([options.papier, bandeMm, listes]));
+  let tailles = $state(null);
+  const parGroupe = $derived(tailles !== null && tailles.cle === cle ? tailles.valeurs : null);
+  const groupes = $derived(parGroupe === null ? null : grouperTours(listes, parGroupe));
+  const cleGroupes = $derived(JSON.stringify([cle, parGroupe]));
   let mesures = $state(null);
-  const pages = $derived(mesures !== null && mesures.cle === cle ? paginerFeuilles(mesures.feuilles, mesures.utile) : null);
+  const pages = $derived(mesures !== null && mesures.cle === cleGroupes ? paginerFeuilles(mesures.feuilles, mesures.utile) : null);
   const feuilleMesure = $derived({ ...feuille, filigrane: false });
+  // Les sondes de la première passe, une par feuille.
+  let sondes = $state([]);
 
-  // Mesure la feuille de mesure une fois le rendu à jour (tick) : la
-  // clé lue alors est celle des valeurs que le DOM porte. La lecture de
-  // cle relance la mesure quand elle change avant que les pages viennent.
+  // Mesure la feuille de mesure une fois le rendu à jour (tick) : la clé
+  // lue alors est celle des valeurs que le DOM porte. Sans tailles à jour,
+  // lit les sondes ; avec elles, les hauteurs des groupes, qui donnent les
+  // pages ou des tailles resserrées. La lecture des clés relance la mesure
+  // quand l'une change avant que les pages viennent.
   function mesurer(conteneur) {
-    const voulue = cle;
+    const voulue = cleGroupes;
+    const valeurs = parGroupe;
+    const feuillesLues = listes;
+    const groupesLus = groupes;
     let active = true;
     tick().then(() => {
-      if (active && voulue === cle) mesures = { cle, ...mesurerListes(conteneur.querySelector('[data-contenu]')) };
+      if (!active || voulue !== cleGroupes) return;
+      const contenu = conteneur.querySelector('[data-contenu]');
+      if (valeurs === null) {
+        tailles = { cle, valeurs: feuillesLues.map((liste, rang) => toursParGroupe(mesurerPlace(sondes[rang], contenu), liste.tours.length)) };
+        return;
+      }
+      const lues = mesurerListes(contenu);
+      const resserrees = resserrerGroupes(valeurs, groupesLus, paginerFeuilles(lues.feuilles, lues.utile));
+      if (resserrees === null) mesures = { cle: voulue, ...lues };
+      else tailles = { cle, valeurs: resserrees };
     });
     return () => {
       active = false;
@@ -70,6 +106,41 @@
     orientation = 'portrait';
   });
 </script>
+
+{#snippet celluleTour(cellule)}
+  <td>
+    {#if cellule.nom === null}
+      <span class="vide" data-place-vide>{t('feuilles.tables.vide')}</span>
+    {:else}
+      <span class="nom" data-nom-imprime>{cellule.nom}</span>
+    {/if}
+    {#if cellule.titre !== null}
+      <span class="titre-place">
+        <span class="libelle-titre">{cellule.titre.libelle}</span>
+        {#if !cellule.titre.pourvu}
+          <span>{t('feuilles.tables.titreNonPourvu')}</span>
+        {/if}
+      </span>
+    {/if}
+  </td>
+{/snippet}
+
+<!-- La sonde d'une feuille : ses têtes de tour et chacune de ses cellules,
+     une par rangée, dans une seule colonne. -->
+{#snippet sonde(liste, rangListe)}
+  <table class="sonde" bind:this={sondes[rangListe]}>
+    <tbody>
+      {#each liste.tours as tour (tour)}
+        <tr><th>{t('feuilles.tour', { tour })}</th></tr>
+      {/each}
+      {#each liste.lignes as ligne (ligne.place)}
+        {#each ligne.cellules as cellule (cellule.tour)}
+          <tr>{@render celluleTour(cellule)}</tr>
+        {/each}
+      {/each}
+    </tbody>
+  </table>
+{/snippet}
 
 {#snippet blocTable(liste, rangListe, debut, fin)}
   <div class="liste" data-liste-imprimee={rangListe} data-table={liste.table}>
@@ -93,21 +164,7 @@
           <tr data-ligne-imprimee={debut + rang}>
             <th scope="row">{ligne.place}</th>
             {#each ligne.cellules as cellule (cellule.tour)}
-              <td>
-                {#if cellule.nom === null}
-                  <span class="vide" data-place-vide>{t('feuilles.tables.vide')}</span>
-                {:else}
-                  <span class="nom" data-nom-imprime>{cellule.nom}</span>
-                {/if}
-                {#if cellule.titre !== null}
-                  <span class="titre-place">
-                    <span class="libelle-titre">{cellule.titre.libelle}</span>
-                    {#if !cellule.titre.pourvu}
-                      <span>{t('feuilles.tables.titreNonPourvu')}</span>
-                    {/if}
-                  </span>
-                {/if}
-              </td>
+              {@render celluleTour(cellule)}
             {/each}
           </tr>
         {/each}
@@ -122,9 +179,15 @@
   <div class="mesure" aria-hidden="true" {@attach mesurer}>
     <Feuille papier={options.papier} orientation="portrait" feuille={feuilleMesure} {bandeMm}>
       {#snippet contenu()}
-        {#each listes as liste, rangListe (rangListe)}
-          {@render blocTable(liste, rangListe, 0, liste.lignes.length)}
-        {/each}
+        {#if groupes === null}
+          {#each listes as liste, rangListe (rangListe)}
+            {@render sonde(liste, rangListe)}
+          {/each}
+        {:else}
+          {#each groupes as groupe, rangGroupe (rangGroupe)}
+            {@render blocTable(groupe, rangGroupe, 0, groupe.lignes.length)}
+          {/each}
+        {/if}
       {/snippet}
     </Feuille>
   </div>
@@ -136,9 +199,9 @@
   </Feuille>
 {:else}
   {#each pages as page (page.rang)}
-    <Feuille rang={page.rang} papier={options.papier} orientation="portrait" feuille={feuilleDeListe(listes[page.feuille])} {bandeMm}>
+    <Feuille rang={page.rang} papier={options.papier} orientation="portrait" feuille={feuilleDeListe(groupes[page.feuille])} {bandeMm}>
       {#snippet contenu()}
-        {@render blocTable(listes[page.feuille], page.feuille, page.debut, page.fin)}
+        {@render blocTable(groupes[page.feuille], page.feuille, page.debut, page.fin)}
       {/snippet}
     </Feuille>
   {/each}
@@ -188,6 +251,18 @@
 
   .libelle-titre {
     font-style: italic;
+  }
+
+  /* La sonde prend la largeur de son plus long mot : à la largeur de son
+     contenu, sans repli dans un mot. */
+  .sonde {
+    width: min-content;
+    table-layout: auto;
+  }
+
+  .sonde th,
+  .sonde td {
+    overflow-wrap: normal;
   }
 
   /* La feuille de mesure se rend hors de la vue : elle se mesure, elle ne

@@ -12,7 +12,11 @@
 // nommés, « non pourvu » quand rien ne les pourvoit ; « Une feuille par
 // tour » donne une feuille par table et par tour, chacune au pied et au
 // filigrane de son tour, sans rien écrire, en lecture comme sur un plan
-// bloqué (§ 8.4).
+// bloqué (§ 8.4). Sur la feuille par table, une colonne de tour garde la
+// largeur de son plus long mot ; une soirée dont les tours n'y tiennent
+// pas, ou dont une ligne passerait la hauteur d'une page, se scinde en
+// groupes de tours, chaque groupe sous ses têtes de tour, chaque tour une
+// fois par table, et aucune ligne ne déborde de sa page.
 //
 // App est montée par test/navigateur/ecrans.js sur le système de fichiers
 // simulé, au cadre de 1 366 × 700 ; le texte attendu vient de la même
@@ -43,6 +47,10 @@ const IMAGES = 300;
 // Un nom de deux cents caractères sans espace : rien ne le coupe qu'un
 // repli au caractère.
 const NOM_LONG = 'Ombrelle'.repeat(25);
+
+// Un nom long fait de mots courts : le repli entre les mots suffit à la
+// largeur, et la hauteur de la ligne croît avec le nombre de mots.
+const NOM_LONG_DE_MOTS = 'Ombrelle Pervenche '.repeat(40).trim();
 
 // La marque d'abréviation du plan (§ 7.4), qu'aucune de ces vues ne pose.
 const ABREVIATION = '\u{2026}';
@@ -205,7 +213,9 @@ describe('aucune troncature : les listes imprimées replient (§ 7.4)', () => {
     const longs = noms.filter((noeud) => noeud.textContent === attendu);
     expect(longs.length, 'le nom entier à chaque tour où la personne est assise').toBeGreaterThan(0);
     const ligne = longs[0].closest('[data-ligne-imprimee]');
-    const autre = noms.find((noeud) => noeud.closest('[data-ligne-imprimee]') !== ligne && noeud.closest('[data-liste-imprimee]') !== longs[0].closest('[data-liste-imprimee]'));
+    // Une autre table : ses lignes ne portent pas le nom long, à aucun tour.
+    const tableDuNom = longs[0].closest('[data-liste-imprimee]').dataset.table;
+    const autre = noms.find((noeud) => noeud.closest('[data-liste-imprimee]').dataset.table !== tableDuNom);
     expect(boite(ligne).height, 'la ligne du nom long replie').toBeGreaterThan(1.5 * boite(autre.closest('[data-ligne-imprimee]')).height);
     expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
   });
@@ -334,5 +344,69 @@ describe('la feuille par table (§ 11.7, Q6 c)', () => {
       const feuille = bloc.closest('[data-feuille]');
       expect(feuille.querySelectorAll('[data-filigrane]'), `tour ${tour}`).toHaveLength(tour === R ? 1 : 0);
     });
+  });
+});
+
+describe('la feuille par table : des tours nombreux sous un nom long (§ 7.4)', () => {
+  // Les groupes de tours de chaque table, dans l'ordre du document : pour
+  // chaque table, les têtes de tour de chacune de ses listes, une liste par
+  // groupe — une liste plus longue qu'une page reprend ses têtes sur la
+  // suivante, sous le même rang.
+  function groupesParTable(m) {
+    const groupes = new Map();
+    const vues = new Set();
+    for (const bloc of tous(m.racine, '[data-impression] [data-liste-imprimee]')) {
+      if (vues.has(bloc.dataset.listeImprimee)) continue;
+      vues.add(bloc.dataset.listeImprimee);
+      const table = Number(bloc.dataset.table);
+      if (!groupes.has(table)) groupes.set(table, []);
+      groupes.get(table).push([...bloc.querySelector('[data-entete-liste] tr').cells].slice(1).map(texte));
+    }
+    return groupes;
+  }
+
+  for (const [cas, nom, tours] of [
+    ['un nom de deux cents caractères sans espace, dix tours', NOM_LONG, 10],
+    ['un nom de sept cents caractères en mots courts, quinze tours', NOM_LONG_DE_MOTS, 15],
+  ]) {
+    test(`${cas}, A4 : chaque ligne tient dans sa page ; la table du nom se scinde en groupes de tours, chaque tour une fois`, async () => {
+      const charge = appliquerCommande(
+        'changerTours',
+        appliquerCommande('modifierParticipant', chargePrincipale(), { id: 1, champs: { nom } }).charge,
+        { tours },
+      ).charge;
+      const m = await ouvrirApercu(contexte, charge);
+      await choisirVue(m, 'tables');
+      verifierPagination(m);
+      const attendues = Array.from({ length: tours }, (_, rang) => t('feuilles.tour', { tour: rang + 1 }));
+      const groupes = groupesParTable(m);
+      expect([...groupes.keys()].sort((a, b) => a - b)).toEqual(charge.tables.map(({ id }) => id).sort((a, b) => a - b));
+      for (const [table, suite] of groupes) expect(suite.flat(), `table ${table} : chaque tour une fois, dans l’ordre`).toEqual(attendues);
+      const nomAttendu = nomAffiche(charge.participants.find(({ id }) => id === 1));
+      const tableDuNom = Number(
+        tous(m.racine, '[data-impression] [data-nom-imprime]').find((noeud) => noeud.textContent === nomAttendu).closest('[data-liste-imprimee]').dataset.table,
+      );
+      expect(groupes.get(tableDuNom).length, 'la table du nom long en plusieurs groupes de tours').toBeGreaterThan(1);
+      expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
+    });
+  }
+
+  test('dix tours et des noms ordinaires : aucun mot coupé dans une colonne de tour, chaque tour une fois par table', async () => {
+    const charge = appliquerCommande('changerTours', chargePrincipale(), { tours: 10 }).charge;
+    const m = await ouvrirApercu(contexte, charge);
+    await choisirVue(m, 'tables');
+    verifierPagination(m);
+    const attendues = Array.from({ length: 10 }, (_, rang) => t('feuilles.tour', { tour: rang + 1 }));
+    for (const [table, suite] of groupesParTable(m)) expect(suite.flat(), `table ${table}`).toEqual(attendues);
+    const cellules = tous(m.racine, '[data-impression] [data-liste-imprimee] tr').flatMap((rangee) => [...rangee.cells].slice(1));
+    expect(cellules.flatMap(motsCoupes), 'mots coupés').toEqual([]);
+  });
+
+  test('quatre tours et des noms ordinaires : une seule feuille par table, tous les tours en colonnes', async () => {
+    const charge = chargePrincipale();
+    const m = await ouvrirApercu(contexte, charge);
+    await choisirVue(m, 'tables');
+    const attendues = Array.from({ length: charge.evenement.tours }, (_, rang) => t('feuilles.tour', { tour: rang + 1 }));
+    for (const [table, suite] of groupesParTable(m)) expect(suite, `table ${table}`).toEqual([attendues]);
   });
 });

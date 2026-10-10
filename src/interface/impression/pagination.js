@@ -102,19 +102,20 @@ export function mesurerListes(contenu) {
   return { utile: contenu.getBoundingClientRect().height, feuilles };
 }
 
-// Ce qu'une colonne de tour reçoit au-delà de la largeur mesurée de son
-// libellé, en px : les largeurs en pour cent s'arrondissent à l'unité de
+// Ce qu'une colonne de tour reçoit au-delà de la largeur mesurée de sa
+// sonde, en px : les largeurs en pour cent s'arrondissent à l'unité de
 // mise en page, et une colonne plus étroite d'une fraction de pixel que son
 // texte le replie.
 const ARRONDI_PX = 1;
 
 /**
- * La part de la largeur d'une liste que prend, sur une ligne, son plus
- * large libellé de colonne de tour, en pour cent (largeursColonnes) : la
- * largeur rendue de la sonde — un tableau d'une colonne, à la largeur de
- * son contenu sans repli, qui porte chaque libellé de place et chaque tête
- * de tour dans les cellules de la liste —, plus ARRONDI_PX, sur celle du
- * tableau de la liste.
+ * La part de la largeur d'une liste que prend sa sonde, en pour cent : la
+ * largeur rendue de la sonde, plus ARRONDI_PX, sur celle du tableau. La
+ * sonde est un tableau d'une colonne, à la largeur de son contenu, qui
+ * porte dans les cellules de la liste ce qu'une colonne de tour doit tenir :
+ * sur une ligne, chaque libellé de place et chaque tête de tour de la liste
+ * d'accueil (largeursColonnes) ; le plus long mot de chaque cellule et de
+ * chaque tête de tour d'une feuille par table (toursParGroupe).
  *
  * @param {Element} sonde
  * @param {Element} tableau   le tableau de la liste, à sa largeur d'impression
