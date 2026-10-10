@@ -80,7 +80,7 @@ export const REPORTEES = Object.freeze([
 
 // Captures déclarées dans CAPTURES et pas encore photographiées : la
 // publication et le contrôle d'ordre les admettent absentes du manifeste.
-export const A_VENIR = Object.freeze(['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche']);
+export const A_VENIR = Object.freeze(['24-badges-controle', '25-badges-planche']);
 
 // --- Forme canonique et empreintes ---------------------------------------------
 

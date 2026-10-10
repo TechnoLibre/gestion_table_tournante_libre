@@ -86,11 +86,12 @@ sur les captures.
 | `--couleur-cadre-ecriture` | marque | 3 | 4,78 | 02-import-apercu | 9,10 | 02-import-apercu |
 | `--couleur-cadre-lecture` | marque | 3 | 5,29 | 01b-passer-en-ecriture | 7,34 | 01b-passer-en-ecriture |
 | `--couleur-chaise-pleine` | marque | 3 | 15,38 | 07a-cibles-sieges | 14,94 | 07a-cibles-sieges |
-| `--couleur-chaise-trait` | marque | 3 | 7,58 | 07-plan-tables | 8,89 | 07-plan-tables |
-| `--couleur-conflit-appartenance` | marque | 3 | 8,92 | 19-ajustement | 6,81 | 19-ajustement |
-| `--couleur-contour-fort` | marque | 3 | 12,54 | 19-ajustement | 11,62 | 19-ajustement |
+| `--couleur-chaise-trait` | marque | 3 | 7,58 | 07-plan-tables | 8,13 | 22-plan-brouillon |
+| `--couleur-conflit-appartenance` | marque | 3 | 8,92 | 20-mode-lecture | 6,81 | 20-mode-lecture |
+| `--couleur-contour-fort` | marque | 3 | 12,54 | 20-mode-lecture | 11,62 | 20-mode-lecture |
 | `--couleur-echelle` | marque | 3 | 15,10 | 07-plan-tables | 14,62 | 07-plan-tables |
 | `--couleur-fantome` | marque | 3 | 4,34 | 19-ajustement | 4,10 | 19-ajustement |
+| `--couleur-filigrane` | marque | 3 | 5,10 | 22-plan-brouillon | 5,10 | 22-plan-brouillon |
 | `--couleur-hachure` | marque | 3 | 16,48 | 08-animateurs-designes | 15,21 | 08-animateurs-designes |
 | `--couleur-marque` | marque | 3 | 3,63 | 07a-cibles-sieges | 3,50 | 07a-cibles-sieges |
 | `--couleur-page-texte` | texte | 4,5 | 15,10 | 01-premier-ecran | 11,39 | 19-ajustement |
@@ -103,6 +104,7 @@ sur les captures.
 | `--couleur-selection` | marque | 3 | 4,66 | 08-animateurs-designes | 4,18 | 08-animateurs-designes |
 | `--couleur-table-trait` | marque | 3 | 7,58 | 07-plan-tables | 5,59 | 07-plan-tables |
 | `rgb(0, 0, 0)` | texte | 4,5 | 18,26 | 09-refus-sur-place | — | — |
+| `rgb(28, 33, 40)` | texte | 4,5 | — | — | 16,18 | 22-plan-brouillon |
 
 <!-- engendre:fin contrastes -->
 

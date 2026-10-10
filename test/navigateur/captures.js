@@ -85,10 +85,10 @@ function coupeLaFenetre(element) {
   return b.right > 0 && b.bottom > 0 && b.left < innerWidth && b.top < innerHeight;
 }
 
-// Vrai quand la boîte de l'élément tient entière dans la fenêtre et dans
-// chaque ancêtre qui rogne ce qui le déborde — overflow autre que visible,
-// ou un <svg> —, à un demi-pixel près.
-function entiereDansLaFenetre(element) {
+/** Vrai quand la boîte de l'élément tient entière dans la fenêtre et dans
+ *  chaque ancêtre qui rogne ce qui le déborde — overflow autre que visible,
+ *  ou un <svg> —, à un demi-pixel près : l'image le montre entier. */
+export function entiereDansLaFenetre(element) {
   const b = element.getBoundingClientRect();
   const dedans = (r) => b.left >= r.left - 0.5 && b.top >= r.top - 0.5 && b.right <= r.right + 0.5 && b.bottom <= r.bottom + 0.5;
   if (!dedans({ left: 0, top: 0, right: innerWidth, bottom: innerHeight })) return false;
@@ -632,12 +632,49 @@ export async function empreinteEtat(m) {
 // de rendu.js, son centre atteint et non couvert. Un élément SVG se lit par
 // la géométrie du dessin, comme ses textes au relevé des contrastes : rendu,
 // et le centre de sa boîte dans le <svg> extérieur et dans la fenêtre — un
-// dessin sous le pointeur ou hors d'atteinte reste visible. Rend true, ou la
-// raison.
+// dessin sous le pointeur ou hors d'atteinte reste visible. Dans les deux
+// cas, la boîte entière tient dans la fenêtre et dans chaque ancêtre qui
+// rogne : un libellé dont le centre se voit mais que le bord du plan coupe
+// n'est pas lisible sur l'image. Rend true, ou la raison.
 function conditionVisible(element) {
-  if (!(element instanceof SVGElement)) return visible(element);
-  if (!rendu(element)) return 'checkVisibility faux';
-  return centreDansLeDessin(element) ? true : 'le centre de sa boîte est hors du dessin ou de la fenêtre';
+  if (element instanceof SVGElement) {
+    if (!rendu(element)) return 'checkVisibility faux';
+    if (!centreDansLeDessin(element)) return 'le centre de sa boîte est hors du dessin ou de la fenêtre';
+  } else {
+    const vu = visible(element);
+    if (vu !== true) return vu;
+  }
+  return entiereDansLaFenetre(element) ? true : 'sa boîte déborde de la fenêtre ou d’un ancêtre qui la rogne : l’image la coupe';
+}
+
+// L'identifiant du cadre que pose cliche.
+const CADRE_DE_CAPTURE = 'gtt-cadre-de-capture';
+
+// L'image de l'écran du montage m, telle que la fenêtre la montre ; rend
+// { chemin }. Un montage dont la boîte est la fenêtre se photographie
+// lui-même. Un montage plus haut — l'aperçu avant impression, dont le
+// document n'est jamais tronqué — se photographie par un cadre fixe de la
+// taille de la fenêtre, posé le temps de la capture, sans peinture, sans
+// atteinte du pointeur, caché aux technologies d'assistance : l'image est
+// la fenêtre, à la position où le document a défilé. Le cadre ne sert que
+// là : la capture d'un autre élément que le montage peint autrement
+// l'élément qui a le focus — le contour de focus du plan, le curseur d'un
+// champ —, et l'image d'un écran qui n'a pas changé changerait.
+async function cliche(m, fichier, racine) {
+  const b = m.racine.getBoundingClientRect();
+  if (b.left === 0 && b.top === 0 && b.width === innerWidth && b.height === innerHeight) {
+    return commands.prendreCliche({ fichier, selecteur: `[data-montage="${m.racine.dataset.montage}"]`, racine });
+  }
+  const cadre = document.createElement('div');
+  cadre.id = CADRE_DE_CAPTURE;
+  cadre.setAttribute('aria-hidden', 'true');
+  Object.assign(cadre.style, { position: 'fixed', inset: '0', pointerEvents: 'none' });
+  document.body.append(cadre);
+  try {
+    return await commands.prendreCliche({ fichier, selecteur: `#${CADRE_DE_CAPTURE}`, racine });
+  } finally {
+    cadre.remove();
+  }
 }
 
 /**
@@ -650,8 +687,8 @@ function conditionVisible(element) {
  * dans le texte relevé ; aucune faute de libellé ; styles relevés dans les
  * deux thèmes, sous leurs seuils ; empreinte d'état. L'entrée se compose,
  * puis 'verifier' la compare au manifeste — un écart nomme l'étape et sa
- * nature —, et 'ecrire' dépose l'image, prise avant les relevés, et
- * l'entrée.
+ * nature —, et 'ecrire' dépose l'image de la fenêtre, prise avant les
+ * relevés, et l'entrée.
  *
  * @param {Object} m          un montage de monterApp
  * @param {string} fichier    le nom de la capture, sans extension
@@ -692,8 +729,7 @@ export async function photographier(m, fichier, { condition = [], graine = null,
     throw echec(`chaîne témoin à ${lue} px, ${attendue} px attendus à ${tolerance} près : la police rendue n’est pas l’embarquée`);
   }
 
-  const selecteur = `[data-montage="${m.racine.dataset.montage}"]`;
-  const image = mode === 'ecrire' ? await commands.prendreCliche({ fichier, selecteur, racine }) : null;
+  const image = mode === 'ecrire' ? await cliche(m, fichier, racine) : null;
 
   const texte = texteReleve(m.racine);
   const racineNeutre = m.seance.etat().racine?.chemin ?? null;

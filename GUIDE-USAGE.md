@@ -360,6 +360,24 @@ en filigrane ; une planche tirée d’une proposition l’est toujours. Chaque p
 imprimée porte en pied le nom et la date de l’événement, le tour, l’instant où
 le placement a pris sa forme, et la version du logiciel.
 
+L’aperçu imprime ce que le plan montre. Une proposition ouverte depuis la
+section « Propositions » s’imprime en brouillon, même quand un autre placement
+est retenu :
+
+![L’aperçu du plan d’une proposition non retenue, sous le filigrane BROUILLON](doc/captures/22-plan-brouillon.png)
+
+*Le filigrane BROUILLON couvre chaque page. Sous le plan, le repère de la
+page, l’échelle graphique et la mention « disposition relative » ; en pied, le
+tour et l’instant où cette proposition a été générée.*
+
+Revenu au placement retenu, l’aperçu sort sans filigrane :
+
+![L’aperçu du plan retenu, sans filigrane](doc/captures/23-plan-retenu.png)
+
+*Le même cadrage, sur le placement retenu : le filigrane a disparu, et le pied
+porte l’instant de ce placement. C’est cette page qui part à l’imprimante pour
+le montage de la salle.*
+
 Une fois le plan imprimé, bloquez-le : choisissez l’état « Bloqué » en haut de
 l’événement. Plus rien ne le modifie, jusqu’à « Débloquer ».
 

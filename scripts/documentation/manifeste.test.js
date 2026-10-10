@@ -142,8 +142,9 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     for (const reportee of REPORTEES) assert.ok(Object.isFrozen(reportee), reportee.fichier);
   });
 
-  test('A_VENIR nomme les quatre captures de l’étape 12, toutes déclarées', () => {
-    assert.deepEqual(A_VENIR, ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche']);
+  test('A_VENIR nomme les deux captures de la planche, à l’étape 12, déclarées ; 22 et 23 sont photographiées', () => {
+    assert.deepEqual(A_VENIR, ['24-badges-controle', '25-badges-planche']);
+    for (const fichier of A_VENIR) assert.equal(CAPTURES.find((c) => c.fichier === fichier)?.etape, '12', fichier);
     const declarees = new Set(CAPTURES.map((c) => c.fichier));
     for (const fichier of A_VENIR) assert.ok(declarees.has(fichier), fichier);
     assert.ok(Object.isFrozen(A_VENIR));
@@ -319,9 +320,15 @@ describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
     assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: A_VENIR })), []);
   });
 
-  test('A_VENIR vidé, l’étape 12 sans capture est une faute', () => {
-    const fautes = verifierOrdre(manifesteDeclare({ sans: A_VENIR }), { aVenir: [] });
-    assert.deepEqual(fautes, [{ chemin: CHEMIN_MANIFESTE, faute: 'étape 12 : aucune capture ni reportée' }]);
+  test('A_VENIR vidé, les captures d’A_VENIR absentes : 22 et 23 couvrent l’étape 12', () => {
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: A_VENIR }), { aVenir: [] }), []);
+  });
+
+  test('A_VENIR vidé, sans 22 ni 23 : l’étape 12 sans capture est une faute', () => {
+    const photographiees = ['22-plan-brouillon', '23-plan-retenu'];
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: [...photographiees, ...A_VENIR] }), { aVenir: [] }), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 12 : aucune capture ni reportée' },
+    ]);
   });
 
   test('une étape sans capture ni reportée est une faute qui la nomme', () => {

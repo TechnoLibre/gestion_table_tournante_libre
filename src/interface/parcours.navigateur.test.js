@@ -14,7 +14,8 @@
 // Le parcours est le parcours photographié (§ 19.1, § 19.3) : il suit les
 // captures du § 19.3 que l'itération photographie — 01, 01b, 02, 02b, 03 à
 // 07, 07b, 08 à 10, les deux 07a sur la grande démonstration que 10 a
-// chargée, 11, 19, 20 —, puis l'ordre de lecture du § 2.1 sur
+// chargée, 11, 19, 20, puis 22 et 23, l'aperçu avant impression d'une
+// proposition et du retenu —, puis l'ordre de lecture du § 2.1 sur
 // l'événement retenu, les fenêtres — aucune pendant un geste non
 // destructeur, une qui nomme ce qui part pour chaque geste qui détruit —,
 // enfin chaque famille de geste modifiant en lecture puis sur un plan
@@ -39,10 +40,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { cdp, commands } from 'vitest/browser';
 import { flushSync } from 'svelte';
 import { bilanRemplacement, cleNormalisee } from '../application/csv.js';
+import { creerFormat } from '../application/format.js';
 import { creerExecuteurDirect } from '../application/generation.js';
 import { TABLES_APPLICATION } from '../application/libelles.js';
 import { nomAffiche } from '../application/personnes.js';
 import { etatPlaces } from '../application/places.js';
+import { estBrouillon } from '../application/sorties.js';
 import { creerTraduction } from '../application/traduction.js';
 import { versionVisible } from '../application/version.js';
 import { apercevoir } from '../csv/apercu.js';
@@ -66,7 +69,7 @@ import { SUFFIXES } from '../stockage/noms.js';
 import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import urlCp1252 from '../../exemples/participants_cas_limites_cp1252.csv?url';
-import { CADRE, capturesPrises, cloreCaptures, modeFourni, photographier } from '../../test/navigateur/captures.js';
+import { CADRE, capturesPrises, cloreCaptures, entiereDansLaFenetre, modeFourni, photographier } from '../../test/navigateur/captures.js';
 import { NOM_CAS_LIMITES, attendre, centre, octetsCasLimites } from '../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
 import { poserFeuille } from '../../test/navigateur/feuilles.js';
@@ -83,6 +86,10 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const NOM_SOIREE = 'Soirée d\u{2019}essai';
 const GRAINE = 4242;
 const ARRET = 300;
+
+// L'écart de l'horloge pilotée entre la génération et la retenue : plus
+// d'une minute, la précision d'un horodatage mis en forme.
+const ECART_RETENUE_MS = 2 * 60 * 1000;
 
 // Le CSV des cas limites enregistré en windows-1252 (§ 10.3, capture 02b).
 const NOM_CP1252 = 'participants_cas_limites_cp1252.csv';
@@ -272,14 +279,19 @@ async function cliquerPointeur(element) {
   await images(2);
 }
 
-// Presse au point depuis et avance par pas jusqu'au point vers, sans relâcher.
-async function presserEtBouger(depuis, vers, pas = 10) {
-  await pointer('presser', depuis.x, depuis.y);
+// Avance le pointeur par pas du point depuis au point vers.
+async function bouger(depuis, vers, pas = 10) {
   for (let i = 1; i <= pas; i += 1) {
     await pointer('bouger', depuis.x + ((vers.x - depuis.x) * i) / pas, depuis.y + ((vers.y - depuis.y) * i) / pas);
     await uneImage();
   }
   flushSync();
+}
+
+// Presse au point depuis et avance par pas jusqu'au point vers, sans relâcher.
+async function presserEtBouger(depuis, vers, pas = 10) {
+  await pointer('presser', depuis.x, depuis.y);
+  await bouger(depuis, vers, pas);
 }
 
 async function glisserVers(depuis, vers) {
@@ -438,6 +450,21 @@ function dansLeCadre(element) {
   return b.width > 0 && x >= cadre.left + 8 && x <= cadre.right - 8 && y >= cadre.top + 8 && y <= cadre.bottom - 8;
 }
 
+// La marge, en px, que le libellé du fantôme garde au bord droit du plan.
+const MARGE_FANTOME_PX = 24;
+
+// Fait glisser la vue de dx px, par un appui sur le sol du plan : un point
+// de la bande haute du cadre où le pointeur n'atteint ni table, ni chaise,
+// ni poignée.
+async function glisserLaVue(dx) {
+  const cadre = dans('[data-plan]').getBoundingClientRect();
+  const sol = { x: cadre.left + cadre.width / 2, y: cadre.top + 12 };
+  const atteint = atteintAuPoint(sol);
+  expect(dans('[data-plan]').contains(atteint), 'le sol, dans le plan').toBe(true);
+  expect(atteint.closest('[data-table], [data-siege], [data-poignee]'), 'le sol, hors de toute table').toBeNull();
+  await glisserVers(sol, { x: sol.x + dx, y: sol.y });
+}
+
 // La première chaise du tour montré qui répond au prédicat et dont le
 // dessin est dans le cadre.
 function chaiseVue(predicat) {
@@ -504,6 +531,63 @@ async function refusPres(porteur, code, remede, geste) {
   const refus = await attendre(`le refus ${code} de ${geste}`, () => porteur().querySelector(`[data-refus="${code}"]`));
   expect(refus.querySelector(`[data-commande="${remede}"]`)?.textContent, geste).toBe(t(`communs.remede.${remede}`));
   return refus;
+}
+
+// --- L'aperçu avant impression ----------------------------------------------------------
+
+// Ce que chaque photographie de l'aperçu affirme de la première feuille :
+// le cartouche, l'échelle graphique, le pied qui porte l'horodatage et la
+// marque de provenance.
+const CONDITIONS_FEUILLE = Object.freeze([
+  '[data-impression] [data-feuille] [data-cartouche]',
+  '[data-impression] [data-feuille] [data-marque="echelle"]',
+  '[data-impression] [data-feuille] [data-pied]',
+]);
+
+const format = creerFormat(t);
+
+// Les chemins que les primitives d'écriture ont reçus depuis le rang donné
+// de la trace, sans doublon, dans l'ordre du premier appel.
+const cheminsEcrits = (rang) => [...new Set(m.trace.slice(rang).map(([, , chemin]) => chemin).filter((chemin) => chemin !== ''))];
+
+// Les feuilles du plan imprimé de la sortie {source, proposition, tour},
+// chacune affirmée : son cartouche, son échelle graphique et la mention
+// « disposition relative » (§ 7.7) ; son pied — le nom de l'événement, le
+// tour, l'horodatage lu sur le placement qui s'imprime, mis en forme comme
+// l'application le met, la marque de provenance et jamais la version
+// (§ 11.7, § 18.6). Rend les feuilles.
+async function feuillesDuPlan(sortie) {
+  const placement = sortie.source === 'retenu' ? charge().retenu : charge().propositions.find(({ id }) => id === sortie.proposition);
+  const horodatage = placement?.horodatage ?? null;
+  expect(horodatage, 'l’horodatage de la sortie').not.toBeNull();
+  const feuilles = await attendre('les feuilles du plan', () => {
+    const lues = tous('[data-impression][data-vue-impression="plan"] [data-feuille]');
+    return lues.length > 0 && lues.every((feuille) => feuille.querySelector('svg[role="img"] [data-table]')) ? lues : null;
+  });
+  for (const feuille of feuilles) {
+    const page = `feuille ${feuille.dataset.feuille}`;
+    expect(texteDe(feuille.querySelector('[data-cartouche]')).length, page).toBeGreaterThan(0);
+    expect(feuille.querySelector('[data-marque="echelle"]').getBoundingClientRect().width, page).toBeGreaterThan(0);
+    expect(texteDe(feuille.querySelector('[data-mention="relative"]')), page).toBe(t('plan.echelle.mention'));
+    const pied = texteDe(feuille.querySelector('[data-pied]'));
+    expect(pied, page).toContain(charge().evenement.nom);
+    expect(pied, page).toContain(t('impression.pied.tour', { tour: sortie.tour }));
+    expect(pied, page).toContain(format.horodatage(horodatage));
+    expect(pied, page).toContain(MARQUE_PROVENANCE);
+    expect(pied, page).not.toContain(VERSION.affichee);
+  }
+  return feuilles;
+}
+
+// Fait défiler la fenêtre jusqu'à centrer la réunion des boîtes des
+// éléments, qui doit tenir dans sa hauteur : l'image les montre ensemble.
+async function cadrerSur(elements) {
+  const boites = elements.map((element) => element.getBoundingClientRect());
+  const haut = Math.min(...boites.map((b) => b.top));
+  const bas = Math.max(...boites.map((b) => b.bottom));
+  expect(bas - haut, 'les éléments à montrer tiennent dans la hauteur de la fenêtre').toBeLessThanOrEqual(innerHeight);
+  window.scrollBy(0, Math.round((haut + bas - innerHeight) / 2));
+  await images(2);
 }
 
 // --- Le parcours (§ 2.1, § 19.3) ------------------------------------------------------
@@ -959,7 +1043,9 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await zoomerJusqua('sieges', 'zoomer');
     for (let cran = 0; cran < CRANS_AU_DESSUS; cran += 1) await cliquer('[data-commande="zoomer"]');
     await images(2);
-    const vue = chaiseVue(() => true);
+    // Une chaise que l'image montre entière : la condition de la capture
+    // juge la boîte, pas son seul centre.
+    const vue = chaiseVue((c) => chaise(c.table, c.siege) !== null && entiereDansLaFenetre(chaise(c.table, c.siege)));
     const disque = chaise(vue.table, vue.siege).querySelector('circle');
     const point = await centre(disque);
     expect(atteintAuPoint(point)?.closest('[data-siege]'), 'l’élément au centre de la chaise').toBe(chaise(vue.table, vue.siege));
@@ -1023,6 +1109,9 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(colonnes).not.toContain('redondance');
     for (const th of section.querySelectorAll('th')) expect(texteDe(th)).not.toMatch(/moyenne/i);
 
+    // Le retenu se date à l'instant où il est retenu, après la génération :
+    // le pied de l'aperçu (étape 12) distingue les deux horodatages.
+    m.horloge.avancer(ECART_RETENUE_MS);
     r = revision();
     memoire.retenue = ordre[0];
     const vues = await sousObservation(async () => {
@@ -1041,17 +1130,46 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     memoire.avantAjustement = serialiserCharge(charge());
     const [t1, t2] = charge().tables.map(({ id }) => id);
     const depuis = chaiseOccupee(t1);
-    // La chaise libre de t2 la plus à gauche : le libellé du fantôme, à
-    // droite du pointeur, reste dans le cadre du plan.
+    // La chaise libre de t2 la plus à gauche : la plus proche de t1.
     const libres = chaisesMontrees().filter((c) => c.table === t2 && c.occupant === null && c.reservation === null && c.titre === null);
     expect(libres.length).toBeGreaterThan(0);
     const gauche = (c) => chaise(t2, c.siege).getBoundingClientRect().left;
     const vers = libres.reduce((a, b) => (gauche(b) < gauche(a) ? b : a));
+    const glisser = async () => presserEtBouger(await centre(chaise(t1, depuis.siege)), await centre(chaise(t2, vers.siege)));
+    const libelleEtat = () => dans('[data-fantome] [data-partie="etat"]');
+
+    // Le libellé du fantôme se pose à droite du pointeur, et le panneau du
+    // diagnostic borne le plan à droite. Un premier glissement, ramené à sa
+    // chaise de départ, mesure ce que le libellé déborde du plan ; la vue
+    // glisse ensuite par le sol, vers la gauche, d'autant et d'une marge,
+    // pour que l'image le montre entier.
+    const r = revision();
+    await glisser();
+    const deborde = (await attendre('le libellé mesuré', libelleEtat)).getBoundingClientRect().right - dans('[data-plan]').getBoundingClientRect().right;
+    // Le libellé que le bord du plan coupe refuse la capture, avant toute
+    // image : le parcours ne photographie pas un libellé illisible. Le
+    // débordement mesuré est la condition de ce refus, et s'affirme : une
+    // disposition où le libellé tient déjà dans le plan rend l'épreuve
+    // rouge, au lieu d'en sauter le contrôle.
+    expect(deborde, 'le libellé mesuré déborde du plan').toBeGreaterThan(0);
+    await expect(photographier(m, '19-ajustement', { condition: '[data-fantome] [data-partie="etat"]', graine: GRAINE })).rejects.toThrow(
+      'l’image la coupe',
+    );
+    const depart = await centre(chaise(t1, depuis.siege));
+    await bouger(await centre(chaise(t2, vers.siege)), depart);
+    await pointer('relacher', depart.x, depart.y);
+    await images(3);
+    await attendre('le glissement ramené', () => libelleEtat() === null);
+    expect(revision()).toBe(r);
+    expect(m.ui.etat().pose).toBeNull();
+    await glisserLaVue(-(deborde + MARGE_FANTOME_PX));
+    expect(dansLeCadre(chaise(t1, depuis.siege)), 'la chaise de départ, dans le cadre').toBe(true);
+
     memoire.ajustement = { depuis, vers, revision: revision() };
-    await presserEtBouger(await centre(chaise(t1, depuis.siege)), await centre(chaise(t2, vers.siege)));
-    const etatDonnees = await attendre('le libellé de l’état des données', () => dans('[data-fantome] [data-partie="etat"]'));
+    await glisser();
+    const etatDonnees = await attendre('le libellé de l’état des données', libelleEtat);
     expect(texteDe(etatDonnees)).toBe(t('plan.fantome.retenu'));
-    await photographier(m, '19-ajustement', { condition: ['[data-fantome] [data-partie="etat"]'], graine: GRAINE });
+    await photographier(m, '19-ajustement', { condition: ['[data-fantome] [data-partie="nom"]', '[data-fantome] [data-partie="etat"]'], graine: GRAINE });
   });
 
   test('19 le dépôt : une entrée qui nomme la personne, le retenu changé', async () => {
@@ -1063,6 +1181,8 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(libelle).toContain(nomAffiche(charge().participants.find((p) => p.id === depuis.occupant)));
     expect(serialiserCharge(charge())).not.toBe(memoire.avantAjustement);
     expect(charge().retenu.proposition).toBe(memoire.retenue);
+    // La vue revient à l'ajustement que les étapes suivantes attendent.
+    await cliquer('[data-commande="ajuster"]');
   });
 
   // Glisser une personne, une table, tirer une poignée, poser une réservation.
@@ -1110,6 +1230,107 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await cliquer('[data-historique] [data-commande="defaire"]');
     await uneEntree(r, 'défaire');
     expect(serialiserCharge(charge())).toBe(memoire.avantAjustement);
+  });
+
+  // Étape 12 (§ 11.7, § 19.3) : l'aperçu avant impression du plan, d'une
+  // proposition que le retenu ne porte pas, puis du retenu. La paire montre
+  // la règle du filigrane — présent, puis absent — sur la première page, au
+  // même cadrage, de deux placements distincts ; le pied porte l'horodatage
+  // de ce qui s'imprime et la marque de provenance à la place de la version.
+  test('22 l’aperçu d’une proposition non retenue : le papier demandé une fois, BROUILLON sur chaque feuille, le pied de la proposition', async () => {
+    expect(charge().evenement.etat).toBe('retenu');
+    const proposition = charge().propositions.find(({ id }) => id !== charge().retenu.proposition).id;
+    const avant = fichiers();
+    const rang = m.trace.length;
+    await ouvrirSection('propositions');
+    await cliquer(`[data-proposition="${proposition}"] [data-commande="voir"]`);
+    await attendre('la proposition montrée au plan', () => m.ui.etat().proposition === proposition && dans('[data-section="plan"]'));
+    await cliquer('[data-ecran="evenement"] [data-commande="apercu"]');
+    // Le premier aperçu de la machine pose la question du papier, avant tout
+    // document (§ 8.5).
+    await attendre('la question du papier', () => dans('[data-ecran="apercu"] [data-papier="question"]'));
+    expect(dans('[data-impression]')).toBeNull();
+    await cliquer('[data-papier="question"] [data-cible="A4"] [data-commande="choisirPapier"]');
+    await attendre('le document imprimé', () => dans('[data-impression] [data-feuille]') && dans('[data-papier="choisi"]'));
+    expect(etat().papier).toBe('A4');
+    expect(m.ui.etat().apercu).toMatchObject({ vue: 'plan', tour: 1 });
+
+    const sortie = { source: 'proposition', proposition, tour: 1 };
+    expect(estBrouillon(charge(), sortie)).toBe(true);
+    memoire.horodatageProposition = charge().propositions.find(({ id }) => id === proposition).horodatage;
+    const feuilles = await feuillesDuPlan(sortie);
+    for (const feuille of feuilles) {
+      const filigranes = feuille.querySelectorAll('[data-filigrane]');
+      expect(filigranes, `feuille ${feuille.dataset.feuille}`).toHaveLength(1);
+      expect(texteDe(filigranes[0])).toBe(t('impression.filigrane'));
+    }
+    // Seul le papier de la machine s'écrit ; rien de l'événement.
+    expect(cheminsEcrits(rang)).toEqual(['reglages_locaux.json']);
+    await rienEcrit(avant, 'l’aperçu d’une proposition');
+
+    // Le cadrage : le filigrane et le pied de la première feuille, ensemble
+    // dans la fenêtre.
+    const filigrane = dans('[data-impression] [data-feuille] [data-filigrane] [data-marque="filigrane"]');
+    await cadrerSur([filigrane, dans('[data-impression] [data-feuille] [data-pied]')]);
+    memoire.cadrage = window.scrollY;
+    await photographier(m, '22-plan-brouillon', {
+      condition: [
+        '[data-impression] [data-feuille] [data-filigrane] [data-marque="filigrane"]',
+        ...CONDITIONS_FEUILLE,
+      ],
+      graine: GRAINE,
+    });
+  });
+
+  test('23 l’aperçu du retenu : le papier gardé, aucun filigrane, le pied du retenu ; rien d’écrit', async () => {
+    await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
+    await attendre('le plan, de retour', () => dans('[data-ecran="evenement"] [data-section="plan"]'));
+    await cliquer('[data-commande="quitterProposition"]');
+    await attendre('le retenu montré', () => m.ui.etat().proposition === null);
+    const avant = fichiers();
+    const rang = m.trace.length;
+    await cliquer('[data-ecran="evenement"] [data-commande="apercu"]');
+    await attendre('le document imprimé', () => dans('[data-impression] [data-feuille]'));
+    // Le papier choisi au premier aperçu n'est pas redemandé.
+    expect(dans('[data-papier="question"]')).toBeNull();
+    expect(dans('[data-papier="choisi"]')).not.toBeNull();
+
+    const sortie = { source: 'retenu', proposition: null, tour: 1 };
+    expect(estBrouillon(charge(), sortie)).toBe(false);
+    const feuilles = await feuillesDuPlan(sortie);
+    // Le pied date le retenu, pas la proposition de 22.
+    expect(charge().retenu.horodatage).not.toBe(memoire.horodatageProposition);
+    for (const feuille of feuilles) expect(texteDe(feuille.querySelector('[data-pied]'))).not.toContain(format.horodatage(memoire.horodatageProposition));
+    expect(tous('[data-impression] [data-filigrane]')).toHaveLength(0);
+    expect(cheminsEcrits(rang)).toEqual([]);
+    await rienEcrit(avant, 'l’aperçu du retenu');
+
+    // Le cadrage de 22 : la même position de défilement, le placement
+    // retenu à la place de la proposition.
+    window.scrollTo(0, memoire.cadrage);
+    await images(2);
+    expect(window.scrollY).toBe(memoire.cadrage);
+    await photographier(m, '23-plan-retenu', { condition: CONDITIONS_FEUILLE, graine: GRAINE });
+
+    await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
+    await attendre('le plan, de retour', () => dans('[data-ecran="evenement"] [data-section="plan"]'));
+    window.scrollTo(0, 0);
+    await images(2);
+  });
+
+  // Un échec de 22 ou de 23 laisse l'aperçu ouvert, la proposition montrée
+  // et la fenêtre défilée : l'état est rendu ici, pour que les épreuves
+  // suivantes jugent leurs propres gardes et non ce reste.
+  afterAll(async () => {
+    if (dans('[data-ecran="apercu"] [data-commande="fermerApercu"]') !== null) {
+      await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
+      await attendre('le plan, de retour', () => dans('[data-ecran="evenement"]'));
+    }
+    if (m.ui.etat().proposition !== null && dans('[data-commande="quitterProposition"]') !== null) {
+      await cliquer('[data-commande="quitterProposition"]');
+      await attendre('le retenu montré', () => m.ui.etat().proposition === null);
+    }
+    window.scrollTo(0, 0);
   });
 });
 

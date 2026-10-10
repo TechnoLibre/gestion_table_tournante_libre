@@ -1232,6 +1232,60 @@ describe('les captures d’écran : chaque contrôle échoue en nommant la captu
     });
   });
 
+  // Une condition se juge sur la boîte entière de l'élément (§ 19.11) :
+  // un élément dont le centre se voit, mais que le bord de la fenêtre ou un
+  // ancêtre qui rogne coupe, refuse la capture ; le même, entier, passe. Le
+  // bord de la fenêtre coupe un élément HTML avant même la boîte entière :
+  // visible de rendu.js le refuse déjà, et nomme la fenêtre.
+  test('condition : un élément HTML ou SVG dont le centre se voit, coupé par la fenêtre ou par un ancêtre qui rogne, refuse la capture ; entier, il passe', async () => {
+    await avecMontage(async (m, { ecrire }) => {
+      const fixe = 'position: fixed; top: 300px';
+      const coupe = 'sa boîte déborde de la fenêtre ou d’un ancêtre qui la rogne : l’image la coupe';
+      const cas = [
+        [
+          'HTML rogné par un ancêtre overflow: hidden',
+          `<div style="${fixe}; left: 100px; width: 200px; height: 40px; overflow: hidden"><div data-sonde style="width: 300px; height: 20px"></div></div>`,
+          `<div style="${fixe}; left: 100px; width: 200px; height: 40px; overflow: hidden"><div data-sonde style="width: 160px; height: 20px"></div></div>`,
+          coupe,
+        ],
+        [
+          'HTML coupé par le bord de la fenêtre',
+          `<div data-sonde style="${fixe}; left: -40px; width: 200px; height: 20px"></div>`,
+          `<div data-sonde style="${fixe}; left: 40px; width: 200px; height: 20px"></div>`,
+          'hors de la fenêtre',
+        ],
+        [
+          'SVG rogné par son <svg>',
+          `<svg style="${fixe}; left: 100px" width="200" height="40"><rect data-sonde x="100" y="10" width="160" height="20" fill="none" /></svg>`,
+          `<svg style="${fixe}; left: 100px" width="200" height="40"><rect data-sonde x="20" y="10" width="160" height="20" fill="none" /></svg>`,
+          coupe,
+        ],
+        [
+          'SVG coupé par le bord de la fenêtre',
+          `<svg style="${fixe}; left: -60px" width="200" height="40"><rect data-sonde x="0" y="10" width="160" height="20" fill="none" /></svg>`,
+          `<svg style="${fixe}; left: 60px" width="200" height="40"><rect data-sonde x="0" y="10" width="160" height="20" fill="none" /></svg>`,
+          coupe,
+        ],
+      ];
+      for (const [nom, rogne, entier, nature] of cas) {
+        let element = poser(m, rogne);
+        try {
+          await expect(photographier(m, '01-premier-ecran', { ...ecrire, condition: '[data-sonde]' }), nom).rejects.toThrow(
+            `capture 01-premier-ecran : « [data-sonde] » invisible : ${nature}`,
+          );
+        } finally {
+          element.remove();
+        }
+        element = poser(m, entier);
+        try {
+          expect((await photographier(m, '01-premier-ecran', { ...ecrire, condition: '[data-sonde]' })).fichier, nom).toBe('01-premier-ecran');
+        } finally {
+          element.remove();
+        }
+      }
+    });
+  });
+
   test('publication : zéro capture échoue ; une étape en échec ne publie rien — attente jetée, manifeste et images inchangés', async () => {
     await avecMontage(async (m, { racine, racineNeutre, ecrire }) => {
       const declarees = ['01-premier-ecran', '01b-passer-en-ecriture'];
