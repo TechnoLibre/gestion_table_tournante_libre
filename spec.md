@@ -1088,8 +1088,9 @@ tours qui n'y tiennent pas côte à côte se scindent en **groupes de tours
 consécutifs**, chacun sur ses pages, sous ses propres têtes de tour. Une ligne
 encore plus haute qu'une page — un nom de plusieurs milliers de caractères — ne
 se coupe pas au bord de la feuille : son texte se poursuit sur la page suivante,
-sous l'en-tête répété, coupé au début d'un mot. Rien d'une ligne ne tombe hors de
-la page, et aucun nom n'est tronqué.
+sous l'en-tête répété, coupé au début d'un mot, ou entre deux caractères quand
+un mot seul dépasse la page — jamais entre une lettre et son accent. Rien d'une
+ligne ne tombe hors de la page, et aucun nom n'est tronqué.
 
 ### 7.5 Les tables en conflit
 
@@ -1286,9 +1287,9 @@ fin d'un calcul. Un intervalle de temps ferait tomber la frontière **au milieu
 d'un geste** — une personne enlevée d'un siège et pas encore posée.
 
 **Le fichier de réglages locaux du § 8.5 échappe nommément à cette règle** : il
-ne porte aucune entrée d'historique, et le logiciel **diffère** son écriture
-plutôt que de l'écrire à chaque image d'un zoom. Lui appliquer la règle écrirait
-un fichier par image de molette.
+ne porte aucune entrée d'historique, et le logiciel **diffère** l'écriture du
+cadrage plutôt que de l'écrire à chaque image d'un zoom. Lui appliquer la règle
+écrirait un fichier par image de molette.
 
 **Le coût d'un enregistrement complet est un seuil mesuré**, non un ordre de
 grandeur posé de tête : la réécriture intégrale du fichier d'état **à chaque
@@ -1438,8 +1439,13 @@ dans tout mode, en lecture et sur un plan bloqué : c'est un réglage de la
 machine, pas une modification de l'événement. En mode portable (§ 8.6), ce
 fichier suit la clé avec les événements.
 
-Son écriture est **différée**, et elle échappe nommément à la règle « fin du
-geste, jamais un minuteur » du § 8.2.
+**Le cadrage s'écrit en différé**, et échappe nommément à la règle « fin du
+geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par délai,
+jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Les deux
+passent par une même file, qui relit le fichier avant chaque écriture : deux
+écrivains qui le liraient chacun avant que l'autre l'ait écrit perdraient l'un
+des deux réglages. Un fichier que la lecture ne prend pas ne s'écrase pas : le
+choix du papier se refuse, et le cadrage attend.
 
 ### 8.6 Les fichiers
 
@@ -1850,8 +1856,8 @@ ailleurs :
    achevé ⇔ un état enregistré », qu'on serait tenté de relâcher par un minuteur,
    ce que le § 8.2 interdit nommément. **Le coût d'un enregistrement se mesure**
    sur la grande démonstration, sur la plateforme livrée, et la mesure est écrite
-   en commentaire avec ce qu'elle mesure (§ 14.1). Un seuil posé de tête ici ne
-   vaudrait rien.
+   en commentaire à côté de sa valeur, avec ce qu'elle mesure, pourquoi et sur
+   quelle configuration (§ 14.1). Un seuil posé de tête ici ne vaudrait rien.
 
 #### Ce que la compacité coûte, et ce qui le paie
 
@@ -2293,8 +2299,8 @@ perdue.
 
 **La zone de silence est la garantie de la coupe.** Aucun texte, aucune marque ne
 s'approche à moins de **8 mm** d'un bord de badge. Cette distance couvre **deux
-bornes différentes selon le bord**, et le commentaire de la constante le dit,
-sans quoi la prochaine main la « corrigera » par le calcul :
+bornes différentes selon le bord**, et l'entrée de la constante au registre le
+dit, sans quoi la prochaine main la « corrigera » par le calcul :
 
 - sur un **bord de coupe** : le décalage de l'imprimante, qui déplace la planche
   entière sur la feuille, plus l'erreur de main, qui déplace la lame ;
@@ -2605,6 +2611,12 @@ d'impression réelle. Ce n'est pas une seconde mise en page : c'est la même,
 regardée avant d'être envoyée à l'imprimante — là où l'aperçu d'une mise en page
 PDF en serait une seconde, avec le défaut que les deux dérivent et que les tests
 des deux restent verts. C'est cette vue que le guide photographie (§ 19.6).
+
+**Ce qu'une feuille porte hors de sa zone de contenu se mesure sur le rendu** —
+le pied et, sur le plan, ses mentions, son échelle graphique et son cartouche —,
+à chaque ouverture de l'aperçu. La zone de contenu prend le reste de la page,
+marges ôtées, et la découpe du plan reçoit la même hauteur. Le registre n'en
+écrit aucune valeur (§ 14.1) : elle suit la police et le rendu.
 
 **L'export CSV des indicateurs suit les conventions du § 10.3** : UTF-8 avec
 marque d'ordre d'octets, séparé par `;`, décimale française. Un fichier séparé par
@@ -3367,9 +3379,11 @@ Un seuil en nombre de caractères se cale sur le **glyphe le plus large** de
 l'alphabet visé, pas sur une moyenne. Un seuil moyen laisse déborder les noms
 écrits en lettres larges, **silencieusement**, par-dessus la ligne suivante.
 
-Chaque constante mesurée porte en commentaire **ce qu'elle mesure, pourquoi, et
-sur quelle configuration elle a été relevée**, afin que personne ne la
-« corrige » plus tard par le calcul.
+Chaque constante du registre porte, à son entrée, **ce qu'elle mesure,
+pourquoi, et sur quelle configuration elle a été relevée** — ses champs `mesure`,
+`raison` et `configuration` —, afin que personne ne la « corrige » plus tard par
+le calcul. Un seuil propre à une épreuve, comme le coût d'un enregistrement
+(§ 8.2), porte les trois en commentaire à côté de sa valeur.
 
 **Chaque seuil dit « mesuré » a un propriétaire nommé** — le banc de mesure du
 § 19.10, le niveau `node`, le **niveau manuel**, ou l'**exécution**, qui le relève
