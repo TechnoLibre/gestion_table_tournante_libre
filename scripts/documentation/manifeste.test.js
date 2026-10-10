@@ -120,6 +120,10 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.equal(configuration.get('02b-import-cp1252'), 'participants_cas_limites_cp1252.csv');
     assert.equal(configuration.get('03-import-rapport'), 'participants_cas_limites.csv');
     assert.equal(configuration.get('10-diagnostic'), 'grande');
+    // Les deux 07a, à l'étape 4, se prennent sur la grande démonstration que
+    // le parcours charge pour 10 (§ 19.3).
+    assert.equal(configuration.get('07a-cibles-sieges'), 'grande');
+    assert.equal(configuration.get('07a-cibles-tables'), 'grande');
   });
 
   test('REPORTEES : 12 à 18 à l’étape 10, 21 à l’étape 11, raison « iteration5 », rien d’autre', () => {

@@ -37,7 +37,9 @@ const capture = (fichier, etape, configuration, source = 'navigateur') => Object
 // La table du § 19.3 en données, avec 02b, 07a et 07b. « configuration » nomme
 // ce que la capture exige : le répertoire neuf, le fichier d'import
 // d'exemples/, l'identifiant de démonstration du catalogue, ou l'événement que
-// le parcours construit puis retient.
+// le parcours construit puis retient. L'étape place une capture dans le guide,
+// la configuration dit sur quoi elle se prend : les deux 07a, à l'étape 4,
+// se photographient sur la grande démonstration que le parcours charge pour 10.
 export const CAPTURES = Object.freeze([
   capture('01-premier-ecran', '1', 'repertoire-neuf'),
   capture('01b-passer-en-ecriture', '1b', 'repertoire-neuf'),
@@ -48,8 +50,8 @@ export const CAPTURES = Object.freeze([
   capture('05-tables-etat', '4', 'evenement-construit'),
   capture('06-defaut-consequence', '4', 'evenement-construit'),
   capture('07-plan-tables', '4', 'evenement-construit'),
-  capture('07a-cibles-sieges', '4', 'evenement-construit'),
-  capture('07a-cibles-tables', '4', 'evenement-construit'),
+  capture('07a-cibles-sieges', '4', 'grande'),
+  capture('07a-cibles-tables', '4', 'grande'),
   capture('07b-nombre-de-tours', '5', 'evenement-construit'),
   capture('08-animateurs-designes', '6', 'evenement-construit'),
   capture('09-refus-sur-place', '7', 'evenement-construit'),
