@@ -1411,6 +1411,26 @@ describe('les captures d’écran : chaque contrôle échoue en nommant la captu
     });
   });
 
+  // Le mode d'affichage du manifeste (§ 19.4) : Chromium sans tête, que
+  // navigator.userAgent nomme HeadlessChrome. La page lit un userAgent
+  // remplacé le temps d'une capture.
+  test('mode d’affichage : la page des épreuves est sans tête ; un userAgent sans HeadlessChrome refuse la capture en la nommant', async () => {
+    expect(navigator.userAgent).toContain('HeadlessChrome');
+    await avecMontage(async (m, { ecrire }) => {
+      const avecTete = navigator.userAgent.replace('HeadlessChrome', 'Chrome');
+      Object.defineProperty(navigator, 'userAgent', { value: avecTete, configurable: true });
+      try {
+        await expect(photographier(m, '01-premier-ecran', ecrire)).rejects.toThrow(
+          'capture 01-premier-ecran : navigateur avec tête, navigator.userAgent sans HeadlessChrome : le mode d’affichage nommé au manifeste est chromium-headless-shell',
+        );
+      } finally {
+        delete navigator.userAgent;
+      }
+      expect(navigator.userAgent).toContain('HeadlessChrome');
+      expect((await photographier(m, '01-premier-ecran', ecrire)).mode).toBe('chromium-headless-shell');
+    });
+  });
+
   test('relevé des styles : un porteur à demi hors de la fenêtre ne fait rien défiler et n’entre pas dans les styles', async () => {
     await avecMontage(async (m) => {
       const releve = async () => {

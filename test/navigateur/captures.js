@@ -647,6 +647,11 @@ function conditionVisible(element) {
   return entiereDansLaFenetre(element) ? true : 'sa boîte déborde de la fenêtre ou d’un ancêtre qui la rogne : l’image la coupe';
 }
 
+// Ce que porte le userAgent de Chromium sans tête, le seul mode d'affichage
+// des captures, MODE_AFFICHAGE au manifeste (§ 19.4) : les métriques de
+// texte diffèrent d'un mode à l'autre.
+const SANS_TETE = 'HeadlessChrome';
+
 // L'identifiant du cadre que pose cliche.
 const CADRE_DE_CAPTURE = 'gtt-cadre-de-capture';
 
@@ -682,10 +687,11 @@ async function cliche(m, fichier, racine) {
  * CAPTURES. Dans l'ordre, chaque contrôle échoue en nommant la capture et
  * la nature de la faute : capture déclarée ; feuille sans mouvement posée ;
  * conditions visibles ; collecteur vide ; aucune requête hors de la boucle
- * locale ; cadre relu au CADRE, facteur d'échelle 1 ; thème clair ; chaîne
- * témoin dans sa tolérance ; aucun chemin hors de la racine de travail
- * dans le texte relevé ; aucune faute de libellé ; styles relevés dans les
- * deux thèmes, sous leurs seuils ; empreinte d'état. L'entrée se compose,
+ * locale ; cadre relu au CADRE, facteur d'échelle 1 ; navigateur sans
+ * tête, que nomme MODE_AFFICHAGE ; thème clair ; chaîne témoin dans sa
+ * tolérance ; aucun chemin hors de la racine de travail dans le texte
+ * relevé ; aucune faute de libellé ; styles relevés dans les deux thèmes,
+ * sous leurs seuils ; empreinte d'état. L'entrée se compose,
  * puis 'verifier' la compare au manifeste — un écart nomme l'étape et sa
  * nature —, et 'ecrire' dépose l'image de la fenêtre, prise avant les
  * relevés, et l'entrée.
@@ -719,6 +725,9 @@ export async function photographier(m, fichier, { condition = [], graine = null,
     throw echec(`cadre ${innerWidth} × ${innerHeight}, attendu ${CADRE.largeur} × ${CADRE.hauteur}`);
   }
   if (devicePixelRatio !== 1) throw echec(`facteur d’échelle ${devicePixelRatio}, attendu 1`);
+  if (!navigator.userAgent.includes(SANS_TETE)) {
+    throw echec(`navigateur avec tête, navigator.userAgent sans ${SANS_TETE} : le mode d’affichage nommé au manifeste est ${MODE_AFFICHAGE}`);
+  }
   const theme = document.documentElement.getAttribute('data-theme');
   if (theme !== 'clair') throw echec(`thème « ${theme} », l’image se prend en thème clair`);
   const { regulier } = await m.polices();

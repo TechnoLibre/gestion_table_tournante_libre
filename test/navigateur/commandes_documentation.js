@@ -40,10 +40,20 @@
 // et test/pdf.js se chargent au premier appel : la configuration du lanceur
 // importe ce module sans eux. La publication tire son pilote des seules
 // captures du navigateur : une page de PDF a la taille de sa page.
+//
+// Le manifeste ne nomme pas sa machine (§ 19.5, contrainte 27). Outre
+// fautesDeMachine — clés fermées, chemins hors de la racine neutre —, la
+// publication refuse toute chaîne qui porte, comme mot entier, le nom
+// d'hôte de la machine, son premier libellé ou son utilisateur, lus de
+// node:os — sauf un nom que les sources fixes du scénario portent déjà, un
+// prénom de la démonstration par exemple, qu'aucun texte ne distingue de la
+// machine —, et tout instant, celui de la capture ou un instant écrit dans
+// un texte, que l'horloge pilotée du montage n'atteint pas : une lecture de
+// l'horloge du système tombe hors de son intervalle.
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
+import { hostname, tmpdir, userInfo } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -61,6 +71,9 @@ import {
   lireEntetePng,
   verifierOrdre,
 } from '../../scripts/documentation/manifeste.js';
+import { creerHorlogePilotee } from '../../src/application/horloge.js';
+import { libelle } from '../../src/application/libelles.js';
+import { estHorodatage } from '../../src/stockage/journal.js';
 import { MODE_AFFICHAGE, suivreRequetes } from '../chromium.js';
 
 /** Les deux modes des captures : verifier compare au manifeste, ecrire
@@ -305,6 +318,224 @@ async function deposees(attente) {
   return depots;
 }
 
+/**
+ * L'identité de la machine que la publication refuse de publier : son nom
+ * d'hôte, et son utilisateur, null quand le système n'en connaît aucun.
+ *
+ * @returns {{hote: string, utilisateur: string|null}}
+ */
+export function machineCourante() {
+  let utilisateur = null;
+  try {
+    utilisateur = userInfo().username;
+  } catch {
+    // Un processus sans entrée dans la base des comptes : aucun nom à taire.
+  }
+  return { hote: hostname(), utilisateur };
+}
+
+/** La portée de l'horloge pilotée qu'admet un instant de capture, en ms
+ *  depuis son départ : le parcours l'avance de quelques minutes ; une
+ *  lecture de l'horloge du système tombe des jours plus loin. */
+export const PORTEE_PILOTEE_MS = 24 * 60 * 60 * 1000;
+
+/** Le premier et le dernier horodatage qu'admet un instant de capture :
+ *  ceux de creerHorlogePilotee à son départ, puis avancée de
+ *  PORTEE_PILOTEE_MS. Les deux portent le décalage du départ. */
+export const INSTANTS_PILOTES = (() => {
+  const horloge = creerHorlogePilotee();
+  const debut = horloge.horodatage();
+  horloge.avancer(PORTEE_PILOTEE_MS);
+  return Object.freeze({ debut, fin: horloge.horodatage() });
+})();
+
+// Vrai quand l'instant est un horodatage que l'horloge pilotée atteint :
+// sa forme, le décalage du départ, entre début et fin. À forme et décalage
+// égaux, l'ordre des textes est celui des instants.
+function instantPilote(instant) {
+  const { debut, fin } = INSTANTS_PILOTES;
+  return (
+    typeof instant === 'string' &&
+    estHorodatage(instant) &&
+    instant.slice(19) === debut.slice(19) &&
+    instant >= debut &&
+    instant <= fin
+  );
+}
+
+// Un instant écrit dans un texte, sous les formes de l'application : un
+// horodatage ISO, millisecondes et « Z » compris, que seul instantPilote
+// admet ; en lettres, la date de format.date suivie, après « , » ou « à »,
+// de l'heure de format.heure (format.horodatage, dater) ou de HH:MM:SS
+// (planche.pied.horodatage).
+const INSTANT_ISO = /(?<!\d)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?(?!\d)/gu;
+const INSTANT_EN_LETTRES =
+  /(?<![\p{L}\p{N}])(1er|\d{1,2})\s(\p{L}+)\s(\d{4})(?:,\s|\sà\s)(?:(\d{1,2})\sh\s(\d{2})|(\d{2}):(\d{2}):(\d{2}))(?!\p{N})/gu;
+
+const deuxChiffres = (n) => String(n).padStart(2, '0');
+
+// La clé AAAA-MM-JJTHH:MM[:SS] d'un instant en lettres, lu par les textes
+// mêmes qui l'écrivent : le mois est celui dont format.date redonne la
+// date telle quelle, l'heure celle que format.heure redonne telle quelle.
+// null quand le texte n'est pas une forme de l'application.
+function cleEnLettres([, jourEcrit, nomDuMois, anneeEcrite, heureH, minuteH, heureS, minuteS, seconde]) {
+  const annee = Number(anneeEcrite);
+  const jour = jourEcrit === '1er' ? 1 : Number(jourEcrit);
+  const dateEcrite = `${jourEcrit} ${nomDuMois} ${anneeEcrite}`;
+  const mois = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].find((m) => libelle('format.date', { annee, mois: m, jour }) === dateEcrite);
+  if (mois === undefined) return null;
+  const jourCle = `${anneeEcrite}-${deuxChiffres(mois)}-${deuxChiffres(jour)}`;
+  if (heureS !== undefined) return `${jourCle}T${heureS}:${minuteS}:${seconde}`;
+  const [heure, minute] = [Number(heureH), Number(minuteH)];
+  if (libelle('format.heure', { heure, minute }) !== `${heureH} h ${minuteH}`) return null;
+  return `${jourCle}T${deuxChiffres(heure)}:${minuteH}`;
+}
+
+// Le premier instant d'un texte que l'horloge pilotée n'atteint pas, tel
+// qu'il s'écrit, ou null. Un instant en lettres se lit à l'heure locale du
+// départ, à la minute ou à la seconde qu'il porte : sa clé se compare au
+// même préfixe de début et de fin.
+function instantEtranger(texte) {
+  for (const [ecrit] of texte.matchAll(INSTANT_ISO)) if (!instantPilote(ecrit)) return ecrit;
+  const { debut, fin } = INSTANTS_PILOTES;
+  for (const morceaux of texte.matchAll(INSTANT_EN_LETTRES)) {
+    const cle = cleEnLettres(morceaux.map((m) => m?.replace(/\s/gu, ' ')));
+    if (cle !== null && (cle < debut.slice(0, cle.length) || cle > fin.slice(0, cle.length))) return morceaux[0];
+  }
+  return null;
+}
+
+const echapper = (texte) => texte.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Le motif d'un nom pris comme mot entier, sans égard à la casse : ni
+// lettre, ni chiffre, ni « _ » ne le touche.
+const motEntier = (nom) => new RegExp(`(?<![\\p{L}\\p{N}_])${echapper(nom)}(?![\\p{L}\\p{N}_])`, 'iu');
+
+// Les chaînes d'une valeur JSON, clés comprises, les clés d'un objet dans
+// leur ordre de points de code.
+function chaines(valeur) {
+  if (typeof valeur === 'string') return [valeur];
+  if (Array.isArray(valeur)) return valeur.flatMap(chaines);
+  if (valeur !== null && typeof valeur === 'object') {
+    return Object.keys(valeur)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+      .flatMap((cle) => [cle, ...chaines(valeur[cle])]);
+  }
+  return [];
+}
+
+// Les sources fixes dont le scénario des captures tire ses textes, sous le
+// projet : les réservoirs et le catalogue de la démonstration, les
+// démonstrations livrées, les CSV d'exemple, les tables de libellés, et le
+// parcours, qui tape les siens. Un dossier se lit fichier par fichier, sans
+// ses sous-dossiers ni ses épreuves.
+export const SOURCES_DU_SCENARIO = Object.freeze([
+  'src/demo',
+  'src/demo/livrees',
+  'exemples',
+  'src/application/libelles',
+  'src/interface/libelles',
+  'src/interface/parcours.navigateur.test.js',
+]);
+
+// Le texte d'un fichier : UTF-8 quand ses octets le sont, windows-1252
+// sinon, l'encodage d'un CSV d'exemple.
+function decoderSource(octets) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(octets);
+  } catch {
+    return new TextDecoder('windows-1252').decode(octets);
+  }
+}
+
+/**
+ * Les textes des SOURCES_DU_SCENARIO, lus sous le projet, dossier par
+ * dossier dans l'ordre de la liste, chaque dossier dans l'ordre des points
+ * de code de ses noms.
+ *
+ * @returns {Promise<string[]>}
+ */
+export async function lireSourcesDuScenario() {
+  const textes = [];
+  for (const source of SOURCES_DU_SCENARIO) {
+    const chemin = join(PROJET, source);
+    let fichiers = [chemin];
+    if (!source.endsWith('.js')) {
+      const entrees = await readdir(chemin, { withFileTypes: true });
+      fichiers = entrees
+        .filter((entree) => entree.isFile() && !entree.name.includes('.test.'))
+        .map(({ name }) => name)
+        .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        .map((nom) => join(chemin, nom));
+    }
+    for (const fichier of fichiers) textes.push(decoderSource(await readFile(fichier)));
+  }
+  return textes;
+}
+
+/**
+ * Les fautes d'identité d'un manifeste (§ 19.5, contrainte 27) : une
+ * chaîne, clés comprises, qui porte comme mot entier le nom d'hôte de la
+ * machine, le premier libellé de ce nom ou son utilisateur ; l'instant
+ * d'une capture que l'horloge pilotée n'atteint pas (INSTANTS_PILOTES) ;
+ * un instant écrit dans une chaîne qu'elle n'atteint pas (instantEtranger).
+ * Un nom que l'une des sources porte déjà comme mot entier ne se cherche
+ * pas : le texte qui le porte vient du scénario, et le chercher refuserait
+ * toute machine nommée comme un prénom de la démonstration. Le pilote
+ * d'abord, puis chaque capture et chaque reportée, dans leur ordre ; une
+ * faute par sorte de nom — hôte, utilisateur — et par entrée, qui ne cite
+ * pas le nom ; une par entrée pour les instants de ses chaînes, qui cite le
+ * premier. Un nom vide ou null ne se cherche pas.
+ *
+ * @param {Object} manifeste
+ * @param {{hote: string|null, utilisateur: string|null}} machine
+ * @param {{sources?: string[]}} [options]  les textes des sources du
+ *        scénario (lireSourcesDuScenario), aucun par défaut
+ * @returns {Array<{chemin: string, faute: string}>}
+ */
+export function fautesDIdentite(manifeste, machine, { sources = [] } = {}) {
+  const noms = [];
+  const hote = machine?.hote ?? '';
+  if (hote !== '') {
+    noms.push(['nom d’hôte de la machine', hote]);
+    const court = hote.split('.')[0];
+    if (court !== '' && court !== hote) noms.push(['nom d’hôte de la machine', court]);
+  }
+  if ((machine?.utilisateur ?? '') !== '') noms.push(['utilisateur de la machine', machine.utilisateur]);
+  const motifs = noms
+    .map(([quoi, nom]) => [quoi, motEntier(nom)])
+    .filter(([, motif]) => !sources.some((source) => motif.test(source)));
+  const { debut, fin } = INSTANTS_PILOTES;
+  const fautes = [];
+  // Les noms, puis les instants écrits dans les chaînes, hors de la clé
+  // instant d'une capture, contrôlée à part.
+  const lire = (chemin, valeur, instantAPart = false) => {
+    const textes = chaines(valeur);
+    const vus = new Set();
+    for (const [quoi, motif] of motifs) {
+      if (vus.has(quoi) || !textes.some((texte) => motif.test(texte))) continue;
+      vus.add(quoi);
+      fautes.push({ chemin, faute: quoi });
+    }
+    for (const texte of instantAPart ? chaines({ ...valeur, instant: null }) : textes) {
+      const ecrit = instantEtranger(texte);
+      if (ecrit === null) continue;
+      fautes.push({ chemin, faute: `instant « ${ecrit} » dans un texte, hors de l’horloge pilotée, de « ${debut} » à « ${fin} »` });
+      break;
+    }
+  };
+  lire(CHEMIN_MANIFESTE, manifeste.pilote ?? null);
+  for (const entree of manifeste.captures ?? []) {
+    lire(cheminImage(entree?.fichier), entree, true);
+    if (!instantPilote(entree?.instant)) {
+      const instant = typeof entree?.instant === 'string' ? `« ${entree.instant} »` : JSON.stringify(entree?.instant ?? null);
+      fautes.push({ chemin: cheminImage(entree?.fichier), faute: `instant ${instant} hors de l’horloge pilotée, de « ${debut} » à « ${fin} »` });
+    }
+  }
+  for (const entree of manifeste.reportees ?? []) lire(cheminImage(entree?.fichier), entree);
+  return fautes;
+}
+
 // Le pilote du manifeste : le navigateur et sa version, le mode nommé, le
 // facteur d'échelle et le cadre, communs à toutes les captures du
 // navigateur. Une page de PDF n'en relève pas : son cadre est sa page à
@@ -330,7 +561,7 @@ function piloteDe(context, captures) {
 
 // Assemble la publication sans rien écrire : le manifeste, les images à
 // écrire, les images à retirer. Lève sur la première raison de refuser.
-async function preparer(context, base, declarees, racineNeutre) {
+async function preparer(context, base, declarees, racineNeutre, machine, sources) {
   if (!Array.isArray(declarees) || declarees.length === 0) {
     throw new Error('publication : aucune capture déclarée — zéro capture n’est pas zéro capture périmée');
   }
@@ -378,7 +609,11 @@ async function preparer(context, base, declarees, racineNeutre) {
 
   const manifeste = { format: 1, pilote: piloteDe(context, captures), captures, reportees: REPORTEES.map((r) => ({ ...r })) };
   const aVenir = CAPTURES.map(({ fichier }) => fichier).filter((fichier) => !declarees.includes(fichier));
-  const fautes = [...verifierOrdre(manifeste, { aVenir }), ...fautesDeMachine(manifeste, racineNeutre)];
+  const fautes = [
+    ...verifierOrdre(manifeste, { aVenir }),
+    ...fautesDeMachine(manifeste, racineNeutre),
+    ...fautesDIdentite(manifeste, machine, { sources }),
+  ];
   if (fautes.length > 0) {
     throw new Error(`publication refusée :\n${fautes.map(({ chemin, faute }) => `${chemin} : ${faute}`).join('\n')}`);
   }
@@ -402,16 +637,20 @@ async function preparer(context, base, declarees, racineNeutre) {
  * Publie d'un bloc les captures déposées (§ 19.5) : declarees, les noms de
  * CAPTURES que cette publication porte — les autres comptent comme à venir
  * au contrôle d'ordre ; racineNeutre, la racine de travail que les textes
- * relevés peuvent nommer (fautesDeMachine). Le dossier d'attente est jeté,
- * que la publication réussisse ou non.
+ * relevés peuvent nommer (fautesDeMachine). Le troisième argument, que la
+ * page ne passe jamais, remplace l'identité de la machine que
+ * fautesDIdentite cherche, machineCourante() par défaut ; les noms que
+ * lireSourcesDuScenario porte déjà ne s'y cherchent pas. Le dossier
+ * d'attente est jeté, que la publication réussisse ou non.
  *
  * @returns {Promise<{ecrites: string[], gardees: string[], retirees: string[], manifeste: boolean}>}
  *   manifeste : vrai quand ses octets ont changé
  */
-export async function publierCaptures(context, { declarees, racine = null, racineNeutre } = {}) {
+export async function publierCaptures(context, { declarees, racine = null, racineNeutre } = {}, { machine = machineCourante() } = {}) {
   const base = racineDe(racine);
   try {
-    const { texte, aEcrire, gardees, retirees } = await preparer(context, base, declarees, racineNeutre);
+    const sources = await lireSourcesDuScenario();
+    const { texte, aEcrire, gardees, retirees } = await preparer(context, base, declarees, racineNeutre, machine, sources);
     await mkdir(join(base, DOSSIER_CAPTURES), { recursive: true });
     for (const { fichier, octets } of aEcrire) await ecrireAtomique(join(base, cheminImage(fichier)), octets);
     for (const fichier of retirees) await rm(join(base, cheminImage(fichier)));

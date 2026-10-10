@@ -17,11 +17,17 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { hostname, userInfo } from 'node:os';
 import { join } from 'node:path';
 import fontkit from '@pdf-lib/fontkit';
 import { PDFDocument, grayscale } from 'pdf-lib';
 import { describe, test } from '../lanceur.js';
 import { lirePolices } from '../polices.js';
+import { creerFormat } from '../../src/application/format.js';
+import { creerHorlogePilotee, creerHorlogeSysteme } from '../../src/application/horloge.js';
+import { libelle } from '../../src/application/libelles.js';
+import { dater } from '../../src/application/libelles/aides.js';
+import { PRENOMS } from '../../src/demo/noms.js';
 import { VERSION } from '../../src/version.genere.js';
 import { CHEMIN_MANIFESTE, DOSSIER_CAPTURES, lireEntetePng } from '../../scripts/documentation/manifeste.js';
 import {
@@ -34,7 +40,9 @@ import {
   dossierEpreuve,
   effacerDossierEpreuve,
   empreintesDossier,
+  fautesDIdentite,
   lireManifeste,
+  machineCourante,
   publierCaptures,
   tramer,
   tramerPdf,
@@ -250,11 +258,15 @@ const CONTEXTE = Object.freeze({ page: { context: () => ({ browser: () => null }
 
 const ECRANS = await construireEcrans();
 
+// L'instant d'une capture : le départ de l'horloge pilotée, celle du
+// montage des épreuves du navigateur.
+const INSTANT_PILOTE = creerHorlogePilotee().horodatage();
+
 // Dépose sous le dossier d'attente une capture de la source donnée : la page
 // donnée, tramée par tramerPdf, en est l'image, et sa taille le cadre. Une
 // page de PDF se tire du PDF des épreuves, une capture du navigateur des
-// pages d'écran.
-async function deposer(racine, { fichier, etape, source, page }) {
+// pages d'écran. remplacer remplace des champs de l'entrée.
+async function deposer(racine, { fichier, etape, source, page }, remplacer = {}) {
   const octets = source === 'pdf' ? OCTETS : ECRANS;
   const { pdf, mode, pages } = await tramerPdf(null, { octetsB64: enBase64(octets), pages: [{ page, fichier }], racine });
   const [{ cadre, chemin }] = pages;
@@ -268,11 +280,12 @@ async function deposer(racine, { fichier, etape, source, page }) {
     facteurEchelle: 1,
     mode: source === 'pdf' ? mode : 'chromium-headless-shell',
     theme: 'clair',
-    instant: '2031-05-06T20:15:00-04:00',
+    instant: INSTANT_PILOTE,
     texte: [fichier],
     styles: { clair: [], sombre: [] },
     etat: null,
     pdf: source === 'pdf' ? pdf : null,
+    ...remplacer,
   };
   return deposerCapture(null, { fichier, entree, chemin, racine });
 }
@@ -327,6 +340,161 @@ describe('publierCaptures : une page de PDF à côté des captures du navigateur
         /publication : aucune capture du navigateur/,
       );
       assert.deepEqual(await empreintesDossier(null, { racine }), []);
+    });
+  });
+});
+
+// Une machine inventée : ni son hôte, ni son domaine, ni son utilisateur
+// n'existent ailleurs dans le dépôt. Le nom d'hôte est pleinement qualifié ;
+// un texte peut ne porter que son premier libellé.
+const MACHINE = Object.freeze({ hote: 'cormoran-ecluse9.tourbiere.invalid', utilisateur: 'rubanier' });
+
+describe('publierCaptures : ni l’hôte, ni l’utilisateur, ni un instant étranger (§ 19.5, contrainte 27)', () => {
+  test('machineCourante lit le nom d’hôte et l’utilisateur de node:os, deux chaînes', () => {
+    const { hote, utilisateur } = machineCourante();
+    assert.equal(typeof hote, 'string');
+    assert.ok(utilisateur === null || typeof utilisateur === 'string', String(utilisateur));
+    // Les valeurs sont celles du système, lues au moment de l'appel.
+    assert.equal(hote, hostname());
+    let attendu = null;
+    try {
+      attendu = userInfo().username;
+    } catch {
+      // Sans entrée dans la base des comptes, machineCourante rend null.
+    }
+    assert.equal(utilisateur, attendu);
+  });
+
+  test('publierCaptures refuse un texte qui porte le nom d’hôte ou l’utilisateur de la machine, et un instant hors de l’horloge pilotée', async (contexte) => {
+    if (!canevasDisponible()) contexte.skip(SANS_CANEVAS);
+    const declarees = ['01-premier-ecran', '24-badges-controle'];
+    // Dépose les deux captures, la première sous les champs remplacés, et
+    // rend la publication de la machine inventée.
+    const publier = (racine, remplacer, pdf = {}) =>
+      (async () => {
+        await deposer(racine, { fichier: '01-premier-ecran', etape: '1', source: 'navigateur', page: 1 }, remplacer);
+        await deposer(racine, { fichier: '24-badges-controle', etape: '12', source: 'pdf', page: 1 }, pdf);
+        return publierCaptures(CONTEXTE, { declarees, racine, racineNeutre: RACINE_NEUTRE }, { machine: MACHINE });
+      })();
+    const refus = [
+      [{ texte: ['Poste CORMORAN-ECLUSE9.tourbiere.invalid'] }, {}, /doc\/captures\/01-premier-ecran\.png : nom d’hôte de la machine/],
+      [{ texte: ['Ouvert sur cormoran-ecluse9, salle 2'] }, {}, /doc\/captures\/01-premier-ecran\.png : nom d’hôte de la machine/],
+      [{ texte: ['Dossier de travail', 'session rubanier'] }, {}, /doc\/captures\/01-premier-ecran\.png : utilisateur de la machine/],
+      [{ styles: { clair: [{ jeton: 'rubanier' }], sombre: [] } }, {}, /doc\/captures\/01-premier-ecran\.png : utilisateur de la machine/],
+      [{ instant: creerHorlogeSysteme().horodatage() }, {}, /doc\/captures\/01-premier-ecran\.png : instant « [^»]+ » hors de l’horloge pilotée/],
+      [{}, { instant: '2031-05-06T20:15:00-04:00' }, /doc\/captures\/24-badges-controle\.png : instant « 2031-05-06T20:15:00-04:00 » hors de l’horloge pilotée/],
+      [{ instant: '2026-10-06T18:59:59-04:00' }, {}, /instant « 2026-10-06T18:59:59-04:00 » hors de l’horloge pilotée/],
+      [{ instant: '2026-10-06T23:00:00+00:00' }, {}, /instant « 2026-10-06T23:00:00\+00:00 » hors de l’horloge pilotée/],
+      [{ instant: null }, {}, /instant null hors de l’horloge pilotée/],
+    ];
+    for (const [remplacer, pdf, motif] of refus) {
+      await dansUnDossier(async (racine) => {
+        await assert.rejects(publier(racine, remplacer, pdf), motif, JSON.stringify(remplacer));
+        assert.deepEqual(await empreintesDossier(null, { racine }), [], JSON.stringify(remplacer));
+      });
+    }
+    // Un mot qui ne fait que contenir l'un des noms passe, comme un instant
+    // que l'horloge pilotée atteint ; la publication se fait.
+    await dansUnDossier(async (racine) => {
+      const horloge = creerHorlogePilotee();
+      horloge.avancer(3 * 60 * 1000);
+      const bilan = await publier(racine, { texte: ['rubaniers', 'cormoran-ecluse90'], instant: horloge.horodatage() });
+      assert.deepEqual(bilan.ecrites, declarees);
+    });
+  });
+
+  test('fautesDIdentite ne cherche pas un nom que les sources du scénario portent déjà comme mot entier', () => {
+    const manifeste = {
+      pilote: null,
+      captures: [{ fichier: '01-premier-ecran', instant: INSTANT_PILOTE, texte: ['Ombrelin Bruvelin, table 3'] }],
+      reportees: [],
+    };
+    const machine = { hote: 'ombrelin.local', utilisateur: 'ombrelin' };
+    assert.deepEqual(fautesDIdentite(manifeste, machine, { sources: [] }), [
+      { chemin: 'doc/captures/01-premier-ecran.png', faute: 'nom d’hôte de la machine' },
+      { chemin: 'doc/captures/01-premier-ecran.png', faute: 'utilisateur de la machine' },
+    ]);
+    assert.deepEqual(fautesDIdentite(manifeste, machine, { sources: ['Ombrelin;Bruvelin;3'] }), []);
+    // Un nom que la source ne porte que dans un mot plus long reste cherché.
+    assert.deepEqual(fautesDIdentite(manifeste, machine, { sources: ['Ombrelines'] }).length, 2);
+    // L'instant de la capture se contrôle à part : une seule faute le nomme.
+    const etranger = { ...manifeste, captures: [{ ...manifeste.captures[0], instant: '2031-05-06T20:15:00-04:00' }] };
+    assert.deepEqual(
+      fautesDIdentite(etranger, machine, { sources: ['Ombrelin'] }).map(({ faute }) => faute.split(' hors ')[0]),
+      ['instant « 2031-05-06T20:15:00-04:00 »'],
+    );
+  });
+
+  test('une machine nommée comme un prénom de la démonstration publie ; un nom absent des sources du scénario reste refusé', async (contexte) => {
+    if (!canevasDisponible()) contexte.skip(SANS_CANEVAS);
+    const declarees = ['01-premier-ecran', '24-badges-controle'];
+    // Le prénom vient de la liste de la démonstration, que le scénario
+    // affiche : l'épreuve n'en écrit aucun.
+    const prenom = PRENOMS[0];
+    const texte = [`${prenom} Bruvelin`, 'session rubanier'];
+    const publier = (racine, machine) =>
+      (async () => {
+        await deposer(racine, { fichier: '01-premier-ecran', etape: '1', source: 'navigateur', page: 1 }, { texte });
+        await deposer(racine, { fichier: '24-badges-controle', etape: '12', source: 'pdf', page: 1 });
+        return publierCaptures(CONTEXTE, { declarees, racine, racineNeutre: RACINE_NEUTRE }, { machine });
+      })();
+    for (const machine of [
+      { hote: `${prenom.toLowerCase()}-poste.invalid`, utilisateur: prenom.toLowerCase() },
+      { hote: `${prenom.toLowerCase()}.local`, utilisateur: null },
+    ]) {
+      await dansUnDossier(async (racine) => {
+        const bilan = await publier(racine, machine);
+        assert.deepEqual(bilan.ecrites, declarees, JSON.stringify(machine));
+      });
+    }
+    await dansUnDossier(async (racine) => {
+      await assert.rejects(
+        publier(racine, { hote: `${prenom.toLowerCase()}.local`, utilisateur: 'rubanier' }),
+        /doc\/captures\/01-premier-ecran\.png : utilisateur de la machine/,
+      );
+      assert.deepEqual(await empreintesDossier(null, { racine }), []);
+    });
+  });
+
+  test('publierCaptures refuse un instant écrit dans un texte hors de l’horloge pilotée, sous les formes de l’application ; un instant qu’elle atteint passe', async (contexte) => {
+    if (!canevasDisponible()) contexte.skip(SANS_CANEVAS);
+    const declarees = ['01-premier-ecran', '24-badges-controle'];
+    const publier = (racine, remplacer, pdf = {}) =>
+      (async () => {
+        await deposer(racine, { fichier: '01-premier-ecran', etape: '1', source: 'navigateur', page: 1 }, remplacer);
+        await deposer(racine, { fichier: '24-badges-controle', etape: '12', source: 'pdf', page: 1 }, pdf);
+        return publierCaptures(CONTEXTE, { declarees, racine, racineNeutre: RACINE_NEUTRE }, { machine: MACHINE });
+      })();
+    const format = creerFormat(libelle);
+    const systeme = creerHorlogeSysteme().horodatage();
+    const dansUnTexte = (fichier) => new RegExp(`doc/captures/${fichier}\\.png : instant « [^»]+ » dans un texte, hors de l’horloge pilotée`);
+    const refus = [
+      [{ texte: ['Aperçu', format.horodatage(systeme)] }, {}, dansUnTexte('01-premier-ecran')],
+      [{}, { texte: [libelle('planche.pied.horodatage', { horodatage: systeme })] }, dansUnTexte('24-badges-controle')],
+      [{ texte: [`Modifié ${dater(systeme, libelle)}`] }, {}, dansUnTexte('01-premier-ecran')],
+      [{ texte: [`journal ${systeme}`] }, {}, dansUnTexte('01-premier-ecran')],
+      [{ styles: { clair: [{ releve: '2026-10-10T18:03:00.000Z' }], sombre: [] } }, {}, dansUnTexte('01-premier-ecran')],
+      [{ texte: [format.horodatage('2026-10-06T18:59:00-04:00')] }, {}, /instant « 6 octobre 2026, 18 h 59 » dans un texte/],
+      [{}, { texte: [libelle('planche.pied.horodatage', { horodatage: '2026-10-07T19:00:01-04:00' })] }, /instant « 7 octobre 2026 à 19:00:01 » dans un texte/],
+    ];
+    for (const [remplacer, pdf, motif] of refus) {
+      await dansUnDossier(async (racine) => {
+        await assert.rejects(publier(racine, remplacer, pdf), motif, JSON.stringify([remplacer, pdf]));
+        assert.deepEqual(await empreintesDossier(null, { racine }), [], JSON.stringify(remplacer));
+      });
+    }
+    // Les mêmes formes d'un instant que l'horloge pilotée atteint, et une
+    // date seule, sans heure, passent.
+    await dansUnDossier(async (racine) => {
+      const horloge = creerHorlogePilotee();
+      horloge.avancer(2 * 60 * 1000);
+      const instant = horloge.horodatage();
+      const bilan = await publier(
+        racine,
+        { texte: [format.horodatage(instant), `Modifié ${dater(instant, libelle)}`, instant, 'Soirée du 17 mai 2031'] },
+        { texte: [libelle('planche.pied.horodatage', { horodatage: instant })] },
+      );
+      assert.deepEqual(bilan.ecrites, declarees);
     });
   });
 });

@@ -602,6 +602,18 @@ async function cadrerSur(elements) {
   await images(2);
 }
 
+// La barre de l'aperçu — l'enfant de [data-ecran="apercu"] qui porte sa
+// commande fermerApercu — est hors de l'image : son bas au bord haut de la
+// fenêtre ou au-dessus (§ 19.3, 22 et 23). Une barre collante resterait
+// dans la fenêtre au défilement de la feuille.
+function barreHorsDeLImage() {
+  const ecran = dans('[data-ecran="apercu"]');
+  let barre = ecran.querySelector('[data-commande="fermerApercu"]');
+  expect(barre, 'la commande fermerApercu de l’aperçu').not.toBeNull();
+  while (barre.parentElement !== ecran) barre = barre.parentElement;
+  expect(barre.getBoundingClientRect().bottom, 'le bas de la barre de l’aperçu, au-dessus de la fenêtre').toBeLessThanOrEqual(0);
+}
+
 // --- La planche de badges photographiée (§ 19.6) --------------------------------------
 
 // Les images de la planche (§ 19.3, § 19.6) : la feuille de contrôle, page 1
@@ -1454,6 +1466,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     const filigrane = dans('[data-impression] [data-feuille] [data-filigrane] [data-marque="filigrane"]');
     await cadrerSur([filigrane, dans('[data-impression] [data-feuille] [data-pied]')]);
     memoire.cadrage = window.scrollY;
+    barreHorsDeLImage();
     await photographier(m, '22-plan-brouillon', {
       condition: [
         '[data-impression] [data-feuille] [data-filigrane] [data-marque="filigrane"]',
@@ -1491,6 +1504,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     window.scrollTo(0, memoire.cadrage);
     await images(2);
     expect(window.scrollY).toBe(memoire.cadrage);
+    barreHorsDeLImage();
     await photographier(m, '23-plan-retenu', { condition: CONDITIONS_FEUILLE, graine: GRAINE });
 
     await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');

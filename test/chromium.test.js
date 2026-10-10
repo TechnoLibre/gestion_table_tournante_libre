@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import configuration from '../vitest.config.js';
-import { ARGUMENTS_NAVIGATEUR, horsBoucle, optionsChromium, optionsNavigateur, suivreRequetes } from './chromium.js';
+import { ARGUMENTS_NAVIGATEUR, MODE_AFFICHAGE, horsBoucle, optionsChromium, optionsNavigateur, suivreRequetes } from './chromium.js';
 import { describe, test } from './lanceur.js';
 import * as commandesDocumentation from './navigateur/commandes_documentation.js';
 import * as commandesImpression from './navigateur/commandes_impression.js';
@@ -177,6 +177,15 @@ describe('chromium : aucun réseau hors de la boucle locale, le facteur d’éch
 
 describe('le projet navigateur : les commandes et le mode des captures d’écran (§ 19.5)', () => {
   const navigateur = configuration.test.projects.find(({ test: { name } }) => name === 'navigateur');
+
+  // Un seul mode d'affichage, nommé au manifeste (§ 19.4) : le projet
+  // navigateur lance Chromium sans tête, et photographier refuse une page
+  // dont le userAgent ne le dit pas.
+  test('le projet navigateur tourne sans tête, et MODE_AFFICHAGE le nomme', () => {
+    assert.equal(navigateur.test.browser.headless, true);
+    assert.deepEqual(navigateur.test.browser.instances, [{ browser: 'chromium' }]);
+    assert.equal(MODE_AFFICHAGE, 'chromium-headless-shell');
+  });
 
   test('modeCaptures : verifier par défaut, ecrire sous GTT_CAPTURES=ecrire ; une autre valeur lève en la nommant', () => {
     assert.equal(commandesDocumentation.modeCaptures({}), 'verifier');
