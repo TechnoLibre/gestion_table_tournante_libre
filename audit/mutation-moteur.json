@@ -11,7 +11,8 @@
   "bilan": {
     "total": 2576,
     "tues": 2171,
-    "survivants": 137,
+    "tuesSerieLongue": 15,
+    "survivants": 122,
     "equivalents": 61,
     "delais": 207,
     "erreurs": 0
@@ -21,6 +22,7 @@
       "fichier": "src/moteur/classement.js",
       "total": 45,
       "tues": 38,
+      "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 5,
       "delais": 2,
@@ -30,6 +32,7 @@
       "fichier": "src/moteur/configuration.js",
       "total": 407,
       "tues": 365,
+      "tuesSerieLongue": 0,
       "survivants": 11,
       "equivalents": 0,
       "delais": 31,
@@ -39,6 +42,7 @@
       "fichier": "src/moteur/conflits.js",
       "total": 24,
       "tues": 24,
+      "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 0,
       "delais": 0,
@@ -48,6 +52,7 @@
       "fichier": "src/moteur/diagnostic.js",
       "total": 383,
       "tues": 312,
+      "tuesSerieLongue": 0,
       "survivants": 45,
       "equivalents": 0,
       "delais": 26,
@@ -57,6 +62,7 @@
       "fichier": "src/moteur/indicateurs.js",
       "total": 325,
       "tues": 281,
+      "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 18,
       "delais": 26,
@@ -66,6 +72,7 @@
       "fichier": "src/moteur/manque.js",
       "total": 162,
       "tues": 148,
+      "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 9,
       "delais": 5,
@@ -75,7 +82,8 @@
       "fichier": "src/moteur/plafond.js",
       "total": 397,
       "tues": 305,
-      "survivants": 2,
+      "tuesSerieLongue": 2,
+      "survivants": 0,
       "equivalents": 29,
       "delais": 61,
       "erreurs": 0
@@ -84,7 +92,8 @@
       "fichier": "src/moteur/recherche.js",
       "total": 648,
       "tues": 530,
-      "survivants": 69,
+      "tuesSerieLongue": 13,
+      "survivants": 56,
       "equivalents": 0,
       "delais": 49,
       "erreurs": 0
@@ -93,6 +102,7 @@
       "fichier": "src/moteur/verification.js",
       "total": 185,
       "tues": 168,
+      "tuesSerieLongue": 0,
       "survivants": 10,
       "equivalents": 0,
       "delais": 7,
@@ -104,6 +114,7 @@
       "operateur": "arithmetique",
       "total": 287,
       "tues": 270,
+      "tuesSerieLongue": 0,
       "survivants": 8,
       "equivalents": 7,
       "delais": 2,
@@ -113,7 +124,8 @@
       "operateur": "frontiere",
       "total": 165,
       "tues": 113,
-      "survivants": 31,
+      "tuesSerieLongue": 2,
+      "survivants": 29,
       "equivalents": 20,
       "delais": 1,
       "erreurs": 0
@@ -122,6 +134,7 @@
       "operateur": "negation",
       "total": 343,
       "tues": 314,
+      "tuesSerieLongue": 0,
       "survivants": 5,
       "equivalents": 0,
       "delais": 24,
@@ -131,6 +144,7 @@
       "operateur": "logique",
       "total": 77,
       "tues": 71,
+      "tuesSerieLongue": 0,
       "survivants": 3,
       "equivalents": 0,
       "delais": 3,
@@ -140,6 +154,7 @@
       "operateur": "retrait-non",
       "total": 36,
       "tues": 36,
+      "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 0,
       "delais": 0,
@@ -149,7 +164,8 @@
       "operateur": "mise-a-jour",
       "total": 158,
       "tues": 84,
-      "survivants": 2,
+      "tuesSerieLongue": 2,
+      "survivants": 0,
       "equivalents": 0,
       "delais": 72,
       "erreurs": 0
@@ -158,7 +174,8 @@
       "operateur": "nombre-plus-un",
       "total": 540,
       "tues": 469,
-      "survivants": 47,
+      "tuesSerieLongue": 9,
+      "survivants": 38,
       "equivalents": 20,
       "delais": 4,
       "erreurs": 0
@@ -167,6 +184,7 @@
       "operateur": "nombre-zero",
       "total": 291,
       "tues": 184,
+      "tuesSerieLongue": 0,
       "survivants": 6,
       "equivalents": 5,
       "delais": 96,
@@ -176,6 +194,7 @@
       "operateur": "booleen",
       "total": 22,
       "tues": 22,
+      "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 0,
       "delais": 0,
@@ -185,7 +204,8 @@
       "operateur": "si-vrai",
       "total": 186,
       "tues": 170,
-      "survivants": 9,
+      "tuesSerieLongue": 2,
+      "survivants": 7,
       "equivalents": 6,
       "delais": 1,
       "erreurs": 0
@@ -194,6 +214,7 @@
       "operateur": "si-faux",
       "total": 186,
       "tues": 174,
+      "tuesSerieLongue": 0,
       "survivants": 9,
       "equivalents": 1,
       "delais": 2,
@@ -203,6 +224,7 @@
       "operateur": "ternaire-vrai",
       "total": 39,
       "tues": 35,
+      "tuesSerieLongue": 0,
       "survivants": 4,
       "equivalents": 0,
       "delais": 0,
@@ -212,6 +234,7 @@
       "operateur": "ternaire-faux",
       "total": 39,
       "tues": 37,
+      "tuesSerieLongue": 0,
       "survivants": 2,
       "equivalents": 0,
       "delais": 0,
@@ -221,6 +244,7 @@
       "operateur": "min-max",
       "total": 21,
       "tues": 19,
+      "tuesSerieLongue": 0,
       "survivants": 1,
       "equivalents": 1,
       "delais": 0,
@@ -230,6 +254,7 @@
       "operateur": "corps-si",
       "total": 186,
       "tues": 173,
+      "tuesSerieLongue": 0,
       "survivants": 10,
       "equivalents": 1,
       "delais": 2,
@@ -854,28 +879,6 @@
       "longue": "survivant"
     },
     {
-      "cle": "src/moteur/plafond.js:si-vrai:b5e28aed44dacc4e:0",
-      "fichier": "src/moteur/plafond.js",
-      "ligne": 268,
-      "colonne": 9,
-      "operateur": "si-vrai",
-      "original": "plafond === undefined",
-      "remplacement": "true",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
-      "cle": "src/moteur/plafond.js:frontiere:91da8a7654bc6855:0",
-      "fichier": "src/moteur/plafond.js",
-      "ligne": 285,
-      "colonne": 16,
-      "operateur": "frontiere",
-      "original": ">",
-      "remplacement": ">=",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
       "cle": "src/moteur/recherche.js:nombre-plus-un:1bad6b8cf97131fc:0",
       "fichier": "src/moteur/recherche.js",
       "ligne": 143,
@@ -1008,17 +1011,6 @@
       "longue": "survivant"
     },
     {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:d850f94bdaabcc65:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 215,
-      "colonne": 18,
-      "operateur": "nombre-plus-un",
-      "original": "0",
-      "remplacement": "1",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
       "cle": "src/moteur/recherche.js:frontiere:6f32f41253f60a4b:0",
       "fichier": "src/moteur/recherche.js",
       "ligne": 217,
@@ -1030,17 +1022,6 @@
       "longue": "survivant"
     },
     {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:32ea99e99f98f65a:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 223,
-      "colonne": 23,
-      "operateur": "nombre-plus-un",
-      "original": "1",
-      "remplacement": "2",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
       "cle": "src/moteur/recherche.js:frontiere:6f32f41253f60a4b:1",
       "fichier": "src/moteur/recherche.js",
       "ligne": 241,
@@ -1050,28 +1031,6 @@
       "remplacement": "<=",
       "couverte": true,
       "longue": "survivant"
-    },
-    {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:a216dbba9047bdaf:1",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 241,
-      "colonne": 31,
-      "operateur": "nombre-plus-un",
-      "original": "1",
-      "remplacement": "2",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
-      "cle": "src/moteur/recherche.js:frontiere:8d0d1504ba708607:1",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 242,
-      "colonne": 23,
-      "operateur": "frontiere",
-      "original": "<",
-      "remplacement": "<=",
-      "couverte": true,
-      "longue": "tue"
     },
     {
       "cle": "src/moteur/recherche.js:frontiere:7d1bafe580984c35:0",
@@ -1096,28 +1055,6 @@
       "longue": "survivant"
     },
     {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:547b58a30bc0a997:2",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 253,
-      "colonne": 16,
-      "operateur": "nombre-plus-un",
-      "original": "0",
-      "remplacement": "1",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:a216dbba9047bdaf:2",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 253,
-      "colonne": 31,
-      "operateur": "nombre-plus-un",
-      "original": "1",
-      "remplacement": "2",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
       "cle": "src/moteur/recherche.js:nombre-plus-un:8136471d1947f817:0",
       "fichier": "src/moteur/recherche.js",
       "ligne": 269,
@@ -1140,17 +1077,6 @@
       "longue": "survivant"
     },
     {
-      "cle": "src/moteur/recherche.js:mise-a-jour:74e1f61770d5c394:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 299,
-      "colonne": 20,
-      "operateur": "mise-a-jour",
-      "original": "+=",
-      "remplacement": "-=",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
       "cle": "src/moteur/recherche.js:frontiere:f004b1ffa3dbf9fa:0",
       "fichier": "src/moteur/recherche.js",
       "ligne": 301,
@@ -1160,17 +1086,6 @@
       "remplacement": ">=",
       "couverte": true,
       "longue": "survivant"
-    },
-    {
-      "cle": "src/moteur/recherche.js:mise-a-jour:2a6f58021d2d2599:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 302,
-      "colonne": 31,
-      "operateur": "mise-a-jour",
-      "original": "+=",
-      "remplacement": "-=",
-      "couverte": true,
-      "longue": "tue"
     },
     {
       "cle": "src/moteur/recherche.js:frontiere:efe1e5c7656bf0ba:0",
@@ -1226,17 +1141,6 @@
       "remplacement": "{}",
       "couverte": true,
       "longue": "survivant"
-    },
-    {
-      "cle": "src/moteur/recherche.js:si-vrai:c9e104a555a44bd6:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 353,
-      "colonne": 9,
-      "operateur": "si-vrai",
-      "original": "q !== FANTOME",
-      "remplacement": "true",
-      "couverte": true,
-      "longue": "tue"
     },
     {
       "cle": "src/moteur/recherche.js:ternaire-vrai:24193ec16d54cc7c:0",
@@ -1393,39 +1297,6 @@
       "longue": "survivant"
     },
     {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:bc30efa0e866ef2a:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 551,
-      "colonne": 50,
-      "operateur": "nombre-plus-un",
-      "original": "0",
-      "remplacement": "1",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:bc30efa0e866ef2a:1",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 551,
-      "colonne": 62,
-      "operateur": "nombre-plus-un",
-      "original": "0",
-      "remplacement": "1",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:9e9819057aefb747:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 551,
-      "colonne": 69,
-      "operateur": "nombre-plus-un",
-      "original": "0",
-      "remplacement": "1",
-      "couverte": true,
-      "longue": "tue"
-    },
-    {
       "cle": "src/moteur/recherche.js:nombre-plus-un:6bdb440888819c6a:0",
       "fichier": "src/moteur/recherche.js",
       "ligne": 560,
@@ -1468,17 +1339,6 @@
       "remplacement": "1",
       "couverte": true,
       "longue": "survivant"
-    },
-    {
-      "cle": "src/moteur/recherche.js:nombre-plus-un:b3235e2c1dea830b:0",
-      "fichier": "src/moteur/recherche.js",
-      "ligne": 772,
-      "colonne": 34,
-      "operateur": "nombre-plus-un",
-      "original": "0",
-      "remplacement": "1",
-      "couverte": true,
-      "longue": "tue"
     },
     {
       "cle": "src/moteur/recherche.js:frontiere:6f32f41253f60a4b:4",
@@ -1743,6 +1603,173 @@
       "remplacement": "<=",
       "couverte": true,
       "longue": "survivant"
+    }
+  ],
+  "tuesSerieLongue": [
+    {
+      "cle": "src/moteur/plafond.js:si-vrai:b5e28aed44dacc4e:0",
+      "fichier": "src/moteur/plafond.js",
+      "ligne": 268,
+      "colonne": 9,
+      "operateur": "si-vrai",
+      "original": "plafond === undefined",
+      "remplacement": "true",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/plafond.js:frontiere:91da8a7654bc6855:0",
+      "fichier": "src/moteur/plafond.js",
+      "ligne": 285,
+      "colonne": 16,
+      "operateur": "frontiere",
+      "original": ">",
+      "remplacement": ">=",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:d850f94bdaabcc65:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 215,
+      "colonne": 18,
+      "operateur": "nombre-plus-un",
+      "original": "0",
+      "remplacement": "1",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:32ea99e99f98f65a:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 223,
+      "colonne": 23,
+      "operateur": "nombre-plus-un",
+      "original": "1",
+      "remplacement": "2",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:a216dbba9047bdaf:1",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 241,
+      "colonne": 31,
+      "operateur": "nombre-plus-un",
+      "original": "1",
+      "remplacement": "2",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:frontiere:8d0d1504ba708607:1",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 242,
+      "colonne": 23,
+      "operateur": "frontiere",
+      "original": "<",
+      "remplacement": "<=",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:547b58a30bc0a997:2",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 253,
+      "colonne": 16,
+      "operateur": "nombre-plus-un",
+      "original": "0",
+      "remplacement": "1",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:a216dbba9047bdaf:2",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 253,
+      "colonne": 31,
+      "operateur": "nombre-plus-un",
+      "original": "1",
+      "remplacement": "2",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:mise-a-jour:74e1f61770d5c394:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 299,
+      "colonne": 20,
+      "operateur": "mise-a-jour",
+      "original": "+=",
+      "remplacement": "-=",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:mise-a-jour:2a6f58021d2d2599:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 302,
+      "colonne": 31,
+      "operateur": "mise-a-jour",
+      "original": "+=",
+      "remplacement": "-=",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:si-vrai:c9e104a555a44bd6:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 353,
+      "colonne": 9,
+      "operateur": "si-vrai",
+      "original": "q !== FANTOME",
+      "remplacement": "true",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:bc30efa0e866ef2a:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 551,
+      "colonne": 50,
+      "operateur": "nombre-plus-un",
+      "original": "0",
+      "remplacement": "1",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:bc30efa0e866ef2a:1",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 551,
+      "colonne": 62,
+      "operateur": "nombre-plus-un",
+      "original": "0",
+      "remplacement": "1",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:9e9819057aefb747:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 551,
+      "colonne": 69,
+      "operateur": "nombre-plus-un",
+      "original": "0",
+      "remplacement": "1",
+      "couverte": true,
+      "longue": "tue"
+    },
+    {
+      "cle": "src/moteur/recherche.js:nombre-plus-un:b3235e2c1dea830b:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 772,
+      "colonne": 34,
+      "operateur": "nombre-plus-un",
+      "original": "0",
+      "remplacement": "1",
+      "couverte": true,
+      "longue": "tue"
     }
   ],
   "equivalents": [

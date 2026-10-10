@@ -3,11 +3,18 @@
 
 // Le rapport de l'audit par mutation (§ 14.13) : rediger rend le Markdown et
 // le JSON d'un audit, sur des résultats inventés. Les modules nommés ici
-// n'existent pas : rediger ne lit aucun fichier.
+// n'existent pas : rediger ne lit aucun fichier. La dernière partie lit, elle,
+// les trois fichiers committés d'audit/, comme du texte, sans importer
+// audit.js.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { VERSION } from '../../src/version.genere.js';
 import { describe, test } from '../../test/lanceur.js';
-import { rediger } from './rapport.js';
+import { equivalentsDe, rediger, relire } from './rapport.js';
+
+const RACINE = fileURLToPath(new URL('../../', import.meta.url));
 
 const ENTETE = Object.freeze({
   version: VERSION.affichee,
@@ -44,8 +51,9 @@ const resultat = (m, issue, { couverte = true, longue = null, equivalent = null 
 //              negation survivant non couvert (l. 4) ; nombre-zero délai ;
 //              si-vrai survivant équivalent
 //   poires.js  arithmetique survivant couvert (l. 12), tué par la série
-//              longue ; frontiere tué ; logique erreur ; frontiere survivant
-//              couvert (l. 12, colonne 2)
+//              longue, donc compté à part des survivants ; frontiere tué ;
+//              logique erreur ; frontiere survivant couvert (l. 12,
+//              colonne 2)
 const RESULTATS = Object.freeze([
   resultat(mutant('src/verger/pommes.js', 3, 'arithmetique', '+', '-'), 'tue'),
   resultat(mutant('src/verger/poires.js', 12, 'arithmetique', '*', '/'), 'survivant', { longue: 'tue' }),
@@ -66,35 +74,37 @@ describe('rapport de mutation : les comptes', () => {
   const { json } = rediger({ entete: ENTETE, resultats: RESULTATS });
   const lu = JSON.parse(json);
 
-  test('le bilan compte chaque issue, un survivant équivalent à part', () => {
-    assert.deepEqual(lu.bilan, { total: 9, tues: 2, survivants: 4, equivalents: 1, delais: 1, erreurs: 1 });
+  test('le bilan compte chaque issue ; un survivant que la série longue tue, et un équivalent, à part', () => {
+    assert.deepEqual(lu.bilan, { total: 9, tues: 2, tuesSerieLongue: 1, survivants: 3, equivalents: 1, delais: 1, erreurs: 1 });
   });
 
   test('par fichier, dans l’ordre des chemins', () => {
     assert.deepEqual(lu.parFichier, [
-      { fichier: 'src/verger/poires.js', total: 4, tues: 1, survivants: 2, equivalents: 0, delais: 0, erreurs: 1 },
-      { fichier: 'src/verger/pommes.js', total: 5, tues: 1, survivants: 2, equivalents: 1, delais: 1, erreurs: 0 },
+      { fichier: 'src/verger/poires.js', total: 4, tues: 1, tuesSerieLongue: 1, survivants: 1, equivalents: 0, delais: 0, erreurs: 1 },
+      { fichier: 'src/verger/pommes.js', total: 5, tues: 1, tuesSerieLongue: 0, survivants: 2, equivalents: 1, delais: 1, erreurs: 0 },
     ]);
   });
 
   test('par opérateur, dans l’ordre d’OPERATEURS', () => {
+    const vide = { tues: 0, tuesSerieLongue: 0, survivants: 0, equivalents: 0, delais: 0, erreurs: 0 };
     assert.deepEqual(lu.parOperateur, [
-      { operateur: 'arithmetique', total: 2, tues: 1, survivants: 1, equivalents: 0, delais: 0, erreurs: 0 },
-      { operateur: 'frontiere', total: 3, tues: 1, survivants: 2, equivalents: 0, delais: 0, erreurs: 0 },
-      { operateur: 'negation', total: 1, tues: 0, survivants: 1, equivalents: 0, delais: 0, erreurs: 0 },
-      { operateur: 'logique', total: 1, tues: 0, survivants: 0, equivalents: 0, delais: 0, erreurs: 1 },
-      { operateur: 'nombre-zero', total: 1, tues: 0, survivants: 0, equivalents: 0, delais: 1, erreurs: 0 },
-      { operateur: 'si-vrai', total: 1, tues: 0, survivants: 0, equivalents: 1, delais: 0, erreurs: 0 },
+      { operateur: 'arithmetique', total: 2, ...vide, tues: 1, tuesSerieLongue: 1 },
+      { operateur: 'frontiere', total: 3, ...vide, tues: 1, survivants: 2 },
+      { operateur: 'negation', total: 1, ...vide, survivants: 1 },
+      { operateur: 'logique', total: 1, ...vide, erreurs: 1 },
+      { operateur: 'nombre-zero', total: 1, ...vide, delais: 1 },
+      { operateur: 'si-vrai', total: 1, ...vide, equivalents: 1 },
     ]);
   });
 
   test('le Markdown porte les mêmes comptes, en lignes de tableau', () => {
     const { markdown } = rediger({ entete: ENTETE, resultats: RESULTATS });
     const lignes = markdown.split('\n');
-    assert.ok(lignes.includes('| 9 | 2 | 4 | 1 | 1 | 1 |'), 'ligne du bilan');
-    assert.ok(lignes.includes('| `src/verger/poires.js` | 4 | 1 | 2 | 0 | 0 | 1 |'), 'ligne de poires.js');
-    assert.ok(lignes.includes('| `src/verger/pommes.js` | 5 | 1 | 2 | 1 | 1 | 0 |'), 'ligne de pommes.js');
-    assert.ok(lignes.includes('| frontiere | 3 | 1 | 2 | 0 | 0 | 0 |'), 'ligne de frontiere');
+    assert.ok(lignes.includes('| mutants | tués | tués par la série longue | survivants | équivalents | délais | erreurs |'), 'en-tête du bilan');
+    assert.ok(lignes.includes('| 9 | 2 | 1 | 3 | 1 | 1 | 1 |'), 'ligne du bilan');
+    assert.ok(lignes.includes('| `src/verger/poires.js` | 4 | 1 | 1 | 1 | 0 | 0 | 1 |'), 'ligne de poires.js');
+    assert.ok(lignes.includes('| `src/verger/pommes.js` | 5 | 1 | 0 | 2 | 1 | 1 | 0 |'), 'ligne de pommes.js');
+    assert.ok(lignes.includes('| frontiere | 3 | 1 | 0 | 2 | 0 | 0 | 0 |'), 'ligne de frontiere');
   });
 
   test('l’en-tête se recopie tel quel quand il ne nomme pas la machine', () => {
@@ -111,21 +121,28 @@ describe('rapport de mutation : l’ordre', () => {
   const lu = JSON.parse(json);
 
   test('les survivants couverts d’abord, puis par fichier, ligne et colonne', () => {
-    assert.deepEqual(lieux(lu.survivants), [
-      'src/verger/poires.js:12:2',
-      'src/verger/poires.js:12:5',
-      'src/verger/pommes.js:30:5',
-      'src/verger/pommes.js:4:5',
-    ]);
+    assert.deepEqual(lieux(lu.survivants), ['src/verger/poires.js:12:2', 'src/verger/pommes.js:30:5', 'src/verger/pommes.js:4:5']);
     assert.deepEqual(
       lu.survivants.map(({ couverte, longue }) => [couverte, longue]),
       [
         [true, null],
-        [true, 'tue'],
         [true, 'survivant'],
         [false, null],
       ],
     );
+  });
+
+  test('un survivant que la série longue tue se liste à part, entre les survivants et les équivalents', () => {
+    assert.deepEqual(
+      lu.tuesSerieLongue.map((r) => [`${r.fichier}:${r.ligne}:${r.colonne}`, r.couverte, r.longue]),
+      [['src/verger/poires.js:12:5', true, 'tue']],
+    );
+    const section = (titre) => markdown.indexOf(`\n## ${titre}`);
+    const ici = markdown.indexOf('`src/verger/poires.js:12:5`');
+    assert.ok(section('Survivants (3)') > 0, 'trois survivants annoncés');
+    assert.ok(section('Tués par la série longue (1)') > section('Survivants (3)'), 'la section suit les survivants');
+    assert.ok(ici > section('Tués par la série longue (1)') && ici < section('Mutants équivalents (1)'), 'le mutant est dans sa section');
+    assert.equal(markdown.indexOf('`src/verger/poires.js:12:5`', ici + 1), -1, 'et nulle part ailleurs');
   });
 
   test('dans un même fichier, les lignes en ordre numérique : 9 avant 12', () => {
@@ -242,6 +259,11 @@ describe('rapport de mutation : ce qu’il refuse', () => {
       );
     }
     refuse({ ...premier, longue: 'tue' }, /série longue/);
+    assert.throws(
+      () => rediger({ entete: ENTETE, resultats: [{ ...RESULTATS[1], equivalent: 'déclaré à tort' }] }),
+      /équivalent/,
+      'un survivant que la série longue tue n’est pas équivalent',
+    );
     refuse({ ...premier, couverte: 'oui' }, /couverte/);
     refuse({ ...premier, mutant: { ...premier.mutant, cle: second.mutant.cle } }, /clé/);
   });
@@ -267,5 +289,143 @@ describe('rapport de mutation : les cellules de code', () => {
     const resultats = [resultat(mutant('src/verger/pommes.js', 2, 'logique', 'a && `x`', '((a )||( `x`))'), 'survivant')];
     const { markdown } = rediger({ entete: ENTETE, resultats });
     assert.ok(markdown.includes('`` a && `x` ``'), markdown);
+  });
+});
+
+describe('rapport de mutation : la relecture du JSON écrit', () => {
+  const ecrit = rediger({ entete: ENTETE, resultats: RESULTATS });
+  // Le JSON écrit, modifié par changer sur sa forme lue, réécrit comme
+  // rediger l'écrit.
+  const modifie = (changer) => {
+    const lu = JSON.parse(ecrit.json);
+    changer(lu);
+    return `${JSON.stringify(lu, null, 2)}\n`;
+  };
+
+  test('relire rend le Markdown que rediger a écrit, octet pour octet', () => {
+    const relu = relire(ecrit.json);
+    assert.equal(relu.markdown, ecrit.markdown);
+    assert.deepEqual(relu.donnees, JSON.parse(ecrit.json));
+  });
+
+  test('relire refuse un JSON réindenté, un en-tête qui nomme la machine, des comptes contraires aux listes', () => {
+    assert.throws(() => relire(JSON.stringify(JSON.parse(ecrit.json))), /forme/);
+    assert.throws(() => relire('{'), /illisible/);
+    assert.throws(() => relire(modifie((lu) => Object.assign(lu.entete, { hote: 'atelier-ombrelle' }))), /ne nomme pas sa machine/);
+    assert.throws(() => relire(modifie((lu) => Object.assign(lu, { format: 2 }))), /format/);
+    assert.throws(() => relire(modifie((lu) => (lu.bilan.survivants += 1))), /bilan/);
+    assert.throws(() => relire(modifie((lu) => (lu.parFichier[0].tues += 1))), /par fichier/);
+    assert.throws(() => relire(modifie((lu) => (lu.parOperateur[0].tues += 1))), /par opérateur/);
+  });
+
+  test('relire refuse un survivant que la série longue tue, laissé parmi les survivants', () => {
+    // L'ancien compte : le mutant tué par la série longue rangé avec les
+    // survivants, bilan, fichier et opérateur ajustés pour que seuls les
+    // listes et la règle du compte le trahissent.
+    const ancien = modifie((lu) => {
+      lu.survivants.splice(1, 0, ...lu.tuesSerieLongue.splice(0));
+      for (const compte of [lu.bilan, lu.parFichier[0], lu.parOperateur[0]]) {
+        compte.survivants += 1;
+        compte.tuesSerieLongue -= 1;
+      }
+    });
+    assert.throws(() => relire(ancien), /série longue/);
+  });
+});
+
+describe('rapport de mutation : les équivalents déclarés', () => {
+  const texte = (liste) => `${JSON.stringify(liste, null, 2)}\n`;
+  const CLE = 'src/verger/pommes.js:si-vrai:00000000000000aa:0';
+
+  test('equivalentsDe rend chaque clé avec sa raison, dans l’ordre du fichier', () => {
+    const lus = equivalentsDe(texte([{ cle: CLE, raison: 'toujours vrai ici' }, { cle: `${CLE}1`, raison: 'idem' }]));
+    assert.deepEqual([...lus], [
+      [CLE, 'toujours vrai ici'],
+      [`${CLE}1`, 'idem'],
+    ]);
+    assert.deepEqual([...equivalentsDe('[]\n')], []);
+  });
+
+  test('equivalentsDe refuse un texte illisible, une autre forme, une raison vide, une clé en double, un chemin de compte', () => {
+    assert.throws(() => equivalentsDe('['), /illisible/);
+    assert.throws(() => equivalentsDe('{}'), /liste de \{ cle, raison \}/);
+    assert.throws(() => equivalentsDe(texte([{ cle: CLE }])), new RegExp(`raison.*${CLE}`));
+    assert.throws(() => equivalentsDe(texte([{ cle: CLE, raison: '' }])), new RegExp(`raison.*${CLE}`));
+    assert.throws(() => equivalentsDe(texte([{ cle: '', raison: 'x' }])), /clé/);
+    assert.throws(() => equivalentsDe(texte([null])), /liste de \{ cle, raison \}/);
+    assert.throws(
+      () => equivalentsDe(texte([{ cle: CLE, raison: 'a' }, { cle: CLE, raison: 'b' }])),
+      new RegExp(`en double.*${CLE}`),
+    );
+    assert.throws(() => equivalentsDe(texte([{ cle: CLE, raison: 'lu dans /home/exemple/notes' }])), /ne nomme pas sa machine/);
+  });
+});
+
+// Les fautes des trois fichiers d'audit/, lus comme du texte : un JSON que
+// relire accepte, au périmètre du moteur seul ; le Markdown que sa
+// composition rejoue ; les équivalents déclarés, exactement ceux que le JSON
+// range à part, chacun avec la même raison. Une liste vide quand tout
+// s'accorde.
+function fautesAudit({ markdown, json, equivalents }) {
+  let relu;
+  try {
+    relu = relire(json);
+  } catch (erreur) {
+    return [`mutation-moteur.json : ${erreur.message}`];
+  }
+  const fautes = [];
+  const { perimetre } = relu.donnees.entete;
+  if (perimetre.length !== 1 || perimetre[0] !== 'src/moteur') fautes.push(`périmètre ${perimetre.join(', ')} : src/moteur seul attendu`);
+  if (markdown !== relu.markdown) fautes.push('mutation-moteur.md : autre que le Markdown que rediger rejoue');
+  let declares;
+  try {
+    declares = equivalentsDe(equivalents);
+  } catch (erreur) {
+    return [...fautes, `mutants-equivalents.json : ${erreur.message}`];
+  }
+  const ranges = new Map(relu.donnees.equivalents.map(({ cle, raison }) => [cle, raison]));
+  for (const [cle, raison] of declares) {
+    if (!ranges.has(cle)) fautes.push(`mutants-equivalents.json : clé inconnue du JSON, ${cle}`);
+    else if (ranges.get(cle) !== raison) fautes.push(`mutants-equivalents.json : raison autre que celle du JSON, ${cle}`);
+  }
+  for (const cle of ranges.keys()) {
+    if (!declares.has(cle)) fautes.push(`mutation-moteur.json : équivalent non déclaré, ${cle}`);
+  }
+  return fautes;
+}
+
+describe('rapport de mutation : audit/ committé (§ 14.13)', () => {
+  const lire = (fichier) => readFileSync(join(RACINE, 'audit', fichier), 'utf8');
+  const COMMITTE = Object.freeze({
+    markdown: lire('mutation-moteur.md'),
+    json: lire('mutation-moteur.json'),
+    equivalents: lire('mutants-equivalents.json'),
+  });
+
+  test('audit/ committé : l’en-tête passe verifierEntete, le Markdown est celui que rediger rejoue, chaque équivalent a une clé unique et une raison non vide, connue du JSON', () => {
+    assert.deepEqual(fautesAudit(COMMITTE), []);
+    assert.deepEqual(relire(COMMITTE.json).donnees.entete.perimetre, ['src/moteur']);
+    assert.ok(equivalentsDe(COMMITTE.equivalents).size > 0, 'des équivalents déclarés');
+  });
+
+  test('la garde relève, en mémoire, une raison vidée, une clé inconnue, un Markdown retouché, un périmètre élargi', () => {
+    const liste = JSON.parse(COMMITTE.equivalents);
+    const premiere = liste[0].cle;
+    const videe = `${JSON.stringify([{ ...liste[0], raison: '' }, ...liste.slice(1)], null, 2)}\n`;
+    assert.deepEqual(fautesAudit({ ...COMMITTE, equivalents: videe }), [
+      `mutants-equivalents.json : liste de { cle, raison }, raison vide pour ${premiere}`,
+    ]);
+    const inconnue = 'src/moteur/inventee.js:frontiere:0123456789abcdef:0';
+    const ajoutee = `${JSON.stringify([...liste, { cle: inconnue, raison: 'une clé que nul audit n’a rendue' }], null, 2)}\n`;
+    assert.deepEqual(fautesAudit({ ...COMMITTE, equivalents: ajoutee }), [`mutants-equivalents.json : clé inconnue du JSON, ${inconnue}`]);
+    assert.deepEqual(fautesAudit({ ...COMMITTE, markdown: COMMITTE.markdown.replace('## Bilan', '## Bilan retouché') }), [
+      'mutation-moteur.md : autre que le Markdown que rediger rejoue',
+    ]);
+    const elargi = COMMITTE.json.replace('"src/moteur"\n', '"src/moteur",\n      "src/application"\n');
+    assert.notEqual(elargi, COMMITTE.json);
+    assert.deepEqual(fautesAudit({ ...COMMITTE, json: elargi }), [
+      'périmètre src/moteur, src/application : src/moteur seul attendu',
+      'mutation-moteur.md : autre que le Markdown que rediger rejoue',
+    ]);
   });
 });

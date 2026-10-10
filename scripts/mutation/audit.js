@@ -25,8 +25,9 @@
 //   7. l'empreinte des sources se reprend : différente de celle de l'étape 0,
 //      les mutants ont été lus ou joués sur d'autres sources que celles que
 //      l'en-tête désigne, et rien ne s'écrit ;
-//   8. audit/mutation-moteur.md et .json, par rediger ; les survivants que
-//      audit/mutants-equivalents.json déclare équivalents y sont rangés à part.
+//   8. audit/mutation-moteur.md et .json, par rediger ; les survivants que la
+//      série longue tue, et ceux que audit/mutants-equivalents.json déclare
+//      équivalents, y sont rangés à part.
 //
 // Sortie 0 quand le rapport est écrit, survivants compris : l'audit n'est pas
 // bloquant. Sortie 2 quand l'audit ne mesure pas — en-tête refusé, ligne de
@@ -41,7 +42,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { executerMutant, executerSerie } from './executer.js';
 import { grapheDuProjet, testsConcernes } from './graphe.js';
 import { mutants } from './mutants.js';
-import { rediger, verifierEntete } from './rapport.js';
+import { equivalentsDe, rediger, verifierEntete } from './rapport.js';
 
 // Les dossiers mutés, et dont les épreuves jugent les mutants : le moteur
 // seul (§ 14.13). audit.test.js le lit dans ce source.
@@ -93,28 +94,17 @@ function empreinteDe(racine, fichiers) {
   return hachage.digest('hex');
 }
 
-// Les équivalences déclarées : [{cle, raison}], deux chaînes non vides, clés
-// uniques. Fichier absent : aucune. Lève AuditImpossible sur une autre forme.
+// Les équivalences déclarées, lues par equivalentsDe de rapport.js : chaque
+// clé vers sa raison. Fichier absent : aucune. Lève AuditImpossible, qui
+// nomme le fichier, sur un texte qu'equivalentsDe refuse.
 function lireEquivalents(racine) {
   const chemin = join(racine, EQUIVALENTS);
   if (!existsSync(chemin)) return new Map();
-  let liste;
   try {
-    liste = JSON.parse(readFileSync(chemin, 'utf8'));
+    return equivalentsDe(readFileSync(chemin, 'utf8'));
   } catch (erreur) {
-    throw new AuditImpossible(`${EQUIVALENTS} illisible : ${erreur.message}`);
+    throw new AuditImpossible(`${EQUIVALENTS} : ${erreur.message}`);
   }
-  const forme = `${EQUIVALENTS} : liste de { cle, raison }, chaînes non vides, clés uniques`;
-  if (!Array.isArray(liste)) throw new AuditImpossible(forme);
-  const equivalents = new Map();
-  for (const entree of liste) {
-    const { cle, raison } = entree ?? {};
-    if (typeof cle !== 'string' || cle === '' || typeof raison !== 'string' || raison === '' || equivalents.has(cle)) {
-      throw new AuditImpossible(forme);
-    }
-    equivalents.set(cle, raison);
-  }
-  return equivalents;
 }
 
 // Les lignes exécutées d'un rapport LCOV, par fichier : DA:<ligne>,<compte>
@@ -299,16 +289,20 @@ export async function auditer({ racine = RACINE, journal = (texte) => process.st
   for (const cle of [...equivalents.keys()].sort(comparer)) {
     if (!cles.has(cle)) journal(`équivalence sans mutant (source changé ?) : ${cle}`);
   }
+  // Une déclaration d'équivalence ne vaut que pour un survivant que la série
+  // longue ne tue pas : un mutant qu'une épreuve tue change quelque chose.
   const resultats = taches.map(({ mutant }, rang) => {
     const issue = issues[rang];
+    const longue = longues[rang];
     const declare = equivalents.get(mutant.cle) ?? null;
-    if (declare !== null && issue !== 'survivant') journal(`déclaré équivalent, pourtant ${issue} : ${mutant.cle}`);
+    const survit = issue === 'survivant' && longue !== 'tue';
+    if (declare !== null && !survit) journal(`déclaré équivalent, pourtant ${longue === 'tue' ? 'tué par la série longue' : issue} : ${mutant.cle}`);
     return {
       mutant,
       issue,
       couverte: couvertes.get(mutant.fichier)?.has(mutant.ligne) ?? false,
-      longue: longues[rang],
-      equivalent: issue === 'survivant' ? declare : null,
+      longue,
+      equivalent: survit ? declare : null,
     };
   });
 
@@ -342,7 +336,8 @@ async function principal() {
     const { bilan, dureeMs } = await auditer({ arreter: () => arret });
     process.stderr.write(
       `audit écrit : ${SORTIES.markdown}, ${SORTIES.json} — ${bilan.total} mutants, ${bilan.tues} tués, ` +
-        `${bilan.survivants} survivants, ${bilan.equivalents} équivalents, ${bilan.delais} délais, ` +
+        `${bilan.tuesSerieLongue} tués par la série longue, ${bilan.survivants} survivants, ` +
+        `${bilan.equivalents} équivalents, ${bilan.delais} délais, ` +
         `${bilan.erreurs} erreurs, en ${(dureeMs / 60_000).toFixed(1)} min\n`,
     );
     process.exitCode = 0;

@@ -7,13 +7,34 @@
 // lance de vrais processus de Node, d'où sa place hors de la série
 // surveillée (§ 14.14). Le cas du délai vérifie qu'aucun processus de
 // l'épreuve ne reste après le délai, groupe entier compris.
+//
+// Puis l'audit entier, en ligne de commande : node scripts/mutation/audit.js
+// dans un processus fils, sur un petit arbre planté dans un dossier
+// temporaire — les scripts de l'audit recopiés, le module inventé de
+// test/fixtures/mutation/arbre/ en src/moteur, une épreuve node qui laisse
+// survivre des mutants, une épreuve longue qui en tue. Aucune épreuve
+// n'importe audit.js (audit.test.js) : le processus fils l'exécute tel que
+// make mutation le lance, sa racine étant celle de l'arbre.
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import {
+  appendFileSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { executerMutant } from '../scripts/mutation/executer.js';
 import { mutants } from '../scripts/mutation/mutants.js';
+import { relire } from '../scripts/mutation/rapport.js';
 import { describe, test } from './lanceur.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
@@ -108,5 +129,135 @@ describe('executerMutant', () => {
       /absente\.epreuve\.js/u,
     );
     await assert.rejects(executerMutant({ mutant, tests: [EPREUVE], delaiMs: 0 }), RangeError);
+  });
+});
+
+// Le petit arbre de l'audit : [chemin dans l'arbre, source sous la racine du
+// projet]. Les scripts de l'audit sont recopiés, et non liés : un module lié
+// se charge sous son chemin réel, et audit.js prendrait le projet pour racine.
+const ARBRE = Object.freeze([
+  ['scripts/version.js', 'scripts/version.js'],
+  ...['audit', 'crochets', 'executer', 'graphe', 'mutants', 'rapport'].map((nom) => [
+    `scripts/mutation/${nom}.js`,
+    `scripts/mutation/${nom}.js`,
+  ]),
+  ['test/lanceur.js', 'test/lanceur.js'],
+  ['version.json', 'version.json'],
+  ['src/moteur/bornes.js', 'test/fixtures/mutation/arbre/bornes.js'],
+  ['src/moteur/bornes.test.js', 'test/fixtures/mutation/arbre/bornes.epreuve.js'],
+  ['src/moteur/bornes.long.test.js', 'test/fixtures/mutation/arbre/bornes.longue.js'],
+]);
+
+// Le délai du processus fils : l'audit du petit arbre dure quelques
+// secondes ; au-delà, l'épreuve échoue plutôt que d'attendre le délai de la
+// série.
+const DELAI_AUDIT_MS = 90_000;
+
+// Plante l'arbre dans un dossier temporaire neuf, node_modules lié à celui du
+// projet (vite, dont mutants.js et executer.js lisent parseAst), et y lance
+// l'audit ; rend le dossier, le code de sortie et la sortie d'erreur.
+// preparer(dossier) modifie l'arbre avant l'audit. Le dossier s'efface par
+// effacer(dossier).
+function auditerArbre(preparer = () => {}) {
+  const dossier = mkdtempSync(join(tmpdir(), 'gtt-audit-'));
+  for (const [cible, source] of ARBRE) {
+    mkdirSync(dirname(join(dossier, cible)), { recursive: true });
+    copyFileSync(join(RACINE, source), join(dossier, cible));
+  }
+  writeFileSync(join(dossier, 'package.json'), '{ "type": "module" }\n');
+  symlinkSync(join(RACINE, 'node_modules'), join(dossier, 'node_modules'), 'dir');
+  preparer(dossier);
+  const fils = spawnSync(process.execPath, ['scripts/mutation/audit.js'], {
+    cwd: dossier,
+    encoding: 'utf8',
+    timeout: DELAI_AUDIT_MS,
+    killSignal: 'SIGKILL',
+  });
+  return { dossier, code: fils.status, sortie: `${fils.stderr ?? ''}${fils.error ? `\n${fils.error.message}` : ''}` };
+}
+
+const effacer = (dossier) => rmSync(dossier, { recursive: true, force: true });
+
+// Les mutants d'une liste du JSON, lus « ligne opérateur avant→après ».
+const lus = (liste) => liste.map((m) => `${m.ligne} ${m.operateur} ${m.original}→${m.remplacement}`);
+
+describe('audit par mutation, en ligne de commande (§ 14.13)', () => {
+  test('un survivant que la série longue tue se compte à part ; l’audit sort en 0 avec un survivant, et écrit ses deux fichiers', () => {
+    const { dossier, code, sortie } = auditerArbre();
+    try {
+      assert.equal(code, 0, sortie);
+      assert.match(sortie, /audit écrit : audit\/mutation-moteur\.md, audit\/mutation-moteur\.json/u);
+      const json = readFileSync(join(dossier, 'audit/mutation-moteur.json'), 'utf8');
+      const markdown = readFileSync(join(dossier, 'audit/mutation-moteur.md'), 'utf8');
+      const lu = JSON.parse(json);
+      assert.deepEqual(lu.entete.perimetre, ['src/moteur']);
+      assert.deepEqual(lu.bilan, { total: 7, tues: 3, tuesSerieLongue: 3, survivants: 1, equivalents: 0, delais: 0, erreurs: 0 });
+      // n * 3 → n / 3 : l'épreuve node le laisse vivre, l'épreuve longue le tue.
+      assert.deepEqual(lus(lu.tuesSerieLongue), ['19 arithmetique *→/', '19 nombre-plus-un 3→4', '19 nombre-zero 3→0']);
+      assert.deepEqual(
+        lu.tuesSerieLongue.map(({ couverte, longue }) => [couverte, longue]),
+        [
+          [true, 'tue'],
+          [true, 'tue'],
+          [true, 'tue'],
+        ],
+      );
+      // a > b → a >= b : rejoué contre l'épreuve longue, qui atteint le
+      // module, il survit encore ; c'est le seul survivant compté.
+      assert.deepEqual(lus(lu.survivants), ['12 frontiere >→>=']);
+      assert.equal(lu.survivants[0].longue, 'survivant');
+      assert.equal(relire(json).markdown, markdown);
+    } finally {
+      effacer(dossier);
+    }
+  });
+
+  test('une ligne de base rouge : sortie 2 (SORTIE_NE_MESURE_PAS), et aucun dossier audit/', () => {
+    const { dossier, code, sortie } = auditerArbre((arbre) =>
+      appendFileSync(
+        join(arbre, 'src/moteur/bornes.test.js'),
+        "\ntest('une épreuve rouge avant tout mutant', () => {\n  assert.equal(plusGrand(1, 2), 1);\n});\n",
+      ),
+    );
+    try {
+      assert.equal(code, 2, sortie);
+      assert.match(sortie, /l’audit ne mesure pas : la série node du périmètre, non mutée, échoue/u);
+      assert.equal(existsSync(join(dossier, 'audit')), false, 'aucun dossier audit/');
+    } finally {
+      effacer(dossier);
+    }
+  });
+
+  test('un mutant déclaré équivalent que la série longue tue reste compté tué par elle, et l’audit le signale', () => {
+    const source = readFileSync(join(RACINE, 'test/fixtures/mutation/arbre/bornes.js'), 'utf8');
+    const [divise] = mutants(source, 'src/moteur/bornes.js').filter((m) => m.operateur === 'arithmetique');
+    const { dossier, code, sortie } = auditerArbre((arbre) => {
+      mkdirSync(join(arbre, 'audit'));
+      writeFileSync(join(arbre, 'audit/mutants-equivalents.json'), `${JSON.stringify([{ cle: divise.cle, raison: 'déclaré à tort' }])}\n`);
+    });
+    try {
+      assert.equal(code, 0, sortie);
+      assert.ok(sortie.includes(`déclaré équivalent, pourtant tué par la série longue : ${divise.cle}`), sortie);
+      const lu = JSON.parse(readFileSync(join(dossier, 'audit/mutation-moteur.json'), 'utf8'));
+      assert.equal(lu.bilan.equivalents, 0);
+      assert.ok(lu.tuesSerieLongue.some((m) => m.cle === divise.cle));
+    } finally {
+      effacer(dossier);
+    }
+  });
+
+  test('des équivalents déclarés d’une autre forme : sortie 2, avant toute mesure, rien d’écrit', () => {
+    const { dossier, code, sortie } = auditerArbre((arbre) => {
+      mkdirSync(join(arbre, 'audit'));
+      writeFileSync(join(arbre, 'audit/mutants-equivalents.json'), '[{ "cle": "src/moteur/bornes.js:frontiere:0:0", "raison": "" }]\n');
+    });
+    try {
+      assert.equal(code, 2, sortie);
+      assert.match(sortie, /audit\/mutants-equivalents\.json : liste de \{ cle, raison \}, raison vide pour src\/moteur\/bornes\.js:frontiere:0:0/u);
+      assert.doesNotMatch(sortie, /ligne de base/u);
+      assert.deepEqual(readdirSync(join(dossier, 'audit')), ['mutants-equivalents.json']);
+    } finally {
+      effacer(dossier);
+    }
   });
 });

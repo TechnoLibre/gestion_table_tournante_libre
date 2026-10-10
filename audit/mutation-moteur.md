@@ -10,49 +10,50 @@
 | Node | v26.10.0 |
 
 Chaque mutant se joue contre les épreuves de la série node qui atteignent son module, sous `node --test`.
+Un survivant se rejoue contre les épreuves longues qui atteignent son module avant d’être compté : tué par elles, il se compte à part.
 Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affirmer.
 
 ## Bilan
 
-| mutants | tués | survivants | équivalents | délais | erreurs |
-|---:|---:|---:|---:|---:|---:|
-| 2576 | 2171 | 137 | 61 | 207 | 0 |
+| mutants | tués | tués par la série longue | survivants | équivalents | délais | erreurs |
+|---:|---:|---:|---:|---:|---:|---:|
+| 2576 | 2171 | 15 | 122 | 61 | 207 | 0 |
 
 ## Par fichier
 
-| fichier | total | tués | survivants | équivalents | délais | erreurs |
-|---|---:|---:|---:|---:|---:|---:|
-| `src/moteur/classement.js` | 45 | 38 | 0 | 5 | 2 | 0 |
-| `src/moteur/configuration.js` | 407 | 365 | 11 | 0 | 31 | 0 |
-| `src/moteur/conflits.js` | 24 | 24 | 0 | 0 | 0 | 0 |
-| `src/moteur/diagnostic.js` | 383 | 312 | 45 | 0 | 26 | 0 |
-| `src/moteur/indicateurs.js` | 325 | 281 | 0 | 18 | 26 | 0 |
-| `src/moteur/manque.js` | 162 | 148 | 0 | 9 | 5 | 0 |
-| `src/moteur/plafond.js` | 397 | 305 | 2 | 29 | 61 | 0 |
-| `src/moteur/recherche.js` | 648 | 530 | 69 | 0 | 49 | 0 |
-| `src/moteur/verification.js` | 185 | 168 | 10 | 0 | 7 | 0 |
+| fichier | total | tués | tués par la série longue | survivants | équivalents | délais | erreurs |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `src/moteur/classement.js` | 45 | 38 | 0 | 0 | 5 | 2 | 0 |
+| `src/moteur/configuration.js` | 407 | 365 | 0 | 11 | 0 | 31 | 0 |
+| `src/moteur/conflits.js` | 24 | 24 | 0 | 0 | 0 | 0 | 0 |
+| `src/moteur/diagnostic.js` | 383 | 312 | 0 | 45 | 0 | 26 | 0 |
+| `src/moteur/indicateurs.js` | 325 | 281 | 0 | 0 | 18 | 26 | 0 |
+| `src/moteur/manque.js` | 162 | 148 | 0 | 0 | 9 | 5 | 0 |
+| `src/moteur/plafond.js` | 397 | 305 | 2 | 0 | 29 | 61 | 0 |
+| `src/moteur/recherche.js` | 648 | 530 | 13 | 56 | 0 | 49 | 0 |
+| `src/moteur/verification.js` | 185 | 168 | 0 | 10 | 0 | 7 | 0 |
 
 ## Par opérateur
 
-| opérateur | total | tués | survivants | équivalents | délais | erreurs |
-|---|---:|---:|---:|---:|---:|---:|
-| arithmetique | 287 | 270 | 8 | 7 | 2 | 0 |
-| frontiere | 165 | 113 | 31 | 20 | 1 | 0 |
-| negation | 343 | 314 | 5 | 0 | 24 | 0 |
-| logique | 77 | 71 | 3 | 0 | 3 | 0 |
-| retrait-non | 36 | 36 | 0 | 0 | 0 | 0 |
-| mise-a-jour | 158 | 84 | 2 | 0 | 72 | 0 |
-| nombre-plus-un | 540 | 469 | 47 | 20 | 4 | 0 |
-| nombre-zero | 291 | 184 | 6 | 5 | 96 | 0 |
-| booleen | 22 | 22 | 0 | 0 | 0 | 0 |
-| si-vrai | 186 | 170 | 9 | 6 | 1 | 0 |
-| si-faux | 186 | 174 | 9 | 1 | 2 | 0 |
-| ternaire-vrai | 39 | 35 | 4 | 0 | 0 | 0 |
-| ternaire-faux | 39 | 37 | 2 | 0 | 0 | 0 |
-| min-max | 21 | 19 | 1 | 1 | 0 | 0 |
-| corps-si | 186 | 173 | 10 | 1 | 2 | 0 |
+| opérateur | total | tués | tués par la série longue | survivants | équivalents | délais | erreurs |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| arithmetique | 287 | 270 | 0 | 8 | 7 | 2 | 0 |
+| frontiere | 165 | 113 | 2 | 29 | 20 | 1 | 0 |
+| negation | 343 | 314 | 0 | 5 | 0 | 24 | 0 |
+| logique | 77 | 71 | 0 | 3 | 0 | 3 | 0 |
+| retrait-non | 36 | 36 | 0 | 0 | 0 | 0 | 0 |
+| mise-a-jour | 158 | 84 | 2 | 0 | 0 | 72 | 0 |
+| nombre-plus-un | 540 | 469 | 9 | 38 | 20 | 4 | 0 |
+| nombre-zero | 291 | 184 | 0 | 6 | 5 | 96 | 0 |
+| booleen | 22 | 22 | 0 | 0 | 0 | 0 | 0 |
+| si-vrai | 186 | 170 | 2 | 7 | 6 | 1 | 0 |
+| si-faux | 186 | 174 | 0 | 9 | 1 | 2 | 0 |
+| ternaire-vrai | 39 | 35 | 0 | 4 | 0 | 0 | 0 |
+| ternaire-faux | 39 | 37 | 0 | 2 | 0 | 0 | 0 |
+| min-max | 21 | 19 | 0 | 1 | 1 | 0 | 0 |
+| corps-si | 186 | 173 | 0 | 10 | 1 | 2 | 0 |
 
-## Survivants (137), lignes couvertes d’abord
+## Survivants (122), lignes couvertes d’abord
 
 | lieu | opérateur | avant | après | ligne couverte | série longue |
 |---|---|---|---|---|---|
@@ -112,8 +113,6 @@ Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affi
 | `src/moteur/diagnostic.js:369:9` | si-faux | `valeur > max` | `false` | oui | survit |
 | `src/moteur/diagnostic.js:369:16` | frontiere | `>` | `>=` | oui | survit |
 | `src/moteur/diagnostic.js:369:23` | corps-si | `max = valeur;` | `{}` | oui | survit |
-| `src/moteur/plafond.js:268:9` | si-vrai | `plafond === undefined` | `true` | oui | tué |
-| `src/moteur/plafond.js:285:16` | frontiere | `>` | `>=` | oui | tué |
 | `src/moteur/recherche.js:143:18` | nombre-plus-un | `1` | `2` | oui | survit |
 | `src/moteur/recherche.js:160:20` | nombre-plus-un | `0xffff` | `65536` | oui | survit |
 | `src/moteur/recherche.js:160:20` | nombre-zero | `0xffff` | `0` | oui | survit |
@@ -126,27 +125,18 @@ Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affi
 | `src/moteur/recherche.js:204:21` | frontiere | `<` | `<=` | oui | survit |
 | `src/moteur/recherche.js:204:75` | nombre-plus-un | `1` | `2` | oui | survit |
 | `src/moteur/recherche.js:214:21` | frontiere | `<` | `<=` | oui | survit |
-| `src/moteur/recherche.js:215:18` | nombre-plus-un | `0` | `1` | oui | tué |
 | `src/moteur/recherche.js:217:23` | frontiere | `<` | `<=` | oui | survit |
-| `src/moteur/recherche.js:223:23` | nombre-plus-un | `1` | `2` | oui | tué |
 | `src/moteur/recherche.js:241:21` | frontiere | `<` | `<=` | oui | survit |
-| `src/moteur/recherche.js:241:31` | nombre-plus-un | `1` | `2` | oui | tué |
-| `src/moteur/recherche.js:242:23` | frontiere | `<` | `<=` | oui | tué |
 | `src/moteur/recherche.js:247:21` | frontiere | `<` | `<=` | oui | survit |
 | `src/moteur/recherche.js:252:19` | nombre-plus-un | `0` | `1` | oui | survit |
-| `src/moteur/recherche.js:253:16` | nombre-plus-un | `0` | `1` | oui | tué |
-| `src/moteur/recherche.js:253:31` | nombre-plus-un | `1` | `2` | oui | tué |
 | `src/moteur/recherche.js:269:37` | nombre-plus-un | `1` | `2` | oui | survit |
 | `src/moteur/recherche.js:285:13` | frontiere | `>` | `>=` | oui | survit |
-| `src/moteur/recherche.js:299:20` | mise-a-jour | `+=` | `-=` | oui | tué |
 | `src/moteur/recherche.js:301:23` | frontiere | `>` | `>=` | oui | survit |
-| `src/moteur/recherche.js:302:31` | mise-a-jour | `+=` | `-=` | oui | tué |
 | `src/moteur/recherche.js:317:15` | frontiere | `<` | `<=` | oui | survit |
 | `src/moteur/recherche.js:317:15` | negation | `<` | `>=` | oui | survit |
 | `src/moteur/recherche.js:325:13` | frontiere | `>` | `>=` | oui | survit |
 | `src/moteur/recherche.js:351:9` | si-faux | `s === exclu` | `false` | oui | survit |
 | `src/moteur/recherche.js:351:22` | corps-si | `continue;` | `{}` | oui | survit |
-| `src/moteur/recherche.js:353:9` | si-vrai | `q !== FANTOME` | `true` | oui | tué |
 | `src/moteur/recherche.js:417:13` | ternaire-vrai | `R <= UINT16_MAX` | `true` | oui | survit |
 | `src/moteur/recherche.js:417:13` | ternaire-faux | `R <= UINT16_MAX` | `false` | oui | survit |
 | `src/moteur/recherche.js:417:15` | frontiere | `<=` | `<` | oui | survit |
@@ -161,14 +151,10 @@ Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affi
 | `src/moteur/recherche.js:536:16` | nombre-plus-un | `0` | `1` | oui | survit |
 | `src/moteur/recherche.js:542:18` | nombre-plus-un | `0` | `1` | oui | survit |
 | `src/moteur/recherche.js:547:9` | si-vrai | `mouvement !== null` | `true` | oui | survit |
-| `src/moteur/recherche.js:551:50` | nombre-plus-un | `0` | `1` | oui | tué |
-| `src/moteur/recherche.js:551:62` | nombre-plus-un | `0` | `1` | oui | tué |
-| `src/moteur/recherche.js:551:69` | nombre-plus-un | `0` | `1` | oui | tué |
 | `src/moteur/recherche.js:560:34` | nombre-plus-un | `1` | `2` | oui | survit |
 | `src/moteur/recherche.js:664:23` | nombre-plus-un | `0` | `1` | oui | survit |
 | `src/moteur/recherche.js:670:16` | nombre-plus-un | `0` | `1` | oui | survit |
 | `src/moteur/recherche.js:721:16` | nombre-plus-un | `0` | `1` | oui | survit |
-| `src/moteur/recherche.js:772:34` | nombre-plus-un | `0` | `1` | oui | tué |
 | `src/moteur/recherche.js:779:21` | frontiere | `<` | `<=` | oui | survit |
 | `src/moteur/recherche.js:782:11` | si-vrai | `t !== RESERVE` | `true` | oui | survit |
 | `src/moteur/recherche.js:813:7` | si-faux | `m < 2` | `false` | oui | survit |
@@ -193,6 +179,28 @@ Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affi
 | `src/moteur/verification.js:168:24` | nombre-plus-un | `1` | `2` | oui | survit |
 | `src/moteur/verification.js:169:50` | nombre-plus-un | `1` | `2` | oui | survit |
 | `src/moteur/verification.js:174:44` | frontiere | `<` | `<=` | oui | survit |
+
+## Tués par la série longue (15)
+
+Survivants de la série node que les épreuves longues tuent : la série node exécute leur ligne sans l’affirmer.
+
+| lieu | opérateur | avant | après | ligne couverte |
+|---|---|---|---|---|
+| `src/moteur/plafond.js:268:9` | si-vrai | `plafond === undefined` | `true` | oui |
+| `src/moteur/plafond.js:285:16` | frontiere | `>` | `>=` | oui |
+| `src/moteur/recherche.js:215:18` | nombre-plus-un | `0` | `1` | oui |
+| `src/moteur/recherche.js:223:23` | nombre-plus-un | `1` | `2` | oui |
+| `src/moteur/recherche.js:241:31` | nombre-plus-un | `1` | `2` | oui |
+| `src/moteur/recherche.js:242:23` | frontiere | `<` | `<=` | oui |
+| `src/moteur/recherche.js:253:16` | nombre-plus-un | `0` | `1` | oui |
+| `src/moteur/recherche.js:253:31` | nombre-plus-un | `1` | `2` | oui |
+| `src/moteur/recherche.js:299:20` | mise-a-jour | `+=` | `-=` | oui |
+| `src/moteur/recherche.js:302:31` | mise-a-jour | `+=` | `-=` | oui |
+| `src/moteur/recherche.js:353:9` | si-vrai | `q !== FANTOME` | `true` | oui |
+| `src/moteur/recherche.js:551:50` | nombre-plus-un | `0` | `1` | oui |
+| `src/moteur/recherche.js:551:62` | nombre-plus-un | `0` | `1` | oui |
+| `src/moteur/recherche.js:551:69` | nombre-plus-un | `0` | `1` | oui |
+| `src/moteur/recherche.js:772:34` | nombre-plus-un | `0` | `1` | oui |
 
 ## Mutants équivalents (61)
 
