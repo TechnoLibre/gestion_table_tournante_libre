@@ -21,9 +21,15 @@
   //
   // Un refus — une erreur qui porte un code — s'affiche à côté du bouton,
   // avec son remède, et le bouton reste actif : jamais un bouton grisé muet.
-  // Une erreur sans code n'est pas un refus et remonte.
+  // Une erreur sans code n'est pas un refus et remonte. Le bouton désigne
+  // le refus affiché par aria-describedby, sur l'id que porte le refus : le
+  // remède qui le retire rend le focus au bouton (Refus).
   //
   // data-commande porte nom, ou à défaut le dernier segment de la clé.
+  // nomAccessible, déjà traduit, nomme le bouton quand son libellé seul ne
+  // le distingue pas d'un homonyme ; null, le libellé le nomme. Armée, la
+  // commande se nomme par son libellé de confirmation, celui qu'elle
+  // montre. Le refus reçoit nomAccessible pour nommer son remède.
   // confirmer se lit au montage : une commande qui change de confirmation se
   // remonte.
   //
@@ -37,10 +43,21 @@
   import { DELAI_CONFIRMATION_MS, creerMachineCommande, exigerVariante } from './commande.js';
   import Refus from './Refus.svelte';
 
-  let { cle, executer, confirmer = null, details = {}, nom = null, gestes = {}, variante = 'secondaire' } = $props();
+  let {
+    cle,
+    executer,
+    confirmer = null,
+    details = {},
+    nom = null,
+    nomAccessible = null,
+    gestes = {},
+    variante = 'secondaire',
+  } = $props();
 
   const t = getContext('t');
   const horloge = getContext('horloge');
+  const uid = $props.id();
+  const idRefus = `${uid}-refus`;
   const machine = creerMachineCommande({ confirmer: untrack(() => confirmer) });
 
   let armee = $state(false);
@@ -104,11 +121,13 @@
     class:discrete={forme === 'discrete'}
     aria-busy={enCours ? 'true' : undefined}
     aria-disabled={enCours ? 'true' : undefined}
+    aria-label={armee ? undefined : (nomAccessible ?? undefined)}
+    aria-describedby={refus === null ? undefined : idRefus}
     onkeydown={surTouche}
     onclick={cliquer}>{libelle}</button
   >
   {#if refus !== null}
-    <Refus {refus} lever={() => (refus = null)} {gestes} />
+    <Refus id={idRefus} {refus} lever={() => (refus = null)} objet={nomAccessible} {gestes} />
   {/if}
 </div>
 

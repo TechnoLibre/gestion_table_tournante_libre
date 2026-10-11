@@ -45,6 +45,16 @@
   // aria-describedby et montre alors la règle de la charge, ou le choix
   // tenu d'un objectif neuf.
   //
+  // Les commandes que chaque table répète — ses places, « Réaligner »,
+  // « Supprimer », le bouton qui déplie, et pour chaque objectif son champ,
+  // le choix de sa règle et « Retirer l'objectif » — portent un nom
+  // accessible qui nomme leur table, et l'objectif pour ce qui ne le dit
+  // pas déjà (tables.nom.table, tables.nom.objectif) : leur texte visible,
+  // puis ce qui les distingue, par la prop nom de Champ et de ChoixRegle,
+  // nomAccessible de Commande. Le remède d'un refus posé contre l'une
+  // d'elles se nomme par son texte puis par ce nom (Refus, objet). Le texte
+  // affiché ne change pas.
+  //
   // « Exporter les objectifs » (§ 10.4) remet les octets d'exporterObjectifs
   // à facade.enregistrerSous, sous le nom ‹base›-objectifs.csv
   // (nomExportObjectifs), comme l'export des participants : sortir n'est pas
@@ -241,6 +251,12 @@
   // la met en forme et la refuse.
   const lireTexte = (texte) => ({ valeur: texte });
 
+  // Les noms d'une commande de la table numero : son texte, sous ses
+  // détails, puis la table ; et pour un objectif, son texte, la portée de
+  // vue, puis la table.
+  const nomDeTable = (numero, cle, details = {}) => t('tables.nom.table', { cle, details, numero });
+  const nomDObjectif = (numero, cle, vue) => t('tables.nom.objectif', { cle, tour: vue.tour, numero });
+
   // Une frappe ou Échap dans le champ de la table id retire le complément
   // de son refus : le champ retire le refus au même instant.
   const suivreSaisie = (id) => (element) => {
@@ -281,6 +297,7 @@
         cle={`objectif-${vue.cle}`}
         etiquette={vue.tour === null ? 'tables.objectif.soiree' : 'tables.objectif.tour'}
         details={{ tour: vue.tour }}
+        nom={nomDeTable(table.numero, vue.tour === null ? 'tables.objectif.soiree' : 'tables.objectif.tour', { tour: vue.tour })}
         valeur={vue.texte}
         lire={lireTexte}
         executer={(texte) => poser(table, vue, texte)}
@@ -294,16 +311,27 @@
         valeur={valeurRegle(vue)}
         {options}
         idRefus={refusDuChoix === null ? null : idRefusRegle}
+        nom={nomDObjectif(table.numero, 'tables.objectif.regle', vue)}
         surChoix={(evenement) => choisirRegle(evenement, table, vue)}
       />
     </div>
     {#if vue.existe}
       <span class="etat-regle"><Pastille sorte="statut" valeur={vue.etat.ton} libelle={t(vue.etat.cle)} /></span>
-      <Commande cle="tables.objectif.retirer" nom="retirerObjectif" executer={() => retirer(table, vue)} />
+      <Commande
+        cle="tables.objectif.retirer"
+        nom="retirerObjectif"
+        nomAccessible={nomDObjectif(table.numero, 'tables.objectif.retirer', vue)}
+        executer={() => retirer(table, vue)}
+      />
     {/if}
   </div>
   {#if refusDuChoix !== null}
-    <Refus id={idRefusRegle} refus={refusDuChoix} lever={() => delete refusRegle[vue.cle]} />
+    <Refus
+      id={idRefusRegle}
+      refus={refusDuChoix}
+      lever={() => delete refusRegle[vue.cle]}
+      objet={nomDObjectif(table.numero, 'tables.objectif.regle', vue)}
+    />
   {/if}
   {#each [...retenuesDe(vue.cle), ...vue.avis] as avis, rang (rang)}
     <div class="message avis" data-avertissement={avis.code} role="status">
@@ -346,6 +374,7 @@
             <Champ
               cle={`sieges-${table.id}`}
               etiquette="tables.liste.places"
+              nom={nomDeTable(table.numero, 'tables.liste.places')}
               valeur={etat.capacite}
               lire={lireEntier}
               executer={(sieges) => executerSurTable(table.id, 'changerPlacesTable', { id: table.id, sieges, origine: 'champ' })}
@@ -356,10 +385,16 @@
               <Commande
                 cle="tables.liste.realigner"
                 nom="realignerTable"
+                nomAccessible={nomDeTable(table.numero, 'tables.liste.realigner')}
                 executer={() => executerSurTable(table.id, 'realignerTable', { id: table.id })}
               />
             {/if}
-            <Commande cle="tables.liste.supprimer" nom="supprimerTable" executer={() => supprimer(table)} />
+            <Commande
+              cle="tables.liste.supprimer"
+              nom="supprimerTable"
+              nomAccessible={nomDeTable(table.numero, 'tables.liste.supprimer')}
+              executer={() => supprimer(table)}
+            />
           </div>
           {#if complement !== null && complement.retires.length > 0}
             <div class="message refus">
@@ -394,6 +429,7 @@
               type="button"
               class="deplier"
               data-commande="basculerObjectifsTours"
+              aria-label={nomDeTable(table.numero, 'tables.objectifs.parTour', { nombre: vues.parTour })}
               aria-expanded={ouverte ? 'true' : 'false'}
               aria-controls={ouverte ? idTours : undefined}
               onclick={() => (ouvertes = basculerTable(ouvertes, table.id))}

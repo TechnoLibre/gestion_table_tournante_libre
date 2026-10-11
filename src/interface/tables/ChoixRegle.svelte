@@ -8,15 +8,18 @@
   // le refus. options est [{valeur, libelle}], le libellé déjà traduit ;
   // champ nomme sa désignation data-champ. idRefus est l'identifiant du
   // refus affiché, null sans refus : il pose aria-invalid et le lien
-  // aria-describedby vers le message. surChoix reçoit l'événement change,
-  // dont currentTarget est le sélecteur.
-  let { id, champ, valeur, options, idRefus = null, surChoix } = $props();
+  // aria-describedby vers le message. nom, déjà traduit, est le nom
+  // accessible du sélecteur quand son étiquette seule ne le distingue pas
+  // d'un autre ; null, l'étiquette le nomme. surChoix reçoit l'événement
+  // change, dont currentTarget est le sélecteur.
+  let { id, champ, valeur, options, idRefus = null, nom = null, surChoix } = $props();
 </script>
 
 <select
   {id}
   data-champ={champ}
   value={valeur}
+  aria-label={nom ?? undefined}
   aria-invalid={idRefus === null ? undefined : 'true'}
   aria-describedby={idRefus ?? undefined}
   onchange={surChoix}

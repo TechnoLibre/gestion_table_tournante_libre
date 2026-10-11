@@ -11,6 +11,8 @@
 // geste du contrat, suivi de .<variante> quand ses arguments changent son
 // libellé (primitives/commande.js, libelleRemede). Un remède qui fait ce que
 // fait une commande de mode en reprend le texte, par texte.
+// communs.nom.remede est le nom accessible d'un remède posé contre un
+// contrôle qui porte un nom distinct (Refus, objet).
 
 // Le libellé d'une autre clé de cette table.
 const meme = (cle) => (details, texte) => texte(cle);
@@ -30,6 +32,12 @@ export const TABLE = new Map([
   ['communs.confirmation.confirmer', 'Confirmer'],
   ['communs.confirmation.annuler', 'Annuler'],
   ['communs.confirmation.enCours', 'Opération en cours\u{2026}'],
+
+  // --- Le nom accessible d'un remède (§ 14.5) ---------------------------------
+  // Le remède d'un refus posé contre un contrôle qui porte un nom distinct
+  // se nomme par son texte, sous ses détails, puis par ce nom, objet : deux
+  // remèdes de même texte, sous deux tables, ne se confondent pas.
+  ['communs.nom.remede', ({ cle, details = {}, objet }, texte) => `${texte(cle, details)} (${objet})`],
 
   // --- Les remèdes des gestes du contrat ------------------------------------
   ['communs.remede.modifier', meme('communs.commande.modifier')],

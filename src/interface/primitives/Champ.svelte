@@ -31,13 +31,18 @@
   // aria-invalid et aria-describedby vers le message. La sortie du champ ne
   // retire pas un refus : son remède, qu'un clic atteint, resterait sinon
   // hors de portée.
+  //
+  // nom, déjà traduit, est le nom accessible du champ, en aria-label, quand
+  // son étiquette seule ne le distingue pas d'un homonyme ; null,
+  // l'étiquette le nomme. L'étiquette visible ne change pas. Le refus reçoit
+  // nom pour nommer son remède.
   import { getContext, onDestroy, untrack } from 'svelte';
   import { effetDe } from '../raccourcis.js';
   import { creerMachineChamp, estRefusSeance, refusSeanceCourant } from './champ.js';
   import { creerGeste } from './geste.js';
   import Refus from './Refus.svelte';
 
-  let { cle, etiquette, valeur, lire, executer, details = {}, gestes = {} } = $props();
+  let { cle, etiquette, valeur, lire, executer, details = {}, nom = null, gestes = {} } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance') ?? null;
@@ -190,6 +195,7 @@
     type="text"
     data-champ={cle}
     value={saisie}
+    aria-label={nom ?? undefined}
     aria-invalid={refus === null ? undefined : 'true'}
     aria-describedby={refus === null ? undefined : idRefus}
     oninput={surSaisie}
@@ -197,7 +203,7 @@
     onblur={valider}
   />
   {#if refus !== null}
-    <Refus id={idRefus} {refus} {lever} {gestes} />
+    <Refus id={idRefus} {refus} {lever} objet={nom} {gestes} />
   {/if}
 </div>
 

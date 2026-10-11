@@ -19,20 +19,20 @@
   // ne nomme une touche, aucun raccourci ne s'y ajoute : Tab les atteint,
   // Entrée ou Espace les active. Chaque libellé nomme le critère, ce qui
   // donne à chaque bouton un nom accessible à lui. Monter et descendre
-  // déplacent le palier du critère, et disent « le palier » quand il en
-  // porte plusieurs. Un geste est
-  // une commande changerPriorites {paliers} — une entrée du journal — ; abouti,
-  // la région role="status" annonce la place du critère, et le focus le suit :
-  // le même bouton quand le geste reste offert, sinon son premier bouton,
-  // sinon son nom. « Rétablir l'ordre par défaut » est retablirPriorites,
-  // sans fenêtre à confirmer (D19).
+  // déplacent le palier du critère, et disent « le palier » quand il en porte
+  // plusieurs. Un geste est une commande changerPriorites {paliers} — une
+  // entrée du journal — ; abouti, la région role="status" annonce la place du
+  // critère, et le focus le suit : le même bouton quand le geste reste
+  // offert, sinon son premier bouton, sinon son nom. « Rétablir l'ordre par
+  // défaut » est retablirPriorites, sans fenêtre à confirmer (D19).
   //
   // Le refus d'un geste — lecture, plan bloqué, support rompu — se pose
   // contre la liste, avec son remède, et décrit le groupe de l'éditeur
-  // (aria-describedby) ; rien ne s'écrit. Le poids d'un critère d'un palier
-  // partagé se saisit dans un Champ entier (poids.<nom>), écrit à la sortie
-  // du champ par changerPriorites ; son refus, un poids hors de son domaine
-  // compris, se pose contre le champ.
+  // (aria-describedby), focalisable par programme (tabindex -1) : après le
+  // remède, le focus revient au groupe ; rien ne s'écrit. Le poids d'un
+  // critère d'un palier partagé se saisit dans un Champ entier (poids.<nom>),
+  // écrit à la sortie du champ par changerPriorites ; son refus, un poids
+  // hors de son domaine compris, se pose contre le champ.
   import { getContext, tick } from 'svelte';
   import { lireEntier } from '../../application/capacite.js';
   import Champ from '../primitives/Champ.svelte';
@@ -109,7 +109,7 @@
   const ecrirePoids = (critere) => (poids) => seance.executer('changerPriorites', { paliers: avecPoids(liste, critere, poids) });
 </script>
 
-<fieldset class="priorites" aria-describedby={refus === null ? undefined : idRefus}>
+<fieldset class="priorites" tabindex="-1" aria-describedby={refus === null ? undefined : idRefus}>
   <legend>{t(entree.etiquette)}</legend>
   <p class="note">{t('generation.priorites.note')}</p>
   <p class="note">{t(regle ? 'generation.priorites.regle' : 'generation.priorites.parDefaut')}</p>

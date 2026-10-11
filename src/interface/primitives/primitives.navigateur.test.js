@@ -484,6 +484,152 @@ describe('champ : le refus là où il a lieu (§ 2.1, § 5.9)', () => {
     expect(entree.value).toBe(`${NOM}x`);
   });
 
+  test('le remède qui retire son refus rend le focus au champ qui le portait, jamais au corps de la page', async () => {
+    const montage = await preparer({ mode: 'lecture' });
+    const { cible, entree, message } = await refusAuPremierCaractere(montage, 'Modifier');
+    await cliquer(message.querySelector('button'));
+    await vi.waitFor(() => expect(cible.querySelector('[data-refus]')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(entree));
+  });
+
+  test('un remède qui porte lui-même le focus ailleurs l’y laisse : le refus parti, le champ ne le reprend pas', async () => {
+    const montage = await preparer();
+    const ailleurs = document.createElement('button');
+    ailleurs.type = 'button';
+    document.body.append(ailleurs);
+    try {
+      // Un seul objet de refus : la sortie du champ, au clic du remède,
+      // relit la saisie, et le refus relu reste celui que le remède lève.
+      const refusLu = { code: 'NOM_REQUIS', details: { remede: { geste: 'afficherTour', tour: 2 } } };
+      const props = {
+        cle: 'nom',
+        etiquette: 'communs.commande.modifier',
+        valeur: NOM,
+        lire: () => ({ refus: refusLu }),
+        executer: () => undefined,
+        gestes: {
+          afficherTour: () => {
+            ailleurs.focus();
+            return true;
+          },
+        },
+      };
+      const cible = monter(Champ, props, montage.contexte);
+      const entree = cible.querySelector('input[data-champ="nom"]');
+      await cliquer(entree);
+      await taper('x');
+      await touche('Enter');
+      await tick();
+      const message = cible.querySelector('[data-refus="NOM_REQUIS"]');
+      expect(message).not.toBeNull();
+      await cliquer(message.querySelector('button'));
+      await vi.waitFor(() => expect(cible.querySelector('[data-refus]')).toBeNull());
+      await tick();
+      await tick();
+      expect(document.activeElement).toBe(ailleurs);
+    } finally {
+      ailleurs.remove();
+    }
+  });
+
+  test('le remède d’un refus de details.autres retire le refus qui le porte : le focus revient au champ que celui-ci décrit', async () => {
+    const montage = await preparer();
+    // Un seul objet de refus, que la sortie du champ relit à l'identique.
+    const refusLu = {
+      code: 'NOM_REQUIS',
+      details: { remede: null, autres: [{ code: 'NOM_REQUIS', details: { remede: { geste: 'afficherTour', tour: 2 } } }] },
+    };
+    const props = {
+      cle: 'nom',
+      etiquette: 'communs.commande.modifier',
+      valeur: NOM,
+      lire: () => ({ refus: refusLu }),
+      executer: () => undefined,
+      gestes: { afficherTour: () => true },
+    };
+    const cible = monter(Champ, props, montage.contexte);
+    const entree = cible.querySelector('input[data-champ="nom"]');
+    await cliquer(entree);
+    await taper('x');
+    await touche('Enter');
+    await tick();
+    const porteur = cible.querySelector('[data-refus="NOM_REQUIS"]');
+    expect(entree.getAttribute('aria-describedby')).toBe(porteur.id);
+    const interne = porteur.querySelector('[data-refus="NOM_REQUIS"]');
+    expect(interne).not.toBeNull();
+    expect(interne.id).toBe('');
+    await cliquer(interne.querySelector('button'));
+    await vi.waitFor(() => expect(cible.querySelector('[data-refus]')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(entree));
+  });
+
+  test('le remède d’une commande de remède : le refus qu’elle pose la désigne, et son remède rend le focus à cette commande, non au champ', async () => {
+    const montage = await preparer();
+    // Un seul objet de refus, que la sortie du champ relit à l'identique ;
+    // son remède échoue sur un refus qui offre le sien.
+    const refusLu = { code: 'NOM_REQUIS', details: { remede: { geste: 'afficherTour', tour: 2 } } };
+    const props = {
+      cle: 'nom',
+      etiquette: 'communs.commande.modifier',
+      valeur: NOM,
+      lire: () => ({ refus: refusLu }),
+      executer: () => undefined,
+      gestes: {
+        afficherTour: () => {
+          throw Object.assign(new Error('NOM_REQUIS'), { code: 'NOM_REQUIS', details: { remede: { geste: 'choisirPlace' } } });
+        },
+        choisirPlace: () => true,
+      },
+    };
+    const cible = monter(Champ, props, montage.contexte);
+    const entree = cible.querySelector('input[data-champ="nom"]');
+    await cliquer(entree);
+    await taper('x');
+    await touche('Enter');
+    await tick();
+    const porteur = cible.querySelector('[data-refus="NOM_REQUIS"]');
+    const remede = porteur.querySelector('button[data-commande="afficherTour"]');
+    await cliquer(remede);
+    await vi.waitFor(() => expect(porteur.querySelector('[data-refus]')).not.toBeNull());
+    const interne = porteur.querySelector('[data-refus]');
+    expect(interne.id).not.toBe('');
+    expect(remede.getAttribute('aria-describedby')).toBe(interne.id);
+    await cliquer(interne.querySelector('button[data-commande="choisirPlace"]'));
+    await vi.waitFor(() => expect(porteur.querySelector('[data-refus]')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(remede));
+    expect(remede.getAttribute('aria-describedby')).toBeNull();
+    expect(porteur.isConnected).toBe(true);
+  });
+
+  test('nom : le nom accessible du champ, l’étiquette visible inchangée ; le remède de son refus se nomme d’après lui, et sans nom il garde son texte', async () => {
+    const montage = await preparer({ mode: 'lecture' });
+    const nom = 'Nom de famille, fiche 3';
+    const props = (cle) => ({
+      cle,
+      etiquette: 'communs.commande.modifier',
+      valeur: NOM,
+      lire: (texte) => ({ valeur: texte }),
+      executer: () => undefined,
+    });
+    const avec = monter(Champ, { ...props('nom'), nom }, montage.contexte);
+    const sans = monter(Champ, props('autre'), montage.contexte);
+    const entree = avec.querySelector('input');
+    expect(entree).toHaveAccessibleName(nom);
+    expect(avec.querySelector('label').textContent).toBe(t('communs.commande.modifier'));
+    expect(sans.querySelector('input')).toHaveAccessibleName(t('communs.commande.modifier'));
+    expect(sans.querySelector('input').getAttribute('aria-label')).toBeNull();
+    for (const cible of [avec, sans]) {
+      await cliquer(cible.querySelector('input'));
+      await taper('x');
+    }
+    const remedeAvec = avec.querySelector('[data-refus="MODE_LECTURE"] button');
+    const remedeSans = sans.querySelector('[data-refus="MODE_LECTURE"] button');
+    expect(remedeAvec.textContent.trim()).toBe(t('communs.remede.modifier'));
+    expect(remedeAvec).toHaveAccessibleName(t('communs.nom.remede', { cle: 'communs.remede.modifier', objet: nom }));
+    expect(remedeSans).toHaveAccessibleName(t('communs.remede.modifier'));
+    expect(remedeSans.getAttribute('aria-label')).toBeNull();
+  });
+
   test('le refus de la séance suit la séance : passée en écriture par un autre chemin que son remède, le champ ne garde ni le refus ni aria-invalid', async () => {
     const montage = await preparer({ mode: 'lecture' });
     const { cible, entree } = await refusAuPremierCaractere(montage, 'Modifier');
@@ -1090,6 +1236,60 @@ describe('commande (§ 2.1)', () => {
     bouton.click();
     expect(appels).toBe(2);
     expect(bouton.getAttribute('aria-busy')).toBeNull();
+  });
+
+  test('refusée, son bouton désigne le refus par aria-describedby ; le remède qui le retire rend le focus au bouton', async () => {
+    const montage = await preparer({ mode: 'lecture' });
+    const cible = monter(
+      Commande,
+      {
+        cle: 'communs.remede.ajouterParticipant',
+        executer: () => montage.seance.executer('ajouterParticipant', { champs: { nom: 'Pervenche' } }),
+      },
+      montage.contexte,
+    );
+    const bouton = cible.querySelector('button[data-commande="ajouterParticipant"]');
+    expect(bouton.getAttribute('aria-describedby')).toBeNull();
+    await cliquer(bouton);
+    await vi.waitFor(() => expect(cible.querySelector('[data-refus]')).not.toBeNull());
+    const message = cible.querySelector('[data-refus]');
+    expect(message.id).not.toBe('');
+    expect(bouton.getAttribute('aria-describedby')).toBe(message.id);
+    await cliquer(message.querySelector('button[data-commande="modifier"]'));
+    await vi.waitFor(() => expect(cible.querySelector('[data-refus]')).toBeNull());
+    expect(bouton.getAttribute('aria-describedby')).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(bouton));
+  });
+
+  test('nomAccessible : le nom du bouton, son texte inchangé ; armée, le bouton se nomme par sa confirmation ; le remède de son refus se nomme d’après lui', async () => {
+    const montage = await preparer({ mode: 'lecture' });
+    const nom = 'Débloquer, plan 4';
+    const armable = monter(
+      Commande,
+      { cle: 'communs.commande.debloquer', confirmer: 'communs.commande.confirmerDeblocage', executer: () => undefined, nomAccessible: nom },
+      montage.contexte,
+    ).querySelector('button');
+    expect(armable.textContent.trim()).toBe(t('communs.commande.debloquer'));
+    expect(armable).toHaveAccessibleName(nom);
+    await cliquer(armable);
+    expect(armable.textContent.trim()).toBe(t('communs.commande.confirmerDeblocage'));
+    expect(armable).toHaveAccessibleName(t('communs.commande.confirmerDeblocage'));
+
+    const objet = 'Ajouter la personne, liste 2';
+    const cible = monter(
+      Commande,
+      {
+        cle: 'communs.remede.ajouterParticipant',
+        executer: () => montage.seance.executer('ajouterParticipant', { champs: { nom: 'Pervenche' } }),
+        nomAccessible: objet,
+      },
+      montage.contexte,
+    );
+    await cliquer(cible.querySelector('button[data-commande="ajouterParticipant"]'));
+    await vi.waitFor(() => expect(cible.querySelector('[data-refus]')).not.toBeNull());
+    const remede = cible.querySelector('[data-refus] button');
+    expect(remede.textContent.trim()).toBe(t('communs.remede.modifier'));
+    expect(remede).toHaveAccessibleName(t('communs.nom.remede', { cle: 'communs.remede.modifier', objet }));
   });
 
   test('sans refus, son libellé est celui de sa clé, et data-commande le dernier segment de la clé', async () => {

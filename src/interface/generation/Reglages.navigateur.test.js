@@ -21,7 +21,7 @@
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import '../jetons.css';
 import { creerControleurGeneration, creerExecuteurDirect } from '../../application/generation.js';
@@ -425,6 +425,16 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(journal(m)).toBe(e0 + 1);
     expect(liste(m).querySelectorAll(':scope > li[data-palier]')).toHaveLength(7);
     expect(annonce(m)).toBe(t('generation.priorites.annonceRetablie'));
+  });
+
+  test('le remède « Modifier » d’un geste refusé rend le focus au groupe de l’éditeur, jamais au corps de la page', async () => {
+    const m = await demonstration({ ecriture: false });
+    await cliquer(m, bouton(m, REDONDANCE, 'joindrePalier'));
+    const remede = editeur(m).querySelector(':scope > [data-refus="MODE_LECTURE"] [data-commande="modifier"]');
+    remede.focus();
+    await cliquer(m, remede);
+    await vi.waitFor(() => expect(editeur(m).querySelector('[data-refus="MODE_LECTURE"]')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(editeur(m)));
   });
 
   test('en lecture et sur un plan bloqué : le geste refusé contre la liste, avec son remède ; rien d’écrit', async () => {

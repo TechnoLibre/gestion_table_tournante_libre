@@ -28,6 +28,9 @@ const etiquettesCitees = (etiquettes) => etiquettes.map(cite).join(JOINTURE_ETIQ
 // Ce qu'une règle exige des étiquettes, en mots (§ 4.5).
 const exigence = (regle) => (regle === 'et' ? 'toutes' : 'au moins une');
 
+// La portée d'un objectif en mots : la soirée, ou le tour désigné.
+const porteeObjectif = (tour) => (tour === null ? 'de la soirée' : `du tour ${tour}`);
+
 export const TABLE = new Map([
   // --- Le défaut (§ 6.1) ------------------------------------------------------
   ['tables.defaut.etiquette', 'Places par défaut'],
@@ -129,7 +132,7 @@ export const TABLE = new Map([
   ['tables.suppression.titre', ({ siege, libelle }) => `Titre ${cite(libelle)}, siège ${siege}`],
   [
     'tables.suppression.objectif',
-    ({ tour, etiquettes }) => `Objectif ${tour === null ? 'de la soirée' : `du tour ${tour}`} : ${etiquettesCitees(etiquettes)}`,
+    ({ tour, etiquettes }) => `Objectif ${porteeObjectif(tour)} : ${etiquettesCitees(etiquettes)}`,
   ],
 
   // --- Les tours (§ 2.1 étape 5, § 4.3) ----------------------------------------
@@ -166,6 +169,19 @@ export const TABLE = new Map([
   // portent un.
   ['tables.objectifs.parTour', ({ nombre }) => (nombre === 0 ? 'Objectifs par tour' : `Objectifs par tour (${nombre})`)],
   ['tables.objectifs.exporter', 'Exporter les objectifs'],
+
+  // --- Les noms accessibles des commandes de chaque table (§ 14.5) -------------
+  // Une commande que chaque table répète se nomme par son texte visible,
+  // composé depuis sa propre clé, puis par sa table : le nom commence
+  // toujours par ce que l'œil lit, et deux tables ne se confondent pas.
+  // tables.nom.table : le texte de la clé cle, sous ses détails, puis la
+  // table. tables.nom.objectif : le texte de la clé cle, puis la portée de
+  // l'objectif, puis la table — pour ce que l'objectif ne nomme pas déjà.
+  ['tables.nom.table', ({ cle, details = {}, numero }, texte) => `${texte(cle, details)}, table ${numero}`],
+  [
+    'tables.nom.objectif',
+    ({ cle, tour, numero }, texte) => `${texte(cle)} ${porteeObjectif(tour)}, table ${numero}`,
+  ],
 
   // Un placement qu'un changement laisse en dérive (§ 9) : il reste, et ne
   // correspond plus à la configuration.

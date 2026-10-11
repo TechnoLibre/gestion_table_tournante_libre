@@ -1103,3 +1103,124 @@ describe('les objectifs en lecture (§ 8.4)', () => {
     expect(ecritures(m)).toBe(avant);
   });
 });
+
+// --- Les noms accessibles et le focus (§ 14.5) ------------------------------------
+
+// Le nom accessible d'un contrôle, calculé comme le font les technologies
+// d'assistance pour les formes que la section emploie : aria-labelledby,
+// puis aria-label, puis l'étiquette du champ, puis le texte du contrôle.
+// Chaque nom relevé est confronté à toHaveAccessibleName, qui suit
+// l'algorithme complet : le calcul ne s'écarte jamais de lui.
+function nomAccessible(element) {
+  const texte = (noeud) => noeud.textContent.replace(/\s+/g, ' ').trim();
+  const designes = element.getAttribute('aria-labelledby');
+  if (designes !== null) return designes.split(/\s+/).map((id) => texte(document.getElementById(id))).join(' ');
+  const etiquette = element.getAttribute('aria-label');
+  if (etiquette !== null) return etiquette.trim();
+  if (element.labels !== undefined && element.labels.length > 0) return [...element.labels].map(texte).join(' ');
+  return texte(element);
+}
+
+// Le texte que l'œil lit pour un contrôle : son étiquette, ou son texte.
+const texteVu = (element) =>
+  (element.labels !== undefined && element.labels.length > 0 ? element.labels[0] : element).textContent.replace(/\s+/g, ' ').trim();
+
+describe('les commandes répétées sous chaque table se distinguent (§ 14.5)', () => {
+  test('deux tables dépliées, en lecture, chacune avec cinq refus : chaque contrôle, remèdes compris, nomme sa table après son texte visible, et les noms sont deux à deux distincts', async () => {
+    const donnees = chargeObjectifs({ tables: [{ id: 1, sieges: 6 }, { id: 2, sieges: 6 }] });
+    for (const table of donnees.tables) {
+      table.objectifs = [
+        { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] },
+        { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['cuisine'] },
+      ];
+    }
+    const m = await preparer(donnees);
+    for (const id of [1, 2]) await cliquer(m, commande(ligne(m, id), 'basculerObjectifsTours'));
+    // En lecture, chaque table refuse ses places, le champ et la règle de
+    // son objectif de la soirée, « Supprimer » et « Retirer l'objectif » :
+    // cinq refus par table, chacun avec son remède « Modifier ».
+    await m.seance.passerEnLecture();
+    await attendre(m);
+    for (const id of [1, 2]) {
+      await saisir(m, champTable(m, id), '7');
+      await saisir(m, champObjectif(m, String(id)), 'x');
+      await choisirAuClavier(m, choixRegle(m, String(id)), 'et');
+      await cliquer(m, commande(ligne(m, id), 'supprimerTable'));
+      await cliquer(m, commande(zoneObjectif(m, String(id)), 'retirerObjectif'));
+    }
+    const remedes = [1, 2].flatMap((id) => [...ligne(m, id).querySelectorAll('[data-refus="MODE_LECTURE"] button')]);
+    expect(remedes).toHaveLength(2 * 5);
+    expect(new Set(remedes.map(texteVu))).toEqual(new Set([t('communs.remede.modifier')]));
+
+    const controles = [1, 2].flatMap((id) => [...ligne(m, id).querySelectorAll('input, select, button')]);
+    // Par table : places, réaligner, supprimer, le bouton qui déplie, et,
+    // pour la soirée et les trois tours, un champ et un choix de règle,
+    // plus « Retirer l'objectif » pour les deux objectifs posés ; puis les
+    // cinq remèdes.
+    expect(controles).toHaveLength(2 * (4 + 4 * 2 + 2 + 5));
+    const noms = controles.map(nomAccessible);
+    for (const [rang, element] of controles.entries()) {
+      expect(element).toHaveAccessibleName(noms[rang]);
+      expect(noms[rang].startsWith(texteVu(element)), `« ${noms[rang]} » commence par « ${texteVu(element)} »`).toBe(true);
+    }
+    const doublons = noms.filter((nom, rang) => noms.indexOf(nom) !== rang);
+    expect(doublons).toEqual([]);
+
+    // Le texte visible ne change pas ; le nom ajoute la portée et la table.
+    const regle = choixRegle(m, '2-2');
+    expect(texteVu(regle)).toBe(t('tables.objectif.regle'));
+    expect(nomAccessible(regle)).toBe(t('tables.nom.objectif', { cle: 'tables.objectif.regle', tour: 2, numero: 2 }));
+    expect(nomAccessible(champObjectif(m, '1'))).toBe(t('tables.nom.table', { cle: 'tables.objectif.soiree', numero: 1 }));
+    expect(nomAccessible(commande(ligne(m, 2), 'supprimerTable'))).toBe(t('tables.nom.table', { cle: 'tables.liste.supprimer', numero: 2 }));
+    // Le remède nomme, après son texte, le contrôle dont il lève le refus.
+    const remedePlaces = ligne(m, 1).querySelector('.saisie [data-refus] button');
+    expect(nomAccessible(remedePlaces)).toBe(
+      t('communs.nom.remede', { cle: 'communs.remede.modifier', objet: t('tables.nom.table', { cle: 'tables.liste.places', numero: 1 }) }),
+    );
+  });
+});
+
+describe('le focus après un remède qui retire son refus (§ 14.5)', () => {
+  test('vider l’objectif posé, puis son remède « Retirer l’objectif » : le refus part, le focus revient au champ, jamais au corps de la page', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['cuisine'] }];
+    const m = await preparer(donnees);
+    await saisir(m, champObjectif(m, '2'), '');
+    const refus = zoneObjectif(m, '2').querySelector('[data-refus="OBJECTIF_SANS_ETIQUETTE"]');
+    expect(refus).not.toBeNull();
+    await cliquer(m, commande(refus, 'retirerObjectif'));
+    expect(objectifs(m, 2)).toBeUndefined();
+    await vi.waitFor(() => expect(zoneObjectif(m, '2').querySelector('[data-refus]')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(champObjectif(m, '2')));
+  });
+
+  test('en lecture, le choix d’une règle refusé, puis « Modifier » : le focus revient au choix qui portait le refus, celui de l’objectif comme celui du défaut', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+    for (const choix of [(m) => choixRegle(m, '1'), (m) => regleDefaut(m)]) {
+      const m = await preparer(donnees, { mode: 'lecture' });
+      await choisirAuClavier(m, choix(m), 'et');
+      const refus = document.getElementById(choix(m).getAttribute('aria-describedby'));
+      expect(refus.dataset.refus).toBe('MODE_LECTURE');
+      await cliquer(m, refus.querySelector('button'));
+      await vi.waitFor(() => expect(m.seance.etat().mode).toBe('ecriture'));
+      await vi.waitFor(() => expect(choix(m).getAttribute('aria-describedby')).toBeNull());
+      await vi.waitFor(() => expect(document.activeElement).toBe(choix(m)));
+    }
+  });
+
+  test('en lecture, une commande de table refusée — « Supprimer », « Retirer l’objectif » —, puis « Modifier » : le refus part, le focus revient au bouton de la commande', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+    for (const bouton of [(m) => commande(ligne(m, 1), 'supprimerTable'), (m) => commande(zoneObjectif(m, '1'), 'retirerObjectif')]) {
+      const m = await preparer(donnees, { mode: 'lecture' });
+      await cliquer(m, bouton(m));
+      const refus = bouton(m).parentElement.querySelector('[data-refus="MODE_LECTURE"]');
+      expect(refus).not.toBeNull();
+      await cliquer(m, refus.querySelector('button'));
+      await vi.waitFor(() => expect(m.seance.etat().mode).toBe('ecriture'));
+      await vi.waitFor(() => expect(bouton(m).parentElement.querySelector('[data-refus]')).toBeNull());
+      await vi.waitFor(() => expect(document.activeElement).toBe(bouton(m)));
+    }
+  });
+});
