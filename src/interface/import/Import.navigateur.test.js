@@ -36,7 +36,7 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { pointer } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { visible } from '../../../test/navigateur/rendu.js';
+import { composantes, visible } from '../../../test/navigateur/rendu.js';
 import urlCasLimites from '../../../exemples/participants_cas_limites.csv?url';
 import urlCasLimites1252 from '../../../exemples/participants_cas_limites_cp1252.csv?url';
 import urlGrande from '../../../exemples/participants_demo_grande.csv?url';
@@ -890,5 +890,93 @@ describe('les cas du § 10.3', () => {
     expect(parVariante[1].separateur).toBe(t('import.separateur.virgule'));
     expect(parVariante[0].participants.length).toBe(13);
     expect(parVariante[1].participants).toEqual(parVariante[0].participants);
+  });
+});
+
+describe('l’habillage : cartes et messages classés en refus, avis ou information', () => {
+  // La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
+  function jeton(nom) {
+    const sonde = document.createElement('span');
+    sonde.style.color = `var(${nom})`;
+    document.body.append(sonde);
+    const couleur = composantes(getComputedStyle(sonde).color);
+    sonde.remove();
+    return couleur;
+  }
+  const fondDe = (element) => composantes(getComputedStyle(element).backgroundColor);
+  const nomDe = (region) => texteDe(document.getElementById(region.getAttribute('aria-labelledby')));
+
+  // La classe d'un message, lue dans son bloc : la pastille dont le texte
+  // nomme la sorte, sa teinte et son signe.
+  function exigerSorte(bloc, sorte, lieu) {
+    expect(bloc, lieu).not.toBeNull();
+    const libelle = t(`import.sorte.${sorte}`);
+    const pastille = [...bloc.querySelectorAll('*')].find((e) => fondDe(e)[3] > 0 && texteDe(e) === libelle);
+    expect(pastille, `${lieu} : pastille « ${libelle} »`).toBeDefined();
+    expect(fondDe(pastille), lieu).toEqual(jeton(`--couleur-${sorte}-fond`));
+    expect(pastille.querySelector('svg'), lieu).not.toBeNull();
+    expect(composantes(getComputedStyle(pastille).color), lieu).toEqual(jeton('--couleur-page-texte'));
+  }
+
+  // Chaque bloc de messages d'un conteneur, et la sorte qu'il doit porter.
+  function exigerBlocs(conteneur, lieu) {
+    const bloc = (selecteur) => conteneur.querySelector(selecteur)?.closest('section') ?? null;
+    exigerSorte(bloc('[data-refusees]'), 'refus', `${lieu}, lignes refusées`);
+    exigerSorte(bloc('[data-doublons]'), 'avis', `${lieu}, doublons`);
+    exigerSorte(bloc('[data-fusions]'), 'information', `${lieu}, orthographes fondues`);
+  }
+
+  test('les cas limites : refusées en refus, doublons en avis, fusions en information, dans l’aperçu puis le rapport', async () => {
+    const e = await ouvrir();
+    await choisir(e, 'participants_cas_limites.csv', await lireLivre(urlCasLimites));
+    exigerBlocs(dans(e, '[data-apercu]'), 'aperçu');
+    await importer(e);
+    exigerBlocs(dans(e, '[data-rapport]'), 'rapport');
+  });
+
+  test('une mise à jour : homonymes et cellule sur deux lignes qui porte le séparateur en avis, dans l’aperçu puis le rapport', async () => {
+    const e = await ouvrir({ participants: [personne(1, 'Ombrelle', 'Iris')] });
+    await choisir(e, 'homonymes.csv', enUtf8('nom;prenom;notes\r\nOmbrelle;Aurèle;\r\nPervenche;Théo;"végétarien;\r\nsans noix"\r\n'));
+    expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
+    for (const lieu of ['aperçu', 'rapport']) {
+      const conteneur = dans(e, lieu === 'aperçu' ? '[data-apercu]' : '[data-rapport]');
+      exigerSorte(conteneur.querySelector('[data-homonyme="2"]')?.closest('section') ?? null, 'avis', `${lieu}, homonymes`);
+      exigerSorte(conteneur.querySelector('[data-multiligne="3"]')?.closest('section') ?? null, 'avis', `${lieu}, cellules sur plusieurs lignes`);
+      if (lieu === 'aperçu') await importer(e);
+    }
+  });
+
+  // Un import n'écrit rien quand la charge ne change pas et qu'il refuse
+  // des lignes : ici, une personne déjà là, et une ligne sans nom.
+  test('un import qui n’a rien écrit le dit en information', async () => {
+    const e = await ouvrir({ participants: [personne(1, 'Ombrelle', 'Iris')] });
+    await choisir(e, 'inchange.csv', enUtf8('nom;prenom\r\nOmbrelle;Iris\r\n;Théo\r\n'));
+    expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
+    const { rendu } = await importer(e);
+    expect(rendu.libelle).toBeNull();
+    const rapport = dans(e, '[data-rapport]');
+    const rien = [...rapport.querySelectorAll('section')].find((bloc) => texteDe(bloc).includes(t('import.rapport.rienEcrit'))) ?? null;
+    exigerSorte(rien, 'information', 'rapport, rien d’écrit');
+  });
+
+  test('un refus global porte la pastille du refus, sa cause et son remède', async () => {
+    const e = await ouvrir();
+    await coller(e, 'Ombrelle\tIris\nPervenche\tThéo');
+    const pose = dans(e, '[data-apercu] [data-refus="AUCUN_ENTETE"]');
+    exigerSorte(pose, 'refus', 'refus global');
+    expect(pose.textContent).toContain(t('import.remede.aucunEnteteCollage'));
+  });
+
+  test('la section, l’aperçu et le rapport sont des cartes titrées ; « Choisir un fichier » est l’action principale de la section', async () => {
+    const e = await ouvrir();
+    const regions = () => tous(e, 'section[aria-labelledby]').map(nomDe);
+    expect(regions()).toEqual([t('coquille.section.import')]);
+    const choisirUn = commande(e, 'choisirFichier');
+    expect(fondDe(choisirUn)).toEqual(jeton('--couleur-action-fond'));
+    await choisir(e, 'participants_cas_limites.csv', await lireLivre(urlCasLimites));
+    expect(regions().slice(0, 2)).toEqual([t('coquille.section.import'), t('import.apercu.titre')]);
+    await importer(e);
+    expect(regions()).toContain(t('import.rapport.titre'));
+    expect(regions()).not.toContain(t('import.apercu.titre'));
   });
 });

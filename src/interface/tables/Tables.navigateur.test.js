@@ -31,10 +31,11 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
 import { pointer, touche } from '../../../test/navigateur/entrees.js';
-import { visible } from '../../../test/navigateur/rendu.js';
+import { composantes, visible } from '../../../test/navigateur/rendu.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import SectionTables from './SectionTables.svelte';
+import { comptesTables } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
@@ -165,7 +166,8 @@ const ligne = (m, id) => section(m).querySelector(`[data-table="${id}"]`);
 const champTable = (m, id) => ligne(m, id).querySelector(`input[data-champ="sieges-${id}"]`);
 const champ = (m, cle) => section(m).querySelector(`input[data-champ="${cle}"]`);
 const commande = (racine, nom) => racine.querySelector(`[data-commande="${nom}"]`);
-const etatDe = (m, id) => ligne(m, id).querySelector('[data-etat-table]').textContent;
+// L'état se lit dans sa pastille, sans les blancs de bord de son balisage.
+const etatDe = (m, id) => ligne(m, id).querySelector('[data-etat-table]').textContent.trim();
 const enonce = (m) => section(m).querySelector('[data-enonce="defaut"]');
 const phrases = (m) => [...enonce(m).querySelectorAll('[data-phrase]')].map((p) => p.textContent).join(' ');
 const fenetre = () => document.querySelector('dialog[open]');
@@ -732,5 +734,63 @@ describe('en lecture (§ 8.4)', () => {
     }
     expect(charge(m).tables).toHaveLength(1);
     expect(ecritures(m)).toBe(avant);
+  });
+});
+
+describe('l’habillage : cartes, pastilles, messages', () => {
+  // La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
+  function jeton(nom) {
+    const sonde = document.createElement('span');
+    sonde.style.color = `var(${nom})`;
+    document.body.append(sonde);
+    const couleur = composantes(getComputedStyle(sonde).color);
+    sonde.remove();
+    return couleur;
+  }
+  const fondDe = (element) => composantes(getComputedStyle(element).backgroundColor);
+  const pastilleDans = (conteneur) => [...conteneur.querySelectorAll('*')].find((e) => fondDe(e)[3] > 0) ?? null;
+  const regions = (m) => [...section(m).querySelectorAll('section[aria-labelledby]')];
+  const nomDe = (region) => document.getElementById(region.getAttribute('aria-labelledby')).textContent.trim();
+
+  test('« Tables et tours » porte les réglages, « Tables » la liste ; l’en-tête de la liste compte tables et sièges, et suit les gestes', async () => {
+    const m = await preparer(treizeTables());
+    const [reglages, liste] = regions(m);
+    expect(regions(m).map(nomDe)).toEqual([t('coquille.section.tables'), t('tables.liste.titre')]);
+    expect(reglages.contains(champ(m, 'siegesParDefaut'))).toBe(true);
+    expect(reglages.contains(champ(m, 'tours'))).toBe(true);
+    expect(liste.contains(ligne(m, 1))).toBe(true);
+    const comptes = () => [...liste.querySelectorAll('p')].map((p) => p.textContent);
+    expect(comptesTables(charge(m))).toEqual({ tables: 13, sieges: 104 });
+    expect(comptes()).toContain(t('tables.liste.comptes', { tables: 13, sieges: 104 }));
+    // Les créations sont les actions de l'en-tête de la liste, avant la première ligne.
+    const ronde = commande(liste, 'creerTableRonde');
+    expect(ronde.compareDocumentPosition(ligne(m, 1)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await cliquer(m, ronde);
+    expect(comptes()).toContain(t('tables.liste.comptes', { tables: 14, sieges: 112 }));
+  });
+
+  test('l’état d’une table en pastille : neutre quand elle suit le défaut, information surchargée, son libellé de l’encre de la page', async () => {
+    const m = await preparer(treizeTables());
+    const encre = jeton('--couleur-page-texte');
+    for (const [id, teinte] of [[1, '--couleur-neutre-fond'], [3, '--couleur-information-fond']]) {
+      const pastille = pastilleDans(ligne(m, id).querySelector('[data-etat-table]'));
+      expect(pastille, `table ${id}`).not.toBeNull();
+      expect(fondDe(pastille), `table ${id}`).toEqual(jeton(teinte));
+      expect(composantes(getComputedStyle(pastille).color), `table ${id}`).toEqual(encre);
+      expect(etatDe(m, id)).toBe(t(id === 3 ? 'tables.etat.surchargee' : 'tables.etat.suitDefaut'));
+    }
+  });
+
+  test('un avertissement de table est un avis : fond et filet de l’avis, son signe, un texte de l’encre de la page', async () => {
+    const m = await preparer(chargeDe({ tables: [{ id: 1 }], n: 4 }));
+    const seuil = constante('SEUIL_SIEGES_LISIBLES');
+    await saisir(m, champTable(m, 1), String(seuil + 1));
+    const avis = ligne(m, 1).querySelector('[data-avertissement="AU_DELA_LISIBLE"]');
+    expect(fondDe(avis)).toEqual(jeton('--couleur-avis-fond'));
+    expect(composantes(getComputedStyle(avis).borderTopColor)).toEqual(jeton('--couleur-avis-filet'));
+    const signe = avis.querySelector('svg');
+    expect(signe).not.toBeNull();
+    expect(composantes(getComputedStyle(signe).color)).toEqual(jeton('--couleur-avis-marque'));
+    expect(composantes(getComputedStyle(avis.querySelector('p')).color)).toEqual(jeton('--couleur-page-texte'));
   });
 });

@@ -20,6 +20,7 @@ import {
   annonceTours,
   avertissementsNommes,
   cleForme,
+  comptesTables,
   elementsSuppression,
   elementsTours,
   enonceDefaut,
@@ -29,6 +30,7 @@ import {
   siegesRetiresNommes,
   surchargesPerdues,
   tablesParNumero,
+  tonEtatTable,
 } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -328,5 +330,28 @@ describe('refusDeCommande : la commande essayée sans rien écrire', () => {
     assert.equal(zero.details.remede, null);
     assert.equal(refusDeCommande(charge, 'changerTours', { tours: 3 }), null);
     assert.equal(charge.evenement.tours, 4);
+  });
+});
+
+describe('comptesTables et tonEtatTable : l’en-tête et la pastille de la liste des tables', () => {
+  test('le nombre de tables et le total de leurs sièges, défaut et surcharges compris', () => {
+    assert.deepEqual(comptesTables(treizeTables()), { tables: 13, sieges: 9 * 8 + 7 + 7 + 6 + 12 });
+    assert.deepEqual(comptesTables(chargeDe({ tables: [{ id: 1 }, { id: 2, sieges: 3 }], defaut: 6 })), { tables: 2, sieges: 9 });
+  });
+
+  test('sans table : deux zéros', () => {
+    assert.deepEqual(comptesTables(chargeDe()), { tables: 0, sieges: 0 });
+  });
+
+  test('le libellé compose la ligne, accordée au nombre', () => {
+    assert.equal(t('tables.liste.comptes', { tables: 13, sieges: 104 }), '13 tables \u{00B7} 104 sièges');
+    assert.equal(t('tables.liste.comptes', { tables: 1, sieges: 1 }), '1 table \u{00B7} 1 siège');
+    assert.equal(t('tables.liste.comptes', { tables: 0, sieges: 0 }), '0 table \u{00B7} 0 siège');
+  });
+
+  test('la pastille de l’état : neutre pour une table qui suit le défaut, information pour une surchargée', () => {
+    assert.equal(tonEtatTable(etatTable({ sieges: null }, 8)), 'neutre');
+    assert.equal(tonEtatTable(etatTable({ sieges: 5 }, 8)), 'information');
+    assert.equal(tonEtatTable(etatTable({ sieges: 8 }, 8)), 'information');
   });
 });

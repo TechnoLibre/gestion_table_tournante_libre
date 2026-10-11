@@ -9,13 +9,20 @@
   // mise à jour, chacune à son rang, avec les personnes qu'elle désigne. Un
   // import qui n'a rien écrit le dit.
   //
+  // Le rapport est une carte titrée ; ses comptes, des chiffres tabulaires
+  // en tête de chaque libellé ; un import qui n'a rien écrit le dit en
+  // information (Message). Ses commandes, celles de la section, viennent
+  // en pied de carte (commandes, un snippet).
+  //
   // rapport : { modele, source, resume, libelle } ; participants : ceux de
-  // la charge écrite. Les commandes du rapport sont celles de la section.
+  // la charge écrite.
   import { getContext } from 'svelte';
+  import Carte from '../primitives/Carte.svelte';
   import Apercu from './Apercu.svelte';
+  import Message from './Message.svelte';
   import { refuseesDe } from './modele.js';
 
-  let { rapport, participants } = $props();
+  let { rapport, participants, commandes = null } = $props();
 
   const t = getContext('t');
   const format = getContext('format');
@@ -32,42 +39,71 @@
   const refusees = $derived(refuseesDe(rapport.resume.refusees));
 </script>
 
-<section class="rapport" data-rapport>
-  <h3>{t('import.rapport.titre')}</h3>
-  {#if rapport.libelle === null}
-    <p>{t('import.rapport.rienEcrit')}</p>
-  {/if}
-  <ul class="comptes">
-    {#each COMPTES as [nom, cle] (nom)}
-      <li data-compte={nom}>
-        <span data-nombre>{format.nombre(rapport.resume[nom])}</span>
-        <span>{t(cle, { n: rapport.resume[nom] })}</span>
-      </li>
-    {/each}
-  </ul>
-  <Apercu modele={rapport.modele} source={rapport.source} {participants} {refusees} />
-</section>
+<div class="rapport" data-rapport>
+  <Carte titre={t('import.rapport.titre')} niveau={3}>
+    <div class="contenu">
+      {#if rapport.libelle === null}
+        <Message bloc="rienEcrit"><p>{t('import.rapport.rienEcrit')}</p></Message>
+      {/if}
+      <ul class="comptes">
+        {#each COMPTES as [nom, cle] (nom)}
+          <li data-compte={nom}>
+            <span class="nombre" data-nombre>{format.nombre(rapport.resume[nom])}</span>
+            <span>{t(cle, { n: rapport.resume[nom] })}</span>
+          </li>
+        {/each}
+      </ul>
+      <Apercu modele={rapport.modele} source={rapport.source} {participants} {refusees} />
+      {#if commandes !== null}
+        <div class="pied">{@render commandes()}</div>
+      {/if}
+    </div>
+  </Carte>
+</div>
 
 <style>
-  .rapport {
+  .contenu {
     display: flex;
     flex-direction: column;
     gap: var(--espace-3);
-    padding-top: var(--espace-3);
-    border-top: 1px solid var(--couleur-page-filet);
   }
 
-  h3 {
+  p {
     margin: 0;
   }
 
+  /* Les comptes : une rangée de cases, le nombre en gras et en chiffres
+     tabulaires, son libellé à côté. */
   .comptes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-2);
     margin: 0;
-    padding-left: var(--espace-5);
+    padding: 0;
+    list-style: none;
   }
 
   .comptes li {
     display: flex;
+    align-items: baseline;
     gap: var(--espace-1);
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  .nombre {
+    font-size: var(--taille-titre-carte);
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pied {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+    padding-top: var(--espace-3);
+    border-top: 1px solid var(--couleur-carte-filet);
   }
 </style>

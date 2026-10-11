@@ -16,6 +16,10 @@
   // champ, qui rend la valeur enregistrée. Un refus de l'événement entier —
   // moins de 2 places — se pose sur le champ (refusDuChampDefaut).
   //
+  // L'énoncé se pose sur le fond sourd de la carte ; le refus d'une table
+  // en refus, un avertissement en avis, chacun son signe et un texte de
+  // l'encre de la page.
+  //
   // La demande tombe quand le défaut l'atteint ; appliquée, elle tombe, et
   // les avertissements du geste s'affichent tant que la révision qui les a
   // produits est la courante.
@@ -26,6 +30,7 @@
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
+  import Icone from '../primitives/Icone.svelte';
   import { actionRemede } from '../primitives/commande.js';
   import { avertissementsNommes, enonceDefaut, refusDuChampDefaut, surchargesPerdues } from './modele.js';
 
@@ -112,6 +117,7 @@
 {#snippet refusDeTable(entree)}
   {@const action = actionRemede(entree.details.refus.details.remede ?? null, { seance, ui })}
   <div class="refus" data-refus={entree.details.refus.code}>
+    <span class="signe"><Icone nom="interdit" /></span>
     <p><span data-phrase>{t(entree.cle, entree.details)}</span></p>
     {#if action !== null}
       <Commande
@@ -183,6 +189,7 @@
 
   {#each avertissements as avertissement, rang (rang)}
     <div class="avertissement" data-avertissement={avertissement.code} role="status">
+      <span class="signe"><Icone nom="triangle" /></span>
       {#if avertissement.numero !== null}
         <p><span>{t('tables.liste.table')}</span> <span>{avertissement.numero}</span></p>
       {/if}
@@ -221,23 +228,37 @@
     display: flex;
     flex-direction: column;
     gap: var(--espace-2);
-    padding: var(--espace-2) var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    padding: var(--espace-3);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond-sourd);
   }
 
   .enonce p {
     margin: 0;
   }
 
+  /* Le refus d'une table : le signe à gauche, la phrase et le remède
+     dessous l'un de l'autre, à sa droite. */
   .refus {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--espace-1);
-    padding-left: var(--espace-2);
-    border-left: 3px solid var(--couleur-refus);
-    color: var(--couleur-refus);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--espace-1) var(--espace-2);
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-refus-filet);
+    border-left: 3px solid var(--couleur-refus-marque);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-refus-fond);
+    color: var(--couleur-page-texte);
+  }
+
+  .refus > :not(.signe) {
+    grid-column: 2;
+  }
+
+  .refus .signe {
+    color: var(--couleur-refus-marque);
   }
 
   .realignement {
@@ -257,13 +278,39 @@
   }
 
   .avertissement {
-    padding: var(--espace-1) var(--espace-2);
-    border-left: 3px solid var(--couleur-avis);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--espace-1) var(--espace-2);
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-avis-filet);
+    border-left: 3px solid var(--couleur-avis-marque);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-avis-fond);
+    color: var(--couleur-page-texte);
     font-size: var(--taille-texte);
+  }
+
+  .avertissement > :not(.signe) {
+    grid-column: 2;
+  }
+
+  .avertissement .signe {
+    color: var(--couleur-avis-marque);
+  }
+
+  .signe {
+    display: inline-flex;
+    grid-row: 1 / span 3;
+    padding-top: 0.125rem;
   }
 
   .avertissement p,
   .avertissement ul {
+    margin: 0;
+  }
+
+  .refus p {
     margin: 0;
   }
 </style>

@@ -15,6 +15,10 @@
   // tour par tour dans etatPlaces : la fiche ne recalcule ni l'un ni
   // l'autre, et ne porte aucun contrôle de saisie.
   //
+  // La fiche est une carte : fond et filet de la carte, rayon de 12 px,
+  // ombre légère ; ses étiquettes et légendes de tableau en petites
+  // capitales d'encre secondaire.
+  //
   // Ouverte, ou passée à une autre personne, la fiche se fait défiler
   // jusque dans la fenêtre : dans une fenêtre étroite, elle se pose sous la
   // grille.
@@ -136,10 +140,11 @@
     box-sizing: border-box;
     width: 24rem;
     max-width: 100%;
-    padding: var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-2);
-    background-color: var(--couleur-page-fond);
+    padding: var(--espace-4) var(--espace-5);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
+    box-shadow: var(--ombre-carte);
     color: var(--couleur-page-texte);
     font-size: var(--taille-texte);
     line-height: 1.4;
@@ -156,24 +161,32 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: var(--espace-2);
+    padding-bottom: var(--espace-3);
+    border-bottom: 1px solid var(--couleur-carte-filet);
   }
 
   h3 {
     flex: 1;
     min-width: 0;
     margin: 0;
-    font-size: var(--taille-titre);
+    font-size: var(--taille-titre-carte);
   }
 
   dl {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);
-    gap: var(--espace-1) var(--espace-3);
+    align-items: baseline;
+    gap: var(--espace-2) var(--espace-3);
     margin: var(--espace-3) 0;
   }
 
-  dt {
+  dt,
+  caption {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
     font-weight: bold;
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
   }
 
   dd {
@@ -184,35 +197,45 @@
 
   table {
     width: 100%;
-    margin: var(--espace-2) 0;
+    margin: var(--espace-3) 0;
     border-collapse: collapse;
     table-layout: fixed;
   }
 
   caption {
-    font-weight: bold;
+    padding-bottom: var(--espace-1);
     text-align: left;
   }
 
   th,
   td {
-    padding: var(--espace-1);
-    border-bottom: 1px solid var(--couleur-page-filet);
+    padding: var(--espace-1) var(--espace-2);
+    border-bottom: 1px solid var(--couleur-ligne-filet);
     text-align: left;
+  }
+
+  th {
+    border-bottom-color: var(--couleur-carte-filet);
+    background-color: var(--couleur-carte-fond-sourd);
   }
 
   p {
     margin: var(--espace-2) 0;
+    color: var(--couleur-page-texte-secondaire);
   }
 
   button {
     padding: var(--espace-1) var(--espace-3);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     cursor: pointer;
+  }
+
+  button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
   }
 
   button:focus-visible {

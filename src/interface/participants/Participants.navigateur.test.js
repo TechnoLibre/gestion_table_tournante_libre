@@ -31,10 +31,12 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { formeNommee } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { pointer, touche } from '../../../test/navigateur/entrees.js';
-import { visible } from '../../../test/navigateur/rendu.js';
+import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
+import { composantes, sousTheme, visible } from '../../../test/navigateur/rendu.js';
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
+import { RANGS_APPARTENANCE, teintesAppartenances } from '../appartenances.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { comptesEntete } from './entete.js';
 import { COLONNES, GROUPEMENTS, cheminDe, cleDeGroupement, cleDeStatut, groupesGrille, lignesGrille, lignesVisibles } from './grille.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -1701,6 +1703,226 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
       expect(lignes(m)).toHaveLength(7);
       expect(toutesLesMarques(m)).toHaveLength(0);
       expect(texteDe(cellule(m, 1, 'nom'))).toBe('Ombrelle');
+    });
+  });
+});
+
+// --- L'habillage : carte, bandes, légende et pastilles ----------------------
+
+// La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
+function jeton(nom) {
+  const sonde = document.createElement('span');
+  sonde.style.color = `var(${nom})`;
+  document.body.append(sonde);
+  const couleur = composantes(getComputedStyle(sonde).color);
+  sonde.remove();
+  return couleur;
+}
+
+const fondDe = (element) => composantes(getComputedStyle(element).backgroundColor);
+const opaque = (element) => fondDe(element)[3] > 0;
+const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
+
+// La pastille d'un conteneur : le premier élément qu'il contient dont le
+// fond est peint, ou null.
+const pastilleDans = (conteneur) => [...conteneur.querySelectorAll('*')].find(opaque) ?? null;
+
+// La région titrée de la section : la carte des participants.
+const carte = (m) => section(m).querySelector('section[aria-labelledby]');
+const legende = (m) => section(m).querySelector(`[aria-label="${t('participants.legende.titre')}"]`);
+
+// Sept appartenances — une de plus que la palette —, une exclue, une
+// personne sans appartenance et une au titre pressenti.
+const SEPT = [
+  { nom: 'Quenouillet', appartenance: 'Atelier Pivoine' },
+  { nom: 'Brindelle', appartenance: 'Banc des Loutres', exclu: true },
+  { nom: 'Calvaille', appartenance: 'Cercle des Grives', titre: 'hôtesse' },
+  { nom: 'Doucemer', appartenance: 'Cercle des Grives' },
+  { nom: 'Esquirol', appartenance: 'Dune des Hérons' },
+  { nom: 'Faverolle', appartenance: 'Étang des Sarcelles' },
+  { nom: 'Glanduc', appartenance: 'Forge des Martres' },
+  { nom: 'Houblonnet', appartenance: 'Grange des Mulots' },
+  { nom: 'Isardin' },
+];
+
+describe('l’habillage de la liste : carte, bandes, légende, pastilles', () => {
+  test('la carte « Participants » : sa ligne de comptes suit la liste, le formulaire d’ajout en est la bande de tête, sur le fond sourd, avant la grille', async () => {
+    const m = await evenementOuvert({ personnes: SEPT });
+    const region = carte(m);
+    expect(region).not.toBeNull();
+    expect(texteDe(document.getElementById(region.getAttribute('aria-labelledby')))).toBe(t('coquille.section.participants'));
+    const ligneDeComptes = () => [...region.querySelectorAll('p')].map((p) => p.textContent);
+    expect(comptesEntete(participants(m))).toEqual({ personnes: 9, aPlacer: 8, exclues: 1, appartenances: 7 });
+    expect(ligneDeComptes()).toContain(t('participants.entete.comptes', comptesEntete(participants(m))));
+
+    await m.seance.executer('exclureParticipant', { id: idDe(m, 'Isardin') });
+    await attendreSeance(m);
+    expect(ligneDeComptes()).toContain(t('participants.entete.comptes', { personnes: 9, aPlacer: 7, exclues: 2, appartenances: 7 }));
+
+    expect(region.contains(formulaire(m))).toBe(true);
+    expect(fondDe(formulaire(m))).toEqual(jeton('--couleur-carte-fond-sourd'));
+    expect(formulaire(m).compareDocumentPosition(grille(m)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // « Ajouter » est l'action principale de la carte : pleine, haute d'une cible.
+    const ajout = formulaire(m).querySelector('[data-commande="ajouter"]');
+    expect(fondDe(ajout)).toEqual(jeton('--couleur-action-fond'));
+    expect(composantes(getComputedStyle(ajout).color)).toEqual(jeton('--couleur-action-texte'));
+    expect(ajout.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    // « Exporter la liste » est dans l'en-tête de la carte, avant le formulaire.
+    const exporter = region.querySelector('[data-commande="exporter"]');
+    expect(exporter.compareDocumentPosition(formulaire(m)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('la légende : une pastille par appartenance, dans l’ordre des teintes, avec son compte, la teinte de son rang ; un filtre ne la change pas', async () => {
+    const m = await evenementOuvert({ personnes: SEPT });
+    const teintes = teintesAppartenances(participants(m));
+    const attendue = [...teintes].map(([nom, rang]) => ({
+      texte: t('participants.legende.element', { nom, compte: participants(m).filter((p) => p.appartenance === nom).length }),
+      rang,
+    }));
+    expect(attendue.map(({ rang }) => rang)).toEqual([1, 2, 3, 4, 5, 6, null]);
+    const lue = () =>
+      [...legende(m).querySelectorAll('li')].map((li) => ({ texte: texteDe(li), fond: fondDe(pastilleDans(li)) }));
+    const peinte = attendue.map(({ texte, rang }) => ({
+      texte,
+      fond: jeton(rang === null ? '--couleur-neutre-fond' : `--couleur-appartenance-${rang}-fond`),
+    }));
+    expect(lue()).toEqual(peinte);
+    expect(lue()[2].texte).toBe('Cercle des Grives \u{00B7} 2');
+
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'Grives');
+    await rendu();
+    expect(idsAffiches(m)).toHaveLength(2);
+    expect(lue()).toEqual(peinte);
+  });
+
+  test('la grille : appartenance en pastille de sa teinte, stable sous le filtre ; « exclue » et le titre pressenti en pastilles à icône ; encre de la page', async () => {
+    const m = await evenementOuvert({ personnes: SEPT });
+    const teintes = teintesAppartenances(participants(m));
+    const encre = jeton('--couleur-page-texte');
+    for (const p of participants(m)) {
+      const pastille = pastilleDans(cellule(m, p.id, 'appartenance'));
+      if (p.appartenance === null) {
+        expect(pastille, p.nom).toBeNull();
+        continue;
+      }
+      const rang = teintes.get(p.appartenance);
+      expect(texteDe(pastille), p.nom).toBe(p.appartenance);
+      expect(fondDe(pastille), p.nom).toEqual(jeton(rang === null ? '--couleur-neutre-fond' : `--couleur-appartenance-${rang}-fond`));
+      expect(composantes(getComputedStyle(pastille).color), p.nom).toEqual(encre);
+    }
+    const loutres = idDe(m, 'Brindelle');
+    const exclue = pastilleDans(cellule(m, loutres, 'exclu'));
+    expect(texteDe(exclue)).toBe(t('participants.grille.exclue'));
+    expect(fondDe(exclue)).toEqual(jeton('--couleur-neutre-fond'));
+    expect(exclue.querySelector('svg')).not.toBeNull();
+    const presente = cellule(m, idDe(m, 'Doucemer'), 'exclu');
+    expect(texteDe(presente)).toBe(t('participants.grille.presente'));
+    expect(pastilleDans(presente)).toBeNull();
+    const titre = pastilleDans(cellule(m, idDe(m, 'Calvaille'), 'titrePressenti'));
+    expect(texteDe(titre)).toBe('hôtesse');
+    expect(fondDe(titre)).toEqual(jeton('--couleur-information-fond'));
+    expect(titre.querySelector('svg')).not.toBeNull();
+    expect(pastilleDans(cellule(m, idDe(m, 'Doucemer'), 'titrePressenti'))).toBeNull();
+
+    // Le filtre ne repeint rien : la teinte se lit sur la liste entière.
+    const grives = idDe(m, 'Doucemer');
+    const avant = fondDe(pastilleDans(cellule(m, grives, 'appartenance')));
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'Doucemer');
+    await rendu();
+    expect(idsAffiches(m)).toEqual([grives]);
+    expect(fondDe(pastilleDans(cellule(m, grives, 'appartenance')))).toEqual(avant);
+
+    // En sombre, la pastille prend la teinte sombre du même rang.
+    await sousTheme('sombre', async () => {
+      expect(fondDe(pastilleDans(cellule(m, grives, 'appartenance')))).toEqual(jeton(`--couleur-appartenance-${teintes.get('Cercle des Grives')}-fond`));
+    });
+    expect(RANGS_APPARTENANCE).toBe(6);
+  });
+
+  test('les actions de ligne sont des boutons secondaires : fond de la carte, filet de la page, rayon de 8 px', async () => {
+    const m = await evenementOuvert({ personnes: SEPT.slice(0, 2) });
+    const id = idDe(m, 'Quenouillet');
+    for (const nom of ['fiche', 'voirSurLePlan', 'exclureParticipant', 'supprimerParticipant']) {
+      const bouton = commandeDeLigne(m, id, nom);
+      const style = getComputedStyle(bouton);
+      expect(fondDe(bouton), nom).toEqual(jeton('--couleur-carte-fond'));
+      expect(composantes(style.borderTopColor), nom).toEqual(jeton('--couleur-page-filet'));
+      expect(style.borderTopLeftRadius, nom).toBe('8px');
+    }
+  });
+
+  test('la fiche est une carte : fond de la carte, filet de la carte, rayon de 12 px', async () => {
+    const m = await evenementOuvert({ personnes: SEPT.slice(0, 2) });
+    m.ui.ouvrirFiche(idDe(m, 'Quenouillet'));
+    await rendu();
+    const style = getComputedStyle(fiche(m));
+    expect(fondDe(fiche(m))).toEqual(jeton('--couleur-carte-fond'));
+    expect(composantes(style.borderTopColor)).toEqual(jeton('--couleur-carte-filet'));
+    expect(style.borderTopLeftRadius).toBe('12px');
+  });
+});
+
+describe('l’habillage dans le cadre : rien ne déborde, rien ne se cache sous le bord', () => {
+  // Pose le cadre largeur × hauteur le temps de mesure, puis rend celui d'avant.
+  async function dansLeCadre(largeur, hauteur, mesure) {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(largeur, hauteur);
+    try {
+      await mesure();
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  }
+
+  for (const largeur of [1366, 1024]) {
+    test(`à ${largeur} × 700 : la page ne défile pas en largeur, la carte tient dans la fenêtre, la grille dans la carte`, async () => {
+      await dansLeCadre(largeur, 700, async () => {
+        const m = await evenementOuvert({ personnes: SEPT });
+        m.ui.ouvrirFiche(idDe(m, 'Calvaille'));
+        await rendu();
+        expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
+        const region = carte(m).getBoundingClientRect();
+        expect(region.right).toBeLessThanOrEqual(innerWidth);
+        expect(fiche(m).getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth);
+        // Le conteneur de défilement tient dans la carte, et le tableau dans
+        // le conteneur : aucune colonne, celle des actions de ligne comprise,
+        // ne se cache au-delà de son bord.
+        const defilement = grille(m).parentElement;
+        expect(defilement.getBoundingClientRect().right).toBeLessThanOrEqual(region.right);
+        expect(defilement.scrollWidth, 'le tableau défile en largeur dans son conteneur').toBeLessThanOrEqual(defilement.clientWidth);
+        for (const li of legende(m).querySelectorAll('li')) expect(li.getBoundingClientRect().right).toBeLessThanOrEqual(region.right);
+        // Chaque action de ligne tient sur une ligne : les boîtes de son
+        // texte partagent un même haut.
+        for (const rangee of lignes(m)) {
+          for (const bouton of rangee.lastElementChild.querySelectorAll('button')) {
+            const etendue = document.createRange();
+            etendue.selectNodeContents(bouton);
+            const hauts = new Set([...etendue.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+            expect(hauts.size, `${rangee.dataset.participant} : ${bouton.textContent.trim()}`).toBe(1);
+          }
+        }
+      });
+    });
+  }
+
+  test('dans une fenêtre basse, le signal d’orthographe et le refus du nom viennent dans la fenêtre, à côté de leur champ', async () => {
+    await dansLeCadre(1024, 420, async () => {
+      const m = await evenementOuvert({ personnes: [{ nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB }] });
+      await saisir(champ(m, 'appartenance'), 'club des  merles');
+      const signal = formulaire(m).querySelector('[data-avertissement]');
+      expect(visible(signal)).toBe(true);
+      await cliquer(signal.querySelector('[data-commande="reprendreOrthographe"]'));
+      // Le champ du nom au bord bas de la fenêtre : Entrée y pose le refus
+      // dessous, que le défilement amène dans la fenêtre.
+      await saisir(champ(m, 'nom'), '  ');
+      champ(m, 'nom').scrollIntoView({ block: 'end' });
+      champ(m, 'nom').focus({ preventScroll: true });
+      await touche('Enter');
+      await vi.waitFor(() => expect(champ(m, 'nom').getAttribute('aria-describedby')).not.toBeNull());
+      await rendu();
+      const message = document.getElementById(champ(m, 'nom').getAttribute('aria-describedby'));
+      expect(visible(message)).toBe(true);
+      expect(participants(m)).toHaveLength(1);
     });
   });
 });

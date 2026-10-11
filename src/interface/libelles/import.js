@@ -24,6 +24,11 @@ export const TABLE = new Map([
   ['import.commande.fermerRapport', 'Fermer le rapport'],
   ['import.refusEnregistres', 'Lignes refusées enregistrées :'],
 
+  // --- La sorte d'un message de l'aperçu et du rapport (messageDuBloc) ------
+  ['import.sorte.refus', 'Refus'],
+  ['import.sorte.avis', 'Avis'],
+  ['import.sorte.information', 'Information'],
+
   // --- Le mode de l'import (§ 10.1) -------------------------------------------
   ['import.mode.titre', "Mode de l'import"],
   ['import.mode.ajouter', 'Ajouter'],

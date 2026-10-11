@@ -47,6 +47,13 @@
   // la cellule d'exclusion suit sa ligne de même : la personne exclue ou
   // réintégrée passe dans son nouveau groupe, et sa cellule garde le focus.
   //
+  // L'appartenance s'affiche en pastille de la teinte que teintes lui donne
+  // (teintesAppartenances, calculée par la section sur la liste entière),
+  // neutre au-delà de la palette ; le titre pressenti en pastille
+  // d'information à étoile ; « exclue » en pastille neutre à croix,
+  // « présente » en texte secondaire. Chaque pastille porte la valeur ou le
+  // libellé en texte, et garde les blancs de la donnée comme la cellule.
+  //
   // Les conflits du placement montré (conflits, clé d'un groupe → ses
   // lignes de conflit ; enConflit, identifiant → ses règles), que la section
   // ne donne que groupée : l'en-tête d'un groupe en conflit, de tout niveau,
@@ -59,6 +66,7 @@
   import { getContext, onDestroy, tick } from 'svelte';
   import { creerMachineChamp } from '../primitives/champ.js';
   import Commande from '../primitives/Commande.svelte';
+  import Pastille from '../primitives/Pastille.svelte';
   import { creerGeste } from '../primitives/geste.js';
   import Refus from '../primitives/Refus.svelte';
   import { effetDe } from '../raccourcis.js';
@@ -68,6 +76,7 @@
   let {
     lignes,
     groupes = null,
+    teintes = new Map(),
     replies = $bindable(new Set()),
     tri = $bindable(null),
     supprimer,
@@ -399,8 +408,18 @@
             onblur={surSortie}
           />
         {:else if colonne === 'exclu'}
-          <span class:exclue={personne.exclu}>
-            {t(personne.exclu ? 'participants.grille.exclue' : 'participants.grille.presente')}
+          {#if personne.exclu}
+            <Pastille sorte="statut" valeur="neutre" icone="croix" libelle={t('participants.grille.exclue')} />
+          {:else}
+            <span class="presente">{t('participants.grille.presente')}</span>
+          {/if}
+        {:else if colonne === 'appartenance' && personne.appartenance !== null}
+          <span class="donnee-pastille">
+            <Pastille sorte="appartenance" valeur={teintes.get(personne.appartenance) ?? null} libelle={personne.appartenance} />
+          </span>
+        {:else if colonne === 'titrePressenti' && personne.titrePressenti !== null}
+          <span class="donnee-pastille">
+            <Pastille sorte="statut" valeur="information" icone="etoile" libelle={personne.titrePressenti} />
           </span>
         {:else}
           <span class="valeur">{personne[colonne] ?? ''}</span>
@@ -538,17 +557,44 @@
     overflow-x: auto;
   }
 
+  /* Le tableau d'une carte : en-tête sur le fond sourd, lignes séparées
+     d'un filet léger, sans filet vertical. */
+  /* Au-dessous de 59rem, le tableau défile dans son conteneur plutôt que de
+     replier ses cellules caractère par caractère sous des actions d'une
+     rangée. Le plancher tient dans la carte pleine largeur d'une fenêtre de
+     1024 px ; la liste qui la porte (SectionParticipants) réclame un peu
+     plus, pour que la fiche passe dessous plutôt que de le rogner. */
   table {
-    border-collapse: collapse;
+    width: 100%;
+    min-width: 59rem;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: var(--taille-texte);
   }
 
   th,
   td {
-    padding: var(--espace-1) var(--espace-2);
-    border: 1px solid var(--couleur-page-filet);
+    padding: var(--espace-2) var(--espace-3);
+    border-bottom: 1px solid var(--couleur-ligne-filet);
     text-align: left;
-    vertical-align: top;
+    vertical-align: middle;
+  }
+
+  th:first-child,
+  td:first-child {
+    padding-left: var(--espace-5);
+  }
+
+  th:last-child,
+  td:last-child {
+    padding-right: var(--espace-5);
+  }
+
+  thead th {
+    border-top: 1px solid var(--couleur-carte-filet);
+    border-bottom-color: var(--couleur-page-filet);
+    background-color: var(--couleur-carte-fond-sourd);
+    white-space: nowrap;
   }
 
   td {
@@ -556,13 +602,32 @@
     overflow-wrap: anywhere;
   }
 
+  td[data-champ='nom'] {
+    font-weight: bold;
+  }
+
+  td[data-champ='notes'] {
+    color: var(--couleur-page-texte-secondaire);
+  }
+
   .valeur {
     white-space: pre-wrap;
   }
 
-  /* L'exclusion se lit en texte ; l'italique la double, sans couleur. */
-  .exclue {
-    font-style: italic;
+  /* La pastille d'une donnée garde ses blancs, comme la cellule de texte :
+     deux orthographes qui ne diffèrent que par eux restent distinctes. */
+  .donnee-pastille {
+    display: flex;
+    min-width: 0;
+  }
+
+  .donnee-pastille :global(.libelle) {
+    white-space: pre-wrap;
+  }
+
+  .presente {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
   }
 
   th button {
@@ -581,8 +646,12 @@
     font-weight: normal;
   }
 
-  /* L'en-tête d'un groupe : un bouton qui porte son état en texte, le
-     libellé du groupe en gras et son compte. */
+  /* L'en-tête d'un groupe : une ligne sur le fond sourd, un bouton qui porte
+     son état en texte, le libellé du groupe en gras et son compte. */
+  .groupe th {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
   .groupe button {
     display: inline-flex;
     flex-wrap: wrap;
@@ -590,8 +659,8 @@
     gap: var(--espace-2);
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     text-align: left;
@@ -633,6 +702,10 @@
     overflow-wrap: anywhere;
   }
 
+  .compte {
+    color: var(--couleur-page-texte-secondaire);
+  }
+
   /* La marque d'un conflit : un cadre plein, de l'encre du texte, autour
      d'un texte qui nomme le conflit ; la forme ne dépend d'aucune couleur. */
   .marque-conflit {
@@ -640,7 +713,7 @@
     padding: 0 var(--espace-1);
     border: 2px solid var(--couleur-page-texte);
     border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font-weight: bold;
   }
@@ -650,6 +723,13 @@
     padding-left: var(--espace-5);
   }
 
+  /* Les actions d'une ligne vont sur une rangée, qui passe à la ligne
+     quand la colonne est étroite ; chaque action garde son libellé sur une
+     ligne : un mot ne se coupe jamais entre deux lettres. */
+  td:last-child {
+    max-width: none;
+  }
+
   .commandes {
     display: flex;
     flex-wrap: wrap;
@@ -657,14 +737,23 @@
     gap: var(--espace-1);
   }
 
+  .commandes > :global(button) {
+    white-space: nowrap;
+  }
+
+  /* Les actions de ligne : des boutons secondaires, comme Commande. */
   .commandes > button {
     padding: var(--espace-1) var(--espace-3);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     cursor: pointer;
+  }
+
+  .commandes > button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
   }
 
   input,
@@ -673,8 +762,8 @@
     box-sizing: border-box;
     padding: var(--espace-1);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
   }

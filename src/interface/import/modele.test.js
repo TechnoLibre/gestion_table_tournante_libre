@@ -19,7 +19,9 @@ import {
   ENCODAGES,
   MODES_D_IMPORT,
   SEPARATEURS,
+  SORTES_DE_MESSAGE,
   avecEntetesDeLaGrille,
+  messageDuBloc,
   modeleApercu,
   modePropose,
   motifLigne,
@@ -405,4 +407,38 @@ describe('les titres que « Remplacer » annonce (§ 10.1, § 4.1)', () => {
       assert.deepEqual(bilan, { participants: 3, reservations: 2, titresPourvus: 2, propositions: 0 });
     });
   }
+});
+
+describe('messageDuBloc : chaque message de l’aperçu et du rapport classé en refus, avis ou information', () => {
+  test('les refus : le refus global et les lignes refusées', () => {
+    for (const bloc of ['global', 'refusees']) {
+      assert.deepEqual(messageDuBloc(bloc), { sorte: 'refus', cle: 'import.sorte.refus', icone: 'interdit' }, bloc);
+    }
+  });
+
+  test('les avis : les doublons et les homonymes, que rien ne fusionne seul, et les cellules sur plusieurs lignes qui portent le séparateur, à vérifier', () => {
+    for (const bloc of ['doublons', 'homonymes', 'multilignes']) {
+      assert.deepEqual(messageDuBloc(bloc), { sorte: 'avis', cle: 'import.sorte.avis', icone: 'triangle' }, bloc);
+    }
+  });
+
+  test('les informations : les orthographes fondues, un import qui n’a rien écrit', () => {
+    for (const bloc of ['fusions', 'rienEcrit']) {
+      assert.deepEqual(messageDuBloc(bloc), { sorte: 'information', cle: 'import.sorte.information', icone: 'information' }, bloc);
+    }
+  });
+
+  test('un bloc inconnu lève RangeError, en le nommant', () => {
+    assert.throws(() => messageDuBloc('fusion'), { name: 'RangeError', message: /"fusion"/ });
+  });
+
+  test('trois sortes, chacune un ton de pastille, un libellé traduit et une icône distincte', () => {
+    assert.deepEqual(SORTES_DE_MESSAGE, ['refus', 'avis', 'information']);
+    const blocs = ['global', 'refusees', 'doublons', 'homonymes', 'fusions', 'multilignes', 'rienEcrit'].map(messageDuBloc);
+    assert.equal(new Set(blocs.map(({ icone }) => icone)).size, 3);
+    assert.deepEqual(
+      SORTES_DE_MESSAGE.map((sorte) => t(`import.sorte.${sorte}`)),
+      ['Refus', 'Avis', 'Information'],
+    );
+  });
 });

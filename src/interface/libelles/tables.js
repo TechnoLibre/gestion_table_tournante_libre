@@ -80,6 +80,12 @@ export const TABLE = new Map([
 
   // --- La liste des tables (§ 4, § 6.1, § 6.2) ----------------------------------
   ['tables.liste.titre', 'Tables'],
+  // L'en-tête de la liste : le nombre de tables et le total de leurs sièges
+  // (comptesTables), séparés d'un point médian.
+  [
+    'tables.liste.comptes',
+    ({ tables, sieges }) => `${compte(tables, 'table', 'tables')} \u{00B7} ${compte(sieges, 'siège', 'sièges')}`,
+  ],
   ['tables.liste.aucune', 'Aucune table : ajoutez-en une, ronde ou carrée.'],
   ['tables.liste.table', 'Table'],
   ['tables.liste.places', 'Places'],

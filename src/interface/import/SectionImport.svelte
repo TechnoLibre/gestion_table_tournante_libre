@@ -15,6 +15,10 @@
   // et ne l'ouvre que sur un import que la commande accepterait.
   // Le rapport lit le résumé que la séance rend.
   //
+  // La section est une carte titrée, dont l'en-tête porte la consigne et
+  // « Choisir un fichier CSV… », son action principale ; l'aperçu, puis le
+  // rapport, sont des cartes sous elle.
+  //
   // Le CSV des refus — de l'aperçu, ou du résumé dans le rapport — vient
   // d'exporterRefus de src/application/csv.js, dont le motif est celui de
   // libelle ; la façade l'enregistre sous ‹base›-refus.csv. La détection
@@ -23,6 +27,7 @@
   import { getContext, untrack } from 'svelte';
   import { appliquerCommande } from '../../application/commandes.js';
   import { apercevoir, bilanRemplacement, decoder, exporterRefus } from '../../application/csv.js';
+  import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
   import Apercu from './Apercu.svelte';
@@ -184,69 +189,75 @@
 
 <svelte:window ondragover={survoler} ondrop={deposer} />
 
-<section class="import" data-section="import">
-  <h2>{t('coquille.section.import')}</h2>
-  <p>{t('import.consigne')}</p>
-  <div class="commandes">
-    <Commande cle="import.commande.choisirFichier" nom="choisirFichier" executer={choisirFichier} />
-  </div>
+<div class="import" data-section="import">
+  <Carte titre={t('coquille.section.import')} sousTitre={t('import.consigne')}>
+    {#snippet actions()}
+      <Commande cle="import.commande.choisirFichier" nom="choisirFichier" variante="principale" executer={choisirFichier} />
+    {/snippet}
+  </Carte>
 
   {#if source !== null}
     {#key source}
-      <section class="apercu" data-apercu>
-        <h3>{t('import.apercu.titre')}</h3>
-        {#if modele.global === null}
-          <fieldset class="modes" data-champ="mode">
-            <legend>{t('import.mode.titre')}</legend>
-            {#each MODES_D_IMPORT as { mode: valeur, cle } (valeur)}
-              <label>
-                <input type="radio" name={`${uid}-mode`} value={valeur} bind:group={mode} />
-                <span>{t(cle)}</span>
-              </label>
-            {/each}
-          </fieldset>
-        {/if}
-        <Apercu {modele} source={{ origine: source.origine, nom: source.nom }} {participants} choisir={choisirColonne} />
-        <div class="commandes">
-          {#if grille !== null}
-            <Commande cle="import.commande.ordreDeLaGrille" nom="ordreDeLaGrille" executer={lireDansLOrdreDeLaGrille} />
-          {/if}
-          {#if modele.global === null}
-            {#key apercu}
-              <Commande cle="import.commande.importer" nom="importer" executer={importer} />
-            {/key}
-          {/if}
-          {#if modele.refusees.length > 0}
-            <Commande
-              cle="import.commande.enregistrerRefus"
-              nom="enregistrerRefus"
-              executer={() => enregistrerRefus(exporterRefus(apercu))}
-            />
-          {/if}
-          <Commande cle="import.commande.fermerApercu" nom="fermerApercu" executer={fermerApercu} />
-        </div>
-        {#if enregistre !== null}
-          <p><span>{t('import.refusEnregistres')}</span> <span data-enregistre>{enregistre}</span></p>
-        {/if}
-      </section>
+      <div class="apercu" data-apercu>
+        <Carte titre={t('import.apercu.titre')} niveau={3}>
+          <div class="contenu">
+            {#if modele.global === null}
+              <fieldset class="modes" data-champ="mode">
+                <legend>{t('import.mode.titre')}</legend>
+                {#each MODES_D_IMPORT as { mode: valeur, cle } (valeur)}
+                  <label>
+                    <input type="radio" name={`${uid}-mode`} value={valeur} bind:group={mode} />
+                    <span>{t(cle)}</span>
+                  </label>
+                {/each}
+              </fieldset>
+            {/if}
+            <Apercu {modele} source={{ origine: source.origine, nom: source.nom }} {participants} choisir={choisirColonne} />
+            <div class="commandes">
+              {#if grille !== null}
+                <Commande cle="import.commande.ordreDeLaGrille" nom="ordreDeLaGrille" executer={lireDansLOrdreDeLaGrille} />
+              {/if}
+              {#if modele.global === null}
+                {#key apercu}
+                  <Commande cle="import.commande.importer" nom="importer" variante="principale" executer={importer} />
+                {/key}
+              {/if}
+              {#if modele.refusees.length > 0}
+                <Commande
+                  cle="import.commande.enregistrerRefus"
+                  nom="enregistrerRefus"
+                  executer={() => enregistrerRefus(exporterRefus(apercu))}
+                />
+              {/if}
+              <Commande cle="import.commande.fermerApercu" nom="fermerApercu" executer={fermerApercu} />
+            </div>
+            {#if enregistre !== null}
+              <p><span>{t('import.refusEnregistres')}</span> <span data-enregistre>{enregistre}</span></p>
+            {/if}
+          </div>
+        </Carte>
+      </div>
     {/key}
   {/if}
 
   {#if rapport !== null}
-    <Rapport {rapport} {participants} />
-    <div class="commandes">
-      {#if rapport.resume.refusees.length > 0}
-        <Commande
-          cle="import.commande.enregistrerRefus"
-          nom="enregistrerRefus"
-          executer={() => enregistrerRefus(exporterRefus(rapport.apercu, rapport.resume.refusees))}
-        />
-      {/if}
-      <Commande cle="import.commande.fermerRapport" nom="fermerRapport" executer={() => (rapport = null)} />
-    </div>
-    {#if enregistre !== null}
-      <p><span>{t('import.refusEnregistres')}</span> <span data-enregistre>{enregistre}</span></p>
-    {/if}
+    <Rapport {rapport} {participants}>
+      {#snippet commandes()}
+        <div class="commandes">
+          {#if rapport.resume.refusees.length > 0}
+            <Commande
+              cle="import.commande.enregistrerRefus"
+              nom="enregistrerRefus"
+              executer={() => enregistrerRefus(exporterRefus(rapport.apercu, rapport.resume.refusees))}
+            />
+          {/if}
+          <Commande cle="import.commande.fermerRapport" nom="fermerRapport" executer={() => (rapport = null)} />
+        </div>
+        {#if enregistre !== null}
+          <p><span>{t('import.refusEnregistres')}</span> <span data-enregistre>{enregistre}</span></p>
+        {/if}
+      {/snippet}
+    </Rapport>
   {/if}
 
   {#if confirmation !== null}
@@ -257,27 +268,23 @@
       surAnnuler={() => (confirmation = null)}
     />
   {/if}
-</section>
+</div>
 
 <style>
   .import {
     display: flex;
     flex-direction: column;
-    gap: var(--espace-3);
+    gap: var(--espace-4);
   }
 
-  h2,
-  h3,
-  p {
-    margin: 0;
-  }
-
-  .apercu {
+  .contenu {
     display: flex;
     flex-direction: column;
     gap: var(--espace-3);
-    padding-top: var(--espace-3);
-    border-top: 1px solid var(--couleur-page-filet);
+  }
+
+  p {
+    margin: 0;
   }
 
   .commandes {
@@ -291,7 +298,15 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    margin: 0;
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  legend {
+    padding: 0 var(--espace-1);
+    font-weight: bold;
   }
 </style>

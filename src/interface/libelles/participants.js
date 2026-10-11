@@ -1,8 +1,13 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les libellés de la liste des participants : grille, formulaire, fiche (§
-// 14.6). Chaque clé commence par « participants. ».
+// Les libellés de la liste des participants : en-tête, grille, formulaire,
+// fiche (§ 14.6). Chaque clé commence par « participants. ».
+//
+// participants.entete.comptes compose la ligne de comptes de la carte
+// (comptesEntete, entete.js), ses parties séparées d'un point médian ;
+// participants.legende.* nomme la légende des appartenances et chacune de
+// ses pastilles, le nom puis le compte.
 //
 // participants.colonne.* nomme chaque colonne de COLONNES (grille.js), dans
 // l'en-tête de la grille, l'étiquette d'un champ du formulaire et celle
@@ -50,6 +55,20 @@ export const TABLE = new Map([
   ['participants.colonne.titrePressenti', 'Titre pressenti'],
   ['participants.colonne.exclu', 'Exclusion'],
   ['participants.colonne.notes', 'Notes'],
+
+  // --- L'en-tête de la carte : la ligne de comptes et la légende -----------
+  [
+    'participants.entete.comptes',
+    ({ personnes, aPlacer, exclues, appartenances }) =>
+      [
+        compte(personnes, 'personne', 'personnes'),
+        `${aPlacer} à placer`,
+        compte(exclues, 'exclue', 'exclues'),
+        compte(appartenances, 'appartenance', 'appartenances'),
+      ].join(' \u{00B7} '),
+  ],
+  ['participants.legende.titre', 'Appartenances'],
+  ['participants.legende.element', ({ nom, compte: n }) => `${nom} \u{00B7} ${n}`],
 
   // --- Le formulaire d'ajout (§ 10.2) ---------------------------------------
   ['participants.formulaire.titre', 'Ajouter une personne'],

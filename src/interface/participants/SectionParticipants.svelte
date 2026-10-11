@@ -2,10 +2,13 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // La section des participants (§ 2.1 étape 3, § 4, § 10.2) : le
-  // formulaire d'ajout, le filtre, le compte, l'export, la grille et la
-  // fiche ouverte. Les lignes de la grille sont celles de lignesGrille
-  // (grille.js) sur la liste de la séance, le tri et le filtre de la
+  // La section des participants (§ 2.1 étape 3, § 4, § 10.2) : une carte
+  // titrée, dont l'en-tête porte la ligne de comptes (comptesEntete,
+  // entete.js) et l'export ; dessous, le formulaire d'ajout en bande de tête,
+  // puis la barre du filtre, du groupement, du compte et de la légende des
+  // appartenances, puis la grille ; à côté, la fiche ouverte, ou dessous
+  // quand la ligne ne tient pas les deux. Les lignes de la grille sont
+  // celles de lignesGrille (grille.js) sur la liste de la séance, le tri et le filtre de la
   // section : regarder, trier et filtrer n'écrivent rien, en écriture comme
   // en lecture. La fiche ouverte est celle de l'état de navigation, ui.fiche.
   //
@@ -33,6 +36,11 @@
   // écrit. Sans groupement, ou sans placement montré, aucun conflit ne se
   // lit.
   //
+  // Les teintes d'appartenance (teintesAppartenances) se calculent une fois
+  // sur la liste entière, exclues comprises, et la légende comme la grille
+  // les lisent : un filtre ne repeint rien. La légende nomme chaque
+  // appartenance avec le nombre de personnes qui la portent.
+  //
   // Supprimer une personne qui porte des réservations ouvre la fenêtre à
   // confirmer, qui les nomme ; sans réservation, ou quand la séance refuse
   // déjà tout geste modifiant, la commande part et la séance répond. L'export
@@ -41,7 +49,10 @@
   import { getContext } from 'svelte';
   import { cleNormalisee, exporterParticipants } from '../../application/csv.js';
   import { nomAffiche } from '../../application/personnes.js';
+  import { teintesAppartenances } from '../appartenances.js';
+  import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
+  import Pastille from '../primitives/Pastille.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
   import Fiche from './Fiche.svelte';
   import Formulaire from './Formulaire.svelte';
@@ -49,6 +60,7 @@
   import { statuts } from '../../application/places.js';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
   import { conflitsDesGroupes, lignesDeConflit, reglesParPersonne } from './conflits.js';
+  import { comptesEntete, legendeAppartenances } from './entete.js';
   import {
     choisirGroupement,
     cleDeGroupement,
@@ -78,6 +90,9 @@
 
   const charge = $derived($seance.charge);
   const participants = $derived(charge?.participants ?? []);
+  const teintes = $derived(teintesAppartenances(participants));
+  const comptes = $derived(comptesEntete(participants));
+  const legende = $derived(legendeAppartenances(participants, teintes));
   const lignes = $derived(lignesGrille(participants, { tri, filtre }, cleNormalisee));
   const toutes = $derived(lignesGrille(participants, { tri, filtre: '' }, cleNormalisee));
   const parStatut = $derived(groupement.includes('statut') && charge !== null ? statuts(charge).parId : null);
@@ -121,55 +136,65 @@
   }
 </script>
 
-<section data-section="participants">
-  <h2>{t('coquille.section.participants')}</h2>
-
-  <Formulaire {participants} />
-
-  <div class="outils">
-    <div class="filtre">
-      <label for={`${uid}-filtre`}>{t('participants.grille.filtre')}</label>
-      <input id={`${uid}-filtre`} type="search" data-champ="filtre" bind:value={filtre} />
-    </div>
-    {#each niveaux as rang (rang)}
-      <div class="filtre">
-        <label for={`${uid}-grouper-${rang + 1}`}>
-          {rang === 0 ? t('participants.groupe.grouperPar') : t('participants.groupe.puisPar', { niveau: rang + 1 })}
-        </label>
-        <select
-          id={`${uid}-grouper-${rang + 1}`}
-          data-champ="grouper"
-          data-niveau={rang + 1}
-          value={groupement[rang] ?? ''}
-          onchange={(evenement) => choisirNiveau(rang, evenement.currentTarget.value)}
-        >
-          <option value="">{t(rang === 0 ? 'participants.groupe.aucun' : 'participants.groupe.aucunSousGroupe')}</option>
-          {#each colonnesOffertes(groupement, rang) as colonne (colonne)}
-            <option value={colonne}>{t(cleDeGroupement(colonne))}</option>
-          {/each}
-        </select>
-      </div>
-    {/each}
-    {#if groupes !== null}
-      <button type="button" data-commande="toutReplier" onclick={() => (replies = new Set(clesPremierNiveau(groupesEntiers)))}>
-        {t('participants.groupe.toutReplier')}
-      </button>
-      <button type="button" data-commande="toutDeplier" onclick={() => (replies = new Set())}>
-        {t('participants.groupe.toutDeplier')}
-      </button>
-    {/if}
-    <output>{t('participants.grille.compte', { total: participants.length, affiches: lignes.length })}</output>
-    <Commande cle="participants.commande.exporter" nom="exporter" executer={exporter} />
-  </div>
-
+<div class="section" data-section="participants">
   <div class="corps">
     <div class="liste">
-      <Grille {lignes} {groupes} bind:replies bind:tri {supprimer} conflits={conflitsParGroupe} {enConflit} />
-      {#if participants.length === 0}
-        <p>{t('participants.grille.vide')}</p>
-      {:else if lignes.length === 0}
-        <p>{t('participants.grille.aucunResultat')}</p>
-      {/if}
+      <Carte titre={t('coquille.section.participants')} sousTitre={t('participants.entete.comptes', comptes)} plein>
+        {#snippet actions()}
+          <Commande cle="participants.commande.exporter" nom="exporter" executer={exporter} />
+        {/snippet}
+
+        <Formulaire {participants} />
+
+        <div class="outils">
+          <div class="filtre">
+            <label for={`${uid}-filtre`}>{t('participants.grille.filtre')}</label>
+            <input id={`${uid}-filtre`} type="search" data-champ="filtre" bind:value={filtre} />
+          </div>
+          {#each niveaux as rang (rang)}
+            <div class="filtre">
+              <label for={`${uid}-grouper-${rang + 1}`}>
+                {rang === 0 ? t('participants.groupe.grouperPar') : t('participants.groupe.puisPar', { niveau: rang + 1 })}
+              </label>
+              <select
+                id={`${uid}-grouper-${rang + 1}`}
+                data-champ="grouper"
+                data-niveau={rang + 1}
+                value={groupement[rang] ?? ''}
+                onchange={(evenement) => choisirNiveau(rang, evenement.currentTarget.value)}
+              >
+                <option value="">{t(rang === 0 ? 'participants.groupe.aucun' : 'participants.groupe.aucunSousGroupe')}</option>
+                {#each colonnesOffertes(groupement, rang) as colonne (colonne)}
+                  <option value={colonne}>{t(cleDeGroupement(colonne))}</option>
+                {/each}
+              </select>
+            </div>
+          {/each}
+          {#if groupes !== null}
+            <button type="button" data-commande="toutReplier" onclick={() => (replies = new Set(clesPremierNiveau(groupesEntiers)))}>
+              {t('participants.groupe.toutReplier')}
+            </button>
+            <button type="button" data-commande="toutDeplier" onclick={() => (replies = new Set())}>
+              {t('participants.groupe.toutDeplier')}
+            </button>
+          {/if}
+          <output>{t('participants.grille.compte', { total: participants.length, affiches: lignes.length })}</output>
+          {#if legende.length > 0}
+            <ul class="legende" aria-label={t('participants.legende.titre')}>
+              {#each legende as { nom, rang, compte } (nom)}
+                <li><Pastille sorte="appartenance" valeur={rang} libelle={t('participants.legende.element', { nom, compte })} /></li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+
+        <Grille {lignes} {groupes} {teintes} bind:replies bind:tri {supprimer} conflits={conflitsParGroupe} {enConflit} />
+        {#if participants.length === 0}
+          <p class="vide">{t('participants.grille.vide')}</p>
+        {:else if lignes.length === 0}
+          <p class="vide">{t('participants.grille.aucunResultat')}</p>
+        {/if}
+      </Carte>
     </div>
     {#if personneFiche !== null}
       <Fiche participant={personneFiche} {charge} />
@@ -185,53 +210,61 @@
       surAnnuler={() => (aSupprimer = null)}
     />
   {/if}
-</section>
+</div>
 
 <style>
-  section {
+  .section {
     display: flex;
     flex-direction: column;
     gap: var(--espace-4);
   }
 
-  h2 {
-    margin: 0;
-    font-size: var(--taille-titre);
-  }
-
+  /* La barre sous le formulaire : filtre, groupement, compte, puis la
+     légende, poussée à droite tant que la ligne la tient. */
   .outils {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: var(--espace-3);
+    gap: var(--espace-3) var(--espace-4);
+    padding: var(--espace-3) var(--espace-5);
   }
 
   .filtre {
     display: flex;
     flex-direction: column;
     gap: var(--espace-1);
+    font-size: var(--taille-texte-petit);
+    font-weight: bold;
   }
 
   input,
   select {
+    box-sizing: border-box;
+    min-height: 2.5rem;
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
+    font-weight: normal;
   }
 
   .outils > button {
+    min-height: 2.5rem;
     padding: var(--espace-1) var(--espace-3);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
     cursor: pointer;
+  }
+
+  .outils > button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
   }
 
   input:focus-visible,
@@ -242,7 +275,25 @@
   }
 
   output {
-    font-size: var(--taille-texte);
+    align-self: center;
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
+  }
+
+  .legende {
+    display: flex;
+    flex-wrap: wrap;
+    align-self: center;
+    gap: var(--espace-1) var(--espace-2);
+    min-width: 0;
+    margin: 0 0 0 auto;
+    padding: 0;
+    list-style: none;
+  }
+
+  .legende li {
+    display: flex;
+    min-width: 0;
   }
 
   .corps {
@@ -252,12 +303,17 @@
     gap: var(--espace-4);
   }
 
+  /* La liste réclame le plancher du tableau (Grille, 59rem) et le cadre de
+     sa carte : quand la ligne ne tient plus la liste et la fiche côte à
+     côte, la fiche passe dessous, et le tableau garde toute sa largeur. */
   .liste {
-    flex: 1 1 32rem;
+    flex: 1 1 60rem;
     min-width: 0;
   }
 
-  p {
-    margin: var(--espace-2) 0;
+  .vide {
+    margin: 0;
+    padding: var(--espace-4) var(--espace-5);
+    color: var(--couleur-page-texte-secondaire);
   }
 </style>

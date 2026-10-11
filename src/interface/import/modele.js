@@ -58,6 +58,49 @@ export const MODES_D_IMPORT = Object.freeze(
   ].map(([mode, cle]) => Object.freeze({ mode, cle })),
 );
 
+/** Les trois sortes d'un message de l'aperçu et du rapport, chacune un ton
+ *  de pastille (Pastille, sorte 'statut'). */
+export const SORTES_DE_MESSAGE = Object.freeze(['refus', 'avis', 'information']);
+
+// L'icône de chaque sorte, distincte des deux autres : la sorte se lit au
+// libellé de sa pastille, et l'icône la redit sans la couleur.
+const ICONES_DE_SORTE = new Map([
+  ['refus', 'interdit'],
+  ['avis', 'triangle'],
+  ['information', 'information'],
+]);
+
+// La sorte de chaque bloc de messages. Un refus écarte des lignes, ou tout
+// l'import ; un avis demande à l'opérateur de vérifier ou de trancher ce
+// que le logiciel ne fusionne jamais seul — doublons, homonymes d'une mise
+// à jour —, ou une cellule sur plusieurs lignes qui porte le séparateur,
+// peut-être un guillemet mal fermé ; une information dit ce qui a été fait
+// ou lu sans rien écarter.
+const SORTES_DES_BLOCS = new Map([
+  ['global', 'refus'],
+  ['refusees', 'refus'],
+  ['doublons', 'avis'],
+  ['homonymes', 'avis'],
+  ['multilignes', 'avis'],
+  ['fusions', 'information'],
+  ['rienEcrit', 'information'],
+]);
+
+/**
+ * La classe d'un bloc de messages de l'aperçu ou du rapport.
+ *
+ * @param {string} bloc  'global', 'refusees', 'doublons', 'homonymes',
+ *        'fusions', 'multilignes' ou 'rienEcrit'
+ * @returns {{sorte: string, cle: string, icone: string}}  la sorte, la clé
+ *   de son libellé et l'icône de sa pastille
+ * @throws {RangeError} un bloc inconnu
+ */
+export function messageDuBloc(bloc) {
+  const sorte = SORTES_DES_BLOCS.get(bloc);
+  if (sorte === undefined) throw new RangeError(`bloc de messages inconnu : ${JSON.stringify(bloc)}`);
+  return { sorte, cle: `import.sorte.${sorte}`, icone: ICONES_DE_SORTE.get(sorte) };
+}
+
 /** Les colonnes du tableau des lignes : chaque champ, dans l'ordre de
  *  CHAMPS, et la clé de son nom. */
 export const COLONNES_DES_LIGNES = Object.freeze(CHAMPS.map((champ) => Object.freeze({ champ, cle: CLES_DES_CHAMPS.get(champ) })));

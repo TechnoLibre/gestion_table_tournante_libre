@@ -66,6 +66,31 @@ export function etatTable(table, siegesParDefaut) {
 }
 
 /**
+ * Le ton de la pastille d'un état de table (etatTable) : 'neutre' pour une
+ * table qui suit le défaut, 'information' pour une surchargée. La pastille
+ * porte toujours le libellé de l'état ; le ton le redit.
+ *
+ * @param {{realignable: boolean}} etat
+ * @returns {'neutre'|'information'}
+ */
+export function tonEtatTable(etat) {
+  return etat.realignable ? 'information' : 'neutre';
+}
+
+/**
+ * L'en-tête de la liste des tables : le nombre de tables et le total de
+ * leurs capacités, celle d'une table qui suit le défaut étant le défaut.
+ *
+ * @param {{tables: Array<{sieges: number|null}>, evenement: {siegesParDefaut: number}}} charge
+ * @returns {{tables: number, sieges: number}}
+ */
+export function comptesTables(charge) {
+  let sieges = 0;
+  for (const table of charge.tables) sieges += etatTable(table, charge.evenement.siegesParDefaut).capacite;
+  return { tables: charge.tables.length, sieges };
+}
+
+/**
  * L'énoncé du § 6.1, en clés et détails, depuis bilanChangementDefaut ; ses
  * phrases se lisent séparées d'une espace. Accepté : la phrase
  * d'application — les tables qui suivent le défaut et ce qu'elles

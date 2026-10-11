@@ -17,8 +17,16 @@
   // choisir(champ, rang) : tranche une ambiguïté, null pour un aperçu figé.
   // Chaque donnée — nom de fichier, en-tête, cellule, rang, compte — occupe
   // son propre nœud de texte.
+  //
+  // Chaque message est classé (Message, messageDuBloc) : le refus global et
+  // les lignes refusées en refus, les doublons, les homonymes et les
+  // cellules sur plusieurs lignes en avis, les orthographes fondues en
+  // information. Les tableaux prennent le langage des cartes : en-tête sur
+  // le fond sourd, lignes séparées d'un filet léger.
   import { getContext } from 'svelte';
-  import { COLONNES_DES_LIGNES, motifLigne, nommer } from './modele.js';
+  import Pastille from '../primitives/Pastille.svelte';
+  import Message from './Message.svelte';
+  import { COLONNES_DES_LIGNES, messageDuBloc, motifLigne, nommer } from './modele.js';
 
   let { modele, source, participants = [], refusees = null, choisir = null } = $props();
 
@@ -28,6 +36,7 @@
 
   const refuseesMontrees = $derived(refusees ?? modele.refusees);
   const global = $derived(modele.global);
+  const refusGlobal = messageDuBloc('global');
 </script>
 
 <div class="apercu">
@@ -51,6 +60,7 @@
 
   {#if global !== null}
     <div class="refus" role="status" data-refus={global.cle}>
+      <Pastille sorte="statut" valeur={refusGlobal.sorte} icone={refusGlobal.icone} libelle={t(refusGlobal.cle)} />
       <p>{t(global.cle, global.details)}</p>
       {#if !global.remede.dansLaCause}
         <p>{t(global.remede.cle, global.remede.details)}</p>
@@ -125,39 +135,40 @@
   {/if}
 
   {#if refuseesMontrees.length > 0}
-    <table class="refusees" data-refusees>
-      <caption>{t('import.apercu.refusees')}</caption>
-      <thead>
-        <tr>
-          <th scope="col">{t('import.apercu.ligne')}</th>
-          <th scope="col">{t('import.apercu.motif')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each refuseesMontrees as { ligne, code, details } (ligne)}
-          <tr data-ligne={ligne}>
-            <th scope="row">{format.nombre(ligne)}</th>
-            <td>
-              <span data-motif>{motif(code, details)}</span>
-              {#if details.participants !== undefined}
-                <span>{t('import.rapport.designees')}</span>
-                {#each nommer(participants, details.participants) as personne (personne.id)}
-                  <span class="personne" data-participant={personne.id}>
-                    {#if personne.prenom !== null}<span>{personne.prenom}</span>{/if}
-                    <span>{personne.nom}</span>
-                  </span>
-                {/each}
-              {/if}
-            </td>
+    <Message bloc="refusees">
+      <table class="refusees" data-refusees>
+        <caption>{t('import.apercu.refusees')}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{t('import.apercu.ligne')}</th>
+            <th scope="col">{t('import.apercu.motif')}</th>
           </tr>
-        {/each}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {#each refuseesMontrees as { ligne, code, details } (ligne)}
+            <tr data-ligne={ligne}>
+              <th scope="row">{format.nombre(ligne)}</th>
+              <td>
+                <span data-motif>{motif(code, details)}</span>
+                {#if details.participants !== undefined}
+                  <span>{t('import.rapport.designees')}</span>
+                  {#each nommer(participants, details.participants) as personne (personne.id)}
+                    <span class="personne" data-participant={personne.id}>
+                      {#if personne.prenom !== null}<span>{personne.prenom}</span>{/if}
+                      <span>{personne.nom}</span>
+                    </span>
+                  {/each}
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </Message>
   {/if}
 
   {#if modele.fusions.length > 0}
-    <section class="bloc">
-      <h4>{t('import.apercu.fusions')}</h4>
+    <Message bloc="fusions" titre={t('import.apercu.fusions')}>
       <ul data-fusions>
         {#each modele.fusions as fusion, rang (rang)}
           <li data-fusion>
@@ -175,12 +186,11 @@
           </li>
         {/each}
       </ul>
-    </section>
+    </Message>
   {/if}
 
   {#if modele.doublons.length > 0}
-    <section class="bloc">
-      <h4>{t('import.apercu.doublons')}</h4>
+    <Message bloc="doublons" titre={t('import.apercu.doublons')}>
       <ul data-doublons>
         {#each modele.doublons as doublon, rang (rang)}
           <li data-doublon>
@@ -200,12 +210,11 @@
           </li>
         {/each}
       </ul>
-    </section>
+    </Message>
   {/if}
 
   {#if modele.homonymes.length > 0}
-    <section class="bloc">
-      <h4>{t('import.apercu.homonymes')}</h4>
+    <Message bloc="homonymes" titre={t('import.apercu.homonymes')}>
       <ul>
         {#each modele.homonymes as homonyme (homonyme.ligne)}
           <li data-homonyme={homonyme.ligne}>
@@ -220,12 +229,11 @@
           </li>
         {/each}
       </ul>
-    </section>
+    </Message>
   {/if}
 
   {#if modele.multilignes.length > 0}
-    <section class="bloc">
-      <h4>{t('import.apercu.multilignes')}</h4>
+    <Message bloc="multilignes" titre={t('import.apercu.multilignes')}>
       <ul>
         {#each modele.multilignes as multiligne (multiligne.ligne)}
           <li data-multiligne={multiligne.ligne}>
@@ -234,7 +242,7 @@
           </li>
         {/each}
       </ul>
-    </section>
+    </Message>
   {/if}
 </div>
 
@@ -253,20 +261,31 @@
   }
 
   dt {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
     font-weight: bold;
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
+    align-self: center;
   }
 
   dd {
     margin: 0;
   }
 
+  /* Le refus global : la pastille du refus, puis la cause et le remède, de
+     l'encre de la page, sur le fond du refus. */
   .refus {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
     gap: var(--espace-1);
-    padding: var(--espace-1) var(--espace-2);
-    border-left: 3px solid var(--couleur-refus);
-    color: var(--couleur-refus);
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-refus-filet);
+    border-left: 3px solid var(--couleur-refus-marque);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
   }
 
   .refus p {
@@ -274,7 +293,8 @@
   }
 
   table {
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
   }
 
   caption {
@@ -286,30 +306,47 @@
   th,
   td {
     padding: var(--espace-1) var(--espace-2);
-    border: 1px solid var(--couleur-page-filet);
+    border-bottom: 1px solid var(--couleur-ligne-filet);
     text-align: left;
     vertical-align: top;
     white-space: pre-wrap;
   }
 
+  thead th {
+    border-top: 1px solid var(--couleur-carte-filet);
+    border-bottom-color: var(--couleur-page-filet);
+    background-color: var(--couleur-carte-fond-sourd);
+    white-space: nowrap;
+  }
+
+  tbody th {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
   .defile {
     max-height: 24rem;
     overflow: auto;
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+  }
+
+  .defile thead th {
+    position: sticky;
+    top: 0;
+    border-top: none;
   }
 
   .ambigu {
     display: flex;
     flex-wrap: wrap;
     gap: var(--espace-2);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    border: 1px solid var(--couleur-avis-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-avis-fond);
   }
 
-  .bloc h4 {
-    margin: 0 0 var(--espace-1);
-  }
-
-  .bloc ul {
+  ul {
     margin: 0;
     padding-left: var(--espace-5);
   }
