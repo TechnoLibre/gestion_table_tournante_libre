@@ -7,7 +7,7 @@
 // module ne choisit que les clés, et ne recalcule rien de ce que l'aperçu de
 // src/csv établit : association, lignes, fusions et doublons s'y lisent tels
 // quels.
-import { CHAMPS } from '../../application/csv.js';
+import { CHAMPS, JOINTURE_ETIQUETTES } from '../../application/csv.js';
 
 /** La clé du nom de chaque encodage que rend decoder, dans l'ordre de ses
  *  quatre temps. */
@@ -37,6 +37,7 @@ const CLES_DES_CHAMPS = new Map([
   ['titre_pressenti', 'import.champ.titrePressenti'],
   ['exclu', 'import.champ.exclu'],
   ['notes', 'import.champ.notes'],
+  ['etiquettes', 'import.champ.etiquettes'],
 ]);
 
 // La clé de la valeur lue d'« exclu » ; une cellule vide n'en a pas.
@@ -186,13 +187,15 @@ function colonnesDe({ entetes, association }) {
 }
 
 // Chaque ligne valide : son rang, puis une cellule par champ, dans l'ordre
-// de CHAMPS : le texte lu, ou la clé de la valeur d'« exclu ».
+// de CHAMPS : le texte lu, ou la clé de la valeur d'« exclu » ; les
+// étiquettes jointes comme l'export les joint, null sans étiquette.
 function lignesDe(lignes) {
   return lignes.map(({ ligne, champs }) => ({
     ligne,
     cellules: CHAMPS.map((champ) => {
       const valeur = champs[CHAMPS_LUS.get(champ) ?? champ];
       if (champ === 'exclu') return { champ, texte: null, cle: valeur === null ? null : CLES_D_EXCLU.get(valeur) };
+      if (champ === 'etiquettes') return { champ, texte: valeur === null ? null : valeur.join(JOINTURE_ETIQUETTES), cle: null };
       return { champ, texte: valeur, cle: null };
     }),
   }));
@@ -319,7 +322,7 @@ export function modeleApercu({ encodage = null, apercu = null, refusDecodage = n
 
 /**
  * Le texte relu dans l'ordre de la grille : précédé d'une ligne d'en-têtes —
- * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de sept —,
+ * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de huit —,
  * joints par le séparateur de l'aperçu. Sous AUCUN_ENTETE d'un texte non
  * blanc, largeur vaut apercu.entetes.length ; sous SEPARATEUR_INTROUVABLE
  * sans candidat (refusGlobalLigne null : une seule colonne), largeur vaut 1

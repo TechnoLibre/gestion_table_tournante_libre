@@ -6,9 +6,11 @@
   // 2). Un fichier choisi par le dialogue de la façade, un fichier déposé
   // sur la fenêtre, ou un texte que le collage de la grille remet par
   // ui.ouvrirImport, ouvre l'aperçu ; rien ne s'importe hors de lui.
-  // L'aperçu se calcule par apercevoir contre les participants de la
-  // charge, sous le mode choisi et le choix des colonnes ambiguës : il
-  // n'écrit rien, et s'ouvre en lecture comme sur un plan bloqué. Seule
+  // L'aperçu se calcule par apercevoir contre les participants et les
+  // tables de la charge — les étiquettes des objectifs donnent leur
+  // orthographe à celles du fichier —, sous le mode choisi et le choix des
+  // colonnes ambiguës : il n'écrit rien, et s'ouvre en lecture comme sur un
+  // plan bloqué. Seule
   // « Importer » écrit, par seance.executer('importerParticipants', …), et
   // son refus se pose à côté d'elle ; « Remplacer » passe d'abord par la
   // fenêtre à confirmer, qui porte les quatre comptes de bilanRemplacement,
@@ -54,8 +56,9 @@
   let enregistre = $state(null);
 
   const participants = $derived($seance.charge?.participants ?? []);
+  const tables = $derived($seance.charge?.tables ?? []);
   const apercu = $derived(
-    source === null || source.refusDecodage !== null ? null : apercevoir(source.texte, { participants, choix, mode }),
+    source === null || source.refusDecodage !== null ? null : apercevoir(source.texte, { participants, tables, choix, mode }),
   );
   const modele = $derived(
     source === null ? null : modeleApercu({ encodage: source.encodage, apercu, refusDecodage: source.refusDecodage }),

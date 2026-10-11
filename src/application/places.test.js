@@ -11,10 +11,11 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
 import { STATUT, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { conflitsParTable } from '../moteur/conflits.js';
-import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { analyser, creerCharge } from '../stockage/document.js';
 import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { COMMANDES } from './commandes.js';
+import { configurationDe } from './configuration.js';
 import { titresNonPourvus } from './listes_travail.js';
 import { etatPlaces, libellePropose, repartirSieges, statuts } from './places.js';
 
@@ -105,7 +106,7 @@ const occupants = (etat, rang) => etat.tables[rang].chaises.map(({ occupant }) =
 
 // Les conflits que le moteur lit sur ce placement, tour par tour.
 function conflitsDuMoteur(charge, placement) {
-  const instance = normaliser(configurationDepuisCharge(charge));
+  const instance = normaliser(configurationDe(charge));
   return conflitsParTable(instance, indexerPlan(instance, planDepuisFichier(placement)));
 }
 
@@ -211,7 +212,7 @@ describe('etatPlaces : la source et la cible (§ 5.8, § 8.9)', () => {
     charge.reservations = [resa(1, 1, null), resa(5, 1, null, 2)];
     const etat = etatPlaces(charge, { tour: 2 });
     assert.equal(etat.evalue, true);
-    const instance = normaliser(configurationDepuisCharge(charge));
+    const instance = normaliser(configurationDe(charge));
     assert.deepEqual(etat.tables[0].conflits, (({ nombre, regles }) => ({ nombre, regles }))(conflitsParTable(instance, instance.fixe)[1][0]));
     assert.ok(etat.tables[0].conflits.nombre > 0);
   });
@@ -558,7 +559,7 @@ describe('libellePropose et statuts (§ 4, § 4.2)', () => {
     const { parId, erreur } = statuts(charge);
     assert.equal(erreur, null);
     assert.deepEqual([...parId.entries()], [[1, 'ancre'], [2, 'ancre'], [3, 'partiel'], [4, 'mobile']]);
-    const instance = normaliser(configurationDepuisCharge(charge));
+    const instance = normaliser(configurationDe(charge));
     const NOMS = new Map([[STATUT.ANCRE, 'ancre'], [STATUT.PARTIELLEMENT_FIXE, 'partiel'], [STATUT.MOBILE, 'mobile']]);
     assert.ok(parId.size > 0);
     for (const [id, statut] of parId) assert.equal(statut, NOMS.get(instance.statut[instance.indexDe.get(id)]));

@@ -62,10 +62,15 @@
  * @property {number} ancragesImposantRetours   personnes dont les réservations
  *           imposent un retour
  * @property {{plancher: number, mobilesAuMoins: number}|null} ecartItineraire
+ * @property {{horsObjectif: number, jamaisServies: number, horsObjectifMax: number}} objectifsInevitables
+ *           planchers immédiats des trois valeurs des modes des objectifs
+ *           (D16, A10) ; 0 quand rien n'est prouvé, chacun calculé sous tout
+ *           mode
  */
 import {
   LIBRE,
   SANS_GROUPE,
+  SANS_OBJECTIF,
   STATUT,
   nombrePlaces,
   nombrePlacesManquantes,
@@ -248,18 +253,35 @@ function avecTablesManquantes(configuration, instance, planchers, chiffrer) {
   return lignes;
 }
 
+// La configuration ramenée à ses R′ premiers tours : les réservations de
+// portée « tous », qui couvrent alors ses R′ tours, restent, et celles d'un
+// tour au-delà de R′ se retirent, exclus compris ; de même les objectifs d'un
+// tour au-delà de R′ et les tours animés au-delà de R′. normaliser les
+// refuserait (RESERVATION_TOUR, OBJECTIF_TOUR, ANIMATION_NON_FIXEE) ; un tour
+// animé gardé reste fixé, sa réservation couvrant un tour de 1 à R′.
+function surMoinsDeTours(configuration, tours) {
+  const avant = (tour) => tour <= tours;
+  const reduite = {
+    ...configuration,
+    tours,
+    reservations: configuration.reservations.filter(({ portee, tour }) => portee !== 'tour' || avant(tour)),
+    participants: configuration.participants.map((personne) =>
+      (personne.anime === undefined ? personne : { ...personne, anime: personne.anime.filter(avant) })),
+  };
+  if (configuration.objectifs !== undefined) {
+    reduite.objectifs = configuration.objectifs.filter(({ tour }) => tour === null || tour === undefined || avant(tour));
+  }
+  return reduite;
+}
+
 // Plus grand R′ < R où la redondance minimale s'annule, null quand elle vaut
-// déjà 0 ou null, ou qu'aucun R′ ne l'annule. La sonde à R′ tours garde les
-// réservations de portée « tous », qui couvrent alors ses R′ tours, et retire
-// celles d'un tour au-delà de R′, exclus compris : normaliser les refuserait
-// (RESERVATION_TOUR). Les R′ se sondent du plus grand au plus petit.
+// déjà 0 ou null, ou qu'aucun R′ ne l'annule. La sonde à R′ tours est la
+// configuration ramenée à ses R′ premiers tours. Les R′ se sondent du plus
+// grand au plus petit.
 function toursSansRedondance(configuration, R, minimale) {
   if (minimale === null || minimale === 0) return null;
   for (let tours = R - 1; tours >= 1; tours -= 1) {
-    const reservations = configuration.reservations.filter(
-      ({ portee, tour }) => portee !== 'tour' || tour <= tours,
-    );
-    const sonde = normaliser({ ...configuration, tours, reservations });
+    const sonde = normaliser(surMoinsDeTours(configuration, tours));
     if (redondanceMinimale(sonde, plafondsAPriori(sonde)) === 0) return tours;
   }
   return null;
@@ -359,6 +381,64 @@ function ecartItineraire(configuration, instance, aPriori) {
   return { plancher, mobilesAuMoins: Math.ceil(siegesToursInferieurs / R) };
 }
 
+// Planchers immédiats des objectifs (D16, A10). Au tour r, une personne
+// servie qui n'est pas fixée occupe un siège libre d'une table dont
+// l'objectif est en vigueur : P_r compte les couples possibles non fixés,
+// L_r ces sièges libres, et les tours hors objectif sont au moins
+// Σ_r max(0, P_r − L_r). Un siège libre ne sert qu'une personne par tour :
+// parmi C′, les concernées qu'aucune réservation ne sert, au moins
+// #C′ − Σ_r min(L_r, P′_r) ne le sont jamais, P′_r comptant celles de C′ dont
+// le tour r est possible — tous non fixés, un couple fixé possible étant
+// servi. Le plus grand nombre de tours hors objectif d'une personne ne
+// descend pas sous la moyenne : le premier plancher divisé par le nombre de
+// personnes qui ont un tour possible non fixé, arrondi au-dessus. Les fixés
+// ne comptent ni parmi les couples ni parmi les sièges libres. O(T · R + N · R)
+// une fois les couples possibles connus.
+function objectifsInevitables({ N, T, R, fixe, possible, objectifDe, siegesLibres }) {
+  let horsObjectif = 0;
+  let servisAuPlus = 0;
+  const libresAuTour = new Int32Array(R);
+  for (let t = 0; t < T; t += 1) {
+    for (let r = 0; r < R; r += 1) {
+      if (objectifDe[t * R + r] !== SANS_OBJECTIF) libresAuTour[r] += siegesLibres[t * R + r];
+    }
+  }
+  // Par personne : un couple possible fixé, qui la sert d'office ; un couple
+  // possible non fixé, qui la fait compter dans P_r, et dans P′_r quand
+  // aucune réservation ne la sert.
+  const servieDOffice = new Uint8Array(N);
+  const aUnTourLibre = new Uint8Array(N);
+  for (let p = 0; p < N; p += 1) {
+    for (let r = 0; r < R; r += 1) {
+      if (possible[p * R + r] === 0) continue;
+      if (fixe[p * R + r] === LIBRE) aUnTourLibre[p] = 1;
+      else servieDOffice[p] = 1;
+    }
+  }
+  let concerneesLibres = 0;
+  let avecTourLibre = 0;
+  for (let p = 0; p < N; p += 1) {
+    if (aUnTourLibre[p] === 1) avecTourLibre += 1;
+    if (aUnTourLibre[p] === 1 && servieDOffice[p] === 0) concerneesLibres += 1;
+  }
+  for (let r = 0; r < R; r += 1) {
+    let couples = 0;
+    let parmiC = 0;
+    for (let p = 0; p < N; p += 1) {
+      if (possible[p * R + r] === 0 || fixe[p * R + r] !== LIBRE) continue;
+      couples += 1;
+      if (servieDOffice[p] === 0) parmiC += 1;
+    }
+    horsObjectif += Math.max(0, couples - libresAuTour[r]);
+    servisAuPlus += Math.min(libresAuTour[r], parmiC);
+  }
+  return {
+    horsObjectif,
+    jamaisServies: Math.max(0, concerneesLibres - servisAuPlus),
+    horsObjectifMax: horsObjectif === 0 ? 0 : Math.ceil(horsObjectif / avecTourLibre),
+  };
+}
+
 // Plus petite et plus grande valeur, null pour une liste vide.
 function etendue(valeurs) {
   if (valeurs.length === 0) return { min: null, max: null };
@@ -394,6 +474,10 @@ function etendue(valeurs) {
  *   que mesure tout plan qui honore les réservations (§ 5.4) ;
  *   ancragesImposantRetours, les personnes qui en portent un au moins.
  * - ecartItineraire : plancher de l'écart d'itinéraire maximal, ou null.
+ * - objectifsInevitables : planchers immédiats des tours hors objectif, des
+ *   personnes jamais servies et du plus de tours hors objectif d'une
+ *   personne, nuls sans objectif ; l'interface écrit ceux que le mode
+ *   compare. animateursMemeAppartenance garde son sens : les ancrés.
  *
  * @param {import('./types.js').Configuration} configuration
  * @param {{planchersCollisions?: typeof planchersCollisions}} [calcul]
@@ -426,5 +510,6 @@ export function diagnostiquer(configuration, { planchersCollisions: chiffrer = p
     retoursImposes: imposes.totalRetoursImposes,
     ancragesImposantRetours: imposes.retoursImposes.filter((retours) => retours > 0).length,
     ecartItineraire: ecartItineraire(configuration, instance, aPriori),
+    objectifsInevitables: objectifsInevitables(instance),
   };
 }

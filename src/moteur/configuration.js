@@ -2,8 +2,15 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Passage de la configuration, forme par identifiants, à l'instance indexée
-// que consomme le moteur (§ 4, § 5.2), et conversion d'un plan entre ses deux
-// formes (§ 8.9). Les formes sont décrites dans types.js.
+// que consomme le moteur (§ 4, § 4.5, § 5.2), et conversion d'un plan entre
+// ses deux formes (§ 8.9). Les formes sont décrites dans types.js.
+//
+// L'instance porte aussi ce que les critères des objectifs et des animateurs
+// lisent, calculé une fois par configuration : l'objectif en vigueur à chaque
+// table et chaque tour, la correspondance de chaque personne à chaque
+// objectif distinct, ses couples (personne, tour) possibles, les animateurs
+// de chaque table à chaque tour et la borne des animateurs de chacun ; puis
+// l'état de chaque critère et la liste des priorités complète.
 //
 // Ce module définit aussi, une seule fois pour tout le moteur (§ 13.2), ce
 // que les autres modules lisent de ces formes : les valeurs du contrat —
@@ -22,15 +29,30 @@
 //   ne produit : un identifiant de participant ou de table qui n'est pas un
 //   entier ≥ 1, une appartenance ni chaîne ni null, un exclu présent et non
 //   booléen, une portée ni « tous » ni « tour », des contraintes qui ne sont
-//   pas un objet de quatre booléens, une liste qui n'est pas un tableau. Ces
-//   formes sont les seules que normaliser contrôle par TypeError ; une valeur
-//   qui en sort est une faute de l'appelant, qu'aucune valeur par défaut ne
-//   masque ;
+//   pas un objet de quatre booléens, ou dont une case facultative présente
+//   n'est pas booléenne, une liste qui n'est pas un tableau, des étiquettes
+//   qui ne sont pas une liste de chaînes, une règle d'objectif ni « ou » ni
+//   « et », un mode des objectifs inconnu, des tours animés qui ne croissent
+//   pas strictement. Ces formes sont les seules que normaliser contrôle par
+//   TypeError ; une valeur qui en sort est une faute de l'appelant, qu'aucune
+//   valeur par défaut ne masque ;
 // - RangeError, pour un plan indexé qui n'a pas la forme de l'instance : seul
 //   le moteur produit cette forme, et l'écart y est une faute de code.
 //
 // Les champs que normaliser ne lit pas — nom, prénom, numéro de table — ne
-// sont pas examinés. Aucune fonction ne modifie ce qu'elle reçoit.
+// sont pas examinés, pas plus que les clés des contraintes autres que les six
+// qu'il copie : le moteur ne parcourt les clés d'aucun objet. Aucune fonction
+// ne modifie ce qu'elle reçoit.
+import { correspondA } from './correspondance.js';
+import {
+  CRITERES,
+  MODES_OBJECTIFS,
+  PRIORITES_PAR_DEFAUT,
+  completerPriorites,
+  estCoche,
+  valeursQuiClassent,
+  verifierPriorites,
+} from './criteres.js';
 import { ErreurConfiguration } from './erreurs.js';
 
 /**
@@ -54,6 +76,12 @@ export const RESERVE = -1;
 /** instance.groupe d'un participant sans appartenance. */
 export const SANS_GROUPE = -1;
 
+/** Case de instance.objectifDe d'une table sans objectif en vigueur au tour. */
+export const SANS_OBJECTIF = -1;
+
+/** instance.rangAnimateur d'une personne qui n'anime à aucun tour. */
+export const NON_ANIMATEUR = -1;
+
 // Case d'un plan indexé qu'indexerPlan n'a pas encore remplie ; jamais rendue.
 const NON_PLACE = -2;
 
@@ -68,8 +96,13 @@ const NOMS_CONTRAINTES = [
   'varierAppartenances',
 ];
 
-// Valeur citée dans un message : une chaîne s'écrit entre guillemets, pour
-// ne pas se lire comme le nombre qu'elle contient.
+// Les deux cases facultatives (A16), absentes à leur défaut : la copie ne les
+// porte que quand la configuration les porte.
+const CONTRAINTES_FACULTATIVES = ['respecterObjectifs', 'rencontrerAnimateurs'];
+
+// Le mode des objectifs d'une configuration qui n'en porte pas (D20).
+const MODE_PAR_DEFAUT = MODES_OBJECTIFS[0];
+
 // Valeur citée dans un message : une chaîne entre guillemets, pour qu'elle
 // ne se lise pas comme le nombre qu'elle contient ; toute autre valeur telle
 // quelle.
@@ -102,8 +135,17 @@ function estExclu({ id, exclu }) {
   return exclu;
 }
 
-// Copie des quatre contraintes : une modification ultérieure de la
-// configuration n'atteint pas l'instance.
+// Lève TypeError quand valeurs n'est pas une liste de chaînes ; quoi nomme
+// la liste dans le message.
+function exigerEtiquettes(valeurs, quoi) {
+  if (!Array.isArray(valeurs) || !valeurs.every((valeur) => typeof valeur === 'string')) {
+    throw new TypeError(`${quoi} : liste de chaînes attendue`);
+  }
+}
+
+// Copie des quatre contraintes, puis des deux cases facultatives que la
+// configuration porte : une modification ultérieure de la configuration
+// n'atteint pas l'instance. Aucune autre clé n'est lue.
 function copierContraintes(contraintes) {
   if (typeof contraintes !== 'object' || contraintes === null) {
     throw new TypeError('configuration.contraintes : objet attendu');
@@ -115,7 +157,24 @@ function copierContraintes(contraintes) {
     }
     copie[nom] = contraintes[nom];
   }
+  for (const nom of CONTRAINTES_FACULTATIVES) {
+    if (contraintes[nom] === undefined) continue;
+    if (typeof contraintes[nom] !== 'boolean') {
+      throw new TypeError(`contrainte ${nom} : booléen attendu, reçu ${decrire(contraintes[nom])}`);
+    }
+    copie[nom] = contraintes[nom];
+  }
   return copie;
+}
+
+// Le mode des objectifs : MODE_PAR_DEFAUT quand la configuration n'en porte
+// pas ; TypeError pour un mode hors de MODES_OBJECTIFS.
+function lireMode(mode) {
+  if (mode === undefined) return MODE_PAR_DEFAUT;
+  if (!MODES_OBJECTIFS.includes(mode)) {
+    throw new TypeError(`configuration.modeObjectifs : ${decrire(mode)}, l'un de ${MODES_OBJECTIFS.join(', ')} attendu`);
+  }
+  return mode;
 }
 
 // Groupe de chaque participant présent, présents triés par identifiant
@@ -195,11 +254,13 @@ function fixerReservations(reservations, contexte) {
   return fixe;
 }
 
-// Lève SURRESERVATION quand, à un tour, une table reçoit plus de personnes
-// fixées que de sièges (§ 5.9). Le compte porte sur les personnes, lues dans
-// fixe : une réservation répétée ne compte qu'une fois. Les tables se
-// parcourent par index, chacune par tours croissants.
-function verifierSurreservation(fixe, { N, T, R, capacite, idsTables }) {
+// Les sièges libres de chaque table à chaque tour, [t × R + r] : sa capacité
+// moins les personnes que fixe y assied. Lève SURRESERVATION quand, à un
+// tour, une table reçoit plus de personnes fixées que de sièges (§ 5.9). Le
+// compte porte sur les personnes, lues dans fixe : une réservation répétée ne
+// compte qu'une fois. Les tables se parcourent par index, chacune par tours
+// croissants.
+function siegesLibresApres(fixe, { N, T, R, capacite, idsTables }) {
   const fixees = new Int32Array(T * R);
   for (let p = 0; p < N; p += 1) {
     for (let r = 0; r < R; r += 1) {
@@ -217,8 +278,10 @@ function verifierSurreservation(fixe, { N, T, R, capacite, idsTables }) {
           capacite: capacite[t],
         });
       }
+      fixees[t * R + r] = capacite[t] - fixees[t * R + r];
     }
   }
+  return fixees;
 }
 
 // Statut de chaque participant, dérivé de fixe et non de la forme des
@@ -252,6 +315,236 @@ function deriverStatuts(fixe, N, T, R) {
   return { statut, ancresParTable, k };
 }
 
+// Les objectifs de la configuration, rangés et numérotés (§ 4.5, A13).
+// Chacun se vérifie dans sa forme et dans son ordre : table connue, tour nul
+// pour la soirée ou de 1 à R, au plus un objectif par table pour la soirée et
+// par tour. Les objectifs distincts — même règle, mêmes étiquettes dans le
+// même ordre — reçoivent un seul numéro, de 0 à O − 1, dans l'ordre des
+// tables par identifiant croissant, la soirée puis les tours croissants de
+// chacune ; la Map ne sert qu'à retrouver un objectif déjà numéroté.
+// objectifDe[t × R + r] donne le numéro de l'objectif en vigueur, celui du
+// tour quand la table en porte un, sinon celui de la soirée, SANS_OBJECTIF
+// sinon : l'objectif du tour remplace celui de la soirée.
+function numeroterObjectifs(objectifs, { T, R, idsTables, indexTableDe }) {
+  exigerListe(objectifs, 'objectifs');
+  // rangDe[t × (R + 1) + k] : rang dans objectifs de l'objectif de la table t
+  // pour la soirée (k = 0) ou pour le tour k ; −1 sans objectif.
+  const rangDe = new Int32Array(T * (R + 1)).fill(-1);
+  objectifs.forEach(({ table, tour, regle, etiquettes }, rang) => {
+    const t = indexTableDe.get(table);
+    if (t === undefined) throw new ErreurConfiguration('OBJECTIF_INCONNU', { table });
+    if (regle !== 'ou' && regle !== 'et') {
+      throw new TypeError(`objectif de la table ${table} : règle ${decrire(regle)}, « ou » ou « et » attendue`);
+    }
+    exigerEtiquettes(etiquettes, `objectif de la table ${table}`);
+    const soiree = tour === null || tour === undefined;
+    if (!soiree && !(Number.isInteger(tour) && tour >= 1 && tour <= R)) {
+      throw new ErreurConfiguration('OBJECTIF_TOUR', { table, tour });
+    }
+    const k = t * (R + 1) + (soiree ? 0 : tour);
+    if (rangDe[k] !== -1) throw new ErreurConfiguration('OBJECTIF_CONFLIT', { table, tour: soiree ? null : tour });
+    rangDe[k] = rang;
+  });
+
+  const parIdentifiant = Array.from({ length: T }, (_, t) => t).sort((a, b) => idsTables[a] - idsTables[b]);
+  const numeroDe = new Int32Array(T * (R + 1)).fill(SANS_OBJECTIF);
+  const distincts = [];
+  const numeroDeCle = new Map();
+  for (const t of parIdentifiant) {
+    for (let k = 0; k <= R; k += 1) {
+      const rang = rangDe[t * (R + 1) + k];
+      if (rang === -1) continue;
+      const { regle, etiquettes } = objectifs[rang];
+      const cle = JSON.stringify([regle, etiquettes]);
+      if (!numeroDeCle.has(cle)) {
+        numeroDeCle.set(cle, distincts.length);
+        distincts.push({ regle, etiquettes });
+      }
+      numeroDe[t * (R + 1) + k] = numeroDeCle.get(cle);
+    }
+  }
+
+  const objectifDe = new Int32Array(T * R);
+  for (let t = 0; t < T; t += 1) {
+    for (let r = 0; r < R; r += 1) {
+      const duTour = numeroDe[t * (R + 1) + r + 1];
+      objectifDe[t * R + r] = duTour !== SANS_OBJECTIF ? duTour : numeroDe[t * (R + 1)];
+    }
+  }
+  return { objectifDe, distincts };
+}
+
+// Correspondance de chaque personne présente à chaque objectif distinct,
+// [p × O + o] = 1 quand correspondA le dit (D18), puis les couples possibles
+// (§ 4.5) : (p, r) l'est quand la table fixée de p à ce tour lui correspond,
+// ou, p libre à ce tour, quand une table qui garde un siège libre lui
+// correspond. Les objectifs qu'offre une table à siège libre se marquent une
+// fois par tour.
+function couplesPossibles(presents, distincts, { N, T, R, fixe, siegesLibres, objectifDe }) {
+  const O = distincts.length;
+  const correspond = new Uint8Array(N * O);
+  for (let p = 0; p < N; p += 1) {
+    const etiquettes = presents[p].etiquettes ?? [];
+    for (let o = 0; o < O; o += 1) correspond[p * O + o] = correspondA(etiquettes, distincts[o]) ? 1 : 0;
+  }
+  const possible = new Uint8Array(N * R);
+  const possibles = new Int32Array(N);
+  const offert = new Uint8Array(O);
+  for (let r = 0; r < R; r += 1) {
+    offert.fill(0);
+    for (let t = 0; t < T; t += 1) {
+      const o = objectifDe[t * R + r];
+      if (o !== SANS_OBJECTIF && siegesLibres[t * R + r] > 0) offert[o] = 1;
+    }
+    for (let p = 0; p < N; p += 1) {
+      const t = fixe[p * R + r];
+      let oui = false;
+      if (t !== LIBRE) {
+        const o = objectifDe[t * R + r];
+        oui = o !== SANS_OBJECTIF && correspond[p * O + o] === 1;
+      } else {
+        for (let o = 0; o < O && !oui; o += 1) oui = offert[o] === 1 && correspond[p * O + o] === 1;
+      }
+      if (oui) {
+        possible[p * R + r] = 1;
+        possibles[p] += 1;
+      }
+    }
+  }
+  return { O, correspond, possible, possibles };
+}
+
+// Les animateurs (§ 4.5, D6) : participant.anime liste, croissants, les tours
+// où la personne présente pourvoit un titre. Chaque tour se vérifie : de 1 à
+// R, et la personne y est fixée — sinon ANIMATION_NON_FIXEE ; elle anime
+// alors à sa table fixée. Un exclu n'anime pas. Les animateurs reçoivent
+// leurs rangs, 0 à A − 1, dans l'ordre des identifiants ; animes porte, ligne
+// t × R + r de debutAnimes à la suivante, les rangs de ceux qui animent à la
+// table t au tour r, croissants.
+function deriverAnimateurs(presents, { N, T, R, fixe }) {
+  const rangAnimateur = new Int32Array(N).fill(NON_ANIMATEUR);
+  const indexDesAnimateurs = [];
+  const parLigne = new Int32Array(T * R);
+  for (let p = 0; p < N; p += 1) {
+    const { id, anime } = presents[p];
+    if (anime === undefined) continue;
+    if (!Array.isArray(anime)) throw new TypeError(`participant ${id} : tours animés en liste attendus`);
+    let precedent = 0;
+    for (const tour of anime) {
+      if (!Number.isInteger(tour) || tour < 1 || tour > R || fixe[p * R + tour - 1] === LIBRE) {
+        throw new ErreurConfiguration('ANIMATION_NON_FIXEE', { participant: id, tour });
+      }
+      if (tour <= precedent) throw new TypeError(`participant ${id} : tours animés strictement croissants attendus`);
+      precedent = tour;
+      parLigne[fixe[p * R + tour - 1] * R + tour - 1] += 1;
+    }
+    if (anime.length === 0) continue;
+    rangAnimateur[p] = indexDesAnimateurs.length;
+    indexDesAnimateurs.push(p);
+  }
+  const debutAnimes = new Int32Array(T * R + 1);
+  for (let ligne = 0; ligne < T * R; ligne += 1) debutAnimes[ligne + 1] = debutAnimes[ligne] + parLigne[ligne];
+  const animes = new Int32Array(debutAnimes[T * R]);
+  const rempli = debutAnimes.slice(0, T * R);
+  for (const p of indexDesAnimateurs) {
+    for (const tour of presents[p].anime) {
+      const ligne = fixe[p * R + tour - 1] * R + tour - 1;
+      animes[rempli[ligne]] = rangAnimateur[p];
+      rempli[ligne] += 1;
+    }
+  }
+  return { A: indexDesAnimateurs.length, rangAnimateur, animateurs: Int32Array.from(indexDesAnimateurs), debutAnimes, animes };
+}
+
+// La borne des animateurs B(p) = min(#Φ(p), Σ_r φ_r(p)) (D21). Une table que
+// p peut occuper au tour r est sa table fixée, sinon toute table qui garde un
+// siège libre. Φ(p) réunit les animateurs autres que p qui animent, à un
+// tour, à une table qu'il peut y occuper : un marquage de taille A, daté par
+// personne, les compte sans remise à zéro. φ_r(p) est le plus grand nombre
+// d'animateurs autres que p à une telle table : pour p fixé, ceux de sa
+// table ; pour p libre, qui n'anime pas à ce tour, le plus grand nombre d'une
+// table à siège libre, calculé une fois par tour, comme la liste de leurs
+// animateurs. O(N · R · A) au pire.
+function bornerAnimateurs({ N, T, R, fixe, siegesLibres }, { A, rangAnimateur, debutAnimes, animes }) {
+  const borne = new Int32Array(N);
+  if (A === 0) return borne;
+  const plusGrandLibre = new Int32Array(R);
+  const libresDuTour = [];
+  for (let r = 0; r < R; r += 1) {
+    const rangs = [];
+    for (let t = 0; t < T; t += 1) {
+      if (siegesLibres[t * R + r] === 0) continue;
+      const debut = debutAnimes[t * R + r];
+      const fin = debutAnimes[t * R + r + 1];
+      for (let k = debut; k < fin; k += 1) rangs.push(animes[k]);
+      plusGrandLibre[r] = Math.max(plusGrandLibre[r], fin - debut);
+    }
+    libresDuTour.push(rangs);
+  }
+  const marque = new Int32Array(A).fill(-1);
+  for (let p = 0; p < N; p += 1) {
+    const soi = rangAnimateur[p];
+    let rejoints = 0;
+    let somme = 0;
+    const rejoindre = (f) => {
+      if (f === soi || marque[f] === p) return;
+      marque[f] = p;
+      rejoints += 1;
+    };
+    for (let r = 0; r < R; r += 1) {
+      const t = fixe[p * R + r];
+      if (t === LIBRE) {
+        libresDuTour[r].forEach(rejoindre);
+        somme += plusGrandLibre[r];
+        continue;
+      }
+      let ici = 0;
+      for (let k = debutAnimes[t * R + r]; k < debutAnimes[t * R + r + 1]; k += 1) {
+        if (animes[k] === soi) continue;
+        rejoindre(animes[k]);
+        ici += 1;
+      }
+      somme += ici;
+    }
+    borne[p] = Math.min(rejoints, somme);
+  }
+  return borne;
+}
+
+// La liste des priorités de la configuration, complète (A16) : une copie de
+// l'ordre par défaut quand elle n'en porte pas ; sinon la liste reçue,
+// complétée, que verifierPriorites juge sous le mode. Le jugement se fait
+// avant le complément, qui suppose la forme d'une liste : verifierPriorites
+// ne relève l'absence d'un critère qu'une fois tout le reste trouvé valide, et
+// le complément n'ajoute que des paliers d'un critère seul au poids 1, si
+// bien qu'une liste dont la seule faute est l'absence se complète en une
+// liste valide, et que toute autre faute est celle de la liste complétée.
+// Les détails de PRIORITES sont la faute de verifierPriorites.
+function lirePriorites(priorites, mode) {
+  if (priorites === undefined) return completerPriorites(PRIORITES_PAR_DEFAUT);
+  const faute = verifierPriorites(priorites, mode);
+  if (faute !== null && faute.faute !== 'critereAbsent') throw new ErreurConfiguration('PRIORITES', faute);
+  return completerPriorites(priorites);
+}
+
+// L'état de chaque critère, dans l'ordre de CRITERES (§ 5.3, D10) : coché
+// selon ses cases, sans objet quand l'événement ne lui donne rien à mesurer —
+// aucun couple possible pour les tours hors objectif, aucune borne des
+// animateurs non nulle pour les animateurs non rencontrés —, et les valeurs
+// qu'il classe sous ces contraintes et ce mode.
+function etatDesCriteres(contraintes, mode, possibles, borne) {
+  const sansObjet = {
+    toursHorsObjectif: possibles.every((n) => n === 0),
+    animateursNonRencontres: borne.every((b) => b === 0),
+  };
+  return CRITERES.map((nom) => ({
+    nom,
+    coche: estCoche(nom, contraintes),
+    sansObjet: sansObjet[nom] ?? false,
+    valeurs: valeursQuiClassent(nom, contraintes, mode),
+  }));
+}
+
 /**
  * Instance indexée d'une configuration (§ 4, § 5.2). Les participants exclus
  * en sont absents (§ 4.4) : ni index ni groupe, et leurs réservations,
@@ -264,19 +557,32 @@ function deriverStatuts(fixe, N, T, R) {
  * (participant ou table), RESERVATION_TOUR (tour absent ou hors de 1..R),
  * RESERVATION_CONFLIT (une personne à deux tables d'un même tour),
  * SURRESERVATION (plus de personnes fixées que de sièges à une table, à un
- * tour). Une salle trop petite n'est pas refusée : nombrePlacesManquantes la
- * chiffre, et la recherche la refuse (§ 5.9). Les détails désignent
- * participants et tables par identifiant, les tours par leur numéro à partir
- * de 1, et la réservation fautive par son rang dans
+ * tour) ; puis objectifs un à un, tours animés, priorités : OBJECTIF_INCONNU
+ * {table} (une table absente), OBJECTIF_TOUR {table, tour} (ni nul ni de
+ * 1..R), OBJECTIF_CONFLIT {table, tour} (deux objectifs d'une table pour la
+ * soirée, tour nul, ou pour un même tour), ANIMATION_NON_FIXEE {participant,
+ * tour} (un tour animé hors de 1..R, ou où la personne n'est pas fixée),
+ * PRIORITES {faute, critere?, palier?} (la faute de verifierPriorites sous le
+ * mode, après complément). Une salle trop petite n'est pas refusée :
+ * nombrePlacesManquantes la chiffre, et la recherche la refuse (§ 5.9). Les
+ * détails désignent participants et tables par identifiant, les tours par
+ * leur numéro à partir de 1, et la réservation fautive par son rang dans
  * configuration.reservations, à partir de 0.
  *
  * Lève TypeError sur les seules formes qu'énumère l'en-tête du module :
  * identifiants de participant et de table, appartenance, exclu, portée,
- * contraintes, listes. Une capacité, un nombre de tours ou un tour désigné
- * hors de leur forme lèvent CAPACITE, TOURS ou RESERVATION_TOUR ; une
- * réservation qui désigne un participant ou une table absents de la
- * configuration lève RESERVATION_INCONNUE, quelle que soit la forme de la
- * valeur qui les désigne.
+ * contraintes, listes, étiquettes, règle d'un objectif, mode, ordre des
+ * tours animés. Une capacité, un nombre de tours, un tour désigné, le tour
+ * d'un objectif ou un tour animé hors de leur forme lèvent CAPACITE, TOURS,
+ * RESERVATION_TOUR, OBJECTIF_TOUR ou ANIMATION_NON_FIXEE ; une réservation ou
+ * un objectif qui désignent un participant ou une table absents de la
+ * configuration lèvent RESERVATION_INCONNUE ou OBJECTIF_INCONNU, quelle que
+ * soit la forme de la valeur qui les désigne.
+ *
+ * Les champs facultatifs absents prennent leur défaut : aucun objectif, aucune
+ * étiquette, personne n'anime, le mode « places », l'ordre par défaut ; les
+ * deux cases facultatives restent absentes de instance.contraintes, où
+ * estCoche (criteres.js) leur donne leur valeur par défaut.
  *
  * @param {import('./types.js').Configuration} configuration
  * @returns {import('./types.js').Instance}
@@ -287,6 +593,7 @@ export function normaliser(configuration) {
   exigerListe(tables, 'tables');
   exigerListe(reservations, 'reservations');
   const contraintes = copierContraintes(configuration.contraintes);
+  const modeObjectifs = lireMode(configuration.modeObjectifs);
 
   // connus porte tous les identifiants, exclus compris : un doublon reste un
   // doublon, et la réservation d'un exclu n'est pas inconnue.
@@ -300,6 +607,7 @@ export function normaliser(configuration) {
     }
     connus.add(participant.id);
     exigerAppartenance(participant);
+    if (participant.etiquettes !== undefined) exigerEtiquettes(participant.etiquettes, `participant ${participant.id}, étiquettes`);
     if (estExclu(participant)) exclus.push(participant.id);
     else presents.push(participant);
   }
@@ -329,8 +637,13 @@ export function normaliser(configuration) {
   const indexDe = new Map(ids.map((id, p) => [id, p]));
   const { groupe, groupes } = numeroterGroupes(presents);
   const fixe = fixerReservations(reservations, { connus, indexDe, indexTableDe, idsTables, N, R });
-  verifierSurreservation(fixe, { N, T, R, capacite, idsTables });
+  const siegesLibres = siegesLibresApres(fixe, { N, T, R, capacite, idsTables });
   const { statut, ancresParTable, k } = deriverStatuts(fixe, N, T, R);
+  const { objectifDe, distincts } = numeroterObjectifs(configuration.objectifs ?? [], { T, R, idsTables, indexTableDe });
+  const objectifs = couplesPossibles(presents, distincts, { N, T, R, fixe, siegesLibres, objectifDe });
+  const animation = deriverAnimateurs(presents, { N, T, R, fixe });
+  const borneAnimateurs = bornerAnimateurs({ N, T, R, fixe, siegesLibres }, animation);
+  const priorites = lirePriorites(configuration.priorites, modeObjectifs);
 
   return {
     N,
@@ -350,6 +663,21 @@ export function normaliser(configuration) {
     k,
     n: N - k,
     contraintes,
+    siegesLibres,
+    O: objectifs.O,
+    objectifDe,
+    correspond: objectifs.correspond,
+    possible: objectifs.possible,
+    possibles: objectifs.possibles,
+    modeObjectifs,
+    A: animation.A,
+    rangAnimateur: animation.rangAnimateur,
+    animateurs: animation.animateurs,
+    debutAnimes: animation.debutAnimes,
+    animes: animation.animes,
+    borneAnimateurs,
+    etatCriteres: etatDesCriteres(contraintes, modeObjectifs, objectifs.possibles, borneAnimateurs),
+    priorites,
   };
 }
 

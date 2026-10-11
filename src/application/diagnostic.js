@@ -3,7 +3,7 @@
 
 // Le diagnostic de la configuration d'une charge (§ 5.6), pour l'interface,
 // qui n'importe pas le moteur (§ 13.4). Le calcul est celui de diagnostiquer,
-// sur configurationDepuisCharge : ce module n'en refait aucun chiffre.
+// sur configurationDe : ce module n'en refait aucun chiffre.
 //
 // Une charge ouverte peut ne pas se normaliser — une table surréservée, que
 // le stockage admet et que le moteur refuse (CONFIGURATION_INCOHERENTE, A2).
@@ -12,7 +12,7 @@
 // autre erreur est une faute du code et remonte.
 import { diagnostiquer } from '../moteur/diagnostic.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
-import { configurationDepuisCharge } from '../stockage/document.js';
+import { configurationDe } from './configuration.js';
 
 /**
  * Le diagnostic de la configuration de la charge (§ 5.6). Ne modifie pas la
@@ -26,7 +26,7 @@ import { configurationDepuisCharge } from '../stockage/document.js';
  */
 export function diagnostiquerCharge(charge) {
   try {
-    return { diagnostic: diagnostiquer(configurationDepuisCharge(charge)), erreur: null };
+    return { diagnostic: diagnostiquer(configurationDe(charge)), erreur: null };
   } catch (erreur) {
     if (!(erreur instanceof ErreurConfiguration)) throw erreur;
     return { diagnostic: null, erreur: { code: erreur.code, details: erreur.details } };

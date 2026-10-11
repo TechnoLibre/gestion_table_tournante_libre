@@ -119,6 +119,17 @@
  *                                       servies (modeObjectifs)
  * @property {true} [rencontrerAnimateurs]  facultatif, présent seulement
  *                                       coché ; absent, décoché (critereCoche)
+ * @property {Array<Array<{critere: string, poids: number}>>} [priorites]
+ *                                       facultatif, présent seulement hors de
+ *                                       l'ordre par défaut : des paliers non
+ *                                       vides, du premier au dernier, chaque
+ *                                       critère du registre une fois, rangés
+ *                                       dans un palier dans l'ordre du
+ *                                       registre ; poids entiers de 1 à
+ *                                       POIDS_MAX ; valide sous le mode des
+ *                                       objectifs (verifierPriorites) ;
+ *                                       absent, l'ordre par défaut
+ *                                       (priorites)
  *
  * @typedef {Object} ProchainsIds   entiers de 1 à 2^31 − 1, au-delà de tout
  *                                  identifiant attribué ; ils ne reculent

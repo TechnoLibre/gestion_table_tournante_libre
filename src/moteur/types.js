@@ -4,8 +4,13 @@
 // Contrat de données du moteur : les formes qu'il reçoit et celles qu'il
 // rend. Ce module ne porte que des définitions JSDoc et n'exécute rien ; un
 // module cite un type par import('./types.js').Instance. Les valeurs que ces
-// formes portent — STATUT, LIBRE, RESERVE, SANS_GROUPE — sont définies et
-// exportées par configuration.js, leur seul propriétaire.
+// formes portent — STATUT, LIBRE, RESERVE, SANS_GROUPE, SANS_OBJECTIF,
+// NON_ANIMATEUR — sont définies et exportées par configuration.js, leur seul
+// propriétaire.
+//
+// « Ancré » nomme la personne fixée à une même table à chaque tour (§ 4.2) ;
+// « animateur » ne nomme que la personne qui anime à un tour au moins (§ 4.5,
+// D6), que portent rangAnimateur et animes.
 
 /**
  * @typedef {Object} Participant
@@ -16,6 +21,12 @@
  *                                       de chaînes fait le groupe (la
  *                                       réconciliation est l'affaire du CSV)
  * @property {boolean} [exclu]       absent = false
+ * @property {string[]} [etiquettes] absent = aucune ; l'égalité de chaînes
+ *                                   les compare (§ 4.5)
+ * @property {number[]} [anime]      tours, de 1 à R, strictement croissants,
+ *                                   où la personne pourvoit un titre, fixée à
+ *                                   la table du titre (D6) ; absent = n'anime
+ *                                   à aucun tour
  *
  * @typedef {Object} Table
  * @property {number} id             entier ≥ 1, unique
@@ -28,11 +39,19 @@
  * @property {'tous'|'tour'} portee
  * @property {number} [tour]         1..R, requis quand portee === 'tour'
  *
+ * @typedef {Object} Objectif     objectif d'une table (§ 4.5)
+ * @property {number} table          id
+ * @property {number|null} tour      1..R ; null pour la soirée
+ * @property {'ou'|'et'} regle       résolue : la règle propre, sinon le défaut
+ * @property {string[]} etiquettes
+ *
  * @typedef {Object} Contraintes
  * @property {boolean} separerAppartenances
  * @property {boolean} nouveauxVoisins
  * @property {boolean} nouvelleTable
  * @property {boolean} varierAppartenances
+ * @property {boolean} [respecterObjectifs]    absent = vrai (A16)
+ * @property {boolean} [rencontrerAnimateurs]  absent = faux (A16)
  *
  * @typedef {Object} Configuration
  * @property {Participant[]} participants
@@ -40,6 +59,10 @@
  * @property {number} tours          R ≥ 1
  * @property {Reservation[]} reservations
  * @property {Contraintes} contraintes
+ * @property {Objectif[]} [objectifs]          absent = aucun
+ * @property {'chacun'|'minimum'} [modeObjectifs]  absent = 'places' (D20)
+ * @property {Array<Array<{critere: string, poids: number}>>} [priorites]
+ *                                   absent = PRIORITES_PAR_DEFAUT (criteres.js)
  *
  * @typedef {Object} Plan           forme par identifiants (§ 8.9)
  * @property {number[]} tables       ids de table, dans l'ordre des listes
@@ -67,7 +90,38 @@
  * @property {Int32Array} ancresParTable  a_t
  * @property {number} k              ancrés
  * @property {number} n              N − k
- * @property {Contraintes} contraintes
+ * @property {Contraintes} contraintes   copie ; les cases facultatives n'y
+ *                                   figurent que si la configuration les porte
+ * @property {Int32Array} siegesLibres    [t * R + r] → c_t moins les personnes
+ *                                   que fixe y assied au tour r
+ * @property {number} O              objectifs distincts : même règle, mêmes
+ *                                   étiquettes dans le même ordre ; numérotés
+ *                                   dans l'ordre des tables par identifiant
+ *                                   croissant, la soirée puis les tours
+ * @property {Int32Array} objectifDe [t * R + r] → objectif distinct en vigueur,
+ *                                   celui du tour sinon celui de la soirée ;
+ *                                   SANS_OBJECTIF (−1) sans objectif
+ * @property {Uint8Array} correspond [p * O + o] → 1 quand p correspond à o
+ *                                   (correspondA)
+ * @property {Uint8Array} possible   [p * R + r] → 1 quand le couple (p, r) est
+ *                                   possible (§ 4.5)
+ * @property {Int32Array} possibles  P(p), tours possibles de chacun
+ * @property {'places'|'chacun'|'minimum'} modeObjectifs
+ * @property {number} A              animateurs
+ * @property {Int32Array} rangAnimateur   par index participant : rang 0..A − 1,
+ *                                   dans l'ordre des ids ; NON_ANIMATEUR (−1)
+ * @property {Int32Array} animateurs rang → index participant
+ * @property {Int32Array} debutAnimes     T × R + 1 cases : la ligne t * R + r
+ *                                   de animes va de debutAnimes[t * R + r] à
+ *                                   debutAnimes[t * R + r + 1]
+ * @property {Int32Array} animes     rangs des animateurs qui animent à la table
+ *                                   t au tour r, croissants, ligne par ligne
+ * @property {Int32Array} borneAnimateurs B(p) = min(#Φ(p), Σ_r φ_r(p)) (D21)
+ * @property {Array<{nom: string, coche: boolean, sansObjet: boolean,
+ *                   valeurs: string[]}>} etatCriteres
+ *           un état par critère, dans l'ordre de CRITERES (criteres.js)
+ * @property {Array<Array<{critere: string, poids: number}>>} priorites
+ *           la liste complète (completerPriorites), valide sous le mode
  *
  * Un plan indexé est un Int32Array `tableDe` de longueur N × R :
  * tableDe[p * R + r] = index de table, RESERVE (−1) pour la réserve.

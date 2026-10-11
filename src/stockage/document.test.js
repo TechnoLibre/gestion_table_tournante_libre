@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
 import { STATUT, normaliser } from '../moteur/configuration.js';
+import { CRITERES, PRIORITES_PAR_DEFAUT } from '../moteur/criteres.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { HISTORIQUE_PAR_DEFAUT } from '../moteur/recherche.js';
 import { texteLivre } from '../demo/livrees.js';
@@ -36,6 +37,7 @@ import {
   modeObjectifs,
   premiereFaute,
   premiereFauteEnPlace,
+  priorites,
   regleObjectifs,
 } from './document.js';
 import { ErreurStockage } from './erreurs.js';
@@ -1347,13 +1349,15 @@ describe('les champs facultatifs du format 2 : forme et place (§ 8.9, A16)', ()
     const PARTICIPANT = regleDuChamp(CHARGE_SCHEMA, 'participants').element;
     const TABLE = regleDuChamp(CHARGE_SCHEMA, 'tables').element;
     assert.deepEqual(
-      REGLAGES.champs.slice(-5).map(([cle, regle]) => [cle, regle.optionnel]),
+      REGLAGES.champs.slice(-7).map(([cle, regle]) => [cle, regle.optionnel]),
       [
+        ['generation', false],
         ['cibleRedondance', true],
         ['regleObjectifs', true],
         ['respecterObjectifs', true],
         ['modeObjectifs', true],
         ['rencontrerAnimateurs', true],
+        ['priorites', true],
       ],
     );
     assert.deepEqual(PARTICIPANT.champs.slice(-2).map(([cle, regle]) => [cle, regle.optionnel]), [['exclu', false], ['etiquettes', true]]);
@@ -1675,5 +1679,190 @@ describe('configurationDepuisCharge : étiquettes, objectifs, mode et cases (con
     assert.deepEqual(charge.participants[0].etiquettes, ['Montréal', 'finance']);
     assert.deepEqual(charge.tables[0].objectifs[0].etiquettes, ['finance']);
     assert.deepEqual(normaliser(configuration).ids, [1, 2, 5]);
+  });
+});
+
+// L'ordre par défaut, chaque critère seul à son palier, au poids 1 : une
+// liste neuve.
+const prioritesParDefaut = () => CRITERES.map((critere) => [{ critere, poids: 1 }]);
+
+// L'ordre par défaut où second rejoint le palier de premier, rangé dans
+// l'ordre du registre, chacun à son poids : une liste neuve.
+function avecPalierPartage(premier, second, [poidsPremier, poidsSecond] = [1, 3]) {
+  const liste = prioritesParDefaut().filter(([{ critere }]) => critere !== second);
+  const palier = liste.find(([{ critere }]) => critere === premier);
+  palier[0].poids = poidsPremier;
+  palier.push({ critere: second, poids: poidsSecond });
+  palier.sort((a, b) => CRITERES.indexOf(a.critere) - CRITERES.indexOf(b.critere));
+  return liste;
+}
+
+// L'ordre réglé des épreuves : l'excédent de collisions × 1 et les tours
+// hors objectif × 3 au deuxième palier, les autres critères seuls.
+const prioritesReglees = () => avecPalierPartage('excedentCollisions', 'toursHorsObjectif');
+
+describe('l’ordre des priorités : un réglage facultatif, absent à son défaut (§ 8.9, A16)', () => {
+  test('une liste réglée se lit telle qu’écrite ; elle s’écrit en dernier des réglages, compacte, et se relit à l’identique', () => {
+    const texte = abime((d) => {
+      d.charge.reglages.rencontrerAnimateurs = true;
+      d.charge.reglages.priorites = prioritesReglees();
+    });
+    const lu = analyser(texte);
+    assert.deepEqual(lu.charge.reglages.priorites, prioritesReglees());
+    const ecrit = serialiser(lu.charge, lu.entete);
+    const attendu = `"rencontrerAnimateurs":true,"priorites":${JSON.stringify(prioritesReglees())}}`;
+    assert.ok(ecrit.includes(attendu), ecrit);
+    assert.ok(attendu.includes('[{"critere":"excedentCollisions","poids":1},{"critere":"toursHorsObjectif","poids":3}]'), attendu);
+    assert.equal(serialiser(analyser(ecrit).charge, lu.entete), ecrit);
+  });
+
+  test('un palier hors de l’ordre du registre se lit ; il s’écrit rangé, et ses lecteurs le rendent rangé', () => {
+    const desordre = prioritesReglees();
+    desordre[1].reverse();
+    const lu = analyser(abime((d) => { d.charge.reglages.priorites = desordre; }));
+    assert.deepEqual(lu.charge.reglages.priorites, desordre);
+    assert.deepEqual(priorites(lu.charge), prioritesReglees());
+    assert.deepEqual(configurationDepuisCharge(lu.charge).priorites, prioritesReglees());
+    const ecrit = serialiser(lu.charge, lu.entete);
+    assert.deepEqual(analyser(ecrit).charge.reglages.priorites, prioritesReglees());
+  });
+
+  test('variantes admises : un palier de trois critères pondérés, les animateurs avant l’excédent, les tours hors objectif seuls sous « chacun » et « l’équité d’abord »', () => {
+    const trois = avecPalierPartage('excedentCollisions', 'toursHorsObjectif', [100, 7]);
+    trois.splice(trois.findIndex(([{ critere }]) => critere === 'collisionsCumulees'), 1);
+    trois[1].splice(1, 0, { critere: 'collisionsCumulees', poids: 2 });
+    const animateursDAbord = prioritesParDefaut();
+    animateursDAbord.splice(1, 0, ...animateursDAbord.splice(5, 1));
+    const seuls = prioritesParDefaut().reverse();
+    seuls.push(...seuls.splice(seuls.findIndex(([{ critere }]) => critere === 'ecartAuPlafondAPrioriMax'), 1));
+    const variantes = [
+      ['un palier de trois critères', abime((d) => { d.charge.reglages.priorites = trois; })],
+      ['les animateurs au deuxième palier', abime((d) => { d.charge.reglages.priorites = animateursDAbord; })],
+      ['à rebours, l’écart en dernier, sous « chacun »', abime((d) => {
+        d.charge.reglages.modeObjectifs = 'chacun';
+        d.charge.reglages.priorites = seuls;
+      })],
+      ['l’ordre par défaut sous « l’équité d’abord » : absent', abime((d) => { d.charge.reglages.modeObjectifs = 'minimum'; })],
+    ];
+    const echecs = variantes.flatMap(([libelle, texte]) => {
+      try {
+        analyser(texte);
+        return [];
+      } catch (erreur) {
+        return [`${libelle} : ${erreur.message}`];
+      }
+    });
+    assert.deepEqual(echecs, []);
+  });
+
+  test('l’ordre par défaut écrit, une liste vide ou une valeur qui n’est pas une liste sont des fautes de forme, nommées par leur chemin', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['l’ordre par défaut écrit', abime((d) => { d.charge.reglages.priorites = prioritesParDefaut(); }), 'FORME', 'charge.reglages.priorites'],
+      ['l’ordre par défaut écrit sous « chacun »', abime((d) => {
+        d.charge.reglages.modeObjectifs = 'chacun';
+        d.charge.reglages.priorites = prioritesParDefaut();
+      }), 'FORME', 'charge.reglages.priorites'],
+      ['une liste vide', abime((d) => { d.charge.reglages.priorites = []; }), 'FORME', 'charge.reglages.priorites'],
+      ['null', abime((d) => { d.charge.reglages.priorites = null; }), 'FORME', 'charge.reglages.priorites'],
+      ['un objet', abime((d) => { d.charge.reglages.priorites = {}; }), 'FORME', 'charge.reglages.priorites'],
+      ['un palier qui n’est pas une liste', abime((d) => {
+        d.charge.reglages.priorites = prioritesReglees();
+        d.charge.reglages.priorites[2] = { critere: 'collisionsCumulees', poids: 1 };
+      }), 'FORME', 'charge.reglages.priorites[2]'],
+    ]), []);
+  });
+
+  test('chaque faute d’une liste se nomme par son chemin : l’entrée fautive, sinon le palier, sinon la liste', () => {
+    const avec = (modifier, mode) => abime((d) => {
+      const liste = prioritesReglees();
+      modifier(liste);
+      d.charge.reglages.priorites = liste;
+      if (mode !== undefined) d.charge.reglages.modeObjectifs = mode;
+    });
+    const P = 'charge.reglages.priorites';
+    assert.deepEqual(ecartsDeRefus([
+      ['un palier vide', avec((l) => { l[2] = []; }), 'FORME', `${P}[2]`],
+      ['un critère inconnu', avec((l) => { l[1][0].critere = 'tablesVoisines'; }), 'FORME', `${P}[1][0].critere`],
+      ['un nom hérité d’Object', avec((l) => { l[1][0].critere = 'constructor'; }), 'FORME', `${P}[1][0].critere`],
+      ['un critère en capitales', avec((l) => { l[0][0].critere = 'ECARTAUPLAFONDAPRIORIMAX'; }), 'FORME', `${P}[0][0].critere`],
+      ['un poids nul', avec((l) => { l[1][1].poids = 0; }), 'FORME', `${P}[1][1].poids`],
+      ['un poids de 101', avec((l) => { l[1][1].poids = 101; }), 'FORME', `${P}[1][1].poids`],
+      ['un poids non entier', avec((l) => { l[1][1].poids = 2.5; }), 'FORME', `${P}[1][1].poids`],
+      ['un poids en texte', avec((l) => { l[1][1].poids = '3'; }), 'FORME', `${P}[1][1].poids`],
+      ['une entrée sans poids', avec((l) => { delete l[1][1].poids; }), 'FORME', `${P}[1][1].poids`],
+      ['une clé inconnue dans une entrée', avec((l) => { l[1][0].note = 'urgent'; }), 'FORME', `${P}[1][0].note`],
+      ['un critère répété', avec((l) => { l[3].push({ critere: 'excedentCollisions', poids: 1 }); }), 'FORME', `${P}[3]`],
+      ['un critère absent', avec((l) => { l.splice(4, 1); }), 'FORME', P],
+      ['l’écart qui partage son palier', avec((l) => { l[0].push(...l.splice(2, 1)[0]); }), 'FORME', `${P}[0]`],
+      ['les rencontres répétées qui partagent leur palier', avec((l) => {
+        const [palier] = l.splice(4, 1);
+        l[3].push(...palier);
+      }), 'FORME', `${P}[3]`],
+      ['les rencontres répétées au poids 2', avec((l) => { l[3][0].poids = 2; }), 'FORME', `${P}[3]`],
+      ['les tours hors objectif partagés sous « chacun »', avec(() => {}, 'chacun'), 'FORME', `${P}[1]`],
+      ['les tours hors objectif partagés sous « l’équité d’abord »', avec(() => {}, 'minimum'), 'FORME', `${P}[1]`],
+    ]), []);
+  });
+
+  test('dans un fichier plus récent, un critère à venir lève FORMAT_PLUS_RECENT ; une clé à venir dans une entrée est ignorée', () => {
+    const lu = analyser(abime((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.reglages.priorites = prioritesReglees();
+      d.charge.reglages.priorites[1][1].pente = 2;
+    }));
+    assert.deepEqual(lu.charge.reglages.priorites, prioritesReglees());
+    assert.deepEqual(ecartsDeRefus([
+      ['un critère à venir', abime((d) => {
+        d.entete.format = FORMAT + 1;
+        d.charge.reglages.priorites = prioritesReglees();
+        d.charge.reglages.priorites[1][1].critere = 'tablesMelangees';
+      }), 'FORMAT_PLUS_RECENT', 'charge.reglages.priorites[1][1].critere', { format: FORMAT + 1 }],
+    ]), []);
+  });
+});
+
+describe('priorites : le lecteur de l’ordre des priorités (§ 5.7, § 8.9)', () => {
+  test('absent, il rend l’ordre par défaut, une liste neuve à chaque appel', () => {
+    const { charge } = documentValide();
+    const lue = priorites(charge);
+    assert.deepEqual(lue, PRIORITES_PAR_DEFAUT);
+    lue[0][0].poids = 50;
+    lue.push([]);
+    assert.deepEqual(priorites(charge), PRIORITES_PAR_DEFAUT);
+    assert.deepEqual(priorites(creerCharge({ id: 'evt-neuf', nom: 'Atelier', siegesParDefaut: 8, tours: 3 })), PRIORITES_PAR_DEFAUT);
+  });
+
+  test('présent, il rend une copie de la liste portée, chaque palier rangé ; la charge reste intacte', () => {
+    const { charge } = documentValide();
+    charge.reglages.priorites = prioritesReglees();
+    charge.reglages.priorites[1].reverse();
+    geler(charge);
+    const lue = priorites(charge);
+    assert.deepEqual(lue, prioritesReglees());
+    lue[1][0].poids = 9;
+    assert.equal(charge.reglages.priorites[1][1].poids, 1);
+  });
+
+  test('une liste qui ne nomme pas un critère le reçoit à sa place de l’ordre par défaut, seul, au poids 1 (A16)', () => {
+    const { charge } = documentValide();
+    charge.reglages.priorites = prioritesReglees().filter(([{ critere }]) => critere !== 'animateursNonRencontres');
+    assert.deepEqual(priorites(charge), prioritesReglees());
+  });
+});
+
+describe('configurationDepuisCharge : l’ordre des priorités (contrat de données)', () => {
+  test('absent du fichier, il est absent de la configuration ; présent, la configuration en porte une copie rangée, le mode à côté', () => {
+    assert.ok(!Object.hasOwn(configurationDepuisCharge(documentValide().charge), 'priorites'));
+    const { charge } = documentValide();
+    charge.reglages.modeObjectifs = 'chacun';
+    charge.reglages.priorites = prioritesParDefaut().reverse();
+    geler(charge);
+    const configuration = configurationDepuisCharge(charge);
+    assert.deepEqual(configuration.priorites, prioritesParDefaut().reverse());
+    assert.equal(configuration.modeObjectifs, 'chacun');
+    configuration.priorites[0][0].poids = 4;
+    configuration.priorites.pop();
+    assert.equal(charge.reglages.priorites.length, CRITERES.length);
+    assert.equal(charge.reglages.priorites[0][0].poids, 1);
   });
 });

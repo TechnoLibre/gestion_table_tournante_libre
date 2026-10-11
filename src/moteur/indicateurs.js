@@ -16,13 +16,23 @@
 // moyenne d'une population sans membre.
 //
 // Une seule lecture du plan décide qu'une paire est réunie, collègue ou revue,
-// et qu'une personne revient : parcourirTours. mesurer en tire chacun de ses
-// chiffres, et conflitsParTable (conflits.js) le détail par table, si bien
-// que la somme des violations par table égale le compte de la mesure
+// qu'une personne revient, qu'elle est servie par l'objectif de sa table et
+// quels animateurs elle rencontre : parcourirTours. mesurer en tire chacun de
+// ses chiffres, et conflitsParTable (conflits.js) le détail par table, si
+// bien que la somme des violations par table égale le compte de la mesure
 // (§ 13.2).
+//
+// Un tour servi et une rencontre d'animateur ne se comptent qu'à une table
+// que la personne peut occuper à ce tour : sa table fixée, ou, libre, une
+// table qui garde un siège libre (§ 4.5). Un plan qui honore les
+// réservations n'assied personne ailleurs ; un plan édité qui en déplace
+// une garde ainsi s(p) ≤ P(p) et m(p) ≤ B(p), que verifierIndicateurs
+// éprouve.
 import {
+  LIBRE,
   RESERVE,
   SANS_GROUPE,
+  SANS_OBJECTIF,
   exigerPlanIndexe,
   replierParPopulation,
 } from './configuration.js';
@@ -37,6 +47,24 @@ import {
  * @property {Agregat} tous
  * @property {Agregat} mobiles       mobiles et partiellement fixés (§ 5.4)
  * @property {Agregat} ancres
+ *
+ * @typedef {Object} MesuresObjectifs   null sans personne concernée (A9)
+ * @property {number[]} tours            s(p), tours servis, ordre canonique
+ * @property {number[]} possibles        P(p), tours possibles (§ 4.5)
+ * @property {number} horsObjectif       H = Σ (P(p) − s(p))
+ * @property {number} jamaisServies      J, concernés dont s(p) = 0
+ * @property {number} horsObjectifMax    E = max (P(p) − s(p)) sur les concernés
+ * @property {number} personnesAuMax     concernés à E ; 0 quand E = 0
+ * @property {number} concernes          personnes dont P(p) > 0
+ * @property {TroisAgregats} agregat     s(p) sur les concernés
+ *
+ * @typedef {Object} MesuresAnimateurs  null sans personne concernée (A9)
+ * @property {number[]} rencontres       m(p), animateurs distincts rencontrés
+ *                                       là où ils animent
+ * @property {number[]} bornes           B(p), instance.borneAnimateurs
+ * @property {number} nonRencontres      Σ (B(p) − m(p)) sur toutes les personnes
+ * @property {number} concernes          personnes dont B(p) > 0
+ * @property {TroisAgregats} agregat     m(p) sur les concernés
  *
  * @typedef {Object} Mesures
  * @property {number[]} rencontres          |met(p)|, ordre canonique
@@ -72,6 +100,8 @@ import {
  * @property {Array<{groupe: string, effectif: number, collisionsCumulees: number,
  *                   pairesDistinctes: number, excedent: number}>} parGroupe
  *           ordre de instance.groupes
+ * @property {MesuresObjectifs|null} objectifs
+ * @property {MesuresAnimateurs|null} animateurs
  */
 
 // Plus grand compte que tient un Uint16Array.
@@ -100,35 +130,61 @@ const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
  * parPaire : les rencontres de chaque paire, rangées par rangPaire ; une
  * paire se réunit au plus une fois par tour, R borne chaque compte, qu'un
  * Uint16Array tient tant que R ≤ 65 535. toursAssis, et retours — visites
- * d'une table déjà visitée, imposées comprises —, par personne.
+ * d'une table déjà visitée, imposées comprises —, par personne. servis,
+ * s(p) : les tours où p est assis, à une table qu'il peut occuper, sous un
+ * objectif en vigueur qui lui correspond. rencontresAnimateurs, m(p) : les
+ * animateurs distincts, autres que p, qui animent à sa table, à un tour où
+ * il l'occupe et peut l'occuper, et y sont assis.
  *
  * Ne modifie ni l'instance ni le plan ; lève ce que lève exigerPlanIndexe.
  *
  * @param {import('./types.js').Instance} instance
  * @param {ArrayLike<number>} tableDe
  * @returns {{parTour: Array<Array<{collegues: number[][], revues: number[][], revenus: number[]}>>,
- *            parPaire: Uint16Array|Uint32Array, toursAssis: number[], retours: number[]}}
+ *            parPaire: Uint16Array|Uint32Array, toursAssis: number[], retours: number[],
+ *            servis: number[], rencontresAnimateurs: number[]}}
  */
 export function parcourirTours(instance, tableDe) {
   exigerPlanIndexe(instance, tableDe);
-  const { N, T, R, fixe, groupe } = instance;
+  const { N, T, R, fixe, groupe, siegesLibres, O, objectifDe, correspond } = instance;
+  const { A, rangAnimateur, animateurs, debutAnimes, animes } = instance;
 
   // Personne par personne, ses tours dans l'ordre : visites[t] compte ses
   // passages à la table t, reserveeAvant[t] note qu'un passage antérieur y
   // était réservé. revenu[p × R + r] marque la visite répétée que la
   // personne choisit. Le second parcours de ses tours remet à zéro les
   // tables qu'elle a visitées : la personne suivante les trouve nulles.
+  //
+  // Au même passage, à chaque table que la personne peut occuper : un tour
+  // servi quand l'objectif en vigueur lui correspond, et chaque animateur qui
+  // anime là et y est assis, autre qu'elle, rencontré. rencontre[f] vaut p
+  // quand p a déjà rencontré l'animateur de rang f : la marque, datée par
+  // personne, n'a pas à se remettre à zéro.
   const toursAssis = new Array(N).fill(0);
   const retours = new Array(N).fill(0);
+  const servis = new Array(N).fill(0);
+  const rencontresAnimateurs = new Array(N).fill(0);
   const revenu = new Uint8Array(N * R);
   const visites = new Int32Array(T);
   const reserveeAvant = new Uint8Array(T);
+  const rencontre = new Int32Array(A).fill(-1);
   for (let p = 0; p < N; p += 1) {
     for (let r = 0; r < R; r += 1) {
       const t = tableDe[p * R + r];
       if (t === RESERVE) continue;
       toursAssis[p] += 1;
-      const reservee = fixe[p * R + r] === t;
+      const imposee = fixe[p * R + r];
+      if (imposee === LIBRE ? siegesLibres[t * R + r] > 0 : imposee === t) {
+        const o = objectifDe[t * R + r];
+        if (o !== SANS_OBJECTIF && correspond[p * O + o] === 1) servis[p] += 1;
+        for (let k = debutAnimes[t * R + r]; k < debutAnimes[t * R + r + 1]; k += 1) {
+          const f = animes[k];
+          if (f === rangAnimateur[p] || rencontre[f] === p || tableDe[animateurs[f] * R + r] !== t) continue;
+          rencontre[f] = p;
+          rencontresAnimateurs[p] += 1;
+        }
+      }
+      const reservee = imposee === t;
       if (visites[t] > 0) {
         retours[p] += 1;
         if (!reservee || reserveeAvant[t] === 0) revenu[p * R + r] = 1;
@@ -184,7 +240,7 @@ export function parcourirTours(instance, tableDe) {
     }
     parTour.push(tables);
   }
-  return { parTour, parPaire, toursAssis, retours };
+  return { parTour, parPaire, toursAssis, retours, servis, rencontresAnimateurs };
 }
 
 // Lecture du triangle des paires, dans l'ordre de rangPaire. Par personne :
@@ -296,6 +352,61 @@ function troisAgregats(valeurs, statut, replier = ajouter) {
 
 const somme = (valeurs) => valeurs.reduce((total, valeur) => total + valeur, 0);
 
+// Les objectifs des tables mesurés (A9), sur les personnes concernées, celles
+// dont P(p) > 0 : null sans aucune. Pour chacune, P(p) − s(p) entre dans H ;
+// s(p) nul, elle est jamais servie ; E et le nombre de personnes à E se
+// tiennent en un passage, ce nombre ramené à 0 quand E l'est.
+function lireObjectifs({ N, possibles, statut }, servis) {
+  const tours = [...servis];
+  const parPersonne = Array.from(possibles);
+  let concernes = 0;
+  let horsObjectif = 0;
+  let jamaisServies = 0;
+  let horsObjectifMax = 0;
+  let auMax = 0;
+  for (let p = 0; p < N; p += 1) {
+    if (parPersonne[p] === 0) continue;
+    concernes += 1;
+    const hors = parPersonne[p] - tours[p];
+    horsObjectif += hors;
+    if (tours[p] === 0) jamaisServies += 1;
+    if (hors > horsObjectifMax) {
+      horsObjectifMax = hors;
+      auMax = 0;
+    }
+    if (hors === horsObjectifMax) auMax += 1;
+  }
+  if (concernes === 0) return null;
+  return {
+    tours,
+    possibles: parPersonne,
+    horsObjectif,
+    jamaisServies,
+    horsObjectifMax,
+    personnesAuMax: horsObjectifMax === 0 ? 0 : auMax,
+    concernes,
+    agregat: troisAgregats(tours.map((s, p) => (parPersonne[p] > 0 ? s : null)), statut, ajouterSiDefinie),
+  };
+}
+
+// Les animateurs rencontrés mesurés (A9), sur les personnes concernées,
+// celles dont B(p) > 0 : null sans aucune. Les animateurs non rencontrés
+// somment B(p) − m(p) sur toutes les personnes, une non concernée y valant
+// zéro.
+function lireAnimateurs({ borneAnimateurs, statut }, rencontresAnimateurs) {
+  const rencontres = [...rencontresAnimateurs];
+  const bornes = Array.from(borneAnimateurs);
+  const concernes = bornes.filter((borne) => borne > 0).length;
+  if (concernes === 0) return null;
+  return {
+    rencontres,
+    bornes,
+    nonRencontres: somme(bornes) - somme(rencontres),
+    concernes,
+    agregat: troisAgregats(rencontres.map((m, p) => (bornes[p] > 0 ? m : null)), statut, ajouterSiDefinie),
+  };
+}
+
 /**
  * Mesure complète d'un plan indexé : la mesure qui fait foi (§ 5.10). Ne
  * modifie ni l'instance ni le plan. Lève ce que lève exigerPlanIndexe
@@ -309,7 +420,7 @@ const somme = (valeurs) => valeurs.reduce((total, valeur) => total + valeur, 0);
  */
 export function mesurer(instance, tableDe) {
   const { N, groupe, groupes, statut } = instance;
-  const { parTour, parPaire, toursAssis, retours } = parcourirTours(instance, tableDe);
+  const { parTour, parPaire, toursAssis, retours, servis, rencontresAnimateurs } = parcourirTours(instance, tableDe);
   const paires = lirePaires(instance, parPaire);
   const { collisions, distinctes, choisies, retoursChoisis } = lireTours(instance, parTour);
 
@@ -356,5 +467,7 @@ export function mesurer(instance, tableDe) {
     totalRetoursChoisis: somme(retoursChoisis),
     totalRetoursImposes: somme(retoursImposes),
     parGroupe,
+    objectifs: lireObjectifs(instance, servis),
+    animateurs: lireAnimateurs(instance, rencontresAnimateurs),
   };
 }

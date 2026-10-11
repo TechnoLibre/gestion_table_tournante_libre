@@ -299,7 +299,7 @@ describe('reservationsDe : les réservations d’une personne, pour la fiche (§
 });
 
 describe("l'ordre de la grille est celui de l'export (§ 10.2)", () => {
-  test('la cellule de rang i de la ligne exportée égale p[COLONNES[i]], exclu écrit « non »', () => {
+  test('la cellule de rang i de la ligne exportée égale p[COLONNES[i]], exclu écrit « non » ; l’export compte une colonne de plus, les étiquettes, en dernier', () => {
     const p = {
       id: 1,
       nom: 'Ombrelle',
@@ -309,15 +309,18 @@ describe("l'ordre de la grille est celui de l'export (§ 10.2)", () => {
       titrePressenti: 'hôtesse',
       notes: 'arrive à neuf heures',
       exclu: false,
+      etiquettes: ['Montréal', 'finance'],
     };
     const { texte } = decoder(exporterParticipants([p]));
-    const [, ligne] = texte.split('\r\n');
+    const [entete, ligne] = texte.split('\r\n');
     const cellules = ligne.split(';');
     assert.equal(COLONNES.length, 7);
-    assert.equal(cellules.length, COLONNES.length);
+    assert.equal(cellules.length, COLONNES.length + 1);
     COLONNES.forEach((colonne, i) => {
       assert.equal(cellules[i], colonne === 'exclu' ? 'non' : p[colonne], colonne);
     });
+    assert.equal(entete.split(';').at(-1), 'etiquettes');
+    assert.equal(cellules.at(-1), 'Montréal, finance');
   });
 
   test('le nom proposé à l’enregistrement : ‹base›-participants.csv', () => {

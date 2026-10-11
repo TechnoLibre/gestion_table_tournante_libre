@@ -214,7 +214,7 @@ async function seanceSur(charge) {
 // --- Les épreuves -----------------------------------------------------------
 
 describe('mobilier : le registre (§ 8.2)', () => {
-  test('COMMANDES_MOBILIER porte les neuf commandes du mobilier, réunies dans COMMANDES', () => {
+  test('COMMANDES_MOBILIER porte les douze commandes du mobilier, réunies dans COMMANDES', () => {
     const noms = [
       'creerTable',
       'supprimerTable',
@@ -225,6 +225,9 @@ describe('mobilier : le registre (§ 8.2)', () => {
       'changerTours',
       'modifierReglage',
       'changerCibleRedondance',
+      'poserObjectif',
+      'retirerObjectif',
+      'changerRegleObjectifs',
     ];
     assert.deepEqual([...COMMANDES_MOBILIER.keys()], noms);
     for (const nom of noms) assert.equal(COMMANDES.get(nom), COMMANDES_MOBILIER.get(nom), nom);
@@ -243,6 +246,9 @@ describe('mobilier : le registre (§ 8.2)', () => {
       ['changerTours', { tours: 3 }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['changerCibleRedondance', { cible: '1200' }],
+      ['poserObjectif', { table: 1, tour: null, etiquettes: 'finance', regle: null }],
+      ['retirerObjectif', { table: 1, tour: null }],
+      ['changerRegleObjectifs', { regle: 'et' }],
     ];
     assert.equal(gestes.length, COMMANDES_MOBILIER.size);
     for (const [nom, args] of gestes) {
@@ -1189,5 +1195,262 @@ describe('mobilier : la cible de la somme de redondance (§ 5.4, § 8.1, § 8.9)
     });
     refuse(() => COMMANDES.get('changerCibleRedondance')(explicite, { cible: 1000 }), 'SANS_EFFET');
     assert.equal(explicite.reglages.cibleRedondance, 1000);
+  });
+});
+
+// --- Les objectifs des tables, leur règle et les deux cases (§ 4.5, § 5.3, § 8.9) ---
+
+// Une charge de trois tables et quatre personnes sur trois tours : Iris
+// Ombrelle « finance », Théo Pervenche « finance » et « Montréal », Ondine
+// Lacasse « ressources humaines », la quatrième sans étiquette.
+function chargeEtiquetee() {
+  const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }, { id: 3, numero: 7 }], n: 4, tours: 3 });
+  charge.participants[0].etiquettes = ['finance'];
+  charge.participants[1].etiquettes = ['Montréal', 'finance'];
+  charge.participants[2].etiquettes = ['ressources humaines'];
+  return charge;
+}
+const objectifsDe = (charge, id) => charge.tables.find((table) => table.id === id).objectifs;
+const soiree = (etiquettes, regle = null) => ({ portee: 'tous', tour: null, regle, etiquettes });
+const auTour = (tour, etiquettes, regle = null) => ({ portee: 'tour', tour, regle, etiquettes });
+
+describe('mobilier : poser et retirer un objectif de table (§ 4.5, § 5.9, A2, A12)', () => {
+  test('poser un objectif de soirée : sa règle suit le défaut, ses étiquettes triées, le champ en dernier ; le libellé nomme la table par son numéro', () => {
+    const rendu = accepter('poserObjectif', chargeEtiquetee(), { table: 3, tour: null, etiquettes: 'finance ; Montréal', regle: null });
+    assert.deepEqual(objectifsDe(rendu.charge, 3), [soiree(['Montréal', 'finance'])]);
+    assert.equal(Object.keys(rendu.charge.tables[2]).at(-1), 'objectifs');
+    assert.equal(rendu.libelle, 'Table 7 : objectif de la soirée « Montréal » et « finance », règle par défaut');
+    assert.deepEqual(rendu.avertissements, []);
+    assert.equal(Object.hasOwn(rendu.charge.tables[0], 'objectifs'), false);
+  });
+
+  test("les objectifs d'une table s'écrivent la soirée d'abord, puis les tours croissants, quel que soit l'ordre des gestes", () => {
+    let une = chargeEtiquetee();
+    for (const [tour, etiquettes] of [[3, 'Montréal'], [null, 'finance'], [1, 'ressources humaines']]) {
+      une = accepter('poserObjectif', une, { table: 1, tour, etiquettes, regle: 'ou' }).charge;
+    }
+    let autre = chargeEtiquetee();
+    for (const [tour, etiquettes] of [[1, 'ressources humaines'], [3, 'Montréal'], [null, 'finance']]) {
+      autre = accepter('poserObjectif', autre, { table: 1, tour, etiquettes, regle: 'ou' }).charge;
+    }
+    const attendus = [soiree(['finance'], 'ou'), auTour(1, ['ressources humaines'], 'ou'), auTour(3, ['Montréal'], 'ou')];
+    assert.deepEqual(objectifsDe(une, 1), attendus);
+    assert.deepEqual(objectifsDe(autre, 1), attendus);
+    assert.equal(serialiser(une, { revision: 1, produitVersion: V1 }), serialiser(autre, { revision: 1, produitVersion: V1 }));
+  });
+
+  test("poser sur un couple qui en porte un le remplace, la règle seule aussi ; la même liste sous un autre ordre est SANS_EFFET, comparée en ensemble", () => {
+    const posee = accepter('poserObjectif', chargeEtiquetee(), { table: 2, tour: 2, etiquettes: 'finance, Montréal', regle: 'et' }).charge;
+    const remplacee = accepter('poserObjectif', posee, { table: 2, tour: 2, etiquettes: 'ressources humaines', regle: null });
+    assert.deepEqual(objectifsDe(remplacee.charge, 2), [auTour(2, ['ressources humaines'])]);
+    assert.equal(remplacee.libelle, 'Table 2, tour 2 : objectif « ressources humaines », règle par défaut');
+    refuse(() => COMMANDES.get('poserObjectif')(posee, { table: 2, tour: 2, etiquettes: 'Montréal | finance', regle: 'et' }), 'SANS_EFFET', {
+      commande: 'poserObjectif',
+      remede: null,
+    });
+    refuse(() => COMMANDES.get('poserObjectif')(posee, { table: 2, tour: 2, etiquettes: 'FINANCE, montreal', regle: 'et' }), 'SANS_EFFET');
+    // Les mêmes étiquettes sous une autre règle : le défaut cède à une règle
+    // propre, qui en change ensuite, et le libellé nomme la règle posée (D3).
+    const charge = chargeEtiquetee();
+    charge.tables[1].objectifs = [auTour(1, ['finance'])];
+    const propre = accepter('poserObjectif', charge, { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' });
+    assert.deepEqual(objectifsDe(propre.charge, 2), [auTour(1, ['finance'], 'et')]);
+    assert.equal(propre.libelle, 'Table 2, tour 1 : objectif « finance », toutes les étiquettes');
+    const autre = accepter('poserObjectif', propre.charge, { table: 2, tour: 1, etiquettes: 'finance', regle: 'ou' });
+    assert.deepEqual(objectifsDe(autre.charge, 2), [auTour(1, ['finance'], 'ou')]);
+    assert.equal(autre.libelle, 'Table 2, tour 1 : objectif « finance », au moins une étiquette');
+    const defaut = accepter('poserObjectif', autre.charge, { table: 2, tour: 1, etiquettes: 'finance', regle: null });
+    assert.deepEqual(objectifsDe(defaut.charge, 2), [auTour(1, ['finance'])]);
+  });
+
+  test("la saisie se réconcilie sur l'événement entier, personnes et objectifs ; l'objectif remplacé ne s'impose pas", () => {
+    const charge = chargeEtiquetee();
+    charge.tables[0].objectifs = [soiree(['voile'])];
+    const rendu = accepter('poserObjectif', charge, { table: 2, tour: null, etiquettes: 'VOILE, Finance', regle: null });
+    assert.deepEqual(objectifsDe(rendu.charge, 2), [soiree(['finance', 'voile'])]);
+    assert.deepEqual(
+      rendu.avertissements.filter(({ code }) => code === 'ORTHOGRAPHE_RETENUE'),
+      [
+        { code: 'ORTHOGRAPHE_RETENUE', details: { saisie: 'VOILE', retenue: 'voile' } },
+        { code: 'ORTHOGRAPHE_RETENUE', details: { saisie: 'Finance', retenue: 'finance' } },
+      ],
+    );
+    // Seul à porter « voile », l'objectif de la table 1 change d'orthographe
+    // en se reposant.
+    const renomme = accepter('poserObjectif', charge, { table: 1, tour: null, etiquettes: 'Voile', regle: null });
+    assert.deepEqual(objectifsDe(renomme.charge, 1), [soiree(['Voile'])]);
+    assert.deepEqual(renomme.avertissements, [
+      { code: 'OBJECTIF_SANS_CORRESPONDANT', details: { table: 1, tour: null } },
+      { code: 'ETIQUETTE_ORPHELINE', details: { etiquette: 'Voile', voisine: null } },
+    ]);
+  });
+
+  test("les avis de l'objectif posé, et de lui seul : OBJECTIF_SANS_CORRESPONDANT, puis ETIQUETTE_ORPHELINE ; acceptés", () => {
+    const charge = chargeEtiquetee();
+    charge.tables[1].objectifs = [soiree(['plongée'])];
+    const rendu = accepter('poserObjectif', charge, { table: 1, tour: 2, etiquettes: 'ressources humaines, Montréal', regle: 'et' });
+    assert.deepEqual(rendu.avertissements, [{ code: 'OBJECTIF_SANS_CORRESPONDANT', details: { table: 1, tour: 2 } }]);
+    const orpheline = accepter('poserObjectif', charge, { table: 1, tour: null, etiquettes: 'plongée, escalade, finance', regle: null });
+    assert.deepEqual(orpheline.avertissements, [
+      { code: 'ETIQUETTE_ORPHELINE', details: { etiquette: 'escalade', voisine: null } },
+      { code: 'ETIQUETTE_ORPHELINE', details: { etiquette: 'plongée', voisine: null } },
+    ]);
+    // Une orthographe qu'une personne porte est reçue : l'étiquette n'est pas
+    // orpheline.
+    charge.participants[3].etiquettes = ['Escalade'];
+    const recue = accepter('poserObjectif', charge, { table: 1, tour: null, etiquettes: 'escalade', regle: null });
+    assert.deepEqual(recue.avertissements, [{ code: 'ORTHOGRAPHE_RETENUE', details: { saisie: 'escalade', retenue: 'Escalade' } }]);
+  });
+
+  test('un tour hors de la soirée : OBJECTIF_HORS_SOIREE {tour}, remède null ; un tour non entier est une faute du code', () => {
+    const charge = chargeEtiquetee();
+    for (const tour of [0, 4]) {
+      refuse(() => COMMANDES.get('poserObjectif')(charge, { table: 1, tour, etiquettes: 'finance', regle: null }), 'OBJECTIF_HORS_SOIREE', {
+        tour,
+        remede: null,
+      });
+    }
+    for (const tour of [2.5, '2', undefined]) {
+      assert.throws(() => COMMANDES.get('poserObjectif')(charge, { table: 1, tour, etiquettes: 'finance', regle: null }), TypeError);
+    }
+    for (const regle of ['OU', 'toutes', undefined]) {
+      assert.throws(() => COMMANDES.get('poserObjectif')(charge, { table: 1, tour: null, etiquettes: 'finance', regle }), TypeError);
+    }
+  });
+
+  test("une saisie sans étiquette : OBJECTIF_SANS_ETIQUETTE {table, tour}, remède « Retirer l'objectif » quand il existe", () => {
+    const charge = chargeEtiquetee();
+    refuse(() => COMMANDES.get('poserObjectif')(charge, { table: 1, tour: 2, etiquettes: ' ;, ', regle: null }), 'OBJECTIF_SANS_ETIQUETTE', {
+      table: 1,
+      tour: 2,
+      remede: null,
+    });
+    charge.tables[0].objectifs = [auTour(2, ['finance'])];
+    refuse(() => COMMANDES.get('poserObjectif')(charge, { table: 1, tour: 2, etiquettes: '', regle: null }), 'OBJECTIF_SANS_ETIQUETTE', {
+      table: 1,
+      tour: 2,
+      remede: { commande: 'retirerObjectif', arguments: { table: 1, tour: 2 } },
+    });
+  });
+
+  test('étiquette mal formée, vingt-et-unième étiquette : les refus de la saisie, remède null', () => {
+    const charge = chargeEtiquetee();
+    refuse(() => COMMANDES.get('poserObjectif')(charge, { table: 1, tour: null, etiquettes: 'finance, x\u{200B}y', regle: null }), 'ETIQUETTE_INVALIDE', {
+      valeur: 'x\u{200B}y',
+      raison: 'controle',
+      remede: null,
+    });
+    const vingt = Array.from({ length: 20 }, (_, rang) => `e${rang}`).join(', ');
+    assert.equal(objectifsDe(accepter('poserObjectif', charge, { table: 1, tour: null, etiquettes: vingt, regle: null }).charge, 1)[0].etiquettes.length, 20);
+    refuse(() => COMMANDES.get('poserObjectif')(charge, { table: 1, tour: null, etiquettes: `${vingt}, e20`, regle: null }), 'ETIQUETTES_EN_TROP', {
+      nombre: 21,
+      remede: null,
+    });
+  });
+
+  test("retirer : le dernier objectif retiré retire le champ ; un objectif absent est SANS_EFFET ; libellé par numéro", () => {
+    const charge = chargeEtiquetee();
+    charge.tables[2].objectifs = [soiree(['finance']), auTour(2, ['Montréal'], 'et')];
+    const tour = accepter('retirerObjectif', charge, { table: 3, tour: 2 });
+    assert.deepEqual(objectifsDe(tour.charge, 3), [soiree(['finance'])]);
+    assert.equal(tour.libelle, "Table 7, tour 2 : objectif retiré");
+    const tout = accepter('retirerObjectif', tour.charge, { table: 3, tour: null });
+    assert.equal(Object.hasOwn(tout.charge.tables[2], 'objectifs'), false);
+    assert.equal(tout.libelle, 'Table 7 : objectif de la soirée retiré');
+    assert.equal(serialiser(tout.charge, { revision: 1, produitVersion: V1 }), serialiser(chargeEtiquetee(), { revision: 1, produitVersion: V1 }));
+    refuse(() => COMMANDES.get('retirerObjectif')(charge, { table: 3, tour: 1 }), 'SANS_EFFET', { commande: 'retirerObjectif', remede: null });
+    assert.throws(() => COMMANDES.get('retirerObjectif')(charge, { table: 3, tour: '2' }), TypeError);
+  });
+
+  test('une table disparue : TABLE_DISPARUE {table}, remède null, pour poser comme pour retirer', () => {
+    const charge = chargeEtiquetee();
+    refuse(() => COMMANDES.get('poserObjectif')(charge, { table: 9, tour: null, etiquettes: 'finance', regle: null }), 'TABLE_DISPARUE', {
+      table: 9,
+      remede: null,
+    });
+    refuse(() => COMMANDES.get('retirerObjectif')(charge, { table: 9, tour: null }), 'TABLE_DISPARUE', { table: 9, remede: null });
+  });
+
+  test("supprimer une table emporte ses objectifs, que le libellé compte", () => {
+    const charge = chargeEtiquetee();
+    charge.tables[1].objectifs = [soiree(['finance']), auTour(1, ['Montréal'])];
+    const rendu = accepter('supprimerTable', charge, { id: 2 });
+    assert.equal(rendu.libelle, 'Supprimé la table 2 ; retirés : 2 objectifs');
+  });
+});
+
+describe("mobilier : la règle par défaut des objectifs (§ 4.5, D3)", () => {
+  test("« toutes » se pose dans les réglages ; « au moins une » retire le champ ; la même règle est SANS_EFFET", () => {
+    const charge = chargeEtiquetee();
+    const et = accepter('changerRegleObjectifs', charge, { regle: 'et' });
+    assert.equal(et.charge.reglages.regleObjectifs, 'et');
+    assert.equal(et.libelle, 'Règle par défaut des objectifs : toutes les étiquettes');
+    const ou = accepter('changerRegleObjectifs', et.charge, { regle: 'ou' });
+    assert.equal(Object.hasOwn(ou.charge.reglages, 'regleObjectifs'), false);
+    assert.equal(ou.libelle, 'Règle par défaut des objectifs : au moins une étiquette');
+    assert.equal(serialiser(ou.charge, { revision: 1, produitVersion: V1 }), serialiser(charge, { revision: 1, produitVersion: V1 }));
+    refuse(() => COMMANDES.get('changerRegleObjectifs')(charge, { regle: 'ou' }), 'SANS_EFFET', { commande: 'changerRegleObjectifs', remede: null });
+    refuse(() => COMMANDES.get('changerRegleObjectifs')(et.charge, { regle: 'et' }), 'SANS_EFFET');
+    for (const regle of ['ET', null, undefined]) assert.throws(() => COMMANDES.get('changerRegleObjectifs')(charge, { regle }), TypeError);
+  });
+
+  test("changer le défaut ne touche aucune règle propre, et dit les objectifs qui le suivent et ne servent plus personne", () => {
+    const charge = chargeEtiquetee();
+    charge.tables[0].objectifs = [soiree(['finance', 'ressources humaines'])];
+    charge.tables[1].objectifs = [soiree(['finance', 'ressources humaines'], 'ou')];
+    // La table 7 porte déjà ses avis avant le changement : ils ne se redisent
+    // pas, seuls ceux que le changement fait naître sont rendus.
+    charge.tables[2].objectifs = [soiree(['plongée'])];
+    const rendu = accepter('changerRegleObjectifs', charge, { regle: 'et' });
+    assert.deepEqual(objectifsDe(rendu.charge, 1), objectifsDe(charge, 1));
+    assert.deepEqual(objectifsDe(rendu.charge, 2), objectifsDe(charge, 2));
+    assert.deepEqual(rendu.avertissements, [{ code: 'OBJECTIF_SANS_CORRESPONDANT', details: { table: 1, tour: null } }]);
+    assert.deepEqual(accepter('changerRegleObjectifs', rendu.charge, { regle: 'ou' }).avertissements, []);
+  });
+});
+
+describe('mobilier : les cases des objectifs et des animateurs (§ 5.3, § 8.9)', () => {
+  test('chaque case ne s’écrit que hors de son défaut, et revenir au défaut retire le champ', () => {
+    const charge = chargeEtiquetee();
+    const decochee = accepter('modifierReglage', charge, { cle: 'respecterObjectifs', valeur: false });
+    assert.equal(decochee.charge.reglages.respecterObjectifs, false);
+    assert.equal(decochee.libelle, 'Respecter les objectifs des tables : désactivé');
+    const recochee = accepter('modifierReglage', decochee.charge, { cle: 'respecterObjectifs', valeur: true });
+    assert.equal(Object.hasOwn(recochee.charge.reglages, 'respecterObjectifs'), false);
+    const cochee = accepter('modifierReglage', charge, { cle: 'rencontrerAnimateurs', valeur: true });
+    assert.equal(cochee.charge.reglages.rencontrerAnimateurs, true);
+    assert.equal(cochee.libelle, "Rencontrer le plus d'animateurs différents : activé");
+    const decocheeAnim = accepter('modifierReglage', cochee.charge, { cle: 'rencontrerAnimateurs', valeur: false });
+    assert.equal(Object.hasOwn(decocheeAnim.charge.reglages, 'rencontrerAnimateurs'), false);
+    for (const fin of [recochee.charge, decocheeAnim.charge]) {
+      assert.equal(serialiser(fin, { revision: 1, produitVersion: V1 }), serialiser(charge, { revision: 1, produitVersion: V1 }));
+    }
+  });
+
+  test('une case à sa valeur courante est SANS_EFFET, sans écrire son défaut ; une valeur non booléenne est une faute du code', () => {
+    const charge = chargeEtiquetee();
+    for (const [cle, valeur] of [['respecterObjectifs', true], ['rencontrerAnimateurs', false]]) {
+      refuse(() => COMMANDES.get('modifierReglage')(charge, { cle, valeur }), 'SANS_EFFET', { commande: 'modifierReglage', remede: null });
+      assert.throws(() => COMMANDES.get('modifierReglage')(charge, { cle, valeur: 'oui' }), TypeError);
+    }
+  });
+});
+
+describe('mobilier : retirer des tours détruit leurs objectifs (§ 2.1 étape 5, A3)', () => {
+  test('3 → 2 : les objectifs du tour 3 partent, ceux de la soirée et des tours restants demeurent ; le libellé les compte avec les réservations', () => {
+    const charge = chargeEtiquetee();
+    charge.tables[0].objectifs = [soiree(['finance']), auTour(3, ['Montréal'])];
+    charge.tables[1].objectifs = [auTour(3, ['finance'])];
+    charge.tables[2].objectifs = [auTour(2, ['finance'])];
+    charge.reservations = [resa(1, 1, null, 3)];
+    const rendu = accepter('changerTours', charge, { tours: 2 });
+    assert.deepEqual(objectifsDe(rendu.charge, 1), [soiree(['finance'])]);
+    assert.equal(Object.hasOwn(rendu.charge.tables[1], 'objectifs'), false);
+    assert.deepEqual(objectifsDe(rendu.charge, 3), [auTour(2, ['finance'])]);
+    assert.equal(rendu.libelle, 'Nombre de tours : 2 ; 1 réservation retirée, 2 objectifs retirés');
+    // Remettre le tour ne rend pas ses objectifs : ils sont détruits.
+    const remis = accepter('changerTours', rendu.charge, { tours: 3 }).charge;
+    assert.deepEqual(objectifsDe(remis, 1), [soiree(['finance'])]);
+    assert.equal(accepter('changerTours', charge, { tours: 4 }).libelle, 'Nombre de tours : 4');
   });
 });

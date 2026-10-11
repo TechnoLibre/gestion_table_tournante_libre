@@ -32,11 +32,12 @@
 // la sortie ne porte que des durées.
 import { beforeAll, describe, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
+import { configurationDe } from '../../src/application/configuration.js';
 import { creerExecuteurTravailleur } from '../../src/application/executeur_travailleur.js';
 import { coeursDe, ralentissement } from '../../src/application/generation.js';
 import { texteLivre } from '../../src/demo/livrees.js';
 import Travailleur from '../../src/interface/generation/travailleur.js?worker&inline';
-import { GENERATION_PAR_DEFAUT, analyser, configurationDepuisCharge } from '../../src/stockage/document.js';
+import { GENERATION_PAR_DEFAUT, analyser } from '../../src/stockage/document.js';
 import { controlerCadre, ecrireSortie, ralentirCpu } from './navigateur.js';
 import { verifierReleve } from './releve.js';
 
@@ -47,7 +48,8 @@ const GRAINE = 1;
 // Les rondes de mesure, et la ronde de plus d'une mesure bruitée.
 const REPETITIONS = 3;
 
-const CONFIGURATION = configurationDepuisCharge(analyser(texteLivre('grande')).charge);
+// La grande démonstration, comme la génération la lit : animateurs compris.
+const CONFIGURATION = configurationDe(analyser(texteLivre('grande')).charge);
 
 // Les processeurs logiques du poste, tels que l'exécuteur de production les lit.
 const L = coeursDe(navigator.hardwareConcurrency);

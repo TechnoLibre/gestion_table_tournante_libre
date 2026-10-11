@@ -5,7 +5,9 @@
 // remplacer, et ce que remplacer annonce avant d'agir ; l'import selon l'état
 // du plan ; les refus globaux ; les identifiants jamais réutilisés ; le CSV
 // des lignes refusées, sa forme, et la boucle qui le corrige et le réimporte
-// tel quel. Les marques combinantes s'écrivent par leur point de code.
+// tel quel ; la colonne des étiquettes, qu'une personne créée porte rangée
+// et qu'une mise à jour remplace sans jamais l'effacer. Les marques
+// combinantes s'écrivent par leur point de code.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { serialiser } from '../stockage/canonique.js';
@@ -14,6 +16,7 @@ import { VERSION } from '../version.genere.js';
 import { apercevoir } from './apercu.js';
 import { decoder } from './encodage.js';
 import { ErreurCsv } from './erreurs.js';
+import { exporterParticipants } from './export.js';
 import { appliquerImport, bilanRemplacement, exporterRefus, pourvoyeursDesTitres } from './import.js';
 import { decouper } from './lecture.js';
 
@@ -130,10 +133,11 @@ function retenuDe({ id, siegesAttribues, tables, capacites, tours, participants,
   return { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
 }
 
-// Aperçu d'un texte contre les participants de la charge, dans le mode
-// donné, puis import dans ce même mode.
+// Aperçu d'un texte contre les participants et les tables de la charge, dans
+// le mode donné, puis import dans ce même mode.
 function importer(charge, texte, mode, choix = {}) {
-  return appliquerImport(charge, apercevoir(texte, { participants: charge.participants, choix, mode }), mode);
+  const apercu = apercevoir(texte, { participants: charge.participants, tables: charge.tables, choix, mode });
+  return appliquerImport(charge, apercu, mode);
 }
 
 // Motif d'épreuve : le code et ses détails en JSON. Il porte guillemets et
@@ -492,6 +496,124 @@ describe('appliquerImport : mettre à jour (§ 10.1)', () => {
     const { charge: apres, resume } = importer(chargeDe(), csv('nom;prenom', 'Ombrelle;Iris', 'Ombrelle;Iris'), 'mettreAJour');
     assert.deepEqual(apres.participants, [personne(1, 'Ombrelle', 'Iris'), personne(2, 'Ombrelle', 'Iris')]);
     assert.deepEqual(resume, resumeDe({ ajoutes: 2 }));
+  });
+});
+
+describe('appliquerImport : la colonne des étiquettes (§ 10.1, A17)', () => {
+  test("une personne créée porte ses étiquettes rangées par unités de code, en dernière clé ; sans étiquette, la clé est absente", () => {
+    const { charge: apres, resume } = importer(
+      chargeDe(),
+      csv('nom;etiquettes', 'Ombrelle;finance, Montréal|bénévole', 'Pervenche;', 'Lacasse;" ; | "'),
+      'ajouter',
+    );
+    assert.deepEqual(apres.participants, [
+      personne(1, 'Ombrelle', null, null, { etiquettes: ['Montréal', 'bénévole', 'finance'] }),
+      personne(2, 'Pervenche'),
+      personne(3, 'Lacasse'),
+    ]);
+    assert.deepEqual(Object.keys(apres.participants[0]).at(-1), 'etiquettes');
+    assert.ok(!Object.hasOwn(apres.participants[1], 'etiquettes'));
+    assert.equal(resume.ajoutes, 3);
+    // La charge rendue s'enregistre et se relit telle quelle.
+    assert.deepEqual(analyser(serialiser(apres, { revision: 1, produitVersion: VERSION.affichee })).charge, apres);
+  });
+
+  test("l'orthographe reçue est celle de l'événement : une personne existante, un objectif de table", () => {
+    const tableVisee = { ...table(2), objectifs: [{ portee: 'tous', tour: null, regle: null, etiquettes: ['RH'] }] };
+    const charge = chargeDe({
+      participants: [personne(1, 'Lacasse', null, null, { etiquettes: ['finance'] })],
+      tables: [table(1), tableVisee],
+    });
+    const { charge: apres } = importer(charge, csv('nom;etiquettes', 'Ombrelle;"FINANCE; rh"'), 'ajouter');
+    assert.deepEqual(apres.participants[1].etiquettes, ['RH', 'finance']);
+    const { charge: remplacee } = importer(charge, csv('nom;etiquettes', 'Ombrelle;"FINANCE; rh"'), 'remplacer');
+    assert.deepEqual(remplacee.participants.map(({ etiquettes }) => etiquettes), [['FINANCE', 'RH']]);
+    assert.deepEqual(remplacee.tables, charge.tables, 'remplacer garde les objectifs des tables');
+  });
+
+  test('en mise à jour, une cellule non vide remplace les étiquettes, une cellule vide les garde', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', null, { etiquettes: ['finance', 'Montréal'].sort() }),
+        personne(2, 'Pervenche', 'Théo', null, { etiquettes: ['bénévole'] }),
+        personne(3, 'Lacasse', 'Ondine'),
+      ],
+    });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv('nom;prenom;etiquettes', 'Ombrelle;Iris;ressources humaines', 'Pervenche;Théo;', 'Lacasse;Ondine;" , "'),
+      'mettreAJour',
+    );
+    assert.deepEqual(apres.participants.map(({ etiquettes }) => etiquettes), [['ressources humaines'], ['bénévole'], undefined]);
+    assert.ok(!Object.hasOwn(apres.participants[2], 'etiquettes'));
+    assert.deepEqual(resume, resumeDe({ misAJour: 1, inchanges: 2 }));
+  });
+
+  test('en mise à jour, les mêmes étiquettes dans un autre ordre, ou d’une autre orthographe de même clé, ne changent rien', () => {
+    const existants = [
+      personne(1, 'Ombrelle', 'Iris', null, { etiquettes: ['Montréal', 'finance'] }),
+      personne(2, 'Pervenche', 'Théo', null, { etiquettes: ['bénévole'] }),
+    ];
+    const charge = chargeDe({ participants: existants });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv('nom;prenom;etiquettes', 'Ombrelle;Iris;FINANCE | montréal', 'Pervenche;Théo;Bénévole'),
+      'mettreAJour',
+    );
+    assert.deepEqual(apres.participants, existants);
+    assert.deepEqual(resume, resumeDe({ inchanges: 2 }));
+  });
+
+  test('en mise à jour, une étiquette de plus, de moins ou autre compte la personne mise à jour', () => {
+    const charge = chargeDe({
+      participants: [
+        personne(1, 'Ombrelle', null, null, { etiquettes: ['Montréal', 'finance'] }),
+        personne(2, 'Pervenche', null, null, { etiquettes: ['Montréal', 'finance'] }),
+        personne(3, 'Lacasse', null, null, { etiquettes: ['Montréal', 'finance'] }),
+        personne(4, 'Sarcelle'),
+      ],
+    });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv('nom;etiquettes', 'Ombrelle;finance, Montréal, RH', 'Pervenche;finance', 'Lacasse;Montréal, atelier', 'Sarcelle;finance'),
+      'mettreAJour',
+    );
+    assert.deepEqual(apres.participants.map(({ etiquettes }) => etiquettes), [
+      ['Montréal', 'RH', 'finance'], ['finance'], ['Montréal', 'atelier'], ['finance'],
+    ]);
+    assert.deepEqual(resume, resumeDe({ misAJour: 4 }));
+  });
+
+  test('un export réimporté en mise à jour ne compte aucun modifié', () => {
+    const existants = [
+      personne(1, 'Ombrelle', 'Iris', 'Club des Merles', { etiquettes: ['=SOMME(A1)', 'Montréal', 'finance'] }),
+      personne(2, 'Pervenche', 'Théo', null, { exclu: true }),
+    ];
+    const charge = chargeDe({ participants: existants });
+    const { charge: apres, resume } = importer(charge, decoder(exporterParticipants(existants)).texte, 'mettreAJour');
+    assert.deepEqual(apres.participants, existants);
+    assert.deepEqual(resume, resumeDe({ inchanges: 2 }));
+  });
+
+  test("les étiquettes rendues ne partagent rien avec l'aperçu : le changer après coup ne touche pas la charge", () => {
+    const charge = chargeDe({ participants: [personne(1, 'Ombrelle', null, null, { etiquettes: ['finance'] })] });
+    const apercu = apercevoir(csv('nom;etiquettes', 'Ombrelle;RH', 'Pervenche;atelier'), {
+      participants: charge.participants, mode: 'mettreAJour',
+    });
+    const { charge: apres } = appliquerImport(charge, apercu, 'mettreAJour');
+    for (const { champs } of apercu.lignes) champs.etiquettes.push('ajout');
+    assert.deepEqual(apres.participants.map(({ etiquettes }) => etiquettes), [['RH'], ['atelier']]);
+  });
+
+  test("le CSV des refus reprend une ligne refusée pour ses étiquettes, motif compris, et se réimporte tel quel", () => {
+    const texte = csv('nom;etiquettes', 'Ombrelle;finance', `Pervenche;${'x'.repeat(41)}`);
+    const apercu = apercevoir(texte);
+    assert.deepEqual(apercu.refusees.map(({ code }) => code), ['ETIQUETTE_MAL_FORMEE']);
+    const { texte: refus } = decoder(exporterRefus(apercu, MOTIF));
+    const { enregistrements } = decouper(refus, ';');
+    assert.deepEqual(enregistrements[1].slice(0, 3), ['Pervenche', 'x'.repeat(41), '3']);
+    assert.match(enregistrements[1][3], /^ETIQUETTE_MAL_FORMEE .*"raison":"longueur"/);
+    assert.deepEqual(apercevoir(refus).refusees.map(({ code }) => code), ['ETIQUETTE_MAL_FORMEE']);
   });
 });
 

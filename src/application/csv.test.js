@@ -3,8 +3,8 @@
 
 // Épreuves du relais CSV de l'application (§ 13.4, § 10.1) : l'interface
 // atteint src/csv par ce module, qui réexporte ses fonctions telles quelles
-// et lie le motif du CSV des refus au libellé français. Les noms sont
-// inventés.
+// et lie le motif du CSV des refus au libellé français ; les textes des
+// deux refus d'une ligne pour ses étiquettes. Les noms sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import * as apercu from '../csv/apercu.js';
@@ -18,7 +18,7 @@ import * as relais from './csv.js';
 import { libelle } from './libelles.js';
 
 describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
-  test('decoder, apercevoir, exporterParticipants, bilanRemplacement, cleNormalisee et CHAMPS sont ceux de src/csv', () => {
+  test('decoder, apercevoir, exporterParticipants, bilanRemplacement, cleNormalisee, CHAMPS et JOINTURE_ETIQUETTES sont ceux de src/csv', () => {
     const attendus = [
       ['decoder', encodage.decoder],
       ['apercevoir', apercu.apercevoir],
@@ -32,8 +32,11 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
       assert.equal(relais[nom], fonction, nom);
     }
     assert.equal(relais.CHAMPS, colonnes.CHAMPS);
+    assert.equal(relais.JOINTURE_ETIQUETTES, exportCsv.JOINTURE_ETIQUETTES);
+    assert.equal(relais.JOINTURE_ETIQUETTES, ', ');
     assert.deepEqual(Object.keys(relais).sort(), [
-      'CHAMPS', 'apercevoir', 'bilanRemplacement', 'cleNormalisee', 'decoder', 'exporterParticipants', 'exporterRefus',
+      'CHAMPS', 'JOINTURE_ETIQUETTES', 'apercevoir', 'bilanRemplacement', 'cleNormalisee', 'decoder',
+      'exporterParticipants', 'exporterRefus',
     ]);
   });
 
@@ -62,5 +65,27 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
     const [{ code, brut, ...details }] = lu.refusees;
     assert.equal(ligne[entete.indexOf('motif')], libelle(code, details));
     assert.ok(brut.length > 0);
+  });
+});
+
+describe('csv : les textes des refus d’une ligne pour ses étiquettes (§ 10.1, A17)', () => {
+  test('ETIQUETTE_MAL_FORMEE cite la valeur et dit la raison : 40 caractères au plus, ou un caractère de contrôle ou invisible', () => {
+    const longue = libelle('ETIQUETTE_MAL_FORMEE', { ligne: 3, valeur: 'x'.repeat(41), raison: 'longueur' });
+    const invisible = libelle('ETIQUETTE_MAL_FORMEE', { ligne: 3, valeur: 'fin\tance', raison: 'controle' });
+    assert.match(longue, new RegExp(`« ${'x'.repeat(41)} »`));
+    assert.match(longue, /40/);
+    assert.match(invisible, /« fin\tance »/);
+    assert.match(invisible, /contrôle/);
+    assert.notEqual(longue.replace('x'.repeat(41), ''), invisible.replace('fin\tance', ''));
+  });
+
+  test('ETIQUETTES_TROP_NOMBREUSES dit le nombre lu et la borne de 20', () => {
+    const texte = libelle('ETIQUETTES_TROP_NOMBREUSES', { ligne: 3, valeur: null, nombre: 23 });
+    assert.match(texte, /23/);
+    assert.match(texte, /20/);
+  });
+
+  test('une raison inconnue lève RangeError plutôt que d’écrire un motif faux', () => {
+    assert.throws(() => libelle('ETIQUETTE_MAL_FORMEE', { ligne: 3, valeur: 'x', raison: 'autre' }), RangeError);
   });
 });

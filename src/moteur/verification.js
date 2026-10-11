@@ -14,9 +14,9 @@ import { LIBRE } from './configuration.js';
  * @typedef {{code: string, participant?: number, table?: number, tour?: number,
  *            detail?: string}} Violation   ids, tours numérotés à partir de 1
  *
- * @typedef {{code: string, index: number}} ViolationIndicateur
+ * @typedef {{code: string, index?: number}} ViolationIndicateur
  *          index : rang de la personne dans l'ordre canonique, celui de
- *          instance.ids
+ *          instance.ids ; absent d'une violation qui porte sur un total
  */
 
 // Index de table d'une liste que plan.tables ne rattache à aucune table de
@@ -206,12 +206,35 @@ function exigerLongueur(valeurs, N, nom, attendu) {
   }
 }
 
+// Les dépassements des objectifs et des animateurs d'une personne (§ 5.4,
+// A9), ajoutés à violations : s(p) ≤ P(p), s(p) ≤ tours assis, m(p) ≤ B(p).
+// P(p) ne se compare pas aux tours assis : un plan édité qui laisse une
+// personne en réserve à un tour possible tient P(p) au-delà.
+function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) {
+  if (objectifs !== null) {
+    if (!tient(objectifs.possibles[p], objectifs.tours[p])) violations.push({ code: 'TOURS_SERVIS', index: p });
+    if (!tient(toursAssis[p], objectifs.tours[p])) violations.push({ code: 'TOURS_SERVIS_NON_ASSIS', index: p });
+  }
+  if (animateurs !== null && !tient(animateurs.bornes[p], animateurs.rencontres[p])) {
+    violations.push({ code: 'ANIMATEURS_RENCONTRES', index: p });
+  }
+}
+
 /**
  * Garde du § 12.3 : éprouve, pour chacun, la ligne de décomposition du
  * § 12.10.5, N − 1 ≥ plafond a priori ≥ plafond réalisé ≥ rencontres, une
  * inégalité entre deux termes voisins à la fois ; ensemble, elles ordonnent
  * toute la ligne. Une violation désigne un calcul faux, sur lequel le profil
  * ne se dessine pas.
+ *
+ * Quand les mesures portent les objectifs des tables ou les animateurs, non
+ * null (A9), elle éprouve aussi, pour chacun, les tours servis contre ses
+ * tours possibles (TOURS_SERVIS) et ses tours assis (TOURS_SERVIS_NON_ASSIS),
+ * les animateurs rencontrés contre la borne (ANIMATEURS_RENCONTRES) ; puis,
+ * sur les totaux, sans index, les personnes jamais servies contre les
+ * concernées (JAMAIS_SERVIES) et le plus de tours hors objectif d'une
+ * personne contre le plus de tours possibles (HORS_OBJECTIF_MAX). Une mesure
+ * absente se lit comme null : seule la liste rencontres est exigée.
  *
  * Les trois listes suivent l'ordre canonique, celui de instance.ids, et N est
  * la longueur de mesures.rencontres. plafondsAPriori vaut null quand le
@@ -225,17 +248,20 @@ function exigerLongueur(valeurs, N, nom, attendu) {
  * (rencontres > réalisé). La fonction ne reçoit pas les identifiants : une
  * violation désigne la personne par index, son rang dans l'ordre canonique,
  * que instance.ids[index] traduit. Les violations se rangent par index
- * croissant, puis de gauche à droite sur la ligne.
+ * croissant, puis de gauche à droite sur la ligne, suivie des dépassements
+ * de la personne ; les deux violations des totaux viennent en dernier.
  *
- * Lève RangeError quand une liste de plafonds n'a pas N cases : elle décrit
+ * Lève RangeError quand une liste de plafonds, ou une liste par personne des
+ * objectifs, des animateurs ou des tours assis, n'a pas N cases : elle décrit
  * une autre population, et l'écart est une faute de code. Lève TypeError
  * quand plafondsRealises n'est pas une liste, ou plafondsAPriori ni une liste
  * ni null : seul null dit l'a priori inconnu. undefined, la valeur d'un champ
  * manquant, ne passe pas pour lui : il ôterait deux inégalités à la garde
  * sans rien signaler.
  *
- * @param {{rencontres: ArrayLike<number>}} mesures  les mesures d'un plan ;
- *        seule la liste rencontres est lue
+ * @param {{rencontres: ArrayLike<number>, toursAssis?: ArrayLike<number>,
+ *          objectifs?: Object|null, animateurs?: Object|null}} mesures
+ *        les mesures d'un plan ; toursAssis n'est lu qu'avec les objectifs
  * @param {ArrayLike<number>|null} plafondsAPriori
  * @param {ArrayLike<number>} plafondsRealises
  * @returns {ViolationIndicateur[]}
@@ -245,6 +271,16 @@ export function verifierIndicateurs(mesures, plafondsAPriori, plafondsRealises) 
   const N = rencontres.length;
   exigerLongueur(plafondsRealises, N, 'plafondsRealises', 'liste');
   if (plafondsAPriori !== null) exigerLongueur(plafondsAPriori, N, 'plafondsAPriori', 'liste ou null');
+  const lues = { toursAssis: mesures.toursAssis, objectifs: mesures.objectifs ?? null, animateurs: mesures.animateurs ?? null };
+  if (lues.objectifs !== null) {
+    exigerLongueur(lues.objectifs.tours, N, 'objectifs.tours', 'liste');
+    exigerLongueur(lues.objectifs.possibles, N, 'objectifs.possibles', 'liste');
+    exigerLongueur(lues.toursAssis, N, 'toursAssis', 'liste');
+  }
+  if (lues.animateurs !== null) {
+    exigerLongueur(lues.animateurs.rencontres, N, 'animateurs.rencontres', 'liste');
+    exigerLongueur(lues.animateurs.bornes, N, 'animateurs.bornes', 'liste');
+  }
   const violations = [];
   for (let p = 0; p < N; p += 1) {
     const realise = plafondsRealises[p];
@@ -256,6 +292,13 @@ export function verifierIndicateurs(mesures, plafondsAPriori, plafondsRealises) 
       if (!tient(aPriori, realise)) violations.push({ code: 'ORDRE_PLAFONDS', index: p });
     }
     if (!tient(realise, rencontres[p])) violations.push({ code: 'DEPASSEMENT', index: p });
+    verifierPersonne(p, lues, violations);
+  }
+  if (lues.objectifs !== null) {
+    const { jamaisServies, concernes, horsObjectifMax, possibles } = lues.objectifs;
+    if (!tient(concernes, jamaisServies)) violations.push({ code: 'JAMAIS_SERVIES' });
+    const plusDePossibles = Array.prototype.reduce.call(possibles, (plus, n) => Math.max(plus, n), 0);
+    if (!tient(plusDePossibles, horsObjectifMax)) violations.push({ code: 'HORS_OBJECTIF_MAX' });
   }
   return violations;
 }

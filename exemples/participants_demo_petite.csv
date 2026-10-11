@@ -1,13 +1,13 @@
-﻿nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes
-Bralmumet;Caroline;Ateliers Jolvane;;;non;
-Neskault;Hugo;Tannerie Cassorgue;;;non;
-Ivrotte;Youssef;Verrerie Ulvardes;;;non;
-Selvière;Louis;Tannerie Cassorgue;;;non;
-Selvançon;Youssef;Ateliers Jolvane;;;non;
-Quilmoubre;Amina;Verrerie Ulvardes;;;non;
-Voskotte;Julie;Verrerie Ulvardes;;;non;
-Neskivet;Paul;Ateliers Jolvane;;;non;
-Bralmignac;Michel;Tannerie Cassorgue;;;non;
-Tolveval;Zoé;Verrerie Ulvardes;;;non;
-Urvard;Luc;Tannerie Cassorgue;;;non;
-Mirveval;Véronique;Ateliers Jolvane;;;non;
+﻿nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes
+Bralmumet;Caroline;Ateliers Jolvane;;;non;;
+Neskault;Hugo;Tannerie Cassorgue;;;non;;
+Ivrotte;Youssef;Verrerie Ulvardes;;;non;;
+Selvière;Louis;Tannerie Cassorgue;;;non;;
+Selvançon;Youssef;Ateliers Jolvane;;;non;;
+Quilmoubre;Amina;Verrerie Ulvardes;;;non;;
+Voskotte;Julie;Verrerie Ulvardes;;;non;;
+Neskivet;Paul;Ateliers Jolvane;;;non;;
+Bralmignac;Michel;Tannerie Cassorgue;;;non;;
+Tolveval;Zoé;Verrerie Ulvardes;;;non;;
+Urvard;Luc;Tannerie Cassorgue;;;non;;
+Mirveval;Véronique;Ateliers Jolvane;;;non;;

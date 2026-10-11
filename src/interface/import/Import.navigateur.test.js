@@ -428,8 +428,8 @@ describe('une ligne fausse n’arrête pas le reste (§ 10.1, § 2.1)', () => {
     const e = await ouvrir();
     const { texte } = decoder(await lireLivre(urlGrande));
     const enregistrements = texte.split('\r\n');
-    expect(enregistrements[212]).toMatch(/;non;$/);
-    enregistrements[212] = enregistrements[212].replace(/;non;$/, ';peut-être;');
+    expect(enregistrements[212]).toMatch(/;non;;$/);
+    enregistrements[212] = enregistrements[212].replace(/;non;;$/, ';peut-être;;');
     await choisir(e, 'grande.csv', enUtf8(enregistrements.join('\r\n')));
     const apercu = dans(e, '[data-apercu]');
     expect(dans(e, '[data-valides] [data-nombre]').textContent).toBe('259');
@@ -609,6 +609,23 @@ describe('une seule entrée, des doublons signalés, une mise à jour qui n’ef
     const ids = participantsDe(e).map(({ id }) => id);
     expect(ids.length).toBe(4);
     expect(new Set(ids).size).toBe(4);
+  });
+
+  test('une étiquette qui ne diffère d’un objectif de table que par la casse : la personne importée reçoit l’orthographe de l’objectif', async () => {
+    // Aucune personne ne porte l'étiquette : seul l'objectif de la table la
+    // donne, et l'aperçu de l'écran doit le lire, sans quoi le moteur, qui
+    // compare les chaînes, ne rapprocherait jamais la personne de l'objectif.
+    const e = await ouvrir({
+      prepare: async (seance) => {
+        await seance.executer('creerTable', { forme: 'ronde' });
+        const [{ id }] = seance.etat().charge.tables;
+        await seance.executer('poserObjectif', { table: id, tour: null, etiquettes: 'finance', regle: null });
+      },
+    });
+    await coller(e, 'nom;etiquettes\nOmbrelle;Finance');
+    choisirMode(e, 'ajouter');
+    await importer(e);
+    expect(participantsDe(e).map(({ nom, etiquettes }) => [nom, etiquettes])).toEqual([['Ombrelle', ['finance']]]);
   });
 
   test('mettre à jour : aucun courriel vidé ; une ligne qui désigne deux personnes, refusée, les deux nommées ; une seconde ligne pour la même personne, refusée, la première nommée', async () => {

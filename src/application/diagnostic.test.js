@@ -12,8 +12,9 @@ import { diagnostiquer } from '../moteur/diagnostic.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { normaliser } from '../moteur/configuration.js';
 import { serialiser } from '../stockage/canonique.js';
-import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { analyser, creerCharge } from '../stockage/document.js';
 import { VERSION } from '../version.genere.js';
+import { configurationDe } from './configuration.js';
 import { diagnostiquerCharge } from './diagnostic.js';
 
 const chargeDemo = (cle) => analyser(texteLivre(cle)).charge;
@@ -30,7 +31,7 @@ describe('diagnostiquerCharge', () => {
   test('petite démonstration : le diagnostic de sa configuration, erreur null', () => {
     const charge = chargeDemo('petite');
     const rendu = diagnostiquerCharge(charge);
-    assert.deepEqual(rendu, { diagnostic: diagnostiquer(configurationDepuisCharge(charge)), erreur: null });
+    assert.deepEqual(rendu, { diagnostic: diagnostiquer(configurationDe(charge)), erreur: null });
     assert.ok(rendu.diagnostic.plafondAPriori.repartition.length > 0);
   });
 
@@ -39,7 +40,7 @@ describe('diagnostiquerCharge', () => {
     const { diagnostic, erreur } = diagnostiquerCharge(charge);
     assert.equal(erreur, null);
     assert.equal(diagnostic.collisions.length, 1);
-    assert.deepEqual(diagnostic, diagnostiquer(configurationDepuisCharge(charge)));
+    assert.deepEqual(diagnostic, diagnostiquer(configurationDe(charge)));
   });
 
   test('quatre réservées sur une table de 3 : analyser admet, normaliser refuse ; le code rendu, sans lever', () => {
@@ -49,7 +50,7 @@ describe('diagnostiquerCharge', () => {
     assert.equal(relue.reservations.length, 4);
     let attendue = null;
     try {
-      normaliser(configurationDepuisCharge(relue));
+      normaliser(configurationDe(relue));
     } catch (erreur) {
       assert.ok(erreur instanceof ErreurConfiguration);
       attendue = erreur;
@@ -64,7 +65,7 @@ describe('diagnostiquerCharge', () => {
     const charge = creerCharge({ id: 'evt-neuf', nom: 'Club des Merles', siegesParDefaut: 8, tours: 4 });
     const { diagnostic, erreur } = diagnostiquerCharge(charge);
     assert.equal(erreur, null);
-    assert.deepEqual(diagnostic, diagnostiquer(configurationDepuisCharge(charge)));
+    assert.deepEqual(diagnostic, diagnostiquer(configurationDe(charge)));
   });
 
   test('une erreur qui n\u{2019}est pas une ErreurConfiguration remonte', () => {

@@ -30,12 +30,14 @@ import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
+import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { estHorodatage } from '../stockage/journal.js';
 import { fautes, formeNommee, versFichier } from '../stockage/placements.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
+import { etiquettesDeLEvenement, etiquettesRangees, recevoirEtiquettes } from './objectifs.js';
 import { nomAffiche } from './personnes.js';
 import { couvre, repartirSieges, reservationsActives } from './places.js';
 import { controlerReintegration, leverRefus } from './pose.js';
@@ -185,6 +187,62 @@ function modifierParticipant(charge, { id, champs }) {
       devenu: renomme ? nomAffiche(apres) : null,
     }),
     avertissements: [],
+  };
+}
+
+// Une chaîne, ou undefined pour un argument absent ; une autre valeur est une
+// faute du code.
+function texteOuAbsent(valeur, nom) {
+  if (valeur !== undefined && typeof valeur !== 'string') {
+    throw new TypeError(`${nom} : chaîne attendue, reçu ${JSON.stringify(valeur)}`);
+  }
+  return valeur;
+}
+
+/**
+ * changerEtiquettes {id, ajouter?, retirer?} (§ 4.5, § 5.9) : retirer, une
+ * étiquette que la personne porte, s'ôte d'abord ; puis ajouter, une saisie
+ * de une ou plusieurs étiquettes, se reçoit (recevoirEtiquettes) sur les
+ * étiquettes de l'événement entier, personnes et objectifs, telles que le
+ * retrait les laisse : une personne seule à porter une orthographe la
+ * change ainsi en un geste. L'effet se juge par comparaison d'ensembles :
+ * une liste qui garde les mêmes étiquettes est SANS_EFFET, quel que soit
+ * l'ordre de la saisie. La liste s'écrit triée par unités de code, et le
+ * champ se retire quand elle se vide. Refus : ETIQUETTE_INVALIDE {valeur,
+ * raison} pour un morceau fautif, ou pour une saisie qui ne donne aucune
+ * étiquette (raison 'vide') ; ETIQUETTES_EN_TROP {nombre} au-delà
+ * d'ETIQUETTES_MAX ; remède null : la saisie se corrige dans le champ même.
+ * Avertissements : ORTHOGRAPHE_RETENUE {saisie, retenue}. Ni ajouter ni
+ * retirer, ou l'un d'eux qui n'est pas une chaîne, est une faute du code.
+ */
+function changerEtiquettes(charge, { id, ajouter, retirer } = {}) {
+  exigerModifiable(charge);
+  texteOuAbsent(ajouter, 'ajouter');
+  texteOuAbsent(retirer, 'retirer');
+  if (ajouter === undefined && retirer === undefined) throw new TypeError('changerEtiquettes : ajouter ou retirer attendu');
+  const participant = participantDe(charge, id);
+  const avant = participant.etiquettes ?? [];
+  const gardees = avant.filter((motCle) => motCle !== retirer);
+  let recues = { etiquettes: [], avertissements: [] };
+  if (ajouter !== undefined) {
+    const restante = avecParticipant(charge, id, (copie) => ({ ...copie, etiquettes: gardees }));
+    recues = recevoirEtiquettes(etiquettesDeLEvenement(restante), ajouter);
+    if (recues.etiquettes.length === 0) throw refus('ETIQUETTE_INVALIDE', { valeur: '', raison: 'vide' });
+  }
+  const apres = etiquettesRangees(new Set([...gardees, ...recues.etiquettes]));
+  const ajoutees = apres.filter((motCle) => !avant.includes(motCle));
+  const retirees = avant.filter((motCle) => !apres.includes(motCle));
+  if (ajoutees.length === 0 && retirees.length === 0) throw refus('SANS_EFFET', { commande: 'changerEtiquettes' });
+  if (apres.length > ETIQUETTES_MAX) throw refus('ETIQUETTES_EN_TROP', { nombre: apres.length });
+  const suivante = avecParticipant(charge, id, (copie) => {
+    const reste = { ...copie };
+    delete reste.etiquettes;
+    return apres.length === 0 ? reste : { ...reste, etiquettes: apres };
+  });
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CHANGER_ETIQUETTES', { personne: nomAffiche(participant), ajoutees, retirees }),
+    avertissements: recues.avertissements,
   };
 }
 
@@ -486,6 +544,7 @@ export const COMMANDES = reunirCommandes(
   new Map([
     ['ajouterParticipant', ajouterParticipant],
     ['modifierParticipant', modifierParticipant],
+    ['changerEtiquettes', changerEtiquettes],
     ['exclureParticipant', exclureParticipant],
     ['reintegrerParticipant', reintegrerParticipant],
     ['supprimerParticipant', supprimerParticipant],

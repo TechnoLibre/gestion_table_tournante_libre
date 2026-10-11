@@ -37,8 +37,9 @@ import { ecartsAuPlafondAPriori, minimumAtteint, troisChiffres } from '../moteur
 import { plafondsRealises } from '../moteur/plafond.js';
 import { verifierIndicateurs, verifierInvariants } from '../moteur/verification.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
-import { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance, configurationDepuisCharge } from '../stockage/document.js';
+import { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance } from '../stockage/document.js';
 import { derive, deriveSansRevalider, fautes, planDepuisFichier, planSansRevalider } from '../stockage/placements.js';
+import { configurationDe } from './configuration.js';
 
 export { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance };
 
@@ -115,7 +116,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
   if (plafondsAPriori !== 'calcul' && plafondsAPriori !== null) {
     throw new TypeError(`evaluer : plafondsAPriori 'calcul' ou null attendu, reçu ${JSON.stringify(plafondsAPriori)}`);
   }
-  const configuration = configurationDepuisCharge(charge);
+  const configuration = configurationDe(charge);
   const diagnostic = diagnostiquer(configuration);
   const instance = normaliser(configuration);
   const aPriori = plafondsAPriori === 'calcul' ? diagnostic.plafondAPriori.parPersonne : null;
@@ -178,7 +179,7 @@ export function resumeDuRetenu(charge) {
   if (retenu === null || !seCompare(retenu, charge)) return null;
   let instance;
   try {
-    instance = normaliser(configurationDepuisCharge(charge));
+    instance = normaliser(configurationDe(charge));
   } catch (erreur) {
     if (erreur instanceof ErreurConfiguration) return null;
     throw erreur;

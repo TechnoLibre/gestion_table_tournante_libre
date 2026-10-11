@@ -28,7 +28,7 @@ import { enregistrementVide } from './lecture.js';
 
 // Champs d'une ligne de l'aperçu, dans l'ordre du participant : ceux que
 // porte une personne créée, et que pose une mise à jour quand la cellule
-// n'est pas vide.
+// n'est pas vide. Les étiquettes, une liste, se posent à part (poser).
 const CHAMPS_LUS = Object.freeze(['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes', 'exclu']);
 
 // En-têtes des deux colonnes qu'ajoute le CSV des refus, inconnues de
@@ -42,11 +42,17 @@ const ENTETE_MOTIF = 'motif';
  *
  * @typedef {Object} LigneRefusee
  * @property {number} ligne          rang de l'enregistrement, en-tête compris
- * @property {string} code           CHAMPS_EN_TROP, NOM_ABSENT ou
- *           EXCLU_INCONNU, de l'aperçu ; PLUSIEURS_CORRESPONDENT ou
- *           DEJA_DESIGNE, de la mise à jour
+ * @property {string} code           CHAMPS_EN_TROP, NOM_ABSENT,
+ *           EXCLU_INCONNU, ETIQUETTE_MAL_FORMEE ou
+ *           ETIQUETTES_TROP_NOMBREUSES, de l'aperçu ; PLUSIEURS_CORRESPONDENT
+ *           ou DEJA_DESIGNE, de la mise à jour
  * @property {string|null} valeur    la valeur d'« exclu » refusée sous
- *           EXCLU_INCONNU, null sous tout autre code
+ *           EXCLU_INCONNU, l'étiquette fautive sous ETIQUETTE_MAL_FORMEE,
+ *           null sous tout autre code
+ * @property {string} [raison]       ETIQUETTE_MAL_FORMEE : 'controle' ou
+ *           'longueur'
+ * @property {number} [nombre]       ETIQUETTES_TROP_NOMBREUSES : le nombre
+ *           d'étiquettes de la cellule
  * @property {number[]} [participants]  refus de la mise à jour : les
  *           identifiants croissants que la ligne désigne
  * @property {number} [premiereLigne]   DEJA_DESIGNE : la ligne qui désigne
@@ -214,19 +220,42 @@ export function bilanRemplacement(charge) {
   };
 }
 
+// Les étiquettes d'une ligne telles que le fichier d'état les range : une
+// copie, triée par unités de code (§ 8.9), qui ne partage rien avec
+// l'aperçu.
+const rangees = (etiquettes) => [...etiquettes].sort(comparerTextes);
+
+// Vrai quand deux listes d'étiquettes rangées portent les mêmes chaînes, rang
+// à rang : deux listes distinctes de même contenu sont égales.
+const memesEtiquettes = (a, b) => a.length === b.length && a.every((motCle, rang) => motCle === b[rang]);
+
 // Participant créé d'une ligne de l'aperçu, ses clés dans l'ordre du
-// fichier d'état : un exclu vide vaut non.
-const creer = (id, { nom, prenom, appartenance, courriel, titrePressenti, notes, exclu }) => ({
-  id, nom, prenom, appartenance, courriel, titrePressenti, notes, exclu: exclu ?? false,
-});
+// fichier d'état : un exclu vide vaut non ; les étiquettes, rangées, en
+// dernier, la clé absente quand la ligne n'en porte pas (§ 8.9).
+function creer(id, { nom, prenom, appartenance, courriel, titrePressenti, notes, exclu, etiquettes }) {
+  const participant = { id, nom, prenom, appartenance, courriel, titrePressenti, notes, exclu: exclu ?? false };
+  if (etiquettes !== null) participant.etiquettes = rangees(etiquettes);
+  return participant;
+}
 
 // Pose sur le participant chaque champ non vide de la ligne : un champ vide
-// garde la valeur (§ 10.1). Rend vrai quand une valeur a changé.
+// garde la valeur (§ 10.1). Une cellule d'étiquettes non vide remplace la
+// liste entière, une cellule vide la garde : un CSV n'efface pas les
+// étiquettes. Les listes se comparent étiquette par étiquette, une fois
+// rangées : un fichier réimporté ne compte aucun modifié. Rend vrai quand
+// une valeur a changé.
 function poser(participant, champs) {
   let change = false;
   for (const champ of CHAMPS_LUS) {
     if (champs[champ] !== null && champs[champ] !== participant[champ]) {
       participant[champ] = champs[champ];
+      change = true;
+    }
+  }
+  if (champs.etiquettes !== null) {
+    const etiquettes = rangees(champs.etiquettes);
+    if (!memesEtiquettes(etiquettes, participant.etiquettes ?? [])) {
+      participant.etiquettes = etiquettes;
       change = true;
     }
   }
@@ -288,17 +317,19 @@ function mettreAJour(participants, lignes) {
  *   Une ligne ajoutée à côté d'un participant de même nom est celle que
  *   l'aperçu nomme dans homonymes. Désigné seul, le participant prend chaque champ non vide de
  *   la ligne, nom, prénom et appartenance compris, et garde la valeur d'un
- *   champ vide ; exclu vide le garde. Une ligne qui ne désigne personne est
+ *   champ vide ; exclu vide le garde ; une cellule d'étiquettes non vide
+ *   remplace la liste, vide la garde. Une ligne qui ne désigne personne est
  *   ajoutée ; qui en désigne plusieurs, refusée PLUSIEURS_CORRESPONDENT ; qui
  *   désigne un participant qu'une ligne précédente désigne déjà, refusée
  *   DEJA_DESIGNE ;
  * - 'remplacer' : les participants et leurs réservations sont retirés,
  *   puis chaque ligne valide ajoutée. Tables, titres, propositions et retenu
  *   restent (bilanRemplacement).
- * Une personne créée prend les champs de sa ligne, exclu vide valant non ;
- * les identifiants partent de prochainsIds.participant, dans l'ordre du
- * fichier, et le compteur avance d'autant. La charge et l'aperçu reçus ne
- * sont pas modifiés ; la charge rendue n'en partage aucun objet.
+ * Une personne créée prend les champs de sa ligne, exclu vide valant non,
+ * ses étiquettes rangées par unités de code, absentes quand la ligne n'en
+ * porte pas ; les identifiants partent de prochainsIds.participant, dans
+ * l'ordre du fichier, et le compteur avance d'autant. La charge et l'aperçu
+ * reçus ne sont pas modifiés ; la charge rendue n'en partage aucun objet.
  *
  * Le résumé (ResumeImport) compte les participants ajoutés, mis à jour,
  * inchangés et retirés, et les réservations retirées. refusees porte les

@@ -63,6 +63,7 @@ import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMMANDES } from '../src/application/commandes.js';
+import { configurationDe } from '../src/application/configuration.js';
 import { creerFormat } from '../src/application/format.js';
 import { TABLES_APPLICATION } from '../src/application/libelles.js';
 import { creerTraduction } from '../src/application/traduction.js';
@@ -74,7 +75,7 @@ import { REGLAGES_GENERATION } from '../src/interface/generation/reglages.js';
 import { TABLES_INTERFACE } from '../src/interface/libelles.js';
 import { RACCOURCIS } from '../src/interface/raccourcis.js';
 import { diagnostiquer } from '../src/moteur/diagnostic.js';
-import { analyser, configurationDepuisCharge } from '../src/stockage/document.js';
+import { analyser } from '../src/stockage/document.js';
 import { VERSION } from '../src/version.genere.js';
 import { CHEMIN_MANIFESTE, cheminImage, ecartDeVersion, fautesDImage } from './documentation/manifeste.js';
 import { tableauConstantes } from './banc/releve.js';
@@ -362,6 +363,10 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   changerTours: { tours: 3, retirees: 2 },
   modifierReglage: { cle: 'separerAppartenances', valeur: false },
   changerCibleRedondance: { cible: 1200 },
+  changerEtiquettes: { personne: 'Iris Ombrelle', ajoutees: ['finance'], retirees: [] },
+  poserObjectif: { numero: 3, tour: null, regle: null, etiquettes: ['finance'] },
+  retirerObjectif: { numero: 3, tour: 2 },
+  changerRegleObjectifs: { regle: 'et' },
   reserver: { personne: 'Théo Pervenche', numero: 4, siege: 2, portee: 'tour', tour: 2 },
   retirerReservation: { personne: 'Théo Pervenche', numero: 4, portee: 'tous', tour: null },
   deplacerReservation: { personne: 'Théo Pervenche', de: 4, vers: 7, siege: null, portee: 'tour', tour: 2 },
@@ -475,7 +480,7 @@ export function tableauDemonstrations(livrees = LIVREES) {
     livrees.map(({ cle, texte }) => {
       const entree = CATALOGUE.find((candidate) => candidate.cle === cle);
       if (entree === undefined) throw new RangeError(`demonstrations : « ${cle} » n'est pas au catalogue`);
-      const configuration = configurationDepuisCharge(analyser(texte).charge);
+      const configuration = configurationDe(analyser(texte).charge);
       const { plafondAPriori } = diagnostiquer(configuration);
       return [
         entree.nom,

@@ -72,13 +72,13 @@ export function orthographeRecue(existantes, saisie) {
  */
 
 /**
- * Réconcilie les étiquettes des lignes d'un import (§ 10.1) avec celles de
- * l'événement, puis entre elles. Une clé que l'événement porte reçoit la plus
- * petite de ses orthographes existantes ; une clé que seules les lignes
- * portent, la plus petite des orthographes lues. Chaque liste est réécrite
- * dans son ordre, une étiquette prenant l'orthographe de sa clé ; une
- * orthographe qui en rejoint une autre de la même liste se fond à la place
- * de la première. Les existantes ne sont jamais réécrites.
+ * Réconcilie les étiquettes des lignes d'un fichier importé (§ 10.1) avec
+ * celles de l'événement, puis entre elles. Une clé que l'événement porte
+ * reçoit la plus petite de ses orthographes existantes ; une clé que seules
+ * les lignes portent, la plus petite des orthographes lues. Chaque liste est
+ * réécrite dans son ordre, une étiquette prenant l'orthographe de sa clé ;
+ * une orthographe qui en rejoint une autre de la même liste se fond à la
+ * place de la première. Les existantes ne sont jamais réécrites.
  *
  * Une fusion est rendue pour chaque clé qui réécrit au moins une ligne, et
  * aucune ligne n'est réécrite sans la sienne : une ligne qui porte déjà

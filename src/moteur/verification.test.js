@@ -24,6 +24,8 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { indexerPlan, normaliser } from './configuration.js';
+import { mesurer } from './indicateurs.js';
+import { plafondsAPriori, plafondsRealises } from './plafond.js';
 import { ErreurConfiguration } from './erreurs.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
 
@@ -825,5 +827,88 @@ describe('verifierIndicateurs : la ligne de décomposition (§ 12.3, § 12.10.5)
       assert.throws(() => verifierIndicateurs({ rencontres }, huit(), valeur),
         { name: 'TypeError', message: /plafondsRealises/ }, `réalisé ${String(valeur)}`);
     }
+  });
+});
+
+describe('verifierIndicateurs : les objectifs et les animateurs (§ 5.4, A9)', () => {
+  // Quatre personnes, deux tours : 1 et 2 ont deux tours possibles, 2 en a
+  // un servi, 3 et 4 n'en ont aucun ; la borne des animateurs vaut 1 pour
+  // chacun, et 4 seul en rencontre un. Chaque inégalité y tient.
+  const base = () => ({
+    rencontres: [3, 3, 3, 3],
+    toursAssis: [2, 2, 2, 2],
+    objectifs: { tours: [0, 1, 0, 0], possibles: [2, 2, 0, 0], jamaisServies: 1, horsObjectifMax: 2, concernes: 2 },
+    animateurs: { rencontres: [0, 0, 0, 1], bornes: [1, 1, 1, 1] },
+  });
+  const plafonds = () => [3, 3, 3, 3];
+  // La base dont modifier(mesures) a changé une valeur.
+  const avec = (modifier) => {
+    const mesures = base();
+    modifier(mesures);
+    return mesures;
+  };
+
+  test('les mesures d’un plan tiennent : la base, et un plan mesuré par le moteur', () => {
+    assert.deepEqual(verifierIndicateurs(base(), plafonds(), plafonds()), []);
+    const instance = normaliser({
+      participants: [
+        { id: 1, nom: 'P1', appartenance: null, anime: [1, 2] },
+        { id: 2, nom: 'P2', appartenance: null, etiquettes: ['finance'] },
+        { id: 3, nom: 'P3', appartenance: null, etiquettes: ['finance'] },
+        { id: 4, nom: 'P4', appartenance: null },
+      ],
+      tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 2 }],
+      tours: 2,
+      reservations: [{ participant: 1, table: 1, portee: 'tous' }],
+      contraintes: SANS_CONTRAINTE,
+      objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }],
+    });
+    const tableDe = indexerPlan(instance, { tables: [1, 2], tours: [[[1, 2], [3, 4]], [[1, 4], [2, 3]]], reserves: [[], []] });
+    const mesures = mesurer(instance, tableDe);
+    assert.equal(mesures.objectifs.concernes, 2);
+    assert.equal(mesures.animateurs.concernes, 3);
+    assert.deepEqual(verifierIndicateurs(mesures, plafondsAPriori(instance), plafondsRealises(instance, tableDe)), []);
+  });
+
+  test('chaque dépassement a son code, et aucun autre ne tombe', () => {
+    const cas = [
+      ['tours servis 3 > tours possibles 2', avec((m) => { m.objectifs.tours[1] = 3; m.toursAssis[1] = 3; }),
+        [{ code: 'TOURS_SERVIS', index: 1 }]],
+      ['tours servis 1 > tours assis 0', avec((m) => { m.toursAssis[1] = 0; }),
+        [{ code: 'TOURS_SERVIS_NON_ASSIS', index: 1 }]],
+      ['animateurs rencontrés 2 > borne 1', avec((m) => { m.animateurs.rencontres[3] = 2; }),
+        [{ code: 'ANIMATEURS_RENCONTRES', index: 3 }]],
+      ['jamais servies 3 > concernées 2', avec((m) => { m.objectifs.jamaisServies = 3; }),
+        [{ code: 'JAMAIS_SERVIES' }]],
+      ['le plus de tours hors objectif 3 > tours possibles 2', avec((m) => { m.objectifs.horsObjectifMax = 3; }),
+        [{ code: 'HORS_OBJECTIF_MAX' }]],
+    ].map(([libelle, mesures, attendu]) => [libelle, () => verifierIndicateurs(mesures, plafonds(), plafonds()), attendu]);
+    assert.deepEqual(ecarts(cas), []);
+  });
+
+  test('les violations d’une personne suivent celles de sa ligne, les deux globales viennent en dernier', () => {
+    const mesures = avec((m) => {
+      m.rencontres[1] = 4;
+      m.objectifs.tours[1] = 3;
+      m.toursAssis[1] = 3;
+      m.animateurs.rencontres[1] = 2;
+      m.objectifs.jamaisServies = 3;
+      m.objectifs.horsObjectifMax = 3;
+    });
+    assert.deepEqual(verifierIndicateurs(mesures, plafonds(), plafonds()), [
+      { code: 'DEPASSEMENT', index: 1 },
+      { code: 'TOURS_SERVIS', index: 1 },
+      { code: 'ANIMATEURS_RENCONTRES', index: 1 },
+      { code: 'JAMAIS_SERVIES' },
+      { code: 'HORS_OBJECTIF_MAX' },
+    ]);
+  });
+
+  test('des objectifs et des animateurs null, ou absents, ne sont pas lus ; une liste d’une autre longueur lève RangeError', () => {
+    assert.deepEqual(verifierIndicateurs({ ...base(), objectifs: null, animateurs: null }, plafonds(), plafonds()), []);
+    assert.deepEqual(verifierIndicateurs({ rencontres: [3, 3, 3, 3] }, plafonds(), plafonds()), []);
+    assert.throws(() => verifierIndicateurs(avec((m) => { m.objectifs.possibles.pop(); }), plafonds(), plafonds()), RangeError);
+    assert.throws(() => verifierIndicateurs(avec((m) => { m.toursAssis.pop(); }), plafonds(), plafonds()), RangeError);
+    assert.throws(() => verifierIndicateurs(avec((m) => { m.animateurs.bornes.push(1); }), plafonds(), plafonds()), RangeError);
   });
 });

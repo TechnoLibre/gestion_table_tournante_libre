@@ -14,8 +14,10 @@ import { describe, test } from '../../test/lanceur.js';
 import { ErreurAnnulee, ErreurConfiguration } from './erreurs.js';
 import {
   LIBRE,
+  NON_ANIMATEUR,
   RESERVE,
   SANS_GROUPE,
+  SANS_OBJECTIF,
   STATUT,
   exigerPlanIndexe,
   indexerPlan,
@@ -25,6 +27,7 @@ import {
   planDepuisIndex,
   replierParPopulation,
 } from './configuration.js';
+import { CRITERES, PRIORITES_PAR_DEFAUT, verifierPriorites } from './criteres.js';
 import { mesurer } from './indicateurs.js';
 import { plafondsRealises } from './plafond.js';
 
@@ -891,5 +894,327 @@ describe('erreurs du moteur', () => {
     const erreur = new ErreurAnnulee();
     assert.ok(erreur instanceof Error);
     assert.equal(erreur.name, 'ErreurAnnulee');
+  });
+});
+
+// --- Les étiquettes, les objectifs, les animateurs (§ 4.5, A7, A21) ---------
+
+// Participant présent qui porte des étiquettes, et éventuellement les tours
+// où il anime.
+const etiquete = (id, etiquettes, anime) => ({
+  id,
+  nom: `P${id}`,
+  appartenance: null,
+  ...(etiquettes === undefined ? {} : { etiquettes }),
+  ...(anime === undefined ? {} : { anime }),
+});
+const objectif = (table, tour, regle, etiquettes) => ({ table, tour, regle, etiquettes });
+
+// La configuration de la correspondance : trois tables, dont 22 gelée au
+// tour 2 par deux réservations ; des objectifs de soirée et de tour, des deux
+// règles, déclarés hors de l'ordre des tables, dont deux identiques sur deux
+// tables ; une personne réservée à une table sans objectif quand une autre la
+// servait, une autre réservée à une table dont l'objectif ne lui correspond
+// pas ; un exclu qui porte des étiquettes.
+const CORRESPONDANCE = configuration({
+  participants: [
+    etiquete(2, ['finance']),
+    etiquete(3, ['finance', 'Montréal']),
+    etiquete(4, ['ressources humaines']),
+    etiquete(5),
+    etiquete(6, ['Montréal']),
+    etiquete(7, ['bénévole', 'finance']),
+    etiquete(8, ['bénévole']),
+    { ...etiquete(9, ['finance']), exclu: true },
+    etiquete(10, ['bénévole']),
+  ],
+  tables: [{ id: 21, numero: 1, capacite: 4 }, { id: 23, numero: 2, capacite: 2 }, { id: 22, numero: 3, capacite: 2 }],
+  tours: 3,
+  reservations: [auTour(4, 23, 1), auTour(6, 21, 3), tous(7, 22), auTour(8, 22, 2), tous(9, 21)],
+});
+CORRESPONDANCE.objectifs = [
+  objectif(23, 3, 'ou', ['Montréal']),
+  objectif(21, null, 'ou', ['finance', 'ressources humaines']),
+  objectif(22, 1, 'ou', ['finance', 'ressources humaines']),
+  objectif(21, 2, 'et', ['finance', 'Montréal']),
+  objectif(22, null, 'ou', ['bénévole']),
+];
+
+// Lecture directe du § 4.5, sans rien du module éprouvé : l'objectif en
+// vigueur à la table au tour r est celui du tour s'il existe, sinon celui de
+// la soirée ; « ou » demande une étiquette commune, « et » chacune ; une
+// table garde un siège libre quand ses réservations présentes n'occupent pas
+// toute sa capacité ; un couple fixé n'est possible qu'à sa table.
+function lectureDirecte(config) {
+  const presents = config.participants.filter((personne) => personne.exclu !== true);
+  const enVigueur = (table, tour) =>
+    config.objectifs.find((o) => o.table === table && o.tour === tour)
+    ?? config.objectifs.find((o) => o.table === table && o.tour === null);
+  const correspond = (personne, table, tour) => {
+    const o = enVigueur(table, tour);
+    if (o === undefined) return false;
+    const siennes = personne.etiquettes ?? [];
+    return o.regle === 'ou' ? o.etiquettes.some((e) => siennes.includes(e)) : o.etiquettes.every((e) => siennes.includes(e));
+  };
+  const couvre = (reservation, tour) => reservation.portee === 'tous' || reservation.tour === tour;
+  const presentes = config.reservations.filter((reservation) => presents.some(({ id }) => id === reservation.participant));
+  const tableFixee = (personne, tour) =>
+    presentes.find((reservation) => reservation.participant === personne.id && couvre(reservation, tour))?.table;
+  const libre = (table, tour) =>
+    presentes.filter((reservation) => reservation.table === table.id && couvre(reservation, tour)).length < table.capacite;
+  const possible = (personne, tour) => {
+    const fixee = tableFixee(personne, tour);
+    if (fixee !== undefined) return correspond(personne, fixee, tour);
+    return config.tables.some((table) => libre(table, tour) && correspond(personne, table.id, tour));
+  };
+  return { presents, correspond, possible };
+}
+
+describe('normaliser : objectifs des tables et correspondance (§ 4.5, A7, A21)', () => {
+  test('une correspondance se décide par la règle : chaque couple (personne, table, tour) et chaque couple possible égalent la lecture directe du § 4.5', () => {
+    const instance = normaliser(CORRESPONDANCE);
+    const { presents, correspond, possible } = lectureDirecte(CORRESPONDANCE);
+    const { N, T, R, O, objectifDe } = instance;
+    assert.deepEqual(instance.ids, presents.map(({ id }) => id));
+    const ecarts = [];
+    for (let p = 0; p < N; p += 1) {
+      for (let r = 0; r < R; r += 1) {
+        for (let t = 0; t < T; t += 1) {
+          const o = objectifDe[t * R + r];
+          const lu = o !== SANS_OBJECTIF && instance.correspond[p * O + o] === 1;
+          if (lu !== correspond(presents[p], instance.idsTables[t], r + 1)) {
+            ecarts.push(`personne ${instance.ids[p]}, table ${instance.idsTables[t]}, tour ${r + 1} : ${lu}`);
+          }
+        }
+        const lu = instance.possible[p * R + r] === 1;
+        if (lu !== possible(presents[p], r + 1)) ecarts.push(`possible ${instance.ids[p]}, tour ${r + 1} : ${lu}`);
+      }
+    }
+    assert.deepEqual(ecarts, []);
+  });
+
+  test('le compte de chacun, compté à la main : l’objectif du tour remplace celui de la soirée, la table sans siège libre ne sert personne, la réservation tient hors objectif', () => {
+    const instance = normaliser(CORRESPONDANCE);
+    assert.deepEqual(instance.ids, [2, 3, 4, 5, 6, 7, 8, 10]);
+    // 2 : « finance » sert aux tours 1 et 3 à la table 21, mais au tour 2
+    // l'objectif « toutes : finance, Montréal » remplace celui de la soirée.
+    // 4 : réservé au tour 1 à 23, sans objectif, quand 21 le servait.
+    // 6 : réservé au tour 3 à 21, dont l'objectif ne lui correspond pas,
+    // quand 23 le servait. 10 : au tour 2, seule 22, gelée, lui correspond.
+    assert.deepEqual(instance.possibles, Int32Array.from([2, 3, 1, 0, 0, 3, 2, 1]));
+    assert.deepEqual(instance.siegesLibres, Int32Array.from([4, 4, 3, 1, 2, 2, 1, 0, 1]));
+  });
+
+  test('les objectifs distincts se numérotent par table d’identifiant croissant, soirée puis tours, deux objectifs identiques en un seul', () => {
+    const instance = normaliser(CORRESPONDANCE);
+    // Index de table 0, 1, 2 : identifiants 21, 23, 22. 21 soirée → 0,
+    // 21 tour 2 → 1, 22 soirée → 2, 22 tour 1 → 0 (le même que 21 soirée),
+    // 23 tour 3 → 3.
+    assert.equal(instance.O, 4);
+    assert.deepEqual(instance.objectifDe, Int32Array.from([0, 1, 0, SANS_OBJECTIF, SANS_OBJECTIF, 3, 0, 2, 2]));
+    assert.equal(instance.correspond.length, instance.N * 4);
+  });
+
+  test('sans objectif ni étiquette ni animateur, chaque champ nouveau prend sa valeur vide, et les cases facultatives restent absentes', () => {
+    const instance = normaliser(configuration({ participants: personnes([3, 1]), tables: tablesDe([12, 11], 2), tours: 2 }));
+    assert.equal(instance.O, 0);
+    assert.deepEqual(instance.objectifDe, new Int32Array(4).fill(SANS_OBJECTIF));
+    assert.deepEqual(instance.correspond, new Uint8Array(0));
+    assert.deepEqual(instance.possible, new Uint8Array(4));
+    assert.deepEqual(instance.possibles, new Int32Array(2));
+    assert.equal(instance.modeObjectifs, 'places');
+    assert.equal(instance.A, 0);
+    assert.deepEqual(instance.rangAnimateur, new Int32Array(2).fill(NON_ANIMATEUR));
+    assert.deepEqual(instance.animateurs, new Int32Array(0));
+    assert.deepEqual(instance.debutAnimes, new Int32Array(5));
+    assert.deepEqual(instance.animes, new Int32Array(0));
+    assert.deepEqual(instance.borneAnimateurs, new Int32Array(2));
+    assert.deepEqual(instance.contraintes, SANS_CONTRAINTE);
+    assert.deepEqual(instance.priorites, PRIORITES_PAR_DEFAUT);
+    assert.notEqual(instance.priorites, PRIORITES_PAR_DEFAUT);
+  });
+
+  test('les deux cases facultatives se copient quand la configuration les porte, et aucune autre clé', () => {
+    const contraintes = { ...SANS_CONTRAINTE, respecterObjectifs: false, rencontrerAnimateurs: true, autre: true };
+    const instance = normaliser(configuration({ participants: personnes([1]), tables: tablesDe([11], 2), tours: 1, contraintes }));
+    contraintes.rencontrerAnimateurs = false;
+    assert.deepEqual(instance.contraintes, { ...SANS_CONTRAINTE, respecterObjectifs: false, rencontrerAnimateurs: true });
+  });
+});
+
+describe('normaliser : animateurs et borne des animateurs (§ 4.5, D6, D21)', () => {
+  // Tables 41 et 42 de trois places, deux tours. 5 anime aux deux tours à
+  // 42 ; 3 anime au seul tour 2 à 41 ; 7 au seul tour 1 à 42 ; 9, exclu,
+  // n'anime pas ; 1 et 2 sont libres.
+  const ANIMATION = configuration({
+    participants: [
+      etiquete(5, undefined, [1, 2]),
+      etiquete(1),
+      etiquete(7, undefined, [1]),
+      etiquete(3, undefined, [2]),
+      etiquete(2),
+      { ...etiquete(9, undefined, [1]), exclu: true },
+    ],
+    tables: tablesDe([41, 42], 3),
+    tours: 2,
+    reservations: [tous(5, 42), auTour(3, 41, 2), auTour(7, 42, 1), tous(9, 41)],
+  });
+
+  test('rangs des animateurs par identifiant croissant, et rangs de ceux qui animent à chaque table, à chaque tour', () => {
+    const instance = normaliser(ANIMATION);
+    assert.deepEqual(instance.ids, [1, 2, 3, 5, 7]);
+    assert.equal(instance.A, 3);
+    assert.deepEqual(instance.rangAnimateur, Int32Array.from([NON_ANIMATEUR, NON_ANIMATEUR, 0, 1, 2]));
+    assert.deepEqual(instance.animateurs, Int32Array.from([2, 3, 4]));
+    // Lignes t × R + r : (41, 1) aucun, (41, 2) 3, (42, 1) 5 et 7, (42, 2) 5.
+    assert.deepEqual(instance.debutAnimes, Int32Array.from([0, 0, 1, 3, 4]));
+    assert.deepEqual(instance.animes, Int32Array.from([0, 1, 2, 1]));
+  });
+
+  test('B(p) = min(#Φ(p), Σ φ_r(p)), compté à la main', () => {
+    const instance = normaliser(ANIMATION);
+    // 1 et 2, libres : Φ = {5, 7} au tour 1, {3, 5} au tour 2, soit trois ;
+    // φ = 2 au tour 1 (5 et 7 à 42), 1 au tour 2 : B = 3.
+    // 3 : libre au tour 1, Φ = {5, 7}, φ = 2 ; fixé à 41 au tour 2, où il
+    // anime seul : B = 2. 5 : fixé à 42, n'y rencontre que 7 au tour 1 : B = 1.
+    // 7 : fixé à 42 au tour 1, avec 5 ; libre au tour 2, Φ = {3, 5}, φ = 1 :
+    // B = min(2, 2) = 2.
+    assert.deepEqual(instance.borneAnimateurs, Int32Array.from([3, 3, 2, 1, 2]));
+  });
+
+  test('ANIMATION_NON_FIXEE : un tour hors de 1 à R, ou où la personne n’est pas fixée', () => {
+    const base = configuration({ participants: personnes([1, 2]), tables: tablesDe([11], 2), tours: 2, reservations: [tous(2, 11)] });
+    const avecAnime = (id, anime) => () => normaliser({
+      ...base,
+      participants: base.participants.map((personne) => (personne.id === id ? { ...personne, anime } : personne)),
+    });
+    assert.deepEqual(ecartsDeRefus([
+      ['un tour 3 sur deux', avecAnime(2, [1, 3]), 'ANIMATION_NON_FIXEE', { participant: 2, tour: 3 }],
+      ['un tour 0', avecAnime(2, [0]), 'ANIMATION_NON_FIXEE', { participant: 2, tour: 0 }],
+      ['un tour non entier', avecAnime(2, [1.5]), 'ANIMATION_NON_FIXEE', { participant: 2, tour: 1.5 }],
+      ['un tour en texte', avecAnime(2, ['1']), 'ANIMATION_NON_FIXEE', { participant: 2, tour: '1' }],
+      ['un tour où la personne est libre', avecAnime(1, [1]), 'ANIMATION_NON_FIXEE', { participant: 1, tour: 1 }],
+    ]), []);
+  });
+});
+
+describe('normaliser : refus des objectifs, du mode et des priorités (A12, A16)', () => {
+  const base = configuration({ participants: personnes([1, 2, 3]), tables: tablesDe([11, 12], 2), tours: 2 });
+  const avec = (modification) => () => normaliser({ ...base, ...modification });
+  const ordre = (...paliers) => paliers.map((palier) => palier.map((critere) => ({ critere, poids: 1 })));
+  const [ecart, excedent, collisions, horsObjectif, repetees, animateurs, redondance] = CRITERES;
+
+  test('chaque code, sur un cas', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['un objectif sur une table inconnue', avec({ objectifs: [objectif(99, null, 'ou', ['finance'])] }),
+        'OBJECTIF_INCONNU', { table: 99 }],
+      ...[0, 3, 1.5, '1'].map((tour) => [
+        `un objectif au tour ${libelleDe(tour)}`, avec({ objectifs: [objectif(12, tour, 'ou', ['finance'])] }),
+        'OBJECTIF_TOUR', { table: 12, tour },
+      ]),
+      ['deux objectifs de soirée', avec({ objectifs: [objectif(11, null, 'ou', ['finance']), objectif(11, null, 'et', ['bénévole'])] }),
+        'OBJECTIF_CONFLIT', { table: 11, tour: null }],
+      ['deux objectifs du tour 2', avec({ objectifs: [objectif(12, 2, 'ou', ['finance']), objectif(12, 2, 'ou', ['finance'])] }),
+        'OBJECTIF_CONFLIT', { table: 12, tour: 2 }],
+      ['une liste de priorités qui n’est pas une liste', avec({ priorites: 'ordre' }), 'PRIORITES', { faute: 'forme' }],
+      ['un palier vide', avec({ priorites: [[]] }), 'PRIORITES', { faute: 'palierVide', palier: 0 }],
+      ['un poids hors domaine', avec({ priorites: [[{ critere: excedent, poids: 101 }]] }),
+        'PRIORITES', { faute: 'poids', critere: excedent, palier: 0 }],
+      ['les tours hors objectif joints sous « chacun au moins une fois »',
+        avec({
+          modeObjectifs: 'chacun',
+          priorites: ordre([ecart], [excedent], [collisions, horsObjectif], [repetees], [animateurs], [redondance]),
+        }),
+        'PRIORITES', { faute: 'seulASonPalier', critere: horsObjectif, palier: 2 }],
+    ]), []);
+  });
+
+  test('une liste incomplète se complète par l’ordre par défaut avant d’être jugée', () => {
+    const instance = normaliser({ ...base, priorites: ordre([redondance], [ecart]) });
+    assert.deepEqual(instance.priorites, ordre([redondance], [ecart], [excedent], [collisions], [horsObjectif], [repetees], [animateurs]));
+    assert.equal(verifierPriorites(instance.priorites, 'places'), null);
+    // Le même partage, sous le mode par défaut, est reçu.
+    const partage = ordre([ecart], [excedent], [collisions, horsObjectif], [repetees], [animateurs], [redondance]);
+    assert.deepEqual(normaliser({ ...base, priorites: partage }).priorites, partage);
+  });
+
+  test('une forme hors du contrat lève TypeError', () => {
+    const cas = [
+      ['des objectifs en objet', { objectifs: {} }],
+      ['une règle non résolue', { objectifs: [objectif(11, null, null, ['finance'])] }],
+      ['une règle inconnue', { objectifs: [objectif(11, null, 'toutes', ['finance'])] }],
+      ['des étiquettes d’objectif en texte', { objectifs: [objectif(11, null, 'ou', 'finance')] }],
+      ['une étiquette d’objectif numérique', { objectifs: [objectif(11, null, 'ou', [7])] }],
+      ['des étiquettes de personne en texte', { participants: [etiquete(1, 'finance')] }],
+      ['une étiquette de personne nulle', { participants: [etiquete(1, [null])] }],
+      ['un mode inconnu', { modeObjectifs: 'egal' }],
+      ['une case des objectifs non booléenne', { contraintes: { ...SANS_CONTRAINTE, respecterObjectifs: 'oui' } }],
+      ['une case des animateurs non booléenne', { contraintes: { ...SANS_CONTRAINTE, rencontrerAnimateurs: 1 } }],
+      ['des tours animés en nombre', { participants: [etiquete(1, undefined, 1)], reservations: [tous(1, 11)] }],
+      ['des tours animés décroissants', { participants: [etiquete(1, undefined, [2, 1])], reservations: [tous(1, 11)] }],
+      ['un tour animé répété', { participants: [etiquete(1, undefined, [1, 1])], reservations: [tous(1, 11)] }],
+    ];
+    const ecarts = [];
+    for (const [libelle, modification] of cas) {
+      try {
+        normaliser({ ...base, ...modification });
+        ecarts.push(`${libelle} : aucun refus`);
+      } catch (erreur) {
+        if (!(erreur instanceof TypeError)) ecarts.push(`${libelle} : ${erreur?.name} au lieu de TypeError`);
+      }
+    }
+    assert.deepEqual(ecarts, []);
+  });
+});
+
+describe('normaliser : état des critères (§ 5.3, A8, D10)', () => {
+  const etat = (instance, nom) => instance.etatCriteres.find((critere) => critere.nom === nom);
+
+  test('un état par critère, dans l’ordre du registre ; sans objectif ni animateur, les deux critères nouveaux sont sans objet', () => {
+    const instance = normaliser(configuration({ participants: personnes([1, 2]), tables: tablesDe([11], 2), tours: 2 }));
+    assert.deepEqual(instance.etatCriteres.map(({ nom }) => nom), [...CRITERES]);
+    assert.deepEqual(etat(instance, 'toursHorsObjectif'), {
+      nom: 'toursHorsObjectif', coche: true, sansObjet: true, valeurs: ['toursHorsObjectif'],
+    });
+    assert.deepEqual(etat(instance, 'animateursNonRencontres'), {
+      nom: 'animateursNonRencontres', coche: false, sansObjet: true, valeurs: ['animateursNonRencontres'],
+    });
+    assert.deepEqual(etat(instance, 'rencontresRepetees'), {
+      nom: 'rencontresRepetees', coche: false, sansObjet: false, valeurs: ['retoursChoisis'],
+    });
+    assert.deepEqual(etat(instance, 'ecartAuPlafondAPrioriMax'), {
+      nom: 'ecartAuPlafondAPrioriMax', coche: true, sansObjet: false, valeurs: ['ecartAuPlafondAPrioriMax'],
+    });
+  });
+
+  test('un couple possible donne un objet aux objectifs, une borne non nulle aux animateurs ; le mode choisit les valeurs', () => {
+    const instance = normaliser({
+      ...configuration({
+        participants: [etiquete(1, ['finance']), etiquete(2, undefined, [1]), etiquete(3)],
+        tables: tablesDe([11, 12], 2),
+        tours: 1,
+        reservations: [tous(2, 12)],
+        contraintes: { ...SANS_CONTRAINTE, nouveauxVoisins: true, respecterObjectifs: false, rencontrerAnimateurs: true },
+      }),
+      objectifs: [objectif(11, null, 'ou', ['finance'])],
+      modeObjectifs: 'minimum',
+    });
+    assert.equal(instance.modeObjectifs, 'minimum');
+    assert.deepEqual(etat(instance, 'toursHorsObjectif'), {
+      nom: 'toursHorsObjectif', coche: false, sansObjet: false, valeurs: ['horsObjectifMax', 'toursHorsObjectif'],
+    });
+    assert.deepEqual(etat(instance, 'animateursNonRencontres'), {
+      nom: 'animateursNonRencontres', coche: true, sansObjet: false, valeurs: ['animateursNonRencontres'],
+    });
+    assert.deepEqual(etat(instance, 'rencontresRepetees').valeurs, ['rencontresRepeteesChoisies']);
+  });
+
+  test('un objectif que personne ne porte laisse les objectifs sans objet', () => {
+    const instance = normaliser({
+      ...configuration({ participants: [etiquete(1, ['finance']), etiquete(2)], tables: tablesDe([11], 2), tours: 1 }),
+      objectifs: [objectif(11, null, 'et', ['finance', 'Montréal'])],
+    });
+    assert.equal(instance.O, 1);
+    assert.equal(etat(instance, 'toursHorsObjectif').sansObjet, true);
   });
 });

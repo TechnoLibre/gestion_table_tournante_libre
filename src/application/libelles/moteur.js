@@ -5,6 +5,7 @@
 // libellés de ses critères (§ 5, § 14.6) : les codes d'une
 // ErreurConfiguration, ceux des violations de verifierInvariants et de
 // verifierIndicateurs, et moteur.critere.<nom> pour chaque nom de CRITERES.
+// Une violation d'indicateur qui porte sur un total ne désigne personne.
 // Un code garde un seul texte : CAPACITE et TOURS, que le moteur lève sous
 // deux formes de détails — ErreurConfiguration et violation —, se
 // distinguent par les détails qu'ils portent. Une réservation que le moteur
@@ -29,6 +30,17 @@ const personneDe = ({ index, participant }) =>
 
 // Un rang de réservation, compté à partir de 0 par le moteur.
 const reservationDe = (rang) => `la réservation n° ${rang + 1}`;
+
+// Les fautes d'une liste de priorités (verifierPriorites), par faute.
+const FAUTES_DE_PRIORITES = new Map([
+  ['forme', "sa forme n'est pas celle d'une liste de paliers"],
+  ['critereInconnu', 'elle nomme un critère inconnu'],
+  ['critereRepete', 'elle nomme deux fois un même critère'],
+  ['critereAbsent', 'elle omet un critère'],
+  ['palierVide', 'un palier est vide'],
+  ['seulASonPalier', 'un critère qui se range seul partage son palier'],
+  ['poids', 'un poids sort des entiers de 1 à 100'],
+]);
 
 export const TABLE = new Map([
   // Une salle trop petite : avertissement d'un geste qui fait croître le
@@ -83,6 +95,31 @@ export const TABLE = new Map([
     ({ participant, tour, tables }) =>
       `La personne n° ${participant} est réservée au tour ${tour} à deux tables, ` +
       `d'identifiants ${tables[0]} et ${tables[1]}.`,
+  ],
+  [
+    'OBJECTIF_INCONNU',
+    ({ table }) => `Un objectif désigne la table d'identifiant ${table}, que l'événement n'a pas.`,
+  ],
+  [
+    'OBJECTIF_TOUR',
+    ({ table, tour }) => `L'objectif de la table d'identifiant ${table} désigne le tour ${tour}, que l'événement n'a pas.`,
+  ],
+  // OBJECTIF_CONFLIT {table, tour} : tour null pour deux objectifs de soirée.
+  [
+    'OBJECTIF_CONFLIT',
+    ({ table, tour }) =>
+      `La table d'identifiant ${table} porte deux objectifs ${tour === null ? 'pour la soirée' : `pour le tour ${tour}`}.`,
+  ],
+  [
+    'PRIORITES',
+    ({ faute, palier }) =>
+      `L'ordre des priorités est refusé : ${nomDans(FAUTES_DE_PRIORITES, faute, 'faute de priorités')}` +
+      `${palier === undefined ? '' : ` (palier ${palier + 1})`}.`,
+  ],
+  [
+    'ANIMATION_NON_FIXEE',
+    ({ participant, tour }) =>
+      `La personne n° ${participant} anime au tour ${tour}, où aucune réservation ne la place à une table.`,
   ],
   [
     'ENUMERATION_TROP_GRANDE',
@@ -143,6 +180,23 @@ export const TABLE = new Map([
   [
     'DEPASSEMENT',
     (details) => `Les rencontres de ${personneDe(details)} dépassent son plafond réalisé : le calcul est faux.`,
+  ],
+  [
+    'TOURS_SERVIS',
+    (details) => `Les tours selon l'objectif de ${personneDe(details)} dépassent ses tours possibles : le calcul est faux.`,
+  ],
+  [
+    'TOURS_SERVIS_NON_ASSIS',
+    (details) => `Les tours selon l'objectif de ${personneDe(details)} dépassent ses tours assis : le calcul est faux.`,
+  ],
+  [
+    'ANIMATEURS_RENCONTRES',
+    (details) => `Les animateurs rencontrés par ${personneDe(details)} dépassent sa borne des animateurs : le calcul est faux.`,
+  ],
+  ['JAMAIS_SERVIES', () => 'Les personnes jamais servies dépassent les personnes concernées : le calcul est faux.'],
+  [
+    'HORS_OBJECTIF_MAX',
+    () => "Le plus de tours hors objectif d'une personne dépasse le plus de tours possibles : le calcul est faux.",
   ],
 
   // --- Les critères du classement (§ 5.7) -----------------------------------------

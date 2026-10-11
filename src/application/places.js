@@ -15,8 +15,9 @@ import { ordreDesReservations, pourvoyeursDesTitres } from '../csv/import.js';
 import { STATUT, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { conflitsParTable } from '../moteur/conflits.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
-import { capacite, configurationDepuisCharge } from '../stockage/document.js';
+import { capacite } from '../stockage/document.js';
 import { derive, fautes, planDepuisFichier } from '../stockage/placements.js';
+import { configurationDe } from './configuration.js';
 import { libelle } from './libelles.js';
 
 const croissant = (a, b) => a - b;
@@ -41,7 +42,7 @@ export function reservationsActives(charge) {
  */
 export function instanceDe(charge) {
   try {
-    return normaliser(configurationDepuisCharge(charge));
+    return normaliser(configurationDe(charge));
   } catch (erreur) {
     if (erreur instanceof ErreurConfiguration) return null;
     throw erreur;
@@ -364,7 +365,7 @@ const NOMS_DES_STATUTS = new Map([
 export function statuts(charge) {
   let instance;
   try {
-    instance = normaliser(configurationDepuisCharge(charge));
+    instance = normaliser(configurationDe(charge));
   } catch (erreur) {
     if (erreur instanceof ErreurConfiguration) return { parId: new Map(), erreur: erreur.code };
     throw erreur;

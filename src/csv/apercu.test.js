@@ -4,19 +4,23 @@
 // Épreuves de l'aperçu d'un import ou d'un collage (§ 10.1, § 10.2, § 14.10) :
 // les lignes valides et leurs champs, les lignes refusées et leur motif, les
 // refus globaux, la valeur d'« exclu », le rapport des orthographes fondues,
-// les doublons signalés et jamais fusionnés, le même aperçu pour un texte
-// collé et pour le même texte décodé d'un fichier, et les données d'épreuve
-// de test/fixtures/csv/, chacune un CSV tel qu'un tableur l'écrit. Les lettres
-// décomposées et les blancs autres que l'espace s'écrivent par leur point de
-// code.
+// les doublons signalés et jamais fusionnés, la colonne des étiquettes, lue
+// par la découpe de la saisie et réconciliée avec l'événement, le même aperçu
+// pour un texte collé et pour le même texte décodé d'un fichier, les données
+// d'épreuve de test/fixtures/csv/, chacune un CSV tel qu'un tableur l'écrit,
+// et la colonne des étiquettes du fichier d'exemple des cas limites. Les
+// lettres décomposées et les blancs autres que l'espace s'écrivent par leur
+// point de code.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
+import { lireEtiquettes } from '../stockage/etiquettes.js';
 import { VALEURS_EXCLU, apercevoir } from './apercu.js';
 import { contientNul, decoder } from './encodage.js';
 import { cleNormalisee } from './normalisation.js';
 
 const FIXTURES = new URL('../../test/fixtures/csv/', import.meta.url);
+const EXEMPLES = new URL('../../exemples/', import.meta.url);
 
 // Texte d'un CSV : chaque ligne donnée, terminée par CRLF.
 const csv = (...lignes) => lignes.map((ligne) => `${ligne}\r\n`).join('');
@@ -44,7 +48,8 @@ const existant = (id, nom, prenom, appartenance) => ({
 // Champs d'une ligne valide, dans l'ordre de l'aperçu ; un champ omis vaut null.
 const champs = ({
   nom, prenom = null, appartenance = null, courriel = null, titrePressenti = null, notes = null, exclu = null,
-}) => ({ nom, prenom, appartenance, courriel, titrePressenti, notes, exclu });
+  etiquettes = null,
+}) => ({ nom, prenom, appartenance, courriel, titrePressenti, notes, exclu, etiquettes });
 
 // Aperçu d'un texte refusé en entier : ce que la lecture a établi avant le
 // refus, aucune ligne.
@@ -60,6 +65,7 @@ const refusGlobal = (
   lignes: [],
   refusees: [],
   fusions: [],
+  fusionsEtiquettes: [],
   doublons: [],
   homonymes: [],
   multilignes: [],
@@ -122,6 +128,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       ],
       refusees: [],
       fusions: [],
+      fusionsEtiquettes: [],
       doublons: [],
       homonymes: [],
       multilignes: [],
@@ -131,11 +138,13 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
   });
 
   test("les champs d'une ligne, dans l'ordre du participant, quel que soit celui des colonnes", () => {
-    const [ligne] = apercevoir(csv('notes;exclu;titre;courriel;équipe;prénom;nom', 'n;oui;t;c@exemple.test;a;p;Ombrelle'))
-      .lignes;
+    const [ligne] = apercevoir(
+      csv('mots-clés;notes;exclu;titre;courriel;équipe;prénom;nom', 'e;n;oui;t;c@exemple.test;a;p;Ombrelle'),
+    ).lignes;
     assert.equal(
       JSON.stringify(ligne.champs),
-      '{"nom":"Ombrelle","prenom":"p","appartenance":"a","courriel":"c@exemple.test","titrePressenti":"t","notes":"n","exclu":true}',
+      '{"nom":"Ombrelle","prenom":"p","appartenance":"a","courriel":"c@exemple.test","titrePressenti":"t","notes":"n",' +
+        '"exclu":true,"etiquettes":["e"]}',
     );
   });
 
@@ -505,6 +514,222 @@ describe("apercevoir : les orthographes d'une appartenance (§ 10.1, § 14.10)",
         ],
       },
     ]);
+  });
+});
+
+// Les étiquettes de chaque ligne valide, par rang.
+const etiquettesDe = (apercu) => apercu.lignes.map(({ ligne, champs: lus }) => [ligne, lus.etiquettes]);
+
+// Une table qui porte un objectif de soirée sur les étiquettes données.
+const tableVisant = (id, etiquettes) => ({
+  id, numero: id, sieges: null, forme: 'ronde', position: { x: 0, y: 0 },
+  objectifs: [{ portee: 'tous', tour: null, regle: null, etiquettes }],
+});
+
+describe('apercevoir : la colonne des étiquettes, lue par la règle de la saisie (§ 10.1, A17)', () => {
+  test('la cellule se découpe sur « , », « ; », « | » et la fin de ligne ; chaque morceau mis en forme, les vides écartés', () => {
+    const texte = csv(
+      'nom;Étiquettes',
+      'Ombrelle;"finance,  Montréal |bénévole;;ressources\u{A0}humaines"',
+      'Pervenche;" ; , | "',
+      'Lacasse;',
+      'Sarcelle;"atelier\r\nmusique"',
+    );
+    assert.deepEqual(etiquettesDe(apercevoir(texte)), [
+      [2, ['finance', 'Montréal', 'bénévole', 'ressources humaines']],
+      [3, null],
+      [4, null],
+      [5, ['atelier', 'musique']],
+    ]);
+  });
+
+  test('sans colonne des étiquettes, chaque ligne lit null ; « e\u{301} » décomposé se lit en NFC', () => {
+    assert.deepEqual(etiquettesDe(apercevoir(csv('nom', 'Ombrelle'))), [[2, null]]);
+    assert.deepEqual(etiquettesDe(apercevoir(csv('nom;mots-clés', 'Ombrelle;be\u{301}ne\u{301}vole'))), [[2, ['bénévole']]]);
+  });
+
+  test("deux morceaux de même clé sur une ligne n'en font qu'un, et la fusion se nomme", () => {
+    const apercu = apercevoir(csv('nom;etiquettes', 'Ombrelle;"Finance, finance ; FINANCE  , Montréal"'));
+    assert.deepEqual(etiquettesDe(apercu), [[2, ['FINANCE', 'Montréal']]]);
+    assert.deepEqual(apercu.fusionsEtiquettes, [{ retenue: 'FINANCE', orthographes: ['FINANCE', 'Finance', 'finance'], lignes: 1 }]);
+  });
+
+  test("deux orthographes sur deux lignes : une seule étiquette, la plus petite, et le rapport nomme la fusion et son nombre de lignes", () => {
+    const apercu = apercevoir(csv('nom;etiquettes', 'Ombrelle;finance', 'Pervenche;Finance', 'Lacasse;fínance', 'Sarcelle;Finance'));
+    assert.deepEqual(etiquettesDe(apercu), [[2, ['Finance']], [3, ['Finance']], [4, ['Finance']], [5, ['Finance']]]);
+    assert.deepEqual(apercu.fusionsEtiquettes, [{ retenue: 'Finance', orthographes: ['Finance', 'finance', 'fínance'], lignes: 2 }]);
+    assert.deepEqual(apercu.fusions, [], 'les fusions des appartenances restent à part');
+  });
+
+  test("une étiquette égale au nom d'une appartenance ne se mêle pas à elle", () => {
+    const apercu = apercevoir(csv('nom;appartenance;etiquettes', 'Ombrelle;finance;Finance', 'Pervenche;FINANCE;Montréal'));
+    assert.deepEqual(etiquettesDe(apercu), [[2, ['Finance']], [3, ['Montréal']]]);
+    assert.deepEqual(apercu.fusionsEtiquettes, []);
+    assert.equal(apercu.fusions.length, 1);
+  });
+
+  test("les étiquettes des personnes existantes donnent l'orthographe, sous ajouter et mettre à jour ; plus sous remplacer", () => {
+    const participants = [{ ...existant(4, 'Pervenche', 'Théo', null), etiquettes: ['finance'] }];
+    const texte = csv('nom;etiquettes', 'Ombrelle;Finance');
+    for (const mode of ['ajouter', 'mettreAJour']) {
+      const apercu = apercevoir(texte, { participants, mode });
+      assert.deepEqual(etiquettesDe(apercu), [[2, ['finance']]], mode);
+      assert.deepEqual(apercu.fusionsEtiquettes, [{ retenue: 'finance', orthographes: ['Finance', 'finance'], lignes: 1 }], mode);
+    }
+    const remplace = apercevoir(texte, { participants, mode: 'remplacer' });
+    assert.deepEqual(etiquettesDe(remplace), [[2, ['Finance']]]);
+    assert.deepEqual(remplace.fusionsEtiquettes, []);
+  });
+
+  test("les étiquettes des objectifs de table donnent l'orthographe dans les trois modes, remplacer compris", () => {
+    const sansObjectif = { id: 2, numero: 2, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } };
+    const tables = [tableVisant(1, ['RH', 'finance']), sansObjectif];
+    const participants = [{ ...existant(4, 'Pervenche', 'Théo', null), etiquettes: ['Finance'] }];
+    for (const mode of ['ajouter', 'mettreAJour', 'remplacer']) {
+      const apercu = apercevoir(csv('nom;etiquettes', 'Ombrelle;FINANCE, rh'), { participants, tables, mode });
+      // Sous ajouter et mettre à jour, l'événement porte « Finance » et
+      // « finance » : la plus petite par points de code est reçue.
+      // Deux fusions de la même ligne se rangent par l'orthographe retenue.
+      const finance = mode === 'remplacer' ? 'finance' : 'Finance';
+      assert.deepEqual(etiquettesDe(apercu), [[2, [finance, 'RH']]], mode);
+      assert.deepEqual(
+        apercu.fusionsEtiquettes.map(({ retenue, lignes }) => [retenue, lignes]),
+        mode === 'remplacer' ? [['RH', 1], ['finance', 1]] : [['Finance', 1], ['RH', 1]],
+        mode,
+      );
+    }
+  });
+
+  test("une ligne qui porte déjà l'orthographe retenue ne fait pas de fusion", () => {
+    const apercu = apercevoir(csv('nom;etiquettes', 'Ombrelle;RH'), { tables: [tableVisant(1, ['RH', 'rh'])] });
+    assert.deepEqual(etiquettesDe(apercu), [[2, ['RH']]]);
+    assert.deepEqual(apercu.fusionsEtiquettes, []);
+  });
+
+  test("l'ordre des participants et des tables donnés ne change ni les listes ni les fusions", () => {
+    const participants = [
+      { ...existant(2, 'Pervenche', null, null), etiquettes: ['finance'] },
+      { ...existant(1, 'Lacasse', null, null), etiquettes: ['FINANCE'] },
+    ];
+    const tables = [tableVisant(1, ['Finance']), tableVisant(2, ['bénévole'])];
+    const texte = csv('nom;etiquettes', 'Ombrelle;fínance, Bénévole');
+    const un = apercevoir(texte, { participants, tables });
+    const autre = apercevoir(texte, { participants: [...participants].reverse(), tables: [...tables].reverse() });
+    assert.deepEqual(autre, un);
+    assert.deepEqual(etiquettesDe(un), [[2, ['FINANCE', 'bénévole']]]);
+  });
+
+  test('apercevoir ne modifie ni les participants ni les tables reçus', () => {
+    const participants = [{ ...existant(4, 'Pervenche', null, null), etiquettes: ['finance'] }];
+    const tables = [tableVisant(1, ['Montréal'])];
+    const avant = structuredClone({ participants, tables });
+    apercevoir(csv('nom;etiquettes', 'Ombrelle;Finance, montreal'), { participants, tables });
+    assert.deepEqual({ participants, tables }, avant);
+  });
+});
+
+describe('apercevoir : une étiquette fautive refuse la ligne, jamais en silence (§ 10.1, A17)', () => {
+  const quarante = 'é'.repeat(40);
+
+  test('40 points de code passent ; 41 refusent la ligne ETIQUETTE_MAL_FORMEE, raison longueur, la valeur nommée', () => {
+    const apercu = apercevoir(csv('nom;etiquettes', `Ombrelle;${quarante}`, `Pervenche;finance, ${quarante}x`, 'Lacasse;Montréal'));
+    assert.deepEqual(etiquettesDe(apercu), [[2, [quarante]], [4, ['Montréal']]]);
+    assert.deepEqual(apercu.refusees, [
+      {
+        ligne: 3, code: 'ETIQUETTE_MAL_FORMEE', valeur: `${quarante}x`, raison: 'longueur',
+        brut: ['Pervenche', `finance, ${quarante}x`],
+      },
+    ]);
+  });
+
+  test('une tabulation ou un caractère invisible dans une étiquette : ETIQUETTE_MAL_FORMEE, raison controle', () => {
+    const apercu = apercevoir(csv('nom;etiquettes', 'Ombrelle;fin\tance', 'Pervenche;Mont\u{200B}réal', 'Lacasse;finance'));
+    assert.deepEqual(
+      apercu.refusees.map(({ ligne, code, valeur, raison }) => [ligne, code, valeur, raison]),
+      [
+        [2, 'ETIQUETTE_MAL_FORMEE', 'fin\tance', 'controle'],
+        [3, 'ETIQUETTE_MAL_FORMEE', 'Mont\u{200B}réal', 'controle'],
+      ],
+    );
+    assert.deepEqual(etiquettesDe(apercu), [[4, ['finance']]]);
+  });
+
+  test('un caractère de contrôle ou invisible au bord de la cellule refuse la ligne, comme lireEtiquettes', () => {
+    // La cellule entière passe par lireEtiquettes, sans les bords que valeurDe
+    // retire : la tabulation ou U+FEFF au bord est fautive comme au milieu.
+    const apercu = apercevoir(csv(
+      'nom;etiquettes',
+      'Ombrelle;"RH, finance\u{9}"',
+      'Pervenche;"finance\u{9}, RH"',
+      'Lacasse;\u{FEFF}finance',
+      'Tilleraie;\u{9}',
+      'Brumeval;finance',
+    ));
+    assert.deepEqual(
+      apercu.refusees.map(({ ligne, code, valeur, raison }) => [ligne, code, valeur, raison]),
+      [
+        [2, 'ETIQUETTE_MAL_FORMEE', 'finance\u{9}', 'controle'],
+        [3, 'ETIQUETTE_MAL_FORMEE', 'finance\u{9}', 'controle'],
+        [4, 'ETIQUETTE_MAL_FORMEE', '\u{FEFF}finance', 'controle'],
+        [5, 'ETIQUETTE_MAL_FORMEE', '\u{9}', 'controle'],
+      ],
+    );
+    for (const { ligne, valeur } of apercu.refusees) {
+      const cellule = apercu.refusees.find((refus) => refus.ligne === ligne).brut[1];
+      assert.deepEqual(lireEtiquettes(cellule).fautes[0].valeur, valeur);
+    }
+    assert.deepEqual(etiquettesDe(apercu), [[6, ['finance']]]);
+  });
+
+  test('20 étiquettes passent ; une vingt et unième refuse la ligne ETIQUETTES_TROP_NOMBREUSES, le nombre nommé', () => {
+    const mots = (n) => Array.from({ length: n }, (_, i) => `mot${i + 1}`);
+    const apercu = apercevoir(csv(
+      'nom;etiquettes',
+      `Ombrelle;${mots(20).join(', ')}`,
+      `Pervenche;${mots(21).join('|')}`,
+      // Vingt et un morceaux, dont deux de même clé : vingt étiquettes.
+      `Lacasse;"${[...mots(20), 'MOT1'].join(';')}"`,
+    ));
+    assert.deepEqual(apercu.refusees, [
+      { ligne: 3, code: 'ETIQUETTES_TROP_NOMBREUSES', valeur: null, nombre: 21, brut: ['Pervenche', mots(21).join('|')] },
+    ]);
+    assert.deepEqual(apercu.lignes.map(({ ligne, champs: lus }) => [ligne, lus.etiquettes.length]), [[2, 20], [4, 20]]);
+  });
+
+  test('un seul motif par ligne : exclu inconnu passe avant les étiquettes, une faute de forme avant le nombre', () => {
+    const vingtEtUne = Array.from({ length: 21 }, (_, i) => `m${i}`).join(',');
+    const apercu = apercevoir(csv(
+      'nom;exclu;etiquettes',
+      `Ombrelle;peut-être;${'x'.repeat(41)}`,
+      `Pervenche;;${vingtEtUne},${'x'.repeat(41)}`,
+      ';;fin\tance',
+      'Lacasse;;finance',
+    ));
+    assert.deepEqual(apercu.refusees.map(({ ligne, code }) => [ligne, code]), [
+      [2, 'EXCLU_INCONNU'], [3, 'ETIQUETTE_MAL_FORMEE'], [4, 'NOM_ABSENT'],
+    ]);
+  });
+
+  test("une ligne refusée ne prend part à aucune fusion d'étiquettes", () => {
+    const apercu = apercevoir(csv('nom;exclu;etiquettes', 'Ombrelle;;finance', 'Pervenche;peut-être;Finance', ';;FINANCE'));
+    assert.deepEqual(etiquettesDe(apercu), [[2, ['finance']]]);
+    assert.deepEqual(apercu.fusionsEtiquettes, []);
+  });
+
+  test('toutes les lignes refusées pour leurs étiquettes : AUCUNE_LIGNE_VALIDE, les refus rendus, aucune fusion', () => {
+    const apercu = apercevoir(csv('nom;etiquettes', `Ombrelle;${'x'.repeat(41)}`));
+    assert.equal(apercu.refusGlobal, 'AUCUNE_LIGNE_VALIDE');
+    assert.deepEqual(apercu.refusees.map(({ code }) => code), ['ETIQUETTE_MAL_FORMEE']);
+    assert.deepEqual(apercu.fusionsEtiquettes, []);
+  });
+
+  test("un fichier séparé par « , » dont la cellule d'étiquettes n'est pas citée : refusé, jamais coupé en silence", () => {
+    const dansLaFenetre = apercevoir(csv('nom,etiquettes', 'Ombrelle,finance, Montréal', 'Pervenche,bénévole'));
+    assert.equal(dansLaFenetre.refusGlobal, 'SEPARATEUR_INTROUVABLE');
+    assert.equal(dansLaFenetre.refusGlobalLigne, 2);
+    const auDela = apercevoir(csv('nom,etiquettes', ...fenetre((nom) => `${nom},bénévole`), 'Ombrelle,finance, Montréal'));
+    assert.equal(auDela.separateur, ',');
+    assert.deepEqual(auDela.refusees.map(({ ligne, code }) => [ligne, code]), [[21, 'CHAMPS_EN_TROP']]);
   });
 });
 
@@ -1165,6 +1390,7 @@ const DONNEES = [
   'derniere_ligne_sans_fin.csv',
   'entete_vide.csv',
   'espaces_autour.csv',
+  'etiquettes_virgule_citee.csv',
   'ligne_vide_au_milieu.csv',
   'marque_crlf.csv',
   'utf16le_tabulation.csv',
@@ -1261,6 +1487,22 @@ describe("apercevoir : les données d'épreuve, un CSV tel qu'un tableur l'écri
     ]);
   });
 
+  test("un fichier séparé par « , » dont la cellule d'étiquettes est citée : chaque étiquette entière, la virgule de la cellule lue comme séparateur d'étiquettes", () => {
+    const apercu = apercuDe('etiquettes_virgule_citee.csv');
+    assert.equal(apercu.separateur, ',');
+    assert.deepEqual(apercu.entetes, ['nom', 'prenom', 'etiquettes']);
+    assert.deepEqual(lignesDe(apercu), [
+      [2, champs({ nom: 'Ombrelle', prenom: 'Iris', etiquettes: ['finance', 'Montréal'] })],
+      [3, champs({ nom: 'Pervenche', prenom: 'Théo', etiquettes: ['bénévole', 'ressources humaines'] })],
+      [4, champs({ nom: 'Lacasse', prenom: 'Ondine' })],
+      [5, champs({ nom: 'Sarcelle', prenom: 'Anouk', etiquettes: ['finance'] })],
+    ]);
+    assert.deepEqual(apercu.lignes[0].brut, ['Ombrelle', 'Iris', 'finance, Montréal']);
+    assert.deepEqual(apercu.lignes[3].brut, ['Sarcelle', 'Anouk', 'fínance']);
+    assert.deepEqual(apercu.fusionsEtiquettes, [{ retenue: 'finance', orthographes: ['finance', 'fínance'], lignes: 1 }]);
+    assert.deepEqual(apercu.refusees, []);
+  });
+
   test("une colonne d'en-tête vide : non reconnue, sa valeur ignorée, la ligne importée", () => {
     const apercu = apercuDe('entete_vide.csv');
     assert.deepEqual(apercu.association, {
@@ -1277,5 +1519,23 @@ describe("apercevoir : les données d'épreuve, un CSV tel qu'un tableur l'écri
       { ligne: 3, champs: champs({ nom: 'Pervenche', prenom: 'Théo' }), brut: ['Pervenche', 'Théo', '', ''] },
     ]);
     assert.deepEqual(apercu.refusees, []);
+  });
+});
+
+describe("apercevoir : la colonne Étiquettes du fichier d'exemple des cas limites (§ 10.3, A19)", () => {
+  test('dans ses deux encodages : une cellule citée à « , », une à « | », deux orthographes fondues, une vide, la colonne non reconnue en dernier', () => {
+    for (const nom of ['participants_cas_limites.csv', 'participants_cas_limites_cp1252.csv']) {
+      const apercu = apercevoir(decoder(readFileSync(new URL(nom, EXEMPLES))).texte);
+      const rang = apercu.association.colonnes.etiquettes;
+      assert.equal(apercu.entetes[rang], 'Étiquettes', nom);
+      assert.deepEqual(apercu.association.nonReconnues, [apercu.entetes.length - 1], nom);
+      const cellules = apercu.lignes.map(({ brut }) => brut[rang]);
+      assert.ok(cellules.some((cellule) => cellule.includes(',')), `${nom} : une cellule à « , »`);
+      assert.ok(cellules.some((cellule) => cellule.includes('|')), `${nom} : une cellule à « | »`);
+      assert.ok(cellules.some((cellule) => cellule === ''), `${nom} : une cellule vide`);
+      assert.ok(apercu.lignes.some(({ champs: lus }) => lus.etiquettes?.length >= 2), nom);
+      assert.ok(apercu.fusionsEtiquettes.some(({ orthographes }) => orthographes.length >= 2), `${nom} : une fusion`);
+      assert.deepEqual(apercu.refusees.map(({ code }) => code), ['NOM_ABSENT'], nom);
+    }
   });
 });

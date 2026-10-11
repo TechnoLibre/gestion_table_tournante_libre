@@ -2,18 +2,20 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Le registre des commandes du mobilier — tables, sièges, tours, réglages,
-// cible de la somme de redondance (§ 4, § 6, § 7.1, § 8.2, § 8.9, § 9), que
-// commandes.js réunit aux autres. Ses
-// imports n'atteignent jamais commandes.js : le registre réuni dépend de lui,
-// non l'inverse.
+// cible de la somme de redondance, objectifs des tables et leur règle par
+// défaut (§ 4, § 4.5, § 6, § 7.1, § 8.2, § 8.9, § 9), que commandes.js réunit
+// aux autres. Ses imports n'atteignent jamais commandes.js : le registre
+// réuni dépend de lui, non l'inverse.
 //
 // Chaque commande suit le contrat de commandes.js : une fonction pure
 // (charge, arguments) → { charge, libelle, avertissements }, la charge reçue
 // intacte ; un refus lève ErreurCommande(code, details), details.remede
 // compris, calculé avant toute modification ; un argument de forme fausse ou
-// une table inconnue lèvent TypeError, que l'interface n'offre jamais. Un
-// plan bloqué refuse tout (PLAN_BLOQUE). Une saisie de places ou de tours se
-// lit par lireEntier, la seule lecture d'un entier saisi.
+// une table inconnue lèvent TypeError, que l'interface n'offre jamais, sauf
+// pour un objectif : la table qu'il vise a pu disparaître pendant la saisie
+// de ses étiquettes, et TABLE_DISPARUE le dit. Un plan bloqué refuse tout
+// (PLAN_BLOQUE). Une saisie de places ou de tours se lit par lireEntier, la
+// seule lecture d'un entier saisi.
 //
 // Une table a un identifiant, tiré de prochainsIds.table, qui ne revient
 // jamais, et un numéro affiché, le plus grand plus un, qui ne se renumérote
@@ -23,12 +25,22 @@
 // proposition ne se réécrit jamais : elle dérive (§ 8.9, § 9). Supprimer une
 // table et changer les tours laissent propositions et retenu en dérive.
 import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js';
-import { CIBLE_REDONDANCE_PAR_DEFAUT, SCHEMA, TOURS_MAX, capacite, cibleRedondance } from '../stockage/document.js';
+import {
+  CIBLE_REDONDANCE_PAR_DEFAUT,
+  SCHEMA,
+  TOURS_MAX,
+  capacite,
+  cibleRedondance,
+  critereCoche,
+  regleObjectifs,
+} from '../stockage/document.js';
+import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { fautes } from '../stockage/placements.js';
 import { bilanChangementDefaut } from './bilans.js';
 import { controlerCapacite, lireEntier, retenuAuxCapacites } from './capacite.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
+import { avisDeLObjectif, avisObjectifs, etiquettesDeLEvenement, ordreDesObjectifs, recevoirEtiquettes } from './objectifs.js';
 import { leverRefus } from './pose.js';
 
 const FORMES = new Set(['ronde', 'carree']);
@@ -43,6 +55,13 @@ const IDENTIFIANT_MAX = regleDuChamp(regleDuChamp(regleDuChamp(SCHEMA, 'charge')
 // de la génération (§ 5.3, § 5.10).
 const INTERRUPTEURS = new Set(['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances', 'attribuerSieges']);
 const ENTIERS_DE_GENERATION = new Set(['generation.nombre', 'generation.arret', 'generation.historique']);
+// Les deux cases facultatives du format 2 (§ 5.3, § 8.9) : absentes des
+// réglages à leur défaut, que critereCoche donne seul — lu sur des réglages
+// qui ne les portent pas.
+const CASES_FACULTATIVES = new Set(['respecterObjectifs', 'rencontrerAnimateurs']);
+const defautDeLaCase = (cle) => critereCoche({ reglages: {} }, cle);
+
+const REGLES = new Set(['ou', 'et']);
 
 // Un plan bloqué refuse toute modification ; débloquer seul le lève (§ 9).
 function exigerModifiable(charge) {
@@ -179,9 +198,9 @@ function creerTable(charge, { forme } = {}) {
 
 /**
  * supprimerTable {id} (§ 6.2, § 9) : la table part, et avec elle, dans la
- * même entrée, ses réservations — suspendues comprises — et ses titres ; les
- * autres tables gardent leur numéro, propositions et retenu restent, en
- * dérive TABLE_SUPPRIMEE.
+ * même entrée, ses réservations — suspendues comprises —, ses titres et ses
+ * objectifs, qu'elle porte ; les autres tables gardent leur numéro,
+ * propositions et retenu restent, en dérive TABLE_SUPPRIMEE.
  */
 function supprimerTable(charge, { id } = {}) {
   exigerModifiable(charge);
@@ -194,6 +213,7 @@ function supprimerTable(charge, { id } = {}) {
     numero: table.numero,
     reservations: charge.reservations.length - suivante.reservations.length,
     titres: charge.titres.length - suivante.titres.length,
+    objectifs: table.objectifs?.length ?? 0,
   };
   return { charge: suivante, libelle: libelle('ENTREE_SUPPRIMER_TABLE', details), avertissements: [] };
 }
@@ -281,12 +301,15 @@ function changerDefaut(charge, { sieges: saisie, realigner } = {}) {
 }
 
 /**
- * changerTours {tours} (§ 2.1 étape 5, § 4.3) : le nombre de tours, lu par
- * lireEntier ; MOINS_D_UN_TOUR {tours} sous 1, TROP_DE_TOURS {max} au-delà
- * de TOURS_MAX, la borne que l'analyse pose aussi, remède null. Retirer des tours
- * détruit les réservations « tour désigné » au-delà, dans la même entrée ;
- * la portée « tous » reste, symbolique. Propositions et retenu restent, en
- * dérive TOURS_CHANGES, jamais tronqués.
+ * changerTours {tours} (§ 2.1 étape 5, § 4.3, § 4.5) : le nombre de tours,
+ * lu par lireEntier ; MOINS_D_UN_TOUR {tours} sous 1, TROP_DE_TOURS {max}
+ * au-delà de TOURS_MAX, la borne que l'analyse pose aussi, remède null.
+ * Retirer des tours détruit, dans la même entrée, les réservations « tour
+ * désigné » et les objectifs de table de ces tours, que le libellé compte ;
+ * une table qui n'en garde aucun perd son champ objectifs. La portée
+ * « tous » reste, symbolique, et l'objectif de la soirée aussi. Remettre le
+ * tour ne rend rien de ce qui est détruit. Propositions et retenu restent,
+ * en dérive TOURS_CHANGES, jamais tronqués.
  */
 function changerTours(charge, { tours: saisie } = {}) {
   exigerModifiable(charge);
@@ -296,16 +319,31 @@ function changerTours(charge, { tours: saisie } = {}) {
   const suivante = structuredClone(charge);
   suivante.evenement.tours = tours;
   suivante.reservations = suivante.reservations.filter(({ portee, tour }) => portee === 'tous' || tour <= tours);
+  let objectifsRetires = 0;
+  for (const table of suivante.tables) {
+    if (table.objectifs === undefined) continue;
+    const gardes = table.objectifs.filter(({ portee, tour }) => portee === 'tous' || tour <= tours);
+    objectifsRetires += table.objectifs.length - gardes.length;
+    if (gardes.length > 0) table.objectifs = gardes;
+    else delete table.objectifs;
+  }
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_CHANGER_TOURS', { tours, retirees: charge.reservations.length - suivante.reservations.length }),
+    libelle: libelle('ENTREE_CHANGER_TOURS', {
+      tours,
+      retirees: charge.reservations.length - suivante.reservations.length,
+      objectifsRetires,
+    }),
     avertissements: [],
   };
 }
 
 /**
- * modifierReglage {cle, valeur} (§ 5.3, § 15.4) : un interrupteur des
- * contraintes ou de l'attribution des sièges, un booléen ; ou generation.nombre,
+ * modifierReglage {cle, valeur} (§ 5.3, § 8.9, § 15.4) : un interrupteur des
+ * contraintes ou de l'attribution des sièges, un booléen ; l'une des deux
+ * cases facultatives, respecterObjectifs ou rencontrerAnimateurs, un
+ * booléen écrit seulement hors de son défaut — y revenir retire le champ, et
+ * la valeur courante est SANS_EFFET ; ou generation.nombre,
  * generation.arret, generation.historique, un entier ≥ 1, que le contrôleur
  * de génération a lu et borné. Une autre clé, ou une autre valeur, est une
  * faute du code.
@@ -316,6 +354,11 @@ function modifierReglage(charge, { cle, valeur } = {}) {
   if (INTERRUPTEURS.has(cle)) {
     if (typeof valeur !== 'boolean') throw new TypeError(`${cle} : booléen attendu, reçu ${JSON.stringify(valeur)}`);
     suivante.reglages[cle] = valeur;
+  } else if (CASES_FACULTATIVES.has(cle)) {
+    if (typeof valeur !== 'boolean') throw new TypeError(`${cle} : booléen attendu, reçu ${JSON.stringify(valeur)}`);
+    if (valeur === critereCoche(charge, cle)) throw refus('SANS_EFFET', { commande: 'modifierReglage' });
+    if (valeur === defautDeLaCase(cle)) delete suivante.reglages[cle];
+    else suivante.reglages[cle] = valeur;
   } else if (ENTIERS_DE_GENERATION.has(cle)) {
     if (!Number.isSafeInteger(valeur) || valeur < 1) throw new TypeError(`${cle} : entier ≥ 1 attendu, reçu ${JSON.stringify(valeur)}`);
     suivante.reglages.generation[cle.slice('generation.'.length)] = valeur;
@@ -346,6 +389,126 @@ function changerCibleRedondance(charge, { cible: saisie } = {}) {
   return { charge: suivante, libelle: libelle('ENTREE_CHANGER_CIBLE_REDONDANCE', { cible }), avertissements: [] };
 }
 
+// L'enregistrement de la table d'identifiant id qu'un objectif vise, ou
+// TABLE_DISPARUE {table}, remède null : aucun geste ne rend une table
+// supprimée.
+function tableDeLObjectif(charge, id) {
+  const table = charge.tables.find((candidate) => candidate.id === id);
+  if (table === undefined) throw refus('TABLE_DISPARUE', { table: id });
+  return table;
+}
+
+// Le tour d'un objectif, null pour la soirée ou un entier ; une autre valeur
+// est une faute du code. Un entier hors de 1 à R est OBJECTIF_HORS_SOIREE
+// {tour}, remède null : le tour se choisit parmi ceux de la soirée.
+function tourDeLObjectif(charge, tour) {
+  if (tour !== null && !Number.isSafeInteger(tour)) {
+    throw new TypeError(`tour : null ou entier attendu, reçu ${JSON.stringify(tour)}`);
+  }
+  if (tour !== null && (tour < 1 || tour > charge.evenement.tours)) throw refus('OBJECTIF_HORS_SOIREE', { tour });
+  return tour;
+}
+
+// La charge reçue, copiée, la table id portant les objectifs que rend
+// modifier de sa liste — sans eux, le champ retiré —, rangés la soirée
+// d'abord, puis les tours croissants (§ 8.9).
+function avecObjectifs(charge, id, modifier) {
+  const suivante = structuredClone(charge);
+  const table = suivante.tables.find((candidate) => candidate.id === id);
+  const objectifs = modifier(table.objectifs ?? []).sort(ordreDesObjectifs);
+  if (objectifs.length > 0) table.objectifs = objectifs;
+  else delete table.objectifs;
+  return suivante;
+}
+
+// Deux listes d'étiquettes portent le même ensemble.
+const memesEtiquettes = (a, b) => a.length === b.length && a.every((motCle) => b.includes(motCle));
+
+/**
+ * poserObjectif {table, tour, etiquettes, regle} (§ 4.5, § 5.9) : l'objectif
+ * de la table d'identifiant table pour la soirée (tour null) ou pour le tour
+ * donné, qui remplace celui du même couple. etiquettes est une saisie, reçue
+ * (recevoirEtiquettes) sur les étiquettes de l'événement entier sans
+ * l'objectif remplacé ; regle, 'ou' ou 'et' pour une règle propre, null pour
+ * suivre le défaut. Le même objectif — même règle, même ensemble
+ * d'étiquettes — est SANS_EFFET. Refus : TABLE_DISPARUE {table} ;
+ * OBJECTIF_HORS_SOIREE {tour} ; ETIQUETTE_INVALIDE {valeur, raison} ;
+ * OBJECTIF_SANS_ETIQUETTE {table, tour}, une saisie qui ne donne aucune
+ * étiquette, de remède « Retirer l'objectif » quand le couple en porte un —
+ * vider la liste, c'est le retirer —, null sinon ; ETIQUETTES_EN_TROP
+ * {nombre} au-delà d'ETIQUETTES_MAX. Avertissements : ORTHOGRAPHE_RETENUE,
+ * puis les avis de l'objectif posé (avisDeLObjectif), acceptés et signalés.
+ */
+function poserObjectif(charge, { table: id, tour: saisi, etiquettes: texte, regle } = {}) {
+  exigerModifiable(charge);
+  if (regle !== null && !REGLES.has(regle)) throw new TypeError(`regle : 'ou', 'et' ou null attendu, reçu ${JSON.stringify(regle)}`);
+  const table = tableDeLObjectif(charge, id);
+  const tour = tourDeLObjectif(charge, saisi);
+  const ancien = (table.objectifs ?? []).find((objectif) => objectif.tour === tour);
+  const sansLui = avecObjectifs(charge, id, (objectifs) => objectifs.filter((objectif) => objectif.tour !== tour));
+  const recues = recevoirEtiquettes(etiquettesDeLEvenement(sansLui), texte);
+  if (recues.etiquettes.length === 0) {
+    const remede = ancien === undefined ? null : { commande: 'retirerObjectif', arguments: { table: id, tour } };
+    throw refus('OBJECTIF_SANS_ETIQUETTE', { table: id, tour }, remede);
+  }
+  if (recues.etiquettes.length > ETIQUETTES_MAX) throw refus('ETIQUETTES_EN_TROP', { nombre: recues.etiquettes.length });
+  if (ancien !== undefined && ancien.regle === regle && memesEtiquettes(ancien.etiquettes, recues.etiquettes)) {
+    throw refus('SANS_EFFET', { commande: 'poserObjectif' });
+  }
+  const objectif = { portee: tour === null ? 'tous' : 'tour', tour, regle, etiquettes: recues.etiquettes };
+  const suivante = avecObjectifs(sansLui, id, (objectifs) => [...objectifs, objectif]);
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_POSER_OBJECTIF', { numero: table.numero, tour, regle, etiquettes: recues.etiquettes }),
+    avertissements: [...recues.avertissements, ...avisDeLObjectif(suivante, id, tour)],
+  };
+}
+
+/**
+ * retirerObjectif {table, tour} (§ 4.5, D19) : l'objectif de la soirée (tour
+ * null) ou du tour donné part, sans fenêtre à confirmer : un retour à
+ * l'instant précédent le rend. Le dernier retiré retire le champ objectifs.
+ * Un couple sans objectif est SANS_EFFET ; TABLE_DISPARUE {table} pour une
+ * table supprimée.
+ */
+function retirerObjectif(charge, { table: id, tour } = {}) {
+  exigerModifiable(charge);
+  if (tour !== null && !Number.isSafeInteger(tour)) throw new TypeError(`tour : null ou entier attendu, reçu ${JSON.stringify(tour)}`);
+  const table = tableDeLObjectif(charge, id);
+  if (!(table.objectifs ?? []).some((objectif) => objectif.tour === tour)) throw refus('SANS_EFFET', { commande: 'retirerObjectif' });
+  return {
+    charge: avecObjectifs(charge, id, (objectifs) => objectifs.filter((objectif) => objectif.tour !== tour)),
+    libelle: libelle('ENTREE_RETIRER_OBJECTIF', { numero: table.numero, tour }),
+    avertissements: [],
+  };
+}
+
+// Un avis rendu comparable : son code et ses détails, en texte.
+const cleDAvis = ({ code, details }) => JSON.stringify([code, details]);
+
+/**
+ * changerRegleObjectifs {regle} (§ 4.5, § 8.9, D3) : la règle par défaut des
+ * objectifs, 'ou' ou 'et' ; le défaut, que regleObjectifs lit sur des
+ * réglages qui ne la portent pas, retire le champ des réglages, et la règle
+ * courante (regleObjectifs) est SANS_EFFET. Aucune règle propre ne change.
+ * Avertissements : les avis que le changement fait naître (avisObjectifs),
+ * ceux d'un objectif qui suit le défaut et ne sert plus personne.
+ */
+function changerRegleObjectifs(charge, { regle } = {}) {
+  exigerModifiable(charge);
+  if (!REGLES.has(regle)) throw new TypeError(`regle : 'ou' ou 'et' attendu, reçu ${JSON.stringify(regle)}`);
+  if (regle === regleObjectifs(charge)) throw refus('SANS_EFFET', { commande: 'changerRegleObjectifs' });
+  const suivante = structuredClone(charge);
+  if (regle === regleObjectifs({ reglages: {} })) delete suivante.reglages.regleObjectifs;
+  else suivante.reglages.regleObjectifs = regle;
+  const connus = new Set(avisObjectifs(charge).map(cleDAvis));
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CHANGER_REGLE_OBJECTIFS', { regle }),
+    avertissements: avisObjectifs(suivante).filter((avis) => !connus.has(cleDAvis(avis))),
+  };
+}
+
 /** @type {Map<string, (charge: Object, args: Object) => Object>} */
 export const COMMANDES_MOBILIER = new Map([
   ['creerTable', creerTable],
@@ -357,4 +520,7 @@ export const COMMANDES_MOBILIER = new Map([
   ['changerTours', changerTours],
   ['modifierReglage', modifierReglage],
   ['changerCibleRedondance', changerCibleRedondance],
+  ['poserObjectif', poserObjectif],
+  ['retirerObjectif', retirerObjectif],
+  ['changerRegleObjectifs', changerRegleObjectifs],
 ]);

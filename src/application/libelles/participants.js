@@ -1,11 +1,14 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les textes des commandes de la liste des participants et de l'import
-// (§ 4.4, § 10.2, § 14.6) : leurs refus, leurs avertissements et leurs
-// libellés figés. Cette table ne porte que des codes. Un champ inconnu lève
-// RangeError, au lieu de se taire.
-import { compte, nomDans } from './aides.js';
+// Les textes des commandes de la liste des participants, de leurs
+// étiquettes et de l'import des participants (§ 4.4, § 4.5, § 10.2,
+// § 14.6) : leurs refus, leurs avertissements et leurs libellés figés. Cette
+// table ne porte que des codes. Un champ ou une raison inconnus lèvent
+// RangeError, au lieu de se taire. Les bornes d'une étiquette viennent de la
+// règle qui les pose.
+import { ETIQUETTES_MAX, ETIQUETTE_LONGUEUR_MAX } from '../../stockage/etiquettes.js';
+import { cite, compte, enumeration, nomDans } from './aides.js';
 
 // Les champs d'un participant qu'une saisie modifie, dans l'ordre du fichier.
 const NOMS_DES_CHAMPS = new Map([
@@ -17,6 +20,17 @@ const NOMS_DES_CHAMPS = new Map([
   ['notes', 'notes'],
 ]);
 const nomChamp = (champ) => nomDans(NOMS_DES_CHAMPS, champ, 'champ');
+
+// Ce qui rend fautive une étiquette saisie (§ 4.5), raison de
+// lireEtiquettes ou saisie vide.
+const RAISONS_D_ETIQUETTE = new Map([
+  ['vide', () => 'La saisie ne donne aucune étiquette'],
+  ['controle', (valeur) => `${cite(valeur)} porte un caractère invisible ou de contrôle, tabulation comprise`],
+  ['longueur', (valeur) => `${cite(valeur)} dépasse ${ETIQUETTE_LONGUEUR_MAX} caractères`],
+]);
+
+// Des étiquettes citées et énumérées.
+const etiquettesCitees = (etiquettes) => enumeration(etiquettes.map(cite));
 
 // Les titres de place qu'un geste sur une personne touche, quand il y en a.
 const titresDe = (n, singulier, pluriel) =>
@@ -45,6 +59,24 @@ export const TABLE = new Map([
       `${titresDe(titres, "n'est plus pourvu", 'ne sont plus pourvus')}.`,
   ],
   [
+    'ETIQUETTE_INVALIDE',
+    ({ valeur, raison }) =>
+      `${nomDans(RAISONS_D_ETIQUETTE, raison, "raison d'étiquette")(valeur)} : une étiquette compte de 1 à ` +
+      `${ETIQUETTE_LONGUEUR_MAX} caractères visibles, et la virgule, le point-virgule et la barre verticale ` +
+      'séparent deux étiquettes.',
+  ],
+  [
+    'ETIQUETTES_EN_TROP',
+    ({ nombre }) =>
+      `Une personne ou un objectif de table porte au plus ${ETIQUETTES_MAX} étiquettes ; ` +
+      `celles-ci en feraient ${nombre}.`,
+  ],
+  [
+    'ORTHOGRAPHE_RETENUE',
+    ({ saisie, retenue }) =>
+      `${cite(saisie)} est enregistrée sous l'orthographe que l'événement porte déjà : ${cite(retenue)}.`,
+  ],
+  [
     'IMPORT_EN_RETENU',
     () =>
       "L'import change la liste après le choix d'un placement : le placement retenu est gardé tel quel, " +
@@ -63,6 +95,15 @@ export const TABLE = new Map([
   ['ENTREE_EXCLURE_PARTICIPANT', ({ personne }) => `Exclu ${personne}`],
   ['ENTREE_REINTEGRER_PARTICIPANT', ({ personne }) => `Réintégré ${personne}`],
   ['ENTREE_SUPPRIMER_PARTICIPANT', ({ personne }) => `Supprimé ${personne}`],
+  [
+    'ENTREE_CHANGER_ETIQUETTES',
+    ({ personne, ajoutees, retirees }) => {
+      const parties = [];
+      if (ajoutees.length > 0) parties.push(`ajouté ${etiquettesCitees(ajoutees)}`);
+      if (retirees.length > 0) parties.push(`retiré ${etiquettesCitees(retirees)}`);
+      return `Étiquettes de ${personne} : ${parties.join(' ; ')}`;
+    },
+  ],
   [
     'ENTREE_IMPORTER_PARTICIPANTS',
     ({ mode, ajoutes, misAJour, retires }) => {

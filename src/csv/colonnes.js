@@ -29,6 +29,9 @@ export const ENTETES_DES_CHAMPS = Object.freeze([
   champ('titre_pressenti', ['titre_pressenti', 'titre', 'rôle']),
   champ('exclu', ['exclu']),
   champ('notes', ['notes']),
+  // En dernier : l'export l'écrit après les sept champs d'avant les
+  // étiquettes, et le collage en bloc les lit à la huitième colonne (§ 10.2).
+  champ('etiquettes', ['etiquettes', 'étiquette', 'mots-clés']),
 ]);
 
 /** Champs d'un participant que porte un CSV, dans l'ordre de l'export. */

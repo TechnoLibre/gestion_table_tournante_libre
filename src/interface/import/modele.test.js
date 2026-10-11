@@ -79,20 +79,23 @@ describe('avecEntetesDeLaGrille : un collage sans en-tête lu dans l’ordre de 
     assert.deepEqual(nomsLus(lu), ['Ombrelle', 'Pervenche']);
   });
 
-  test('neuf colonnes : les sept champs de la grille, puis deux en-têtes vides, listés non reconnus', () => {
-    const rangee = (nom) => [nom, 'Iris', 'Grisaille', 'iris@exemple.test', 'animation', 'non', 'note', 'x1', 'x2'].join(TAB);
+  test('dix colonnes : les huit champs de l’export, la huitième celle des étiquettes, puis deux en-têtes vides, listés non reconnus', () => {
+    const rangee = (nom) =>
+      [nom, 'Iris', 'Grisaille', 'iris@exemple.test', 'animation', 'non', 'note', 'finance|Montréal', 'x1', 'x2'].join(TAB);
     const texte = lignes(rangee('Ombrelle'), rangee('Lacasse'));
     const sans = apercevoir(texte);
     assert.equal(sans.refusGlobal, 'AUCUN_ENTETE');
-    assert.equal(sans.entetes.length, 9);
+    assert.equal(sans.entetes.length, 10);
     const avec = avecEntetesDeLaGrille(texte, sans);
     assert.equal(avec.split('\n')[0], [...CHAMPS, '', ''].join(TAB));
     const lu = apercevoir(avec);
     assert.equal(lu.refusGlobal, null);
-    assert.equal(CHAMPS.length, 7);
+    assert.equal(CHAMPS.length, 8);
+    assert.equal(CHAMPS[7], 'etiquettes');
     assert.deepEqual(lu.association.colonnes, Object.fromEntries(CHAMPS.map((champ, rang) => [champ, rang])));
-    assert.deepEqual(lu.association.nonReconnues, [7, 8]);
+    assert.deepEqual(lu.association.nonReconnues, [8, 9]);
     assert.deepEqual(nomsLus(lu), ['Ombrelle', 'Lacasse']);
+    assert.deepEqual(lu.lignes.map(({ champs }) => champs.etiquettes), [['finance', 'Montréal'], ['finance', 'Montréal']]);
   });
 
   test('une liste de noms d’une colonne, « Lacasse, Ondine » compris : SEPARATEUR_INTROUVABLE sans rang, puis une colonne, la ligne entière en nom', () => {
@@ -268,9 +271,9 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
   });
 
   test('chaque champ de CHAMPS a sa clé, qui se traduit', () => {
-    const texte = lignes(CHAMPS.join(';'), ['Ombrelle', 'Iris', 'Grisaille', 'i@exemple.test', 'x', 'non', 'n'].join(';'));
+    const texte = lignes(CHAMPS.join(';'), ['Ombrelle', 'Iris', 'Grisaille', 'i@exemple.test', 'x', 'non', 'n', 'finance'].join(';'));
     const { colonnes } = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte) });
-    assert.equal(colonnes.length, 7);
+    assert.equal(colonnes.length, 8);
     for (const { cle } of colonnes) {
       assert.match(cle, /^import\.champ\./);
       assert.ok(t(cle).length > 0, cle);
@@ -312,12 +315,12 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
 });
 
 describe('les lignes, les refus de la mise à jour, les personnes désignées, le mode proposé (§ 10.1)', () => {
-  test('chaque ligne valide montre ses sept champs dans l’ordre de CHAMPS ; exclu par sa clé, vide sans valeur', () => {
+  test('chaque ligne valide montre ses huit champs dans l’ordre de CHAMPS ; exclu par sa clé, vide sans valeur ; les étiquettes jointes par « , »', () => {
     const texte = lignes(
-      'notes;exclu;nom;prenom',
-      'arrive tard;Oui;Ombrelle;Iris',
-      ';;Pervenche;',
-      ';0;Lacasse;Ondine',
+      'notes;exclu;nom;prenom;mots-clés',
+      'arrive tard;Oui;Ombrelle;Iris;',
+      ';;Pervenche;;finance|Montréal',
+      ';0;Lacasse;Ondine;',
     );
     const { lignes: lues } = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte) });
     assert.equal(lues.length, 3);
@@ -326,7 +329,8 @@ describe('les lignes, les refus de la mise à jour, les personnes désignées, l
     assert.deepEqual(COLONNES_DES_LIGNES.map(({ champ }) => champ), [...CHAMPS]);
     for (const { cle } of COLONNES_DES_LIGNES) assert.ok(t(cle).length > 0, cle);
     const [premiere, deuxieme, troisieme] = lues;
-    assert.deepEqual(premiere.cellules.map(({ texte: valeur }) => valeur), ['Ombrelle', 'Iris', null, null, null, null, 'arrive tard']);
+    assert.deepEqual(premiere.cellules.map(({ texte: valeur }) => valeur), ['Ombrelle', 'Iris', null, null, null, null, 'arrive tard', null]);
+    assert.deepEqual(deuxieme.cellules.at(-1), { champ: 'etiquettes', texte: 'finance, Montréal', cle: null });
     assert.equal(premiere.cellules[5].cle, 'import.exclu.oui');
     assert.equal(deuxieme.cellules[5].cle, null);
     assert.equal(troisieme.cellules[5].cle, 'import.exclu.non');

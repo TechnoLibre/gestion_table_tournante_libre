@@ -1091,6 +1091,7 @@ describe('diagnostic : population vide, forme, refus', () => {
       retoursImposes: 0,
       ancragesImposantRetours: 0,
       ecartItineraire: null,
+      objectifsInevitables: { horsObjectif: 0, jamaisServies: 0, horsObjectifMax: 0 },
     };
     // Les mêmes chiffres, séparation active ou non : sans présent, aucune
     // appartenance n'est portée par chacun, et aucune table n'est forcée.
@@ -1436,5 +1437,95 @@ describe('diagnostic : ancrage par table (§ 5.6)', () => {
       { table: 20, ancres: 2, capacite: 4, gelee: false, moitie: true },
       { table: 30, ancres: 1, capacite: 4, gelee: false, moitie: false },
     ]);
+  });
+});
+
+describe('diagnostic : les objectifs hors d’atteinte (§ 5.6, A10, D16)', () => {
+  // n personnes « finance », puis celles que autres ajoute ; la table 1,
+  // « finance », de huit places ; la table 2, sans objectif, assez grande
+  // pour les autres ; quatre tours.
+  function finance(n, { autres = [], reservations = [] } = {}) {
+    const configuration = salle({ tables: [[1, 8], [2, n + autres.length]], appartenances: fois(n + autres.length, null), tours: 4, reservations });
+    configuration.participants.forEach((personne, i) => {
+      if (i < n) personne.etiquettes = ['finance'];
+      else if (autres[i - n] !== undefined) personne.etiquettes = autres[i - n];
+    });
+    configuration.objectifs = [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }];
+    return configuration;
+  }
+
+  test('dix, trente, quarante personnes « finance » pour huit places, quatre tours : les planchers de A10', () => {
+    // Trente : P_r = 30, L_r = 8, 22 × 4 = 88 ; 30 − 4 × 8 < 0 ; ⌈88 / 30⌉ = 3.
+    // Dix : 2 × 4 = 8 ; aucun ; ⌈8 / 10⌉ = 1. Quarante : 32 × 4 = 128 ;
+    // 40 − 32 = 8 ; ⌈128 / 40⌉ = 4.
+    assert.deepEqual(diagnostiquer(finance(30)).objectifsInevitables, { horsObjectif: 88, jamaisServies: 0, horsObjectifMax: 3 });
+    assert.deepEqual(diagnostiquer(finance(10)).objectifsInevitables, { horsObjectif: 8, jamaisServies: 0, horsObjectifMax: 1 });
+    assert.deepEqual(diagnostiquer(finance(40)).objectifsInevitables, { horsObjectif: 128, jamaisServies: 8, horsObjectifMax: 4 });
+  });
+
+  test('les fixés ne comptent ni dans les couples ni dans les sièges libres, et qui une réservation sert n’est jamais servi d’office', () => {
+    // Dix libres, 11 « finance » ancré à la table 1, servi, et 12 sans
+    // étiquette ancré à la même table : L_r = 6, P_r = 10, 4 × 4 = 16 ; C′
+    // compte les dix libres, 10 − 24 < 0 ; ⌈16 / 10⌉ = 2.
+    const deuxAncres = finance(10, { autres: [['finance'], undefined], reservations: [ancrer(11, 1), ancrer(12, 1)] });
+    assert.deepEqual(diagnostiquer(deuxAncres).objectifsInevitables, { horsObjectif: 16, jamaisServies: 0, horsObjectifMax: 2 });
+    // Quarante dont 1, ancré à la table 1, servi d'office : L_r = 7, P_r = 39,
+    // 32 × 4 = 128 ; C′ = 39, 39 − 28 = 11 ; ⌈128 / 39⌉ = 4.
+    const unAncre = finance(40, { reservations: [ancrer(1, 1)] });
+    assert.deepEqual(diagnostiquer(unAncre).objectifsInevitables, { horsObjectif: 128, jamaisServies: 11, horsObjectifMax: 4 });
+    // Quarante dont 1, réservé au seul tour 1 à la table 1 : servi d'office,
+    // hors de C′, il compte encore dans P_r aux trois autres tours.
+    // 32 + 3 × 32 = 128 ; C′ = 39, 39 − (7 + 3 × 8) = 8 ; ⌈128 / 40⌉ = 4.
+    const unTour = finance(40, { reservations: [fixer(1, 1, 1)] });
+    assert.deepEqual(diagnostiquer(unTour).objectifsInevitables, { horsObjectif: 128, jamaisServies: 8, horsObjectifMax: 4 });
+    // Dix dont 1 à 6 ancrés à la table 1, servis d'office : L_r = 2, P_r = 4,
+    // 2 × 4 = 8 ; C′ = 4, 4 − 4 × 2 < 0. Le diviseur compte les quatre qui
+    // ont un tour possible non fixé, non les six que leur réservation sert :
+    // ⌈8 / 4⌉ = 2.
+    const sixAncres = finance(10, { reservations: Array.from({ length: 6 }, (_, i) => ancrer(i + 1, 1)) });
+    assert.deepEqual(diagnostiquer(sixAncres).objectifsInevitables, { horsObjectif: 8, jamaisServies: 0, horsObjectifMax: 2 });
+    // Deux tours. 1 à 6, « finance », réservés au tour 2 à la table 1,
+    // « finance », de huit places ; 7 à 16, « rh », libres ; la table 2,
+    // « rh » au seul tour 2, de trois places ; la table 3, sans objectif.
+    // Tour 1 : L_1 = 8, P_1 = 6 (1 à 6), P′_1 = 0, aucun « rh » possible.
+    // Tour 2 : L_2 = 2 + 3 = 5, P_2 = P′_2 = 10. H = 0 + 5 ; C′ compte les
+    // dix « rh », 10 − (min(8, 0) + min(5, 10)) = 5, que min(L_r, P_r)
+    // ramènerait à 0 ; ⌈5 / 16⌉ = 1.
+    const parTour = salle({ tables: [[1, 8], [2, 3], [3, 16]], appartenances: fois(16, null), tours: 2, reservations: Array.from({ length: 6 }, (_, i) => fixer(i + 1, 1, 2)) });
+    parTour.participants.forEach((personne, i) => { personne.etiquettes = i < 6 ? ['finance'] : ['rh']; });
+    parTour.objectifs = [
+      { table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] },
+      { table: 2, tour: 2, regle: 'ou', etiquettes: ['rh'] },
+    ];
+    assert.deepEqual(diagnostiquer(parTour).objectifsInevitables, { horsObjectif: 5, jamaisServies: 5, horsObjectifMax: 1 });
+  });
+
+  test('sans objectif, ou sans personne qu’un objectif serve, les trois planchers sont nuls', () => {
+    const sans = finance(10);
+    delete sans.objectifs;
+    const nul = { horsObjectif: 0, jamaisServies: 0, horsObjectifMax: 0 };
+    assert.deepEqual(diagnostiquer(sans).objectifsInevitables, nul);
+    const personne = finance(10);
+    personne.objectifs = [{ table: 1, tour: null, regle: 'ou', etiquettes: ['bénévole'] }];
+    assert.deepEqual(diagnostiquer(personne).objectifsInevitables, nul);
+    assert.deepEqual(diagnostiquer(construire('petite')).objectifsInevitables, nul);
+  });
+
+  test('un objectif ou une animation d’un tour au-delà de R′ se retire de la sonde des tours, sans lever', () => {
+    // La configuration du remède en tours : 1, réservé au tour 4 à la table
+    // 10, y anime ; la table 20 porte un objectif du tour 4.
+    const configuration = salle({
+      tables: [[10, 7], [20, 7], [30, 7], [40, 7]],
+      appartenances: [
+        ...Array.from({ length: 10 }, (_, g) => fois(2, `Grisaille ${g + 1}`)).flat(),
+        ...Array.from({ length: 8 }, (_, g) => `Club des Merles ${g + 1}`),
+      ],
+      tours: 4,
+      reservations: [fixer(1, 10, 4)],
+    });
+    configuration.participants[0].anime = [4];
+    configuration.participants[1].etiquettes = ['finance'];
+    configuration.objectifs = [{ table: 20, tour: 4, regle: 'ou', etiquettes: ['finance'] }];
+    assert.deepEqual(diagnostiquer(configuration).remedes, { toursSansRedondance: 3 });
   });
 });

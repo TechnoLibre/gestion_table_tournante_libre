@@ -1,16 +1,18 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les bilans du mobilier (§ 6.1, § 6.2, § 2.1 étape 5) : ce qu'un changement
-// de défaut, de tours ou la suppression d'une table emporterait, compté sur
-// la charge courante sans rien écrire, pour l'énoncer avant d'appliquer. La
-// commande qui applique lit le même bilan : changerDefaut lève le premier de
-// ses refus. Les refus et avertissements d'une capacité sont ceux de
-// controlerCapacites (capacite.js), le seul contrôle. Aucune fonction ne
-// modifie ce qu'elle reçoit.
+// Les bilans du mobilier (§ 6.1, § 6.2, § 2.1 étape 5, § 4.5) : ce qu'un
+// changement de défaut, de tours ou la suppression d'une table emporterait,
+// objectifs des tables compris, compté sur la charge courante sans rien
+// écrire, pour l'énoncer avant d'appliquer. La commande qui applique lit le
+// même bilan : changerDefaut lève le premier de ses refus. Les refus et
+// avertissements d'une capacité sont ceux de controlerCapacites
+// (capacite.js), le seul contrôle ; l'ordre des objectifs, ordreDesObjectifs
+// (objectifs.js). Aucune fonction ne modifie ce qu'elle reçoit.
 import { ordreDesReservations } from '../csv/import.js';
 import { SIEGES_MAX, capacite } from '../stockage/document.js';
 import { controlerCapacites } from './capacite.js';
+import { ordreDesObjectifs } from './objectifs.js';
 import { presents } from './places.js';
 
 const croissant = (a, b) => a - b;
@@ -88,9 +90,11 @@ export function bilanChangementDefaut(charge, sieges, { realigner = false } = {}
 }
 
 /**
- * Le changement du nombre de tours à tours (§ 2.1 étape 5, § 4.3) :
+ * Le changement du nombre de tours à tours (§ 2.1 étape 5, § 4.3, § 4.5) :
  * reservationsDetruites, les réservations « tour désigné » au-delà, dans
- * l'ordre canonique ; propositionsTouchees, les identifiants croissants des
+ * l'ordre canonique ; objectifsDetruits, les objectifs de table des tours
+ * au-delà, par identifiant de table puis tour croissants — ceux de la
+ * soirée restent ; propositionsTouchees, les identifiants croissants des
  * propositions qui ne porteront pas tours tours, et retenuTouche de même
  * pour le retenu — ils restent, en dérive TOURS_CHANGES (§ 9). Le nombre de
  * tours d'aujourd'hui ne touche rien. La portée « tous » ne se détruit
@@ -99,7 +103,8 @@ export function bilanChangementDefaut(charge, sieges, { realigner = false } = {}
  * @param {import('../stockage/types.js').Charge} charge
  * @param {number} tours
  * @returns {{reservationsDetruites: Array<{participant: number, table: number, tour: number}>,
- *            propositionsTouchees: number[], retenuTouche: boolean}}
+ *            objectifsDetruits: Array<{table: number, tour: number}>, propositionsTouchees: number[],
+ *            retenuTouche: boolean}}
  * @throws {TypeError} tours qui n'est pas un entier
  */
 export function bilanTours(charge, tours) {
@@ -111,26 +116,38 @@ export function bilanTours(charge, tours) {
       .filter(({ portee, tour }) => portee === 'tour' && tour > tours)
       .sort(ordreDesReservations)
       .map(({ participant, table, tour }) => ({ participant, table, tour })),
+    objectifsDetruits: [...charge.tables]
+      .sort((a, b) => a.id - b.id)
+      .flatMap(({ id, objectifs = [] }) =>
+        objectifs
+          .filter(({ portee, tour }) => portee === 'tour' && tour > tours)
+          .map(({ tour }) => ({ table: id, tour }))
+          .sort((a, b) => a.tour - b.tour),
+      ),
     propositionsTouchees: identifiants(charge.propositions, touche),
     retenuTouche: charge.retenu !== null && touche(charge.retenu),
   };
 }
 
 /**
- * La suppression de la table id (§ 6.2, § 4) : ses réservations, suspendues
- * comprises, dans l'ordre canonique, et ses titres par siège puis libellé,
- * qui partent avec elle ; propositionsTouchees, les identifiants croissants
- * des propositions qui la déclarent, et retenuTouche de même — ils restent,
- * en dérive TABLE_SUPPRIMEE (§ 9). Une table nue rend deux listes vides.
+ * La suppression de la table id (§ 6.2, § 4, § 4.5) : ses réservations,
+ * suspendues comprises, dans l'ordre canonique, ses titres par siège puis
+ * libellé, et ses objectifs {tour, regle, etiquettes}, la soirée d'abord
+ * puis les tours croissants, qui partent avec elle ; propositionsTouchees,
+ * les identifiants croissants des propositions qui la déclarent, et
+ * retenuTouche de même — ils restent, en dérive TABLE_SUPPRIMEE (§ 9). Une
+ * table nue rend trois listes vides.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {number} id
  * @returns {{reservations: Array<{participant: number, portee: 'tous'|'tour', tour: number|null, siege: number|null}>,
- *            titres: Array<{siege: number, libelle: string}>, propositionsTouchees: number[], retenuTouche: boolean}}
+ *            titres: Array<{siege: number, libelle: string}>,
+ *            objectifs: Array<{tour: number|null, regle: 'ou'|'et'|null, etiquettes: string[]}>,
+ *            propositionsTouchees: number[], retenuTouche: boolean}}
  * @throws {TypeError} une table inconnue
  */
 export function bilanSuppressionTable(charge, id) {
-  tableDe(charge, id);
+  const table = tableDe(charge, id);
   const declare = (placement) => Array.isArray(placement?.tables) && placement.tables.includes(id);
   return {
     reservations: charge.reservations
@@ -141,6 +158,9 @@ export function bilanSuppressionTable(charge, id) {
       .filter(({ table }) => table === id)
       .sort((a, b) => a.siege - b.siege || comparerTextes(a.libelle, b.libelle))
       .map(({ siege, libelle }) => ({ siege, libelle })),
+    objectifs: [...(table.objectifs ?? [])]
+      .sort(ordreDesObjectifs)
+      .map(({ tour, regle, etiquettes }) => ({ tour, regle, etiquettes: [...etiquettes] })),
     propositionsTouchees: identifiants(charge.propositions, declare),
     retenuTouche: charge.retenu !== null && declare(charge.retenu),
   };

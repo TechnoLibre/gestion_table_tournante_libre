@@ -19,6 +19,14 @@ import { CHAMPS } from './colonnes.js';
 /** Séparateur de l'export : celui qu'un tableur francophone rouvre sans manipulation (§ 10.3). */
 export const SEPARATEUR = ';';
 
+/**
+ * Jointure des étiquettes d'une cellule (§ 10.2) : une virgule, séparateur
+ * que la découpe de la saisie lit (SEPARATEURS_ETIQUETTES), suivie d'une
+ * espace, que la mise en forme retire. Une étiquette ne porte aucun
+ * séparateur : la cellule se relit en les mêmes étiquettes.
+ */
+export const JOINTURE_ETIQUETTES = ', ';
+
 const MARQUE_ORDRE_OCTETS = '\u{FEFF}';
 const FIN_DE_LIGNE = '\r\n';
 const GUILLEMET = '"';
@@ -37,6 +45,7 @@ const PROPRIETE_DU_CHAMP = new Map([
   ['titre_pressenti', 'titrePressenti'],
   ['exclu', 'exclu'],
   ['notes', 'notes'],
+  ['etiquettes', 'etiquettes'],
 ]);
 
 // Un champ s'écrit cité (RFC 4180) quand il porte le séparateur, un retour
@@ -69,12 +78,14 @@ export function ecrireCsv(enregistrements, separateur) {
 }
 
 // Cellule d'un champ de CHAMPS pour le participant de rang donné, à partir
-// de 0 : exclu en oui ou non, un texte tel quel, null vide. Lèvent TypeError
-// un exclu qui n'est pas un booléen, un nom qui n'est pas une chaîne, un
-// autre texte ni chaîne ni null. Écrit sans bruit « non » ou vide, un exclu
-// de travers réinviterait au réimport une personne qui s'est désistée ; un
-// texte d'un autre genre lèverait plus loin, dans l'écriture, sans nommer ni
-// la personne ni le champ.
+// de 0 : exclu en oui ou non, les étiquettes jointes par JOINTURE_ETIQUETTES
+// dans l'ordre de leur liste, vide quand la clé manque, un texte tel quel,
+// null vide. Lèvent TypeError un exclu qui n'est pas un booléen, des
+// étiquettes présentes qui ne sont pas une liste de textes, un nom qui n'est
+// pas une chaîne, un autre texte ni chaîne ni null. Écrit sans bruit « non »
+// ou vide, un exclu de travers réinviterait au réimport une personne qui
+// s'est désistée ; un texte d'un autre genre lèverait plus loin, dans
+// l'écriture, sans nommer ni la personne ni le champ.
 function cellule(participant, champ, rang) {
   const valeur = participant[PROPRIETE_DU_CHAMP.get(champ)];
   const refuser = (attendu) => {
@@ -85,6 +96,11 @@ function cellule(participant, champ, rang) {
     if (typeof valeur !== 'boolean') refuser('booléen');
     return valeur ? OUI : NON;
   }
+  if (champ === 'etiquettes') {
+    if (!Object.hasOwn(participant, 'etiquettes')) return '';
+    if (!Array.isArray(valeur) || !valeur.every((motCle) => typeof motCle === 'string')) refuser('liste de textes');
+    return valeur.join(JOINTURE_ETIQUETTES);
+  }
   if (valeur === null && champ !== 'nom') return '';
   if (typeof valeur !== 'string') refuser(champ === 'nom' ? 'texte' : 'texte ou null');
   return valeur;
@@ -93,17 +109,19 @@ function cellule(participant, champ, rang) {
 /**
  * La liste des participants en CSV, dans la forme exacte que l'import lit
  * (§ 10.2) : UTF-8 avec marque, « ; », CRLF ; l'en-tête
- * nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes, les champs
- * de CHAMPS dans leur ordre ; puis un participant par ligne, dans l'ordre de
- * la liste reçue, que la charge range par identifiant. exclu s'écrit oui ou
- * non, un champ null vide, un champ qui porte « ; », un guillemet ou une fin
- * de ligne entre guillemets. L'identifiant ne s'écrit pas : le réimport en
+ * nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes,
+ * les champs de CHAMPS dans leur ordre ; puis un participant par ligne, dans
+ * l'ordre de la liste reçue, que la charge range par identifiant. exclu
+ * s'écrit oui ou non, un champ null vide, la colonne etiquettes toujours,
+ * ses étiquettes jointes par « , », vide sans étiquette ; un champ qui porte
+ * « ; », un guillemet ou une fin de ligne entre guillemets. L'identifiant ne s'écrit pas : le réimport en
  * attribue de neufs. La liste reçue n'est pas modifiée.
  *
  * @param {import('../stockage/types.js').Participant[]} participants
  * @returns {Uint8Array}
- * @throws {TypeError} pour un exclu qui n'est pas un booléen, un nom qui
- *   n'est pas une chaîne, un autre texte ni chaîne ni null
+ * @throws {TypeError} pour un exclu qui n'est pas un booléen, des étiquettes
+ *   présentes qui ne sont pas une liste de textes, un nom qui n'est pas une
+ *   chaîne, un autre texte ni chaîne ni null
  */
 export function exporterParticipants(participants) {
   const lignes = participants.map((participant, rang) => CHAMPS.map((champ) => cellule(participant, champ, rang)));

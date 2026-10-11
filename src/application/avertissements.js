@@ -15,8 +15,9 @@
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { LIBRE, nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
 import { verifierInvariants } from '../moteur/verification.js';
-import { capacite, configurationDepuisCharge } from '../stockage/document.js';
+import { capacite } from '../stockage/document.js';
 import { examiner, planDepuisFichier } from '../stockage/placements.js';
+import { configurationDe } from './configuration.js';
 import { nomAffiche } from './personnes.js';
 import { couvre, placesTenues, presents, reservationsActives } from './places.js';
 
@@ -26,7 +27,7 @@ const avertissement = (code, details) => ({ code, details });
 // { instance } ou { refus }. Une autre erreur remonte.
 function instanceDe(charge) {
   try {
-    return { instance: normaliser(configurationDepuisCharge(charge)), refus: null };
+    return { instance: normaliser(configurationDe(charge)), refus: null };
   } catch (erreur) {
     if (!(erreur instanceof ErreurConfiguration)) throw erreur;
     return { instance: null, refus: erreur };
@@ -230,7 +231,7 @@ export function invariantViole(charge, examen = examiner(charge)) {
  * lisent sur examiner(avant) et examiner(apres) (S2), et planDepuisFichier
  * ne reçoit le retenu que quand examiner(…).retenu.fautes est vide.
  *
- *   CONFIGURATION_INCOHERENTE {code, details}   normaliser(configurationDepuisCharge(apres))
+ *   CONFIGURATION_INCOHERENTE {code, details}   normaliser(configurationDe(apres))
  *     lève, et celle d'avant se normalisait ; PLACES_MANQUANTES et
  *     RESERVATION_NON_HONOREE, qui lisent l'instance d'après, ne se calculent
  *     alors pas ;

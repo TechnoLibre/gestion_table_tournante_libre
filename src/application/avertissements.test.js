@@ -10,10 +10,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
-import { configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { creerCharge } from '../stockage/document.js';
 import { examiner } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
+import { configurationDe } from './configuration.js';
 
 const personne = (id, nom, exclu = false) => ({
   id,
@@ -50,7 +51,7 @@ function sallePleine() {
   return charge;
 }
 
-const manqueDu = (charge) => nombrePlacesManquantes(normaliser(configurationDepuisCharge(charge)));
+const manqueDu = (charge) => nombrePlacesManquantes(normaliser(configurationDe(charge)));
 
 // Quatre personnes, deux tables de deux, deux tours ; Iris Ombrelle réservée
 // à la table 1 pour tous les tours. Le placement de la proposition 1 : Iris

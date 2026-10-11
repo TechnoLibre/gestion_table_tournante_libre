@@ -3,11 +3,19 @@
 
 // Les textes des codes de src/csv (§ 10.1, § 14.6) : encodage, séparateur,
 // en-tête, refus d'une ligne, refus de la mise à jour.
-import { cite, enumeration } from './aides.js';
+import { ETIQUETTE_LONGUEUR_MAX, ETIQUETTES_MAX } from '../../stockage/etiquettes.js';
+import { cite, enumeration, nomDans } from './aides.js';
 
 // Le remède commun aux refus d'encodage (§ 10.1).
 const REMEDE_UTF8 = 'Réenregistrez le fichier en UTF-8 depuis le tableur, puis importez-le de nouveau.';
 const refusEncodage = (constat) => () => `${constat} ${REMEDE_UTF8}`;
+
+// Ce qui rend fautive une étiquette, par la raison que rend lireEtiquettes
+// (§ 4.5).
+const FAUTES_D_ETIQUETTE = new Map([
+  ['longueur', `dépasse ${ETIQUETTE_LONGUEUR_MAX} caractères`],
+  ['controle', 'porte un caractère de contrôle ou invisible, tabulation comprise'],
+]);
 
 export const TABLE = new Map([
   // --- Le CSV (§ 10.1) -------------------------------------------------------
@@ -42,6 +50,16 @@ export const TABLE = new Map([
     ({ valeur }) =>
       `La valeur d'« exclu » ${cite(valeur)} n'est pas reconnue : ` +
       'oui, o, vrai, 1 ou x pour exclure ; non, n, faux, 0 ou vide sinon.',
+  ],
+  [
+    'ETIQUETTE_MAL_FORMEE',
+    ({ valeur, raison }) =>
+      `L'étiquette ${cite(valeur)} ${nomDans(FAUTES_D_ETIQUETTE, raison, 'raison')} : ` +
+      'corrigez-la, puis importez la ligne de nouveau.',
+  ],
+  [
+    'ETIQUETTES_TROP_NOMBREUSES',
+    ({ nombre }) => `La ligne porte ${nombre} étiquettes : une personne en porte ${ETIQUETTES_MAX} au plus.`,
   ],
   [
     'PLUSIEURS_CORRESPONDENT',

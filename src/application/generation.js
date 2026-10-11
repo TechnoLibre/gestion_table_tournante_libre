@@ -44,9 +44,10 @@ import { normaliser, nombrePlacesManquantes } from '../moteur/configuration.js';
 import { ErreurAnnulee, ErreurConfiguration } from '../moteur/erreurs.js';
 import { rechercher, verifierReglages } from '../moteur/recherche.js';
 import { verifierInvariants } from '../moteur/verification.js';
-import { GENERATION_PAR_DEFAUT, configurationDepuisCharge } from '../stockage/document.js';
+import { GENERATION_PAR_DEFAUT } from '../stockage/document.js';
 import { derive, planDepuisFichier, versFichier } from '../stockage/placements.js';
 import { lireEntier } from './capacite.js';
+import { configurationDe } from './configuration.js';
 
 // src/interface reçoit l'annulation d'ici : elle ne joint pas le moteur.
 export { ErreurAnnulee } from '../moteur/erreurs.js';
@@ -363,7 +364,7 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
       throw new ErreurGeneration('AUCUN_PARTICIPANT', { remede: versSection('participants') });
     }
     if (charge.tables.length === 0) throw new ErreurGeneration('AUCUNE_TABLE', { remede: versSection('tables') });
-    const configuration = configurationDepuisCharge(charge);
+    const configuration = configurationDe(charge);
     let instance;
     try {
       instance = normaliser(configuration);

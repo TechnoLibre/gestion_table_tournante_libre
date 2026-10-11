@@ -16,11 +16,12 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { configurationPessimiste } from '../../test/fixtures/banc/pessimiste.js';
+import { configurationDe } from '../../src/application/configuration.js';
 import { LIVREES } from '../../src/demo/livrees.js';
 import { normaliser } from '../../src/moteur/configuration.js';
 import { diagnostiquer } from '../../src/moteur/diagnostic.js';
 import { plafondsAPriori } from '../../src/moteur/plafond.js';
-import { analyser, configurationDepuisCharge } from '../../src/stockage/document.js';
+import { analyser } from '../../src/stockage/document.js';
 
 // Les démonstrations livrées que le § 19.10 nomme : la grande et sa variante.
 const DEMONSTRATIONS_MESUREES = ['grande', 'grande-sans-exception'];
@@ -116,7 +117,8 @@ export function mesurerPlafondAPriori({ configurations, maintenant, repetitions 
 /**
  * Les configurations du banc, dans l'ordre du relevé : la grande
  * démonstration et sa variante, lues dans leur fichier livré (src/demo/
- * livrees.js) comme l'opérateur les ouvre, puis la configuration pessimiste
+ * livrees.js) comme l'opérateur les ouvre, par configurationDe, animateurs
+ * compris, puis la configuration pessimiste
  * (test/fixtures/banc/pessimiste.js). Des objets neufs à chaque appel.
  *
  * @returns {Array<{cle: string, configuration: import('../../src/moteur/types.js').Configuration}>}
@@ -124,7 +126,7 @@ export function mesurerPlafondAPriori({ configurations, maintenant, repetitions 
 export function configurationsDuBanc() {
   const livrees = DEMONSTRATIONS_MESUREES.map((cle) => ({
     cle,
-    configuration: configurationDepuisCharge(analyser(LIVREES.find((livree) => livree.cle === cle).texte).charge),
+    configuration: configurationDe(analyser(LIVREES.find((livree) => livree.cle === cle).texte).charge),
   }));
   return [...livrees, { cle: 'pessimiste', configuration: configurationPessimiste() }];
 }

@@ -23,16 +23,21 @@
 //      valide ou refusée pour un seul motif ; zéro ligne valide refuse ;
 //   7. les appartenances des lignes valides se réconcilient avec celles des
 //      existants, et les doublons se relèvent ; en mode remplacer, qui
-//      retire chaque existant, avec ceux du fichier seuls ;
+//      retire chaque existant, avec ceux du fichier seuls. Leurs étiquettes
+//      se réconcilient avec celles des existants, hors du mode remplacer, et
+//      avec celles des objectifs de table dans chaque mode : les objectifs
+//      appartiennent aux tables, que remplacer garde ;
 //   8. en mode mettreAJour, les lignes ajoutées à côté d'un existant de même
 //      nom se nomment ; dans chaque mode, les cellules qui s'étendent sur
 //      plusieurs lignes du texte et portent le séparateur.
 // Une ligne refusée ne refuse pas le texte : le reste s'importe, et la ligne
 // revient dans le CSV des refus (§ 10.1).
 
+import { ETIQUETTES_MAX, lireEtiquettes } from '../stockage/etiquettes.js';
 import { associer, reconnaitre } from './colonnes.js';
 import { contientNul } from './encodage.js';
 import { ErreurCsv } from './erreurs.js';
+import { cleEtiquette, reconcilier as reconcilierEtiquettes } from './etiquettes.js';
 import { choisirSeparateur, decouper, enregistrementVide } from './lecture.js';
 import { cleNormalisee } from './normalisation.js';
 
@@ -78,6 +83,12 @@ export const VALEURS_EXCLU = new Map([
  * @property {boolean|null} exclu          null pour une cellule vide ou une
  *           colonne absente : vide vaut non pour une personne créée, et laisse
  *           la valeur d'une personne existante qu'un import met à jour
+ * @property {string[]|null} etiquettes    les étiquettes de la cellule,
+ *           découpées par lireEtiquettes, dans l'ordre de la cellule, chacune
+ *           sous l'orthographe que la réconciliation lui donne, sans deux de
+ *           même clé, ETIQUETTES_MAX au plus ; null pour une colonne absente
+ *           ou une cellule qui n'en donne aucune — vide, blanche ou faite de
+ *           séparateurs —, qui laisse celles d'une personne mise à jour
  *
  * @typedef {Object} Apercu
  * @property {'ajouter'|'mettreAJour'|'remplacer'} mode   le mode pour lequel
@@ -93,10 +104,15 @@ export const VALEURS_EXCLU = new Map([
  *           les lignes valides ; ligne : rang de l'enregistrement à partir de
  *           1, l'en-tête compris ; champs : chaînes en NFC, blancs de bord
  *           retirés, vide → null ; brut : les champs tels que découpés
- * @property {Array<{ligne: number, code: string, valeur: string|null, brut: string[]}>} refusees
- *           code : CHAMPS_EN_TROP, NOM_ABSENT, EXCLU_INCONNU ; valeur : la
- *           valeur d'« exclu » refusée, en NFC sans ses blancs de bord, null
- *           pour les deux autres codes
+ * @property {Array<{ligne: number, code: string, valeur: string|null, raison?: string, nombre?: number, brut: string[]}>} refusees
+ *           code : CHAMPS_EN_TROP, NOM_ABSENT, EXCLU_INCONNU,
+ *           ETIQUETTE_MAL_FORMEE, ETIQUETTES_TROP_NOMBREUSES ; valeur : la
+ *           valeur d'« exclu » refusée, en NFC sans ses blancs de bord, ou la
+ *           première étiquette fautive de la cellule, mise en forme ; null
+ *           pour les autres codes ; raison, sous ETIQUETTE_MAL_FORMEE :
+ *           'controle' ou 'longueur', celle de lireEtiquettes ; nombre, sous
+ *           ETIQUETTES_TROP_NOMBREUSES : les étiquettes de clés distinctes
+ *           que porte la cellule
  * @property {Array<{affichee: string, orthographes: Array<{texte: string, lignes: number[]}>}>} fusions
  *           chaque groupe d'au moins deux orthographes, existantes comprises
  *           hors du mode remplacer, qui porte une ligne valide, rangé par sa
@@ -104,6 +120,11 @@ export const VALEURS_EXCLU = new Map([
  *           orthographes dans l'ordre de rencontre, la première affichée ;
  *           lignes : rangs des lignes valides de cette orthographe, vide pour
  *           une orthographe que seuls des participants existants portent
+ * @property {import('./etiquettes.js').FusionEtiquettes[]} fusionsEtiquettes
+ *           les fusions d'orthographes d'étiquettes que rend reconcilier
+ *           (etiquettes.js) sur les lignes valides : chacune nomme
+ *           l'orthographe retenue, les orthographes de sa clé et son nombre
+ *           de lignes réécrites ; distinctes des fusions des appartenances
  * @property {Array<{cle: string, lignes: number[], existants: number[]}>} doublons
  *           chaque triplet (nom, prénom, appartenance) normalisé que portent au
  *           moins deux personnes, dont une ligne valide, rangé par sa première
@@ -130,8 +151,8 @@ export const VALEURS_EXCLU = new Map([
  *           lignes a la même forme, et l'export l'écrit ainsi (§ 10.2) :
  *           l'aperçu la nomme sans refuser la ligne
  * @property {null|'CARACTERE_NUL'|'AUCUN_ENTETE'|'SEPARATEUR_INTROUVABLE'|'GUILLEMET_OUVERT'|'NOM_NON_ASSOCIE'|'AUCUNE_LIGNE_VALIDE'} refusGlobal
- *           sous un refus global, lignes, fusions, doublons, homonymes et
- *           multilignes sont vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les lignes
+ *           sous un refus global, lignes, fusions, fusionsEtiquettes,
+ *           doublons, homonymes et multilignes sont vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les lignes
  *           refusées sont la cause
  * @property {number|null} refusGlobalLigne   sous GUILLEMET_OUVERT, le rang de
  *           l'enregistrement où le guillemet s'ouvre ; sous
@@ -156,6 +177,7 @@ function refuserEn(
     lignes: [],
     refusees: [],
     fusions: [],
+    fusionsEtiquettes: [],
     doublons: [],
     homonymes: [],
     multilignes: [],
@@ -181,12 +203,38 @@ function valeurDe(brut, rang) {
 // sur chaque appartenance, lue ou existante.
 const appartenanceNommee = (texte) => typeof texte === 'string' && cleNormalisee(texte) !== '';
 
+// Les étiquettes d'une cellule (§ 4.5, § 10.1), par la découpe de la saisie
+// (lireEtiquettes) : { etiquettes }, null quand la cellule n'en donne aucune,
+// ou le motif du refus de la ligne. Une étiquette mal formée refuse,
+// ETIQUETTE_MAL_FORMEE, la première nommée avec sa raison ; puis plus
+// d'ETIQUETTES_MAX clés distinctes, ETIQUETTES_TROP_NOMBREUSES : deux
+// morceaux de même clé ne font qu'une étiquette, que la réconciliation
+// fond. Tronquer ou écarter en silence ferait manquer un objectif sans que
+// rien ne le dise. La cellule arrive telle que découpée, sans le trim de
+// valeurDe : trim retire au bord une tabulation ou U+FEFF, que
+// lireEtiquettes refuse, et la ligne ne dépendrait plus que de leur place.
+// cellule : undefined quand le champ n'a pas de colonne ou que
+// l'enregistrement s'arrête avant elle.
+function etiquettesDe(cellule) {
+  if (cellule === undefined) return { etiquettes: null };
+  const { etiquettes, fautes } = lireEtiquettes(cellule);
+  if (fautes.length > 0) {
+    const [{ valeur, raison }] = fautes;
+    return { refus: { code: 'ETIQUETTE_MAL_FORMEE', valeur, raison } };
+  }
+  const nombre = new Set(etiquettes.map(cleEtiquette)).size;
+  if (nombre > ETIQUETTES_MAX) return { refus: { code: 'ETIQUETTES_TROP_NOMBREUSES', valeur: null, nombre } };
+  return { etiquettes: etiquettes.length === 0 ? null : etiquettes };
+}
+
 // Lit un enregistrement de données selon les colonnes associées, largeur
 // étant le nombre d'en-têtes. Rend { champs }, l'appartenance telle qu'écrite
-// ou null quand elle n'en nomme aucune, ou le motif du refus { code, valeur },
-// un seul, dans cet ordre : un champ non vide au-delà de l'en-tête, qui dit
-// une ligne décalée dont aucune valeur n'est sûre ; un nom vide ; une valeur
-// d'« exclu » hors de la liste fermée.
+// ou null quand elle n'en nomme aucune, les étiquettes telles que découpées,
+// ou le motif du refus { code, valeur }, avec raison ou nombre pour les
+// étiquettes, un seul, dans cet ordre : un champ non vide au-delà de
+// l'en-tête, qui dit une ligne décalée dont aucune valeur n'est sûre ; un nom
+// vide ; une valeur d'« exclu » hors de la liste fermée ; une étiquette mal
+// formée ; trop d'étiquettes.
 function lireLigne(brut, largeur, colonnes) {
   if (!enregistrementVide(brut.slice(largeur))) return { code: 'CHAMPS_EN_TROP', valeur: null };
   const lire = (champ) => valeurDe(brut, colonnes[champ]);
@@ -195,6 +243,8 @@ function lireLigne(brut, largeur, colonnes) {
   const valeurExclu = lire('exclu');
   const exclu = valeurExclu === null ? null : VALEURS_EXCLU.get(cleNormalisee(valeurExclu));
   if (exclu === undefined) return { code: 'EXCLU_INCONNU', valeur: valeurExclu };
+  const { etiquettes, refus } = etiquettesDe(colonnes.etiquettes === undefined ? undefined : brut[colonnes.etiquettes]);
+  if (refus !== undefined) return refus;
   const appartenance = lire('appartenance');
   return {
     champs: {
@@ -205,8 +255,20 @@ function lireLigne(brut, largeur, colonnes) {
       titrePressenti: lire('titre_pressenti'),
       notes: lire('notes'),
       exclu,
+      etiquettes,
     },
   };
+}
+
+// Les étiquettes de l'événement qui donnent leur orthographe à celles d'un
+// fichier importé (§ 10.1) : celles des participants existants — aucun
+// sous remplacer, qui les retire —, puis celles des objectifs de table,
+// dans chaque mode. reconcilier ne dépend pas de leur ordre.
+function etiquettesExistantes(existants, tables) {
+  return [
+    ...existants.flatMap(({ etiquettes = [] }) => etiquettes),
+    ...tables.flatMap(({ objectifs = [] }) => objectifs.flatMap(({ etiquettes }) => etiquettes)),
+  ];
 }
 
 // Réconcilie les appartenances (§ 10.1). Les orthographes de même clé
@@ -367,13 +429,17 @@ function multilignesDe(lignes, separateur) {
  * remplacer, chaque existant est retiré avant que les lignes s'ajoutent :
  * aucune ligne n'en est le doublon, et aucune orthographe existante ne
  * s'affiche ni ne fond avec celles du fichier. Ajouter et mettre à jour
- * lisent le fichier contre les existants.
+ * lisent le fichier contre les existants. Les étiquettes des objectifs de
+ * table donnent leur orthographe dans chaque mode.
  *
  * @param {string} texte  le texte que rend decoder, ou celui d'un collage
  * @param {Object} [options]
  * @param {Array<{id: number, nom: string, prenom: string|null, appartenance: string|null}>} [options.participants]
  *   les participants existants, dans n'importe quel ordre : l'identifiant
  *   ordonne leurs orthographes
+ * @param {Array<{objectifs?: Array<{etiquettes: string[]}>}>} [options.tables]
+ *   les tables de l'événement, dont seules les étiquettes des objectifs se
+ *   lisent
  * @param {Object<string, number>} [options.choix]  { champ: rang } qui tranche
  *   une ambiguïté de l'en-tête (voir associer)
  * @param {'ajouter'|'mettreAJour'|'remplacer'} [options.mode]  ajouter par
@@ -382,7 +448,7 @@ function multilignesDe(lignes, separateur) {
  * @throws {TypeError} quand texte n'est pas une chaîne : des octets passent
  *   d'abord par decoder ; pour un mode inconnu
  */
-export function apercevoir(texte, { participants = [], choix = {}, mode = 'ajouter' } = {}) {
+export function apercevoir(texte, { participants = [], tables = [], choix = {}, mode = 'ajouter' } = {}) {
   if (typeof texte !== 'string') throw new TypeError('texte : chaîne attendue');
   if (!MODES.includes(mode)) throw new TypeError(`mode : ${MODES.join(', ')} attendu, reçu ${String(mode)}`);
   // Chaque refus global porte le mode de l'aperçu.
@@ -422,17 +488,25 @@ export function apercevoir(texte, { participants = [], choix = {}, mode = 'ajout
     const brut = enregistrements[indice];
     if (enregistrementVide(brut)) continue;
     const ligne = indice + 1;
-    const lecture = lireLigne(brut, entetes.length, association.colonnes);
-    if (lecture.champs === undefined) refusees.push({ ligne, code: lecture.code, valeur: lecture.valeur, brut });
-    else valides.push({ ligne, champs: lecture.champs, brut });
+    const { champs: lus, ...refus } = lireLigne(brut, entetes.length, association.colonnes);
+    if (lus === undefined) refusees.push({ ligne, ...refus, brut });
+    else valides.push({ ligne, champs: lus, brut });
   }
   if (valides.length === 0) return { ...refuser('AUCUNE_LIGNE_VALIDE', lu), refusees };
 
   const existants = mode === 'remplacer' ? [] : [...participants].sort((a, b) => a.id - b.id);
   const { afficheeDe, fusions } = reconcilier(existants, valides);
-  const lignes = valides.map(({ ligne, champs, brut }) => ({
+  const { listes, fusions: fusionsEtiquettes } = reconcilierEtiquettes(
+    etiquettesExistantes(existants, tables),
+    valides.map(({ champs }) => champs.etiquettes),
+  );
+  const lignes = valides.map(({ ligne, champs, brut }, rang) => ({
     ligne,
-    champs: { ...champs, appartenance: champs.appartenance === null ? null : afficheeDe(champs.appartenance) },
+    champs: {
+      ...champs,
+      appartenance: champs.appartenance === null ? null : afficheeDe(champs.appartenance),
+      etiquettes: listes[rang],
+    },
     brut,
   }));
   return {
@@ -441,6 +515,7 @@ export function apercevoir(texte, { participants = [], choix = {}, mode = 'ajout
     lignes,
     refusees,
     fusions,
+    fusionsEtiquettes,
     doublons: doublonsDe(existants, lignes),
     homonymes: mode === 'mettreAJour' ? homonymesDe(participants, lignes) : [],
     multilignes: multilignesDe(lignes, separateur),

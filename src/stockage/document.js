@@ -19,7 +19,8 @@
 // FORMAT_INCONNU s'il n'est pas un entier ≥ 1) ; la forme de chaque champ,
 // dans l'ordre du schéma puis des rangs (FORME) ; les identifiants des
 // participants et des tables, le tour des réservations, la portée et le tour
-// des objectifs de table, et les titres répétés à l'identique (FORME) ; les
+// des objectifs de table, l'ordre des priorités sous le mode des objectifs,
+// et les titres répétés à l'identique (FORME) ; les
 // comptes de la saisie dans l'en-tête — participants, tables, réservations,
 // titres — (COMPTES) ; les références (REFERENCE). Les comptes des
 // propositions et du retenu ne refusent jamais le fichier (§ 8.9, point 3) :
@@ -40,13 +41,14 @@
 // Un fichier d'un format plus ancien se lit comme un fichier du format
 // courant : chaque format n'ajoute au précédent que des champs facultatifs
 // (§ 8.8, § 8.9). Le format 2 ajoute les étiquettes des personnes, les
-// objectifs des tables et quatre réglages, chacun absent à son défaut ; un
+// objectifs des tables et cinq réglages, chacun absent à son défaut ; un
 // fichier du format 1 ne les porte pas, et se lit sans conversion. Il ne se
 // réécrit qu'au premier geste, au format courant.
 //
 // Les autres fonctions créent une charge ou dérivent d'elle la configuration
 // du moteur, l'état qu'impose son contenu, la capacité d'une table et la
 // valeur d'un réglage facultatif. Aucune ne modifie ce qu'elle reçoit.
+import { CRITERES, POIDS_MAX, PRIORITES_PAR_DEFAUT, completerPriorites, verifierPriorites } from '../moteur/criteres.js';
 import { HISTORIQUE_PAR_DEFAUT } from '../moteur/recherche.js';
 import { ETIQUETTES_MAX, estEtiquetteBienFormee } from './etiquettes.js';
 import { ErreurStockage } from './erreurs.js';
@@ -253,6 +255,26 @@ const OBJECTIF = objet([
 // défaut, il est une faute de forme.
 const horsDuDefaut = (...valeurs) => regle('parmi', { valeurs: Object.freeze(valeurs), optionnel: true });
 
+// Les critères d'un palier de priorités se rangent dans l'ordre du registre
+// (A16) ; à critère égal, que l'analyse refuse, le poids puis le JSON les
+// départagent : l'ordre reste total.
+const rangDuCritere = (nom) => CRITERES.indexOf(nom);
+const ordreDansLePalier = (a, b) =>
+  rangDuCritere(a.critere) - rangDuCritere(b.critere) ||
+  a.poids - b.poids ||
+  comparerTextes(JSON.stringify(a), JSON.stringify(b));
+
+// L'ordre des priorités (§ 5.7, A16) : une liste non vide de paliers, chacun
+// une liste non vide d'entrées {critere, poids}, le critère nommé par le
+// registre, le poids entier de 1 à POIDS_MAX ; chaque palier s'écrit rangé.
+// La répétition, l'absence, les critères seuls à leur palier sous le mode
+// des objectifs et l'ordre par défaut écrit se jugent sur la charge entière
+// (examinerPriorites).
+const PRIORITES = liste(
+  liste(objet([['critere', parmi(...CRITERES)], ['poids', entier(1, POIDS_MAX)]]), { min: 1, tri: ordreDansLePalier }),
+  { min: 1, optionnel: true },
+);
+
 const REGLAGES = objet([
   ['separerAppartenances', BOOLEEN],
   ['nouveauxVoisins', BOOLEEN],
@@ -266,12 +288,14 @@ const REGLAGES = objet([
   // « et » seulement (regleObjectifs) ; la case des objectifs, décochée
   // seulement (respecterObjectifs) ; le mode des objectifs hors du plus de
   // places servies (modeObjectifs) ; la case des animateurs, cochée
-  // seulement (rencontrerAnimateurs).
+  // seulement (rencontrerAnimateurs) ; l'ordre des priorités hors de l'ordre
+  // par défaut (priorites).
   ['cibleRedondance', entier(0, Infinity, { optionnel: true })],
   ['regleObjectifs', horsDuDefaut('et')],
   ['respecterObjectifs', horsDuDefaut(false)],
   ['modeObjectifs', horsDuDefaut('chacun', 'minimum')],
   ['rencontrerAnimateurs', horsDuDefaut(true)],
+  ['priorites', PRIORITES],
 ]);
 
 const PARTICIPANT = objet([
@@ -678,6 +702,37 @@ function examinerObjectifs({ evenement, tables }, faute) {
   });
 }
 
+// L'ordre des priorités, quand les réglages le portent, chaque palier rangé
+// dans l'ordre du registre : la liste se juge par verifierPriorites sous le
+// mode des objectifs de la charge, et l'ordre par défaut écrit est une faute
+// (§ 8.9, A16). Une faute d'un palier désigne ce palier ; une autre, la
+// liste. faute(chemin) lève l'écart.
+function examinerPriorites(charge, faute) {
+  const { priorites: portee } = charge.reglages;
+  if (portee === undefined) return;
+  const chemin = 'charge.reglages.priorites';
+  const rangee = rangerPriorites(portee);
+  const ecart = verifierPriorites(rangee, modeObjectifs(charge));
+  if (ecart !== null) faute(ecart.palier === undefined ? chemin : `${chemin}[${ecart.palier}]`);
+  if (egaleAuDefaut(rangee)) faute(chemin);
+}
+
+// Copie d'une liste de priorités, chaque palier rangé dans l'ordre du
+// registre, chaque entrée réduite à {critere, poids}.
+const rangerPriorites = (liste) =>
+  liste.map((palier) => palier.map(({ critere, poids }) => ({ critere, poids })).sort(ordreDansLePalier));
+
+// Vrai quand une liste rangée est l'ordre par défaut : chaque critère seul à
+// son palier, au poids 1, dans l'ordre du registre.
+const egaleAuDefaut = (liste) =>
+  liste.length === PRIORITES_PAR_DEFAUT.length &&
+  liste.every(
+    (palier, rang) =>
+      palier.length === 1 &&
+      palier[0].critere === PRIORITES_PAR_DEFAUT[rang][0].critere &&
+      palier[0].poids === PRIORITES_PAR_DEFAUT[rang][0].poids,
+  );
+
 // Comptes de l'en-tête qui portent sur les placements : une proposition ou
 // un retenu perdus se recalculent, la saisie non.
 const COMPTES_DES_PLACEMENTS = new Set(['propositions', 'retenu']);
@@ -770,6 +825,7 @@ export function analyser(texte) {
   examinerIdentifiants(charge, faute);
   examinerTours(charge, faute);
   examinerObjectifs(charge, faute);
+  examinerPriorites(charge, faute);
   examinerTitres(charge, faute);
   const manquants = examinerComptes(entete.comptes, charge, plus);
   examinerReferences(charge, plus);
@@ -784,18 +840,23 @@ export function analyser(texte) {
  * quatre contraintes des réglages et les deux cases facultatives ; les
  * objectifs des tables, chacun { table, tour, regle, etiquettes }, tour null
  * pour la soirée, sa règle résolue : la sienne, sinon la règle par défaut
- * (regleObjectifs) ; le mode des objectifs. Chaque champ nouveau du format 2
- * est absent à son défaut — étiquettes d'une personne qui n'en porte pas,
- * objectifs quand aucune table n'en a, modeObjectifs à « places »,
- * respecterObjectifs coché, rencontrerAnimateurs décoché — : la
- * configuration d'une charge sans eux est celle du format 1. Les tables vont
+ * (regleObjectifs) ; le mode des objectifs ; l'ordre des priorités, tel que
+ * le rend priorites. Chaque champ nouveau du format 2 est absent à son
+ * défaut — étiquettes d'une personne qui n'en porte pas, objectifs quand
+ * aucune table n'en a, modeObjectifs à « places », respecterObjectifs coché,
+ * rencontrerAnimateurs décoché, priorites quand les réglages ne le portent
+ * pas — : la configuration d'une charge sans eux est celle du format 1. Qui
+ * anime à chaque tour ne se lit pas ici : configurationDe
+ * (src/application/configuration.js) l'ajoute, sur la règle des titres
+ * pourvus, que le stockage n'importe pas. Les tables vont
  * par identifiant croissant, l'ordre du texte canonique : le moteur assoit
  * table après table, et une charge aux tables dans un autre ordre, relue
  * après un enregistrement, ne régénérerait plus ses propositions (§ 8.9).
  * Les objectifs suivent l'ordre des tables, puis la soirée et les tours
  * croissants. Les participants et les réservations gardent l'ordre de la
  * charge : le rang d'une réservation que nomme une ErreurConfiguration est
- * son rang dans la charge. Les listes d'étiquettes sont des copies.
+ * son rang dans la charge. Les listes d'étiquettes et de priorités sont des
+ * copies.
  *
  * @param {import('./types.js').Charge} charge
  * @returns {import('../moteur/types.js').Configuration}
@@ -834,6 +895,7 @@ export function configurationDepuisCharge(charge) {
   if (objectifs.length > 0) configuration.objectifs = objectifs;
   const mode = modeObjectifs(charge);
   if (mode !== MODE_OBJECTIFS_PAR_DEFAUT) configuration.modeObjectifs = mode;
+  if (reglages.priorites !== undefined) configuration.priorites = priorites(charge);
   return configuration;
 }
 
@@ -917,6 +979,23 @@ export function critereCoche(charge, cle) {
  */
 export function modeObjectifs(charge) {
   return charge.reglages.modeObjectifs ?? MODE_OBJECTIFS_PAR_DEFAUT;
+}
+
+/**
+ * L'ordre des priorités de l'événement (§ 5.7, § 8.9, A16) : la liste que
+ * les réglages portent, sinon l'ordre par défaut. Chaque palier y est rangé
+ * dans l'ordre du registre, et un critère que la liste ne nomme pas — écrit
+ * sous un format qui ne le connaissait pas — y prend sa place de l'ordre par
+ * défaut, seul à son palier, au poids 1 (completerPriorites). C'est la seule
+ * lecture de ce réglage. Rend une liste neuve à chaque appel ; ne modifie pas
+ * la charge.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @returns {Array<Array<{critere: string, poids: number}>>}
+ */
+export function priorites(charge) {
+  const { priorites: portee } = charge.reglages;
+  return portee === undefined ? rangerPriorites(PRIORITES_PAR_DEFAUT) : completerPriorites(rangerPriorites(portee));
 }
 
 /**

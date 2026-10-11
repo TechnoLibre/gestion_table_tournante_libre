@@ -11,6 +11,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
 import { bilanRemplacement } from '../csv/import.js';
 import { rechercher } from '../moteur/recherche.js';
+import { serialiserCharge } from '../stockage/canonique.js';
 import { configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { derive, fautes, formeNommee, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
@@ -96,10 +97,11 @@ const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
 const CSV_DEUX = 'nom;prenom;appartenance\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, les dix des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, les dix des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
       'ajouterParticipant',
       'changerEtat',
+      'changerEtiquettes',
       'convertirEnTous',
       'debloquer',
       'deplacerDansRetenu',
@@ -120,7 +122,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 21);
+    assert.equal(attendues.length, 22);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
   });
@@ -254,6 +256,134 @@ describe('commandes : les participants (§ 4, § 4.4, § 10.2)', () => {
       { code: 'RESERVATIONS_RETIREES', details: { participant: 1, personne: 'Iris Ombrelle', reservations: 1, titres: 1 } },
     ]);
     refuse(() => executer('supprimerParticipant', chargeEssai(), { id: 9 }), 'PARTICIPANT_INCONNU');
+  });
+});
+
+describe('commandes : les étiquettes d’une personne (§ 4.5, § 5.9, A12)', () => {
+  // La charge d'essai, Iris Ombrelle « finance », la table 2 d'objectif de
+  // soirée « ressources humaines » sous sa règle propre.
+  function chargeEtiquetee() {
+    const charge = chargeEssai();
+    charge.participants[0].etiquettes = ['finance'];
+    charge.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: 'ou', etiquettes: ['ressources humaines'] }];
+    return charge;
+  }
+  const etiquettesDe = (charge, id) => charge.participants.find((p) => p.id === id).etiquettes;
+
+  test('ajouter une saisie de deux étiquettes : triées par unités de code, le libellé nomme la personne et chacune', () => {
+    const rendu = executer('changerEtiquettes', figer(chargeEssai()), { id: 3, ajouter: ' voile ; Montre\u{0301}al ' });
+    assert.deepEqual(etiquettesDe(rendu.charge, 3), ['Montréal', 'voile']);
+    assert.equal(rendu.libelle, 'Étiquettes de Théo Pervenche : ajouté « Montréal » et « voile »');
+    assert.deepEqual(rendu.avertissements, []);
+    const ordre = Object.keys(rendu.charge.participants[2]);
+    assert.equal(ordre.at(-1), 'etiquettes');
+  });
+
+  test('« a|b » saisi sur la fiche fait deux étiquettes : la barre sépare', () => {
+    assert.deepEqual(etiquettesDe(executer('changerEtiquettes', chargeEssai(), { id: 3, ajouter: 'a|b' }).charge, 3), ['a', 'b']);
+  });
+
+  test("l'orthographe existante d'une personne est reçue, et le dit : ORTHOGRAPHE_RETENUE {saisie, retenue}", () => {
+    const rendu = executer('changerEtiquettes', chargeEtiquetee(), { id: 3, ajouter: 'FINANCE' });
+    assert.deepEqual(etiquettesDe(rendu.charge, 3), ['finance']);
+    assert.deepEqual(rendu.avertissements, [{ code: 'ORTHOGRAPHE_RETENUE', details: { saisie: 'FINANCE', retenue: 'finance' } }]);
+  });
+
+  test("deux orthographes d'une clé que l'événement ne porte pas se fondent dans la saisie, sans avertissement", () => {
+    const rendu = executer('changerEtiquettes', chargeEssai(), { id: 3, ajouter: 'Montréal, MONTRÉAL' });
+    assert.deepEqual(etiquettesDe(rendu.charge, 3), ['MONTRÉAL']);
+    assert.deepEqual(rendu.avertissements, []);
+  });
+
+  test("la réconciliation lit l'événement entier : une étiquette que seul un objectif porte donne son orthographe", () => {
+    const rendu = executer('changerEtiquettes', chargeEtiquetee(), { id: 4, ajouter: 'Ressources  Humaines' });
+    assert.deepEqual(etiquettesDe(rendu.charge, 4), ['ressources humaines']);
+    assert.deepEqual(rendu.avertissements, [
+      { code: 'ORTHOGRAPHE_RETENUE', details: { saisie: 'Ressources Humaines', retenue: 'ressources humaines' } },
+    ]);
+  });
+
+  test("deux orthographes déjà présentes dans un fichier retouché : la plus petite par points de code est reçue", () => {
+    const charge = chargeEtiquetee();
+    charge.participants[1].etiquettes = ['Finance'];
+    assert.deepEqual(etiquettesDe(executer('changerEtiquettes', charge, { id: 3, ajouter: 'finance' }).charge, 3), ['Finance']);
+  });
+
+  test('retirer : la dernière étiquette retirée retire le champ ; une étiquette et sa nouvelle orthographe dans un même geste', () => {
+    const charge = chargeEtiquetee();
+    const retiree = executer('changerEtiquettes', charge, { id: 1, retirer: 'finance' });
+    assert.equal(Object.hasOwn(retiree.charge.participants[0], 'etiquettes'), false);
+    assert.equal(retiree.libelle, 'Étiquettes de Iris Ombrelle : retiré « finance »');
+    // Seule à porter « finance », Iris la renomme : l'orthographe retirée ne
+    // s'impose plus à la saisie.
+    const renommee = executer('changerEtiquettes', charge, { id: 1, retirer: 'finance', ajouter: 'Finance' });
+    assert.deepEqual(etiquettesDe(renommee.charge, 1), ['Finance']);
+    assert.deepEqual(renommee.avertissements, []);
+    assert.equal(renommee.libelle, 'Étiquettes de Iris Ombrelle : ajouté « Finance » ; retiré « finance »');
+  });
+
+  test('SANS_EFFET par comparaison d’ensembles : une étiquette déjà portée, son autre orthographe, une étiquette absente à retirer', () => {
+    const charge = chargeEtiquetee();
+    charge.participants[0].etiquettes = ['finance', 'voile'];
+    for (const args of [
+      { id: 1, ajouter: 'voile, finance' },
+      { id: 1, ajouter: 'Finance' },
+      { id: 1, retirer: 'escalade' },
+      { id: 1, retirer: 'finance', ajouter: 'finance' },
+    ]) {
+      refuse(() => executer('changerEtiquettes', charge, args), 'SANS_EFFET', { commande: 'changerEtiquettes', remede: null });
+    }
+  });
+
+  test('une étiquette mal formée est refusée ETIQUETTE_INVALIDE {valeur, raison}, remède null ; une saisie vide aussi', () => {
+    const charge = chargeEssai();
+    refuse(() => executer('changerEtiquettes', charge, { id: 3, ajouter: 'voile, a\u{0009}b' }), 'ETIQUETTE_INVALIDE', {
+      valeur: 'a\u{0009}b',
+      raison: 'controle',
+      remede: null,
+    });
+    const longue = 'x'.repeat(41);
+    refuse(() => executer('changerEtiquettes', charge, { id: 3, ajouter: longue }), 'ETIQUETTE_INVALIDE', {
+      valeur: longue,
+      raison: 'longueur',
+      remede: null,
+    });
+    for (const vide of ['', '   ', ' ,; | ']) {
+      refuse(() => executer('changerEtiquettes', charge, { id: 3, ajouter: vide }), 'ETIQUETTE_INVALIDE', { valeur: '', raison: 'vide', remede: null });
+    }
+    assert.deepEqual(etiquettesDe(executer('changerEtiquettes', charge, { id: 3, ajouter: 'x'.repeat(40) }).charge, 3), ['x'.repeat(40)]);
+  });
+
+  test('une vingt-et-unième étiquette est refusée ETIQUETTES_EN_TROP {nombre}, remède null ; la vingtième passe', () => {
+    const charge = chargeEssai();
+    charge.participants[2].etiquettes = Array.from({ length: 19 }, (_, rang) => `e${String(rang).padStart(2, '0')}`);
+    assert.equal(etiquettesDe(executer('changerEtiquettes', charge, { id: 3, ajouter: 'voile' }).charge, 3).length, 20);
+    refuse(() => executer('changerEtiquettes', charge, { id: 3, ajouter: 'voile, escalade' }), 'ETIQUETTES_EN_TROP', { nombre: 21, remede: null });
+  });
+
+  test('les mêmes étiquettes sous deux ordres de saisie s’écrivent pareil', () => {
+    const une = executer('changerEtiquettes', chargeEssai(), { id: 3, ajouter: 'voile, Montréal, escalade' }).charge;
+    let autre = executer('changerEtiquettes', chargeEssai(), { id: 3, ajouter: 'escalade' }).charge;
+    autre = executer('changerEtiquettes', autre, { id: 3, ajouter: 'Montréal | voile' }).charge;
+    assert.equal(serialiserCharge(une), serialiserCharge(autre));
+    assert.deepEqual(etiquettesDe(une, 3), etiquettesDe(autre, 3));
+  });
+
+  test("personne inconnue, plan bloqué, arguments de forme fausse", () => {
+    refuse(() => executer('changerEtiquettes', chargeEssai(), { id: 42, ajouter: 'voile' }), 'PARTICIPANT_INCONNU', { id: 42, remede: null });
+    const bloquee = { ...chargeEssai(), evenement: { ...chargeEssai().evenement, etat: 'bloque' } };
+    refuse(() => executer('changerEtiquettes', bloquee, { id: 3, ajouter: 'voile' }), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+    for (const args of [{ id: 3 }, { id: 3, ajouter: 4 }, { id: 3, retirer: ['voile'] }, { id: 3, retirer: null }]) {
+      assert.throws(() => executer('changerEtiquettes', chargeEssai(), args), TypeError, JSON.stringify(args));
+    }
+  });
+
+  test('changer les étiquettes ne met aucune proposition en dérive (D13)', () => {
+    const charge = chargeRiche();
+    const apres = executer('changerEtiquettes', charge, { id: 2, ajouter: 'finance' }).charge;
+    for (const placement of [...charge.propositions, charge.retenu]) {
+      assert.deepEqual(derive(placement, apres), derive(placement, charge));
+    }
   });
 });
 
@@ -606,6 +736,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['debloquer', { ...charge, evenement: { ...charge.evenement, etat: 'bloque' } }],
       ['convertirEnTous', reservee],
       ['deplacerDansRetenu', executer('retirerDuTour', charge, { tour: 1, participant: autre }).charge],
+      ['retirerObjectif', executer('poserObjectif', charge, { table: 2, tour: null, etiquettes: 'finance', regle: null }).charge],
     ]);
   }
 
@@ -643,6 +774,10 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['changerTours', { tours: 3 }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['changerCibleRedondance', { cible: '1200' }],
+      ['changerEtiquettes', { id: 3, ajouter: 'finance' }],
+      ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
+      ['retirerObjectif', { table: 2, tour: null }],
+      ['changerRegleObjectifs', { regle: 'et' }],
     ]);
   }
 
@@ -690,8 +825,8 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1 et les deux registres de F1, vides tant que leurs tâches ne les remplissent pas", () => {
-    assert.equal(COMMANDES.size, 11 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes et les deux registres de F1", () => {
+    assert.equal(COMMANDES.size, 12 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
     for (const registre of [COMMANDES_MOBILIER, COMMANDES_PLACES]) {

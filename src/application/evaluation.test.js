@@ -19,10 +19,11 @@ import { mesurer } from '../moteur/indicateurs.js';
 import { ecartsAuPlafondAPriori } from '../moteur/manque.js';
 import { plafondsAPriori } from '../moteur/plafond.js';
 import { rechercher } from '../moteur/recherche.js';
-import { analyser, capacite, configurationDepuisCharge } from '../stockage/document.js';
+import { analyser, capacite } from '../stockage/document.js';
 import { fautes, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
+import { configurationDe } from './configuration.js';
 import {
   CIBLE_REDONDANCE_PAR_DEFAUT,
   cibleRedondance,
@@ -38,7 +39,7 @@ const chargeDemo = (cle) => analyser(texteLivre(cle)).charge;
 
 // La charge, une génération du moteur de plus, enregistrée par la commande.
 function generee(charge, reglages) {
-  const configuration = configurationDepuisCharge(charge);
+  const configuration = configurationDe(charge);
   const propositions = rechercher(configuration, reglages);
   return appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
 }
@@ -139,7 +140,7 @@ describe("évaluation : la mesure qui fait foi (§ 5.10, § 13.2)", () => {
   test('chaque ligne comparable porte mesurer, les plafonds, les trois chiffres ; le classement est celui de classer', () => {
     const charge = figer(generee(chargeDemo('petite-conflit'), { graine: 5, nombre: 3, arret: 400 }));
     const table = evaluer(charge);
-    const instance = normaliser(configurationDepuisCharge(charge));
+    const instance = normaliser(configurationDe(charge));
     const aPriori = plafondsAPriori(instance);
     assert.deepEqual(table.population, instance.ids);
     assert.equal(table.propositions.length, 3);
@@ -179,7 +180,7 @@ describe("évaluation : la mesure qui fait foi (§ 5.10, § 13.2)", () => {
     assert.deepEqual(table.classement.ordre, [3, 2, 1, 4]);
     assert.deepEqual(table.classement.criteresAppliques[0], 'ecartAuPlafondAPrioriMax');
     for (const ligne of table.propositions) {
-      const ecarts = ecartsAuPlafondAPriori(ligne.mesures, plafondsAPriori(normaliser(configurationDepuisCharge(charge))));
+      const ecarts = ecartsAuPlafondAPriori(ligne.mesures, plafondsAPriori(normaliser(configurationDe(charge))));
       assert.equal(ligne.ecartAuPlafondAPrioriMax, Math.max(...ecarts));
     }
   });
@@ -228,7 +229,7 @@ describe('évaluation : les formes closes ne corrigent rien (§ 5.4)', () => {
     charge.prochainsIds.proposition = 2;
     charge.evenement.etat = 'retenu';
     const table = evaluer(figer(charge));
-    const plancher = diagnostiquer(configurationDepuisCharge(charge)).collisions.reduce((total, { plancherCumulees }) => total + plancherCumulees, 0);
+    const plancher = diagnostiquer(configurationDe(charge)).collisions.reduce((total, { plancherCumulees }) => total + plancherCumulees, 0);
     assert.equal(plancher, 4);
     assert.equal(table.retenu.statut, 'comparable');
     assert.equal(table.retenu.id, 1);
@@ -386,7 +387,7 @@ describe('évaluation : les imposés (§ 5.4, § 15.1)', () => {
   test('la grande démonstration : 99 retours imposés, 33 ancrages qui en imposent, ceux de diagnostiquer', () => {
     const charge = chargeDemo('grande');
     const table = evaluer(figer(charge));
-    const diagnostic = diagnostiquer(configurationDepuisCharge(charge));
+    const diagnostic = diagnostiquer(configurationDe(charge));
     assert.deepEqual(table.imposes, { retours: 99, ancrages: 33 });
     assert.deepEqual(table.imposes, { retours: diagnostic.retoursImposes, ancrages: diagnostic.ancragesImposantRetours });
   });
@@ -454,7 +455,7 @@ describe('resumeDuRetenu : la différence à la cible que lit la liste des évé
     const { mesures } = evaluer(charge).retenu;
     assert.ok(mesures.totalRedondance !== 1000, 'la différence se distingue de zéro');
     assert.deepEqual(resume, { diffRedondance: Math.abs(1000 - mesures.totalRedondance) });
-    const instance = normaliser(configurationDepuisCharge(charge));
+    const instance = normaliser(configurationDe(charge));
     const attendues = mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
     assert.equal(attendues.totalRedondance, mesures.totalRedondance);
     assert.equal(CIBLE_REDONDANCE_PAR_DEFAUT, 1000);

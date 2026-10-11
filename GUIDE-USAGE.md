@@ -561,6 +561,7 @@ majuscules ni aux accents.
 | `titre_pressenti` | `titre`, `rôle` |
 | `exclu` | — |
 | `notes` | — |
+| `etiquettes` | `étiquette`, `mots-clés` |
 
 <!-- engendre:fin colonnes-csv -->
 
@@ -575,6 +576,7 @@ l’historique ; les noms des exemples sont inventés.
 |---|---|
 | `ajouterParticipant` | Ajouté Iris Ombrelle |
 | `modifierParticipant` | Modifié Ondine Lacasse : courriel |
+| `changerEtiquettes` | Étiquettes de Iris Ombrelle : ajouté « finance » |
 | `exclureParticipant` | Exclu Théo Pervenche |
 | `reintegrerParticipant` | Réintégré Théo Pervenche |
 | `supprimerParticipant` | Supprimé Ondine Lacasse |
@@ -593,6 +595,9 @@ l’historique ; les noms des exemples sont inventés.
 | `changerTours` | Nombre de tours : 3 ; 2 réservations retirées |
 | `modifierReglage` | Séparer les appartenances : désactivé |
 | `changerCibleRedondance` | Cible de la somme de redondance : 1200 |
+| `poserObjectif` | Table 3 : objectif de la soirée « finance », règle par défaut |
+| `retirerObjectif` | Table 3, tour 2 : objectif retiré |
+| `changerRegleObjectifs` | Règle par défaut des objectifs : toutes les étiquettes |
 | `reserver` | Réservé Théo Pervenche à la table 4, siège 2, tour 2 |
 | `retirerReservation` | Réservation retirée : Théo Pervenche, table 4, tous les tours |
 | `deplacerReservation` | Réservation déplacée : Théo Pervenche, de la table 4 à la table 7, tour 2 |

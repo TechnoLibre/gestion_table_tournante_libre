@@ -8,7 +8,8 @@
 // indexerPlan comme un plan enregistré.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
-import { indexerPlan, normaliser } from './configuration.js';
+import { LIBRE, indexerPlan, normaliser } from './configuration.js';
+import { VALEURS_DES_MODES } from './criteres.js';
 import { mesurer, parcourirTours } from './indicateurs.js';
 
 const SANS_CONTRAINTE = {
@@ -160,6 +161,8 @@ describe('mesurer', () => {
         { groupe: 'B', effectif: 4, collisionsCumulees: 0, pairesDistinctes: 0, excedent: 0 },
         { groupe: 'C', effectif: 4, collisionsCumulees: 0, pairesDistinctes: 0, excedent: 0 },
       ],
+      objectifs: null,
+      animateurs: null,
     });
   });
 
@@ -641,6 +644,8 @@ describe('mesurer', () => {
       totalRetoursChoisis: 0,
       totalRetoursImposes: 0,
       parGroupe: [],
+      objectifs: null,
+      animateurs: null,
     });
   });
 
@@ -724,6 +729,8 @@ describe('parcourirTours', () => {
       parPaire: Uint16Array.of(2, 2, 0, 1, 0, 1),
       toursAssis: [3, 3, 3, 2],
       retours: [2, 1, 1, 1],
+      servis: [0, 0, 0, 0],
+      rencontresAnimateurs: [0, 0, 0, 0],
     });
   });
 
@@ -758,6 +765,8 @@ describe('parcourirTours', () => {
       parPaire: new Uint16Array(0),
       toursAssis: [],
       retours: [],
+      servis: [],
+      rencontresAnimateurs: [],
     });
   });
 
@@ -767,5 +776,466 @@ describe('parcourirTours', () => {
     const avant = { tableDe: tableDe.slice(), fixe: instance.fixe.slice(), groupe: instance.groupe.slice() };
     parcourirTours(instance, tableDe);
     assert.deepEqual({ tableDe, fixe: instance.fixe, groupe: instance.groupe }, avant);
+  });
+});
+
+// --- Les objectifs des tables et les animateurs (§ 4.5, § 5.4, A9, A21) -----
+
+// Configuration d'épreuve : personnes [id, étiquettes, tours animés], toutes
+// présentes ; tables [id, capacité], dans l'ordre de la configuration ;
+// objectifs {table, tour, regle, etiquettes}, règle résolue.
+function configurer({ personnes, tables, tours, reservations = [], objectifs = [] }) {
+  return {
+    participants: personnes.map(([id, etiquettes, anime]) => ({
+      id,
+      nom: `P${id}`,
+      appartenance: null,
+      ...(etiquettes === undefined ? {} : { etiquettes }),
+      ...(anime === undefined ? {} : { anime }),
+    })),
+    tables: tables.map(([id, capacite], i) => ({ id, numero: i + 1, capacite })),
+    tours,
+    reservations,
+    contraintes: SANS_CONTRAINTE,
+    ...(objectifs.length === 0 ? {} : { objectifs }),
+  };
+}
+
+// Plan indexé d'un plan écrit par identifiants, une liste par table dans
+// l'ordre de configuration.tables, sans réserve.
+function indexer(instance, configuration, tours) {
+  const tables = configuration.tables.map(({ id }) => id);
+  return indexerPlan(instance, { tables, tours, reserves: tours.map(() => []) });
+}
+
+// Les mesures d'un plan, avec l'instance qui les porte.
+function mesurerSur(configuration, tours) {
+  const instance = normaliser(configuration);
+  return { instance, mesures: mesurer(instance, indexer(instance, configuration, tours)) };
+}
+
+// Entiers de debut à fin, inclus.
+function suite(debut, fin) {
+  return Array.from({ length: fin - debut + 1 }, (_, i) => debut + i);
+}
+
+// Dix personnes « finance », 1 à 10, six sans étiquette, 11 à 16 ; la table
+// 1, « finance », de huit places ; la table 2, sans objectif, de huit
+// places ; quatre tours (A21, « chaque mode compare ce qu'il dit »).
+const FINANCE = configurer({
+  personnes: [...suite(1, 10).map((id) => [id, ['finance']]), ...suite(11, 16).map((id) => [id])],
+  tables: [[1, 8], [2, 8]],
+  tours: 4,
+  objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }],
+});
+
+// Le plan où la table 1 reçoit, à chaque tour, les « finance » hors des deux
+// que chaque paire nomme, et la table 2 ces deux-là avec les six autres.
+const tenus = (...paires) => paires.map((ecartes) => [
+  suite(1, 10).filter((id) => !ecartes.includes(id)),
+  [...ecartes, ...suite(11, 16)],
+]);
+
+describe('mesurer : les objectifs des tables (§ 5.4, A9, A21)', () => {
+  // Trois plans qui servent tous 32 places. Le premier laisse 10 sans tour
+  // servi : 1 à 5 en ont 4, 6 à 9 en ont 3. Le deuxième sert chacun une fois
+  // au moins : 9 et 10 une seule, 1 et 2 trois, 3 à 8 quatre. Le dernier
+  // sert chacun trois tours au moins : 1 à 8 trois, 9 et 10 quatre.
+  const PLANS = {
+    sansTourServi: tenus([9, 10], [8, 10], [7, 10], [6, 10]),
+    chacunUneFois: tenus([9, 10], [9, 10], [9, 10], [1, 2]),
+    troisAuMoins: tenus([1, 2], [3, 4], [5, 6], [7, 8]),
+  };
+  const attendus = {
+    sansTourServi: { tours: [4, 4, 4, 4, 4, 3, 3, 3, 3, 0], jamaisServies: 1, horsObjectifMax: 4, personnesAuMax: 1, min: 0 },
+    chacunUneFois: { tours: [3, 3, 4, 4, 4, 4, 4, 4, 1, 1], jamaisServies: 0, horsObjectifMax: 3, personnesAuMax: 2, min: 1 },
+    troisAuMoins: { tours: [3, 3, 3, 3, 3, 3, 3, 3, 4, 4], jamaisServies: 0, horsObjectifMax: 1, personnesAuMax: 8, min: 3 },
+  };
+
+  test('chaque plan, compté à la main : tours servis, tours possibles, et les valeurs des trois modes', () => {
+    for (const [nom, tours] of Object.entries(PLANS)) {
+      const { objectifs } = mesurerSur(FINANCE, tours).mesures;
+      const attendu = attendus[nom];
+      assert.deepEqual(objectifs.tours, [...attendu.tours, 0, 0, 0, 0, 0, 0], nom);
+      assert.deepEqual(objectifs.possibles, [...new Array(10).fill(4), 0, 0, 0, 0, 0, 0], nom);
+      assert.equal(objectifs.horsObjectif, 8, nom);
+      assert.equal(objectifs.jamaisServies, attendu.jamaisServies, nom);
+      assert.equal(objectifs.horsObjectifMax, attendu.horsObjectifMax, nom);
+      assert.equal(objectifs.personnesAuMax, attendu.personnesAuMax, nom);
+      assert.equal(objectifs.concernes, 10, nom);
+      // Le minimum porte sur les dix concernés, tous mobiles.
+      assert.deepEqual(objectifs.agregat.tous, { min: attendu.min, moyenne: 3.2, effectif: 10 }, nom);
+      assert.deepEqual(objectifs.agregat.mobiles, { min: attendu.min, moyenne: 3.2, effectif: 10 }, nom);
+      assert.deepEqual(objectifs.agregat.ancres, AUCUN, nom);
+    }
+  });
+
+  test('chaque mode compare ce qu’il dit : égaux sous « places », le premier derrière sous « chacun », le dernier devant sous « minimum »', () => {
+    // Les valeurs que chaque mode classe, lues sous leur nom de mesure.
+    const NOM_DE_MESURE = { toursHorsObjectif: 'horsObjectif', jamaisServies: 'jamaisServies', horsObjectifMax: 'horsObjectifMax' };
+    const cle = (objectifs, mode) => VALEURS_DES_MODES[mode].map((valeur) => objectifs[NOM_DE_MESURE[valeur]]);
+    const compare = (a, b) => a.reduce((resultat, x, i) => resultat || x - b[i], 0);
+    const mesures = Object.fromEntries(Object.entries(PLANS).map(([nom, tours]) => [nom, mesurerSur(FINANCE, tours).mesures.objectifs]));
+    const { sansTourServi: a, chacunUneFois: b, troisAuMoins: c } = mesures;
+    assert.equal(compare(cle(a, 'places'), cle(b, 'places')), 0);
+    assert.equal(compare(cle(b, 'places'), cle(c, 'places')), 0);
+    assert.ok(compare(cle(a, 'chacun'), cle(b, 'chacun')) > 0);
+    assert.ok(compare(cle(a, 'chacun'), cle(c, 'chacun')) > 0);
+    assert.ok(compare(cle(c, 'minimum'), cle(a, 'minimum')) < 0);
+    assert.ok(compare(cle(c, 'minimum'), cle(b, 'minimum')) < 0);
+  });
+
+  test('une personne servie par sa réservation n’est jamais comptée jamais servie', () => {
+    // 1 est réservé à la table 1 au tour 1, où il est servi, puis tenu à la
+    // table 2 : un tour servi, trois hors objectif. Seul 10 n'est jamais
+    // servi.
+    const reserve = { ...FINANCE, reservations: [{ participant: 1, table: 1, portee: 'tour', tour: 1 }] };
+    const { objectifs } = mesurerSur(reserve, tenus([9, 10], [1, 10], [1, 10], [1, 10])).mesures;
+    assert.deepEqual(objectifs.tours.slice(0, 10), [1, 4, 4, 4, 4, 4, 4, 4, 3, 0]);
+    assert.equal(objectifs.possibles[0], 4);
+    assert.equal(objectifs.jamaisServies, 1);
+    assert.equal(objectifs.horsObjectif, 8);
+    assert.equal(objectifs.horsObjectifMax, 4);
+    // 1 est partiellement fixé : il compte parmi les mobiles.
+    assert.equal(objectifs.agregat.mobiles.effectif, 10);
+  });
+
+  test('une personne réservée à une table dont l’objectif ne lui correspond pas n’est pas concernée ; tous servis, le plus grand nombre et le nombre à ce plus grand valent zéro', () => {
+    // 1, « finance », est réservé aux deux tours à la table 2, « bénévole » :
+    // aucun tour possible. 2, « finance », et 3, « bénévole », sont servis aux
+    // deux tours ; 4 ne porte rien.
+    const configuration = configurer({
+      personnes: [[1, ['finance']], [2, ['finance']], [3, ['bénévole']], [4]],
+      tables: [[1, 2], [2, 2]],
+      tours: 2,
+      reservations: [{ participant: 1, table: 2, portee: 'tous' }],
+      objectifs: [
+        { table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] },
+        { table: 2, tour: null, regle: 'ou', etiquettes: ['bénévole'] },
+      ],
+    });
+    const { objectifs } = mesurerSur(configuration, [[[2, 4], [1, 3]], [[2, 4], [1, 3]]]).mesures;
+    assert.deepEqual(objectifs, {
+      tours: [0, 2, 2, 0],
+      possibles: [0, 2, 2, 0],
+      horsObjectif: 0,
+      jamaisServies: 0,
+      horsObjectifMax: 0,
+      personnesAuMax: 0,
+      concernes: 2,
+      agregat: { tous: { min: 2, moyenne: 2, effectif: 2 }, mobiles: { min: 2, moyenne: 2, effectif: 2 }, ancres: AUCUN },
+    });
+  });
+
+  test('sans personne concernée, les objectifs valent null : aucun objectif, ou un objectif que personne ne porte', () => {
+    const sans = configurer({ personnes: [[1, ['finance']], [2]], tables: [[1, 2]], tours: 1 });
+    assert.equal(mesurerSur(sans, [[[1, 2]]]).mesures.objectifs, null);
+    const personne = { ...sans, objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['bénévole'] }] };
+    assert.equal(mesurerSur(personne, [[[1, 2]]]).mesures.objectifs, null);
+  });
+});
+
+// Lecture directe de m(p) et de B(p) (§ 4.5), sans rien du module éprouvé.
+// anime(q, r) : q anime au tour r ; la table fixée d'une personne à un tour
+// est celle de sa réservation ; une table garde un siège libre quand ses
+// réservations n'occupent pas toute sa capacité.
+function lectureDesAnimateurs(configuration) {
+  const { participants, tables, reservations, tours: R } = configuration;
+  const anime = (q, r) => (q.anime ?? []).includes(r);
+  const couvre = (reservation, r) => reservation.portee === 'tous' || reservation.tour === r;
+  const tableFixee = (id, r) => reservations.find((res) => res.participant === id && couvre(res, r))?.table;
+  const libre = ({ id, capacite }, r) => reservations.filter((res) => res.table === id && couvre(res, r)).length < capacite;
+  const animentA = (table, r, sauf) =>
+    participants.filter((q) => q.id !== sauf && anime(q, r) && tableFixee(q.id, r) === table).map((q) => q.id);
+  const borne = (id) => {
+    const phi = new Set();
+    let somme = 0;
+    for (let r = 1; r <= R; r += 1) {
+      const fixee = tableFixee(id, r);
+      const occupables = fixee === undefined ? tables.filter((table) => libre(table, r)).map((table) => table.id) : [fixee];
+      let plus = 0;
+      for (const table of occupables) {
+        const ici = animentA(table, r, id);
+        for (const f of ici) phi.add(f);
+        plus = Math.max(plus, ici.length);
+      }
+      somme += plus;
+    }
+    return Math.min(phi.size, somme);
+  };
+  // tours[r][i] : les personnes de la table configuration.tables[i] au tour r + 1.
+  const rencontres = (id, tours) => {
+    const vus = new Set();
+    tours.forEach((listes, r) => {
+      const liste = listes.find((occupants) => occupants.includes(id));
+      for (const q of participants) if (q.id !== id && liste.includes(q.id) && anime(q, r + 1)) vus.add(q.id);
+    });
+    return vus.size;
+  };
+  return { borne, rencontres };
+}
+
+// Tous les plans indexés d'une instance qui assoient chacun à chaque tour,
+// honorent les réservations et tiennent les capacités ; le même tableau est
+// rendu, rempli, à chaque plan.
+function* tousLesPlans({ N, T, R, capacite, fixe }) {
+  const tableDe = new Int32Array(N * R);
+  const occupation = new Int32Array(T * R);
+  function* placer(i) {
+    if (i === N * R) {
+      yield tableDe;
+      return;
+    }
+    const r = i % R;
+    for (let t = 0; t < T; t += 1) {
+      if ((fixe[i] !== LIBRE && fixe[i] !== t) || occupation[t * R + r] === capacite[t]) continue;
+      occupation[t * R + r] += 1;
+      tableDe[i] = t;
+      yield* placer(i + 1);
+      occupation[t * R + r] -= 1;
+    }
+  }
+  yield* placer(0);
+}
+
+describe('mesurer : les animateurs rencontrés (§ 5.4, A9, A21)', () => {
+  // Tables 31, 32, 33 de trois places, trois tours. 1 anime aux trois tours à
+  // 31 ; 2 au seul tour 2, à 32 ; 3 et 4 aux trois tours à 33, qui porte deux
+  // titres ; 5 à 9 sont libres.
+  const M = configurer({
+    personnes: [[1, undefined, [1, 2, 3]], [2, undefined, [2]], [3, undefined, [1, 2, 3]], [4, undefined, [1, 2, 3]], ...suite(5, 9).map((id) => [id])],
+    tables: [[31, 3], [32, 3], [33, 3]],
+    tours: 3,
+    reservations: [
+      { participant: 1, table: 31, portee: 'tous' },
+      { participant: 2, table: 32, portee: 'tour', tour: 2 },
+      { participant: 3, table: 33, portee: 'tous' },
+      { participant: 4, table: 33, portee: 'tous' },
+    ],
+  });
+  // 7 partage la table de 2 au tour 1, où 2 n'anime pas ; 8 la partage au
+  // tour 3, et y rencontre 1 ; 3 et 4 se rencontrent à chaque tour.
+  const TOURS_M = [
+    [[1, 5, 6], [2, 7, 8], [3, 4, 9]],
+    [[1, 7, 9], [2, 5, 6], [3, 4, 8]],
+    [[1, 2, 8], [5, 7, 9], [3, 4, 6]],
+  ];
+
+  test('m(p), B(p), le minimum et les animateurs non rencontrés égalent une lecture faite couple par couple, tour par tour', () => {
+    const { borne, rencontres } = lectureDesAnimateurs(M);
+    const ids = suite(1, 9);
+    const m = ids.map((id) => rencontres(id, TOURS_M));
+    const B = ids.map(borne);
+    const { animateurs } = mesurerSur(M, TOURS_M).mesures;
+    assert.deepEqual(animateurs.rencontres, m);
+    assert.deepEqual(animateurs.bornes, B);
+    assert.equal(animateurs.nonRencontres, B.reduce((total, b, i) => total + b - m[i], 0));
+    const concernes = ids.filter((_, i) => B[i] > 0);
+    assert.equal(animateurs.concernes, concernes.length);
+    const minDe = (garde) => Math.min(...ids.filter((id, i) => B[i] > 0 && garde(id)).map((id) => m[id - 1]));
+    const ANCRES = [1, 3, 4];
+    assert.equal(animateurs.agregat.tous.min, minDe(() => true));
+    assert.equal(animateurs.agregat.mobiles.min, minDe((id) => !ANCRES.includes(id)));
+    assert.equal(animateurs.agregat.ancres.min, minDe((id) => ANCRES.includes(id)));
+    // Comptés à la main : 1 ne peut rencontrer personne qui anime (B = 0,
+    // hors du minimum) ; 7 ne rencontre que 1, 2 n'animant pas au tour 1 ;
+    // 3 rencontre 4 aux trois tours, compté une fois ; 6 rencontre les quatre.
+    assert.deepEqual(B, [0, 3, 1, 1, 4, 4, 4, 4, 4]);
+    assert.deepEqual(m, [0, 1, 1, 1, 2, 4, 1, 3, 3]);
+    assert.equal(animateurs.concernes, 8);
+    assert.deepEqual(animateurs.agregat.ancres, { min: 1, moyenne: 1, effectif: 2 });
+  });
+
+  test('la borne des animateurs tient sur tous les plans, et un plan l’atteint pour chacun', () => {
+    // A : tables 1 et 2 de deux places, trois tours ; 1 anime aux trois tours
+    // à 1 ; 2 aux tours 1 et 3 à 2. Le plan qui suit atteint B pour chacun :
+    // tour 1, 1 et 4 | 2 et 3 ; tour 2, 1 et 2 | 3 et 4 ; tour 3, 1 et 3 |
+    // 2 et 4.
+    // B : 1 et 9 animent à 1, gelée avec 5, ancré ; 2 anime à 2, qui garde
+    // deux sièges ; 3 et 4, libres, vont à 2 ou à 3. La borne qui
+    // oublierait la table fixée de 5 n'y compterait que 2.
+    // C : 2 et 3 animent à 2 aux deux tours, 1 à 1, 4 au seul tour 1 à 3 :
+    // une table porte deux animateurs à chaque tour, et qui les rejoint en
+    // rencontre deux à un même tour.
+    const configurations = {
+      A: configurer({
+        personnes: [[1, undefined, [1, 2, 3]], [2, undefined, [1, 3]], [3], [4]],
+        tables: [[1, 2], [2, 2]],
+        tours: 3,
+        reservations: [
+          { participant: 1, table: 1, portee: 'tous' },
+          { participant: 2, table: 2, portee: 'tour', tour: 1 },
+          { participant: 2, table: 2, portee: 'tour', tour: 3 },
+        ],
+      }),
+      B: configurer({
+        personnes: [[1, undefined, [1, 2]], [2, undefined, [1, 2]], [3], [4], [5], [9, undefined, [1, 2]]],
+        tables: [[1, 3], [2, 3], [3, 2]],
+        tours: 2,
+        reservations: [
+          { participant: 1, table: 1, portee: 'tous' },
+          { participant: 9, table: 1, portee: 'tous' },
+          { participant: 5, table: 1, portee: 'tous' },
+          { participant: 2, table: 2, portee: 'tous' },
+        ],
+      }),
+      C: configurer({
+        personnes: [[1, undefined, [1, 2]], [2, undefined, [1, 2]], [3, undefined, [1, 2]], [4, undefined, [1]], [5], [6], [7], [8]],
+        tables: [[1, 2], [2, 3], [3, 3]],
+        tours: 2,
+        reservations: [
+          { participant: 1, table: 1, portee: 'tous' },
+          { participant: 2, table: 2, portee: 'tous' },
+          { participant: 3, table: 2, portee: 'tous' },
+          { participant: 4, table: 3, portee: 'tour', tour: 1 },
+        ],
+      }),
+    };
+    const atteintes = {};
+    for (const [nom, configuration] of Object.entries(configurations)) {
+      const instance = normaliser(configuration);
+      let plans = 0;
+      let atteinte = false;
+      for (const tableDe of tousLesPlans(instance)) {
+        plans += 1;
+        const { animateurs } = mesurer(instance, tableDe);
+        const depasse = animateurs.rencontres.findIndex((m, p) => m > animateurs.bornes[p]);
+        assert.equal(depasse, -1, `${nom} : ${tableDe.join(',')}`);
+        if (animateurs.nonRencontres === 0) atteinte = true;
+      }
+      assert.ok(plans > 1, `${nom} : ${plans} plans`);
+      atteintes[nom] = atteinte;
+    }
+    assert.deepEqual(atteintes, { A: true, B: true, C: false });
+    const A = normaliser(configurations.A);
+    const plan = indexer(A, configurations.A, [[[1, 4], [2, 3]], [[1, 2], [3, 4]], [[1, 3], [2, 4]]]);
+    const { animateurs } = mesurer(A, plan);
+    assert.deepEqual(animateurs.bornes, [0, 1, 2, 2]);
+    assert.deepEqual(animateurs.rencontres, animateurs.bornes);
+    // B : 5, ancré à la table gelée, y rencontre ses deux animateurs ; 2
+    // anime seul à sa table. C : 4, fixé au tour 1 à 3, où il anime seul,
+    // rejoint au tour 2 au plus deux animateurs ; un libre en rencontre au
+    // plus trois des quatre en deux tours, sous une borne de quatre.
+    assert.deepEqual(Array.from(normaliser(configurations.B).borneAnimateurs), [1, 0, 1, 1, 2, 1]);
+    assert.deepEqual(Array.from(normaliser(configurations.C).borneAnimateurs), [0, 1, 1, 2, 4, 4, 4, 4]);
+  });
+
+  test('un plan qui déplace une personne réservée ne compte ni tour servi ni rencontre hors des tables qu’elle peut occuper', () => {
+    // 1 anime aux deux tours à la table 1, « finance », que 2, « finance »,
+    // ancré, remplit avec lui ; 3, « finance », et 4 sont libres. Le plan
+    // honoré sert 2 aux deux tours et lui fait rencontrer 1, une fois. Le plan
+    // fautif assied 3 à la table 1, sans siège libre, au tour 1, et 2 à la
+    // table 2 ; au tour 2, 2 revient à la table 1, que 1 a quittée.
+    const configuration = configurer({
+      personnes: [[1, undefined, [1, 2]], [2, ['finance']], [3, ['finance']], [4]],
+      tables: [[1, 2], [2, 2]],
+      tours: 2,
+      reservations: [{ participant: 1, table: 1, portee: 'tous' }, { participant: 2, table: 1, portee: 'tous' }],
+      objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }],
+    });
+    const honore = mesurerSur(configuration, [[[1, 2], [3, 4]], [[1, 2], [3, 4]]]).mesures;
+    assert.deepEqual(honore.objectifs.tours, [0, 2, 0, 0]);
+    assert.deepEqual(honore.animateurs.rencontres, [0, 1, 0, 0]);
+    assert.deepEqual(honore.animateurs.bornes, [0, 1, 0, 0]);
+    const fautif = mesurerSur(configuration, [[[1, 3], [2, 4]], [[2, 3], [1, 4]]]).mesures;
+    assert.deepEqual(fautif.objectifs.tours, [0, 1, 0, 0]);
+    assert.deepEqual(fautif.objectifs.possibles, [0, 2, 0, 0]);
+    assert.deepEqual(fautif.animateurs.rencontres, [0, 0, 0, 0]);
+    assert.equal(fautif.animateurs.nonRencontres, 1);
+  });
+
+  test('sans personne concernée, les animateurs valent null : aucun titre pourvu, ou un seul animateur, seul présent', () => {
+    const sans = configurer({ personnes: [[1], [2]], tables: [[1, 2]], tours: 1 });
+    assert.equal(mesurerSur(sans, [[[1, 2]]]).mesures.animateurs, null);
+    const seul = configurer({
+      personnes: [[1, undefined, [1]]],
+      tables: [[1, 2]],
+      tours: 1,
+      reservations: [{ participant: 1, table: 1, portee: 'tous' }],
+    });
+    assert.equal(mesurerSur(seul, [[[1]]]).mesures.animateurs, null);
+  });
+});
+
+// Lecture directe de s(p) (§ 4.5) sur un plan qui honore les réservations,
+// sans rien du module éprouvé : l'objectif en vigueur à une table est celui
+// du tour s'il existe, sinon celui de la soirée ; « ou » demande une
+// étiquette commune, « et » chacune. tours[r][i] : les personnes de la table
+// configuration.tables[i] au tour r + 1.
+function servisLus(configuration, tours) {
+  const enVigueur = (table, tour) =>
+    configuration.objectifs.find((o) => o.table === table && o.tour === tour)
+    ?? configuration.objectifs.find((o) => o.table === table && o.tour === null);
+  const correspond = (personne, table, tour) => {
+    const o = enVigueur(table, tour);
+    if (o === undefined) return false;
+    const siennes = personne.etiquettes ?? [];
+    return o.regle === 'ou' ? o.etiquettes.some((e) => siennes.includes(e)) : o.etiquettes.every((e) => siennes.includes(e));
+  };
+  return configuration.participants.map((personne) => {
+    let servis = 0;
+    tours.forEach((listes, r) => {
+      const i = listes.findIndex((occupants) => occupants.includes(personne.id));
+      if (correspond(personne, configuration.tables[i].id, r + 1)) servis += 1;
+    });
+    return servis;
+  });
+}
+
+describe('mesurer : un objectif et des sièges libres qui changent d’un tour à l’autre (§ 4.5, A9, A21)', () => {
+  // Tables 1, 2, 3 de trois places, trois tours. La table 1 porte « finance »
+  // pour la soirée, « bénévole » au tour 2 ; la table 2, « bénévole » pour la
+  // soirée, « toutes : finance, Montréal » au tour 3 ; la table 3,
+  // « finance » au seul tour 1. 5, 6 et 8 réservés au tour 1 gèlent la
+  // table 2 à ce tour ; 8 y anime ; 7, réservé au tour 2 à la table 2, y
+  // anime.
+  const VARIABLE = configurer({
+    personnes: [
+      [1, ['finance']],
+      [2, ['finance', 'Montréal']],
+      [3, ['bénévole']],
+      [4, ['bénévole', 'finance']],
+      [5],
+      [6, ['Montréal']],
+      [7, ['finance'], [2]],
+      [8, ['bénévole'], [1]],
+      [9, ['finance']],
+    ],
+    tables: [[1, 3], [2, 3], [3, 3]],
+    tours: 3,
+    reservations: [
+      { participant: 5, table: 2, portee: 'tour', tour: 1 },
+      { participant: 6, table: 2, portee: 'tour', tour: 1 },
+      { participant: 8, table: 2, portee: 'tour', tour: 1 },
+      { participant: 7, table: 2, portee: 'tour', tour: 2 },
+    ],
+    objectifs: [
+      { table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] },
+      { table: 1, tour: 2, regle: 'ou', etiquettes: ['bénévole'] },
+      { table: 2, tour: null, regle: 'ou', etiquettes: ['bénévole'] },
+      { table: 2, tour: 3, regle: 'et', etiquettes: ['finance', 'Montréal'] },
+      { table: 3, tour: 1, regle: 'ou', etiquettes: ['finance'] },
+    ],
+  });
+  // Au tour 2, 1 et 9, « finance », s'assoient à la table 1 sous
+  // « bénévole » ; 3 et 5, libres, à la table 2, gelée au tour 1, où 7 anime.
+  const TOURS_V = [
+    [[1, 2, 3], [5, 6, 8], [4, 7, 9]],
+    [[1, 4, 9], [3, 5, 7], [2, 6, 8]],
+    [[3, 5, 7], [2, 4, 6], [1, 8, 9]],
+  ];
+
+  test('s(p) et m(p) égalent une lecture directe : l’objectif du tour remplace celui de la soirée, la table gelée à un seul tour sert aux autres', () => {
+    const { mesures } = mesurerSur(VARIABLE, TOURS_V);
+    const { rencontres } = lectureDesAnimateurs(VARIABLE);
+    const s = servisLus(VARIABLE, TOURS_V);
+    const m = suite(1, 9).map((id) => rencontres(id, TOURS_V));
+    assert.deepEqual(mesures.objectifs.tours, s);
+    assert.deepEqual(mesures.animateurs.rencontres, m);
+    // Comptés à la main : 1 et 9 ne sont servis qu'au tour 1 ; 3 l'est au
+    // tour 2 à la table 2 ; 2 au tour 3 sous « toutes ». 5 rencontre 8 au
+    // tour 1, 7 au tour 2 ; 3 rencontre 7.
+    assert.deepEqual(s, [1, 2, 1, 2, 0, 0, 2, 1, 1]);
+    assert.deepEqual(m, [0, 0, 1, 0, 2, 1, 0, 0, 0]);
   });
 });

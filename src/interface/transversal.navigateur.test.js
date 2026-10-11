@@ -32,6 +32,7 @@ import { decoder } from '../csv/encodage.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { decouper } from '../csv/lecture.js';
 import { analyser } from '../stockage/document.js';
+import { lireEtiquettes } from '../stockage/etiquettes.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import { VERSION } from '../version.genere.js';
@@ -100,20 +101,19 @@ const LETTRE = /\p{L}/u;
 /**
  * Ce qu'un écran peut montrer sans la marque de la langue témoin, parce que
  * c'est une donnée (§ 14.6, « La traduction ») : noms, prénoms, noms
- * affichés, appartenances, courriels, titres et notes des personnes, nom et
- * base des événements du disque, libellés des titres, libellés figés du
- * journal, version, provenance, identifiant et instant d'un verrou, cellules
- * du CSV servi, nom de chaque démonstration du catalogue — le nom que
- * l'événement chargé porte, que l'accueil reçoit comme une donnée — ; un
- * chemin sous une racine du système simulé.
- * → { valeurs: string[], racines: string[] }, valeurs de la plus longue à la
- * plus courte.
+ * affichés, appartenances, courriels, titres, notes et étiquettes des
+ * personnes, nom et base des événements du disque, libellés des titres,
+ * libellés figés du journal, version, provenance, identifiant et instant d'un
+ * verrou, cellules du CSV servi, nom de chaque démonstration du catalogue —
+ * le nom que l'événement chargé porte, que l'accueil reçoit comme une donnée
+ * — ; un chemin sous une racine du système simulé. → { valeurs: string[],
+ * racines: string[] }, valeurs de la plus longue à la plus courte.
  */
 async function donneesConnues(contexte, { cellules = [] } = {}) {
   const valeurs = new Set([VERSION.affichee, VERSION.windows, PROVENANCE, ...CATALOGUE.map(({ nom }) => nom), ...cellules]);
   const racines = new Set();
   const personne = (p) => {
-    for (const v of [p.nom, p.prenom, p.appartenance, p.courriel, p.titrePressenti, p.notes]) if (v) valeurs.add(v);
+    for (const v of [p.nom, p.prenom, p.appartenance, p.courriel, p.titrePressenti, p.notes, ...(p.etiquettes ?? [])]) if (v) valeurs.add(v);
     if (p.nom) valeurs.add(nomAffiche(p));
   };
   for (const m of contexte.montages) {
@@ -158,10 +158,12 @@ async function donneesConnues(contexte, { cellules = [] } = {}) {
 }
 
 /** Le nom du CSV des cas limites et ses cellules, telles que la découpe
- *  les rend. */
+ *  les rend, avec les étiquettes que chaque cellule porte : l'aperçu les
+ *  montre une à une. */
 async function cellulesCasLimites() {
   const { texte } = decoder(await octetsCasLimites());
-  return [NOM_CAS_LIMITES, ...decouper(texte, ';').enregistrements.flat().map((c) => c.trim()).filter((c) => c !== '')];
+  const cellules = decouper(texte, ';').enregistrements.flat().map((c) => c.trim()).filter((c) => c !== '');
+  return [NOM_CAS_LIMITES, ...cellules, ...cellules.flatMap((c) => lireEtiquettes(c).etiquettes)];
 }
 
 // --- La langue témoin et les emoji ---------------------------------------------

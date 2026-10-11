@@ -47,6 +47,7 @@ const SANS_ENTREE = new Map([
   ['respecterObjectifs', 'case des objectifs, sans entrée à l’écran de la génération'],
   ['modeObjectifs', 'mode des objectifs, sans entrée à l’écran de la génération'],
   ['rencontrerAnimateurs', 'case des animateurs, sans entrée à l’écran de la génération'],
+  ['priorites', 'ordre des priorités, écrit par son éditeur de la section Génération, non par une entrée'],
 ]);
 
 // La commande qui écrit un réglage de chaque section, et ses arguments.

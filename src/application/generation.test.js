@@ -19,11 +19,12 @@ import { rechercher, regenerer } from '../moteur/recherche.js';
 import { verifierInvariants } from '../moteur/verification.js';
 import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
-import { FORMAT, analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
+import { FORMAT, analyser, creerCharge } from '../stockage/document.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import { derive, planDepuisFichier, versFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
+import { configurationDe } from './configuration.js';
 import { ErreurCommande } from './erreurs.js';
 import { creerExecuteurTravailleur } from './executeur_travailleur.js';
 import {
@@ -322,7 +323,7 @@ describe('génération : la saisie des réglages (§ 5.7)', () => {
 describe("génération : l'exécuteur direct refuse un réglage comme le travailleur", () => {
   test('un réglage hors de son domaine rejette REGLAGE_HORS_DOMAINE, qui le nomme, sans le message du moteur', async () => {
     const { charge } = analyser(texteLivre('petite'));
-    const configuration = configurationDepuisCharge(charge);
+    const configuration = configurationDe(charge);
     const { resultat } = creerExecuteurDirect().lancer(configuration, { graine: 2 ** 32, nombre: 1, arret: 10 });
     await refuse(resultat, 'REGLAGE_HORS_DOMAINE', { reglage: 'graine', remede: null });
   });
@@ -398,7 +399,7 @@ describe("génération : les refus d'avant lancement (§ 2.1, § 5.9, § 8.4, §
     const sansTable = await monter({ charges: [chargeDe({ n: 3, tables: 0 })] });
     await refuseSansRien(sansTable, 'AUCUNE_TABLE', { remede: VERS_TABLES });
     // Le moteur accepte N = 0 et rend des plans vides : le refus est celui du contrôleur.
-    const vide = configurationDepuisCharge(chargeDe({ n: 3, exclus: [1, 2, 3], tables: 2 }));
+    const vide = configurationDe(chargeDe({ n: 3, exclus: [1, 2, 3], tables: 2 }));
     assert.deepEqual(rechercher(vide, COURT)[0].plan.tours, [[[], []], [[], []]]);
   });
 
@@ -413,7 +414,7 @@ describe("génération : les refus d'avant lancement (§ 2.1, § 5.9, § 8.4, §
     const montage = await monter({ charges: [charge] });
     let attendu = null;
     try {
-      normaliser(configurationDepuisCharge(charge));
+      normaliser(configurationDe(charge));
     } catch (erreur) {
       attendu = erreur;
     }
@@ -535,7 +536,7 @@ describe('génération : un compte, jamais une durée (§ 5.10, § 14.7)', () =>
       assert.equal(avancements, 10);
       assert.deepEqual(bilan.ajoutees, [1, 2]);
       assert.equal(bilan.dureeMs, 10 * pas);
-      const configuration = configurationDepuisCharge(montage.charge());
+      const configuration = configurationDe(montage.charge());
       const attendues = rechercher(configuration, reglages);
       assert.equal(attendues.length, 2);
       montage.charge().propositions.forEach((proposition, rang) => {
@@ -640,7 +641,7 @@ describe("génération : les champs d'une proposition (§ 5.7, § 8.9)", () => {
     const reglages = { graine: 41, nombre: 3, arret: 300, historique: 50 };
     await montage.controleur.generer(reglages);
     const charge = montage.charge();
-    const configuration = configurationDepuisCharge(charge);
+    const configuration = configurationDe(charge);
     const moteur = rechercher(configuration, reglages);
     assert.equal(charge.propositions.length, 3);
     charge.propositions.forEach((proposition, rang) => {
@@ -762,7 +763,7 @@ describe('génération : les invariants (§ 14.12)', () => {
     const bilan = await montage.controleur.generer({ graine: 3, nombre: 2, arret: 20000 });
     assert.deepEqual(bilan.ajoutees, [1, 2]);
     const charge = montage.charge();
-    const instance = normaliser(configurationDepuisCharge(charge));
+    const instance = normaliser(configurationDe(charge));
     assert.ok(instance.k > 0, 'aucun ancré');
     for (const proposition of charge.propositions) assert.deepEqual(verifierInvariants(instance, planDepuisFichier(proposition)), []);
   });
@@ -781,7 +782,7 @@ describe('génération : compléter un placement partiel (§ 5.8)', () => {
     const montage = await monter({ charges: [charge] });
     await montage.controleur.generer({ graine: 8, nombre: 3, arret: 2000 });
     const apres = montage.charge();
-    const instance = normaliser(configurationDepuisCharge(apres));
+    const instance = normaliser(configurationDe(apres));
     assert.ok(apres.propositions.length > 0);
     for (const proposition of apres.propositions) {
       const plan = planDepuisFichier(proposition);
@@ -909,7 +910,7 @@ describe("génération : l'annulation (§ 5.10, § 8.4)", () => {
 // --- L'exécuteur direct (§ 5.10) -----------------------------------------------------
 
 describe("génération : l'exécuteur direct (§ 5.10)", () => {
-  const configuration = configurationDepuisCharge(chargeDemo('petite-conflit'));
+  const configuration = configurationDe(chargeDemo('petite-conflit'));
 
   test('annuler aussitôt après lancer : ErreurAnnulee, aucun avancement', async () => {
     const execution = creerExecuteurDirect().lancer(configuration, { graine: 1, nombre: 2, arret: 5000 });
@@ -961,7 +962,7 @@ describe("génération : l'exécuteur direct (§ 5.10)", () => {
   });
 
   test('des places manquantes : ErreurGeneration PLACES_MANQUANTES, code et détails du moteur', async () => {
-    const manque = configurationDepuisCharge(chargeDe({ n: 13, tables: 4, sieges: 3 }));
+    const manque = configurationDe(chargeDe({ n: 13, tables: 4, sieges: 3 }));
     const leve = await rejet(creerExecuteurDirect().lancer(manque, COURT).resultat);
     assert.ok(leve instanceof ErreurGeneration);
     assert.deepEqual([leve.code, leve.details], ['PLACES_MANQUANTES', { placesManquantes: 1 }]);
@@ -1233,12 +1234,12 @@ describe('génération : les cœurs de calcul, un réglage du poste pour la séa
       const bilan = await montage.controleur.generer(reglages);
       assert.deepEqual(bilan.ajoutees, [1, 2, 3, 4, 5]);
       assert.deepEqual(montage.espion.lancements.at(-1).options, { coeurs });
-      const attendues = rechercher(configurationDepuisCharge(montage.charge()), reglages);
+      const attendues = rechercher(configurationDe(montage.charge()), reglages);
       assert.deepEqual(
         montage.charge().propositions.map(({ graine }) => graine),
         attendues.map(({ graine }) => graine),
       );
-      assert.deepEqual(montage.charge().propositions.map(planDepuisFichier), attendues.map((p) => planRange(p, configurationDepuisCharge(montage.charge()))));
+      assert.deepEqual(montage.charge().propositions.map(planDepuisFichier), attendues.map((p) => planRange(p, configurationDe(montage.charge()))));
       assert.equal(montage.controleur.derniereGeneration().coeurs, coeurs);
       etats.push(montage.etatDisque());
     }
@@ -1334,7 +1335,7 @@ describe('génération : les cœurs de calcul, un réglage du poste pour la séa
     assert.equal(creerExecuteurDirect().coeursDisponibles, 1);
     assert.equal(creerExecuteurDirect({ coeursDisponibles: 12 }).coeursDisponibles, 12);
     assert.equal(creerExecuteurDirect({ coeursDisponibles: 0 }).coeursDisponibles, 1);
-    const configuration = configurationDepuisCharge(chargeDemo('petite-conflit'));
+    const configuration = configurationDe(chargeDemo('petite-conflit'));
     const reglages = { graine: 4, nombre: 3, arret: 2000 };
     const execution = creerExecuteurDirect({ coeursDisponibles: 4 }).lancer(configuration, reglages, { coeurs: 3 });
     assert.equal(execution.coeurs, 1);

@@ -339,6 +339,8 @@ const EXEMPLES = new Map([
   ['CHAMPS_EN_TROP', { ligne: 4, valeur: null }],
   ['NOM_ABSENT', { ligne: 5, valeur: null }],
   ['EXCLU_INCONNU', { ligne: 6, valeur: 'peut-être' }],
+  ['ETIQUETTE_MAL_FORMEE', { ligne: 6, valeur: 'ressources\thumaines', raison: 'controle' }],
+  ['ETIQUETTES_TROP_NOMBREUSES', { ligne: 6, valeur: null, nombre: 21 }],
   ['PLUSIEURS_CORRESPONDENT', { ligne: 7, valeur: null, participants: [3, 8] }],
   ['DEJA_DESIGNE', { ligne: 9, valeur: null, participants: [3], premiereLigne: 4 }],
   ['PLAN_BLOQUE', { remede: { geste: 'debloquer' } }],
@@ -412,6 +414,16 @@ const EXEMPLES = new Map([
   ['ORDRE_PLAFONDS', { index: 2, participant: 3 }],
   ['PLAFOND_REALISE', { index: 0, participant: 1 }],
   ['DEPASSEMENT', { index: 4, participant: 9 }],
+  ['OBJECTIF_INCONNU', { table: 9 }],
+  ['OBJECTIF_TOUR', { table: 2, tour: 5 }],
+  ['OBJECTIF_CONFLIT', { table: 2, tour: null }],
+  ['PRIORITES', { faute: 'seulASonPalier', critere: 'toursHorsObjectif', palier: 2 }],
+  ['ANIMATION_NON_FIXEE', { participant: 4, tour: 3 }],
+  ['TOURS_SERVIS', { index: 2, participant: 3 }],
+  ['TOURS_SERVIS_NON_ASSIS', { index: 2, participant: 3 }],
+  ['ANIMATEURS_RENCONTRES', { index: 4, participant: 9 }],
+  ['JAMAIS_SERVIES', {}],
+  ['HORS_OBJECTIF_MAX', {}],
   // Génération
   ['GENERATION_EN_COURS', { remede: null }],
   ['TRAVAILLEUR_EN_ECHEC', { remede: null }],
@@ -455,6 +467,9 @@ const EXEMPLES = new Map([
   ['RESERVATIONS_RETABLIES', { participant: 1, personne: 'Iris Ombrelle', reservations: 2, titres: 1 }],
   ['RESERVATIONS_RETIREES', { participant: 1, personne: 'Iris Ombrelle', reservations: 1, titres: 1 }],
   ['IMPORT_EN_RETENU', {}],
+  ['ETIQUETTE_INVALIDE', { valeur: 'ressources\u{0009}humaines', raison: 'controle', remede: null }],
+  ['ETIQUETTES_EN_TROP', { nombre: 21, remede: null }],
+  ['ORTHOGRAPHE_RETENUE', { saisie: 'Finance', retenue: 'finance' }],
   // Façade des événements
   ['QUESTION_EN_ATTENTE', { question: 'PORTABLE_NON_INSCRIPTIBLE', remede: null }],
   ['EXPLORATEUR_ABSENT', { remede: null }],
@@ -472,6 +487,7 @@ const EXEMPLES = new Map([
   ['ENTREE_EXCLURE_PARTICIPANT', { personne: 'Iris Ombrelle' }],
   ['ENTREE_REINTEGRER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
   ['ENTREE_SUPPRIMER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
+  ['ENTREE_CHANGER_ETIQUETTES', { personne: 'Iris Ombrelle', ajoutees: ['Montréal', 'finance'], retirees: ['bénévole'] }],
   ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
   ['ENTREE_CHANGER_ETAT', { etat: 'bloque' }],
   ['ENTREE_DEBLOQUER', { etat: 'retenu' }],
@@ -541,6 +557,15 @@ const EXEMPLES = new Map([
   ['ENTREE_CHANGER_TOURS', { tours: 3, retirees: 2 }],
   ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerAppartenances', valeur: false }],
   ['ENTREE_CHANGER_CIBLE_REDONDANCE', { cible: 1200 }],
+  // Objectifs des tables
+  ['OBJECTIF_HORS_SOIREE', { tour: 5, remede: null }],
+  ['OBJECTIF_SANS_ETIQUETTE', { table: 2, tour: 3, remede: { commande: 'retirerObjectif', arguments: { table: 2, tour: 3 } } }],
+  ['TABLE_DISPARUE', { table: 9, remede: null }],
+  ['OBJECTIF_SANS_CORRESPONDANT', { table: 2, tour: null }],
+  ['ETIQUETTE_ORPHELINE', { etiquette: 'Finance', voisine: 'finance' }],
+  ['ENTREE_POSER_OBJECTIF', { numero: 3, tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] }],
+  ['ENTREE_RETIRER_OBJECTIF', { numero: 3, tour: null }],
+  ['ENTREE_CHANGER_REGLE_OBJECTIFS', { regle: 'et' }],
   // Planche de badges
   ['PLANCHE_SANS_PLACEMENT', { remede: { geste: 'ouvrirSection', section: 'propositions' } }],
   ['PROPOSITION_FAUTIVE', { id: 2, remede: { geste: 'ouvrirSection', section: 'propositions' } }],
@@ -1043,5 +1068,64 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
   test('un domaine borné nomme ses deux bornes, un domaine ouvert son minimum', () => {
     assert.match(libelle('HORS_DOMAINE', { min: 0, max: 4294967295, remede: null }), /0 et 4\u{202F}294\u{202F}967\u{202F}295/u);
     assert.match(libelle('HORS_DOMAINE', { min: 1, max: null, remede: null }), /au moins 1\b/);
+  });
+});
+
+describe('libellés : les étiquettes et les objectifs des tables (§ 4.5, § 5.9, § 8.2)', () => {
+  test('les libellés figés nomment la personne ou la table par son numéro, chaque étiquette citée, la règle en mots', () => {
+    assert.equal(
+      libelle('ENTREE_CHANGER_ETIQUETTES', { personne: 'Iris Ombrelle', ajoutees: ['finance'], retirees: [] }),
+      'Étiquettes de Iris Ombrelle : ajouté « finance »',
+    );
+    assert.equal(
+      libelle('ENTREE_POSER_OBJECTIF', { numero: 7, tour: null, regle: null, etiquettes: ['finance'] }),
+      'Table 7 : objectif de la soirée « finance », règle par défaut',
+    );
+    assert.equal(
+      libelle('ENTREE_POSER_OBJECTIF', { numero: 7, tour: 2, regle: 'ou', etiquettes: ['Montréal', 'finance', 'voile'] }),
+      'Table 7, tour 2 : objectif « Montréal », « finance » et « voile », au moins une étiquette',
+    );
+    assert.equal(libelle('ENTREE_RETIRER_OBJECTIF', { numero: 7, tour: 2 }), 'Table 7, tour 2 : objectif retiré');
+    assert.equal(libelle('ENTREE_CHANGER_REGLE_OBJECTIFS', { regle: 'ou' }), 'Règle par défaut des objectifs : au moins une étiquette');
+    assert.equal(libelle('ENTREE_CHANGER_TOURS', { tours: 3, retirees: 0, objectifsRetires: 1 }), 'Nombre de tours : 3 ; 1 objectif retiré');
+    assert.equal(libelle('ENTREE_CHANGER_TOURS', { tours: 3, retirees: 2 }), 'Nombre de tours : 3 ; 2 réservations retirées');
+    assert.equal(
+      libelle('ENTREE_MODIFIER_REGLAGE', { cle: 'respecterObjectifs', valeur: false }),
+      'Respecter les objectifs des tables : désactivé',
+    );
+    assert.throws(() => libelle('ENTREE_CHANGER_REGLE_OBJECTIFS', { regle: 'peut-être' }), RangeError);
+  });
+
+  test('une étiquette refusée dit sa cause et la forme attendue ; une raison inconnue lève', () => {
+    // ORTHOGRAPHE_RETENUE ne naît que d'une orthographe que l'événement
+    // porte déjà : son texte le dit.
+    assert.equal(
+      libelle('ORTHOGRAPHE_RETENUE', { saisie: 'FINANCE', retenue: 'finance' }),
+      "« FINANCE » est enregistrée sous l'orthographe que l'événement porte déjà : « finance ».",
+    );
+    const vide = libelle('ETIQUETTE_INVALIDE', { valeur: '', raison: 'vide', remede: null });
+    assert.match(vide, /aucune étiquette/);
+    assert.match(vide, /de 1 à 40 caractères/);
+    assert.match(libelle('ETIQUETTE_INVALIDE', { valeur: 'x'.repeat(41), raison: 'longueur', remede: null }), /dépasse 40 caractères/);
+    assert.match(libelle('ETIQUETTES_EN_TROP', { nombre: 21, remede: null }), /au plus 20 étiquettes ; celles-ci en feraient 21/);
+    assert.throws(() => libelle('ETIQUETTE_INVALIDE', { valeur: 'x', raison: 'inventee', remede: null }), RangeError);
+  });
+
+  test("les avis d'un objectif disent son tour ; l'étiquette orpheline nomme sa voisine quand il y en a une", () => {
+    assert.match(libelle('OBJECTIF_SANS_CORRESPONDANT', { table: 2, tour: 3 }), /au tour 3/);
+    assert.match(libelle('OBJECTIF_SANS_CORRESPONDANT', { table: 2, tour: null }), /pour la soirée/);
+    assert.equal(
+      libelle('ETIQUETTE_ORPHELINE', { etiquette: 'Finance', voisine: null }),
+      "Aucune personne ne porte l'étiquette « Finance ».",
+    );
+    assert.match(libelle('ETIQUETTE_ORPHELINE', { etiquette: 'Finance', voisine: 'finance' }), /une personne porte « finance »/);
+    // Le remède « Retirer l'objectif » ne se dit que sur un couple qui porte
+    // un objectif ; sans lui, le refus nomme sa cause seule (§ 5.9).
+    const retirer = { commande: 'retirerObjectif', arguments: { table: 2, tour: 3 } };
+    assert.match(libelle('OBJECTIF_SANS_ETIQUETTE', { table: 2, tour: 3, remede: retirer }), /« Retirer l'objectif »/);
+    assert.equal(
+      libelle('OBJECTIF_SANS_ETIQUETTE', { table: 2, tour: 3, remede: null }),
+      'Un objectif au tour 3 vise au moins une étiquette.',
+    );
   });
 });

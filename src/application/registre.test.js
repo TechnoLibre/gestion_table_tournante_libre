@@ -43,7 +43,7 @@ import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { analyser, configurationDepuisCharge } from '../stockage/document.js';
 import { lireJournal, reconstruire } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
-import { planDepuisFichier } from '../stockage/placements.js';
+import { derive, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { COMMANDES } from './commandes.js';
 import { creerFacade } from './evenements.js';
@@ -117,6 +117,11 @@ const REMEDE_NUL_ADMIS = new Map([
   ['RESERVATION_ABSENTE', "la réservation visée est absente, aucune commande ne la produit, et l'interface n'offre le retrait que sur une réservation présente"],
   ['TITRE_ABSENT', "le titre visé est absent, aucune commande ne le produit, et l'interface n'offre le retrait que sur un titre présent"],
   ['CONVERSION_IMPOSSIBLE', "les réservations « tour » visées sont absentes, aucune commande ne les produit, et l'interface n'offre la conversion que sur des réservations présentes"],
+  ['ETIQUETTE_INVALIDE', 'la saisie se corrige dans le champ même, dont le texte dit la forme attendue'],
+  ['ETIQUETTES_EN_TROP', 'la saisie se corrige dans le champ même, dont le texte dit le nombre admis'],
+  ['OBJECTIF_HORS_SOIREE', 'le tour se choisit dans le champ même, parmi ceux de la soirée'],
+  ['OBJECTIF_SANS_ETIQUETTE', "sur un couple sans objectif, rien à retirer : la saisie se corrige dans le champ même"],
+  ['TABLE_DISPARUE', 'une table supprimée entre-temps : aucun geste ne la rend'],
 ]);
 
 // Le geste qui pose deux places de plus à la table 2, par son champ.
@@ -342,6 +347,52 @@ const EXEMPLES = new Map([
       accepte: { args: { cible: '1200' } },
       refuse: { args: { cible: '-1' }, code: 'NON_ENTIER', remede: null },
       sansEffet: { args: { cible: '1000' } },
+    },
+  ],
+  [
+    'changerEtiquettes',
+    {
+      accepte: { args: { id: 2, ajouter: 'finance, Montréal' } },
+      personne: () => 2,
+      refuse: { args: { id: 2, ajouter: 'ressources\u{0009}humaines' }, code: 'ETIQUETTE_INVALIDE', remede: null },
+      sansEffet: { avant: [['changerEtiquettes', { id: 2, ajouter: 'finance' }]], args: { id: 2, ajouter: 'Finance' } },
+    },
+  ],
+  [
+    'poserObjectif',
+    {
+      accepte: { args: { table: 2, tour: null, etiquettes: 'finance', regle: null } },
+      refuse: {
+        avant: [['poserObjectif', { table: 2, tour: 3, etiquettes: 'finance', regle: 'et' }]],
+        args: { table: 2, tour: 3, etiquettes: ' ; ', regle: null },
+        code: 'OBJECTIF_SANS_ETIQUETTE',
+        remede: { commande: 'retirerObjectif', arguments: { table: 2, tour: 3 } },
+      },
+      sansEffet: {
+        avant: [['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance, Montréal', regle: 'et' }]],
+        args: { table: 2, tour: 1, etiquettes: 'Montréal | finance', regle: 'et' },
+      },
+    },
+  ],
+  [
+    'retirerObjectif',
+    {
+      accepte: { avant: [['poserObjectif', { table: 2, tour: 2, etiquettes: 'finance', regle: null }]], args: { table: 2, tour: 2 } },
+      refuse: {
+        avant: [['poserObjectif', { table: 4, tour: null, etiquettes: 'finance', regle: null }], ['supprimerTable', { id: 4 }]],
+        args: { table: 4, tour: null },
+        code: 'TABLE_DISPARUE',
+        remede: null,
+      },
+      sansEffet: { args: { table: 2, tour: null } },
+    },
+  ],
+  [
+    'changerRegleObjectifs',
+    {
+      accepte: { args: { regle: 'et' } },
+      refuse: "la règle se choisit entre deux valeurs, que l'interface offre seules : changer la règle ne refuse rien du domaine",
+      sansEffet: { args: { regle: 'ou' } },
     },
   ],
   [
@@ -1079,5 +1130,40 @@ describe('registre : créer un événement et charger une démonstration écrive
     assert.notEqual(fs.contenu(racine.id, base + SUFFIXES.etat), null);
     assert.equal(lireJournal(fs.contenu(racine.id, base + SUFFIXES.journal)).entrees.length, 1);
     assert.equal(fs.contenu(racine.id, base + SUFFIXES.verrou), null);
+  });
+});
+
+// --- Les étiquettes, les objectifs, leur règle et les cases ne font aucune dérive ---
+
+describe('registre : étiquettes, objectifs, règle et cases ne mettent aucun placement en dérive (§ 8.9, D13)', () => {
+  // Les raisons de dérive de chaque proposition, puis du retenu.
+  const raisons = (charge) => [...charge.propositions, charge.retenu].map((placement) => derive(placement, charge));
+
+  test('sur la charge témoin, chaque geste écrit une entrée et laisse les raisons de dérive telles quelles', async () => {
+    const ouvert = await ouvrirCopie((await departsPrets()).temoin, { ecriture: true });
+    const { seance } = ouvert;
+    const gestes = [
+      ['changerEtiquettes', { id: 2, ajouter: 'finance' }],
+      ['changerEtiquettes', { id: 3, ajouter: 'Montréal' }],
+      ['poserObjectif', { table: 2, tour: null, etiquettes: 'finance', regle: null }],
+      ['poserObjectif', { table: 3, tour: 2, etiquettes: 'finance, montreal', regle: 'et' }],
+      ['changerRegleObjectifs', { regle: 'et' }],
+      ['modifierReglage', { cle: 'respecterObjectifs', valeur: false }],
+      ['modifierReglage', { cle: 'rencontrerAnimateurs', valeur: true }],
+      ['retirerObjectif', { table: 2, tour: null }],
+      ['changerEtiquettes', { id: 2, retirer: 'finance' }],
+    ];
+    const depart = raisons(seance.charge);
+    for (const [nom, args] of gestes) {
+      const entrees = journalDe(ouvert).entrees.length;
+      await seance.executer(nom, args);
+      assert.equal(journalDe(ouvert).entrees.length, entrees + 1, nom);
+      assert.deepEqual(raisons(seance.charge), depart, nom);
+    }
+    const ecrite = chargeEcrite(ouvert);
+    assert.deepEqual(raisons(ecrite), depart);
+    assert.deepEqual(ecrite.tables.find(({ id }) => id === 3).objectifs, [
+      { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] },
+    ]);
   });
 });

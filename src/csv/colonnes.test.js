@@ -8,10 +8,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CHAMPS, ENTETES_DES_CHAMPS, associer, reconnaitre } from './colonnes.js';
+import { cleEntete } from './normalisation.js';
 
 describe('CHAMPS', () => {
-  test('les sept champs du § 10.1, dans leur ordre, figés', () => {
-    assert.deepEqual(CHAMPS, ['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes']);
+  test('les huit champs du § 10.1, dans leur ordre, etiquettes en dernier, figés', () => {
+    assert.deepEqual(CHAMPS, [
+      'nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes',
+    ]);
     assert.ok(Object.isFrozen(CHAMPS));
   });
 });
@@ -28,6 +31,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
         ['titre_pressenti', ['titre_pressenti', 'titre', 'rôle']],
         ['exclu', ['exclu']],
         ['notes', ['notes']],
+        ['etiquettes', ['etiquettes', 'étiquette', 'mots-clés']],
       ],
     );
     assert.deepEqual(ENTETES_DES_CHAMPS.map(([champ]) => champ), [...CHAMPS]);
@@ -47,8 +51,14 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
 
   test('chaque en-tête de la table est reconnu sous son champ : la reconnaissance la lit', () => {
     const paires = ENTETES_DES_CHAMPS.flatMap(([champ, entetes]) => entetes.map((entete) => [entete, champ]));
-    assert.equal(paires.length, 12);
+    assert.equal(paires.length, 15);
     for (const [entete, champ] of paires) assert.equal(reconnaitre(entete), champ, entete);
+  });
+
+  test('aucune clé d’en-tête n’est celle de deux en-têtes : un synonyme ne vole la colonne d’aucun autre champ', () => {
+    const cles = ENTETES_DES_CHAMPS.flatMap(([, entetes]) => entetes.map((entete) => cleEntete(entete)));
+    assert.equal(cles.length, 15);
+    assert.equal(new Set(cles).size, cles.length);
   });
 });
 
@@ -58,11 +68,19 @@ describe('reconnaitre (§ 10.1)', () => {
     for (const champ of CHAMPS) assert.equal(reconnaitre(champ), champ);
   });
 
-  test('les synonymes : organisation, entreprise et équipe ; titre et rôle', () => {
+  test('les synonymes : organisation, entreprise et équipe ; titre et rôle ; étiquette et mots-clés', () => {
     assert.deepEqual(
-      ['organisation', 'entreprise', 'équipe', 'titre', 'rôle'].map((entete) => reconnaitre(entete)),
-      ['appartenance', 'appartenance', 'appartenance', 'titre_pressenti', 'titre_pressenti'],
+      ['organisation', 'entreprise', 'équipe', 'titre', 'rôle', 'étiquette', 'mots-clés'].map((entete) => reconnaitre(entete)),
+      ['appartenance', 'appartenance', 'appartenance', 'titre_pressenti', 'titre_pressenti', 'etiquettes', 'etiquettes'],
     );
+  });
+
+  test('Étiquettes, ETIQUETTE, Mots clés et mots_clés désignent les étiquettes ; « mot-clé » et « tags » restent inconnus', () => {
+    assert.deepEqual(
+      ['Étiquettes', 'ETIQUETTE', 'Mots clés', 'mots_clés', 'Mots-Cles'].map((entete) => reconnaitre(entete)),
+      ['etiquettes', 'etiquettes', 'etiquettes', 'etiquettes', 'etiquettes'],
+    );
+    assert.deepEqual(['mot-clé', 'tags', 'étiquettes 2'].map((entete) => reconnaitre(entete)), [null, null, null]);
   });
 
   test('sans égard à la casse, aux accents ni aux espaces', () => {
@@ -101,8 +119,8 @@ describe('reconnaitre (§ 10.1)', () => {
 
 describe('associer : par en-tête, jamais par position (§ 10.1)', () => {
   test('chaque champ reconnu reçoit le rang de sa colonne, à partir de 0', () => {
-    assert.deepEqual(associer(['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes']), {
-      colonnes: { nom: 0, prenom: 1, appartenance: 2, courriel: 3, titre_pressenti: 4, exclu: 5, notes: 6 },
+    assert.deepEqual(associer(['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes']), {
+      colonnes: { nom: 0, prenom: 1, appartenance: 2, courriel: 3, titre_pressenti: 4, exclu: 5, notes: 6, etiquettes: 7 },
       ambigus: [],
       nonReconnues: [],
     });
@@ -181,6 +199,14 @@ describe('associer : par en-tête, jamais par position (§ 10.1)', () => {
       { inconnu: 1 },
     ];
     for (const un of choix) assert.deepEqual(associer(entetes, un), sansChoix, JSON.stringify(un));
+  });
+
+  test("étiquette et mots-clés ensemble : ni l'une ni l'autre, une ambiguïté sur etiquettes", () => {
+    assert.deepEqual(associer(['nom', 'étiquette', 'mots-clés']), {
+      colonnes: { nom: 0 },
+      ambigus: [{ champ: 'etiquettes', rangs: [1, 2] }],
+      nonReconnues: [],
+    });
   });
 
   test("deux colonnes nom : ni l'une ni l'autre", () => {

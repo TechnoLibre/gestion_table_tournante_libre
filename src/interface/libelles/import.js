@@ -62,6 +62,7 @@ export const TABLE = new Map([
   ['import.champ.titrePressenti', 'titre pressenti'],
   ['import.champ.exclu', 'exclu'],
   ['import.champ.notes', 'notes'],
+  ['import.champ.etiquettes', 'étiquettes'],
   ['import.exclu.oui', 'oui'],
   ['import.exclu.non', 'non'],
   ['import.colonne.nonReconnue', 'non reconnue : ignorée'],

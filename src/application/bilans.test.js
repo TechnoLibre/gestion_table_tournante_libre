@@ -178,6 +178,7 @@ describe('bilans : changer les tours (§ 2.1 étape 5, § 4.3)', () => {
         { participant: 1, table: 1, tour: 4 },
         { participant: 2, table: 2, tour: 4 },
       ],
+      objectifsDetruits: [],
       propositionsTouchees: [1, 2],
       retenuTouche: true,
     });
@@ -185,8 +186,25 @@ describe('bilans : changer les tours (§ 2.1 étape 5, § 4.3)', () => {
 
   test("le même nombre ne touche rien ; en ajouter ne détruit rien, mais périme les placements", () => {
     const charge = quatreTours();
-    assert.deepEqual(bilanTours(charge, 4), { reservationsDetruites: [], propositionsTouchees: [], retenuTouche: false });
-    assert.deepEqual(bilanTours(charge, 5), { reservationsDetruites: [], propositionsTouchees: [1, 2], retenuTouche: true });
+    const rien = { reservationsDetruites: [], objectifsDetruits: [] };
+    assert.deepEqual(bilanTours(charge, 4), { ...rien, propositionsTouchees: [], retenuTouche: false });
+    assert.deepEqual(bilanTours(charge, 5), { ...rien, propositionsTouchees: [1, 2], retenuTouche: true });
+  });
+
+  test('retirer les tours 3 et 4 compte les objectifs de ces tours, par table puis tour, quel que soit l’ordre de la charge ; la soirée reste', () => {
+    const charge = quatreTours();
+    const objectif = (tour) => ({ portee: tour === null ? 'tous' : 'tour', tour, regle: null, etiquettes: ['finance'] });
+    charge.tables[1].objectifs = [objectif(null), objectif(2), objectif(3), objectif(4)];
+    charge.tables[0].objectifs = [objectif(4)];
+    charge.tables.reverse();
+    assert.deepEqual(bilanTours(charge, 2).objectifsDetruits, [
+      { table: 1, tour: 4 },
+      { table: 2, tour: 3 },
+      { table: 2, tour: 4 },
+    ]);
+    assert.deepEqual(bilanTours(charge, 4).objectifsDetruits, []);
+    // La commande détruit ce que le bilan annonce.
+    assert.equal(COMMANDES.get('changerTours')(charge, { tours: 2 }).libelle, 'Nombre de tours : 2 ; 2 réservations retirées, 3 objectifs retirés');
   });
 });
 
@@ -208,19 +226,38 @@ describe("bilans : supprimer une table (§ 6.2, § 4)", () => {
     assert.deepEqual(bilanSuppressionTable(garnie(), 2), {
       reservations: [{ participant: 2, portee: 'tous', tour: null, siege: 2 }],
       titres: [{ siege: 2, libelle: 'animateur' }],
+      objectifs: [],
       propositionsTouchees: [1, 2],
       retenuTouche: true,
     });
   });
 
+  test("les objectifs de la table partent avec elle : le bilan les nomme, la soirée d'abord, puis les tours", () => {
+    const charge = garnie();
+    charge.tables[1].objectifs = [
+      { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] },
+      { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] },
+    ];
+    assert.deepEqual(bilanSuppressionTable(charge, 2).objectifs, [
+      { tour: null, regle: null, etiquettes: ['finance'] },
+      { tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] },
+    ]);
+  });
+
   test('une table nue : deux listes vides ; une table créée après les placements ne les touche pas', () => {
     const charge = garnie();
     const nue = bilanSuppressionTable(charge, 3);
-    assert.deepEqual([nue.reservations, nue.titres], [[], []]);
+    assert.deepEqual([nue.reservations, nue.titres, nue.objectifs], [[], [], []]);
     const creee = COMMANDES.get('creerTable')(charge, { forme: 'carree' }).charge;
     const idCree = creee.tables.at(-1).id;
     // creerTable fait entrer la table au retenu ; aucune proposition ne la déclare.
-    assert.deepEqual(bilanSuppressionTable(creee, idCree), { reservations: [], titres: [], propositionsTouchees: [], retenuTouche: true });
+    assert.deepEqual(bilanSuppressionTable(creee, idCree), {
+      reservations: [],
+      titres: [],
+      objectifs: [],
+      propositionsTouchees: [],
+      retenuTouche: true,
+    });
   });
 
   test('les titres se rangent par siège puis libellé', () => {
