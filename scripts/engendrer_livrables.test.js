@@ -319,13 +319,13 @@ describe("engendrer_livrables : la charge d'une démonstration (§ 15)", () => {
 });
 
 describe("engendrer_livrables : le fichier d'état écrit (§ 8.8, § 18.6)", () => {
-  test('révision 1, la version de la construction qui écrit, la forme canonique ; UTF-8 sans marque, des LF seules, une fin de ligne finale', () => {
+  test('format 2, révision 1, la version de la construction qui écrit, la forme canonique ; UTF-8 sans marque, des LF seules, une fin de ligne finale', () => {
     for (const entree of CATALOGUE) {
       const texte = texteDeDemonstration(entree);
       const lu = analyser(texte);
       assert.deepEqual(
         [lu.entete.format, lu.entete.produitVersion, lu.entete.revision],
-        [1, VERSION.affichee, 1],
+        [2, VERSION.affichee, 1],
         entree.cle,
       );
       assert.equal(serialiser(lu.charge, lu.entete), texte, entree.cle);

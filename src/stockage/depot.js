@@ -60,6 +60,16 @@
 // nouvelle base appartient à l'événement dès que son journal existe, et
 // l'ancienne paire ne s'apparie jamais ce journal.
 //
+// Un état ou un journal d'un format plus ancien que FORMAT se lit comme un
+// fichier du format courant qui ne porte aucun champ nouveau (§ 8.8) : ni
+// l'ouverture, ni le passage en écriture ne le réécrivent. Le premier geste
+// qui écrit — un geste, un jalon, l'écriture ailleurs — réécrit le journal
+// en entier, au format courant, chaque entrée lue gardée telle quelle :
+// des entrées du format courant ne s'ajoutent jamais sous une ouverture
+// d'un format plus ancien, qu'une construction ancienne lirait comme
+// sienne. Un geste réécrit aussi l'état, au format courant ; un jalon, qui
+// n'écrit pas l'état, le laisse à son format jusqu'au geste suivant.
+//
 // Un état sur le disque, ou un journal de la base, d'un format plus récent
 // que FORMAT garde en lecture seule tout ce qui ouvre l'événement, secours
 // compris : rien de ce qu'une construction plus récente a écrit dans l'état
@@ -135,8 +145,9 @@ import { examiner } from './placements.js';
  *           restitue la dernière entrée du journal, d'où part le correctif
  *           de la suivante ; null sans journal
  * @property {boolean} journalAReecrire   le fichier du journal porte des
- *           lignes que la lecture a écartées : la prochaine écriture le
- *           réécrit sans elles
+ *           lignes que la lecture a écartées, ou une ouverture d'un format
+ *           plus ancien que FORMAT : la prochaine écriture le réécrit en
+ *           entier, sans elles, au format courant
  * @property {boolean} formatPlusRecent   lecture seule (§ 8.8) : l'état sur
  *           le disque, le .precedent qu'un secours ouvre ou le journal de la
  *           base est d'un format plus récent que FORMAT
@@ -590,7 +601,9 @@ export function rattraper(etat, instant) {
 // L'Ouvert d'une source — état, .precedent ou instant du journal — et du
 // journal trouvé pour elle. avecRattrapage : la source suit la règle de
 // rattraper. La source d'un format plus récent, ou un journal d'un format
-// plus récent, gardent l'Ouvert en lecture seule.
+// plus récent, gardent l'Ouvert en lecture seule. Un journal dont la lecture
+// a écarté des lignes, ou d'un format plus ancien, se réécrira en entier à
+// la prochaine écriture (journalAReecrire).
 function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage }) {
   const lu = avecRattrapage ? rattraper(source, instant) : { ...source, rattrape: false };
   const { charge, revision, produitVersion, manquants, rattrape } = lu;
@@ -609,7 +622,7 @@ function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage }
     journal,
     baseJournal: trouve.base,
     chargeJournal: instant?.charge ?? null,
-    journalAReecrire: journal !== null && ecartees > 0,
+    journalAReecrire: journal !== null && (ecartees > 0 || journal.format < FORMAT),
     formatPlusRecent: source.formatPlusRecent || trouve.format !== null,
     etatMalEncode: source.etatMalEncode,
     examen,
@@ -880,12 +893,13 @@ function texteDe({ evenement, entrees, jalons }) {
 // ligne de l'entrée de reprise qui le fait finir sur la charge ouverte, ou
 // null ; journal, avant suivi de la reprise ; charge, ce que restitue sa
 // dernière entrée ; entier, vrai quand le fichier se réécrit en entier à sa
-// prochaine écriture : il manque, sa lecture a écarté des lignes, ou il
-// reçoit la reprise. Sans journal, la reprise le commence, instantané de la
-// charge ouverte à sa révision et à sa version. Un journal qui finit sur une
-// autre révision que la charge ouverte reçoit la reprise à la révision qui
-// suit la sienne, qui restitue la charge ouverte. libelleReprise manque :
-// ligneEntree lève TypeError, avant toute écriture.
+// prochaine écriture : il manque, sa lecture a écarté des lignes ou son
+// ouverture est d'un format plus ancien (journalAReecrire), ou il reçoit la
+// reprise. Sans journal, la reprise le commence, instantané de la charge
+// ouverte à sa révision et à sa version. Un journal qui finit sur une autre
+// révision que la charge ouverte reçoit la reprise à la révision qui suit la
+// sienne, qui restitue la charge ouverte. libelleReprise manque : ligneEntree
+// lève TypeError, avant toute écriture.
 function preparer(ouvert, { libelleReprise, horodatage }) {
   const { journal, revision, charge, produitVersion } = ouvert;
   if (journal === null) {
@@ -897,7 +911,7 @@ function preparer(ouvert, { libelleReprise, horodatage }) {
       apres: charge,
       instantane: true,
     });
-    const vide = { evenement: charge.evenement.id, entrees: [], jalons: [], ecartees: 0 };
+    const vide = { evenement: charge.evenement.id, format: FORMAT, entrees: [], jalons: [], ecartees: 0 };
     return { avant: vide, reprise, journal: avec(vide, reprise), charge: canoniser(charge), entier: true };
   }
   const derniere = journal.entrees.at(-1).revision;
@@ -965,12 +979,13 @@ async function aligner(ouvert, preparation, texte) {
 }
 
 // Le texte entier d'un journal en mémoire, élagué au-delà de PLAFOND_ENTREES
-// (elaguer), et le journal que ce texte porte, sans ligne écartée : ce que
-// le fichier porte une fois écrit d'un bloc.
+// (elaguer), et le journal que ce texte porte, sans ligne écartée, au
+// format courant que porte son ouverture (ligneOuverture) : ce que le
+// fichier porte une fois écrit d'un bloc.
 function textePlein(journal) {
   const texte = texteDe(journal);
   const elague = elaguer(texte);
-  if (elague === null) return { texte, journal: { ...journal, ecartees: 0 } };
+  if (elague === null) return { texte, journal: { ...journal, format: FORMAT, ecartees: 0 } };
   return { texte: elague, journal: lireJournal(elague) };
 }
 
@@ -1177,7 +1192,7 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
   const base = await deriver(fs, racine, charge.evenement.nom, []);
   const entree = ligneEntree({ revision: 1, libelle, horodatage, produitVersion, apres: charge, instantane: true });
   const jalon = ligneJalon({ revision: 1, nom: nomJalon, horodatage });
-  const vide = { evenement: charge.evenement.id, entrees: [], jalons: [], ecartees: 0 };
+  const vide = { evenement: charge.evenement.id, format: FORMAT, entrees: [], jalons: [], ecartees: 0 };
   const journal = avec(avec(vide, entree), jalon);
   const texteEtat = relisible(serialiser(charge, { revision: 1, produitVersion }), 'creer');
   await fs.ecrireAtomique(racine, base + SUFFIXES.journal, texteDe(journal));
@@ -1208,7 +1223,8 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
  * ou en entier quand (1) a lieu, quand sa lecture a écarté des lignes, et
  * au-delà de PLAFOND_ENTREES, élagué ; (3) le .precedent reçoit texteEtat,
  * s'il est lisible ; (4) l'état, son nouveau texte. Un format plus ancien
- * s'écrit au format courant : la conversion tombe au premier geste. Avant
+ * s'écrit au format courant : la conversion tombe au premier geste, qui
+ * réécrit le journal en entier, chaque entrée lue gardée, puis l'état. Avant
  * (1), l'état aux octets hors UTF-8 d'un Ouvert de secours passe dans un
  * dossier daté de la corbeille, à l'horodatage du geste
  * (mettreDeCoteEtatMalEncode).

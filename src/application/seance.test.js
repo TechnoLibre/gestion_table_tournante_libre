@@ -1256,10 +1256,11 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
   });
 
   // L'événement réécrit par une construction plus récente : l'état, ou la
-  // première ligne du journal, déclarent le format 2.
+  // première ligne du journal, déclarent le format qui suit FORMAT.
+  const versPlusRecent = (texte) => texte.replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`);
   const plusRecent = {
-    etat: (fs) => fs.deposer('documents', ETAT, fs.contenu('documents', ETAT).replace('"format":1', '"format":2')),
-    journal: (fs) => fs.deposer('documents', JOURNAL, fs.contenu('documents', JOURNAL).replace('"format":1', '"format":2')),
+    etat: (fs) => fs.deposer('documents', ETAT, versPlusRecent(fs.contenu('documents', ETAT))),
+    journal: (fs) => fs.deposer('documents', JOURNAL, versPlusRecent(fs.contenu('documents', JOURNAL))),
   };
 
   for (const [fichier, designe] of [['etat', "l'état"], ['journal', 'le journal']]) {
@@ -1277,7 +1278,7 @@ describe("séance : une autre séance a écrit entre-temps (§ 8.2, § 8.8)", ()
       const { seconde, fs } = await surPrecedent();
       if (fichier === 'etat') {
         const precedent = fs.contenu('documents', `${BASE}${SUFFIXES.precedent}`);
-        fs.deposer('documents', ETAT, precedent.replace('"format":1', '"format":2'));
+        fs.deposer('documents', ETAT, versPlusRecent(precedent));
       } else {
         plusRecent.journal(fs);
       }
@@ -1653,7 +1654,11 @@ describe("séance : un fichier d'un format plus récent (§ 8.8)", () => {
     fs.deposerDossier('documents');
     const charge = chargeEssai();
     charge.evenement.etat = 'bloque';
-    fs.deposer('documents', ETAT, serialiser(charge, { revision: 1, produitVersion: V1 }).replace('"format":1', '"format":2'));
+    fs.deposer(
+      'documents',
+      ETAT,
+      serialiser(charge, { revision: 1, produitVersion: V1 }).replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`),
+    );
     const { seance } = monter({ fs });
     const avant = fs.compteurs.ecritures;
     await seance.ouvrir(BASE);

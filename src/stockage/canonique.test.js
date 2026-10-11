@@ -5,9 +5,9 @@
 // exact que le contrat de données attend du sérialiseur, la canonicité quel
 // que soit l'ordre dans lequel une charge s'est construite, la charge seule
 // dans la mise en page du fichier, l'aller-retour par l'analyse, le retenu
-// que sa règle refuse, recopié hors du schéma, et un sérialiseur dont la
-// sortie ne dépend que de ses arguments. Les noms des charges d'épreuve sont
-// inventés.
+// que sa règle refuse, recopié hors du schéma, les champs facultatifs du
+// format 2 et leur rang, et un sérialiseur dont la sortie ne dépend que de
+// ses arguments. Les noms des charges d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
@@ -21,7 +21,7 @@ const ENTETE = Object.freeze({ revision: 3, produitVersion: VERSION.affichee });
 // Texte exact que le contrat de données (types.js) attend de serialiser pour
 // chargeContrat() sous ENTETE, fin de ligne finale comprise.
 const TEXTE_CONTRAT = `{
-  "entete": {"format":1,"produitVersion":"${VERSION.affichee}","revision":3,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},
+  "entete": {"format":2,"produitVersion":"${VERSION.affichee}","revision":3,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},
   "charge": {
     "evenement": {"id":"evt-essai","nom":"Soirée d'essai","date":null,"siegesParDefaut":2,"tours":2,"unite":"cm","etat":"propose","filiation":null},
     "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},
@@ -187,7 +187,7 @@ function chargeSansListe() {
   };
 }
 const TEXTE_SANS_LISTE = `{
-  "entete": {"format":1,"produitVersion":"${VERSION.affichee}","revision":1,"comptes":{"participants":0,"tables":0,"reservations":0,"titres":0,"propositions":0,"retenu":0}},
+  "entete": {"format":2,"produitVersion":"${VERSION.affichee}","revision":1,"comptes":{"participants":0,"tables":0,"reservations":0,"titres":0,"propositions":0,"retenu":0}},
   "charge": {
     "evenement": {"id":"evt-neuf","nom":"Atelier \\"jeudi\\"","date":"2026-11-12","siegesParDefaut":8,"tours":3,"unite":"cm","etat":"brouillon","filiation":{"source":{"id":"evt-modele","nom":"Atelier modèle"},"instant":{"revision":7,"libelle":"Tables posées"}}},
     "reglages": {"separerAppartenances":false,"nouveauxVoisins":true,"nouvelleTable":false,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":2,"arret":1000,"historique":10}},
@@ -580,7 +580,7 @@ describe('serialiserCharge : la charge seule (§ 8.8)', () => {
     assert.deepEqual(avant.flatMap((ligne, i) => (ligne === apres[i] ? [] : [i])), [1]);
     assert.equal(
       apres[1],
-      `  "entete": {"format":1,"produitVersion":"${autre}","revision":41,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},`,
+      `  "entete": {"format":2,"produitVersion":"${autre}","revision":41,"comptes":{"participants":4,"tables":2,"reservations":1,"titres":1,"propositions":1,"retenu":0}},`,
     );
   });
 });
@@ -725,5 +725,86 @@ describe('déterminisme (§ 8.8, § 14.7)', () => {
       return [serialiser(charge, ENTETE), serialiserCharge(charge), JSON.stringify(canoniser(charge))];
     };
     assert.deepEqual(sansHorlogeNiAlea(rendre), rendre());
+  });
+});
+
+describe('les champs facultatifs du format 2 (§ 8.9, A16)', () => {
+  // La charge du contrat, chaque champ du format 2 posé hors de son défaut,
+  // ses listes à rebours de l'ordre canonique, et le texte qui l'écrit.
+  function chargeFormat2() {
+    const charge = chargeContrat();
+    charge.reglages.rencontrerAnimateurs = true;
+    charge.reglages.modeObjectifs = 'chacun';
+    charge.reglages.respecterObjectifs = false;
+    charge.reglages.regleObjectifs = 'et';
+    charge.reglages.cibleRedondance = 800;
+    charge.participants[0].etiquettes = ['finance', 'bénévole', 'Montréal'];
+    charge.tables[1].objectifs = [
+      { portee: 'tour', tour: 2, regle: 'ou', etiquettes: ['ressources humaines', 'finance'] },
+      { portee: 'tour', tour: 1, regle: null, etiquettes: ['bénévole'] },
+      { portee: 'tous', tour: null, regle: null, etiquettes: ['Montréal'] },
+    ];
+    return charge;
+  }
+  const TEXTE_FORMAT_2 = remplacer(
+    remplacer(
+      remplacer(
+        TEXTE_CONTRAT,
+        '"generation":{"nombre":5,"arret":200000,"historique":1000}}',
+        '"generation":{"nombre":5,"arret":200000,"historique":1000},"cibleRedondance":800,"regleObjectifs":"et","respecterObjectifs":false,"modeObjectifs":"chacun","rencontrerAnimateurs":true}',
+      ),
+      '"notes":null,"exclu":false},\n      {"id":2',
+      '"notes":null,"exclu":false,"etiquettes":["Montréal","bénévole","finance"]},\n      {"id":2',
+    ),
+    '"position":{"x":250,"y":0}}',
+    '"position":{"x":250,"y":0},"objectifs":[{"portee":"tous","tour":null,"regle":null,"etiquettes":["Montréal"]},{"portee":"tour","tour":1,"regle":null,"etiquettes":["bénévole"]},{"portee":"tour","tour":2,"regle":"ou","etiquettes":["finance","ressources humaines"]}]}',
+  );
+
+  test('chacun s’écrit après les clés du format 1 de son objet, les réglages dans l’ordre de A16, les étiquettes par unités de code, les objectifs la soirée puis les tours', () => {
+    assert.equal(serialiser(chargeFormat2(), ENTETE), TEXTE_FORMAT_2);
+    assert.equal(serialiser(aRebours(chargeFormat2()), ENTETE), TEXTE_FORMAT_2);
+    const lu = analyser(TEXTE_FORMAT_2);
+    assert.equal(serialiser(lu.charge, lu.entete), TEXTE_FORMAT_2);
+  });
+
+  test('absents, ils ne s’écrivent pas : la charge du format 1 rend le texte du contrat', () => {
+    const charge = chargeFormat2();
+    for (const cle of ['cibleRedondance', 'regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs']) {
+      delete charge.reglages[cle];
+    }
+    delete charge.participants[0].etiquettes;
+    delete charge.tables[1].objectifs;
+    assert.equal(serialiser(charge, ENTETE), TEXTE_CONTRAT);
+  });
+
+  test('l’ordre des étiquettes est celui des unités de code : une lettre hors du plan de base passe avant U+FF21, une majuscule avant une minuscule', () => {
+    const charge = chargeContrat();
+    charge.participants[1].etiquettes = ['\u{FF21}', 'été', 'Été', '\u{1D538}', 'zèbre'];
+    // Par points de code, U+FF21 passerait avant U+1D538 ; ses deux unités
+    // commencent par 0xD835, plus petite que 0xFF21.
+    assert.deepEqual(canoniser(charge).participants[1].etiquettes, ['zèbre', 'Été', 'été', '\u{1D538}', '\u{FF21}']);
+  });
+
+  test('deux objectifs d’une même portée et d’un même tour, que l’analyse refuse, s’écrivent pareil quel que soit l’ordre reçu : l’ordre reste total', () => {
+    const doubles = [
+      { portee: 'tous', tour: null, regle: 'et', etiquettes: ['finance'] },
+      { portee: 'tous', tour: null, regle: null, etiquettes: ['bénévole'] },
+    ];
+    const une = chargeContrat();
+    une.tables[0].objectifs = structuredClone(doubles);
+    const autre = chargeContrat();
+    autre.tables[0].objectifs = structuredClone(doubles).reverse();
+    assert.equal(serialiser(une, ENTETE), serialiser(autre, ENTETE));
+    // Deux objectifs identiques s'écrivent deux fois, à l'identique.
+    une.tables[0].objectifs = [structuredClone(doubles[0]), structuredClone(doubles[0])];
+    assert.deepEqual(canoniser(une).tables[0].objectifs, [doubles[0], doubles[0]]);
+  });
+
+  test('la copie canonique ne partage aucune liste d’étiquettes ni aucun objectif avec la charge reçue, qui reste intacte', () => {
+    const charge = geler(chargeFormat2());
+    const copie = canoniser(charge);
+    const recus = objetsDe(charge);
+    for (const objet of objetsDe(copie)) assert.ok(!recus.has(objet));
+    assert.deepEqual(charge.participants[0].etiquettes, ['finance', 'bénévole', 'Montréal']);
   });
 });

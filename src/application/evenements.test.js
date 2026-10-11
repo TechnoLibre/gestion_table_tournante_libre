@@ -1528,8 +1528,8 @@ describe('importer (§ 8.6, § 8.7)', () => {
   test('un fichier d’un format plus récent s’importe tel quel', async () => {
     const { fs, facade } = monter();
     await facade.demarrer();
-    const texte = texteEtat(MERLES).replace('"format":1', '"format":2');
-    assert.ok(texte.includes('"format":2'));
+    const texte = texteEtat(MERLES).replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`);
+    assert.ok(texte.includes(`"format":${FORMAT + 1}`));
     const octets = UTF8.encode(texte);
     fs.choisirFichierAImporter = async () => ({ nom: 'futur.gtt.json', octets });
     const avant = ecritures(fs);

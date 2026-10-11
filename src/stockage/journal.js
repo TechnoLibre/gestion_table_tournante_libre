@@ -9,6 +9,15 @@
 // charge. L'ordre est celui des lignes, jamais celui des horodatages, qui ne
 // servent qu'à l'affichage.
 //
+// L'ouverture déclare le format des charges que le journal porte. Le
+// journal s'écrit au format courant, FORMAT, et se lit à tout format de 1 à
+// FORMAT : un format n'ajoute au précédent que des champs facultatifs, et
+// les charges d'un journal plus ancien sont des charges du format courant
+// qui ne les portent pas (§ 8.8). La lecture rend le format lu ; le dépôt
+// réécrit en entier, au premier geste, un journal d'un format plus ancien.
+// Un format plus récent rend l'ouverture illisible : ce code ne sait pas
+// lire ses charges.
+//
 // Le module n'a ni fichier ni horloge. Il rend le texte d'une ligne, sans fin
 // de ligne — l'ajout au fichier appartient au système de fichiers —, lit le
 // texte entier d'un journal, en décode les octets ligne par ligne, restitue
@@ -44,14 +53,15 @@ export const PLANCHER_ENTREES = 500;
 export const PLAFOND_ENTREES = 600;
 
 /**
- * Un journal lu (lireJournal) : l'identifiant de l'événement, null quand
- * l'ouverture est illisible ; les entrées, puis les jalons, chacun dans
- * l'ordre des lignes, tels que le texte les porte ; et le nombre de lignes
- * écartées. Les révisions des entrées se suivent ; la première porte un
- * instantané et une version.
+ * Un journal lu (lireJournal) : l'identifiant de l'événement et le format
+ * que déclare l'ouverture, null l'un et l'autre quand elle est illisible ;
+ * les entrées, puis les jalons, chacun dans l'ordre des lignes, tels que le
+ * texte les porte ; et le nombre de lignes écartées. Les révisions des
+ * entrées se suivent ; la première porte un instantané et une version.
  *
  * @typedef {Object} Journal
  * @property {string|null} evenement
+ * @property {number|null} format     de 1 à FORMAT
  * @property {import('./types.js').LigneEntree[]} entrees
  * @property {import('./types.js').LigneJalon[]} jalons
  * @property {number} ecartees
@@ -99,9 +109,11 @@ function fauteDeCharge(charge) {
 // est admise à sa clé ; il peut lire les clés qui la précèdent, déjà admises.
 const sorte = (champs) => ({ champs, cles: new Set(champs.map(([cle]) => cle)) });
 
+// Le format d'une ouverture : un entier de 1 à FORMAT. L'écriture n'en pose
+// qu'un, FORMAT (ligneOuverture).
 const OUVERTURE = sorte([
   ['type', (valeur) => valeur === 'journal'],
-  ['format', (valeur) => valeur === FORMAT],
+  ['format', (valeur) => Number.isSafeInteger(valeur) && valeur >= 1 && valeur <= FORMAT],
   ['evenement', estTexte],
 ]);
 
@@ -287,21 +299,22 @@ function jalonDe(ligne, entrees) {
   );
 }
 
-// Lecture d'un texte de journal : le journal lu ; les lignes lues après
-// l'ouverture, entrées et jalons dans l'ordre du texte ; et les segments du
-// texte coupé à chaque fin de ligne, la marque d'ordre d'octets retirée, le
-// dernier segment suivant la dernière fin de ligne. Chaque segment suivi
-// d'une fin de ligne est une ligne ; le dernier aussi quand il n'est pas
-// vide, et la lecture l'écarte.
+// Lecture d'un texte de journal : le journal lu, son format compris ; les
+// lignes lues après l'ouverture, entrées et jalons dans l'ordre du texte ; et
+// les segments du texte coupé à chaque fin de ligne, la marque d'ordre
+// d'octets retirée, le dernier segment suivant la dernière fin de ligne.
+// Chaque segment suivi d'une fin de ligne est une ligne ; le dernier aussi
+// quand il n'est pas vide, et la lecture l'écarte.
 function lire(texte) {
   const segments = (texte.startsWith(MARQUE_ORDRE_OCTETS) ? texte.slice(1) : texte).split('\n');
   const completes = segments.length - 1;
   const lignes = segments[completes] === '' ? completes : completes + 1;
-  const journal = { evenement: null, entrees: [], jalons: [], ecartees: lignes };
+  const journal = { evenement: null, format: null, entrees: [], jalons: [], ecartees: lignes };
   const lues = [];
   const ouverture = completes > 0 ? analyserLigne(segments[0]) : undefined;
   if (champFautif(ouverture, OUVERTURE) !== null) return { journal, lues, segments };
   journal.evenement = ouverture.evenement;
+  journal.format = ouverture.format;
   for (let rang = 1; rang < completes; rang += 1) {
     const ligne = analyserLigne(segments[rang]);
     if (entreeSuivante(ligne, journal.entrees)) journal.entrees.push(ligne);
@@ -319,15 +332,17 @@ function lire(texte) {
  * ligne aussi, que JSON tient pour un blanc.
  *
  * La lecture s'arrête à la première ligne illisible : JSON invalide ; forme
- * fausse, toute clé absente, refusée ou inconnue, et l'instantané d'une
- * forme que l'analyse du fichier d'état refuse ; une ouverture d'un autre
- * format ; une entrée dont la révision ne suit pas la précédente, ou dont
- * l'instantané manque ou abonde au regard de la cadence (estInstantane) ;
- * une première entrée sans version ; un jalon d'une révision qui n'est pas
- * encore lue ; une ligne finale sans fin de ligne. Cette ligne et toutes
- * celles qui la suivent, entrées et jalons confondus — une ligne illisible
- * ne dit pas sa sorte —, sont écartées et comptées dans ecartees. Une
- * ouverture illisible écarte tout, et evenement vaut null.
+ * fausse, toute clé absente, refusée ou inconnue, et l'instantané d'une forme
+ * que l'analyse du fichier d'état refuse ; une ouverture dont le format n'est
+ * pas un entier de 1 à FORMAT ; une entrée dont la révision ne suit pas la
+ * précédente, ou dont l'instantané manque ou abonde au regard de la cadence
+ * (estInstantane) ; une première entrée sans version ; un jalon d'une
+ * révision qui n'est pas encore lue ; une ligne finale sans fin de ligne.
+ * Cette ligne et toutes celles qui la suivent, entrées et jalons confondus —
+ * une ligne illisible ne dit pas sa sorte —, sont écartées et comptées dans
+ * ecartees. Une ouverture illisible écarte tout, et evenement et format
+ * valent null. Un journal d'un format plus ancien se lit entier, son format
+ * rendu.
  *
  * Un correctif se lit sans s'appliquer : reconstruire lève CORRECTIF sur
  * celui qui ne s'applique pas.
@@ -473,15 +488,16 @@ export function versionDe({ entrees }, revision) {
  * Texte du journal élagué (§ 8.6), ou null quand ses entrées lisibles ne
  * dépassent pas PLAFOND_ENTREES. La coupe tombe sur l'instantané le plus
  * récent qui garde au moins PLANCHER_ENTREES entrées : le plancher l'emporte
- * sur le plafond. Le texte rendu porte l'ouverture, puis les lignes lues dont
- * la révision atteint la coupe — les jalons des entrées retirées partent
- * avec elles —, puis les lignes que la lecture écarte, telles quelles.
- * L'entrée de la coupe porte la version de la construction qui l'a produite
- * (versionDe), qu'elle hérite sinon d'une entrée retirée ; toute autre
- * ligne gardée se recopie octet pour octet. La marque d'ordre d'octets ne
- * se recopie pas. Les instantanés gardés suivent la cadence comptée depuis
- * la coupe, celle d'avant : le texte rendu se relit, et chaque instant gardé
- * s'y restitue comme avant.
+ * sur le plafond. Le texte rendu porte l'ouverture au format courant —
+ * réécrit, un journal d'un format plus ancien s'y convertit —, puis les
+ * lignes lues dont la révision atteint la coupe — les jalons des entrées
+ * retirées partent avec elles —, puis les lignes que la lecture écarte,
+ * telles quelles. L'entrée de la coupe porte la version de la construction
+ * qui l'a produite (versionDe), qu'elle hérite sinon d'une entrée retirée ;
+ * toute autre ligne gardée se recopie octet pour octet. La marque d'ordre
+ * d'octets ne se recopie pas. Les instantanés gardés suivent la cadence
+ * comptée depuis la coupe, celle d'avant : le texte rendu se relit, et chaque
+ * instant gardé s'y restitue comme avant.
  *
  * @param {string} texte
  * @returns {string|null}

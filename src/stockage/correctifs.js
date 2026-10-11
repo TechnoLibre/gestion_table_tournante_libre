@@ -33,7 +33,11 @@
 // franchit ; une liste d'identifiants de même longueur se pose alors
 // entière dès que ses poses rang par rang pèsent plus que cette pose, et
 // l'échange ne coûte jamais plus que les deux listes posées entières. Une
-// liste qui change de longueur se pose entière.
+// liste qui change de longueur se pose entière. Une liste dont la règle
+// veut les éléments distincts — les étiquettes d'une personne ou d'un
+// objectif — se pose toujours entière, et rien ne se pose sous elle : une
+// pose à un rang y répéterait un élément sans que la règle de ce rang le
+// voie.
 //
 // Une charge que rend appliquer, l'analyse l'admet comme celle qu'il
 // reçoit, et chacune de ses propositions suit sa règle, comme dans la
@@ -82,6 +86,10 @@ const OCCUPANT = regleDuChamp(regleDuChamp(PROPOSITION, 'placement').element, 's
 // Vrai pour un objet qui n'est ni null ni une liste.
 const estObjet = (valeur) => typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
 
+// Vrai pour la règle d'une liste qui se pose entière : ses éléments sont
+// distincts, et seule sa règle, qui voit la liste entière, le contrôle.
+const sePoseEntiere = (regle) => regle?.genre === 'liste' && regle.distincts === true;
+
 // Vrai quand chaque élément de liste est un objet dont l'id est un entier
 // exact, et qu'aucun id ne s'y répète : la seule forme où { id } désigne un
 // enregistrement et un seul. Une copie canonique ne porte que les clés du
@@ -105,20 +113,23 @@ const poids = (operations) => JSON.stringify(operations).length;
 
 // Ajoute à operations ce qui mène de a à b, deux valeurs canoniques de la
 // règle regle, au bout de chemin. null contre une valeur, et deux scalaires
-// différents, posent b. Un retenu que sa règle refuse, d'un côté ou de
-// l'autre, n'a pas de champs que le schéma décrive : b se pose entier quand
-// les deux copies canoniques s'écrivent autrement, et rien sinon. Deux
+// différents, posent b ; deux listes qui se posent entières (sePoseEntiere)
+// et s'écrivent autrement aussi. Un retenu que sa règle refuse, d'un côté ou
+// de l'autre, n'a pas de champs que le schéma décrive : b se pose entier
+// quand les deux copies canoniques s'écrivent autrement, et rien sinon. Deux
 // objets se comparent champ par champ, dans l'ordre du schéma. Deux listes
 // d'enregistrements à identifiants distincts se comparent par identifiant ;
 // deux autres listes, de longueurs différentes, posent b entière, et de même
 // longueur se comparent rang par rang — deux listes d'identifiants ou
-// d'occupants exceptées, qui posent b entière quand leurs poses rang par
-// rang pèsent plus que la sienne. Un champ facultatif absent d'un côté se
-// pose quand b le porte, et se retire quand b ne le porte pas.
+// d'occupants exceptées, qui posent b entière quand leurs poses rang par rang
+// pèsent plus que la sienne. Un champ facultatif absent d'un côté se pose
+// quand b le porte, et se retire quand b ne le porte pas.
 function comparer(a, b, regle, chemin, operations) {
   if (a === null || b === null || (regle.genre !== 'objet' && regle.genre !== 'liste')) {
     if (a !== b) operations.push({ op: 'poser', chemin, valeur: b });
   } else if (retenuHorsDeSaRegle(a, regle) || retenuHorsDeSaRegle(b, regle)) {
+    if (JSON.stringify(a) !== JSON.stringify(b)) operations.push({ op: 'poser', chemin, valeur: b });
+  } else if (sePoseEntiere(regle)) {
     if (JSON.stringify(a) !== JSON.stringify(b)) operations.push({ op: 'poser', chemin, valeur: b });
   } else if (regle.genre === 'objet') {
     for (const [cle, regleDeCle] of regle.champs) {
@@ -193,20 +204,21 @@ function comparerParIdentifiant(a, b, regleElement, chemin, operations) {
  * prise à la copie canonique de b, et ne partage aucun objet avec b. Ni a ni
  * b ne sont modifiées.
  *
- * Règles : les objets clé par clé dans l'ordre du schéma ; les listes
- * d'enregistrements à identifiant — participants, tables, propositions —
- * par identifiant : retirés, posés entiers, communs comparés ; une telle
- * liste dont un identifiant se répète, ce que la lecture admet pour deux
- * propositions, se compare comme les autres listes ; les autres listes de
- * longueurs différentes posées entières, et de même longueur rang par rang,
- * sauf une liste d'identifiants dont les poses rang par rang pèsent plus,
- * en JSON, que sa pose entière : elle se pose entière ; null contre une
- * valeur, et deux scalaires différents, posent la valeur de b ; un retenu
- * que sa règle refuse, dans a ou dans b, se pose entier quand les deux
- * diffèrent, sans rien pour lui sinon. L'échange de deux personnes, au même
- * tour d'une proposition, ne touche ainsi que les listes de leurs deux
- * tables, et ne pèse jamais plus que ces deux listes posées entières,
- * attribution des sièges ou non (§ 8.9).
+ * Règles : les objets clé par clé dans l'ordre du schéma ; une liste
+ * d'étiquettes posée entière quand elle change ; les listes d'enregistrements
+ * à identifiant — participants, tables, propositions — par identifiant :
+ * retirés, posés entiers, communs comparés ; une telle liste dont un
+ * identifiant se répète, ce que la lecture admet pour deux propositions, se
+ * compare comme les autres listes ; les autres listes de longueurs
+ * différentes posées entières, et de même longueur rang par rang, sauf une
+ * liste d'identifiants dont les poses rang par rang pèsent plus, en JSON, que
+ * sa pose entière : elle se pose entière ; null contre une valeur, et deux
+ * scalaires différents, posent la valeur de b ; un retenu que sa règle
+ * refuse, dans a ou dans b, se pose entier quand les deux diffèrent, sans
+ * rien pour lui sinon. L'échange de deux personnes, au même tour d'une
+ * proposition, ne touche ainsi que les listes de leurs deux tables, et ne
+ * pèse jamais plus que ces deux listes posées entières, attribution des
+ * sièges ou non (§ 8.9).
  *
  * @param {import('./types.js').Charge} a
  * @param {import('./types.js').Charge} b
@@ -232,21 +244,25 @@ function regleSuivante(regle, etape) {
 // dont l'élément a un champ id : participants, tables, propositions.
 const estListeDEnregistrements = (regle) => regle?.element?.cles?.has('id') === true;
 
-// Lecture de chemin dans le schéma, depuis la charge : { regle }, la règle
-// de la place qu'il désigne, undefined quand une étape sort du schéma ; null
-// quand une étape { id } ne tombe pas dans une liste d'enregistrements à
-// identifiant. C'est le schéma qui en décide, et non le contenu de la
-// liste : une liste vide n'a aucun élément qui montre la forme des autres,
-// et tout identifiant y est absent, ce qui ouvrirait une insertion par
-// { id } dans une réserve, une liste de table ou les réservations. Une clé
-// et un rang se contrôlent sur la valeur, qui les porte ou non.
+// Lecture de chemin dans le schéma, depuis la charge : { regle, parent }, la
+// règle de la place qu'il désigne et celle de son conteneur, undefined quand
+// une étape sort du schéma ; null quand une étape { id } ne tombe pas dans
+// une liste d'enregistrements à identifiant, ou qu'une étape descend sous une
+// liste qui se pose entière (sePoseEntiere). C'est le schéma qui en décide,
+// et non le contenu de la liste : une liste vide n'a aucun élément qui montre
+// la forme des autres, et tout identifiant y est absent, ce qui ouvrirait une
+// insertion par { id } dans une réserve, une liste de table ou les
+// réservations. Une clé et un rang se contrôlent sur la valeur, qui les porte
+// ou non.
 function lireChemin(chemin) {
   let regle = CHARGE;
+  let parent;
   for (const etape of chemin) {
-    if (estObjet(etape) && !estListeDEnregistrements(regle)) return null;
+    if ((estObjet(etape) && !estListeDEnregistrements(regle)) || sePoseEntiere(regle)) return null;
+    parent = regle;
     regle = regleSuivante(regle, etape);
   }
-  return { regle };
+  return { regle, parent };
 }
 
 // Vrai quand valeur, posée au bout de chemin dans charge, à la place de
@@ -300,18 +316,30 @@ function descendre(conteneur, etape) {
   return rangs?.length === 1 ? conteneur[rangs[0]] : undefined;
 }
 
-// Pose une copie de valeur à la place que désigne etape dans conteneur :
-// une clé qu'il porte déjà, ou la clé d'un champ facultatif — regle, celle
-// de la place, le dit — qu'un objet ne porte pas ; un rang qu'il contient ;
-// ou { id } absent de la liste, quand valeur, un enregistrement que
-// valeurAdmise a contrôlé, porte cet id ; l'enregistrement s'insère alors
-// avant le premier d'id plus grand, ce qui garde une liste rangée par
-// identifiant croissant. Rend faux quand etape ne désigne aucune de ces
-// places.
-function poser(conteneur, etape, valeur, regle) {
-  const facultatifAbsent = regle.optionnel && typeof etape === 'string' && estObjet(conteneur);
-  if (estCleDe(conteneur, etape) || estRangDe(conteneur, etape) || facultatifAbsent) {
+// Pose une copie de valeur à la place que désigne etape dans conteneur : une
+// clé qu'il porte déjà, ou la clé d'un champ facultatif — regle, celle de la
+// place, le dit — qu'un objet ne porte pas, posée à son rang dans l'ordre des
+// champs de parent, la règle de l'objet : les clés qui la suivent dans le
+// schéma se reposent après elle, et l'objet garde l'ordre canonique de ses
+// clés ; un rang qu'il contient ; ou { id } absent de la liste, quand valeur,
+// un enregistrement que valeurAdmise a contrôlé, porte cet id ;
+// l'enregistrement s'insère alors avant le premier d'id plus grand, ce qui
+// garde une liste rangée par identifiant croissant. Rend faux quand etape ne
+// désigne aucune de ces places.
+function poser(conteneur, etape, valeur, regle, parent) {
+  if (estCleDe(conteneur, etape) || estRangDe(conteneur, etape)) {
     conteneur[etape] = structuredClone(valeur);
+    return true;
+  }
+  if (regle.optionnel && typeof etape === 'string' && estObjet(conteneur)) {
+    conteneur[etape] = structuredClone(valeur);
+    const rang = parent.champs.findIndex(([cle]) => cle === etape);
+    for (const [cle] of parent.champs.slice(rang + 1)) {
+      if (!Object.hasOwn(conteneur, cle)) continue;
+      const suivante = conteneur[cle];
+      delete conteneur[cle];
+      conteneur[cle] = suivante;
+    }
     return true;
   }
   if (rangsDe(conteneur, etape)?.length !== 0 || valeur.id !== etape.id) return false;
@@ -357,7 +385,7 @@ function executer(charge, operation) {
   const derniere = chemin[chemin.length - 1];
   if (op === 'poser') {
     if (valeur === undefined || !valeurAdmise(charge, chemin, lecture.regle, valeur)) return false;
-    return poser(conteneur, derniere, valeur, lecture.regle);
+    return poser(conteneur, derniere, valeur, lecture.regle, lecture.parent);
   }
   if (op === 'retirer') return retirer(conteneur, derniere, lecture.regle);
   return false;
@@ -378,19 +406,19 @@ function executer(charge, operation) {
  * tables et des propositions, même dans une liste vide ; une étape qui ne
  * trouve pas sa clé, que l'objet porte en propre et n'hérite pas, son rang
  * ou exactement un enregistrement ; poser à une clé que l'objet ne porte
- * pas, hors d'un champ facultatif, ou au-delà de la fin d'une liste ; poser
- * par { id } un identifiant déjà présent, ou une valeur qui n'est pas
- * l'enregistrement de cet identifiant ; poser une valeur qui sort de la
- * règle de sa place, en genre, en domaine, null compris, ou en clés, jusque
- * dans les propositions et le retenu ; à la place du retenu, autre chose
- * qu'un objet ou null ; sous un retenu que sa règle refuse, quoi que ce
- * soit ; retirer autre chose qu'un enregistrement par { id } ou un champ
- * facultatif présent. Une charge rendue garde ainsi chaque proposition dans
- * sa règle, et canoniser, difference et serialiser la lisent sans lever. Le
- * contrôle porte sur la forme : une opération ne porte pas la valeur qu'elle
- * remplace, et un correctif dont chaque chemin existe aussi dans une autre
- * charge s'y applique sans lever. Un correctif qui n'est pas une liste lève
- * TypeError.
+ * pas, hors d'un champ facultatif, ou au-delà de la fin d'une liste, ou sous
+ * une liste d'étiquettes, qui ne se pose qu'entière ; poser par { id } un
+ * identifiant déjà présent, ou une valeur qui n'est pas l'enregistrement de
+ * cet identifiant ; poser une valeur qui sort de la règle de sa place, en
+ * genre, en domaine, null compris, ou en clés, jusque dans les propositions
+ * et le retenu ; à la place du retenu, autre chose qu'un objet ou null ; sous
+ * un retenu que sa règle refuse, quoi que ce soit ; retirer autre chose qu'un
+ * enregistrement par { id } ou un champ facultatif présent. Une charge rendue
+ * garde ainsi chaque proposition dans sa règle, et canoniser, difference et
+ * serialiser la lisent sans lever. Le contrôle porte sur la forme : une
+ * opération ne porte pas la valeur qu'elle remplace, et un correctif dont
+ * chaque chemin existe aussi dans une autre charge s'y applique sans lever.
+ * Un correctif qui n'est pas une liste lève TypeError.
  *
  * @param {import('./types.js').Charge} a
  * @param {Operation[]} correctif

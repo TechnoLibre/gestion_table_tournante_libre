@@ -46,17 +46,18 @@ const COMMANDES_NAVIGATEUR = Object.fromEntries(
 const SERIES = reglagesSeries(coeursDisponibles(), { couverture: process.argv.includes('--coverage') });
 const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
 
-// Les épreuves node qui lisent les composants de src/interface par le
-// système de fichiers — chaînes, couleurs, en-tête, jetons lus, écouteurs du
-// plan, version affichée, graphe des couches, version qu'App reçoit par ses
-// propriétés —, celle qui importe App.svelte pour en voir l'échec sous
-// node, et la garde du banc, qui balaie l'arbre à côté des motifs de ce
-// fichier. S'y ajoutent les épreuves qui chargent ce fichier : il nomme les
-// composants dans son motif, et son graphe porte les commandes des captures
-// d'écran, qui balaient doc/captures ; la garde des lecteurs par le disque
-// (test/arborescence.test.js), textuelle, les compte parmi les lecteurs des
-// composants. test/documentation.test.js en est : elle lit ces motifs pour
-// les fichiers que scripts/documentation.js lit par le disque.
+// Les épreuves node qui lisent les composants de src/interface par le système
+// de fichiers — chaînes, couleurs, en-tête, jetons lus, écouteurs du plan,
+// version affichée, graphe des couches, version qu'App reçoit par ses
+// propriétés, découpe des étiquettes hors de leur module —, celle qui importe
+// App.svelte pour en voir l'échec sous node, et la garde du banc, qui balaie
+// l'arbre à côté des motifs de ce fichier. S'y ajoutent les épreuves qui
+// chargent ce fichier : il nomme les composants dans son motif, et son graphe
+// porte les commandes des captures d'écran, qui balaient doc/captures ; la
+// garde des lecteurs par le disque (test/arborescence.test.js), textuelle,
+// les compte parmi les lecteurs des composants. test/documentation.test.js en
+// est : elle lit ces motifs pour les fichiers que scripts/documentation.js
+// lit par le disque.
 const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/arborescence.test.js',
   'test/sources_interface.test.js',
@@ -71,6 +72,7 @@ const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/machine.test.js',
   'test/rapporteur.test.js',
   'test/documentation.test.js',
+  'src/stockage/etiquettes.test.js',
 ]);
 
 // Les épreuves node qui lisent la feuille des jetons par le système de

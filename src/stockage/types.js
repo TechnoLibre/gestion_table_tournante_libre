@@ -20,20 +20,27 @@
 // prochainsIds, au plus 2^31 − 1.
 
 /**
- * Le fichier d'état, format 1 (§ 8.8, § 8.9). Deux régions : l'en-tête et la
- * charge. Les comparaisons qui traversent les constructions — empreinte des
- * démonstrations, aller-retour des fichiers livrés — portent sur la charge
- * seule. Toute clé hors de ces formes est une faute de forme. Le texte est
- * en UTF-8 sans marque d'ordre d'octets, fin de ligne LF, une seule fin de
- * ligne finale, dans la forme canonique qu'écrit canonique.js.
+ * Le fichier d'état, format 2 (§ 8.8, § 8.9). Deux régions : l'en-tête et la
+ * charge. Le format 2 ajoute au format 1 des champs facultatifs seulement,
+ * chacun absent à son défaut et écrit après les clés du format 1 de son
+ * objet : les étiquettes d'un participant, les objectifs d'une table, et
+ * quatre réglages. Un fichier du format 1 se lit comme un fichier du format 2
+ * qui n'en porte aucun. Les comparaisons qui traversent les constructions —
+ * empreinte des démonstrations, aller-retour des fichiers livrés — portent
+ * sur la charge seule. Toute clé hors de ces formes est une faute de forme.
+ * Le texte est en UTF-8 sans marque d'ordre d'octets, fin de ligne LF, une
+ * seule fin de ligne finale, dans la forme canonique qu'écrit canonique.js.
  *
  * @typedef {Object} Fichier
  * @property {Entete} entete
  * @property {Charge} charge
  *
  * @typedef {Object} Entete
- * @property {number} format          FORMAT ; un format plus récent se lit et
- *                                    s'ouvre en lecture seule (§ 8.8)
+ * @property {number} format          FORMAT à l'écriture ; un format plus
+ *                                    ancien se lit tel quel et se convertit
+ *                                    au premier geste, un format plus récent
+ *                                    se lit et s'ouvre en lecture seule
+ *                                    (§ 8.8)
  * @property {string} produitVersion  non vide : version affichée de la
  *                                    construction qui a écrit en dernier (§ 18.6)
  * @property {number} revision        entier ≥ 1 : révision de la dernière
@@ -100,6 +107,18 @@
  *                                       de la somme de redondance ; absent,
  *                                       elle vaut CIBLE_REDONDANCE_PAR_DEFAUT,
  *                                       que rend la fonction cibleRedondance
+ * @property {'et'} [regleObjectifs]     facultatif, présent seulement à
+ *                                       « et » : la règle que suit un
+ *                                       objectif de règle nulle ; absent,
+ *                                       « ou » (regleObjectifs)
+ * @property {false} [respecterObjectifs]   facultatif, présent seulement
+ *                                       décoché ; absent, coché (critereCoche)
+ * @property {'chacun'|'minimum'} [modeObjectifs]   facultatif, présent
+ *                                       seulement hors du défaut ; absent,
+ *                                       « places », le plus de places
+ *                                       servies (modeObjectifs)
+ * @property {true} [rencontrerAnimateurs]  facultatif, présent seulement
+ *                                       coché ; absent, décoché (critereCoche)
  *
  * @typedef {Object} ProchainsIds   entiers de 1 à 2^31 − 1, au-delà de tout
  *                                  identifiant attribué ; ils ne reculent
@@ -134,6 +153,11 @@
  * @property {string|null} titrePressenti   informatif (§ 4)
  * @property {string|null} notes
  * @property {boolean} exclu                (§ 4.4)
+ * @property {string[]} [etiquettes]       facultatif : de 1 à ETIQUETTES_MAX
+ *                                          étiquettes bien formées
+ *                                          (etiquettes.js), sans doublon
+ *                                          exact, rangées par unités UTF-16 ;
+ *                                          absent, aucune étiquette (§ 4.5)
  *
  * @typedef {Object} Table
  * @property {number} id            identifiant, unique
@@ -142,6 +166,17 @@
  *                                  surcharge (§ 6.1)
  * @property {'ronde'|'carree'} forme
  * @property {{x: number, y: number}} position   nombres finis, en cm
+ * @property {Objectif[]} [objectifs]  facultatif : une liste non vide, au
+ *                                  plus un objectif par portée et tour, la
+ *                                  soirée d'abord puis les tours
+ *                                  croissants ; absent, aucun objectif
+ *
+ * @typedef {Object} Objectif   un objectif de table (§ 4.5)
+ * @property {'tous'|'tour'} portee  pour la soirée, ou pour un tour désigné
+ * @property {number|null} tour      null pour la portée tous, de 1 à R sinon
+ * @property {'ou'|'et'|null} regle  la règle propre ; null, l'objectif suit
+ *                                   la règle par défaut de l'événement
+ * @property {string[]} etiquettes   comme celles d'un participant
  *
  * @typedef {Object} Reservation
  * @property {number} participant   id d'un participant de la charge, exclu
@@ -231,9 +266,11 @@
  * Une règle de SCHEMA, qui décrit une valeur du fichier d'état.
  *
  * @typedef {Object} Regle
- * @property {'objet'|'liste'|'chaine'|'entier'|'nombre'|'booleen'|'parmi'|'date'} genre
+ * @property {'objet'|'liste'|'chaine'|'entier'|'nombre'|'booleen'|'parmi'|'date'|'horodatage'|'etiquettes'} genre
  *           chaine : non vide ; nombre : fini ; parmi : l'une de valeurs ;
- *           date : AAAA-MM-JJ d'un jour du calendrier
+ *           date : AAAA-MM-JJ d'un jour du calendrier ; horodatage :
+ *           AAAA-MM-JJTHH:MM:SS±HH:MM ; etiquettes : une étiquette bien
+ *           formée (estEtiquetteBienFormee)
  * @property {boolean} nul                   null est admis
  * @property {boolean} optionnel             le champ peut manquer à son
  *           objet : absent, il ne s'écrit pas et ne se compare pas
@@ -241,8 +278,11 @@
  *           l'ordre des clés du texte canonique
  * @property {Set<string>} [cles]            objet : les clés de ses champs
  * @property {Regle} [element]               liste : la règle de ses éléments
- * @property {number} [min]                  entier : bornes incluses
+ * @property {number} [min]                  entier : bornes incluses ;
+ *           liste : bornes incluses de sa longueur
  * @property {number} [max]
+ * @property {boolean} [distincts]           liste : aucun élément répété ;
+ *           un correctif la pose entière (correctifs.js)
  * @property {string[]} [valeurs]            parmi
  * @property {'lignes'|'ouverte'} [mise]     absente : la valeur s'écrit
  *           compacte. lignes : un champ, ou un élément, par ligne. ouverte :
@@ -266,7 +306,9 @@
  *
  * @typedef {Object} LigneOuverture
  * @property {'journal'} type
- * @property {number} format
+ * @property {number} format        FORMAT à l'écriture ; de 1 à FORMAT à la
+ *           lecture : le journal d'un format plus ancien se lit, et le
+ *           premier geste le réécrit en entier au format courant
  * @property {string} evenement     id de l'événement
  *
  * @typedef {Object} LigneEntree
@@ -411,8 +453,10 @@
  *                   domaine — un identifiant ou un compteur au-delà de
  *                   2^31 − 1 compris —, identifiant de participant ou de
  *                   table en double ou atteignant prochainsIds, tour d'une
- *                   réservation hors de sa portée ; des propositions et du
- *                   retenu, seul le conteneur
+ *                   réservation ou d'un objectif hors de sa portée, deux
+ *                   objectifs d'une table de même portée et même tour, un
+ *                   champ facultatif écrit à son défaut ; des propositions
+ *                   et du retenu, seul le conteneur
  *   COMPTES         un compte de la saisie — participants, tables,
  *                   réservations, titres — contredit sa liste ; ceux des
  *                   propositions et du retenu ne refusent jamais (Lecture,

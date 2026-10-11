@@ -223,6 +223,11 @@ const NOMS_INVENTES = ['Brindille', 'Calembour', 'Dentelle', 'Escarbille', 'Falb
 const PRENOMS_INVENTES = ['Azur', 'Céladon', 'Nacre', 'Opale'];
 const APPARTENANCES = ['Cercle du Héron', 'Club Lanterne', 'Atelier Boussole'];
 const LIBELLES = ['animation', 'accueil', 'secrétariat'];
+const ETIQUETTES_INVENTEES = ['finance', 'Montréal', 'bénévole', 'ressources humaines', 'Finance'];
+
+// Une liste d'étiquettes tirée : une à trois, distinctes, dans l'ordre du
+// tirage, qui n'est pas l'ordre canonique.
+const desEtiquettes = fc.uniqueArray(fc.constantFrom(...ETIQUETTES_INVENTEES), { minLength: 1, maxLength: 3 });
 
 // Une valeur ou null : fast-check tire null une fois sur freq, ici une fois
 // sur deux.
@@ -233,28 +238,54 @@ const deuxFois = (arbitraire) => fc.tuple(arbitraire, arbitraire);
 
 // Les champs de saisie se tirent parmi peu de valeurs : deux variantes d'un
 // même enregistrement coïncident souvent champ par champ.
+// Les étiquettes, facultatives, manquent une fois sur deux.
 const unParticipant = (id) =>
-  fc.record({
-    id: fc.constant(id),
-    nom: fc.constantFrom(...NOMS_INVENTES),
-    prenom: ouNul(fc.constantFrom(...PRENOMS_INVENTES)),
-    appartenance: ouNul(fc.constantFrom(...APPARTENANCES)),
-    courriel: ouNul(fc.constantFrom('a@exemple.test', 'b@exemple.test')),
-    titrePressenti: ouNul(fc.constantFrom(...LIBELLES)),
-    notes: ouNul(fc.constantFrom('arrive tard', 'part tôt')),
-    exclu: fc.boolean(),
-  });
+  fc.record(
+    {
+      id: fc.constant(id),
+      nom: fc.constantFrom(...NOMS_INVENTES),
+      prenom: ouNul(fc.constantFrom(...PRENOMS_INVENTES)),
+      appartenance: ouNul(fc.constantFrom(...APPARTENANCES)),
+      courriel: ouNul(fc.constantFrom('a@exemple.test', 'b@exemple.test')),
+      titrePressenti: ouNul(fc.constantFrom(...LIBELLES)),
+      notes: ouNul(fc.constantFrom('arrive tard', 'part tôt')),
+      exclu: fc.boolean(),
+      etiquettes: desEtiquettes,
+    },
+    { requiredKeys: ['id', 'nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes', 'exclu'] },
+  );
 
 const coordonnee = fc.oneof(fc.integer({ min: -400, max: 400 }), fc.double({ min: -1e4, max: 1e4, noNaN: true }));
 
+// Les objectifs candidats d'une table : un à trois, de portées et de tours
+// distincts, dans l'ordre du tirage ; la charge écarte ceux dont le tour
+// dépasse sa soirée.
+const desObjectifs = fc.uniqueArray(fc.constantFrom(null, 1, 2, 3), { minLength: 1, maxLength: 3 }).chain((tours) =>
+  fc.tuple(
+    ...tours.map((tour) =>
+      fc.record({
+        portee: fc.constant(tour === null ? 'tous' : 'tour'),
+        tour: fc.constant(tour),
+        regle: ouNul(fc.constantFrom('ou', 'et')),
+        etiquettes: desEtiquettes,
+      }),
+    ),
+  ),
+);
+
+// Les objectifs, facultatifs, manquent une fois sur deux.
 const uneTable = (id) =>
-  fc.record({
-    id: fc.constant(id),
-    numero: fc.integer({ min: 1, max: 9 }),
-    sieges: ouNul(fc.integer({ min: 2, max: 5 })),
-    forme: fc.constantFrom('ronde', 'carree'),
-    position: fc.record({ x: coordonnee, y: coordonnee }),
-  });
+  fc.record(
+    {
+      id: fc.constant(id),
+      numero: fc.integer({ min: 1, max: 9 }),
+      sieges: ouNul(fc.integer({ min: 2, max: 5 })),
+      forme: fc.constantFrom('ronde', 'carree'),
+      position: fc.record({ x: coordonnee, y: coordonnee }),
+      objectifs: desObjectifs,
+    },
+    { requiredKeys: ['id', 'numero', 'sieges', 'forme', 'position'] },
+  );
 
 const unEvenement = fc.record({
   id: fc.constantFrom('evt-heron', 'evt-lanterne'),
@@ -275,18 +306,36 @@ const unEvenement = fc.record({
   ),
 });
 
-const desReglages = fc.record({
-  separerAppartenances: fc.boolean(),
-  nouveauxVoisins: fc.boolean(),
-  nouvelleTable: fc.boolean(),
-  varierAppartenances: fc.boolean(),
-  attribuerSieges: fc.boolean(),
-  generation: fc.record({
-    nombre: fc.integer({ min: 1, max: 20 }),
-    arret: fc.constantFrom(20_000, 200_000),
-    historique: fc.constantFrom(500, 1_000),
-  }),
-});
+// Les réglages facultatifs du format 2 manquent une fois sur deux, chacun
+// pour lui-même ; présents, ils portent une valeur hors de leur défaut.
+const desReglages = fc.record(
+  {
+    separerAppartenances: fc.boolean(),
+    nouveauxVoisins: fc.boolean(),
+    nouvelleTable: fc.boolean(),
+    varierAppartenances: fc.boolean(),
+    attribuerSieges: fc.boolean(),
+    generation: fc.record({
+      nombre: fc.integer({ min: 1, max: 20 }),
+      arret: fc.constantFrom(20_000, 200_000),
+      historique: fc.constantFrom(500, 1_000),
+    }),
+    regleObjectifs: fc.constant('et'),
+    respecterObjectifs: fc.constant(false),
+    modeObjectifs: fc.constantFrom('chacun', 'minimum'),
+    rencontrerAnimateurs: fc.constant(true),
+  },
+  {
+    requiredKeys: [
+      'separerAppartenances',
+      'nouveauxVoisins',
+      'nouvelleTable',
+      'varierAppartenances',
+      'attribuerSieges',
+      'generation',
+    ],
+  },
+);
 
 // Réservations et titres candidats : une charge garde ceux dont la
 // personne, la table et le siège y existent, et le tour y tient.
@@ -445,6 +494,13 @@ function construire(vivier, choisir) {
     vivier[cle].flatMap((deux, rang) => (choisir(cle, rang) === 0 ? [] : [copie(deux[choisir(cle, rang) - 1])]));
   const participants = variantes('participants');
   const tables = variantes('tables');
+  // Un objectif dont le tour dépasse la soirée s'écarte, comme la commande
+  // qui retire un tour ; une table sans objectif restant n'en porte plus.
+  for (const table of tables) {
+    if (table.objectifs === undefined) continue;
+    table.objectifs = table.objectifs.filter(({ tour }) => tour === null || tour <= evenement.tours);
+    if (table.objectifs.length === 0) delete table.objectifs;
+  }
   const capaciteDe = new Map(tables.map((t) => [t.id, t.sieges ?? evenement.siegesParDefaut]));
   const presents = new Set(participants.map((p) => p.id));
   const tient = (table, siege) => capaciteDe.has(table) && (siege === null || siege <= capaciteDe.get(table));
@@ -526,6 +582,9 @@ const unePaire = fc
     }),
   }));
 
+// Les réglages facultatifs du format 2.
+const REGLAGES_DU_FORMAT_2 = ['regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs'];
+
 // Vrai quand deux propositions de la charge partagent un identifiant.
 const identifiantsRepetes = (charge) => new Set(charge.propositions.map((p) => p.id)).size < charge.propositions.length;
 const derniere = ({ chemin }) => chemin[chemin.length - 1];
@@ -545,6 +604,9 @@ describe('difference et appliquer : aller-retour sur des paires tirées (§ 8.6)
       retenuBascule: 0,
       retenuAbime: 0,
       retenuAbimePose: 0,
+      etiquettesPosees: 0,
+      objectifsParRang: 0,
+      reglagesDuFormat2: 0,
     };
     fc.assert(
       fc.property(unePaire, ({ a, b }) => {
@@ -583,6 +645,17 @@ describe('difference et appliquer : aller-retour sur des paires tirées (§ 8.6)
           bilan.retenuAbime += 1;
           if (correctif.some(({ chemin }) => chemin.length === 1 && chemin[0] === 'retenu')) bilan.retenuAbimePose += 1;
         }
+        // Une liste d'étiquettes se pose entière : aucune opération ne
+        // descend sous elle.
+        const sousEtiquettes = correctif.filter(({ chemin }) => chemin.indexOf('etiquettes') >= 0 && chemin.at(-1) !== 'etiquettes');
+        assert.deepEqual(sousEtiquettes, []);
+        if (correctif.some(({ chemin }) => chemin.at(-1) === 'etiquettes')) bilan.etiquettesPosees += 1;
+        if (correctif.some(({ chemin }) => typeof chemin[chemin.indexOf('objectifs') + 1] === 'number' && chemin.includes('objectifs'))) {
+          bilan.objectifsParRang += 1;
+        }
+        if (correctif.some(({ chemin }) => chemin[0] === 'reglages' && REGLAGES_DU_FORMAT_2.includes(chemin[1]))) {
+          bilan.reglagesDuFormat2 += 1;
+        }
       }),
       { seed: GRAINE, numRuns: TIRAGES },
     );
@@ -603,6 +676,9 @@ describe('difference et appliquer : aller-retour sur des paires tirées (§ 8.6)
       ['retenuBascule', 30],
       ['retenuAbime', 30],
       ['retenuAbimePose', 10],
+      ['etiquettesPosees', 30],
+      ['objectifsParRang', 10],
+      ['reglagesDuFormat2', 30],
     ];
     for (const [famille, plancher] of planchers) {
       assert.ok(bilan[famille] >= plancher, `${famille} : ${bilan[famille]} tirages sur ${TIRAGES}`);
@@ -1879,5 +1955,125 @@ describe('le placement daté : un champ facultatif du retenu et des propositions
     charges.forEach((charge, rang) => {
       assert.deepEqual(reconstruire(journal, rang + 1), canoniser(charge), `révision ${rang + 1}`);
     });
+  });
+});
+
+describe('les étiquettes, les objectifs et les réglages du format 2 dans un correctif (§ 8.6, § 8.9)', () => {
+  // Une charge de deux personnes et deux tables, sans champ du format 2 ;
+  // modifier passe sur une copie.
+  function base(modifier = () => {}) {
+    const charge = creerCharge({ id: 'evt-format2', nom: 'Veillée des Grives', siegesParDefaut: 4, tours: 2 });
+    charge.prochainsIds = { participant: 3, table: 3, proposition: 1 };
+    charge.participants = [1, 2].map((id) => ({
+      id,
+      nom: ['Ombrelle', 'Pervenche'][id - 1],
+      prenom: null,
+      appartenance: null,
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: false,
+    }));
+    charge.tables = [1, 2].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 300 * id, y: 0 } }));
+    modifier(charge);
+    return charge;
+  }
+  const P1 = ['participants', { id: 1 }, 'etiquettes'];
+  const T2 = ['tables', { id: 2 }, 'objectifs'];
+
+  // Affirme que difference(a, b) rend attendu, et que ce correctif, relu en
+  // JSON, mène a à la copie canonique de b.
+  function exigerCorrectif(a, b, attendu, libelle) {
+    const correctif = difference(a, b);
+    assert.deepEqual(correctif, attendu, libelle);
+    const rendue = appliquer(a, JSON.parse(JSON.stringify(correctif)));
+    assert.deepEqual(rendue, canoniser(b), libelle);
+    assert.equal(serialiser(rendue, ENTETE), serialiser(b, ENTETE), libelle);
+  }
+
+  test('une liste d’étiquettes se pose entière, même quand une seule change à longueur égale ; posée quand elle apparaît, retirée quand elle disparaît', () => {
+    const avec = (etiquettes) => base((c) => { c.participants[0].etiquettes = etiquettes; });
+    exigerCorrectif(base(), avec(['finance']), [{ op: 'poser', chemin: P1, valeur: ['finance'] }], 'apparaît');
+    exigerCorrectif(avec(['finance']), base(), [{ op: 'retirer', chemin: P1 }], 'disparaît');
+    exigerCorrectif(
+      avec(['bénévole', 'finance']),
+      avec(['finance', 'Montréal']),
+      [{ op: 'poser', chemin: P1, valeur: ['Montréal', 'finance'] }],
+      'une sur deux change',
+    );
+    exigerCorrectif(avec(['finance', 'Montréal']), avec(['Montréal', 'finance']), [], 'même ensemble, autre ordre');
+  });
+
+  test('un objectif se compare champ par champ, ses étiquettes posées entières ; un objectif ajouté pose la liste entière', () => {
+    const soiree = { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] };
+    const tour2 = { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] };
+    const avec = (...objectifs) => base((c) => { c.tables[1].objectifs = structuredClone(objectifs); });
+    exigerCorrectif(base(), avec(soiree), [{ op: 'poser', chemin: T2, valeur: [soiree] }], 'apparaît');
+    exigerCorrectif(avec(soiree), base(), [{ op: 'retirer', chemin: T2 }], 'disparaît');
+    exigerCorrectif(avec(soiree), avec({ ...soiree, regle: 'et' }), [{ op: 'poser', chemin: [...T2, 0, 'regle'], valeur: 'et' }], 'règle propre');
+    exigerCorrectif(
+      avec(soiree),
+      avec({ ...soiree, etiquettes: ['bénévole'] }),
+      [{ op: 'poser', chemin: [...T2, 0, 'etiquettes'], valeur: ['bénévole'] }],
+      'étiquettes de l’objectif',
+    );
+    exigerCorrectif(avec(soiree), avec(tour2, soiree), [{ op: 'poser', chemin: T2, valeur: [soiree, tour2] }], 'un de plus');
+  });
+
+  test('chaque réglage du format 2 se pose quand il apparaît, se retire quand il revient à son défaut', () => {
+    const valeurs = [['regleObjectifs', 'et'], ['respecterObjectifs', false], ['modeObjectifs', 'minimum'], ['rencontrerAnimateurs', true]];
+    for (const [cle, valeur] of valeurs) {
+      const avec = base((c) => { c.reglages[cle] = valeur; });
+      exigerCorrectif(base(), avec, [{ op: 'poser', chemin: ['reglages', cle], valeur }], `${cle} posé`);
+      exigerCorrectif(avec, base(), [{ op: 'retirer', chemin: ['reglages', cle] }], `${cle} retiré`);
+    }
+    exigerCorrectif(
+      base((c) => { c.reglages.modeObjectifs = 'chacun'; }),
+      base((c) => { c.reglages.modeObjectifs = 'minimum'; }),
+      [{ op: 'poser', chemin: ['reglages', 'modeObjectifs'], valeur: 'minimum' }],
+      'mode changé',
+    );
+  });
+
+  test('un champ facultatif posé avant un autre déjà présent prend sa place dans l’ordre du schéma : la charge rendue est la copie canonique, ordre des clés compris', () => {
+    const a = base((c) => {
+      c.reglages.rencontrerAnimateurs = true;
+      c.participants[0].exclu = true;
+    });
+    const b = base((c) => {
+      c.reglages.cibleRedondance = 900;
+      c.reglages.respecterObjectifs = false;
+      c.reglages.rencontrerAnimateurs = true;
+      c.participants[0].etiquettes = ['finance'];
+    });
+    const rendue = appliquer(a, difference(a, b));
+    assert.deepEqual(Object.keys(rendue.reglages).slice(-3), ['cibleRedondance', 'respecterObjectifs', 'rencontrerAnimateurs']);
+    assert.equal(JSON.stringify(rendue), JSON.stringify(canoniser(b)));
+  });
+
+  test('une pose sous une liste d’étiquettes, une liste vide, en double ou mal formée, un champ écrit à son défaut, un retrait absent lèvent CORRECTIF', () => {
+    const avecEtiquettes = base((c) => {
+      c.participants[0].etiquettes = ['finance', 'Montréal'];
+      c.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+    });
+    const cas = [
+      ['une étiquette posée à son rang', avecEtiquettes, { op: 'poser', chemin: [...P1, 0], valeur: 'Montréal' }],
+      ['une étiquette ajoutée au-delà', avecEtiquettes, { op: 'poser', chemin: [...P1, 2], valeur: 'RH' }],
+      ['une étiquette d’objectif posée à son rang', avecEtiquettes, { op: 'poser', chemin: [...T2, 0, 'etiquettes', 0], valeur: 'RH' }],
+      ['des étiquettes vides', avecEtiquettes, { op: 'poser', chemin: P1, valeur: [] }],
+      ['un doublon exact', avecEtiquettes, { op: 'poser', chemin: P1, valeur: ['finance', 'finance'] }],
+      ['une tabulation', avecEtiquettes, { op: 'poser', chemin: P1, valeur: ['a\u{0009}b'] }],
+      ['21 étiquettes', avecEtiquettes, { op: 'poser', chemin: P1, valeur: Array.from({ length: 21 }, (_, n) => `g${n}`) }],
+      ['des objectifs vides', avecEtiquettes, { op: 'poser', chemin: T2, valeur: [] }],
+      ['un objectif sans étiquette', avecEtiquettes, { op: 'poser', chemin: [...T2, 0, 'etiquettes'], valeur: [] }],
+      ['un mode « places »', base(), { op: 'poser', chemin: ['reglages', 'modeObjectifs'], valeur: 'places' }],
+      ['une règle « ou »', base(), { op: 'poser', chemin: ['reglages', 'regleObjectifs'], valeur: 'ou' }],
+      ['un mode inconnu', base(), { op: 'poser', chemin: ['reglages', 'modeObjectifs'], valeur: 'pondere' }],
+      ['un retrait d’étiquettes absentes', base(), { op: 'retirer', chemin: P1 }],
+      ['un retrait du mode absent', base(), { op: 'retirer', chemin: ['reglages', 'modeObjectifs'] }],
+    ];
+    for (const [libelle, charge, operation] of cas) {
+      assert.deepEqual(refusDe(charge, [operation]), { rang: 0 }, libelle);
+    }
   });
 });

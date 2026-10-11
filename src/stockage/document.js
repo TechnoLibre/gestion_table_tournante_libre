@@ -18,34 +18,45 @@
 // tout le reste parce qu'il dit comment lire le reste (FORME s'il manque,
 // FORMAT_INCONNU s'il n'est pas un entier ≥ 1) ; la forme de chaque champ,
 // dans l'ordre du schéma puis des rangs (FORME) ; les identifiants des
-// participants et des tables, le tour des réservations, et les titres
-// répétés à l'identique (FORME) ; les
+// participants et des tables, le tour des réservations, la portée et le tour
+// des objectifs de table, et les titres répétés à l'identique (FORME) ; les
 // comptes de la saisie dans l'en-tête — participants, tables, réservations,
 // titres — (COMPTES) ; les références (REFERENCE). Les comptes des
 // propositions et du retenu ne refusent jamais le fichier (§ 8.9, point 3) :
-// ce que l'en-tête annonce sans que la charge le porte se rend à côté
-// d'elle, et le dépôt l'annonce. Un fichier
-// d'un format plus récent que FORMAT se lit réduit aux clés que le schéma
-// connaît, et ce qui serait FORME au format courant y porte la raison
-// FORMAT_PLUS_RECENT : la lecture ne le distingue pas d'une évolution du
-// format. Ses comptes et ses références gardent leur raison, une
-// corruption quel que soit le format ; tout refus d'un tel fichier porte le
-// format lu dans ses détails, qui disent au dépôt d'où il vient. Le dépôt
-// complète les détails — base, secours — et pose lui-même la raison ABSENT,
-// quand le journal existe sans l'état. Des propositions et du retenu,
-// l'analyse ne lit que le conteneur : leur forme, leur cohérence et leurs
-// identifiants, comparés entre eux et à prochainsIds.proposition, sont
-// l'affaire du contrôle des placements, qui écarte une proposition fautive
-// et signale un retenu fautif sans refuser le fichier (§ 8.9, point 3).
+// ce que l'en-tête annonce sans que la charge le porte se rend à côté d'elle,
+// et le dépôt l'annonce. Un fichier d'un format plus récent que FORMAT se lit
+// réduit aux clés que le schéma connaît, et ce qui serait FORME au format
+// courant y porte la raison FORMAT_PLUS_RECENT : la lecture ne le distingue
+// pas d'une évolution du format. Ses comptes et ses références gardent leur
+// raison, une corruption quel que soit le format ; tout refus d'un tel
+// fichier porte le format lu dans ses détails, qui disent au dépôt d'où il
+// vient. Le dépôt complète les détails — base, secours — et pose lui-même la
+// raison ABSENT, quand le journal existe sans l'état. Des propositions et du
+// retenu, l'analyse ne lit que le conteneur : leur forme, leur cohérence et
+// leurs identifiants, comparés entre eux et à prochainsIds.proposition, sont
+// l'affaire du contrôle des placements, qui écarte une proposition fautive et
+// signale un retenu fautif sans refuser le fichier (§ 8.9, point 3).
+//
+// Un fichier d'un format plus ancien se lit comme un fichier du format
+// courant : chaque format n'ajoute au précédent que des champs facultatifs
+// (§ 8.8, § 8.9). Le format 2 ajoute les étiquettes des personnes, les
+// objectifs des tables et quatre réglages, chacun absent à son défaut ; un
+// fichier du format 1 ne les porte pas, et se lit sans conversion. Il ne se
+// réécrit qu'au premier geste, au format courant.
 //
 // Les autres fonctions créent une charge ou dérivent d'elle la configuration
-// du moteur, l'état qu'impose son contenu et la capacité d'une table. Aucune
-// ne modifie ce qu'elle reçoit.
+// du moteur, l'état qu'impose son contenu, la capacité d'une table et la
+// valeur d'un réglage facultatif. Aucune ne modifie ce qu'elle reçoit.
 import { HISTORIQUE_PAR_DEFAUT } from '../moteur/recherche.js';
+import { ETIQUETTES_MAX, estEtiquetteBienFormee } from './etiquettes.js';
 import { ErreurStockage } from './erreurs.js';
 
-/** Version de format que ce code écrit (§ 8.8). */
-export const FORMAT = 1;
+/**
+ * Version de format que ce code écrit (§ 8.8). Le format 2 ajoute au format
+ * 1 des champs facultatifs seulement (§ 8.9) : un fichier du format 1 se lit
+ * comme un fichier du format 2 qui n'en porte aucun.
+ */
+export const FORMAT = 2;
 
 /**
  * Le plus grand nombre de places d'une table, au défaut comme en surcharge
@@ -100,9 +111,10 @@ export const estHorodatage = (valeur) => typeof valeur === 'string' && HORODATAG
 
 // Une règle du schéma ; types.js en décrit les propriétés (Regle). Un objet
 // porte ses champs, paires [clé, règle] dans l'ordre des clés, et l'ensemble
-// de leurs clés ; une liste porte la règle de ses éléments. Un champ
-// facultatif (optionnel) peut manquer à son objet : absent, il ne s'écrit
-// pas, et sa valeur par défaut se lit par la fonction qui le nomme.
+// de leurs clés ; une liste porte la règle de ses éléments, et peut borner
+// sa longueur (min, max) et exiger des éléments distincts (distincts). Un
+// champ facultatif (optionnel) peut manquer à son objet : absent, il ne
+// s'écrit pas, et sa valeur par défaut se lit par la fonction qui le nomme.
 function regle(genre, proprietes) {
   return Object.freeze({ genre, nul: false, optionnel: false, ...proprietes });
 }
@@ -156,6 +168,13 @@ const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const nulEnTete = (a, b) => (a === b ? 0 : a === null ? -1 : b === null ? 1 : a - b);
 // La portée « tous » avant « tour », que l'ordre des chaînes inverserait.
 const rangDePortee = (portee) => (portee === 'tous' ? 0 : 1);
+// Les objectifs d'une table : la soirée, puis les tours croissants (§ 8.9).
+// Deux objectifs d'une même portée et d'un même tour, que l'analyse refuse,
+// se départagent par le JSON de leur copie canonique : l'ordre reste total.
+const ordreDesObjectifs = (a, b) =>
+  rangDePortee(a.portee) - rangDePortee(b.portee) ||
+  nulEnTete(a.tour, b.tour) ||
+  comparerTextes(JSON.stringify(a), JSON.stringify(b));
 const ordreDesReservations = (a, b) =>
   a.participant - b.participant ||
   a.table - b.table ||
@@ -210,6 +229,30 @@ const EVENEMENT = objet([
   ['filiation', FILIATION],
 ]);
 
+// Les étiquettes d'une personne ou d'un objectif (§ 4.5, § 8.9) : une liste
+// non vide d'au plus ETIQUETTES_MAX étiquettes bien formées, sans doublon
+// exact, rangée par unités de code à l'écriture. Le genre etiquettes est
+// celui d'une seule étiquette (estEtiquetteBienFormee). Deux orthographes
+// d'une même clé normalisée restent admises : un fichier retouché à la main
+// peut les porter, et le moteur les tient pour deux (§ 4.5).
+const ETIQUETTES = liste(regle('etiquettes'), { min: 1, max: ETIQUETTES_MAX, distincts: true, tri: comparerTextes });
+
+// Un objectif de table (§ 4.5) : sa portée, son tour — null sous « tous »,
+// de 1 à R sous « tour », que l'analyse compare au nombre de tours —, sa
+// règle propre, null quand il suit le défaut de l'événement, et ses
+// étiquettes.
+const OBJECTIF = objet([
+  ['portee', parmi('tous', 'tour')],
+  ['tour', entier(1, undefined, { nul: true })],
+  ['regle', regle('parmi', { valeurs: Object.freeze(['ou', 'et']), nul: true })],
+  ['etiquettes', ETIQUETTES],
+]);
+
+// Un champ facultatif présent seulement hors de son défaut (§ 8.9) : la
+// liste fermée des valeurs qu'il admet, le défaut exclu ; écrit à son
+// défaut, il est une faute de forme.
+const horsDuDefaut = (...valeurs) => regle('parmi', { valeurs: Object.freeze(valeurs), optionnel: true });
+
 const REGLAGES = objet([
   ['separerAppartenances', BOOLEEN],
   ['nouveauxVoisins', BOOLEEN],
@@ -217,9 +260,18 @@ const REGLAGES = objet([
   ['varierAppartenances', BOOLEEN],
   ['attribuerSieges', BOOLEEN],
   ['generation', objet([['nombre', entier(1)], ['arret', entier(1)], ['historique', entier(1)]])],
-  // Facultatif, en dernier : un fichier qui ne le porte pas s'écrit sans
-  // lui, octet pour octet comme avant qu'il existe (cibleRedondance).
+  // Facultatifs, en dernier, dans l'ordre de A16 : un fichier qui n'en porte
+  // aucun s'écrit sans eux, au numéro de format près. La cible de la somme
+  // de redondance (cibleRedondance) ; la règle par défaut des objectifs,
+  // « et » seulement (regleObjectifs) ; la case des objectifs, décochée
+  // seulement (respecterObjectifs) ; le mode des objectifs hors du plus de
+  // places servies (modeObjectifs) ; la case des animateurs, cochée
+  // seulement (rencontrerAnimateurs).
   ['cibleRedondance', entier(0, Infinity, { optionnel: true })],
+  ['regleObjectifs', horsDuDefaut('et')],
+  ['respecterObjectifs', horsDuDefaut(false)],
+  ['modeObjectifs', horsDuDefaut('chacun', 'minimum')],
+  ['rencontrerAnimateurs', horsDuDefaut(true)],
 ]);
 
 const PARTICIPANT = objet([
@@ -231,6 +283,8 @@ const PARTICIPANT = objet([
   ['titrePressenti', CHAINE_OU_NUL],
   ['notes', CHAINE_OU_NUL],
   ['exclu', BOOLEEN],
+  // Facultatif, en dernier : absent, la personne ne porte aucune étiquette.
+  ['etiquettes', regle('liste', { ...ETIQUETTES, optionnel: true })],
 ]);
 
 const TABLE = objet([
@@ -239,6 +293,9 @@ const TABLE = objet([
   ['sieges', entier(2, SIEGES_MAX, { nul: true })],
   ['forme', parmi('ronde', 'carree')],
   ['position', objet([['x', NOMBRE], ['y', NOMBRE]])],
+  // Facultatif, en dernier : absent, la table n'a aucun objectif. Présent,
+  // une liste non vide, la soirée d'abord, puis les tours croissants.
+  ['objectifs', liste(OBJECTIF, { min: 1, tri: ordreDesObjectifs, optionnel: true })],
 ]);
 
 const RESERVATION = objet([
@@ -416,13 +473,19 @@ function estJour(texte) {
 // Vrai quand valeur, non nulle, a le genre de sa règle et tient dans son
 // domaine. Un entier du fichier est un entier exact, au plus 2^53 − 1 :
 // au-delà, deux entiers distincts se lisent comme un seul, et la relecture
-// rend un autre texte.
-function conforme(valeur, { genre, min, max, valeurs }) {
+// rend un autre texte. Une liste tient dans ses bornes de longueur quand sa
+// règle en porte, et ne répète aucun élément quand elle les veut distincts.
+function conforme(valeur, { genre, min, max, valeurs, distincts }) {
   switch (genre) {
     case 'objet':
       return estObjet(valeur);
     case 'liste':
-      return Array.isArray(valeur);
+      return (
+        Array.isArray(valeur) &&
+        valeur.length >= (min ?? 0) &&
+        valeur.length <= (max ?? Infinity) &&
+        (distincts !== true || new Set(valeur).size === valeur.length)
+      );
     case 'chaine':
       return typeof valeur === 'string' && valeur !== '';
     case 'entier':
@@ -437,6 +500,8 @@ function conforme(valeur, { genre, min, max, valeurs }) {
       return typeof valeur === 'string' && estJour(valeur);
     case 'horodatage':
       return estHorodatage(valeur);
+    case 'etiquettes':
+      return estEtiquetteBienFormee(valeur);
   }
 }
 
@@ -596,6 +661,23 @@ function examinerTours({ evenement, reservations }, faute) {
   });
 }
 
+// Objectifs de chaque table, dans l'ordre des tables puis des rangs : le
+// tour d'un objectif est null pour la portée « tous », de 1 à R pour la
+// portée « tour » ; une table porte au plus un objectif par portée et tour,
+// et le second est fautif (§ 4.5). faute(chemin) lève l'écart.
+function examinerObjectifs({ evenement, tables }, faute) {
+  tables.forEach(({ objectifs = [] }, rangTable) => {
+    const vus = new Set();
+    objectifs.forEach(({ portee, tour }, rang) => {
+      const chemin = `charge.tables[${rangTable}].objectifs[${rang}]`;
+      const admis = portee === 'tous' ? tour === null : tour !== null && tour <= evenement.tours;
+      if (!admis) faute(`${chemin}.tour`);
+      if (vus.has(tour)) faute(chemin);
+      vus.add(tour);
+    });
+  });
+}
+
 // Comptes de l'en-tête qui portent sur les placements : une proposition ou
 // un retenu perdus se recalculent, la saisie non.
 const COMPTES_DES_PLACEMENTS = new Set(['propositions', 'retenu']);
@@ -687,6 +769,7 @@ export function analyser(texte) {
   const { entete, charge } = fichier;
   examinerIdentifiants(charge, faute);
   examinerTours(charge, faute);
+  examinerObjectifs(charge, faute);
   examinerTitres(charge, faute);
   const manquants = examinerComptes(entete.comptes, charge, plus);
   examinerReferences(charge, plus);
@@ -695,37 +778,63 @@ export function analyser(texte) {
 
 /**
  * Configuration du moteur tirée d'une charge : les participants avec leur
- * appartenance et leur exclusion ; les tables avec leur capacité courante ;
- * le nombre de tours ; les réservations sans leur siège, que le moteur ne
- * lit pas, et sans tour pour la portée « tous » ; les quatre contraintes des
- * réglages. Les tables vont par identifiant croissant, l'ordre du texte
- * canonique : le moteur assoit table après table, et une charge aux tables
- * dans un autre ordre, relue après un enregistrement, ne régénérerait plus
- * ses propositions (§ 8.9). Les participants et les réservations gardent
- * l'ordre de la charge : le rang d'une réservation que nomme une
- * ErreurConfiguration est son rang dans la charge.
+ * appartenance, leur exclusion et leurs étiquettes ; les tables avec leur
+ * capacité courante ; le nombre de tours ; les réservations sans leur siège,
+ * que le moteur ne lit pas, et sans tour pour la portée « tous » ; les
+ * quatre contraintes des réglages et les deux cases facultatives ; les
+ * objectifs des tables, chacun { table, tour, regle, etiquettes }, tour null
+ * pour la soirée, sa règle résolue : la sienne, sinon la règle par défaut
+ * (regleObjectifs) ; le mode des objectifs. Chaque champ nouveau du format 2
+ * est absent à son défaut — étiquettes d'une personne qui n'en porte pas,
+ * objectifs quand aucune table n'en a, modeObjectifs à « places »,
+ * respecterObjectifs coché, rencontrerAnimateurs décoché — : la
+ * configuration d'une charge sans eux est celle du format 1. Les tables vont
+ * par identifiant croissant, l'ordre du texte canonique : le moteur assoit
+ * table après table, et une charge aux tables dans un autre ordre, relue
+ * après un enregistrement, ne régénérerait plus ses propositions (§ 8.9).
+ * Les objectifs suivent l'ordre des tables, puis la soirée et les tours
+ * croissants. Les participants et les réservations gardent l'ordre de la
+ * charge : le rang d'une réservation que nomme une ErreurConfiguration est
+ * son rang dans la charge. Les listes d'étiquettes sont des copies.
  *
  * @param {import('./types.js').Charge} charge
  * @returns {import('../moteur/types.js').Configuration}
  */
 export function configurationDepuisCharge(charge) {
   const { evenement, reglages } = charge;
-  return {
-    participants: charge.participants.map(({ id, nom, appartenance, exclu }) => ({ id, nom, appartenance, exclu })),
-    tables: [...charge.tables]
-      .sort((a, b) => a.id - b.id)
-      .map((table) => ({ id: table.id, numero: table.numero, capacite: capacite(charge, table) })),
+  const tables = [...charge.tables].sort((a, b) => a.id - b.id);
+  const regleParDefaut = regleObjectifs(charge);
+  const objectifs = tables.flatMap(({ id, objectifs: deLaTable = [] }) =>
+    [...deLaTable]
+      .sort(ordreDesObjectifs)
+      .map(({ tour, regle: propre, etiquettes }) => ({ table: id, tour, regle: propre ?? regleParDefaut, etiquettes: [...etiquettes] })),
+  );
+  const contraintes = {
+    separerAppartenances: reglages.separerAppartenances,
+    nouveauxVoisins: reglages.nouveauxVoisins,
+    nouvelleTable: reglages.nouvelleTable,
+    varierAppartenances: reglages.varierAppartenances,
+  };
+  for (const [cle, defaut] of CASES_FACULTATIVES) {
+    if (critereCoche(charge, cle) !== defaut) contraintes[cle] = !defaut;
+  }
+  const configuration = {
+    participants: charge.participants.map(({ id, nom, appartenance, exclu, etiquettes }) =>
+      etiquettes === undefined
+        ? { id, nom, appartenance, exclu }
+        : { id, nom, appartenance, exclu, etiquettes: [...etiquettes] },
+    ),
+    tables: tables.map((table) => ({ id: table.id, numero: table.numero, capacite: capacite(charge, table) })),
     tours: evenement.tours,
     reservations: charge.reservations.map(({ participant, table, portee, tour }) =>
       portee === 'tous' ? { participant, table, portee } : { participant, table, portee, tour },
     ),
-    contraintes: {
-      separerAppartenances: reglages.separerAppartenances,
-      nouveauxVoisins: reglages.nouveauxVoisins,
-      nouvelleTable: reglages.nouvelleTable,
-      varierAppartenances: reglages.varierAppartenances,
-    },
+    contraintes,
   };
+  if (objectifs.length > 0) configuration.objectifs = objectifs;
+  const mode = modeObjectifs(charge);
+  if (mode !== MODE_OBJECTIFS_PAR_DEFAUT) configuration.modeObjectifs = mode;
+  return configuration;
 }
 
 /**
@@ -752,6 +861,62 @@ export function etatDeduit({ retenu, propositions }) {
  */
 export function cibleRedondance(charge) {
   return charge.reglages.cibleRedondance ?? CIBLE_REDONDANCE_PAR_DEFAUT;
+}
+
+// La règle par défaut des objectifs et le mode des objectifs quand les
+// réglages ne les portent pas (§ 8.9).
+const REGLE_OBJECTIFS_PAR_DEFAUT = 'ou';
+const MODE_OBJECTIFS_PAR_DEFAUT = 'places';
+
+// Les quatre cases du format 1, toujours portées par les réglages, et les
+// deux cases facultatives du format 2, chacune avec la valeur qu'elle prend
+// quand les réglages ne la portent pas (§ 5.3, § 8.9).
+const CASES_DU_FORMAT_1 = new Set(['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances']);
+const CASES_FACULTATIVES = new Map([
+  ['respecterObjectifs', true],
+  ['rencontrerAnimateurs', false],
+]);
+
+/**
+ * La règle par défaut des objectifs de l'événement (§ 4.5, § 8.9) : « et »
+ * quand les réglages la portent, « ou » sinon. C'est la seule lecture de ce
+ * réglage ; un objectif dont la règle propre est null la suit.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @returns {'ou'|'et'}
+ */
+export function regleObjectifs(charge) {
+  return charge.reglages.regleObjectifs ?? REGLE_OBJECTIFS_PAR_DEFAUT;
+}
+
+/**
+ * Vrai quand la case cle des critères est cochée (§ 5.3, § 8.9) : l'une des
+ * quatre contraintes du format 1, que les réglages portent toujours, ou
+ * l'une des deux cases facultatives — respecterObjectifs, cochée quand les
+ * réglages ne la portent pas, rencontrerAnimateurs, décochée alors. C'est la
+ * seule lecture des deux cases facultatives.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @param {'separerAppartenances'|'nouveauxVoisins'|'nouvelleTable'|'varierAppartenances'|'respecterObjectifs'|'rencontrerAnimateurs'} cle
+ * @returns {boolean}
+ * @throws {RangeError} pour toute autre clé
+ */
+export function critereCoche(charge, cle) {
+  if (CASES_DU_FORMAT_1.has(cle)) return charge.reglages[cle];
+  if (CASES_FACULTATIVES.has(cle)) return charge.reglages[cle] ?? CASES_FACULTATIVES.get(cle);
+  throw new RangeError(`critereCoche : case inconnue ${JSON.stringify(cle)}`);
+}
+
+/**
+ * Le mode des objectifs de l'événement (§ 8.9, D20) : « chacun » ou
+ * « minimum » quand les réglages le portent, « places », le plus de places
+ * servies, sinon. C'est la seule lecture de ce réglage.
+ *
+ * @param {import('./types.js').Charge} charge
+ * @returns {'places'|'chacun'|'minimum'}
+ */
+export function modeObjectifs(charge) {
+  return charge.reglages.modeObjectifs ?? MODE_OBJECTIFS_PAR_DEFAUT;
 }
 
 /**

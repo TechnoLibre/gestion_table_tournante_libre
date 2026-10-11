@@ -1,5 +1,5 @@
 {
-  "entete": {"format":1,"produitVersion":"2026.10.05.01","revision":1,"comptes":{"participants":12,"tables":4,"reservations":0,"titres":0,"propositions":0,"retenu":0}},
+  "entete": {"format":2,"produitVersion":"2026.10.05.01","revision":1,"comptes":{"participants":12,"tables":4,"reservations":0,"titres":0,"propositions":0,"retenu":0}},
   "charge": {
     "evenement": {"id":"demo:petite-conflit","nom":"Petite démonstration, conflit inévitable","date":null,"siegesParDefaut":3,"tours":4,"unite":"cm","etat":"brouillon","filiation":null},
     "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},

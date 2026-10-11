@@ -39,6 +39,16 @@ function cheminsDuSchema() {
   return chemins;
 }
 
+// Les réglages du schéma qu'aucune entrée de REGLAGES_GENERATION ne porte,
+// chacun avec sa raison. Un réglage nommé ici doit exister au schéma et
+// n'avoir aucune entrée : l'entrée qui s'ajoute l'en retire.
+const SANS_ENTREE = new Map([
+  ['regleObjectifs', 'la règle par défaut des objectifs s’écrit depuis les tables, non depuis la génération'],
+  ['respecterObjectifs', 'case des objectifs, sans entrée à l’écran de la génération'],
+  ['modeObjectifs', 'mode des objectifs, sans entrée à l’écran de la génération'],
+  ['rencontrerAnimateurs', 'case des animateurs, sans entrée à l’écran de la génération'],
+]);
+
 // La commande qui écrit un réglage de chaque section, et ses arguments.
 const ECRITURES = new Map([
   ['generation', (entree, valeur) => ['modifierReglage', { cle: entree.cle, valeur }]],
@@ -123,13 +133,15 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
     );
   });
 
-  test('chaque réglage du schéma du fichier, facultatif compris, a son entrée, et chaque entrée en désigne un : aucun n’échappe aux écrans ni au tableau', () => {
+  test('chaque réglage du schéma du fichier, facultatif compris, a son entrée, et chaque entrée en désigne un : aucun n’échappe aux écrans ni au tableau, hors des réglages nommés sans entrée', () => {
     const chemins = cheminsDuSchema();
     assert.ok(chemins.includes('cibleRedondance') && chemins.includes('generation.nombre'), chemins.join(', '));
-    assert.deepEqual(
-      [...REGLAGES_GENERATION.map(({ cle }) => cle)].sort(),
-      [...chemins].sort(),
-    );
+    const cles = REGLAGES_GENERATION.map(({ cle }) => cle);
+    for (const cle of SANS_ENTREE.keys()) {
+      assert.ok(chemins.includes(cle), `${cle} : absent du schéma, à retirer de SANS_ENTREE`);
+      assert.ok(!cles.includes(cle), `${cle} : a son entrée, à retirer de SANS_ENTREE`);
+    }
+    assert.deepEqual([...cles].sort(), chemins.filter((cle) => !SANS_ENTREE.has(cle)).sort());
   });
 
   test('chaque entrée s’écrit par la commande de sa section, et chaque libellé existe', () => {

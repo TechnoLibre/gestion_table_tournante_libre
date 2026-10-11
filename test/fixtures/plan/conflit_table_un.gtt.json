@@ -1,5 +1,5 @@
 {
-  "entete": {"format":1,"produitVersion":"epreuve","revision":1,"comptes":{"participants":8,"tables":4,"reservations":0,"titres":0,"propositions":1,"retenu":1}},
+  "entete": {"format":2,"produitVersion":"epreuve","revision":1,"comptes":{"participants":8,"tables":4,"reservations":0,"titres":0,"propositions":1,"retenu":1}},
   "charge": {
     "evenement": {"id":"evt-conflit-table-un","nom":"Club des Merles","date":null,"siegesParDefaut":2,"tours":2,"unite":"cm","etat":"retenu","filiation":null},
     "reglages": {"separerAppartenances":true,"nouveauxVoisins":true,"nouvelleTable":true,"varierAppartenances":true,"attribuerSieges":false,"generation":{"nombre":5,"arret":200000,"historique":1000}},

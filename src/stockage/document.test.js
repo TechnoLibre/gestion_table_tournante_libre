@@ -1,13 +1,14 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Épreuves du document d'événement (§ 4, § 6.1, § 8.1, § 8.8, § 9) : la
-// charge neuve ; l'analyse d'un texte, ce qu'elle lit et chacun de ses
-// refus, nommé par sa raison et son chemin ; la lecture d'un format plus
-// récent ; la configuration que reçoit le moteur ; l'état qu'impose le
-// contenu ; la capacité d'une table ; l'erreur de stockage ; le parcours
-// de forme que partagent l'analyse, le contrôle des placements et les
-// correctifs. Les textes d'épreuve sont du JSON compact : l'analyse ne
+// Épreuves du document d'événement (§ 4, § 4.5, § 6.1, § 8.1, § 8.8, § 8.9,
+// § 9) : la charge neuve ; l'analyse d'un texte, ce qu'elle lit et chacun
+// de ses refus, nommé par sa raison et son chemin ; la lecture d'un format
+// plus ancien et d'un format plus récent ; les champs facultatifs du format
+// 2 et leurs lecteurs ; la configuration que reçoit le moteur ; l'état
+// qu'impose le contenu ; la capacité d'une table ; l'erreur de stockage ; le
+// parcours de forme que partagent l'analyse, le contrôle des placements et
+// les correctifs. Les textes d'épreuve sont du JSON compact : l'analyse ne
 // dépend pas de la mise en page. Les noms sont inventés.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -17,7 +18,7 @@ import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { HISTORIQUE_PAR_DEFAUT } from '../moteur/recherche.js';
 import { texteLivre } from '../demo/livrees.js';
 import { VERSION } from '../version.genere.js';
-import { serialiser } from './canonique.js';
+import { serialiser, serialiserCharge } from './canonique.js';
 import {
   CIBLE_REDONDANCE_PAR_DEFAUT,
   FORMAT,
@@ -30,9 +31,12 @@ import {
   cibleRedondance,
   configurationDepuisCharge,
   creerCharge,
+  critereCoche,
   etatDeduit,
+  modeObjectifs,
   premiereFaute,
   premiereFauteEnPlace,
+  regleObjectifs,
 } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { fautes as fautesDePlacement } from './placements.js';
@@ -45,7 +49,7 @@ import { fautes as fautesDePlacement } from './placements.js';
 function documentValide() {
   return {
     entete: {
-      format: 1,
+      format: FORMAT,
       produitVersion: VERSION.affichee,
       revision: 12,
       comptes: { participants: 4, tables: 2, reservations: 2, titres: 1, propositions: 1, retenu: 0 },
@@ -251,8 +255,8 @@ describe('ErreurStockage (erreurs.js)', () => {
 });
 
 describe('creerCharge (§ 4, § 6.1, § 9)', () => {
-  test('une charge neuve est un brouillon sans participant ni table, au format 1, aux réglages par défaut', () => {
-    assert.equal(FORMAT, 1);
+  test('une charge neuve est un brouillon sans participant ni table, au format 2, aux réglages par défaut', () => {
+    assert.equal(FORMAT, 2);
     const charge = creerCharge({ id: 'evt-neuf', nom: 'Atelier du jeudi', date: '2026-11-12', siegesParDefaut: 8, tours: 3 });
     assert.deepEqual(charge, {
       evenement: {
@@ -817,13 +821,13 @@ describe('analyser : ordre des refus', () => {
 });
 
 describe('analyser : format plus récent (§ 8.8, § 18.6)', () => {
-  test("un format 2 se lit, formatPlusRecent vrai, ses clés inconnues ignorées : ni l'en-tête ni la charge rendus ne les portent", () => {
-    const simple = analyser(abime((d) => { d.entete.format = 2; }));
+  test("un format plus récent se lit, formatPlusRecent vrai, ses clés inconnues ignorées : ni l'en-tête ni la charge rendus ne les portent", () => {
+    const simple = analyser(abime((d) => { d.entete.format = FORMAT + 1; }));
     assert.equal(simple.formatPlusRecent, true);
-    assert.equal(simple.entete.format, 2);
+    assert.equal(simple.entete.format, FORMAT + 1);
     const { entete, charge } = documentValide();
     const etendu = analyser(abime((d) => {
-      d.entete.format = 2;
+      d.entete.format = FORMAT + 1;
       d.annexe = { couleur: 'vert' };
       d.entete.signature = null;
       d.entete.comptes.lieux = 1;
@@ -834,7 +838,7 @@ describe('analyser : format plus récent (§ 8.8, § 18.6)', () => {
       d.charge.propositions[0].placement[0].commentaire = 'tour calme';
     }));
     assert.deepEqual(etendu, {
-      entete: { ...entete, format: 2 },
+      entete: { ...entete, format: FORMAT + 1 },
       charge,
       formatPlusRecent: true,
       manquants: { propositions: 0, retenu: false },
@@ -848,40 +852,41 @@ describe('analyser : format plus récent (§ 8.8, § 18.6)', () => {
       modifier(d);
     });
     assert.deepEqual(ecartsDeRefus([
-      ['état « archive »', plusRecent(2, (d) => { d.charge.evenement.etat = 'archive'; }),
-        'FORMAT_PLUS_RECENT', 'charge.evenement.etat', { format: 2 }],
-      ['état « archive », format 3', plusRecent(3, (d) => { d.charge.evenement.etat = 'archive'; }),
-        'FORMAT_PLUS_RECENT', 'charge.evenement.etat', { format: 3 }],
-      ['nom vide', plusRecent(2, (d) => { d.charge.participants[0].nom = ''; }),
-        'FORMAT_PLUS_RECENT', 'charge.participants[0].nom', { format: 2 }],
-      ['clé connue absente', plusRecent(2, (d) => { delete d.charge.tables[0].forme; }),
-        'FORMAT_PLUS_RECENT', 'charge.tables[0].forme', { format: 2 }],
-      ['charge qui est une liste', plusRecent(2, (d) => { d.charge = []; }),
-        'FORMAT_PLUS_RECENT', 'charge', { format: 2 }],
-      ['identifiant en double', plusRecent(2, (d) => { d.charge.participants[2].id = 1; }),
-        'FORMAT_PLUS_RECENT', 'charge.participants[2].id', { format: 2 }],
-      ['tour au-delà du nombre de tours', plusRecent(2, (d) => { d.charge.reservations[1].tour = 3; }),
-        'FORMAT_PLUS_RECENT', 'charge.reservations[1].tour', { format: 2 }],
-      ['comptes faux', plusRecent(2, (d) => { d.entete.comptes.tables = 1; }),
-        'COMPTES', 'entete.comptes.tables', { format: 2 }],
-      ['référence absente', plusRecent(2, (d) => { d.charge.titres[0].table = 7; }),
-        'REFERENCE', 'charge.titres[0].table', { format: 2 }],
-      ['comptes faux, format 3', plusRecent(3, (d) => { d.entete.comptes.titres = 0; }),
-        'COMPTES', 'entete.comptes.titres', { format: 3 }],
-      ['référence absente, format 3', plusRecent(3, (d) => { d.charge.reservations[1].participant = 4; }),
-        'REFERENCE', 'charge.reservations[1].participant', { format: 3 }],
-      ['siège au-delà de la capacité', plusRecent(2, (d) => { d.charge.reservations[1].siege = 4; }),
-        'REFERENCE', 'charge.reservations[1].siege', { format: 2 }],
+      ['état « archive »', plusRecent(FORMAT + 1, (d) => { d.charge.evenement.etat = 'archive'; }),
+        'FORMAT_PLUS_RECENT', 'charge.evenement.etat', { format: FORMAT + 1 }],
+      ['état « archive », deux formats plus loin', plusRecent(FORMAT + 2, (d) => { d.charge.evenement.etat = 'archive'; }),
+        'FORMAT_PLUS_RECENT', 'charge.evenement.etat', { format: FORMAT + 2 }],
+      ['nom vide', plusRecent(FORMAT + 1, (d) => { d.charge.participants[0].nom = ''; }),
+        'FORMAT_PLUS_RECENT', 'charge.participants[0].nom', { format: FORMAT + 1 }],
+      ['clé connue absente', plusRecent(FORMAT + 1, (d) => { delete d.charge.tables[0].forme; }),
+        'FORMAT_PLUS_RECENT', 'charge.tables[0].forme', { format: FORMAT + 1 }],
+      ['charge qui est une liste', plusRecent(FORMAT + 1, (d) => { d.charge = []; }),
+        'FORMAT_PLUS_RECENT', 'charge', { format: FORMAT + 1 }],
+      ['identifiant en double', plusRecent(FORMAT + 1, (d) => { d.charge.participants[2].id = 1; }),
+        'FORMAT_PLUS_RECENT', 'charge.participants[2].id', { format: FORMAT + 1 }],
+      ['tour au-delà du nombre de tours', plusRecent(FORMAT + 1, (d) => { d.charge.reservations[1].tour = 3; }),
+        'FORMAT_PLUS_RECENT', 'charge.reservations[1].tour', { format: FORMAT + 1 }],
+      ['comptes faux', plusRecent(FORMAT + 1, (d) => { d.entete.comptes.tables = 1; }),
+        'COMPTES', 'entete.comptes.tables', { format: FORMAT + 1 }],
+      ['référence absente', plusRecent(FORMAT + 1, (d) => { d.charge.titres[0].table = 7; }),
+        'REFERENCE', 'charge.titres[0].table', { format: FORMAT + 1 }],
+      ['comptes faux, deux formats plus loin', plusRecent(FORMAT + 2, (d) => { d.entete.comptes.titres = 0; }),
+        'COMPTES', 'entete.comptes.titres', { format: FORMAT + 2 }],
+      ['référence absente, deux formats plus loin', plusRecent(FORMAT + 2, (d) => { d.charge.reservations[1].participant = 4; }),
+        'REFERENCE', 'charge.reservations[1].participant', { format: FORMAT + 2 }],
+      ['siège au-delà de la capacité', plusRecent(FORMAT + 1, (d) => { d.charge.reservations[1].siege = 4; }),
+        'REFERENCE', 'charge.reservations[1].siege', { format: FORMAT + 1 }],
       ['au format courant, la même faute reste FORME',
         abime((d) => { d.charge.evenement.etat = 'archive'; }), 'FORME', 'charge.evenement.etat'],
     ]), []);
   });
 
   test("une collection qu'un format plus récent ajoute, ignorée à la lecture, laisse une référence ou un compte sans objet : la raison reste REFERENCE ou COMPTES, et les détails portent le format lu", () => {
-    // Le format 2 de l'épreuve range une table d'appoint hors de tables, et
-    // une réservation la désigne ; la lecture ne garde que les clés connues.
+    // Le format plus récent de l'épreuve range une table d'appoint hors de
+    // tables, et une réservation la désigne ; la lecture ne garde que les
+    // clés connues.
     const avecAppoint = (modifier) => abime((d) => {
-      d.entete.format = 2;
+      d.entete.format = FORMAT + 1;
       d.charge.tablesAppoint = [{ id: 4, numero: 3, sieges: 4, forme: 'ronde', position: { x: 0, y: 200 } }];
       d.charge.prochainsIds.table = 5;
       d.charge.reservations.push({ participant: 5, table: 4, siege: 1, portee: 'tous', tour: null });
@@ -890,9 +895,9 @@ describe('analyser : format plus récent (§ 8.8, § 18.6)', () => {
     });
     assert.deepEqual(ecartsDeRefus([
       ["la réservation de la table d'appoint", avecAppoint(() => {}),
-        'REFERENCE', 'charge.reservations[2].table', { format: 2 }],
+        'REFERENCE', 'charge.reservations[2].table', { format: FORMAT + 1 }],
       ["la table d'appoint comptée parmi les tables", avecAppoint((d) => { d.entete.comptes.tables = 3; }),
-        'COMPTES', 'entete.comptes.tables', { format: 2 }],
+        'COMPTES', 'entete.comptes.tables', { format: FORMAT + 1 }],
     ]), []);
   });
 });
@@ -1288,5 +1293,387 @@ describe('le placement daté : un champ facultatif du retenu et des propositions
     assert.equal(lecture.formatPlusRecent, true);
     assert.equal(lecture.charge.retenu.horodatage, H);
     assert.equal(Object.hasOwn(lecture.charge.retenu, 'autreCle'), false);
+  });
+});
+
+// --- Les champs facultatifs du format 2 (§ 4.5, § 8.9, A16) ---------------
+
+// Le document valide portant chaque champ facultatif du format 2 hors de son
+// défaut : des étiquettes à deux personnes, deux objectifs à la table 1 — la
+// soirée, qui suit le défaut, et le tour 2, de règle propre —, la règle par
+// défaut « et », les objectifs non respectés, le mode « l'équité d'abord »,
+// la rencontre des animateurs cochée. Une copie neuve à chaque appel.
+function documentComplet() {
+  const d = documentValide();
+  d.charge.reglages.regleObjectifs = 'et';
+  d.charge.reglages.respecterObjectifs = false;
+  d.charge.reglages.modeObjectifs = 'minimum';
+  d.charge.reglages.rencontrerAnimateurs = true;
+  d.charge.participants[0].etiquettes = ['Montréal', 'finance'];
+  d.charge.participants[3].etiquettes = ['bénévole'];
+  d.charge.tables[0].objectifs = [
+    { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] },
+    { portee: 'tour', tour: 2, regle: 'ou', etiquettes: ['Montréal', 'ressources humaines'] },
+  ];
+  return d;
+}
+
+// Texte du document complet, une fois modifier passé sur lui.
+function abimeComplet(modifier) {
+  const copie = documentComplet();
+  modifier(copie);
+  return JSON.stringify(copie);
+}
+
+// Chemins, rangs effacés, des valeurs nouvelles du format 2 que le contrat
+// admet nulles.
+const ADMETTENT_NULL_FORMAT_2 = new Set([...ADMETTENT_NULL, 'charge.tables[].objectifs[].tour', 'charge.tables[].objectifs[].regle']);
+
+// Vrai pour les étapes d'une valeur que le format 2 ajoute : sous les
+// étiquettes d'une personne, les objectifs d'une table, ou l'un des quatre
+// réglages nouveaux.
+const REGLAGES_FORMAT_2 = ['regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs'];
+const estDuFormat2 = (etapes) =>
+  etapes.includes('etiquettes') ||
+  etapes.includes('objectifs') ||
+  (etapes[1] === 'reglages' && REGLAGES_FORMAT_2.includes(etapes[2]));
+
+const regleDuChamp = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+const CHARGE_SCHEMA = regleDuChamp(SCHEMA, 'charge');
+
+describe('les champs facultatifs du format 2 : forme et place (§ 8.9, A16)', () => {
+  test('chacun est facultatif, écrit après les clés du format 1 de son objet, les réglages dans l’ordre de A16', () => {
+    const REGLAGES = regleDuChamp(CHARGE_SCHEMA, 'reglages');
+    const PARTICIPANT = regleDuChamp(CHARGE_SCHEMA, 'participants').element;
+    const TABLE = regleDuChamp(CHARGE_SCHEMA, 'tables').element;
+    assert.deepEqual(
+      REGLAGES.champs.slice(-5).map(([cle, regle]) => [cle, regle.optionnel]),
+      [
+        ['cibleRedondance', true],
+        ['regleObjectifs', true],
+        ['respecterObjectifs', true],
+        ['modeObjectifs', true],
+        ['rencontrerAnimateurs', true],
+      ],
+    );
+    assert.deepEqual(PARTICIPANT.champs.slice(-2).map(([cle, regle]) => [cle, regle.optionnel]), [['exclu', false], ['etiquettes', true]]);
+    assert.deepEqual(TABLE.champs.slice(-2).map(([cle, regle]) => [cle, regle.optionnel]), [['position', false], ['objectifs', true]]);
+  });
+
+  test('le document complet se lit tel quel ; il s’écrit dans l’ordre du schéma, listes rangées, et se relit à l’identique', () => {
+    const { entete, charge } = documentComplet();
+    assert.deepEqual(analyser(JSON.stringify(documentComplet())), {
+      entete,
+      charge,
+      formatPlusRecent: false,
+      manquants: { propositions: 0, retenu: false },
+    });
+    const texte = serialiser(charge, { revision: 12, produitVersion: VERSION.affichee });
+    const attendus = [
+      '"generation":{"nombre":3,"arret":50000,"historique":500},"regleObjectifs":"et","respecterObjectifs":false,"modeObjectifs":"minimum","rencontrerAnimateurs":true}',
+      '"notes":null,"exclu":false,"etiquettes":["Montréal","finance"]}',
+      '"exclu":false,"etiquettes":["bénévole"]}',
+      '"position":{"x":0,"y":0},"objectifs":[{"portee":"tous","tour":null,"regle":null,"etiquettes":["finance"]},{"portee":"tour","tour":2,"regle":"ou","etiquettes":["Montréal","ressources humaines"]}]}',
+    ];
+    for (const attendu of attendus) assert.ok(texte.includes(attendu), `${attendu}\n${texte}`);
+    const relue = analyser(texte);
+    assert.deepEqual(relue.charge, charge);
+    assert.equal(serialiser(relue.charge, relue.entete), texte);
+    const avecCible = structuredClone(charge);
+    avecCible.reglages.cibleRedondance = 900;
+    assert.ok(
+      serialiser(avecCible, relue.entete).includes('"historique":500},"cibleRedondance":900,"regleObjectifs":"et",'),
+      'la cible avant la règle',
+    );
+  });
+
+  test('des étiquettes hors de l’ordre des unités de code et des objectifs hors de l’ordre soirée puis tours se lisent, et s’écrivent rangés', () => {
+    const lu = analyser(abimeComplet((d) => {
+      d.charge.participants[0].etiquettes = ['finance', 'Montréal', 'Été', 'été'];
+      d.charge.tables[0].objectifs.reverse();
+      d.charge.tables[0].objectifs[0].etiquettes = ['ressources humaines', 'Montréal'];
+    }));
+    const texte = serialiser(lu.charge, { revision: 12, produitVersion: VERSION.affichee });
+    const relue = analyser(texte).charge;
+    assert.deepEqual(relue.participants[0].etiquettes, ['Montréal', 'finance', 'Été', 'été']);
+    assert.deepEqual(relue.tables[0].objectifs, documentComplet().charge.tables[0].objectifs);
+  });
+
+  test('variantes admises : deux orthographes d’une même clé, une étiquette égale à une appartenance, 20 étiquettes de 40 points de code, la règle propre « et », un objectif à chaque tour sans soirée', () => {
+    const vingt = Array.from({ length: 20 }, (_, rang) => `${String.fromCharCode(65 + rang)}${'x'.repeat(39)}`);
+    const variantes = [
+      ['Finance et finance', abimeComplet((d) => { d.charge.participants[0].etiquettes = ['Finance', 'finance']; })],
+      ['une étiquette égale à une appartenance', abimeComplet((d) => { d.charge.participants[0].etiquettes = ['Chorale du Vallon']; })],
+      ['20 étiquettes de 40 points de code', abimeComplet((d) => { d.charge.participants[3].etiquettes = vingt; })],
+      ['un objectif de 20 étiquettes', abimeComplet((d) => { d.charge.tables[0].objectifs[0].etiquettes = vingt; })],
+      ['règle propre « et »', abimeComplet((d) => { d.charge.tables[0].objectifs[1].regle = 'et'; })],
+      ['un objectif à chaque tour, aucun de soirée', abimeComplet((d) => {
+        d.charge.tables[1].objectifs = [
+          { portee: 'tour', tour: 1, regle: null, etiquettes: ['finance'] },
+          { portee: 'tour', tour: 2, regle: null, etiquettes: ['bénévole'] },
+        ];
+      })],
+      ['la règle par défaut seule, sans objectif', abime((d) => { d.charge.reglages.regleObjectifs = 'et'; })],
+      ['le mode « chacun » sans objectif', abime((d) => { d.charge.reglages.modeObjectifs = 'chacun'; })],
+    ];
+    const echecs = variantes.flatMap(([libelle, texte]) => {
+      try {
+        analyser(texte);
+        return [];
+      } catch (erreur) {
+        return [`${libelle} : ${erreur.message}`];
+      }
+    });
+    assert.deepEqual(echecs, []);
+  });
+
+  test('un champ écrit à son défaut est une faute de forme, nommée par son chemin : « ou », vrai, « places », faux', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['règle par défaut « ou » écrite', abime((d) => { d.charge.reglages.regleObjectifs = 'ou'; }), 'FORME', 'charge.reglages.regleObjectifs'],
+      ['objectifs respectés écrits', abime((d) => { d.charge.reglages.respecterObjectifs = true; }), 'FORME', 'charge.reglages.respecterObjectifs'],
+      ['mode « places » écrit', abime((d) => { d.charge.reglages.modeObjectifs = 'places'; }), 'FORME', 'charge.reglages.modeObjectifs'],
+      ['animateurs décochés écrits', abime((d) => { d.charge.reglages.rencontrerAnimateurs = false; }), 'FORME', 'charge.reglages.rencontrerAnimateurs'],
+      ['étiquettes vides', abime((d) => { d.charge.participants[1].etiquettes = []; }), 'FORME', 'charge.participants[1].etiquettes'],
+      ['objectifs vides', abime((d) => { d.charge.tables[1].objectifs = []; }), 'FORME', 'charge.tables[1].objectifs'],
+    ]), []);
+  });
+
+  test('une valeur hors de son domaine est une faute de forme : un mode inconnu, une règle inconnue, une étiquette mal formée, un doublon exact, 21 étiquettes', () => {
+    const vingtEtUne = Array.from({ length: 21 }, (_, rang) => `groupe ${rang + 1}`);
+    const cas = [
+      ['mode inconnu', (d) => { d.charge.reglages.modeObjectifs = 'aleatoire'; }, 'charge.reglages.modeObjectifs'],
+      ['mode en capitales', (d) => { d.charge.reglages.modeObjectifs = 'CHACUN'; }, 'charge.reglages.modeObjectifs'],
+      ['règle par défaut en capitales', (d) => { d.charge.reglages.regleObjectifs = 'ET'; }, 'charge.reglages.regleObjectifs'],
+      ['objectifs respectés en texte', (d) => { d.charge.reglages.respecterObjectifs = 'false'; }, 'charge.reglages.respecterObjectifs'],
+      ['animateurs en texte', (d) => { d.charge.reglages.rencontrerAnimateurs = 'true'; }, 'charge.reglages.rencontrerAnimateurs'],
+      ['une étiquette vide', (d) => { d.charge.participants[0].etiquettes = ['']; }, 'charge.participants[0].etiquettes[0]'],
+      ['une étiquette à blanc en bord', (d) => { d.charge.participants[0].etiquettes = ['finance', ' RH']; }, 'charge.participants[0].etiquettes[1]'],
+      ['deux espaces', (d) => { d.charge.participants[0].etiquettes = ['ressources  humaines']; }, 'charge.participants[0].etiquettes[0]'],
+      ['une tabulation', (d) => { d.charge.participants[0].etiquettes = ['ressources\u{0009}humaines']; }, 'charge.participants[0].etiquettes[0]'],
+      ['une fin de ligne', (d) => { d.charge.participants[0].etiquettes = ['a\u{000A}b']; }, 'charge.participants[0].etiquettes[0]'],
+      ['une barre', (d) => { d.charge.participants[0].etiquettes = ['a|b']; }, 'charge.participants[0].etiquettes[0]'],
+      ['une virgule', (d) => { d.charge.participants[0].etiquettes = ['a,b']; }, 'charge.participants[0].etiquettes[0]'],
+      ['un point-virgule', (d) => { d.charge.participants[0].etiquettes = ['a;b']; }, 'charge.participants[0].etiquettes[0]'],
+      ['« é » décomposé', (d) => { d.charge.participants[0].etiquettes = ['Montre\u{0301}al']; }, 'charge.participants[0].etiquettes[0]'],
+      ['41 points de code', (d) => { d.charge.participants[0].etiquettes = ['a'.repeat(41)]; }, 'charge.participants[0].etiquettes[0]'],
+      ['une étiquette numérique', (d) => { d.charge.participants[0].etiquettes = [42]; }, 'charge.participants[0].etiquettes[0]'],
+      ['un doublon exact', (d) => { d.charge.participants[0].etiquettes = ['finance', 'finance']; }, 'charge.participants[0].etiquettes'],
+      ['21 étiquettes', (d) => { d.charge.participants[0].etiquettes = vingtEtUne; }, 'charge.participants[0].etiquettes'],
+      ['une portée inconnue', (d) => { d.charge.tables[0].objectifs[0].portee = 'soiree'; }, 'charge.tables[0].objectifs[0].portee'],
+      ['une règle propre inconnue', (d) => { d.charge.tables[0].objectifs[1].regle = 'peut-etre'; }, 'charge.tables[0].objectifs[1].regle'],
+      ['un tour 0', (d) => { d.charge.tables[0].objectifs[1].tour = 0; }, 'charge.tables[0].objectifs[1].tour'],
+      ['un tour non entier', (d) => { d.charge.tables[0].objectifs[1].tour = 1.5; }, 'charge.tables[0].objectifs[1].tour'],
+      ['un objectif sans étiquette', (d) => { d.charge.tables[0].objectifs[0].etiquettes = []; }, 'charge.tables[0].objectifs[0].etiquettes'],
+      ['un objectif de 21 étiquettes', (d) => { d.charge.tables[0].objectifs[0].etiquettes = vingtEtUne; }, 'charge.tables[0].objectifs[0].etiquettes'],
+      ['un objectif à doublon exact', (d) => { d.charge.tables[0].objectifs[0].etiquettes = ['RH', 'RH']; }, 'charge.tables[0].objectifs[0].etiquettes'],
+      ['un objectif à étiquette mal formée', (d) => { d.charge.tables[0].objectifs[0].etiquettes = ['finance', 'x\u{0007}']; }, 'charge.tables[0].objectifs[0].etiquettes[1]'],
+      ['un objectif sans sa règle', (d) => { delete d.charge.tables[0].objectifs[0].regle; }, 'charge.tables[0].objectifs[0].regle'],
+    ];
+    assert.deepEqual(ecartsDeRefus(cas.map(([libelle, modifier, chemin]) => [libelle, abimeComplet(modifier), 'FORME', chemin])), []);
+  });
+
+  test('la portée et le tour d’un objectif se répondent, le tour reste dans la soirée, et une table porte au plus un objectif par portée et tour', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['portée « tous » avec un tour', abimeComplet((d) => { d.charge.tables[0].objectifs[0].tour = 1; }), 'FORME', 'charge.tables[0].objectifs[0].tour'],
+      ['portée « tour » sans tour', abimeComplet((d) => { d.charge.tables[0].objectifs[1].tour = null; }), 'FORME', 'charge.tables[0].objectifs[1].tour'],
+      ['tour au-delà du nombre de tours', abimeComplet((d) => { d.charge.tables[0].objectifs[1].tour = 3; }), 'FORME', 'charge.tables[0].objectifs[1].tour'],
+      ['deux objectifs de soirée, le second fautif', abimeComplet((d) => {
+        d.charge.tables[0].objectifs.splice(1, 0, { portee: 'tous', tour: null, regle: 'et', etiquettes: ['RH'] });
+      }), 'FORME', 'charge.tables[0].objectifs[1]'],
+      ['deux objectifs du tour 2', abimeComplet((d) => {
+        d.charge.tables[0].objectifs.push({ portee: 'tour', tour: 2, regle: null, etiquettes: ['RH'] });
+      }), 'FORME', 'charge.tables[0].objectifs[2]'],
+      ['la seconde table fautive après la première admise', abimeComplet((d) => {
+        d.charge.tables[1].objectifs = [{ portee: 'tour', tour: 5, regle: null, etiquettes: ['RH'] }];
+      }), 'FORME', 'charge.tables[1].objectifs[0].tour'],
+      ['la forme avant la portée', abimeComplet((d) => {
+        d.charge.tables[0].objectifs[0].tour = 1;
+        d.charge.tables[1].objectifs = [{ portee: 'tour', tour: 2, regle: null, etiquettes: [] }];
+      }), 'FORME', 'charge.tables[1].objectifs[0].etiquettes'],
+    ]), []);
+  });
+
+  test('sur chaque valeur nouvelle : une clé inconnue, une valeur d’une autre sorte, null où le contrat ne l’admet pas, sont nommés par leur chemin', () => {
+    const etapes = etapesDe(documentComplet()).filter(estDuFormat2);
+    assert.ok(etapes.length >= 20, `${etapes.length} valeurs seulement`);
+    const objets = etapes.filter((e) => {
+      const valeur = valeurEn(documentComplet(), e);
+      return typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
+    });
+    assert.equal(objets.length, 2);
+    const cas = [
+      ...objets.map((e) => [
+        `inconnue sous ${cheminDe(e)}`,
+        abimeComplet((d) => { valeurEn(d, e).inconnue = 1; }),
+        'FORME',
+        cheminDe([...e, 'inconnue']),
+      ]),
+      ...etapes.map((e) => [
+        `${cheminDe(e)} d'une autre sorte`,
+        abimeComplet((d) => {
+          const porteur = valeurEn(d, e.slice(0, -1));
+          porteur[e.at(-1)] = Array.isArray(porteur[e.at(-1)]) ? {} : [];
+        }),
+        'FORME',
+        cheminDe(e),
+      ]),
+      ...etapes.filter((e) => !ADMETTENT_NULL_FORMAT_2.has(sansRangs(e))).map((e) => [
+        `${cheminDe(e)} nul`,
+        abimeComplet((d) => { valeurEn(d, e.slice(0, -1))[e.at(-1)] = null; }),
+        'FORME',
+        cheminDe(e),
+      ]),
+    ];
+    assert.deepEqual(ecartsDeRefus(cas), []);
+  });
+});
+
+describe('un fichier du format 1 se lit comme un fichier du format 2 qui ne porte aucun champ nouveau (§ 8.8, A15)', () => {
+  test('il se lit, formatPlusRecent faux, sa charge telle qu’écrite ; réécrit, seul l’en-tête change, au format courant', () => {
+    const formatUn = documentValide();
+    formatUn.entete.format = 1;
+    const lu = analyser(JSON.stringify(formatUn));
+    assert.equal(lu.formatPlusRecent, false);
+    assert.equal(lu.entete.format, 1);
+    assert.deepEqual(lu.charge, documentValide().charge);
+    const reecrit = serialiser(lu.charge, lu.entete);
+    assert.equal(analyser(reecrit).entete.format, FORMAT);
+    assert.equal(serialiserCharge(analyser(reecrit).charge), serialiserCharge(lu.charge));
+    assert.equal(regleObjectifs(lu.charge), 'ou');
+    assert.equal(modeObjectifs(lu.charge), 'places');
+  });
+
+  test('ses refus gardent leur raison, sans format dans les détails : il n’est pas plus récent', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['nom vide', abime((d) => { d.entete.format = 1; d.charge.participants[0].nom = ''; }), 'FORME', 'charge.participants[0].nom'],
+      ['comptes faux', abime((d) => { d.entete.format = 1; d.entete.comptes.tables = 1; }), 'COMPTES', 'entete.comptes.tables'],
+      ['mode « places » écrit', abime((d) => { d.entete.format = 1; d.charge.reglages.modeObjectifs = 'places'; }), 'FORME', 'charge.reglages.modeObjectifs'],
+    ]), []);
+  });
+});
+
+describe('un fichier plus récent porte les champs du format 2 (§ 8.8)', () => {
+  test('ils se lisent, réduits aux clés connues ; une valeur que le format courant refuse lève FORMAT_PLUS_RECENT', () => {
+    const lu = analyser(abimeComplet((d) => {
+      d.entete.format = FORMAT + 1;
+      d.charge.tables[0].objectifs[0].poids = 3;
+      d.charge.participants[0].couleurEtiquettes = 'ocre';
+    }));
+    assert.equal(lu.formatPlusRecent, true);
+    assert.deepEqual(lu.charge, documentComplet().charge);
+    assert.deepEqual(ecartsDeRefus([
+      ['un mode à venir', abimeComplet((d) => {
+        d.entete.format = FORMAT + 1;
+        d.charge.reglages.modeObjectifs = 'pondere';
+      }), 'FORMAT_PLUS_RECENT', 'charge.reglages.modeObjectifs', { format: FORMAT + 1 }],
+    ]), []);
+  });
+});
+
+describe('les lecteurs des réglages facultatifs (§ 8.9)', () => {
+  test('absents, ils rendent leur défaut : « ou », coché, décoché, « places »', () => {
+    const { charge } = documentValide();
+    assert.equal(regleObjectifs(charge), 'ou');
+    assert.equal(critereCoche(charge, 'respecterObjectifs'), true);
+    assert.equal(critereCoche(charge, 'rencontrerAnimateurs'), false);
+    assert.equal(modeObjectifs(charge), 'places');
+    const neuve = creerCharge({ id: 'evt-neuf', nom: 'Atelier', siegesParDefaut: 8, tours: 3 });
+    assert.deepEqual(
+      [regleObjectifs(neuve), critereCoche(neuve, 'respecterObjectifs'), critereCoche(neuve, 'rencontrerAnimateurs'), modeObjectifs(neuve)],
+      ['ou', true, false, 'places'],
+    );
+  });
+
+  test('présents, ils rendent la valeur portée', () => {
+    const { charge } = documentComplet();
+    assert.equal(regleObjectifs(charge), 'et');
+    assert.equal(critereCoche(charge, 'respecterObjectifs'), false);
+    assert.equal(critereCoche(charge, 'rencontrerAnimateurs'), true);
+    assert.equal(modeObjectifs(charge), 'minimum');
+    charge.reglages.modeObjectifs = 'chacun';
+    assert.equal(modeObjectifs(charge), 'chacun');
+  });
+
+  test('critereCoche lit aussi les quatre cases du format 1, et lève RangeError sur une clé qu’il ne connaît pas', () => {
+    const { charge } = documentValide();
+    assert.deepEqual(
+      ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances'].map((cle) => critereCoche(charge, cle)),
+      [true, false, true, false],
+    );
+    for (const cle of ['attribuerSieges', 'generation', 'cibleRedondance', 'modeObjectifs', 'inconnue', '__proto__', 'toString']) {
+      assert.throws(() => critereCoche(charge, cle), RangeError, cle);
+    }
+  });
+});
+
+describe('configurationDepuisCharge : étiquettes, objectifs, mode et cases (contrat de données)', () => {
+  test('sans champ nouveau, la configuration n’en porte aucun', () => {
+    const configuration = configurationDepuisCharge(documentValide().charge);
+    assert.deepEqual(Object.keys(configuration).sort(), ['contraintes', 'participants', 'reservations', 'tables', 'tours']);
+    assert.deepEqual(Object.keys(configuration.contraintes).sort(), ['nouveauxVoisins', 'nouvelleTable', 'separerAppartenances', 'varierAppartenances']);
+    assert.ok(configuration.participants.every((participant) => !Object.hasOwn(participant, 'etiquettes')));
+  });
+
+  test('chaque champ nouveau se transporte, la règle de chaque objectif résolue ; la table par identifiant, puis la soirée et les tours croissants', () => {
+    const { charge } = documentComplet();
+    charge.tables.reverse();
+    charge.tables[0].objectifs = [{ portee: 'tour', tour: 1, regle: 'et', etiquettes: ['bénévole'] }];
+    charge.tables[1].objectifs.reverse();
+    const configuration = configurationDepuisCharge(charge);
+    assert.deepEqual(configuration.participants.map(({ id, etiquettes }) => [id, etiquettes]), [
+      [1, ['Montréal', 'finance']],
+      [2, undefined],
+      [3, undefined],
+      [5, ['bénévole']],
+    ]);
+    assert.deepEqual(configuration.objectifs, [
+      { table: 1, tour: null, regle: 'et', etiquettes: ['finance'] },
+      { table: 1, tour: 2, regle: 'ou', etiquettes: ['Montréal', 'ressources humaines'] },
+      { table: 3, tour: 1, regle: 'et', etiquettes: ['bénévole'] },
+    ]);
+    assert.equal(configuration.modeObjectifs, 'minimum');
+    assert.deepEqual(configuration.contraintes, {
+      separerAppartenances: true,
+      nouveauxVoisins: false,
+      nouvelleTable: true,
+      varierAppartenances: false,
+      respecterObjectifs: false,
+      rencontrerAnimateurs: true,
+    });
+  });
+
+  test('une règle qui suit le défaut prend « ou » tant que le défaut n’est pas réglé ; une règle propre ne change pas avec lui', () => {
+    const { charge } = documentComplet();
+    delete charge.reglages.regleObjectifs;
+    charge.tables[0].objectifs[1].regle = 'et';
+    assert.deepEqual(configurationDepuisCharge(charge).objectifs.map(({ regle }) => regle), ['ou', 'et']);
+    charge.reglages.regleObjectifs = 'et';
+    charge.tables[0].objectifs[1].regle = 'ou';
+    assert.deepEqual(configurationDepuisCharge(charge).objectifs.map(({ regle }) => regle), ['et', 'ou']);
+  });
+
+  test('chaque champ reste absent à son défaut, un par un', () => {
+    const cas = [
+      ['mode', (c) => { delete c.reglages.modeObjectifs; }, (k) => !Object.hasOwn(k, 'modeObjectifs')],
+      ['objectifs respectés', (c) => { delete c.reglages.respecterObjectifs; }, (k) => !Object.hasOwn(k.contraintes, 'respecterObjectifs')],
+      ['animateurs décochés', (c) => { delete c.reglages.rencontrerAnimateurs; }, (k) => !Object.hasOwn(k.contraintes, 'rencontrerAnimateurs')],
+      ['aucun objectif', (c) => { delete c.tables[0].objectifs; }, (k) => !Object.hasOwn(k, 'objectifs')],
+      ['aucune étiquette', (c) => { for (const p of c.participants) delete p.etiquettes; }, (k) => k.participants.every((p) => !Object.hasOwn(p, 'etiquettes'))],
+    ];
+    for (const [libelle, retirer, absent] of cas) {
+      const { charge } = documentComplet();
+      retirer(charge);
+      assert.ok(absent(configurationDepuisCharge(charge)), libelle);
+    }
+  });
+
+  test('la configuration ne partage aucune liste avec la charge, qui reste intacte', () => {
+    const charge = geler(documentComplet().charge);
+    const configuration = configurationDepuisCharge(charge);
+    configuration.participants[0].etiquettes.push('RH');
+    configuration.objectifs[0].etiquettes.push('RH');
+    assert.deepEqual(charge.participants[0].etiquettes, ['Montréal', 'finance']);
+    assert.deepEqual(charge.tables[0].objectifs[0].etiquettes, ['finance']);
+    assert.deepEqual(normaliser(configuration).ids, [1, 2, 5]);
   });
 });
