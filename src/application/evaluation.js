@@ -11,8 +11,11 @@
 // faute (fautes, S2) et sans dérive (derive, S2). Fautif ou en dérive, il
 // n'est ni mesuré ni classé, et ses raisons disent pourquoi — la partition
 // se fait avant classer, qui laisse passer deux populations de même taille.
-// derive et planDepuisFichier, qui lèvent sur une faute, ne reçoivent que
-// des placements sans faute.
+// evaluer valide chaque placement une fois, par fautes, puis lit le placement
+// sans faute par deriveSansRevalider et planSansRevalider, qui ne refont pas
+// cette validation : un placement fautif ne les atteint jamais, et c'est ce
+// seul appel à fautes qui l'arrête. resumeDuRetenu passe par derive et
+// planDepuisFichier, qui la refont et lèvent sur une faute.
 //
 // Les imposés viennent du diagnostic, les mêmes pour toute ligne ; les
 // rencontres répétées imposées dépendent du plan, et chaque ligne les lit
@@ -34,7 +37,7 @@ import { plafondsRealises } from '../moteur/plafond.js';
 import { verifierIndicateurs, verifierInvariants } from '../moteur/verification.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance, configurationDepuisCharge } from '../stockage/document.js';
-import { derive, fautes, planDepuisFichier } from '../stockage/placements.js';
+import { derive, deriveSansRevalider, fautes, planDepuisFichier, planSansRevalider } from '../stockage/placements.js';
 
 export { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance };
 
@@ -94,7 +97,9 @@ const nonMesuree = (id, statut, raisons) => ({
 
 /**
  * La table d'évaluation d'une charge (contrat de A6). Ne modifie pas la
- * charge.
+ * charge. Chaque proposition et le retenu se valident une seule fois, par
+ * fautes : fautif, le placement s'arrête là ; sans faute, sa dérive et son
+ * plan se lisent sans seconde validation.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {{plafondsAPriori?: 'calcul'|null}} [options]
@@ -118,9 +123,9 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
   function ligneDe(placement, id) {
     const sesFautes = fautes(placement);
     if (sesFautes.length > 0) return nonMesuree(id, 'fautif', sesFautes);
-    const raisons = derive(placement, charge);
+    const raisons = deriveSansRevalider(placement, charge);
     if (raisons.length > 0) return nonMesuree(id, 'derive', raisons);
-    const plan = planDepuisFichier(placement);
+    const plan = planSansRevalider(placement);
     const tableDe = indexerPlan(instance, plan);
     const mesures = mesurer(instance, tableDe);
     const realises = plafondsRealises(instance, tableDe);

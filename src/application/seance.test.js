@@ -2181,6 +2181,24 @@ describe('séance observable : etat() et subscribe (§ 8.4)', () => {
     compterFiges(seance.etat());
   });
 
+  test("la charge de l'état garde son identité tant que l'événement ne change pas, et chaque geste en rend une neuve, figée", async () => {
+    const { seance } = await ouvertSur();
+    await seance.passerEnEcriture();
+    const etat = seance.etat();
+    const { charge } = etat;
+    seance.debuterCalcul();
+    seance.finirCalcul();
+    assert.notEqual(seance.etat(), etat);
+    assert.equal(seance.etat().charge, charge);
+    await seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
+    const apres = seance.etat().charge;
+    assert.notEqual(apres, charge);
+    compterFiges(apres);
+    await seance.executer('exclureParticipant', { id: 3 });
+    assert.notEqual(seance.etat().charge, apres);
+    compterFiges(seance.etat().charge);
+  });
+
   test("l'état porte l'événement, la charge, l'examen, les retours, le calcul en cours ; sans événement, rien", async () => {
     const vide = monter().seance.etat();
     assert.deepEqual(

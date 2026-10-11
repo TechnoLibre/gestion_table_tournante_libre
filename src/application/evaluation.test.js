@@ -20,7 +20,7 @@ import { ecartsAuPlafondAPriori } from '../moteur/manque.js';
 import { plafondsAPriori } from '../moteur/plafond.js';
 import { rechercher } from '../moteur/recherche.js';
 import { analyser, capacite, configurationDepuisCharge } from '../stockage/document.js';
-import { planDepuisFichier } from '../stockage/placements.js';
+import { fautes, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
 import {
@@ -290,6 +290,80 @@ describe('évaluation : un placement fautif (§ 8.9, point 3)', () => {
     assert.ok(table.retenu.raisons.every(({ code }) => code === 'LONGUEUR'), JSON.stringify(table.retenu.raisons));
     assert.deepEqual(table.propositions, attendue.propositions);
     assert.deepEqual(table.classement, attendue.classement);
+  });
+});
+
+// Le placement donné, sous un mandataire qui compte les lectures de
+// siegesAttribues : seule la validation (fautes) lit cette clé.
+function compte(placement) {
+  const releve = { lectures: 0 };
+  const mandataire = new Proxy(placement, {
+    get(cible, cle, recepteur) {
+      if (cle === 'siegesAttribues') releve.lectures += 1;
+      return Reflect.get(cible, cle, recepteur);
+    },
+  });
+  return { mandataire, releve };
+}
+
+describe('évaluation : chaque placement se valide une fois (§ 8.9)', () => {
+  test("une proposition fautive est rendue fautive, ses fautes pour raisons, non mesurée ; les autres se classent comme sans elle", () => {
+    const base = generee(chargeDemo('petite'), { graine: 3, nombre: 3, arret: 300 });
+    const charge = structuredClone(base);
+    const fautive = charge.propositions[1];
+    const [premiere, seconde] = fautive.placement[0].sieges;
+    premiere.push(seconde.shift());
+    const sansElle = structuredClone(base);
+    sansElle.propositions.splice(1, 1);
+    const table = evaluer(figer(charge));
+    const attendue = evaluer(figer(sansElle));
+    const ligne = table.propositions.find(({ id }) => id === fautive.id);
+    assert.equal(ligne.statut, 'fautif');
+    assert.ok(ligne.raisons.length > 0);
+    assert.deepEqual(ligne.raisons, fautes(fautive));
+    assert.equal(ligne.mesures, null);
+    assert.equal(table.propositions.at(-1), ligne);
+    assert.deepEqual(table.propositions.slice(0, -1), attendue.propositions);
+    assert.deepEqual(table.classement, attendue.classement);
+  });
+
+  test('un placement à la fois fautif et en dérive est rendu fautif, ses fautes pour raisons : la validation précède la dérive', () => {
+    const base = generee(chargeDemo('petite'), { graine: 3, nombre: 3, arret: 300 });
+    const retenue = executer(base, 'retenirProposition', { id: base.propositions[0].id });
+    const charge = executer(retenue, 'exclureParticipant', { id: retenue.participants[0].id });
+    const proposition = charge.propositions[1];
+    for (const placement of [proposition, charge.retenu]) {
+      const [a, b] = placement.placement[0].sieges;
+      a.push(b.shift());
+    }
+    assert.ok(fautes(proposition).length > 0);
+    assert.ok(fautes(charge.retenu).length > 0);
+    const table = evaluer(figer(charge));
+    const ligne = table.propositions.find(({ id }) => id === proposition.id);
+    assert.equal(ligne.statut, 'fautif');
+    assert.deepEqual(ligne.raisons, fautes(proposition));
+    assert.equal(table.retenu.statut, 'fautif');
+    assert.deepEqual(table.retenu.raisons, fautes(charge.retenu));
+    assert.ok(table.propositions.filter(({ id }) => id !== proposition.id).every(({ statut }) => statut === 'derive'));
+  });
+
+  test('evaluer valide chaque proposition et le retenu une seule fois : la validation y lit le placement autant que fautes seul', () => {
+    const base = generee(chargeDemo('petite'), { graine: 3, nombre: 2, arret: 300 });
+    const charge = executer(base, 'retenirProposition', { id: base.propositions[0].id });
+    const seule = compte(structuredClone(charge.propositions[1]));
+    fautes(seule.mandataire);
+    assert.ok(seule.releve.lectures > 0);
+    const proposition = compte(charge.propositions[1]);
+    const retenu = compte(charge.retenu);
+    charge.propositions[1] = proposition.mandataire;
+    charge.retenu = retenu.mandataire;
+    const table = evaluer(charge);
+    assert.ok(table.propositions.every(({ statut }) => statut === 'comparable'));
+    assert.equal(table.retenu.statut, 'comparable');
+    assert.equal(proposition.releve.lectures, seule.releve.lectures);
+    const seulRetenu = compte(structuredClone(executer(base, 'retenirProposition', { id: base.propositions[0].id }).retenu));
+    fautes(seulRetenu.mandataire);
+    assert.equal(retenu.releve.lectures, seulRetenu.releve.lectures);
   });
 });
 

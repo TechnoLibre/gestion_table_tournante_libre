@@ -672,7 +672,8 @@ sur six paires passe devant un plan qui en concentre quatre sur une seule.
 affichée, et se retrouvent de toute façon par soustraction. Trois clés pour deux
 quantités indépendantes feraient un départage qui ne départage rien.
 
-**Le plafond a priori par personne se calcule à chaque évaluation** : sa
+**Le plafond a priori par personne se calcule à chaque évaluation** d'une
+charge nouvelle — une même charge figée relit sa table — : sa
 maximisation est mesurée et ne coûte presque rien (§ 17, point 4), et le premier
 critère s'applique toujours. Le chemin où il manque reste celui du moteur, que
 l'application n'emprunte pas : le premier critère y est **sauté** et la page
@@ -3356,7 +3357,7 @@ des fonctions pures du module de géométrie.
 | critère | ce que Svelte apporte |
 |---|---|
 | tenir hors ligne | se compile en JavaScript ordinaire ; Vite est une dépendance de développement qui ne survit pas à la construction |
-| rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main |
+| rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main — à une exception près : la table d'évaluation des propositions, gardée dans le modèle pur sous l'identité de la charge figée de la séance, qu'une écriture remplace |
 | se tester sans navigateur | n'impose d'écrire aucun calcul dans un composant ; le composant ne contient que le câblage |
 | être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande de mode, les messages (avis, refus, information), le plan, le papier |
 

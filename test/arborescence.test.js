@@ -1640,6 +1640,37 @@ function releverImportateursReserves(racine, reserves = IMPORTATEURS_RESERVES) {
   });
 }
 
+// Les variantes de placements.js qui lisent un placement sans le valider :
+// evaluation.js seul les appelle, après avoir validé le placement une fois
+// par fautes ; tout autre appelant passe par planDepuisFichier et derive,
+// qui valident. Le relevé lit leurs noms, mots entiers, dans le code des
+// sources du projet — chaînes comprises, commentaires exclus —, hors de
+// leurs porteurs et des épreuves.
+const PORTEURS_SANS_REVALIDATION = ['src/stockage/placements.js', 'src/application/evaluation.js'];
+const NOM_SANS_REVALIDATION = /\b(?:planSansRevalider|deriveSansRevalider)\b/g;
+
+// Relevé « fichier:ligne nom » des variantes sans validation nommées hors de
+// leurs porteurs, par fichier puis par ligne ; puis « porteur sans objet :
+// fichier » pour un porteur qui ne les nomme plus. Lève quand le périmètre
+// ne porte aucun fichier.
+function releverSansRevalidation(racine, porteurs = PORTEURS_SANS_REVALIDATION) {
+  const fichiers = sourcesDuProjet(racine).filter((f) => !EPREUVE.test(f));
+  assert.ok(fichiers.length > 0, 'aucun fichier source');
+  const servis = new Set();
+  const releve = fichiers.flatMap((fichier) => {
+    const nom = enBarres(racine, fichier);
+    const texte = readFileSync(fichier, 'utf8');
+    const trouves = [...texteSansCommentaires(fichier, texte).matchAll(NOM_SANS_REVALIDATION)];
+    if (porteurs.includes(nom)) {
+      if (trouves.length > 0) servis.add(nom);
+      return [];
+    }
+    return trouves.map(({ 0: variante, index }) => `${nom}:${ligneDe(texte, index)} ${variante}`);
+  });
+  const sansObjet = porteurs.filter((p) => !servis.has(p)).map((p) => `porteur sans objet : ${p}`);
+  return [...releve, ...sansObjet];
+}
+
 // Le nom d'un papier, que seul src/geometrie/papiers.js définit (§ 13.2) :
 // le stockage, l'application, l'imposition et l'impression tirent leur
 // domaine de PAPIERS. Le relevé lit « Lettre », mot entier, dans le code
@@ -1695,6 +1726,39 @@ function releverNomsDePapier(racine, porteurs = PORTEURS_DES_NOMS_DE_PAPIER) {
   const sansObjet = porteurs.filter((p) => !servis.has(p)).map((p) => `porteur sans objet : ${p}`);
   return [...releve, ...sansObjet];
 }
+
+describe('arborescence : la validation des placements (§ 8.9)', () => {
+  test('planSansRevalider et deriveSansRevalider ne se nomment que dans placements.js, evaluation.js et les épreuves', () => {
+    assert.deepEqual(releverSansRevalidation(RACINE), []);
+  });
+
+  test('la garde des variantes sans validation relève un import, un appel ou une chaîne hors de leurs porteurs, script et composant compris ; commentaires et épreuves passent ; un porteur muet est sans objet', () => {
+    const porteurs = {
+      'src/stockage/placements.js': 'export function planSansRevalider(p) {}\nexport function deriveSansRevalider(p, c) {}\n',
+      'src/application/evaluation.js': "import { deriveSansRevalider, planSansRevalider } from '../stockage/placements.js';\n",
+    };
+    const fichiers = {
+      ...porteurs,
+      'src/application/places.js': [
+        '// planSansRevalider, dans un commentaire',
+        "import { planSansRevalider } from '../stockage/placements.js';",
+        'const plan = planSansRevalider(p);',
+      ].join('\n'),
+      'src/interface/Plan.svelte': ['<script>', "  const nom = 'deriveSansRevalider';", '</script>'].join('\n'),
+      'scripts/outil.js': "import { deriveSansRevalider } from '../src/stockage/placements.js';\n",
+      'src/application/evaluation.test.js': "import { planSansRevalider } from '../stockage/placements.js';\n",
+      'src/application/derive.js': 'const planSansRevaliderAutre = 1;\n',
+    };
+    assert.deepEqual(avecArbre(fichiers, releverSansRevalidation), [
+      'scripts/outil.js:1 deriveSansRevalider',
+      'src/application/places.js:2 planSansRevalider',
+      'src/application/places.js:3 planSansRevalider',
+      'src/interface/Plan.svelte:2 deriveSansRevalider',
+    ]);
+    const muet = { 'src/stockage/placements.js': porteurs['src/stockage/placements.js'], 'src/application/evaluation.js': '\n' };
+    assert.deepEqual(avecArbre(muet, releverSansRevalidation), ['porteur sans objet : src/application/evaluation.js']);
+  });
+});
 
 describe('arborescence : les sorties — PDF, impression, police (§ 11.1, § 13.4, § 17 point 2)', () => {
   test('les paquets de développement sont ceux de la liste fermée, les trois paquets des sorties épinglés exacts, sans script d’installation ; aucune dépendance d’exécution', () => {

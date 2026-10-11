@@ -348,6 +348,20 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
  */
 export function planDepuisFichier(p) {
   exigerCoherent(p, 'planDepuisFichier');
+  return planSansRevalider(p);
+}
+
+/**
+ * planDepuisFichier sans la validation : le même plan, pour un placement
+ * dont l'appelant vient de lire fautes(p) vide. evaluer (evaluation.js) est
+ * son seul appelant, qui valide chaque placement une fois avant de le lire ;
+ * tout autre passe par planDepuisFichier. Un placement fautif y rend un
+ * plan faux, sans lever.
+ *
+ * @param {import('./types.js').PropositionFichier|import('./types.js').Retenu} p
+ * @returns {import('../moteur/types.js').Plan}
+ */
+export function planSansRevalider(p) {
   return {
     tables: [...p.tables],
     tours: p.placement.map(({ sieges }) => sieges.map((liste) => liste.filter((id) => id !== null).sort(croissant))),
@@ -362,7 +376,8 @@ const ordreDesRaisons = (a, b) =>
   comparerTextes(a.code, b.code) || (a.participant ?? a.table ?? 0) - (b.participant ?? b.table ?? 0);
 
 // Raisons de dérive d'un placement cohérent, sans contrôle : derive les
-// rend après l'avoir contrôlé, examiner après l'avoir fait lui-même.
+// rend après l'avoir contrôlé, examiner après l'avoir fait lui-même,
+// deriveSansRevalider après que son appelant l'a fait.
 function raisonsDeDerive({ tables, capacites, tours, participants }, charge) {
   const raisons = [];
   const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
@@ -422,6 +437,21 @@ function raisonsDeDerive({ tables, capacites, tours, participants }, charge) {
  */
 export function derive(p, charge) {
   exigerCoherent(p, 'derive');
+  return raisonsDeDerive(p, charge);
+}
+
+/**
+ * derive sans la validation : les mêmes raisons, pour un placement dont
+ * l'appelant vient de lire fautes(p) vide. evaluer (evaluation.js) est son
+ * seul appelant, qui valide chaque placement une fois avant de le lire ;
+ * tout autre passe par derive. Un placement fautif y rend des raisons
+ * fausses, sans lever.
+ *
+ * @param {import('./types.js').PropositionFichier|import('./types.js').Retenu} p
+ * @param {import('./types.js').Charge} charge
+ * @returns {Raison[]}
+ */
+export function deriveSansRevalider(p, charge) {
   return raisonsDeDerive(p, charge);
 }
 

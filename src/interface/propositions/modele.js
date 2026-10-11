@@ -397,16 +397,36 @@ export function demandeConfirmation({ refus, charge }, id) {
   };
 }
 
-/**
- * La table d'évaluation d'une charge, ou ce qui l'empêche : null sans
- * proposition ni retenu, rien n'étant à mesurer ; le refus de normaliser —
- * une erreur qui porte un code — quand la configuration ne se tient pas.
- * Toute autre erreur remonte.
- *
- * @param {Object} charge
- * @returns {{table: Object|null, refus: null|{code: string, details: Object}}}
- */
-export function evaluation(charge) {
+// La table d'évaluation de chaque charge figée en profondeur, sous l'identité
+// de la charge. La charge de l'état observable de la séance est une copie
+// figée en profondeur (seance.js, figer), remplacée par une copie neuve à
+// chaque changement de l'événement ouvert et gardée telle quelle sinon : son
+// identité suffit à dire que son contenu n'a pas changé, et Génération et
+// Propositions relisent la même table. Une charge qui n'est pas figée
+// partout se mesure à chaque appel, son contenu pouvant changer sous la
+// même identité. Le § 13.3 compte sur la réactivité de Svelte plutôt que sur
+// une mémoïsation posée à la main ; ce cache en est l'exception voulue, posé
+// dans le modèle pur et tenu par l'immuabilité de son entrée.
+const evaluees = new WeakMap();
+
+// Vrai quand chaque objet atteint depuis valeur est figé. Un objet figé ne
+// redevient jamais modifiable : vrai une fois, vrai pour toujours.
+function figeePartout(valeur) {
+  if (valeur === null || typeof valeur !== 'object') return true;
+  if (!Object.isFrozen(valeur)) return false;
+  for (const cle of Object.keys(valeur)) if (!figeePartout(valeur[cle])) return false;
+  return true;
+}
+
+// Fige une valeur neuve et tout ce qu'elle atteint.
+function figer(valeur) {
+  if (valeur === null || typeof valeur !== 'object' || Object.isFrozen(valeur)) return valeur;
+  for (const cle of Object.keys(valeur)) figer(valeur[cle]);
+  return Object.freeze(valeur);
+}
+
+// La table d'une charge, mesurée à neuf.
+function evaluationNeuve(charge) {
   if (charge.propositions.length === 0 && charge.retenu === null) return { table: null, refus: null };
   try {
     return { table: evaluer(charge), refus: null };
@@ -414,6 +434,25 @@ export function evaluation(charge) {
     if (typeof erreur?.code !== 'string') throw erreur;
     return { table: null, refus: { code: erreur.code, details: erreur.details ?? {} } };
   }
+}
+
+/**
+ * La table d'évaluation d'une charge, ou ce qui l'empêche : null sans
+ * proposition ni retenu, rien n'étant à mesurer ; le refus de normaliser —
+ * une erreur qui porte un code — quand la configuration ne se tient pas.
+ * Toute autre erreur remonte, et rien n'est retenu. Le résultat est figé en
+ * profondeur ; pour une charge figée partout, c'est le même objet à chaque
+ * appel, mesuré au premier.
+ *
+ * @param {Object} charge
+ * @returns {{table: Object|null, refus: null|{code: string, details: Object}}}
+ */
+export function evaluation(charge) {
+  const connue = evaluees.get(charge);
+  if (connue !== undefined) return connue;
+  const evaluee = figer(evaluationNeuve(charge));
+  if (figeePartout(charge)) evaluees.set(charge, evaluee);
+  return evaluee;
 }
 
 /** Le nom affiché de la personne id de la charge, exclue comprise ; null

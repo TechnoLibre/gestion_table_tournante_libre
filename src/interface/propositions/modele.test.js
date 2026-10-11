@@ -669,6 +669,77 @@ describe('evaluation : la table d’une charge, ou ce qui l’empêche', () => {
   });
 });
 
+// Fige en profondeur, comme la séance fige la charge de son état
+// observable : chaque objet atteint, puis l'objet lui-même.
+function figer(valeur) {
+  if (valeur !== null && typeof valeur === 'object' && !Object.isFrozen(valeur)) {
+    for (const element of Object.values(valeur)) figer(element);
+    Object.freeze(valeur);
+  }
+  return valeur;
+}
+
+// Vrai quand chaque objet atteint depuis valeur est figé.
+const figeePartout = (valeur) =>
+  valeur === null || typeof valeur !== 'object' || (Object.isFrozen(valeur) && Object.values(valeur).every(figeePartout));
+
+describe('evaluation : une table par charge figée, relue tant que la charge ne change pas (§ 13.3)', () => {
+  test('une même charge figée rend deux fois la même table, figée en profondeur et égale à celle d’evaluer', () => {
+    const charge = figer(generee(chargeDemo('petite'), { graine: 1, nombre: 3, arret: 100 }));
+    const premiere = evaluation(charge);
+    assert.equal(evaluation(charge), premiere);
+    assert.deepEqual(premiere, { table: evaluer(charge), refus: null });
+    assert.ok(figeePartout(premiere));
+    const refusee = structuredClone(charge);
+    refusee.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+    figer(refusee);
+    assert.equal(evaluation(refusee), evaluation(refusee));
+    assert.equal(evaluation(refusee).refus.code, 'SURRESERVATION');
+  });
+
+  test('chaque écriture rend une charge neuve, dont la table se mesure à neuf ; la charge d’avant garde la sienne', () => {
+    const avant = figer(generee(chargeDemo('petite'), { graine: 1, nombre: 3, arret: 100 }));
+    const deAvant = evaluation(avant);
+    const exclue = figer(executer(avant, 'exclureParticipant', { id: avant.participants[0].id }));
+    assert.deepEqual(evaluation(exclue), { table: evaluer(exclue), refus: null });
+    assert.ok(evaluation(exclue).table.propositions.every(({ statut }) => statut === 'derive'));
+    const plus = figer(generee(avant, { graine: 2, nombre: 2, arret: 100 }));
+    assert.deepEqual(evaluation(plus), { table: evaluer(plus), refus: null });
+    assert.equal(evaluation(plus).table.propositions.length, 5);
+    const retenue = figer(executer(plus, 'retenirProposition', { id: plus.propositions[4].id }));
+    assert.deepEqual(evaluation(retenue), { table: evaluer(retenue), refus: null });
+    assert.equal(evaluation(retenue).table.retenu.id, plus.propositions[4].id);
+    const effacee = figer(executer(retenue, 'effacerPropositions', {}));
+    assert.deepEqual(evaluation(effacee), { table: evaluer(effacee), refus: null });
+    assert.deepEqual(evaluation(effacee).table.propositions.map(({ id }) => id), [plus.propositions[4].id]);
+    assert.equal(evaluation(avant), deAvant);
+  });
+
+  test('une charge neuve qui reprend les objets figés de la précédente — propositions comprises — se mesure à neuf', () => {
+    const avant = figer(generee(chargeDemo('petite'), { graine: 1, nombre: 3, arret: 100 }));
+    const deAvant = evaluation(avant);
+    const [premiere, ...autres] = avant.participants;
+    const partagee = figer({ ...avant, participants: [{ ...premiere, exclu: true }, ...autres] });
+    assert.equal(partagee.propositions, avant.propositions);
+    assert.equal(partagee.tables, avant.tables);
+    assert.deepEqual(evaluation(partagee), { table: evaluer(partagee), refus: null });
+    assert.ok(evaluation(partagee).table.propositions.every(({ statut }) => statut === 'derive'));
+    assert.equal(evaluation(avant), deAvant);
+  });
+
+  test('une charge qui n’est pas figée partout se mesure à chaque appel : modifiée en place, sa table suit', () => {
+    const charge = generee(chargeDemo('petite'), { graine: 1, nombre: 3, arret: 100 });
+    assert.notEqual(evaluation(charge), evaluation(charge));
+    Object.freeze(charge);
+    const premiere = evaluation(charge);
+    charge.propositions.pop();
+    charge.participants[0].exclu = true;
+    assert.notDeepEqual(evaluation(charge), premiere);
+    assert.deepEqual(evaluation(charge), { table: evaluer(charge), refus: null });
+    assert.ok(evaluation(charge).table.propositions.every(({ statut }) => statut === 'derive'));
+  });
+});
+
 describe('les explications des colonnes et des critères (infobulles, § 5.4, § 5.5, § 5.7)', () => {
   // Le sens de chaque colonne : 'bas' quand la plus faible valeur sert le
   // mieux, 'grand' quand c'est la plus forte ; null quand l'explication ne
