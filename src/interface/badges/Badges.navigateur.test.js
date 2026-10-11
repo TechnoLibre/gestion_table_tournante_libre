@@ -26,7 +26,9 @@ import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js'
 import { PAPIERS } from '../../geometrie/papiers.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { FICHIER_REGLAGES } from '../../stockage/reglages_locaux.js';
+import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
+import { composantes, contraste } from '../../../test/navigateur/rendu.js';
 import { BASE, attendre, chargeBloquee, chargePrincipale, cliquer, creerContexte, fichierReglages, ouvrirEvenement } from '../../../test/navigateur/ecrans.js';
 import { FORME_TEMOIN, chargeTemoin } from '../../../test/fixtures/badges/temoin.js';
 import { clesPapier } from '../impression/modele.js';
@@ -468,5 +470,48 @@ describe('la langue témoin (§ 14.6)', () => {
       await temoin.defaire();
       expect(erreurs).toEqual([]);
     }
+  });
+});
+
+// --- L'habillage : cartes, action principale --------------------------------------
+
+// La carte qui porte un élément : le plus proche ancêtre peint du fond de la
+// carte, au rayon de 12 px ; null sans elle.
+function carteDe(element) {
+  const fond = couleurDeJeton('--couleur-carte-fond').join();
+  for (let n = element.parentElement; n !== null; n = n.parentElement) {
+    const style = getComputedStyle(n);
+    if (composantes(style.backgroundColor).join() === fond && style.borderTopLeftRadius === '12px') return n;
+  }
+  return null;
+}
+
+describe('l’habillage de la section des badges', () => {
+  test('les réglages, le papier, les commandes et l’annonce de la planche dans une carte ; la réédition dans une autre', async () => {
+    const m = await ouvrirBadges(chargeRetenue());
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    const planche = carteDe(dans(m, '[data-section="badges"] [data-champ="imposition"]'));
+    expect(planche, 'carte de la planche').not.toBeNull();
+    expect(section(m).contains(planche)).toBe(true);
+    for (const selecteur of ['[data-champ="ordre"]', '[data-papier="choisi"]', '[data-commande="preparerPlanche"]', '[data-commande="produirePlanche"]', '[data-annonce-planche]']) {
+      expect(planche.contains(dans(m, `[data-section="badges"] ${selecteur}`)), selecteur).toBe(true);
+    }
+    const reedition = carteDe(dans(m, '[data-section="badges"] [data-champ="reedition"]'));
+    expect(reedition, 'carte de la réédition').not.toBeNull();
+    expect(reedition).not.toBe(planche);
+    expect(planche.contains(reedition)).toBe(false);
+  });
+
+  test('l’annonce sur le fond sourd de la carte ; « Produire la planche » est l’action principale, son texte à 4,5:1', async () => {
+    const m = await ouvrirBadges(chargeRetenue());
+    dans(m, '[data-section="badges"] [data-commande="preparerPlanche"]').click();
+    await attendre('l’annonce', () => annonce(m), IMAGES);
+    expect(composantes(getComputedStyle(annonce(m)).backgroundColor).join()).toBe(couleurDeJeton('--couleur-carte-fond-sourd').join());
+    const style = getComputedStyle(produire(m));
+    const fond = composantes(style.backgroundColor);
+    expect(fond.join()).toBe(couleurDeJeton('--couleur-action-fond').join());
+    expect(contraste(composantes(style.color), fond)).toBeGreaterThanOrEqual(4.5);
+    expect(produire(m).getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
   });
 });

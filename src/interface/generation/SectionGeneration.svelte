@@ -42,9 +42,15 @@
   // colonne du tableau ; son survol ou son focus ouvre l'infobulle de la
   // section, une seule, sur l'explication de cette colonne, et le quitter la
   // referme ; le terme expliqué porte aria-describedby vers elle.
+  //
+  // Habillage : la meilleure proposition est une carte à elle, chaque valeur
+  // sous son intitulé ; les réglages, « Générer » — l'action principale de
+  // l'écran —, la question, l'avancement et l'issue vivent dans la carte des
+  // réglages, sous elle.
   import { getContext, onDestroy, untrack } from 'svelte';
   import { ErreurCommande } from '../../application/erreurs.js';
   import { ErreurAnnulee } from '../../application/generation.js';
+  import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Infobulle from '../primitives/Infobulle.svelte';
   import { explicationDeColonne, texteCellule } from '../propositions/modele.js';
@@ -190,28 +196,32 @@
       {/if}
     </section>
     <Infobulle id={idExplication} ouverte={expliquee} fermer={taire} />
-    <Reglages {charge} {mesure} {estimation} bind:graine {refusGraine} {saisirGraine} bind:refusCoeurs />
-    <div class="lancer">
-      <Commande cle="generation.commande.generer" nom="generer" executer={() => lancer(false)} />
-    </div>
-    {#if question !== null}
-      <div class="question" data-question="longue" role="status">
-        <p>{t('generation.longue.question', question)}</p>
-        <div class="issues">
-          <Commande cle="generation.longue.confirmer" nom="confirmerGeneration" executer={() => lancer(true)} />
-          <Commande cle="generation.longue.renoncer" nom="renoncerGeneration" executer={() => (question = null)} />
+    <Carte titre={t('generation.reglages.titre')} niveau={3}>
+      <div class="reglages">
+        <Reglages {charge} {mesure} {estimation} bind:graine {refusGraine} {saisirGraine} bind:refusCoeurs />
+        <div class="lancer">
+          <Commande cle="generation.commande.generer" nom="generer" variante="principale" executer={() => lancer(false)} />
         </div>
+        {#if question !== null}
+          <div class="question" data-question="longue" role="status">
+            <p>{t('generation.longue.question', question)}</p>
+            <div class="issues">
+              <Commande cle="generation.longue.confirmer" nom="confirmerGeneration" executer={() => lancer(true)} />
+              <Commande cle="generation.longue.renoncer" nom="renoncerGeneration" executer={() => (question = null)} />
+            </div>
+          </div>
+        {/if}
+        {#if $generation.enCours}
+          <Avancement fait={$generation.fait} total={$generation.total} annuler={() => generation.annuler()} />
+        {:else if issue !== null}
+          <p data-issue role="status">{t('generation.issue.ajoutees', issue)}</p>
+        {:else if $generation.annulee === 'commande'}
+          <p data-issue role="status">{t('generation.issue.annuleeCommande')}</p>
+        {:else if $generation.annulee === 'seance'}
+          <p data-issue role="status">{t('generation.issue.annuleeSeance')}</p>
+        {/if}
       </div>
-    {/if}
-    {#if $generation.enCours}
-      <Avancement fait={$generation.fait} total={$generation.total} annuler={() => generation.annuler()} />
-    {:else if issue !== null}
-      <p data-issue role="status">{t('generation.issue.ajoutees', issue)}</p>
-    {:else if $generation.annulee === 'commande'}
-      <p data-issue role="status">{t('generation.issue.annuleeCommande')}</p>
-    {:else if $generation.annulee === 'seance'}
-      <p data-issue role="status">{t('generation.issue.annuleeSeance')}</p>
-    {/if}
+    </Carte>
   {/if}
 </section>
 
@@ -220,6 +230,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--espace-4);
+    min-width: 0;
   }
 
   h2 {
@@ -227,37 +238,47 @@
     font-size: var(--taille-titre);
   }
 
-  /* La meilleure proposition : un bloc d'information encadré d'un filet,
-     sur le fond de la page ; chaque libellé suivi de sa valeur, en gras. */
+  /* La meilleure proposition : une carte, son titre en tête, puis chaque
+     valeur en grand, sous son intitulé en petites capitales. */
   .meilleure {
     display: flex;
     flex-direction: column;
-    gap: var(--espace-2);
-    padding: var(--espace-2) var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    gap: var(--espace-3);
+    padding: var(--espace-4) var(--espace-5);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
+    box-shadow: var(--ombre-carte);
   }
 
   h3 {
     margin: 0;
-    font-size: var(--taille-texte);
+    font-size: var(--taille-titre-carte);
   }
 
   dl {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--espace-2) var(--espace-5);
+    gap: var(--espace-3) var(--espace-6);
     margin: 0;
   }
 
   dl > div {
     display: flex;
-    gap: var(--espace-2);
-    align-items: baseline;
+    flex-direction: column;
+    gap: var(--espace-1);
+  }
+
+  dt {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
   }
 
   dd {
     margin: 0;
+    font-size: var(--taille-titre);
     font-weight: bold;
     font-variant-numeric: tabular-nums;
   }
@@ -274,13 +295,28 @@
     outline-offset: 2px;
   }
 
+  .reglages {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-4);
+  }
+
+  .lancer {
+    display: flex;
+    padding-top: var(--espace-3);
+    border-top: 1px solid var(--couleur-ligne-filet);
+  }
+
   .question {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--espace-2);
-    padding: var(--espace-2) var(--espace-3);
-    border-left: 3px solid var(--couleur-avis);
+    padding: var(--espace-3) var(--espace-4);
+    border: 1px solid var(--couleur-avis-filet);
+    border-left: 3px solid var(--couleur-avis-marque);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-avis-fond);
   }
 
   .issues {

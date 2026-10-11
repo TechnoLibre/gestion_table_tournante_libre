@@ -35,8 +35,10 @@ import { configurationDepuisCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
+import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { composantes, contraste, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import Travailleur from './travailleur.js?worker&inline';
 
@@ -940,5 +942,49 @@ describe('la durée du calcul (§ 5.10, § 19.4)', () => {
     expect(executions.length).toBe(3);
     executions[2].resoudre([]);
     await attendre(() => expect(enCours(m)).toBe(false));
+  });
+});
+
+// --- L'habillage : réglages en carte, action principale -------------------------
+
+// La carte qui porte un élément : le plus proche ancêtre peint du fond de la
+// carte, au rayon de 12 px ; null sans elle.
+function carteDe(element) {
+  const fond = couleurDeJeton('--couleur-carte-fond').join();
+  for (let n = element.parentElement; n !== null; n = n.parentElement) {
+    const style = getComputedStyle(n);
+    if (composantes(style.backgroundColor).join() === fond && style.borderTopLeftRadius === '12px') return n;
+  }
+  return null;
+}
+
+describe('l’habillage de la génération', () => {
+  test('les réglages et « Générer » dans une même carte de la section ; la meilleure proposition dans la sienne, au-dessus', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
+    const reglages = section(m).querySelector('[data-reglages]');
+    const carte = carteDe(reglages);
+    expect(carte, 'carte des réglages').not.toBeNull();
+    expect(section(m).contains(carte)).toBe(true);
+    expect(carte.contains(generer(m))).toBe(true);
+    const meilleure = section(m).querySelector('[data-meilleure]');
+    const style = getComputedStyle(meilleure);
+    expect(composantes(style.backgroundColor).join()).toBe(couleurDeJeton('--couleur-carte-fond').join());
+    expect(style.borderTopLeftRadius).toBe('12px');
+    expect(carte.contains(meilleure)).toBe(false);
+    expect(meilleure.getBoundingClientRect().bottom).toBeLessThanOrEqual(carte.getBoundingClientRect().top);
+  });
+
+  test('« Générer » est l’action principale : pleine de la teinte de l’action, son texte à 4,5:1, haute de 44 px, dans les deux thèmes', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        flushSync();
+        const style = getComputedStyle(generer(m));
+        const fond = composantes(style.backgroundColor);
+        expect(fond.join(), theme).toBe(couleurDeJeton('--couleur-action-fond').join());
+        expect(contraste(composantes(style.color), fond), theme).toBeGreaterThanOrEqual(4.5);
+        expect(generer(m).getBoundingClientRect().height, theme).toBeGreaterThanOrEqual(44);
+      });
+    }
   });
 });

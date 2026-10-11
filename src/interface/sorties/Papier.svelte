@@ -18,8 +18,13 @@
   // la commande, et la question reste. Le choix fait, onChoisi, quand il est
   // donné, reçoit le papier : la section qui demandait une production la
   // poursuit.
+  //
+  // Habillage : la question montre chaque papier comme un choix distinct,
+  // une tuile à son filet que son bouton remplit, haut d'une cible
+  // principale ; le papier choisi se montre dans une pastille neutre.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
+  import Pastille from '../primitives/Pastille.svelte';
   import { PAPIERS_OFFERTS, clesPapier } from '../impression/modele.js';
 
   let { onChoisi = null } = $props();
@@ -45,7 +50,7 @@
     <p class="explication">{t('impression.papier.explication')}</p>
     <div class="choix">
       {#each PAPIERS_OFFERTS as choix (choix)}
-        <div data-cible={choix}>
+        <div class="tuile" data-cible={choix}>
           <Commande cle={clesPapier(choix).choix} nom="choisirPapier" executer={() => choisir(choix)} />
         </div>
       {/each}
@@ -53,8 +58,8 @@
   </div>
 {:else}
   <div class="papier choisi" data-papier="choisi">
-    <span>{t('impression.papier.titre')}</span>
-    <span class="donnee">{t(clesPapier(papier).nom)}</span>
+    <span class="titre">{t('impression.papier.titre')}</span>
+    <Pastille sorte="statut" valeur="neutre" icone="imprimer" libelle={t(clesPapier(papier).nom)} />
     <Commande cle="impression.papier.changer" nom="changerPapier" executer={() => (changer = true)} />
   </div>
 {/if}
@@ -63,13 +68,13 @@
   .papier {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     gap: var(--espace-2);
   }
 
   .question {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
 
   p {
@@ -80,17 +85,37 @@
     font-weight: bold;
   }
 
-  .explication {
+  .explication,
+  .titre {
     color: var(--couleur-page-texte-secondaire);
   }
 
+  /* Les choix : une tuile par papier, côte à côte tant que la largeur le
+     permet, l'une sous l'autre sinon. */
   .choix {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--espace-2);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--espace-3);
+    max-width: 36rem;
   }
 
-  .donnee {
+  .tuile {
+    padding: var(--espace-2);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+  }
+
+  /* Le bouton de la Commande remplit sa tuile, haut d'une cible principale ;
+     son refus se pose dessous. */
+  .tuile :global(.commande) {
+    display: flex;
+    width: 100%;
+  }
+
+  .tuile :global(button) {
+    flex: 1 1 100%;
+    min-height: var(--hauteur-cible);
     font-weight: bold;
   }
 </style>

@@ -8,6 +8,10 @@
   // génération », qui appelle annuler. fait et total viennent du contrôleur
   // de génération ; total est le produit du nombre de propositions et du
   // compte d'arrêt, jamais nul pendant un calcul.
+  //
+  // La barre occupe la largeur de son bloc : sa piste sur le fond sourd de la
+  // carte, son remplissage de la teinte de l'action principale, qui s'y
+  // détache à 3:1 (SIGNES, actionPrincipale).
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
 
@@ -39,23 +43,28 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--espace-2);
+    padding: var(--espace-3) var(--espace-4);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
   }
 
   p {
     margin: 0;
+    font-variant-numeric: tabular-nums;
   }
 
   .barre {
     box-sizing: border-box;
-    width: min(30rem, 100%);
-    height: var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    width: 100%;
+    height: 0.75rem;
+    overflow: hidden;
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-pilule);
+    background-color: var(--couleur-carte-fond-sourd);
   }
 
   .plein {
     height: 100%;
-    background-color: var(--couleur-page-texte);
+    background-color: var(--couleur-action-fond);
   }
 </style>

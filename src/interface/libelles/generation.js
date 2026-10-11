@@ -41,6 +41,7 @@ export const TABLE = new Map([
   ],
 
   // --- Les réglages (§ 5.7, § 5.10) ---------------------------------------------
+  ['generation.reglages.titre', 'Réglages de la génération'],
   ['generation.reglage.graine', 'Graine (nombre entier, de 0 à 4\u{202F}294\u{202F}967\u{202F}295)'],
   ['generation.reglage.nombre', 'Propositions par génération (nombre de propositions)'],
   ['generation.reglage.arret', "Compte d'arrêt (mouvements évalués par proposition)"],

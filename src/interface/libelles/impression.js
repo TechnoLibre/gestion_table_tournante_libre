@@ -14,6 +14,8 @@ export const TABLE = new Map([
   ['impression.commande.ouvrir', 'Imprimer…'],
   ['impression.commande.imprimer', 'Imprimer'],
   ['impression.commande.fermer', "Fermer l'aperçu"],
+  ['impression.groupe.reglages', 'Réglages de la vue'],
+  ['impression.groupe.sortie', 'Papier et impression'],
 
   // --- Ce que l'aperçu imprime ----------------------------------------------
   ['impression.vue.titre', 'Vue imprimée'],

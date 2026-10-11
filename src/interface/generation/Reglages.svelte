@@ -46,6 +46,10 @@
   // posé, « Générer » ne part pas. Échap rend le dernier nombre accepté ; les
   // deux touches sont celles du contexte 'champ' de la table des raccourcis.
   // La valeur automatique du poste s'affiche à côté, dans les deux états.
+  //
+  // Habillage : la graine et les cœurs se saisissent comme un Champ, sur le
+  // fond de la carte au filet de contrôle ; les contraintes et les cœurs sont
+  // deux groupes sous un intertitre en petites capitales.
   import { getContext, untrack } from 'svelte';
   import Champ from '../primitives/Champ.svelte';
   import Refus from '../primitives/Refus.svelte';
@@ -224,10 +228,10 @@
     <p>{t('generation.coeurs.note')}</p>
   </fieldset>
   {#if mesure === null}
-    <p data-duree>{t('generation.duree.inconnue')}</p>
+    <p class="note" data-duree>{t('generation.duree.inconnue')}</p>
   {:else}
-    <p data-duree>{t('generation.duree.observee', mesure)}</p>
-    <p data-estimation>{t('generation.duree.estimee', estimation)}</p>
+    <p class="note" data-duree>{t('generation.duree.observee', mesure)}</p>
+    <p class="note" data-estimation>{t('generation.duree.estimee', estimation)}</p>
   {/if}
 </div>
 
@@ -235,7 +239,7 @@
   .reglages {
     display: flex;
     flex-direction: column;
-    gap: var(--espace-3);
+    gap: var(--espace-4);
   }
 
   .champs {
@@ -255,8 +259,8 @@
   input {
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
@@ -271,30 +275,37 @@
     border-color: var(--couleur-refus);
   }
 
+  /* Les deux groupes : un filet de carte, l'intertitre en petites capitales
+     d'encre secondaire. */
+  .coeurs,
+  .bascules {
+    margin: 0;
+    padding: var(--espace-3) var(--espace-4);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+  }
+
   .coeurs {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--espace-2);
-    margin: 0;
-    padding: var(--espace-2) var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
   }
 
   .bascules {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
-    gap: var(--espace-2) var(--espace-4);
-    margin: 0;
-    padding: var(--espace-2) var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    gap: var(--espace-2) var(--espace-5);
   }
 
   legend {
     padding: 0 var(--espace-1);
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
+    font-weight: bold;
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
   }
 
   .bascule {
@@ -310,5 +321,9 @@
 
   p {
     margin: 0;
+  }
+
+  .note {
+    color: var(--couleur-page-texte-secondaire);
   }
 </style>

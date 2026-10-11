@@ -39,6 +39,10 @@
   // explication (explicationDeColonne, modele.js). Le terme expliqué porte
   // aria-describedby vers elle, et lui seul.
   //
+  // Habillage : le tableau et la phrase de l'ordre vivent dans une carte
+  // titrée, « Effacer les propositions » à droite de son en-tête ; le message
+  // d'une liste vide et le champ de la cible, chacun dans sa carte.
+  //
   // Le champ de la cible de la somme de redondance montre la cible de
   // l'événement (cibleRedondance), et exécute changerCibleRedondance à la
   // sortie du champ — une entrée ; la saisie se lit par lireEntier, et un
@@ -47,6 +51,7 @@
   import { lireEntier } from '../../application/capacite.js';
   import { cibleRedondance } from '../../application/evaluation.js';
   import { REGLAGES_GENERATION, reglagesDeSection } from '../generation/reglages.js';
+  import Carte from '../primitives/Carte.svelte';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
@@ -137,11 +142,17 @@
   const nommer = (id) => nomDe(charge, id);
 </script>
 
+{#snippet effacerListe()}
+  <Commande cle="propositions.commande.effacer" executer={effacer} />
+{/snippet}
+
 <section data-section="propositions">
   <h2>{t('coquille.section.propositions')}</h2>
 
   {#if charge !== null && charge.propositions.length === 0}
-    <p>{t('propositions.aucune')}</p>
+    <Carte>
+      <p>{t('propositions.aucune')}</p>
+    </Carte>
   {/if}
 
   {#if evaluee.refus !== null}
@@ -149,55 +160,55 @@
   {/if}
 
   {#if vue !== null}
-    <div class="ordre" data-ordre>
-      {#each vue.ordre as morceaux, rang (rang)}
-        <p>
-          {#each morceaux as morceau, place (place)}
-            {#if morceau.colonne === null}
-              {t(morceau.cle, morceau.details)}
-            {:else}
-              <!-- Le nom est un terme, non une commande : aucun rôle n'annonce
-                   d'action, et le focus ne sert qu'à montrer au clavier la
-                   colonne que le pointeur montre au survol. -->
-              <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
-              <span
-                class="critere"
-                class:actif={surlignee === morceau.colonne}
-                data-critere={morceau.critere}
-                tabindex="0"
-                aria-describedby={decrit(`critere:${morceau.critere}`)}
-                onmouseenter={(evenement) => entrer(evenement, morceau, false)}
-                onmouseleave={() => sortir(morceau, false)}
-                onfocus={(evenement) => entrer(evenement, morceau, true)}
-                onblur={() => sortir(morceau, true)}>{t(morceau.cle, morceau.details)}</span
-              >
-            {/if}
-          {/each}
-        </p>
-      {/each}
-    </div>
-    <TableauPropositions {vue} {surlignee} {nommer} {voir} {retenir} {expliquer} {taire} {decrit} />
+    <Carte titre={t('propositions.tableau.titre')} niveau={3} plein actions={charge.propositions.length > 0 ? effacerListe : null}>
+      <div class="ordre" data-ordre>
+        {#each vue.ordre as morceaux, rang (rang)}
+          <p>
+            {#each morceaux as morceau, place (place)}
+              {#if morceau.colonne === null}
+                {t(morceau.cle, morceau.details)}
+              {:else}
+                <!-- Le nom est un terme, non une commande : aucun rôle n'annonce
+                     d'action, et le focus ne sert qu'à montrer au clavier la
+                     colonne que le pointeur montre au survol. -->
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+                <span
+                  class="critere"
+                  class:actif={surlignee === morceau.colonne}
+                  data-critere={morceau.critere}
+                  tabindex="0"
+                  aria-describedby={decrit(`critere:${morceau.critere}`)}
+                  onmouseenter={(evenement) => entrer(evenement, morceau, false)}
+                  onmouseleave={() => sortir(morceau, false)}
+                  onfocus={(evenement) => entrer(evenement, morceau, true)}
+                  onblur={() => sortir(morceau, true)}>{t(morceau.cle, morceau.details)}</span
+                >
+              {/if}
+            {/each}
+          </p>
+        {/each}
+      </div>
+      <TableauPropositions {vue} {surlignee} {nommer} {voir} {retenir} {expliquer} {taire} {decrit} />
+    </Carte>
+  {:else if charge !== null && charge.propositions.length > 0}
+    <div class="effacer">{@render effacerListe()}</div>
   {/if}
 
   <Infobulle id={idExplication} ouverte={expliquee} fermer={fermerExplication} />
 
   {#if charge !== null}
-    <div class="cible" data-cible-redondance>
-      <Champ
-        cle={entreeCible.cle}
-        etiquette={entreeCible.etiquette}
-        valeur={cibleRedondance(charge)}
-        lire={lireEntier}
-        executer={changerCible}
-      />
-      <p>{t('propositions.cible.aide')}</p>
-    </div>
-  {/if}
-
-  {#if charge !== null && charge.propositions.length > 0}
-    <div class="effacer">
-      <Commande cle="propositions.commande.effacer" executer={effacer} />
-    </div>
+    <Carte>
+      <div class="cible" data-cible-redondance>
+        <Champ
+          cle={entreeCible.cle}
+          etiquette={entreeCible.etiquette}
+          valeur={cibleRedondance(charge)}
+          lire={lireEntier}
+          executer={changerCible}
+        />
+        <p class="aide">{t('propositions.cible.aide')}</p>
+      </div>
+    </Carte>
   {/if}
 
   {#if aConfirmer !== null}
@@ -228,10 +239,13 @@
     margin: 0;
   }
 
+  /* La phrase de l'ordre, en tête de la carte, au retrait du contenu d'une
+     carte ; le tableau la suit, collé aux bords. */
   .ordre {
     display: flex;
     flex-direction: column;
     gap: var(--espace-1);
+    padding: var(--espace-3) var(--espace-5);
   }
 
   /* Un nom qui désigne une colonne se signale par un soulignement pointillé ;
@@ -262,5 +276,10 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--espace-1);
+  }
+
+  .aide {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
   }
 </style>

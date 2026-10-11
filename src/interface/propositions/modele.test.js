@@ -31,6 +31,7 @@ import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
   COLONNES,
+  GROUPES_COLONNES,
   colonneDuCritere,
   demandeConfirmation,
   evaluation,
@@ -767,5 +768,55 @@ describe('surlignee : la colonne surlignée, du survol et du focus (§ 5.7)', ()
     assert.equal(surlignee(null, 'proposition'), 'proposition');
     assert.equal(surlignee('excedentCollisions', null), 'excedentCollisions');
     assert.equal(surlignee(null, null), null);
+  });
+});
+
+describe('GROUPES_COLONNES : les en-têtes groupés du tableau', () => {
+  const noms = COLONNES.map(({ nom }) => nom);
+
+  test('les segments couvrent chaque colonne une fois, dans l’ordre de COLONNES ; chaque étendue est le compte de ses colonnes', () => {
+    assert.ok(GROUPES_COLONNES.length > 0);
+    assert.deepEqual(GROUPES_COLONNES.flatMap(({ colonnes }) => colonnes), noms);
+    for (const segment of GROUPES_COLONNES) assert.equal(segment.etendue, segment.colonnes.length, JSON.stringify(segment));
+    assert.ok(Object.isFrozen(GROUPES_COLONNES));
+    for (const segment of GROUPES_COLONNES) {
+      assert.ok(Object.isFrozen(segment));
+      assert.ok(Object.isFrozen(segment.colonnes));
+    }
+  });
+
+  test('le rang, la proposition, le certificat, les imposés et les commandes restent hors groupe, une colonne par segment sans clé', () => {
+    const seules = GROUPES_COLONNES.filter(({ cle }) => cle === null);
+    assert.deepEqual(seules.map(({ colonnes }) => colonnes), [['rang'], ['proposition'], ['certificat'], ['imposes'], ['commandes']]);
+  });
+
+  test('cinq groupes de mesures voisines, chacun sous une clé « propositions.groupe. » qui a son texte, distinct des en-têtes de colonne', () => {
+    const groupes = GROUPES_COLONNES.filter(({ cle }) => cle !== null);
+    assert.deepEqual(
+      groupes.map(({ colonnes }) => colonnes),
+      [
+        ['rencontresTous', 'rencontresMobiles', 'rencontresAncres'],
+        ['collisionsCumulees', 'pairesDistinctes', 'excedentCollisions'],
+        ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis'],
+        ['appartenancesVues', 'totalRedondance', 'diversite'],
+        ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori'],
+      ],
+    );
+    const enTetes = new Set(COLONNES.map(({ cle }) => t(cle)));
+    for (const { cle } of groupes) {
+      assert.match(cle, /^propositions\.groupe\.[a-z]+$/u);
+      const texte = t(cle);
+      assert.ok(texte.length > 0, cle);
+      assert.ok(!enTetes.has(texte), cle);
+      assert.doesNotMatch(texte, /moyenne/i, cle);
+    }
+    assert.equal(new Set(groupes.map(({ cle }) => cle)).size, groupes.length);
+  });
+});
+
+describe('COLONNES : les colonnes de nombres', () => {
+  test('nombre est vrai pour le rang et chaque mesure chiffrée ; faux pour la proposition, le certificat en mots, les imposés et les commandes', () => {
+    const textes = new Set(['proposition', 'certificat', 'imposes', 'commandes']);
+    for (const colonne of COLONNES) assert.equal(colonne.nombre, !textes.has(colonne.nom), colonne.nom);
   });
 });

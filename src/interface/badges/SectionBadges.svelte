@@ -35,7 +35,14 @@
   //
   // La réédition (Reedition.svelte) passe par la même production, sa
   // sélection dans la demande.
+  //
+  // Habillage : les réglages, le papier, les commandes, l'annonce et la
+  // planche produite vivent dans la carte de la planche ; « Produire la
+  // planche » en est l'action principale. L'annonce se pose sur le fond
+  // sourd de la carte, la planche produite sur le fond de l'information. La
+  // réédition est une carte à elle.
   import { getContext } from 'svelte';
+  import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
   import Papier from '../sorties/Papier.svelte';
@@ -161,83 +168,87 @@
   <p>{t('badges.introduction')}</p>
 
   {#if charge !== null}
-    <div class="reglages">
-      {#if offertes.length > 1}
-        <label class="reglage">
-          <span>{t('badges.source.titre')}</span>
-          <select data-champ="source" value={cleSource(source)} onchange={(evenement) => (cleChoisie = evenement.currentTarget.value)}>
-            {#each offertes as offerte (cleSource(offerte))}
-              <option value={cleSource(offerte)}>{t(libelleSource(offerte).cle, libelleSource(offerte).details)}</option>
-            {/each}
-          </select>
-        </label>
-      {/if}
-      <label class="reglage">
-        <span>{t('badges.imposition.titre')}</span>
-        <select data-champ="imposition" value={imposition} onchange={(evenement) => (imposition = evenement.currentTarget.value)}>
-          {#each IMPOSITIONS_OFFERTES as valeur (valeur)}
-            <option value={valeur}>{t(cleImposition(valeur))}</option>
-          {/each}
-        </select>
-      </label>
-      <label class="reglage">
-        <span>{t('badges.ordre.titre')}</span>
-        <select data-champ="ordre" value={ordre} onchange={(evenement) => (ordre = evenement.currentTarget.value)}>
-          {#each ORDRES_OFFERTS as valeur (valeur)}
-            <option value={valeur}>{t(cleOrdre(valeur))}</option>
-          {/each}
-        </select>
-      </label>
-    </div>
-
-    {#if $seance.papier !== null || attente !== null}
-      <Papier onChoisi={papierChoisi} />
-    {/if}
-
-    <div class="commandes">
-      <Commande cle="badges.commande.preparer" nom="preparerPlanche" executer={() => preparer(null)} {gestes} />
-      {#if bloque}
-        <button type="button" data-commande="produirePlanche" aria-disabled="true" aria-describedby={`${uid}-bloque`}
-          >{t('badges.commande.produire')}</button
-        >
-        <p class="explication" id={`${uid}-bloque`}>{t('badges.produire.bloque')}</p>
-      {:else}
-        <Commande cle="badges.commande.produire" nom="produirePlanche" executer={() => produire(null)} {gestes} />
-      {/if}
-    </div>
-    {#if refusRepris !== null}
-      <Refus refus={refusRepris} lever={() => (refusRepris = null)} {gestes} />
-    {/if}
-
-    {#if montree !== null}
-      <div class="annonce" data-annonce-planche role="group" aria-labelledby={`${uid}-annonce`}>
-        <h3 id={`${uid}-annonce`}>{t('badges.annonce.titre')}</h3>
-        <ul>
-          {#each phrases as phrase, rang (rang)}
-            <li>{t(phrase.cle, phrase.details)}</li>
-          {/each}
-        </ul>
-        {#if montree.annonce.refus !== null}
-          <Refus refus={montree.annonce.refus} {gestes} />
-        {/if}
-      </div>
-    {/if}
-
-    {#if produite !== null}
-      <div class="produite">
-        {#if produite.chemin !== null}
-          <p>
-            <span>{t('badges.produite.chemin')}</span>
-            <span class="chemin" data-chemin-planche>{produite.chemin}</span>
-          </p>
-          {#if explorateur.disponible && !produite.ailleurs}
-            <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => facade.ouvrirExplorateur()} />
+    <Carte titre={t('badges.planche.titre')} niveau={3}>
+      <div class="planche">
+        <div class="reglages">
+          {#if offertes.length > 1}
+            <label class="reglage">
+              <span>{t('badges.source.titre')}</span>
+              <select data-champ="source" value={cleSource(source)} onchange={(evenement) => (cleChoisie = evenement.currentTarget.value)}>
+                {#each offertes as offerte (cleSource(offerte))}
+                  <option value={cleSource(offerte)}>{t(libelleSource(offerte).cle, libelleSource(offerte).details)}</option>
+                {/each}
+              </select>
+            </label>
           {/if}
-        {:else}
-          <p data-chemin-planche>{t('badges.produite.telechargee', { nom: produite.nom })}</p>
+          <label class="reglage">
+            <span>{t('badges.imposition.titre')}</span>
+            <select data-champ="imposition" value={imposition} onchange={(evenement) => (imposition = evenement.currentTarget.value)}>
+              {#each IMPOSITIONS_OFFERTES as valeur (valeur)}
+                <option value={valeur}>{t(cleImposition(valeur))}</option>
+              {/each}
+            </select>
+          </label>
+          <label class="reglage">
+            <span>{t('badges.ordre.titre')}</span>
+            <select data-champ="ordre" value={ordre} onchange={(evenement) => (ordre = evenement.currentTarget.value)}>
+              {#each ORDRES_OFFERTS as valeur (valeur)}
+                <option value={valeur}>{t(cleOrdre(valeur))}</option>
+              {/each}
+            </select>
+          </label>
+        </div>
+
+        {#if $seance.papier !== null || attente !== null}
+          <Papier onChoisi={papierChoisi} />
+        {/if}
+
+        <div class="commandes">
+          <Commande cle="badges.commande.preparer" nom="preparerPlanche" executer={() => preparer(null)} {gestes} />
+          {#if bloque}
+            <button type="button" data-commande="produirePlanche" aria-disabled="true" aria-describedby={`${uid}-bloque`}
+              >{t('badges.commande.produire')}</button
+            >
+            <p class="explication" id={`${uid}-bloque`}>{t('badges.produire.bloque')}</p>
+          {:else}
+            <Commande cle="badges.commande.produire" nom="produirePlanche" variante="principale" executer={() => produire(null)} {gestes} />
+          {/if}
+        </div>
+        {#if refusRepris !== null}
+          <Refus refus={refusRepris} lever={() => (refusRepris = null)} {gestes} />
+        {/if}
+
+        {#if montree !== null}
+          <div class="annonce" data-annonce-planche role="group" aria-labelledby={`${uid}-annonce`}>
+            <h3 id={`${uid}-annonce`}>{t('badges.annonce.titre')}</h3>
+            <ul>
+              {#each phrases as phrase, rang (rang)}
+                <li>{t(phrase.cle, phrase.details)}</li>
+              {/each}
+            </ul>
+            {#if montree.annonce.refus !== null}
+              <Refus refus={montree.annonce.refus} {gestes} />
+            {/if}
+          </div>
+        {/if}
+
+        {#if produite !== null}
+          <div class="produite">
+            {#if produite.chemin !== null}
+              <p>
+                <span>{t('badges.produite.chemin')}</span>
+                <span class="chemin" data-chemin-planche>{produite.chemin}</span>
+              </p>
+              {#if explorateur.disponible && !produite.ailleurs}
+                <Commande cle="badges.commande.ouvrirDossier" nom="ouvrirDossier" executer={() => facade.ouvrirExplorateur()} />
+              {/if}
+            {:else}
+              <p data-chemin-planche>{t('badges.produite.telechargee', { nom: produite.nom })}</p>
+            {/if}
+          </div>
         {/if}
       </div>
-    {/if}
+    </Carte>
 
     <Reedition {charge} executer={produire} {gestes} />
   {/if}
@@ -247,7 +258,7 @@
   section {
     display: flex;
     flex-direction: column;
-    gap: var(--espace-3);
+    gap: var(--espace-4);
     min-width: 0;
   }
 
@@ -265,40 +276,67 @@
     margin: 0;
   }
 
-  .reglages,
-  .commandes {
+  .planche {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-4);
+  }
+
+  /* Les réglages : chaque libellé, en petites capitales d'encre secondaire,
+     au-dessus de son sélecteur. */
+  .reglages {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--espace-3);
+    align-items: flex-end;
+    gap: var(--espace-3) var(--espace-5);
   }
 
   .reglage {
     display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--espace-1);
+  }
+
+  .reglage > span {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
+    font-weight: bold;
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
+  }
+
+  .commandes {
+    display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--espace-2);
+    align-items: center;
+    gap: var(--espace-3);
+    padding-top: var(--espace-3);
+    border-top: 1px solid var(--couleur-ligne-filet);
   }
 
   select {
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
   }
 
-  /* « Produire » désactivé tant qu'un refus tient : son filet tireté et son
-     texte secondaire le distinguent, et son explication le suit. */
+  /* « Produire » désactivé tant qu'un refus tient : à la hauteur de l'action
+     principale, son filet tireté et son texte secondaire le distinguent, et
+     son explication le suit. */
   button {
-    padding: var(--espace-1) var(--espace-3);
+    min-height: var(--hauteur-cible);
+    padding: 0 var(--espace-4);
     border: 1px dashed var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte-secondaire);
     font: inherit;
     font-size: var(--taille-texte);
+    font-weight: bold;
     cursor: not-allowed;
   }
 
@@ -317,9 +355,10 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--espace-2);
-    padding: var(--espace-2) var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    padding: var(--espace-3) var(--espace-4);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond-sourd);
   }
 
   ul {
@@ -333,8 +372,12 @@
   .produite {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     gap: var(--espace-2);
+    padding: var(--espace-3) var(--espace-4);
+    border: 1px solid var(--couleur-information-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-information-fond);
   }
 
   /* Un chemin long se coupe où il faut, plutôt que de déborder. */

@@ -64,6 +64,15 @@ export const TABLE = new Map([
   ['propositions.colonne.imposes', 'Imposé par les réservations'],
   ['propositions.colonne.commandes', 'Commandes'],
 
+  // --- Les groupes d'en-têtes, au-dessus des colonnes -------------------------
+  // Chaque groupe réunit des colonnes voisines ; les en-têtes de colonne
+  // gardent chacun son unité.
+  ['propositions.groupe.rencontres', 'Personnes rencontrées'],
+  ['propositions.groupe.collisions', "Collisions d'appartenance"],
+  ['propositions.groupe.repetitions', 'Rencontres répétées et retours'],
+  ['propositions.groupe.diversite', "Diversité d'appartenance"],
+  ['propositions.groupe.manque', 'Manque et plafond a priori'],
+
   // --- Les explications, une par colonne (§ 5.4, § 5.5, § 5.7, § 12.10.4) --------
   // Le texte de l'infobulle d'un en-tête, et celui du nom de critère qui
   // désigne la colonne dans la phrase de l'ordre : un critère et sa colonne

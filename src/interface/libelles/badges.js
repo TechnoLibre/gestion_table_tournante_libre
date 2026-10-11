@@ -16,6 +16,7 @@ export const TABLE = new Map([
   ['badges.introduction', "Un badge A6 par personne présente, imposé sur le papier de l'imprimante, précédé d'une feuille de contrôle."],
 
   // --- Les réglages de la planche (§ 11.6, Q3) ------------------------------
+  ['badges.planche.titre', 'Planche de badges'],
   ['badges.source.titre', 'Placement imprimé'],
   ['badges.source.retenu', 'Le placement retenu'],
   ['badges.source.proposition', ({ id }) => `La proposition n° ${id}`],

@@ -13,13 +13,16 @@
 //
 // Le projet navigateur emploie expect, et test et describe de Vitest
 // (§ 14.8).
+import '../jetons.css';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { creerHorlogePilotee } from '../../application/horloge.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
+import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { attendre } from '../../../test/navigateur/ecrans.js';
+import { composantes, couleurTexte, fondPeintSous, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import Papier from './Papier.svelte';
 
@@ -133,5 +136,41 @@ describe('la question du papier (§ 8.5, § 11.2)', () => {
     expect(conteneur.querySelector('[data-papier="question"]')).not.toBeNull();
     expect(onChoisi).not.toHaveBeenCalled();
     expect(seance.demandes).toEqual(['A4']);
+  });
+});
+
+describe('l’habillage de la question du papier', () => {
+  test('chaque papier est un choix distinct : une tuile à son filet, qui ne chevauche pas sa voisine, et son bouton la remplit sur 44 px de haut au moins', () => {
+    const conteneur = monter(seanceDEpreuve(null));
+    const tuiles = [...conteneur.querySelectorAll('[data-papier="question"] [data-cible]')];
+    expect(tuiles.map((tuile) => tuile.dataset.cible)).toEqual(Object.keys(PAPIERS));
+    const filet = couleurDeJeton('--couleur-carte-filet').join();
+    for (const tuile of tuiles) {
+      const style = getComputedStyle(tuile);
+      expect(style.borderTopWidth, tuile.dataset.cible).toBe('1px');
+      expect(composantes(style.borderTopColor).join(), tuile.dataset.cible).toBe(filet);
+      expect(Number.parseFloat(style.borderTopLeftRadius), tuile.dataset.cible).toBeGreaterThanOrEqual(8);
+      const bouton = tuile.querySelector('[data-commande="choisirPapier"]');
+      const b = bouton.getBoundingClientRect();
+      expect(b.height, tuile.dataset.cible).toBeGreaterThanOrEqual(44);
+      expect(b.width, tuile.dataset.cible).toBeGreaterThanOrEqual(tuile.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight) - 1);
+    }
+    const [a, b] = tuiles.map((tuile) => tuile.getBoundingClientRect());
+    const chevauchent = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    expect(chevauchent).toBe(false);
+  });
+
+  test('le papier choisi se montre dans une pastille neutre, son nom de l’encre de la page, dans les deux thèmes', async () => {
+    const conteneur = monter(seanceDEpreuve('A4'));
+    const choisi = conteneur.querySelector('[data-papier="choisi"]');
+    const nom = [...choisi.querySelectorAll('span')].find((span) => texte(span) === t('impression.papier.nom.a4') && span.children.length === 0);
+    expect(nom).toBeDefined();
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        const [fond] = fondPeintSous(nom);
+        expect(fond.join(), theme).toBe(couleurDeJeton('--couleur-neutre-fond').join());
+        expect(couleurTexte(nom).join(), theme).toBe(couleurDeJeton('--couleur-page-texte').join());
+      });
+    }
   });
 });

@@ -12,6 +12,10 @@
   // sélection — dans l'ordre de la liste — à executer, la production de la
   // section, qui annonce puis produit. Un refus s'affiche à côté de la
   // commande, avec son remède, que gestes exécute quand l'écran le fournit.
+  //
+  // Habillage : le groupe est une carte, titrée de son intitulé ; la liste
+  // défile dans un cadre au filet de la carte, l'appartenance d'une personne
+  // en encre secondaire.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import { filtrerPersonnes, personnesReeditables, selectionRetenue } from './modele.js';
@@ -65,16 +69,23 @@
 </div>
 
 <style>
+  /* Une carte : son fond, son filet, son rayon, son ombre. */
   .reedition {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--espace-2);
+    gap: var(--espace-3);
+    min-width: 0;
+    padding: var(--espace-4) var(--espace-5);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
+    box-shadow: var(--ombre-carte);
   }
 
   h3 {
     margin: 0;
-    font-size: var(--taille-texte);
+    font-size: var(--taille-titre-carte);
   }
 
   p {
@@ -84,15 +95,15 @@
   .filtre {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     gap: var(--espace-2);
   }
 
   input[type='search'] {
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
   }
@@ -108,12 +119,14 @@
     display: flex;
     flex-direction: column;
     gap: var(--espace-1);
+    box-sizing: border-box;
+    width: min(36rem, 100%);
     max-height: 16rem;
     margin: 0;
-    padding: var(--espace-1) var(--espace-2);
+    padding: var(--espace-2) var(--espace-3);
     overflow-y: auto;
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
     list-style: none;
   }
 

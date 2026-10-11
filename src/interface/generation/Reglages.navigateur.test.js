@@ -24,6 +24,8 @@ import { creerSeance } from '../../application/seance.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { VERSION } from '../../version.genere.js';
 import { creerFichiersSimules } from '../../../test/fichiers_simules.js';
+import { couleurDeJeton } from '../../../test/navigateur/captures.js';
+import { composantes, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import Reglages from './Reglages.svelte';
 import { REGLAGES_GENERATION, reglagesDeSection } from './reglages.js';
@@ -160,5 +162,25 @@ describe('Reglages : l’écran montre la définition (§ 19.8)', () => {
     expect(gardees).toHaveLength(2);
     const cible = await monter({ props: { definition: gardees } });
     expect(designations(cible)).toEqual(['graine', 'generation.arret', 'nouvelleTable', 'coeursAutomatiques']);
+  });
+});
+
+describe('l’habillage des réglages', () => {
+  test('chaque champ de saisie sur le fond de la carte, au filet de contrôle, dans les deux thèmes ; chaque groupe sous un intertitre en petites capitales', async () => {
+    const cible = await monter();
+    const champs = [...cible.querySelectorAll('input[type="text"]')];
+    expect(champs.length).toBeGreaterThan(0);
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        for (const champ of champs) {
+          const style = getComputedStyle(champ);
+          expect(composantes(style.backgroundColor).join(), `${theme} ${champ.dataset.champ}`).toBe(couleurDeJeton('--couleur-carte-fond').join());
+          expect(composantes(style.borderTopColor).join(), `${theme} ${champ.dataset.champ}`).toBe(couleurDeJeton('--couleur-page-filet').join());
+        }
+      });
+    }
+    const legendes = [...cible.querySelectorAll('legend')];
+    expect(legendes.length).toBe(2);
+    for (const legende of legendes) expect(getComputedStyle(legende).textTransform).toBe('uppercase');
   });
 });

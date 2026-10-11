@@ -28,6 +28,16 @@
   // decrit('colonne:<nom>') rend l'identifiant de l'infobulle quand elle
   // explique cet en-tête, pour son aria-describedby, undefined sinon.
   //
+  // Deux rangées d'en-têtes : celle des groupes (GROUPES_COLONNES, modele.js),
+  // chacun en scope colgroup au-dessus de ses colonnes, une cellule vide au-
+  // dessus d'une colonne hors groupe ; puis celle des colonnes, seule à
+  // porter data-colonne et les explications. Les colonnes de nombres
+  // s'alignent à droite en chiffres tabulaires, en-tête compris. La ligne du
+  // retenu se peint de la teinte de l'état Retenu, sous l'encre de la page ;
+  // la proposition retenue porte la pastille « retenue » (Pastille,
+  // primitive). Le tableau se nomme par aria-label : la carte de la section
+  // en porte le titre visible.
+  //
   // Désignations : data-retenu sur la ligne du retenu, data-proposition sur
   // chaque autre ligne, data-colonne sur chaque cellule et chaque en-tête ;
   // data-classement et data-hors-classement sur les deux groupes de lignes.
@@ -36,7 +46,9 @@
   // 3:1 contre le fond, dans les deux thèmes. Les autres n'en portent pas.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
-  import { texteCellule } from './modele.js';
+  import Icone from '../primitives/Icone.svelte';
+  import Pastille from '../primitives/Pastille.svelte';
+  import { GROUPES_COLONNES, texteCellule } from './modele.js';
 
   let { vue, surlignee = null, nommer, voir, retenir, expliquer, taire, decrit } = $props();
 
@@ -47,6 +59,9 @@
   const t = getContext('t');
   const format = getContext('format');
   const outils = { t, format };
+
+  // Les noms des colonnes de nombres.
+  const nombres = $derived(new Set(vue.colonnes.filter((colonne) => colonne.nombre).map((colonne) => colonne.nom)));
 </script>
 
 {#snippet raisons(ligne)}
@@ -65,7 +80,7 @@
 {#snippet mesures(ligne)}
   {#if ligne.comparable}
     {#each ligne.cellules as cellule (cellule.colonne)}
-      <td data-colonne={cellule.colonne} data-marque={marque(cellule.colonne)} class="nombre" class:surlignee={cellule.colonne === surlignee}>{texteCellule(cellule, outils)}</td>
+      <td data-colonne={cellule.colonne} data-marque={marque(cellule.colonne)} class:nombre={nombres.has(cellule.colonne)} class:surlignee={cellule.colonne === surlignee}>{texteCellule(cellule, outils)}</td>
     {/each}
     <td data-colonne="imposes">
       {#each ligne.imposes as phrase, rang (rang)}
@@ -89,7 +104,7 @@
   <td data-colonne="proposition" data-marque={marque('proposition')} class:surlignee={surlignee === 'proposition'}>
     <span class="identifiant">{format.nombre(ligne.id)}</span>
     {#if ligne.retenue}
-      <span class="marque">{t('propositions.marque.retenue')}</span>
+      <Pastille sorte="statut" valeur="retenu" icone="coche" libelle={t('propositions.marque.retenue')} />
     {/if}
     {@render violations(ligne)}
   </td>
@@ -105,9 +120,20 @@
 {/snippet}
 
 <div class="defilement">
-  <table>
-    <caption>{t('propositions.tableau.titre')}</caption>
+  <table aria-label={t('propositions.tableau.titre')}>
+    {#each GROUPES_COLONNES as segment, rang (rang)}
+      <colgroup span={segment.etendue}></colgroup>
+    {/each}
     <thead>
+      <tr class="groupes">
+        {#each GROUPES_COLONNES as segment, rang (rang)}
+          {#if segment.cle === null}
+            <td></td>
+          {:else}
+            <th scope="colgroup" colspan={segment.etendue}>{t(segment.cle)}</th>
+          {/if}
+        {/each}
+      </tr>
       <tr>
         {#each vue.colonnes as colonne (colonne.nom)}
           {@const terme = `colonne:${colonne.nom}`}
@@ -118,6 +144,7 @@
             data-colonne={colonne.nom}
             data-marque={marque(colonne.nom)}
             class:surlignee={colonne.nom === surlignee}
+            class:nombre={colonne.nombre}
             tabindex="0"
             aria-describedby={decrit(terme)}
             onmouseenter={(evenement) => expliquer(evenement, terme, colonne.nom)}
@@ -131,7 +158,9 @@
     {#if vue.retenu !== null}
       <tbody>
         <tr data-retenu={vue.retenu.id} class="retenu">
-          <th scope="row" data-colonne="rang">{t('propositions.retenu.titre')}</th>
+          <th scope="row" data-colonne="rang"
+            ><span class="titre-retenu"><span class="signe-retenu"><Icone nom="coche" /></span>{t('propositions.retenu.titre')}</span></th
+          >
           <td data-colonne="proposition" data-marque={marque('proposition')} class:surlignee={surlignee === 'proposition'}>
             <span class="identifiant">{format.nombre(vue.retenu.id)}</span>
             <p>{t(vue.retenu.libelle.cle, vue.retenu.libelle.details)}</p>
@@ -181,27 +210,55 @@
   }
 
   table {
+    min-width: 100%;
     border-collapse: collapse;
     font-size: var(--taille-texte);
   }
 
-  caption {
-    padding-bottom: var(--espace-2);
-    font-weight: bold;
-    text-align: left;
-  }
-
+  /* Les cellules : un filet léger entre deux lignes, aucun filet vertical. */
   th,
   td {
-    padding: var(--espace-1) var(--espace-2);
-    border: 1px solid var(--couleur-page-filet);
+    padding: var(--espace-2) var(--espace-3);
+    border: none;
+    border-bottom: 1px solid var(--couleur-ligne-filet);
     vertical-align: top;
-    text-align: left;
+    text-align: start;
+  }
+
+  /* Les en-têtes de colonne : sur le fond sourd de la carte, en gras et en
+     petit corps, sous un filet de carte. */
+  thead th,
+  thead td {
+    background-color: var(--couleur-carte-fond-sourd);
+    border-bottom-color: var(--couleur-carte-filet);
   }
 
   thead th {
     min-width: 6rem;
+    font-size: var(--taille-texte-petit);
     font-weight: bold;
+    vertical-align: bottom;
+  }
+
+  /* La rangée des groupes : des intertitres en petites capitales d'encre
+     secondaire, chacun soulignant l'étendue de ses colonnes. */
+  .groupes th {
+    padding-top: var(--espace-2);
+    padding-bottom: var(--espace-1);
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .groupes th,
+  .groupes td {
+    border-bottom: none;
+  }
+
+  .groupes th {
+    border-bottom: 2px solid var(--couleur-carte-filet);
   }
 
   .nombre {
@@ -231,23 +288,55 @@
     font-style: italic;
   }
 
-  /* La ligne du retenu et la proposition retenue se distinguent par leur
-     forme : texte gras, filet épais à gauche, et le mot « retenue ». */
-  .retenu,
-  .retenue {
-    font-weight: bold;
+  /* L'en-tête du groupe hors classement : un intertitre sur le fond sourd. */
+  tbody[data-hors-classement] th[scope='rowgroup'] {
+    background-color: var(--couleur-carte-fond-sourd);
+    font-size: var(--taille-intertitre);
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
   }
 
+  /* La ligne du retenu : chaque cellule sur la teinte de l'état Retenu,
+     l'encre de la page dessus ; son titre en gras, précédé de la coche. */
+  .retenu > * {
+    background-color: var(--couleur-etat-retenu-fond);
+  }
+
+  .titre-retenu {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espace-1);
+    font-weight: bold;
+    white-space: nowrap;
+  }
+
+  .signe-retenu {
+    display: inline-flex;
+    color: var(--couleur-etat-retenu-marque);
+  }
+
+  /* La ligne du retenu et la proposition retenue ouvrent sur un trait de la
+     marque de Retenu ; la ligne du retenu se nomme en mots, la proposition
+     retenue par sa pastille. */
   .retenu > :first-child,
   .retenue > :first-child {
-    border-left: 4px solid var(--couleur-page-texte);
+    border-left: 3px solid var(--couleur-etat-retenu-marque);
+  }
+
+  td[data-colonne='proposition'] {
+    min-width: 7rem;
+  }
+
+  .identifiant {
+    margin-right: var(--espace-2);
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
   }
 
   /* La colonne que désigne la phrase de l'ordre : un filet de 2 px de la
      couleur de sélection de chaque côté de son en-tête et de ses cellules,
-     plus épais que le filet ordinaire, et l'en-tête souligné. Ni le fond ni
-     la couleur du texte ne changent : les contrastes restent ceux du
-     tableau. */
+     et l'en-tête souligné. Ni le fond ni la couleur du texte ne changent :
+     les contrastes restent ceux du tableau. */
   th.surlignee,
   td.surlignee {
     border-left: 2px solid var(--couleur-selection);
@@ -265,13 +354,6 @@
     text-decoration: underline;
     text-decoration-thickness: 2px;
     text-underline-offset: 0.2em;
-  }
-
-  .marque {
-    margin-left: var(--espace-1);
-    padding: 0 var(--espace-1);
-    border: 1px solid var(--couleur-page-texte);
-    border-radius: var(--rayon-1);
   }
 
   .commandes {

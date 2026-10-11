@@ -34,11 +34,13 @@ import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../.
 import { SUFFIXES } from '../../stockage/noms.js';
 import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
+import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { centre } from '../../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { evaluation, tableau } from './modele.js';
+import { GROUPES_COLONNES, evaluation, tableau } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
@@ -1003,5 +1005,118 @@ describe('la cible de la somme de redondance : un champ de la section', () => {
     await saisirCible(ecriture, '-3');
     await attendre(() => expect(section(ecriture).querySelector('[data-refus="NON_ENTIER"]')).not.toBeNull());
     expect(revision(ecriture)).toBe(revisionEcriture);
+  });
+});
+
+// --- L'habillage : carte, en-têtes groupés, ligne du retenu (§ 5.7, § 12.7) -------
+
+// La carte qui porte un élément : le plus proche ancêtre peint du fond de la
+// carte, au rayon de 12 px ; null sans elle.
+function carteDe(element) {
+  const fond = couleurDeJeton('--couleur-carte-fond').join();
+  for (let n = element.parentElement; n !== null; n = n.parentElement) {
+    const style = getComputedStyle(n);
+    if (composantes(style.backgroundColor).join() === fond && style.borderTopLeftRadius === '12px') return n;
+  }
+  return null;
+}
+
+// Les colonnes de nombres : le rang et chaque mesure, sauf le certificat.
+const COLONNES_NOMBRES = NOMS_DES_COLONNES.filter((nom) => !['proposition', 'certificat', 'imposes', 'commandes'].includes(nom));
+
+describe('l’habillage du tableau des propositions', () => {
+  const chargeRetenue = () => executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 });
+
+  test('le tableau vit dans une carte de la section, et son conteneur défilant reste dans la carte', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const table = section(m).querySelector('table');
+    const carte = carteDe(table);
+    expect(carte, 'carte du tableau').not.toBeNull();
+    expect(section(m).contains(carte)).toBe(true);
+    const defilement = table.parentElement;
+    const b = carte.getBoundingClientRect();
+    const d = defilement.getBoundingClientRect();
+    expect(d.left).toBeGreaterThanOrEqual(b.left);
+    expect(d.right).toBeLessThanOrEqual(b.right);
+  });
+
+  test('deux rangées d’en-têtes : chaque groupe, scope colgroup, couvre exactement ses colonnes ; les en-têtes de colonne restent dans la seconde', async () => {
+    const m = await ouvrir(chargeRetenue());
+    const thead = section(m).querySelector('thead');
+    expect(thead.rows.length).toBe(2);
+    const groupes = [...thead.rows[0].querySelectorAll('th')];
+    const attendus = GROUPES_COLONNES.filter(({ cle }) => cle !== null);
+    expect(groupes.map(texteDe)).toEqual(attendus.map(({ cle }) => t(cle)));
+    expect(thead.rows[0].querySelectorAll('[data-colonne]').length).toBe(0);
+    expect([...thead.rows[1].querySelectorAll('th[data-colonne]')].map((th) => th.dataset.colonne)).toEqual(NOMS_DES_COLONNES);
+    for (const [rang, groupe] of groupes.entries()) {
+      const { colonnes } = attendus[rang];
+      expect(groupe.getAttribute('scope')).toBe('colgroup');
+      const premiere = thead.querySelector(`th[data-colonne="${colonnes[0]}"]`).getBoundingClientRect();
+      const derniere = thead.querySelector(`th[data-colonne="${colonnes.at(-1)}"]`).getBoundingClientRect();
+      const g = groupe.getBoundingClientRect();
+      expect(Math.abs(g.left - premiere.left), texteDe(groupe)).toBeLessThanOrEqual(1);
+      expect(Math.abs(g.right - derniere.right), texteDe(groupe)).toBeLessThanOrEqual(1);
+      expect(g.bottom).toBeLessThanOrEqual(premiere.top + 1);
+    }
+    const colgroups = [...section(m).querySelectorAll('table > colgroup')];
+    expect(colgroups.map((colgroup) => colgroup.span)).toEqual(GROUPES_COLONNES.map(({ etendue }) => etendue));
+  });
+
+  test('les nombres, en-têtes compris, s’alignent à droite en chiffres tabulaires', async () => {
+    const m = await ouvrir(chargeRetenue());
+    for (const nom of COLONNES_NOMBRES) {
+      const cellulesLues = [...section(m).querySelectorAll(`tbody[data-classement] td[data-colonne="${nom}"], thead th[data-colonne="${nom}"]`)];
+      expect(cellulesLues.length, nom).toBe(4);
+      for (const cellule of cellulesLues) {
+        const style = getComputedStyle(cellule);
+        expect(style.textAlign, nom).toBe('right');
+        expect(style.fontVariantNumeric, nom).toContain('tabular-nums');
+      }
+    }
+  });
+
+  test('la ligne du retenu sur la teinte de Retenu, son texte à 4,5:1, dans les deux thèmes ; les autres lignes sur la carte', async () => {
+    const m = await ouvrir(chargeRetenue());
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        flushSync();
+        const teinte = couleurDeJeton('--couleur-etat-retenu-fond');
+        const carte = couleurDeJeton('--couleur-carte-fond');
+        for (const cellule of ligneRetenu(m).children) {
+          cellule.scrollIntoView({ block: 'center', inline: 'center' });
+          const [fond] = fondPeintSous(cellule);
+          expect(fond.join(), `${theme} ${cellule.dataset.colonne}`).toBe(teinte.join());
+        }
+        const titre = ligneRetenu(m).querySelector('[data-colonne="rang"]');
+        expect(contraste(couleurTexte(titre), teinte), theme).toBeGreaterThanOrEqual(4.5);
+        for (const cellule of ligne(m, 1).querySelectorAll('td[data-colonne]')) {
+          cellule.scrollIntoView({ block: 'center', inline: 'center' });
+          const [fond] = fondPeintSous(cellule);
+          expect(fond.join(), `${theme} ligne 1 ${cellule.dataset.colonne}`).toBe(carte.join());
+        }
+      });
+    }
+  });
+
+  test('la proposition retenue porte la pastille « retenue » : fond de Retenu, signe à 3:1, texte de l’encre de la page', async () => {
+    const m = await ouvrir(chargeRetenue());
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        flushSync();
+        const cellule = ligne(m, 3).querySelector('td[data-colonne="proposition"]');
+        const libelle = [...cellule.querySelectorAll('span')].find((span) => texteDe(span) === t('propositions.marque.retenue') && span.children.length === 0);
+        expect(libelle, theme).toBeDefined();
+        libelle.scrollIntoView({ block: 'center', inline: 'center' });
+        const [fond] = fondPeintSous(libelle);
+        expect(fond.join(), theme).toBe(couleurDeJeton('--couleur-etat-retenu-fond').join());
+        expect(couleurTexte(libelle).join(), theme).toBe(couleurDeJeton('--couleur-page-texte').join());
+        const signe = libelle.parentElement.querySelector('svg');
+        expect(signe, theme).not.toBeNull();
+        expect(composantes(getComputedStyle(signe).color).join(), theme).toBe(couleurDeJeton('--couleur-etat-retenu-marque').join());
+        expect(contraste(composantes(getComputedStyle(signe).color), fond), theme).toBeGreaterThanOrEqual(3);
+        for (const autre of [1, 2]) expect(texteDe(ligne(m, autre))).not.toContain(t('propositions.marque.retenue'));
+      });
+    }
   });
 });

@@ -131,12 +131,14 @@ export const MARQUES = Object.freeze([
   // La désignation se pose sur la page, le sol, le plateau et une chaise
   // vide, pourvue ou à pourvoir : chacun de ses remplissages est un fond.
   marque('miseEnEvidence', 'mise-en-evidence', ['page-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
-  marque('selection', 'selection', ['page-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  // La sélection marque aussi une colonne du tableau des propositions, sur la
+  // carte, son fond sourd et la ligne du retenu.
+  marque('selection', 'selection', ['page-fond', 'carte-fond', 'carte-fond-sourd', 'etat-retenu-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
   // Le cadre de mode (§ 8.4) entoure le contenu de l'événement, sur la page.
   marque('cadreLecture', 'cadre-lecture', ['page-fond']),
   marque('cadreEcriture', 'cadre-ecriture', ['page-fond']),
   marque('cadreBloque', 'cadre-bloque', ['page-fond']),
-  marque('focus', 'focus', ['page-fond', 'bandeau-fond', 'carte-fond', 'carte-fond-sourd', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  marque('focus', 'focus', ['page-fond', 'bandeau-fond', 'carte-fond', 'carte-fond-sourd', 'etat-retenu-fond', 'action-teinte', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
   // Le mobilier sur le sol : le trait de la table, celui de la chaise, qui
   // touche aussi le plateau.
   marque('contourTable', 'table-trait', ['sol']),

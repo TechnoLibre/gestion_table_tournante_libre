@@ -62,16 +62,63 @@ const SELON_A_PRIORI = new Set(['ecartItineraireMax', 'ecartAuPlafondAPriori']);
 // sont des comptes.
 const DECIMALES = new Map([['diversite', 2]]);
 
+// Les colonnes dont les cellules sont du texte : toutes les autres portent
+// un nombre, qui s'aligne à droite en chiffres tabulaires.
+const TEXTUELLES = new Set(['proposition', 'certificat', 'imposes', 'commandes']);
+
 /** Les colonnes du tableau, dans l'ordre d'affichage : le rang et
  *  l'identifiant, puis les mesures — les trois minimums des rencontres en
  *  tête —, le certificat, les imposés et les commandes. Chacune porte son nom,
- *  la clé de son en-tête, qui nomme son unité, et celle de son explication,
- *  le texte de l'infobulle de son en-tête et du critère qui la désigne. */
+ *  la clé de son en-tête, qui nomme son unité, celle de son explication,
+ *  le texte de l'infobulle de son en-tête et du critère qui la désigne, et
+ *  nombre, vrai quand ses cellules portent un nombre. */
 export const COLONNES = Object.freeze(
   ['rang', 'proposition', ...LECTURES.keys(), 'imposes', 'commandes'].map((nom) =>
-    Object.freeze({ nom, cle: `propositions.colonne.${nom}`, explication: `propositions.explication.${nom}` }),
+    Object.freeze({ nom, cle: `propositions.colonne.${nom}`, explication: `propositions.explication.${nom}`, nombre: !TEXTUELLES.has(nom) }),
   ),
 );
+
+// Les groupes d'en-têtes : chacun nomme des colonnes de mesure voisines dans
+// COLONNES, sous la clé propositions.groupe.<nom>.
+const GROUPES = [
+  ['rencontres', ['rencontresTous', 'rencontresMobiles', 'rencontresAncres']],
+  ['collisions', ['collisionsCumulees', 'pairesDistinctes', 'excedentCollisions']],
+  ['repetitions', ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis']],
+  ['diversite', ['appartenancesVues', 'totalRedondance', 'diversite']],
+  ['manque', ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori']],
+];
+
+// Les segments de la rangée des groupes, dans l'ordre de COLONNES : un
+// groupe couvre ses colonnes d'un seul segment, une colonne hors groupe
+// forme le sien, sans clé. Un groupe dont les colonnes ne se suivent pas
+// dans COLONNES lève au chargement du module.
+function segmenter() {
+  const noms = COLONNES.map(({ nom }) => nom);
+  const segments = [];
+  for (let rang = 0; rang < noms.length; ) {
+    const groupe = GROUPES.find(([, colonnes]) => colonnes[0] === noms[rang]);
+    if (groupe === undefined) {
+      if (GROUPES.some(([, colonnes]) => colonnes.includes(noms[rang]))) throw new Error(`colonne groupée hors de son groupe : ${noms[rang]}`);
+      segments.push({ cle: null, colonnes: [noms[rang]] });
+      rang += 1;
+      continue;
+    }
+    const [nom, colonnes] = groupe;
+    colonnes.forEach((colonne, decalage) => {
+      if (noms[rang + decalage] !== colonne) throw new Error(`groupe ${nom} : colonnes non voisines`);
+    });
+    segments.push({ cle: `propositions.groupe.${nom}`, colonnes });
+    rang += colonnes.length;
+  }
+  return segments.map(({ cle, colonnes }) => Object.freeze({ cle, etendue: colonnes.length, colonnes: Object.freeze([...colonnes]) }));
+}
+
+/** La rangée des groupes d'en-têtes, au-dessus de celle des colonnes :
+ *  { cle, etendue, colonnes } par segment, dans l'ordre de COLONNES — cle,
+ *  la clé du libellé du groupe, null pour une colonne hors groupe ;
+ *  etendue, le nombre de colonnes couvertes ; colonnes, leurs noms. Les
+ *  segments couvrent chaque colonne une fois. */
+export const GROUPES_COLONNES = Object.freeze(segmenter());
 
 /**
  * La clé de l'explication d'une colonne : le texte de l'infobulle de son

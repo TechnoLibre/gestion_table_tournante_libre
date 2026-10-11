@@ -32,6 +32,7 @@ import { analyser } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { FICHIER_REGLAGES } from '../../stockage/reglages_locaux.js';
 import { VERSION } from '../../version.genere.js';
+import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import {
   attendre,
@@ -43,7 +44,7 @@ import {
   ouvrirApercu,
   ouvrirEvenement,
 } from '../../../test/navigateur/ecrans.js';
-import { attenuations, composantes, contraste } from '../../../test/navigateur/rendu.js';
+import { attenuations, composantes, contraste, sousTheme } from '../../../test/navigateur/rendu.js';
 import { creerImprimanteSimulee } from '../../../test/imprimante_simulee.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { MARQUES } from '../marques.js';
@@ -522,6 +523,104 @@ describe('la bande mesurée (HAUTEUR_BANDE_IMPRESSION, § 14.1)', () => {
       }
     } finally {
       feuille.remove();
+    }
+  });
+});
+
+// --- L'habillage de l'écran : la barre d'outils groupée ---------------------------
+
+describe('la barre d’outils de l’aperçu', () => {
+  const barre = (m) => dans(m, `[data-ecran="apercu"] [role="group"][aria-label="${t('impression.barre')}"]`);
+
+  // La carte qui porte un élément : le plus proche ancêtre peint du fond de
+  // la carte, au rayon de 12 px ; null sans elle.
+  function carteDe(element) {
+    const fond = couleurDeJeton('--couleur-carte-fond').join();
+    for (let n = element.parentElement; n !== null; n = n.parentElement) {
+      const style = getComputedStyle(n);
+      if (composantes(style.backgroundColor).join() === fond && style.borderTopLeftRadius === '12px') return n;
+    }
+    return null;
+  }
+
+  test('sans papier, la question se pose dans une carte sous la barre, dans les deux thèmes ; « Fermer l’aperçu » se range au bord droit de la barre', async () => {
+    const m = await ouvrirApercu(contexte, chargePrincipale(), { papier: null });
+    const question = dans(m, '[data-ecran="apercu"] [data-papier="question"]');
+    expect(question, 'la question du papier').not.toBeNull();
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        const carte = carteDe(question);
+        expect(carte, `${theme} : carte de la question`).not.toBeNull();
+        expect(carte.contains(barre(m)), theme).toBe(false);
+        expect(barre(m).contains(carte), theme).toBe(false);
+        expect(carte.getBoundingClientRect().top, theme).toBeGreaterThanOrEqual(barre(m).getBoundingClientRect().bottom);
+      });
+    }
+    // Le bord droit de la barre, moins son filet et sa marge intérieure :
+    // la fermeture s'y range, à un pixel près, quelle que soit la place que
+    // les groupes laissent libre.
+    const style = getComputedStyle(barre(m));
+    const bord = barre(m).getBoundingClientRect().right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+    const fermer = dans(m, '[data-ecran="apercu"] [data-commande="fermerApercu"]').getBoundingClientRect();
+    expect(fermer.right).toBeGreaterThanOrEqual(bord - 1);
+    expect(fermer.right).toBeLessThanOrEqual(bord + 1);
+  });
+
+  test('une carte, ses commandes en groupes nommés côte à côte : vue, réglages de la vue, papier et impression, fermeture', async () => {
+    const m = await ouvrirApercu(contexte, chargePrincipale());
+    const style = getComputedStyle(barre(m));
+    expect(composantes(style.backgroundColor).join()).toBe(couleurDeJeton('--couleur-carte-fond').join());
+    expect(style.borderTopLeftRadius).toBe('12px');
+    const groupes = [...barre(m).querySelectorAll('[role="group"]')];
+    expect(groupes.map((groupe) => groupe.getAttribute('aria-label'))).toEqual([
+      t('impression.vue.titre'),
+      t('impression.groupe.reglages'),
+      t('impression.groupe.sortie'),
+    ]);
+    const boites = groupes.map((groupe) => groupe.getBoundingClientRect());
+    for (const [rang, a] of boites.entries()) {
+      expect(a.width * a.height, groupes[rang].getAttribute('aria-label')).toBeGreaterThan(0);
+      for (const b of boites.slice(rang + 1)) {
+        const chevauchent = a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+        expect(chevauchent).toBe(false);
+      }
+    }
+    const [, reglages, sortie] = groupes;
+    expect(reglages.querySelector('[data-champ="tour"]')).not.toBeNull();
+    expect(sortie.querySelector('[data-papier="choisi"]')).not.toBeNull();
+    expect(sortie.querySelector('[data-commande="imprimer"]')).not.toBeNull();
+    expect(groupes.some((groupe) => groupe.contains(dans(m, '[data-commande="fermerApercu"]')))).toBe(false);
+  });
+
+  test('la vue retenue se lit enfoncée — teinte de l’action, gras, texte à 4,5:1 — et « Imprimer » est l’action principale, dans les deux thèmes', async () => {
+    const m = await ouvrirApercu(contexte, chargePrincipale());
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        const vues = tous(m, '[data-ecran="apercu"] [data-commande="vue"]');
+        const enfoncee = vues.find((vue) => vue.getAttribute('aria-pressed') === 'true');
+        const style = getComputedStyle(enfoncee);
+        const fond = composantes(style.backgroundColor);
+        expect(fond.join(), theme).toBe(couleurDeJeton('--couleur-action-teinte').join());
+        expect(style.fontWeight, theme).toBe('700');
+        expect(contraste(composantes(style.color), fond), theme).toBeGreaterThanOrEqual(4.5);
+        for (const vue of vues.filter((autre) => autre !== enfoncee)) {
+          expect(composantes(getComputedStyle(vue).backgroundColor).join(), theme).not.toBe(fond.join());
+        }
+        const imprimer = getComputedStyle(dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]'));
+        expect(composantes(imprimer.backgroundColor).join(), theme).toBe(couleurDeJeton('--couleur-action-fond').join());
+      });
+    }
+  });
+
+  test('à 1 024 px de large, la barre tient dans la fenêtre sans défilement interne', async () => {
+    await fixerCadre(1024, 700);
+    const m = await ouvrirApercu(contexte, chargePrincipale());
+    const b = barre(m).getBoundingClientRect();
+    expect(b.left).toBeGreaterThanOrEqual(0);
+    expect(b.right).toBeLessThanOrEqual(document.documentElement.clientWidth);
+    expect(barre(m).scrollWidth).toBeLessThanOrEqual(barre(m).clientWidth);
+    for (const enfant of barre(m).querySelectorAll('button, select')) {
+      expect(enfant.getBoundingClientRect().right, enfant.textContent).toBeLessThanOrEqual(b.right);
     }
   });
 });
