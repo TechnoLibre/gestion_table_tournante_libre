@@ -133,6 +133,17 @@ async function enManque(m) {
   flushSync();
 }
 
+// L'événement passé en écriture, une table de trois places créée, puis
+// trois personnes de plus que de places : le manque donné, à chaque tour.
+async function enManqueDe(m, manque) {
+  await m.seance.passerEnEcriture();
+  await m.seance.executer('creerTable', { forme: 'ronde' });
+  for (let n = 0; n < EVENEMENT.siegesParDefaut + manque; n += 1) {
+    await m.seance.executer('ajouterParticipant', { champs: { nom: `${NOMS[n % NOMS.length]} ${n + 1}` } });
+  }
+  flushSync();
+}
+
 // --- Les épreuves -----------------------------------------------------------------
 
 describe('la bande de mode (§ 8.4)', () => {
@@ -436,37 +447,51 @@ describe('les avertissements, en messages d’avis', () => {
   // Le texte de l'avertissement et son action ne sont jamais rognés : ni
   // le texte, ni le message, ni aucune boîte qui les porte jusqu'au cadre
   // ne déborde de sa hauteur, et chacun tient dans la boîte visible de
-  // chaque ascendant qui coupe ce qui le dépasse.
+  // chaque ascendant qui coupe ce qui le dépasse, la zone des annonces la
+  // première. Le manque d'une place, de quatre et de treize : le nombre et
+  // l'accord allongent la phrase.
   for (const largeur of [1366, 1024]) {
-    test(`à ${largeur} × 700, le texte de PLACES_MANQUANTES et « Ouvrir les tables » se lisent en entier : aucune boîte ne les rogne jusqu’au cadre`, async () => {
-      await fixerCadre(largeur, 700);
-      const m = await neuf();
-      await enManque(m);
-      const message = await attendre(() => {
-        const element = dans(m, '[data-annonces] [data-avertissement="PLACES_MANQUANTES"]');
-        expect(element).not.toBeNull();
-        return element;
-      });
-      const texte = message.querySelector('p');
-      const action = message.querySelector('[data-commande]');
-      expect(texte.textContent).toBe(t('PLACES_MANQUANTES', { placesManquantes: 1 }));
-      expect(action).not.toBeNull();
-      const borne = cadre(m);
-      for (let element = texte; element !== borne.parentElement; element = element.parentElement) {
-        const nom = `${element.tagName.toLowerCase()}${element.hasAttribute('data-annonces') ? '[data-annonces]' : ''}`;
-        expect(element.scrollHeight, `${nom} : hauteur du contenu`).toBeLessThanOrEqual(element.clientHeight + 1);
-        if (element === texte || style(element).overflowY === 'visible') continue;
-        const b = boite(element);
-        const bas = b.top + element.clientTop + element.clientHeight;
-        for (const [lu, porte] of [['texte', texte], ['action', action]]) {
-          expect(boite(porte).top, `${lu} dans ${nom}`).toBeGreaterThanOrEqual(b.top + element.clientTop - 0.5);
-          expect(boite(porte).bottom, `${lu} dans ${nom}`).toBeLessThanOrEqual(bas + 0.5);
+    for (const manque of [1, 4, 13]) {
+      test(`à ${largeur} × 700, il manque ${manque} : le texte de PLACES_MANQUANTES et le bouton « Ouvrir les tables » se lisent en entier, sans défiler`, async () => {
+        await fixerCadre(largeur, 700);
+        const m = await neuf();
+        await enManqueDe(m, manque);
+        const message = await attendre(() => {
+          const element = dans(m, '[data-annonces] [data-avertissement="PLACES_MANQUANTES"]');
+          expect(element).not.toBeNull();
+          return element;
+        });
+        const texte = message.querySelector('p');
+        const action = message.querySelector('button[data-commande]');
+        expect(texte.textContent).toBe(t('PLACES_MANQUANTES', { placesManquantes: manque }));
+        expect(action).not.toBeNull();
+        expect(action.textContent.trim()).toBe(t('communs.remede.ouvrirSection.tables'));
+        // La zone des annonces ne défile pas, et le bouton tient dans sa
+        // boîte visible.
+        const zone = message.closest('[data-annonces]');
+        expect(zone.scrollHeight, 'zone : hauteur du contenu').toBeLessThanOrEqual(zone.clientHeight + 1);
+        expect(zone.scrollTop).toBe(0);
+        const z = boite(zone);
+        const a = boite(action);
+        expect(a.top, 'bouton sous le haut de la zone').toBeGreaterThanOrEqual(z.top + zone.clientTop - 0.5);
+        expect(a.bottom, 'bouton au-dessus du bas visible de la zone').toBeLessThanOrEqual(z.top + zone.clientTop + zone.clientHeight + 0.5);
+        const borne = cadre(m);
+        for (let element = texte; element !== borne.parentElement; element = element.parentElement) {
+          const nom = `${element.tagName.toLowerCase()}${element.hasAttribute('data-annonces') ? '[data-annonces]' : ''}`;
+          expect(element.scrollHeight, `${nom} : hauteur du contenu`).toBeLessThanOrEqual(element.clientHeight + 1);
+          if (element === texte || style(element).overflowY === 'visible') continue;
+          const b = boite(element);
+          const bas = b.top + element.clientTop + element.clientHeight;
+          for (const [lu, porte] of [['texte', texte], ['bouton', action]]) {
+            expect(boite(porte).top, `${lu} dans ${nom}`).toBeGreaterThanOrEqual(b.top + element.clientTop - 0.5);
+            expect(boite(porte).bottom, `${lu} dans ${nom}`).toBeLessThanOrEqual(bas + 0.5);
+          }
         }
-      }
-      expect(visible(action)).toBe(true);
-      expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight);
-      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
-    });
+        expect(visible(action)).toBe(true);
+        expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight);
+        expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
+      });
+    }
   }
 });
 

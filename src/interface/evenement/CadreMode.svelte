@@ -404,6 +404,17 @@
     padding-block: 0.125rem;
   }
 
+  /* Une zone qui ne porte qu'un message — un seul enfant, qui n'en a qu'un
+     lui-même — n'a rien à faire défiler pour en montrer d'autres : son
+     plafond, 10rem, tient entier un avertissement de cinq lignes de texte
+     et son action dessous. Le plafond de plusieurs messages reste celui
+     ci-dessus, et la surface garde sa hauteur devant des avertissements
+     nombreux. Ces enfants viennent d'un autre composant : :global les
+     soustrait à la portée des styles de celui-ci. */
+  .place > .annonces:has(> :global(:only-child > :only-child)) {
+    max-height: 10rem;
+  }
+
   /* Seules — sans tête, en plein écran, ou devant un support rompu —, les
      annonces ne prennent jamais plus du quart du cadre, et cèdent d'abord
      leur hauteur à la surface : leur facteur de rétrécissement, mille fois
