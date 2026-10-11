@@ -542,6 +542,7 @@ const EXEMPLES = new Map([
   ['ENTREE_CHANGER_CIBLE_REDONDANCE', { cible: 1200 }],
   // Planche de badges
   ['PLANCHE_SANS_PLACEMENT', { remede: { geste: 'ouvrirSection', section: 'propositions' } }],
+  ['PROPOSITION_FAUTIVE', { id: 2, remede: { geste: 'ouvrirSection', section: 'propositions' } }],
   [
     'PLANCHE_DERIVE',
     {

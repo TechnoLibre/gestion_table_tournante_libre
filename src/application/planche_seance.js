@@ -21,10 +21,20 @@
 // et, pour une réédition, la sélection. Les refus s'ordonnent : ceux du
 // placement (refusPlanche), puis ceux de la mise en page, nommant la
 // personne du badge refusé, puis le papier à choisir.
+//
+// Le nom du fichier (nomPlanche) porte tout ce qui change la pile : la
+// source, l'imposition, l'ordre, le placement. Une réédition, ou une
+// planche dont la borne du chemin raccourcit la base (nomPlancheExigeListe),
+// ne remplace jamais un fichier du dossier : son nom prend le premier rang
+// libre parmi les entrées que le dossier porte, listées à chaque
+// préparation et à chaque production. Un dossier qui ne se liste pas laisse
+// à l'annonce le nom sans dossier, et refuse la production
+// PLANCHE_NON_ECRITE avant d'écrire, plutôt que de risquer de remplacer une
+// planche précédente.
 import { PAPIERS } from '../geometrie/papiers.js';
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
-import { nomPlanche } from '../stockage/noms.js';
+import { nomPlanche, nomPlancheExigeListe } from '../stockage/noms.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { IMPOSITIONS, ORDRES, modelePlanche, refusPlanche, refusProduction, textesControle } from './planche.js';
@@ -118,7 +128,7 @@ export function creerPlanches({ polices, provenance, version }) {
   async function etudier({ charge, papier }, demande) {
     const { source, proposition, ordre, selection, imposition } = demandeLue(demande);
     const rejet = refusPlanche(charge, { source, proposition });
-    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, source };
+    if (rejet !== null) return { refus: rejet, modele: null, absents: [], papier, imposition, ordre, source };
     if (typeof provenance !== 'string') throw new TypeError('provenance : le mode de construction attendu');
     const modele = modelePlanche(charge, { source, proposition, ordre, selection, provenance, version });
     const octets = await lesPolices();
@@ -133,18 +143,63 @@ export function creerPlanches({ polices, provenance, version }) {
     } else if (papier === null) {
       leRefus = papierRequis();
     }
-    return { refus: leRefus, modele, absents: analyse.absents, papier, imposition, source };
+    return { refus: leRefus, modele, absents: analyse.absents, papier, imposition, ordre, source };
   }
 
-  // Le nom du fichier d'une étude, null sans papier.
-  const nomDe = (base, { modele, papier, imposition }) =>
-    papier === null ? null : nomPlanche(base, { papier, imposition, horodatage: modele.horodatage, reedition: modele.reedition });
+  // Les options de nomPlanche pour une étude, sous le dossier donné.
+  const optionsDe = ({ modele, papier, imposition, ordre }, dossier) => ({
+    papier,
+    imposition,
+    ordre,
+    horodatage: modele.horodatage,
+    reedition: modele.reedition,
+    proposition: modele.proposition,
+    dossier,
+  });
 
-  // Les octets de la planche d'une demande, et son nom ; le refus de
-  // l'étude lève, ErreurCommande, avant que rien ne se produise.
-  async function octetsDe(lecture, demande) {
+  // Le nom du fichier d'une étude, sous le dossier donné (nomPlanche) ;
+  // null sans papier.
+  const nomDe = (base, etude, dossier) => (etude.papier === null ? null : nomPlanche(base, optionsDe(etude, dossier)));
+
+  // Le dossier où la planche d'une étude se dépose, tel que nomPlanche le
+  // lit : sa racine, son séparateur et, quand le nom se choisit parmi elles
+  // (nomPlancheExigeListe), les noms qu'il porte ; null sous web, où la
+  // planche se télécharge. Un dossier qui ne se liste pas lève
+  // l'ErreurStockage de la liste.
+  async function dossierDe({ fs, racine, base }, etude) {
+    if (fs.nature === 'web') return null;
+    const { separateur } = await fs.emplacements();
+    const sansListe = { racine: racine.chemin, separateur, existants: [] };
+    if (!nomPlancheExigeListe(base, optionsDe(etude, sansListe))) return sansListe;
+    const existants = (await fs.lister(racine, '')).map(({ nom }) => nom);
+    return { ...sansListe, existants };
+  }
+
+  // Le refus d'une planche qui ne se dépose pas : le nom, le dossier, la
+  // cause, remède « Enregistrer sous… ». Le support de l'événement n'en est
+  // pas rompu.
+  const nonEcrite = ({ chemin, dossier, cause }) =>
+    refus('PLANCHE_NON_ECRITE', { chemin, dossier, cause: cause ?? null }, { geste: 'enregistrerSous' });
+
+  // Les octets de la planche d'une demande, et son nom : sous le dossier de
+  // la lecture quand avecDossier est vrai, sans dossier sinon. Le refus de
+  // l'étude lève, ErreurCommande, avant que rien ne se produise. Le dossier
+  // se lit avant de produire : une liste refusée lève PLANCHE_NON_ECRITE
+  // sans rien produire ni écrire.
+  async function octetsDe(lecture, demande, { avecDossier }) {
     const etude = await etudier(lecture, demande);
     if (etude.refus !== null) throw new ErreurCommande(etude.refus.code, etude.refus.details);
+    let dossier = null;
+    if (avecDossier) {
+      try {
+        dossier = await dossierDe(lecture, etude);
+      } catch (erreur) {
+        if (!(erreur instanceof ErreurStockage)) throw erreur;
+        const cause = erreur.details?.cause ?? erreur.code;
+        throw nonEcrite({ chemin: nomDe(lecture.base, etude, null), dossier: lecture.racine.chemin, cause });
+      }
+    }
+    const nom = nomDe(lecture.base, etude, dossier);
     const { modele, papier, imposition, absents } = etude;
     const planches = nombrePlanches(modele.badges.length, papier);
     const controle = textesControle(modele, { papier, imposition, planches, absents });
@@ -157,7 +212,7 @@ export function creerPlanches({ polices, provenance, version }) {
       controle,
       filigrane: libelle('planche.brouillon'),
     });
-    return { octets, nom: nomDe(lecture.base, etude) };
+    return { octets, nom };
   }
 
   return {
@@ -166,7 +221,9 @@ export function creerPlanches({ polices, provenance, version }) {
      * décision 12). Un refus du placement rend l'annonce sans modèle :
      * comptes, planches et nom null, ni homonymes ni absents, le brouillon
      * de la source. Sans papier, refus PAPIER_REQUIS et nom null, les
-     * planches des deux papiers données. Rien ne s'écrit.
+     * planches des deux papiers données. Le nom est celui que la production
+     * donnerait, rang compris ; sans dossier, donc sans rang, quand le dossier
+     * ne se liste pas. Rien ne s'écrit.
      *
      * @throws {TypeError} une demande hors de son domaine, une séance sans
      *         polices ou sans provenance
@@ -189,6 +246,14 @@ export function creerPlanches({ polices, provenance, version }) {
         };
       }
       const { modele } = etude;
+      let dossier = null;
+      if (papier !== null) {
+        try {
+          dossier = await dossierDe(lecture, etude);
+        } catch (erreur) {
+          if (!(erreur instanceof ErreurStockage)) throw erreur;
+        }
+      }
       return {
         refus: etude.refus,
         papier,
@@ -197,7 +262,7 @@ export function creerPlanches({ polices, provenance, version }) {
         homonymes: modele.homonymes,
         absents: etude.absents,
         brouillon: modele.brouillon,
-        nom: nomDe(lecture.base, etude),
+        nom: nomDe(lecture.base, etude, dossier),
       };
     },
 
@@ -206,14 +271,16 @@ export function creerPlanches({ polices, provenance, version }) {
      * d'événement, par une écriture atomique, sous electron et sur le
      * système d'épreuve, et rend son chemin en entier ; sous web, par
      * enregistrerSous, le téléchargement, et chemin null. Le refus de
-     * l'annonce lève, sans rien écrire. Une écriture refusée par le support
-     * lève PLANCHE_NON_ECRITE {chemin, dossier, cause}, remède
+     * l'annonce lève, sans rien écrire. Une écriture refusée par le support,
+     * ou un dossier qui ne se liste pas quand le nom se choisit parmi ses
+     * entrées, lève
+     * PLANCHE_NON_ECRITE {chemin, dossier, cause}, remède
      * « Enregistrer sous… » : le support de l'événement n'en est pas rompu.
      *
      * @throws {ErreurCommande} le refus de l'annonce ; PLANCHE_NON_ECRITE
      */
     async produire(lecture, demande) {
-      const { octets, nom } = await octetsDe(lecture, demande);
+      const { octets, nom } = await octetsDe(lecture, demande, { avecDossier: true });
       const { fs, racine } = lecture;
       if (fs.nature === 'web') {
         await fs.enregistrerSous(nom, octets);
@@ -223,8 +290,7 @@ export function creerPlanches({ polices, provenance, version }) {
         await fs.ecrireOctetsAtomique(racine, nom, octets);
       } catch (erreur) {
         if (!(erreur instanceof ErreurStockage && erreur.code === 'ECRITURE')) throw erreur;
-        const { chemin, dossier, cause } = erreur.details;
-        throw refus('PLANCHE_NON_ECRITE', { chemin, dossier, cause }, { geste: 'enregistrerSous' });
+        throw nonEcrite(erreur.details);
       }
       const { separateur } = await fs.emplacements();
       const tete = racine.chemin.endsWith(separateur) ? racine.chemin : racine.chemin + separateur;
@@ -233,13 +299,14 @@ export function creerPlanches({ polices, provenance, version }) {
 
     /**
      * Produit la planche et la confie au dialogue d'enregistrement de la
-     * plateforme, sous le nom de la planche : le remède d'une écriture
+     * plateforme, sous le nom de la planche sans rang ni coupe, que
+     * l'opérateur garde ou change avec le dossier : le remède d'une écriture
      * refusée. Rend le chemin choisi, null quand l'opérateur annule.
      *
      * @throws {ErreurCommande} le refus de l'annonce
      */
     async enregistrerSous(lecture, demande) {
-      const { octets, nom } = await octetsDe(lecture, demande);
+      const { octets, nom } = await octetsDe(lecture, demande, { avecDossier: false });
       return lecture.fs.enregistrerSous(nom, octets);
     },
   };

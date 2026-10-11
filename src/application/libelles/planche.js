@@ -51,6 +51,12 @@ export const TABLE = new Map([
     () => "Aucun placement à imprimer : retenez une proposition, ou choisissez-en une parmi les propositions.",
   ],
   [
+    'PROPOSITION_FAUTIVE',
+    ({ id }) =>
+      `La proposition n° ${id} se contredit, la planche ne se produit pas : ` +
+      'choisissez-en une autre parmi les propositions, ou relancez la génération.',
+  ],
+  [
     'PLANCHE_DERIVE',
     ({ raisons }, texte) =>
       'Le placement ne décrit plus la soirée, la planche ne se produit pas : ' +
@@ -126,6 +132,16 @@ export const TABLE = new Map([
       (exclus === 0 ? '' : `, ${compte(exclus, 'exclu', 'exclus')}`),
   ],
   ['planche.controle.evenement', (evenement, texte) => `Événement : ${texte('planche.pied.evenement', evenement)}`],
+  // La source imprimée : le placement retenu, ou la proposition par son
+  // numéro, que rien d'autre sur la page ne distingue d'une autre proposition
+  // de la même génération.
+  [
+    'planche.controle.source',
+    ({ source, proposition }) =>
+      source === 'proposition'
+        ? `Source : la proposition n° ${proposition}, qui n\u{2019}est pas le placement retenu`
+        : 'Source : le placement retenu',
+  ],
   ['planche.controle.version', ({ version }) => `Version : ${version}`],
   ['planche.controle.consigne', 'Imprimer en recto seul, à 100 %'],
   ['planche.controle.reedition', ({ n }) => `Réédition : ${compte(n, 'badge', 'badges')}`],

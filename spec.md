@@ -2327,8 +2327,10 @@ sur une page ; **elle ne se découpe pas**, ses pages de suite non plus. Elle
 porte une **échelle graphique de 100 mm, repérée tous les 10 mm**, sur sa
 première page, les dimensions annoncées du badge, le format de papier,
 l'imposition retenue, le nombre de planches, le compte de badges produits et le
-compte attendu, le nom et la date de l'événement, l'horodatage du placement, la
-version (§ 18.6), la consigne d'impression — recto seul, à 100 % —, les
+compte attendu, le nom et la date de l'événement, la source — le placement
+retenu, ou la proposition imprimée par son numéro, que l'horodatage ne
+distingue pas des autres propositions de sa génération —, l'horodatage du
+placement, la version (§ 18.6), la consigne d'impression — recto seul, à 100 % —, les
 caractères que la police n'a pas, par leur point de code (§ 11.5), et le
 filigrane BROUILLON s'il y a lieu, sur chacune de ses pages. L'opérateur la
 mesure sous une règle avant d'engager la
@@ -2498,20 +2500,51 @@ la fin de la pile finale, ce qui est la propriété qui compte.
 Les deux impositions produisent la même pile finale par deux gestes différents ;
 prendre l'une pour l'autre oblige à retrier la totalité. Le logiciel inscrit
 l'imposition retenue **dans le nom du fichier produit**, avec le nom de
-l'événement, le format de papier et l'horodatage du placement, parce que c'est la
-seule chose qui survit à l'envoi de la planche à quelqu'un d'autre. Le nom suit
-un gabarit fixe :
+l'événement, le format de papier, la source, l'ordre et l'horodatage du
+placement, parce que c'est la seule chose qui survit à l'envoi de la planche à
+quelqu'un d'autre. Le nom suit un gabarit fixe :
 
 ```
-<base>.badges[-<k>]_<A4|Lettre>_<feuille|pile>_<AAAA-MM-JJ_HH-MM-SS>.pdf
+<base>.badges[-p<id>][-<k>]_<A4|Lettre>_<feuille|pile>[_table]_<AAAA-MM-JJ_HH-MM-SS>[_<n>].pdf
 ```
 
-— la base des fichiers de l'événement (§ 8.6), le nombre k de badges d'une
-réédition, le papier, l'imposition, puis le jour et l'heure de l'horodatage du
-placement, décalage retiré, ou `horodatage-inconnu` quand le placement n'en
-porte pas. Il ne contient aucun deux-points, que Windows refuse, et tient sous la
-borne de chemin du § 8.6 ; même événement, même papier, même imposition, même
-placement : même nom.
+— la base des fichiers de l'événement (§ 8.6), raccourcie et suivie d'un point
+quand le chemin dépasserait la borne (ci-dessous) ; l'identifiant de la proposition
+imprimée, rien pour le retenu ; le nombre k de badges d'une réédition ; le
+papier ; l'imposition ; `_table` pour l'ordre par table, rien pour l'ordre
+alphabétique ; le jour et l'heure de l'horodatage du placement, décalage
+retiré, ou `horodatage-inconnu` quand le placement n'en porte pas ; enfin le
+rang n d'un nom déjà pris dans le dossier. Il ne contient aucun deux-points,
+que Windows refuse.
+
+**Le nom est injectif sur ce qui change la pile.** Une génération date toutes
+les propositions qu'elle ajoute du même instant (§ 8.9) : sans leur
+identifiant, deux propositions donneraient le même nom, et la seconde planche
+remplacerait la première sans rien dire. L'ordre par table change la pile
+autant que l'imposition, et se lit donc dans le nom de la même façon. Même
+événement, même source, même papier, même imposition, même ordre, même
+placement : même nom, et la planche entière remplace la sienne, qui imprime la
+même pile. **Une réédition ne remplace jamais un fichier** : deux rééditions de
+trois personnes différentes partagent tout le reste du nom, et la seconde prend
+le premier rang libre, `_2`, `_3`…, comme le dossier daté de la corbeille
+(§ 8.7). Une planche dont la base se raccourcit (ci-dessous) prend aussi le
+premier rang libre : la base d'un événement et celle de sa copie (§ 8.7), qui
+partagent propositions et horodatages, peuvent se raccourcir en une même tête.
+Un dossier qui ne se liste pas refuse ces planches plutôt que de risquer un
+remplacement, et offre « Enregistrer sous… ».
+
+**Le nom tient sous la borne de chemin du § 8.6.** Sans marque, son plus long
+suffixe tient dans la réserve que la borne fait à chaque base. Les marques et le
+rang l'allongent : quand le chemin complet dépasserait la borne, la base se
+raccourcit dans le nom de la planche, sans couper un caractère, espaces et points
+finaux retirés, sans laisser un nom réservé (§ 8.6), suivie d'un point ; le reste
+du nom demeure entier. Aucune base ne finit par un point, que Windows retire de
+la fin d'un nom et que la dérivation retire donc aussi (§ 8.6) : un nom
+raccourci ne se confond avec aucun nom entier, et la planche entière d'une base
+qui tient ne remplace jamais une planche raccourcie. Le nom raccourci dépend de
+la racine du dossier qui le reçoit. Quand même un caractère de la base ne tient
+pas, le nom garde sa base, l'écriture refusée se dit, et « Enregistrer sous… »
+dépose la planche ailleurs.
 
 **Sous `electron`, le fichier se dépose à côté des fichiers d'événement** (§ 8.6),
 par une écriture atomique, et le logiciel en nomme le chemin ; une écriture
@@ -2524,7 +2557,10 @@ nomme le fichier, sans chemin.
 proposition choisie dans la section des propositions ; l'annonce nomme la source.
 Une planche tirée d'une proposition sort **toujours** en BROUILLON (§ 11.7), à
 l'horodatage de cette proposition : elle n'est pas le plan retenu. Sans retenu ni
-proposition désignée, la production se refuse et renvoie aux propositions.
+proposition désignée, la production se refuse et renvoie aux propositions. Une
+proposition qui se contredit se refuse aussi, et renvoie aux propositions : la
+version précédente du fichier, le remède d'un retenu qui se contredit, ne se
+reprend pas pour elle, puisque le retenu est sain.
 
 **Produire la planche n'est pas une modification.** Elle n'écrit aucun fichier
 d'événement et n'ajoute aucune entrée d'historique (§ 8.2), donc elle reste

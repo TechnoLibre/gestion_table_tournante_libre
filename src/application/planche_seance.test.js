@@ -11,17 +11,17 @@
 //
 // La série surveillée borne le coût (§ 14.4, contrainte 31) : douze
 // productions de PDF au plus dans ce fichier, sur une soirée de quatre
-// personnes — trois pour les trois modes, trois pour la stabilité des
+// personnes — trois pour les trois modes, deux pour la stabilité des
 // octets, une réédition, deux refus d'écriture et l'enregistrement sous,
-// une sous web, une proposition. L'imposition et l'ordre se lisent dans la
-// place de chaque nom, et le papier, l'imposition et le nombre de planches
-// dans la feuille de contrôle : la première production, sous la demande
-// par défaut, en A4 — l'ordre alphabétique ; la proposition, sous la
-// demande par défaut, en Lettre — feuille par feuille sur deux planches ;
-// celle sous web en Lettre, en pile, par table. La réédition porte un
-// caractère sans glyphe, que sa feuille de contrôle nomme. Le témoin de 257
-// ne s'analyse que pour son annonce. Les noms sont inventés ; la version
-// vient du module engendré.
+// une sous web, deux propositions de la même génération. L'imposition et
+// l'ordre se lisent dans la place de chaque nom, et le papier, l'imposition
+// et le nombre de planches dans la feuille de contrôle : la première
+// production, sous la demande par défaut, en A4 — l'ordre alphabétique ; la
+// proposition, sous la demande par défaut, en Lettre — feuille par feuille
+// sur deux planches ; celle sous web en Lettre, en pile, par table. La
+// réédition porte un caractère sans glyphe, que sa feuille de contrôle
+// nomme. Le témoin de 257 ne s'analyse que pour son annonce. Les noms sont
+// inventés ; la version vient du module engendré.
 import assert from 'node:assert/strict';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_PROPOSITION, H_RETENU, personne, soiree, table } from '../../test/fixtures/badges/cas.js';
@@ -32,9 +32,10 @@ import { lirePolices } from '../../test/polices.js';
 import { PAPIERS } from '../geometrie/papiers.js';
 import { cellules } from '../pdf/imposition.js';
 import { serialiser } from '../stockage/canonique.js';
+import { ErreurStockage } from '../stockage/erreurs.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { FORMAT } from '../stockage/document.js';
-import { SUFFIXES, nomPlanche } from '../stockage/noms.js';
+import { SUFFIXES, deriverBase, nomPlanche } from '../stockage/noms.js';
 import { VERSION } from '../version.genere.js';
 import { libelle } from './libelles.js';
 import { creerSeance } from './seance.js';
@@ -109,8 +110,8 @@ function chargeLucioles({ personnes = null, ...champs } = {}) {
 }
 
 // Le nom de la planche de la soirée d'essai.
-const nomDe = ({ papier = 'A4', imposition = 'feuille', horodatage = H_RETENU, reedition = null } = {}) =>
-  nomPlanche(BASE, { papier, imposition, horodatage, reedition });
+const nomDe = ({ papier = 'A4', imposition = 'feuille', horodatage = H_RETENU, reedition = null, proposition = null, ordre } = {}) =>
+  nomPlanche(BASE, { papier, imposition, horodatage, reedition, proposition, ordre });
 
 // Pose l'événement de la charge sur le disque, par le dépôt ; format :
 // celui qu'annonce l'en-tête de l'état, FORMAT par défaut.
@@ -131,7 +132,7 @@ async function deposer(fs, charge, { format = FORMAT } = {}) {
 
 // Une séance sur l'événement de la charge, ouvert en lecture, le papier
 // choisi quand il est donné ; la trace part ensuite, vide.
-async function monter(charge = chargeLucioles(), { papier = 'A4', fs = creerFichiersSimules({ documents: DOCUMENTS }), format } = {}) {
+async function monter(charge = chargeLucioles(), { papier = 'A4', fs = creerFichiersSimules({ documents: DOCUMENTS }), format, base = BASE } = {}) {
   await deposer(fs, charge, { format });
   let tirage = 0;
   const seance = creerSeance({
@@ -149,7 +150,7 @@ async function monter(charge = chargeLucioles(), { papier = 'A4', fs = creerFich
     provenance: 'production',
   });
   if (papier !== null) await seance.choisirPapier(papier);
-  await seance.ouvrir(BASE);
+  await seance.ouvrir(base);
   const trace = tracer(fs);
   return { fs, seance, trace };
 }
@@ -315,7 +316,9 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
   test('une proposition s’annonce BROUILLON, sous son propre horodatage ; sans placement, PLANCHE_SANS_PLACEMENT et rien du modèle', async () => {
     const { seance } = await monter();
     const proposee = await seance.preparerPlanche({ source: 'proposition', proposition: 2 });
-    assert.deepEqual([proposee.refus, proposee.brouillon, proposee.nom], [null, true, nomDe({ horodatage: H_PROPOSITION })]);
+    assert.deepEqual([proposee.refus, proposee.brouillon, proposee.nom], [null, true, nomDe({ horodatage: H_PROPOSITION, proposition: 2 })]);
+    assert.notEqual((await seance.preparerPlanche({ source: 'proposition', proposition: 1 })).nom, proposee.nom);
+    assert.equal((await seance.preparerPlanche({ ordre: 'table' })).nom, nomDe({ ordre: 'table' }));
 
     const sans = await monter(chargeLucioles({ plan: null, etat: 'propose' }));
     const annonce = await sans.seance.preparerPlanche();
@@ -360,11 +363,12 @@ describe('planche dans la séance : l’annonce (§ 11.2, § 11.5, § 11.8, déc
 });
 
 describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', () => {
-  test('deux productions du même placement : mêmes octets, même nom ; un geste lancé pendant la seconde attend son tour ; la retouche change le nom ; défaire rend le premier', async () => {
+  test('deux productions du même placement : mêmes octets, même nom ; un geste lancé pendant la seconde attend son tour ; la retouche change le nom ; défaire rend la charge, donc le premier', async () => {
     const { fs, seance, trace } = await monter();
     const premier = await seance.produirePlanche();
     const octetsPremiers = fs.octets('documents', premier.nom);
     await seance.passerEnEcriture();
+    const chargePremiere = structuredClone(seance.charge);
     trace.length = 0;
 
     const production = seance.produirePlanche();
@@ -382,19 +386,30 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
     assert.notEqual(horodatage, H_RETENU);
     assert.equal(retouche.nom, nomDe({ horodatage }));
 
+    // Défaire rend la charge entière, horodatage compris : la production,
+    // qui ne lit qu'elle et la demande, rend les octets que les deux
+    // premières ont rendus à l'identique, sous le même nom.
     await seance.defaire();
-    const troisieme = await seance.produirePlanche();
-    assert.deepEqual(troisieme, premier);
-    assert.deepEqual(fs.octets('documents', troisieme.nom), octetsPremiers);
+    assert.deepEqual(seance.charge, chargePremiere);
+    assert.equal((await seance.preparerPlanche()).nom, premier.nom);
   });
 
   test('une réédition de trois badges : un autre nom, « -3 », et la feuille de contrôle dit « Réédition : 3 badges » et nomme le caractère sans glyphe d’« Ondine 李 »', async () => {
     const charge = chargeLucioles();
     charge.participants[2].nom = '李';
-    const { fs, seance } = await monter(charge);
+    const { fs, seance, trace } = await monter(charge);
+    // Une réédition de trois autres personnes, déjà posée sous le même nom :
+    // la nouvelle prend le rang libre, et la première reste.
+    const pris = nomDe({ reedition: { ids: [3, 1, 4] } });
+    const anciens = new TextEncoder().encode('%PDF-réédition précédente');
+    fs.deposerOctets('documents', pris, anciens);
+    const annonce = await seance.preparerPlanche({ selection: [3, 1, 4] });
     const rendu = await seance.produirePlanche({ selection: [3, 1, 4] });
-    assert.equal(rendu.nom, nomDe({ reedition: { ids: [3, 1, 4] } }));
+    assert.equal(rendu.nom, pris.replace(/\.pdf$/, '_2.pdf'));
+    assert.equal(annonce.nom, rendu.nom);
     assert.match(rendu.nom, /\.badges-3_A4_feuille_/);
+    assert.deepEqual(fs.octets('documents', pris), anciens);
+    assert.deepEqual(trace, [['ecrireOctetsAtomique', rendu.nom]]);
     const pdf = await lirePdf(fs.octets('documents', rendu.nom));
     assert.ok(textesDe(pdf.pages[0]).includes(libelle('planche.controle.reedition', { n: 3 })), textesDe(pdf.pages[0]).join(' | '));
     assert.ok(textesDe(pdf.pages[0]).includes('Réédition : 3 badges'));
@@ -403,11 +418,33 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
     assert.equal(pdf.pages.length, 2);
   });
 
-  test('une proposition produite porte le mot du filigrane au trait, sa feuille de contrôle aussi ; en Lettre sous la demande par défaut, feuille par feuille, dans l’ordre alphabétique', async () => {
-    const { fs, seance } = await monter(chargeLucioles(), { papier: 'Lettre' });
+  test('deux propositions de la même génération, au même horodatage : deux fichiers ; la seconde porte le mot du filigrane au trait, sa feuille de contrôle aussi et la nomme ; en Lettre sous la demande par défaut, feuille par feuille, dans l’ordre alphabétique', async () => {
+    const charge = chargeLucioles();
+    assert.equal(charge.propositions[0].horodatage, charge.propositions[1].horodatage);
+    const { fs, seance, trace } = await monter(charge, { papier: 'Lettre' });
+    const premiere = await seance.produirePlanche({ source: 'proposition', proposition: 1 });
+    const octetsPremiers = fs.octets('documents', premiere.nom);
     const rendu = await seance.produirePlanche({ source: 'proposition', proposition: 2 });
-    assert.equal(rendu.nom, nomDe({ papier: 'Lettre', horodatage: H_PROPOSITION }));
+    assert.deepEqual(
+      [premiere.nom, rendu.nom],
+      [1, 2].map((proposition) => nomDe({ papier: 'Lettre', horodatage: H_PROPOSITION, proposition })),
+    );
+    assert.notEqual(premiere.nom, rendu.nom);
+    assert.deepEqual(fs.octets('documents', premiere.nom), octetsPremiers);
+    assert.notDeepEqual(fs.octets('documents', rendu.nom), octetsPremiers);
+    const pdfs = (await fs.lister(DOC, '')).map(({ nom }) => nom).filter((nom) => nom.endsWith('.pdf'));
+    assert.deepEqual(pdfs, [premiere.nom, rendu.nom]);
+    assert.deepEqual(trace, [
+      ['ecrireOctetsAtomique', premiere.nom],
+      ['ecrireOctetsAtomique', rendu.nom],
+    ]);
+
+    // La seconde : le mot du filigrane au trait, sur ses planches et sa
+    // feuille de contrôle, qui la nomme ; en Lettre sous la demande par
+    // défaut, feuille par feuille, dans l'ordre alphabétique.
     const pdf = await lirePdf(fs.octets('documents', rendu.nom));
+    const source = libelle('planche.controle.source', { source: 'proposition', proposition: 2 });
+    assert.ok(textesDe(pdf.pages[0]).includes(source), textesDe(pdf.pages[0]).join(' | '));
     assert.ok(pdf.pages.every((page) => textesDe(page).includes(FILIGRANE)));
     assert.equal(auTrait(pdf), true);
     // Deux badges par planche : feuille par feuille, la planche p porte les
@@ -422,6 +459,60 @@ describe('planche dans la séance : les octets et le nom (§ 11.6, § 11.8)', ()
         ['Iris Ombrelle', 'Théo Pervenche'],
       ],
     );
+  });
+});
+
+describe('planche dans la séance : un nom par pile (§ 11.6)', () => {
+  test('une réédition dont le dossier ne se liste pas : l’annonce garde le nom sans rang, produire se refuse PLANCHE_NON_ECRITE avant d’écrire, plutôt que de risquer un remplacement', async () => {
+    const { fs, seance, trace } = await monter();
+    const lister = fs.lister;
+    fs.lister = async () => {
+      throw new ErreurStockage('LECTURE', { chemin: '', dossier: DOCUMENTS, cause: 'EACCES' });
+    };
+    const nom = nomDe({ reedition: { ids: [2] } });
+    assert.equal((await seance.preparerPlanche({ selection: [2] })).nom, nom);
+    await refusee(seance.produirePlanche({ selection: [2] }), 'PLANCHE_NON_ECRITE', {
+      chemin: nom,
+      dossier: DOCUMENTS,
+      cause: 'EACCES',
+      remede: { geste: 'enregistrerSous' },
+    });
+    assert.deepEqual(trace, []);
+    // Une planche entière ne liste pas le dossier : elle se nomme sans lui.
+    assert.equal((await seance.preparerPlanche()).nom, nomDe());
+    fs.lister = lister;
+  });
+
+  test('une planche entière dont la base se raccourcit liste le dossier : elle prend le premier rang libre plutôt que de remplacer un fichier ; un dossier qui ne se liste pas la refuse avant d’écrire', async () => {
+    const nom = `Souper des Lucioles du printemps, \u{E9}dition sp\u{E9}ciale ${'et des Merles '.repeat(12)}`;
+    const fs = creerFichiersSimules({ documents: DOCUMENTS });
+    const { separateur } = await fs.emplacements();
+    const base = deriverBase(nom, { racine: DOCUMENTS, separateur, existantes: [] });
+    const { seance, trace } = await monter(chargeLucioles({ nom }), { papier: 'Lettre', fs, base });
+    const demande = { source: 'proposition', proposition: 2, ordre: 'table' };
+    const options = { papier: 'Lettre', imposition: 'feuille', horodatage: H_PROPOSITION, reedition: null, proposition: 2, ordre: 'table' };
+    const raccourci = nomPlanche(base, { ...options, dossier: { racine: DOCUMENTS, separateur, existants: [] } });
+    assert.notEqual(raccourci, nomPlanche(base, options), 'la base se raccourcit');
+    assert.equal((await seance.preparerPlanche(demande)).nom, raccourci);
+    // Le fichier d'un autre événement porte déjà ce nom : la planche prend le rang suivant.
+    fs.deposer('documents', raccourci, 'planche d’un autre événement');
+    const auRang2 = nomPlanche(base, { ...options, dossier: { racine: DOCUMENTS, separateur, existants: [raccourci] } });
+    assert.ok(auRang2.endsWith('_2.pdf'), auRang2);
+    assert.equal((await seance.preparerPlanche(demande)).nom, auRang2);
+    const lister = fs.lister;
+    fs.lister = async () => {
+      throw new ErreurStockage('LECTURE', { chemin: '', dossier: DOCUMENTS, cause: 'EACCES' });
+    };
+    assert.equal((await seance.preparerPlanche(demande)).nom, nomPlanche(base, options));
+    await refusee(seance.produirePlanche(demande), 'PLANCHE_NON_ECRITE', {
+      chemin: nomPlanche(base, options),
+      dossier: DOCUMENTS,
+      cause: 'EACCES',
+      remede: { geste: 'enregistrerSous' },
+    });
+    fs.lister = lister;
+    assert.deepEqual(trace, []);
+    assert.equal(fs.contenu('documents', raccourci), 'planche d’un autre événement');
   });
 });
 
@@ -475,10 +566,10 @@ describe('planche dans la séance : l’écriture refusée, enregistrer sous, le
       recus.push([nom, octets]);
       return nom;
     };
-    const attendu = nomDe({ papier: 'Lettre', imposition: 'pile' });
+    const attendu = nomDe({ papier: 'Lettre', imposition: 'pile', ordre: 'table' });
     const rendu = await seance.produirePlanche({ imposition: 'pile', ordre: 'table' });
     assert.deepEqual(rendu, { chemin: null, nom: attendu });
-    assert.match(attendu, /_Lettre_pile_/);
+    assert.match(attendu, /_Lettre_pile_table_/);
     assert.deepEqual(trace, []);
     assert.equal(recus.length, 1);
     assert.equal(recus[0][0], attendu);

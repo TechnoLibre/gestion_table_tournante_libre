@@ -73,12 +73,14 @@ const retenue = (champs = {}) =>
 // Les opérations de la planche d'une séance, sur la police embarquée lue
 // du disque, la provenance d'épreuve et la version engendrée.
 const planches = creerPlanches({ polices: async () => lirePolices(), provenance: 'test', version: VERSION.affichee });
-const fsInutile = Object.freeze({ nature: 'epreuve' });
+// Un dossier de travail vide : le nom de la planche ne lit que son
+// séparateur et, pour une réédition, ses entrées.
+const fsVide = Object.freeze({ nature: 'epreuve', emplacements: async () => ({ separateur: '/' }), lister: async () => [] });
 
 // L'annonce que la séance rendrait sur cette charge, ce papier et cette
-// demande : la lecture que la séance passe, sans système de fichiers lu.
+// demande : la lecture que la séance passe, sur un dossier vide.
 const annoncer = (charge, papier, demande = {}) =>
-  planches.preparer({ charge, base: 'lucioles', fs: fsInutile, racine: { id: 'documents', chemin: '/d' }, papier }, demande);
+  planches.preparer({ charge, base: 'lucioles', fs: fsVide, racine: { id: 'documents', chemin: '/d' }, papier }, demande);
 
 describe('les sources offertes (Q3)', () => {
   test('le retenu d’abord, puis la proposition demandée au plan quand elle existe ; rien sans l’un ni l’autre', () => {
@@ -206,7 +208,7 @@ describe('les phrases de l’annonce (§ 11.2, § 11.5, § 11.8)', () => {
     assert.equal(produireBloque(null), false);
     assert.equal(produireBloque({ ...vide, refus: null }), false);
     assert.equal(produireBloque({ ...vide, refus: { code: 'PAPIER_REQUIS', details: {} } }), false);
-    for (const code of ['PLANCHE_SANS_PLACEMENT', 'RETENU_FAUTIF', 'PLANCHE_DERIVE', 'PLANCHE_TROP_DE_TOURS', 'PLANCHE_NOM_TROP_LONG']) {
+    for (const code of ['PLANCHE_SANS_PLACEMENT', 'RETENU_FAUTIF', 'PROPOSITION_FAUTIVE', 'PLANCHE_DERIVE', 'PLANCHE_TROP_DE_TOURS', 'PLANCHE_NOM_TROP_LONG']) {
       assert.equal(produireBloque({ ...vide, refus: { code, details: {} } }), true, code);
     }
   });

@@ -54,6 +54,8 @@ function modele(n, { brouillon = false, reedition = false } = {}) {
   });
   return {
     badges,
+    source: 'retenu',
+    proposition: null,
     evenement: EVENEMENT,
     horodatage: HORODATAGE,
     brouillon,

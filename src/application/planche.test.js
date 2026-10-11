@@ -422,6 +422,8 @@ describe('planche : la source imprimée, le retenu ou une proposition (Q3)', () 
     assert.deepEqual(badgeDe(tiree, 1).textes.lignes, ['Tour 1 — table 7', 'Tour 2 — table 3']);
     assert.deepEqual(badgeDe(retenu, 1).textes.lignes, ['Toute la soirée — table 7']);
     assert.notDeepEqual(tiree, retenu);
+    assert.deepEqual([retenu.source, retenu.proposition], ['retenu', null]);
+    assert.deepEqual([tiree.source, tiree.proposition], ['proposition', 2]);
     const sansChamp = avecProposition();
     delete sansChamp.propositions[0].horodatage;
     assert.equal(modele(sansChamp, { source: 'proposition', proposition: 2 }).horodatage, null);
@@ -456,15 +458,31 @@ describe('planche : les refus avant de produire (§ 11.8, Q3)', () => {
     );
   });
 
-  test('une source qui se contredit : RETENU_FAUTIF, tel que le relaient les places', () => {
+  test('un retenu qui se contredit : RETENU_FAUTIF, tel que le relaient les places, remède la version précédente du fichier', () => {
     const attendu = { code: 'RETENU_FAUTIF', details: { remede: { geste: 'ouvrirSecours', source: 'precedent' } } };
     const fautif = aReserve();
     fautif.retenu.placement[0].sieges[1] = [3, 3];
     assert.deepEqual(refusPlanche(fautif), attendu);
+    assert.throws(() => modele(fautif), (erreur) => erreur instanceof ErreurCommande && erreur.code === 'RETENU_FAUTIF');
+  });
+
+  test('une proposition qui se contredit : PROPOSITION_FAUTIVE la nomme, remède les propositions ; le retenu sain se produit, et ne la juge pas', () => {
     const proposee = aReserve({ propositions: [[2, [{ sieges: [[1, 2], [3, 4]], reserve: [5] }, { sieges: [[1, 5], [3, 4]], reserve: [2] }]]] });
     proposee.propositions[0].placement[1].reserve = [];
+    const attendu = { code: 'PROPOSITION_FAUTIVE', details: { id: 2, remede: VERS_PROPOSITIONS } };
     assert.deepEqual(refusPlanche(proposee, { source: 'proposition', proposition: 2 }), attendu);
-    assert.throws(() => modele(fautif), (erreur) => erreur instanceof ErreurCommande && erreur.code === 'RETENU_FAUTIF');
+    assert.throws(
+      () => modele(proposee, { source: 'proposition', proposition: 2 }),
+      (erreur) => erreur instanceof ErreurCommande && erreur.code === 'PROPOSITION_FAUTIVE' && erreur.details.id === 2,
+    );
+    assert.equal(refusPlanche(proposee), null);
+    const texte = libelle(attendu.code, attendu.details);
+    assert.match(texte, /proposition n° 2\b/);
+    assert.doesNotMatch(texte, /retenu|version précédente/);
+    // Un retenu fautif n'empêche pas d'imprimer une proposition saine.
+    const retenuFautif = aReserve({ propositions: [[2, [{ sieges: [[1, 2], [3, 4]], reserve: [5] }, { sieges: [[1, 5], [3, 4]], reserve: [2] }]]] });
+    retenuFautif.retenu.placement[0].sieges[1] = [3, 3];
+    assert.equal(refusPlanche(retenuFautif, { source: 'proposition', proposition: 2 }), null);
   });
 
   test('une source en dérive — une personne ajoutée depuis — : PLANCHE_DERIVE, qui la nomme avant de produire', () => {
@@ -493,6 +511,10 @@ describe('planche : les refus avant de produire (§ 11.8, Q3)', () => {
     fautifEtDerive.retenu.placement[0].sieges[1] = [3, 3];
     fautifEtDerive.participants.push(personne(6, 'Ondine', 'Grisaille'));
     assert.equal(refusPlanche(fautifEtDerive).code, 'RETENU_FAUTIF');
+    const fautiveEtDerive = aReserve({ propositions: [[2, [{ sieges: [[1, 2], [3, 4]], reserve: [5] }, { sieges: [[1, 5], [3, 4]], reserve: [2] }]]] });
+    fautiveEtDerive.propositions[0].placement[1].reserve = [];
+    fautiveEtDerive.participants.push(personne(6, 'Ondine', 'Grisaille'));
+    assert.equal(refusPlanche(fautiveEtDerive, { source: 'proposition', proposition: 2 }).code, 'PROPOSITION_FAUTIVE');
     const sansPlacementEtDerive = aReserve({ plan: null });
     sansPlacementEtDerive.participants.push(personne(6, 'Ondine', 'Grisaille'));
     assert.equal(refusPlanche(sansPlacementEtDerive).code, 'PLANCHE_SANS_PLACEMENT');
@@ -629,6 +651,23 @@ describe('planche : la feuille de contrôle (§ 11.3, § 11.5, § 11.8)', () => 
       'BROUILLON',
     ]) {
       assert.ok(lignes.includes(attendue), `« ${attendue} » absente de ${JSON.stringify(lignes)}`);
+    }
+  });
+
+  test('la source se nomme : le placement retenu, ou la proposition par son numéro, avant l’horodatage du placement', () => {
+    const charge = aReserve({ propositions: [[2, [{ sieges: [[1, 2], [3, 4]], reserve: [5] }, { sieges: [[3, 4], [1, 5]], reserve: [2] }]]] });
+    const options = { papier: 'A4', imposition: 'feuille', planches: 2 };
+    const retenu = textesControle(modele(charge), options);
+    const tiree = textesControle(modele(charge, { source: 'proposition', proposition: 2 }), options);
+    assert.ok(retenu.includes('Source : le placement retenu'), JSON.stringify(retenu));
+    const ligne = 'Source : la proposition n° 2, qui n\u{2019}est pas le placement retenu';
+    assert.ok(tiree.includes(ligne), JSON.stringify(tiree));
+    assert.equal(tiree.indexOf(ligne) + 1, tiree.indexOf(libelle('planche.pied.horodatage', { horodatage: H_PROPOSITION })));
+    assert.ok(!retenu.some((texte) => texte.includes('proposition')), JSON.stringify(retenu));
+    // Une source hors de son domaine lève.
+    const m = modele(charge);
+    for (const mauvaise of [{ source: undefined }, { source: 'plan' }, { source: 'proposition', proposition: null }, { source: 'retenu', proposition: 2 }]) {
+      assert.throws(() => textesControle({ ...m, ...mauvaise }, options), TypeError, JSON.stringify(mauvaise));
     }
   });
 

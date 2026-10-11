@@ -11,8 +11,9 @@
 //
 // La série surveillée borne le coût (§ 14.4) : trois productions sur de
 // petits modèles écrits à la main, que toutes les épreuves du fichier
-// lisent — A4, cinq badges, feuille par feuille, brouillon, horodatage
-// connu, produite deux fois ; Lettre, trois badges, en pile, retenu,
+// lisent — A4, cinq badges, feuille par feuille, brouillon tiré de la
+// proposition n° 7, horodatage connu, produite deux fois ; Lettre, trois
+// badges, en pile, retenu,
 // horodatage inconnu, sous un nom d'événement plus large que la page, dont
 // la ligne de contrôle se replie aux espaces, reporte entier un mot qui
 // tient seul, puis coupe un mot qui ne tient pas seul. Les lignes de
@@ -72,9 +73,11 @@ function badge(participant, nom, { appartenance = null, tours = 2, horodatage = 
 }
 
 /** Un modèle de planche écrit à la main. */
-function modele(badges, { horodatage = HORODATAGE, brouillon = false, exclus = 0, evenement = EVENEMENT } = {}) {
+function modele(badges, { horodatage = HORODATAGE, brouillon = false, exclus = 0, evenement = EVENEMENT, proposition = null } = {}) {
   return {
     badges,
+    source: proposition === null ? 'retenu' : 'proposition',
+    proposition,
     evenement,
     horodatage,
     brouillon,
@@ -88,7 +91,7 @@ function modele(badges, { horodatage = HORODATAGE, brouillon = false, exclus = 0
 const NOMS_A4 = ['Iris Ombrelle', 'Ôjgq Æ Grisaille', 'Théo Pervenche', 'Ondine Lacasse', 'Merle Bleuet'];
 const MODELE_A4 = modele(
   NOMS_A4.map((nom, i) => badge(i + 1, nom, { appartenance: i % 2 === 0 ? 'Club des Merles' : null })),
-  { brouillon: true, exclus: 1 },
+  { brouillon: true, exclus: 1, proposition: 7 },
 );
 const NOMS_LETTRE = ['Aube Sarcelle', 'Côme Pervenche', 'Ysée Lacasse'];
 const MODELE_LETTRE = modele(
@@ -448,7 +451,7 @@ describe('produirePlanche : la feuille de contrôle, page 1 (§ 11.3)', () => {
     }
   });
 
-  test("les lignes de contrôle se lisent dans la couche de texte, dans l'ordre et entières : comptes, horodatage, version, papier", () => {
+  test("les lignes de contrôle se lisent dans la couche de texte, dans l'ordre et entières : comptes, source, horodatage, version, papier", () => {
     for (const { papier, imposition, lu, modele: m } of PRODUCTIONS) {
       const lignes = textesControle(m, { papier, imposition, planches: nombrePlanches(m.badges.length, papier) });
       recomposer(fragmentsDeControle(lu.pages[0]), lignes);
@@ -457,6 +460,9 @@ describe('produirePlanche : la feuille de contrôle, page 1 (§ 11.3)', () => {
     assert.ok(lusA4.includes(libelle('planche.controle.comptes', MODELE_A4.comptes)));
     assert.ok(lusA4.includes(libelle('planche.pied.horodatage', { horodatage: HORODATAGE })));
     assert.ok(LETTRE.pages[0].textes.some(({ texte }) => texte === libelle('planche.pied.horodatageInconnu')));
+    // La source se nomme : la proposition imprimée par son numéro, ou le retenu.
+    assert.ok(lusA4.includes('Source : la proposition n° 7, qui n\u{2019}est pas le placement retenu'), lusA4.join(' | '));
+    assert.ok(LETTRE.pages[0].textes.some(({ texte }) => texte === 'Source : le placement retenu'));
   });
 
   test("une ligne plus large que la page se replie dans la largeur utile : aux espaces, puis dans le mot qui ne tient pas seul ; chaque morceau aussi plein qu'il se peut", () => {

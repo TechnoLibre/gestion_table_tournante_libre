@@ -11,9 +11,10 @@
 // en page et le PDF (src/pdf) ne composent aucun mot.
 //
 // La planche imprime une source : le placement retenu, ou une proposition
-// désignée par son identifiant (Q3), qui sort toujours en BROUILLON. Elle se
-// refuse sans placement, sur un placement qui se contredit ou qui ne décrit
-// plus la soirée, avant de produire (§ 11.8).
+// désignée par son identifiant (Q3), qui sort toujours en BROUILLON, et que
+// la feuille de contrôle nomme. Elle se refuse sans placement, sur un
+// placement qui se contredit ou qui ne décrit plus la soirée, avant de
+// produire (§ 11.8).
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { cleNormalisee } from '../csv/normalisation.js';
 import { BADGE, PAPIERS } from '../geometrie/papiers.js';
@@ -46,6 +47,9 @@ import { versionVisible } from './version.js';
  *             pied: string[], piedReduit: string[]}} textes
  * @typedef {Object} ModelePlanche
  * @property {Badge[]} badges             dans l'ordre de la pile
+ * @property {'retenu'|'proposition'} source   le placement imprimé
+ * @property {number|null} proposition    l'identifiant de la proposition
+ *                                        imprimée ; null pour le retenu
  * @property {{nom: string, date: string|null}} evenement
  * @property {string|null} horodatage
  * @property {boolean} brouillon
@@ -149,11 +153,14 @@ function placementDeSource(charge, source, proposition) {
 /**
  * Le refus qui garde la planche avant de produire (§ 11.8, Q3), le premier
  * dans cet ordre : PLANCHE_SANS_PLACEMENT {} — la source retenu sans retenu,
- * ou la source proposition sans proposition désignée ; RETENU_FAUTIF {},
- * relayé tel que les places le lèvent, quand le placement de la source se
- * contredit ; PLANCHE_DERIVE {raisons}, les raisons de dérive de la source
- * nommées (raisonsNommees) quand elle ne décrit plus la soirée. null quand
- * la planche se produit. Les détails portent le remède.
+ * ou la source proposition sans proposition désignée ; quand le placement
+ * de la source se contredit, RETENU_FAUTIF {}, relayé tel que les places le
+ * lèvent, remède la version précédente du fichier, pour le retenu, et
+ * PROPOSITION_FAUTIVE {id}, remède les propositions, pour une proposition —
+ * le retenu, sain, ne se reprend pas pour elle ; PLANCHE_DERIVE {raisons},
+ * les raisons de dérive de la source nommées (raisonsNommees) quand elle ne
+ * décrit plus la soirée. null quand la planche se produit. Les détails
+ * portent le remède.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {{source?: 'retenu'|'proposition', proposition?: number|null}} [options]
@@ -166,6 +173,7 @@ export function refusPlanche(charge, { source = 'retenu', proposition = null } =
   const placement = placementDeSource(charge, source, proposition);
   if (placement === null) return { code: 'PLANCHE_SANS_PLACEMENT', details: { remede: versPropositions() } };
   if (fautes(placement).length > 0) {
+    if (source === 'proposition') return { code: 'PROPOSITION_FAUTIVE', details: { id: proposition, remede: versPropositions() } };
     return { code: 'RETENU_FAUTIF', details: { remede: { geste: 'ouvrirSecours', source: 'precedent' } } };
   }
   const raisons = derive(placement, charge);
@@ -308,7 +316,8 @@ function selectionLue(charge, selection) {
  * Le modèle de la planche (§ 11.4 à § 11.8) : un badge par personne non
  * exclue — ou par personne de la sélection, pour une réédition —, dans
  * l'ordre demandé, ses lignes de tour lues du placement de la source, ses
- * textes composés. horodatage : horodatagePlacement de la source ;
+ * textes composés. source et proposition : le placement imprimé, que la
+ * feuille de contrôle nomme ; horodatage : horodatagePlacement de la source ;
  * brouillon : estBrouillon sur toute la soirée, toujours vrai pour une
  * proposition ; version : versionVisible, que la feuille de contrôle
  * imprime et le badge jamais. Les comptes sont ceux de la soirée, produits
@@ -368,6 +377,8 @@ export function modelePlanche(
   const exclus = charge.participants.filter(({ exclu }) => exclu).length;
   return {
     badges,
+    source,
+    proposition: source === 'proposition' ? proposition : null,
     evenement,
     horodatage,
     brouillon: estBrouillon(charge, { source, tour: 'tous' }),
@@ -389,7 +400,8 @@ const sansAbsents = (texte, absents) => [...texte].map((c) => (absents.has(c) ? 
  * Les lignes de la feuille de contrôle (§ 11.3, § 11.5, § 11.8), page 1 de
  * la planche : les cotes du badge, le papier et ses cotes, l'imposition, le
  * nombre de planches, le compte produit et le compte attendu, l'événement
- * et sa date, l'horodatage du placement, la version, la consigne
+ * et sa date, la source — le placement retenu, ou la proposition par son
+ * numéro —, l'horodatage du placement, la version, la consigne
  * d'impression ; BROUILLON s'il y a lieu ; pour une réédition, son compte
  * puis les noms réédités dans l'ordre de la pile ; les caractères absents
  * de la police, quand il y en a, par leur point de code. Dans toutes les
@@ -402,7 +414,8 @@ const sansAbsents = (texte, absents) => [...texte].map((c) => (absents.has(c) ? 
  * @param {number} options.planches        entier ≥ 0
  * @param {string[]} [options.absents]     un caractère chacun, doublons admis
  * @returns {string[]}
- * @throws {TypeError} une option hors de son domaine
+ * @throws {TypeError} une option hors de son domaine, une source du modèle
+ *         hors de la sienne
  */
 export function textesControle(modele, { papier, imposition, planches, absents = [] }) {
   if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
@@ -418,7 +431,12 @@ export function textesControle(modele, { papier, imposition, planches, absents =
   if (!Array.isArray(absents) || !absents.every(unCaractere)) {
     throw new TypeError(`absents : caractères attendus, reçu ${JSON.stringify(absents)}`);
   }
-  const { badges, evenement, horodatage, brouillon, comptes, reedition, version } = modele;
+  const { badges, source, proposition, evenement, horodatage, brouillon, comptes, reedition, version } = modele;
+  const sourceBienFormee =
+    (source === 'retenu' && proposition === null) || (source === 'proposition' && Number.isSafeInteger(proposition));
+  if (!sourceBienFormee) {
+    throw new TypeError(`modele : source et proposition attendues, reçu ${JSON.stringify({ source, proposition })}`);
+  }
   const lignes = [
     libelle('planche.controle.badge', BADGE),
     libelle('planche.controle.papier', { papier, ...PAPIERS[papier] }),
@@ -426,6 +444,7 @@ export function textesControle(modele, { papier, imposition, planches, absents =
     libelle('planche.controle.planches', { planches }),
     libelle('planche.controle.comptes', comptes),
     libelle('planche.controle.evenement', evenement),
+    libelle('planche.controle.source', { source, proposition }),
     horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage }),
     libelle('planche.controle.version', { version }),
     libelle('planche.controle.consigne'),

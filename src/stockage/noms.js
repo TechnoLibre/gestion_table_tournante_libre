@@ -18,8 +18,10 @@
 // tiendrait que pour l'état laisserait déborder le journal, le fichier
 // précédent et leurs fichiers d'écriture. Le nom de la planche, posé à la
 // racine du dossier de travail, tient sous la même borne : son plus long
-// suffixe, prolongé de SUFFIXE_ECRITURE, ne dépasse pas la partie fixe de
-// longueurRelativeMax.
+// suffixe sans marque, prolongé de SUFFIXE_ECRITURE, ne dépasse pas la partie
+// fixe de longueurRelativeMax, et un nom marqué raccourcit sa base dans le
+// dossier qui le reçoit, suivie d'un point qui le distingue de tout nom
+// entier.
 import { PAPIERS } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 
@@ -305,25 +307,126 @@ export function dossierCorbeille(horodatage, existants) {
 // écrit.
 const IMPOSITIONS = Object.freeze(['feuille', 'pile']);
 
+// Les ordres de la pile (§ 11.6) : l'ordre par table se marque dans le nom,
+// l'ordre alphabétique, celui par défaut, ne s'y écrit pas.
+const ORDRES = Object.freeze(['alphabetique', 'table']);
+
 // Une réédition compte au plus REEDITION_MAX badges, quatre chiffres : le
-// plus long suffixe de la planche, « .badges-9999_<papier>_feuille_<date>.pdf »,
-// en tient compte sous la borne du chemin.
+// plus long suffixe sans marque de la planche,
+// « .badges-9999_<papier>_feuille_<date>.pdf », en tient compte sous la borne
+// du chemin.
 const REEDITION_MAX = 9999;
 
 // Ce qui tient lieu de date et d'heure quand le placement n'en porte pas.
 const HORODATAGE_INCONNU = 'horodatage-inconnu';
 
+// Ce qui suit une base raccourcie dans le nom de la planche : un point. Une
+// base que rend deriverBase ne finit jamais par un point, si bien qu'un nom
+// raccourci ne se confond avec aucun nom entier : la planche entière d'une
+// base qui tient ne remplace jamais la planche raccourcie d'une autre.
+const MARQUE_COUPE = '.';
+
+// Le dossier de travail où la planche se dépose, contrôlé : null, ou sa
+// racine, son séparateur et les noms qu'il porte déjà.
+function dossierLu(dossier) {
+  if (dossier === null) return null;
+  const forme =
+    typeof dossier === 'object' &&
+    typeof dossier.racine === 'string' &&
+    (dossier.separateur === '\\' || dossier.separateur === '/') &&
+    typeof dossier.existants?.[Symbol.iterator] === 'function';
+  if (!forme) throw new TypeError('nomPlanche : dossier {racine, separateur, existants} ou null attendu');
+  return dossier;
+}
+
+// Les options de nomPlanche contrôlées, et ce qu'il en tire : le dossier lu,
+// le nom de rang donné, et si le nom se choisit parmi les entrées du dossier
+// — une réédition, ou une base que la borne raccourcit dès le premier rang.
+// Lève comme nomPlanche.
+function composer(
+  base,
+  { papier, imposition, horodatage, reedition = null, proposition = null, ordre = 'alphabetique', dossier = null } = {},
+) {
+  if (typeof base !== 'string' || base === '') throw new TypeError(`nomPlanche : base attendue, reçu ${JSON.stringify(base)}`);
+  if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
+    throw new TypeError(`nomPlanche : papier inconnu ${JSON.stringify(papier)}`);
+  }
+  if (!IMPOSITIONS.includes(imposition)) throw new TypeError(`nomPlanche : imposition inconnue ${JSON.stringify(imposition)}`);
+  if (proposition !== null && !(Number.isSafeInteger(proposition) && proposition >= 1)) {
+    throw new TypeError(`nomPlanche : identifiant de proposition attendu, reçu ${JSON.stringify(proposition)}`);
+  }
+  if (!ORDRES.includes(ordre)) throw new TypeError(`nomPlanche : ordre inconnu ${JSON.stringify(ordre)}`);
+  const leDossier = dossierLu(dossier);
+  const date = horodatage === null ? HORODATAGE_INCONNU : jourEtHeure(horodatage);
+  let compte = '';
+  if (reedition !== null) {
+    if (!Array.isArray(reedition?.ids)) throw new TypeError('nomPlanche : réédition sans tableau ids');
+    const k = reedition.ids.length;
+    if (k < 1 || k > REEDITION_MAX) throw new RangeError(`nomPlanche : réédition de ${k} badges, de 1 à ${REEDITION_MAX} admis`);
+    compte = `-${k}`;
+  }
+  const source = proposition === null ? '' : `-p${proposition}`;
+  const marqueOrdre = ordre === 'table' ? '_table' : '';
+  const suffixe = (rang) =>
+    `.badges${source}${compte}_${papier}_${imposition}${marqueOrdre}_${date}${rang === 1 ? '' : `_${rang}`}.pdf`;
+  if (leDossier === null) return { leDossier, nomDeRang: (rang) => base + suffixe(rang), exigeListe: false };
+
+  // Le nom de rang donné : la base entière quand le chemin complet, en
+  // écriture atomique, tient sous la borne ; sinon la plus longue tête de la
+  // base que tenir rend, suivie de MARQUE_COUPE ; la base entière quand même
+  // un caractère n'y tient pas.
+  const { racine, separateur } = leDossier;
+  const unitesRacine = racine.endsWith(separateur) ? racine.length - 1 : racine.length;
+  const nomDeRang = (rang) => {
+    const fin = suffixe(rang);
+    const libres = LONGUEUR_CHEMIN_MAX - (unitesRacine + 1) - SUFFIXE_ECRITURE.length - fin.length;
+    if (base.length <= libres) return base + fin;
+    const tete = tenir(base, libres - MARQUE_COUPE.length);
+    return tete === null ? base + fin : tete + MARQUE_COUPE + fin;
+  };
+  return { leDossier, nomDeRang, exigeListe: reedition !== null || nomDeRang(1) !== base + suffixe(1) };
+}
+
 /**
  * Nom du fichier de la planche de badges (§ 11.6), posé à la racine du
- * dossier de travail : <base>.badges[-<k>]_<papier>_<imposition>_<date>.pdf,
- * où k est le nombre de badges d'une réédition, papier une clé de PAPIERS,
- * imposition feuille ou pile, et date le jour et l'heure de l'horodatage du
- * placement, AAAA-MM-JJ_HH-MM-SS, décalage retiré — « horodatage-inconnu »
- * quand il manque. Le nom ne porte aucun deux-points. Même base, même
- * papier, même imposition, même placement : même nom. Le plus long suffixe,
- * 51 unités, prolongé de SUFFIXE_ECRITURE, tient sous la partie fixe de
- * longueurRelativeMax : la base d'un événement, que deriverBase borne, laisse
- * donc place à sa planche.
+ * dossier de travail :
+ * <base>.badges[-p<id>][-<k>]_<papier>_<imposition>[_table]_<date>[_<n>].pdf,
+ * où id est l'identifiant de la proposition imprimée — rien pour le
+ * retenu —, k le nombre de badges d'une réédition, papier une clé de
+ * PAPIERS, imposition feuille ou pile, « _table » l'ordre par table — rien
+ * pour l'ordre alphabétique —, date le jour et l'heure de l'horodatage du
+ * placement, AAAA-MM-JJ_HH-MM-SS, décalage retiré, « horodatage-inconnu »
+ * quand il manque, et n le rang d'un nom déjà pris que le dossier départage.
+ * Le nom ne porte aucun deux-points.
+ *
+ * Le nom est injectif sur ce qui change la pile : deux propositions d'une
+ * même génération, qui partagent leur horodatage, ou les deux ordres d'un
+ * même placement donnent deux noms. Même base, même source, même papier,
+ * même imposition, même ordre, même placement : même nom, et la planche
+ * entière d'un placement remplace la sienne quand sa base tient entière.
+ * Un nom qui se choisit parmi les entrées du dossier — celui d'une
+ * réédition, ou celui dont la base se raccourcit (nomPlancheExigeListe) — ne
+ * remplace jamais un fichier : quand le dossier porte déjà ce nom, comparé
+ * par la majuscule de sa NFC comme Windows compare les noms, il prend le
+ * premier rang libre, « _2 », « _3 »…, comme le dossier daté de la
+ * corbeille. Deux bases qui ne diffèrent qu'au-delà de la coupe, celle d'un
+ * événement et celle de sa copie, se raccourcissent en une même tête : la
+ * seconde planche prend un rang plutôt que de remplacer la première.
+ *
+ * La borne du chemin (§ 8.6) : le plus long suffixe sans marque, 51 unités,
+ * prolongé de SUFFIXE_ECRITURE, tient sous la partie fixe de
+ * longueurRelativeMax, et la base d'un événement, que deriverBase borne,
+ * laisse place à sa planche. Les marques et le rang l'allongent au-delà :
+ * quand le dossier est donné, la base du nom se raccourcit, sans couper une
+ * paire de substitution, espaces et points finaux retirés, sans laisser un
+ * nom réservé, et prend un point à sa suite, jusqu'à ce que racine +
+ * séparateur + nom + SUFFIXE_ECRITURE tienne en LONGUEUR_CHEMIN_MAX ; le
+ * suffixe reste entier. Aucune base que rend deriverBase ne finit par un
+ * point : un nom raccourci ne se confond avec aucun nom entier.
+ * Quand même un caractère de base ne tient pas, le nom garde sa base
+ * entière : l'écriture refusée par le support se dit, et « Enregistrer
+ * sous… » la dépose ailleurs. Sans dossier — sous web, où la planche se
+ * télécharge, et pour le dialogue d'enregistrement —, ni rang ni coupe.
  *
  * @param {string} base  celle de l'événement, que rend deriverBase
  * @param {Object} options
@@ -332,25 +435,44 @@ const HORODATAGE_INCONNU = 'horodatage-inconnu';
  * @param {string|null} options.horodatage  AAAA-MM-JJTHH:MM:SS±HH:MM, ou null
  * @param {null|{ids: number[]}} [options.reedition]  les badges réédités ;
  *        null ou absent pour une planche entière
+ * @param {number|null} [options.proposition]  l'identifiant de la
+ *        proposition imprimée ; null ou absent pour le retenu
+ * @param {'alphabetique'|'table'} [options.ordre]  'alphabetique' par défaut
+ * @param {null|{racine: string, separateur: '\\'|'/', existants: Iterable<string>}} [options.dossier]
+ *        le dossier de travail : sa racine, son séparateur, et les noms des
+ *        entrées qu'il porte déjà à sa racine
  * @returns {string}
  * @throws {TypeError} une base vide ou autre chose qu'une chaîne, un papier
  *         hors de PAPIERS, une imposition hors de feuille et pile, un
- *         horodatage d'une autre forme, une réédition sans tableau ids
+ *         horodatage d'une autre forme, une réédition sans tableau ids, une
+ *         proposition qui n'est pas un entier ≥ 1, un ordre inconnu, un
+ *         dossier d'une autre forme
  * @throws {RangeError} une réédition de 0 badge ou de plus de 9 999
  */
-export function nomPlanche(base, { papier, imposition, horodatage, reedition = null } = {}) {
-  if (typeof base !== 'string' || base === '') throw new TypeError(`nomPlanche : base attendue, reçu ${JSON.stringify(base)}`);
-  if (typeof papier !== 'string' || !Object.hasOwn(PAPIERS, papier)) {
-    throw new TypeError(`nomPlanche : papier inconnu ${JSON.stringify(papier)}`);
+export function nomPlanche(base, options) {
+  const { leDossier, nomDeRang, exigeListe } = composer(base, options);
+  if (!exigeListe) return nomDeRang(1);
+  const pris = new Set(Array.from(leDossier.existants, cle));
+  let rang = 1;
+  let candidat = nomDeRang(rang);
+  while (pris.has(cle(candidat))) {
+    rang += 1;
+    candidat = nomDeRang(rang);
   }
-  if (!IMPOSITIONS.includes(imposition)) throw new TypeError(`nomPlanche : imposition inconnue ${JSON.stringify(imposition)}`);
-  const date = horodatage === null ? HORODATAGE_INCONNU : jourEtHeure(horodatage);
-  let rang = '';
-  if (reedition !== null) {
-    if (!Array.isArray(reedition?.ids)) throw new TypeError('nomPlanche : réédition sans tableau ids');
-    const k = reedition.ids.length;
-    if (k < 1 || k > REEDITION_MAX) throw new RangeError(`nomPlanche : réédition de ${k} badges, de 1 à ${REEDITION_MAX} admis`);
-    rang = `-${k}`;
-  }
-  return `${base}.badges${rang}_${papier}_${imposition}_${date}.pdf`;
+  return candidat;
+}
+
+/**
+ * Vrai quand le nom de la planche (nomPlanche), sous le dossier donné, se
+ * choisit parmi les entrées du dossier : pour une réédition, ou quand la
+ * borne raccourcit la base. Faux sans dossier. Les entrées du dossier n'y
+ * sont pas lues : l'appelant liste le dossier seulement quand il le faut.
+ *
+ * @param {string} base
+ * @param {Object} options  celles de nomPlanche
+ * @returns {boolean}
+ * @throws {TypeError|RangeError} comme nomPlanche
+ */
+export function nomPlancheExigeListe(base, options) {
+  return composer(base, options).exigeListe;
 }

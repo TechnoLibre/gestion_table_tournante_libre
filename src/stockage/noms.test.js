@@ -29,6 +29,7 @@ import {
   dossierCorbeille,
   longueurRelativeMax,
   nomPlanche,
+  nomPlancheExigeListe,
 } from './noms.js';
 
 // Les deux dossiers de travail possibles (§ 8.6) : le dossier du produit dans
@@ -1020,6 +1021,15 @@ describe('déterminisme et pureté (§ 14.7)', () => {
       dossierCorbeille('2026-10-06T19:02:11-04:00', ['2026-10-06_19-02-11']),
       nomPlanche('Gala', { papier: 'A4', imposition: 'pile', horodatage: '2026-10-06T19:02:11-04:00', reedition: { ids: [4, 9] } }),
       nomPlanche('Gala', { papier: 'A4', imposition: 'feuille', horodatage: null, reedition: null }),
+      nomPlanche('Gala', {
+        papier: 'A4',
+        imposition: 'pile',
+        horodatage: '2026-10-06T19:02:11-04:00',
+        reedition: { ids: [4] },
+        proposition: 2,
+        ordre: 'table',
+        dossier: { ...DOSSIERS[0], existants: ['gala.BADGES-p2-1_A4_pile_table_2026-10-06_19-02-11.pdf'] },
+      }),
     ];
     assert.deepEqual(sansSourcesVariables(rendre), rendre());
   });
@@ -1110,6 +1120,173 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     }
   });
 
+  test('une proposition porte « -p<id> » après « .badges », avant le compte d’une réédition ; le retenu, rien : son nom ne change pas', () => {
+    const nom = (options) => nomPlanche(BASE, { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, reedition: null, ...options });
+    assert.equal(nom({ proposition: 2 }), `${BASE}.badges-p2_A4_feuille_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom({ proposition: 2 ** 31 - 1 }), `${BASE}.badges-p2147483647_A4_feuille_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom({ proposition: 2, reedition: { ids: [3, 8, 12] } }), `${BASE}.badges-p2-3_A4_feuille_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom({ proposition: null }), `${BASE}.badges_A4_feuille_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom({}), `${BASE}.badges_A4_feuille_2031-05-17_20-15-07.pdf`);
+  });
+
+  test('deux propositions de la même génération, donc du même horodatage : deux noms ; le retenu au même horodatage, un troisième', () => {
+    const nom = (proposition) => nomPlanche(BASE, { papier: 'Lettre', imposition: 'pile', horodatage: HORODATAGE, reedition: null, proposition });
+    const noms = [nom(1), nom(2), nom(null)];
+    assert.equal(new Set(noms).size, 3, noms.join(' | '));
+    // Sans horodatage, les trois se distinguent encore.
+    const inconnus = [1, 2, null].map((proposition) => nomPlanche(BASE, { papier: 'A4', imposition: 'feuille', horodatage: null, proposition }));
+    assert.equal(new Set(inconnus).size, 3, inconnus.join(' | '));
+  });
+
+  test('l’ordre par table porte « _table » après l’imposition ; l’ordre alphabétique, rien', () => {
+    const nom = (ordre) => nomPlanche(BASE, { papier: 'A4', imposition: 'pile', horodatage: HORODATAGE, reedition: null, ordre });
+    assert.equal(nom('table'), `${BASE}.badges_A4_pile_table_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom('alphabetique'), `${BASE}.badges_A4_pile_2031-05-17_20-15-07.pdf`);
+    assert.equal(nom(undefined), `${BASE}.badges_A4_pile_2031-05-17_20-15-07.pdf`);
+    assert.equal(
+      nomPlanche(BASE, { papier: 'Lettre', imposition: 'feuille', horodatage: null, reedition: reeditionDe(2), proposition: 4, ordre: 'table' }),
+      `${BASE}.badges-p4-2_Lettre_feuille_table_horodatage-inconnu.pdf`,
+    );
+  });
+
+  test('une réédition ne remplace jamais un fichier du dossier : le premier rang libre, « _2 », « _3 »…, comparé sans égard à la casse ; une planche entière garde son nom', () => {
+    const dossier = (existants) => ({ ...DOSSIERS[0], existants });
+    const options = { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, reedition: reeditionDe(3) };
+    const libre = `${BASE}.badges-3_A4_feuille_2031-05-17_20-15-07.pdf`;
+    const rang = (n) => libre.replace(/\.pdf$/, `_${n}.pdf`);
+    assert.equal(nomPlanche(BASE, { ...options, dossier: dossier([]) }), libre);
+    assert.equal(nomPlanche(BASE, { ...options, dossier: dossier([`${BASE}.gtt.json`, 'corbeille']) }), libre);
+    assert.equal(nomPlanche(BASE, { ...options, dossier: dossier([libre]) }), rang(2));
+    assert.equal(nomPlanche(BASE, { ...options, dossier: dossier([rang(2), libre]) }), rang(3));
+    assert.equal(nomPlanche(BASE, { ...options, dossier: dossier([libre.toUpperCase()]) }), rang(2));
+    // Un rang pris ne compte pas tant que le nom sans rang est libre.
+    assert.equal(nomPlanche(BASE, { ...options, dossier: dossier([rang(2)]) }), libre);
+    // Une liste figée passe, et n'est pas modifiée.
+    const figee = Object.freeze([libre]);
+    assert.equal(nomPlanche(BASE, { ...options, dossier: { ...DOSSIERS[0], existants: figee } }), rang(2));
+    assert.deepEqual([...figee], [libre]);
+    // La planche entière du même placement reprend son nom : même placement, même planche.
+    const entiere = `${BASE}.badges_A4_feuille_2031-05-17_20-15-07.pdf`;
+    assert.equal(nomPlanche(BASE, { ...options, reedition: null, dossier: dossier([entiere]) }), entiere);
+  });
+
+  test('le plus long nom marqué tient sous 259 unités à côté d’une base à la borne : la base s’y raccourcit, le suffixe reste entier ; le nom sans marque ne change pas', () => {
+    for (const dossier of DOSSIERS) {
+      const base = deriverBase(lettres(400), { ...dossier, existantes: [] });
+      const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table' };
+      const sansDossier = nomPlanche(base, options);
+      const suffixe = sansDossier.slice(base.length);
+      assert.equal(suffixe, '.badges-p2147483647-9999_Lettre_feuille_table_2031-05-17_20-15-07.pdf');
+      // Dix rééditions de suite dans le même dossier : chacune prend le rang
+      // libre suivant, la base raccourcie d'autant.
+      const pris = [];
+      for (let rang = 1; rang <= 10; rang += 1) {
+        const nom = nomPlanche(base, { ...options, dossier: { ...dossier, existants: pris } });
+        const attendu = rang === 1 ? suffixe : suffixe.replace(/\.pdf$/, `_${rang}.pdf`);
+        assert.ok(nom.endsWith(attendu), nom);
+        // La tête raccourcie finit par le point de la coupe.
+        const tete = nom.slice(0, nom.length - attendu.length);
+        assert.ok(tete.length > 1 && tete.endsWith('.') && base.startsWith(tete.slice(0, -1)), tete);
+        const chemin = `${dossier.racine}${dossier.separateur}${nom}.ecriture`;
+        assert.equal(chemin.length, LONGUEUR_CHEMIN_MAX, `${dossier.racine} : ${chemin.length} unités`);
+        pris.push(nom);
+      }
+      assert.equal(new Set(pris).size, 10);
+      // Le nom du retenu, dans l'ordre alphabétique, ne bouge pas.
+      const retenu = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: null };
+      assert.equal(nomPlanche(base, { ...retenu, dossier: { ...dossier, existants: [] } }), nomPlanche(base, retenu));
+    }
+  });
+
+  test('deux événements dont les bases ne diffèrent qu’au-delà de la coupe : la planche entière du second prend un rang plutôt que de remplacer celle du premier ; un nom raccourci ne se confond pas avec un nom entier', () => {
+    const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: null, proposition: 12, ordre: 'table' };
+    const suffixe = nomPlanche('b', options).slice(1);
+    assert.equal(suffixe, '.badges-p12_Lettre_feuille_table_2031-05-17_20-15-07.pdf');
+    for (const dossier of DOSSIERS) {
+      // L'original et sa copie : la copie ne diffère que par « (2) », que la coupe retire.
+      const nom = `Souper des Lucioles du printemps, \u{E9}dition sp\u{E9}ciale ${lettres(400)}`;
+      const original = derive(nom, dossier);
+      const copie = derive(nom, dossier, [original]);
+      assert.ok(copie.endsWith(' (2)') && copie.length === original.length, copie);
+      const sous = (existants) => ({ ...options, dossier: { ...dossier, existants } });
+      const premier = nomPlanche(original, sous([]));
+      assert.notEqual(premier, original + suffixe, 'la base se raccourcit');
+      assert.ok(`${dossier.racine}${dossier.separateur}${premier}.ecriture`.length <= LONGUEUR_CHEMIN_MAX, premier);
+      // Sans le premier fichier dans le dossier, la copie prendrait le même nom :
+      // listé, il lui laisse le rang suivant.
+      assert.equal(nomPlanche(copie, sous([])), premier);
+      const second = nomPlanche(copie, sous([`${original}.gtt.json`, `${copie}.gtt.json`, premier]));
+      // Le rang allonge le suffixe : la tête se raccourcit d'autant.
+      const auRang2 = suffixe.replace(/\.pdf$/, '_2.pdf');
+      assert.ok(second.endsWith(`.${auRang2}`) && premier.startsWith(second.slice(0, -auRang2.length - 1)), second);
+      assert.ok(`${dossier.racine}${dossier.separateur}${second}.ecriture`.length <= LONGUEUR_CHEMIN_MAX, second);
+      assert.equal(nomPlanche(copie, sous([premier.toUpperCase()])), second);
+      // La planche entière raccourcie ne remplace pas davantage la sienne.
+      assert.equal(nomPlanche(original, sous([premier])), second);
+      // Une base égale à la tête raccourcie se nomme entière, autrement que le nom raccourci.
+      const tete = premier.slice(0, premier.length - suffixe.length);
+      assert.ok(tete.endsWith('.'), tete);
+      const courte = derive(tete.slice(0, -1), dossier);
+      assert.equal(courte, tete.slice(0, -1));
+      const entier = nomPlanche(courte, sous([premier]));
+      assert.equal(entier, courte + suffixe);
+      assert.notEqual(entier.toUpperCase(), premier.toUpperCase());
+    }
+  });
+
+  test('le nom se choisit parmi les entrées du dossier pour une réédition, ou pour une base qui se raccourcit ; jamais sans dossier', () => {
+    const dossier = { ...DOSSIERS[0], existants: [] };
+    const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: null, proposition: 12, ordre: 'table' };
+    const longue = derive(lettres(400), DOSSIERS[0]);
+    assert.equal(nomPlancheExigeListe(BASE, { ...options, dossier }), false);
+    assert.equal(nomPlancheExigeListe(BASE, { ...options, reedition: reeditionDe(2), dossier }), true);
+    assert.equal(nomPlancheExigeListe(longue, { ...options, dossier }), true);
+    assert.equal(nomPlancheExigeListe(longue, { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, dossier }), false);
+    assert.equal(nomPlancheExigeListe(longue, options), false);
+    assert.equal(nomPlancheExigeListe(longue, { ...options, reedition: reeditionDe(2) }), false);
+    assert.throws(() => nomPlancheExigeListe(longue, { ...options, papier: 'A5', dossier }), TypeError);
+  });
+
+  test('la coupe rend un nom bien formé : ni demi-paire, ni espace ou point avant le point de la coupe, ni nom réservé, et le chemin tient sous 259 unités', () => {
+    const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: null, proposition: 12, ordre: 'table' };
+    const suffixe = '.badges-p12_Lettre_feuille_table_2031-05-17_20-15-07.pdf';
+    // Le dossier dont la racine laisse exactement libres unités à la tête du nom :
+    // racine, séparateur, tête, point de la coupe, suffixe, « .ecriture ».
+    const dossierPour = (libres) => dossierDeLongueur(259 - 1 - libres - 1 - suffixe.length - '.ecriture'.length);
+    const debut = (n) => `Gala ${lettres(n - 5)}`;
+    const L = 40;
+    const cas = [
+      ['une paire coupée en son milieu', L, `${debut(L - 1)}\u{1F389}\u{1F389}x`, debut(L - 1)],
+      ['une coupe sur une espace', L, `${debut(L - 1)} f\u{EA}te`, debut(L - 1)],
+      ['une coupe sur un point', L, `${debut(L - 1)}.f\u{EA}te`, debut(L - 1)],
+      ['une coupe sur une espace et un point', L, `${debut(L - 2)} .f\u{EA}t`, debut(L - 2)],
+      ['une coupe qui laisserait CON', 3, 'CON soir', 'CO'],
+      ['une coupe qui laisserait COM1', 4, 'COM1 soi', 'COM'],
+    ];
+    for (const [quoi, libres, base, attendue] of cas) {
+      const dossier = dossierPour(libres);
+      assert.equal(derive(base, dossier), base, `${quoi} : la base se dérive telle quelle`);
+      const nom = nomPlanche(base, { ...options, dossier: { ...dossier, existants: [] } });
+      assert.equal(nom, `${attendue}.${suffixe}`, quoi);
+      const tete = nom.slice(0, nom.length - suffixe.length - 1);
+      assert.ok(!/[\ud800-\udfff]/u.test(tete), `${quoi} : demi-paire dans ${JSON.stringify(tete)}`);
+      assert.ok(!/[ .]$/.test(tete), `${quoi} : ${JSON.stringify(tete)} finit par une espace ou un point`);
+      assert.equal(estReserve(nom), false, `${quoi} : ${nom}`);
+      assert.ok(`${dossier.racine}${dossier.separateur}${nom}.ecriture`.length <= LONGUEUR_CHEMIN_MAX, quoi);
+    }
+  });
+
+  test('une base qui ne laisse rien à couper sous une racine trop longue garde son nom entier : l’écriture refusée offrira « Enregistrer sous… »', () => {
+    // La racine la plus longue où « Gala » se dérive encore.
+    const dossier = dossierDeLongueur(LONGUEUR_CHEMIN_MAX - 1 - longueurRelativeMax('Gala'));
+    assert.equal(derive('Gala', dossier), 'Gala');
+    const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table' };
+    assert.equal(nomPlanche('Gala', { ...options, dossier: { ...dossier, existants: [] } }), nomPlanche('Gala', options));
+    // Un nom qui tient ne se raccourcit pas.
+    const court = { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, proposition: 3 };
+    assert.equal(nomPlanche('Gala', { ...court, dossier: { ...dossier, existants: [] } }), 'Gala.badges-p3_A4_feuille_2031-05-17_20-15-07.pdf');
+  });
+
   test('un domaine hors contrat lève sans rien rendre : base, papier, imposition ou horodatage, TypeError ; réédition vide, de plus de 9 999 badges ou d’une autre forme, RangeError ou TypeError', () => {
     const valides = { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, reedition: null };
     const fautes = [
@@ -1127,6 +1304,15 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
       [TypeError, BASE, { ...valides, reedition: { ids: 'abc' } }],
       [RangeError, BASE, { ...valides, reedition: { ids: [] } }],
       [RangeError, BASE, { ...valides, reedition: reeditionDe(10000) }],
+      [TypeError, BASE, { ...valides, proposition: 0 }],
+      [TypeError, BASE, { ...valides, proposition: 1.5 }],
+      [TypeError, BASE, { ...valides, proposition: '2' }],
+      [TypeError, BASE, { ...valides, ordre: 'hasard' }],
+      [TypeError, BASE, { ...valides, ordre: null }],
+      [TypeError, BASE, { ...valides, dossier: { racine: 'E:\\data', separateur: '\\' } }],
+      [TypeError, BASE, { ...valides, dossier: { racine: 'E:\\data', separateur: ':', existants: [] } }],
+      [TypeError, BASE, { ...valides, dossier: { racine: 42, separateur: '/', existants: [] } }],
+      [TypeError, BASE, { ...valides, dossier: 'E:\\data' }],
     ];
     for (const [type, base, options] of fautes) {
       assert.throws(() => nomPlanche(base, options), type, `${JSON.stringify(base)} ${JSON.stringify(options).slice(0, 120)}`);
