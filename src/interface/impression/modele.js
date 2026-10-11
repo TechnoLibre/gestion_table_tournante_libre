@@ -5,14 +5,12 @@
 // ce qu'une vue imprime — papier, orientation, tour —, les dimensions d'une
 // page et de sa zone de contenu, la bande mesurée, la page nommée que la
 // feuille d'impression déclare pour chaque papier et chaque orientation, le
-// pied de cinq éléments et le filigrane d'une feuille, la source que
-// l'aperçu imprime et la découpe du plan. Le modèle ne rend que des
-// nombres, des codes, des clés et des données ; les composants les
-// traduisent et les posent.
+// pied de cinq éléments et le filigrane d'une feuille, et la source que
+// l'aperçu imprime. La découpe du plan en pages n'est pas ici : pagesDuPlan
+// (plan.js) l'appelle seule. Le modèle ne rend que des nombres, des codes,
+// des clés et des données ; les composants les traduisent et les posent.
 import { etatPlaces } from '../../application/places.js';
-import { decouperPlan } from '../../geometrie/pages.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
-import { englobantImpression, geometrieTable } from '../../geometrie/tables.js';
 import { DECOUPES, VUES_IMPRESSION } from '../etat_ui.js';
 
 /** Millimètres par pixel CSS : 96 px au pouce, 25,4 mm au pouce. */
@@ -242,17 +240,4 @@ export function sortieApercu(charge, { tour }, proposition) {
     proposition: etat.source === 'proposition' ? etat.proposition : null,
     tour: tour === 'tous' ? 'tous' : tourEtat,
   };
-}
-
-/**
- * La découpe du plan d'un tour en pages (decouperPlan, § 11.7) : les
- * géométries des tables de l'état des places, à leur capacité, leur
- * englobant, et la bande mesurée sur la feuille gabarit.
- *
- * @param {Object} etat   EtatPlaces
- * @param {{papier: string, bandeMm: number, decoupe: string}} options
- */
-export function decoupeDuPlan(etat, { papier, bandeMm, decoupe }) {
-  const geometries = etat.tables.map((table) => geometrieTable(table, table.capacite));
-  return decouperPlan(englobantImpression(geometries), { papier, bandeMm, mode: decoupe, geometries });
 }

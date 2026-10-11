@@ -12,9 +12,7 @@ import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { etatPlaces } from '../../application/places.js';
 import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js';
 import { constante } from '../../geometrie/constantes.js';
-import { decouperPlan } from '../../geometrie/pages.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
-import { englobantImpression, geometrieTable } from '../../geometrie/tables.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { analyser } from '../../stockage/document.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -25,7 +23,6 @@ import {
   clesPapier,
   cleDecoupe,
   cleVue,
-  decoupeDuPlan,
   dimensionsPage,
   feuilleDe,
   filigraneDe,
@@ -220,7 +217,7 @@ describe('le filigrane BROUILLON (§ 11.7, § 14.5)', () => {
   });
 });
 
-describe('la sortie de l’aperçu et la découpe du plan', () => {
+describe('la sortie de l’aperçu', () => {
   test('sans placement, la source des réservations, sans proposition ; le tour du plan borné aux tours de la soirée', () => {
     const charge = petite();
     const sortie = sortieApercu(charge, { tour: 9 }, null);
@@ -235,17 +232,16 @@ describe('la sortie de l’aperçu et la découpe du plan', () => {
     const sortie = sortieApercu(avecProposition(), { tour: 1 }, 1);
     assert.deepEqual([sortie.source, sortie.proposition, sortie.tour], ['proposition', 1, 1]);
   });
+});
 
-  test('la découpe du plan reçoit la bande mesurée : une bande plus haute réduit la surface utile', () => {
-    const etat = etatPlaces(petite(), { tour: 1 });
-    const geometries = etat.tables.map((table) => geometrieTable(table, table.capacite));
-    for (const bandeMm of [0, 12.5]) {
-      const attendue = decouperPlan(englobantImpression(geometries), { papier: 'A4', bandeMm, mode: 'unePage', geometries });
-      assert.deepEqual(decoupeDuPlan(etat, { papier: 'A4', bandeMm, decoupe: 'unePage' }), attendue, String(bandeMm));
-    }
-    const basse = decoupeDuPlan(etat, { papier: 'A4', bandeMm: 0, decoupe: 'unePage' });
-    const haute = decoupeDuPlan(etat, { papier: 'A4', bandeMm: 150, decoupe: 'unePage' });
-    assert.ok(haute.echelle < basse.echelle, `${haute.echelle} < ${basse.echelle}`);
+describe('la découpe du plan : une seule implémentation (§ 13.2)', () => {
+  test('le modèle de l’aperçu ne découpe pas le plan : la vue du plan passe par pagesDuPlan (plan.js) seule', () => {
+    // Un second appelant de decouperPlan découperait le même plan sur
+    // d'autres géométries ou sans les listes, et deux aperçus d'un même
+    // état ne compteraient plus les mêmes pages. Le texte du module, sans
+    // ses commentaires, n'importe ni la découpe ni l'englobant d'impression.
+    const source = readFileSync(new URL('./modele.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    assert.doesNotMatch(source, /geometrie\/pages\.js|\bdecouperPlan\b|\benglobantImpression\b/);
   });
 });
 

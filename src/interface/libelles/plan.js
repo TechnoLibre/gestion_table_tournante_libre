@@ -99,13 +99,17 @@ export const TABLE = new Map([
   // courant modifie : l'état des données, non le geste (§ 5.8) ; une
   // personne réservée déplace sa réservation, dont il dit la portée, et
   // au-dessus du sol la retire (« ce tour ») ou se la voit refuser (« tous
-  // les tours »). Le nom de la personne est une donnée, dans son propre nœud.
+  // les tours ») ; une personne que rien ne tient n'y change rien ; sous le
+  // retenu, le sol retire du tour. Le nom de la personne est une donnée,
+  // dans son propre nœud.
   ['plan.fantome.reservations', 'pose une réservation'],
   ['plan.fantome.reservationTour', 'déplace sa réservation de ce tour'],
   ['plan.fantome.reservationTous', 'déplace sa réservation, à tous les tours'],
   ['plan.fantome.retireReservationTour', 'retire sa réservation de ce tour'],
   ['plan.fantome.refuseTous', 'refusé : sa réservation vaut pour tous les tours'],
+  ['plan.fantome.rienNeChange', 'aucune réservation à retirer : rien ne change'],
   ['plan.fantome.retenu', 'déplace dans le placement retenu'],
+  ['plan.fantome.retireDuTour', 'retire du tour : attend dans la réserve'],
   ['plan.fantome.vueSeule', 'proposition en vue seule : rien ne change'],
   // La place où un refus ou un avertissement du plan se pose.
   ['plan.refus.table', ({ numero }) => `Table ${numero}`],

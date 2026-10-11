@@ -231,10 +231,21 @@ export function memoriser(controler) {
 }
 
 // Les clés du libellé du fantôme, par cible de l'état des places : ce que
-// le dépôt modifie, ou rien sous une cible null.
+// le dépôt sur une chaise modifie, ou rien sous une cible null.
 const CLES_FANTOME = new Map([
   ['reservations', 'plan.fantome.reservations'],
   ['retenu', 'plan.fantome.retenu'],
+  [null, 'plan.fantome.vueSeule'],
+]);
+
+// Les mêmes, au-dessus du sol (commandeDeDepot, depot.js) : sous le retenu,
+// le dépôt retire la personne du tour (retirerDuTour) ; sous les
+// réservations, une personne qu'aucune réservation ne tient n'a rien à
+// retirer, et le dépôt ne rend rien ; sous une cible null, le refus de la
+// vue seule, comme sur une chaise.
+const CLES_FANTOME_SUR_LE_SOL = new Map([
+  ['reservations', 'plan.fantome.rienNeChange'],
+  ['retenu', 'plan.fantome.retireDuTour'],
   [null, 'plan.fantome.vueSeule'],
 ]);
 
@@ -257,13 +268,18 @@ const CLES_RESERVATION_SUR_LE_SOL = new Map([
 /**
  * La clé du libellé que le fantôme porte pendant le glissement d'une
  * personne (§ 5.8, § 7.1), qui dit ce que le relâcher au point courant
- * modifie : sous la cible 'reservations', « pose une réservation » pour une
- * personne que rien ne tient, sinon le déplacement de sa réservation et sa
- * portée — « tous les tours » s'y dit — ; au-dessus du sol, la même
- * réservation se dit retirée (« ce tour ») ou refusée (« tous les tours ») ;
- * « déplace dans le placement retenu » sous 'retenu' ; la vue seule sous une
- * cible null. Une cible, une portée ou un sol hors du contrat lève : il ne
- * prend aucun libellé par défaut.
+ * modifie, celui que rend commandeDeDepot (depot.js) :
+ *  - sous la cible 'reservations', sur une chaise, « pose une réservation »
+ *    pour une personne que rien ne tient, sinon le déplacement de sa
+ *    réservation et sa portée — « tous les tours » s'y dit ; au-dessus du
+ *    sol, la même réservation se dit retirée (« ce tour ») ou refusée
+ *    (« tous les tours »), et « rien ne change » pour une personne que rien
+ *    ne tient ;
+ *  - sous 'retenu', « déplace dans le placement retenu » sur une chaise,
+ *    « retire du tour » au-dessus du sol ;
+ *  - la vue seule sous une cible null, partout.
+ * Une cible, une portée ou un sol hors du contrat lève : il ne prend aucun
+ * libellé par défaut.
  *
  * @param {'reservations'|'retenu'|null} cible  EtatPlaces.cible
  * @param {'tous'|'tour'|null} [portee]  la portée de la réservation qui tient
@@ -277,7 +293,7 @@ export function cleFantome(cible, portee = null, surLeSol = false) {
     throw new TypeError(`portée du fantôme hors du contrat : ${JSON.stringify(portee)}`);
   }
   if (typeof surLeSol !== 'boolean') throw new TypeError(`sol du fantôme hors du contrat : ${JSON.stringify(surLeSol)}`);
-  if (cible !== 'reservations' || portee === null) return CLES_FANTOME.get(cible);
+  if (cible !== 'reservations' || portee === null) return (surLeSol ? CLES_FANTOME_SUR_LE_SOL : CLES_FANTOME).get(cible);
   return (surLeSol ? CLES_RESERVATION_SUR_LE_SOL : CLES_RESERVATION_TENUE).get(portee);
 }
 

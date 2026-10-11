@@ -98,7 +98,9 @@ function bords(n, utileMm, echelle, centre, etendue) {
  * le plan se lit sur une page : elle est alors d'une page.
  *
  * L'orientation est celle qui donne le moins de pages ; à pages égales, la
- * plus grande échelle ; à échelle égale aussi, le paysage.
+ * plus grande échelle ; à échelle égale aussi, le paysage. Une orientation
+ * sans surface utile ne concourt pas : une bande plus haute que la page
+ * couchée laisse le portrait seul.
  *
  * Les tuiles, toutes de même taille, se rangent par rangées de haut en bas,
  * de gauche à droite dans chaque rangée ; rang est l'indice dans pages,
@@ -130,8 +132,9 @@ function bords(n, utileMm, echelle, centre, etendue) {
  *                                      voisins: {haut: number|null, droite: number|null,
  *                                                bas: number|null, gauche: number|null}},
  *                          tables: number[]}>}}
- * @throws {RangeError} papier ou mode inconnu ; marge, bande ou corps hors de leur domaine ; page
- *         sans surface utile ; englobant plat, inversé ou non fini ; table sans hauteur de liste
+ * @throws {RangeError} papier ou mode inconnu ; marge, bande ou corps hors de leur domaine ; aucune
+ *         orientation avec une surface utile ; englobant plat, inversé ou non fini ; table sans
+ *         hauteur de liste
  */
 export function decouperPlan(
   englobant,
@@ -164,17 +167,23 @@ export function decouperPlan(
   const seuil = corpsMinMm / corpsDessinCm;
   const { largeur: petit, hauteur: grand } = PAPIERS[papier];
 
-  // Paysage d'abord : il garde la place à toute égalité.
-  const candidats = [
+  // Paysage d'abord : il garde la place à toute égalité. Une orientation
+  // sans surface utile — une bande plus haute que la page couchée — n'est
+  // pas candidate ; le portrait, plus haut, garde alors la sienne.
+  const orientations = [
     { orientation: 'paysage', feuille: { largeur: grand, hauteur: petit } },
     { orientation: 'portrait', feuille: { largeur: petit, hauteur: grand } },
-  ].map(({ orientation, feuille }) => {
-    const utile = { largeur: feuille.largeur - 2 * margeMm, hauteur: feuille.hauteur - 2 * margeMm - bandeMm };
-    if (!(utile.largeur > 0 && utile.hauteur > 0)) {
-      throw new RangeError(`page ${orientation} sans surface utile : ${utile.largeur} × ${utile.hauteur} mm`);
-    }
-    return { orientation, utile, ...disposer(utile, plan, seuil, mode) };
-  });
+  ].map(({ orientation, feuille }) => ({
+    orientation,
+    utile: { largeur: feuille.largeur - 2 * margeMm, hauteur: feuille.hauteur - 2 * margeMm - bandeMm },
+  }));
+  const candidats = orientations
+    .filter(({ utile }) => utile.largeur > 0 && utile.hauteur > 0)
+    .map(({ orientation, utile }) => ({ orientation, utile, ...disposer(utile, plan, seuil, mode) }));
+  if (candidats.length === 0) {
+    const surfaces = orientations.map(({ orientation, utile }) => `${orientation} ${utile.largeur} × ${utile.hauteur} mm`);
+    throw new RangeError(`aucune orientation n'a de surface utile : ${surfaces.join(', ')}`);
+  }
   const retenu = candidats.reduce((meilleur, c) => {
     const pages = c.colonnes * c.rangees;
     const pagesMeilleur = meilleur.colonnes * meilleur.rangees;

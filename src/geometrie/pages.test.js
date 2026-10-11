@@ -358,8 +358,34 @@ describe('decouperPlan : les refus', () => {
     assert.throws(() => decouperPlan(ok, { ...OPTIONS, corpsDessinCm: Number.NaN }), RangeError);
     assert.throws(() => decouperPlan(ok, { ...OPTIONS, margeMm: -1 }), RangeError);
     // A4 : 210 − 2 × 105 = 0 mm, en largeur du portrait et en hauteur du paysage.
-    assert.throws(() => decouperPlan(ok, { ...OPTIONS, margeMm: 105 }), RangeError);
-    assert.throws(() => decouperPlan(ok, { ...OPTIONS, bandeMm: 300 }), RangeError);
+    assert.throws(() => decouperPlan(ok, { ...OPTIONS, margeMm: 105 }), { name: 'RangeError', message: /aucune orientation/ });
+    // 297 − 20 − 300 < 0 : ni le portrait ni le paysage n'ont de hauteur.
+    assert.throws(() => decouperPlan(ok, { ...OPTIONS, bandeMm: 300 }), { name: 'RangeError', message: /aucune orientation/ });
+    // 297 − 20 − 277 = 0 : le portrait n'a plus de hauteur non plus.
+    assert.throws(() => decouperPlan(ok, { ...OPTIONS, bandeMm: 277 }), { name: 'RangeError', message: /aucune orientation/ });
+  });
+
+  test('une bande plus haute que le paysage : la découpe se replie sur le portrait, qui garde de la place', () => {
+    // Bande de 195 mm, plus de la moitié d'une page couchée : le paysage a
+    // 210 − 20 − 195 = −5 mm de hauteur, le portrait 297 − 20 − 195 = 82 mm.
+    // Le plan large de 100 × 50 cm, qui préférerait le paysage, s'imprime en
+    // portrait : e₁ = min(190/100, 82/50) = 1,64 < 2, sa grille au seuil est
+    // ⌈200/190⌉ × ⌈100/82⌉ = 2 × 2, à min(380/100, 164/50) = 3,28.
+    for (const mode of ['auto', 'unePage', 'decoupe']) {
+      const plan = decouperPlan(boite(0, 0, 100, 50), { ...OPTIONS, bandeMm: 195, mode });
+      assert.equal(plan.orientation, 'portrait', mode);
+      for (const page of plan.pages) {
+        proche(page.cadrage.hauteur * plan.echelle, 82, `${mode} : hauteur utile`, 1e-4);
+        proche(page.cadrage.largeur * plan.echelle, 190, `${mode} : largeur utile`, 1e-4);
+      }
+    }
+    assert.equal(decouperPlan(boite(0, 0, 100, 50), { ...OPTIONS, bandeMm: 195 }).pages.length, 4);
+    // Lettre : 215,9 − 20 − 196 < 0 en paysage, 279,4 − 20 − 196 = 63,4 en portrait.
+    const lettre = decouperPlan(boite(0, 0, 100, 50), { ...OPTIONS, papier: 'Lettre', bandeMm: 196, mode: 'unePage' });
+    assert.equal(lettre.orientation, 'portrait');
+    proche(lettre.pages[0].cadrage.hauteur * lettre.echelle, PAPIERS.Lettre.hauteur - 20 - 196, 'hauteur utile Lettre', 1e-4);
+    // Le plan vide aussi : une page portrait.
+    assert.equal(decouperPlan(null, { ...OPTIONS, bandeMm: 195 }).orientation, 'portrait');
   });
 
   test('un englobant plat, inversé, non fini, ou hors des cotes représentables', () => {

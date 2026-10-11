@@ -15,6 +15,7 @@ import { constante } from '../../geometrie/constantes.js';
 import { placesSousPoignee } from '../../geometrie/tables.js';
 import { deplacer, deplacerVue, dessinDepuisEcran, transformDe } from '../../geometrie/vue.js';
 import { TABLE as LIBELLES } from '../libelles/plan.js';
+import { commandeDeDepot, reservationTenue } from './depot.js';
 import { REPOS, cleFantome, geste, libellePlace, memoriser } from './gestes.js';
 
 const SEUIL = constante('SEUIL_GLISSER_PX');
@@ -371,14 +372,11 @@ describe('les libellés d’un geste : le fantôme et la place d’une pose', ()
   test('cleFantome : au-dessus du sol, une réservation « ce tour » se dit retirée, une « tous les tours » refusée (§ 5.8)', () => {
     // Le dépôt sur le sol retire la première et refuse la seconde : le
     // fantôme dit ce qui arrivera au relâcher, non ce qui arrive sur une
-    // chaise. Une personne que rien ne tient, et les autres cibles, gardent
-    // leur libellé.
+    // chaise. La vue seule garde son libellé.
     assert.equal(cleFantome('reservations', 'tour', true), 'plan.fantome.retireReservationTour');
     assert.equal(cleFantome('reservations', 'tous', true), 'plan.fantome.refuseTous');
     assert.equal(cleFantome('reservations', 'tour', false), 'plan.fantome.reservationTour');
     assert.equal(cleFantome('reservations', 'tous', false), 'plan.fantome.reservationTous');
-    assert.equal(cleFantome('reservations', null, true), 'plan.fantome.reservations');
-    assert.equal(cleFantome('retenu', null, true), 'plan.fantome.retenu');
     assert.equal(cleFantome(null, 'tous', true), 'plan.fantome.vueSeule');
     assert.match(LIBELLES.get('plan.fantome.retireReservationTour'), /retire/);
     assert.match(LIBELLES.get('plan.fantome.refuseTous'), /refusé/);
@@ -386,6 +384,70 @@ describe('les libellés d’un geste : le fantôme et la place d’une pose', ()
     for (const sol of [0, 'oui', null]) {
       assert.throws(() => cleFantome('reservations', 'tour', sol), { name: 'TypeError', message: /^sol du fantôme hors du contrat/ });
     }
+  });
+
+  test('cleFantome : au-dessus du sol, le retenu se dit retiré du tour ; une personne que rien ne tient, rien ne change', () => {
+    // Sous 'retenu', le dépôt sur le sol est retirerDuTour : la personne
+    // attend dans la réserve (§ 7.1). Sous 'reservations', une personne
+    // qu'aucune réservation ne tient n'a rien à retirer : le dépôt ne rend
+    // rien, et le fantôme ne promet pas une réservation.
+    for (const portee of [null, 'tour', 'tous']) {
+      assert.equal(cleFantome('retenu', portee, true), 'plan.fantome.retireDuTour');
+      assert.equal(cleFantome('retenu', portee, false), 'plan.fantome.retenu');
+    }
+    assert.equal(cleFantome('reservations', null, true), 'plan.fantome.rienNeChange');
+    assert.equal(cleFantome('reservations', null, false), 'plan.fantome.reservations');
+    assert.match(LIBELLES.get('plan.fantome.retireDuTour'), /retire du tour/);
+    assert.match(LIBELLES.get('plan.fantome.retireDuTour'), /réserve/);
+    assert.match(LIBELLES.get('plan.fantome.rienNeChange'), /rien ne change/);
+  });
+
+  test('cleFantome dit l’effet du relâcher : chaque clé, sur chaque cible, portée et point, suit la commande de commandeDeDepot', () => {
+    // Le fantôme et le dépôt lisent la même réservation (reservationTenue),
+    // comme Plan.svelte : la personne 11, assise à la table 1, siège 1, sans
+    // réservation, ou tenue « ce tour » ou « tous les tours ». Elle se
+    // dépose sur une chaise libre, sur une chaise occupée, ou sur le sol.
+    // L'effet est la commande exécutée, le code du refus rendu, ou « rien ».
+    const EFFETS = new Map([
+      ['plan.fantome.reservations', ['reserver']],
+      ['plan.fantome.reservationTour', ['deplacerReservation']],
+      ['plan.fantome.reservationTous', ['deplacerReservation']],
+      ['plan.fantome.retireReservationTour', ['retirerReservation']],
+      ['plan.fantome.refuseTous', ['RESERVATION_TOUS_LES_TOURS']],
+      ['plan.fantome.retenu', ['deplacerDansRetenu', 'echangerDansRetenu']],
+      ['plan.fantome.retireDuTour', ['retirerDuTour']],
+      ['plan.fantome.rienNeChange', ['rien']],
+      ['plan.fantome.vueSeule', ['VUE_SEULE']],
+    ]);
+    const RESERVATIONS = [null, { participant: 11, portee: 'tour', tour: 1 }, { participant: 11, portee: 'tous', tour: null }];
+    const POINTS = [
+      { cible: { table: 2, siege: 1 }, surLeSol: false },
+      { cible: { table: 2, siege: 2 }, surLeSol: false },
+      { cible: null, surLeSol: true },
+    ];
+    const depuis = { table: 1, siege: 1 };
+    const vus = new Set();
+    for (const cible of ['reservations', 'retenu', null]) {
+      for (const reservation of RESERVATIONS) {
+        const etat = {
+          cible,
+          refus: cible === null ? { code: 'VUE_SEULE', details: {} } : null,
+          tables: [
+            { id: 1, chaises: [{ siege: 1, occupant: 11, reservation }, { siege: 2, occupant: 12, reservation: null }] },
+            { id: 2, chaises: [{ siege: 1, occupant: null, reservation: null }, { siege: 2, occupant: 13, reservation: null }] },
+          ],
+        };
+        for (const point of POINTS) {
+          const cle = cleFantome(cible, reservationTenue(etat, 11, depuis)?.portee ?? null, point.surLeSol);
+          const resultat = commandeDeDepot({ etatPlaces: etat, tour: 1, personne: 11, depuis, ...point });
+          const effet = resultat === null ? 'rien' : (resultat.refus?.code ?? resultat.commande);
+          const cas = JSON.stringify({ cible, reservation: reservation?.portee ?? null, point });
+          assert.ok(EFFETS.get(cle).includes(effet), `${cas} : le fantôme dit ${cle}, le relâcher fait ${effet}`);
+          vus.add(cle);
+        }
+      }
+    }
+    assert.deepEqual([...vus].sort(), [...EFFETS.keys()].sort());
   });
 
   test('cleFantome : une cible hors du contrat lève, au lieu de se dire « vue seule »', () => {

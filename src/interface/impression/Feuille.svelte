@@ -13,6 +13,11 @@
   // [data-impression], qui porte les jetons du clair, et peint son fond du
   // papier et son texte de l'encre de la page.
   //
+  // À l'écran, le bord de la feuille est un contour tracé sur son propre
+  // rectangle, qui ne prend aucune place : la zone de contenu a la largeur
+  // de la page moins ses marges, à l'écran comme sur le papier, et la tuile
+  // du plan, à la largeur utile, y tient sans être rognée.
+  //
   // La zone de contenu mesure la hauteur utile que la découpe reçoit : la
   // page, moins les marges, moins bandeMm, la bande mesurée sur la feuille
   // gabarit. Sans bandeMm, la feuille est le gabarit : sa hauteur suit ce
@@ -61,7 +66,8 @@
     flex-direction: column;
     margin: 0 auto var(--espace-5);
     overflow: hidden;
-    border: 1px solid var(--couleur-page-filet);
+    outline: 1px solid var(--couleur-page-filet);
+    outline-offset: -1px;
     background-color: var(--couleur-papier);
     color: var(--couleur-page-texte);
     box-shadow: var(--ombre-2);
