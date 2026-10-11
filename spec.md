@@ -47,7 +47,11 @@ Le parcours est **un ordre de lecture, pas une séquence imposée**. Le logiciel
 n'enchaîne aucun assistant et n'exige jamais de recommencer au début : un
 assistant linéaire obligerait l'opérateur qui découvre une faute de saisie au
 moment d'imprimer à ressortir de toutes les étapes pour y revenir, or corriger
-est ce qu'il fait le plus (§ 10.2).
+est ce qu'il fait le plus (§ 10.2). La navigation de l'événement groupe ses huit
+sections en trois phases nommées : **Préparer** (import, participants, tables et
+tours), **Placer** (plan, diagnostic, génération, propositions), **Produire**
+(badges). Le groupement est une lecture, non un ordre : chaque section reste
+offerte depuis toutes les autres.
 
 **Deux verrous existent pourtant, et ils sont ailleurs.** L'état **bloqué**
 refuse toute modification, import compris (§ 9, § 10.1) ; le **mode lecture**,
@@ -615,6 +619,11 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   mais une **propriété de la configuration** (§ 5.9) : le diagnostic la nomme
   avec le nombre de places manquantes, et **la génération la refuse**.
 
+À l'écran, les énoncés se regroupent en cartes, sans changer d'ordre : la
+séparation des appartenances vidée de son sens, une carte par appartenance en
+collision, titrée de sa pastille d'appartenance (§ 12.7), puis ce qui vaut pour
+tout l'événement.
+
 Un opérateur à qui l'on dit « c'est impossible, voici pourquoi, voici le
 remède » cesse de relancer en espérant mieux.
 
@@ -672,6 +681,12 @@ critère qu'il n'a pas pu appliquer se lit comme un classement complet.
 
 Un départage ne se déclenchant presque jamais, les chiffres de diversité sont
 affichés **en colonne pour chaque proposition**, et non pour la seule gagnante.
+Le tableau réunit ses colonnes de mesure voisines sous cinq intitulés de groupe
+— les personnes rencontrées, les collisions d'appartenance, les rencontres
+répétées et les retours, la diversité d'appartenance, le manque et le plafond a
+priori — sans changer l'en-tête ni l'explication d'aucune colonne ; ses nombres
+s'alignent à droite en chiffres tabulaires. La ligne du placement retenu porte
+la teinte de l'état Retenu, et la proposition retenue, la pastille « retenue ».
 
 ### 5.8 Le placement à la main
 
@@ -1049,7 +1064,9 @@ pointables.
 
 **Il n'y a pas de survol au doigt** : le détail d'un conflit est accessible par
 survol, par focus clavier **et par pression longue** — un seul composant
-d'infobulle, trois déclencheurs.
+d'infobulle, trois déclencheurs. L'infobulle, comme un refus posé sur une place,
+se tient dans le cadre du plan : à droite de sa table ou de sa place quand elle
+y tient, sinon de l'autre côté, jamais sur le panneau voisin ni hors du cadre.
 
 **Un seul écouteur sur la racine**, la cible étant identifiée par
 `closest('[data-siege]')`. Les mouvements sont **regroupés par image**.
@@ -1236,22 +1253,36 @@ qui est dedans, sans son complément, laisse l'implémenteur ajouter.
 
 Le logiciel ouvre sur une **liste des événements**, avec pour chacun le nom, la
 date, l'état, le nombre de participants, la dernière modification et le chemin.
-Deux colonnes résument en plus le **placement retenu** : « Collisions cumulées
-(paire et tour) », les collisions cumulées du retenu (§ 5.4), et « Diff somme
+Un en-tête la résume — « N événements · M participants au total », M la somme
+des participants des lignes listées — et offre la création et l'import. Sous
+lui, une tuile par filtre — tous les événements, puis chaque état du plan dans
+l'ordre du § 9 —, avec le nombre de lignes qu'il retient, la pastille de l'état
+et une aide qui redit sa ligne du § 9 ; ce sont des boutons-filtres, et le
+filtre, avec le groupement, est un état d'interface que la séance retient et que
+rien n'écrit. Le tableau groupe les lignes par état, dans l'ordre du § 9, les
+états illisibles à la suite — chaque groupe sous un intitulé qui porte la
+pastille de l'état et son compte —, ou ne les groupe pas, au choix ; ses
+en-têtes de colonnes se groupent en « Événement », « Placement retenu » et
+« Meilleure proposition du classement », et le nom de chaque ligne en est
+l'en-tête, la date et le chemin en petite ligne dessous. Sous le tableau, des
+cartes offrent la création, le dossier de travail et les démonstrations. Deux
+colonnes résument en plus le **placement retenu** : « Collisions cumulées (paire
+et tour) », les collisions cumulées du retenu (§ 5.4), et « Diff somme
 d'appartenance », |cible − Σ r(p)|, où Σ r(p) est la somme de redondance du
 retenu — le nombre de la colonne « Redondance d'appartenance, somme Σ r(p) » du
 tableau des propositions — et la cible celle de l'événement (§ 8.9), 1000 par
 défaut, réglable dans la section des propositions. Les deux se lisent dans la
 même mesure que le tableau, sans rien écrire ; un événement sans retenu, ou dont
 le retenu est fautif ou en dérive (§ 8.9, § 9), y porte « — ». Chaque ligne
-porte aussi la **« Meilleure proposition du classement »**, sous les libellés
-du bloc que la section de la génération montre en tête : l'identifiant de la
-proposition au rang 1 du classement (§ 5.7) et ses
-collisions cumulées — la même proposition et le même nombre que ce bloc et que
-la première ligne du tableau des propositions, retenue ou non ; une proposition
-fautive, que l'ouverture écarte (§ 8.9, point 3), n'y entre pas. Sans proposition
-classée — aucune, ou aucune qui décrive encore la configuration —, l'un et
-l'autre valent « — ». Chaque intitulé s'explique dans une infobulle.
+porte aussi la **« Meilleure proposition du classement »**, sous les libellés du
+bloc que la section de la génération montre en tête : l'identifiant de la
+proposition au rang 1 du classement (§ 5.7) et ses collisions cumulées — la même
+proposition et le même nombre que ce bloc et que la première ligne du tableau
+des propositions, retenue ou non ; une proposition fautive, que l'ouverture
+écarte (§ 8.9, point 3), n'y entre pas. Sans proposition classée — aucune, ou
+aucune qui décrive encore la configuration —, l'un et l'autre valent « — ».
+Chaque intitulé s'explique dans une infobulle, posée sur l'en-tête de sa
+colonne.
 **La liste paraît avant ses colonnes calculées** : ses lignes s'affichent dès le
 relevé du dossier, et les mesures du retenu et la meilleure proposition, qui
 évaluent chaque événement, se calculent ensuite, un événement après l'autre, la
@@ -1260,8 +1291,10 @@ chacune de ses valeurs porte un signe de chargement qui tourne ; chaque ligne
 montre les siennes dès qu'elles sont obtenues, et une liste relue abandonne les
 calculs de la précédente.
 **Un répertoire vide n'affiche pas une liste vide** : il présente la commande de
-création et les démonstrations — une liste vide sans issue est le premier écran
-que voit un opérateur qui lance l'exécutable.
+création et les démonstrations — ni tuiles, ni tableau, ni résumé —, car une
+liste vide sans issue est le premier écran que voit un opérateur qui lance
+l'exécutable. Un filtre qui ne retient aucune ligne le dit, sans laisser un
+tableau vide.
 
 Le logiciel n'ouvre **qu'un événement à la fois**, et ferme le précédent sans
 question : il n'y a rien à enregistrer.
@@ -1359,7 +1392,8 @@ permanence et le mode lecture ne protégerait plus rien.
 **On en sort par un seul geste délibéré** — une commande « Modifier » à place
 fixe — et le logiciel y retourne **seul après dix minutes d'inactivité**. Ce
 retour ne coûte rien et ne perd rien, puisque tout geste achevé est déjà sur le
-disque.
+disque. En lecture, « Modifier » est l'action principale de l'écran ; « Revenir
+en lecture » et « Débloquer », à la même place, ne le sont pas.
 
 **Le compteur d'inactivité ne court pas pendant un geste** : il est suspendu
 tant qu'un pointeur est enfoncé, qu'un champ contient une saisie non validée ou
@@ -1372,8 +1406,8 @@ ou refusé, une saisie validée ou abandonnée, une fenêtre à confirmer referm
 et tout appui relâché sur le plan — un clic qui n'exécute rien et un déplacement
 de vue compris. Regarder sans appuyer n'en est pas une : zoomer à la molette,
 une commande de vue, changer de tour affiché ne relancent rien. Le retour
-automatique se voit au cadre, au libellé et au bandeau, et un avertissement non
-modal le dit jusqu'au passage en écriture suivant.
+automatique se voit au cadre, au libellé, à la bande de mode et au bandeau, et
+un avertissement non modal le dit jusqu'au passage en écriture suivant.
 
 **Le mode est visible sur la surface de travail elle-même** — un cadre et un
 libellé permanents autour du plan — et non dans un coin de barre d'outils :
@@ -1383,7 +1417,19 @@ S'y ajoute un **bandeau d'application présent sur tout écran**, qui porte la
 version et la provenance de la construction (§ 18.6) et, **quand un plan est
 ouvert**, le libellé de mode. Les deux ne font pas double emploi : le cadre
 signale le mode là où la main agit ; le bandeau porte la version jusque sur la
-liste des événements, qui est le premier écran d'un signalement sur deux.
+liste des événements, qui est le premier écran d'un signalement sur deux. Le
+bandeau porte aussi la marque du logiciel, le réglage de thème et « À propos » ;
+il garde une hauteur d'une ligne de commande, de sorte que la surface de travail
+ne perd rien.
+
+Sous le bandeau, quand un plan est ouvert, une **bande de mode** court de bord à
+bord de la fenêtre et redit le mode : son icône, son libellé, et une phrase qui
+dit ce qu'il permet en nommant la commande de la place fixe qui en sort —
+« Modifier » en lecture, « Revenir en lecture » en écriture, « Débloquer » sur
+un plan bloqué, et aucune devant un fichier d'un format plus récent (§ 8.8), qui
+n'en offre pas —, sur le fond de sa couleur. D'une hauteur constante, elle
+s'ajoute au cadre sans le remplacer : le cadre reste là où la main agit, la
+bande le dit dès l'entrée dans l'écran.
 
 **Le passage en écriture est une étape nommée du parcours** (§ 2.1, étape 1b),
 et non un sous-entendu : huit des douze étapes sont modifiantes, et toutes sont
@@ -1429,11 +1475,12 @@ Ce fichier porte **deux choses, et deux seulement** :
 | le **cadrage** | indexé par identifiant d'événement |
 | le **format de papier** (§ 11.2) | global à la machine |
 
-Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans le
-fichier d'événement ferait voyager le bac d'un bureau avec le plan. Le logiciel
-le demande à la première sortie qui en a besoin — la première production d'une
-planche, ou le premier aperçu d'impression — et ne le redemande plus ; la
-section des badges et l'aperçu le montrent, et il se change d'un geste. Le
+Le format de papier décrit le bac de l'imprimante, pas le plan : l'écrire dans
+le fichier d'événement ferait voyager le bac d'un bureau avec le plan. Le
+logiciel le demande à la première sortie qui en a besoin — la première
+production d'une planche, ou le premier aperçu d'impression — et ne le redemande
+plus ; la section des badges et l'aperçu le montrent, et il se change d'un
+geste. La question offre chaque papier comme un choix distinct, d'un geste. Le
 redemander chaque fois apprend à cliquer sans lire (§ 5.9). Le choix s'écrit
 dans tout mode, en lecture et sur un plan bloqué : c'est un réglage de la
 machine, pas une modification de l'événement. En mode portable (§ 8.6), ce
@@ -1952,7 +1999,9 @@ Quatre exigences rendent ce coût acceptable, et aucune n'est facultative.
 
 **Brouillon, proposé et retenu n'interdisent rien.** Ils ordonnent le travail,
 se posent en cliquant l'état, et passer de l'un à l'autre **ne détruit jamais**
-de données.
+de données. Les quatre états se montrent en suite d'étapes, dans cet ordre.
+L'état courant porte le fond de sa teinte, son icône et le gras ; chaque étape
+reste la commande qui pose son état, et le refus s'affiche à côté d'elle.
 
 **Bloqué refuse toute modification** — tours, options, tables, participants,
 import, et jusqu'à la position d'une table à l'écran. La lecture et l'impression
@@ -2056,6 +2105,12 @@ une appartenance nommée « ».
 > deux collègues, G est gonflé, et A_max avec lui. Le défaut est muet — aucun
 > indicateur ne s'en aperçoit.
 
+L'aperçu et le rapport classent chacun de leurs messages en **refus** — le refus
+global, les lignes refusées —, **avis** — les doublons, les homonymes d'une mise
+à jour, les cellules sur plusieurs lignes qui portent le séparateur — ou
+**information** — les orthographes fondues, un import qui n'a rien écrit. Une
+pastille nomme la classe en texte, avec son icône ; la couleur la redit.
+
 **La ligne invalide : importer le reste.** Le logiciel importe les lignes
 valides et **réexporte les refusées** en un CSV reprenant les colonnes
 d'origine, augmenté de `ligne` et `motif` — deux colonnes qu'aucun en-tête ne
@@ -2102,6 +2157,12 @@ Trois mécanismes rendent tenable la saisie de 260 personnes :
    les sept personnes d'une organisation, c'est taper sept noms.
 3. **La grille éditable**, au clavier, avec tri et filtre. Corriger est ce que
    l'opérateur fait le plus, la veille et sur place.
+
+La liste des participants porte une ligne de comptes — personnes, à placer,
+exclues, appartenances — et une légende des appartenances, chacune avec le
+nombre de personnes qui la portent, exclues comprises ; dans la grille,
+l'appartenance s'affiche en pastille de sa teinte (§ 12.7), le titre pressenti
+et l'exclusion en pastilles à icône.
 
 **La liste s'exporte en CSV dans la forme exacte qu'il importe.** L'aller-retour
 est éprouvé par un test qui importe, exporte et compare champ par champ : il
@@ -2181,14 +2242,15 @@ embarquée.
 
 Conséquences à tenir :
 
-- **La police est embarquée** : Noto Sans, en graisses normale et grasse, sous la
-  licence libre SIL Open Font License 1.1, dont le texte accompagne le livrable.
-  Elle couvre le latin étendu du français, ligatures comprises, et n'entre dans
-  le document qu'en **sous-ensemble**, les seuls glyphes que la planche emploie.
-  C'est aussi la police de toute l'interface : l'écran ressemble aux captures
-  d'écran, et la mesure de la chaîne témoin du § 19.4 porte sur la police que
-  l'opérateur voit. Un caractère qu'elle n'a pas se nomme avant de produire
-  (§ 11.5).
+- **La police est embarquée** : Noto Sans, en graisses normale et grasse, sous
+  la licence libre SIL Open Font License 1.1, dont le texte accompagne le
+  livrable. Elle couvre le latin étendu du français, ligatures comprises, et
+  n'entre dans le document qu'en **sous-ensemble**, les seuls glyphes que la
+  planche emploie. C'est aussi la police de toute l'interface : l'écran
+  ressemble aux captures d'écran, et la mesure de la chaîne témoin du § 19.4
+  porte sur la police que l'opérateur voit. L'interface ne l'emploie qu'en ses
+  deux seules graisses : ni demi-gras ni graisse intermédiaire. Un caractère
+  qu'elle n'a pas se nomme avant de produire (§ 11.5).
 - **Chaque police embarquée porte une table `ToUnicode`.** Sans elle, un
   sous-ensemble de police encode ses glyphes dans un ordre interne : les accents
   s'impriment correctement et l'extraction rend du charabia. Le test ne distingue
@@ -2592,12 +2654,14 @@ de l'événement ouvre et qui se referme vers la section d'où il vient. Il offr
 **trois vues** : le plan, tour par tour ; la liste d'accueil ; la feuille par
 table. Le rapport de placement et la page de qualité s'imprimeront avec la page
 de qualité elle-même, à l'itération 5 : leurs lignes du tableau décrivent ce qui
-vient, non ce que l'aperçu offre. L'aperçu imprime la source que le plan montre —
-le retenu, la proposition montrée, ou les seules réservations — et n'écrit rien
-dans l'événement : il vit en lecture et sur un plan bloqué. Sa commande
+vient, non ce que l'aperçu offre. L'aperçu imprime la source que le plan montre
+— le retenu, la proposition montrée, ou les seules réservations — et n'écrit
+rien dans l'événement : il vit en lecture et sur un plan bloqué. Sa commande
 « Imprimer » demande à la plateforme le papier et l'orientation de la vue : la
 boîte de dialogue du navigateur sous `web`, celle du système sous `electron`. Un
-échec se dit sur la commande ; une annulation ne dit rien.
+échec se dit sur la commande ; une annulation ne dit rien. La barre de l'aperçu,
+qui ne s'imprime pas, groupe ses commandes : la vue imprimée, les réglages de la
+vue, le papier et « Imprimer », puis « Fermer l'aperçu » à part.
 
 **La feuille par table couvre la soirée** : une feuille par table, une colonne
 par tour, que l'animateur garde d'un tour à l'autre. L'aperçu offre aussi « Une
@@ -2892,10 +2956,23 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   le plan de salle, et ne servent à rien d'autre ; chacune ne peint que les
   marques de sa règle. Elles se distinguent entre elles et des autres marques
   du plan **une fois les trois dichromaties simulées**.
+- **Les couleurs d'appartenance ne vont que sur les listes**, jamais sur le
+  plan, dont le canal chromatique appartient aux conflits : au plus six teintes
+  catégorielles, chacune à 30° au moins des teintes de conflit dans chaque
+  thème, distinctes deux à deux une fois les trois dichromaties simulées et,
+  deux teintes voisines, en clarté. Les appartenances distinctes de l'événement
+  — deux chaînes différentes en font deux, comme pour le moteur — se rangent par
+  leur clé normalisée (§ 10.1), comparée point de code par point de code, puis,
+  à clé égale, par leur chaîne, et reçoivent les teintes dans cet ordre.
+  L'attribution lit toute la liste, exclues comprises : un filtre, un tri ou une
+  exclusion ne repeint rien. Au-delà de six, la pastille est neutre. Une
+  pastille porte toujours le nom.
 - **Une échelle séquentielle est une seule teinte, du clair au foncé.** Jamais
   d'arc-en-ciel : un dégradé multicolore invente des frontières là où la
   grandeur est continue.
-- **Le texte garde une encre neutre** ; la couleur est portée par la marque.
+- **Le texte garde une encre neutre** ; la couleur est portée par la marque. Une
+  pastille d'état, de statut ou d'appartenance est un fond teinté, un signe —
+  icône ou point — de la teinte, et un libellé de l'encre de la page.
 - **La palette se valide par calcul, jamais à l'œil** : simuler d'abord les trois
   dichromaties, **puis** mesurer l'écart — mesurer sur les couleurs d'origine ne
   dit rien de ce que voit une personne daltonienne. **4,5:1** pour le texte,
@@ -3280,7 +3357,7 @@ des fonctions pures du module de géométrie.
 | tenir hors ligne | se compile en JavaScript ordinaire ; Vite est une dépendance de développement qui ne survit pas à la construction |
 | rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main |
 | se tester sans navigateur | n'impose d'écrire aucun calcul dans un composant ; le composant ne contient que le câblage |
-| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique — décliné en deux thèmes |
+| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande et le cadre de mode, les messages (avis, refus, information), le plan, le papier |
 
 **Les candidates écartées.** Vue 3 est le second choix défendable, écarté de peu
 sur le poids et sur la discipline qu'exige sa réactivité. React est écarté sur la
@@ -3508,6 +3585,14 @@ document imprimé y fait exception par construction : le papier est clair dans
 les deux thèmes, et ses textes et marques prennent les couleurs du thème clair ;
 le tableau les montre donc aux mêmes ratios sous les deux thèmes, sans que la
 mesure ait failli.
+
+**Une seule exception, bornée, à l'épreuve par rendu** : le signe d'une
+pastille, d'un message et de la bande de mode, que son libellé accompagne
+toujours, tient 3:1 sur le fond de sa pastille, de son message ou de sa bande,
+mesuré au rendu des primitives dans les deux thèmes ; ses autres fonds sont
+validés par calcul sous les trois dichromaties ; le libellé, lui, se mesure au
+rendu comme tout texte. Tant qu'aucun écran ne montre tous ces signes, ils ne
+figurent pas au tableau des ratios du § 19.5.
 
 **Le logiciel n'applique aucune opacité partielle, aucun filtre et aucun mode de
 fusion au texte ni aux marques porteuses d'information.** Le style calculé rend
