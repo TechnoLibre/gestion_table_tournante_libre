@@ -16,9 +16,14 @@
   // quand il est donné, reçoit le refus affiché au départ du remède, celui
   // qu'il levait : le porteur ne retire que lui, même remplacé entre-temps.
   // Un refus de details.autres rend à lever le refus qui le porte.
+  //
+  // Le refus se peint sur son propre fond, --couleur-refus-fond, bordé de son
+  // filet et d'un trait de gauche de la teinte du refus, une icône devant son
+  // texte : il se lit de même sur la page, une carte ou une fenêtre.
   import { getContext } from 'svelte';
   import { actionRemede } from './commande.js';
   import Commande from './Commande.svelte';
+  import Icone from './Icone.svelte';
   import Refus from './Refus.svelte';
 
   let { refus, lever = null, gestes = {}, id = undefined } = $props();
@@ -43,7 +48,7 @@
 </script>
 
 <div class="refus" role="status" data-refus={refus.code} {id}>
-  <p>{message}</p>
+  <p><span class="signe"><Icone nom="interdit" /></span>{message}</p>
   {#if action !== null}
     {#key action}
       <Commande
@@ -68,12 +73,20 @@
     align-items: flex-start;
     gap: var(--espace-1);
     padding: var(--espace-1) var(--espace-2);
+    border: 1px solid var(--couleur-refus-filet);
     border-left: 3px solid var(--couleur-refus);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-refus-fond);
     color: var(--couleur-refus);
     font-size: var(--taille-texte);
   }
 
   p {
     margin: 0;
+  }
+
+  .signe {
+    margin-right: var(--espace-1);
+    color: var(--couleur-refus-marque);
   }
 </style>

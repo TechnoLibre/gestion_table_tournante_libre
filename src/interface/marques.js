@@ -11,6 +11,13 @@
 // Les remplissages d'une chaise sont son fond, son remplissage plein et les
 // deux couleurs de la hachure — des traits --couleur-hachure sur le fond de
 // la chaise : une marque posée sur une chaise se mesure sur chacun.
+//
+// Deux registres de marques : MARQUES, celles que les écrans rendent sous
+// data-marque et que les épreuves de rendu mesurent sur ce qui est peint
+// dessous ; SIGNES, celles des pastilles, des messages, de la bande de mode
+// et de l'action principale, qui se valident par calcul sur chacun de leurs
+// fonds. Un signe ne porte jamais seul une information : un libellé
+// l'accompagne toujours.
 
 const c = (nom) => `--couleur-${nom}`;
 
@@ -56,7 +63,50 @@ export const JETONS_CONFLIT = Object.freeze(CONFLITS.map(({ jeton }) => jeton));
  *  elle se pose juste sous la plus petite séparation que la palette tient
  *  entre une teinte de conflit et une autre marque, et garde la palette de
  *  reculer sans établir qu'un écart de 5 se perçoit. */
-export const SEPARATIONS = Object.freeze({ entreConflits: 12, autresMarques: 5 });
+export const SEPARATIONS = Object.freeze({ entreConflits: 12, autresMarques: 5, entreAppartenances: 10, clarteAppartenances: 10 });
+
+/** La palette catégorielle des appartenances, sur les listes seulement —
+ *  jamais sur le plan, dont le canal chromatique appartient aux conflits :
+ *  { rang, marque, fond }, rang de 1 à n, le jeton de son point et celui du
+ *  fond de sa pastille. Ses marques se séparent deux à deux de
+ *  SEPARATIONS.entreAppartenances sous les trois dichromaties, et deux
+ *  teintes voisines de SEPARATIONS.clarteAppartenances en clarté
+ *  (verifierClartes) : six teintes au plus tiennent ces deux seuils à 3:1
+ *  sur la carte. Au-delà de n appartenances, la pastille est neutre
+ *  (appartenances.js). */
+export const TEINTES_APPARTENANCE = Object.freeze(
+  [1, 2, 3, 4, 5, 6].map((rang) =>
+    Object.freeze({ rang, marque: c(`appartenance-${rang}-marque`), fond: c(`appartenance-${rang}-fond`) }),
+  ),
+);
+
+// Les surfaces de contenu sur lesquelles une pastille se pose.
+const SURFACES = ['carte-fond', 'carte-fond-sourd', 'page-fond'];
+// Les teintes d'une pastille dont la marque se pose aussi hors de son fond.
+const TEINTES_DE_PASTILLE = [
+  ['etatBrouillon', 'etat-brouillon'],
+  ['etatPropose', 'etat-propose'],
+  ['etatRetenu', 'etat-retenu'],
+  ['etatBloque', 'etat-bloque'],
+  ['neutre', 'neutre'],
+  ...TEINTES_APPARTENANCE.map(({ rang }) => [`appartenance${rang}`, `appartenance-${rang}`]),
+];
+
+/** Les signes, même forme que MARQUES, seuil 3 : l'icône ou le point d'une
+ *  pastille sur son fond teinté et sur les surfaces de contenu ; l'icône
+ *  d'un message sur son fond ; l'icône de la bande de mode, de la teinte du
+ *  cadre de mode, sur le fond de la bande ; le fond de l'action principale,
+ *  qui délimite le bouton, sur les surfaces. */
+export const SIGNES = Object.freeze([
+  ...TEINTES_DE_PASTILLE.map(([nom, teinte]) => marque(nom, `${teinte}-marque`, [`${teinte}-fond`, ...SURFACES])),
+  marque('signeAvis', 'avis-marque', ['avis-fond']),
+  marque('signeRefus', 'refus-marque', ['refus-fond']),
+  marque('signeInformation', 'information-marque', ['information-fond']),
+  marque('bandeEcriture', 'cadre-ecriture', ['mode-ecriture-fond']),
+  marque('bandeLecture', 'cadre-lecture', ['mode-lecture-fond']),
+  marque('bandeBloque', 'cadre-bloque', ['mode-bloque-fond']),
+  marque('actionPrincipale', 'action-fond', SURFACES),
+]);
 
 /** Les marques porteuses d'information (§ 14.5) : { nom, jeton, fonds, seuil: 3 } — nom, la
  *  désignation data-marque ; jeton, celui qui la peint ; fonds, chaque jeton sur lequel elle
@@ -86,7 +136,7 @@ export const MARQUES = Object.freeze([
   marque('cadreLecture', 'cadre-lecture', ['page-fond']),
   marque('cadreEcriture', 'cadre-ecriture', ['page-fond']),
   marque('cadreBloque', 'cadre-bloque', ['page-fond']),
-  marque('focus', 'focus', ['page-fond', 'bandeau-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  marque('focus', 'focus', ['page-fond', 'bandeau-fond', 'carte-fond', 'carte-fond-sourd', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
   // Le mobilier sur le sol : le trait de la table, celui de la chaise, qui
   // touche aussi le plateau.
   marque('contourTable', 'table-trait', ['sol']),
@@ -105,14 +155,40 @@ export const MARQUES = Object.freeze([
   marque('filigrane', 'filigrane', ['papier']),
 ]);
 
-/** Les textes et leurs fonds, même forme, seuil 4,5 : page, secondaire, bandeau, refus,
- *  avis, listes du plan sur le sol, pastille. */
+// Les fonds teintés d'une pastille : ceux de ses teintes, puis ceux des
+// messages, qu'un statut reprend, et la teinte de l'action.
+const FONDS_ETIQUETTE = [
+  ...TEINTES_DE_PASTILLE.map(([, teinte]) => `${teinte}-fond`),
+  'avis-fond',
+  'refus-fond',
+  'information-fond',
+  'action-teinte',
+];
+
+/** Les textes et leurs fonds, même forme, seuil 4,5 : page, secondaire,
+ *  bandeau, refus, avis, listes du plan sur le sol, pastille du plan ; puis
+ *  l'encre de la page sur la carte, l'encre secondaire sur la carte, le
+ *  texte d'une étiquette — l'encre de la page sur chaque fond teinté de
+ *  pastille (§ 12.7) —, celui de la bande de mode, la version et la
+ *  provenance du bandeau, le thème retenu du bandeau, aux couleurs du
+ *  bandeau inversées, le texte de l'action principale, un lien ou un texte
+ *  mis en valeur de l'encre de l'action, et l'information. Le refus, l'avis
+ *  et l'information gardent l'encre de leur message, sur son fond. */
 export const TEXTES = Object.freeze([
   texte('page', 'page-texte', ['page-fond']),
   texte('secondaire', 'page-texte-secondaire', ['page-fond']),
   texte('bandeau', 'bandeau-texte', ['bandeau-fond']),
-  texte('refus', 'refus', ['page-fond']),
-  texte('avis', 'avis', ['page-fond']),
+  texte('refus', 'refus', ['page-fond', 'refus-fond', 'carte-fond']),
+  texte('avis', 'avis', ['page-fond', 'avis-fond', 'carte-fond']),
   texte('listes', 'liste-texte', ['sol']),
   texte('pastille', 'pastille-texte', ['pastille-fond']),
+  texte('carte', 'page-texte', ['carte-fond', 'carte-fond-sourd']),
+  texte('secondaireCarte', 'page-texte-secondaire', ['carte-fond', 'carte-fond-sourd']),
+  texte('etiquette', 'page-texte', FONDS_ETIQUETTE),
+  texte('bandeMode', 'page-texte', ['mode-ecriture-fond', 'mode-lecture-fond', 'mode-bloque-fond']),
+  texte('bandeauSecondaire', 'bandeau-texte-secondaire', ['bandeau-fond']),
+  texte('bandeauChoisi', 'bandeau-fond', ['bandeau-texte']),
+  texte('action', 'action-texte', ['action-fond']),
+  texte('lien', 'action-encre', ['page-fond', 'carte-fond', 'carte-fond-sourd', 'action-teinte']),
+  texte('information', 'information', ['information-fond', 'page-fond', 'carte-fond']),
 ]);

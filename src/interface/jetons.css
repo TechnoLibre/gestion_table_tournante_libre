@@ -62,7 +62,27 @@
    au-dessus de sa ligne de base à 0,262 au-dessous : les capitales
    accentuées (0,944) et les jambages (0,244) du latin y tiennent ; seules
    les capitales à deux diacritiques superposés (jusqu'à 1,059) en
-   débordent. */
+   débordent.
+
+   Les familles de l'interface, en plus de la page, du bandeau, du plan et
+   du papier : la carte — son fond, son fond sourd, qui porte une bande ou
+   un en-tête de tableau, son filet, son ombre, le filet léger entre deux
+   lignes d'un tableau — ; l'action principale — son fond, son texte, sa
+   teinte claire et son encre, celle d'un lien — ; les quatre états du plan,
+   le neutre et les appartenances, chacun un fond teinté et une marque, que
+   lisent les pastilles ; la bande de mode, un fond et un filet par mode, sa
+   marque étant la teinte du cadre de mode ; les messages — avis, refus,
+   information —, chacun son encre, un fond, un filet et une marque.
+
+   Le texte d'une pastille ou de la bande de mode garde l'encre de la page
+   (§ 12.7) : la teinte se porte par le fond et la marque. Les marques des
+   pastilles, des messages et de la bande se valident par calcul (SIGNES,
+   marques.js).
+
+   Les teintes d'appartenance ne vont que sur les listes, jamais sur le
+   plan : six teintes au plus, catégorielles, chacune à 30° au moins des
+   teintes de conflit, distinctes deux à deux sous les trois dichromaties et,
+   deux teintes voisines, en clarté (TEINTES_APPARTENANCE, marques.js). */
 
 @font-face {
   font-family: 'Noto Sans';
@@ -89,12 +109,17 @@ textarea {
   --police-interface: 'Noto Sans', system-ui, sans-serif;
   --police-interligne: 1.3;
 
-  /* Échelle typographique, du plus petit au plus grand. */
+  /* Échelle typographique, du plus petit au plus grand ; l'intertitre en
+     petites capitales prend --interlettre-capitales. */
+  --taille-intertitre: 0.75rem;
   --taille-texte-petit: 0.8125rem;
   --taille-texte-bandeau: 0.9375rem;
   --taille-texte: 1rem;
+  --taille-titre-carte: 1.125rem;
   --taille-titre: 1.25rem;
   --taille-titre-grand: 1.5rem;
+  --taille-titre-page: 1.875rem;
+  --interlettre-capitales: 0.05em;
 
   --espace-1: 0.25rem;
   --espace-2: 0.5rem;
@@ -103,12 +128,22 @@ textarea {
   --espace-5: 1.5rem;
   --espace-6: 2rem;
 
+  /* Rayons : celui d'un contrôle, d'un bouton, d'une carte, d'une pilule. */
   --rayon-1: 0.25rem;
   --rayon-2: 0.5rem;
+  --rayon-3: 0.75rem;
+  --rayon-pilule: 62.5rem;
 
-  /* Ombres : une couleur opaque par thème, --couleur-ombre. */
+  /* La hauteur d'une cible principale (44 px), et la largeur au-delà de
+     laquelle le contenu d'un écran se centre. */
+  --hauteur-cible: 2.75rem;
+  --largeur-page: 87rem;
+
+  /* Ombres : une couleur opaque par thème, --couleur-ombre ; celle d'une
+     carte, plus légère, --couleur-carte-ombre. */
   --ombre-1: 0 1px 2px var(--couleur-ombre);
   --ombre-2: 0 2px 6px var(--couleur-ombre);
+  --ombre-carte: 0 1px 2px var(--couleur-carte-ombre);
 }
 
 :root,
@@ -117,25 +152,82 @@ textarea {
   color-scheme: light;
 
   /* Page. */
-  --couleur-page-fond: #f6f7f9;
-  --couleur-page-texte: #1c2128;
-  --couleur-page-texte-secondaire: #4b5563;
-  --couleur-page-filet: #c3c9d1;
+  --couleur-page-fond: #f3f5f8;
+  --couleur-page-texte: #18212f;
+  --couleur-page-texte-secondaire: #586374;
+  --couleur-page-filet: #c3cbd6;
   --couleur-ombre: #b4bcc6;
 
-  /* Bandeau d'application. */
-  --couleur-bandeau-fond: #172b47;
-  --couleur-bandeau-texte: #ffffff;
-  --couleur-bandeau-filet: #8fb3d9;
+  /* Carte. */
+  --couleur-carte-fond: #ffffff;
+  --couleur-carte-fond-sourd: #f8fafc;
+  --couleur-carte-filet: #dce1e8;
+  --couleur-carte-ombre: #e1e5eb;
+  --couleur-ligne-filet: #edf0f4;
 
-  /* Cadre de mode (§ 8.4). */
+  /* Bandeau d'application. */
+  --couleur-bandeau-fond: #13223a;
+  --couleur-bandeau-texte: #ffffff;
+  --couleur-bandeau-texte-secondaire: #b9c4d6;
+  --couleur-bandeau-filet: #4a6185;
+  --couleur-bandeau-marque: #7fb0f0;
+
+  /* Action principale. */
+  --couleur-action-fond: #1f5fbf;
+  --couleur-action-texte: #ffffff;
+  --couleur-action-teinte: #e8f0fb;
+  --couleur-action-encre: #184c99;
+
+  /* États du plan (§ 9), le neutre et les appartenances : fond teinté et
+     marque. */
+  --couleur-neutre-fond: #eef1f5;
+  --couleur-neutre-marque: #5e6b7a;
+  --couleur-etat-brouillon-fond: var(--couleur-neutre-fond);
+  --couleur-etat-brouillon-marque: var(--couleur-neutre-marque);
+  --couleur-etat-propose-fond: #fbf0de;
+  --couleur-etat-propose-marque: #9a6500;
+  --couleur-etat-retenu-fond: #e1f3ec;
+  --couleur-etat-retenu-marque: #1a8566;
+  --couleur-etat-bloque-fond: #ece9fa;
+  --couleur-etat-bloque-marque: #6a55c8;
+  --couleur-appartenance-1-fond: #e4eff4;
+  --couleur-appartenance-1-marque: #185a72;
+  --couleur-appartenance-2-fond: #f7f1e3;
+  --couleur-appartenance-2-marque: #a17317;
+  --couleur-appartenance-3-fond: #f1eafc;
+  --couleur-appartenance-3-marque: #7c24e0;
+  --couleur-appartenance-4-fond: #e4f2ef;
+  --couleur-appartenance-4-marque: #32857a;
+  --couleur-appartenance-5-fond: #f2ede3;
+  --couleur-appartenance-5-marque: #6b4d0f;
+  --couleur-appartenance-6-fond: #f3f0fc;
+  --couleur-appartenance-6-marque: #8f6dd5;
+
+  /* Cadre de mode (§ 8.4), et bande de mode : fond et filet ; sa marque est
+     la teinte du cadre. */
   --couleur-cadre-lecture: #5c6878;
   --couleur-cadre-ecriture: #2e7d32;
   --couleur-cadre-bloque: #7b3fa0;
+  --couleur-mode-lecture-fond: #e9edf3;
+  --couleur-mode-lecture-filet: #c3cbd6;
+  --couleur-mode-ecriture-fond: #e3f4e8;
+  --couleur-mode-ecriture-filet: #a9d8b8;
+  --couleur-mode-bloque-fond: #f1eaf7;
+  --couleur-mode-bloque-filet: #cfb5e3;
 
-  /* Messages. */
+  /* Messages : encre, fond, filet, marque. */
   --couleur-refus: #6a1b9a;
+  --couleur-refus-fond: #f6effb;
+  --couleur-refus-filet: #cfb3e6;
+  --couleur-refus-marque: var(--couleur-refus);
   --couleur-avis: #7a5000;
+  --couleur-avis-fond: #fff6e5;
+  --couleur-avis-filet: #f0c77a;
+  --couleur-avis-marque: var(--couleur-avis);
+  --couleur-information: #1d5bb8;
+  --couleur-information-fond: #e8f0fb;
+  --couleur-information-filet: #b7cef0;
+  --couleur-information-marque: var(--couleur-information);
 
   /* Désignation. Le focus, la sélection, la mise en évidence et le fantôme
      passent sur une chaise vide comme sur une chaise pleine : leur clarté se
@@ -179,16 +271,68 @@ textarea {
   --couleur-page-filet: #3a414b;
   --couleur-ombre: #000000;
 
+  --couleur-carte-fond: #1b1f25;
+  --couleur-carte-fond-sourd: #20252c;
+  --couleur-carte-filet: #2e353f;
+  --couleur-carte-ombre: #0b0d10;
+  --couleur-ligne-filet: #262c34;
+
   --couleur-bandeau-fond: #1d2c3f;
   --couleur-bandeau-texte: #f2f4f7;
+  --couleur-bandeau-texte-secondaire: #b3bfd0;
   --couleur-bandeau-filet: #5b7fa6;
+  --couleur-bandeau-marque: #8fbaf2;
+
+  --couleur-action-fond: #8ab4f8;
+  --couleur-action-texte: #0b1730;
+  --couleur-action-teinte: #1a2b45;
+  --couleur-action-encre: #a8c7fa;
+
+  --couleur-neutre-fond: #272d36;
+  --couleur-neutre-marque: #9aa5b4;
+  --couleur-etat-brouillon-fond: var(--couleur-neutre-fond);
+  --couleur-etat-brouillon-marque: var(--couleur-neutre-marque);
+  --couleur-etat-propose-fond: #352a15;
+  --couleur-etat-propose-marque: #e0a54a;
+  --couleur-etat-retenu-fond: #15322a;
+  --couleur-etat-retenu-marque: #4cc3a0;
+  --couleur-etat-bloque-fond: #29254a;
+  --couleur-etat-bloque-marque: #a99af0;
+  --couleur-appartenance-1-fond: #1f2335;
+  --couleur-appartenance-1-marque: #96a1e9;
+  --couleur-appartenance-2-fond: #2b2416;
+  --couleur-appartenance-2-marque: #c98f1d;
+  --couleur-appartenance-3-fond: #251d34;
+  --couleur-appartenance-3-marque: #9c5ae7;
+  --couleur-appartenance-4-fond: #162b2a;
+  --couleur-appartenance-4-marque: #70e1d2;
+  --couleur-appartenance-5-fond: #2a2717;
+  --couleur-appartenance-5-marque: #e7cb5a;
+  --couleur-appartenance-6-fond: #152826;
+  --couleur-appartenance-6-marque: #298e88;
 
   --couleur-cadre-lecture: #9aa5b4;
   --couleur-cadre-ecriture: #81c784;
   --couleur-cadre-bloque: #ce93d8;
+  --couleur-mode-lecture-fond: #1f252d;
+  --couleur-mode-lecture-filet: #3a434f;
+  --couleur-mode-ecriture-fond: #16291c;
+  --couleur-mode-ecriture-filet: #2f5e3c;
+  --couleur-mode-bloque-fond: #271e33;
+  --couleur-mode-bloque-filet: #56407a;
 
   --couleur-refus: #d7a6f0;
+  --couleur-refus-fond: #261d31;
+  --couleur-refus-filet: #5d4677;
+  --couleur-refus-marque: var(--couleur-refus);
   --couleur-avis: #f0c060;
+  --couleur-avis-fond: #2e2513;
+  --couleur-avis-filet: #6b5424;
+  --couleur-avis-marque: var(--couleur-avis);
+  --couleur-information: #9cc2f5;
+  --couleur-information-fond: #172338;
+  --couleur-information-filet: #34507a;
+  --couleur-information-marque: var(--couleur-information);
 
   --couleur-focus: #8764e1;
   --couleur-selection: #4070f0;

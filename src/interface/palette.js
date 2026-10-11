@@ -3,8 +3,9 @@
 
 // La palette se valide par calcul (§ 12.7, § 14.5). Le module lit les jetons
 // de couleur dans le texte de jetons.css, simule les trois dichromaties,
-// mesure le contraste au sens des WCAG et l'écart perçu entre deux
-// couleurs, et contrôle les teintes réservées aux conflits. Il est pur : il
+// mesure le contraste au sens des WCAG, l'écart perçu entre deux couleurs
+// et l'écart de clarté de deux teintes voisines, et contrôle les teintes
+// réservées aux conflits. Il est pur : il
 // reçoit le texte de la feuille, ne lit aucun fichier et ne touche pas le
 // document.
 //
@@ -357,6 +358,36 @@ export function verifierSeparation(texteCss, jetons, autres, seuil) {
         if (ecart < seuil) fautes.push({ theme, simulation, jeton, autre, ecart, seuil });
       }
     }
+  }
+  return fautes;
+}
+
+/** Des teintes voisines se distinguent en clarté : dans chaque thème, deux
+ *  jetons dont les teintes HSL d'origine se tiennent à moins d'ECART_TEINTE
+ *  degrés — ou dont l'un se lit gris, sans teinte — s'écartent d'au moins
+ *  seuil en clarté, le L d'OKLab multiplié par 100. Deux teintes plus
+ *  éloignées se distinguent par la teinte et ne se mesurent pas ici. Rend
+ *  les fautes [{theme, jeton, autre, ecart, seuil}], ecart l'écart de clarté
+ *  × 100, dans l'ordre thème, paires de jetons ; [] quand tout tient. Un
+ *  jeton absent d'un thème lève. */
+export function verifierClartes(texteCss, jetons, seuil) {
+  const fautes = [];
+  for (const theme of THEMES) {
+    const lus = lireJetons(texteCss, theme);
+    const lire = (nom) => {
+      if (!lus.has(nom)) throw new Error(`jeton absent du thème ${theme} : ${nom}`);
+      return lus.get(nom);
+    };
+    jetons.forEach((jeton, i) => {
+      for (const autre of jetons.slice(i + 1)) {
+        const [a, b] = [lire(jeton), lire(autre)];
+        const [ta, tb] = [teinte(a), teinte(b)];
+        const brut = ta === null || tb === null ? 0 : Math.abs(ta - tb);
+        if (Math.min(brut, 360 - brut) >= ECART_TEINTE) continue;
+        const ecart = 100 * Math.abs(oklab(a)[0] - oklab(b)[0]);
+        if (ecart < seuil) fautes.push({ theme, jeton, autre, ecart, seuil });
+      }
+    });
   }
   return fautes;
 }

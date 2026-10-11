@@ -21,6 +21,7 @@ import {
   oklab,
   simuler,
   teinte,
+  verifierClartes,
   verifierPalette,
   verifierSeparation,
   verifierTeintesReservees,
@@ -371,6 +372,41 @@ describe('ecartPercu et verifierSeparation (§ 12.7 : simuler d’abord, puis me
     );
     assert.equal(fautes.length, 2 * 2 * 4);
     assert.throws(() => verifierSeparation(css, ['--couleur-a'], ['--couleur-absente'], 5), /--couleur-absente/);
+  });
+});
+
+describe('verifierClartes : des teintes voisines se distinguent en clarté', () => {
+  test('deux bleus de même clarté sont relevés, dans chaque thème ; un bleu et un ocre de même clarté passent : leurs teintes s’écartent', () => {
+    const css = feuille({ '--couleur-a': '#2050b0', '--couleur-b': '#2a56b2', '--couleur-o': '#8a5a00' });
+    const fautes = verifierClartes(css, ['--couleur-a', '--couleur-b', '--couleur-o'], 10);
+    assert.deepEqual(fautes.map((f) => `${f.theme} ${f.jeton}/${f.autre}`), ['clair --couleur-a/--couleur-b', 'sombre --couleur-a/--couleur-b']);
+    assert.ok(fautes.every((f) => f.seuil === 10 && f.ecart < 10 && f.ecart >= 0));
+    assert.ok(Math.abs(oklab(hex('#2050b0'))[0] - oklab(hex('#8a5a00'))[0]) < 0.1, 'le bleu et l’ocre ont une clarté voisine');
+  });
+
+  test('une teinte à 29° de l’autre est voisine, à 31° elle ne l’est plus ; un gris est voisin de toute couleur', () => {
+    // Trois couleurs de même clarté perçue, à 0,001 près : un bleu à 199,8°,
+    // un bleu à 229,2° et un autre à 231,0°.
+    const base = '#228ec3';
+    for (const [autre, voisine] of [['#637ae3', true], ['#6679e4', false]]) {
+      assert.ok(Math.abs(oklab(hex(base))[0] - oklab(hex(autre))[0]) < 0.001, autre);
+      const ecart = teinte(hex(autre)) - teinte(hex(base));
+      assert.ok(voisine ? ecart > 29 && ecart < 30 : ecart > 30 && ecart < 32, `${autre} : écart ${ecart}`);
+      const css = feuille({ '--couleur-a': base, '--couleur-b': autre });
+      assert.equal(verifierClartes(css, ['--couleur-a', '--couleur-b'], 5).length, voisine ? 2 : 0, autre);
+    }
+    const gris = feuille({ '--couleur-a': '#2050b0', '--couleur-g': '#56595e' });
+    assert.equal(teinte(hex('#56595e')), null);
+    assert.ok(Math.abs(oklab(hex('#2050b0'))[0] - oklab(hex('#56595e'))[0]) < 0.05);
+    assert.equal(verifierClartes(gris, ['--couleur-a', '--couleur-g'], 10).length, 2);
+  });
+
+  test('deux bleus de clartés écartées passent ; le seuil se mesure en L × 100 ; un jeton absent lève', () => {
+    const css = feuille({ '--couleur-clair': '#6f9be8', '--couleur-fonce': '#173a80' });
+    const ecart = 100 * Math.abs(oklab(hex('#6f9be8'))[0] - oklab(hex('#173a80'))[0]);
+    assert.deepEqual(verifierClartes(css, ['--couleur-clair', '--couleur-fonce'], ecart - 0.01), []);
+    assert.equal(verifierClartes(css, ['--couleur-clair', '--couleur-fonce'], ecart + 0.01).length, 2);
+    assert.throws(() => verifierClartes(css, ['--couleur-clair', '--couleur-absente'], 10), /--couleur-absente/);
   });
 });
 

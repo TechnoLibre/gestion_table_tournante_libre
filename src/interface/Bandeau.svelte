@@ -10,6 +10,15 @@
   // aria-pressed, et l'ouverture du panneau « À propos ». Collé en haut de la
   // fenêtre, il ne défile pas.
   //
+  // Son habillage : la marque — le dessin d'une table ronde et de ses six
+  // chaises, caché aux technologies d'assistance —, le nom, la version et la
+  // provenance en pilules, le libellé de mode en pilule grasse, puis, à
+  // droite, « Liste des événements » précédée de son icône, le thème en
+  // commutateur segmenté — le retenu plein de l'encre du bandeau, en gras —
+  // et « À propos ». Chaque élément garde la hauteur d'une ligne de commande
+  // du bandeau : le bandeau tient sur une ligne à 1 366 px, l'événement
+  // ouvert, et la surface de travail garde sa hauteur.
+  //
   // Le bandeau ne décide de rien : App lui donne l'état de la séance, la
   // version et la provenance telles qu'elles s'affichent, le thème et les
   // gestes à appeler ; mode.js choisit les clés du libellé de mode et de
@@ -21,6 +30,7 @@
   // commandes qui le portent sont un <div>, non un <span>.
   import { getContext } from 'svelte';
   import { cleAnnonceFormat, cleDeMode } from './mode.js';
+  import Icone from './primitives/Icone.svelte';
   import Refus from './primitives/Refus.svelte';
   import { THEMES, cleDeTheme } from './theme.js';
 
@@ -33,18 +43,29 @@
 </script>
 
 <header class="bandeau" data-bandeau>
+  <svg class="marque" width="24" height="24" viewBox="0 0 30 30" aria-hidden="true" focusable="false">
+    <circle cx="15" cy="15" r="7" fill="none" stroke="currentColor" stroke-width="2" />
+    <circle cx="15" cy="3.5" r="2.5" fill="currentColor" />
+    <circle cx="25" cy="9.5" r="2.5" fill="currentColor" />
+    <circle cx="25" cy="20.5" r="2.5" fill="currentColor" />
+    <circle cx="15" cy="26.5" r="2.5" fill="currentColor" />
+    <circle cx="5" cy="20.5" r="2.5" fill="currentColor" />
+    <circle cx="5" cy="9.5" r="2.5" fill="currentColor" />
+  </svg>
   <span class="nom">{t('coquille.nom')}</span>
-  <span class="version">{version}</span>
-  <span class="provenance">{provenance}</span>
+  <span class="pilule version">{version}</span>
+  <span class="pilule provenance">{provenance}</span>
   {#if cleMode !== null}
-    <span class="mode" data-mode-libelle="bandeau">{t(cleMode)}</span>
+    <span class="pilule mode" data-mode-libelle="bandeau">{t(cleMode)}</span>
   {/if}
   {#if cleAnnonce !== null}
-    <span class="annonce" data-avertissement="annonceFormat">{t(cleAnnonce)}</span>
+    <span class="pilule annonce" data-avertissement="annonceFormat">{t(cleAnnonce)}</span>
   {/if}
   <div class="commandes">
     {#if etat.evenement !== null}
-      <button type="button" data-commande="liste" onclick={revenirALaListe}>{t('coquille.liste')}</button>
+      <button type="button" data-commande="liste" onclick={revenirALaListe}
+        ><Icone nom="liste" />{t('coquille.liste')}</button
+      >
       {#if refusListe !== null}
         <div class="refus-liste" data-refus="liste">
           <Refus refus={refusListe} />
@@ -73,7 +94,7 @@
     z-index: 1;
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
+    align-items: center;
     gap: var(--espace-2) var(--espace-3);
     padding: var(--espace-2) var(--espace-4);
     border-bottom: 1px solid var(--couleur-bandeau-filet);
@@ -82,12 +103,27 @@
     font-size: var(--taille-texte-bandeau);
   }
 
-  .provenance,
-  .mode,
-  .annonce {
-    padding: 0 var(--espace-2);
+  .marque {
+    flex: none;
+    color: var(--couleur-bandeau-marque);
+  }
+
+  .nom {
+    font-weight: bold;
+  }
+
+  /* La version, la provenance, le libellé de mode et l'annonce : des
+     pilules à filet. */
+  .pilule {
+    padding: 0.125rem var(--espace-2);
     border: 1px solid var(--couleur-bandeau-filet);
-    border-radius: var(--rayon-1);
+    border-radius: var(--rayon-pilule);
+    font-size: var(--taille-texte-petit);
+  }
+
+  .version,
+  .provenance {
+    color: var(--couleur-bandeau-texte-secondaire);
   }
 
   .mode {
@@ -107,42 +143,55 @@
     width: max-content;
     max-width: min(32rem, calc(100vw - 2 * var(--espace-4)));
     margin-top: var(--espace-1);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    border-radius: var(--rayon-2);
     background-color: var(--couleur-page-fond);
     color: var(--couleur-page-texte);
-  }
-
-  .commandes,
-  .themes {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--espace-2);
+    box-shadow: var(--ombre-2);
   }
 
   .commandes {
     position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espace-2);
     margin-left: auto;
   }
 
   button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espace-1);
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-bandeau-filet);
-    border-radius: var(--rayon-1);
+    border-radius: var(--rayon-2);
     background-color: var(--couleur-bandeau-fond);
     color: var(--couleur-bandeau-texte);
     font: inherit;
     cursor: pointer;
   }
 
-  /* Le thème retenu se distingue par sa forme autant que par ses couleurs :
-     texte souligné et gras, couleurs du bandeau inversées. */
-  button[aria-pressed='true'] {
+  /* Le commutateur de thème : un groupe bordé, sans fond, dont les deux
+     choix se touchent. Le retenu se distingue par sa forme autant que par
+     ses couleurs : plein, aux couleurs du bandeau inversées, et en gras. */
+  .themes {
+    display: inline-flex;
+    padding: 0.0625rem;
+    border: 1px solid var(--couleur-bandeau-filet);
+    border-radius: var(--rayon-2);
+  }
+
+  .themes button {
+    padding: 0.1875rem var(--espace-2);
+    border: none;
+    border-radius: var(--rayon-1);
+    background-color: transparent;
+  }
+
+  .themes button[aria-pressed='true'] {
     background-color: var(--couleur-bandeau-texte);
     color: var(--couleur-bandeau-fond);
     font-weight: bold;
-    text-decoration: underline;
   }
 
   button:focus-visible {

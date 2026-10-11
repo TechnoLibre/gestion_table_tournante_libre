@@ -89,12 +89,12 @@
     box-sizing: border-box;
     width: max-content;
     max-width: min(26rem, calc(100% - 16px));
-    padding: var(--espace-2);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background: var(--couleur-page-fond);
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+    background: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
-    box-shadow: var(--ombre-1);
+    box-shadow: var(--ombre-2);
     font-size: var(--taille-texte);
     font-weight: normal;
     line-height: 1.4;

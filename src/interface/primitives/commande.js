@@ -36,6 +36,25 @@
 
 import { COMMANDES } from '../../application/commandes.js';
 
+/** Les variantes d'une commande, la secondaire en tête — celle d'une
+ *  commande qui n'en donne pas : principale, l'action à faire sur l'écran,
+ *  pleine de la teinte de l'action ; secondaire, à filet ; discrète, sans
+ *  fond ni filet au repos. La variante ne change que l'apparence : le rôle,
+ *  les attributs et la machine restent ceux de toute commande. */
+export const VARIANTES_COMMANDE = Object.freeze(['secondaire', 'principale', 'discrete']);
+
+/**
+ * Une variante de commande, rendue telle quelle.
+ *
+ * @param {string} variante
+ * @returns {'secondaire'|'principale'|'discrete'}
+ * @throws {RangeError} hors de VARIANTES_COMMANDE, en la nommant
+ */
+export function exigerVariante(variante) {
+  if (!VARIANTES_COMMANDE.includes(variante)) throw new RangeError(`commande : variante inconnue ${JSON.stringify(variante) ?? 'undefined'}`);
+  return variante;
+}
+
 /** Le délai au terme duquel une commande armée se désarme. */
 export const DELAI_CONFIRMATION_MS = 10_000;
 

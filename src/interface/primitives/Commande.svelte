@@ -26,12 +26,18 @@
   // data-commande porte nom, ou à défaut le dernier segment de la clé.
   // confirmer se lit au montage : une commande qui change de confirmation se
   // remonte.
+  //
+  // variante : 'secondaire', la défaut, à filet sur le fond de la carte ;
+  // 'principale', l'action à faire sur l'écran, pleine de la teinte de
+  // l'action, haute d'une cible principale ; 'discrete', sans fond ni filet
+  // au repos. Elle ne change que l'apparence ; une variante hors de
+  // VARIANTES_COMMANDE lève RangeError au montage.
   import { getContext, onDestroy, untrack } from 'svelte';
   import { effetDe } from '../raccourcis.js';
-  import { DELAI_CONFIRMATION_MS, creerMachineCommande } from './commande.js';
+  import { DELAI_CONFIRMATION_MS, creerMachineCommande, exigerVariante } from './commande.js';
   import Refus from './Refus.svelte';
 
-  let { cle, executer, confirmer = null, details = {}, nom = null, gestes = {} } = $props();
+  let { cle, executer, confirmer = null, details = {}, nom = null, gestes = {}, variante = 'secondaire' } = $props();
 
   const t = getContext('t');
   const horloge = getContext('horloge');
@@ -44,6 +50,7 @@
 
   const libelle = $derived(armee ? t(confirmer) : t(cle, details));
   const designation = $derived(nom ?? cle.slice(cle.lastIndexOf('.') + 1));
+  const forme = $derived(exigerVariante(variante));
 
   function desarmer() {
     if (minuterie === null) return;
@@ -93,6 +100,8 @@
   <button
     type="button"
     data-commande={designation}
+    class:principale={forme === 'principale'}
+    class:discrete={forme === 'discrete'}
     aria-busy={enCours ? 'true' : undefined}
     aria-disabled={enCours ? 'true' : undefined}
     onkeydown={surTouche}
@@ -111,21 +120,55 @@
     gap: var(--espace-2);
   }
 
+  /* La secondaire : à filet, sur le fond de la carte. */
   button {
     padding: var(--espace-1) var(--espace-3);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
     cursor: pointer;
   }
 
+  button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  /* La principale : pleine de la teinte de l'action, d'une cible
+     principale de haut. */
+  button.principale {
+    min-height: var(--hauteur-cible);
+    padding: 0 var(--espace-4);
+    border-color: var(--couleur-action-fond);
+    background-color: var(--couleur-action-fond);
+    color: var(--couleur-action-texte);
+    font-weight: bold;
+  }
+
+  /* La discrète : ni fond ni filet au repos ; le survol lui donne le fond
+     sourd de la carte. */
+  button.discrete {
+    border-color: transparent;
+    background-color: transparent;
+  }
+
+  button.discrete:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
   button[aria-disabled='true'] {
     border-style: dashed;
     color: var(--couleur-page-texte-secondaire);
     cursor: progress;
+  }
+
+  /* Occupée, la principale garde ses couleurs ; son filet tireté prend
+     l'encre de son texte. */
+  button.principale[aria-disabled='true'] {
+    border-color: var(--couleur-action-texte);
+    color: var(--couleur-action-texte);
   }
 
   button:focus-visible {

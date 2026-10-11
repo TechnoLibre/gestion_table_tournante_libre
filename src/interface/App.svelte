@@ -36,6 +36,14 @@
   // présent sur tout écran, ne défile pas : un écran plus haut que la
   // fenêtre défile sous lui.
   //
+  // La page porte le fond de la page ; l'écran — l'élément <main>, parent
+  // direct de chaque [data-ecran] — se centre dans --largeur-page au-delà
+  // de cette largeur et prend la fenêtre en deçà. App pose les styles de
+  // base d'un titre de premier niveau, des cellules d'un tableau et des
+  // champs de saisie de l'écran, de spécificité nulle : le style propre d'un
+  // composant l'emporte toujours, et le document imprimé (§ 11.7), sous
+  // [data-impression], ne les reçoit pas.
+  //
   // Le thème part de la propriété themeInitial, ou de la préférence du
   // système lue au montage ; le réglage de l'opérateur le change pour la
   // séance, en mémoire, posé en data-theme sur <html> (§ 19.2). À la sortie
@@ -362,6 +370,41 @@
 
   .ecran {
     flex: 1;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--largeur-page);
+    margin-inline: auto;
     padding: var(--espace-4);
+  }
+
+  /* Les styles de base de l'écran, sous :where : spécificité nulle. Le
+     titre de page ; les en-têtes alignés au début de la ligne, les nombres
+     en chiffres tabulaires ; les champs de saisie sur le fond de la carte,
+     au filet de la page — cases à cocher, boutons radio et sélecteurs de
+     fichier exceptés. */
+  :global(:where(.ecran h1:not([data-impression] *))) {
+    font-size: var(--taille-titre-page);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  :global(:where(.ecran th:not([data-impression] *))) {
+    text-align: start;
+  }
+
+  :global(:where(.ecran :is(td, th):not([data-impression] *))) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :global(
+      :where(
+          .ecran
+            :is(input:not([type='checkbox'], [type='radio'], [type='file']), select, textarea):not([data-impression] *)
+        )
+    ) {
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
   }
 </style>

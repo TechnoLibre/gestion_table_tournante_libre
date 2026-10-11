@@ -151,10 +151,10 @@
 <style>
   dialog {
     max-width: min(40rem, calc(100vw - 2 * var(--espace-4)));
-    padding: var(--espace-4);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-2);
-    background-color: var(--couleur-page-fond);
+    padding: var(--espace-5);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     box-shadow: var(--ombre-2);
   }
@@ -189,8 +189,8 @@
   button {
     padding: var(--espace-1) var(--espace-3);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     cursor: pointer;

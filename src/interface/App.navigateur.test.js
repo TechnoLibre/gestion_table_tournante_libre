@@ -40,6 +40,7 @@ import { FORMAT, analyser, configurationDepuisCharge } from '../stockage/documen
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { VERSION } from '../version.genere.js';
 import COLLECTEUR from '../../public/collecteur.js?raw';
+import { fixerCadre } from '../../test/navigateur/entrees.js';
 import { monterApp } from '../../test/navigateur/montage.js';
 import {
   attenuations,
@@ -921,6 +922,144 @@ describe('rendu du bandeau, dans les deux thèmes (§ 14.2, § 14.5)', () => {
           expect(fautes, `${theme} : ${designation(porteur)}`).toEqual([]);
         }
       });
+    }
+  });
+});
+
+// La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
+function jeton(nom) {
+  const sonde = document.createElement('span');
+  sonde.style.color = `var(${nom})`;
+  document.body.append(sonde);
+  const couleur = composantes(getComputedStyle(sonde).color);
+  sonde.remove();
+  return couleur;
+}
+
+// L'élément du bandeau dont le texte propre, blancs de bord ôtés, vaut texte.
+const porteurDe = (racine, texte) =>
+  [...racine.querySelectorAll('*')].find((e) => [...e.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim() === texte));
+
+describe('le bandeau de la maquette (§ 8.4, § 18.6)', () => {
+  test('la marque : un dessin caché aux technologies d’assistance, de la teinte de la marque, devant le nom ; la version et la provenance en pilules, de l’encre secondaire du bandeau', async () => {
+    const m = await avecEvenementOuvert();
+    for (const theme of THEMES) {
+      await sousTheme(theme, () => {
+        const dessin = bandeau(m).querySelector('svg');
+        expect(dessin, theme).not.toBeNull();
+        expect(dessin.getAttribute('aria-hidden'), theme).toBe('true');
+        expect(visible(dessin), theme).toBe(true);
+        expect(composantes(getComputedStyle(dessin).color), theme).toEqual(jeton('--couleur-bandeau-marque'));
+        const nom = porteurDe(bandeau(m), t('coquille.nom'));
+        expect(nom, theme).toBeDefined();
+        expect(dessin.compareDocumentPosition(nom) & Node.DOCUMENT_POSITION_FOLLOWING, theme).toBeTruthy();
+        expect(dessin.getBoundingClientRect().right, theme).toBeLessThanOrEqual(nom.getBoundingClientRect().left);
+        for (const texte of [VERSION.affichee, libelleProvenance('test')]) {
+          const pilule = porteurDe(bandeau(m), texte);
+          const style = getComputedStyle(pilule);
+          expect(composantes(style.color), `${theme} ${texte}`).toEqual(jeton('--couleur-bandeau-texte-secondaire'));
+          expect(composantes(style.borderTopColor), `${theme} ${texte}`).toEqual(jeton('--couleur-bandeau-filet'));
+          expect(Number.parseFloat(style.borderTopLeftRadius), `${theme} ${texte}`).toBeGreaterThanOrEqual(pilule.getBoundingClientRect().height / 2);
+        }
+      });
+    }
+  });
+
+  test('le thème en commutateur segmenté : un groupe nommé et bordé de deux boutons côte à côte ; le retenu plein de l’encre du bandeau et gras, l’autre sans fond', async () => {
+    const m = await monter();
+    const groupe = dans(m, `[role="group"][aria-label="${t('coquille.theme.titre')}"]`);
+    expect(groupe).not.toBeNull();
+    const [clair, sombre] = ['clair', 'sombre'].map((choix) => groupe.querySelector(`[data-commande="theme"][data-theme-choix="${choix}"]`));
+    expect(clair.getBoundingClientRect().top).toBe(sombre.getBoundingClientRect().top);
+    expect(clair.getBoundingClientRect().right).toBeLessThanOrEqual(sombre.getBoundingClientRect().left);
+    for (const theme of THEMES) {
+      await sousTheme(theme, () => {
+        expect(composantes(getComputedStyle(groupe).borderTopColor), theme).toEqual(jeton('--couleur-bandeau-filet'));
+        const [retenu, autre] = clair.getAttribute('aria-pressed') === 'true' ? [clair, sombre] : [sombre, clair];
+        expect(composantes(getComputedStyle(retenu).backgroundColor), theme).toEqual(jeton('--couleur-bandeau-texte'));
+        expect(composantes(getComputedStyle(retenu).color), theme).toEqual(jeton('--couleur-bandeau-fond'));
+        expect(getComputedStyle(retenu).fontWeight, theme).toBe('700');
+        expect(composantes(getComputedStyle(autre).backgroundColor), theme).toEqual([0, 0, 0, 0]);
+        expect(getComputedStyle(autre).fontWeight, theme).toBe('400');
+      });
+    }
+  });
+
+  test('« Liste des événements » et « À propos » : une icône cachée devant le texte de « Liste des événements », le texte inchangé ; le libellé de mode en pilule, en gras', async () => {
+    const m = await avecEvenementOuvert();
+    const liste = dans(m, '[data-bandeau] [data-commande="liste"]');
+    expect(liste.textContent.trim()).toBe(t('coquille.liste'));
+    expect(liste.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(dans(m, '[data-bandeau] [data-commande="apropos"]').textContent.trim()).toBe(t('coquille.apropos.titre'));
+    const mode = libelleDeMode(m);
+    expect(getComputedStyle(mode).fontWeight).toBe('700');
+    expect(Number.parseFloat(getComputedStyle(mode).borderTopLeftRadius)).toBeGreaterThanOrEqual(mode.getBoundingClientRect().height / 2);
+  });
+
+  test('le bandeau tient sur une ligne de 52 px au plus à 1 366 px de large, événement ouvert, et ne déborde pas à 1 024 px', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    try {
+      await fixerCadre(1366, 700);
+      const m = await avecEvenementOuvert();
+      expect(bandeau(m).getBoundingClientRect().height).toBeLessThanOrEqual(52);
+      await fixerCadre(1024, 700);
+      flushSync();
+      expect(bandeau(m).scrollWidth).toBeLessThanOrEqual(bandeau(m).clientWidth);
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(1024);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+});
+
+describe('la page de la maquette : fond, largeur bornée, styles de base', () => {
+  test('au-delà de la largeur de page, l’écran se centre dans --largeur-page ; en deçà, il prend la fenêtre', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    try {
+      await fixerCadre(1800, 900);
+      const m = await monter();
+      const main = ecran(m).parentElement;
+      expect(main.tagName.toLowerCase()).toBe('main');
+      const boite = main.getBoundingClientRect();
+      const borne = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) * 87;
+      expect(boite.width).toBeCloseTo(borne, 0);
+      expect(boite.left).toBeCloseTo((document.documentElement.clientWidth - boite.width) / 2, 0);
+      await fixerCadre(1366, 700);
+      flushSync();
+      expect(main.getBoundingClientRect().width).toBeCloseTo(document.documentElement.clientWidth, 0);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('un titre, un tableau et un champ sans style propre prennent les styles de base de l’écran ; le document imprimé les ignore', async () => {
+    const m = await monter();
+    const zone = document.createElement('div');
+    zone.innerHTML = [
+      '<h1>Titre témoin</h1>',
+      '<table><thead><tr><th>En-tête</th></tr></thead><tbody><tr><td>12</td></tr></tbody></table>',
+      '<input type="text" value="saisie">',
+      '<div data-impression><table><thead><tr><th>Papier</th></tr></thead></table><input type="text" value="papier"></div>',
+    ].join('');
+    ecran(m).append(zone);
+    try {
+      for (const theme of THEMES) {
+        await sousTheme(theme, () => {
+          const [titre, th, td, champ] = ['h1', 'th', 'td', 'input'].map((s) => zone.querySelector(s));
+          const racine = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+          expect(Number.parseFloat(getComputedStyle(titre).fontSize), theme).toBeCloseTo(racine * 1.875, 1);
+          expect(getComputedStyle(th).textAlign, theme).toBe('start');
+          expect(getComputedStyle(td).fontVariantNumeric, theme).toBe('tabular-nums');
+          expect(composantes(getComputedStyle(champ).backgroundColor), theme).toEqual(jeton('--couleur-carte-fond'));
+          expect(composantes(getComputedStyle(champ).borderTopColor), theme).toEqual(jeton('--couleur-page-filet'));
+          expect(getComputedStyle(champ).borderTopLeftRadius, theme).toBe('8px');
+          const papier = zone.querySelector('[data-impression]');
+          expect(getComputedStyle(papier.querySelector('th')).textAlign, theme).not.toBe('start');
+          expect(getComputedStyle(papier.querySelector('input')).borderTopLeftRadius, theme).not.toBe('8px');
+        });
+      }
+    } finally {
+      zone.remove();
     }
   });
 });

@@ -22,8 +22,10 @@ import {
   GESTES,
   SECTIONS_REMEDE,
   SOURCES_SECOURS,
+  VARIANTES_COMMANDE,
   actionRemede,
   creerMachineCommande,
+  exigerVariante,
   libelleRemede,
 } from './commande.js';
 
@@ -346,5 +348,19 @@ describe('commande : l’action d’un remède', () => {
     action.executer();
     assert.deepEqual(recus, [remede]);
     assert.equal(action.cle, 'communs.remede.choisirPlace');
+  });
+});
+
+describe('commande : la variante', () => {
+  test('trois variantes, la secondaire en tête : celle d’une commande qui n’en donne pas', () => {
+    assert.deepEqual(VARIANTES_COMMANDE, ['secondaire', 'principale', 'discrete']);
+    assert.ok(Object.isFrozen(VARIANTES_COMMANDE));
+  });
+
+  test('exigerVariante rend une variante du contrat telle quelle ; une autre lève RangeError en la nommant', () => {
+    for (const variante of VARIANTES_COMMANDE) assert.equal(exigerVariante(variante), variante);
+    for (const autre of ['primaire', '', null, undefined, 'Principale']) {
+      assert.throws(() => exigerVariante(autre), (e) => e instanceof RangeError && e.message.includes(JSON.stringify(autre) ?? 'undefined'), String(autre));
+    }
   });
 });
