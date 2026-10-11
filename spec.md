@@ -178,8 +178,8 @@ propositions sur le même axe — celui du **manque** (§ 12.10) —, retient ce
 qu'il préfère. Le logiciel sépare ce que le moteur a décidé de ce que les
 réservations imposent (§ 5.4). Retenir fait passer le plan à l'état *Retenu*
 (§ 9) ; les propositions non retenues restent disponibles. Le retenu se résume
-ensuite dans la liste des événements, par ses collisions cumulées et la
-différence absolue de sa somme de redondance à la cible de l'événement (§ 8.1).
+ensuite dans la liste des événements, par la différence absolue de sa somme de
+redondance à la cible de l'événement (§ 8.1).
 
 **11. Ajuster à la main.** *Facultative, reprenable.* Le même geste qu'à
 l'étape 7 déplace maintenant une personne réelle dans le placement retenu. **Le
@@ -1265,24 +1265,24 @@ pastille de l'état et son compte —, ou ne les groupe pas, au choix ; ses
 en-têtes de colonnes se groupent en « Événement », « Placement retenu » et
 « Meilleure proposition du classement », et le nom de chaque ligne en est
 l'en-tête, la date et le chemin en petite ligne dessous. Sous le tableau, des
-cartes offrent la création, le dossier de travail et les démonstrations. Deux
-colonnes résument en plus le **placement retenu** : « Collisions cumulées (paire
-et tour) », les collisions cumulées du retenu (§ 5.4), et « Diff somme
-d'appartenance », |cible − Σ r(p)|, où Σ r(p) est la somme de redondance du
-retenu — le nombre de la colonne « Redondance d'appartenance, somme Σ r(p) » du
-tableau des propositions — et la cible celle de l'événement (§ 8.9), 1000 par
-défaut, réglable dans la section des propositions. Les deux se lisent dans la
-même mesure que le tableau, sans rien écrire ; un événement sans retenu, ou dont
-le retenu est fautif ou en dérive (§ 8.9, § 9), y porte « — ». Chaque ligne
-porte aussi la **« Meilleure proposition du classement »**, sous les libellés du
-bloc que la section de la génération montre en tête : l'identifiant de la
-proposition au rang 1 du classement (§ 5.7) et ses collisions cumulées — la même
-proposition et le même nombre que ce bloc et que la première ligne du tableau
-des propositions, retenue ou non ; une proposition fautive, que l'ouverture
-écarte (§ 8.9, point 3), n'y entre pas. Sans proposition classée — aucune, ou
-aucune qui décrive encore la configuration —, l'un et l'autre valent « — ».
-Chaque intitulé s'explique dans une infobulle, posée sur l'en-tête de sa
-colonne.
+cartes offrent la création, le dossier de travail et les démonstrations. Une
+colonne résume en plus le **placement retenu** : « Diff somme d'appartenance »,
+|cible − Σ r(p)|, où Σ r(p) est la somme de redondance du retenu — le nombre de
+la colonne « Redondance d'appartenance, somme Σ r(p) » du tableau des
+propositions — et la cible celle de l'événement (§ 8.9), 1000 par défaut,
+réglable dans la section des propositions. Elle se lit dans la même mesure que
+le tableau, sans rien écrire ; un événement sans retenu, ou dont le retenu est
+fautif ou en dérive (§ 8.9, § 9), y porte « — ». Chaque ligne porte aussi la
+**« Meilleure proposition du classement »**, sous les libellés du bloc que la
+section de la génération montre en tête : l'identifiant de la proposition au
+rang 1 du classement (§ 5.7) — la même proposition que ce bloc et que la
+première ligne du tableau des propositions, retenue ou non ; une proposition
+fautive, que l'ouverture écarte (§ 8.9, point 3), n'y entre pas. Sans
+proposition classée — aucune, ou aucune qui décrive encore la configuration —,
+elle vaut « — ». La liste ne montre les collisions cumulées ni du retenu ni de
+la meilleure proposition : le tableau des propositions et le bloc de la
+génération les portent. Chaque intitulé s'explique dans une infobulle, posée
+sur l'en-tête de sa colonne.
 **La liste paraît avant ses colonnes calculées** : ses lignes s'affichent dès le
 relevé du dossier, et les mesures du retenu et la meilleure proposition, qui
 évaluent chaque événement, se calculent ensuite, un événement après l'autre, la
@@ -1406,30 +1406,31 @@ ou refusé, une saisie validée ou abandonnée, une fenêtre à confirmer referm
 et tout appui relâché sur le plan — un clic qui n'exécute rien et un déplacement
 de vue compris. Regarder sans appuyer n'en est pas une : zoomer à la molette,
 une commande de vue, changer de tour affiché ne relancent rien. Le retour
-automatique se voit au cadre, au libellé, à la bande de mode et au bandeau, et
-un avertissement non modal le dit jusqu'au passage en écriture suivant.
+automatique se voit à la bande de mode, au libellé de mode et au bandeau, et un
+avertissement non modal le dit jusqu'au passage en écriture suivant.
 
-**Le mode est visible sur la surface de travail elle-même** — un cadre et un
-libellé permanents autour du plan — et non dans un coin de barre d'outils :
-l'opérateur regarde le plan.
+**Le mode est visible sans quitter la surface de travail des yeux**, et non dans
+un coin de barre d'outils : l'opérateur regarde le plan. Sous le bandeau, quand
+un plan est ouvert, une **bande de mode** court de bord à bord de la fenêtre et
+dit le mode : son icône, son libellé, et une phrase qui dit ce qu'il permet en
+nommant la commande de la place fixe qui en sort — « Modifier » en lecture,
+« Revenir en lecture » en écriture, « Débloquer » sur un plan bloqué, et aucune
+devant un fichier d'un format plus récent (§ 8.8), qui n'en offre pas —, sur le
+fond de sa couleur. D'une hauteur constante, elle le dit dès l'entrée dans
+l'écran. Le **libellé de mode**, une pastille à côté de la place fixe, le redit
+là où la main agit. **Aucun cadre n'entoure la surface de travail** : l'écran de
+l'événement prend **toute la largeur de la fenêtre**, à son retrait près, sans
+la largeur de page qui borne la liste des événements, et le plan garde chaque
+pixel que la bande et la barre lui laissent.
 
 S'y ajoute un **bandeau d'application présent sur tout écran**, qui porte la
 version et la provenance de la construction (§ 18.6) et, **quand un plan est
-ouvert**, le libellé de mode. Les deux ne font pas double emploi : le cadre
-signale le mode là où la main agit ; le bandeau porte la version jusque sur la
-liste des événements, qui est le premier écran d'un signalement sur deux. Le
-bandeau porte aussi la marque du logiciel, le réglage de thème et « À propos » ;
-il garde une hauteur d'une ligne de commande, de sorte que la surface de travail
-ne perd rien.
-
-Sous le bandeau, quand un plan est ouvert, une **bande de mode** court de bord à
-bord de la fenêtre et redit le mode : son icône, son libellé, et une phrase qui
-dit ce qu'il permet en nommant la commande de la place fixe qui en sort —
-« Modifier » en lecture, « Revenir en lecture » en écriture, « Débloquer » sur
-un plan bloqué, et aucune devant un fichier d'un format plus récent (§ 8.8), qui
-n'en offre pas —, sur le fond de sa couleur. D'une hauteur constante, elle
-s'ajoute au cadre sans le remplacer : le cadre reste là où la main agit, la
-bande le dit dès l'entrée dans l'écran.
+ouvert**, le libellé de mode. Ils ne font pas double emploi : la bande et le
+libellé de la barre signalent le mode dans l'écran de l'événement ; le bandeau
+porte la version jusque sur la liste des événements, qui est le premier écran
+d'un signalement sur deux. Le bandeau porte aussi la marque du logiciel, le
+réglage de thème et « À propos » ; il garde une hauteur d'une ligne de commande,
+de sorte que la surface de travail ne perd rien.
 
 **Le passage en écriture est une étape nommée du parcours** (§ 2.1, étape 1b),
 et non un sous-entendu : huit des douze étapes sont modifiantes, et toutes sont
@@ -3357,7 +3358,7 @@ des fonctions pures du module de géométrie.
 | tenir hors ligne | se compile en JavaScript ordinaire ; Vite est une dépendance de développement qui ne survit pas à la construction |
 | rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main |
 | se tester sans navigateur | n'impose d'écrire aucun calcul dans un composant ; le composant ne contient que le câblage |
-| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande et le cadre de mode, les messages (avis, refus, information), le plan, le papier |
+| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande de mode, les messages (avis, refus, information), le plan, le papier |
 
 **Les candidates écartées.** Vue 3 est le second choix défendable, écarté de peu
 sur le poids et sur la discipline qu'exige sa réactivité. React est écarté sur la
@@ -4934,10 +4935,10 @@ complément.** Un signalement arrive le plus souvent sous forme d'image, et une
 capture faite à la touche d'impression d'écran, ou cadrée sur le défaut, ne
 contient pas toujours la barre de titre du système — elle ne la contient jamais sur
 la plateforme `web`, où le titre est celui d'un onglet. Un bandeau dessiné par
-l'application est dans l'image quel que soit le cadrage. Le § 8.4 impose en plus un
-cadre permanent **autour du plan** pour le mode : les deux coexistent, le cadre
-signalant le mode là où la main agit, le bandeau portant la version jusque sur la
-liste des événements.
+l'application est dans l'image quel que soit le cadrage. Le § 8.4 impose en plus une
+bande de mode **sous le bandeau** et un libellé de mode à côté de la place fixe : ils
+coexistent, la bande et le libellé signalant le mode dans l'écran de l'événement, le
+bandeau portant la version jusque sur la liste des événements.
 
 **Le bandeau annonce aussi la version de format du fichier ouvert** dès qu'elle
 diffère de celle que le binaire écrit : plus ancienne, « ce fichier se convertira à
@@ -5088,7 +5089,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | fichier | configuration | ce que la capture d'écran montre | ce que son étape affirme |
 |---|---|---|---|
 | `01-premier-ecran.png` | répertoire neuf | le répertoire vide : la commande de création et les configurations de démonstration offertes, **jamais une liste vide** (§ 8.1) | chaque configuration que le catalogue déclare est nommée et cliquable, et **leur nombre est lu dans le catalogue, jamais écrit dans le scénario** |
-| `01b-passer-en-ecriture.png` | idem | la commande « Modifier » à place fixe, et le cadre de mode autour du plan (§ 8.4) | avant ce geste, une tentative de modification est refusée ; après, elle passe |
+| `01b-passer-en-ecriture.png` | idem | la commande « Modifier » à place fixe, la bande de mode et le libellé de mode, sans cadre autour du plan (§ 8.4) | avant ce geste, une tentative de modification est refusée ; après, elle passe |
 | `02-import-apercu.png` | `participants_cas_limites.csv` | l'aperçu obligatoire (§ 10.1) : encodage et séparateur détectés et **nommés**, association par en-tête, nombre de lignes refusées | l'encodage et le séparateur affichés sont ceux que le module d'import a retenus ; l'aperçu n'est pas contournable |
 | `02b-import-cp1252.png` | `participants_cas_limites_cp1252.csv` | l'aperçu du même contenu en windows-1252, séparé par des virgules : l'encodage détecté et **nommé**, les cellules accentuées intactes (§ 10.1) | l'encodage affiché est celui que le module d'import a retenu ; les cellules accentuées affichées sont celles que rend le décodage du fichier, sans caractère parasite |
 | `03-import-rapport.png` | idem | le rapport : lignes valides, orthographes d'appartenance fondues avec leur compte, lignes refusées avec leur motif | au moins un groupe d'orthographes fondu et au moins une ligne refusée sont visibles |
@@ -5111,7 +5112,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `17-comparaison-manque.png` | **variante sans exception** (§ 15.1) | les deux profils de manque qui se croisent, l'axe commun, le zéro libellé, les trois effectifs de rangs (§ 12.10.6) | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe |
 | `18-comparaison-escalier.png` | idem | l'escalier du manque, jumeau tabulaire de la vue précédente | les effectifs cumulés du tableau reproduisent la courbe |
 | `19-ajustement.png` | l'événement retenu | le déplacement d'une personne après la retenue, l'interface disant **lequel des deux gestes** est en cours (§ 5.8) | le libellé de l'état des données est visible |
-| `20-mode-lecture.png` | idem | le cadre et le libellé permanents autour du plan, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
+| `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
 | `21-historique.png` | idem | la liste des instants, le fil courant distingué des fils abandonnés, un jalon nommé (§ 8.3) | au moins un fil abandonné est présent et marqué comme tel |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
 | `24-badges-controle.png` / `25-badges-planche.png` | idem | la **feuille de contrôle** avec son échelle de 100 mm et ses comptes, puis une **planche** de quatre A6 et ses trois filets de coupe | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle avant d'engager la rame, et une planche seule ne le montre pas |

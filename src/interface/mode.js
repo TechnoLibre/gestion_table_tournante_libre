@@ -3,7 +3,7 @@
 
 // Ce que le bandeau dit de l'événement ouvert, en clés de la table de la
 // coquille : le libellé de mode (§ 8.4, § 8.5), calculé ici une fois pour le
-// bandeau et pour le cadre de mode, et l'annonce de la version de format du
+// bandeau, la bande de mode et la barre de l'événement, et l'annonce de la version de format du
 // fichier (§ 18.6). Les deux se lisent dans l'état observable de la séance.
 
 // La clé de chaque annonce de format de la séance.

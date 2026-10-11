@@ -2,7 +2,7 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les libellés de l'événement ouvert : son en-tête et son résumé chiffré,
-// ses états, la bande et la place fixe de son cadre de mode, les phases de
+// ses états, la bande de mode et la place fixe de sa barre, les phases de
 // sa navigation, la reprise d'un verrou, ses avertissements, le support
 // rompu (§ 8.3 à § 8.9, § 9, § 14.6). Chaque clé commence par
 // « evenement. ». Une donnée qui désigne — un numéro, une séance, un
@@ -53,7 +53,7 @@ export const TABLE = new Map([
   ['evenement.phase.placer', 'Placer'],
   ['evenement.phase.produire', 'Produire'],
 
-  // --- Le cadre de mode et sa place fixe (§ 8.3, § 8.4, § 8.5) -------------
+  // --- La barre de l'événement et sa place fixe (§ 8.3, § 8.4, § 8.5) ------
   ['evenement.cadre.commandes', 'Commandes de l\u{2019}événement'],
   ['evenement.commande.defaire', 'Défaire'],
   ['evenement.commande.refaire', 'Refaire'],

@@ -1013,7 +1013,7 @@ describe('le bandeau de la maquette (§ 8.4, § 18.6)', () => {
 });
 
 describe('la page de la maquette : fond, largeur bornée, styles de base', () => {
-  test('au-delà de la largeur de page, l’écran se centre dans --largeur-page ; en deçà, il prend la fenêtre', async () => {
+  test('au-delà de la largeur de page, la liste se centre dans --largeur-page ; en deçà, elle prend la fenêtre ; l’événement prend la fenêtre à toute largeur', async () => {
     const avant = { largeur: innerWidth, hauteur: innerHeight };
     try {
       await fixerCadre(1800, 900);
@@ -1027,6 +1027,14 @@ describe('la page de la maquette : fond, largeur bornée, styles de base', () =>
       await fixerCadre(1366, 700);
       flushSync();
       expect(main.getBoundingClientRect().width).toBeCloseTo(document.documentElement.clientWidth, 0);
+      for (const largeur of [1800, 1366]) {
+        await fixerCadre(largeur, 900);
+        const ouvert = await avecEvenementOuvert();
+        const principal = ecran(ouvert).parentElement;
+        expect(ecran(ouvert).dataset.ecran, `${largeur}`).toBe('evenement');
+        expect(principal.getBoundingClientRect().left, `${largeur}`).toBeCloseTo(0, 0);
+        expect(principal.getBoundingClientRect().width, `${largeur}`).toBeCloseTo(document.documentElement.clientWidth, 0);
+      }
     } finally {
       await fixerCadre(avant.largeur, avant.hauteur);
     }

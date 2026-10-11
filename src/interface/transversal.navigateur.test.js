@@ -460,13 +460,17 @@ function releverEtats(m) {
   return etats;
 }
 
-// Le cadre de mode : sa signature, son libellé compris.
-function signatureCadre(racine) {
-  const cadre = racine.querySelector('[data-mode]');
-  if (cadre === null) return null;
-  const s = getComputedStyle(cadre);
-  const libelle = racine.querySelector('[data-mode-libelle="cadre"]')?.textContent.trim() ?? '';
-  return `bords ${s.borderTopStyle} ${s.borderTopWidth} | ${libelle}`;
+// Le mode de l'événement : sig, la signature de la bande de mode et du
+// libellé de mode de la barre ; trait, la somme des épaisseurs des bords de
+// la surface de travail, qui n'en porte aucun. null hors d'un événement.
+function signatureMode(racine) {
+  const surface = racine.querySelector('[data-mode]');
+  const bande = racine.querySelector('[data-ecran="evenement"] > [role="status"]');
+  const libelle = racine.querySelector('[data-mode-libelle="cadre"]');
+  if (surface === null || bande === null || libelle === null) return null;
+  const s = getComputedStyle(surface);
+  const trait = ['Top', 'Right', 'Bottom', 'Left'].reduce((somme, cote) => somme + Number.parseFloat(s[`border${cote}Width`]), 0);
+  return { sig: signature([bande, libelle]), trait };
 }
 
 /** Fautes d'une paire d'états : chaque élément du premier dont la signature
@@ -494,7 +498,7 @@ function dansLaFenetre(element) {
 
 /** Fautes du bandeau d'un écran (§ 8.4, § 18.6) : unique, visible, portant
  *  la version et la provenance ; le libellé de mode absent sans événement,
- *  présent et égal à celui du cadre sinon. */
+ *  présent et égal à celui de la barre de l'événement sinon. */
 export function fautesBandeau(racine, mode, { version = VERSION.affichee, provenance = provenanceVisible(PROVENANCE, tTemoin) } = {}) {
   const bandeaux = racine.querySelectorAll('[data-bandeau]');
   if (bandeaux.length !== 1) return [`${bandeaux.length} bandeaux`];
@@ -513,12 +517,12 @@ export function fautesBandeau(racine, mode, { version = VERSION.affichee, proven
     if (libelle !== null) fautes.push(`libellé de mode « ${libelle.textContent.trim()} » sans événement ouvert`);
     return fautes;
   }
-  const cadre = racine.querySelector('[data-mode-libelle="cadre"]');
+  const barre = racine.querySelector('[data-mode-libelle="cadre"]');
   if (libelle === null) fautes.push(`libellé de mode absent du bandeau (${mode})`);
   else if (voir(libelle) !== true) fautes.push(`libellé de mode du bandeau non visible : ${voir(libelle)}`);
-  if (cadre === null) fautes.push(`libellé de mode absent du cadre (${mode})`);
-  if (libelle !== null && cadre !== null && libelle.textContent.trim() !== cadre.textContent.trim()) {
-    fautes.push(`bandeau « ${libelle.textContent.trim()} », cadre « ${cadre.textContent.trim()} »`);
+  if (barre === null) fautes.push(`libellé de mode absent de la barre (${mode})`);
+  if (libelle !== null && barre !== null && libelle.textContent.trim() !== barre.textContent.trim()) {
+    fautes.push(`bandeau « ${libelle.textContent.trim()} », barre « ${barre.textContent.trim()} »`);
   }
   return fautes;
 }
@@ -603,7 +607,7 @@ beforeAll(async () => {
       releve.refus = releverRefus(racine).map((r) => ({ ...r, restes: horsMarques(r.texte).filter((x) => !estDonnee(x, connues)) }));
       releve.etats = releverEtats(m);
       releve.listes = releverListes(racine);
-      releve.cadre = signatureCadre(racine);
+      releve.signatureMode = signatureMode(racine);
       releve.clair = releverTheme(racine);
       await cliquer(m, '[data-bandeau] [data-commande="theme"][data-theme-choix="sombre"]');
       await attendre('le thème sombre', () => document.documentElement.getAttribute('data-theme') === 'sombre');
@@ -984,7 +988,7 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     aucuneFaute([...new Set(fautes)], 'atténuations');
   });
 
-  test('jamais la seule couleur : table saine et en conflit, les trois sortes de conflit, place libre, réservée et à titre non pourvu, portée tour et tous, cadre en lecture, en écriture et bloqué', () => {
+  test('jamais la seule couleur : table saine et en conflit, les trois sortes de conflit, place libre, réservée et à titre non pourvu, portée tour et tous, mode en lecture, en écriture et bloqué, sans trait autour de la surface', () => {
     const plan = atteints().find((r) => r.nom === 'evenement.plan.ecriture');
     expect(plan, 'le plan en écriture relevé').toBeDefined();
     const e = plan.etats;
@@ -1000,13 +1004,14 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     expect(trois, 'le plan des trois sortes de conflit relevé').toBeDefined();
     const [a, b, c] = CONFLITS.map(({ marque }) => trois.etats.trames[marque]);
     fautes.push(...fautesPaire('trame appartenance / voisins', a, b), ...fautesPaire('trame appartenance / table', a, c), ...fautesPaire('trame voisins / table', b, c));
-    const cadres = ['lecture', 'ecriture', 'bloque'].map((mode) => {
+    const modes = ['lecture', 'ecriture', 'bloque'].map((mode) => {
       const r = atteints().find((x) => x.nom === `evenement.plan.${mode}`);
-      return { ou: `cadre ${mode}`, sig: r?.cadre ?? null };
+      return { ou: `mode ${mode}`, sig: r?.signatureMode?.sig ?? null, trait: r?.signatureMode?.trait ?? null };
     });
-    for (const c of cadres) if (c.sig === null) fautes.push(`${c.ou} : absent`);
-    for (let i = 0; i < cadres.length; i += 1) {
-      for (let j = i + 1; j < cadres.length; j += 1) fautes.push(...fautesPaire(`${cadres[i].ou} / ${cadres[j].ou}`, [cadres[i]], [cadres[j]]));
+    for (const c of modes) if (c.sig === null) fautes.push(`${c.ou} : absent`);
+    for (const c of modes) if (c.trait !== null && c.trait !== 0) fautes.push(`${c.ou} : un trait de ${c.trait} px autour de la surface`);
+    for (let i = 0; i < modes.length; i += 1) {
+      for (let j = i + 1; j < modes.length; j += 1) fautes.push(...fautesPaire(`${modes[i].ou} / ${modes[j].ou}`, [modes[i]], [modes[j]]));
     }
     aucuneFaute(fautes, 'jamais la seule couleur');
   });
@@ -1024,7 +1029,7 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     aucuneFaute(atteints().flatMap((r) => r.emoji.fautes.map((f) => `${r.nom} — ${f}`)), 'emoji');
   });
 
-  test('le bandeau sur tout écran : visible, version et provenance ; libellé de mode absent de la liste, égal à celui du cadre sur un événement', () => {
+  test('le bandeau sur tout écran : visible, version et provenance ; libellé de mode absent de la liste, égal à celui de la barre sur un événement', () => {
     expect(atteints().some((r) => r.mode === null) && atteints().some((r) => r.mode !== null)).toBe(true);
     aucuneFaute(atteints().flatMap((r) => r.bandeau.map((f) => `${r.nom} — ${f}`)), 'bandeau');
   });

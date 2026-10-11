@@ -833,7 +833,7 @@ describe('le plein écran (§ 8.4, § 18.6)', () => {
     expect(boite(surface(m))).toEqual(avant);
   });
 
-  test('le cadre de mode garde sa boîte après un zoom', async () => {
+  test('la barre, la tête et la surface de l’événement gardent leur boîte après un zoom', async () => {
     const m = await petite();
     await deuxImages();
     const avant = boite(dans(m, '[data-mode]'));

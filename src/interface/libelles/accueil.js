@@ -74,18 +74,10 @@ export const TABLE = new Map([
   ['accueil.colonne.participants', 'Participants'],
   ['accueil.colonne.modification', 'Dernière modification'],
   ['accueil.colonne.chemin', 'Fichier'],
-  // Les deux mesures du placement retenu (§ 5.4, § 8.9), et l'explication
-  // que l'infobulle de leur intitulé donne : ce que compte le nombre, d'où
-  // il vient, et quand il vaut « — ».
-  ['accueil.colonne.collisionsCumulees', 'Collisions cumulées (paire et tour)'],
+  // La mesure du placement retenu (§ 5.4, § 8.9), et l'explication que
+  // l'infobulle de son intitulé donne : ce que compte le nombre, d'où il
+  // vient, et quand il vaut « — ».
   ['accueil.colonne.diffRedondance', "Diff somme d'appartenance"],
-  [
-    'accueil.explication.collisionsCumulees',
-    'Celles du placement retenu : chaque fois que deux personnes de la même appartenance partagent une table, ' +
-      'compté une fois par paire et par tour ; deux collègues ensemble aux quatre tours font 4. Le même nombre que la ' +
-      "colonne « Collisions cumulées » du tableau des propositions. Plus il est bas, mieux c'est. " +
-      "« \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit plus la configuration.",
-  ],
   [
     'accueil.explication.diffRedondance',
     '|cible \u{2212} Σ r(p)| : la différence, sans signe, entre la cible de la soirée et la somme Σ r(p) du placement ' +
@@ -96,13 +88,13 @@ export const TABLE = new Map([
   ],
 
   // La meilleure proposition du classement de chaque événement (§ 5.4,
-  // § 5.7) : son titre, l'identifiant et les collisions s'écrivent sous les
-  // libellés du bloc de la génération ; l'explication du titre est propre à
-  // la liste, qui l'écrit « — » quand rien n'est classé.
+  // § 5.7) : son titre et son identifiant s'écrivent sous les libellés du
+  // bloc de la génération ; l'explication du titre est propre à la liste,
+  // qui l'écrit « — » quand rien n'est classé.
   [
     'accueil.explication.meilleure',
     "La proposition au rang 1 du classement de l'événement, celle que la section de la génération annonce en tête : " +
-      'son identifiant et ses collisions cumulées. Le classement range les propositions comparables, retenue comprise ; ' +
+      'son identifiant. Le classement range les propositions comparables, retenue comprise ; ' +
       'le placement retenu se lit à part, sous ses propres intitulés. ' +
       "« \u{2014} » quand aucune proposition n'est classée : aucune proposition, ou aucune qui décrive encore la " +
       'configuration.',

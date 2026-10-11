@@ -23,8 +23,9 @@ fichiers, lisez `GUIDE-WINDOWS.md`.
 ## Avant de commencer : lecture, écriture, et trois garanties
 
 **Tout événement s’ouvre en lecture.** Rien ne s’y modifie tant que vous n’avez
-pas cliqué sur « Modifier », toujours à la même place, en haut de l’écran. Un
-cadre autour du plan et le bandeau disent dans quel mode vous êtes. Après un
+pas cliqué sur « Modifier », toujours à la même place, en haut de l’écran. La
+bande de couleur sous le bandeau, le libellé à côté de « Modifier » et le
+bandeau disent dans quel mode vous êtes. Après un
 moment d’inactivité, le logiciel revient seul en lecture, entre deux gestes et
 jamais au milieu de l’un d’eux.
 
@@ -71,10 +72,10 @@ s’affiche à côté du bouton, et propose « Modifier ».
 ![Un ajout de table refusé en lecture, et la commande « Modifier »](doc/captures/01b-passer-en-ecriture.png)
 
 *Le refus apparaît là où vous avez cliqué, sans fenêtre. Le mot « Lecture »
-figure dans le bandeau et sur le cadre de l’événement.*
+figure dans le bandeau, dans la bande de mode et à côté de « Modifier ».*
 
-Cliquez sur « Modifier » : le cadre passe en écriture, et le même geste
-réussit. « Revenir en lecture » fait l’inverse.
+Cliquez sur « Modifier » : la bande et le libellé passent en écriture, et le
+même geste réussit. « Revenir en lecture » fait l’inverse.
 
 ## Étape 2 — Importer la liste des participants
 
@@ -306,8 +307,8 @@ réservations imposent de ce que la recherche a choisi.
 proposition alors que le retenu a été ajusté à la main détruit ces ajustements :
 une fenêtre le dit avant.
 
-La liste des événements résume ensuite le retenu par ses collisions cumulées et
-par l’écart de sa somme de redondance d’appartenance à la cible de la soirée.
+La liste des événements résume ensuite le retenu par l’écart de sa somme de
+redondance d’appartenance à la cible de la soirée.
 
 Retenir n’est pas obligatoire, mais tout ce qui s’imprime sans placement retenu
 porte la mention BROUILLON (étape 12).
@@ -329,9 +330,10 @@ Les indicateurs du tableau des propositions suivent l’ajustement.
 
 En lecture, aucun de ces gestes ne passe :
 
-![Le plan en lecture : le cadre, son libellé, et un geste refusé](doc/captures/20-mode-lecture.png)
+![Le plan en lecture : la bande de mode, le libellé, et un geste refusé](doc/captures/20-mode-lecture.png)
 
-*Le cadre et le libellé « Lecture » entourent le plan, et le bandeau le répète.
+*La bande de mode et le libellé « Lecture » le disent au-dessus du plan, et le
+bandeau le répète.
 Glisser une personne ou une table, tirer une poignée, poser une réservation :
 chaque geste est refusé avec « Modifier » pour remède, et rien ne change sur le
 disque.*

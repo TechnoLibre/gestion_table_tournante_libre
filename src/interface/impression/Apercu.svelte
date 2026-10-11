@@ -40,7 +40,7 @@
   import { estBrouillon, piedDePage, refusImpression } from '../../application/sorties.js';
   import { constante } from '../../geometrie/constantes.js';
   import { DECOUPES, VUES_IMPRESSION } from '../etat_ui.js';
-  import { cadreDeMode } from '../evenement/modele.js';
+  import { cleDeMode } from '../mode.js';
   import Commande from '../primitives/Commande.svelte';
   import Papier from '../sorties/Papier.svelte';
   import FeuillesTables from './FeuillesTables.svelte';
@@ -74,7 +74,7 @@
   );
   const feuille = $derived(feuilleDe(pied, estBrouillon(charge, { source: sortie.source, tour: sortie.tour })));
   const Vue = $derived(VUES.get(options.vue));
-  const cadre = $derived(cadreDeMode($seance));
+  const cleMode = $derived(cleDeMode($seance));
   const tours = $derived(toursOfferts(charge.evenement.tours));
 
   // La bande mesurée sur le gabarit, null avant la première mesure ; ce qui
@@ -113,8 +113,8 @@
   <div class="barre" role="group" aria-label={t('impression.barre')}>
     <div class="tete">
       <h2>{t('impression.titre')}</h2>
-      {#if cadre !== null}
-        <span class="mode" data-mode-libelle="cadre">{t(cadre.cle)}</span>
+      {#if cleMode !== null}
+        <span class="mode" data-mode-libelle="cadre">{t(cleMode)}</span>
       {/if}
     </div>
     <div class="groupe vues" role="group" aria-label={t('impression.vue.titre')}>

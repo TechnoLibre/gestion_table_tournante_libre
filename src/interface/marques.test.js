@@ -17,7 +17,7 @@ const THEMES = ['clair', 'sombre'];
 const NOMS_MARQUES = [
   'cadenasFerme', 'cadenasOuvert', 'anneau', 'hachure', 'remplissagePlein',
   'contourConflit', 'trameAppartenance', 'trameVoisins', 'trameTable', 'pastille', 'poignee', 'gel', 'miseEnEvidence',
-  'selection', 'cadreLecture', 'cadreEcriture', 'cadreBloque', 'focus',
+  'selection', 'focus',
   'contourTable', 'contourChaise', 'echelle', 'fantome', 'chargement', 'filigrane',
 ];
 
@@ -39,7 +39,7 @@ const FONDS_REQUIS = {
 const parNom = (registre, nom) => registre.find((e) => e.nom === nom);
 
 describe('registre des marques', () => {
-  test('les vingt-quatre marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
+  test('les vingt et une marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
     assert.equal(MARQUES.length, NOMS_MARQUES.length);
     assert.deepEqual(MARQUES.map((m) => m.nom), NOMS_MARQUES);
     assert.equal(new Set(MARQUES.map((m) => m.nom)).size, MARQUES.length);
@@ -204,7 +204,8 @@ describe('les signes des pastilles, des messages, de la bande de mode et de l’
       assert.equal(signe.jeton, `--couleur-${teinte}-marque`, nom);
       assert.deepEqual(signe.fonds, [`--couleur-${teinte}-fond`, '--couleur-carte-fond', '--couleur-carte-fond-sourd', '--couleur-page-fond'], nom);
     }
-    // La bande de mode reprend la teinte du cadre de mode, sur son propre fond.
+    // L'icône de la bande de mode porte la teinte de son mode, sur le fond de
+    // la bande.
     for (const mode of ['Ecriture', 'Lecture', 'Bloque']) {
       const signe = parNom(SIGNES, `bande${mode}`);
       assert.deepEqual([signe.jeton, ...signe.fonds], [`--couleur-cadre-${mode.toLowerCase()}`, `--couleur-mode-${mode.toLowerCase()}-fond`]);

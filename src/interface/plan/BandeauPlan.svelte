@@ -2,8 +2,8 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // Le bandeau du plan (§ 7.5), au-dessus du <svg data-plan> et dans le
-  // cadre de mode : vide tant qu'une table au moins est saine ; quand toutes
+  // Le bandeau du plan (§ 7.5), au-dessus du <svg data-plan> et dans la
+  // surface de travail de l'événement : vide tant qu'une table au moins est saine ; quand toutes
   // sont en conflit, la phrase, puis ce que le diagnostic prouve — chaque
   // entrée {cle, details} du modèle (modele.js), traduite. L'appartenance
   // d'un plancher de groupe est une donnée : elle occupe son propre nœud,

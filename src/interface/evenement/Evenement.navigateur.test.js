@@ -4,7 +4,8 @@
 // L'événement ouvert dans un vrai moteur de rendu (§ 2.1, § 8.3 à § 8.9,
 // § 9, § 14.5) : aucune section n'en exige une autre ; la place fixe de
 // « Modifier », de « Débloquer » et de « Revenir en lecture », plein écran
-// compris ; le cadre de mode et son libellé ; l'inactivité ; l'état bloqué
+// compris ; la surface de travail sans cadre, le mode porté par la bande et
+// le libellé ; l'inactivité ; l'état bloqué
 // et son déblocage confirmé en place ; les états du plan ; défaire et
 // refaire ; les annonces d'ouverture, du journal et de la dérive ; le verrou
 // d'une autre séance et sa reprise ; le support rompu ; le format plus
@@ -13,7 +14,7 @@
 // qu'atteint un point, le style calculé, le texte — jamais une classe.
 //
 // Les éléments s'atteignent par leurs attributs data-… : data-place-fixe, la
-// place fixe du cadre ; data-etat, un état du plan de l'en-tête ;
+// place fixe de la barre ; data-etat, un état du plan de l'en-tête ;
 // data-verrou, le verrou d'une autre séance ; data-support-rompu, le message
 // du support rompu. Le texte attendu vient de la même traduction que celle
 // de l'application ; les noms d'épreuve sont inventés.
@@ -67,6 +68,7 @@ afterEach(() => {
 const dans = (m, selecteur) => m.racine.querySelector(selecteur);
 const tous = (m, selecteur) => [...m.racine.querySelectorAll(selecteur)];
 const cadre = (m) => dans(m, '[data-mode]');
+const bande = (m) => dans(m, '[data-ecran="evenement"] > [role="status"]');
 const fixe = (m, nom) => dans(m, `[data-place-fixe] [data-commande="${nom}"]`);
 const historique = (m, nom) => dans(m, `[data-mode] [data-historique] [data-commande="${nom}"]`);
 const boutonEtat = (m, etat) => dans(m, `[data-etat="${etat}"] [data-commande="etat"]`);
@@ -327,39 +329,39 @@ describe('passer en écriture (§ 8.4, § 19.3 01b)', () => {
   });
 });
 
-describe('le cadre de mode (§ 8.4, § 14.5)', () => {
-  test('il contient la surface, sa bordure n’est pas nulle, son libellé se voit ; texte et trait diffèrent en lecture, en écriture et bloqué ; même boîte après défilement', async () => {
+describe('le mode sans cadre (§ 8.4, § 14.5)', () => {
+  test('aucun trait autour de la surface ; le mode se lit dans la bande, le libellé de la barre et le bandeau, distincts en lecture, en écriture et bloqué ; même boîte après défilement', async () => {
     const m = await neuf();
     const releves = [];
-    const relever = () => {
+    const relever = (mode) => {
       flushSync();
       const boite = cadre(m).getBoundingClientRect();
       const surface = dans(m, '[data-section]').getBoundingClientRect();
-      expect(boite.left).toBeLessThanOrEqual(surface.left);
-      expect(boite.top).toBeLessThanOrEqual(surface.top);
-      expect(boite.right).toBeGreaterThanOrEqual(surface.right);
-      expect(boite.bottom).toBeGreaterThanOrEqual(surface.bottom);
+      expect(boite.left, mode).toBeLessThanOrEqual(surface.left);
+      expect(boite.top, mode).toBeLessThanOrEqual(surface.top);
+      expect(boite.right, mode).toBeGreaterThanOrEqual(surface.right);
+      expect(boite.bottom, mode).toBeGreaterThanOrEqual(surface.bottom);
+      expect(cadre(m).dataset.mode, mode).toBe(mode);
+      expect(cadre(m).hasAttribute('data-marque'), mode).toBe(false);
       const style = getComputedStyle(cadre(m));
-      expect(Number.parseFloat(style.borderTopWidth)).toBeGreaterThan(0);
-      expect(style.borderTopStyle).not.toBe('none');
+      for (const cote of ['Top', 'Right', 'Bottom', 'Left']) {
+        expect(Number.parseFloat(style[`border${cote}Width`]), `${mode} ${cote}`).toBe(0);
+      }
       const libelle = libelleCadre(m);
       expect(libelle.checkVisibility()).toBe(true);
       expect(visible(libelle)).toBe(true);
       expect(libelle.contains(auCentre(libelle))).toBe(true);
       expect(libelle.textContent).toBe(libelleBandeau(m).textContent);
-      releves.push({ texte: libelle.textContent, trait: style.borderTopStyle });
+      expect(visible(bande(m)), mode).toBe(true);
+      expect(bande(m).textContent, mode).toContain(libelle.textContent);
+      releves.push(libelle.textContent);
     };
-    relever();
+    relever('lecture');
     await m.seance.passerEnEcriture();
-    relever();
+    relever('ecriture');
     await m.seance.executer('changerEtat', { etat: 'bloque' });
-    relever();
-    expect(releves.map(({ texte }) => texte)).toEqual([
-      t('coquille.mode.lecture'),
-      t('coquille.mode.ecriture'),
-      t('coquille.mode.bloque'),
-    ]);
-    expect(new Set(releves.map(({ trait }) => trait)).size).toBe(3);
+    relever('bloque');
+    expect(releves).toEqual([t('coquille.mode.lecture'), t('coquille.mode.ecriture'), t('coquille.mode.bloque')]);
     // Une surface plus haute que la fenêtre : la page et la surface
     // défilées jusqu'en bas, le libellé garde sa boîte.
     const avant = libelleCadre(m).getBoundingClientRect().toJSON();

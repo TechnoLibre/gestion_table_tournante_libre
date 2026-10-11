@@ -2,8 +2,8 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Le modèle de l'événement ouvert, pur : ce que ses composants montrent de
-// l'état observable de la séance (§ 8.4, § 8.5, § 8.8, § 8.9, § 9). Le cadre
-// de mode et sa forme, la commande de la place fixe, les états du plan et
+// l'état observable de la séance (§ 8.4, § 8.5, § 8.8, § 8.9, § 9). La
+// commande de la place fixe, les états du plan et
 // leurs clés, la reprise de verrou que l'écran offre, et les avertissements
 // dans l'ordre de la séance, chacun avec son remède ; puis ce que montre
 // l'enveloppe de l'événement : le résumé chiffré de son en-tête, les étapes
@@ -13,29 +13,6 @@
 import { cleDeMode } from '../mode.js';
 import { modelePastille } from '../primitives/pastille.js';
 import { etatTable } from '../tables/modele.js';
-
-// La forme du cadre pour chaque clé du libellé de mode : un trait différent
-// par mode, pour qu'aucun ne se distingue par la seule couleur (§ 14.5).
-const FORMES = new Map([
-  ['coquille.mode.lecture', 'tirets'],
-  ['coquille.mode.ecriture', 'plein'],
-  ['coquille.mode.bloque', 'double'],
-]);
-
-/**
- * Libellé et forme du cadre de mode : cle, celle de cleDeMode (mode.js) — le
- * libellé du bandeau — ; forme : lecture (tirets), écriture (trait plein),
- * bloqué (trait double), quel que soit le mode d'un plan bloqué. null sans
- * événement.
- *
- * @param {Object} etatSeance  EtatSeance
- * @returns {null|{cle: string, forme: 'tirets'|'plein'|'double'}}
- */
-export function cadreDeMode(etatSeance) {
-  const cle = cleDeMode(etatSeance);
-  if (cle === null) return null;
-  return { cle, forme: FORMES.get(cle) };
-}
 
 /**
  * La commande de la place fixe (§ 8.4, § 8.5, § 8.8) : 'format' quand le
@@ -84,18 +61,20 @@ export function etapesEtat(etatSeance) {
   return ETATS_PLAN.map((etat) => ({ etat, cle: cleEtat(etat), icone: modelePastille('etat', etat, null).icone, courant: etat === courant }));
 }
 
-// Le mode de la bande, son explication et son icône, pour chaque forme du
-// cadre : la bande dit ce que le cadre dit.
+// Le mode de la bande, son explication et son icône, pour chaque clé du
+// libellé de mode : une icône et une phrase différentes par mode, pour
+// qu'aucun ne se distingue par la seule couleur (§ 14.5).
 const BANDES = new Map([
-  ['tirets', { mode: 'lecture', explication: 'evenement.bande.lecture', icone: 'oeil' }],
-  ['plein', { mode: 'ecriture', explication: 'evenement.bande.ecriture', icone: 'stylo' }],
-  ['double', { mode: 'bloque', explication: 'evenement.bande.bloque', icone: 'cadenas' }],
+  ['coquille.mode.lecture', { mode: 'lecture', explication: 'evenement.bande.lecture', icone: 'oeil' }],
+  ['coquille.mode.ecriture', { mode: 'ecriture', explication: 'evenement.bande.ecriture', icone: 'stylo' }],
+  ['coquille.mode.bloque', { mode: 'bloque', explication: 'evenement.bande.bloque', icone: 'cadenas' }],
 ]);
 
 /**
  * La bande de mode, sous le bandeau (§ 8.4) : mode, 'lecture', 'ecriture' ou
- * 'bloque' — un plan bloqué l'est quel que soit le mode — ; cle, le libellé
- * du cadre (cadreDeMode) ; explication, la clé de la phrase qui le suit ;
+ * 'bloque' — un plan bloqué l'est quel que soit le mode — ; cle, celle du
+ * libellé de mode (cleDeMode, mode.js), que le bandeau et la barre de
+ * l'événement montrent aussi ; explication, la clé de la phrase qui le suit ;
  * icone, celle des primitives qui le précède. La phrase nomme la commande
  * de la place fixe (commandeFixe) ; devant un format plus récent, qui n'en
  * offre aucune, plan bloqué compris, elle est evenement.bande.lectureSeule,
@@ -105,11 +84,11 @@ const BANDES = new Map([
  * @returns {null|{mode: 'lecture'|'ecriture'|'bloque', cle: string, explication: string, icone: string}}
  */
 export function bandeDeMode(etatSeance) {
-  const cadre = cadreDeMode(etatSeance);
-  if (cadre === null) return null;
-  const { mode, explication, icone } = BANDES.get(cadre.forme);
+  const cle = cleDeMode(etatSeance);
+  if (cle === null) return null;
+  const { mode, explication, icone } = BANDES.get(cle);
   const phrase = commandeFixe(etatSeance) === 'format' ? 'evenement.bande.lectureSeule' : explication;
-  return { mode, cle: cadre.cle, explication: phrase, icone };
+  return { mode, cle, explication: phrase, icone };
 }
 
 /**

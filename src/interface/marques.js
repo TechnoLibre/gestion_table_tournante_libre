@@ -94,8 +94,8 @@ const TEINTES_DE_PASTILLE = [
 
 /** Les signes, même forme que MARQUES, seuil 3 : l'icône ou le point d'une
  *  pastille sur son fond teinté et sur les surfaces de contenu ; l'icône
- *  d'un message sur son fond ; l'icône de la bande de mode, de la teinte du
- *  cadre de mode, sur le fond de la bande ; le fond de l'action principale,
+ *  d'un message sur son fond ; l'icône de la bande de mode, de la teinte de
+ *  son mode, sur le fond de la bande ; le fond de l'action principale,
  *  qui délimite le bouton, sur les surfaces. */
 export const SIGNES = Object.freeze([
   ...TEINTES_DE_PASTILLE.map(([nom, teinte]) => marque(nom, `${teinte}-marque`, [`${teinte}-fond`, ...SURFACES])),
@@ -134,10 +134,6 @@ export const MARQUES = Object.freeze([
   // La sélection marque aussi une colonne du tableau des propositions, sur la
   // carte, son fond sourd et la ligne du retenu.
   marque('selection', 'selection', ['page-fond', 'carte-fond', 'carte-fond-sourd', 'etat-retenu-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
-  // Le cadre de mode (§ 8.4) entoure le contenu de l'événement, sur la page.
-  marque('cadreLecture', 'cadre-lecture', ['page-fond']),
-  marque('cadreEcriture', 'cadre-ecriture', ['page-fond']),
-  marque('cadreBloque', 'cadre-bloque', ['page-fond']),
   marque('focus', 'focus', ['page-fond', 'bandeau-fond', 'carte-fond', 'carte-fond-sourd', 'etat-retenu-fond', 'action-teinte', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
   // Le mobilier sur le sol : le trait de la table, celui de la chaise, qui
   // touche aussi le plateau.

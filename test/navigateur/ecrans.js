@@ -424,7 +424,7 @@ export const ECRANS = Object.freeze([
       // « chargement ».
       const m = await contexte.monter({ fichiers: [fichierEtat(chargePrincipale()), fichierEtat(chargeGelee(), 'gelee')] });
       await attendre('le signe du chargement dans chaque valeur de résumé', () =>
-        [BASE, 'gelee'].every((base) => m.racine.querySelectorAll(`[data-evenement="${base}"] [aria-busy="true"] [data-chargement]`).length === 4),
+        [BASE, 'gelee'].every((base) => m.racine.querySelectorAll(`[data-evenement="${base}"] [aria-busy="true"] [data-chargement]`).length === 2),
       );
       return m.racine;
     },
@@ -433,8 +433,8 @@ export const ECRANS = Object.freeze([
     nom: 'accueil.mesuresRetenu',
     mode: null,
     async atteindre(contexte) {
-      // La principale, sa proposition retenue : la ligne montre les deux
-      // mesures du retenu et la meilleure proposition du classement, et le
+      // La principale, sa proposition retenue : la ligne montre la
+      // différence du retenu et la meilleure proposition du classement, et le
       // pointeur réel sur l'intitulé de la différence — un en-tête de
       // colonne du tableau, une fois pour la liste — ouvre son infobulle.
       const principale = chargePrincipale();
@@ -442,12 +442,8 @@ export const ECRANS = Object.freeze([
       const m = await contexte.monter({ fichiers: [fichierEtat(charge)] });
       const ligne = `[data-evenement="${BASE}"]`;
       await chargerResumes(m);
-      await attendre('les mesures du retenu et la meilleure proposition', () =>
-        [
-          ...['collisionsCumulees', 'diffRedondance'].map((colonne) => `[data-colonne="${colonne}"]`),
-          '[data-meilleure-id]',
-          '[data-meilleure-collisions]',
-        ].every((valeur) => /\d/.test(m.racine.querySelector(`${ligne} ${valeur}`)?.textContent ?? '')),
+      await attendre('la différence du retenu et la meilleure proposition', () =>
+        ['[data-colonne="diffRedondance"]', '[data-meilleure-id]'].every((valeur) => /\d/.test(m.racine.querySelector(`${ligne} ${valeur}`)?.textContent ?? '')),
       );
       const { x, y } = await centre(await element(m, '[data-ecran="accueil"] thead [data-terme="diffRedondance"]'));
       await pointer('bouger', x, y);

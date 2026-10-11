@@ -1238,10 +1238,9 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     return mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
   }
 
-  test('un événement retenu : ses collisions cumulées et |1000 \u{2212} Σ r(p)| ; sans retenu : « — » ; rien d’écrit', async () => {
+  test('un événement retenu : |1000 \u{2212} Σ r(p)|, sans colonne des collisions cumulées ; sans retenu : « — » ; rien d’écrit', async () => {
     const charge = chargeRetenue();
     const mesures = mesuresDe(charge);
-    expect(mesures.collisionsCumulees).toBeGreaterThan(0);
     const m = await monter({
       fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(charge)), fichier(`club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
     });
@@ -1249,21 +1248,17 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     await chargerResumes(m);
     const avant = ecritures(m);
     const retenue = ligneDe(m, 'retenue');
-    expect(colonne(retenue, 'collisionsCumulees')).toBe(format.nombre(mesures.collisionsCumulees));
     expect(colonne(retenue, 'diffRedondance')).toBe(format.nombre(Math.abs(1000 - mesures.totalRedondance)));
     const club = ligneDe(m, 'club');
-    expect(colonne(club, 'collisionsCumulees')).toBe(TIRET);
     expect(colonne(club, 'diffRedondance')).toBe(TIRET);
-    // Chaque intitulé est un en-tête de colonne, une seule fois pour toute la
-    // liste.
-    for (const [nom, cle] of [
-      ['collisionsCumulees', 'accueil.colonne.collisionsCumulees'],
-      ['diffRedondance', 'accueil.colonne.diffRedondance'],
-    ]) {
-      expect(tous(m, `[data-terme="${nom}"]`).length, nom).toBe(1);
-      expect(terme(accueil(m), nom).closest('thead'), nom).not.toBeNull();
-      expect(terme(accueil(m), nom).textContent).toBe(t(cle));
-    }
+    // L'intitulé est un en-tête de colonne, une seule fois pour toute la
+    // liste ; aucune colonne ni aucun intitulé ne nomme les collisions
+    // cumulées.
+    expect(tous(m, '[data-terme="diffRedondance"]').length).toBe(1);
+    expect(terme(accueil(m), 'diffRedondance').closest('thead')).not.toBeNull();
+    expect(terme(accueil(m), 'diffRedondance').textContent).toBe(t('accueil.colonne.diffRedondance'));
+    expect(tous(m, '[data-colonne="collisionsCumulees"], [data-terme="collisionsCumulees"]')).toEqual([]);
+    expect(tous(m, '[data-ecran="accueil"] thead th').filter((th) => th.textContent.includes(t('propositions.colonne.collisionsCumulees')))).toEqual([]);
     expect(visible(retenue.querySelector('[data-colonne="diffRedondance"]'))).toBe(true);
     expect(ecritures(m)).toBe(avant);
   });
@@ -1271,10 +1266,7 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
   test('chaque intitulé s’explique : le survol puis le focus ouvrent son infobulle, Échap et la sortie la ferment', async () => {
     const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(chargeRetenue()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
-    await eprouverTermes(accueil(m), [
-      ['collisionsCumulees', 'accueil.explication.collisionsCumulees'],
-      ['diffRedondance', 'accueil.explication.diffRedondance'],
-    ]);
+    await eprouverTermes(accueil(m), [['diffRedondance', 'accueil.explication.diffRedondance']]);
   });
 
   test('la cible changée dans les propositions, puis la liste : la différence se lit contre la nouvelle cible', async () => {
@@ -1301,7 +1293,6 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     await revenirALaListe(m, 1);
     await resumeRecu('retenue');
     expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(25 - totalRedondance)));
-    expect(colonne(ligneDe(m, 'retenue'), 'collisionsCumulees')).toBe(format.nombre(mesuresDe(charge).collisionsCumulees));
   });
 });
 
@@ -1323,12 +1314,9 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     return appliquerCommande('retenirProposition', charge, { id: autre.id }).charge;
   }
 
-  // Ce que la ligne, ou le bloc de la génération, écrit de la meilleure
-  // proposition.
-  const lu = (bloc) => ({
-    id: bloc.querySelector('[data-meilleure-id]')?.textContent ?? null,
-    collisions: bloc.querySelector('[data-meilleure-collisions]')?.textContent ?? null,
-  });
+  // Ce que la ligne, ou le bloc de la génération, écrit de l'identifiant de
+  // la meilleure proposition.
+  const lu = (bloc) => ({ id: bloc.querySelector('[data-meilleure-id]')?.textContent ?? null });
   // L'en-tête du groupe de colonnes de la meilleure proposition, et celui de
   // sa colonne d'identifiant.
   const groupeMeilleure = (m) => terme(accueil(m), 'meilleure').closest('th');
@@ -1342,7 +1330,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
   };
   const blocGeneration = (m) => dans(m, '[data-section="generation"] [data-meilleure]');
 
-  test('un événement classé : le rang 1, son identifiant et ses collisions cumulées, à part du retenu ; sans proposition, « — » ; rien d’écrit', async () => {
+  test('un événement classé : le rang 1 et son identifiant, à part du retenu, sans ses collisions cumulées ; sans proposition, « — » ; rien d’écrit', async () => {
     const charge = chargeClassee();
     const table = evaluer(charge);
     const [premiere] = table.propositions;
@@ -1355,35 +1343,29 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     await chargerResumes(m);
     const avant = ecritures(m);
     const classee = ligneDe(m, 'classee');
-    expect(lu(classee)).toEqual({ id: format.nombre(premiere.id), collisions: format.nombre(premiere.mesures.collisionsCumulees) });
-    expect(colonne(classee, 'collisionsCumulees')).toBe(format.nombre(table.retenu.mesures.collisionsCumulees));
+    expect(lu(classee)).toEqual({ id: format.nombre(premiere.id) });
     // Les intitulés sont ceux du bloc de la génération, en en-têtes de
-    // colonnes : le titre sur le groupe, l'identifiant et les collisions sur
-    // ses deux colonnes ; chaque valeur se tient sous son groupe.
+    // colonnes : le titre sur le groupe, l'identifiant sur sa seule colonne ;
+    // la valeur se tient sous son groupe. Aucune cellule ni aucun intitulé
+    // des collisions de la meilleure.
     expect(terme(accueil(m), 'meilleure').textContent).toBe(t('generation.meilleure.titre'));
     expect(groupeMeilleure(m).getAttribute('scope')).toBe('colgroup');
-    expect(groupeMeilleure(m).colSpan).toBe(2);
+    expect(groupeMeilleure(m).colSpan).toBe(1);
     expect(enteteProposition(m)).toBeDefined();
-    expect(terme(accueil(m), 'meilleureCollisions').textContent).toBe(t('propositions.colonne.collisionsCumulees'));
-    for (const valeur of ['[data-meilleure-id]', '[data-meilleure-collisions]']) {
-      const cellule = classee.querySelector(valeur);
-      expect(visible(cellule), valeur).toBe(true);
-      expect(atteint(cellule), valeur).toBe(true);
-      expect(sous(cellule, groupeMeilleure(m)), valeur).toBe(true);
-    }
-    expect(sous(classee.querySelector('[data-meilleure-id]'), enteteProposition(m))).toBe(true);
-    expect(sous(classee.querySelector('[data-meilleure-collisions]'), terme(accueil(m), 'meilleureCollisions').closest('th'))).toBe(true);
-    expect(lu(ligneDe(m, 'club'))).toEqual({ id: TIRET, collisions: TIRET });
+    const cellule = classee.querySelector('[data-meilleure-id]');
+    expect(visible(cellule)).toBe(true);
+    expect(atteint(cellule)).toBe(true);
+    expect(sous(cellule, groupeMeilleure(m))).toBe(true);
+    expect(sous(cellule, enteteProposition(m))).toBe(true);
+    expect(tous(m, '[data-ecran="accueil"] [data-meilleure-collisions], [data-terme="meilleureCollisions"]')).toEqual([]);
+    expect(lu(ligneDe(m, 'club'))).toEqual({ id: TIRET });
     expect(ecritures(m)).toBe(avant);
   });
 
-  test('le titre et l’intitulé des collisions s’expliquent : le survol puis le focus ouvrent l’infobulle, Échap et la sortie la ferment', async () => {
+  test('le titre s’explique : le survol puis le focus ouvrent l’infobulle, Échap et la sortie la ferment', async () => {
     const m = await monter({ fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
-    await eprouverTermes(accueil(m), [
-      ['meilleure', 'accueil.explication.meilleure'],
-      ['meilleureCollisions', 'propositions.explication.collisionsCumulees'],
-    ]);
+    await eprouverTermes(accueil(m), [['meilleure', 'accueil.explication.meilleure']]);
   });
 
   test('la ligne écrit ce que le bloc de la génération écrit du même événement, sous les mêmes libellés, et de nouveau au retour', async () => {
@@ -1392,20 +1374,16 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     await chargerResumes(m);
     const deLaListe = lu(ligneDe(m, 'classee'));
     expect(deLaListe.id).toMatch(/\d/);
-    const libelles = [terme(accueil(m), 'meilleure'), enteteProposition(m), terme(accueil(m), 'meilleureCollisions')].map(
-      (element) => element.textContent.trim(),
-    );
+    const libelles = [terme(accueil(m), 'meilleure'), enteteProposition(m)].map((element) => element.textContent.trim());
     await ouvrirLigne(m, 'classee');
     await attendreEvenement(m);
     m.ui.allerA('generation');
     await vi.waitFor(() => expect(blocGeneration(m)?.querySelector('[data-meilleure-id]')).not.toBeNull());
     const bloc = blocGeneration(m);
     expect(lu(bloc)).toEqual(deLaListe);
-    expect(
-      [bloc.querySelector('h3'), bloc.querySelector('[data-meilleure-libelle-id]'), bloc.querySelector('[data-terme]')].map(
-        (element) => element.textContent,
-      ),
-    ).toEqual(libelles);
+    expect([bloc.querySelector('h3'), bloc.querySelector('[data-meilleure-libelle-id]')].map((element) => element.textContent)).toEqual(
+      libelles,
+    );
     // Le même résumé, mais reçu de la liste relue au retour : celui d'avant
     // l'ouverture écrirait les mêmes valeurs sans rien prouver.
     const resumeRecu = suivreResumes(m);
@@ -1423,7 +1401,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     const m = await monter({ fichiers: [fichier(`horsclassement${SUFFIXES.etat}`, etat(charge))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await chargerResumes(m);
-    expect(lu(ligneDe(m, 'horsclassement'))).toEqual({ id: TIRET, collisions: TIRET });
+    expect(lu(ligneDe(m, 'horsclassement'))).toEqual({ id: TIRET });
     await ouvrirLigne(m, 'horsclassement');
     await attendreEvenement(m);
     m.ui.allerA('generation');
@@ -1473,16 +1451,15 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
     return appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
   }
 
-  // Les quatre valeurs de résumé d'une ligne, dans l'ordre du rendu.
-  const CELLULES = ['[data-colonne="collisionsCumulees"]', '[data-colonne="diffRedondance"]', '[data-meilleure-id]', '[data-meilleure-collisions]'];
+  // Les deux valeurs de résumé d'une ligne, dans l'ordre du rendu.
+  const CELLULES = ['[data-colonne="diffRedondance"]', '[data-meilleure-id]'];
   const cellules = (ligne) => CELLULES.map((selecteur) => ligne.querySelector(selecteur));
   // Ce que la ligne d'une charge écrit, par la table d'évaluation sollicitée
   // une seconde fois (§ 19.1).
   function attendues(charge) {
     const table = evaluer(charge);
     const [premiere] = table.propositions;
-    const { collisionsCumulees, totalRedondance } = table.retenu.mesures;
-    return [collisionsCumulees, Math.abs(1000 - totalRedondance), premiere.id, premiere.mesures.collisionsCumulees].map((n) => format.nombre(n));
+    return [Math.abs(1000 - table.retenu.mesures.totalRedondance), premiere.id].map((n) => format.nombre(n));
   }
   // Chaque valeur de la ligne attend : la cellule se dit occupée, porte un
   // seul signe, muet pour l'accessibilité (aria-hidden, sans rôle ni nom),
@@ -1528,12 +1505,12 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
       expect(colonne(ligne, 'participants')).toBe(format.nombre(charges[ligne.dataset.evenement].participants.length));
       enAttente(ligne);
     }
-    expect(signes(m).length).toBe(8);
+    expect(signes(m).length).toBe(4);
     const region = regionEtat(m);
     expect(region.textContent).toBe(t('accueil.chargement'));
     for (let image = 0; image < 3; image += 1) await uneImage();
     flushSync();
-    expect(signes(m).length).toBe(8);
+    expect(signes(m).length).toBe(4);
     m.horloge.avancer(0);
     await vi.waitFor(() => resolue(ligneDe(m, 'alpha'), attendues(charges.alpha)));
     enAttente(ligneDe(m, 'beta'));
@@ -1551,7 +1528,7 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
   test('démontée avant le premier pas, l’application arrête le flux des résumés : aucun état ne se relit ensuite', async () => {
     const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
     const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}${SUFFIXES.etat}`, etat(charge))) });
-    expect(signes(m).length).toBe(8);
+    expect(signes(m).length).toBe(4);
     const relus = [];
     const lireTexte = m.fs.lireTexte;
     m.fs.lireTexte = (racine, chemin) => {
@@ -1568,7 +1545,7 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
     expect(relus).toEqual([]);
   });
 
-  test('un état qui ne se relit pas pendant le chargement : « — » dans ses quatre valeurs, et l’autre ligne résolue', async () => {
+  test('un état qui ne se relit pas pendant le chargement : « — » dans ses deux valeurs, et l’autre ligne résolue', async () => {
     const charges = { alpha: chargeResumee('evt-alpha'), beta: chargeResumee('evt-beta') };
     const m = await monter({ fichiers: Object.entries(charges).map(([base, charge]) => fichier(`${base}${SUFFIXES.etat}`, etat(charge))) });
     const lireTexte = m.fs.lireTexte;
@@ -1577,7 +1554,7 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
         ? Promise.reject(new ErreurStockage('LECTURE', { chemin, cause: 'EIO' }))
         : lireTexte.call(m.fs, racine, chemin);
     await chargerResumes(m);
-    resolue(ligneDe(m, 'alpha'), [TIRET, TIRET, TIRET, TIRET]);
+    resolue(ligneDe(m, 'alpha'), [TIRET, TIRET]);
     resolue(ligneDe(m, 'beta'), attendues(charges.beta));
   });
 
@@ -1611,7 +1588,7 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
   test('le signe se voit : il tient 3:1 sur ce qui l’entoure dans les deux thèmes, sans atténuation', async () => {
     const m = await monter({ fichiers: [fichier(`alpha${SUFFIXES.etat}`, etat(chargeResumee('evt-alpha')))] });
     const traces = tous(m, '[data-chargement] path');
-    expect(traces.length).toBe(4);
+    expect(traces.length).toBe(2);
     for (const theme of ['clair', 'sombre']) {
       await sousTheme(theme, async () => {
         for (const trace of traces) {
@@ -1822,7 +1799,7 @@ describe('la liste en tableau : en-tête, tuiles, groupes et cartes (§ 8.1, § 
     await chargerResumes(m);
     const entetes = tous(m, '[data-ecran="accueil"] thead th[scope="colgroup"]');
     expect(entetes.map(texte)).toEqual([t('accueil.entete.evenement'), t('accueil.entete.retenu'), t('generation.meilleure.titre')]);
-    expect(entetes.map((th) => th.colSpan)).toEqual([4, 2, 2]);
+    expect(entetes.map((th) => th.colSpan)).toEqual([4, 1, 1]);
     expect(fond(entetes[1])).toEqual(jeton('--couleur-etat-retenu-fond'));
     expect(fond(entetes[2])).toEqual(jeton('--couleur-etat-propose-fond'));
     // Le groupe porte le signe de son état, de la marque de l'état.
@@ -1835,8 +1812,8 @@ describe('la liste en tableau : en-tête, tuiles, groupes et cartes (§ 8.1, § 
     };
     const ligne = ligneDe(m, 'gala');
     for (const nom of ['nom', 'etat', 'participants', 'modification']) expect(dans2(ligne.querySelector(`[data-colonne="${nom}"]`), entetes[0]), nom).toBe(true);
-    for (const nom of ['collisionsCumulees', 'diffRedondance']) expect(dans2(ligne.querySelector(`[data-colonne="${nom}"]`), entetes[1]), nom).toBe(true);
-    for (const valeur of ['[data-meilleure-id]', '[data-meilleure-collisions]']) expect(dans2(ligne.querySelector(valeur), entetes[2]), valeur).toBe(true);
+    expect(dans2(ligne.querySelector('[data-colonne="diffRedondance"]'), entetes[1])).toBe(true);
+    expect(dans2(ligne.querySelector('[data-meilleure-id]'), entetes[2])).toBe(true);
     // Le nom est l'en-tête de sa ligne ; la date et le chemin le suivent,
     // dessous, en plus petit.
     const nom = ligne.querySelector('[data-colonne="nom"]');

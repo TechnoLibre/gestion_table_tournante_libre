@@ -3,18 +3,18 @@
 
 <script>
   // L'événement ouvert (§ 2.1, § 8.4) : la bande de mode, sous le bandeau,
-  // puis le cadre de mode, qui entoure la surface de travail de toute
-  // section. Sa barre porte la place fixe, le libellé, Défaire et Refaire,
-  // puis les outils — la suite des états du plan — et les actions —
-  // « Imprimer… », l'action principale de l'en-tête. Sous la barre, la tête
-  // de l'événement : son en-tête — nom et résumé — et la navigation des
-  // sections, dans l'ordre du § 2.1. La barre et la tête forment la carte
-  // d'en-tête. Seule la bande précède le cadre dans l'écran, à hauteur
-  // constante : ce que la tête montre ne déplace pas la place fixe. Aucune
-  // section n'en exige une autre : la navigation les offre toutes, et la
-  // séance refuse elle-même ce qui ne peut pas se faire. Le plein écran du
-  // plan efface les outils, les actions et la tête, jamais la bande, le
-  // cadre ni sa place fixe.
+  // puis la barre, la tête et la surface de travail de toute section
+  // (CadreMode.svelte), sans trait autour d'elles. La barre porte la place
+  // fixe, le libellé de mode, Défaire et Refaire, puis les outils — la
+  // suite des états du plan — et les actions — « Imprimer… », l'action
+  // principale de l'en-tête. Sous la barre, la tête de l'événement : son
+  // en-tête — nom et résumé — et la navigation des sections, dans l'ordre
+  // du § 2.1. La barre et la tête forment la carte d'en-tête. Seule la
+  // bande précède la barre dans l'écran, à hauteur constante : ce que la
+  // tête montre ne déplace pas la place fixe. Aucune section n'en exige une
+  // autre : la navigation les offre toutes, et la séance refuse elle-même
+  // ce qui ne peut pas se faire. Le plein écran du plan efface les outils,
+  // les actions et la tête, jamais la bande, la barre ni sa place fixe.
   //
   // « Imprimer… » ouvre l'aperçu avant impression (§ 11.7) sur le plan, au
   // tour montré : toute impression passe par lui. Vivante dans tout mode,
@@ -29,18 +29,21 @@
   // de l'action.
   //
   // L'écran de l'événement tient dans la fenêtre, sous le bandeau : la page
-  // ne défile pas, la surface de travail défile dans le cadre, et le cadre,
-  // son libellé et sa place fixe restent où ils sont (§ 8.4). La règle
-  // globale ci-dessous donne pour cela une hauteur à l'ascendance de l'écran
-  // — le conteneur de l'application et son <main> — tant qu'il porte cet
-  // écran, et à lui seul.
+  // ne défile pas, la surface de travail défile dans sa zone, et la barre,
+  // son libellé et sa place fixe restent où ils sont (§ 8.4). Il prend
+  // aussi toute la largeur de la fenêtre, au retrait de l'écran près, sans
+  // la borne --largeur-page de la liste des événements. Les règles
+  // globales ci-dessous donnent pour cela une hauteur à l'ascendance de
+  // l'écran — le conteneur de l'application et son <main> — et retirent la
+  // borne de largeur de son <main>, tant qu'il porte cet écran, et à lui
+  // seul.
   //
   // Le support rompu et les avertissements se posent dans la zone des
-  // annonces du cadre, qui défile seule au-delà de son plafond, et non
-  // au-dessus de la section : la section ne cède à la zone que ce dont elle
-  // dépasse la tête, quel que soit le nombre des avertissements, et le
-  // support rompu, en tête de la zone, garde ses issues en vue
-  // (CadreMode.svelte).
+  // annonces, à côté de la tête ou sous elle, qui défile seule au-delà de
+  // son plafond, et non au-dessus de la section : la section ne cède à la
+  // zone que ce dont elle dépasse la tête, quel que soit le nombre des
+  // avertissements, et le support rompu, en tête de la zone, garde ses
+  // issues en vue (CadreMode.svelte).
   import { getContext } from 'svelte';
   import SectionBadges from '../badges/SectionBadges.svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
@@ -79,7 +82,7 @@
 
   const Section = $derived(COMPOSANTS.get($ui.section));
   // La zone des annonces n'existe que lorsqu'elle a quelque chose à dire :
-  // sans annonce, le cadre ne lui garde ni hauteur ni trait.
+  // sans annonce, aucune hauteur ni aucun trait ne lui est gardé.
   const annoncer = $derived($seance.supportRompu !== null || avertissementsOrdonnes($seance).length > 0);
 </script>
 
@@ -155,9 +158,11 @@
     min-height: 0;
   }
 
-  /* La classe de l'écran (App.svelte) porte la spécificité de son retrait,
-     que cette règle doit dépasser. */
+  /* La classe de l'écran (App.svelte) porte la spécificité de son retrait
+     et de sa borne de largeur, que cette règle doit dépasser : l'écran de
+     l'événement prend la largeur de la fenêtre. */
   :global(main.ecran:has(> [data-ecran='evenement'])) {
+    max-width: none;
     padding-bottom: var(--espace-2);
   }
 

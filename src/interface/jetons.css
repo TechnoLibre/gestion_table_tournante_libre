@@ -70,8 +70,8 @@
    lignes d'un tableau — ; l'action principale — son fond, son texte, sa
    teinte claire et son encre, celle d'un lien — ; les quatre états du plan,
    le neutre et les appartenances, chacun un fond teinté et une marque, que
-   lisent les pastilles ; la bande de mode, un fond et un filet par mode, sa
-   marque étant la teinte du cadre de mode ; les messages — avis, refus,
+   lisent les pastilles ; la bande de mode, un fond, un filet et une
+   teinte par mode, celle de son icône ; les messages — avis, refus,
    information —, chacun son encre, un fond, un filet et une marque.
 
    Le texte d'une pastille ou de la bande de mode garde l'encre de la page
@@ -203,8 +203,8 @@ textarea {
   --couleur-appartenance-6-fond: #f3f0fc;
   --couleur-appartenance-6-marque: #8f6dd5;
 
-  /* Cadre de mode (§ 8.4), et bande de mode : fond et filet ; sa marque est
-     la teinte du cadre. */
+  /* Bande de mode (§ 8.4) : la teinte de chaque mode, que porte son icône,
+     puis son fond et son filet. */
   --couleur-cadre-lecture: #5c6878;
   --couleur-cadre-ecriture: #2e7d32;
   --couleur-cadre-bloque: #7b3fa0;

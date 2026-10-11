@@ -3,30 +3,26 @@
 
 <script>
   // La bande de mode (§ 8.4) : sous le bandeau, de bord à bord de la
-  // fenêtre, l'icône du mode, son libellé — celui du cadre et du
-  // bandeau — en gras, puis la phrase qui dit ce que le mode permet et la
-  // commande qui en sort (bandeDeMode, modele.js). Elle s'ajoute au cadre de
-  // mode, qui reste autour de la surface de travail, et ne le remplace pas.
+  // fenêtre, l'icône du mode, son libellé — celui du bandeau et de la barre
+  // de l'événement — en gras, puis la phrase qui dit ce que le mode permet
+  // et la commande qui en sort (bandeDeMode, modele.js). Avec ces deux
+  // libellés, elle porte seule le mode : aucun trait n'entoure la surface de
+  // travail.
   //
-  // Son fond et son filet sont ceux du mode, son icône de la teinte du
-  // cadre, son texte de l'encre de la page (marques.js : bandeMode et les
-  // signes bandeLecture, bandeEcriture, bandeBloque). Région d'état, elle
-  // annonce le mode quand il change.
+  // Son fond et son filet sont ceux du mode, son icône de la teinte du mode
+  // (--couleur-cadre-…), son texte de l'encre de la page (marques.js :
+  // bandeMode et les signes bandeLecture, bandeEcriture, bandeBloque).
+  // Région d'état, elle annonce le mode quand il change.
   //
-  // Sa marge haute négative vaut le retrait de l'écran (App.svelte) : la
-  // bande touche le bandeau. Ses marges latérales négatives valent la
-  // distance du contenu de la colonne au bord de la fenêtre : le retrait de
-  // l'écran tant que la fenêtre ne dépasse pas --largeur-page, ce retrait
-  // plus la moitié de l'excédent au-delà, où la colonne se centre. La bande
-  // va donc d'un bord à l'autre de la fenêtre à toute largeur, et son retrait
-  // intérieur, de même valeur, aligne son texte sur la colonne. 100vw égale
-  // la largeur utile de la fenêtre parce que l'écran de l'événement tient
-  // dans sa hauteur (Evenement.svelte) : aucune barre de défilement
-  // verticale n'en retranche, et la page ne défile pas en largeur. Elle tient en
-  // une ligne aux largeurs usuelles, de même hauteur dans les trois modes :
-  // changer de mode ne déplace pas la place fixe du cadre, sous elle. Mince
-  // — une ligne de petit corps —, elle prend au plan à peine plus que le
-  // retrait de l'écran qu'elle remplace.
+  // Ses marges négatives valent le retrait de l'écran (App.svelte), que
+  // l'écran de l'événement garde à toute largeur de fenêtre sans être borné
+  // par --largeur-page : la bande touche le bandeau et va d'un bord à
+  // l'autre de la fenêtre, et son retrait intérieur, de même valeur, aligne
+  // son texte sur l'écran. Elle tient en une ligne aux largeurs usuelles, de
+  // même hauteur dans les trois modes : changer de mode ne déplace pas la
+  // place fixe de la barre, sous elle. Mince — une ligne de petit corps —,
+  // elle prend au plan à peine plus que le retrait de l'écran qu'elle
+  // remplace.
   import { getContext } from 'svelte';
   import Icone from '../primitives/Icone.svelte';
   import { bandeDeMode } from './modele.js';
@@ -52,8 +48,8 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--espace-1) var(--espace-2);
-    margin: calc(-1 * var(--espace-4)) calc(-1 * max(var(--espace-4), (100vw - var(--largeur-page)) / 2 + var(--espace-4))) 0;
-    padding: 0.0625rem max(var(--espace-4), (100vw - var(--largeur-page)) / 2 + var(--espace-4));
+    margin: calc(-1 * var(--espace-4)) calc(-1 * var(--espace-4)) 0;
+    padding: 0.0625rem var(--espace-4);
     border-bottom: 1px solid var(--couleur-mode-lecture-filet);
     background-color: var(--couleur-mode-lecture-fond);
     color: var(--couleur-page-texte);

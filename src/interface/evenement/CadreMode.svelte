@@ -2,33 +2,34 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // Le cadre de mode (§ 8.4, § 8.5, § 14.5) : un trait autour de la surface
-  // de travail, dont la forme dit le mode — tirets en lecture, plein en
-  // écriture, double sur un plan bloqué —, et une barre qui porte, de gauche
-  // à droite, la place fixe, le libellé de mode, puis « Défaire » et
-  // « Refaire » (§ 8.3), puis les outils, outils — la suite des états du
-  // plan —, et les actions, actions — « Imprimer… », calée à droite —, quand
-  // ils sont donnés. Outils et actions suivent la place fixe et ne la
-  // déplacent donc jamais : un refus posé à côté de la place fixe les
-  // repousse sur la ligne suivante, à côté du libellé, sans ligne de plus.
-  // Une barre de moins de 80rem — la fenêtre de 1 366 px lui en donne
-  // davantage — passe les outils sous les commandes et les actions, sur une
-  // ligne à eux : la barre garde deux lignes là où, dans l'ordre du
-  // document, elle en prendrait trois.
+  // La barre, la tête et la surface de travail de l'événement (§ 8.4, § 8.5,
+  // § 14.5), sans trait autour d'elles : le mode se lit dans la bande de
+  // mode (BandeMode.svelte), dans le libellé de mode du bandeau, et dans
+  // celui de la barre, à côté de la place fixe. data-mode porte le mode —
+  // lecture, ecriture ou bloque. La barre porte, de gauche à droite, la
+  // place fixe, le libellé de mode, puis « Défaire » et « Refaire » (§ 8.3),
+  // puis les outils, outils — la suite des états du plan —, et les actions,
+  // actions — « Imprimer… », calée à droite —, quand ils sont donnés.
+  // Outils et actions suivent la place fixe et ne la déplacent donc jamais :
+  // un refus posé à côté de la place fixe les repousse sur la ligne
+  // suivante, à côté du libellé, sans ligne de plus. Une barre de moins de
+  // 80rem — la fenêtre de 1 366 px lui en donne davantage — passe les outils
+  // sous les commandes et les actions, sur une ligne à eux : la barre garde
+  // deux lignes là où, dans l'ordre du document, elle en prendrait trois.
   //
   // Sous la barre vient la tête, tete, quand elle est donnée — l'en-tête de
   // l'événement et la navigation des sections —, puis les annonces,
   // annonces, quand il y en a — support rompu et avertissements —, puis la
-  // surface, children. La barre ouvre le cadre, et seule la bande de mode,
-  // de hauteur constante, le précède dans l'écran de l'événement : un refus
-  // posé dans la barre ou la tête, ou un nom qui s'étend sur plusieurs
+  // surface, children. La barre ouvre le composant, et seule la bande de
+  // mode, de hauteur constante, le précède dans l'écran de l'événement : un
+  // refus posé dans la barre ou la tête, ou un nom qui s'étend sur plusieurs
   // lignes, allonge la barre ou la tête sans déplacer la place fixe
-  // (§ 8.4). Tête, annonces et surface défilent
-  // chacune dans sa zone : des avertissements nombreux ne poussent pas la
-  // surface hors du cadre, ni le cadre hors de la fenêtre. La surface porte
-  // le plan, que l'opérateur regarde : elle réclame les trois quarts du
-  // cadre avant que les annonces ne dépassent leur première ligne, sauf
-  // devant un support rompu, dont les issues restent en vue.
+  // (§ 8.4). Tête, annonces et surface défilent chacune dans sa zone : des
+  // avertissements nombreux ne poussent pas la surface hors du composant, ni
+  // le composant hors de la fenêtre. La surface porte le plan, que
+  // l'opérateur regarde : elle réclame les trois quarts du composant avant
+  // que les annonces ne dépassent leur première ligne, sauf devant un
+  // support rompu, dont les issues restent en vue.
   //
   // Sous une tête, et hors d'un support rompu, les annonces se posent à
   // côté d'elle, dans la place que sa navigation laisse à droite. Leur zone
@@ -69,26 +70,23 @@
   //
   // La barre et la tête forment la carte d'en-tête de l'événement : la
   // barre sur le fond sourd de la carte, la tête sur son fond, séparées et
-  // closes par le filet de la carte. Le cadre, lui, reste sur le fond de la
-  // page, que son trait contraste (marques.js).
+  // closes par le filet de la carte. La surface reste sur le fond de la
+  // page.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import { CONFIRMATION_DEBLOCAGE } from '../primitives/commande.js';
   import Refus from '../primitives/Refus.svelte';
-  import { cadreDeMode, commandeFixe, repriseOfferte } from './modele.js';
+  import { bandeDeMode, commandeFixe, repriseOfferte } from './modele.js';
 
   let { children, tete = null, annonces = null, outils = null, actions = null } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
 
-  // Sans événement — l'instant où l'écran se retire —, le cadre garde la
-  // forme de la lecture, et n'a pas de libellé.
-  const cadre = $derived(cadreDeMode($seance));
-  const forme = $derived(cadre?.forme ?? 'tirets');
-  // Le trait du cadre est une marque (§ 14.5) : data-marque nomme l'entrée
-  // du registre (marques.js) qui porte le jeton de sa couleur.
-  const MARQUE_DE_LA_FORME = { tirets: 'cadreLecture', plein: 'cadreEcriture', double: 'cadreBloque' };
+  // Le mode et la clé de son libellé, ceux de la bande. Sans événement —
+  // l'instant où l'écran se retire —, le mode est la lecture, sans libellé.
+  const libelle = $derived(bandeDeMode($seance));
+  const mode = $derived(libelle?.mode ?? 'lecture');
   const commande = $derived(commandeFixe($seance));
   const verrou = $derived($seance.mode === 'lecture' ? $seance.verrouAutre : null);
   const reprise = $derived(repriseOfferte($seance));
@@ -96,7 +94,7 @@
   const aCote = $derived(tete !== null && annonces !== null && $seance.supportRompu === null);
 </script>
 
-<div class="cadre" data-mode={forme} data-marque={MARQUE_DE_LA_FORME[forme]} class:tirets={forme === 'tirets'} class:double={forme === 'double'}>
+<div class="corps" data-mode={mode}>
   <div class="barre" role="group" aria-label={t('evenement.cadre.commandes')}>
     <div class="ligne">
       <div class="fixe" data-place-fixe>
@@ -115,10 +113,10 @@
           <Commande cle="communs.commande.lecture" nom="lecture" executer={() => seance.passerEnLecture()} />
         {/if}
       </div>
-      {#if cadre !== null}
+      {#if libelle !== null}
         <span class="porte-libelle">
-          <span class="libelle" class:plein={forme === 'plein'} class:double={forme === 'double'} data-mode-libelle="cadre"
-            >{t(cadre.cle)}</span
+          <span class="libelle" class:ecriture={mode === 'ecriture'} class:bloque={mode === 'bloque'} data-mode-libelle="cadre"
+            >{t(libelle.cle)}</span
           >
         </span>
       {/if}
@@ -187,29 +185,16 @@
 </div>
 
 <style>
-  /* Le trait du cadre : sa forme dit le mode, sa couleur le redit. */
-  /* Une même épaisseur dans les trois formes : la place fixe ne bouge pas
-     d'un mode à l'autre. */
-  .cadre {
+  /* Sans trait : rien autour de la surface ne change d'un mode à l'autre,
+     et la place fixe ne bouge pas. */
+  .corps {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
     min-height: 0;
-    border: 6px solid var(--couleur-cadre-ecriture);
-    border-radius: var(--rayon-2);
   }
 
-  .cadre.tirets {
-    border-style: dashed;
-    border-color: var(--couleur-cadre-lecture);
-  }
-
-  .cadre.double {
-    border-style: double;
-    border-color: var(--couleur-cadre-bloque);
-  }
-
-  /* La barre ne prend jamais toute la hauteur du cadre : au-delà, ses
+  /* La barre ne prend jamais toute la hauteur du composant : au-delà, ses
      messages défilent, la place fixe en tête. */
   .barre {
     display: flex;
@@ -284,12 +269,12 @@
     font-weight: bold;
   }
 
-  .libelle.plein {
+  .libelle.ecriture {
     border-color: var(--couleur-mode-ecriture-filet);
     background-color: var(--couleur-mode-ecriture-fond);
   }
 
-  .libelle.double {
+  .libelle.bloque {
     border-color: var(--couleur-mode-bloque-filet);
     background-color: var(--couleur-mode-bloque-fond);
   }
@@ -320,7 +305,7 @@
     font-weight: bold;
   }
 
-  /* La tête ne prend jamais plus de 35 % du cadre : au-delà, elle défile,
+  /* La tête ne prend jamais plus de 35 % du composant : au-delà, elle défile,
      et la surface garde sa place. Elle n'a pas de retrait en bas : le trait
      des onglets de la navigation se pose sur son filet. */
   .tete {
@@ -397,7 +382,7 @@
      retrait compris : 7,25rem tiennent entier, dans la place de 36 % d'une
      fenêtre de 1 366 px, un avertissement de trois lignes de texte et son
      action dessous (Avertissements.svelte). Au-delà, la zone défile, et la
-     tête, qui ne grandit pas plus, laisse le reste du cadre à la surface. */
+     tête, qui ne grandit pas plus, laisse le reste du composant à la surface. */
   .place > .annonces {
     box-sizing: border-box;
     max-height: 7.25rem;
@@ -416,7 +401,7 @@
   }
 
   /* Seules — sans tête, en plein écran, ou devant un support rompu —, les
-     annonces ne prennent jamais plus du quart du cadre, et cèdent d'abord
+     annonces ne prennent jamais plus du quart du composant, et cèdent d'abord
      leur hauteur à la surface : leur facteur de rétrécissement, mille fois
      celui de la surface, leur fait absorber presque tout le manque de
      place, jusqu'à leur hauteur minimale : un avertissement d'une ligne en
@@ -430,13 +415,13 @@
 
   /* Le support rompu, en tête des annonces, porte les seules issues de
      l'opérateur : tant qu'il est là, les annonces ne cèdent rien à la
-     surface, et gardent leur hauteur jusqu'au quart du cadre ; les
+     surface, et gardent leur hauteur jusqu'au quart du composant ; les
      avertissements qui le suivent défilent sous lui. */
   .annonces.rompu {
     flex-shrink: 0;
   }
 
-  /* La surface part des trois quarts du cadre, s'étend à ce qui reste, et
+  /* La surface part des trois quarts du composant, s'étend à ce qui reste, et
      ne rétrécit, après les annonces, que pour la barre et la tête. Sa
      hauteur ne dépend pas de son contenu : elle est un conteneur de taille,
      dont une section borne un panneau à la hauteur visible (unités cqb). */

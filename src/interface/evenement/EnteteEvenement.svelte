@@ -2,8 +2,8 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // L'en-tête de l'événement ouvert, en tête de la tête du cadre : son nom,
-  // puis, sur la même ligne tant qu'elle a la place, son résumé — la date
+  // L'en-tête de l'événement ouvert, en tête de la tête (CadreMode.svelte) :
+  // son nom, puis, sur la même ligne tant qu'elle a la place, son résumé — la date
   // quand il en a une, les participants, les tables et leurs sièges, les
   // tours (resumeEvenement, modele.js) —, d'encre secondaire. Le nom se
   // coupe où il le faut, même sans espace : un nom long de glyphes larges

@@ -2,14 +2,13 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // La suite des états du plan (§ 9), dans la barre du cadre : sous le nom
-  // « État du plan », que redit un intertitre en petites capitales tant que
-  // la barre a la place, les
-  // quatre états dans l'ordre du § 9 (etapesEtat, modele.js), séparés de
-  // chevrons cachés à l'assistance. Chaque étape est la Commande
-  // changerEtat de son état, restylée en pilule, avec l'icône de sa pastille
-  // d'état posée sur le bouton, à gauche de son nom, de la marque de sa
-  // teinte. L'état courant porte en plus le fond de sa teinte, un filet
+  // La suite des états du plan (§ 9), dans la barre de l'événement : sous
+  // le nom « État du plan », que redit un intertitre en petites capitales
+  // tant que la barre a la place, les quatre états dans l'ordre du § 9
+  // (etapesEtat, modele.js), séparés de chevrons cachés à l'assistance.
+  // Chaque étape est la Commande changerEtat de son état, restylée en
+  // pilule, avec l'icône de sa pastille d'état posée sur le bouton, à
+  // gauche de son nom, de la marque de sa teinte. L'état courant porte en plus le fond de sa teinte, un filet
   // plein et le gras ; les autres, un filet tireté, et restent cliquables
   // sous le même nom.
   //

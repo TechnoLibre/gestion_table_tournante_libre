@@ -4,15 +4,14 @@
 // Le modèle de l'accueil, pur (§ 8.1, § 8.6, § 8.8) : ce que les composants
 // de la liste des événements affichent, sans arithmétique ni texte. Une
 // ligne de la liste (LigneListe de la façade, evenements.js) devient ses six
-// informations et ses signalements, mis en forme, puis, son résumé reçu, les
-// deux mesures de son retenu et la meilleure proposition de son
-// classement ; les lignes de la liste, les tuiles de ses filtres par état
-// du plan, le résumé de son en-tête et les groupes de son tableau ; une
-// question du dossier de travail, ses réponses ; un état illisible, ses
-// secours ; un refus de la façade, le refus affiché sur la liste. Chaque clé
-// rendue est écrite ici en entier : aucun composant ne compose une clé.
-import { COLONNE_ANNONCEE } from '../generation/meilleure.js';
-import { COLONNES } from '../propositions/modele.js';
+// informations et ses signalements, mis en forme, puis, son résumé reçu, la
+// différence à la cible de son retenu et l'identifiant de la meilleure
+// proposition de son classement ; les lignes de la liste, les tuiles de ses
+// filtres par état du plan, le résumé de son en-tête et les groupes de son
+// tableau ; une question du dossier de travail, ses réponses ; un état
+// illisible, ses secours ; un refus de la façade, le refus affiché sur la
+// liste. Chaque clé rendue est écrite ici en entier : aucun composant ne
+// compose une clé.
 
 // Les états du plan (§ 9) et la clé de leur nom, dans l'ordre du § 9.
 const CLES_ETATS = new Map([
@@ -26,34 +25,29 @@ const CLES_ETATS = new Map([
 export const ETATS = Object.freeze([...CLES_ETATS.keys()]);
 
 /**
- * Les deux mesures du placement retenu qu'une ligne montre (§ 5.4, § 8.9),
- * dans l'ordre d'affichage : chacune { colonne, cle, explication } — le nom
- * de sa valeur dans ligneAffichee et son data-colonne, la clé de son
- * intitulé, celle de son explication, que l'infobulle de l'intitulé montre.
+ * La mesure du placement retenu qu'une ligne montre (§ 5.4, § 8.9) : la
+ * différence à la cible, { colonne, cle, explication } — le nom de sa valeur
+ * dans ligneAffichee et son data-colonne, la clé de son intitulé, celle de
+ * son explication, que l'infobulle de l'intitulé montre. Les collisions
+ * cumulées du retenu ne se montrent pas dans la liste.
  */
 export const COLONNES_DU_RETENU = Object.freeze(
-  ['collisionsCumulees', 'diffRedondance'].map((colonne) =>
+  ['diffRedondance'].map((colonne) =>
     Object.freeze({ colonne, cle: `accueil.colonne.${colonne}`, explication: `accueil.explication.${colonne}` }),
   ),
 );
 
-// La colonne du tableau des propositions que le bloc de la génération
-// annonce : son intitulé et son explication.
-const COLONNE_MEILLEURE = COLONNES.find(({ nom }) => nom === COLONNE_ANNONCEE);
-
 /**
- * Les clés du bloc de la meilleure proposition du classement qu'une ligne
- * montre (§ 5.4, § 5.7), celles du bloc de la génération : titre,
- * explication du titre — ce que désigne le rang 1, et quand le bloc écrit
- * « — » —, libellé de l'identifiant, intitulé des collisions cumulées et
- * leur explication, celles de la colonne du tableau des propositions.
+ * Les clés de la meilleure proposition du classement qu'une ligne montre
+ * (§ 5.4, § 5.7) : titre et libellé de l'identifiant, ceux du bloc de la
+ * génération, et explication du titre — ce que désigne le rang 1, et quand
+ * la ligne écrit « — ». Ses collisions cumulées ne se montrent pas dans la
+ * liste.
  */
 export const MEILLEURE = Object.freeze({
   titre: 'generation.meilleure.titre',
   explication: 'accueil.explication.meilleure',
   proposition: 'generation.meilleure.proposition',
-  collisions: COLONNE_MEILLEURE.cle,
-  explicationCollisions: COLONNE_MEILLEURE.explication,
 });
 
 // La clé de la valeur absente, celle de la mise en forme.
@@ -133,9 +127,9 @@ export function signalementsDe(ligne) {
 }
 
 /**
- * Les six informations d'une ligne (§ 8.1), les deux mesures de son retenu
- * et la meilleure proposition de son classement, mises en forme, et ses
- * signalements. nom : celui inscrit dans le fichier, ou la base quand l'état
+ * Les six informations d'une ligne (§ 8.1), la différence à la cible de son
+ * retenu et l'identifiant de la meilleure proposition de son classement,
+ * mis en forme, et ses signalements. nom : celui inscrit dans le fichier, ou la base quand l'état
  * ne se lit pas ; date, participants et dernière modification par format,
  * la valeur absente quand ils manquent — la dernière modification est
  * l'horodatage de la dernière entrée du journal, sur l'horloge de
@@ -143,13 +137,12 @@ export function signalementsDe(ligne) {
  * clé de son nom, que le composant traduit ; chemin : tel que la façade
  * l'affiche, en entier.
  *
- * Les quatre valeurs de résumé lisent resume, ce que facade.resumer a rendu
- * pour la ligne : collisionsCumulees et diffRedondance celles de
- * mesuresDuRetenu, par format, la valeur absente sans retenu mesurable — la
- * différence se lit telle quelle, jamais refaite ; meilleure, l'identifiant
- * et les collisions cumulées de meilleureDuClassement, par format, la valeur
- * absente l'un et l'autre sans proposition classée. Sans resume, la ligne
- * est enAttente : son résumé se calcule encore, et les quatre valeurs
+ * Les deux valeurs de résumé lisent resume, ce que facade.resumer a rendu
+ * pour la ligne : diffRedondance, celle de mesuresDuRetenu, par format, la
+ * valeur absente sans retenu mesurable — elle se lit telle quelle, jamais
+ * refaite ; meilleure.id, l'identifiant de meilleureDuClassement, par
+ * format, la valeur absente sans proposition classée. Sans resume, la
+ * ligne est enAttente : son résumé se calcule encore, et les deux valeurs
  * valent la valeur absente, que le composant remplace par le signe du
  * chargement.
  *
@@ -158,8 +151,7 @@ export function signalementsDe(ligne) {
  * @param {{mesuresDuRetenu: Object|null, meilleureDuClassement: Object|null}} [resume]
  * @returns {{nom: string, date: string, etat: string, participants: string,
  *            modification: string, chemin: string, enAttente: boolean,
- *            collisionsCumulees: string, diffRedondance: string,
- *            meilleure: {id: string, collisions: string},
+ *            diffRedondance: string, meilleure: {id: string},
  *            signalements: Array<{cle: string, details: Object, noms: string[]}>}}
  */
 export function ligneAffichee(ligne, format, resume) {
@@ -171,12 +163,8 @@ export function ligneAffichee(ligne, format, resume) {
     modification: ligne.derniereModification === null ? format.nombre(null) : format.horodatage(ligne.derniereModification),
     chemin: ligne.chemin,
     enAttente: resume === undefined,
-    collisionsCumulees: format.nombre(resume?.mesuresDuRetenu?.collisionsCumulees ?? null),
     diffRedondance: format.nombre(resume?.mesuresDuRetenu?.diffRedondance ?? null),
-    meilleure: {
-      id: format.nombre(resume?.meilleureDuClassement?.id ?? null),
-      collisions: format.nombre(resume?.meilleureDuClassement?.collisionsCumulees ?? null),
-    },
+    meilleure: { id: format.nombre(resume?.meilleureDuClassement?.id ?? null) },
     signalements: signalementsDe(ligne),
   };
 }

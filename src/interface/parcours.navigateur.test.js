@@ -215,6 +215,24 @@ const base = () => etat().evenement.base;
 const plat = (texte) => texte.replace(/\s+/g, ' ').trim();
 const texteDe = (element) => plat(element.textContent);
 
+// Le mode de l'événement ouvert, sans cadre : la surface de travail est en
+// ce mode et ne porte aucun trait ; la bande de mode, visible, et le libellé
+// de la barre, à côté de la place fixe, le nomment, comme le bandeau.
+function exigerModeSansCadre(mode) {
+  const surface = dans('[data-mode]');
+  expect(surface.dataset.mode).toBe(mode);
+  expect(surface.hasAttribute('data-marque')).toBe(false);
+  const style = getComputedStyle(surface);
+  for (const cote of ['Top', 'Right', 'Bottom', 'Left']) expect(Number.parseFloat(style[`border${cote}Width`]), cote).toBe(0);
+  const bande = dans('[data-ecran="evenement"] > [role="status"]');
+  const libelle = dans('[data-mode-libelle="cadre"]');
+  expect(visible(bande)).toBe(true);
+  expect(visible(libelle)).toBe(true);
+  expect(texteDe(libelle).length).toBeGreaterThan(0);
+  expect(texteDe(bande)).toContain(texteDe(libelle));
+  expect(texteDe(dans('[data-mode-libelle="bandeau"]'))).toBe(texteDe(libelle));
+}
+
 // Le texte de l'état et du journal de l'événement ouvert, et sa révision.
 function fichiers() {
   return {
@@ -832,10 +850,10 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(charge().participants).toHaveLength(0);
   });
 
-  test('01b une modification refusée en lecture, à côté de son geste, avec « Modifier » pour remède ; le cadre de lecture', async () => {
+  test('01b une modification refusée en lecture, à côté de son geste, avec « Modifier » pour remède ; la lecture, sans cadre', async () => {
     await ouvrirSection('tables');
     const avant = fichiers();
-    expect(dans('[data-mode]').dataset.marque).toBe('cadreLecture');
+    exigerModeSansCadre('lecture');
     await cliquer('[data-section="tables"] [data-commande="creerTableRonde"]');
     await refusPres(() => dans('[data-commande="creerTableRonde"]').parentElement, 'MODE_LECTURE', 'modifier', 'créer une table');
     expect(document.querySelectorAll(FENETRE)).toHaveLength(0);
@@ -846,16 +864,11 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     });
   });
 
-  test('01b « Modifier » : l’écriture et son cadre ; la même modification passe', async () => {
+  test('01b « Modifier » : l’écriture, sans cadre ; la même modification passe', async () => {
     await cliquer('[data-place-fixe] [data-commande="modifier"]');
     await attendre('l’écriture', () => etat().mode === 'ecriture' && dans('[data-place-fixe] [data-commande="lecture"]'));
-    const cadre = dans('[data-mode]');
-    expect(cadre.dataset.marque).toBe('cadreEcriture');
-    expect(visible(cadre)).toBe(true);
-    const libelle = dans('[data-mode-libelle="cadre"]');
-    expect(visible(libelle)).toBe(true);
-    expect(texteDe(libelle).length).toBeGreaterThan(0);
-    expect(texteDe(dans('[data-mode-libelle="bandeau"]'))).toBe(texteDe(libelle));
+    expect(visible(dans('[data-mode]'))).toBe(true);
+    exigerModeSansCadre('ecriture');
 
     const r = revision();
     await cliquer('[data-section="tables"] [data-commande="creerTableRonde"]');
@@ -1407,11 +1420,10 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
   });
 
   // Glisser une personne, une table, tirer une poignée, poser une réservation.
-  test('20 la lecture : quatre gestes du plan, empreinte inchangée ; le cadre, son libellé et le bandeau', async () => {
+  test('20 la lecture : quatre gestes du plan, empreinte inchangée ; la bande, le libellé de mode et le bandeau, sans cadre', async () => {
     await cliquer('[data-place-fixe] [data-commande="lecture"]');
     await attendre('la lecture', () => etat().mode === 'lecture');
-    expect(dans('[data-mode]').dataset.marque).toBe('cadreLecture');
-    expect(visible(dans('[data-mode-libelle="cadre"]'))).toBe(true);
+    exigerModeSansCadre('lecture');
     expect(dans('[data-bandeau]').textContent).toContain(MARQUE_PROVENANCE);
     const empreinte = serialiserCharge(charge());
     const avant = fichiers();
@@ -2095,7 +2107,7 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
     await cliquer('[data-etat="bloque"] [data-commande="etat"]');
     await uneEntree(r, 'bloquer');
     expect(charge().evenement.etat).toBe('bloque');
-    expect(dans('[data-mode]').dataset.marque).toBe('cadreBloque');
+    exigerModeSansCadre('bloque');
     const empreinte = serialiserCharge(charge());
     const avant = fichiers();
     const rang = m.trace.length;

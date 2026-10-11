@@ -38,7 +38,9 @@
   //
   // La page porte le fond de la page ; l'écran — l'élément <main>, parent
   // direct de chaque [data-ecran] — se centre dans --largeur-page au-delà
-  // de cette largeur et prend la fenêtre en deçà. App pose les styles de
+  // de cette largeur et prend la fenêtre en deçà ; l'écran de l'événement
+  // retire cette borne et prend la fenêtre à toute largeur
+  // (Evenement.svelte). App pose les styles de
   // base d'un titre de premier niveau, des cellules d'un tableau et des
   // champs de saisie de l'écran, de spécificité nulle : le style propre d'un
   // composant l'emporte toujours, et le document imprimé (§ 11.7), sous

@@ -146,11 +146,11 @@ async function enManqueDe(m, manque) {
 
 // --- Les épreuves -----------------------------------------------------------------
 
-describe('la bande de mode (§ 8.4)', () => {
-  // 1 920 px dépasse --largeur-page : la colonne de la page n'y touche plus
-  // les bords de la fenêtre, la bande si.
+describe('la bande de mode et la pleine fenêtre (§ 8.4)', () => {
+  // 1 920 px dépasse --largeur-page, qui borne la liste des événements :
+  // l'écran de l'événement n'y est pas borné.
   for (const largeur of [1366, 1920]) {
-    test(`à ${largeur} px, sous le bandeau, de bord à bord de la fenêtre sans défilement en largeur, avant le cadre : l’icône, le libellé du cadre et son explication, aux couleurs de chaque mode, à la même hauteur`, async () => {
+    test(`à ${largeur} px : la bande de bord à bord sous le bandeau, aux couleurs de chaque mode, à hauteur constante ; l’écran en pleine fenêtre, sans trait`, async () => {
       await fixerCadre(largeur, 700);
       const m = await neuf();
       const hauteurs = [];
@@ -163,6 +163,20 @@ describe('la bande de mode (§ 8.4)', () => {
         expect([b.left, b.right], mode).toEqual([0, innerWidth]);
         expect(document.documentElement.scrollWidth, mode).toBeLessThanOrEqual(innerWidth);
         expect(b.bottom, mode).toBeLessThanOrEqual(boite(cadre(m)).top);
+        // L'écran va d'un bord à l'autre de la fenêtre, au retrait de
+        // l'écran près, et la barre, la tête et la surface avec lui, sans
+        // trait autour d'elles.
+        const retrait = Number.parseFloat(style(ecran(m).parentElement).paddingLeft);
+        expect(retrait, mode).toBeGreaterThan(0);
+        expect(retrait, mode).toBeLessThanOrEqual(32);
+        for (const element of [ecran(m), cadre(m)]) {
+          const e = boite(element);
+          expect(e.left, mode).toBeCloseTo(retrait, 0);
+          expect(e.right, mode).toBeCloseTo(innerWidth - retrait, 0);
+        }
+        for (const cote of ['Top', 'Right', 'Bottom', 'Left']) {
+          expect(Number.parseFloat(style(cadre(m))[`border${cote}Width`]), `${mode} ${cote}`).toBe(0);
+        }
         expect(region.textContent, mode).toContain(t(cle));
         expect(region.textContent, mode).toContain(t(explication));
         expect(region.textContent, mode).toContain(dans(m, '[data-mode-libelle="cadre"]').textContent);

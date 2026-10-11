@@ -1,9 +1,9 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// La clé du libellé de mode (§ 8.4, § 8.5), que lisent le bandeau et le
-// cadre de mode : aucune sans événement ; le plan bloqué avant le mode, qu'il
-// force en lecture ; sinon le mode de la séance. Et la clé de l'annonce de
+// La clé du libellé de mode (§ 8.4, § 8.5), que lisent le bandeau, la bande
+// de mode et la barre de l'événement : aucune sans événement ; le plan
+// bloqué avant le mode, qu'il force en lecture ; sinon le mode de la séance. Et la clé de l'annonce de
 // format du bandeau (§ 18.6), une par annonce de la séance.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';

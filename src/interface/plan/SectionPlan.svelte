@@ -21,8 +21,8 @@
   // pas rognée par son défilement.
   //
   // En plein écran, le titre et les panneaux s'effacent : le plan prend la
-  // surface que le cadre de mode lui laisse sous le bandeau (§ 18.6), et le
-  // cadre l'entoure toujours (§ 8.4).
+  // surface de travail que la bande de mode et la barre de l'événement lui
+  // laissent sous le bandeau (§ 8.4, § 18.6).
   import { getContext } from 'svelte';
   import { diagnostiquerCharge } from '../../application/diagnostic.js';
   import { etatPlaces } from '../../application/places.js';
@@ -75,8 +75,8 @@
 </section>
 
 <style>
-  /* La section prend la hauteur de la surface du cadre de mode : le plan
-     s'y étend, et c'est la surface du cadre qui défile, jamais la page. */
+  /* La section prend la hauteur de la surface de travail de l'événement :
+     le plan s'y étend, et c'est cette surface qui défile, jamais la page. */
   .section-plan {
     display: flex;
     flex-direction: column;

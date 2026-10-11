@@ -1,8 +1,8 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Le modèle de l'événement ouvert (§ 8.4, § 8.5, § 8.8, § 8.9, § 9) : le cadre
-// de mode et sa forme, la commande de la place fixe, les états du plan et
+// Le modèle de l'événement ouvert (§ 8.4, § 8.5, § 8.8, § 8.9, § 9) : la
+// commande de la place fixe, les états du plan et
 // leurs clés, la reprise de verrou offerte, et les avertissements ordonnés,
 // chacun avec son remède ; puis l'enveloppe : le résumé chiffré de
 // l'en-tête et ses textes, les étapes des états, la bande de mode. Chaque
@@ -13,11 +13,11 @@ import { describe, test } from '../../../test/lanceur.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { cleDeMode } from '../mode.js';
 import {
   ETATS_PLAN,
   avertissementsOrdonnes,
   bandeDeMode,
-  cadreDeMode,
   cleEtat,
   commandeFixe,
   etapesEtat,
@@ -52,25 +52,6 @@ function etat({
     verrouAutre,
   };
 }
-
-describe('cadreDeMode (§ 8.4, § 14.5)', () => {
-  test('null sans événement', () => {
-    assert.equal(cadreDeMode(etat({ plan: null })), null);
-  });
-
-  test('lecture : tirets ; écriture : trait plein ; bloqué : trait double, quel que soit le mode', () => {
-    assert.deepEqual(cadreDeMode(etat({ mode: 'lecture' })), { cle: 'coquille.mode.lecture', forme: 'tirets' });
-    assert.deepEqual(cadreDeMode(etat({ mode: 'ecriture' })), { cle: 'coquille.mode.ecriture', forme: 'plein' });
-    assert.deepEqual(cadreDeMode(etat({ mode: 'lecture', plan: 'bloque' })), { cle: 'coquille.mode.bloque', forme: 'double' });
-    assert.deepEqual(cadreDeMode(etat({ mode: 'ecriture', plan: 'bloque' })), { cle: 'coquille.mode.bloque', forme: 'double' });
-  });
-
-  test('trois formes distinctes pour trois libellés distincts, chaque libellé traduit', () => {
-    const cadres = [etat(), etat({ mode: 'ecriture' }), etat({ plan: 'bloque' })].map(cadreDeMode);
-    assert.equal(new Set(cadres.map(({ forme }) => forme)).size, 3);
-    assert.equal(new Set(cadres.map(({ cle }) => t(cle))).size, 3);
-  });
-});
 
 describe('commandeFixe (§ 8.4, § 8.5, § 8.8)', () => {
   test('null sans événement ; modifier en lecture ; lecture en écriture ; debloquer sur un plan bloqué', () => {
@@ -316,7 +297,7 @@ describe('bandeDeMode : la bande sous le bandeau', () => {
     assert.equal(bandeDeMode(etat({ plan: null })), null);
   });
 
-  test('lecture, écriture, plan bloqué — quel que soit le mode : le libellé du cadre, une explication, une icône', () => {
+  test('lecture, écriture, plan bloqué — quel que soit le mode : le libellé de mode, une explication, une icône', () => {
     assert.deepEqual(bandeDeMode(etat({ mode: 'lecture' })), {
       mode: 'lecture',
       cle: 'coquille.mode.lecture',
@@ -339,9 +320,10 @@ describe('bandeDeMode : la bande sous le bandeau', () => {
     }
   });
 
-  test('le libellé est celui du cadre ; trois explications traduites, distinctes, qui citent la commande qui en sort', () => {
+  test('le libellé est celui du bandeau ; trois libellés et trois explications traduits, distincts ; chaque explication cite la commande qui en sort', () => {
     const etats = [etat(), etat({ mode: 'ecriture' }), etat({ plan: 'bloque' })];
-    for (const e of etats) assert.equal(bandeDeMode(e).cle, cadreDeMode(e).cle);
+    for (const e of etats) assert.equal(bandeDeMode(e).cle, cleDeMode(e));
+    assert.equal(new Set(etats.map((e) => t(bandeDeMode(e).cle))).size, 3);
     const explications = etats.map((e) => t(bandeDeMode(e).explication));
     for (const texte of explications) assert.notEqual(texte.trim(), '');
     assert.equal(new Set(explications).size, 3);
@@ -349,7 +331,7 @@ describe('bandeDeMode : la bande sous le bandeau', () => {
     explications.forEach((texte, rang) => assert.ok(texte.includes(`« ${t(commandes[rang])} »`), texte));
   });
 
-  test('un format plus récent, plan bloqué ou non : le mode du cadre, et une explication qui ne cite aucune commande', () => {
+  test('un format plus récent, plan bloqué ou non : son mode, et une explication qui ne cite aucune commande', () => {
     const attendus = [
       [etat({ refus: FORMAT_REFUS }), { mode: 'lecture', cle: 'coquille.mode.lecture', icone: 'oeil' }],
       [etat({ plan: 'bloque', refus: FORMAT_REFUS }), { mode: 'bloque', cle: 'coquille.mode.bloque', icone: 'cadenas' }],
