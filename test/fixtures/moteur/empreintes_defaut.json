@@ -1,0 +1,721 @@
+{
+  "reglages": {
+    "graines": [
+      1,
+      2,
+      3
+    ],
+    "arret": 20000,
+    "historique": 1000,
+    "cases": [
+      "separerAppartenances",
+      "nouveauxVoisins",
+      "nouvelleTable",
+      "varierAppartenances"
+    ],
+    "classement": {
+      "cles": [
+        "petite-conflit",
+        "grande"
+      ],
+      "graine": 7,
+      "arret": 1000,
+      "nombre": 12
+    },
+    "bascule": {
+      "cles": [
+        "petite",
+        "petite-conflit"
+      ],
+      "arret": 50000
+    }
+  },
+  "plans": {
+    "grande": {
+      "1": {
+        "empreinte": "2f637984985154ff3a8785a7d29092a634fdd4b3651c33448b877a1cb0077b16",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 3,
+          "excedentCollisions": 1,
+          "collisionsCumulees": 58,
+          "rencontresRepeteesChoisies": 74,
+          "retoursChoisis": 21,
+          "redondance": 1334
+        }
+      },
+      "2": {
+        "empreinte": "111a3077e5f0a381a81df2648c1aac5bb875a4ad84a8d95840210a0dcf905dba",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 3,
+          "excedentCollisions": 1,
+          "collisionsCumulees": 53,
+          "rencontresRepeteesChoisies": 49,
+          "retoursChoisis": 18,
+          "redondance": 1322
+        }
+      },
+      "3": {
+        "empreinte": "b6500109a02cc02b3a0ab121b57af6a15fd0a0e73e4460d65820aada73834ccd",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 3,
+          "excedentCollisions": 1,
+          "collisionsCumulees": 45,
+          "rencontresRepeteesChoisies": 30,
+          "retoursChoisis": 10,
+          "redondance": 1311
+        }
+      }
+    },
+    "grande-sans-exception": {
+      "1": {
+        "empreinte": "eb59055b0f65f2f5a4bb7cecb5b1c747d2ba3fc6fe8c77bcb17659b24cbedf8f",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 3,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 54,
+          "rencontresRepeteesChoisies": 49,
+          "retoursChoisis": 19,
+          "redondance": 1314
+        }
+      },
+      "2": {
+        "empreinte": "c1908708b1b74643be66202beef64b689d8634aaf3db81ead0c275bc62b2bcd6",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 3,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 43,
+          "rencontresRepeteesChoisies": 74,
+          "retoursChoisis": 27,
+          "redondance": 1246
+        }
+      },
+      "3": {
+        "empreinte": "c68933c83e2d0c53eb1798e108dd94f0bfd82e4dbf1a55309b576aad7dc585e0",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 3,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 52,
+          "rencontresRepeteesChoisies": 74,
+          "retoursChoisis": 21,
+          "redondance": 1336
+        }
+      }
+    },
+    "petite": {
+      "1": {
+        "empreinte": "d13db767aaa2fc7ad59ad69973d663320931598b7d02a9212ca0f4e2949f8a21",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 1,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 13,
+          "rencontresRepeteesChoisies": 1,
+          "retoursChoisis": 10,
+          "redondance": 58
+        }
+      },
+      "2": {
+        "empreinte": "7de7cee8dcb6561c13b8fdd72ce8730f8022b9d2ff00ee7d11acc8a9a2c21558",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 14,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 17,
+          "redondance": 60
+        }
+      },
+      "3": {
+        "empreinte": "b531231af7422c46eaee40ece57222b9d15c57942dd822bda8651010c9fbec86",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 10,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 14,
+          "redondance": 61
+        }
+      }
+    },
+    "petite-conflit": {
+      "1": {
+        "empreinte": "eb8b6cfd59ab3c422c126ede84cf34319674bbf1ff1260963ff87d0dbf1134ad",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 1,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 11,
+          "rencontresRepeteesChoisies": 1,
+          "retoursChoisis": 14,
+          "redondance": 58
+        }
+      },
+      "2": {
+        "empreinte": "3d69f6c6701355b4945758c73721d222dadab5dff2af07f2f7b1fa8e3cee64bb",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 10,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 15,
+          "redondance": 61
+        }
+      },
+      "3": {
+        "empreinte": "d4daa8def32d39046daad3bfa7263ac52bcafc5d0b28eddf6efaf7359ae90f33",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 1,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 9,
+          "rencontresRepeteesChoisies": 1,
+          "retoursChoisis": 15,
+          "redondance": 59
+        }
+      }
+    }
+  },
+  "combinaisons": {
+    "separerAppartenances+nouveauxVoisins+nouvelleTable+varierAppartenances": {
+      "empreinte": "d13db767aaa2fc7ad59ad69973d663320931598b7d02a9212ca0f4e2949f8a21",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 13,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 10,
+        "redondance": 58
+      }
+    },
+    "separerAppartenances+nouveauxVoisins+nouvelleTable": {
+      "empreinte": "f76257b5ecf1260a0d7c81b948c5971ffb0c0c18ed6310979cfb7b2be6698dfb",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 11,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 15,
+        "redondance": 58
+      }
+    },
+    "separerAppartenances+nouveauxVoisins+varierAppartenances": {
+      "empreinte": "9b22b885a65791752a5928b7fe1b285355a4c336dec9cbd9e630aaa4f084ef04",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 7,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 15,
+        "redondance": 58
+      }
+    },
+    "separerAppartenances+nouveauxVoisins": {
+      "empreinte": "00885d606c84f32f15eef4731a9835a5f97a4754842f00e26f7f6fd73d6d3b4d",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 0,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 11,
+        "rencontresRepeteesChoisies": 0,
+        "retoursChoisis": 15,
+        "redondance": 60
+      }
+    },
+    "separerAppartenances+nouvelleTable+varierAppartenances": {
+      "empreinte": "cb80a1470adbb6203469abeafdf4f5fa03797242b0a80ca1665d73d5ab5ccc3b",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 0,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 11,
+        "rencontresRepeteesChoisies": 0,
+        "retoursChoisis": 16,
+        "redondance": 60
+      }
+    },
+    "separerAppartenances+nouvelleTable": {
+      "empreinte": "b97d6d1666c04024d0958b44e04667d0c68b205ef0a8a8473aafa61eaf688cbe",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 8,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 16,
+        "redondance": 58
+      }
+    },
+    "separerAppartenances+varierAppartenances": {
+      "empreinte": "1765e4f6977feac2298a40c8558b76cec322b2ddd3783db78b1fbe923aa1e88e",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 0,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 12,
+        "rencontresRepeteesChoisies": 0,
+        "retoursChoisis": 16,
+        "redondance": 60
+      }
+    },
+    "separerAppartenances": {
+      "empreinte": "caceccc8edeed9a9dcbd999308cb3a8b1bbca95475d9eddbbeb3563e4749ed40",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 10,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 15,
+        "redondance": 58
+      }
+    },
+    "nouveauxVoisins+nouvelleTable+varierAppartenances": {
+      "empreinte": "9e498d46ae56717fe5fee4cd33f06bc0c159116cfce761bac73969e85d668983",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 10,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 13,
+        "redondance": 58
+      }
+    },
+    "nouveauxVoisins+nouvelleTable": {
+      "empreinte": "ac14e9bd382bc0ac5878df97b67a3fec74b3891750b2aa3a69147882020a03cb",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 13,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 11,
+        "redondance": 58
+      }
+    },
+    "nouveauxVoisins+varierAppartenances": {
+      "empreinte": "2104c85460bc6751ec96249c8a65b5a5b09cb3028f6455d57145596b2ed893ef",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 13,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 15,
+        "redondance": 58
+      }
+    },
+    "nouveauxVoisins": {
+      "empreinte": "e19ecf733df91fdc2f6d1a25484e1b3625eed22e306b100b2f174b7147f5cc55",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 12,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 17,
+        "redondance": 58
+      }
+    },
+    "nouvelleTable+varierAppartenances": {
+      "empreinte": "f680569b067ea17677aae9659dea9977e528171dd28c788a6b9536da28316732",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 12,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 16,
+        "redondance": 59
+      }
+    },
+    "nouvelleTable": {
+      "empreinte": "9477b22afcc42ecf0017bc0dd5711916f6e546cd2a04d6598ac406c07ef57b27",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 13,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 14,
+        "redondance": 58
+      }
+    },
+    "varierAppartenances": {
+      "empreinte": "c3df5155baa7cbbb7d0b980c9fbd071247e2934ce19732137291b6bad66fcdcc",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 0,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 10,
+        "rencontresRepeteesChoisies": 0,
+        "retoursChoisis": 15,
+        "redondance": 60
+      }
+    },
+    "aucune": {
+      "empreinte": "9fd1147b184369d7ba5ffe04c81f3f721d6967fcecd7fc64a623006e76fbf0f9",
+      "grandeurs": {
+        "ecartAuPlafondAPrioriMax": 1,
+        "excedentCollisions": 0,
+        "collisionsCumulees": 13,
+        "rencontresRepeteesChoisies": 1,
+        "retoursChoisis": 17,
+        "redondance": 58
+      }
+    }
+  },
+  "bascule": {
+    "petite": {
+      "1": {
+        "empreinte": "a028aa693dd46b17070762d3cac2a2713eb0ee9dfc7bf021b8fc234a27bcf671",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 12,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 15,
+          "redondance": 60
+        }
+      },
+      "2": {
+        "empreinte": "e72ba70986cbf2a15231d9defe4bcdc1490db6633552e97d4799d4221232da78",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 0,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 11,
+          "redondance": 72
+        }
+      },
+      "3": {
+        "empreinte": "b531231af7422c46eaee40ece57222b9d15c57942dd822bda8651010c9fbec86",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 10,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 14,
+          "redondance": 61
+        }
+      }
+    },
+    "petite-conflit": {
+      "1": {
+        "empreinte": "991a8d86d7ae00d3be99bb19990642efc2025eac51867b7def97102d998fc6b2",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 12,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 15,
+          "redondance": 60
+        }
+      },
+      "2": {
+        "empreinte": "3d69f6c6701355b4945758c73721d222dadab5dff2af07f2f7b1fa8e3cee64bb",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 10,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 15,
+          "redondance": 61
+        }
+      },
+      "3": {
+        "empreinte": "48aafbee06bc5fd1567b44b2d3734df55f91cd1e0d0a915f333f53be8bf92f90",
+        "grandeurs": {
+          "ecartAuPlafondAPrioriMax": 0,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 14,
+          "rencontresRepeteesChoisies": 0,
+          "retoursChoisis": 14,
+          "redondance": 61
+        }
+      }
+    }
+  },
+  "classements": {
+    "petite-conflit": {
+      "connu": {
+        "ordre": [
+          7,
+          10,
+          2,
+          1,
+          12,
+          8,
+          4,
+          9,
+          5,
+          11,
+          6,
+          3
+        ],
+        "criteresAppliques": [
+          "ecartAuPlafondAPrioriMax",
+          "excedentCollisions",
+          "collisionsCumulees",
+          "rencontresRepetees",
+          "redondance"
+        ],
+        "critereSaute": null
+      },
+      "inconnu": {
+        "ordre": [
+          1,
+          12,
+          7,
+          8,
+          10,
+          4,
+          2,
+          9,
+          5,
+          11,
+          6,
+          3
+        ],
+        "criteresAppliques": [
+          "excedentCollisions",
+          "collisionsCumulees",
+          "rencontresRepetees",
+          "redondance"
+        ],
+        "critereSaute": "ecartAuPlafondAPrioriMax"
+      },
+      "propositions": {
+        "1": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 11,
+          "rencontresRepeteesChoisies": 4,
+          "retoursChoisis": 16,
+          "redondance": 53
+        },
+        "2": {
+          "ecartAuPlafondAPrioriMax": 1,
+          "excedentCollisions": 1,
+          "collisionsCumulees": 13,
+          "rencontresRepeteesChoisies": 5,
+          "retoursChoisis": 12,
+          "redondance": 53
+        },
+        "3": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 16,
+          "rencontresRepeteesChoisies": 6,
+          "retoursChoisis": 14,
+          "redondance": 49
+        },
+        "4": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 1,
+          "collisionsCumulees": 10,
+          "rencontresRepeteesChoisies": 3,
+          "retoursChoisis": 16,
+          "redondance": 54
+        },
+        "5": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 15,
+          "rencontresRepeteesChoisies": 4,
+          "retoursChoisis": 17,
+          "redondance": 52
+        },
+        "6": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 15,
+          "rencontresRepeteesChoisies": 5,
+          "retoursChoisis": 15,
+          "redondance": 52
+        },
+        "7": {
+          "ecartAuPlafondAPrioriMax": 1,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 12,
+          "rencontresRepeteesChoisies": 3,
+          "retoursChoisis": 17,
+          "redondance": 55
+        },
+        "8": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 13,
+          "rencontresRepeteesChoisies": 5,
+          "retoursChoisis": 16,
+          "redondance": 50
+        },
+        "9": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 14,
+          "rencontresRepeteesChoisies": 6,
+          "retoursChoisis": 15,
+          "redondance": 49
+        },
+        "10": {
+          "ecartAuPlafondAPrioriMax": 1,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 15,
+          "rencontresRepeteesChoisies": 3,
+          "retoursChoisis": 18,
+          "redondance": 54
+        },
+        "11": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 15,
+          "rencontresRepeteesChoisies": 5,
+          "retoursChoisis": 15,
+          "redondance": 51
+        },
+        "12": {
+          "ecartAuPlafondAPrioriMax": 2,
+          "excedentCollisions": 0,
+          "collisionsCumulees": 11,
+          "rencontresRepeteesChoisies": 5,
+          "retoursChoisis": 15,
+          "redondance": 50
+        }
+      }
+    },
+    "grande": {
+      "connu": {
+        "ordre": [
+          10,
+          9,
+          8,
+          1,
+          5,
+          12,
+          3,
+          2,
+          7,
+          6,
+          4,
+          11
+        ],
+        "criteresAppliques": [
+          "ecartAuPlafondAPrioriMax",
+          "excedentCollisions",
+          "collisionsCumulees",
+          "rencontresRepetees",
+          "redondance"
+        ],
+        "critereSaute": null
+      },
+      "inconnu": {
+        "ordre": [
+          10,
+          9,
+          11,
+          8,
+          1,
+          5,
+          12,
+          3,
+          2,
+          7,
+          6,
+          4
+        ],
+        "criteresAppliques": [
+          "excedentCollisions",
+          "collisionsCumulees",
+          "rencontresRepetees",
+          "redondance"
+        ],
+        "critereSaute": "ecartAuPlafondAPrioriMax"
+      },
+      "propositions": {
+        "1": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 58,
+          "rencontresRepeteesChoisies": 128,
+          "retoursChoisis": 42,
+          "redondance": 1312
+        },
+        "2": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 3,
+          "collisionsCumulees": 70,
+          "rencontresRepeteesChoisies": 142,
+          "retoursChoisis": 32,
+          "redondance": 1326
+        },
+        "3": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 68,
+          "rencontresRepeteesChoisies": 112,
+          "retoursChoisis": 36,
+          "redondance": 1308
+        },
+        "4": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 4,
+          "collisionsCumulees": 75,
+          "rencontresRepeteesChoisies": 129,
+          "retoursChoisis": 32,
+          "redondance": 1314
+        },
+        "5": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 64,
+          "rencontresRepeteesChoisies": 124,
+          "retoursChoisis": 34,
+          "redondance": 1298
+        },
+        "6": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 4,
+          "collisionsCumulees": 69,
+          "rencontresRepeteesChoisies": 130,
+          "retoursChoisis": 38,
+          "redondance": 1282
+        },
+        "7": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 3,
+          "collisionsCumulees": 72,
+          "rencontresRepeteesChoisies": 116,
+          "retoursChoisis": 31,
+          "redondance": 1347
+        },
+        "8": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 57,
+          "rencontresRepeteesChoisies": 120,
+          "retoursChoisis": 39,
+          "redondance": 1305
+        },
+        "9": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 1,
+          "collisionsCumulees": 62,
+          "rencontresRepeteesChoisies": 120,
+          "retoursChoisis": 34,
+          "redondance": 1291
+        },
+        "10": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 1,
+          "collisionsCumulees": 57,
+          "rencontresRepeteesChoisies": 123,
+          "retoursChoisis": 38,
+          "redondance": 1287
+        },
+        "11": {
+          "ecartAuPlafondAPrioriMax": 5,
+          "excedentCollisions": 1,
+          "collisionsCumulees": 71,
+          "rencontresRepeteesChoisies": 119,
+          "retoursChoisis": 30,
+          "redondance": 1339
+        },
+        "12": {
+          "ecartAuPlafondAPrioriMax": 4,
+          "excedentCollisions": 2,
+          "collisionsCumulees": 67,
+          "rencontresRepeteesChoisies": 117,
+          "retoursChoisis": 44,
+          "redondance": 1301
+        }
+      }
+    }
+  }
+}
