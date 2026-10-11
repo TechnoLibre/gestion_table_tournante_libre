@@ -58,7 +58,7 @@ afterEach(() => {
 const dans = (m, selecteur) => m.racine.querySelector(selecteur);
 const tous = (m, selecteur) => [...m.racine.querySelectorAll(selecteur)];
 const ecran = (m) => dans(m, '[data-ecran="evenement"]');
-const cadre = (m) => dans(m, '[data-mode]');
+const surface = (m) => dans(m, '[data-mode]');
 const bande = (m) => ecran(m).querySelector(':scope > [role="status"]');
 const fixe = (m, nom) => dans(m, `[data-place-fixe] [data-commande="${nom}"]`);
 const etats = (m) => dans(m, `[role="group"][aria-label="${t('evenement.etat.titre')}"]`);
@@ -162,24 +162,24 @@ describe('la bande de mode et la pleine fenêtre (§ 8.4)', () => {
         expect(Math.abs(b.top - boite(dans(m, '[data-bandeau]')).bottom), mode).toBeLessThanOrEqual(1);
         expect([b.left, b.right], mode).toEqual([0, innerWidth]);
         expect(document.documentElement.scrollWidth, mode).toBeLessThanOrEqual(innerWidth);
-        expect(b.bottom, mode).toBeLessThanOrEqual(boite(cadre(m)).top);
+        expect(b.bottom, mode).toBeLessThanOrEqual(boite(surface(m)).top);
         // L'écran va d'un bord à l'autre de la fenêtre, au retrait de
         // l'écran près, et la barre, la tête et la surface avec lui, sans
         // trait autour d'elles.
         const retrait = Number.parseFloat(style(ecran(m).parentElement).paddingLeft);
         expect(retrait, mode).toBeGreaterThan(0);
         expect(retrait, mode).toBeLessThanOrEqual(32);
-        for (const element of [ecran(m), cadre(m)]) {
+        for (const element of [ecran(m), surface(m)]) {
           const e = boite(element);
           expect(e.left, mode).toBeCloseTo(retrait, 0);
           expect(e.right, mode).toBeCloseTo(innerWidth - retrait, 0);
         }
         for (const cote of ['Top', 'Right', 'Bottom', 'Left']) {
-          expect(Number.parseFloat(style(cadre(m))[`border${cote}Width`]), `${mode} ${cote}`).toBe(0);
+          expect(Number.parseFloat(style(surface(m))[`border${cote}Width`]), `${mode} ${cote}`).toBe(0);
         }
         expect(region.textContent, mode).toContain(t(cle));
         expect(region.textContent, mode).toContain(t(explication));
-        expect(region.textContent, mode).toContain(dans(m, '[data-mode-libelle="cadre"]').textContent);
+        expect(region.textContent, mode).toContain(dans(m, '[data-mode-libelle="barre"]').textContent);
         expect(visible(region), mode).toBe(true);
         hauteurs.push(b.height);
         const icones = region.querySelectorAll('svg');
@@ -190,7 +190,7 @@ describe('la bande de mode et la pleine fenêtre (§ 8.4)', () => {
             const lieu = `${theme} ${mode}`;
             expect(fond(region), lieu).toEqual(jeton(`--couleur-mode-${mode}-fond`));
             expect(composantes(style(region).borderBottomColor), lieu).toEqual(jeton(`--couleur-mode-${mode}-filet`));
-            expect(trait(icones[0]), lieu).toEqual(jeton(`--couleur-cadre-${mode}`));
+            expect(trait(icones[0]), lieu).toEqual(jeton(`--couleur-mode-${mode}`));
             exigerSigneVisible(icones[0], lieu);
             exigerTextesLisibles(region, lieu);
           });
@@ -235,7 +235,7 @@ describe('la carte d’en-tête', () => {
     expect(imprimer.textContent).toBe(t('impression.commande.ouvrir'));
     expect(entete.contains(imprimer)).toBe(false);
     const place = boite(fixe(m, 'lecture'));
-    const [i, e, c] = [boite(imprimer), boite(etats(m)), boite(cadre(m))];
+    const [i, e, c] = [boite(imprimer), boite(etats(m)), boite(surface(m))];
     expect(i.top).toBe(place.top);
     expect(i.height).toBeGreaterThanOrEqual(44);
     expect(c.right - i.right).toBeLessThanOrEqual(24);
@@ -459,10 +459,10 @@ describe('les avertissements, en messages d’avis', () => {
     }
   });
   // Le texte de l'avertissement et son action ne sont jamais rognés : ni
-  // le texte, ni le message, ni aucune boîte qui les porte jusqu'au cadre
-  // ne déborde de sa hauteur, et chacun tient dans la boîte visible de
-  // chaque ascendant qui coupe ce qui le dépasse, la zone des annonces la
-  // première. Le manque d'une place, de quatre et de treize : le nombre et
+  // le texte, ni le message, ni aucune boîte qui les porte jusqu'à la
+  // surface de l'événement (SurfaceEvenement.svelte) ne déborde de sa
+  // hauteur, et chacun tient dans la boîte visible de chaque ascendant qui
+  // coupe ce qui le dépasse, la zone des annonces la première. Le manque d'une place, de quatre et de treize : le nombre et
   // l'accord allongent la phrase.
   for (const largeur of [1366, 1024]) {
     for (const manque of [1, 4, 13]) {
@@ -489,7 +489,7 @@ describe('les avertissements, en messages d’avis', () => {
         const a = boite(action);
         expect(a.top, 'bouton sous le haut de la zone').toBeGreaterThanOrEqual(z.top + zone.clientTop - 0.5);
         expect(a.bottom, 'bouton au-dessus du bas visible de la zone').toBeLessThanOrEqual(z.top + zone.clientTop + zone.clientHeight + 0.5);
-        const borne = cadre(m);
+        const borne = surface(m);
         for (let element = texte; element !== borne.parentElement; element = element.parentElement) {
           const nom = `${element.tagName.toLowerCase()}${element.hasAttribute('data-annonces') ? '[data-annonces]' : ''}`;
           expect(element.scrollHeight, `${nom} : hauteur du contenu`).toBeLessThanOrEqual(element.clientHeight + 1);

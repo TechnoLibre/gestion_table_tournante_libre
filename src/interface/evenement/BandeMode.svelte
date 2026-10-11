@@ -9,8 +9,9 @@
   // libellés, elle porte seule le mode : aucun trait n'entoure la surface de
   // travail.
   //
-  // Son fond et son filet sont ceux du mode, son icône de la teinte du mode
-  // (--couleur-cadre-…), son texte de l'encre de la page (marques.js :
+  // Son fond et son filet sont ceux du mode (--couleur-mode-…-fond et
+  // -filet), son icône de la teinte du mode (--couleur-mode-lecture,
+  // -ecriture, -bloque), son texte de l'encre de la page (marques.js :
   // bandeMode et les signes bandeLecture, bandeEcriture, bandeBloque).
   // Région d'état, elle annonce le mode quand il change.
   //
@@ -68,14 +69,14 @@
 
   .signe {
     display: flex;
-    color: var(--couleur-cadre-lecture);
+    color: var(--couleur-mode-lecture);
   }
 
   .ecriture .signe {
-    color: var(--couleur-cadre-ecriture);
+    color: var(--couleur-mode-ecriture);
   }
 
   .bloque .signe {
-    color: var(--couleur-cadre-bloque);
+    color: var(--couleur-mode-bloque);
   }
 </style>

@@ -808,7 +808,7 @@ describe('les commandes de vue n’écrivent rien et restent vivantes (§ 8.2, �
 });
 
 describe('le plein écran (§ 8.4, § 18.6)', () => {
-  test('la surface s’agrandit ; le cadre de mode, son libellé et le bandeau restent visibles ; ressorti, la surface retrouve sa boîte', async () => {
+  test('la surface s’agrandit ; la barre, la tête et la surface de l’événement, ses deux libellés de mode et le bandeau restent visibles ; ressorti, la surface retrouve sa boîte', async () => {
     const m = await petite();
     await deuxImages();
     const avant = boite(surface(m));
@@ -818,7 +818,7 @@ describe('le plein écran (§ 8.4, § 18.6)', () => {
     expect(plein.width * plein.height).toBeGreaterThan(avant.width * avant.height);
     expect(plein.height).toBeGreaterThan(avant.height);
     expect(plein.width).toBeGreaterThan(avant.width);
-    const temoins = [dans(m, '[data-mode]'), dans(m, '[data-mode-libelle="cadre"]'), dans(m, '[data-mode-libelle="bandeau"]'), dans(m, '[data-bandeau]')];
+    const temoins = [dans(m, '[data-mode]'), dans(m, '[data-mode-libelle="barre"]'), dans(m, '[data-mode-libelle="bandeau"]'), dans(m, '[data-bandeau]')];
     for (const temoin of temoins) {
       expect(temoin).not.toBeNull();
       expect(visible(temoin)).toBe(true);

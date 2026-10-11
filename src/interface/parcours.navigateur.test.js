@@ -225,7 +225,7 @@ function exigerModeSansCadre(mode) {
   const style = getComputedStyle(surface);
   for (const cote of ['Top', 'Right', 'Bottom', 'Left']) expect(Number.parseFloat(style[`border${cote}Width`]), cote).toBe(0);
   const bande = dans('[data-ecran="evenement"] > [role="status"]');
-  const libelle = dans('[data-mode-libelle="cadre"]');
+  const libelle = dans('[data-mode-libelle="barre"]');
   expect(visible(bande)).toBe(true);
   expect(visible(libelle)).toBe(true);
   expect(texteDe(libelle).length).toBeGreaterThan(0);
@@ -860,7 +860,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await rienEcrit(avant, 'créer une table en lecture');
     expect(charge().tables).toHaveLength(0);
     await photographier(m, '01b-passer-en-ecriture', {
-      condition: ['[data-place-fixe] [data-commande="modifier"]', '[data-refus="MODE_LECTURE"]', '[data-mode-libelle="cadre"]'],
+      condition: ['[data-place-fixe] [data-commande="modifier"]', '[data-refus="MODE_LECTURE"]', '[data-mode-libelle="barre"]'],
     });
   });
 
@@ -1446,7 +1446,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await rienEcrit(avant, 'les quatre gestes en lecture');
     expect(dans(`[data-table="${t2}"]`).getAttribute('transform')).toBeNull();
     for (const t of etatMontre().tables) expect(tous(`[data-siege^="${t.id}:"]`), `table ${t.numero}`).toHaveLength(t.capacite);
-    await photographier(m, '20-mode-lecture', { condition: ['[data-mode-libelle="cadre"]', '[data-mode-libelle="bandeau"]'], graine: GRAINE });
+    await photographier(m, '20-mode-lecture', { condition: ['[data-mode-libelle="barre"]', '[data-mode-libelle="bandeau"]'], graine: GRAINE });
   });
 
   test('20 « Défaire » en lecture : refusé avec « Modifier » ; en écriture, rend l’état d’avant 19', async () => {

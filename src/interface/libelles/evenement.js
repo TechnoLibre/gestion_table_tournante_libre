@@ -54,7 +54,7 @@ export const TABLE = new Map([
   ['evenement.phase.produire', 'Produire'],
 
   // --- La barre de l'événement et sa place fixe (§ 8.3, § 8.4, § 8.5) ------
-  ['evenement.cadre.commandes', 'Commandes de l\u{2019}événement'],
+  ['evenement.barre.commandes', 'Commandes de l\u{2019}événement'],
   ['evenement.commande.defaire', 'Défaire'],
   ['evenement.commande.refaire', 'Refaire'],
 

@@ -18,7 +18,7 @@
   // écartées, placements en dérive — vient dessous, sur toute la largeur du
   // message : l'action n'étroitise que la première phrase. La zone des
   // annonces qui les porte prend la hauteur d'un avertissement ordinaire,
-  // action comprise, et défile au-delà (CadreMode.svelte).
+  // action comprise, et défile au-delà (SurfaceEvenement.svelte).
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';

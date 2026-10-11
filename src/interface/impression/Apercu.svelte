@@ -114,7 +114,7 @@
     <div class="tete">
       <h2>{t('impression.titre')}</h2>
       {#if cleMode !== null}
-        <span class="mode" data-mode-libelle="cadre">{t(cleMode)}</span>
+        <span class="mode" data-mode-libelle="barre">{t(cleMode)}</span>
       {/if}
     </div>
     <div class="groupe vues" role="group" aria-label={t('impression.vue.titre')}>

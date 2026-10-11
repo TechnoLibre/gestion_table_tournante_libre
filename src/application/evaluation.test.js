@@ -441,41 +441,33 @@ describe("évaluation : une configuration qui ne se tient pas", () => {
   });
 });
 
-describe('resumeDuRetenu : les mesures du retenu que lit la liste des événements (§ 5.4, § 8.1, § 8.9)', () => {
+describe('resumeDuRetenu : la différence à la cible que lit la liste des événements (§ 5.4, § 8.1, § 8.9)', () => {
   // La petite démonstration, trois propositions générées, la deuxième retenue.
   function retenue() {
     const generees = generee(chargeDemo('petite-conflit'), { graine: 3, nombre: 3, arret: 300 });
     return executer(generees, 'retenirProposition', { id: generees.propositions[1].id });
   }
 
-  test("les collisions cumulées et Σ r(p) du retenu, celles de la ligne du retenu d'evaluer, et la cible, 1000 par défaut", () => {
+  test("la seule différence à la cible, 1000 par défaut, contre le Σ r(p) de la ligne du retenu d'evaluer", () => {
     const charge = figer(retenue());
     const resume = resumeDuRetenu(charge);
     const { mesures } = evaluer(charge).retenu;
-    assert.ok(mesures.collisionsCumulees > 0, 'la petite démonstration en conflit compte des collisions');
-    assert.deepEqual(resume, {
-      collisionsCumulees: mesures.collisionsCumulees,
-      totalRedondance: mesures.totalRedondance,
-      cibleRedondance: 1000,
-      diffRedondance: Math.abs(1000 - mesures.totalRedondance),
-    });
+    assert.ok(mesures.totalRedondance !== 1000, 'la différence se distingue de zéro');
+    assert.deepEqual(resume, { diffRedondance: Math.abs(1000 - mesures.totalRedondance) });
     const instance = normaliser(configurationDepuisCharge(charge));
     const attendues = mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
-    assert.equal(resume.totalRedondance, attendues.totalRedondance);
-    assert.equal(resume.collisionsCumulees, attendues.collisionsCumulees);
+    assert.equal(attendues.totalRedondance, mesures.totalRedondance);
     assert.equal(CIBLE_REDONDANCE_PAR_DEFAUT, 1000);
     assert.equal(cibleRedondance(charge), 1000);
   });
 
   test("une cible propre à l'événement : la différence se lit contre elle, en valeur absolue, des deux côtés", () => {
     const charge = retenue();
-    const total = resumeDuRetenu(charge).totalRedondance;
+    const total = evaluer(charge).retenu.mesures.totalRedondance;
     for (const cible of [0, total, total + 7, 5_000]) {
       const avecCible = executer(charge, 'changerCibleRedondance', { cible: String(cible) });
       assert.equal(cibleRedondance(avecCible), cible);
-      const resume = resumeDuRetenu(avecCible);
-      assert.equal(resume.cibleRedondance, cible);
-      assert.equal(resume.diffRedondance, Math.abs(cible - total), String(cible));
+      assert.deepEqual(resumeDuRetenu(avecCible), { diffRedondance: Math.abs(cible - total) }, String(cible));
     }
     const dessous = executer(charge, 'changerCibleRedondance', { cible: '0' });
     assert.equal(resumeDuRetenu(dessous).diffRedondance, total);
@@ -507,7 +499,7 @@ describe('resumeDuRetenu : les mesures du retenu que lit la liste des événemen
 });
 
 describe('resumeDuMeilleur : la proposition au rang 1 que lit la liste des événements (§ 5.4, § 5.7, § 8.1)', () => {
-  test("le rang 1 du classement, ni le plus petit identifiant ni le moins de collisions : son identifiant et ses collisions cumulées", () => {
+  test('le rang 1 du classement, ni le plus petit identifiant ni le moins de collisions : son seul identifiant', () => {
     // Le classement range les plans écrits à la main 3, 2, 1, 4 : la 3 vient
     // en tête avec 6 collisions cumulées, quand la 1 n'en porte que 4.
     const charge = structuredClone(chargeDemo('petite-conflit'));
@@ -516,9 +508,10 @@ describe('resumeDuMeilleur : la proposition au rang 1 que lit la liste des évé
     figer(charge);
     const table = evaluer(charge);
     assert.deepEqual(table.classement.ordre, [3, 2, 1, 4]);
-    assert.deepEqual(resumeDuMeilleur(charge), { id: 3, collisionsCumulees: 6 });
+    assert.deepEqual(resumeDuMeilleur(charge), { id: 3 });
     assert.equal(premiereDuClassement(table), table.propositions[0]);
     assert.equal(premiereDuClassement(table).mesures.collisionsCumulees, 6);
+    assert.equal(table.propositions.find(({ id }) => id === 1).mesures.collisionsCumulees, 4);
   });
 
   test("après des générations : la première ligne d'evaluer, comparable, et le retenu n'y change rien", () => {
@@ -526,7 +519,7 @@ describe('resumeDuMeilleur : la proposition au rang 1 que lit la liste des évé
     charge = generee(charge, { graine: 9, nombre: 2, arret: 300 });
     const [premiere] = evaluer(charge).propositions;
     assert.equal(premiere.statut, 'comparable');
-    const attendu = { id: premiere.id, collisionsCumulees: premiere.mesures.collisionsCumulees };
+    const attendu = { id: premiere.id };
     assert.deepEqual(resumeDuMeilleur(figer(charge)), attendu);
     const derniere = charge.propositions.at(-1).id;
     const retenue = executer(charge, 'retenirProposition', { id: derniere });

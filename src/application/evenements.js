@@ -147,9 +147,9 @@ const AUCUN_RESUME = Object.freeze({ mesuresDuRetenu: null, meilleureDuClassemen
 // rattrape en mémoire, par la règle de rattraper, et examiner (§ 8.9, point
 // 3) en écarte une proposition fautive, dont l'identifiant se répète ou
 // atteint le compteur — le classement lève sur un identifiant répété. La
-// liste nomme ainsi la proposition au rang 1, et son nombre, que le bloc de
-// génération de l'événement ouvert nomme (§ 8.1). null pour un état absent
-// ou qui ne s'ouvre pas.
+// liste nomme ainsi la proposition au rang 1 que le bloc de génération de
+// l'événement ouvert nomme (§ 8.1). null pour un état absent ou qui ne
+// s'ouvre pas.
 async function chargeExaminee(fs, racine, base) {
   try {
     return (await ouvrirDepot(fs, racine, base)).charge;

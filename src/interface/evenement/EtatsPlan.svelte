@@ -71,8 +71,8 @@
     text-transform: uppercase;
   }
 
-  /* Dans une barre étroite (CadreMode.svelte), l'intertitre s'efface : le
-     groupe garde son nom, et les quatre étapes leur ligne. */
+  /* Dans une barre étroite (SurfaceEvenement.svelte), l'intertitre
+     s'efface : le groupe garde son nom, et les quatre étapes leur ligne. */
   @container barre (max-width: 80rem) {
     .intertitre {
       display: none;

@@ -72,7 +72,7 @@ const bande = (m) => dans(m, '[data-ecran="evenement"] > [role="status"]');
 const fixe = (m, nom) => dans(m, `[data-place-fixe] [data-commande="${nom}"]`);
 const historique = (m, nom) => dans(m, `[data-mode] [data-historique] [data-commande="${nom}"]`);
 const boutonEtat = (m, etat) => dans(m, `[data-etat="${etat}"] [data-commande="etat"]`);
-const libelleCadre = (m) => dans(m, '[data-mode-libelle="cadre"]');
+const libelleBarre = (m) => dans(m, '[data-mode-libelle="barre"]');
 const libelleBandeau = (m) => dans(m, '[data-mode-libelle="bandeau"]');
 const avertissement = (m, code) => dans(m, `[data-avertissement="${code}"]`);
 const ecran = (m) => dans(m, '[data-ecran]');
@@ -347,7 +347,7 @@ describe('le mode sans cadre (§ 8.4, § 14.5)', () => {
       for (const cote of ['Top', 'Right', 'Bottom', 'Left']) {
         expect(Number.parseFloat(style[`border${cote}Width`]), `${mode} ${cote}`).toBe(0);
       }
-      const libelle = libelleCadre(m);
+      const libelle = libelleBarre(m);
       expect(libelle.checkVisibility()).toBe(true);
       expect(visible(libelle)).toBe(true);
       expect(libelle.contains(auCentre(libelle))).toBe(true);
@@ -364,7 +364,7 @@ describe('le mode sans cadre (§ 8.4, § 14.5)', () => {
     expect(releves).toEqual([t('coquille.mode.lecture'), t('coquille.mode.ecriture'), t('coquille.mode.bloque')]);
     // Une surface plus haute que la fenêtre : la page et la surface
     // défilées jusqu'en bas, le libellé garde sa boîte.
-    const avant = libelleCadre(m).getBoundingClientRect().toJSON();
+    const avant = libelleBarre(m).getBoundingClientRect().toJSON();
     const haut = document.createElement('div');
     haut.style.height = '3000px';
     dans(m, '[data-section]').append(haut);
@@ -372,8 +372,8 @@ describe('le mode sans cadre (§ 8.4, § 14.5)', () => {
     for (let porteur = dans(m, '[data-section]'); porteur !== null; porteur = porteur.parentElement) {
       porteur.scrollTop = porteur.scrollHeight;
     }
-    expect(libelleCadre(m).getBoundingClientRect().toJSON()).toEqual(avant);
-    expect(visible(libelleCadre(m))).toBe(true);
+    expect(libelleBarre(m).getBoundingClientRect().toJSON()).toEqual(avant);
+    expect(visible(libelleBarre(m))).toBe(true);
     expect(visible(fixe(m, 'debloquer'))).toBe(true);
     haut.remove();
   });
@@ -396,7 +396,7 @@ describe('l’inactivité (§ 8.4, § 19.4)', () => {
       m.horloge.avancer(INACTIVITE_MS);
       await attendre(() => expect(m.seance.etat().mode).toBe('lecture'));
       expect(fichier(m, SUFFIXES.verrou)).toBeNull();
-      expect(libelleCadre(m).textContent).toBe(t('coquille.mode.lecture'));
+      expect(libelleBarre(m).textContent).toBe(t('coquille.mode.lecture'));
       expect(libelleBandeau(m).textContent).toBe(t('coquille.mode.lecture'));
       const annonce = avertissement(m, 'RETOUR_AUTOMATIQUE');
       expect(annonce.textContent).toContain(t('RETOUR_AUTOMATIQUE', {}));

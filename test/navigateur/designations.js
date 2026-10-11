@@ -115,7 +115,7 @@ const ENTREES = [
   ['data-mention', 'aperçu : une mention d’une page du plan imprimé — disposition relative, listes hors d’échelle', ['listes', 'relative']],
   ['data-menu', 'plan : le menu d’une personne', null],
   ['data-mode', 'événement : la barre, la tête et la surface de l’événement, par son mode', null],
-  ['data-mode-libelle', 'le libellé de mode', ['bandeau', 'cadre']],
+  ['data-mode-libelle', 'le libellé de mode', ['bandeau', 'barre']],
   ['data-motif', 'import : le motif d’une ligne refusée', ['']],
   ['data-multiligne', 'import : une ligne sur plusieurs lignes de texte', null],
   ['data-niveau', 'participants : le niveau d’un groupe ou d’un sélecteur', null],

@@ -208,7 +208,7 @@ describe('les signes des pastilles, des messages, de la bande de mode et de l’
     // la bande.
     for (const mode of ['Ecriture', 'Lecture', 'Bloque']) {
       const signe = parNom(SIGNES, `bande${mode}`);
-      assert.deepEqual([signe.jeton, ...signe.fonds], [`--couleur-cadre-${mode.toLowerCase()}`, `--couleur-mode-${mode.toLowerCase()}-fond`]);
+      assert.deepEqual([signe.jeton, ...signe.fonds], [`--couleur-mode-${mode.toLowerCase()}`, `--couleur-mode-${mode.toLowerCase()}-fond`]);
     }
   });
 

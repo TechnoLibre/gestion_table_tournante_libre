@@ -466,7 +466,7 @@ function releverEtats(m) {
 function signatureMode(racine) {
   const surface = racine.querySelector('[data-mode]');
   const bande = racine.querySelector('[data-ecran="evenement"] > [role="status"]');
-  const libelle = racine.querySelector('[data-mode-libelle="cadre"]');
+  const libelle = racine.querySelector('[data-mode-libelle="barre"]');
   if (surface === null || bande === null || libelle === null) return null;
   const s = getComputedStyle(surface);
   const trait = ['Top', 'Right', 'Bottom', 'Left'].reduce((somme, cote) => somme + Number.parseFloat(s[`border${cote}Width`]), 0);
@@ -517,7 +517,7 @@ export function fautesBandeau(racine, mode, { version = VERSION.affichee, proven
     if (libelle !== null) fautes.push(`libellé de mode « ${libelle.textContent.trim()} » sans événement ouvert`);
     return fautes;
   }
-  const barre = racine.querySelector('[data-mode-libelle="cadre"]');
+  const barre = racine.querySelector('[data-mode-libelle="barre"]');
   if (libelle === null) fautes.push(`libellé de mode absent du bandeau (${mode})`);
   else if (voir(libelle) !== true) fautes.push(`libellé de mode du bandeau non visible : ${voir(libelle)}`);
   if (barre === null) fautes.push(`libellé de mode absent de la barre (${mode})`);

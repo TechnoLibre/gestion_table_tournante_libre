@@ -102,9 +102,9 @@ export const SIGNES = Object.freeze([
   marque('signeAvis', 'avis-marque', ['avis-fond']),
   marque('signeRefus', 'refus-marque', ['refus-fond']),
   marque('signeInformation', 'information-marque', ['information-fond']),
-  marque('bandeEcriture', 'cadre-ecriture', ['mode-ecriture-fond']),
-  marque('bandeLecture', 'cadre-lecture', ['mode-lecture-fond']),
-  marque('bandeBloque', 'cadre-bloque', ['mode-bloque-fond']),
+  marque('bandeEcriture', 'mode-ecriture', ['mode-ecriture-fond']),
+  marque('bandeLecture', 'mode-lecture', ['mode-lecture-fond']),
+  marque('bandeBloque', 'mode-bloque', ['mode-bloque-fond']),
   marque('actionPrincipale', 'action-fond', SURFACES),
 ]);
 

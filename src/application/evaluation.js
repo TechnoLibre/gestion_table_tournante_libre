@@ -21,13 +21,14 @@
 // rencontres répétées imposées dépendent du plan, et chaque ligne les lit
 // dans ses mesures, à part des choisies.
 //
-// resumeDuRetenu donne à la liste des événements deux nombres du retenu,
-// lus dans la même mesure que sa ligne du tableau, sans le diagnostic ni
-// les plafonds : la liste en résume chaque événement du dossier.
-// premiereDuClassement est la seule définition de la proposition au rang 1
-// : la section de la génération la lit dans sa table, resumeDuMeilleur la
-// donne à la liste, sur la même table d'évaluation, diagnostic compris — le
-// premier critère du classement lit le plafond a priori.
+// resumeDuRetenu donne à la liste des événements la différence à la cible
+// du retenu, lue dans la même mesure que sa ligne du tableau, sans le
+// diagnostic ni les plafonds : la liste en résume chaque événement du
+// dossier. premiereDuClassement est la seule définition de la proposition
+// au rang 1 : la section de la génération la lit dans sa table,
+// resumeDuMeilleur en donne l'identifiant à la liste, sur la même table
+// d'évaluation, diagnostic compris — le premier critère du classement lit
+// le plafond a priori.
 import { classer } from '../moteur/classement.js';
 import { indexerPlan, normaliser } from '../moteur/configuration.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
@@ -162,16 +163,15 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
 
 /**
  * Le résumé du retenu que montre la liste des événements (§ 5.4, § 8.1,
- * § 8.9) : ses collisions cumulées et sa somme de redondance Σ r(p), celles
- * de mesurer, que la ligne du retenu d'evaluer porte aussi ; la cible de
- * l'événement (cibleRedondance) ; et diffRedondance, la valeur absolue de la
- * cible moins Σ r(p). null sans retenu, pour un retenu fautif ou en dérive,
- * et quand la configuration ne se normalise pas : rien ne s'y mesure, et
- * la liste écrit « — ». Ne modifie pas la charge.
+ * § 8.9) : diffRedondance, la valeur absolue de la cible de l'événement
+ * (cibleRedondance) moins la somme de redondance Σ r(p) du retenu, celle de
+ * mesurer, que la ligne du retenu d'evaluer porte aussi. null sans retenu,
+ * pour un retenu fautif ou en dérive, et quand la configuration ne se
+ * normalise pas : rien ne s'y mesure, et la liste écrit « — ». Ne modifie
+ * pas la charge.
  *
  * @param {import('../stockage/types.js').Charge} charge
- * @returns {{collisionsCumulees: number, totalRedondance: number,
- *            cibleRedondance: number, diffRedondance: number}|null}
+ * @returns {{diffRedondance: number}|null}
  */
 export function resumeDuRetenu(charge) {
   const { retenu } = charge;
@@ -183,9 +183,8 @@ export function resumeDuRetenu(charge) {
     if (erreur instanceof ErreurConfiguration) return null;
     throw erreur;
   }
-  const { collisionsCumulees, totalRedondance } = mesurer(instance, indexerPlan(instance, planDepuisFichier(retenu)));
-  const cible = cibleRedondance(charge);
-  return { collisionsCumulees, totalRedondance, cibleRedondance: cible, diffRedondance: Math.abs(cible - totalRedondance) };
+  const { totalRedondance } = mesurer(instance, indexerPlan(instance, planDepuisFichier(retenu)));
+  return { diffRedondance: Math.abs(cibleRedondance(charge) - totalRedondance) };
 }
 
 /**
@@ -204,15 +203,14 @@ export function premiereDuClassement(table) {
 
 /**
  * La meilleure proposition du classement que montre la liste des
- * événements (§ 5.4, § 5.7, § 8.1) : l'identifiant de la proposition au
- * rang 1 (premiereDuClassement) et ses collisions cumulées, celles de sa
- * ligne d'evaluer. null sans proposition, quand aucune ne se compare —
- * toutes fautives ou en dérive —, et quand la configuration ne se normalise
- * pas : la liste écrit alors « — ». Le retenu n'y entre pas. Ne modifie pas
- * la charge.
+ * événements (§ 5.4, § 5.7, § 8.1) : id, l'identifiant de la proposition au
+ * rang 1 (premiereDuClassement). null sans proposition, quand aucune ne se
+ * compare — toutes fautives ou en dérive —, et quand la configuration ne se
+ * normalise pas : la liste écrit alors « — ». Le retenu n'y entre pas. Ne
+ * modifie pas la charge.
  *
  * @param {import('../stockage/types.js').Charge} charge
- * @returns {{id: number, collisionsCumulees: number}|null}
+ * @returns {{id: number}|null}
  */
 export function resumeDuMeilleur(charge) {
   if (charge.propositions.length === 0) return null;
@@ -224,5 +222,5 @@ export function resumeDuMeilleur(charge) {
     throw erreur;
   }
   const premiere = premiereDuClassement(table);
-  return premiere === null ? null : { id: premiere.id, collisionsCumulees: premiere.mesures.collisionsCumulees };
+  return premiere === null ? null : { id: premiere.id };
 }

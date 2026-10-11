@@ -639,7 +639,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     return serialiser(modifier(charge), { revision: 3, produitVersion: V1 });
   }
 
-  test('les mesures du retenu : collisions cumulées, Σ r(p), la cible et la différence, celles de resumeDuRetenu ; null sans retenu ; rien d’écrit', async () => {
+  test('les mesures du retenu : la seule différence à la cible, celle de resumeDuRetenu ; null sans retenu ; rien d’écrit', async () => {
     const { fs, facade } = await deuxEvenements();
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
     const avant = ecritures(fs);
@@ -648,12 +648,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
     const charge = analyser(texteRetenu()).charge;
     const { mesures } = evaluer(charge).retenu;
-    assert.deepEqual(par.retenue.mesuresDuRetenu, {
-      collisionsCumulees: mesures.collisionsCumulees,
-      totalRedondance: mesures.totalRedondance,
-      cibleRedondance: 1000,
-      diffRedondance: Math.abs(1000 - mesures.totalRedondance),
-    });
+    assert.deepEqual(par.retenue.mesuresDuRetenu, { diffRedondance: Math.abs(1000 - mesures.totalRedondance) });
     assert.deepEqual(par.retenue.mesuresDuRetenu, resumeDuRetenu(charge));
     assert.equal(par['soiree-a'].mesuresDuRetenu, null);
     assert.equal(par.petite.mesuresDuRetenu, null);
@@ -665,8 +660,8 @@ describe('lister (§ 8.1, § 19.4)', () => {
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, texte);
     const ligne = (await listerResume(facade)).find(({ base }) => base === 'retenue');
     const { totalRedondance } = evaluer(analyser(texte).charge).retenu.mesures;
-    assert.equal(ligne.mesuresDuRetenu.cibleRedondance, 25);
-    assert.equal(ligne.mesuresDuRetenu.diffRedondance, Math.abs(25 - totalRedondance));
+    assert.notEqual(Math.abs(25 - totalRedondance), Math.abs(1000 - totalRedondance));
+    assert.deepEqual(ligne.mesuresDuRetenu, { diffRedondance: Math.abs(25 - totalRedondance) });
   });
 
   test('un retenu fautif, ou en dérive, et un état illisible : null, la liste entière rendue, rien d’écrit', async () => {
@@ -716,7 +711,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
       const charge = analyser(texte).charge;
       const [premiere] = evaluer(charge).propositions;
       assert.equal(premiere.statut, 'comparable', base);
-      assert.deepEqual(par[base].meilleureDuClassement, { id: premiere.id, collisionsCumulees: premiere.mesures.collisionsCumulees }, base);
+      assert.deepEqual(par[base].meilleureDuClassement, { id: premiere.id }, base);
       assert.deepEqual(par[base].meilleureDuClassement, resumeDuMeilleur(charge), base);
     }
     assert.equal(par.proposee.mesuresDuRetenu, null);
@@ -724,7 +719,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     assert.equal(par.petite.meilleureDuClassement, null);
   });
 
-  test("un journal en avance d'une entrée : la ligne porte la proposition et le nombre que montre le bloc après ouverture, sans rien écrire", async () => {
+  test("un journal en avance d'une entrée : la ligne porte la proposition que montre le bloc après ouverture, sans rien écrire", async () => {
     const montage = await deuxEvenements();
     const { fs, facade } = montage;
     // L'état d'une soirée sans proposition ; le journal porte en plus la
@@ -905,7 +900,9 @@ describe('lister (§ 8.1, § 19.4)', () => {
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, plusTard);
     for (let pas = 0; pas < lignes.length; pas += 1) await unPas(horloge);
     await flux.fin;
-    assert.equal(recus.get('retenue').mesuresDuRetenu.cibleRedondance, 25);
+    const { totalRedondance } = evaluer(analyser(plusTard).charge).retenu.mesures;
+    assert.notEqual(Math.abs(25 - totalRedondance), Math.abs(1000 - totalRedondance));
+    assert.equal(recus.get('retenue').mesuresDuRetenu.diffRedondance, Math.abs(25 - totalRedondance));
     assert.deepEqual(recus.get('retenue'), resumesAttendus(plusTard));
   });
 

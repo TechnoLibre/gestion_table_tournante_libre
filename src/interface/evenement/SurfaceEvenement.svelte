@@ -95,7 +95,7 @@
 </script>
 
 <div class="corps" data-mode={mode}>
-  <div class="barre" role="group" aria-label={t('evenement.cadre.commandes')}>
+  <div class="barre" role="group" aria-label={t('evenement.barre.commandes')}>
     <div class="ligne">
       <div class="fixe" data-place-fixe>
         {#if commande === 'format'}
@@ -115,7 +115,7 @@
       </div>
       {#if libelle !== null}
         <span class="porte-libelle">
-          <span class="libelle" class:ecriture={mode === 'ecriture'} class:bloque={mode === 'bloque'} data-mode-libelle="cadre"
+          <span class="libelle" class:ecriture={mode === 'ecriture'} class:bloque={mode === 'bloque'} data-mode-libelle="barre"
             >{t(libelle.cle)}</span
           >
         </span>

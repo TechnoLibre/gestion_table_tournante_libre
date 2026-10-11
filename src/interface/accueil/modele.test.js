@@ -335,15 +335,11 @@ describe('saisieDe : la saisie d’un nom pour copier ou renommer (§ 8.7)', () 
 });
 
 describe('ligneAffichee : les mesures du retenu (§ 5.4, § 8.1, § 8.9)', () => {
-  test('la différence à la cible, celle de la façade, mise en forme, sans calcul ici ; les collisions cumulées du retenu ne se montrent pas', () => {
-    const mesuresDuRetenu = { collisionsCumulees: 8765, totalRedondance: 1500, cibleRedondance: 1000, diffRedondance: 500 };
-    const affichee = ligneAffichee(ligne(), format, { ...AUCUN, mesuresDuRetenu });
-    assert.equal(affichee.diffRedondance, format.nombre(500));
-    assert.ok(!Object.values(affichee).includes(format.nombre(8765)));
-    // La différence se lit telle que la façade la rend, jamais refaite
-    // depuis la cible et la somme.
-    const telleQuelle = ligneAffichee(ligne(), format, { ...AUCUN, mesuresDuRetenu: { ...mesuresDuRetenu, diffRedondance: 7 } });
-    assert.equal(telleQuelle.diffRedondance, format.nombre(7));
+  test('la différence à la cible, celle de la façade, mise en forme, sans calcul ici', () => {
+    for (const diffRedondance of [500, 7, 0]) {
+      const affichee = ligneAffichee(ligne(), format, { ...AUCUN, mesuresDuRetenu: { diffRedondance } });
+      assert.equal(affichee.diffRedondance, format.nombre(diffRedondance), String(diffRedondance));
+    }
   });
 
   test('sans retenu mesurable, et pour une ligne illisible, la différence vaut « — »', () => {
@@ -378,8 +374,8 @@ describe('ligneAffichee : les résumés en attente (§ 8.1)', () => {
     assert.deepEqual(attente.meilleure, { id: VIDE });
     assert.equal(ligneAffichee(ligne(), format, AUCUN).enAttente, false);
     const recu = ligneAffichee(ligne(), format, {
-      mesuresDuRetenu: { collisionsCumulees: 12, totalRedondance: 990, cibleRedondance: 1000, diffRedondance: 10 },
-      meilleureDuClassement: { id: 3, collisionsCumulees: 9 },
+      mesuresDuRetenu: { diffRedondance: 10 },
+      meilleureDuClassement: { id: 3 },
     });
     assert.equal(recu.enAttente, false);
     assert.equal(recu.diffRedondance, format.nombre(10));
@@ -401,8 +397,8 @@ describe('ligneAffichee : la meilleure proposition du classement (§ 5.4, § 5.7
     return executer(charge, 'enregistrerGeneration', { propositions, configuration, produitVersion: VERSION.affichee });
   }
 
-  test("l'identifiant que rend la façade, mis en forme, sans calcul ici ; ses collisions cumulées ne se montrent pas", () => {
-    const affichee = ligneAffichee(ligne(), format, { ...AUCUN, meilleureDuClassement: { id: 1234, collisionsCumulees: 5678 } });
+  test("l'identifiant que rend la façade, mis en forme, sans calcul ici", () => {
+    const affichee = ligneAffichee(ligne(), format, { ...AUCUN, meilleureDuClassement: { id: 1234 } });
     assert.deepEqual(affichee.meilleure, { id: format.nombre(1234) });
   });
 

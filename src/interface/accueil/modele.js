@@ -148,7 +148,8 @@ export function signalementsDe(ligne) {
  *
  * @param {Object} ligne   LigneListe (evenements.js)
  * @param {ReturnType<import('../../application/format.js').creerFormat>} format
- * @param {{mesuresDuRetenu: Object|null, meilleureDuClassement: Object|null}} [resume]
+ * @param {{mesuresDuRetenu: {diffRedondance: number}|null,
+ *          meilleureDuClassement: {id: number}|null}} [resume]
  * @returns {{nom: string, date: string, etat: string, participants: string,
  *            modification: string, chemin: string, enAttente: boolean,
  *            diffRedondance: string, meilleure: {id: string},

@@ -2,13 +2,13 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // L'en-tête de l'événement ouvert, en tête de la tête (CadreMode.svelte) :
-  // son nom, puis, sur la même ligne tant qu'elle a la place, son résumé — la date
-  // quand il en a une, les participants, les tables et leurs sièges, les
-  // tours (resumeEvenement, modele.js) —, d'encre secondaire. Le nom se
-  // coupe où il le faut, même sans espace : un nom long de glyphes larges
-  // passe à la ligne au lieu d'élargir la page. Le résumé passe à la ligne
-  // entre ses éléments, jamais dans l'un d'eux.
+  // L'en-tête de l'événement ouvert, en tête de la tête
+  // (SurfaceEvenement.svelte) : son nom, puis, sur la même ligne tant qu'elle
+  // a la place, son résumé — la date quand il en a une, les participants, les
+  // tables et leurs sièges, les tours (resumeEvenement, modele.js) —, d'encre
+  // secondaire. Le nom se coupe où il le faut, même sans espace : un nom
+  // long de glyphes larges passe à la ligne au lieu d'élargir la page. Le
+  // résumé passe à la ligne entre ses éléments, jamais dans l'un d'eux.
   import { getContext } from 'svelte';
   import { resumeEvenement } from './modele.js';
 

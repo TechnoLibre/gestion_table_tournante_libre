@@ -205,9 +205,9 @@ textarea {
 
   /* Bande de mode (§ 8.4) : la teinte de chaque mode, que porte son icône,
      puis son fond et son filet. */
-  --couleur-cadre-lecture: #5c6878;
-  --couleur-cadre-ecriture: #2e7d32;
-  --couleur-cadre-bloque: #7b3fa0;
+  --couleur-mode-lecture: #5c6878;
+  --couleur-mode-ecriture: #2e7d32;
+  --couleur-mode-bloque: #7b3fa0;
   --couleur-mode-lecture-fond: #e9edf3;
   --couleur-mode-lecture-filet: #c3cbd6;
   --couleur-mode-ecriture-fond: #e3f4e8;
@@ -311,9 +311,9 @@ textarea {
   --couleur-appartenance-6-fond: #152826;
   --couleur-appartenance-6-marque: #298e88;
 
-  --couleur-cadre-lecture: #9aa5b4;
-  --couleur-cadre-ecriture: #81c784;
-  --couleur-cadre-bloque: #ce93d8;
+  --couleur-mode-lecture: #9aa5b4;
+  --couleur-mode-ecriture: #81c784;
+  --couleur-mode-bloque: #ce93d8;
   --couleur-mode-lecture-fond: #1f252d;
   --couleur-mode-lecture-filet: #3a434f;
   --couleur-mode-ecriture-fond: #16291c;

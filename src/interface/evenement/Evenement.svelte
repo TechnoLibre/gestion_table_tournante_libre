@@ -4,8 +4,8 @@
 <script>
   // L'événement ouvert (§ 2.1, § 8.4) : la bande de mode, sous le bandeau,
   // puis la barre, la tête et la surface de travail de toute section
-  // (CadreMode.svelte), sans trait autour d'elles. La barre porte la place
-  // fixe, le libellé de mode, Défaire et Refaire, puis les outils — la
+  // (SurfaceEvenement.svelte), sans trait autour d'elles. La barre porte la
+  // place fixe, le libellé de mode, Défaire et Refaire, puis les outils — la
   // suite des états du plan — et les actions — « Imprimer… », l'action
   // principale de l'en-tête. Sous la barre, la tête de l'événement : son
   // en-tête — nom et résumé — et la navigation des sections, dans l'ordre
@@ -43,7 +43,7 @@
   // son plafond, et non au-dessus de la section : la section ne cède à la
   // zone que ce dont elle dépasse la tête, quel que soit le nombre des
   // avertissements, et le support rompu, en tête de la zone, garde ses
-  // issues en vue (CadreMode.svelte).
+  // issues en vue (SurfaceEvenement.svelte).
   import { getContext } from 'svelte';
   import SectionBadges from '../badges/SectionBadges.svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
@@ -56,7 +56,7 @@
   import Avertissements from './Avertissements.svelte';
   import BandeMode from './BandeMode.svelte';
   import Commande from '../primitives/Commande.svelte';
-  import CadreMode from './CadreMode.svelte';
+  import SurfaceEvenement from './SurfaceEvenement.svelte';
   import EnteteEvenement from './EnteteEvenement.svelte';
   import EtatsPlan from './EtatsPlan.svelte';
   import SupportRompu from './SupportRompu.svelte';
@@ -138,9 +138,9 @@
 
 <div class="evenement" data-ecran="evenement">
   <BandeMode />
-  <CadreMode outils={$ui.pleinEcran ? null : outils} actions={$ui.pleinEcran ? null : actions} tete={$ui.pleinEcran ? null : tete} annonces={annoncer ? annonces : null}>
+  <SurfaceEvenement outils={$ui.pleinEcran ? null : outils} actions={$ui.pleinEcran ? null : actions} tete={$ui.pleinEcran ? null : tete} annonces={annoncer ? annonces : null}>
     <Section />
-  </CadreMode>
+  </SurfaceEvenement>
 </div>
 
 <style>
@@ -176,7 +176,7 @@
 
   /* Les phases côte à côte, séparées d'un blanc : les huit onglets tiennent
      sur une ligne à côté de la place des annonces dans une fenêtre de
-     1 366 px (CadreMode.svelte). */
+     1 366 px (SurfaceEvenement.svelte). */
   nav {
     display: flex;
     flex-wrap: wrap;

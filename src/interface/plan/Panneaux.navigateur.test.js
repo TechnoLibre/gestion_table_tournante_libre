@@ -270,9 +270,9 @@ async function cliquerPoint({ x, y }) {
 }
 
 // Un clic réel au centre d'une chaise. Quand elle est hors du cadre du
-// plan — les annonces du cadre de mode, avertissements compris, prennent
-// leur hauteur à la surface —, la vue se déplace d'abord, par le cadrage de
-// la séance, pour poser la chaise au centre du cadre, au même k.
+// plan — les annonces de l'écran de l'événement, avertissements compris,
+// prennent leur hauteur à la surface —, la vue se déplace d'abord, par le
+// cadrage de la séance, pour poser la chaise au centre du cadre, au même k.
 async function cliquerChaise(m, table, siege) {
   const atteinte = () => {
     const { x, y } = pointChaise(m, table, siege);
