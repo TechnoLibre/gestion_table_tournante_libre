@@ -16,7 +16,7 @@ import { texteLivre } from '../../demo/livrees.js';
 import { diagnostiquer } from '../../moteur/diagnostic.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { cartesDiagnostic, enonces, numeroDeCharge } from './phrases.js';
+import { cartesDiagnostic, criteresDuDiagnostic, enonces, numeroDeCharge } from './phrases.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const TIRET = '\u{2014}';
@@ -58,11 +58,28 @@ function chargeDe({ appartenances, capacites, tours = 4, ancres = [], separer = 
 
 const fois = (n, valeur) => Array(n).fill(valeur);
 
-// Le diagnostic d'une charge, par l'application, et ses énoncés.
+/**
+ * Une charge d'objectifs (§ 4.5, A10) : n personnes qui portent
+ * « finance », une table 1 de 8 places qui la vise pour la soirée, puis des
+ * tables sans objectif aux capacités données, quatre tours. mode : le mode
+ * des objectifs, absent au défaut ; respecter faux décoche le critère.
+ */
+function chargeObjectifs(n, autres, { mode = null, respecter = true } = {}) {
+  const charge = chargeDe({ appartenances: fois(n, null), capacites: [8, ...autres] });
+  for (const participant of charge.participants) participant.etiquettes = ['finance'];
+  charge.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+  if (mode !== null) charge.reglages.modeObjectifs = mode;
+  if (!respecter) charge.reglages.respecterObjectifs = false;
+  return charge;
+}
+
+// Le diagnostic d'une charge, par l'application, et ses énoncés, sous l'état
+// des critères que l'écran lit pour les objectifs.
 function lire(charge) {
   const { diagnostic, erreur } = diagnostiquerCharge(charge);
   assert.equal(erreur, null);
-  return { diagnostic, liste: enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours }) };
+  const criteres = criteresDuDiagnostic(charge, diagnostic);
+  return { diagnostic, liste: enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours, criteres }) };
 }
 
 const cles = (liste) => liste.map(({ cle }) => cle);
@@ -120,6 +137,9 @@ const CONFIGURATIONS = {
   petiteConflit: () => chargeDemo('petite-conflit'),
   grande: () => chargeDemo('grande'),
   grandeSansException: () => chargeDemo('grande-sans-exception'),
+  // Dix personnes « finance », une table « finance » de 8, une table de 2
+  // sans objectif, quatre tours (A10).
+  objectifs: () => chargeObjectifs(10, [2]),
 };
 
 // --- Chaque champ, son énoncé ------------------------------------------------------
@@ -235,6 +255,22 @@ const CHAMPS = [
               cle: 'diagnostic.placesManquantes',
               details: { placesManquantes: d.placesManquantes },
               remede: { cle: 'diagnostic.remede.places', details: {} },
+            },
+          ]
+        : [],
+  },
+  {
+    // Sous le mode par défaut, « le plus de places servies », le seul
+    // plancher que le mode compare : les tours hors objectif.
+    champ: 'objectifsInevitables',
+    attendus: (d) =>
+      d.objectifsInevitables.horsObjectif > 0
+        ? [
+            {
+              cle: 'diagnostic.objectifs.toursHorsObjectif',
+              details: { plancher: d.objectifsInevitables.horsObjectif },
+              remede: { cle: 'diagnostic.remede.objectifs', details: {} },
+              grandeur: 'toursHorsObjectif',
             },
           ]
         : [],
@@ -454,6 +490,83 @@ describe('enonces : les phrases du § 5.6', () => {
     const { liste } = lire(CONFIGURATIONS.uneSeule());
     assert.equal(liste[0].cle, 'diagnostic.uneSeuleAppartenance');
     assert.deepEqual(liste[0].remede, SEPARATION);
+  });
+});
+
+describe('enonces : les planchers des objectifs (§ 5.6, A10, D16, D20)', () => {
+  // Les énoncés des objectifs d'une liste : grandeur, plancher et texte.
+  const desObjectifs = (liste) =>
+    liste.filter(({ cle }) => cle.startsWith('diagnostic.objectifs.')).map((enonce) => [enonce.grandeur, enonce.details.plancher, texte(enonce)]);
+
+  test('dix personnes « finance », une table de 8, quatre tours : 8 tours hors objectif ; les deux autres planchers, nuls, se taisent sous chaque mode', () => {
+    const { diagnostic, liste } = lire(chargeObjectifs(10, [2]));
+    assert.deepEqual(diagnostic.objectifsInevitables, { horsObjectif: 8, jamaisServies: 0, horsObjectifMax: 1 });
+    assert.deepEqual(desObjectifs(liste), [
+      [
+        'toursHorsObjectif',
+        8,
+        "au moins 8 tours hors objectif : les tables qui portent un objectif n'ont pas assez de places libres pour chaque tour possible",
+      ],
+    ]);
+    // Sous « chacun au moins une fois », le plancher des personnes jamais
+    // servies, nul, ne s'écrit pas.
+    assert.deepEqual(desObjectifs(lire(chargeObjectifs(10, [2], { mode: 'chacun' })).liste).map(([grandeur]) => grandeur), ['toursHorsObjectif']);
+    // Sous « l'équité d'abord », le plus de tours hors objectif d'une
+    // personne vaut 1 : il s'écrit, avant les tours hors objectif.
+    assert.deepEqual(desObjectifs(lire(chargeObjectifs(10, [2], { mode: 'minimum' })).liste), [
+      ['horsObjectifMax', 1, 'au moins une personne passe au moins 1 tour hors objectif, quel que soit le placement'],
+      [
+        'toursHorsObjectif',
+        8,
+        "au moins 8 tours hors objectif : les tables qui portent un objectif n'ont pas assez de places libres pour chaque tour possible",
+      ],
+    ]);
+  });
+
+  test('quarante personnes « finance » : 128, 8 et 4 ; chaque mode écrit les planchers qu’il compare, dans l’ordre où il les compare, et jamais les autres', () => {
+    const autres = fois(4, 8);
+    const { diagnostic, liste } = lire(chargeObjectifs(40, autres));
+    assert.deepEqual(diagnostic.objectifsInevitables, { horsObjectif: 128, jamaisServies: 8, horsObjectifMax: 4 });
+    const grandeurs = (mode) => desObjectifs(lire(chargeObjectifs(40, autres, { mode })).liste).map(([grandeur, plancher]) => [grandeur, plancher]);
+    assert.deepEqual(desObjectifs(liste).map(([grandeur, plancher]) => [grandeur, plancher]), [['toursHorsObjectif', 128]]);
+    assert.deepEqual(grandeurs('chacun'), [
+      ['jamaisServies', 8],
+      ['toursHorsObjectif', 128],
+    ]);
+    assert.deepEqual(grandeurs('minimum'), [
+      ['horsObjectifMax', 4],
+      ['toursHorsObjectif', 128],
+    ]);
+    const [jamais] = desObjectifs(lire(chargeObjectifs(40, autres, { mode: 'chacun' })).liste);
+    assert.equal(jamais[2], 'au moins 8 personnes jamais servies par une table à objectif, quel que soit le placement');
+    for (const enonce of liste.filter(({ cle }) => cle.startsWith('diagnostic.objectifs.'))) {
+      assert.deepEqual(enonce.remede, { cle: 'diagnostic.remede.objectifs', details: {} });
+      assert.equal(typeof texte(enonce.remede), 'string');
+    }
+  });
+
+  test('le critère des objectifs décoché : aucun plancher des objectifs, le diagnostic les calcule toujours', () => {
+    const { diagnostic, liste } = lire(chargeObjectifs(40, fois(4, 8), { mode: 'chacun', respecter: false }));
+    assert.equal(diagnostic.objectifsInevitables.horsObjectif, 128);
+    assert.deepEqual(desObjectifs(liste), []);
+  });
+
+  test('criteresDuDiagnostic : sans plancher positif, aucune lecture des critères ; avec, l’état de chaque critère du registre', () => {
+    const sans = CONFIGURATIONS.petite();
+    assert.deepEqual(criteresDuDiagnostic(sans, diagnostiquerCharge(sans).diagnostic), []);
+    const charge = chargeObjectifs(40, fois(4, 8), { mode: 'minimum' });
+    const avant = structuredClone(charge);
+    const criteres = criteresDuDiagnostic(charge, diagnostiquerCharge(charge).diagnostic);
+    const objectifs = criteres.find(({ nom }) => nom === 'toursHorsObjectif');
+    assert.deepEqual(objectifs, { nom: 'toursHorsObjectif', coche: true, sansObjet: false, valeurs: ['horsObjectifMax', 'toursHorsObjectif'] });
+    assert.deepEqual(charge, avant);
+  });
+
+  test('sans état des critères, enonces n’écrit aucun plancher des objectifs', () => {
+    const charge = chargeObjectifs(40, fois(4, 8));
+    const { diagnostic } = diagnostiquerCharge(charge);
+    const liste = enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: 4 });
+    assert.deepEqual(desObjectifs(liste), []);
   });
 });
 

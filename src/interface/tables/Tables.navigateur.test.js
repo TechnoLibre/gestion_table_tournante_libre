@@ -18,6 +18,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import '../jetons.css';
 import { controlerCapacite } from '../../application/capacite.js';
+import { exporterObjectifs } from '../../application/csv.js';
 import { creerHorlogePilotee } from '../../application/horloge.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
@@ -121,8 +122,16 @@ afterEach(() => {
 
 // Le fichier d'état de la charge posé dans le système simulé, ouvert par une
 // séance, en écriture sauf mode 'lecture' ; la section montée au début du
-// corps, avec les contextes de l'application.
+// corps, avec les contextes de l'application. La façade ne sait
+// qu'enregistrer : chaque appel d'enregistrerSous se range dans enregistres.
 async function preparer(charge, { mode = 'ecriture' } = {}) {
+  const enregistres = [];
+  const facade = {
+    async enregistrerSous(nomPropose, octets) {
+      enregistres.push({ nomPropose, octets });
+      return nomPropose;
+    },
+  };
   const fs = creerFichiersSimules();
   fs.deposerDossier('documents');
   fs.deposer('documents', `${BASE}${SUFFIXES.etat}`, serialiser(charge, { revision: 1, produitVersion: VERSION.affichee }));
@@ -149,13 +158,14 @@ async function preparer(charge, { mode = 'ecriture' } = {}) {
     ['t', t],
     ['horloge', horloge],
     ['ui', ui],
+    ['facade', facade],
   ]);
   const cible = document.createElement('div');
   document.body.prepend(cible);
   const composant = mount(SectionTables, { target: cible, props: {}, context: contexte });
   flushSync();
   montes.push({ composant, cible });
-  return { fs, seance, ui, cible };
+  return { fs, seance, ui, cible, enregistres };
 }
 
 const section = (m) => m.cible.querySelector('[data-section="tables"]');
@@ -792,5 +802,304 @@ describe('l’habillage : cartes, pastilles, messages', () => {
     expect(signe).not.toBeNull();
     expect(composantes(getComputedStyle(signe).color)).toEqual(jeton('--couleur-avis-marque'));
     expect(composantes(getComputedStyle(avis.querySelector('p')).color)).toEqual(jeton('--couleur-page-texte'));
+  });
+});
+
+// --- Les objectifs des tables (§ 4.5, § 10.4, D3, D19) ---------------------------
+
+// L'objectif d'une table à l'écran, par sa clé : ‹table› pour la soirée,
+// ‹table›-‹tour› pour un tour ; son champ d'étiquettes et son choix de règle.
+const zoneObjectif = (m, cle) => section(m).querySelector(`[data-objectif="${cle}"]`);
+const champObjectif = (m, cle) => zoneObjectif(m, cle).querySelector(`input[data-champ="objectif-${cle}"]`);
+const choixRegle = (m, cle) => zoneObjectif(m, cle).querySelector(`select[data-champ="regle-${cle}"]`);
+const regleDefaut = (m) => section(m).querySelector('[data-regle-objectifs] select[data-champ="regleObjectifs"]');
+const objectifs = (m, id) => charge(m).tables.find((table) => table.id === id).objectifs;
+// Le texte d'un objectif, sans les blancs du balisage.
+const texteObjectif = (m, cle) => zoneObjectif(m, cle).textContent.replace(/\s+/g, ' ').trim();
+
+// Choisit au clavier la valeur d'un sélecteur, un cran de flèche à la fois,
+// la file de la séance passée à chaque cran : chaque cran est un choix. Un
+// choix refusé rend la valeur enregistrée : au plus autant de crans que
+// d'options.
+async function choisirAuClavier(m, choix, valeur) {
+  choix.focus();
+  const cible = [...choix.options].findIndex((option) => option.value === valeur);
+  expect(cible, `option ${valeur}`).toBeGreaterThanOrEqual(0);
+  for (let cran = 0; cran < choix.options.length && choix.selectedIndex !== cible; cran += 1) {
+    await touche(choix.selectedIndex < cible ? 'ArrowDown' : 'ArrowUp');
+    await attendre(m);
+  }
+}
+
+// Deux tables, trois tours, quatre personnes : Iris Ombrelle porte
+// « finance », Théo Pervenche « cuisine ».
+function chargeObjectifs(options = {}) {
+  const donnees = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 4, tours: 3, ...options });
+  donnees.participants[0].etiquettes = ['finance'];
+  donnees.participants[1].etiquettes = ['cuisine'];
+  return donnees;
+}
+
+describe('la règle par défaut des objectifs (§ 2.1 étape 4, § 4.5, D3)', () => {
+  test('dans la carte des réglages, « au moins une (OU) » ; « toutes (ET) » choisie au clavier : une entrée, la règle propre d’un objectif ne change pas', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: 'ou', etiquettes: ['finance'] }];
+    const m = await preparer(donnees);
+    const [reglages] = section(m).querySelectorAll('section[aria-labelledby]');
+    expect(reglages.contains(regleDefaut(m))).toBe(true);
+    expect(regleDefaut(m).value).toBe('ou');
+    expect(regleDefaut(m).selectedOptions[0].textContent).toBe(t('tables.regle.ou'));
+    expect(section(m).querySelector(`label[for="${regleDefaut(m).id}"]`).textContent).toBe(t('tables.regle.etiquette'));
+    const r0 = revision(m);
+    await choisirAuClavier(m, regleDefaut(m), 'et');
+    expect(revision(m)).toBe(r0 + 1);
+    expect(charge(m).reglages.regleObjectifs).toBe('et');
+    expect(regleDefaut(m).value).toBe('et');
+    expect(objectifs(m, 1)[0].regle).toBe('ou');
+    expect(choixRegle(m, '1').value).toBe('ou');
+    expect(choixRegle(m, '1').options[0].textContent).toBe(t('tables.objectif.regleDefaut', { regle: 'et' }));
+  });
+});
+
+describe('l’objectif d’une table (§ 4.5, D3, D19)', () => {
+  test('saisi « finance, cuisine » : une entrée, la règle suit le défaut et le dit ; « au moins une (OU) » choisie sous le défaut « ou » : l’état dit « règle propre », jamais celui du défaut', async () => {
+    const m = await preparer(chargeObjectifs());
+    expect(zoneObjectif(m, '1').dataset.portee).toBe('tous');
+    expect(choixRegle(m, '1').value).toBe('');
+    expect(commande(zoneObjectif(m, '1'), 'retirerObjectif')).toBeNull();
+    const r0 = revision(m);
+    await saisir(m, champObjectif(m, '1'), 'finance, cuisine');
+    expect(revision(m)).toBe(r0 + 1);
+    expect(objectifs(m, 1)).toEqual([{ portee: 'tous', tour: null, regle: null, etiquettes: ['cuisine', 'finance'] }]);
+    expect(champObjectif(m, '1').value).toBe('cuisine, finance');
+    expect(choixRegle(m, '1').value).toBe('');
+    const suit = texteObjectif(m, '1');
+    expect(suit).toContain(t('tables.objectif.suitDefaut'));
+    expect(suit).not.toContain(t('tables.objectif.reglePropre'));
+
+    await choisirAuClavier(m, choixRegle(m, '1'), 'ou');
+    expect(revision(m)).toBe(r0 + 2);
+    expect(objectifs(m, 1)[0].regle).toBe('ou');
+    expect(charge(m).reglages.regleObjectifs).toBeUndefined();
+    const propre = texteObjectif(m, '1');
+    expect(propre).toContain(t('tables.objectif.reglePropre'));
+    expect(propre).not.toContain(t('tables.objectif.suitDefaut'));
+  });
+
+  test('un objectif neuf : sa règle se choisit avant ses étiquettes, rien d’écrit ; la saisie le pose sous elle, une seule entrée', async () => {
+    const m = await preparer(chargeObjectifs());
+    expect(section(m).querySelector(`label[for="${choixRegle(m, '1').id}"]`).textContent).toBe(t('tables.objectif.regle'));
+    expect(texteObjectif(m, '1')).not.toContain(t('tables.objectif.suitDefaut'));
+    const r0 = revision(m);
+    await choisirAuClavier(m, choixRegle(m, '1'), 'et');
+    expect(revision(m)).toBe(r0);
+    expect(objectifs(m, 1)).toBeUndefined();
+    expect(choixRegle(m, '1').value).toBe('et');
+    expect(document.activeElement).toBe(choixRegle(m, '1'));
+    await saisir(m, champObjectif(m, '1'), 'finance, cuisine');
+    expect(revision(m)).toBe(r0 + 1);
+    expect(objectifs(m, 1)).toEqual([{ portee: 'tous', tour: null, regle: 'et', etiquettes: ['cuisine', 'finance'] }]);
+    expect(choixRegle(m, '1').value).toBe('et');
+    expect(texteObjectif(m, '1')).toContain(t('tables.objectif.reglePropre'));
+    // L'autre table garde son choix vide : le choix d'un objectif neuf est
+    // le sien.
+    expect(choixRegle(m, '2').value).toBe('');
+  });
+
+  test('les avis contre l’objectif : personne ne correspond, une étiquette que personne ne porte, sa voisine nommée ; le champ propose les étiquettes connues', async () => {
+    const m = await preparer(chargeObjectifs());
+    const liste = document.getElementById(champObjectif(m, '2').getAttribute('list'));
+    expect(liste.localName).toBe('datalist');
+    expect([...liste.options].map((option) => option.value)).toEqual(['cuisine', 'finance']);
+    await saisir(m, champObjectif(m, '2'), 'Finances');
+    const avis = [...zoneObjectif(m, '2').querySelectorAll('[data-avertissement]')].map((element) => element.dataset.avertissement);
+    expect(avis).toEqual(['OBJECTIF_SANS_CORRESPONDANT', 'ETIQUETTE_ORPHELINE']);
+    expect(texteObjectif(m, '2')).toContain(t('ETIQUETTE_ORPHELINE', { etiquette: 'Finances', voisine: null }));
+    expect([...liste.options].map((option) => option.value)).toEqual(['Finances', 'cuisine', 'finance']);
+    // Théo Pervenche visé : l'objectif sert quelqu'un, les avis tombent.
+    await saisir(m, champObjectif(m, '2'), 'cuisine');
+    expect(zoneObjectif(m, '2').querySelectorAll('[data-avertissement]')).toHaveLength(0);
+
+    // Un objectif écrit « Finance » à la main, quand Iris Ombrelle porte
+    // « finance » : l'orpheline nomme sa voisine de même clé.
+    const donnees = chargeObjectifs();
+    donnees.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['Finance'] }];
+    const n = await preparer(donnees);
+    expect(texteObjectif(n, '2')).toContain(t('ETIQUETTE_ORPHELINE', { etiquette: 'Finance', voisine: 'finance' }));
+  });
+
+  test('une orthographe retenue se dit contre le champ : « FINANCE » saisi reçoit « finance »', async () => {
+    const m = await preparer(chargeObjectifs());
+    await saisir(m, champObjectif(m, '1'), 'FINANCE');
+    expect(objectifs(m, 1)[0].etiquettes).toEqual(['finance']);
+    expect(champObjectif(m, '1').value).toBe('finance');
+    const retenue = zoneObjectif(m, '1').querySelector('[data-avertissement="ORTHOGRAPHE_RETENUE"]');
+    expect(retenue).not.toBeNull();
+    expect(retenue.textContent).toContain(t('ORTHOGRAPHE_RETENUE', { saisie: 'FINANCE', retenue: 'finance' }));
+  });
+
+  test('« Retirer l’objectif » : sans fenêtre, une entrée, le champ se vide ; vider le champ d’un objectif posé est refusé contre lui, et son remède le retire', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: 'et', etiquettes: ['finance'] }];
+    donnees.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['cuisine'] }];
+    const m = await preparer(donnees);
+    const r0 = revision(m);
+    await cliquer(m, commande(zoneObjectif(m, '1'), 'retirerObjectif'));
+    expect(fenetre()).toBeNull();
+    expect(revision(m)).toBe(r0 + 1);
+    expect(objectifs(m, 1)).toBeUndefined();
+    expect(champObjectif(m, '1').value).toBe('');
+    expect(choixRegle(m, '1').value).toBe('');
+    expect(document.activeElement).toBe(champObjectif(m, '1'));
+
+    await saisir(m, champObjectif(m, '2'), '');
+    const refus = zoneObjectif(m, '2').querySelector('[data-refus="OBJECTIF_SANS_ETIQUETTE"]');
+    expect(refus).not.toBeNull();
+    expect(revision(m)).toBe(r0 + 1);
+    await cliquer(m, commande(refus, 'retirerObjectif'));
+    expect(fenetre()).toBeNull();
+    expect(revision(m)).toBe(r0 + 2);
+    expect(objectifs(m, 2)).toBeUndefined();
+  });
+
+  test('« Objectifs par tour » : replié, le bouton compte ceux qui existent ; déplié au clavier, un champ par tour ; posé au tour 2, une entrée, le bouton en compte deux ; replié à l’espace', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[0].objectifs = [{ portee: 'tour', tour: 3, regle: null, etiquettes: ['finance'] }];
+    const m = await preparer(donnees);
+    const bouton = commande(ligne(m, 1), 'basculerObjectifsTours');
+    expect(bouton.getAttribute('aria-expanded')).toBe('false');
+    expect(bouton.textContent.trim()).toBe(t('tables.objectifs.parTour', { nombre: 1 }));
+    expect(commande(ligne(m, 2), 'basculerObjectifsTours').textContent.trim()).toBe(t('tables.objectifs.parTour', { nombre: 0 }));
+    expect(zoneObjectif(m, '1-1')).toBeNull();
+    bouton.focus();
+    await touche('Enter');
+    await attendre(m);
+    expect(bouton.getAttribute('aria-expanded')).toBe('true');
+    expect(document.getElementById(bouton.getAttribute('aria-controls')).contains(zoneObjectif(m, '1-1'))).toBe(true);
+    expect(['1-1', '1-2', '1-3'].map((cle) => zoneObjectif(m, cle).dataset.portee)).toEqual(['tour', 'tour', 'tour']);
+    expect(champObjectif(m, '1-3').value).toBe('finance');
+    expect(zoneObjectif(m, '2-1')).toBeNull();
+    const r0 = revision(m);
+    await saisir(m, champObjectif(m, '1-2'), 'cuisine');
+    expect(revision(m)).toBe(r0 + 1);
+    expect(objectifs(m, 1).map(({ tour }) => tour)).toEqual([2, 3]);
+    expect(bouton.textContent.trim()).toBe(t('tables.objectifs.parTour', { nombre: 2 }));
+    bouton.focus();
+    await touche(' ');
+    await attendre(m);
+    expect(bouton.getAttribute('aria-expanded')).toBe('false');
+    expect(zoneObjectif(m, '1-2')).toBeNull();
+  });
+});
+
+describe('« Exporter les objectifs » (§ 10.4)', () => {
+  // Une proposition retenue, puis le plan bloqué.
+  function chargeBloquee() {
+    const donnees = chargeObjectifs();
+    donnees.tables[0].objectifs = [
+      { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] },
+      { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['cuisine', 'finance'] },
+    ];
+    placer(donnees, [[[1, 2], [3, 4]], [[1, 3], [2, 4]], [[1, 4], [2, 3]]], { id: 1, retenu: true });
+    donnees.evenement.etat = 'bloque';
+    return donnees;
+  }
+
+  test('en écriture, en lecture et sur un plan bloqué : les octets d’exporterObjectifs, sous ‹base›-objectifs.csv, rien d’écrit au fichier', async () => {
+    // Un plan bloqué ne passe pas en écriture : la séance le tient en
+    // lecture seule, et refuse tout geste qui modifie.
+    const ouverte = chargeObjectifs();
+    ouverte.tables[1].objectifs = [{ portee: 'tour', tour: 3, regle: null, etiquettes: ['cuisine'] }];
+    for (const [donnees, mode, refus] of [
+      [ouverte, 'ecriture', null],
+      [ouverte, 'lecture', 'MODE_LECTURE'],
+      [chargeBloquee(), 'lecture', 'LECTURE_SEULE'],
+    ]) {
+      const m = await preparer(donnees, { mode });
+      expect(m.seance.etat().refus?.code ?? null).toBe(refus);
+      expect(charge(m).tables.some(({ objectifs: liste }) => liste !== undefined)).toBe(true);
+      const avant = ecritures(m);
+      const bouton = commande(section(m), 'exporterObjectifs');
+      expect(bouton.textContent).toBe(t('tables.objectifs.exporter'));
+      await cliquer(m, bouton);
+      await attendre(m);
+      expect(m.enregistres).toHaveLength(1);
+      expect(m.enregistres[0].nomPropose).toBe(`${BASE}-objectifs.csv`);
+      expect([...m.enregistres[0].octets]).toEqual([...exporterObjectifs(charge(m).tables)]);
+      expect(bouton.parentElement.querySelector('[data-refus]')).toBeNull();
+      expect(ecritures(m)).toBe(avant);
+    }
+  });
+});
+
+describe('les objectifs que les fenêtres nomment (§ 2.1 étape 5, § 4.3, § 6.2, A3, A6)', () => {
+  test('trois tours, un objectif au tour 3 et un de la soirée ; 2 saisi : la fenêtre nomme l’objectif du tour 3, rien d’écrit ; Confirmer : il part, la soirée reste', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[1].objectifs = [
+      { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] },
+      { portee: 'tour', tour: 3, regle: null, etiquettes: ['cuisine'] },
+    ];
+    const m = await preparer(donnees);
+    const avant = ecritures(m);
+    await saisir(m, champ(m, 'tours'), '2');
+    expect(fenetre()).not.toBeNull();
+    expect(ecritures(m)).toBe(avant);
+    expect(elementsFenetre()).toEqual([t('tables.tours.objectif', { numero: 2, tour: 3, etiquettes: ['cuisine'] })]);
+    await cliquer(m, commande(fenetre(), 'confirmer'));
+    expect(fenetre()).toBeNull();
+    expect(objectifs(m, 2)).toEqual([{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }]);
+  });
+
+  test('une table qui ne porte qu’un objectif : sa suppression ouvre la fenêtre, qui le nomme', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[0].objectifs = [{ portee: 'tour', tour: 2, regle: 'et', etiquettes: ['cuisine', 'finance'] }];
+    const m = await preparer(donnees);
+    await cliquer(m, commande(ligne(m, 1), 'supprimerTable'));
+    expect(fenetre()).not.toBeNull();
+    expect(elementsFenetre()).toEqual([t('tables.suppression.objectif', { tour: 2, etiquettes: ['cuisine', 'finance'] })]);
+    await cliquer(m, commande(fenetre(), 'renoncer'));
+    expect(charge(m).tables).toHaveLength(2);
+  });
+});
+
+describe('les objectifs en lecture (§ 8.4)', () => {
+  test('poser un objectif, choisir la règle par défaut ou celle d’un objectif, le retirer : refusés contre le geste, le message porte « Modifier », rien d’écrit ; le choix montre la règle enregistrée', async () => {
+    const donnees = chargeObjectifs();
+    donnees.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+    const m = await preparer(donnees, { mode: 'lecture' });
+    const avant = ecritures(m);
+    const modifier = t('communs.remede.modifier');
+
+    await cliquer(m, champObjectif(m, '2'));
+    await touche('x');
+    await attendre(m);
+    expect(zoneObjectif(m, '2').querySelector('[data-refus="MODE_LECTURE"]').textContent).toContain(modifier);
+
+    await choisirAuClavier(m, regleDefaut(m), 'et');
+    expect(regleDefaut(m).value).toBe('ou');
+    expect(regleDefaut(m).closest('[data-regle-objectifs]').querySelector('[data-refus="MODE_LECTURE"]').textContent).toContain(modifier);
+
+    const decrit = (choix) => document.getElementById(choix.getAttribute('aria-describedby'));
+    expect(decrit(regleDefaut(m)).dataset.refus).toBe('MODE_LECTURE');
+
+    await choisirAuClavier(m, choixRegle(m, '1'), 'ou');
+    expect(choixRegle(m, '1').value).toBe('');
+    expect(zoneObjectif(m, '1').querySelector('[data-refus="MODE_LECTURE"]').textContent).toContain(modifier);
+    expect(choixRegle(m, '1').getAttribute('aria-invalid')).toBe('true');
+    expect(decrit(choixRegle(m, '1')).dataset.refus).toBe('MODE_LECTURE');
+    expect(decrit(choixRegle(m, '1')).textContent).toContain(modifier);
+    expect(document.activeElement).toBe(choixRegle(m, '1'));
+
+    // Le choix d'un objectif que la table ne porte pas encore : refusé de
+    // même, il rend la valeur vide.
+    await choisirAuClavier(m, choixRegle(m, '2'), 'et');
+    expect(choixRegle(m, '2').value).toBe('');
+    expect(decrit(choixRegle(m, '2')).dataset.refus).toBe('MODE_LECTURE');
+
+    await cliquer(m, commande(zoneObjectif(m, '1'), 'retirerObjectif'));
+    expect(commande(zoneObjectif(m, '1'), 'retirerObjectif').parentElement.querySelector('[data-refus="MODE_LECTURE"]')).not.toBeNull();
+    expect(objectifs(m, 1)).toHaveLength(1);
+    expect(charge(m).reglages.regleObjectifs).toBeUndefined();
+    expect(ecritures(m)).toBe(avant);
   });
 });

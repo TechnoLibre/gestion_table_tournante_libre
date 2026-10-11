@@ -277,6 +277,52 @@ describe('ce que nomment les fenêtres (§ 6.1, § 6.2, § 2.1 étape 5)', () =>
   });
 });
 
+// Un objectif de table (§ 4.5) : la soirée pour tour null, sinon le tour
+// désigné ; regle null suit le défaut.
+const objectif = (tour, etiquettes, regle = null) => ({ portee: tour === null ? 'tous' : 'tour', tour, regle, etiquettes });
+
+describe('les objectifs perdus, nommés par les fenêtres (§ 2.1 étape 5, § 4.3, § 6.2, A3, A6, A16)', () => {
+  test('elementsTours : les réservations détruites, puis chaque objectif des tours retirés, sa table et ses étiquettes, puis les placements ; l’objectif de la soirée reste', () => {
+    const charge = chargeDe({ tables: [{ id: 1, numero: 1 }, { id: 2, numero: 5 }], n: 4, tours: 4, reservations: [resa(1, 2, null, 4)] });
+    charge.tables[0].objectifs = [objectif(null, ['finance']), objectif(3, ['Montréal', 'finance'], 'et'), objectif(4, ['bénévole'])];
+    charge.tables[1].objectifs = [objectif(4, ['cuisine'])];
+    charge.propositions = [{ id: 1, tours: 4 }];
+    const bilan = bilanTours(charge, 2);
+    assert.equal(annonceTours(bilan, 4, 2), true);
+    assert.deepEqual(
+      elementsTours(charge, bilan).map(({ cle, details }) => t(cle, details)),
+      [
+        'Iris Ombrelle : réservation à la table 5 au tour 4, détruite',
+        'Table 1 : objectif du tour 3 (« Montréal », « finance »), détruit',
+        'Table 1 : objectif du tour 4 (« bénévole »), détruit',
+        'Table 5 : objectif du tour 4 (« cuisine »), détruit',
+        t('tables.touchee.proposition', { id: 1 }),
+      ],
+    );
+  });
+
+  test('annonceTours : un objectif de tour détruit s’annonce seul, sans réservation ni placement ; celui de la soirée, jamais', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 2, tours: 3 });
+    charge.tables[0].objectifs = [objectif(null, ['finance'])];
+    assert.equal(annonceTours(bilanTours(charge, 1), 3, 1), false);
+    charge.tables[0].objectifs.push(objectif(3, ['finance']));
+    assert.equal(annonceTours(bilanTours(charge, 2), 3, 2), true);
+    assert.equal(annonceTours(bilanTours(charge, 3), 3, 3), false);
+  });
+
+  test('elementsSuppression : une table qui ne porte que des objectifs s’annonce, chacun nommé, la soirée d’abord, ses étiquettes séparées d’une virgule, sans « et » qui dirait une règle', () => {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2 }], n: 2, tours: 3 });
+    charge.tables[0].objectifs = [objectif(null, ['finance', 'ressources humaines']), objectif(2, ['bénévole'], 'et')];
+    const bilan = bilanSuppressionTable(charge, 1);
+    assert.equal(annonceSuppression(bilan), true);
+    assert.deepEqual(
+      elementsSuppression(charge, bilan).map(({ cle, details }) => t(cle, details)),
+      ['Objectif de la soirée : « finance », « ressources humaines »', 'Objectif du tour 2 : « bénévole »'],
+    );
+    assert.equal(annonceSuppression(bilanSuppressionTable(charge, 2)), false);
+  });
+});
+
 describe('les compléments d’un refus et d’un avertissement (§ 6.2)', () => {
   test('siegesRetiresNommes : le siège 8 et son titre, puis le siège 7 et Iris Ombrelle, dans cet ordre', () => {
     const charge = chargeDe({

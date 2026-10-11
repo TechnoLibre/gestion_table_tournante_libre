@@ -5,8 +5,8 @@
   // La section des participants (§ 2.1 étape 3, § 4, § 10.2) : une carte
   // titrée, dont l'en-tête porte la ligne de comptes (comptesEntete,
   // entete.js) et l'export ; dessous, le formulaire d'ajout en bande de tête,
-  // puis la barre du filtre, du groupement, du compte et de la légende des
-  // appartenances, puis la grille ; à côté, la fiche ouverte, ou dessous
+  // puis la barre du filtre, du groupement, du compte et des légendes des
+  // appartenances et des étiquettes, puis la grille ; à côté, la fiche ouverte, ou dessous
   // quand la ligne ne tient pas les deux. Les lignes de la grille sont
   // celles de lignesGrille (grille.js) sur la liste de la séance, le tri et le filtre de la
   // section : regarder, trier et filtrer n'écrivent rien, en écriture comme
@@ -39,7 +39,12 @@
   // Les teintes d'appartenance (teintesAppartenances) se calculent une fois
   // sur la liste entière, exclues comprises, et la légende comme la grille
   // les lisent : un filtre ne repeint rien. La légende nomme chaque
-  // appartenance avec le nombre de personnes qui la portent.
+  // appartenance avec le nombre de personnes qui la portent. Dessous, quand
+  // l'événement porte des étiquettes, la légende des étiquettes
+  // (legendeEtiquettes, entete.js) nomme chacune avec le nombre de
+  // personnes qui la portent, exclues comprises, en pastilles neutres à
+  // icône : la teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7).
+  // Sans étiquette, elle n'est pas montrée.
   //
   // Supprimer une personne qui porte des réservations ouvre la fenêtre à
   // confirmer, qui les nomme ; sans réservation, ou quand la séance refuse
@@ -60,7 +65,7 @@
   import { statuts } from '../../application/places.js';
   import { conflitsDuPlacement } from '../../application/conflits_placement.js';
   import { conflitsDesGroupes, lignesDeConflit, reglesParPersonne } from './conflits.js';
-  import { comptesEntete, legendeAppartenances } from './entete.js';
+  import { comptesEntete, legendeAppartenances, legendeEtiquettes } from './entete.js';
   import {
     choisirGroupement,
     cleDeGroupement,
@@ -93,6 +98,7 @@
   const teintes = $derived(teintesAppartenances(participants));
   const comptes = $derived(comptesEntete(participants));
   const legende = $derived(legendeAppartenances(participants, teintes));
+  const legendeDesEtiquettes = $derived(legendeEtiquettes(participants));
   const lignes = $derived(lignesGrille(participants, { tri, filtre }, cleNormalisee));
   const toutes = $derived(lignesGrille(participants, { tri, filtre: '' }, cleNormalisee));
   const parStatut = $derived(groupement.includes('statut') && charge !== null ? statuts(charge).parId : null);
@@ -179,12 +185,25 @@
             </button>
           {/if}
           <output>{t('participants.grille.compte', { total: participants.length, affiches: lignes.length })}</output>
-          {#if legende.length > 0}
-            <ul class="legende" aria-label={t('participants.legende.titre')}>
-              {#each legende as { nom, rang, compte } (nom)}
-                <li><Pastille sorte="appartenance" valeur={rang} libelle={t('participants.legende.element', { nom, compte })} /></li>
-              {/each}
-            </ul>
+          {#if legende.length > 0 || legendeDesEtiquettes.length > 0}
+            <div class="legendes">
+              {#if legende.length > 0}
+                <ul class="legende" aria-label={t('participants.legende.titre')}>
+                  {#each legende as { nom, rang, compte } (nom)}
+                    <li><Pastille sorte="appartenance" valeur={rang} libelle={t('participants.legende.element', { nom, compte })} /></li>
+                  {/each}
+                </ul>
+              {/if}
+              {#if legendeDesEtiquettes.length > 0}
+                <ul class="legende" data-legende-etiquettes aria-label={t('participants.legendeEtiquettes.titre')}>
+                  {#each legendeDesEtiquettes as { nom, compte } (nom)}
+                    <li>
+                      <Pastille sorte="statut" valeur="neutre" icone="etiquettes" libelle={t('participants.legende.element', { nom, compte })} />
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+            </div>
           {/if}
         </div>
 
@@ -280,13 +299,25 @@
     font-size: var(--taille-texte-petit);
   }
 
+  /* Les légendes, poussées à droite tant que la ligne les tient : celle
+     des étiquettes sous celle des appartenances. */
+  .legendes {
+    display: flex;
+    flex-direction: column;
+    align-self: center;
+    align-items: flex-end;
+    gap: var(--espace-2);
+    min-width: 0;
+    margin-left: auto;
+  }
+
   .legende {
     display: flex;
     flex-wrap: wrap;
-    align-self: center;
+    justify-content: flex-end;
     gap: var(--espace-1) var(--espace-2);
     min-width: 0;
-    margin: 0 0 0 auto;
+    margin: 0;
     padding: 0;
     list-style: none;
   }

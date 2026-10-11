@@ -21,6 +21,7 @@ import { PLAN_PARFAIT_PETITE } from '../../demo/catalogue.js';
 import { texteLivre } from '../../demo/livrees.js';
 import { CRITERES, classer } from '../../moteur/classement.js';
 import { indexerPlan, normaliser } from '../../moteur/configuration.js';
+import { CRITERES as REGISTRE, MODES_OBJECTIFS, valeursQuiClassent } from '../../moteur/criteres.js';
 import { mesurer } from '../../moteur/indicateurs.js';
 import { ecartsAuPlafondAPriori, minimumAtteint, troisChiffres } from '../../moteur/manque.js';
 import { plafondsAPriori, plafondsRealises } from '../../moteur/plafond.js';
@@ -34,7 +35,7 @@ import {
   GROUPES_COLONNES,
   TAILLE_PAGE,
   changerDePage,
-  colonneDuCritere,
+  colonneDeValeur,
   demandeConfirmation,
   evaluation,
   explicationDeColonne,
@@ -122,6 +123,49 @@ const DEUX_COLLEGUES = [
   [[1, 2, 5], [3, 4, 6]],
   [[1, 2, 6], [3, 4, 5]],
 ];
+
+// Les colonnes du tableau sans objectif ni case des animateurs, dans l'ordre
+// d'affichage : celles que le tableau portait avant le sixième groupe.
+const COLONNES_PAR_DEFAUT = [
+  'rang',
+  'proposition',
+  'rencontresTous',
+  'rencontresMobiles',
+  'rencontresAncres',
+  'collisionsCumulees',
+  'pairesDistinctes',
+  'excedentCollisions',
+  'rencontresRepetees',
+  'maxRencontresPaire',
+  'retoursChoisis',
+  'appartenancesVues',
+  'totalRedondance',
+  'diversite',
+  'manqueMax',
+  'effectifManque',
+  'ecartItineraireMax',
+  'ecartAuPlafondAPriori',
+  'certificat',
+  'imposes',
+  'commandes',
+];
+
+// Les colonnes du sixième groupe, les objectifs des tables et les
+// animateurs, dans l'ordre d'affichage ; les deux premières ne paraissent
+// jamais ensemble, chacune sous son mode.
+const SIXIEME = ['jamaisServies', 'horsObjectifMax', 'toursHorsObjectif', 'toursSelonObjectif', 'animateursRencontres', 'animateursNonRencontres'];
+
+// La petite démonstration au conflit inévitable, les personnes 1 à 6
+// « finance », la première table attendant « finance » pour la soirée ; les
+// réglages donnés s'ajoutent à ceux de la charge.
+function petiteAObjectifs(reglages = {}) {
+  const charge = structuredClone(chargeDemo('petite-conflit'));
+  for (const participant of charge.participants) if (participant.id <= 6) participant.etiquettes = ['finance'];
+  const [premiere] = [...charge.tables].sort((a, b) => a.id - b.id);
+  premiere.objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+  Object.assign(charge.reglages, reglages);
+  return charge;
+}
 
 // Trois plans de la petite démonstration au conflit inévitable, nommés par
 // leurs collisions (cumulées, distinctes), au même plus grand écart au
@@ -227,7 +271,8 @@ describe('tableau : chaque cellule porte la valeur de la table d’évaluation (
   test('chaque cellule égale la valeur de sa ligne ; un nombre se met en forme, null porte la clé de « — »', () => {
     const table = evaluer(generee(chargeDemo('petite-conflit'), { graine: 5, nombre: 3, arret: 400 }));
     const vue = tableau(table);
-    assert.deepEqual(vue.colonnes, COLONNES);
+    assert.deepEqual(vue.colonnes.map(({ nom }) => nom), COLONNES_PAR_DEFAUT);
+    for (const colonne of vue.colonnes) assert.ok(COLONNES.includes(colonne), colonne.nom);
     assert.equal(vue.lignes.length, 3);
     assert.deepEqual(vue.lignes.map(({ id }) => id), table.propositions.map(({ id }) => id));
     let vues = 0;
@@ -419,18 +464,40 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
       ['identifiant', 'proposition'],
     ]);
     for (const morceau of vue.ordre[0]) {
-      if (morceau.colonne === null) assert.equal(morceau.critere, null, morceau.cle);
-      else assert.equal(t(morceau.cle, morceau.details), morceau.critere === 'identifiant' ? "l'identifiant croissant" : t(`moteur.critere.${morceau.critere}`));
+      if (morceau.colonne === null) {
+        assert.equal(morceau.critere, null, morceau.cle);
+        assert.equal(morceau.valeur, null, morceau.cle);
+        continue;
+      }
+      // Sous le défaut, la valeur appliquée porte le nom du critère.
+      const attendu = morceau.critere === 'identifiant' ? "l'identifiant croissant" : t(`moteur.critere.${morceau.critere}`);
+      assert.equal(t(morceau.cle, morceau.details), attendu);
+      if (morceau.critere !== 'identifiant') assert.equal(morceau.cle, `moteur.valeur.${morceau.valeur}`);
     }
   });
 
-  test('colonneDuCritere : chaque critère de CRITERES désigne une colonne de COLONNES ; un critère sans colonne lève', () => {
+  test('colonneDeValeur : chaque valeur qui classe, sous tout mode et toute combinaison des cases, désigne une colonne de COLONNES ; une valeur inconnue lève', () => {
     const noms = new Set(COLONNES.map(({ nom }) => nom));
-    assert.equal(CRITERES.length, 5);
-    for (const critere of CRITERES) assert.ok(noms.has(colonneDuCritere(critere)), critere);
-    assert.ok(noms.has(colonneDuCritere('identifiant')));
-    assert.equal(colonneDuCritere('identifiant'), 'proposition');
-    assert.throws(() => colonneDuCritere('moyenneRencontres'), TypeError);
+    const valeurs = new Set();
+    for (const mode of MODES_OBJECTIFS) {
+      for (let masque = 0; masque < 16; masque += 1) {
+        const contraintes = {
+          separerAppartenances: (masque & 1) !== 0,
+          nouveauxVoisins: (masque & 2) !== 0,
+          nouvelleTable: (masque & 4) !== 0,
+          varierAppartenances: (masque & 8) !== 0,
+        };
+        for (const nom of REGISTRE) for (const valeur of valeursQuiClassent(nom, contraintes, mode)) valeurs.add(valeur);
+      }
+    }
+    assert.equal(valeurs.size, 10);
+    for (const valeur of valeurs) assert.ok(noms.has(colonneDeValeur(valeur)), valeur);
+    assert.equal(colonneDeValeur('rencontresRepeteesChoisies'), 'rencontresRepetees');
+    assert.equal(colonneDeValeur('retoursChoisis'), 'retoursChoisis');
+    assert.equal(colonneDeValeur('redondance'), 'totalRedondance');
+    assert.equal(colonneDeValeur('identifiant'), 'proposition');
+    assert.throws(() => colonneDeValeur('moyenneRencontres'), TypeError);
+    assert.throws(() => colonneDeValeur('rencontresRepetees'), TypeError);
   });
 
   test('a priori inconnu : la phrase nomme le critère sauté et « excédent de collisions » appliqué à sa place ; les critères appliqués désignent toujours leur colonne', () => {
@@ -440,8 +507,9 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.deepEqual(vue.ordre[0], [
       {
         cle: 'propositions.ordre.saute',
-        details: { saute: 'ecartAuPlafondAPrioriMax', applique: [{ nom: 'excedentCollisions', poids: 1 }] },
+        details: { saute: 'ecartAuPlafondAPrioriMax', applique: [{ nom: 'excedentCollisions', poids: 1, valeurs: ['excedentCollisions'] }] },
         critere: null,
+        valeur: null,
         colonne: null,
       },
     ]);
@@ -502,7 +570,7 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     );
   });
 
-  test('les objectifs comptés se nomment à leur palier, en texte : colonneDuCritere rend null pour les critères que le tableau ne porte pas en colonne', () => {
+  test('les objectifs comptés se nomment à leur palier et désignent la colonne des tours hors objectif', () => {
     const vue = tableau(evaluer(generee(aObjectifs(), { graine: 3, nombre: 2, arret: 200 })));
     assert.equal(
       phraseDe(vue.ordre[0]),
@@ -511,12 +579,16 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
         "puis l'identifiant croissant.",
     );
     const horsObjectif = vue.ordre[0].find(({ critere }) => critere === 'toursHorsObjectif');
-    assert.deepEqual(horsObjectif, { cle: 'moteur.critere.toursHorsObjectif', details: {}, critere: 'toursHorsObjectif', colonne: null });
-    assert.equal(colonneDuCritere('toursHorsObjectif'), null);
-    assert.equal(colonneDuCritere('animateursNonRencontres'), null);
+    assert.deepEqual(horsObjectif, {
+      cle: 'moteur.valeur.toursHorsObjectif',
+      details: {},
+      critere: 'toursHorsObjectif',
+      valeur: 'toursHorsObjectif',
+      colonne: 'toursHorsObjectif',
+    });
   });
 
-  test('sous un ordre réglé, la phrase suit les paliers, aplatis ; a priori inconnu, le palier qui suit l’écart prend sa place, nommé en entier', () => {
+  test('sous un ordre réglé, la phrase dit les paliers ; a priori inconnu, le palier qui suit l’écart prend sa place, nommé en entier', () => {
     const priorites = [
       [e('toursHorsObjectif')],
       [e('collisionsCumulees')],
@@ -529,13 +601,16 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
     assert.equal(
       phraseDe(tableau(evaluer(charge)).ordre[0]),
       "Ordre du classement, chaque critère au plus faible d'abord : tours hors objectif, puis collisions cumulées, " +
-        "puis écart au plafond a priori, puis excédent de collisions, puis redondance d'appartenance, " +
+        "puis écart au plafond a priori, puis ensemble, excédent de collisions (poids 1), redondance d'appartenance (poids 2), " +
         "puis rencontres répétées, puis l'identifiant croissant.",
     );
     const inconnu = tableau(evaluer(charge, { plafondsAPriori: null }));
     assert.deepEqual(inconnu.ordre[0][0].details, {
       saute: 'ecartAuPlafondAPrioriMax',
-      applique: [{ nom: 'excedentCollisions', poids: 1 }, { nom: 'redondance', poids: 2 }],
+      applique: [
+        { nom: 'excedentCollisions', poids: 1, valeurs: ['excedentCollisions'] },
+        { nom: 'redondance', poids: 2, valeurs: ['redondance'] },
+      ],
     });
     assert.equal(
       phraseDe(inconnu.ordre[0]),
@@ -543,6 +618,251 @@ describe('tableau : l’ordre écrit (§ 5.7, § 17 point 4)', () => {
         "Appliqué à sa place : ensemble, excédent de collisions (poids 1), redondance d'appartenance (poids 2).",
     );
     assert.ok(!phraseDe(inconnu.ordre[1]).includes('écart au plafond a priori'));
+  });
+});
+
+describe('tableau : la phrase dit les paliers et les valeurs appliquées (§ 5.7, A11)', () => {
+  const phraseDe = (morceaux) => morceaux.map(({ cle, details }) => t(cle, details)).join('');
+  const designes = (morceaux) => morceaux.filter(({ colonne }) => colonne !== null).map(({ critere, valeur, colonne }) => [critere, valeur, colonne]);
+  const e = (critere, poids = 1) => ({ critere, poids });
+  const DEBUT = "Ordre du classement, chaque critère au plus faible d'abord : ";
+
+  test('« nouvelle table » cochée seule : le palier des rencontres répétées se nomme « retours » et désigne la colonne des retours choisis', () => {
+    const charge = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    for (const cle of ['separerAppartenances', 'nouveauxVoisins', 'varierAppartenances']) charge.reglages[cle] = false;
+    const vue = tableau(evaluer(charge));
+    assert.equal(phraseDe(vue.ordre[0]), `${DEBUT}écart au plafond a priori, puis retours, puis l'identifiant croissant.`);
+    assert.deepEqual(designes(vue.ordre[0]), [
+      ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
+      ['rencontresRepetees', 'retoursChoisis', 'retoursChoisis'],
+      ['identifiant', 'identifiant', 'proposition'],
+    ]);
+  });
+
+  test('a priori inconnu, le critère sauté : le palier appliqué à sa place se nomme par ses valeurs — « retours » sous « nouvelle table » seule, les deux valeurs sous « chacun au moins une fois »', () => {
+    const PHRASE = 'Critère sauté, faute de plafond a priori par personne : écart au plafond a priori. Appliqué à sa place : ';
+    const seule = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    for (const cle of ['separerAppartenances', 'nouveauxVoisins', 'varierAppartenances']) seule.reglages[cle] = false;
+    const [saute] = tableau(evaluer(seule, { plafondsAPriori: null })).ordre[0];
+    assert.equal(t(saute.cle, saute.details), `${PHRASE}retours.`);
+    const priorites = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('toursHorsObjectif')],
+      [e('excedentCollisions')],
+      [e('collisionsCumulees')],
+      [e('rencontresRepetees')],
+      [e('redondance')],
+      [e('animateursNonRencontres')],
+    ];
+    const chacun = generee(petiteAObjectifs({ modeObjectifs: 'chacun', priorites }), { graine: 3, nombre: 2, arret: 200 });
+    const [sauteChacun] = tableau(evaluer(chacun, { plafondsAPriori: null })).ordre[0];
+    assert.equal(t(sauteChacun.cle, sauteChacun.details), `${PHRASE}personnes jamais servies, puis tours hors objectif.`);
+  });
+
+  test('« chacun au moins une fois » : « personnes jamais servies, puis tours hors objectif », deux noms du même critère, chacun sa colonne', () => {
+    const vue = tableau(evaluer(generee(petiteAObjectifs({ modeObjectifs: 'chacun' }), { graine: 3, nombre: 2, arret: 200 })));
+    assert.equal(
+      phraseDe(vue.ordre[0]),
+      `${DEBUT}écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, ` +
+        "puis personnes jamais servies, puis tours hors objectif, puis rencontres répétées, puis redondance d'appartenance, " +
+        "puis l'identifiant croissant.",
+    );
+    assert.deepEqual(
+      designes(vue.ordre[0]).filter(([critere]) => critere === 'toursHorsObjectif'),
+      [
+        ['toursHorsObjectif', 'jamaisServies', 'jamaisServies'],
+        ['toursHorsObjectif', 'toursHorsObjectif', 'toursHorsObjectif'],
+      ],
+    );
+  });
+
+  test('« l’équité d’abord » : « plus de tours hors objectif d’une personne, puis tours hors objectif », chacun sa colonne', () => {
+    const vue = tableau(evaluer(generee(petiteAObjectifs({ modeObjectifs: 'minimum' }), { graine: 3, nombre: 2, arret: 200 })));
+    assert.ok(
+      phraseDe(vue.ordre[0]).includes("puis collisions cumulées, puis plus de tours hors objectif d'une personne, puis tours hors objectif, puis rencontres répétées"),
+      phraseDe(vue.ordre[0]),
+    );
+    assert.deepEqual(
+      designes(vue.ordre[0]).filter(([critere]) => critere === 'toursHorsObjectif'),
+      [
+        ['toursHorsObjectif', 'horsObjectifMax', 'horsObjectifMax'],
+        ['toursHorsObjectif', 'toursHorsObjectif', 'toursHorsObjectif'],
+      ],
+    );
+  });
+
+  test('un palier partagé : « ensemble, », puis chaque nom suivi de son poids ; chaque nom désigne sa colonne, les poids restent du texte', () => {
+    const charge = structuredClone(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    charge.reglages.priorites = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('excedentCollisions', 3), e('redondance', 2)],
+      [e('collisionsCumulees')],
+      [e('toursHorsObjectif')],
+      [e('rencontresRepetees')],
+      [e('animateursNonRencontres')],
+    ];
+    const [morceaux] = tableau(evaluer(charge)).ordre;
+    assert.equal(
+      phraseDe(morceaux),
+      `${DEBUT}écart au plafond a priori, puis ensemble, excédent de collisions (poids 3), redondance d'appartenance (poids 2), ` +
+        "puis collisions cumulées, puis rencontres répétées, puis l'identifiant croissant.",
+    );
+    const debut = morceaux.findIndex(({ cle }) => cle === 'propositions.ordre.ensemble');
+    assert.deepEqual(morceaux.slice(debut, debut + 5), [
+      { cle: 'propositions.ordre.ensemble', details: {}, critere: null, valeur: null, colonne: null },
+      { cle: 'moteur.valeur.excedentCollisions', details: {}, critere: 'excedentCollisions', valeur: 'excedentCollisions', colonne: 'excedentCollisions' },
+      { cle: 'propositions.ordre.poids', details: { poids: 3 }, critere: null, valeur: null, colonne: null },
+      { cle: 'propositions.ordre.virgule', details: {}, critere: null, valeur: null, colonne: null },
+      { cle: 'moteur.valeur.redondance', details: {}, critere: 'redondance', valeur: 'redondance', colonne: 'totalRedondance' },
+    ]);
+  });
+
+  test('les animateurs comptés : « animateurs non rencontrés » à leur palier, qui désigne sa colonne', () => {
+    const charge = structuredClone(chargeDemo('grande'));
+    charge.reglages.rencontrerAnimateurs = true;
+    const vue = tableau(evaluer(generee(charge, { graine: 1, nombre: 1, arret: 2000 })));
+    assert.ok(phraseDe(vue.ordre[0]).includes("puis rencontres répétées, puis animateurs non rencontrés, puis redondance d'appartenance"), phraseDe(vue.ordre[0]));
+    assert.deepEqual(
+      designes(vue.ordre[0]).filter(([critere]) => critere === 'animateursNonRencontres'),
+      [['animateursNonRencontres', 'animateursNonRencontres', 'animateursNonRencontres']],
+    );
+  });
+
+  test('chaque nom de la phrase désigne une colonne présente du tableau, et un seul : sous chaque mode, chaque combinaison des cases, a priori connu ou inconnu', () => {
+    const base = avecPlans(petiteAObjectifs(), PLANS_CONFLIT);
+    let vues = 0;
+    for (const mode of MODES_OBJECTIFS) {
+      for (let masque = 0; masque < 16; masque += 1) {
+        const charge = structuredClone(base);
+        if (mode !== 'places') charge.reglages.modeObjectifs = mode;
+        ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances'].forEach((cle, rang) => {
+          charge.reglages[cle] = (masque & (1 << rang)) !== 0;
+        });
+        for (const options of [{}, { plafondsAPriori: null }]) {
+          const vue = tableau(evaluer(charge, options));
+          const presentes = new Set(vue.colonnes.map(({ nom }) => nom));
+          const designees = vue.ordre.flat().filter(({ colonne }) => colonne !== null);
+          assert.ok(designees.length >= 1);
+          for (const { valeur, colonne } of designees) assert.ok(presentes.has(colonne), `${mode} ${masque} ${valeur} → ${colonne}`);
+          assert.equal(new Set(designees.map(({ colonne }) => colonne)).size, designees.length, `${mode} ${masque}`);
+          vues += 1;
+        }
+      }
+    }
+    assert.equal(vues, 96);
+  });
+});
+
+describe('tableau : le sixième groupe, les objectifs des tables et les animateurs (A9, A11)', () => {
+  const noms = (vue) => vue.colonnes.map(({ nom }) => nom);
+  const duGroupe = (vue) => vue.groupes.find(({ cle }) => cle === 'propositions.groupe.objectifs')?.colonnes ?? null;
+  const sansSixieme = (vue) => SIXIEME.every((nom) => !noms(vue).includes(nom));
+
+  // Les colonnes de chaque ligne comparable et du retenu suivent celles de la
+  // vue : les mesures seules, sans le rang, la proposition, les imposés ni
+  // les commandes.
+  function exigerCellulesAlignees(vue) {
+    const mesures = noms(vue).filter((nom) => !['rang', 'proposition', 'imposes', 'commandes'].includes(nom));
+    assert.equal(vue.etendueRaisons, mesures.length + 1);
+    for (const ligne of [...vue.lignes, ...(vue.retenu?.comparable ? [vue.retenu] : [])]) {
+      assert.deepEqual(ligne.cellules.map(({ colonne }) => colonne), mesures, String(ligne.id));
+    }
+  }
+
+  test('sans objectif ni case des animateurs : aucune colonne du groupe ; les vingt et une colonnes et les cinq groupes d’avant', () => {
+    const vue = tableau(evaluer(generee(chargeDemo('petite-conflit'), { graine: 3, nombre: 2, arret: 200 })));
+    assert.deepEqual(noms(vue), COLONNES_PAR_DEFAUT);
+    assert.equal(duGroupe(vue), null);
+    assert.deepEqual(
+      vue.groupes.filter(({ cle }) => cle !== null).map(({ cle }) => cle),
+      ['rencontres', 'collisions', 'repetitions', 'diversite', 'manque'].map((nom) => `propositions.groupe.${nom}`),
+    );
+    assert.deepEqual(vue.groupes, GROUPES_COLONNES.filter(({ colonnes }) => !SIXIEME.includes(colonnes[0])));
+    assert.equal(vue.etendueRaisons, 18);
+    exigerCellulesAlignees(vue);
+  });
+
+  test('« le plus de places servies » : les tours hors objectif et le minimum des tours selon l’objectif, après le manque et avant le certificat ; ni les personnes jamais servies ni le plus de tours hors objectif d’une personne', () => {
+    let charge = generee(petiteAObjectifs(), { graine: 3, nombre: 2, arret: 200 });
+    charge = executer(charge, 'retenirProposition', { id: 2 });
+    const table = evaluer(charge);
+    const vue = tableau(table);
+    assert.deepEqual(duGroupe(vue), ['toursHorsObjectif', 'toursSelonObjectif']);
+    assert.ok(!noms(vue).includes('jamaisServies'));
+    assert.ok(!noms(vue).includes('horsObjectifMax'));
+    assert.deepEqual(noms(vue).slice(16, 21), ['ecartItineraireMax', 'ecartAuPlafondAPriori', 'toursHorsObjectif', 'toursSelonObjectif', 'certificat']);
+    exigerCellulesAlignees(vue);
+    const lignes = [...vue.lignes.map((ligne, rang) => [ligne, table.propositions[rang]]), [vue.retenu, table.retenu]];
+    for (const [ligne, source] of lignes) {
+      assert.equal(cellule(ligne, 'toursHorsObjectif').valeur, source.mesures.objectifs.horsObjectif);
+      assert.equal(cellule(ligne, 'toursSelonObjectif').valeur, source.mesures.objectifs.agregat.tous.min);
+      assert.equal(cellule(ligne, 'toursHorsObjectif').cle, null);
+    }
+  });
+
+  test('« chacun au moins une fois » : les personnes jamais servies devant les deux ; « l’équité d’abord » : le plus de tours hors objectif d’une personne', () => {
+    for (const [mode, premiere, lire] of [
+      ['chacun', 'jamaisServies', (objectifs) => objectifs.jamaisServies],
+      ['minimum', 'horsObjectifMax', (objectifs) => objectifs.horsObjectifMax],
+    ]) {
+      const table = evaluer(generee(petiteAObjectifs({ modeObjectifs: mode }), { graine: 3, nombre: 2, arret: 200 }));
+      const vue = tableau(table);
+      assert.deepEqual(duGroupe(vue), [premiere, 'toursHorsObjectif', 'toursSelonObjectif'], mode);
+      exigerCellulesAlignees(vue);
+      vue.lignes.forEach((ligne, rang) => assert.equal(cellule(ligne, premiere).valeur, lire(table.propositions[rang].mesures.objectifs), mode));
+    }
+  });
+
+  test('critère décoché, ou sans objet faute de personne qui corresponde : aucune colonne du groupe', () => {
+    const decoche = tableau(evaluer(generee(petiteAObjectifs({ respecterObjectifs: false, modeObjectifs: 'chacun' }), { graine: 3, nombre: 2, arret: 200 })));
+    assert.ok(sansSixieme(decoche), noms(decoche).join(', '));
+    assert.equal(duGroupe(decoche), null);
+    exigerCellulesAlignees(decoche);
+    const orpheline = petiteAObjectifs({ modeObjectifs: 'chacun' });
+    for (const participant of orpheline.participants) delete participant.etiquettes;
+    const table = evaluer(generee(orpheline, { graine: 3, nombre: 2, arret: 200 }));
+    assert.equal(table.criteres.find(({ nom }) => nom === 'toursHorsObjectif').sansObjet, true);
+    const vue = tableau(table);
+    assert.ok(sansSixieme(vue), noms(vue).join(', '));
+    assert.deepEqual(noms(vue), COLONNES_PAR_DEFAUT);
+  });
+
+  test('la case des animateurs cochée sur la grande : le minimum des animateurs rencontrés et les animateurs non rencontrés ; décochée, rien', () => {
+    const charge = structuredClone(chargeDemo('grande'));
+    charge.reglages.rencontrerAnimateurs = true;
+    const table = structuredClone(evaluer(generee(charge, { graine: 1, nombre: 1, arret: 2000 })));
+    // Trois minimums distincts : la colonne lit celui de toutes les
+    // personnes qui peuvent rencontrer un animateur, jamais celui d'une
+    // population.
+    const { animateurs } = table.propositions[0].mesures;
+    animateurs.agregat = { tous: { min: 0 }, mobiles: { min: 2 }, ancres: { min: 1 } };
+    const vue = tableau(table);
+    assert.deepEqual(duGroupe(vue), ['animateursRencontres', 'animateursNonRencontres']);
+    exigerCellulesAlignees(vue);
+    const [ligne] = vue.lignes;
+    assert.equal(cellule(ligne, 'animateursRencontres').valeur, 0);
+    assert.equal(cellule(ligne, 'animateursNonRencontres').valeur, animateurs.nonRencontres);
+    const sans = tableau(evaluer(generee(chargeDemo('grande'), { graine: 1, nombre: 1, arret: 2000 })));
+    assert.ok(sansSixieme(sans));
+  });
+
+  test('le mode se lit dans les valeurs de l’état des critères, jamais recalculé ; une mesure absente s’écrit « — » (A9)', () => {
+    const table = structuredClone(evaluer(generee(petiteAObjectifs(), { graine: 3, nombre: 2, arret: 200 })));
+    table.criteres.find(({ nom }) => nom === 'toursHorsObjectif').valeurs = ['horsObjectifMax', 'toursHorsObjectif'];
+    table.propositions[0].mesures.objectifs = null;
+    // Trois minimums distincts sur la seconde : la colonne lit celui de
+    // toutes les personnes concernées, jamais celui d'une population.
+    const servie = table.propositions[1];
+    servie.mesures.objectifs.agregat = { tous: { min: 0 }, mobiles: { min: 2 }, ancres: { min: 1 } };
+    const vue = tableau(table);
+    assert.equal(cellule(vue.lignes.find(({ id }) => id === servie.id), 'toursSelonObjectif').valeur, 0);
+    assert.deepEqual(duGroupe(vue), ['horsObjectifMax', 'toursHorsObjectif', 'toursSelonObjectif']);
+    for (const nom of ['horsObjectifMax', 'toursHorsObjectif', 'toursSelonObjectif']) {
+      const vide = cellule(vue.lignes[0], nom);
+      assert.deepEqual([vide.valeur, vide.cle], [null, 'format.vide'], nom);
+      assert.equal(texte(vide), '\u{2014}', nom);
+      assert.equal(typeof cellule(vue.lignes[1], nom).valeur, 'number', nom);
+    }
   });
 });
 
@@ -646,7 +966,7 @@ describe('tableau : le retenu et les placements hors classement (§ 9, § 12.6)'
     // imposés d'une ligne comparable.
     const [comparable] = vue.lignes;
     assert.equal(vue.etendueRaisons, comparable.cellules.length + 1);
-    assert.equal(vue.etendueRaisons, COLONNES.length - 3);
+    assert.equal(vue.etendueRaisons, vue.colonnes.length - 3);
   });
 
   test('une exclusion et un ajout, à effectif égal : hors classement aussi', () => {
@@ -855,6 +1175,12 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
     ['effectifManque', 'bas'],
     ['ecartItineraireMax', 'bas'],
     ['ecartAuPlafondAPriori', 'bas'],
+    ['jamaisServies', 'bas'],
+    ['horsObjectifMax', 'bas'],
+    ['toursHorsObjectif', 'bas'],
+    ['toursSelonObjectif', 'grand'],
+    ['animateursRencontres', 'grand'],
+    ['animateursNonRencontres', 'bas'],
     ['certificat', null],
     ['imposes', null],
     ['commandes', null],
@@ -868,7 +1194,7 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
   const phrases = (texte) => texte.split(/(?<=\.)\s+(?=[\p{Lu}\u{00AB}])/u);
 
   test('chaque colonne de COLONNES, sans exception, porte la clé de son explication : elle existe, compte une à trois phrases, et diffère de l’en-tête et des autres explications', () => {
-    assert.equal(COLONNES.length, 21);
+    assert.equal(COLONNES.length, 27);
     assert.deepEqual(COLONNES.map(({ nom }) => nom), [...SENS.keys()]);
     const textes = new Set();
     for (const { nom, cle, explication } of COLONNES) {
@@ -896,24 +1222,47 @@ describe('les explications des colonnes et des critères (infobulles, § 5.4, §
     }
   });
 
-  test('chaque critère, et l’identifiant croissant, partage l’explication de la colonne qu’il désigne ; seule l’explication d’un critère le dit critère du classement', () => {
-    const criteres = new Set(CRITERES.map(colonneDuCritere));
-    assert.equal(criteres.size, 5);
+  test('chaque valeur qui classe, et l’identifiant croissant, partage l’explication de la colonne qu’elle désigne ; seule l’explication d’une valeur qui classe la dit critère du classement', () => {
+    const valeurs = ['ecartAuPlafondAPrioriMax', 'excedentCollisions', 'collisionsCumulees', 'jamaisServies', 'horsObjectifMax']
+      .concat(['toursHorsObjectif', 'rencontresRepeteesChoisies', 'retoursChoisis', 'animateursNonRencontres', 'redondance']);
+    const criteres = new Set(valeurs.map(colonneDeValeur));
+    assert.equal(criteres.size, 10);
     for (const { nom } of COLONNES) {
       const texte = t(explicationDeColonne(nom));
       if (criteres.has(nom)) assert.match(texte, /critère du classement/i, nom);
       else assert.doesNotMatch(texte, /(?<!pas un )critère du classement/i, nom);
     }
-    assert.match(t(explicationDeColonne(colonneDuCritere('identifiant'))), /départage/, 'identifiant');
+    assert.match(t(explicationDeColonne(colonneDeValeur('identifiant'))), /départage/, 'identifiant');
     for (const options of [{}, { plafondsAPriori: null }]) {
       const vue = tableau(evaluer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), options));
       const designants = vue.ordre.flat().filter(({ colonne }) => colonne !== null);
       assert.ok(designants.length >= 5);
-      for (const { critere, colonne } of designants) {
-        assert.equal(explicationDeColonne(colonne), explicationDeColonne(colonneDuCritere(critere)), critere);
-        assert.ok(t(explicationDeColonne(colonne)).length > 0, critere);
+      for (const { valeur, colonne } of designants) {
+        assert.equal(explicationDeColonne(colonne), explicationDeColonne(colonneDeValeur(valeur)), valeur);
+        assert.ok(t(explicationDeColonne(colonne)).length > 0, valeur);
       }
     }
+  });
+
+  test('l’explication d’une colonne que désigne une valeur qui classe ne fixe aucun rang : la place vient de l’ordre écrit au-dessus du tableau', () => {
+    const valeurs = new Set();
+    for (const mode of MODES_OBJECTIFS) {
+      for (const nouveauxVoisins of [true, false]) {
+        for (const nom of REGISTRE) for (const valeur of valeursQuiClassent(nom, { nouveauxVoisins }, mode)) valeurs.add(valeur);
+      }
+    }
+    assert.equal(valeurs.size, 10);
+    for (const valeur of valeurs) {
+      const texte = t(explicationDeColonne(colonneDeValeur(valeur)));
+      assert.doesNotMatch(texte, /critère du classement (?:après|avant)|(?:premier|dernier) critère/i, valeur);
+      assert.match(texte, /l'ordre écrit au-dessus du tableau/, valeur);
+    }
+  });
+
+  test('l’excédent de collisions dit son rang par défaut et pourquoi : passer la soirée avec le même collègue est pire que croiser six collègues une fois (§ 5.4)', () => {
+    const texte = t(explicationDeColonne('excedentCollisions'));
+    assert.match(texte, /par défaut avant les collisions cumulées/);
+    assert.match(texte, /le même collègue est pire que croiser six collègues une fois/);
   });
 
   test('explicationDeColonne lève pour un nom qui n’est pas une colonne', () => {
@@ -951,7 +1300,7 @@ describe('GROUPES_COLONNES : les en-têtes groupés du tableau', () => {
     assert.deepEqual(seules.map(({ colonnes }) => colonnes), [['rang'], ['proposition'], ['certificat'], ['imposes'], ['commandes']]);
   });
 
-  test('cinq groupes de mesures voisines, chacun sous une clé « propositions.groupe. » qui a son texte, distinct des en-têtes de colonne', () => {
+  test('six groupes de mesures voisines, chacun sous une clé « propositions.groupe. » qui a son texte, distinct des en-têtes de colonne', () => {
     const groupes = GROUPES_COLONNES.filter(({ cle }) => cle !== null);
     assert.deepEqual(
       groupes.map(({ colonnes }) => colonnes),
@@ -961,8 +1310,10 @@ describe('GROUPES_COLONNES : les en-têtes groupés du tableau', () => {
         ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis'],
         ['appartenancesVues', 'totalRedondance', 'diversite'],
         ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori'],
+        SIXIEME,
       ],
     );
+    assert.equal(groupes.at(-1).cle, 'propositions.groupe.objectifs');
     const enTetes = new Set(COLONNES.map(({ cle }) => t(cle)));
     for (const { cle } of groupes) {
       assert.match(cle, /^propositions\.groupe\.[a-z]+$/u);

@@ -539,7 +539,11 @@ réglage du poste, pour la séance, automatique par défaut (étape 9).
 | Nouveaux voisins à chaque tour | Génération | cochée |
 | Nouvelle table à chaque tour | Génération | cochée |
 | Varier les appartenances rencontrées | Génération | cochée |
+| Respecter les objectifs des tables | Génération | cochée |
+| Rencontrer le plus d'animateurs différents | Génération | décochée |
 | Attribuer les sièges | Génération | décochée |
+| Objectifs des tables : chercher d'abord | Génération | le plus de places servies |
+| Ordre des priorités | Génération | écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, puis tours hors objectif, puis rencontres répétées et retours, puis animateurs non rencontrés, puis redondance d'appartenance |
 | Cible de la somme de redondance | Propositions | 1 000 |
 
 <!-- engendre:fin reglages -->

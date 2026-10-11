@@ -1,17 +1,17 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// L'en-tête de la liste des participants : la ligne de comptes de la carte
-// et la légende des appartenances, chacune lue sur la liste entière, exclues
-// comprises, et le texte que les libellés en composent. Les noms d'épreuve
-// sont inventés.
+// L'en-tête de la liste des participants : la ligne de comptes de la carte,
+// la légende des appartenances et celle des étiquettes, chacune lue sur la
+// liste entière, exclues comprises, et le texte que les libellés en
+// composent. Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { RANGS_APPARTENANCE, teintesAppartenances } from '../appartenances.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { comptesEntete, legendeAppartenances } from './entete.js';
+import { comptesEntete, legendeAppartenances, legendeEtiquettes } from './entete.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
@@ -103,5 +103,52 @@ describe('legendeAppartenances : la légende en pastilles, avec leur compte', ()
   test('le libellé d’un élément : le nom, puis le compte', () => {
     assert.equal(t('participants.legende.element', { nom: 'Atelier Pivoine', compte: 4 }), 'Atelier Pivoine \u{00B7} 4');
     assert.equal(t('participants.legende.titre'), 'Appartenances');
+  });
+});
+
+// Une personne qui porte des étiquettes ; sans liste, le champ est absent,
+// comme dans la charge.
+const etiquetee = (id, etiquettes, exclu = false) => {
+  const p = personne(id, null, exclu);
+  return etiquettes === undefined ? p : { ...p, etiquettes };
+};
+
+describe('legendeEtiquettes : la légende des étiquettes, avec leur compte (§ 10.2)', () => {
+  test('chaque étiquette portée, par sa clé normalisée puis par points de code, avec le nombre de personnes qui la portent, exclues comprises', () => {
+    const liste = [
+      etiquetee(1, ['Montréal', 'finance']),
+      etiquetee(2, ['finance']),
+      etiquetee(3, ['bénévole', 'finance'], true),
+      etiquetee(4, undefined),
+      etiquetee(5, ['Finance']),
+    ];
+    assert.deepEqual(legendeEtiquettes(liste), [
+      { nom: 'bénévole', compte: 1 },
+      { nom: 'Finance', compte: 1 },
+      { nom: 'finance', compte: 3 },
+      { nom: 'Montréal', compte: 1 },
+    ]);
+  });
+
+  test('sans étiquette portée, une légende vide : la section ne la montre pas', () => {
+    assert.deepEqual(legendeEtiquettes([]), []);
+    assert.deepEqual(legendeEtiquettes([etiquetee(1, undefined), etiquetee(2, undefined, true)]), []);
+  });
+
+  test('une étiquette égale au nom d’une appartenance reste une étiquette, et l’appartenance ne s’y compte pas', () => {
+    const liste = [{ ...etiquetee(1, ['Atelier Pivoine']), appartenance: 'Atelier Pivoine' }, personne(2, 'Atelier Pivoine')];
+    assert.deepEqual(legendeEtiquettes(liste), [{ nom: 'Atelier Pivoine', compte: 1 }]);
+    assert.deepEqual(legendeAppartenances(liste, teintesAppartenances(liste)), [{ nom: 'Atelier Pivoine', rang: 1, compte: 2 }]);
+  });
+
+  test('l’ordre ne dépend pas de l’ordre de la liste : un filtre ou un tri ne le change pas', () => {
+    const liste = [etiquetee(1, ['ressources humaines']), etiquetee(2, ['bénévole', 'Montréal']), etiquetee(3, ['finance'])];
+    assert.deepEqual(legendeEtiquettes([...liste].reverse()), legendeEtiquettes(liste));
+  });
+
+  test('le titre de la légende des étiquettes ; chaque élément, le nom puis le compte, comme les appartenances', () => {
+    assert.equal(t('participants.legendeEtiquettes.titre'), 'Étiquettes');
+    assert.notEqual(t('participants.legendeEtiquettes.titre'), t('participants.legende.titre'));
+    assert.equal(t('participants.legende.element', { nom: 'finance', compte: 3 }), 'finance \u{00B7} 3');
   });
 });

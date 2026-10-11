@@ -7,32 +7,49 @@
 // Chaque en-tête de colonne nomme son unité (§ 5.4) : collisions cumulées,
 // paires distinctes et excédent ne se confondent jamais. Des rencontres, le
 // tableau ne porte que le minimum, sur les trois populations du § 5.4 ; la
-// moyenne n'y paraît pas. La phrase de l'ordre compose les noms des critères
-// par leurs clés moteur.critere.<nom>, dans l'ordre reçu, puis l'identifiant
-// croissant, qui départage deux propositions égales sur tous (§ 5.7).
+// moyenne n'y paraît pas. La phrase de l'ordre nomme les paliers appliqués,
+// chaque valeur qu'un palier applique par sa clé moteur.valeur.<valeur>,
+// puis l'identifiant croissant, qui départage deux propositions égales sur
+// tous (§ 5.7, A11).
 import { compte } from '../../application/libelles/aides.js';
 
 // Le nom d'un critère du classement, celui de la table du moteur.
 const critere = (nom, texte) => texte(`moteur.critere.${nom}`);
 
-// Un palier, ses critères {nom, poids} : le nom du critère seul ; pour un
-// palier partagé, « ensemble, » puis chaque critère suivi de son poids.
+// Les noms d'un critère appliqué, {valeurs} : chaque valeur qu'il classe,
+// séparées par « puis ».
+const valeursDe = ({ valeurs }, texte) => valeurs.map((valeur) => texte(`moteur.valeur.${valeur}`)).join(texte('propositions.ordre.separateur'));
+
+// Un palier, ses critères {nom, poids, valeurs} : les noms du critère seul ;
+// pour un palier partagé, « ensemble, » puis chaque critère suivi de son
+// poids. Les mêmes morceaux que la phrase de l'ordre (palierEnMorceaux,
+// propositions/modele.js).
 const palier = (criteres, texte) =>
   criteres.length === 1
-    ? critere(criteres[0].nom, texte)
-    : `${texte('moteur.palier.ensemble')}, ` +
-      criteres.map(({ nom, poids }) => `${critere(nom, texte)} (${texte('moteur.palier.poids', { poids })})`).join(', ');
+    ? valeursDe(criteres[0], texte)
+    : texte('propositions.ordre.ensemble') +
+      criteres
+        .map((applique) => `${valeursDe(applique, texte)}${texte('propositions.ordre.poids', { poids: applique.poids })}`)
+        .join(texte('propositions.ordre.virgule'));
 
 export const TABLE = new Map([
   // --- La section (§ 5.7) ------------------------------------------------------
   ['propositions.tableau.titre', 'Propositions classées'],
   ['propositions.aucune', "Aucune proposition : la génération en produit, et chaque génération s'ajoute aux précédentes."],
   // La phrase des critères se compose de morceaux, chacun sa clé : le début,
-  // les noms, leur séparateur, l'identifiant croissant et la fin. L'affichage
-  // les met bout à bout, chaque nom dans son propre élément ;
-  // propositions.ordre.criteres les assemble en une seule chaîne, la même.
+  // les noms des valeurs appliquées, le séparateur des paliers, les mots d'un
+  // palier partagé — « ensemble, », le poids qui suit chaque critère, la
+  // virgule entre deux critères —, l'identifiant croissant et la fin.
+  // L'affichage les met bout à bout, chaque nom dans son propre élément.
+  // propositions.ordre.criteres assemble en une seule chaîne celle de l'ordre
+  // fixe de référence, sur la liste de ses critères : sous l'ordre par
+  // défaut, les quatre cases cochées, sans objectif ni case des animateurs,
+  // la phrase affichée l'égale mot pour mot.
   ['propositions.ordre.debut', "Ordre du classement, chaque critère au plus faible d'abord : "],
   ['propositions.ordre.separateur', ', puis '],
+  ['propositions.ordre.ensemble', (_, texte) => `${texte('moteur.palier.ensemble')}, `],
+  ['propositions.ordre.poids', ({ poids }, texte) => ` (${texte('moteur.palier.poids', { poids })})`],
+  ['propositions.ordre.virgule', ', '],
   ['propositions.ordre.identifiant', "l'identifiant croissant"],
   ['propositions.ordre.fin', '.'],
   [
@@ -43,9 +60,9 @@ export const TABLE = new Map([
       texte('propositions.ordre.fin'),
   ],
   // Le critère sauté, puis le palier appliqué à sa place : un critère seul
-  // s'y nomme ; un palier partagé se lit « ensemble, » suivi de chaque
-  // critère et de son poids. applique null, aucun palier ne prend sa place,
-  // et la seconde phrase se tait.
+  // s'y nomme par les valeurs qu'il applique ; un palier partagé se lit
+  // « ensemble, » suivi de chaque critère et de son poids. applique null,
+  // aucun palier ne prend sa place, et la seconde phrase se tait.
   [
     'propositions.ordre.saute',
     ({ saute, applique }, texte) =>
@@ -88,25 +105,36 @@ export const TABLE = new Map([
   ['propositions.colonne.effectifManque', 'Personnes à qui il en manque'],
   ['propositions.colonne.ecartItineraireMax', "Écart d'itinéraire maximal (personnes)"],
   ['propositions.colonne.ecartAuPlafondAPriori', 'Écart au plafond a priori maximal (personnes)'],
+  ['propositions.colonne.jamaisServies', 'Personnes jamais servies par un objectif'],
+  ['propositions.colonne.horsObjectifMax', "Tours hors objectif d'une personne, au plus"],
+  ['propositions.colonne.toursHorsObjectif', 'Tours hors objectif (personne et tour)'],
+  ['propositions.colonne.toursSelonObjectif', "Tours selon l'objectif s(p), minimum"],
+  ['propositions.colonne.animateursRencontres', 'Animateurs rencontrés m(p), minimum'],
+  ['propositions.colonne.animateursNonRencontres', 'Animateurs non rencontrés (personne et animateur)'],
   ['propositions.colonne.certificat', 'Certificat'],
   ['propositions.colonne.imposes', 'Imposé par les réservations'],
   ['propositions.colonne.commandes', 'Commandes'],
 
   // --- Les groupes d'en-têtes, au-dessus des colonnes -------------------------
   // Chaque groupe réunit des colonnes voisines ; les en-têtes de colonne
-  // gardent chacun son unité.
+  // gardent chacun son unité. Le sixième ne paraît que quand le critère des
+  // objectifs ou celui des animateurs compte (A11).
   ['propositions.groupe.rencontres', 'Personnes rencontrées'],
   ['propositions.groupe.collisions', "Collisions d'appartenance"],
   ['propositions.groupe.repetitions', 'Rencontres répétées et retours'],
   ['propositions.groupe.diversite', "Diversité d'appartenance"],
   ['propositions.groupe.manque', 'Manque et plafond a priori'],
+  ['propositions.groupe.objectifs', 'Objectifs des tables et animateurs'],
 
   // --- Les explications, une par colonne (§ 5.4, § 5.5, § 5.7, § 12.10.4) --------
-  // Le texte de l'infobulle d'un en-tête, et celui du nom de critère qui
-  // désigne la colonne dans la phrase de l'ordre : un critère et sa colonne
-  // partagent la clé. Chacune dit ce que la colonne compte, sur quelle
-  // population, et dans quel sens elle sert le mieux quand ce sens existe ;
-  // les termes sont ceux du glossaire du § 5.5.
+  // Le texte de l'infobulle d'un en-tête, et celui du nom de la valeur
+  // appliquée qui désigne la colonne dans la phrase de l'ordre : une valeur
+  // appliquée et sa colonne partagent la clé. Chacune dit ce que la colonne
+  // compte, sur quelle population, et dans quel sens elle sert le mieux quand
+  // ce sens existe ; les termes sont ceux du glossaire du § 5.5. Celle d'une
+  // valeur qui classe ne fixe aucun rang : l'ordre se règle, et sa place se
+  // lit dans la phrase de l'ordre au-dessus du tableau ; un rang par défaut
+  // s'y dit comme tel.
   [
     'propositions.explication.rang',
     "La place de la proposition dans le classement, 1 pour la première, selon l'ordre écrit au-dessus du tableau. " +
@@ -137,7 +165,8 @@ export const TABLE = new Map([
   [
     'propositions.explication.collisionsCumulees',
     'Chaque fois que deux personnes de la même appartenance partagent une table, compté une fois par paire et par tour : ' +
-      "deux collègues ensemble aux quatre tours font 4. Critère du classement après l'excédent, il départage deux " +
+      "deux collègues ensemble aux quatre tours font 4. Critère du classement à la place que lui donne " +
+      "l'ordre écrit au-dessus du tableau ; l'ordre par défaut le lit après l'excédent, pour départager deux " +
       "propositions de même excédent. Plus il est bas, mieux c'est.",
   ],
   [
@@ -148,15 +177,16 @@ export const TABLE = new Map([
   ],
   [
     'propositions.explication.excedentCollisions',
-    'Les retrouvailles entre personnes de la même appartenance au-delà de leur première rencontre, soit les collisions ' +
-      'cumulées moins les paires distinctes : deux collègues ensemble aux quatre tours font 3, six collègues croisés une ' +
-      'fois chacun font 0. Critère du classement avant les collisions cumulées, car passer la soirée avec le même ' +
-      "collègue est pire que croiser six collègues une fois. Plus il est bas, mieux c'est.",
+    'Les retrouvailles entre personnes de même appartenance après leur première rencontre, soit les collisions ' +
+      'cumulées moins les paires distinctes : deux collègues ensemble aux quatre tours font 3. Critère du classement ' +
+      "placé par l'ordre écrit au-dessus du tableau, par défaut avant les collisions cumulées : passer la soirée avec " +
+      "le même collègue est pire que croiser six collègues une fois. Plus il est bas, mieux c'est.",
   ],
   [
     'propositions.explication.rencontresRepetees',
     "Le nombre de paires de personnes réunies à plus d'un tour que le placement a choisies ; celles qu'imposent les " +
-      'réservations sont dans la colonne des imposés. Critère du classement après les collisions cumulées. ' +
+      "réservations sont dans la colonne des imposés. Critère du classement à la place que lui donne l'ordre écrit " +
+      'au-dessus du tableau. ' +
       "Plus il est bas, mieux c'est.",
   ],
   [
@@ -166,9 +196,11 @@ export const TABLE = new Map([
   ],
   [
     'propositions.explication.retoursChoisis',
-    "Le nombre de fois où une personne revient à une table où elle s'est déjà assise, additionné sur toutes les personnes. " +
-      "Seuls comptent les retours que le placement a choisis ; ceux qu'imposent les réservations sont dans la colonne " +
-      "des imposés. Plus il est bas, mieux c'est.",
+    "Le nombre de fois où une personne revient à une table où elle s'est déjà assise, additionné sur toutes les personnes ; " +
+      "seuls comptent les retours que le placement a choisis, ceux qu'imposent les réservations étant dans la colonne " +
+      "des imposés. Critère du classement quand seule « nouvelle table » est cochée, là où l'ordre écrit au-dessus du " +
+      "tableau place les rencontres répétées. " +
+      "Plus il est bas, mieux c'est.",
   ],
   [
     'propositions.explication.appartenancesVues',
@@ -180,7 +212,8 @@ export const TABLE = new Map([
     'propositions.explication.totalRedondance',
     "r(p) : le nombre de personnes que p rencontre et qui ont une appartenance, moins A(p), le nombre d'appartenances " +
       "différentes qu'elles portent ; à 0, aucune appartenance n'est recroisée. La colonne donne la somme sur toutes les " +
-      "personnes, Σ r(p), dernier critère du classement avant le numéro. Plus elle est basse, mieux c'est.",
+      "personnes, Σ r(p), critère du classement à la place que lui donne l'ordre écrit au-dessus du tableau. " +
+      "Plus elle est basse, mieux c'est.",
   ],
   [
     'propositions.explication.diversite',
@@ -209,10 +242,56 @@ export const TABLE = new Map([
   ],
   [
     'propositions.explication.ecartAuPlafondAPriori',
-    "L'écart au plafond a priori d'une personne : son plafond a priori, le plus de rencontres que permettent les " +
+    "Pour chaque personne, son plafond a priori, le plus de rencontres que permettent les " +
       "capacités des tables sur le meilleur itinéraire, moins ses rencontres, soit son manque plus son écart d'itinéraire. " +
-      "La colonne donne le plus grand, premier critère du classement, sauté quand le plafond a priori n'a pas pu être " +
-      "calculé, la cellule écrivant alors « inconnu ». Plus il est bas, mieux c'est.",
+      "La colonne donne le plus grand, critère du classement à sa place dans l'ordre écrit au-dessus du tableau ; " +
+      "sans plafond a priori calculé, il est sauté et la cellule écrit « inconnu ». " +
+      "Plus il est bas, mieux c'est.",
+  ],
+  // Les colonnes des objectifs des tables et des animateurs (A9) : une
+  // personne est concernée par les objectifs quand une table qui lui
+  // correspond peut l'accueillir à un tour au moins, par les animateurs
+  // quand elle peut en rencontrer un là où il anime.
+  [
+    'propositions.explication.jamaisServies',
+    "Les personnes concernées par un objectif de table, celles qui ont au moins un tour possible, que le placement " +
+      "n'assied jamais à une table dont l'objectif leur correspond. Critère du classement sous le mode « chacun au moins " +
+      "une fois », lu avant les tours hors objectif, au palier que l'ordre écrit au-dessus du tableau " +
+      "donne aux objectifs. " +
+      "Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.horsObjectifMax',
+    "Pour chaque personne concernée par un objectif, ses tours possibles moins ses tours selon l'objectif ; la colonne " +
+      "donne le plus grand, celui de la personne la moins servie. Critère du classement sous le mode qui sert d'abord " +
+      "la personne la moins servie, lu avant les tours hors objectif, au palier que l'ordre écrit au-dessus du " +
+      "tableau donne aux objectifs. Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.toursHorsObjectif',
+    "Les couples d'une personne et d'un tour où une table dont l'objectif lui correspond pouvait l'accueillir, mais où " +
+      "le placement l'assied ailleurs, additionnés sur toutes les personnes. Critère du classement quand des objectifs " +
+      "de table peuvent servir quelqu'un, à la place que lui donne l'ordre écrit au-dessus du tableau. " +
+      "Plus il est bas, mieux c'est.",
+  ],
+  [
+    'propositions.explication.toursSelonObjectif',
+    "s(p) : le nombre de tours où p est assis à une table dont l'objectif lui correspond. La colonne donne le plus " +
+      "petit s(p) parmi les personnes concernées, celles qu'une table à objectif peut accueillir à un tour au moins. " +
+      "Plus il est grand, mieux c'est.",
+  ],
+  [
+    'propositions.explication.animateursRencontres',
+    "m(p) : le nombre d'animateurs différents que p rencontre à un tour où ils animent, un animateur revu comptant " +
+      "une fois. La colonne donne le plus petit m(p) parmi les personnes qui peuvent en rencontrer au moins un. " +
+      "Plus il est grand, mieux c'est.",
+  ],
+  [
+    'propositions.explication.animateursNonRencontres',
+    "Pour chaque personne, le nombre d'animateurs qu'elle pouvait rencontrer là où ils animent, selon les tables et " +
+      "les réservations, moins ceux qu'elle rencontre, additionné sur toutes les personnes. Critère du classement quand " +
+      "la case des animateurs est cochée, à la place que lui donne l'ordre écrit au-dessus du tableau. " +
+      "Plus il est bas, mieux c'est.",
   ],
   [
     'propositions.explication.certificat',

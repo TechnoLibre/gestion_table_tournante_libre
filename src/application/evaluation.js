@@ -49,6 +49,11 @@ import { configurationDe } from './configuration.js';
 
 export { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance };
 
+// Les modes des objectifs, le défaut en tête, et les cases qui font compter
+// chaque critère, tels que le registre les tient (contrainte 35) :
+// l'interface, qui n'importe pas le moteur, les lit ici.
+export { CASES, MODES_OBJECTIFS } from '../moteur/criteres.js';
+
 /**
  * @typedef {Object} LigneEvaluation
  * @property {number} id          celui de la proposition ; retenu.proposition pour le retenu

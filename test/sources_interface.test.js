@@ -357,6 +357,12 @@ const PICTOGRAMME = /\p{Extended_Pictographic}/u;
 // remèdes disent qu'un changement « la rend » ou « la rendent évitable ».
 // Ailleurs, « évitable » nommerait le second segment du manque (§ 12.4), que
 // le logiciel n'écrit pas.
+//
+// Le troisième mode des objectifs garde le libellé que l'utilisateur lui a
+// donné, « l'équité d'abord » (D22) : il nomme le minimum d'abord (§ 12.1),
+// jamais un indice d'équité (§ 12.8). La forme exacte s'admet sous la seule
+// clé de ce libellé ; son explication, et tout autre texte, ne l'emploient
+// pas.
 const EXCEPTIONS_DE_CONTENU = [
   {
     mot: 'évitable',
@@ -364,7 +370,16 @@ const EXCEPTIONS_DE_CONTENU = [
     forme: /\bla rend(?:ent)? evitable\b/g,
     nom: 'diagnostic.remede.* « la rend(ent) évitable »',
   },
+  {
+    mot: 'équité',
+    cles: /^generation\.reglage\.modeObjectifs\.minimum$/,
+    forme: /(?<![\p{L}\p{N}])l'equite d'abord(?![\p{L}\p{N}])/gu,
+    nom: "generation.reglage.modeObjectifs.minimum « l'équité d'abord » (D22)",
+  },
 ];
+
+// Les exceptions d'un seul mot, pour une épreuve qui n'éprouve que lui.
+const exceptionsDu = (mot) => EXCEPTIONS_DE_CONTENU.filter((exception) => exception.mot === mot);
 
 // Une chaîne de forme clé — un code, LECTURE_SEULE, ou un libellé,
 // plan.refus.fermer — : une fonction la passe à texte, ou la compare à un
@@ -1326,14 +1341,107 @@ describe('sources de l’interface : le contenu des tables de traduction (§ 5.5
       ['plan.segment', 'la rend évitable'],
       ['diagnostic.remede.inevitable', 'inévitable'],
     ]);
-    assert.deepEqual(releverContenuTables([tables]), [
+    assert.deepEqual(releverContenuTables([tables], () => null, exceptionsDu('évitable')), [
       'diagnostic.remede.autre : évitable « la place devient évitable »',
       'diagnostic.remede.reste : évitable « la rend évitable, part évitable »',
       'diagnostic.titre : évitable « un tabouret la rend évitable »',
       'plan.segment : évitable « la rend évitable »',
     ]);
     const sansRemede = new Map([['diagnostic.remede.un', 'ajouter une table']]);
-    assert.deepEqual(releverContenuTables([sansRemede]), ['exception sans objet : diagnostic.remede.* « la rend(ent) évitable »']);
+    assert.deepEqual(releverContenuTables([sansRemede], () => null, exceptionsDu('évitable')), [
+      'exception sans objet : diagnostic.remede.* « la rend(ent) évitable »',
+    ]);
+  });
+
+  test('rouge : l’exception D22 n’admet « l’équité d’abord » que sous la clé du libellé du troisième mode ; tout autre emploi d’« équité » se relève, l’explication du mode comprise', () => {
+    const tables = new Map([
+      ['generation.reglage.modeObjectifs.minimum', 'l\u{2019}équité d\u{2019}abord'],
+      ['generation.reglage.modeObjectifs.minimum.explication', "l'équité d'abord, puis le total"],
+      ['generation.reglage.modeObjectifs.chacun', "L'ÉQUITÉ D'ABORD"],
+      ['propositions.phrase', "l'équité"],
+      ['diagnostic.remede.un', '2 chaises de plus la rend évitable'],
+    ]);
+    assert.deepEqual(releverContenuTables([tables]), [
+      "generation.reglage.modeObjectifs.chacun : équité « L'ÉQUITÉ D'ABORD »",
+      "generation.reglage.modeObjectifs.minimum.explication : équité « l'équité d'abord, puis le total »",
+      "propositions.phrase : équité « l'équité »",
+    ]);
+    // Sous sa clé, une autre forme du mot se relève encore.
+    const autre = new Map([
+      ['generation.reglage.modeObjectifs.minimum', "l'équité d'abord, une équité"],
+      ['diagnostic.remede.un', 'la rend évitable'],
+    ]);
+    assert.deepEqual(releverContenuTables([autre]), [
+      "generation.reglage.modeObjectifs.minimum : équité « l'équité d'abord, une équité »",
+    ]);
+    const sansMode = new Map([['diagnostic.remede.un', 'la rend évitable']]);
+    assert.deepEqual(releverContenuTables([sansMode]), [
+      "exception sans objet : generation.reglage.modeObjectifs.minimum « l'équité d'abord » (D22)",
+    ]);
+  });
+});
+
+// --- Garde : l'état des critères se lit, il ne se recalcule pas ---------------
+
+// Les sources qui écrivent l'état « décoché » ou « sans objet » d'un critère
+// (§ 5.3, A8) : l'éditeur des priorités, les réglages qui portent le choix du
+// mode, et leur modèle.
+const SOURCES_DE_L_ETAT = [
+  'src/interface/generation/Priorites.svelte',
+  'src/interface/generation/Reglages.svelte',
+  'src/interface/generation/priorites.js',
+];
+
+// Ce que la garde relève d'un « sans objet » recalculé : une variable ou une
+// clé sansObjet qui reçoit une valeur, et chaque lecture des objets de la
+// charge d'où il se déduirait — tables, participants, titres, réservations,
+// objectifs, étiquettes, animations. Ces sources lisent l'état dans la table
+// d'évaluation, qui le tient du moteur (§ 13.2) : aucune n'en a l'emploi. Une
+// lecture est un accès pointé, un accès entre crochets par une chaîne, ou
+// une déstructuration qui nomme l'objet — un motif entre accolades suivi de
+// « = », hors « == » et « => », ou de la parenthèse d'un paramètre. Les
+// commentaires ne calculent rien et se retirent d'abord ; un commentaire de
+// ligne commence en début de ligne ou après un blanc.
+const OBJETS_DE_LA_CHARGE = '(?:tables|participants|titres|reservations|objectifs|etiquettes|anime)';
+function relevesSansObjet(texte) {
+  const source = texte
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/(^|\s)\/\/.*$/gm, ' ');
+  const motifs = [
+    /\bsansObjet\s*(?::|=(?!=))/g,
+    new RegExp(`\\.${OBJETS_DE_LA_CHARGE}\\b`, 'g'),
+    new RegExp(`\\{[^{}]*\\b${OBJETS_DE_LA_CHARGE}\\b[^{}]*\\}\\s*(?:=(?![=>])|\\))`, 'g'),
+    new RegExp(`\\[\\s*(['"\`])${OBJETS_DE_LA_CHARGE}\\1\\s*\\]`, 'g'),
+  ];
+  return motifs.flatMap((motif) => [...source.matchAll(motif)].map(([trouve]) => trouve.replace(/\s+/g, ' ')));
+}
+
+describe('sources de l’interface : l’état des critères, lu dans la table d’évaluation (§ 5.3, § 13.2, A8)', () => {
+  test('rouge : la garde relève un « sans objet » recalculé, et laisse passer une lecture de l’état', () => {
+    assert.deepEqual(relevesSansObjet('const sansObjet = charge.tables.every((t) => t.objectifs === undefined);'), [
+      'sansObjet =',
+      '.tables',
+      '.objectifs',
+    ]);
+    assert.deepEqual(relevesSansObjet('const vide = { coche: true, sansObjet: false };'), ['sansObjet:']);
+    assert.deepEqual(relevesSansObjet('const muet = etat.sansObjet === true; // charge.tables'), []);
+    // Une déstructuration, en déclaration ou en paramètre, et un accès entre
+    // crochets lisent les mêmes objets sans point.
+    const deguise =
+      'const { tables: lesTables } = charge;\n' +
+      "const aucun = $derived(lesTables.every((t) => (t['objectifs'] ?? []).length === 0));\n" +
+      'const compte = ({ participants }) => participants.length;';
+    assert.deepEqual(relevesSansObjet(deguise), ['{ tables: lesTables } =', '{ participants })', "['objectifs']"]);
+    assert.deepEqual(relevesSansObjet("const { table, refus } = evaluation(charge);\nconst etat = etats?.get('tables');"), []);
+  });
+
+  test('l’éditeur des priorités, les réglages et leur modèle ne recalculent pas l’état d’un critère', () => {
+    for (const chemin of SOURCES_DE_L_ETAT) {
+      const source = readFileSync(join(RACINE, chemin), 'utf8');
+      assert.ok(source.includes('etatAffiche'), `${chemin} : l'état ne s'y lit plus, la garde est à revoir`);
+      assert.deepEqual(relevesSansObjet(source), [], chemin);
+    }
   });
 });
 

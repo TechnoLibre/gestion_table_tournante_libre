@@ -156,11 +156,12 @@ export function surchargesPerdues(charge) {
 
 /**
  * Vrai quand le changement de avant à apres tours s'annonce avant d'être
- * appliqué (§ 2.1 étape 5) : il détruit une réservation « tour désigné »
- * au-delà, ou, pour une baisse, il laisse en dérive un placement engendré,
- * entier mais qui porte des tours que l'événement n'a plus. Une hausse ne
- * détruit rien : les placements qu'elle laisse en dérive restent entiers,
- * et la séance en avertit (DERIVE_NOUVELLE) sans fenêtre (§ 5.9).
+ * appliqué (§ 2.1 étape 5, § 4.3) : il détruit une réservation « tour
+ * désigné » ou un objectif de table d'un tour au-delà, ou, pour une baisse,
+ * il laisse en dérive un placement engendré, entier mais qui porte des
+ * tours que l'événement n'a plus. Une hausse ne détruit rien : les
+ * placements qu'elle laisse en dérive restent entiers, et la séance en
+ * avertit (DERIVE_NOUVELLE) sans fenêtre (§ 5.9).
  *
  * @param {ReturnType<import('../../application/bilans.js').bilanTours>} bilan
  * @param {number} avant   le nombre de tours enregistré
@@ -169,6 +170,7 @@ export function surchargesPerdues(charge) {
  */
 export const annonceTours = (bilan, avant, apres) =>
   bilan.reservationsDetruites.length > 0 ||
+  bilan.objectifsDetruits.length > 0 ||
   (apres < avant && (bilan.propositionsTouchees.length > 0 || bilan.retenuTouche));
 
 // Les placements qu'un changement laisse en dérive : chaque proposition,
@@ -178,14 +180,26 @@ const touches = (bilan) => [
   ...(bilan.retenuTouche ? [{ cle: 'tables.touchee.retenu', details: {} }] : []),
 ];
 
+// Les étiquettes de l'objectif de la table id au tour donné : le bilan des
+// tours ne nomme que la table et le tour d'un objectif détruit.
+function etiquettesDe(charge, id, tour) {
+  const table = charge.tables.find((candidate) => candidate.id === id);
+  const objectif = table?.objectifs?.find((candidat) => candidat.tour === tour);
+  if (objectif === undefined) throw new TypeError(`objectif inconnu : table ${JSON.stringify(id)}, tour ${JSON.stringify(tour)}`);
+  return objectif.etiquettes;
+}
+
 /**
- * Ce que nomme la fenêtre d'un changement de tours (§ 2.1 étape 5) : chaque
- * réservation détruite, sa personne et le numéro de sa table, dans l'ordre
- * du bilan, puis les placements touchés.
+ * Ce que nomme la fenêtre d'un changement de tours (§ 2.1 étape 5, A3) :
+ * chaque réservation détruite, sa personne et le numéro de sa table, puis
+ * chaque objectif de table détruit, le numéro de sa table, son tour et ses
+ * étiquettes, chacun dans l'ordre du bilan ; puis les placements touchés.
+ * Les objectifs de la soirée restent et ne se nomment pas.
  *
  * @param {Object} charge
  * @param {ReturnType<import('../../application/bilans.js').bilanTours>} bilan
  * @returns {Array<{cle: string, details: Object}>}
+ * @throws {TypeError} un objectif du bilan que la charge ne porte pas
  */
 export function elementsTours(charge, bilan) {
   return [
@@ -193,18 +207,23 @@ export function elementsTours(charge, bilan) {
       cle: 'tables.tours.reservation',
       details: { nom: nomDe(charge, participant), numero: numeroDe(charge.tables, table), tour },
     })),
+    ...bilan.objectifsDetruits.map(({ table, tour }) => ({
+      cle: 'tables.tours.objectif',
+      details: { numero: numeroDe(charge.tables, table), tour, etiquettes: etiquettesDe(charge, table, tour) },
+    })),
     ...touches(bilan),
   ];
 }
 
-/** Vrai quand supprimer la table détruit une réservation ou un titre. */
-export const annonceSuppression = (bilan) => bilan.reservations.length > 0 || bilan.titres.length > 0;
+/** Vrai quand supprimer la table détruit une réservation, un titre ou un objectif. */
+export const annonceSuppression = (bilan) => bilan.reservations.length > 0 || bilan.titres.length > 0 || bilan.objectifs.length > 0;
 
 /**
- * Ce que nomme la fenêtre de la suppression d'une table (§ 6.2) : ses
+ * Ce que nomme la fenêtre de la suppression d'une table (§ 6.2, A16) : ses
  * réservations, leur personne, leur portée et leur siège, puis ses titres,
- * dans l'ordre du bilan ; puis les placements touchés. Rien pour une table
- * nue, que la suppression ne demande pas de confirmer.
+ * puis ses objectifs, leur tour — null pour la soirée — et leurs
+ * étiquettes, dans l'ordre du bilan ; puis les placements touchés. Rien
+ * pour une table nue, que la suppression ne demande pas de confirmer.
  *
  * @param {Object} charge
  * @param {ReturnType<import('../../application/bilans.js').bilanSuppressionTable>} bilan
@@ -218,6 +237,7 @@ export function elementsSuppression(charge, bilan) {
       details: { nom: nomDe(charge, participant), portee, tour, siege },
     })),
     ...bilan.titres.map(({ siege, libelle }) => ({ cle: 'tables.suppression.titre', details: { siege, libelle } })),
+    ...bilan.objectifs.map(({ tour, etiquettes }) => ({ cle: 'tables.suppression.objectif', details: { tour, etiquettes } })),
     ...touches(bilan),
   ];
 }

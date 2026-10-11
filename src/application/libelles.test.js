@@ -1245,8 +1245,11 @@ describe("libellés : l'ordre des priorités et le mode des objectifs (§ 5.7, �
     assert.equal(libelle('POIDS_HORS_DOMAINE', { valeur: 2.5, remede: null }), "Un poids est un nombre entier de 1 à 100 : 2,5 ne l'est pas.");
     assert.equal(libelle('POIDS_HORS_DOMAINE', { valeur: Number.NaN, remede: null }), 'Un poids est un nombre entier de 1 à 100.');
     const partage = libelle('OBJECTIFS_PALIER_PARTAGE', { mode: 'minimum', palier: 1, remede: null });
-    for (const motif of [/« le minimum, puis le total »/, /deux valeurs l'une après l'autre/, /« tours hors objectif »/, /palier 2\b/, /séparer/i, /reste celui d'avant/]) {
+    for (const motif of [/^Ce mode compare deux valeurs l'une après l'autre/, /« tours hors objectif »/, /palier 2\b/, /séparer/i, /reste celui d'avant/]) {
       assert.match(partage, motif);
     }
+    // Posé contre le groupe du mode, il ne nomme pas le mode autrement que
+    // le bouton choisi.
+    assert.doesNotMatch(partage, /minimum|total/);
   });
 });

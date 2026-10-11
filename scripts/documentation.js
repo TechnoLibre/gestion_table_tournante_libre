@@ -307,15 +307,22 @@ export function tableau(entetes, lignes) {
 /**
  * Le tableau des réglages (§ 19.8) : chaque entrée de la définition, dans
  * son ordre — son libellé, qui porte l'unité d'un champ, l'écran qui la
- * montre, sa valeur par défaut.
+ * montre, sa valeur par défaut. Celle d'un choix est le libellé de sa valeur,
+ * <etiquette>.<valeur> ; celle de l'ordre des priorités, ses paliers dans
+ * l'ordre, séparés par « puis », chaque critère sous son nom complet
+ * (mobilier.critere.<nom>), ceux d'un palier partagé joints par « avec ».
  *
  * @param {ReadonlyArray<import('../src/interface/generation/reglages.js').EntreeReglage>} [definition]
  * @returns {string}
  */
 export function tableauReglages(definition = REGLAGES_GENERATION) {
-  const defaut = ({ genre, defaut: valeur, cle }) => {
+  const defaut = ({ genre, defaut: valeur, cle, etiquette }) => {
     if (genre === 'champ') return nombre(valeur);
     if (genre === 'bascule') return valeur ? 'cochée' : 'décochée';
+    if (genre === 'choix') return t(`${etiquette}.${valeur}`);
+    if (genre === 'ordre') {
+      return valeur.map((palier) => palier.map(({ critere }) => t(`mobilier.critere.${critere}`)).join(' avec ')).join(', puis ');
+    }
     throw new RangeError(`reglages : genre inconnu ${JSON.stringify(genre)} pour ${cle}`);
   };
   return tableau(

@@ -8,9 +8,11 @@
   // aussitôt quand rien ne se perd — une hausse, dont la dérive des
   // placements s'avertit par la séance ; sinon la fenêtre à confirmer
   // nomme, avant toute écriture, les réservations « tour désigné » qu'elle
-  // détruit — personne et table — et les placements qui perdent des tours
-  // (bilanTours, annonceTours). Annuler la ferme et remonte le champ, qui rend la valeur
-  // enregistrée ; Confirmer exécute le changement, une entrée.
+  // détruit — personne et table —, les objectifs de table des tours retirés
+  // — table, tour et étiquettes (§ 4.3, A3) — et les placements qui perdent
+  // des tours (bilanTours, annonceTours, elementsTours). Annuler la ferme et
+  // remonte le champ, qui rend la valeur enregistrée ; Confirmer exécute le
+  // changement, une entrée.
   import { getContext } from 'svelte';
   import { bilanTours } from '../../application/bilans.js';
   import { lireEntier } from '../../application/capacite.js';

@@ -1,11 +1,13 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// L'import des participants dans un vrai moteur de rendu (§ 10.1, § 10.2,
-// § 10.3, § 2.1 étape 2, § 9) : l'aperçu obligatoire, l'encodage et le
+// L'import des participants et des objectifs de table dans un vrai moteur de
+// rendu (§ 10.1, § 10.2, § 10.3, § 10.4, § 2.1 étape 2, § 9) : la nature
+// choisie, jamais devinée, l'aperçu obligatoire, l'encodage et le
 // séparateur nommés, l'association par en-tête, l'ambiguïté, les refus
-// d'une ligne et les refus globaux, le rapport, le CSV des refus, les trois
-// modes, l'import selon l'état, le collage. Chaque épreuve monte App par
+// d'une ligne et les refus globaux, les étiquettes en pastilles et leurs
+// fusions à part, le rapport, le CSV des refus, les modes, l'import selon
+// l'état, le collage. Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé, ouvre un événement et sa
 // section d'import ; le dialogue de choix sert, dans l'ordre, les fichiers
 // que l'épreuve prépare, et le dialogue d'enregistrement relève ce qu'il
@@ -29,17 +31,19 @@ import { apercevoir } from '../../csv/apercu.js';
 import { decoder } from '../../csv/encodage.js';
 import { bilanRemplacement, exporterRefus as exporterRefusCsv } from '../../csv/import.js';
 import { decouper } from '../../csv/lecture.js';
+import { apercevoirObjectifs, bilanRemplacementObjectifs } from '../../csv/objectifs.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { creerCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { pointer } from '../../../test/navigateur/entrees.js';
+import { pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, visible } from '../../../test/navigateur/rendu.js';
 import urlCasLimites from '../../../exemples/participants_cas_limites.csv?url';
 import urlCasLimites1252 from '../../../exemples/participants_cas_limites_cp1252.csv?url';
 import urlGrande from '../../../exemples/participants_demo_grande.csv?url';
+import urlObjectifs from '../../../exemples/objectifs_cas_limites.csv?url';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { ENCODAGES, SEPARATEURS } from './modele.js';
 
@@ -93,10 +97,12 @@ afterEach(() => {
  * dialogue de choix sert aServir dans l'ordre ; l'enregistreur relève
  * enregistres et rend le nom proposé.
  */
-async function ouvrir({ participants = [], ecriture = true, langue = 'fr', siegesParDefaut = 6, prepare = null } = {}) {
+async function ouvrir({ participants = [], tables = [], ecriture = true, langue = 'fr', siegesParDefaut = 6, prepare = null } = {}) {
   const charge = creerCharge({ id: 'epreuve-import', nom: 'Soirée des Merles', siegesParDefaut, tours: 2 });
   charge.participants = participants;
   charge.prochainsIds.participant = participants.length + 1;
+  charge.tables = tables;
+  charge.prochainsIds.table = tables.length + 1;
   const texte = serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
   const m = await monterApp({ fichiers: [{ racine: 'documents', chemin: `${BASE}.gtt.json`, texte }], langue });
   montes.push(m);
@@ -123,7 +129,7 @@ const tous = (e, selecteur) => [...section(e).querySelectorAll(selecteur)];
 const commande = (e, nom) => dans(e, `[data-commande="${nom}"]`);
 const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
 const ecritures = ({ m }) => m.trace.length;
-const imports = ({ espion }) => espion.mock.calls.filter(([nom]) => nom === 'importerParticipants');
+const imports = ({ espion }, nom = 'importerParticipants') => espion.mock.calls.filter(([appel]) => appel === nom);
 
 // Sert un fichier au dialogue et le choisit : l'aperçu s'ouvre sur lui.
 async function choisir(e, nom, octets) {
@@ -146,13 +152,13 @@ function choisirMode(e, mode) {
   flushSync();
 }
 
-// Clique « Importer » et attend la fin de l'appel à la séance qu'il fait :
-// rend ce que rend seance.executer, ou le refus.
-async function importer(e) {
-  const avant = imports(e).length;
+// Clique « Importer » et attend la fin de l'appel à la séance qu'il fait,
+// la commande nom : rend ce que rend seance.executer, ou le refus.
+async function importer(e, nom = 'importerParticipants') {
+  const avant = imports(e, nom).length;
   commande(e, 'importer').click();
-  await vi.waitFor(() => expect(imports(e).length).toBe(avant + 1));
-  const resultat = e.espion.mock.results.filter((_, rang) => e.espion.mock.calls[rang][0] === 'importerParticipants').at(-1);
+  await vi.waitFor(() => expect(imports(e, nom).length).toBe(avant + 1));
+  const resultat = e.espion.mock.results.filter((_, rang) => e.espion.mock.calls[rang][0] === nom).at(-1);
   try {
     const rendu = await resultat.value;
     await vi.waitFor(() => expect(dans(e, '[data-rapport]')).not.toBeNull());
@@ -164,12 +170,18 @@ async function importer(e) {
 }
 
 // Les lignes valides montrées sous un conteneur : le texte de chaque
-// cellule, dans l'ordre.
+// cellule, dans l'ordre. Une cellule d'étiquettes se lit pastille par
+// pastille, chacune par son libellé, sans l'espace que la Pastille pose
+// entre son icône et lui.
+const texteCellule = (cellule) => {
+  const pastilles = [...cellule.querySelectorAll('li')];
+  return pastilles.length === 0 ? cellule.textContent : pastilles.map(texteDe).join('');
+};
 const lignesMontrees = (conteneur) =>
   [...conteneur.querySelectorAll('[data-lignes] [data-ligne]')].map((ligne) =>
-    [...ligne.querySelectorAll('[data-cellule]')].map((cellule) => cellule.textContent));
+    [...ligne.querySelectorAll('[data-cellule]')].map(texteCellule));
 const cellule = (conteneur, ligne, champ) =>
-  conteneur.querySelector(`[data-lignes] [data-ligne="${ligne}"] [data-cellule="${champ}"]`).textContent;
+  texteCellule(conteneur.querySelector(`[data-lignes] [data-ligne="${ligne}"] [data-cellule="${champ}"]`));
 const refusee = (conteneur, ligne) => conteneur.querySelector(`[data-refusees] [data-ligne="${ligne}"]`);
 const association = (conteneur) =>
   [...conteneur.querySelectorAll('[data-colonne]')].map((colonne) => [
@@ -212,6 +224,17 @@ function vu(element) {
   element.scrollIntoView({ block: 'center' });
   return visible(element);
 }
+
+// La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
+function jeton(nom) {
+  const sonde = document.createElement('span');
+  sonde.style.color = `var(${nom})`;
+  document.body.append(sonde);
+  const couleur = composantes(getComputedStyle(sonde).color);
+  sonde.remove();
+  return couleur;
+}
+const fondDe = (element) => composantes(getComputedStyle(element).backgroundColor);
 
 describe('l’aperçu est obligatoire (§ 10.1)', () => {
   test('choisir les cas limites ouvre l’aperçu, sans rien écrire ; déposer un fichier sur la fenêtre ouvre son aperçu ; aucun contrôle hors de l’import n’importe', async () => {
@@ -911,16 +934,6 @@ describe('les cas du § 10.3', () => {
 });
 
 describe('l’habillage : cartes et messages classés en refus, avis ou information', () => {
-  // La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
-  function jeton(nom) {
-    const sonde = document.createElement('span');
-    sonde.style.color = `var(${nom})`;
-    document.body.append(sonde);
-    const couleur = composantes(getComputedStyle(sonde).color);
-    sonde.remove();
-    return couleur;
-  }
-  const fondDe = (element) => composantes(getComputedStyle(element).backgroundColor);
   const nomDe = (region) => texteDe(document.getElementById(region.getAttribute('aria-labelledby')));
 
   // La classe d'un message, lue dans son bloc : la pastille dont le texte
@@ -941,9 +954,11 @@ describe('l’habillage : cartes et messages classés en refus, avis ou informat
     exigerSorte(bloc('[data-refusees]'), 'refus', `${lieu}, lignes refusées`);
     exigerSorte(bloc('[data-doublons]'), 'avis', `${lieu}, doublons`);
     exigerSorte(bloc('[data-fusions]'), 'information', `${lieu}, orthographes fondues`);
+    exigerSorte(bloc('[data-fusions-etiquettes]'), 'information', `${lieu}, étiquettes fondues`);
+    expect(bloc('[data-fusions-etiquettes]'), lieu).not.toBe(bloc('[data-fusions]'));
   }
 
-  test('les cas limites : refusées en refus, doublons en avis, fusions en information, dans l’aperçu puis le rapport', async () => {
+  test('les cas limites : refusées en refus, doublons en avis, fusions d’appartenances et d’étiquettes en information, chacune son bloc, dans l’aperçu puis le rapport', async () => {
     const e = await ouvrir();
     await choisir(e, 'participants_cas_limites.csv', await lireLivre(urlCasLimites));
     exigerBlocs(dans(e, '[data-apercu]'), 'aperçu');
@@ -976,6 +991,21 @@ describe('l’habillage : cartes et messages classés en refus, avis ou informat
     exigerSorte(rien, 'information', 'rapport, rien d’écrit');
   });
 
+  // Un import d'objectifs n'écrit rien quand chaque couple du fichier porte
+  // déjà son objectif et qu'il refuse des lignes : ici, la table 1 porte
+  // déjà « finance », et aucune table n'affiche le numéro 9.
+  test('un import d’objectifs qui n’a rien écrit le dit en information, avec le texte des objectifs', async () => {
+    const e = await ouvrir({ tables: [table(1, 1, [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }]), table(2, 2)] });
+    choisirNature(e, 'objectifs');
+    await choisir(e, 'inchange.csv', enUtf8('table;objectif\r\n1;finance\r\n9;finance\r\n'));
+    const { rendu } = await importer(e, 'importerObjectifs');
+    expect(rendu.libelle).toBeNull();
+    const rapport = dans(e, '[data-rapport]');
+    const rien = [...rapport.querySelectorAll('section')].find((bloc) => texteDe(bloc).includes(t('import.rapport.rienEcritObjectifs'))) ?? null;
+    exigerSorte(rien, 'information', 'rapport des objectifs, rien d’écrit');
+    expect(texteDe(rapport)).not.toContain(t('import.rapport.rienEcrit'));
+  });
+
   test('un refus global porte la pastille du refus, sa cause et son remède', async () => {
     const e = await ouvrir();
     await coller(e, 'Ombrelle\tIris\nPervenche\tThéo');
@@ -995,5 +1025,365 @@ describe('l’habillage : cartes et messages classés en refus, avis ou informat
     await importer(e);
     expect(regions()).toContain(t('import.rapport.titre'));
     expect(regions()).not.toContain(t('import.apercu.titre'));
+  });
+});
+
+// --- La nature du fichier, les objectifs de table, les étiquettes (§ 10.1, § 10.4) ---
+
+// Une table de la charge d'épreuve, ses objectifs donnés.
+const table = (id, numero, objectifs = null) => ({
+  id, numero, sieges: null, forme: 'ronde', position: { x: 0, y: 0 }, ...(objectifs === null ? {} : { objectifs }),
+});
+// Neuf tables numérotées 1, 2, 3, 3, puis 4 à 8 : deux portent le numéro 3.
+const NEUF_TABLES = () => [1, 2, 3, 3, 4, 5, 6, 7, 8].map((numero, rang) => table(rang + 1, numero));
+
+// Le CSV des objectifs qui refuse une ligne pour chaque motif du § 10.4,
+// dans l'ordre du texte ; huit lignes valides précèdent le champ en trop,
+// que l'analyse du séparateur ne lit qu'au-delà de ses vingt premiers
+// enregistrements.
+const VINGT_ET_UNE = Array.from({ length: 21 }, (_, rang) => `mot${rang + 1}`).join('|');
+const TEXTE_DES_MOTIFS = [
+  'table;tour;objectif;regle',
+  '1;;finance;',
+  ';;finance;',
+  'un;;finance;',
+  '9;;finance;',
+  '3;;finance;',
+  '2;2.0;finance;',
+  '2;5;finance;',
+  '2;1;;',
+  `2;1;${'x'.repeat(41)};`,
+  `2;1;${VINGT_ET_UNE};`,
+  '2;1;finance;peut-être',
+  '1;;Finance;et',
+  '2;2;FINANCE;toutes',
+  '4;;bénévole;ou',
+  '4;1;bénévole;',
+  '4;2;bénévole;',
+  '5;;bénévole;',
+  '5;1;bénévole;',
+  '5;2;bénévole;',
+  '6;;bénévole;',
+  '6;1;bénévole;une',
+  '1;1;finance;;en trop',
+  '',
+].join('\r\n');
+const MOTIFS_DU_10_4 = [
+  'TABLE_ABSENTE', 'TABLE_NON_ENTIERE', 'NUMERO_TABLE_INCONNU', 'PLUSIEURS_TABLES', 'TOUR_NON_ENTIER', 'TOUR_HORS_SOIREE',
+  'OBJECTIF_VIDE', 'ETIQUETTE_MAL_FORMEE', 'ETIQUETTES_TROP_NOMBREUSES', 'REGLE_INCONNUE', 'OBJECTIF_EN_DOUBLE', 'CHAMPS_EN_TROP',
+];
+
+// Coche une nature du fichier.
+function choisirNature(e, nature) {
+  dans(e, `[data-nature-import] input[value="${nature}"]`).click();
+  flushSync();
+}
+const natureCochee = (e) => dans(e, '[data-nature-import] input:checked')?.value ?? null;
+
+// Les étiquettes montrées en pastilles dans une cellule de l'aperçu.
+const pastilles = (conteneur, ligne, champ) =>
+  [...conteneur.querySelectorAll(`[data-lignes] [data-ligne="${ligne}"] [data-cellule="${champ}"] li`)].map(texteDe);
+
+// Un premier geste, sans effet sur les objectifs ni sur les tables : le
+// journal existe avant l'import, dont l'entrée se compte seule.
+const premierGeste = (seance) => seance.executer('changerRegleObjectifs', { regle: 'et' });
+
+// Les comptes du rapport d'un import d'objectifs, affichés puis attendus.
+const COMPTES_DES_OBJECTIFS = [
+  ['ajoutes', 'import.rapport.objectifsAjoutes'],
+  ['remplaces', 'import.rapport.objectifsRemplaces'],
+  ['inchanges', 'import.rapport.objectifsInchanges'],
+  ['retires', 'import.rapport.objectifsRetires'],
+  ['tables', 'import.rapport.tablesTouchees'],
+];
+const comptesObjectifsAffiches = (e) =>
+  COMPTES_DES_OBJECTIFS.map(([nom]) => {
+    const compte = dans(e, `[data-rapport] [data-compte="${nom}"]`);
+    return [nom, compte.querySelector('[data-nombre]').textContent, compte.querySelector('[data-nombre] + span').textContent];
+  });
+const comptesObjectifsDu = (resume) =>
+  COMPTES_DES_OBJECTIFS.map(([nom, cle]) => [nom, format.nombre(resume[nom]), t(cle, { n: resume[nom] })]);
+
+describe('la nature du fichier : choisie avant l’aperçu, jamais devinée (§ 10.4)', () => {
+  test('Participants est cochée par défaut, avant tout fichier ; le CSV des objectifs livré, lu sous Participants, est refusé sans commande d’import ; coché Objectifs, le même texte se lit en objectifs', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    expect(dans(e, '[data-apercu]')).toBeNull();
+    const choix = dans(e, '[data-nature-import]');
+    expect(vu(choix)).toBe(true);
+    expect(natureCochee(e)).toBe('participants');
+    expect([...choix.querySelectorAll('label')].map(texteDe)).toEqual([t('import.nature.participants'), t('import.nature.objectifs')]);
+    expect(texteDe(choix.querySelector('legend'))).toBe(t('import.nature.titre'));
+
+    const octets = await lireLivre(urlObjectifs);
+    await choisir(e, 'objectifs_cas_limites.csv', octets);
+    expect(natureCochee(e)).toBe('participants');
+    expect(dans(e, '[data-apercu] [data-refus="AUCUN_ENTETE"]')).not.toBeNull();
+    expect(commande(e, 'importer')).toBeNull();
+    expect(tous(e, '[data-apercu] [data-champ="mode"]')).toEqual([]);
+
+    choisirNature(e, 'objectifs');
+    expect(natureCochee(e)).toBe('objectifs');
+    expect(dans(e, '[data-apercu] [data-fichier]').textContent).toBe('objectifs_cas_limites.csv');
+    expect(dans(e, '[data-apercu] [data-refus]')).toBeNull();
+    const apercu = apercevoirObjectifs(decoder(octets).texte, e.m.seance.etat().charge);
+    expect(association(dans(e, '[data-apercu]'))).toEqual([
+      ['Table', t('import.champ.table')],
+      ['Tour', t('import.champ.tour')],
+      ['Objectif', t('import.champ.objectif')],
+      ['Règle', t('import.champ.regle')],
+    ]);
+    expect(tous(e, '[data-apercu] [data-lignes] [data-ligne]').map((ligne) => Number(ligne.dataset.ligne))).toEqual(
+      apercu.lignes.map(({ ligne }) => ligne),
+    );
+    expect(tous(e, '[data-apercu] [data-refusees] [data-ligne]').map((ligne) => Number(ligne.dataset.ligne))).toEqual(
+      apercu.refusees.map(({ ligne }) => ligne),
+    );
+    expect([...dans(e, '[data-champ="mode"]').querySelectorAll('input')].map((input) => input.value)).toEqual(['mettreAJour', 'remplacer']);
+    expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
+    expect(commande(e, 'importer')).not.toBeNull();
+  });
+
+  test('une liste de participants qui porte une colonne « Table », lue sous Participants : la table ignorée, des personnes ; sous Objectifs, refusée faute d’objectif', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    await choisir(e, 'invites.csv', enUtf8('nom;prenom;table\r\nOmbrelle;Iris;2\r\nPervenche;Théo;1\r\n'));
+    expect(association(dans(e, '[data-apercu]')).at(-1)).toEqual(['table', t('import.colonne.nonReconnue')]);
+    expect(lignesMontrees(dans(e, '[data-apercu]')).map(([nom]) => nom)).toEqual(['Ombrelle', 'Pervenche']);
+    choisirNature(e, 'objectifs');
+    expect(dans(e, '[data-apercu] [data-refus="OBJECTIF_NON_ASSOCIE"]')).not.toBeNull();
+    expect(texteDe(dans(e, '[data-apercu] [data-refus]'))).toContain(t('import.remede.objectifNonAssocie'));
+    expect(commande(e, 'importer')).toBeNull();
+    choisirNature(e, 'participants');
+    expect(dans(e, '[data-apercu] [data-refus]')).toBeNull();
+    expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('ajouter');
+  });
+
+  test('au clavier : la flèche passe de Participants à Objectifs de table, l’aperçu ouvert se relit, et le bouton qui a le focus porte l’anneau de l’application', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    await choisir(e, 'objectifs_cas_limites.csv', await lireLivre(urlObjectifs));
+    dans(e, '[data-nature-import] input[value="participants"]').focus();
+    await touche('ArrowDown');
+    await vi.waitFor(() => expect(natureCochee(e)).toBe('objectifs'));
+    const actif = document.activeElement;
+    expect(actif.value).toBe('objectifs');
+    expect(actif.matches(':focus-visible')).toBe(true);
+    const style = getComputedStyle(actif);
+    expect(style.outlineStyle).toBe('solid');
+    const sonde = document.createElement('span');
+    sonde.style.color = 'var(--couleur-focus)';
+    document.body.append(sonde);
+    expect(style.outlineColor).toBe(getComputedStyle(sonde).color);
+    sonde.remove();
+    await vi.waitFor(() => expect(dans(e, '[data-apercu] [data-refus]')).toBeNull());
+    expect(commande(e, 'importer')).not.toBeNull();
+  });
+
+  test('un collage de la grille coche Participants, quelle que soit la nature cochée', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    choisirNature(e, 'objectifs');
+    await coller(e, 'nom\tprenom\nOmbrelle\tIris\n');
+    expect(natureCochee(e)).toBe('participants');
+    expect(lignesMontrees(dans(e, '[data-apercu]')).map(([nom]) => nom)).toEqual(['Ombrelle']);
+  });
+});
+
+describe('l’aperçu des objectifs de table (§ 10.4)', () => {
+  test('un refus de chaque motif du § 10.4 rendu dans l’aperçu, à son rang, son motif celui de t ; les lignes valides montrent numéro, tour, étiquettes en pastilles et règle', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    choisirNature(e, 'objectifs');
+    await choisir(e, 'motifs.csv', enUtf8(TEXTE_DES_MOTIFS));
+    const apercu = apercevoirObjectifs(TEXTE_DES_MOTIFS, e.m.seance.etat().charge);
+    expect(apercu.refusees.map(({ code }) => code)).toEqual(MOTIFS_DU_10_4);
+    const ici = dans(e, '[data-apercu]');
+    for (const { code, brut, ...details } of apercu.refusees) {
+      const ligne = refusee(ici, details.ligne);
+      expect(ligne, code).not.toBeNull();
+      expect(vu(ligne), code).toBe(true);
+      expect(ligne.querySelector('[data-motif]').textContent, code).toBe(t(code, details));
+    }
+    const [{ retenue }] = apercu.fusionsEtiquettes;
+    expect(lignesMontrees(ici)[0]).toEqual(['1', t('import.tour.soiree'), retenue, t('import.regle.defaut')]);
+    expect(cellule(ici, 14, 'tour')).toBe('2');
+    expect(pastilles(ici, 14, 'objectif')).toEqual([retenue]);
+    expect(cellule(ici, 14, 'regle')).toBe(t('import.regle.et'));
+    expect(cellule(ici, 15, 'regle')).toBe(t('import.regle.ou'));
+    expect(texteDe(dans(e, '[data-apercu] [data-valides]'))).toContain(format.nombre(apercu.lignes.length));
+  });
+
+  test('« finance » et « FINANCE » fondus en une orthographe : le bloc des étiquettes fondues, en information, nomme la retenue, les orthographes et les lignes réécrites ; aucun bloc d’appartenances', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    choisirNature(e, 'objectifs');
+    await choisir(e, 'motifs.csv', enUtf8(TEXTE_DES_MOTIFS));
+    const [fusion] = apercevoirObjectifs(TEXTE_DES_MOTIFS, e.m.seance.etat().charge).fusionsEtiquettes;
+    const bloc = dans(e, '[data-apercu] [data-fusions-etiquettes]');
+    expect(vu(bloc)).toBe(true);
+    expect(bloc.querySelector('[data-affichee]').textContent).toBe(fusion.retenue);
+    expect([...bloc.querySelectorAll('[data-orthographe] [data-texte]')].map((o) => o.textContent)).toEqual(fusion.orthographes);
+    expect(bloc.querySelector(':scope > li > [data-nombre]').textContent).toBe(format.nombre(fusion.lignes));
+    expect(texteDe(bloc.closest('section'))).toContain(t('import.apercu.fusionsEtiquettes'));
+    expect(texteDe(bloc.closest('section'))).toContain(t('import.sorte.information'));
+    expect(dans(e, '[data-apercu] [data-fusions]')).toBeNull();
+  });
+
+  test('un événement sans table : OBJECTIFS_SANS_TABLE, et son remède ouvre la section des tables', async () => {
+    const e = await ouvrir();
+    choisirNature(e, 'objectifs');
+    await choisir(e, 'objectifs_cas_limites.csv', await lireLivre(urlObjectifs));
+    const pose = dans(e, '[data-apercu] [data-refus="OBJECTIFS_SANS_TABLE"]');
+    expect(vu(pose)).toBe(true);
+    expect(texteDe(pose)).toContain(t('OBJECTIFS_SANS_TABLE'));
+    const remede = pose.querySelector('[data-commande="ouvrirSection"]');
+    expect(remede.textContent.trim()).toBe(t('communs.remede.ouvrirSection.tables'));
+    expect(commande(e, 'importer')).toBeNull();
+    remede.click();
+    await vi.waitFor(() => expect(e.m.ui.etat().section).toBe('tables'));
+  });
+
+  test('chaque refus global propre aux objectifs : sa cause et son remède, aucune commande d’import, rien d’écrit', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    choisirNature(e, 'objectifs');
+    const avant = ecritures(e);
+    const cas = [
+      ['AUCUN_ENTETE', 'a;b\r\n1;finance\r\n', 'import.remede.aucunEnteteObjectifs'],
+      ['TABLE_NON_ASSOCIEE', 'tour;objectif\r\n1;finance\r\n', 'import.remede.tableNonAssociee'],
+      ['OBJECTIF_NON_ASSOCIE', 'table;tour\r\n1;1\r\n', 'import.remede.objectifNonAssocie'],
+      ['AUCUNE_LIGNE_VALIDE', 'table;objectif\r\n9;finance\r\n', 'import.remede.aucuneLigneValide'],
+    ];
+    for (const [code, texte, remede] of cas) {
+      await choisir(e, `${code}.csv`, enUtf8(texte));
+      const pose = dans(e, `[data-apercu] [data-refus="${code}"]`);
+      expect(pose, code).not.toBeNull();
+      expect(texteDe(pose), code).toContain(t(remede));
+      expect(commande(e, 'importer'), code).toBeNull();
+      expect(natureCochee(e), code).toBe('objectifs');
+    }
+    expect(ecritures(e)).toBe(avant);
+  });
+});
+
+describe('importer des objectifs de table (§ 10.4)', () => {
+  test('mettre à jour : une entrée, importerObjectifs sous l’aperçu montré ; le rapport porte les comptes du résumé et le bloc des étiquettes fondues ; le CSV des refus est celui d’exporterRefus', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES(), prepare: premierGeste });
+    choisirNature(e, 'objectifs');
+    await choisir(e, 'motifs.csv', enUtf8(TEXTE_DES_MOTIFS));
+    const apercu = apercevoirObjectifs(TEXTE_DES_MOTIFS, e.m.seance.etat().charge);
+    commande(e, 'enregistrerRefus').click();
+    await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
+    expect(e.enregistres[0].nomPropose).toBe(`${BASE}-refus.csv`);
+    expect([...e.enregistres[0].octets]).toEqual([...exporterRefusCsv(apercu, libelle)]);
+
+    const entreesAvant = entrees(e);
+    const { rendu } = await importer(e, 'importerObjectifs');
+    expect(imports(e)).toEqual([]);
+    const [[, argumentsRecus]] = imports(e, 'importerObjectifs');
+    expect(argumentsRecus.mode).toBe('mettreAJour');
+    expect(argumentsRecus.apercu).toEqual(apercu);
+    expect(entrees(e)).toBe(entreesAvant + 1);
+    expect(rendu.resume).toMatchObject({ ajoutes: 10, remplaces: 0, inchanges: 0, retires: 0 });
+    expect(comptesObjectifsAffiches(e)).toEqual(comptesObjectifsDu(rendu.resume));
+    const rapport = dans(e, '[data-rapport]');
+    expect(vu(rapport.querySelector('h3'))).toBe(true);
+    expect(rapport.querySelector('[data-fusions-etiquettes]')).not.toBeNull();
+    expect(rapport.querySelectorAll('[data-refusees] [data-ligne]').length).toBe(MOTIFS_DU_10_4.length);
+    const tables = e.m.seance.etat().charge.tables;
+    const [{ retenue }] = apercu.fusionsEtiquettes;
+    expect(tables.find(({ id }) => id === 1).objectifs).toEqual([{ portee: 'tous', tour: null, regle: null, etiquettes: [retenue] }]);
+
+    // L'avis de A20 : l'événement n'a aucun participant, donc aucun des dix
+    // objectifs écrits n'a de correspondant. La commande le rend, la séance
+    // le relaie, la liste des avertissements de l'événement le montre.
+    expect(rendu.avertissements.map(({ code }) => code)).toEqual(Array(10).fill('OBJECTIF_SANS_CORRESPONDANT'));
+    const montres = [...e.m.racine.querySelectorAll('[data-avertissement="OBJECTIF_SANS_CORRESPONDANT"]')];
+    expect(montres.map((avis) => texteDe(avis.querySelector('p')))).toEqual(rendu.avertissements.map(({ code, details }) => t(code, details)));
+    expect(vu(montres[0])).toBe(true);
+  });
+
+  test('remplacer annonce ses deux comptes, objectifs et tables ; Annuler n’écrit rien ; Confirmer, une entrée, et les objectifs que le fichier ne nomme pas partent', async () => {
+    const soiree = (etiquettes) => ({ portee: 'tous', tour: null, regle: null, etiquettes });
+    const tables = [
+      table(1, 1, [soiree(['bénévole']), { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] }]),
+      table(2, 2, [soiree(['ressources humaines'])]),
+      table(3, 3),
+    ];
+    const e = await ouvrir({ tables, prepare: premierGeste });
+    choisirNature(e, 'objectifs');
+    await choisir(e, 'remplace.csv', enUtf8('table;objectif\r\n3;finance\r\n'));
+    choisirMode(e, 'remplacer');
+    const bilan = bilanRemplacementObjectifs(e.m.seance.etat().charge);
+    expect(bilan).toEqual({ objectifs: 3, tables: 2 });
+    const attendus = [t('import.remplacer.objectifs', { n: 3 }), t('import.remplacer.tables', { n: 2 })];
+    expect(attendus).toEqual(['3 objectifs de table seront supprimés', '2 tables perdront leurs objectifs']);
+    const avant = ecritures(e);
+    commande(e, 'importer').click();
+    await vi.waitFor(() => expect(dans(e, 'dialog')?.open).toBe(true));
+    expect(texteDe(dans(e, 'dialog'))).toContain(t('import.remplacer.titreObjectifs'));
+    expect([...dans(e, 'dialog').querySelectorAll('li')].map((li) => li.textContent)).toEqual(attendus);
+    dans(e, 'dialog [data-commande="renoncer"]').click();
+    await vi.waitFor(() => expect(dans(e, 'dialog')).toBeNull());
+    expect(imports(e, 'importerObjectifs')).toEqual([]);
+    expect(ecritures(e)).toBe(avant);
+
+    const entreesAvant = entrees(e);
+    commande(e, 'importer').click();
+    await vi.waitFor(() => expect(dans(e, 'dialog')?.open).toBe(true));
+    dans(e, 'dialog [data-commande="confirmer"]').click();
+    await vi.waitFor(() => expect(dans(e, '[data-rapport]')).not.toBeNull());
+    expect(imports(e, 'importerObjectifs').map(([, { mode }]) => mode)).toEqual(['remplacer']);
+    expect(entrees(e)).toBe(entreesAvant + 1);
+    const { resume } = await e.espion.mock.results.at(-1).value;
+    expect(resume).toMatchObject({ ajoutes: 1, remplaces: 0, inchanges: 0, retires: 3, tables: 3 });
+    expect(comptesObjectifsAffiches(e)).toEqual(comptesObjectifsDu(resume));
+    expect(e.m.seance.etat().charge.tables.map(({ objectifs = [] }) => objectifs.length)).toEqual([0, 0, 1]);
+  });
+
+  test('bloqué : l’aperçu des objectifs s’ouvre, l’import est refusé à côté de la commande, rien d’écrit', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES(), prepare: (seance) => seance.executer('changerEtat', { etat: 'bloque' }) });
+    choisirNature(e, 'objectifs');
+    const avant = ecritures(e);
+    await choisir(e, 'objectifs_cas_limites.csv', await lireLivre(urlObjectifs));
+    const { refus } = await importer(e, 'importerObjectifs');
+    expect(refus.code).toBe('LECTURE_SEULE');
+    expect(commande(e, 'importer').parentElement.contains(dans(e, '[data-refus="LECTURE_SEULE"]'))).toBe(true);
+    expect(ecritures(e)).toBe(avant);
+  });
+});
+
+describe('les étiquettes des participants dans l’aperçu (§ 10.1, A17)', () => {
+  test('les cas limites : chaque cellule d’étiquettes en pastilles, sous l’orthographe retenue ; le bloc des étiquettes fondues présent, à part des appartenances, dans l’aperçu puis le rapport', async () => {
+    const e = await ouvrir();
+    const octets = await lireLivre(urlCasLimites);
+    await choisir(e, 'participants_cas_limites.csv', octets);
+    const apercu = apercevoir(decoder(octets).texte);
+    expect(apercu.fusionsEtiquettes.length).toBeGreaterThanOrEqual(1);
+    const ici = dans(e, '[data-apercu]');
+    for (const { ligne, champs } of apercu.lignes) expect(pastilles(ici, ligne, 'etiquettes'), `ligne ${ligne}`).toEqual(champs.etiquettes ?? []);
+    expect(apercu.lignes.some(({ champs }) => (champs.etiquettes ?? []).length > 1)).toBe(true);
+    // Chaque étiquette, la pastille de la fiche : neutre, à icône, de
+    // l'encre de la page ; son fond se détache de celui de la cellule.
+    const elements = [...ici.querySelectorAll('[data-cellule="etiquettes"] li')];
+    expect(elements.length).toBeGreaterThan(1);
+    for (const li of elements) {
+      const pastille = [li, ...li.querySelectorAll('*')].find((element) => fondDe(element)[3] > 0);
+      expect(fondDe(pastille), texteDe(li)).toEqual(jeton('--couleur-neutre-fond'));
+      expect(li.querySelector('svg'), texteDe(li)).not.toBeNull();
+      expect(composantes(getComputedStyle(pastille).color), texteDe(li)).toEqual(jeton('--couleur-page-texte'));
+    }
+    expect(vu(elements[0])).toBe(true);
+    expect(fondDe(elements[0].closest('td'))).not.toEqual(jeton('--couleur-neutre-fond'));
+
+    for (const lieu of ['[data-apercu]', '[data-rapport]']) {
+      if (lieu === '[data-rapport]') await importer(e);
+      const conteneur = dans(e, lieu);
+      const bloc = conteneur.querySelector('[data-fusions-etiquettes]');
+      expect(bloc, lieu).not.toBeNull();
+      expect([...bloc.querySelectorAll('[data-affichee]')].map((a) => a.textContent), lieu).toEqual(
+        apercu.fusionsEtiquettes.map(({ retenue }) => retenue),
+      );
+      const appartenances = conteneur.querySelector('[data-fusions]');
+      expect(appartenances.contains(bloc), lieu).toBe(false);
+      expect(bloc.contains(appartenances), lieu).toBe(false);
+      const retenues = new Set(apercu.fusionsEtiquettes.map(({ retenue }) => retenue));
+      for (const affichee of appartenances.querySelectorAll('[data-affichee]')) expect(retenues.has(affichee.textContent), lieu).toBe(false);
+      expect(appartenances.querySelectorAll('[data-fusion]').length, lieu).toBe(apercu.fusions.length);
+    }
   });
 });

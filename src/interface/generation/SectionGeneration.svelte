@@ -43,6 +43,11 @@
   // section, une seule, sur l'explication de cette colonne, et le quitter la
   // referme ; le terme expliqué porte aria-describedby vers elle.
   //
+  // Les réglages (Reglages.svelte) portent le choix du mode des objectifs,
+  // sous sa case, et l'éditeur de l'ordre des priorités, après les
+  // contraintes (§ 5.3, § 5.7) : chacun s'écrit par ses commandes, sans que
+  // la section s'en mêle.
+  //
   // Habillage : la meilleure proposition est une carte à elle, chaque valeur
   // sous son intitulé ; les réglages, « Générer » — l'action principale de
   // l'écran —, la question, l'avancement et l'issue vivent dans la carte des

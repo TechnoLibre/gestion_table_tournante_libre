@@ -27,13 +27,29 @@
   // « Générer ». Son refus, refusGraine, se pose contre elle ; une frappe
   // appelle saisirGraine, qui le retire.
   //
-  // Les quatre contraintes et l'attribution des sièges (§ 5.3) sont des
+  // Les six contraintes et l'attribution des sièges (§ 5.3) sont des
   // cases à cocher, chacune sous son nom du spec : un clic, ou la barre
   // d'espace, exécute modifierReglage {cle, valeur} — une entrée par
   // bascule. À l'issue du geste, la case montre la valeur de la charge,
   // écrite ou inchangée. Un refus de la séance — lecture, plan
   // bloqué, support rompu — se pose à côté de la case, avec son remède, et
   // rien ne s'écrit.
+  //
+  // Un choix (§ 5.3, A8) se montre sous sa bascule (entree.sous) : un groupe
+  // data-mode-objectifs, sa légende, un bouton radio par valeur, chacun sous
+  // son libellé et décrit par son explication (aria-describedby), puis par
+  // le refus du groupe quand il y en a un. Il reste modifiable quel que soit
+  // l'état de son critère, que le groupe écrit en texte, « décoché » ou
+  // « sans objet », tel que la table d'évaluation le porte
+  // (etatsDesCriteres) : rien ne se recalcule ici. Choisir, au pointeur
+  // ou aux flèches du clavier, exécute modifierReglage {cle, valeur} — une
+  // entrée par choix. Un refus — un mode qui compare deux valeurs alors que
+  // son critère partage un palier (OBJECTIFS_PALIER_PARTAGE), la lecture, un
+  // plan bloqué — se pose contre le groupe, et le choix revient à la valeur
+  // de la charge.
+  //
+  // L'ordre des priorités (genre 'ordre') suit les contraintes, dans son
+  // éditeur (Priorites.svelte), qui lit les mêmes états.
   //
   // Les cœurs de calcul sont un réglage du poste, que le contrôleur de
   // génération tient pour la séance du logiciel : ni le fichier ni le journal
@@ -54,6 +70,8 @@
   import Champ from '../primitives/Champ.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { effetDe } from '../raccourcis.js';
+  import Priorites from './Priorites.svelte';
+  import { etatAffiche, etatsDesCriteres } from './priorites.js';
   import { REGLAGES_GENERATION, reglagesDeSection, reglagesDuGenre, valeurDuReglage } from './reglages.js';
 
   let {
@@ -111,6 +129,14 @@
   const deLaGeneration = $derived(reglagesDeSection(definition, 'generation'));
   const champs = $derived(reglagesDuGenre(deLaGeneration, 'champ'));
   const bascules = $derived(reglagesDuGenre(deLaGeneration, 'bascule'));
+  const choix = $derived(reglagesDuGenre(deLaGeneration, 'choix'));
+  const ordres = $derived(reglagesDuGenre(deLaGeneration, 'ordre'));
+  // Les choix qui se montrent sous la bascule de clé cle.
+  const choixSous = (cle) => choix.filter((entree) => entree.sous === cle);
+
+  // L'état de chaque critère, lu dans la table d'évaluation de la charge ;
+  // null quand la configuration ne se normalise pas.
+  const etats = $derived(choix.length + ordres.length === 0 ? null : etatsDesCriteres(charge));
 
   // La lecture d'une saisie du réglage nom : la validation du contrôleur sur
   // les réglages proposés, ce réglage remplacé par la saisie ; son refus, ou
@@ -142,6 +168,28 @@
       refusBascule = { cle, refus: { code: erreur.code, details: erreur.details ?? {} } };
     } finally {
       caseACocher.checked = valeurDuReglage(charge.reglages, entree);
+    }
+  }
+
+  // Le refus du dernier choix, { cle, refus }, posé contre son groupe.
+  let refusChoix = $state.raw(null);
+
+  // Le choix d'un bouton radio : la séance écrit sa valeur ; à l'issue,
+  // chaque bouton du groupe montre la valeur de la charge, écrite ou
+  // inchangée — un choix refusé revient ainsi à l'ancien.
+  async function choisir(evenement, entree) {
+    const groupe = evenement.currentTarget.closest('fieldset');
+    const { value: valeur } = evenement.currentTarget;
+    const { cle } = entree;
+    refusChoix = null;
+    try {
+      await seance.executer('modifierReglage', { cle, valeur });
+    } catch (erreur) {
+      if (typeof erreur?.code !== 'string') throw erreur;
+      refusChoix = { cle, refus: { code: erreur.code, details: erreur.details ?? {} } };
+    } finally {
+      const courante = valeurDuReglage(charge.reglages, entree);
+      for (const bouton of groupe.querySelectorAll(`input[type="radio"][data-champ="${cle}"]`)) bouton.checked = bouton.value === courante;
     }
   }
 </script>
@@ -190,8 +238,43 @@
           <Refus refus={refusBascule.refus} lever={() => (refusBascule = null)} />
         {/if}
       </div>
+      {#each choixSous(cle) as entreeChoix (entreeChoix.cle)}
+        {@const etat = etatAffiche(etats?.get(entreeChoix.critere))}
+        {@const courante = valeurDuReglage(charge.reglages, entreeChoix)}
+        {@const idRefusChoix = `${uid}-${entreeChoix.cle}-refus`}
+        {@const refuse = refusChoix !== null && refusChoix.cle === entreeChoix.cle}
+        <fieldset class="choix" data-mode-objectifs>
+          <legend>{t(entreeChoix.etiquette)}</legend>
+          {#each entreeChoix.valeurs as valeur (valeur)}
+            {@const id = `${uid}-${entreeChoix.cle}-${valeur}`}
+            <div class="option">
+              <input
+                {id}
+                type="radio"
+                name={`${uid}-${entreeChoix.cle}`}
+                value={valeur}
+                data-champ={entreeChoix.cle}
+                checked={courante === valeur}
+                aria-describedby={refuse ? `${id}-explication ${idRefusChoix}` : `${id}-explication`}
+                onchange={(evenement) => choisir(evenement, entreeChoix)}
+              />
+              <label for={id}>{t(`${entreeChoix.etiquette}.${valeur}`)}</label>
+              <p class="explication" id={`${id}-explication`}>{t(`${entreeChoix.etiquette}.${valeur}.explication`)}</p>
+            </div>
+          {/each}
+          {#if etat !== null}
+            <p class="note">{t(`${entreeChoix.etiquette}.etat.${etat}`)}</p>
+          {/if}
+          {#if refuse}
+            <Refus id={idRefusChoix} refus={refusChoix.refus} lever={() => (refusChoix = null)} />
+          {/if}
+        </fieldset>
+      {/each}
     {/each}
   </fieldset>
+  {#each ordres as entree (entree.cle)}
+    <Priorites {charge} {entree} {etats} />
+  {/each}
   <fieldset class="coeurs" data-coeurs>
     <legend>{t('generation.coeurs.titre')}</legend>
     <div class="bascule">
@@ -317,6 +400,52 @@
 
   .bascule input {
     margin: 0;
+  }
+
+  /* Le choix, sous sa case, sur toute la largeur du groupe : sa légende se
+     lit comme le libellé d'un champ, chaque bouton suivi de son explication
+     en encre secondaire. */
+  .choix {
+    display: flex;
+    flex-basis: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--espace-2);
+    margin: 0 0 0 var(--espace-5);
+    padding: 0;
+    border: none;
+  }
+
+  .choix > legend {
+    padding: 0;
+    margin-bottom: var(--espace-2);
+    color: var(--couleur-page-texte);
+    font-size: var(--taille-texte);
+    font-weight: normal;
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .option {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0 var(--espace-1);
+  }
+
+  .option input {
+    margin: 0;
+  }
+
+  .option input:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
+  }
+
+  .explication {
+    grid-column: 2;
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
   }
 
   p {

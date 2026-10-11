@@ -5,7 +5,9 @@
 // moteur de rendu (§ 5.7, § 13.3) : tant que la charge de la séance ne
 // change pas, revenir à l'une ou l'autre section ne mesure rien de nouveau ;
 // une charge écrite se mesure une fois, et la meilleure proposition annoncée
-// la suit.
+// la suit. Une charge sans proposition n'a pas de table partagée : l'éditeur
+// des priorités y lit l'état des critères par une évaluation à lui, une fois
+// par charge écrite.
 //
 // Le module de l'évaluation est remplacé par ses propres fonctions,
 // espionnées (vi.mock, spy) : evaluer garde son effet, et ses appels se
@@ -109,8 +111,14 @@ describe('Génération et Propositions relisent une même évaluation (§ 5.7, �
     const anciens = charge(m).propositions.map(({ id }) => id);
     const avantEcriture = appels();
     await m.seance.executer('effacerPropositions', {});
+    flushSync();
+    expect(appels(), 'la charge sans proposition, évaluée une fois pour l’état des critères').toBe(avantEcriture + 1);
+    aller(m, 'participants');
+    aller(m, 'generation');
+    expect(appels(), 'la charge sans proposition, revisitée').toBe(avantEcriture + 1);
+    const avantGeneration = appels();
     await enregistrer(m, { graine: 9, nombre: 2, arret: 300 });
-    expect(appels(), 'la charge écrite, mesurée une fois').toBe(avantEcriture + 1);
+    expect(appels(), 'la charge écrite, mesurée une fois').toBe(avantGeneration + 1);
     const attendu = rangUnAttendu(m);
     const apres = appels();
     expect(identifiant(m).textContent).toBe(attendu);

@@ -2,15 +2,21 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les libellés de la génération : meilleure proposition du classement,
-// réglages, cœurs de calcul, durée observée, question d'une génération
-// longue, avancement et issue (§ 5.4, § 5.7, § 5.10, § 14.6). Chaque
+// réglages, mode des objectifs, ordre des priorités, cœurs de calcul, durée
+// observée, question d'une génération longue, avancement et issue (§ 5.3,
+// § 5.4, § 5.7, § 5.10, § 14.6). Chaque
 // clé commence par « generation. ». Le libellé d'un réglage porte son unité,
 // entre parenthèses : l'étiquette du champ la dit, et le nom accessible du
 // champ avec elle. Un nombre et une durée se mettent en forme par
 // creerFormat, sur la composition que la traduction passe à l'entrée ; les
-// détails reçus sont des nombres.
+// détails reçus sont des nombres, ou le nom d'un critère du registre, que le
+// texte écrit sous son nom complet, mobilier.critere.<nom>.
 import { creerFormat } from '../../application/format.js';
-import { compte } from '../../application/libelles/aides.js';
+import { cite, compte, enumeration } from '../../application/libelles/aides.js';
+
+// Le nom complet d'un critère, cité (§ 5.7) : celui que l'application donne
+// à mobilier.critere.<nom>, le même que le journal écrit.
+const nomCritere = (critere, texte) => cite(texte(`mobilier.critere.${critere}`));
 
 // Les cœurs d'un calcul, dits quand il en emploie plus d'un : « , sur
 // 4 cœurs » ; rien pour un seul, ou quand le nombre n'est pas donné.
@@ -53,7 +59,83 @@ export const TABLE = new Map([
   ['generation.contrainte.nouveauxVoisins', 'Nouveaux voisins à chaque tour'],
   ['generation.contrainte.nouvelleTable', 'Nouvelle table à chaque tour'],
   ['generation.contrainte.varierAppartenances', 'Varier les appartenances rencontrées'],
+  ['generation.contrainte.respecterObjectifs', 'Respecter les objectifs des tables'],
+  ['generation.contrainte.rencontrerAnimateurs', "Rencontrer le plus d'animateurs différents"],
   ['generation.contrainte.attribuerSieges', 'Attribuer les sièges'],
+
+  // --- Le mode des objectifs, sous sa case (§ 5.3, A8, D20, D22) -----------------
+  // Le troisième mode garde le libellé de l'utilisateur : sa clé est le seul
+  // emploi admis de son mot (D22) ; son explication dit ce qu'il compare.
+  ['generation.reglage.modeObjectifs', "Objectifs des tables : chercher d'abord"],
+  ['generation.reglage.modeObjectifs.places', 'le plus de places servies'],
+  ['generation.reglage.modeObjectifs.chacun', 'chacun au moins une fois'],
+  ['generation.reglage.modeObjectifs.minimum', "l'équité d'abord"],
+  [
+    'generation.reglage.modeObjectifs.places.explication',
+    'Le plus grand total de tours servis : le critère compare les tours hors objectif.',
+  ],
+  [
+    'generation.reglage.modeObjectifs.chacun.explication',
+    "D'abord le plus de personnes servies à un tour au moins, puis le plus grand total : le critère compare " +
+      'les personnes jamais servies, puis les tours hors objectif.',
+  ],
+  [
+    'generation.reglage.modeObjectifs.minimum.explication',
+    "Le minimum d'abord, puis le total : d'abord la personne la plus mal servie, mesurée contre ses propres " +
+      'tours possibles, puis le plus grand total. Le critère compare le plus de tours hors objectif ' +
+      "d'une personne, puis les tours hors objectif.",
+  ],
+  // L'état du critère des tours hors objectif, lu dans la table d'évaluation.
+  [
+    'generation.reglage.modeObjectifs.etat.decoche',
+    "Tours hors objectif : critère décoché. Le mode ne change rien tant que la case n'est pas cochée.",
+  ],
+  [
+    'generation.reglage.modeObjectifs.etat.sansObjet',
+    "Tours hors objectif : critère sans objet. Aucune table à objectif ne peut servir personne : le mode ne change rien.",
+  ],
+
+  // --- L'ordre des priorités (§ 5.7, A11, A12) -------------------------------------
+  ['generation.reglage.priorites', 'Ordre des priorités'],
+  [
+    'generation.priorites.note',
+    'Deux propositions se comparent palier par palier : un palier ne départage que des propositions égales sur ' +
+      'ceux qui le précèdent. Dans un palier de plusieurs critères, chacun compte selon son poids.',
+  ],
+  ['generation.priorites.parDefaut', 'Ordre par défaut : chaque critère seul à son palier.'],
+  ['generation.priorites.regle', "Ordre réglé pour l'événement."],
+  // palier, compté à partir de 1 ; paliers, leur nombre.
+  [
+    'generation.priorites.palier',
+    ({ palier, paliers }, texte) => {
+      const { nombre } = creerFormat(texte);
+      return `Palier ${nombre(palier)} sur ${nombre(paliers)}`;
+    },
+  ],
+  ['generation.priorites.etat.decoche', 'décoché'],
+  ['generation.priorites.etat.sansObjet', 'sans objet'],
+  ['generation.priorites.poids', ({ critere }, texte) => `Poids de ${nomCritere(critere, texte)} (nombre entier)`],
+  // Les gestes d'un critère, chacun nommant le critère qu'il déplace :
+  // chaque bouton de l'éditeur porte ainsi un nom à lui (§ 14.5).
+  ['generation.priorites.monter', ({ critere }, texte) => `Monter ${nomCritere(critere, texte)} d'un palier`],
+  ['generation.priorites.monterPalier', ({ critere }, texte) => `Monter le palier de ${nomCritere(critere, texte)}`],
+  ['generation.priorites.descendre', ({ critere }, texte) => `Descendre ${nomCritere(critere, texte)} d'un palier`],
+  ['generation.priorites.descendrePalier', ({ critere }, texte) => `Descendre le palier de ${nomCritere(critere, texte)}`],
+  ['generation.priorites.joindre', ({ critere }, texte) => `Joindre ${nomCritere(critere, texte)} au palier du dessus`],
+  ['generation.priorites.separer', ({ critere }, texte) => `Séparer ${nomCritere(critere, texte)} en palier propre`],
+  ['generation.priorites.retablir', "Rétablir l'ordre par défaut"],
+  // L'annonce d'un geste abouti : critere, le critère déplacé ; palier,
+  // compté à partir de 1 ; paliers ; avec, ses compagnons de palier.
+  [
+    'generation.priorites.annonce',
+    ({ critere, palier, paliers, avec }, texte) => {
+      const { nombre } = creerFormat(texte);
+      const compagnons =
+        avec.length === 0 ? ', seul' : `, avec ${enumeration(avec.map((autre) => nomCritere(autre, texte)))}`;
+      return `${nomCritere(critere, texte)} est au palier ${nombre(palier)} sur ${nombre(paliers)}${compagnons}.`;
+    },
+  ],
+  ['generation.priorites.annonceRetablie', "L'ordre par défaut est rétabli."],
 
   // --- Les cœurs de calcul, un réglage du poste pour la séance (§ 5.10) --------
   // disponibles : les processeurs logiques du poste, hyperthreads compris.

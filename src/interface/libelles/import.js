@@ -1,7 +1,8 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les libellés de l'import d'une liste : aperçu et rapport (§ 14.6). Chaque
+// Les libellés de l'import d'une liste de participants ou d'objectifs de
+// table : nature du fichier, aperçu et rapport (§ 10.4, § 14.6). Chaque
 // clé commence par « import. ». Un nombre, un nom ou un rang s'affiche dans
 // son propre nœud de texte : les libellés qui le suivent ne reçoivent que ce
 // qui accorde le nom au compte.
@@ -28,6 +29,11 @@ export const TABLE = new Map([
   ['import.sorte.refus', 'Refus'],
   ['import.sorte.avis', 'Avis'],
   ['import.sorte.information', 'Information'],
+
+  // --- La nature du fichier, choisie avant l'aperçu (§ 10.4) --------------------
+  ['import.nature.titre', 'Contenu du fichier'],
+  ['import.nature.participants', 'Participants'],
+  ['import.nature.objectifs', 'Objectifs de table'],
 
   // --- Le mode de l'import (§ 10.1) -------------------------------------------
   ['import.mode.titre', "Mode de l'import"],
@@ -63,6 +69,14 @@ export const TABLE = new Map([
   ['import.champ.exclu', 'exclu'],
   ['import.champ.notes', 'notes'],
   ['import.champ.etiquettes', 'étiquettes'],
+  ['import.champ.table', 'table'],
+  ['import.champ.tour', 'tour'],
+  ['import.champ.objectif', 'objectif'],
+  ['import.champ.regle', 'règle'],
+  ['import.tour.soiree', 'soirée'],
+  ['import.regle.ou', 'au moins une'],
+  ['import.regle.et', 'toutes'],
+  ['import.regle.defaut', 'règle par défaut'],
   ['import.exclu.oui', 'oui'],
   ['import.exclu.non', 'non'],
   ['import.colonne.nonReconnue', 'non reconnue : ignorée'],
@@ -78,6 +92,10 @@ export const TABLE = new Map([
   ['import.apercu.fusions', 'Orthographes fondues en une appartenance'],
   ['import.apercu.orthographeLignes', ({ n }) => accorde(n, 'ligne', 'lignes')],
   ['import.apercu.affichee', 'affichée :'],
+  ['import.apercu.fusionsEtiquettes', 'Orthographes fondues en une étiquette'],
+  ['import.apercu.retenue', 'retenue :'],
+  ['import.apercu.orthographes', 'orthographes :'],
+  ['import.apercu.lignesReecrites', ({ n }) => accorde(n, 'ligne réécrite', 'lignes réécrites')],
   ['import.apercu.doublons', 'Doublons signalés, jamais fusionnés'],
   ['import.apercu.doublonLignes', 'lignes'],
   ['import.apercu.doublonExistants', 'déjà dans la liste :'],
@@ -92,6 +110,9 @@ export const TABLE = new Map([
     "Ajoutez une ligne d'en-tête qui nomme les colonnes, ou lisez les colonnes dans l'ordre de la grille.",
   ],
   ['import.remede.nomNonAssocie', 'Nommez « nom » la colonne des noms.'],
+  ['import.remede.aucunEnteteObjectifs', "Ajoutez une ligne d'en-tête qui nomme les colonnes, « table » et « objectif » au moins."],
+  ['import.remede.tableNonAssociee', 'Nommez « table » la colonne des numéros de table.'],
+  ['import.remede.objectifNonAssocie', 'Nommez « objectif » la colonne des étiquettes visées.'],
   ['import.remede.aucuneLigneValide', 'Corrigez les lignes refusées, listées avec leur motif.'],
   [
     'import.remede.guillemetOuvert',
@@ -128,6 +149,14 @@ export const TABLE = new Map([
     ({ n }) => `${n} ${accorde(n, 'proposition deviendra périmée', 'propositions deviendront périmées')}`,
   ],
 
+  // --- La fenêtre de « Remplacer » des objectifs (§ 10.4) ----------------------
+  ['import.remplacer.titreObjectifs', 'Remplacer les objectifs des tables'],
+  [
+    'import.remplacer.objectifs',
+    ({ n }) => `${n} ${accorde(n, 'objectif de table sera supprimé', 'objectifs de table seront supprimés')}`,
+  ],
+  ['import.remplacer.tables', ({ n }) => `${n} ${accorde(n, 'table perdra ses objectifs', 'tables perdront leurs objectifs')}`],
+
   // --- Le rapport (§ 10.1) ---------------------------------------------------
   ['import.rapport.titre', "Rapport d'import"],
   ['import.rapport.ajoutes', ({ n }) => accorde(n, 'personne ajoutée', 'personnes ajoutées')],
@@ -136,5 +165,14 @@ export const TABLE = new Map([
   ['import.rapport.retires', ({ n }) => accorde(n, 'personne retirée', 'personnes retirées')],
   ['import.rapport.reservationsRetirees', ({ n }) => accorde(n, 'réservation retirée', 'réservations retirées')],
   ['import.rapport.rienEcrit', "Rien n'a changé dans la liste : seules des lignes refusées restent à lire."],
+  ['import.rapport.objectifsAjoutes', ({ n }) => accorde(n, 'objectif ajouté', 'objectifs ajoutés')],
+  ['import.rapport.objectifsRemplaces', ({ n }) => accorde(n, 'objectif remplacé', 'objectifs remplacés')],
+  ['import.rapport.objectifsInchanges', ({ n }) => accorde(n, 'objectif inchangé', 'objectifs inchangés')],
+  ['import.rapport.objectifsRetires', ({ n }) => accorde(n, 'objectif retiré', 'objectifs retirés')],
+  ['import.rapport.tablesTouchees', ({ n }) => accorde(n, 'table dont les objectifs changent', 'tables dont les objectifs changent')],
+  [
+    'import.rapport.rienEcritObjectifs',
+    "Aucun objectif de table n'a changé : seules des lignes refusées restent à lire.",
+  ],
   ['import.rapport.designees', 'désignées :'],
 ]);

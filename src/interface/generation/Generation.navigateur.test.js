@@ -40,6 +40,7 @@ import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, contraste, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { REGLAGES_GENERATION, valeurDuReglage } from './reglages.js';
 import Travailleur from './travailleur.js?worker&inline';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -295,7 +296,7 @@ async function regler(m, reglages) {
 describe('les réglages (§ 5.7, § 5.10)', () => {
   test('exécuteur direct : quatre champs, chacun son libellé et son unité ; l’historique pré-rempli à 1 000 ; aucun champ de durée', async () => {
     const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
-    const entrees = [...section(m).querySelectorAll('input:not([type="checkbox"])')];
+    const entrees = [...section(m).querySelectorAll('input:not([type="checkbox"]):not([type="radio"])')];
     expect(entrees.length).toBe(4);
     expect(entrees.map((entree) => entree.dataset.champ)).toEqual(CHAMPS);
     for (const cle of CHAMPS) {
@@ -386,24 +387,36 @@ describe('les réglages (§ 5.7, § 5.10)', () => {
 });
 
 describe('les contraintes et l’attribution des sièges (§ 5.3)', () => {
-  // Les cinq bascules, dans l'ordre du § 5.3.
-  const BASCULES = ['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances', 'attribuerSieges'];
+  // Les sept bascules, dans l'ordre du § 5.3 ; les deux cases facultatives
+  // valent leur défaut tant que la charge ne les porte pas.
+  const BASCULES = [
+    'separerAppartenances',
+    'nouveauxVoisins',
+    'nouvelleTable',
+    'varierAppartenances',
+    'respecterObjectifs',
+    'rencontrerAnimateurs',
+    'attribuerSieges',
+  ];
   const NOMS_DU_SPEC = [
     'Séparer les appartenances',
     'Nouveaux voisins à chaque tour',
     'Nouvelle table à chaque tour',
     'Varier les appartenances rencontrées',
+    'Respecter les objectifs des tables',
+    "Rencontrer le plus d'animateurs différents",
     'Attribuer les sièges',
   ];
+  const valeurLue = (reglages, cle) => valeurDuReglage(reglages, REGLAGES_GENERATION.find((entree) => entree.cle === cle));
 
-  test('direct : cinq bascules sous leur nom du § 5.3 ; chacune, une entrée, son réglage seul', async () => {
+  test('direct : sept bascules sous leur nom du § 5.3 ; chacune, une entrée, son réglage seul', async () => {
     const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
     const cases = [...section(m).querySelectorAll('input[type="checkbox"]')];
     expect(cases.map((caseACocher) => caseACocher.dataset.champ)).toEqual([...BASCULES, 'coeursAutomatiques']);
     BASCULES.forEach((cle, rang) => {
       expect(etiquette(m, cle).textContent).toBe(t(`generation.contrainte.${cle}`));
       expect(t(`generation.contrainte.${cle}`)).toBe(NOMS_DU_SPEC[rang]);
-      expect(bascule(m, cle).checked, cle).toBe(charge(m).reglages[cle]);
+      expect(bascule(m, cle).checked, cle).toBe(valeurLue(charge(m).reglages, cle));
     });
     for (const cle of BASCULES) {
       const avant = structuredClone(charge(m).reglages);
@@ -412,8 +425,8 @@ describe('les contraintes et l’attribution des sièges (§ 5.3)', () => {
       await cliquer(m, bascule(m, cle));
       expect(revision(m), cle).toBe(r0 + 1);
       expect(journalDe(m).entrees.length, cle).toBe(entrees + 1);
-      expect(charge(m).reglages, cle).toEqual({ ...avant, [cle]: !avant[cle] });
-      expect(bascule(m, cle).checked, cle).toBe(!avant[cle]);
+      expect(charge(m).reglages, cle).toEqual({ ...avant, [cle]: !valeurLue(avant, cle) });
+      expect(bascule(m, cle).checked, cle).toBe(!valeurLue(avant, cle));
     }
     // La barre d'espace bascule aussi, par le même geste.
     const cle = BASCULES[0];

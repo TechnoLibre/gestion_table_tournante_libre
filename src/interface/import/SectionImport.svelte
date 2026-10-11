@@ -2,24 +2,32 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // La section de l'import des participants (§ 10.1, § 10.2, § 2.1 étape
-  // 2). Un fichier choisi par le dialogue de la façade, un fichier déposé
-  // sur la fenêtre, ou un texte que le collage de la grille remet par
-  // ui.ouvrirImport, ouvre l'aperçu ; rien ne s'importe hors de lui.
-  // L'aperçu se calcule par apercevoir contre les participants et les
-  // tables de la charge — les étiquettes des objectifs donnent leur
-  // orthographe à celles du fichier —, sous le mode choisi et le choix des
-  // colonnes ambiguës : il n'écrit rien, et s'ouvre en lecture comme sur un
-  // plan bloqué. Seule
-  // « Importer » écrit, par seance.executer('importerParticipants', …), et
-  // son refus se pose à côté d'elle ; « Remplacer » passe d'abord par la
-  // fenêtre à confirmer, qui porte les quatre comptes de bilanRemplacement,
-  // et ne l'ouvre que sur un import que la commande accepterait.
-  // Le rapport lit le résumé que la séance rend.
+  // La section d'un import, § 10.1, § 10.2, § 10.4 et § 2.1 étape 2 : des
+  // participants, ou des objectifs de table, selon la nature que
+  // l'opérateur coche avant l'aperçu — Participants par défaut. La nature
+  // ne se devine jamais de l'en-tête : un fichier lu sous la mauvaise se
+  // refuse, et l'opérateur la change. Un fichier choisi par le dialogue de
+  // la façade, un fichier déposé sur la fenêtre, ou un texte que le collage
+  // de la grille remet par ui.ouvrirImport, ouvre l'aperçu ; rien ne
+  // s'importe hors de lui. Le collage vient de la grille des participants,
+  // et coche leur nature.
+  //
+  // L'aperçu se calcule par apercevoirSelon (modele.js) contre la charge,
+  // sous la nature, le mode choisi et le choix des colonnes ambiguës : il
+  // n'écrit rien, et s'ouvre en lecture comme sur un plan bloqué. Changer
+  // de nature recalcule l'aperçu du même texte, le choix des colonnes et le
+  // mode repartant de rien. Seule « Importer » écrit, par seance.executer —
+  // importerParticipants ou importerObjectifs —, et son refus se pose à
+  // côté d'elle ; « Remplacer » passe d'abord par la fenêtre à confirmer,
+  // qui porte les quatre comptes de bilanRemplacement pour des
+  // participants, les deux de bilanRemplacementObjectifs — objectifs et
+  // tables — pour des objectifs, et ne l'ouvre que sur un import que la
+  // commande accepterait. Le rapport lit le résumé que la séance rend.
   //
   // La section est une carte titrée, dont l'en-tête porte la consigne et
-  // « Choisir un fichier CSV… », son action principale ; l'aperçu, puis le
-  // rapport, sont des cartes sous elle.
+  // « Choisir un fichier CSV… », son action principale, et dont le contenu
+  // est le choix de la nature ; l'aperçu, puis le rapport, sont des cartes
+  // sous elle.
   //
   // Le CSV des refus — de l'aperçu, ou du résumé dans le rapport — vient
   // d'exporterRefus de src/application/csv.js, dont le motif est celui de
@@ -28,13 +36,27 @@
   // et corrige le fichier.
   import { getContext, untrack } from 'svelte';
   import { appliquerCommande } from '../../application/commandes.js';
-  import { apercevoir, bilanRemplacement, decoder, exporterRefus } from '../../application/csv.js';
+  import { bilanRemplacement, bilanRemplacementObjectifs, decoder, exporterRefus } from '../../application/csv.js';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
   import Apercu from './Apercu.svelte';
   import Rapport from './Rapport.svelte';
-  import { MODES_D_IMPORT, avecEntetesDeLaGrille, modeleApercu, modePropose } from './modele.js';
+  import {
+    NATURES_D_IMPORT,
+    NATURE_PAR_DEFAUT,
+    apercevoirSelon,
+    avecEntetesDeLaGrille,
+    modeleApercu,
+    modePropose,
+    modesDImport,
+  } from './modele.js';
+
+  // La commande qu'applique « Importer », par nature.
+  const COMMANDES_DES_NATURES = new Map([
+    ['participants', 'importerParticipants'],
+    ['objectifs', 'importerObjectifs'],
+  ]);
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -45,36 +67,53 @@
   // La source de l'aperçu : { origine: 'fichier'|'collage', nom, encodage,
   // texte, refusDecodage } ; texte null sous un refus de decoder.
   let source = $state.raw(null);
+  // La nature cochée : ce que le fichier importe.
+  let nature = $state(NATURE_PAR_DEFAUT);
   // { champ: rang } qui tranche une ambiguïté de l'en-tête.
   let choix = $state.raw({});
   let mode = $state('ajouter');
-  // Le dernier import appliqué : { modele, source, apercu, resume, libelle }.
+  // Le dernier import appliqué : { nature, modele, source, apercu, resume, libelle }.
   let rapport = $state.raw(null);
-  // La fenêtre de « Remplacer » ouverte : { apercu, elements }.
+  // La fenêtre de « Remplacer » ouverte : { titre, nature, apercu, depuis, elements }.
   let confirmation = $state.raw(null);
   // Le chemin où le CSV des refus vient d'être enregistré.
   let enregistre = $state(null);
 
-  const participants = $derived($seance.charge?.participants ?? []);
-  const tables = $derived($seance.charge?.tables ?? []);
+  const charge = $derived($seance.charge ?? null);
+  const participants = $derived(charge?.participants ?? []);
   const apercu = $derived(
-    source === null || source.refusDecodage !== null ? null : apercevoir(source.texte, { participants, tables, choix, mode }),
+    source === null || source.refusDecodage !== null || charge === null
+      ? null
+      : apercevoirSelon(nature, source.texte, charge, { choix, mode }),
   );
   const modele = $derived(
-    source === null ? null : modeleApercu({ encodage: source.encodage, apercu, refusDecodage: source.refusDecodage }),
+    source === null ? null : modeleApercu({ nature, encodage: source.encodage, apercu, refusDecodage: source.refusDecodage }),
   );
   // Le texte relu dans l'ordre de la grille, offert à un collage seul.
-  const grille = $derived(source?.origine === 'collage' && apercu !== null ? avecEntetesDeLaGrille(source.texte, apercu) : null);
+  const grille = $derived(
+    source?.origine === 'collage' && apercu !== null ? avecEntetesDeLaGrille(source.texte, apercu, nature) : null,
+  );
 
-  // Une source neuve : le choix des colonnes repart de rien, le mode
-  // proposé suit la liste, le rapport précédent se retire.
-  function ouvrirSource(nouvelle) {
-    source = nouvelle;
+  // Ce qui suit un aperçu neuf : le choix des colonnes repart de rien, le
+  // mode proposé suit la nature et la liste, le rapport précédent se
+  // retire.
+  function repartir() {
     choix = {};
-    mode = modePropose(untrack(() => participants));
+    mode = modePropose(untrack(() => participants), untrack(() => nature));
     rapport = null;
     confirmation = null;
     enregistre = null;
+  }
+
+  function ouvrirSource(nouvelle) {
+    source = nouvelle;
+    repartir();
+  }
+
+  // Une autre nature : l'aperçu ouvert se recalcule sur le même texte.
+  function choisirNature(nouvelle) {
+    nature = nouvelle;
+    repartir();
   }
 
   // Les octets d'un fichier : leur texte décodé, ou le refus de decoder,
@@ -113,7 +152,9 @@
     if ($ui.importEnAttente === null) return;
     untrack(() => {
       const pris = ui.prendreImport();
-      if (pris !== null) ouvrirSource({ origine: 'collage', nom: null, encodage: null, texte: pris.texte, refusDecodage: null });
+      if (pris === null) return;
+      nature = 'participants';
+      ouvrirSource({ origine: 'collage', nom: null, encodage: null, texte: pris.texte, refusDecodage: null });
     });
   });
 
@@ -131,12 +172,13 @@
     enregistre = null;
   }
 
-  // L'aperçu appliqué par la séance, dans son mode ; le rapport lit le
-  // résumé rendu, et l'aperçu se ferme.
-  async function appliquer(applique, sonMode, depuis) {
-    const { libelle, resume } = await seance.executer('importerParticipants', { apercu: applique, mode: sonMode });
+  // L'aperçu appliqué par la séance, par la commande de sa nature, dans son
+  // mode ; le rapport lit le résumé rendu, et l'aperçu se ferme.
+  async function appliquer(applique, sonMode, depuis, saNature) {
+    const { libelle, resume } = await seance.executer(COMMANDES_DES_NATURES.get(saNature), { apercu: applique, mode: sonMode });
     rapport = {
-      modele: modeleApercu({ encodage: depuis.encodage, apercu: applique }),
+      nature: saNature,
+      modele: modeleApercu({ nature: saNature, encodage: depuis.encodage, apercu: applique }),
       source: { origine: depuis.origine, nom: depuis.nom },
       apercu: applique,
       resume,
@@ -159,17 +201,32 @@
     const applique = apercu;
     const sonMode = mode;
     const depuis = source;
+    const saNature = nature;
     if (sonMode !== 'remplacer') {
-      await appliquer(applique, sonMode, depuis);
+      await appliquer(applique, sonMode, depuis, saNature);
       return;
     }
-    const { refus, charge } = seance.etat();
+    const { refus, charge: courante } = seance.etat();
     if (refus !== null) throw refus;
-    appliquerCommande('importerParticipants', charge, { apercu: applique, mode: sonMode });
-    const bilan = bilanRemplacement(charge);
-    confirmation = {
-      apercu: applique,
-      depuis,
+    appliquerCommande(COMMANDES_DES_NATURES.get(saNature), courante, { apercu: applique, mode: sonMode });
+    confirmation = { nature: saNature, apercu: applique, depuis, ...annonceDuRemplacement(saNature, courante) };
+  }
+
+  // Le titre de la fenêtre de « Remplacer » et ce qu'elle nomme détruit :
+  // les personnes, réservations, titres pourvus et propositions pour des
+  // participants ; les objectifs et les tables qui en portent pour des
+  // objectifs.
+  function annonceDuRemplacement(saNature, courante) {
+    if (saNature === 'objectifs') {
+      const bilan = bilanRemplacementObjectifs(courante);
+      return {
+        titre: 'import.remplacer.titreObjectifs',
+        elements: [t('import.remplacer.objectifs', { n: bilan.objectifs }), t('import.remplacer.tables', { n: bilan.tables })],
+      };
+    }
+    const bilan = bilanRemplacement(courante);
+    return {
+      titre: 'import.remplacer.titre',
       elements: [
         t('import.remplacer.participants', { n: bilan.participants }),
         t('import.remplacer.reservations', { n: bilan.reservations }),
@@ -180,7 +237,7 @@
   }
 
   async function confirmerRemplacement() {
-    await appliquer(confirmation.apercu, 'remplacer', confirmation.depuis);
+    await appliquer(confirmation.apercu, 'remplacer', confirmation.depuis, confirmation.nature);
     confirmation = null;
   }
 
@@ -197,6 +254,21 @@
     {#snippet actions()}
       <Commande cle="import.commande.choisirFichier" nom="choisirFichier" variante="principale" executer={choisirFichier} />
     {/snippet}
+    <fieldset class="natures" data-nature-import>
+      <legend>{t('import.nature.titre')}</legend>
+      {#each NATURES_D_IMPORT as { nature: valeur, cle } (valeur)}
+        <label>
+          <input
+            type="radio"
+            name={`${uid}-nature`}
+            value={valeur}
+            checked={nature === valeur}
+            onchange={() => choisirNature(valeur)}
+          />
+          <span>{t(cle)}</span>
+        </label>
+      {/each}
+    </fieldset>
   </Carte>
 
   {#if source !== null}
@@ -207,7 +279,7 @@
             {#if modele.global === null}
               <fieldset class="modes" data-champ="mode">
                 <legend>{t('import.mode.titre')}</legend>
-                {#each MODES_D_IMPORT as { mode: valeur, cle } (valeur)}
+                {#each modesDImport(nature) as { mode: valeur, cle } (valeur)}
                   <label>
                     <input type="radio" name={`${uid}-mode`} value={valeur} bind:group={mode} />
                     <span>{t(cle)}</span>
@@ -265,7 +337,7 @@
 
   {#if confirmation !== null}
     <Confirmation
-      titre="import.remplacer.titre"
+      titre={confirmation.titre}
       elements={confirmation.elements}
       surConfirmer={confirmerRemplacement}
       surAnnuler={() => (confirmation = null)}
@@ -297,7 +369,8 @@
     gap: var(--espace-2);
   }
 
-  .modes {
+  .modes,
+  .natures {
     display: flex;
     flex-wrap: wrap;
     gap: var(--espace-3);
@@ -311,5 +384,12 @@
   legend {
     padding: 0 var(--espace-1);
     font-weight: bold;
+  }
+
+  /* Le choix de la nature et celui du mode se font aussi au clavier : le
+     bouton radio qui a le focus porte l'anneau de l'application. */
+  input:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
   }
 </style>

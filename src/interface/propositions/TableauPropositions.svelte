@@ -11,8 +11,10 @@
   // Les violations d'une ligne comparable — retenu compris — se lisent sous
   // son identifiant.
   //
-  // vue : ce que rend tableau(), libellés et étendues compris, ses lignes
-  // et ses lignes hors classement réduites à celles de la page montrée
+  // vue : ce que rend tableau(), libellés et étendues compris — ses colonnes
+  // et ses groupes, ceux que porte la table, le sixième groupe selon les
+  // critères qui comptent —, ses lignes et ses lignes hors classement
+  // réduites à celles de la page montrée
   // (pagine, modele.js) ; chaque ligne garde son rang global. nommer(id) :
   // le nom affiché d'une personne, null pour id null ou pour une personne que
   // la charge n'a plus. voir(id) et
@@ -26,11 +28,12 @@
   //
   // Chaque en-tête explique sa colonne dans l'infobulle de la section : il se
   // focalise au clavier (tabindex 0), et son survol ou son focus appelle
-  // expliquer(evenement, 'colonne:<nom>', nom), le quitter taire('colonne:<nom>').
+  // expliquer(evenement, 'colonne:<nom>', nom), le quitter
+  // taire('colonne:<nom>').
   // decrit('colonne:<nom>') rend l'identifiant de l'infobulle quand elle
   // explique cet en-tête, pour son aria-describedby, undefined sinon.
   //
-  // Deux rangées d'en-têtes : celle des groupes (GROUPES_COLONNES, modele.js),
+  // Deux rangées d'en-têtes : celle des groupes (vue.groupes, modele.js),
   // chacun en scope colgroup au-dessus de ses colonnes, une cellule vide au-
   // dessus d'une colonne hors groupe ; puis celle des colonnes, seule à
   // porter data-colonne et les explications. Les colonnes de nombres
@@ -50,7 +53,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
   import Pastille from '../primitives/Pastille.svelte';
-  import { GROUPES_COLONNES, texteCellule } from './modele.js';
+  import { texteCellule } from './modele.js';
 
   let { vue, surlignee = null, nommer, voir, retenir, expliquer, taire, decrit } = $props();
 
@@ -123,12 +126,12 @@
 
 <div class="defilement">
   <table aria-label={t('propositions.tableau.titre')}>
-    {#each GROUPES_COLONNES as segment, rang (rang)}
+    {#each vue.groupes as segment, rang (rang)}
       <colgroup span={segment.etendue}></colgroup>
     {/each}
     <thead>
       <tr class="groupes">
-        {#each GROUPES_COLONNES as segment, rang (rang)}
+        {#each vue.groupes as segment, rang (rang)}
           {#if segment.cle === null}
             <td></td>
           {:else}

@@ -7,7 +7,11 @@
 // participants.entete.comptes compose la ligne de comptes de la carte
 // (comptesEntete, entete.js), ses parties séparées d'un point médian ;
 // participants.legende.* nomme la légende des appartenances et chacune de
-// ses pastilles, le nom puis le compte.
+// ses pastilles, le nom puis le compte ; participants.legendeEtiquettes.titre
+// nomme la légende des étiquettes, dont chaque pastille se compose comme
+// celle d'une appartenance. participants.etiquettes.* porte la saisie des
+// étiquettes sur la fiche : son champ, son ajout, et le retrait nommé par
+// l'étiquette qu'il ôte.
 //
 // participants.colonne.* nomme chaque colonne de COLONNES (grille.js), dans
 // l'en-tête de la grille, l'étiquette d'un champ du formulaire et celle
@@ -69,6 +73,7 @@ export const TABLE = new Map([
   ],
   ['participants.legende.titre', 'Appartenances'],
   ['participants.legende.element', ({ nom, compte: n }) => `${nom} \u{00B7} ${n}`],
+  ['participants.legendeEtiquettes.titre', 'Étiquettes'],
 
   // --- Le formulaire d'ajout (§ 10.2) ---------------------------------------
   ['participants.formulaire.titre', 'Ajouter une personne'],
@@ -158,6 +163,13 @@ export const TABLE = new Map([
   ['participants.fiche.horsRetenu', 'hors du placement retenu'],
   ['participants.fiche.siegeNonAttribue', 'non attribué'],
   ['participants.fiche.aucunRetenu', 'Aucun placement retenu ne la nomme.'],
+  ['participants.fiche.etiquettes', 'Étiquettes'],
+  ['participants.fiche.aucuneEtiquette', 'Aucune étiquette.'],
+
+  // --- Les étiquettes de la fiche (§ 4.5, § 10.2) ---------------------------
+  ['participants.etiquettes.champ', 'Ajouter des étiquettes, séparées par une virgule'],
+  ['participants.etiquettes.ajouter', 'Ajouter'],
+  ['participants.etiquettes.retirer', ({ motCle }) => `Retirer « ${motCle} »`],
 
   // --- Les statuts calculés (§ 4.2) -----------------------------------------
   ['participants.statut.ancre', 'ancré'],

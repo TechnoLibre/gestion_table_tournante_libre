@@ -11,6 +11,7 @@
 // composé par texte depuis son code. Les noms de personnes et les numéros de
 // table viennent des détails : une fenêtre à confirmer nomme chaque élément
 // détruit dans son propre libellé.
+import { JOINTURE_ETIQUETTES } from '../../application/csv.js';
 import { cite, compte } from '../../application/libelles/aides.js';
 
 // Un accord au nombre : le singulier jusqu'à un, comme compte.
@@ -18,6 +19,14 @@ const accord = (n, singulier, pluriel) => (n <= 1 ? singulier : pluriel);
 
 // La portée d'une réservation en mots : tous les tours, ou le tour désigné.
 const portee = ({ portee: genre, tour }) => (genre === 'tous' ? 'pour tous les tours' : `au tour ${tour}`);
+
+// Les étiquettes d'un objectif, citées et jointes comme l'export les
+// joint : aucun « et » ni « ou » entre elles, qui dirait une règle que
+// l'objectif ne porte pas forcément.
+const etiquettesCitees = (etiquettes) => etiquettes.map(cite).join(JOINTURE_ETIQUETTES);
+
+// Ce qu'une règle exige des étiquettes, en mots (§ 4.5).
+const exigence = (regle) => (regle === 'et' ? 'toutes' : 'au moins une');
 
 export const TABLE = new Map([
   // --- Le défaut (§ 6.1) ------------------------------------------------------
@@ -118,6 +127,10 @@ export const TABLE = new Map([
       `${reservation.siege === null ? '' : `, siège ${reservation.siege}`}`,
   ],
   ['tables.suppression.titre', ({ siege, libelle }) => `Titre ${cite(libelle)}, siège ${siege}`],
+  [
+    'tables.suppression.objectif',
+    ({ tour, etiquettes }) => `Objectif ${tour === null ? 'de la soirée' : `du tour ${tour}`} : ${etiquettesCitees(etiquettes)}`,
+  ],
 
   // --- Les tours (§ 2.1 étape 5, § 4.3) ----------------------------------------
   ['tables.tours.etiquette', 'Nombre de tours'],
@@ -129,6 +142,30 @@ export const TABLE = new Map([
     'tables.tours.reservation',
     ({ nom, numero, tour }) => `${nom} : réservation à la table ${numero} au tour ${tour}, détruite`,
   ],
+  [
+    'tables.tours.objectif',
+    ({ numero, tour, etiquettes }) => `Table ${numero} : objectif du tour ${tour} (${etiquettesCitees(etiquettes)}), détruit`,
+  ],
+
+  // --- Les objectifs des tables (§ 4.5, § 10.4, D3, D19) ------------------------
+  // La règle par défaut de l'événement, réglée avec les places et les tours.
+  ['tables.regle.etiquette', 'Règle par défaut des objectifs'],
+  ['tables.regle.ou', 'au moins une (OU)'],
+  ['tables.regle.et', 'toutes (ET)'],
+  // L'objectif d'une table : son champ d'étiquettes, le choix de sa règle —
+  // le réglage général, nommé par ce qu'il exige, ou une règle propre —, et
+  // son état en mots.
+  ['tables.objectif.soiree', 'Objectif de la soirée'],
+  ['tables.objectif.tour', ({ tour }) => `Objectif du tour ${tour}`],
+  ['tables.objectif.regle', "Règle de l'objectif"],
+  ['tables.objectif.regleDefaut', ({ regle }) => `selon le réglage général (${exigence(regle)})`],
+  ['tables.objectif.suitDefaut', 'Suit la règle par défaut'],
+  ['tables.objectif.reglePropre', 'Règle propre'],
+  ['tables.objectif.retirer', "Retirer l'objectif"],
+  // Le bouton qui déplie les objectifs par tour, et combien de tours en
+  // portent un.
+  ['tables.objectifs.parTour', ({ nombre }) => (nombre === 0 ? 'Objectifs par tour' : `Objectifs par tour (${nombre})`)],
+  ['tables.objectifs.exporter', 'Exporter les objectifs'],
 
   // Un placement qu'un changement laisse en dérive (§ 9) : il reste, et ne
   // correspond plus à la configuration.

@@ -25,6 +25,11 @@
   // qui l'exécute par la séance ; un refus de la séance — mode lecture, plan
   // bloqué — s'affiche à côté du bouton, avec son propre remède.
   //
+  // Les planchers des objectifs (A10) s'énoncent selon le mode réglé : ils
+  // lisent l'état des critères, criteresDuDiagnostic, qui ne s'évalue que
+  // lorsqu'un plancher des objectifs est positif. Chacun porte
+  // data-plancher-objectifs, la valeur dont il donne le plancher.
+  //
   // Une configuration que le moteur refuse n'a pas de diagnostic : son
   // code, traduit, se pose à sa place, jamais le message de l'erreur.
   import { getContext } from 'svelte';
@@ -35,7 +40,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
-  import { cartesDiagnostic, enonces, numeroDeCharge } from './phrases.js';
+  import { cartesDiagnostic, criteresDuDiagnostic, enonces, numeroDeCharge } from './phrases.js';
 
   let { compact = false } = $props();
 
@@ -49,7 +54,11 @@
   const liste = $derived(
     resultat === null || resultat.diagnostic === null
       ? []
-      : enonces(resultat.diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours }),
+      : enonces(resultat.diagnostic, {
+          numeroDe: numeroDeCharge(charge),
+          tours: charge.evenement.tours,
+          criteres: criteresDuDiagnostic(charge, resultat.diagnostic),
+        }),
   );
   const cartes = $derived(cartesDiagnostic(liste));
   // Le rang de teinte de chaque appartenance, sur tous les participants.
@@ -72,7 +81,7 @@
   </svelte:element>
   <ul aria-labelledby={id}>
     {#each carte.enonces as enonce, n (n)}
-      <li data-enonce={enonce.cle}>
+      <li data-enonce={enonce.cle} data-plancher-objectifs={enonce.grandeur}>
         <p class="enonce"><span data-phrase>{t(enonce.cle, enonce.details)}</span></p>
         {#if !compact && enonce.remede !== null}
           {@const action = actionDe(enonce.remede)}

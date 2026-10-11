@@ -24,6 +24,7 @@ import { appliquerCommande } from '../../src/application/commandes.js';
 import { ErreurAnnulee } from '../../src/application/generation.js';
 import { texteLivre } from '../../src/demo/livrees.js';
 import { SECTIONS } from '../../src/interface/evenement/sections.js';
+import { LISTE_PAR_DEFAUT, listeApres } from '../../src/interface/generation/priorites.js';
 import { rechercher } from '../../src/moteur/recherche.js';
 import { serialiser } from '../../src/stockage/canonique.js';
 import { analyser, capacite, configurationDepuisCharge } from '../../src/stockage/document.js';
@@ -653,6 +654,29 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'participants.etiquettes',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // Deux personnes étiquetées, puis la fiche d'une troisième, où
+      // « FINANCE » tapé au clavier s'enregistre sous l'orthographe que
+      // l'événement porte : les pastilles neutres et leur « Retirer », le
+      // signal d'orthographe contre le champ, et la légende des étiquettes
+      // sous celle des appartenances.
+      let charge = chargePrincipale();
+      charge = executer(charge, 'changerEtiquettes', { id: 1, ajouter: 'finance, Montréal' });
+      charge = executer(charge, 'changerEtiquettes', { id: 2, ajouter: 'bénévole' });
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'participants' });
+      await cliquer(m, '[data-participant="3"] [data-commande="fiche"]');
+      const champ = await element(m, '[data-fiche="3"] [data-champ="etiquettes"]');
+      champ.focus();
+      for (const caractere of 'FINANCE') await touche(caractere);
+      await touche('Enter');
+      await element(m, '[data-fiche="3"] [data-etiquettes] [data-avertissement="ORTHOGRAPHE_RETENUE"]');
+      await element(m, '[data-legende-etiquettes]');
+      return m.racine;
+    },
+  },
+  {
     nom: 'participants.groupes',
     mode: 'ecriture',
     async atteindre(contexte) {
@@ -733,6 +757,27 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'tables.objectifs',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // La règle par défaut dans la carte des réglages ; la table 1 vise
+      // « finance » pour la soirée sous sa règle propre, et au tour 2 en
+      // suivant le défaut, ses objectifs par tour dépliés ; la table 2 vise
+      // « cuisine », que personne ne porte : ses avis contre l'objectif.
+      let charge = chargePrincipale();
+      charge = executer(charge, 'changerEtiquettes', { id: 1, ajouter: 'finance' });
+      charge = executer(charge, 'poserObjectif', { table: 1, tour: null, etiquettes: 'finance', regle: 'ou' });
+      charge = executer(charge, 'poserObjectif', { table: 1, tour: 2, etiquettes: 'finance', regle: null });
+      charge = executer(charge, 'poserObjectif', { table: 2, tour: null, etiquettes: 'cuisine', regle: null });
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'tables' });
+      await element(m, '[data-regle-objectifs]');
+      await cliquer(m, '[data-section="tables"] [data-table="1"] [data-commande="basculerObjectifsTours"]');
+      await element(m, '[data-objectif="1-2"][data-portee="tour"]');
+      await element(m, '[data-objectif="2"] [data-avertissement="ETIQUETTE_ORPHELINE"]');
+      return m.racine;
+    },
+  },
+  {
     nom: 'evenement.avertissements',
     mode: 'lecture',
     async atteindre(contexte) {
@@ -756,6 +801,38 @@ export const ECRANS = Object.freeze([
       );
       if (m.racine.querySelector('[data-avancement]') === null) await cliquer(m, '[data-commande="confirmerGeneration"]');
       await element(m, '[data-avancement]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'generation.priorites',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // L'éditeur des priorités sur un ordre réglé — l'excédent et les
+      // collisions cumulées au même palier, chacun son poids —, puis la
+      // redondance jointe aux animateurs : l'annonce du geste paraît.
+      const paliers = listeApres(LISTE_PAR_DEFAUT, 'joindrePalier', 'collisionsCumulees');
+      const charge = executer(chargePrincipale(), 'changerPriorites', { paliers });
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'generation' });
+      await cliquer(m, '[data-section="generation"] [data-priorite="redondance"] [data-commande="joindrePalier"]');
+      await attendre("l'annonce du geste", () => {
+        const annonce = m.racine.querySelector('[data-section="generation"] [data-priorites] ~ [role="status"]');
+        return (annonce?.textContent.trim() ?? '') !== '';
+      });
+      return m.racine;
+    },
+  },
+  {
+    nom: 'generation.modeObjectifs',
+    mode: 'ecriture',
+    async atteindre(contexte) {
+      // Les tours hors objectif partagent un palier : choisir « l'équité
+      // d'abord » se refuse contre le groupe du mode, le choix revenu.
+      const paliers = listeApres(LISTE_PAR_DEFAUT, 'joindrePalier', 'toursHorsObjectif');
+      const charge = executer(chargePrincipale(), 'changerPriorites', { paliers });
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'generation' });
+      await cliquer(m, '[data-section="generation"] [data-mode-objectifs] input[value="minimum"]');
+      await element(m, '[data-mode-objectifs] [data-refus="OBJECTIFS_PALIER_PARTAGE"]');
       return m.racine;
     },
   },

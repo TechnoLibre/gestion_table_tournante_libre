@@ -2,10 +2,14 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // L'en-tête de la liste des participants, pur : la ligne de comptes de la
-// carte et la légende des appartenances. Les deux se lisent sur la liste
-// entière, exclues comprises — la population de l'attribution des teintes
-// (teintesAppartenances, appartenances.js) — : un filtre ne change ni un
-// compte ni une teinte. Aucune fonction ne modifie ce qu'elle reçoit.
+// carte, la légende des appartenances et celle des étiquettes. Toutes se
+// lisent sur la liste entière, exclues comprises — la population de
+// l'attribution des teintes (teintesAppartenances, appartenances.js) — : un
+// filtre ne change ni un compte ni une teinte. Aucune fonction ne modifie ce
+// qu'elle reçoit.
+
+import { cleNormalisee } from '../../application/csv.js';
+import { comparerPointsDeCode } from '../../application/planche.js';
 
 /**
  * La ligne de comptes de la carte des participants.
@@ -48,4 +52,28 @@ export function legendeAppartenances(participants, teintes) {
     if (comptes.has(nom)) legende.push({ nom, rang, compte: comptes.get(nom) });
   }
   return legende;
+}
+
+/**
+ * La légende des étiquettes (§ 10.2) : une entrée par étiquette portée,
+ * avec le nombre de personnes qui la portent, exclues comprises. Deux
+ * orthographes sont deux étiquettes, comme pour le moteur (§ 4.5) ; elles
+ * se rangent comme les appartenances : par clé normalisée (§ 10.1),
+ * comparée point de code par point de code, puis par leur chaîne. L'ordre
+ * ne dépend donc pas de celui de la liste. Vide quand personne ne porte
+ * d'étiquette : la section ne montre alors aucune légende.
+ *
+ * @param {Array<{etiquettes?: string[]}>} participants  tous ceux de
+ *   l'événement
+ * @returns {Array<{nom: string, compte: number}>}
+ */
+export function legendeEtiquettes(participants) {
+  const comptes = new Map();
+  for (const { etiquettes = [] } of participants) {
+    for (const motCle of new Set(etiquettes)) comptes.set(motCle, (comptes.get(motCle) ?? 0) + 1);
+  }
+  return [...comptes]
+    .map(([nom, compte]) => ({ nom, compte, cle: cleNormalisee(nom) }))
+    .sort((a, b) => comparerPointsDeCode(a.cle, b.cle) || comparerPointsDeCode(a.nom, b.nom))
+    .map(({ nom, compte }) => ({ nom, compte }));
 }

@@ -18,6 +18,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { flushSync } from 'svelte';
 import { appliquerCommande } from '../../application/commandes.js';
+import { configurationDe } from '../../application/configuration.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
@@ -40,7 +41,7 @@ import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { GROUPES_COLONNES, evaluation, tableau } from './modele.js';
+import { evaluation, tableau } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
@@ -1095,7 +1096,10 @@ describe('l’habillage du tableau des propositions', () => {
     const thead = section(m).querySelector('thead');
     expect(thead.rows.length).toBe(2);
     const groupes = [...thead.rows[0].querySelectorAll('th')];
-    const attendus = GROUPES_COLONNES.filter(({ cle }) => cle !== null);
+    // Sans objectif ni case des animateurs, les cinq groupes du tableau.
+    const segments = tableau(evaluation(charge(m)).table).groupes;
+    const attendus = segments.filter(({ cle }) => cle !== null);
+    expect(attendus.length).toBe(5);
     expect(groupes.map(texteDe)).toEqual(attendus.map(({ cle }) => t(cle)));
     expect(thead.rows[0].querySelectorAll('[data-colonne]').length).toBe(0);
     expect([...thead.rows[1].querySelectorAll('th[data-colonne]')].map((th) => th.dataset.colonne)).toEqual(NOMS_DES_COLONNES);
@@ -1110,7 +1114,7 @@ describe('l’habillage du tableau des propositions', () => {
       expect(g.bottom).toBeLessThanOrEqual(premiere.top + 1);
     }
     const colgroups = [...section(m).querySelectorAll('table > colgroup')];
-    expect(colgroups.map((colgroup) => colgroup.span)).toEqual(GROUPES_COLONNES.map(({ etendue }) => etendue));
+    expect(colgroups.map((colgroup) => colgroup.span)).toEqual(segments.map(({ etendue }) => etendue));
   });
 
   test('les nombres, en-têtes compris, s’alignent à droite en chiffres tabulaires', async () => {
@@ -1168,6 +1172,184 @@ describe('l’habillage du tableau des propositions', () => {
         for (const autre of [1, 2]) expect(texteDe(ligne(m, autre))).not.toContain(t('propositions.marque.retenue'));
       });
     }
+  });
+});
+
+// --- Le sixième groupe et la phrase par paliers (§ 5.7, A9, A11) ------------------
+
+// La petite démonstration au conflit inévitable et les trois plans de
+// PLANS_CONFLIT, les personnes 1 à 6 « finance », la première table attendant
+// « finance » pour la soirée ; les réglages donnés s'ajoutent à ceux de la
+// charge.
+function petiteAObjectifs(reglages = {}) {
+  const chargeLue = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
+  for (const participant of chargeLue.participants) if (participant.id <= 6) participant.etiquettes = ['finance'];
+  const [premiere] = [...chargeLue.tables].sort((a, b) => a.id - b.id);
+  premiere.objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+  Object.assign(chargeLue.reglages, reglages);
+  return chargeLue;
+}
+
+describe('le sixième groupe et la phrase par paliers (§ 5.7, A9, A11)', () => {
+  // Le pointeur réel part du coin du cadre, hors de la phrase et du tableau.
+  beforeEach(async () => {
+    await pointer('bouger', 0, 0);
+  });
+
+  const enTetesDesColonnes = (m) => [...section(m).querySelector('thead').rows[1].querySelectorAll('th[data-colonne]')].map((th) => th.dataset.colonne);
+  const enTeteDuGroupe = (m) =>
+    [...section(m).querySelector('thead').rows[0].querySelectorAll('th')].find((th) => texteDe(th) === t('propositions.groupe.objectifs')) ?? null;
+  // Les colonnes du défaut, celles du groupe des objectifs et des animateurs
+  // insérées après l'écart au plafond a priori, avant le certificat.
+  const avecSixieme = (...noms) => [...NOMS_DES_COLONNES.slice(0, 18), ...noms, ...NOMS_DES_COLONNES.slice(18)];
+
+  test('« chacun au moins une fois » : le groupe « Objectifs des tables et animateurs » couvre ses trois colonnes, chiffres du moteur ; la phrase nomme « personnes jamais servies, puis tours hors objectif »', async () => {
+    const chargeLue = executer(petiteAObjectifs({ modeObjectifs: 'chacun' }), 'retenirProposition', { id: 3 });
+    const m = await ouvrir(chargeLue);
+    expect(enTetesDesColonnes(m)).toEqual(avecSixieme('jamaisServies', 'toursHorsObjectif', 'toursSelonObjectif'));
+    const groupe = enTeteDuGroupe(m);
+    expect(groupe).not.toBeNull();
+    expect(groupe.getAttribute('scope')).toBe('colgroup');
+    expect(groupe.colSpan).toBe(3);
+    const g = groupe.getBoundingClientRect();
+    const thead = section(m).querySelector('thead');
+    expect(Math.abs(g.left - thead.querySelector('th[data-colonne="jamaisServies"]').getBoundingClientRect().left)).toBeLessThanOrEqual(1);
+    expect(Math.abs(g.right - thead.querySelector('th[data-colonne="toursSelonObjectif"]').getBoundingClientRect().right)).toBeLessThanOrEqual(1);
+    const instance = normaliser(configurationDe(chargeLue));
+    for (const proposition of chargeLue.propositions) {
+      const { objectifs } = mesurer(instance, indexerPlan(instance, planDepuisFichier(proposition)));
+      const lues = cellules(ligne(m, proposition.id));
+      expect(lues.get('jamaisServies')).toBe(format.nombre(objectifs.jamaisServies));
+      expect(lues.get('toursHorsObjectif')).toBe(format.nombre(objectifs.horsObjectif));
+      expect(lues.get('toursSelonObjectif')).toBe(format.nombre(objectifs.agregat.tous.min));
+    }
+    expect(cellules(ligneRetenu(m)).has('toursHorsObjectif')).toBe(true);
+    expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
+      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis excédent de collisions, " +
+        'puis collisions cumulées, puis personnes jamais servies, puis tours hors objectif, puis rencontres répétées, ' +
+        "puis redondance d'appartenance, puis l'identifiant croissant.",
+    );
+  });
+
+  test('les deux noms du critère des objectifs, au clavier : chacun surligne sa colonne seule et ouvre son explication, qu’il est seul à désigner', async () => {
+    const m = await ouvrir(executer(petiteAObjectifs({ modeObjectifs: 'chacun' }), 'retenirProposition', { id: 3 }));
+    const noms = [...section(m).querySelectorAll('[data-ordre] [data-critere="toursHorsObjectif"]')];
+    expect(noms.map(texteDe)).toEqual(['personnes jamais servies', 'tours hors objectif']);
+    for (const [nom, nomColonne] of [
+      [noms[0], 'jamaisServies'],
+      [noms[1], 'toursHorsObjectif'],
+    ]) {
+      expect(nom.tabIndex).toBe(0);
+      nom.focus();
+      expect(colonne(m, nomColonne).length).toBe(5);
+      await attendre(() => expect(surlignees(m), nomColonne).toEqual(colonne(m, nomColonne)));
+      await attendre(() => exigerInfobulle(nom, explicationDeColonne(nomColonne)));
+      nom.blur();
+      await attendre(() => expect(surlignees(m)).toEqual([]));
+    }
+  });
+
+  test('« nouvelle table » cochée seule : le nom « retours » surligne la colonne des retours choisis, jamais celle des rencontres répétées', async () => {
+    const chargeLue = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
+    for (const cle of ['separerAppartenances', 'nouveauxVoisins', 'varierAppartenances']) chargeLue.reglages[cle] = false;
+    const m = await ouvrir(chargeLue);
+    expect(texteDe(section(m).querySelector('[data-ordre]'))).toBe(
+      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis retours, puis l'identifiant croissant.",
+    );
+    const nom = section(m).querySelector('[data-ordre] [data-critere="rencontresRepetees"]');
+    expect(texteDe(nom)).toBe('retours');
+    const { x, y } = await centre(nom);
+    await pointer('bouger', x, y);
+    await attendre(() => expect(surlignees(m)).toEqual(colonne(m, 'retoursChoisis')));
+    for (const cellule of colonne(m, 'rencontresRepetees')) expect(cellule.dataset.marque).toBeUndefined();
+    await attendre(() => exigerInfobulle(nom, explicationDeColonne('retoursChoisis')));
+  });
+
+  test('un palier partagé : « ensemble, », chaque nom suivi de son poids ; seuls les noms se focalisent, les poids restent du texte', async () => {
+    const chargeLue = avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
+    const e = (critere, poids = 1) => ({ critere, poids });
+    chargeLue.reglages.priorites = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('excedentCollisions', 3), e('redondance', 2)],
+      [e('collisionsCumulees')],
+      [e('toursHorsObjectif')],
+      [e('rencontresRepetees')],
+      [e('animateursNonRencontres')],
+    ];
+    const m = await ouvrir(chargeLue);
+    expect(section(m).querySelector('[data-ordre] p').textContent).toBe(
+      "Ordre du classement, chaque critère au plus faible d'abord : écart au plafond a priori, puis ensemble, " +
+        "excédent de collisions (poids 3), redondance d'appartenance (poids 2), puis collisions cumulées, " +
+        "puis rencontres répétées, puis l'identifiant croissant.",
+    );
+    const noms = nomsDesignants(m);
+    expect(noms.map((nom) => nom.dataset.critere)).toEqual([
+      'ecartAuPlafondAPrioriMax',
+      'excedentCollisions',
+      'redondance',
+      'collisionsCumulees',
+      'rencontresRepetees',
+      'identifiant',
+    ]);
+    for (const nom of noms) expect(texteDe(nom)).not.toMatch(/poids|ensemble/);
+    const redondance = section(m).querySelector('[data-ordre] [data-critere="redondance"]');
+    redondance.focus();
+    await attendre(() => expect(surlignees(m)).toEqual(colonne(m, 'totalRedondance')));
+  });
+
+  test('chaque en-tête du sixième groupe se focalise, ouvre son explication, aligne ses nombres à droite en chiffres tabulaires ; ses textes à 4,5:1 dans les deux thèmes', async () => {
+    const m = await ouvrir(petiteAObjectifs({ modeObjectifs: 'minimum' }));
+    const noms = ['horsObjectifMax', 'toursHorsObjectif', 'toursSelonObjectif'];
+    expect(enTetesDesColonnes(m)).toEqual(avecSixieme(...noms));
+    for (const nom of noms) {
+      const th = enTetes(m).find((candidat) => candidat.dataset.colonne === nom);
+      expect(th.tabIndex).toBe(0);
+      th.focus();
+      await attendre(() => exigerInfobulle(th, explicationDeColonne(nom)));
+      for (const cellule of colonne(m, nom)) {
+        const style = getComputedStyle(cellule);
+        expect(style.textAlign, nom).toBe('right');
+        expect(style.fontVariantNumeric, nom).toContain('tabular-nums');
+      }
+      th.blur();
+    }
+    await attendre(() => exigerFermee());
+    for (const theme of ['clair', 'sombre']) {
+      await sousTheme(theme, async () => {
+        flushSync();
+        for (const element of [enTeteDuGroupe(m), ...noms.flatMap((nom) => colonne(m, nom))]) {
+          element.scrollIntoView({ block: 'center', inline: 'center' });
+          const [fond] = fondPeintSous(element);
+          expect(contraste(couleurTexte(element), fond), `${theme} ${element.dataset.colonne ?? 'groupe'}`).toBeGreaterThanOrEqual(4.5);
+        }
+      });
+    }
+  });
+
+  test('la case des animateurs cochée sur la grande : le groupe couvre le minimum des animateurs rencontrés et les animateurs non rencontrés, chiffres du moteur', async () => {
+    const depart = structuredClone(chargeDemo('grande'));
+    depart.reglages.rencontrerAnimateurs = true;
+    const chargeLue = generee(depart, { graine: 1, nombre: 1, arret: 2000 });
+    const m = await ouvrir(chargeLue);
+    expect(enTetesDesColonnes(m)).toEqual(avecSixieme('animateursRencontres', 'animateursNonRencontres'));
+    expect(enTeteDuGroupe(m).colSpan).toBe(2);
+    const instance = normaliser(configurationDe(chargeLue));
+    const { animateurs } = mesurer(instance, indexerPlan(instance, planDepuisFichier(chargeLue.propositions[0])));
+    const lues = cellules(ligne(m, 1));
+    expect(lues.get('animateursRencontres')).toBe(format.nombre(animateurs.agregat.tous.min));
+    expect(lues.get('animateursNonRencontres')).toBe(format.nombre(animateurs.nonRencontres));
+    const nom = section(m).querySelector('[data-ordre] [data-critere="animateursNonRencontres"]');
+    expect(texteDe(nom)).toBe('animateurs non rencontrés');
+    nom.focus();
+    await attendre(() => expect(surlignees(m)).toEqual(colonne(m, 'animateursNonRencontres')));
+  });
+
+  test('le critère des objectifs décoché : ni groupe ni colonne des objectifs, et la phrase ne le nomme pas', async () => {
+    const m = await ouvrir(petiteAObjectifs({ respecterObjectifs: false, modeObjectifs: 'chacun' }));
+    expect(enTetesDesColonnes(m)).toEqual(NOMS_DES_COLONNES);
+    expect(enTeteDuGroupe(m)).toBeNull();
+    expect(section(m).querySelector('[data-ordre] [data-critere="toursHorsObjectif"]')).toBeNull();
+    expect(texteDe(section(m).querySelector('[data-ordre]'))).toBe(t('propositions.ordre.criteres', { criteres: [...CRITERES] }));
   });
 });
 

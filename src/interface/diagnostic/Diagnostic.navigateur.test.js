@@ -281,6 +281,70 @@ describe('la grande démonstration (§ 15.1, § 19.3 capture 10)', () => {
   });
 });
 
+describe('les planchers des objectifs (§ 5.6, A10, D16, D20)', () => {
+  // Quarante personnes inventées qui portent « finance », une table de 8 qui
+  // la vise pour la soirée, quatre tables de 8 sans objectif, quatre tours :
+  // les planchers valent 128, 8 et 4 (A10). mode : celui des objectifs,
+  // absent au défaut.
+  function quaranteFinance(mode = null) {
+    const charge = creerCharge({ id: 'evt-objectifs', nom: 'Soirée des Merles', siegesParDefaut: 8, tours: 4 });
+    charge.participants = Array.from({ length: 40 }, (_, p) => ({
+      id: p + 1,
+      nom: `Lacasse${p + 1}`,
+      prenom: 'Ondine',
+      appartenance: null,
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: false,
+      etiquettes: ['finance'],
+    }));
+    charge.tables = [1, 2, 3, 4, 5].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 300 * id, y: 0 } }));
+    charge.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+    if (mode !== null) charge.reglages.modeObjectifs = mode;
+    charge.prochainsIds = { participant: 41, table: 6, proposition: 1 };
+    return charge;
+  }
+
+  // Les énoncés des objectifs rendus sous la racine : la valeur que porte
+  // data-plancher-objectifs, et la phrase.
+  const planchers = (racine) =>
+    [...racine.querySelectorAll('[data-plancher-objectifs]')].map((li) => [li.dataset.plancherObjectifs, texteDe(li.querySelector('[data-phrase]'))]);
+
+  test('sous « le plus de places servies », le seul plancher des tours hors objectif, avec son remède, dans la section et le panneau du plan', async () => {
+    const m = await ouvrirCharge(quaranteFinance());
+    m.ui.allerA('diagnostic');
+    expect(diagnostiquer(configurationDepuisCharge(charge(m))).objectifsInevitables).toEqual({ horsObjectif: 128, jamaisServies: 8, horsObjectifMax: 4 });
+    await attendre(() =>
+      expect(planchers(section(m))).toEqual([['toursHorsObjectif', t('diagnostic.objectifs.toursHorsObjectif', { plancher: 128 })]]),
+    );
+    const ligne = section(m).querySelector('[data-plancher-objectifs]');
+    expect(ligne.dataset.enonce).toBe('diagnostic.objectifs.toursHorsObjectif');
+    expect(texteDe(ligne.querySelector('[data-remede]'))).toBe(t('diagnostic.remede.objectifs'));
+    expect(visible(ligne.querySelector('[data-phrase]'))).toBe(true);
+    m.ui.allerA('plan');
+    await attendre(() => expect(planchers(panneau(m)).map(([grandeur]) => grandeur)).toEqual(['toursHorsObjectif']));
+  });
+
+  test('sous « chacun au moins une fois », les personnes jamais servies d’abord, puis les tours hors objectif', async () => {
+    const autre = await ouvrirCharge(quaranteFinance('chacun'));
+    autre.ui.allerA('diagnostic');
+    await attendre(() =>
+      expect(planchers(section(autre))).toEqual([
+        ['jamaisServies', t('diagnostic.objectifs.jamaisServies', { plancher: 8 })],
+        ['toursHorsObjectif', t('diagnostic.objectifs.toursHorsObjectif', { plancher: 128 })],
+      ]),
+    );
+  });
+
+  test('sans objectif, aucun plancher des objectifs ne s’écrit', async () => {
+    const m = await demonstration('petite-conflit');
+    m.ui.allerA('diagnostic');
+    await attendre(() => expect(section(m).querySelectorAll('[data-enonce]').length).toBeGreaterThan(0));
+    expect(section(m).querySelectorAll('[data-plancher-objectifs]')).toHaveLength(0);
+  });
+});
+
 describe('une seule appartenance (§ 15.4)', () => {
   test('la phrase et son remède ; en lecture, refusé avec « Modifier » ; en écriture, exécuté en une entrée', async () => {
     const m = await ouvrirCharge(chargeDouze(() => 'Club des Merles'));

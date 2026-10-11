@@ -5,20 +5,26 @@
 // § 12.6, § 12.9), pur : SectionPropositions.svelte et
 // TableauPropositions.svelte le câblent.
 //
-// Le tableau lit la table d'évaluation d'evaluer (evaluation.js), la seule mesure : chaque
-// cellule porte la valeur que la table rend, telle quelle, et sa clé de mise
-// en forme ; aucune arithmétique ne s'y fait, aucun plafond ne s'y recompose.
-// Des rencontres, il ne porte que le minimum, sur les trois populations du
-// § 5.4 — tous, mobiles, ancrés —, en tête des colonnes de mesure ; la moyenne
-// n'y entre pas. Le plafond réalisé, individuel, se lit par le manque, dont
-// les cellules sont celles de troisChiffres. Les imposés se disent à part, sur
-// chaque ligne, jamais ajoutés aux choisis.
+// Le tableau lit la table d'évaluation d'evaluer (evaluation.js), la seule
+// mesure : chaque cellule porte la valeur que la table rend, telle quelle, et
+// sa clé de mise en forme ; aucune arithmétique ne s'y fait, aucun plafond
+// ne s'y recompose. Des rencontres, il ne porte que le minimum, sur les trois
+// populations du § 5.4 — tous, mobiles, ancrés —, en tête des colonnes de
+// mesure ; la moyenne n'y entre pas. Le plafond réalisé, individuel, se lit
+// par le manque, dont les cellules sont celles de troisChiffres. Les imposés
+// se disent à part, sur chaque ligne, jamais ajoutés aux choisis.
 //
 // Chaque minimum affiché désigne la personne la plus mal servie (§ 12.1) :
 // le moins de rencontres, d'appartenances vues, de diversité. La redondance
 // r(p) va dans l'autre sens — plus elle est grande, pire est le sort —, et
 // son minimum désignerait la personne la mieux servie : elle se lit par sa
 // somme Σ r(p), la grandeur que la recherche et le classement lisent.
+//
+// Les objectifs des tables et les animateurs (A9, A11) forment un sixième
+// groupe de colonnes, présentes chacune quand son critère compte — coché et
+// avec un objet, tel que l'état des critères de la table le dit — : le
+// tableau ne recalcule ni « sans objet » ni le mode, qu'il lit dans les
+// valeurs que le critère des objectifs classe.
 //
 // Une cellule vaut { colonne, valeur, cle, decimales } : cle null, la valeur
 // est un nombre que format.nombre écrit avec decimales chiffres après la
@@ -51,7 +57,28 @@ const LECTURES = new Map([
   ['effectifManque', (l) => l.troisChiffres.effectifManque.tous],
   ['ecartItineraireMax', (l) => l.troisChiffres.ecartItineraireMax?.tous ?? null],
   ['ecartAuPlafondAPriori', (l) => l.ecartAuPlafondAPrioriMax],
+  ['jamaisServies', (l) => l.mesures.objectifs?.jamaisServies ?? null],
+  ['horsObjectifMax', (l) => l.mesures.objectifs?.horsObjectifMax ?? null],
+  ['toursHorsObjectif', (l) => l.mesures.objectifs?.horsObjectif ?? null],
+  ['toursSelonObjectif', (l) => l.mesures.objectifs?.agregat.tous.min ?? null],
+  ['animateursRencontres', (l) => l.mesures.animateurs?.agregat.tous.min ?? null],
+  ['animateursNonRencontres', (l) => l.mesures.animateurs?.nonRencontres ?? null],
   ['certificat', (l) => l.minimumAtteint],
+]);
+
+// Les colonnes que le tableau ne porte que sous une condition : [critère,
+// valeur], la colonne présente quand le critère compte et, valeur non
+// null, quand il classe cette valeur — les personnes jamais servies sous
+// « chacun au moins une fois », le plus de tours hors objectif d'une
+// personne sous le troisième mode. Toute autre colonne est toujours là. La
+// Map ne sert qu'à retrouver la condition d'une colonne.
+const SOUS_CONDITION = new Map([
+  ['jamaisServies', ['toursHorsObjectif', 'jamaisServies']],
+  ['horsObjectifMax', ['toursHorsObjectif', 'horsObjectifMax']],
+  ['toursHorsObjectif', ['toursHorsObjectif', 'toursHorsObjectif']],
+  ['toursSelonObjectif', ['toursHorsObjectif', null]],
+  ['animateursRencontres', ['animateursNonRencontres', null]],
+  ['animateursNonRencontres', ['animateursNonRencontres', 'animateursNonRencontres']],
 ]);
 
 // Les colonnes dont la valeur n'existe pas quand le plafond a priori est
@@ -68,10 +95,12 @@ const TEXTUELLES = new Set(['proposition', 'certificat', 'imposes', 'commandes']
 
 /** Les colonnes du tableau, dans l'ordre d'affichage : le rang et
  *  l'identifiant, puis les mesures — les trois minimums des rencontres en
- *  tête —, le certificat, les imposés et les commandes. Chacune porte son nom,
+ *  tête, celles des objectifs et des animateurs en dernier —, le certificat,
+ *  les imposés et les commandes ; toutes celles qu'un tableau peut porter,
+ *  tableau() rendant celles que porte le sien. Chacune porte son nom,
  *  la clé de son en-tête, qui nomme son unité, celle de son explication,
- *  le texte de l'infobulle de son en-tête et du critère qui la désigne, et
- *  nombre, vrai quand ses cellules portent un nombre. */
+ *  le texte de l'infobulle de son en-tête et de la valeur appliquée qui la
+ *  désigne, et nombre, vrai quand ses cellules portent un nombre. */
 export const COLONNES = Object.freeze(
   ['rang', 'proposition', ...LECTURES.keys(), 'imposes', 'commandes'].map((nom) =>
     Object.freeze({ nom, cle: `propositions.colonne.${nom}`, explication: `propositions.explication.${nom}`, nombre: !TEXTUELLES.has(nom) }),
@@ -86,44 +115,64 @@ const GROUPES = [
   ['repetitions', ['rencontresRepetees', 'maxRencontresPaire', 'retoursChoisis']],
   ['diversite', ['appartenancesVues', 'totalRedondance', 'diversite']],
   ['manque', ['manqueMax', 'effectifManque', 'ecartItineraireMax', 'ecartAuPlafondAPriori']],
+  ['objectifs', ['jamaisServies', 'horsObjectifMax', 'toursHorsObjectif', 'toursSelonObjectif', 'animateursRencontres', 'animateursNonRencontres']],
 ];
 
-// Les segments de la rangée des groupes, dans l'ordre de COLONNES : un
-// groupe couvre ses colonnes d'un seul segment, une colonne hors groupe
-// forme le sien, sans clé. Un groupe dont les colonnes ne se suivent pas
-// dans COLONNES lève au chargement du module.
-function segmenter() {
-  const noms = COLONNES.map(({ nom }) => nom);
+// Les segments de la rangée des groupes sur les colonnes noms, une suite de
+// COLONNES : un groupe couvre celles de ses colonnes que noms porte d'un seul
+// segment, une colonne hors groupe forme le sien, sans clé ; un groupe dont
+// noms ne porte aucune colonne n'a pas de segment. Un groupe dont les
+// colonnes ne se suivent pas dans noms lève : au chargement du module pour
+// COLONNES entier.
+function segmenter(noms) {
   const segments = [];
   for (let rang = 0; rang < noms.length; ) {
-    const groupe = GROUPES.find(([, colonnes]) => colonnes[0] === noms[rang]);
+    const groupe = GROUPES.find(([, colonnes]) => colonnes.includes(noms[rang]));
     if (groupe === undefined) {
-      if (GROUPES.some(([, colonnes]) => colonnes.includes(noms[rang]))) throw new Error(`colonne groupée hors de son groupe : ${noms[rang]}`);
       segments.push({ cle: null, colonnes: [noms[rang]] });
       rang += 1;
       continue;
     }
     const [nom, colonnes] = groupe;
-    colonnes.forEach((colonne, decalage) => {
+    const portees = colonnes.filter((colonne) => noms.includes(colonne));
+    portees.forEach((colonne, decalage) => {
       if (noms[rang + decalage] !== colonne) throw new Error(`groupe ${nom} : colonnes non voisines`);
     });
-    segments.push({ cle: `propositions.groupe.${nom}`, colonnes });
-    rang += colonnes.length;
+    segments.push({ cle: `propositions.groupe.${nom}`, colonnes: portees });
+    rang += portees.length;
   }
-  return segments.map(({ cle, colonnes }) => Object.freeze({ cle, etendue: colonnes.length, colonnes: Object.freeze([...colonnes]) }));
+  return Object.freeze(
+    segments.map(({ cle, colonnes }) => Object.freeze({ cle, etendue: colonnes.length, colonnes: Object.freeze([...colonnes]) })),
+  );
 }
 
-/** La rangée des groupes d'en-têtes, au-dessus de celle des colonnes :
- *  { cle, etendue, colonnes } par segment, dans l'ordre de COLONNES — cle,
- *  la clé du libellé du groupe, null pour une colonne hors groupe ;
- *  etendue, le nombre de colonnes couvertes ; colonnes, leurs noms. Les
- *  segments couvrent chaque colonne une fois. */
-export const GROUPES_COLONNES = Object.freeze(segmenter());
+/** La rangée des groupes d'en-têtes de COLONNES entier, au-dessus de celle
+ *  des colonnes : { cle, etendue, colonnes } par segment, dans l'ordre de
+ *  COLONNES — cle, la clé du libellé du groupe, null pour une colonne hors
+ *  groupe ; etendue, le nombre de colonnes couvertes ; colonnes, leurs noms.
+ *  Les segments couvrent chaque colonne une fois. tableau() rend ceux des
+ *  colonnes que porte le sien. */
+export const GROUPES_COLONNES = segmenter(COLONNES.map(({ nom }) => nom));
+
+// Les colonnes que porte le tableau d'une table d'évaluation, dans l'ordre de
+// COLONNES : chacune hors de SOUS_CONDITION, et celles dont la condition
+// tient sur l'état des critères de la table, {nom, coche, sansObjet,
+// valeurs}. Un critère compte quand il est coché et a un objet.
+function colonnesPortees(criteres) {
+  const comptent = new Map(criteres.filter(({ coche, sansObjet }) => coche && !sansObjet).map(({ nom, valeurs }) => [nom, valeurs]));
+  return COLONNES.filter(({ nom }) => {
+    const condition = SOUS_CONDITION.get(nom);
+    if (condition === undefined) return true;
+    const [critere, valeur] = condition;
+    const valeurs = comptent.get(critere);
+    return valeurs !== undefined && (valeur === null || valeurs.includes(valeur));
+  });
+}
 
 /**
  * La clé de l'explication d'une colonne : le texte de l'infobulle de son
- * en-tête, et celui du nom de critère qui la désigne dans la phrase de
- * l'ordre (colonneDuCritere) — un critère et sa colonne partagent la même.
+ * en-tête, et celui du nom qui la désigne dans la phrase de l'ordre
+ * (colonneDeValeur) — une valeur appliquée et sa colonne partagent la même.
  * Lève TypeError pour un nom qui n'est pas une colonne de COLONNES.
  *
  * @param {string} nom  le nom d'une colonne
@@ -154,12 +203,12 @@ function certificat(ligne) {
   return { colonne: 'certificat', valeur, cle, decimales: 0 };
 }
 
-// Les cellules de mesure d'une ligne comparable, dans l'ordre de LECTURES.
-// L'a priori est inconnu quand troisChiffres ne porte pas d'écart
-// d'itinéraire du tout.
-function cellules(ligne) {
+// Les cellules de mesure d'une ligne comparable, une par colonne de mesure
+// portée, dans l'ordre de LECTURES. L'a priori est inconnu quand
+// troisChiffres ne porte pas d'écart d'itinéraire du tout.
+function cellules(ligne, portees) {
   const inconnu = ligne.troisChiffres.ecartItineraireMax === null;
-  return [...LECTURES].map(([colonne, lire]) => {
+  return [...LECTURES].filter(([colonne]) => portees.has(colonne)).map(([colonne, lire]) => {
     if (colonne === 'certificat') return certificat(ligne);
     if (inconnu && SELON_A_PRIORI.has(colonne)) return { colonne, valeur: null, cle: INCONNU, decimales: 0 };
     return nombre(colonne, lire(ligne));
@@ -181,14 +230,11 @@ const codeDe = (raison) => ({ cle: raison.code, details: raison });
 // null quand elle n'en nomme aucune.
 const raisonDe = (raison) => ({ ...codeDe(raison), participant: raison.participant ?? null });
 
-// Les colonnes que couvre la cellule des raisons d'une ligne hors
-// classement : celles des mesures et celle des imposés.
-const ETENDUE_RAISONS = LECTURES.size + 1;
-
 // La ligne d'un placement mesuré, ou celle d'un placement hors classement.
-// rang : la place dans le classement, à partir de 1 ; null hors classement
-// et pour le retenu.
-function ligneDe(ligne, table, idRetenu, rang = null) {
+// portees : les noms des colonnes que porte le tableau ; rang : la place
+// dans le classement, à partir de 1 ; null hors classement et pour le
+// retenu.
+function ligneDe(ligne, table, idRetenu, portees, rang = null) {
   const retenue = ligne.id === idRetenu;
   if (ligne.statut !== 'comparable') {
     return {
@@ -205,83 +251,106 @@ function ligneDe(ligne, table, idRetenu, rang = null) {
     rang,
     retenue,
     comparable: true,
-    cellules: cellules(ligne),
+    cellules: cellules(ligne, portees),
     imposes: imposes(ligne, table.imposes),
     violations: ligne.violations.map(codeDe),
   };
 }
 
-// La colonne que désigne chaque critère du classement (§ 5.7) : celle qui
-// porte la grandeur qu'il compare ; null pour les tours hors objectif et les
-// animateurs non rencontrés, que le tableau ne porte pas en colonne. La Map
-// ne sert qu'à retrouver la colonne d'un critère ; la phrase suit l'ordre que
-// le classement rend.
-const COLONNE_DU_CRITERE = new Map([
+// La colonne que désigne chaque valeur qui classe (§ 5.7, A11) : celle qui
+// la porte ; l'identifiant croissant, le dernier départage, désigne la
+// colonne des propositions. La Map ne sert qu'à retrouver la colonne d'une
+// valeur ; la phrase suit l'ordre que le classement rend.
+const COLONNE_DE_VALEUR = new Map([
   ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
   ['excedentCollisions', 'excedentCollisions'],
   ['collisionsCumulees', 'collisionsCumulees'],
-  ['toursHorsObjectif', null],
-  ['rencontresRepetees', 'rencontresRepetees'],
-  ['animateursNonRencontres', null],
+  ['jamaisServies', 'jamaisServies'],
+  ['horsObjectifMax', 'horsObjectifMax'],
+  ['toursHorsObjectif', 'toursHorsObjectif'],
+  ['rencontresRepeteesChoisies', 'rencontresRepetees'],
+  ['retoursChoisis', 'retoursChoisis'],
+  ['animateursNonRencontres', 'animateursNonRencontres'],
   ['redondance', 'totalRedondance'],
   ['identifiant', 'proposition'],
 ]);
 
 /**
- * La colonne du tableau que désigne un critère du classement, ou
- * 'identifiant', le dernier départage, qui désigne la colonne des
- * propositions ; null pour un critère du registre que le tableau ne porte
- * pas en colonne. Lève TypeError pour un nom que la table ne connaît pas :
- * un critère ajouté au classement doit dire laquelle il compare, ou
- * qu'il n'en a pas.
+ * La colonne du tableau que désigne une valeur qui classe (valeursQuiClassent,
+ * criteres.js), ou 'identifiant', le dernier départage, qui désigne la
+ * colonne des propositions. Lève TypeError pour un nom que la table ne
+ * connaît pas : une valeur ajoutée au classement doit dire laquelle elle
+ * compare.
  *
- * @param {string} critere  un nom de CRITERES (criteres.js), ou 'identifiant'
- * @returns {string|null}  le nom d'une colonne de COLONNES, ou null
+ * @param {string} valeur  une valeur qui classe, ou 'identifiant'
+ * @returns {string}  le nom d'une colonne de COLONNES
  */
-export function colonneDuCritere(critere) {
-  const colonne = COLONNE_DU_CRITERE.get(critere);
-  if (colonne === undefined) throw new TypeError(`critère sans colonne : ${critere}`);
+export function colonneDeValeur(valeur) {
+  const colonne = COLONNE_DE_VALEUR.get(valeur);
+  if (colonne === undefined) throw new TypeError(`valeur sans colonne : ${valeur}`);
   return colonne;
 }
 
-// Les noms des critères appliqués, palier après palier : la liste aplatie
-// des criteresAppliques que rend classer.
-const aplatir = (criteresAppliques) => criteresAppliques.flatMap(({ criteres }) => criteres.map(({ nom }) => nom));
-
 // Un morceau de phrase : un texte de liaison, ou un nom qui désigne une
-// colonne ; un nom de critère sans colonne s'affiche comme un texte.
-const liaison = (cle, details = {}) => ({ cle, details, critere: null, colonne: null });
-const designant = (critere, cle) => ({ cle, details: {}, critere, colonne: colonneDuCritere(critere) });
+// colonne — celui d'une valeur appliquée, sous la clé
+// moteur.valeur.<valeur>, avec le critère qui la classe.
+const liaison = (cle, details = {}) => ({ cle, details, critere: null, valeur: null, colonne: null });
+const designant = (critere, valeur, cle = `moteur.valeur.${valeur}`) => ({ cle, details: {}, critere, valeur, colonne: colonneDeValeur(valeur) });
 
-// La phrase des critères appliqués, morceau par morceau : le début, chaque
-// critère de la liste aplatie par son nom moteur.critere.<nom>, puis
-// l'identifiant croissant, séparés, et la fin. Bout à bout, les morceaux
-// traduits composent le texte de propositions.ordre.criteres sur la liste
-// aplatie : sous l'ordre par défaut et les quatre cases cochées, celui de
-// l'ordre fixe de référence.
-function phraseDesCriteres(criteresAppliques) {
-  const noms = [
-    ...aplatir(criteresAppliques).map((critere) => designant(critere, `moteur.critere.${critere}`)),
-    designant('identifiant', 'propositions.ordre.identifiant'),
+// Des listes de morceaux mises bout à bout, le morceau separateur entre deux.
+const joindre = (listes, separateur) => listes.flatMap((morceaux, rang) => (rang === 0 ? morceaux : [separateur(), ...morceaux]));
+
+// Les noms d'un critère appliqué, {nom, valeurs, poids} : chaque valeur
+// qu'il classe, dans l'ordre, séparées par « puis » comme deux paliers.
+const nomsDuCritere = ({ nom, valeurs }) =>
+  joindre(
+    valeurs.map((valeur) => [designant(nom, valeur)]),
+    () => liaison('propositions.ordre.separateur'),
+  );
+
+// Un palier appliqué en morceaux : les noms de son critère, seul ; pour un
+// palier partagé, « ensemble, » puis chaque critère suivi de son poids,
+// séparés par une virgule.
+function palierEnMorceaux({ criteres }) {
+  if (criteres.length === 1) return nomsDuCritere(criteres[0]);
+  return [
+    liaison('propositions.ordre.ensemble'),
+    ...joindre(
+      criteres.map((critere) => [...nomsDuCritere(critere), liaison('propositions.ordre.poids', { poids: critere.poids })]),
+      () => liaison('propositions.ordre.virgule'),
+    ),
   ];
+}
+
+// La phrase des critères appliqués, morceau par morceau (A11) : le début,
+// chaque palier appliqué dans l'ordre, puis l'identifiant croissant, séparés
+// par « puis », et la fin. Chaque nom est celui de la valeur que le palier
+// applique — « retours » pour les rencontres répétées sous « nouvelle
+// table » seule. Sous l'ordre par défaut et les quatre cases cochées, sans
+// objectif ni case des animateurs, chaque palier porte un critère qui
+// classe une valeur du nom de son critère, et les morceaux traduits bout à
+// bout composent le texte de propositions.ordre.criteres, celui de l'ordre
+// fixe de référence.
+function phraseDesCriteres(criteresAppliques) {
+  const paliers = [...criteresAppliques.map(palierEnMorceaux), [designant('identifiant', 'identifiant', 'propositions.ordre.identifiant')]];
   return [
     liaison('propositions.ordre.debut'),
-    ...noms.flatMap((nom, rang) => (rang === 0 ? [nom] : [liaison('propositions.ordre.separateur'), nom])),
+    ...joindre(paliers, () => liaison('propositions.ordre.separateur')),
     liaison('propositions.ordre.fin'),
   ];
 }
 
-// Le palier qui prend la place du palier sauté : ses critères {nom, poids},
-// ceux du palier appliqué au rang rangSaute ; null quand aucun palier ne
-// suit le palier sauté.
+// Le palier qui prend la place du palier sauté : ses critères {nom, poids,
+// valeurs}, ceux du palier appliqué au rang rangSaute ; null quand aucun
+// palier ne suit le palier sauté.
 function palierAppliqueASaPlace({ criteresAppliques, rangSaute }) {
   const palier = criteresAppliques[rangSaute];
-  return palier === undefined ? null : palier.criteres.map(({ nom, poids }) => ({ nom, poids }));
+  return palier === undefined ? null : palier.criteres.map(({ nom, poids, valeurs }) => ({ nom, poids, valeurs: [...valeurs] }));
 }
 
 // Les phrases de l'ordre (§ 5.7), chacune une liste de morceaux : quand le
 // plafond a priori manque, le critère sauté et le palier appliqué à sa
-// place, s'il en est un ; puis les critères appliqués.
+// place, s'il en est un ; puis les paliers appliqués.
 function ordre(classement) {
   const { criteresAppliques, critereSaute } = classement;
   const phrases = [];
@@ -300,13 +369,18 @@ function ordre(classement) {
  *   placement de sa proposition d'origine (retenuAjuste) ; il choisit le
  *   libellé de la ligne du retenu
  * @returns {{ordre: Array<Array<{cle: string, details: Object, critere: string|null,
- *   colonne: string|null}>>, colonnes: typeof COLONNES,
- *   etendueRaisons: number, lignes: Object[], horsClassement: Object[], retenu: Object|null}}
+ *   valeur: string|null, colonne: string|null}>>, colonnes: typeof COLONNES,
+ *   groupes: typeof GROUPES_COLONNES, etendueRaisons: number, lignes: Object[],
+ *   horsClassement: Object[], retenu: Object|null}}
  *   ordre : les phrases de l'ordre, chacune une liste de morceaux que t
- *   traduit et que l'affichage met bout à bout ; un morceau qui nomme un
- *   critère, ou l'identifiant croissant, porte critere et la colonne qu'il
- *   désigne, null pour un texte de liaison ; lignes : les comparables dans
- *   l'ordre du classement, chacune { id, rang, retenue, comparable: true,
+ *   traduit et que l'affichage met bout à bout ; un morceau qui nomme une
+ *   valeur appliquée, ou l'identifiant croissant, porte le critère qui la
+ *   classe, la valeur et la colonne qu'elle désigne — 'identifiant' pour
+ *   le dernier départage —, null pour un texte de liaison ; colonnes : celles
+ *   de COLONNES que le tableau porte, les colonnes des objectifs et des
+ *   animateurs selon l'état des critères de la table ; groupes : les
+ *   segments de la rangée des groupes sur ces colonnes ; lignes : les
+ *   comparables dans l'ordre du classement, chacune { id, rang, retenue, comparable: true,
  *   cellules, imposes, violations } ;
  *   horsClassement : les autres par identifiant, { id, rang: null, retenue,
  *   comparable: false, statut, raisons } — statut la clé de « non comparable »,
@@ -319,24 +393,29 @@ function ordre(classement) {
  */
 export function tableau(tableEvaluation, { ajuste = false } = {}) {
   const idRetenu = tableEvaluation.retenu?.id ?? null;
+  const colonnes = colonnesPortees(tableEvaluation.criteres);
+  const portees = new Set(colonnes.map(({ nom }) => nom));
   // Les comparables ouvrent la liste, dans l'ordre du classement : leur
   // place y est leur rang.
-  const toutes = tableEvaluation.propositions.map((ligne, place) => ligneDe(ligne, tableEvaluation, idRetenu, place + 1));
+  const toutes = tableEvaluation.propositions.map((ligne, place) => ligneDe(ligne, tableEvaluation, idRetenu, portees, place + 1));
   return {
     ordre: ordre(tableEvaluation.classement),
-    colonnes: COLONNES,
-    etendueRaisons: ETENDUE_RAISONS,
+    colonnes,
+    groupes: segmenter(colonnes.map(({ nom }) => nom)),
+    // La cellule des raisons d'une ligne hors classement couvre les colonnes
+    // de mesure portées et celle des imposés.
+    etendueRaisons: [...LECTURES.keys()].filter((nom) => portees.has(nom)).length + 1,
     lignes: toutes.filter(({ comparable }) => comparable),
     horsClassement: toutes.filter(({ comparable }) => !comparable),
-    retenu: tableEvaluation.retenu === null ? null : ligneDuRetenu(tableEvaluation, idRetenu, ajuste),
+    retenu: tableEvaluation.retenu === null ? null : ligneDuRetenu(tableEvaluation, idRetenu, portees, ajuste),
   };
 }
 
 // La ligne du retenu, et son libellé : « tel que » la proposition d'origine,
 // ou « ajusté » depuis elle.
-function ligneDuRetenu(tableEvaluation, idRetenu, ajuste) {
+function ligneDuRetenu(tableEvaluation, idRetenu, portees, ajuste) {
   const cle = ajuste ? 'propositions.retenu.ajuste' : 'propositions.retenu.origine';
-  return { ...ligneDe(tableEvaluation.retenu, tableEvaluation, idRetenu), libelle: { cle, details: { proposition: idRetenu } } };
+  return { ...ligneDe(tableEvaluation.retenu, tableEvaluation, idRetenu, portees), libelle: { cle, details: { proposition: idRetenu } } };
 }
 
 /**
@@ -380,9 +459,10 @@ function egaux(a, b) {
 // remplacerait.
 const CHAMPS_DU_PLACEMENT = ['siegesAttribues', 'tables', 'capacites', 'tours', 'participants', 'placement'];
 
-/** Vrai quand un retenu existe et ne porte plus le placement de sa proposition d'origine :
- *  tables, capacités, tours, participants ou placement diffèrent, en profondeur, de ceux
- *  de la proposition retenu.proposition, ou celle-ci n'est plus dans la liste. */
+/** Vrai quand un retenu existe et ne porte plus le placement de sa
+ *  proposition d'origine : tables, capacités, tours, participants ou
+ *  placement diffèrent, en profondeur, de ceux de la proposition
+ *  retenu.proposition, ou celle-ci n'est plus dans la liste. */
 export function retenuAjuste(charge) {
   const { retenu } = charge;
   if (retenu === null) return false;
@@ -430,9 +510,9 @@ export function demandeConfirmation({ refus, charge }, id) {
 // dans le modèle pur et tenu par l'immuabilité de son entrée.
 const evaluees = new WeakMap();
 
-// Vrai quand chaque objet atteint depuis valeur est figé. Un objet figé ne
-// redevient jamais modifiable : vrai une fois, vrai pour toujours.
-function figeePartout(valeur) {
+/** Vrai quand chaque objet atteint depuis valeur est figé. Un objet figé ne
+ *  redevient jamais modifiable : vrai une fois, vrai pour toujours. */
+export function figeePartout(valeur) {
   if (valeur === null || typeof valeur !== 'object') return true;
   if (!Object.isFrozen(valeur)) return false;
   for (const cle of Object.keys(valeur)) if (!figeePartout(valeur[cle])) return false;

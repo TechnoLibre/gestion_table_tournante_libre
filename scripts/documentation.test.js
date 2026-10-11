@@ -314,10 +314,28 @@ describe('documentation : les producteurs, chacun sur sa source unique (§ 19.8)
   test('reglages : une ligne par entrée de la définition, son libellé, son écran et son défaut ; une entrée ajoutée paraît', () => {
     const lignes = lignesDuTableau(tableauReglages());
     assert.equal(lignes.length, REGLAGES_GENERATION.length);
+    // Le défaut écrit de chaque genre : un nombre, une case ; le libellé du
+    // mode par défaut et les paliers de l'ordre par défaut, écrits en toutes
+    // lettres.
+    const ecrit = {
+      champ: ({ defaut }) => nombre(defaut),
+      bascule: ({ defaut }) => (defaut ? 'cochée' : 'décochée'),
+      choix: () => 'le plus de places servies',
+      ordre: () =>
+        'écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, puis tours hors objectif, ' +
+        "puis rencontres répétées et retours, puis animateurs non rencontrés, puis redondance d'appartenance",
+    };
     REGLAGES_GENERATION.forEach((entree, rang) => {
-      const attendu = entree.genre === 'champ' ? nombre(entree.defaut) : entree.defaut ? 'cochée' : 'décochée';
-      assert.deepEqual(lignes[rang], [t(entree.etiquette), t(`coquille.section.${entree.section}`), attendu]);
+      assert.deepEqual(lignes[rang], [t(entree.etiquette), t(`coquille.section.${entree.section}`), ecrit[entree.genre](entree)]);
     });
+    // Sept bascules, le mode et l'ordre (§ 5.3, § 5.7).
+    assert.equal(REGLAGES_GENERATION.filter(({ genre }) => genre === 'bascule').length, 7);
+    const ordre = REGLAGES_GENERATION.find(({ genre }) => genre === 'ordre');
+    const partage = { ...ordre, defaut: [[{ critere: 'excedentCollisions', poids: 2 }, { critere: 'redondance', poids: 3 }], [{ critere: 'collisionsCumulees', poids: 1 }]] };
+    assert.equal(
+      lignesDuTableau(tableauReglages([partage]))[0][2],
+      `${t('mobilier.critere.excedentCollisions')} avec ${t('mobilier.critere.redondance')}, puis ${t('mobilier.critere.collisionsCumulees')}`,
+    );
     const ajoutee = { ...REGLAGES_GENERATION[0], etiquette: 'generation.reglage.graine', defaut: 4_294_967_295 };
     const avecAjout = lignesDuTableau(tableauReglages([...REGLAGES_GENERATION, ajoutee]));
     assert.deepEqual(avecAjout.at(-1), [t('generation.reglage.graine'), t('coquille.section.generation'), '4\u{202F}294\u{202F}967\u{202F}295']);

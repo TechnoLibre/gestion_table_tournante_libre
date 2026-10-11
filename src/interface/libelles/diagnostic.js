@@ -79,6 +79,27 @@ export const TABLE = new Map([
       placesManquantes === 1 ? '1 place manque à chaque tour' : `${placesManquantes} places manquent à chaque tour`,
   ],
 
+  // --- Les objectifs hors d'atteinte (§ 5.6, A10) -----------------------------
+  // Un plancher par valeur que le mode des objectifs compare : le texte dit
+  // ce qu'aucun placement n'évite.
+  [
+    'diagnostic.objectifs.toursHorsObjectif',
+    ({ plancher }) =>
+      `au moins ${compte(plancher, 'tour hors objectif', 'tours hors objectif')} : ` +
+      "les tables qui portent un objectif n'ont pas assez de places libres pour chaque tour possible",
+  ],
+  [
+    'diagnostic.objectifs.jamaisServies',
+    ({ plancher }) =>
+      `au moins ${compte(plancher, 'personne jamais servie', 'personnes jamais servies')} par une table à objectif, ` +
+      'quel que soit le placement',
+  ],
+  [
+    'diagnostic.objectifs.horsObjectifMax',
+    ({ plancher }) =>
+      `au moins une personne passe au moins ${compte(plancher, 'tour', 'tours')} hors objectif, quel que soit le placement`,
+  ],
+
   // --- Le plafond a priori et les imposés (§ 5.4, § 5.5) ---------------------
   [
     'diagnostic.plafond',
@@ -126,5 +147,9 @@ export const TABLE = new Map([
   ],
   ['diagnostic.remede.places', "ajouter des tables ou des places, ou exclure des personnes : d'ici là, la génération est refusée"],
   ['diagnostic.remede.plafond', 'seules les capacités et les réservations le changent : aucune relance ne le dépasse'],
+  [
+    'diagnostic.remede.objectifs',
+    "ajouter des places aux tables qui portent un objectif, ou donner un objectif à d'autres tables, abaisse ce plancher",
+  ],
   ['diagnostic.remede.imposes', 'les réservations les imposent : ils ne comptent pas parmi les retours que choisit le moteur'],
 ]);

@@ -9,9 +9,9 @@
   // « Retenir » et « Effacer », le refus posé à côté du bouton.
   //
   // La table d'évaluation se lit dans la charge de l'état observable, par
-  // evaluation (modele.js) : une seule mesure, celle d'evaluer (evaluation.js), refaite
-  // à chaque charge écrite ; les indicateurs du retenu suivent donc
-  // l'ajustement (§ 2.1 étape 11).
+  // evaluation (modele.js) : une seule mesure, celle d'evaluer
+  // (evaluation.js), refaite à chaque charge écrite ; les indicateurs du
+  // retenu suivent donc l'ajustement (§ 2.1 étape 11).
   //
   // « Voir sur le plan » demande la proposition au plan par l'état de
   // navigation, sans écriture, et ouvre la section du plan ; voir(null) y
@@ -24,20 +24,23 @@
   // aucune saisie — chaque proposition se régénère de sa graine, et le geste
   // se défait — : il s'exécute sans fenêtre.
   //
-  // La phrase de l'ordre se met bout à bout, morceau par morceau (modele.js) ;
-  // chaque nom de critère, et l'identifiant croissant, est un élément
-  // focalisable qui désigne sa colonne. Le survoler ou le focaliser surligne
-  // cette colonne dans le tableau. Le survol et le focus se tiennent à part,
-  // et surlignee (modele.js) choisit : le nom survolé, sinon celui qui a le
-  // focus. Quitter un nom — pointeur sorti, focus perdu — n'efface que l'état
-  // qu'il tenait, et laisse l'autre.
+  // La phrase de l'ordre se met bout à bout, morceau par morceau (modele.js) :
+  // les paliers appliqués, chaque nom celui de la valeur que son palier
+  // applique — deux noms pour un critère qui en classe deux. Chaque nom, et
+  // l'identifiant croissant, est un élément focalisable qui porte le critère
+  // qui le classe (data-critere) et désigne la colonne de sa valeur. Le
+  // survoler ou le focaliser surligne cette colonne dans le tableau. Le
+  // survol et le focus se tiennent à part, et surlignee (modele.js) choisit :
+  // le nom survolé, sinon celui qui a le focus. Quitter un nom — pointeur
+  // sorti, focus perdu — n'efface que l'état qu'il tenait, et laisse l'autre.
   //
-  // Chaque nom de critère et chaque en-tête de colonne s'expliquent dans
-  // l'infobulle de la section, une seule (Infobulle, primitive) : le survol
-  // ou le focus l'ouvre sur le terme, le quitter la referme quand elle est
-  // encore la sienne, Échap aussi. Un critère et sa colonne partagent leur
-  // explication (explicationDeColonne, modele.js). Le terme expliqué porte
-  // aria-describedby vers elle, et lui seul.
+  // Chaque nom de la phrase, celui d'une valeur appliquée, et chaque en-tête
+  // de colonne s'expliquent dans l'infobulle de la section, une seule
+  // (Infobulle, primitive) : le survol ou le focus l'ouvre sur le terme, le
+  // quitter la referme quand elle est encore la sienne, Échap aussi. Une
+  // valeur appliquée et sa colonne partagent leur explication
+  // (explicationDeColonne, colonneDeValeur, modele.js). Le terme expliqué
+  // porte aria-describedby vers elle, et lui seul.
   //
   // Au-delà de TAILLE_PAGE propositions (modele.js), le tableau se lit page
   // à page : pagine découpe le classement unique, sans le retrier, et la
@@ -163,10 +166,10 @@
   const surlignee = $derived(colonneSurlignee(survolee, focalisee));
 
   // Le terme expliqué : {ancre, terme, cle, details} — son élément, sa
-  // désignation, 'critere:<critère>' pour un nom de la phrase ou
-  // 'colonne:<nom>' pour un en-tête, et la clé de son explication — ; null
-  // sans infobulle. Ouvrir sur un terme remplace l'explication d'un autre ;
-  // quitter un terme ne ferme que la sienne.
+  // désignation, 'valeur:<valeur>' pour un nom de la phrase, où chaque
+  // valeur paraît une fois, ou 'colonne:<nom>' pour un en-tête, et la clé
+  // de son explication — ; null sans infobulle. Ouvrir sur un terme remplace
+  // l'explication d'un autre ; quitter un terme ne ferme que la sienne.
   const uid = $props.id();
   const idExplication = `${uid}-explication`;
   let expliquee = $state(null);
@@ -181,15 +184,15 @@
   const decrit = (terme) => (expliquee?.terme === terme ? idExplication : undefined);
 
   // L'entrée sur un nom, par le pointeur ou par le focus, et sa sortie.
-  function entrer(evenement, { critere, colonne }, parFocus) {
+  function entrer(evenement, { valeur, colonne }, parFocus) {
     if (parFocus) focalisee = colonne;
     else survolee = colonne;
-    expliquer(evenement, `critere:${critere}`, colonne);
+    expliquer(evenement, `valeur:${valeur}`, colonne);
   }
-  function sortir({ critere }, parFocus) {
+  function sortir({ valeur }, parFocus) {
     if (parFocus) focalisee = null;
     else survolee = null;
-    taire(`critere:${critere}`);
+    taire(`valeur:${valeur}`);
   }
 
   const effacer = () => seance.executer('effacerPropositions', {});
@@ -254,7 +257,7 @@
                   class:actif={surlignee === morceau.colonne}
                   data-critere={morceau.critere}
                   tabindex="0"
-                  aria-describedby={decrit(`critere:${morceau.critere}`)}
+                  aria-describedby={decrit(`valeur:${morceau.valeur}`)}
                   onmouseenter={(evenement) => entrer(evenement, morceau, false)}
                   onmouseleave={() => sortir(morceau, false)}
                   onfocus={(evenement) => entrer(evenement, morceau, true)}

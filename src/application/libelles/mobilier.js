@@ -192,12 +192,19 @@ export const TABLE = new Map([
     ({ valeur }) =>
       `Un poids est un nombre entier de 1 à ${POIDS_MAX}` + (Number.isFinite(valeur) ? ` : ${nombreEcrit(valeur)} ne l'est pas.` : '.'),
   ],
+  // Le refus se pose contre le groupe du mode, sous le libellé du bouton
+  // choisi : il dit « ce mode » sans le renommer, l'écran et le journal ne
+  // le nommant pas pareil (D22). Un mode inconnu lève.
   [
     'OBJECTIFS_PALIER_PARTAGE',
-    ({ mode, palier }, texte) =>
-      `Le mode ${cite(nomMode(mode))} compare deux valeurs l'une après l'autre : les ` +
-      `${cite(texte('mobilier.critere.toursHorsObjectif'))} s'y rangent seuls à leur palier, et partagent le palier ` +
-      `${numeroDePalier(palier)}. Les séparer d'abord dans l'ordre des priorités : le mode reste celui d'avant.`,
+    ({ mode, palier }, texte) => {
+      nomMode(mode);
+      return (
+        `Ce mode compare deux valeurs l'une après l'autre : les ` +
+        `${cite(texte('mobilier.critere.toursHorsObjectif'))} s'y rangent seuls à leur palier, et partagent le palier ` +
+        `${numeroDePalier(palier)}. Les séparer d'abord dans l'ordre des priorités : le mode reste celui d'avant.`
+      );
+    },
   ],
   // Le nom complet de chaque critère de l'ordre, tel que l'éditeur l'écrit
   // (§ 5.7) : la phrase de l'ordre nomme, elle, la valeur qui classe

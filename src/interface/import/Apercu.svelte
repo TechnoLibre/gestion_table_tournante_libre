@@ -2,14 +2,17 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // Le contenu d'un aperçu d'import (§ 10.1, § 10.2), celui que rend
-  // modeleApercu (modele.js) : la source — le nom du fichier, ou le texte
-  // collé —, l'encodage et le séparateur nommés, le refus global avec sa
-  // cause et son remède, l'association des colonnes et ses ambiguïtés, les
-  // lignes valides, les lignes refusées et leur motif, les orthographes
-  // fondues, les doublons, les homonymes d'une mise à jour, les cellules sur
-  // plusieurs lignes. Le rapport le reprend pour l'aperçu appliqué, ses
-  // refus remplacés par ceux du résumé.
+  // Le contenu de l'aperçu d'un import, § 10.1, § 10.2 et § 10.4, celui que
+  // rend modeleApercu (modele.js), de participants ou d'objectifs de table : la
+  // source — le nom du fichier, ou le texte collé —, l'encodage et le
+  // séparateur nommés, le refus global avec sa cause et son remède — texte,
+  // ou commande du geste qui y mène —, l'association des colonnes et ses
+  // ambiguïtés, les lignes valides sous les colonnes de leur nature, les
+  // lignes refusées et leur motif, les orthographes fondues d'appartenances
+  // puis, dans un bloc à part, celles d'étiquettes, les doublons, les
+  // homonymes d'une mise à jour, les cellules sur plusieurs lignes. Le
+  // rapport le reprend pour l'aperçu appliqué, ses refus remplacés par ceux
+  // du résumé. Une cellule d'étiquettes montre chacune en pastille.
   //
   // modele : le modèle ; source : { origine: 'fichier'|'collage', nom } ;
   // participants : ceux de la charge, qui nomment les personnes désignées ;
@@ -20,23 +23,29 @@
   //
   // Chaque message est classé (Message, messageDuBloc) : le refus global et
   // les lignes refusées en refus, les doublons, les homonymes et les
-  // cellules sur plusieurs lignes en avis, les orthographes fondues en
-  // information. Les tableaux prennent le langage des cartes : en-tête sur
+  // cellules sur plusieurs lignes en avis, les orthographes fondues,
+  // d'appartenances et d'étiquettes, en information. Les tableaux prennent le langage des cartes : en-tête sur
   // le fond sourd, lignes séparées d'un filet léger.
   import { getContext } from 'svelte';
+  import { actionRemede } from '../primitives/commande.js';
+  import Commande from '../primitives/Commande.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import Message from './Message.svelte';
-  import { COLONNES_DES_LIGNES, messageDuBloc, motifLigne, nommer } from './modele.js';
+  import { messageDuBloc, motifLigne, nommer } from './modele.js';
 
   let { modele, source, participants = [], refusees = null, choisir = null } = $props();
 
   const t = getContext('t');
   const format = getContext('format');
+  const seance = getContext('seance');
+  const ui = getContext('ui') ?? null;
   const motif = motifLigne(t);
 
   const refuseesMontrees = $derived(refusees ?? modele.refusees);
   const global = $derived(modele.global);
   const refusGlobal = messageDuBloc('global');
+  // La commande du geste qui remédie au refus global, null sans geste.
+  const remedeGlobal = $derived(global?.remede.geste ? actionRemede(global.remede.geste, { seance, ui }) : null);
 </script>
 
 <div class="apercu">
@@ -64,6 +73,9 @@
       <p>{t(global.cle, global.details)}</p>
       {#if !global.remede.dansLaCause}
         <p>{t(global.remede.cle, global.remede.details)}</p>
+      {/if}
+      {#if remedeGlobal !== null}
+        <Commande cle={remedeGlobal.cle} details={remedeGlobal.details} nom={remedeGlobal.nom} executer={remedeGlobal.executer} />
       {/if}
     </div>
   {/if}
@@ -115,7 +127,7 @@
         <thead>
           <tr>
             <th scope="col">{t('import.apercu.ligne')}</th>
-            {#each COLONNES_DES_LIGNES as { champ, cle } (champ)}
+            {#each modele.champs as { champ, cle } (champ)}
               <th scope="col">{t(cle)}</th>
             {/each}
           </tr>
@@ -124,8 +136,18 @@
           {#each modele.lignes as { ligne, cellules } (ligne)}
             <tr data-ligne={ligne}>
               <th scope="row">{format.nombre(ligne)}</th>
-              {#each cellules as { champ, texte, cle } (champ)}
-                <td data-cellule={champ}>{cle === null ? (texte ?? '') : t(cle)}</td>
+              {#each cellules as { champ, texte, cle, etiquettes } (champ)}
+                <td data-cellule={champ}>
+                  {#if etiquettes !== null}
+                    {#if etiquettes.length > 0}
+                      <ul class="etiquettes">
+                        {#each etiquettes as motCle (motCle)}
+                          <li><Pastille sorte="statut" valeur="neutre" icone="etiquettes" libelle={motCle} /></li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  {:else}{cle === null ? (texte ?? '') : t(cle)}{/if}
+                </td>
               {/each}
             </tr>
           {/each}
@@ -183,6 +205,27 @@
                 </li>
               {/each}
             </ul>
+          </li>
+        {/each}
+      </ul>
+    </Message>
+  {/if}
+
+  {#if modele.fusionsEtiquettes.length > 0}
+    <Message bloc="fusionsEtiquettes" titre={t('import.apercu.fusionsEtiquettes')}>
+      <ul data-fusions-etiquettes>
+        {#each modele.fusionsEtiquettes as fusion (fusion.retenue)}
+          <li>
+            <span>{t('import.apercu.retenue')}</span>
+            <strong data-affichee>{fusion.retenue}</strong>
+            <span>{t('import.apercu.orthographes')}</span>
+            <ul class="orthographes">
+              {#each fusion.orthographes as orthographe (orthographe)}
+                <li data-orthographe><span data-texte>{orthographe}</span></li>
+              {/each}
+            </ul>
+            <span data-nombre>{format.nombre(fusion.lignes)}</span>
+            <span>{t('import.apercu.lignesReecrites', { n: fusion.lignes })}</span>
           </li>
         {/each}
       </ul>
@@ -324,6 +367,13 @@
     text-align: right;
   }
 
+  /* Un motif cite la valeur fautive, qu'aucun blanc ne coupe parfois — une
+     étiquette trop longue — : il passe à la ligne n'importe où plutôt que
+     d'élargir la page. */
+  .refusees td {
+    overflow-wrap: anywhere;
+  }
+
   .defile {
     max-height: 24rem;
     overflow: auto;
@@ -349,6 +399,26 @@
   ul {
     margin: 0;
     padding-left: var(--espace-5);
+  }
+
+  /* Les orthographes d'une étiquette fondue, en ligne, séparées d'un blanc. */
+  .orthographes {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--espace-2);
+    padding: 0;
+    list-style: none;
+  }
+
+  /* Les étiquettes d'une cellule, une Pastille chacune, celle de la fiche :
+     neutre, à l'icône des étiquettes. La cellule passe à la ligne entre deux
+     pastilles. */
+  .etiquettes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--espace-1);
+    padding: 0;
+    list-style: none;
   }
 
   .personne {

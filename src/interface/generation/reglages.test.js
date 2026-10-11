@@ -4,15 +4,26 @@
 // Épreuves de la définition des réglages de la charge (§ 5.3, § 5.7,
 // § 5.10, § 8.9, § 19.8) : sa forme, figée ; l'ordre des écrans ; les
 // défauts, ceux d'une charge neuve, GENERATION_PAR_DEFAUT et
-// CIBLE_REDONDANCE_PAR_DEFAUT compris ; chaque réglage du schéma du fichier,
-// facultatif compris, et lui seul ; les clés que les commandes acceptent et
-// les libellés qui existent ; la lecture d'une valeur dans une charge.
+// CIBLE_REDONDANCE_PAR_DEFAUT compris, et ceux que les lecteurs du stockage
+// donnent aux réglages facultatifs — les deux cases, le mode des objectifs,
+// l'ordre des priorités ; chaque réglage du schéma du fichier, facultatif
+// compris, et lui seul ; les clés que les commandes acceptent et les
+// libellés qui existent ; la lecture d'une valeur dans une charge.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { appliquerCommande } from '../../application/commandes.js';
 import { creerTraduction } from '../../application/traduction.js';
-import { CIBLE_REDONDANCE_PAR_DEFAUT, GENERATION_PAR_DEFAUT, SCHEMA, creerCharge } from '../../stockage/document.js';
+import { MODES_OBJECTIFS } from '../../moteur/criteres.js';
+import {
+  CIBLE_REDONDANCE_PAR_DEFAUT,
+  GENERATION_PAR_DEFAUT,
+  SCHEMA,
+  creerCharge,
+  critereCoche,
+  modeObjectifs,
+  priorites,
+} from '../../stockage/document.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { REGLAGES_GENERATION, reglagesDeSection, reglagesDuGenre, valeurDuReglage } from './reglages.js';
 
@@ -44,30 +55,48 @@ function cheminsDuSchema() {
 // n'avoir aucune entrée : l'entrée qui s'ajoute l'en retire.
 const SANS_ENTREE = new Map([
   ['regleObjectifs', 'la règle par défaut des objectifs s’écrit depuis les tables, non depuis la génération'],
-  ['respecterObjectifs', 'case des objectifs, sans entrée à l’écran de la génération'],
-  ['modeObjectifs', 'mode des objectifs, sans entrée à l’écran de la génération'],
-  ['rencontrerAnimateurs', 'case des animateurs, sans entrée à l’écran de la génération'],
-  ['priorites', 'ordre des priorités, écrit par son éditeur de la section Génération, non par une entrée'],
 ]);
 
-// La commande qui écrit un réglage de chaque section, et ses arguments.
+// La commande qui écrit un réglage de chaque section, et ses arguments :
+// l'ordre des priorités par changerPriorites, les autres réglages de la
+// génération par modifierReglage.
 const ECRITURES = new Map([
-  ['generation', (entree, valeur) => ['modifierReglage', { cle: entree.cle, valeur }]],
+  [
+    'generation',
+    (entree, valeur) =>
+      entree.genre === 'ordre' ? ['changerPriorites', { paliers: valeur }] : ['modifierReglage', { cle: entree.cle, valeur }],
+  ],
   ['propositions', (entree, valeur) => ['changerCibleRedondance', { cible: String(valeur) }]],
 ]);
 
+// Une valeur autre que le défaut de l'entrée : la case contraire, un mode
+// voisin, un entier de plus, l'ordre par défaut aux deux derniers paliers
+// joints.
+function autreValeur({ genre, defaut, valeurs }) {
+  if (genre === 'bascule') return !defaut;
+  if (genre === 'choix') return valeurs.find((valeur) => valeur !== defaut);
+  if (genre === 'ordre') return [...defaut.slice(0, -2), [...defaut.at(-2), ...defaut.at(-1)]];
+  return defaut + 1;
+}
+
+// Les clés de chaque entrée, et celles qu'une entrée du genre choix porte en
+// plus : ses valeurs, la bascule sous laquelle elle se montre, le critère
+// dont elle règle la lecture.
+const CLES_D_ENTREE = ['nom', 'cle', 'etiquette', 'unite', 'defaut', 'genre', 'section'];
+const CLES_DU_CHOIX = ['valeurs', 'sous', 'critere'];
+
 describe('REGLAGES_GENERATION : la définition que lisent les écrans et la documentation (§ 19.8)', () => {
-  test('chaque entrée porte nom, cle, etiquette, unite, defaut, genre et section ; la définition comme chaque entrée sont figées', () => {
+  test('chaque entrée porte nom, cle, etiquette, unite, defaut, genre et section, un choix ses valeurs, sa bascule et son critère ; la définition comme chaque entrée sont figées', () => {
     assert.ok(REGLAGES_GENERATION.length > 0, 'définition vide');
     assert.ok(Object.isFrozen(REGLAGES_GENERATION));
     for (const entree of REGLAGES_GENERATION) {
-      assert.deepEqual(Object.keys(entree), ['nom', 'cle', 'etiquette', 'unite', 'defaut', 'genre', 'section']);
+      assert.deepEqual(Object.keys(entree), entree.genre === 'choix' ? [...CLES_D_ENTREE, ...CLES_DU_CHOIX] : CLES_D_ENTREE);
       assert.ok(Object.isFrozen(entree), entree.nom);
     }
     assert.throws(() => REGLAGES_GENERATION.push({}), TypeError);
   });
 
-  test('l’ordre des écrans : les trois champs de la recherche, les bascules du § 5.3, puis la cible de la section des propositions', () => {
+  test('l’ordre des écrans : les trois champs de la recherche, les bascules du § 5.3, le mode des objectifs, l’ordre des priorités, puis la cible de la section des propositions', () => {
     assert.deepEqual(
       REGLAGES_GENERATION.map(({ nom, genre, section }) => [section, genre, nom]),
       [
@@ -78,7 +107,11 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
         ['generation', 'bascule', 'nouveauxVoisins'],
         ['generation', 'bascule', 'nouvelleTable'],
         ['generation', 'bascule', 'varierAppartenances'],
+        ['generation', 'bascule', 'respecterObjectifs'],
+        ['generation', 'bascule', 'rencontrerAnimateurs'],
         ['generation', 'bascule', 'attribuerSieges'],
+        ['generation', 'choix', 'modeObjectifs'],
+        ['generation', 'ordre', 'priorites'],
         ['propositions', 'champ', 'cibleRedondance'],
       ],
     );
@@ -94,13 +127,55 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
     }
     assert.deepEqual(champs.map(({ unite }) => unite), ['propositions', 'mouvements', 'mouvements']);
     const bascules = reglagesDuGenre(generation, 'bascule');
-    assert.equal(bascules.length, 5);
+    assert.equal(bascules.length, 7);
     for (const { nom, cle, etiquette, unite } of bascules) {
       assert.equal(cle, nom);
       assert.equal(etiquette, `generation.contrainte.${nom}`);
       assert.equal(unite, null);
     }
-    assert.equal(champs.length + bascules.length, generation.length);
+    const choix = reglagesDuGenre(generation, 'choix');
+    const ordres = reglagesDuGenre(generation, 'ordre');
+    assert.equal(champs.length + bascules.length + choix.length + ordres.length, generation.length);
+  });
+
+  test('le mode des objectifs : un choix à la racine des réglages, ses trois valeurs celles du registre, le plus de places servies par défaut, sous la case des objectifs, réglant les tours hors objectif', () => {
+    const choix = reglagesDuGenre(REGLAGES_GENERATION, 'choix');
+    assert.deepEqual(choix, [
+      {
+        nom: 'modeObjectifs',
+        cle: 'modeObjectifs',
+        etiquette: 'generation.reglage.modeObjectifs',
+        unite: null,
+        defaut: 'places',
+        genre: 'choix',
+        section: 'generation',
+        valeurs: [...MODES_OBJECTIFS],
+        sous: 'respecterObjectifs',
+        critere: 'toursHorsObjectif',
+      },
+    ]);
+    assert.ok(Object.isFrozen(choix[0].valeurs));
+    assert.equal(choix[0].defaut, modeObjectifs({ reglages: {} }));
+    assert.ok(reglagesDuGenre(REGLAGES_GENERATION, 'bascule').some(({ cle }) => cle === choix[0].sous));
+    for (const valeur of choix[0].valeurs) {
+      assert.notEqual(t(`${choix[0].etiquette}.${valeur}`), `${choix[0].etiquette}.${valeur}`, valeur);
+      assert.notEqual(t(`${choix[0].etiquette}.${valeur}.explication`), `${choix[0].etiquette}.${valeur}.explication`, valeur);
+    }
+  });
+
+  test('l’ordre des priorités : une entrée à la racine des réglages, sans unité, l’ordre par défaut que lit le stockage', () => {
+    const [ordre] = reglagesDuGenre(REGLAGES_GENERATION, 'ordre');
+    assert.deepEqual({ ...ordre, defaut: null }, {
+      nom: 'priorites',
+      cle: 'priorites',
+      etiquette: 'generation.reglage.priorites',
+      unite: null,
+      defaut: null,
+      genre: 'ordre',
+      section: 'generation',
+    });
+    assert.deepEqual(ordre.defaut, priorites({ reglages: {} }));
+    assert.ok(Object.isFrozen(ordre.defaut));
   });
 
   test('la cible de la somme de redondance : un champ de la section des propositions, à la racine des réglages, sous le libellé de son champ, sans unité', () => {
@@ -130,8 +205,15 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
     );
     assert.deepEqual(
       reglagesDuGenre(generation, 'bascule').map(({ defaut }) => defaut),
-      [true, true, true, true, false],
+      [true, true, true, true, true, false, false],
     );
+    // Les cases facultatives, absentes d'une charge neuve : leur défaut est
+    // celui que le stockage leur lit.
+    for (const cle of ['respecterObjectifs', 'rencontrerAnimateurs']) {
+      assert.equal(Object.hasOwn(reglages, cle), false, cle);
+      assert.equal(REGLAGES_GENERATION.find((entree) => entree.cle === cle).defaut, critereCoche({ reglages: {} }, cle), cle);
+    }
+    assert.equal(Object.hasOwn(reglages, 'modeObjectifs') || Object.hasOwn(reglages, 'priorites'), false);
   });
 
   test('chaque réglage du schéma du fichier, facultatif compris, a son entrée, et chaque entrée en désigne un : aucun n’échappe aux écrans ni au tableau, hors des réglages nommés sans entrée', () => {
@@ -148,10 +230,10 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
   test('chaque entrée s’écrit par la commande de sa section, et chaque libellé existe', () => {
     let charge = chargeNeuveEpreuve();
     for (const entree of REGLAGES_GENERATION) {
-      const valeur = entree.genre === 'bascule' ? !entree.defaut : entree.defaut + 1;
+      const valeur = autreValeur(entree);
       const [commande, args] = ECRITURES.get(entree.section)(entree, valeur);
       charge = appliquerCommande(commande, charge, args).charge;
-      assert.equal(valeurDuReglage(charge.reglages, entree), valeur, entree.cle);
+      assert.deepEqual(valeurDuReglage(charge.reglages, entree), valeur, entree.cle);
       assert.notEqual(t(entree.etiquette), entree.etiquette);
     }
     assert.deepEqual([...new Set(REGLAGES_GENERATION.map(({ section }) => section))], [...ECRITURES.keys()]);
@@ -173,6 +255,18 @@ describe('valeurDuReglage, reglagesDuGenre et reglagesDeSection', () => {
     const cible = REGLAGES_GENERATION.find(({ nom }) => nom === 'cibleRedondance');
     assert.equal(valeurDuReglage({ generation: {} }, cible), CIBLE_REDONDANCE_PAR_DEFAUT);
     assert.equal(valeurDuReglage({ generation: {} }, { ...cible, defaut: 3 }), 3);
+    for (const entree of REGLAGES_GENERATION.filter(({ genre }) => genre !== 'champ')) {
+      assert.equal(valeurDuReglage({ generation: {} }, entree), entree.defaut, entree.cle);
+    }
+  });
+
+  test('le mode et l’ordre se lisent à la racine des réglages, comme les cases facultatives', () => {
+    const lire = (nom, reglages) => valeurDuReglage(reglages, REGLAGES_GENERATION.find((entree) => entree.nom === nom));
+    const ordre = [[{ critere: 'redondance', poids: 1 }]];
+    assert.equal(lire('modeObjectifs', { modeObjectifs: 'minimum' }), 'minimum');
+    assert.equal(lire('priorites', { priorites: ordre }), ordre);
+    assert.equal(lire('respecterObjectifs', { respecterObjectifs: false }), false);
+    assert.equal(lire('rencontrerAnimateurs', { rencontrerAnimateurs: true }), true);
   });
 
   test('un genre inconnu lève, et le nomme', () => {
@@ -187,7 +281,7 @@ describe('valeurDuReglage, reglagesDuGenre et reglagesDeSection', () => {
     );
     assert.deepEqual(
       reglagesDeSection(definition, 'generation').slice(0, 2).map(({ nom }) => nom),
-      ['attribuerSieges', 'varierAppartenances'],
+      ['priorites', 'modeObjectifs'],
     );
     assert.deepEqual(reglagesDuGenre([], 'bascule'), []);
     assert.deepEqual(reglagesDeSection([], 'generation'), []);

@@ -16,11 +16,19 @@
 // un texte.
 //
 // L'ordre est celui du § 5.6 — collisions et excédent, redondance,
-// animateurs, ancrage, écart d'itinéraire, manque de places —, précédé de ce
-// qui vide la séparation de son sens (§ 15.4, § 7.5) et suivi du plafond a
-// priori (§ 5.5) et des retours imposés (§ 5.4). Un plancher ne s'énonce que
-// strictement positif : un plancher nul laisserait croire qu'un plancher a
-// été calculé là où il n'y en a pas.
+// animateurs, ancrage, écart d'itinéraire, manque de places, objectifs hors
+// d'atteinte —, précédé de ce qui vide la séparation de son sens (§ 15.4,
+// § 7.5) et suivi du plafond a priori (§ 5.5) et des retours imposés
+// (§ 5.4). Un plancher ne s'énonce que strictement positif : un plancher nul
+// laisserait croire qu'un plancher a été calculé là où il n'y en a pas.
+//
+// Les planchers des objectifs (A10, D16) se calculent toujours ; l'énoncé
+// n'écrit que ceux des valeurs que le mode réglé compare, lues dans l'état
+// du critère des tours hors objectif (les valeurs de valeursQuiClassent,
+// telles qu'evaluer les rend), dans l'ordre où le classement les compare.
+// Un critère décoché ou sans objet ne compare rien : ses planchers se
+// taisent.
+import { evaluer } from '../../application/evaluation.js';
 
 // Désactiver la séparation : le seul remède que réalise une commande. Un
 // objet neuf à chaque appel.
@@ -127,6 +135,51 @@ function placesManquantes({ placesManquantes: manquantes }) {
   return [{ cle: 'diagnostic.placesManquantes', details: { placesManquantes: manquantes }, remede: remede('diagnostic.remede.places') }];
 }
 
+// Le nom du critère des objectifs dans l'état des critères, et, pour chaque
+// valeur qu'il peut comparer, le champ de objectifsInevitables qui en donne
+// le plancher.
+const CRITERE_DES_OBJECTIFS = 'toursHorsObjectif';
+const PLANCHERS_DES_OBJECTIFS = new Map([
+  ['toursHorsObjectif', 'horsObjectif'],
+  ['jamaisServies', 'jamaisServies'],
+  ['horsObjectifMax', 'horsObjectifMax'],
+]);
+
+// Vrai quand un plancher des objectifs au moins est strictement positif.
+const unPlancherDesObjectifs = ({ objectifsInevitables }) =>
+  [...PLANCHERS_DES_OBJECTIFS.values()].some((champ) => objectifsInevitables[champ] > 0);
+
+// Le plancher de chaque valeur que le critère des objectifs compare, quand
+// il est strictement positif, dans l'ordre de ses valeurs ; rien quand le
+// critère manque à criteres, est décoché ou sans objet. grandeur nomme la
+// valeur, que l'écran pose en data-plancher-objectifs.
+function objectifs({ objectifsInevitables }, criteres) {
+  const etat = criteres.find(({ nom }) => nom === CRITERE_DES_OBJECTIFS);
+  if (etat === undefined || !etat.coche || etat.sansObjet) return [];
+  return etat.valeurs.flatMap((grandeur) => {
+    if (!PLANCHERS_DES_OBJECTIFS.has(grandeur)) throw new RangeError(`valeur des objectifs inconnue : ${JSON.stringify(grandeur)}`);
+    const plancher = objectifsInevitables[PLANCHERS_DES_OBJECTIFS.get(grandeur)];
+    if (plancher === 0) return [];
+    return [{ cle: `diagnostic.objectifs.${grandeur}`, details: { plancher }, remede: remede('diagnostic.remede.objectifs'), grandeur }];
+  });
+}
+
+/**
+ * L'état des critères que l'énoncé des objectifs lit (§ 5.3, D10, D20) :
+ * celui qu'evaluer rend, sur la charge sans ses placements — aucune
+ * proposition ne se mesure pour le lire. Quand aucun plancher des objectifs
+ * n'est positif, il n'y a rien à lire : la liste vide, sans évaluation.
+ * Ne modifie pas la charge.
+ *
+ * @param {Object} charge
+ * @param {Object} diagnostic   celui de diagnostiquerCharge pour cette charge
+ * @returns {Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>}
+ */
+export function criteresDuDiagnostic(charge, diagnostic) {
+  if (!unPlancherDesObjectifs(diagnostic)) return [];
+  return evaluer({ ...charge, propositions: [], retenu: null }, { plafondsAPriori: null }).criteres;
+}
+
 // Le plafond a priori, une ligne par valeur de la répartition ; une
 // population vide n'en a aucun, et l'énoncé le dit par le tiret.
 function plafond({ plafondAPriori }) {
@@ -155,13 +208,16 @@ function imposes({ retoursImposes, ancragesImposantRetours }) {
  * le diagnostic.
  *
  * @param {Object} diagnostic   celui que rend diagnostiquerCharge
- * @param {{numeroDe: (table: number) => number, tours: number}} options
+ * @param {{numeroDe: (table: number) => number, tours: number,
+ *          criteres?: Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>}} options
  *        numeroDe : le numéro affiché d'un identifiant de table ; tours : le
- *        nombre de tours de l'événement
+ *        nombre de tours de l'événement ; criteres : l'état des critères
+ *        (criteresDuDiagnostic), vide par défaut, et aucun plancher des
+ *        objectifs ne s'écrit alors
  * @returns {Array<{cle: string, details: Object, remede: null|{cle: string, details: Object,
- *           commande?: string, arguments?: Object}}>}
+ *           commande?: string, arguments?: Object}, grandeur?: string}>}
  */
-export function enonces(diagnostic, { numeroDe, tours }) {
+export function enonces(diagnostic, { numeroDe, tours, criteres = [] }) {
   return [
     ...separation(diagnostic),
     ...collisions(diagnostic, tours),
@@ -170,6 +226,7 @@ export function enonces(diagnostic, { numeroDe, tours }) {
     ...ancrage(diagnostic, numeroDe),
     ...ecartItineraire(diagnostic),
     ...placesManquantes(diagnostic),
+    ...objectifs(diagnostic, criteres),
     ...plafond(diagnostic),
     ...imposes(diagnostic),
   ];

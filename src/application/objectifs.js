@@ -16,6 +16,11 @@ import { regleObjectifs } from '../stockage/document.js';
 import { lireEtiquettes } from '../stockage/etiquettes.js';
 import { refus } from './erreurs.js';
 
+// La règle par défaut des objectifs de l'événement, que le stockage seul lit
+// (« ou » quand les réglages n'en portent pas) : l'interface, qui n'importe
+// pas le stockage, la lit ici.
+export { regleObjectifs };
+
 // Deux chaînes comparées unité UTF-16 par unité : l'ordre où le fichier
 // d'état range une liste d'étiquettes (§ 8.9).
 const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);

@@ -5,9 +5,10 @@
 // § 5.9, § 7.4, § 10.2) : la saisie par le seul nom, l'appartenance
 // collante, la grille au clavier, le tri, le filtre et le compte,
 // l'exclusion, le manque de places à l'ajout et à la réintégration, la fiche
-// et l'itinéraire, l'export, le collage, et la liste groupée par une
-// colonne ou plusieurs, ses groupes imbriqués, repliés et dépliés, et les
-// conflits du placement montré sous ses groupes. Chaque épreuve monte App par
+// et l'itinéraire, les étiquettes de la fiche et leur légende, l'export, le
+// collage, et la liste groupée par une colonne ou plusieurs, ses groupes
+// imbriqués, repliés et dépliés, et les conflits du placement montré sous
+// ses groupes. Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé et l'horloge pilotée ; chaque
 // écriture se relève (trace) et chaque entrée se compte dans le journal. Les
 // gestes passent par des entrées que Chromium traite comme réelles
@@ -836,7 +837,8 @@ describe('la fiche (§ 4.2, § 7.4)', () => {
       await rendu();
       expect(fiche(m).dataset.fiche).toBe(String(id));
       expect(valeurDeFiche(m, 'participants.fiche.statut').textContent).toBe(t(cleDeStatut(statut)));
-      expect(fiche(m).querySelectorAll('input, select, textarea')).toHaveLength(0);
+      // Le seul contrôle de saisie de la fiche est le champ des étiquettes.
+      expect([...fiche(m).querySelectorAll('input, select, textarea')].map((champ) => champ.dataset.champ)).toEqual(['etiquettes']);
     }
   });
 
@@ -924,6 +926,317 @@ describe('la fiche (§ 4.2, § 7.4)', () => {
     const interligne = Number.parseFloat(getComputedStyle(valeur).lineHeight);
     expect(interligne).toBeGreaterThan(0);
     expect(valeur.getBoundingClientRect().height).toBeGreaterThanOrEqual(2 * interligne);
+  });
+});
+
+describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', () => {
+  // La rubrique des étiquettes de la fiche, son champ d'ajout, sa commande
+  // d'ajout, et la légende des étiquettes de la section.
+  const rubrique = (m) => fiche(m).querySelector('[data-etiquettes]');
+  const champEtiquettes = (m) => fiche(m).querySelector('[data-champ="etiquettes"]');
+  const ajoutEtiquettes = (m) => fiche(m).querySelector('[data-commande="ajouterEtiquettes"]');
+  const retrait = (m, motCle) =>
+    [...fiche(m).querySelectorAll('[data-commande="retirerEtiquette"]')].find(
+      (bouton) => bouton.textContent.trim() === t('participants.etiquettes.retirer', { motCle }),
+    ) ?? null;
+  const legendeEtiquettes = (m) => section(m).querySelector('[data-legende-etiquettes]');
+  const etiquettesDe = (m, nom) => participants(m).find((p) => p.nom === nom).etiquettes;
+
+  // Trois personnes de deux appartenances : les teintes d'appartenance
+  // existent, et aucune ne doit peindre une étiquette.
+  const TROIS_ETIQUETEES = [
+    { nom: 'Ombrelle', prenom: 'Iris', appartenance: CLUB },
+    { nom: 'Pervenche', prenom: 'Théo', appartenance: 'Cercle des Pinsons' },
+    { nom: 'Lacasse', prenom: 'Ondine', appartenance: CLUB, exclu: true },
+  ];
+
+  // La fiche de la personne nommée, ouverte.
+  async function ouvrirFiche(m, nom) {
+    m.ui.ouvrirFiche(idDe(m, nom));
+    await rendu();
+  }
+
+  // Une saisie dans le champ des étiquettes, envoyée par Entrée.
+  async function ajouterParClavier(m, texte) {
+    await saisir(champEtiquettes(m), texte);
+    champEtiquettes(m).focus();
+    await touche('Enter');
+    await attendreSeance(m);
+  }
+
+  test('la fiche montre chaque étiquette en pastille neutre à icône, sa commande « Retirer » nommée par elle ; sans étiquette, elle le dit', async () => {
+    const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: 'finance, Montréal' });
+    await ouvrirFiche(m, 'Ombrelle');
+    const elements = [...rubrique(m).querySelectorAll('li')];
+    expect(elements.map((li) => texteDe(pastilleDans(li)))).toEqual(['Montréal', 'finance']);
+    const encre = jeton('--couleur-page-texte');
+    for (const li of elements) {
+      const pastille = pastilleDans(li);
+      expect(fondDe(pastille)).toEqual(jeton('--couleur-neutre-fond'));
+      expect(pastille.querySelector('svg')).not.toBeNull();
+      expect(composantes(getComputedStyle(pastille).color)).toEqual(encre);
+    }
+    // La teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7).
+    const teintes = new Set([1, 2, 3, 4, 5, 6].map((rang) => JSON.stringify(jeton(`--couleur-appartenance-${rang}-fond`))));
+    for (const li of elements) expect(teintes.has(JSON.stringify(fondDe(pastilleDans(li))))).toBe(false);
+    for (const motCle of ['Montréal', 'finance']) expect(retrait(m, motCle), motCle).not.toBeNull();
+    // En sombre, la pastille prend le neutre sombre.
+    await sousTheme('sombre', async () => {
+      for (const li of elements) expect(fondDe(pastilleDans(li))).toEqual(jeton('--couleur-neutre-fond'));
+    });
+
+    await ouvrirFiche(m, 'Pervenche');
+    expect(rubrique(m).querySelectorAll('li')).toHaveLength(0);
+    expect(rubrique(m).textContent).toContain(t('participants.fiche.aucuneEtiquette'));
+    expect(fiche(m).querySelectorAll('[data-commande="retirerEtiquette"]')).toHaveLength(0);
+  });
+
+  test('au clavier : une saisie de trois étiquettes, Entrée, une entrée au journal ; le champ se vide et garde le focus ; « Retirer » ôte la sienne et rend le focus à sa voisine', async () => {
+    const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
+    await ouvrirFiche(m, 'Pervenche');
+    const champ = champEtiquettes(m);
+    expect(document.querySelector(`label[for="${champ.id}"]`).textContent.trim()).toBe(t('participants.etiquettes.champ'));
+    expect(ajoutEtiquettes(m).textContent.trim()).toBe(t('participants.etiquettes.ajouter'));
+    const avant = entrees(m).length;
+    const gestes = vi.spyOn(m.seance, 'debuterGeste');
+    const finis = vi.spyOn(m.seance, 'finirGeste');
+    await saisir(champ, 'ressources  humaines ; bénévole ; voile');
+    // Une saisie non envoyée est un geste ouvert.
+    expect(gestes).toHaveBeenCalled();
+    expect(m.seance.gesteEnCours).toBe(true);
+    champ.focus();
+    await touche('Enter');
+    await attendreSeance(m);
+    expect(etiquettesDe(m, 'Pervenche')).toEqual(['bénévole', 'ressources humaines', 'voile']);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(champEtiquettes(m).value).toBe('');
+    // Le champ vidé par l'envoi rend le geste : le compte d'inactivité reprend.
+    expect(finis).toHaveBeenCalledTimes(1);
+    expect(m.seance.gesteEnCours).toBe(false);
+    expect(document.activeElement).toBe(champEtiquettes(m));
+    expect([...rubrique(m).querySelectorAll('li')].map((li) => texteDe(pastilleDans(li)))).toEqual(['bénévole', 'ressources humaines', 'voile']);
+
+    // « Retirer » activé par Entrée : le focus passe au « Retirer » suivant,
+    // sinon au précédent, sinon au champ ; jamais au document.
+    const retirerAuClavier = async (motCle) => {
+      retrait(m, motCle).focus();
+      await touche('Enter');
+      await attendreSeance(m);
+    };
+    await retirerAuClavier('ressources humaines');
+    expect(etiquettesDe(m, 'Pervenche')).toEqual(['bénévole', 'voile']);
+    expect(entrees(m)).toHaveLength(avant + 2);
+    expect(retrait(m, 'ressources humaines')).toBeNull();
+    expect(document.activeElement).toBe(retrait(m, 'voile'));
+
+    await retirerAuClavier('voile');
+    expect(etiquettesDe(m, 'Pervenche')).toEqual(['bénévole']);
+    expect(document.activeElement).toBe(retrait(m, 'bénévole'));
+
+    // Le dernier retrait retire le champ de la personne.
+    await retirerAuClavier('bénévole');
+    expect(etiquettesDe(m, 'Pervenche')).toBeUndefined();
+    expect(rubrique(m).textContent).toContain(t('participants.fiche.aucuneEtiquette'));
+    expect(document.activeElement).toBe(champEtiquettes(m));
+
+    // Une saisie non envoyée : fermer la fiche rend le geste qu'elle tient.
+    await saisir(champEtiquettes(m), 'voile');
+    expect(m.seance.gesteEnCours).toBe(true);
+    finis.mockClear();
+    await cliquer(fiche(m).querySelector('[data-commande="fermerFiche"]'));
+    expect(fiche(m)).toBeNull();
+    expect(finis).toHaveBeenCalledTimes(1);
+    expect(m.seance.gesteEnCours).toBe(false);
+  });
+
+  test('« FINANCE » saisi quand « finance » existe s’enregistre sous « finance », et le signal d’orthographe se pose contre le champ', async () => {
+    const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: 'finance' });
+    await ouvrirFiche(m, 'Pervenche');
+    await ajouterParClavier(m, 'FINANCE');
+    expect(etiquettesDe(m, 'Pervenche')).toEqual(['finance']);
+    const signal = fiche(m).querySelector('[data-avertissement="ORTHOGRAPHE_RETENUE"]');
+    expect(signal).not.toBeNull();
+    expect(visible(signal)).toBe(true);
+    expect(texteDe(signal)).toBe(t('ORTHOGRAPHE_RETENUE', { saisie: 'FINANCE', retenue: 'finance' }));
+    expect(champEtiquettes(m).getAttribute('aria-describedby')).toBe(signal.id);
+    // Contre le champ : le signal suit le champ dans la fiche, sans rien entre eux.
+    expect(ecart(signal, champEtiquettes(m))).toBeLessThan(48);
+
+    // Une autre fiche ne le montre pas ; revenue à la personne, sous la même
+    // révision, la fiche le montre de nouveau.
+    await ouvrirFiche(m, 'Ombrelle');
+    expect(fiche(m).querySelector('[data-avertissement]')).toBeNull();
+    expect(champEtiquettes(m).hasAttribute('aria-describedby')).toBe(false);
+    await ouvrirFiche(m, 'Pervenche');
+    expect(fiche(m).querySelector('[data-avertissement="ORTHOGRAPHE_RETENUE"]')).not.toBeNull();
+
+    // Un geste suivant le retire.
+    await ajouterParClavier(m, 'bénévole');
+    expect(fiche(m).querySelector('[data-avertissement="ORTHOGRAPHE_RETENUE"]')).toBeNull();
+    expect(champEtiquettes(m).hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  test('refusé contre le champ : une tabulation, 41 caractères, des séparateurs seuls, une vingt et unième ; la saisie reste, rien ne s’écrit', async () => {
+    const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
+    const vingt = Array.from({ length: 20 }, (_, i) => `mot${String(i).padStart(2, '0')}`).join(', ');
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: vingt });
+    await ouvrirFiche(m, 'Pervenche');
+    const avant = texteJournal(m);
+    const cas = [
+      ['voile, a\u{0009}b', 'ETIQUETTE_INVALIDE'],
+      ['x'.repeat(41), 'ETIQUETTE_INVALIDE'],
+      [' , ; | ', 'ETIQUETTE_INVALIDE'],
+    ];
+    for (const [saisie, code] of cas) {
+      await ajouterParClavier(m, saisie);
+      const champ = champEtiquettes(m);
+      expect(champ.getAttribute('aria-invalid'), saisie).toBe('true');
+      const message = document.getElementById(champ.getAttribute('aria-describedby'));
+      expect(message.dataset.refus, saisie).toBe(code);
+      expect(visible(message)).toBe(true);
+      expect(champ.value, saisie).toBe(saisie);
+      expect(fiche(m).contains(message)).toBe(true);
+    }
+    expect(texteJournal(m)).toBe(avant);
+    // Une frappe retire le refus.
+    await saisir(champEtiquettes(m), 'voile');
+    expect(champEtiquettes(m).hasAttribute('aria-invalid')).toBe(false);
+
+    await ouvrirFiche(m, 'Ombrelle');
+    await ajouterParClavier(m, 'voile');
+    const champ = champEtiquettes(m);
+    const message = document.getElementById(champ.getAttribute('aria-describedby'));
+    expect(message.dataset.refus).toBe('ETIQUETTES_EN_TROP');
+    expect(texteDe(message)).toContain(t('ETIQUETTES_EN_TROP', { nombre: 21 }));
+    expect(etiquettesDe(m, 'Ombrelle')).toHaveLength(20);
+    expect(texteJournal(m)).toBe(avant);
+
+    // Passer à une autre personne vide le champ et son refus.
+    await ouvrirFiche(m, 'Pervenche');
+    expect(champEtiquettes(m).value).toBe('');
+    expect(champEtiquettes(m).hasAttribute('aria-invalid')).toBe(false);
+    expect(champEtiquettes(m).hasAttribute('aria-describedby')).toBe(false);
+    expect(fiche(m).querySelector('[data-refus]')).toBeNull();
+  });
+
+  test('un refus rendu après le passage à une autre personne ne se pose pas sur son champ', async () => {
+    const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
+    // Une écriture retenue tient la file de la séance : l'ajout tapé
+    // ensuite attend derrière elle.
+    const liberer = retenirJournal(m);
+    const tenue = m.seance.executer('changerEtiquettes', { id: idDe(m, 'Lacasse'), ajouter: 'finance' });
+    await ouvrirFiche(m, 'Pervenche');
+    await saisir(champEtiquettes(m), 'a\u{0009}b');
+    champEtiquettes(m).focus();
+    await touche('Enter');
+    await rendu();
+    await ouvrirFiche(m, 'Ombrelle');
+    liberer();
+    await tenue;
+    await attendreSeance(m);
+    expect(champEtiquettes(m).value).toBe('');
+    expect(champEtiquettes(m).hasAttribute('aria-invalid')).toBe(false);
+    expect(champEtiquettes(m).hasAttribute('aria-describedby')).toBe(false);
+    expect(fiche(m).querySelector('[data-refus]')).toBeNull();
+  });
+
+  test('une seconde Entrée pendant l’écriture n’envoie rien : un seul envoi, une entrée au journal, aucun refus', async () => {
+    const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
+    await ouvrirFiche(m, 'Pervenche');
+    const avant = entrees(m).length;
+    const executer = vi.spyOn(m.seance, 'executer');
+    const liberer = retenirJournal(m);
+    await saisir(champEtiquettes(m), 'bénévole');
+    champEtiquettes(m).focus();
+    await touche('Enter');
+    await rendu();
+    expect(ajoutEtiquettes(m).getAttribute('aria-busy')).toBe('true');
+    await touche('Enter');
+    await rendu();
+    liberer();
+    await vi.waitFor(() => expect(etiquettesDe(m, 'Pervenche')).toEqual(['bénévole']));
+    await attendreSeance(m);
+    expect(executer.mock.calls.filter(([nom]) => nom === 'changerEtiquettes')).toHaveLength(1);
+    expect(entrees(m)).toHaveLength(avant + 1);
+    expect(fiche(m).querySelector('[data-refus]')).toBeNull();
+    expect(champEtiquettes(m).hasAttribute('aria-invalid')).toBe(false);
+  });
+
+  test('la légende des étiquettes suit celle des appartenances, chacune chiffrée exclues comprises, en pastilles neutres ; absente sans étiquette', async () => {
+    const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
+    expect(legendeEtiquettes(m)).toBeNull();
+    expect(legende(m)).not.toBeNull();
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: 'finance, Montréal' });
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Lacasse'), ajouter: 'finance' });
+    await attendreSeance(m);
+    const porteur = legendeEtiquettes(m);
+    expect(porteur).not.toBeNull();
+    expect(porteur.getAttribute('aria-label')).toBe(t('participants.legendeEtiquettes.titre'));
+    // Sous celle des appartenances : sa voisine immédiate, dans le même
+    // porteur des légendes.
+    expect(legende(m).nextElementSibling).toBe(porteur);
+    expect(porteur.parentElement).toBe(legende(m).parentElement);
+    const lue = () => [...porteur.querySelectorAll('li')].map((li) => ({ texte: texteDe(li), fond: fondDe(pastilleDans(li)) }));
+    const neutre = jeton('--couleur-neutre-fond');
+    expect(lue()).toEqual([
+      { texte: t('participants.legende.element', { nom: 'finance', compte: 2 }), fond: neutre },
+      { texte: t('participants.legende.element', { nom: 'Montréal', compte: 1 }), fond: neutre },
+    ]);
+    for (const li of porteur.querySelectorAll('li')) expect(pastilleDans(li).querySelector('svg')).not.toBeNull();
+    // Un filtre ne la change pas.
+    await saisir(section(m).querySelector('[data-champ="filtre"]'), 'Pervenche');
+    expect(idsAffiches(m)).toHaveLength(1);
+    expect(lue()).toHaveLength(2);
+    // La dernière étiquette retirée, la légende part.
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), retirer: 'finance' });
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), retirer: 'Montréal' });
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Lacasse'), retirer: 'finance' });
+    await attendreSeance(m);
+    expect(legendeEtiquettes(m)).toBeNull();
+  });
+
+  test('en lecture : les pastilles restent ; « Ajouter » et « Retirer » sont refusés, chacun avec son remède, et rien ne s’écrit', async () => {
+    const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: 'finance' });
+    await m.seance.passerEnLecture();
+    await ouvrirFiche(m, 'Ombrelle');
+    const avant = texteJournal(m);
+    expect(texteDe(pastilleDans(rubrique(m).querySelector('li')))).toBe('finance');
+
+    await ajouterParClavier(m, 'bénévole');
+    const message = document.getElementById(champEtiquettes(m).getAttribute('aria-describedby'));
+    expect(message.dataset.refus).toBe('MODE_LECTURE');
+    expect(message.querySelector('[data-commande]')).not.toBeNull();
+
+    await cliquer(retrait(m, 'finance'));
+    await attendreSeance(m);
+    const refusRetrait = retrait(m, 'finance').parentElement.querySelector('[data-refus]');
+    expect(refusRetrait.dataset.refus).toBe('MODE_LECTURE');
+    expect(refusRetrait.querySelector('[data-commande]')).not.toBeNull();
+    expect(etiquettesDe(m, 'Ombrelle')).toEqual(['finance']);
+    expect(texteJournal(m)).toBe(avant);
+  });
+
+  test('plan bloqué, en écriture : « Ajouter » et « Retirer » sont refusés avec « Débloquer » pour remède', async () => {
+    const m = await evenementOuvert({ sieges: 4, tours: 2, tables: 1, personnes: TROIS_ETIQUETEES });
+    await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: 'finance' });
+    await m.app.generation().generer({ graine: 1, nombre: 1, arret: 50, historique: 1000 });
+    const [proposition] = m.seance.etat().charge.propositions;
+    await m.seance.executer('retenirProposition', { id: proposition.id });
+    await m.seance.executer('changerEtat', { etat: 'bloque' });
+    await ouvrirFiche(m, 'Ombrelle');
+    const avant = texteJournal(m);
+
+    await ajouterParClavier(m, 'bénévole');
+    const message = document.getElementById(champEtiquettes(m).getAttribute('aria-describedby'));
+    expect(message.querySelector('[data-commande="debloquer"]')).not.toBeNull();
+    await cliquer(retrait(m, 'finance'));
+    await attendreSeance(m);
+    const refusRetrait = retrait(m, 'finance').parentElement.querySelector('[data-refus]');
+    expect(refusRetrait.querySelector('[data-commande="debloquer"]')).not.toBeNull();
+    expect(texteJournal(m)).toBe(avant);
   });
 });
 

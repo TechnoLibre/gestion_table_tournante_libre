@@ -42,6 +42,8 @@ const DESSINS = [
   ['chevron', ['M9 6l6 6-6 6']],
   ['points', [cercle(5, 12, 1.5), cercle(12, 12, 1.5), cercle(19, 12, 1.5)]],
   ['demarrer', ['M8 5l11 7-11 7z']],
+  // Une étiquette (§ 4.5) : l'étiquette à œillet, pointe en bas à droite.
+  ['etiquettes', ['M3 3h8l10 10-8 8L3 11z', cercle(7.5, 7.5, 1.5)]],
 ];
 
 /** Les noms des icônes, dans l'ordre du module. */
