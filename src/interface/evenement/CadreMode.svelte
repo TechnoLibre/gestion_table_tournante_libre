@@ -6,13 +6,24 @@
   // de travail, dont la forme dit le mode — tirets en lecture, plein en
   // écriture, double sur un plan bloqué —, et une barre qui porte, de gauche
   // à droite, la place fixe, le libellé de mode, puis « Défaire » et
-  // « Refaire » (§ 8.3). Sous la barre vient la tête, tete, quand elle est
-  // donnée — l'en-tête de l'événement et la navigation des sections —, puis
-  // les annonces, annonces, quand il y en a — support rompu et
-  // avertissements —, puis la surface, children. La barre ouvre le cadre :
-  // rien ne la précède dans l'écran de l'événement, si bien qu'un refus posé
-  // dans la tête, ou un nom qui s'étend sur plusieurs lignes, allonge la tête
-  // sans déplacer la place fixe (§ 8.4). Tête, annonces et surface défilent
+  // « Refaire » (§ 8.3), puis les outils, outils — la suite des états du
+  // plan —, et les actions, actions — « Imprimer… », calée à droite —, quand
+  // ils sont donnés. Outils et actions suivent la place fixe et ne la
+  // déplacent donc jamais : un refus posé à côté de la place fixe les
+  // repousse sur la ligne suivante, à côté du libellé, sans ligne de plus.
+  // Une barre de moins de 80rem — la fenêtre de 1 366 px lui en donne
+  // davantage — passe les outils sous les commandes et les actions, sur une
+  // ligne à eux : la barre garde deux lignes là où, dans l'ordre du
+  // document, elle en prendrait trois.
+  //
+  // Sous la barre vient la tête, tete, quand elle est donnée — l'en-tête de
+  // l'événement et la navigation des sections —, puis les annonces,
+  // annonces, quand il y en a — support rompu et avertissements —, puis la
+  // surface, children. La barre ouvre le cadre, et seule la bande de mode,
+  // de hauteur constante, le précède dans l'écran de l'événement : un refus
+  // posé dans la barre ou la tête, ou un nom qui s'étend sur plusieurs
+  // lignes, allonge la barre ou la tête sans déplacer la place fixe
+  // (§ 8.4). Tête, annonces et surface défilent
   // chacune dans sa zone : des avertissements nombreux ne poussent pas la
   // surface hors du cadre, ni le cadre hors de la fenêtre. La surface porte
   // le plan, que l'opérateur regarde : elle réclame les trois quarts du
@@ -43,13 +54,26 @@
   // côté de ce qui le nomme (§ 8.8). « Refaire » n'est là que lorsqu'un
   // retour se refait ; « Défaire » est toujours là, et la séance refuse à
   // côté de lui ce qui ne se défait pas.
+  //
+  // « Modifier » est l'action principale de la lecture, pleine de la teinte
+  // de l'action ; « Revenir en lecture » et « Débloquer » ne le sont pas.
+  // Chaque commande de la barre a la hauteur d'une cible principale, et la
+  // barre celle d'une ligne de ces commandes : passer d'une commande de la
+  // place fixe à l'autre ne déplace ni la tête ni la surface. Le libellé de
+  // mode est une pastille aux couleurs de la bande de mode, centrée dans
+  // cette hauteur, d'encre neutre.
+  //
+  // La barre et la tête forment la carte d'en-tête de l'événement : la
+  // barre sur le fond sourd de la carte, la tête sur son fond, séparées et
+  // closes par le filet de la carte. Le cadre, lui, reste sur le fond de la
+  // page, que son trait contraste (marques.js).
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import { CONFIRMATION_DEBLOCAGE } from '../primitives/commande.js';
   import Refus from '../primitives/Refus.svelte';
   import { cadreDeMode, commandeFixe, repriseOfferte } from './modele.js';
 
-  let { children, tete = null, annonces = null } = $props();
+  let { children, tete = null, annonces = null, outils = null, actions = null } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -75,7 +99,7 @@
         {#if commande === 'format'}
           <Refus refus={$seance.refus} />
         {:else if commande === 'modifier'}
-          <Commande cle="communs.commande.modifier" nom="modifier" executer={() => seance.passerEnEcriture()} />
+          <Commande cle="communs.commande.modifier" nom="modifier" variante="principale" executer={() => seance.passerEnEcriture()} />
         {:else if commande === 'debloquer'}
           <Commande
             cle="communs.commande.debloquer"
@@ -88,7 +112,11 @@
         {/if}
       </div>
       {#if cadre !== null}
-        <span class="libelle" data-mode-libelle="cadre">{t(cadre.cle)}</span>
+        <span class="porte-libelle">
+          <span class="libelle" class:plein={forme === 'plein'} class:double={forme === 'double'} data-mode-libelle="cadre"
+            >{t(cadre.cle)}</span
+          >
+        </span>
       {/if}
       {#if commande !== 'format'}
         <div class="historique" data-historique>
@@ -96,6 +124,16 @@
           {#if $seance.retours.refaire}
             <Commande cle="evenement.commande.refaire" nom="refaire" executer={() => seance.refaire()} />
           {/if}
+        </div>
+      {/if}
+      {#if outils !== null}
+        <div class="outils">
+          {@render outils()}
+        </div>
+      {/if}
+      {#if actions !== null}
+        <div class="actions">
+          {@render actions()}
         </div>
       {/if}
     </div>
@@ -176,8 +214,10 @@
     gap: var(--espace-2);
     max-height: 50%;
     overflow-y: auto;
-    padding: var(--espace-2) var(--espace-3);
-    border-bottom: 1px solid var(--couleur-page-filet);
+    padding: var(--espace-1) var(--espace-3);
+    border-bottom: 1px solid var(--couleur-carte-filet);
+    background-color: var(--couleur-carte-fond-sourd);
+    container: barre / inline-size;
   }
 
   .ligne {
@@ -187,6 +227,28 @@
     gap: var(--espace-2) var(--espace-3);
   }
 
+  /* Les outils et les actions, centrés sur la hauteur d'une cible
+     principale ; les actions calées à droite de leur ligne. */
+  .outils,
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    min-height: var(--hauteur-cible);
+    gap: var(--espace-2);
+  }
+
+  .actions {
+    margin-left: auto;
+  }
+
+  @container barre (max-width: 80rem) {
+    .outils {
+      order: 1;
+      min-height: 0;
+    }
+  }
+
   .fixe {
     display: flex;
     flex-wrap: wrap;
@@ -194,11 +256,38 @@
     gap: var(--espace-2);
   }
 
+  /* Le bouton de chaque commande de la barre — celui de la Commande, non
+     ceux du refus posé à côté — a la hauteur d'une cible principale. */
+  .fixe > :global(div > button),
+  .historique > :global(div > button) {
+    min-height: var(--hauteur-cible);
+  }
+
+  .porte-libelle {
+    display: flex;
+    align-items: center;
+    min-height: var(--hauteur-cible);
+  }
+
+  /* Le libellé de mode : une pastille du fond et du filet de la bande de
+     mode, d'encre neutre, en gras. */
   .libelle {
-    padding: var(--espace-1) var(--espace-2);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
+    padding: 0.125rem var(--espace-3);
+    border: 1px solid var(--couleur-mode-lecture-filet);
+    border-radius: var(--rayon-pilule);
+    background-color: var(--couleur-mode-lecture-fond);
+    color: var(--couleur-page-texte);
     font-weight: bold;
+  }
+
+  .libelle.plein {
+    border-color: var(--couleur-mode-ecriture-filet);
+    background-color: var(--couleur-mode-ecriture-fond);
+  }
+
+  .libelle.double {
+    border-color: var(--couleur-mode-bloque-filet);
+    background-color: var(--couleur-mode-bloque-fond);
   }
 
   .historique {
@@ -228,7 +317,8 @@
   }
 
   /* La tête ne prend jamais plus de 35 % du cadre : au-delà, elle défile,
-     et la surface garde sa place. */
+     et la surface garde sa place. Elle n'a pas de retrait en bas : le trait
+     des onglets de la navigation se pose sur son filet. */
   .tete {
     display: flex;
     flex: 0 0 auto;
@@ -236,8 +326,9 @@
     gap: var(--espace-2);
     max-height: 35%;
     overflow-y: auto;
-    padding: var(--espace-2) var(--espace-3);
-    border-bottom: 1px solid var(--couleur-page-filet);
+    padding: var(--espace-2) var(--espace-3) 0;
+    border-bottom: 1px solid var(--couleur-carte-filet);
+    background-color: var(--couleur-carte-fond);
   }
 
   /* Les annonces défilent dans leur zone, au-delà de sa hauteur. */
@@ -277,7 +368,7 @@
   .cote > .contenu {
     flex: 1 1 0;
     min-width: min(100%, 30rem);
-    padding-block: var(--espace-2);
+    padding-top: var(--espace-2);
   }
 
   .place {
@@ -285,12 +376,15 @@
     flex: 0 0 36%;
     min-width: 16rem;
     min-height: 3rem;
-    border-left: 1px solid var(--couleur-page-filet);
+    border-left: 1px solid var(--couleur-carte-filet);
   }
 
+  /* À côté de la tête, la zone a un retrait vertical réduit : les deux
+     avertissements d'un journal abîmé paraissent dans sa hauteur. */
   .place > .annonces {
     position: absolute;
     inset: 0;
+    padding-block: var(--espace-1);
   }
 
   /* Seules — sans tête, en plein écran, ou devant un support rompu —, les

@@ -5,10 +5,14 @@
 // l'état observable de la séance (§ 8.4, § 8.5, § 8.8, § 8.9, § 9). Le cadre
 // de mode et sa forme, la commande de la place fixe, les états du plan et
 // leurs clés, la reprise de verrou que l'écran offre, et les avertissements
-// dans l'ordre de la séance, chacun avec son remède. Rien n'y est décidé
-// que la séance ne décide déjà : le refus courant, le mode et l'état du plan
-// se lisent dans EtatSeance, jamais se recalculent.
+// dans l'ordre de la séance, chacun avec son remède ; puis ce que montre
+// l'enveloppe de l'événement : le résumé chiffré de son en-tête, les étapes
+// de ses états, la bande de mode. Rien n'y est décidé que la séance ne
+// décide déjà : le refus courant, le mode et l'état du plan se lisent dans
+// EtatSeance, jamais se recalculent.
 import { cleDeMode } from '../mode.js';
+import { modelePastille } from '../primitives/pastille.js';
+import { etatTable } from '../tables/modele.js';
 
 // La forme du cadre pour chaque clé du libellé de mode : un trait différent
 // par mode, pour qu'aucun ne se distingue par la seule couleur (§ 14.5).
@@ -64,6 +68,67 @@ export const ETATS_PLAN = Object.freeze(['brouillon', 'propose', 'retenu', 'bloq
 export function cleEtat(etat) {
   if (!ETATS_PLAN.includes(etat)) throw new RangeError(`état du plan inconnu : ${JSON.stringify(etat)}`);
   return `evenement.etat.${etat}`;
+}
+
+/**
+ * Les étapes de la suite des états du plan (§ 9), dans l'ordre d'ETATS_PLAN :
+ * pour chacune, son état, la clé de son libellé (cleEtat), l'icône de sa
+ * pastille d'état (pastille.js) et courant, vrai pour l'état du plan ouvert
+ * seul. Sans événement, aucune n'est courante.
+ *
+ * @param {Object} etatSeance  EtatSeance
+ * @returns {Array<{etat: string, cle: string, icone: string, courant: boolean}>}
+ */
+export function etapesEtat(etatSeance) {
+  const courant = etatSeance.evenement?.etat ?? null;
+  return ETATS_PLAN.map((etat) => ({ etat, cle: cleEtat(etat), icone: modelePastille('etat', etat, null).icone, courant: etat === courant }));
+}
+
+// Le mode de la bande, son explication et son icône, pour chaque forme du
+// cadre : la bande dit ce que le cadre dit.
+const BANDES = new Map([
+  ['tirets', { mode: 'lecture', explication: 'evenement.bande.lecture', icone: 'oeil' }],
+  ['plein', { mode: 'ecriture', explication: 'evenement.bande.ecriture', icone: 'stylo' }],
+  ['double', { mode: 'bloque', explication: 'evenement.bande.bloque', icone: 'cadenas' }],
+]);
+
+/**
+ * La bande de mode, sous le bandeau (§ 8.4) : mode, 'lecture', 'ecriture' ou
+ * 'bloque' — un plan bloqué l'est quel que soit le mode — ; cle, le libellé
+ * du cadre (cadreDeMode) ; explication, la clé de la phrase qui le suit ;
+ * icone, celle des primitives qui le précède. La phrase nomme la commande
+ * de la place fixe (commandeFixe) ; devant un format plus récent, qui n'en
+ * offre aucune, plan bloqué compris, elle est evenement.bande.lectureSeule,
+ * qui n'en nomme aucune. null sans événement.
+ *
+ * @param {Object} etatSeance  EtatSeance
+ * @returns {null|{mode: 'lecture'|'ecriture'|'bloque', cle: string, explication: string, icone: string}}
+ */
+export function bandeDeMode(etatSeance) {
+  const cadre = cadreDeMode(etatSeance);
+  if (cadre === null) return null;
+  const { mode, explication, icone } = BANDES.get(cadre.forme);
+  const phrase = commandeFixe(etatSeance) === 'format' ? 'evenement.bande.lectureSeule' : explication;
+  return { mode, cle: cadre.cle, explication: phrase, icone };
+}
+
+/**
+ * Le résumé chiffré de l'en-tête, tiré de la charge publiée : date, celle de
+ * l'événement ou null ; participants, tous ceux de la liste, exclus compris,
+ * comme la liste des événements les compte ; tables ; sieges, la somme de
+ * leurs capacités (etatTable, tables/modele.js), défaut ou surcharge ;
+ * tours. null sans charge.
+ *
+ * @param {Object} etatSeance  EtatSeance
+ * @returns {null|{date: string|null, participants: number, tables: number, sieges: number, tours: number}}
+ */
+export function resumeEvenement(etatSeance) {
+  const { charge } = etatSeance;
+  if (charge === null || charge === undefined) return null;
+  const { date, siegesParDefaut, tours } = charge.evenement;
+  let sieges = 0;
+  for (const table of charge.tables) sieges += etatTable(table, siegesParDefaut).capacite;
+  return { date: date ?? null, participants: charge.participants.length, tables: charge.tables.length, sieges, tours };
 }
 
 /**

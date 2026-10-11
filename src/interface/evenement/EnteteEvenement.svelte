@@ -2,41 +2,35 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // L'en-tête de l'événement ouvert (§ 9) : son nom, puis ses quatre états,
-  // dans l'ordre du § 9. Un état se pose en le cliquant, par la commande
-  // changerEtat de la séance — « Bloqué » est la commande « Bloquer », après
-  // laquelle la séance revient en lecture et rend le verrou. Ce que la séance
-  // refuse — la lecture, un plan bloqué, « Retenu » sans placement retenu,
-  // « Proposé » sans proposition — s'affiche à côté de l'état cliqué, avec
-  // son remède. L'état courant se distingue par sa forme : gras, et un trait
-  // sous lui. Le nom se coupe où il le faut, même sans espace : un nom long
-  // de glyphes larges passe à la ligne au lieu d'élargir la page. Chaque état
-  // est un bloc : la commande et son refus en sont.
-  //
-  // « Imprimer… » ouvre l'aperçu avant impression (§ 11.7) sur le plan, au
-  // tour montré : toute impression passe par lui. Vivante dans tout mode,
-  // elle n'écrit rien.
+  // L'en-tête de l'événement ouvert, en tête de la tête du cadre : son nom,
+  // puis, sur la même ligne tant qu'elle a la place, son résumé — la date
+  // quand il en a une, les participants, les tables et leurs sièges, les
+  // tours (resumeEvenement, modele.js) —, d'encre secondaire. Le nom se
+  // coupe où il le faut, même sans espace : un nom long de glyphes larges
+  // passe à la ligne au lieu d'élargir la page. Le résumé passe à la ligne
+  // entre ses éléments, jamais dans l'un d'eux.
   import { getContext } from 'svelte';
-  import Commande from '../primitives/Commande.svelte';
-  import { ETATS_PLAN, cleEtat } from './modele.js';
+  import { resumeEvenement } from './modele.js';
 
   const t = getContext('t');
+  const format = getContext('format');
   const seance = getContext('seance');
-  const ui = getContext('ui');
 
-  const courant = $derived($seance.evenement?.etat ?? null);
+  const resume = $derived(resumeEvenement($seance));
 </script>
 
 <header class="entete">
   <h1>{$seance.evenement?.nom}</h1>
-  <div class="etats" role="group" aria-label={t('evenement.etat.titre')}>
-    {#each ETATS_PLAN as etat (etat)}
-      <div class="etat" class:courant={courant === etat} data-etat={etat}>
-        <Commande cle={cleEtat(etat)} nom="etat" executer={() => seance.executer('changerEtat', { etat })} />
-      </div>
-    {/each}
-  </div>
-  <Commande cle="impression.commande.ouvrir" nom="apercu" executer={() => ui.ouvrirApercu({ vue: 'plan', tour: $ui.tour })} />
+  {#if resume !== null}
+    <p class="resume">
+      {#if resume.date !== null}
+        <span>{format.date(resume.date)}</span>
+      {/if}
+      <span>{t('evenement.resume.participants', { participants: resume.participants })}</span>
+      <span>{t('evenement.resume.tables', { tables: resume.tables, sieges: resume.sieges })}</span>
+      <span>{t('evenement.resume.tours', { tours: resume.tours })}</span>
+    </p>
+  {/if}
 </header>
 
 <style>
@@ -44,31 +38,24 @@
     min-width: 0;
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
-    gap: var(--espace-2) var(--espace-4);
+    align-items: baseline;
+    gap: 0 var(--espace-4);
   }
 
   h1 {
     min-width: 0;
     margin: 0;
-    font-size: var(--taille-titre);
+    font-size: var(--taille-titre-grand);
+    line-height: 1.15;
     overflow-wrap: anywhere;
   }
 
-  .etats {
+  .resume {
     display: flex;
     flex-wrap: wrap;
-    align-items: flex-start;
-    gap: var(--espace-2);
-  }
-
-  .etat {
-    padding-bottom: var(--espace-1);
-    border-bottom: 3px solid var(--couleur-page-fond);
-  }
-
-  .etat.courant {
-    border-bottom-color: var(--couleur-page-texte);
-    font-weight: bold;
+    gap: 0 var(--espace-4);
+    margin: 0;
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
   }
 </style>

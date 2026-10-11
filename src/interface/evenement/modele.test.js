@@ -4,14 +4,26 @@
 // Le modèle de l'événement ouvert (§ 8.4, § 8.5, § 8.8, § 8.9, § 9) : le cadre
 // de mode et sa forme, la commande de la place fixe, les états du plan et
 // leurs clés, la reprise de verrou offerte, et les avertissements ordonnés,
-// chacun avec son remède. Chaque épreuve part d'un EtatSeance réduit à ce que
-// la fonction lit ; les noms et identifiants sont inventés.
+// chacun avec son remède ; puis l'enveloppe : le résumé chiffré de
+// l'en-tête et ses textes, les étapes des états, la bande de mode. Chaque
+// épreuve part d'un EtatSeance réduit à ce que la fonction lit ; les noms et
+// identifiants sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { ETATS_PLAN, avertissementsOrdonnes, cadreDeMode, cleEtat, commandeFixe, repriseOfferte } from './modele.js';
+import {
+  ETATS_PLAN,
+  avertissementsOrdonnes,
+  bandeDeMode,
+  cadreDeMode,
+  cleEtat,
+  commandeFixe,
+  etapesEtat,
+  repriseOfferte,
+  resumeEvenement,
+} from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
@@ -233,6 +245,122 @@ describe('avertissementsOrdonnes (§ 8.6, § 8.8, § 8.9, § 9)', () => {
     for (const { remede } of avecRemede) {
       const cle = remede.geste === 'ouvrirSecours' ? `communs.remede.ouvrirSecours.${remede.source}` : `communs.remede.ouvrirSection.${remede.section}`;
       assert.notEqual(t(cle).trim(), '');
+    }
+  });
+});
+
+// Une charge réduite à ce que lit le résumé : l'événement, ses
+// participants et ses tables.
+function charge({ date = null, tours = 3, defaut = 8, participants = 0, exclus = 0, sieges = [] } = {}) {
+  const personnes = Array.from({ length: participants }, (_, rang) => ({ id: rang + 1, nom: `Quillard ${rang + 1}`, exclu: rang < exclus }));
+  return {
+    evenement: { id: 'evt-merles', nom: 'Club des Merles', date, siegesParDefaut: defaut, tours, etat: 'brouillon' },
+    participants: personnes,
+    tables: sieges.map((nombre, rang) => ({ id: rang + 1, numero: rang + 1, sieges: nombre })),
+  };
+}
+
+describe('resumeEvenement : la ligne de méta de l’en-tête', () => {
+  test('null sans charge', () => {
+    assert.equal(resumeEvenement({ ...etat(), charge: null }), null);
+    assert.equal(resumeEvenement({ ...etat({ plan: null }), charge: null }), null);
+  });
+
+  test('la date de l’événement, ses participants exclus compris, ses tables, leurs sièges — le défaut ou la surcharge —, ses tours', () => {
+    const lu = resumeEvenement({ ...etat(), charge: charge({ date: '2031-05-17', tours: 4, defaut: 8, participants: 13, exclus: 2, sieges: [null, 6, null] }) });
+    assert.deepEqual(lu, { date: '2031-05-17', participants: 13, tables: 3, sieges: 22, tours: 4 });
+  });
+
+  test('sans date, la date est null ; sans table, zéro table et zéro siège', () => {
+    const lu = resumeEvenement({ ...etat(), charge: charge({ tours: 1 }) });
+    assert.deepEqual(lu, { date: null, participants: 0, tables: 0, sieges: 0, tours: 1 });
+  });
+});
+
+describe('les textes du résumé', () => {
+  test('le singulier jusqu’à un, le pluriel au-delà, les milliers groupés d’une espace fine', () => {
+    assert.equal(t('evenement.resume.participants', { participants: 0 }), '0 participant');
+    assert.equal(t('evenement.resume.participants', { participants: 1 }), '1 participant');
+    assert.equal(t('evenement.resume.participants', { participants: 13 }), '13 participants');
+    assert.equal(t('evenement.resume.participants', { participants: 1200 }), '1\u{202F}200 participants');
+    assert.equal(t('evenement.resume.tables', { tables: 1, sieges: 1 }), '1 table \u{00B7} 1 siège');
+    assert.equal(t('evenement.resume.tables', { tables: 2, sieges: 18 }), '2 tables \u{00B7} 18 sièges');
+    assert.equal(t('evenement.resume.tours', { tours: 1 }), '1 tour');
+    assert.equal(t('evenement.resume.tours', { tours: 3 }), '3 tours');
+  });
+});
+
+describe('etapesEtat : la suite des états du plan', () => {
+  test('les quatre états dans l’ordre du § 9, chacun sa clé, l’icône de sa pastille, un seul courant', () => {
+    const etapes = etapesEtat(etat({ plan: 'retenu' }));
+    assert.deepEqual(etapes, [
+      { etat: 'brouillon', cle: 'evenement.etat.brouillon', icone: 'crayon', courant: false },
+      { etat: 'propose', cle: 'evenement.etat.propose', icone: 'listePoints', courant: false },
+      { etat: 'retenu', cle: 'evenement.etat.retenu', icone: 'coche', courant: true },
+      { etat: 'bloque', cle: 'evenement.etat.bloque', icone: 'cadenas', courant: false },
+    ]);
+  });
+
+  test('chaque état du plan est courant à son tour ; sans événement, aucun', () => {
+    for (const plan of ETATS_PLAN) {
+      const courants = etapesEtat(etat({ plan })).filter(({ courant }) => courant);
+      assert.deepEqual(courants.map(({ etat: e }) => e), [plan]);
+    }
+    assert.deepEqual(etapesEtat(etat({ plan: null })).filter(({ courant }) => courant), []);
+    assert.equal(etapesEtat(etat({ plan: null })).length, 4);
+  });
+});
+
+describe('bandeDeMode : la bande sous le bandeau', () => {
+  test('null sans événement', () => {
+    assert.equal(bandeDeMode(etat({ plan: null })), null);
+  });
+
+  test('lecture, écriture, plan bloqué — quel que soit le mode : le libellé du cadre, une explication, une icône', () => {
+    assert.deepEqual(bandeDeMode(etat({ mode: 'lecture' })), {
+      mode: 'lecture',
+      cle: 'coquille.mode.lecture',
+      explication: 'evenement.bande.lecture',
+      icone: 'oeil',
+    });
+    assert.deepEqual(bandeDeMode(etat({ mode: 'ecriture' })), {
+      mode: 'ecriture',
+      cle: 'coquille.mode.ecriture',
+      explication: 'evenement.bande.ecriture',
+      icone: 'stylo',
+    });
+    for (const mode of ['lecture', 'ecriture']) {
+      assert.deepEqual(bandeDeMode(etat({ mode, plan: 'bloque' })), {
+        mode: 'bloque',
+        cle: 'coquille.mode.bloque',
+        explication: 'evenement.bande.bloque',
+        icone: 'cadenas',
+      });
+    }
+  });
+
+  test('le libellé est celui du cadre ; trois explications traduites, distinctes, qui citent la commande qui en sort', () => {
+    const etats = [etat(), etat({ mode: 'ecriture' }), etat({ plan: 'bloque' })];
+    for (const e of etats) assert.equal(bandeDeMode(e).cle, cadreDeMode(e).cle);
+    const explications = etats.map((e) => t(bandeDeMode(e).explication));
+    for (const texte of explications) assert.notEqual(texte.trim(), '');
+    assert.equal(new Set(explications).size, 3);
+    const commandes = ['communs.commande.modifier', 'communs.commande.lecture', 'communs.commande.debloquer'];
+    explications.forEach((texte, rang) => assert.ok(texte.includes(`« ${t(commandes[rang])} »`), texte));
+  });
+
+  test('un format plus récent, plan bloqué ou non : le mode du cadre, et une explication qui ne cite aucune commande', () => {
+    const attendus = [
+      [etat({ refus: FORMAT_REFUS }), { mode: 'lecture', cle: 'coquille.mode.lecture', icone: 'oeil' }],
+      [etat({ plan: 'bloque', refus: FORMAT_REFUS }), { mode: 'bloque', cle: 'coquille.mode.bloque', icone: 'cadenas' }],
+    ];
+    const commandes = ['communs.commande.modifier', 'communs.commande.debloquer', 'evenement.commande.defaire', 'communs.commande.lecture'];
+    for (const [e, attendu] of attendus) {
+      assert.equal(commandeFixe(e), 'format');
+      assert.deepEqual(bandeDeMode(e), { ...attendu, explication: 'evenement.bande.lectureSeule' });
+      const texte = t(bandeDeMode(e).explication);
+      assert.notEqual(texte.trim(), '');
+      for (const cle of commandes) assert.ok(!texte.includes(t(cle)), `${texte} cite ${t(cle)}`);
     }
   });
 });

@@ -1113,6 +1113,8 @@ describe('le support rompu (§ 8.6, § 8.2)', () => {
     await attendre(() => expect(dans(m, `[data-evenement="${nouvelle}"]`)).not.toBeNull());
     const dossier = dans(m, '[data-dossier-travail]');
     expect(dossier.textContent).toBe(DOCUMENTS);
+    // La liste défile : le dossier de travail s'amène dans la fenêtre.
+    dossier.scrollIntoView({ block: 'center' });
     expect(visible(dossier)).toBe(true);
   });
 
@@ -1185,6 +1187,12 @@ describe('le format plus récent (§ 8.8)', () => {
     const explication = dans(m, '[data-place-fixe] [data-refus="LECTURE_SEULE"]');
     expect(explication.textContent).toContain(t('LECTURE_SEULE', { raison: 'FORMAT', remede: null }));
     expect(visible(explication)).toBe(true);
+    // La bande sous le bandeau ne nomme aucune commande que la place fixe
+    // n'offre pas.
+    const bande = dans(m, '[data-ecran="evenement"] > [role="status"]');
+    expect(bande).not.toBeNull();
+    expect(bande.textContent).toContain(t('evenement.bande.lectureSeule'));
+    for (const cle of ['communs.commande.modifier', 'communs.commande.debloquer']) expect(bande.textContent).not.toContain(t(cle));
     const avant = m.trace.length;
     const boutons = tous(m, '[data-ecran="evenement"] button').filter((bouton) => bouton.dataset.commande !== 'section');
     expect(boutons.length).toBeGreaterThan(0);

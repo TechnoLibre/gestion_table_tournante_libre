@@ -25,6 +25,22 @@ const CLES = new Map([
  *  clé coquille.section.<nom> de coquille.js. */
 export const SECTIONS = Object.freeze([...CLES.keys()]);
 
+// Les phases de la navigation, chacune avec ses sections, dans l'ordre du
+// § 2.1 : préparer la liste et le mobilier, placer, produire la planche.
+const PHASES_ET_SECTIONS = [
+  ['preparer', ['import', 'participants', 'tables']],
+  ['placer', ['plan', 'diagnostic', 'generation', 'propositions']],
+  ['produire', ['badges']],
+];
+
+/** Les phases qui groupent les sections dans la navigation : { nom, cle,
+ *  sections } — cle, evenement.phase.<nom> de evenement.js, l'intertitre du
+ *  groupe ; sections, les siennes dans l'ordre de SECTIONS. Mises bout à
+ *  bout, les phases rendent SECTIONS, chaque section une fois. Figées. */
+export const PHASES = Object.freeze(
+  PHASES_ET_SECTIONS.map(([nom, sections]) => Object.freeze({ nom, cle: `evenement.phase.${nom}`, sections: Object.freeze([...sections]) })),
+);
+
 /** La section qu'un événement montre à son ouverture. */
 export const SECTION_OUVERTURE = 'plan';
 

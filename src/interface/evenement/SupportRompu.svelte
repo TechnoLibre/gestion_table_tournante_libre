@@ -10,8 +10,13 @@
   // demande le dossier à l'opérateur — un refus, NON_DISPONIBLE sous web,
   // s'affiche à côté de la commande ; et « Fermer sans écrire ailleurs »,
   // confirmé en place, qui abandonne l'événement à ce support.
+  //
+  // C'est un message de refus, comme la primitive Refus : le fond et le
+  // filet du refus, son trait à gauche, l'icône « interdit » de sa marque
+  // devant le texte, l'encre du refus ; les issues sous le texte.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
+  import Icone from '../primitives/Icone.svelte';
 
   const t = getContext('t');
   const seance = getContext('seance');
@@ -26,22 +31,25 @@
 
 {#if rompu !== null}
   <section class="rompu" role="status" data-support-rompu>
-    <p>{t('SUPPORT_ROMPU', refus)}</p>
-    <div class="issues">
-      {#if rompu.ailleurs !== null}
+    <span class="signe"><Icone nom="interdit" taille={18} /></span>
+    <div class="corps">
+      <p>{t('SUPPORT_ROMPU', refus)}</p>
+      <div class="issues">
+        {#if rompu.ailleurs !== null}
+          <Commande
+            cle="communs.commande.ecrireDocuments"
+            nom="ecrireDocuments"
+            executer={() => seance.ecrireAilleurs(rompu.ailleurs)}
+          />
+        {/if}
+        <Commande cle="communs.commande.choisirDossier" nom="choisirDossier" executer={() => seance.ecrireAilleurs(null)} />
         <Commande
-          cle="communs.commande.ecrireDocuments"
-          nom="ecrireDocuments"
-          executer={() => seance.ecrireAilleurs(rompu.ailleurs)}
+          cle="evenement.supportRompu.abandonner"
+          nom="abandonner"
+          confirmer="evenement.supportRompu.confirmerAbandon"
+          executer={() => seance.fermer({ abandonner: true })}
         />
-      {/if}
-      <Commande cle="communs.commande.choisirDossier" nom="choisirDossier" executer={() => seance.ecrireAilleurs(null)} />
-      <Commande
-        cle="evenement.supportRompu.abandonner"
-        nom="abandonner"
-        confirmer="evenement.supportRompu.confirmerAbandon"
-        executer={() => seance.fermer({ abandonner: true })}
-      />
+      </div>
     </div>
   </section>
 {/if}
@@ -49,13 +57,31 @@
 <style>
   .rompu {
     display: flex;
+    align-items: flex-start;
+    gap: var(--espace-2) var(--espace-3);
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-refus-filet);
+    border-left: 3px solid var(--couleur-refus);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-refus-fond);
+    color: var(--couleur-refus);
+    font-size: var(--taille-texte);
+  }
+
+  .signe {
+    display: flex;
+    flex: none;
+    padding-top: 0.125rem;
+    color: var(--couleur-refus-marque);
+  }
+
+  .corps {
+    display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     align-items: flex-start;
     gap: var(--espace-2);
-    padding: var(--espace-2) var(--espace-3);
-    border-left: 3px solid var(--couleur-refus);
-    color: var(--couleur-refus);
-    font-size: var(--taille-texte);
+    min-width: 0;
   }
 
   p {
