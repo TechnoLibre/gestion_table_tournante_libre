@@ -9,7 +9,10 @@
 // d'itinéraire maximal d'au moins 1, porté par au moins 24 mobiles ; un
 // certificat « minimum atteint » hors d'atteinte. Les seuils de qualité sont
 // posés après mesure, la mesure en commentaire (§ 14.1). Puis la grille de
-// propriétés du § 14.12, sur des configurations tirées.
+// propriétés du § 14.12, sur des configurations tirées. Enfin l'ordre réglé
+// (A21) : sur cinq graines, l'excédent et les cumulées atteints sous l'ordre
+// par défaut et sous un ordre qui range les objectifs au deuxième palier ne
+// s'écartent que d'une borne mesurée.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
@@ -34,6 +37,7 @@ import {
   scoreIncremental,
 } from './recherche.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
+import { CRITERES } from './criteres.js';
 
 // Compte d'arrêt choisi par la mesure. À 1 000 000 mouvements, chacune des
 // trois propositions atteint, sur chaque seuil ci-dessous, la meilleure
@@ -540,5 +544,55 @@ describe('intégration : grille de propriétés sur des configurations tirées (
       .filter(([, cle, plancher]) => comptes[cle] < plancher)
       .map(([libelle, cle, plancher]) => `${libelle} : ${comptes[cle]}, plancher ${plancher}`);
     assert.deepEqual(sousLePlancher, [], JSON.stringify(comptes));
+  });
+});
+
+// La grande démonstration à objectifs : une personne sur trois, dans l'ordre
+// de la liste, porte « finance », et une table sur quatre attend « finance »
+// pour la soirée.
+function grandeAObjectifs(priorites) {
+  const base = CATALOGUE.find(({ cle }) => cle === 'grande').construire();
+  return {
+    ...base,
+    participants: base.participants.map((participant, rang) => (rang % 3 === 0 ? { ...participant, etiquettes: ['finance'] } : participant)),
+    objectifs: base.tables.filter((_, rang) => rang % 4 === 0).map(({ id }) => ({ table: id, tour: null, regle: 'ou', etiquettes: ['finance'] })),
+    ...(priorites === undefined ? {} : { priorites }),
+  };
+}
+
+// Mesure, graines 1 à 5, 100 000 mouvements : sous l'ordre par défaut,
+// excédent 3, 0, 1, 0, 0 (somme 4) et cumulées 64, 57, 60, 60, 46 (somme
+// 287) ; les objectifs au deuxième palier, excédent 0, 0, 2, 0, 1 (somme 3)
+// et cumulées 52, 52, 70, 57, 46 (somme 277). Les bornes laissent la marge
+// d'une graine à l'autre, que les sommes ne lissent pas : 5 sur l'excédent,
+// 15 % des cumulées de l'ordre par défaut.
+const ECART_EXCEDENT_MAX = 5;
+const ECART_CUMULEES_RELATIF_MAX = 0.15;
+
+describe("intégration : l'ordre réglé ne défait pas les collisions (A21)", () => {
+  test("grande à objectifs, cinq graines : l'excédent et les cumulées sous les objectifs au deuxième palier restent près de ceux de l'ordre par défaut", () => {
+    const e = (critere) => ({ critere, poids: 1 });
+    const deplace = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('toursHorsObjectif')],
+      ...CRITERES.filter((nom) => nom !== 'ecartAuPlafondAPrioriMax' && nom !== 'toursHorsObjectif').map((nom) => [e(nom)]),
+    ];
+    const sommes = [undefined, deplace].map((priorites) => {
+      const configuration = grandeAObjectifs(priorites);
+      const instance = normaliser(configuration);
+      assert.equal(instance.etatCriteres.find(({ nom }) => nom === 'toursHorsObjectif').sansObjet, false);
+      let excedent = 0;
+      let cumulees = 0;
+      for (const graine of [1, 2, 3, 4, 5]) {
+        const [{ plan }] = rechercher(configuration, { graine, arret: 100_000, nombre: 1 });
+        const mesures = mesurer(instance, indexerPlan(instance, plan));
+        excedent += mesures.excedentCollisions;
+        cumulees += mesures.collisionsCumulees;
+      }
+      return { excedent, cumulees };
+    });
+    const [defaut, objectifsDevant] = sommes;
+    assert.ok(Math.abs(objectifsDevant.excedent - defaut.excedent) <= ECART_EXCEDENT_MAX, JSON.stringify(sommes));
+    assert.ok(Math.abs(objectifsDevant.cumulees - defaut.cumulees) <= ECART_CUMULEES_RELATIF_MAX * defaut.cumulees, JSON.stringify(sommes));
   });
 });

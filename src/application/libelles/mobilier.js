@@ -2,13 +2,16 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les textes des commandes du mobilier — tables, sièges, tours, réglages,
-// objectifs des tables (§ 4, § 4.5, § 6, § 7.1, § 8.2, § 14.6) : les refus
-// d'une capacité, d'un nombre de tours et d'un objectif, leurs
-// avertissements, les causes d'un siège retiré, les avis des objectifs et
-// les libellés figés du journal. Les détails désignent tables et personnes par
+// objectifs des tables, ordre des priorités (§ 4, § 4.5, § 5.7, § 6, § 7.1,
+// § 8.2, § 14.6) : les refus d'une capacité, d'un nombre de tours, d'un
+// objectif, d'un ordre des priorités et d'un mode des objectifs, leurs
+// avertissements, les causes d'un siège retiré, les avis des objectifs, le
+// nom complet de chaque critère (mobilier.critere.<nom>) et les libellés
+// figés du journal. Les détails désignent tables et personnes par
 // identifiant : le refus se pose sur la table qu'il concerne, et son texte ne
 // les nomme pas. Un libellé figé reçoit le numéro de table que la commande
 // lit dans la charge.
+import { POIDS_MAX } from '../../moteur/criteres.js';
 import { cite, compte, enumeration, nomDans } from './aides.js';
 
 // Le nom de chaque réglage que modifierReglage change, tel que le journal le
@@ -24,6 +27,51 @@ const NOMS_DES_REGLAGES = new Map([
   ['generation.historique', "Historique d'acceptation"],
   ['respecterObjectifs', 'Respecter les objectifs des tables'],
   ['rencontrerAnimateurs', "Rencontrer le plus d'animateurs différents"],
+  ['modeObjectifs', "Objectifs des tables, chercher d'abord"],
+]);
+
+// Ce que chaque mode des objectifs cherche d'abord (§ 5.3, A8). Le troisième
+// se nomme par ce qu'il compare : le libellé que l'écran lui donne est le
+// seul emploi admis de son mot (D22).
+const NOMS_DES_MODES = new Map([
+  ['places', 'le plus de places servies'],
+  ['chacun', 'chacun au moins une fois'],
+  ['minimum', 'le minimum, puis le total'],
+]);
+const nomMode = (mode) => nomDans(NOMS_DES_MODES, mode, 'mode des objectifs');
+
+// Le nom complet d'un critère, cité, que lit sa clé mobilier.critere.<nom>.
+const nomCritere = (critere, texte) => cite(texte(`mobilier.critere.${critere}`));
+
+// Un palier, compté à partir de 1 pour l'affichage ; les détails le
+// portent à partir de 0, comme verifierPriorites.
+const numeroDePalier = (palier) => palier + 1;
+
+// Les fautes d'un ordre des priorités (verifierPriorites), chacune sa
+// phrase : la cause seule, le critère nommé quand la faute le désigne.
+const FAUTES_DE_PRIORITES = new Map([
+  ['forme', () => "L'ordre des priorités n'a pas la forme d'une liste de paliers."],
+  ['critereInconnu', ({ critere }) => `L'ordre des priorités nomme un critère inconnu, ${cite(String(critere))}.`],
+  [
+    'critereRepete',
+    ({ critere }, texte) => `L'ordre des priorités nomme ${nomCritere(critere, texte)} deux fois : chaque critère y figure une seule fois.`,
+  ],
+  [
+    'critereAbsent',
+    ({ critere }, texte) => `L'ordre des priorités omet ${nomCritere(critere, texte)} : chaque critère y figure une fois, coché ou non.`,
+  ],
+  ['palierVide', ({ palier }) => `Le palier ${numeroDePalier(palier)} de l'ordre des priorités ne porte aucun critère.`],
+  [
+    'seulASonPalier',
+    ({ critere, palier }, texte) =>
+      `${nomCritere(critere, texte)} se range seul à son palier : le palier ${numeroDePalier(palier)} ` +
+      'ne peut pas le partager avec un autre critère.',
+  ],
+  [
+    'poids',
+    ({ critere, palier }, texte) =>
+      `Le poids de ${nomCritere(critere, texte)} au palier ${numeroDePalier(palier)} sort des entiers de 1 à ${POIDS_MAX}.`,
+  ],
 ]);
 
 // La règle d'un objectif (§ 4.5) : celle de l'événement quand elle est
@@ -44,6 +92,9 @@ const aCeTour = (tour) => (tour === null ? 'pour la soirée' : `au tour ${tour}`
 // La valeur d'un réglage dans un libellé : activé ou désactivé pour un
 // interrupteur, le nombre sinon.
 const valeurDeReglage = (valeur) => (typeof valeur === 'boolean' ? (valeur ? 'activé' : 'désactivé') : String(valeur));
+
+// Un nombre écrit à la française : la virgule décimale.
+const nombreEcrit = (valeur) => String(valeur).replace('.', ',');
 
 // Ce qu'une saisie refusée est : vide, ou un texte qui n'est pas un entier.
 const saisieCitee = (saisie) => (String(saisie).trim() === '' ? 'La saisie est vide' : `${cite(String(saisie))} n'est pas un nombre entier`);
@@ -134,6 +185,31 @@ export const TABLE = new Map([
       (voisine === null || voisine === undefined ? '.' : ` ; une personne porte ${cite(voisine)}.`),
   ],
 
+  // --- L'ordre des priorités et le mode des objectifs (§ 5.7, § 5.9, A12) ---
+  ['PRIORITES_INVALIDES', (details, texte) => nomDans(FAUTES_DE_PRIORITES, details.faute, 'faute de priorités')(details, texte)],
+  [
+    'POIDS_HORS_DOMAINE',
+    ({ valeur }) =>
+      `Un poids est un nombre entier de 1 à ${POIDS_MAX}` + (Number.isFinite(valeur) ? ` : ${nombreEcrit(valeur)} ne l'est pas.` : '.'),
+  ],
+  [
+    'OBJECTIFS_PALIER_PARTAGE',
+    ({ mode, palier }, texte) =>
+      `Le mode ${cite(nomMode(mode))} compare deux valeurs l'une après l'autre : les ` +
+      `${cite(texte('mobilier.critere.toursHorsObjectif'))} s'y rangent seuls à leur palier, et partagent le palier ` +
+      `${numeroDePalier(palier)}. Les séparer d'abord dans l'ordre des priorités : le mode reste celui d'avant.`,
+  ],
+  // Le nom complet de chaque critère de l'ordre, tel que l'éditeur l'écrit
+  // (§ 5.7) : la phrase de l'ordre nomme, elle, la valeur qui classe
+  // (moteur.critere.<nom>).
+  ['mobilier.critere.ecartAuPlafondAPrioriMax', 'écart au plafond a priori'],
+  ['mobilier.critere.excedentCollisions', 'excédent de collisions'],
+  ['mobilier.critere.collisionsCumulees', 'collisions cumulées'],
+  ['mobilier.critere.toursHorsObjectif', 'tours hors objectif'],
+  ['mobilier.critere.rencontresRepetees', 'rencontres répétées et retours'],
+  ['mobilier.critere.animateursNonRencontres', 'animateurs non rencontrés'],
+  ['mobilier.critere.redondance', "redondance d'appartenance"],
+
   // --- Les libellés figés du journal (§ 8.2) ---------------------------------
   ['ENTREE_CREER_TABLE', ({ numero }) => `Ajouté la table ${numero}`],
   [
@@ -165,7 +241,8 @@ export const TABLE = new Map([
   ],
   [
     'ENTREE_MODIFIER_REGLAGE',
-    ({ cle, valeur }) => `${nomDans(NOMS_DES_REGLAGES, cle, 'réglage')} : ${valeurDeReglage(valeur)}`,
+    ({ cle, valeur }) =>
+      `${nomDans(NOMS_DES_REGLAGES, cle, 'réglage')} : ${cle === 'modeObjectifs' ? nomMode(valeur) : valeurDeReglage(valeur)}`,
   ],
   ['ENTREE_CHANGER_CIBLE_REDONDANCE', ({ cible }) => `Cible de la somme de redondance : ${cible}`],
   [
@@ -179,4 +256,18 @@ export const TABLE = new Map([
     ({ numero, tour }) => `${lieuObjectif(numero, tour)} : objectif${tour === null ? ' de la soirée' : ''} retiré`,
   ],
   ['ENTREE_CHANGER_REGLE_OBJECTIFS', ({ regle }) => `Règle par défaut des objectifs : ${nomRegle(regle)}`],
+  // Le critère déplacé, ou les critères d'un palier déplacé entier, et le
+  // palier où il arrive ; ceux qu'il y rejoint, ou son poids quand le geste
+  // ne change que lui.
+  [
+    'ENTREE_CHANGER_PRIORITES',
+    ({ criteres, palier, paliers, avec, poids }, texte) => {
+      const noms = enumeration(criteres.map((critere) => nomCritere(critere, texte)));
+      const ou = `palier ${numeroDePalier(palier)} sur ${paliers}`;
+      if (poids !== null) return `Ordre des priorités : ${noms} au poids ${poids}, ${ou}`;
+      const compagnons = avec.length > 0 ? `, avec ${enumeration(avec.map((critere) => nomCritere(critere, texte)))}` : '';
+      return `Ordre des priorités : ${noms} au ${ou}${compagnons}`;
+    },
+  ],
+  ['ENTREE_RETABLIR_PRIORITES', () => 'Ordre des priorités : ordre par défaut rétabli'],
 ]);

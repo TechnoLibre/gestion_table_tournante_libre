@@ -4,10 +4,12 @@
 // Épreuves de l'association des colonnes (§ 10.1) : les champs du CSV, la
 // reconnaissance d'un en-tête et de ses synonymes, et l'association par
 // en-tête, jamais par position, qui laisse sans colonne un champ que deux
-// colonnes revendiquent tant qu'un choix ne tranche pas.
+// colonnes revendiquent tant qu'un choix ne tranche pas. associerSelon et
+// reconnaitreSelon portent la même règle sur une autre table d'en-têtes,
+// celle du CSV des objectifs de table (§ 10.4).
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
-import { CHAMPS, ENTETES_DES_CHAMPS, associer, reconnaitre } from './colonnes.js';
+import { CHAMPS, ENTETES_DES_CHAMPS, associer, associerSelon, reconnaitre, reconnaitreSelon } from './colonnes.js';
 import { cleEntete } from './normalisation.js';
 
 describe('CHAMPS', () => {
@@ -238,5 +240,84 @@ describe('associer : par en-tête, jamais par position (§ 10.1)', () => {
 
   test('aucune colonne : rien à associer', () => {
     assert.deepEqual(associer([]), { colonnes: {}, ambigus: [], nonReconnues: [] });
+  });
+});
+
+// Une table d'en-têtes inventée, d'un autre fichier que celui des
+// participants : deux champs, des synonymes, et un synonyme de même clé que
+// le nom de son champ, comme « règle » pour regle.
+const TABLE_INVENTEE = Object.freeze([
+  Object.freeze(['salle', Object.freeze(['salle', 'pièce', 'local'])]),
+  Object.freeze(['couleur', Object.freeze(['couleur', 'Couleur', 'teinte'])]),
+]);
+
+describe('associerSelon et reconnaitreSelon : la même règle sur une autre table (§ 10.1, § 10.4)', () => {
+  test('sur la table des participants, associerSelon rend exactement ce que rend associer', () => {
+    const associerParticipants = associerSelon(ENTETES_DES_CHAMPS);
+    const cas = [
+      [['nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes'], {}],
+      [['notes', 'exclu', 'courriel', 'nom'], {}],
+      [['nom', 'organisation', 'entreprise'], {}],
+      [['nom', 'organisation', 'entreprise'], { appartenance: 2 }],
+      [['nom', 'organisation', 'entreprise', 'inconnue'], { appartenance: 3 }],
+      [['titre', 'équipe', 'nom', 'rôle', 'organisation', 'entreprise'], {}],
+      [['x', 'nom', '', 'ligne', '  '], {}],
+      [[], {}],
+    ];
+    for (const [entetes, choix] of cas) {
+      const rendu = associerParticipants(entetes, choix);
+      assert.deepEqual(rendu, associer(entetes, choix), JSON.stringify([entetes, choix]));
+      assert.equal(JSON.stringify(rendu.colonnes), JSON.stringify(associer(entetes, choix).colonnes));
+    }
+    const reconnaitreParticipants = reconnaitreSelon(ENTETES_DES_CHAMPS);
+    for (const entete of ['NOM', 'Équipe', 'mots-clés', 'ligne', 'motif', '', 'table']) {
+      assert.equal(reconnaitreParticipants(entete), reconnaitre(entete), entete);
+    }
+  });
+
+  test('sur une autre table, chaque champ par ses en-têtes ; ceux des participants y sont inconnus', () => {
+    const reconnaitreInventee = reconnaitreSelon(TABLE_INVENTEE);
+    assert.deepEqual(
+      ['SALLE', 'Pièce', 'lo cal', 'couleur', 'TEINTE', 'nom', 'etiquettes', 'ligne', 'motif', ''].map(reconnaitreInventee),
+      ['salle', 'salle', 'salle', 'couleur', 'couleur', null, null, null, null, null],
+    );
+    assert.equal(reconnaitre('salle'), null);
+  });
+
+  test("sur une autre table, l'association suit l'ordre de la table, laisse ambigu un champ revendiqué deux fois, et le choix tranche", () => {
+    const associerInventee = associerSelon(TABLE_INVENTEE);
+    assert.deepEqual(associerInventee(['teinte', 'nom', 'local']), {
+      colonnes: { salle: 2, couleur: 0 },
+      ambigus: [],
+      nonReconnues: [1],
+    });
+    assert.equal(JSON.stringify(associerInventee(['teinte', 'local']).colonnes), '{"salle":1,"couleur":0}');
+    assert.deepEqual(associerInventee(['pièce', 'teinte', 'salle']), {
+      colonnes: { couleur: 1 },
+      ambigus: [{ champ: 'salle', rangs: [0, 2] }],
+      nonReconnues: [],
+    });
+    assert.deepEqual(associerInventee(['pièce', 'teinte', 'salle'], { salle: 2 }).colonnes, { salle: 2, couleur: 1 });
+    assert.deepEqual(associerInventee(['pièce', 'teinte', 'salle'], { salle: 1 }).ambigus, [{ champ: 'salle', rangs: [0, 2] }]);
+  });
+
+  test("deux champs qui partagent une clé d'en-tête lèvent RangeError, qui nomme la clé ; un champ peut répéter la sienne", () => {
+    const conflit = [
+      ['salle', ['salle', 'pièce']],
+      ['couleur', ['couleur', 'Piece']],
+    ];
+    assert.throws(() => associerSelon(conflit), (erreur) => erreur instanceof RangeError && /piece/.test(erreur.message));
+    assert.throws(() => reconnaitreSelon(conflit), RangeError);
+    assert.equal(reconnaitreSelon(TABLE_INVENTEE)('Couleur'), 'couleur');
+  });
+
+  test('la table reçue est lue une fois : la changer ensuite ne change pas la reconnaissance', () => {
+    const table = [['salle', ['salle']]];
+    const reconnaitreLue = reconnaitreSelon(table);
+    const associerLue = associerSelon(table);
+    table[0][1].push('pièce');
+    table.push(['couleur', ['couleur']]);
+    assert.equal(reconnaitreLue('pièce'), null);
+    assert.deepEqual(associerLue(['couleur', 'salle']), { colonnes: { salle: 1 }, ambigus: [], nonReconnues: [0] });
   });
 });

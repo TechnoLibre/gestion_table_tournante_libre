@@ -109,8 +109,10 @@ describe('intégration : de la configuration au classement (§ 5.5, § 5.7, § 1
     const generation = generer(demo('petite'), 'petite', REGLAGES);
     const { classement, premiere } = classerPropositions(generation);
     // Le plafond a priori est connu : aucun critère n'est sauté, et le
-    // certificat se lit contre lui (§ 5.5).
-    assert.deepEqual(classement.criteresAppliques, [...CRITERES]);
+    // certificat se lit contre lui (§ 5.5). Les critères appliqués, palier
+    // après palier, aplatis en noms, sont ceux de l'ordre fixe de référence.
+    const appliques = classement.criteresAppliques.flatMap(({ criteres }) => criteres.map(({ nom }) => nom));
+    assert.deepEqual(appliques, [...CRITERES]);
     assert.equal(classement.critereSaute, null);
     assert.equal(minimumAtteint(premiere.mesures, generation.aPriori), true);
     // Le certificat ne lit que les rencontres : il se décerne aussi à un plan

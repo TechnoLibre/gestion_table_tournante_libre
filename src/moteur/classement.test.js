@@ -1,22 +1,53 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Épreuves du classement des propositions (§ 5.7). Une proposition
+// Épreuves du classement des propositions (§ 5.7, A11, A21). Une proposition
 // synthétique ne porte que les champs que classer lit, pour trois personnes
 // au plafond a priori de 8. Chaque ordre attendu est écrit en clair. Hors des
 // épreuves où seul l'identifiant départage, chaque épreuve qui attend un
 // ordre non vide en attend au moins un qui diffère de l'ordre des
 // identifiants : un classement qui ne lirait aucun critère, et rangerait par
-// identifiant, y échoue.
+// identifiant, y échoue. Sans compilation, classer applique l'ordre fixe de
+// référence ; une compilation (compilationDe, criteres.js) range les paliers
+// et pèse leurs critères, et chaque mode des objectifs y compare ses valeurs.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { CRITERES, classer } from './classement.js';
 import { indexerPlan, normaliser } from './configuration.js';
+import { CRITERES as REGISTRE, compilationDe, estCoche, valeursQuiClassent } from './criteres.js';
 import { mesurer } from './indicateurs.js';
+
+// Les noms des critères appliqués, palier après palier : la liste aplatie,
+// égale à CRITERES sous l'ordre fixe de référence.
+const aplatir = (criteresAppliques) => criteresAppliques.flatMap(({ criteres }) => criteres.map(({ nom }) => nom));
 
 // Les critères appliqués quand le premier est sauté.
 const SANS_A_PRIORI = ['excedentCollisions', 'collisionsCumulees', 'rencontresRepetees', 'redondance'];
+
+// Ce que classer rend, ses critères appliqués lus en noms.
+const lu = ({ ordre, criteresAppliques, critereSaute }) => ({ ordre, criteres: aplatir(criteresAppliques), critereSaute });
+
+const QUATRE_CASES = { separerAppartenances: true, nouveauxVoisins: true, nouvelleTable: true, varierAppartenances: true };
+
+// Une entrée de palier.
+const e = (critere, poids = 1) => ({ critere, poids });
+
+// La compilation d'un ordre réglé sous ces contraintes et ce mode, comme
+// normaliser la donnerait : les tours hors objectif et les animateurs non
+// rencontrés ont un objet quand avecObjet les nomme, aucun sinon.
+function compilationSous(priorites, { contraintes = QUATRE_CASES, mode = 'places', avecObjet = [] } = {}) {
+  const etatCriteres = REGISTRE.map((nom) => ({
+    nom,
+    coche: estCoche(nom, contraintes),
+    sansObjet: (nom === 'toursHorsObjectif' || nom === 'animateursNonRencontres') && !avecObjet.includes(nom),
+    valeurs: valeursQuiClassent(nom, contraintes, mode),
+  }));
+  return compilationDe({ priorites, etatCriteres, modeObjectifs: mode });
+}
+
+// L'ordre par défaut, chaque critère seul à son palier.
+const PAR_DEFAUT = REGISTRE.map((nom) => [e(nom)]);
 
 // Fige une valeur et, à toute profondeur, les objets et les tableaux qu'elle
 // contient : une écriture du module éprouvé y lève TypeError.
@@ -40,7 +71,10 @@ function proposition(
     collisions = [0, 0, 0],
     repetees = 0,
     imposees = 0,
+    retours = 0,
     redondance = 0,
+    objectifs = null,
+    nonRencontres = null,
   } = {},
 ) {
   const [collisionsCumulees, pairesDistinctes, excedentCollisions] = collisions;
@@ -52,11 +86,18 @@ function proposition(
       pairesDistinctes,
       excedentCollisions,
       rencontresRepetees: { choisies: repetees, imposees },
+      totalRetoursChoisis: retours,
       totalRedondance: redondance,
+      objectifs,
+      animateurs: nonRencontres === null ? null : { nonRencontres },
     },
     plafondsAPriori: [8, 8, 8],
   };
 }
+
+// Les mesures des objectifs que classer lit : les tours hors objectif, les
+// personnes jamais servies, le plus de tours hors objectif d'une personne.
+const objectifs = (horsObjectif, jamaisServies, horsObjectifMax) => ({ horsObjectif, jamaisServies, horsObjectifMax });
 
 // La même proposition, son plafond a priori inconnu.
 const inconnu = (entree) => ({ ...entree, plafondsAPriori: null });
@@ -65,7 +106,7 @@ const inconnu = (entree) => ({ ...entree, plafondsAPriori: null });
 const permutations = ([a, b, c]) => [[a, b, c], [a, c, b], [b, a, c], [b, c, a], [c, a, b], [c, b, a]];
 
 describe('classer : les critères et leur ordre (§ 5.7)', () => {
-  test('CRITERES nomme les cinq critères dans leur ordre, et ne se modifie pas', () => {
+  test("CRITERES nomme les cinq critères de l'ordre fixe de référence dans leur ordre, et ne se modifie pas", () => {
     assert.deepEqual(CRITERES, [
       'ecartAuPlafondAPrioriMax',
       'excedentCollisions',
@@ -109,9 +150,9 @@ describe('classer : les critères et leur ordre (§ 5.7)', () => {
       proposition(5, { redondance: 1 }), // redondance 1
       proposition(6),
     ];
-    assert.deepEqual(classer(figer(entrees)), {
+    assert.deepEqual(lu(classer(figer(entrees))), {
       ordre: [6, 5, 4, 3, 2, 1],
-      criteresAppliques: [...CRITERES],
+      criteres: [...CRITERES],
       critereSaute: null,
     });
   });
@@ -153,17 +194,17 @@ describe('classer : le critère sauté (§ 5.7, § 12.6)', () => {
     // 2 : écart au plafond a priori 1, excédent 0.
     const premiere = proposition(1, { collisions: [4, 2, 2], repetees: 2 });
     const seconde = proposition(2, { rencontres: [7, 8, 8] });
-    assert.deepEqual(classer([premiere, seconde]), {
+    assert.deepEqual(lu(classer([premiere, seconde])), {
       ordre: [1, 2],
-      criteresAppliques: [...CRITERES],
+      criteres: [...CRITERES],
       critereSaute: null,
     });
     // Un seul a priori inconnu suffit : l'excédent ouvre alors le classement
     // de toutes, y compris de celle dont l'a priori est connu.
-    const attendu = { ordre: [2, 1], criteresAppliques: SANS_A_PRIORI, critereSaute: 'ecartAuPlafondAPrioriMax' };
-    assert.deepEqual(classer([premiere, inconnu(seconde)]), attendu);
-    assert.deepEqual(classer([inconnu(premiere), seconde]), attendu);
-    assert.deepEqual(classer([inconnu(premiere), inconnu(seconde)]), attendu);
+    const attendu = { ordre: [2, 1], criteres: SANS_A_PRIORI, critereSaute: 'ecartAuPlafondAPrioriMax' };
+    assert.deepEqual(lu(classer([premiere, inconnu(seconde)])), attendu);
+    assert.deepEqual(lu(classer([inconnu(premiere), seconde])), attendu);
+    assert.deepEqual(lu(classer([inconnu(premiere), inconnu(seconde)])), attendu);
   });
 });
 
@@ -212,9 +253,9 @@ describe('classer : petite démonstration, conflit inévitable (§ 14.10, § 15.
     ];
     assert.deepEqual(classer(entrees).ordre, [2, 1]);
     // Le plafond a priori inconnu, l'excédent décide seul : 0 contre 3.
-    assert.deepEqual(classer(entrees.map(inconnu)), {
+    assert.deepEqual(lu(classer(entrees.map(inconnu))), {
       ordre: [2, 1],
-      criteresAppliques: SANS_A_PRIORI,
+      criteres: SANS_A_PRIORI,
       critereSaute: 'ecartAuPlafondAPrioriMax',
     });
   });
@@ -222,16 +263,16 @@ describe('classer : petite démonstration, conflit inévitable (§ 14.10, § 15.
 
 describe('classer : les entrées reçues', () => {
   test("une liste vide rend un ordre vide, tous les critères appliqués", () => {
-    assert.deepEqual(classer([]), { ordre: [], criteresAppliques: [...CRITERES], critereSaute: null });
+    assert.deepEqual(lu(classer([])), { ordre: [], criteres: [...CRITERES], critereSaute: null });
   });
 
   test("population vide, plafond a priori connu : le premier critère s'applique, sans rien départager", () => {
     // Une population vide n'a pas de plus grand écart au plafond a priori ;
     // ce n'est pas un plafond a priori inconnu, et rien n'est sauté.
     const vide = (id) => ({ ...proposition(id, { rencontres: [] }), plafondsAPriori: [] });
-    assert.deepEqual(classer([vide(2), vide(1)]), {
+    assert.deepEqual(lu(classer([vide(2), vide(1)])), {
       ordre: [1, 2],
-      criteresAppliques: [...CRITERES],
+      criteres: [...CRITERES],
       critereSaute: null,
     });
   });
@@ -254,5 +295,244 @@ describe('classer : les entrées reçues', () => {
       plafondsAPriori: [8, 8, 8, 8],
     };
     assert.throws(() => classer([proposition(1), quatre]), RangeError);
+  });
+});
+
+describe('classer : la forme des critères appliqués (contrat du classement)', () => {
+  test("sans compilation : l'ordre fixe de référence, un palier par critère, ses valeurs et son poids", () => {
+    assert.deepEqual(classer([proposition(1)]).criteresAppliques, [
+      { criteres: [{ nom: 'ecartAuPlafondAPrioriMax', valeurs: ['ecartAuPlafondAPrioriMax'], poids: 1 }] },
+      { criteres: [{ nom: 'excedentCollisions', valeurs: ['excedentCollisions'], poids: 1 }] },
+      { criteres: [{ nom: 'collisionsCumulees', valeurs: ['collisionsCumulees'], poids: 1 }] },
+      { criteres: [{ nom: 'rencontresRepetees', valeurs: ['rencontresRepeteesChoisies'], poids: 1 }] },
+      { criteres: [{ nom: 'redondance', valeurs: ['redondance'], poids: 1 }] },
+    ]);
+  });
+
+  test("l'ordre par défaut compilé sous les quatre cases, sans objectif ni animateurs, rend le même classement que sans compilation", () => {
+    const entrees = [
+      proposition(1, { rencontres: [7, 8, 8] }),
+      proposition(2, { collisions: [2, 1, 1], repetees: 1 }),
+      proposition(3, { redondance: 1 }),
+    ];
+    assert.deepEqual(classer(entrees, compilationSous(PAR_DEFAUT)), classer(entrees));
+    for (const mode of ['chacun', 'minimum']) {
+      assert.deepEqual(classer(entrees, compilationSous(PAR_DEFAUT, { mode })), classer(entrees), mode);
+    }
+  });
+
+  test('les critères appliqués sont des copies : les modifier ne touche ni la compilation ni le classement suivant', () => {
+    const compilation = compilationSous(PAR_DEFAUT);
+    const { criteresAppliques } = classer([proposition(1)], compilation);
+    criteresAppliques[0].criteres[0].valeurs.push('autre');
+    assert.deepEqual(compilation.paliers[0].criteres[0].valeurs, ['ecartAuPlafondAPrioriMax']);
+    assert.deepEqual(aplatir(classer([proposition(1)], compilation).criteresAppliques), [...CRITERES]);
+  });
+});
+
+describe('classer : un palier pondéré classe par sa somme (A11, A21)', () => {
+  test('deux propositions égales sur la somme du palier : le suivant les départage ; la troisième, moins bonne sur ce palier, reste derrière', () => {
+    // Palier 2 : { excédent × 2, redondance × 1 }, puis les collisions
+    // cumulées. 1 : 2 × 1 + 3 = 5 ; 2 : 2 × 2 + 1 = 5 ; 3 : 2 × 0 + 6 = 6.
+    // Lu critère par critère, l'excédent nul de 3 la mettrait en tête.
+    const liste = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('excedentCollisions', 2), e('redondance')],
+      [e('collisionsCumulees')],
+      [e('toursHorsObjectif')],
+      [e('rencontresRepetees')],
+      [e('animateursNonRencontres')],
+    ];
+    const entrees = [
+      proposition(1, { collisions: [5, 4, 1], redondance: 3 }),
+      proposition(2, { collisions: [4, 2, 2], redondance: 1 }),
+      proposition(3, { collisions: [0, 0, 0], redondance: 6 }),
+    ];
+    const classement = classer(entrees, compilationSous(liste));
+    assert.deepEqual(classement.ordre, [2, 1, 3]);
+    assert.deepEqual(classement.criteresAppliques[1], {
+      criteres: [
+        { nom: 'excedentCollisions', valeurs: ['excedentCollisions'], poids: 2 },
+        { nom: 'redondance', valeurs: ['redondance'], poids: 1 },
+      ],
+    });
+  });
+
+  test('le poids renverse l’ordre de la somme brute : le palier compare Σ poids × valeur, non Σ valeur', () => {
+    // Palier 2 : { excédent × 2, redondance × 1 }, les collisions cumulées
+    // égales. 2 : 2 × 1 + 4 = 6, brut 1 + 4 = 5 ; 1 : 2 × 3 + 1 = 7, brut
+    // 3 + 1 = 4. Pondérée, la somme met 2 en tête ; brute, elle y mettrait 1.
+    const liste = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('excedentCollisions', 2), e('redondance')],
+      [e('collisionsCumulees')],
+      [e('toursHorsObjectif')],
+      [e('rencontresRepetees')],
+      [e('animateursNonRencontres')],
+    ];
+    const entrees = [
+      proposition(1, { collisions: [4, 1, 3], redondance: 1 }),
+      proposition(2, { collisions: [4, 3, 1], redondance: 4 }),
+    ];
+    assert.deepEqual(classer(entrees, compilationSous(liste)).ordre, [2, 1]);
+  });
+
+  test("le poids d'un critère seul à son palier multiplie sa valeur sans changer l'ordre qu'il donne", () => {
+    const liste = [[e('ecartAuPlafondAPrioriMax')], [e('excedentCollisions', 7)], ...PAR_DEFAUT.slice(2)];
+    const entrees = [proposition(1, { collisions: [2, 1, 1] }), proposition(2)];
+    assert.deepEqual(classer(entrees, compilationSous(liste)).ordre, [2, 1]);
+  });
+});
+
+describe('classer : les cases et les critères qui ne comptent pas (§ 5.3, D10, Q4)', () => {
+  test('un critère décoché ne classe pas : séparer les appartenances décochée, l’excédent ne départage plus', () => {
+    const entrees = [proposition(1, { collisions: [2, 1, 1] }), proposition(2, { repetees: 1 })];
+    assert.deepEqual(classer(entrees).ordre, [2, 1]);
+    const contraintes = { ...QUATRE_CASES, separerAppartenances: false };
+    const classement = classer(entrees, compilationSous(PAR_DEFAUT, { contraintes }));
+    assert.deepEqual(lu(classement), {
+      ordre: [1, 2],
+      criteres: ['ecartAuPlafondAPrioriMax', 'rencontresRepetees', 'redondance'],
+      critereSaute: null,
+    });
+  });
+
+  test('« nouvelle table » seule : les retours choisis classent à la place des rencontres répétées', () => {
+    // 1 : une rencontre répétée, aucun retour ; 2 : deux retours.
+    const entrees = [proposition(1, { repetees: 1 }), proposition(2, { retours: 2 })];
+    const contraintes = { ...QUATRE_CASES, nouveauxVoisins: false };
+    const classement = classer(entrees, compilationSous(PAR_DEFAUT, { contraintes }));
+    assert.deepEqual(classement.ordre, [1, 2]);
+    assert.deepEqual(classement.criteresAppliques[3].criteres, [{ nom: 'rencontresRepetees', valeurs: ['retoursChoisis'], poids: 1 }]);
+    assert.deepEqual(classer(entrees).ordre, [2, 1]);
+  });
+
+  test('les animateurs cochés et avec un objet classent sur les animateurs non rencontrés, avant la redondance', () => {
+    const entrees = [proposition(1, { nonRencontres: 3 }), proposition(2, { nonRencontres: 1, redondance: 4 })];
+    const contraintes = { ...QUATRE_CASES, rencontrerAnimateurs: true };
+    const classement = classer(entrees, compilationSous(PAR_DEFAUT, { contraintes, avecObjet: ['animateursNonRencontres'] }));
+    assert.deepEqual(classement.ordre, [2, 1]);
+    assert.deepEqual(aplatir(classement.criteresAppliques).slice(-2), ['animateursNonRencontres', 'redondance']);
+  });
+
+  test("le critère sauté sort avec son palier, où qu'il soit rangé ; critereSaute le nomme, rangSaute dit son rang", () => {
+    const liste = [[e('excedentCollisions')], [e('collisionsCumulees')], [e('ecartAuPlafondAPrioriMax')], ...PAR_DEFAUT.slice(3)];
+    const entrees = [inconnu(proposition(1, { repetees: 2 })), inconnu(proposition(2, { rencontres: [1, 1, 1], repetees: 1 }))];
+    const classement = classer(entrees, compilationSous(liste));
+    assert.deepEqual(lu(classement), {
+      ordre: [2, 1],
+      criteres: ['excedentCollisions', 'collisionsCumulees', 'rencontresRepetees', 'redondance'],
+      critereSaute: 'ecartAuPlafondAPrioriMax',
+    });
+    // Le palier des rencontres répétées prend le rang 2, celui de l'écart.
+    assert.equal(classement.rangSaute, 2);
+    assert.equal(classement.criteresAppliques[2].criteres[0].nom, 'rencontresRepetees');
+    assert.equal(classer(entrees).rangSaute, 0);
+    assert.equal(classer([proposition(1)]).rangSaute, null);
+  });
+
+  test('les quatre cases décochées, sans objectif : le palier sauté était le seul, aucun ne prend sa place', () => {
+    const contraintes = { separerAppartenances: false, nouveauxVoisins: false, nouvelleTable: false, varierAppartenances: false };
+    const entrees = [inconnu(proposition(2)), inconnu(proposition(1, { repetees: 3 }))];
+    const classement = classer(entrees, compilationSous(PAR_DEFAUT, { contraintes }));
+    assert.deepEqual(classement.criteresAppliques, []);
+    assert.equal(classement.critereSaute, 'ecartAuPlafondAPrioriMax');
+    assert.equal(classement.rangSaute, 0);
+    assert.deepEqual(classement.ordre, [1, 2]);
+  });
+});
+
+describe('classer : un critère à deux valeurs, seul à son palier, compare la première puis la seconde (D20)', () => {
+  // 1 : jamais servies 1, tours hors objectif 2, le plus d'une personne 2 ;
+  // 2 : 0, 5, 3 ; 3 : 0, 3, 1 ; 4 : 0, 4, 1.
+  const entrees = () => [
+    proposition(1, { objectifs: objectifs(2, 1, 2) }),
+    proposition(2, { objectifs: objectifs(5, 0, 3) }),
+    proposition(3, { objectifs: objectifs(3, 0, 1) }),
+    proposition(4, { objectifs: objectifs(4, 0, 1) }),
+  ];
+  const sous = (mode) => compilationSous(PAR_DEFAUT, { mode, avecObjet: ['toursHorsObjectif'] });
+
+  test('places : les tours hors objectif seuls', () => {
+    assert.deepEqual(classer(entrees(), sous('places')).ordre, [1, 3, 4, 2]);
+  });
+
+  test('chacun : les personnes jamais servies, puis les tours hors objectif', () => {
+    const classement = classer(entrees(), sous('chacun'));
+    assert.deepEqual(classement.ordre, [3, 4, 2, 1]);
+    assert.deepEqual(classement.criteresAppliques[3].criteres, [
+      { nom: 'toursHorsObjectif', valeurs: ['jamaisServies', 'toursHorsObjectif'], poids: 1 },
+    ]);
+  });
+
+  test("minimum : le plus de tours hors objectif d'une personne, puis les tours hors objectif", () => {
+    assert.deepEqual(classer(entrees(), sous('minimum')).ordre, [3, 4, 1, 2]);
+  });
+});
+
+// Dix personnes « finance », une table « finance » de huit places et une
+// table sans objectif de deux, quatre tours : chaque plan sert 32 places.
+// Seuls les objectifs comptent (les quatre cases décochées) ; le plafond a
+// priori, inconnu, fait sauter l'écart.
+function soireeFinance(mode) {
+  return normaliser({
+    participants: Array.from({ length: 10 }, (_, rang) => ({ id: rang + 1, appartenance: null, etiquettes: ['finance'] })),
+    tables: [{ id: 1, capacite: 8 }, { id: 2, capacite: 2 }],
+    tours: 4,
+    reservations: [],
+    contraintes: { separerAppartenances: false, nouveauxVoisins: false, nouvelleTable: false, varierAppartenances: false },
+    objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }],
+    ...(mode === 'places' ? {} : { modeObjectifs: mode }),
+  });
+}
+
+// Le plan dont la table de deux reçoit, au tour r, la paire paires[r].
+function planFinance(paires) {
+  return {
+    tables: [1, 2],
+    tours: paires.map((paire) => [Array.from({ length: 10 }, (_, rang) => rang + 1).filter((id) => !paire.includes(id)), paire]),
+    reserves: [[], [], [], []],
+  };
+}
+
+// L'un laisse 10 sans tour servi ; l'autre sert chacun une fois au moins,
+// 9 et 10 une fois seulement ; le dernier sert chacun trois tours au moins.
+const PLANS_FINANCE = [
+  planFinance([[9, 10], [8, 10], [7, 10], [6, 10]]),
+  planFinance([[9, 10], [9, 10], [9, 10], [7, 8]]),
+  planFinance([[1, 2], [3, 4], [5, 6], [7, 8]]),
+];
+
+describe('classer : chaque mode des objectifs compare ce qu’il dit (A21)', () => {
+  // Les trois plans mesurés et classés sous ce mode.
+  function classerFinance(mode) {
+    const instance = soireeFinance(mode);
+    const entrees = PLANS_FINANCE.map((plan, rang) => ({
+      id: rang + 1,
+      mesures: mesurer(instance, indexerPlan(instance, plan)),
+      plafondsAPriori: null,
+    }));
+    return { entrees, classement: classer(entrees, compilationDe(instance)) };
+  }
+
+  test('les trois plans servent 32 places : les mêmes tours hors objectif ; jamais servies 1, 0, 0 ; le plus d’une personne 4, 3, 1', () => {
+    const { entrees } = classerFinance('places');
+    assert.deepEqual(
+      entrees.map(({ mesures }) => [mesures.objectifs.horsObjectif, mesures.objectifs.jamaisServies, mesures.objectifs.horsObjectifMax]),
+      [[8, 1, 4], [8, 0, 3], [8, 0, 1]],
+    );
+  });
+
+  test('le plus de places servies : les trois égaux sur le critère, rangés par identifiant', () => {
+    const { classement } = classerFinance('places');
+    assert.deepEqual(lu(classement), { ordre: [1, 2, 3], criteres: ['toursHorsObjectif'], critereSaute: 'ecartAuPlafondAPrioriMax' });
+  });
+
+  test('chacun au moins une fois : le premier passe derrière les deux autres', () => {
+    assert.deepEqual(classerFinance('chacun').classement.ordre, [2, 3, 1]);
+  });
+
+  test("l'équité d'abord : le dernier passe devant les deux autres", () => {
+    assert.deepEqual(classerFinance('minimum').classement.ordre, [3, 2, 1]);
   });
 });

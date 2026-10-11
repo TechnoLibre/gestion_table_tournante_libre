@@ -2,9 +2,15 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les textes des codes du moteur qui n'ont pas leur table ailleurs, et les
-// libellés de ses critères (§ 5, § 14.6) : les codes d'une
+// libellés de ses critères (§ 5, § 5.7, § 14.6) : les codes d'une
 // ErreurConfiguration, ceux des violations de verifierInvariants et de
-// verifierIndicateurs, et moteur.critere.<nom> pour chaque nom de CRITERES.
+// verifierIndicateurs ; moteur.critere.<nom> pour chacun des sept critères
+// du registre, le nom que la phrase de l'ordre lui donne sous le défaut ;
+// moteur.valeur.<valeur> pour chaque valeur qui classe, le nom que la phrase
+// donne à la valeur appliquée — « rencontres répétées », ou « retours » sous
+// « nouvelle table » seule ; un critère qui en classe deux les nomme l'une
+// après l'autre (A11) — ; moteur.palier.*, les mots d'un palier partagé. Le
+// nom complet d'un critère, celui de l'éditeur, est mobilier.critere.<nom>.
 // Une violation d'indicateur qui porte sur un total ne désigne personne.
 // Un code garde un seul texte : CAPACITE et TOURS, que le moteur lève sous
 // deux formes de détails — ErreurConfiguration et violation —, se
@@ -203,6 +209,25 @@ export const TABLE = new Map([
   ['moteur.critere.ecartAuPlafondAPrioriMax', 'écart au plafond a priori'],
   ['moteur.critere.excedentCollisions', 'excédent de collisions'],
   ['moteur.critere.collisionsCumulees', 'collisions cumulées'],
+  ['moteur.critere.toursHorsObjectif', 'tours hors objectif'],
   ['moteur.critere.rencontresRepetees', 'rencontres répétées'],
+  ['moteur.critere.animateursNonRencontres', 'animateurs non rencontrés'],
   ['moteur.critere.redondance', "redondance d'appartenance"],
+
+  // --- Les valeurs qui classent (§ 5.7, A11, D9, D20) ------------------------------
+  ['moteur.valeur.ecartAuPlafondAPrioriMax', 'écart au plafond a priori'],
+  ['moteur.valeur.excedentCollisions', 'excédent de collisions'],
+  ['moteur.valeur.collisionsCumulees', 'collisions cumulées'],
+  ['moteur.valeur.jamaisServies', 'personnes jamais servies'],
+  ['moteur.valeur.horsObjectifMax', "plus de tours hors objectif d'une personne"],
+  ['moteur.valeur.toursHorsObjectif', 'tours hors objectif'],
+  ['moteur.valeur.rencontresRepeteesChoisies', 'rencontres répétées'],
+  ['moteur.valeur.retoursChoisis', 'retours'],
+  ['moteur.valeur.animateursNonRencontres', 'animateurs non rencontrés'],
+  ['moteur.valeur.redondance', "redondance d'appartenance"],
+
+  // --- Un palier partagé (§ 5.7, A11) : « ensemble, », puis chaque critère
+  // suivi de son poids.
+  ['moteur.palier.ensemble', 'ensemble'],
+  ['moteur.palier.poids', ({ poids }) => `poids ${poids}`],
 ]);

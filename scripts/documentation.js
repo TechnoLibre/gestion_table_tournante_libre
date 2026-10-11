@@ -68,6 +68,7 @@ import { creerFormat } from '../src/application/format.js';
 import { TABLES_APPLICATION } from '../src/application/libelles.js';
 import { creerTraduction } from '../src/application/traduction.js';
 import { ENTETES_DES_CHAMPS } from '../src/csv/colonnes.js';
+import { ENTETES_DES_OBJECTIFS } from '../src/csv/objectifs.js';
 import { CATALOGUE } from '../src/demo/catalogue.js';
 import { LIVREES } from '../src/demo/livrees.js';
 import { CONSTANTES } from '../src/geometrie/constantes.js';
@@ -324,8 +325,10 @@ export function tableauReglages(definition = REGLAGES_GENERATION) {
 }
 
 /**
- * Le tableau des colonnes du CSV (§ 10.1, § 19.8) : chaque champ, dans
- * l'ordre de l'export — son en-tête, puis ses synonymes.
+ * Le tableau des colonnes du CSV (§ 10.1, § 10.4, § 19.8) : chaque champ,
+ * dans l'ordre de l'export — son en-tête, puis ses synonymes. La table des
+ * participants par défaut ; celle des objectifs de table
+ * (ENTETES_DES_OBJECTIFS) pour la région colonnes-objectifs.
  *
  * @param {ReadonlyArray<readonly [string, ReadonlyArray<string>]>} [entetes]
  * @returns {string}
@@ -349,6 +352,7 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   reintegrerParticipant: { personne: 'Théo Pervenche' },
   supprimerParticipant: { personne: 'Ondine Lacasse' },
   importerParticipants: { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 },
+  importerObjectifs: { mode: 'mettreAJour', ajoutes: 3, remplaces: 1, retires: 0 },
   changerEtat: { etat: 'bloque' },
   debloquer: { etat: 'retenu' },
   enregistrerGeneration: { n: 5, premier: 3, dernier: 7 },
@@ -367,6 +371,8 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   poserObjectif: { numero: 3, tour: null, regle: null, etiquettes: ['finance'] },
   retirerObjectif: { numero: 3, tour: 2 },
   changerRegleObjectifs: { regle: 'et' },
+  changerPriorites: { criteres: ['collisionsCumulees'], palier: 1, paliers: 6, avec: ['excedentCollisions'], poids: null },
+  retablirPriorites: {},
   reserver: { personne: 'Théo Pervenche', numero: 4, siege: 2, portee: 'tour', tour: 2 },
   retirerReservation: { personne: 'Théo Pervenche', numero: 4, portee: 'tous', tour: null },
   deplacerReservation: { personne: 'Théo Pervenche', de: 4, vers: 7, siege: null, portee: 'tour', tour: 2 },
@@ -610,6 +616,7 @@ const producteur = (nom, produire) => Object.freeze({ nom, produire });
 export const PRODUCTEURS = Object.freeze([
   producteur('reglages', () => tableauReglages()),
   producteur('colonnes-csv', () => tableauColonnesCsv()),
+  producteur('colonnes-objectifs', () => tableauColonnesCsv(ENTETES_DES_OBJECTIFS)),
   producteur('commandes', () => tableauCommandes()),
   producteur('raccourcis', () => tableauRaccourcis()),
   producteur('demonstrations', () => tableauDemonstrations()),

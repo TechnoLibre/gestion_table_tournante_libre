@@ -6,6 +6,9 @@
 // une colonne a été déplacée importerait sinon les noms dans les
 // appartenances, sans rien signaler. Deux colonnes reconnues sous le même
 // champ ne se départagent pas toutes seules ; le choix de l'opérateur tranche.
+// La règle se lit sur une table d'en-têtes : reconnaitreSelon et
+// associerSelon la portent pour toute table, celle des objectifs de table
+// (§ 10.4) comprise ; reconnaitre et associer sont celles des participants.
 
 import { cleEntete } from './normalisation.js';
 
@@ -37,11 +40,80 @@ export const ENTETES_DES_CHAMPS = Object.freeze([
 /** Champs d'un participant que porte un CSV, dans l'ordre de l'export. */
 export const CHAMPS = Object.freeze(ENTETES_DES_CHAMPS.map(([nom]) => nom));
 
-// Champ de chaque clé d'en-tête, la clé tirée de l'écriture du § 10.1 par la
-// même règle que celle d'un en-tête lu.
-const CHAMP_DE_CLE = new Map(
-  ENTETES_DES_CHAMPS.flatMap(([champ, entetes]) => entetes.map((entete) => [cleEntete(entete), champ])),
-);
+/**
+ * La reconnaissance d'une table d'en-têtes, de la forme d'ENTETES_DES_CHAMPS :
+ * une fonction qui rend le champ qu'un en-tête désigne, synonymes compris,
+ * sans égard à la casse, aux accents, aux espaces, à « _ » ni à « - » ; null
+ * pour un en-tête inconnu. La clé de chaque en-tête de la table se tire de
+ * son écriture par la même règle que celle d'un en-tête lu (cleEntete). La
+ * table se lit une fois, à l'appel : la changer ensuite ne change rien.
+ *
+ * @param {ReadonlyArray<readonly [string, ReadonlyArray<string>]>} table
+ * @returns {(entete: string) => string|null}
+ * @throws {RangeError} quand deux champs partagent une clé d'en-tête, qu'il
+ *   nomme : la colonne irait à l'un ou à l'autre selon l'ordre de la table.
+ *   Un champ peut répéter la sienne, comme « règle » pour regle.
+ */
+export function reconnaitreSelon(table) {
+  const champDeCle = new Map();
+  for (const [champ, entetes] of table) {
+    for (const entete of entetes) {
+      const cle = cleEntete(entete);
+      const deja = champDeCle.get(cle);
+      if (deja !== undefined && deja !== champ) {
+        throw new RangeError(`en-têtes : la clé ${JSON.stringify(cle)} est celle de ${deja} et de ${champ}`);
+      }
+      champDeCle.set(cle, champ);
+    }
+  }
+  return (entete) => champDeCle.get(cleEntete(entete)) ?? null;
+}
+
+/**
+ * L'association des colonnes selon une table d'en-têtes, de la forme
+ * d'ENTETES_DES_CHAMPS : une fonction (entetes, choix) qui suit la règle
+ * d'associer (voir associer), les champs pris dans l'ordre de la table. La
+ * table se lit une fois, à l'appel.
+ *
+ * @param {ReadonlyArray<readonly [string, ReadonlyArray<string>]>} table
+ * @returns {(entetes: string[], choix?: Object<string, number>) => {
+ *   colonnes: Object<string, number>,
+ *   ambigus: Array<{champ: string, rangs: number[]}>,
+ *   nonReconnues: number[],
+ * }}
+ * @throws {RangeError} quand deux champs partagent une clé d'en-tête
+ *   (reconnaitreSelon)
+ */
+export function associerSelon(table) {
+  const reconnaitreLu = reconnaitreSelon(table);
+  const champs = table.map(([champ]) => champ);
+  return (entetes, choix = {}) => {
+    const rangsDesChamps = new Map(champs.map((champ) => [champ, []]));
+    const nonReconnues = [];
+    entetes.forEach((entete, rang) => {
+      const champ = reconnaitreLu(entete);
+      if (champ === null) nonReconnues.push(rang);
+      else rangsDesChamps.get(champ).push(rang);
+    });
+
+    const colonnes = {};
+    const ambigus = [];
+    for (const champ of champs) {
+      const rangs = rangsDesChamps.get(champ);
+      if (rangs.length === 1) {
+        colonnes[champ] = rangs[0];
+      } else if (rangs.length > 1) {
+        if (Object.hasOwn(choix, champ) && rangs.includes(choix[champ])) colonnes[champ] = choix[champ];
+        else ambigus.push({ champ, rangs });
+      }
+    }
+    return { colonnes, ambigus, nonReconnues };
+  };
+}
+
+// La reconnaissance et l'association des participants.
+const RECONNAITRE_PARTICIPANT = reconnaitreSelon(ENTETES_DES_CHAMPS);
+const ASSOCIER_PARTICIPANTS = associerSelon(ENTETES_DES_CHAMPS);
 
 /**
  * Champ qu'un en-tête désigne, synonymes compris, sans égard à la casse, aux
@@ -52,7 +124,7 @@ const CHAMP_DE_CLE = new Map(
  * @returns {string|null}  un élément de CHAMPS, ou null
  */
 export function reconnaitre(entete) {
-  return CHAMP_DE_CLE.get(cleEntete(entete)) ?? null;
+  return RECONNAITRE_PARTICIPANT(entete);
 }
 
 /**
@@ -77,24 +149,5 @@ export function reconnaitre(entete) {
  *   croissants des colonnes dont l'en-tête est inconnu, vide compris.
  */
 export function associer(entetes, choix = {}) {
-  const rangsDesChamps = new Map(CHAMPS.map((champ) => [champ, []]));
-  const nonReconnues = [];
-  entetes.forEach((entete, rang) => {
-    const champ = reconnaitre(entete);
-    if (champ === null) nonReconnues.push(rang);
-    else rangsDesChamps.get(champ).push(rang);
-  });
-
-  const colonnes = {};
-  const ambigus = [];
-  for (const champ of CHAMPS) {
-    const rangs = rangsDesChamps.get(champ);
-    if (rangs.length === 1) {
-      colonnes[champ] = rangs[0];
-    } else if (rangs.length > 1) {
-      if (Object.hasOwn(choix, champ) && rangs.includes(choix[champ])) colonnes[champ] = choix[champ];
-      else ambigus.push({ champ, rangs });
-    }
-  }
-  return { colonnes, ambigus, nonReconnues };
+  return ASSOCIER_PARTICIPANTS(entetes, choix);
 }

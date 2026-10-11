@@ -1,10 +1,11 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les textes des codes de src/csv (§ 10.1, § 14.6) : encodage, séparateur,
-// en-tête, refus d'une ligne, refus de la mise à jour.
+// Les textes des codes de src/csv (§ 10.1, § 10.4, § 14.6) : encodage,
+// séparateur, en-tête, refus d'une ligne, refus de la mise à jour, et ceux du
+// CSV des objectifs de table, son import et son libellé d'historique.
 import { ETIQUETTE_LONGUEUR_MAX, ETIQUETTES_MAX } from '../../stockage/etiquettes.js';
-import { cite, enumeration, nomDans } from './aides.js';
+import { cite, compte, enumeration, nomDans } from './aides.js';
 
 // Le remède commun aux refus d'encodage (§ 10.1).
 const REMEDE_UTF8 = 'Réenregistrez le fichier en UTF-8 depuis le tableur, puis importez-le de nouveau.';
@@ -40,7 +41,7 @@ export const TABLE = new Map([
       `Un guillemet ouvert${Number.isInteger(ligne) ? ` à la ligne ${ligne}` : ''} ne se referme pas : ` +
       'tout ce qui le suit tiendrait dans un seul champ.',
   ],
-  ['AUCUN_ENTETE', () => "Aucun en-tête n'est reconnu : la première ligne nomme les colonnes, « nom » au moins."],
+  ['AUCUN_ENTETE', () => "Aucun en-tête n'est reconnu : la première ligne nomme les colonnes du fichier."],
   ['NOM_NON_ASSOCIE', () => "Aucune colonne ne porte le nom : l'en-tête doit compter une colonne « nom »."],
   ['AUCUNE_LIGNE_VALIDE', () => "Aucune ligne n'est valide : rien n'est importé."],
   ['CHAMPS_EN_TROP', () => "La ligne compte plus de champs que l'en-tête."],
@@ -59,7 +60,7 @@ export const TABLE = new Map([
   ],
   [
     'ETIQUETTES_TROP_NOMBREUSES',
-    ({ nombre }) => `La ligne porte ${nombre} étiquettes : une personne en porte ${ETIQUETTES_MAX} au plus.`,
+    ({ nombre }) => `La ligne porte ${nombre} étiquettes : une personne ou un objectif en porte ${ETIQUETTES_MAX} au plus.`,
   ],
   [
     'PLUSIEURS_CORRESPONDENT',
@@ -76,5 +77,54 @@ export const TABLE = new Map([
     'AMBIGUITE',
     ({ champs }) =>
       `Plusieurs colonnes répondent au même champ (${enumeration(champs)}) : choisissez celle qui s'importe.`,
+  ],
+  // --- Le CSV des objectifs de table (§ 10.4) -------------------------------
+  ['TABLE_NON_ASSOCIEE', () => "Aucune colonne ne porte le numéro de table : l'en-tête doit compter une colonne « table »."],
+  ['OBJECTIF_NON_ASSOCIE', () => "Aucune colonne ne porte l'objectif : l'en-tête doit compter une colonne « objectif »."],
+  ['OBJECTIFS_SANS_TABLE', () => "L'événement n'a aucune table : créez les tables avant d'importer leurs objectifs."],
+  ['TABLE_ABSENTE', () => 'Le numéro de table manque.'],
+  [
+    'TABLE_NON_ENTIERE',
+    ({ valeur }) => `${cite(valeur)} n'est pas un numéro de table : un entier, celui que la table affiche sur le plan.`,
+  ],
+  ['NUMERO_TABLE_INCONNU', ({ valeur }) => `Aucune table ne porte le numéro ${valeur}.`],
+  [
+    'PLUSIEURS_TABLES',
+    ({ valeur }) => `Plusieurs tables portent le numéro ${valeur} : la ligne ne dit pas laquelle elle vise.`,
+  ],
+  ['TOUR_NON_ENTIER', ({ valeur }) => `${cite(valeur)} n'est pas un numéro de tour : un entier, ou vide pour la soirée.`],
+  [
+    'TOUR_HORS_SOIREE',
+    ({ valeur, tours }) => `La soirée compte ${compte(tours, 'tour', 'tours')} : le tour ${valeur} n'en est pas un.`,
+  ],
+  ['OBJECTIF_VIDE', () => "L'objectif manque : au moins une étiquette."],
+  [
+    'REGLE_INCONNUE',
+    ({ valeur }) =>
+      `La règle ${cite(valeur)} n'est pas reconnue : ou, une, au moins une ; et, toutes ; ` +
+      'vide pour suivre la règle par défaut.',
+  ],
+  [
+    'OBJECTIF_EN_DOUBLE',
+    ({ premiereLigne, numero, tour }) =>
+      `La ligne ${premiereLigne} donne déjà l'objectif de la table ${numero} ` +
+      `${tour === null ? 'pour la soirée' : `au tour ${tour}`} : rien n'est fusionné.`,
+  ],
+  [
+    'IMPORT_OBJECTIFS_RECLASSE',
+    () =>
+      'Le plan est retenu : les objectifs importés peuvent changer le classement des propositions, ' +
+      "sans qu'aucune passe en dérive.",
+  ],
+  [
+    'ENTREE_IMPORTER_OBJECTIFS',
+    ({ mode, ajoutes, remplaces, retires }) => {
+      const ajoutesEtRemplaces = `${compte(ajoutes, 'ajouté', 'ajoutés')}, ${compte(remplaces, 'remplacé', 'remplacés')}`;
+      if (mode === 'mettreAJour') return `Mis à jour les objectifs de table par import : ${ajoutesEtRemplaces}`;
+      if (mode === 'remplacer') {
+        return `Remplacé les objectifs de table par import : ${compte(retires, 'retiré', 'retirés')}, ${ajoutesEtRemplaces}`;
+      }
+      throw new RangeError(`libelle : mode d'import des objectifs inconnu ${JSON.stringify(mode)}`);
+    },
   ],
 ]);

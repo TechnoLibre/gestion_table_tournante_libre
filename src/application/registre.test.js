@@ -33,9 +33,11 @@ import assert from 'node:assert/strict';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
+import { apercevoirObjectifs } from '../csv/objectifs.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { LIVREES } from '../demo/livrees.js';
 import { normaliser } from '../moteur/configuration.js';
+import { CRITERES } from '../moteur/criteres.js';
 import { rechercher } from '../moteur/recherche.js';
 import { verifierInvariants } from '../moteur/verification.js';
 import { serialiserCharge } from '../stockage/canonique.js';
@@ -122,10 +124,46 @@ const REMEDE_NUL_ADMIS = new Map([
   ['OBJECTIF_HORS_SOIREE', 'le tour se choisit dans le champ même, parmi ceux de la soirée'],
   ['OBJECTIF_SANS_ETIQUETTE', "sur un couple sans objectif, rien à retirer : la saisie se corrige dans le champ même"],
   ['TABLE_DISPARUE', 'une table supprimée entre-temps : aucun geste ne la rend'],
+  ['PRIORITES_INVALIDES', "l'éditeur n'offre que des listes valides : le texte nomme le palier et le critère en cause"],
+  ['POIDS_HORS_DOMAINE', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
+  [
+    'OBJECTIFS_PALIER_PARTAGE',
+    "séparer d'office déplacerait des critères que le choix du mode ne nomme pas (D23) : le texte nomme le palier, que l'opérateur sépare dans l'éditeur",
+  ],
 ]);
 
 // Le geste qui pose deux places de plus à la table 2, par son champ.
 const QUATRE_PLACES_A_LA_TABLE_2 = ['changerPlacesTable', { id: 2, sieges: '4', origine: 'champ' }];
+
+// Les arguments d'un import des objectifs qui donne « finance » à la soirée
+// de la table d'identifiant 2, désignée par son numéro affiché, lu sur la
+// charge où il s'exécute.
+const IMPORTER_FINANCE_A_LA_TABLE_2 = (charge) => ({
+  apercu: apercevoirObjectifs(`table;objectif\n${tableDe(charge, 2).numero};finance\n`, charge),
+  mode: 'mettreAJour',
+});
+
+// L'ordre des priorités par défaut, chaque critère seul à son palier ; un
+// ordre réglé, où l'excédent et les collisions cumulées partagent le
+// deuxième palier ; et le geste qui joint les tours hors objectif à
+// l'excédent.
+const PRIORITES_DEFAUT = CRITERES.map((critere) => [{ critere, poids: 1 }]);
+const COLLISIONS_JOINTES = [
+  PRIORITES_DEFAUT[0],
+  [{ critere: CRITERES[1], poids: 2 }, { critere: CRITERES[2], poids: 3 }],
+  ...PRIORITES_DEFAUT.slice(3),
+];
+const JOINDRE_LES_TOURS_HORS_OBJECTIF = [
+  'changerPriorites',
+  {
+    paliers: [
+      PRIORITES_DEFAUT[0],
+      [{ critere: CRITERES[1], poids: 1 }, { critere: CRITERES[3], poids: 3 }],
+      PRIORITES_DEFAUT[2],
+      ...PRIORITES_DEFAUT.slice(4),
+    ],
+  },
+];
 
 // La personne libre de la table 2 au tour 1, retirée dans la réserve du tour.
 const RETIRER_UN_LIBRE_DE_LA_TABLE = (idTable) => [
@@ -217,6 +255,22 @@ const EXEMPLES = new Map([
           const texte = `nom;prenom\n${nom};${prenom ?? ''}\n`;
           return { apercu: apercevoir(texte, { participants: charge.participants, mode: 'mettreAJour' }), mode: 'mettreAJour' };
         },
+      },
+    },
+  ],
+  [
+    'importerObjectifs',
+    {
+      accepte: { args: (charge) => IMPORTER_FINANCE_A_LA_TABLE_2(charge) },
+      refuse: {
+        sur: 'vide',
+        args: (charge) => ({ apercu: apercevoirObjectifs('table;objectif\n1;finance\n', charge), mode: 'mettreAJour' }),
+        code: 'OBJECTIFS_SANS_TABLE',
+        remede: { geste: 'ouvrirSection', section: 'tables' },
+      },
+      sansEffet: {
+        avant: [['poserObjectif', { table: 2, tour: null, etiquettes: 'finance', regle: null }]],
+        args: (charge) => IMPORTER_FINANCE_A_LA_TABLE_2(charge),
       },
     },
   ],
@@ -337,7 +391,12 @@ const EXEMPLES = new Map([
     'modifierReglage',
     {
       accepte: { args: { cle: 'nouveauxVoisins', valeur: false } },
-      refuse: "une clé ou une valeur hors de leur domaine est une faute du code (TypeError) : l'interface n'offre que les réglages admis",
+      refuse: {
+        avant: [JOINDRE_LES_TOURS_HORS_OBJECTIF],
+        args: { cle: 'modeObjectifs', valeur: 'chacun' },
+        code: 'OBJECTIFS_PALIER_PARTAGE',
+        remede: null,
+      },
       sansEffet: { args: { cle: 'attribuerSieges', valeur: false } },
     },
   ],
@@ -393,6 +452,26 @@ const EXEMPLES = new Map([
       accepte: { args: { regle: 'et' } },
       refuse: "la règle se choisit entre deux valeurs, que l'interface offre seules : changer la règle ne refuse rien du domaine",
       sansEffet: { args: { regle: 'ou' } },
+    },
+  ],
+  [
+    'changerPriorites',
+    {
+      accepte: { args: { paliers: COLLISIONS_JOINTES } },
+      refuse: {
+        args: { paliers: [[...PRIORITES_DEFAUT[0], ...PRIORITES_DEFAUT[1]], ...PRIORITES_DEFAUT.slice(2)] },
+        code: 'PRIORITES_INVALIDES',
+        remede: null,
+      },
+      sansEffet: { args: { paliers: PRIORITES_DEFAUT } },
+    },
+  ],
+  [
+    'retablirPriorites',
+    {
+      accepte: { avant: [['changerPriorites', { paliers: COLLISIONS_JOINTES }]], args: {} },
+      refuse: "rétablir l'ordre par défaut ne refuse rien du domaine : sans ordre réglé, le geste est sans effet",
+      sansEffet: { args: {} },
     },
   ],
   [
@@ -1152,6 +1231,10 @@ describe('registre : étiquettes, objectifs, règle et cases ne mettent aucun pl
       ['modifierReglage', { cle: 'rencontrerAnimateurs', valeur: true }],
       ['retirerObjectif', { table: 2, tour: null }],
       ['changerEtiquettes', { id: 2, retirer: 'finance' }],
+      ['changerPriorites', { paliers: COLLISIONS_JOINTES }],
+      ['modifierReglage', { cle: 'modeObjectifs', valeur: 'minimum' }],
+      ['retablirPriorites', {}],
+      ['modifierReglage', { cle: 'modeObjectifs', valeur: 'places' }],
     ];
     const depart = raisons(seance.charge);
     for (const [nom, args] of gestes) {
@@ -1160,6 +1243,25 @@ describe('registre : étiquettes, objectifs, règle et cases ne mettent aucun pl
       assert.equal(journalDe(ouvert).entrees.length, entrees + 1, nom);
       assert.deepEqual(raisons(seance.charge), depart, nom);
     }
+    const ecrite = chargeEcrite(ouvert);
+    assert.deepEqual(raisons(ecrite), depart);
+    assert.deepEqual(ecrite.tables.find(({ id }) => id === 3).objectifs, [
+      { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] },
+    ]);
+  });
+
+  test("sur la charge témoin retenue, importer des objectifs écrit une entrée, avertit IMPORT_OBJECTIFS_RECLASSE et laisse les raisons de dérive telles quelles (§ 10.4)", async () => {
+    const ouvert = await ouvrirCopie((await departsPrets()).temoin, { ecriture: true });
+    const { seance } = ouvert;
+    assert.equal(seance.charge.evenement.etat, 'retenu');
+    const depart = raisons(seance.charge);
+    const entrees = journalDe(ouvert).entrees.length;
+    const { charge } = seance;
+    const texte = `table;tour;objectif;regle\n${tableDe(charge, 2).numero};;finance;\n${tableDe(charge, 3).numero};2;finance, Montréal;et\n`;
+    const rendu = await seance.executer('importerObjectifs', { apercu: apercevoirObjectifs(texte, charge), mode: 'mettreAJour' });
+    assert.equal(rendu.avertissements[0].code, 'IMPORT_OBJECTIFS_RECLASSE');
+    assert.equal(journalDe(ouvert).entrees.length, entrees + 1);
+    assert.deepEqual(raisons(seance.charge), depart);
     const ecrite = chargeEcrite(ouvert);
     assert.deepEqual(raisons(ecrite), depart);
     assert.deepEqual(ecrite.tables.find(({ id }) => id === 3).objectifs, [

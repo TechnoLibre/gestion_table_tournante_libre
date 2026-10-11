@@ -3,8 +3,8 @@
 
 // Le registre des commandes du mobilier — tables, sièges, tours, réglages,
 // cible de la somme de redondance, objectifs des tables et leur règle par
-// défaut (§ 4, § 4.5, § 6, § 7.1, § 8.2, § 8.9, § 9), que commandes.js réunit
-// aux autres. Ses imports n'atteignent jamais commandes.js : le registre
+// défaut, ordre des priorités et mode des objectifs (§ 4, § 4.5, § 5.3,
+// § 5.7, § 6, § 7.1, § 8.2, § 8.9, § 9), que commandes.js réunit aux autres. Ses imports n'atteignent jamais commandes.js : le registre
 // réuni dépend de lui, non l'inverse.
 //
 // Chaque commande suit le contrat de commandes.js : une fonction pure
@@ -25,6 +25,7 @@
 // proposition ne se réécrit jamais : elle dérive (§ 8.9, § 9). Supprimer une
 // table et changer les tours laissent propositions et retenu en dérive.
 import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js';
+import { CRITERES, MODES_OBJECTIFS, POIDS_MAX, seulsASonPalier, verifierPriorites } from '../moteur/criteres.js';
 import {
   CIBLE_REDONDANCE_PAR_DEFAUT,
   SCHEMA,
@@ -32,6 +33,8 @@ import {
   capacite,
   cibleRedondance,
   critereCoche,
+  modeObjectifs,
+  priorites,
   regleObjectifs,
 } from '../stockage/document.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
@@ -62,6 +65,9 @@ const CASES_FACULTATIVES = new Set(['respecterObjectifs', 'rencontrerAnimateurs'
 const defautDeLaCase = (cle) => critereCoche({ reglages: {} }, cle);
 
 const REGLES = new Set(['ou', 'et']);
+
+// Le mode des objectifs que les réglages ne portent pas (§ 8.9).
+const MODE_PAR_DEFAUT = modeObjectifs({ reglages: {} });
 
 // Un plan bloqué refuse toute modification ; débloquer seul le lève (§ 9).
 function exigerModifiable(charge) {
@@ -343,7 +349,8 @@ function changerTours(charge, { tours: saisie } = {}) {
  * contraintes ou de l'attribution des sièges, un booléen ; l'une des deux
  * cases facultatives, respecterObjectifs ou rencontrerAnimateurs, un
  * booléen écrit seulement hors de son défaut — y revenir retire le champ, et
- * la valeur courante est SANS_EFFET ; ou generation.nombre,
+ * la valeur courante est SANS_EFFET ; le mode des objectifs, modeObjectifs,
+ * l'un de MODES_OBJECTIFS (changerModeObjectifs) ; ou generation.nombre,
  * generation.arret, generation.historique, un entier ≥ 1, que le contrôleur
  * de génération a lu et borné. Une autre clé, ou une autre valeur, est une
  * faute du code.
@@ -359,6 +366,8 @@ function modifierReglage(charge, { cle, valeur } = {}) {
     if (valeur === critereCoche(charge, cle)) throw refus('SANS_EFFET', { commande: 'modifierReglage' });
     if (valeur === defautDeLaCase(cle)) delete suivante.reglages[cle];
     else suivante.reglages[cle] = valeur;
+  } else if (cle === 'modeObjectifs') {
+    changerModeObjectifs(charge, suivante, valeur);
   } else if (ENTIERS_DE_GENERATION.has(cle)) {
     if (!Number.isSafeInteger(valeur) || valeur < 1) throw new TypeError(`${cle} : entier ≥ 1 attendu, reçu ${JSON.stringify(valeur)}`);
     suivante.reglages.generation[cle.slice('generation.'.length)] = valeur;
@@ -509,6 +518,189 @@ function changerRegleObjectifs(charge, { regle } = {}) {
   };
 }
 
+// --- L'ordre des priorités et le mode des objectifs (§ 5.3, § 5.7, § 5.9) ---
+
+// La liste que reçoit changerPriorites, contrôlée dans sa forme : une liste
+// de paliers, chacun une liste d'entrées {critere, poids}, critere une
+// chaîne, poids un nombre. Une autre forme est une faute du code, que
+// l'éditeur n'offre jamais : TypeError. Rend une copie, chaque entrée réduite
+// à ces deux clés, dans l'ordre reçu.
+function lirePaliers(paliers) {
+  const faute = (attendu) => new TypeError(`paliers : ${attendu}, reçu ${JSON.stringify(paliers)}`);
+  if (!Array.isArray(paliers)) throw faute('une liste de paliers attendue');
+  return paliers.map((palier) => {
+    if (!Array.isArray(palier)) throw faute('chaque palier, une liste');
+    return palier.map((entree) => {
+      const forme =
+        typeof entree === 'object' &&
+        entree !== null &&
+        !Array.isArray(entree) &&
+        typeof entree.critere === 'string' &&
+        typeof entree.poids === 'number';
+      if (!forme) throw faute('chaque entrée, {critere: chaîne, poids: nombre}');
+      return { critere: entree.critere, poids: entree.poids };
+    });
+  });
+}
+
+// Vrai pour un poids du domaine : un entier de 1 à POIDS_MAX (§ 5.7).
+const poidsAdmis = (poids) => Number.isInteger(poids) && poids >= 1 && poids <= POIDS_MAX;
+
+// Le rang d'un critère dans le registre ; −1 pour un nom inconnu, que
+// verifierPriorites relève ensuite.
+const rangDuCritere = (nom) => CRITERES.indexOf(nom);
+
+// Une liste de priorités rangée : les critères de chaque palier dans l'ordre
+// du registre (A16), et le poids d'un critère seul à son palier ramené à 1.
+// Seul, un poids multiplie la seule valeur de son palier et ne départage
+// rien : deux listes de même effet s'écrivent pareil, et un mode sous lequel
+// le critère compare deux valeurs, qui ne le pondère pas (D8), l'admet. Rend
+// une liste neuve.
+function rangerPaliers(liste) {
+  return liste.map((palier) => {
+    const range = [...palier].sort((a, b) => rangDuCritere(a.critere) - rangDuCritere(b.critere));
+    return range.length === 1 ? [{ critere: range[0].critere, poids: 1 }] : range.map(({ critere, poids }) => ({ critere, poids }));
+  });
+}
+
+// Deux listes rangées identiques, palier par palier, entrée par entrée.
+const memesPriorites = (a, b) =>
+  a.length === b.length &&
+  a.every((palier, i) => palier.length === b[i].length && palier.every(({ critere, poids }, k) => critere === b[i][k].critere && poids === b[i][k].poids));
+
+// L'ordre par défaut, rangé : celui que lit priorites sur des réglages qui
+// ne portent pas le champ.
+const PAR_DEFAUT = rangerPaliers(priorites({ reglages: {} }));
+
+// La place de chaque critère d'une liste rangée : l'index de son palier,
+// ses compagnons de palier et son poids.
+function placesDes(liste) {
+  const places = new Map();
+  liste.forEach((palier, index) => {
+    for (const { critere, poids } of palier) {
+      const compagnons = palier.map((autre) => autre.critere).filter((autre) => autre !== critere);
+      places.set(critere, { index, compagnons, poids });
+    }
+  });
+  return places;
+}
+
+// Les détails du libellé figé de changerPriorites : le critère que le geste
+// déplace, ou les critères du palier déplacé entier, l'index du palier où il
+// arrive, le nombre de paliers, ses compagnons d'arrivée, et son poids quand
+// le geste ne change que lui. avant et apres sont deux listes rangées
+// différentes ; les candidats se lisent dans l'ordre d'apres.
+// - Joindre, séparer : parmi les critères dont les compagnons changent,
+//   celui qui en gagne ou en perd le plus — le critère joint ou séparé, et
+//   non ceux du palier qu'il quitte ou rejoint, qui n'en gagnent ou n'en
+//   perdent qu'un — ; à égalité, celui dont le palier change d'index.
+// - Déplacer un palier sans rien regrouper : celui qui va le plus loin ; à
+//   égalité, celui qui monte — monter d'un palier passe le palier voisin,
+//   qui descend d'autant.
+// - Rien d'autre : le critère dont le poids change.
+function changementDesPriorites(avant, apres) {
+  const ancienne = placesDes(avant);
+  const nouvelle = placesDes(apres);
+  const noms = apres.flat().map(({ critere }) => critere);
+  const ecartDIndex = (nom) => nouvelle.get(nom).index - ancienne.get(nom).index;
+  const paliers = apres.length;
+  const changes = (nom) => {
+    const [gardes, prises] = [ancienne.get(nom).compagnons, nouvelle.get(nom).compagnons];
+    return gardes.filter((autre) => !prises.includes(autre)).length + prises.filter((autre) => !gardes.includes(autre)).length;
+  };
+  const regroupes = noms.filter((nom) => changes(nom) > 0);
+  if (regroupes.length > 0) {
+    const plus = Math.max(...regroupes.map(changes));
+    const candidats = regroupes.filter((nom) => changes(nom) === plus);
+    const nom = candidats.find((candidat) => ecartDIndex(candidat) !== 0) ?? candidats[0];
+    const { index, compagnons } = nouvelle.get(nom);
+    return { criteres: [nom], palier: index, paliers, avec: compagnons, poids: null };
+  }
+  const deplaces = noms.filter((nom) => ecartDIndex(nom) !== 0);
+  if (deplaces.length > 0) {
+    const loin = Math.max(...deplaces.map((nom) => Math.abs(ecartDIndex(nom))));
+    const candidats = deplaces.filter((nom) => Math.abs(ecartDIndex(nom)) === loin);
+    const { index } = nouvelle.get(candidats.find((nom) => ecartDIndex(nom) < 0) ?? candidats[0]);
+    return { criteres: apres[index].map(({ critere }) => critere), palier: index, paliers, avec: [], poids: null };
+  }
+  const nom = noms.find((candidat) => nouvelle.get(candidat).poids !== ancienne.get(candidat).poids);
+  const { index, poids } = nouvelle.get(nom);
+  return { criteres: [nom], palier: index, paliers, avec: [], poids };
+}
+
+/**
+ * changerPriorites {paliers} (§ 5.7, § 5.9, A11, A12) : l'ordre des
+ * priorités de l'événement, une liste complète de paliers, chacun une liste
+ * d'entrées {critere, poids}. Elle s'écrit rangée (rangerPaliers) ; égale à
+ * l'ordre par défaut, elle retire le champ des réglages. Une liste dont
+ * l'effet égale l'ordre courant (priorites) est SANS_EFFET. Refus, remède
+ * null, dans cet ordre : POIDS_HORS_DOMAINE {valeur}, le premier poids qui
+ * n'est pas un entier de 1 à POIDS_MAX ; PRIORITES_INVALIDES {faute,
+ * critere?, palier?}, la faute que verifierPriorites relève sous le mode des
+ * objectifs de l'événement — palier, l'index du palier à partir de 0. Une
+ * liste de forme fausse est une faute du code (lirePaliers). Le libellé
+ * figé nomme le critère déplacé et son palier (changementDesPriorites).
+ */
+function changerPriorites(charge, { paliers } = {}) {
+  exigerModifiable(charge);
+  const recue = lirePaliers(paliers);
+  const horsDomaine = recue.flat().find(({ poids }) => !poidsAdmis(poids));
+  if (horsDomaine !== undefined) throw refus('POIDS_HORS_DOMAINE', { valeur: horsDomaine.poids });
+  const liste = rangerPaliers(recue);
+  const faute = verifierPriorites(liste, modeObjectifs(charge));
+  if (faute !== null) throw refus('PRIORITES_INVALIDES', faute);
+  const courante = rangerPaliers(priorites(charge));
+  if (memesPriorites(liste, courante)) throw refus('SANS_EFFET', { commande: 'changerPriorites' });
+  const suivante = structuredClone(charge);
+  if (memesPriorites(liste, PAR_DEFAUT)) delete suivante.reglages.priorites;
+  else suivante.reglages.priorites = liste;
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_CHANGER_PRIORITES', changementDesPriorites(courante, liste)),
+    avertissements: [],
+  };
+}
+
+/**
+ * retablirPriorites {} (§ 5.7, D19) : l'ordre par défaut, sans fenêtre à
+ * confirmer — un retour à l'instant précédent rend l'ordre réglé. Le champ
+ * des réglages part ; sans lui, SANS_EFFET.
+ */
+function retablirPriorites(charge) {
+  exigerModifiable(charge);
+  if (charge.reglages.priorites === undefined) throw refus('SANS_EFFET', { commande: 'retablirPriorites' });
+  const suivante = structuredClone(charge);
+  delete suivante.reglages.priorites;
+  return { charge: suivante, libelle: libelle('ENTREE_RETABLIR_PRIORITES'), avertissements: [] };
+}
+
+// modifierReglage {cle: 'modeObjectifs', valeur} (§ 5.3, § 8.9, A12, D23),
+// sur suivante, la copie de charge : valeur, l'un de MODES_OBJECTIFS, sinon
+// TypeError ; le mode courant est SANS_EFFET ; le défaut retire le champ.
+// Un mode sous lequel un critère se range seul à son palier — les tours hors
+// objectif sous les modes qui comparent deux valeurs — se refuse tant que ce
+// critère partage le sien : OBJECTIFS_PALIER_PARTAGE {mode, palier}, palier
+// à partir de 0, remède null, le mode inchangé. Séparer d'office déplacerait
+// des critères que le choix ne nomme pas : aucun critère ne se déplace. Un
+// ordre écrit se réécrit rangé (rangerPaliers) : le poids d'un critère seul,
+// qu'un fichier écrit ailleurs peut porter, revient à 1, et l'ordre reste
+// valide sous le mode choisi.
+function changerModeObjectifs(charge, suivante, valeur) {
+  if (!MODES_OBJECTIFS.includes(valeur)) {
+    throw new TypeError(`modeObjectifs : ${MODES_OBJECTIFS.join(', ')} attendu, reçu ${JSON.stringify(valeur)}`);
+  }
+  if (valeur === modeObjectifs(charge)) throw refus('SANS_EFFET', { commande: 'modifierReglage' });
+  const liste = rangerPaliers(priorites(charge));
+  const seuls = seulsASonPalier(valeur);
+  const partage = liste.findIndex((palier) => palier.length > 1 && palier.some(({ critere }) => seuls.includes(critere)));
+  if (partage >= 0) throw refus('OBJECTIFS_PALIER_PARTAGE', { mode: valeur, palier: partage });
+  if (valeur === MODE_PAR_DEFAUT) delete suivante.reglages.modeObjectifs;
+  else suivante.reglages.modeObjectifs = valeur;
+  if (charge.reglages.priorites === undefined) return;
+  if (memesPriorites(liste, PAR_DEFAUT)) delete suivante.reglages.priorites;
+  else suivante.reglages.priorites = liste;
+}
+
 /** @type {Map<string, (charge: Object, args: Object) => Object>} */
 export const COMMANDES_MOBILIER = new Map([
   ['creerTable', creerTable],
@@ -523,4 +715,6 @@ export const COMMANDES_MOBILIER = new Map([
   ['poserObjectif', poserObjectif],
   ['retirerObjectif', retirerObjectif],
   ['changerRegleObjectifs', changerRegleObjectifs],
+  ['changerPriorites', changerPriorites],
+  ['retablirPriorites', retablirPriorites],
 ]);

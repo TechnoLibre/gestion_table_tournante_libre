@@ -374,3 +374,34 @@ export function compiler(liste, compte, mode = 'places') {
     taille,
   };
 }
+
+/**
+ * La compilation d'une instance (§ 5.7, D10) : sa liste de priorités, déjà
+ * complète, compilée sous son mode, chaque critère comptant quand son état le
+ * dit coché et avec un objet. etatCriteres porte un état par critère, dans
+ * l'ordre de CRITERES ({nom, coche, sansObjet, valeurs}, normaliser).
+ *
+ * Rend ce que compiler rend, où chaque critère d'un palier porte en plus
+ * valeurs, une copie des grandeurs qu'il classe, dans l'ordre où le
+ * classement les compare : la recherche et le classement lisent ainsi une
+ * seule compilation. Lève ce que compiler lève, et RangeError quand
+ * etatCriteres ne suit pas l'ordre de CRITERES. Ne modifie rien de ce
+ * qu'elle reçoit.
+ *
+ * @param {{priorites: Array<Array<{critere: string, poids: number}>>,
+ *          etatCriteres: Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>,
+ *          modeObjectifs: 'places'|'chacun'|'minimum'}} instance
+ * @returns {ReturnType<typeof compiler>}
+ */
+export function compilationDe({ priorites, etatCriteres, modeObjectifs }) {
+  const etatDe = (nom) => {
+    const etat = etatCriteres[rangDe(nom)];
+    if (etat?.nom !== nom) throw new RangeError(`état des critères : ${nom} attendu au rang ${rangDe(nom)}`);
+    return etat;
+  };
+  const compilation = compiler(priorites, (nom) => etatDe(nom).coche && !etatDe(nom).sansObjet, modeObjectifs);
+  for (const palier of compilation.paliers) {
+    palier.criteres = palier.criteres.map(({ nom, poids }) => ({ nom, poids, valeurs: [...etatDe(nom).valeurs] }));
+  }
+  return compilation;
+}

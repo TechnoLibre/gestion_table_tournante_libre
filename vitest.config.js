@@ -57,7 +57,8 @@ const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
 // garde des lecteurs par le disque (test/arborescence.test.js), textuelle,
 // les compte parmi les lecteurs des composants. test/documentation.test.js en
 // est : elle lit ces motifs pour les fichiers que scripts/documentation.js
-// lit par le disque.
+// lit par le disque. La garde de la contrainte 35 (src/moteur/criteres.test.js)
+// lit chaque composant à la recherche d'une liste littérale de critères.
 const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/arborescence.test.js',
   'test/sources_interface.test.js',
@@ -73,6 +74,7 @@ const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/rapporteur.test.js',
   'test/documentation.test.js',
   'src/stockage/etiquettes.test.js',
+  'src/moteur/criteres.test.js',
 ]);
 
 // Les épreuves node qui lisent la feuille des jetons par le système de

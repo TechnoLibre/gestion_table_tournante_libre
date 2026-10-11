@@ -40,6 +40,13 @@
 // src/moteur/empreintes.test.js, et seulement sur l'état du moteur que le
 // fichier doit garder. Une empreinte qui change est un défaut, jamais une
 // régénération : écrire est un geste conscient (§ 15.5, point 5).
+//
+// Le mode des objectifs (D20) est un paramètre de chaque calcul : 'places',
+// le défaut, laisse la configuration et la charge sans mode ; 'chacun' et
+// 'minimum' le leur donnent. Sans objectif, les trois rendent les mêmes
+// empreintes : le fichier, relevé sans mode, les garde toutes (A21, « le mode
+// ne touche pas au défaut »). Le classement se lit en noms : la liste aplatie
+// des critères appliqués, palier après palier.
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -49,6 +56,7 @@ import { evaluer } from '../src/application/evaluation.js';
 import { CATALOGUE } from '../src/demo/catalogue.js';
 import { texteLivre } from '../src/demo/livrees.js';
 import { indexerPlan, normaliser } from '../src/moteur/configuration.js';
+import { MODES_OBJECTIFS } from '../src/moteur/criteres.js';
 import { mesurer } from '../src/moteur/indicateurs.js';
 import { ecartsAuPlafondAPriori } from '../src/moteur/manque.js';
 import { plafondsAPriori } from '../src/moteur/plafond.js';
@@ -203,6 +211,18 @@ function configurationDuCatalogue(cle) {
   return entree.construire();
 }
 
+// Lève RangeError pour un mode hors de MODES_OBJECTIFS (criteres.js).
+function exigerMode(mode) {
+  if (!MODES_OBJECTIFS.includes(mode)) throw new RangeError(`mode des objectifs inconnu : ${String(mode)}`);
+}
+
+// La configuration sous ce mode : telle quelle sous 'places', le mode posé
+// sinon.
+function sousLeMode(configuration, mode) {
+  exigerMode(mode);
+  return mode === 'places' ? configuration : { ...configuration, modeObjectifs: mode };
+}
+
 // L'empreinte du plan que rechercher rend pour une configuration sous une
 // graine, une proposition, à arret mouvements, historique par défaut.
 function empreinteRecherchee(configuration, graine, arret = ARRET) {
@@ -213,14 +233,16 @@ function empreinteRecherchee(configuration, graine, arret = ARRET) {
 
 /**
  * Les empreintes des plans d'une configuration du catalogue, une par graine
- * de GRAINES, sous la clé de la graine, à arret mouvements.
+ * de GRAINES, sous la clé de la graine, à arret mouvements, sous ce mode des
+ * objectifs.
  *
  * @param {string} cle
  * @param {number} [arret=ARRET]
+ * @param {'places'|'chacun'|'minimum'} [mode='places']
  * @returns {Record<string, {empreinte: string, grandeurs: object}>}
  */
-export function empreintesDesPlans(cle, arret = ARRET) {
-  const configuration = configurationDuCatalogue(cle);
+export function empreintesDesPlans(cle, arret = ARRET, mode = 'places') {
+  const configuration = sousLeMode(configurationDuCatalogue(cle), mode);
   return Object.fromEntries(
     GRAINES.map((graine) => [String(graine), empreinteRecherchee(configuration, graine, arret)]),
   );
@@ -247,28 +269,34 @@ export function combinaisons() {
 
 /**
  * Les empreintes des plans de la petite démonstration sous chacune des seize
- * combinaisons, graine 1, sous la clé de la combinaison.
+ * combinaisons, graine 1, sous la clé de la combinaison, sous ce mode des
+ * objectifs.
  *
+ * @param {'places'|'chacun'|'minimum'} [mode='places']
  * @returns {Record<string, {empreinte: string, grandeurs: object}>}
  */
-export function empreintesDesCombinaisons() {
+export function empreintesDesCombinaisons(mode = 'places') {
   return Object.fromEntries(
     combinaisons().map(({ cle, contraintes }) => [
       cle,
-      empreinteRecherchee({ ...configurationDuCatalogue('petite'), contraintes }, GRAINES[0]),
+      empreinteRecherchee(sousLeMode({ ...configurationDuCatalogue('petite'), contraintes }, mode), GRAINES[0]),
     ]),
   );
 }
 
 /**
  * La charge du classement de référence : la démonstration livrée de clé
- * cle, et la génération de CLASSEMENT enregistrée par la commande.
+ * cle, sous ce mode des objectifs — le réglage absent sous 'places' —, et la
+ * génération de CLASSEMENT enregistrée par la commande.
  *
  * @param {string} cle
+ * @param {'places'|'chacun'|'minimum'} [mode='places']
  * @returns {import('../src/stockage/types.js').Charge}
  */
-export function chargeDeClassement(cle) {
+export function chargeDeClassement(cle, mode = 'places') {
+  exigerMode(mode);
   const charge = analyser(texteLivre(cle)).charge;
+  if (mode !== 'places') charge.reglages.modeObjectifs = mode;
   const configuration = configurationDepuisCharge(charge);
   const { graine, arret, nombre } = CLASSEMENT;
   const propositions = rechercher(configuration, { graine, arret, nombre });
@@ -281,28 +309,34 @@ export function chargeDeClassement(cle) {
 
 /**
  * Ce que l'empreinte garde d'un classement : l'ordre, les noms des critères
- * appliqués dans leur ordre, le critère sauté.
+ * appliqués dans leur ordre — la liste aplatie, palier après palier —, le
+ * critère sauté.
  *
- * @param {{ordre: number[], criteresAppliques: string[], critereSaute: string|null}} classement
+ * @param {{ordre: number[], criteresAppliques: Array<{criteres: Array<{nom: string}>}>, critereSaute: string|null}} classement
  * @returns {{ordre: number[], criteresAppliques: string[], critereSaute: string|null}}
  */
 export function classementLu({ ordre, criteresAppliques, critereSaute }) {
-  return { ordre: [...ordre], criteresAppliques: [...criteresAppliques], critereSaute };
+  return {
+    ordre: [...ordre],
+    criteresAppliques: criteresAppliques.flatMap(({ criteres }) => criteres.map(({ nom }) => nom)),
+    critereSaute,
+  };
 }
 
 /**
- * Le classement de référence d'une charge de CLASSEMENT.cles : connu et
- * inconnu, ses classements par evaluer, plafond a priori calculé puis
- * inconnu ; propositions, les grandeurs nommées de chacune, plafond a priori
- * calculé, par identifiant croissant.
+ * Le classement de référence d'une charge de CLASSEMENT.cles, sous ce mode
+ * des objectifs : connu et inconnu, ses classements par evaluer, plafond a
+ * priori calculé puis inconnu ; propositions, les grandeurs nommées de
+ * chacune, plafond a priori calculé, par identifiant croissant.
  *
  * @param {string} cle
+ * @param {'places'|'chacun'|'minimum'} [mode='places']
  * @returns {{connu: object, inconnu: object, propositions: Record<string, Record<string, number|null>>}}
  * @throws {Error} une proposition qui ne se compare pas : elle n'a pas de
  *         grandeurs
  */
-export function empreintesDuClassement(cle) {
-  const charge = chargeDeClassement(cle);
+export function empreintesDuClassement(cle, mode = 'places') {
+  const charge = chargeDeClassement(cle, mode);
   const connu = evaluer(charge);
   const inconnu = evaluer(charge, { plafondsAPriori: null });
   const ligneDe = new Map(connu.propositions.map((ligne) => [ligne.id, ligne]));

@@ -7,12 +7,25 @@
 // partent des démonstrations livrées, et leurs propositions s'enregistrent
 // par la commande ; les plans construits à la main sont écrits ici, sur la
 // petite démonstration au conflit inévitable. La valeur attendue vient des
-// fonctions du moteur, sollicitées une seconde fois (§ 19.1).
+// fonctions du moteur, sollicitées une seconde fois (§ 19.1). Le classement
+// suit l'ordre des priorités et le mode de la charge (A11, A21) ; sous
+// chacune des seize combinaisons des quatre cases, son ordre est celui de la
+// clé de référence privée des critères que les cases décochées retirent,
+// relue sur les grandeurs du fichier des empreintes (contrainte 33).
 import assert from 'node:assert/strict';
+import {
+  CASES,
+  CLASSEMENT,
+  chargeDeClassement,
+  empreintesDuClassement,
+  exigerVerification,
+  lireEmpreintes,
+} from '../../test/empreintes_moteur.js';
 import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
 import { classer } from '../moteur/classement.js';
 import { indexerPlan, normaliser } from '../moteur/configuration.js';
+import { compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { mesurer } from '../moteur/indicateurs.js';
@@ -178,7 +191,7 @@ describe("évaluation : la mesure qui fait foi (§ 5.10, § 13.2)", () => {
     assert.deepEqual([1, 2, 3].map((id) => parId.get(id).ecartAuPlafondAPrioriMax), [3, 3, 3]);
     assert.ok(parId.get(4).ecartAuPlafondAPrioriMax > 3);
     assert.deepEqual(table.classement.ordre, [3, 2, 1, 4]);
-    assert.deepEqual(table.classement.criteresAppliques[0], 'ecartAuPlafondAPrioriMax');
+    assert.deepEqual(table.classement.criteresAppliques[0].criteres.map(({ nom }) => nom), ['ecartAuPlafondAPrioriMax']);
     for (const ligne of table.propositions) {
       const ecarts = ecartsAuPlafondAPriori(ligne.mesures, plafondsAPriori(normaliser(configurationDe(charge))));
       assert.equal(ligne.ecartAuPlafondAPrioriMax, Math.max(...ecarts));
@@ -373,7 +386,7 @@ describe('évaluation : le plafond a priori inconnu (§ 17, point 4)', () => {
     const charge = figer(generee(chargeDemo('petite-conflit'), { graine: 5, nombre: 2, arret: 300 }));
     const table = evaluer(charge, { plafondsAPriori: null });
     assert.equal(table.classement.critereSaute, 'ecartAuPlafondAPrioriMax');
-    assert.equal(table.classement.criteresAppliques[0], 'excedentCollisions');
+    assert.deepEqual(table.classement.criteresAppliques[0].criteres.map(({ nom }) => nom), ['excedentCollisions']);
     for (const ligne of table.propositions) {
       assert.equal(ligne.troisChiffres.ecartItineraireMax, null);
       assert.equal(ligne.minimumAtteint, null);
@@ -563,4 +576,164 @@ describe('resumeDuMeilleur : la proposition au rang 1 que lit la liste des évé
     assert.throws(() => evaluer(charge), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION');
     assert.equal(resumeDuMeilleur(charge), null);
   });
+});
+
+// --- L'ordre des priorités, le mode et les cases (A11, A21) ---------------------
+
+exigerVerification(process.env);
+
+// La petite démonstration au conflit inévitable, où 1 à 6 portent
+// « finance » et la table d'identifiant le plus petit l'objectif « finance »
+// pour la soirée ; le mode et l'ordre des priorités donnés, quand ils le
+// sont.
+function chargeAObjectifs({ mode, priorites } = {}) {
+  const charge = structuredClone(chargeDemo('petite-conflit'));
+  for (const participant of charge.participants) if (participant.id <= 6) participant.etiquettes = ['finance'];
+  const [premiere] = [...charge.tables].sort((a, b) => a.id - b.id);
+  premiere.objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+  if (mode !== undefined) charge.reglages.modeObjectifs = mode;
+  if (priorites !== undefined) charge.reglages.priorites = priorites;
+  return charge;
+}
+
+const e = (critere, poids = 1) => ({ critere, poids });
+
+describe("évaluation : l'état des critères et les mesures nouvelles (contrat du classement)", () => {
+  test("criteres porte l'état de chaque critère tel que normaliser le donne, valeurs comprises", () => {
+    const charge = figer(generee(chargeAObjectifs({ mode: 'chacun' }), { graine: 3, nombre: 2, arret: 300 }));
+    const table = evaluer(charge);
+    const instance = normaliser(configurationDe(charge));
+    assert.deepEqual(table.criteres, instance.etatCriteres);
+    assert.deepEqual(table.criteres.find(({ nom }) => nom === 'toursHorsObjectif'), {
+      nom: 'toursHorsObjectif',
+      coche: true,
+      sansObjet: false,
+      valeurs: ['jamaisServies', 'toursHorsObjectif'],
+    });
+    assert.deepEqual(table.criteres.find(({ nom }) => nom === 'animateursNonRencontres').coche, false);
+    for (const ligne of table.propositions) {
+      assert.equal(ligne.mesures.objectifs.concernes, 6, `${ligne.id}`);
+      assert.equal(ligne.mesures.animateurs, null, `${ligne.id}`);
+    }
+  });
+
+  test('sans objectif, les objectifs sont sans objet, et les lignes portent des mesures nouvelles nulles', () => {
+    const table = evaluer(figer(generee(chargeDemo('petite'), { graine: 2, nombre: 1, arret: 100 })));
+    assert.equal(table.criteres.find(({ nom }) => nom === 'toursHorsObjectif').sansObjet, true);
+    assert.deepEqual(table.propositions.map(({ mesures }) => [mesures.objectifs, mesures.animateurs]), [[null, null]]);
+  });
+});
+
+describe("évaluation : le classement suit l'ordre et le mode de la charge (A11, A21)", () => {
+  test("sous minimum et un ordre réglé, le classement est celui de classer sur la compilation de l'instance", () => {
+    const priorites = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('toursHorsObjectif')],
+      [e('excedentCollisions'), e('redondance', 3)],
+      [e('collisionsCumulees')],
+      [e('rencontresRepetees')],
+      [e('animateursNonRencontres')],
+    ];
+    const charge = figer(generee(chargeAObjectifs({ mode: 'minimum', priorites }), { graine: 4, nombre: 6, arret: 200 }));
+    const table = evaluer(charge);
+    const instance = normaliser(configurationDe(charge));
+    const aPriori = plafondsAPriori(instance);
+    const entrees = charge.propositions.map(({ id }) => ({
+      id,
+      mesures: table.propositions.find((ligne) => ligne.id === id).mesures,
+      plafondsAPriori: aPriori,
+    }));
+    assert.deepEqual(table.classement, classer(entrees, compilationDe(instance)));
+    assert.deepEqual(
+      table.classement.criteresAppliques.map(({ criteres }) => criteres.map(({ nom, valeurs, poids }) => `${nom}:${valeurs.join('+')}×${poids}`)),
+      [
+        ['ecartAuPlafondAPrioriMax:ecartAuPlafondAPrioriMax×1'],
+        ['toursHorsObjectif:horsObjectifMax+toursHorsObjectif×1'],
+        ['excedentCollisions:excedentCollisions×1', 'redondance:redondance×3'],
+        ['collisionsCumulees:collisionsCumulees×1'],
+        ['rencontresRepetees:rencontresRepeteesChoisies×1'],
+      ],
+    );
+    assert.notDeepEqual(table.classement.criteresAppliques, classer(entrees).criteresAppliques);
+  });
+
+  test('sans objectif, les trois modes rendent le même classement que la charge sans mode', () => {
+    const charge = generee(chargeDemo('petite-conflit'), { graine: 6, nombre: 5, arret: 200 });
+    const reference = evaluer(charge).classement;
+    for (const mode of ['chacun', 'minimum']) {
+      const autre = structuredClone(charge);
+      autre.reglages.modeObjectifs = mode;
+      assert.deepEqual(evaluer(autre).classement, reference, mode);
+    }
+  });
+});
+
+describe('évaluation : sous les seize combinaisons des cases, la clé de référence privée des critères retirés (A21, contrainte 33)', () => {
+  const REFERENCE = lireEmpreintes();
+  // La clé de référence privée des critères que les cases décochées
+  // retirent, en grandeurs nommées du fichier : l'écart toujours ;
+  // l'excédent et les cumulées sous « séparer » ; les rencontres répétées
+  // choisies sous « nouveaux voisins », sinon les retours choisis sous
+  // « nouvelle table » seule ; la redondance sous « varier ».
+  const cleSous = (cases) => [
+    'ecartAuPlafondAPrioriMax',
+    ...(cases.separerAppartenances ? ['excedentCollisions', 'collisionsCumulees'] : []),
+    ...(cases.nouveauxVoisins ? ['rencontresRepeteesChoisies'] : cases.nouvelleTable ? ['retoursChoisis'] : []),
+    ...(cases.varierAppartenances ? ['redondance'] : []),
+  ];
+  // Le nom du critère appliqué qui classe chaque grandeur de la clé.
+  const CRITERE_DE = {
+    ecartAuPlafondAPrioriMax: 'ecartAuPlafondAPrioriMax',
+    excedentCollisions: 'excedentCollisions',
+    collisionsCumulees: 'collisionsCumulees',
+    rencontresRepeteesChoisies: 'rencontresRepetees',
+    retoursChoisis: 'rencontresRepetees',
+    redondance: 'redondance',
+  };
+  // Les identifiants rangés grandeur par grandeur de la clé, puis par
+  // identifiant croissant.
+  const ordonner = (grandeurs, cle, ids) => [...ids].sort((a, b) => {
+    for (const nom of cle) {
+      const ecart = grandeurs[String(a)][nom] - grandeurs[String(b)][nom];
+      if (ecart !== 0) return ecart;
+    }
+    return a - b;
+  });
+
+  for (const cle of CLASSEMENT.cles) {
+    test(`${cle} : chaque combinaison classe comme sa clé privée, et ne nomme que ses critères ; l'ordre change sous une combinaison au moins`, () => {
+      const charge = chargeDeClassement(cle);
+      const { propositions: grandeurs } = REFERENCE.classements[cle];
+      const ids = charge.propositions.map(({ id }) => id);
+      let differentes = 0;
+      for (let masque = 0; masque < 16; masque += 1) {
+        const cases = Object.fromEntries(CASES.map((nom, bit) => [nom, (masque & (1 << bit)) !== 0]));
+        const sous = structuredClone(charge);
+        Object.assign(sous.reglages, cases);
+        const table = evaluer(sous);
+        const nom = `${cle}, ${CASES.filter((c) => cases[c]).join('+') || 'aucune'}`;
+        assert.ok(table.propositions.every(({ statut }) => statut === 'comparable'), nom);
+        const attendu = ordonner(grandeurs, cleSous(cases), ids);
+        assert.deepEqual(table.classement.ordre, attendu, nom);
+        assert.deepEqual(
+          table.classement.criteresAppliques.map(({ criteres }) => criteres.map(({ nom: n, valeurs }) => `${n}:${valeurs.join('+')}`).join()),
+          cleSous(cases).map((g) => `${CRITERE_DE[g]}:${g}`),
+          nom,
+        );
+        if (attendu.join() !== REFERENCE.classements[cle].connu.ordre.join()) differentes += 1;
+      }
+      assert.ok(differentes > 0, cle);
+    });
+  }
+});
+
+describe('évaluation : le mode ne touche pas au classement de référence, sans objectif (A21)', () => {
+  const REFERENCE = lireEmpreintes();
+  for (const mode of ['chacun', 'minimum']) {
+    test(`${mode} : ordre, critères appliqués et grandeurs, plafond a priori connu puis inconnu, ceux des empreintes de référence`, () => {
+      for (const cle of CLASSEMENT.cles) {
+        assert.deepEqual(empreintesDuClassement(cle, mode), REFERENCE.classements[cle], `${cle}, ${mode}`);
+      }
+    });
+  }
 });

@@ -212,13 +212,17 @@ function ligneDe(ligne, table, idRetenu, rang = null) {
 }
 
 // La colonne que désigne chaque critère du classement (§ 5.7) : celle qui
-// porte la grandeur qu'il compare. La Map ne sert qu'à retrouver la colonne
-// d'un critère ; la phrase suit l'ordre que le classement rend.
+// porte la grandeur qu'il compare ; null pour les tours hors objectif et les
+// animateurs non rencontrés, que le tableau ne porte pas en colonne. La Map
+// ne sert qu'à retrouver la colonne d'un critère ; la phrase suit l'ordre que
+// le classement rend.
 const COLONNE_DU_CRITERE = new Map([
   ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPriori'],
   ['excedentCollisions', 'excedentCollisions'],
   ['collisionsCumulees', 'collisionsCumulees'],
+  ['toursHorsObjectif', null],
   ['rencontresRepetees', 'rencontresRepetees'],
+  ['animateursNonRencontres', null],
   ['redondance', 'totalRedondance'],
   ['identifiant', 'proposition'],
 ]);
@@ -226,11 +230,13 @@ const COLONNE_DU_CRITERE = new Map([
 /**
  * La colonne du tableau que désigne un critère du classement, ou
  * 'identifiant', le dernier départage, qui désigne la colonne des
- * propositions. Lève TypeError pour un critère sans colonne : un critère
- * ajouté au classement doit dire laquelle il compare.
+ * propositions ; null pour un critère du registre que le tableau ne porte
+ * pas en colonne. Lève TypeError pour un nom que la table ne connaît pas :
+ * un critère ajouté au classement doit dire laquelle il compare, ou
+ * qu'il n'en a pas.
  *
- * @param {string} critere  un nom de CRITERES (moteur), ou 'identifiant'
- * @returns {string}  le nom d'une colonne de COLONNES
+ * @param {string} critere  un nom de CRITERES (criteres.js), ou 'identifiant'
+ * @returns {string|null}  le nom d'une colonne de COLONNES, ou null
  */
 export function colonneDuCritere(critere) {
   const colonne = COLONNE_DU_CRITERE.get(critere);
@@ -238,18 +244,24 @@ export function colonneDuCritere(critere) {
   return colonne;
 }
 
+// Les noms des critères appliqués, palier après palier : la liste aplatie
+// des criteresAppliques que rend classer.
+const aplatir = (criteresAppliques) => criteresAppliques.flatMap(({ criteres }) => criteres.map(({ nom }) => nom));
+
 // Un morceau de phrase : un texte de liaison, ou un nom qui désigne une
-// colonne.
+// colonne ; un nom de critère sans colonne s'affiche comme un texte.
 const liaison = (cle, details = {}) => ({ cle, details, critere: null, colonne: null });
 const designant = (critere, cle) => ({ cle, details: {}, critere, colonne: colonneDuCritere(critere) });
 
 // La phrase des critères appliqués, morceau par morceau : le début, chaque
-// critère par son nom moteur.critere.<nom>, puis l'identifiant croissant,
-// séparés, et la fin. Bout à bout, les morceaux traduits composent le texte
-// de propositions.ordre.criteres.
+// critère de la liste aplatie par son nom moteur.critere.<nom>, puis
+// l'identifiant croissant, séparés, et la fin. Bout à bout, les morceaux
+// traduits composent le texte de propositions.ordre.criteres sur la liste
+// aplatie : sous l'ordre par défaut et les quatre cases cochées, celui de
+// l'ordre fixe de référence.
 function phraseDesCriteres(criteresAppliques) {
   const noms = [
-    ...criteresAppliques.map((critere) => designant(critere, `moteur.critere.${critere}`)),
+    ...aplatir(criteresAppliques).map((critere) => designant(critere, `moteur.critere.${critere}`)),
     designant('identifiant', 'propositions.ordre.identifiant'),
   ];
   return [
@@ -259,13 +271,22 @@ function phraseDesCriteres(criteresAppliques) {
   ];
 }
 
-// Les phrases de l'ordre (§ 5.7), chacune une liste de morceaux : le critère
-// sauté et celui appliqué à sa place quand le plafond a priori manque, puis
-// les critères appliqués.
-function ordre({ criteresAppliques, critereSaute }) {
+// Le palier qui prend la place du palier sauté : ses critères {nom, poids},
+// ceux du palier appliqué au rang rangSaute ; null quand aucun palier ne
+// suit le palier sauté.
+function palierAppliqueASaPlace({ criteresAppliques, rangSaute }) {
+  const palier = criteresAppliques[rangSaute];
+  return palier === undefined ? null : palier.criteres.map(({ nom, poids }) => ({ nom, poids }));
+}
+
+// Les phrases de l'ordre (§ 5.7), chacune une liste de morceaux : quand le
+// plafond a priori manque, le critère sauté et le palier appliqué à sa
+// place, s'il en est un ; puis les critères appliqués.
+function ordre(classement) {
+  const { criteresAppliques, critereSaute } = classement;
   const phrases = [];
   if (critereSaute !== null) {
-    phrases.push([liaison('propositions.ordre.saute', { saute: critereSaute, applique: criteresAppliques[0] })]);
+    phrases.push([liaison('propositions.ordre.saute', { saute: critereSaute, applique: palierAppliqueASaPlace(classement) })]);
   }
   phrases.push(phraseDesCriteres(criteresAppliques));
   return phrases;

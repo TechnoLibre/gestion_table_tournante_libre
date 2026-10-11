@@ -29,8 +29,14 @@
 // resumeDuMeilleur en donne l'identifiant à la liste, sur la même table
 // d'évaluation, diagnostic compris — le premier critère du classement lit
 // le plafond a priori.
+//
+// Le classement applique la compilation de l'instance (compilationDe) : son
+// ordre des priorités, son mode des objectifs, ses cases. La table porte
+// aussi l'état de chaque critère tel que normaliser le donne — coché, sans
+// objet, ses valeurs —, que l'écran lit au lieu de le recalculer.
 import { classer } from '../moteur/classement.js';
 import { indexerPlan, normaliser } from '../moteur/configuration.js';
+import { compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
 import { mesurer } from '../moteur/indicateurs.js';
 import { ecartsAuPlafondAPriori, minimumAtteint, troisChiffres } from '../moteur/manque.js';
@@ -65,8 +71,13 @@ export { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance };
  * @property {LigneEvaluation[]} propositions   comparables dans l'ordre du
  *           classement, puis les autres par identifiant
  * @property {LigneEvaluation|null} retenu
- * @property {{ordre: number[], criteresAppliques: string[], critereSaute: string|null}} classement
- *           classer, tel quel, sur les comparables
+ * @property {{ordre: number[], criteresAppliques: Array<{criteres: Array<{nom: string, valeurs: string[], poids: number}>}>,
+ *            critereSaute: string|null, rangSaute: number|null}} classement
+ *           classer, tel quel, sur les comparables, sous la compilation de
+ *           l'instance
+ * @property {Array<{nom: string, coche: boolean, sansObjet: boolean, valeurs: string[]}>} criteres
+ *           l'état de chaque critère, instance.etatCriteres, dans l'ordre du
+ *           registre
  * @property {{retours: number, ancrages: number}} imposes
  */
 
@@ -150,7 +161,10 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
 
   const lignes = charge.propositions.map((proposition) => ligneDe(proposition, proposition.id));
   const comparables = lignes.filter(({ statut }) => statut === 'comparable');
-  const classement = classer(comparables.map(({ id, mesures }) => ({ id, mesures, plafondsAPriori: aPriori })));
+  const classement = classer(
+    comparables.map(({ id, mesures }) => ({ id, mesures, plafondsAPriori: aPriori })),
+    compilationDe(instance),
+  );
   const rangDe = new Map(classement.ordre.map((id, rang) => [id, rang]));
   const autres = lignes.filter(({ statut }) => statut !== 'comparable').sort((a, b) => a.id - b.id);
   return {
@@ -158,6 +172,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
     propositions: [...comparables.sort((a, b) => rangDe.get(a.id) - rangDe.get(b.id)), ...autres],
     retenu: charge.retenu === null ? null : ligneDe(charge.retenu, charge.retenu.proposition),
     classement,
+    criteres: instance.etatCriteres,
     imposes: { retours: diagnostic.retoursImposes, ancrages: diagnostic.ancragesImposantRetours },
   };
 }

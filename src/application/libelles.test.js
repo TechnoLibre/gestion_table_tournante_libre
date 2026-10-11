@@ -30,6 +30,7 @@ import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
 import { CRITERES } from '../moteur/classement.js';
+import { CRITERES as CRITERES_DU_REGISTRE, MODES_OBJECTIFS, valeursQuiClassent } from '../moteur/criteres.js';
 import { TABLES_INTERFACE } from '../interface/libelles.js';
 import { creerTraduction } from './traduction.js';
 import { CODES, TABLES_APPLICATION, libelle } from './libelles.js';
@@ -345,6 +346,21 @@ const EXEMPLES = new Map([
   ['DEJA_DESIGNE', { ligne: 9, valeur: null, participants: [3], premiereLigne: 4 }],
   ['PLAN_BLOQUE', { remede: { geste: 'debloquer' } }],
   ['AMBIGUITE', { champs: ['appartenance', 'courriel'] }],
+  // Le CSV des objectifs de table (§ 10.4)
+  ['TABLE_NON_ASSOCIEE', {}],
+  ['OBJECTIF_NON_ASSOCIE', {}],
+  ['OBJECTIFS_SANS_TABLE', { ligne: null, remede: { geste: 'ouvrirSection', section: 'tables' } }],
+  ['TABLE_ABSENTE', { ligne: 3, valeur: null }],
+  ['TABLE_NON_ENTIERE', { ligne: 3, valeur: '3b' }],
+  ['NUMERO_TABLE_INCONNU', { ligne: 4, valeur: '9' }],
+  ['PLUSIEURS_TABLES', { ligne: 4, valeur: '3' }],
+  ['TOUR_NON_ENTIER', { ligne: 5, valeur: 'deux' }],
+  ['TOUR_HORS_SOIREE', { ligne: 5, valeur: '9', tours: 4 }],
+  ['OBJECTIF_VIDE', { ligne: 6, valeur: null }],
+  ['REGLE_INCONNUE', { ligne: 6, valeur: 'peut-être' }],
+  ['OBJECTIF_EN_DOUBLE', { ligne: 8, valeur: null, premiereLigne: 3, numero: 1, tour: 2 }],
+  ['IMPORT_OBJECTIFS_RECLASSE', {}],
+  ['ENTREE_IMPORTER_OBJECTIFS', { mode: 'mettreAJour', ajoutes: 3, remplaces: 1, retires: 0 }],
   // Séance
   ['AUCUN_EVENEMENT', {}],
   ['MODE_LECTURE', {}],
@@ -566,6 +582,12 @@ const EXEMPLES = new Map([
   ['ENTREE_POSER_OBJECTIF', { numero: 3, tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] }],
   ['ENTREE_RETIRER_OBJECTIF', { numero: 3, tour: null }],
   ['ENTREE_CHANGER_REGLE_OBJECTIFS', { regle: 'et' }],
+  // Ordre des priorités et mode des objectifs
+  ['PRIORITES_INVALIDES', { faute: 'seulASonPalier', critere: 'ecartAuPlafondAPrioriMax', palier: 0, remede: null }],
+  ['POIDS_HORS_DOMAINE', { valeur: 0, remede: null }],
+  ['OBJECTIFS_PALIER_PARTAGE', { mode: 'chacun', palier: 1, remede: null }],
+  ['ENTREE_CHANGER_PRIORITES', { criteres: ['collisionsCumulees'], palier: 1, paliers: 6, avec: ['excedentCollisions'], poids: null }],
+  ['ENTREE_RETABLIR_PRIORITES', {}],
   // Planche de badges
   ['PLANCHE_SANS_PLACEMENT', { remede: { geste: 'ouvrirSection', section: 'propositions' } }],
   ['PROPOSITION_FAUTIVE', { id: 2, remede: { geste: 'ouvrirSection', section: 'propositions' } }],
@@ -967,14 +989,44 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
     for (const code of ['PLACES_MANQUANTES', 'SURRESERVATION']) assert.ok(MOTEUR_TABLE.has(code), code);
   });
 
-  test('chaque critère de CRITERES a son libellé moteur.critere.<nom>', () => {
-    assert.ok(CRITERES.length > 0);
-    for (const critere of CRITERES) {
+  test('chaque critère du registre a son libellé moteur.critere.<nom>, ceux de l’ordre fixe de référence compris', () => {
+    assert.ok(CRITERES.length > 0 && CRITERES.every((critere) => CRITERES_DU_REGISTRE.includes(critere)));
+    for (const critere of CRITERES_DU_REGISTRE) {
       const texte = libelle(`moteur.critere.${critere}`);
       assert.ok(texte.length > 0, critere);
       for (const trace of TRACES) assert.doesNotMatch(texte, trace);
     }
-    assert.equal(new Set(CRITERES.map((critere) => libelle(`moteur.critere.${critere}`))).size, CRITERES.length);
+    const noms = CRITERES_DU_REGISTRE.map((critere) => libelle(`moteur.critere.${critere}`));
+    assert.equal(new Set(noms).size, CRITERES_DU_REGISTRE.length);
+  });
+
+  test('chaque valeur qui classe, sous toute case et tout mode, a son libellé moteur.valeur.<valeur> ; la phrase de l’ordre fixe y garde ses noms', () => {
+    const valeurs = new Set();
+    for (let masque = 0; masque < 4; masque += 1) {
+      const contraintes = { nouveauxVoisins: (masque & 1) === 1, nouvelleTable: (masque & 2) === 2 };
+      for (const mode of MODES_OBJECTIFS) {
+        for (const critere of CRITERES_DU_REGISTRE) for (const valeur of valeursQuiClassent(critere, contraintes, mode)) valeurs.add(valeur);
+      }
+    }
+    assert.equal(valeurs.size, 10);
+    const textes = [...valeurs].map((valeur) => libelle(`moteur.valeur.${valeur}`));
+    for (const texte of textes) {
+      assert.ok(texte.length > 0);
+      for (const trace of TRACES) assert.doesNotMatch(texte, trace);
+    }
+    assert.equal(new Set(textes).size, valeurs.size);
+    // Sous le défaut, la valeur qui classe porte le nom de son critère.
+    for (const critere of CRITERES_DU_REGISTRE) {
+      const [premiere] = valeursQuiClassent(critere, { nouveauxVoisins: true, nouvelleTable: true });
+      assert.equal(libelle(`moteur.valeur.${premiere}`), libelle(`moteur.critere.${critere}`), critere);
+    }
+    assert.equal(libelle('moteur.valeur.retoursChoisis'), 'retours');
+    assert.equal(libelle('moteur.valeur.jamaisServies'), 'personnes jamais servies');
+  });
+
+  test('un palier partagé se lit « ensemble », chaque critère suivi de son poids', () => {
+    assert.equal(libelle('moteur.palier.ensemble'), 'ensemble');
+    assert.equal(libelle('moteur.palier.poids', { poids: 3 }), 'poids 3');
   });
 
   test("les tables de l'application et des écrans s'assemblent sans clé en double", () => {
@@ -1127,5 +1179,74 @@ describe('libellés : les étiquettes et les objectifs des tables (§ 4.5, § 5.
       libelle('OBJECTIF_SANS_ETIQUETTE', { table: 2, tour: 3, remede: null }),
       'Un objectif au tour 3 vise au moins une étiquette.',
     );
+  });
+});
+
+describe("libellés : l'ordre des priorités et le mode des objectifs (§ 5.7, § 5.9, § 8.2, A11, A12, D22)", () => {
+  test('chaque critère du registre a son nom complet mobilier.critere.<nom>, deux à deux distincts', () => {
+    assert.equal(CRITERES_DU_REGISTRE.length, 7);
+    const noms = CRITERES_DU_REGISTRE.map((critere) => libelle(`mobilier.critere.${critere}`));
+    for (const nom of noms) {
+      assert.ok(nom.length > 0);
+      for (const trace of TRACES) assert.doesNotMatch(nom, trace);
+    }
+    assert.equal(new Set(noms).size, noms.length);
+    assert.equal(libelle('mobilier.critere.rencontresRepetees'), 'rencontres répétées et retours');
+  });
+
+  test('le libellé figé de changerPriorites nomme le critère, son palier sur le nombre de paliers, et ceux qu’il rejoint ou son poids', () => {
+    assert.equal(
+      libelle('ENTREE_CHANGER_PRIORITES', { criteres: ['collisionsCumulees'], palier: 1, paliers: 6, avec: ['excedentCollisions'], poids: null }),
+      'Ordre des priorités : « collisions cumulées » au palier 2 sur 6, avec « excédent de collisions »',
+    );
+    assert.equal(
+      libelle('ENTREE_CHANGER_PRIORITES', { criteres: ['toursHorsObjectif'], palier: 3, paliers: 7, avec: [], poids: null }),
+      'Ordre des priorités : « tours hors objectif » au palier 4 sur 7',
+    );
+    assert.equal(
+      libelle('ENTREE_CHANGER_PRIORITES', { criteres: ['excedentCollisions', 'collisionsCumulees'], palier: 3, paliers: 6, avec: [], poids: null }),
+      'Ordre des priorités : « excédent de collisions » et « collisions cumulées » au palier 4 sur 6',
+    );
+    assert.equal(
+      libelle('ENTREE_CHANGER_PRIORITES', { criteres: ['collisionsCumulees'], palier: 1, paliers: 6, avec: [], poids: 5 }),
+      'Ordre des priorités : « collisions cumulées » au poids 5, palier 2 sur 6',
+    );
+    assert.equal(libelle('ENTREE_RETABLIR_PRIORITES'), 'Ordre des priorités : ordre par défaut rétabli');
+    assert.throws(() => libelle('ENTREE_CHANGER_PRIORITES', { criteres: ['constructor'], palier: 0, paliers: 7, avec: [], poids: null }), RangeError);
+  });
+
+  test("le mode des objectifs se nomme au journal par ce qu'il cherche d'abord, sans le mot que l'écran seul porte (D22) ; un mode inconnu lève", () => {
+    const attendus = [
+      ['places', "Objectifs des tables, chercher d'abord : le plus de places servies"],
+      ['chacun', "Objectifs des tables, chercher d'abord : chacun au moins une fois"],
+      ['minimum', "Objectifs des tables, chercher d'abord : le minimum, puis le total"],
+    ];
+    for (const [valeur, texte] of attendus) {
+      assert.equal(libelle('ENTREE_MODIFIER_REGLAGE', { cle: 'modeObjectifs', valeur }), texte);
+      assert.doesNotMatch(texte, /[ée]quit[ée]/i);
+    }
+    assert.throws(() => libelle('ENTREE_MODIFIER_REGLAGE', { cle: 'modeObjectifs', valeur: 'pondere' }), RangeError);
+    assert.throws(() => libelle('OBJECTIFS_PALIER_PARTAGE', { mode: 'pondere', palier: 1, remede: null }), RangeError);
+  });
+
+  test('les refus nomment le palier à partir de 1, le critère par son nom complet, et la cause seule ; une faute inconnue lève', () => {
+    assert.equal(
+      libelle('PRIORITES_INVALIDES', { faute: 'seulASonPalier', critere: 'ecartAuPlafondAPrioriMax', palier: 0, remede: null }),
+      '« écart au plafond a priori » se range seul à son palier : le palier 1 ne peut pas le partager avec un autre critère.',
+    );
+    assert.match(libelle('PRIORITES_INVALIDES', { faute: 'critereAbsent', critere: 'redondance', remede: null }), /omet « redondance d'appartenance »/);
+    assert.match(libelle('PRIORITES_INVALIDES', { faute: 'critereRepete', critere: 'excedentCollisions', palier: 7, remede: null }), /« excédent de collisions » deux fois/);
+    assert.match(libelle('PRIORITES_INVALIDES', { faute: 'critereInconnu', critere: 'constructor', palier: 7, remede: null }), /inconnu, « constructor »/);
+    assert.match(libelle('PRIORITES_INVALIDES', { faute: 'palierVide', palier: 3, remede: null }), /palier 4\b/);
+    assert.match(libelle('PRIORITES_INVALIDES', { faute: 'forme', remede: null }), /liste de paliers/);
+    assert.match(libelle('PRIORITES_INVALIDES', { faute: 'poids', critere: 'toursHorsObjectif', palier: 2, remede: null }), /« tours hors objectif » au palier 3/);
+    assert.throws(() => libelle('PRIORITES_INVALIDES', { faute: 'inventee', remede: null }), RangeError);
+    assert.equal(libelle('POIDS_HORS_DOMAINE', { valeur: 0, remede: null }), "Un poids est un nombre entier de 1 à 100 : 0 ne l'est pas.");
+    assert.equal(libelle('POIDS_HORS_DOMAINE', { valeur: 2.5, remede: null }), "Un poids est un nombre entier de 1 à 100 : 2,5 ne l'est pas.");
+    assert.equal(libelle('POIDS_HORS_DOMAINE', { valeur: Number.NaN, remede: null }), 'Un poids est un nombre entier de 1 à 100.');
+    const partage = libelle('OBJECTIFS_PALIER_PARTAGE', { mode: 'minimum', palier: 1, remede: null });
+    for (const motif of [/« le minimum, puis le total »/, /deux valeurs l'une après l'autre/, /« tours hors objectif »/, /palier 2\b/, /séparer/i, /reste celui d'avant/]) {
+      assert.match(partage, motif);
+    }
   });
 });

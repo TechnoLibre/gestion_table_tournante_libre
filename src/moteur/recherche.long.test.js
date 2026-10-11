@@ -7,7 +7,11 @@
 // 1 000 et 10 000 mouvements appliqués, et non au seul terme : une dérive qui
 // se compense passe inaperçue à la fin, et le palier où un désaccord affleure
 // est le chiffre que l'épreuve rend. Le relevé liste chaque désaccord, palier
-// et grandeur, au lieu de s'arrêter au premier. La petite démonstration et sa
+// et grandeur, au lieu de s'arrêter au premier. La même suite se joue sur une
+// configuration inventée qui porte des objectifs de table — de soirée et de
+// tour, des personnes aux tours possibles inégaux — et des animateurs — l'un
+// d'un seul tour, une table à deux titres —, les deux critères cochés, sous
+// chacun des trois modes et sous un ordre déplacé (A13). La petite démonstration et sa
 // variante conflit atteignent ensuite leur optimum sur vingt graines, trois
 // propositions chacune ; une recherche longue sur la grande démonstration
 // rend des plans que jugent verifierInvariants et verifierIndicateurs.
@@ -27,6 +31,7 @@ import {
   scoreIncremental,
 } from './recherche.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
+import { differences, empreintesDesPlans, exigerVerification, lireEmpreintes } from '../../test/empreintes_moteur.js';
 
 const PALIERS = [1, 10, 100, 1_000, 10_000];
 // Graine des suites de mouvements, écrite ici.
@@ -60,7 +65,122 @@ function relever(etat, instance, palier, releve) {
   confronter('excedentCollisions', [etat.excedentCollisions], [mesures.excedentCollisions]);
   confronter('totalRetoursChoisis', [etat.totalRetoursChoisis], [mesures.totalRetoursChoisis]);
   confronter('totalRedondance', [etat.totalRedondance], [mesures.totalRedondance]);
+  if (mesures.objectifs !== null) {
+    const { tours, horsObjectif, jamaisServies, horsObjectifMax, personnesAuMax } = mesures.objectifs;
+    confronter('servis', Array.from(etat.servis), tours);
+    confronter(
+      'objectifs',
+      [etat.horsObjectif, etat.jamaisServies, etat.horsObjectifMax, etat.personnesAuMax],
+      [horsObjectif, jamaisServies, horsObjectifMax, personnesAuMax],
+    );
+  }
+  if (mesures.animateurs !== null) {
+    confronter('rencontresAnimateurs', Array.from(etat.rencontresAnimateurs), mesures.animateurs.rencontres);
+    confronter('animateursNonRencontres', [etat.animateursNonRencontres], [mesures.animateurs.nonRencontres]);
+  }
 }
+
+// La suite déterministe de mouvements sur une instance, relevée à chaque
+// palier : rend le relevé, et les comptes de mouvements appliqués et défaits.
+function suivre(instance) {
+  const rng = creerPcg32(GRAINE, FLUX.RECHERCHE);
+  const etat = creerEtat(instance, rng);
+  const releve = [];
+  relever(etat, instance, 0, releve);
+  let appliques = 0;
+  let defaits = 0;
+  let palier = 0;
+  for (let essai = 0; palier < PALIERS.length && essai < ESSAIS_MAX; essai += 1) {
+    const mouvement = proposerEtAppliquer(etat, rng);
+    if (mouvement === null) continue;
+    appliques += 1;
+    if (appliques % DEFAIT_TOUS_LES === 0) {
+      defaire(etat, mouvement);
+      defaits += 1;
+    }
+    if (appliques === PALIERS[palier]) {
+      relever(etat, instance, appliques, releve);
+      palier += 1;
+    }
+  }
+  return { releve, appliques, defaits };
+}
+
+// Une entrée de palier.
+const e = (critere, poids = 1) => ({ critere, poids });
+
+// Une soirée inventée de quatorze personnes, quatre tables de 4, quatre
+// tours, les six cases cochées. Objectifs : table 1 « finance » pour la
+// soirée ; table 2 « finance ET Montréal » pour la soirée, « Montréal » au
+// tour 2 ; table 3 « bénévole » au tour 3. 1 à 3 portent « finance », 4 et 5
+// « finance » et « Montréal », 6 et 7 « Montréal », 8 et 9 « bénévole ». 6
+// est réservé à la table 1 au tour 1, 1 à la table 4 au tour 4 : leurs tours
+// possibles sont inégaux. 2 est réservé à la table 1 au tour 3, 4 à la table
+// 2 au tour 1 : deux places réservées qui servent (D5), l'une sous « ou »,
+// l'autre sous « et ». 10 anime à la table 1 à chaque tour ; 11 et 12
+// tiennent les deux titres de la table 3 au seul tour 2 ; 13 est réservé
+// sans animer.
+function soireeAObjectifs(mode, priorites) {
+  const etiquettes = [
+    ['finance'], ['finance'], ['finance'], ['Montréal', 'finance'], ['Montréal', 'finance'],
+    ['Montréal'], ['Montréal'], ['bénévole'], ['bénévole'],
+  ];
+  const anime = new Map([[10, [1, 2, 3, 4]], [11, [2]], [12, [2]]]);
+  const auTour = (participant, table, tour) => ({ participant, table, portee: 'tour', tour });
+  return {
+    participants: Array.from({ length: 14 }, (_, rang) => ({
+      id: rang + 1,
+      appartenance: ['A', 'B', 'C', null][rang % 4],
+      ...(rang < etiquettes.length ? { etiquettes: etiquettes[rang] } : {}),
+      ...(anime.has(rang + 1) ? { anime: anime.get(rang + 1) } : {}),
+    })),
+    tables: [1, 2, 3, 4].map((id) => ({ id, capacite: 4 })),
+    tours: 4,
+    reservations: [
+      { participant: 10, table: 1, portee: 'tous' },
+      auTour(11, 3, 2), auTour(12, 3, 2), auTour(6, 1, 1), auTour(1, 4, 4), auTour(13, 2, 3),
+      auTour(2, 1, 3), auTour(4, 2, 1),
+    ],
+    contraintes: {
+      separerAppartenances: true,
+      nouveauxVoisins: true,
+      nouvelleTable: true,
+      varierAppartenances: true,
+      respecterObjectifs: true,
+      rencontrerAnimateurs: true,
+    },
+    objectifs: [
+      { table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] },
+      { table: 2, tour: null, regle: 'et', etiquettes: ['Montréal', 'finance'] },
+      { table: 2, tour: 2, regle: 'ou', etiquettes: ['Montréal'] },
+      { table: 3, tour: 3, regle: 'ou', etiquettes: ['bénévole'] },
+    ],
+    ...(mode === 'places' ? {} : { modeObjectifs: mode }),
+    ...(priorites === undefined ? {} : { priorites }),
+  };
+}
+
+// Les ordres déplacés : sous places, le palier { excédent × 1, tours hors
+// objectif × 3 } en deuxième ; sous les deux autres modes, les tours hors
+// objectif seuls en deuxième.
+const ORDRES_DEPLACES = {
+  places: [
+    [e('ecartAuPlafondAPrioriMax')],
+    [e('excedentCollisions'), e('toursHorsObjectif', 3)],
+    [e('collisionsCumulees')],
+    [e('rencontresRepetees')],
+    [e('animateursNonRencontres', 2)],
+    [e('redondance')],
+  ],
+  autres: [
+    [e('ecartAuPlafondAPrioriMax')],
+    [e('toursHorsObjectif')],
+    [e('excedentCollisions')],
+    [e('collisionsCumulees')],
+    [e('rencontresRepetees')],
+    [e('animateursNonRencontres'), e('redondance', 4)],
+  ],
+};
 
 describe('recherche : incrémental contre recalcul complet (§ 5.10, § 14.10)', () => {
   test('le catalogue fournit les quatre démonstrations éprouvées ci-dessous', () => {
@@ -69,31 +189,23 @@ describe('recherche : incrémental contre recalcul complet (§ 5.10, § 14.10)',
 
   for (const { cle, construire } of CATALOGUE) {
     test(`${cle} : accord à 1, 10, 100, 1 000 et 10 000 mouvements`, () => {
-      const instance = normaliser(construire());
-      const rng = creerPcg32(GRAINE, FLUX.RECHERCHE);
-      const etat = creerEtat(instance, rng);
-      const releve = [];
-      relever(etat, instance, 0, releve);
-      let appliques = 0;
-      let defaits = 0;
-      let palier = 0;
-      for (let essai = 0; palier < PALIERS.length && essai < ESSAIS_MAX; essai += 1) {
-        const mouvement = proposerEtAppliquer(etat, rng);
-        if (mouvement === null) continue;
-        appliques += 1;
-        if (appliques % DEFAIT_TOUS_LES === 0) {
-          defaire(etat, mouvement);
-          defaits += 1;
-        }
-        if (appliques === PALIERS[palier]) {
-          relever(etat, instance, appliques, releve);
-          palier += 1;
-        }
-      }
+      const { releve, appliques, defaits } = suivre(normaliser(construire()));
       assert.equal(appliques, PALIERS.at(-1), `${cle} : mouvements appliqués`);
       assert.equal(defaits, Math.floor(PALIERS.at(-1) / DEFAIT_TOUS_LES));
       assert.deepEqual(releve, [], cle);
     });
+  }
+
+  for (const mode of ['places', 'chacun', 'minimum']) {
+    for (const [ordre, priorites] of [['ordre par défaut', undefined], ['ordre déplacé', mode === 'places' ? ORDRES_DEPLACES.places : ORDRES_DEPLACES.autres]]) {
+      test(`soirée à objectifs et animateurs, ${mode}, ${ordre} : accord à 1, 10, 100, 1 000 et 10 000 mouvements`, () => {
+        const instance = normaliser(soireeAObjectifs(mode, priorites));
+        assert.ok(instance.etatCriteres.every(({ coche, sansObjet }) => coche && !sansObjet));
+        const { releve, appliques } = suivre(instance);
+        assert.equal(appliques, PALIERS.at(-1));
+        assert.deepEqual(releve, [], `${mode}, ${ordre}`);
+      });
+    }
   }
 });
 
@@ -153,4 +265,16 @@ describe('recherche : recherche longue sur la grande démonstration (§ 14.12)',
       );
     }
   });
+});
+
+describe('recherche : le mode ne touche pas au défaut, grande démonstration et sa variante (A21)', () => {
+  exigerVerification(process.env);
+  const REFERENCE = lireEmpreintes();
+  for (const mode of ['chacun', 'minimum']) {
+    for (const cle of ['grande', 'grande-sans-exception']) {
+      test(`${cle}, ${mode} : les plans des empreintes de référence`, () => {
+        assert.deepEqual(differences(`${cle}, ${mode}`, empreintesDesPlans(cle, undefined, mode), REFERENCE.plans[cle]), []);
+      });
+    }
+  }
 });

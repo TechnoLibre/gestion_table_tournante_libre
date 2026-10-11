@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
 import { bilanRemplacement } from '../csv/import.js';
+import { apercevoirObjectifs } from '../csv/objectifs.js';
 import { rechercher } from '../moteur/recherche.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
@@ -111,6 +112,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'effacerPropositions',
       'enregistrerGeneration',
       'exclureParticipant',
+      'importerObjectifs',
       'importerParticipants',
       'modifierParticipant',
       'poserTitre',
@@ -122,7 +124,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 22);
+    assert.equal(attendues.length, 23);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
   });
@@ -517,6 +519,90 @@ describe("commandes : l'import qui exclut, réintègre ou ne change rien (§ 4.4
   });
 });
 
+describe("commandes : l'import des objectifs de table (§ 10.4)", () => {
+  // La charge d'essai, Iris Ombrelle étiquetée « finance », Théo Pervenche
+  // « Montréal », et la table 1 portant un objectif de soirée.
+  function etiquetee(charge = chargeEssai()) {
+    const suivante = structuredClone(charge);
+    suivante.participants[0].etiquettes = ['finance'];
+    suivante.participants[2].etiquettes = ['Montréal'];
+    suivante.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+    return suivante;
+  }
+  const importer = (charge, texte, mode = 'mettreAJour') =>
+    appliquerCommande('importerObjectifs', charge, { apercu: apercevoirObjectifs(texte, charge, { mode }), mode });
+
+  test('mettre à jour et remplacer : une seule commande, le libellé nomme le mode et les comptes, le résumé suit', () => {
+    const avant = figer(etiquetee());
+    const misAJour = importer(avant, 'table;tour;objectif;regle\n1;;finance, Montréal;ou\n2;2;MONTRÉAL;\n');
+    assert.equal(misAJour.libelle, 'Mis à jour les objectifs de table par import : 1 ajouté, 1 remplacé');
+    assert.deepEqual(misAJour.charge.tables.map(({ objectifs }) => objectifs), [
+      [{ portee: 'tous', tour: null, regle: 'ou', etiquettes: ['Montréal', 'finance'] }],
+      [{ portee: 'tour', tour: 2, regle: null, etiquettes: ['Montréal'] }],
+    ]);
+    assert.deepEqual(misAJour.avertissements, []);
+    assert.deepEqual(
+      [misAJour.resume.ajoutes, misAJour.resume.remplaces, misAJour.resume.inchanges, misAJour.resume.tables],
+      [1, 1, 0, 2],
+    );
+    const remplace = importer(avant, 'table;tour;objectif\n2;1;finance\n', 'remplacer');
+    assert.equal(remplace.libelle, 'Remplacé les objectifs de table par import : 1 retiré, 1 ajouté, 0 remplacé');
+    assert.ok(!Object.hasOwn(remplace.charge.tables[0], 'objectifs'));
+    assert.deepEqual(remplace.charge.tables[1].objectifs, [{ portee: 'tour', tour: 1, regle: null, etiquettes: ['finance'] }]);
+    assert.deepEqual(remplace.charge.participants, avant.participants);
+  });
+
+  test("en retenu, IMPORT_OBJECTIFS_RECLASSE, et aucune proposition ni le retenu ne passent en dérive ; rien en brouillon et proposé ; refusé en bloqué", () => {
+    const retenue = etiquetee(chargeRiche());
+    assert.equal(retenue.evenement.etat, 'retenu');
+    const raisons = (charge) => [...charge.propositions, charge.retenu].map((placement) => derive(placement, charge));
+    const rendu = importer(retenue, 'table;tour;objectif\n2;;finance\n1;2;Montréal\n');
+    assert.deepEqual(rendu.avertissements, [{ code: 'IMPORT_OBJECTIFS_RECLASSE', details: {} }]);
+    assert.deepEqual(raisons(rendu.charge), raisons(retenue));
+    assert.deepEqual(rendu.charge.propositions, retenue.propositions);
+    assert.deepEqual(rendu.charge.retenu, retenue.retenu);
+    const proposee = etiquetee(executer('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 2)).charge);
+    assert.equal(proposee.evenement.etat, 'propose');
+    assert.deepEqual(importer(proposee, 'table;objectif\n2;finance\n').avertissements, []);
+    const bloquee = { ...retenue, evenement: { ...retenue.evenement, etat: 'bloque' } };
+    refuse(() => importer(bloquee, 'table;objectif\n2;finance\n'), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+  });
+
+  test("l'avis OBJECTIF_SANS_CORRESPONDANT des seuls objectifs écrits, relayé d'avisObjectifs, après la dérive", () => {
+    const charge = etiquetee(chargeRiche());
+    // La table 1 garde un objectif que personne ne sert : il ne se redit pas.
+    charge.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['voile'] }];
+    const rendu = importer(charge, 'table;tour;objectif;regle\n2;;finance, Montréal;et\n2;1;finance;\n');
+    assert.deepEqual(rendu.avertissements, [
+      { code: 'IMPORT_OBJECTIFS_RECLASSE', details: {} },
+      { code: 'OBJECTIF_SANS_CORRESPONDANT', details: { table: 2, tour: null } },
+    ]);
+  });
+
+  test("un aperçu refusé ou ambigu est refusé sous son code, remède null ; OBJECTIFS_SANS_TABLE mène à la section des tables", () => {
+    const avant = etiquetee();
+    refuse(() => importer(avant, 'tour;objectif\n1;finance\n'), 'TABLE_NON_ASSOCIEE', { ligne: null, remede: null });
+    refuse(() => importer(avant, 'table;objectif\n1;"finance\n'), 'GUILLEMET_OUVERT', { ligne: 2, remede: null });
+    refuse(() => importer(avant, 'table;regle;règle;objectif\n1;ou;et;finance\n'), 'AMBIGUITE', { champs: ['regle'], remede: null });
+    const sansTable = { ...avant, tables: [] };
+    refuse(() => importer(sansTable, 'table;objectif\n1;finance\n'), 'OBJECTIFS_SANS_TABLE', {
+      ligne: null,
+      remede: { geste: 'ouvrirSection', section: 'tables' },
+    });
+  });
+
+  test("un import qui ne change rien est SANS_EFFET ; qui ne change rien mais refuse des lignes rend son résumé, sans entrée", () => {
+    const avant = figer(etiquetee());
+    refuse(() => importer(avant, 'table;objectif\n1;finance\n'), 'SANS_EFFET', { commande: 'importerObjectifs', remede: null });
+    const rendu = importer(avant, 'table;tour;objectif;regle\n1;;FINANCE;\n2;;finance;peut-être\n');
+    assert.equal(rendu.libelle, null);
+    assert.equal(rendu.charge, avant);
+    assert.deepEqual(rendu.avertissements, []);
+    assert.deepEqual(rendu.resume.refusees.map(({ ligne, code }) => [ligne, code]), [[3, 'REGLE_INCONNUE']]);
+    assert.equal(rendu.resume.inchanges, 1);
+  });
+});
+
 describe('commandes : la forme nommée, une lecture (§ 8.9, point 4)', () => {
   test("rend la forme nommée d'une proposition ou du retenu, avec ses fautes, sans toucher la charge", () => {
     const charge = figer(chargeRiche());
@@ -721,6 +807,17 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
     };
   }
 
+  // Un ordre des priorités réglé : l'excédent et les collisions cumulées
+  // partagent le deuxième palier, pondérés.
+  const PRIORITES_REGLEES = [
+    [{ critere: 'ecartAuPlafondAPrioriMax', poids: 1 }],
+    [{ critere: 'excedentCollisions', poids: 2 }, { critere: 'collisionsCumulees', poids: 3 }],
+    [{ critere: 'toursHorsObjectif', poids: 1 }],
+    [{ critere: 'rencontresRepetees', poids: 1 }],
+    [{ critere: 'animateursNonRencontres', poids: 1 }],
+    [{ critere: 'redondance', poids: 1 }],
+  ];
+
   // La charge que reçoit chaque commande : la charge riche, sauf debloquer,
   // qui la reçoit bloquée ; convertirEnTous, qui y trouve Théo réservé à la
   // table 2 à chaque tour, en portée « tour » ; deplacerDansRetenu, qui y
@@ -737,6 +834,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['convertirEnTous', reservee],
       ['deplacerDansRetenu', executer('retirerDuTour', charge, { tour: 1, participant: autre }).charge],
       ['retirerObjectif', executer('poserObjectif', charge, { table: 2, tour: null, etiquettes: 'finance', regle: null }).charge],
+      ['retablirPriorites', executer('changerPriorites', charge, { paliers: PRIORITES_REGLEES }).charge],
     ]);
   }
 
@@ -750,6 +848,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['reintegrerParticipant', { id: 5 }],
       ['supprimerParticipant', { id: 2 }],
       ['importerParticipants', { apercu: apercevoir(CSV_DEUX, { participants: charge.participants }), mode: 'ajouter' }],
+      ['importerObjectifs', { apercu: apercevoirObjectifs('table;objectif\n2;finance\n', charge), mode: 'mettreAJour' }],
       ['changerEtat', { etat: 'bloque' }],
       ['debloquer', {}],
       ['enregistrerGeneration', generer(charge, 1, 5)],
@@ -778,6 +877,8 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
       ['retirerObjectif', { table: 2, tour: null }],
       ['changerRegleObjectifs', { regle: 'et' }],
+      ['changerPriorites', { paliers: PRIORITES_REGLEES }],
+      ['retablirPriorites', {}],
     ]);
   }
 
@@ -825,8 +926,8 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes et les deux registres de F1", () => {
-    assert.equal(COMMANDES.size, 12 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, importerObjectifs et les deux registres de F1", () => {
+    assert.equal(COMMANDES.size, 13 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
     for (const registre of [COMMANDES_MOBILIER, COMMANDES_PLACES]) {

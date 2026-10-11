@@ -3,14 +3,16 @@
 
 // Épreuves du registre des critères (§ 5.3, § 5.7, D8 à D11, D15, D20, D23) :
 // les constantes du registre, la validation d'une liste de priorités faute
-// par faute sous chaque mode, son complément, les valeurs qui classent, et
-// la compilation. La compilation de l'ordre par défaut se compare, sous les
+// par faute sous chaque mode, son complément, les valeurs qui classent, la
+// compilation, celle d'une instance, et la garde de la contrainte 35 : hors
+// du registre, aucune source ne recopie une liste des noms de critères ni un
+// ordre de comparaison. La compilation de l'ordre par défaut se compare, sous les
 // seize combinaisons des quatre cases, au n-uplet que la recherche descend
 // sans le registre : six composantes, celles d'un critère décoché nulles,
 // comparées dans l'ordre du score [0..5] puis, l'écart annulé, dans celui
 // des contraintes [2, 3, 4, 0, 1, 5].
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
 import {
   CASES,
@@ -21,6 +23,7 @@ import {
   POIDS_MAX,
   PRIORITES_PAR_DEFAUT,
   VALEURS_DES_MODES,
+  compilationDe,
   compiler,
   completerPriorites,
   composantesDe,
@@ -52,8 +55,9 @@ const remplacer = (liste, i, ...paliers) => [...liste.slice(0, i), ...paliers, .
 // Le compte qui fait compter les noms donnés, et eux seuls.
 const comptant = (...noms) => (nom) => noms.includes(nom);
 
-// Le compte des cases d'aujourd'hui : le critère coché, et ni objectif ni
-// case des animateurs (aucun des deux nouveaux critères n'a d'objet).
+// Le compte des quatre cases : le critère coché, sans objectif ni case des
+// animateurs (ni les tours hors objectif ni les animateurs non rencontrés
+// n'ont d'objet).
 const compteDesCases = (contraintes) => (nom) =>
   estCoche(nom, contraintes) && nom !== 'toursHorsObjectif' && nom !== 'animateursNonRencontres';
 
@@ -740,5 +744,119 @@ describe('criteres : la source du registre', () => {
     for (const motif of [/new Map\b/, /Object\.(keys|values|entries)\(/, /\bfor\s*\([^)]*\bin\b/, /faute: '[A-Z]/]) {
       assert.doesNotMatch(source, motif);
     }
+  });
+});
+
+// L'état des critères que normaliser rendrait sous ces contraintes et ce
+// mode : les tours hors objectif et les animateurs non rencontrés sont sans
+// objet, sauf ceux que avecObjet nomme.
+const etatSous = (contraintes, mode, ...avecObjet) => CRITERES.map((nom) => ({
+  nom,
+  coche: estCoche(nom, contraintes),
+  sansObjet: (nom === 'toursHorsObjectif' || nom === 'animateursNonRencontres') && !avecObjet.includes(nom),
+  valeurs: valeursQuiClassent(nom, contraintes, mode),
+}));
+
+describe('criteres : compilationDe, la compilation d’une instance (D10, contrat du classement)', () => {
+  test('un critère compte quand il est coché et a un objet ; chacun porte ses valeurs qui classent', () => {
+    const compilation = compilationDe({
+      priorites: PRIORITES_PAR_DEFAUT,
+      etatCriteres: etatSous(TOUTES_COCHEES, 'places'),
+      modeObjectifs: 'places',
+    });
+    assert.deepEqual(compilation.paliers.map(({ criteres }) => criteres), [
+      [{ nom: 'ecartAuPlafondAPrioriMax', poids: 1, valeurs: ['ecartAuPlafondAPrioriMax'] }],
+      [{ nom: 'excedentCollisions', poids: 1, valeurs: ['excedentCollisions'] }],
+      [{ nom: 'collisionsCumulees', poids: 1, valeurs: ['collisionsCumulees'] }],
+      [{ nom: 'rencontresRepetees', poids: 1, valeurs: ['rencontresRepeteesChoisies'] }],
+      [{ nom: 'redondance', poids: 1, valeurs: ['redondance'] }],
+    ]);
+    const { paliers, ...reste } = compiler(PRIORITES_PAR_DEFAUT, compteDesCases(TOUTES_COCHEES), 'places');
+    assert.deepEqual({ ...compilation, paliers: undefined }, { ...reste, paliers: undefined });
+  });
+
+  test('sous chacun, les objectifs ayant un objet : un palier de deux valeurs, « nouvelle table » seule fait classer les retours', () => {
+    const contraintes = { ...contraintesDu(0b0100), respecterObjectifs: true };
+    const compilation = compilationDe({
+      priorites: PRIORITES_PAR_DEFAUT,
+      etatCriteres: etatSous(contraintes, 'chacun', 'toursHorsObjectif'),
+      modeObjectifs: 'chacun',
+    });
+    assert.deepEqual(compilation.paliers.map(({ criteres }) => criteres.map(({ nom, valeurs }) => [nom, valeurs])), [
+      [['ecartAuPlafondAPrioriMax', ['ecartAuPlafondAPrioriMax']]],
+      [['toursHorsObjectif', ['jamaisServies', 'toursHorsObjectif']]],
+      [['rencontresRepetees', ['retoursChoisis']]],
+    ]);
+    assert.equal(compilation.taille, 5);
+  });
+
+  test('un critère décoché ne compte pas, même avec un objet ; un critère sans objet non plus, même coché', () => {
+    const decoche = compilationDe({
+      priorites: PRIORITES_PAR_DEFAUT,
+      etatCriteres: etatSous({ ...TOUTES_COCHEES, respecterObjectifs: false }, 'places', 'toursHorsObjectif', 'animateursNonRencontres'),
+      modeObjectifs: 'places',
+    });
+    const sansObjet = compilationDe({
+      priorites: PRIORITES_PAR_DEFAUT,
+      etatCriteres: etatSous({ ...TOUTES_COCHEES, rencontrerAnimateurs: true }, 'places'),
+      modeObjectifs: 'places',
+    });
+    for (const compilation of [decoche, sansObjet]) {
+      const noms = compilation.paliers.flatMap(({ criteres }) => criteres.map(({ nom }) => nom));
+      assert.deepEqual(noms, ['ecartAuPlafondAPrioriMax', 'excedentCollisions', 'collisionsCumulees', 'rencontresRepetees', 'redondance']);
+    }
+  });
+});
+
+// Les modules JavaScript et les composants de src/, hors épreuves, chemins
+// relatifs à src/, dans l'ordre alphabétique. Lisant les composants par le
+// disque, cette épreuve se relance à chaque composant changé
+// (RELANCES_D_UN_COMPOSANT, vitest.config.js).
+function sourcesDeSrc() {
+  const racine = new URL('../', import.meta.url);
+  return readdirSync(racine, { recursive: true })
+    .map((chemin) => String(chemin).split('\\').join('/'))
+    .filter((chemin) => /\.(js|svelte)$/.test(chemin) && !/\.test\.js$/.test(chemin))
+    .sort();
+}
+
+// Ce que la garde relève dans un texte source : chaque suite de deux noms
+// de critères distincts, écrits en chaînes littérales et séparés par une
+// seule virgule — le début d'une liste littérale —, et chaque constante
+// ORDRE_ déclarée sur une liste littérale de rangs, un ordre de comparaison
+// des composantes écrit en dur. Une constante ORDRE_ d'une autre nature —
+// l'ordre des simulations de la palette — ne compare aucun critère.
+function relevesDeLaGarde(source) {
+  const noms = CRITERES.join('|');
+  const liste = new RegExp(`(['"\`])(${noms})\\1\\s*,\\s*(['"\`])(?!\\2\\3)(${noms})\\3`, 'g');
+  return [
+    ...[...source.matchAll(liste)].map((trouve) => trouve[0]),
+    ...[...source.matchAll(/\b(?:const|let|var)\s+(ORDRE_[A-Z_]*)\s*=\s*(?:Object\.freeze\(\s*)?\[\s*\d/g)].map((trouve) => trouve[1]),
+  ];
+}
+
+describe('criteres : la garde de la contrainte 35 (registre unique)', () => {
+  test('la garde relève une liste littérale de noms et une constante ORDRE_, sur des sources inventées', () => {
+    assert.deepEqual(relevesDeLaGarde("const X = ['excedentCollisions', 'redondance'];"), ["'excedentCollisions', 'redondance'"]);
+    assert.deepEqual(relevesDeLaGarde('const ORDRE_SCORE = Object.freeze([0, 1]);'), ['ORDRE_SCORE']);
+    assert.deepEqual(relevesDeLaGarde('const ORDRE_CONTRAINTES = [2, 3, 4, 0, 1, 5];'), ['ORDRE_CONTRAINTES']);
+    assert.deepEqual(relevesDeLaGarde("const ORDRE_TEINTES = ['rouge', 'vert'];"), []);
+    assert.equal(relevesDeLaGarde('export const CRITERES = Object.freeze([\n  "ecartAuPlafondAPrioriMax",\n  "toursHorsObjectif",\n]);').length, 1);
+    // Un nom seul, une clé de libellé ou une paire nom → même nom ne font pas
+    // une liste.
+    assert.deepEqual(relevesDeLaGarde("['redondance', 'totalRedondance'], ['moteur.critere.redondance', 'x']"), []);
+    assert.deepEqual(relevesDeLaGarde("['excedentCollisions', 'excedentCollisions']"), []);
+  });
+
+  test('hors de criteres.js, aucun module de src/ ne porte une liste littérale des noms de critères ni une constante ORDRE_', () => {
+    const sources = sourcesDeSrc();
+    assert.ok(sources.includes('moteur/recherche.js') && sources.includes('moteur/classement.js'));
+    assert.ok(sources.includes('interface/propositions/SectionPropositions.svelte'));
+    const releves = sources
+      .filter((chemin) => chemin !== 'moteur/criteres.js')
+      .flatMap((chemin) => relevesDeLaGarde(readFileSync(new URL(`../${chemin}`, import.meta.url), 'utf8')).map((r) => `${chemin} : ${r}`));
+    assert.deepEqual(releves, []);
+    // Le registre, lui, en porte : la garde le lirait si elle ne l'écartait.
+    assert.ok(relevesDeLaGarde(readFileSync(new URL('./criteres.js', import.meta.url), 'utf8')).length > 0);
   });
 });

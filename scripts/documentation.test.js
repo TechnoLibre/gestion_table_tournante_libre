@@ -295,10 +295,10 @@ describe('documentation : vérifier les régions (§ 19.8, § 14.3)', () => {
 });
 
 describe('documentation : les producteurs, chacun sur sa source unique (§ 19.8)', () => {
-  test('les sept producteurs, dans leur ordre ; PORTEURS est une liste figée', () => {
+  test('les huit producteurs, dans leur ordre ; PORTEURS est une liste figée', () => {
     assert.deepEqual(
       PRODUCTEURS.map(({ nom }) => nom),
-      ['reglages', 'colonnes-csv', 'commandes', 'raccourcis', 'demonstrations', 'contrastes', 'constantes'],
+      ['reglages', 'colonnes-csv', 'colonnes-objectifs', 'commandes', 'raccourcis', 'demonstrations', 'contrastes', 'constantes'],
     );
     assert.ok(Object.isFrozen(PRODUCTEURS) && Object.isFrozen(PORTEURS));
     assert.deepEqual([...producteursDe({ manifeste: () => null }).keys()], PRODUCTEURS.map(({ nom }) => nom));
@@ -333,6 +333,15 @@ describe('documentation : les producteurs, chacun sur sa source unique (§ 19.8)
       ]),
     );
     assert.deepEqual(lignes.find(([c]) => c === '`titre_pressenti`'), ['`titre_pressenti`', '`titre`, `rôle`']);
+  });
+
+  test('colonnes-objectifs : une ligne par champ du CSV des objectifs, son en-tête puis ses synonymes (§ 10.4)', () => {
+    assert.deepEqual(lignesDuTableau(PRODUCTEURS.find(({ nom }) => nom === 'colonnes-objectifs').produire({})), [
+      ['`table`', t('format.vide')],
+      ['`tour`', t('format.vide')],
+      ['`objectif`', '`objectifs`'],
+      ['`regle`', '`règle`'],
+    ]);
   });
 
   test("commandes : une ligne par commande du registre, dans son ordre, et son libellé d'historique composé par la traduction", () => {

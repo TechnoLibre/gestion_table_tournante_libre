@@ -565,6 +565,21 @@ majuscules ni aux accents.
 
 <!-- engendre:fin colonnes-csv -->
 
+Les objectifs des tables s’importent par leur propre fichier, qui reconnaît
+ces colonnes de la même façon ; la table se désigne par le numéro qu’elle
+affiche sur le plan.
+
+<!-- engendre:debut colonnes-objectifs -->
+
+| Colonne | Synonymes reconnus |
+|---|---|
+| `table` | — |
+| `tour` | — |
+| `objectif` | `objectifs` |
+| `regle` | `règle` |
+
+<!-- engendre:fin colonnes-objectifs -->
+
 ## Annexe C — Les commandes et leur trace dans l’historique
 
 Chaque geste qui modifie l’événement, et la ligne qu’il laisse dans
@@ -581,6 +596,7 @@ l’historique ; les noms des exemples sont inventés.
 | `reintegrerParticipant` | Réintégré Théo Pervenche |
 | `supprimerParticipant` | Supprimé Ondine Lacasse |
 | `importerParticipants` | Importé 12 participants |
+| `importerObjectifs` | Mis à jour les objectifs de table par import : 3 ajoutés, 1 remplacé |
 | `changerEtat` | Plan passé à l'état « Bloqué » |
 | `debloquer` | Plan débloqué, état « Retenu » |
 | `enregistrerGeneration` | Généré 5 propositions (n° 3 à 7) |
@@ -598,6 +614,8 @@ l’historique ; les noms des exemples sont inventés.
 | `poserObjectif` | Table 3 : objectif de la soirée « finance », règle par défaut |
 | `retirerObjectif` | Table 3, tour 2 : objectif retiré |
 | `changerRegleObjectifs` | Règle par défaut des objectifs : toutes les étiquettes |
+| `changerPriorites` | Ordre des priorités : « collisions cumulées » au palier 2 sur 6, avec « excédent de collisions » |
+| `retablirPriorites` | Ordre des priorités : ordre par défaut rétabli |
 | `reserver` | Réservé Théo Pervenche à la table 4, siège 2, tour 2 |
 | `retirerReservation` | Réservation retirée : Théo Pervenche, table 4, tous les tours |
 | `deplacerReservation` | Réservation déplacée : Théo Pervenche, de la table 4 à la table 7, tour 2 |

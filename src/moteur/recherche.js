@@ -36,18 +36,23 @@
 // rien. Sinon les deux occupants s'échangent : un échange avec une place
 // fantôme déplace une personne vers le siège vide d'une autre table.
 //
-// Score. Un n-uplet de six entiers comparé dans l'ordre lexicographique, la
-// forme exacte d'une pondération strictement hiérarchique, sans poids ni
-// perte de précision :
-//   0. le plus grand écart au plafond a priori, plafond a priori − rencontres ;
-//   1. la somme des carrés de ces écarts ;
-//   2. l'excédent de collisions, si separerAppartenances ;
-//   3. les collisions cumulées, si separerAppartenances ;
-//   4. Σ_paires max(0, M − 1), M les rencontres de la paire, si
-//      nouveauxVoisins, plus les retours choisis, si nouvelleTable ;
-//   5. Σ_p r(p), la redondance d'appartenance, si varierAppartenances.
-// Une composante désactivée vaut 0 ; aucune n'est négative, et le n-uplet
-// nul ne s'améliore plus.
+// Score. Un n-uplet d'entiers comparé dans l'ordre lexicographique, la forme
+// exacte d'une pondération strictement hiérarchique, sans perte de
+// précision. Sa forme est la compilation de la liste des priorités de
+// l'instance, sous son mode des objectifs (compilationDe, criteres.js) : une
+// composante par palier, dans l'ordre des paliers, et plusieurs pour un
+// critère seul à son palier qui en descend plusieurs — l'écart au plafond a
+// priori, son plus grand écart puis la somme des carrés des écarts ; les
+// tours hors objectif, une à trois grandeurs selon le mode. Chaque composante
+// vaut Σ poids × grandeur sur les critères de son palier, la grandeur lue
+// sous son nom dans l'état ; les rencontres répétées y valent Σ_paires
+// max(0, M − 1), M les rencontres de la paire, sous nouveauxVoisins, plus les
+// retours choisis sous nouvelleTable. Un critère décoché ou sans objet ne
+// pose aucune composante (§ 5.7, D10) : sous l'ordre par défaut, sans
+// objectif ni case des animateurs, le n-uplet est celui de l'ordre fixe de
+// référence, ses composantes toujours nulles en moins, ce qui ne change
+// aucune comparaison. Aucune n'est négative, et le n-uplet nul ne s'améliore
+// plus.
 //
 // Incrémental. L'état tient à jour ce dont le score dépend : la matrice des
 // rencontres par paire ; rencontres(p) ; l'histogramme des écarts au plafond
@@ -56,10 +61,29 @@
 // les visites par (personne, table), d'où les retours choisis ; par
 // personne, le nombre d'affiliés rencontrés de chaque appartenance, d'où
 // |F(p)|, A(p) et Σ r(p). Un échange ne touche que les paires des deux tables
-// concernées, au tour concerné : O(capacité). Ce score sert la boucle de
-// recherche et rien d'autre ; scoreComplet recompose le même n-uplet à partir
-// de la mesure qui fait foi, dont il lit chaque grandeur au lieu de la
-// refaire (§ 5.10, § 13.2).
+// concernées, au tour concerné : O(capacité).
+//
+// Les objectifs (A13). Les tours servis s(p) suivent la personne déplacée :
+// la table de correspondance par objectif distinct dit si la table quittée
+// et la table rejointe la servent, et s(p) change d'au plus un. Les tours hors
+// objectif H changent de un ; les personnes jamais servies, sur la transition
+// de s(p) entre 0 et 1 ; un histogramme des P(p) − s(p) des personnes
+// concernées donne le plus grand E, qui ne bouge que de un, comme le plus
+// grand écart, et le nombre de personnes à E, nul quand E l'est. O(1) par
+// personne déplacée ; les quatre valeurs se tiennent sous tout mode.
+//
+// Les animateurs (D7, A13). Qui anime au tour r y est fixé : seul le déplacé
+// change ses rencontres d'animateurs. Il quitte les animateurs de sa table
+// de départ à ce tour et rejoint ceux de sa table d'arrivée, lui-même
+// exclu ; un compteur par couple (personne, animateur) dit quand une
+// rencontre apparaît ou disparaît, et m(p), avec les animateurs non
+// rencontrés Σ (B(p) − m(p)), suit. Partager la table d'un animateur à un
+// tour où il n'anime pas n'y compte pas : modifierPaire n'y touche pas.
+// O(animateurs des deux tables), au plus O(capacité).
+//
+// Ce score sert la boucle de recherche et rien d'autre ; scoreComplet
+// recompose le même n-uplet à partir de la mesure qui fait foi, dont il lit
+// chaque grandeur au lieu de la refaire (§ 5.10, § 13.2).
 //
 // Acceptation tardive. L'historique H, de longueur L, part du score initial.
 // À l'itération i, le candidat est gardé s'il ne dépasse ni le score courant
@@ -69,19 +93,23 @@
 // courant est le n-uplet nul : sur un compte, jamais sur une durée (§ 5.10).
 //
 // Deux ordres d'acceptation. L'acceptation compare d'abord dans l'ordre du
-// score, rencontres en tête. Quand la meilleure affectation porte un écart
-// maximal nul, chacun atteint son plafond a priori : les deux premières
-// composantes sont à leur minimum prouvé (§ 5.5), et une meilleure
-// affectation ne peut plus différer que sur les suivantes. L'acceptation
-// compare alors les composantes 2, 3 et 4, celles des contraintes, avant les
-// deux premières ; l'historique garde son contenu. L'ordre des contraintes
-// laisse perdre une rencontre le temps de défaire une collision. L'ordre du
-// score le refuse dès que l'historique ne porte plus que des scores à écart
-// nul : collisions, voisins et tables n'y progressent plus que par les rares
-// échanges qui conservent toutes les rencontres, et s'arrêtent loin de leur
-// minimum. La meilleure affectation, jugée dans l'ordre du score, ne retient
-// que des affectations à écart nul. Une instance dont aucun plan n'annule
-// tous les écarts garde l'ordre du score de bout en bout.
+// score, celui des paliers. Quand la meilleure affectation porte un écart
+// maximal nul — lu au rang que la compilation donne au plus grand écart —,
+// chacun atteint son plafond a priori : les composantes de l'écart sont à
+// leur minimum prouvé (§ 5.5), et une meilleure affectation ne peut plus
+// différer que sur les autres. L'acceptation compare alors dans l'ordre des
+// contraintes de la compilation, où le palier de l'écart descend juste avant
+// le premier palier « raffinement » qui le suit ; l'historique garde son
+// contenu. Sous l'ordre par défaut, les composantes de l'excédent, des
+// cumulées, des tours hors objectif et des rencontres répétées y passent
+// devant celles de l'écart. L'ordre des contraintes laisse perdre une
+// rencontre le temps de défaire une collision. L'ordre du score le refuse
+// dès que l'historique ne porte plus que des scores à écart nul : collisions,
+// voisins et tables n'y progressent plus que par les rares échanges qui
+// conservent toutes les rencontres, et s'arrêtent loin de leur minimum. La
+// meilleure affectation, jugée dans l'ordre du score, ne retient que des
+// affectations à écart nul. Une instance dont aucun plan n'annule tous les
+// écarts garde l'ordre du score de bout en bout.
 //
 // Relance. Dans l'ordre des contraintes, un score courant inchangé pendant
 // PATIENCE × L itérations fait relancer la descente : le reste du compte
@@ -99,10 +127,12 @@ import {
   LIBRE,
   RESERVE,
   SANS_GROUPE,
+  SANS_OBJECTIF,
   nombrePlacesManquantes,
   normaliser,
   planDepuisIndex,
 } from './configuration.js';
+import { compilationDe, composantesDe } from './criteres.js';
 import { ErreurAnnulee, ErreurConfiguration } from './erreurs.js';
 import { mesurer } from './indicateurs.js';
 import { ecartsAuPlafondAPriori } from './manque.js';
@@ -134,6 +164,16 @@ import { plafondsAPriori } from './plafond.js';
  * @property {number} excedentCollisions     collisions cumulées − paires distinctes
  * @property {number} totalRetoursChoisis
  * @property {number} totalRedondance        Σ_p r(p)
+ * @property {Int32Array} servis             s(p), tours servis
+ * @property {number} horsObjectif           H, sur les personnes concernées
+ * @property {number} jamaisServies          J
+ * @property {number} horsObjectifMax        E
+ * @property {number} personnesAuMax         concernés à E ; 0 quand E = 0
+ * @property {Int32Array} rencontresAnimateurs  m(p)
+ * @property {number} animateursNonRencontres   Σ (B(p) − m(p))
+ * @property {Object} composition        la forme du n-uplet de l'instance :
+ *           taille, termes de chaque composante, ordres de comparaison et
+ *           rang du plus grand écart
  *
  * @typedef {{tour: number, a: number, b: number}} Mouvement
  *          l'échange des occupants des sièges a et b au tour d'index tour
@@ -141,12 +181,6 @@ import { plafondsAPriori } from './plafond.js';
 
 // Siège sans occupant : la place fantôme.
 const FANTOME = -1;
-const TAILLE_SCORE = 6;
-// Ordres de comparaison du n-uplet, par rang de composante : celui du score,
-// et celui des contraintes, qui passe les composantes 2, 3 et 4 devant les
-// deux premières.
-const ORDRE_SCORE = Object.freeze([0, 1, 2, 3, 4, 5]);
-const ORDRE_CONTRAINTES = Object.freeze([2, 3, 4, 0, 1, 5]);
 // Itérations entre deux appels de progression, et entre deux lectures du
 // signal.
 const CADENCE = 1_000;
@@ -158,6 +192,103 @@ const MOT_MAX = 0xffffffff;
 // Plus grand compte de rencontres d'une paire que tient un Uint16Array : une
 // paire se réunit au plus une fois par tour.
 const UINT16_MAX = 0xffff;
+// Plus grand compte que tient un Uint8Array : une personne partage la table
+// d'un animateur, là où il anime, au plus une fois par tour.
+const UINT8_MAX = 0xff;
+
+// Les grandeurs de l'état que le n-uplet compose, chacune par un code : la
+// composition lit un code par terme, et ne parcourt les clés d'aucun objet.
+const ECART = 0;
+const CARRES = 1;
+const EXCEDENT = 2;
+const CUMULEES = 3;
+const HORS_OBJECTIF = 4;
+const JAMAIS_SERVIES = 5;
+const HORS_OBJECTIF_MAX = 6;
+const PERSONNES_AU_MAX = 7;
+const EXCEDENT_PAIRES = 8;
+const RETOURS = 9;
+const ANIMATEURS = 10;
+const REDONDANCE = 11;
+
+// Le code de chaque grandeur que composantesDe nomme (criteres.js), les
+// rencontres répétées mises à part : leur valeur dépend des cases. La Map ne
+// sert qu'à retrouver un code par son nom.
+const CODE_DE = new Map([
+  ['ecartAuPlafondAPrioriMax', ECART],
+  ['carresEcartsAuPlafondAPriori', CARRES],
+  ['excedentCollisions', EXCEDENT],
+  ['collisionsCumulees', CUMULEES],
+  ['toursHorsObjectif', HORS_OBJECTIF],
+  ['jamaisServies', JAMAIS_SERVIES],
+  ['horsObjectifMax', HORS_OBJECTIF_MAX],
+  ['personnesAuMax', PERSONNES_AU_MAX],
+  ['animateursNonRencontres', ANIMATEURS],
+  ['redondance', REDONDANCE],
+]);
+
+// La grandeur de code code, lue sous son nom dans q : l'état de recherche,
+// ou les grandeurs que scoreComplet tire de la mesure.
+function lire(q, code) {
+  switch (code) {
+    case ECART: return q.ecartAuPlafondAPrioriMax;
+    case CARRES: return q.carresEcartsAuPlafondAPriori;
+    case EXCEDENT: return q.excedentCollisions;
+    case CUMULEES: return q.collisionsCumulees;
+    case HORS_OBJECTIF: return q.horsObjectif;
+    case JAMAIS_SERVIES: return q.jamaisServies;
+    case HORS_OBJECTIF_MAX: return q.horsObjectifMax;
+    case PERSONNES_AU_MAX: return q.personnesAuMax;
+    case EXCEDENT_PAIRES: return q.excedentPaires;
+    case RETOURS: return q.totalRetoursChoisis;
+    case ANIMATEURS: return q.animateursNonRencontres;
+    default: return q.totalRedondance;
+  }
+}
+
+// La composition du n-uplet d'une instance, tirée de sa compilation : pour la
+// composante k, les termes de debut[k] à debut[k + 1], chacun un code de
+// grandeur et un poids ; puis les deux ordres de comparaison et le rang du
+// plus grand écart (en-tête du module). Un critère seul à son palier pose un
+// terme par composante qu'il descend ; un palier partagé, un terme par
+// critère dans sa composante. Les rencontres répétées posent un terme par
+// case cochée de « nouveaux voisins » et « nouvelle table », au même poids.
+// Lève RangeError pour une grandeur que la composition ne sait pas lire.
+function composition(instance) {
+  const { paliers, ordreScore, ordreContraintes, rangEcart, taille } = compilationDe(instance);
+  const { contraintes, modeObjectifs } = instance;
+  const parComposante = Array.from({ length: taille }, () => []);
+  const poser = (k, nom, poids) => {
+    if (nom !== 'rencontresRepetees') {
+      const code = CODE_DE.get(nom);
+      if (code === undefined) throw new RangeError(`grandeur du score inconnue : ${nom}`);
+      parComposante[k].push([code, poids]);
+      return;
+    }
+    if (contraintes.nouveauxVoisins) parComposante[k].push([EXCEDENT_PAIRES, poids]);
+    if (contraintes.nouvelleTable) parComposante[k].push([RETOURS, poids]);
+  };
+  for (const { criteres, composantes } of paliers) {
+    if (criteres.length === 1) {
+      const [{ nom, poids }] = criteres;
+      composantesDe(nom, modeObjectifs).forEach((grandeur, i) => poser(composantes[i], grandeur, poids));
+    } else {
+      for (const { nom, poids } of criteres) poser(composantes[0], nom, poids);
+    }
+  }
+  const debut = new Int32Array(taille + 1);
+  for (let k = 0; k < taille; k += 1) debut[k + 1] = debut[k] + parComposante[k].length;
+  const termes = parComposante.flat();
+  return {
+    taille,
+    debut,
+    codes: Int32Array.from(termes, ([code]) => code),
+    poids: Float64Array.from(termes, ([, poids]) => poids),
+    ordreScore: Int32Array.from(ordreScore),
+    ordreContraintes: Int32Array.from(ordreContraintes),
+    rangEcart,
+  };
+}
 
 // Valeur citée dans un message : un nombre tel quel, toute autre valeur
 // suivie de son type.
@@ -189,9 +320,10 @@ function exigerChampsProposition({ graine, arret, historique }) {
 // Ce que toutes les propositions d'une instance partagent : la disposition
 // des sièges, les sièges fixés et les sièges mobiles de chaque tour, les
 // personnes libres de chaque tour par index croissant, le plafond a priori
-// de chacun et, par (personne, table), le seuil de visites au-delà duquel
-// une visite est un retour choisi. Lève PLACES_MANQUANTES quand les sièges
-// d'un tour ne suffisent pas à asseoir tout le monde (§ 5.9).
+// de chacun, par (personne, table), le seuil de visites au-delà duquel une
+// visite est un retour choisi, et la composition du n-uplet. Lève
+// PLACES_MANQUANTES quand les sièges d'un tour ne suffisent pas à asseoir
+// tout le monde (§ 5.9).
 function preparer(instance) {
   const placesManquantes = nombrePlacesManquantes(instance);
   if (placesManquantes > 0) throw new ErreurConfiguration('PLACES_MANQUANTES', { placesManquantes });
@@ -267,6 +399,7 @@ function preparer(instance) {
     seuilRetour,
     aPriori,
     largeurHistogramme: plusGrand + 1,
+    composition: composition(instance),
   };
 }
 
@@ -333,6 +466,69 @@ function modifierPaire(etat, a, b, sens) {
   if (etat.porteAppartenance[a] === 1) changerAffilie(etat, b, ga, sens);
 }
 
+// p gagne (sens = 1) ou perd (sens = −1) un tour servi ; p est concerné, et
+// P(p) − s(p) reste dans 0..P(p). Les tours hors objectif changent de −sens ;
+// les jamais servies, quand s(p) passe de 0 à 1 ou de 1 à 0. Une baisse de
+// P(p) − s(p) ne fait baisser le plus grand E que d'un : quand E perd son
+// dernier porteur, E − 1 en a un. Le nombre de personnes à E se relit dans
+// l'histogramme, et vaut 0 quand E est nul.
+function changerServis(etat, p, sens) {
+  const { servis, histogrammeObjectifs } = etat;
+  const avant = etat.possibles[p] - servis[p];
+  const apres = avant - sens;
+  servis[p] += sens;
+  histogrammeObjectifs[avant] -= 1;
+  histogrammeObjectifs[apres] += 1;
+  etat.horsObjectif -= sens;
+  if (servis[p] === (sens > 0 ? 1 : 0)) etat.jamaisServies -= sens;
+  if (apres > etat.horsObjectifMax) {
+    etat.horsObjectifMax = apres;
+  } else if (avant === etat.horsObjectifMax && histogrammeObjectifs[avant] === 0) {
+    etat.horsObjectifMax = apres;
+  }
+  etat.personnesAuMax = etat.horsObjectifMax === 0 ? 0 : histogrammeObjectifs[etat.horsObjectifMax];
+}
+
+// 1 quand la table t sert p au tour r : un objectif y est en vigueur, et p
+// lui correspond ; 0 sinon.
+function sert(etat, p, t, r) {
+  const o = etat.objectifDe[t * etat.R + r];
+  return o !== SANS_OBJECTIF && etat.correspond[p * etat.O + o] === 1 ? 1 : 0;
+}
+
+// p rejoint (sens = 1) ou quitte (sens = −1) les animateurs qui animent à la
+// table t au tour r, lui-même exclu : une rencontre apparaît quand le compte
+// du couple passe de 0 à 1, disparaît quand il revient à 0.
+function changerAnimateurs(etat, p, t, r, sens) {
+  const { debutAnimes, animes, rencontresAnimees, A } = etat;
+  const ligne = t * etat.R + r;
+  const soi = etat.rangAnimateur[p];
+  for (let k = debutAnimes[ligne], fin = debutAnimes[ligne + 1]; k < fin; k += 1) {
+    const f = animes[k];
+    if (f === soi) continue;
+    const i = p * A + f;
+    const avant = rencontresAnimees[i];
+    rencontresAnimees[i] = avant + sens;
+    if (avant === (sens > 0 ? 0 : 1)) {
+      etat.rencontresAnimateurs[p] += sens;
+      etat.animateursNonRencontres -= sens;
+    }
+  }
+}
+
+// p, libre au tour r, passe de la table depart à la table arrivee : ses tours
+// servis et ses rencontres d'animateurs suivent (en-tête du module).
+function changerTable(etat, p, depart, arrivee, r) {
+  if (etat.O > 0) {
+    const ecart = sert(etat, p, arrivee, r) - sert(etat, p, depart, r);
+    if (ecart !== 0) changerServis(etat, p, ecart);
+  }
+  if (etat.A > 0) {
+    changerAnimateurs(etat, p, depart, r, -1);
+    changerAnimateurs(etat, p, arrivee, r, 1);
+  }
+}
+
 // Ajoute sens aux visites de p à la table t, et ajuste les retours choisis.
 function changerVisite(etat, p, t, sens) {
   const i = p * etat.T + t;
@@ -356,8 +552,8 @@ function voisiner(etat, p, base, t, exclu, sens) {
 
 // Échange les occupants des sièges a et b, de deux tables différentes, au
 // tour r. Chaque occupant quitte d'abord ses voisins, puis rejoint ceux de
-// l'autre table : l'échange est sa propre réciproque, et le refaire rend
-// l'état d'avant, compteurs compris.
+// l'autre table, ses tours servis et ses animateurs avec : l'échange est sa
+// propre réciproque, et le refaire rend l'état d'avant, compteurs compris.
 function echanger(etat, r, a, b) {
   const { siege, tableDe, tableDuSiege, R } = etat;
   const base = r * etat.S;
@@ -374,20 +570,28 @@ function echanger(etat, r, a, b) {
     changerVisite(etat, x, ta, -1);
     changerVisite(etat, x, tb, 1);
     voisiner(etat, x, base, tb, b, 1);
+    changerTable(etat, x, ta, tb, r);
   }
   if (y !== FANTOME) {
     tableDe[y * R + r] = ta;
     changerVisite(etat, y, tb, -1);
     changerVisite(etat, y, ta, 1);
     voisiner(etat, y, base, ta, a, 1);
+    changerTable(etat, y, tb, ta, r);
   }
 }
 
 // Placement initial d'une instance préparée : les personnes fixées à leurs
 // sièges, les libres de chaque tour mélangées puis assises dans l'ordre des
-// sièges mobiles. Les compteurs partent de zéro et suivent chaque paire et
-// chaque visite par les mêmes fonctions que les mouvements ; les écarts
-// partent du plafond a priori, aucune rencontre n'étant encore comptée.
+// sièges mobiles. Les compteurs partent de zéro et suivent chaque paire,
+// chaque visite et chaque rencontre d'animateur par les mêmes fonctions que
+// les mouvements ; les écarts partent du plafond a priori, aucune rencontre
+// n'étant encore comptée, et les animateurs non rencontrés de Σ B(p). Les
+// tours servis se comptent siège par siège, puis l'histogramme des
+// P(p) − s(p) se forme sur les personnes concernées. Chaque personne assise
+// l'est à une table qu'elle peut occuper — sa table fixée, ou un siège
+// mobile, que seule une table à siège libre offre — : servie et rencontres
+// d'animateurs s'y lisent sans autre condition, comme mesurer les lit.
 function etatInitial(structure, rng) {
   const { instance, N, T, R, S, mobiles, libres, aPriori, tableDuSiege, debut } = structure;
   const G = instance.groupes.length;
@@ -428,11 +632,34 @@ function etatInitial(structure, rng) {
     excedentPaires: 0,
     totalRetoursChoisis: 0,
     totalRedondance: 0,
+    // Les objectifs : la correspondance par objectif distinct et P(p), de
+    // l'instance ; s(p) et l'histogramme des P(p) − s(p), de cet état.
+    O: instance.O,
+    objectifDe: instance.objectifDe,
+    correspond: instance.correspond,
+    possibles: instance.possibles,
+    servis: new Int32Array(N),
+    histogrammeObjectifs: new Int32Array(R + 1),
+    horsObjectif: 0,
+    jamaisServies: 0,
+    horsObjectifMax: 0,
+    personnesAuMax: 0,
+    // Les animateurs : qui anime à chaque table et chaque tour, de
+    // l'instance ; le compte de chaque couple (personne, animateur), m(p) et
+    // Σ (B(p) − m(p)), de cet état.
+    A: instance.A,
+    rangAnimateur: instance.rangAnimateur,
+    debutAnimes: instance.debutAnimes,
+    animes: instance.animes,
+    rencontresAnimees: R <= UINT8_MAX ? new Uint8Array(N * instance.A) : new Uint32Array(N * instance.A),
+    rencontresAnimateurs: new Int32Array(N),
+    animateursNonRencontres: 0,
   };
   for (let p = 0; p < N; p += 1) {
     etat.histogramme[aPriori[p]] += 1;
     etat.carresEcartsAuPlafondAPriori += aPriori[p] * aPriori[p];
     etat.ecartAuPlafondAPrioriMax = Math.max(etat.ecartAuPlafondAPrioriMax, aPriori[p]);
+    etat.animateursNonRencontres += instance.borneAnimateurs[p];
   }
   const { siege, tableDe } = etat;
   for (let r = 0; r < R; r += 1) {
@@ -451,31 +678,42 @@ function etatInitial(structure, rng) {
         const q = siege[base + voisin];
         if (q !== FANTOME) modifierPaire(etat, p, q, 1);
       }
+      if (etat.O > 0) etat.servis[p] += sert(etat, p, t, r);
+      if (etat.A > 0) changerAnimateurs(etat, p, t, r, 1);
     }
   }
+  for (let p = 0; p < N; p += 1) {
+    const P = etat.possibles[p];
+    if (P === 0) continue;
+    const hors = P - etat.servis[p];
+    etat.histogrammeObjectifs[hors] += 1;
+    etat.horsObjectif += hors;
+    if (etat.servis[p] === 0) etat.jamaisServies += 1;
+    etat.horsObjectifMax = Math.max(etat.horsObjectifMax, hors);
+  }
+  etat.personnesAuMax = etat.horsObjectifMax === 0 ? 0 : etat.histogrammeObjectifs[etat.horsObjectifMax];
   return etat;
 }
 
 // Écrit dans sortie le n-uplet du score, à partir des grandeurs nommées de
-// q, et le rend. Une seule composition sert le score tenu à jour et le score
+// q, et le rend : chaque composante, Σ poids × grandeur sur ses termes
+// (composition). Une seule composition sert le score tenu à jour et le score
 // recalculé ; une grandeur que mesurer rend y porte son nom, et la
-// composition n'en refait aucune.
-function composer(contraintes, q, sortie) {
-  const separer = contraintes.separerAppartenances;
-  sortie[0] = q.ecartAuPlafondAPrioriMax;
-  sortie[1] = q.carresEcartsAuPlafondAPriori;
-  sortie[2] = separer ? q.excedentCollisions : 0;
-  sortie[3] = separer ? q.collisionsCumulees : 0;
-  sortie[4] = (contraintes.nouveauxVoisins ? q.excedentPaires : 0)
-    + (contraintes.nouvelleTable ? q.totalRetoursChoisis : 0);
-  sortie[5] = contraintes.varierAppartenances ? q.totalRedondance : 0;
+// composition n'en refait aucune, ni ne tient aucun cumul pondéré.
+function composer({ taille, debut, codes, poids }, q, sortie) {
+  for (let k = 0; k < taille; k += 1) {
+    let somme = 0;
+    for (let j = debut[k], fin = debut[k + 1]; j < fin; j += 1) somme += poids[j] * lire(q, codes[j]);
+    sortie[k] = somme;
+  }
   return sortie;
 }
 
 // Signe de la comparaison lexicographique des n-uplets a[ia …] et b[ib …],
-// composantes prises dans l'ordre que donne la liste ordre.
+// composantes prises dans l'ordre que donne la liste ordre, une par
+// composante.
 function comparer(ordre, a, ia, b, ib) {
-  for (let j = 0; j < TAILLE_SCORE; j += 1) {
+  for (let j = 0; j < ordre.length; j += 1) {
     const k = ordre[j];
     const difference = a[ia + k] - b[ib + k];
     if (difference !== 0) return difference;
@@ -484,14 +722,15 @@ function comparer(ordre, a, ia, b, ib) {
 }
 
 // Ordre d'acceptation que fixe la meilleure affectation : celui des
-// contraintes dès que son écart maximal est nul (en-tête du module). Cet
-// écart ne fait que baisser d'une meilleure affectation à la suivante : une
-// fois nul, il le reste.
-const ordreAccepte = (meilleurScore) =>
-  meilleurScore[0] === 0 ? ORDRE_CONTRAINTES : ORDRE_SCORE;
+// contraintes dès que son écart maximal, au rang que la composition donne au
+// plus grand écart, est nul (en-tête du module) ; celui du score quand
+// l'écart ne compte pas. Cet écart ne fait que baisser d'une meilleure
+// affectation à la suivante : une fois nul, il le reste.
+const ordreAccepte = ({ rangEcart, ordreScore, ordreContraintes }, meilleurScore) =>
+  rangEcart !== null && meilleurScore[rangEcart] === 0 ? ordreContraintes : ordreScore;
 
 function estNul(score) {
-  for (let k = 0; k < TAILLE_SCORE; k += 1) if (score[k] !== 0) return false;
+  for (let k = 0; k < score.length; k += 1) if (score[k] !== 0) return false;
   return true;
 }
 
@@ -511,44 +750,45 @@ function lireSignal(signal) {
 // propositions précédentes : à chaque multiple de CADENCE,
 // progression(fait, total), puis une lecture du signal.
 function descendre(structure, rng, { arret, historique, dejaFaits, total, signal, progression }) {
-  const { contraintes } = structure.instance;
+  const { composition: forme } = structure;
+  const { taille, ordreScore, ordreContraintes } = forme;
   let etat = etatInitial(structure, rng);
-  const courant = composer(contraintes, etat, new Float64Array(TAILLE_SCORE));
-  const candidat = new Float64Array(TAILLE_SCORE);
+  const courant = composer(forme, etat, new Float64Array(taille));
+  const candidat = new Float64Array(taille);
   const meilleurScore = Float64Array.from(courant);
   const meilleurPlan = Int32Array.from(etat.tableDe);
-  const memoire = new Float64Array(historique * TAILLE_SCORE);
+  const memoire = new Float64Array(historique * taille);
   const remplirMemoire = () => {
-    for (let v = 0; v < memoire.length; v += TAILLE_SCORE) memoire.set(courant, v);
+    for (let v = 0; v < memoire.length; v += taille) memoire.set(courant, v);
   };
   // Garde l'état courant comme meilleure affectation s'il la dépasse dans
   // l'ordre du score, et rend l'ordre d'acceptation qui en découle.
   const retenir = (ordre) => {
-    if (comparer(ORDRE_SCORE, courant, 0, meilleurScore, 0) >= 0) return ordre;
+    if (comparer(ordreScore, courant, 0, meilleurScore, 0) >= 0) return ordre;
     meilleurScore.set(courant);
     meilleurPlan.set(etat.tableDe);
-    return ordreAccepte(meilleurScore);
+    return ordreAccepte(forme, meilleurScore);
   };
   remplirMemoire();
-  let ordre = ordreAccepte(meilleurScore);
+  let ordre = ordreAccepte(forme, meilleurScore);
   const patience = PATIENCE * historique;
   let immobile = 0;
   for (let i = 0; i < arret && !estNul(courant); i += 1) {
-    if (immobile >= patience && ordre === ORDRE_CONTRAINTES) {
+    if (immobile >= patience && ordre === ordreContraintes) {
       etat = etatInitial(structure, rng);
-      composer(contraintes, etat, courant);
+      composer(forme, etat, courant);
       remplirMemoire();
       ordre = retenir(ordre);
       immobile = 0;
     }
     const mouvement = proposerEtAppliquer(etat, rng);
-    const v = (i % historique) * TAILLE_SCORE;
+    const v = (i % historique) * taille;
     let change = false;
     if (mouvement !== null) {
-      composer(contraintes, etat, candidat);
+      composer(forme, etat, candidat);
       if (comparer(ordre, candidat, 0, courant, 0) <= 0
         || comparer(ordre, candidat, 0, memoire, v) <= 0) {
-        change = comparer(ORDRE_SCORE, candidat, 0, courant, 0) !== 0;
+        change = comparer(ordreScore, candidat, 0, courant, 0) !== 0;
         courant.set(candidat);
         ordre = retenir(ordre);
       } else {
@@ -726,7 +966,8 @@ export function regenerer(configuration, { graine, arret, historique }) {
 /**
  * État de recherche au placement initial (§ 5.10) : fixés à leurs tables,
  * libres mélangés par rng.melanger, tour après tour, puis assis table après
- * table dans l'ordre des tables. Lève ErreurConfiguration('PLACES_MANQUANTES',
+ * table dans l'ordre des tables. L'état porte la composition du n-uplet de
+ * l'instance. Lève ErreurConfiguration('PLACES_MANQUANTES',
  * { placesManquantes }) comme rechercher.
  *
  * @param {import('./types.js').Instance} instance
@@ -734,17 +975,21 @@ export function regenerer(configuration, { graine, arret, historique }) {
  * @returns {EtatRecherche}
  */
 export function creerEtat(instance, rng) {
-  return etatInitial(preparer(instance), rng);
+  const structure = preparer(instance);
+  const etat = etatInitial(structure, rng);
+  etat.composition = structure.composition;
+  return etat;
 }
 
 /**
- * Le n-uplet du score, tel que l'état le tient à jour.
+ * Le n-uplet du score, tel que l'état le tient à jour, de la longueur que la
+ * compilation de l'instance lui donne.
  *
  * @param {EtatRecherche} etat
  * @returns {number[]}
  */
 export function scoreIncremental(etat) {
-  return composer(etat.contraintes, etat, new Array(TAILLE_SCORE));
+  return composer(etat.composition, etat, new Array(etat.composition.taille));
 }
 
 /**
@@ -752,9 +997,10 @@ export function scoreIncremental(etat) {
  * qui fait foi, dont chaque grandeur se lit au lieu de se refaire : les
  * écarts au plafond a priori par ecartsAuPlafondAPriori (manque.js), sur les
  * plafonds de plafondsAPriori ; l'excédent de collisions, les collisions
- * cumulées, les retours choisis et Σ r(p) par mesurer. Une redéfinition de
- * l'une d'elles dans son module change donc ce score, et son accord avec le
- * score tenu à jour tombe.
+ * cumulées, les retours choisis, Σ r(p), les quatre valeurs des objectifs et
+ * les animateurs non rencontrés par mesurer — nulles quand la mesure n'a
+ * personne de concerné. Une redéfinition de l'une d'elles dans son module
+ * change donc ce score, et son accord avec le score tenu à jour tombe.
  *
  * Seule Σ_paires max(0, M − 1), que la mesure ne rend pas, se calcule ici :
  * elle vaut Σ_paires M − Σ_paires min(M, 1). Le premier terme compte les
@@ -786,6 +1032,7 @@ export function scoreComplet(etat) {
   for (const o of occupation) reunions += (o * (o - 1)) / 2;
   let sommeRencontres = 0;
   for (const rencontres of mesures.rencontres) sommeRencontres += rencontres;
+  const objectifs = mesures.objectifs ?? { horsObjectif: 0, jamaisServies: 0, horsObjectifMax: 0, personnesAuMax: 0 };
   const grandeurs = {
     ecartAuPlafondAPrioriMax,
     carresEcartsAuPlafondAPriori,
@@ -794,8 +1041,13 @@ export function scoreComplet(etat) {
     excedentPaires: reunions - sommeRencontres / 2,
     totalRetoursChoisis: mesures.totalRetoursChoisis,
     totalRedondance: mesures.totalRedondance,
+    horsObjectif: objectifs.horsObjectif,
+    jamaisServies: objectifs.jamaisServies,
+    horsObjectifMax: objectifs.horsObjectifMax,
+    personnesAuMax: objectifs.personnesAuMax,
+    animateursNonRencontres: mesures.animateurs?.nonRencontres ?? 0,
   };
-  return composer(instance.contraintes, grandeurs, new Array(TAILLE_SCORE));
+  return composer(etat.composition, grandeurs, new Array(etat.composition.taille));
 }
 
 /**

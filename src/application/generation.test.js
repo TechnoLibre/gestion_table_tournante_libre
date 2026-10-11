@@ -1483,3 +1483,66 @@ describe('génération : une table, un tour (§ 15.4)', () => {
     assert.deepEqual(planDepuisFichier(montage.charge().propositions[0]).tours, [[[1, 2, 3, 4, 5, 6]]]);
   });
 });
+
+// --- Objectifs, mode et ordre réglé (§ 5.7, D17, A21) ----------------------------------
+
+describe('génération : objectifs, mode et ordre réglé, par la séance (§ 5.7, D17, A21)', () => {
+  // La petite démonstration au conflit inévitable, 1 à 6 « finance », la
+  // première table attendant « finance » pour la soirée ; le mode minimum
+  // par défaut (sous places, aucun mode écrit) et, sous ordre, un ordre où
+  // les tours hors objectif suivent l'écart et où l'excédent et la
+  // redondance partagent un palier.
+  function chargeAObjectifs({ mode = 'minimum', ordre = true } = {}) {
+    const charge = chargeDemo('petite-conflit');
+    for (const participant of charge.participants) if (participant.id <= 6) participant.etiquettes = ['finance'];
+    const [premiere] = [...charge.tables].sort((a, b) => a.id - b.id);
+    premiere.objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+    if (mode !== 'places') charge.reglages.modeObjectifs = mode;
+    if (ordre) {
+      const e = (critere, poids = 1) => ({ critere, poids });
+      charge.reglages.priorites = [
+        [e('ecartAuPlafondAPrioriMax')],
+        [e('toursHorsObjectif')],
+        [e('excedentCollisions', 2), e('redondance')],
+        [e('collisionsCumulees')],
+        [e('rencontresRepetees')],
+        [e('animateursNonRencontres')],
+      ];
+    }
+    return charge;
+  }
+
+  test('fil direct, puis groupe de travailleurs à un et à quatre cœurs : le même état écrit, octet pour octet, et les plans de rechercher', async () => {
+    const reglages = { graine: 3, nombre: 4, arret: 1500, historique: 1000 };
+    const executeurs = [
+      ['fil direct', () => creerExecuteurDirect(), null],
+      ['un cœur', () => creerExecuteurTravailleur(travailleursCalculants(), { coeursDisponibles: 4 }), 1],
+      ['quatre cœurs', () => creerExecuteurTravailleur(travailleursCalculants(), { coeursDisponibles: 4 }), 4],
+    ];
+    const etats = [];
+    for (const [nom, creer, coeurs] of executeurs) {
+      const montage = await monter({ charges: [chargeAObjectifs()], executeur: creer() });
+      if (coeurs !== null) {
+        montage.controleur.reglerCoeurs({ automatique: false });
+        montage.controleur.reglerCoeurs({ saisie: String(coeurs) });
+      }
+      const bilan = await montage.controleur.generer(reglages);
+      assert.deepEqual(bilan.ajoutees, [1, 2, 3, 4], nom);
+      const configuration = configurationDe(montage.charge());
+      assert.equal(configuration.modeObjectifs, 'minimum', nom);
+      const attendues = rechercher(configuration, reglages);
+      assert.deepEqual(montage.charge().propositions.map(planDepuisFichier), attendues.map((p) => planRange(p, configuration)), nom);
+      etats.push(montage.etatDisque());
+    }
+    assert.equal(etats[1], etats[0]);
+    assert.equal(etats[2], etats[0]);
+  });
+
+  test('le mode et l’ordre atteignent la recherche, chacun pour sa part : sans le mode, sous le même ordre, ou sans l’ordre, sous le même mode, la même charge rend d’autres plans', () => {
+    const reglages = { graine: 3, nombre: 4, arret: 1500 };
+    const plans = (charge) => rechercher(configurationDe(charge), reglages).map(({ plan }) => plan);
+    const regles = plans(chargeAObjectifs());
+    assert.notDeepEqual(regles, plans(chargeAObjectifs({ mode: 'places' })), 'sans le mode');
+    assert.notDeepEqual(regles, plans(chargeAObjectifs({ ordre: false })), 'sans l’ordre');
+  });
+});

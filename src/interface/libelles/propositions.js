@@ -15,6 +15,14 @@ import { compte } from '../../application/libelles/aides.js';
 // Le nom d'un critère du classement, celui de la table du moteur.
 const critere = (nom, texte) => texte(`moteur.critere.${nom}`);
 
+// Un palier, ses critères {nom, poids} : le nom du critère seul ; pour un
+// palier partagé, « ensemble, » puis chaque critère suivi de son poids.
+const palier = (criteres, texte) =>
+  criteres.length === 1
+    ? critere(criteres[0].nom, texte)
+    : `${texte('moteur.palier.ensemble')}, ` +
+      criteres.map(({ nom, poids }) => `${critere(nom, texte)} (${texte('moteur.palier.poids', { poids })})`).join(', ');
+
 export const TABLE = new Map([
   // --- La section (§ 5.7) ------------------------------------------------------
   ['propositions.tableau.titre', 'Propositions classées'],
@@ -34,11 +42,15 @@ export const TABLE = new Map([
       [...criteres.map((nom) => critere(nom, texte)), texte('propositions.ordre.identifiant')].join(texte('propositions.ordre.separateur')) +
       texte('propositions.ordre.fin'),
   ],
+  // Le critère sauté, puis le palier appliqué à sa place : un critère seul
+  // s'y nomme ; un palier partagé se lit « ensemble, » suivi de chaque
+  // critère et de son poids. applique null, aucun palier ne prend sa place,
+  // et la seconde phrase se tait.
   [
     'propositions.ordre.saute',
     ({ saute, applique }, texte) =>
-      `Critère sauté, faute de plafond a priori par personne : ${critere(saute, texte)}. ` +
-      `Appliqué à sa place : ${critere(applique, texte)}.`,
+      `Critère sauté, faute de plafond a priori par personne : ${critere(saute, texte)}.` +
+      (applique === null ? '' : ` Appliqué à sa place : ${palier(applique, texte)}.`),
   ],
 
   // --- Les pages du classement (§ 5.7) -------------------------------------------

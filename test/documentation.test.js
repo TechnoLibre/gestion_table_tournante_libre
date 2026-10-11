@@ -400,7 +400,7 @@ describe('documentation : les régions engendrées des documents livrés (§ 19.
     assert.deepEqual(lireRegions(lire(README)).map((r) => r.nom), ['contrastes', 'constantes']);
     assert.deepEqual(
       lireRegions(lire(GUIDE_USAGE)).map((r) => r.nom),
-      ['reglages', 'colonnes-csv', 'commandes', 'raccourcis', 'demonstrations'],
+      ['reglages', 'colonnes-csv', 'colonnes-objectifs', 'commandes', 'raccourcis', 'demonstrations'],
     );
     // Chaque producteur sert une région, et une seule.
     const servies = PORTEURS.flatMap((chemin) => lireRegions(lire(chemin)).map((r) => r.nom)).sort();

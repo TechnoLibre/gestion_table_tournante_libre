@@ -27,6 +27,7 @@
 // effacer les propositions ramène un plan proposé sans retenu à brouillon.
 import { ErreurCsv } from '../csv/erreurs.js';
 import { appliquerImport, bilanRemplacement } from '../csv/import.js';
+import { appliquerImportObjectifs } from '../csv/objectifs.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
@@ -37,7 +38,7 @@ import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
-import { etiquettesDeLEvenement, etiquettesRangees, recevoirEtiquettes } from './objectifs.js';
+import { avisObjectifs, etiquettesDeLEvenement, etiquettesRangees, recevoirEtiquettes } from './objectifs.js';
 import { nomAffiche } from './personnes.js';
 import { couvre, repartirSieges, reservationsActives } from './places.js';
 import { controlerReintegration, leverRefus } from './pose.js';
@@ -378,6 +379,54 @@ function importerParticipants(charge, { apercu, mode }) {
   };
 }
 
+// Le remède d'un refus du CSV des objectifs, par code : un événement sans
+// table se corrige dans la section des tables ; les autres se corrigent dans
+// le fichier ou l'association des colonnes, et n'en ont pas.
+const REMEDES_DES_OBJECTIFS = new Map([['OBJECTIFS_SANS_TABLE', { geste: 'ouvrirSection', section: 'tables' }]]);
+
+/**
+ * importerObjectifs {apercu, mode} (§ 10.4) : l'aperçu du CSV des objectifs
+ * appliqué selon le mode, mettreAJour ou remplacer (appliquerImportObjectifs),
+ * en une seule entrée. Le refus du CSV — un aperçu refusé ou ambigu — devient
+ * le refus de la commande, sous le même code, remède null sauf OBJECTIFS_SANS_TABLE,
+ * qui mène à la section des tables. Le résumé suit le rendu, pour le rapport
+ * d'import et le CSV des refus. Selon l'état : sans avertissement en
+ * brouillon et proposé ; en retenu, IMPORT_OBJECTIFS_RECLASSE, le classement
+ * des propositions pouvant changer, sans qu'aucune passe en dérive (§ 8.9) ;
+ * refusé en bloqué, PLAN_BLOQUE. Suivent, dans l'ordre d'avisObjectifs, les
+ * avis OBJECTIF_SANS_CORRESPONDANT des seuls objectifs que le fichier écrit.
+ *
+ * Un import dont la charge ne change pas, mais qui refuse des lignes, rend la
+ * charge reçue, un libellé null — aucune entrée ne s'écrit —, aucun
+ * avertissement, et son résumé.
+ */
+function importerObjectifs(charge, { apercu, mode }) {
+  exigerModifiable(charge);
+  let resultat;
+  try {
+    resultat = appliquerImportObjectifs(charge, apercu, mode);
+  } catch (erreur) {
+    if (erreur instanceof ErreurCsv) {
+      throw new ErreurCommande(erreur.code, { ...erreur.details, remede: REMEDES_DES_OBJECTIFS.get(erreur.code) ?? null });
+    }
+    throw erreur;
+  }
+  const { ajoutes, remplaces, retires, derive, refusees } = resultat.resume;
+  if (refusees.length > 0 && serialiserCharge(resultat.charge) === serialiserCharge(charge)) {
+    return { charge, libelle: null, avertissements: [], resume: resultat.resume };
+  }
+  const ecrits = new Set(apercu.lignes.map(({ champs }) => JSON.stringify([champs.table, champs.tour])));
+  const sansCorrespondant = avisObjectifs(resultat.charge).filter(
+    ({ code, details }) => code === 'OBJECTIF_SANS_CORRESPONDANT' && ecrits.has(JSON.stringify([details.table, details.tour])),
+  );
+  return {
+    charge: resultat.charge,
+    libelle: libelle('ENTREE_IMPORTER_OBJECTIFS', { mode, ajoutes, remplaces, retires }),
+    avertissements: [...(derive ? [avertissement('IMPORT_OBJECTIFS_RECLASSE', {})] : []), ...sansCorrespondant],
+    resume: resultat.resume,
+  };
+}
+
 /** changerEtat {etat} (§ 9) : un état du plan, sans rien détruire ; bloque se pose de chacun. */
 function changerEtat(charge, { etat }) {
   if (!ETATS.includes(etat)) throw new TypeError(`etat : ${ETATS.join(', ')} attendu, reçu ${JSON.stringify(etat)}`);
@@ -532,8 +581,8 @@ export function reunirCommandes(...registres) {
 
 /**
  * Le registre des commandes, par nom : chacune (charge, arguments) →
- * { charge, libelle, avertissements }, et importerParticipants y ajoute le
- * résumé de l'import. Il réunit les commandes de ce module, celles du
+ * { charge, libelle, avertissements }, et importerParticipants et
+ * importerObjectifs y ajoutent le résumé de l'import. Il réunit les commandes de ce module, celles du
  * mobilier et celles des places.
  *
  * @typedef {{code: string, details: Object}} Avertissement
@@ -549,6 +598,7 @@ export const COMMANDES = reunirCommandes(
     ['reintegrerParticipant', reintegrerParticipant],
     ['supprimerParticipant', supprimerParticipant],
     ['importerParticipants', importerParticipants],
+    ['importerObjectifs', importerObjectifs],
     ['changerEtat', changerEtat],
     ['debloquer', debloquer],
     ['enregistrerGeneration', enregistrerGeneration],
