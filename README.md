@@ -86,8 +86,6 @@ sur les captures.
 | `--couleur-bandeau-fond` | texte | 4,5 | 15,94 | 01-premier-ecran | 12,84 | 01-premier-ecran |
 | `--couleur-bandeau-texte` | texte | 4,5 | 6,09 | 01-premier-ecran | 12,84 | 01-premier-ecran |
 | `--couleur-bandeau-texte-secondaire` | texte | 4,5 | 9,05 | 01-premier-ecran | 7,60 | 01-premier-ecran |
-| `--couleur-cadre-ecriture` | marque | 3 | 4,69 | 02-import-apercu | 9,10 | 02-import-apercu |
-| `--couleur-cadre-lecture` | marque | 3 | 5,19 | 01b-passer-en-ecriture | 7,34 | 01b-passer-en-ecriture |
 | `--couleur-chaise-pleine` | marque | 3 | 15,09 | 07a-cibles-sieges | 14,94 | 07a-cibles-sieges |
 | `--couleur-chaise-trait` | marque | 3 | 7,44 | 07-plan-tables | 8,13 | 22-plan-brouillon |
 | `--couleur-conflit-appartenance` | marque | 3 | 8,92 | 20-mode-lecture | 6,81 | 20-mode-lecture |
