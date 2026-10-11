@@ -433,6 +433,41 @@ describe('les avertissements, en messages d’avis', () => {
       });
     }
   });
+  // Le texte de l'avertissement et son action ne sont jamais rognés : ni
+  // le texte, ni le message, ni aucune boîte qui les porte jusqu'au cadre
+  // ne déborde de sa hauteur, et chacun tient dans la boîte visible de
+  // chaque ascendant qui coupe ce qui le dépasse.
+  for (const largeur of [1366, 1024]) {
+    test(`à ${largeur} × 700, le texte de PLACES_MANQUANTES et « Ouvrir les tables » se lisent en entier : aucune boîte ne les rogne jusqu’au cadre`, async () => {
+      await fixerCadre(largeur, 700);
+      const m = await neuf();
+      await enManque(m);
+      const message = await attendre(() => {
+        const element = dans(m, '[data-annonces] [data-avertissement="PLACES_MANQUANTES"]');
+        expect(element).not.toBeNull();
+        return element;
+      });
+      const texte = message.querySelector('p');
+      const action = message.querySelector('[data-commande]');
+      expect(texte.textContent).toBe(t('PLACES_MANQUANTES', { placesManquantes: 1 }));
+      expect(action).not.toBeNull();
+      const borne = cadre(m);
+      for (let element = texte; element !== borne.parentElement; element = element.parentElement) {
+        const nom = `${element.tagName.toLowerCase()}${element.hasAttribute('data-annonces') ? '[data-annonces]' : ''}`;
+        expect(element.scrollHeight, `${nom} : hauteur du contenu`).toBeLessThanOrEqual(element.clientHeight + 1);
+        if (element === texte || style(element).overflowY === 'visible') continue;
+        const b = boite(element);
+        const bas = b.top + element.clientTop + element.clientHeight;
+        for (const [lu, porte] of [['texte', texte], ['action', action]]) {
+          expect(boite(porte).top, `${lu} dans ${nom}`).toBeGreaterThanOrEqual(b.top + element.clientTop - 0.5);
+          expect(boite(porte).bottom, `${lu} dans ${nom}`).toBeLessThanOrEqual(bas + 0.5);
+        }
+      }
+      expect(visible(action)).toBe(true);
+      expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight);
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
+    });
+  }
 });
 
 describe('le support rompu, en message de refus (§ 8.6)', () => {

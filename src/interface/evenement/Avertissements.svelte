@@ -12,13 +12,13 @@
   //
   // Chacun est un message d'avis : le fond, le filet et l'encre de l'avis,
   // le triangle de sa marque devant le texte. Le remède se pose en haut à
-  // droite, sur la première ligne du texte, et non sous lui : dans la zone
-  // des annonces, qui défile à la hauteur de la tête, l'action d'un
-  // avertissement se voit dès que son début se voit, et n'est jamais
-  // rognée par le bas de la zone. Ce qu'il nomme — propositions écartées,
-  // placements en dérive — vient dessous, sur toute la largeur du message :
-  // l'action n'étroitise que la première phrase. Une zone trop étroite pour
-  // le texte et l'action côte à côte passe l'action sous le texte.
+  // droite, sur la première ligne du texte ; une liste trop étroite pour le
+  // texte et l'action côte à côte passe l'action sous le texte, qui garde
+  // alors toute la largeur du message. Ce qu'il nomme — propositions
+  // écartées, placements en dérive — vient dessous, sur toute la largeur du
+  // message : l'action n'étroitise que la première phrase. La zone des
+  // annonces qui les porte prend la hauteur d'un avertissement ordinaire,
+  // action comprise, et défile au-delà (CadreMode.svelte).
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
@@ -91,10 +91,9 @@
 {/if}
 
 <style>
-  /* Des messages serrés : dans la zone des annonces, à la hauteur de la
-     tête, les deux avertissements d'un journal abîmé, de deux lignes
-     chacun, se voient l'un et l'autre. La liste est un conteneur de
-     largeur, que lit la disposition étroite ci-dessous. */
+  /* Des messages serrés : la zone des annonces en montre davantage sous
+     son plafond. La liste est un conteneur de largeur, que lit la
+     disposition étroite ci-dessous. */
   .avertissements {
     display: flex;
     flex-direction: column;
@@ -144,8 +143,10 @@
   }
 
   /* Une liste trop étroite pour le texte et l'action côte à côte — moins
-     de 26rem — passe l'action sous le texte. */
-  @container (max-width: 26rem) {
+     de 30rem, comme la place des annonces à côté de la tête d'une fenêtre
+     de 1 366 px — passe l'action sous le texte : le texte y garde toute la
+     largeur du message, et tient en moins de lignes. */
+  @container (max-width: 30rem) {
     p {
       grid-column: 2 / 4;
     }

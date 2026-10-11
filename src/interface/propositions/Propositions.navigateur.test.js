@@ -402,6 +402,56 @@ describe('retenir, voir sur le plan', () => {
     expect(ids(m)).toEqual(vue.lignes.map(({ id }) => id));
   });
 
+  // Les lignes du texte d'un élément : les boîtes de ses fragments de
+  // texte, rangées de haut en bas, dont chacune ouvre une ligne quand elle
+  // commence sous le milieu de la ligne courante.
+  function lignesDuTexte(element) {
+    const boites = [];
+    const parcours = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    for (let noeud = parcours.nextNode(); noeud !== null; noeud = parcours.nextNode()) {
+      const plage = document.createRange();
+      plage.selectNodeContents(noeud);
+      boites.push(...[...plage.getClientRects()].filter((r) => r.width > 0 && r.height > 0));
+    }
+    boites.sort((a, b) => a.top - b.top);
+    let lignes = 0;
+    let milieu = -Infinity;
+    for (const r of boites) {
+      if (r.top < milieu) continue;
+      lignes += 1;
+      milieu = (r.top + r.bottom) / 2;
+    }
+    return lignes;
+  }
+
+  test('à 1 366 px, la cellule de la ligne du retenu tient son numéro et « Tel que la proposition n° 3. » en trois lignes au plus', async () => {
+    const m = await ouvrir(executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 }));
+    const cellule = await attendre(() => {
+      const trouvee = ligneRetenu(m)?.querySelector('td[data-colonne="proposition"]');
+      expect(trouvee ?? null).not.toBeNull();
+      return trouvee;
+    });
+    const vue = tableau(evaluation(charge(m)).table);
+    const libelle = t(vue.retenu.libelle.cle, vue.retenu.libelle.details);
+    expect(libelle).toBe('Tel que la proposition n° 3.');
+    expect(texteDe(cellule)).toBe(`${format.nombre(3)} ${libelle}`);
+    expect(lignesDuTexte(cellule)).toBeLessThanOrEqual(3);
+  });
+
+  test('à 1 366 px, la cellule du retenu ajusté tient son numéro et « Ajusté à la main depuis la proposition n° 2. » en trois lignes au plus', async () => {
+    const m = await ouvrir(chargeSix());
+    commande(ligne(m, 2), 'retenir').click();
+    await attendre(() => expect(charge(m).retenu?.proposition).toBe(2));
+    await m.seance.executer('deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
+    const libelle = t('propositions.retenu.ajuste', { proposition: 2 });
+    const cellule = await attendre(() => {
+      const trouvee = ligneRetenu(m).querySelector('td[data-colonne="proposition"]');
+      expect(texteDe(trouvee)).toBe(`${format.nombre(2)} ${libelle}`);
+      return trouvee;
+    });
+    expect(lignesDuTexte(cellule)).toBeLessThanOrEqual(3);
+  });
+
   test('« Voir » de la ligne du retenu montre le retenu sur le plan, après une proposition demandée, sans écriture', async () => {
     const m = await ouvrir(executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 }));
     m.ui.montrerProposition(1);

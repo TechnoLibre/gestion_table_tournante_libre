@@ -31,11 +31,15 @@
   // devant un support rompu, dont les issues restent en vue.
   //
   // Sous une tête, et hors d'un support rompu, les annonces se posent à
-  // côté d'elle, dans la place que sa navigation laisse à droite : leur zone
-  // prend la hauteur de la tête et défile dedans, si bien qu'un
-  // avertissement ne retire aucune hauteur à la surface, ni au plan qu'elle
-  // porte. Une fenêtre trop étroite pour les deux les passe à la ligne, et
-  // la zone garde alors sa hauteur minimale.
+  // côté d'elle, dans la place que sa navigation laisse à droite. Leur zone
+  // prend la hauteur de ce qu'elle porte, jusqu'à un plafond, et la tête
+  // grandit avec elle : un avertissement s'y lit en entier, son action
+  // comprise, jamais rogné par le bas de la zone ; au-delà du plafond, la
+  // zone défile. Un avertissement qui tient dans la hauteur de la tête ne
+  // retire donc aucune hauteur à la surface, ni au plan qu'elle porte, et
+  // des avertissements nombreux ne lui retirent que ce qui sépare le
+  // plafond de la hauteur de la tête. Une tête trop étroite pour les deux
+  // passe la place à la ligne, sous son contenu, sur toute sa largeur.
   //
   // La tête se rend en un seul point du DOM, quelle que soit la place des
   // annonces : seules les annonces passent de côté à dessous quand une
@@ -341,18 +345,19 @@
   }
 
   /* À côté de la tête : la tête passe en ligne, son contenu à gauche, la
-     place des annonces à droite. La place ne donne à la ligne que sa
-     hauteur minimale ; la zone des annonces la remplit, posée en absolu,
-     et ne l'agrandit jamais : la ligne a la hauteur du contenu de la tête.
-     La place prend une part fixe de la largeur, et le contenu le reste :
+     place des annonces à droite. La ligne a la hauteur du plus haut des
+     deux : le contenu de la tête, ou la zone des annonces. La place prend
+     une part fixe de la largeur, et le contenu le reste :
      la zone ne bouge pas d'une section à l'autre, quand le libellé de la
      section ouverte, en gras, change la largeur de la navigation. Sa part,
-     36 %, tient en deux lignes de Noto Sans chacun des deux avertissements
-     d'un journal tronqué dans une fenêtre de 1 366 px : le second paraît
-     dans la hauteur de la tête. Sous 30rem de contenu, la place passe à la
-     ligne. */
+     36 %, laisse au contenu les huit onglets sur une ligne dans une fenêtre
+     de 1 366 px. Une tête de moins de 70rem — celle d'une fenêtre de
+     1 024 px — passe la place à la ligne, sous le contenu, sur toute sa
+     largeur, où un avertissement d'une phrase tient en deux lignes, son
+     action à côté. La tête est pour cela un conteneur de largeur. */
   .tete.cote {
     flex-flow: row wrap;
+    container: tete / inline-size;
     align-items: stretch;
     gap: 0 var(--espace-3);
     padding-right: 0;
@@ -372,19 +377,31 @@
   }
 
   .place {
-    position: relative;
     flex: 0 0 36%;
     min-width: 16rem;
     min-height: 3rem;
     border-left: 1px solid var(--couleur-carte-filet);
   }
 
-  /* À côté de la tête, la zone a un retrait vertical réduit : les deux
-     avertissements d'un journal abîmé paraissent dans sa hauteur. */
+  /* Passée à la ligne, la place prend toute la largeur de la tête, séparée
+     du contenu par un filet au-dessus d'elle. */
+  @container tete (max-width: 70rem) {
+    .place {
+      flex-basis: 100%;
+      border-top: 1px solid var(--couleur-carte-filet);
+      border-left: none;
+    }
+  }
+
+  /* Dans la place, la zone a un retrait vertical de 2 px et un plafond,
+     retrait compris : 7,25rem tiennent entier, dans la place de 36 % d'une
+     fenêtre de 1 366 px, un avertissement de trois lignes de texte et son
+     action dessous (Avertissements.svelte). Au-delà, la zone défile, et la
+     tête, qui ne grandit pas plus, laisse le reste du cadre à la surface. */
   .place > .annonces {
-    position: absolute;
-    inset: 0;
-    padding-block: var(--espace-1);
+    box-sizing: border-box;
+    max-height: 7.25rem;
+    padding-block: 0.125rem;
   }
 
   /* Seules — sans tête, en plein écran, ou devant un support rompu —, les

@@ -323,8 +323,15 @@
     border-left: 3px solid var(--couleur-etat-retenu-marque);
   }
 
-  td[data-colonne='proposition'] {
-    min-width: 7rem;
+  /* Les colonnes de phrases ont la largeur d'une phrase courte : la
+     cellule des propositions tient son numéro et « Tel que la proposition
+     n° 3. » en deux lignes, « Ajusté à la main depuis… » en trois, et celle
+     des retours imposés chacune de ses deux phrases en deux lignes au plus.
+     Plus étroites, leurs phrases passeraient à la ligne mot à mot et
+     allongeraient la ligne entière ; le tableau défile déjà en largeur. */
+  td[data-colonne='proposition'],
+  td[data-colonne='imposes'] {
+    min-width: 14rem;
   }
 
   .identifiant {

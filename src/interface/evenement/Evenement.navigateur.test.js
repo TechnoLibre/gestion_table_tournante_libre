@@ -756,7 +756,7 @@ describe('l’écran tient dans la fenêtre, avertissements compris (§ 8.4)', (
     }
   });
 
-  test('à 1 366 × 700, les avertissements de dérive se posent à côté de la tête : le plan garde toute sa hauteur, et ses chaises au zoom ajusté', async () => {
+  test('à 1 366 × 700, les avertissements de dérive se posent à côté de la tête : le plan ne cède que ce dont leur zone dépasse la tête, et garde ses chaises au zoom ajusté', async () => {
     const m = await monter();
     await m.seance.creer({ nom: 'Bal des Grisailles', date: null, siegesParDefaut: 8, tours: 3 });
     await m.seance.passerEnEcriture();
@@ -775,6 +775,10 @@ describe('l’écran tient dans la fenêtre, avertissements compris (§ 8.4)', (
     expect(dans(m, '[data-annonces]')).toBeNull();
     const hauteurSeule = dans(m, '[data-plan]').getBoundingClientRect().height;
     expect(hauteurSeule).toBeGreaterThan(0);
+    // Le haut de la surface qui porte la section : la tête qui grandit le
+    // pousse d'autant.
+    const surface = () => dans(m, '[data-section]').parentElement.getBoundingClientRect();
+    const hautSeul = surface().top;
     // Trois gestes admis sur le retenu, chacun une dérive annoncée.
     await m.seance.executer('ajouterParticipant', { champs: { nom: 'Rouvraie' } });
     await m.seance.executer('creerTable', { forme: 'ronde' });
@@ -790,7 +794,13 @@ describe('l’écran tient dans la fenêtre, avertissements compris (§ 8.4)', (
     expect(premier.top).toBeGreaterThanOrEqual(boiteZone.top);
     expect(premier.top).toBeLessThan(boiteZone.bottom - 16);
     expect(document.documentElement.scrollHeight).toBeLessThanOrEqual(innerHeight);
-    expect(dans(m, '[data-plan]').getBoundingClientRect().height).toBeGreaterThanOrEqual(hauteurSeule - 1);
+    // La zone, à son plafond, défile ; la tête ne grandit que de ce dont la
+    // zone la dépasse, et le plan ne cède que cela.
+    expect(zone.scrollHeight).toBeGreaterThan(zone.clientHeight);
+    const pousse = surface().top - hautSeul;
+    expect(pousse).toBeGreaterThanOrEqual(0);
+    expect(pousse).toBeLessThan(boiteZone.height);
+    expect(dans(m, '[data-plan]').getBoundingClientRect().height).toBeGreaterThanOrEqual(hauteurSeule - pousse - 1);
     const tables = tous(m, '[data-plan] [data-table]');
     expect(tables.length).toBe(4);
     expect(tous(m, '[data-plan] [data-siege]').length).toBe(4 * 8);

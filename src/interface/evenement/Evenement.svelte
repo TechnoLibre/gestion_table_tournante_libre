@@ -36,10 +36,11 @@
   // écran, et à lui seul.
   //
   // Le support rompu et les avertissements se posent dans la zone des
-  // annonces du cadre, qui défile seule, et non au-dessus de la section : la
-  // section garde la hauteur de la surface, plan compris, quel que soit le
-  // nombre des avertissements, et le support rompu, en tête de la zone,
-  // garde ses issues en vue (CadreMode.svelte).
+  // annonces du cadre, qui défile seule au-delà de son plafond, et non
+  // au-dessus de la section : la section ne cède à la zone que ce dont elle
+  // dépasse la tête, quel que soit le nombre des avertissements, et le
+  // support rompu, en tête de la zone, garde ses issues en vue
+  // (CadreMode.svelte).
   import { getContext } from 'svelte';
   import SectionBadges from '../badges/SectionBadges.svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
@@ -170,8 +171,7 @@
 
   /* Les phases côte à côte, séparées d'un blanc : les huit onglets tiennent
      sur une ligne à côté de la place des annonces dans une fenêtre de
-     1 366 px, et un avertissement ne retire donc aucune hauteur au plan
-     (CadreMode.svelte). */
+     1 366 px (CadreMode.svelte). */
   nav {
     display: flex;
     flex-wrap: wrap;
