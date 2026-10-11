@@ -81,29 +81,33 @@ sur les captures.
 
 | Jeton | Rôle | Seuil | Thème clair | Capture | Thème sombre | Capture |
 |---|---|---|---|---|---|---|
-| `--couleur-bandeau-fond` | texte | 4,5 | 14,26 | 01-premier-ecran | 12,84 | 01-premier-ecran |
-| `--couleur-bandeau-texte` | texte | 4,5 | 13,44 | 19-ajustement | 12,84 | 01-premier-ecran |
-| `--couleur-cadre-ecriture` | marque | 3 | 4,78 | 02-import-apercu | 9,10 | 02-import-apercu |
-| `--couleur-cadre-lecture` | marque | 3 | 5,29 | 01b-passer-en-ecriture | 7,34 | 01b-passer-en-ecriture |
-| `--couleur-chaise-pleine` | marque | 3 | 15,38 | 07a-cibles-sieges | 14,94 | 07a-cibles-sieges |
-| `--couleur-chaise-trait` | marque | 3 | 7,58 | 07-plan-tables | 8,13 | 22-plan-brouillon |
+| `--couleur-action-texte` | texte | 4,5 | — | — | 8,45 | 01-premier-ecran |
+| `--couleur-avis` | texte | 4,5 | 6,58 | 03-import-rapport | 8,93 | 03-import-rapport |
+| `--couleur-bandeau-fond` | texte | 4,5 | 15,94 | 01-premier-ecran | 12,84 | 01-premier-ecran |
+| `--couleur-bandeau-texte` | texte | 4,5 | 6,09 | 01-premier-ecran | 12,84 | 01-premier-ecran |
+| `--couleur-bandeau-texte-secondaire` | texte | 4,5 | 9,05 | 01-premier-ecran | 7,60 | 01-premier-ecran |
+| `--couleur-cadre-ecriture` | marque | 3 | 4,69 | 02-import-apercu | 9,10 | 02-import-apercu |
+| `--couleur-cadre-lecture` | marque | 3 | 5,19 | 01b-passer-en-ecriture | 7,34 | 01b-passer-en-ecriture |
+| `--couleur-chaise-pleine` | marque | 3 | 15,09 | 07a-cibles-sieges | 14,94 | 07a-cibles-sieges |
+| `--couleur-chaise-trait` | marque | 3 | 7,44 | 07-plan-tables | 8,13 | 22-plan-brouillon |
 | `--couleur-conflit-appartenance` | marque | 3 | 8,92 | 20-mode-lecture | 6,81 | 20-mode-lecture |
-| `--couleur-contour-fort` | marque | 3 | 12,54 | 20-mode-lecture | 11,62 | 20-mode-lecture |
-| `--couleur-echelle` | marque | 3 | 15,10 | 07-plan-tables | 14,62 | 07-plan-tables |
+| `--couleur-contour-fort` | marque | 3 | 12,30 | 20-mode-lecture | 11,62 | 20-mode-lecture |
+| `--couleur-echelle` | marque | 3 | 14,82 | 07-plan-tables | 14,62 | 07-plan-tables |
 | `--couleur-fantome` | marque | 3 | 4,34 | 19-ajustement | 4,10 | 19-ajustement |
 | `--couleur-filigrane` | marque | 3 | 5,10 | 22-plan-brouillon | 5,10 | 22-plan-brouillon |
 | `--couleur-hachure` | marque | 3 | 16,48 | 08-animateurs-designes | 15,21 | 08-animateurs-designes |
+| `--couleur-liste-texte` | texte | 4,5 | 14,82 | 07-plan-tables | — | — |
 | `--couleur-marque` | marque | 3 | 3,63 | 07a-cibles-sieges | 3,50 | 07a-cibles-sieges |
-| `--couleur-page-texte` | texte | 4,5 | 15,10 | 01-premier-ecran | 11,39 | 19-ajustement |
-| `--couleur-page-texte-secondaire` | texte | 4,5 | 7,05 | 10-diagnostic | 7,98 | 10-diagnostic |
-| `--couleur-papier` | texte | 4,5 | — | — | 5,33 | 09-refus-sur-place |
+| `--couleur-page-texte` | texte | 4,5 | 13,78 | 01b-passer-en-ecriture | 11,02 | 11-propositions |
+| `--couleur-page-texte-secondaire` | texte | 4,5 | 5,57 | 01-premier-ecran | 6,72 | 01b-passer-en-ecriture |
+| `--couleur-papier` | texte | 4,5 | — | — | 13,44 | 22-plan-brouillon |
 | `--couleur-pastille-fond` | marque | 3 | 13,44 | 19-ajustement | 11,62 | 19-ajustement |
 | `--couleur-pastille-texte` | texte | 4,5 | — | — | 14,51 | 19-ajustement |
-| `--couleur-poignee` | marque | 3 | 7,58 | 07-plan-tables | 11,32 | 07-plan-tables |
-| `--couleur-refus` | texte | 4,5 | 8,76 | 01b-passer-en-ecriture | 9,24 | 01b-passer-en-ecriture |
-| `--couleur-selection` | marque | 3 | 4,66 | 08-animateurs-designes | 4,18 | 08-animateurs-designes |
-| `--couleur-table-trait` | marque | 3 | 7,58 | 07-plan-tables | 5,59 | 07-plan-tables |
-| `rgb(0, 0, 0)` | texte | 4,5 | 18,26 | 09-refus-sur-place | — | — |
+| `--couleur-poignee` | marque | 3 | 7,44 | 07-plan-tables | 11,32 | 07-plan-tables |
+| `--couleur-refus` | texte | 4,5 | 8,34 | 01b-passer-en-ecriture | 8,14 | 01b-passer-en-ecriture |
+| `--couleur-selection` | marque | 3 | 4,57 | 08-animateurs-designes | 4,18 | 08-animateurs-designes |
+| `--couleur-table-trait` | marque | 3 | 7,44 | 07-plan-tables | 5,59 | 07-plan-tables |
+| `rgb(24, 33, 47)` | texte | 4,5 | — | — | 16,19 | 22-plan-brouillon |
 | `rgb(28, 33, 40)` | texte | 4,5 | — | — | 16,18 | 22-plan-brouillon |
 
 <!-- engendre:fin contrastes -->

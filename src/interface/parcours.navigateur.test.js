@@ -992,6 +992,17 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     document.activeElement?.blur();
     enHaut(section().querySelector('[role="grid"]'));
     await images(2);
+    // L'avertissement des places manquantes, à côté de la tête, se lit en
+    // entier, son bouton compris : la zone des annonces ne défile pas, et
+    // le bouton tient dans sa boîte visible.
+    const zone = dans('[data-annonces]');
+    const bouton = zone.querySelector('[data-avertissement="PLACES_MANQUANTES"] button[data-commande]');
+    expect(bouton, 'le bouton de l’avertissement').not.toBeNull();
+    expect(zone.scrollHeight, 'la zone des annonces ne défile pas').toBeLessThanOrEqual(zone.clientHeight + 1);
+    const visibleZone = zone.getBoundingClientRect();
+    const boiteBouton = bouton.getBoundingClientRect();
+    expect(boiteBouton.top, 'le haut du bouton dans la zone').toBeGreaterThanOrEqual(visibleZone.top + zone.clientTop - 0.5);
+    expect(boiteBouton.bottom, 'le bas du bouton dans la zone').toBeLessThanOrEqual(visibleZone.top + zone.clientTop + zone.clientHeight + 0.5);
     await photographier(m, '04-grille-participants', {
       condition: ['[data-section="participants"] [data-champ="filtre"]', '[data-section="participants"] [data-commande="trier"][data-cible="nom"]'],
     });
