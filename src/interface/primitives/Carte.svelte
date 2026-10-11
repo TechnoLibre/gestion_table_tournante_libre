@@ -31,12 +31,11 @@
   <section class="carte" aria-labelledby={idTitre}>
     <div class="entete" class:seule={children === null}>
       <div class="intitule">
-        <svelte:element this={balise} id={idTitre} class="titre">
-          {#if icone !== null}
-            <span class="pictogramme"><Icone nom={icone} /></span>
-          {/if}
-          {titre}
-        </svelte:element>
+        <!-- Le titre suit l'icône sans blanc entre eux : le texte de
+             l'intitulé est le titre seul, sans espace de tête. -->
+        <svelte:element this={balise} id={idTitre} class="titre"
+          >{#if icone !== null}<span class="pictogramme"><Icone nom={icone} /></span>{/if}{titre}</svelte:element
+        >
         {#if sousTitre !== null}
           <p class="sous-titre">{sousTitre}</p>
         {/if}
