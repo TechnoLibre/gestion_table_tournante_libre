@@ -2080,9 +2080,12 @@ describe('arborescence : un seul propriétaire des valeurs du contrat (types.js)
   });
 });
 
-// Modules que le § 14.13 tient à 100 % de branches : le module des indicateurs
-// et du plafond, et les chemins de reprise du stockage.
+// Modules que le § 14.13 tient à 100 % de branches : le registre des
+// critères et la correspondance aux objectifs, le module des indicateurs et
+// du plafond, et les chemins de reprise du stockage.
 const MODULES_A_SEUIL = [
+  'src/moteur/correspondance.js',
+  'src/moteur/criteres.js',
   'src/moteur/indicateurs.js',
   'src/moteur/plafond.js',
   'src/stockage/depot.js',
@@ -2196,7 +2199,7 @@ function releverCouverture(racine, couverture) {
 }
 
 // Une mesure conforme au § 14.13, que les données d'épreuve altèrent une
-// pièce à la fois : les quatre modules, le script de package.json, la recette
+// pièce à la fois : les modules nommés, le script de package.json, la recette
 // du Makefile, et la configuration de couverture.
 const scriptDeMesure = (script) => JSON.stringify({ scripts: { couverture: script } });
 const MODULES_MESURES = Object.freeze(Object.fromEntries(MODULES_A_SEUIL.map((module) => [module, ''])));
@@ -2224,6 +2227,8 @@ describe('arborescence : la couverture (§ 14.13)', () => {
       thresholds: {
         branches: 90,
         perFile: true,
+        'src/moteur/correspondance.js': { branches: 100 },
+        'src/moteur/criteres.js': { branches: 100 },
         'src/moteur/indicateurs.js': { branches: 100 },
         'src/moteur/plafond.js': { branches: 95 },
         'src/stockage/journal.js': { branches: 100, lines: 100 },
@@ -2232,6 +2237,8 @@ describe('arborescence : la couverture (§ 14.13)', () => {
     };
     const fichiers = {
       ...COMMANDE_CONFORME,
+      'src/moteur/correspondance.js': '',
+      'src/moteur/criteres.js': '',
       'src/moteur/indicateurs.js': '',
       'src/stockage/depot.js': '',
       'src/stockage/journal.js': '',
@@ -2248,7 +2255,13 @@ describe('arborescence : la couverture (§ 14.13)', () => {
     const sansInclude = { ...couverture, include: undefined, exclude: undefined, thresholds: {} };
     assert.deepEqual(
       avecArbre(fichiers, (racine) => releverCouverture(racine, sansInclude)).filter((e) => e.endsWith('mesure')),
-      ['src/moteur/indicateurs.js : hors de la mesure', 'src/stockage/depot.js : hors de la mesure', 'src/stockage/journal.js : hors de la mesure'],
+      [
+        'src/moteur/correspondance.js : hors de la mesure',
+        'src/moteur/criteres.js : hors de la mesure',
+        'src/moteur/indicateurs.js : hors de la mesure',
+        'src/stockage/depot.js : hors de la mesure',
+        'src/stockage/journal.js : hors de la mesure',
+      ],
     );
     assert.throws(() => releverCouverture(RACINE, undefined), /aucune configuration de couverture/);
   });
