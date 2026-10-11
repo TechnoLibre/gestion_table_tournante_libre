@@ -317,7 +317,11 @@ export const TABLE = new Map([
     ({ chemin, raison }, texte) => {
       const pourquoi =
         raison === 'JSON' || raison === 'FORME' ? texte(raison) : `La lecture est refusée (${raison}).`;
-      return `Les réglages locaux ${cite(chemin)} ne se lisent pas. ${pourquoi} Les valeurs par défaut s'appliquent.`;
+      return (
+        `Les réglages locaux ${cite(chemin)} ne se lisent pas. ${pourquoi} Le fichier reste tel quel : ` +
+        'le papier choisi vaut pour cette séance, sans être retenu sur cette machine, ' +
+        "et le cadrage n'est pas retenu."
+      );
     },
   ],
 ]);

@@ -11,10 +11,13 @@
   // rouvre la question. Aucun papier n'est choisi pour l'opérateur.
   //
   // Un choix passe par seance.choisirPapier, vivant dans tout mode, sur un
-  // plan bloqué comme en lecture. Un refus — des réglages illisibles, une
-  // écriture refusée — s'affiche sur le choix cliqué, par la commande, et
-  // la question reste. Le choix écrit, onChoisi, quand il est donné, reçoit
-  // le papier : la section qui demandait une production la poursuit.
+  // plan bloqué comme en lecture. Des réglages illisibles ou une écriture
+  // refusée ne refusent pas le choix : il vaut pour la séance, et
+  // l'avertissement que rend la séance va à EtatSeance.avertissements, que
+  // ce composant n'affiche pas. Un refus s'affiche sur le choix cliqué, par
+  // la commande, et la question reste. Le choix fait, onChoisi, quand il est
+  // donné, reçoit le papier : la section qui demandait une production la
+  // poursuit.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import { PAPIERS_OFFERTS, clesPapier } from '../impression/modele.js';

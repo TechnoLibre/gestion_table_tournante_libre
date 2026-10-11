@@ -153,6 +153,14 @@ export const TABLE = new Map([
       `Le verrou de l'événement n'a pas pu être rendu${causeEntreParentheses(cause, texte)} : ` +
       'une autre séance de ce poste le reprendra une fois ce logiciel fermé.',
   ],
+  // Le papier choisi que le dossier de travail refuse d'écrire dans les
+  // réglages locaux : il vaut pour la séance, en mémoire.
+  [
+    'REGLAGES_NON_ECRITS',
+    (details, texte) =>
+      `Les réglages locaux ${ouEcrire(details, texte)} n'ont pas pu s'écrire : ` +
+      'le papier choisi vaut pour cette séance, sans être retenu sur cette machine.',
+  ],
   ['RIEN_A_DEFAIRE', () => "Rien à défaire : l'historique commence à cet instant."],
   ['RIEN_A_REFAIRE', () => 'Rien à refaire : seul un retour se refait, tant que nul geste ne le suit.'],
   ['INSTANT_NON_RESTITUABLE', ({ revision }) => `L'historique ne restitue plus l'instant ${revision}.`],

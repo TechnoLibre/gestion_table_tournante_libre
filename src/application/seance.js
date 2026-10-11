@@ -70,7 +70,13 @@
 // (§ 8.5) : regarder n'écrit jamais l'événement. Le papier des planches, de
 // la machine et non du plan, s'y range aussi, dans tout mode, avec ou sans
 // événement (§ 8.5, § 11.2) ; une seule file y écrit, que le cadrage et le
-// papier partagent.
+// papier partagent. Des réglages que la lecture ne prend pas ne s'écrasent
+// jamais : le cadrage attend, et le papier choisi vaut pour la séance, en
+// mémoire, sans être retenu sur la machine. Il en va de même du papier d'une
+// écriture que le dossier refuse : ni des réglages illisibles ni un dossier
+// en lecture seule ne bloquent le choix du papier, et les sorties écrivent
+// là où le dossier l'accepte — un dossier qui refuse l'écriture refuse aussi
+// le PDF des planches.
 //
 // Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
 // date aussi le placement qu'il change (§ 8.9, § 11.8).
@@ -100,7 +106,15 @@ import { FORMAT, analyser } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { fil, reconstruire } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
-import { avecCadrage, avecPapier, cadrageDe, creerEcrivainDiffere, ecrireReglages, lireReglages } from '../stockage/reglages_locaux.js';
+import {
+  FICHIER_REGLAGES,
+  avecCadrage,
+  avecPapier,
+  cadrageDe,
+  creerEcrivainDiffere,
+  ecrireReglages,
+  lireReglages,
+} from '../stockage/reglages_locaux.js';
 import { avertissementsApres, examenNomme, invariantViole } from './avertissements.js';
 import { appliquerCommande, chargeNeuve, formeNommeeDe } from './commandes.js';
 import { libelle } from './libelles.js';
@@ -238,9 +252,10 @@ export function creerSeance({
   // formatLu : le format de l'état relu, null dès qu'un geste l'a écrit ;
   // retourAutomatique : le dernier retour en lecture est celui de
   // l'inactivité ; cadrage : celui de l'événement ouvert, lu ou demandé ;
-  // papier : celui que portent les réglages de la racine, relu à chaque
-  // changement de racine et après chaque écriture des réglages, null sans
-  // racine ou sans choix.
+  // papier : sur la racine du choix de la séance (choixSeance), le papier de
+  // ce choix ; sur une autre, celui que portent ses réglages, à défaut le
+  // papier du choix ; relu à chaque changement de racine et après chaque
+  // écriture des réglages, null sans racine ou sans choix.
   const etat = {
     racine,
     ouvert: null,
@@ -377,6 +392,31 @@ export function creerSeance({
   // écriture et rendue après remettrait dans l'état le papier d'avant.
   let fileReglages = Promise.resolve();
 
+  // Le choix de la séance, {racine, papier} : le dernier papier choisi sur
+  // des réglages que la lecture ne prend pas, ou que le dossier refuse
+  // d'écrire, et la racine où il l'a été ; le fichier ne le retient donc
+  // pas. Sur cette racine, il l'emporte sur le papier que le fichier porte ;
+  // sur une autre, il ne vaut que là où les réglages n'en portent aucun.
+  // null sans tel choix, et dès qu'une écriture le retient (retenirPapier).
+  let choixSeance = null;
+
+  // Le papier de dossier selon le choix de la séance : celui du choix sur sa
+  // racine, undefined ailleurs.
+  const papierDuChoix = (dossier) =>
+    choixSeance !== null && memeRacine(choixSeance.racine, dossier) ? choixSeance.papier : undefined;
+
+  // Un papier vient de s'écrire dans des réglages : le choix de la séance
+  // s'efface, et les avis REGLAGES_ILLISIBLES et REGLAGES_NON_ECRITS du
+  // fichier des réglages quittent ceux du geste, que le choix retenu
+  // dément.
+  function retenirPapier() {
+    choixSeance = null;
+    etat.avertissementsGeste = etat.avertissementsGeste.filter(
+      ({ code, details }) =>
+        !((code === 'REGLAGES_ILLISIBLES' || code === 'REGLAGES_NON_ECRITS') && details?.chemin === FICHIER_REGLAGES),
+    );
+  }
+
   // Met travail à son tour dans la file des réglages et rend sa promesse ;
   // la file continue après un refus.
   function enFileReglages(travail) {
@@ -394,34 +434,86 @@ export function creerSeance({
   // (REGLAGES_ILLISIBLES : lecture refusée, JSON ou forme fautifs) ne
   // s'écrasent pas des défauts, qui perdraient le papier et les cadrages :
   // le refus lève, ErreurSeance de l'avertissement, et rien ne s'écrit.
-  // L'écriture faite, le papier de la séance est celui qu'elle a écrit quand
-  // dossier est la racine de la séance.
+  // Sur la racine du choix de la séance, le papier du choix s'écrit avec ce
+  // que transformer rend, et l'écriture faite le retient (retenirPapier).
+  // L'écriture faite, EtatSeance.papier est celui qu'elle a écrit, à défaut
+  // celui du choix de la séance, quand dossier est la racine de la séance.
   function ecrireReglagesLocaux(dossier, transformer) {
     return enFileReglages(async () => {
       const { reglages, avertissement } = await lireReglages(fs, dossier);
       if (avertissement !== null) throw new ErreurSeance(avertissement.code, avertissement.details);
-      const ecrits = transformer(reglages);
+      const choisi = papierDuChoix(dossier);
+      const transformes = transformer(reglages);
+      const ecrits = choisi === undefined ? transformes : avecPapier(transformes, choisi);
       await ecrireReglages(fs, dossier, ecrits);
-      if (memeRacine(dossier, etat.racine)) {
-        etat.papier = ecrits.papier;
-        publier();
-      }
+      if (choisi !== undefined) retenirPapier();
+      const surRacine = memeRacine(dossier, etat.racine);
+      if (surRacine) etat.papier = ecrits.papier ?? choixSeance?.papier ?? null;
+      if (surRacine || choisi !== undefined) publier();
     });
   }
 
-  // À son tour dans la file des réglages, relit le papier des réglages de
-  // dossier — null sans dossier, sans choix, et pour des réglages que la
-  // lecture ne prend pas — et le pose dans l'état quand dossier est encore
-  // la racine de la séance. Ne lève jamais ; ne publie pas : l'appelant
-  // est un travail de la file des appels, qui publie en finissant.
+  // À son tour dans la file des réglages, écrit papier dans les réglages
+  // de dossier, le retient (retenirPapier) et rend {avertissements: []}. Un
+  // papier qui ne s'écrit pas devient le choix de la séance sur dossier, et
+  // un avis le dit : des réglages que la lecture ne prend pas ne s'écrivent
+  // pas, REGLAGES_ILLISIBLES {chemin, raison} ; une écriture que le dossier
+  // refuse (ErreurStockage) laisse le fichier intact, REGLAGES_NON_ECRITS
+  // {chemin, dossier, cause}. L'avis rejoint ceux du geste — une fois, quel
+  // que soit le nombre de choix — et se rend, {avertissements: [avis]}. Dans
+  // tous les cas, EtatSeance.papier devient papier quand dossier est encore
+  // la racine de la séance : un choix parti avant un changement de racine
+  // ne se publie pas sur la nouvelle. Une autre erreur, faute du code,
+  // remonte sans rien poser.
+  function ecrirePapier(dossier, papier) {
+    return enFileReglages(async () => {
+      const { reglages, avertissement: illisibles } = await lireReglages(fs, dossier);
+      let avis = null;
+      if (illisibles === null) {
+        try {
+          await ecrireReglages(fs, dossier, avecPapier(reglages, papier));
+        } catch (erreur) {
+          if (!(erreur instanceof ErreurStockage)) throw erreur;
+          avis = avertissement('REGLAGES_NON_ECRITS', {
+            chemin: FICHIER_REGLAGES,
+            dossier: dossier.chemin,
+            cause: erreur.details?.cause ?? null,
+          });
+        }
+      } else {
+        avis = avertissement(illisibles.code, illisibles.details);
+      }
+      if (avis === null) {
+        retenirPapier();
+      } else {
+        choixSeance = { racine: dossier, papier };
+        const meme = JSON.stringify(avis);
+        etat.avertissementsGeste = [...etat.avertissementsGeste.filter((autre) => JSON.stringify(autre) !== meme), avis];
+      }
+      if (memeRacine(dossier, etat.racine)) etat.papier = papier;
+      publier();
+      return { avertissements: avis === null ? [] : [avis] };
+    });
+  }
+
+  // À son tour dans la file des réglages, pose dans l'état le papier de
+  // dossier, quand dossier est encore la racine de la séance : sur la racine
+  // du choix de la séance, le papier du choix, sans rien lire ; ailleurs,
+  // celui des réglages, à défaut celui du choix — sans papier, et pour des
+  // réglages que la lecture ne prend pas ; null sans dossier. Ne lève
+  // jamais ; ne publie pas : l'appelant est un travail de la file des
+  // appels, qui publie en finissant.
   function relirePapier(dossier) {
     return enFileReglages(async () => {
       let papier = null;
       if (dossier !== null) {
-        try {
-          papier = (await lireReglages(fs, dossier)).reglages.papier;
-        } catch {
-          papier = null;
+        papier = papierDuChoix(dossier);
+        if (papier === undefined) {
+          try {
+            papier = (await lireReglages(fs, dossier)).reglages.papier ?? choixSeance?.papier ?? null;
+          } catch {
+            papier = choixSeance?.papier ?? null;
+          }
         }
       }
       if (memeRacine(dossier, etat.racine)) etat.papier = papier;
@@ -1329,23 +1421,29 @@ export function creerSeance({
      * récent : l'état et le journal ne s'écrivent pas. Le domaine est celui
      * d'avecPapier ; null, qui y efface le choix, ne se choisit pas.
      *
+     * Des réglages que la lecture ne prend pas ne s'écrasent pas, et une
+     * écriture que le dossier refuse laisse le fichier intact ; ni l'un ni
+     * l'autre ne bloque le choix : le papier vaut pour la séance, en
+     * mémoire, EtatSeance.papier le porte, et l'avertissement
+     * REGLAGES_ILLISIBLES {chemin, raison}, ou REGLAGES_NON_ECRITS {chemin,
+     * dossier, cause}, rejoint EtatSeance.avertissements et se rend. Sur
+     * cette racine, ce papier l'emporte sur celui que le fichier porte, et
+     * la première écriture des réglages qui y réussit l'écrit et retire
+     * l'avertissement. Une séance neuve ne le retrouve pas.
+     *
      * @param {'A4'|'Lettre'} papier
-     * @returns {Promise<void>}
+     * @returns {Promise<{avertissements: Array<{code: string, details: Object}>}>}
+     *          vide quand le papier s'est écrit
      * @throws {TypeError} un papier hors du domaine, ou une séance sans
      *         dossier de travail, sans rien lire ni écrire
-     * @throws {ErreurSeance} REGLAGES_ILLISIBLES {chemin, raison} : les
-     *         réglages ne se lisent pas, ni ne s'écrasent ; le papier de la
-     *         séance reste celui d'avant
-     * @throws {ErreurStockage} ECRITURE, le fichier intact
      */
     async choisirPapier(papier) {
       if (papier === null) throw new TypeError('choisirPapier : un papier attendu, reçu null');
-      const choisir = (reglages) => avecPapier(reglages, papier);
       // Essayé sur des réglages vides, avecPapier lève sur un papier hors du
       // domaine avant que rien ne se lise.
-      choisir({ format: 1, papier: null, cadrages: [] });
+      avecPapier({ format: 1, papier: null, cadrages: [] }, papier);
       if (etat.racine === null) throw new TypeError('choisirPapier : aucun dossier de travail');
-      await ecrireReglagesLocaux(etat.racine, choisir);
+      return ecrirePapier(etat.racine, papier);
     },
 
     // quitter.abandonner : vrai pour quitter l'événement d'un support rompu

@@ -1444,8 +1444,12 @@ geste, jamais un minuteur » du § 8.2 : un zoom continu écrit une fois par dé
 jamais à chaque image. **Le papier s'écrit au geste qui le choisit.** Les deux
 passent par une même file, qui relit le fichier avant chaque écriture : deux
 écrivains qui le liraient chacun avant que l'autre l'ait écrit perdraient l'un
-des deux réglages. Un fichier que la lecture ne prend pas ne s'écrase pas : le
-choix du papier se refuse, et le cadrage attend.
+des deux réglages. Un fichier que la lecture ne prend pas ne s'écrase pas. Ni
+lui, ni un dossier qui refuse de l'écrire, ne bloque le choix du papier : le
+papier choisi vaut pour la séance sur ce dossier de travail, sans être retenu sur
+la machine, et un avertissement nomme le fichier et dit que le choix n'est pas
+retenu ; la première écriture des réglages qui y réussit le retient, et
+l'avertissement se retire. Le cadrage attend.
 
 ### 8.6 Les fichiers
 

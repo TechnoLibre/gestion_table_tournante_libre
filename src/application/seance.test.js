@@ -11,7 +11,7 @@
 // version vient du module engendré.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { creerFichiersSimules } from '../../test/fichiers_simules.js';
+import { PanneSimulee, creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { H_RETENU, personne as personneBadge, soiree, table as tableBadge } from '../../test/fixtures/badges/cas.js';
 import { describe, test } from '../../test/lanceur.js';
 import { lirePolices } from '../../test/polices.js';
@@ -3045,14 +3045,285 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     assert.equal(seance.etat().papier, null);
   });
 
-  test('des réglages illisibles refusent le choix REGLAGES_ILLISIBLES, comme le cadrage : le fichier intact, le papier inchangé', async () => {
-    for (const corrompu of ['pas du json\n', '{"cadrages":[],"format":1,"papier":"A5"}\n']) {
-      const { fs, seance } = await ouvertSur();
-      fs.deposer('documents', FICHIER_REGLAGES, corrompu);
-      await refus(seance.choisirPapier('A4'), 'REGLAGES_ILLISIBLES');
-      assert.equal(fs.contenu('documents', FICHIER_REGLAGES), corrompu);
-      assert.equal(seance.etat().papier, null);
+  // Des réglages que la lecture ne prend pas : un format plus récent qui
+  // porte un papier inconnu de cette construction, et un texte tronqué.
+  const ILLISIBLES = [
+    ['FORME', '{"format":2,"papier":"Legal","cadrages":[]}'],
+    ['JSON', '{"format":1,"papier":"A4","cadr'],
+  ];
+  // Une soirée retenue de deux personnes à une table, un tour : une planche
+  // se prépare dès que le papier est connu.
+  const PLAN_RETENU = [{ sieges: [[1, 2]] }];
+  const chargeRetenue = () =>
+    soiree({
+      personnes: [personneBadge(1, 'Iris', 'Ombrelle'), personneBadge(2, 'Théo', 'Pervenche')],
+      tables: [tableBadge(1, 1, 2)],
+      plan: PLAN_RETENU,
+      propositions: [[1, PLAN_RETENU]],
+    });
+  const avecPlanche = { polices: async () => lirePolices(), provenance: 'production' };
+
+  test('des réglages illisibles : le papier choisi vaut pour la séance, en mémoire, le fichier intact octet pour octet, et la planche se prépare sans PAPIER_REQUIS', async () => {
+    for (const [raison, texte] of ILLISIBLES) {
+      const fs = creerFichiersSimules();
+      fs.deposerDossier('documents');
+      fs.deposer('documents', FICHIER_REGLAGES, texte);
+      const { seance } = await ouvertSur(chargeRetenue(), { fs, ...avecPlanche });
+      const avant = fs.compteurs.ecritures;
+      const textes = evenementSurDisque(fs);
+      const avis = { code: 'REGLAGES_ILLISIBLES', details: { chemin: FICHIER_REGLAGES, raison } };
+      assert.deepEqual(await seance.choisirPapier('A4'), { avertissements: [avis] }, raison);
+      assert.equal(seance.etat().papier, 'A4', raison);
+      assert.deepEqual(seance.etat().avertissements.filter(({ code }) => code === avis.code), [avis], raison);
+      const annonce = await seance.preparerPlanche();
+      assert.deepEqual([annonce.refus, annonce.papier], [null, 'A4'], raison);
+      await seance.choisirPapier('Lettre');
+      assert.equal(seance.etat().papier, 'Lettre', raison);
+      assert.equal((await seance.preparerPlanche()).papier, 'Lettre', raison);
+      assert.deepEqual(seance.etat().avertissements.filter(({ code }) => code === avis.code), [avis], `${raison} : un avis, pas deux`);
+      assert.deepEqual(fs.octets('documents', FICHIER_REGLAGES), new TextEncoder().encode(texte), raison);
+      assert.equal(fs.compteurs.ecritures, avant, raison);
+      assert.deepEqual(evenementSurDisque(fs), textes, raison);
     }
+  });
+
+  test('des réglages illisibles : la planche se produit sur le papier de la séance, et seul le PDF s’écrit', async () => {
+    const [, texte] = ILLISIBLES[1];
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeRetenue(), { fs, ...avecPlanche });
+    await refus(seance.produirePlanche(), 'PAPIER_REQUIS');
+    await seance.choisirPapier('A4');
+    const textes = evenementSurDisque(fs);
+    const { nom } = await seance.produirePlanche();
+    assert.match(nom, /_A4_/);
+    assert.ok(fs.octets('documents', nom).length > 0);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+    assert.deepEqual(evenementSurDisque(fs), textes);
+  });
+
+  test("le papier de la séance n'est pas retenu sur la machine : une séance neuve sur la même racine le demande, et un changement de racine le garde", async () => {
+    const [, texte] = ILLISIBLES[0];
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    await seance.choisirPapier('A4');
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().papier, null);
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().papier, 'A4', 'relu sur la même racine illisible');
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().papier, 'A4', 'une racine sans réglages : le choix de la séance');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"Lettre"}\n');
+    await seance.changerRacine(DOC);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().papier, 'Lettre', 'un papier écrit sur la racine l’emporte');
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+  });
+
+  test('des réglages illisibles : le cadrage différé attend, rien ne s’écrit, et le choix du papier ne le change pas', async () => {
+    const [, texte] = ILLISIBLES[1];
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance, planificateur } = await ouvertSur(chargeEssai(), { fs });
+    seance.demanderCadrage({ k: 1.5, tx: 3, ty: 4 });
+    await planificateur.avancer(DELAI_REGLAGES_MS);
+    await seance.choisirPapier('Lettre');
+    await laisser();
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), texte);
+    assert.equal(seance.etat().papier, 'Lettre');
+  });
+
+  test('un cadrage écrit après des réglages illisibles réparés écrit avec lui le papier de la séance, qui devient retenu, et l’avis se retire', async () => {
+    const [, texte] = ILLISIBLES[1];
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance, planificateur } = await ouvertSur(chargeEssai(), { fs });
+    await seance.choisirPapier('A4');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":"Lettre"}\n');
+    seance.demanderCadrage({ k: 2, tx: 0, ty: 0 });
+    await planificateur.avancer(DELAI_REGLAGES_MS);
+    await laisser();
+    const relus = JSON.parse(fs.contenu('documents', FICHIER_REGLAGES));
+    assert.deepEqual([relus.papier, relus.cadrages.length], ['A4', 1]);
+    assert.equal(seance.etat().papier, 'A4');
+    assert.equal(seance.etat().avertissements.some(({ code }) => code === 'REGLAGES_ILLISIBLES'), false);
+    const neuve = monter({ fs, prefixe: 'neuve' });
+    await neuve.seance.attendre();
+    assert.equal(neuve.seance.etat().papier, 'A4', 'retenu sur la machine');
+  });
+
+  test('un papier écrit après des réglages illisibles réparés : le fichier le porte, la séance suit le fichier, et le papier de la séance s’efface', async () => {
+    const [, texte] = ILLISIBLES[1];
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, texte);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    await seance.choisirPapier('A4');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null}\n');
+    assert.deepEqual(await seance.choisirPapier('Lettre'), { avertissements: [] });
+    assert.deepEqual([papierLu(fs), seance.etat().papier], ['Lettre', 'Lettre']);
+    assert.equal(seance.etat().avertissements.some(({ code }) => code === 'REGLAGES_ILLISIBLES'), false, 'l’avis se retire');
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().papier, null, 'le choix retenu reste à sa racine ; une racine sans réglages le demande');
+  });
+
+  // Un dossier de travail qui refuse toute écriture (EROFS) après
+  // l'ouverture : les réglages s'y lisent, ils ne s'y écrivent pas.
+  const avisNonEcrits = { code: 'REGLAGES_NON_ECRITS', details: { chemin: FICHIER_REGLAGES, dossier: DOCUMENTS, cause: 'EROFS' } };
+
+  test("un dossier qui refuse l'écriture des réglages : le papier choisi vaut pour la séance, un avis le dit, et la planche se prépare sans PAPIER_REQUIS", async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null}\n');
+    const { seance } = await ouvertSur(chargeRetenue(), { fs, ...avecPlanche });
+    fs.pannes.ecriture('documents');
+    const textes = evenementSurDisque(fs);
+    const reglages = fs.contenu('documents', FICHIER_REGLAGES);
+    assert.deepEqual(await seance.choisirPapier('A4'), { avertissements: [avisNonEcrits] });
+    assert.equal(seance.etat().papier, 'A4');
+    const annonce = await seance.preparerPlanche();
+    assert.deepEqual([annonce.refus, annonce.papier], [null, 'A4']);
+    assert.deepEqual(await seance.choisirPapier('Lettre'), { avertissements: [avisNonEcrits] });
+    assert.equal((await seance.preparerPlanche()).papier, 'Lettre');
+    assert.deepEqual(
+      seance.etat().avertissements.filter(({ code }) => code === avisNonEcrits.code),
+      [avisNonEcrits],
+      'un avis, pas deux',
+    );
+    assert.equal(seance.etat().avertissements.some(({ code }) => code === 'REGLAGES_ILLISIBLES'), false);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), reglages);
+    assert.deepEqual(evenementSurDisque(fs), textes);
+  });
+
+  test("un dossier qui refuse l'écriture des réglages : la production ne demande plus le papier, seule l'écriture du PDF est refusée", async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    const { seance } = await ouvertSur(chargeRetenue(), { fs, ...avecPlanche });
+    fs.pannes.ecriture('documents');
+    await refus(seance.produirePlanche(), 'PAPIER_REQUIS');
+    const textes = evenementSurDisque(fs);
+    await seance.choisirPapier('A4');
+    const erreur = await refus(seance.produirePlanche(), 'PLANCHE_NON_ECRITE');
+    assert.match(erreur.details.chemin, /_A4_/);
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), null);
+    assert.deepEqual(evenementSurDisque(fs), textes);
+  });
+
+  test("le papier d'une écriture refusée vaut au changement de racine, là où les réglages n'en portent pas", async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    fs.pannes.ecriture('documents');
+    await seance.choisirPapier('Lettre');
+    fs.deposerDossier(PORTABLE.id);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().papier, 'Lettre');
+  });
+
+  // Des réglages lisibles qui portent déjà un papier, sur la racine des
+  // documents.
+  const REGLAGES_A4 = '{"cadrages":[],"format":1,"papier":"A4"}\n';
+  const sansReglages = (seance) =>
+    seance.etat().avertissements.filter(({ code }) => code === 'REGLAGES_NON_ECRITS' || code === 'REGLAGES_ILLISIBLES');
+
+  test("une écriture refusée une fois : le papier de la séance l'emporte sur celui du fichier, le cadrage écrit ensuite l'écrit avec lui, et l'avis se retire", async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
+    const { seance, planificateur } = await ouvertSur(chargeEssai(), { fs });
+    fs.pannes.renommage('documents', 11);
+    const avis = { code: 'REGLAGES_NON_ECRITS', details: { chemin: FICHIER_REGLAGES, dossier: DOCUMENTS, cause: 'EBUSY' } };
+    assert.deepEqual(await seance.choisirPapier('Lettre'), { avertissements: [avis] });
+    assert.deepEqual([papierLu(fs), seance.etat().papier], ['A4', 'Lettre']);
+    seance.demanderCadrage({ k: 1.5, tx: 3, ty: 4 });
+    await planificateur.avancer(DELAI_REGLAGES_MS);
+    await laisser();
+    const relus = JSON.parse(fs.contenu('documents', FICHIER_REGLAGES));
+    assert.deepEqual([relus.papier, relus.cadrages.length], ['Lettre', 1]);
+    assert.equal(seance.etat().papier, 'Lettre');
+    assert.deepEqual(sansReglages(seance), [], 'le choix est retenu : l’avis se retire');
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().papier, 'Lettre');
+  });
+
+  test("une écriture refusée une fois, puis un papier qui s'écrit : l'avis se retire de l'état", async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
+    const { seance } = await ouvertSur(chargeEssai(), { fs });
+    fs.pannes.renommage('documents', 11);
+    await seance.choisirPapier('Lettre');
+    assert.deepEqual(sansReglages(seance).map(({ code }) => code), ['REGLAGES_NON_ECRITS']);
+    assert.deepEqual(await seance.choisirPapier('Lettre'), { avertissements: [] });
+    assert.deepEqual([papierLu(fs), seance.etat().papier], ['Lettre', 'Lettre']);
+    assert.deepEqual(sansReglages(seance), []);
+  });
+
+  test("un dossier qui refuse l'écriture : revenir sur la même racine garde le papier de la séance, que le fichier en porte un autre ou non ; une autre racine lit le sien", async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    fs.deposerDossier('documents');
+    fs.deposer('documents', FICHIER_REGLAGES, REGLAGES_A4);
+    const { seance, planificateur } = await ouvertSur(chargeEssai(), { fs });
+    fs.pannes.ecriture('documents');
+    await seance.choisirPapier('Lettre');
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().papier, 'Lettre', 'la même racine');
+    fs.deposerDossier(PORTABLE.id);
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, REGLAGES_A4);
+    await seance.changerRacine(PORTABLE);
+    assert.equal(seance.etat().papier, 'A4', 'une autre racine : son papier l’emporte');
+    await seance.changerRacine(DOC);
+    assert.equal(seance.etat().papier, 'Lettre', 'de retour sur la racine du choix');
+    await seance.ouvrir(BASE);
+    seance.demanderCadrage({ k: 2, tx: 0, ty: 0 });
+    await planificateur.avancer(DELAI_REGLAGES_MS);
+    await laisser();
+    assert.equal(seance.etat().papier, 'Lettre', 'un cadrage refusé ne le change pas');
+    assert.equal(fs.contenu('documents', FICHIER_REGLAGES), REGLAGES_A4);
+  });
+
+  test('une écriture des réglages qui lève autre chose qu’un refus du stockage remonte de choisirPapier, sans poser de papier ni d’avis', async () => {
+    const { fs, seance } = await ouvertSur();
+    // Les réglages se lisent ; leur écriture lève une panne du processus.
+    const ecrireAtomique = fs.ecrireAtomique;
+    fs.ecrireAtomique = async (racine, chemin, texte) => {
+      if (chemin === FICHIER_REGLAGES) throw new PanneSimulee();
+      return ecrireAtomique(racine, chemin, texte);
+    };
+    await assert.rejects(seance.choisirPapier('A4'), PanneSimulee);
+    assert.equal(seance.etat().papier, null);
+    assert.deepEqual(sansReglages(seance), []);
+  });
+
+  test("un papier écrit pour l'ancienne racine, dans la file pendant un changement de racine, ne se publie jamais sur la nouvelle", async () => {
+    const { fs, seance } = monter({ fs: creerFichiersSimules({ executable: 'E:\\soirees' }) });
+    await seance.attendre();
+    // Un fichier présent : sa lecture se retient, celle d'un absent non.
+    fs.deposer('documents', FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null}\n');
+    fs.deposerDossier(PORTABLE.id);
+    const publies = [];
+    seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+    const lecture = retenirLectureReglages(fs);
+    const choix = seance.choisirPapier('Lettre');
+    await laisser();
+    assert.equal(lecture.prise(), true, 'la lecture du choix est partie');
+    const changement = seance.changerRacine(PORTABLE);
+    await laisser();
+    assert.equal(seance.racine.id, PORTABLE.id, 'la racine a changé, le choix attend');
+    lecture.liberer();
+    await choix;
+    await changement;
+    await seance.attendre();
+    assert.equal(papierLu(fs), 'Lettre', 'écrit à sa racine');
+    assert.deepEqual(publies.filter(([racine, papier]) => racine === PORTABLE.id && papier !== null), []);
+    assert.equal(seance.etat().papier, null);
   });
 
   test("un cadrage différé et le choix du papier écrits ensemble : les deux restent, l'un après l'autre", async () => {

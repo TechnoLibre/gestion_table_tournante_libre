@@ -323,6 +323,7 @@ const EXEMPLES = new Map([
   ['PLATEFORME_WEB', {}],
   ['SUPPORT_AMOVIBLE', {}],
   ['REGLAGES_ILLISIBLES', { chemin: 'reglages_locaux.json', raison: 'FORME' }],
+  ['REGLAGES_NON_ECRITS', { chemin: 'reglages_locaux.json', dossier: 'E:\\data', cause: 'EROFS' }],
   // CSV
   ['UTF16_SANS_MARQUE', { remede: 'ENREGISTRER_EN_UTF8' }],
   ['UTF16_INVALIDE', { remede: 'ENREGISTRER_EN_UTF8' }],
@@ -698,6 +699,25 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
     assert.doesNotMatch(libelle('SUPPORT_AMOVIBLE', {}), /«/);
     assert.match(libelle('SUPPORT_AMOVIBLE', { dossier: 'F:\\soirees' }), /« F:\\soirees »/);
     assert.match(libelle('EVENEMENT_CHANGE', { revision: 7 }), /\b7\b/);
+  });
+
+  test("des réglages locaux illisibles nomment le fichier, disent le papier choisi pour la séance et le cadrage non retenu, sans promettre de valeurs par défaut", () => {
+    for (const raison of ['JSON', 'FORME', 'EACCES']) {
+      const texte = libelle('REGLAGES_ILLISIBLES', { chemin: 'reglages_locaux.json', raison });
+      assert.match(texte, /« reglages_locaux\.json »/, raison);
+      assert.ok(texte.includes('le papier choisi vaut pour cette séance, sans être retenu sur cette machine'), `${raison} : « ${texte} »`);
+      assert.ok(texte.includes("le cadrage n'est pas retenu"), `${raison} : le cadrage ne se promet pas pour la séance`);
+      assert.doesNotMatch(texte, /défaut|cadrage choisis?/, raison);
+    }
+    assert.match(libelle('REGLAGES_ILLISIBLES', { chemin: 'reglages_locaux.json', raison: 'EACCES' }), /\(EACCES\)/);
+  });
+
+  test("des réglages locaux non écrits nomment le fichier, le dossier et la cause, et disent le papier non retenu sur la machine", () => {
+    const texte = libelle('REGLAGES_NON_ECRITS', { chemin: 'reglages_locaux.json', dossier: 'E:\\data', cause: 'EROFS' });
+    for (const motif of [/« reglages_locaux\.json »/, /« E:\\data »/, /\(EROFS\)/]) assert.match(texte, motif);
+    assert.ok(texte.includes('sans être retenu sur cette machine'), texte);
+    assert.doesNotMatch(texte, /défaut|ne se lisent pas/);
+    assert.doesNotMatch(libelle('REGLAGES_NON_ECRITS', { chemin: 'reglages_locaux.json', dossier: 'E:\\data', cause: null }), /\(/);
   });
 
   test("quitter un événement au support rompu nomme « Écrire ailleurs », et ce qui serait perdu", () => {
