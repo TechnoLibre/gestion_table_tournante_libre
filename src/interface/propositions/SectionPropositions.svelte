@@ -39,6 +39,25 @@
   // explication (explicationDeColonne, modele.js). Le terme expliqué porte
   // aria-describedby vers elle, et lui seul.
   //
+  // Au-delà de TAILLE_PAGE propositions (modele.js), le tableau se lit page
+  // à page : pagine découpe le classement unique, sans le retrier, et la
+  // ligne du retenu reste en tête de chaque page, hors du compte. Une nav
+  // nommée au-dessus du tableau, répétée sous lui, porte « Précédentes »,
+  // l'étendue de la page et « Suivantes » ; une commande sans objet n'y est
+  // pas, comme « Refaire » sans retour à refaire. Changer de page n'écrit
+  // rien (§ 8.4) : le focus va à l'étendue de la nav du dessus, une région
+  // role="status" qui annonce la page ; chaque étendue se focalise par
+  // programme (tabindex -1), jamais par Tab. La page est un état
+  // d'interface que l'état de navigation retient (pagePropositions,
+  // retenirPagePropositions) : elle survit au démontage de la section, et
+  // repart de la première à chaque ouverture d'un événement, quand
+  // l'état de navigation revient à son départ. suivrePage la recale à chaque
+  // charge ou visée nouvelles — la première après une génération, bornée à
+  // la dernière quand des propositions partent, celle de la proposition
+  // visée à chaque nouvelle demande au plan (EtatUi.visee). Rien de ce
+  // qu'une ligne tient — la colonne surlignée, la proposition demandée au
+  // plan, le retenu — ne dépend de la page.
+  //
   // Habillage : le tableau et la phrase de l'ordre vivent dans une carte
   // titrée, « Effacer les propositions » à droite de son en-tête ; le message
   // d'une liste vide et le champ de la cible, chacun dans sa carte.
@@ -47,7 +66,7 @@
   // l'événement (cibleRedondance), et exécute changerCibleRedondance à la
   // sortie du champ — une entrée ; la saisie se lit par lireEntier, et un
   // refus se pose contre le champ (Champ).
-  import { getContext } from 'svelte';
+  import { getContext, tick, untrack } from 'svelte';
   import { lireEntier } from '../../application/capacite.js';
   import { cibleRedondance } from '../../application/evaluation.js';
   import { REGLAGES_GENERATION, reglagesDeSection } from '../generation/reglages.js';
@@ -58,9 +77,22 @@
   import Infobulle from '../primitives/Infobulle.svelte';
   import Refus from '../primitives/Refus.svelte';
   import TableauPropositions from './TableauPropositions.svelte';
-  import { demandeConfirmation, evaluation, explicationDeColonne, nomDe, retenuAjuste, surlignee as colonneSurlignee, tableau } from './modele.js';
+  import {
+    changerDePage,
+    demandeConfirmation,
+    evaluation,
+    explicationDeColonne,
+    nomDe,
+    pagine,
+    retenuAjuste,
+    suivrePage,
+    surlignee as colonneSurlignee,
+    tableau,
+    texteEtendue,
+  } from './modele.js';
 
   const t = getContext('t');
+  const format = getContext('format');
   // Le champ de la cible lit l'entrée que lit aussi le tableau des réglages
   // de la documentation (§ 19.8).
   const [entreeCible] = reglagesDeSection(REGLAGES_GENERATION, 'propositions');
@@ -71,6 +103,29 @@
   const evaluee = $derived(charge === null ? { table: null, refus: null } : evaluation(charge));
   const ajuste = $derived(charge !== null && retenuAjuste(charge));
   const vue = $derived(evaluee.table === null ? null : tableau(evaluee.table, { ajuste }));
+
+  // Le suivi de la page (SuiviDePage, modele.js), que l'état de navigation
+  // retient, recalé avant le rendu à chaque vue ou visée nouvelles ; sans
+  // tableau, il reste tel. Le suivi inchangé revient identique de
+  // suivrePage, et l'état de navigation ne publie rien : le recalage
+  // s'arrête là. La page montrée en découle.
+  const suivi = $derived($ui.pagePropositions);
+  $effect.pre(() => {
+    const observee = { vue, propositions: charge?.propositions ?? [], vise: $ui.proposition, visee: $ui.visee };
+    if (vue === null) return;
+    untrack(() => ui.retenirPagePropositions(suivrePage(ui.etat().pagePropositions, observee)));
+  });
+  const page = $derived(vue === null ? null : pagine(vue, suivi?.page ?? 1));
+  const vuePage = $derived(page === null ? null : { ...vue, lignes: page.lignes, horsClassement: page.horsClassement });
+
+  // L'élément de la section, où se trouve l'étendue de la nav du dessus.
+  let racine = $state(null);
+
+  // Montre la page demandée, puis rend le focus à l'étendue qui l'annonce.
+  function tourner(numero) {
+    ui.retenirPagePropositions(changerDePage(ui.etat().pagePropositions, numero));
+    tick().then(() => racine?.querySelector('[data-pages="haut"] [data-etendue]')?.focus());
+  }
 
   // La retenue en attente de confirmation, telle que demandeConfirmation la
   // rend : la proposition demandée, le titre et les éléments de la fenêtre ;
@@ -142,11 +197,33 @@
   const nommer = (id) => nomDe(charge, id);
 </script>
 
+{#snippet pages(ou)}
+  <nav class="pages" data-pages={ou} aria-label={t(`propositions.pages.${ou}`)}>
+    <div class="precedentes">
+      {#if page.page > 1}
+        <Commande cle="propositions.pages.precedentes" executer={() => tourner(page.page - 1)} />
+      {/if}
+    </div>
+    <p
+      class="etendue"
+      data-etendue
+      role={ou === 'haut' ? 'status' : undefined}
+      tabindex="-1">
+      {texteEtendue(page, { t, format })}
+    </p>
+    <div class="suivantes">
+      {#if page.page < page.pages}
+        <Commande cle="propositions.pages.suivantes" executer={() => tourner(page.page + 1)} />
+      {/if}
+    </div>
+  </nav>
+{/snippet}
+
 {#snippet effacerListe()}
   <Commande cle="propositions.commande.effacer" executer={effacer} />
 {/snippet}
 
-<section data-section="propositions">
+<section data-section="propositions" bind:this={racine}>
   <h2>{t('coquille.section.propositions')}</h2>
 
   {#if charge !== null && charge.propositions.length === 0}
@@ -188,7 +265,9 @@
           </p>
         {/each}
       </div>
-      <TableauPropositions {vue} {surlignee} {nommer} {voir} {retenir} {expliquer} {taire} {decrit} />
+      {#if page.paginee}{@render pages('haut')}{/if}
+      <TableauPropositions vue={vuePage} {surlignee} {nommer} {voir} {retenir} {expliquer} {taire} {decrit} />
+      {#if page.paginee}{@render pages('bas')}{/if}
     </Carte>
   {:else if charge !== null && charge.propositions.length > 0}
     <div class="effacer">{@render effacerListe()}</div>
@@ -269,6 +348,34 @@
 
   .effacer {
     display: flex;
+  }
+
+  /* Une nav des pages : l'étendue au centre, « Précédentes » contre elle à
+     gauche, « Suivantes » à droite ; une commande absente laisse sa place
+     vide, et l'étendue ne bouge pas d'une page à l'autre. */
+  .pages {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: var(--espace-3);
+    padding: var(--espace-3) var(--espace-5);
+  }
+
+  .precedentes {
+    justify-self: end;
+  }
+
+  .suivantes {
+    justify-self: start;
+  }
+
+  .etendue {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .etendue:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
   }
 
   .cible {

@@ -1170,3 +1170,265 @@ describe('l’habillage du tableau des propositions', () => {
     }
   });
 });
+
+// --- Les pages du classement (§ 5.7, § 2.1 étapes 9 et 10, § 8.4) ---------------
+
+// La grande démonstration et 237 propositions (graine 7, arrêt 50) : brute,
+// sans retenu ; retenue, la 150e du classement retenue ; encore, cent
+// propositions de plus sous la graine 8, que l'épreuve enregistre. ordre :
+// les identifiants dans l'ordre que rend le moteur, sollicité une seconde
+// fois (§ 19.1). Calculées une fois, pour toutes les épreuves des pages.
+let calculees = null;
+function pagesDEpreuve() {
+  if (calculees !== null) return calculees;
+  const brute = generee(chargeDemo('grande'), { graine: 7, nombre: 237, arret: 50, historique: 1000 });
+  const configuration = configurationDepuisCharge(brute);
+  const instance = normaliser(configuration);
+  const aPriori = plafondsAPriori(instance);
+  const { ordre } = classer(
+    brute.propositions.map((p) => ({ id: p.id, mesures: mesurer(instance, indexerPlan(instance, planDepuisFichier(p))), plafondsAPriori: aPriori })),
+  );
+  const retenue = executer(brute, 'retenirProposition', { id: ordre[149] });
+  const encore = rechercher(configuration, { graine: 8, nombre: 100, arret: 50, historique: 1000 });
+  calculees = { brute, retenue, ordre, idRetenue: ordre[149], encore, configuration };
+  return calculees;
+}
+
+// La charge brute réduite à ses n premières propositions par identifiant.
+function premieres(n) {
+  const reduite = structuredClone(pagesDEpreuve().brute);
+  reduite.propositions = reduite.propositions.filter(({ id }) => id <= n);
+  return reduite;
+}
+
+const navDes = (m, ou) => section(m).querySelector(`nav[data-pages="${ou}"]`);
+const etendue = (m, ou = 'haut') => navDes(m, ou)?.querySelector('[data-etendue]') ?? null;
+const rangsLus = (m) => lignes(m).map((tr) => texteDe(tr.querySelector('td[data-colonne="rang"]')));
+const rangsDe = (premier, dernier) => Array.from({ length: dernier - premier + 1 }, (_, place) => format.nombre(premier + place));
+const texteEtendue = (premier, dernier, total) =>
+  t('propositions.pages.etendue', { premier: format.nombre(premier), dernier: format.nombre(dernier), total: format.nombre(total), nombre: dernier - premier + 1 });
+
+// La page montrée : les identifiants de ses lignes, et l'étendue que disent
+// les deux nav.
+async function exigerPage(m, ordre, premier, dernier, total) {
+  await attendre(() => expect(ids(m)).toEqual(ordre.slice(premier - 1, dernier)));
+  expect(rangsLus(m)).toEqual(rangsDe(premier, dernier));
+  for (const ou of ['haut', 'bas']) expect(texteDe(etendue(m, ou)), ou).toBe(texteEtendue(premier, dernier, total));
+}
+
+// Une commande de page d'une nav, null quand elle n'y est pas.
+const commandePage = (m, ou, nom) => commande(navDes(m, ou), nom);
+
+describe('les pages du classement (§ 5.7)', () => {
+  beforeEach(async () => {
+    await pointer('bouger', 0, 0);
+  });
+
+  test('237 propositions, la page 1 : les rangs 1 à 100 dans l’ordre du moteur, le retenu en tête ; une nav nommée au-dessus du tableau et une sous lui, « Suivantes » sans « Précédentes »', async () => {
+    const { retenue, ordre, idRetenue } = pagesDEpreuve();
+    const m = await ouvrir(retenue);
+    await exigerPage(m, ordre, 1, 100, 237);
+    const table = section(m).querySelector('table');
+    const haut = navDes(m, 'haut');
+    const bas = navDes(m, 'bas');
+    expect(haut.getAttribute('aria-label')).toBe(t('propositions.pages.haut'));
+    expect(bas.getAttribute('aria-label')).toBe(t('propositions.pages.bas'));
+    expect(haut.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bas.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    for (const ou of ['haut', 'bas']) {
+      expect(commandePage(m, ou, 'precedentes'), ou).toBeNull();
+      expect(texteDe(commandePage(m, ou, 'suivantes')), ou).toBe(t('propositions.pages.suivantes'));
+    }
+    expect(etendue(m, 'haut').getAttribute('role')).toBe('status');
+    expect(etendue(m, 'bas').getAttribute('role')).toBeNull();
+    expect(ligneRetenu(m)).not.toBeNull();
+    expect(ligneRetenu(m).compareDocumentPosition(lignes(m)[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ligne(m, idRetenue)).toBeNull();
+  });
+
+  test('« Suivantes » : la page 2 aux rangs globaux 101 à 200, le focus sur l’étendue annoncée ; puis la 3, 37 lignes, sans « Suivantes » ; « Précédentes » rend la 2 ; rien ne s’écrit', async () => {
+    const { retenue, ordre, idRetenue } = pagesDEpreuve();
+    const m = await ouvrir(retenue);
+    const ecritures = m.trace.length;
+    const revisionAvant = revision(m);
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    await attendre(() => expect(document.activeElement).toBe(etendue(m, 'haut')));
+    expect(ligneRetenu(m)).not.toBeNull();
+    expect(texteDe(ligne(m, idRetenue))).toContain(t('propositions.marque.retenue'));
+    for (const ou of ['haut', 'bas']) {
+      expect(commandePage(m, ou, 'precedentes'), ou).not.toBeNull();
+      expect(commandePage(m, ou, 'suivantes'), ou).not.toBeNull();
+    }
+    commandePage(m, 'bas', 'suivantes').click();
+    await exigerPage(m, ordre, 201, 237, 237);
+    await attendre(() => expect(document.activeElement).toBe(etendue(m, 'haut')));
+    for (const ou of ['haut', 'bas']) expect(commandePage(m, ou, 'suivantes'), ou).toBeNull();
+    commandePage(m, 'bas', 'precedentes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    await attendre(() => expect(document.activeElement).toBe(etendue(m, 'haut')));
+    expect(m.trace.length).toBe(ecritures);
+    expect(revision(m)).toBe(revisionAvant);
+  });
+
+  test('en mode lecture, « Suivantes » montre la page 2 et rien ne s’écrit (§ 8.4)', async () => {
+    const { retenue, ordre } = pagesDEpreuve();
+    const m = await ouvrir(retenue, { mode: 'lecture' });
+    await exigerPage(m, ordre, 1, 100, 237);
+    const ecritures = m.trace.length;
+    const revisionAvant = revision(m);
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    expect(m.trace.length).toBe(ecritures);
+    expect(revision(m)).toBe(revisionAvant);
+  });
+
+  test('la page survit au plan : « Voir sur le plan » depuis la page 2, retour sur la 2 ; changer de page garde la proposition demandée au plan, et la page choisie reste', async () => {
+    const { retenue, ordre } = pagesDEpreuve();
+    const m = await ouvrir(retenue);
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    const montree = ordre[120];
+    commande(ligne(m, montree), 'voir').click();
+    await attendre(() => expect(m.racine.querySelector('[data-section="plan"]')).not.toBeNull());
+    expect(m.ui.etat().proposition).toBe(montree);
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 101, 200, 237);
+    commandePage(m, 'haut', 'precedentes').click();
+    await exigerPage(m, ordre, 1, 100, 237);
+    expect(m.ui.etat().proposition).toBe(montree);
+    m.ui.allerA('plan');
+    flushSync();
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 1, 100, 237);
+  });
+
+  test('une proposition visée depuis ailleurs amène la page qui la porte : au retour sur la section, et section ouverte', async () => {
+    const { retenue, ordre } = pagesDEpreuve();
+    const m = await ouvrir(retenue);
+    await exigerPage(m, ordre, 1, 100, 237);
+    m.ui.allerA('plan');
+    flushSync();
+    m.ui.montrerProposition(ordre[220]);
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 201, 237, 237);
+    expect(ligne(m, ordre[220])).not.toBeNull();
+    m.ui.montrerProposition(ordre[150]);
+    await exigerPage(m, ordre, 101, 200, 237);
+  });
+
+  test('la même proposition visée de nouveau depuis le plan, après un retour à aucune ou sans lui, amène encore sa page', async () => {
+    const { retenue, ordre } = pagesDEpreuve();
+    const m = await ouvrir(retenue);
+    m.ui.allerA('plan');
+    flushSync();
+    m.ui.montrerProposition(ordre[220]);
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 201, 237, 237);
+    commandePage(m, 'haut', 'precedentes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    m.ui.allerA('plan');
+    flushSync();
+    m.ui.montrerProposition(null);
+    flushSync();
+    m.ui.montrerProposition(ordre[220]);
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 201, 237, 237);
+    commandePage(m, 'haut', 'precedentes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    m.ui.allerA('plan');
+    flushSync();
+    m.ui.montrerProposition(ordre[220]);
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 201, 237, 237);
+  });
+
+  test('une génération ramène à la page 1 ; « Défaire », qui la retire, borne la page à la dernière qui reste', async () => {
+    const { retenue, ordre, encore, configuration } = pagesDEpreuve();
+    const m = await ouvrir(retenue);
+    commandePage(m, 'haut', 'suivantes').click();
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 201, 237, 237);
+    await m.seance.executer('enregistrerGeneration', { propositions: encore, configuration, produitVersion: V1 });
+    await attendre(() => expect(texteDe(etendue(m))).toBe(texteEtendue(1, 100, 337)));
+    expect(rangsLus(m)).toEqual(rangsDe(1, 100));
+    for (let page = 2; page <= 4; page += 1) {
+      commandePage(m, 'haut', 'suivantes').click();
+      await attendre(() => expect(texteDe(etendue(m))).toBe(texteEtendue((page - 1) * 100 + 1, Math.min(page * 100, 337), 337)));
+    }
+    await m.seance.defaire();
+    await exigerPage(m, ordre, 201, 237, 237);
+  });
+
+  test('un autre événement s’ouvre sur la page 1', async () => {
+    const { retenue, ordre } = pagesDEpreuve();
+    const texte = serialiser(retenue, { revision: 1, produitVersion: V1 });
+    const m = await monterApp({
+      fichiers: [BASE, 'autre-soiree'].map((base) => ({ racine: 'documents', chemin: `${base}${SUFFIXES.etat}`, texte })),
+    });
+    montes.push(m);
+    await m.seance.ouvrir(BASE);
+    m.ui.allerA('propositions');
+    flushSync();
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    await m.seance.ouvrir('autre-soiree');
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 1, 100, 237);
+  });
+
+  test('chaque ouverture repart de la page 1 : le premier événement rouvert après un autre que la section n’a pas vu, puis rouvert après sa fermeture', async () => {
+    const { retenue, ordre } = pagesDEpreuve();
+    const texte = serialiser(retenue, { revision: 1, produitVersion: V1 });
+    const m = await monterApp({
+      fichiers: [BASE, 'autre-soiree'].map((base) => ({ racine: 'documents', chemin: `${base}${SUFFIXES.etat}`, texte })),
+    });
+    montes.push(m);
+    await m.seance.ouvrir(BASE);
+    m.ui.allerA('propositions');
+    flushSync();
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    await m.seance.ouvrir('autre-soiree');
+    flushSync();
+    await m.seance.ouvrir(BASE);
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 1, 100, 237);
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    await m.seance.fermer();
+    flushSync();
+    await m.seance.ouvrir(BASE);
+    m.ui.allerA('propositions');
+    await exigerPage(m, ordre, 1, 100, 237);
+  });
+
+  test('à 100 propositions, ni nav ni commande de page ; à 101, la page 2 ne porte que la 101e : « Proposition 101 sur 101 »', async () => {
+    const cent = await ouvrir(premieres(100));
+    await attendre(() => expect(lignes(cent).length).toBe(100));
+    expect(section(cent).querySelector('nav')).toBeNull();
+    expect(section(cent).querySelector('[data-etendue]')).toBeNull();
+    for (const nom of ['precedentes', 'suivantes']) expect(commande(section(cent), nom), nom).toBeNull();
+    const centUn = await ouvrir(premieres(101));
+    await attendre(() => expect(texteDe(etendue(centUn))).toBe(texteEtendue(1, 100, 101)));
+    expect(lignes(centUn).length).toBe(100);
+    commandePage(centUn, 'bas', 'suivantes').click();
+    await attendre(() => expect(lignes(centUn).length).toBe(1));
+    expect(texteDe(etendue(centUn))).toBe('Proposition 101 sur 101');
+    expect(rangsLus(centUn)).toEqual([format.nombre(101)]);
+  });
+
+  test('la colonne que désigne un nom survolé reste surlignée sur la page suivante', async () => {
+    const { retenue } = pagesDEpreuve();
+    const m = await ouvrir(retenue);
+    const nom = section(m).querySelector('[data-ordre] [data-critere="excedentCollisions"]');
+    const { x, y } = await centre(nom);
+    await pointer('bouger', x, y);
+    await attendre(() => expect(surlignees(m)).toEqual(colonne(m, 'excedentCollisions')));
+    commandePage(m, 'haut', 'suivantes').click();
+    await attendre(() => expect(texteDe(etendue(m))).toBe(texteEtendue(101, 200, 237)));
+    const attendues = colonne(m, 'excedentCollisions');
+    expect(attendues.length).toBe(102);
+    await attendre(() => expect(surlignees(m)).toEqual(attendues));
+  });
+});

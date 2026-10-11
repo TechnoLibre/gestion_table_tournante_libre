@@ -25,6 +25,8 @@ const DEPART = {
   pose: null,
   appartenance: '',
   apercu: null,
+  visee: 0,
+  pagePropositions: null,
 };
 
 // Un état et le relevé de ce que reçoit son abonné.
@@ -95,6 +97,7 @@ describe('état de navigation : chaque transition', () => {
     ui.ouvrirFiche(4);
     ui.choisir({ genre: 'personne', participant: 2, depuis: null });
     ui.poserSurPlace({ place: { table: 1, siege: 2 }, refus: { code: 'SANS_EFFET', details: {} }, avertissements: [] });
+    ui.retenirPagePropositions(Object.freeze({ page: 2 }));
     ui.ouvrirApropos();
     ui.reinitialiser();
     assert.deepEqual(ui.etat(), { ...DEPART, apropos: true });
@@ -124,11 +127,45 @@ describe('état de navigation : chaque transition', () => {
     ui.mettreEnEvidence(12);
     ui.montrerProposition(3);
     ui.selectionner({ table: 2, siege: 1 });
-    assert.deepEqual(ui.etat(), { ...DEPART, miseEnEvidence: 12, proposition: 3, selection: { table: 2, siege: 1 } });
+    assert.deepEqual(ui.etat(), { ...DEPART, miseEnEvidence: 12, proposition: 3, visee: 1, selection: { table: 2, siege: 1 } });
     ui.mettreEnEvidence(null);
     ui.montrerProposition(null);
     ui.selectionner(null);
-    assert.deepEqual(ui.etat(), DEPART);
+    assert.deepEqual(ui.etat(), { ...DEPART, visee: 1 });
+  });
+
+  test('montrerProposition numérote chaque visée : la même proposition demandée de nouveau publie un état neuf ; null retire la visée sans la numéroter', () => {
+    const { ui, recus } = suivi();
+    ui.montrerProposition(5);
+    assert.equal(ui.etat().visee, 1);
+    ui.montrerProposition(5);
+    assert.deepEqual([ui.etat().proposition, ui.etat().visee, recus.length], [5, 2, 3]);
+    ui.montrerProposition(null);
+    ui.montrerProposition(null);
+    assert.deepEqual([ui.etat().proposition, ui.etat().visee, recus.length], [null, 2, 4]);
+    ui.montrerProposition(5);
+    assert.equal(ui.etat().visee, 3);
+    ui.reinitialiser();
+    assert.equal(ui.etat().visee, 0);
+  });
+
+  test('retenirPagePropositions retient le suivi de la page des propositions, figé, ou null ; un autre événement repart de null ; RangeError sinon, sans rien changer', () => {
+    const { ui, recus } = suivi();
+    const page = Object.freeze({ cles: Object.freeze(['1/1/40/1000']), visee: 0, page: 2, pages: 3 });
+    ui.retenirPagePropositions(page);
+    assert.equal(ui.etat().pagePropositions, page);
+    ui.retenirPagePropositions(page);
+    assert.equal(recus.length, 2);
+    ui.allerA('plan');
+    ui.allerA('propositions');
+    assert.equal(ui.etat().pagePropositions, page);
+    for (const faute of [undefined, 2, 'page', { page: 2 }]) assert.throws(() => ui.retenirPagePropositions(faute), RangeError, String(faute));
+    assert.equal(ui.etat().pagePropositions, page);
+    ui.reinitialiser();
+    assert.equal(ui.etat().pagePropositions, null);
+    ui.retenirPagePropositions(page);
+    ui.retenirPagePropositions(null);
+    assert.equal(ui.etat().pagePropositions, null);
   });
 
   test('ouvrirImport garde le texte en attente et mène à la section import ; prendreImport le rend une fois', () => {

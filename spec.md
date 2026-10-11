@@ -635,6 +635,14 @@ réglages ajoute des candidats plutôt que d'effacer les précédents, et un
 classement unique les ordonne tous. Une commande efface la liste en épargnant
 celui qui est retenu.
 
+Au-delà de cent propositions, le tableau se lit par pages de cent : la page
+découpe ce classement unique sans le retrier, chaque ligne y garde son rang, et
+la ligne du retenu reste en tête de chaque page, hors du compte. La page est une
+posture de la navigation, jamais écrite (§ 8.4) : elle repart de la première à
+chaque ouverture d'un événement et après une génération, se borne à la dernière
+quand des propositions partent, et amène la proposition visée à chaque demande
+au plan, même répétée.
+
 **La commande prend une graine entière et un compte d'arrêt**, et une longueur
 d'historique d'acceptation dont l'algorithme fixe la valeur par défaut. Chaque
 proposition conserve sa graine dérivée, ce compte et cette longueur (§ 8.9).

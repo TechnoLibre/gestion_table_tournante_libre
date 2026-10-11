@@ -11,7 +11,9 @@
   // Les violations d'une ligne comparable — retenu compris — se lisent sous
   // son identifiant.
   //
-  // vue : ce que rend tableau(), libellés et étendues compris. nommer(id) :
+  // vue : ce que rend tableau(), libellés et étendues compris, ses lignes
+  // et ses lignes hors classement réduites à celles de la page montrée
+  // (pagine, modele.js) ; chaque ligne garde son rang global. nommer(id) :
   // le nom affiché d'une personne, null pour id null ou pour une personne que
   // la charge n'a plus. voir(id) et
   // retenir(id) : les gestes d'une ligne, que la section câble ; voir(null)

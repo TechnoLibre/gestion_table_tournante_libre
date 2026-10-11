@@ -461,3 +461,156 @@ export function nomDe(charge, id) {
   const personne = charge.participants.find((candidate) => candidate.id === id);
   return personne === undefined ? null : nomAffiche(personne);
 }
+
+/** Le nombre de propositions qu'une page du tableau montre (§ 5.7) : le
+ *  classement entier se découpe en pages de TAILLE_PAGE lignes, la ligne du
+ *  retenu en plus, hors du compte. */
+export const TAILLE_PAGE = 100;
+
+/** Le nombre de pages d'un tableau de total propositions : une au moins,
+ *  la page d'un tableau vide comprise. */
+export function nombreDePages(total) {
+  return Math.max(1, Math.ceil(total / TAILLE_PAGE));
+}
+
+// La page bornée aux pages existantes : la première en deçà, la dernière
+// au-delà.
+const bornee = (page, pages) => Math.min(Math.max(1, page), pages);
+
+/**
+ * La page d'un tableau (tableau()) : le classement unique découpé, jamais
+ * retrié. Les propositions se comptent dans l'ordre où le tableau les
+ * montre — les classées dans l'ordre du classement, puis celles hors
+ * classement —, et la page p porte celles de rang (p − 1) × TAILLE_PAGE + 1
+ * à p × TAILLE_PAGE. Chaque ligne garde le rang global que tableau() lui a
+ * donné. La page demandée se borne aux pages existantes.
+ *
+ * @param {{lignes: Object[], horsClassement: Object[]}} vue
+ * @param {number} page  entière, à partir de 1
+ * @returns {{lignes: Object[], horsClassement: Object[], page: number,
+ *   pages: number, premier: number, dernier: number, total: number,
+ *   paginee: boolean}}  lignes et horsClassement : celles de la page, dans
+ *   l'ordre de la vue ; page : la page bornée ; pages : leur nombre ;
+ *   premier et dernier : les places, à partir de 1, de la première et de la
+ *   dernière proposition de la page, 0 et 0 sans proposition ; total : le
+ *   nombre de propositions de la vue ; paginee : vrai au-delà d'une page,
+ *   seul cas où des commandes de page existent
+ */
+export function pagine(vue, page) {
+  const classees = vue.lignes.length;
+  const total = classees + vue.horsClassement.length;
+  const pages = nombreDePages(total);
+  const montree = bornee(page, pages);
+  const debut = (montree - 1) * TAILLE_PAGE;
+  const fin = Math.min(debut + TAILLE_PAGE, total);
+  return {
+    lignes: vue.lignes.slice(debut, fin),
+    horsClassement: vue.horsClassement.slice(Math.max(0, debut - classees), Math.max(0, fin - classees)),
+    page: montree,
+    pages,
+    premier: total === 0 ? 0 : debut + 1,
+    dernier: fin,
+    total,
+    paginee: total > TAILLE_PAGE,
+  };
+}
+
+/**
+ * La page du tableau qui porte la proposition id, classée ou hors
+ * classement ; null quand la vue ne la porte pas.
+ *
+ * @param {{lignes: Object[], horsClassement: Object[]}} vue
+ * @param {number|null} id
+ * @returns {number|null}
+ */
+export function pageDe(vue, id) {
+  const place = [...vue.lignes, ...vue.horsClassement].findIndex((ligne) => ligne.id === id);
+  return place === -1 ? null : Math.floor(place / TAILLE_PAGE) + 1;
+}
+
+// Ce qui distingue une proposition d'une autre : son identifiant, et ce qui
+// la régénère. Un retour arrière rend des identifiants que la génération
+// suivante réattribue, sous d'autres graines : l'identifiant seul ne dirait
+// pas qu'elle est nouvelle.
+const cleDe = ({ id, graine, arret, historique }) => `${id}/${graine}/${arret}/${historique}`;
+
+/**
+ * @typedef {Readonly<{cles: ReadonlyArray<string>, visee: number, page: number,
+ *   pages: number}>} SuiviDePage
+ *   la page du tableau que l'état de navigation retient pour l'événement
+ *   ouvert : les clés des propositions vues (cleDe), le numéro de la
+ *   dernière visée prise en compte (EtatUi.visee), la page, et le nombre de
+ *   pages
+ */
+
+// Vrai quand deux listes de clés portent les mêmes clés, dans le même ordre.
+const memesCles = (a, b) => a.length === b.length && a.every((cle, place) => cle === b[place]);
+
+/**
+ * La page à montrer, du suivi que l'état de navigation retient et de ce que
+ * l'écran montre maintenant (§ 8.4 : un état d'interface, que rien
+ * n'écrit) :
+ *
+ * - la première, sans suivi retenu — l'état de navigation le remet à null à
+ *   chaque ouverture d'un événement —, ou quand une proposition est
+ *   nouvelle : une génération montre son classement depuis le meilleur ;
+ * - sinon la page retenue, bornée à la dernière qui existe encore ;
+ * - à chaque visée nouvelle — un numéro de visée autre que celui du suivi :
+ *   « Voir sur le plan », un remède qui montre une proposition, même celle
+ *   que le plan montrait déjà —, la page qui porte la proposition visée, si
+ *   la vue la porte. Une visée retirée (vise null) n'amène rien.
+ *
+ * Rien de changé, le suivi retenu revient lui-même : l'état de navigation,
+ * qui ne publie qu'un état différent, ne republie pas.
+ *
+ * @param {SuiviDePage|null} retenue
+ * @param {{vue: {lignes: Object[], horsClassement: Object[]},
+ *   propositions: Object[], vise: number|null, visee: number}} observee  le
+ *   tableau, les propositions de la charge, la proposition que l'état de
+ *   navigation demande au plan, et le numéro de cette visée
+ * @returns {SuiviDePage}  le suivi à retenir, celui de la page montrée
+ */
+export function suivrePage(retenue, { vue, propositions, vise, visee }) {
+  const cles = propositions.map(cleDe);
+  const pages = nombreDePages(vue.lignes.length + vue.horsClassement.length);
+  const connues = new Set(retenue?.cles ?? []);
+  const neuve = retenue === null || cles.some((cle) => !connues.has(cle));
+  let page = neuve ? 1 : retenue.page;
+  const visant = vise !== null && (retenue === null || visee !== retenue.visee) ? pageDe(vue, vise) : null;
+  if (visant !== null) page = visant;
+  page = bornee(page, pages);
+  if (retenue !== null && retenue.visee === visee && retenue.page === page && retenue.pages === pages && memesCles(retenue.cles, cles)) {
+    return retenue;
+  }
+  return Object.freeze({ cles: Object.freeze(cles), visee, page, pages });
+}
+
+/**
+ * Le suivi à la page demandée, bornée aux pages existantes.
+ *
+ * @param {SuiviDePage} suivi
+ * @param {number} page
+ * @returns {SuiviDePage}
+ */
+export function changerDePage(suivi, page) {
+  return Object.freeze({ ...suivi, page: bornee(page, suivi.pages) });
+}
+
+/**
+ * Le texte de l'étendue d'une page (pagine) : « Propositions 101 à 200 sur
+ * 237 », au singulier pour une page d'une seule proposition. Ses nombres se
+ * mettent en forme par format.nombre ; le compte de la page accorde le nom.
+ *
+ * @param {{premier: number, dernier: number, total: number}} page
+ * @param {{t: Function, format: {nombre: Function}}} outils  la traduction
+ *   et la mise en forme du contexte
+ * @returns {string}
+ */
+export function texteEtendue({ premier, dernier, total }, { t, format }) {
+  return t('propositions.pages.etendue', {
+    premier: format.nombre(premier),
+    dernier: format.nombre(dernier),
+    total: format.nombre(total),
+    nombre: dernier - premier + 1,
+  });
+}

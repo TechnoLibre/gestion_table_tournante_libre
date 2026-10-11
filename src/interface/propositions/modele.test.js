@@ -32,15 +32,22 @@ import { TABLES_INTERFACE } from '../libelles.js';
 import {
   COLONNES,
   GROUPES_COLONNES,
+  TAILLE_PAGE,
+  changerDePage,
   colonneDuCritere,
   demandeConfirmation,
   evaluation,
   explicationDeColonne,
   nomDe,
+  nombreDePages,
+  pageDe,
+  pagine,
   retenuAjuste,
+  suivrePage,
   surlignee,
   tableau,
   texteCellule,
+  texteEtendue,
 } from './modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
@@ -889,5 +896,222 @@ describe('COLONNES : les colonnes de nombres', () => {
   test('nombre est vrai pour le rang et chaque mesure chiffrée ; faux pour la proposition, le certificat en mots, les imposés et les commandes', () => {
     const textes = new Set(['proposition', 'certificat', 'imposes', 'commandes']);
     for (const colonne of COLONNES) assert.equal(colonne.nombre, !textes.has(colonne.nom), colonne.nom);
+  });
+});
+
+// --- La pagination du classement (§ 5.7, § 2.1 étapes 9 et 10, § 8.4) ---------
+
+// Une vue réduite à ce que la pagination lit : comparables lignes classées,
+// rangs 1 à comparables, identifiants 1000 + rang ; puis hors propositions
+// hors classement, identifiants 1 à hors.
+function vueDe(comparables, hors = 0) {
+  return {
+    lignes: Array.from({ length: comparables }, (_, place) => ({ id: 1000 + place + 1, rang: place + 1, comparable: true })),
+    horsClassement: Array.from({ length: hors }, (_, place) => ({ id: place + 1, rang: null, comparable: false })),
+    retenu: null,
+  };
+}
+
+// Les propositions d'une charge, réduites à ce qui les distingue : chaque
+// identifiant reçoit sa graine, son arrêt et son historique.
+const propositionsDe = (ids, { graine = 0, arret = 40, historique = 1000 } = {}) =>
+  ids.map((id) => ({ id, graine: graine + id, arret, historique }));
+
+// Ce que la section observe d'une vue : la vue, les propositions de sa
+// charge — une par ligne —, la proposition visée et le numéro de sa visée.
+function observee(vue, { vise = null, visee = 0, graine = 0, arret = 40, historique = 1000 } = {}) {
+  const ids = [...vue.lignes, ...vue.horsClassement].map(({ id }) => id);
+  return { vue, propositions: propositionsDe(ids, { graine, arret, historique }), vise, visee };
+}
+
+describe('pagination : le classement unique se découpe en pages de cent (§ 5.7, § 2.1 étape 9)', () => {
+  test('TAILLE_PAGE vaut 100 ; nombreDePages compte une page au moins', () => {
+    assert.equal(TAILLE_PAGE, 100);
+    assert.deepEqual([0, 1, 100, 101, 200, 201, 237].map(nombreDePages), [1, 1, 1, 2, 2, 3, 3]);
+  });
+
+  test('aux bornes 0, 1, 100, 101, 200, 201 : les pages mises bout à bout rendent le classement entier, dans son ordre, chaque rang une fois', () => {
+    for (const n of [0, 1, 100, 101, 200, 201]) {
+      const vue = vueDe(n);
+      const pages = nombreDePages(n);
+      const lues = [];
+      for (let page = 1; page <= pages; page += 1) {
+        const decoupe = pagine(vue, page);
+        assert.equal(decoupe.page, page, `${n} : page ${page}`);
+        assert.equal(decoupe.pages, pages, `${n}`);
+        assert.equal(decoupe.total, n, `${n}`);
+        assert.equal(decoupe.paginee, n > 100, `${n}`);
+        assert.ok(decoupe.lignes.length <= TAILLE_PAGE, `${n} : page ${page}`);
+        assert.equal(decoupe.premier, n === 0 ? 0 : (page - 1) * TAILLE_PAGE + 1, `${n} : page ${page}`);
+        assert.equal(decoupe.dernier, Math.min(page * TAILLE_PAGE, n), `${n} : page ${page}`);
+        assert.equal(decoupe.dernier - decoupe.premier + (n === 0 ? 0 : 1), decoupe.lignes.length, `${n} : page ${page}`);
+        lues.push(...decoupe.lignes);
+      }
+      assert.deepEqual(lues, vue.lignes, `${n}`);
+    }
+  });
+
+  test('à cent propositions ou moins, la page unique rend la vue telle quelle ; à 201, la page 3 ne porte que le rang 201', () => {
+    const cent = vueDe(100, 0);
+    assert.deepEqual(pagine(cent, 1).lignes, cent.lignes);
+    const troisPages = pagine(vueDe(201), 3);
+    assert.deepEqual(troisPages.lignes.map(({ rang }) => rang), [201]);
+    assert.deepEqual([troisPages.premier, troisPages.dernier, troisPages.total], [201, 201, 201]);
+  });
+
+  test('une ligne de la page 2 garde son rang global : 101 à 200, jamais 1', () => {
+    const decoupe = pagine(vueDe(237), 2);
+    assert.deepEqual(decoupe.lignes.map(({ rang }) => rang), Array.from({ length: 100 }, (_, place) => 101 + place));
+    assert.deepEqual([decoupe.premier, decoupe.dernier, decoupe.total], [101, 200, 237]);
+  });
+
+  test('une page hors des pages existantes se borne : 0 et moins à la première, au-delà à la dernière', () => {
+    const vue = vueDe(237);
+    assert.equal(pagine(vue, 0).page, 1);
+    assert.equal(pagine(vue, -4).page, 1);
+    assert.equal(pagine(vue, 4).page, 3);
+    assert.equal(pagine(vue, 99).page, 3);
+    assert.equal(pagine(vueDe(0), 2).page, 1);
+  });
+
+  test('les propositions hors classement suivent les classées dans le compte : 150 classées et 60 hors, la page 2 porte 50 et 50, la page 3 les 10 dernières hors', () => {
+    const vue = vueDe(150, 60);
+    const deux = pagine(vue, 2);
+    assert.deepEqual(deux.lignes.map(({ rang }) => rang), Array.from({ length: 50 }, (_, place) => 101 + place));
+    assert.deepEqual(deux.horsClassement.map(({ id }) => id), Array.from({ length: 50 }, (_, place) => place + 1));
+    assert.deepEqual([deux.premier, deux.dernier, deux.total, deux.pages], [101, 200, 210, 3]);
+    const trois = pagine(vue, 3);
+    assert.deepEqual(trois.lignes, []);
+    assert.deepEqual(trois.horsClassement.map(({ id }) => id), [51, 52, 53, 54, 55, 56, 57, 58, 59, 60]);
+    assert.deepEqual(pagine(vue, 1).horsClassement, []);
+  });
+
+  test('la grande et 237 propositions : la page découpe le classement de evaluer, sans tri local — la page 2 commence au 101e de l’ordre du moteur', () => {
+    const charge = generee(chargeDemo('grande'), { graine: 7, nombre: 237, arret: 50, historique: 1000 });
+    const table = evaluer(charge);
+    const vue = tableau(table);
+    const ordre = parLeMoteur(charge).classement.ordre;
+    assert.equal(ordre.length, 237);
+    const pages = [1, 2, 3].map((page) => pagine(vue, page));
+    assert.deepEqual(pages.flatMap(({ lignes }) => lignes.map(({ id }) => id)), ordre);
+    assert.deepEqual(pages[1].lignes.map(({ id }) => id), ordre.slice(100, 200));
+    assert.deepEqual(pages.map(({ lignes }) => lignes.length), [100, 100, 37]);
+    assert.notDeepEqual(
+      pages[1].lignes.map(({ id }) => id),
+      [...pages[1].lignes.map(({ id }) => id)].sort((a, b) => a - b),
+      'l’ordre du classement n’est pas celui des identifiants',
+    );
+  });
+
+  test('pageDe rend la page d’une proposition, classée ou hors classement ; null pour une proposition absente', () => {
+    const vue = vueDe(150, 60);
+    assert.equal(pageDe(vue, 1001), 1);
+    assert.equal(pageDe(vue, 1100), 1);
+    assert.equal(pageDe(vue, 1101), 2);
+    assert.equal(pageDe(vue, 1150), 2);
+    assert.equal(pageDe(vue, 50), 2);
+    assert.equal(pageDe(vue, 51), 3);
+    assert.equal(pageDe(vue, 999), null);
+    assert.equal(pageDe(vue, null), null);
+  });
+});
+
+describe('pagination : la page suit l’état de navigation, jamais le fichier (§ 8.4)', () => {
+  test('sans page retenue, la première ; la page choisie se garde tant que rien ne change', () => {
+    const vue = vueDe(237);
+    const depart = suivrePage(null, observee(vue));
+    assert.equal(depart.page, 1);
+    const choisie = changerDePage(depart, 3);
+    assert.equal(choisie.page, 3);
+    assert.equal(suivrePage(choisie, observee(vue)).page, 3);
+  });
+
+  test('changerDePage se borne aux pages existantes', () => {
+    const suivi = suivrePage(null, observee(vueDe(237)));
+    assert.equal(changerDePage(suivi, 0).page, 1);
+    assert.equal(changerDePage(suivi, 7).page, 3);
+    assert.equal(changerDePage(suivi, 2).page, 2);
+  });
+
+  test('rien de changé — mêmes propositions, même visée — : le suivi retenu lui-même, que l’état de navigation ne republie pas', () => {
+    const vue = vueDe(237);
+    const choisie = changerDePage(suivrePage(null, observee(vue, { vise: 1150, visee: 4 })), 3);
+    assert.equal(suivrePage(choisie, observee(vue, { vise: 1150, visee: 4 })), choisie);
+    assert.ok(Object.isFrozen(choisie));
+    assert.notEqual(suivrePage(choisie, observee(vueDe(150), { vise: 1150, visee: 4 })), choisie);
+  });
+
+  test('moins de propositions, sans aucune nouvelle — un effacement, un retour : la page se borne à la dernière', () => {
+    const choisie = changerDePage(suivrePage(null, observee(vueDe(237))), 3);
+    const apres = suivrePage(choisie, observee(vueDe(150)));
+    assert.equal(apres.page, 2);
+    assert.equal(suivrePage(choisie, observee(vueDe(1))).page, 1);
+    assert.equal(suivrePage(choisie, observee(vueDe(201))).page, 3);
+  });
+
+  test('une proposition nouvelle — une génération — ramène à la première page, même quand le compte baisse', () => {
+    const choisie = changerDePage(suivrePage(null, observee(vueDe(237))), 2);
+    assert.equal(suivrePage(choisie, observee(vueDe(300))).page, 1);
+    const moins = suivrePage(choisie, observee(vueDe(150)));
+    assert.equal(moins.page, 2);
+    // Un retour qui retire des propositions, puis une génération qui réattribue
+    // leurs identifiants sous d'autres graines : des identifiants déjà vus,
+    // des propositions nouvelles, donc la première.
+    assert.equal(suivrePage(choisie, observee(vueDe(150), { graine: 5000 })).page, 1);
+    assert.equal(suivrePage(choisie, observee(vueDe(150), { arret: 41 })).page, 1);
+    assert.equal(suivrePage(choisie, observee(vueDe(150), { historique: 1001 })).page, 1);
+  });
+
+  test('des clés qui changent sans changer le compte de pages sont retenues : le retour des propositions retirées ramène à la première page', () => {
+    const choisie = changerDePage(suivrePage(null, observee(vueDe(250))), 2);
+    const apres = suivrePage(choisie, observee(vueDe(220)));
+    assert.deepEqual([apres.page, apres.cles.length], [2, 220]);
+    assert.equal(suivrePage(apres, observee(vueDe(250))).page, 1);
+  });
+
+  test('une proposition visée depuis ailleurs, sur une autre page, amène sa page ; même numéro de visée, la page choisie reste', () => {
+    const vue = vueDe(237);
+    const choisie = changerDePage(suivrePage(null, observee(vue)), 3);
+    const visee = suivrePage(choisie, observee(vue, { vise: 1150, visee: 1 }));
+    assert.equal(visee.page, 2);
+    const ailleurs = changerDePage(visee, 3);
+    assert.equal(suivrePage(ailleurs, observee(vue, { vise: 1150, visee: 1 })).page, 3);
+    assert.equal(suivrePage(ailleurs, observee(vue, { vise: null, visee: 1 })).page, 3);
+    assert.equal(suivrePage(ailleurs, observee(vue, { vise: 999, visee: 2 })).page, 3, 'une proposition absente n’amène rien');
+    assert.equal(suivrePage(null, observee(vue, { vise: 1201, visee: 1 })).page, 3);
+  });
+
+  test('la même proposition visée de nouveau — un autre numéro de visée — amène encore sa page ; une visée retirée n’amène rien', () => {
+    const vue = vueDe(237);
+    const ailleurs = changerDePage(suivrePage(null, observee(vue, { vise: 1150, visee: 1 })), 3);
+    assert.equal(ailleurs.page, 3);
+    assert.equal(suivrePage(ailleurs, observee(vue, { vise: 1150, visee: 2 })).page, 2);
+    assert.equal(suivrePage(ailleurs, observee(vue, { vise: 1150, visee: 7 })).page, 2);
+    assert.equal(suivrePage(ailleurs, observee(vue, { vise: null, visee: 2 })).page, 3);
+  });
+});
+
+describe('pagination : le texte de l’étendue (libelles/propositions.js)', () => {
+  test('« Propositions 101 à 200 sur 237 », au singulier pour une page d’une seule proposition ; des chiffres déjà mis en forme', () => {
+    const etendue = (premier, dernier, total) =>
+      t('propositions.pages.etendue', {
+        premier: format.nombre(premier),
+        dernier: format.nombre(dernier),
+        total: format.nombre(total),
+        nombre: dernier - premier + 1,
+      });
+    assert.equal(etendue(101, 200, 237), 'Propositions 101 à 200 sur 237');
+    assert.equal(etendue(201, 201, 201), 'Proposition 201 sur 201');
+    assert.equal(etendue(1, 100, 1500), `Propositions 1 à 100 sur ${format.nombre(1500)}`);
+    assert.equal(t('propositions.pages.precedentes'), 'Précédentes');
+    assert.equal(t('propositions.pages.suivantes'), 'Suivantes');
+    assert.notEqual(t('propositions.pages.haut'), t('propositions.pages.bas'));
+  });
+
+  test('texteEtendue met en forme les nombres de la page par format.nombre : la page 11 de 1 500, « Propositions 1 001 à 1 100 sur 1 500 »', () => {
+    const fine = '\u{202F}';
+    assert.equal(texteEtendue(pagine(vueDe(1500), 11), { t, format }), `Propositions 1${fine}001 à 1${fine}100 sur 1${fine}500`);
+    assert.equal(texteEtendue(pagine(vueDe(1101), 12), { t, format }), `Proposition 1${fine}101 sur 1${fine}101`);
+    assert.equal(texteEtendue(pagine(vueDe(237), 2), { t, format }), 'Propositions 101 à 200 sur 237');
   });
 });

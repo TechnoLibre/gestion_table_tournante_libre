@@ -3,10 +3,11 @@
 
 // L'état de navigation de l'interface : la section ouverte, le panneau « À
 // propos », le tour montré, la personne mise en évidence, la proposition
-// demandée au plan, le texte d'un import en attente, les listes de noms, le
-// plein écran, la place sélectionnée, la fiche ouverte, le choix en attente
-// du plan, le refus posé sur une place, l'appartenance collante du
-// formulaire d'ajout et l'aperçu avant impression. Ce qu'il tient survit au
+// demandée au plan et le numéro de sa demande, le texte d'un import en
+// attente, les listes de noms, le plein écran, la place sélectionnée, la
+// fiche ouverte, le choix en attente du plan, le refus posé sur une place,
+// l'appartenance collante du formulaire d'ajout, l'aperçu avant impression
+// et la page du tableau des propositions. Ce qu'il tient survit au
 // démontage des sections.
 // Regarder n'écrit jamais (§ 8.4) : cet état ne reçoit ni la séance, ni la
 // façade, ni un système de fichiers, et rien de ce qu'il tient ne quitte la
@@ -49,6 +50,12 @@ import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
  *           tour du plan, 'tous' pour une vue de la soirée, jamais pour le plan ; les
  *           listes de noms du plan ; sa découpe en pages ; la feuille par table, une
  *           par tour ou la soirée en colonnes ; la section où l'aperçu se referme
+ * @property {number} visee               le numéro de la dernière demande d'une proposition
+ *           au plan : chaque montrerProposition d'une proposition l'augmente de 1, même
+ *           pour celle déjà demandée ; 0 au départ
+ * @property {Object|null} pagePropositions le suivi de la page du tableau des propositions
+ *           (SuiviDePage, propositions/modele.js), figé, que la section des propositions
+ *           tient ; null au départ, et chaque événement qui s'ouvre repart de la première page
  */
 
 // L'état de navigation d'un événement qui s'ouvre, panneau « À propos »
@@ -67,6 +74,8 @@ const DEPART = Object.freeze({
   pose: null,
   appartenance: '',
   apercu: null,
+  visee: 0,
+  pagePropositions: null,
 });
 
 /** Les vues que l'aperçu imprime (§ 11.7). */
@@ -144,7 +153,8 @@ function choixValide(choix) {
  *   basculerListes: Function, basculerPleinEcran: Function,
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
  *   poserSurPlace: Function, garderAppartenance: Function,
- *   ouvrirApercu: Function, reglerApercu: Function, fermerApercu: Function}}
+ *   ouvrirApercu: Function, reglerApercu: Function, fermerApercu: Function,
+ *   retenirPagePropositions: Function}}
  */
 export function creerEtatUi() {
   let etat = Object.freeze({ ...DEPART, apropos: false });
@@ -197,9 +207,21 @@ export function creerEtatUi() {
       changer({ miseEnEvidence: id });
     },
     /** Demande la proposition id au plan, ou aucune (null) ; la pose, lue
-     *  sur l'état des places d'avant, se retire. */
+     *  sur l'état des places d'avant, se retire. Chaque demande d'une
+     *  proposition reçoit le numéro de visée suivant, et publie donc un état
+     *  neuf même pour la proposition déjà demandée : la section des
+     *  propositions y reconnaît une visée nouvelle. */
     montrerProposition(id) {
-      changer({ proposition: id, pose: null });
+      changer(id === null ? { proposition: null, pose: null } : { proposition: id, pose: null, visee: etat.visee + 1 });
+    },
+    /** Retient le suivi de la page du tableau des propositions, un objet
+     *  figé, ou null ; RangeError sinon, sans rien changer. Le même suivi ne
+     *  publie rien. */
+    retenirPagePropositions(suivi) {
+      if (suivi !== null && (typeof suivi !== 'object' || !Object.isFrozen(suivi))) {
+        throw new RangeError(`page des propositions : suivi figé ou null attendu, reçu ${JSON.stringify(suivi)}`);
+      }
+      changer({ pagePropositions: suivi });
     },
     /** Garde un texte à importer et ouvre la section de l'import. */
     ouvrirImport({ texte, origine }) {

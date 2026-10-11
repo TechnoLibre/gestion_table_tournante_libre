@@ -41,6 +41,22 @@ export const TABLE = new Map([
       `Appliqué à sa place : ${critere(applique, texte)}.`,
   ],
 
+  // --- Les pages du classement (§ 5.7) -------------------------------------------
+  // Au-delà de cent propositions, le classement se lit page à page ; chaque
+  // nav des pages se nomme, celle du dessus et celle du dessous. L'étendue
+  // reçoit ses nombres déjà mis en forme (texteEtendue,
+  // propositions/modele.js), et nombre, le compte de la page, qui accorde
+  // son nom.
+  ['propositions.pages.haut', 'Pages du classement'],
+  ['propositions.pages.bas', 'Pages du classement, sous le tableau'],
+  ['propositions.pages.precedentes', 'Précédentes'],
+  ['propositions.pages.suivantes', 'Suivantes'],
+  [
+    'propositions.pages.etendue',
+    ({ premier, dernier, total, nombre }) =>
+      nombre <= 1 ? `Proposition ${premier} sur ${total}` : `Propositions ${premier} à ${dernier} sur ${total}`,
+  ],
+
   // --- Les colonnes, chacune avec son unité (§ 5.4, § 5.5) ----------------------
   ['propositions.colonne.rang', 'Rang'],
   ['propositions.colonne.proposition', 'Proposition'],
