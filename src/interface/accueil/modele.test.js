@@ -5,7 +5,8 @@
 // ligne de la liste, mises en forme, et ses signalements ; les réponses
 // d'une question du dossier de travail ; les secours d'un état illisible ;
 // le refus d'un geste de la liste, sans remède ; l'annonce du dossier de
-// travail, une fois par séance. Chaque clé que le modèle rend existe dans la
+// travail, une fois par séance ; les tuiles par état du plan, le résumé de
+// la liste, ses groupes et la vue que la séance retient. Chaque clé que le modèle rend existe dans la
 // traduction. Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
@@ -24,12 +25,20 @@ import { COLONNES, texteCellule } from '../propositions/modele.js';
 import {
   COLONNES_DU_RETENU,
   ETATS,
+  FILTRES,
+  GROUPEMENTS,
   MEILLEURE,
   SAISIES,
   champDuRefus,
+  choixDeGroupement,
   cleDEtat,
+  groupesDeLaListe,
   ligneAffichee,
   premiereAnnonce,
+  resumeDeLaListe,
+  retenirVue,
+  tuilesDeLaListe,
+  vueDeLaListe,
   refusDeLaListe,
   reponsesDe,
   saisieDe,
@@ -439,5 +448,212 @@ describe('ligneAffichee : la meilleure proposition du classement (§ 5.4, § 5.7
       assert.deepEqual(affichee.meilleure, { id: format.nombre(bloc.id), collisions: texteCellule(bloc.cellule, { t, format }) });
     }
     assert.equal(classees, 2);
+  });
+});
+
+// --- La vue de la liste : tuiles, résumé, groupes (§ 8.1, § 9) -------------------
+
+// Une liste de sept lignes, dans l'ordre de la façade : deux brouillons, un
+// proposé, un retenu, deux bloqués et un état illisible, entremêlés.
+function liste() {
+  const lisible = (base, etat, participants) => ligne({ base, id: `evt-${base}`, nom: base, etat, participants });
+  return [
+    lisible('Nuit des Pervenches', 'bloque', 40),
+    lisible('Bal des Grisailles', 'brouillon', 12),
+    ligne({ base: 'Soirée vide', id: null, nom: null, etat: null, participants: null, illisible: { raison: 'VIDE' } }),
+    lisible('Gala des Ombrelles', 'retenu', 1200),
+    lisible('Club des Merles', 'brouillon', 0),
+    lisible('Souper des Hiboux', 'propose', 7),
+    lisible('Fête des Lucioles', 'bloque', 3),
+  ];
+}
+const bases = (lignes) => lignes.map(({ base }) => base);
+
+describe('tuilesDeLaListe : une tuile par filtre (§ 8.1, § 9)', () => {
+  test('Tous, puis les quatre états dans l’ordre du § 9 ; chaque compte, mis en forme ; seule la tuile du filtre est pressée', () => {
+    assert.deepEqual(FILTRES, ['tous', 'brouillon', 'propose', 'retenu', 'bloque']);
+    // Un format qui marque ses nombres : sous 1 000, format.nombre(n) vaut
+    // String(n), et un compte resté brut passerait pour mis en forme.
+    const marque = { nombre: (n) => `#${n}` };
+    const tuiles = tuilesDeLaListe(liste(), 'propose', marque);
+    assert.deepEqual(
+      tuiles.map(({ filtre, compte, presse }) => [filtre, compte, presse]),
+      [
+        ['tous', '#7', false],
+        ['brouillon', '#2', false],
+        ['propose', '#1', true],
+        ['retenu', '#1', false],
+        ['bloque', '#2', false],
+      ],
+    );
+  });
+
+  test('le nom de chaque état est celui de la colonne État ; Tous et chaque aide ont leur clé, qui existe, et l’aide redit le § 9', () => {
+    const tuiles = tuilesDeLaListe(liste(), 'tous', format);
+    for (const { filtre, cle, aide } of tuiles) {
+      if (filtre !== 'tous') assert.equal(cle, cleDEtat(filtre));
+      assert.ok(t(cle).length > 0, cle);
+      assert.ok(t(aide).length > 0, aide);
+    }
+    assert.equal(t(tuiles[0].cle), 'Tous les événements');
+    assert.deepEqual(
+      tuiles.slice(1).map(({ aide }) => t(aide)),
+      ['on prépare', 'des placements existent, aucun n\u{2019}est retenu', 'un placement est en vigueur', 'rien ne peut plus changer'],
+    );
+  });
+
+  test('la pastille de chaque tuile : celle de son état ; Tous, un statut d’information à l’icône de la liste', () => {
+    assert.deepEqual(
+      tuilesDeLaListe(liste(), 'tous', format).map(({ pastille }) => pastille),
+      [
+        { sorte: 'statut', valeur: 'information', icone: 'liste' },
+        ...ETATS.map((etat) => ({ sorte: 'etat', valeur: etat, icone: null })),
+      ],
+    );
+  });
+
+  test('une liste vide compte zéro partout ; un filtre inconnu lève', () => {
+    assert.deepEqual(
+      tuilesDeLaListe([], 'tous', format).map(({ compte }) => compte),
+      FILTRES.map(() => format.nombre(0)),
+    );
+    assert.throws(() => tuilesDeLaListe(liste(), 'illisible', format), RangeError);
+    assert.throws(() => tuilesDeLaListe(liste(), undefined, format), RangeError);
+  });
+});
+
+describe('resumeDeLaListe : le résumé de l’en-tête (§ 8.1)', () => {
+  test('le nombre d’événements, et la somme des participants déjà listés : un état illisible n’en apporte aucun', () => {
+    assert.deepEqual(resumeDeLaListe(liste()), { evenements: 7, participants: 1262 });
+    assert.deepEqual(resumeDeLaListe([]), { evenements: 0, participants: 0 });
+  });
+
+  test('le texte du résumé accorde chaque compte, et met les nombres en forme', () => {
+    assert.equal(t('accueil.entete.resume', resumeDeLaListe(liste())), `7 événements \u{00B7} ${format.nombre(1262)} participants au total`);
+    assert.equal(t('accueil.entete.resume', { evenements: 1, participants: 1 }), '1 événement \u{00B7} 1 participant au total');
+    assert.equal(t('accueil.entete.resume', { evenements: 1, participants: 0 }), '1 événement \u{00B7} 0 participant au total');
+    // Le compte des événements passe lui aussi par la mise en forme des nombres.
+    assert.notEqual(format.nombre(1200), '1200');
+    assert.equal(t('accueil.entete.resume', { evenements: 1200, participants: 1 }), `${format.nombre(1200)} événements \u{00B7} 1 participant au total`);
+  });
+});
+
+describe('groupesDeLaListe : les groupes du tableau (§ 8.1, § 9)', () => {
+  test('par état : les groupes dans l’ordre du § 9, puis les états illisibles ; dans chaque groupe, l’ordre de la façade ; un état sans ligne n’a pas de groupe', () => {
+    const lignes = liste().filter(({ etat }) => etat !== 'propose');
+    const groupes = groupesDeLaListe(lignes, 'tous', 'etat');
+    assert.deepEqual(
+      groupes.map(({ groupe, cle, details }) => [groupe, cle, details]),
+      [
+        ['brouillon', 'accueil.etat.brouillon', { evenements: 2 }],
+        ['retenu', 'accueil.etat.retenu', { evenements: 1 }],
+        ['bloque', 'accueil.etat.bloque', { evenements: 2 }],
+        ['illisible', 'accueil.groupe.illisible', { evenements: 1 }],
+      ],
+    );
+    assert.deepEqual(bases(groupes[0].lignes), ['Bal des Grisailles', 'Club des Merles']);
+    assert.deepEqual(bases(groupes[2].lignes), ['Nuit des Pervenches', 'Fête des Lucioles']);
+    assert.deepEqual(bases(groupes[3].lignes), ['Soirée vide']);
+    assert.equal(groupes[0].lignes[0], lignes[1]);
+  });
+
+  test('la pastille de chaque groupe : celle de son état ; les états illisibles, un avis à l’icône du triangle ; chaque clé existe', () => {
+    const groupes = groupesDeLaListe(liste(), 'tous', 'etat');
+    assert.deepEqual(
+      groupes.map(({ pastille }) => pastille),
+      [
+        ...ETATS.map((etat) => ({ sorte: 'etat', valeur: etat, icone: null })),
+        { sorte: 'statut', valeur: 'avis', icone: 'triangle' },
+      ],
+    );
+    for (const { cle, details } of groupes) {
+      assert.ok(t(cle).length > 0, cle);
+      assert.ok(t('accueil.groupe.compte', details).length > 0);
+    }
+    assert.equal(t('accueil.groupe.compte', { evenements: 1 }), '1 événement');
+    assert.equal(t('accueil.groupe.compte', { evenements: 2 }), '2 événements');
+    // Au-delà de 999, le compte prend la mise en forme des nombres.
+    assert.notEqual(format.nombre(1200), '1200');
+    assert.equal(t('accueil.groupe.compte', { evenements: 1200 }), `${format.nombre(1200)} événements`);
+  });
+
+  test('un filtre ne retient que son état, illisibles écartés ; sans ligne retenue, aucun groupe', () => {
+    const groupes = groupesDeLaListe(liste(), 'bloque', 'etat');
+    assert.deepEqual(
+      groupes.map(({ groupe }) => groupe),
+      ['bloque'],
+    );
+    assert.deepEqual(bases(groupes[0].lignes), ['Nuit des Pervenches', 'Fête des Lucioles']);
+    assert.deepEqual(groupesDeLaListe(liste().filter(({ etat }) => etat !== 'retenu'), 'retenu', 'etat'), []);
+    assert.deepEqual(groupesDeLaListe([], 'tous', 'etat'), []);
+    assert.deepEqual(groupesDeLaListe([], 'tous', 'aucun'), []);
+  });
+
+  test('sans groupement : un seul groupe sans intitulé, dans l’ordre de la façade, filtré comme les autres', () => {
+    const lignes = liste();
+    const [seul, ...autres] = groupesDeLaListe(lignes, 'tous', 'aucun');
+    assert.deepEqual(autres, []);
+    assert.equal(seul.groupe, null);
+    assert.equal(seul.cle, null);
+    assert.equal(seul.pastille, null);
+    assert.deepEqual(seul.details, { evenements: 7 });
+    assert.deepEqual(bases(seul.lignes), bases(lignes));
+    assert.deepEqual(
+      bases(groupesDeLaListe(lignes, 'brouillon', 'aucun')[0].lignes),
+      ['Bal des Grisailles', 'Club des Merles'],
+    );
+  });
+
+  test('un filtre, un groupement ou un état de ligne inconnus lèvent : aucune ligne ne disparaît en silence', () => {
+    assert.throws(() => groupesDeLaListe(liste(), 'illisible', 'etat'), RangeError);
+    assert.throws(() => groupesDeLaListe(liste(), 'tous', 'date'), RangeError);
+    assert.throws(() => groupesDeLaListe([ligne({ etat: 'archive' })], 'tous', 'etat'), RangeError);
+    assert.throws(() => groupesDeLaListe([ligne({ etat: 'archive' })], 'tous', 'aucun'), RangeError);
+  });
+
+  test('choixDeGroupement : par état du plan, puis aucun, chacun avec sa clé, qui existe', () => {
+    assert.deepEqual(GROUPEMENTS, ['etat', 'aucun']);
+    const choix = choixDeGroupement();
+    assert.deepEqual(
+      choix.map(({ groupement }) => groupement),
+      GROUPEMENTS,
+    );
+    assert.deepEqual(
+      choix.map(({ cle }) => t(cle)),
+      ['État du plan', 'Aucun groupement'],
+    );
+    choix[0].cle = 'autre';
+    assert.equal(choixDeGroupement()[0].cle, 'accueil.groupement.etat');
+  });
+});
+
+describe('vueDeLaListe : le filtre et le groupement, retenus par la séance, jamais écrits (§ 8.1)', () => {
+  test('par défaut, tous les événements groupés par état ; une vue retenue se relit pour la même séance, et pour elle seule', () => {
+    const seance = {};
+    const autre = {};
+    assert.deepEqual(vueDeLaListe(seance), { filtre: 'tous', groupement: 'etat' });
+    retenirVue(seance, { filtre: 'retenu', groupement: 'aucun' });
+    assert.deepEqual(vueDeLaListe(seance), { filtre: 'retenu', groupement: 'aucun' });
+    assert.deepEqual(vueDeLaListe(autre), { filtre: 'tous', groupement: 'etat' });
+  });
+
+  test('la vue rendue est une copie : la changer ne change pas ce que la séance retient', () => {
+    const seance = {};
+    const vue = vueDeLaListe(seance);
+    vue.filtre = 'bloque';
+    assert.deepEqual(vueDeLaListe(seance), { filtre: 'tous', groupement: 'etat' });
+    const retenue = { filtre: 'propose', groupement: 'etat' };
+    retenirVue(seance, retenue);
+    retenue.filtre = 'bloque';
+    assert.equal(vueDeLaListe(seance).filtre, 'propose');
+  });
+
+  test('une séance absente, un filtre ou un groupement inconnus lèvent, et rien n’est retenu', () => {
+    const seance = {};
+    assert.throws(() => vueDeLaListe(null), TypeError);
+    assert.throws(() => retenirVue('séance', { filtre: 'tous', groupement: 'etat' }), TypeError);
+    assert.throws(() => retenirVue(seance, { filtre: 'illisible', groupement: 'etat' }), RangeError);
+    assert.throws(() => retenirVue(seance, { filtre: 'tous', groupement: 'date' }), RangeError);
+    assert.deepEqual(vueDeLaListe(seance), { filtre: 'tous', groupement: 'etat' });
   });
 });

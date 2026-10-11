@@ -6,10 +6,11 @@
 // ligne de la liste (LigneListe de la façade, evenements.js) devient ses six
 // informations et ses signalements, mis en forme, puis, son résumé reçu, les
 // deux mesures de son retenu et la meilleure proposition de son
-// classement ; une question du dossier de travail, ses réponses ; un état
-// illisible, ses secours ; un refus de la façade, le refus affiché sur la
-// liste. Chaque clé rendue est écrite ici en entier : aucun composant ne
-// compose une clé.
+// classement ; les lignes de la liste, les tuiles de ses filtres par état
+// du plan, le résumé de son en-tête et les groupes de son tableau ; une
+// question du dossier de travail, ses réponses ; un état illisible, ses
+// secours ; un refus de la façade, le refus affiché sur la liste. Chaque clé
+// rendue est écrite ici en entier : aucun composant ne compose une clé.
 import { COLONNE_ANNONCEE } from '../generation/meilleure.js';
 import { COLONNES } from '../propositions/modele.js';
 
@@ -327,4 +328,202 @@ export function premiereAnnonce(seance) {
   if (ANNONCEES.has(seance)) return false;
   ANNONCEES.add(seance);
   return true;
+}
+
+// --- La vue de la liste : filtres, résumé, groupes (§ 8.1, § 9) ------------------
+
+/**
+ * Les filtres de la liste, dans l'ordre de leurs tuiles : tous les
+ * événements, puis chaque état du plan, dans l'ordre du § 9.
+ */
+export const FILTRES = Object.freeze(['tous', ...ETATS]);
+
+// Le groupe des lignes dont l'état ne se lit pas : il suit les quatre états,
+// et aucun filtre d'état ne le retient.
+const ILLISIBLE = 'illisible';
+
+// La clé du nom et celle de l'aide de chaque tuile ; le nom d'un état est
+// celui de la colonne État, l'aide redit sa ligne du tableau du § 9.
+const CLES_FILTRES = new Map([
+  ['tous', { cle: 'accueil.filtre.tous', aide: 'accueil.filtre.aide.tous' }],
+  ['brouillon', { cle: 'accueil.etat.brouillon', aide: 'accueil.filtre.aide.brouillon' }],
+  ['propose', { cle: 'accueil.etat.propose', aide: 'accueil.filtre.aide.propose' }],
+  ['retenu', { cle: 'accueil.etat.retenu', aide: 'accueil.filtre.aide.retenu' }],
+  ['bloque', { cle: 'accueil.etat.bloque', aide: 'accueil.filtre.aide.bloque' }],
+]);
+
+// La clé de l'intitulé de chaque groupe par état : le nom de l'état, ou
+// celui des états illisibles.
+const CLES_GROUPES = new Map([...CLES_ETATS, [ILLISIBLE, 'accueil.groupe.illisible']]);
+
+// La pastille de chaque tuile et de chaque groupe, telle que Pastille la
+// reçoit : un état porte la sienne ; tous les événements, un statut
+// d'information à l'icône de la liste ; les états illisibles, un avis à
+// l'icône du triangle.
+const PASTILLES = new Map([
+  ['tous', { sorte: 'statut', valeur: 'information', icone: 'liste' }],
+  ['brouillon', { sorte: 'etat', valeur: 'brouillon', icone: null }],
+  ['propose', { sorte: 'etat', valeur: 'propose', icone: null }],
+  ['retenu', { sorte: 'etat', valeur: 'retenu', icone: null }],
+  ['bloque', { sorte: 'etat', valeur: 'bloque', icone: null }],
+  [ILLISIBLE, { sorte: 'statut', valeur: 'avis', icone: 'triangle' }],
+]);
+
+// Les groupements de la liste, dans l'ordre de leur choix, et la clé du
+// libellé de chacun.
+const CLES_GROUPEMENTS = new Map([
+  ['etat', 'accueil.groupement.etat'],
+  ['aucun', 'accueil.groupement.aucun'],
+]);
+
+/** Les groupements de la liste : par état du plan, ou aucun. */
+export const GROUPEMENTS = Object.freeze([...CLES_GROUPEMENTS.keys()]);
+
+function exigerFiltre(filtre) {
+  if (!FILTRES.includes(filtre)) throw new RangeError(`filtre de la liste inconnu : ${JSON.stringify(filtre)}`);
+}
+
+function exigerGroupement(groupement) {
+  if (!CLES_GROUPEMENTS.has(groupement)) throw new RangeError(`groupement de la liste inconnu : ${JSON.stringify(groupement)}`);
+}
+
+// Le groupe d'une ligne : son état, ILLISIBLE sans état lu ; un état hors
+// du § 9 lève, plutôt que de laisser la ligne hors de tout groupe.
+function groupeDe(ligne) {
+  if (ligne.etat === null) return ILLISIBLE;
+  cleDEtat(ligne.etat);
+  return ligne.etat;
+}
+
+// Vrai quand le filtre retient la ligne : tous les événements, ou ceux de
+// son état. L'état se vérifie sous tout filtre.
+function retient(filtre, ligne) {
+  const groupe = groupeDe(ligne);
+  return filtre === 'tous' || groupe === filtre;
+}
+
+/**
+ * Les tuiles des filtres de la liste (§ 8.1, § 9), dans l'ordre de FILTRES :
+ * chacune { filtre, cle, aide, compte, presse, pastille } — le filtre
+ * qu'elle pose, la clé de son nom et celle de son aide, le nombre de lignes
+ * qu'il retient, mis en forme, vrai pour la tuile du filtre courant, et sa
+ * pastille ({ sorte, valeur, icone }, une copie). Une ligne illisible ne
+ * compte que sous « tous ».
+ *
+ * @param {Object[]} lignes  LigneListe[] (evenements.js)
+ * @param {string} filtre    le filtre courant, de FILTRES
+ * @param {ReturnType<import('../../application/format.js').creerFormat>} format
+ * @returns {Array<{filtre: string, cle: string, aide: string, compte: string, presse: boolean,
+ *                  pastille: {sorte: string, valeur: string, icone: string|null}}>}
+ * @throws {RangeError} un filtre hors de FILTRES
+ */
+export function tuilesDeLaListe(lignes, filtre, format) {
+  exigerFiltre(filtre);
+  return FILTRES.map((tuile) => ({
+    filtre: tuile,
+    ...CLES_FILTRES.get(tuile),
+    compte: format.nombre(lignes.filter((ligne) => retient(tuile, ligne)).length),
+    presse: tuile === filtre,
+    pastille: { ...PASTILLES.get(tuile) },
+  }));
+}
+
+/**
+ * Le résumé de l'en-tête de la liste (§ 8.1), les détails de la clé
+ * accueil.entete.resume : le nombre d'événements listés, et la somme des
+ * participants qu'ils portent déjà — une ligne illisible, sans compte, n'en
+ * apporte aucun. Rien ne se relit : la somme est celle des lignes reçues.
+ *
+ * @param {Object[]} lignes  LigneListe[] (evenements.js)
+ * @returns {{evenements: number, participants: number}}
+ */
+export function resumeDeLaListe(lignes) {
+  let participants = 0;
+  for (const ligne of lignes) if (ligne.participants !== null) participants += ligne.participants;
+  return { evenements: lignes.length, participants };
+}
+
+/**
+ * Les groupes du tableau de la liste (§ 8.1, § 9), les lignes que le filtre
+ * retient, chacune dans l'ordre de la façade : chacun { groupe, cle,
+ * pastille, details, lignes }. Groupées par état, un groupe par état du
+ * plan dans l'ordre du § 9, puis celui des états illisibles ; un groupe sans
+ * ligne n'existe pas ; cle est la clé de son intitulé, details les détails
+ * de accueil.groupe.compte. Sans groupement, un seul groupe, sans
+ * intitulé : groupe, cle et pastille valent null. Sans ligne retenue, aucun
+ * groupe : le composant dit que le filtre ne retient rien.
+ *
+ * @param {Object[]} lignes  LigneListe[] (evenements.js)
+ * @param {string} filtre      de FILTRES
+ * @param {string} groupement  de GROUPEMENTS
+ * @returns {Array<{groupe: string|null, cle: string|null, pastille: Object|null,
+ *                  details: {evenements: number}, lignes: Object[]}>}
+ * @throws {RangeError} un filtre, un groupement, ou l'état d'une ligne inconnus
+ */
+export function groupesDeLaListe(lignes, filtre, groupement) {
+  exigerFiltre(filtre);
+  exigerGroupement(groupement);
+  const retenues = lignes.filter((ligne) => retient(filtre, ligne));
+  if (retenues.length === 0) return [];
+  if (groupement === 'aucun') {
+    return [{ groupe: null, cle: null, pastille: null, details: { evenements: retenues.length }, lignes: retenues }];
+  }
+  const groupes = [];
+  for (const [groupe, cle] of CLES_GROUPES) {
+    const siennes = retenues.filter((ligne) => groupeDe(ligne) === groupe);
+    if (siennes.length === 0) continue;
+    groupes.push({ groupe, cle, pastille: { ...PASTILLES.get(groupe) }, details: { evenements: siennes.length }, lignes: siennes });
+  }
+  return groupes;
+}
+
+/**
+ * Les choix du groupement, dans l'ordre de GROUPEMENTS : chacun
+ * { groupement, cle }, une copie.
+ *
+ * @returns {Array<{groupement: string, cle: string}>}
+ */
+export function choixDeGroupement() {
+  return GROUPEMENTS.map((groupement) => ({ groupement, cle: CLES_GROUPEMENTS.get(groupement) }));
+}
+
+// La vue de la liste que chaque séance retient, et celle d'une séance qui
+// n'en a retenu aucune.
+const VUES = new WeakMap();
+const VUE_PAR_DEFAUT = Object.freeze({ filtre: 'tous', groupement: 'etat' });
+
+function exigerSeance(seance, quoi) {
+  if (seance === null || typeof seance !== 'object') throw new TypeError(`${quoi} : la séance est un objet`);
+}
+
+/**
+ * La vue de la liste que la séance retient (§ 8.1) : { filtre, groupement },
+ * une copie ; tous les événements groupés par état tant qu'elle n'en a
+ * retenu aucune. C'est un état d'interface : il survit à un retour à la
+ * liste, jamais à la séance, et rien ne l'écrit. La séance est la façade
+ * d'App, comme pour premiereAnnonce.
+ *
+ * @param {object} seance
+ * @returns {{filtre: string, groupement: string}}
+ * @throws {TypeError} une séance qui n'est pas un objet
+ */
+export function vueDeLaListe(seance) {
+  exigerSeance(seance, 'vueDeLaListe');
+  return { ...(VUES.get(seance) ?? VUE_PAR_DEFAUT) };
+}
+
+/**
+ * Retient la vue de la liste pour la séance ; une copie, que vueDeLaListe
+ * rend ensuite.
+ *
+ * @param {object} seance
+ * @param {{filtre: string, groupement: string}} vue
+ * @throws {TypeError} une séance qui n'est pas un objet
+ * @throws {RangeError} un filtre ou un groupement inconnus ; rien n'est retenu
+ */
+export function retenirVue(seance, { filtre, groupement }) {
+  exigerSeance(seance, 'retenirVue');
+  exigerFiltre(filtre);
+  exigerGroupement(groupement);
+  VUES.set(seance, Object.freeze({ filtre, groupement }));
 }

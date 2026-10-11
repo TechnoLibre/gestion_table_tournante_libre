@@ -17,7 +17,11 @@
   // se dit : sous elle, un message [data-attente-demonstration] nomme celle
   // qui se charge, et le bouton le désigne par aria-describedby. Le message
   // part avec le chargement.
+  //
+  // Les démonstrations sont une carte titrée, l'explication en sous-titre ;
+  // chacune un bouton secondaire, sur une rangée qui passe à la ligne.
   import { getContext } from 'svelte';
+  import Carte from '../primitives/Carte.svelte';
   import Refus from '../primitives/Refus.svelte';
 
   let { demonstrations, charger, refus } = $props();
@@ -47,9 +51,7 @@
   }
 </script>
 
-<section class="demonstrations" aria-labelledby={`${uid}-titre`}>
-  <h2 id={`${uid}-titre`}>{t('accueil.demonstrations.titre')}</h2>
-  <p>{t('accueil.demonstrations.explication')}</p>
+<Carte titre={t('accueil.demonstrations.titre')} sousTitre={t('accueil.demonstrations.explication')} icone="demarrer">
   <ul>
     {#each demonstrations as { cle, nom } (cle)}
       <li>
@@ -72,31 +74,21 @@
       </li>
     {/each}
   </ul>
-</section>
+</Carte>
 
 <style>
-  .demonstrations,
-  ul {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--espace-2);
-  }
-
-  h2,
   p {
     margin: 0;
-  }
-
-  h2 {
-    font-size: var(--taille-titre);
   }
 
   /* Les démonstrations se rangent en ligne, et passent à la ligne quand la
      largeur manque : en colonne, quatre entrées repoussent la dernière
      au-dessous d'une fenêtre de 700 px de haut. */
   ul {
+    display: flex;
     flex-flow: row wrap;
+    align-items: flex-start;
+    gap: var(--espace-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -112,13 +104,17 @@
   button {
     padding: var(--espace-1) var(--espace-3);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
     text-align: start;
     cursor: pointer;
+  }
+
+  button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
   }
 
   button:focus-visible {

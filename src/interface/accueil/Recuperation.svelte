@@ -12,7 +12,11 @@
   //
   // base, chemin : ceux de la ligne ; refus : { code, details } de
   // l'ouverture refusée ; retour() : rend la liste.
+  //
+  // Sous le titre de l'écran, une carte : le fichier, la raison, les secours
+  // — le premier offert est l'action principale —, puis le retour.
   import { getContext } from 'svelte';
+  import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { secoursOfferts, surLaListe } from './modele.js';
@@ -28,28 +32,44 @@
 
 <section class="recuperation" data-ecran="recuperation" aria-labelledby={`${uid}-titre`}>
   <h1 id={`${uid}-titre`}>{t('accueil.recuperation.titre')}</h1>
-  <p class="fichier">
-    <span>{t('accueil.recuperation.fichier')}</span>
-    <span class="chemin">{chemin}</span>
-  </p>
-  <Refus {refus} />
-  {#if offerts.length > 0}
-    <p>{t('accueil.recuperation.offerte')}</p>
-    <ul class="secours">
-      {#each offerts as { source, cle } (source)}
-        <li data-secours={source}>
-          <Commande {cle} executer={() => surLaListe(() => seance.ouvrirSecours(base, source))} />
-        </li>
-      {/each}
-    </ul>
-  {:else}
-    <p>{t('accueil.recuperation.aucunSecours')}</p>
-  {/if}
-  <Commande cle="accueil.recuperation.retour" executer={retour} />
+  <Carte>
+    <div class="contenu">
+      <p class="fichier">
+        <span class="intitule">{t('accueil.recuperation.fichier')}</span>
+        <span class="chemin">{chemin}</span>
+      </p>
+      <Refus {refus} />
+      {#if offerts.length > 0}
+        <p>{t('accueil.recuperation.offerte')}</p>
+        <ul class="secours">
+          {#each offerts as { source, cle }, rang (source)}
+            <li data-secours={source}>
+              <Commande
+                {cle}
+                variante={rang === 0 ? 'principale' : 'secondaire'}
+                executer={() => surLaListe(() => seance.ouvrirSecours(base, source))}
+              />
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <p>{t('accueil.recuperation.aucunSecours')}</p>
+      {/if}
+      <div class="retour">
+        <Commande cle="accueil.recuperation.retour" executer={retour} />
+      </div>
+    </div>
+  </Carte>
 </section>
 
 <style>
-  .recuperation,
+  .recuperation {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-5);
+  }
+
+  .contenu,
   .secours {
     display: flex;
     flex-direction: column;
@@ -62,10 +82,18 @@
     margin: 0;
   }
 
+  h1 {
+    line-height: 1.2;
+  }
+
   .fichier {
     display: flex;
     flex-wrap: wrap;
     gap: var(--espace-2);
+  }
+
+  .intitule {
+    font-weight: bold;
   }
 
   .chemin {
@@ -73,9 +101,17 @@
   }
 
   .secours {
+    flex-flow: row wrap;
+    align-items: center;
     gap: var(--espace-2);
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  .retour {
+    padding-top: var(--espace-3);
+    border-top: 1px solid var(--couleur-carte-filet);
+    align-self: stretch;
   }
 </style>

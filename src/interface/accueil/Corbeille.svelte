@@ -9,57 +9,57 @@
   // vide ne montre rien.
   //
   // contenu : [{ dossier, chemin, fichiers }] de facade.corbeille().
+  //
+  // La corbeille est une carte titrée, l'explication en sous-titre ; elle
+  // n'offre aucune commande.
   import { getContext } from 'svelte';
+  import Carte from '../primitives/Carte.svelte';
 
   let { contenu } = $props();
 
   const t = getContext('t');
-  const uid = $props.id();
 </script>
 
 {#if contenu.length > 0}
-  <section class="corbeille" data-corbeille aria-labelledby={`${uid}-titre`}>
-    <h2 id={`${uid}-titre`}>{t('accueil.corbeille.titre')}</h2>
-    <p>{t('accueil.corbeille.explication')}</p>
-    <ul class="dossiers">
-      {#each contenu as { dossier, chemin, fichiers } (dossier)}
-        <li data-corbeille-dossier={dossier}>
-          <p class="chemin">{chemin}</p>
-          <ul class="fichiers">
-            {#each fichiers as nom (nom)}
-              <li>{nom}</li>
-            {/each}
-          </ul>
-        </li>
-      {/each}
-    </ul>
-  </section>
+  <div class="corbeille" data-corbeille>
+    <Carte titre={t('accueil.corbeille.titre')} sousTitre={t('accueil.corbeille.explication')} icone="dossier">
+      <ul class="dossiers">
+        {#each contenu as { dossier, chemin, fichiers } (dossier)}
+          <li data-corbeille-dossier={dossier}>
+            <p class="chemin">{chemin}</p>
+            <ul class="fichiers">
+              {#each fichiers as nom (nom)}
+                <li>{nom}</li>
+              {/each}
+            </ul>
+          </li>
+        {/each}
+      </ul>
+    </Carte>
+  </div>
 {/if}
 
 <style>
-  .corbeille,
+  .corbeille {
+    min-width: 0;
+  }
+
   .dossiers {
     display: flex;
     flex-direction: column;
     gap: var(--espace-2);
-  }
-
-  h2,
-  p {
-    margin: 0;
-  }
-
-  h2 {
-    font-size: var(--taille-titre);
-  }
-
-  .dossiers {
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
+  p {
+    margin: 0;
+  }
+
   .chemin {
+    font-size: var(--taille-texte-petit);
+    font-weight: bold;
     overflow-wrap: anywhere;
   }
 
@@ -67,5 +67,7 @@
     margin: 0;
     padding-left: var(--espace-4);
     color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
+    overflow-wrap: anywhere;
   }
 </style>

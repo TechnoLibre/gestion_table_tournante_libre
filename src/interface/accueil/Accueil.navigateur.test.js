@@ -8,8 +8,10 @@
 // l'ouverture en lecture, les réglages illisibles, le dossier de travail, ses
 // avis et ses questions, l'explorateur, l'autre emplacement, copier,
 // renommer, importer, supprimer, les démonstrations, la racine neutre, la
-// liste qui défile sous le bandeau, et le chargement des résumés de la liste,
-// dont l'horloge pilotée du montage tient chaque pas. Chaque épreuve monte
+// liste qui défile sous le bandeau, le chargement des résumés de la liste,
+// dont l'horloge pilotée du montage tient chaque pas, et la liste en
+// tableau : l'en-tête et son résumé, les tuiles des filtres par état du
+// plan, les groupes, les en-têtes groupés, les cartes et les messages. Chaque épreuve monte
 // App par monterApp (test/navigateur/montage.js), sur le système de fichiers
 // simulé, et lit le relevé de ses écritures.
 //
@@ -139,8 +141,24 @@ const accueil = (m) => dans(m, '[data-ecran="accueil"]');
 const lignes = (m) => tous(m, '[data-evenement]');
 const ligneDe = (m, base) => dans(m, `[data-evenement="${CSS.escape(base)}"]`);
 const colonne = (ligne, nom) => ligne.querySelector(`[data-colonne="${nom}"]`)?.textContent;
+// Le nom de l'état d'une ligne : le seul texte de sa cellule, que la
+// pastille porte à côté de son signe.
+const etatDe = (ligne) => noeudsDeTexte(ligne.querySelector('[data-colonne="etat"]')).join('');
 const ecritures = (m) => m.trace.length;
 const sondes = (m) => m.trace.filter(([primitive]) => primitive === 'sonder').length;
+// Le terme expliqué nom, sous racine : un en-tête de colonne du tableau.
+const terme = (racine, nom) => racine.querySelector(`[data-terme="${nom}"]`);
+
+// La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
+function jeton(nom) {
+  const sonde = document.createElement('span');
+  sonde.style.color = `var(${nom})`;
+  document.body.append(sonde);
+  const couleur = composantes(getComputedStyle(sonde).color);
+  sonde.remove();
+  return couleur;
+}
+const fond = (element) => composantes(getComputedStyle(element).backgroundColor);
 
 // Visible une fois ramené dans la fenêtre : la liste défile sous le bandeau.
 function visible(element) {
@@ -275,7 +293,7 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
     expect(colonne(gala, 'nom')).toBe(lue.charge.evenement.nom);
     expect(colonne(gala, 'nom')).toBe('Gala du printemps');
     expect(colonne(gala, 'date')).toBe(format.date('2031-05-17'));
-    expect(colonne(gala, 'etat')).toBe(t('accueil.etat.brouillon'));
+    expect(etatDe(gala)).toBe(t('accueil.etat.brouillon'));
     expect(colonne(gala, 'participants')).toBe(format.nombre(lue.entete.comptes.participants));
     expect(colonne(gala, 'modification')).toBe(format.horodatage(HORODATAGE_DEPOT));
     expect(colonne(gala, 'chemin')).toBe(`${DOCUMENTS}\\soiree-a${SUFFIXES.etat}`);
@@ -288,7 +306,9 @@ describe('le premier écran (§ 8.1, § 18.6)', () => {
     expect(Number(lu.entete.comptes.participants)).toBeGreaterThan(0);
     expect(colonne(ligneClub, 'modification')).toBe('\u{2014}');
     expect(colonne(ligneClub, 'chemin')).toBe(`${DOCUMENTS}\\club${SUFFIXES.etat}`);
-    for (const ligne of lignes(m)) expect(visible(ligne)).toBe(true);
+    // Le nom de chaque ligne se voit ; sous la largeur où le tableau tient,
+    // le reste de la ligne défile dans le conteneur du tableau.
+    for (const ligne of lignes(m)) expect(visible(ligne.querySelector('[data-colonne="nom"]'))).toBe(true);
   });
 
   test('répertoire vide : « version » et la version, la création, une entrée par démonstration du catalogue, atteinte ; aucun « aucun événement »', async () => {
@@ -759,7 +779,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     const original = await photographier(m, 'documents');
     const avant = ecritures(m);
     const ligne = ligneDe(m, 'Bal des Grisailles');
-    expect(colonne(ligne, 'etat')).toBe(t('accueil.etat.bloque'));
+    expect(etatDe(ligne)).toBe(t('accueil.etat.bloque'));
     await cliquer(ligne.querySelector('[data-commande="copier"]'));
     const champ = ligne.querySelector('[data-champ="nomCopie"]');
     expect(visible(champ)).toBe(true);
@@ -777,7 +797,7 @@ describe('les opérations de fichiers (§ 8.7)', () => {
     const journal = lireJournal(m.fs.contenu('documents', `${copie.base}${SUFFIXES.journal}`));
     expect(journal.entrees.map(({ libelle: texte }) => texte)).toEqual([attendu]);
     expect(analyser(m.fs.contenu('documents', `${copie.base}${SUFFIXES.etat}`)).charge.evenement.etat).not.toBe('bloque');
-    expect(colonne(ligneDe(m, copie.base), 'etat')).not.toBe(t('accueil.etat.bloque'));
+    expect(etatDe(ligneDe(m, copie.base))).not.toBe(t('accueil.etat.bloque'));
     const apres = await photographier(m, 'documents');
     for (const [chemin, texte] of Object.entries(original)) expect(apres[chemin]).toBe(texte);
   });
@@ -1168,7 +1188,6 @@ function chargeRetenue() {
 
 const etat = (charge) => serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
 const TIRET = '\u{2014}';
-const terme = (ligne, nom) => ligne.querySelector(`[data-terme="${nom}"]`);
 const infobulles = () => [...document.querySelectorAll('[role="tooltip"]')];
 
 // L'infobulle unique, ouverte sur le terme : visible, au texte de la clé,
@@ -1188,13 +1207,14 @@ function exigerInfobulle(ancre, cle) {
   expect(b.left < a.right && a.left < b.right && b.top < a.bottom && a.top < b.bottom, `${cle} sur son terme`).toBe(false);
 }
 
-// Chaque terme de la ligne, survolé puis focalisé, ouvre l'infobulle sur sa
-// clé ; la sortie du pointeur et Échap la ferment, le focus reste au terme.
-async function eprouverTermes(ligne, cas) {
+// Chaque terme de la liste, un en-tête de colonne, survolé puis focalisé,
+// ouvre l'infobulle sur sa clé ; la sortie du pointeur et Échap la ferment,
+// le focus reste au terme.
+async function eprouverTermes(racine, cas) {
   expect(cas.length).toBeGreaterThan(0);
   await pointer('bouger', 0, 0);
   for (const [nom, cle] of cas) {
-    const ancre = terme(ligne, nom);
+    const ancre = terme(racine, nom);
     ancre.scrollIntoView({ block: 'center' });
     const { x, y } = await centre(ancre);
     await pointer('bouger', x, y);
@@ -1234,8 +1254,16 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     const club = ligneDe(m, 'club');
     expect(colonne(club, 'collisionsCumulees')).toBe(TIRET);
     expect(colonne(club, 'diffRedondance')).toBe(TIRET);
-    expect(terme(retenue, 'collisionsCumulees').textContent).toBe(t('accueil.colonne.collisionsCumulees'));
-    expect(terme(retenue, 'diffRedondance').textContent).toBe(t('accueil.colonne.diffRedondance'));
+    // Chaque intitulé est un en-tête de colonne, une seule fois pour toute la
+    // liste.
+    for (const [nom, cle] of [
+      ['collisionsCumulees', 'accueil.colonne.collisionsCumulees'],
+      ['diffRedondance', 'accueil.colonne.diffRedondance'],
+    ]) {
+      expect(tous(m, `[data-terme="${nom}"]`).length, nom).toBe(1);
+      expect(terme(accueil(m), nom).closest('thead'), nom).not.toBeNull();
+      expect(terme(accueil(m), nom).textContent).toBe(t(cle));
+    }
     expect(visible(retenue.querySelector('[data-colonne="diffRedondance"]'))).toBe(true);
     expect(ecritures(m)).toBe(avant);
   });
@@ -1243,8 +1271,7 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
   test('chaque intitulé s’explique : le survol puis le focus ouvrent son infobulle, Échap et la sortie la ferment', async () => {
     const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(chargeRetenue()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
-    const retenue = ligneDe(m, 'retenue');
-    await eprouverTermes(retenue, [
+    await eprouverTermes(accueil(m), [
       ['collisionsCumulees', 'accueil.explication.collisionsCumulees'],
       ['diffRedondance', 'accueil.explication.diffRedondance'],
     ]);
@@ -1296,12 +1323,23 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     return appliquerCommande('retenirProposition', charge, { id: autre.id }).charge;
   }
 
-  const blocDe = (ligne) => ligne.querySelector('[data-meilleure]');
-  // Ce que le bloc d'une ligne, ou celui de la génération, écrit.
+  // Ce que la ligne, ou le bloc de la génération, écrit de la meilleure
+  // proposition.
   const lu = (bloc) => ({
     id: bloc.querySelector('[data-meilleure-id]')?.textContent ?? null,
     collisions: bloc.querySelector('[data-meilleure-collisions]')?.textContent ?? null,
   });
+  // L'en-tête du groupe de colonnes de la meilleure proposition, et celui de
+  // sa colonne d'identifiant.
+  const groupeMeilleure = (m) => terme(accueil(m), 'meilleure').closest('th');
+  const enteteProposition = (m) =>
+    tous(m, 'thead th[scope="col"]').find((th) => th.textContent.trim() === t('generation.meilleure.proposition'));
+  // Vrai quand la boîte de cellule tient, en largeur, dans celle de l'en-tête.
+  const sous = (cellule, entete) => {
+    const c = cellule.getBoundingClientRect();
+    const e = entete.getBoundingClientRect();
+    return c.left >= e.left - 0.5 && c.right <= e.right + 0.5 && c.top >= e.bottom - 0.5;
+  };
   const blocGeneration = (m) => dans(m, '[data-section="generation"] [data-meilleure]');
 
   test('un événement classé : le rang 1, son identifiant et ses collisions cumulées, à part du retenu ; sans proposition, « — » ; rien d’écrit', async () => {
@@ -1317,26 +1355,32 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     await chargerResumes(m);
     const avant = ecritures(m);
     const classee = ligneDe(m, 'classee');
-    const bloc = blocDe(classee);
-    expect(lu(bloc)).toEqual({ id: format.nombre(premiere.id), collisions: format.nombre(premiere.mesures.collisionsCumulees) });
+    expect(lu(classee)).toEqual({ id: format.nombre(premiere.id), collisions: format.nombre(premiere.mesures.collisionsCumulees) });
     expect(colonne(classee, 'collisionsCumulees')).toBe(format.nombre(table.retenu.mesures.collisionsCumulees));
-    expect(terme(classee, 'meilleure').textContent).toBe(t('generation.meilleure.titre'));
-    expect(bloc.querySelector('dt').textContent).toBe(t('generation.meilleure.proposition'));
-    expect(terme(classee, 'meilleureCollisions').textContent).toBe(t('propositions.colonne.collisionsCumulees'));
-    expect(bloc.getAttribute('role')).toBe('group');
-    expect(document.getElementById(bloc.getAttribute('aria-labelledby'))).toBe(terme(classee, 'meilleure'));
+    // Les intitulés sont ceux du bloc de la génération, en en-têtes de
+    // colonnes : le titre sur le groupe, l'identifiant et les collisions sur
+    // ses deux colonnes ; chaque valeur se tient sous son groupe.
+    expect(terme(accueil(m), 'meilleure').textContent).toBe(t('generation.meilleure.titre'));
+    expect(groupeMeilleure(m).getAttribute('scope')).toBe('colgroup');
+    expect(groupeMeilleure(m).colSpan).toBe(2);
+    expect(enteteProposition(m)).toBeDefined();
+    expect(terme(accueil(m), 'meilleureCollisions').textContent).toBe(t('propositions.colonne.collisionsCumulees'));
     for (const valeur of ['[data-meilleure-id]', '[data-meilleure-collisions]']) {
-      expect(visible(bloc.querySelector(valeur)), valeur).toBe(true);
-      expect(atteint(bloc.querySelector(valeur)), valeur).toBe(true);
+      const cellule = classee.querySelector(valeur);
+      expect(visible(cellule), valeur).toBe(true);
+      expect(atteint(cellule), valeur).toBe(true);
+      expect(sous(cellule, groupeMeilleure(m)), valeur).toBe(true);
     }
-    expect(lu(blocDe(ligneDe(m, 'club')))).toEqual({ id: TIRET, collisions: TIRET });
+    expect(sous(classee.querySelector('[data-meilleure-id]'), enteteProposition(m))).toBe(true);
+    expect(sous(classee.querySelector('[data-meilleure-collisions]'), terme(accueil(m), 'meilleureCollisions').closest('th'))).toBe(true);
+    expect(lu(ligneDe(m, 'club'))).toEqual({ id: TIRET, collisions: TIRET });
     expect(ecritures(m)).toBe(avant);
   });
 
   test('le titre et l’intitulé des collisions s’expliquent : le survol puis le focus ouvrent l’infobulle, Échap et la sortie la ferment', async () => {
     const m = await monter({ fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
-    await eprouverTermes(ligneDe(m, 'classee'), [
+    await eprouverTermes(accueil(m), [
       ['meilleure', 'accueil.explication.meilleure'],
       ['meilleureCollisions', 'propositions.explication.collisionsCumulees'],
     ]);
@@ -1346,11 +1390,10 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     const m = await monter({ fichiers: [fichier(`classee${SUFFIXES.etat}`, etat(chargeClassee()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await chargerResumes(m);
-    const ligne = ligneDe(m, 'classee');
-    const deLaListe = lu(blocDe(ligne));
+    const deLaListe = lu(ligneDe(m, 'classee'));
     expect(deLaListe.id).toMatch(/\d/);
-    const libelles = [terme(ligne, 'meilleure'), blocDe(ligne).querySelector('dt'), terme(ligne, 'meilleureCollisions')].map(
-      (element) => element.textContent,
+    const libelles = [terme(accueil(m), 'meilleure'), enteteProposition(m), terme(accueil(m), 'meilleureCollisions')].map(
+      (element) => element.textContent.trim(),
     );
     await ouvrirLigne(m, 'classee');
     await attendreEvenement(m);
@@ -1368,7 +1411,7 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     const resumeRecu = suivreResumes(m);
     await revenirALaListe(m, 1);
     await resumeRecu('classee');
-    expect(lu(blocDe(ligneDe(m, 'classee')))).toEqual(deLaListe);
+    expect(lu(ligneDe(m, 'classee'))).toEqual(deLaListe);
   });
 
   test('des propositions toutes hors du classement : « — » à la liste, là où le bloc de la génération le dit en mots', async () => {
@@ -1380,33 +1423,40 @@ describe('la meilleure proposition du classement dans la liste (§ 5.4, § 5.7, 
     const m = await monter({ fichiers: [fichier(`horsclassement${SUFFIXES.etat}`, etat(charge))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await chargerResumes(m);
-    expect(lu(blocDe(ligneDe(m, 'horsclassement')))).toEqual({ id: TIRET, collisions: TIRET });
+    expect(lu(ligneDe(m, 'horsclassement'))).toEqual({ id: TIRET, collisions: TIRET });
     await ouvrirLigne(m, 'horsclassement');
     await attendreEvenement(m);
     m.ui.allerA('generation');
     await vi.waitFor(() => expect(blocGeneration(m)?.querySelector('[data-meilleure-vide]')).not.toBeNull());
   });
 
-  test('à 1366 × 700, six événements classés : la page ne défile pas en largeur, chaque bloc tient dans la sienne', async () => {
-    const avant = { largeur: innerWidth, hauteur: innerHeight };
-    await fixerCadre(1366, 700);
-    try {
-      const bases = ['un', 'deux', 'trois', 'quatre', 'cinq', 'six'];
-      const m = await monter({ fichiers: bases.map((base) => fichier(`${base}${SUFFIXES.etat}`, etat(chargeClassee({ id: `evt-${base}` })))) });
-      await vi.waitFor(() => expect(lignes(m).length).toBe(bases.length));
-      await chargerResumes(m);
-      const blocs = lignes(m).map(blocDe);
-      expect(blocs.length).toBe(bases.length);
-      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
-      for (const bloc of blocs) {
-        expect(lu(bloc).id).toMatch(/\d/);
-        expect(bloc.scrollWidth).toBeLessThanOrEqual(bloc.clientWidth);
-        expect(bloc.getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth);
+  for (const largeur of [1366, 1024]) {
+    test(`à ${largeur} × 700, six événements classés : la page ne défile pas en largeur, le tableau tient dans sa carte, chaque valeur dans sa cellule`, async () => {
+      const avant = { largeur: innerWidth, hauteur: innerHeight };
+      await fixerCadre(largeur, 700);
+      try {
+        const bases = ['un', 'deux', 'trois', 'quatre', 'cinq', 'six'];
+        const m = await monter({ fichiers: bases.map((base) => fichier(`${base}${SUFFIXES.etat}`, etat(chargeClassee({ id: `evt-${base}` })))) });
+        await vi.waitFor(() => expect(lignes(m).length).toBe(bases.length));
+        await chargerResumes(m);
+        expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(innerWidth);
+        const tableau = dans(m, '[data-ecran="accueil"] table');
+        const carte = tableau.closest('section');
+        expect(tableau.parentElement.scrollWidth).toBeLessThanOrEqual(tableau.parentElement.clientWidth);
+        expect(tableau.getBoundingClientRect().right).toBeLessThanOrEqual(carte.getBoundingClientRect().right);
+        expect(carte.getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth);
+        for (const ligne of lignes(m)) {
+          expect(lu(ligne).id).toMatch(/\d/);
+          for (const cellule of ligne.cells) {
+            expect(cellule.scrollWidth, cellule.textContent).toBeLessThanOrEqual(cellule.clientWidth);
+            expect(cellule.getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth);
+          }
+        }
+      } finally {
+        await fixerCadre(avant.largeur, avant.hauteur);
       }
-    } finally {
-      await fixerCadre(avant.largeur, avant.hauteur);
-    }
-  });
+    });
+  }
 });
 
 // --- Le chargement des résumés (§ 8.1, § 14.5, § 19.2) ------------------------------
@@ -1455,7 +1505,7 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
     const regions = tous(m, '[data-chargement-liste]');
     expect(regions.length).toBe(1);
     expect(regions[0].getAttribute('role')).toBe('status');
-    expect(tous(m, '.liste [role="status"], .liste [role="img"]')).toEqual([]);
+    expect(tous(m, 'table [role="status"], table [role="img"]')).toEqual([]);
     return regions[0];
   }
   const resolue = (ligne, valeurs) => {
@@ -1577,5 +1627,325 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
         }
       });
     }
+  });
+});
+
+// --- La liste en tableau : en-tête, tuiles, groupes, cartes (§ 8.1, § 9) ------------
+
+describe('la liste en tableau : en-tête, tuiles, groupes et cartes (§ 8.1, § 9)', () => {
+  // Le fichier d'état de la petite démonstration, sous un identifiant, un
+  // nom et un état à soi : aucun doublon entre deux fichiers.
+  function texteDe(id, nom, etatDuPlan) {
+    const { charge } = analyser(PETITE);
+    charge.evenement.id = id;
+    charge.evenement.nom = nom;
+    charge.evenement.etat = etatDuPlan;
+    return serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
+  }
+  // Cinq événements de quatre états : [base, nom, état].
+  const CINQ = [
+    ['bal', 'Bal des Grisailles', 'bloque'],
+    ['club', 'Club des Merles', 'brouillon'],
+    ['gala', 'Gala des Ombrelles', 'retenu'],
+    ['nuit', 'Nuit des Pervenches', 'brouillon'],
+    ['souper', 'Souper des Hiboux', 'propose'],
+  ];
+  const fichiersDe = (evenements) =>
+    evenements.map(([base, nom, etatDuPlan]) => fichier(`${base}${SUFFIXES.etat}`, texteDe(`evt-${base}`, nom, etatDuPlan)));
+  async function monterCinq(options = {}) {
+    const m = await monter({ fichiers: fichiersDe(CINQ), ...options });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(CINQ.length));
+    return m;
+  }
+
+  const bases = (m) => lignes(m).map((ligne) => ligne.dataset.evenement);
+  // Les tuiles des filtres, dans l'ordre du rendu, et celle d'un filtre.
+  const groupeDesTuiles = (m) => dans(m, `[data-ecran="accueil"] [role="group"][aria-label="${t('accueil.filtre.groupe')}"]`);
+  const tuiles = (m) => [...groupeDesTuiles(m).querySelectorAll('button[data-commande="filtrer"]')];
+  const tuile = (m, filtre) => tuiles(m).find((bouton) => bouton.dataset.cible === filtre);
+  const presses = (m) => tuiles(m).map((bouton) => bouton.getAttribute('aria-pressed'));
+  // Le texte d'un élément, espaces réduits.
+  const texte = (element) => element.textContent.replace(/\s+/g, ' ').trim();
+  // Les groupes du tableau : chacun le texte de son intitulé, ou null, et
+  // ses bases.
+  const groupes = (m) =>
+    tous(m, '[data-ecran="accueil"] table tbody').map((corps) => {
+      const intitule = corps.querySelector('th[scope="rowgroup"]');
+      return [intitule === null ? null : noeudsDeTexte(intitule), [...corps.querySelectorAll('[data-evenement]')].map((l) => l.dataset.evenement)];
+    });
+  // Choisit un groupement dans le sélecteur, comme une personne.
+  function grouper(m, valeur) {
+    const choix = dans(m, '[data-champ="groupement"]');
+    choix.value = valeur;
+    choix.dispatchEvent(new Event('change', { bubbles: true }));
+    flushSync();
+  }
+  // Vrai quand la boîte de l'élément est entière dans la fenêtre, sans défilement.
+  function dansLaPremiereVue(element) {
+    const boite = element.getBoundingClientRect();
+    return boite.top >= 0 && boite.bottom <= innerHeight && boite.left >= 0 && boite.right <= innerWidth;
+  }
+
+  test('en-tête : le titre, le résumé des lignes listées, « Créer un événement » principale qui mène au champ du nom, « Importer… » secondaire à côté ; tout dans la première vue à 1366 × 700', async () => {
+    const avant = { largeur: innerWidth, hauteur: innerHeight };
+    await fixerCadre(1366, 700);
+    try {
+      const m = await monterCinq();
+      window.scrollTo(0, 0);
+      const ecrites = ecritures(m);
+      expect(texte(accueil(m).querySelector('h1'))).toBe(t('coquille.liste'));
+      const participants = CINQ.length * analyser(PETITE).charge.participants.length;
+      expect(participants).toBeGreaterThan(CINQ.length);
+      const attendu = t('accueil.entete.resume', { evenements: CINQ.length, participants });
+      const resume = tous(m, '[data-ecran="accueil"] p').find((p) => p.textContent === attendu);
+      expect(resume, attendu).toBeDefined();
+      const creer = dans(m, '[data-ecran="accueil"] [data-commande="allerCreation"]');
+      const importer = dans(m, '[data-ecran="accueil"] [data-commande="importer"]');
+      expect(creer.textContent.trim()).toBe(t('accueil.entete.creer'));
+      expect(importer.textContent.trim()).toBe(t('accueil.operation.importer'));
+      for (const element of [resume, creer, importer, dans(m, '[data-version]')]) expect(dansLaPremiereVue(element), texte(element)).toBe(true);
+      // Les deux rangs de la maquette : la principale pleine de l'action, à
+      // hauteur de cible ; l'import à filet, sur le fond de la carte.
+      expect(fond(creer)).toEqual(jeton('--couleur-action-fond'));
+      expect(creer.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+      expect(fond(importer)).toEqual(jeton('--couleur-carte-fond'));
+      // « Créer un événement » porte le focus sur le champ du nom de la carte
+      // de création, et n'écrit rien.
+      await cliquer(creer);
+      const nom = dans(m, '[data-champ="nom"]');
+      expect(document.activeElement).toBe(nom);
+      expect(visibleDansLaFenetre(nom)).toBe(true);
+      expect(nom.closest('section').getAttribute('aria-labelledby')).not.toBeNull();
+      expect(texte(document.getElementById(nom.closest('section').getAttribute('aria-labelledby')))).toBe(t('accueil.creation.titre'));
+      expect(ecritures(m)).toBe(ecrites);
+    } finally {
+      await fixerCadre(avant.largeur, avant.hauteur);
+    }
+  });
+
+  test('tuiles : Tous puis les quatre états dans l’ordre du § 9, chacune son compte, sa pastille et son aide ; un clic filtre, aria-pressed suit, rien ne s’écrit', async () => {
+    const m = await monterCinq();
+    const ecrites = ecritures(m);
+    expect(tuiles(m).map((bouton) => bouton.dataset.cible)).toEqual(['tous', 'brouillon', 'propose', 'retenu', 'bloque']);
+    expect(presses(m)).toEqual(['true', 'false', 'false', 'false', 'false']);
+    const attendues = [
+      ['tous', 'accueil.filtre.tous', 5, 'accueil.filtre.aide.tous'],
+      ['brouillon', 'accueil.etat.brouillon', 2, 'accueil.filtre.aide.brouillon'],
+      ['propose', 'accueil.etat.propose', 1, 'accueil.filtre.aide.propose'],
+      ['retenu', 'accueil.etat.retenu', 1, 'accueil.filtre.aide.retenu'],
+      ['bloque', 'accueil.etat.bloque', 1, 'accueil.filtre.aide.bloque'],
+    ];
+    for (const [filtre, cle, compte, aide] of attendues) {
+      const bouton = tuile(m, filtre);
+      expect(noeudsDeTexte(bouton).map((t0) => t0.trim()), filtre).toEqual([t(cle), format.nombre(compte), t(aide)]);
+      // La pastille : un signe dessiné, caché aux technologies d'assistance.
+      const signe = bouton.querySelector('svg');
+      expect(signe, filtre).not.toBeNull();
+      expect(signe.getAttribute('aria-hidden'), filtre).toBe('true');
+      expect(visible(bouton), filtre).toBe(true);
+      expect(atteint(bouton), filtre).toBe(true);
+    }
+    await cliquer(tuile(m, 'brouillon'));
+    expect(bases(m)).toEqual(['club', 'nuit']);
+    expect(presses(m)).toEqual(['false', 'true', 'false', 'false', 'false']);
+    await cliquer(tuile(m, 'bloque'));
+    expect(bases(m)).toEqual(['bal']);
+    // Les comptes ne suivent pas le filtre : ils comptent toute la liste.
+    expect(noeudsDeTexte(tuile(m, 'tous'))[1].trim()).toBe(format.nombre(5));
+    await cliquer(tuile(m, 'tous'));
+    expect(bases(m).length).toBe(5);
+    expect(ecritures(m)).toBe(ecrites);
+  });
+
+  test('le filtre est un état de la séance : il survit à un retour à la liste, une autre séance part de Tous, et le fichier ne le porte pas', async () => {
+    const m = await monterCinq();
+    const ecrites = ecritures(m);
+    await cliquer(tuile(m, 'bloque'));
+    grouper(m, 'aucun');
+    expect(bases(m)).toEqual(['bal']);
+    await ouvrirLigne(m, 'bal');
+    await attendreEvenement(m);
+    await revenirALaListe(m, 1);
+    expect(bases(m)).toEqual(['bal']);
+    expect(presses(m)).toEqual(['false', 'false', 'false', 'false', 'true']);
+    expect(dans(m, '[data-champ="groupement"]').value).toBe('aucun');
+    expect(ecritures(m)).toBe(ecrites);
+    for (const [base] of CINQ) expect(m.fs.contenu('documents', `${base}${SUFFIXES.etat}`)).not.toMatch(/filtre|groupement/);
+    const autre = await monter({ systeme: { disque: m.disque } });
+    await vi.waitFor(() => expect(lignes(autre).length).toBe(CINQ.length));
+    expect(presses(autre)).toEqual(['true', 'false', 'false', 'false', 'false']);
+    expect(dans(autre, '[data-champ="groupement"]').value).toBe('etat');
+  });
+
+  test('groupé par état : un groupe par état présent, dans l’ordre du § 9, son intitulé porte la pastille et « n événement(s) » ; sans groupement, un seul groupe dans l’ordre de la façade', async () => {
+    const m = await monterCinq();
+    const intitule = (cle, n) => [t(cle), t('accueil.groupe.compte', { evenements: n })];
+    expect(groupes(m)).toEqual([
+      [intitule('accueil.etat.brouillon', 2), ['club', 'nuit']],
+      [intitule('accueil.etat.propose', 1), ['souper']],
+      [intitule('accueil.etat.retenu', 1), ['gala']],
+      [intitule('accueil.etat.bloque', 1), ['bal']],
+    ]);
+    for (const th of tous(m, 'table th[scope="rowgroup"]')) {
+      expect(th.colSpan).toBe(tous(m, 'table thead tr')[1].cells.length + 1);
+      expect(th.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    }
+    const choix = dans(m, '[data-champ="groupement"]');
+    expect(texte(choix.labels[0])).toContain(t('accueil.groupement.libelle'));
+    expect([...choix.options].map((option) => option.textContent)).toEqual([t('accueil.groupement.etat'), t('accueil.groupement.aucun')]);
+    expect(choix.value).toBe('etat');
+    grouper(m, 'aucun');
+    const ordre = (await m.facade.lister()).map(({ base }) => base);
+    expect(groupes(m)).toEqual([[null, ordre]]);
+    // Un filtre s'applique aussi sans groupement.
+    await cliquer(tuile(m, 'brouillon'));
+    expect(groupes(m)).toEqual([[null, ['club', 'nuit']]]);
+    grouper(m, 'etat');
+    expect(groupes(m)).toEqual([[intitule('accueil.etat.brouillon', 2), ['club', 'nuit']]]);
+  });
+
+  test('un filtre sans ligne : le tableau le dit, sans aucune ligne ; « Tous les événements » les rend', async () => {
+    const m = await monter({ fichiers: fichiersDe(CINQ.filter(([, , etatDuPlan]) => etatDuPlan === 'brouillon')) });
+    await vi.waitFor(() => expect(lignes(m).length).toBe(2));
+    await cliquer(tuile(m, 'retenu'));
+    expect(lignes(m).length).toBe(0);
+    const message = tous(m, '[data-ecran="accueil"] p').find((p) => p.textContent === t('accueil.filtre.vide'));
+    expect(message).toBeDefined();
+    expect(visible(message)).toBe(true);
+    await cliquer(tuile(m, 'tous'));
+    expect(lignes(m).length).toBe(2);
+    expect(tous(m, '[data-ecran="accueil"] p').some((p) => p.textContent === t('accueil.filtre.vide'))).toBe(false);
+  });
+
+  test('en-têtes groupés : Événement, Placement retenu à la teinte de Retenu, Meilleure proposition à celle de Proposé ; chaque valeur sous son groupe ; le nom en tête de ligne, la date et le chemin en petite ligne dessous', async () => {
+    const m = await monterCinq();
+    await chargerResumes(m);
+    const entetes = tous(m, '[data-ecran="accueil"] thead th[scope="colgroup"]');
+    expect(entetes.map(texte)).toEqual([t('accueil.entete.evenement'), t('accueil.entete.retenu'), t('generation.meilleure.titre')]);
+    expect(entetes.map((th) => th.colSpan)).toEqual([4, 2, 2]);
+    expect(fond(entetes[1])).toEqual(jeton('--couleur-etat-retenu-fond'));
+    expect(fond(entetes[2])).toEqual(jeton('--couleur-etat-propose-fond'));
+    // Le groupe porte le signe de son état, de la marque de l'état.
+    expect(composantes(getComputedStyle(entetes[1].querySelector('svg')).stroke)).toEqual(jeton('--couleur-etat-retenu-marque'));
+    expect(composantes(getComputedStyle(entetes[2].querySelector('svg')).stroke)).toEqual(jeton('--couleur-etat-propose-marque'));
+    const dans2 = (cellule, entete) => {
+      const c = cellule.getBoundingClientRect();
+      const e = entete.getBoundingClientRect();
+      return c.left >= e.left - 0.5 && c.right <= e.right + 0.5;
+    };
+    const ligne = ligneDe(m, 'gala');
+    for (const nom of ['nom', 'etat', 'participants', 'modification']) expect(dans2(ligne.querySelector(`[data-colonne="${nom}"]`), entetes[0]), nom).toBe(true);
+    for (const nom of ['collisionsCumulees', 'diffRedondance']) expect(dans2(ligne.querySelector(`[data-colonne="${nom}"]`), entetes[1]), nom).toBe(true);
+    for (const valeur of ['[data-meilleure-id]', '[data-meilleure-collisions]']) expect(dans2(ligne.querySelector(valeur), entetes[2]), valeur).toBe(true);
+    // Le nom est l'en-tête de sa ligne ; la date et le chemin le suivent,
+    // dessous, en plus petit.
+    const nom = ligne.querySelector('[data-colonne="nom"]');
+    const enTete = nom.closest('th');
+    expect(enTete.getAttribute('scope')).toBe('row');
+    for (const colonneDessous of ['date', 'chemin']) {
+      const element = ligne.querySelector(`[data-colonne="${colonneDessous}"]`);
+      expect(enTete.contains(element), colonneDessous).toBe(true);
+      expect(element.getBoundingClientRect().top, colonneDessous).toBeGreaterThanOrEqual(nom.getBoundingClientRect().bottom - 0.5);
+      expect(parseFloat(getComputedStyle(element).fontSize), colonneDessous).toBeLessThan(parseFloat(getComputedStyle(nom).fontSize));
+    }
+    // L'état est une pastille : son signe, et le nom de l'état seul pour texte.
+    const etatDeLigne = ligne.querySelector('[data-colonne="etat"]');
+    expect(etatDeLigne.textContent.trim()).toBe(t('accueil.etat.retenu'));
+    expect(etatDeLigne.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    // « Ouvrir » ouvre la ligne.
+    const ouvrir = ligne.querySelector('[data-commande="ouvrir"]');
+    expect(ouvrir.textContent.trim()).toBe(t('accueil.ouvrir'));
+    await cliquer(ouvrir);
+    await attendreEvenement(m, ({ base }) => base === 'gala');
+  });
+
+  test('« Ouvrir », la commande principale de la ligne, a une cible d’au moins 44 px de haut, à chaque ligne', async () => {
+    const m = await monterCinq();
+    for (const [base] of CINQ) {
+      const ouvrir = ligneDe(m, base).querySelector('[data-commande="ouvrir"]');
+      expect(ouvrir.getBoundingClientRect().height, base).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test('chaque « Ouvrir » se nomme « Ouvrir » suivi du nom de sa ligne, et se distingue ainsi des autres', async () => {
+    const m = await monterCinq();
+    // Le nom accessible d'un bouton nommé par aria-labelledby : le texte de
+    // chaque élément désigné, dans l'ordre, séparés d'une espace.
+    const nomAccessible = (element) =>
+      element
+        .getAttribute('aria-labelledby')
+        .split(' ')
+        .map((id) => texte(document.getElementById(id)))
+        .join(' ');
+    const noms = [];
+    for (const [base, nom] of CINQ) {
+      const ouvrir = ligneDe(m, base).querySelector('[data-commande="ouvrir"]');
+      expect(ouvrir.getAttribute('aria-labelledby'), base).not.toBeNull();
+      expect(nomAccessible(ouvrir), base).toBe(`${t('accueil.ouvrir')} ${nom}`);
+      noms.push(nomAccessible(ouvrir));
+    }
+    expect(new Set(noms).size).toBe(CINQ.length);
+  });
+
+  test('la date et le chemin, sous le nom, portent chacun son intitulé, lu par les technologies d’assistance et caché à l’œil', async () => {
+    const m = await monterCinq();
+    const enTete = ligneDe(m, 'gala').querySelector('[data-colonne="nom"]').closest('th');
+    for (const [colonne, cle] of [
+      ['date', 'accueil.colonne.date'],
+      ['chemin', 'accueil.colonne.chemin'],
+    ]) {
+      const valeur = enTete.querySelector(`[data-colonne="${colonne}"]`);
+      // L'intitulé : le nœud sans enfant de l'en-tête de ligne qui porte son texte.
+      const intitule = [...enTete.querySelectorAll('span')].find((element) => element.children.length === 0 && texte(element) === t(cle)) ?? null;
+      expect(intitule, colonne).not.toBeNull();
+      expect(texte(intitule), colonne).toBe(t(cle));
+      // L'intitulé précède sa valeur dans l'ordre de lecture.
+      expect(intitule.compareDocumentPosition(valeur) & Node.DOCUMENT_POSITION_FOLLOWING, colonne).toBeTruthy();
+      expect(intitule.getAttribute('aria-hidden'), colonne).toBeNull();
+      const boite = intitule.getBoundingClientRect();
+      expect(boite.width * boite.height, colonne).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test('l’avis d’un dossier de l’exécutable inconnu est un message « avis » : son fond, son signe ; le texte garde l’encre de la page', async () => {
+    const m = await monterCinq();
+    const avis = dans(m, '[data-avertissement="NON_PUBLIE"]');
+    expect(visible(avis)).toBe(true);
+    expect(fondPeintSous(avis)).toEqual([jeton('--couleur-avis-fond')]);
+    expect(composantes(getComputedStyle(avis).color)).toEqual(jeton('--couleur-page-texte'));
+    let message = avis;
+    while (message.querySelector('svg') === null) message = message.parentElement;
+    const signe = message.querySelector('svg');
+    expect(signe.getAttribute('aria-hidden')).toBe('true');
+    expect(composantes(getComputedStyle(signe).stroke)).toEqual(jeton('--couleur-avis-marque'));
+    // Le message précède les tuiles et le tableau.
+    expect(avis.compareDocumentPosition(groupeDesTuiles(m)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('les cartes : Créer un événement, Dossier de travail, Démonstrations, chacune une région nommée par son titre, sur le fond de la carte, après le tableau', async () => {
+    const m = await monterCinq();
+    const titres = [t('accueil.creation.titre'), t('accueil.dossier.titre'), t('accueil.demonstrations.titre')];
+    const regions = tous(m, '[data-ecran="accueil"] section[aria-labelledby]');
+    const nommees = new Map(regions.map((region) => [texte(document.getElementById(region.getAttribute('aria-labelledby'))), region]));
+    const tableau = dans(m, '[data-ecran="accueil"] table');
+    for (const titre of titres) {
+      const region = nommees.get(titre);
+      expect(region, titre).toBeDefined();
+      expect(fond(region), titre).toEqual(jeton('--couleur-carte-fond'));
+      expect(tableau.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING, titre).toBeTruthy();
+    }
+    expect(nommees.get(titres[0]).contains(dans(m, '[data-commande="creer"]'))).toBe(true);
+    expect(nommees.get(titres[1]).contains(dans(m, '[data-dossier-travail]'))).toBe(true);
+    expect(nommees.get(titres[2]).contains(dans(m, '[data-demonstration]'))).toBe(true);
+    expect(nommees.get(t('accueil.liste.titre'))?.contains(tableau)).toBe(true);
+  });
+
+  test('répertoire vide : ni tuiles, ni tableau, ni résumé ; la création et les démonstrations', async () => {
+    const m = await monter();
+    expect(groupeDesTuiles(m)).toBeNull();
+    expect(dans(m, '[data-ecran="accueil"] table')).toBeNull();
+    expect(tous(m, '[data-ecran="accueil"] p').some((p) => p.textContent.includes(t('accueil.entete.resume', { evenements: 0, participants: 0 })))).toBe(false);
+    expect(atteint(dans(m, '[data-commande="creer"]'))).toBe(true);
+    expect(atteint(dans(m, '[data-demonstration]'))).toBe(true);
   });
 });

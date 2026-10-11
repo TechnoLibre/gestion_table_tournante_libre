@@ -11,12 +11,63 @@
 // le composant la rend dans son propre nœud, à côté du texte traduit
 // (§ 14.6). Un compte s'accorde dans la phrase qui le porte.
 import { CIBLE_REDONDANCE_PAR_DEFAUT } from '../../application/evaluation.js';
+import { creerFormat } from '../../application/format.js';
 
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
 
+// Un compte mis en forme comme les nombres de la liste — espace fine entre
+// les milliers —, accordé à sa valeur.
+const compteEnForme = (n, singulier, pluriel, texte) => `${creerFormat(texte).nombre(n)} ${n <= 1 ? singulier : pluriel}`;
+
 export const TABLE = new Map([
+  // --- L'en-tête de la liste (§ 8.1) ----------------------------------------
+  // evenements, participants : le nombre de lignes et la somme des
+  // participants qu'elles portent déjà (resumeDeLaListe, modele.js).
+  [
+    'accueil.entete.resume',
+    ({ evenements, participants }, texte) =>
+      `${compteEnForme(evenements, 'événement', 'événements', texte)} \u{00B7} ` +
+      `${compteEnForme(participants, 'participant', 'participants', texte)} au total`,
+  ],
+  // La commande de l'en-tête qui mène au champ du nom de la création.
+  ['accueil.entete.creer', 'Créer un événement'],
+
+  // --- Les tuiles des filtres par état du plan (§ 8.1, § 9) ------------------
+  // Le nom du groupe des tuiles ; celui de « tous » ; l'aide de chacune, qui
+  // redit pour un état sa ligne du tableau du § 9.
+  ['accueil.filtre.groupe', 'Filtrer par état du plan'],
+  ['accueil.filtre.tous', 'Tous les événements'],
+  ['accueil.filtre.aide.tous', 'tous les états'],
+  ['accueil.filtre.aide.brouillon', 'on prépare'],
+  ['accueil.filtre.aide.propose', 'des placements existent, aucun n\u{2019}est retenu'],
+  ['accueil.filtre.aide.retenu', 'un placement est en vigueur'],
+  ['accueil.filtre.aide.bloque', 'rien ne peut plus changer'],
+  // Le tableau quand le filtre ne retient aucune ligne.
+  ['accueil.filtre.vide', 'Aucune ligne ne porte cet état : choisir « Tous les événements » les montre toutes.'],
+
+  // --- Le tableau des événements (§ 8.1) ---------------------------------------
+  ['accueil.liste.titre', 'Événements'],
+  // Le choix du groupement, et ses deux valeurs.
+  ['accueil.groupement.libelle', 'Grouper par'],
+  ['accueil.groupement.etat', 'État du plan'],
+  ['accueil.groupement.aucun', 'Aucun groupement'],
+  // L'intitulé d'un groupe : le nom de son état, ou celui des états qui ne
+  // se lisent pas, puis son compte (evenements).
+  ['accueil.groupe.illisible', 'État illisible'],
+  ['accueil.groupe.compte', ({ evenements }, texte) => compteEnForme(evenements, 'événement', 'événements', texte)],
+  // Les en-têtes de groupes de colonnes ; la meilleure proposition porte le
+  // titre du bloc de la génération.
+  ['accueil.entete.evenement', 'Événement'],
+  ['accueil.entete.retenu', 'Placement retenu'],
+  ['accueil.colonne.nom', 'Nom'],
+  ['accueil.colonne.actions', 'Actions'],
+  // La commande qui ouvre l'événement de la ligne, en lecture.
+  ['accueil.ouvrir', 'Ouvrir'],
+
   // --- La liste (§ 8.1) ----------------------------------------------------
-  // Les intitulés des informations d'une ligne ; le nom est la commande qui
+  // Les intitulés des informations d'une ligne : en-têtes des colonnes, et,
+  // pour la date et le chemin, l'intitulé caché à l'œil qui les précède sous
+  // le nom, en tête de ligne. Le nom est l'en-tête de la ligne ; « Ouvrir »
   // ouvre l'événement.
   ['accueil.colonne.date', 'Date'],
   ['accueil.colonne.etat', 'État'],

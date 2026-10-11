@@ -13,7 +13,8 @@
   // opération réussie. Une validation en cours ne se relance pas : une
   // seconde soumission pendant l'écriture ne fait rien, et le bouton de
   // validation se dit occupé ; supprimer passe par la Commande, qui a la
-  // même garde.
+  // même garde. Dans la cellule des actions du tableau, les trois commandes
+  // sont discrètes, à côté de « Ouvrir » ; la saisie s'ouvre à leur place.
   import { getContext } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
@@ -76,9 +77,14 @@
 
 <div class="operations">
   {#if saisie === null}
-    <Commande cle="accueil.operation.copier" executer={() => ouvrirSaisie('copier')} />
-    <Commande cle="accueil.operation.renommer" executer={() => ouvrirSaisie('renommer')} />
-    <Commande cle="accueil.operation.supprimer" confirmer="accueil.operation.confirmerSuppression" executer={supprimer} />
+    <Commande cle="accueil.operation.copier" variante="discrete" executer={() => ouvrirSaisie('copier')} />
+    <Commande cle="accueil.operation.renommer" variante="discrete" executer={() => ouvrirSaisie('renommer')} />
+    <Commande
+      cle="accueil.operation.supprimer"
+      variante="discrete"
+      confirmer="accueil.operation.confirmerSuppression"
+      executer={supprimer}
+    />
   {:else}
     <form novalidate onsubmit={valider}>
       <div class="champ">
@@ -117,14 +123,14 @@
     display: flex;
     flex-wrap: wrap;
     align-items: flex-start;
-    gap: var(--espace-2);
+    gap: var(--espace-1);
   }
 
   form,
   .champ {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: var(--espace-2);
   }
 
@@ -132,12 +138,18 @@
     gap: var(--espace-1);
   }
 
+  label {
+    font-weight: bold;
+  }
+
   input {
-    min-width: 20em;
+    width: 14rem;
+    max-width: 100%;
+    box-sizing: border-box;
     padding: var(--espace-1) var(--espace-2);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
@@ -150,12 +162,25 @@
   button {
     padding: var(--espace-1) var(--espace-3);
     border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
     cursor: pointer;
+  }
+
+  button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  /* La validation : l'action de la saisie, pleine de la teinte de
+     l'action. */
+  button[type='submit'] {
+    border-color: var(--couleur-action-fond);
+    background-color: var(--couleur-action-fond);
+    color: var(--couleur-action-texte);
+    font-weight: bold;
   }
 
   input:focus-visible,
@@ -166,7 +191,10 @@
 
   button[aria-disabled='true'] {
     border-style: dashed;
-    color: var(--couleur-page-texte-secondaire);
     cursor: progress;
+  }
+
+  button[type='submit'][aria-disabled='true'] {
+    border-color: var(--couleur-action-texte);
   }
 </style>
