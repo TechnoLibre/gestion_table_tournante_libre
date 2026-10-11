@@ -51,14 +51,15 @@
 // porteur : un document privé de ses images ne passe pas sur un balayage
 // vide.
 //
-// Ligne de commande, depuis la racine du projet ou d'ailleurs :
+// Ligne de commande, depuis la racine du projet ou d'ailleurs, par un
+// chemin qui traverse ou non un lien symbolique :
 //   node scripts/documentation.js engendrer | verifier [--livraison]
 //        [--racine <dossier>] [--porteur <chemin>]…
 // --racine remplace la racine du projet ; chaque --porteur, relatif à la
 // racine, remplace la liste PORTEURS. Code de sortie : 0 sans faute, 1 sur
 // une faute ou, sous --livraison, un écart de version, 2 sur des arguments
 // illisibles.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { COMMANDES } from '../src/application/commandes.js';
@@ -934,6 +935,23 @@ export function engendrerArbre({
   return { fautes, ecrits: aEcrire.map(([chemin]) => chemin), code: 0 };
 }
 
+/**
+ * La ligne qui nomme un écart de version (§ 19.7) : sa portée — bloquant
+ * sous livraison, non bloquant au cycle court —, la version du manifeste,
+ * celle de la construction. La ligne de commande l'imprime, et la série node
+ * l'affiche au cycle court (test/documentation.test.js).
+ *
+ * @param {null|{manifeste: string|null, construction: string}} ecart  celui de verifierArbre
+ * @param {{livraison?: boolean}} [options]
+ * @returns {string|null}   null sans écart
+ */
+export function ligneEcart(ecart, { livraison = false } = {}) {
+  if (ecart === null) return null;
+  const portee = livraison ? 'bloquant' : 'non bloquant';
+  const manifeste = ecart.manifeste ?? 'aucune (manifeste absent ou sans capture)';
+  return `écart de version (${portee}) : manifeste ${manifeste}, construction ${ecart.construction}`;
+}
+
 const USAGE =
   'usage : node scripts/documentation.js engendrer | verifier [--livraison] [--racine <dossier>] [--porteur <chemin>]…';
 
@@ -992,15 +1010,29 @@ export function executer(argv, { racine = RACINE, porteurs = PORTEURS, version, 
     ...(lireOctets === undefined ? {} : { lireOctets }),
   });
   ecrireFautes(bilan.fautes);
-  if (bilan.ecart !== null) {
-    const portee = lus.livraison ? 'bloquant' : 'non bloquant';
-    const manifeste = bilan.ecart.manifeste ?? 'aucune (manifeste absent ou sans capture)';
-    sortie(`écart de version (${portee}) : manifeste ${manifeste}, construction ${bilan.ecart.construction}`);
-  }
+  const ecart = ligneEcart(bilan.ecart, { livraison: lus.livraison });
+  if (ecart !== null) sortie(ecart);
   sortie(`verifier : ${options.porteurs.length} porteur(s), ${bilan.regions} région(s), ${bilan.images} image(s), ${bilan.fautes.length} faute(s)`);
   return bilan.code;
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+/**
+ * Vrai quand chemin désigne ce module : Node charge le script lancé sous son
+ * chemin réel, et un chemin qui traverse un lien symbolique se compare donc
+ * par realpathSync. Un chemin absent ou illisible rend faux.
+ *
+ * @param {string|undefined} [chemin]  le script que Node a lancé
+ * @returns {boolean}
+ */
+export function estLanceDirectement(chemin = process.argv[1]) {
+  if (chemin === undefined) return false;
+  try {
+    return realpathSync(chemin) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (estLanceDirectement()) {
   process.exitCode = executer(process.argv.slice(2));
 }

@@ -18,9 +18,13 @@
 // (une image retirée, un nombre changé, un nom de fonction collé), elle en
 // rend une, ce qui montre qu'elle ne passe pas à vide (§ 14.2).
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { describe, test } from './lanceur.js';
+import { versionVoisine } from './version_voisine.js';
+import configuration from '../vitest.config.js';
 import { TABLES_APPLICATION } from '../src/application/libelles.js';
 import { creerTraduction } from '../src/application/traduction.js';
 import { CATALOGUE } from '../src/demo/catalogue.js';
@@ -32,6 +36,7 @@ import { VERSION } from '../src/version.genere.js';
 import { CONSTANTES } from '../src/geometrie/constantes.js';
 import { tableauConstantes } from '../scripts/banc/releve.js';
 import {
+  CHEMIN_RELEVE,
   PORTEURS,
   PRODUCTEURS,
   RACINE,
@@ -39,6 +44,7 @@ import {
   executer,
   fautesImagesCitees,
   imagesCitees,
+  ligneEcart,
   lireRegions,
   tableauRegistre,
   verifierArbre,
@@ -401,8 +407,12 @@ describe('documentation : les régions engendrées des documents livrés (§ 19.
     assert.deepEqual(servies, PRODUCTEURS.map(({ nom }) => nom).sort());
   });
 
-  test('verifier, sur l’arbre réel et la liste par défaut : aucune faute, toutes les régions lues', () => {
-    const bilan = verifierArbre();
+  test('verifier, sur l’arbre réel et la liste par défaut : aucune faute, toutes les régions lues ; l’écart de version affiché, non bloquant', () => {
+    // L'écrivain relève chaque ligne et la passe à la sortie d'erreur de
+    // l'épreuve : la série surveillée affiche l'écart de l'arbre réel.
+    const lignes = [];
+    const { bilan } = verifierEtAfficher({ ecrire: (ligne) => { lignes.push(ligne); console.warn(ligne); } });
+    assert.deepEqual(lignes, bilan.ecart === null ? [] : [ligneEcart(bilan.ecart)]);
     assert.deepEqual(bilan.fautes, []);
     assert.equal(bilan.regions, PRODUCTEURS.length);
     assert.equal(bilan.code, 0);
@@ -432,6 +442,123 @@ describe('documentation : les régions engendrées des documents livrés (§ 19.
     const bilan = verifierArbre({ porteurs: [GUIDE_USAGE], lire: (chemin) => (chemin === GUIDE_USAGE ? corrige : lire(chemin)) });
     assert.deepEqual(bilan.fautes.map((f) => f.chemin), [GUIDE_USAGE]);
     assert.match(bilan.fautes[0].faute, /région « reglages » : diffère de ce que le producteur engendre/);
+  });
+});
+
+// --- L'écart de version, la ligne de commande, la surveillance (§ 19.7, § 14.4) ---------
+
+// Vérifie l'arbre réel au cycle court, par lire quand il est donné, et
+// affiche l'écart de version du bilan par ecrire : par défaut console.warn,
+// la sortie d'erreur de l'épreuve, que le rapporteur imprime sous le nom de
+// l'épreuve sans la faire échouer (§ 19.7). L'épreuve du manifeste voisin
+// éprouve les deux écrivains, l'injecté et celui par défaut ; celle de
+// l'arbre réel passe un écrivain qui relève puis transmet à console.warn,
+// et attend la ligne de son propre écart, aucune sans écart.
+// Rend { bilan, ligne } : ligne est la ligne écrite, null sans écart.
+function verifierEtAfficher({ lire, ecrire = (ligne) => console.warn(ligne) } = {}) {
+  const bilan = verifierArbre({ lire });
+  const ligne = ligneEcart(bilan.ecart);
+  if (ligne !== null) ecrire(ligne);
+  return { bilan, ligne };
+}
+
+// Les épreuves que la série surveillée relance quand chemin change : la
+// réunion des motifs de vitest.config.js qui y répondent, comme Vitest la
+// calcule.
+function relanceesPar(chemin) {
+  const motifs = configuration.test.watchTriggerPatterns.filter(({ pattern }) => new RegExp(pattern.source, pattern.flags).test(chemin));
+  return new Set(motifs.flatMap(({ testsToRun }) => [testsToRun(chemin) ?? []].flat()));
+}
+
+describe('documentation : l’écart de version, la ligne de commande, la surveillance (§ 19.7, § 14.4)', () => {
+  // Le manifeste réel, chaque version réelle passée à la voisine de la
+  // construction : seules les versions diffèrent, images et empreintes
+  // restent celles de l'arbre.
+  const versionDuManifeste = (version) => {
+    const manifeste = lireManifeste();
+    manifeste.captures = manifeste.captures.map((capture) => ({ ...capture, versionReelle: version }));
+    return lireAvec(CHEMIN_MANIFESTE, `${JSON.stringify(manifeste, null, 2)}\n`);
+  };
+
+  test('rouge : un manifeste à une version voisine — au cycle court, l’écart s’affiche, se nomme et ne bloque pas ; à la livraison, il bloque', () => {
+    const voisine = versionVoisine(VERSION.affichee);
+    const lire = versionDuManifeste(voisine);
+    const lignes = [];
+    const { bilan: court, ligne } = verifierEtAfficher({ lire, ecrire: (ecrite) => lignes.push(ecrite) });
+    assert.deepEqual([court.fautes, court.code], [[], 0]);
+    assert.deepEqual(court.ecart, { manifeste: voisine, construction: VERSION.affichee });
+    assert.deepEqual(lignes, [`écart de version (non bloquant) : manifeste ${voisine}, construction ${VERSION.affichee}`]);
+    assert.equal(ligne, lignes[0]);
+    // Sans écrivain, la ligne va à console.warn, remplacé le temps de l'appel.
+    const recues = [];
+    const avertir = console.warn;
+    console.warn = (...valeurs) => recues.push(valeurs.join(' '));
+    try {
+      verifierEtAfficher({ lire });
+    } finally {
+      console.warn = avertir;
+    }
+    assert.deepEqual(recues, lignes);
+    const livraison = verifierArbre({ lire, livraison: true });
+    assert.equal(livraison.code, 1);
+    assert.equal(ligneEcart(livraison.ecart, { livraison: true }), `écart de version (bloquant) : manifeste ${voisine}, construction ${VERSION.affichee}`);
+    // La ligne de commande imprime la même ligne, par la même composition.
+    for (const [argv, code, portee] of [[['verifier'], 0, 'non bloquant'], [['verifier', '--livraison'], 1, 'bloquant']]) {
+      const sortie = [];
+      assert.equal(executer(argv, { lire, sortie: (ligne) => sortie.push(ligne) }), code);
+      assert.ok(sortie.includes(`écart de version (${portee}) : manifeste ${voisine}, construction ${VERSION.affichee}`), sortie.join('\n'));
+    }
+    // Sans écart, rien ne s'affiche.
+    const accorde = verifierEtAfficher({ lire: versionDuManifeste(VERSION.affichee), ecrire: () => assert.fail('aucune ligne sans écart') });
+    assert.equal(accorde.bilan.ecart, null);
+    assert.equal(accorde.ligne, null);
+  });
+
+  test('un manifeste absent ne prouve aucune version : l’écart le nomme', () => {
+    assert.equal(
+      ligneEcart({ manifeste: null, construction: VERSION.affichee }),
+      `écart de version (non bloquant) : manifeste aucune (manifeste absent ou sans capture), construction ${VERSION.affichee}`,
+    );
+    assert.equal(ligneEcart(null, { livraison: true }), null);
+  });
+
+  // Node charge le script lancé sous son chemin réel : un lancement par un
+  // chemin qui traverse un lien symbolique est un lancement direct.
+  test('rouge : lancé par un lien symbolique vers son dossier, le script s’exécute — un argument illisible rend l’usage et le code 2', () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'gtt-documentation-lien-'));
+    try {
+      const lien = join(dossier, 'scripts');
+      symlinkSync(join(RACINE, 'scripts'), lien, 'junction');
+      const lance = spawnSync(process.execPath, [join(lien, 'documentation.js'), 'illisible'], { encoding: 'utf8' });
+      assert.equal(lance.status, 2, lance.stderr);
+      assert.match(lance.stdout, /^usage : node scripts\/documentation\.js engendrer \| verifier/);
+    } finally {
+      rmSync(dossier, { recursive: true, force: true });
+    }
+  });
+
+  // verifier lit par le disque les porteurs, le manifeste, le relevé du banc
+  // et les captures citées, qu'aucun graphe d'imports ne relie aux épreuves
+  // de la documentation : chacun a son motif de surveillance. Les lectures
+  // se relèvent sur l'arbre réel, avant l'appel à chaque lecteur. Les textes
+  // relancent les deux épreuves ; une capture relance celle de l'arbre réel,
+  // scripts/documentation.test.js ne lisant que ses propres images.
+  test('rouge : chaque fichier que verifier lit par le disque relance les épreuves de la documentation qui le lisent', () => {
+    const lus = new Set();
+    const relever = (lecteur) => (chemin) => {
+      lus.add(chemin);
+      return lecteur(chemin);
+    };
+    const bilan = verifierArbre({ lire: relever(lire), lireOctets: relever(lireOctets) });
+    const images = [...lus].filter((chemin) => chemin.endsWith('.png'));
+    assert.ok(bilan.images > 0, 'aucune capture citée');
+    assert.equal(images.length, bilan.images);
+    assert.deepEqual([...PORTEURS, CHEMIN_MANIFESTE, CHEMIN_RELEVE].filter((chemin) => !lus.has(chemin)), []);
+    const epreuvesDe = (chemin) =>
+      chemin.endsWith('.png') ? ['test/documentation.test.js'] : ['test/documentation.test.js', 'scripts/documentation.test.js'];
+    const manquent = [...lus].flatMap((chemin) =>
+      epreuvesDe(chemin).filter((e) => !relanceesPar(chemin).has(e)).map((e) => `${chemin} ne relance pas ${e}`));
+    assert.deepEqual(manquent, []);
   });
 });
 

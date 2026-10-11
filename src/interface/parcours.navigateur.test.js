@@ -9,7 +9,7 @@
 // de 1 366 × 700. Un seul montage porte toutes les épreuves du fichier, qui
 // s'exécutent dans l'ordre : chacune part de l'événement que la précédente a
 // laissé, affirme sa condition avant la suivante, et finit sur un collecteur
-// d'erreurs vide.
+// d'erreurs vide et sans requête hors de la boucle locale (§ 19.11).
 //
 // Le parcours est le parcours photographié (§ 19.1, § 19.3) : il suit les
 // captures du § 19.3 que l'itération photographie — 01, 01b, 02, 02b, 03 à
@@ -81,6 +81,7 @@ import {
   entiereDansLaFenetre,
   modeFourni,
   photographier,
+  requeteHorsBoucle,
 } from '../../test/navigateur/captures.js';
 import { NOM_CAS_LIMITES, attendre, centre, octetsCasLimites } from '../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
@@ -180,8 +181,21 @@ beforeEach(({ task, onTestFailed }) => {
   expect(new TextEncoder().encode(titre).length, titre).toBeLessThanOrEqual(TITRE_MAX_OCTETS);
 });
 
-afterEach(() => {
-  expect(m.erreurs(), 'erreurs reçues par le collecteur').toEqual([]);
+// Chaque épreuve, photographiée ou non, finit sans erreur au collecteur et
+// sans requête hors de la boucle locale : celles d'après la dernière capture
+// d'écran — les pages du PDF, les sorties, l'ordre de lecture, les fenêtres,
+// la lecture et le plan bloqué — se relèvent ici. Les deux causes se
+// lisent avant d'échouer et se nomment ensemble, la requête d'abord : une
+// requête se nomme dans l'épreuve qui l'a émise, même quand le collecteur a
+// aussi reçu une erreur.
+afterEach(async () => {
+  const requete = await requeteHorsBoucle();
+  const erreurs = m.erreurs();
+  const fautes = [
+    ...(requete === null ? [] : [`requête hors de la boucle locale : ${requete}`]),
+    ...(erreurs.length === 0 ? [] : [`erreurs reçues par le collecteur : ${JSON.stringify(erreurs)}`]),
+  ];
+  if (fautes.length > 0) expect.fail(fautes.join(' ; '));
 });
 
 afterAll(async () => {
@@ -680,7 +694,8 @@ function parPointsDeCode(a, b) {
 
 /**
  * Photographie une page du PDF de la planche (§ 19.6) : tramerPdf la lit
- * d'abord sans rien écrire, conditions(lue) affirme ce qu'elle montre, puis,
+ * d'abord sans rien écrire, conditions(lue) affirme ce qu'elle montre, aucune
+ * requête hors de la boucle locale n'attend d'être nommée (§ 19.11), puis,
  * en écriture, la trame en PNG sous le dossier d'attente et dépose l'entrée ;
  * en vérification, compare l'entrée au manifeste. L'entrée porte la source
  * pdf, la taille de la page à 96 ppp pour cadre, la couche de texte de la
@@ -700,6 +715,8 @@ async function photographierPdf(octets, { page, fichier }, conditions) {
   expect(lu.pdf).toBe(await empreinte(octets));
   const [lue] = lu.pages;
   conditions(lue);
+  const requete = await requeteHorsBoucle();
+  if (requete !== null) expect.fail(`capture ${fichier} : requête hors de la boucle locale : ${requete}`);
   const racineNeutre = etat().racine.chemin;
   expect(await commands.cheminsHorsRacine({ texte: lue.textes, racine: racineNeutre }), fichier).toEqual([]);
   const entree = {

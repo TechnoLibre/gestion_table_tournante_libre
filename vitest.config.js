@@ -55,7 +55,8 @@ const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
 // composants dans son motif, et son graphe porte les commandes des captures
 // d'écran, qui balaient doc/captures ; la garde des lecteurs par le disque
 // (test/arborescence.test.js), textuelle, les compte parmi les lecteurs des
-// composants.
+// composants. test/documentation.test.js en est : elle lit ces motifs pour
+// les fichiers que scripts/documentation.js lit par le disque.
 const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/arborescence.test.js',
   'test/sources_interface.test.js',
@@ -69,6 +70,7 @@ const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/chromium.test.js',
   'test/machine.test.js',
   'test/rapporteur.test.js',
+  'test/documentation.test.js',
 ]);
 
 // Les épreuves node qui lisent la feuille des jetons par le système de
@@ -174,6 +176,13 @@ export default defineConfig({
       // captures, que scripts/documentation.js lit par le disque (§ 19.8).
       { pattern: /(^|\/)(README\.md|GUIDE-[^/]*\.md|doc\/captures\/manifeste\.json)$/,
         testsToRun: () => 'scripts/documentation.test.js' },
+      // Le relevé du banc, que scripts/documentation.js lit par le disque
+      // pour la région « constantes » (§ 19.10) : les deux épreuves de la
+      // documentation, et celles qui l'importent, que le motif ne relancerait
+      // plus sinon.
+      { pattern: /(^|\/)scripts\/banc\/releve\.json$/,
+        testsToRun: () => ['test/documentation.test.js', 'scripts/documentation.test.js', 'src/geometrie/constantes.test.js',
+                           'scripts/banc/releve.test.js', 'scripts/banc/lancer.test.js'] },
     ],
     projects: [
       { test: {

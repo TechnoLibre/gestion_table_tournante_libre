@@ -647,6 +647,24 @@ function conditionVisible(element) {
   return entiereDansLaFenetre(element) ? true : 'sa boîte déborde de la fenêtre ou d’un ancêtre qui la rogne : l’image la coupe';
 }
 
+/**
+ * La première requête hors de la boucle locale que la page a émise depuis
+ * le relevé précédent (§ 2, § 19.11), suivie de la cause de son échec entre
+ * parenthèses quand node l'a déjà reçue ; null sans requête. Vide les deux
+ * relevés de test/chromium.js, requêtes et échecs : chaque requête se
+ * nomme une fois, au premier contrôle qui la lit. Photographier, une page
+ * du PDF, la fin de chaque épreuve du parcours et sa clôture la lisent.
+ *
+ * @returns {Promise<string|null>}
+ */
+export async function requeteHorsBoucle() {
+  const [adresse] = await commands.requetesHorsBoucle();
+  const echecs = await commands.echecsHorsBoucle();
+  if (adresse === undefined) return null;
+  const cause = echecs.find((echec) => echec.adresse === adresse)?.cause ?? null;
+  return cause === null ? adresse : `${adresse} (${cause})`;
+}
+
 // Ce que porte le userAgent de Chromium sans tête, le seul mode d'affichage
 // des captures, MODE_AFFICHAGE au manifeste (§ 19.4) : les métriques de
 // texte diffèrent d'un mode à l'autre.
@@ -719,8 +737,8 @@ export async function photographier(m, fichier, { condition = [], graine = null,
   }
   const [erreur] = m.erreurs();
   if (erreur !== undefined) throw echec(`collecteur : ${erreur.type} « ${erreur.message} »`);
-  const [requete] = await commands.requetesHorsBoucle();
-  if (requete !== undefined) throw echec(`requête hors de la boucle locale : ${requete}`);
+  const requete = await requeteHorsBoucle();
+  if (requete !== null) throw echec(`requête hors de la boucle locale : ${requete}`);
   if (innerWidth !== CADRE.largeur || innerHeight !== CADRE.hauteur) {
     throw echec(`cadre ${innerWidth} × ${innerHeight}, attendu ${CADRE.largeur} × ${CADRE.hauteur}`);
   }
@@ -794,13 +812,14 @@ export async function photographier(m, fichier, { condition = [], graine = null,
 }
 
 /**
- * Clôt un parcours photographié (§ 19.1, § 19.5, § 19.7). declarees : les
- * captures que le parcours porte, CAPTURES hors A_VENIR par défaut. Une
- * épreuve du fichier en échec, qu'elle ait photographié ou non, refuse la
- * clôture en se nommant : en écriture, le dossier d'attente est jeté et
- * rien n'est publié. Sans échec, l'écriture publie d'un bloc et rend le
- * bilan de publierCaptures ; la vérification affirme que le manifeste porte
- * exactement les déclarées.
+ * Clôt un parcours photographié (§ 19.1, § 19.5, § 19.7, § 19.11).
+ * declarees : les captures que le parcours porte, CAPTURES hors A_VENIR par
+ * défaut. Une épreuve du fichier en échec, qu'elle ait photographié ou non,
+ * refuse la clôture en se nommant ; une requête hors de la boucle locale
+ * émise depuis le dernier relevé la refuse en se nommant aussi : en
+ * écriture, le dossier d'attente est jeté et rien n'est publié. Sans
+ * échec, l'écriture publie d'un bloc et rend le bilan de publierCaptures ;
+ * la vérification affirme que le manifeste porte exactement les déclarées.
  *
  * @param {Object} options
  * @param {string[]} options.echecs  les épreuves du fichier qui ont échoué
@@ -817,10 +836,13 @@ export async function cloreCaptures({ echecs, declarees = null, mode = modeFourn
     liste = captures.map(({ fichier }) => fichier).filter((fichier) => !aVenir.includes(fichier));
   }
   if (liste.length === 0) throw new Error('captures : aucune capture déclarée — zéro capture n’est jamais un succès');
-  if (echecs.length > 0) {
+  const requete = await requeteHorsBoucle();
+  const causes = [];
+  if (echecs.length > 0) causes.push(`${echecs.length} épreuve(s) du parcours en échec : ${echecs.map((nom) => `« ${nom} »`).join(', ')}`);
+  if (requete !== null) causes.push(`requête hors de la boucle locale : ${requete}`);
+  if (causes.length > 0) {
     if (mode === 'ecrire') await commands.viderAttente({ racine });
-    const natures = echecs.map((nom) => `« ${nom} »`).join(', ');
-    throw new Error(`captures non ${mode === 'ecrire' ? 'publiées' : 'vérifiées'} : ${echecs.length} épreuve(s) du parcours en échec : ${natures}`);
+    throw new Error(`captures non ${mode === 'ecrire' ? 'publiées' : 'vérifiées'} : ${causes.join(' ; ')}`);
   }
   const memes = (a, b) => [...a].sort().join('\n') === [...b].sort().join('\n');
   if (mode === 'ecrire') {

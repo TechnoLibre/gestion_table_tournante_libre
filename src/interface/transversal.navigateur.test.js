@@ -62,6 +62,7 @@ import {
   rgb,
   cloreCaptures,
   photographier,
+  requeteHorsBoucle,
   situer,
   stylesDuTheme,
   texteReleve,
@@ -1183,6 +1184,12 @@ describe('les captures d’écran : chaque contrôle échoue en nommant la captu
     return echecs;
   }
 
+  // Laisse passer autant d'images de la page qu'echecsReleves en attend au
+  // plus, sans lire aucun relevé : l'échec d'une requête a rejoint node.
+  async function laisserArriverLEchec() {
+    for (let image = 0; image < 60; image += 1) await new Promise((resoudre) => requestAnimationFrame(resoudre));
+  }
+
   // Le mandataire mort de test/chromium.js refuse la connexion : la requête
   // n'est jamais partie de la machine, et Chromium le dit par sa cause.
   test('réseau : une requête vers une adresse littérale inventée échoue en connexion au mandataire mort, la page de la boucle locale se charge, le relevé la nomme', async () => {
@@ -1193,6 +1200,16 @@ describe('les captures d’écran : chaque contrôle échoue en nommant la captu
     expect(erreur?.name, String(erreur)).toBe('TypeError');
     expect(await echecsReleves()).toEqual([{ adresse: ADRESSE_INVENTEE, cause: 'net::ERR_PROXY_CONNECTION_FAILED' }]);
     expect(await commands.requetesHorsBoucle()).toEqual([ADRESSE_INVENTEE]);
+  });
+
+  test('relevé : requeteHorsBoucle nomme la requête suivie de sa cause une fois l’échec reçu, vide les deux relevés, puis rend null', async () => {
+    await commands.requetesHorsBoucle();
+    await commands.echecsHorsBoucle();
+    await requeteInventee();
+    await laisserArriverLEchec();
+    expect(await requeteHorsBoucle()).toBe(`${ADRESSE_INVENTEE} (net::ERR_PROXY_CONNECTION_FAILED)`);
+    expect(await commands.echecsHorsBoucle()).toEqual([]);
+    expect(await requeteHorsBoucle()).toBe(null);
   });
 
   test('un sélecteur manquant, une erreur au collecteur, une requête hors boucle : chacun échoue en nommant la capture', async () => {
@@ -1458,12 +1475,25 @@ describe('les captures d’écran : chaque contrôle échoue en nommant la captu
     });
   });
 
-  test('clôture : une épreuve du parcours en échec ne publie rien, jette l’attente et se nomme ; sans échec, la clôture publie', async () => {
+  test('clôture : une épreuve en échec ou une requête hors boucle ne publie rien, jette l’attente et se nomme ; sinon, la clôture publie', async () => {
     await avecMontage(async (m, { racine, racineNeutre, ecrire }) => {
       const declarees = ['01-premier-ecran'];
       const clore = (echecs) => cloreCaptures({ echecs, declarees, mode: 'ecrire', racine, racineNeutre });
       await photographier(m, '01-premier-ecran', ecrire);
       await expect(clore(['20 « Défaire » en lecture'])).rejects.toThrow('captures non publiées : 1 épreuve(s) du parcours en échec : « 20 « Défaire » en lecture »');
+      expect(await commands.empreintesDossier({ racine })).toEqual([]);
+      // Une requête émise après la dernière capture : la clôture seule la lit.
+      await photographier(m, '01-premier-ecran', ecrire);
+      await requeteInventee();
+      await echecsReleves();
+      await expect(clore([])).rejects.toThrow(`captures non publiées : requête hors de la boucle locale : ${ADRESSE_INVENTEE}`);
+      expect(await commands.empreintesDossier({ racine })).toEqual([]);
+      await photographier(m, '01-premier-ecran', ecrire);
+      await requeteInventee();
+      await echecsReleves();
+      await expect(clore(['20 « Défaire » en lecture'])).rejects.toThrow(
+        `captures non publiées : 1 épreuve(s) du parcours en échec : « 20 « Défaire » en lecture » ; requête hors de la boucle locale : ${ADRESSE_INVENTEE}`,
+      );
       expect(await commands.empreintesDossier({ racine })).toEqual([]);
       await photographier(m, '01-premier-ecran', ecrire);
       expect(await clore([])).toEqual({ declarees, bilan: { ecrites: declarees, gardees: [], retirees: [], manifeste: true } });
