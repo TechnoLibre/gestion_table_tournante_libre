@@ -28,6 +28,7 @@ import {
   cadreDepuisRect,
   englobantDuTour,
   nomDeCharge,
+  placerBulle,
   sourceMontree,
   tourAffiche,
   toursOfferts,
@@ -302,5 +303,69 @@ describe('sourceMontree : ce que la barre de vue dit du placement montré (§ 2.
 
   test('une source hors du contrat lève', () => {
     assert.throws(() => sourceMontree(etat('autre'), null, false), TypeError);
+  });
+});
+
+describe('placerBulle : une bulle reste dans la zone du plan (§ 7.1, § 7.3)', () => {
+  // Une zone de 600 × 400 px dont le coin est à (20, 10) : bords droit 620
+  // et bas 410.
+  const ZONE = { gauche: 20, haut: 10, largeur: 600, hauteur: 400 };
+
+  test('une bulle qui tient à droite et dessous reste à son ancre', () => {
+    assert.deepEqual(placerBulle({ x: 100, y: 50, xRepli: 60 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 100, y: 50 });
+    // Au ras des bords droit et bas, elle tient encore.
+    assert.deepEqual(placerBulle({ x: 420, y: 310 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 420, y: 310 });
+  });
+
+  test('qui déborde à droite, elle passe à gauche de xRepli, son bord droit sur lui', () => {
+    assert.deepEqual(placerBulle({ x: 500, y: 50, xRepli: 440 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 240, y: 50 });
+    // Sans xRepli, le repli se fait autour de x.
+    assert.deepEqual(placerBulle({ x: 500, y: 50 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 300, y: 50 });
+  });
+
+  test('qui déborde dessous, elle passe au-dessus de son ancre, son bord bas sur elle', () => {
+    assert.deepEqual(placerBulle({ x: 100, y: 380 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 100, y: 280 });
+  });
+
+  test('sans place d’un côté ni de l’autre, elle se cale sur le bord opposé, jamais avant le début de la zone', () => {
+    // 200 px à droite de 500 débordent ; à gauche de 150, il manque 30 px.
+    assert.deepEqual(placerBulle({ x: 500, y: 50, xRepli: 150 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 420, y: 50 });
+    // Plus large que la zone : calée au bord gauche.
+    assert.deepEqual(placerBulle({ x: 500, y: 50, xRepli: 150 }, { largeur: 700, hauteur: 100 }, ZONE), { x: 20, y: 50 });
+    // Plus haute que la zone, sous une ancre basse : calée au bord haut.
+    assert.deepEqual(placerBulle({ x: 100, y: 300 }, { largeur: 200, hauteur: 500 }, ZONE), { x: 100, y: 10 });
+  });
+
+  test('une ancre avant le bord gauche ou le bord haut ramène la bulle sur ce bord, même quand elle tient', () => {
+    // L'ancre d'une table coupée par le haut du cadre : au-dessus de la zone.
+    assert.deepEqual(placerBulle({ x: 100, y: -50 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 100, y: 10 });
+    // Au-dessus et à gauche : calée dans le coin haut gauche.
+    assert.deepEqual(placerBulle({ x: -40, y: -50, xRepli: -90 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 20, y: 10 });
+    // Une taille encore inconnue ne la laisse pas non plus hors de la zone.
+    assert.deepEqual(placerBulle({ x: -40, y: -50 }, { largeur: 0, hauteur: 0 }, ZONE), { x: 20, y: 10 });
+  });
+
+  test('une ancre après le bord droit ou le bord bas ramène la bulle dans la zone, son bord sur ce bord', () => {
+    // À droite de la zone, son repli encore après le bord : le bord droit
+    // de la bulle sur celui de la zone, 620 − 50.
+    assert.deepEqual(placerBulle({ x: 700, y: 50, xRepli: 690 }, { largeur: 50, hauteur: 100 }, ZONE), { x: 570, y: 50 });
+    // Sous la zone, 100 px au-dessus de l'ancre ne suffisent pas : le bord
+    // bas de la bulle sur celui de la zone, 410 − 100.
+    assert.deepEqual(placerBulle({ x: 100, y: 450 }, { largeur: 200, hauteur: 100 }, ZONE), { x: 100, y: 310 });
+  });
+
+  test('une taille encore inconnue — zéro, avant la première mesure — laisse la bulle à son ancre', () => {
+    assert.deepEqual(placerBulle({ x: 615, y: 405, xRepli: 580 }, { largeur: 0, hauteur: 0 }, ZONE), { x: 615, y: 405 });
+  });
+
+  test('les arguments ne sont pas modifiés ; un nombre non fini lève', () => {
+    const ancre = { x: 500, y: 380, xRepli: 440 };
+    const taille = { largeur: 200, hauteur: 100 };
+    const zone = { ...ZONE };
+    placerBulle(ancre, taille, zone);
+    assert.deepEqual([ancre, taille, zone], [{ x: 500, y: 380, xRepli: 440 }, { largeur: 200, hauteur: 100 }, ZONE]);
+    assert.throws(() => placerBulle({ x: Number.NaN, y: 0 }, taille, zone), TypeError);
+    assert.throws(() => placerBulle({ x: 0, y: 0 }, { largeur: Infinity, hauteur: 0 }, zone), TypeError);
+    assert.throws(() => placerBulle({ x: 0, y: 0 }, taille, { ...ZONE, hauteur: undefined }), TypeError);
   });
 });

@@ -31,9 +31,10 @@ import { VERSION } from '../../version.genere.js';
 import TEXTE_TOUTES_EN_CONFLIT from '../../../test/fixtures/plan/toutes_en_conflit.gtt.json?raw';
 import { fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
-import { visible } from '../../../test/navigateur/rendu.js';
+import { composantes, visible } from '../../../test/navigateur/rendu.js';
+import { teintesAppartenances } from '../appartenances.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { enonces, numeroDeCharge } from './phrases.js';
+import { cartesDiagnostic, enonces, numeroDeCharge } from './phrases.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const V1 = VERSION.affichee;
@@ -131,11 +132,16 @@ const texteDe = (element) => element.textContent.replace(/\s+/g, ' ').trim();
 const charge = (m) => m.seance.etat().charge;
 const revision = (m) => m.seance.etat().evenement.revision;
 
-// Chaque énoncé rendu sous la racine : sa clé, son appartenance, son texte,
-// et son remède, null quand il n'en porte pas.
+// L'intitulé de la liste qui porte un énoncé : la liste d'une carte est
+// nommée par son titre (aria-labelledby).
+const intituleDe = (li) => document.getElementById(li.closest('ul').getAttribute('aria-labelledby'));
+
+// Chaque énoncé rendu sous la racine : sa clé, son appartenance — la donnée
+// du titre de sa carte —, son texte, et son remède, null quand il n'en porte
+// pas.
 function lus(racine) {
   return [...racine.querySelectorAll('[data-enonce]')].map((li) => {
-    const donnee = li.querySelector('[data-donnee]');
+    const donnee = intituleDe(li).querySelector('[data-donnee]');
     const remede = li.querySelector('[data-remede]');
     return {
       cle: li.dataset.enonce,
@@ -157,6 +163,51 @@ function attendus(chargeLue, { avecRemede }) {
     phrase: t(cle, details),
     remede: avecRemede && remede !== null ? t(remede.cle, remede.details) : null,
   }));
+}
+
+
+// La couleur qu'un jeton donne dans le thème courant, relue sur une sonde.
+function jeton(nom) {
+  const sonde = document.createElement('span');
+  sonde.style.color = `var(${nom})`;
+  document.body.append(sonde);
+  const couleur = composantes(getComputedStyle(sonde).color);
+  sonde.remove();
+  return couleur;
+}
+
+// La carte qui porte un élément : son plus proche ancêtre peint du fond de
+// la carte, bordé d'un filet et arrondi.
+function carteDe(element) {
+  const fond = jeton('--couleur-carte-fond');
+  for (let porteur = element.parentElement; porteur !== null; porteur = porteur.parentElement) {
+    const style = getComputedStyle(porteur);
+    const peinte = composantes(style.backgroundColor).join() === fond.join();
+    if (peinte && parseFloat(style.borderTopWidth) > 0 && parseFloat(style.borderTopLeftRadius) > 0) return porteur;
+  }
+  return null;
+}
+
+// Les cartes attendues : genre, groupe et clés de chaque carte, du moteur
+// sollicité une seconde fois.
+function cartesAttendues(chargeLue) {
+  const diagnostic = diagnostiquer(configurationDepuisCharge(chargeLue));
+  const liste = enonces(diagnostic, { numeroDe: numeroDeCharge(chargeLue), tours: chargeLue.evenement.tours });
+  return cartesDiagnostic(liste).map(({ genre, groupe, enonces: dedans }) => ({ genre, groupe, cles: dedans.map(({ cle }) => cle) }));
+}
+
+// Les cartes rendues sous la racine, lues comme cartesAttendues : chaque
+// liste d'énoncés et son titre ; groupe, la donnée du titre.
+function cartesLues(racine) {
+  return [...racine.querySelectorAll('ul')]
+    .filter((ul) => ul.querySelector('[data-enonce]') !== null)
+    .map((ul) => {
+      const donnee = document.getElementById(ul.getAttribute('aria-labelledby')).querySelector('[data-donnee]');
+      return {
+        groupe: donnee === null ? null : texteDe(donnee),
+        cles: [...ul.querySelectorAll('[data-enonce]')].map((li) => li.dataset.enonce),
+      };
+    });
 }
 
 // --- Les épreuves ------------------------------------------------------------------
@@ -309,6 +360,86 @@ describe('la configuration refusée (§ 5.6, § 5.9)', () => {
     // Les participants se lisent toujours.
     m.ui.allerA('participants');
     await attendre(() => expect(m.racine.querySelectorAll('[data-section="participants"] [data-participant]').length).toBe(12));
+  });
+});
+
+
+describe('le diagnostic en cartes (§ 5.6, § 12.7)', () => {
+  test('toutes en conflit : la section pose une carte par appartenance, titrée de sa pastille, de la teinte de son rang ; le panneau compact titre chaque groupe de même', async () => {
+    const m = await ouvrirTexte(TEXTE_TOUTES_EN_CONFLIT, 'toutes_en_conflit');
+    const rangs = teintesAppartenances(charge(m).participants);
+    const attendues = cartesAttendues(charge(m));
+    const appartenances = attendues.filter(({ genre }) => genre === 'appartenance');
+    expect(appartenances.length).toBe(2);
+    const sansGenre = attendues.map(({ groupe, cles }) => ({ groupe, cles }));
+
+    for (const [nom, racine] of [
+      ['panneau', () => panneau(m)],
+      ['section', () => (m.ui.allerA('diagnostic'), section(m))],
+    ]) {
+      await attendre(() => expect(cartesLues(racine())).toEqual(sansGenre));
+      const listes = [...racine().querySelectorAll('ul')].filter((ul) => ul.querySelector('[data-enonce]') !== null);
+      for (const { groupe } of appartenances) {
+        const ul = listes.find((liste) => document.getElementById(liste.getAttribute('aria-labelledby')).textContent.includes(groupe));
+        const titre = document.getElementById(ul.getAttribute('aria-labelledby'));
+        expect(/^H[2-6]$/.test(titre.tagName), `${nom} ${groupe} : un intitulé`).toBe(true);
+        const donnee = titre.querySelector('[data-donnee]');
+        expect(texteDe(donnee)).toBe(groupe);
+        // La pastille : un point de la marque du rang, le nom de l'encre de la page.
+        const point = donnee.querySelector('[aria-hidden="true"]');
+        expect(point, `${nom} ${groupe} : le point de la pastille`).not.toBeNull();
+        const rang = rangs.get(groupe);
+        expect(composantes(getComputedStyle(point).backgroundColor)).toEqual(jeton(`--couleur-appartenance-${rang}-marque`));
+        expect(visible(donnee)).toBe(true);
+      }
+      if (nom === 'section') {
+        // Chaque liste a sa propre carte.
+        const cartes = listes.map(carteDe);
+        expect(cartes.every((carte) => carte !== null)).toBe(true);
+        expect(new Set(cartes).size).toBe(listes.length);
+      }
+    }
+  });
+});
+
+describe('le rang de teinte d’une carte se compte sur tous les participants, exclus compris (§ 12.7)', () => {
+  test('une personne exclue dont l’appartenance se range avant les autres décale les deux cartes aux rangs 2 et 3', async () => {
+    // La charge « toutes en conflit » et une treizième personne, exclue,
+    // d'une appartenance qui se range avant les deux autres : le moteur ne
+    // la voit pas, les collisions restent celles des deux groupes.
+    const chargeAvecExclue = analyser(TEXTE_TOUTES_EN_CONFLIT).charge;
+    chargeAvecExclue.participants.push({
+      id: 13,
+      nom: 'Varech',
+      prenom: null,
+      appartenance: 'Atelier des Alisiers',
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: true,
+    });
+    chargeAvecExclue.prochainsIds = { ...chargeAvecExclue.prochainsIds, participant: 14 };
+    const m = await ouvrirCharge(chargeAvecExclue);
+    const attendues = cartesAttendues(charge(m)).filter(({ genre }) => genre === 'appartenance');
+    expect(attendues.map(({ groupe }) => groupe).sort()).toEqual(['Cercle des Hérons', 'Club des Merles']);
+
+    for (const [nom, racine] of [
+      ['panneau', () => panneau(m)],
+      ['section', () => (m.ui.allerA('diagnostic'), section(m))],
+    ]) {
+      await attendre(() => expect(racine().querySelectorAll('[data-donnee]').length).toBe(2));
+      for (const [groupe, rang] of [
+        ['Cercle des Hérons', 2],
+        ['Club des Merles', 3],
+      ]) {
+        const donnee = [...racine().querySelectorAll('[data-donnee]')].find((d) => texteDe(d) === groupe);
+        expect(donnee, `${nom} ${groupe} : la pastille`).not.toBeUndefined();
+        const point = donnee.querySelector('[aria-hidden="true"]');
+        expect(composantes(getComputedStyle(point).backgroundColor), `${nom} ${groupe} : la marque du rang ${rang}`).toEqual(
+          jeton(`--couleur-appartenance-${rang}-marque`),
+        );
+      }
+    }
   });
 });
 

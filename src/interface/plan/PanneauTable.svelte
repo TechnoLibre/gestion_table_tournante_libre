@@ -115,73 +115,109 @@
 {#if etatTable !== undefined}
   <!-- Échap remonte des contrôles du panneau jusqu'à lui, qui se referme. -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <section class="panneau" data-panneau="table" data-table-panneau={table} tabindex="-1" aria-labelledby="{uid}-titre" onkeydown={surTouche}>
+  <section
+    class="panneau carte"
+    data-panneau="table"
+    data-table-panneau={table}
+    tabindex="-1"
+    aria-labelledby="{uid}-titre"
+    onkeydown={surTouche}
+  >
     <h3 id="{uid}-titre">{t(nommee.cle, nommee.details)}</h3>
-    <p>{t('plan.panneauTable.titres', comptes)}</p>
-    {#if etatTable.gelee}
-      <p class="gel">{t('plan.liste.gelee')}</p>
-    {/if}
-    <h4 id="{uid}-sieges">{t('plan.panneauTable.sieges')}</h4>
-    <ul class="sieges" aria-labelledby="{uid}-sieges">
-      {#each lignes as parties, rang (rang)}
-        <li>
-          <button
-            type="button"
-            data-choix-siege={rang + 1}
-            data-focus-initial={rang === 0 ? '' : undefined}
-            onclick={(evenement) => choisirSiege(evenement, rang + 1)}
+    <div class="corps">
+      <p>{t('plan.panneauTable.titres', comptes)}</p>
+      {#if etatTable.gelee}
+        <p class="gel">{t('plan.liste.gelee')}</p>
+      {/if}
+      <h4 id="{uid}-sieges">{t('plan.panneauTable.sieges')}</h4>
+      <ul class="sieges" aria-labelledby="{uid}-sieges">
+        {#each lignes as parties, rang (rang)}
+          <li>
+            <button
+              type="button"
+              data-choix-siege={rang + 1}
+              data-focus-initial={rang === 0 ? '' : undefined}
+              onclick={(evenement) => choisirSiege(evenement, rang + 1)}
+            >
+              {#each parties as { partie, texte } (partie)}<span class:titre={partie === 'titre'}>{texte}</span>{/each}
+            </button>
+          </li>
+        {/each}
+      </ul>
+      {#if choix !== null}
+        <p class="choix" role="status">
+          <span>{t(choix.genre === 'personne' ? 'plan.choix.personne' : 'plan.choix.reservation')}</span><span class="donnee"
+            >{nomDe(choix.participant)}</span
           >
-            {#each parties as { partie, texte } (partie)}<span class:titre={partie === 'titre'}>{texte}</span>{/each}
-          </button>
-        </li>
-      {/each}
-    </ul>
-    {#if choix !== null}
-      <p class="choix" role="status">
-        <span>{t(choix.genre === 'personne' ? 'plan.choix.personne' : 'plan.choix.reservation')}</span><span class="donnee"
-          >{nomDe(choix.participant)}</span
-        >
-      </p>
-    {:else}
-      <p class="invite">{t('plan.choix.inviter')}</p>
-    {/if}
-    {#if etat.siegesAttribues}
+        </p>
+      {:else}
+        <p class="invite">{t('plan.choix.inviter')}</p>
+      {/if}
+      {#if etat.siegesAttribues}
+        <label class="champ">
+          <span>{t('plan.panneauTable.siege')}</span>
+          <select data-champ="siege" value={siegeChoisi} onchange={(evenement) => (siege = Number(evenement.currentTarget.value))}>
+            {#each lignes as _, rang (rang)}
+              <option value={rang + 1}>{rang + 1}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <label class="champ">
-        <span>{t('plan.panneauTable.siege')}</span>
-        <select data-champ="siege" value={siegeChoisi} onchange={(evenement) => (siege = Number(evenement.currentTarget.value))}>
-          {#each lignes as _, rang (rang)}
-            <option value={rang + 1}>{rang + 1}</option>
-          {/each}
-        </select>
+        <span>{t('plan.titre.etiquette')}</span>
+        <input type="text" data-champ="libelle" value={libelleSaisi} oninput={(evenement) => (saisi = evenement.currentTarget.value)} />
       </label>
-    {/if}
-    <label class="champ">
-      <span>{t('plan.titre.etiquette')}</span>
-      <input type="text" data-champ="libelle" value={libelleSaisi} oninput={(evenement) => (saisi = evenement.currentTarget.value)} />
-    </label>
-    <div class="actions">
-      <Commande cle="plan.action.donnerTitre" nom="donnerTitre" executer={donnerTitre} />
-      <Commande cle="plan.action.designer" nom="designer" executer={designer} />
+      <div class="actions">
+        <Commande cle="plan.action.donnerTitre" nom="donnerTitre" executer={donnerTitre} />
+        <Commande cle="plan.action.designer" nom="designer" executer={designer} />
+      </div>
     </div>
   </section>
 {/if}
 
 <style>
-  .panneau {
+  /* Le panneau est une carte : fond, filet, rayon et ombre de la carte ;
+     son titre au-dessus d'un filet, son contenu en retrait. */
+  .carte {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    box-shadow: var(--ombre-carte);
+  }
+
+  .carte > h3 {
+    margin: 0;
+    padding: var(--espace-3) var(--espace-4);
+    border-bottom: 1px solid var(--couleur-carte-filet);
+    font-size: var(--taille-titre-carte);
+  }
+
+  .corps {
     display: flex;
     flex-direction: column;
     gap: var(--espace-2);
+    padding: var(--espace-3) var(--espace-4);
   }
 
-  h3,
-  h4,
+  .panneau:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
+  }
+
   p {
     margin: 0;
   }
 
-  h3,
+  /* Un intertitre en petites capitales, d'encre secondaire. */
   h4 {
-    font-size: var(--taille-texte);
+    margin: var(--espace-1) 0 0;
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
   }
 
   .gel {
@@ -197,6 +233,26 @@
     list-style: none;
   }
 
+  /* Un bouton de liste : la commande secondaire, au filet de la page. */
+  li > button {
+    padding: var(--espace-1) var(--espace-3);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  li > button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  li > button:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
+  }
+
   .sieges button {
     width: 100%;
     text-align: start;
@@ -206,10 +262,27 @@
     font-style: italic;
   }
 
+  .invite {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
+  }
+
   .champ {
     display: flex;
     flex-direction: column;
     gap: var(--espace-1);
+  }
+
+  .champ > span {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
+    font-weight: 700;
+  }
+
+  .champ select,
+  .champ input {
+    padding: var(--espace-1) var(--espace-2);
+    font: inherit;
   }
 
   .actions {

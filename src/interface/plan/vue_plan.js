@@ -172,3 +172,42 @@ export function sourceMontree(etat, demandee, retenu) {
   }
   throw new TypeError(`source de l’état des places hors du contrat : ${JSON.stringify(etat.source)}`);
 }
+
+// La position d'une bulle sur un axe : debut, le bord de départ voulu ;
+// repli, le bord où finit la bulle passée de l'autre côté ; taille, sa
+// longueur ; de et a, les bords de la zone. Le côté choisi est ensuite
+// borné à [de, a - taille] : une ancre avant de — une table coupée par le
+// bord du cadre — ramène la bulle sur de ; une bulle plus longue que la
+// zone se cale sur de.
+function placerSurAxe(debut, repli, taille, de, a) {
+  const fin = Math.max(de, a - taille);
+  const choisi = debut + taille <= a ? debut : repli - taille >= de ? repli - taille : fin;
+  return Math.min(Math.max(choisi, de), fin);
+}
+
+/**
+ * La position d'une bulle posée sur le plan — l'infobulle d'une table, le
+ * refus posé sur une place — dans la zone qui la contient, en px du
+ * conteneur : à son ancre quand elle y tient, à droite et dessous ; passée
+ * à gauche, son bord droit sur xRepli, quand elle déborde à droite ;
+ * au-dessus, son bord bas sur y, quand elle déborde dessous ; calée sur le
+ * bord opposé de la zone quand aucun côté ne suffit, jamais avant le bord
+ * gauche ni le bord haut : une ancre au-dessus ou à gauche de la zone ramène
+ * la bulle sur ce bord. Une taille nulle — pas encore mesurée — tient
+ * toujours : la bulle reste à son ancre quand celle-ci est dans la zone.
+ * Aucun argument n'est modifié.
+ *
+ * @param {{x: number, y: number, xRepli?: number}} ancre  xRepli vaut x par défaut
+ * @param {{largeur: number, hauteur: number}} taille
+ * @param {{gauche: number, haut: number, largeur: number, hauteur: number}} zone
+ * @returns {{x: number, y: number}}  le coin haut gauche de la bulle
+ * @throws {TypeError} pour un nombre non fini
+ */
+export function placerBulle({ x, y, xRepli = x }, { largeur, hauteur }, zone) {
+  const nombres = [x, y, xRepli, largeur, hauteur, zone.gauche, zone.haut, zone.largeur, zone.hauteur];
+  if (!nombres.every(Number.isFinite)) throw new TypeError(`bulle : nombre non fini : ${JSON.stringify(nombres)}`);
+  return {
+    x: placerSurAxe(x, xRepli, largeur, zone.gauche, zone.gauche + zone.largeur),
+    y: placerSurAxe(y, y, hauteur, zone.haut, zone.haut + zone.hauteur),
+  };
+}

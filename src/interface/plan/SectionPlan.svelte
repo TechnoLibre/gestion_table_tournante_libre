@@ -16,6 +16,10 @@
   // Le plan se remonte pour chaque événement : un autre événement repart de
   // sa propre vue, mémorisée ou ajustée.
   //
+  // Les panneaux sont des cartes, empilées dans une colonne qui défile seule ;
+  // la colonne garde un léger retrait, pour que l'ombre des cartes ne soit
+  // pas rognée par son défilement.
+  //
   // En plein écran, le titre et les panneaux s'effacent : le plan prend la
   // surface que le cadre de mode lui laisse sous le bandeau (§ 18.6), et le
   // cadre l'entoure toujours (§ 8.4).
@@ -99,7 +103,9 @@
     flex: 0 0 18rem;
     flex-direction: column;
     gap: var(--espace-3);
+    box-sizing: border-box;
     min-height: 0;
+    padding: 0 0.125rem var(--espace-1);
     overflow-y: auto;
   }
 </style>

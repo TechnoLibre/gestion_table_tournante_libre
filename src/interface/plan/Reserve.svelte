@@ -44,38 +44,60 @@
 
 <!-- Échap remonte des boutons de la réserve jusqu'à elle, qui oublie le choix. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<section data-reserve={tour} aria-labelledby="{uid}-titre" onkeydown={surTouche}>
+<section class="carte" data-reserve={tour} aria-labelledby="{uid}-titre" onkeydown={surTouche}>
   <h3 id="{uid}-titre">{t('plan.reserve.titre')}</h3>
   {#if charge !== null}
-    <p>{t('plan.reserve.tour', { tour })}</p>
-    {#if reserve.length === 0}
-      <p>{t('plan.reserve.vide')}</p>
-    {:else}
-      <ul>
-        {#each reserve as id (id)}
-          <li>
-            <button type="button" data-participant={id} aria-pressed={choisie(id)} onclick={() => basculer(id)}>{nomDe(id)}</button>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+    <div class="corps">
+      <p class="sous-titre">{t('plan.reserve.tour', { tour })}</p>
+      {#if reserve.length === 0}
+        <p>{t('plan.reserve.vide')}</p>
+      {:else}
+        <ul>
+          {#each reserve as id (id)}
+            <li>
+              <button type="button" data-participant={id} aria-pressed={choisie(id)} onclick={() => basculer(id)}>{nomDe(id)}</button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
   {/if}
 </section>
 
 <style>
-  section {
+  /* Le panneau est une carte : fond, filet, rayon et ombre de la carte ;
+     son titre au-dessus d'un filet, son contenu en retrait. */
+  .carte {
     display: flex;
     flex-direction: column;
-    gap: var(--espace-1);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    box-shadow: var(--ombre-carte);
   }
 
-  h3,
+  .carte > h3 {
+    margin: 0;
+    padding: var(--espace-3) var(--espace-4);
+    border-bottom: 1px solid var(--couleur-carte-filet);
+    font-size: var(--taille-titre-carte);
+  }
+
+  .corps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+    padding: var(--espace-3) var(--espace-4);
+  }
+
   p {
     margin: 0;
   }
 
-  h3 {
-    font-size: var(--taille-texte);
+  .sous-titre {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
   }
 
   ul {
@@ -87,10 +109,31 @@
     list-style: none;
   }
 
+  /* Un bouton de liste : la commande secondaire, au filet de la page. */
+  li > button {
+    padding: var(--espace-1) var(--espace-3);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  li > button:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  li > button:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
+  }
+
   /* La personne choisie se dit par aria-pressed et par sa forme : un trait
-     épais et du gras. */
-  button[aria-pressed='true'] {
-    border-width: 3px;
+     épais et du gras, sur la teinte de l'action. */
+  li > button[aria-pressed='true'] {
+    border: 3px solid var(--couleur-page-texte);
+    background-color: var(--couleur-action-teinte);
     font-weight: 700;
   }
 </style>

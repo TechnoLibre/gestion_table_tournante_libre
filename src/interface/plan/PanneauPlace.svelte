@@ -166,67 +166,101 @@
 {#if chaise !== null}
   <!-- Échap remonte des contrôles du panneau jusqu'à lui, qui se referme. -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <section class="panneau" data-panneau="place" tabindex="-1" aria-labelledby="{uid}-titre" onkeydown={surTouche}>
+  <section class="panneau carte" data-panneau="place" tabindex="-1" aria-labelledby="{uid}-titre" onkeydown={surTouche}>
     <h3 id="{uid}-titre">{t(nommee.cle, nommee.details)}</h3>
-    <p class="ligne">
-      {#each parties as { partie, texte } (partie)}<span class:titre={partie === 'titre'}>{texte}</span>{/each}
-    </p>
-    {#if choix !== null}
-      <p class="choix" role="status">
-        <span>{t(choix.genre === 'personne' ? 'plan.choix.personne' : 'plan.choix.reservation')}</span><span class="donnee"
-          >{nomDe(choix.participant)}</span
-        >
+    <div class="corps">
+      <p class="ligne">
+        {#each parties as { partie, texte } (partie)}<span class:titre={partie === 'titre'}>{texte}</span>{/each}
       </p>
-    {:else if actions.includes('assigner')}
-      <p class="invite">{t('plan.choix.inviter')}</p>
-    {/if}
-    {#if actions.includes('reserver')}
-      <label class="champ">
-        <span>{t('plan.portee.etiquette')}</span>
-        <select data-champ="portee" value={portee} onchange={(evenement) => (portee = evenement.currentTarget.value)}>
-          <option value="tour">{t('plan.portee.tour', { tour })}</option>
-          <option value="tous">{t('plan.portee.tous')}</option>
-        </select>
-      </label>
-    {/if}
-    {#if actions.includes('donnerTitre') || actions.includes('designer')}
-      <label class="champ">
-        <span>{t('plan.titre.etiquette')}</span>
-        <input type="text" data-champ="libelle" value={libelleSaisi} oninput={(evenement) => (saisi = evenement.currentTarget.value)} />
-      </label>
-    {/if}
-    <div class="actions">
-      {#each actions as action (action)}
-        <Commande cle="plan.action.{action}" nom={action} executer={EXECUTIONS[action]} />
-      {/each}
       {#if choix !== null}
-        <Commande cle="plan.choix.oublier" nom="oublierChoix" executer={() => ui.choisir(null)} />
+        <p class="choix" role="status">
+          <span>{t(choix.genre === 'personne' ? 'plan.choix.personne' : 'plan.choix.reservation')}</span><span class="donnee"
+            >{nomDe(choix.participant)}</span
+          >
+        </p>
+      {:else if actions.includes('assigner')}
+        <p class="invite">{t('plan.choix.inviter')}</p>
+      {/if}
+      {#if actions.includes('reserver')}
+        <label class="champ">
+          <span>{t('plan.portee.etiquette')}</span>
+          <select data-champ="portee" value={portee} onchange={(evenement) => (portee = evenement.currentTarget.value)}>
+            <option value="tour">{t('plan.portee.tour', { tour })}</option>
+            <option value="tous">{t('plan.portee.tous')}</option>
+          </select>
+        </label>
+      {/if}
+      {#if actions.includes('donnerTitre') || actions.includes('designer')}
+        <label class="champ">
+          <span>{t('plan.titre.etiquette')}</span>
+          <input type="text" data-champ="libelle" value={libelleSaisi} oninput={(evenement) => (saisi = evenement.currentTarget.value)} />
+        </label>
+      {/if}
+      <div class="actions">
+        {#each actions as action (action)}
+          <Commande
+            cle="plan.action.{action}"
+            nom={action}
+            executer={EXECUTIONS[action]}
+            variante={action === 'assigner' ? 'principale' : 'secondaire'}
+          />
+        {/each}
+        {#if choix !== null}
+          <Commande cle="plan.choix.oublier" nom="oublierChoix" executer={() => ui.choisir(null)} />
+        {/if}
+      </div>
+      {#if menuDe !== null}
+        <MenuPersonne participant={menuDe} {etatTour} />
       {/if}
     </div>
-    {#if menuDe !== null}
-      <MenuPersonne participant={menuDe} {etatTour} />
-    {/if}
   </section>
 {/if}
 
 <style>
-  .panneau {
+  /* Le panneau est une carte : fond, filet, rayon et ombre de la carte ;
+     son titre au-dessus d'un filet, son contenu en retrait. */
+  .carte {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    box-shadow: var(--ombre-carte);
+  }
+
+  .carte > h3 {
+    margin: 0;
+    padding: var(--espace-3) var(--espace-4);
+    border-bottom: 1px solid var(--couleur-carte-filet);
+    font-size: var(--taille-titre-carte);
+  }
+
+  .corps {
     display: flex;
     flex-direction: column;
     gap: var(--espace-2);
+    padding: var(--espace-3) var(--espace-4);
   }
 
-  h3,
+  /* Le panneau reçoit le focus d'Échap et du clavier : son contour suit le
+     rayon de la carte. */
+  .panneau:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
+  }
+
   p {
     margin: 0;
   }
 
-  h3 {
-    font-size: var(--taille-texte);
-  }
-
   .titre {
     font-style: italic;
+  }
+
+  .invite {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
   }
 
   .champ {
@@ -235,9 +269,22 @@
     gap: var(--espace-1);
   }
 
+  .champ > span {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
+    font-weight: 700;
+  }
+
+  .champ select,
+  .champ input {
+    padding: var(--espace-1) var(--espace-2);
+    font: inherit;
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--espace-2);
   }
 </style>

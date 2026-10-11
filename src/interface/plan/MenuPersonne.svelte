@@ -109,17 +109,24 @@
 {/if}
 
 <style>
+  /* Le menu suit les actions de la place, dans la même carte, sous un filet
+     de la carte ; son titre nomme la personne. */
   .menu {
     display: flex;
     flex-direction: column;
     gap: var(--espace-2);
-    padding-top: var(--espace-2);
-    border-top: 1px solid var(--couleur-page-filet);
+    margin-top: var(--espace-1);
+    padding-top: var(--espace-3);
+    border-top: 1px solid var(--couleur-carte-filet);
   }
 
   h4 {
     margin: 0;
     font-size: var(--taille-texte);
+  }
+
+  .donnee {
+    font-weight: 700;
   }
 
   .actions {

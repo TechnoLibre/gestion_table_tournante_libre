@@ -9,29 +9,40 @@
   // fait que traduire. Regarder n'écrit jamais (§ 8.4) : il se lit en
   // lecture comme sur un plan bloqué.
   //
+  // Les énoncés se regroupent par cartesDiagnostic, sans changer d'ordre :
+  // la séparation vidée de son sens, une carte par appartenance en
+  // collision, puis le reste de l'événement. Chaque groupe a son intitulé,
+  // qui nomme sa liste (aria-labelledby) : celui d'une appartenance est sa
+  // pastille, de la teinte que teintesAppartenances donne à son rang sur
+  // toute la liste des participants, exclus compris, et porte la donnée
+  // [data-donnee] ; les autres, un intertitre.
+  //
   // compact : la forme du panneau latéral du plan, que SectionPlan monte
-  // dans [data-panneau-diagnostic] — son titre et les énoncés seuls. Sinon, la section,
-  // [data-section="diagnostic"] : chaque énoncé suivi du texte de son
-  // remède et, quand une commande le réalise, de la Commande qui l'exécute
-  // par la séance ; un refus de la séance — mode lecture, plan bloqué —
-  // s'affiche à côté du bouton, avec son propre remède.
+  // dans [data-panneau-diagnostic] — une carte titrée, dont les groupes se
+  // suivent sous un filet, et les énoncés seuls. Sinon, la section,
+  // [data-section="diagnostic"] : une carte par groupe, chaque énoncé suivi
+  // du texte de son remède et, quand une commande le réalise, de la Commande
+  // qui l'exécute par la séance ; un refus de la séance — mode lecture, plan
+  // bloqué — s'affiche à côté du bouton, avec son propre remède.
   //
   // Une configuration que le moteur refuse n'a pas de diagnostic : son
   // code, traduit, se pose à sa place, jamais le message de l'erreur.
-  // L'appartenance d'un groupe est une donnée : elle occupe son propre
-  // nœud, avant le texte.
   import { getContext } from 'svelte';
   import { diagnostiquerCharge } from '../../application/diagnostic.js';
+  import { teintesAppartenances } from '../appartenances.js';
+  import Carte from '../primitives/Carte.svelte';
   import { actionRemede } from '../primitives/commande.js';
   import Commande from '../primitives/Commande.svelte';
+  import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
-  import { enonces, numeroDeCharge } from './phrases.js';
+  import { cartesDiagnostic, enonces, numeroDeCharge } from './phrases.js';
 
   let { compact = false } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance');
   const ui = getContext('ui') ?? null;
+  const uid = $props.id();
 
   const charge = $derived($seance.charge);
   const resultat = $derived(charge === null ? null : diagnostiquerCharge(charge));
@@ -40,53 +51,71 @@
       ? []
       : enonces(resultat.diagnostic, { numeroDe: numeroDeCharge(charge), tours: charge.evenement.tours }),
   );
+  const cartes = $derived(cartesDiagnostic(liste));
+  // Le rang de teinte de chaque appartenance, sur tous les participants.
+  const rangs = $derived(charge === null ? new Map() : teintesAppartenances(charge.participants));
+  // L'intitulé d'un groupe est un h3 dans la section, un h4 sous le titre
+  // du panneau.
+  const balise = $derived(compact ? 'h4' : 'h3');
 
   // L'action d'un remède que réalise une commande ; null pour un remède de
   // texte seul.
   const actionDe = (remede) => (remede?.commande === undefined ? null : actionRemede(remede, { seance, ui }));
 </script>
 
-{#snippet contenu()}
-  {#if resultat !== null && resultat.erreur !== null}
-    <p>{t('diagnostic.nonCalcule')}</p>
-    <Refus refus={resultat.erreur} />
-  {:else if liste.length > 0}
-    <ul aria-label={t('diagnostic.enonces')}>
-      {#each liste as enonce, rang (rang)}
-        <li data-enonce={enonce.cle}>
-          <p class="enonce">
-            {#if enonce.details.groupe !== undefined}<span class="donnee" data-donnee>{enonce.details.groupe}</span>{/if}<span
-              data-phrase>{t(enonce.cle, enonce.details)}</span
-            >
-          </p>
-          {#if !compact && enonce.remede !== null}
-            {@const action = actionDe(enonce.remede)}
-            <p class="remede" data-remede>{t(enonce.remede.cle, enonce.remede.details)}</p>
-            {#if action !== null}
-              <Commande
-                cle={action.cle}
-                details={action.details}
-                nom={action.nom}
-                confirmer={action.confirmer}
-                executer={action.executer}
-              />
-            {/if}
+{#snippet groupe(carte, rang)}
+  {@const id = `${uid}-groupe-${rang}`}
+  <svelte:element this={balise} {id} class="intitule" class:intertitre={carte.genre !== 'appartenance'}>
+    {#if carte.genre === 'appartenance'}<span class="donnee" data-donnee
+        ><Pastille sorte="appartenance" valeur={rangs.get(carte.groupe) ?? null} libelle={carte.groupe} /></span
+      >{:else if carte.genre === 'separation'}{t('diagnostic.carte.separation')}{:else}{t('diagnostic.carte.ensemble')}{/if}
+  </svelte:element>
+  <ul aria-labelledby={id}>
+    {#each carte.enonces as enonce, n (n)}
+      <li data-enonce={enonce.cle}>
+        <p class="enonce"><span data-phrase>{t(enonce.cle, enonce.details)}</span></p>
+        {#if !compact && enonce.remede !== null}
+          {@const action = actionDe(enonce.remede)}
+          <p class="remede" data-remede>{t(enonce.remede.cle, enonce.remede.details)}</p>
+          {#if action !== null}
+            <Commande cle={action.cle} details={action.details} nom={action.nom} confirmer={action.confirmer} executer={action.executer} />
           {/if}
-        </li>
-      {/each}
-    </ul>
-  {/if}
+        {/if}
+      </li>
+    {/each}
+  </ul>
+{/snippet}
+
+{#snippet erreur()}
+  <p>{t('diagnostic.nonCalcule')}</p>
+  <Refus refus={resultat.erreur} />
 {/snippet}
 
 {#if compact}
-  <div class="diagnostic compact">
-    <h3>{t('coquille.section.diagnostic')}</h3>
-    {@render contenu()}
-  </div>
+  <section class="diagnostic compact" aria-labelledby="{uid}-titre">
+    <h3 id="{uid}-titre" class="titre-panneau">{t('coquille.section.diagnostic')}</h3>
+    {#if resultat !== null && resultat.erreur !== null}
+      <div class="corps">{@render erreur()}</div>
+    {:else if cartes.length > 0}
+      <div class="corps groupes" role="group" aria-label={t('diagnostic.enonces')}>
+        {#each cartes as carte, rang (rang)}
+          <div class="groupe">{@render groupe(carte, rang)}</div>
+        {/each}
+      </div>
+    {/if}
+  </section>
 {:else}
   <section class="diagnostic" data-section="diagnostic">
     <h2>{t('coquille.section.diagnostic')}</h2>
-    {@render contenu()}
+    {#if resultat !== null && resultat.erreur !== null}
+      <Carte>{@render erreur()}</Carte>
+    {:else if cartes.length > 0}
+      <div class="cartes" role="group" aria-label={t('diagnostic.enonces')}>
+        {#each cartes as carte, rang (rang)}
+          <Carte>{@render groupe(carte, rang)}</Carte>
+        {/each}
+      </div>
+    {/if}
   </section>
 {/if}
 
@@ -94,7 +123,7 @@
   .diagnostic {
     display: flex;
     flex-direction: column;
-    gap: var(--espace-2);
+    gap: var(--espace-3);
     min-width: 0;
     color: var(--couleur-page-texte);
     font-size: var(--taille-texte);
@@ -105,9 +134,30 @@
     font-size: var(--taille-titre);
   }
 
-  h3 {
-    margin: 0;
+  .cartes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-3);
+  }
+
+  /* L'intitulé d'un groupe : la pastille de son appartenance, ou un
+     intertitre en petites capitales d'encre secondaire. */
+  .intitule {
+    margin: 0 0 var(--espace-2);
     font-size: var(--taille-texte);
+    font-weight: bold;
+  }
+
+  .intertitre {
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
+  }
+
+  .donnee {
+    display: flex;
+    min-width: 0;
   }
 
   ul {
@@ -117,10 +167,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-  }
-
-  .compact ul {
-    gap: var(--espace-2);
   }
 
   li {
@@ -134,17 +180,43 @@
     margin: 0;
   }
 
-  .enonce {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--espace-2);
-  }
-
-  .donnee {
-    font-weight: 700;
-  }
-
   .remede {
     color: var(--couleur-page-texte-secondaire);
+  }
+
+  /* Le panneau compact : une carte titrée ; ses groupes se suivent, chacun
+     sous un filet. */
+  .compact {
+    gap: 0;
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
+    box-shadow: var(--ombre-carte);
+  }
+
+  .titre-panneau {
+    margin: 0;
+    padding: var(--espace-3) var(--espace-4);
+    border-bottom: 1px solid var(--couleur-carte-filet);
+    font-size: var(--taille-titre-carte);
+  }
+
+  .compact .corps {
+    padding: var(--espace-3) var(--espace-4);
+  }
+
+  .compact .groupes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-3);
+  }
+
+  .compact .groupe + .groupe {
+    padding-top: var(--espace-3);
+    border-top: 1px solid var(--couleur-carte-filet);
+  }
+
+  .compact ul {
+    gap: var(--espace-2);
   }
 </style>

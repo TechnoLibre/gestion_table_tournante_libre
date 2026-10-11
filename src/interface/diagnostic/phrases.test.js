@@ -16,7 +16,7 @@ import { texteLivre } from '../../demo/livrees.js';
 import { diagnostiquer } from '../../moteur/diagnostic.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { TABLES_INTERFACE } from '../libelles.js';
-import { enonces, numeroDeCharge } from './phrases.js';
+import { cartesDiagnostic, enonces, numeroDeCharge } from './phrases.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const TIRET = '\u{2014}';
@@ -490,5 +490,66 @@ describe('enonces : aux bords', () => {
     const avant = structuredClone(diagnostic);
     enonces(diagnostic, { numeroDe: numeroDeCharge(charge), tours: 4 });
     assert.deepEqual(diagnostic, avant);
+  });
+});
+
+describe('cartesDiagnostic : une carte par appartenance (§ 5.6, § 12.7)', () => {
+  // La forme lisible d'une suite de cartes : genre, groupe, clés.
+  const formes = (cartes) => cartes.map(({ genre, groupe, enonces: liste }) => [genre, groupe, cles(liste)]);
+
+  test('deux appartenances en collision partout : la séparation, une carte par groupe, puis le reste de l\u{2019}événement', () => {
+    const { diagnostic, liste } = lire(CONFIGURATIONS.toutesEnConflit());
+    assert.equal(diagnostic.collisionPartout, true);
+    const cartes = cartesDiagnostic(liste);
+    const groupes = diagnostic.collisions.map(({ groupe }) => groupe);
+    assert.equal(groupes.length, 2);
+    const reste = cles(liste).filter((cle) => !['diagnostic.collisionPartout', 'diagnostic.collisions', 'diagnostic.excedent'].includes(cle));
+    assert.ok(reste.length > 0);
+    assert.deepEqual(formes(cartes), [
+      ['separation', null, ['diagnostic.collisionPartout']],
+      ...groupes.map((groupe) => [
+        'appartenance',
+        groupe,
+        cles(liste.filter(({ details }) => details.groupe === groupe)),
+      ]),
+      ['ensemble', null, reste],
+    ]);
+  });
+
+  test('l\u{2019}excédent suit les collisions de son groupe, dans la même carte', () => {
+    const { liste } = lire(CONFIGURATIONS.excedent());
+    const [carte] = cartesDiagnostic(liste).filter(({ genre }) => genre === 'appartenance');
+    assert.deepEqual([carte.groupe, cles(carte.enonces)], ['Grisaille', ['diagnostic.collisions', 'diagnostic.excedent']]);
+  });
+
+  test('l\u{2019}ordre des énoncés est celui d\u{2019}enonces, carte après carte, et chaque énoncé est le même objet', () => {
+    for (const [nom, fabrique] of Object.entries(CONFIGURATIONS)) {
+      const { liste } = lire(fabrique());
+      const cartes = cartesDiagnostic(liste);
+      const aplati = cartes.flatMap((carte) => carte.enonces);
+      assert.equal(aplati.length, liste.length, nom);
+      aplati.forEach((enonce, rang) => assert.equal(enonce, liste[rang], `${nom} : énoncé ${rang}`));
+      // Deux cartes voisines ne se confondent pas.
+      for (let rang = 1; rang < cartes.length; rang += 1) {
+        const [a, b] = [cartes[rang - 1], cartes[rang]];
+        assert.ok(a.genre !== b.genre || a.groupe !== b.groupe, `${nom} : cartes ${rang - 1} et ${rang}`);
+      }
+      for (const carte of cartes) assert.ok(carte.enonces.length > 0, nom);
+    }
+  });
+
+  test('sans appartenance, une seule carte, celle de l\u{2019}événement ; aucun énoncé, aucune carte ; la liste reçue n\u{2019}est pas modifiée', () => {
+    const { liste } = lire(CONFIGURATIONS.manque());
+    const copie = structuredClone(liste);
+    assert.deepEqual(formes(cartesDiagnostic(liste)), [['ensemble', null, cles(liste)]]);
+    assert.deepEqual(liste, copie);
+    assert.deepEqual(cartesDiagnostic([]), []);
+  });
+
+  test('une seule appartenance : sa phrase ouvre la carte de la séparation', () => {
+    const { liste } = lire(CONFIGURATIONS.uneSeule());
+    const [premiere] = cartesDiagnostic(liste);
+    assert.equal(premiere.genre, 'separation');
+    assert.equal(premiere.enonces[0].cle, 'diagnostic.uneSeuleAppartenance');
   });
 });

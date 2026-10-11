@@ -17,6 +17,10 @@ export const TABLE = new Map([
   // --- Le cadre de l'écran ---------------------------------------------------
   ['diagnostic.enonces', 'Ce que la configuration impose'],
   ['diagnostic.nonCalcule', 'La configuration ne se normalise pas : le diagnostic ne se calcule pas.'],
+  // Les intitulés des cartes que ne nomme pas une appartenance
+  // (cartesDiagnostic) : la séparation vidée de son sens, puis le reste.
+  ['diagnostic.carte.separation', 'Séparation des appartenances'],
+  ['diagnostic.carte.ensemble', "Tout l'événement"],
 
   // --- La séparation vidée de son sens (§ 7.5, § 15.4) -----------------------
   [

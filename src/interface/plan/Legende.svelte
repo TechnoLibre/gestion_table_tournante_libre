@@ -60,12 +60,15 @@
 </section>
 
 <style>
+  /* Une carte : fond et filet de la carte ; les échantillons gardent le
+     dessin du plan. */
   .legende {
-    padding: var(--espace-2) var(--espace-3);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background-color: var(--couleur-page-fond);
+    padding: var(--espace-3) var(--espace-4);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
+    box-shadow: var(--ombre-carte);
   }
 
   .motifs {
@@ -75,7 +78,7 @@
 
   h3 {
     margin: 0 0 var(--espace-2);
-    font-size: var(--taille-texte);
+    font-size: var(--taille-titre-carte);
   }
 
   p {

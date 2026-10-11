@@ -14,14 +14,27 @@
   // les appartenances — la nomme dans son propre nœud, entre son libellé et
   // finAppartenance.
   //
-  // infobulle : null, ou {detail, x, y} ; id : l'identifiant que la racine
-  // du plan désigne par aria-describedby quand l'infobulle s'ouvre par le
-  // focus.
+  // infobulle : null, ou {detail, x, y, xRepli} — x et y, le coin haut droit
+  // de l'emprise de la table, xRepli son bord gauche, en px de la surface ;
+  // zone : le cadre du <svg> dans la surface ; id : l'identifiant que la
+  // racine du plan désigne par aria-describedby quand l'infobulle s'ouvre
+  // par le focus. L'infobulle se pose par placerBulle : à droite de
+  // l'emprise quand elle y tient, sinon à sa gauche, et dans la zone — elle
+  // ne couvre pas le panneau voisin. Sa taille se lit par un observateur de
+  // taille (bind:offsetWidth), jamais dans un pointermove ; elle ne dépend
+  // pas de sa position, sa largeur étant celle de son contenu, bornée.
   import { getContext } from 'svelte';
+  import { placerBulle } from './vue_plan.js';
 
-  let { infobulle, id } = $props();
+  let { infobulle, zone, id } = $props();
 
   const t = getContext('t');
+
+  let largeur = $state(0);
+  let hauteur = $state(0);
+  const position = $derived(
+    infobulle === null ? null : placerBulle({ x: infobulle.x, y: infobulle.y, xRepli: infobulle.xRepli }, { largeur, hauteur }, zone),
+  );
 </script>
 
 <div
@@ -29,8 +42,10 @@
   role="tooltip"
   {id}
   hidden={infobulle === null}
-  style:left={infobulle === null ? null : `${infobulle.x}px`}
-  style:top={infobulle === null ? null : `${infobulle.y}px`}
+  style:left={position === null ? null : `${position.x}px`}
+  style:top={position === null ? null : `${position.y}px`}
+  bind:offsetWidth={largeur}
+  bind:offsetHeight={hauteur}
 >
   {#if infobulle !== null}
     <p class="entete">{t('plan.infobulle.entete', { numero: infobulle.detail.numero, nombre: infobulle.detail.nombre })}</p>
@@ -49,17 +64,21 @@
 </div>
 
 <style>
+  /* Une carte flottante : fond et filet de la carte, ombre portée. Sa
+     largeur est celle de son contenu, bornée à 24rem et à la surface : elle
+     ne dépend pas de sa position, que placerBulle choisit sur sa taille. */
   .infobulle {
     position: absolute;
     z-index: 2;
     box-sizing: border-box;
-    max-width: 24rem;
-    padding: var(--espace-2);
-    border: 1px solid var(--couleur-page-filet);
-    border-radius: var(--rayon-1);
-    background: var(--couleur-page-fond);
+    width: max-content;
+    max-width: min(24rem, 100%);
+    padding: var(--espace-2) var(--espace-3);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-2);
+    background: var(--couleur-carte-fond);
     color: var(--couleur-page-texte);
-    box-shadow: var(--ombre-1);
+    box-shadow: var(--ombre-2);
     font-size: var(--taille-texte);
     pointer-events: none;
   }
@@ -73,6 +92,7 @@
   }
 
   .entete {
+    margin-bottom: var(--espace-1);
     font-weight: 700;
   }
 </style>

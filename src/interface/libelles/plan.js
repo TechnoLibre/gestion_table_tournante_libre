@@ -83,6 +83,9 @@ export const TABLE = new Map([
   ['plan.vue.ajuster', 'Ajuster'],
   ['plan.vue.listes', 'Listes de noms'],
   ['plan.vue.pleinEcran', 'Plein écran'],
+  // Les noms des groupes de la barre de vue (role="group").
+  ['plan.vue.groupeZoom', 'Zoom'],
+  ['plan.vue.groupeAffichage', 'Affichage'],
   ['plan.vue.dessin', 'Plan de salle'],
   // Le placement que le plan montre, et la commande qui quitte une
   // proposition montrée.

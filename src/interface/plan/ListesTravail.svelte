@@ -72,84 +72,108 @@
 
 <!-- Échap remonte des contrôles des listes jusqu'à elles, qui oublient le choix. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<section aria-labelledby="{uid}-titre" onkeydown={surTouche}>
+<section class="carte" aria-labelledby="{uid}-titre" onkeydown={surTouche}>
   <h3 id="{uid}-titre">{t('plan.listesTravail.titre')}</h3>
   {#if charge !== null}
-    <h4 id="{uid}-titres">{t('plan.listesTravail.titres')}</h4>
-    <ul data-liste-travail="titres" aria-labelledby="{uid}-titres">
-      {#each titres as titre, rang (rang)}
-        <li>
-          <button type="button" data-titre="{titre.table}:{titre.siege}" onclick={(evenement) => allerAuTitre(evenement, titre)}
-            ><span>{t('plan.listesTravail.titreNonPourvu', { numero: titre.numero })}</span><span class="donnee"
-              >{titre.libelle}</span
-            ><span>{t('plan.listesTravail.nonPourvu')}</span
-            >{#if titre.pourvuAuxTours.length > 0}<span>{t('plan.listesTravail.pourvuAuxTours', { tours: titre.pourvuAuxTours })}</span
-              >{/if}</button
-          >
-        </li>
-      {/each}
-    </ul>
-    {#if titres.length === 0}
-      <p>{t('plan.listesTravail.aucun')}</p>
-    {/if}
-
-    <h4 id="{uid}-pressentis">{t('plan.listesTravail.pressentis')}</h4>
-    <ul data-liste-travail="pressentis" aria-labelledby="{uid}-pressentis">
-      {#each pressentis as { participant, titrePressenti } (participant)}
-        <li>
-          <button type="button" data-participant={participant} aria-pressed={choisie(participant)} onclick={() => basculer(participant)}
-            ><span class="donnee">{nomDe(participant)}</span><span>{t('plan.listesTravail.pressenti')}</span><span class="donnee"
-              >{titrePressenti}</span
-            ></button
-          >
-        </li>
-      {/each}
-    </ul>
-    {#if pressentis.length === 0}
-      <p>{t('plan.listesTravail.aucun')}</p>
-    {/if}
-
-    {#if conversions.length > 0}
-      <h4 id="{uid}-conversions">{t('plan.listesTravail.conversions')}</h4>
-      <ul aria-labelledby="{uid}-conversions">
-        {#each conversions as conversion (conversion.cle)}
-          <li data-conversion={conversion.cle}>
-            <p>
-              <span class="donnee">{nomDe(conversion.participant)}</span><span
-                >{t('plan.listesTravail.conversion', { numero: numeroDe(conversion.table) })}</span
-              >
-            </p>
-            <Commande
-              cle="plan.listesTravail.convertir"
-              nom="convertir"
-              executer={() => seance.executer('convertirEnTous', { participant: conversion.participant, table: conversion.table })}
-            />
-            <button type="button" data-commande="ignorer" onclick={() => (ignorees = [...ignorees, conversion.cle])}
-              >{t('plan.listesTravail.ignorer')}</button
+    <div class="corps">
+      <h4 id="{uid}-titres">{t('plan.listesTravail.titres')}</h4>
+      <ul data-liste-travail="titres" aria-labelledby="{uid}-titres">
+        {#each titres as titre, rang (rang)}
+          <li>
+            <button type="button" data-titre="{titre.table}:{titre.siege}" onclick={(evenement) => allerAuTitre(evenement, titre)}
+              ><span>{t('plan.listesTravail.titreNonPourvu', { numero: titre.numero })}</span><span class="donnee"
+                >{titre.libelle}</span
+              ><span>{t('plan.listesTravail.nonPourvu')}</span
+              >{#if titre.pourvuAuxTours.length > 0}<span>{t('plan.listesTravail.pourvuAuxTours', { tours: titre.pourvuAuxTours })}</span
+                >{/if}</button
             >
           </li>
         {/each}
       </ul>
-    {/if}
+      {#if titres.length === 0}
+        <p>{t('plan.listesTravail.aucun')}</p>
+      {/if}
+
+      <h4 id="{uid}-pressentis">{t('plan.listesTravail.pressentis')}</h4>
+      <ul data-liste-travail="pressentis" aria-labelledby="{uid}-pressentis">
+        {#each pressentis as { participant, titrePressenti } (participant)}
+          <li>
+            <button type="button" data-participant={participant} aria-pressed={choisie(participant)} onclick={() => basculer(participant)}
+              ><span class="donnee">{nomDe(participant)}</span><span>{t('plan.listesTravail.pressenti')}</span><span class="donnee"
+                >{titrePressenti}</span
+              ></button
+            >
+          </li>
+        {/each}
+      </ul>
+      {#if pressentis.length === 0}
+        <p>{t('plan.listesTravail.aucun')}</p>
+      {/if}
+
+      {#if conversions.length > 0}
+        <h4 id="{uid}-conversions">{t('plan.listesTravail.conversions')}</h4>
+        <ul aria-labelledby="{uid}-conversions">
+          {#each conversions as conversion (conversion.cle)}
+            <li data-conversion={conversion.cle}>
+              <p>
+                <span class="donnee">{nomDe(conversion.participant)}</span><span
+                  >{t('plan.listesTravail.conversion', { numero: numeroDe(conversion.table) })}</span
+                >
+              </p>
+              <Commande
+                cle="plan.listesTravail.convertir"
+                nom="convertir"
+                executer={() => seance.executer('convertirEnTous', { participant: conversion.participant, table: conversion.table })}
+              />
+              <button type="button" class="ignorer" data-commande="ignorer" onclick={() => (ignorees = [...ignorees, conversion.cle])}
+                >{t('plan.listesTravail.ignorer')}</button
+              >
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
   {/if}
 </section>
 
 <style>
-  section {
+  /* Le panneau est une carte : fond, filet, rayon et ombre de la carte ;
+     son titre au-dessus d'un filet, son contenu en retrait. */
+  .carte {
     display: flex;
     flex-direction: column;
-    gap: var(--espace-1);
+    border: 1px solid var(--couleur-carte-filet);
+    border-radius: var(--rayon-3);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    box-shadow: var(--ombre-carte);
   }
 
-  h3,
-  h4,
+  .carte > h3 {
+    margin: 0;
+    padding: var(--espace-3) var(--espace-4);
+    border-bottom: 1px solid var(--couleur-carte-filet);
+    font-size: var(--taille-titre-carte);
+  }
+
+  .corps {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-2);
+    padding: var(--espace-3) var(--espace-4);
+  }
+
   p {
     margin: 0;
   }
 
-  h3,
+  /* Un intertitre en petites capitales, d'encre secondaire. */
   h4 {
-    font-size: var(--taille-texte);
+    margin: var(--espace-1) 0 0;
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-intertitre);
+    letter-spacing: var(--interlettre-capitales);
+    text-transform: uppercase;
   }
 
   ul {
@@ -161,14 +185,50 @@
     list-style: none;
   }
 
-  li > button {
+  li[data-conversion] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espace-1) var(--espace-2);
+  }
+
+  li[data-conversion] p {
+    flex: 1 0 100%;
+  }
+
+  /* Un bouton de liste : la commande secondaire, au filet de la page. */
+  li > button,
+  .ignorer {
+    padding: var(--espace-1) var(--espace-3);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  li > button:hover,
+  .ignorer:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  li > button:focus-visible,
+  .ignorer:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
+  }
+
+  [data-liste-travail] li > button {
     width: 100%;
     text-align: start;
   }
 
-  /* La personne choisie se dit par aria-pressed et par sa forme. */
-  button[aria-pressed='true'] {
-    border-width: 3px;
+  /* La personne choisie se dit par aria-pressed et par sa forme : un trait
+     épais et du gras, sur la teinte de l'action. */
+  li > button[aria-pressed='true'] {
+    border: 3px solid var(--couleur-page-texte);
+    background-color: var(--couleur-action-teinte);
     font-weight: 700;
   }
 </style>

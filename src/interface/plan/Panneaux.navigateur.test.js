@@ -620,6 +620,18 @@ describe('l’infobulle nomme l’appartenance d’une paire réunie ; la légen
     }
   });
 
+  test('la barre de vue se lit en groupes nommés : le zoom, puis l’affichage, leurs commandes dans l’ordre', async () => {
+    const m = await ouvrir(deuxAppartenances({ nouvelleTable: false }));
+    const barre = dans(m, '[role="toolbar"]');
+    expect(barre).not.toBeNull();
+    const groupes = [...barre.querySelectorAll('[role="group"]')];
+    expect(groupes.map((g) => g.getAttribute('aria-label'))).toEqual([t('plan.vue.groupeZoom'), t('plan.vue.groupeAffichage')]);
+    expect(groupes.map((g) => [...g.querySelectorAll('[data-commande]')].map((b) => b.dataset.commande))).toEqual([
+      ['zoomer', 'dezoomer', 'ajuster'],
+      ['listes', 'legende', 'pleinEcran'],
+    ]);
+  });
+
   for (const mode of ['ecriture', 'lecture']) {
     test(`mode ${mode} : le bouton « Légende » de la barre de vue ouvre la légende des seules règles actives, et la referme ; rien ne s’écrit`, async () => {
       const m = await ouvrir(deuxAppartenances({ nouvelleTable: false }), { mode });
@@ -884,6 +896,58 @@ describe('Échap oublie le choix en attente (§ 7.1, § 7.3)', () => {
     expect(actif(m)).toBeNull();
     await touche('Escape');
     await attendre(() => expect(m.ui.etat().choix).toBeNull());
+  });
+});
+
+// --- Les bulles posées sur le plan (§ 7.1, § 7.3, capture 20) -------------------
+
+describe('une bulle posée près du bord reste dans le cadre du plan (§ 7.1, § 7.3)', () => {
+  // Le panneau latéral du plan, que la bulle ne doit pas couvrir.
+  const panneaux = (m) => dans(m, '[data-section="plan"] aside');
+
+  test('le refus d\u{2019}une chaise au coin bas droit du cadre passe à gauche et au-dessus : dans le cadre, hors des panneaux', async () => {
+    const m = await ouvrir(huitRetenue(), { mode: 'lecture' });
+    const cadre = cadreDe(m);
+    const chaise = geometrieDe(m, 8).chaises[1];
+    await avecVue(m, { k: 1, tx: cadre.largeur - 24 - chaise.x, ty: cadre.hauteur - 24 - chaise.y });
+    await cliquerChaise(m, 8, 2);
+    expect(m.ui.etat().selection).toEqual({ table: 8, siege: 2 });
+    await cliquer(panneau(m, 'place').querySelector('[data-commande="donnerTitre"]'));
+    const place = chaiseEl(m, 8, 2);
+    const refus = await attendre(() => {
+      const trouve = decrit(place);
+      expect(trouve?.querySelector('[data-refus="MODE_LECTURE"]')).not.toBeNull();
+      return trouve;
+    });
+    await attendre(() => expect(dansLaFenetre(m, refus)).toBe(true));
+    expect(recoupe(refus, panneaux(m))).toBe(false);
+    // Le refus redit sa place, et la chaise reste à son bord : la bulle
+    // s'est déplacée, pas la vue.
+    expect(pointChaise(m, 8, 2).x).toBeCloseTo(cadreDe(m).gauche + cadreDe(m).largeur - 24, 0);
+  });
+
+  test('l\u{2019}infobulle d\u{2019}une table en conflit au bord droit passe à gauche de son emprise : dans le cadre, hors des panneaux', async () => {
+    const m = await ouvrir(analyser(TEXTE_CONFLIT).charge);
+    m.ui.montrerTour(2);
+    flushSync();
+    await images(2);
+    const cadre = cadreDe(m);
+    const geometrie = geometrieDe(m, 1);
+    await avecVue(m, {
+      k: 1,
+      tx: cadre.largeur - 8 - geometrie.centre.x - geometrie.rayonEmprise,
+      ty: cadre.hauteur / 2 - geometrie.centre.y,
+    });
+    const centre = pointTable(m, 1);
+    await pointer('bouger', centre.x, centre.y);
+    const infobulle = infobulles()[0];
+    await attendre(() => expect(infobulleVisible(infobulle)).toBe(true));
+    await attendre(() => expect(dansLaFenetre(m, infobulle)).toBe(true));
+    expect(recoupe(infobulle, panneaux(m))).toBe(false);
+    // Passée à gauche, elle ne couvre pas le centre de la table qu'elle décrit.
+    const boite = infobulle.getBoundingClientRect();
+    expect(boite.right).toBeLessThanOrEqual(centre.x);
+    await pointer('bouger', pointSol(m).x, pointSol(m).y);
   });
 });
 

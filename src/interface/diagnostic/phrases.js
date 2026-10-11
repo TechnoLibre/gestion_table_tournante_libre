@@ -190,3 +190,38 @@ export function numeroDeCharge(charge) {
     return numero;
   };
 }
+
+// Les énoncés de la séparation vidée de son sens, que porte la carte de la
+// séparation.
+const CLES_SEPARATION = new Set(['diagnostic.uneSeuleAppartenance', 'diagnostic.collisionPartout']);
+
+// Le genre et le groupe de la carte d'un énoncé.
+function carteDe({ cle, details }) {
+  if (details.groupe !== undefined) return { genre: 'appartenance', groupe: details.groupe };
+  return { genre: CLES_SEPARATION.has(cle) ? 'separation' : 'ensemble', groupe: null };
+}
+
+/**
+ * Les cartes du diagnostic (§ 5.6) : les énoncés regroupés, sans en changer
+ * l'ordre, par suites d'énoncés voisins de même carte — la séparation vidée
+ * de son sens ('separation'), une appartenance, celle de details.groupe
+ * ('appartenance'), ou le reste de l'événement ('ensemble'). Dans l'ordre
+ * d'enonces, la séparation vient d'abord, puis une carte par appartenance
+ * en collision — ses collisions et son excédent —, puis l'événement : les
+ * cartes mises bout à bout redonnent la liste reçue, énoncé pour énoncé, les
+ * mêmes objets. Ne modifie pas la liste.
+ *
+ * @param {Array<{cle: string, details: Object}>} liste  celle que rend enonces
+ * @returns {Array<{genre: 'separation'|'appartenance'|'ensemble', groupe: string|null,
+ *           enonces: Array<Object>}>}
+ */
+export function cartesDiagnostic(liste) {
+  const cartes = [];
+  for (const enonce of liste) {
+    const { genre, groupe } = carteDe(enonce);
+    const derniere = cartes.at(-1);
+    if (derniere !== undefined && derniere.genre === genre && derniere.groupe === groupe) derniere.enonces.push(enonce);
+    else cartes.push({ genre, groupe, enonces: [enonce] });
+  }
+  return cartes;
+}

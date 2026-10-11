@@ -139,7 +139,8 @@
   let fantome = $state.raw(null);
   // Le coin du <svg> dans la surface, en cadre dont le bord gauche et le
   // haut sont relatifs à la surface : relu à chaque changement de cadre et à
-  // chaque appui, jamais dans un pointermove.
+  // chaque appui, jamais dans un pointermove. C'est aussi la zone où
+  // l'infobulle et le refus posé sur une place se tiennent.
   let origineSvg = $state.raw({ gauche: 0, haut: 0, largeur: 0, hauteur: 0 });
   // L'élément actif du clavier, {table, siege|null}, ou null ; la racine a
   // le focus ; le focus vient du clavier.
@@ -204,7 +205,8 @@
   });
   // L'infobulle : la table que désignent la pression longue, le survol, puis
   // l'élément actif sous un focus venu du clavier ; rien quand elle n'a pas
-  // de conflit. Posée au coin haut droit de l'emprise.
+  // de conflit. Posée au coin haut droit de l'emprise ; xRepli, le bord
+  // gauche de l'emprise, où finit l'infobulle passée à gauche (placerBulle).
   const infobulleTable = $derived(pression ?? survol ?? (actifMontre === null ? null : actifMontre.table));
   const infobulle = $derived.by(() => {
     if (infobulleTable === null || vue === null || modele === null) return null;
@@ -215,7 +217,8 @@
     if (detail === null) return null;
     const { centre, rayonEmprise } = dessin.geometrie;
     const { x, y } = ecranDepuisDessin(vue, origineSvg, centre.x + rayonEmprise, centre.y - rayonEmprise);
-    return { detail, x, y };
+    const xRepli = ecranDepuisDessin(vue, origineSvg, centre.x - rayonEmprise, centre.y).x;
+    return { detail, x, y, xRepli };
   });
   const infobulleDuFocus = $derived(infobulle !== null && pression === null && survol === null);
 
@@ -769,9 +772,9 @@
       <Fantome {fantome} bind:element={elementFantome} />
     </svg>
     {#if poseAffichee !== null}
-      <RefusPlace pose={poseAffichee} fermer={fermerPose} gestes={gestesPose} />
+      <RefusPlace pose={poseAffichee} zone={origineSvg} fermer={fermerPose} gestes={gestesPose} />
     {/if}
-    <Infobulle {infobulle} id={idInfobulle} />
+    <Infobulle {infobulle} zone={origineSvg} id={idInfobulle} />
     <!-- L'échelle occupe sa place avant que la vue n'existe, cachée : sa
          venue ne change pas le cadre du dessin. -->
     <div class="pied" class:cache={vue === null}>
