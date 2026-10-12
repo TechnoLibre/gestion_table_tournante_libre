@@ -97,20 +97,31 @@ bloqué**, le message nommant la commande qui déverrouille.
 la génération.* Le logiciel n'exige que le nom (§ 10.2) et n'invente aucune
 valeur manquante.
 
+La fiche d'une personne porte ses **étiquettes** (§ 4.5), que l'opérateur ajoute
+et retire là ; une colonne du CSV les importe (§ 10.1). Elles ne sont exigées
+nulle part : une soirée sans étiquette est une configuration valide.
+
 **4. Préparer les tables.** *Obligatoire.* L'opérateur fixe le nombre de sièges
 par défaut, crée les tables, surcharge celles qui diffèrent (§ 6.1) et les
 dispose sur le plan (§ 7.1). Le logiciel énonce la conséquence chiffrée d'un
 changement de défaut avant de l'appliquer, n'écrase aucune surcharge, et refuse
 en bloc une baisse qu'une seule table refuse (§ 6.1).
 
+Il donne au besoin à une table un **objectif** (§ 4.5) — les étiquettes des
+personnes qu'elle attend, sous la règle « au moins une » ou « toutes » —, pour
+la soirée ou pour un tour désigné, à l'écran ou par un CSV d'objectifs (§ 10.4).
+La règle par défaut se règle avec le nombre de sièges par défaut. Un objectif ne
+fixe personne : il oriente la recherche (§ 5.3).
+
 **5. Fixer le nombre de tours.** *Obligatoire.* Retirer un tour puis le remettre
 retrouve les **ancrages** intacts, parce que la portée « tous les tours » n'est
 jamais développée (§ 4.3). La protection s'arrête là, et le logiciel le dit
 **avant** d'appliquer : retirer le tour *r* détruit les réservations de portée
-« tour désigné » portant sur *r*. Les placements déjà engendrés, eux, ne sont
-pas tronqués : ils ne portent plus le nombre de tours de la soirée, restent
-entiers **en dérive** (§ 9), et le logiciel nomme ceux que le changement
-touche. Les annoncer après coup ferait découvrir la perte à l'impression.
+« tour désigné » portant sur *r*, et les objectifs de table de ce tour (§ 4.5) ;
+les objectifs de soirée restent. Les placements déjà engendrés, eux, ne sont pas
+tronqués : ils ne portent plus le nombre de tours de la soirée, restent entiers
+**en dérive** (§ 9), et le logiciel nomme ceux que le changement touche. Les
+annoncer après coup ferait découvrir la perte à l'impression.
 
 **6. Désigner les animateurs, table par table.** *Facultative — une soirée sans
 aucun animateur est une configuration valide, et la petite démonstration en est
@@ -168,8 +179,12 @@ conserve sa graine dérivée, ce compte et la longueur d'historique qui l'ont
 produite (§ 5.7, § 8.9). Le logiciel produit plusieurs propositions
 comparables ; relancer **ajoute** des candidats, un classement unique les
 ordonne tous. Les réservations des étapes 6 et 7 sont honorées, le moteur place
-les autres autour (§ 5.2). Le logiciel nomme automatiquement l'instant qui
-précède chaque génération (§ 8.3).
+les autres autour (§ 5.2). Les critères que la recherche poursuit et que le
+classement applique sont ceux que l'opérateur coche (§ 5.3), dans l'**ordre des
+priorités** qu'il règle à côté (§ 5.7) ; pour les objectifs des tables, il y
+choisit aussi ce que le critère cherche d'abord, le **mode** (§ 5.3). Sans
+réglage, c'est l'ordre par défaut et le mode « le plus de places servies ». Le
+logiciel nomme automatiquement l'instant qui précède chaque génération (§ 8.3).
 
 **10. Comparer, et retenir.** *Facultative en droit — l'impression d'un plan non
 retenu sort en filigrane BROUILLON (§ 11.7) — nécessaire en fait pour distribuer
@@ -222,9 +237,9 @@ Un seul opérateur, une seule machine, un seul événement ouvert à la fois.
 reste ci-dessous. Le logiciel en gère plusieurs (§ 8).
 
 **Participant** — un **identifiant entier court**, unique dans l'événement et
-jamais réutilisé ; un nom ; éventuellement un prénom, un courriel, des notes,
-et une **appartenance** — l'étiquette qui sépare les gens qui se connaissent
-déjà : entreprise, équipe, famille, école.
+jamais réutilisé ; un nom ; éventuellement un prénom, un courriel, des notes, et
+une **appartenance** — le groupe qui sépare les gens qui se connaissent déjà :
+entreprise, équipe, famille, école.
 
 > L'identifiant est un petit entier et non un identifiant opaque. Le calcul de
 > taille du § 8.6 repose dessus : sous la forme positionnelle du § 8.9, un
@@ -266,6 +281,16 @@ les tours*. Elle contraint la génération, qui l'honore, et elle lui survit.
 **Titre de place** — un libellé attaché à **une place**, jamais à une personne :
 « ce siège est le siège de l'animateur ». Il ne nomme personne et vaut pour
 toute la soirée.
+
+**Étiquette** — un mot court qu'une personne porte — « finance », « Montréal »,
+« bénévole » — et qu'un objectif de table vise. L'appartenance sépare les gens
+qui se connaissent déjà ; l'étiquette dit à quelle table une personne est
+attendue. Une personne en porte de zéro à vingt.
+
+**Objectif de table** — une liste d'étiquettes attachée à une table, sous une
+règle : *au moins une* de ces étiquettes, ou *toutes*. Il vaut pour la soirée,
+ou pour un tour désigné. Il ne fixe personne : c'est un critère de la recherche
+(§ 5.3), jamais une réservation.
 
 ### 4.1 Pourquoi le titre appartient à la place
 
@@ -314,12 +339,142 @@ obligerait à choisir entre détruire les lignes excédentaires — l'opérateur
 retrouve pas son travail — et les garder en sommeil, c'est-à-dire porter un
 état invisible.
 
+La portée « pour la soirée » d'un objectif de table (§ 4.5) est symbolique au
+même titre : jamais développée en R objectifs, elle se retrouve intacte quand un
+tour retiré revient. Un objectif de tour désigné suit les réservations de même
+portée : retirer son tour le détruit, et le logiciel le dit avant d'appliquer
+(§ 2.1, étape 5).
+
 ### 4.4 L'exclusion l'emporte
 
 Exclure une personne **suspend toutes ses réservations**, rend ses places aux
 mobiles, rend les titres correspondants non pourvus, et le logiciel le dit. La
 réintégration les rend. L'exclusion décrit une absence physique : aucune table
 ne peut asseoir quelqu'un qui n'est pas là.
+
+### 4.5 Les étiquettes et les objectifs de table
+
+**La forme d'une étiquette.** Une étiquette est un texte en forme normalisée de
+composition (NFC), sans blanc en bord, ses blancs intérieurs — tout caractère
+d'espacement qui n'est pas un caractère de contrôle — réduits à une espace. Elle
+compte de 1 à 40 points de code. Elle ne porte ni `,`, ni `;`, ni `|` : ces
+caractères séparent les étiquettes d'une cellule CSV (§ 10.1) et d'une saisie,
+où « a|b » fait deux étiquettes, et une étiquette qui en porterait un se
+couperait en deux à l'aller-retour (§ 10.2). Elle ne porte aucun caractère de
+contrôle ni caractère invisible — de format ou ignorable par défaut, comme le
+trait d'union conditionnel, l'espace sans chasse ou un contrôle
+bidirectionnel —, tabulation comprise : invisible ou illisible à l'écran, il
+ferait deux étiquettes d'apparence égale ; la fin de ligne, elle, sépare aussi.
+Une personne porte au plus 20 étiquettes, un objectif en vise au plus 20 ; le
+nombre d'étiquettes distinctes d'un événement n'a pas de borne propre.
+
+**Deux orthographes, une étiquette.** Deux étiquettes de même clé normalisée —
+espaces réduits, casse et accents ignorés, la clé du § 10.1 — sont la même
+étiquette. La réconciliation se fait à l'entrée, sur l'événement entier,
+personnes et objectifs confondus : une saisie qui donne « Finance » quand
+« finance » existe reçoit l'orthographe existante, et le logiciel le dit, contre
+le champ pour une saisie, dans le rapport pour un import. Quand l'événement
+porte déjà plusieurs orthographes d'une même clé, la saisie reçoit la plus
+petite par points de code ; deux orthographes d'une clé que l'événement ne porte
+pas encore, dans une même saisie ou dans les lignes d'un même import, se fondent
+de même en la plus petite : le résultat ne dépend ni de l'orthographe tapée ni
+de l'ordre des lignes. Une saisie ne pose jamais deux fois la même étiquette
+dans une liste : un doublon s'y fond. Le moteur compare ensuite les étiquettes
+par égalité de chaînes, comme les appartenances (§ 5.2). Un fichier retouché à
+la main peut donc porter deux orthographes d'une même étiquette, que le moteur
+tient pour deux ; l'analyse du fichier ne le refuse pas, même limite que pour
+les appartenances (§ 10.1).
+
+**La règle d'un objectif.** Un objectif porte une liste non vide d'étiquettes et
+une règle :
+
+| règle | une personne correspond à l'objectif quand |
+|---|---|
+| **au moins une** (OU) | elle porte au moins une des étiquettes de l'objectif |
+| **toutes** (ET) | elle porte chacune des étiquettes de l'objectif |
+
+« finance OU RH » s'écrit [finance, RH] sous « au moins une » ; « finance ET
+Montréal », [finance, Montréal] sous « toutes ». Un objectif d'une seule
+étiquette se lit pareil sous les deux règles. La grammaire s'arrête là : ni
+parenthèses, ni mélange des deux règles dans un objectif. « (finance ET
+Montréal) OU RH » ne s'écrit pas ; ce qu'il décrit se répartit sur deux tables,
+l'une « toutes : finance, Montréal », l'autre « au moins une : RH ». Une
+grammaire à parenthèses demanderait un analyseur, des refus de syntaxe et un
+éditeur que la saisie d'une liste n'a pas, pour un cas que deux tables couvrent.
+
+**Le défaut de l'événement, la règle propre d'un objectif.** L'événement porte
+une règle par défaut, « au moins une » tant que l'opérateur ne la change pas.
+Chaque objectif **suit le défaut** ou porte **sa propre règle**, comme le nombre
+de sièges d'une table suit le défaut ou le surcharge (§ 6.1) : l'écran montre
+lequel des deux, et changer le défaut ne touche aucune règle propre.
+
+**Pour la soirée, ou par tour.** Un objectif porte une portée, comme une
+réservation : *pour la soirée* ou *pour un tour désigné*. Une table porte au
+plus un objectif de soirée et au plus un objectif par tour. Au tour r,
+l'objectif **en vigueur** à la table t est son objectif du tour r s'il existe,
+sinon son objectif de soirée, sinon aucun : l'objectif d'un tour **remplace**
+celui de la soirée, il ne s'y ajoute pas. Le mode n'est pas déclaré, il se lit
+dans les données, comme le statut d'un participant (§ 4.2) : une table sans
+objectif de tour garde le même objectif toute la soirée, une table qui en porte
+un à chaque tour change d'objectif à chaque tour, et les deux se mêlent
+librement.
+
+**Correspondre à une table.** La personne p **correspond** à la table t au tour
+r quand un objectif est en vigueur à t au tour r et que p lui correspond selon
+sa règle. Une personne sans étiquette ne correspond à aucune table. Une table
+sans objectif en vigueur ne correspond à personne. Une seule fonction décide
+qu'une personne correspond à un objectif : le moteur, l'écran et l'import la
+lisent (§ 13.2).
+
+**Un couple possible, un tour servi.** Le couple (p, r) est **possible** quand p
+correspond, au tour r, à au moins une table qui peut l'accueillir à ce tour : sa
+table réservée quand une réservation le fixe à ce tour, sinon toute table qui
+garde à ce tour un siège qu'aucune réservation n'occupe. Le tour r est **servi**
+quand p y est assis à une table qui lui correspond et qu'il peut occuper à ce
+tour, au même sens. Le critère (§ 5.3) et l'indicateur (§ 5.4) ne comptent que
+les couples possibles : une personne qu'aucune table ne peut servir au tour r
+n'est pas « hors objectif » à ce tour, où qu'elle soit assise ; une personne
+qu'une table pouvait servir et qui n'est pas servie compte un tour hors
+objectif. Un couple fixé n'est possible que si sa table réservée lui correspond,
+et il y est alors servi : un couple fixé n'est jamais hors objectif, et le
+critère n'a pas de part imposée. Sur un plan ajusté qui déplace une réservation,
+les tours servis ne dépassent toujours pas les tours possibles.
+
+**L'animateur, pour le critère du § 5.3.** La personne présente qui pourvoit un
+titre de place au tour r **anime** à ce tour, quel que soit le libellé du
+titre ; est **animateur** la personne qui anime à un tour au moins. Le fait se
+lit tour par tour, comme le statut d'ancré (§ 4.2), sur ce qui est tenu et
+jamais sur la forme du stockage : une réservation de portée « tous les tours »
+sur la place titrée fait animer à chaque tour, R réservations de tour désigné
+sur cette place aussi, une seule réservation de tour désigné au seul tour
+qu'elle couvre. Le pourvoyeur d'un titre à un tour se lit par la règle qui
+dresse la liste des titres non pourvus (§ 4.1) ; sans sièges attribués,
+plusieurs ancrés d'une table titrée n'en font qu'un animateur par titre, celui
+que cette règle désigne. Une réservation pourvoit le titre : qui anime au tour r
+est fixé à ce tour à la table du titre. Le logiciel ne porte aucune
+case « est animateur » ; une réservation sans titre ne fait pas animer, et le
+titre pressenti reste informatif (§ 4). Le diagnostic du § 5.6 garde son propre
+emploi du mot, les ancrés d'une même appartenance : un ancré sans titre n'anime
+pas, qui n'anime qu'à un tour n'est pas ancré, et le code nomme les deux
+différemment.
+
+**Rencontrer un animateur.** La personne p **rencontre** l'animateur f quand p
+et f partagent une table à un tour où f anime, à une table que p peut occuper à
+ce tour. Partager sa table à un tour où f n'anime pas est une rencontre
+ordinaire, que le critère des rencontres compte déjà. Un animateur en rencontre
+un autre de la même façon : aux tours où lui-même n'anime pas, ou à une table
+qui porte deux titres pourvus.
+
+**La borne des animateurs.** B(p) borne, sur la seule configuration, le nombre
+d'animateurs distincts que p peut rencontrer ; c'est le plus petit de deux
+nombres. Le premier compte les animateurs f, autres que p, que p peut rejoindre
+à un tour où f anime : à sa table fixée quand une réservation fixe p à ce tour,
+sinon à une table qui garde à ce tour un siège qu'aucune réservation n'occupe.
+Le second somme, sur les tours, le plus grand nombre d'animateurs autres que p
+qui animent à une même table que p peut occuper à ce tour : p ne s'assied qu'à
+une table par tour. Aucun plan ne fait rencontrer à p plus de B(p) animateurs ;
+aucun ne garantit d'atteindre B(p). La personne est **concernée par les
+animateurs** quand B(p) > 0.
 
 ---
 
@@ -330,6 +485,9 @@ ne peut asseoir quelqu'un qui n'est pas là.
 Étant donné N participants, T tables de capacités c₁…c_T et R tours, répartir
 les gens à chaque tour de façon à **maximiser le nombre de personnes distinctes
 que chacun rencontre**, sous les contraintes que l'opérateur active.
+
+C'est l'objectif de l'ordre des priorités par défaut (§ 5.7) ; l'opérateur peut
+ranger d'autres critères devant, et l'ordre affiché dit alors lequel prime.
 
 ### 5.2 L'instance réduite : ce que les réservations changent
 
@@ -359,11 +517,93 @@ configuration et le diagnostic lisent les réservations.
 | **Nouveaux voisins à chaque tour** | deux personnes ne se retrouvent pas deux fois à la même table |
 | **Nouvelle table à chaque tour** | *voir ci-dessous* |
 | **Varier les appartenances rencontrées** | sur l'ensemble des tours, chacun rencontre le plus d'appartenances **différentes** possible |
+| **Respecter les objectifs des tables** | à chaque tour, chacun est assis à une table dont l'objectif lui correspond, quand une telle table peut l'accueillir (§ 4.5), selon le mode réglé : le plus de places servies, chacun au moins une fois, ou l'équité d'abord |
+| **Rencontrer le plus d'animateurs différents** | sur l'ensemble des tours, chacun rencontre le plus d'animateurs **différents** possible, là où ils animent (§ 4.5) |
 | **Attribuer les sièges** | chacun reçoit un numéro de siège, pas seulement une table |
 
 Ce sont des **objectifs**, pas des interdits : quand la configuration les rend
 impossibles à satisfaire toutes, le moteur produit le meilleur compromis **et
 dit lequel**, au lieu de refuser.
+
+**Cochées, décochées, sans objet.** Un événement neuf coche les quatre premières
+et « Respecter les objectifs des tables » ; « Rencontrer le plus d'animateurs
+différents » et l'attribution des sièges sont décochées. Cochée d'office, la
+case des animateurs changerait, à graine égale, le plan de chaque événement qui
+pourvoit un titre de place. Un critère est **sans objet** quand l'événement ne
+lui donne rien à mesurer : pour les objectifs, quand aucun couple (personne,
+tour) n'est possible (§ 4.5) — aucune table à objectif en est un cas, un
+objectif auquel aucune personne ne correspond en est un autre ; pour les
+animateurs, quand aucune personne n'est concernée par les animateurs (§ 4.5), ce
+qui arrive quand aucun titre n'est pourvu. Un critère décoché ou sans objet ne
+compte nulle part : il ne pèse pas dans la recherche, ne classe pas (§ 5.7), ne
+se nomme pas dans la phrase de l'ordre. Il garde son rang dans l'ordre des
+priorités, où l'éditeur le marque « décoché » ou « sans objet » : le recocher le
+remet là où l'opérateur l'avait rangé.
+
+**Les cases et les critères de l'ordre.** L'ordre des priorités (§ 5.7) ne porte
+aucune case : il montre l'état que donnent les cases de ce tableau.
+
+| critère de l'ordre | il compte quand |
+|---|---|
+| écart au plafond a priori | toujours |
+| excédent de collisions, collisions cumulées | « Séparer les appartenances » est cochée — une case, deux critères |
+| tours hors objectif | « Respecter les objectifs des tables » est cochée et a un objet |
+| rencontres répétées et retours | « Nouveaux voisins » **ou** « Nouvelle table » est cochée ; décoché quand aucune des deux ne l'est |
+| animateurs non rencontrés | « Rencontrer le plus d'animateurs différents » est cochée et a un objet |
+| redondance d'appartenance | « Varier les appartenances rencontrées » est cochée |
+
+**« Attribuer les sièges » change les animateurs.** Sans sièges attribués, une
+réservation sans siège à une table titrée peut pourvoir un titre de cette
+table ; avec sièges attribués, seule une réservation à la place titrée le
+pourvoit (§ 4.1). Changer cette case change donc les animateurs, et, la case des
+animateurs cochée, le plan à graine égale.
+
+**« Respecter les objectifs » n'est pas réserver.** L'objectif dit qui une table
+attend, il n'assied personne ; la recherche le pèse avec les autres critères,
+dans l'ordre que l'opérateur règle (§ 5.7). Une table d'objectif « finance » qui
+reçoit plus de personnes « finance » qu'elle n'a de sièges en laisse ailleurs,
+et l'indicateur le compte.
+
+**Trois modes pour les objectifs.** Un réglage de l'événement, dans la section
+Génération, dit ce que le critère cherche d'abord. Il lit, pour chaque personne,
+ses tours possibles P(p) et ses tours servis s(p) (§ 5.4).
+
+| mode | ce que le critère cherche | ce qu'il compare, dans l'ordre |
+|---|---|---|
+| **le plus de places servies** (par défaut) | le plus grand total de tours servis | les tours hors objectif |
+| **chacun au moins une fois** | d'abord le plus de personnes concernées servies à un tour au moins, puis le plus grand total | les personnes jamais servies, puis les tours hors objectif |
+| **l'équité d'abord** | d'abord la personne la plus mal servie, puis le plus grand total | le plus de tours hors objectif d'une personne, puis les tours hors objectif |
+
+Dix personnes « finance », une table « finance » de huit places, quatre tours :
+les trois modes servent au mieux les 32 places. Le premier peut laisser une
+personne sans aucun tour servi ; le deuxième sert chacun une fois au moins, et
+peut laisser une personne à un seul tour quand d'autres en ont quatre ; le
+troisième sert chacun trois tours au moins. « L'équité d'abord » mesure chacun
+contre ses propres tours possibles, comme l'écart au plafond a priori mesure
+chacun contre son plafond (§ 5.5) : quand tous les concernés ont autant de tours
+possibles, il cherche le plus grand des plus petits nombres de tours servis ;
+une personne qu'une réservation tient hors objectif à un tour ne fixe pas la
+cible des autres. Ce n'est pas un indice d'équité (§ 12.8) : le minimum d'abord,
+puis le total (§ 12.1). Le libellé de ce mode à l'écran est le seul texte du
+logiciel qui porte le mot « équité » ; son explication ne l'emploie pas, et le
+journal nomme le mode « le minimum, puis le total ». Le mode ne compte que quand
+le critère compte : sans objectif, aucun mode ne change rien.
+
+**Tant qu'une personne qui a le plus de tours possibles n'en a aucun de servi,
+« l'équité d'abord » compare ce que compare « chacun au moins une fois ».** Le
+plus de tours hors objectif d'une personne vaut alors ce plus grand nombre de
+tours possibles, et les personnes qui l'atteignent sont les jamais servies,
+quand celles-ci ont toutes le plus de tours possibles. Sur une soirée où il en
+reste une quel que soit le plan, les deux modes rendent les mêmes plans : le
+troisième ne se distingue du deuxième que là où chacun peut être servi une fois.
+
+**« Rencontrer le plus d'animateurs » n'est pas « rencontrer le plus de
+monde ».** Sur une soirée tendue où chaque table porte un animateur à chaque
+tour, atteindre le plafond a priori (§ 5.5) fait déjà visiter des tables
+distinctes, donc rencontrer autant d'animateurs que de tours : le critère y
+départage peu. Il départage quand des tables n'ont pas d'animateur ou en ont
+plusieurs, quand un animateur n'anime qu'à certains tours, et quand le plafond
+de rencontres ne force pas des tables distinctes.
 
 **« Nouvelle table à chaque tour », énoncée correctement.** La formulation
 naïve — « personne ne revient à une table déjà occupée » — est fausse pour un
@@ -400,6 +640,12 @@ une lecture et non un jugement :
 | **taux de diversité** — d(p) | A(p) / \|F(p)\| ; « — » quand \|F(p)\| = 0 |
 | **manque** | plafond réalisé − rencontres (§ 5.5) — la grandeur qui compare deux propositions (§ 12.10) |
 | **écart d'itinéraire** | plafond a priori − plafond réalisé (§ 5.5, § 12.10) |
+| **tours selon l'objectif** — s(p) | tours servis de p : tours où p est assis à une table dont l'objectif en vigueur lui correspond et qu'il peut occuper (§ 4.5) ; ils ne dépassent pas P(p), ses **tours possibles**, les couples (p, r) possibles |
+| **tours hors objectif** | Σ (P(p) − s(p)) : couples (p, r) possibles (§ 4.5) où p n'est pas servi ; zéro veut dire que personne n'est hors objectif, et n'est atteignable que si les places libres des tables à objectif suffisent (plancher au § 5.6) |
+| **personnes jamais servies** | personnes concernées dont s(p) vaut zéro |
+| **le plus de tours hors objectif d'une personne** | max (P(p) − s(p)) sur les personnes concernées |
+| **animateurs rencontrés** — m(p) | animateurs distincts (§ 4.5) que p rencontre à un tour où ils animent, lui-même non compté ; un animateur rencontré à plusieurs tours compte une fois ; m(p) ne dépasse pas B(p), la borne des animateurs |
+| **animateurs non rencontrés** | Σ (B(p) − m(p)) sur les personnes présentes placées : ce qui leur reste à rencontrer de ce que la configuration leur permettait |
 
 **Les agrégats portent sur tous les participants placés.** Le minimum se calcule
 sur l'ensemble, ancrés compris, et **deux lignes secondaires** donnent la même
@@ -444,14 +690,43 @@ Le dernier est le moins mauvais, bien qu'il porte le **plus** de collisions
 cumulées — passer la soirée avec le même collègue est pire que croiser six
 collègues une fois. Ni les collisions cumulées ni les paires distinctes, prises
 seules, ne rendent cet ordre : **les deux classent le premier plan en tête**,
-c'est-à-dire exactement à l'envers. L'excédent le rend, et c'est pour cela qu'il
-ouvre le classement du § 5.7.
+c'est-à-dire exactement à l'envers. L'excédent le rend, et c'est pour cela que
+l'ordre par défaut du § 5.7 le range devant les collisions cumulées.
 
 Les trois restent **affichés** : ce sont trois conflits, et aucun ne se cache
 derrière la grandeur qui ordonne.
 
 **Quand une population est vide, le logiciel écrit « — », jamais zéro.** Un
 ensemble vide n'est pas une mesure nulle.
+
+**Les objectifs des tables se lisent sur les personnes concernées.** Une
+personne est **concernée** quand au moins un de ses tours est possible (§ 4.5).
+Le minimum de s(p), les personnes jamais servies et le plus de tours hors
+objectif d'une personne portent sur les concernées ; le minimum a ses deux
+lignes secondaires, mobiles et ancrés. Sans personne concernée — aucun objectif,
+ou des objectifs que personne ne peut servir —, tous les chiffres des objectifs
+écrivent « — », le total des tours hors objectif compris : un événement qui n'a
+rien pu viser n'a rien manqué, et le signalement de l'objectif (§ 5.9) dit
+pourquoi.
+
+**Les tours hors objectif ne se séparent pas en choisis et imposés.** Un couple
+fixé n'est possible que si sa table lui correspond, et il y est servi (§ 4.5) :
+la part imposée vaudrait toujours zéro.
+
+**Les animateurs rencontrés se lisent sur les personnes concernées.** Le minimum
+de m(p) porte sur les personnes présentes placées concernées par les animateurs
+(B(p) > 0, § 4.5), avec les deux lignes secondaires, mobiles et ancrés. Une
+personne qui ne peut rencontrer aucun animateur, quel que soit le plan, mettrait
+le minimum à zéro sur toute proposition : elle n'y entre pas, et vaut zéro dans
+les animateurs non rencontrés. Un animateur y entre comme tout autre : aux tours
+où il n'anime pas, il rencontre ceux qui animent. Comme les personnes
+rencontrées, les animateurs rencontrés ne se séparent pas en imposé et choisi.
+Sans personne concernée, m(p) et les animateurs non rencontrés écrivent « — ».
+
+**Aucun de ces chiffres ne s'additionne à un autre pour s'afficher.** Un palier
+pondéré du § 5.7 somme des paires, des couples (personne, tour) et des
+personnes : sa clé est un ordre, jamais un indicateur, et ne s'affiche nulle
+part.
 
 **Ce que le moteur a décidé, et ce que les réservations imposent.** L'indicateur
 « retours à une table » ne compte que les retours **choisis par le moteur** ;
@@ -617,7 +892,32 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   configuration interdit ;
 - **le manque de places**, `Σ (c_t − k_t) < n`. Ce n'est pas un refus de geste
   mais une **propriété de la configuration** (§ 5.9) : le diagnostic la nomme
-  avec le nombre de places manquantes, et **la génération la refuse**.
+  avec le nombre de places manquantes, et **la génération la refuse** ;
+- **les objectifs hors d'atteinte** : au tour r, une personne servie qui n'est
+  pas fixée occupe un siège libre — qu'aucune réservation n'occupe — d'une table
+  dont l'objectif est en vigueur. Le nombre de tours hors objectif est donc au
+  moins Σ_r max(0, P_r − L_r), où P_r compte les couples (p, r) possibles dont p
+  n'est pas fixé au tour r, et L_r les sièges libres des tables qui portent un
+  objectif au tour r. Un siège libre ne sert qu'une personne par tour : les
+  personnes jamais servies sont au moins #C′ − Σ_r min(L_r, P′_r), où #C′ compte
+  les personnes concernées qu'aucune réservation ne sert — les autres sont
+  servies d'office — et P′_r celles de C′ dont le tour r est possible. Le plus
+  grand ne descend pas sous la moyenne : le plus de tours hors objectif d'une
+  personne est au moins le plancher des tours hors objectif divisé par le nombre
+  de personnes qui ont un tour possible non fixé, arrondi au-dessus. Chaque
+  plancher se calcule en O(T·R + N·R) une fois les couples possibles connus. Le
+  diagnostic écrit le plancher de chaque valeur que le mode réglé compare
+  (§ 5.3), quand il est strictement positif, et se tait sinon, comme pour
+  l'excédent de collisions ; il se tait aussi quand le critère des objectifs est
+  décoché ou sans objet, qui ne compare rien. Il ne tient pas compte de qui
+  correspond à quelle table : un plancher plus serré demande un flot par tour,
+  que le logiciel ne calcule pas. Sur dix personnes « finance », une table
+  « finance » de huit places et quatre tours, les planchers valent huit tours
+  hors objectif, zéro personne jamais servie et un tour hors objectif pour une
+  personne ; sur quarante personnes, 128, huit et quatre.
+
+L'objectif auquel aucune personne présente ne correspond est signalé à
+l'objectif même (§ 5.9).
 
 À l'écran, les énoncés se regroupent en cartes, sans changer d'ordre : la
 séparation des appartenances vidée de son sens, une carte par appartenance en
@@ -656,46 +956,175 @@ identifiant attribué à l'achèvement ferait départager deux propositions à
 égalité par la vitesse de la machine, et deux exécutions les classeraient dans
 deux ordres.
 
-**La recherche descend un scalaire ; le classement affiché est un ordre
-explicite**, écrit dans l'interface. Confondre les deux ferait dépendre l'ordre
-de poids internes que l'opérateur ne voit pas.
+**L'ordre des priorités est un réglage de l'événement, et l'interface l'écrit.**
+Il range les critères en **paliers**, du premier au dernier. Deux propositions
+se comparent palier par palier : un palier ne départage que des propositions
+égales sur tous ceux qui le précèdent. Un palier porte un critère, ou plusieurs,
+chacun avec un **poids** entier de 1 à 100 ; la clé du palier est la somme, sur
+ses critères, du poids multiplié par la valeur du critère. Chaque valeur est un
+entier ≥ 0, et la plus faible est la meilleure.
 
-Ordre par défaut : **écart au plafond a priori** le plus faible (§ 5.5), puis
-**excédent de collisions**, puis **collisions cumulées**, puis rencontres
-répétées, puis **redondance d'appartenance comme départage**.
+| critère | valeur qui classe | valeur que la recherche descend | famille |
+|---|---|---|---|
+| écart au plafond a priori | le plus grand écart (§ 5.5) | le plus grand écart, puis la somme des carrés des écarts | rencontres |
+| excédent de collisions | l'excédent (§ 5.4) | la même | contrainte |
+| collisions cumulées | les collisions cumulées | la même | contrainte |
+| tours hors objectif | selon le mode (§ 5.3) : les tours hors objectif ; ou les personnes jamais servies, puis les tours hors objectif ; ou le plus de tours hors objectif d'une personne, puis les tours hors objectif | les mêmes ; sous « l'équité d'abord », entre les deux, le nombre de personnes qui ont ce plus grand nombre de tours hors objectif, zéro quand il est nul | contrainte |
+| rencontres répétées et retours | les rencontres répétées choisies sous « nouveaux voisins » ; sinon, sous « nouvelle table » seule, les retours choisis | Σ_paires max(0, M − 1) sous « nouveaux voisins », plus les retours choisis sous « nouvelle table » | contrainte |
+| animateurs non rencontrés | Σ (B(p) − m(p)) (§ 5.4) | la même | raffinement |
+| redondance d'appartenance | Σ r(p) | la même | raffinement |
 
-Le premier rang se justifie par l'asymétrie des gains — rencontrer une personne
-de plus est un gain certain, rencontrer une appartenance de plus est un
-raffinement. Mettre la diversité au-dessus ferait **refuser un contact neuf**
-parce que l'appartenance du voisin est déjà croisée.
+**La liste est complète** : chaque critère y figure une fois, coché ou non. Deux
+critères y sont **seuls à leur palier** : ils se déplacent, ils ne partagent pas
+leur palier. L'écart au plafond a priori, parce que sa valeur nulle est le
+certificat du § 5.5 et qu'une somme pondérée le noierait dans d'autres unités.
+Les rencontres répétées et les retours, parce que leurs deux valeurs ne
+s'échangent pas au même taux contre un autre critère : une paire réunie trois
+fois coûte deux à la recherche et un au classement, un retour coûte un à la
+recherche et rien au classement sous « nouveaux voisins ». Seul à son palier, le
+critère ne compare que l'ordre de ses deux valeurs, qui baissent ensemble ;
+pondéré avec un autre, il ferait retenir par la recherche un plan que le
+classement range sous un plan qu'elle a rejeté. Sous les modes « chacun au moins
+une fois » et « l'équité d'abord », les tours hors objectif sont seuls à leur
+palier eux aussi : ils comparent deux valeurs l'une après l'autre, qu'une somme
+pondérée confondrait — une personne jamais servie s'y échangerait contre
+quelques tours hors objectif. Sous le mode par défaut, ils se pondèrent comme
+les autres. Le mode qui compare deux valeurs se refuse tant que le critère
+partage son palier, et l'éditeur n'offre pas de l'y joindre sous ces modes
+(§ 5.9) : changer de mode ne déplace aucun critère.
 
-**Les deux rangs de collision sont dans cet ordre, et l'inverse serait faux.**
-Le § 5.4 le démontre en trois plans : classer d'abord sur les collisions
-cumulées — comme classer d'abord sur les paires distinctes — met en tête le plan
-qui fait passer toute la soirée aux deux mêmes collègues, parce qu'il en porte le
-moins. L'excédent d'abord, le volume ensuite : un plan qui répartit six collisions
-sur six paires passe devant un plan qui en concentre quatre sur une seule.
+**Les commandes donnent le poids 1 à un critère seul à son palier, poids que
+l'écran ne montre pas.** Seul, un poids ne change aucun ordre : la liste qu'une
+commande écrit le ramène à 1, et deux listes de même effet qu'elle range
+s'écrivent pareil. La lecture d'un fichier garde le poids écrit d'un critère
+seul à son palier, hors des critères que le § 8.9 tient au poids 1 : une liste
+de même effet que l'ordre par défaut s'y lit, et se réécrit présente (§ 8.9).
+Un critère qui rejoint un palier y entre au poids 1. Changer de mode réécrit la
+liste ainsi rangée, sans qu'aucun critère change de palier.
+
+**Ordre par défaut** : écart au plafond a priori, puis excédent de collisions,
+puis collisions cumulées, puis tours hors objectif, puis rencontres répétées et
+retours, puis animateurs non rencontrés, puis redondance d'appartenance, chacun
+seul à son palier, sous le mode « le plus de places servies ». L'**ordre fixe de
+référence** est la liste écart, excédent, cumulées, rencontres répétées,
+redondance, chacun seul à son palier : l'ordre par défaut sans les deux critères
+des objectifs et des animateurs. Sous l'ordre par défaut, sans objectif de table
+et sans la case des animateurs, quel que soit le mode : sous toute combinaison
+des cases du § 5.3, les plans à graine égale sont ceux de l'ordre fixe de
+référence ; sous les quatre cases cochées, le classement et sa phrase le sont
+aussi. Une case décochée retire son critère du classement et de la phrase
+(§ 5.3) ; « nouvelle table » cochée seule y fait classer les retours choisis. Un
+événement qui ne règle rien n'écrit rien (§ 8.9) ; « Rétablir l'ordre par
+défaut » retire le réglage.
+
+**L'ordre par défaut se justifie par l'asymétrie des gains.** Il met l'écart au
+plafond a priori en tête : rencontrer une personne de plus est un gain certain,
+rencontrer une appartenance de plus, ou un animateur de plus, un raffinement.
+Mettre la diversité au-dessus ferait **refuser un contact neuf** parce que
+l'appartenance du voisin est déjà croisée. Il met l'excédent de collisions
+devant les collisions cumulées : le § 5.4 le démontre en trois plans, classer
+d'abord sur les collisions cumulées — comme classer d'abord sur les paires
+distinctes — met en tête le plan qui fait passer toute la soirée aux deux mêmes
+collègues, parce qu'il en porte le moins. L'excédent d'abord, le volume
+ensuite : un plan qui répartit six collisions sur six paires passe devant un
+plan qui en concentre quatre sur une seule. L'opérateur qui inverse ces deux
+paliers remet ce plan en tête ; l'éditeur le permet, l'ordre par défaut ne le
+fait pas.
+
+**La recherche et le classement compilent la même liste.** La recherche descend
+un n-uplet, une composante par palier — deux pour l'écart au plafond a priori,
+le plus grand écart puis la somme des carrés ; deux sous « chacun au moins une
+fois » et trois sous « l'équité d'abord » pour les tours hors objectif, seuls à
+leur palier —, chaque composante étant la somme pondérée des valeurs de
+recherche de son palier. Le classement compare, palier par palier, les sommes
+pondérées des valeurs qui classent — un critère seul à son palier qui en classe
+deux les compare l'une après l'autre —, puis l'identifiant croissant. Ce que la
+recherche a de plus sert à la conduire, jamais à classer : la somme des carrés
+façonne la descente vers le plafond, le nombre de personnes au plus de tours
+hors objectif façonne celle de « l'équité d'abord », et le critère des
+rencontres répétées descend l'excès de chaque paire et les retours là où il
+classe sur les paires revues. Le poids que la recherche applique est celui que
+l'écran montre : aucun poids interne, que l'opérateur ne verrait pas, ne fait
+l'ordre.
+
+**Une fois l'écart au plafond a priori annulé, la recherche passe les
+contraintes devant.** Un palier est de la famille « raffinement » quand tous ses
+critères le sont ; un seul critère d'une autre famille en fait un palier
+« contrainte », sauf le palier de l'écart, seul de la famille « rencontres ». Dès
+que sa meilleure affectation porte un plus grand écart nul, la recherche compare
+les paliers dans l'ordre où le palier de l'écart descend juste avant le premier
+palier « raffinement » qui le suit — à la fin s'il n'y en a pas —, les autres
+gardant leur ordre : elle peut perdre une rencontre le temps de défaire une
+collision, puis la reprendre. Sous l'ordre par défaut, cela compare excédent,
+cumulées, tours hors objectif, rencontres répétées et retours, l'écart,
+animateurs, redondance. Le classement, lui, suit toujours l'ordre réglé.
+
+**Tant que l'écart n'est pas annulé, la somme des carrés précède tous les
+paliers qui suivent l'écart.** Là où le plus grand écart ne peut pas descendre à
+zéro — le diagnostic en donne le plancher (§ 5.6) —, la bascule n'a jamais
+lieu : un palier rangé après l'écart ne départage que des affectations de même
+somme des carrés, et pèse dans la recherche à peine plus qu'un départage. Un
+critère rangé après l'écart ne coûte donc aucune rencontre à personne ; pour
+qu'il pèse sur une soirée tendue, l'opérateur le range devant l'écart, et
+accepte de perdre des rencontres pour lui.
+
+**Un critère décoché ou sans objet** (§ 5.3) sort de la recherche comme du
+classement ; un palier dont aucun critère ne compte disparaît, et les autres
+gardent leur ordre.
+
+**Le classement se départage sans arbitraire.** Les clés sont des entiers
+exacts. Une valeur qui classe est au plus le nombre de couples (paire, tour),
+C(N, 2)·R ; la clé d'un palier, au plus 100 fois la somme de cinq telles
+valeurs ; la somme des carrés, seule à sa composante, au plus N·(N − 1)² ; les
+valeurs des modes des objectifs, au plus N·R. Pour N ≤ 100 000 et R ≤ 100,
+aucune n'approche 2⁵³, et la mémoire que la recherche alloue aux paires (N²)
+borne N bien en deçà. Deux propositions égales sur tous les paliers se
+départagent par l'identifiant croissant. L'ordre des paliers est celui de la
+liste écrite. L'ordre des critères dans un palier ne change aucune clé ; il est
+pourtant fixé, celui du tableau ci-dessus, pour que deux listes de même effet
+s'écrivent pareil : les commandes et le moteur refusent un palier rangé
+autrement, et la lecture d'un fichier le range (§ 8.9).
+
+**La phrase de l'ordre dit les paliers.** Elle nomme les paliers appliqués, dans
+l'ordre, séparés par « puis » ; un palier de plusieurs critères se lit
+« ensemble, » suivi de chaque critère et de son poids. Elle nomme la valeur que
+le palier applique : « rencontres répétées », ou « retours » sous « nouvelle
+table » seule ; un critère qui en classe deux les nomme l'une après l'autre,
+séparées par « puis » comme deux paliers — « personnes jamais servies, puis
+tours hors objectif ». L'éditeur, lui, écrit le nom complet du critère. Sous
+l'ordre par défaut, sans objectif et sans la case des animateurs, les quatre
+cases cochées, elle est mot pour mot celle de l'ordre fixe de référence.
 
 **Les paires distinctes ne sont pas une clé de tri** ; elles restent une colonne
 affichée, et se retrouvent de toute façon par soustraction. Trois clés pour deux
 quantités indépendantes feraient un départage qui ne départage rien.
 
-**Le plafond a priori par personne se calcule à chaque évaluation** d'une
-charge nouvelle — une même charge figée relit sa table — : sa
-maximisation est mesurée et ne coûte presque rien (§ 17, point 4), et le premier
-critère s'applique toujours. Le chemin où il manque reste celui du moteur, que
-l'application n'emprunte pas : le premier critère y est **sauté** et la page
-nomme celui qu'elle applique à sa place — un classement qui se tait sur le
-critère qu'il n'a pas pu appliquer se lit comme un classement complet.
+**Le plafond a priori par personne se calcule à chaque évaluation** d'une charge
+nouvelle — une même charge figée relit sa table — : sa maximisation est mesurée
+et ne coûte presque rien (§ 17, point 4), et l'écart au plafond a priori
+s'applique toujours. Le chemin où il manque reste celui du moteur, que
+l'application n'emprunte pas : ce critère y est **sauté**, avec son palier, où
+il est seul, et la page nomme le palier qu'elle applique à sa place — un
+classement qui se tait sur le critère qu'il n'a pas pu appliquer se lit comme un
+classement complet.
 
 Un départage ne se déclenchant presque jamais, les chiffres de diversité sont
 affichés **en colonne pour chaque proposition**, et non pour la seule gagnante.
 Le tableau réunit ses colonnes de mesure voisines sous cinq intitulés de groupe
 — les personnes rencontrées, les collisions d'appartenance, les rencontres
 répétées et les retours, la diversité d'appartenance, le manque et le plafond a
-priori — sans changer l'en-tête ni l'explication d'aucune colonne ; ses nombres
-s'alignent à droite en chiffres tabulaires. La ligne du placement retenu porte
-la teinte de l'état Retenu, et la proposition retenue, la pastille « retenue ».
+priori —, et sous un sixième, « les objectifs des tables et les animateurs »,
+quand l'un de ces deux critères est coché et a un objet : ses colonnes sont,
+pour le premier, les tours hors objectif et le minimum des tours selon
+l'objectif, précédés des personnes jamais servies sous « chacun au moins une
+fois » et du plus de tours hors objectif d'une personne sous « l'équité
+d'abord » ; pour le second, le minimum des animateurs rencontrés et les
+animateurs non rencontrés ; chacune présente quand son critère compte (§ 5.3).
+Chacun de ces deux minimums porte sur tous les concernés, sans ses lignes
+secondaires (§ 5.4). Le regroupement ne change l'en-tête ni l'explication
+d'aucune colonne ; ses nombres s'alignent à droite en chiffres tabulaires. La
+ligne du placement retenu porte la teinte de l'état Retenu, et la proposition
+retenue, la pastille « retenue ».
 
 ### 5.8 Le placement à la main
 
@@ -755,6 +1184,35 @@ dans l'outil.
   personne à deux places sur un même tour ; une personne exclue.
 - Déposer quelqu'un sur une place réservée à un autre, ou l'échanger avec elle.
   **Déplacer la réservation** est une commande séparée et explicite.
+- Une saisie d'étiquettes vide — des blancs ou des séparateurs seuls —, une
+  étiquette de plus de 40 caractères ou qui porte un caractère de contrôle ou
+  invisible, une vingt-et-unième étiquette sur une personne ou dans un
+  objectif : refusé contre le champ, le texte disant la forme attendue. Les
+  séparateurs ne se refusent pas : ils découpent la saisie en plusieurs
+  étiquettes (§ 4.5).
+- Un objectif pour un tour qui n'existe pas : refusé. Un objectif sans étiquette
+  n'existe pas : vider sa liste est refusé, et le refus propose la commande
+  « Retirer l'objectif » quand le couple (table, tour) en porte un.
+- Un poids hors de 1 à 100, ou non entier : refusé contre le champ. Joindre un
+  critère au palier de l'écart au plafond a priori ou à celui des rencontres
+  répétées et retours, ou joindre ces deux-là à un autre : l'éditeur ne l'offre
+  pas (§ 5.7) ; sous « chacun au moins une fois » et « l'équité d'abord », pas
+  davantage pour les tours hors objectif.
+- Choisir « chacun au moins une fois » ou « l'équité d'abord » quand les tours
+  hors objectif partagent un palier : refusé contre le choix, le texte nommant
+  le palier et disant de séparer le critère d'abord ; le refus ne propose pas de
+  remède, puisque séparer d'office déplacerait des critères que le choix ne
+  nomme pas. Le mode reste celui d'avant ; aucun critère ne se déplace par un
+  choix de mode.
+- « Retirer l'objectif » et « Rétablir l'ordre par défaut » n'ouvrent pas de
+  fenêtre à confirmer : chacun détruit un seul objet, nommé contre sa commande,
+  qu'un retour à l'instant précédent rend.
+- **Accepté et signalé**, comme une table entièrement gelée : un objectif auquel
+  aucune personne présente ne correspond — la table ne servira personne à ce
+  titre —, signalé contre l'objectif ; une étiquette d'objectif qu'aucune
+  personne ne porte, exclues comprises, signalée avec l'orthographe voisine
+  quand il en existe une ; un critère coché sans objet (§ 5.3), marqué « sans
+  objet » dans l'ordre des priorités.
 
 Un refus **nomme sa cause et propose le geste qui le lève**, et se manifeste
 **sur la place concernée**, pas dans une boîte de dialogue. Seul un geste qui
@@ -764,14 +1222,15 @@ apprend à cliquer sans lire, et le premier refus qui comptait passe inaperçu.
 **Quand aucun geste ne lève le refus, il nomme sa cause seule.** Ainsi d'une
 valeur qui se corrige dans le champ même, dont le texte dit la valeur attendue —
 moins de deux sièges, une saisie non entière, moins d'un tour, un libellé ou un
-nom vides ; d'une cible absente ou disparue entre-temps — une personne, une
-proposition, une réservation, un titre, des réservations à convertir —,
-qu'aucune commande ne fait revenir et sur laquelle l'interface n'offre pas le
-geste ; d'un compteur au bout de sa règle, d'un plan qui n'est plus bloqué, d'un
-geste sans effet, et d'un refus du CSV relayé par l'import, qui se lève dans le
-fichier ou dans l'association de ses colonnes — `NOM_NON_ASSOCIE` quand aucune
-colonne n'est associée au nom. Un remède posé pour la forme enverrait
-l'opérateur vers un geste qui ne change rien.
+nom vides, une étiquette mal formée, un poids hors de son domaine ; d'une cible
+absente ou disparue entre-temps — une personne, une proposition, une
+réservation, un titre, des réservations à convertir —, qu'aucune commande ne
+fait revenir et sur laquelle l'interface n'offre pas le geste ; d'un compteur au
+bout de sa règle, d'un plan qui n'est plus bloqué, d'un geste sans effet, et
+d'un refus du CSV relayé par l'import, qui se lève dans le fichier ou dans
+l'association de ses colonnes — `NOM_NON_ASSOCIE` quand aucune colonne n'est
+associée au nom. Un remède posé pour la forme enverrait l'opérateur vers un
+geste qui ne change rien.
 
 ### 5.10 Le coût d'évaluation
 
@@ -781,6 +1240,38 @@ le temps de génération. Le moteur les met à jour **de façon incrémentale**,
 les seules tables modifiées. C'est une exigence de faisabilité : sans elle,
 l'objectif existe dans l'interface et ne converge pas dans le temps que
 l'opérateur accorde.
+
+**Les grandeurs nouvelles se tiennent à jour de la même façon.** Un échange qui
+fait passer une personne d'une table à une autre au tour r change ses tours
+servis d'au plus un, lu dans une table de correspondance calculée une fois par
+configuration, indexée par **objectif distinct** — deux objectifs de même règle
+et de mêmes étiquettes n'en font qu'un — : personnes × objectifs, jamais
+personnes × tables × tours, qui pèserait des dizaines de mégaoctets à cent
+tours. Les valeurs des trois modes suivent en temps constant : les tours hors
+objectif changent de un ; les personnes jamais servies, quand s(p) passe de zéro
+à un ou de un à zéro ; le plus de tours hors objectif d'une personne et le
+nombre de personnes qui l'ont, par un histogramme des P(p) − s(p), où le plus
+grand ne bouge que de un, comme le plus grand écart au plafond a priori. Les
+animateurs rencontrés ne changent que pour la personne déplacée : qui anime au
+tour r y est fixé et ne se déplace pas à ce tour. Le déplacé quitte les
+animateurs de sa table de départ à ce tour et rejoint ceux de sa table
+d'arrivée ; un compteur par couple (personne, animateur), N × A octets pour A
+animateurs tant que R ne dépasse pas 255, dit quand une rencontre apparaît ou
+disparaît. La recherche ne tient ces compteurs que quand le critère des
+animateurs compte, coché et avec un objet : sinon aucune composante ne les lit,
+et elle ne paie rien pour eux, même quand des personnes animent. Le coût d'un
+mouvement reste de l'ordre des sièges des deux tables, et un n-uplet de dix
+composantes au plus se compose et se compare dans le même ordre de grandeur que
+celui de six : mesuré sur la grande démonstration, un mouvement coûte quelques
+pour cent de plus que sous l'ordre fixe de référence sans objectif, et moins
+d'un dixième de plus avec des étiquettes, des objectifs, la case des animateurs
+et un ordre réglé.
+
+**L'ordre des priorités et le mode ne touchent pas au hasard.** Ils changent la
+façon dont deux scores se comparent, jamais les tirages : aucun ne s'ajoute ni
+ne se déplace (§ 15.5, point 3). La liste se lit dans l'ordre où le fichier
+l'écrit, jamais par le parcours des clés d'un objet, et les sommes d'un palier
+sont des entiers exacts.
 
 **La recherche s'arrête sur un compte, jamais sur une durée** — un nombre
 d'itérations, ou un nombre de mouvements consécutifs sans amélioration — fixé
@@ -858,9 +1349,11 @@ un plan que les indicateurs affichés classeront **sous** un plan qu'elle a
 rejeté, et l'opérateur verra le classement contredire la proposition.
 
 Le logiciel **éprouve l'incrémental contre le recalcul complet** sur chaque
-configuration de démonstration, **à 1, 10, 100, 1 000 et 10 000 mouvements** —
-non au seul terme : comparer à la fin laisse passer une dérive qui se compense,
-et ne dit pas à quel ordre de grandeur le défaut affleure, qui est précisément le
+configuration de démonstration — et sur une configuration qui porte des
+objectifs de table et des animateurs, les deux critères cochés, sous chacun des
+trois modes des objectifs —, **à 1, 10, 100, 1 000 et 10 000 mouvements** — non
+au seul terme : comparer à la fin laisse passer une dérive qui se compense, et
+ne dit pas à quel ordre de grandeur le défaut affleure, qui est précisément le
 chiffre que l'épreuve doit produire (§ 14.10).
 
 ---
@@ -1183,8 +1676,8 @@ cosmétique** : en deçà de quatre convives — la formule atteint 70 cm à 3,6
 places — ce n'est plus le périmètre qui borne la table mais le plateau, et la
 formule seule dessinerait des guéridons. Les deux valeurs sont des **réglages
 par défaut, non des normes vérifiées** ; un diamètre saisi à la main l'emporte,
-dès que le fichier d'état peut le porter : le format 1 n'a pas de champ pour
-lui, et toute table s'y dessine selon la formule.
+dès que le fichier d'état peut le porter : le format du fichier n'a pas de champ
+pour lui, et toute table s'y dessine selon la formule.
 
 **Les étiquettes ne sont pas à l'échelle, le mobilier l'est.** Une liste de dix
 noms couvre plusieurs mètres carrés fictifs. **Le plan à l'échelle du bâtiment
@@ -1249,10 +1742,12 @@ et n'est jamais nécessaire pour ouvrir.
 
 | | |
 |---|---|
-| participants | avec identifiant entier, titre pressenti, notes |
+| participants | avec identifiant entier, titre pressenti, notes, **étiquettes** |
 | tables | capacité **et son état** : `sieges: null` (suit le défaut) ou un entier (surcharge) |
 | le **nombre de sièges par défaut** de l'événement | |
 | tours, réglages, réservations avec leur portée, **titres de place** | |
+| **objectifs des tables**, avec leur portée et leur règle propre | |
+| **règle par défaut** et **mode des objectifs**, **ordre des priorités** | dans les réglages, absents tant qu'ils valent leur défaut |
 | placements engendrés, celui qui est retenu, état du plan | |
 | **positions en centimètres**, et l'unité déclarée | |
 | **filiation** : nom et identifiant de la source, instant d'origine | |
@@ -1602,7 +2097,7 @@ séance suivante.
 | fichier | contenu | écriture |
 |---|---|---|
 | `<nom>.gtt.json` | l'état courant, complet | réécrit en entier à chaque entrée |
-| `<nom>.gtt-journal.jsonl` | les entrées d'historique | **ajout en fin**, une ligne par entrée |
+| `<nom>.gtt-journal.jsonl` | les entrées d'historique | **ajout en fin**, une ligne par entrée ; réécrit en entier, de façon atomique, à la conversion de format (§ 8.8) et après des lignes écartées |
 
 Les deux portent **l'identifiant interne de l'événement**, et c'est lui qui les
 apparie — jamais leurs noms.
@@ -1698,10 +2193,29 @@ plateforme**.
   le fichier illisible et propose la version précédente, puis le dernier instant
   du journal. Créer un événement vide est la défaillance qui perd une soirée,
   parce que l'enregistrement automatique la rend définitive en une seconde.
-- **Version de format.** Un fichier **plus récent** s'ouvre en lecture seule
-  sans passage possible en écriture ; un fichier **plus ancien** se convertit au
-  premier geste qui l'écrit, jamais à l'ouverture ni au passage en écriture, qui
-  ne réécrit pas le fichier d'état.
+- **Version de format.** Le format courant est le **2**. Il ajoute au format 1
+  des champs **facultatifs** seulement (§ 8.9) : un fichier de format 1 se lit
+  comme un fichier de format 2 qui n'en porte aucun, sans fonction de
+  conversion, et un fichier qui annonce le format 1 en portant déjà l'un d'eux
+  se lit aussi. Un fichier **plus récent** s'ouvre en lecture seule sans passage
+  possible en écriture ; un fichier **plus ancien** se convertit au premier
+  geste qui l'écrit, jamais à l'ouverture ni au passage en écriture, qui ne
+  réécrit pas le fichier d'état. **Son journal se convertit avec lui** : un
+  journal ouvert sous un format plus ancien se lit, et le premier geste réécrit
+  le journal entier au format courant, historique conservé, et l'état quand il
+  l'écrit. Sinon, des entrées du format 2 s'ajouteraient sous une ouverture du
+  format 1, qu'une construction ancienne lirait comme sienne avant de tronquer
+  l'historique à la première entrée qu'elle ne sait pas lire. Un jalon, qui
+  n'écrit pas l'état, convertit le journal seul : l'état garde son format
+  jusqu'au geste suivant, et une construction du format 1 ouvre alors
+  l'événement en lecture seule, son journal étant plus récent. Quand ce journal
+  vit sous un autre nom que l'état — un renommage interrompu (§ 8.7) —, cette
+  lecture seule n'est plus garantie : une construction du format 1 qui ne
+  l'apparie pas ouvrirait l'état en écriture, sans son historique. Le format
+  monte parce que les étiquettes et les objectifs sont de la saisie : une
+  construction du format 1 refuserait comme illisible un fichier qui les porte
+  et proposerait un secours qui les perd ; devant un fichier du format 2, elle
+  s'ouvre en lecture seule.
 - **Une seule séance en écriture**, le verrou se prenant **à l'entrée en mode
   écriture** et non à l'ouverture. Le verrou porte l'instant de sa prise, que la
   séance lit à l'horloge unique de l'application (§ 19.4), comme toute date
@@ -1772,18 +2286,17 @@ retrouve-t-il ?*
 
 #### Un réglage facultatif : la cible de la somme de redondance
 
-Les réglages de l'événement portent un champ **facultatif**,
-`cibleRedondance`, un entier ≥ 0 : la cible à laquelle la liste des événements
-compare la somme de redondance Σ r(p) du retenu (§ 8.1). **Absent, il vaut
-1000.** Le format reste le format 1 : un fichier qui ne le porte pas — chaque
-fichier écrit avant lui, chaque démonstration livrée — se lit tel quel, à la
-cible 1000, et s'écrit octet pour octet comme avant. Une valeur négative, non
-entière, hors des entiers exacts ou d'une autre sorte est une faute de forme du
-fichier (§ 8.8). La commande « Cible de la somme de redondance », un champ de la
-section des propositions, le pose — une entrée d'historique, refusée en lecture
-et sur un plan bloqué — et le retire quand la cible revient à 1000 : deux
-fichiers de même cible s'écrivent pareil. Un correctif du journal (§ 8.6) le
-pose quand il apparaît et le retire quand il disparaît.
+Les réglages de l'événement portent un champ **facultatif**, `cibleRedondance`,
+un entier ≥ 0 : la cible à laquelle la liste des événements compare la somme de
+redondance Σ r(p) du retenu (§ 8.1). **Absent, il vaut 1000.** Un fichier qui ne
+le porte pas — chaque fichier écrit avant lui, chaque démonstration livrée — se
+lit à la cible 1000, et s'écrit sans lui. Une valeur négative, non entière, hors
+des entiers exacts ou d'une autre sorte est une faute de forme du fichier
+(§ 8.8). La commande « Cible de la somme de redondance », un champ de la section
+des propositions, le pose — une entrée d'historique, refusée en lecture et sur
+un plan bloqué — et le retire quand la cible revient à 1000 : deux fichiers de
+même cible s'écrivent pareil. Un correctif du journal (§ 8.6) le pose quand il
+apparaît et le retire quand il disparaît.
 
 #### Deux champs facultatifs : le placement daté
 
@@ -1792,10 +2305,9 @@ de la forme `AAAA-MM-JJTHH:MM:SS±HH:MM` — celle de l'horloge de l'application
 décalage local compris —, écrit en dernière clé de son objet, après le
 placement. Pour le retenu, il est l'instant où le placement a pris sa forme
 courante ; pour une proposition, celui de la génération qui l'a produite.
-**Absent, il est inconnu** : le format reste le format 1, et un fichier écrit
-avant lui — chaque démonstration livrée comprise — se lit tel quel et s'écrit
-octet pour octet comme avant. Une valeur d'une autre forme est une faute de forme
-du placement, nommée par son chemin (§ 8.8).
+**Absent, il est inconnu**, et un fichier écrit avant lui — chaque démonstration
+livrée comprise — se lit tel quel et s'écrit sans lui. Une valeur d'une autre
+forme est une faute de forme du placement, nommée par son chemin (§ 8.8).
 
 Le geste qui change le retenu le date de l'instant du geste ; un geste qui le
 reconstruit sans le changer garde l'horodatage reçu. Une génération date les
@@ -1805,6 +2317,47 @@ instant (§ 8.3) le restitue avec le reste de l'état — un badge réédité su
 même placement redevient identique au premier (§ 11.8). Les sorties le lisent
 là, et nulle part ailleurs : le pied des pages, la feuille de contrôle, le badge
 (§ 11.4, § 11.7) et le nom du fichier de la planche (§ 11.6).
+
+#### Les champs facultatifs des étiquettes, des objectifs et des priorités
+
+Chacun est **absent tant qu'il vaut son défaut** et s'écrit après les clés du
+format 1 de son objet, dans l'ordre du tableau qui suit — pour les réglages,
+`cibleRedondance`, `regleObjectifs`, `respecterObjectifs`, `modeObjectifs`,
+`rencontrerAnimateurs`, `priorites` : un événement qui n'emploie ni étiquette,
+ni objectif, ni ordre réglé s'écrit comme un fichier du format 1, au numéro de
+format près. Chacun se pose par une commande — une entrée d'historique, refusée
+en lecture et sur un plan bloqué — qui le retire quand il revient à son défaut :
+deux états de même valeur effective posés par les commandes s'écrivent pareil.
+Un fichier lu garde ce qu'il écrit : une liste `priorites` dont un critère seul
+à son palier porte un poids autre que 1 se lit telle quelle, même de même effet
+que l'ordre par défaut, et ne revient à l'absence que par une commande. Un
+correctif du journal (§ 8.6) le pose quand il apparaît et le retire quand il
+disparaît. Un champ écrit à son défaut, ou sous toute autre forme que celle du
+tableau, est une faute de forme du fichier, nommée par son chemin (§ 8.8).
+L'ordre, lui, ne fait pas faute : des étiquettes, des objectifs ou les critères
+d'un palier rangés autrement se lisent, et s'écrivent rangés.
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `etiquettes` | chaque participant | aucune étiquette | liste non vide d'au plus 20 étiquettes (§ 4.5), sans doublon exact, écrite triée par unités de code |
+| `objectifs` | chaque table | aucun objectif | liste non vide d'objets `{portee, tour, regle, etiquettes}` ; `portee` `tous` ou `tour` ; `tour` nul sous `tous`, de 1 à R sous `tour` ; `regle` `ou`, `et` ou nul (suit le défaut) ; `etiquettes` sous la forme de celles d'un participant ; au plus un objectif par portée et tour ; écrite la soirée d'abord, puis les tours croissants |
+| `regleObjectifs` | réglages | `ou` | `ou` ou `et` ; présent seulement à `et` |
+| `respecterObjectifs` | réglages | coché | booléen ; présent seulement à faux |
+| `modeObjectifs` | réglages | le plus de places servies | `chacun` (chacun au moins une fois) ou `minimum` (l'équité d'abord) ; présent seulement hors du défaut |
+| `rencontrerAnimateurs` | réglages | décoché | booléen ; présent seulement à vrai |
+| `priorites` | réglages | l'ordre par défaut (§ 5.7) | liste de paliers, chacun une liste non vide de `{critere, poids}` ; chaque critère du § 5.7 une fois ; l'écart au plafond a priori et les rencontres répétées et retours seuls à leur palier, au poids 1 ; sous `modeObjectifs` présent, les tours hors objectif aussi ; poids entiers de 1 à 100, un critère seul à son palier hors de ceux-là gardant le poids écrit (§ 5.7) ; chaque palier écrit dans l'ordre du tableau du § 5.7 ; absent quand il égale le défaut, chaque critère seul à son palier au poids 1 |
+
+La liste `priorites` est complète : une liste qui ne nomme pas un critère est
+une faute de forme. Le lecteur de l'ordre sait compléter une liste qui ne
+nommerait pas un critère — chaque critère manquant à sa place de l'ordre par
+défaut, seul à son palier, au poids 1 — ; au format courant l'analyse la refuse
+avant, et ce complément sert la liste d'un format qui ne connaissait pas un
+critère.
+
+Un objectif appartient à sa table : supprimer la table l'emporte, et la fenêtre
+qui annonce la suppression le compte (§ 2.1). Retirer un tour détruit les
+objectifs de ce tour, que l'annonce compte avec les réservations (§ 2.1, étape
+5).
 
 #### La forme positionnelle
 
@@ -1846,6 +2399,13 @@ déterminent le plan que pour l'algorithme de recherche qui l'a produit, dont
 l'ordre des tirages et les règles d'acceptation font partie du résultat : une
 proposition produite par une autre version du moteur n'est pas garantie
 régénérable.
+
+**« À configuration égale » comprend les étiquettes, les objectifs, la règle par
+défaut, le mode des objectifs, les cases du § 5.3 et l'ordre des priorités.**
+Les changer ne met aucune proposition en dérive : elle reste comparable, se
+reclasse sous l'ordre courant (§ 5.7), et sa régénération rend un autre plan,
+comme après un changement de contrainte. Seuls les participants, les tables, les
+capacités et les tours font une dérive (§ 9).
 
 Puis, **par tour** : la liste des tables, chacune étant la liste de ses
 occupants **dans l'ordre des sièges** — leurs **identifiants entiers**, et `null`
@@ -2051,6 +2611,7 @@ appartenances sans rien signaler.
 | `titre_pressenti` | non | synonymes : `titre`, `rôle` — **informatif, ne pourvoit aucune place** |
 | `exclu` | non | liste fermée ; vide vaut `non` |
 | `notes` | non | texte libre, jamais interprété |
+| `etiquettes` | non | plusieurs par cellule, séparées par `,`, `;`, `\|` ou une fin de ligne (§ 4.5) ; synonymes : `étiquette`, `mots-clés` |
 
 Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents ni
 des espaces**. **Deux colonnes reconnues sous le même nom** ne se départagent
@@ -2115,6 +2676,21 @@ une appartenance nommée « ».
 > deux collègues, G est gonflé, et A_max avec lui. Le défaut est muet — aucun
 > indicateur ne s'en aperçoit.
 
+**Les étiquettes se lisent par la règle de la saisie** (§ 4.5) : la cellule se
+découpe sur ses séparateurs, chaque morceau se met en forme, les morceaux vides
+s'écartent, et deux morceaux de même clé n'en font qu'un. Elles se réconcilient
+ensuite sur la clé normalisée avec les étiquettes de l'événement — celles des
+personnes, hors du mode « remplacer », qui les retire, et celles des objectifs
+de table, qui restent sous tout mode parce qu'elles appartiennent aux tables —,
+puis entre les lignes ; le rapport nomme chaque groupe d'orthographes fondues et
+son nombre de lignes, en information. Une étiquette mal formée — plus de 40
+points de code, ou un caractère de contrôle ou invisible autre que la fin de
+ligne — refuse la ligne (`ETIQUETTE_MAL_FORMEE`), une vingt-et-unième étiquette
+sur une même ligne aussi (`ETIQUETTES_TROP_NOMBREUSES`) : la tronquer ou
+l'écarter en silence ferait manquer un objectif sans que rien ne le dise. En
+mise à jour, une cellule non vide **remplace** les étiquettes de la personne, et
+une cellule vide les garde : un CSV n'efface pas les étiquettes.
+
 L'aperçu et le rapport classent chacun de leurs messages en **refus** — le refus
 global, les lignes refusées —, **avis** — les doublons, les homonymes d'une mise
 à jour, les cellules sur plusieurs lignes qui portent le séparateur — ou
@@ -2174,10 +2750,24 @@ nombre de personnes qui la portent, exclues comprises ; dans la grille,
 l'appartenance s'affiche en pastille de sa teinte (§ 12.7), le titre pressenti
 et l'exclusion en pastilles à icône.
 
+La fiche d'une personne porte ses étiquettes, en pastilles **neutres** — la
+teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7) —, chacune avec sa
+commande « Retirer », et un champ qui en ajoute une ou plusieurs, séparées comme
+dans une cellule CSV ; la saisie passe par la même lecture que l'import (§ 4.5,
+§ 10.1). Quand l'événement porte des étiquettes, une légende des étiquettes suit
+celle des appartenances, chacune avec le nombre de personnes qui la portent,
+exclues comprises.
+
 **La liste s'exporte en CSV dans la forme exacte qu'il importe.** L'aller-retour
 est éprouvé par un test qui importe, exporte et compare champ par champ : il
 fait du fichier une sauvegarde, et de l'export le gabarit que personne n'a
 besoin de documenter.
+
+L'export écrit toujours la colonne `etiquettes`, en dernière position, les
+étiquettes jointes par une virgule suivie d'une espace (`, `) ; le collage en
+bloc suit le même ordre de colonnes, la huitième étant celle des étiquettes. Les
+objectifs des tables s'exportent par leur propre CSV, dans la forme exacte qu'il
+importe (§ 10.4).
 
 ### 10.3 Les fichiers d'exemple livrés
 
@@ -2187,6 +2777,7 @@ besoin de documenter.
 | `exemples/participants_demo_grande.csv` | celle de la grande |
 | `exemples/participants_cas_limites.csv` | éprouve l'analyseur ; n'alimente aucune démonstration |
 | `exemples/participants_cas_limites_cp1252.csv` | même contenu, windows-1252, séparé par des virgules |
+| `exemples/objectifs_cas_limites.csv` | éprouve l'import des objectifs de table ; n'alimente aucune démonstration |
 
 **Un CSV ne reproduit pas une configuration** : un import de participants ne
 crée ni tables, ni tours, ni réservations, ni titres. Les deux premiers fichiers
@@ -2202,10 +2793,75 @@ ligne refusée faute de nom. Il **alimente aussi deux captures d'écran** du gui
 (§ 19.3) — l'aperçu d'import et son rapport —, qui sont les deux écrans où une
 fusion d'orthographes et un refus de ligne se montrent ensemble.
 
+Il porte aussi une colonne `Étiquettes`, en-tête accentué en casse mixte : une
+cellule à plusieurs étiquettes séparées par `,`, une séparée par `|`, une paire
+d'orthographes d'une même étiquette à fondre, et une cellule vide. Sa colonne
+non reconnue reste la dernière. Les deux fichiers `participants_demo_*.csv`,
+exports des démonstrations, portent la colonne `etiquettes`, vide ; les
+démonstrations elles-mêmes ne changent pas. Le fichier des objectifs exerce un
+numéro de table inconnu, un tour hors de la soirée, une règle inconnue, deux
+lignes pour une même table et un même tour, une orthographe qui se fond avec une
+étiquette des participants, et une table qui porte un objectif de soirée et un
+objectif de tour ; il alimente la capture d'écran de l'aperçu des objectifs
+(§ 19.3).
+
 Tous sont en **UTF-8 avec marque d'ordre d'octets, séparés par `;`** — la forme
-qu'un tableur francophone sous Windows rouvre sans manipulation — sauf le
-dernier. Noms, organisations et courriels sont **inventés** ; les courriels
-emploient le domaine réservé `.test`.
+qu'un tableur francophone sous Windows rouvre sans manipulation — sauf
+`participants_cas_limites_cp1252.csv`. Noms, organisations et courriels sont
+**inventés** ; les courriels emploient le domaine réservé `.test`.
+
+### 10.4 Les objectifs de table en CSV
+
+**Un second fichier, choisi par l'opérateur.** Les objectifs s'importent par
+leur propre CSV, jamais par une section du fichier des participants : chaque
+fichier garde son séparateur, son en-tête et son CSV des refus. L'opérateur dit
+ce qu'il importe — des participants ou des objectifs de table — avant l'aperçu ;
+le logiciel ne le devine pas, une liste de participants reçue portant souvent
+une colonne « Table » d'une soirée passée. Changer ce choix, l'aperçu ouvert,
+relit le même texte sous l'autre nature ; un collage depuis la grille des
+participants arrive sous « participants ».
+
+| en-tête | obligatoire | contenu |
+|---|---|---|
+| `table` | **oui** | le **numéro affiché** de la table, jamais son identifiant |
+| `tour` | non | vide pour la soirée, sinon un tour de 1 à R |
+| `objectif` | **oui** | les étiquettes, découpées comme la colonne `etiquettes` (§ 10.1) ; synonyme : `objectifs` |
+| `regle` | non | liste fermée, sans égard à la casse, aux accents ni aux espaces, comme `exclu` (§ 10.1) : `ou`, `une`, `au moins une` ; `et`, `toutes` ; vide pour suivre le défaut ; synonyme : `règle` |
+
+**Tout le § 10.1 vaut, sauf ce qui nomme les participants** : aperçu
+obligatoire, encodage en quatre temps, séparateur analysé, colonnes par en-tête,
+lignes valides importées et refusées réexportées avec `ligne` et `motif`, import
+entier en une entrée d'historique, refus en bloqué. Les étiquettes se
+réconcilient avec celles de l'événement — celles des personnes, exclues
+comprises, et celles des objectifs de table, hors du mode « remplacer », qui
+retire ces objectifs —, et le rapport nomme chaque fusion. En état retenu,
+l'import avertit que le classement des propositions peut changer ; il ne met
+aucune proposition en dérive (§ 8.9).
+
+**Deux modes.** *Mettre à jour* : chaque couple (table, tour) du fichier
+remplace l'objectif de ce couple, les autres restent. *Remplacer* : tous les
+objectifs de l'événement partent, puis ceux du fichier s'écrivent ; le logiciel
+annonce avant d'agir combien d'objectifs et de tables il touche.
+
+**Refus globaux** : ceux du § 10.1 hors `NOM_NON_ASSOCIE`, plus aucune colonne
+associée à `table` (`TABLE_NON_ASSOCIEE`) ou à `objectif`
+(`OBJECTIF_NON_ASSOCIE`), et un événement sans table (`OBJECTIFS_SANS_TABLE`),
+dont le remède mène à la section des tables. **Refus de ligne**, un motif par
+ligne, dans cet ordre : champs en trop ; numéro de table absent, non entier,
+inconnu, ou porté par deux tables ; tour non entier ou hors de la soirée ;
+objectif vide ; étiquette mal formée ou vingt-et-unième étiquette ; règle hors
+de la liste fermée — l'inconnu ne se lit jamais comme le défaut ; deuxième ligne
+pour un même couple (table, tour), qui nomme la première. **Avis** : après
+l'import, un objectif écrit par le fichier auquel aucune personne présente ne
+correspond ; l'aperçu ne le calcule pas.
+
+**L'export des objectifs** écrit `table;tour;objectif;regle`, une ligne par
+objectif, les tables par numéro affiché puis identifiant croissant, et pour
+chacune la soirée puis les tours croissants ; la règle s'écrit `ou`, `et`, ou
+vide quand l'objectif suit le défaut ; il est le gabarit de l'import et sa
+sauvegarde, et l'aller-retour s'éprouve comme celui des participants. La
+commande « Exporter les objectifs » se trouve dans la section des tables ; elle
+est permise en lecture et sur un plan bloqué : sortir n'est pas modifier.
 
 ---
 
@@ -2662,9 +3318,9 @@ page ; aucune ne se découpe, aucune ne doit entrer dans une pochette.
 **Toute impression passe par un écran d'aperçu**, que la commande « Imprimer… »
 de l'événement ouvre et qui se referme vers la section d'où il vient. Il offre
 **trois vues** : le plan, tour par tour ; la liste d'accueil ; la feuille par
-table. Le rapport de placement et la page de qualité s'imprimeront avec la page
-de qualité elle-même, à l'itération 5 : leurs lignes du tableau décrivent ce qui
-vient, non ce que l'aperçu offre. L'aperçu imprime la source que le plan montre
+table. Le rapport de placement et la page de qualité ne s'impriment pas : leurs
+lignes du tableau décrivent l'impression qui accompagne la page de qualité
+(§ 12), non ce que l'aperçu offre. L'aperçu imprime la source que le plan montre
 — le retenu, la proposition montrée, ou les seules réservations — et n'écrit
 rien dans l'événement : il vit en lecture et sur un plan bloqué. Sa commande
 « Imprimer » demande à la plateforme le papier et l'orientation de la vue : la
@@ -2949,11 +3605,11 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | noms longs | tronqués à une largeur **mesurée**, entiers dans l'infobulle et le tableau |
 | homonymes | distingués par leur appartenance ; la navigation se fait par identifiant |
 | le manque ne prend qu'une ou deux valeurs distinctes | une phrase portant les effectifs, non une courbe à deux marches |
-| deux propositions au même profil de manque | « indiscernables sur le manque » ; l'ordre explicite du § 5.7 les départage sur le critère suivant, et la page nomme lequel |
+| deux propositions au même profil de manque | « indiscernables sur le manque » ; l'ordre des priorités du § 5.7 les départage sur le palier suivant, et la page le nomme |
 | deux profils qui alternent plusieurs fois | les trois effectifs de rangs, **sans** rang de bascule ; le jumeau tabulaire porte le détail |
 | populations mesurées différentes entre deux propositions — ce que produit la dérive du § 9 sur des générations accumulées | ni courbe ni dominance : la page nomme les personnes exclues de part et d'autre et le dit **non comparable** |
 | le plafond réalisé d'une personne vaut 0 | son manque vaut 0 et n'enseigne rien : la page marque le point et renvoie à l'écart d'itinéraire. Un manque nul n'est jamais lu comme « bien servi » sans son plafond à côté |
-| le plafond a priori n'a pas pu être maximisé | l'écart d'itinéraire s'écrit **« inconnu »**, jamais 0 ; le certificat reste hors d'atteinte (§ 5.5) et le départage du § 5.7 qui en dépend est sauté, la page nommant le critère suivant |
+| le plafond a priori n'a pas pu être maximisé | l'écart d'itinéraire s'écrit **« inconnu »**, jamais 0 ; le certificat reste hors d'atteinte (§ 5.5) et le départage du § 5.7 qui en dépend est sauté, la page nommant le palier suivant |
 
 ### 12.7 Les règles de forme
 
@@ -3274,12 +3930,12 @@ recalcule rien.
 
 Une réserve honnête sur l'un des deux : le manque ne coûte rien, le plafond
 réalisé se lisant sur le placement. **L'écart d'itinéraire suppose le plafond a
-priori disponible par personne**, et non seulement en agrégat au diagnostic ; son
-coût est exactement le point 4 du § 17, que cette section rend porteur. **Il se
-calcule à chaque évaluation** : le coût est mesuré, et il ne retarde pas la page.
-Le chemin « inconnu » reste celui du moteur, que l'application n'emprunte pas :
-là, le troisième chiffre s'écrit **« inconnu »** et le départage du § 5.7 qui en
-dépend est sauté en nommant le critère appliqué à sa place.
+priori disponible par personne**, et non seulement en agrégat au diagnostic ;
+son coût est exactement le point 4 du § 17, que cette section rend porteur. **Il
+se calcule à chaque évaluation** : le coût est mesuré, et il ne retarde pas la
+page. Le chemin « inconnu » reste celui du moteur, que l'application n'emprunte
+pas : là, le troisième chiffre s'écrit **« inconnu »** et le départage du § 5.7
+qui en dépend est sauté en nommant le palier appliqué à sa place.
 
 ---
 
@@ -3765,10 +4421,10 @@ n'égale, octet pour octet, un fichier livré.
 
 | module (§ 13.4) | niveau | ce qui s'y éprouve |
 |---|---|---|
-| moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul |
+| moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut |
 | géométrie | `node` + navigateur | conversions, ajustement, bornes de zoom, désignation d'un siège ; l'oracle du moteur de rendu au niveau 2 ; la découpe du plan en pages (§ 11.7) |
-| stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle (§ 8.9) |
-| analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des appartenances, lignes refusées, aller-retour |
+| stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), conversion du format 1 avec son journal |
+| analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des appartenances et des étiquettes, lignes refusées, aller-retour, CSV des objectifs de table |
 | générateur de démonstrations | `node` | vecteur du générateur pseudo-aléatoire, empreinte des fichiers livrés, refus, noms forgés |
 | PDF | `node` | couche de texte, pagination, police embarquée et table `ToUnicode`, géométrie de la planche, reproductibilité |
 | application | `node` | les commandes et leurs refus, la séance observable, les contrôles de pose et de capacité, la table d'évaluation — sur le système de fichiers simulé et l'horloge pilotée |
@@ -3814,6 +4470,101 @@ suite déterministe d'échanges, avec comparaison terme à terme de A(p) et de |
 à jour qui oublie de décrémenter un compteur sur la table quittée. **Le nombre de
 mouvements est l'exigence du test** : un test à dix mouvements est le test qui ne
 peut pas échouer du § 14.2. Cette épreuve est dans la série `node:long`.
+
+**L'ordre par défaut rend les plans de l'ordre fixe de référence.** Des
+**empreintes de référence**, fichier d'épreuve versionné
+(`test/fixtures/moteur/empreintes_defaut.json`), gardent les plans et les
+grandeurs nommées qu'ils mesurent — excédent, cumulées, rencontres répétées
+choisies, retours choisis, redondance, plus grand écart — de la petite
+démonstration, de sa variante « conflit inévitable », de la grande et de la
+variante sans exception, sous trois graines et un compte réduit ; de la petite
+sous chacune des seize combinaisons des quatre cases ; de la petite et de sa
+variante sous un compte plus long, où l'acceptation bascule ; et le classement
+de douze propositions de la variante et de la grande, plafond a priori connu et
+inconnu. Elles ne se régénèrent que par un geste conscient, comme l'empreinte
+des démonstrations (§ 15.5, point 5). Il refuse la compilation qui place mal une
+composante nulle, déplace un tirage, ou fait basculer l'acceptation sur un autre
+rang que celui de l'écart.
+
+**Le classement par défaut est celui de l'ordre fixe de référence sous les
+quatre cases cochées, et une case décochée n'en retire que son critère.** Sous
+les quatre cases cochées, l'ordre des propositions et la liste des critères
+appliqués se comparent aux empreintes de référence. Sous chacune des quinze
+autres combinaisons, l'ordre est celui de la clé de référence privée des
+critères que les cases décochées retirent — et, sous « nouvelle table » seule,
+où les retours choisis remplacent les rencontres répétées. Il refuse le critère
+décoché qui classe encore, et celui qui se nomme dans la phrase.
+
+**La bascule suit l'ordre réglé.** Sur des ordres inventés — l'écart en
+troisième palier, un palier mixte { tours hors objectif × 2, redondance × 1 }
+sous le mode par défaut, un palier de deux raffinements —, la compilation rend
+l'ordre d'acceptation que le § 5.7 décrit, palier mixte compté « contrainte ».
+Une épreuve de la série `node:long` compare, sur cinq graines, l'excédent et les
+cumulées atteints sous l'ordre par défaut et sous un ordre qui range les
+objectifs au deuxième palier, et borne leur écart. Il refuse le palier lu
+critère par critère et la famille tirée du premier critère d'un palier.
+
+**L'animateur se lit sur le fait, tour par tour.** Sur une petite configuration
+inventée, animent à chaque tour : une réservation « tous les tours » sur une
+place titrée ; R réservations de tour désigné sur cette même place. Anime au
+seul tour 2 : une réservation du tour 2 sur une place titrée. N'animent pas : un
+titre sans réservation ; une réservation sans titre ; une personne exclue ; le
+second ancré d'une table à un titre, sans sièges attribués. Il refuse
+l'animateur lu sur la seule portée « tous les tours », et le titre d'un seul
+tour qui fait animer à tous.
+
+**m(p) se compare à une lecture directe.** Sur une petite configuration où un
+animateur n'anime qu'à un tour, où une table porte deux titres pourvus, et où
+une personne partage la table d'un animateur à un tour où il n'anime pas, m(p),
+son minimum, B(p) et les animateurs non rencontrés égalent un compte fait couple
+par couple, tour par tour. Il refuse la rencontre comptée à un tour où
+l'animateur n'anime pas, l'animateur compté deux fois, et la personne non
+concernée comptée dans le minimum.
+
+**La borne des animateurs tient sur tous les plans.** Sur des configurations
+inventées assez petites pour énumérer tous les plans, aucun plan ne fait
+dépasser B(p) à m(p), et sur l'une d'elles un plan l'atteint pour chaque
+personne. Il refuse la borne qui ignore la table fixée d'une personne à un tour
+où elle y est fixée, et celle qui ignore le plus grand nombre d'animateurs par
+table et par tour.
+
+**Chaque mode des objectifs compare ce qu'il dit.** Dix personnes « finance »,
+une table « finance » de huit places, quatre tours, et trois plans inventés qui
+servent tous 32 places : l'un laisse une personne sans tour servi, l'autre sert
+chacun une fois au moins et une personne une fois seulement, le dernier sert
+chacun trois tours au moins. Sous « le plus de places servies », les trois sont
+égaux sur le critère ; sous « chacun au moins une fois », le premier passe
+derrière les deux autres ; sous « l'équité d'abord », le dernier passe devant
+les deux autres. Sur une soirée inventée où servir la dernière personne coûte
+une collision — des personnes « finance » d'une même appartenance, une personne
+de cette appartenance réservée à la table « finance », « séparer les
+appartenances » seule cochée, les tours hors objectif au premier palier —,
+chaque mode atteint, à trois graines, le plancher que le diagnostic donne de la
+valeur qu'il compare d'abord, que la même graine laisse au-dessus sous « le plus
+de places servies ». Il refuse le mode lu sur le total seul, le plus de tours
+hors objectif mesuré sur s(p) au lieu de P(p) − s(p), et une personne servie par
+une réservation comptée jamais servie.
+
+**Un mode qui compare deux valeurs garde son palier.** Sous « chacun au moins
+une fois » et « l'équité d'abord », la liste qui joint les tours hors objectif à
+un autre critère est refusée, et le choix du mode est refusé tant qu'elle les y
+joint. Il refuse le palier mixte accepté sous ces modes.
+
+**Le mode ne touche pas au défaut.** Sans objectif de table, les plans et le
+classement des empreintes de référence sont identiques sous les trois modes. Il
+refuse la composante d'un mode comptée pour un critère sans objet.
+
+**Une correspondance se décide par la règle.** Sur une petite configuration qui
+mêle objectifs de soirée et de tour, règles propres et défaut, tables gelées et
+personnes réservées, chaque couple (personne, table, tour) se compare à une
+lecture directe du § 4.5. Il refuse l'objectif de tour qui s'ajoute à celui de
+la soirée au lieu de le remplacer, et le couple compté possible vers une table
+sans siège libre.
+
+**Un palier pondéré classe par sa somme, et le palier suivant ne départage que
+l'égalité.** Trois propositions inventées, dont deux égales sur la somme
+pondérée d'un palier : la troisième, moins bonne sur ce palier et meilleure sur
+le suivant, reste derrière. Il refuse le palier lu critère par critère.
 
 #### La géométrie
 
@@ -3876,6 +4627,14 @@ journal et n'écrit pas le fichier d'état : l'ouverture compare les révisions 
 retrouve le geste. Il refuse la reprise fondée sur la date de modification des
 fichiers, que recopier un dossier suffit à fausser.
 
+**Un fichier du format 1 et son journal se convertissent ensemble, au premier
+geste.** Ouvrir et passer en écriture n'écrivent rien ; le premier geste écrit
+l'état et le journal au format 2, chaque instant d'avant se reconstruit encore,
+et défaire revient avant la conversion. Un vrai événement du format 1, avec ses
+jalons, en est la donnée d'épreuve, dans la série `node:long`. Il refuse le
+journal du format 1 rejeté comme illisible, qu'une écriture remplacerait,
+historique perdu.
+
 **Une ligne illisible arrête la lecture et annonce le compte.** Journal de cent
 entrées corrompu à la trente-septième : trente-six entrées retenues,
 soixante-quatre annoncées écartées.
@@ -3929,6 +4688,20 @@ signale.
 dans le CSV des refus, lequel se réimporte tel quel.** Le test boucle : import,
 export des refus, correction d'un champ, réimport. Il refuse le refus global sur
 une faute unique, et refuse le fichier de refus qu'il faudrait nettoyer à la main.
+
+**Une étiquette écrite de deux orthographes est une seule étiquette, et le
+rapport nomme la fusion.** Il refuse la fusion silencieuse, qui ferait manquer
+un objectif à la moitié des personnes visées.
+
+**Les étiquettes font l'aller-retour** : import, export, réimport, mêmes
+ensembles. Il refuse un séparateur que l'export écrirait autrement que l'import
+le lit.
+
+**Une règle d'objectif hors de la liste fermée refuse la ligne, et la ligne
+revient dans le CSV des refus, qui se réimporte tel quel.**
+
+**Un objectif sur un numéro de table inconnu refuse la ligne, jamais le
+fichier.**
 
 #### Le générateur de démonstrations
 
@@ -4069,12 +4842,18 @@ d'être appelé** ; appelé par les commandes, il refuse au moment du geste, là
 § 5.9 veut les refus.
 
 **La garde du § 12.3 est une seconde fonction, de signature différente.**
-`verifier_indicateurs(mesures, plafonds_a_priori, plafonds_realises)` éprouve les
-**trois** inégalités de la ligne de décomposition du § 12.10.5. Elle ne prend pas
-un plan mais des mesures, et ce qu'elle refuse n'est pas un geste mais un
-**dessin**. Les deux fonctions vivent dans le moteur, sous la même discipline ; les
-confondre obligerait le vérificateur de plan à recevoir des indicateurs qu'il n'a
-aucune raison de connaître.
+`verifier_indicateurs(mesures, plafonds_a_priori, plafonds_realises)` éprouve
+les **trois** inégalités de la ligne de décomposition du § 12.10.5. Quand les
+mesures portent les objectifs des tables ou les animateurs (§ 5.4), elle éprouve
+aussi, pour chacun, s(p) ≤ P(p), s(p) ≤ ses tours assis et m(p) ≤ B(p), puis,
+sur les totaux, les personnes jamais servies contre les concernées et le plus de
+tours hors objectif d'une personne contre le plus de tours possibles. P(p) ne se
+compare pas aux tours assis : un plan qui laisse une personne en réserve à un
+tour possible le tient au-delà. Elle ne prend pas un plan mais des mesures, et
+ce qu'elle refuse n'est pas un geste mais un **dessin**. Les deux fonctions
+vivent dans le moteur, sous la même discipline ; les confondre obligerait le
+vérificateur de plan à recevoir des indicateurs qu'il n'a aucune raison de
+connaître.
 
 **Le vérificateur est lui-même éprouvé par mutation.** Le test prend un plan
 valide, déplace une personne pour qu'elle occupe deux tables au tour 2, et affirme
@@ -4137,19 +4916,21 @@ d'un participant partiellement fixé, la frontière d'instantané, le renommage 
 **La couverture se mesure et se publie par module**, jamais agrégée. Sa valeur est
 de **désigner ce qui n'est jamais exécuté** ; c'est une liste à lire, pas une note.
 
-**Deux seuils durs, en branches, sur deux modules.** Le module des indicateurs et
-du plafond, et les chemins de reprise du stockage, tiennent **100 % de branches**.
-Ils sont petits, purs — le second à la condition d'injection du § 13.4 — et chaque
-branche non couverte y est un cas que l'opérateur rencontre au pire moment. Une
-branche qu'on ne sait pas couvrir est soit du code mort — on le retire — soit un
-cas que la spécification n'a pas prévu — on l'écrit.
+**Trois seuils durs, en branches, sur trois paires de modules.** Le module des
+indicateurs et du plafond, les chemins de reprise du stockage, et le registre
+des critères avec la règle de correspondance des objectifs tiennent **100 % de
+branches**. Ils sont petits, purs — le deuxième à la condition d'injection du
+§ 13.4 — et chaque branche non couverte y est un cas que l'opérateur rencontre
+au pire moment. Une branche qu'on ne sait pas couvrir est soit du code mort — on
+le retire — soit un cas que la spécification n'a pas prévu — on l'écrit.
 
 **La mesure est sa propre commande**, `make couverture` : la série `node` sous
 instrumentation, hors des budgets du § 14.14. Elle publie un tableau par couche
 et par module, et un rapport à parcourir qui montre, ligne à ligne, ce qui n'est
-jamais exécuté. Les deux seuils portent sur quatre fichiers —
+jamais exécuté. Les seuils portent sur six fichiers —
 `src/moteur/indicateurs.js` et `src/moteur/plafond.js`, `src/stockage/depot.js`
-et `src/stockage/journal.js` — et la commande échoue en deçà. Un test de
+et `src/stockage/journal.js`, `src/moteur/criteres.js` et
+`src/moteur/correspondance.js` — et la commande échoue en deçà. Un test de
 l'arborescence refuse un seuil abaissé, un seuil global, et un seuil posé sur un
 fichier absent ou hors de la mesure : l'outil tiendrait ce dernier pour atteint,
 faute de branche à compter. Il refuse de même une commande qui ne mesure pas —
@@ -5099,11 +5880,14 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 |---|---|---|---|
 | `01-premier-ecran.png` | répertoire neuf | le répertoire vide : la commande de création et les configurations de démonstration offertes, **jamais une liste vide** (§ 8.1) | chaque configuration que le catalogue déclare est nommée et cliquable, et **leur nombre est lu dans le catalogue, jamais écrit dans le scénario** |
 | `01b-passer-en-ecriture.png` | idem | la commande « Modifier » à place fixe, la bande de mode et le libellé de mode, sans cadre autour du plan (§ 8.4) | avant ce geste, une tentative de modification est refusée ; après, elle passe |
-| `02-import-apercu.png` | `participants_cas_limites.csv` | l'aperçu obligatoire (§ 10.1) : encodage et séparateur détectés et **nommés**, association par en-tête, nombre de lignes refusées | l'encodage et le séparateur affichés sont ceux que le module d'import a retenus ; l'aperçu n'est pas contournable |
-| `02b-import-cp1252.png` | `participants_cas_limites_cp1252.csv` | l'aperçu du même contenu en windows-1252, séparé par des virgules : l'encodage détecté et **nommé**, les cellules accentuées intactes (§ 10.1) | l'encodage affiché est celui que le module d'import a retenu ; les cellules accentuées affichées sont celles que rend le décodage du fichier, sans caractère parasite |
-| `03-import-rapport.png` | idem | le rapport : lignes valides, orthographes d'appartenance fondues avec leur compte, lignes refusées avec leur motif | au moins un groupe d'orthographes fondu et au moins une ligne refusée sont visibles |
-| `04-grille-participants.png` | l'événement en construction | la grille éditable, le tri, le filtre, une personne exclue (§ 10.2) | le compte affiché égale le compte importé |
+| `02-import-apercu.png` | `participants_cas_limites.csv` | le haut de l'aperçu obligatoire (§ 10.1) : la nature du fichier choisie, « Participants » (§ 10.4), le mode de l'import, le nom du fichier, l'encodage et le séparateur détectés et **nommés** ; le tableau des colonnes, qui porte l'association par en-tête, s'ouvre au bord inférieur et se poursuit sous l'image | l'encodage et le séparateur affichés sont ceux que le module d'import a retenus ; l'aperçu n'est pas contournable ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
+| `02b-import-cp1252.png` | `participants_cas_limites_cp1252.csv` | le haut de l'aperçu du même contenu en windows-1252 (§ 10.1) : la nature du fichier choisie, le nom du fichier, l'encodage détecté et **nommé**, le séparateur, « virgule » ; les cellules accentuées sont sous l'image | l'encodage affiché est celui que le module d'import a retenu ; les cellules accentuées de l'aperçu sont celles que rend le décodage du fichier, sans caractère parasite, et sont affirmées sur l'écran, sous l'image : l'épreuve lit le texte de l'aperçu, non ce que la fenêtre laisse voir |
+| `03-import-rapport.png` | idem | le haut du rapport : les comptes de l'import — personnes ajoutées, mises à jour, inchangées, retirées, réservations retirées —, le nom du fichier, l'encodage et le séparateur | le compte des personnes ajoutées égale le nombre de participants de l'événement, et l'import fait une seule entrée d'historique ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
+| `04-grille-participants.png` | l'événement en construction | la grille éditable, le tri, le filtre, une personne exclue, la légende des étiquettes, chacune chiffrée (§ 10.2) | le compte affiché égale le compte importé |
+| `04a-etiquettes.png` | l'événement en construction | la fiche d'une personne avec ses étiquettes en pastilles neutres, le champ d'ajout, et le signal de l'orthographe retenue sous le champ ; la légende des étiquettes, chiffrée, est celle de `04` (§ 10.2) | les étiquettes affichées sont celles de la personne ; une saisie d'une orthographe voisine reçoit l'orthographe existante, et le signal est visible ; la légende compte les porteurs de chaque étiquette, exclues comprises |
 | `05-tables-etat.png` | idem, deux tables posées par le scénario | deux tables à 8 places dont l'une **suit le défaut** et l'autre porte une **surcharge de même valeur** (§ 6.1) | les deux états s'affichent différemment **à valeur égale** |
+| `05a-objectifs-tables.png` | idem | une table à objectif de soirée qui suit la règle par défaut, que son choix de règle nomme en mots (« selon le réglage général (…) »), une table à objectif de tour à règle propre (§ 4.5) | les deux états de règle s'affichent différemment ; l'objectif auquel personne ne correspond porte son signal ; la règle par défaut, changée puis rendue, n'est pas écrite |
+| `05b-import-objectifs.png` | `objectifs_cas_limites.csv` | l'aperçu des objectifs : lignes refusées avec leur motif, orthographes fondues (§ 10.4) | au moins une ligne refusée et un groupe fondu sont visibles ; la nature du fichier, cochée et nommée, et le séparateur nommé sont affirmés sur l'écran, au-dessus de l'image |
 | `06-defaut-consequence.png` | idem | l'énoncé chiffré avant application — tables suivant le défaut, surchargées épargnées, total des sièges contre nombre de participants | le total annoncé égale celui que recalcule le moteur |
 | `07-plan-tables.png` | idem | le plan, ses tables à l'échelle, l'échelle graphique, la mention « disposition relative » (§ 7.7) | la mention est présente tant qu'aucune dimension de salle n'est saisie |
 | `07a-cibles-sieges.png` | **grande démonstration** (celle de la capture `10`) | zoomée jusqu'au régime des sièges : les chaises dessinées une à une, chacune une cible (§ 7.3) | le centre d'une chaise désigne cette chaise |
@@ -5112,7 +5896,8 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `08-animateurs-designes.png` | idem | un siège **cadenas fermé + anneau** (réservé, tous les tours) et un siège **hachuré à cadenas ouvert** (titre non pourvu), avec la liste numérotée qui énonce les deux états en toutes lettres (§ 7.6), et les deux listes de travail du § 5.8 | les marques sont des éléments SVG, **aucun point de code emoji dans le sous-arbre** ; aucune chaise ne porte plus de deux marques |
 | `09-refus-sur-place.png` | idem | un refus du § 5.9 affiché **sur la place concernée**, nommant sa cause et le geste qui le lève | le refus photographié est l'un de ceux qui subsistent à la pose — `k_t > c_t`, une personne exclue, deux places sur un même tour, un dépôt sur une place réservée à un autre ; aucune boîte de dialogue n'est ouverte |
 | `10-diagnostic.png` | **grande démonstration** | le diagnostic préalable (§ 5.6), le plafond a priori, les **99 retours imposés** énoncés à part, et le plancher de l'écart d'itinéraire | les valeurs affichées égalent celles du moteur pour la même entrée ; le plafond des quatre animateurs des tables de 7 vaut **24** |
-| `11-propositions.png` | l'événement en construction | plusieurs propositions comparées, l'ordre de classement **écrit dans l'interface** (§ 5.7), les colonnes de diversité | au moins trois propositions ; l'ordre affiché est celui que produit la clé de tri du moteur |
+| `10a-ordre-priorites.png` | l'événement en construction | l'ordre des priorités : paliers numérotés, un palier de deux critères avec leurs poids — excédent de collisions × 1 et tours hors objectif × 3 —, « rencontrer le plus d'animateurs différents » marqué décoché (§ 5.3, § 5.7) | l'ordre affiché est celui que compile le moteur ; la capture `11` qui suit nomme les mêmes paliers ; le choix du mode des objectifs, à son défaut « le plus de places servies », et la commande qui rétablit le défaut sont affirmés hors de l'image |
+| `11-propositions.png` | l'événement en construction | plusieurs propositions comparées, l'ordre de classement **écrit dans l'interface** par paliers (§ 5.7), le tableau défilé en largeur des colonnes de diversité jusqu'à celles des objectifs | au moins trois propositions ; l'ordre affiché est celui que produit la clé de tri du moteur |
 | `12-qualite-profil.png` | **grande démonstration** | la courbe en escalier, deux séries sur **un seul axe**, le plafond réalisé tracé dans le même ordre, le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée |
 | `13-qualite-collisions.png` | **petite démonstration, variante « conflit inévitable »** | les barres horizontales à deux segments, « prouvé inévitable » et « reste », en **collisions cumulées**, avec l'effectif, les paires distinctes et l'**excédent** en encre secondaire | le segment prouvé vaut **4 collisions cumulées** et égale le plancher du diagnostic, au chiffre près ; les lignes sont triées sur l'excédent (§ 12.4) |
 | `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et chaque ligne mène au tour fautif |
@@ -5126,15 +5911,23 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
 | `24-badges-controle.png` / `25-badges-planche.png` | idem | la **feuille de contrôle** avec son échelle de 100 mm et ses comptes, puis une **planche** de quatre A6 et ses trois filets de coupe | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle avant d'engager la rame, et une planche seule ne le montre pas |
 
+**L'événement en construction est généré sous ses objectifs et son ordre
+réglé.** Les objectifs posés en `05a` et l'import de `05b` restent, et l'ordre
+réglé en `10a` reste : la capture `11` montre la phrase par paliers et les
+colonnes des objectifs, son tableau défilé en largeur de la diversité jusqu'à
+elles, et les captures du placement qui en découle changent avec elle. Que
+l'ordre par défaut rende les plans de l'ordre fixe de référence ne se
+photographie pas : les empreintes de référence le gardent (§ 14.10).
+
 **Huit captures sont déclarées et reportées** : `12` à `18`, à l'étape 10, et
 `21`, à l'étape 11, montrent la page de qualité, la comparaison et la vue
-d'historique, qui viennent à l'itération 5. Le manifeste les porte comme
+d'historique, que le logiciel n'offre pas. Le manifeste les porte comme
 reportées, à leur étape et sans image, et le contrôle d'ordre les compte :
 l'étape 10 n'est pas une étape sans capture, et leur place dans l'ordre est déjà
 gardée. Les deux `07a` se photographient sur la grande démonstration, chargée
-pour la capture `10` : sur la soirée que le parcours construit, deux tables, même
-le zoom le plus faible laisse les sièges pour cibles, et la bascule ne se montre
-pas.
+pour la capture `10` : sur la soirée que le parcours construit, deux tables,
+même le zoom le plus faible laisse les sièges pour cibles, et la bascule ne se
+montre pas.
 
 **L'aperçu d'impression est plus haut que la fenêtre.** `22` et `23` le
 photographient au défilement où le filigrane et le pied de la première page
@@ -5389,7 +6182,9 @@ questions et s'arrête.
 **Ce qu'elle contient, dans cet ordre.**
 
 1. **Le problème, en une phrase** : asseoir chacun à chaque tour de sorte que le
-   plus mal servi rencontre le plus de monde possible.
+   plus mal servi rencontre le plus de monde possible. C'est l'objectif de
+   l'ordre par défaut ; la section dit en une phrase que l'opérateur peut en
+   ranger d'autres devant (§ 5.7).
 2. **Pourquoi il n'a pas de réponse évidente**, par un compte, pas par un mot
    savant. Douze personnes se répartissent sur quatre tables **numérotées** de
    trois de **369 600 façons pour un seul tour** — 12! divisé par 6 quatre fois —

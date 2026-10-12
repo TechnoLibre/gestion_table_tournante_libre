@@ -494,7 +494,9 @@ même plan diffèrent, et pourquoi relancer aide parfois, et parfois jamais.
 ### Le problème
 
 Asseoir chacun, à chaque tour, de sorte que la personne la plus mal servie
-rencontre le plus de monde possible.
+rencontre le plus de monde possible. C’est l’objectif de l’ordre par défaut ;
+vous pouvez en ranger d’autres devant, dans l’ordre des priorités de la
+section « Génération ».
 
 ### Pourquoi il n’a pas de réponse évidente
 

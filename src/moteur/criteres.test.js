@@ -806,6 +806,14 @@ describe('criteres : compilationDe, la compilation d’une instance (D10, contra
       assert.deepEqual(noms, ['ecartAuPlafondAPrioriMax', 'excedentCollisions', 'collisionsCumulees', 'rencontresRepetees', 'redondance']);
     }
   });
+
+  test('un état des critères trop court ou hors de l’ordre du registre lève RangeError', () => {
+    const etat = etatSous(TOUTES_COCHEES, 'places');
+    const [premier, second, ...suite] = etat;
+    for (const etatCriteres of [etat.slice(0, -1), [second, premier, ...suite]]) {
+      assert.throws(() => compilationDe({ priorites: PRIORITES_PAR_DEFAUT, etatCriteres, modeObjectifs: 'places' }), RangeError);
+    }
+  });
 });
 
 // Les modules JavaScript et les composants de src/, hors épreuves, chemins
