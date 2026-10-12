@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { appliquerCommande } from '../../application/commandes.js';
-import { evaluer } from '../../application/evaluation.js';
+import { detaillerQualite, evaluer, retenuAjuste as retenuAjusteDeLEvaluation } from '../../application/evaluation.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
@@ -1033,6 +1033,23 @@ describe('retenuAjuste (§ 2.1, § 5.9)', () => {
     const sansOrigine = structuredClone(retenue);
     sansOrigine.propositions = [];
     assert.equal(retenuAjuste(sansOrigine), true);
+  });
+
+  test("le tableau et la page de qualité lisent la même définition : tel que retenu, ajusté, sa proposition effacée, la page ne montre la course que d'un retenu non ajusté", () => {
+    const retenue = executer(deTables(), 'retenirProposition', { id: 1 });
+    const deplacee = executer(retenue, 'deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
+    const sansOrigine = structuredClone(retenue);
+    sansOrigine.propositions = [];
+    assert.equal(retenuAjuste, retenuAjusteDeLEvaluation);
+    const lus = [retenue, deplacee, sansOrigine].map((charge) => {
+      const detail = detaillerQualite(charge, 'retenu', { courseDe: () => ({ evalues: 0, releves: [] }) });
+      return [detail.statut, retenuAjuste(charge), detail.propositionDuRetenu === null, detail.course === null];
+    });
+    assert.deepEqual(lus, [
+      ['comparable', false, false, false],
+      ['comparable', true, true, true],
+      ['comparable', true, true, true],
+    ]);
   });
 });
 

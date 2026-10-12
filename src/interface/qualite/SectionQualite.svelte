@@ -33,15 +33,18 @@
   // Sinon, la liste des vues, dans leur ordre à l'écran, mène à chacune :
   // un lien porte le focus sur la vue, qui se fait voir. Puis les neuf vues,
   // chacune sous le contrat de propriétés {detail, ligne, table} — le
-  // détail du placement, la ligne d'évaluation de la source, la table
-  // d'évaluation de la charge. Le détail n'est pas encore calculé : detail
-  // vaut null.
+  // détail du placement (detailDe, modele.js), la ligne d'évaluation de la
+  // source, la table d'évaluation de la charge. Le détail se mesure pour la
+  // seule source mesurable, avec la course que la séance garde et la
+  // génération qui l'a produite ; sa garde à quatre paramètres donne les
+  // contradictions qui retirent le dessin.
   import { getContext } from 'svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { evaluation, nomDe } from '../propositions/modele.js';
+  import { detailDe } from './modele.js';
   import { sourceQualite } from './source.js';
   import VueAnimateurs from './VueAnimateurs.svelte';
   import VueCollisions from './VueCollisions.svelte';
@@ -56,6 +59,7 @@
   const t = getContext('t');
   const ui = getContext('ui');
   const seance = getContext('seance');
+  const generation = getContext('generation');
   const uid = $props.id();
 
   // Les vues, dans leur ordre à l'écran (§ 12, B9), chacune sous le nom de
@@ -76,10 +80,14 @@
   const source = $derived(charge === null ? null : sourceQualite(charge, { demandee: $ui.proposition }));
   const table = $derived(charge === null ? null : evaluation(charge).table);
   const ligne = $derived(source?.ligne ?? null);
-  const detail = null;
-  // Les contradictions qui retirent le dessin : celles de la ligne
-  // d'évaluation de la source, une liste vide sans source mesurable.
-  const refusDessin = $derived(ligne?.refusDessin ?? []);
+  const detail = $derived(
+    source?.cas === 'mesurable'
+      ? detailDe(charge, source.id, { courseDe: (id) => seance.courseDe(id), generationDe: (id) => generation.generationDe(id) })
+      : null,
+  );
+  // Les contradictions qui retirent le dessin : celles de la garde du
+  // détail, une liste vide sans source mesurable.
+  const refusDessin = $derived(detail?.refusDessin ?? []);
   const nommer = (id) => (id === null || id === undefined ? null : nomDe(charge, id));
 
   // L'identifiant de l'élément qui porte une vue.

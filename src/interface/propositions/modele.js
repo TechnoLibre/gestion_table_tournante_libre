@@ -31,7 +31,7 @@
 // virgule ; sinon le texte est t(cle) — « — » pour une population vide,
 // « inconnu » pour une grandeur que l'a priori inconnu ne permet pas, le
 // certificat en mots.
-import { evaluer } from '../../application/evaluation.js';
+import { evaluer, retenuAjuste } from '../../application/evaluation.js';
 import { nomAffiche } from '../../application/personnes.js';
 
 const VIDE = 'format.vide';
@@ -444,32 +444,9 @@ export function texteCellule({ valeur, cle, decimales }, { t, format }) {
   return cle === null ? format.nombre(valeur, { decimales }) : t(cle);
 }
 
-// Égalité en profondeur de deux valeurs du fichier d'état : nombres,
-// chaînes, booléens, null, listes et objets simples.
-function egaux(a, b) {
-  if (a === b) return true;
-  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  const clesA = Object.keys(a);
-  if (clesA.length !== Object.keys(b).length) return false;
-  return clesA.every((cle) => Object.hasOwn(b, cle) && egaux(a[cle], b[cle]));
-}
-
-// Ce que le retenu copie de sa proposition d'origine, et que retenirProposition
-// remplacerait.
-const CHAMPS_DU_PLACEMENT = ['siegesAttribues', 'tables', 'capacites', 'tours', 'participants', 'placement'];
-
-/** Vrai quand un retenu existe et ne porte plus le placement de sa
- *  proposition d'origine : tables, capacités, tours, participants ou
- *  placement diffèrent, en profondeur, de ceux de la proposition
- *  retenu.proposition, ou celle-ci n'est plus dans la liste. */
-export function retenuAjuste(charge) {
-  const { retenu } = charge;
-  if (retenu === null) return false;
-  const origine = charge.propositions.find(({ id }) => id === retenu.proposition);
-  if (origine === undefined) return true;
-  return !CHAMPS_DU_PLACEMENT.every((champ) => egaux(retenu[champ], origine[champ]));
-}
+// Le retenu ajusté se définit une fois, dans l'évaluation, que la page de
+// qualité lit aussi : le tableau et la page s'accordent sur le même retenu.
+export { retenuAjuste };
 
 /**
  * La fenêtre à confirmer avant de retenir la proposition id (§ 2.1) : retenir

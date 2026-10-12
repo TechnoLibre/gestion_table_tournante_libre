@@ -34,6 +34,9 @@ import { TABLES_APPLICATION } from '../src/application/libelles.js';
 import { creerTraduction } from '../src/application/traduction.js';
 import { TABLES_INTERFACE } from '../src/interface/libelles.js';
 import { JETONS_CONFLIT } from '../src/interface/marques.js';
+import * as DIVERSITE from '../src/moteur/diversite.js';
+import * as PAIRES from '../src/moteur/paires.js';
+import * as QUALITE from '../src/moteur/qualite.js';
 import { DESIGNATIONS } from './navigateur/designations.js';
 import { describe, test } from './lanceur.js';
 
@@ -959,8 +962,12 @@ function releverTexteEtAnimation(racine, exceptions = ANIMATIONS_ADMISES) {
 // --- Garde 7 : le câblage (§ 12.9, § 13.3) ------------------------------------
 
 const TRIS_ET_REDUCTIONS = new Set(['sort', 'toSorted', 'reduce', 'reduceRight']);
-// Les mesures de la table d'évaluation, que src/application/evaluation.js
-// seul importe (§ 12.9).
+// Les mesures de la table d'évaluation et du détail d'un placement, que
+// src/application/evaluation.js seul importe (§ 12.9, contrainte 41) :
+// celles de la table, nommées, puis chaque export de qualite.js, de
+// paires.js et de diversite.js, lu dans l'espace de noms du module — un
+// export ajouté y entre sans qu'on le nomme —, la borne de diversité et les
+// occupations.
 const MESURES = new Set([
   'mesurer',
   'plafondsRealises',
@@ -969,6 +976,11 @@ const MESURES = new Set([
   'manques',
   'ecartsAuPlafondAPriori',
   'minimumAtteint',
+  ...Object.keys(QUALITE),
+  ...Object.keys(PAIRES),
+  ...Object.keys(DIVERSITE),
+  'borneDiversite',
+  'occupations',
 ]);
 const EVALUATION = 'src/application/evaluation.js';
 
@@ -1927,6 +1939,33 @@ describe('sources de l’interface : le câblage (§ 12.9, § 13.3)', () => {
       'src/interface/plan/A.svelte:6 Math.round',
       'src/interface/plan/A.svelte:7 .reduce(',
       'src/interface/plan/A.svelte:8 .sort(',
+    ]);
+  });
+
+  test("la garde relève l'import d'une fonction du détail hors d'evaluation.js : detailler, qualite.js, paires.js, diversite.js, la borne et les occupations", () => {
+    // Chaque export de qualite.js, lu dans l'espace de noms du module.
+    const qualite = Object.keys(QUALITE);
+    const fichiers = {
+      'src/interface/plan/A.svelte': composant({ script: '  let liste = $state([]);', gabarit: '<p>{liste.length}</p>' }),
+      'src/application/evaluation.js': "import { detailler } from '../moteur/qualite.js';\nexport { detailler };\n",
+      'src/application/generation.js': [
+        `import { ${qualite.join(', ')} } from '../moteur/qualite.js';`,
+        "import { pairesRepetees, rencontresDe } from '../moteur/paires.js';",
+        "export { matriceRencontres } from '../moteur/paires.js';",
+        "import * as diversite from '../moteur/diversite.js';",
+        'export const f = (x) => diversite.diversiteAnimateurs(x);',
+        "import { borneDiversite as borne, occupations } from '../moteur/plafond.js';",
+        '',
+      ].join('\n'),
+    };
+    assert.deepEqual(avecArbre(fichiers, releverCablage), [
+      ...qualite.map((nom) => `src/application/generation.js:1 import de ${nom}`).sort(),
+      'src/application/generation.js:2 import de pairesRepetees',
+      'src/application/generation.js:2 import de rencontresDe',
+      'src/application/generation.js:3 import de matriceRencontres',
+      'src/application/generation.js:5 import de diversiteAnimateurs',
+      'src/application/generation.js:6 import de borneDiversite',
+      'src/application/generation.js:6 import de occupations',
     ]);
   });
 
