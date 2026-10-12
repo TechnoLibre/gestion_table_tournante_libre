@@ -290,10 +290,27 @@ function dessousLePlusFrequent(forme, quoi) {
   return [...comptes.values()].reduce((a, b) => (b.n > a.n ? b : a)).couleurs;
 }
 
+// Le frère avant lequel se pose la sonde de ce qui est peint sous une forme :
+// la forme elle-même, sauf pour un repère de graphique à motif — data-repere
+// et un stroke-dasharray —, tracé par-dessus les séries qu'il borne et qui
+// recouvre une série sur toute sa longueur quand chaque rang est à sa borne.
+// Les vides de son motif laissent alors voir la série : le repère se mesure
+// contre ce qui est peint sous la première série tracée avant lui, le fond du
+// graphique et sa grille. Un repère plein, sans vide, se mesure contre la
+// série qu'il recouvre.
+function sondeAvant(forme) {
+  if (!forme.matches('[data-repere]') || getComputedStyle(forme).strokeDasharray === 'none') return forme;
+  for (const frere of forme.parentNode.children) {
+    if (frere === forme) break;
+    if (frere.matches('[data-serie]')) return frere;
+  }
+  return forme;
+}
+
 // Les couleurs peintes sous une forme SVG au point donné de son repère : une
-// sonde sans peinture, posée juste avant elle chez son parent, se mesure par
-// fondPeintSous, qui lit les formes peintes avant elle à ce point, puis ce
-// qui est sous le dessin.
+// sonde sans peinture, posée chez son parent juste avant elle (sondeAvant),
+// se mesure par fondPeintSous, qui lit les formes peintes avant elle à ce
+// point, puis ce qui est sous le dessin.
 function dessousAuPoint(forme, point) {
   const ecran = point.matrixTransform(forme.getScreenCTM());
   const parent = forme.parentNode;
@@ -307,7 +324,7 @@ function dessousAuPoint(forme, point) {
   sonde.setAttribute('height', String(cote));
   sonde.style.fill = 'none';
   sonde.style.stroke = 'none';
-  parent.insertBefore(sonde, forme);
+  parent.insertBefore(sonde, sondeAvant(forme));
   try {
     return fondPeintSous(sonde);
   } finally {

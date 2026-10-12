@@ -9,7 +9,11 @@
   // légende ; la surface de pointage ; l'infobulle. Escalier, Barres et
   // Grille le remplissent : il ne dessine aucune marque et ne calcule rien.
   //
-  // La largeur se mesure sur le conteneur (largeur, liable), et le texte sur
+  // La largeur se mesure sur une règle de hauteur nulle en tête du
+  // conteneur (largeur, liable) : sa hauteur ne suit pas le dessin, si bien
+  // qu'un dessin dont la hauteur suit la largeur — une grille — ne change
+  // pas, dans l'image même, la taille d'un élément déjà mesuré, ce que
+  // ResizeObserver signale comme une boucle. Le texte se mesure sur
   // une sonde du dessin (mesures, liable : {mesurer, hauteurTexte}, null
   // tant que la sonde n'est pas rendue) : le composant qui remplit le cadre
   // en tire sa disposition (pointage.js), puis rend ses marques par
@@ -161,7 +165,8 @@
   </svg>
 {/snippet}
 
-<div class="graphique" bind:clientWidth={largeur}>
+<div class="graphique">
+  <div class="mesure" bind:clientWidth={largeur}></div>
   <span id={idNom} hidden>{nom}</span>
   <svg
     bind:this={svg}
@@ -229,7 +234,18 @@
 </div>
 
 <style>
+  /* La règle de la largeur : la largeur du conteneur, aucune hauteur ;
+     posée hors du flux, elle n'ajoute pas d'écart à la colonne. */
+  .mesure {
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 0;
+  }
+
   .graphique {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--espace-2);

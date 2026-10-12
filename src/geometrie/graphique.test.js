@@ -422,6 +422,19 @@ describe('graphique : la grille et ses niveaux (§ 12.5, D33, B29)', () => {
     assert.equal(grille(30, 30, 700, 16).dessinable, false);
   });
 
+  test('la borne de la case : peu de colonnes dans une carte large ne font pas de cases plus grandes qu’elle', () => {
+    assert.deepEqual(grille(4, 2, 1200, 16), { cote: 600, dessinable: true, largeur: 1200, hauteur: 2400 });
+    assert.deepEqual(grille(4, 2, 1200, 16, 40), { cote: 40, dessinable: true, largeur: 80, hauteur: 160 });
+    assert.deepEqual(grille(4, 2, 1200, 16, 40.7), { cote: 40, dessinable: true, largeur: 80, hauteur: 160 });
+    // Une carte étroite décide sous la borne, et une borne sous la cible
+    // rend la grille non dessinable.
+    assert.equal(grille(4, 40, 900, 16, 40).cote, 22);
+    assert.equal(grille(4, 2, 1200, 16, CIBLE_MIN_PX - 1).dessinable, false);
+    for (const borne of [-1, Number.NaN, Number.NEGATIVE_INFINITY]) {
+      assert.throws(() => grille(4, 2, 1200, 16, borne), RangeError, String(borne));
+    }
+  });
+
   test('une case qui ne tient pas la hauteur de son texte, une grille vide, ne se dessinent pas', () => {
     assert.equal(grille(4, 4, 120, 31).dessinable, false);
     assert.equal(grille(4, 4, 120, 30).dessinable, true);

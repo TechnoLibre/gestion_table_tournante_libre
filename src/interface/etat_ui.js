@@ -6,8 +6,10 @@
 // demandée au plan et le numéro de sa demande, le texte d'un import en
 // attente, les listes de noms, le plein écran, la place sélectionnée, la
 // fiche ouverte, le choix en attente du plan, le refus posé sur une place,
-// l'appartenance collante du formulaire d'ajout, l'aperçu avant impression
-// et la page du tableau des propositions. Ce qu'il tient survit au
+// l'appartenance collante du formulaire d'ajout, l'aperçu avant impression,
+// la page du tableau des propositions et la position du sélecteur du
+// mélange des tables de la page de qualité (§ 12.11, D54) — ce que la
+// grille compte : sièges, assis ou doublons. Ce qu'il tient survit au
 // démontage des sections.
 // Regarder n'écrit jamais (§ 8.4) : cet état ne reçoit ni la séance, ni la
 // façade, ni un système de fichiers, et rien de ce qu'il tient ne quitte la
@@ -56,6 +58,9 @@ import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
  * @property {Object|null} pagePropositions le suivi de la page du tableau des propositions
  *           (SuiviDePage, propositions/modele.js), figé, que la section des propositions
  *           tient ; null au départ, et chaque événement qui s'ouvre repart de la première page
+ * @property {'sieges'|'assis'|'doublons'} melangeTables  la position du sélecteur du
+ *           mélange des tables (§ 12.11) : une de POSITIONS_MELANGE, 'sieges' au départ ;
+ *           chaque événement qui s'ouvre en repart, et un changement de section la garde
  */
 
 // L'état de navigation d'un événement qui s'ouvre, panneau « À propos »
@@ -76,7 +81,13 @@ const DEPART = Object.freeze({
   apercu: null,
   visee: 0,
   pagePropositions: null,
+  melangeTables: 'sieges',
 });
+
+/** Les positions du sélecteur du mélange des tables (§ 12.11, D35), dans
+ *  l'ordre du sélecteur : les sièges, les assis, les doublons parmi les
+ *  affiliés. */
+export const POSITIONS_MELANGE = Object.freeze(['sieges', 'assis', 'doublons']);
 
 /** Les vues que l'aperçu imprime (§ 11.7). */
 export const VUES_IMPRESSION = Object.freeze(['plan', 'accueil', 'tables']);
@@ -154,7 +165,7 @@ function choixValide(choix) {
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
  *   poserSurPlace: Function, garderAppartenance: Function,
  *   ouvrirApercu: Function, reglerApercu: Function, fermerApercu: Function,
- *   retenirPagePropositions: Function}}
+ *   retenirPagePropositions: Function, reglerMelangeTables: Function}}
  */
 export function creerEtatUi() {
   let etat = Object.freeze({ ...DEPART, apropos: false });
@@ -222,6 +233,15 @@ export function creerEtatUi() {
         throw new RangeError(`page des propositions : suivi figé ou null attendu, reçu ${JSON.stringify(suivi)}`);
       }
       changer({ pagePropositions: suivi });
+    },
+    /** Règle la position du sélecteur du mélange des tables, l'une de
+     *  POSITIONS_MELANGE ; RangeError sinon, sans rien changer. Regarder
+     *  n'écrit rien : la position ne quitte pas cet état. */
+    reglerMelangeTables(position) {
+      if (!POSITIONS_MELANGE.includes(position)) {
+        throw new RangeError(`mélange des tables : position hors de ${POSITIONS_MELANGE.join(', ')}, reçu ${JSON.stringify(position)}`);
+      }
+      changer({ melangeTables: position });
     },
     /** Garde un texte à importer et ouvre la section de l'import. */
     ouvrirImport({ texte, origine }) {

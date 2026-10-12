@@ -447,13 +447,14 @@ export function mixTables(instance, tableDe, occupation, parcours = parcourirTou
  * Les objectifs des tables tour par tour (§ 12.12, D36, B21), lus dans
  * parcourirTours et dans les planchers par tour du diagnostic, sans recompte.
  * Par tour : possibles, Π_r ; servis, S_r ; leur pourcentage ; hors, Π_r −
- * S_r ; plancher, le plancher du tour ; sansCouple, σ_r, les assis sans table
+ * S_r ; plancher, le plancher du tour ; reste, hors − plancher, le second
+ * segment de la barre du tour (B21) ; sansCouple, σ_r, les assis sans table
  * possible. Un tour sans couple possible a possibles 0, servis, pourcent,
- * hors et plancher null, et garde sansCouple.
+ * hors, plancher et reste null, et garde sansCouple.
  *
- * pireTour : l'index du tour au plus grand reste, hors − plancher, le
- * premier à égalité. soiree : les sommes des tours, Σ S_r sur Σ Π_r, la seule
- * somme d'un pourcentage admise (D52), et la somme des planchers.
+ * pireTour : l'index du tour au plus grand reste, le premier à égalité.
+ * soiree : les sommes des tours, Σ S_r sur Σ Π_r, la seule somme d'un
+ * pourcentage admise (D52), et la somme des planchers.
  * jamaisServies : les concernées dont s(p) est nul, avec leurs tours
  * possibles, les plus nombreux d'abord, puis par index. repartition :
  * P(p) − s(p) sur les concernées, de la plus grande valeur à la plus petite.
@@ -478,20 +479,21 @@ export function objectifsParTour(instance, parcours, planchers) {
     const possibles = possiblesParTour[r];
     const sansCouple = assisSansCoupleParTour[r];
     if (possibles === 0) {
-      parTour.push({ possibles, servis: null, pourcent: null, hors: null, plancher: null, sansCouple });
+      parTour.push({ possibles, servis: null, pourcent: null, hors: null, plancher: null, reste: null, sansCouple });
       continue;
     }
     const servis = servisParTour[r];
     const hors = possibles - servis;
     const plancher = planchers[r];
-    parTour.push({ possibles, servis, pourcent: pourcentage(servis, possibles), hors, plancher, sansCouple });
+    const reste = hors - plancher;
+    parTour.push({ possibles, servis, pourcent: pourcentage(servis, possibles), hors, plancher, reste, sansCouple });
     soiree.possibles += possibles;
     soiree.servis += servis;
     soiree.hors += hors;
     soiree.plancher += plancher;
-    if (pireTour === null || hors - plancher > pireReste) {
+    if (pireTour === null || reste > pireReste) {
       pireTour = r;
-      pireReste = hors - plancher;
+      pireReste = reste;
     }
   }
   if (soiree.possibles === 0) return null;

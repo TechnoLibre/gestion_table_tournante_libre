@@ -27,6 +27,7 @@ const DEPART = {
   apercu: null,
   visee: 0,
   pagePropositions: null,
+  melangeTables: 'sieges',
 };
 
 // Un état et le relevé de ce que reçoit son abonné.
@@ -98,6 +99,7 @@ describe('état de navigation : chaque transition', () => {
     ui.choisir({ genre: 'personne', participant: 2, depuis: null });
     ui.poserSurPlace({ place: { table: 1, siege: 2 }, refus: { code: 'SANS_EFFET', details: {} }, avertissements: [] });
     ui.retenirPagePropositions(Object.freeze({ page: 2 }));
+    ui.reglerMelangeTables('doublons');
     ui.ouvrirApropos();
     ui.reinitialiser();
     assert.deepEqual(ui.etat(), { ...DEPART, apropos: true });
@@ -254,6 +256,45 @@ describe('état de navigation : chaque transition', () => {
     ui.mettreEnEvidence(null);
     ui.ouvrirFiche(null);
     assert.equal(recus.length, 1);
+  });
+});
+
+describe('état de navigation : la position du sélecteur du mélange des tables (§ 12.11, D54)', () => {
+  test('la position part de « sièges », se règle sur chacune des trois, et ne publie rien quand elle ne change pas', () => {
+    const { ui, recus } = suivi();
+    assert.equal(ui.etat().melangeTables, 'sieges');
+    for (const position of ['assis', 'doublons', 'sieges']) {
+      ui.reglerMelangeTables(position);
+      assert.deepEqual(ui.etat(), { ...DEPART, melangeTables: position });
+    }
+    const publies = recus.length;
+    ui.reglerMelangeTables('sieges');
+    assert.equal(recus.length, publies);
+  });
+
+  test('hors des trois positions, RangeError sans rien changer', () => {
+    const ui = creerEtatUi();
+    ui.reglerMelangeTables('assis');
+    const avant = ui.etat();
+    for (const faute of ['Sieges', 'doublon', '', null, undefined, 0, ['assis'], { position: 'assis' }]) {
+      assert.throws(() => ui.reglerMelangeTables(faute), RangeError, JSON.stringify(faute));
+    }
+    assert.equal(ui.etat(), avant);
+  });
+
+  test('la position survit au changement de section, au tour montré et à la proposition demandée ; reinitialiser la rend à « sièges »', () => {
+    const ui = creerEtatUi();
+    ui.reglerMelangeTables('doublons');
+    for (const section of SECTIONS) {
+      ui.allerA(section);
+      assert.equal(ui.etat().melangeTables, 'doublons', section);
+    }
+    ui.montrerTour(2);
+    ui.montrerProposition(3);
+    ui.ouvrirFiche(1);
+    assert.equal(ui.etat().melangeTables, 'doublons');
+    ui.reinitialiser();
+    assert.equal(ui.etat().melangeTables, 'sieges');
   });
 });
 

@@ -49,6 +49,19 @@
   // Ouverte, ou passée à une autre personne, la fiche se fait défiler
   // jusque dans la fenêtre : dans une fenêtre étroite, elle se pose sous la
   // grille.
+  //
+  // La rubrique « Rencontres » (§ 12.5, D33, data-rubrique-rencontres) porte
+  // la ligne de la personne dans le placement que le plan montre — celui
+  // que la page de qualité mesure —, par rubriqueRencontres
+  // (qualite/paires.js) : la ligne de source qui le nomme, puis chaque
+  // personne rencontrée, le nombre de fois, et chaque tour avec sa table,
+  // les plus revues d'abord. Comme au tableau des paires, une personne
+  // s'écrit par son nom, puis en encre secondaire l'identifiant d'un
+  // homonyme et son appartenance : deux homonymes n'y font pas deux lignes
+  // pareilles. Une source qui ne se mesure pas, une personne
+  // exclue : une phrase le dit. Sans placement, la rubrique est absente,
+  // sans phrase. Elle n'a aucune commande : elle se lit en lecture et sur un
+  // plan bloqué comme en écriture.
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { nomAffiche } from '../../application/personnes.js';
   import { etatPlaces, statuts } from '../../application/places.js';
@@ -58,6 +71,7 @@
   import Pastille from '../primitives/Pastille.svelte';
   import Refus from '../primitives/Refus.svelte';
   import { creerGeste } from '../primitives/geste.js';
+  import { rubriqueRencontres } from '../qualite/paires.js';
   import { ajoutEtiquettes, etiquettesDeLaFiche, retraitEtiquette, saisieApresAjout, signauxOrthographe } from './etiquettes.js';
   import { cleDeColonne, cleDeStatut, itineraire, ligneVoisine, reservationsDe } from './grille.js';
 
@@ -80,6 +94,7 @@
   });
   const reservations = $derived(reservationsDe(charge, participant.id));
   const etapes = $derived(itineraire(participant.id, charge.evenement.tours, (tour) => etatPlaces(charge, { tour })));
+  const rencontres = $derived(rubriqueRencontres(charge, $ui.proposition, participant.id));
 
   // La fiche et son champ d'ajout, montés : le défilement vise la fiche,
   // le focus d'après un retrait ses commandes de retrait ou le champ.
@@ -314,6 +329,50 @@
       </tbody>
     </table>
   {/if}
+
+  {#if rencontres.statut !== 'sansPlacement'}
+    <section class="rencontres" data-rubrique-rencontres aria-labelledby={`${uid}-titre-rencontres`}>
+      <h4 id={`${uid}-titre-rencontres`}>{t('participants.fiche.rencontres.titre')}</h4>
+      <p class="source">
+        <span>{t('participants.fiche.rencontres.intitule')}</span>
+        <span class="placement">{t(rencontres.source.cle, rencontres.source.details)}</span>
+      </p>
+      {#if rencontres.statut === 'exclue'}
+        <p>{t('participants.fiche.rencontres.exclue')}</p>
+      {:else if rencontres.statut === 'nonMesurable'}
+        <p>{t('participants.fiche.rencontres.nonMesurable')}</p>
+      {:else if rencontres.lignes.length === 0}
+        <p>{t('participants.fiche.rencontres.aucune')}</p>
+      {:else}
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{t('participants.fiche.rencontres.personne')}</th>
+              <th scope="col" class="fois">{t('participants.fiche.rencontres.fois')}</th>
+              <th scope="col">{t('participants.fiche.rencontres.tours')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each rencontres.lignes as rencontre (rencontre.id)}
+              <tr>
+                <th scope="row">
+                  <span class="nom">{rencontre.nom}</span>
+                  {#if rencontre.homonyme}
+                    <span class="secondaire">{t('qualite.paires.homonyme', { id: rencontre.id })}</span>
+                  {/if}
+                  {#if rencontre.appartenance !== null}
+                    <span class="secondaire">{rencontre.appartenance}</span>
+                  {/if}
+                </th>
+                <td class="fois">{rencontre.fois}</td>
+                <td>{rencontre.tours.map((etape) => t('participants.fiche.rencontres.tour', etape)).join(' ; ')}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {/if}
+    </section>
+  {/if}
 </aside>
 
 <style>
@@ -488,6 +547,44 @@
 
   .refus {
     min-width: 0;
+  }
+
+  /* La rubrique des rencontres : l'intitulé en petites capitales, la ligne
+     de source, le placement en gras, puis le tableau ; l'intitulé de ligne
+     sur le fond de la carte, le nombre de fois aligné à droite. */
+  .rencontres {
+    margin: var(--espace-3) 0;
+  }
+
+  .rencontres .source {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--espace-1);
+  }
+
+  .placement {
+    color: var(--couleur-page-texte);
+    font-weight: bold;
+  }
+
+  .rencontres tbody th {
+    background-color: var(--couleur-carte-fond);
+    border-bottom-color: var(--couleur-ligne-filet);
+    font-weight: normal;
+  }
+
+  /* Une personne rencontrée : son nom, puis l'identifiant d'un homonyme et
+     son appartenance, chacun à la ligne, en petit corps d'encre secondaire. */
+  .rencontres tbody th .secondaire {
+    display: block;
+    color: var(--couleur-page-texte-secondaire);
+    font-size: var(--taille-texte-petit);
+  }
+
+  .fois {
+    width: 4rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
   /* L'orthographe retenue : un avis, son signe, un texte de l'encre de la

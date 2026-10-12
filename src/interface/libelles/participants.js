@@ -166,6 +166,24 @@ export const TABLE = new Map([
   ['participants.fiche.etiquettes', 'Étiquettes'],
   ['participants.fiche.aucuneEtiquette', 'Aucune étiquette.'],
 
+  // --- La rubrique « Rencontres » de la fiche (§ 12.5, D33) -----------------
+  // La ligne de la personne dans le placement que le plan montre, celui que
+  // la page de qualité mesure, nommé sur la ligne de source.
+  ['participants.fiche.rencontres.titre', 'Rencontres'],
+  ['participants.fiche.rencontres.intitule', 'Placement mesuré :'],
+  ['participants.fiche.rencontres.retenu', 'Placement retenu'],
+  ['participants.fiche.rencontres.proposition', ({ proposition }) => `Proposition n° ${proposition}`],
+  ['participants.fiche.rencontres.personne', 'Personne rencontrée'],
+  ['participants.fiche.rencontres.fois', 'Fois'],
+  ['participants.fiche.rencontres.tours', 'Tours'],
+  ['participants.fiche.rencontres.tour', ({ tour, table }) => `tour ${tour}, table ${table}`],
+  ['participants.fiche.rencontres.aucune', 'Elle ne rencontre personne dans ce placement.'],
+  [
+    'participants.fiche.rencontres.nonMesurable',
+    'Ce placement ne se mesure pas : la page Qualité en donne les raisons.',
+  ],
+  ['participants.fiche.rencontres.exclue', 'Exclue : elle ne rencontre personne dans les mesures.'],
+
   // --- Les étiquettes de la fiche (§ 4.5, § 10.2) ---------------------------
   ['participants.etiquettes.champ', 'Ajouter des étiquettes, séparées par une virgule'],
   ['participants.etiquettes.ajouter', 'Ajouter'],

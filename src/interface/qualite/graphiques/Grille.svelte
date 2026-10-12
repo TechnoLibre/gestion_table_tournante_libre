@@ -21,7 +21,9 @@
   // pointe, liable, en porte l'indice, ligne × colonnes + colonne ;
   // infobulle, {colonnes, lignes}, une ligne par case dans cet ordre
   // (Graphique). ecrire(v) écrit un compte, par défaut le nombre mis en
-  // forme.
+  // forme. coteMaxTextes borne la case à ce nombre de hauteurs de ligne du
+  // compte écrit, mesurée par la sonde ; null, sans borne : la case prend
+  // alors toute la largeur que la carte donne à sa colonne.
   //
   // Désignations : data-graphique sur le <svg>, data-case sur chaque case,
   // par « ligne:colonne » à partir de 0, data-rang sur la désignation de la
@@ -42,6 +44,7 @@
     diagonale = false,
     phrase = null,
     ecrire = null,
+    coteMaxTextes = null,
     infobulle = null,
     dessinable = $bindable(true),
     pointe = $bindable(null),
@@ -65,6 +68,7 @@
           mesurer: mesures.mesurer,
           hauteurTexte: mesures.hauteurTexte,
           ecrire: ecrire ?? ((v) => format.nombre(v)),
+          coteMax: coteMaxTextes === null ? Number.POSITIVE_INFINITY : coteMaxTextes * mesures.hauteurTexte,
         }),
   );
 
@@ -85,8 +89,11 @@
 </script>
 
 <!-- La largeur se mesure ici aussi : une grille qui a cédé la place se
-     redessine quand la carte s'élargit. -->
-<div bind:clientWidth={largeur}>
+     redessine quand la carte s'élargit. Elle se lit sur une règle de
+     hauteur nulle, comme dans Graphique : la hauteur de la grille suit sa
+     largeur, et le conteneur qui la porte ne se mesure pas. -->
+<div>
+<div class="mesure" bind:clientWidth={largeur}></div>
 {#if disposition !== null && !disposition.dessinable}
   <p class="phrase">{#if typeof phrase === 'function'}{@render phrase()}{:else}{phrase}{/if}</p>
 {:else}
@@ -152,6 +159,11 @@
 </div>
 
 <style>
+  /* La règle de la largeur : la largeur du conteneur, aucune hauteur. */
+  .mesure {
+    height: 0;
+  }
+
   .phrase {
     margin: 0;
   }

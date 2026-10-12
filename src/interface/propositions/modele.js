@@ -203,16 +203,35 @@ function certificat(ligne) {
   return { colonne: 'certificat', valeur, cle, decimales: 0 };
 }
 
+/**
+ * La cellule d'une colonne de mesure pour une ligne comparable de la table
+ * d'évaluation : { colonne, valeur, cle, decimales }, celle que le tableau
+ * écrit sous cette colonne. La mesure se lit dans la ligne par le nom de sa
+ * colonne, que le tableau porte la colonne ou non : une tuile de la page de
+ * qualité lit ainsi la même mesure qu'une colonne absente — critère décoché,
+ * valeur que le mode réglé ne compare pas — porterait (§ 12.2, D48). L'a
+ * priori est inconnu quand troisChiffres ne porte pas d'écart d'itinéraire
+ * du tout : ses deux colonnes s'écrivent alors « inconnu ». Lève TypeError
+ * pour un nom qui n'est pas celui d'une colonne de mesure.
+ *
+ * @param {import('../../application/evaluation.js').LigneEvaluation} ligne  comparable
+ * @param {string} nom  le nom d'une colonne de mesure de COLONNES
+ * @returns {{colonne: string, valeur: number|boolean|null, cle: string|null, decimales: number}}
+ */
+export function lireColonne(ligne, nom) {
+  const lire = LECTURES.get(nom);
+  if (lire === undefined) throw new TypeError(`colonne de mesure inconnue : ${nom}`);
+  if (nom === 'certificat') return certificat(ligne);
+  if (ligne.troisChiffres.ecartItineraireMax === null && SELON_A_PRIORI.has(nom)) {
+    return { colonne: nom, valeur: null, cle: INCONNU, decimales: 0 };
+  }
+  return nombre(nom, lire(ligne));
+}
+
 // Les cellules de mesure d'une ligne comparable, une par colonne de mesure
-// portée, dans l'ordre de LECTURES. L'a priori est inconnu quand
-// troisChiffres ne porte pas d'écart d'itinéraire du tout.
+// portée, dans l'ordre de LECTURES.
 function cellules(ligne, portees) {
-  const inconnu = ligne.troisChiffres.ecartItineraireMax === null;
-  return [...LECTURES].filter(([colonne]) => portees.has(colonne)).map(([colonne, lire]) => {
-    if (colonne === 'certificat') return certificat(ligne);
-    if (inconnu && SELON_A_PRIORI.has(colonne)) return { colonne, valeur: null, cle: INCONNU, decimales: 0 };
-    return nombre(colonne, lire(ligne));
-  });
+  return [...LECTURES.keys()].filter((colonne) => portees.has(colonne)).map((colonne) => lireColonne(ligne, colonne));
 }
 
 // Ce que les réservations imposent, énoncé à part (§ 5.4) : les retours et

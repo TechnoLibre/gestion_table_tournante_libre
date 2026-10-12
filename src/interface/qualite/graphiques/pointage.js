@@ -683,13 +683,23 @@ export function cibleLigne(y, disposition) {
  * se tournent d'un quart de tour quand l'un d'eux dépasse la case. ecrire(v)
  * écrit un compte.
  */
-export function dispositionGrille({ largeur, lignes, colonnes, valeurs, diagonale = false, mesurer, hauteurTexte, ecrire }) {
+export function dispositionGrille({
+  largeur,
+  lignes,
+  colonnes,
+  valeurs,
+  diagonale = false,
+  mesurer,
+  hauteurTexte,
+  ecrire,
+  coteMax = Number.POSITIVE_INFINITY,
+}) {
   exiger(Array.isArray(lignes) && Array.isArray(colonnes), 'grille : lignes et colonnes attendues', TypeError);
   const nl = lignes.length;
   const nc = colonnes.length;
   exiger(Array.isArray(valeurs) && valeurs.length === nl * nc, `grille : ${nl * nc} valeurs attendues`);
   const largeurIntitules = plusLarge(lignes.map((l) => l.libelle), mesurer) + ESPACE_PX;
-  const g = grille(nl, nc, Math.max(0, largeur - largeurIntitules), hauteurTexte);
+  const g = grille(nl, nc, Math.max(0, largeur - largeurIntitules), hauteurTexte, coteMax);
   const tournes = colonnes.some((c) => mesurer(c.libelle) > g.cote);
   const enTete = (tournes ? plusLarge(colonnes.map((c) => c.libelle), mesurer) : hauteurTexte) + ESPACE_PX;
   const x0 = largeurIntitules;

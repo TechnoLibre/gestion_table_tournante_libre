@@ -336,12 +336,12 @@ function objectifsDe(prepare) {
 }
 
 describe('objectifsParTour (§ 12.12, D36, B21)', () => {
-  test('chaque tour, compté à la main : possibles, servis, pourcentage, hors objectif, plancher, assis sans table possible', () => {
+  test('chaque tour, compté à la main : possibles, servis, pourcentage, hors objectif, plancher, reste, assis sans table possible', () => {
     const { objectifs } = objectifsDe(preparer(OBJECTIFS));
     assert.deepEqual(objectifs.parTour, [
-      { possibles: 5, servis: 3, pourcent: 60, hors: 2, plancher: 2, sansCouple: 4 },
-      { possibles: 6, servis: 2, pourcent: 33, hors: 4, plancher: 3, sansCouple: 2 },
-      { possibles: 0, servis: null, pourcent: null, hors: null, plancher: null, sansCouple: 9 },
+      { possibles: 5, servis: 3, pourcent: 60, hors: 2, plancher: 2, reste: 0, sansCouple: 4 },
+      { possibles: 6, servis: 2, pourcent: 33, hors: 4, plancher: 3, reste: 1, sansCouple: 2 },
+      { possibles: 0, servis: null, pourcent: null, hors: null, plancher: null, reste: null, sansCouple: 9 },
     ]);
     assert.equal(objectifs.pireTour, 1);
     assert.deepEqual(objectifs.soiree, { possibles: 11, servis: 5, pourcent: 45, hors: 6, plancher: 5 });
@@ -390,7 +390,7 @@ describe('objectifsParTour (§ 12.12, D36, B21)', () => {
     plan[1] = { 1: [6, 3, 1], 2: [2, 7, 8], 3: [4, 5] };
     const prepare = preparer({ ...OBJECTIFS, plan });
     const { objectifs } = objectifsDe(prepare);
-    assert.deepEqual(objectifs.parTour.map(({ hors, plancher }) => [hors, plancher]), [[2, 2], [3, 3], [null, null]]);
+    assert.deepEqual(objectifs.parTour.map(({ hors, plancher, reste }) => [hors, plancher, reste]), [[2, 2, 0], [3, 3, 0], [null, null, null]]);
     assert.equal(objectifs.pireTour, 0);
     const { tours } = prepare;
     const lu = tourLu(prepare.configuration, 1, tours[0]);

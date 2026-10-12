@@ -30,6 +30,7 @@ import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../.
 import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import * as MODELE from './modele.js';
 import {
   COLONNES,
   GROUPES_COLONNES,
@@ -39,6 +40,7 @@ import {
   demandeConfirmation,
   evaluation,
   explicationDeColonne,
+  lireColonne,
   nomDe,
   nombreDePages,
   pageDe,
@@ -1564,5 +1566,62 @@ describe('pagination : le texte de l’étendue (libelles/propositions.js)', () 
     assert.equal(texteEtendue(pagine(vueDe(1500), 11), { t, format }), `Propositions 1${fine}001 à 1${fine}100 sur 1${fine}500`);
     assert.equal(texteEtendue(pagine(vueDe(1101), 12), { t, format }), `Proposition 1${fine}101 sur 1${fine}101`);
     assert.equal(texteEtendue(pagine(vueDe(237), 2), { t, format }), 'Propositions 101 à 200 sur 237');
+  });
+});
+
+describe('lireColonne : la mesure d’une ligne par le nom de sa colonne (§ 12.2, D48)', () => {
+  // Les colonnes de mesure, dans l'ordre de COLONNES : celles qu'un groupe
+  // d'en-têtes couvre, puis le certificat.
+  const MESURES = [...GROUPES_COLONNES.filter(({ cle }) => cle !== null).flatMap(({ colonnes }) => colonnes), 'certificat'];
+
+  test('chaque colonne que le tableau porte : la cellule même du tableau, valeur, clé et décimales ; le retenu aussi', () => {
+    let charge = generee(petiteAObjectifs(), { graine: 3, nombre: 2, arret: 200 });
+    charge = executer(charge, 'retenirProposition', { id: 2 });
+    const table = evaluer(charge);
+    const vue = tableau(table);
+    const lignes = [...vue.lignes.map((ligne, rang) => [ligne, table.propositions[rang]]), [vue.retenu, table.retenu]];
+    let lues = 0;
+    for (const [ligne, source] of lignes) {
+      for (const attendue of ligne.cellules) {
+        assert.deepEqual(lireColonne(source, attendue.colonne), attendue, attendue.colonne);
+        lues += 1;
+      }
+    }
+    assert.equal(lues, 3 * (COLONNES_PAR_DEFAUT.length - 4 + 2));
+  });
+
+  test('une colonne que le tableau ne porte pas, critère décoché : la même mesure, lue dans la ligne', () => {
+    const table = evaluer(generee(petiteAObjectifs({ respecterObjectifs: false, modeObjectifs: 'chacun' }), { graine: 3, nombre: 2, arret: 200 }));
+    const [source] = table.propositions;
+    assert.ok(!tableau(table).colonnes.some(({ nom }) => SIXIEME.includes(nom)));
+    const { objectifs } = source.mesures;
+    assert.deepEqual(lireColonne(source, 'jamaisServies'), { colonne: 'jamaisServies', valeur: objectifs.jamaisServies, cle: null, decimales: 0 });
+    assert.equal(lireColonne(source, 'horsObjectifMax').valeur, objectifs.horsObjectifMax);
+    assert.equal(lireColonne(source, 'toursHorsObjectif').valeur, objectifs.horsObjectif);
+    assert.equal(lireColonne(source, 'toursSelonObjectif').valeur, objectifs.agregat.tous.min);
+    // Sans personne concernée par les animateurs, la mesure manque : « — ».
+    assert.deepEqual(lireColonne(source, 'animateursRencontres'), { colonne: 'animateursRencontres', valeur: null, cle: 'format.vide', decimales: 0 });
+  });
+
+  test('a priori inconnu : « inconnu » sous les deux colonnes de l’a priori, comme au tableau ; le taux de diversité au centième', () => {
+    const charge = generee(chargeDemo('petite'), { graine: 2, nombre: 1, arret: 300 });
+    const table = evaluer(charge, { plafondsAPriori: null });
+    const [ligne] = tableau(table).lignes;
+    const [source] = table.propositions;
+    for (const nom of ['ecartItineraireMax', 'ecartAuPlafondAPriori']) {
+      assert.deepEqual(lireColonne(source, nom), cellule(ligne, nom), nom);
+      assert.equal(lireColonne(source, nom).cle, 'propositions.valeur.inconnu', nom);
+    }
+    assert.equal(lireColonne(source, 'diversite').decimales, 2);
+    assert.equal(texte(lireColonne(source, 'certificat')), 'atteignabilité inconnue');
+  });
+
+  test('chaque colonne de mesure se lit ; une colonne qui n’est pas une mesure, ou inconnue, lève ; la table des lectures reste privée', () => {
+    const [source] = evaluer(generee(chargeSix(), { graine: 1, nombre: 1, arret: 100 })).propositions;
+    for (const nom of MESURES) assert.equal(lireColonne(source, nom).colonne, nom);
+    for (const nom of ['rang', 'proposition', 'imposes', 'commandes', 'inconnue']) {
+      assert.throws(() => lireColonne(source, nom), TypeError, nom);
+    }
+    assert.equal(Object.hasOwn(MODELE, 'LECTURES'), false);
   });
 });

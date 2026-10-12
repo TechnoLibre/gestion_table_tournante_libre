@@ -342,17 +342,21 @@ export function colonnesJuxtaposees(largeur, n, ecart) {
  * tient par colonne. Elle est dessinable quand elle a au moins une ligne et
  * une colonne et que sa case tient la cible de CIBLE_MIN_PX et la hauteur
  * du texte qu'elle porte : la largeur réelle de la carte décide, quel que
- * soit le seuil mesuré au cadre du banc. largeur et hauteur sont celles des
- * cases seules. Lève RangeError sur des comptes qui ne sont pas des entiers
- * ≥ 0, ou une largeur ou une hauteur de texte qui n'est pas un nombre fini
- * ≥ 0.
+ * soit le seuil mesuré au cadre du banc. coteMax borne la case par en
+ * haut, sans borne par défaut : peu de colonnes dans une carte large ne
+ * font pas de cases géantes ; une borne sous la cible rend la grille non
+ * dessinable, comme une carte trop étroite. largeur et hauteur sont celles
+ * des cases seules. Lève RangeError sur des comptes qui ne sont pas des
+ * entiers ≥ 0, une largeur ou une hauteur de texte qui n'est pas un nombre
+ * fini ≥ 0, ou une borne qui n'est ni un nombre fini ≥ 0 ni Infinity.
  * @param {number} lignes
  * @param {number} colonnes
  * @param {number} largeurDispo  px
  * @param {number} hauteurTexte  px, la hauteur de ligne du compte écrit
+ * @param {number} [coteMax]     px, la plus grande case, Infinity par défaut
  * @returns {{cote: number, dessinable: boolean, largeur: number, hauteur: number}}
  */
-export function grille(lignes, colonnes, largeurDispo, hauteurTexte) {
+export function grille(lignes, colonnes, largeurDispo, hauteurTexte, coteMax = Number.POSITIVE_INFINITY) {
   exiger(
     estEntierPositif(lignes) && estEntierPositif(colonnes),
     `grille : comptes entiers ≥ 0 attendus, reçu ${lignes}, ${colonnes}`,
@@ -361,7 +365,11 @@ export function grille(lignes, colonnes, largeurDispo, hauteurTexte) {
     estPositif(largeurDispo) && estPositif(hauteurTexte),
     `grille : largeur et texte ≥ 0 attendus, reçu ${largeurDispo}, ${hauteurTexte}`,
   );
-  const cote = colonnes === 0 ? 0 : Math.floor(largeurDispo / colonnes);
+  exiger(
+    estPositif(coteMax) || coteMax === Number.POSITIVE_INFINITY,
+    `grille : borne de case ≥ 0 attendue, reçu ${coteMax}`,
+  );
+  const cote = colonnes === 0 ? 0 : Math.min(Math.floor(largeurDispo / colonnes), Math.floor(coteMax));
   const dessinable = lignes >= 1 && colonnes >= 1 && cote >= CIBLE_MIN_PX && cote >= hauteurTexte;
   return { cote, dessinable, largeur: cote * colonnes, hauteur: cote * lignes };
 }
