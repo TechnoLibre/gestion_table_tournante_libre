@@ -2091,6 +2091,7 @@ const MODULES_A_SEUIL = [
   'src/moteur/indicateurs.js',
   'src/moteur/paires.js',
   'src/moteur/plafond.js',
+  'src/moteur/qualite.js',
   'src/stockage/depot.js',
   'src/stockage/journal.js',
 ];
@@ -2237,6 +2238,7 @@ describe('arborescence : la couverture (§ 14.13)', () => {
         'src/moteur/indicateurs.js': { branches: 100 },
         'src/moteur/paires.js': { branches: 100 },
         'src/moteur/plafond.js': { branches: 95 },
+        'src/moteur/qualite.js': { branches: 100 },
         'src/stockage/journal.js': { branches: 100, lines: 100 },
         'src/csv/**': { branches: 100 },
       },
@@ -2249,6 +2251,7 @@ describe('arborescence : la couverture (§ 14.13)', () => {
       'src/moteur/diversite.js': '',
       'src/moteur/indicateurs.js': '',
       'src/moteur/paires.js': '',
+      'src/moteur/qualite.js': '',
       'src/stockage/depot.js': '',
       'src/stockage/journal.js': '',
     };
@@ -2271,6 +2274,7 @@ describe('arborescence : la couverture (§ 14.13)', () => {
         'src/moteur/diversite.js : hors de la mesure',
         'src/moteur/indicateurs.js : hors de la mesure',
         'src/moteur/paires.js : hors de la mesure',
+        'src/moteur/qualite.js : hors de la mesure',
         'src/stockage/depot.js : hors de la mesure',
         'src/stockage/journal.js : hors de la mesure',
       ],

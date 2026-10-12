@@ -15,21 +15,23 @@ const CLES = new Map([
   ['diagnostic', 'coquille.section.diagnostic'],
   ['generation', 'coquille.section.generation'],
   ['propositions', 'coquille.section.propositions'],
+  ['qualite', 'coquille.section.qualite'],
   ['badges', 'coquille.section.badges'],
 ]);
 
 /** Les sections de l'événement, dans l'ordre du § 2.1 : import,
- *  participants, tables, plan, diagnostic, generation, propositions, badges
- *  — la planche, dernière étape (§ 2.1 étape 12). Aucune n'en exige une
- *  autre. Le titre et le nom de navigation de chacune sont la
- *  clé coquille.section.<nom> de coquille.js. */
+ *  participants, tables, plan, diagnostic, generation, propositions,
+ *  qualite — la page de qualité, lue avant de retenir (§ 2.1 étape 10) —,
+ *  badges — la planche, dernière étape (§ 2.1 étape 12). Aucune n'en exige
+ *  une autre. Le titre et le nom de navigation de chacune sont la clé
+ *  coquille.section.<nom> de coquille.js. */
 export const SECTIONS = Object.freeze([...CLES.keys()]);
 
 // Les phases de la navigation, chacune avec ses sections, dans l'ordre du
 // § 2.1 : préparer la liste et le mobilier, placer, produire la planche.
 const PHASES_ET_SECTIONS = [
   ['preparer', ['import', 'participants', 'tables']],
-  ['placer', ['plan', 'diagnostic', 'generation', 'propositions']],
+  ['placer', ['plan', 'diagnostic', 'generation', 'propositions', 'qualite']],
   ['produire', ['badges']],
 ];
 

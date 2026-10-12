@@ -6,11 +6,15 @@
 // la coquille charge la page par file://, où un chemin absolu « /assets/… »
 // désigne la racine du disque.
 //
-// Le seuil d'avertissement d'un morceau vaut 1 000 ko, et non les 500 ko de
-// Vite : la page se lit sur le disque local, hors ligne, une fois au
-// lancement, et un seul morceau porte l'application entière, travailleur de
-// génération incrusté compris. Le seuil n'avertit donc que d'une croissance
-// anormale du paquet ; test/construction.long.test.js tombe au-delà.
+// Le lancement charge le point d'entrée, travailleur de génération incrusté
+// compris, et le morceau commun que la construction nomme d'après l'un de
+// ses modules, vue_plan : les modules que le point d'entrée partage avec
+// un morceau différé. La section de la qualité forme son propre morceau,
+// différé, que la page ne charge qu'à la première ouverture de la section
+// (src/main.js). Le seuil d'avertissement d'un morceau vaut 1 000 ko, et
+// non les 500 ko de Vite : la page se lit sur le disque local, hors ligne,
+// une fois au lancement. Le seuil n'avertit donc que d'une croissance
+// anormale d'un morceau ; test/construction.long.test.js tombe au-delà.
 //
 // La production de la planche se charge à part, par un import différé, et
 // jamais au lancement. pdf-lib et fontkit y pèsent ensemble plus d'un

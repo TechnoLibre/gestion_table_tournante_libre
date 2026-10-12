@@ -38,6 +38,12 @@
   // borne de largeur de son <main>, tant qu'il porte cet écran, et à lui
   // seul.
   //
+  // La section de la qualité forme son propre morceau dans la construction :
+  // Evenement ne l'importe pas, il reçoit d'App sa demande unique
+  // (chargeurs.qualite, differe.js), et la monte par SectionDifferee, qui
+  // montre son état de chargement tant que le composant n'est pas là. Toute
+  // autre section est importée ici.
+  //
   // Le support rompu et les avertissements se posent dans la zone des
   // annonces, à côté de la tête ou sous elle, qui défile seule au-delà de
   // son plafond, et non au-dessus de la section : la section ne cède à la
@@ -56,6 +62,7 @@
   import Avertissements from './Avertissements.svelte';
   import BandeMode from './BandeMode.svelte';
   import Commande from '../primitives/Commande.svelte';
+  import SectionDifferee from './SectionDifferee.svelte';
   import SurfaceEvenement from './SurfaceEvenement.svelte';
   import EnteteEvenement from './EnteteEvenement.svelte';
   import EtatsPlan from './EtatsPlan.svelte';
@@ -63,12 +70,16 @@
   import { avertissementsOrdonnes } from './modele.js';
   import { PHASES, cleDeSection } from './sections.js';
 
+  // chargeurs : { qualite } — la demande unique de la section de la qualité,
+  // que rend creerChargeurSection (differe.js).
+  const { chargeurs } = $props();
   const t = getContext('t');
   const ui = getContext('ui');
   const seance = getContext('seance');
   const uid = $props.id();
 
-  // Le composant de chaque section.
+  // Le composant de chaque section importée ici ; la qualité, chargée à
+  // part, n'y est pas.
   const COMPOSANTS = new Map([
     ['import', SectionImport],
     ['participants', SectionParticipants],
@@ -80,7 +91,8 @@
     ['badges', SectionBadges],
   ]);
 
-  const Section = $derived(COMPOSANTS.get($ui.section));
+  const Section = $derived(COMPOSANTS.get($ui.section) ?? null);
+  const demander = $derived(chargeurs[$ui.section] ?? null);
   // La zone des annonces n'existe que lorsqu'elle a quelque chose à dire :
   // sans annonce, aucune hauteur ni aucun trait ne lui est gardé.
   const annoncer = $derived($seance.supportRompu !== null || avertissementsOrdonnes($seance).length > 0);
@@ -139,7 +151,13 @@
 <div class="evenement" data-ecran="evenement">
   <BandeMode />
   <SurfaceEvenement outils={$ui.pleinEcran ? null : outils} actions={$ui.pleinEcran ? null : actions} tete={$ui.pleinEcran ? null : tete} annonces={annoncer ? annonces : null}>
-    <Section />
+    {#if Section !== null}
+      <Section />
+    {:else if demander !== null}
+      {#key $ui.section}
+        <SectionDifferee nom={$ui.section} {demander} />
+      {/key}
+    {/if}
   </SurfaceEvenement>
 </div>
 
@@ -174,7 +192,7 @@
     min-height: 0;
   }
 
-  /* Les phases côte à côte, séparées d'un blanc : les huit onglets tiennent
+  /* Les phases côte à côte, séparées d'un blanc : les neuf onglets tiennent
      sur une ligne à côté de la place des annonces dans une fenêtre de
      1 366 px (SurfaceEvenement.svelte). */
   nav {

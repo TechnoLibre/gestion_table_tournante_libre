@@ -314,7 +314,7 @@ describe('les planchers des objectifs (§ 5.6, A10, D16, D20)', () => {
   test('sous « le plus de places servies », le seul plancher des tours hors objectif, avec son remède, dans la section et le panneau du plan', async () => {
     const m = await ouvrirCharge(quaranteFinance());
     m.ui.allerA('diagnostic');
-    expect(diagnostiquer(configurationDepuisCharge(charge(m))).objectifsInevitables).toEqual({ horsObjectif: 128, jamaisServies: 8, horsObjectifMax: 4 });
+    expect(diagnostiquer(configurationDepuisCharge(charge(m))).objectifsInevitables).toEqual({ horsObjectif: 128, jamaisServies: 8, horsObjectifMax: 4, parTour: [32, 32, 32, 32] });
     await attendre(() =>
       expect(planchers(section(m))).toEqual([['toursHorsObjectif', t('diagnostic.objectifs.toursHorsObjectif', { plancher: 128 })]]),
     );

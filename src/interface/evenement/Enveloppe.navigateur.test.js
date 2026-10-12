@@ -417,13 +417,17 @@ describe('la navigation groupée par phase', () => {
     for (const theme of THEMES) await sousTheme(theme, () => exigerTextesLisibles(nav, theme));
   });
 
-  test('avec un avertissement à côté de la tête, les huit onglets tiennent sur une ligne', async () => {
+  test('avec un avertissement à côté de la tête, tous les onglets tiennent sur une ligne, quelle que soit la section ouverte, dont le libellé passe en gras', async () => {
     const m = await neuf();
     await enManque(m);
     expect(dans(m, '[data-annonces] [data-avertissement]')).not.toBeNull();
-    const hauts = tous(m, '[data-commande="section"]').map((bouton) => boite(bouton).top);
-    expect(hauts.length).toBe(SECTIONS.length);
-    expect(new Set(hauts).size).toBe(1);
+    for (const nom of SECTIONS) {
+      m.ui.allerA(nom);
+      flushSync();
+      const hauts = tous(m, '[data-commande="section"]').map((bouton) => boite(bouton).top);
+      expect(hauts.length, nom).toBe(SECTIONS.length);
+      expect(new Set(hauts).size, nom).toBe(1);
+    }
   });
 });
 

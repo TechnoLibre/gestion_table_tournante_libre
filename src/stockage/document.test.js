@@ -22,6 +22,7 @@ import { VERSION } from '../version.genere.js';
 import { serialiser, serialiserCharge } from './canonique.js';
 import {
   CIBLE_REDONDANCE_PAR_DEFAUT,
+  ENTREE_DE_COURSE,
   FORMAT,
   GENERATION_PAR_DEFAUT,
   SCHEMA,
@@ -1295,6 +1296,74 @@ describe('le placement daté : un champ facultatif du retenu et des propositions
     assert.equal(lecture.formatPlusRecent, true);
     assert.equal(lecture.charge.retenu.horodatage, H);
     assert.equal(Object.hasOwn(lecture.charge.retenu, 'autreCle'), false);
+  });
+});
+
+describe("la course de la recherche hors du fichier d'état (§ 8.9, B31)", () => {
+  const regleDe = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1];
+  const CHARGE = regleDe(SCHEMA, 'charge');
+  const RETENU = regleDe(CHARGE, 'retenu');
+  const PROPOSITION = regleDe(CHARGE, 'propositions').element;
+
+  // Une course inventée pour la proposition du document valide, à 120
+  // mouvements évalués : un placement de relevé à 1, 10 et 100 mouvements.
+  const course = () => ({
+    evalues: 120,
+    releves: [
+      { mouvements: 1, placement: [{ sieges: [[1, 2], [5]], reserve: [] }, { sieges: [[1], [2, 5]], reserve: [] }] },
+      { mouvements: 10, placement: [{ sieges: [[2], [1, 5]], reserve: [] }, { sieges: [[2, 5], [1]], reserve: [] }] },
+      { mouvements: 100, placement: [{ sieges: [[2, 5], [1]], reserve: [] }, { sieges: [[2], [1, 5]], reserve: [] }] },
+    ],
+  });
+
+  test("le schéma de l'état ne connaît pas la course : la proposition finit par placement puis horodatage, et une clé course y est une faute FORME, nommée", () => {
+    assert.deepEqual(PROPOSITION.champs.map(([cle]) => cle).slice(-2), ['placement', 'horodatage']);
+    assert.equal(PROPOSITION.cles.has('course'), false);
+    assert.equal(RETENU.cles.has('course'), false);
+    const proposition = { ...documentValide().charge.propositions[0], course: course() };
+    assert.equal(premiereFaute(proposition, PROPOSITION), 'course');
+    assert.deepEqual(fautesDePlacement(proposition), [{ code: 'FORME', chemin: 'course' }]);
+  });
+
+  test("un fichier d'un format plus récent qui porte une course la perd à la lecture, réduit aux clés connues", () => {
+    const d = documentValide();
+    d.entete.format = FORMAT + 1;
+    d.charge.propositions[0].course = course();
+    const lecture = analyser(JSON.stringify(d));
+    assert.equal(lecture.formatPlusRecent, true);
+    assert.equal(Object.hasOwn(lecture.charge.propositions[0], 'course'), false);
+  });
+
+  test("ENTREE_DE_COURSE, la règle d'une entrée du compagnon des courses : l'identité de la proposition et son horodatage facultatif sous les règles de la proposition, l'empreinte de son placement, puis sa course, evalues et releves, rien d'autre", () => {
+    assert.deepEqual(ENTREE_DE_COURSE.champs.map(([cle]) => cle), ['id', 'graine', 'arret', 'historique', 'horodatage', 'empreinte', 'course']);
+    for (const cle of ['id', 'graine', 'arret', 'historique', 'horodatage']) {
+      assert.equal(regleDe(ENTREE_DE_COURSE, cle), regleDe(PROPOSITION, cle), cle);
+    }
+    const COURSE = regleDe(ENTREE_DE_COURSE, 'course');
+    assert.equal(COURSE.optionnel, false);
+    assert.deepEqual(COURSE.champs.map(([cle]) => cle), ['evalues', 'releves']);
+    const entree = { id: 1, graine: 7, arret: 200, historique: 1000, empreinte: 2 ** 53 - 1, course: course() };
+    assert.equal(premiereFaute(entree, ENTREE_DE_COURSE), null);
+    const fautive = (modifier) => {
+      const copie = structuredClone(entree);
+      modifier(copie);
+      return premiereFaute(copie, ENTREE_DE_COURSE);
+    };
+    assert.equal(fautive((e) => { e.course.evalues = -1; }), 'course.evalues');
+    assert.equal(fautive((e) => { e.course.releves[1].mouvements = 0; }), 'course.releves[1].mouvements');
+    assert.equal(fautive((e) => { e.course.releves[0].duree = 3; }), 'course.releves[0].duree');
+    assert.equal(fautive((e) => { e.course.cadence = 3; }), 'course.cadence');
+    assert.equal(fautive((e) => { e.course.releves[2].placement[0].sieges[0][0] = 0; }), 'course.releves[2].placement[0].sieges[0][0]');
+    assert.equal(fautive((e) => { delete e.course; }), 'course');
+    assert.equal(fautive((e) => { e.empreinte = 0; }), null);
+    assert.equal(fautive((e) => { e.empreinte = -1; }), 'empreinte');
+    assert.equal(fautive((e) => { e.empreinte = 2 ** 53; }), 'empreinte');
+    assert.equal(fautive((e) => { e.empreinte = 'a1'; }), 'empreinte');
+    assert.equal(fautive((e) => { delete e.empreinte; }), 'empreinte');
+    assert.equal(fautive((e) => { e.horodatage = '2031-05-17T21:40:00+02:00'; }), null);
+    assert.equal(fautive((e) => { e.horodatage = null; }), 'horodatage');
+    assert.equal(fautive((e) => { e.horodatage = '2031-05-17 21:40'; }), 'horodatage');
+    assert.equal(fautive((e) => { e.duree = 3; }), 'duree');
   });
 });
 

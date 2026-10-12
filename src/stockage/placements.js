@@ -5,8 +5,12 @@
 // la proposition du moteur mise en forme de fichier, et le plan du moteur
 // qu'on en tire ; le contrôle de cohérence d'une proposition ou du retenu ;
 // leur dérive contre la charge courante ; leur forme nommée ; le partage
-// d'une charge lue entre propositions gardées et écartées. Les formes sont
-// décrites dans types.js et dans ce module.
+// d'une charge lue entre propositions gardées et écartées. La course de la
+// recherche d'une proposition (§ 5.10) n'est pas dans le fichier d'état :
+// ce module la met en forme de fichier, contrôle qu'elle ne contredit pas
+// sa proposition et en tire les plans, pour le compagnon des courses
+// (courses.js), qui la garde à côté. Les formes sont décrites dans
+// types.js, dans la règle ENTREE_DE_COURSE du schéma et dans ce module.
 //
 // Fautif et périmé sont deux choses (§ 8.9, point 3). Un placement fautif se
 // contredit lui-même : fautes nomme chaque contradiction, et examiner écarte
@@ -28,7 +32,7 @@
 // des sièges attribués, avant le dernier occupant, siège 1 compris. Aucune
 // fonction ne modifie ce qu'elle reçoit ; aucune ne lit l'horloge ni un
 // aléa.
-import { SCHEMA, capacite, premiereFaute } from './document.js';
+import { ENTREE_DE_COURSE, SCHEMA, capacite, premiereFaute } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 
 /**
@@ -104,6 +108,8 @@ const CHARGE = regleDuChamp(SCHEMA, 'charge');
 const PROPOSITION = regleDuChamp(CHARGE, 'propositions').element;
 const RETENU = regleDuChamp(CHARGE, 'retenu');
 const IDENTIFIANT = regleDuChamp(PROPOSITION, 'id');
+// Règle de la course d'une entrée du compagnon des courses.
+const COURSE = regleDuChamp(ENTREE_DE_COURSE, 'course');
 
 const croissant = (a, b) => a - b;
 // Deux chaînes, comparées unité UTF-16 par unité.
@@ -208,6 +214,86 @@ function fautesDeCoherence({ tables, capacites, tours, participants, placement }
   return liste;
 }
 
+// Chemin, sous chemin, de la n-ième occurrence de id (n à partir de 1) dans
+// un tour de placement, ses listes de table dans leur ordre puis sa
+// réserve, chacune dans l'ordre de ses rangs ; le tour en porte au moins n.
+function cheminDOccurrence({ sieges, reserve }, id, n, chemin) {
+  const places = [
+    ...sieges.flatMap((liste, table) =>
+      liste.map((occupant, rang) => [occupant, `${chemin}.sieges[${table}][${rang}]`]),
+    ),
+    ...reserve.map((occupant, rang) => [occupant, `${chemin}.reserve[${rang}]`]),
+  ];
+  return places.filter(([occupant]) => occupant === id)[n - 1][1];
+}
+
+// Chemin, sous chemin — celui d'un placement —, de ce que désigne une faute
+// de cohérence de ce placement (fautesDeCoherence), sous la déclaration
+// qui l'accompagne : le placement pour son nombre de tours ; la liste des
+// tables d'un tour pour leur nombre ; la liste d'une table au-delà de sa
+// capacité ; le second exemplaire d'un doublon, le premier d'un inconnu ;
+// le tour d'un manquant, qu'aucune place ne porte.
+function cheminDeFaute(faute, { tables, placement }, chemin) {
+  const { code, tour } = faute;
+  if (tour === null) return chemin;
+  const cheminDuTour = `${chemin}[${tour - 1}]`;
+  if (code === 'LONGUEUR') {
+    return faute.table === null ? `${cheminDuTour}.sieges` : `${cheminDuTour}.sieges[${tables.indexOf(faute.table)}]`;
+  }
+  if (code === 'MANQUANT') return cheminDuTour;
+  return cheminDOccurrence(placement[tour - 1], faute.participant, code === 'DOUBLON' ? 2 : 1, cheminDuTour);
+}
+
+// Les abscisses des points de relevé d'une course à evalues mouvements
+// évalués (§ 5.10) : chaque puissance de dix strictement inférieure à
+// evalues, croissantes ; aucune quand evalues vaut 0 ou 1.
+function abscisses(evalues) {
+  const liste = [];
+  for (let mouvements = 1; mouvements < evalues; mouvements *= 10) liste.push(mouvements);
+  return liste;
+}
+
+/**
+ * Chemin de la première contradiction de course, la course de la recherche
+ * de la proposition de fichier p (§ 5.10, § 8.9), ou null quand il n'y en
+ * a aucune. Le chemin part de « course » : la course elle-même quand elle
+ * n'est pas un objet, sinon la première valeur hors de sa règle
+ * (ENTREE_DE_COURSE) — aucune valeur mesurée, aucune durée, aucune clé
+ * inconnue ; puis evalues au-delà de l'arret de p ; puis, point après
+ * point, un point en trop, une abscisse qui n'est pas la puissance de dix
+ * de son rang, et le placement de relevé, contrôlé sous la déclaration de
+ * p comme son propre placement — chaises vides, puis longueurs et
+ * multiensemble, réserve comprise, nommés comme fautes les nomme sous
+ * course.releves[i].placement ; enfin un point qui manque, nommé au rang
+ * qui le porterait. Une abscisse égale à evalues est en trop : ce point est
+ * le placement de p, qui ne s'écrit pas deux fois. Ne modifie rien ; lève
+ * TypeError quand p n'est pas une proposition cohérente (fautes), qui ne
+ * déclare rien sous quoi lire la course.
+ *
+ * @param {import('./types.js').PropositionFichier} p
+ * @param {*} course
+ * @returns {string|null}
+ */
+export function fauteDeCourse(p, course) {
+  exigerProposition(p, 'fauteDeCourse');
+  const forme = premiereFaute(course, COURSE, 'course');
+  if (forme !== null) return forme;
+  if (course.evalues > p.arret) return 'course.evalues';
+  const attendues = abscisses(course.evalues);
+  for (let i = 0; i < course.releves.length; i += 1) {
+    const chemin = `course.releves[${i}]`;
+    if (i >= attendues.length) return chemin;
+    const { mouvements, placement } = course.releves[i];
+    if (mouvements !== attendues[i]) return `${chemin}.mouvements`;
+    const releve = { ...p, placement };
+    const chaise = fauteDeChaiseVide(releve);
+    if (chaise !== null) return `${chemin}.${chaise}`;
+    const [premiere] = fautesDeCoherence(releve);
+    if (premiere !== undefined) return cheminDeFaute(premiere, releve, `${chemin}.placement`);
+  }
+  return course.releves.length < attendues.length ? `course.releves[${course.releves.length}]` : null;
+}
+
 // Fautes de valeur sous regle : la première faute de forme, de
 // déclaration ou de chaise vide seule, qui rend la cohérence illisible ;
 // sinon les fautes de cohérence.
@@ -231,7 +317,8 @@ function fautesSelon(valeur, regle) {
  * d'un tour ; une table pour une liste plus longue que sa capacité — puis,
  * dans chaque tour, { code: 'DOUBLON'|'INCONNU'|'MANQUANT', tour,
  * participant } par identifiant croissant. Rend [] pour un placement
- * cohérent ; ne lève jamais.
+ * cohérent ; ne lève jamais. Une clé course, que le fichier d'état ne
+ * connaît pas, est une faute FORME comme toute clé inconnue.
  *
  * Une permutation dans une table, ou l'échange du contenu de deux tables de
  * même capacité, gardent longueurs et multiensemble : rien dans le fichier
@@ -250,6 +337,29 @@ export function fautes(p) {
 function exigerCoherent(p, fonction) {
   const [premiere] = fautes(p);
   if (premiere !== undefined) throw new TypeError(`${fonction} : placement fautif ${JSON.stringify(premiere)}`);
+}
+
+// Lève TypeError, au nom de fonction, quand p n'est pas une proposition de
+// fichier cohérente : un retenu, qui n'a pas de course, ou un placement
+// fautif (exigerCoherent).
+function exigerProposition(p, fonction) {
+  if (typeof p === 'object' && p !== null && Object.hasOwn(p, 'proposition')) {
+    throw new TypeError(`${fonction} : proposition attendue, reçu le retenu`);
+  }
+  exigerCoherent(p, fonction);
+}
+
+// Le placement de fichier d'un plan du moteur (§ 8.9), tour par tour : sans
+// attribution de sièges, chaque liste de table triée par identifiant
+// croissant ; avec, dans son ordre, celui des sièges, chaises vides
+// comprises. La réserve, un ensemble, se trie dans les deux cas. Rien n'est
+// partagé avec le plan.
+function placementDeFichier({ tours, reserves }, attribuerSieges) {
+  const ordonner = (liste) => (attribuerSieges ? [...liste] : [...liste].sort(croissant));
+  return tours.map((listes, rang) => ({
+    sieges: listes.map((liste) => ordonner(liste)),
+    reserve: [...reserves[rang]].sort(croissant),
+  }));
 }
 
 /**
@@ -277,9 +387,10 @@ function exigerCoherent(p, fonction) {
  * par tour : sans attribution de sièges, chaque liste de table se trie par
  * identifiant croissant ; avec, elle garde son ordre, celui des sièges, et
  * ses chaises vides, null. La réserve, un ensemble, se trie dans les deux
- * cas. Les clés suivent l'ordre
- * du schéma ; rien n'est partagé avec les arguments, qui ne sont pas
- * modifiés.
+ * cas. La course que la proposition du moteur rapporte — evalues, releves
+ * — n'y entre pas : courseVersFichier la met en forme pour le compagnon des
+ * courses. Les clés suivent l'ordre du schéma ; rien n'est partagé avec les
+ * arguments, qui ne sont pas modifiés.
  *
  * Lève ErreurStockage('COMPTEUR_SATURE', { compteur: 'proposition' }), sans
  * rien rendre, quand l'identifiant atteint 2^31 − 1, le plus grand
@@ -312,7 +423,6 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
   if (identifiant >= IDENTIFIANT.max) throw new ErreurStockage('COMPTEUR_SATURE', { compteur: 'proposition' });
   const { plan } = proposition;
   const capaciteDe = new Map(configuration.tables.map(({ id, capacite: places }) => [id, places]));
-  const ordonner = (liste) => (attribuerSieges ? [...liste] : [...liste].sort(croissant));
   const fichier = {
     id: identifiant,
     graine: proposition.graine,
@@ -327,13 +437,50 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
       .filter(({ exclu }) => exclu !== true)
       .map(({ id }) => id)
       .sort(croissant),
-    placement: plan.tours.map((listes, rang) => ({
-      sieges: listes.map((liste) => ordonner(liste)),
-      reserve: [...plan.reserves[rang]].sort(croissant),
-    })),
+    placement: placementDeFichier(plan, attribuerSieges),
   };
   exigerCoherent(fichier, 'versFichier');
   return fichier;
+}
+
+/**
+ * La course de la recherche d'une proposition du moteur mise en forme de
+ * fichier (§ 5.10, § 8.9), pour le compagnon des courses : { evalues,
+ * releves }, chaque point de relevé { mouvements, placement }, dans l'ordre
+ * des points reçus, son placement mis en forme du plan du point comme
+ * versFichier met en forme celui de la proposition, sous le même drapeau
+ * attribuerSieges. fichier est la proposition de fichier que versFichier a
+ * rendue pour elle, sous laquelle la course se contrôle (fauteDeCourse).
+ * Rend null quand proposition.evalues n'est pas un nombre : un appelant qui
+ * ne rapporte pas la course. Rien n'est partagé avec les arguments, qui ne
+ * sont pas modifiés.
+ *
+ * Lève TypeError, sans rien rendre, quand la course contredit fichier,
+ * nommée par son chemin (fauteDeCourse) — des points de relevé absents
+ * laissent releves absente, que la faute nomme —, et quand le plan d'un
+ * point de relevé déclare d'autres tables que celui de la proposition,
+ * dans un autre ordre compris : ses listes ne s'apparieraient pas aux
+ * tables déclarées, et deux tables de même capacité échangées ne se voient
+ * pas dans le placement.
+ *
+ * @param {import('../moteur/recherche.js').Proposition} proposition
+ * @param {import('./types.js').PropositionFichier} fichier
+ * @param {{attribuerSieges: boolean}} options
+ * @returns {{evalues: number, releves: {mouvements: number, placement: import('./types.js').TourDePlacement[]}[]}|null}
+ */
+export function courseVersFichier(proposition, fichier, { attribuerSieges }) {
+  if (typeof proposition.evalues !== 'number') return null;
+  const { tables } = proposition.plan;
+  const releves = proposition.releves?.map(({ mouvements, plan }, i) => {
+    if (plan.tables.length !== tables.length || plan.tables.some((id, rang) => id !== tables[rang])) {
+      throw new TypeError(`courseVersFichier : le point de relevé ${i} déclare d'autres tables que le plan`);
+    }
+    return { mouvements, placement: placementDeFichier(plan, attribuerSieges) };
+  });
+  const course = { evalues: proposition.evalues, releves };
+  const faute = fauteDeCourse(fichier, course);
+  if (faute !== null) throw new TypeError(`courseVersFichier : course fautive ${JSON.stringify({ chemin: faute })}`);
+  return course;
 }
 
 /**
@@ -366,6 +513,30 @@ export function planSansRevalider(p) {
     tables: [...p.tables],
     tours: p.placement.map(({ sieges }) => sieges.map((liste) => liste.filter((id) => id !== null).sort(croissant))),
     reserves: p.placement.map(({ reserve }) => [...reserve].sort(croissant)),
+  };
+}
+
+/**
+ * Les plans de course, la course de la recherche de la proposition de
+ * fichier p (§ 5.10, § 8.9) : { evalues, releves }, chaque point de relevé
+ * { mouvements, plan }, son plan rendu comme planDepuisFichier rend celui
+ * de p — tables déclarées, listes par identifiant croissant sans chaise
+ * vide, réserves rangées —, dans l'ordre des points. Aucune liste n'est
+ * partagée avec p ni avec course. Lève TypeError quand p n'est pas une
+ * proposition cohérente, et quand course la contredit (fauteDeCourse) :
+ * une course contradictoire ne se lit jamais.
+ *
+ * @param {import('./types.js').PropositionFichier} p
+ * @param {{evalues: number, releves: Object[]}} course
+ * @returns {{evalues: number, releves: {mouvements: number, plan: import('../moteur/types.js').Plan}[]}}
+ */
+export function courseDepuisFichier(p, course) {
+  const faute = fauteDeCourse(p, course);
+  if (faute !== null) throw new TypeError(`courseDepuisFichier : course fautive ${JSON.stringify({ chemin: faute })}`);
+  const { evalues, releves } = course;
+  return {
+    evalues,
+    releves: releves.map(({ mouvements, placement }) => ({ mouvements, plan: planSansRevalider({ ...p, placement }) })),
   };
 }
 

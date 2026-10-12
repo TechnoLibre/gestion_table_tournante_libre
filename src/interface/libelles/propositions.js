@@ -351,6 +351,9 @@ export const TABLE = new Map([
   // --- Les commandes (§ 2.1 étape 10, § 5.7) ------------------------------------
   ['propositions.commande.voir', 'Voir sur le plan'],
   ['propositions.commande.retenir', 'Retenir'],
+  // « Qualité » montre la proposition de sa ligne au plan et ouvre la page
+  // de qualité, qui la mesure (§ 12).
+  ['propositions.commande.qualite', 'Qualité'],
   ['propositions.commande.effacer', 'Effacer les propositions'],
 
   // --- Retenir sur un retenu ajusté (§ 2.1) ----------------------------------------

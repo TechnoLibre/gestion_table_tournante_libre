@@ -46,9 +46,9 @@ const CREATION = "Création de l'événement « Soirée des Lucioles »";
 const deux = (valeur) => String(valeur).padStart(2, '0');
 
 // Horloge d'épreuve : une minute de plus à chaque lecture, à partir de 8 h le
-// 17 mai 2031, à l'heure de l'Est.
-function creerHorloge() {
-  let n = 0;
+// 17 mai 2031, à l'heure de l'Est, décalée de debut minutes.
+function creerHorloge(debut = 0) {
+  let n = debut;
   return {
     horodatage() {
       const minutes = 8 * 60 + n;
@@ -3503,5 +3503,209 @@ describe('séance : la planche, câblée dans la file des appels (§ 11.6, § 13
     const annonce = await seance.preparerPlanche();
     assert.equal(annonce.refus.code, 'PAPIER_REQUIS');
     assert.equal(essais, 2);
+  });
+});
+
+describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.9, B31)', () => {
+  const COURSES = `${BASE}${SUFFIXES.courses}`;
+
+  // Les identifiants des propositions dont le compagnon sur le disque porte
+  // la course, dans son ordre ; null sans compagnon.
+  const dansLeCompagnon = (fs) => {
+    const texte = fs.contenu('documents', COURSES);
+    return texte === null ? null : JSON.parse(texte).courses.map(({ id }) => id);
+  };
+
+  test("une génération écrit le compagnon, que courseDe lit ; un geste qui garde les propositions ne le réécrit pas ; défaire et refaire la génération le réécrivent, la course gardée par la séance, même relue au passage en écriture", async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs);
+    const montage = monter({ fs });
+    await ouvrirSansEcrire(montage);
+    const { seance } = montage;
+    await seance.passerEnEcriture();
+    assert.equal(seance.courseDe(1), null);
+
+    const args = generer(seance.charge);
+    await seance.executer('enregistrerGeneration', args);
+    assert.deepEqual(dansLeCompagnon(fs), [1, 2]);
+    assert.equal(seance.courseDe(2).evalues, args.propositions[1].evalues);
+    assert.equal(etatDe(fs).charge.propositions.some((p) => Object.hasOwn(p, 'course')), false);
+
+    const texte = fs.contenu('documents', COURSES);
+    const ecrire = fs.ecrireAtomique;
+    const ecrits = [];
+    fs.ecrireAtomique = (racine, chemin, contenu) => {
+      ecrits.push(chemin);
+      return ecrire(racine, chemin, contenu);
+    };
+    await seance.executer('retenirProposition', { id: 1 });
+    await seance.executer('exclureParticipant', { id: 2 });
+    assert.equal(ecrits.includes(COURSES), false);
+    assert.equal(fs.contenu('documents', COURSES), texte);
+
+    await seance.defaire();
+    await seance.defaire();
+    await seance.defaire();
+    assert.deepEqual(seance.charge.propositions, []);
+    assert.deepEqual(dansLeCompagnon(fs), []);
+    assert.equal(seance.courseDe(1), null);
+
+    await seance.passerEnLecture();
+    await seance.passerEnEcriture();
+    await seance.refaire();
+    assert.deepEqual(dansLeCompagnon(fs), [1, 2]);
+    assert.equal(seance.courseDe(2).evalues, args.propositions[1].evalues);
+    assert.equal(fs.contenu('documents', COURSES), texte);
+  });
+
+  // Le compteur des propositions ne recule jamais sous défaire ni revenir ;
+  // il recule quand l'opérateur reprend un état d'avant la génération, ici
+  // son .precedent. La génération suivante, sous la même graine, porte
+  // alors les mêmes id, graine, arret et historique que celles du journal,
+  // et après un changement qui laisse la déclaration intacte — ici une
+  // appartenance — un autre placement. Le retour à la première génération
+  // ne rend jamais la course de la seconde, et réécrit le compagnon.
+  test("une génération refaite sous la même graine après un changement d'appartenance ne prête jamais sa course à la première ; le retour à la première réécrit le compagnon", async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs);
+    const montage = monter({ fs });
+    await ouvrirSansEcrire(montage);
+    const { seance } = montage;
+    await seance.passerEnEcriture();
+    await seance.executer('enregistrerGeneration', generer(seance.charge));
+    const revision = seance.ouvert.revision;
+    const premieres = seance.charge.propositions;
+    assert.notEqual(seance.courseDe(1), null);
+    await seance.passerEnLecture();
+
+    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.passerEnEcriture();
+    assert.deepEqual(seance.charge.propositions, []);
+    await seance.executer('modifierParticipant', { id: 2, champs: { appartenance: 'Société Alpha' } });
+    await seance.executer('enregistrerGeneration', generer(seance.charge));
+    const identite = ({ id, graine, arret, historique }) => [id, graine, arret, historique];
+    assert.deepEqual(seance.charge.propositions.map(identite), premieres.map(identite));
+    assert.notDeepEqual(seance.charge.propositions[0].placement, premieres[0].placement);
+    assert.notEqual(seance.courseDe(1), null);
+    const texteSeconde = fs.contenu('documents', COURSES);
+
+    await seance.revenir(revision);
+    const placements = (propositions) => propositions.map(({ placement }) => placement);
+    assert.deepEqual(placements(seance.charge.propositions), placements(premieres));
+    // La séance ne connaît plus la course de la première génération.
+    assert.equal(seance.courseDe(1), null);
+    assert.notEqual(fs.contenu('documents', COURSES), texteSeconde);
+    assert.deepEqual(dansLeCompagnon(fs), []);
+
+    // Relu par une autre séance, le compagnon ne rend aucune course.
+    await seance.fermer();
+    const relecture = monter({ fs, prefixe: 'relecture' });
+    await ouvrirSansEcrire(relecture);
+    assert.equal(relecture.seance.courseDe(1), null);
+  });
+
+  // Douze personnes, la sixième seule du Club des Merles, trois tables de
+  // quatre, trois tours.
+  function chargeDouze() {
+    const charge = creerCharge({ id: 'evt-lucioles', nom: BASE, siegesParDefaut: 4, tours: 3 });
+    const prenoms = ['Iris', 'Théo', 'Ondine', 'Basile', 'Clémence', 'Gaspard', 'Lison', 'Marius', 'Nora', 'Octave', 'Perle', 'Rémi'];
+    charge.participants = prenoms.map((prenom, i) => personne(i + 1, 'Lucane', prenom, i === 5 ? 'Club des Merles' : null));
+    charge.tables = [1, 2, 3].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 250 * (id - 1), y: 0 } }));
+    charge.prochainsIds = { participant: 13, table: 4, proposition: 1 };
+    return charge;
+  }
+
+  // Les arguments d'enregistrerGeneration : graine 1, arrêt à 400 mouvements.
+  const generationDouze = (charge) => {
+    const configuration = configurationDepuisCharge(charge);
+    return { propositions: rechercher(configuration, { graine: 1, arret: 400, nombre: 2 }), configuration, produitVersion: V1 };
+  };
+
+  // Une deuxième personne au Club des Merles ne change pas le placement
+  // final de la recherche sous la même graine, mais sa course : la seconde
+  // génération porte alors la même identité de recherche et la même
+  // empreinte que la première. Seul l'horodatage de la génération les
+  // départage.
+  test("une génération refaite sous la même graine qui finit sur le même placement ne prête jamais sa course à la première", async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs, chargeDouze());
+    const montage = monter({ fs });
+    await ouvrirSansEcrire(montage);
+    const { seance } = montage;
+    await seance.passerEnEcriture();
+    await seance.executer('enregistrerGeneration', generationDouze(seance.charge));
+    const revision = seance.ouvert.revision;
+    const premieres = seance.charge.propositions;
+    const premiereCourse = seance.courseDe(1);
+    assert.notEqual(premiereCourse, null);
+    await seance.passerEnLecture();
+
+    await seance.ouvrirSecours(BASE, 'precedent');
+    await seance.passerEnEcriture();
+    await seance.executer('modifierParticipant', { id: 2, champs: { appartenance: 'Club des Merles' } });
+    await seance.executer('enregistrerGeneration', generationDouze(seance.charge));
+    const [p1] = premieres;
+    const [q1] = seance.charge.propositions;
+    const identite = ({ id, graine, arret, historique, placement }) => ({ id, graine, arret, historique, placement });
+    assert.deepEqual(identite(q1), identite(p1));
+    assert.notEqual(q1.horodatage, p1.horodatage);
+    const secondeCourse = seance.courseDe(1);
+    assert.notDeepEqual(secondeCourse, premiereCourse);
+
+    await seance.revenir(revision);
+    assert.deepEqual(seance.charge.propositions, premieres);
+    // La séance a quitté la course de la première en ouvrant le .precedent,
+    // et celle de la seconde n'est pas la sienne.
+    assert.equal(seance.courseDe(1), null);
+    assert.deepEqual(dansLeCompagnon(fs), []);
+
+    await seance.fermer();
+    const relecture = monter({ fs, prefixe: 'relecture' });
+    await ouvrirSansEcrire(relecture);
+    assert.equal(relecture.seance.courseDe(1), null);
+  });
+
+  // La première séance garde en mémoire la course de sa génération ; une
+  // autre, sur une horloge plus tardive, reprend le .precedent et régénère
+  // sur le même placement. Le passage en écriture de la première relit le
+  // compagnon de la seconde sans perdre sa course.
+  test("la course qu'une séance garde ne cède pas à celle qu'une autre séance écrit pour une génération qui finit sur le même placement", async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs, chargeDouze());
+    const premiere = monter({ fs });
+    await ouvrirSansEcrire(premiere);
+    await premiere.seance.passerEnEcriture();
+    await premiere.seance.executer('enregistrerGeneration', generationDouze(premiere.seance.charge));
+    const revision = premiere.seance.ouvert.revision;
+    const premieres = premiere.seance.charge.propositions;
+    const premiereCourse = premiere.seance.courseDe(1);
+    assert.notEqual(premiereCourse, null);
+    await premiere.seance.passerEnLecture();
+
+    const seconde = monter({ fs, prefixe: 'seconde', horloge: creerHorloge(60) });
+    await ouvrirSansEcrire(seconde);
+    await seconde.seance.ouvrirSecours(BASE, 'precedent');
+    await seconde.seance.passerEnEcriture();
+    await seconde.seance.executer('modifierParticipant', { id: 2, champs: { appartenance: 'Club des Merles' } });
+    await seconde.seance.executer('enregistrerGeneration', generationDouze(seconde.seance.charge));
+    assert.deepEqual(seconde.seance.charge.propositions[0].placement, premieres[0].placement);
+    assert.notDeepEqual(seconde.seance.courseDe(1), premiereCourse);
+    await seconde.seance.passerEnLecture();
+
+    await premiere.seance.passerEnEcriture();
+    await premiere.seance.revenir(revision);
+    assert.deepEqual(premiere.seance.charge.propositions, premieres);
+    assert.deepEqual(premiere.seance.courseDe(1), premiereCourse);
+    assert.deepEqual(dansLeCompagnon(fs), [1, 2]);
+
+    await premiere.seance.fermer();
+    const relecture = monter({ fs, prefixe: 'relecture' });
+    await ouvrirSansEcrire(relecture);
+    assert.deepEqual(relecture.seance.courseDe(1), premiereCourse);
+  });
+
+  test("la séance sans événement n'a aucune course", () => {
+    const { seance } = monter();
+    assert.equal(seance.courseDe(1), null);
   });
 });

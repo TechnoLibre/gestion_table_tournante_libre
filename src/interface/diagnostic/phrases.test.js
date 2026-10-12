@@ -500,7 +500,7 @@ describe('enonces : les planchers des objectifs (§ 5.6, A10, D16, D20)', () => 
 
   test('dix personnes « finance », une table de 8, quatre tours : 8 tours hors objectif ; les deux autres planchers, nuls, se taisent sous chaque mode', () => {
     const { diagnostic, liste } = lire(chargeObjectifs(10, [2]));
-    assert.deepEqual(diagnostic.objectifsInevitables, { horsObjectif: 8, jamaisServies: 0, horsObjectifMax: 1 });
+    assert.deepEqual(diagnostic.objectifsInevitables, { horsObjectif: 8, jamaisServies: 0, horsObjectifMax: 1, parTour: [2, 2, 2, 2] });
     assert.deepEqual(desObjectifs(liste), [
       [
         'toursHorsObjectif',
@@ -526,7 +526,7 @@ describe('enonces : les planchers des objectifs (§ 5.6, A10, D16, D20)', () => 
   test('quarante personnes « finance » : 128, 8 et 4 ; chaque mode écrit les planchers qu’il compare, dans l’ordre où il les compare, et jamais les autres', () => {
     const autres = fois(4, 8);
     const { diagnostic, liste } = lire(chargeObjectifs(40, autres));
-    assert.deepEqual(diagnostic.objectifsInevitables, { horsObjectif: 128, jamaisServies: 8, horsObjectifMax: 4 });
+    assert.deepEqual(diagnostic.objectifsInevitables, { horsObjectif: 128, jamaisServies: 8, horsObjectifMax: 4, parTour: [32, 32, 32, 32] });
     const grandeurs = (mode) => desObjectifs(lire(chargeObjectifs(40, autres, { mode })).liste).map(([grandeur, plancher]) => [grandeur, plancher]);
     assert.deepEqual(desObjectifs(liste).map(([grandeur, plancher]) => [grandeur, plancher]), [['toursHorsObjectif', 128]]);
     assert.deepEqual(grandeurs('chacun'), [

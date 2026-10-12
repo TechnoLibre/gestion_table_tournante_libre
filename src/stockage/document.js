@@ -371,24 +371,58 @@ const PLAN = [
   ['horodatage', HORODATAGE_FACULTATIF],
 ];
 
-const PROPOSITION = objet(
-  [
-    ['id', IDENTIFIANT],
-    ['graine', entier(0, 2 ** 32 - 1)],
-    ['arret', entier(1)],
-    ['historique', entier(1)],
-    ['produitVersion', CHAINE],
-    ['siegesAttribues', BOOLEEN],
-    ...PLAN,
-  ],
-  { mise: 'ouverte' },
-);
+// Ce qui identifie une proposition, au-delà de son identifiant : la graine,
+// le compte d'arrêt et l'historique de la recherche qui l'a produite. Le
+// compagnon des courses reconnaît une proposition à ces quatre champs, à
+// l'horodatage de sa génération et à l'empreinte de son placement
+// (ENTREE_DE_COURSE).
+const IDENTITE = [
+  ['id', IDENTIFIANT],
+  ['graine', entier(0, 2 ** 32 - 1)],
+  ['arret', entier(1)],
+  ['historique', entier(1)],
+];
+
+const PROPOSITION = objet([...IDENTITE, ['produitVersion', CHAINE], ['siegesAttribues', BOOLEEN], ...PLAN], {
+  mise: 'ouverte',
+});
 
 const RETENU = objet([['proposition', IDENTIFIANT], ['siegesAttribues', BOOLEEN], ...PLAN], {
   nul: true,
   mise: 'ouverte',
   aPart: true,
 });
+
+/**
+ * Une entrée du compagnon des courses (§ 5.10, § 8.9), qui n'est pas le
+ * fichier d'état : l'identité d'une proposition, sous les règles mêmes de
+ * la proposition, puis horodatage, celui de la génération qui l'a
+ * produite, facultatif et absent quand la proposition n'en porte pas, puis
+ * empreinte, celle du texte canonique de son placement (courses.js), un
+ * entier de 0 à 2^53 − 1, puis course, ce que la recherche a rapporté
+ * d'elle-même.
+ * course porte evalues, ses mouvements évalués, puis releves, un point de
+ * relevé {mouvements, placement} par puissance de dix strictement
+ * inférieure à evalues, le placement sous la forme de celui d'une
+ * proposition. Aucune autre clé : ni valeur mesurée, ni durée. Les
+ * contraintes qui croisent la course et la proposition — evalues au plus
+ * arret, abscisses 1, 10, 100…, placements cohérents avec la déclaration —
+ * sont l'affaire du contrôle des placements (fauteDeCourse). La règle
+ * contrôle la forme ; elle n'écrit rien : courses.js écrit le compagnon.
+ * @type {import('./types.js').Regle}
+ */
+export const ENTREE_DE_COURSE = objet([
+  ...IDENTITE,
+  ['horodatage', HORODATAGE_FACULTATIF],
+  ['empreinte', entier(0, Number.MAX_SAFE_INTEGER)],
+  [
+    'course',
+    objet([
+      ['evalues', entier(0)],
+      ['releves', liste(objet([['mouvements', entier(1)], ['placement', PLACEMENT]]))],
+    ]),
+  ],
+]);
 
 const CHARGE = objet(
   [

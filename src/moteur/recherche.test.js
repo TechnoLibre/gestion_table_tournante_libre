@@ -1454,7 +1454,8 @@ describe('rechercher : chaque mode descend jusqu’aux planchers du diagnostic (
     minimum: ['horsObjectifMax', 'horsObjectif'],
   };
   const CONTRASTE = { chacun: 'jamaisServies', minimum: 'horsObjectifMax' };
-  const PLANCHERS = { horsObjectif: 12, jamaisServies: 0, horsObjectifMax: 2 };
+  // Par tour, P_r = 10 et L_r = 8 − 1, l'ancré de la table : 3, et 12 en tout.
+  const PLANCHERS = { horsObjectif: 12, jamaisServies: 0, horsObjectifMax: 2, parTour: [3, 3, 3, 3] };
   const objectifsDu = (configuration, graine) => {
     const instance = normaliser(configuration);
     const [{ plan }] = rechercher(configuration, { graine, arret: 20_000, nombre: 1 });

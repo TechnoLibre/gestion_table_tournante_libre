@@ -62,10 +62,12 @@
  * @property {number} ancragesImposantRetours   personnes dont les réservations
  *           imposent un retour
  * @property {{plancher: number, mobilesAuMoins: number}|null} ecartItineraire
- * @property {{horsObjectif: number, jamaisServies: number, horsObjectifMax: number}} objectifsInevitables
+ * @property {{horsObjectif: number, jamaisServies: number, horsObjectifMax: number,
+ *             parTour: number[]}} objectifsInevitables
  *           planchers immédiats des trois valeurs des modes des objectifs
  *           (D16, A10) ; 0 quand rien n'est prouvé, chacun calculé sous tout
- *           mode
+ *           mode, critère coché ou non ; parTour, le plancher de chaque tour,
+ *           max(0, P_r − L_r), R cases, dont horsObjectif est la somme
  */
 import {
   LIBRE,
@@ -384,18 +386,20 @@ function ecartItineraire(configuration, instance, aPriori) {
 // Planchers immédiats des objectifs (D16, A10). Au tour r, une personne
 // servie qui n'est pas fixée occupe un siège libre d'une table dont
 // l'objectif est en vigueur : P_r compte les couples possibles non fixés,
-// L_r ces sièges libres, et les tours hors objectif sont au moins
-// Σ_r max(0, P_r − L_r). Un siège libre ne sert qu'une personne par tour :
-// parmi C′, les concernées qu'aucune réservation ne sert, au moins
-// #C′ − Σ_r min(L_r, P′_r) ne le sont jamais, P′_r comptant celles de C′ dont
-// le tour r est possible — tous non fixés, un couple fixé possible étant
-// servi. Le plus grand nombre de tours hors objectif d'une personne ne
-// descend pas sous la moyenne : le premier plancher divisé par le nombre de
-// personnes qui ont un tour possible non fixé, arrondi au-dessus. Les fixés
-// ne comptent ni parmi les couples ni parmi les sièges libres. O(T · R + N · R)
-// une fois les couples possibles connus.
+// L_r ces sièges libres, et les tours hors objectif du tour sont au moins
+// max(0, P_r − L_r), rendu par tour dans parTour ; leur somme sur les tours
+// est le plancher des tours hors objectif. Un siège libre ne sert qu'une
+// personne par tour : parmi C′, les concernées qu'aucune réservation ne
+// sert, au moins #C′ − Σ_r min(L_r, P′_r) ne le sont jamais, P′_r comptant
+// celles de C′ dont le tour r est possible — tous non fixés, un couple fixé
+// possible étant servi. Le plus grand nombre de tours hors objectif d'une
+// personne ne descend pas sous la moyenne : le premier plancher divisé par
+// le nombre de personnes qui ont un tour possible non fixé, arrondi
+// au-dessus. Les fixés ne comptent ni parmi les couples ni parmi les sièges
+// libres. O(T · R + N · R) une fois les couples possibles connus. Rien ne
+// lit l'état des critères : les planchers se chiffrent critère coché ou non.
 function objectifsInevitables({ N, T, R, fixe, possible, objectifDe, siegesLibres }) {
-  let horsObjectif = 0;
+  const parTour = new Array(R).fill(0);
   let servisAuPlus = 0;
   const libresAuTour = new Int32Array(R);
   for (let t = 0; t < T; t += 1) {
@@ -429,13 +433,15 @@ function objectifsInevitables({ N, T, R, fixe, possible, objectifDe, siegesLibre
       couples += 1;
       if (servieDOffice[p] === 0) parmiC += 1;
     }
-    horsObjectif += Math.max(0, couples - libresAuTour[r]);
+    parTour[r] = Math.max(0, couples - libresAuTour[r]);
     servisAuPlus += Math.min(libresAuTour[r], parmiC);
   }
+  const horsObjectif = parTour.reduce((somme, plancher) => somme + plancher, 0);
   return {
     horsObjectif,
     jamaisServies: Math.max(0, concerneesLibres - servisAuPlus),
     horsObjectifMax: horsObjectif === 0 ? 0 : Math.ceil(horsObjectif / avecTourLibre),
+    parTour,
   };
 }
 
@@ -477,7 +483,9 @@ function etendue(valeurs) {
  * - objectifsInevitables : planchers immédiats des tours hors objectif, des
  *   personnes jamais servies et du plus de tours hors objectif d'une
  *   personne, nuls sans objectif ; l'interface écrit ceux que le mode
- *   compare. animateursMemeAppartenance garde son sens : les ancrés.
+ *   compare. parTour porte le plancher de chaque tour, que le détail de la
+ *   page de qualité lit sans le recompter (qualite.js).
+ *   animateursMemeAppartenance garde son sens : les ancrés.
  *
  * @param {import('./types.js').Configuration} configuration
  * @param {{planchersCollisions?: typeof planchersCollisions}} [calcul]

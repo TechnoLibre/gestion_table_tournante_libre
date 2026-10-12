@@ -14,7 +14,14 @@
 // par creer ; renommer écrit par enregistrer, en place, ou par
 // enregistrerAilleurs, sous le nouveau nom ; le journal d'un événement est
 // celui qu'ouvrir lui apparie, ou, faute d'état lisible, celui que lister
-// lui apparie. Ce module ne fait par lui-même que recopier les octets d'un
+// lui apparie. Le compagnon des courses (courses.js) suit la base de l'état :
+// copier et renommer le font écrire par le dépôt sous la base neuve ;
+// renommer supprime l'ancien, quand il existe, avec l'ancienne paire, ou le
+// déplace sous la base neuve quand l'écriture du neuf a été refusée ;
+// supprimer l'emporte dans la corbeille. Importer de l'autre emplacement le
+// recopie tel quel après l'état, et l'ouverture le revalide (lireCourses) ;
+// un fichier d'état venu d'ailleurs n'en a pas, et ses courses sont
+// inconnues. Ce module ne fait par lui-même que recopier les octets d'un
 // fichier, le déplacer ou le supprimer en entier.
 //
 // Un fichier d'un format plus récent que FORMAT ne se réécrit sous aucun nom
@@ -30,6 +37,7 @@
 // bases que portent les fichiers d'événement à la racine du dossier
 // (basesPrises), comme le dépôt la dérive pour creer.
 import { canoniser } from './canonique.js';
+import { entreesPour } from './courses.js';
 import {
   basesPrises,
   creer,
@@ -79,6 +87,18 @@ async function texteSiPresent(fs, racine, chemin) {
   } catch (erreur) {
     if (erreur.code === 'ABSENT') return null;
     if (erreur.code === 'LECTURE' && erreur.details.cause === 'UTF8_INVALIDE') return null;
+    throw erreur;
+  }
+}
+
+// Texte du fichier chemin, ou null quand sa lecture échoue par une
+// ErreurStockage — absent, hors UTF-8, refusé — : la lecture du compagnon
+// des courses, qui ne refuse jamais rien. Toute autre erreur remonte.
+async function texteSiLisible(fs, racine, chemin) {
+  try {
+    return await fs.lireTexte(racine, chemin);
+  } catch (erreur) {
+    if (erreur instanceof ErreurStockage) return null;
     throw erreur;
   }
 }
@@ -142,8 +162,10 @@ export function libelleDeLInstant({ journal, revision }, libelleReprise) {
  * identifiant et son nom, et l'instant copié, la révision de l'Ouvert et le
  * libellé de son entrée au journal. L'historique ne se copie pas : creer
  * écrit un journal d'une entrée, en instantané, au libellé libelle, et son
- * jalon nomJalon, puis l'état ; sa base se dérive du nom. L'original n'est
- * ni lu ni écrit : la copie part de l'Ouvert, en lecture comme en écriture.
+ * jalon nomJalon, puis l'état, puis le compagnon des courses que l'Ouvert
+ * connaît pour ses propositions, sous l'identifiant de la copie ; sa base se
+ * dérive du nom. L'original n'est ni lu ni écrit : la copie part de
+ * l'Ouvert, en lecture comme en écriture.
  *
  * @param {import('./depot.js').Ouvert} ouvert
  * @param {Object} options
@@ -173,7 +195,8 @@ export async function copier(ouvert, { id, nom, libelle, nomJalon, horodatage, p
     etat: etatDeduit(charge),
     filiation: { source: { id: source.id, nom: source.nom }, instant },
   };
-  return creer(ouvert.fs, ouvert.racine, charge, { libelle, nomJalon, horodatage, produitVersion });
+  const courses = entreesPour(ouvert.courses, charge.propositions);
+  return creer(ouvert.fs, ouvert.racine, charge, { libelle, nomJalon, horodatage, produitVersion, courses });
 }
 
 // Vrai quand la base que deriver tire du nom, parmi les autres bases, tombe
@@ -197,6 +220,20 @@ function tombeSur(deriver, autres, base) {
 async function effacerSiPossible(fs, racine, chemin) {
   try {
     await fs.supprimer(racine, chemin);
+    return true;
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+    return false;
+  }
+}
+
+// Déplace le fichier de dans racine vers vers. Rend vrai quand il y est
+// passé, et faux quand le système de fichiers refuse, par une
+// ErreurStockage, qui ne lève pas : de reste alors où il est. Toute autre
+// erreur remonte.
+async function deplacerSiPossible(fs, racine, de, vers) {
+  try {
+    await fs.deplacer(racine, de, vers);
     return true;
   } catch (erreur) {
     if (!(erreur instanceof ErreurStockage)) throw erreur;
@@ -252,18 +289,31 @@ async function ecrireNouvellePaire(ouvert, options) {
 
 // Supprime l'ancienne paire de l'Ouvert, la nouvelle étant complète : son
 // état d'abord, sans lequel lister ne la montre plus, la nouvelle portant
-// son identifiant ; puis son .precedent et le journal de l'événement
-// (baseJournal), jamais celui d'un autre ; un fichier absent n'est pas une
-// faute. Une ErreurStockage reçoit dans ses détails ouvert, l'Ouvert de la
-// nouvelle paire, d'où continuer, puis remonte : celui que tient l'appelant
-// décrit l'ancienne, et un geste parti de lui ferait diverger deux paires du
-// même événement.
+// son identifiant ; puis son .precedent, le journal de l'événement
+// (baseJournal), jamais celui d'un autre, et son compagnon des courses
+// quand la liste du dossier le porte, sous son nom sur le disque
+// (nomSurDisque) ; un fichier absent n'est pas une faute, ni un dossier
+// disparu, dont la liste est vide (entreesDe). Quand l'écriture du
+// compagnon neuf a été refusée (nouvelle.compagnon null), l'ancien ne se
+// supprime pas : il se déplace sous la nouvelle base, qui retrouve ainsi
+// ses courses à la réouverture, ou reste où il est quand le déplacement
+// est refusé ; ni l'un ni l'autre ne lève. Une ErreurStockage reçoit
+// dans ses détails ouvert, l'Ouvert de la nouvelle paire, d'où continuer,
+// puis remonte : celui que tient l'appelant décrit l'ancienne, et un geste
+// parti de lui ferait diverger deux paires du même événement.
 async function supprimerAncienne(ouvert, nouvelle) {
   const { fs, racine, base, baseJournal } = ouvert;
   const chemins = [base + SUFFIXES.etat, base + SUFFIXES.precedent];
   if (baseJournal !== null) chemins.push(baseJournal + SUFFIXES.journal);
   try {
     for (const chemin of chemins) await fs.supprimer(racine, chemin);
+    const { insensibleCasse } = await fs.emplacements();
+    const noms = (await entreesDe(fs, racine, '')).map(({ nom }) => nom);
+    const compagnon = nomSurDisque(noms, base + SUFFIXES.courses, insensibleCasse);
+    if (compagnon !== null && nouvelle.compagnon !== null) await fs.supprimer(racine, compagnon);
+    if (compagnon !== null && nouvelle.compagnon === null) {
+      await deplacerSiPossible(fs, racine, compagnon, nouvelle.base + SUFFIXES.courses);
+    }
   } catch (erreur) {
     if (erreur instanceof ErreurStockage) erreur.details.ouvert = nouvelle;
     throw erreur;
@@ -278,8 +328,10 @@ async function supprimerAncienne(ouvert, nouvelle) {
  * refuse, ou par la casse —, le renommage est ce seul geste, en place
  * (enregistrer). Sinon, le logiciel écrit d'abord la paire complète sous la
  * nouvelle base — l'état d'avant au .precedent, le journal recopié suivi de
- * l'entrée du renommage, puis l'état —, puis supprime l'ancienne : son état,
- * son .precedent et le journal de l'événement, jamais l'inverse. Rien de
+ * l'entrée du renommage, puis l'état, puis le compagnon des courses —, puis
+ * supprime l'ancienne : son état, son .precedent, le journal de l'événement
+ * et son compagnon quand il existe, jamais l'inverse ; un compagnon neuf
+ * refusé laisse l'ancien se déplacer sous la nouvelle base. Rien de
  * l'ancienne paire ne s'écrit, et le .precedent neuf, posé avant le journal
  * neuf, tient ce journal à la nouvelle base : quel que soit le journal de
  * l'ancienne base — le sien, aucun pour un état importé, un illisible, celui
@@ -367,10 +419,12 @@ function decoder(octets) {
 // Écrit dans racine l'événement id, nom : ses fichiers, tels quels, chacun
 // quand il est donné, sous une base libre que nom dérive — le .precedent
 // d'abord, qui tient la base à l'événement (apparier, dans le dépôt), puis
-// le journal, puis l'état. Rend cette base. IDENTIFIANT_PRESENT quand lister
-// nomme id dans le dossier, que son état se lise ou non : l'événement y est
-// déjà, et une seconde copie de son identifiant dériverait (§ 8.6).
-async function deposer(fs, racine, { id, nom, texteEtat, textePrecedent = null, texteJournal }) {
+// le journal, puis l'état, puis le compagnon des courses. Rend cette base.
+// IDENTIFIANT_PRESENT quand lister nomme id dans le dossier, que son état
+// se lise ou non : l'événement y est déjà, et une seconde copie de son
+// identifiant dériverait (§ 8.6). Le refus d'écrire le compagnon, par une
+// ErreurStockage, ne lève pas : l'événement est là, ses courses inconnues.
+async function deposer(fs, racine, { id, nom, texteEtat, textePrecedent = null, texteJournal, texteCourses = null }) {
   const present = (await lister(fs, racine)).find((resume) => resume.id === id);
   if (present !== undefined) throw new ErreurStockage('IDENTIFIANT_PRESENT', { id, base: present.base });
   const { separateur } = await fs.emplacements();
@@ -379,6 +433,13 @@ async function deposer(fs, racine, { id, nom, texteEtat, textePrecedent = null, 
   if (textePrecedent !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.precedent, textePrecedent);
   if (texteJournal !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.journal, texteJournal);
   if (texteEtat !== null) await fs.ecrireAtomique(racine, base + SUFFIXES.etat, texteEtat);
+  if (texteCourses !== null) {
+    try {
+      await fs.ecrireAtomique(racine, base + SUFFIXES.courses, texteCourses);
+    } catch (erreur) {
+      if (!(erreur instanceof ErreurStockage)) throw erreur;
+    }
+  }
   return base;
 }
 
@@ -412,7 +473,8 @@ export async function importer(fs, racine, octets) {
 // Les fichiers de l'événement de base dans depuis, dont l'état ne se lit
 // pas, recopiés tels quels dans vers (deposer) : le .precedent et l'état,
 // chacun quand il existe et que ses octets sont de l'UTF-8, et le journal
-// que le secours source apparie, par ses lignes lisibles (journalSiPresent). Le secours source — 'precedent' ou 'journal'
+// que le secours source apparie, par ses lignes lisibles
+// (journalSiPresent). Le secours source — 'precedent' ou 'journal'
 // (ouvrirSecours) — donne l'identifiant et le nom. Rend la base dans vers.
 async function importerSecours(fs, depuis, vers, base, source) {
   const { charge, baseJournal } = await ouvrirSecours(fs, depuis, base, source);
@@ -429,9 +491,12 @@ async function importerSecours(fs, depuis, vers, base, source) {
 }
 
 // Importe l'événement de base de depuis dans vers (importerDepuis) et rend
-// sa base là-bas. Un état illisible qui a un secours lisible s'importe par
-// ses fichiers (importerSecours), le .precedent pour source quand il se lit ;
-// sans secours, son refus remonte.
+// sa base là-bas. Un état lisible s'importe avec son journal et son
+// compagnon des courses, tel quel, quand ses octets se lisent
+// (texteSiLisible) : l'ouverture là-bas le revalide entrée par entrée. Un
+// état illisible qui a un secours lisible s'importe par ses fichiers
+// (importerSecours), le .precedent pour source quand il se lit ; sans
+// secours, son refus remonte.
 async function importerUn(fs, depuis, vers, base) {
   let ouvert;
   try {
@@ -445,25 +510,27 @@ async function importerUn(fs, depuis, vers, base) {
   const { texteEtat, baseJournal } = ouvert;
   const { id, nom } = analyser(texteEtat).charge.evenement;
   const texteJournal = baseJournal === null ? null : await journalSiPresent(fs, depuis, baseJournal + SUFFIXES.journal);
-  return deposer(fs, vers, { id, nom, texteEtat, texteJournal });
+  const texteCourses = await texteSiLisible(fs, depuis, base + SUFFIXES.courses);
+  return deposer(fs, vers, { id, nom, texteEtat, texteJournal, texteCourses });
 }
 
 /**
  * Importe des événements de l'autre emplacement (§ 8.6) : pour chaque base
- * de depuis, dans l'ordre reçu, l'état et le journal qu'ouvrir lui apparie
- * se copient tels quels dans vers, le journal d'abord, sous une base libre
- * que dérive le nom que porte l'état. Le .precedent ne se copie pas. Un
- * événement dont l'état ne se lit pas, mais dont le .precedent ou le journal
- * se lisent (§ 8.8), se copie par ses fichiers, tels quels : le .precedent,
- * le journal que son secours apparie, et l'état, chacun quand ses octets
- * sont de l'UTF-8 ; il s'ouvre là-bas en secours. Un journal dont une ligne
- * n'est pas de l'UTF-8 se copie par les lignes qui la précèdent, celles que
- * l'ouverture lit (journalSiPresent). Les originaux restent où
- * ils sont, sans qu'aucune écriture ne touche depuis. Une base qui ne
- * s'importe pas se refuse par son code — ETAT_ILLISIBLE sans secours
- * lisible, ABSENT, IDENTIFIANT_PRESENT, ECRITURE… —, sans arrêter les
- * suivantes ; l'écriture refusée d'un fichier laisse dans vers ceux déjà
- * écrits.
+ * de depuis, dans l'ordre reçu, le journal qu'ouvrir lui apparie, son état,
+ * puis son compagnon des courses quand il se lit, se copient tels quels
+ * dans vers, sous une base libre que dérive le nom que porte l'état ; le
+ * refus d'écrire le compagnon ne refuse pas l'import. Le .precedent ne se
+ * copie pas. Un événement dont l'état ne se lit pas, mais dont le
+ * .precedent ou le journal se lisent (§ 8.8), se copie par ses fichiers,
+ * tels quels : le .precedent, le journal que son secours apparie, et
+ * l'état, chacun quand ses octets sont de l'UTF-8 ; il s'ouvre là-bas en
+ * secours. Un journal dont une ligne n'est pas de l'UTF-8 se copie par les
+ * lignes qui la précèdent, celles que l'ouverture lit (journalSiPresent).
+ * Les originaux restent où ils sont, sans qu'aucune écriture ne touche
+ * depuis. Une base qui ne s'importe pas se refuse par son code —
+ * ETAT_ILLISIBLE sans secours lisible, ABSENT, IDENTIFIANT_PRESENT,
+ * ECRITURE… —, sans arrêter les suivantes ; l'écriture refusée d'un
+ * fichier laisse dans vers ceux déjà écrits.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} depuis
@@ -513,12 +580,13 @@ async function baseDuJournal(fs, racine, base, insensibleCasse) {
  * dossier neuf de la corbeille, daté de l'horodatage (dossierCorbeille),
  * créé d'abord — _2, _3… quand la seconde a déjà le sien. Partent l'état, le
  * .precedent, le journal de l'événement (baseDuJournal), jamais celui d'un
- * autre, le verrou, et chacun de leurs fichiers d'écriture atomique restés ;
- * ceux-ci d'abord, puis le verrou, le journal, le .precedent, et l'état en
- * dernier. Sur un système de fichiers qui ignore la casse, un fichier se
- * reconnaît à la clé de son nom, la majuscule de sa NFC, comme deriverBase
- * compare les bases, et part sous son nom sur le disque : un journal, un
- * .precedent ou un verrou d'une autre casse est le même fichier. Sur un
+ * autre, le verrou, le compagnon des courses, et chacun de leurs fichiers
+ * d'écriture atomique restés ; ceux-ci d'abord, puis le verrou, le
+ * compagnon, le journal, le .precedent, et l'état en dernier. Sur un
+ * système de fichiers qui ignore la casse, un fichier se reconnaît à la clé
+ * de son nom, la majuscule de sa NFC, comme deriverBase compare les bases,
+ * et part sous son nom sur le disque : un journal, un .precedent, un
+ * compagnon ou un verrou d'une autre casse est le même fichier. Sur un
  * système sensible à la casse, seul le nom exact compte. Chaque déplacement
  * porte un fichier entier : une coupure laisse
  * chacun à sa place ou dans la corbeille, jamais perdu, et l'événement se
@@ -561,6 +629,7 @@ export async function supprimer(fs, racine, base, { horodatage, seance }) {
   const verrou = base + SUFFIXES.verrou;
   const fichiers = [
     verrou,
+    base + SUFFIXES.courses,
     ...(journal === null ? [] : [journal + SUFFIXES.journal]),
     base + SUFFIXES.precedent,
     base + SUFFIXES.etat,

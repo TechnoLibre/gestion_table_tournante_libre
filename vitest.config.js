@@ -126,6 +126,7 @@ export default defineConfig({
         'src/moteur/indicateurs.js': { branches: 100 },
         'src/moteur/paires.js': { branches: 100 },
         'src/moteur/plafond.js': { branches: 100 },
+        'src/moteur/qualite.js': { branches: 100 },
         'src/stockage/depot.js': { branches: 100 },
         'src/stockage/journal.js': { branches: 100 },
       },

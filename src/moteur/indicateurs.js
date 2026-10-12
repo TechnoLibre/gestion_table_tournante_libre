@@ -18,9 +18,10 @@
 // Une seule lecture du plan décide qu'une paire est réunie, collègue ou revue,
 // qu'une personne revient, qu'elle est servie par l'objectif de sa table et
 // quels animateurs elle rencontre : parcourirTours. mesurer en tire chacun de
-// ses chiffres, et conflitsParTable (conflits.js) le détail par table, si
+// ses chiffres, conflitsParTable (conflits.js) le détail par table, si
 // bien que la somme des violations par table égale le compte de la mesure
-// (§ 13.2).
+// (§ 13.2), et le détail de la page de qualité (qualite.js) ses comptes par
+// tour.
 //
 // Un tour servi et une rencontre d'animateur ne se comptent qu'à une table
 // que la personne peut occuper à ce tour : sa table fixée, ou, libre, une
@@ -139,17 +140,27 @@ const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
  * animateurs distincts, autres que p, qui animent à sa table, à un tour où
  * il l'occupe et peut l'occuper, et y sont assis.
  *
+ * Par tour, au même passage que servis (§ 5.4, B4) : servisParTour, S_r,
+ * les tours servis du tour r, si bien que leur somme sur les tours est celle
+ * de servis ; possiblesParTour, Π_r, les couples (p, r) possibles du tour,
+ * instance.possible, fixés et personnes en réserve compris, si bien que leur
+ * somme est celle de P(p) ; assisSansCoupleParTour, σ_r, les personnes
+ * assises à une table au tour r dont le couple (p, r) n'est pas possible,
+ * concernées ou non. Un servi a son couple possible : S_r ≤ Π_r, et σ_r + Π_r
+ * ne dépasse pas les présents.
+ *
  * Ne modifie ni l'instance ni le plan ; lève ce que lève exigerPlanIndexe.
  *
  * @param {import('./types.js').Instance} instance
  * @param {ArrayLike<number>} tableDe
  * @returns {{parTour: Array<Array<{collegues: number[][], revues: number[][], revenus: number[]}>>,
  *            parPaire: Uint16Array|Uint32Array, reunies: number[], toursAssis: number[], retours: number[],
- *            servis: number[], rencontresAnimateurs: number[]}}
+ *            servis: number[], rencontresAnimateurs: number[], servisParTour: number[],
+ *            possiblesParTour: number[], assisSansCoupleParTour: number[]}}
  */
 export function parcourirTours(instance, tableDe) {
   exigerPlanIndexe(instance, tableDe);
-  const { N, T, R, fixe, groupe, siegesLibres, O, objectifDe, correspond } = instance;
+  const { N, T, R, fixe, groupe, siegesLibres, O, objectifDe, correspond, possible } = instance;
   const { A, rangAnimateur, animateurs, debutAnimes, animes } = instance;
 
   // Personne par personne, ses tours dans l'ordre : visites[t] compte ses
@@ -162,11 +173,16 @@ export function parcourirTours(instance, tableDe) {
   // servi quand l'objectif en vigueur lui correspond, et chaque animateur qui
   // anime là et y est assis, autre qu'elle, rencontré. rencontre[f] vaut p
   // quand p a déjà rencontré l'animateur de rang f : la marque, datée par
-  // personne, n'a pas à se remettre à zéro.
+  // personne, n'a pas à se remettre à zéro. Le couple (p, r) possible compte
+  // dans Π_r avant que la réserve ne l'écarte ; assis, il entre dans σ_r
+  // quand il ne l'est pas, et un tour servi entre aussi dans S_r.
   const toursAssis = new Array(N).fill(0);
   const retours = new Array(N).fill(0);
   const servis = new Array(N).fill(0);
   const rencontresAnimateurs = new Array(N).fill(0);
+  const servisParTour = new Array(R).fill(0);
+  const possiblesParTour = new Array(R).fill(0);
+  const assisSansCoupleParTour = new Array(R).fill(0);
   const revenu = new Uint8Array(N * R);
   const visites = new Int32Array(T);
   const reserveeAvant = new Uint8Array(T);
@@ -174,14 +190,20 @@ export function parcourirTours(instance, tableDe) {
   for (let p = 0; p < N; p += 1) {
     const soi = rangAnimateur[p];
     for (let r = 0; r < R; r += 1) {
+      const couple = possible[p * R + r];
+      possiblesParTour[r] += couple;
       const t = tableDe[p * R + r];
       if (t === RESERVE) continue;
       toursAssis[p] += 1;
+      if (couple === 0) assisSansCoupleParTour[r] += 1;
       const imposee = fixe[p * R + r];
       const ligne = t * R + r;
       if (imposee === LIBRE ? siegesLibres[ligne] > 0 : imposee === t) {
         const o = objectifDe[ligne];
-        if (o !== SANS_OBJECTIF && correspond[p * O + o] === 1) servis[p] += 1;
+        if (o !== SANS_OBJECTIF && correspond[p * O + o] === 1) {
+          servis[p] += 1;
+          servisParTour[r] += 1;
+        }
         for (let k = debutAnimes[ligne], fin = debutAnimes[ligne + 1]; k < fin; k += 1) {
           const f = animes[k];
           if (f === soi || rencontre[f] === p || tableDe[animateurs[f] * R + r] !== t) continue;
@@ -247,7 +269,18 @@ export function parcourirTours(instance, tableDe) {
     }
     parTour.push(tables);
   }
-  return { parTour, parPaire, reunies, toursAssis, retours, servis, rencontresAnimateurs };
+  return {
+    parTour,
+    parPaire,
+    reunies,
+    toursAssis,
+    retours,
+    servis,
+    rencontresAnimateurs,
+    servisParTour,
+    possiblesParTour,
+    assisSansCoupleParTour,
+  };
 }
 
 // Lecture des paires réunies (reunies de parcourirTours), leurs comptes dans

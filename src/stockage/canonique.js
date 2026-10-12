@@ -31,6 +31,7 @@ const regleDuChamp = (regle, cle) => regle.champs.find(([nom]) => nom === cle)[1
 const ENTETE = regleDuChamp(SCHEMA, 'entete');
 const CHARGE = regleDuChamp(SCHEMA, 'charge');
 const RETENU = regleDuChamp(CHARGE, 'retenu');
+const PLACEMENT = regleDuChamp(regleDuChamp(CHARGE, 'propositions').element, 'placement');
 
 // Vrai pour un objet qui n'est ni null ni une liste.
 const estObjet = (valeur) => typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
@@ -174,6 +175,22 @@ export function serialiser(charge, { revision, produitVersion }) {
   const copie = canoniser(charge);
   const entete = copier({ format: FORMAT, produitVersion, revision, comptes: comptesDe(copie) }, ENTETE, 'entete');
   return `${rendre({ entete, charge: copie }, SCHEMA, 0)}\n`;
+}
+
+/**
+ * Texte canonique du placement d'une proposition : JSON.stringify de sa
+ * copie canonique, sur une ligne. Chaque réserve s'y range par identifiant
+ * croissant ; chaque liste de table aussi quand siegesAttribues est faux,
+ * et reste dans l'ordre des sièges quand il est vrai. Deux placements qui
+ * ne diffèrent que par un ordre que canoniser range ont le même texte. La
+ * proposition reçue n'est pas modifiée ; un placement hors de sa règle lève
+ * TypeError ou rend un texte quelconque, comme copier.
+ *
+ * @param {{placement: Object[], siegesAttribues: boolean}} proposition
+ * @returns {string}
+ */
+export function texteDuPlacement({ placement, siegesAttribues }) {
+  return JSON.stringify(copier(placement, PLACEMENT, 'placement', siegesAttribues));
 }
 
 /**

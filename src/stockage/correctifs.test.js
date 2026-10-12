@@ -1958,6 +1958,20 @@ describe('le placement daté : un champ facultatif du retenu et des propositions
   });
 });
 
+describe('le journal ne porte aucune course de la recherche (§ 8.6, § 8.9, B31)', () => {
+  // La course va au fichier compagnon des courses (courses.js) : une
+  // proposition qui la porte sort de sa règle, et aucune ligne ne l'écrit.
+  test('ligneEntree refuse une proposition qui porte une course, en instantané comme en correctif, avant toute écriture', () => {
+    const avant = petite();
+    const apres = petite();
+    apres.propositions[0].course = { evalues: 0, releves: [] };
+    const commun = { libelle: 'Geste', horodatage: '2031-05-17T20:15:00-04:00' };
+    const premiere = { ...commun, revision: 1, produitVersion: VERSION.affichee };
+    assert.throws(() => ligneEntree({ ...premiere, apres, instantane: true }), /course/);
+    assert.throws(() => ligneEntree({ ...commun, revision: 2, produitVersion: null, avant, apres, instantane: false }), /course/);
+  });
+});
+
 describe('les étiquettes, les objectifs et les réglages du format 2 dans un correctif (§ 8.6, § 8.9)', () => {
   // Une charge de deux personnes et deux tables, sans champ du format 2 ;
   // modifier passe sur une copie.

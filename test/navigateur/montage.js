@@ -26,11 +26,18 @@
 // de la police d'interface (attendrePolices) avant de monter App : un
 // mesureur de texte créé au premier rendu lit la police embarquée, non son
 // repli. Une face qui ne se charge pas fait échouer le montage.
+//
+// La section de la qualité, que src/main.js charge par son propre morceau,
+// est ici importée d'emblée : la fonction qu'App reçoit rend le composant
+// tel quel, et la section se monte sans état de chargement, au rendu même
+// qui l'ouvre. Une épreuve de ce chargement passe sa propre fonction, qui
+// rend une promesse.
 import { mount, unmount } from 'svelte';
 import { creerExecuteurDirect } from '../../src/application/generation.js';
 import { creerHorlogePilotee } from '../../src/application/horloge.js';
 import { demonstrationsLivrees } from '../../src/demo/livrees.js';
 import App from '../../src/interface/App.svelte';
+import SectionQualite from '../../src/interface/qualite/SectionQualite.svelte';
 import { attendrePolices, chargerPolices } from '../../src/polices/chargement.js';
 import { FORMAT } from '../../src/stockage/document.js';
 import { VERSION } from '../../src/version.genere.js';
@@ -118,6 +125,9 @@ export function tracer(fs) {
  *        sinon chargerPolices, celui de src/main.js
  * @param {Object} [options.imprimante]  l'imprimante qu'App reçoit ; sinon
  *        une imprimante d'épreuve neuve, dont chaque impression est envoyée
+ * @param {() => Function | PromiseLike<Function>} [options.sectionQualite]
+ *        le chargement de la section de la qualité qu'App reçoit ; sinon une
+ *        fonction qui rend le composant importé d'emblée
  * @returns {Promise<Object>} { app, racine, fs, disque, trace, horloge,
  *   presse, polices, imprimante, seance, facade, ui, erreurs(), demonter() }
  *   — polices est le chargement de la police qu'App a reçu, imprimante
@@ -139,6 +149,7 @@ export async function monterApp({
   demonstrations,
   polices = chargerPolices,
   imprimante = creerImprimanteSimulee(),
+  sectionQualite = () => SectionQualite,
 } = {}) {
   await installerCollecteur();
   await attendrePolices(document);
@@ -189,6 +200,7 @@ export async function monterApp({
       versionWindows: VERSION.windows,
       polices,
       imprimante,
+      sectionQualite,
       ...(theme === null ? {} : { themeInitial: theme }),
     },
   });

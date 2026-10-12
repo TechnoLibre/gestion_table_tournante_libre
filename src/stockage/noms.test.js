@@ -41,9 +41,9 @@ const DOSSIERS = [
 
 // Le dossier daté de la corbeille au rang de collision le plus long, à deux
 // chiffres, et les suffixes des fichiers d'un événement : le journal en compte
-// 18, l'état 9.
+// 18, l'état 9, le compagnon des courses 17.
 const CORBEILLE_RANG_99 = 'corbeille/2026-10-06_19-02-11_99';
-const SUFFIXES_ECRITS = ['.gtt.json', '.gtt.json.precedent', '.gtt-journal.jsonl', '.gtt.verrou'];
+const SUFFIXES_ECRITS = ['.gtt.json', '.gtt.json.precedent', '.gtt-journal.jsonl', '.gtt.verrou', '.gtt-courses.json'];
 
 // Le caractère de substitution haute d'une paire, et celui de substitution basse.
 const estHaute = (unite) => unite >= 0xd800 && unite <= 0xdbff;
@@ -153,6 +153,7 @@ describe('noms.js : valeurs du contrat', () => {
       precedent: '.gtt.json.precedent',
       journal: '.gtt-journal.jsonl',
       verrou: '.gtt.verrou',
+      courses: '.gtt-courses.json',
     });
     assert.ok(Object.isFrozen(SUFFIXES));
     assert.equal(SUFFIXE_ECRITURE, '.ecriture');
@@ -160,10 +161,12 @@ describe('noms.js : valeurs du contrat', () => {
     assert.equal(LONGUEUR_CHEMIN_MAX, 259);
   });
 
-  test("longueurs des suffixes : l'état 9, le journal 18, l'état précédent 19, et 28 avec le suffixe d'écriture", () => {
+  test("longueurs des suffixes : l'état 9, le journal 18, l'état précédent 19, le compagnon des courses 17, et 28 avec le suffixe d'écriture", () => {
     assert.deepEqual(
-      [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou].map((suffixe) => suffixe.length),
-      [9, 19, 18, 11],
+      [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou, SUFFIXES.courses].map(
+        (suffixe) => suffixe.length,
+      ),
+      [9, 19, 18, 11, 17],
     );
     assert.equal(SUFFIXE_ECRITURE.length, 9);
     assert.equal(`${SUFFIXES.precedent}${SUFFIXE_ECRITURE}`.length, 28);

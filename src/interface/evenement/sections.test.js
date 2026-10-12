@@ -1,22 +1,27 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les sections de l'événement ouvert (§ 2.1) : huit noms distincts, dans
-// l'ordre du parcours de l'opérateur — les badges, dernière étape, après les
-// propositions (§ 2.1 étape 12) —, chacun nommé par sa clé
-// coquille.section.<nom> de la table de la coquille ; la section d'ouverture
-// en est une. La navigation les groupe en trois phases — préparer, placer,
-// produire —, qui les couvrent chacune une fois, dans leur ordre.
+// Les sections de l'événement ouvert (§ 2.1) : neuf noms distincts, dans
+// l'ordre du parcours de l'opérateur — la qualité après les propositions
+// (§ 2.1 étape 10), les badges, dernière étape, après elle (§ 2.1 étape
+// 12) —, chacun nommé par sa clé coquille.section.<nom> de la table de la
+// coquille ; la section d'ouverture en est une. La navigation les groupe en
+// trois phases — préparer, placer, produire —, qui les couvrent chacune une
+// fois, dans leur ordre. La section de la qualité se lit à l'écran et ne
+// s'imprime pas (§ 11.7) : aucune vue de l'aperçu ne la porte. Qu'aucune
+// règle d'impression ne la vise s'éprouve au navigateur, sur les feuilles
+// appliquées (Qualite.navigateur.test.js).
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
+import { VUES_IMPRESSION } from '../etat_ui.js';
 import { TABLE as COQUILLE } from '../libelles/coquille.js';
 import { TABLE as EVENEMENT } from '../libelles/evenement.js';
 import { PHASES, SECTION_OUVERTURE, SECTIONS, cleDeSection } from './sections.js';
 
 describe('sections de l’événement (§ 2.1)', () => {
-  test('huit noms distincts, dans l’ordre du parcours, les badges après les propositions, figés', () => {
-    assert.deepEqual(SECTIONS, ['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions', 'badges']);
-    assert.equal(new Set(SECTIONS).size, 8);
+  test('neuf noms distincts, dans l’ordre du parcours, la qualité après les propositions, les badges après elle, figés', () => {
+    assert.deepEqual(SECTIONS, ['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions', 'qualite', 'badges']);
+    assert.equal(new Set(SECTIONS).size, 9);
     assert.ok(Object.isFrozen(SECTIONS));
   });
 
@@ -48,7 +53,7 @@ describe('les phases de la navigation', () => {
       PHASES.map(({ nom, sections }) => [nom, sections]),
       [
         ['preparer', ['import', 'participants', 'tables']],
-        ['placer', ['plan', 'diagnostic', 'generation', 'propositions']],
+        ['placer', ['plan', 'diagnostic', 'generation', 'propositions', 'qualite']],
         ['produire', ['badges']],
       ],
     );
@@ -76,5 +81,12 @@ describe('les phases de la navigation', () => {
       assert.ok(Object.isFrozen(phase), phase.nom);
       assert.ok(Object.isFrozen(phase.sections), phase.nom);
     }
+  });
+});
+
+describe('la section de la qualité ne s’imprime pas (§ 11.7, § 12)', () => {
+  test('les vues de l’aperçu restent le plan, l’accueil et les tables', () => {
+    assert.ok(SECTIONS.includes('qualite'));
+    assert.deepEqual(VUES_IMPRESSION, ['plan', 'accueil', 'tables']);
   });
 });

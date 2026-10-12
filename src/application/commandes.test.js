@@ -14,7 +14,8 @@ import { apercevoirObjectifs } from '../csv/objectifs.js';
 import { rechercher } from '../moteur/recherche.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
-import { derive, fautes, formeNommee, planDepuisFichier } from '../stockage/placements.js';
+import { cleDeCourse } from '../stockage/courses.js';
+import { courseDepuisFichier, derive, fauteDeCourse, fautes, formeNommee, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { readFileSync } from 'node:fs';
 import { chargements } from '../../test/chargements.js';
@@ -767,6 +768,120 @@ describe('commandes : générer, retenir, effacer (§ 5.7, § 8.9)', () => {
     assert.deepEqual(videe.charge.propositions, []);
     assert.equal(videe.charge.evenement.etat, 'brouillon');
     assert.equal(videe.libelle, 'Effacé 2 propositions');
+  });
+});
+
+describe('commandes : la course de la recherche, rendue à côté de la charge (§ 8.9, B31, D53)', () => {
+  // La charge d'essai sur trois tours, sièges attribués, deux tables de
+  // trois places pour quatre personnes : Iris Ombrelle réservée au siège 3
+  // de la table 1, Ondine Lacasse au siège 3 de la table 2, à chaque tour.
+  // Chaque table assied sa réservée et au plus deux autres, et l'une au
+  // moins reste incomplète : une chaise vide avant le siège 3 à chaque tour.
+  function chargeAuxSieges() {
+    const charge = chargeEssai();
+    charge.evenement.siegesParDefaut = 3;
+    charge.evenement.tours = 3;
+    charge.reglages.attribuerSieges = true;
+    charge.reservations = [
+      { participant: 1, table: 1, siege: 3, portee: 'tous', tour: null },
+      { participant: 4, table: 2, siege: 3, portee: 'tous', tour: null },
+    ];
+    charge.titres = [];
+    return charge;
+  }
+
+  // Le plan reçu, chaque liste et chaque réserve par identifiant croissant,
+  // sans chaise vide.
+  const range = ({ tables, tours, reserves }) => ({
+    tables: [...tables],
+    tours: tours.map((listes) => listes.map((liste) => liste.filter((id) => id !== null).sort((a, b) => a - b))),
+    reserves: reserves.map((reserve) => [...reserve].sort((a, b) => a - b)),
+  });
+
+  test('enregistrerGeneration rend la course de chaque proposition à côté de la charge, sous son identité ; la charge et ses propositions ne portent aucune course', () => {
+    const avant = chargeEssai();
+    const args = generer(avant, 2, 7);
+    args.propositions = rechercher(args.configuration, { graine: 7, arret: 200, nombre: 2 });
+    const { charge, courses, libelle } = executer('enregistrerGeneration', avant, args);
+    assert.deepEqual(charge.propositions.map(({ id }) => id), [1, 2]);
+    assert.equal(charge.prochainsIds.proposition, 3);
+    assert.equal(libelle, 'Généré 2 propositions (n° 1 à 2)');
+    assert.equal(serialiserCharge(charge).includes('evalues'), false);
+    assert.deepEqual(courses.map(cleDeCourse), charge.propositions.map(cleDeCourse));
+    charge.propositions.forEach((p, rang) => {
+      assert.equal(Object.hasOwn(p, 'course'), false);
+      const { course } = courses[rang];
+      assert.equal(fauteDeCourse(p, course), null);
+      for (const { placement } of course.releves) {
+        for (const { sieges } of placement) {
+          for (const liste of sieges) assert.deepEqual(liste, [...liste].sort((a, b) => a - b));
+        }
+      }
+      assert.deepEqual(courseDepuisFichier(p, course), {
+        evalues: args.propositions[rang].evalues,
+        releves: args.propositions[rang].releves.map(({ mouvements, plan }) => ({ mouvements, plan: range(plan) })),
+      });
+    });
+  });
+
+  test("appliquée à un instant, la génération date chaque entrée de course comme sa proposition, et la clé de course en tient compte ; sans instant, aucune n'est datée", () => {
+    const avant = chargeEssai();
+    const args = generer(avant, 2, 7);
+    args.propositions = rechercher(args.configuration, { graine: 7, arret: 200, nombre: 2 });
+    const horodatage = '2031-05-17T08:02:00-04:00';
+    const datee = appliquerCommande('enregistrerGeneration', avant, args, { horodatage });
+    assert.deepEqual(datee.charge.propositions.map((p) => p.horodatage), [horodatage, horodatage]);
+    assert.deepEqual(datee.courses.map((entree) => entree.horodatage), [horodatage, horodatage]);
+    assert.deepEqual(datee.courses.map(cleDeCourse), datee.charge.propositions.map(cleDeCourse));
+    const sansInstant = appliquerCommande('enregistrerGeneration', avant, args);
+    assert.equal(sansInstant.courses.some((entree) => Object.hasOwn(entree, 'horodatage')), false);
+    assert.deepEqual(sansInstant.courses.map(cleDeCourse), sansInstant.charge.propositions.map(cleDeCourse));
+    assert.notDeepEqual(sansInstant.courses.map(cleDeCourse), datee.courses.map(cleDeCourse));
+  });
+
+  test('sièges attribués, chaque placement de relevé se range par siège comme celui de la proposition : la chaise vide et les sièges réservés à leur place, et la course se lit sous la proposition', () => {
+    const avant = chargeAuxSieges();
+    const configuration = configurationDepuisCharge(avant);
+    const propositions = rechercher(configuration, { graine: 7, arret: 200, nombre: 2 });
+    const { charge, courses } = executer('enregistrerGeneration', avant, { propositions, configuration, produitVersion: V1 });
+    let chaisesVides = 0;
+    charge.propositions.forEach((p, rang) => {
+      const source = propositions[rang];
+      const { course } = courses[rang];
+      assert.equal(p.siegesAttribues, true);
+      assert.deepEqual(fautes(p), []);
+      assert.equal(fauteDeCourse(p, course), null);
+      assert.equal(course.evalues, source.evalues);
+      assert.deepEqual(course.releves.map(({ mouvements }) => mouvements), [1, 10, 100]);
+      const placements = [p.placement, ...course.releves.map(({ placement }) => placement)];
+      placements.forEach((placement, point) => {
+        placement.forEach(({ sieges }, tour) => {
+          const ici = `proposition ${p.id}, point ${point}, tour ${tour + 1}`;
+          assert.equal(sieges[p.tables.indexOf(1)][2], 1, ici);
+          assert.equal(sieges[p.tables.indexOf(2)][2], 4, ici);
+          for (const liste of sieges) {
+            assert.equal(liste.length, 3, ici);
+            chaisesVides += liste.filter((id) => id === null).length;
+          }
+        });
+      });
+      assert.deepEqual(
+        courseDepuisFichier(p, course).releves.map(({ plan }) => plan),
+        source.releves.map(({ plan }) => range(plan)),
+      );
+    });
+    assert.ok(chaisesVides > 0);
+  });
+
+  test("sans course rapportée par le moteur, aucune course n'est rendue ; retenir et effacer n'en rendent aucune", () => {
+    const args = generer(chargeEssai(), 2);
+    args.propositions = args.propositions.map(({ evalues, releves, ...proposition }) => proposition);
+    const sans = executer('enregistrerGeneration', chargeEssai(), args);
+    assert.deepEqual(sans.courses, []);
+    assert.equal(executer('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 2)).courses.length, 2);
+    const retenue = executer('retenirProposition', sans.charge, { id: 1 });
+    assert.equal(Object.hasOwn(retenue, 'courses'), false);
+    assert.equal(Object.hasOwn(executer('effacerPropositions', retenue.charge, {}), 'courses'), false);
   });
 });
 

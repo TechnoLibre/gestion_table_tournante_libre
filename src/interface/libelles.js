@@ -18,11 +18,13 @@ import { TABLE as DIAGNOSTIC } from './libelles/diagnostic.js';
 import { TABLE as EVENEMENT } from './libelles/evenement.js';
 import { TABLE as FEUILLES } from './libelles/feuilles.js';
 import { TABLE as GENERATION } from './libelles/generation.js';
+import { TABLE as GRAPHIQUES } from './libelles/graphiques.js';
 import { TABLE as IMPORT } from './libelles/import.js';
 import { TABLE as IMPRESSION } from './libelles/impression.js';
 import { TABLE as PARTICIPANTS } from './libelles/participants.js';
 import { TABLE as PLAN } from './libelles/plan.js';
 import { TABLE as PROPOSITIONS } from './libelles/propositions.js';
+import { TABLE as QUALITE } from './libelles/qualite.js';
 import { TABLE as RACCOURCIS } from './libelles/raccourcis.js';
 import { TABLE as TABLES } from './libelles/tables.js';
 
@@ -36,11 +38,13 @@ export const TABLES_INTERFACE = Object.freeze([
   EVENEMENT,
   FEUILLES,
   GENERATION,
+  GRAPHIQUES,
   IMPORT,
   IMPRESSION,
   PARTICIPANTS,
   PLAN,
   PROPOSITIONS,
+  QUALITE,
   RACCOURCIS,
   TABLES,
 ]);

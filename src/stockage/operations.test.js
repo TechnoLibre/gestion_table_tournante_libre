@@ -16,6 +16,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
 import { VERSION } from '../version.genere.js';
 import { serialiser, serialiserCharge } from './canonique.js';
+import { courseDe, entreeDeCourse, texteDesCourses } from './courses.js';
 import { creer, enregistrer, lister, ouvrir, ouvrirSecours, verrouiller } from './depot.js';
 import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
@@ -42,6 +43,7 @@ const ETAT = `${BASE}${SUFFIXES.etat}`;
 const PRECEDENT = `${BASE}${SUFFIXES.precedent}`;
 const JOURNAL = `${BASE}${SUFFIXES.journal}`;
 const VERROU = `${BASE}${SUFFIXES.verrou}`;
+const COURSES = `${BASE}${SUFFIXES.courses}`;
 
 const REPRISE = "Reprise de l'état trouvé sur le disque";
 const UTF8 = new TextEncoder();
@@ -1919,5 +1921,164 @@ describe('opérations : un état aux octets hors UTF-8 (§ 8.8)', () => {
       const rouvert = await ouvrir(creerFichiersSimules({ disque }), DOC, base);
       assert.deepEqual([rouvert.charge.evenement.nom, rouvert.avertissements], [nom, []], nom);
     }
+  });
+});
+
+// --- Le compagnon des courses (§ 8.6, § 8.7, § 8.9, B31) --------------------
+
+// Un événement de deux révisions dont la seconde est une génération : la
+// proposition 2 ajoutée, avec sa course à 100 mouvements évalués — un point
+// de relevé à 1 et à 10, chacun une copie de son placement —, et le
+// compagnon qui la porte.
+async function avecUneCourse() {
+  const { disque, fs } = nouveauDisque();
+  const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+  const apres = structuredClone(ouvert.charge);
+  const neuve = proposition(2);
+  apres.propositions.push(neuve);
+  apres.prochainsIds.proposition = 3;
+  const releves = [1, 10].map((mouvements) => ({ mouvements, placement: structuredClone(neuve.placement) }));
+  const entree = entreeDeCourse(neuve, { evalues: 100, releves });
+  const genere = await enregistrer(ouvert, apres, geste(2, { courses: [entree] }));
+  assert.equal(fs.contenu('documents', COURSES), texteDesCourses('evt-lucioles', [entree]));
+  return { disque, fs, ouvert: genere, entree };
+}
+
+describe("opérations : le compagnon des courses suit l'événement (§ 8.7, B31)", () => {
+  test("renommer écrit le compagnon sous la nouvelle base, après l'état, et supprime l'ancien avec l'ancienne paire ; rouvert sous son nouveau nom, l'événement retrouve sa course", async () => {
+    const { disque, fs, ouvert, entree } = await avecUneCourse();
+    const nouvelle = 'Gala des Saules';
+    const trace = tracer(fs);
+    const renomme = await renommer(ouvert, renommage(nouvelle, 3));
+    assert.deepEqual(trace, [
+      ['ecrireAtomique', `${nouvelle}${SUFFIXES.precedent}`],
+      ['ecrireAtomique', `${nouvelle}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${nouvelle}${SUFFIXES.etat}`],
+      ['ecrireAtomique', `${nouvelle}${SUFFIXES.courses}`],
+      ['supprimer', ETAT],
+      ['supprimer', PRECEDENT],
+      ['supprimer', JOURNAL],
+      ['supprimer', COURSES],
+    ]);
+    assert.equal(fs.contenu('documents', `${nouvelle}${SUFFIXES.courses}`), texteDesCourses('evt-lucioles', [entree]));
+    assert.equal(fs.contenu('documents', COURSES), null);
+    assert.equal(courseDe(renomme, 2).evalues, 100);
+    const rouvert = await ouvrir(creerFichiersSimules({ disque }), DOC, nouvelle);
+    assert.deepEqual(courseDe(rouvert, 2), courseDe(ouvert, 2));
+  });
+
+  test("renommer en place, le nom ne changeant que par la casse, garde le compagnon tel quel : les propositions ne changent pas", async () => {
+    const { fs, ouvert, entree } = await avecUneCourse();
+    const trace = tracer(fs);
+    const renomme = await renommer(ouvert, renommage(BASE.toUpperCase(), 3));
+    assert.equal(renomme.base, BASE);
+    assert.deepEqual(trace.filter(([, chemin]) => chemin === COURSES), []);
+    assert.equal(fs.contenu('documents', COURSES), texteDesCourses('evt-lucioles', [entree]));
+  });
+
+  test("copier écrit le compagnon de la copie sous son identifiant, après son état ; l'original et son compagnon restent octet pour octet", async () => {
+    const { disque, fs, ouvert, entree } = await avecUneCourse();
+    const avant = await arbre(disque);
+    const variante = 'Variante des Lucioles';
+    const trace = tracer(fs);
+    const copie = await copier(ouvert, optionsCopie(variante));
+    assert.deepEqual(trace, [
+      ['ecrireAtomique', `${variante}${SUFFIXES.journal}`],
+      ['ecrireAtomique', `${variante}${SUFFIXES.etat}`],
+      ['ecrireAtomique', `${variante}${SUFFIXES.courses}`],
+    ]);
+    assert.equal(fs.contenu('documents', `${variante}${SUFFIXES.courses}`), texteDesCourses('evt-variante', [entree]));
+    assert.equal(courseDe(copie, 2).evalues, 100);
+    const apres = await arbre(disque);
+    assert.deepEqual(apres.filter(([chemin]) => !chemin.startsWith(variante)), avant);
+  });
+
+  // L'écriture du compagnon sous la nouvelle base refusée, et elle seule.
+  function refuserLeCompagnon(fs, base) {
+    const ecrire = fs.ecrireAtomique;
+    fs.ecrireAtomique = (racine, chemin, ...reste) => {
+      if (chemin !== `${base}${SUFFIXES.courses}`) return ecrire(racine, chemin, ...reste);
+      return Promise.reject(new ErreurStockage('ECRITURE', { chemin, dossier: racine.chemin, cause: 'EACCES' }));
+    };
+  }
+
+  test("renommer dont le compagnon neuf est refusé y déplace l'ancien au lieu de le supprimer : rouvert sous son nouveau nom, l'événement retrouve sa course", async () => {
+    const { disque, fs, ouvert, entree } = await avecUneCourse();
+    const nouvelle = 'Gala des Saules';
+    refuserLeCompagnon(fs, nouvelle);
+    const trace = tracer(fs);
+    const renomme = await renommer(ouvert, renommage(nouvelle, 3));
+    assert.equal(renomme.compagnon, null);
+    assert.deepEqual(trace.slice(-4), [
+      ['supprimer', ETAT],
+      ['supprimer', PRECEDENT],
+      ['supprimer', JOURNAL],
+      ['deplacer', COURSES, `${nouvelle}${SUFFIXES.courses}`],
+    ]);
+    assert.equal(fs.contenu('documents', COURSES), null);
+    assert.equal(fs.contenu('documents', `${nouvelle}${SUFFIXES.courses}`), texteDesCourses('evt-lucioles', [entree]));
+    assert.equal(courseDe(renomme, 2).evalues, 100);
+    const rouvert = await rouvrir(disque, nouvelle);
+    assert.deepEqual(courseDe(rouvert, 2), courseDe(ouvert, 2));
+  });
+
+  test("renommer dont le compagnon neuf est refusé, et le déplacement de l'ancien aussi, garde l'ancien sous l'ancienne base sans lever", async () => {
+    const { fs, ouvert, entree } = await avecUneCourse();
+    const nouvelle = 'Gala des Saules';
+    refuserLeCompagnon(fs, nouvelle);
+    fs.deplacer = (racine, de) =>
+      Promise.reject(new ErreurStockage('ECRITURE', { chemin: de, dossier: racine.chemin, cause: 'EBUSY' }));
+    const renomme = await renommer(ouvert, renommage(nouvelle, 3));
+    assert.equal(renomme.base, nouvelle);
+    assert.equal(fs.contenu('documents', COURSES), texteDesCourses('evt-lucioles', [entree]));
+    assert.equal(fs.contenu('documents', ETAT), null);
+  });
+
+  test("importerDepuis recopie le compagnon tel quel, après l'état ; là-bas, l'événement retrouve sa course. Sans compagnon, illisible ou refusé à l'écriture, l'import passe, sans course", async () => {
+    const PORTABLE = { executable: 'E:\\soirees' };
+    const { disque, fs, ouvert, entree } = await avecUneCourse();
+    const ailleurs = creerFichiersSimules({ disque, ...PORTABLE });
+    ailleurs.deposerDossier('portable');
+    const { portable, documents } = await ailleurs.racines();
+    const texte = texteDesCourses('evt-lucioles', [entree]);
+
+    const trace = tracer(ailleurs);
+    assert.deepEqual(await importerDepuis(ailleurs, documents, portable, [BASE]), {
+      importes: [{ base: BASE, nouvelle: BASE }],
+      refuses: [],
+    });
+    assert.deepEqual(trace.map(([, chemin]) => chemin).slice(-2), [ETAT, COURSES]);
+    assert.equal(ailleurs.contenu('portable', COURSES), texte);
+    const importe = await ouvrir(creerFichiersSimules({ disque, ...PORTABLE }), portable, BASE);
+    assert.deepEqual(courseDe(importe, 2), courseDe(ouvert, 2));
+
+    for (const [libelle, preparer] of [
+      ['sans compagnon', (f) => f.supprimer(documents, COURSES)],
+      ['compagnon hors UTF-8', (f) => f.deposerOctets('documents', COURSES, Uint8Array.of(0xff, 0xfe, 0x00))],
+      ['écriture refusée', (f) => refuserLeCompagnon(f, BASE)],
+    ]) {
+      const cas = await avecUneCourse();
+      const autre = creerFichiersSimules({ disque: cas.disque, ...PORTABLE });
+      autre.deposerDossier('portable');
+      const racines = await autre.racines();
+      await preparer(autre);
+      const rendu = await importerDepuis(autre, racines.documents, racines.portable, [BASE]);
+      assert.deepEqual(rendu, { importes: [{ base: BASE, nouvelle: BASE }], refuses: [] }, libelle);
+      const relu = await ouvrir(creerFichiersSimules({ disque: cas.disque, ...PORTABLE }), racines.portable, BASE);
+      assert.equal(courseDe(relu, 2), null, libelle);
+    }
+  });
+
+  test("supprimer emporte le compagnon et son écriture restée dans le dossier daté, après le verrou et avant le journal", async () => {
+    const { disque, fs } = await avecUneCourse();
+    fs.deposer('documents', `${COURSES}.ecriture`, 'partiel');
+    const trace = tracer(fs);
+    assert.deepEqual(await supprimer(fs, DOC, BASE, { horodatage: HEURE_SUPPRESSION, seance: SEANCE }), { dossier: DATE });
+    const deplaces = [`${COURSES}.ecriture`, VERROU, COURSES, JOURNAL, PRECEDENT, ETAT];
+    assert.deepEqual(trace.filter(([primitive]) => primitive === 'deplacer'), deplaces.map((nom) => ['deplacer', nom, `${DATE}/${nom}`]));
+    assert.deepEqual(
+      (await arbre(disque)).map(([chemin]) => chemin).filter((chemin) => !chemin.startsWith(DATE)),
+      [],
+    );
   });
 });

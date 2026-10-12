@@ -96,7 +96,18 @@
 // journal que l'identifiant apparie, l'Ouvert l'annonce, JOURNAL_ILLISIBLE,
 // et la première écriture pose l'historique sous une base libre, comme pour
 // le journal d'un autre événement.
+//
+// Le compagnon des courses, <base>.gtt-courses.json (courses.js), suit la
+// base de l'état. L'ouverture le lit sans jamais s'y arrêter : absent,
+// illisible ou contradictoire, il laisse inconnues les courses qu'il ne
+// confirme pas. L'Ouvert garde en mémoire les courses lues et celles des
+// générations de la séance, y compris celles de propositions qu'un geste a
+// retirées : un retour qui les rend retrouve leur course. Une écriture pose
+// le compagnon après l'état, et seulement quand les courses connues des
+// propositions écrites ne sont plus celles qu'il porte (poserCompagnon) ;
+// un refus d'écrire le compagnon ne refuse pas l'écriture.
 import { canoniser, serialiser } from './canonique.js';
+import { avecCourses, cleDeCourse, entreesPour, lireCourses, texteDesCourses } from './courses.js';
 import { FORMAT, analyser } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import {
@@ -154,6 +165,13 @@ import { examiner } from './placements.js';
  * @property {boolean} etatMalEncode   l'état sur le disque, à côté du secours
  *           ouvert, n'est pas de l'UTF-8 : le premier geste le met de côté
  *           dans la corbeille (mettreDeCoteEtatMalEncode) avant d'écrire
+ * @property {Map<string, Object>} courses   les courses de la recherche que
+ *           l'Ouvert connaît, par cleDeCourse (courses.js) : celles que le
+ *           compagnon confirme à l'ouverture, et celles des générations de
+ *           la séance, même d'une proposition retirée depuis
+ * @property {string[]|null} compagnon   les clés des courses que le
+ *           compagnon sur le disque porte, null quand une écriture refusée
+ *           le laisse inconnu : la prochaine écriture le pose
  * @property {import('./placements.js').Examen} examen
  * @property {Array<{code: string, details: Object}>} avertissements   dans
  *           cet ordre, chacun au plus une fois : RETENU_FAUTIF {}, un retenu
@@ -203,9 +221,16 @@ import { examiner } from './placements.js';
  *           le même identifiant
  */
 
-// Suffixes des fichiers d'un événement : une base que l'un d'eux porte dans
-// un dossier n'est pas libre.
-const SUFFIXES_EVENEMENT = [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal, SUFFIXES.verrou];
+// Suffixes des fichiers d'un événement, compagnon des courses compris : une
+// base que l'un d'eux porte dans un dossier n'est pas libre. Un compagnon
+// resté seul ne passe ainsi jamais à un autre événement.
+const SUFFIXES_EVENEMENT = [
+  SUFFIXES.etat,
+  SUFFIXES.precedent,
+  SUFFIXES.journal,
+  SUFFIXES.verrou,
+  SUFFIXES.courses,
+];
 
 // Deux chaînes, comparées unité UTF-16 par unité.
 const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -334,9 +359,9 @@ function formatPlusRecentDe(texte) {
 
 /**
  * Bases que portent les fichiers d'événement — état, .precedent, journal,
- * verrou — à la racine de racine, dans l'ordre de sa liste, sans rien
- * écrire : une base que l'un d'eux porte n'est pas libre (deriverBase). Une
- * base revient une fois par fichier qui la porte.
+ * verrou, compagnon des courses — à la racine de racine, dans l'ordre de sa
+ * liste, sans rien écrire : une base que l'un d'eux porte n'est pas libre
+ * (deriverBase). Une base revient une fois par fichier qui la porte.
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -382,6 +407,17 @@ function vueDe(fs, racine) {
     journal: async (chemin) => journalLisible(await fichier(chemin)),
     // Vrai quand le fichier existe, que ses octets soient de l'UTF-8 ou non.
     present: async (chemin) => (await fichier(chemin)).present,
+    // Le texte du fichier, null quand il manque, que ses octets ne sont pas
+    // de l'UTF-8 ou que sa lecture est refusée : la lecture qui ne doit
+    // jamais refuser l'ouverture, celle du compagnon des courses.
+    texteSiLisible: async (chemin) => {
+      try {
+        return (await fichier(chemin)).texte;
+      } catch (erreur) {
+        if (erreur instanceof ErreurStockage) return null;
+        throw erreur;
+      }
+    },
     // { texte, lecture, details } d'un fichier d'état ou d'un .precedent :
     // les trois null quand il manque ; texte et lecture null, details
     // {raison: 'ENCODAGE', chemin: null}, quand ses octets ne sont pas de
@@ -603,13 +639,17 @@ export function rattraper(etat, instant) {
 // rattraper. La source d'un format plus récent, ou un journal d'un format
 // plus récent, gardent l'Ouvert en lecture seule. Un journal dont la lecture
 // a écarté des lignes, ou d'un format plus ancien, se réécrira en entier à
-// la prochaine écriture (journalAReecrire).
-function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage }) {
+// la prochaine écriture (journalAReecrire). texteCourses, le texte du
+// compagnon des courses de la base, null quand il ne se lit pas : les
+// courses qu'il confirme pour la charge examinée (lireCourses) sont celles
+// de l'Ouvert, et compagnon leurs clés.
+function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage, texteCourses }) {
   const lu = avecRattrapage ? rattraper(source, instant) : { ...source, rattrape: false };
   const { charge, revision, produitVersion, manquants, rattrape } = lu;
   const journal = instant?.journal ?? null;
   const ecartees = journal?.ecartees ?? trouve.lu?.ecartees ?? 0;
   const examen = examiner(charge);
+  const courses = lireCourses(texteCourses, examen.charge);
   return {
     fs,
     racine,
@@ -625,6 +665,8 @@ function assembler({ fs, racine, base, source, trouve, instant, avecRattrapage }
     journalAReecrire: journal !== null && (ecartees > 0 || journal.format < FORMAT),
     formatPlusRecent: source.formatPlusRecent || trouve.format !== null,
     etatMalEncode: source.etatMalEncode,
+    courses,
+    compagnon: [...courses.keys()],
     examen,
     avertissements: avertir({
       examen,
@@ -776,7 +818,9 @@ export async function ouvrir(fs, racine, base) {
   if (etat.lecture === null) throw await refuser(vue, base, etat.details ?? { raison: 'ABSENT', chemin: null });
   const trouve = await journalDe(vue, base, etat.lecture.charge.evenement.id);
   const source = depuisLecture(etat.lecture, surDisque(etat.texte, etat));
-  return assembler({ fs, racine, base, source, trouve, instant: instantDe(trouve.lu), avecRattrapage: true });
+  const texteCourses = await vue.texteSiLisible(base + SUFFIXES.courses);
+  const instant = instantDe(trouve.lu);
+  return assembler({ fs, racine, base, source, trouve, instant, avecRattrapage: true, texteCourses });
 }
 
 /**
@@ -829,7 +873,9 @@ export async function ouvrirSecours(fs, racine, base, source) {
     const { lecture } = precedent;
     const trouve = await journalDe(vue, base, lecture.charge.evenement.id);
     const depuis = depuisLecture(lecture, disque);
-    return assembler({ fs, racine, base, source: depuis, trouve, instant: instantDe(trouve.lu), avecRattrapage: false });
+    const texteCourses = await vue.texteSiLisible(base + SUFFIXES.courses);
+    const instant = instantDe(trouve.lu);
+    return assembler({ fs, racine, base, source: depuis, trouve, instant, avecRattrapage: false, texteCourses });
   }
   const trouve = await (etat.lecture === null
     ? journalSansEtat(vue, base)
@@ -853,7 +899,8 @@ export async function ouvrirSecours(fs, racine, base, source) {
     manquants: AUCUN_MANQUANT,
     ...disque,
   };
-  return assembler({ fs, racine, base, source: depuis, trouve, instant, avecRattrapage: false });
+  const texteCourses = await vue.texteSiLisible(base + SUFFIXES.courses);
+  return assembler({ fs, racine, base, source: depuis, trouve, instant, avecRattrapage: false, texteCourses });
 }
 
 // Un Ouvert en lecture seule — un fichier qu'il a lu est d'un format plus
@@ -1128,6 +1175,35 @@ async function ecrireEtat(avance, texteEtat) {
   }
 }
 
+// Vrai quand deux listes de clés portent les mêmes clés, quel que soit
+// leur ordre.
+const memesCles = (a, b) => a.length === b.length && [...a].sort().join('\n') === [...b].sort().join('\n');
+
+// Pose le compagnon des courses de l'Ouvert écrit, dont l'état est sur le
+// disque, et rend l'Ouvert qui le dit (compagnon). Il porte les courses
+// connues des propositions de la charge, dans leur ordre (entreesPour), et
+// ne s'écrit que quand leurs clés ne sont pas celles que le compagnon sur
+// le disque porte, ou que celles-ci sont inconnues : une génération, un
+// effacement, un retour qui rend ou retire des propositions, et l'écriture
+// qui suit un compagnon refusé. Un geste qui garde les mêmes propositions
+// ne l'écrit jamais. L'écriture est atomique, comme celle de l'état. Un
+// refus du système de fichiers ne remonte pas : le compagnon reste ce
+// qu'il était, l'Ouvert le dit inconnu, et la course reste connue de
+// l'Ouvert pour la séance. Toute autre erreur remonte.
+async function poserCompagnon(ouvert) {
+  const entrees = entreesPour(ouvert.courses, ouvert.charge.propositions);
+  const cles = entrees.map(cleDeCourse);
+  if (ouvert.compagnon !== null && memesCles(cles, ouvert.compagnon)) return ouvert;
+  const { fs, racine, base, charge } = ouvert;
+  try {
+    await fs.ecrireAtomique(racine, base + SUFFIXES.courses, texteDesCourses(charge.evenement.id, entrees));
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurStockage)) throw erreur;
+    return { ...ouvert, compagnon: null };
+  }
+  return { ...ouvert, compagnon: cles };
+}
+
 // L'Ouvert d'une charge écrite : examinée, ses avertissements ceux de ses
 // placements, d'un journal qui finit ailleurs que sur elle, et du journal
 // disparu que l'écriture a réécrit (recree).
@@ -1175,12 +1251,15 @@ function ligneDuGeste(preparation, apres, { libelle, horodatage, produitVersion,
  * Crée l'événement de charge dans racine (§ 8.1, § 8.2) : sa base dérive de
  * son nom (deriverBase), libre dans le dossier. Le journal d'abord, écrit
  * d'un bloc — ouverture, entrée 1 en instantané, jalon nomJalon sur elle —,
- * puis l'état, à la révision 1.
+ * puis l'état, à la révision 1, puis, quand courses en porte pour les
+ * propositions de la charge, le compagnon des courses (poserCompagnon).
  *
  * @param {import('./systeme_fichiers.js').SystemeFichiers} fs
  * @param {import('./systeme_fichiers.js').Racine} racine
  * @param {import('./types.js').Charge} charge
- * @param {{libelle: string, nomJalon: string, horodatage: string, produitVersion: string}} options
+ * @param {{libelle: string, nomJalon: string, horodatage: string, produitVersion: string, courses?: Object[]}} options
+ *        courses : les entrées du compagnon des courses que l'événement
+ *        reçoit — celles de l'événement copié —, aucune par défaut
  * @returns {Promise<Ouvert>}
  * @throws {TypeError} une charge, un libellé, un nom ou un horodatage que la
  *         lecture refuserait, avant toute écriture
@@ -1188,7 +1267,7 @@ function ligneDuGeste(preparation, apres, { libelle, horodatage, produitVersion,
  *         n'est écrit ; ETAT_NON_ECRIT : le journal est écrit, l'état non ;
  *         CHEMIN_TROP_LONG (deriverBase) ; ABSENT : racine n'existe pas
  */
-export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage, produitVersion }) {
+export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage, produitVersion, courses = [] }) {
   const base = await deriver(fs, racine, charge.evenement.nom, []);
   const entree = ligneEntree({ revision: 1, libelle, horodatage, produitVersion, apres: charge, instantane: true });
   const jalon = ligneJalon({ revision: 1, nom: nomJalon, horodatage });
@@ -1209,8 +1288,10 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
     journalAReecrire: false,
     formatPlusRecent: false,
     etatMalEncode: false,
+    courses: avecCourses(new Map(), courses),
+    compagnon: [],
   };
-  return ecrireEtat(apresEcriture(cree, { charge, revision: 1, journal }), texteEtat);
+  return poserCompagnon(await ecrireEtat(apresEcriture(cree, { charge, revision: 1, journal }), texteEtat));
 }
 
 /**
@@ -1238,6 +1319,13 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
  * Un geste refusé n'écrit rien : chaque ligne et chaque texte d'état se
  * calculent, et se relisent, avant la première écriture.
  *
+ * (5) Après l'état, le compagnon des courses, quand les courses connues des
+ * propositions écrites ne sont plus celles qu'il porte (poserCompagnon) :
+ * une génération, un effacement, un retour qui rend ou retire des
+ * propositions. courses, les entrées que le geste apporte — celles d'une
+ * génération —, s'ajoutent aux courses de l'Ouvert. Un refus d'écrire le
+ * compagnon ne refuse pas le geste.
+ *
  * @param {Ouvert} ouvert
  * @param {import('./types.js').Charge} apres
  * @param {Object} options
@@ -1248,6 +1336,9 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
  * @param {number|null} [options.retour]    révision visée par un retour
  * @param {string} [options.libelleReprise] texte de l'entrée de reprise,
  *        requis quand elle a lieu
+ * @param {Object[]} [options.courses]      entrées du compagnon des courses
+ *        des propositions que le geste ajoute (courses.js), aucune par
+ *        défaut
  * @returns {Promise<Ouvert>}
  * @throws {ErreurStockage} LECTURE_SEULE {raison: 'FORMAT_PLUS_RECENT'} ;
  *         ce que lève la mise de côté d'un état aux octets hors UTF-8
@@ -1263,7 +1354,7 @@ export async function creer(fs, racine, charge, { libelle, nomJalon, horodatage,
  *         refuserait, avant toute écriture
  */
 export async function enregistrer(ouvert, apres, options) {
-  const { horodatage, produitVersion, libelleReprise } = options;
+  const { horodatage, produitVersion, libelleReprise, courses = [] } = options;
   exigerEcriture(ouvert);
   const preparation = preparer(ouvert, { libelleReprise, horodatage });
   const { ligne, revision } = ligneDuGeste(preparation, apres, options);
@@ -1272,8 +1363,10 @@ export async function enregistrer(ouvert, apres, options) {
   const depart = await mettreDeCoteEtatMalEncode(ouvert, horodatage);
   const suite = aligne === null ? { depart, preparation } : await aligner(depart, preparation, aligne);
   const { recree, ...ecrit } = await ecrireJournal(suite.depart, suite.preparation, ligne);
-  const avance = { ...suite.depart, ...ecrit, produitVersion, chargeJournal: canoniser(apres) };
-  return ecrireEtat(apresEcriture(avance, { charge: apres, revision, journal: ecrit.journal, recree }), texteEtat);
+  const memoire = avecCourses(ouvert.courses, courses);
+  const avance = { ...suite.depart, ...ecrit, produitVersion, chargeJournal: canoniser(apres), courses: memoire };
+  const examine = apresEcriture(avance, { charge: apres, revision, journal: ecrit.journal, recree });
+  return poserCompagnon(await ecrireEtat(examine, texteEtat));
 }
 
 /**
@@ -1387,8 +1480,11 @@ function paireAilleurs(ouvert, { libelleReprise, horodatage, geste }) {
  * de la base n'est pas le sien — ne s'apparie le journal neuf (apparier). La
  * paire va sous une base qu'aucun fichier du dossier ne porte : elle n'y
  * remplace rien, pas même la paire de l'Ouvert quand ce dossier est le sien.
- * Les lignes et les textes d'état se calculent, et se relisent, avant la
- * première écriture, celle de la racine comprise.
+ * Après l'état, la nouvelle base reçoit le compagnon des courses que
+ * l'Ouvert connaît pour les propositions écrites, quand il en connaît
+ * (poserCompagnon) : le renommage et l'écriture ailleurs l'emportent avec
+ * la paire. Les lignes et les textes d'état se calculent, et se relisent,
+ * avant la première écriture, celle de la racine comprise.
  *
  * @param {Ouvert} ouvert
  * @param {import('./systeme_fichiers.js').Racine} racine
@@ -1446,6 +1542,7 @@ export async function enregistrerAilleurs(
     chargeJournal: paire.chargeJournal,
     journalAReecrire: false,
     etatMalEncode: false,
+    compagnon: [],
   };
-  return ecrireEtat(apresEcriture(ailleurs, { charge, revision, journal }), texteEtat);
+  return poserCompagnon(await ecrireEtat(apresEcriture(ailleurs, { charge, revision, journal }), texteEtat));
 }

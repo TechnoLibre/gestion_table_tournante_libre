@@ -8,9 +8,10 @@
 // la règle porte sur ce que le code fait, et un commentaire qui nomme un
 // interdit le documente.
 //
-// Neuf gardes : les chaînes visibles en dur (§ 14.6), les clés littérales de
+// Dix gardes : les chaînes visibles en dur (§ 14.6), les clés littérales de
 // t qui n'existent pas, le contenu des tables de traduction (§ 5.5, § 7.6,
-// § 7.7, § 12.8, § 12.10.8), les couleurs (§ 12.7, § 13.3, § 13.5), le
+// § 7.7, § 12.8, § 12.10.8), le signe « % » écrit par le code (contrainte
+// 44), les couleurs (§ 12.7, § 13.3, § 13.5), le
 // balisage et les fenêtres du navigateur (§ 13.1, § 2.1), le texte comprimé et
 // les animations (§ 7.4, § 19.2), le câblage des composants (§ 12.9, § 13.3),
 // les sélecteurs que le compilateur élague (§ 13.3), les touches nommées hors
@@ -192,7 +193,10 @@ const dansUnAttribut = (ancetres) => ancetres.some((a) => DANS_UN_ATTRIBUT.has(a
 
 // --- Garde 1 : les chaînes visibles en dur (§ 14.6) ---------------------------
 
-const LETTRE = /\p{L}/u;
+// Une chaîne visible : une lettre, ou le signe « % », qui n'écrit qu'un
+// pourcentage de la page de qualité, lu sous qualite.pourcentage.*
+// (contrainte 44) ; seul, sans lettre, il se relève comme elle.
+const VISIBLE = /[\p{L}%]/u;
 // Attributs qu'une technologie d'assistance annonce, ou que la page montre.
 const ATTRIBUTS_ANNONCES = new Set(['aria-label', 'aria-roledescription', 'title', 'placeholder', 'alt']);
 // Les types d'<input> dont la page montre la value comme libellé.
@@ -213,16 +217,18 @@ const TEXTES_SVG = new Set(['title', 'desc', 'text', 'tspan']);
 const CHAINE_CSS = /(["'])((?:\\.|(?!\1).)*)\1/g;
 
 // Vrai quand un texte placé dans cet élément est une chaîne visible : une
-// lettre partout, tout caractère non blanc dans un texte du SVG.
+// lettre ou le signe « % » partout, tout caractère non blanc dans un texte
+// du SVG.
 function texteVisible(texte, element) {
   if (element !== null && element.type === 'RegularElement' && TEXTES_SVG.has(element.name)) {
     return texte.trim() !== '';
   }
-  return LETTRE.test(texte);
+  return VISIBLE.test(texte);
 }
 
-// Vrai quand une valeur de « content » porte une lettre dans une chaîne.
-const contenuLettre = (valeur) => [...valeur.matchAll(CHAINE_CSS)].some(([, , chaine]) => LETTRE.test(chaine));
+// Vrai quand une valeur de « content » porte une lettre ou le signe « % »
+// dans une chaîne.
+const contenuLettre = (valeur) => [...valeur.matchAll(CHAINE_CSS)].some(([, , chaine]) => VISIBLE.test(chaine));
 
 // Relevé des chaînes visibles écrites dans les composants de src/interface :
 // texte statique, attribut annoncé ou value d'un <input> bouton, contenu
@@ -250,7 +256,7 @@ function releverChainesEnDur(racine) {
             ? [{ valeur: morceau.statique, debut: morceau.debut }]
             : litterauxRendus(morceau.expression);
           for (const { valeur, debut } of valeurs) {
-            if (LETTRE.test(valeur)) relever(debut, `attribut ${noeud.name}`, valeur);
+            if (VISIBLE.test(valeur)) relever(debut, `attribut ${noeud.name}`, valeur);
           }
         }
       } else if (noeud.type === 'Attribute' && noeud.name === 'style') {
@@ -264,6 +270,42 @@ function releverChainesEnDur(racine) {
     parcourir(ast.css, (noeud) => {
       if (noeud.type === 'Declaration' && noeud.property === 'content' && contenuLettre(noeud.value)) {
         relever(noeud.start, 'content', noeud.value);
+      }
+    });
+  }
+  return trier(releves);
+}
+
+// Un pourcentage écrit : le signe « % » après un blanc, espace fine
+// insécable comprise, comme le français l'écrit — « 88 % ». Une largeur ou
+// une position de style, « 100% » ou `${x}%`, colle le signe au nombre.
+const POURCENTAGE_ECRIT = /\s%/u;
+// Les tables de traduction : la garde de leur contenu les lit, avec ses
+// exceptions nommées (qualite.pourcentage.*).
+const TABLES_DE_TRADUCTION = /^src\/interface\/libelles\//;
+
+// Relevé des pourcentages que le code de src/interface écrit hors des tables
+// de traduction (contrainte 44) : chaque chaîne littérale, et chaque morceau
+// fixe d'un gabarit de chaîne, des modules et de chaque partie JavaScript
+// d'un composant, qui porte POURCENTAGE_ECRIT. Un morceau se lit seul : le
+// signe qui suit une expression, « ${a} ${b}% », n'est pas précédé d'un blanc.
+// Le gabarit d'un composant est l'affaire de releverChainesEnDur, qui y relève
+// le signe comme une lettre.
+function releverPourcentagesDesScripts(racine) {
+  const chemins = exigerNonVide(
+    sources(racine, ['src/interface'], ['.svelte', '.js']).filter((chemin) => !TABLES_DE_TRADUCTION.test(chemin)),
+    'pourcentages des scripts',
+  );
+  const releves = [];
+  for (const chemin of chemins) {
+    const composant = chemin.endsWith('.svelte');
+    const { texte, ast } = composant ? analyserComposant(racine, chemin) : analyserModule(racine, chemin);
+    parcourir(composant ? partiesCode(ast) : [ast], (noeud) => {
+      let valeur = null;
+      if (noeud.type === 'Literal' && typeof noeud.value === 'string') valeur = noeud.value;
+      else if (noeud.type === 'TemplateElement') valeur = noeud.value.cooked ?? noeud.value.raw;
+      if (valeur !== null && POURCENTAGE_ECRIT.test(valeur)) {
+        releves.push({ chemin, ligne: ligneDe(texte, noeud.start), texte: `pourcentage ${extrait(valeur)}` });
       }
     });
   }
@@ -344,6 +386,7 @@ const MOTS_INTERDITS = [
   ['manque minimal', /\bmanques?\s+minima/],
   ['récupérable', /recuperable/],
   ['évitable', /(?<!in)evitable/],
+  ['pourcentage', /%/],
 ];
 const PICTOGRAMME = /\p{Extended_Pictographic}/u;
 
@@ -363,6 +406,13 @@ const PICTOGRAMME = /\p{Extended_Pictographic}/u;
 // jamais un indice d'équité (§ 12.8). La forme exacte s'admet sous la seule
 // clé de ce libellé ; son explication, et tout autre texte, ne l'emploient
 // pas.
+//
+// Le signe « % » n'écrit que les pourcentages de la page de qualité (§ 12.8,
+// D34, D52) : la valeur « N % », les graduations de l'axe en pourcentages et
+// le libellé de sa règle, sous les seules clés qualite.pourcentage.*. La
+// consigne d'impression de la planche, « à 100 % », est une échelle, non un
+// mélange, et s'admet sous sa seule clé. Partout ailleurs, au tableau des
+// propositions compris, le signe se relève.
 const EXCEPTIONS_DE_CONTENU = [
   {
     mot: 'évitable',
@@ -376,10 +426,30 @@ const EXCEPTIONS_DE_CONTENU = [
     forme: /(?<![\p{L}\p{N}])l'equite d'abord(?![\p{L}\p{N}])/gu,
     nom: "generation.reglage.modeObjectifs.minimum « l'équité d'abord » (D22)",
   },
+  {
+    mot: 'pourcentage',
+    cles: /^qualite\.pourcentage\./,
+    forme: /%/g,
+    nom: 'qualite.pourcentage.* « % » (D34, D52)',
+  },
+  {
+    mot: 'pourcentage',
+    cles: /^planche\.controle\.consigne$/,
+    forme: /(?<![\p{L}\p{N}])a\s100\s%/gu,
+    nom: 'planche.controle.consigne « à 100 % »',
+  },
 ];
 
 // Les exceptions d'un seul mot, pour une épreuve qui n'éprouve que lui.
 const exceptionsDu = (mot) => EXCEPTIONS_DE_CONTENU.filter((exception) => exception.mot === mot);
+
+// Deux entrées qui servent les exceptions du signe « % », pour une épreuve
+// qui en éprouve une autre sous toute la liste : sans elles, chacune se
+// relèverait sans objet.
+const SERVENT_LE_POURCENTAGE = [
+  ['qualite.pourcentage.valeur', '88 %'],
+  ['planche.controle.consigne', 'Imprimer en recto seul, à 100 %'],
+];
 
 // Une chaîne de forme clé — un code, LECTURE_SEULE, ou un libellé,
 // plan.refus.fermer — : une fonction la passe à texte, ou la compare à un
@@ -1216,6 +1286,66 @@ describe('sources de l’interface : les chaînes visibles en dur (§ 14.6)', ()
       /chaînes en dur : aucun fichier examiné/,
     );
   });
+
+  test('rouge : un « % » écrit dans un gabarit se relève comme une lettre — texte, expression rendue, attribut annoncé, content —, et pas une largeur de style ni sa directive', () => {
+    const fichiers = {
+      'src/interface/qualite/T.svelte': composant({
+        script: "  const t = (cle) => cle;\n  let x = $state(1);",
+        gabarit: [
+          '<span>{x} %</span>',
+          "<span>{x ? '50 %' : t('qualite.pourcentage.valeur')}</span>",
+          '<span title="{x} %" style="width: 50%" style:height="{x}%">.</span>',
+          '<table><colgroup><col style:width="{x}%" /></colgroup></table>',
+        ].join('\n'),
+        style: '  span::after { content: "%"; }\n  span { width: 100%; }',
+      }),
+    };
+    assert.deepEqual(avecArbre(fichiers, releverChainesEnDur), [
+      'src/interface/qualite/T.svelte:5 texte « % »',
+      'src/interface/qualite/T.svelte:6 expression littérale « 50 % »',
+      'src/interface/qualite/T.svelte:7 attribut title « % »',
+      'src/interface/qualite/T.svelte:10 content « "%" »',
+    ]);
+  });
+});
+
+describe('sources de l’interface : le signe « % » écrit par le code (contrainte 44)', () => {
+  test('aucun script de src/interface, hors des tables de traduction, n’écrit un pourcentage', () => {
+    exigerVide(releverPourcentagesDesScripts(RACINE), 'pourcentages des scripts');
+  });
+
+  test('rouge : la garde relève un « % » précédé d’un blanc dans un module ou le script d’un composant, et pas une largeur, un échappement, une clé, un commentaire, une table ni une épreuve', () => {
+    const fichiers = {
+      'src/interface/qualite/a.js': [
+        'export const a = (n) => `${n} %`;',
+        "export const b = (n) => n + '\\u{202F}%';",
+        'export const c = (n) => `${n}%`;',
+        "export const d = '100%';",
+        "export const e = (s) => s.replaceAll('%', '%25');",
+        '// 50 % dans un commentaire',
+        "export const f = (t) => t('qualite.pourcentage.valeur');",
+        '',
+      ].join('\n'),
+      'src/interface/qualite/B.svelte': composant({
+        script: "  const libelle = (n) => n + ' %';\n  const largeur = (n) => `${n}%`;",
+        gabarit: '<p style:width={largeur(1)}>{libelle(1)}</p>',
+      }),
+      'src/interface/libelles/q.js': "export const T = new Map([['qualite.pourcentage.valeur', ({ n }) => `${n}\\u{202F}%`]]);\n",
+      'src/interface/qualite/a.test.js': "export const x = '5 %';\n",
+    };
+    assert.deepEqual(avecArbre(fichiers, releverPourcentagesDesScripts), [
+      'src/interface/qualite/B.svelte:2 pourcentage « % »',
+      'src/interface/qualite/a.js:1 pourcentage « % »',
+      'src/interface/qualite/a.js:2 pourcentage « % »',
+    ]);
+  });
+
+  test('un arbre sans source d’interface hors des tables fait échouer la garde', () => {
+    assert.throws(
+      () => avecArbre({ 'src/interface/libelles/q.js': 'export const a = 1;\n' }, releverPourcentagesDesScripts),
+      /pourcentages des scripts : aucun fichier examiné/,
+    );
+  });
 });
 
 describe('sources de l’interface : les clés littérales de t existent (§ 14.6, § 19.11)', () => {
@@ -1360,6 +1490,7 @@ describe('sources de l’interface : le contenu des tables de traduction (§ 5.5
       ['generation.reglage.modeObjectifs.chacun', "L'ÉQUITÉ D'ABORD"],
       ['propositions.phrase', "l'équité"],
       ['diagnostic.remede.un', '2 chaises de plus la rend évitable'],
+      ...SERVENT_LE_POURCENTAGE,
     ]);
     assert.deepEqual(releverContenuTables([tables]), [
       "generation.reglage.modeObjectifs.chacun : équité « L'ÉQUITÉ D'ABORD »",
@@ -1370,13 +1501,45 @@ describe('sources de l’interface : le contenu des tables de traduction (§ 5.5
     const autre = new Map([
       ['generation.reglage.modeObjectifs.minimum', "l'équité d'abord, une équité"],
       ['diagnostic.remede.un', 'la rend évitable'],
+      ...SERVENT_LE_POURCENTAGE,
     ]);
     assert.deepEqual(releverContenuTables([autre]), [
       "generation.reglage.modeObjectifs.minimum : équité « l'équité d'abord, une équité »",
     ]);
-    const sansMode = new Map([['diagnostic.remede.un', 'la rend évitable']]);
+    const sansMode = new Map([['diagnostic.remede.un', 'la rend évitable'], ...SERVENT_LE_POURCENTAGE]);
     assert.deepEqual(releverContenuTables([sansMode]), [
       "exception sans objet : generation.reglage.modeObjectifs.minimum « l'équité d'abord » (D22)",
+    ]);
+  });
+
+  test('rouge : le signe « % » ne s’écrit que sous qualite.pourcentage.*, et « à 100 % » sous la seule consigne de la planche ; tout autre « % » se relève, et une exception que rien ne sert est sans objet', () => {
+    const tables = new Map([
+      ['qualite.tuile.x', '88 %'],
+      ['qualite.pourcentage.valeur', '88 %'],
+      ['qualite.pourcentage.servis', ({ pourcent }) => `${pourcent}\u{202F}% des tours possibles servis`],
+      ['qualite.pourcentageX', '88 %'],
+      ['planche.controle.consigne', 'Imprimer en recto seul, à 100 %'],
+      ['planche.controle.autre', 'à 100 %'],
+      ['propositions.phrase', ({ n }) => `${n} %`],
+    ]);
+    assert.deepEqual(releverContenuTables([tables], () => null, exceptionsDu('pourcentage')), [
+      'planche.controle.autre : pourcentage « à 100 % »',
+      'propositions.phrase : pourcentage « % »',
+      'qualite.pourcentageX : pourcentage « 88 % »',
+      'qualite.tuile.x : pourcentage « 88 % »',
+    ]);
+    // Sous la consigne, un autre « % » se relève encore.
+    const autre = new Map([
+      ['planche.controle.consigne', 'à 100 %, puis 50 %'],
+      ['qualite.pourcentage.valeur', '1 %'],
+    ]);
+    assert.deepEqual(releverContenuTables([autre], () => null, exceptionsDu('pourcentage')), [
+      'planche.controle.consigne : pourcentage « à 100 %, puis 50 % »',
+    ]);
+    const sansPourcentage = new Map([['qualite.tuile.x', 'minimum 24 sur 27']]);
+    assert.deepEqual(releverContenuTables([sansPourcentage], () => null, exceptionsDu('pourcentage')), [
+      'exception sans objet : qualite.pourcentage.* « % » (D34, D52)',
+      'exception sans objet : planche.controle.consigne « à 100 % »',
     ]);
   });
 });

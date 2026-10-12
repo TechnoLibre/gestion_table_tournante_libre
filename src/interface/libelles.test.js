@@ -65,12 +65,12 @@ async function tablesDuDossier() {
 }
 
 describe('libellés : les tables des écrans (§ 14.6)', () => {
-  test('chaque module de libelles/ exporte TABLE, une Map ; TABLES_INTERFACE les assemble, quinze, par ordre alphabétique', async () => {
+  test('chaque module de libelles/ exporte TABLE, une Map ; TABLES_INTERFACE les assemble, dix-sept, par ordre alphabétique', async () => {
     const tables = await tablesDuDossier();
-    assert.equal(tables.length, 15);
+    assert.equal(tables.length, 17);
     assert.deepEqual(tables.map(({ table }) => table), [
-      'accueil', 'badges', 'communs', 'coquille', 'diagnostic', 'evenement', 'feuilles', 'generation',
-      'import', 'impression', 'participants', 'plan', 'propositions', 'raccourcis', 'tables',
+      'accueil', 'badges', 'communs', 'coquille', 'diagnostic', 'evenement', 'feuilles', 'generation', 'graphiques',
+      'import', 'impression', 'participants', 'plan', 'propositions', 'qualite', 'raccourcis', 'tables',
     ]);
     for (const { table, module } of tables) assert.ok(module.TABLE instanceof Map, table);
     assert.equal(TABLES_INTERFACE.length, tables.length);

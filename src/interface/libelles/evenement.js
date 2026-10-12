@@ -3,12 +3,13 @@
 
 // Les libellés de l'événement ouvert : son en-tête et son résumé chiffré,
 // ses états, la bande de mode et la place fixe de sa barre, les phases de
-// sa navigation, la reprise d'un verrou, ses avertissements, le support
-// rompu (§ 8.3 à § 8.9, § 9, § 14.6). Chaque clé commence par
-// « evenement. ». Une donnée qui désigne — un numéro, une séance, un
-// instant, une date — n'entre dans aucun de ces textes : l'écran la pose
-// dans son propre nœud, à côté. Les comptes du résumé, eux, entrent dans le
-// leur, qui s'accorde au nombre et l'écrit par creerFormat.
+// sa navigation, l'attente d'une section chargée à part, la reprise d'un
+// verrou, ses avertissements, le support rompu (§ 8.3 à § 8.9, § 9,
+// § 14.6). Chaque clé commence par « evenement. ». Une donnée qui
+// désigne — un numéro, une séance, un instant, une date — n'entre dans
+// aucun de ces textes : l'écran la pose dans son propre nœud, à côté. Les
+// comptes du résumé, eux, entrent dans le leur, qui s'accorde au nombre et
+// l'écrit par creerFormat.
 import { creerFormat } from '../../application/format.js';
 import { cite } from '../../application/libelles/aides.js';
 
@@ -52,6 +53,10 @@ export const TABLE = new Map([
   ['evenement.phase.preparer', 'Préparer'],
   ['evenement.phase.placer', 'Placer'],
   ['evenement.phase.produire', 'Produire'],
+
+  // --- Une section chargée à part (SectionDifferee.svelte) --------------------
+  ['evenement.section.chargement', 'Chargement de la section\u{2026}'],
+  ['evenement.section.echec', 'Cette section ne s\u{2019}est pas chargée ; y revenir la recharge.'],
 
   // --- La barre de l'événement et sa place fixe (§ 8.3, § 8.4, § 8.5) ------
   ['evenement.barre.commandes', 'Commandes de l\u{2019}événement'],

@@ -29,11 +29,12 @@ import { ErreurCsv } from '../csv/erreurs.js';
 import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { appliquerImportObjectifs } from '../csv/objectifs.js';
 import { serialiserCharge } from '../stockage/canonique.js';
+import { entreeDeCourse } from '../stockage/courses.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { estHorodatage } from '../stockage/journal.js';
-import { fautes, formeNommee, versFichier } from '../stockage/placements.js';
+import { courseVersFichier, fautes, formeNommee, versFichier } from '../stockage/placements.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
 import { ErreurCommande, refus } from './erreurs.js';
@@ -486,7 +487,16 @@ function rangerParSiege(charge, plan, configuration) {
  * la proposition d'identifiant k du moteur prend prochainsIds.proposition +
  * k − 1 —, s'ajoutent aux précédentes, et le compteur passe au-delà de la
  * dernière. Sièges attribués, chaque liste se range d'abord par siège
- * (rangerParSiege). Un brouillon passe à proposé.
+ * (rangerParSiege), celles du plan de la proposition et celles du plan de
+ * chacun de ses points de relevé : un placement de relevé a ainsi la forme
+ * d'un placement de proposition, chaises vides et sièges réservés compris.
+ * Un brouillon passe à proposé.
+ *
+ * La course que le moteur rapporte de chaque proposition (§ 5.10) n'entre
+ * pas dans la charge : le rendu la porte à côté, courses, l'entrée du
+ * compagnon des courses de chaque proposition qui en rapporte une, dans
+ * l'ordre des propositions (courseVersFichier, entreeDeCourse). Le dépôt
+ * l'écrit dans le compagnon, après l'état (§ 8.9).
  */
 function enregistrerGeneration(charge, { propositions, configuration, produitVersion }) {
   exigerModifiable(charge);
@@ -498,12 +508,23 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
   }
   const decalage = charge.prochainsIds.proposition - 1;
   const options = { produitVersion, attribuerSieges: charge.reglages.attribuerSieges, decalage };
-  let fichiers;
+  const fichiers = [];
+  const courses = [];
   try {
-    fichiers = propositions.map((proposition) => {
-      const rangee = options.attribuerSieges ? { ...proposition, plan: rangerParSiege(charge, proposition.plan, configuration) } : proposition;
-      return versFichier(rangee, configuration, options);
-    });
+    for (const proposition of propositions) {
+      let rangee = proposition;
+      if (options.attribuerSieges) {
+        const ranger = (plan) => rangerParSiege(charge, plan, configuration);
+        rangee = { ...proposition, plan: ranger(proposition.plan) };
+        if (Array.isArray(proposition.releves)) {
+          rangee.releves = proposition.releves.map((releve) => ({ ...releve, plan: ranger(releve.plan) }));
+        }
+      }
+      const fichier = versFichier(rangee, configuration, options);
+      const course = courseVersFichier(rangee, fichier, options);
+      fichiers.push(fichier);
+      if (course !== null) courses.push(entreeDeCourse(fichier, course));
+    }
   } catch (erreur) {
     if (erreur instanceof ErreurStockage && erreur.code === 'COMPTEUR_SATURE') {
       throw refus('COMPTEUR_SATURE', erreur.details);
@@ -521,6 +542,7 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
     charge: suivante,
     libelle: libelle('ENTREE_ENREGISTRER_GENERATION', { n: fichiers.length, premier, dernier }),
     avertissements: [],
+    courses,
   };
 }
 
@@ -582,8 +604,9 @@ export function reunirCommandes(...registres) {
 /**
  * Le registre des commandes, par nom : chacune (charge, arguments) →
  * { charge, libelle, avertissements }, et importerParticipants et
- * importerObjectifs y ajoutent le résumé de l'import. Il réunit les commandes de ce module, celles du
- * mobilier et celles des places.
+ * importerObjectifs y ajoutent le résumé de l'import, enregistrerGeneration
+ * les courses de ses propositions. Il réunit les commandes de ce module,
+ * celles du mobilier et celles des places.
  *
  * @typedef {{code: string, details: Object}} Avertissement
  * @typedef {{charge: Object, libelle: string, avertissements: Avertissement[]}} Rendu
@@ -623,6 +646,15 @@ function sansHorodatage(retenu) {
 const VIDE = { participants: [], tables: [], reservations: [], titres: [], propositions: [] };
 const texteDuPlacement = (charge, retenu) => serialiserCharge({ ...charge, ...VIDE, retenu: sansHorodatage(retenu) });
 
+// Les entrées de courses d'une génération, refaites sur les propositions de
+// la charge datée : chacune prend l'horodatage que dater a posé sur sa
+// proposition, qui entre dans son identité (cleDeCourse). Chaque entrée
+// est celle d'une proposition de la charge.
+function daterCourses(charge, courses) {
+  const parId = new Map(charge.propositions.map((p) => [p.id, p]));
+  return courses.map(({ id, course }) => entreeDeCourse(parId.get(id), course));
+}
+
 // La charge rendue datée de horodatage (§ 8.9) : le retenu quand retenuNeuf,
 // et chaque proposition dont l'identifiant manque à la charge reçue. Les
 // objets datés sont neufs : ni la charge rendue ni la reçue ne changent.
@@ -650,10 +682,12 @@ function dater(recue, rendue, horodatage, retenuNeuf) {
  * datation : un geste sans effet ne le devient pas par son instant. Puis le
  * retenu qui change, ou qui apparaît, prend horodatage, et chaque proposition
  * dont l'identifiant manque à la charge reçue aussi ; les autres gardent le
- * leur. Corriger un nom ne date rien : l'horodatage date le placement, non
- * la page. horodatage null, le défaut, ne pose ni ne retire rien : un
- * retenu reconstruit à l'identique garde l'horodatage reçu, et aucun autre
- * n'est posé.
+ * leur. Les entrées de courses d'une génération (courses) prennent
+ * l'horodatage de leur proposition, qui entre dans leur identité
+ * (cleDeCourse). Corriger un nom ne date rien : l'horodatage date le
+ * placement, non la page. horodatage null, le défaut, ne pose ni ne retire
+ * rien : un retenu reconstruit à l'identique garde l'horodatage reçu, aucun
+ * autre n'est posé, et les entrées de courses restent sans horodatage.
  *
  * @param {string} nom
  * @param {Object} charge
@@ -684,8 +718,10 @@ export function appliquerCommande(nom, charge, args = {}, { horodatage = null } 
     suivante = { ...suivante, retenu: recu === undefined ? sansHorodatage(retenu) : { ...sansHorodatage(retenu), horodatage: recu } };
   }
   if (serialiserCharge(suivante) === serialiserCharge(charge)) throw refus('SANS_EFFET', { commande: nom });
-  if (horodatage !== null) suivante = dater(charge, suivante, horodatage, retenu !== null && !memePlacement);
-  return { ...rendu, charge: suivante, avertissements: rendu.avertissements ?? [] };
+  if (horodatage === null) return { ...rendu, charge: suivante, avertissements: rendu.avertissements ?? [] };
+  suivante = dater(charge, suivante, horodatage, retenu !== null && !memePlacement);
+  const courses = rendu.courses === undefined ? {} : { courses: daterCourses(suivante, rendu.courses) };
+  return { ...rendu, charge: suivante, ...courses, avertissements: rendu.avertissements ?? [] };
 }
 
 /**

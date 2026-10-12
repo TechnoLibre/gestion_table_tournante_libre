@@ -21,7 +21,17 @@ import { VERSION } from '../version.genere.js';
 import { serialiser } from './canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
-import { derive, examiner, fautes, formeNommee, planDepuisFichier, versFichier } from './placements.js';
+import {
+  courseDepuisFichier,
+  courseVersFichier,
+  derive,
+  examiner,
+  fauteDeCourse,
+  fautes,
+  formeNommee,
+  planDepuisFichier,
+  versFichier,
+} from './placements.js';
 
 const ENTETE = Object.freeze({ revision: 1, produitVersion: VERSION.affichee });
 
@@ -1634,5 +1644,245 @@ describe('le marqueur de chaise vide : null avant le dernier occupant, sièges a
     assert.deepStrictEqual(examen.fautives, [
       { rang: 1, id: 2, fautes: [{ code: 'FORME', chemin: 'placement[0].sieges[0][0]' }] },
     ]);
+  });
+});
+
+// --- La course de la recherche, hors du fichier d'état (§ 8.9, B31) ---------
+
+// Une course inventée sur la petite démonstration, telle que le moteur la
+// rend, à evalues mouvements évalués : un point de relevé à chaque
+// puissance de dix strictement sous evalues. Le point de rang k reprend les
+// tours du plan parfait décalés de k, chaque liste de table à rebours, hors
+// de l'ordre croissant ; au premier point, la personne 12 attend en réserve
+// au tour 1. Aucun appel à la recherche.
+function courseInventee(evalues) {
+  const releves = [];
+  for (let k = 0, mouvements = 1; mouvements < evalues; k += 1, mouvements *= 10) {
+    const { tours } = PLAN_PARFAIT_PETITE;
+    const decales = tours.map((_, r) => tours[(r + k) % tours.length].map((liste) => [...liste].reverse()));
+    const reserves = decales.map(() => []);
+    if (k === 0) {
+      decales[0][3] = decales[0][3].filter((id) => id !== 12);
+      reserves[0] = [12];
+    }
+    releves.push({ mouvements, plan: { tables: [1, 2, 3, 4], tours: decales, reserves } });
+  }
+  return { evalues, releves };
+}
+
+// PARFAITE portant la course inventée à evalues mouvements, 1 234 par
+// défaut : quatre points de relevé, à 1, 10, 100 et 1 000.
+const parfaiteAvecCourse = (evalues = 1_234) => ({ ...PARFAITE, ...courseInventee(evalues) });
+
+// Le plan reçu, chaque liste de table et chaque réserve par identifiant
+// croissant, sans chaise vide : la forme que rend planDepuisFichier.
+const planRange = ({ tables, tours, reserves }) => ({
+  tables: [...tables],
+  tours: tours.map((listes) => listes.map((liste) => liste.filter((id) => id !== null).sort((a, b) => a - b))),
+  reserves: reserves.map((reserve) => [...reserve].sort((a, b) => a - b)),
+});
+
+// Un plan de configuration forgé sans moteur : à chaque tour, les
+// participants non exclus, par identifiant croissant décalé de 37 rangs par
+// tour, remplissent les tables dans l'ordre de la configuration, chacune
+// jusqu'à sa capacité, chaque liste triée ; ceux qui restent vont à la
+// réserve. Il porte chaque participant une fois par tour, et sa forme de
+// fichier pèse ce que pèse celle d'un plan du moteur.
+function planForge(configuration) {
+  const ids = configuration.participants
+    .filter(({ exclu }) => exclu !== true)
+    .map(({ id }) => id)
+    .sort((a, b) => a - b);
+  const tours = [];
+  const reserves = [];
+  for (let r = 0; r < configuration.tours; r += 1) {
+    const decalage = (37 * r) % ids.length;
+    const ordre = [...ids.slice(decalage), ...ids.slice(0, decalage)];
+    let rang = 0;
+    tours.push(
+      configuration.tables.map(({ capacite }) => {
+        const liste = ordre.slice(rang, rang + capacite).sort((a, b) => a - b);
+        rang += liste.length;
+        return liste;
+      }),
+    );
+    reserves.push(ordre.slice(rang).sort((a, b) => a - b));
+  }
+  return { tables: configuration.tables.map(({ id }) => id), tours, reserves };
+}
+
+// La proposition de fichier de PARFAITE, sous attribuerSieges, et sa course
+// mise en forme de fichier, à evalues mouvements, 1 234 par défaut.
+function avecSaCourse(attribuerSieges = false, evalues = 1_234) {
+  const proposition = parfaiteAvecCourse(evalues);
+  const options = { produitVersion: VERSION.affichee, attribuerSieges, decalage: 0 };
+  const fichier = versFichier(proposition, petite(), options);
+  return { fichier, course: courseVersFichier(proposition, fichier, { attribuerSieges }) };
+}
+
+describe("la course de la recherche hors du fichier d'état (§ 8.9, B31, D53)", () => {
+  test("versFichier n'écrit aucune course, même quand la proposition du moteur en porte une : la proposition de fichier est celle d'une proposition sans course", () => {
+    const options = { produitVersion: VERSION.affichee, attribuerSieges: false, decalage: 0 };
+    const avec = versFichier(parfaiteAvecCourse(), petite(), options);
+    assert.equal(Object.hasOwn(avec, 'course'), false);
+    assert.deepStrictEqual(avec, fichierParfait());
+    assert.deepStrictEqual(versFichier({ ...PARFAITE, evalues: 0, releves: [] }, petite(), options), fichierParfait());
+  });
+
+  test('courseVersFichier met la course en forme de fichier : sans attribution, chaque placement de relevé rangé comme celui de la proposition ; avec, dans l’ordre reçu ; la réserve rangée dans les deux cas', () => {
+    const { releves } = courseInventee(1_234);
+    const nonAttribues = avecSaCourse(false).course;
+    const attribues = avecSaCourse(true).course;
+    assert.equal(nonAttribues.evalues, 1_234);
+    assert.deepStrictEqual(nonAttribues.releves.map(({ mouvements }) => mouvements), [1, 10, 100, 1_000]);
+    nonAttribues.releves.forEach(({ placement }, i) => {
+      const { tours, reserves } = planRange(releves[i].plan);
+      assert.deepStrictEqual(placement, tours.map((sieges, r) => ({ sieges, reserve: reserves[r] })), `relevé ${i}`);
+    });
+    attribues.releves.forEach(({ placement }, i) => {
+      const { tours, reserves } = releves[i].plan;
+      assert.deepStrictEqual(placement, tours.map((sieges, r) => ({ sieges, reserve: reserves[r] })), `relevé ${i}`);
+    });
+    assert.deepStrictEqual(Object.keys(nonAttribues), ['evalues', 'releves']);
+  });
+
+  test('sans evalues, courseVersFichier rend null ; à zéro mouvement évalué, {evalues: 0, releves: []}', () => {
+    const fichier = fichierParfait();
+    assert.equal(courseVersFichier(PARFAITE, fichier, { attribuerSieges: false }), null);
+    const nulle = courseVersFichier({ ...PARFAITE, evalues: 0, releves: [] }, fichier, { attribuerSieges: false });
+    assert.deepStrictEqual(nulle, { evalues: 0, releves: [] });
+    assert.equal(fauteDeCourse(fichier, nulle), null);
+  });
+
+  test('aller-retour courseVersFichier → JSON → courseDepuisFichier, sièges attribués ou non : la course reçue, en plans par identifiants rangés', () => {
+    for (const attribuerSieges of [false, true]) {
+      const { fichier, course } = avecSaCourse(attribuerSieges);
+      const relue = JSON.parse(JSON.stringify(course));
+      assert.equal(fauteDeCourse(fichier, relue), null, `attribuerSieges ${attribuerSieges}`);
+      const { evalues, releves } = courseInventee(1_234);
+      assert.deepStrictEqual(courseDepuisFichier(fichier, relue), {
+        evalues,
+        releves: releves.map(({ mouvements, plan }) => ({ mouvements, plan: planRange(plan) })),
+      });
+    }
+    const { course } = avecSaCourse(false, 0);
+    assert.deepStrictEqual(courseDepuisFichier(fichierParfait(), course), { evalues: 0, releves: [] });
+    leveTypeError(() => courseDepuisFichier({ ...fichierParfait(), tours: 5 }, course), /placement fautif/);
+    const contredite = { ...avecSaCourse(false).course, evalues: 20_001 };
+    leveTypeError(() => courseDepuisFichier(fichierParfait(), contredite), /course\.evalues/);
+  });
+
+  test('courseDepuisFichier ne partage aucune liste avec la proposition ni avec la course', () => {
+    const { fichier, course } = avecSaCourse(true);
+    geler(fichier);
+    geler(course);
+    const { releves } = courseDepuisFichier(fichier, course);
+    releves.forEach(({ plan }, i) => {
+      const { placement } = course.releves[i];
+      assert.notEqual(plan.tables, fichier.tables);
+      plan.tours.forEach((listes, r) => {
+        assert.notEqual(plan.reserves[r], placement[r].reserve);
+        listes.forEach((liste, t) => assert.notEqual(liste, placement[r].sieges[t]));
+      });
+    });
+  });
+
+  test('fauteDeCourse nomme par son chemin la première contradiction : forme, evalues au-delà de arret, abscisse manquante, en trop, hors d’ordre ou au dernier point, placement de relevé qui contredit la déclaration', () => {
+    // Chaque cas abîme une copie de la course, sous le drapeau donné, et
+    // nomme le chemin attendu.
+    const cas = [
+      ['une durée dans un point', false, (c) => { c.releves[1].duree = 3; }, 'course.releves[1].duree'],
+      ['une valeur mesurée', false, (c) => { c.valeurs = { rencontres: 3 }; }, 'course.valeurs'],
+      ['evalues au-delà de arret', false, (c) => { c.evalues = 20_001; }, 'course.evalues'],
+      ['abscisse manquante au milieu', false, (c) => { c.releves.splice(1, 1); }, 'course.releves[1].mouvements'],
+      ['abscisse manquante à la fin', false, (c) => { c.releves.pop(); }, 'course.releves[3]'],
+      ['abscisse en trop', false, (c) => {
+        c.releves.push({ ...structuredClone(c.releves[3]), mouvements: 10_000 });
+      }, 'course.releves[4]'],
+      ['abscisses hors d’ordre', false, (c) => {
+        const [a, b] = [c.releves[1], c.releves[2]];
+        c.releves[1] = b;
+        c.releves[2] = a;
+      }, 'course.releves[1].mouvements'],
+      ['abscisse qui n’est pas une puissance de dix', false, (c) => { c.releves[0].mouvements = 5; }, 'course.releves[0].mouvements'],
+      ['abscisse 1 000 sous evalues 1 000 : elle est le placement', false, (c) => { c.evalues = 1_000; }, 'course.releves[3]'],
+      ['abscisse 1 sous evalues 1', false, (c) => {
+        c.evalues = 1;
+        c.releves.splice(1);
+      }, 'course.releves[0]'],
+      ['un tour de moins', false, (c) => { c.releves[1].placement.pop(); }, 'course.releves[1].placement'],
+      ['une liste de table de moins', false, (c) => { c.releves[2].placement[1].sieges.pop(); }, 'course.releves[2].placement[1].sieges'],
+      ['une table au-delà de sa capacité', false, (c) => {
+        const { sieges } = c.releves[1].placement[0];
+        sieges[2].push(sieges[3].shift());
+      }, 'course.releves[1].placement[0].sieges[2]'],
+      ['un identifiant dupliqué : le second nommé', false, (c) => {
+        const tour = c.releves[2].placement[3];
+        tour.reserve.push(tour.sieges[1][0]);
+      }, 'course.releves[2].placement[3].reserve[0]'],
+      ['un identifiant inconnu', false, (c) => { c.releves[3].placement[2].sieges[0][1] = 13; }, 'course.releves[3].placement[2].sieges[0][1]'],
+      ['un identifiant manquant sans entrée de réserve', false, (c) => {
+        c.releves[0].placement[0].reserve = [];
+      }, 'course.releves[0].placement[0]'],
+      ['une chaise vide sans attribution', false, (c) => {
+        c.releves[0].placement[0].sieges[3] = [null, 10, 11];
+        c.releves[0].placement[0].reserve = [12];
+      }, 'course.releves[0].placement[0].sieges[3][0]'],
+      ['une chaise vide en fin de liste, sièges attribués', true, (c) => {
+        const tour = c.releves[1].placement[2];
+        const [premier] = tour.sieges[0].splice(0, 1);
+        tour.sieges[0].push(null);
+        tour.reserve = [premier];
+      }, 'course.releves[1].placement[2].sieges[0][2]'],
+    ];
+    assert.equal(cas.length, 18);
+    const ecarts = cas.flatMap(([libelle, attribuerSieges, abimer, chemin]) => {
+      const { fichier, course } = avecSaCourse(attribuerSieges);
+      const abimee = structuredClone(course);
+      abimer(abimee);
+      const rendu = fauteDeCourse(fichier, abimee);
+      return rendu === chemin ? [] : [`${libelle} : ${rendu}`];
+    });
+    assert.deepEqual(ecarts, []);
+    for (const valeur of [undefined, null, 3, 'x', []]) assert.equal(fauteDeCourse(fichierParfait(), valeur), 'course');
+  });
+
+  test('les bornes admises : evalues égal à arret, et ses points de relevé exactement les puissances de dix sous lui', () => {
+    for (const evalues of [0, 1, 2, 10, 11, 1_000, 1_001, 20_000]) {
+      const { fichier, course } = avecSaCourse(false, evalues);
+      assert.equal(course.evalues, evalues);
+      assert.equal(fauteDeCourse(fichier, course), null, `evalues ${evalues}`);
+    }
+    assert.deepStrictEqual(avecSaCourse(false, 20_000).course.releves.map(({ mouvements }) => mouvements), [1, 10, 100, 1_000, 10_000]);
+  });
+
+  test('courseVersFichier lève TypeError pour une course qui se contredit, et pour un point de relevé sur d’autres tables que le plan', () => {
+    const fichier = fichierParfait();
+    const options = { attribuerSieges: false };
+    leveTypeError(() => courseVersFichier({ ...parfaiteAvecCourse(), evalues: 20_001 }, fichier, options), /course\.evalues/);
+    // Sans points de relevé, la course n'a pas de releves : la faute nomme
+    // la clé, et non un point.
+    for (const evalues of [0, 1, 12]) {
+      leveTypeError(() => courseVersFichier({ ...PARFAITE, evalues }, fichier, options), /course\.releves\b(?!\[)/);
+    }
+    const autresTables = parfaiteAvecCourse();
+    autresTables.releves[1] = { ...autresTables.releves[1], plan: { ...autresTables.releves[1].plan, tables: [2, 1, 3, 4] } };
+    leveTypeError(() => courseVersFichier(autresTables, fichier, options), /relevé/);
+  });
+
+  test('la taille d’une course sur la grande démonstration, à la forme réelle : six placements de relevé de 1 040 places, chacun du poids du placement de la proposition', () => {
+    const configuration = CATALOGUE.find(({ cle }) => cle === 'grande').construire();
+    const plan = planForge(configuration);
+    const releves = [1, 10, 100, 1_000, 10_000, 100_000].map((mouvements) => ({ mouvements, plan }));
+    const proposition = { id: 1, graine: 1, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT, plan, evalues: 200_000, releves };
+    const fichier = versFichier(proposition, configuration, { produitVersion: VERSION.affichee, attribuerSieges: false, decalage: 0 });
+    const course = courseVersFichier(proposition, fichier, { attribuerSieges: false });
+    assert.equal(fichier.participants.length * fichier.tours, 1_040);
+    const placement = JSON.stringify(fichier.placement).length;
+    const octets = JSON.stringify(course).length;
+    // Six placements et leurs abscisses : la forme positionnelle, sans
+    // rien qui nomme une place.
+    assert.ok(octets > 6 * placement && octets < 6.1 * placement, `course ${octets} o, placement ${placement} o`);
+    assert.ok(octets > 15_000 && octets < 40_000, `course ${octets} o`);
   });
 });

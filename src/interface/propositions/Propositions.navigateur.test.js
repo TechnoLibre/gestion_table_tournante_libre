@@ -528,6 +528,37 @@ describe('retenir sur un retenu ajusté', () => {
 
 // --- Effacer (§ 5.7) ----------------------------------------------------------------
 
+// --- « Qualité », sur chaque ligne (§ 12, D25) ------------------------------------
+
+describe('« Qualité », sur chaque ligne', () => {
+  test('chaque ligne — classée, hors classement, celle du retenu — offre « Qualité » après « Voir sur le plan » ; elle montre sa proposition au plan, ou le retenu, et ouvre la page de qualité, sans écriture', async () => {
+    let chargeLue = executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 });
+    chargeLue = executer(chargeLue, 'exclureParticipant', { id: 12 });
+    chargeLue = generee(chargeLue, { graine: 2, nombre: 2, arret: 40 });
+    const m = await ouvrir(chargeLue);
+    const ecritures = m.trace.length;
+    expect(section(m).querySelector('[data-hors-classement] tr[data-proposition]')).not.toBeNull();
+    const rangees = [ligneRetenu(m), ...lignes(m)];
+    expect(rangees.length).toBe(1 + chargeLue.propositions.length);
+    for (const tr of rangees) {
+      const noms = [...tr.querySelectorAll('td[data-colonne="commandes"] [data-commande]')].map((bouton) => bouton.dataset.commande);
+      expect(noms.slice(0, 2), tr.dataset.proposition ?? 'retenu').toEqual(['voir', 'qualite']);
+      expect(texteDe(commande(tr, 'qualite'))).toBe(t('propositions.commande.qualite'));
+    }
+    for (const id of [...ids(m), null]) {
+      m.ui.allerA('propositions');
+      flushSync();
+      const tr = id === null ? ligneRetenu(m) : ligne(m, id);
+      commande(tr, 'qualite').click();
+      await attendre(() => expect(m.racine.querySelector('[data-section="qualite"]')).not.toBeNull());
+      expect(m.ui.etat().proposition).toBe(id);
+      expect(m.racine.querySelector('[data-refus]')).toBeNull();
+    }
+    expect(m.trace.length).toBe(ecritures);
+    expect(charge(m).retenu.proposition).toBe(3);
+  });
+});
+
 describe('effacer', () => {
   test('retenir la 2, effacer : seule la 2 reste, charge.retenu intact, une entrée', async () => {
     const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));

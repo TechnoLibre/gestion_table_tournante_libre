@@ -81,6 +81,15 @@
 // Chaque geste lit l'horloge une fois : l'instant de son entrée au journal
 // date aussi le placement qu'il change (§ 8.9, § 11.8).
 //
+// La course de la recherche de chaque proposition (§ 5.10) va au compagnon
+// des courses, que le dépôt écrit après l'état (courses.js) : la séance
+// passe au dépôt les courses que la génération rend à côté de la charge, et
+// courseDe lit celle d'une proposition de l'Ouvert, contrôlée contre elle.
+// L'Ouvert garde en mémoire les courses de la séance, celles d'une
+// proposition retirée comprises ; l'événement relu au passage en écriture
+// les garde aussi, quand il est le même événement : un retour qui rend la
+// proposition retrouve sa course.
+//
 // La planche de badges se prépare, se produit et s'enregistre ailleurs dans
 // tout mode (planche_seance.js) : elle lit l'événement ouvert sans le verrou
 // d'écriture, à son tour dans la file des appels, et n'écrit que son PDF
@@ -91,6 +100,7 @@
 // laissé. L'horloge et les minuteries entrent en paramètre : la séance ne lit
 // ni l'heure ni un aléa, et n'arme aucune minuterie elle-même.
 import { serialiserCharge } from '../stockage/canonique.js';
+import { avecCourses, courseDe } from '../stockage/courses.js';
 import {
   creer as creerSurDisque,
   deverrouiller,
@@ -727,10 +737,20 @@ export function creerSeance({
     return { frais: parSource, source: etat.source };
   }
 
+  // L'Ouvert frais, relu sur le disque, portant aussi les courses en mémoire
+  // de l'Ouvert d'avant quand il s'agit du même événement : celles que le
+  // compagnon relu confirme passent devant. Un autre événement garde les
+  // siennes seules. Chaque course se contrôle encore à sa lecture (courseDe).
+  function avecCoursesDe(frais, avant) {
+    if (frais.charge.evenement.id !== avant.charge.evenement.id) return frais;
+    return { ...frais, courses: avecCourses(avant.courses, [...frais.courses.values()]) };
+  }
+
   // Relit l'événement de l'Ouvert, le verrou de la séance pris (relire). Ce
   // que la lecture rend devient l'Ouvert de la séance, journal et jalons
-  // compris ; rend [EVENEMENT_CHANGE {revision}] quand sa révision ou sa
-  // charge diffèrent de celles de l'Ouvert, [] sinon. Une entrée d'une autre
+  // compris, ses courses complétées de celles de l'Ouvert (avecCoursesDe) ;
+  // rend [EVENEMENT_CHANGE {revision}] quand sa révision ou sa charge
+  // diffèrent de celles de l'Ouvert, [] sinon. Une entrée d'une autre
   // séance change toujours la révision relue : l'état qu'elle a écrit, ou le
   // dernier instant du journal qu'un .precedent lui cède (relire). Une
   // lecture refusée rend le verrou — ses avertissements deviennent ceux du
@@ -744,7 +764,8 @@ export function creerSeance({
       etat.avertissementsGeste = await rendreVerrou(ouvert);
       throw erreur;
     }
-    const { frais, source } = relu;
+    const { source } = relu;
+    const frais = avecCoursesDe(relu.frais, ouvert);
     etat.ouvert = frais;
     etat.source = source;
     etat.formatLu = formatDe(frais.texteEtat);
@@ -851,14 +872,16 @@ export function creerSeance({
   // le geste : options.horodatage, celui qui a daté la commande, ou une
   // lecture de l'horloge. Le jalon d'état qu'un refus empêche laisse le geste
   // enregistré : JALON_NON_ECRIT s'ajoute aux avertissements, et le support
-  // est rompu sous ce même échec. Rend le libellé ; les avertissements
-  // deviennent ceux du dernier geste.
-  async function ecrireGeste(depart, { charge, libelle: texte, avertissements }, options = {}) {
+  // est rompu sous ce même échec. courses, les entrées du compagnon des
+  // courses qu'une génération rend à côté de la charge, vont au dépôt avec
+  // l'entrée. Rend le libellé ; les avertissements deviennent ceux du
+  // dernier geste.
+  async function ecrireGeste(depart, { charge, libelle: texte, avertissements, courses = [] }, options = {}) {
     const { sens = null, retour = null, jalonAvant = null, horodatage = horloge.horodatage() } = options;
     const commun = { horodatage, libelleReprise };
     let ouvert = depart;
     if (jalonAvant !== null) ouvert = await ecrire(ouvert, (o) => nommerSurDisque(o, { nom: jalonAvant, ...commun }));
-    const entree = { libelle: texte, produitVersion, sens, retour, ...commun };
+    const entree = { libelle: texte, produitVersion, sens, retour, courses, ...commun };
     ouvert = await ecrire(ouvert, (o) => enregistrer(o, charge, entree));
     etat.source = null;
     const suite = [...avertissements];
@@ -1492,6 +1515,16 @@ export function creerSeance({
      * lecture, admise dans tout mode, qui n'écrit rien.
      */
     formeNommee: (cible) => enFile(async () => formeNommeeDe(exigerOuvert().charge, cible)),
+    /**
+     * La course de la recherche de la proposition id de l'événement ouvert
+     * (§ 5.10), en plans par identifiants : { evalues, releves: [{mouvements,
+     * plan}] }. null sans événement, sans proposition id, ou quand sa course
+     * n'est pas gardée : le compagnon des courses absent, illisible ou
+     * contradictoire, une proposition d'une version antérieure, ou effacée
+     * puis rendue après une réouverture. Une lecture, hors de la file : elle
+     * lit l'Ouvert courant sans rien écrire.
+     */
+    courseDe: (id) => (etat.ouvert === null ? null : courseDe(etat.ouvert, id)),
     /**
      * L'annonce de la planche de badges (planche_seance.js), avant de
      * produire : une lecture, admise dans tout mode, qui n'écrit rien.

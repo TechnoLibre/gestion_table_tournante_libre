@@ -6,11 +6,18 @@
   // l'application — système de fichiers, horloge, exécuteur de génération,
   // presse-papiers, identifiants, langue, provenance, démonstrations, format
   // courant, version du produit et sa forme Windows, chargement de la police
-  // embarquée, imprimante de la plateforme, et en option le thème de
-  // départ — que src/main.js construit pour la machine et monterApp pour
-  // une épreuve : App ne choisit aucune plateforme, et ne lit la version que
-  // dans ses propriétés, la même au bandeau, au titre, à l'accueil et dans
-  // le bloc « À propos ».
+  // embarquée, imprimante de la plateforme, chargement de la section de la
+  // qualité, et en option le thème de départ — que src/main.js construit
+  // pour la machine et monterApp pour une épreuve : App ne choisit aucune
+  // plateforme, et ne lit la version que dans ses propriétés, la même au
+  // bandeau, au titre, à l'accueil et dans le bloc « À propos ».
+  //
+  // La section de la qualité forme son propre morceau dans la construction :
+  // src/main.js passe une fonction qui la charge par un import différé,
+  // monterApp une fonction qui rend le composant importé d'emblée. App en
+  // fait une demande unique (creerChargeurSection), qu'il donne à
+  // l'événement : le morceau ne se charge qu'à la première ouverture de la
+  // section, et une fois.
   //
   // À son initialisation, App crée une fois chacun la séance, sans racine,
   // le contrôleur de génération et la façade, et les donne aux composants par
@@ -64,6 +71,7 @@
   import Accueil from './accueil/Accueil.svelte';
   import { creerPas } from './accueil/chargement.js';
   import Bandeau from './Bandeau.svelte';
+  import { creerChargeurSection } from './evenement/differe.js';
   import Evenement from './evenement/Evenement.svelte';
   import Apercu from './impression/Apercu.svelte';
   import { blocAPropos, provenanceVisible, versionVisible } from './apropos.js';
@@ -93,6 +101,9 @@
     // frontière « impression » de la plateforme (§ 13.4), que les
     // composants reçoivent par le contexte, sans importer src/impression.
     imprimante,
+    // () => Component | PromiseLike<Component> : le composant de la section
+    // de la qualité, ou la promesse de son morceau.
+    sectionQualite,
     themeInitial,
   } = untrack(() => dependances);
 
@@ -153,6 +164,8 @@
     },
   };
   const uiApp = creerEtatUi();
+  // Les sections chargées à part, chacune par sa demande unique.
+  const chargeurs = { qualite: creerChargeurSection(sectionQualite) };
 
   setContext('seance', seanceApp);
   setContext('facade', facadeContexte);
@@ -350,7 +363,7 @@
     {:else if $uiApp.apercu !== null}
       <Apercu {provenance} version={produitVersion} fermer={fermerApercu} />
     {:else}
-      <Evenement />
+      <Evenement {chargeurs} />
     {/if}
   </main>
 </div>

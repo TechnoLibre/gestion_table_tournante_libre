@@ -14,17 +14,20 @@
   // vue : ce que rend tableau(), libellés et étendues compris — ses colonnes
   // et ses groupes, ceux que porte la table, le sixième groupe selon les
   // critères qui comptent —, ses lignes et ses lignes hors classement
-  // réduites à celles de la page montrée
-  // (pagine, modele.js) ; chaque ligne garde son rang global. nommer(id) :
-  // le nom affiché d'une personne, null pour id null ou pour une personne que
-  // la charge n'a plus. voir(id) et
+  // réduites à celles de la page montrée (pagine, modele.js) ; chaque ligne
+  // garde son rang global. nommer(id) : le nom affiché d'une personne, null
+  // pour id null ou pour une personne que la charge n'a plus. voir(id) et
   // retenir(id) : les gestes d'une ligne, que la section câble ; voir(null)
   // montre le retenu. Un refus de « Retenir » se pose à côté du bouton, par
-  // la Commande. surlignee : le nom de la colonne que la phrase de l'ordre
-  // désigne — une colonne de mesure, ou celle des propositions —, null sans
-  // surlignage ; son en-tête et chacune de ses cellules se surlignent, hors
-  // la cellule des raisons d'une ligne hors classement, qui en couvre
-  // plusieurs.
+  // la Commande. « Qualité », sur chaque ligne, demande sa proposition au
+  // plan — le retenu sur la ligne du retenu — et ouvre la page de qualité,
+  // qui mesure la proposition de sa ligne, ou le retenu (§ 12), que le plan
+  // la montre ou non : l'état de navigation seul change, sans écriture ni
+  // refus, en lecture comme sur un plan bloqué. surlignee : le nom de la
+  // colonne que la phrase de l'ordre désigne — une colonne de mesure, ou
+  // celle des propositions —, null sans surlignage ; son en-tête et chacune
+  // de ses cellules se surlignent, hors la cellule des raisons d'une ligne
+  // hors classement, qui en couvre plusieurs.
   //
   // Chaque en-tête explique sa colonne dans l'infobulle de la section : il se
   // focalise au clavier (tabindex 0), et son survol ou son focus appelle
@@ -63,7 +66,15 @@
 
   const t = getContext('t');
   const format = getContext('format');
+  const ui = getContext('ui');
   const outils = { t, format };
+
+  // Demande la proposition id au plan, ou le retenu pour null, puis ouvre
+  // la page de qualité.
+  function qualite(id) {
+    ui.montrerProposition(id);
+    ui.allerA('qualite');
+  }
 
   // Les noms des colonnes de nombres.
   const nombres = $derived(new Set(vue.colonnes.filter((colonne) => colonne.nombre).map((colonne) => colonne.nom)));
@@ -119,6 +130,7 @@
   <td data-colonne="commandes">
     <div class="commandes">
       <Commande cle="propositions.commande.voir" nom="voir" executer={() => voir(ligne.id)} />
+      <Commande cle="propositions.commande.qualite" nom="qualite" executer={() => qualite(ligne.id)} />
       <Commande cle="propositions.commande.retenir" executer={() => retenir(ligne.id)} />
     </div>
   </td>
@@ -175,6 +187,7 @@
           <td data-colonne="commandes">
             <div class="commandes">
               <Commande cle="propositions.commande.voir" nom="voir" executer={() => voir(null)} />
+              <Commande cle="propositions.commande.qualite" nom="qualite" executer={() => qualite(null)} />
             </div>
           </td>
         </tr>

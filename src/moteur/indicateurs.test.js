@@ -733,6 +733,11 @@ describe('parcourirTours', () => {
       retours: [2, 1, 1, 1],
       servis: [0, 0, 0, 0],
       rencontresAnimateurs: [0, 0, 0, 0],
+      // Sans objectif, aucun couple n'est possible : chaque assis du tour est
+      // sans table possible, et 4, en réserve au tour 3, n'y compte pas.
+      servisParTour: [0, 0, 0],
+      possiblesParTour: [0, 0, 0],
+      assisSansCoupleParTour: [4, 4, 3],
     });
   });
 
@@ -770,6 +775,9 @@ describe('parcourirTours', () => {
       retours: [],
       servis: [],
       rencontresAnimateurs: [],
+      servisParTour: [0, 0],
+      possiblesParTour: [0, 0],
+      assisSansCoupleParTour: [0, 0],
     });
   });
 
@@ -1185,6 +1193,100 @@ function servisLus(configuration, tours) {
   });
 }
 
+// Lecture directe des trois comptes par tour (§ 5.4, B4) sur un plan écrit
+// par identifiants, sans rien du module éprouvé. Le couple (p, r) est
+// possible quand la table fixée de p à ce tour lui correspond ou, p libre,
+// quand une table qui garde un siège libre à ce tour en porte un qui lui
+// correspond ; p est servi assis à une table qu'il peut occuper — sa table
+// fixée, ou, libre, une table qui garde un siège libre — et dont l'objectif
+// lui correspond. Par tour : Π_r, les couples possibles, réserve comprise ;
+// S_r, les servis ; σ_r, les assis dont le couple n'est pas possible. Une
+// personne absente des listes d'un tour y est en réserve.
+function parTourLus(configuration, tours) {
+  const { participants, tables, reservations, objectifs = [] } = configuration;
+  const couvre = (reservation, tour) => reservation.portee === 'tous' || reservation.tour === tour;
+  const fixee = (id, tour) => reservations.find((res) => res.participant === id && couvre(res, tour))?.table;
+  const libre = (table, tour) => reservations.filter((res) => res.table === table.id && couvre(res, tour)).length < table.capacite;
+  const enVigueur = (table, tour) =>
+    objectifs.find((o) => o.table === table && o.tour === tour) ?? objectifs.find((o) => o.table === table && o.tour === null);
+  const correspond = (personne, table, tour) => {
+    const o = enVigueur(table, tour);
+    if (o === undefined) return false;
+    const siennes = personne.etiquettes ?? [];
+    return o.regle === 'ou' ? o.etiquettes.some((e) => siennes.includes(e)) : o.etiquettes.every((e) => siennes.includes(e));
+  };
+  const occupable = (personne, table, tour) => {
+    const t = fixee(personne.id, tour);
+    return t === undefined ? libre(table, tour) : t === table.id;
+  };
+  const possible = (personne, tour) => {
+    const t = fixee(personne.id, tour);
+    if (t !== undefined) return correspond(personne, t, tour);
+    return tables.some((table) => libre(table, tour) && correspond(personne, table.id, tour));
+  };
+  const presents = participants.filter((personne) => !personne.exclu);
+  const lus = { servisParTour: [], possiblesParTour: [], assisSansCoupleParTour: [] };
+  tours.forEach((listes, r) => {
+    const tour = r + 1;
+    let servis = 0;
+    let possibles = 0;
+    let sansCouple = 0;
+    for (const personne of presents) {
+      const ouvert = possible(personne, tour);
+      if (ouvert) possibles += 1;
+      const i = listes.findIndex((occupants) => occupants.includes(personne.id));
+      if (i === -1) continue;
+      if (!ouvert) sansCouple += 1;
+      const table = tables[i];
+      if (occupable(personne, table, tour) && correspond(personne, table.id, tour)) servis += 1;
+    }
+    lus.servisParTour.push(servis);
+    lus.possiblesParTour.push(possibles);
+    lus.assisSansCoupleParTour.push(sansCouple);
+  });
+  return lus;
+}
+
+// Les trois comptes par tour de parcourirTours, sur un plan écrit par
+// identifiants, réserve comprise.
+function parTourMesures(configuration, tours) {
+  const instance = normaliser(configuration);
+  const tables = configuration.tables.map(({ id }) => id);
+  const assis = (r) => new Set(tours[r].flat());
+  const reserves = tours.map((_, r) => configuration.participants.map(({ id }) => id).filter((id) => !assis(r).has(id)));
+  const parcours = parcourirTours(instance, indexerPlan(instance, { tables, tours, reserves }));
+  return {
+    servisParTour: parcours.servisParTour,
+    possiblesParTour: parcours.possiblesParTour,
+    assisSansCoupleParTour: parcours.assisSansCoupleParTour,
+    servis: parcours.servis,
+  };
+}
+
+describe('parcourirTours : les servis, les possibles et les assis sans table possible de chaque tour (§ 5.4, B4, D36)', () => {
+  test('dix « finance » pour une table de huit : 10 possibles et 8 servis par tour, les six sans étiquette assis sans table possible', () => {
+    const tours = tenus([9, 10], [8, 10], [7, 10], [6, 10]);
+    const mesures = parTourMesures(FINANCE, tours);
+    assert.deepEqual(mesures.servisParTour, [8, 8, 8, 8]);
+    assert.deepEqual(mesures.possiblesParTour, [10, 10, 10, 10]);
+    assert.deepEqual(mesures.assisSansCoupleParTour, [6, 6, 6, 6]);
+    const { servisParTour, possiblesParTour, assisSansCoupleParTour } = mesures;
+    assert.deepEqual({ servisParTour, possiblesParTour, assisSansCoupleParTour }, parTourLus(FINANCE, tours));
+  });
+
+  test('une personne en réserve garde son couple possible, n’est ni servie ni assise sans table possible', () => {
+    // Au tour 1, 1, « finance », et 11, sans étiquette, sont en réserve :
+    // Π_1 garde 1 ; σ_1 perd 11 ; la table 1 sert huit « finance ».
+    const tours = tenus([9, 10], [8, 10], [7, 10], [6, 10]);
+    tours[0] = [suite(2, 9), [10, ...suite(12, 16)]];
+    const { servisParTour, possiblesParTour, assisSansCoupleParTour } = parTourMesures(FINANCE, tours);
+    assert.deepEqual(servisParTour, [8, 8, 8, 8]);
+    assert.deepEqual(possiblesParTour, [10, 10, 10, 10]);
+    assert.deepEqual(assisSansCoupleParTour, [5, 6, 6, 6]);
+    assert.deepEqual({ servisParTour, possiblesParTour, assisSansCoupleParTour }, parTourLus(FINANCE, tours));
+  });
+});
+
 describe('mesurer : un objectif et des sièges libres qui changent d’un tour à l’autre (§ 4.5, A9, A21)', () => {
   // Tables 1, 2, 3 de trois places, trois tours. La table 1 porte « finance »
   // pour la soirée, « bénévole » au tour 2 ; la table 2, « bénévole » pour la
@@ -1240,5 +1342,24 @@ describe('mesurer : un objectif et des sièges libres qui changent d’un tour �
     // tour 1, 7 au tour 2 ; 3 rencontre 7.
     assert.deepEqual(s, [1, 2, 1, 2, 0, 0, 2, 1, 1]);
     assert.deepEqual(m, [0, 0, 1, 0, 2, 1, 0, 0, 0]);
+  });
+
+  test('S_r, Π_r et σ_r égalent une lecture directe, et S_r somme s(p) : l’objectif du tour remplace celui de la soirée, la table gelée n’offre rien', () => {
+    // Comptés à la main. Tour 1 : la table 2, gelée, n'offre rien ; 8 y est
+    // fixé sous « bénévole » ; les « finance » libres ont les tables 1 et 3 :
+    // Π_1 = 6, tous servis ; 3, 5 et 6 sans table possible. Tour 2 : 7, fixé
+    // à la table 2 sous « bénévole », n'a pas de couple ; 3, 4 et 8 en ont
+    // un ; 4 et 3 sont servis ; six assis sans table possible. Tour 3 : les
+    // cinq « finance », 2 aussi sous « toutes » ; 7 et 2 servis.
+    const mesures = parTourMesures(VARIABLE, TOURS_V);
+    assert.deepEqual(mesures.servisParTour, [6, 2, 2]);
+    assert.deepEqual(mesures.possiblesParTour, [6, 3, 5]);
+    assert.deepEqual(mesures.assisSansCoupleParTour, [3, 6, 4]);
+    const { servisParTour, possiblesParTour, assisSansCoupleParTour } = mesures;
+    assert.deepEqual({ servisParTour, possiblesParTour, assisSansCoupleParTour }, parTourLus(VARIABLE, TOURS_V));
+    const somme = (valeurs) => valeurs.reduce((total, valeur) => total + valeur, 0);
+    assert.equal(somme(servisParTour), somme(mesures.servis));
+    const instance = normaliser(VARIABLE);
+    assert.equal(somme(possiblesParTour), somme(instance.possibles));
   });
 });

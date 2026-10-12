@@ -30,6 +30,7 @@ import {
   ouvrirSecours,
   verrouiller,
 } from './depot.js';
+import { courseDe, entreeDeCourse, texteDesCourses } from './courses.js';
 import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { PLAFOND_ENTREES, elaguer, fil, ligneJalon, ligneOuverture, lireJournal, reconstruire } from './journal.js';
@@ -47,6 +48,7 @@ const ETAT = `${BASE}${SUFFIXES.etat}`;
 const PRECEDENT = `${BASE}${SUFFIXES.precedent}`;
 const JOURNAL = `${BASE}${SUFFIXES.journal}`;
 const VERROU = `${BASE}${SUFFIXES.verrou}`;
+const COURSES = `${BASE}${SUFFIXES.courses}`;
 
 const REPRISE = "Reprise de l'état trouvé sur le disque";
 
@@ -2212,6 +2214,162 @@ describe('dépôt : propositions fautives et périmées, retenu fautif (§ 8.9)'
       [1],
     );
     assert.deepEqual(suite.avertissements, []);
+  });
+});
+
+// L'entrée du compagnon des courses du placement p, à evalues mouvements
+// évalués : un point de relevé à chaque puissance de dix strictement sous
+// evalues, chacun une copie du placement de p (§ 8.9, B31).
+function entreeDe(p, evalues = 100) {
+  const releves = [];
+  for (let mouvements = 1; mouvements < evalues; mouvements *= 10) {
+    releves.push({ mouvements, placement: structuredClone(p.placement) });
+  }
+  return entreeDeCourse(p, { evalues, releves });
+}
+
+// La charge reçue, les propositions 2 et 3 ajoutées et le compteur relevé,
+// et les entrées de leurs courses : ce qu'enregistre une génération.
+function generation(charge) {
+  const apres = structuredClone(charge);
+  const nouvelles = [placement(2, [[1, 2], [3, 4]]), placement(3, [[1, 4], [2, 3]])];
+  apres.propositions.push(...nouvelles);
+  apres.prochainsIds.proposition = 4;
+  return { apres, courses: [entreeDe(nouvelles[0]), entreeDe(nouvelles[1], 1_000)] };
+}
+
+// Le texte du compagnon des courses de l'événement d'épreuve.
+const compagnon = (entrees) => texteDesCourses('evt-lucioles', entrees);
+
+describe('dépôt : le compagnon des courses (§ 8.6, § 8.9, B31)', () => {
+  test("une génération écrit le compagnon après l'état ; un geste qui garde les mêmes propositions ne l'écrit pas ; rouvert, l'événement retrouve chaque course", async () => {
+    const { disque, fs } = nouveauDisque();
+    const trace = tracer(fs);
+    const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+    assert.equal(fs.contenu('documents', COURSES), null, 'une création sans course connue écrit un compagnon');
+    assert.equal(courseDe(ouvert, 1), null);
+
+    trace.length = 0;
+    const { apres, courses } = generation(ouvert.charge);
+    const genere = await enregistrer(ouvert, apres, geste(2, { courses }));
+    assert.deepEqual(trace.slice(-2), [['ecrireAtomique', ETAT], ['ecrireAtomique', COURSES]]);
+    assert.equal(fs.contenu('documents', COURSES), compagnon(courses));
+    assert.equal(courseDe(genere, 3).evalues, 1_000);
+    assert.equal(courseDe(genere, 1), null);
+    // Le fichier d'état et le journal ne portent aucune course.
+    assert.equal(fs.contenu('documents', ETAT).includes('evalues'), false);
+    assert.equal(fs.contenu('documents', JOURNAL).includes('evalues'), false);
+
+    trace.length = 0;
+    let suite = genere;
+    for (const n of [3, 4, 5]) suite = await enregistrer(suite, gesteSur(suite.charge, n), geste(n));
+    suite = await nommer(suite, { nom: 'Après trois gestes', horodatage: heure(6) });
+    assert.deepEqual(trace.filter(([, chemin]) => chemin === COURSES), []);
+    assert.equal(courseDe(suite, 2).evalues, 100);
+
+    const rouvert = await rouvrir(disque, BASE);
+    assert.deepEqual(courseDe(rouvert, 3), courseDe(genere, 3));
+    assert.deepEqual(courseDe(rouvert, 2), courseDe(genere, 2));
+  });
+
+  test("effacer puis défaire : le compagnon se réécrit sans les courses effacées, l'Ouvert les garde en mémoire, et le retour les réécrit ; après une réouverture, elles ne sont plus connues", async () => {
+    const { disque, fs } = nouveauDisque();
+    const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+    const { apres, courses } = generation(ouvert.charge);
+    const genere = await enregistrer(ouvert, apres, geste(2, { courses }));
+
+    const vide = structuredClone(genere.charge);
+    vide.propositions = [];
+    const efface = await enregistrer(genere, vide, geste(3));
+    assert.equal(fs.contenu('documents', COURSES), compagnon([]));
+    assert.equal(courseDe(efface, 2), null);
+
+    const restituee = reconstruire(efface.journal, 2);
+    const defait = await enregistrer(efface, restituee, geste(4, { sens: 'defaire', retour: 2 }));
+    assert.equal(fs.contenu('documents', COURSES), compagnon(courses));
+    assert.deepEqual(courseDe(defait, 3), courseDe(genere, 3));
+
+    // Rouvert après l'effacement, l'événement ne connaît plus ces courses :
+    // le retour rend les propositions, sans course, et le compagnon reste
+    // vide.
+    const efface2 = await enregistrer(defait, vide, geste(5));
+    const rouvert = await rouvrir(disque, BASE);
+    const trace = tracer(rouvert.fs);
+    const revient = await enregistrer(rouvert, reconstruire(rouvert.journal, 4), geste(6, { sens: 'revenir', retour: 4 }));
+    assert.equal(efface2.charge.propositions.length, 0);
+    assert.equal(revient.charge.propositions.length, 3);
+    assert.equal(courseDe(revient, 3), null);
+    assert.deepEqual(trace.filter(([, chemin]) => chemin === COURSES), []);
+    assert.equal(fs.contenu('documents', COURSES), compagnon([]));
+  });
+
+  test("un compagnon absent, illisible, hors UTF-8, d'un autre événement ou contradictoire n'empêche ni l'ouverture ni l'écriture : ses courses sont inconnues, et un geste qui garde les mêmes propositions ne le touche pas", async () => {
+    const charge = chargeEssai();
+    const [p] = charge.propositions;
+    const valide = texteDesCourses('evt-lucioles', [entreeDe(p)]);
+    const contredite = entreeDe(p);
+    contredite.course.evalues = p.arret + 1;
+    const cas = [
+      ['absent', null],
+      ['hors JSON', 'pas du JSON'],
+      ["d'un autre événement", texteDesCourses('evt-autre', [entreeDe(p)])],
+      ['contradictoire', texteDesCourses('evt-lucioles', [contredite])],
+      ['hors UTF-8', malEncode(valide.replace('{"format"', '{"é":0,"format"'))],
+    ];
+    for (const [libelle, contenu] of cas) {
+      const { disque, fs } = disqueAvec([[ETAT, etatTexte(charge)]]);
+      if (typeof contenu === 'string') fs.deposer('documents', COURSES, contenu);
+      if (contenu instanceof Uint8Array) fs.deposerOctets('documents', COURSES, contenu);
+      const avant = contenu === null ? null : [...fs.octets('documents', COURSES)];
+      const ouvert = await rouvrir(disque, BASE);
+      assert.deepEqual(ouvert.avertissements, [], libelle);
+      assert.equal(courseDe(ouvert, 1), null, libelle);
+      await enregistrer(ouvert, modifier(ouvert.charge, 2), geste(2, { libelleReprise: REPRISE }));
+      const apres = contenu === null ? null : [...fs.octets('documents', COURSES)];
+      assert.deepEqual(apres, avant, libelle);
+    }
+    const { disque, fs } = disqueAvec([[ETAT, etatTexte(charge)], [COURSES, valide]]);
+    assert.equal(courseDe(await rouvrir(disque, BASE), 1).evalues, 100);
+    assert.equal(fs.contenu('documents', COURSES), valide);
+  });
+
+  test("un refus d'écrire le compagnon n'empêche pas le geste : journal et état écrits, la course connue de l'Ouvert pour la séance ; le geste qui change ensuite les propositions le réécrit", async () => {
+    const { fs } = nouveauDisque();
+    const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+    const ecrire = fs.ecrireAtomique;
+    let refuser = true;
+    fs.ecrireAtomique = (racine, chemin, texte) => {
+      if (refuser && chemin.endsWith(SUFFIXES.courses)) {
+        return Promise.reject(new ErreurStockage('ECRITURE', { chemin, dossier: DOCUMENTS, cause: 'EACCES' }));
+      }
+      return ecrire(racine, chemin, texte);
+    };
+    const { apres, courses } = generation(ouvert.charge);
+    const genere = await enregistrer(ouvert, apres, geste(2, { courses }));
+    assert.equal(genere.revision, 2);
+    assert.equal(analyser(fs.contenu('documents', ETAT)).entete.revision, 2);
+    assert.equal(fs.contenu('documents', COURSES), null);
+    assert.equal(courseDe(genere, 3).evalues, 1_000);
+    refuser = false;
+    const vide = structuredClone(genere.charge);
+    vide.propositions = vide.propositions.filter(({ id }) => id !== 2);
+    await enregistrer(genere, vide, geste(3));
+    assert.equal(fs.contenu('documents', COURSES), compagnon([courses[1]]));
+  });
+
+  test("écrit ailleurs, l'événement porte son compagnon sous sa nouvelle base ; un dossier où seul un compagnon porte une base ne la laisse pas libre", async () => {
+    const { fs } = nouveauDisque();
+    const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+    const { apres, courses } = generation(ouvert.charge);
+    const genere = await enregistrer(ouvert, apres, geste(2, { courses }));
+    const ailleurs = await enregistrerAilleurs(genere, DOC, { existantes: [] });
+    assert.notEqual(ailleurs.base, BASE);
+    assert.equal(fs.contenu('documents', `${ailleurs.base}${SUFFIXES.courses}`), compagnon(courses));
+    assert.deepEqual(courseDe(ailleurs, 2), courseDe(genere, 2));
+
+    const seul = nouveauDisque();
+    seul.fs.deposer('documents', COURSES, compagnon(courses));
+    assert.deepEqual(await basesPrises(seul.fs, DOC), [BASE]);
   });
 });
 

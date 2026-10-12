@@ -335,11 +335,13 @@
      une part fixe de la largeur, et le contenu le reste :
      la zone ne bouge pas d'une section à l'autre, quand le libellé de la
      section ouverte, en gras, change la largeur de la navigation. Sa part,
-     36 %, laisse au contenu les huit onglets sur une ligne dans une fenêtre
-     de 1 366 px. Une tête de moins de 70rem — celle d'une fenêtre de
-     1 024 px — passe la place à la ligne, sous le contenu, sur toute sa
-     largeur, où un avertissement d'une phrase tient en deux lignes, son
-     action à côté. La tête est pour cela un conteneur de largeur. */
+     32 %, laisse au contenu 886 px dans une fenêtre de 1 366 px : les neuf
+     onglets et les blancs entre les phases y tiennent sur une ligne, quelle
+     que soit la section ouverte, la plus large en demandant 885. Une tête
+     de moins de 70rem — celle d'une fenêtre de 1 024 px — passe la place
+     à la ligne, sous le contenu, sur toute sa largeur, où un avertissement
+     d'une phrase tient en deux lignes, son action à côté. La tête est pour
+     cela un conteneur de largeur. */
   .tete.cote {
     flex-flow: row wrap;
     container: tete / inline-size;
@@ -362,7 +364,7 @@
   }
 
   .place {
-    flex: 0 0 36%;
+    flex: 0 0 32%;
     min-width: 16rem;
     min-height: 3rem;
     border-left: 1px solid var(--couleur-carte-filet);
@@ -379,7 +381,7 @@
   }
 
   /* Dans la place, la zone a un retrait vertical de 2 px et un plafond,
-     retrait compris : 7,25rem tiennent entier, dans la place de 36 % d'une
+     retrait compris : 7,25rem tiennent entier, dans la place de 32 % d'une
      fenêtre de 1 366 px, un avertissement de trois lignes de texte et son
      action dessous (Avertissements.svelte). Au-delà, la zone défile, et la
      tête, qui ne grandit pas plus, laisse le reste du composant à la surface. */

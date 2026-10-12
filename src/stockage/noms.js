@@ -25,12 +25,16 @@
 import { PAPIERS } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 
-// Suffixes des fichiers d'un événement, que précède la base de son nom.
+// Suffixes des fichiers d'un événement, que précède la base de son nom :
+// l'état, son .precedent, le journal, le verrou, et le compagnon des
+// courses, qui garde la course de la recherche de chaque proposition à
+// côté de l'état (courses.js).
 export const SUFFIXES = Object.freeze({
   etat: '.gtt.json',
   precedent: '.gtt.json.precedent',
   journal: '.gtt-journal.jsonl',
   verrou: '.gtt.verrou',
+  courses: '.gtt-courses.json',
 });
 
 // Ajouté au nom d'un fichier pendant son écriture atomique, puis renommé
@@ -57,7 +61,13 @@ const RANG_LE_PLUS_LONG = `_${RANG_MAX}`;
 // suffixe ajouté à SUFFIXES s'ajoute aussi à ce maximum.
 const LONGUEUR_FIXE =
   `${DOSSIER_CORBEILLE}/${MODELE_DATE}${RANG_LE_PLUS_LONG}/`.length +
-  Math.max(SUFFIXES.etat.length, SUFFIXES.precedent.length, SUFFIXES.journal.length, SUFFIXES.verrou.length) +
+  Math.max(
+    SUFFIXES.etat.length,
+    SUFFIXES.precedent.length,
+    SUFFIXES.journal.length,
+    SUFFIXES.verrou.length,
+    SUFFIXES.courses.length,
+  ) +
   SUFFIXE_ECRITURE.length;
 
 /**

@@ -180,7 +180,7 @@ describe('aucun assistant (§ 2.1)', () => {
     const { charge } = m.seance.etat();
     expect([charge.participants.length, charge.tables.length]).toEqual([0, 0]);
     const ordre = creerPcg32(20261006, FLUX.DEMO).melanger([...SECTIONS]);
-    expect(ordre.length).toBe(8);
+    expect(ordre.length).toBe(SECTIONS.length);
     for (const nom of [...ordre, ...[...ordre].reverse()]) {
       const bouton = dans(m, `[data-commande="section"][data-cible="${nom}"]`);
       expect(visible(bouton), nom).toBe(true);
@@ -202,7 +202,7 @@ describe('aucun assistant (§ 2.1)', () => {
 });
 
 describe('la place fixe (§ 8.4, § 8.5)', () => {
-  test('« Modifier » aux mêmes coordonnées sur les huit sections ; plein écran, il reste visible et atteint ; « Revenir en lecture » puis « Débloquer » au même endroit', async () => {
+  test('« Modifier » aux mêmes coordonnées sur chaque section ; plein écran, il reste visible et atteint ; « Revenir en lecture » puis « Débloquer » au même endroit', async () => {
     const m = await neuf();
     const coins = [];
     for (const nom of SECTIONS) {
@@ -211,7 +211,7 @@ describe('la place fixe (§ 8.4, § 8.5)', () => {
       expect(visible(fixe(m, 'modifier')), nom).toBe(true);
       coins.push(coin(fixe(m, 'modifier')));
     }
-    expect(coins.length).toBe(8);
+    expect(coins.length).toBe(SECTIONS.length);
     for (const lu of coins) expect(lu).toEqual(coins[0]);
     // Un refus posé à côté d'un état, au-dessus de la surface, ne déplace
     // pas la place fixe, et ne la couvre pas.
