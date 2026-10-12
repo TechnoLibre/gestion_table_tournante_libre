@@ -129,7 +129,10 @@ const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
  *   à t.
  * parPaire : les rencontres de chaque paire, rangées par rangPaire ; une
  * paire se réunit au plus une fois par tour, R borne chaque compte, qu'un
- * Uint16Array tient tant que R ≤ 65 535. toursAssis, et retours — visites
+ * Uint16Array tient tant que R ≤ 65 535. reunies : chaque paire réunie au
+ * moins une fois, une seule fois, a puis b à plat, dans l'ordre de sa
+ * première rencontre ; lirePaires n'en parcourt pas d'autre, au lieu du
+ * triangle entier. toursAssis, et retours — visites
  * d'une table déjà visitée, imposées comprises —, par personne. servis,
  * s(p) : les tours où p est assis, à une table qu'il peut occuper, sous un
  * objectif en vigueur qui lui correspond. rencontresAnimateurs, m(p) : les
@@ -141,7 +144,7 @@ const rangPaire = (N, a, b) => (a * (2 * N - a - 1)) / 2 + (b - a - 1);
  * @param {import('./types.js').Instance} instance
  * @param {ArrayLike<number>} tableDe
  * @returns {{parTour: Array<Array<{collegues: number[][], revues: number[][], revenus: number[]}>>,
- *            parPaire: Uint16Array|Uint32Array, toursAssis: number[], retours: number[],
+ *            parPaire: Uint16Array|Uint32Array, reunies: number[], toursAssis: number[], retours: number[],
  *            servis: number[], rencontresAnimateurs: number[]}}
  */
 export function parcourirTours(instance, tableDe) {
@@ -169,17 +172,19 @@ export function parcourirTours(instance, tableDe) {
   const reserveeAvant = new Uint8Array(T);
   const rencontre = new Int32Array(A).fill(-1);
   for (let p = 0; p < N; p += 1) {
+    const soi = rangAnimateur[p];
     for (let r = 0; r < R; r += 1) {
       const t = tableDe[p * R + r];
       if (t === RESERVE) continue;
       toursAssis[p] += 1;
       const imposee = fixe[p * R + r];
-      if (imposee === LIBRE ? siegesLibres[t * R + r] > 0 : imposee === t) {
-        const o = objectifDe[t * R + r];
+      const ligne = t * R + r;
+      if (imposee === LIBRE ? siegesLibres[ligne] > 0 : imposee === t) {
+        const o = objectifDe[ligne];
         if (o !== SANS_OBJECTIF && correspond[p * O + o] === 1) servis[p] += 1;
-        for (let k = debutAnimes[t * R + r]; k < debutAnimes[t * R + r + 1]; k += 1) {
+        for (let k = debutAnimes[ligne], fin = debutAnimes[ligne + 1]; k < fin; k += 1) {
           const f = animes[k];
-          if (f === rangAnimateur[p] || rencontre[f] === p || tableDe[animateurs[f] * R + r] !== t) continue;
+          if (f === soi || rencontre[f] === p || tableDe[animateurs[f] * R + r] !== t) continue;
           rencontre[f] = p;
           rencontresAnimateurs[p] += 1;
         }
@@ -209,6 +214,7 @@ export function parcourirTours(instance, tableDe) {
   const nombrePaires = (N * (N - 1)) / 2;
   const parPaire = R <= UINT16_MAX ? new Uint16Array(nombrePaires) : new Uint32Array(nombrePaires);
   const libre = new Uint8Array(nombrePaires);
+  const reunies = [];
   const parTour = [];
   for (let r = 0; r < R; r += 1) {
     const assis = Array.from({ length: T }, () => []);
@@ -231,6 +237,7 @@ export function parcourirTours(instance, tableDe) {
           const b = liste[j];
           const k = rangPaire(N, a, b);
           parPaire[k] += 1;
+          if (parPaire[k] === 1) reunies.push(a, b);
           if (!aReserve || fixe[b * R + r] !== t) libre[k] = 1;
           if (g !== SANS_GROUPE && g === groupe[b]) collegues.push([a, b]);
           if (parPaire[k] >= 2 && libre[k] === 1) revues.push([a, b]);
@@ -240,14 +247,16 @@ export function parcourirTours(instance, tableDe) {
     }
     parTour.push(tables);
   }
-  return { parTour, parPaire, toursAssis, retours, servis, rencontresAnimateurs };
+  return { parTour, parPaire, reunies, toursAssis, retours, servis, rencontresAnimateurs };
 }
 
-// Lecture du triangle des paires, dans l'ordre de rangPaire. Par personne :
-// |met(p)|, |F(p)| et A(p), vu[p * G + g] notant que p a déjà croisé un
-// affilié du groupe g. Sur toutes les paires : les paires réunies deux fois
-// au moins, et le plus grand compte.
-function lirePaires({ N, groupe, groupes }, parPaire) {
+// Lecture des paires réunies (reunies de parcourirTours), leurs comptes dans
+// parPaire : une paire jamais réunie ne change aucun chiffre, et l'ordre de
+// lecture n'en change aucun non plus. Par personne : |met(p)|, |F(p)| et
+// A(p), vu[p * G + g] notant que p a déjà croisé un affilié du groupe g. Sur
+// toutes les paires : les paires réunies deux fois au moins, et le plus
+// grand compte. O(paires réunies), et non O(N²).
+function lirePaires({ N, groupe, groupes }, parPaire, reunies) {
   const G = groupes.length;
   const rencontres = new Int32Array(N);
   const affilies = new Int32Array(N);
@@ -270,16 +279,14 @@ function lirePaires({ N, groupe, groupes }, parPaire) {
     }
   };
 
-  let k = 0;
-  for (let a = 0; a < N; a += 1) {
-    for (let b = a + 1; b < N; b += 1, k += 1) {
-      const n = parPaire[k];
-      if (n === 0) continue;
-      rencontrer(a, b);
-      rencontrer(b, a);
-      if (n > maxRencontresPaire) maxRencontresPaire = n;
-      if (n >= 2) repetees += 1;
-    }
+  for (let i = 0; i < reunies.length; i += 2) {
+    const a = reunies[i];
+    const b = reunies[i + 1];
+    const n = parPaire[rangPaire(N, a, b)];
+    rencontrer(a, b);
+    rencontrer(b, a);
+    if (n > maxRencontresPaire) maxRencontresPaire = n;
+    if (n >= 2) repetees += 1;
   }
   return { rencontres, affilies, vues, repetees, maxRencontresPaire };
 }
@@ -325,12 +332,16 @@ function lireTours({ N, groupe, groupes }, parTour) {
 // aucun Infinity ne sert de minimum initial.
 const VIDE = Object.freeze({ min: null, somme: 0, effectif: 0 });
 
-// La population, une valeur de plus ; celle qu'elle reçoit reste intacte.
-const ajouter = ({ min, somme, effectif }, valeur) => ({
-  min: min === null || valeur < min ? valeur : min,
-  somme: somme + valeur,
-  effectif: effectif + 1,
-});
+// La population, une valeur de plus. VIDE, que les trois populations
+// partagent au départ, reste intact : la première valeur ouvre un cumul
+// neuf, que les suivantes complètent en place, sans un objet par personne.
+function ajouter(cumul, valeur) {
+  if (cumul === VIDE) return { min: valeur, somme: valeur, effectif: 1 };
+  if (valeur < cumul.min) cumul.min = valeur;
+  cumul.somme += valeur;
+  cumul.effectif += 1;
+  return cumul;
+}
 
 // Agrégat d'une population ; la moyenne d'une population vide vaut null.
 const conclure = ({ min, somme, effectif }) => ({
@@ -355,55 +366,71 @@ const somme = (valeurs) => valeurs.reduce((total, valeur) => total + valeur, 0);
 // Les objectifs des tables mesurés (A9), sur les personnes concernées, celles
 // dont P(p) > 0 : null sans aucune. Pour chacune, P(p) − s(p) entre dans H ;
 // s(p) nul, elle est jamais servie ; E et le nombre de personnes à E se
-// tiennent en un passage, ce nombre ramené à 0 quand E l'est.
-function lireObjectifs({ N, possibles, statut }, servis) {
-  const tours = [...servis];
-  const parPersonne = Array.from(possibles);
+// tiennent en un passage, ce nombre ramené à 0 quand E l'est. servis est le
+// tableau neuf de parcourirTours, que la mesure rend tel quel sous tours.
+function lireObjectifs({ N, possibles: P, statut }, servis) {
   let concernes = 0;
+  for (let p = 0; p < N; p += 1) if (P[p] > 0) concernes += 1;
+  if (concernes === 0) return null;
+  const possibles = new Array(N);
+  // s(p) des concernés, null pour les autres : l'agrégat n'en compte aucun.
+  const selonObjectif = new Array(N);
   let horsObjectif = 0;
   let jamaisServies = 0;
   let horsObjectifMax = 0;
   let auMax = 0;
   for (let p = 0; p < N; p += 1) {
-    if (parPersonne[p] === 0) continue;
-    concernes += 1;
-    const hors = parPersonne[p] - tours[p];
+    possibles[p] = P[p];
+    if (P[p] === 0) {
+      selonObjectif[p] = null;
+      continue;
+    }
+    selonObjectif[p] = servis[p];
+    const hors = P[p] - servis[p];
     horsObjectif += hors;
-    if (tours[p] === 0) jamaisServies += 1;
+    if (servis[p] === 0) jamaisServies += 1;
     if (hors > horsObjectifMax) {
       horsObjectifMax = hors;
       auMax = 0;
     }
     if (hors === horsObjectifMax) auMax += 1;
   }
-  if (concernes === 0) return null;
   return {
-    tours,
-    possibles: parPersonne,
+    tours: servis,
+    possibles,
     horsObjectif,
     jamaisServies,
     horsObjectifMax,
     personnesAuMax: horsObjectifMax === 0 ? 0 : auMax,
     concernes,
-    agregat: troisAgregats(tours.map((s, p) => (parPersonne[p] > 0 ? s : null)), statut, ajouterSiDefinie),
+    agregat: troisAgregats(selonObjectif, statut, ajouterSiDefinie),
   };
 }
 
 // Les animateurs rencontrés mesurés (A9), sur les personnes concernées,
 // celles dont B(p) > 0 : null sans aucune. Les animateurs non rencontrés
 // somment B(p) − m(p) sur toutes les personnes, une non concernée y valant
-// zéro.
-function lireAnimateurs({ borneAnimateurs, statut }, rencontresAnimateurs) {
-  const rencontres = [...rencontresAnimateurs];
-  const bornes = Array.from(borneAnimateurs);
-  const concernes = bornes.filter((borne) => borne > 0).length;
+// zéro. rencontres est le tableau neuf de parcourirTours, rendu tel quel.
+function lireAnimateurs({ N, borneAnimateurs, statut }, rencontres) {
+  let concernes = 0;
+  for (let p = 0; p < N; p += 1) if (borneAnimateurs[p] > 0) concernes += 1;
   if (concernes === 0) return null;
+  const bornes = new Array(N);
+  // m(p) des concernés, null pour les autres : l'agrégat n'en compte aucun.
+  const selonBorne = new Array(N);
+  let nonRencontres = 0;
+  for (let p = 0; p < N; p += 1) {
+    const borne = borneAnimateurs[p];
+    bornes[p] = borne;
+    nonRencontres += borne - rencontres[p];
+    selonBorne[p] = borne > 0 ? rencontres[p] : null;
+  }
   return {
     rencontres,
     bornes,
-    nonRencontres: somme(bornes) - somme(rencontres),
+    nonRencontres,
     concernes,
-    agregat: troisAgregats(rencontres.map((m, p) => (bornes[p] > 0 ? m : null)), statut, ajouterSiDefinie),
+    agregat: troisAgregats(selonBorne, statut, ajouterSiDefinie),
   };
 }
 
@@ -420,8 +447,8 @@ function lireAnimateurs({ borneAnimateurs, statut }, rencontresAnimateurs) {
  */
 export function mesurer(instance, tableDe) {
   const { N, groupe, groupes, statut } = instance;
-  const { parTour, parPaire, toursAssis, retours, servis, rencontresAnimateurs } = parcourirTours(instance, tableDe);
-  const paires = lirePaires(instance, parPaire);
+  const { parTour, parPaire, reunies, toursAssis, retours, servis, rencontresAnimateurs } = parcourirTours(instance, tableDe);
+  const paires = lirePaires(instance, parPaire, reunies);
   const { collisions, distinctes, choisies, retoursChoisis } = lireTours(instance, parTour);
 
   const rencontres = Array.from(paires.rencontres);

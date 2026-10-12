@@ -202,6 +202,19 @@ describe("évaluation : la mesure qui fait foi (§ 5.10, § 13.2)", () => {
     const charge = figer(generee(chargeDemo('petite'), { graine: 2, nombre: 2, arret: 300 }));
     assert.deepEqual(evaluer(charge), evaluer(charge));
   });
+
+  test('evaluer fige sa configuration, jamais la charge : rien de ce que la charge atteint ne devient figé', () => {
+    const charge = generee(chargeDemo('grande'), { graine: 2, nombre: 1, arret: 300 });
+    evaluer(charge);
+    const figes = [];
+    const parcourir = (valeur, chemin) => {
+      if (valeur === null || typeof valeur !== 'object') return;
+      if (Object.isFrozen(valeur)) figes.push(chemin);
+      for (const [cle, element] of Object.entries(valeur)) parcourir(element, `${chemin}.${cle}`);
+    };
+    parcourir(charge, 'charge');
+    assert.deepEqual(figes, []);
+  });
 });
 
 describe('évaluation : une réservation que le plan ne tient pas (§ 5.8, § 12.6)', () => {

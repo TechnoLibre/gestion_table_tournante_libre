@@ -79,7 +79,10 @@
 // rencontre apparaît ou disparaît, et m(p), avec les animateurs non
 // rencontrés Σ (B(p) − m(p)), suit. Partager la table d'un animateur à un
 // tour où il n'anime pas n'y compte pas : modifierPaire n'y touche pas.
-// O(animateurs des deux tables), au plus O(capacité).
+// O(animateurs des deux tables), au plus O(capacité). L'état ne les tient
+// que lorsque le n-uplet les compose, le critère coché et non sans objet :
+// sinon aucune composante ne les lit, et la recherche ne paie rien pour
+// eux, même quand des personnes animent.
 //
 // Ce score sert la boucle de recherche et rien d'autre ; scoreComplet
 // recompose le même n-uplet à partir de la mesure qui fait foi, dont il lit
@@ -169,11 +172,15 @@ import { plafondsAPriori } from './plafond.js';
  * @property {number} jamaisServies          J
  * @property {number} horsObjectifMax        E
  * @property {number} personnesAuMax         concernés à E ; 0 quand E = 0
- * @property {Int32Array} rencontresAnimateurs  m(p)
- * @property {number} animateursNonRencontres   Σ (B(p) − m(p))
+ * @property {boolean} suitAnimateurs   vrai quand le n-uplet compose les
+ *           animateurs non rencontrés : l'état ne les tient qu'alors
+ * @property {Int32Array|null} rencontresAnimateurs  m(p) ; null quand
+ *           le n-uplet ne compose pas les animateurs non rencontrés
+ * @property {number|null} animateursNonRencontres   Σ (B(p) − m(p)) ; null
+ *           de même
  * @property {Object} composition        la forme du n-uplet de l'instance :
- *           taille, termes de chaque composante, ordres de comparaison et
- *           rang du plus grand écart
+ *           taille, termes de chaque composante, ordres de comparaison,
+ *           rang du plus grand écart et suitAnimateurs
  *
  * @typedef {{tour: number, a: number, b: number}} Mouvement
  *          l'échange des occupants des sièges a et b au tour d'index tour
@@ -253,7 +260,9 @@ function lire(q, code) {
 // terme par composante qu'il descend ; un palier partagé, un terme par
 // critère dans sa composante. Les rencontres répétées posent un terme par
 // case cochée de « nouveaux voisins » et « nouvelle table », au même poids.
-// Lève RangeError pour une grandeur que la composition ne sait pas lire.
+// suitAnimateurs dit qu'un terme lit les animateurs non rencontrés : l'état
+// ne les tient qu'alors. Lève RangeError pour une grandeur que la
+// composition ne sait pas lire.
 function composition(instance) {
   const { paliers, ordreScore, ordreContraintes, rangEcart, taille } = compilationDe(instance);
   const { contraintes, modeObjectifs } = instance;
@@ -287,6 +296,7 @@ function composition(instance) {
     ordreScore: Int32Array.from(ordreScore),
     ordreContraintes: Int32Array.from(ordreContraintes),
     rangEcart,
+    suitAnimateurs: termes.some(([code]) => code === ANIMATEURS),
   };
 }
 
@@ -517,13 +527,14 @@ function changerAnimateurs(etat, p, t, r, sens) {
 }
 
 // p, libre au tour r, passe de la table depart à la table arrivee : ses tours
-// servis et ses rencontres d'animateurs suivent (en-tête du module).
+// servis et, quand l'état les tient, ses rencontres d'animateurs suivent
+// (en-tête du module).
 function changerTable(etat, p, depart, arrivee, r) {
   if (etat.O > 0) {
     const ecart = sert(etat, p, arrivee, r) - sert(etat, p, depart, r);
     if (ecart !== 0) changerServis(etat, p, ecart);
   }
-  if (etat.A > 0) {
+  if (etat.suitAnimateurs) {
     changerAnimateurs(etat, p, depart, r, -1);
     changerAnimateurs(etat, p, arrivee, r, 1);
   }
@@ -586,7 +597,8 @@ function echanger(etat, r, a, b) {
 // sièges mobiles. Les compteurs partent de zéro et suivent chaque paire,
 // chaque visite et chaque rencontre d'animateur par les mêmes fonctions que
 // les mouvements ; les écarts partent du plafond a priori, aucune rencontre
-// n'étant encore comptée, et les animateurs non rencontrés de Σ B(p). Les
+// n'étant encore comptée, et les animateurs non rencontrés de Σ B(p),
+// quand l'état les tient (suitAnimateurs de la composition). Les
 // tours servis se comptent siège par siège, puis l'histogramme des
 // P(p) − s(p) se forme sur les personnes concernées. Chaque personne assise
 // l'est à une table qu'elle peut occuper — sa table fixée, ou un siège
@@ -595,6 +607,7 @@ function echanger(etat, r, a, b) {
 function etatInitial(structure, rng) {
   const { instance, N, T, R, S, mobiles, libres, aPriori, tableDuSiege, debut } = structure;
   const G = instance.groupes.length;
+  const { suitAnimateurs } = structure.composition;
   const etat = {
     instance,
     contraintes: instance.contraintes,
@@ -646,20 +659,23 @@ function etatInitial(structure, rng) {
     personnesAuMax: 0,
     // Les animateurs : qui anime à chaque table et chaque tour, de
     // l'instance ; le compte de chaque couple (personne, animateur), m(p) et
-    // Σ (B(p) − m(p)), de cet état.
+    // Σ (B(p) − m(p)), de cet état, null quand il ne les tient pas.
+    suitAnimateurs,
     A: instance.A,
     rangAnimateur: instance.rangAnimateur,
     debutAnimes: instance.debutAnimes,
     animes: instance.animes,
-    rencontresAnimees: R <= UINT8_MAX ? new Uint8Array(N * instance.A) : new Uint32Array(N * instance.A),
-    rencontresAnimateurs: new Int32Array(N),
-    animateursNonRencontres: 0,
+    rencontresAnimees: !suitAnimateurs
+      ? null
+      : R <= UINT8_MAX ? new Uint8Array(N * instance.A) : new Uint32Array(N * instance.A),
+    rencontresAnimateurs: suitAnimateurs ? new Int32Array(N) : null,
+    animateursNonRencontres: suitAnimateurs ? 0 : null,
   };
   for (let p = 0; p < N; p += 1) {
     etat.histogramme[aPriori[p]] += 1;
     etat.carresEcartsAuPlafondAPriori += aPriori[p] * aPriori[p];
     etat.ecartAuPlafondAPrioriMax = Math.max(etat.ecartAuPlafondAPrioriMax, aPriori[p]);
-    etat.animateursNonRencontres += instance.borneAnimateurs[p];
+    if (suitAnimateurs) etat.animateursNonRencontres += instance.borneAnimateurs[p];
   }
   const { siege, tableDe } = etat;
   for (let r = 0; r < R; r += 1) {
@@ -679,7 +695,7 @@ function etatInitial(structure, rng) {
         if (q !== FANTOME) modifierPaire(etat, p, q, 1);
       }
       if (etat.O > 0) etat.servis[p] += sert(etat, p, t, r);
-      if (etat.A > 0) changerAnimateurs(etat, p, t, r, 1);
+      if (suitAnimateurs) changerAnimateurs(etat, p, t, r, 1);
     }
   }
   for (let p = 0; p < N; p += 1) {

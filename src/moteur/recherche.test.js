@@ -1347,6 +1347,24 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
     const directs = animateursRencontres(configuration, instance, etat.tableDe);
     assert.deepEqual(Array.from(etat.rencontresAnimateurs), directs);
   });
+
+  test("case des animateurs décochée : l'état ne tient pas leurs rencontres, le score reste celui de la mesure, et la recherche rend les plans d'une soirée sans animateur", () => {
+    const cochee = soireeAObjectifs();
+    const decochee = { ...cochee, contraintes: { ...cochee.contraintes, rencontrerAnimateurs: false } };
+    const sansAnimateur = { ...decochee, participants: decochee.participants.map(({ anime, ...reste }) => reste) };
+    assert.ok(normaliser(decochee).borneAnimateurs.some((B) => B > 0));
+    assert.equal(creerEtat(normaliser(cochee), creerPcg32(5, FLUX.RECHERCHE)).suitAnimateurs, true);
+    const rng = creerPcg32(5, FLUX.RECHERCHE);
+    const etat = creerEtat(normaliser(decochee), rng);
+    assert.deepEqual(
+      [etat.suitAnimateurs, etat.rencontresAnimees, etat.rencontresAnimateurs, etat.animateursNonRencontres],
+      [false, null, null, null],
+    );
+    for (let essai = 0; essai < 300; essai += 1) proposerEtAppliquer(etat, rng);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
+    const reglages = { graine: 9, arret: 3_000, nombre: 2 };
+    assert.deepEqual(rechercher(decochee, reglages), rechercher(sansAnimateur, reglages));
+  });
 });
 
 describe("recherche : le mode et l'ordre réglé ne touchent pas au hasard (A13, § 15.5)", () => {

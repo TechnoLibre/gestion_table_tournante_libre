@@ -714,7 +714,8 @@ describe('parcourirTours', () => {
     // (0, 1) collègues et revus ; 0 et 1 reviennent à la table d'index 0, 3
     // à celle d'index 1, que 2 découvre. Tour 3 : (0, 2) revus, réunis
     // librement au tour 1 ; 0 revient une deuxième fois, 2 revient ; 1
-    // découvre la table d'index 1.
+    // découvre la table d'index 1. Réunies une première fois : (0, 1),
+    // (0, 2) et (1, 2) au tour 1, (2, 3) au tour 2.
     const { instance, tableDe } = preparer(PARCOURS);
     const vide = { collegues: [], revues: [], revenus: [] };
     assert.deepEqual(parcourirTours(instance, tableDe), {
@@ -727,6 +728,7 @@ describe('parcourirTours', () => {
         [{ collegues: [], revues: [[0, 2]], revenus: [0, 2] }, vide],
       ],
       parPaire: Uint16Array.of(2, 2, 0, 1, 0, 1),
+      reunies: [0, 1, 0, 2, 1, 2, 2, 3],
       toursAssis: [3, 3, 3, 2],
       retours: [2, 1, 1, 1],
       servis: [0, 0, 0, 0],
@@ -763,6 +765,7 @@ describe('parcourirTours', () => {
     assert.deepEqual(parcourirTours(instance, new Int32Array(0)), {
       parTour: [[vide], [vide]],
       parPaire: new Uint16Array(0),
+      reunies: [],
       toursAssis: [],
       retours: [],
       servis: [],

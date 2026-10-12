@@ -20,6 +20,7 @@ import {
   SANS_OBJECTIF,
   STATUT,
   exigerPlanIndexe,
+  figerConfiguration,
   indexerPlan,
   nombrePlaces,
   nombrePlacesManquantes,
@@ -848,6 +849,48 @@ describe('plans : forme par identifiants et forme indexée (§ 8.9)', () => {
     }
     assert.equal(confrontees, 3 * FAUTIFS.length);
     assert.deepEqual(ecarts, []);
+  });
+});
+
+describe('figerConfiguration : une normalisation par configuration figée', () => {
+  // 2 anime aux deux tours, réservé à la table 10 ; 4 porte « finance », que
+  // vise la table 30 pour la soirée.
+  const recue = () => ({
+    ...configuration({
+      participants: [
+        ...personnes([9]),
+        { id: 2, nom: 'P2', appartenance: null, anime: [1, 2] },
+        { id: 4, nom: 'P4', appartenance: 'X', etiquettes: ['finance'] },
+      ],
+      tables: tablesDe([30, 10], 4),
+      tours: 2,
+      reservations: [tous(9, 30), tous(2, 10)],
+    }),
+    objectifs: [{ table: 30, tour: null, regle: 'ou', etiquettes: ['finance'] }],
+    priorites: PRIORITES_PAR_DEFAUT.map((palier) => palier.map((entree) => ({ ...entree }))),
+  });
+
+  test('fige ce que normaliser lit et rend la configuration ; normaliser rend alors la même instance à chaque appel, celle d’une copie non figée', () => {
+    const figee = recue();
+    assert.equal(figerConfiguration(figee), figee);
+    const lues = [
+      figee, figee.participants, figee.participants[0], figee.participants[1].anime, figee.participants[2].etiquettes,
+      figee.tables, figee.tables[1], figee.reservations, figee.reservations[1], figee.contraintes,
+      figee.objectifs, figee.objectifs[0], figee.objectifs[0].etiquettes, figee.priorites, figee.priorites[3], figee.priorites[3][0],
+    ];
+    assert.deepEqual(lues.filter((valeur) => !Object.isFrozen(valeur)), []);
+    const premiere = normaliser(figee);
+    assert.equal(normaliser(figee), premiere);
+    assert.deepEqual(premiere, normaliser(recue()));
+    const libre = recue();
+    assert.notEqual(normaliser(libre), normaliser(libre));
+  });
+
+  test('une configuration figée que normaliser refuse lève à chaque appel', () => {
+    const figee = figerConfiguration({ ...recue(), tours: 0 });
+    for (let appel = 0; appel < 2; appel += 1) {
+      assert.throws(() => normaliser(figee), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'TOURS');
+    }
   });
 });
 

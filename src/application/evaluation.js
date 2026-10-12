@@ -17,6 +17,10 @@
 // seul appel à fautes qui l'arrête. resumeDuRetenu passe par derive et
 // planDepuisFichier, qui la refont et lèvent sur une faute.
 //
+// La configuration de la charge est figée (figerConfiguration) : le
+// diagnostic et la mesure en lisent la même instance, normalisée une fois.
+// configurationDe la bâtit neuve, et figer ne touche pas la charge.
+//
 // Les imposés viennent du diagnostic, les mêmes pour toute ligne ; les
 // rencontres répétées imposées dépendent du plan, et chaque ligne les lit
 // dans ses mesures, à part des choisies.
@@ -35,7 +39,7 @@
 // aussi l'état de chaque critère tel que normaliser le donne — coché, sans
 // objet, ses valeurs —, que l'écran lit au lieu de le recalculer.
 import { classer } from '../moteur/classement.js';
-import { indexerPlan, normaliser } from '../moteur/configuration.js';
+import { figerConfiguration, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
 import { mesurer } from '../moteur/indicateurs.js';
@@ -132,7 +136,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
   if (plafondsAPriori !== 'calcul' && plafondsAPriori !== null) {
     throw new TypeError(`evaluer : plafondsAPriori 'calcul' ou null attendu, reçu ${JSON.stringify(plafondsAPriori)}`);
   }
-  const configuration = configurationDe(charge);
+  const configuration = figerConfiguration(configurationDe(charge));
   const diagnostic = diagnostiquer(configuration);
   const instance = normaliser(configuration);
   const aPriori = plafondsAPriori === 'calcul' ? diagnostic.plafondAPriori.parPersonne : null;

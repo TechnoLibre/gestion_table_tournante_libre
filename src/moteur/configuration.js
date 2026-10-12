@@ -379,12 +379,23 @@ function numeroterObjectifs(objectifs, { T, R, idsTables, indexTableDe }) {
 // (§ 4.5) : (p, r) l'est quand la table fixée de p à ce tour lui correspond,
 // ou, p libre à ce tour, quand une table qui garde un siège libre lui
 // correspond. Les objectifs qu'offre une table à siège libre se marquent une
-// fois par tour.
+// fois par tour. Deux personnes aux mêmes étiquettes, dans le même ordre, ont
+// la même rangée : correspondA ne se calcule qu'à la première, que les
+// suivantes recopient ; la clé, la liste en JSON, ne confond pas deux listes
+// différentes.
 function couplesPossibles(presents, distincts, { N, T, R, fixe, siegesLibres, objectifDe }) {
   const O = distincts.length;
   const correspond = new Uint8Array(N * O);
-  for (let p = 0; p < N; p += 1) {
+  const premiereAvec = new Map();
+  for (let p = 0; O > 0 && p < N; p += 1) {
     const etiquettes = presents[p].etiquettes ?? [];
+    const cle = JSON.stringify(etiquettes);
+    const premiere = premiereAvec.get(cle);
+    if (premiere !== undefined) {
+      correspond.copyWithin(p * O, premiere * O, premiere * O + O);
+      continue;
+    }
+    premiereAvec.set(cle, p);
     for (let o = 0; o < O; o += 1) correspond[p * O + o] = correspondA(etiquettes, distincts[o]) ? 1 : 0;
   }
   const possible = new Uint8Array(N * R);
@@ -481,28 +492,31 @@ function bornerAnimateurs({ N, T, R, fixe, siegesLibres }, { A, rangAnimateur, d
     }
     libresDuTour.push(rangs);
   }
+  // marque[f] vaut p quand p a déjà rejoint l'animateur de rang f.
   const marque = new Int32Array(A).fill(-1);
   for (let p = 0; p < N; p += 1) {
     const soi = rangAnimateur[p];
     let rejoints = 0;
     let somme = 0;
-    const rejoindre = (f) => {
-      if (f === soi || marque[f] === p) return;
-      marque[f] = p;
-      rejoints += 1;
-    };
     for (let r = 0; r < R; r += 1) {
       const t = fixe[p * R + r];
       if (t === LIBRE) {
-        libresDuTour[r].forEach(rejoindre);
+        for (const f of libresDuTour[r]) {
+          if (f === soi || marque[f] === p) continue;
+          marque[f] = p;
+          rejoints += 1;
+        }
         somme += plusGrandLibre[r];
         continue;
       }
       let ici = 0;
       for (let k = debutAnimes[t * R + r]; k < debutAnimes[t * R + r + 1]; k += 1) {
-        if (animes[k] === soi) continue;
-        rejoindre(animes[k]);
+        const f = animes[k];
+        if (f === soi) continue;
         ici += 1;
+        if (marque[f] === p) continue;
+        marque[f] = p;
+        rejoints += 1;
       }
       somme += ici;
     }
@@ -584,10 +598,78 @@ function etatDesCriteres(contraintes, mode, possibles, borne) {
  * deux cases facultatives restent absentes de instance.contraintes, où
  * estCoche (criteres.js) leur donne leur valeur par défaut.
  *
+ * Une configuration passée par figerConfiguration ne se normalise qu'une
+ * fois : les appels suivants rendent la même instance, que l'appelant lit
+ * sans la modifier, comme tout le moteur.
+ *
  * @param {import('./types.js').Configuration} configuration
  * @returns {import('./types.js').Instance}
  */
 export function normaliser(configuration) {
+  const connue = figees.get(configuration);
+  if (connue) return connue;
+  const instance = instanceDe(configuration);
+  if (connue === null) figees.set(configuration, instance);
+  return instance;
+}
+
+// Les configurations que figerConfiguration a figées, chacune avec son
+// instance, null tant qu'aucune normalisation n'a réussi : une
+// configuration refusée lève à chaque appel. La clé est l'objet même ; ce
+// que normaliser en lit, figé, ne change plus sous la même identité, et
+// l'instance tirée au premier appel vaut pour les suivants. Une
+// configuration que plus rien ne retient quitte la table avec son instance.
+const figees = new WeakMap();
+
+// Fige liste, quand c'en est une, après chacun de ses éléments par
+// figerElement.
+function figerListe(liste, figerElement) {
+  if (!Array.isArray(liste)) return;
+  for (const element of liste) figerElement(element);
+  Object.freeze(liste);
+}
+
+// Fige valeur quand c'est un objet ; une autre valeur reste telle quelle.
+function figerObjet(valeur) {
+  if (valeur !== null && typeof valeur === 'object') Object.freeze(valeur);
+}
+
+/**
+ * Fige ce que normaliser lit de la configuration et la rend : l'objet, ses
+ * participants avec leurs étiquettes et leurs tours animés, ses tables, ses
+ * réservations, ses contraintes, ses objectifs avec leurs étiquettes, ses
+ * priorités, palier par palier. normaliser ne la calcule alors plus qu'une
+ * fois, et chaque appel suivant rend la même instance : un appelant qui la
+ * passe à plusieurs fonctions du moteur — diagnostiquer, puis normaliser
+ * pour mesurer — ne paie qu'une normalisation. Ce qu'elle atteint devient
+ * immuable : elle ne doit rien partager avec une valeur que son
+ * propriétaire modifie encore. Les champs sont nommés, et non parcourus :
+ * l'instance ne dépend que d'eux.
+ *
+ * @param {import('./types.js').Configuration} configuration
+ * @returns {import('./types.js').Configuration} la même, figée
+ */
+export function figerConfiguration(configuration) {
+  figerListe(configuration.participants, (participant) => {
+    figerObjet(participant);
+    figerListe(participant?.etiquettes, figerObjet);
+    figerListe(participant?.anime, figerObjet);
+  });
+  figerListe(configuration.tables, figerObjet);
+  figerListe(configuration.reservations, figerObjet);
+  figerObjet(configuration.contraintes);
+  figerListe(configuration.objectifs, (objectif) => {
+    figerObjet(objectif);
+    figerListe(objectif?.etiquettes, figerObjet);
+  });
+  figerListe(configuration.priorites, (palier) => figerListe(palier, figerObjet));
+  Object.freeze(configuration);
+  if (!figees.has(configuration)) figees.set(configuration, null);
+  return configuration;
+}
+
+// L'instance d'une configuration, calculée à neuf (normaliser).
+function instanceDe(configuration) {
   const { participants, tables, tours: R, reservations } = configuration;
   exigerListe(participants, 'participants');
   exigerListe(tables, 'tables');
@@ -861,9 +943,10 @@ export function nombrePlacesManquantes(instance) {
  * range une personne dans sa population : les agrégats des indicateurs et
  * les chiffres du manque le lisent tous deux.
  *
- * replier(cumul, valeur) rend le cumul suivant sans modifier celui qu'il
- * reçoit : les trois populations partent du même initial, et une population
- * sans membre le garde.
+ * replier(cumul, valeur) rend le cumul suivant sans jamais modifier
+ * initial : les trois populations partent de lui, et une population sans
+ * membre le garde. Un cumul que replier a lui-même rendu n'appartient qu'à
+ * sa population, et replier peut le compléter en place.
  *
  * @template C
  * @param {ArrayLike<*>} valeurs  une par personne, dans l'ordre de instance.ids
