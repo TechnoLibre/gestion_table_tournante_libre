@@ -16,10 +16,12 @@ import {
   ECART_AXE_PX,
   ECART_SEGMENTS_PX,
   ESPACE_PX,
+  LARGEUR_MIN_CONTOUR_PX,
   LARGEUR_NOM_PX,
   RETRAIT_CASE_PX,
   REMPLISSAGES,
   SIGNES,
+  TRAIT_CONTOUR_PX,
   TRAITS,
   ancrePoint,
   ancreRang,
@@ -327,6 +329,36 @@ describe('pointage : les barres (§ 12.4)', () => {
     assert.equal(d.lignes[2].segments[1].x, d.ex.versPx(1) + ECART_SEGMENTS_PX, 'le second segment s’écarte du premier');
     assert.equal(d.lignes[0].segments[0].largeur, d.ex.versPx(3) - d.ex.versPx(0), 'sans premier segment, aucun écart');
     assert.equal(d.ex.domaine[1], 3);
+  });
+
+  test('rouge : « prouvé inévitable » seul se trace en contour ; étroit, il garde LARGEUR_MIN_CONTOUR_PX, pris sur le segment qui le suit, la fin de la barre inchangée ; seul, sa barre s’allonge d’autant', () => {
+    assert.deepEqual(Object.entries(REMPLISSAGES).filter(([, r]) => r.contour).map(([genre]) => genre), ['prouve']);
+    assert.equal(TRAIT_CONTOUR_PX, 2);
+    assert.equal(LARGEUR_MIN_CONTOUR_PX, 2 * TRAIT_CONTOUR_PX + 2);
+    const d = disposer({
+      lignes: [
+        { id: 'a', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [0, 300] },
+        { id: 'b', nom: 'Atelier Ressac', appartenance: 2, valeurs: [1, 9] },
+        { id: 'c', nom: 'Iris Ombrelle', appartenance: null, valeurs: [1, 0] },
+      ],
+    });
+    const naturelle = d.ex.versPx(1) - d.ex.versPx(0);
+    assert.ok(naturelle < LARGEUR_MIN_CONTOUR_PX, `un sur trois cents : ${naturelle} px`);
+    const [prouve, reste] = d.lignes[1].segments;
+    assert.equal(prouve.contour, true);
+    assert.equal(reste.contour, false);
+    assert.equal(prouve.x, d.ex.versPx(0));
+    assert.equal(prouve.largeur, LARGEUR_MIN_CONTOUR_PX);
+    assert.equal(reste.x, prouve.x + prouve.largeur + ECART_SEGMENTS_PX);
+    assert.ok(Math.abs(reste.x + reste.largeur - d.ex.versPx(10)) < 1e-9, 'le reste finit où finit la barre');
+    assert.ok(Math.abs(d.lignes[1].fin - d.ex.versPx(10)) < 1e-9);
+    const seul = d.lignes[2].segments[0];
+    assert.equal(seul.largeur, LARGEUR_MIN_CONTOUR_PX);
+    assert.equal(d.lignes[2].fin, seul.x + LARGEUR_MIN_CONTOUR_PX);
+    const ordinaire = disposer();
+    const large = ordinaire.lignes[2].segments[0];
+    assert.ok(large.largeur > LARGEUR_MIN_CONTOUR_PX);
+    assert.equal(large.largeur, ordinaire.ex.versPx(1) - ordinaire.ex.versPx(0), 'un prouvé assez large garde sa largeur');
   });
 
   test('rouge : le libellé de chaque segment se pose sur la première barre où il est non nul', () => {

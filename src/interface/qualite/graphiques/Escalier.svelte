@@ -21,9 +21,10 @@
   // genre plafond, borne ou cent ; libellés déjà traduits, valeurs une par
   // rang ou par point, dans l'ordre du détail : rien ne se trie ni ne se
   // recompte ici. Chaque trace porte son libellé au bout de son tracé, et la
-  // légende le reprend. graduer(v) et graduerX(v) écrivent une graduation —
-  // par défaut le nombre mis en forme ; titreX nomme l'abscisse, null pour
-  // aucun titre, par défaut celui de la forme.
+  // légende le reprend. graduer(v) écrit une graduation de l'axe vertical,
+  // graduerX(v) une graduation de l'abscisse — un rang ou des mouvements
+  // évalués —, chacun par défaut le nombre mis en forme ; titreX nomme
+  // l'abscisse, null pour aucun titre, par défaut celui de la forme.
   //
   // marges, liable en sortie : les marges que le graphique demande pour son
   // texte (margesVerticales, pointage.js) ; alignerSur : null, ou les marges
@@ -114,7 +115,7 @@
     };
     return enPoints
       ? dispositionPoints({ ...communes, abscisses, graduerX: graduerX ?? nombre })
-      : dispositionEscalier({ ...communes, reperes, marques });
+      : dispositionEscalier({ ...communes, reperes, marques, graduerX: graduerX ?? nombre });
   });
 
   const cibler = (x) => (enPoints ? ciblePoint(x, disposition) : cibleRang(x, disposition));

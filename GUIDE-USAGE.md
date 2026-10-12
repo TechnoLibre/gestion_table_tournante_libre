@@ -384,6 +384,178 @@ redondance d’appartenance à la cible de la soirée.
 Retenir n’est pas obligatoire, mais tout ce qui s’imprime sans placement retenu
 porte la mention BROUILLON (étape 12).
 
+### La page « Qualité »
+
+Avant de retenir, la section « Qualité » dit si un placement est bon, et qui
+y est mal servi. La commande « Qualité » de chaque ligne du tableau classé
+montre la proposition sur le plan et ouvre la page ; sans proposition
+montrée, la page mesure le placement retenu. Sa première ligne dit toujours
+quel placement elle mesure. Regarder la page n’écrit rien : elle se lit en
+lecture comme en écriture.
+
+Chaque graphique a son tableau jumeau, que « Voir le tableau » ouvre : les
+mêmes nombres, ligne par ligne, au clavier et au lecteur d’écran. Un
+pourcentage est toujours suivi du compte qu’il résume : le pire cas d’une
+population, ou le compte de sa ligne.
+
+Les écrans de la grande démonstration viennent d’une génération faite avec
+la graine 4242 et un compte d’arrêt de 2 000 ; ceux de la petite
+démonstration, avec la graine 4242 et le compte d’arrêt par défaut ; les
+autres, avec la graine 4242 et un compte d’arrêt de 300.
+
+![Le profil trié des rencontres de la grande démonstration, en comptes puis en pourcentages](doc/captures/12-qualite-profil.png)
+
+*Le profil trié de la première proposition de la grande démonstration. En
+haut, en comptes de personnes : les rencontres de chacun en trait plein, de
+la personne la moins servie, à gauche, à la mieux servie ; les appartenances
+rencontrées en tirets ; le plafond réalisé en trait mixte et la borne de
+diversité en pointillés, chacun nommé au bout de son tracé. Les triangles
+marquent les personnes ancrées par une réservation. Dessous, au même ordre
+de rangs, les rencontres de chacun en pourcentage de son plafond réalisé,
+sous la règle à 100 % ; le bas de ce second graphique sort de l’image.
+Le pire cas est au premier rang des deux graphiques.*
+
+![Les collisions d’appartenance de la variante « conflit inévitable », en deux segments](doc/captures/13-qualite-collisions.png)
+
+*Les collisions d’appartenance de la variante « conflit inévitable » : une
+barre par appartenance, le plus grand excédent d’abord. Pour
+l’appartenance de cinq personnes, à quatre tables, le segment gris « prouvé
+inévitable » vaut 4 collisions cumulées, le plancher que le diagnostic
+annonce ; le segment bleu « reste » est ce que la recherche aurait pu
+éviter. L’effectif, les paires distinctes et l’excédent suivent en encre
+secondaire.*
+
+![Les appartenances à chaque table, sous « appartenances par siège »](doc/captures/13a-qualite-tables.png)
+
+*Les appartenances à chaque table, même proposition. Le sélecteur est sur
+« appartenances par siège » : une ligne par table, une colonne par tour, et
+chaque case écrit le nombre de sièges qui n’apportent aucune appartenance
+nouvelle à leur table ; sa couleur fonce avec lui. La pire table vient en
+tête, une table qui n’en a aucun à aucun tour, en dernier. Les deux autres
+positions comptent les personnes assises, puis les doublons parmi les
+personnes d’une appartenance ; le choix tient le temps de la séance, et
+n’écrit rien.*
+
+![Le tableau des paires répétées d’une soirée où se revoir est forcé](doc/captures/14-qualite-paires.png)
+
+*Les paires répétées d’une soirée construite de 12 personnes, 4 tables de
+3 places et 6 tours, où se revoir est forcé : les paires les plus revues
+d’abord. « Voir au tour … » montre le plan au premier tour où la paire se
+revoit ; chaque tour et sa table sont aussi une commande vers le plan.*
+
+![La fiche d’une personne et sa rubrique « Rencontres »](doc/captures/14a-fiche-rencontres.png)
+
+*La fiche d’une personne de la même soirée, sa rubrique « Rencontres » : qui
+elle a rencontré, combien de fois, à quels tours et à quelles tables, les
+plus revues d’abord. Ses rencontres de plus d’une fois sont ses lignes du
+tableau des paires.*
+
+![La matrice « qui a rencontré qui », remplacée par une phrase sur la grande démonstration](doc/captures/15-pas-de-matrice.png)
+
+*Sur la grande démonstration, la matrice « qui a rencontré qui » n’est pas
+dessinée : 260 personnes dépassent son seuil, et la phrase renvoie à la
+fiche de chaque personne. Au-dessus, la fin du tableau des paires
+répétées.*
+
+![Les objectifs des tables, tour par tour](doc/captures/15a-qualite-objectifs.png)
+
+*Les objectifs des tables de la « Soirée d’essai », changée depuis
+l’étape 9 et générée de nouveau : d’abord les personnes jamais servies —
+aucune ici —, puis la soirée en texte, sa part des tours possibles servis
+et, dessous, le compte des jamais servies ; puis une barre par tour, le tour
+au plus grand reste en tête, chacune avec ses assis sans table possible en
+encre secondaire ; enfin chaque tour, son pourcentage et ses deux comptes.
+En haut à droite, un avertissement rappelle que le placement retenu et les
+propositions d’avant le changement ne décrivent plus la soirée : ils sont
+gardés.*
+
+![Les animateurs rencontrés sous la borne des animateurs, puis la diversité par animateur](doc/captures/15b-qualite-animateurs.png)
+
+*Les animateurs rencontrés sur la grande démonstration : chaque personne
+concernée, de la moins servie à la mieux servie, sous la borne des
+animateurs en pointillés — ce que la soirée permet au mieux, sans garantie.
+Dessous commence la diversité par animateur : aucune personne présente ne
+porte d’étiquette, et seule la colonne des appartenances se dessine.*
+
+![La performance du calcul : la course de la recherche aux points de relevé](doc/captures/15c-qualite-performance.png)
+
+*La performance du calcul de la proposition montrée, dans la séance qui l’a
+générée : les mouvements évalués sur le compte d’arrêt, puis la durée
+observée, les cœurs, la cadence et le nombre de propositions de la
+génération entière. Chaque petit multiple porte une valeur aux seuls points
+de relevé — après 1, 10, 100 et 1 000 mouvements, puis au dernier, la
+proposition elle-même —, sur une abscisse logarithmique ; entre deux
+points, rien n’est mesuré. Ici, plusieurs valeurs changent encore au
+dernier point ; la phrase qui nomme le dernier changement suit les petits
+multiples, plus bas, hors de l’image. Rouvert plus tard, l’événement garde
+la course, et la durée devient « inconnue » : elle ne valait que pour la
+séance.*
+
+![« Minimum atteint » sur la petite démonstration](doc/captures/16-minimum-atteint.png)
+
+*Le bas de l’en-tête chiffré, sur la petite démonstration générée au compte
+d’arrêt par défaut : la diversité d’appartenance, aucun manque, et « minimum
+atteint ». Plus haut, hors de l’image, les collisions cumulées et les
+rencontres répétées valent 0, et la ligne des ancrés écrit « — » : la
+démonstration n’a aucune réservation, et une population vide n’a pas de
+minimum.*
+
+#### Quand il n’y a rien à dessiner
+
+La page ne dessine jamais d’axes vides : un cas qui n’a rien à montrer le
+dit par une phrase. Chacun des sept écrans suivants vient de sa propre
+configuration : la variante « conflit inévitable », ou une courte soirée
+construite à la main.
+
+![La page sans placement : sa phrase et le diagnostic](doc/captures/12a-qualite-sans-placement.png)
+
+*Aucun placement : la variante « conflit inévitable », avant toute
+génération. La page dit qu’il n’y a rien à mesurer, et montre le diagnostic
+préalable : au moins 4 collisions cumulées pour l’appartenance de cinq
+personnes, à quatre tables.*
+
+![Une seule table : une phrase à la place de chaque vue](doc/captures/12b-qualite-une-table.png)
+
+*Une seule table de six places, six personnes, trois tours : chacun y
+rencontre tous les autres. Le profil, les collisions, les appartenances à
+chaque table et les paires cèdent chacun la place à sa phrase.*
+
+![Un seul tour : la grille d’une colonne, la phrase des paires](doc/captures/12c-qualite-un-tour.png)
+
+*Un seul tour, douze personnes à trois tables de quatre : le profil et les
+collisions se dessinent plus haut, hors de l’image ; la vue des tables, son
+sélecteur sur « appartenances par siège », n’a qu’une colonne, et aucune
+paire ne peut se revoir.*
+
+![Une seule appartenance : le profil à une seule série](doc/captures/12d-qualite-une-appartenance.png)
+
+*Douze personnes d’une même appartenance : le profil n’a qu’une série, les
+rencontres, sans borne de diversité, et sa phrase le dit. Les collisions et
+la grille des tables restent, plus bas.*
+
+![Aucune collision : la phrase des collisions, la grille à zéro](doc/captures/12e-qualite-sans-collision.png)
+
+*Neuf personnes de neuf appartenances, trois tables de trois, deux tours :
+aucune collision, et la phrase le dit. La grille, sous « appartenances par
+siège », écrit 0 dans chaque case.*
+
+![Une personne en réserve : sa marque dans le profil](doc/captures/12f-qualite-reserve.png)
+
+*La variante, sa première proposition retenue, puis une personne retirée du
+tour 2 sur le plan : le carré la marque, dans les deux graphiques du
+profil, en réserve à un tour au moins. Plus bas, hors de l’image, les
+collisions n’ont plus qu’un segment : le plancher du diagnostic ne vaut que
+pour un plan qui assoit chacun à chaque tour, et une phrase le dit.*
+
+![Un plafond réalisé nul au premier rang du profil, son infobulle ouverte](doc/captures/12g-qualite-plafond-nul.png)
+
+*Cinq personnes, une table de quatre et une de deux, deux tours ; quatre
+sont réservées à la table de quatre. La cinquième, assise seule à la table
+de deux, ne peut rencontrer personne : son plafond réalisé est nul. Au
+premier rang du profil, son infobulle écrit le plafond réalisé 0 et le
+pourcentage « — » ; au second graphique, plus bas, ce rang n’a pas de
+point.*
+
 ## Étape 11 — Ajuster à la main
 
 Sur le placement retenu, le geste de l’étape 7 déplace maintenant une personne
@@ -496,7 +668,10 @@ même plan diffèrent, et pourquoi relancer aide parfois, et parfois jamais.
 Asseoir chacun, à chaque tour, de sorte que la personne la plus mal servie
 rencontre le plus de monde possible. C’est l’objectif de l’ordre par défaut ;
 vous pouvez en ranger d’autres devant, dans l’ordre des priorités de la
-section « Génération ».
+section « Génération ». Le profil trié de la page « Qualité » range les
+personnes de la moins servie à la mieux servie
+([le profil trié](doc/captures/12-qualite-profil.png)) : la plus mal servie
+est au premier rang.
 
 ### Pourquoi il n’a pas de réponse évidente
 
@@ -521,6 +696,16 @@ points différents s’arrêtent sur deux placements différents, et aucun des d
 n’est « le bon ». La même graine, sur la même configuration et les mêmes
 réglages, redonne exactement les mêmes propositions ; une autre graine en donne
 d’autres. Cette phrase est vérifiée par une épreuve du logiciel.
+
+La page « Qualité » montre la course d’une recherche
+([la performance du calcul](doc/captures/15c-qualite-performance.png)) :
+chaque valeur de la proposition, mesurée sur le meilleur placement trouvé
+après un, dix, cent, mille mouvements, et ainsi de suite, puis au dernier.
+Quand plus rien ne change pendant les derniers relevés, la recherche est sur
+un plateau, et relancer plus longtemps la même graine a peu de chances
+d’aider ; quand une valeur change encore au dernier point, comme sur cet
+écran, un compte d’arrêt plus grand peut faire mieux. La page ne dit rien
+des mouvements que la recherche n’a pas essayés.
 
 ### Ce que font les contraintes
 
@@ -552,6 +737,10 @@ donné rendait possible. C’est pourquoi la grande démonstration ne l’obtien
 jamais : son diagnostic prouve, avant toute recherche, que des personnes
 finiront sous leur plafond a priori — c’est le plancher de l’écart
 d’itinéraire.
+
+La page « Qualité » l’écrit sous son en-tête chiffré
+([« minimum atteint » sur la petite démonstration](doc/captures/16-minimum-atteint.png)),
+avec les compteurs mesurés de la proposition.
 
 Son absence ne dit pas qu’un meilleur placement existe. « Atteignabilité
 inconnue » dit que le logiciel ne sait pas si mieux est possible.
@@ -593,7 +782,8 @@ atteignent le même minimum, c’est le plus souvent qu’une borne le tient, et
 relancer n’y changera rien. C’est **un indice, pas une preuve**. Le plafond a
 priori, que le diagnostic affiche, le dit d’un coup d’œil : quand le minimum
 d’une proposition l’égale, c’est la borne qui le tient, et aucune relance ne
-fera mieux.
+fera mieux. Sur la page « Qualité », la tuile du minimum porte ce plafond à
+côté du minimum, pour la personne au premier rang du profil.
 
 ## Annexe A — Les réglages et leurs valeurs par défaut
 

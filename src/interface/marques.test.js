@@ -5,8 +5,9 @@
 // § 7.5, § 7.6, § 7.7), et la palette de jetons.css validée par calcul sur
 // lui (§ 12.7) : chaque entrée tient son seuil sur chacun de ses fonds, dans
 // les deux thèmes, en couleurs d'origine puis sous les trois dichromaties.
-// La famille « graphique » (§ 12.7, § 13.3) a ses listes à part, hors de
-// MARQUES et de TEXTES, éprouvées de même.
+// La famille « graphique » (§ 12.7, § 13.3) a ses listes, versées à la fin
+// de MARQUES et de TEXTES, que les écrans de la qualité rendent ; ses fonds
+// restent hors de toute mesure.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
@@ -64,9 +65,10 @@ const FONDS_REQUIS = {
 const parNom = (registre, nom) => registre.find((e) => e.nom === nom);
 
 describe('registre des marques', () => {
-  test('les vingt-deux marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
-    assert.equal(MARQUES.length, NOMS_MARQUES.length);
-    assert.deepEqual(MARQUES.map((m) => m.nom), NOMS_MARQUES);
+  test('les trente-quatre marques du contrat — les vingt-deux du plan et des écrans, puis les douze de la famille « graphique » —, noms uniques, seuil 3, au moins un fond chacune', () => {
+    const noms = [...NOMS_MARQUES, ...NOMS_MARQUES_GRAPHIQUE];
+    assert.equal(MARQUES.length, noms.length);
+    assert.deepEqual(MARQUES.map((m) => m.nom), noms);
     assert.equal(new Set(MARQUES.map((m) => m.nom)).size, MARQUES.length);
     for (const marque of MARQUES) {
       assert.deepEqual(Object.keys(marque).sort(), ['fonds', 'jeton', 'nom', 'seuil'], marque.nom);
@@ -176,10 +178,11 @@ describe('les trois sortes de conflit (§ 7.5, § 12.7)', () => {
 });
 
 describe('registre des textes', () => {
-  test('page, secondaire, bandeau, refus, avis, listes du plan, pastille, puis les textes des cartes, des étiquettes, de la bande de mode, du bandeau, de l’action et des messages ; seuil 4,5', () => {
+  test('page, secondaire, bandeau, refus, avis, listes du plan, pastille, puis les textes des cartes, des étiquettes, de la bande de mode, du bandeau, de l’action et des messages, puis les deux encres des cases de graphique ; seuil 4,5', () => {
     assert.deepEqual(TEXTES.map((t) => t.nom), [
       'page', 'secondaire', 'bandeau', 'refus', 'avis', 'listes', 'pastille',
       'carte', 'secondaireCarte', 'etiquette', 'bandeMode', 'bandeauSecondaire', 'bandeauChoisi', 'action', 'lien', 'information',
+      'graphiqueEncreFoncee', 'graphiqueEncreClaire',
     ]);
     assert.ok(TEXTES.every((t) => t.seuil === 4.5 && t.fonds.length > 0));
     assert.equal(new Set(TEXTES.map((t) => t.nom)).size, TEXTES.length);
@@ -345,7 +348,7 @@ const CARTE = '--couleur-carte-fond';
 const PAGE = '--couleur-page-fond';
 const SIMULATIONS_ET_ORIGINE = ['origine', 'protanopie', 'deuteranopie', 'tritanopie'];
 
-describe('la famille « graphique » : ses listes, hors de MARQUES et de TEXTES', () => {
+describe('la famille « graphique » : ses listes, versées dans MARQUES et TEXTES, ses fonds hors de toute mesure', () => {
   test('les seize jetons du contrat existent dans les deux thèmes, et aucun autre jeton ne porte le préfixe de la famille', () => {
     for (const theme of THEMES) {
       const famille = [...lireJetons(JETONS, theme).keys()].filter((n) => n.startsWith('--couleur-graphique-'));
@@ -369,13 +372,24 @@ describe('la famille « graphique » : ses listes, hors de MARQUES et de TEXTES'
     }
   });
 
-  test('les listes de la famille restent hors de MARQUES et de TEXTES : aucun nom ni aucun jeton partagé, MARQUES garde ses vingt-deux entrées', () => {
-    assert.equal(MARQUES.length, NOMS_MARQUES.length);
+  test('MARQUES_GRAPHIQUE et TEXTES_GRAPHIQUE sont versées à la fin de MARQUES et de TEXTES, les mêmes entrées dans le même ordre ; aucune autre entrée des registres ne porte un jeton de la famille', () => {
+    assert.deepEqual(MARQUES.slice(NOMS_MARQUES.length), [...MARQUES_GRAPHIQUE]);
+    assert.ok(MARQUES.slice(NOMS_MARQUES.length).every((e, i) => e === MARQUES_GRAPHIQUE[i]));
+    assert.deepEqual(TEXTES.slice(-TEXTES_GRAPHIQUE.length), [...TEXTES_GRAPHIQUE]);
+    assert.ok(TEXTES.slice(-TEXTES_GRAPHIQUE.length).every((e, i) => e === TEXTES_GRAPHIQUE[i]));
     const nomsGraphique = [...MARQUES_GRAPHIQUE, ...TEXTES_GRAPHIQUE, ...FONDS_GRAPHIQUE].map((e) => e.nom);
     assert.equal(new Set(nomsGraphique).size, nomsGraphique.length);
+    const famille = new Set([...MARQUES_GRAPHIQUE, ...TEXTES_GRAPHIQUE]);
+    assert.deepEqual([...MARQUES, ...TEXTES, ...SIGNES].filter((e) => e.jeton.startsWith('--couleur-graphique-') && !famille.has(e)).map((e) => e.nom), []);
+    assert.deepEqual(SIGNES.filter((e) => nomsGraphique.includes(e.nom)).map((e) => e.nom), []);
+  });
+
+  test('les fonds de la famille — la grille et le niveau 0 — restent hors de MARQUES, de TEXTES et de SIGNES : ni leur nom, ni leur jeton comme jeton d’une entrée', () => {
     const registres = [...MARQUES, ...TEXTES, ...SIGNES];
-    assert.deepEqual(registres.filter((e) => nomsGraphique.includes(e.nom)).map((e) => e.nom), []);
-    assert.deepEqual(registres.filter((e) => e.jeton.startsWith('--couleur-graphique-')).map((e) => e.nom), []);
+    for (const { nom, jeton } of FONDS_GRAPHIQUE) {
+      assert.deepEqual(registres.filter((e) => e.nom === nom).map((e) => e.nom), [], nom);
+      assert.deepEqual(registres.filter((e) => e.jeton === jeton).map((e) => e.nom), [], jeton);
+    }
   });
 
   test('l’échelle : quatre niveaux, 0 à 3, chacun son jeton et l’encre de son compte ; deux encres au plus ; figée', () => {

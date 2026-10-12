@@ -77,9 +77,16 @@ export const ECART_SEGMENTS_PX = 1;
  *  se lit sur le fond de la carte, et le niveau aussi. */
 export const RETRAIT_CASE_PX = 2;
 
+/** L'épaisseur du trait d'un segment tracé en contour, en px. */
+export const TRAIT_CONTOUR_PX = 2;
+
+/** La largeur minimale d'un segment tracé en contour, en px : ses deux
+ *  traits et un vide de 2 px entre eux, qui le distingue d'un aplat. */
+export const LARGEUR_MIN_CONTOUR_PX = 2 * TRAIT_CONTOUR_PX + 2;
+
 const jeton = (nom) => `--couleur-graphique-${nom}`;
 const trait = (marque, nom, motif) => Object.freeze({ marque, jeton: jeton(nom), motif });
-const remplissage = (marque, nom) => Object.freeze({ marque, jeton: jeton(nom) });
+const remplissage = (marque, nom, contour = false) => Object.freeze({ marque, jeton: jeton(nom), contour });
 
 /** Les traits d'un graphique, par genre (D30, § 12.7) : { marque, jeton,
  *  motif } — la désignation data-marque du registre (marques.js), le jeton
@@ -95,11 +102,14 @@ export const TRAITS = Object.freeze({
   borne: trait('graphiqueBorne', 'borne', '2 3'),
 });
 
-/** Les remplissages d'un segment de barre, par genre : { marque, jeton }. */
+/** Les remplissages d'un segment de barre, par genre : { marque, jeton,
+ *  contour }. Le segment « prouvé inévitable » se trace en contour, un
+ *  trait de TRAIT_CONTOUR_PX de son jeton, les autres en aplat : prouvé et
+ *  reste se distinguent par la forme comme par la couleur (§ 12.4, B13). */
 export const REMPLISSAGES = Object.freeze({
   serie1: remplissage('graphiqueSerie1', 'serie-1'),
   serie2: remplissage('graphiqueSerie2', 'serie-2'),
-  prouve: remplissage('graphiqueProuve', 'prouve'),
+  prouve: remplissage('graphiqueProuve', 'prouve', true),
   reste: remplissage('graphiqueReste', 'reste'),
 });
 
@@ -306,8 +316,11 @@ function legendeDe(traces, signes = []) {
  * linéaire des rangs. marques : null, ou une entrée par rang, null ou un
  * genre de SIGNES — le signe se pose au centre du rang, à la valeur de la
  * première série, au bas de la zone quand elle est nulle. graduer(v) écrit
- * une graduation de l'axe vertical ; titreX, déjà traduit, nomme
- * l'abscisse, ou null. Les libellés des traces se posent au bout de leur
+ * une graduation de l'axe vertical, graduerX(rang) une graduation de
+ * l'abscisse — un rang, jamais une valeur de l'axe vertical : un graphique
+ * en pourcentages ne gradue pas ses rangs en pourcentages ; sans graduerX,
+ * graduer écrit les deux. titreX, déjà traduit, nomme l'abscisse, ou
+ * null. Les libellés des traces se posent au bout de leur
  * tracé, dans la marge droite mesurée. aligner : null, ou les marges
  * communes d'un groupe de graphiques (margesVerticales, margesCommunes).
  * Chaque graduation de l'abscisse, {valeur, texte, x}, porte son rang :
@@ -325,6 +338,7 @@ export function dispositionEscalier({
   mesurer,
   hauteurTexte,
   graduer,
+  graduerX = graduer,
   titreX = null,
   aligner = null,
 }) {
@@ -353,7 +367,7 @@ export function dispositionEscalier({
   const graduationsX =
     n === 0
       ? []
-      : graduations(1, n, GRADUATIONS_RANGS, { entieres: true }).map((rang) => ({ valeur: rang, texte: graduer(rang), x: ex.versPx(rang - 0.5) }));
+      : graduations(1, n, GRADUATIONS_RANGS, { entieres: true }).map((rang) => ({ valeur: rang, texte: graduerX(rang), x: ex.versPx(rang - 0.5) }));
   return { ...cadre, n, ex, traces: tracees, signes, graduationsX, legende: legendeDe(tracees, signes) };
 }
 
@@ -571,12 +585,21 @@ export function dispositionBarres({ largeur, lignes, segments = null, colonnes =
     const traces = juxtaposees
       ? geometries.map((g, k) => ({ ...g.lignes[indice].segments[0], genre: parts[k].genre, colonne: k }))
       : geometries[0].lignes[indice].segments.map((s, k) => ({ ...s, genre: parts[k].genre, colonne: k }));
-    // Empilé, un segment qui suit un segment non nul s'en écarte.
+    // Empilé, un segment qui suit un segment non nul s'en écarte. Un
+    // segment en contour garde LARGEUR_MIN_CONTOUR_PX ; empilé, ce qu'il
+    // gagne au-delà de sa fin se retranche du segment qui le suit, sans le
+    // rendre négatif : la barre finit où sa valeur la fait finir, sauf quand
+    // le segment en contour est seul.
+    let gagne = 0;
     const tracees = traces
       .filter((s) => l.valeurs[s.colonne] > 0)
       .map((s) => {
         const ecart = !juxtaposees && s.colonne > 0 && l.valeurs[s.colonne - 1] > 0 ? ECART_SEGMENTS_PX : 0;
-        return { ...s, x: s.x + ecart, largeur: Math.max(0, s.largeur - ecart), y, hauteur: hauteurLigne, ...REMPLISSAGES[s.genre] };
+        const x = s.x + ecart + gagne;
+        const propre = Math.max(0, s.x + s.largeur - x);
+        const largeurTracee = REMPLISSAGES[s.genre].contour ? Math.max(propre, LARGEUR_MIN_CONTOUR_PX) : propre;
+        gagne = juxtaposees ? 0 : Math.max(0, x + largeurTracee - (s.x + s.largeur));
+        return { ...s, x, largeur: largeurTracee, y, hauteur: hauteurLigne, ...REMPLISSAGES[s.genre] };
       });
     const intitule = intitules[indice];
     const centre = y + hauteurLigne / 2;
@@ -599,7 +622,7 @@ export function dispositionBarres({ largeur, lignes, segments = null, colonnes =
       indice,
       y,
       hauteur: hauteurLigne,
-      fin: derniere.x + derniere.largeur,
+      fin: Math.max(derniere.x + derniere.largeur, ...tracees.map((s) => s.x + s.largeur)),
       intitule: { ...intitule, x: retraitNom, y: centre },
       pastille,
       segments: tracees,

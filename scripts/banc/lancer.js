@@ -65,8 +65,15 @@ export const ATTENDUES = Object.freeze([...CONSTANTES.filter((c) => c.proprietai
 /** La police embarquée, sous laquelle se prend toute mesure de texte. */
 export const FAMILLE_EMBARQUEE = 'Noto Sans';
 
-// Les mesures qui lisent le rendu du texte, et nomment donc leur police.
-const MESURES_DE_TEXTE = Object.freeze(['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN']);
+// Les mesures qui lisent le rendu du texte, et nomment donc leur police :
+// le seuil de la matrice en est, sa colonne de noms prenant la largeur
+// rendue du nom de référence.
+const MESURES_DE_TEXTE = Object.freeze([
+  'SEUIL_SIEGES_LISIBLES',
+  'TOLERANCE_CHAINE_TEMOIN',
+  'SEUIL_MATRICE_PARTICIPANTS',
+  'LARGEUR_TRONCATURE_NOM_PX',
+]);
 
 // La machine de référence du banc : le poste, son processeur ralenti ×4 par
 // le navigateur. C'est le ralentissement de la configuration du relevé ;

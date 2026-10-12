@@ -81,10 +81,11 @@ sur les captures.
 
 | Jeton | Rôle | Seuil | Thème clair | Capture | Thème sombre | Capture |
 |---|---|---|---|---|---|---|
+| `--couleur-action-encre` | texte | 4,5 | 8,29 | 14-qualite-paires | 9,62 | 14-qualite-paires |
 | `--couleur-action-texte` | texte | 4,5 | — | — | 8,45 | 01-premier-ecran |
 | `--couleur-avis` | texte | 4,5 | 6,58 | 03-import-rapport | 8,93 | 03-import-rapport |
 | `--couleur-bandeau-fond` | texte | 4,5 | 15,94 | 01-premier-ecran | 12,84 | 01-premier-ecran |
-| `--couleur-bandeau-texte` | texte | 4,5 | 6,09 | 01-premier-ecran | 12,84 | 01-premier-ecran |
+| `--couleur-bandeau-texte` | texte | 4,5 | 5,85 | 13a-qualite-tables | 12,84 | 01-premier-ecran |
 | `--couleur-bandeau-texte-secondaire` | texte | 4,5 | 9,05 | 01-premier-ecran | 7,60 | 01-premier-ecran |
 | `--couleur-chaise-pleine` | marque | 3 | 15,09 | 07a-cibles-sieges | 14,94 | 07a-cibles-sieges |
 | `--couleur-chaise-trait` | marque | 3 | 7,44 | 07-plan-tables | 8,13 | 22-plan-brouillon |
@@ -93,12 +94,25 @@ sur les captures.
 | `--couleur-echelle` | marque | 3 | 14,82 | 07-plan-tables | 14,62 | 07-plan-tables |
 | `--couleur-fantome` | marque | 3 | 4,34 | 19-ajustement | 4,10 | 19-ajustement |
 | `--couleur-filigrane` | marque | 3 | 5,10 | 22-plan-brouillon | 5,10 | 22-plan-brouillon |
+| `--couleur-graphique-axe` | marque | 3 | 5,64 | 12-qualite-profil | 5,38 | 12-qualite-profil |
+| `--couleur-graphique-bordure-case` | marque | 3 | 4,78 | 12c-qualite-un-tour | 5,38 | 12c-qualite-un-tour |
+| `--couleur-graphique-borne` | marque | 3 | 3,93 | 12g-qualite-plafond-nul | 4,96 | 12g-qualite-plafond-nul |
+| `--couleur-graphique-encre-claire` | texte | 4,5 | — | — | 6,03 | 13a-qualite-tables |
+| `--couleur-graphique-encre-foncee` | texte | 4,5 | 5,43 | 12c-qualite-un-tour | — | — |
+| `--couleur-graphique-marque` | marque | 3 | 9,67 | 12-qualite-profil | 10,64 | 12-qualite-profil |
+| `--couleur-graphique-niveau-1` | marque | 3 | 3,46 | 12c-qualite-un-tour | 3,31 | 12c-qualite-un-tour |
+| `--couleur-graphique-niveau-2` | marque | 3 | 5,85 | 13a-qualite-tables | 5,35 | 13a-qualite-tables |
+| `--couleur-graphique-prouve` | marque | 3 | 4,23 | 13-qualite-collisions | 5,12 | 13-qualite-collisions |
+| `--couleur-graphique-repere` | marque | 3 | 6,15 | 12-qualite-profil | 7,01 | 12-qualite-profil |
+| `--couleur-graphique-reste` | marque | 3 | 5,10 | 13-qualite-collisions | 6,89 | 13-qualite-collisions |
+| `--couleur-graphique-serie-1` | marque | 3 | 5,10 | 12-qualite-profil | 6,89 | 12-qualite-profil |
+| `--couleur-graphique-serie-2` | marque | 3 | 4,53 | 12g-qualite-plafond-nul | 6,29 | 12g-qualite-plafond-nul |
 | `--couleur-hachure` | marque | 3 | 16,48 | 08-animateurs-designes | 15,21 | 08-animateurs-designes |
 | `--couleur-liste-texte` | texte | 4,5 | 14,82 | 07-plan-tables | — | — |
 | `--couleur-marque` | marque | 3 | 3,63 | 07a-cibles-sieges | 3,50 | 07a-cibles-sieges |
 | `--couleur-page-texte` | texte | 4,5 | 13,78 | 01b-passer-en-ecriture | 11,02 | 11-propositions |
 | `--couleur-page-texte-secondaire` | texte | 4,5 | 5,57 | 01-premier-ecran | 6,72 | 01b-passer-en-ecriture |
-| `--couleur-papier` | texte | 4,5 | — | — | 13,44 | 22-plan-brouillon |
+| `--couleur-papier` | texte | 4,5 | — | — | 5,00 | 12c-qualite-un-tour |
 | `--couleur-pastille-fond` | marque | 3 | 13,44 | 19-ajustement | 11,62 | 19-ajustement |
 | `--couleur-pastille-texte` | texte | 4,5 | — | — | 14,51 | 19-ajustement |
 | `--couleur-poignee` | marque | 3 | 7,44 | 07-plan-tables | 11,32 | 07-plan-tables |
@@ -139,9 +153,9 @@ l'exécution elle-même —, son statut et la façon de le relever. Une valeur a
 | `MARGE_PAGE_MM` | marge de chaque bord d'une page imprimée par l'aperçu | 10 mm | défaut de travail | manuel | marge non imprimable mesurée sur chaque imprimante visée (une page de filets à 1 mm d'écart, lue à la règle) ; la plus grande, écrite dans ce registre | — | imprimantes visées, chaque papier des sorties |
 | `HAUTEUR_BANDE_IMPRESSION` | hauteur de ce que porte une feuille imprimée hors de sa zone de contenu : pied, mentions, barre, cartouche | relevée à l’exécution | mesurée | exécution | mesurée à l'ouverture de l'aperçu : tout ce qu'une feuille porte hors de [data-contenu] ; aucune valeur n'est écrite dans ce registre | — | rendu de l'aperçu, relevé à chaque ouverture |
 | `TOLERANCE_CHAINE_TEMOIN` | écart relatif admis entre la longueur rendue de la chaîne témoin et celle que donnent les avances de la police | 0,011 rapport | mesurée | banc | banc de mesure : le quart de l'écart relatif entre la police embarquée et une famille de repli forcée, et au moins trois fois la gigue de dix mesures, chaîne témoin à 16 px, crénage et ligatures coupés ; arrondi par excès à deux chiffres significatifs, écrit dans ce registre | 0,011 rapport | cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, 16 processeurs logiques, processeur non ralenti, police Noto Sans |
-| `RALENTISSEMENT_PLEINE_CHARGE` | ralentissement d'une génération quand tous les processeurs logiques travaillent, t(L) / t(1) | 2 × | défaut de travail | banc | banc de mesure : durée d'une même génération sur un travailleur, puis sur L travailleurs ; le rapport ρ des médianes, écrit dans ce registre | 2,79 × | cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, 16 processeurs logiques, processeur non ralenti, police Noto Sans |
-| `SEUIL_MATRICE_PARTICIPANTS` | nombre de participants au-delà duquel une case de la matrice « qui a rencontré qui » tombe sous la cible de 24 px dans la largeur de la carte, au cadre fixé | 40 participants | défaut de travail | banc | banc de mesure, cadre de 1 366 × 700 px : le plus grand nombre de participants dont la case de la matrice tient 24 px dans la largeur de la carte de la vue, noms en tête compris, relevé sur le rendu ; la valeur proposée, adoptée à la main dans ce registre | non relevée | cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, 16 processeurs logiques, processeur ralenti ×4, police Noto Sans |
-| `LARGEUR_TRONCATURE_NOM_PX` | largeur à laquelle un nom se tronque dans une étiquette de graphique | 180 px | défaut de travail | banc | banc de mesure, police Noto Sans : la largeur rendue d'un nom de 14 caractères, chacun le glyphe le plus large de l'alphabet visé, au corps des étiquettes de graphique, dans la marge gauche d'une vue à barres — jamais un nom de démonstration ; arrondie au pixel supérieur, adoptée à la main dans ce registre | non relevée | cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, 16 processeurs logiques, processeur ralenti ×4, police Noto Sans |
+| `RALENTISSEMENT_PLEINE_CHARGE` | ralentissement d'une génération quand tous les processeurs logiques travaillent, t(L) / t(1) | 2 × | défaut de travail | banc | banc de mesure : durée d'une même génération sur un travailleur, puis sur L travailleurs ; le rapport ρ des médianes, écrit dans ce registre | 2,98 × | cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, 16 processeurs logiques, processeur non ralenti, police Noto Sans |
+| `SEUIL_MATRICE_PARTICIPANTS` | nombre de participants au-delà duquel une case de la matrice « qui a rencontré qui » tombe sous la cible de 24 px dans la largeur de la carte, au cadre fixé | 40 participants | défaut de travail | banc | banc de mesure, cadre de 1 366 × 700 px : le plus grand nombre de participants dont la case de la matrice tient 24 px dans la largeur de la carte de la vue, noms en tête compris, relevé sur le rendu ; la valeur proposée, adoptée à la main dans ce registre | 44 participants | cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, 16 processeurs logiques, processeur non ralenti, police Noto Sans |
+| `LARGEUR_TRONCATURE_NOM_PX` | largeur à laquelle un nom se tronque dans une étiquette de graphique | 180 px | défaut de travail | banc | banc de mesure, police Noto Sans : la largeur rendue d'un nom de 14 caractères, chacun le glyphe le plus large de l'alphabet visé, au corps des étiquettes de graphique, dans la marge gauche d'une vue à barres — jamais un nom de démonstration ; arrondie au pixel supérieur, adoptée à la main dans ce registre | 168 px | cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, 16 processeurs logiques, processeur non ralenti, police Noto Sans |
 
 <!-- engendre:fin constantes -->
 

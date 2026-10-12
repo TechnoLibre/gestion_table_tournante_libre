@@ -36,8 +36,10 @@
   // Elle ne s'ouvre que dans le graphique survolé, sur le modèle de
   // l'infobulle primitive : un seul élément [role=tooltip], caché tant
   // qu'aucune cible n'est pointée, placé par placerInfobulle contre le point
-  // d'ancrage de la cible (ancrer(indice) → {x, y} local), replacé au
-  // défilement et au redimensionnement, invisible tant qu'il n'est pas
+  // d'ancrage de la cible (ancrer(indice) → {x, y} local), dans la zone
+  // visible où défile le graphique (zoneVisible) — elle ne couvre ni le
+  // bandeau collant ni ce qui reste fixe au-dessus de cette zone —, replacé
+  // au défilement et au redimensionnement, invisible tant qu'il n'est pas
   // placé ; Échap la ferme. Elle ne capte aucun pointeur.
   //
   // legende : [{genre, libelle, signe}] — un trait, un remplissage ou un
@@ -52,7 +54,7 @@
   import { placerInfobulle } from '../../primitives/infobulle.js';
   import { effetDe } from '../../raccourcis.js';
   import Pourcentage from './Pourcentage.svelte';
-  import { REMPLISSAGES, TRAITS, cheminSigne, ligneInfobulle } from './pointage.js';
+  import { REMPLISSAGES, TRAITS, TRAIT_CONTOUR_PX, cheminSigne, ligneInfobulle } from './pointage.js';
 
   let {
     graphique,
@@ -110,6 +112,20 @@
     pointe = null;
   }
 
+  // La zone visible où défile le graphique : le haut et le bas, dans le
+  // repère de la fenêtre, du plus proche ancêtre qui fait défiler son
+  // contenu à la verticale ; {} sans un tel ancêtre.
+  function zoneVisible(element) {
+    for (let ancetre = element.parentElement; ancetre !== null; ancetre = ancetre.parentElement) {
+      const { overflowY } = getComputedStyle(ancetre);
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        const boite = ancetre.getBoundingClientRect();
+        return { haut: boite.top, bas: boite.bottom };
+      }
+    }
+    return {};
+  }
+
   function placer() {
     if (ligne === null || bulle === null || svg === null) return;
     const point = ancrer(pointe);
@@ -121,7 +137,7 @@
     place = placerInfobulle(
       { gauche: x, haut: y, droite: x, bas: y },
       { largeur: boite.width, hauteur: boite.height },
-      { largeur: fenetre.clientWidth, hauteur: fenetre.clientHeight },
+      { largeur: fenetre.clientWidth, hauteur: fenetre.clientHeight, ...zoneVisible(svg) },
     );
   }
 
@@ -158,6 +174,16 @@
         class="trait"
         stroke-dasharray={TRAITS[entree.genre].motif}
         style:stroke={`var(${TRAITS[entree.genre].jeton})`}
+      />
+    {:else if REMPLISSAGES[entree.genre].contour}
+      <rect
+        x="2"
+        y="3"
+        width="24"
+        height="6"
+        class="contour"
+        style:stroke={`var(${REMPLISSAGES[entree.genre].jeton})`}
+        style:stroke-width={`${TRAIT_CONTOUR_PX}px`}
       />
     {:else}
       <rect x="1" y="2" width="26" height="8" style:fill={`var(${REMPLISSAGES[entree.genre].jeton})`} />
@@ -293,6 +319,11 @@
     fill: none;
     stroke: var(--couleur-graphique-marque);
     stroke-width: 1.5;
+  }
+
+  /* L'échantillon d'un segment tracé en contour : « prouvé inévitable ». */
+  .contour {
+    fill: none;
   }
 
   .signe.plein {

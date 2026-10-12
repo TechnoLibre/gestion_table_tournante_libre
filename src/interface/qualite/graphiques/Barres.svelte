@@ -23,7 +23,12 @@
   //   titre, jamais empilées ni sur un axe commun, valeurs[k] celle de la
   //   colonne k, les lignes dans le même ordre.
   // genre : serie1, serie2, prouve ou reste, chacun son jeton (REMPLISSAGES,
-  // pointage.js). Un segment nul ne se trace pas.
+  // pointage.js). Un segment au remplissage en contour — « prouvé
+  // inévitable » — se trace d'un trait de TRAIT_CONTOUR_PX de son jeton,
+  // tenu dans la boîte du segment, que la disposition garde au moins large
+  // de LARGEUR_MIN_CONTOUR_PX ; les autres en aplat : prouvé et reste se
+  // distinguent par la forme comme par la couleur, à toute largeur (§ 12.4,
+  // B13). Un segment nul ne se trace pas.
   //
   // Le pointage désigne la ligne sous le pointeur ; pointe, liable, en porte
   // l'indice ; infobulle, {colonnes, lignes}, une ligne du jumeau par ligne
@@ -36,7 +41,7 @@
   // pointée, par son rang à partir de 1. Chaque marque porte data-marque.
   import { getContext } from 'svelte';
   import Graphique from './Graphique.svelte';
-  import { ESPACE_PX, cibleLigne, dispositionBarres } from './pointage.js';
+  import { ESPACE_PX, TRAIT_CONTOUR_PX, cibleLigne, dispositionBarres } from './pointage.js';
 
   let {
     graphique,
@@ -127,15 +132,29 @@
           <text class="secondaire" x={ligne.secondaire.x} y={ligne.secondaire.y} dominant-baseline="central">{ligne.secondaire.texte}</text>
         {/if}
         {#each ligne.segments as segment (segment.colonne)}
-          <rect
-            data-segment={segment.genre}
-            data-marque={segment.marque}
-            x={segment.x}
-            y={segment.y}
-            width={segment.largeur}
-            height={segment.hauteur}
-            style:fill={`var(${segment.jeton})`}
-          />
+          {#if segment.contour}
+            <rect
+              class="contour"
+              data-segment={segment.genre}
+              data-marque={segment.marque}
+              x={segment.x + TRAIT_CONTOUR_PX / 2}
+              y={segment.y + TRAIT_CONTOUR_PX / 2}
+              width={segment.largeur - TRAIT_CONTOUR_PX}
+              height={segment.hauteur - TRAIT_CONTOUR_PX}
+              style:stroke={`var(${segment.jeton})`}
+              style:stroke-width={`${TRAIT_CONTOUR_PX}px`}
+            />
+          {:else}
+            <rect
+              data-segment={segment.genre}
+              data-marque={segment.marque}
+              x={segment.x}
+              y={segment.y}
+              width={segment.largeur}
+              height={segment.hauteur}
+              style:fill={`var(${segment.jeton})`}
+            />
+          {/if}
         {/each}
       </g>
     {/each}
@@ -146,6 +165,10 @@
 </Graphique>
 
 <style>
+  .contour {
+    fill: none;
+  }
+
   .axe {
     stroke: var(--couleur-graphique-axe);
     stroke-width: 1;

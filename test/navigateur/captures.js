@@ -26,7 +26,7 @@ import { MARQUE_TEMOIN, creerTraduction } from '../../src/application/traduction
 import { constante } from '../../src/geometrie/constantes.js';
 import JETONS_CSS from '../../src/interface/jetons.css?raw';
 import { TABLES_INTERFACE } from '../../src/interface/libelles.js';
-import { MARQUES, MARQUES_GRAPHIQUE, TEXTES } from '../../src/interface/marques.js';
+import { MARQUES, TEXTES, TEXTES_GRAPHIQUE } from '../../src/interface/marques.js';
 import { serialiserCharge } from '../../src/stockage/canonique.js';
 import { analyser } from '../../src/stockage/document.js';
 import { SUFFIXES } from '../../src/stockage/noms.js';
@@ -35,6 +35,7 @@ import { MODE_AFFICHAGE } from '../chromium.js';
 import { CHAINE_TEMOIN, longueurTemoin } from '../temoin.js';
 import { feuillePosee } from './feuilles.js';
 import {
+  atteignable,
   attenuations,
   composantes,
   contraste,
@@ -114,25 +115,15 @@ function svgExterieur(element) {
   return svg;
 }
 
-// Feuille qui rend chaque élément atteignable le temps d'une lecture, comme
-// celle de rendu.js : elementsFromPoint suit l'atteinte du pointeur.
-const ATTEIGNABLE = '*, *::before, *::after { pointer-events: auto !important; }';
-
 // Le point (x, y) de la fenêtre montre-t-il le dessin qui porte l'élément ?
 // Dans la fenêtre, et le <svg> extérieur, ou l'un de ses descendants, parmi
-// les éléments présents au point : un ancêtre qui défile rogne ce qui
-// déborde de sa boîte, et le point rogné n'atteint plus le dessin.
+// les éléments présents au point, chacun atteignable (atteignable,
+// rendu.js) : un ancêtre qui défile rogne ce qui déborde de sa boîte, et le
+// point rogné n'atteint plus le dessin.
 function montreLeDessin(element, x, y) {
   if (!(x >= 0 && y >= 0 && x < innerWidth && y < innerHeight)) return false;
   const svg = svgExterieur(element);
-  const feuille = document.createElement('style');
-  feuille.textContent = ATTEIGNABLE;
-  document.head.append(feuille);
-  try {
-    return document.elementsFromPoint(x, y).some((n) => svg.contains(n));
-  } finally {
-    feuille.remove();
-  }
+  return atteignable(document, () => document.elementsFromPoint(x, y).some((n) => svg.contains(n)));
 }
 
 // Le centre de la boîte d'un élément SVG montre-t-il son dessin ?
@@ -164,7 +155,12 @@ export const CHAMPS = 'input:not([type="radio"]):not([type="checkbox"]):not([typ
  * dont la boîte coupe la fenêtre se mesurent, sans rien amener — ce que
  * montre une capture d'écran.
  */
-export function releverTextes(racine, { fenetre = false } = {}) {
+export function releverTextes(racine, options = {}) {
+  return atteignable(document, () => lireTextes(racine, options));
+}
+
+// Le corps de releverTextes, sous la feuille ATTEIGNABLE qu'il pose une fois.
+function lireTextes(racine, { fenetre = false } = {}) {
   const fautes = [];
   const fautesAttenuation = [];
   const couleurs = new Map();
@@ -297,12 +293,37 @@ function dessousLePlusFrequent(forme, quoi) {
 // Les vides de son motif laissent alors voir la série : le repère se mesure
 // contre ce qui est peint sous la première série tracée avant lui, le fond du
 // graphique et sa grille. Un repère plein, sans vide, se mesure contre la
-// série qu'il recouvre.
+// série qu'il recouvre. Un point de relevé — data-point-releve —, posé sur
+// le tracé de sa série, de la même marque, se mesure contre ce qui est peint
+// sous ce tracé, le premier frère qui le précède sous la même marque : le
+// point et son tracé sont une seule marque. Dans un graphique de la page de
+// qualité, une autre forme se mesure de même contre ce qui est peint sous la
+// première forme de sa marque qui la précède chez son parent : les signes de
+// rangs voisins se chevauchent quand les rangs sont serrés, et ce qu'une forme
+// de sa propre encre recouvre n'est pas son fond.
 function sondeAvant(forme) {
-  if (!forme.matches('[data-repere]') || getComputedStyle(forme).strokeDasharray === 'none') return forme;
+  if (forme.matches('[data-point-releve]')) {
+    let trace = forme.previousElementSibling;
+    while (trace !== null && !(trace.localName === 'path' && trace.dataset.marque === forme.dataset.marque)) trace = trace.previousElementSibling;
+    return trace ?? forme;
+  }
+  if (!forme.matches('[data-repere]') || getComputedStyle(forme).strokeDasharray === 'none') return memeMarqueAvant(forme);
   for (const frere of forme.parentNode.children) {
     if (frere === forme) break;
     if (frere.matches('[data-serie]')) return frere;
+  }
+  return forme;
+}
+
+// La première forme qui précède la forme chez son parent et porte la même
+// data-marque, dans un graphique (svg[data-graphique]) ; la forme elle-même
+// sinon, et hors d'un graphique.
+function memeMarqueAvant(forme) {
+  const marque = forme.getAttribute('data-marque');
+  if (marque === null || forme.closest('svg[data-graphique]') === null) return forme;
+  for (const frere of forme.parentNode.children) {
+    if (frere === forme) break;
+    if (frere.getAttribute('data-marque') === marque) return frere;
   }
   return forme;
 }
@@ -379,17 +400,10 @@ function voisinage(element, jeton) {
   return { peinture: null, voisins: [] };
 }
 
-// Le registre que releverMarques connaît : MARQUES, et les marques de
-// graphique (MARQUES_GRAPHIQUE), tenues hors de MARQUES tant qu'aucun
-// écran ne les rend toutes — la couverture des écrans ne lit que MARQUES.
-// Le relevé d'un écran comme celui du parcours photographié les mesure
-// ainsi à 3:1. Les fonds de graphique (FONDS_GRAPHIQUE) ne sont pas des
-// marques et n'y entrent pas.
-const REGISTRE_MARQUES = Object.freeze([...MARQUES, ...MARQUES_GRAPHIQUE]);
-
 /**
  * Les marques rendues sous racine (§ 14.5, § 19.5) : chacune nommée au
- * registre, peinte de son jeton, à 3:1 de ce qui l'entoure, sans
+ * registre (MARQUES, marques.js, celles des graphiques comprises), peinte de
+ * son jeton, à 3:1 de ce qui l'entoure, sans
  * atténuation. Sous le document imprimé de l'aperçu, le jeton se résout
  * comme le papier le résout : au clair, dans les deux thèmes.
  * → { vues: string[], fautes, attenuations, mesures, ratios },
@@ -401,7 +415,12 @@ const REGISTRE_MARQUES = Object.freeze([...MARQUES, ...MARQUES_GRAPHIQUE]);
  * le bord du plan ne garde parfois, de son trait, que le point où il touche
  * le trait du plateau.
  */
-export function releverMarques(racine, { fenetre = false } = {}) {
+export function releverMarques(racine, options = {}) {
+  return atteignable(document, () => lireMarques(racine, options));
+}
+
+// Le corps de releverMarques, sous la feuille ATTEIGNABLE qu'il pose une fois.
+function lireMarques(racine, { fenetre = false } = {}) {
   const vues = new Set();
   const ratios = [];
   const fautes = [];
@@ -411,7 +430,7 @@ export function releverMarques(racine, { fenetre = false } = {}) {
     if (fenetre && !entiereDansLaFenetre(element)) continue;
     if (!rendu(element)) continue;
     const nom = element.dataset.marque;
-    const entree = REGISTRE_MARQUES.find((m) => m.nom === nom);
+    const entree = MARQUES.find((m) => m.nom === nom);
     if (entree === undefined) {
       fautes.push(`${situer(element)} : marque hors du registre`);
       continue;
@@ -476,11 +495,16 @@ const NOMMANTS = ['aria-label', 'aria-labelledby', 'title'];
 const CLES = new Set(creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]).cles());
 
 // Les jetons de couleur que la feuille des jetons déclare, dans l'ordre de
-// leur première déclaration ; les jetons des textes du registre (TEXTES)
-// d'abord, qui nomment une couleur partagée par plusieurs jetons.
+// leur première déclaration ; d'abord les jetons des textes du registre
+// (TEXTES) hors de la famille « graphique » (TEXTES_GRAPHIQUE), qui nomment
+// une couleur partagée par plusieurs jetons. Les encres des cases de
+// graphique ne passent pas devant : une couleur qu'elles partagent avec un
+// jeton déclaré avant elles, comme le blanc du papier dans le thème sombre,
+// garde le nom de ce jeton, que les encres soient versées dans TEXTES ou non.
 const JETONS = (() => {
   const declares = [...new Set([...JETONS_CSS.matchAll(/(--couleur-[a-z0-9-]+)\s*:/g)].map(([, nom]) => nom))];
-  const deTexte = TEXTES.map(({ jeton }) => jeton);
+  const deGraphique = new Set(TEXTES_GRAPHIQUE.map(({ jeton }) => jeton));
+  const deTexte = TEXTES.map(({ jeton }) => jeton).filter((jeton) => !deGraphique.has(jeton));
   return Object.freeze([...deTexte.filter((jeton) => declares.includes(jeton)), ...declares.filter((jeton) => !deTexte.includes(jeton))]);
 })();
 

@@ -3,10 +3,12 @@
 
 // Les seuils du banc de mesure (§ 19.10, § 19.4, § 6.2), tirés de mesures
 // déjà prises : le plus grand entier qui tient un prédicat, par dichotomie ;
-// le plus petit zoom au-delà duquel une courbe de temps par image tient son
-// critère ; la tolérance de la chaîne témoin. Module pur, sans import ni
-// horloge : il se charge sous node, où ses épreuves le jouent, comme dans la
-// page du banc, où les *.banc.js lui passent leurs mesures.
+// le nom de référence d'une largeur de troncature, fait du glyphe le plus
+// large (§ 14.1) ; le plus petit zoom au-delà duquel une courbe de temps par
+// image tient son critère ; la tolérance de la chaîne témoin. Module pur,
+// sans import ni horloge : il se charge sous node, où ses épreuves le
+// jouent, comme dans la page du banc, où les *.banc.js lui passent leurs
+// mesures.
 
 /** Le temps par image qu'un glissement de la grande démonstration doit tenir,
  *  au p95, sur la machine de référence (Q13 b) : le choix de l'utilisateur.
@@ -84,6 +86,54 @@ export async function plusGrandTenant(predicat, min, max) {
 
 const estPositifFini = (valeur) => typeof valeur === 'number' && Number.isFinite(valeur) && valeur > 0;
 const estPositifOuNul = (valeur) => typeof valeur === 'number' && Number.isFinite(valeur) && valeur >= 0;
+
+// La largeur d'un texte par le mesureur reçu, qui doit être finie > 0 : un
+// texte qui n'est pas rendu mesure 0, et ne mesure alors rien.
+function largeurDe(mesurer, texte) {
+  const largeur = mesurer(texte);
+  if (!estPositifFini(largeur)) throw new RangeError(`nomDeReference : largeur finie > 0 attendue pour « ${texte} », reçu ${String(largeur)}`);
+  return largeur;
+}
+
+/**
+ * Le nom de référence d'une largeur de troncature (§ 14.1) : le glyphe le
+ * plus large de l'alphabet, répété longueur fois. Chaque glyphe se mesure
+ * une fois, dans l'ordre de l'alphabet, parcouru par points de code ; à
+ * égalité, le premier l'emporte. Le nom composé se mesure ensuite entier,
+ * et non comme longueur fois son glyphe : la mesure est celle du texte
+ * rendu. valeur est sa largeur arrondie au pixel supérieur, celle que le
+ * banc propose au registre.
+ *
+ * @param {string} alphabet   au moins un glyphe
+ * @param {number} longueur   entier ≥ 1, le nombre de glyphes du nom
+ * @param {(texte: string) => number} mesurer   largeur rendue d'un texte, px
+ * @returns {{glyphe: string, largeurGlyphe: number, nom: string, largeur: number, valeur: number}}
+ * @throws {TypeError} un alphabet qui n'est pas un texte, un mesureur qui
+ *   n'est pas une fonction
+ * @throws {RangeError} un alphabet vide, une longueur hors contrat, avant
+ *   toute mesure ; une largeur mesurée qui n'est pas finie > 0, en nommant
+ *   son texte
+ */
+export function nomDeReference(alphabet, longueur, mesurer) {
+  if (typeof alphabet !== 'string') throw new TypeError('nomDeReference : un alphabet en texte est attendu');
+  if (typeof mesurer !== 'function') throw new TypeError('nomDeReference : un mesureur est attendu');
+  if (alphabet.length === 0) throw new RangeError('nomDeReference : alphabet vide');
+  if (!Number.isSafeInteger(longueur) || longueur < 1) {
+    throw new RangeError(`nomDeReference : longueur entière ≥ 1 attendue, reçu ${String(longueur)}`);
+  }
+  let glyphe = null;
+  let largeurGlyphe = 0;
+  for (const candidat of alphabet) {
+    const largeur = largeurDe(mesurer, candidat);
+    if (largeur > largeurGlyphe) {
+      glyphe = candidat;
+      largeurGlyphe = largeur;
+    }
+  }
+  const nom = glyphe.repeat(longueur);
+  const largeur = largeurDe(mesurer, nom);
+  return { glyphe, largeurGlyphe, nom, largeur, valeur: Math.ceil(largeur) };
+}
 
 /**
  * Le plus petit k de la courbe au-delà duquel tout k de la courbe tient le

@@ -79,7 +79,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.ok(Object.isFrozen(ETAPES));
   });
 
-  test('CAPTURES égale la table du contrat : vingt-six entrées, leur étape et leur source', () => {
+  test('CAPTURES égale la table du contrat : quarante-trois entrées, leur étape et leur source', () => {
     const table = CAPTURES.map((c) => [c.fichier, c.etape, c.source]);
     assert.deepEqual(table, [
       ['01-premier-ecran', '1', 'navigateur'],
@@ -102,6 +102,23 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['10-diagnostic', '8', 'navigateur'],
       ['10a-ordre-priorites', '9', 'navigateur'],
       ['11-propositions', '9', 'navigateur'],
+      ['12-qualite-profil', '10', 'navigateur'],
+      ['12a-qualite-sans-placement', '10', 'navigateur'],
+      ['12b-qualite-une-table', '10', 'navigateur'],
+      ['12c-qualite-un-tour', '10', 'navigateur'],
+      ['12d-qualite-une-appartenance', '10', 'navigateur'],
+      ['12e-qualite-sans-collision', '10', 'navigateur'],
+      ['12f-qualite-reserve', '10', 'navigateur'],
+      ['12g-qualite-plafond-nul', '10', 'navigateur'],
+      ['13-qualite-collisions', '10', 'navigateur'],
+      ['13a-qualite-tables', '10', 'navigateur'],
+      ['14-qualite-paires', '10', 'navigateur'],
+      ['14a-fiche-rencontres', '10', 'navigateur'],
+      ['15-pas-de-matrice', '10', 'navigateur'],
+      ['15a-qualite-objectifs', '10', 'navigateur'],
+      ['15b-qualite-animateurs', '10', 'navigateur'],
+      ['15c-qualite-performance', '10', 'navigateur'],
+      ['16-minimum-atteint', '10', 'navigateur'],
       ['19-ajustement', '11', 'navigateur'],
       ['20-mode-lecture', '11', 'navigateur'],
       ['22-plan-brouillon', '12', 'navigateur'],
@@ -134,24 +151,44 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     // le parcours charge pour 10 (§ 19.3).
     assert.equal(configuration.get('07a-cibles-sieges'), 'grande');
     assert.equal(configuration.get('07a-cibles-tables'), 'grande');
+    // La page de qualité (B27) : chaque capture sur sa charge, la
+    // démonstration du catalogue qu'elle charge, l'événement que le parcours
+    // construit, ou une configuration qu'un scénario court construit.
+    const qualite = [
+      ['12-qualite-profil', 'grande'],
+      ['12a-qualite-sans-placement', 'petite-conflit'],
+      ['12b-qualite-une-table', 'construite-une-table'],
+      ['12c-qualite-un-tour', 'construite-un-tour'],
+      ['12d-qualite-une-appartenance', 'construite-une-appartenance'],
+      ['12e-qualite-sans-collision', 'construite-sans-collision'],
+      ['12f-qualite-reserve', 'petite-conflit'],
+      ['12g-qualite-plafond-nul', 'construite-plafond-nul'],
+      ['13-qualite-collisions', 'petite-conflit'],
+      ['13a-qualite-tables', 'petite-conflit'],
+      ['14-qualite-paires', 'construite-paires'],
+      ['14a-fiche-rencontres', 'construite-paires'],
+      ['15-pas-de-matrice', 'grande'],
+      ['15a-qualite-objectifs', 'evenement-construit'],
+      ['15b-qualite-animateurs', 'grande'],
+      ['15c-qualite-performance', 'grande'],
+      ['16-minimum-atteint', 'petite'],
+    ];
+    assert.deepEqual(qualite.map(([fichier]) => [fichier, configuration.get(fichier)]), qualite);
   });
 
-  test('REPORTEES : 12 à 18 à l’étape 10, 21 à l’étape 11, raison « iteration5 », rien d’autre', () => {
+  test('REPORTEES : 17 et 18 à l’étape 10, 21 à l’étape 11, raison « iteration5 », rien d’autre', () => {
     assert.deepEqual(
       REPORTEES.map((r) => [r.fichier, r.etape, r.raison]),
       [
-        ['12-qualite-profil', '10', 'iteration5'],
-        ['13-qualite-collisions', '10', 'iteration5'],
-        ['14-qualite-paires', '10', 'iteration5'],
-        ['15-pas-de-matrice', '10', 'iteration5'],
-        ['16-minimum-atteint', '10', 'iteration5'],
         ['17-comparaison-manque', '10', 'iteration5'],
         ['18-comparaison-escalier', '10', 'iteration5'],
         ['21-historique', '11', 'iteration5'],
       ],
     );
-    const rangs = REPORTEES.map((r) => Number(r.fichier.slice(0, 2)));
-    for (const rang of rangs) assert.ok((rang >= 12 && rang <= 18) || rang === 21, String(rang));
+    // La page de qualité se photographie : aucune de ses captures n'est
+    // reportée, et aucune reportée n'est déclarée photographiée.
+    const declarees = new Set(CAPTURES.map((c) => c.fichier));
+    for (const reportee of REPORTEES) assert.ok(!declarees.has(reportee.fichier), reportee.fichier);
     assert.ok(Object.isFrozen(REPORTEES));
     for (const reportee of REPORTEES) assert.ok(Object.isFrozen(reportee), reportee.fichier);
   });
@@ -351,8 +388,11 @@ describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
     ]);
   });
 
-  test('les reportées couvrent l’étape 10 ; sans elles, elle manque', () => {
-    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [] })), [
+  test('les captures de la page de qualité couvrent l’étape 10 sans les reportées ; sans les unes ni les autres, elle manque', () => {
+    const etape10 = CAPTURES.filter((c) => c.etape === '10').map((c) => c.fichier);
+    assert.equal(etape10.length, 17);
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [] })), []);
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: etape10 })), [
       { chemin: CHEMIN_MANIFESTE, faute: 'étape 10 : aucune capture ni reportée' },
     ]);
   });

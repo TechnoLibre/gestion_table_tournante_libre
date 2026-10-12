@@ -5,8 +5,11 @@
 // § 19.11, § 12.7, § 7.6, § 13.1, § 2, § 19.2, § 8.4, § 18.6) : langue
 // témoin, erreurs par leur libellé, contrastes et marques dans les deux
 // thèmes, aucune atténuation, jamais la seule couleur, teinte réservée, aucun
-// emoji, balisage littéral, bandeau, formulaires, transitions annulées ;
-// puis le mécanisme des captures d'écran (§ 19.4, § 19.5, § 19.7, § 19.11),
+// emoji, balisage littéral, bandeau, formulaires, transitions annulées ; la
+// page de qualité — chaque pourcentage suivi de son compte, le signe « % »
+// à ses seules places, chaque niveau de l'échelle rendu, les motifs des
+// tracés, ses graphiques nommés et décrits, ses jumeaux au clavier ; puis
+// le mécanisme des captures d'écran (§ 19.4, § 19.5, § 19.7, § 19.11),
 // chaque contrôle montré en train d'échouer sur un dossier d'épreuve.
 //
 // Un parcours unique, en langue témoin, au cadre de 1 366 × 700, atteint
@@ -42,13 +45,17 @@ import {
   NOM_CAS_LIMITES,
   attendre,
   centre,
+  chargeObjectifs,
+  chargePaires,
   chargePrincipale,
   cliquer,
   creerContexte,
+  fichierCourses,
+  generationPrincipale,
   octetsCasLimites,
   ouvrirEvenement,
 } from '../../test/navigateur/ecrans.js';
-import { fixerCadre, pointer } from '../../test/navigateur/entrees.js';
+import { fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
 import { monterApp } from '../../test/navigateur/montage.js';
 import {
   CADRE,
@@ -72,7 +79,9 @@ import { poserFeuille } from '../../test/navigateur/feuilles.js';
 import { composantes, couleursPeintes, designation, sousTheme, visible } from '../../test/navigateur/rendu.js';
 import { provenanceVisible } from './apropos.js';
 import { TABLES_INTERFACE } from './libelles.js';
-import { CONFLITS, FONDS_GRAPHIQUE, MARQUES } from './marques.js';
+import SOURCE_CAPTURES from '../../test/navigateur/captures.js?raw';
+import { CONFLITS, FONDS_GRAPHIQUE, JETON_RETRAIT, MARQUES, MARQUES_GRAPHIQUE, NIVEAUX_GRAPHIQUE, SEPARATIONS, TEINTES_APPARTENANCE } from './marques.js';
+import { SIMULATIONS, ecartPercu, simuler } from './palette.js';
 
 const { t: tTemoin } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue: 'temoin' });
 const { ouverture: OUVERTURE, fermeture: FERMETURE } = MARQUE_TEMOIN;
@@ -559,6 +568,299 @@ export function fautesFormulaires(racine) {
   return { fautes, formulaires: formulaires.length };
 }
 
+// --- La page de qualité --------------------------------------------------------------------
+
+// Le graphique en pourcentages : les graduations de son axe vertical et le
+// libellé de son repère « cent » écrivent le signe « % » sans être le
+// pourcentage d'une mesure (contrainte 44, D34), et n'ont pas de compte.
+const GRAPHIQUE_EN_POURCENTAGES = 'profilPourcentages';
+
+// Le signe « % » est-il admis dans l'élément qui porte le texte ? Dans un
+// [data-pourcentage] ; dans le libellé du repère « cent », sur le tracé ou
+// repris par la légende de son graphique — une entrée de liste sœur du
+// <svg> qui porte ce libellé, au même texte ; dans une graduation de l'axe
+// vertical du graphique en pourcentages — un <text> ancré à sa fin, qui
+// n'est le libellé ni d'une série ni d'un repère.
+function pourcentAdmis(element) {
+  if (element.closest('[data-pourcentage], [data-repere="cent"]') !== null) return true;
+  const liste = element.closest('li')?.parentElement ?? null;
+  const voisin = liste?.parentElement?.querySelector(`:scope > svg[data-graphique="${GRAPHIQUE_EN_POURCENTAGES}"]`) ?? null;
+  const cent = voisin?.querySelector('text[data-repere="cent"]') ?? null;
+  if (cent !== null && cent.textContent.trim() === element.textContent.trim()) return true;
+  const texte = element.closest('text');
+  if (texte === null || texte.closest('svg[data-graphique]')?.dataset.graphique !== GRAPHIQUE_EN_POURCENTAGES) return false;
+  return texte.getAttribute('text-anchor') === 'end' && !texte.hasAttribute('data-serie') && !texte.hasAttribute('data-repere');
+}
+
+/**
+ * Les pourcentages et le signe « % » rendus sous racine (contrainte 44,
+ * D34) : chaque [data-pourcentage] rendu suivi, son voisin immédiat dans
+ * le composant Pourcentage, d'un [data-compte-pire] rendu et non vide ; et
+ * chaque texte rendu — nœud de texte ou attribut annoncé — qui porte « % »
+ * hors des places que pourcentAdmis admet. → { lus, dansInfobulle,
+ * dansJumeaux, fautes, signes: { lus, fautes } }, lus le nombre de
+ * pourcentages rendus, dansInfobulle et dansJumeaux ceux d'une infobulle
+ * et d'un jumeau ; signes.lus le nombre de textes rendus qui portent « % ».
+ */
+export function releverPourcentages(racine) {
+  const fautes = [];
+  let lus = 0;
+  let dansInfobulle = 0;
+  let dansJumeaux = 0;
+  for (const valeur of racine.querySelectorAll('[data-pourcentage]')) {
+    if (!rendu(valeur)) continue;
+    lus += 1;
+    if (valeur.closest('[role="tooltip"]') !== null) dansInfobulle += 1;
+    if (valeur.closest('[data-jumeau]') !== null) dansJumeaux += 1;
+    const compte = valeur.nextElementSibling;
+    const nomme = `${situer(valeur)} « ${extrait(valeur.textContent)} »`;
+    if (compte === null || !compte.matches('[data-compte-pire]')) fautes.push(`${nomme} : aucun [data-compte-pire] ne le suit`);
+    else if (!rendu(compte) || compte.textContent.trim() === '') fautes.push(`${nomme} : son compte du pire est vide`);
+  }
+  const signes = { lus: 0, fautes: [] };
+  const marcheur = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT);
+  for (let noeud = marcheur.nextNode(); noeud !== null; noeud = marcheur.nextNode()) {
+    const parent = noeud.parentElement;
+    if (parent === null || !noeud.textContent.includes('%') || TEXTES_NON_PEINTS.has(parent.localName) || !rendu(parent)) continue;
+    if (parent.closest('svg title, svg desc') !== null) continue;
+    signes.lus += 1;
+    if (!pourcentAdmis(parent)) signes.fautes.push(`${situer(parent)} : « ${extrait(noeud.textContent)} »`);
+  }
+  for (const element of [racine, ...racine.querySelectorAll('*')]) {
+    if (!rendu(element)) continue;
+    for (const nom of ATTRIBUTS_ANNONCES) {
+      const valeur = element.getAttribute(nom);
+      if (valeur === null || !valeur.includes('%')) continue;
+      signes.lus += 1;
+      signes.fautes.push(`${situer(element)}[${nom}] : « ${extrait(valeur)} »`);
+    }
+  }
+  return { lus, dansInfobulle, dansJumeaux, fautes, signes };
+}
+
+/** Les niveaux de l'échelle que chaque grille rend sous racine (§ 12.7,
+ *  D33, D35) : [{ graphique, niveaux }], niveaux croissants, chacun lu sur
+ *  le remplissage calculé d'une case, comparé à la couleur que le thème
+ *  courant donne au jeton de chaque niveau (NIVEAUX_GRAPHIQUE). */
+export function releverNiveaux(racine) {
+  const couleurs = NIVEAUX_GRAPHIQUE.map(({ niveau, jeton }) => ({ niveau, couleur: couleurDeJeton(jeton) }));
+  const grilles = [];
+  for (const svg of racine.querySelectorAll('svg[data-graphique]')) {
+    const cases = [...svg.querySelectorAll('[data-case] > rect')].filter(rendu);
+    if (cases.length === 0) continue;
+    const niveaux = new Set();
+    for (const forme of cases) {
+      for (const peinte of couleursPeintes(forme).fill) {
+        for (const { niveau, couleur } of couleurs) if (egales(peinte, couleur)) niveaux.add(niveau);
+      }
+    }
+    grilles.push({ graphique: svg.dataset.graphique, niveaux: [...niveaux].sort((a, b) => a - b) });
+  }
+  return grilles;
+}
+
+// Les jetons des teintes d'appartenance, la marque et le fond de chacune.
+const JETONS_APPARTENANCE = TEINTES_APPARTENANCE.flatMap(({ marque, fond }) => [marque, fond]);
+
+/**
+ * Ce que les tracés de la page portent hors de leur couleur (§ 12.7, D30,
+ * B13, B16) : traces, par genre — serie1, serie2, plafond, borne, cent —,
+ * chaque tracé rendu [{ ou, sig, motif }], sig sa signature non chromatique
+ * (signature), motif le stroke-dasharray calculé ; segments, prouve et
+ * reste, chaque segment de barre rendu [{ ou, sig }].
+ */
+export function releverTraces(racine) {
+  const traces = { serie1: [], serie2: [], plafond: [], borne: [], cent: [] };
+  for (const trace of racine.querySelectorAll('path[data-serie], path[data-repere]')) {
+    if (!rendu(trace)) continue;
+    const genre = trace.dataset.serie ?? trace.dataset.repere;
+    traces[genre] ??= [];
+    traces[genre].push({ ou: situer(trace), sig: signature([trace]), motif: getComputedStyle(trace).strokeDasharray });
+  }
+  const segments = { prouve: [], reste: [] };
+  for (const segment of racine.querySelectorAll('[data-segment="prouve"], [data-segment="reste"]')) {
+    if (rendu(segment)) segments[segment.dataset.segment].push({ ou: situer(segment), sig: signature([segment]) });
+  }
+  return { traces, segments };
+}
+
+/**
+ * Fautes des tracés réunis de plusieurs écrans (releverTraces) — jamais la
+ * seule couleur (§ 12.7, D30, B13, B16) : la série 1 et la série 2, prouvé
+ * inévitable et reste ont des signatures distinctes (fautesPaire) ; les motifs
+ * des quatre traits — plein, tirets, trait mixte, pointillé — sont deux à
+ * deux distincts : chaque série, le plafond, la borne ; la règle « cent »
+ * a le motif du plafond et aucun autre. Une paire absente est une faute.
+ */
+export function fautesTraces({ traces, segments }) {
+  const de = (genre) => traces[genre] ?? [];
+  const motifs = (genre) => de(genre).map(({ ou, motif }) => ({ ou, sig: motif }));
+  const fautes = [
+    ...fautesPaire('série 1 / série 2', de('serie1'), de('serie2')),
+    ...fautesPaire('prouvé inévitable / reste', segments.prouve, segments.reste),
+  ];
+  const genres = ['serie1', 'serie2', 'plafond', 'borne'];
+  for (let i = 0; i < genres.length; i += 1) {
+    for (let j = i + 1; j < genres.length; j += 1) {
+      fautes.push(...fautesPaire(`motif ${genres[i]} / ${genres[j]}`, motifs(genres[i]), motifs(genres[j])));
+    }
+  }
+  const cent = motifs('cent');
+  if (cent.length === 0) fautes.push('motif cent : absent');
+  for (const regle of cent) {
+    for (const plafond of motifs('plafond')) if (regle.sig !== plafond.sig) fautes.push(`motif cent : ${regle.ou} (${regle.sig}) n’a pas celui du plafond ${plafond.ou} (${plafond.sig})`);
+  }
+  return fautes;
+}
+
+// Les vues sous lesquelles une série se mesure à une teinte d'appartenance :
+// les couleurs d'origine, puis chaque dichromatie (§ 12.7 : simuler d'abord,
+// puis mesurer l'écart).
+const VUES_SEPARATION = ['origine', ...Object.keys(SIMULATIONS)];
+
+/**
+ * Les couleurs que les séries et les teintes d'appartenance peignent
+ * réellement sous racine, dans le thème courant (§ 12.7, D43) : series,
+ * chaque tracé de série rendu [{ ou, couleur }], couleur son trait calculé ;
+ * teintes, chaque élément rendu, hors des conteneurs de référence et des
+ * tracés de série, qui peint la marque d'une teinte d'appartenance — le
+ * point d'une pastille — [{ ou, couleur }]. Une couleur déjà relevée ne se relève pas deux fois.
+ */
+export function releverSeparation(racine) {
+  const series = [];
+  const teintes = [];
+  const ajouter = (liste, ou, couleur) => {
+    if (!liste.some((x) => egales(x.couleur, couleur))) liste.push({ ou, couleur });
+  };
+  for (const trace of racine.querySelectorAll('path[data-serie]')) {
+    if (rendu(trace)) for (const couleur of couleursPeintes(trace).stroke) ajouter(series, situer(trace), couleur);
+  }
+  const marques = TEINTES_APPARTENANCE.map(({ marque }) => couleurDeJeton(marque));
+  for (const element of racine.querySelectorAll('*')) {
+    if (element.closest(CONTENEURS_DE_REFERENCE) !== null || element.matches('[data-serie]') || !rendu(element)) continue;
+    for (const { couleurs } of peinturesDe(element)) {
+      for (const couleur of couleurs) if (marques.some((m) => egales(m, couleur))) ajouter(teintes, situer(element), couleur);
+    }
+  }
+  return { series, teintes };
+}
+
+/** Fautes de séparation (releverSeparation, réunis de plusieurs écrans) :
+ *  chaque série rendue et chaque teinte d'appartenance rendue s'écartent
+ *  d'au moins SEPARATIONS.autresMarques (ecartPercu), sur les couleurs
+ *  d'origine puis sous chaque dichromatie (§ 12.7, D43). Aucune série ou
+ *  aucune teinte relevée est une faute : la mesure n'a pas eu lieu. */
+export function fautesSeparation({ series, teintes }) {
+  if (series.length === 0 || teintes.length === 0) return [`séries / teintes d’appartenance : paire absente (${series.length} et ${teintes.length})`];
+  const fautes = [];
+  for (const serie of series) {
+    for (const teinte of teintes) {
+      for (const vue of VUES_SEPARATION) {
+        const vu = (c) => (vue === 'origine' ? c : simuler(c, vue));
+        const ecart = ecartPercu(vu(serie.couleur), vu(teinte.couleur));
+        if (ecart < SEPARATIONS.autresMarques) {
+          fautes.push(`${serie.ou} ${rgb(serie.couleur)} et ${teinte.ou} ${rgb(teinte.couleur)} : écart ${ecart.toFixed(1)} (${vue}), ${SEPARATIONS.autresMarques} au moins`);
+        }
+      }
+    }
+  }
+  return fautes;
+}
+
+/** Fautes des marques de graphique sous racine (D43, § 12.7) : une marque
+ *  d'un <svg data-graphique> peinte d'une teinte d'appartenance — sa marque
+ *  ou son fond — ou du rouge du retrait, dans le thème courant. → { fautes,
+ *  lus }, lus le nombre de marques de graphique lues. */
+export function fautesTeintesGraphique(racine) {
+  const reservees = [...JETONS_APPARTENANCE, JETON_RETRAIT].map((jeton) => ({ jeton, couleur: couleurDeJeton(jeton) }));
+  const fautes = [];
+  let lus = 0;
+  for (const marque of racine.querySelectorAll('svg[data-graphique] [data-marque]')) {
+    if (!rendu(marque)) continue;
+    lus += 1;
+    const { fill, stroke } = couleursPeintes(marque);
+    for (const { jeton, couleur } of reservees) {
+      if ([...fill, ...stroke].some((c) => egales(c, couleur))) fautes.push(`${situer(marque)} : ${rgb(couleur)} (${jeton})`);
+    }
+  }
+  return { fautes, lus };
+}
+
+// Le texte des éléments que nomment des identifiants séparés d'espaces.
+const texteDesIdentifiants = (ids) =>
+  (ids ?? '')
+    .split(/\s+/)
+    .filter((id) => id !== '')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/** Les graphiques rendus sous racine (§ 12.7, D44) : [{ ou, vue, role,
+ *  nom, description }], vue la vue de qualité qui le porte
+ *  (data-vue-qualite), nom son nom accessible — aria-label, sinon le texte
+ *  de aria-labelledby —, description le texte de aria-describedby. */
+export function releverGraphiques(racine) {
+  return [...racine.querySelectorAll('svg[data-graphique]')].filter(rendu).map((svg) => ({
+    ou: situer(svg),
+    vue: svg.closest('[data-vue-qualite]')?.dataset.vueQualite ?? null,
+    role: svg.getAttribute('role'),
+    nom: (svg.getAttribute('aria-label') ?? '').trim() || texteDesIdentifiants(svg.getAttribute('aria-labelledby')),
+    description: texteDesIdentifiants(svg.getAttribute('aria-describedby')),
+  }));
+}
+
+/** Fautes des graphiques d'un écran (releverGraphiques) : chacun une image
+ *  (role img), nommée et décrite, et deux graphiques de vues différentes
+ *  jamais du même nom. */
+export function fautesGraphiques(graphiques) {
+  const fautes = [];
+  for (const g of graphiques) {
+    if (g.role !== 'img') fautes.push(`${g.ou} : rôle ${g.role ?? 'absent'}, img attendu`);
+    if (g.nom === '') fautes.push(`${g.ou} : sans nom accessible`);
+    if (g.description === '') fautes.push(`${g.ou} : sans description`);
+  }
+  for (let i = 0; i < graphiques.length; i += 1) {
+    for (let j = i + 1; j < graphiques.length; j += 1) {
+      const [a, b] = [graphiques[i], graphiques[j]];
+      if (a.nom !== '' && a.nom === b.nom && a.vue !== b.vue) fautes.push(`${a.ou} (${a.vue}) et ${b.ou} (${b.vue}) : même nom « ${extrait(a.nom)} »`);
+    }
+  }
+  return fautes;
+}
+
+/** Ce qu'un écran de la page de qualité rend, hors des thèmes : null hors
+ *  de la page. Sinon les pourcentages, les niveaux, les tracés et les
+ *  graphiques, les phrases de cas (data-phrase-qualite), le nombre de
+ *  jumeaux ouverts et les vues qui les portent (vuesJumeau), le nombre de
+ *  points de relevé, la ligne de tête de la course, et la largeur rendue,
+ *  en px, de chaque segment « prouvé inévitable » des collisions
+ *  (prouvesCollisions). */
+function releverQualite(racine) {
+  const section = racine.querySelector('[data-section="qualite"]');
+  if (section === null) return null;
+  return {
+    pourcentages: releverPourcentages(racine),
+    niveaux: releverNiveaux(section),
+    traces: releverTraces(section),
+    graphiques: releverGraphiques(section),
+    phrases: [...section.querySelectorAll('[data-phrase-qualite]')].filter(rendu).map((p) => p.dataset.phraseQualite),
+    jumeaux: [...section.querySelectorAll('[data-jumeau]')].filter(rendu).length,
+    vuesJumeau: [
+      ...new Set(
+        [...section.querySelectorAll('[data-jumeau]')]
+          .filter(rendu)
+          .map((jumeau) => jumeau.closest('[data-vue-qualite]')?.dataset.vueQualite ?? null),
+      ),
+    ],
+    prouvesCollisions: [...section.querySelectorAll('[data-graphique="collisions"] [data-segment="prouve"]')]
+      .filter(rendu)
+      .map((segment) => segment.getBoundingClientRect().width),
+    pointsReleve: [...section.querySelectorAll('[data-point-releve]')].filter(rendu).length,
+    course: section.querySelector('[data-course]') !== null,
+  };
+}
+
 // --- Le parcours et ses relevés ----------------------------------------------------------
 
 // Les messages de refus d'un écran, et les motifs des lignes refusées d'un
@@ -582,7 +884,14 @@ function releverTheme(racine) {
   try {
     const textes = releverTextes(racine);
     const marques = releverMarques(racine);
-    return { textes, marques, teinte: fautesTeinte(racine, teintesDeConflit()) };
+    const section = racine.querySelector('[data-section="qualite"]');
+    return {
+      textes,
+      marques,
+      teinte: fautesTeinte(racine, teintesDeConflit()),
+      teintesGraphique: fautesTeintesGraphique(racine),
+      separation: section === null ? null : releverSeparation(section),
+    };
   } finally {
     window.scrollTo(0, 0);
   }
@@ -610,6 +919,7 @@ beforeAll(async () => {
       releve.etats = releverEtats(m);
       releve.listes = releverListes(racine);
       releve.signatureMode = signatureMode(racine);
+      releve.qualite = releverQualite(racine);
       releve.clair = releverTheme(racine);
       await cliquer(m, '[data-bandeau] [data-commande="theme"][data-theme-choix="sombre"]');
       await attendre('le thème sombre', () => document.documentElement.getAttribute('data-theme') === 'sombre');
@@ -750,7 +1060,15 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     }
   });
 
-  test('marques de graphique : le relevé d’un écran connaît MARQUES_GRAPHIQUE et les mesure à 3:1 ; une marque inconnue des deux listes et un fond de graphique restent hors du registre', () => {
+  test('le pont retiré : chaque marque de graphique est versée dans MARQUES, le seul registre que releverMarques lit', () => {
+    const noms = MARQUES.map(({ nom }) => nom);
+    expect(MARQUES_GRAPHIQUE.length).toBeGreaterThan(0);
+    for (const { nom } of MARQUES_GRAPHIQUE) expect(noms, nom).toContain(nom);
+    expect(SOURCE_CAPTURES).not.toMatch(/MARQUES_GRAPHIQUE|REGISTRE_MARQUES/);
+    expect(SOURCE_CAPTURES).toMatch(/const entree = MARQUES\.find\(/);
+  });
+
+  test('marques de graphique : le relevé d’un écran les connaît par MARQUES et les mesure à 3:1 ; une marque inconnue du registre et un fond de graphique restent hors du registre', () => {
     const { fautes, vues, mesures } = avecFragment(
       '<svg width="200" height="40" style="background:var(--couleur-carte-fond)">' +
         '<rect data-marque="graphiqueSerie1" x="4" y="4" width="24" height="24" style="fill:var(--couleur-graphique-serie-1)" />' +
@@ -813,6 +1131,115 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
       },
     );
     expect(vues).toEqual(['selection']);
+  });
+
+  test('qualité, pourcentages : un pourcentage sans compte, ou d’un compte vide, est relevé ; un « % » hors d’un pourcentage, d’une graduation de l’axe vertical du graphique en pourcentages et du repère « cent », sur le tracé ou dans sa légende, est relevé — une graduation de l’abscisse, un attribut annoncé compris', () => {
+    const { lus, dansInfobulle, dansJumeaux, fautes, signes } = avecFragment(
+      '<p><span data-pourcentage>88 %</span><span data-compte-pire>minimum 24 sur 27</span></p>' +
+        '<p><span data-pourcentage>50 %</span></p><p><span data-pourcentage>40 %</span><span data-compte-pire> </span></p>' +
+        '<div role="tooltip"><span data-pourcentage>7 %</span><span data-compte-pire>1 sur 14</span></div>' +
+        '<table data-jumeau="0"><tbody><tr><td><span data-pourcentage>9 %</span><span data-compte-pire>1 sur 11</span></td></tr></tbody></table>' +
+        '<p>12 %</p><button aria-label="9 %">x</button>' +
+        '<div><svg data-graphique="profilPourcentages" width="200" height="60">' +
+        '<text x="40" y="10" text-anchor="end">50 %</text><text data-repere="cent" x="60" y="30">100 %</text>' +
+        '<text data-serie="serie1" x="60" y="50">3 %</text><text x="80" y="58" text-anchor="middle">4 %</text></svg>' +
+        '<ul><li><span>100 %</span></li><li><span>7 %</span></li></ul></div>' +
+        '<svg data-graphique="profilComptes" width="200" height="30"><text x="40" y="10" text-anchor="end">20 %</text></svg>',
+      (c) => releverPourcentages(c),
+    );
+    expect([lus, dansInfobulle, dansJumeaux]).toEqual([5, 1, 1]);
+    expect(fautes).toHaveLength(2);
+    expect(fautes[0]).toContain('aucun [data-compte-pire]');
+    expect(fautes[1]).toContain('compte du pire est vide');
+    expect(signes.lus).toBe(14);
+    expect(signes.fautes).toHaveLength(6);
+    expect(signes.fautes.join('\n')).toContain('« 4 % »');
+    expect(signes.fautes.join('\n')).toContain('« 7 % »');
+    expect(signes.fautes.join('\n')).toMatch(/^p : « 12 % »/m);
+    expect(signes.fautes.join('\n')).toContain('[data-serie="serie1"]');
+    expect(signes.fautes.join('\n')).toContain('« 20 % »');
+    expect(signes.fautes.join('\n')).toContain('[aria-label] : « 9 % »');
+  });
+
+  test('qualité, niveaux : une grille rend les niveaux que portent ses cases, lus sur leur remplissage calculé ; une forme hors d’une case ne compte pas', () => {
+    const cases = [0, 2, 2]
+      .map((k, i) => `<g data-case="0:${i}"><rect x="${30 * i}" width="20" height="20" style="fill:var(--couleur-graphique-niveau-${k})" /></g>`)
+      .join('');
+    const grilles = avecFragment(
+      `<svg data-graphique="matrice" width="120" height="30">${cases}<rect x="100" width="10" height="10" style="fill:var(--couleur-graphique-niveau-3)" /></svg>`,
+      (c) => releverNiveaux(c),
+    );
+    expect(grilles).toEqual([{ graphique: 'matrice', niveaux: [0, 2] }]);
+  });
+
+  test('qualité, tracés : deux séries de même trait, une borne du motif d’une série, une règle « cent » d’un autre motif que le plafond, deux segments que seule la couleur sépare sont relevés', () => {
+    const trace = (attribut, jeton, motif) =>
+      `<path ${attribut} d="M10 10 H190" style="fill:none;stroke:var(${jeton});stroke-width:2px"${motif === null ? '' : ` stroke-dasharray="${motif}"`} />`;
+    const fragment = (motifs) =>
+      '<svg width="200" height="60">' +
+      trace('data-serie="serie1"', '--couleur-graphique-serie-1', motifs.serie1) +
+      trace('data-serie="serie2"', '--couleur-graphique-serie-2', motifs.serie2) +
+      trace('data-repere="plafond"', '--couleur-graphique-repere', motifs.plafond) +
+      trace('data-repere="borne"', '--couleur-graphique-borne', motifs.borne) +
+      trace('data-repere="cent"', '--couleur-graphique-repere', motifs.cent) +
+      '<rect data-segment="prouve" x="10" y="30" width="40" height="10" style="fill:var(--couleur-graphique-prouve)" />' +
+      `<rect data-segment="reste" x="50" y="30" width="40" height="10" style="fill:var(--couleur-graphique-reste)"${motifs.reste} /></svg>`;
+    const justes = { serie1: null, serie2: '6 4', plafond: '8 3 2 3', borne: '2 3', cent: '8 3 2 3', reste: ' stroke="#000" stroke-width="1"' };
+    const juste = avecFragment(fragment(justes), (c) => releverTraces(c));
+    expect(fautesTraces(juste)).toEqual([]);
+    const fautive = avecFragment(fragment({ ...justes, serie2: null, borne: null, cent: '2 3', reste: '' }), (c) => releverTraces(c));
+    const fautes = fautesTraces(fautive);
+    expect(fautes.some((f) => f.startsWith('série 1 / série 2'))).toBe(true);
+    expect(fautes.some((f) => f.startsWith('prouvé inévitable / reste'))).toBe(true);
+    expect(fautes.some((f) => f.startsWith('motif serie1 / borne'))).toBe(true);
+    expect(fautes.some((f) => f.startsWith('motif cent'))).toBe(true);
+    expect(fautesTraces({ traces: {}, segments: { prouve: [], reste: [] } }).some((f) => f.includes('paire absente'))).toBe(true);
+  });
+
+  test('qualité, séparation : une série peinte d’une couleur que la marque d’une teinte d’appartenance rendue ne quitte pas d’assez loin est relevée, sous chaque vue ; ses jetons passent ; sans série ou sans teinte, la paire absente', () => {
+    const fragment = (jetonSerie) =>
+      '<svg width="200" height="30">' +
+      `<path data-serie="serie1" d="M10 10 H190" style="fill:none;stroke:var(${jetonSerie});stroke-width:2px" /></svg>` +
+      '<span style="display:inline-block;width:12px;height:12px;background-color:var(--couleur-appartenance-2-marque)"></span>';
+    const juste = avecFragment(fragment('--couleur-graphique-serie-1'), (c) => releverSeparation(c));
+    expect(juste.series).toHaveLength(1);
+    expect(juste.teintes).toHaveLength(1);
+    expect(fautesSeparation(juste)).toEqual([]);
+    const fautes = fautesSeparation(avecFragment(fragment('--couleur-appartenance-2-marque'), (c) => releverSeparation(c)));
+    expect(fautes).toHaveLength(4);
+    expect(fautes[0]).toMatch(/^path\b.*span\b.*écart 0\.0 \(origine\)/);
+    expect(fautes.map((f) => /\(([a-z]+)\)/.exec(f)[1])).toEqual(['origine', ...Object.keys(SIMULATIONS)]);
+    expect(fautesSeparation({ series: juste.series, teintes: [] })).toEqual(['séries / teintes d’appartenance : paire absente (1 et 0)']);
+  });
+
+  test('qualité, teintes : une marque de graphique peinte d’une teinte d’appartenance ou du rouge du retrait est relevée ; une série de son jeton passe', () => {
+    const { fautes, lus } = avecFragment(
+      '<svg data-graphique="collisions" width="200" height="30">' +
+        '<rect data-marque="graphiqueSerie1" width="20" height="20" style="fill:var(--couleur-graphique-serie-1)" />' +
+        '<rect data-marque="graphiqueReste" x="40" width="20" height="20" style="fill:var(--couleur-appartenance-2-marque)" />' +
+        '<path data-marque="graphiqueRepere" d="M80 10 H150" style="fill:none;stroke:var(--couleur-retrait);stroke-width:2px" /></svg>',
+      (c) => fautesTeintesGraphique(c),
+    );
+    expect(lus).toBe(3);
+    expect(fautes).toHaveLength(2);
+    expect(fautes[0]).toContain('--couleur-appartenance-2-marque');
+    expect(fautes[1]).toContain('--couleur-retrait');
+  });
+
+  test('qualité, graphiques : un graphique sans rôle img, sans nom ou sans description est relevé, et deux graphiques de vues différentes du même nom', () => {
+    const graphique = (vue, nom, decrit) =>
+      `<div data-vue-qualite="${vue}"><span id="n-${vue}" hidden>${nom}</span><p id="d-${vue}">synthèse</p>` +
+      `<svg data-graphique="${vue}" role="img" width="40" height="20" aria-labelledby="n-${vue}"${decrit ? ` aria-describedby="d-${vue}"` : ''}></svg></div>`;
+    const fautes = avecFragment(
+      graphique('profil', 'Qui est mal servi ?', true) + graphique('paires', 'Qui est mal servi ?', true) + graphique('tables', '', false) +
+        '<svg data-graphique="nu" width="40" height="20"></svg>',
+      (c) => fautesGraphiques(releverGraphiques(c)),
+    );
+    expect(fautes).toHaveLength(6);
+    expect(fautes.filter((f) => f.includes('sans nom accessible'))).toHaveLength(2);
+    expect(fautes.filter((f) => f.includes('sans description'))).toHaveLength(2);
+    expect(fautes.filter((f) => f.includes('rôle absent'))).toHaveLength(1);
+    expect(fautes.filter((f) => f.includes('même nom'))).toHaveLength(1);
   });
 
   test('teintes réservées : un texte peint d’une teinte de conflit, et la trame d’une règle peinte de la teinte d’une autre, sont relevés ; une trame de sa propre teinte passe', () => {
@@ -1095,6 +1522,227 @@ describe('chaque écran de l’itération (§ 14.5, § 14.6, § 19.11)', () => {
     if (!/<html[^>]*\slang="fr"/.test(INDEX)) fautes.push('index.html : <html> sans lang="fr"');
     aucuneFaute(fautes, 'formulaires');
   });
+});
+
+// --- La page de qualité, sur ses écrans --------------------------------------------------
+
+// Les écrans nommés de la page de qualité (§ 12, § 12.7) : chacun atteint,
+// et chacun montre ce que son nom annonce.
+const ECRANS_QUALITE = [
+  'qualite.infobulle',
+  'qualite.jumeaux',
+  'qualite.jumeaux.lecture',
+  'qualite.jumeaux.bloque',
+  'qualite.paires',
+  'qualite.objectifs',
+  'qualite.performance',
+  'qualite.collisions.etroit',
+  'qualite.niveaux',
+  'qualite.tables.assis',
+  'qualite.tables.doublons',
+  'qualite.sansCourse',
+  'qualite.refus',
+];
+
+// Les vues de la page qui portent un jumeau : chaque source de vue qui rend
+// <Jumeau>, nommée par son data-vue-qualite, en ordre alphabétique.
+const SOURCES_VUES = import.meta.glob('./qualite/Vue*.svelte', { query: '?raw', import: 'default', eager: true });
+const VUES_A_JUMEAU = Object.values(SOURCES_VUES)
+  .filter((source) => /<Jumeau\b/.test(source))
+  .map((source) => /data-vue-qualite="([^"]+)"/.exec(source)?.[1] ?? source.slice(0, 60))
+  .sort();
+
+// Un segment « prouvé inévitable » étroit : 8 px de large au plus, où un
+// contour de 2 px de chaque côté ne laisse plus de vide.
+const PROUVE_ETROIT_PX = 8;
+
+// Les relevés des écrans atteints qui montrent la page de qualité.
+const deQualite = () => atteints().filter((r) => r.qualite !== null);
+const releveDe = (nom) => atteints().find((r) => r.nom === nom);
+
+describe('la page de qualité, sur chacun de ses écrans (§ 12.7, § 14.5, D30, D34, D43, D44)', () => {
+  test('chaque écran nommé de la page est atteint et la montre ; chacun rend ce que son nom annonce', () => {
+    const fautes = [];
+    for (const nom of ECRANS_QUALITE) {
+      const r = releveDe(nom);
+      if (r === undefined) fautes.push(`${nom} : non atteint`);
+      else if (r.qualite === null) fautes.push(`${nom} : la page de qualité absente`);
+    }
+    const q = (nom) => releveDe(nom)?.qualite ?? null;
+    if (q('qualite.infobulle') !== null && q('qualite.infobulle').pourcentages.dansInfobulle === 0) fautes.push('qualite.infobulle : aucun pourcentage dans l’infobulle');
+    for (const nom of ['qualite.jumeaux', 'qualite.objectifs', 'qualite.performance']) {
+      if (q(nom) !== null && q(nom).pourcentages.dansJumeaux === 0) fautes.push(`${nom} : aucun pourcentage dans un jumeau`);
+    }
+    if (q('qualite.objectifs') !== null && !q('qualite.objectifs').vuesJumeau.includes('objectifs')) fautes.push('qualite.objectifs : le jumeau des objectifs fermé');
+    if (q('qualite.performance') !== null && !q('qualite.performance').vuesJumeau.includes('performance')) fautes.push('qualite.performance : le jumeau de la performance fermé');
+    if (q('qualite.collisions.etroit') !== null && !q('qualite.collisions.etroit').prouvesCollisions.some((largeur) => largeur <= PROUVE_ETROIT_PX)) {
+      fautes.push(`qualite.collisions.etroit : aucun segment prouvé de ${PROUVE_ETROIT_PX} px au plus — largeurs [${q('qualite.collisions.etroit').prouvesCollisions.map((l) => l.toFixed(1))}]`);
+    }
+    if (q('qualite.performance') !== null && !(q('qualite.performance').course && q('qualite.performance').pointsReleve > 0)) fautes.push('qualite.performance : ni course ni point de relevé');
+    if (q('qualite.sansCourse') !== null && !q('qualite.sansCourse').phrases.includes('sansCourse')) fautes.push('qualite.sansCourse : la phrase « sansCourse » absente');
+    if (q('qualite.refus') !== null) {
+      if (!q('qualite.refus').phrases.includes('refusDessin')) fautes.push('qualite.refus : la phrase « refusDessin » absente');
+      if (q('qualite.refus').graphiques.length > 0) fautes.push('qualite.refus : un graphique dessiné malgré le refus');
+    }
+    if (q('qualite.paires') !== null && !q('qualite.paires').niveaux.some(({ graphique }) => graphique === 'matrice')) fautes.push('qualite.paires : la matrice non dessinée');
+    if (q('qualite.objectifs') !== null && !q('qualite.objectifs').graphiques.some(({ ou }) => ou.includes('objectifs'))) fautes.push('qualite.objectifs : le graphique des objectifs absent');
+    aucuneFaute(fautes, 'écrans de la qualité');
+  });
+
+  test('un jumeau ouvert en lecture et sur un plan bloqué : aucun refus rendu (l’écran lève à la moindre écriture)', () => {
+    const fautes = [];
+    for (const nom of ['qualite.jumeaux.lecture', 'qualite.jumeaux.bloque']) {
+      const r = releveDe(nom);
+      if (r === undefined) {
+        fautes.push(`${nom} : non atteint`);
+        continue;
+      }
+      if (r.qualite.jumeaux === 0) fautes.push(`${nom} : aucun jumeau ouvert`);
+      for (const refus of r.refus) fautes.push(`${nom} : refus ${refus.code}`);
+    }
+    aucuneFaute(fautes, 'jumeau en lecture et bloqué');
+  });
+
+  test('chaque pourcentage rendu est suivi, dans son composant, de son compte du pire, sur chaque écran de la page, infobulle et jumeaux compris — le jumeau de chaque vue qui en porte un ouvert sur un écran au moins', () => {
+    expect(deQualite().reduce((n, r) => n + r.qualite.pourcentages.lus, 0), 'pourcentages lus').toBeGreaterThan(0);
+    expect(VUES_A_JUMEAU.length, 'vues à jumeau').toBeGreaterThan(0);
+    const ouvertes = new Set(deQualite().flatMap((r) => r.qualite.vuesJumeau));
+    const fautes = VUES_A_JUMEAU.filter((vue) => !ouvertes.has(vue)).map((vue) => `${vue} : son jumeau ouvert sur aucun écran`);
+    fautes.push(...deQualite().flatMap((r) => r.qualite.pourcentages.fautes.map((f) => `${r.nom} — ${f}`)));
+    aucuneFaute(fautes, 'pourcentage et son compte');
+  });
+
+  test('le signe « % » ne s’écrit que dans un pourcentage, une graduation du graphique en pourcentages ou le libellé du repère « cent »', () => {
+    expect(deQualite().reduce((n, r) => n + r.qualite.pourcentages.signes.lus, 0), 'textes à « % » lus').toBeGreaterThan(0);
+    aucuneFaute(deQualite().flatMap((r) => r.qualite.pourcentages.signes.fautes.map((f) => `${r.nom} — ${f}`)), 'signe « % »');
+  });
+
+  test('chaque niveau de l’échelle est rendu : sur qualite.niveaux, la grille des tables et la matrice portent chacune les quatre ; sous les deux autres positions, la grille aussi', () => {
+    const fautes = [];
+    const tous = NIVEAUX_GRAPHIQUE.map(({ niveau }) => niveau);
+    for (const [nom, graphiques] of [
+      ['qualite.niveaux', ['tables', 'matrice']],
+      ['qualite.tables.assis', ['tables']],
+      ['qualite.tables.doublons', ['tables']],
+    ]) {
+      const grilles = releveDe(nom)?.qualite?.niveaux ?? [];
+      for (const graphique of graphiques) {
+        const niveaux = grilles.find((g) => g.graphique === graphique)?.niveaux ?? [];
+        if (niveaux.join() !== tous.join()) fautes.push(`${nom} : ${graphique} rend les niveaux [${niveaux}], [${tous}] attendus`);
+      }
+    }
+    const rendus = new Set(deQualite().flatMap((r) => r.qualite.niveaux.flatMap(({ niveaux }) => niveaux)));
+    for (const niveau of tous) if (!rendus.has(niveau)) fautes.push(`niveau ${niveau} : rendu sur aucun écran`);
+    aucuneFaute(fautes, 'niveaux de l’échelle');
+  });
+
+  test('jamais la seule couleur : série 1 / série 2, prouvé inévitable / reste — un segment prouvé étroit compris ; le plafond, la borne et chaque série, quatre motifs deux à deux distincts ; la règle « cent » au motif du plafond', () => {
+    // Chaque liste réunie ne garde que la première occurrence de chaque
+    // signature et de chaque motif : une faute se nomme une fois, sur le
+    // premier écran qui la montre.
+    const reunis = { traces: {}, segments: { prouve: [], reste: [] } };
+    const ajouter = (cible, liste, nom) => {
+      for (const x of liste) {
+        if (!cible.some((y) => y.sig === x.sig && y.motif === x.motif)) cible.push({ ...x, ou: `${nom} ${x.ou}` });
+      }
+    };
+    for (const r of deQualite()) {
+      const { traces, segments } = r.qualite.traces;
+      for (const [genre, liste] of Object.entries(traces)) ajouter((reunis.traces[genre] ??= []), liste, r.nom);
+      for (const genre of ['prouve', 'reste']) ajouter(reunis.segments[genre], segments[genre], r.nom);
+    }
+    aucuneFaute([...new Set(fautesTraces(reunis))], 'jamais la seule couleur (graphiques)');
+  });
+
+  test('chaque série rendue se sépare de chaque teinte d’appartenance rendue, sur les couleurs d’origine et sous les trois dichromaties, dans les deux thèmes', () => {
+    const fautes = [];
+    for (const theme of THEMES) {
+      // Les couleurs réunies de tous les écrans, chacune nommée sur le
+      // premier qui la peint.
+      const reunis = { series: [], teintes: [] };
+      for (const r of deQualite()) {
+        for (const genre of ['series', 'teintes']) {
+          for (const x of r[theme].separation[genre]) {
+            if (!reunis[genre].some((y) => egales(y.couleur, x.couleur))) reunis[genre].push({ ...x, ou: `${r.nom} ${x.ou}` });
+          }
+        }
+      }
+      fautes.push(...fautesSeparation(reunis).map((f) => `[${theme}] ${f}`));
+    }
+    aucuneFaute(fautes, 'séries et teintes d’appartenance');
+  });
+
+  test('aucune teinte d’appartenance ni le rouge du retrait sur une marque de graphique, dans les deux thèmes', () => {
+    for (const theme of THEMES) {
+      expect(deQualite().reduce((n, r) => n + r[theme].teintesGraphique.lus, 0), `marques de graphique lues [${theme}]`).toBeGreaterThan(0);
+    }
+    const fautes = deQualite().flatMap((r) => THEMES.flatMap((theme) => r[theme].teintesGraphique.fautes.map((f) => `${r.nom} [${theme}] — ${f}`)));
+    aucuneFaute([...new Set(fautes)], 'teintes des graphiques');
+  });
+
+  test('chaque graphique est une image nommée par sa question et décrite par sa synthèse ; deux vues ne nomment jamais deux graphiques du même nom', () => {
+    expect(deQualite().reduce((n, r) => n + r.qualite.graphiques.length, 0), 'graphiques lus').toBeGreaterThan(0);
+    aucuneFaute([...new Set(deQualite().flatMap((r) => fautesGraphiques(r.qualite.graphiques).map((f) => `${r.nom} — ${f}`)))], 'graphiques nommés et décrits');
+  });
+
+  // Les charges que l'épreuve du clavier ouvre sur la page : chacune rend
+  // { charge, fichiers }, fichiers posés dans les Documents. Ensemble, elles
+  // montrent chaque vue qui porte un jumeau.
+  const CHARGES_CLAVIER = [
+    ['principale', () => ({ charge: chargePrincipale(), fichiers: [] })],
+    ['paires', () => ({ charge: chargePaires(), fichiers: [] })],
+    ['objectifs', () => ({ charge: chargeObjectifs(), fichiers: [] })],
+    [
+      'performance',
+      () => {
+        const { charge, courses } = generationPrincipale();
+        return { charge, fichiers: [fichierCourses(charge, courses)] };
+      },
+    ],
+  ];
+
+  test('au clavier : chaque jumeau de la page s’ouvre et se ferme par Entrée, le focus jamais sur body, celui de chaque vue qui en porte un ; Échap ferme l’infobulle', async () => {
+    const vues = new Set();
+    for (const [nom, preparer] of CHARGES_CLAVIER) {
+      const contexte = creerContexte({ langue: 'temoin', theme: 'clair' });
+      try {
+        const { charge, fichiers } = preparer();
+        const m = await ouvrirEvenement(contexte, charge, { section: 'qualite', options: { fichiers } });
+        await attendre(`la page de qualité dessinée (${nom})`, () => m.racine.querySelector('[data-section="qualite"] svg[data-graphique] [data-marque]'));
+        const commandes = [...m.racine.querySelectorAll('[data-section="qualite"] [data-commande="ouvrirJumeau"]')];
+        expect(commandes.length, `commandes de jumeau (${nom})`).toBeGreaterThan(0);
+        for (const commande of commandes) {
+          const vue = commande.closest('[data-vue-qualite]')?.dataset.vueQualite ?? null;
+          commande.focus();
+          await touche('Enter');
+          await attendre(`le jumeau de ${vue} ouvert au clavier (${nom})`, () => {
+            const tableaux = document.getElementById(commande.getAttribute('aria-controls') ?? '');
+            return commande.getAttribute('aria-expanded') === 'true' && commande.dataset.commande === 'fermerJumeau' && tableaux?.querySelector('[data-jumeau]');
+          });
+          expect(document.activeElement, `focus après l’ouverture (${nom}, ${vue})`).toBe(commande);
+          await touche('Enter');
+          await attendre(`le jumeau de ${vue} refermé au clavier (${nom})`, () => commande.getAttribute('aria-expanded') === 'false' && commande.dataset.commande === 'ouvrirJumeau');
+          expect(document.activeElement, `focus après la fermeture (${nom}, ${vue})`).toBe(commande);
+          expect(document.activeElement).not.toBe(document.body);
+          vues.add(vue);
+        }
+        if (nom === 'principale') {
+          const { x, y } = await centre(m.racine.querySelector('[data-graphique="profilComptes"] > rect[pointer-events="all"]'));
+          await pointer('bouger', x, y);
+          const bulle = await attendre("l'infobulle du profil", () => {
+            const trouvee = m.racine.querySelector('[data-vue-qualite="profil"] [role="tooltip"]');
+            return trouvee !== null && !trouvee.hidden ? trouvee : null;
+          });
+          await touche('Escape');
+          await attendre("l'infobulle fermée par Échap", () => bulle.hidden);
+        }
+        expect(contexte.erreurs(), `erreurs (${nom})`).toEqual([]);
+      } finally {
+        await contexte.defaire();
+      }
+    }
+    expect([...vues].filter((vue) => vue !== null).sort(), 'vues dont le jumeau s’ouvre au clavier').toEqual(expect.arrayContaining(VUES_A_JUMEAU));
+  }, 240_000);
 });
 
 // --- Le balisage littéral -------------------------------------------------------------------

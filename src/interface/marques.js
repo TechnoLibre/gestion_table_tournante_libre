@@ -19,11 +19,12 @@
 // fonds. Un signe ne porte jamais seul une information : un libellé
 // l'accompagne toujours.
 //
-// La famille « graphique » (§ 12.7, § 13.3) a ses listes à part :
-// MARQUES_GRAPHIQUE, TEXTES_GRAPHIQUE et FONDS_GRAPHIQUE, de même forme,
-// validées par calcul comme les autres. Elles restent hors de MARQUES et de
-// TEXTES tant qu'aucun écran ne les rend : la garde transversale exige que
-// chaque entrée de MARQUES soit rendue sur un écran.
+// La famille « graphique » (§ 12.7, § 13.3) a ses listes :
+// MARQUES_GRAPHIQUE et TEXTES_GRAPHIQUE, de même forme, versées à la fin de
+// MARQUES et de TEXTES — les écrans de la page de qualité les rendent, et la
+// garde transversale exige que chaque entrée de MARQUES soit rendue sur un
+// écran ; FONDS_GRAPHIQUE, la grille et le niveau 0, qui ne portent aucune
+// information et restent hors de toute mesure.
 
 const c = (nom) => `--couleur-${nom}`;
 
@@ -122,93 +123,6 @@ export const SIGNES = Object.freeze([
   marque('actionPrincipale', 'action-fond', SURFACES),
 ]);
 
-/** Les marques porteuses d'information (§ 14.5) : { nom, jeton, fonds, seuil: 3 } — nom, la
- *  désignation data-marque ; jeton, celui qui la peint ; fonds, chaque jeton sur lequel elle
- *  se peint, chaque remplissage d'une chaise pour une marque qui passe sur une chaise. */
-export const MARQUES = Object.freeze([
-  // Sur la chaise (§ 7.6) : cadenas posés sur ses remplissages ; l'anneau
-  // l'entoure, sur le sol et le bord du plateau qu'elle touche.
-  marque('cadenasFerme', 'marque', REMPLISSAGES_CHAISE),
-  marque('cadenasOuvert', 'marque', REMPLISSAGES_CHAISE),
-  marque('anneau', 'marque', ['sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
-  marque('hachure', 'hachure', ['chaise-fond']),
-  marque('remplissagePlein', 'chaise-pleine', ['sol', 'table-fond']),
-  // Le conflit (§ 7.5) : contour épaissi sur le sol, commun aux trois
-  // règles et peint de l'encre forte du plan ; une trame par règle violée
-  // sur le plateau, chacune de sa teinte, ses traits détachés par un halo
-  // du fond du plateau ; pastille chiffrée près de la table.
-  marque('contourConflit', 'contour-fort', ['sol', 'table-fond']),
-  ...SORTES_CONFLIT.map(([, trame, jeton]) => marque(trame, jeton, ['table-fond'])),
-  marque('pastille', 'pastille-fond', ['sol', 'table-fond']),
-  marque('poignee', 'poignee', ['sol']),
-  marque('gel', 'gel', ['sol', 'table-fond']),
-  // La désignation se pose sur la page, le sol, le plateau et une chaise
-  // vide, pourvue ou à pourvoir : chacun de ses remplissages est un fond.
-  marque('miseEnEvidence', 'mise-en-evidence', ['page-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
-  // La sélection marque aussi une colonne du tableau des propositions, sur la
-  // carte, son fond sourd et la ligne du retenu.
-  marque('selection', 'selection', ['page-fond', 'carte-fond', 'carte-fond-sourd', 'etat-retenu-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
-  marque('focus', 'focus', ['page-fond', 'bandeau-fond', 'carte-fond', 'carte-fond-sourd', 'etat-retenu-fond', 'action-teinte', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
-  // Le mobilier sur le sol : le trait de la table, celui de la chaise, qui
-  // touche aussi le plateau.
-  marque('contourTable', 'table-trait', ['sol']),
-  marque('contourChaise', 'chaise-trait', ['sol', 'table-fond']),
-  // L'échelle graphique (§ 7.7) vit dans la surface du plan, sur le sol ou la
-  // page ; le fantôme d'un glissement passe sur le sol, les tables et les
-  // chaises.
-  marque('echelle', 'echelle', ['sol', 'page-fond']),
-  marque('fantome', 'fantome', ['sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
-  // Le signe du chargement d'une valeur de la liste des événements (§ 8.1) :
-  // un arc tracé de l'encre secondaire, dans une cellule du tableau, sur la
-  // carte.
-  marque('chargement', 'page-texte-secondaire', ['carte-fond']),
-  // Le filigrane BROUILLON (§ 11.7) : un texte au trait, par-dessus le
-  // contenu d'une feuille imprimée, mesuré sur le papier, clair dans les
-  // deux thèmes.
-  marque('filigrane', 'filigrane', ['papier']),
-  // La croix cerclée d'un retrait, seul contenu de son bouton : sur la
-  // carte, et sur son fond sourd, celui du survol.
-  marque('retrait', 'retrait', ['carte-fond', 'carte-fond-sourd']),
-]);
-
-// Les fonds teintés d'une pastille : ceux de ses teintes, puis ceux des
-// messages, qu'un statut reprend, et la teinte de l'action.
-const FONDS_ETIQUETTE = [
-  ...TEINTES_DE_PASTILLE.map(([, teinte]) => `${teinte}-fond`),
-  'avis-fond',
-  'refus-fond',
-  'information-fond',
-  'action-teinte',
-];
-
-/** Les textes et leurs fonds, même forme, seuil 4,5 : page, secondaire,
- *  bandeau, refus, avis, listes du plan sur le sol, pastille du plan ; puis
- *  l'encre de la page sur la carte, l'encre secondaire sur la carte, le
- *  texte d'une étiquette — l'encre de la page sur chaque fond teinté de
- *  pastille (§ 12.7) —, celui de la bande de mode, la version et la
- *  provenance du bandeau, le thème retenu du bandeau, aux couleurs du
- *  bandeau inversées, le texte de l'action principale, un lien ou un texte
- *  mis en valeur de l'encre de l'action, et l'information. Le refus, l'avis
- *  et l'information gardent l'encre de leur message, sur son fond. */
-export const TEXTES = Object.freeze([
-  texte('page', 'page-texte', ['page-fond']),
-  texte('secondaire', 'page-texte-secondaire', ['page-fond']),
-  texte('bandeau', 'bandeau-texte', ['bandeau-fond']),
-  texte('refus', 'refus', ['page-fond', 'refus-fond', 'carte-fond']),
-  texte('avis', 'avis', ['page-fond', 'avis-fond', 'carte-fond']),
-  texte('listes', 'liste-texte', ['sol']),
-  texte('pastille', 'pastille-texte', ['pastille-fond']),
-  texte('carte', 'page-texte', ['carte-fond', 'carte-fond-sourd']),
-  texte('secondaireCarte', 'page-texte-secondaire', ['carte-fond', 'carte-fond-sourd']),
-  texte('etiquette', 'page-texte', FONDS_ETIQUETTE),
-  texte('bandeMode', 'page-texte', ['mode-ecriture-fond', 'mode-lecture-fond', 'mode-bloque-fond']),
-  texte('bandeauSecondaire', 'bandeau-texte-secondaire', ['bandeau-fond']),
-  texte('bandeauChoisi', 'bandeau-fond', ['bandeau-texte']),
-  texte('action', 'action-texte', ['action-fond']),
-  texte('lien', 'action-encre', ['page-fond', 'carte-fond', 'carte-fond-sourd', 'action-teinte']),
-  texte('information', 'information', ['information-fond', 'page-fond', 'carte-fond']),
-]);
-
 // --- La famille « graphique » (§ 12.7, § 13.3, D30, D43) ---------------------
 
 const graphique = (nom) => `graphique-${nom}`;
@@ -288,3 +202,96 @@ export const FONDS_GRAPHIQUE = Object.freeze(
     ['graphiqueNiveau0', 'niveau-0'],
   ].map(([nom, jeton]) => Object.freeze({ nom, jeton: c(graphique(jeton)) })),
 );
+
+/** Les marques porteuses d'information (§ 14.5) : { nom, jeton, fonds, seuil: 3 } — nom, la
+ *  désignation data-marque ; jeton, celui qui la peint ; fonds, chaque jeton sur lequel elle
+ *  se peint, chaque remplissage d'une chaise pour une marque qui passe sur une chaise. Celles
+ *  du plan et des écrans, puis celles des graphiques (MARQUES_GRAPHIQUE), les mêmes entrées. */
+export const MARQUES = Object.freeze([
+  // Sur la chaise (§ 7.6) : cadenas posés sur ses remplissages ; l'anneau
+  // l'entoure, sur le sol et le bord du plateau qu'elle touche.
+  marque('cadenasFerme', 'marque', REMPLISSAGES_CHAISE),
+  marque('cadenasOuvert', 'marque', REMPLISSAGES_CHAISE),
+  marque('anneau', 'marque', ['sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  marque('hachure', 'hachure', ['chaise-fond']),
+  marque('remplissagePlein', 'chaise-pleine', ['sol', 'table-fond']),
+  // Le conflit (§ 7.5) : contour épaissi sur le sol, commun aux trois
+  // règles et peint de l'encre forte du plan ; une trame par règle violée
+  // sur le plateau, chacune de sa teinte, ses traits détachés par un halo
+  // du fond du plateau ; pastille chiffrée près de la table.
+  marque('contourConflit', 'contour-fort', ['sol', 'table-fond']),
+  ...SORTES_CONFLIT.map(([, trame, jeton]) => marque(trame, jeton, ['table-fond'])),
+  marque('pastille', 'pastille-fond', ['sol', 'table-fond']),
+  marque('poignee', 'poignee', ['sol']),
+  marque('gel', 'gel', ['sol', 'table-fond']),
+  // La désignation se pose sur la page, le sol, le plateau et une chaise
+  // vide, pourvue ou à pourvoir : chacun de ses remplissages est un fond.
+  marque('miseEnEvidence', 'mise-en-evidence', ['page-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  // La sélection marque aussi une colonne du tableau des propositions, sur la
+  // carte, son fond sourd et la ligne du retenu.
+  marque('selection', 'selection', ['page-fond', 'carte-fond', 'carte-fond-sourd', 'etat-retenu-fond', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  marque('focus', 'focus', ['page-fond', 'bandeau-fond', 'carte-fond', 'carte-fond-sourd', 'etat-retenu-fond', 'action-teinte', 'sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  // Le mobilier sur le sol : le trait de la table, celui de la chaise, qui
+  // touche aussi le plateau.
+  marque('contourTable', 'table-trait', ['sol']),
+  marque('contourChaise', 'chaise-trait', ['sol', 'table-fond']),
+  // L'échelle graphique (§ 7.7) vit dans la surface du plan, sur le sol ou la
+  // page ; le fantôme d'un glissement passe sur le sol, les tables et les
+  // chaises.
+  marque('echelle', 'echelle', ['sol', 'page-fond']),
+  marque('fantome', 'fantome', ['sol', 'table-fond', ...REMPLISSAGES_CHAISE]),
+  // Le signe du chargement d'une valeur de la liste des événements (§ 8.1) :
+  // un arc tracé de l'encre secondaire, dans une cellule du tableau, sur la
+  // carte.
+  marque('chargement', 'page-texte-secondaire', ['carte-fond']),
+  // Le filigrane BROUILLON (§ 11.7) : un texte au trait, par-dessus le
+  // contenu d'une feuille imprimée, mesuré sur le papier, clair dans les
+  // deux thèmes.
+  marque('filigrane', 'filigrane', ['papier']),
+  // La croix cerclée d'un retrait, seul contenu de son bouton : sur la
+  // carte, et sur son fond sourd, celui du survol.
+  marque('retrait', 'retrait', ['carte-fond', 'carte-fond-sourd']),
+  // Les graphiques de la page de qualité (§ 12.7).
+  ...MARQUES_GRAPHIQUE,
+]);
+
+// Les fonds teintés d'une pastille : ceux de ses teintes, puis ceux des
+// messages, qu'un statut reprend, et la teinte de l'action.
+const FONDS_ETIQUETTE = [
+  ...TEINTES_DE_PASTILLE.map(([, teinte]) => `${teinte}-fond`),
+  'avis-fond',
+  'refus-fond',
+  'information-fond',
+  'action-teinte',
+];
+
+/** Les textes et leurs fonds, même forme, seuil 4,5 : page, secondaire,
+ *  bandeau, refus, avis, listes du plan sur le sol, pastille du plan ; puis
+ *  l'encre de la page sur la carte, l'encre secondaire sur la carte, le
+ *  texte d'une étiquette — l'encre de la page sur chaque fond teinté de
+ *  pastille (§ 12.7) —, celui de la bande de mode, la version et la
+ *  provenance du bandeau, le thème retenu du bandeau, aux couleurs du
+ *  bandeau inversées, le texte de l'action principale, un lien ou un texte
+ *  mis en valeur de l'encre de l'action, et l'information. Le refus, l'avis
+ *  et l'information gardent l'encre de leur message, sur son fond. Puis les
+ *  deux encres des comptes d'une case de graphique (TEXTES_GRAPHIQUE), les
+ *  mêmes entrées. */
+export const TEXTES = Object.freeze([
+  texte('page', 'page-texte', ['page-fond']),
+  texte('secondaire', 'page-texte-secondaire', ['page-fond']),
+  texte('bandeau', 'bandeau-texte', ['bandeau-fond']),
+  texte('refus', 'refus', ['page-fond', 'refus-fond', 'carte-fond']),
+  texte('avis', 'avis', ['page-fond', 'avis-fond', 'carte-fond']),
+  texte('listes', 'liste-texte', ['sol']),
+  texte('pastille', 'pastille-texte', ['pastille-fond']),
+  texte('carte', 'page-texte', ['carte-fond', 'carte-fond-sourd']),
+  texte('secondaireCarte', 'page-texte-secondaire', ['carte-fond', 'carte-fond-sourd']),
+  texte('etiquette', 'page-texte', FONDS_ETIQUETTE),
+  texte('bandeMode', 'page-texte', ['mode-ecriture-fond', 'mode-lecture-fond', 'mode-bloque-fond']),
+  texte('bandeauSecondaire', 'bandeau-texte-secondaire', ['bandeau-fond']),
+  texte('bandeauChoisi', 'bandeau-fond', ['bandeau-texte']),
+  texte('action', 'action-texte', ['action-fond']),
+  texte('lien', 'action-encre', ['page-fond', 'carte-fond', 'carte-fond-sourd', 'action-teinte']),
+  texte('information', 'information', ['information-fond', 'page-fond', 'carte-fond']),
+  ...TEXTES_GRAPHIQUE,
+]);

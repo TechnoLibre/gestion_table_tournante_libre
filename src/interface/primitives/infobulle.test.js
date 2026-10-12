@@ -65,6 +65,21 @@ describe('placerInfobulle : sous le terme, au-dessus, dans le cadre', () => {
     assert.ok(dansLeCadre(boite(haut, haute), petit), JSON.stringify(haut));
   });
 
+  test('rouge : un cadre borné en haut et en bas — la zone visible où défile le terme, sous un bandeau collant — : l’infobulle n’en sort jamais, quitte à couvrir le terme ; sans bornes, la fenêtre', () => {
+    // Sous la zone, elle monte ; au-dessus de la zone, elle descend.
+    assert.deepEqual(placerInfobulle(terme(200, 500), TAILLE, { largeur: 1366, hauteur: 700, bas: 600 }), { gauche: 200, haut: 404, cote: 'dessus' });
+    assert.deepEqual(placerInfobulle(terme(200, 600), TAILLE, { largeur: 1366, hauteur: 700, haut: 560, bas: 690 }), { gauche: 200, haut: 592, cote: 'dessous' });
+    const zone = { largeur: 1366, hauteur: 700, haut: 260, bas: 690 };
+    for (let haut = zone.haut; haut <= zone.bas - 20; haut += 11) {
+      const b = boite(placerInfobulle(terme(200, haut), TAILLE, zone), TAILLE);
+      assert.ok(b.haut >= zone.haut + MARGE_INFOBULLE_PX && b.bas <= zone.bas - MARGE_INFOBULLE_PX, `${haut} : ${JSON.stringify(b)}`);
+    }
+    const ancre = terme(200, 300);
+    assert.deepEqual(placerInfobulle(ancre, TAILLE, { ...CADRE, haut: 0, bas: 700 }), placerInfobulle(ancre, TAILLE, CADRE));
+    const debordante = { ...CADRE, haut: -40, bas: 900 };
+    assert.deepEqual(placerInfobulle(terme(200, 640), TAILLE, debordante), placerInfobulle(terme(200, 640), TAILLE, CADRE), 'la zone se borne à la fenêtre');
+  });
+
   test('sur une grille de termes qui couvre le cadre : dès qu’un côté la reçoit, l’infobulle reste dans le cadre et ne couvre jamais le terme', () => {
     let essais = 0;
     for (let gauche = -100; gauche <= CADRE.largeur; gauche += 37) {

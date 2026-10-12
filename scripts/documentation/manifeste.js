@@ -38,12 +38,21 @@ const capture = (fichier, etape, configuration, source = 'navigateur') => Object
 // des étiquettes, des objectifs et de l'ordre des priorités : 04a, 05a, 05b,
 // 10a (A22). « configuration » nomme ce que la capture exige : le répertoire
 // neuf, le fichier d'import d'exemples/, l'identifiant de démonstration du
-// catalogue, ou l'événement que le parcours construit puis retient. L'étape
-// place une capture dans le guide, la configuration dit sur quoi elle se
-// prend : les deux 07a, à l'étape 4, se photographient sur la grande
-// démonstration que le parcours charge pour 10 ; 05b, sur l'exemple des
-// objectifs importé dans l'événement construit ; 10a, à l'étape 9 où l'ordre
-// des priorités se règle à côté de la génération (§ 2.1).
+// catalogue, l'événement que le parcours construit puis retient, ou, préfixée
+// de « construite- », une configuration qu'un scénario court du parcours
+// construit. L'étape place une capture dans le guide, la configuration dit
+// sur quoi elle se prend : les deux 07a, à l'étape 4, se photographient sur
+// la grande démonstration que le parcours charge pour 10 ; 05b, sur
+// l'exemple des objectifs importé dans l'événement construit ; 10a, à
+// l'étape 9 où l'ordre des priorités se règle à côté de la génération
+// (§ 2.1).
+//
+// Les captures de la page de qualité, 12 à 16 et leurs voisines en « a » à
+// « g » (B27), illustrent l'étape 10 et se prennent à la fin du parcours,
+// chacune sur sa charge : la grande démonstration, la petite, sa variante
+// « conflit inévitable », l'événement construit, ou l'une des six
+// configurations construites — les cinq cas limites 12b à 12e et 12g, et
+// les paires de 14 et 14a.
 export const CAPTURES = Object.freeze([
   capture('01-premier-ecran', '1', 'repertoire-neuf'),
   capture('01b-passer-en-ecriture', '1b', 'repertoire-neuf'),
@@ -65,6 +74,23 @@ export const CAPTURES = Object.freeze([
   capture('10-diagnostic', '8', 'grande'),
   capture('10a-ordre-priorites', '9', 'evenement-construit'),
   capture('11-propositions', '9', 'evenement-construit'),
+  capture('12-qualite-profil', '10', 'grande'),
+  capture('12a-qualite-sans-placement', '10', 'petite-conflit'),
+  capture('12b-qualite-une-table', '10', 'construite-une-table'),
+  capture('12c-qualite-un-tour', '10', 'construite-un-tour'),
+  capture('12d-qualite-une-appartenance', '10', 'construite-une-appartenance'),
+  capture('12e-qualite-sans-collision', '10', 'construite-sans-collision'),
+  capture('12f-qualite-reserve', '10', 'petite-conflit'),
+  capture('12g-qualite-plafond-nul', '10', 'construite-plafond-nul'),
+  capture('13-qualite-collisions', '10', 'petite-conflit'),
+  capture('13a-qualite-tables', '10', 'petite-conflit'),
+  capture('14-qualite-paires', '10', 'construite-paires'),
+  capture('14a-fiche-rencontres', '10', 'construite-paires'),
+  capture('15-pas-de-matrice', '10', 'grande'),
+  capture('15a-qualite-objectifs', '10', 'evenement-construit'),
+  capture('15b-qualite-animateurs', '10', 'grande'),
+  capture('15c-qualite-performance', '10', 'grande'),
+  capture('16-minimum-atteint', '10', 'petite'),
   capture('19-ajustement', '11', 'evenement-retenu'),
   capture('20-mode-lecture', '11', 'evenement-retenu'),
   capture('22-plan-brouillon', '12', 'evenement-retenu'),
@@ -75,14 +101,10 @@ export const CAPTURES = Object.freeze([
 
 const reportee = (fichier, etape) => Object.freeze({ fichier, etape, raison: 'iteration5' });
 
-// Les captures des écrans que l'itération 5 livre (Q8 a) : déclarées à leur
+// Les captures des écrans que le logiciel n'offre pas encore — la
+// comparaison de deux propositions et la vue d'historique : déclarées à leur
 // étape, sans image ; le contrôle d'ordre les compte comme présentes.
 export const REPORTEES = Object.freeze([
-  reportee('12-qualite-profil', '10'),
-  reportee('13-qualite-collisions', '10'),
-  reportee('14-qualite-paires', '10'),
-  reportee('15-pas-de-matrice', '10'),
-  reportee('16-minimum-atteint', '10'),
   reportee('17-comparaison-manque', '10'),
   reportee('18-comparaison-escalier', '10'),
   reportee('21-historique', '11'),

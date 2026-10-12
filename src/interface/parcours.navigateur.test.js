@@ -24,11 +24,20 @@
 // et reglages_locaux.json (§ 11.6), puis l'ordre de lecture du § 2.1 sur
 // l'événement retenu, les fenêtres — aucune pendant un geste non
 // destructeur, une qui nomme ce qui part pour chaque geste qui détruit —,
-// enfin chaque famille de geste modifiant en lecture puis sur un plan
-// bloqué. Les valeurs attendues viennent du moteur, du CSV et du stockage,
-// sollicités une seconde fois (§ 19.1), et le texte de la même traduction
-// que celle de l'application. Aucun délai fixe : chaque étape attend un
-// état du document (§ 19.3).
+// puis chaque famille de geste modifiant en lecture puis sur un plan
+// bloqué, enfin la page de qualité de l'étape 10 (B27). Ses captures se
+// prennent toutes après les familles, chacune sur sa charge, pour ne rien
+// changer de ce que 10a, 11, 19, 20 et les familles reçoivent : 12, 15, 15b
+// et 15c sur la grande démonstration rouverte et générée sous la graine
+// écrite, au compte réduit de la grande, la durée de 15c pilotée par le
+// relais de l'exécuteur ; 12a, 13, 13a puis 12f sur la variante « conflit
+// inévitable » ; 12b à 12e et 12g, chacune sur une configuration qu'un
+// scénario court construit et génère ; 14 et 14a sur celle des paires ;
+// 15a sur l'événement construit, rouvert, débloqué et généré de nouveau ;
+// 16 sur la petite démonstration. Les valeurs attendues viennent du
+// moteur, du CSV et du stockage, sollicités une seconde fois (§ 19.1), et
+// le texte de la même traduction que celle de l'application. Aucun délai
+// fixe : chaque étape attend un état du document (§ 19.3).
 //
 // Une épreuve qui porte une capture finit, ses conditions affirmées, par
 // photographier (test/navigateur/captures.js), ou, pour une page du PDF de
@@ -60,8 +69,10 @@ import { apercevoir } from '../csv/apercu.js';
 import { decoder } from '../csv/encodage.js';
 import { decouper } from '../csv/lecture.js';
 import { CATALOGUE } from '../demo/catalogue.js';
+import { constante } from '../geometrie/constantes.js';
 import { regimeCibles } from '../geometrie/designation.js';
 import { echelleGraphique } from '../geometrie/echelle.js';
+import { niveau } from '../geometrie/graphique.js';
 import { diametre, geometrieTable } from '../geometrie/tables.js';
 import { vueDepuisTransform } from '../geometrie/vue.js';
 import { classer } from '../moteur/classement.js';
@@ -98,6 +109,7 @@ import { visible } from '../../test/navigateur/rendu.js';
 import { ENCODAGES, SEPARATEURS } from './import/modele.js';
 import { TABLES_INTERFACE } from './libelles.js';
 import { LARGEUR_ECHELLE_PX } from './plan/modele.js';
+import { colonneDeValeur } from './propositions/modele.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 
@@ -234,6 +246,36 @@ const epreuvesEnEchec = [];
 // proposition retenue, la charge d'avant l'ajustement de 19.
 const memoire = {};
 
+// Le pas dont le relais avance l'horloge pilotée à chaque avancement du
+// moteur, pendant la génération de la grande démonstration de la page de
+// qualité : la durée que 15c affiche vaut le nombre d'avancements multiplié
+// par ce pas, la même à chaque exécution (§ 19.3, § 19.4).
+const PAS_HORLOGE_GENERATION_MS = 250;
+
+// Le relais d'épreuve : armé, il compte chaque avancement que le moteur
+// publie et avance d'autant l'horloge pilotée du montage, dont le
+// contrôleur de génération lit la durée du calcul ; désarmé, il est inerte.
+const relais = { arme: false, avancements: 0 };
+
+// L'exécuteur enveloppé du relais : les mêmes cœurs annoncés, le même
+// calcul ; l'abonnement aux avancements se pose avant que le moteur ne
+// tourne, dans la tâche que lancer rend, et seulement sous le relais armé.
+function relayer(executeur) {
+  return {
+    coeursDisponibles: executeur.coeursDisponibles,
+    lancer(configuration, reglages, options) {
+      const execution = executeur.lancer(configuration, reglages, options);
+      if (relais.arme) {
+        execution.surAvancement(() => {
+          relais.avancements += 1;
+          m.horloge.avancer(PAS_HORLOGE_GENERATION_MS);
+        });
+      }
+      return execution;
+    },
+  };
+}
+
 // En écriture, le dossier d'attente part vide : le dépôt d'un passage
 // interrompu ne se publie jamais avec celui-ci.
 beforeAll(async () => {
@@ -241,7 +283,7 @@ beforeAll(async () => {
   retirerFeuille = poserFeuille();
   await commands.requetesHorsBoucle();
   if (modeFourni() === 'ecrire') await commands.viderAttente();
-  m = await monterApp({ provenance: 'documentation', executeur: creerExecuteurDirect({ coeursDisponibles: 4 }) });
+  m = await monterApp({ provenance: 'documentation', executeur: relayer(creerExecuteurDirect({ coeursDisponibles: 4 })) });
 });
 
 // La capture d'un échec prend pour nom de fichier le titre de son groupe et
@@ -458,6 +500,24 @@ async function cadrerDansLaSurface(elements) {
   const visibleBas = Math.min(cadre.top + porteur.clientTop + porteur.clientHeight, innerHeight);
   expect(bas - haut, 'les éléments à montrer tiennent dans la hauteur visible de leur surface').toBeLessThanOrEqual(visibleBas - visibleHaut);
   porteur.scrollTop += Math.round((haut + bas - visibleHaut - visibleBas) / 2);
+  await images(2);
+}
+
+// Fait défiler le premier ancêtre défilant de l'élément jusqu'à poser son
+// haut ('haut') ou son bas ('bas') à 8 px du bord correspondant de la
+// hauteur visible de cette surface : l'image montre l'élément à ce bord, et
+// ce qui le suit ou le précède tant que la surface le laisse voir.
+async function cadrerAuBord(element, bord) {
+  let porteur = element.parentElement;
+  while (porteur !== null && !(porteur.scrollHeight > porteur.clientHeight && /auto|scroll/.test(getComputedStyle(porteur).overflowY))) {
+    porteur = porteur.parentElement;
+  }
+  expect(porteur, 'une surface qui défile').not.toBeNull();
+  const cadre = porteur.getBoundingClientRect();
+  const visibleHaut = Math.max(cadre.top + porteur.clientTop, 0);
+  const visibleBas = Math.min(cadre.top + porteur.clientTop + porteur.clientHeight, innerHeight);
+  const boite = element.getBoundingClientRect();
+  porteur.scrollTop += Math.round(bord === 'haut' ? boite.top - visibleHaut - 8 : boite.bottom - visibleBas + 8);
   await images(2);
 }
 
@@ -1602,6 +1662,8 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await attendre('le premier écran', () => dans('[data-ecran="accueil"] [data-demonstration="grande"]'));
     await cliquer('[data-demonstration="grande"]');
     await attendre('la grande démonstration ouverte', () => dans('[data-ecran="evenement"]') && etat().evenement !== null && etat().evenement.base !== memoire.base);
+    // La page de qualité la rouvre à la fin du parcours (12, 15, 15b, 15c).
+    memoire.baseGrande = base();
     await ouvrirSection('diagnostic');
     const diagnostic = diagnostiquer(configurationDepuisCharge(charge()));
     expect(diagnostic.retoursImposes).toBe(99);
@@ -2760,6 +2822,876 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
     expect(serialiserCharge(charge())).toBe(empreinte);
     await rienEcrit(avant, 'bloqué, regarder');
     expect(ecrituresDepuis(rang)).toEqual([]);
+  });
+});
+
+// --- La page de qualité (§ 12, § 19.3, B27) ---------------------------------------------
+
+// Le compte d'arrêt de la génération de la grande démonstration : quatre
+// points de relevé avant le dernier, et dix avancements du moteur, que le
+// relais compte.
+const ARRET_GRANDE = 2_000;
+
+// La cadence des avancements que le moteur publie, en mouvements évalués :
+// le relais en compte un à chaque multiple, proposition par proposition.
+const CADENCE_AVANCEMENTS = 1_000;
+
+// Des personnes et des appartenances inventées (contrainte 48), pour les
+// configurations que la page de qualité photographie et qu'aucun catalogue
+// ne porte : chaque configuration en prend les premières.
+const PERSONNES_INVENTEES = Object.freeze([
+  ['Ombrelle', 'Iris'],
+  ['Pervenche', 'Théo'],
+  ['Lacasse', 'Ondine'],
+  ['Tourteau', 'Basile'],
+  ['Quenouille', 'Maëlle'],
+  ['Varech', 'Sidonie'],
+  ['Aubépin', 'Lucien'],
+  ['Bruyère', 'Aglaé'],
+  ['Cormier', 'Félix'],
+  ['Dorine', 'Ysé'],
+  ['Escourgeon', 'Paulin'],
+  ['Fenouil', 'Rosalie'],
+]);
+const APPARTENANCES_INVENTEES = Object.freeze([
+  'Coopérative Aubier',
+  'Atelier Ressac',
+  'Chantier Grève',
+  'Fanfare Ormeau',
+  'Rucher Salicorne',
+  'Cercle Varangue',
+  'Jardin Pétrel',
+  'Forge Brisant',
+  'Collectif Ajonc',
+]);
+
+// Les configurations construites (§ 19.3, B27) : le nom de l'événement,
+// le nombre de personnes, l'appartenance de la personne de rang donné, les
+// places par défaut, le nombre de tables, les places surchargées par rang
+// de table, le nombre de tours, et le nombre de personnes réservées pour la
+// soirée, dans l'ordre de leurs rangs, aux premiers sièges de la table 1.
+const CONSTRUITES = Object.freeze({
+  uneTable: { nom: 'Une seule table', personnes: 6, appartenance: (rang) => APPARTENANCES_INVENTEES[rang % 3], sieges: 6, tables: 1, tours: 3 },
+  unTour: { nom: 'Un seul tour', personnes: 12, appartenance: (rang) => APPARTENANCES_INVENTEES[rang % 3], sieges: 4, tables: 3, tours: 1 },
+  uneAppartenance: { nom: 'Une seule appartenance', personnes: 12, appartenance: () => APPARTENANCES_INVENTEES[0], sieges: 4, tables: 3, tours: 3 },
+  sansCollision: { nom: 'Sans collision', personnes: 9, appartenance: (rang) => APPARTENANCES_INVENTEES[rang], sieges: 3, tables: 3, tours: 2 },
+  plafondNul: {
+    nom: 'Plafond nul',
+    personnes: 5,
+    appartenance: (rang) => APPARTENANCES_INVENTEES[rang % 2],
+    sieges: 4,
+    tables: 2,
+    surcharges: [[1, 2]],
+    tours: 2,
+    reservees: 4,
+  },
+  paires: { nom: 'Paires répétées', personnes: 12, appartenance: (rang) => APPARTENANCES_INVENTEES[rang % 3], sieges: 3, tables: 4, tours: 6 },
+});
+
+// Le CSV des participants d'une configuration construite, en UTF-8.
+function csvConstruite({ personnes, appartenance }) {
+  const lignes = PERSONNES_INVENTEES.slice(0, personnes).map(([nom, prenom], rang) => `${nom};${prenom};${appartenance(rang)}`);
+  return new TextEncoder().encode(`nom;prenom;appartenance\r\n${lignes.join('\r\n')}\r\n`);
+}
+
+// Revient à la liste des événements, quand un événement est ouvert.
+async function versLaListe() {
+  if (dans('[data-ecran="accueil"]') === null) await cliquer('[data-bandeau] [data-commande="liste"]');
+  await attendre('le premier écran', () => dans('[data-ecran="accueil"] [data-dossier-travail]'));
+}
+
+// Rouvre l'événement de base donnée depuis la liste.
+async function rouvrir(baseVisee) {
+  await versLaListe();
+  await cliquer(`[data-evenement="${baseVisee}"] [data-commande="ouvrir"]`);
+  await attendre('l’événement rouvert', () => dans('[data-ecran="evenement"]') && etat().evenement?.base === baseVisee);
+}
+
+// Charge la démonstration du catalogue de clé donnée, depuis la liste : un
+// événement neuf, sous une base qu'aucun événement de la liste ne porte.
+async function chargerDemonstration(cle) {
+  await versLaListe();
+  const connues = new Set(tous('[data-evenement]').map((element) => element.dataset.evenement));
+  await cliquer(`[data-demonstration="${cle}"]`);
+  await attendre(`la démonstration ${cle}`, () => dans('[data-ecran="evenement"]') && etat().evenement !== null && !connues.has(etat().evenement.base));
+}
+
+async function passerEnEcriture() {
+  if (etat().mode === 'ecriture') return;
+  await cliquer('[data-place-fixe] [data-commande="modifier"]');
+  await attendre('l’écriture', () => etat().mode === 'ecriture');
+}
+
+// Génère sous la graine écrite, au compte d'arrêt donné, ou au compte de
+// l'événement quand arret est null : une entrée, la question d'une
+// génération longue confirmée si elle vient.
+async function generer(arret = null) {
+  await ouvrirSection('generation');
+  await taper(dans('[data-section="generation"] input[data-champ="graine"]'), String(GRAINE));
+  if (arret !== null && charge().reglages.generation.arret !== arret) {
+    const r = revision();
+    await saisir(dans('[data-section="generation"] input[data-champ="generation.arret"]'), String(arret));
+    await uneEntree(r, 'le compte d’arrêt');
+  }
+  const r = revision();
+  await cliquer('[data-section="generation"] [data-commande="generer"]');
+  await attendre('la génération, ou sa question', () => revision() > r || dans('[data-question="longue"]'));
+  if (revision() === r) await cliquer('[data-commande="confirmerGeneration"]');
+  await uneEntree(r, 'générer');
+  expect(charge().propositions.length).toBeGreaterThan(0);
+}
+
+// La page de qualité de la première proposition du classement, ouverte par
+// la commande « Qualité » de sa ligne ; rend son identifiant.
+async function qualiteDeLaPremiere() {
+  await ouvrirSection('propositions');
+  const premiere = await attendre('le tableau classé', () => dans('[data-section="propositions"] [data-classement] tr[data-proposition]'));
+  const id = Number(premiere.dataset.proposition);
+  await appuyer(premiere.querySelector('[data-commande="qualite"]'), 'la commande « Qualité »');
+  await attendre('la page de qualité de la proposition', () => dans('[data-section="qualite"] [data-vue-qualite="performance"]') && m.ui.etat().proposition === id);
+  await images(3);
+  return id;
+}
+
+// Construit la configuration par les gestes de l'opérateur — créer
+// l'événement, l'écriture, importer ses participants, ses places par
+// défaut, ses tables, ses surcharges, ses tours, ses réservations pour la
+// soirée —, génère au compte réduit, puis ouvre la page de qualité de la
+// première proposition du classement ; rend son identifiant.
+async function construire(configuration) {
+  const { nom, personnes, sieges, tables, surcharges = [], tours, reservees = 0 } = configuration;
+  await versLaListe();
+  await taper(dans('[data-ecran="accueil"] input[data-champ="nom"]'), nom);
+  await cliquer('[data-ecran="accueil"] [data-commande="creer"]');
+  await attendre(`l’événement « ${nom} »`, () => dans('[data-ecran="evenement"]') && etat().evenement?.nom === nom);
+  await passerEnEcriture();
+
+  await ouvrirSection('import');
+  await ouvrirApercu('participants_qualite.csv', csvConstruite(configuration));
+  let r = revision();
+  await cliquer('[data-apercu] [data-commande="importer"]');
+  await attendre('le rapport', () => dans('[data-rapport]'));
+  await uneEntree(r, 'importer');
+  expect(charge().participants).toHaveLength(personnes);
+
+  await ouvrirSection('tables');
+  if (charge().evenement.siegesParDefaut !== sieges) {
+    r = revision();
+    await saisir(dans('[data-section="tables"] input[data-champ="siegesParDefaut"]'), String(sieges));
+    await cliquer('[data-enonce="defaut"] [data-commande="appliquer"]');
+    await uneEntree(r, 'les places par défaut');
+  }
+  for (let rang = 0; rang < tables; rang += 1) {
+    r = revision();
+    await cliquer('[data-section="tables"] [data-commande="creerTableRonde"]');
+    await uneEntree(r, 'créer une table');
+  }
+  for (const [rang, places] of surcharges) {
+    const { id } = charge().tables[rang];
+    r = revision();
+    await saisir(dans(`[data-section="tables"] [data-table="${id}"] input[data-champ="sieges-${id}"]`), String(places));
+    await uneEntree(r, 'surcharger');
+  }
+  if (charge().evenement.tours !== tours) {
+    r = revision();
+    await saisir(dans('[data-section="tables"] input[data-champ="tours"]'), String(tours));
+    await uneEntree(r, 'les tours');
+  }
+  expect(charge().tables.map(({ sieges: places }) => places ?? sieges)).toEqual(
+    Array.from({ length: tables }, (_, rang) => surcharges.find(([rangSurcharge]) => rangSurcharge === rang)?.[1] ?? sieges),
+  );
+  expect(charge().evenement.tours).toBe(tours);
+
+  if (reservees > 0) {
+    await ouvrirPlan();
+    await regimeSieges();
+    const [t1] = charge().tables.map(({ id }) => id);
+    for (let rang = 0; rang < reservees; rang += 1) {
+      const participant = charge().participants[rang].id;
+      r = revision();
+      await choisir('[data-reserve]', participant);
+      await cliquerPointeur(chaise(t1, rang + 1));
+      const portee = await attendre('le choix de la portée', () => dans('[data-panneau="place"] select[data-champ="portee"]'));
+      portee.value = 'tous';
+      portee.dispatchEvent(new Event('change', { bubbles: true }));
+      flushSync();
+      await appuyer(actionPlace('reserver'), 'réserver pour la soirée');
+      await uneEntree(r, 'réserver pour la soirée');
+      expect(charge().reservations.at(-1)).toMatchObject({ participant, table: t1, siege: rang + 1, portee: 'tous' });
+    }
+    await oublierChoix();
+  }
+
+  await generer(ARRET);
+  return qualiteDeLaPremiere();
+}
+
+// Les lectures de la page de qualité.
+const vueQualite = (nom) => dans(`[data-section="qualite"] [data-vue-qualite="${nom}"]`);
+const graphique = (nom) => dans(`[data-section="qualite"] svg[data-graphique="${nom}"]`);
+const phrasesQualite = () => tous('[data-section="qualite"] [data-phrase-qualite]').map((phrase) => phrase.dataset.phraseQualite);
+const motif = (trace) => getComputedStyle(trace).strokeDasharray;
+
+// Les axes verticaux d'un graphique : ses traits d'axe d'abscisse constante.
+const axesVerticaux = (svg) =>
+  [...svg.querySelectorAll('line[data-marque="graphiqueAxe"]')].filter((axe) => axe.getAttribute('x1') === axe.getAttribute('x2')).length;
+
+// Les graphiques de la page qui ne portent aucune marque de donnée — ni
+// série, ni segment, ni case, ni point de relevé — : des axes vides, que
+// la page ne dessine jamais (§ 12.6).
+const axesVides = () =>
+  tous('[data-section="qualite"] svg[data-graphique]')
+    .filter((svg) => svg.querySelector('path[data-serie], rect[data-segment], [data-case], circle[data-point-releve]') === null)
+    .map((svg) => svg.dataset.graphique);
+
+// Chaque [data-pourcentage] du porteur est suivi, son voisin immédiat, d'un
+// [data-compte-pire] non vide (contrainte 44) ; rend leur nombre.
+function exigerComptes(porteur) {
+  const pourcentages = [...porteur.querySelectorAll('[data-pourcentage]')];
+  for (const valeur of pourcentages) {
+    const compte = valeur.nextElementSibling;
+    expect(compte?.hasAttribute('data-compte-pire'), texteDe(valeur)).toBe(true);
+    expect(texteDe(compte)).not.toBe('');
+  }
+  return pourcentages.length;
+}
+
+// Le jumeau d'une vue, ouvert par sa commande, lu, puis refermé, sa
+// commande quittée par le focus — l'image ne porte pas son contour : par
+// tableau, chaque ligne, une Map colonne → texte de sa cellule.
+async function lireJumeau(vue) {
+  await appuyer(vue.querySelector('[data-commande="ouvrirJumeau"]'), 'ouvrir le jumeau');
+  await attendre('le jumeau', () => vue.querySelector('[data-jumeau="0"]'));
+  const tableaux = [...vue.querySelectorAll('[data-jumeau]')].map((table) =>
+    [...table.querySelectorAll('tbody tr')].map((tr) => new Map([...tr.querySelectorAll('[data-colonne]')].map((cellule) => [cellule.dataset.colonne, texteDe(cellule)]))),
+  );
+  await appuyer(vue.querySelector('[data-commande="fermerJumeau"]'), 'fermer le jumeau');
+  await attendre('le jumeau fermé', () => vue.querySelector('[data-jumeau]') === null);
+  document.activeElement?.blur();
+  await images(2);
+  return tableaux;
+}
+
+// Pointe le rang 1 d'un graphique en escalier, au bord gauche de sa surface
+// de pointage, puis rend l'infobulle ouverte : une Map libellé → texte.
+async function pointerLeRang1(svg) {
+  const surface = svg.querySelector(':scope > rect[pointer-events="all"]');
+  const boite = surface.getBoundingClientRect();
+  await pointer('bouger', boite.left + 2, boite.top + boite.height / 2);
+  flushSync();
+  await images(2);
+  const bulle = tous('[data-section="qualite"] [role="tooltip"]').find((element) => !element.hidden);
+  expect(bulle, 'l’infobulle du rang pointé').toBeDefined();
+  const cellules = new Map([...bulle.querySelectorAll('.cellule')].map((cellule) => [texteDe(cellule.querySelector('dt')), cellule.querySelector('dd')]));
+  return { bulle, cellule: (cle) => texteDe(cellules.get(plat(t(cle)))) };
+}
+
+// Écarte le pointeur des graphiques : en haut à gauche de la fenêtre.
+async function ecarterLePointeur() {
+  await pointer('bouger', 1, 1);
+  flushSync();
+  await images(2);
+}
+
+// Le compte et le plafond réalisé minimaux de la proposition id, mesurés par
+// le moteur sur son plan, sous la configuration de l'événement ouvert.
+function minimumDe(id) {
+  const instance = normaliser(configurationDepuisCharge(charge()));
+  const proposition = charge().propositions.find((p) => p.id === id);
+  return mesurer(instance, indexerPlan(instance, planDepuisFichier(proposition))).aggRencontres.tous.min;
+}
+
+// La ligne de la proposition id au tableau des propositions : une Map
+// colonne → texte de sa cellule.
+async function ligneAuTableau(id) {
+  await ouvrirSection('propositions');
+  const ligne = await attendre('la ligne de la proposition', () => dans(`[data-section="propositions"] tr[data-proposition="${id}"]`));
+  return new Map([...ligne.querySelectorAll('td[data-colonne]')].map((cellule) => [cellule.dataset.colonne, texteDe(cellule)]));
+}
+
+// La page de qualité d'une proposition déjà au plan, rouverte par la
+// navigation.
+async function revenirALaQualite(id) {
+  await ouvrirSection('qualite');
+  await attendre('la page de qualité', () => vueQualite('performance') && m.ui.etat().proposition === id);
+  await images(3);
+}
+
+// La page mesure la proposition id que la séance montre, avant toute
+// retenue : la ligne de source porte le libellé que la barre de vue du plan
+// donne à une proposition montrée sans placement retenu, et non celui du
+// retenu.
+function exigerLaPropositionMontree(id) {
+  expect(m.ui.etat().proposition, 'la proposition montrée').toBe(id);
+  expect(charge().retenu).toBeNull();
+  const placement = texteDe(dans('[data-section="qualite"] [data-source-qualite] .placement'));
+  expect(placement, 'la ligne de source').toBe(plat(t('plan.source.propositionReservations', { proposition: id })));
+}
+
+// La configuration construite des paires est celle de l'événement ouvert :
+// 12 personnes, 4 tables de 3 places, 6 tours.
+function exigerLaConstruiteDesPaires() {
+  const { nom, personnes, tables, sieges, tours } = CONSTRUITES.paires;
+  expect(charge().evenement.nom).toBe(nom);
+  expect(charge().participants).toHaveLength(personnes);
+  expect(charge().tables.map(({ sieges: places }) => places ?? charge().evenement.siegesParDefaut)).toEqual(Array.from({ length: tables }, () => sieges));
+  expect(charge().evenement.tours).toBe(tours);
+}
+
+describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => {
+  // Le plan bloqué que les familles laissent n'est plus touché : chaque
+  // capture se prend sur sa charge, celle que le parcours charge ou
+  // construit ici, et rien ne revient aux captures précédentes.
+  test('12 la grande générée, durée pilotée : le profil en deux graphiques, un axe vertical chacun, le même rang 1', async () => {
+    await rouvrir(memoire.baseGrande);
+    await passerEnEcriture();
+    // Le relais est resté inerte pour chaque génération qui précède.
+    expect(relais.avancements, 'aucun avancement compté avant la grande').toBe(0);
+    relais.arme = true;
+    const debut = m.horloge.instant();
+    try {
+      await generer(ARRET_GRANDE);
+    } finally {
+      relais.arme = false;
+    }
+    memoire.grande = { avancements: relais.avancements, dureeMs: m.horloge.instant() - debut };
+    expect(relais.avancements).toBeGreaterThan(0);
+    const id = await qualiteDeLaPremiere();
+    memoire.grande.id = id;
+
+    // La page a dessiné plutôt que d'opposer son refus (§ 12.3).
+    const profil = await attendre('les deux graphiques du profil', () => graphique('profilPourcentages') && vueQualite('profil'));
+    expect(phrasesQualite()).not.toContain('refusDessin');
+    const comptes = graphique('profilComptes');
+    const pourcentages = graphique('profilPourcentages');
+    for (const svg of [comptes, pourcentages]) expect(axesVerticaux(svg), svg.dataset.graphique).toBe(1);
+    // Deux séries en comptes, une en pourcentages ; le plafond, la borne de
+    // diversité et la règle à 100 % en repères, aucun du motif d'une série.
+    expect(comptes.querySelectorAll('path[data-serie]')).toHaveLength(2);
+    expect(pourcentages.querySelectorAll('path[data-serie]')).toHaveLength(1);
+    for (const [svg, repere] of [[comptes, 'plafond'], [comptes, 'borne'], [pourcentages, 'cent']]) {
+      expect(svg.querySelector(`path[data-repere="${repere}"]`), repere).not.toBeNull();
+    }
+    const motifsDe = (attribut) => [comptes, pourcentages].flatMap((svg) => [...svg.querySelectorAll(`path[${attribut}]`)].map(motif));
+    const series = motifsDe('data-serie');
+    for (const repere of motifsDe('data-repere')) expect(series).not.toContain(repere);
+    expect(texteDe(comptes.querySelector('text[data-repere="borne"]'))).toBe(plat(t('qualite.profil.repere.borne')));
+    expect(exigerComptes(profil)).toBeGreaterThan(0);
+
+    // Le même rang 1 dans les deux graphiques : le pire cas, le minimum que
+    // le moteur mesure sur le plan de la proposition. Les graphiques se
+    // cadrent d'abord : le pointeur atteint ce que la fenêtre montre. Les
+    // deux ensemble sont plus hauts que la surface : le premier se pose en
+    // haut, et le second se montre jusqu'à sa règle à 100 %, ses
+    // pourcentages au-dessous de la règle, son axe des rangs hors de l'image.
+    await cadrerAuBord(comptes, 'haut');
+    const { cellule } = await pointerLeRang1(comptes);
+    expect(comptes.querySelector('[data-rang]')?.getAttribute('data-rang')).toBe('1');
+    expect(pourcentages.querySelector('[data-rang]')?.getAttribute('data-rang')).toBe('1');
+    expect(cellule('qualite.profil.colonne.rencontres')).toBe(String(minimumDe(id)));
+    await ecarterLePointeur();
+    expect(tous('[data-section="qualite"] [role="tooltip"]').every((bulle) => bulle.hidden)).toBe(true);
+    await photographier(m, '12-qualite-profil', {
+      condition: [
+        '[data-vue-qualite="profil"] svg[data-graphique="profilComptes"]',
+        '[data-vue-qualite="profil"] svg[data-graphique="profilPourcentages"] path[data-repere="cent"]',
+        '[data-vue-qualite="profil"] svg[data-graphique="profilPourcentages"] text[data-repere="cent"]',
+      ],
+      graine: GRAINE,
+    });
+  });
+
+  test('15 la grande, 260 participants : la phrase du seuil au lieu de la matrice', async () => {
+    const vue = vueQualite('paires');
+    const seuil = constante('SEUIL_MATRICE_PARTICIPANTS');
+    const presents = charge().participants.filter(({ exclu }) => !exclu).length;
+    expect(presents).toBe(260);
+    expect(presents).toBeGreaterThan(seuil);
+    expect(vue.querySelector('svg[data-graphique="matrice"]')).toBeNull();
+    const phrase = vue.querySelector('[data-phrase-qualite="matriceSeuil"]');
+    expect(texteDe(phrase)).toBe(plat(t('qualite.paires.matrice.seuil', { participants: format.nombre(presents), seuil: format.nombre(seuil) })));
+    await cadrerDansLaSurface([vue.querySelector('h4') ?? phrase, phrase]);
+    await photographier(m, '15-pas-de-matrice', { condition: ['[data-vue-qualite="paires"] [data-phrase-qualite="matriceSeuil"]'], graine: GRAINE });
+  });
+
+  test('15b la grande : les animateurs sous leur borne pointillée, sans « plafond » ; la diversité, le moins varié en tête', async () => {
+    const animateurs = vueQualite('animateurs');
+    const svg = animateurs.querySelector('svg[data-graphique="animateurs"]');
+    expect(svg).not.toBeNull();
+    expect(axesVerticaux(svg)).toBe(1);
+    const borne = svg.querySelector('path[data-repere="borne"]');
+    expect(borne).not.toBeNull();
+    expect(motif(borne)).not.toBe(motif(svg.querySelector('path[data-serie]')));
+    expect(texteDe(animateurs)).not.toMatch(/plafond/i);
+
+    // La première barre de la soirée porte le minimum annoncé : le moins
+    // varié de chaque colonne dessinée.
+    const diversite = vueQualite('diversite');
+    const colonnes = [...diversite.querySelectorAll('[data-equite]')];
+    expect(colonnes.length).toBeGreaterThan(0);
+    const [soirees] = await lireJumeau(diversite);
+    for (const colonne of colonnes) {
+      const moins = texteDe(colonne.querySelector('dd'));
+      expect(soirees[0].get(colonne.dataset.equite), colonne.dataset.equite).toBe(moins);
+    }
+    // Le profil des animateurs en haut de la surface, puis le haut de la
+    // diversité : son graphique, plus bas, ne tient pas avec lui.
+    await cadrerAuBord(svg, 'haut');
+    await photographier(m, '15b-qualite-animateurs', {
+      condition: ['[data-vue-qualite="animateurs"] svg[data-graphique="animateurs"]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('15c la grande : la course, la durée pilotée ; le dernier point est la ligne de la proposition', async () => {
+    const { id, avancements, dureeMs } = memoire.grande;
+    // Le moteur sollicité une seconde fois : les mouvements évalués de
+    // chaque proposition, dont le relais a compté les avancements.
+    const { nombre, historique } = charge().reglages.generation;
+    const propositions = rechercher(configurationDepuisCharge(charge()), { graine: GRAINE, nombre, arret: ARRET_GRANDE, historique });
+    const evalues = propositions.reduce((somme, p) => somme + p.evalues, 0);
+    expect(avancements).toBe(propositions.reduce((somme, p) => somme + Math.floor(p.evalues / CADENCE_AVANCEMENTS), 0));
+    expect(dureeMs).toBe(avancements * PAS_HORLOGE_GENERATION_MS);
+    const montree = propositions.find(({ graine }) => graine === charge().propositions.find((p) => p.id === id).graine);
+    const vue = vueQualite('performance');
+    const tete = [...vue.querySelectorAll('[data-course] li')].map(texteDe);
+    expect(tete).toEqual([
+      plat(t('qualite.performance.mouvements', { evalues: format.nombre(montree.evalues), arret: format.nombre(ARRET_GRANDE) })),
+      plat(t('qualite.performance.duree', { duree: format.duree(dureeMs) })),
+      plat(t('qualite.performance.coeurs', { coeurs: 1 })),
+      plat(t('qualite.performance.cadence', { cadence: format.nombre(Math.round((evalues * 1000) / dureeMs)) })),
+      plat(t('qualite.performance.propositions', { nombre })),
+    ]);
+    expect(vue.querySelectorAll('svg[data-graphique]').length).toBeGreaterThan(0);
+    expect(vue.querySelector('[data-dernier-changement]')).not.toBeNull();
+
+    // Le dernier point de relevé est le plan de la proposition : ses
+    // mouvements, ses valeurs égales à sa ligne au tableau des propositions.
+    const [points] = await lireJumeau(vue);
+    memoire.grande.points = points;
+    const dernier = points.at(-1);
+    expect(dernier.get('mouvements')).toBe(plat(format.nombre(montree.evalues)));
+    const ligne = await ligneAuTableau(id);
+    const colonneAuTableau = (nom) => (nom === 'minimumBrut' ? 'rencontresTous' : colonneDeValeur(nom));
+    for (const [nom, valeur] of dernier) if (nom !== 'mouvements') expect(valeur, nom).toBe(ligne.get(colonneAuTableau(nom)));
+
+    await revenirALaQualite(id);
+    // La ligne de tête au haut de la surface, et sous elle les deux premiers
+    // rangs des petits multiples : la vue entière, la phrase du dernier
+    // changement comprise, est plus haute que la surface. Le bord haut tombe
+    // entre la question de la vue et la ligne de tête, le bas entre deux rangs.
+    const performance = vueQualite('performance');
+    const multiples = [...performance.querySelectorAll('svg[data-graphique]')];
+    const dernierMontre = multiples[Math.min(3, multiples.length - 1)];
+    await cadrerAuBord(performance.querySelector('[data-course]'), 'haut');
+    await photographier(m, '15c-qualite-performance', {
+      condition: ['[data-vue-qualite="performance"] [data-course]', `[data-vue-qualite="performance"] svg[data-graphique="${dernierMontre.dataset.graphique}"]`],
+      graine: GRAINE,
+    });
+  });
+
+  test('15c rouverte, sans capture : la même course, la durée « inconnue »', async () => {
+    const { id, points } = memoire.grande;
+    await rouvrir(memoire.baseGrande);
+    await ouvrirSection('propositions');
+    await cliquer(`[data-section="propositions"] tr[data-proposition="${id}"] [data-commande="qualite"]`);
+    await revenirALaQualite(id);
+    const vue = vueQualite('performance');
+    const tete = [...vue.querySelectorAll('[data-course] li')].map(texteDe);
+    expect(tete).toContain(plat(t('qualite.performance.dureeInconnue')));
+    // Le début du gabarit de la cadence, coupé à la place de sa valeur :
+    // aucun morceau de la ligne de tête ne l'écrit.
+    const [avantCadence] = plat(t('qualite.performance.cadence', { cadence: '\u{0}' })).split('\u{0}');
+    expect(avantCadence).not.toBe('');
+    expect(tete.filter((morceau) => morceau.startsWith(avantCadence))).toEqual([]);
+    const [relus] = await lireJumeau(vue);
+    expect(relus.map((ligne) => [...ligne])).toEqual(points.map((ligne) => [...ligne]));
+  });
+
+  test('12a la variante « conflit », sans placement : la phrase et le diagnostic, aucun graphique', async () => {
+    await chargerDemonstration('petite-conflit');
+    memoire.baseConflit = base();
+    await ouvrirSection('qualite');
+    const phrase = await attendre('la phrase d’aucun placement', () => dans('[data-section="qualite"] [data-phrase-qualite="aucunPlacement"]'));
+    expect(texteDe(phrase)).toBe(plat(t('qualite.phrase.aucunPlacement')));
+    expect(phrasesQualite()).toEqual(['aucunPlacement']);
+    expect(tous('[data-section="qualite"] svg[data-graphique]')).toEqual([]);
+    expect(dans('[data-section="qualite"] [data-source-qualite]')).not.toBeNull();
+    expect(tous('[data-section="qualite"] [data-phrase]').length, 'le diagnostic préalable').toBeGreaterThan(0);
+    await photographier(m, '12a-qualite-sans-placement', {
+      condition: ['[data-section="qualite"] [data-source-qualite]', '[data-section="qualite"] [data-phrase-qualite="aucunPlacement"]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('13 la variante générée : deux segments, le prouvé égal au plancher, 4, triées sur l’excédent', async () => {
+    await passerEnEcriture();
+    await generer(ARRET);
+    memoire.conflit = { id: await qualiteDeLaPremiere() };
+    exigerLaPropositionMontree(memoire.conflit.id);
+    const vue = vueQualite('collisions');
+    const svg = vue.querySelector('svg[data-graphique="collisions"]');
+    expect(svg).not.toBeNull();
+    expect(svg.querySelectorAll('rect[data-segment="prouve"]').length).toBeGreaterThan(0);
+    const diagnostic = diagnostiquer(configurationDepuisCharge(charge()));
+    const plancherDe = new Map(diagnostic.collisions.map(({ groupe, plancherCumulees }) => [groupe, plancherCumulees]));
+    expect([...plancherDe.values()]).toContain(4);
+    const [lignes] = await lireJumeau(vue);
+    expect(lignes.length).toBeGreaterThan(0);
+    for (const ligne of lignes) {
+      expect(ligne.get('prouve'), ligne.get('appartenance')).toBe(String(plancherDe.get(ligne.get('appartenance')) ?? 0));
+    }
+    expect(lignes.map((ligne) => ligne.get('prouve'))).toContain('4');
+    const excedents = lignes.map((ligne) => Number(ligne.get('excedent')));
+    expect(excedents).toEqual([...excedents].sort((a, b) => b - a));
+    await cadrerDansLaSurface([svg]);
+    await photographier(m, '13-qualite-collisions', { condition: ['[data-vue-qualite="collisions"] svg[data-graphique="collisions"]'], graine: GRAINE });
+  });
+
+  test('13a les tables sous « sièges » : la pire en tête, chaque case écrit le compte que son niveau colore', async () => {
+    // La proposition générée, et non le retenu que 12f ajuste ensuite.
+    exigerLaPropositionMontree(memoire.conflit.id);
+    const vue = vueQualite('tables');
+    expect(vue.querySelector('input[data-position-tables="sieges"]').checked).toBe(true);
+    const svg = vue.querySelector('svg[data-graphique="tables"]');
+    expect(svg).not.toBeNull();
+    const cases = [...svg.querySelectorAll('[data-case]')];
+    expect(cases.length).toBe(charge().tables.length * charge().evenement.tours);
+    const comptes = new Map();
+    for (const c of cases) {
+      const [ligne] = c.dataset.case.split(':').map(Number);
+      const texte = texteDe(c.querySelector('text'));
+      if (texte === t('format.vide')) {
+        expect(c.querySelector('rect[data-marque^="graphiqueNiveau"]'), c.dataset.case).toBeNull();
+        continue;
+      }
+      const compte = Number(texte);
+      expect(Number.isInteger(compte), c.dataset.case).toBe(true);
+      const n = niveau(compte);
+      const fond = c.querySelector('rect:not(.bordure)');
+      expect(fond?.getAttribute('data-marque') ?? null, c.dataset.case).toBe(n > 0 ? `graphiqueNiveau${n}` : null);
+      expect(fond?.style.fill ?? '', c.dataset.case).toContain(`--couleur-graphique-niveau-${n}`);
+      comptes.set(ligne, Math.max(comptes.get(ligne) ?? 0, compte));
+    }
+    expect(comptes.get(0)).toBe(Math.max(...comptes.values()));
+    await cadrerDansLaSurface([vue.querySelector('fieldset'), svg]);
+    await photographier(m, '13a-qualite-tables', {
+      condition: ['[data-vue-qualite="tables"] input[data-position-tables="sieges"]', '[data-vue-qualite="tables"] svg[data-graphique="tables"]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('12f une personne mobile en réserve au tour 2 : sa marque, les collisions d’un seul segment', async () => {
+    const { id } = memoire.conflit;
+    await ouvrirSection('propositions');
+    let r = revision();
+    await cliquer(`[data-section="propositions"] tr[data-proposition="${id}"] [data-commande="retenir"]`);
+    await uneEntree(r, 'retenir');
+    expect(charge().retenu.proposition).toBe(id);
+    await ouvrirPlan();
+    if (m.ui.etat().proposition !== null) {
+      await cliquer('[data-commande="quitterProposition"]');
+      await attendre('le retenu montré', () => m.ui.etat().proposition === null);
+    }
+    const selecteurTour = dans('[data-champ="tour"]');
+    selecteurTour.value = '2';
+    selecteurTour.dispatchEvent(new Event('change', { bubbles: true }));
+    await attendre('le tour 2 montré', () => m.ui.etat().tour === 2);
+    await images(2);
+    await regimeSieges();
+    // Une personne mobile : aucune réservation ne la tient, à aucun tour.
+    const tenues = new Set(charge().reservations.map(({ participant }) => participant));
+    const assise = chaiseVue((c) => c.occupant !== null && !tenues.has(c.occupant));
+    const mobile = assise.occupant;
+    r = revision();
+    await cliquerPointeur(chaise(assise.table, assise.siege));
+    await cliquer(`[data-panneau="place"] [data-menu="${mobile}"] [data-commande="retirerDuTour"]`);
+    await uneEntree(r, 'retirer du tour 2');
+    selecteurTour.value = '1';
+    selecteurTour.dispatchEvent(new Event('change', { bubbles: true }));
+    await attendre('le tour 1 montré', () => m.ui.etat().tour === 1);
+
+    await ouvrirSection('qualite');
+    await attendre('la page du retenu', () => vueQualite('profil')?.querySelector('svg[data-graphique="profilComptes"]'));
+    await images(3);
+    const nom = nomAffiche(charge().participants.find((p) => p.id === mobile));
+    const profil = vueQualite('profil');
+    expect(profil.querySelectorAll('svg[data-graphique="profilComptes"] [data-marque="graphiqueMarque"]').length).toBeGreaterThan(0);
+    const [rangs] = await lireJumeau(profil);
+    const sienne = rangs.find((ligne) => ligne.get('nom') === plat(nom));
+    expect(sienne?.get('marque'), nom).toBe(plat(t('qualite.profil.marque.reserve')));
+    // Hors du domaine des planchers, une barre d'un seul segment, et la
+    // phrase qui le dit (D31).
+    const collisions = vueQualite('collisions');
+    expect(collisions.querySelector('svg[data-graphique="collisions"]')).not.toBeNull();
+    expect(collisions.querySelector('rect[data-segment="prouve"]')).toBeNull();
+    const segments = [...collisions.querySelectorAll('svg[data-graphique="collisions"] rect[data-segment]')];
+    expect(segments.length).toBeGreaterThan(0);
+    expect([...new Set(segments.map((segment) => segment.dataset.segment))]).toEqual(['serie1']);
+    expect(axesVides()).toEqual([]);
+    const phrase = collisions.querySelector('[data-phrase-qualite="collisionsHorsDomaine"]');
+    expect(texteDe(phrase)).toBe(plat(t('qualite.collisions.horsDomaine')));
+    // Le premier graphique du profil en haut de la surface, son signe de la
+    // réserve : les barres des collisions, plus bas, ne tiennent pas avec
+    // lui, et s'affirment sans l'image.
+    await cadrerAuBord(profil.querySelector('svg[data-graphique="profilComptes"]'), 'haut');
+    await photographier(m, '12f-qualite-reserve', {
+      condition: [
+        '[data-vue-qualite="profil"] svg[data-graphique="profilComptes"]',
+        '[data-vue-qualite="profil"] svg[data-graphique="profilComptes"] [data-marque="graphiqueMarque"]',
+      ],
+      graine: GRAINE,
+    });
+  });
+
+  test('12b une seule table : sa phrase, ni profil, ni barre, ni grille, ni paires', async () => {
+    await construire(CONSTRUITES.uneTable);
+    for (const code of ['uneTable', 'collisionsUneTable', 'tablesUneTable', 'pairesUneTable']) expect(phrasesQualite(), code).toContain(code);
+    for (const nom of ['profilComptes', 'profilPourcentages', 'collisions', 'tables', 'matrice']) expect(graphique(nom), nom).toBeNull();
+    expect(dans('[data-section="qualite"] [data-paire]')).toBeNull();
+    expect(axesVides()).toEqual([]);
+    const phrase = vueQualite('profil').querySelector('[data-phrase-qualite="uneTable"]');
+    expect(texteDe(phrase)).toBe(plat(t('qualite.profil.uneTable')));
+    await cadrerDansLaSurface([phrase, vueQualite('paires').querySelector('[data-phrase-qualite="pairesUneTable"]')]);
+    await photographier(m, '12b-qualite-une-table', {
+      condition: ['[data-vue-qualite="profil"] [data-phrase-qualite="uneTable"]', '[data-vue-qualite="paires"] [data-phrase-qualite="pairesUneTable"]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('12c un seul tour : le profil et les collisions dessinés, la phrase des paires', async () => {
+    await construire(CONSTRUITES.unTour);
+    expect(graphique('profilComptes')).not.toBeNull();
+    expect(graphique('collisions')).not.toBeNull();
+    expect(phrasesQualite()).toContain('pairesUnTour');
+    expect(dans('[data-section="qualite"] [data-vue-qualite="paires"] table')).toBeNull();
+    expect(axesVides()).toEqual([]);
+    const phrase = vueQualite('paires').querySelector('[data-phrase-qualite="pairesUnTour"]');
+    expect(texteDe(phrase)).toBe(plat(t('qualite.paires.unTour')));
+    // La vue des tables entière, sa grille d'un seul tour, et la phrase des
+    // paires : le profil et les collisions, plus haut, ne tiennent pas avec
+    // elles dans la surface, et s'affirment sans l'image.
+    await cadrerDansLaSurface([vueQualite('tables'), phrase]);
+    await photographier(m, '12c-qualite-un-tour', {
+      condition: [
+        '[data-vue-qualite="tables"]',
+        '[data-vue-qualite="tables"] svg[data-graphique="tables"]',
+        '[data-vue-qualite="paires"] [data-phrase-qualite="pairesUnTour"]',
+      ],
+      graine: GRAINE,
+    });
+  });
+
+  test('12d une seule appartenance : une série, sans borne, sa phrase ; les collisions et la grille restent', async () => {
+    await construire(CONSTRUITES.uneAppartenance);
+    const comptes = graphique('profilComptes');
+    expect(comptes.querySelectorAll('path[data-serie]')).toHaveLength(1);
+    expect(comptes.querySelector('[data-repere="borne"]')).toBeNull();
+    const phrase = vueQualite('profil').querySelector('[data-phrase-qualite="uneAppartenance"]');
+    expect(texteDe(phrase)).toBe(plat(t('qualite.profil.uneAppartenance')));
+    expect(graphique('collisions')?.querySelectorAll('rect[data-segment]').length).toBeGreaterThan(0);
+    expect(graphique('tables')).not.toBeNull();
+    expect(axesVides()).toEqual([]);
+    await cadrerDansLaSurface([phrase, comptes]);
+    await photographier(m, '12d-qualite-une-appartenance', {
+      condition: ['[data-vue-qualite="profil"] [data-phrase-qualite="uneAppartenance"]', '[data-vue-qualite="profil"] svg[data-graphique="profilComptes"]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('12e aucune collision : la phrase ; la grille sous « sièges », chaque case 0', async () => {
+    await construire(CONSTRUITES.sansCollision);
+    expect(graphique('collisions')).toBeNull();
+    const phrase = vueQualite('collisions').querySelector('[data-phrase-qualite="collisionsAucune"]');
+    expect(texteDe(phrase)).toBe(plat(t('qualite.collisions.aucune')));
+    const tables = vueQualite('tables');
+    expect(tables.querySelector('input[data-position-tables="sieges"]').checked).toBe(true);
+    const cases = [...graphique('tables').querySelectorAll('[data-case]')];
+    expect(cases).toHaveLength(3 * 2);
+    for (const c of cases) expect(texteDe(c.querySelector('text')), c.dataset.case).toBe('0');
+    expect(axesVides()).toEqual([]);
+    await cadrerDansLaSurface([phrase, graphique('tables')]);
+    await photographier(m, '12e-qualite-sans-collision', {
+      condition: ['[data-vue-qualite="collisions"] [data-phrase-qualite="collisionsAucune"]', '[data-vue-qualite="tables"] svg[data-graphique="tables"]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('12g la cinquième seule à la table de 2 : plafond réalisé nul au rang 1, son infobulle', async () => {
+    await construire(CONSTRUITES.plafondNul);
+    const seule = charge().participants[4];
+    const comptes = graphique('profilComptes');
+    const pourcentages = graphique('profilPourcentages');
+    // Le graphique au bas de la surface : l'infobulle du rang 1, plus haute
+    // que l'espace sous son point, se pose au-dessus de lui, dans l'image.
+    await cadrerAuBord(comptes, 'bas');
+    const { bulle, cellule } = await pointerLeRang1(comptes);
+    expect(cellule('qualite.profil.colonne.nom')).toBe(plat(nomAffiche(seule)));
+    expect(cellule('qualite.profil.colonne.plafondRealise')).toBe('0');
+    expect(cellule('qualite.profil.colonne.marque')).toBe(plat(t('qualite.profil.marque.plafondNul')));
+    expect(texteDe(bulle.querySelector('[data-pourcentage]'))).toBe(t('format.vide'));
+    // Au second graphique, aucun point au rang 1 : la série commence après
+    // son signe, posé au pied de l'axe.
+    const signes = [...pourcentages.querySelectorAll('[data-marque="graphiqueMarque"]')].map((signe) => signe.getBoundingClientRect());
+    const premierSigne = signes.reduce((a, b) => (b.left < a.left ? b : a));
+    const debutSerie = Number(/^M\s*([-\d.]+)/.exec(pourcentages.querySelector('path[data-serie]').getAttribute('d'))[1]);
+    const gaucheSvg = pourcentages.getBoundingClientRect().left;
+    expect(debutSerie + gaucheSvg).toBeGreaterThan(premierSigne.right);
+    expect(axesVides()).toEqual([]);
+    await photographier(m, '12g-qualite-plafond-nul', {
+      condition: ['[data-vue-qualite="profil"] svg[data-graphique="profilComptes"]', '[data-section="qualite"] [role="tooltip"]:not([hidden])'],
+      graine: GRAINE,
+    });
+  });
+
+  test('14 les paires répétées : le tableau, la première commande au premier tour revu', async () => {
+    await ecarterLePointeur();
+    memoire.paires = { id: await construire(CONSTRUITES.paires) };
+    exigerLaConstruiteDesPaires();
+    const vue = vueQualite('paires');
+    const lignes = [...vue.querySelectorAll('tr[data-paire]')];
+    expect(lignes.length).toBeGreaterThan(0);
+    const fois = lignes.map((ligne) => Number(/\d+/.exec(texteDe(ligne.querySelector('td.nombre')))[0]));
+    for (const ligne of lignes) {
+      const [premiere, ...tours] = [...ligne.querySelectorAll('[data-commande="allerAuTour"]')];
+      expect(tours.length).toBeGreaterThanOrEqual(2);
+      const numeros = tours.map((bouton) => Number(/\d+/.exec(texteDe(bouton))[0]));
+      expect(texteDe(premiere)).toBe(plat(t('qualite.paires.premierTour', { tour: numeros[1] })));
+    }
+    expect(fois[0]).toBe(Math.max(...fois));
+    memoire.paires.premiere = { cle: lignes[0].dataset.paire, tour: Number(/\d+/.exec(texteDe(lignes[0].querySelector('.premiere')))[0]) };
+    await cadrerDansLaSurface([vue.querySelector('thead'), lignes[Math.min(lignes.length, 5) - 1]]);
+    await photographier(m, '14-qualite-paires', { condition: ['[data-vue-qualite="paires"] tr[data-paire]'], graine: GRAINE });
+  });
+
+  test('14a la commande mène au tour revu ; la fiche, ses « Rencontres », égales au tableau des paires', async () => {
+    const { cle, tour } = memoire.paires.premiere;
+    exigerLaConstruiteDesPaires();
+    const [a] = cle.split(':').map(Number);
+    // Les paires de la personne au tableau : l'autre, ses fois, ses tours.
+    const deLaPersonne = tous('[data-section="qualite"] tr[data-paire]')
+      .filter((ligne) => ligne.dataset.paire.split(':').map(Number).includes(a))
+      .map((ligne) => {
+        const [x, y] = ligne.dataset.paire.split(':').map(Number);
+        const autre = x === a ? y : x;
+        const tours = [...ligne.querySelectorAll('[data-commande="allerAuTour"]:not(.premiere)')].map((bouton) => texteDe(bouton).match(/\d+/g).map(Number));
+        return [plat(nomAffiche(charge().participants.find((p) => p.id === autre))), Number(/\d+/.exec(texteDe(ligne.querySelector('td.nombre')))[0]), tours];
+      });
+    expect(deLaPersonne.length).toBeGreaterThan(0);
+    await cliquer(`[data-section="qualite"] tr[data-paire="${cle}"] .premiere`);
+    await attendre('le plan au premier tour revu', () => dans('[data-section="plan"]') && m.ui.etat().tour === tour);
+
+    await ouvrirSection('participants');
+    await cliquer(`[data-section="participants"] [data-participant="${a}"] [data-commande="fiche"]`);
+    const rubrique = await attendre('la rubrique « Rencontres »', () => dans(`[data-fiche="${a}"] [data-rubrique-rencontres]`));
+    const lignes = [...rubrique.querySelectorAll('tbody tr')].map((ligne) => [
+      texteDe(ligne.querySelector('.nom')),
+      Number(texteDe(ligne.querySelector('td.fois'))),
+      texteDe(ligne.querySelectorAll('td')[1]).split(' ; ').map((etape) => etape.match(/\d+/g).map(Number)),
+    ]);
+    // Les plus revues d'abord ; celles revues plus d'une fois sont les
+    // lignes de la personne au tableau des paires, une pour une.
+    const fois = lignes.map(([, f]) => f);
+    expect(fois).toEqual([...fois].sort((x, y) => y - x));
+    expect(lignes.filter(([, f]) => f > 1)).toEqual(deLaPersonne);
+    // La rubrique jusqu'à ses quatre premières rencontres, les plus revues
+    // d'abord : le haut de la fiche, son nom compris, ne tient pas avec
+    // elles dans la surface du panneau.
+    const rangees = [...rubrique.querySelectorAll('tbody tr')];
+    await cadrerDansLaSurface([rubrique.querySelector('h4'), rangees[Math.min(rangees.length, 4) - 1]]);
+    await photographier(m, '14a-fiche-rencontres', {
+      condition: [`[data-fiche="${a}"] [data-rubrique-rencontres] h4`, `[data-fiche="${a}"] [data-rubrique-rencontres] tbody tr`],
+      graine: GRAINE,
+    });
+  });
+
+  test('15a l’événement construit généré de nouveau : jamais servies, la soirée, chaque tour et ses assis sans table', async () => {
+    if (dans('[data-fiche]') !== null) {
+      await cliquer('[data-fiche] [data-commande="fermerFiche"]');
+      await attendre('la fiche fermée', () => dans('[data-fiche]') === null);
+    }
+    // Le plan bloqué que les familles laissent : « Débloquer », à place
+    // fixe, se confirme sur place, puis l'écriture.
+    await rouvrir(memoire.base);
+    expect(charge().evenement.etat).toBe('bloque');
+    const r = revision();
+    await cliquer('[data-place-fixe] [data-commande="debloquer"]');
+    await cliquer('[data-place-fixe] [data-commande="debloquer"]');
+    await uneEntree(r, 'débloquer');
+    await passerEnEcriture();
+    await generer();
+    const id = await qualiteDeLaPremiere();
+    const vue = vueQualite('objectifs');
+    expect(vue.querySelector('[data-jamais-servies]')).not.toBeNull();
+    const soiree = vue.querySelector('[data-soiree-objectifs]');
+    expect(soiree).not.toBeNull();
+    expect(soiree.querySelector('[data-pourcentage] + [data-compte-pire]')).not.toBeNull();
+    const tours = [...vue.querySelectorAll('ol.tours > li')];
+    expect(tours).toHaveLength(charge().evenement.tours);
+    for (const tour of tours) expect(tour.querySelector('[data-pourcentage] + [data-compte-pire]'), texteDe(tour)).not.toBeNull();
+    exigerComptes(vue);
+
+    const [parTour] = await lireJumeau(vue);
+    const lignesTours = parTour.slice(0, -1);
+    const laSoiree = parTour.at(-1);
+    expect(laSoiree.get('tour')).toBe(plat(t('qualite.objectifs.soiree')));
+    // Chaque barre de tour écrit ses assis sans table possible.
+    const barres = [...vue.querySelectorAll('svg[data-graphique="objectifs"] [data-ligne-graphique]')];
+    expect(barres).toHaveLength(lignesTours.length);
+    barres.forEach((barre, rang) => {
+      expect(texteDe(barre.querySelector('text.secondaire')), lignesTours[rang].get('tour')).toBe(
+        plat(t('qualite.objectifs.assisSansTable', { assis: Number(lignesTours[rang].get('assis')) })),
+      );
+    });
+    // La somme des planchers des tours égale le plancher du diagnostic ;
+    // possibles − servis de la soirée égale la colonne du tableau.
+    const diagnostic = diagnostiquer(configurationDepuisCharge(charge()));
+    const somme = lignesTours.reduce((total, ligne) => total + Number(ligne.get('plancher')), 0);
+    expect(somme).toBe(diagnostic.objectifsInevitables.horsObjectif);
+    expect(Number(laSoiree.get('plancher'))).toBe(somme);
+    const hors = Number(laSoiree.get('possibles')) - Number(laSoiree.get('servis'));
+    const ligne = await ligneAuTableau(id);
+    expect(ligne.get('toursHorsObjectif')).toBe(plat(format.nombre(hors)));
+    await revenirALaQualite(id);
+
+    const objectifs = vueQualite('objectifs');
+    await cadrerDansLaSurface([objectifs.querySelector('[data-jamais-servies]'), objectifs.querySelector('ol.tours')]);
+    await photographier(m, '15a-qualite-objectifs', {
+      condition: ['[data-vue-qualite="objectifs"] [data-soiree-objectifs]', '[data-vue-qualite="objectifs"] ol.tours'],
+      graine: GRAINE,
+    });
+  });
+
+  test('16 la petite : « minimum atteint », collisions et répétitions à zéro, les ancrés à « — »', async () => {
+    await chargerDemonstration('petite');
+    await passerEnEcriture();
+    await generer();
+    const id = await qualiteDeLaPremiere();
+    const instance = normaliser(configurationDepuisCharge(charge()));
+    const mesures = mesurer(instance, indexerPlan(instance, planDepuisFichier(charge().propositions.find((p) => p.id === id))));
+    expect(mesures.collisionsCumulees).toBe(0);
+    expect(mesures.rencontresRepetees).toEqual({ choisies: 0, imposees: 0 });
+    const entete = vueQualite('entete');
+    expect(texteDe(entete.querySelector('.certificat'))).toBe(plat(t('propositions.certificat.atteint')));
+    const valeur = (nom) => texteDe(entete.querySelector(`[data-tuile="${nom}"] .valeur`));
+    for (const nom of ['collisionsCumulees', 'rencontresRepetees']) expect(valeur(nom), nom).toBe('0');
+    expect(valeur('rencontresAncres')).toBe(t('format.vide'));
+    // Le relais est resté inerte pour chaque génération qui suit la grande.
+    expect(relais.avancements, 'aucun avancement compté après la grande').toBe(memoire.grande.avancements);
+    // Le bas de l'en-tête, du groupe de la diversité à la mention : le bord
+    // haut tombe entre deux groupes de tuiles, aucune n'y est coupée. Du
+    // groupe des collisions à la mention, l'en-tête est plus haut que la
+    // surface : les rencontres et leur ligne des ancrés, les collisions et
+    // les répétitions s'affirment plus haut, sans l'image.
+    await cadrerAuBord(entete.querySelector('section.groupe:has([data-tuile="diversite"])'), 'haut');
+    await photographier(m, '16-minimum-atteint', {
+      condition: [
+        '[data-vue-qualite="entete"] section.groupe:has([data-tuile="diversite"]) h4',
+        '[data-vue-qualite="entete"] [data-tuile="manqueMax"]',
+        '[data-vue-qualite="entete"] .certificat',
+      ],
+      graine: GRAINE,
+    });
   });
 });
 

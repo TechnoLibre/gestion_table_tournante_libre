@@ -14,8 +14,9 @@
 //
 // Aucun délai fixe (§ 19.3) : chaque étape attend une condition du document,
 // image après image, et lève en la nommant quand elle ne vient pas. Les
-// données sont tirées des démonstrations livrées et de commandes de
-// l'application, sans aléa : deux parcours rendent le même écran.
+// données sont tirées des démonstrations livrées, d'événements d'épreuve aux
+// noms inventés et de commandes de l'application, sans aléa : deux parcours
+// rendent le même écran.
 //
 // Un état s'atteint sans geste de l'opérateur : la question du dossier de
 // travail, qui se pose au démarrage, par les options du système simulé.
@@ -27,7 +28,8 @@ import { SECTIONS } from '../../src/interface/evenement/sections.js';
 import { LISTE_PAR_DEFAUT, listeApres } from '../../src/interface/generation/priorites.js';
 import { rechercher } from '../../src/moteur/recherche.js';
 import { serialiser } from '../../src/stockage/canonique.js';
-import { analyser, capacite, configurationDepuisCharge } from '../../src/stockage/document.js';
+import { texteDesCourses } from '../../src/stockage/courses.js';
+import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../../src/stockage/document.js';
 import { SUFFIXES } from '../../src/stockage/noms.js';
 import { FICHIER_REGLAGES, serialiserReglages } from '../../src/stockage/reglages_locaux.js';
 import { VERSION } from '../../src/version.genere.js';
@@ -178,14 +180,162 @@ const demonstration = (cle) => analyser(texteLivre(cle)).charge;
  * : au tour 1, les tables 1 et 2 sont en conflit, les tables 3 et 4 saines.
  */
 export function chargePrincipale() {
+  return generationPrincipale().charge;
+}
+
+/** La principale et les entrées du compagnon des courses que sa génération
+ *  rend : { charge, courses }. */
+export function generationPrincipale() {
   let charge = demonstration('petite-conflit');
   charge = executer(charge, 'designer', { participant: 1, table: 1, siege: 1, libelle: 'hôte' });
   charge = executer(charge, 'reserver', { participant: 2, table: 2, siege: 2, portee: 'tour', tour: 1 });
   charge = executer(charge, 'poserTitre', { table: 3, siege: 3, libelle: 'animateur' });
-  const configuration = configurationDepuisCharge(charge);
-  const propositions = rechercher(configuration, { graine: 2, nombre: 1, arret: 300, historique: 1000 });
-  return appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
+  return generee(charge, { graine: 2, nombre: 1, arret: 300 });
 }
+
+// La charge, une génération de plus sous les réglages donnés, historique
+// 1 000, enregistrée par la commande : { charge, courses }, courses les
+// entrées du compagnon que la commande rend, une par proposition.
+function generee(charge, reglages) {
+  const configuration = configurationDepuisCharge(charge);
+  const propositions = rechercher(configuration, { historique: 1000, ...reglages });
+  const rendu = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee });
+  return { charge: rendu.charge, courses: rendu.courses };
+}
+
+// Des personnes inventées : le prénom et le nom se combinent, chacun
+// désigné par son rang, sans homonyme jusqu'à soixante-quatre.
+const PRENOMS = ['Iris', 'Théo', 'Ondine', 'Basile', 'Maëlle', 'Sidonie', 'Aurèle', 'Clovis'];
+const NOMS = ['Ombrelle', 'Pervenche', 'Lacasse', 'Tourteau', 'Quenouille', 'Cormoran', 'Belette', 'Garance'];
+
+// Un événement d'épreuve inventé, sans proposition ni retenu : une
+// personne par entrée d'appartenances — son appartenance, null sans —,
+// tables tables rondes de sieges places numérotées de 1 à tables, tours
+// tours.
+function chargeInventee({ appartenances, tables, sieges, tours }) {
+  const charge = creerCharge({ id: 'evt-qualite', nom: 'Soirée Pervenche', siegesParDefaut: sieges, tours });
+  charge.participants = appartenances.map((appartenance, rang) => ({
+    id: rang + 1,
+    nom: NOMS[Math.floor(rang / PRENOMS.length) % NOMS.length],
+    prenom: PRENOMS[rang % PRENOMS.length],
+    appartenance,
+    courriel: null,
+    titrePressenti: null,
+    notes: null,
+    exclu: false,
+  }));
+  charge.tables = Array.from({ length: tables }, (_, rang) => ({
+    id: rang + 1,
+    numero: rang + 1,
+    sieges: null,
+    forme: 'ronde',
+    position: { x: 300 * (rang + 1), y: 0 },
+  }));
+  charge.prochainsIds = { participant: appartenances.length + 1, table: tables + 1, proposition: 1 };
+  return charge;
+}
+
+const AUBIER = 'Coopérative Aubier';
+const RESSAC = 'Atelier Ressac';
+
+/** Douze personnes, quatre tables de trois, six tours (§ 12.5) : chacun
+ *  revoit quelqu'un ; les deux premières, réservées ensemble à la table 1
+ *  pour tous les tours, forment une paire imposée. Une génération de deux
+ *  propositions. */
+export function chargePaires() {
+  const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 4, sieges: 3, tours: 6 });
+  charge.reservations = [1, 2].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+  return generee(charge, { graine: 5, nombre: 2, arret: 60 }).charge;
+}
+
+/** Douze personnes, trois tables de quatre, trois tours ; les six premières
+ *  portent l'étiquette « finance », que la table 1 a pour objectif à tous
+ *  les tours. Une génération d'une proposition, sous cet objectif. */
+export function chargeObjectifs() {
+  const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
+  for (const personne of charge.participants) if (personne.id <= 6) personne.etiquettes = ['finance'];
+  charge.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+  return generee(charge, { graine: 3, nombre: 1, arret: 300 }).charge;
+}
+
+// Le placement de chargeNiveaux, tours par tours, sièges non attribués.
+// Les doublons parmi les affiliés (α − δ) valent 3 à la table 1 à chaque
+// tour, 2 et 1 aux tables 2 et 3 du tour 1, 0 ailleurs ; les sièges sans
+// appartenance nouvelle (c − δ) valent 0 à la table 2 du tour 2, 1 aux
+// tables 2 et 3 du tour 3, 2 et 3 ailleurs ; la table 4 du tour 3 n'a aucun
+// affilié. Les quatre de la table 1 se voient trois fois, 5 et 6 deux
+// fois, 5 et 7 une fois, 1 et 5 jamais.
+const NIVEAUX = Object.freeze([
+  [[1, 2, 3, 4], [5, 6, 7, 12], [8, 9, 13, 14], [10, 11, 15, 16]],
+  [[1, 2, 3, 4], [5, 8, 10, 11], [6, 9, 12, 13], [7, 14, 15, 16]],
+  [[1, 2, 3, 4], [5, 6, 9, 10], [7, 8, 11, 12], [13, 14, 15, 16]],
+]);
+
+/** Seize personnes inventées, quatre tables de quatre, trois tours : les
+ *  quatre de la première appartenance réservées ensemble à la table 1 pour
+ *  tous les tours, et la proposition NIVEAUX, écrite à la main, où la
+ *  grille des tables, sous chaque position, et la matrice des rencontres
+ *  portent les quatre niveaux de l'échelle (§ 12.7, D33, D35). */
+export function chargeNiveaux() {
+  const appartenances = [
+    ...Array(4).fill(AUBIER),
+    ...Array(3).fill(RESSAC),
+    ...Array(2).fill('Collectif Brisant'),
+    'Cercle Ormeau',
+    'Brigade Sauge',
+    ...Array(5).fill(null),
+  ];
+  let charge = chargeInventee({ appartenances, tables: 4, sieges: 4, tours: 3 });
+  for (const participant of [1, 2, 3, 4]) {
+    charge = executer(charge, 'reserver', { participant, table: 1, siege: participant, portee: 'tous', tour: null });
+  }
+  return avecTours(charge, NIVEAUX);
+}
+
+// Le nombre de tours de chargeCollisionsEtroites.
+const TOURS_ETROITS = 10;
+
+/** Soixante-quatre personnes inventées, huit tables de huit, TOURS_ETROITS
+ *  tours, et une proposition écrite à la main, la même à chaque tour : les
+ *  huit de la première appartenance réunies à la table 1, vingt-huit
+ *  collisions par tour, aucune prouvée ; les huit de la seconde, une par
+ *  table sauf deux à la table 2, une collision par tour, dont une seule
+ *  prouvée — les deux réservées ensemble à la table 2 au tour 1. Le segment
+ *  « prouvé inévitable » de la seconde vaut un sur un axe de 280 : il est
+ *  étroit (§ 12.4, B13). Au-delà de SEUIL_MATRICE_PARTICIPANTS, la matrice
+ *  ne se dessine pas. */
+export function chargeCollisionsEtroites() {
+  const appartenances = [...Array(8).fill(AUBIER), ...Array(8).fill(RESSAC), ...Array(48).fill(null)];
+  const charge = chargeInventee({ appartenances, tables: 8, sieges: 8, tours: TOURS_ETROITS });
+  charge.reservations = [9, 10].map((participant) => ({ participant, table: 2, siege: null, portee: 'tour', tour: 1 }));
+  // Les tables 2 à 8 : la seconde appartenance, 9 et 10 à la table 2, puis
+  // une de 11 à 16 par table, complétées des personnes sans appartenance.
+  const sans = Array.from({ length: 48 }, (_, rang) => 17 + rang);
+  const autres = [
+    [9, 10, ...sans.slice(0, 6)],
+    ...[11, 12, 13, 14, 15, 16].map((personne, rang) => [personne, ...sans.slice(6 + 7 * rang, 13 + 7 * rang)]),
+  ];
+  const tour = [[1, 2, 3, 4, 5, 6, 7, 8], ...autres];
+  return avecTours(charge, Array.from({ length: TOURS_ETROITS }, () => tour));
+}
+
+/** La petite démonstration dont la table 4 est réservée en entier pour
+ *  tous les tours (chargeGelee), sous la proposition TROIS_CONFLITS, écrite
+ *  à la main, qui assoit ailleurs les trois personnes réservées : les
+ *  rencontres que le plan mesure dépassent les plafonds que les
+ *  réservations bornent, et la garde du détail (refusDessin, § 12.3) retire
+ *  le dessin de la page de qualité. */
+export function chargeRefusDessin() {
+  return avecTours(chargeGelee(), TROIS_CONFLITS);
+}
+
+/** Le compagnon des courses d'une charge, ses entrées données, posé dans
+ *  les Documents sous BASE. */
+export const fichierCourses = (charge, entrees, base = BASE) => ({
+  racine: 'documents',
+  chemin: `${base}${SUFFIXES.courses}`,
+  texte: texteDesCourses(charge.evenement.id, entrees),
+});
 
 // Un placement de la petite démonstration en conflit, quatre tours de
 // quatre tables de trois, sièges non attribués : au tour 3, la table 1 réunit
@@ -364,6 +514,69 @@ function ecranDeSection(section, mode) {
 
 // La principale en écriture, sur le plan.
 const planEnEcriture = (contexte, options) => ouvrirEvenement(contexte, chargePrincipale(), { ecriture: true, section: 'plan', options });
+
+// La page de qualité du montage dessinée : une vue posée au moins, chaque
+// graphique de la section mesuré et porteur d'une marque au moins.
+async function qualiteDessinee(m) {
+  await attendre('la page de qualité dessinée', () => {
+    const section = m.racine.querySelector('[data-section="qualite"]');
+    if (section === null || section.querySelector('[data-vue-qualite]') === null) return false;
+    return [...section.querySelectorAll('svg[data-graphique]')].every(
+      (svg) => Number(svg.getAttribute('width')) > 0 && svg.querySelector('[data-marque]') !== null,
+    );
+  });
+}
+
+// Ouvre l'événement de la charge sur la page de qualité (ouvrirEvenement),
+// puis attend son dessin. Rend le montage.
+async function ouvrirQualite(contexte, charge, { ecriture = false, options = {} } = {}) {
+  const m = await ouvrirEvenement(contexte, charge, { ecriture, section: 'qualite', options });
+  await qualiteDessinee(m);
+  return m;
+}
+
+
+// Les commandes qui ouvrent un jumeau, sous le sélecteur donné.
+const commandesJumeau = (m, sous) => m.racine.querySelectorAll(`${sous} [data-commande="ouvrirJumeau"]`);
+
+// Ouvre, par sa commande, chaque jumeau sous le sélecteur donné, l'un après
+// l'autre — la commande d'un jumeau ouvert devient celle qui le ferme —,
+// puis attend que chacun soit rendu. Rend le nombre de jumeaux ouverts.
+async function ouvrirJumeaux(m, sous) {
+  const total = commandesJumeau(m, sous).length;
+  for (let ouverts = 0; ouverts < total; ouverts += 1) {
+    const commande = commandesJumeau(m, sous)[0];
+    if (commande === undefined) throw new Error(`écran : ${total - ouverts} jumeau(x) de ${sous} sans commande d'ouverture`);
+    commande.click();
+    flushSync();
+    await uneImage();
+  }
+  await attendre(`les ${total} jumeaux de ${sous} ouverts`, () => commandesJumeau(m, sous).length === 0 && m.racine.querySelectorAll(`${sous} [data-jumeau]`).length >= total);
+  return total;
+}
+
+// Un jumeau du profil ouvert sur la page de qualité de la charge, au mode
+// donné : regarder ne refuse rien et n'écrit rien (§ 8.4) — un refus rendu
+// ou une primitive d'écriture appelée depuis l'ouverture de la page fait
+// lever l'écran.
+async function jumeauSansEcriture(contexte, charge) {
+  const m = await ouvrirQualite(contexte, charge);
+  const ecritures = m.trace.length;
+  await ouvrirJumeaux(m, '[data-vue-qualite="profil"]');
+  if (m.racine.querySelector('[data-refus]') !== null) throw new Error('écran : un refus rendu à l’ouverture d’un jumeau');
+  if (m.trace.length !== ecritures) throw new Error(`écran : l’ouverture d’un jumeau a écrit ${JSON.stringify(m.trace.slice(ecritures))}`);
+  return m.racine;
+}
+
+// La page de qualité de chargeNiveaux, son sélecteur du mélange des tables
+// posé sur la position donnée par un clic.
+async function tablesSurPosition(contexte, position) {
+  const m = await ouvrirQualite(contexte, chargeNiveaux());
+  await cliquer(m, `[data-vue-qualite="tables"] [data-position-tables="${position}"]`);
+  await attendre(`la position « ${position} » choisie`, () => m.racine.querySelector(`[data-position-tables="${position}"]`)?.checked === true);
+  await qualiteDessinee(m);
+  return m.racine;
+}
 
 /**
  * Le contexte d'un parcours : il monte App dans la langue et le thème
@@ -869,6 +1082,148 @@ export const ECRANS = Object.freeze([
           getComputedStyle(bulle).visibility === 'visible'
         );
       });
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.infobulle',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // Le pointeur réel au centre de la surface du profil en comptes,
+      // amenée au milieu de la fenêtre comme centre() amène toute cible : le
+      // rang pointé se désigne, et l'infobulle porte sa ligne du jumeau, son
+      // pourcentage suivi du compte de la ligne. Rien ne la place à l'écart
+      // du bandeau collant : l'infobulle elle-même reste dans la zone où
+      // défile le graphique.
+      const m = await ouvrirQualite(contexte, chargePrincipale());
+      const { x, y } = await centre(await element(m, '[data-graphique="profilComptes"] > rect[pointer-events="all"]'));
+      await pointer('bouger', x, y);
+      await attendre("l'infobulle du profil", () => {
+        const bulle = m.racine.querySelector('[data-vue-qualite="profil"] [role="tooltip"]');
+        return (
+          bulle !== null &&
+          !bulle.hidden &&
+          getComputedStyle(bulle).visibility === 'visible' &&
+          bulle.querySelector('[data-pourcentage]') !== null &&
+          m.racine.querySelector('[data-graphique="profilComptes"] [data-rang]') !== null
+        );
+      });
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.jumeaux',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // La principale : chaque jumeau de la page ouvert par sa commande. Les
+      // écrans des objectifs et de la performance ouvrent les leurs.
+      const m = await ouvrirQualite(contexte, chargePrincipale());
+      await ouvrirJumeaux(m, '[data-section="qualite"]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.jumeaux.lecture',
+    mode: 'lecture',
+    atteindre: (contexte) => jumeauSansEcriture(contexte, chargePrincipale()),
+  },
+  {
+    nom: 'qualite.jumeaux.bloque',
+    mode: 'bloque',
+    atteindre: (contexte) => jumeauSansEcriture(contexte, chargeBloquee()),
+  },
+  {
+    nom: 'qualite.paires',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // 12 / 4 × 3 / 6 : les paires choisies et imposées, et la matrice
+      // dessinée sous le seuil.
+      const m = await ouvrirQualite(contexte, chargePaires());
+      await element(m, '[data-vue-qualite="paires"] [data-paire]');
+      await element(m, '[data-graphique="matrice"] [data-case]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.objectifs',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // La charge à objectifs, chaque jumeau de la page ouvert : celui des
+      // objectifs porte la ligne de la soirée et celle de chaque table.
+      const m = await ouvrirQualite(contexte, chargeObjectifs());
+      await element(m, '[data-graphique="objectifs"]');
+      await ouvrirJumeaux(m, '[data-section="qualite"]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.performance',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // La principale et le compagnon des courses que sa génération rend :
+      // la ligne de tête de la course et ses points de relevé, chaque
+      // jumeau de la page ouvert, celui de la performance compris.
+      const { charge, courses } = generationPrincipale();
+      const m = await ouvrirQualite(contexte, charge, { options: { fichiers: [fichierCourses(charge, courses)] } });
+      await element(m, '[data-vue-qualite="performance"] [data-course]');
+      await element(m, '[data-vue-qualite="performance"] [data-point-releve]');
+      await ouvrirJumeaux(m, '[data-section="qualite"]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.collisions.etroit',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // chargeCollisionsEtroites : la barre de la seconde appartenance
+      // porte un segment « prouvé inévitable » étroit, à côté de son reste.
+      const m = await ouvrirQualite(contexte, chargeCollisionsEtroites());
+      await element(m, '[data-graphique="collisions"] [data-segment="prouve"]');
+      await element(m, '[data-graphique="collisions"] [data-segment="reste"]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.niveaux',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // La grille des tables, position « sièges », et la matrice portent
+      // chacune les quatre niveaux de l'échelle.
+      const m = await ouvrirQualite(contexte, chargeNiveaux());
+      await element(m, '[data-graphique="tables"] [data-case]');
+      await element(m, '[data-graphique="matrice"] [data-case]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.tables.assis',
+    mode: 'lecture',
+    atteindre: (contexte) => tablesSurPosition(contexte, 'assis'),
+  },
+  {
+    nom: 'qualite.tables.doublons',
+    mode: 'lecture',
+    atteindre: (contexte) => tablesSurPosition(contexte, 'doublons'),
+  },
+  {
+    nom: 'qualite.sansCourse',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // La principale sans compagnon des courses : la phrase de la
+      // performance.
+      const m = await ouvrirQualite(contexte, chargePrincipale());
+      await element(m, '[data-vue-qualite="performance"] [data-phrase-qualite="sansCourse"]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.refus',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // chargeRefusDessin : la garde du détail retire le dessin, la phrase
+      // du refus et chaque contradiction nommée.
+      const m = await ouvrirEvenement(contexte, chargeRefusDessin(), { section: 'qualite' });
+      await element(m, '[data-section="qualite"] [data-phrase-qualite="refusDessin"]');
       return m.racine;
     },
   },

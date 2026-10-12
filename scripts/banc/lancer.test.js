@@ -95,7 +95,7 @@ const sorties = () =>
         format: 1,
         mesures: [
           { nom: 'LARGEUR_TRONCATURE_NOM_PX', unite: 'px', valeurProposee: 190, critere: 'nom de référence', police: 'Noto Sans', ralentissementCpu: 1 },
-          { nom: 'SEUIL_MATRICE_PARTICIPANTS', unite: 'participants', valeurProposee: 38, critere: 'case de 24 px', ralentissementCpu: 1 },
+          { nom: 'SEUIL_MATRICE_PARTICIPANTS', unite: 'participants', valeurProposee: 38, critere: 'case de 24 px', police: 'Noto Sans', ralentissementCpu: 1 },
         ],
       },
     ],
@@ -249,6 +249,16 @@ describe('lancer : le jugement qui rend la sortie non nulle', () => {
     assert.deepEqual(jugement(r).bloquants, [
       'SEUIL_SIEGES_LISIBLES mesurée sous la police « DejaVu Sans », et non sous Noto Sans',
       'TOLERANCE_CHAINE_TEMOIN mesurée sous la police « inconnue », et non sous Noto Sans',
+    ]);
+  });
+
+  test('les deux seuils de la page de qualité sont des mesures de texte : sans police nommée ou sous une autre, motif bloquant', () => {
+    const r = releve();
+    delete r.mesures.find(({ nom }) => nom === 'SEUIL_MATRICE_PARTICIPANTS').police;
+    r.mesures.find(({ nom }) => nom === 'LARGEUR_TRONCATURE_NOM_PX').police = 'DejaVu Sans';
+    assert.deepEqual(jugement(r).bloquants, [
+      'SEUIL_MATRICE_PARTICIPANTS mesurée sous la police « inconnue », et non sous Noto Sans',
+      'LARGEUR_TRONCATURE_NOM_PX mesurée sous la police « DejaVu Sans », et non sous Noto Sans',
     ]);
   });
 

@@ -368,6 +368,39 @@ function centreDe(element) {
 // pointer-events: none n'en est pas moins peint.
 const ATTEIGNABLE = '*, *::before, *::after { pointer-events: auto !important; }';
 
+// Les documents où la feuille ATTEIGNABLE est posée par une lecture en
+// cours.
+const ATTEIGNABLES = new WeakSet();
+
+/**
+ * Rend lire(), la feuille ATTEIGNABLE posée dans doc le temps de l'appel.
+ * Une lecture imbriquée dans une autre lit sous la feuille de la première,
+ * qui seule la pose et la retire : un relevé qui atteint des milliers de
+ * points, enveloppé d'un seul appel, ne change les feuilles du document
+ * qu'une fois. Chaque pose et chaque retrait recalculent le style du
+ * document entier, et la page épuise sa mémoire après quelque cent mille
+ * recalculs. lire est synchrone : rien d'autre ne s'exécute sous la
+ * feuille.
+ *
+ * @template T
+ * @param {Document} doc
+ * @param {() => T} lire
+ * @returns {T}
+ */
+export function atteignable(doc, lire) {
+  if (ATTEIGNABLES.has(doc)) return lire();
+  const feuille = doc.createElement('style');
+  feuille.textContent = ATTEIGNABLE;
+  doc.head.append(feuille);
+  ATTEIGNABLES.add(doc);
+  try {
+    return lire();
+  } finally {
+    ATTEIGNABLES.delete(doc);
+    feuille.remove();
+  }
+}
+
 // Éléments présents au point centre, en coordonnées de la fenêtre, du plus
 // haut au plus bas dans l'ordre de peinture — cascade, positionnement et
 // dessins SVG compris —, pointer-events ignoré. Un point hors de la fenêtre
@@ -377,14 +410,7 @@ function elementsAuPoint(doc, centre, texte) {
   if (centre.x < 0 || centre.y < 0 || centre.x >= fenetre.innerWidth || centre.y >= fenetre.innerHeight) {
     throw new Error(`fond sous ${designation(texte)} : centre (${centre.x}, ${centre.y}) hors de la fenêtre`);
   }
-  const feuille = doc.createElement('style');
-  feuille.textContent = ATTEIGNABLE;
-  doc.head.append(feuille);
-  try {
-    return doc.elementsFromPoint(centre.x, centre.y);
-  } finally {
-    feuille.remove();
-  }
+  return atteignable(doc, () => doc.elementsFromPoint(centre.x, centre.y));
 }
 
 // Premier fond opaque peint au point centre sous racine. Parmi les éléments
