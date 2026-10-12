@@ -83,6 +83,17 @@
  *                                   sans appartenance
  * @property {string[]} groupes      index de groupe → libellé ; ordre de première
  *                                   apparition en parcourant les ids croissants
+ * @property {Int32Array} debutEtiquettes N + 1 cases : les étiquettes de la
+ *                                   personne p vont, dans etiquettes, de
+ *                                   debutEtiquettes[p] à debutEtiquettes[p + 1] ;
+ *                                   que des zéros sans étiquette
+ * @property {Int32Array} etiquettes index dans libellesEtiquettes des
+ *                                   étiquettes distinctes de chacun,
+ *                                   croissants, personne par personne
+ * @property {string[]} libellesEtiquettes  index d'étiquette → libellé : les
+ *                                   étiquettes distinctes des présents,
+ *                                   rangées par unités de code ; [] sans
+ *                                   étiquette
  * @property {Int32Array} fixe       [p * R + r] → index de table imposé (r à
  *                                   partir de 0), LIBRE (−1) si libre
  * @property {Uint8Array} statut     STATUT.MOBILE (0), STATUT.PARTIELLEMENT_FIXE
@@ -116,7 +127,11 @@
  *                                   debutAnimes[t * R + r + 1]
  * @property {Int32Array} animes     rangs des animateurs qui animent à la table
  *                                   t au tour r, croissants, ligne par ligne
- * @property {Int32Array} borneAnimateurs B(p) = min(#Φ(p), Σ_r φ_r(p)) (D21)
+ * @property {Int32Array} borneAnimateurs B(p), la borne des animateurs
+ *                                   (§ 4.5, D21) : le plus petit du nombre
+ *                                   d'animateurs que p peut rejoindre et de la
+ *                                   somme, sur les tours, du plus grand nombre
+ *                                   d'animateurs à une table qu'il peut occuper
  * @property {Array<{nom: string, coche: boolean, sansObjet: boolean,
  *                   valeurs: string[]}>} etatCriteres
  *           un état par critère, dans l'ordre de CRITERES (criteres.js)

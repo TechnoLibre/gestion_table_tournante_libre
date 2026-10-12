@@ -125,6 +125,18 @@
 // pas : les échanges de même score y sont acceptés, un score courant
 // inchangé y marque aussi bien un plateau que la descente parcourt, et une
 // relance couperait ce parcours, d'autant plus souvent que L est court.
+//
+// La course (§ 5.10). Chaque proposition rapporte ses mouvements évalués —
+// le compte d'arrêt, moins quand le n-uplet devient nul, zéro quand le
+// placement initial l'est déjà — et ses points de relevé : la meilleure
+// affectation copiée après k mouvements évalués, pour chaque puissance de
+// dix k strictement sous le dernier. Ce dernier point est le plan de la
+// proposition, qui ne se copie pas : au plus ⌊log₁₀ arret⌋ + 1 copies. La
+// copie se prend à la fin de l'itération de rang k − 1, avant la relance
+// que l'itération suivante peut faire ; elle ne tire rien et ne change
+// aucune comparaison. La boucle ne lit le compte d'arrêt qu'à sa borne :
+// le point k est donc le plan que la même graine rend au compte d'arrêt k.
+// La recherche ne lit pas l'horloge et ne date rien.
 import { FLUX, creerPcg32 } from '../demo/prng.js';
 import {
   LIBRE,
@@ -154,6 +166,11 @@ import { plafondsAPriori } from './plafond.js';
  * @property {number} arret
  * @property {number} historique    longueur de l'historique d'acceptation
  * @property {import('./types.js').Plan} plan
+ * @property {number} evalues       mouvements évalués, de 0 à arret
+ * @property {{mouvements: number, plan: import('./types.js').Plan}[]} releves
+ *           les points de relevé copiés, mouvements croissants : chaque
+ *           puissance de dix strictement sous evalues ; le dernier point,
+ *           evalues, est plan
  *
  * @typedef {Object} EtatRecherche
  * Rendu par creerEtat ; les champs qui suivent se lisent, aucun ne s'écrit
@@ -756,7 +773,10 @@ function lireSignal(signal) {
 }
 
 // Descente par acceptation tardive depuis un placement initial tiré de rng ;
-// rend la meilleure affectation vue, en plan indexé. L'ordre d'acceptation
+// rend { plan, evalues, releves } : la meilleure affectation vue, en plan
+// indexé, les mouvements évalués, et les copies de la meilleure affectation
+// aux points de relevé, { mouvements, tableDe }, mouvements croissants (en-tête
+// du module, « La course »). L'ordre d'acceptation
 // suit la meilleure affectation (ordreAccepte). Dans l'ordre des
 // contraintes, un score courant inchangé pendant PATIENCE × historique
 // itérations fait relancer la descente (en-tête du module). La bascule vers
@@ -789,7 +809,12 @@ function descendre(structure, rng, { arret, historique, dejaFaits, total, signal
   let ordre = ordreAccepte(forme, meilleurScore);
   const patience = PATIENCE * historique;
   let immobile = 0;
-  for (let i = 0; i < arret && !estNul(courant); i += 1) {
+  // releve : la prochaine puissance de dix ; i, à la sortie de la boucle, les
+  // mouvements évalués.
+  const releves = [];
+  let releve = 1;
+  let i = 0;
+  for (; i < arret && !estNul(courant); i += 1) {
     if (immobile >= patience && ordre === ordreContraintes) {
       etat = etatInitial(structure, rng);
       composer(forme, etat, courant);
@@ -813,32 +838,55 @@ function descendre(structure, rng, { arret, historique, dejaFaits, total, signal
     }
     memoire.set(courant, v);
     immobile = change ? 0 : immobile + 1;
+    // Après releve mouvements évalués : la copie se garde quand la boucle
+    // continue, la borne de la boucle relue ; sinon ce point est le plan rendu.
+    if (i + 1 === releve) {
+      if (i + 1 < arret && !estNul(courant)) {
+        releves.push({ mouvements: releve, tableDe: Int32Array.from(meilleurPlan) });
+      }
+      releve *= 10;
+    }
     const fait = dejaFaits + i + 1;
     if (fait % CADENCE === 0) {
       progression?.(fait, total);
       lireSignal(signal);
     }
   }
-  return meilleurPlan;
+  return { plan: meilleurPlan, evalues: i, releves };
 }
 
-// Le plan de la proposition de graine dérivée graineDerivee : la descente
-// depuis creerPcg32(graineDerivee, FLUX.RECHERCHE), rendue par identifiants.
-// rechercher et regenerer l'appellent tous deux. À instance égale, le plan ne
-// dépend que de la graine dérivée, d'options.arret et d'options.historique :
-// les autres options ne servent qu'à rapporter l'avancement et à lire le
-// signal.
-function proposer(instance, structure, graineDerivee, options) {
+// La descente de la proposition de graine dérivée graineDerivee, depuis
+// creerPcg32(graineDerivee, FLUX.RECHERCHE), en plans indexés (descendre).
+// rechercher, proposerUne et regenerer l'appellent tous trois. À instance
+// égale, le résultat ne dépend que de la graine dérivée, d'options.arret et
+// d'options.historique : les autres options ne servent qu'à rapporter
+// l'avancement et à lire le signal.
+function proposer(structure, graineDerivee, options) {
   const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
-  return planDepuisIndex(instance, descendre(structure, rng, options));
+  return descendre(structure, rng, options);
 }
+
+// La proposition d'identifiant id : ses trois réglages, puis le plan, les
+// mouvements évalués et les points de relevé de sa descente, chaque plan
+// rendu par identifiants.
+const propositionDe = (instance, { id, graine, arret, historique }, { plan, evalues, releves }) => ({
+  id,
+  graine,
+  arret,
+  historique,
+  plan: planDepuisIndex(instance, plan),
+  evalues,
+  releves: releves.map(({ mouvements, tableDe }) => ({ mouvements, plan: planDepuisIndex(instance, tableDe) })),
+});
 
 /**
  * Propositions de placement d'une configuration (§ 5.7) : nombre
  * propositions, d'identifiants 1 à nombre, chacune la meilleure affectation
  * vue en arret mouvements évalués, relances comprises (en-tête du module).
  * Chacune porte sa graine dérivée, arret et historique, défaut résolu : les
- * trois décident de son plan, que regenerer rend à partir d'eux. À
+ * trois décident de son plan, que regenerer rend à partir d'eux. Elle porte
+ * aussi sa course, evalues et releves (en-tête du module) : le point de
+ * relevé k est le plan que regenerer rend au compte d'arrêt k. À
  * configuration et réglages égaux, le résultat est identique. Ne modifie pas
  * la configuration.
  *
@@ -872,7 +920,7 @@ export function rechercher(configuration, reglages, { signal, progression } = {}
   for (let id = 1; id <= nombre; id += 1) {
     lireSignal(signal);
     const graineDerivee = graines.suivant();
-    const plan = proposer(instance, structure, graineDerivee, {
+    const descente = proposer(structure, graineDerivee, {
       arret,
       historique,
       dejaFaits: (id - 1) * arret,
@@ -880,7 +928,7 @@ export function rechercher(configuration, reglages, { signal, progression } = {}
       signal,
       progression,
     });
-    propositions.push({ id, graine: graineDerivee, arret, historique, plan });
+    propositions.push(propositionDe(instance, { id, graine: graineDerivee, arret, historique }, descente));
   }
   return propositions;
 }
@@ -920,7 +968,7 @@ export function proposerUne(configuration, reglages, rang, { signal, progression
   let graineDerivee = 0;
   for (let tirage = 1; tirage <= rang; tirage += 1) graineDerivee = graines.suivant();
   lireSignal(signal);
-  const plan = proposer(instance, structure, graineDerivee, {
+  const descente = proposer(structure, graineDerivee, {
     arret,
     historique,
     dejaFaits: 0,
@@ -928,7 +976,7 @@ export function proposerUne(configuration, reglages, rang, { signal, progression
     signal,
     progression,
   });
-  return { id: rang, graine: graineDerivee, arret, historique, plan };
+  return propositionDe(instance, { id: rang, graine: graineDerivee, arret, historique }, descente);
 }
 
 /**
@@ -956,7 +1004,8 @@ export function verifierReglages({ graine, arret, nombre, historique = HISTORIQU
  * elle-même fait aussi partie du résultat, ordre des tirages, PATIENCE et
  * ordres d'acceptation : une proposition rendue par une autre version de ce
  * module n'est pas garantie régénérable (§ 8.9). Aucun autre champ n'est lu,
- * ni id ni plan. Ne modifie ni la configuration ni la proposition.
+ * ni id ni plan. Rend le seul plan, sans la course que rechercher joint à
+ * la proposition. Ne modifie ni la configuration ni la proposition.
  *
  * Lève RangeError quand l'un des trois champs n'est pas un entier de son
  * domaine, graine de 0 à 2^32 − 1, arret et historique ≥ 1 : un champ absent
@@ -971,12 +1020,13 @@ export function verifierReglages({ graine, arret, nombre, historique = HISTORIQU
 export function regenerer(configuration, { graine, arret, historique }) {
   exigerChampsProposition({ graine, arret, historique });
   const instance = normaliser(configuration);
-  return proposer(instance, preparer(instance), graine, {
+  const { plan } = proposer(preparer(instance), graine, {
     arret,
     historique,
     dejaFaits: 0,
     total: arret,
   });
+  return planDepuisIndex(instance, plan);
 }
 
 /**

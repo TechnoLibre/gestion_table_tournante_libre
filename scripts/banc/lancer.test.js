@@ -90,6 +90,16 @@ const sorties = () =>
       },
     ],
     [
+      'qualite',
+      {
+        format: 1,
+        mesures: [
+          { nom: 'LARGEUR_TRONCATURE_NOM_PX', unite: 'px', valeurProposee: 190, critere: 'nom de référence', police: 'Noto Sans', ralentissementCpu: 1 },
+          { nom: 'SEUIL_MATRICE_PARTICIPANTS', unite: 'participants', valeurProposee: 38, critere: 'case de 24 px', ralentissementCpu: 1 },
+        ],
+      },
+    ],
+    [
       'sieges_lisibles',
       {
         format: 1,
@@ -119,6 +129,8 @@ describe('lancer : assembler (§ 19.10)', () => {
       'SEUIL_SIEGES_LISIBLES',
       'TOLERANCE_CHAINE_TEMOIN',
       'RALENTISSEMENT_PLEINE_CHARGE',
+      'SEUIL_MATRICE_PARTICIPANTS',
+      'LARGEUR_TRONCATURE_NOM_PX',
       'DUREE_GENERATION_PAR_DEFAUT',
       'TEMPS_IMAGE_LISTES',
     ]);
@@ -150,6 +162,8 @@ describe('lancer : assembler (§ 19.10)', () => {
         ['SEUIL_SIEGES_LISIBLES', 1],
         ['TOLERANCE_CHAINE_TEMOIN', 1],
         ['RALENTISSEMENT_PLEINE_CHARGE', 1],
+        ['SEUIL_MATRICE_PARTICIPANTS', 1],
+        ['LARGEUR_TRONCATURE_NOM_PX', 1],
         ['DUREE_GENERATION_PAR_DEFAUT', 1],
         ['TEMPS_IMAGE_LISTES', 4],
       ],
@@ -240,7 +254,7 @@ describe('lancer : le jugement qui rend la sortie non nulle', () => {
 
   test('un verdict non tenu : motif non bloquant, qui nomme la mesure et son critère', () => {
     const r = releve();
-    r.mesures[4].verdict = 'nonTenu';
+    r.mesures.find(({ nom }) => nom === 'TEMPS_IMAGE_LISTES').verdict = 'nonTenu';
     assert.deepEqual(jugement(r), { bloquants: [], nonTenus: ['TEMPS_IMAGE_LISTES : verdict non tenu — p95 sous 33 ms'] });
   });
 });
@@ -351,7 +365,7 @@ describe('lancer : executer, sur des effets factices', () => {
     fichiers.get('temps_image').mesures[0].verdict = 'nonTenu';
     const p = passage({ fichiers });
     assert.equal(await executer(p.effets), 1);
-    assert.equal(JSON.parse(p.ecrits.get(CHEMIN_RELEVE)).mesures[4].verdict, 'nonTenu');
+    assert.equal(JSON.parse(p.ecrits.get(CHEMIN_RELEVE)).mesures.find(({ nom }) => nom === 'TEMPS_IMAGE_LISTES').verdict, 'nonTenu');
     assert.match(p.lignes.join('\n'), /TEMPS_IMAGE_LISTES : verdict non tenu/);
   });
 

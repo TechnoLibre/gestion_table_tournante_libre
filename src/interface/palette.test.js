@@ -5,13 +5,14 @@
 // réservée (§ 12.7, § 13.3, § 14.5). Les fonctions s'éprouvent d'abord sur des
 // feuilles d'épreuve écrites ici, où chaque défaut est posé exprès, puis sur
 // le vrai fichier de jetons : ses familles, ses deux thèmes, les jetons que
-// lisent les composants, les teintes des trois sortes de conflit.
+// lisent les composants, les teintes des trois sortes de conflit, l'échelle
+// séquentielle des graphiques.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
-import { JETONS_CONFLIT, JETON_RETRAIT, MARQUES } from './marques.js';
+import { ECHELLE_GRAPHIQUE, JETONS_CONFLIT, JETON_RETRAIT, MARQUES, MARQUES_GRAPHIQUE, NIVEAUX_GRAPHIQUE } from './marques.js';
 import {
   SIMULATIONS,
   contraste,
@@ -515,5 +516,121 @@ describe('jetons.css', () => {
     }
     const peintes = MARQUES.filter((m) => m.jeton === JETON_RETRAIT || m.fonds.includes(JETON_RETRAIT));
     assert.deepEqual(peintes.map((m) => [m.nom, [...m.fonds]]), [['retrait', ['--couleur-carte-fond', '--couleur-carte-fond-sourd']]]);
+  });
+});
+
+// L'échelle séquentielle des graphiques (§ 12.7, D33, D43) : les niveaux
+// d'une seule teinte, la clarté s'éloignant du fond de la carte d'un niveau
+// au suivant. Rend les fautes, dans l'ordre thème, puis sorte :
+//   { theme, sorte: 'achromatique', jeton } — un niveau sans teinte ;
+//   { theme, sorte: 'teinte', ecart } — deux niveaux dont les teintes HSL
+//     s'écartent de plus de ecartTeinte degrés, l'écart le plus grand ;
+//   { theme, sorte: 'eloignement', jeton, pas } — un niveau dont la clarté
+//     (L d'OKLab × 100) ne s'éloigne pas du fond d'au moins clarte de plus
+//     que celle du niveau qui le précède, pas l'éloignement mesuré. Le sens
+//     est celui du niveau 1 par rapport au fond, et le niveau 0 ne se lit
+//     que par son pas jusqu'au niveau 1 : un niveau 0 qui, dans ce sens,
+//     n'est pas d'au moins clarte en deçà du niveau 1 fait une faute au
+//     niveau 1. Le côté du fond où tombe le niveau 0 n'est pas lu.
+// Un jeton absent d'un thème lève.
+function fautesEchelle(texteCss, niveaux, fond, { ecartTeinte, clarte }) {
+  const fautes = [];
+  for (const theme of ['clair', 'sombre']) {
+    const jetons = lireJetons(texteCss, theme);
+    const lire = (nom) => {
+      if (!jetons.has(nom)) throw new Error(`jeton absent du thème ${theme} : ${nom}`);
+      return jetons.get(nom);
+    };
+    const teintes = niveaux.map((nom) => teinte(lire(nom)));
+    niveaux.forEach((jeton, k) => {
+      if (teintes[k] === null) fautes.push({ theme, sorte: 'achromatique', jeton });
+    });
+    const chromatiques = teintes.filter((h) => h !== null);
+    let ecart = 0;
+    chromatiques.forEach((h, i) => {
+      for (const autre of chromatiques.slice(i + 1)) {
+        const brut = Math.abs(h - autre);
+        ecart = Math.max(ecart, Math.min(brut, 360 - brut));
+      }
+    });
+    if (ecart > ecartTeinte) fautes.push({ theme, sorte: 'teinte', ecart });
+    const clartes = niveaux.map((nom) => 100 * oklab(lire(nom))[0]);
+    const clarteFond = 100 * oklab(lire(fond))[0];
+    const sens = Math.sign(clartes[1] - clarteFond);
+    for (let k = 1; k < niveaux.length; k += 1) {
+      const pas = (clartes[k] - clartes[k - 1]) * sens;
+      if (sens === 0 || pas < clarte) fautes.push({ theme, sorte: 'eloignement', jeton: niveaux[k], pas });
+    }
+  }
+  return fautes;
+}
+
+describe('l’échelle séquentielle des graphiques (§ 12.7, D33, D43)', () => {
+  const NIVEAUX = ['--couleur-n0', '--couleur-n1', '--couleur-n2', '--couleur-n3'];
+  const SEUILS = { ecartTeinte: 6, clarte: 10 };
+  // Quatre bleus de teinte 214° à 1° près, du clair au foncé, sur une carte
+  // blanche ; dans le sombre, du sombre au clair sur une carte sombre.
+  const CLAIR = { '--couleur-carte': '#ffffff', '--couleur-n0': '#dde9f8', '--couleur-n1': '#6b8cb8', '--couleur-n2': '#2c65af', '--couleur-n3': '#1b3d6b' };
+  const SOMBRE = { '--couleur-carte': '#1b1f25', '--couleur-n0': '#1d2b3f', '--couleur-n1': '#587193', '--couleur-n2': '#6a95cd', '--couleur-n3': '#a6c3e8' };
+  const lire = (clair, sombre = SOMBRE) => fautesEchelle(feuille(clair, sombre), NIVEAUX, '--couleur-carte', SEUILS);
+
+  test('une échelle d’une teinte qui s’éloigne du fond, du clair au foncé dans le clair et du sombre au clair dans le sombre, passe', () => {
+    assert.deepEqual(lire(CLAIR), []);
+  });
+
+  test('un niveau plus proche du fond que le précédent est relevé, à son rang', () => {
+    const fautes = lire({ ...CLAIR, '--couleur-n2': '#8aa6cc' });
+    assert.deepEqual(fautes.map((f) => `${f.theme} ${f.sorte} ${f.jeton}`), ['clair eloignement --couleur-n2']);
+    assert.ok(fautes[0].pas < 0);
+  });
+
+  test('un niveau 0 sombre en thème clair est relevé : il n’est plus le plus proche du fond', () => {
+    const fautes = lire({ ...CLAIR, '--couleur-n0': '#14294a' });
+    assert.deepEqual(fautes.map((f) => `${f.theme} ${f.sorte} ${f.jeton}`), ['clair eloignement --couleur-n1']);
+  });
+
+  test('deux niveaux trop proches en clarté sont relevés, même dans le bon sens', () => {
+    const fautes = lire(CLAIR, { ...SOMBRE, '--couleur-n2': '#5b7aa3' });
+    assert.deepEqual(fautes.map((f) => `${f.theme} ${f.sorte} ${f.jeton}`), ['sombre eloignement --couleur-n2']);
+    assert.ok(fautes[0].pas > 0 && fautes[0].pas < SEUILS.clarte);
+  });
+
+  test('une teinte qui dérive d’un niveau à l’autre et un niveau gris sont relevés : une échelle est une seule teinte', () => {
+    // Le niveau 2 vire au violet : à plus de 6° des trois autres.
+    const derive = lire({ ...CLAIR, '--couleur-n2': '#3c4fb0' });
+    assert.deepEqual(derive.map((f) => `${f.theme} ${f.sorte}`), ['clair teinte']);
+    assert.ok(derive[0].ecart > SEUILS.ecartTeinte);
+    const gris = lire({ ...CLAIR, '--couleur-n0': '#ececec' });
+    assert.deepEqual(gris.map((f) => `${f.theme} ${f.sorte}`), ['clair achromatique']);
+    const { '--couleur-n3': _absent, ...sansN3 } = CLAIR;
+    assert.throws(() => lire(sansN3), /jeton absent du thème clair : --couleur-n3/);
+  });
+
+  test('l’échelle de jetons.css : une seule teinte, à ECHELLE_GRAPHIQUE.ecartTeinte degrés au plus, chaque niveau plus loin du fond de la carte que le précédent d’ECHELLE_GRAPHIQUE.clarte au moins, dans les deux thèmes', () => {
+    const niveaux = NIVEAUX_GRAPHIQUE.map(({ jeton }) => jeton);
+    assert.equal(niveaux.length, 4);
+    assert.deepEqual(fautesEchelle(JETONS, niveaux, '--couleur-carte-fond', ECHELLE_GRAPHIQUE), []);
+    // Les niveaux d'une même teinte se distinguent aussi deux à deux en clarté.
+    assert.deepEqual(verifierClartes(JETONS, niveaux, ECHELLE_GRAPHIQUE.clarte), []);
+  });
+
+  test('une série à 25° d’une teinte de conflit est refusée, comme tout jeton chromatique', () => {
+    // Conflit à 0° ; une série orangée à 25° est relevée, une bleue passe.
+    const css = feuille({ '--couleur-conflit': '#ff0000', '--couleur-graphique-serie-1': '#ff6a00', '--couleur-graphique-serie-2': '#1a61ac' });
+    assert.ok(Math.abs(teinte(hex('#ff6a00')) - 25) < 0.1);
+    assert.deepEqual(
+      verifierTeintesReservees(css, ['--couleur-conflit']).map((f) => `${f.theme}:${f.jeton}`),
+      ['clair:--couleur-graphique-serie-1', 'sombre:--couleur-graphique-serie-1'],
+    );
+  });
+
+  test('les marques de la famille tiennent 3:1 sur leurs fonds dans le vrai fichier : la borne comprise', () => {
+    const borne = MARQUES_GRAPHIQUE.find((m) => m.jeton === '--couleur-graphique-borne');
+    assert.notEqual(borne, undefined);
+    assert.deepEqual(verifierPalette(JETONS, [borne]), []);
+    // Absente d'un thème, elle lève.
+    const sansBorne = JETONS.replace(/(:root\[data-theme='sombre'\][^}]*?)--couleur-graphique-borne:[^;]*;/, '$1');
+    assert.notEqual(sansBorne, JETONS);
+    assert.throws(() => verifierPalette(sansBorne, [borne]), /--couleur-graphique-borne/);
   });
 });

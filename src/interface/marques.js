@@ -18,6 +18,12 @@
 // et de l'action principale, qui se valident par calcul sur chacun de leurs
 // fonds. Un signe ne porte jamais seul une information : un libellé
 // l'accompagne toujours.
+//
+// La famille « graphique » (§ 12.7, § 13.3) a ses listes à part :
+// MARQUES_GRAPHIQUE, TEXTES_GRAPHIQUE et FONDS_GRAPHIQUE, de même forme,
+// validées par calcul comme les autres. Elles restent hors de MARQUES et de
+// TEXTES tant qu'aucun écran ne les rend : la garde transversale exige que
+// chaque entrée de MARQUES soit rendue sur un écran.
 
 const c = (nom) => `--couleur-${nom}`;
 
@@ -202,3 +208,83 @@ export const TEXTES = Object.freeze([
   texte('lien', 'action-encre', ['page-fond', 'carte-fond', 'carte-fond-sourd', 'action-teinte']),
   texte('information', 'information', ['information-fond', 'page-fond', 'carte-fond']),
 ]);
+
+// --- La famille « graphique » (§ 12.7, § 13.3, D30, D43) ---------------------
+
+const graphique = (nom) => `graphique-${nom}`;
+
+/** L'échelle séquentielle des graphiques — la matrice des rencontres et la
+ *  grille tables × tours (D33, D35) : quatre niveaux, 0, 1, 2, 3 et plus,
+ *  { niveau, jeton, encre }, encre le jeton du compte écrit dans la case.
+ *  Une seule teinte ; la clarté s'éloigne du fond de la carte du niveau 0
+ *  au niveau 3, dans chaque thème : du clair au foncé dans le clair, du
+ *  sombre au clair dans le sombre. Deux encres neutres, nommées d'après le
+ *  thème clair : l'encre foncée sert les niveaux 0 et 1, les plus proches
+ *  du fond, l'encre claire les niveaux 2 et 3. Le thème sombre inverse
+ *  l'échelle et, avec elle, la clarté des deux encres, qui gardent leurs
+ *  niveaux : une même déclaration se mesure dans les deux thèmes. */
+export const NIVEAUX_GRAPHIQUE = Object.freeze(
+  [
+    [0, 'encre-foncee'],
+    [1, 'encre-foncee'],
+    [2, 'encre-claire'],
+    [3, 'encre-claire'],
+  ].map(([niveau, encre]) =>
+    Object.freeze({ niveau, jeton: c(graphique(`niveau-${niveau}`)), encre: c(graphique(encre)) }),
+  ),
+);
+
+/** Les seuils de l'échelle : ecartTeinte, le plus grand écart de teinte HSL
+ *  admis entre deux niveaux, en degrés — une échelle est une seule teinte ;
+ *  clarte, le pas minimal dont chaque niveau s'éloigne du fond de la carte
+ *  de plus que le précédent, en L d'OKLab × 100. */
+export const ECHELLE_GRAPHIQUE = Object.freeze({ ecartTeinte: 6, clarte: 10 });
+
+// Le fond de la zone de tracé : la carte, et la grille de fond qu'une
+// marque tracée croise.
+const TRACE = ['carte-fond', graphique('grille')];
+
+/** Les marques des graphiques, même forme que MARQUES, seuil 3 : les deux
+ *  séries, mesurées aussi sur la page ; le repère d'un plafond (trait mixte)
+ *  et celui d'une borne (pointillé), neutres, chacun son jeton (D30) ;
+ *  l'axe ; les deux segments d'une barre de collisions, « prouvé
+ *  inévitable » et « reste » ; les niveaux 1 à 3 de l'échelle et la bordure
+ *  d'une case, sur la carte ; le signe d'un point marqué. Le niveau 0 et la
+ *  grille n'en sont pas (FONDS_GRAPHIQUE). */
+export const MARQUES_GRAPHIQUE = Object.freeze([
+  marque('graphiqueSerie1', graphique('serie-1'), [...TRACE, 'page-fond']),
+  marque('graphiqueSerie2', graphique('serie-2'), [...TRACE, 'page-fond']),
+  marque('graphiqueRepere', graphique('repere'), TRACE),
+  marque('graphiqueBorne', graphique('borne'), TRACE),
+  marque('graphiqueAxe', graphique('axe'), ['carte-fond']),
+  marque('graphiqueProuve', graphique('prouve'), TRACE),
+  marque('graphiqueReste', graphique('reste'), TRACE),
+  ...NIVEAUX_GRAPHIQUE.filter(({ niveau }) => niveau > 0).map(({ niveau }) =>
+    marque(`graphiqueNiveau${niveau}`, graphique(`niveau-${niveau}`), ['carte-fond']),
+  ),
+  marque('graphiqueBordureCase', graphique('bordure-case'), ['carte-fond']),
+  marque('graphiqueMarque', graphique('marque'), TRACE),
+]);
+
+// Les niveaux qu'une encre sert, en noms courts de jetons.
+const niveauxServis = (encre) =>
+  NIVEAUX_GRAPHIQUE.filter((n) => n.encre === c(graphique(encre))).map(({ niveau }) => graphique(`niveau-${niveau}`));
+
+/** Les encres des comptes écrits dans les cases, même forme que TEXTES,
+ *  seuil 4,5 : une entrée par encre, dans l'ordre des niveaux, mesurée sur
+ *  chaque niveau que NIVEAUX_GRAPHIQUE lui donne. */
+export const TEXTES_GRAPHIQUE = Object.freeze([
+  texte('graphiqueEncreFoncee', graphique('encre-foncee'), niveauxServis('encre-foncee')),
+  texte('graphiqueEncreClaire', graphique('encre-claire'), niveauxServis('encre-claire')),
+]);
+
+/** Les fonds des graphiques, { nom, jeton } : la grille de fond et le
+ *  niveau 0 de l'échelle. Ils ne portent aucune information que la bordure
+ *  et le chiffre d'une case ne portent déjà : hors de la mesure 3:1, sans
+ *  seuil, et sans data-marque — un fond n'est pas une marque. */
+export const FONDS_GRAPHIQUE = Object.freeze(
+  [
+    ['graphiqueGrille', 'grille'],
+    ['graphiqueNiveau0', 'niveau-0'],
+  ].map(([nom, jeton]) => Object.freeze({ nom, jeton: c(graphique(jeton)) })),
+);

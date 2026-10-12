@@ -5,12 +5,13 @@
 // que consomme le moteur (§ 4, § 4.5, § 5.2), et conversion d'un plan entre
 // ses deux formes (§ 8.9). Les formes sont décrites dans types.js.
 //
-// L'instance porte aussi ce que les critères des objectifs et des animateurs
-// lisent, calculé une fois par configuration : l'objectif en vigueur à chaque
-// table et chaque tour, la correspondance de chaque personne à chaque
-// objectif distinct, ses couples (personne, tour) possibles, les animateurs
-// de chaque table à chaque tour et la borne des animateurs de chacun ; puis
-// l'état de chaque critère et la liste des priorités complète.
+// L'instance porte aussi les étiquettes de chacun, en index, que lit la
+// diversité par animateur, et ce que les critères des objectifs et des
+// animateurs lisent, calculé une fois par configuration : l'objectif en
+// vigueur à chaque table et chaque tour, la correspondance de chaque personne
+// à chaque objectif distinct, ses couples (personne, tour) possibles, les
+// animateurs de chaque table à chaque tour et la borne des animateurs de
+// chacun ; puis l'état de chaque critère et la liste des priorités complète.
 //
 // Ce module définit aussi, une seule fois pour tout le moteur (§ 13.2), ce
 // que les autres modules lisent de ces formes : les valeurs du contrat —
@@ -198,6 +199,30 @@ function numeroterGroupes(presents) {
     groupe[p] = numeroDe.get(appartenance);
   }
   return { groupe, groupes };
+}
+
+// Les étiquettes des présents en index (D39). libellesEtiquettes porte les
+// étiquettes distinctes que les présents portent, rangées par unités de
+// code, sans égard à la langue : l'égalité de chaînes fait l'étiquette,
+// comme le groupe. Les étiquettes de la personne p vont, dans etiquettes, de
+// debutEtiquettes[p] à debutEtiquettes[p + 1] : leurs index, croissants,
+// chacun une fois, même quand sa liste en répète un. Sans étiquette,
+// libellesEtiquettes et etiquettes sont vides et debutEtiquettes ne porte que
+// des zéros. La Map ne sert qu'à retrouver l'index d'un libellé. Le coût suit
+// le nombre total d'étiquettes portées, plus le tri des distinctes.
+function indexerEtiquettes(presents) {
+  const libellesEtiquettes = [...new Set(presents.flatMap(({ etiquettes = [] }) => etiquettes))].sort();
+  const indexDe = new Map(libellesEtiquettes.map((libelle, e) => [libelle, e]));
+  const debutEtiquettes = new Int32Array(presents.length + 1);
+  const etiquettes = [];
+  presents.forEach(({ etiquettes: siennes = [] }, p) => {
+    const index = siennes.map((libelle) => indexDe.get(libelle)).sort((a, b) => a - b);
+    index.forEach((e, i) => {
+      if (i === 0 || e !== index[i - 1]) etiquettes.push(e);
+    });
+    debutEtiquettes[p + 1] = etiquettes.length;
+  });
+  return { debutEtiquettes, etiquettes: Int32Array.from(etiquettes), libellesEtiquettes };
 }
 
 // Tables imposées par les réservations : fixe[p * R + r] = index de table,
@@ -718,6 +743,7 @@ function instanceDe(configuration) {
   const ids = presents.map((participant) => participant.id);
   const indexDe = new Map(ids.map((id, p) => [id, p]));
   const { groupe, groupes } = numeroterGroupes(presents);
+  const { debutEtiquettes, etiquettes, libellesEtiquettes } = indexerEtiquettes(presents);
   const fixe = fixerReservations(reservations, { connus, indexDe, indexTableDe, idsTables, N, R });
   const siegesLibres = siegesLibresApres(fixe, { N, T, R, capacite, idsTables });
   const { statut, ancresParTable, k } = deriverStatuts(fixe, N, T, R);
@@ -739,6 +765,9 @@ function instanceDe(configuration) {
     capacite,
     groupe,
     groupes,
+    debutEtiquettes,
+    etiquettes,
+    libellesEtiquettes,
     fixe,
     statut,
     ancresParTable,

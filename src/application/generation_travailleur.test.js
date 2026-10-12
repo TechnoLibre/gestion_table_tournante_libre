@@ -47,6 +47,18 @@ describe('travailleur de génération (§ 5.7, § 5.10)', () => {
     assert.equal(postes.length, avancements.length + 1);
   });
 
+  test("la proposition postée porte la course du moteur, mouvements évalués et points de relevé, sans rien de plus : aucune date, aucune durée", () => {
+    const configuration = configurationDe('petite-conflit');
+    const reglages = { graine: 9, nombre: 2, arret: 2_500, historique: 100 };
+    const { postes, envoyer } = porteeFactice();
+    envoyer({ type: 'proposer', configuration, reglages, rang: 2 });
+    const [{ proposition }] = postes.filter(({ type }) => type === 'proposition');
+    assert.deepEqual(Object.keys(proposition), ['id', 'graine', 'arret', 'historique', 'plan', 'evalues', 'releves']);
+    assert.equal(proposition.evalues, 2_500);
+    assert.deepEqual(proposition.releves.map(({ mouvements }) => mouvements), [1, 10, 100, 1_000]);
+    assert.deepStrictEqual(proposition, rechercher(configuration, reglages)[1]);
+  });
+
   test('le même travailleur répond à chaque proposer, dans un ordre quelconque des rangs', () => {
     const configuration = configurationDe('petite');
     const reglages = { graine: 31, nombre: 4, arret: 2000, historique: 1000 };

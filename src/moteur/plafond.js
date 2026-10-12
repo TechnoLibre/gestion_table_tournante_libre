@@ -35,6 +35,14 @@
 // asseoir p à une table admissible n'ôte rien au plafond, puisque
 // a_t ≥ 0 et c_t − 1 − a_t ≥ 0.
 //
+// La même formule borne aussi les affiliés que p rencontre (§ 5.5, B5) : la
+// population comptée n'est plus tout le monde mais les seuls affiliés, et
+// chaque terme se restreint à eux — N_aff − ε_p au lieu de N − 1, a^aff_t les
+// ancrés affiliés, n^aff_p les mobiles affiliés, α_{t,r} les affiliés assis,
+// ε_p valant 1 quand p est affilié, 0 sinon. C'est Φ_aff(p), le plafond
+// réalisé des affiliés, d'où la borne de diversité A_max(p). Une population
+// porte son effectif, ses mobiles, ses ancrés par table et ses membres.
+//
 // Une personne se désigne par son index dans l'instance, une table par son
 // index ; un tableau rendu suit l'ordre de instance.ids. Aucune fonction ne
 // modifie l'instance.
@@ -42,30 +50,63 @@
 // Une case d'itinéraire en réserve vaut RESERVE, et RESERVE vaut LIBRE
 // (configuration.js) : une rangée de instance.fixe se lit comme l'itinéraire
 // qui laisse en réserve chaque tour libre.
-import { LIBRE, RESERVE, STATUT, decrire, exigerPlanIndexe } from './configuration.js';
+import { LIBRE, RESERVE, SANS_GROUPE, STATUT, decrire, exigerPlanIndexe } from './configuration.js';
 import { ErreurConfiguration } from './erreurs.js';
 
 // Nombre de multiensembles au-delà duquel l'énumération refuse une
 // signature.
 const LIMITE_ENUMERATION = 300_000;
 
-// La formule du § 5.5. ancres : Σ a_t sur les tables distinctes ; sieges :
-// les sièges qui changent d'occupant ; nP : n_p.
-function borne(instance, nP, ancres, sieges) {
-  return Math.min(instance.N - 1, ancres + Math.min(nP, sieges));
+// La population de tout le monde : N personnes, n mobiles, a_t ancrés à la
+// table t ; membres null dit que chacun en est.
+const tous = (instance) => ({
+  effectif: instance.N,
+  mobiles: instance.n,
+  ancresParTable: instance.ancresParTable,
+  membres: null,
+});
+
+// La population des affiliés : N_aff personnes, n^aff mobiles, a^aff_t
+// ancrés affiliés à la table t ; membres[p] vaut 1 pour un affilié.
+function affiliesDe({ N, R, T, groupe, statut, fixe }) {
+  const membres = new Uint8Array(N);
+  const ancresParTable = new Int32Array(T);
+  let effectif = 0;
+  let mobiles = 0;
+  for (let p = 0; p < N; p += 1) {
+    if (groupe[p] === SANS_GROUPE) continue;
+    membres[p] = 1;
+    effectif += 1;
+    if (statut[p] === STATUT.ANCRE) ancresParTable[fixe[p * R]] += 1;
+    else mobiles += 1;
+  }
+  return { effectif, mobiles, ancresParTable, membres };
 }
 
-// n_p : les mobiles — partiellement fixés compris — que p peut rencontrer,
-// p excepté quand il en est un.
-const mobilesRencontrables = (instance, p) =>
-  instance.statut[p] === STATUT.ANCRE ? instance.n : instance.n - 1;
+// ε_p : 1 quand p compte dans la population, 0 sinon.
+const epsilon = (population, p) => (population.membres === null ? 1 : population.membres[p]);
+
+// La formule du § 5.5, sur une population. ancres : Σ a_t sur les tables
+// distinctes ; sieges : les sièges qui changent d'occupant ; nP : n_p. Le
+// premier terme compte les autres membres de la population, p excepté quand
+// il en est un : N − 1 pour tout le monde, N_aff − ε_p pour les affiliés.
+function borne(population, eps, nP, ancres, sieges) {
+  return Math.min(population.effectif - eps, ancres + Math.min(nP, sieges));
+}
+
+// n_p : les mobiles de la population — partiellement fixés compris — que p
+// peut rencontrer, p excepté quand il en est un.
+const mobilesRencontrables = (instance, population, p, eps) =>
+  population.mobiles - (eps === 1 && instance.statut[p] !== STATUT.ANCRE ? 1 : 0);
 
 // Table d'ancrage de p, −1 s'il n'est pas ancré.
 const ancrageDe = (instance, p) =>
   instance.statut[p] === STATUT.ANCRE ? instance.fixe[p * instance.R] : -1;
 
-// a_t vu de p : les ancrés de la table t, p non compté.
-const ancresVus = (instance, t, ancrage) => instance.ancresParTable[t] - (t === ancrage ? 1 : 0);
+// a_t vu de p : les ancrés de la population à la table t, p non compté
+// quand il en est un.
+const ancresVus = (population, t, ancrage, eps) =>
+  population.ancresParTable[t] - (eps === 1 && t === ancrage ? 1 : 0);
 
 // Tables qu'un tour libre peut recevoir, par index croissant : celles où les
 // ancrés laissent au moins un siège.
@@ -83,22 +124,24 @@ function dejaVisitee(cases, debut, r) {
 }
 
 // Plafond de p sur la rangée cases[debut … debut + R − 1], une table par
-// tour. occupation porte o_{t,r} en [t × R + r] et fait la base du plafond
-// réalisé ; null fait celle des capacités.
-function plafondSurRangee(instance, p, cases, debut, occupation) {
+// tour, pour la population donnée. occupation porte, en [t × R + r], les
+// membres de la population assis à t au tour r et fait la base du plafond
+// réalisé ; null fait celle des capacités, qui ne sert qu'à tout le monde.
+function plafondSurRangee(instance, population, p, cases, debut, occupation) {
   const { R, capacite } = instance;
   const ancrage = ancrageDe(instance, p);
+  const eps = epsilon(population, p);
   let ancres = 0;
   let sieges = 0;
   for (let r = 0; r < R; r += 1) {
     const t = cases[debut + r];
     if (t === RESERVE) continue;
-    const a = ancresVus(instance, t, ancrage);
+    const a = ancresVus(population, t, ancrage, eps);
     const occupants = occupation === null ? capacite[t] : occupation[t * R + r];
-    sieges += occupants - 1 - a;
+    sieges += occupants - eps - a;
     if (!dejaVisitee(cases, debut, r)) ancres += a;
   }
-  return borne(instance, mobilesRencontrables(instance, p), ancres, sieges);
+  return borne(population, eps, mobilesRencontrables(instance, population, p, eps), ancres, sieges);
 }
 
 // Lève RangeError quand une case de l'itinéraire n'est ni RESERVE ni un index
@@ -138,7 +181,38 @@ export function plafondItineraire(instance, p, itineraire) {
     throw new RangeError(`itinéraire de ${itineraire.length} tours, ${R} attendus`);
   }
   exigerCases(itineraire, T);
-  return plafondSurRangee(instance, p, itineraire, 0, null);
+  return plafondSurRangee(instance, tous(instance), p, itineraire, 0, null);
+}
+
+/**
+ * L'occupation d'un plan (§ 5.4, B4), rangée t × R + r : occupants, o_{t,r},
+ * les personnes assises à la table t au tour r ; affilies, α_{t,r}, celles
+ * d'entre elles qui portent une appartenance, compté seulement sous l'option
+ * {affilies}, null sans elle. Un tour en réserve n'occupe aucune table. Des
+ * Array, jamais un tableau typé.
+ *
+ * Lève ce que lève exigerPlanIndexe (configuration.js).
+ *
+ * @param {import('./types.js').Instance} instance
+ * @param {ArrayLike<number>} tableDe  plan indexé, [p × R + r]
+ * @param {{affilies?: boolean}} [options]
+ * @returns {{occupants: number[], affilies: number[]|null}}
+ */
+export function occupations(instance, tableDe, { affilies = false } = {}) {
+  exigerPlanIndexe(instance, tableDe);
+  const { N, T, R, groupe } = instance;
+  const occupants = new Array(T * R).fill(0);
+  const assisAffilies = affilies ? new Array(T * R).fill(0) : null;
+  for (let p = 0; p < N; p += 1) {
+    const affilie = assisAffilies !== null && groupe[p] !== SANS_GROUPE;
+    for (let r = 0; r < R; r += 1) {
+      const t = tableDe[p * R + r];
+      if (t === RESERVE) continue;
+      occupants[t * R + r] += 1;
+      if (affilie) assisAffilies[t * R + r] += 1;
+    }
+  }
+  return { occupants, affilies: assisAffilies };
 }
 
 /**
@@ -154,20 +228,55 @@ export function plafondItineraire(instance, p, itineraire) {
  * @returns {number[]}
  */
 export function plafondsRealises(instance, tableDe) {
-  exigerPlanIndexe(instance, tableDe);
-  const { N, T, R } = instance;
-  const occupation = new Int32Array(T * R);
-  for (let p = 0; p < N; p += 1) {
-    for (let r = 0; r < R; r += 1) {
-      const t = tableDe[p * R + r];
-      if (t !== RESERVE) occupation[t * R + r] += 1;
-    }
-  }
+  const { occupants } = occupations(instance, tableDe);
+  const { N, R } = instance;
+  const population = tous(instance);
   const plafonds = [];
   for (let p = 0; p < N; p += 1) {
-    plafonds.push(plafondSurRangee(instance, p, tableDe, p * R, occupation));
+    plafonds.push(plafondSurRangee(instance, population, p, tableDe, p * R, occupants));
   }
   return plafonds;
+}
+
+/**
+ * Borne de diversité de chacun (§ 5.5, B5), sur l'occupation du plan :
+ *
+ *   A_max(p) = min(Φ_aff(p), G, (N_aff − g_p) + 1)   p affilié
+ *   A_max(p) = min(Φ_aff(p), G)                      sinon
+ *
+ * Φ_aff(p), rendu en phiAffilies, est le plafond réalisé des affiliés :
+ * min(N_aff − ε_p, Σ_{t∈D} a^aff_t + min(n^aff_p, Σ_{(t,r)∈I} v^aff_{t,r})),
+ * v^aff_{t,r} = α_{t,r} − ε_p − a^aff_t, chaque terme compté sur les seuls
+ * affiliés, p non compté. Il borne |F(p)|, les affiliés que p rencontre. G
+ * compte les appartenances des personnes présentes (instance.groupes) ;
+ * N_aff, les présents affiliés ; g_p, l'effectif de l'appartenance de p.
+ *
+ * Chaque appartenance autre que celle de p compte au moins une personne :
+ * N_aff − g_p ≥ G − 1, et le troisième terme ne descend jamais sous G. Il
+ * s'écrit pour que le code se lise contre la formule du § 5.5.
+ *
+ * Deux Array dans l'ordre canonique. Lève ce que lève exigerPlanIndexe.
+ *
+ * @param {import('./types.js').Instance} instance
+ * @param {ArrayLike<number>} tableDe  plan indexé, [p × R + r]
+ * @returns {{phiAffilies: number[], aMax: number[]}}
+ */
+export function borneDiversite(instance, tableDe) {
+  const { affilies } = occupations(instance, tableDe, { affilies: true });
+  const { N, R, groupe, groupes } = instance;
+  const G = groupes.length;
+  const population = affiliesDe(instance);
+  const effectifs = new Int32Array(G);
+  for (let p = 0; p < N; p += 1) if (groupe[p] !== SANS_GROUPE) effectifs[groupe[p]] += 1;
+  const phiAffilies = [];
+  const aMax = [];
+  for (let p = 0; p < N; p += 1) {
+    const phi = plafondSurRangee(instance, population, p, tableDe, p * R, affilies);
+    phiAffilies.push(phi);
+    const g = groupe[p];
+    aMax.push(g === SANS_GROUPE ? Math.min(phi, G) : Math.min(phi, G, population.effectif - effectifs[g] + 1));
+  }
+  return { phiAffilies, aMax };
 }
 
 // Clé de signature de p : statut, table d'ancrage, multiensemble trié des
@@ -195,9 +304,11 @@ function signature(instance, p) {
 // elle.
 function maximiser(instance, p, admissibles) {
   const { T, R, fixe, capacite } = instance;
+  const population = tous(instance);
   const ancrage = ancrageDe(instance, p);
-  const nP = mobilesRencontrables(instance, p);
-  const sieges = (t) => capacite[t] - 1 - ancresVus(instance, t, ancrage);
+  const nP = mobilesRencontrables(instance, population, p, 1);
+  const vus = (t) => ancresVus(population, t, ancrage, 1);
+  const sieges = (t) => capacite[t] - 1 - vus(t);
   const dansD0 = new Uint8Array(T);
   let ancres0 = 0;
   let sieges0 = 0;
@@ -211,12 +322,12 @@ function maximiser(instance, p, admissibles) {
     sieges0 += sieges(t);
     if (dansD0[t] === 0) {
       dansD0[t] = 1;
-      ancres0 += ancresVus(instance, t, ancrage);
+      ancres0 += vus(t);
     }
   }
   // Sans tour libre, l'itinéraire est imposé ; sans table admissible, les
   // tours libres restent en réserve.
-  if (f === 0 || admissibles.length === 0) return borne(instance, nP, ancres0, sieges0);
+  if (f === 0 || admissibles.length === 0) return borne(population, 1, nP, ancres0, sieges0);
 
   // Les sièges ajoutés ne dépassent jamais f fois le plus grand v_t : au-delà
   // de cette valeur, w n'a pas de case à remplir.
@@ -227,7 +338,7 @@ function maximiser(instance, p, admissibles) {
   let meilleur = new Int32Array((f + 1) * largeur).fill(-1);
   meilleur[0] = 0;
   for (const t of admissibles) {
-    const gain = dansD0[t] === 1 ? 0 : ancresVus(instance, t, ancrage);
+    const gain = dansD0[t] === 1 ? 0 : vus(t);
     const v = sieges(t);
     const suivant = meilleur.slice();
     for (let s = 0; s < f; s += 1) {
@@ -245,7 +356,7 @@ function maximiser(instance, p, admissibles) {
   let plafond = -1;
   for (let w = 0; w <= W; w += 1) {
     const ajout = meilleur[f * largeur + w];
-    if (ajout >= 0) plafond = Math.max(plafond, borne(instance, nP, ancres0 + ajout, sieges0 + w));
+    if (ajout >= 0) plafond = Math.max(plafond, borne(population, 1, nP, ancres0 + ajout, sieges0 + w));
   }
   return plafond;
 }

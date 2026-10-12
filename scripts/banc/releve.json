@@ -348,6 +348,20 @@
       "ralentissementCpu": 1
     },
     {
+      "nom": "SEUIL_MATRICE_PARTICIPANTS",
+      "unite": "participants",
+      "valeurProposee": null,
+      "critere": "non relevée : la case de la matrice dans la largeur de la carte",
+      "ralentissementCpu": 4
+    },
+    {
+      "nom": "LARGEUR_TRONCATURE_NOM_PX",
+      "unite": "px",
+      "valeurProposee": null,
+      "critere": "non relevée : la largeur du nom de référence",
+      "ralentissementCpu": 4
+    },
+    {
       "nom": "DUREE_GENERATION_PAR_DEFAUT",
       "unite": "ms",
       "valeurProposee": 615.2,

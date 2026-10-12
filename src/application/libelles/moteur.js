@@ -18,8 +18,9 @@
 // désigne sans identifiant l'est par son rang à partir de 0, que le texte
 // affiche à partir de 1 ; une personne qu'une violation d'indicateur désigne
 // par son index se nomme par participant quand l'appelant l'a traduit, par
-// son rang sinon. INCONNU, aux mêmes détails que la faute de placement du
-// stockage, a son texte dans libelles/stockage.js.
+// son rang sinon ; l'appartenance d'un reste négatif, de même, par son
+// libellé ou par son rang. INCONNU, aux mêmes détails que la faute de
+// placement du stockage, a son texte dans libelles/stockage.js.
 import { capitale, compte, nomDans } from './aides.js';
 
 // Les cas d'une table que le plan ne rattache pas à l'instance, par detail.
@@ -33,6 +34,14 @@ const CAS_DE_TABLE = new Map([
 // la population quand l'appelant ne l'a pas traduit.
 const personneDe = ({ index, participant }) =>
   participant === undefined || participant === null ? `la personne de rang ${index + 1}` : `la personne n° ${participant}`;
+
+// L'appartenance d'un reste négatif : son libellé quand l'appelant l'a
+// traduit, son rang dans les appartenances sinon, compté à partir de 0 par
+// le moteur.
+const appartenanceDe = ({ groupe, appartenance }) =>
+  appartenance === undefined || appartenance === null
+    ? `l'appartenance de rang ${groupe + 1}`
+    : `l'appartenance « ${appartenance} »`;
 
 // Un rang de réservation, compté à partir de 0 par le moteur.
 const reservationDe = (rang) => `la réservation n° ${rang + 1}`;
@@ -203,6 +212,34 @@ export const TABLE = new Map([
   [
     'HORS_OBJECTIF_MAX',
     () => "Le plus de tours hors objectif d'une personne dépasse le plus de tours possibles : le calcul est faux.",
+  ],
+  [
+    'RESTE_NEGATIF',
+    (details) =>
+      `Les collisions cumulées de ${appartenanceDe(details)} passent sous la part prouvée inévitable : le reste est négatif, le calcul est faux.`,
+  ],
+  [
+    'RESTE_OBJECTIFS_NEGATIF',
+    ({ tour }) =>
+      `Au tour ${tour}, les tours hors objectif passent sous la part prouvée inévitable : le reste est négatif, le calcul est faux.`,
+  ],
+  [
+    'DIVERSITE_RENCONTRES',
+    (details) => `Les appartenances rencontrées par ${personneDe(details)} dépassent ses rencontres : le calcul est faux.`,
+  ],
+  [
+    'DIVERSITE_AFFILIES',
+    (details) =>
+      `Les appartenances rencontrées par ${personneDe(details)} dépassent les personnes affiliées qu'elle rencontre : le calcul est faux.`,
+  ],
+  [
+    'AFFILIES_PLAFOND',
+    (details) =>
+      `Les personnes affiliées que rencontre ${personneDe(details)} dépassent son plafond réalisé des affiliés : le calcul est faux.`,
+  ],
+  [
+    'BORNE_DIVERSITE',
+    (details) => `Les appartenances rencontrées par ${personneDe(details)} dépassent sa borne de diversité : le calcul est faux.`,
   ],
 
   // --- Les critères du classement (§ 5.7) -----------------------------------------

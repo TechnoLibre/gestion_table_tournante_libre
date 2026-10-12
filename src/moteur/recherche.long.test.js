@@ -14,7 +14,9 @@
 // chacun des trois modes et sous un ordre déplacé (A13). La petite démonstration et sa
 // variante conflit atteignent ensuite leur optimum sur vingt graines, trois
 // propositions chacune ; une recherche longue sur la grande démonstration
-// rend des plans que jugent verifierInvariants et verifierIndicateurs.
+// rend des plans que jugent verifierInvariants et verifierIndicateurs, et
+// chaque point de relevé de sa course égale le plan que regenerer rend à son
+// compte.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
@@ -27,6 +29,7 @@ import {
   defaire,
   proposerEtAppliquer,
   rechercher,
+  regenerer,
   scoreComplet,
   scoreIncremental,
 } from './recherche.js';
@@ -276,5 +279,33 @@ describe('recherche : le mode ne touche pas au défaut, grande démonstration et
         assert.deepEqual(differences(`${cle}, ${mode}`, empreintesDesPlans(cle, undefined, mode), REFERENCE.plans[cle]), []);
       });
     }
+  }
+});
+
+// Les puissances de dix strictement sous n, croissantes : les abscisses des
+// points de relevé copiés d'une descente de n mouvements évalués.
+function puissancesSous(n) {
+  const liste = [];
+  for (let k = 1; k < n; k *= 10) liste.push(k);
+  return liste;
+}
+
+describe('recherche : la course sur la grande démonstration (§ 5.10, B6, D40)', () => {
+  // Arrêt au compte : 200 000 mouvements évalués, six points copiés, de 1 à
+  // 100 000, chacun le plan que la même graine rend à son compte ; le
+  // dernier point, 200 000, est le plan de la proposition.
+  for (const cle of ['grande', 'grande-sans-exception']) {
+    test(`${cle}, arret 200 000 : le point de relevé k égale regenerer au compte k, de 1 à 100 000`, () => {
+      const configuration = CATALOGUE.find((entree) => entree.cle === cle).construire();
+      const [proposition] = rechercher(configuration, { graine: 31, arret: 200_000, nombre: 1 });
+      const { graine, historique, evalues, releves, plan } = proposition;
+      assert.equal(evalues, 200_000);
+      assert.deepEqual(releves.map(({ mouvements }) => mouvements), puissancesSous(evalues));
+      assert.equal(releves.length, 6);
+      for (const { mouvements, plan: copie } of releves) {
+        assert.deepStrictEqual(copie, regenerer(configuration, { graine, arret: mouvements, historique }), `${cle}, point ${mouvements}`);
+      }
+      assert.deepStrictEqual(plan, regenerer(configuration, { graine, arret: evalues, historique }));
+    });
   }
 });

@@ -26,7 +26,7 @@ import { MARQUE_TEMOIN, creerTraduction } from '../../src/application/traduction
 import { constante } from '../../src/geometrie/constantes.js';
 import JETONS_CSS from '../../src/interface/jetons.css?raw';
 import { TABLES_INTERFACE } from '../../src/interface/libelles.js';
-import { MARQUES, TEXTES } from '../../src/interface/marques.js';
+import { MARQUES, MARQUES_GRAPHIQUE, TEXTES } from '../../src/interface/marques.js';
 import { serialiserCharge } from '../../src/stockage/canonique.js';
 import { analyser } from '../../src/stockage/document.js';
 import { SUFFIXES } from '../../src/stockage/noms.js';
@@ -362,6 +362,14 @@ function voisinage(element, jeton) {
   return { peinture: null, voisins: [] };
 }
 
+// Le registre que releverMarques connaît : MARQUES, et les marques de
+// graphique (MARQUES_GRAPHIQUE), tenues hors de MARQUES tant qu'aucun
+// écran ne les rend toutes — la couverture des écrans ne lit que MARQUES.
+// Le relevé d'un écran comme celui du parcours photographié les mesure
+// ainsi à 3:1. Les fonds de graphique (FONDS_GRAPHIQUE) ne sont pas des
+// marques et n'y entrent pas.
+const REGISTRE_MARQUES = Object.freeze([...MARQUES, ...MARQUES_GRAPHIQUE]);
+
 /**
  * Les marques rendues sous racine (§ 14.5, § 19.5) : chacune nommée au
  * registre, peinte de son jeton, à 3:1 de ce qui l'entoure, sans
@@ -386,9 +394,9 @@ export function releverMarques(racine, { fenetre = false } = {}) {
     if (fenetre && !entiereDansLaFenetre(element)) continue;
     if (!rendu(element)) continue;
     const nom = element.dataset.marque;
-    const entree = MARQUES.find((m) => m.nom === nom);
+    const entree = REGISTRE_MARQUES.find((m) => m.nom === nom);
     if (entree === undefined) {
-      fautes.push(`${situer(element)} : marque hors du registre MARQUES`);
+      fautes.push(`${situer(element)} : marque hors du registre`);
       continue;
     }
     for (const a of attenuations(element)) fautesAttenuation.push(`${situer(element)} : ${designation(a)} ${a.propriete}: ${a.valeur}`);

@@ -72,7 +72,7 @@ import { poserFeuille } from '../../test/navigateur/feuilles.js';
 import { composantes, couleursPeintes, designation, sousTheme, visible } from '../../test/navigateur/rendu.js';
 import { provenanceVisible } from './apropos.js';
 import { TABLES_INTERFACE } from './libelles.js';
-import { CONFLITS, MARQUES } from './marques.js';
+import { CONFLITS, FONDS_GRAPHIQUE, MARQUES } from './marques.js';
 
 const { t: tTemoin } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue: 'temoin' });
 const { ouverture: OUVERTURE, fermeture: FERMETURE } = MARQUE_TEMOIN;
@@ -748,6 +748,37 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
       if (theme === null) racine.removeAttribute('data-theme');
       else racine.setAttribute('data-theme', theme);
     }
+  });
+
+  test('marques de graphique : le relevé d’un écran connaît MARQUES_GRAPHIQUE et les mesure à 3:1 ; une marque inconnue des deux listes et un fond de graphique restent hors du registre', () => {
+    const { fautes, vues, mesures } = avecFragment(
+      '<svg width="200" height="40" style="background:var(--couleur-carte-fond)">' +
+        '<rect data-marque="graphiqueSerie1" x="4" y="4" width="24" height="24" style="fill:var(--couleur-graphique-serie-1)" />' +
+        '<rect data-marque="graphiqueSerie3" x="60" y="4" width="24" height="24" style="fill:var(--couleur-graphique-serie-2)" />' +
+        '<rect data-marque="graphiqueGrille" x="120" y="4" width="24" height="24" style="fill:var(--couleur-graphique-grille)" /></svg>' +
+        '<svg width="40" height="40" style="background:var(--couleur-graphique-borne)">' +
+        '<rect data-marque="graphiqueBorne" x="4" y="4" width="24" height="24" style="fill:var(--couleur-graphique-borne)" /></svg>',
+      (c) => releverTheme(c).marques,
+    );
+    expect(vues).toEqual(['graphiqueSerie1', 'graphiqueBorne']);
+    expect(mesures).toBe(2);
+    expect(fautes).toHaveLength(3);
+    expect(fautes[0]).toContain('graphiqueSerie3');
+    expect(fautes[0]).toContain('hors du registre');
+    expect(fautes[1]).toContain('graphiqueGrille');
+    expect(fautes[1]).toContain('hors du registre');
+    expect(fautes[2]).toContain('1.00:1');
+    expect(FONDS_GRAPHIQUE.map((f) => f.nom)).toContain('graphiqueGrille');
+  });
+
+  test('marques de graphique : le relevé du parcours photographié (stylesDuTheme) les connaît aussi — une série sur la carte ne porte aucune faute et se range sous son jeton, rôle marque', () => {
+    const { styles, fautes } = avecFragment(
+      '<svg width="200" height="40" style="background:var(--couleur-carte-fond)">' +
+        '<rect data-marque="graphiqueSerie1" x="4" y="4" width="24" height="24" style="fill:var(--couleur-graphique-serie-1)" /></svg>',
+      (c) => stylesDuTheme(c),
+    );
+    expect(fautes).toEqual([]);
+    expect(styles.filter((s) => s.role === 'marque').map((s) => s.jeton)).toEqual(['--couleur-graphique-serie-1']);
   });
 
   test('marques sous une fenêtre modale : une marque HTML de la page, qui ne s’y mesure pas, ne compte pas comme vue ; une marque dans la fenêtre, si', () => {

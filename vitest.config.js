@@ -107,11 +107,11 @@ export default defineConfig({
     // ligne par couche et par module de src/, pleins compris — que Vitest
     // tait sinon quand un agent le lance — et à 0 % ceux qu'aucune épreuve ne
     // charge ; coverage/index.html montre, ligne à ligne, ce qui n'est jamais
-    // exécuté. Six modules tiennent 100 % de branches, seuil dur : la
-    // commande échoue en deçà. Une branche nue s'y couvre par un cas ajouté,
-    // ou part avec le code mort ; le seuil ne s'abaisse pas, et
-    // test/arborescence.test.js garde ces six seuils, ces deux rapports
-    // et les deux commandes qui lancent la mesure.
+    // exécuté. Les modules nommés ci-dessous tiennent 100 % de branches,
+    // seuil dur : la commande échoue en deçà. Une branche nue s'y couvre par
+    // un cas ajouté, ou part avec le code mort ; le seuil ne s'abaisse pas,
+    // et test/arborescence.test.js garde ces seuils, ces deux rapports et
+    // les deux commandes qui lancent la mesure.
     coverage: {
       provider: 'v8',
       include: ['src/**/*.js'],
@@ -119,9 +119,12 @@ export default defineConfig({
       reporter: [['text', { skipFull: false }], 'html'],
       reportsDirectory: 'coverage',
       thresholds: {
+        'src/geometrie/graphique.js': { branches: 100 },
         'src/moteur/correspondance.js': { branches: 100 },
         'src/moteur/criteres.js': { branches: 100 },
+        'src/moteur/diversite.js': { branches: 100 },
         'src/moteur/indicateurs.js': { branches: 100 },
+        'src/moteur/paires.js': { branches: 100 },
         'src/moteur/plafond.js': { branches: 100 },
         'src/stockage/depot.js': { branches: 100 },
         'src/stockage/journal.js': { branches: 100 },

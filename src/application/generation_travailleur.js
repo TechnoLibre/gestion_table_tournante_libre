@@ -14,7 +14,9 @@
 //                                           et total comptent dans la seule
 //                                           proposition, total valant arret
 //   ← { type: 'proposition', proposition }  celle de rang rang de rechercher,
-//                                           telle quelle
+//                                           telle quelle, course comprise
+//                                           (evalues, releves), sans date
+//                                           ni durée
 //   ← { type: 'erreur', code, details }     REGLAGE_HORS_DOMAINE {reglage}
 //                                           d'exigerReglages, avant tout
 //                                           calcul ; puis, par

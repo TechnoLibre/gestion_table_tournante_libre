@@ -23,6 +23,14 @@
  * @property {string} protocole       comment le propriétaire la relève, et où il l'écrit
  */
 
+/**
+ * Longueur, en caractères, du nom de référence sur lequel se cale
+ * LARGEUR_TRONCATURE_NOM_PX : le banc le compose de ce nombre de fois le
+ * glyphe le plus large de l'alphabet visé (§ 14.1), jamais d'un nom de
+ * démonstration, que sa régénération change.
+ */
+export const LONGUEUR_NOM_REFERENCE = 14;
+
 const PROPRIETAIRES = new Set(['banc', 'node', 'manuel', 'execution']);
 const STATUTS = new Set(['mesuree', 'defautDeTravail']);
 
@@ -282,6 +290,42 @@ export const CONSTANTES = Object.freeze(
       protocole:
         "banc de mesure : durée d'une même génération sur un travailleur, puis sur L travailleurs ; le " +
         'rapport ρ des médianes, écrit dans ce registre',
+    },
+    {
+      nom: 'SEUIL_MATRICE_PARTICIPANTS',
+      valeur: 40,
+      unite: 'participants',
+      mesure:
+        "nombre de participants au-delà duquel une case de la matrice « qui a rencontré qui » tombe sous la " +
+        'cible de 24 px dans la largeur de la carte, au cadre fixé',
+      raison:
+        'au-delà, la matrice coûte et ne se lit plus : la vue renvoie à la fiche de chaque personne, qui porte ' +
+        'ses rencontres (§ 12.5). La page éprouve en plus, par la géométrie, que les cases tiennent 24 px ' +
+        'dans la largeur réelle de la carte',
+      configuration: 'banc de mesure, cadre de 1 366 × 700 px, facteur 1, vue des paires de la page de qualité',
+      proprietaire: 'banc',
+      statut: 'defautDeTravail',
+      protocole:
+        'banc de mesure, cadre de 1 366 × 700 px : le plus grand nombre de participants dont la case de la ' +
+        'matrice tient 24 px dans la largeur de la carte de la vue, noms en tête compris, relevé sur le rendu ; ' +
+        'la valeur proposée, adoptée à la main dans ce registre',
+    },
+    {
+      nom: 'LARGEUR_TRONCATURE_NOM_PX',
+      valeur: 180,
+      unite: 'px',
+      mesure: "largeur à laquelle un nom se tronque dans une étiquette de graphique",
+      raison:
+        "un nom plus long déborderait sur le tracé ou sur l'étiquette voisine ; le nom entier reste dans " +
+        "l'infobulle et dans le jumeau (§ 12.6)",
+      configuration: "banc de mesure, cadre de 1 366 × 700 px, facteur 1, police Noto Sans, corps des étiquettes de graphique",
+      proprietaire: 'banc',
+      statut: 'defautDeTravail',
+      protocole:
+        `banc de mesure, police Noto Sans : la largeur rendue d'un nom de ${LONGUEUR_NOM_REFERENCE} caractères, ` +
+        "chacun le glyphe le plus large de l'alphabet visé, au corps des étiquettes de graphique, dans la marge " +
+        "gauche d'une vue à barres — jamais un nom de démonstration ; arrondie au pixel supérieur, adoptée à " +
+        'la main dans ce registre',
     },
   ].map((entree) => Object.freeze(entree)),
 );

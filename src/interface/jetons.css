@@ -90,7 +90,24 @@
    Les teintes d'appartenance ne vont que sur les listes, jamais sur le
    plan : six teintes au plus, catégorielles, chacune à 30° au moins des
    teintes de conflit, distinctes deux à deux sous les trois dichromaties et,
-   deux teintes voisines, en clarté (TEINTES_APPARTENANCE, marques.js). */
+   deux teintes voisines, en clarté (TEINTES_APPARTENANCE, marques.js).
+
+   Le graphique (§ 12.7) : deux séries, chacune à 3:1 sur la carte, la page
+   et la grille de fond, séparées l'une de l'autre et des six teintes
+   d'appartenance sous les trois dichromaties ; le repère d'un plafond et
+   celui d'une borne, neutres, à 3:1, que leur trait distingue — mixte et
+   pointillé ; l'axe, neutre ; « prouvé inévitable », neutre, et « reste »,
+   la teinte de la première série, séparés l'un de l'autre ; l'échelle à
+   quatre niveaux, d'une seule teinte, le niveau 0 au plus près du fond de
+   la carte et chaque niveau suivant plus loin, du clair au foncé dans le
+   clair, du sombre au clair dans le sombre ; ses deux encres neutres,
+   chacune à 4,5:1 sur les niveaux qu'elle sert, nommées d'après le thème
+   clair — l'encre foncée sert les niveaux 0 et 1, la claire les niveaux 2
+   et 3, et le sombre inverse leurs clartés avec l'échelle ; la bordure des
+   cases, à 3:1 sur la carte. La grille et le niveau 0 ne portent aucune
+   information : hors de la mesure 3:1 (FONDS_GRAPHIQUE, marques.js). Aucun
+   jeton du graphique ne prend une teinte de conflit, d'appartenance ni le
+   rouge du retrait. */
 
 @font-face {
   font-family: 'Noto Sans';
@@ -273,6 +290,27 @@ textarea {
   /* Le document imprimé : le papier, et le contour du filigrane. */
   --couleur-papier: #ffffff;
   --couleur-filigrane: #6e6e6e;
+
+  /* Graphiques (§ 12.7) : deux séries ; le repère d'un plafond et celui
+     d'une borne, l'axe ; la grille de fond ; les deux segments d'une barre
+     de collisions ; l'échelle à quatre niveaux, ses deux encres et la
+     bordure des cases ; le signe d'un point marqué. */
+  --couleur-graphique-serie-1: #1a61ac;
+  --couleur-graphique-serie-2: #8f5e00;
+  --couleur-graphique-repere: #4b5563;
+  --couleur-graphique-borne: #6b7280;
+  --couleur-graphique-axe: #5f6875;
+  --couleur-graphique-grille: #e4e8ee;
+  --couleur-graphique-prouve: #737c88;
+  --couleur-graphique-reste: var(--couleur-graphique-serie-1);
+  --couleur-graphique-niveau-0: #dde9f8;
+  --couleur-graphique-niveau-1: #6b8cb8;
+  --couleur-graphique-niveau-2: #2c65af;
+  --couleur-graphique-niveau-3: #1b3d6b;
+  --couleur-graphique-encre-foncee: #0e1218;
+  --couleur-graphique-encre-claire: #ffffff;
+  --couleur-graphique-bordure-case: #6b7380;
+  --couleur-graphique-marque: #3d4552;
 }
 
 :root[data-theme='sombre'] {
@@ -375,4 +413,21 @@ textarea {
 
   --couleur-papier: #ffffff;
   --couleur-filigrane: #6e6e6e;
+
+  --couleur-graphique-serie-1: #8fc0e8;
+  --couleur-graphique-serie-2: #e0aa1a;
+  --couleur-graphique-repere: #b4bdc9;
+  --couleur-graphique-borne: #959fac;
+  --couleur-graphique-axe: #8a94a1;
+  --couleur-graphique-grille: #2a3038;
+  --couleur-graphique-prouve: #87909c;
+  --couleur-graphique-reste: var(--couleur-graphique-serie-1);
+  --couleur-graphique-niveau-0: #1d2b3f;
+  --couleur-graphique-niveau-1: #587193;
+  --couleur-graphique-niveau-2: #6a95cd;
+  --couleur-graphique-niveau-3: #a6c3e8;
+  --couleur-graphique-encre-foncee: #ffffff;
+  --couleur-graphique-encre-claire: #0f1318;
+  --couleur-graphique-bordure-case: #8a94a1;
+  --couleur-graphique-marque: #c9d0d9;
 }

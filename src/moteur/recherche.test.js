@@ -1542,3 +1542,150 @@ describe('rechercher : le mode ne touche pas au défaut, sans objectif (A21, con
     });
   }
 });
+
+// --- La course de la recherche (§ 5.10, B6, D40) ------------------------------
+
+// Les puissances de dix strictement sous n, croissantes : les abscisses des
+// points de relevé copiés d'une descente de n mouvements évalués. Le compte
+// se fait en entiers, sans logarithme flottant.
+function puissancesSous(n) {
+  const liste = [];
+  for (let k = 1; k < n; k *= 10) liste.push(k);
+  return liste;
+}
+
+// ⌊log₁₀ n⌋ + 1 pour un entier n ≥ 1 : le nombre de ses chiffres décimaux.
+const chiffres = (n) => String(n).length;
+
+// Confronte la course d'une proposition à regenerer : ses abscisses sont les
+// puissances de dix strictement sous evalues ; chaque point de relevé k est
+// le plan que la même graine rend au compte d'arrêt k ; le dernier point,
+// evalues, est le plan de la proposition. Rend le nombre de points copiés.
+function confronterCourse(configuration, proposition, nom) {
+  const { graine, historique, evalues, releves, plan } = proposition;
+  assert.ok(Number.isSafeInteger(evalues) && evalues >= 0, `${nom} : evalues ${evalues}`);
+  assert.deepEqual(releves.map(({ mouvements }) => mouvements), puissancesSous(evalues), nom);
+  for (const releve of releves) {
+    assert.deepEqual(Object.keys(releve), ['mouvements', 'plan'], nom);
+    assert.deepStrictEqual(
+      releve.plan,
+      regenerer(configuration, { graine, arret: releve.mouvements, historique }),
+      `${nom}, point ${releve.mouvements}`,
+    );
+  }
+  if (evalues > 0) {
+    assert.deepStrictEqual(plan, regenerer(configuration, { graine, arret: evalues, historique }), `${nom}, dernier point`);
+  }
+  return releves.length;
+}
+
+// Six personnes « finance », une table sans objectif de deux rangée
+// d'abord, une table « finance » de six, un tour, sous minimum : le plan
+// initial assied deux personnes à la première table, et la descente
+// s'arrête sur le n-uplet nul, toutes à la seconde, avant son compte.
+const soireeQuiSAnnule = () => ({
+  priorites: [[e('toursHorsObjectif')], [e('ecartAuPlafondAPrioriMax')], ...parDefaut().slice(1).filter(([{ critere }]) => critere !== 'toursHorsObjectif')],
+  participants: Array.from({ length: 6 }, (_, rang) => ({ id: rang + 1, nom: `F${rang + 1}`, appartenance: null, exclu: false, etiquettes: ['finance'] })),
+  tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 6 }],
+  tours: 1,
+  reservations: [],
+  contraintes: { ...SANS_CONTRAINTE },
+  objectifs: [{ table: 2, tour: null, regle: 'ou', etiquettes: ['finance'] }],
+  modeObjectifs: 'minimum',
+});
+
+describe('rechercher : la course de la recherche (§ 5.10, B6, D40)', () => {
+  test("chaque proposition porte ses mouvements évalués et ses points de relevé, après son plan ; proposerUne rend les mêmes", () => {
+    const reglages = { graine: 5, arret: 2_500, nombre: 3, historique: 37 };
+    const propositions = rechercher(demo('petite-conflit'), reglages);
+    for (const proposition of propositions) {
+      assert.deepEqual(Object.keys(proposition), ['id', 'graine', 'arret', 'historique', 'plan', 'evalues', 'releves']);
+      assert.deepStrictEqual(proposerUne(demo('petite-conflit'), reglages, proposition.id), proposition);
+    }
+  });
+
+  test("arrêt au compte : le point de relevé k égale regenerer au compte k (1, 10, 100, 1 000), et le plan rendu celui du compte entier — salle réservée, variante conflit avec bascule et relance, historique 37", () => {
+    // Dans la variante conflit, chaque descente bascule puis relance avant
+    // 5 000 mouvements (épreuve de regenerer plus haut) : un point copié
+    // pendant l'ordre des contraintes, ou juste après une relance, doit
+    // encore égaler la régénération à son compte.
+    const reglages = { graine: 5, arret: 5_000, nombre: 3, historique: 37 };
+    let points = 0;
+    for (const [nom, construire] of [
+      ['salleReservee', salleReservee],
+      ['petite-conflit', () => demo('petite-conflit')],
+    ]) {
+      const configuration = construire();
+      for (const proposition of rechercher(configuration, reglages)) {
+        assert.equal(proposition.evalues, reglages.arret, `${nom}, proposition ${proposition.id}`);
+        points += confronterCourse(configuration, proposition, `${nom}, proposition ${proposition.id}`);
+      }
+    }
+    assert.equal(points, 6 * 4);
+  });
+
+  test("arrêt sur le n-uplet nul : moins de mouvements évalués que le compte, des points sous ce nombre seulement, chacun égal à regenerer", () => {
+    const configuration = soireeQuiSAnnule();
+    const propositions = rechercher(configuration, { graine: 1, arret: 100_000, nombre: 4 });
+    for (const proposition of propositions) {
+      assert.ok(proposition.evalues > 0 && proposition.evalues < 100_000, `evalues ${proposition.evalues}`);
+      confronterCourse(configuration, proposition, `proposition ${proposition.id}`);
+    }
+    // Au moins une descente dure plus d'un mouvement : la liste de ses points
+    // n'est pas vide, et la confrontation porte sur autre chose que le plan.
+    assert.ok(propositions.some(({ releves }) => releves.length > 0));
+    // Une descente qui s'annule pile à une puissance de dix : ce dernier point
+    // est le plan rendu, non copié ; seules les puissances strictement sous
+    // lui sont des points de relevé.
+    for (const [graine, evalues, attendus] of [[39, 10, [1]], [144, 100, [1, 10]]]) {
+      const [proposition] = rechercher(configuration, { graine, arret: 100_000, nombre: 1 });
+      assert.equal(proposition.evalues, evalues, `graine ${graine}`);
+      assert.deepEqual(proposition.releves.map(({ mouvements }) => mouvements), attendus, `graine ${graine}`);
+      confronterCourse(configuration, proposition, `graine ${graine}`);
+    }
+  });
+
+  test("plan initial au n-uplet nul : aucun mouvement évalué, aucun point de relevé", () => {
+    for (const proposition of rechercher(troisTablesDeDeux(), { graine: 8, arret: 50_000, nombre: 2 })) {
+      assert.equal(proposition.evalues, 0);
+      assert.deepEqual(proposition.releves, []);
+    }
+  });
+
+  test("compte 1 : un mouvement, aucun point copié ; compte 1 000 : 1, 10 et 100, le point 1 000 étant le plan ; compte 2 500 : 1, 10, 100 et 1 000", () => {
+    const configuration = demo('grande');
+    const cas = [
+      [1, []],
+      [1_000, [1, 10, 100]],
+      [2_500, [1, 10, 100, 1_000]],
+    ];
+    for (const [arret, attendus] of cas) {
+      const [proposition] = rechercher(configuration, { graine: 3, arret, nombre: 1 });
+      assert.equal(proposition.evalues, arret, `compte ${arret}`);
+      assert.deepEqual(proposition.releves.map(({ mouvements }) => mouvements), attendus, `compte ${arret}`);
+      confronterCourse(configuration, proposition, `compte ${arret}`);
+    }
+  });
+
+  test("au plus ⌊log₁₀ arret⌋ + 1 copies, autour de chaque puissance de dix", () => {
+    const configuration = demo('petite-conflit');
+    const comptes = [1, 2, 9, 10, 11, 99, 100, 101, 999, 1_000, 1_001];
+    for (const arret of comptes) {
+      for (const proposition of rechercher(configuration, { graine: 13, arret, nombre: 2, historique: 50 })) {
+        assert.ok(proposition.releves.length <= chiffres(arret), `compte ${arret} : ${proposition.releves.length} copies`);
+        assert.deepEqual(proposition.releves.map(({ mouvements }) => mouvements), puissancesSous(proposition.evalues), `compte ${arret}`);
+      }
+    }
+    assert.equal(chiffres(999), 3);
+    assert.equal(chiffres(1_000), 4);
+  });
+
+  test("regenerer rend le seul plan, sans la course : ses clés sont celles du plan d'une proposition", () => {
+    const configuration = demo('petite-conflit');
+    const [proposition] = rechercher(configuration, { graine: 2, arret: 300, nombre: 1 });
+    const plan = regenerer(configuration, proposition);
+    assert.deepEqual(Object.keys(plan), Object.keys(proposition.plan));
+    assert.deepStrictEqual(plan, proposition.plan);
+    assert.equal('evalues' in plan || 'releves' in plan, false);
+  });
+});

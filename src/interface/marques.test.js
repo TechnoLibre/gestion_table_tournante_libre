@@ -5,11 +5,36 @@
 // § 7.5, § 7.6, § 7.7), et la palette de jetons.css validée par calcul sur
 // lui (§ 12.7) : chaque entrée tient son seuil sur chacun de ses fonds, dans
 // les deux thèmes, en couleurs d'origine puis sous les trois dichromaties.
+// La famille « graphique » (§ 12.7, § 13.3) a ses listes à part, hors de
+// MARQUES et de TEXTES, éprouvées de même.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
-import { CONFLITS, JETONS_CONFLIT, MARQUES, SEPARATIONS, SIGNES, TEINTES_APPARTENANCE, TEXTES } from './marques.js';
-import { lireBlocs, lireJetons, teinte, verifierClartes, verifierPalette, verifierSeparation } from './palette.js';
+import {
+  CONFLITS,
+  ECHELLE_GRAPHIQUE,
+  FONDS_GRAPHIQUE,
+  JETONS_CONFLIT,
+  MARQUES,
+  MARQUES_GRAPHIQUE,
+  NIVEAUX_GRAPHIQUE,
+  SEPARATIONS,
+  SIGNES,
+  TEINTES_APPARTENANCE,
+  TEXTES,
+  TEXTES_GRAPHIQUE,
+} from './marques.js';
+import {
+  contraste,
+  lireBlocs,
+  lireJetons,
+  simuler,
+  teinte,
+  verifierClartes,
+  verifierPalette,
+  verifierSeparation,
+  verifierTeintesReservees,
+} from './palette.js';
 
 const JETONS = readFileSync(new URL('./jetons.css', import.meta.url), 'utf8');
 const THEMES = ['clair', 'sombre'];
@@ -297,5 +322,159 @@ describe('palette de jetons.css validée par calcul (§ 12.7, § 14.5)', () => {
       assert.ok(autres.includes(jeton), jeton);
     }
     assert.deepEqual(verifierSeparation(JETONS, JETONS_CONFLIT, autres, SEPARATIONS.autresMarques), []);
+  });
+});
+
+// --- La famille « graphique » (§ 12.7, § 13.3, D30, D43) ---------------------
+
+const g = (nom) => `--couleur-graphique-${nom}`;
+
+// Les seize jetons de la famille, dans l'ordre du contrat.
+const JETONS_GRAPHIQUE = [
+  'serie-1', 'serie-2', 'repere', 'borne', 'axe', 'grille', 'prouve', 'reste',
+  'niveau-0', 'niveau-1', 'niveau-2', 'niveau-3', 'encre-claire', 'encre-foncee', 'bordure-case', 'marque',
+].map(g);
+
+const NOMS_MARQUES_GRAPHIQUE = [
+  'graphiqueSerie1', 'graphiqueSerie2', 'graphiqueRepere', 'graphiqueBorne', 'graphiqueAxe',
+  'graphiqueProuve', 'graphiqueReste', 'graphiqueNiveau1', 'graphiqueNiveau2', 'graphiqueNiveau3',
+  'graphiqueBordureCase', 'graphiqueMarque',
+];
+
+const CARTE = '--couleur-carte-fond';
+const PAGE = '--couleur-page-fond';
+const SIMULATIONS_ET_ORIGINE = ['origine', 'protanopie', 'deuteranopie', 'tritanopie'];
+
+describe('la famille « graphique » : ses listes, hors de MARQUES et de TEXTES', () => {
+  test('les seize jetons du contrat existent dans les deux thèmes, et aucun autre jeton ne porte le préfixe de la famille', () => {
+    for (const theme of THEMES) {
+      const famille = [...lireJetons(JETONS, theme).keys()].filter((n) => n.startsWith('--couleur-graphique-'));
+      assert.deepEqual([...famille].sort(), [...JETONS_GRAPHIQUE].sort(), theme);
+    }
+  });
+
+  test('MARQUES_GRAPHIQUE : douze marques, seuil 3, figées, chacune peinte de son jeton de la famille ; le repère d’un plafond et celui d’une borne ont chacun le leur', () => {
+    assert.deepEqual(MARQUES_GRAPHIQUE.map((m) => m.nom), NOMS_MARQUES_GRAPHIQUE);
+    assert.ok(Object.isFrozen(MARQUES_GRAPHIQUE) && MARQUES_GRAPHIQUE.every((m) => Object.isFrozen(m) && Object.isFrozen(m.fonds)));
+    for (const marque of MARQUES_GRAPHIQUE) {
+      assert.deepEqual(Object.keys(marque).sort(), ['fonds', 'jeton', 'nom', 'seuil'], marque.nom);
+      assert.equal(marque.seuil, 3, marque.nom);
+      assert.ok(marque.jeton.startsWith('--couleur-graphique-'), marque.nom);
+      assert.ok(marque.fonds.includes(CARTE), `${marque.nom} : ${CARTE}`);
+    }
+    assert.equal(parNom(MARQUES_GRAPHIQUE, 'graphiqueRepere').jeton, g('repere'));
+    assert.equal(parNom(MARQUES_GRAPHIQUE, 'graphiqueBorne').jeton, g('borne'));
+    for (const nom of ['graphiqueSerie1', 'graphiqueSerie2']) {
+      assert.ok(parNom(MARQUES_GRAPHIQUE, nom).fonds.includes(PAGE), `${nom} : ${PAGE}`);
+    }
+  });
+
+  test('les listes de la famille restent hors de MARQUES et de TEXTES : aucun nom ni aucun jeton partagé, MARQUES garde ses vingt-deux entrées', () => {
+    assert.equal(MARQUES.length, NOMS_MARQUES.length);
+    const nomsGraphique = [...MARQUES_GRAPHIQUE, ...TEXTES_GRAPHIQUE, ...FONDS_GRAPHIQUE].map((e) => e.nom);
+    assert.equal(new Set(nomsGraphique).size, nomsGraphique.length);
+    const registres = [...MARQUES, ...TEXTES, ...SIGNES];
+    assert.deepEqual(registres.filter((e) => nomsGraphique.includes(e.nom)).map((e) => e.nom), []);
+    assert.deepEqual(registres.filter((e) => e.jeton.startsWith('--couleur-graphique-')).map((e) => e.nom), []);
+  });
+
+  test('l’échelle : quatre niveaux, 0 à 3, chacun son jeton et l’encre de son compte ; deux encres au plus ; figée', () => {
+    assert.deepEqual(
+      NIVEAUX_GRAPHIQUE.map(({ niveau, jeton }) => [niveau, jeton]),
+      [0, 1, 2, 3].map((k) => [k, g(`niveau-${k}`)]),
+    );
+    assert.ok(Object.isFrozen(NIVEAUX_GRAPHIQUE) && NIVEAUX_GRAPHIQUE.every(Object.isFrozen));
+    const encres = [...new Set(NIVEAUX_GRAPHIQUE.map(({ encre }) => encre))];
+    assert.ok(encres.length >= 1 && encres.length <= 2, `${encres.length} encres`);
+    for (const encre of encres) assert.ok([g('encre-claire'), g('encre-foncee')].includes(encre), encre);
+    assert.deepEqual(Object.keys(ECHELLE_GRAPHIQUE).sort(), ['clarte', 'ecartTeinte']);
+    assert.ok(Object.isFrozen(ECHELLE_GRAPHIQUE));
+  });
+
+  test('TEXTES_GRAPHIQUE : une entrée par encre, seuil 4,5, mesurée sur chaque niveau que NIVEAUX_GRAPHIQUE lui donne et sur aucun autre', () => {
+    const encres = [...new Set(NIVEAUX_GRAPHIQUE.map(({ encre }) => encre))];
+    assert.deepEqual(TEXTES_GRAPHIQUE.map((t) => t.jeton), encres);
+    assert.ok(Object.isFrozen(TEXTES_GRAPHIQUE) && TEXTES_GRAPHIQUE.every((t) => Object.isFrozen(t) && Object.isFrozen(t.fonds)));
+    for (const texte of TEXTES_GRAPHIQUE) {
+      assert.equal(texte.seuil, 4.5, texte.nom);
+      assert.deepEqual([...texte.fonds], NIVEAUX_GRAPHIQUE.filter((n) => n.encre === texte.jeton).map((n) => n.jeton), texte.nom);
+    }
+  });
+
+  test('FONDS_GRAPHIQUE : la grille et le niveau 0, sans seuil, hors de la mesure 3:1 ; les niveaux 1 à 3 sont des marques, mesurées sur la carte', () => {
+    assert.deepEqual(FONDS_GRAPHIQUE.map((f) => [f.nom, f.jeton]), [['graphiqueGrille', g('grille')], ['graphiqueNiveau0', g('niveau-0')]]);
+    assert.ok(Object.isFrozen(FONDS_GRAPHIQUE) && FONDS_GRAPHIQUE.every(Object.isFrozen));
+    assert.ok(FONDS_GRAPHIQUE.every((f) => !('seuil' in f)));
+    const jetonsMarques = MARQUES_GRAPHIQUE.map((m) => m.jeton);
+    for (const { jeton } of FONDS_GRAPHIQUE) assert.ok(!jetonsMarques.includes(jeton), jeton);
+    for (const k of [1, 2, 3]) assert.deepEqual([...parNom(MARQUES_GRAPHIQUE, `graphiqueNiveau${k}`).fonds], [CARTE], `niveau ${k}`);
+  });
+
+  test('chaque jeton et chaque fond des listes de la famille existe dans les deux thèmes, sans canal alpha', () => {
+    const noms = new Set([
+      ...[...MARQUES_GRAPHIQUE, ...TEXTES_GRAPHIQUE].flatMap((e) => [e.jeton, ...e.fonds]),
+      ...FONDS_GRAPHIQUE.map((f) => f.jeton),
+    ]);
+    for (const nom of JETONS_GRAPHIQUE) assert.ok(noms.has(nom), nom);
+    for (const theme of THEMES) {
+      const jetons = lireJetons(JETONS, theme);
+      for (const nom of noms) {
+        assert.ok(jetons.has(nom), `${theme} : ${nom}`);
+        assert.equal(jetons.get(nom)[3], 1, `${theme} : ${nom}`);
+      }
+    }
+  });
+});
+
+describe('la famille « graphique » validée par calcul (§ 12.7, § 14.5, D43)', () => {
+  const series = [g('serie-1'), g('serie-2')];
+  const appartenances = () => TEINTES_APPARTENANCE.map(({ marque }) => marque);
+
+  test('chaque marque de la famille tient 3:1 sur chacun de ses fonds — séries sur la carte et la page, repère et borne sur la carte —, dans les deux thèmes, sous les trois simulations', () => {
+    assert.deepEqual(verifierPalette(JETONS, MARQUES_GRAPHIQUE), []);
+  });
+
+  test('chaque encre tient 4,5:1 sur chaque niveau qu’elle sert, dans les deux thèmes, sous les trois simulations', () => {
+    assert.deepEqual(verifierPalette(JETONS, TEXTES_GRAPHIQUE), []);
+  });
+
+  test(`les deux séries se séparent l’une de l’autre et des six teintes d’appartenance de ${SEPARATIONS.autresMarques} au moins (OKLab × 100), sous les trois simulations`, () => {
+    assert.deepEqual(verifierSeparation(JETONS, series, appartenances(), SEPARATIONS.autresMarques), []);
+  });
+
+  test(`« prouvé inévitable » et « reste » se séparent l’un de l’autre de ${SEPARATIONS.autresMarques} au moins, et « reste », chromatique, des teintes d’appartenance, sous les trois simulations`, () => {
+    assert.deepEqual(verifierSeparation(JETONS, [g('prouve'), g('reste')], [], SEPARATIONS.autresMarques), []);
+    assert.deepEqual(verifierSeparation(JETONS, [g('reste')], appartenances(), SEPARATIONS.autresMarques), []);
+  });
+
+  test('aucun jeton de la famille n’est à moins de 30° d’une teinte de conflit, ni ne porte la valeur d’une teinte de conflit, d’appartenance ou du retrait', () => {
+    const fautes = verifierTeintesReservees(JETONS, JETONS_CONFLIT).filter((f) => f.jeton.startsWith('--couleur-graphique-'));
+    assert.deepEqual(fautes, []);
+    const reservees = [...JETONS_CONFLIT, ...appartenances(), '--couleur-retrait'];
+    for (const theme of THEMES) {
+      const jetons = lireJetons(JETONS, theme);
+      const valeurs = new Set(reservees.map((n) => String(jetons.get(n))));
+      assert.deepEqual(JETONS_GRAPHIQUE.filter((n) => valeurs.has(String(jetons.get(n)))), [], theme);
+    }
+  });
+
+  test('le repère, la borne, l’axe et les deux encres sont neutres dans les deux thèmes : sans teinte', () => {
+    for (const theme of THEMES) {
+      const jetons = lireJetons(JETONS, theme);
+      for (const nom of ['repere', 'borne', 'axe', 'encre-claire', 'encre-foncee'].map(g)) {
+        assert.equal(teinte(jetons.get(nom)), null, `${theme} : ${nom}`);
+      }
+    }
+  });
+
+  test('la bordure des cases tient 3:1 sur la carte ; le niveau 0 et la grille ne sont pas mesurés : le niveau 0 se tient sous 3:1, au plus près du fond', () => {
+    assert.deepEqual([...parNom(MARQUES_GRAPHIQUE, 'graphiqueBordureCase').fonds], [CARTE]);
+    for (const theme of THEMES) {
+      const jetons = lireJetons(JETONS, theme);
+      for (const simulation of SIMULATIONS_ET_ORIGINE) {
+        const vue = (c) => (simulation === 'origine' ? c : simuler(c, simulation));
+        assert.ok(contraste(vue(jetons.get(g('niveau-0'))), vue(jetons.get(CARTE))) < 3, `${theme} ${simulation}`);
+      }
+    }
   });
 });

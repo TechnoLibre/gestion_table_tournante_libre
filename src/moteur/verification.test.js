@@ -24,8 +24,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { indexerPlan, normaliser } from './configuration.js';
+import { planchersCollisions } from './diagnostic.js';
 import { mesurer } from './indicateurs.js';
-import { plafondsAPriori, plafondsRealises } from './plafond.js';
+import { borneDiversite, plafondsAPriori, plafondsRealises } from './plafond.js';
 import { ErreurConfiguration } from './erreurs.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
 
@@ -910,5 +911,235 @@ describe('verifierIndicateurs : les objectifs et les animateurs (§ 5.4, A9)', (
     assert.throws(() => verifierIndicateurs(avec((m) => { m.objectifs.possibles.pop(); }), plafonds(), plafonds()), RangeError);
     assert.throws(() => verifierIndicateurs(avec((m) => { m.toursAssis.pop(); }), plafonds(), plafonds()), RangeError);
     assert.throws(() => verifierIndicateurs(avec((m) => { m.animateurs.bornes.push(1); }), plafonds(), plafonds()), RangeError);
+  });
+});
+
+describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3, § 14.12, D42)', () => {
+  // Quatre personnes, trois rencontres chacune ; deux appartenances, de
+  // collisions cumulées 2 et 1 sur des planchers 1 et 1 ; deux tours, hors
+  // objectif 2 puis 0 sur des planchers 1 et 0. A(p) 2, 2, 1, 2 ; |F(p)| 3,
+  // 2, 2, 3 ; Φ_aff 3, 3, 2, 3 ; A_max 2, 2, 2, 3. Chaque inégalité y tient,
+  // et seule la personne de rang 2 n'y est pas à l'égalité de A_max.
+  const base = () => ({
+    rencontres: [3, 3, 3, 3],
+    affilies: [3, 2, 2, 3],
+    appartenancesVues: [2, 2, 1, 2],
+    parGroupe: [
+      { groupe: 'Coopérative Aubier', effectif: 2, collisionsCumulees: 2, pairesDistinctes: 1, excedent: 1 },
+      { groupe: 'Atelier Ressac', effectif: 2, collisionsCumulees: 1, pairesDistinctes: 1, excedent: 0 },
+    ],
+  });
+  const complementsDeBase = () => ({
+    planchersValides: true,
+    planchersCollisions: [1, 1],
+    objectifsParTour: [{ hors: 2, plancher: 1 }, { hors: 0, plancher: 0 }],
+    phiAffilies: [3, 3, 2, 3],
+    aMax: [2, 2, 2, 3],
+  });
+  const plafonds = () => [3, 3, 3, 3];
+  // La base, mesures et compléments, dont modifier(mesures, complements) a
+  // changé une valeur.
+  const avec = (modifier) => {
+    const mesures = base();
+    const complements = complementsDeBase();
+    modifier(mesures, complements);
+    return { mesures, complements };
+  };
+  const verifier = ({ mesures, complements }) => verifierIndicateurs(mesures, plafonds(), plafonds(), complements);
+
+  // Chaque code, la mesure forgée qui le lève, seul.
+  const MUTATIONS_COMPLEMENTS = [
+    ['collisions cumulées 0 sous le plancher 1 de Ressac', (m) => { m.parGroupe[1].collisionsCumulees = 0; },
+      [{ code: 'RESTE_NEGATIF', groupe: 1 }]],
+    ['hors objectif 0 sous le plancher 1 du tour 1', (m, c) => { c.objectifsParTour[0].hors = 0; },
+      [{ code: 'RESTE_OBJECTIFS_NEGATIF', tour: 1 }]],
+    ['A(p) 2 au-delà de rencontres 1', (m) => { m.rencontres[0] = 1; },
+      [{ code: 'DIVERSITE_RENCONTRES', index: 0 }]],
+    ['A(p) 2 au-delà de |F(p)| 1', (m) => { m.affilies[1] = 1; },
+      [{ code: 'DIVERSITE_AFFILIES', index: 1 }]],
+    ['|F(p)| 3 au-delà de Φ_aff 2', (m, c) => { c.phiAffilies[3] = 2; },
+      [{ code: 'AFFILIES_PLAFOND', index: 3 }]],
+    ['A(p) 2 au-delà de A_max 1', (m, c) => { c.aMax[1] = 1; },
+      [{ code: 'BORNE_DIVERSITE', index: 1 }]],
+  ];
+
+  test('les compléments d’un plan qui tient ne lèvent rien ; chaque inégalité est large', () => {
+    assert.deepEqual(verifier(avec(() => {})), []);
+    const egalite = avec((m, c) => {
+      m.affilies = [3, 3, 3, 3];
+      m.appartenancesVues = [3, 3, 3, 3];
+      m.parGroupe[0].collisionsCumulees = 1;
+      c.phiAffilies = [3, 3, 3, 3];
+      c.aMax = [3, 3, 3, 3];
+      c.objectifsParTour[0].hors = 1;
+    });
+    assert.deepEqual(verifier(egalite), []);
+  });
+
+  test('chaque code a sa mesure forgée, et aucun autre ne tombe', () => {
+    const cas = MUTATIONS_COMPLEMENTS.map(([libelle, modifier, attendu]) => [libelle, () => verifier(avec(modifier)), attendu]);
+    assert.deepEqual(ecarts(cas), []);
+  });
+
+  test('sans compléments, aucun des six codes ne tombe : la sortie est celle des trois paramètres', () => {
+    // Chaque mesure forgée, puis toutes à la fois, avec une DEPASSEMENT :
+    // sans compléments, null ou absents, seule la ligne est éprouvée.
+    const toutes = avec((m, c) => {
+      for (const [, modifier] of MUTATIONS_COMPLEMENTS) modifier(m, c);
+      m.rencontres[2] = 4;
+    });
+    const cas = [];
+    for (const [libelle, modifier] of [...MUTATIONS_COMPLEMENTS, ['toutes', () => {}]]) {
+      const { mesures } = libelle === 'toutes' ? toutes : avec(modifier);
+      const attendu = verifierIndicateurs(mesures, plafonds(), plafonds());
+      cas.push([`${libelle}, compléments null`, () => verifierIndicateurs(mesures, plafonds(), plafonds(), null), attendu]);
+      cas.push([`${libelle}, compléments absents`, () => verifierIndicateurs(mesures, plafonds(), plafonds(), undefined), attendu]);
+    }
+    assert.deepEqual(ecarts(cas), []);
+    assert.deepEqual(verifierIndicateurs(toutes.mesures, plafonds(), plafonds()), [{ code: 'DEPASSEMENT', index: 2 }]);
+  });
+
+  test('les deux restes ne s’éprouvent que sur un plan où les planchers valent', () => {
+    const horsDomaine = avec((m, c) => {
+      c.planchersValides = false;
+      m.parGroupe[1].collisionsCumulees = 0;
+      c.objectifsParTour[0].hors = 0;
+    });
+    assert.deepEqual(verifier(horsDomaine), []);
+    // La diversité s'éprouve, elle, hors du domaine des planchers.
+    horsDomaine.complements.aMax[1] = 1;
+    assert.deepEqual(verifier(horsDomaine), [{ code: 'BORNE_DIVERSITE', index: 1 }]);
+  });
+
+  test('un complément null n’est pas lu : planchers des collisions, des objectifs, Φ_aff, A_max', () => {
+    const cas = [
+      ['planchersCollisions null', (m, c) => { m.parGroupe[1].collisionsCumulees = 0; c.planchersCollisions = null; }],
+      ['objectifsParTour null', (m, c) => { c.objectifsParTour[0].hors = 0; c.objectifsParTour = null; }],
+      ['phiAffilies null', (m, c) => { c.phiAffilies[3] = 2; c.phiAffilies = null; }],
+      ['aMax null', (m, c) => { c.aMax[1] = 1; c.aMax = null; }],
+      ['parGroupe absent, planchersCollisions null', (m, c) => { delete m.parGroupe; c.planchersCollisions = null; }],
+    ].map(([libelle, modifier]) => [libelle, () => verifier(avec(modifier)), []]);
+    // Φ_aff et A_max null : leurs deux codes se taisent, ceux que les mesures
+    // seules décident s'éprouvent encore.
+    cas.push([
+      'phiAffilies et aMax null, A(p) au-delà de rencontres et de |F(p)|',
+      () => verifier(avec((m, c) => {
+        m.rencontres[0] = 1;
+        m.affilies[1] = 1;
+        c.phiAffilies = null;
+        c.aMax = null;
+      })),
+      [{ code: 'DIVERSITE_RENCONTRES', index: 0 }, { code: 'DIVERSITE_AFFILIES', index: 1 }],
+    ]);
+    assert.deepEqual(ecarts(cas), []);
+  });
+
+  test('un tour sans objet, hors et plancher null, n’est pas lu ; un seul des deux null fait tomber le tour', () => {
+    const cas = [
+      ['hors et plancher null au tour 2', (m, c) => { c.objectifsParTour[1] = { hors: null, plancher: null }; }, []],
+      ['hors et plancher null au tour 1, hors 0 sous le plancher 1 au tour 2', (m, c) => {
+        c.objectifsParTour = [{ hors: null, plancher: null }, { hors: 0, plancher: 1 }];
+      }, [{ code: 'RESTE_OBJECTIFS_NEGATIF', tour: 2 }]],
+      ['plancher null seul', (m, c) => { c.objectifsParTour[1].plancher = null; }, [{ code: 'RESTE_OBJECTIFS_NEGATIF', tour: 2 }]],
+    ].map(([libelle, modifier, attendu]) => [libelle, () => verifier(avec(modifier)), attendu]);
+    assert.deepEqual(ecarts(cas), []);
+  });
+
+  test('les violations d’une personne suivent sa ligne ; les restes viennent après les totaux, appartenance puis tour', () => {
+    const { mesures, complements } = avec((m, c) => {
+      for (const [, modifier] of MUTATIONS_COMPLEMENTS) modifier(m, c);
+      m.parGroupe[0].collisionsCumulees = 0;
+      c.objectifsParTour[1].plancher = 1;
+      m.rencontres[1] = 4;
+      m.objectifs = { tours: [0, 0, 0, 0], possibles: [0, 0, 0, 0], jamaisServies: 3, horsObjectifMax: 0, concernes: 2 };
+      m.toursAssis = [2, 2, 2, 2];
+    });
+    assert.deepEqual(verifierIndicateurs(mesures, plafonds(), plafonds(), complements), [
+      { code: 'DIVERSITE_RENCONTRES', index: 0 },
+      { code: 'DEPASSEMENT', index: 1 },
+      { code: 'DIVERSITE_AFFILIES', index: 1 },
+      { code: 'BORNE_DIVERSITE', index: 1 },
+      { code: 'AFFILIES_PLAFOND', index: 3 },
+      { code: 'JAMAIS_SERVIES' },
+      { code: 'RESTE_NEGATIF', groupe: 0 },
+      { code: 'RESTE_NEGATIF', groupe: 1 },
+      { code: 'RESTE_OBJECTIFS_NEGATIF', tour: 1 },
+      { code: 'RESTE_OBJECTIFS_NEGATIF', tour: 2 },
+    ]);
+  });
+
+  test('une valeur qui n’est pas un nombre fait tomber les inégalités qui la lisent', () => {
+    const cas = [
+      ['A(p) NaN', (m) => { m.appartenancesVues[2] = Number.NaN; },
+        [{ code: 'DIVERSITE_RENCONTRES', index: 2 }, { code: 'DIVERSITE_AFFILIES', index: 2 }, { code: 'BORNE_DIVERSITE', index: 2 }]],
+      ['|F(p)| en texte', (m) => { m.affilies[2] = '2'; },
+        [{ code: 'DIVERSITE_AFFILIES', index: 2 }, { code: 'AFFILIES_PLAFOND', index: 2 }]],
+      ['Φ_aff indéfini', (m, c) => { c.phiAffilies[2] = undefined; }, [{ code: 'AFFILIES_PLAFOND', index: 2 }]],
+      ['A_max null', (m, c) => { c.aMax[2] = null; }, [{ code: 'BORNE_DIVERSITE', index: 2 }]],
+      ['plancher des collisions NaN', (m, c) => { c.planchersCollisions[0] = Number.NaN; }, [{ code: 'RESTE_NEGATIF', groupe: 0 }]],
+      ['hors objectif null', (m, c) => { c.objectifsParTour[1].hors = null; }, [{ code: 'RESTE_OBJECTIFS_NEGATIF', tour: 2 }]],
+    ].map(([libelle, modifier, attendu]) => [libelle, () => verifier(avec(modifier)), attendu]);
+    assert.deepEqual(ecarts(cas), []);
+  });
+
+  test('un complément d’une autre forme lève : longueurs, listes manquantes, validité non booléenne', () => {
+    const cas = [
+      ['Φ_aff de 3 cases', (m, c) => { c.phiAffilies.pop(); }, RangeError],
+      ['A_max de 5 cases', (m, c) => { c.aMax.push(3); }, RangeError],
+      ['un plancher de collisions de plus que parGroupe', (m, c) => { c.planchersCollisions.push(0); }, RangeError],
+      ['parGroupe absent, des planchers de collisions', (m) => { delete m.parGroupe; }, TypeError],
+      ['A(p) absent', (m) => { delete m.appartenancesVues; }, TypeError],
+      ['|F(p)| de 3 cases', (m) => { m.affilies.pop(); }, RangeError],
+      ['objectifsParTour qui n’est pas une liste', (m, c) => { c.objectifsParTour = { hors: 0, plancher: 0 }; }, TypeError],
+      // Une erreur nommée, et non celle d'une déstructuration de null.
+      ['un tour null dans objectifsParTour', (m, c) => { c.objectifsParTour[1] = null; },
+        { name: 'TypeError', message: /^objectifsParTour\[1\] : objet attendu/ }],
+      ['un tour nombre dans objectifsParTour, hors du domaine des planchers', (m, c) => {
+        c.planchersValides = false;
+        c.objectifsParTour[0] = 2;
+      }, { name: 'TypeError', message: /^objectifsParTour\[0\] : objet attendu/ }],
+      ['planchersValides en texte', (m, c) => { c.planchersValides = 'oui'; }, TypeError],
+      ['planchersValides absent', (m, c) => { delete c.planchersValides; }, TypeError],
+    ];
+    for (const [libelle, modifier, erreur] of cas) assert.throws(() => verifier(avec(modifier)), erreur, libelle);
+    for (const valeur of [3, 'compléments']) {
+      assert.throws(() => verifierIndicateurs(base(), plafonds(), plafonds(), valeur), TypeError, String(valeur));
+    }
+  });
+
+  test('ne modifie ni les mesures ni les compléments, que tout tienne ou que tout tombe', () => {
+    const geler = (valeur) => {
+      if (valeur !== null && typeof valeur === 'object') {
+        for (const champ of Object.values(valeur)) geler(champ);
+        Object.freeze(valeur);
+      }
+      return valeur;
+    };
+    const tout = avec((m, c) => {
+      for (const [, modifier] of MUTATIONS_COMPLEMENTS) modifier(m, c);
+    });
+    for (const entrees of [avec(() => {}), tout]) {
+      geler(entrees);
+      const copie = structuredClone(entrees);
+      verifier(entrees);
+      assert.deepEqual(entrees, copie);
+    }
+  });
+
+  test('la petite démonstration et son plan parfait tiennent ; un plancher forgé au-delà de ses collisions lève', () => {
+    const tableDe = indexerPlan(INSTANCE, PLAN_PARFAIT);
+    const mesures = mesurer(INSTANCE, tableDe);
+    const { phiAffilies, aMax } = borneDiversite(INSTANCE, tableDe);
+    // Le plancher de chaque appartenance, 0 quand le diagnostic se tait.
+    const parNom = new Map(planchersCollisions(INSTANCE).map(({ groupe, plancherCumulees }) => [groupe, plancherCumulees]));
+    const planchers = INSTANCE.groupes.map((groupe) => parNom.get(groupe) ?? 0);
+    const complements = { planchersValides: true, planchersCollisions: planchers, objectifsParTour: null, phiAffilies, aMax };
+    const realises = plafondsRealises(INSTANCE, tableDe);
+    assert.deepEqual(verifierIndicateurs(mesures, plafondsAPriori(INSTANCE), realises, complements), []);
+    const forges = planchers.map((plancher, g) => (g === 1 ? mesures.parGroupe[g].collisionsCumulees + 1 : plancher));
+    assert.deepEqual(
+      verifierIndicateurs(mesures, plafondsAPriori(INSTANCE), realises, { ...complements, planchersCollisions: forges }),
+      [{ code: 'RESTE_NEGATIF', groupe: 1 }],
+    );
   });
 });

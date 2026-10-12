@@ -14,7 +14,10 @@
 // recevoir est terminé aussitôt. Chaque proposition se calcule de sa graine
 // dérivée, la même quel que soit le travailleur qui la calcule (proposerUne) :
 // le résultat, rangé par identifiant, est octet pour octet celui de
-// rechercher, quel que soit W et quel que soit l'ordre d'achèvement (§ 5.7).
+// rechercher, course de chaque proposition comprise, quel que soit W et quel
+// que soit l'ordre d'achèvement (§ 5.7). Aucun travailleur ne date une
+// proposition : la durée est celle que le contrôleur prend autour du calcul
+// entier.
 //
 //   → { type: 'proposer', configuration, reglages, rang }  un rang à la fois
 //   ← { type: 'avancement', fait, total }        fait dans la proposition en

@@ -7,16 +7,18 @@
 // démonstration et sa variante, arbitrées par l'énumération ; la limite de
 // l'énumération à sa frontière exacte ; le coût du plafond a priori et du
 // diagnostic sur la grande démonstration, sa variante et la configuration
-// pessimiste, chacun sous un seuil tiré de sa référence (§ 17, point 4).
+// pessimiste, chacun sous un seuil tiré de sa référence (§ 17, point 4) ; la
+// borne de diversité contre chaque plan de deux salles inventées (§ 5.5).
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { configurationPessimiste, FORME_PESSIMISTE } from '../../test/fixtures/banc/pessimiste.js';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
-import { LIBRE, STATUT, normaliser } from './configuration.js';
+import { LIBRE, RESERVE, STATUT, normaliser } from './configuration.js';
 import { diagnostiquer } from './diagnostic.js';
 import { ErreurConfiguration } from './erreurs.js';
-import { plafondsAPriori, plafondsAPrioriParEnumeration } from './plafond.js';
+import { mesurer as mesurerPlan } from './indicateurs.js';
+import { borneDiversite, plafondsAPriori, plafondsAPrioriParEnumeration } from './plafond.js';
 
 const SANS_CONTRAINTE = {
   separerAppartenances: false,
@@ -331,4 +333,153 @@ describe("plafond a priori : le coût, sous un seuil tiré d'une référence (§
       );
     });
   }
+});
+
+// Appartenances inventées des salles énumérées.
+const AUBIER = 'Coopérative Aubier';
+const RESSAC = 'Atelier Ressac';
+const BRISANT = 'Collectif Brisant';
+
+/**
+ * Instance d'une salle aux appartenances données : personnes[i] = [id,
+ * appartenance ou null] ; la table d'index t a la capacité capacites[t] et
+ * l'identifiant 100 + t ; reservations : [id, index de table, tour ou null],
+ * null pour tous les tours.
+ */
+function salle({ personnes, capacites, tours, reservations }) {
+  return normaliser({
+    participants: personnes.map(([id, appartenance]) => ({ id, nom: `P${id}`, appartenance })),
+    tables: capacites.map((capacite, t) => ({ id: 100 + t, numero: t + 1, capacite })),
+    tours,
+    reservations: reservations.map(([participant, t, tour]) =>
+      tour === null
+        ? { participant, table: 100 + t, portee: 'tous' }
+        : { participant, table: 100 + t, portee: 'tour', tour },
+    ),
+    contraintes: SANS_CONTRAINTE,
+  });
+}
+
+// Chaque affectation du tour r : les personnes fixées à leur table, chacune
+// des autres, par index croissant, à chaque table qui garde un siège, puis en
+// réserve quand reserve est vrai. Une affectation est un Int32Array de N
+// cases, index de table ou RESERVE.
+function affectationsDuTour({ N, T, R, fixe, capacite }, r, reserve) {
+  const sieges = Int32Array.from(capacite);
+  const courante = new Int32Array(N).fill(RESERVE);
+  const aPlacer = [];
+  for (let p = 0; p < N; p += 1) {
+    const t = fixe[p * R + r];
+    if (t === LIBRE) {
+      aPlacer.push(p);
+    } else {
+      courante[p] = t;
+      sieges[t] -= 1;
+    }
+  }
+  const affectations = [];
+  const poser = (i) => {
+    if (i === aPlacer.length) {
+      affectations.push(Int32Array.from(courante));
+      return;
+    }
+    const p = aPlacer[i];
+    for (let t = 0; t < T; t += 1) {
+      if (sieges[t] === 0) continue;
+      sieges[t] -= 1;
+      courante[p] = t;
+      poser(i + 1);
+      sieges[t] += 1;
+    }
+    if (reserve) {
+      courante[p] = RESERVE;
+      poser(i + 1);
+    }
+  };
+  poser(0);
+  return affectations;
+}
+
+// Chaque plan de l'instance, sur le gabarit de plafondsAPrioriParEnumeration :
+// une affectation par tour, les suites d'affectations dans l'ordre
+// lexicographique, de (0, …, 0) au dernier rang de chaque tour. Appelle
+// visiter(tableDe) pour chacun ; le même Int32Array sert d'un plan à l'autre.
+// Rend le nombre de plans visités.
+function enumererPlans(instance, reserve, visiter) {
+  const { N, R } = instance;
+  const parTour = Array.from({ length: R }, (_, r) => affectationsDuTour(instance, r, reserve));
+  const choix = new Int32Array(R);
+  const tableDe = new Int32Array(N * R);
+  let plans = 0;
+  for (;;) {
+    for (let r = 0; r < R; r += 1) {
+      const affectation = parTour[r][choix[r]];
+      for (let p = 0; p < N; p += 1) tableDe[p * R + r] = affectation[p];
+    }
+    visiter(tableDe);
+    plans += 1;
+    let r = R - 1;
+    while (r >= 0 && choix[r] === parTour[r].length - 1) r -= 1;
+    if (r < 0) return plans;
+    choix[r] += 1;
+    for (let q = r + 1; q < R; q += 1) choix[q] = 0;
+  }
+}
+
+describe('borne de diversité : chaque plan de deux salles inventées (§ 5.5, B5, § 14.12)', () => {
+  // Pour chaque plan : A(p) ≤ A_max(p) et |F(p)| ≤ Φ_aff(p) pour chacun ;
+  // sur l'ensemble des plans, Φ_aff(p) atteint pour une personne au moins.
+  // Rend les écarts, en lignes lisibles, les personnes qui atteignent leur
+  // Φ_aff non nul à un plan au moins, le nombre de plans et celui des plans
+  // qui laissent quelqu'un en réserve.
+  function eprouver(instance, reserve) {
+    const ecarts = [];
+    const atteintes = new Set();
+    let avecReserve = 0;
+    const plans = enumererPlans(instance, reserve, (tableDe) => {
+      const { phiAffilies, aMax } = borneDiversite(instance, tableDe);
+      const { appartenancesVues, affilies } = mesurerPlan(instance, tableDe);
+      if (tableDe.includes(RESERVE)) avecReserve += 1;
+      for (let p = 0; p < instance.N; p += 1) {
+        const id = instance.ids[p];
+        if (appartenancesVues[p] > aMax[p]) ecarts.push(`${tableDe.join(',')} : A(${id}) > A_max`);
+        if (affilies[p] > phiAffilies[p]) ecarts.push(`${tableDe.join(',')} : |F(${id})| > Φ_aff`);
+        if (phiAffilies[p] > 0 && affilies[p] === phiAffilies[p]) atteintes.add(id);
+      }
+    });
+    return { ecarts: ecarts.slice(0, 10), atteintes: [...atteintes].sort((x, y) => x - y), plans, avecReserve };
+  }
+
+  test('une table de 3 et une de 2, 2 tours, la réserve permise : un ancré affilié, un partiellement fixé, une personne sans appartenance', () => {
+    // 1 (Aubier) ancré à la table de 3 ; 3 (Ressac) fixé à la table de 2 au
+    // tour 1 ; 2 (Aubier), 4 (Ressac), 5 sans appartenance, libres.
+    const instance = salle({
+      personnes: [[1, AUBIER], [2, AUBIER], [3, RESSAC], [4, RESSAC], [5, null]],
+      capacites: [3, 2],
+      tours: 2,
+      reservations: [[1, 0, null], [3, 1, 1]],
+    });
+    const { ecarts, atteintes, plans, avecReserve } = eprouver(instance, true);
+    assert.deepEqual(ecarts, []);
+    // 19 affectations au tour 1, 63 au tour 2 ; tous sauf 18 laissent
+    // quelqu'un en réserve. Chacun atteint son Φ_aff à un plan au moins.
+    assert.deepEqual({ plans, avecReserve }, { plans: 1197, avecReserve: 1179 });
+    assert.deepEqual(atteintes, [1, 2, 3, 4, 5]);
+  });
+
+  test('trois tables de 2, 3 tours, chacun assis : un ancré seul de son appartenance, un partiellement fixé', () => {
+    // 1 (Brisant) ancré à la table d'index 2 ; 5 (Ressac) fixé à la table
+    // d'index 0 au tour 2 ; 2, 3, 6 (Aubier), 4 (Ressac), libres.
+    const instance = salle({
+      personnes: [[1, BRISANT], [2, AUBIER], [3, AUBIER], [4, RESSAC], [5, RESSAC], [6, AUBIER]],
+      capacites: [2, 2, 2],
+      tours: 3,
+      reservations: [[1, 2, null], [5, 0, 2]],
+    });
+    const { ecarts, atteintes, plans, avecReserve } = eprouver(instance, false);
+    assert.deepEqual(ecarts, []);
+    // 30 affectations aux tours 1 et 3, 12 au tour 2.
+    assert.deepEqual({ plans, avecReserve }, { plans: 10_800, avecReserve: 0 });
+    assert.deepEqual(atteintes, [1, 2, 3, 4, 5, 6]);
+  });
 });

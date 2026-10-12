@@ -15,7 +15,7 @@ import { texteLivre } from '../demo/livrees.js';
 import { rechercher } from '../moteur/recherche.js';
 import { analyser, configurationDepuisCharge } from '../stockage/document.js';
 import { creerExecuteurTravailleur } from './executeur_travailleur.js';
-import { ErreurAnnulee, ErreurGeneration } from './generation.js';
+import { ErreurAnnulee, ErreurGeneration, creerExecuteurDirect } from './generation.js';
 import { brancherTravailleur } from './generation_travailleur.js';
 
 const CONFIGURATION = Object.freeze({ marque: 'configuration d’épreuve', tours: 3 });
@@ -222,6 +222,24 @@ describe('exécuteur du travailleur : le groupe (§ 5.7, § 5.10)', () => {
       }
     }
     assert.equal(comparaisons, 9);
+  });
+
+  test("la course de chaque proposition traverse le groupe telle quelle, sans date : l'exécuteur direct rend la même, quel que soit l'ordre d'achèvement", async () => {
+    const configuration = configurationDe('petite-conflit');
+    const reglages = { graine: 23, nombre: 4, arret: 3_000, historique: 100 };
+    const direct = await creerExecuteurDirect().lancer(configuration, reglages).resultat;
+    assert.ok(direct.every(({ evalues, releves }) => evalues === 3_000 && releves.length === 4));
+    for (const choisir of [() => 0, (n) => n - 1]) {
+      const { fabrique, servir } = fabriqueCalculante();
+      const execution = creerExecuteurTravailleur(fabrique).lancer(configuration, reglages, { coeurs: 3 });
+      servir(choisir);
+      const lue = await issue(execution.resultat);
+      assert.equal(lue.etat, 'resolue');
+      assert.deepStrictEqual(lue.valeur, direct);
+      for (const proposition of lue.valeur) {
+        assert.deepEqual(Object.keys(proposition), ['id', 'graine', 'arret', 'historique', 'plan', 'evalues', 'releves']);
+      }
+    }
   });
 
   test('l’avancement est la somme des avancements de chaque proposition, sur nombre × arret ; une proposition rendue compte pour son arret entier', () => {

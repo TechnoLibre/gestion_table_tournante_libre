@@ -2,7 +2,7 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Épreuves du registre des constantes mesurées (§ 14.1, § 19.10) : les
-// dix-huit entrées du contrat de données, chacune complète et de statut
+// vingt entrées du contrat de données, chacune complète et de statut
 // épinglé, la vérification qui nomme l'entrée et le champ d'une faute, et
 // l'accord du registre avec le relevé committé du banc : le banc écrit un
 // relevé, jamais le registre, et une constante du banc déclarée mesurée
@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { accordRegistre } from '../../scripts/banc/releve.js';
 import releveCommite from '../../scripts/banc/releve.json' with { type: 'json' };
-import { CONSTANTES, constante, verifierRegistre } from './constantes.js';
+import { CONSTANTES, LONGUEUR_NOM_REFERENCE, constante, verifierRegistre } from './constantes.js';
 
 // Le contrat de données : nom, valeur de départ, unité, propriétaire,
 // statut.
@@ -38,6 +38,8 @@ const CONTRAT = [
   ['HAUTEUR_BANDE_IMPRESSION', null, 'mm', 'execution', 'mesuree'],
   ['TOLERANCE_CHAINE_TEMOIN', 0.011, 'rapport', 'banc', 'mesuree'],
   ['RALENTISSEMENT_PLEINE_CHARGE', 2, '×', 'banc', 'defautDeTravail'],
+  ['SEUIL_MATRICE_PARTICIPANTS', 40, 'participants', 'banc', 'defautDeTravail'],
+  ['LARGEUR_TRONCATURE_NOM_PX', 180, 'px', 'banc', 'defautDeTravail'],
 ];
 
 // Les constantes du banc dont le registre a adopté la valeur relevée.
@@ -47,8 +49,8 @@ const ADOPTEES = ['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN'];
 const copie = () => CONSTANTES.map((entree) => ({ ...entree }));
 
 describe('constantes : le registre (§ 14.1, § 19.10)', () => {
-  test('le registre porte les dix-huit entrées du contrat, dans son ordre, chacune complète', () => {
-    assert.equal(CONSTANTES.length, 18);
+  test('le registre porte les vingt entrées du contrat, dans son ordre, chacune complète', () => {
+    assert.equal(CONSTANTES.length, 20);
     assert.deepEqual(
       CONSTANTES.map(({ nom, valeur, unite, proprietaire, statut }) => [nom, valeur, unite, proprietaire, statut]),
       CONTRAT,
@@ -72,6 +74,26 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
     assert.match(entree('ZONE_SILENCE_MM').raison, /bord de feuille/);
     assert.match(entree('K_LISTES').protocole, /n'a pas écrit le logiciel/);
     assert.match(entree('TOLERANCE_CHAINE_TEMOIN').protocole, /repli/);
+  });
+
+  test('les deux seuils de la page de qualité attendent le banc, protocole écrit (B29) ; la troncature se cale sur une longueur de nom écrite ici', () => {
+    const entree = (nom) => CONSTANTES.find((c) => c.nom === nom);
+    const matrice = entree('SEUIL_MATRICE_PARTICIPANTS');
+    assert.match(matrice.mesure, /24 px/);
+    assert.match(matrice.protocole, /cadre de 1 366 × 700 px/);
+    assert.match(matrice.raison, /fiche/);
+    const troncature = entree('LARGEUR_TRONCATURE_NOM_PX');
+    assert.ok(Number.isInteger(LONGUEUR_NOM_REFERENCE) && LONGUEUR_NOM_REFERENCE > 0);
+    assert.ok(troncature.protocole.includes(`nom de ${LONGUEUR_NOM_REFERENCE} caractères`), troncature.protocole);
+    assert.match(troncature.protocole, /glyphe le plus large/);
+    // Jamais les noms d'une démonstration, que sa régénération change.
+    assert.match(troncature.protocole, /jamais un nom de démonstration/);
+    // Le banc les relève ; le registre garde leur défaut de travail jusqu'à
+    // l'adoption à la main d'une valeur relevée.
+    for (const seuil of [matrice, troncature]) {
+      assert.equal(seuil.proprietaire, 'banc', seuil.nom);
+      assert.equal(seuil.statut, 'defautDeTravail', seuil.nom);
+    }
   });
 
   test('constante rend la valeur par le nom ; un nom inconnu lève', () => {

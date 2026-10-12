@@ -14,9 +14,26 @@ import { LIBRE } from './configuration.js';
  * @typedef {{code: string, participant?: number, table?: number, tour?: number,
  *            detail?: string}} Violation   ids, tours numérotés à partir de 1
  *
- * @typedef {{code: string, index?: number}} ViolationIndicateur
+ * @typedef {{code: string, index?: number, groupe?: number,
+ *            tour?: number}} ViolationIndicateur
  *          index : rang de la personne dans l'ordre canonique, celui de
- *          instance.ids ; absent d'une violation qui porte sur un total
+ *          instance.ids ; absent d'une violation qui porte sur un total.
+ *          groupe : rang de l'appartenance dans instance.groupes, à partir
+ *          de 0 ; tour : numéroté à partir de 1. Seuls les restes les portent
+ *
+ * @typedef {Object} ComplementsIndicateurs   ce que la page de qualité ajoute
+ * @property {boolean} planchersValides  vrai quand le plan assoit chacun à
+ *           chaque tour et honore les réservations : les planchers n'y valent
+ *           que là (§ 12.4)
+ * @property {ArrayLike<number>|null} planchersCollisions  plancher des
+ *           collisions cumulées par appartenance, ordre de instance.groupes,
+ *           0 quand le diagnostic se tait
+ * @property {Array<{hors: number|null, plancher: number|null}>|null}
+ *           objectifsParTour  un élément par tour ; un tour sans couple
+ *           possible porte hors et plancher tous deux null, et la garde ne
+ *           le lit pas
+ * @property {ArrayLike<number>|null} phiAffilies  Φ_aff(p), borneDiversite
+ * @property {ArrayLike<number>|null} aMax         A_max(p), borneDiversite
  */
 
 // Index de table d'une liste que plan.tables ne rattache à aucune table de
@@ -206,6 +223,80 @@ function exigerLongueur(valeurs, N, nom, attendu) {
   }
 }
 
+// Les dépassements de la diversité d'une personne, ajoutés à violations,
+// quand la garde a ses compléments : A(p) ≤ rencontres(p), A(p) ≤ |F(p)|,
+// |F(p)| ≤ Φ_aff(p), A(p) ≤ A_max(p), les deux derniers quand la borne est
+// donnée. complements vaut null sans compléments.
+function verifierDiversite(p, rencontres, mesures, complements, violations) {
+  if (complements === null) return;
+  const { appartenancesVues: vues, affilies } = mesures;
+  if (!tient(rencontres[p], vues[p])) violations.push({ code: 'DIVERSITE_RENCONTRES', index: p });
+  if (!tient(affilies[p], vues[p])) violations.push({ code: 'DIVERSITE_AFFILIES', index: p });
+  const { phiAffilies, aMax } = complements;
+  if (phiAffilies !== null && !tient(phiAffilies[p], affilies[p])) violations.push({ code: 'AFFILIES_PLAFOND', index: p });
+  if (aMax !== null && !tient(aMax[p], vues[p])) violations.push({ code: 'BORNE_DIVERSITE', index: p });
+}
+
+// Les compléments lus, chacun null quand il manque ; null sans compléments.
+// Lève TypeError quand complements n'est ni un objet ni null, que
+// planchersValides n'est pas un booléen, qu'une liste attendue n'en est pas
+// une, qu'un élément de objectifsParTour n'est pas un objet, ou que mesures
+// n'a pas les listes que les compléments font lire ;
+// RangeError quand une liste n'a pas la longueur de sa population : N pour
+// les personnes, mesures.parGroupe pour les appartenances.
+function lireComplements(complements, mesures, N) {
+  if (complements === null) return null;
+  if (typeof complements !== 'object') throw new TypeError('complements : objet ou null attendu');
+  const { planchersValides, planchersCollisions = null, objectifsParTour = null } = complements;
+  const { phiAffilies = null, aMax = null } = complements;
+  if (typeof planchersValides !== 'boolean') throw new TypeError('complements.planchersValides : booléen attendu');
+  exigerLongueur(mesures.appartenancesVues, N, 'appartenancesVues', 'liste');
+  exigerLongueur(mesures.affilies, N, 'affilies', 'liste');
+  if (phiAffilies !== null) exigerLongueur(phiAffilies, N, 'phiAffilies', 'liste ou null');
+  if (aMax !== null) exigerLongueur(aMax, N, 'aMax', 'liste ou null');
+  if (planchersCollisions !== null) {
+    if (!Array.isArray(mesures.parGroupe)) throw new TypeError('parGroupe : liste attendue avec planchersCollisions');
+    if (planchersCollisions.length !== mesures.parGroupe.length) {
+      throw new RangeError(
+        `planchersCollisions : ${planchersCollisions.length} cases, ${mesures.parGroupe.length} attendues comme parGroupe`,
+      );
+    }
+  }
+  if (objectifsParTour !== null) {
+    if (!Array.isArray(objectifsParTour)) throw new TypeError('objectifsParTour : liste ou null attendue');
+    objectifsParTour.forEach((element, r) => {
+      if (element === null || typeof element !== 'object') {
+        throw new TypeError(`objectifsParTour[${r}] : objet attendu, {hors, plancher}`);
+      }
+    });
+  }
+  return { planchersValides, planchersCollisions, objectifsParTour, phiAffilies, aMax };
+}
+
+// Les restes négatifs, ajoutés à violations, sur un plan où les planchers
+// valent : collisions cumulées sous leur plancher, appartenance par
+// appartenance, puis hors objectif sous leur plancher, tour par tour. Un
+// tour dont hors et plancher sont tous deux null est sans objet et passe ;
+// un seul des deux null fait tomber l'inégalité, comme toute non-valeur.
+function verifierRestes(complements, parGroupe, violations) {
+  if (complements === null || !complements.planchersValides) return;
+  const { planchersCollisions, objectifsParTour } = complements;
+  if (planchersCollisions !== null) {
+    for (let g = 0; g < planchersCollisions.length; g += 1) {
+      if (!tient(parGroupe[g].collisionsCumulees, planchersCollisions[g])) {
+        violations.push({ code: 'RESTE_NEGATIF', groupe: g });
+      }
+    }
+  }
+  if (objectifsParTour !== null) {
+    for (let r = 0; r < objectifsParTour.length; r += 1) {
+      const { hors, plancher } = objectifsParTour[r];
+      if (hors === null && plancher === null) continue;
+      if (!tient(hors, plancher)) violations.push({ code: 'RESTE_OBJECTIFS_NEGATIF', tour: r + 1 });
+    }
+  }
+}
+
 // Les dépassements des objectifs et des animateurs d'une personne (§ 5.4,
 // A9), ajoutés à violations : s(p) ≤ P(p), s(p) ≤ tours assis, m(p) ≤ B(p).
 // P(p) ne se compare pas aux tours assis : un plan édité qui laisse une
@@ -236,6 +327,20 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * personne contre le plus de tours possibles (HORS_OBJECTIF_MAX). Une mesure
  * absente se lit comme null : seule la liste rencontres est exigée.
  *
+ * Avec ses compléments, que seule la page de qualité lui passe (§ 12.3, D42),
+ * elle éprouve en plus, pour chacun, A(p) ≤ rencontres(p)
+ * (DIVERSITE_RENCONTRES), A(p) ≤ |F(p)| (DIVERSITE_AFFILIES), |F(p)| ≤
+ * Φ_aff(p) (AFFILIES_PLAFOND) et A(p) ≤ A_max(p) (BORNE_DIVERSITE), A(p) et
+ * |F(p)| lus dans mesures.appartenancesVues et mesures.affilies, les deux
+ * derniers seulement quand la borne est donnée ; puis, sur un plan où les
+ * planchers valent, que le reste n'est jamais négatif : les collisions
+ * cumulées de chaque appartenance, mesures.parGroupe, au moins son plancher
+ * (RESTE_NEGATIF, groupe), et les tours hors objectif de chaque tour au moins
+ * le sien (RESTE_OBJECTIFS_NEGATIF, tour), un tour sans couple possible,
+ * hors et plancher null, n'étant pas lu. Un complément null n'est pas lu.
+ * Sans compléments, null ou absents, la sortie est celle des trois premiers
+ * paramètres seuls.
+ *
  * Les trois listes suivent l'ordre canonique, celui de instance.ids, et N est
  * la longueur de mesures.rencontres. plafondsAPriori vaut null quand le
  * plafond a priori est inconnu (§ 12.6) : la ligne perd ce terme, et seule la
@@ -249,7 +354,8 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  * violation désigne la personne par index, son rang dans l'ordre canonique,
  * que instance.ids[index] traduit. Les violations se rangent par index
  * croissant, puis de gauche à droite sur la ligne, suivie des dépassements
- * de la personne ; les deux violations des totaux viennent en dernier.
+ * de la personne, puis de sa diversité ; les deux violations des totaux
+ * viennent ensuite, et les restes en dernier, appartenances puis tours.
  *
  * Lève RangeError quand une liste de plafonds, ou une liste par personne des
  * objectifs, des animateurs ou des tours assis, n'a pas N cases : elle décrit
@@ -264,13 +370,15 @@ function verifierPersonne(p, { toursAssis, objectifs, animateurs }, violations) 
  *        les mesures d'un plan ; toursAssis n'est lu qu'avec les objectifs
  * @param {ArrayLike<number>|null} plafondsAPriori
  * @param {ArrayLike<number>} plafondsRealises
+ * @param {ComplementsIndicateurs|null} [complements]
  * @returns {ViolationIndicateur[]}
  */
-export function verifierIndicateurs(mesures, plafondsAPriori, plafondsRealises) {
+export function verifierIndicateurs(mesures, plafondsAPriori, plafondsRealises, complements = null) {
   const { rencontres } = mesures;
   const N = rencontres.length;
   exigerLongueur(plafondsRealises, N, 'plafondsRealises', 'liste');
   if (plafondsAPriori !== null) exigerLongueur(plafondsAPriori, N, 'plafondsAPriori', 'liste ou null');
+  const lus = lireComplements(complements, mesures, N);
   const lues = { toursAssis: mesures.toursAssis, objectifs: mesures.objectifs ?? null, animateurs: mesures.animateurs ?? null };
   if (lues.objectifs !== null) {
     exigerLongueur(lues.objectifs.tours, N, 'objectifs.tours', 'liste');
@@ -293,6 +401,7 @@ export function verifierIndicateurs(mesures, plafondsAPriori, plafondsRealises) 
     }
     if (!tient(realise, rencontres[p])) violations.push({ code: 'DEPASSEMENT', index: p });
     verifierPersonne(p, lues, violations);
+    verifierDiversite(p, rencontres, mesures, lus, violations);
   }
   if (lues.objectifs !== null) {
     const { jamaisServies, concernes, horsObjectifMax, possibles } = lues.objectifs;
@@ -300,5 +409,6 @@ export function verifierIndicateurs(mesures, plafondsAPriori, plafondsRealises) 
     const plusDePossibles = Array.prototype.reduce.call(possibles, (plus, n) => Math.max(plus, n), 0);
     if (!tient(plusDePossibles, horsObjectifMax)) violations.push({ code: 'HORS_OBJECTIF_MAX' });
   }
+  verifierRestes(lus, mesures.parGroupe, violations);
   return violations;
 }

@@ -1141,6 +1141,57 @@ describe('normaliser : animateurs et borne des animateurs (§ 4.5, D6, D21)', ()
   });
 });
 
+describe('normaliser : les étiquettes des personnes, en index (§ 4.5, D39)', () => {
+  test('les étiquettes distinctes des présents se rangent par unités de code ; chacun porte les siennes en index croissants, une fois chacune', () => {
+    const instance = normaliser(configuration({
+      participants: [
+        etiquete(4, ['finance', 'Montréal', 'finance']),
+        etiquete(2, ['Écoute', 'bénévole']),
+        etiquete(3),
+        etiquete(6, ['Finance']),
+        { ...etiquete(5, ['ressources humaines', 'finance']), exclu: true },
+        etiquete(7, []),
+      ],
+      tables: tablesDe([11, 12], 4),
+      tours: 1,
+    }));
+    assert.deepEqual(instance.ids, [2, 3, 4, 6, 7]);
+    // Par unités de code, « F » (0x46) < « M » < « b » < « f » < « É »
+    // (0xC9), là où l'ordre alphabétique mettrait « Écoute » en deuxième ;
+    // deux orthographes font deux étiquettes, et « ressources humaines », que
+    // seul l'exclu porte, n'y entre pas.
+    assert.deepEqual(instance.libellesEtiquettes, ['Finance', 'Montréal', 'bénévole', 'finance', 'Écoute']);
+    // 2 : bénévole (2), Écoute (4) ; 3 : aucune ; 4 : Montréal (1), finance
+    // (3), qu'il porte deux fois ; 6 : Finance (0) ; 7 : aucune.
+    assert.deepEqual(instance.debutEtiquettes, Int32Array.from([0, 2, 2, 4, 5, 5]));
+    assert.deepEqual(instance.etiquettes, Int32Array.from([2, 4, 1, 3, 0]));
+  });
+
+  test('chaque personne retrouve ses étiquettes distinctes, et seulement elles : lecture directe de la configuration', () => {
+    const instance = normaliser(CORRESPONDANCE);
+    const { presents } = lectureDirecte(CORRESPONDANCE);
+    const lues = presents.map((_, p) =>
+      [...instance.etiquettes.subarray(instance.debutEtiquettes[p], instance.debutEtiquettes[p + 1])]
+        .map((e) => instance.libellesEtiquettes[e]));
+    const attendues = presents.map(({ etiquettes = [] }) =>
+      [...new Set(etiquettes)].sort((a, b) => instance.libellesEtiquettes.indexOf(a) - instance.libellesEtiquettes.indexOf(b)));
+    assert.deepEqual(lues, attendues);
+    assert.deepEqual(instance.libellesEtiquettes, ['Montréal', 'bénévole', 'finance', 'ressources humaines']);
+    assert.equal(instance.debutEtiquettes.length, instance.N + 1);
+  });
+
+  test('sans étiquette : aucun libellé, aucune entrée, et debutEtiquettes ne porte que des zéros', () => {
+    const instance = normaliser(configuration({
+      participants: [...personnes([3, 1]), etiquete(2, []), { ...etiquete(4, ['finance']), exclu: true }],
+      tables: tablesDe([12, 11], 2),
+      tours: 2,
+    }));
+    assert.deepEqual(instance.libellesEtiquettes, []);
+    assert.deepEqual(instance.debutEtiquettes, new Int32Array(4));
+    assert.deepEqual(instance.etiquettes, new Int32Array(0));
+  });
+});
+
 describe('normaliser : refus des objectifs, du mode et des priorités (A12, A16)', () => {
   const base = configuration({ participants: personnes([1, 2, 3]), tables: tablesDe([11, 12], 2), tours: 2 });
   const avec = (modification) => () => normaliser({ ...base, ...modification });

@@ -440,6 +440,12 @@ const EXEMPLES = new Map([
   ['ANIMATEURS_RENCONTRES', { index: 4, participant: 9 }],
   ['JAMAIS_SERVIES', {}],
   ['HORS_OBJECTIF_MAX', {}],
+  ['RESTE_NEGATIF', { groupe: 1, appartenance: 'Atelier Ressac' }],
+  ['RESTE_OBJECTIFS_NEGATIF', { tour: 2 }],
+  ['DIVERSITE_RENCONTRES', { index: 4, participant: 9 }],
+  ['DIVERSITE_AFFILIES', { index: 4, participant: 9 }],
+  ['AFFILIES_PLAFOND', { index: 4, participant: 9 }],
+  ['BORNE_DIVERSITE', { index: 4, participant: 9 }],
   // Génération
   ['GENERATION_EN_COURS', { remede: null }],
   ['TRAVAILLEUR_EN_ECHEC', { remede: null }],
@@ -1052,6 +1058,12 @@ describe('libellés : les codes du moteur et de la génération (§ 14.6, § 5.7
     for (const detail of ['inconnue', 'doublon', 'absente']) assert.match(libelle('TABLE_INCONNUE', { table: 9, detail }), /9/);
     assert.match(libelle('TABLE_INCONNUE', { tour: 2, detail: 'listes' }), /tour 2/);
     assert.throws(() => libelle('TABLE_INCONNUE', { table: 9, detail: 'inventee' }), RangeError);
+  });
+
+  test("un reste négatif nomme l'appartenance quand l'appelant la traduit, son rang sinon, compté à partir de 1", () => {
+    assert.match(libelle('RESTE_NEGATIF', { groupe: 1, appartenance: 'Atelier Ressac' }), /l'appartenance « Atelier Ressac »/);
+    assert.match(libelle('RESTE_NEGATIF', { groupe: 1 }), /l'appartenance de rang 2 /);
+    assert.match(libelle('RESTE_NEGATIF', { groupe: 1, appartenance: null }), /l'appartenance de rang 2 /);
   });
 
   test('chaque refus de valider et de generer a son texte, dans la table de son domaine', async () => {

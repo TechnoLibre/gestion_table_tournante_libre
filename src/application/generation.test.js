@@ -1546,3 +1546,192 @@ describe('génération : objectifs, mode et ordre réglé, par la séance (§ 5.
     assert.notDeepEqual(regles, plans(chargeAObjectifs({ ordre: false })), 'sans l’ordre');
   });
 });
+
+// --- La course de la recherche dans la séance (§ 5.10, B6, D40) -------------------------
+
+// La somme des mouvements évalués d'une liste de propositions du moteur.
+const sommeEvalues = (propositions) => propositions.reduce((somme, { evalues }) => somme + evalues, 0);
+
+describe('génération : la course, et la génération gardée pour la séance (§ 5.10, B6, D40)', () => {
+  const PREMIERE = { graine: 1, nombre: 3, arret: 200, historique: 1000 };
+
+  test("generationDe : durée, cœurs, somme des mouvements évalués de toutes les propositions calculées, identiques comprises, et nombre", async () => {
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')] });
+    const { controleur } = montage;
+    assert.equal(controleur.generationDe(1), null);
+    const configuration = configurationDe(montage.charge());
+    assert.deepEqual((await controleur.generer(PREMIERE)).ajoutees, [1, 2, 3]);
+    const premieres = rechercher(configuration, PREMIERE);
+    const resume = { dureeMs: 0, coeurs: 1, evalues: sommeEvalues(premieres), nombre: 3 };
+    for (const id of [1, 2, 3]) assert.deepEqual(controleur.generationDe(id), resume, `proposition ${id}`);
+    // La seconde génération recalcule les trois premières, identiques et
+    // écartées, et ajoute la quatrième, sous l'identifiant 3 + 4 que le
+    // compteur lui donne : ses évalués comptent les quatre.
+    const seconde = { ...PREMIERE, nombre: 4 };
+    const bilan = await controleur.generer(seconde);
+    assert.deepEqual([bilan.ajoutees, bilan.identiques], [[7], 3]);
+    const toutes = rechercher(configuration, seconde);
+    assert.ok(toutes.every(({ evalues }) => evalues > 0));
+    assert.deepEqual(controleur.generationDe(7), { dureeMs: 0, coeurs: 1, evalues: sommeEvalues(toutes), nombre: 4 });
+    assert.ok(sommeEvalues(toutes) > toutes[3].evalues);
+    assert.deepEqual(controleur.generationDe(1), resume);
+    for (const id of [4, 5, 6, 8]) assert.equal(controleur.generationDe(id), null, `identifiant ${id}`);
+    // Une copie : la modifier ne change pas ce que la séance garde.
+    controleur.generationDe(1).dureeMs = 99;
+    assert.deepEqual(controleur.generationDe(1), resume);
+  });
+
+  test("la proposition passe à enregistrerGeneration avec sa course, telle que le moteur la rend ; ni durée ni cadence n'atteignent le fichier", async () => {
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')] });
+    const { seance, controleur, horloge } = montage;
+    const executer = seance.executer;
+    const recus = [];
+    seance.executer = (nom, args) => {
+      recus.push({ nom, args });
+      return executer(nom, args);
+    };
+    controleur.subscribe(({ fait }) => {
+      if (fait > 0) horloge.avancer(7);
+    });
+    await controleur.generer({ ...PREMIERE, arret: 2_000 });
+    const configuration = configurationDe(montage.charge());
+    const attendues = rechercher(configuration, { ...PREMIERE, arret: 2_000 });
+    assert.deepEqual(recus.map(({ nom }) => nom), ['enregistrerGeneration']);
+    assert.deepStrictEqual(recus[0].args.propositions, attendues);
+    assert.ok(attendues.every(({ releves }) => releves.length === 4));
+    assert.ok(controleur.generationDe(1).dureeMs > 0);
+    const etat = montage.etatDisque();
+    for (const mot of ['dureeMs', 'cadence', 'coeurs']) {
+      assert.equal(etat.includes(mot), false, mot);
+      assert.equal(JSON.stringify(montage.journal()).includes(mot), false, mot);
+    }
+  });
+
+  test("horloge pilotée : la durée gardée est exactement l'avance donnée pendant le calcul, la même pour chaque proposition de la génération, et 0 sans avance", async () => {
+    for (const pas of [0, 1, 1000]) {
+      const montage = await monter({ charges: [chargeDemo('petite-conflit')] });
+      let dernier = 0;
+      montage.controleur.subscribe(({ fait }) => {
+        if (fait > dernier) {
+          dernier = fait;
+          montage.horloge.avancer(pas);
+        }
+      });
+      await montage.controleur.generer({ graine: 11, nombre: 2, arret: 5000, historique: 1000 });
+      assert.equal(montage.controleur.generationDe(1).dureeMs, 10 * pas, `pas ${pas}`);
+      assert.equal(montage.controleur.generationDe(2).dureeMs, 10 * pas, `pas ${pas}`);
+    }
+  });
+
+  test("annulée, une génération ne garde rien : la suivante, aux mêmes réglages, garde sa seule durée", async () => {
+    const manuel = executeurManuel({ differer: true });
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: manuel });
+    const enCours = montage.controleur.generer(PREMIERE);
+    await Promise.resolve();
+    montage.horloge.avancer(500);
+    montage.controleur.annuler();
+    manuel.executions[0].resoudreParLeMoteur();
+    assert.ok((await rejet(enCours)) instanceof ErreurAnnulee);
+    for (const id of [1, 2, 3]) assert.equal(montage.controleur.generationDe(id), null);
+    const suivante = montage.controleur.generer(PREMIERE);
+    await Promise.resolve();
+    manuel.executions[1].resoudreParLeMoteur();
+    assert.deepEqual((await suivante).ajoutees, [1, 2, 3]);
+    const configuration = configurationDe(montage.charge());
+    assert.deepEqual(montage.controleur.generationDe(1), {
+      dureeMs: 0,
+      coeurs: 1,
+      evalues: sommeEvalues(rechercher(configuration, PREMIERE)),
+      nombre: 3,
+    });
+  });
+
+  test("les exécuteurs direct et à fils rendent la même course à la séance, quel que soit l'ordre d'achèvement des fils", async () => {
+    const executeurs = [
+      ['direct', () => creerExecuteurDirect(), null],
+      ['quatre cœurs', () => creerExecuteurTravailleur(travailleursCalculants(), { coeursDisponibles: 4 }), 4],
+    ];
+    const recus = [];
+    for (const [nom, creer, coeurs] of executeurs) {
+      const montage = await monter({ charges: [chargeDemo('petite-conflit')], executeur: creer() });
+      if (coeurs !== null) {
+        montage.controleur.reglerCoeurs({ automatique: false });
+        montage.controleur.reglerCoeurs({ saisie: String(coeurs) });
+      }
+      const executer = montage.seance.executer;
+      montage.seance.executer = (commande, args) => {
+        recus.push(args.propositions);
+        return executer(commande, args);
+      };
+      await montage.controleur.generer({ graine: 4, nombre: 4, arret: 1_500, historique: 100 });
+      const { evalues, nombre } = montage.controleur.generationDe(1);
+      assert.deepEqual([evalues, nombre], [sommeEvalues(recus.at(-1)), 4], nom);
+    }
+    assert.equal(recus.length, 2);
+    assert.deepStrictEqual(recus[1], recus[0]);
+    assert.ok(recus[0].every(({ releves }) => releves.length === 4));
+  });
+
+  test("fermer l'événement, puis le rouvrir, ou en ouvrir un autre, vide ce que la séance garde", async () => {
+    const montage = await monter({ charges: [chargeDemo('petite-conflit'), chargeDemo('petite-conflit', AUTRE)] });
+    const { seance, controleur } = montage;
+    await controleur.generer(PREMIERE);
+    assert.notEqual(controleur.generationDe(1), null);
+    await seance.fermer();
+    assert.equal(controleur.generationDe(1), null);
+    await seance.ouvrir(NOM);
+    assert.equal(montage.charge().propositions.length, 3);
+    assert.equal(controleur.generationDe(1), null);
+    await seance.passerEnEcriture();
+    await controleur.generer({ ...PREMIERE, graine: 2 });
+    assert.notEqual(controleur.generationDe(4), null);
+    await seance.ouvrir(AUTRE);
+    assert.equal(controleur.generationDe(4), null);
+  });
+
+  test("une autre proposition sous le même identifiant, adoptée d'une relecture, n'a pas de génération ; la même, revenue par un retour, garde la sienne", async () => {
+    const reglages = { graine: 1, nombre: 1, arret: 200, historique: 1000 };
+    const montage = await monter({ charges: [chargeDemo('petite-conflit')] });
+    const { seance, controleur } = montage;
+    // Le retour à l'instant d'avant retire la proposition 1 ; le retour à
+    // l'instant d'après la rend, la même : sa génération la suit.
+    const avant = montage.journal().entrees.at(-1).revision;
+    await controleur.generer(reglages);
+    const apres = montage.journal().entrees.at(-1).revision;
+    const gardee = controleur.generationDe(1);
+    assert.notEqual(gardee, null);
+    await seance.revenir(avant);
+    assert.deepEqual(montage.charge().propositions, []);
+    assert.equal(controleur.generationDe(1), null);
+    await seance.revenir(apres);
+    assert.deepEqual(controleur.generationDe(1), gardee);
+    // Une autre séance, sur un autre support, a produit sa proposition 1
+    // sous d'autres réglages ; ses fichiers remplacent ceux-ci pendant la
+    // lecture, et le passage en écriture les relit. Chacun des trois champs
+    // contrôlés, seul à différer, suffit à refuser la génération gardée.
+    const [originale] = rechercher(configurationDe(montage.charge()), reglages);
+    for (const [champ, autres] of [
+      ['graine', { ...reglages, graine: 2 }],
+      ['arret', { ...reglages, arret: 300 }],
+      ['historique', { ...reglages, historique: 500 }],
+    ]) {
+      const ici = await monter({ charges: [chargeDemo('petite-conflit')] });
+      await ici.controleur.generer(reglages);
+      assert.notEqual(ici.controleur.generationDe(1), null, champ);
+      const ailleurs = await monter({ charges: [chargeDemo('petite-conflit')] });
+      await ailleurs.controleur.generer(autres);
+      await ailleurs.seance.fermer();
+      await ici.seance.passerEnLecture();
+      for (const suffixe of [SUFFIXES.etat, SUFFIXES.precedent, SUFFIXES.journal]) {
+        ici.fs.deposer('documents', `${NOM}${suffixe}`, ailleurs.fs.contenu('documents', `${NOM}${suffixe}`));
+      }
+      await ici.seance.passerEnEcriture();
+      const [relue] = ici.charge().propositions;
+      assert.equal(relue.id, 1, champ);
+      for (const cle of ['graine', 'arret', 'historique']) {
+        assert.equal(relue[cle] === originale[cle], cle !== champ, `${champ} : ${cle}`);
+      }
+      assert.equal(ici.controleur.generationDe(1), null, champ);
+    }
+  });
+});

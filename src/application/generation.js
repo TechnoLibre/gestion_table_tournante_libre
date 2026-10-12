@@ -35,6 +35,18 @@
 // commande enregistrerGeneration, une seule entrée du journal. Le nombre de
 // propositions d'une génération est un réglage, jamais une constante d'ici.
 //
+// La course (§ 5.10). Chaque proposition du moteur porte ses mouvements
+// évalués et ses points de relevé ; le contrôleur la confie telle quelle à
+// enregistrerGeneration. Ce qui dépend de la machine ne vaut que pour la
+// séance et ne s'écrit nulle part : le résumé de chaque génération — la
+// durée prise autour du calcul entier, les cœurs employés, la somme des
+// mouvements évalués de toutes les propositions calculées, identiques
+// écartées comprises, et leur nombre —, rattaché à chaque proposition
+// qu'elle a ajoutée, sous la graine, le compte d'arrêt et l'historique que
+// celle-ci portait. Aucune proposition n'est datée seule. Ce qui est gardé
+// s'oublie quand l'événement se ferme ou qu'un autre s'ouvre ; un
+// rechargement de l'application l'oublie avec le contrôleur.
+//
 // Le compte d'inactivité de la séance est suspendu pendant toute la
 // génération (debuterCalcul), et repart à sa fin, quelle qu'elle soit
 // (finirCalcul, dans un finally). Passer en lecture, ou fermer l'événement,
@@ -259,8 +271,8 @@ function planRange(proposition, configuration, produitVersion) {
  *        le contrôleur y lit RALENTISSEMENT_PLEINE_CHARGE à chaque
  *        estimation, sans en garder la valeur
  * @returns {Object} le contrôleur : grainePropose, reglagesProposes, valider,
- *          estimer, derniereGeneration, generer, annuler, coeurs,
- *          reglerCoeurs, subscribe
+ *          estimer, derniereGeneration, generationDe, generer, annuler,
+ *          coeurs, reglerCoeurs, subscribe
  */
 export function creerControleurGeneration({ seance, executeur, horloge, produitVersion, constante: lireConstante = constante }) {
   // graine : la graine proposée ; base : celle de l'événement ouvert, null
@@ -270,10 +282,14 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
   // coeurs : le réglage des cœurs de calcul, que l'observable porte —
   // automatique, le nombre saisi (manuel), les disponibles, et nombre, les
   // cœurs réglés.
+  // generations : par identifiant d'une proposition ajoutée ici, { graine,
+  // arret, historique, resume }, ce qu'elle portait à l'ajout et le résumé
+  // de sa génération ; vidé quand base change.
   let graine = 1;
   let base = null;
   let mesure = null;
   let execution = null;
+  const generations = new Map();
   const disponibles = coeursDe(executeur.coeursDisponibles);
   let reglageCoeurs = { automatique: true, manuel: disponibles };
   const coeurs = () => ({
@@ -291,9 +307,12 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
 
   // Une ouverture : l'événement passe de null, ou d'une autre base, à une
   // base ; la graine proposée repart de 1.
+  // Une fermeture, ou l'ouverture d'un autre événement, oublie les
+  // générations gardées.
   seance.subscribe((etat) => {
     const suivante = etat.evenement?.base ?? null;
     if (suivante !== null && suivante !== base) graine = 1;
+    if (suivante !== base) generations.clear();
     base = suivante;
   });
 
@@ -443,6 +462,15 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
       .sort((a, b) => a - b);
   }
 
+  // Rattache le résumé d'une génération à chaque proposition ajoutée de la
+  // charge, sous la graine, le compte d'arrêt et l'historique qu'elle porte.
+  function garder(charge, ajoutees, resume) {
+    for (const id of ajoutees) {
+      const { graine: g, arret, historique } = charge.propositions.find((proposition) => proposition.id === id);
+      generations.set(id, { graine: g, arret, historique, resume });
+    }
+  }
+
   async function generer(reglages, { confirmee = false } = {}) {
     const { configuration, instance } = exigerLancement(reglages, confirmee);
     graine = (reglages.graine + 1) % GRAINES;
@@ -462,7 +490,12 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
       if (gardees.length === 0) return { ajoutees: [], identiques, dureeMs };
       const avant = new Set(seance.etat().charge.propositions.map(({ id }) => id));
       await seance.executer('enregistrerGeneration', { propositions: gardees, configuration, produitVersion });
-      return { ajoutees: ajouteesDans(seance.etat().charge, avant, gardees), identiques, dureeMs };
+      const charge = seance.etat().charge;
+      const ajoutees = ajouteesDans(charge, avant, gardees);
+      let evalues = 0;
+      for (const proposition of propositions) evalues += proposition.evalues;
+      garder(charge, ajoutees, Object.freeze({ dureeMs, coeurs: employes, evalues, nombre: propositions.length }));
+      return { ajoutees, identiques, dureeMs };
     } finally {
       seance.finirCalcul();
       publier({ enCours: false });
@@ -520,6 +553,30 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
      * coeurs }, coeurs étant ceux que l'exécution a employés.
      */
     derniereGeneration: () => (mesure === null ? null : { ...mesure }),
+    /**
+     * La génération de cette séance d'où vient la proposition id de la
+     * charge ouverte : { dureeMs, coeurs, evalues, nombre }, une copie —
+     * la durée prise autour du calcul entier, les cœurs employés, la somme
+     * des mouvements évalués de toutes les propositions calculées, identiques
+     * écartées comprises, leur nombre. null quand aucune génération de la
+     * séance ne l'a ajoutée, quand la charge n'a pas de proposition id, ou
+     * quand celle-ci ne porte plus la graine, le compte d'arrêt et
+     * l'historique gardés pour elle.
+     */
+    generationDe(id) {
+      const gardee = generations.get(id);
+      if (gardee === undefined) return null;
+      const proposition = seance.etat().charge?.propositions.find((candidate) => candidate.id === id);
+      if (
+        proposition === undefined
+        || proposition.graine !== gardee.graine
+        || proposition.arret !== gardee.arret
+        || proposition.historique !== gardee.historique
+      ) {
+        return null;
+      }
+      return { ...gardee.resume };
+    },
     /**
      * Lance une génération et l'enregistre : { ajoutees, identiques, dureeMs }.
      * Refuse avant tout lancement, par ErreurGeneration, dans cet ordre :

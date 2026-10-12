@@ -50,7 +50,7 @@ const DOSSIER_SORTIES = 'scripts/banc/sorties';
 
 /** Les sorties que les épreuves du banc écrivent, par nom de fichier sans
  *  extension : le harnais, puis chaque mesure. */
-export const SORTIES_NAVIGATEUR = Object.freeze(['harnais', 'temoin', 'sieges_lisibles', 'temps_image', 'parallele']);
+export const SORTIES_NAVIGATEUR = Object.freeze(['harnais', 'temoin', 'sieges_lisibles', 'temps_image', 'parallele', 'qualite']);
 
 /** Les gardes du banc : des mesures hors du registre, qui ne proposent pas
  *  de constante mais disent si une hypothèse tient, par ordre de nom. */
