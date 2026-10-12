@@ -659,7 +659,7 @@ export const ECRANS = Object.freeze([
     async atteindre(contexte) {
       // Deux personnes étiquetées, puis la fiche d'une troisième, où
       // « FINANCE » tapé au clavier s'enregistre sous l'orthographe que
-      // l'événement porte : les pastilles neutres et leur « Retirer », le
+      // l'événement porte : les pastilles neutres et leur croix de retrait, le
       // signal d'orthographe contre le champ, et la légende des étiquettes
       // sous celle des appartenances.
       let charge = chargePrincipale();

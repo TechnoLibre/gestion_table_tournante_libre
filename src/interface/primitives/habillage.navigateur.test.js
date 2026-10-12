@@ -415,6 +415,30 @@ describe('commande : la variante', () => {
     expect(style(secondaire).fontSize).toBe('16px');
     expect(() => commande({ variante: 'primaire' })).toThrow(RangeError);
   });
+
+  test('retrait : la croix cerclée seule, de la teinte du retrait, sans texte ni fond, nommée par son libellé, dans une cible de 24 px au moins ; à confirmer, elle lève au montage', async () => {
+    const libelle = t('participants.etiquettes.retirer', { motCle: 'voile' });
+    const retrait = commande({ variante: 'retrait', cle: 'participants.etiquettes.retirer', details: { motCle: 'voile' }, nom: 'retirerEtiquette' });
+    expect(retrait.textContent.trim()).toBe('');
+    expect(retrait.getAttribute('aria-label')).toBe(libelle);
+    expect(retrait.getAttribute('data-commande')).toBe('retirerEtiquette');
+    expect([...retrait.querySelectorAll('svg path')].map((p) => p.getAttribute('d'))).toEqual([...ICONES.croixCerclee]);
+    const { width, height } = retrait.getBoundingClientRect();
+    expect(Math.min(width, height)).toBeGreaterThanOrEqual(24);
+    for (const theme of THEMES) {
+      await sousTheme(theme, () => {
+        expect(fond(retrait), theme).toEqual(TRANSPARENT);
+        expect(composantes(style(retrait).borderTopColor)[3], theme).toBe(0);
+        for (const trace of retrait.querySelectorAll('path')) {
+          expect(trace.dataset.marque, theme).toBe('retrait');
+          expect(composantes(getComputedStyle(trace).stroke), theme).toEqual(jeton('--couleur-retrait'));
+        }
+      });
+    }
+    // Un nom accessible donné passe devant le libellé.
+    expect(commande({ variante: 'retrait', nomAccessible: 'Ôter' }).getAttribute('aria-label')).toBe('Ôter');
+    expect(() => commande({ variante: 'retrait', confirmer: 'communs.commande.confirmerDeblocage' })).toThrow(RangeError);
+  });
 });
 
 describe('refus, infobulle, champ et fenêtre à confirmer : habillés des jetons', () => {

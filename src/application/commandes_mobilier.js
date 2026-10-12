@@ -543,6 +543,10 @@ function lirePaliers(paliers) {
   });
 }
 
+/** Le plus grand poids d'un critère (§ 5.7), celui du moteur : l'écran en
+ *  borne le champ du poids, que changerPriorites contrôle. */
+export { POIDS_MAX };
+
 // Vrai pour un poids du domaine : un entier de 1 à POIDS_MAX (§ 5.7).
 const poidsAdmis = (poids) => Number.isInteger(poids) && poids >= 1 && poids <= POIDS_MAX;
 

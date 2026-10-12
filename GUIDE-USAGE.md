@@ -148,8 +148,8 @@ nulle part.
 
 ![La fiche d’une personne : ses étiquettes, le champ d’ajout, une orthographe reçue sous celle de l’événement](doc/captures/04a-etiquettes.png)
 
-*Chaque étiquette est une pastille grise, suivie de sa commande « Retirer ».
-Tapez une ou plusieurs étiquettes séparées par une virgule, puis « Ajouter »
+*Chaque étiquette est une pastille grise ; en écriture, une petite croix
+rouge cerclée la suit, qui la retire. Tapez une ou plusieurs étiquettes séparées par une virgule, puis « Ajouter »
 ou Entrée. Ici, « FINANCE » s’enregistre sous « Finance », l’orthographe que
 l’événement porte déjà, et le logiciel le dit sous le champ : une même
 étiquette ne s’écrit jamais de deux façons. La légende, au-dessus de la

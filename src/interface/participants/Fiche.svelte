@@ -18,10 +18,11 @@
   //
   // Les étiquettes (etiquettes.js) : une pastille neutre à icône par
   // étiquette, dans l'ordre de la charge — la teinte d'appartenance ne sert
-  // qu'à l'appartenance (§ 12.7) —, chacune suivie de sa commande
-  // « Retirer », nommée par elle ; puis un formulaire d'ajout, dont le
-  // champ reçoit une ou plusieurs étiquettes séparées comme dans une
-  // cellule CSV. Entrée, ou « Ajouter », envoie la saisie entière à
+  // qu'à l'appartenance (§ 12.7) —, chacune suivie, en écriture seulement,
+  // de sa commande de retrait : une croix cerclée rouge (Commande, variante
+  // retrait), nommée « Retirer « <étiquette> » » ; puis un formulaire
+  // d'ajout, dont le champ reçoit une ou plusieurs étiquettes séparées
+  // comme dans une cellule CSV. Entrée, ou « Ajouter », envoie la saisie entière à
   // changerEtiquettes, qui la découpe, la met en forme et la réconcilie : la
   // fiche ne lit rien elle-même. Un refus de l'ajout — étiquette mal formée,
   // trop d'étiquettes, séance en lecture, plan bloqué — se pose contre le
@@ -31,14 +32,15 @@
   // (ORTHOGRAPHE_RETENUE), tant que la révision qui l'a produit est la
   // courante et la fiche celle de la personne. Le refus d'un retrait se
   // pose à côté de sa commande (Commande). En lecture comme sur un plan
-  // bloqué, pastilles et commandes restent : la séance refuse le geste, et
+  // bloqué (cleDeMode, mode.js), aucune commande de retrait ne se montre ;
+  // pastilles, champ et « Ajouter » restent : la séance refuse l'ajout, et
   // le refus porte son remède. Une saisie non envoyée est un geste ouvert
   // (geste.js), qui suspend le compte d'inactivité ; l'envoi n'est pas
   // ré-entrant. Passer à une autre personne vide le champ et son refus ; le
   // refus d'un envoi qui revient après ce passage n'est posé nulle part.
-  // Un retrait abouti rend le focus au « Retirer » qui prend la place du
-  // sien — le suivant, sinon le précédent (ligneVoisine) —, ou au champ
-  // quand il n'en reste aucun.
+  // Un retrait abouti rend le focus à la commande de retrait qui prend la
+  // place de la sienne — la suivante, sinon la précédente (ligneVoisine) —,
+  // ou au champ quand il n'en reste aucune.
   //
   // La fiche est une carte : fond et filet de la carte, rayon de 12 px,
   // ombre légère ; ses étiquettes et légendes de tableau en petites
@@ -50,6 +52,7 @@
   import { getContext, onDestroy, tick, untrack } from 'svelte';
   import { nomAffiche } from '../../application/personnes.js';
   import { etatPlaces, statuts } from '../../application/places.js';
+  import { cleDeMode } from '../mode.js';
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
   import Pastille from '../primitives/Pastille.svelte';
@@ -79,7 +82,7 @@
   const etapes = $derived(itineraire(participant.id, charge.evenement.tours, (tour) => etatPlaces(charge, { tour })));
 
   // La fiche et son champ d'ajout, montés : le défilement vise la fiche,
-  // le focus d'après un retrait ses « Retirer » ou le champ.
+  // le focus d'après un retrait ses commandes de retrait ou le champ.
   let element;
   let champ;
   $effect(() => {
@@ -97,6 +100,9 @@
   const idSignal = `${uid}-orthographe`;
 
   const pastilles = $derived(etiquettesDeLaFiche(participant));
+  // Les commandes de retrait ne se montrent qu'en écriture, hors d'un plan
+  // bloqué.
+  const retraitOffert = $derived(cleDeMode($seance) === 'coquille.mode.ecriture');
   const signaux = $derived(signauxOrthographe(dernier, { revision: $seance.evenement?.revision ?? null, participant: participant.id }));
   const decrit = $derived(refusChamp !== null ? idRefus : signaux.length > 0 ? idSignal : undefined);
 
@@ -142,8 +148,8 @@
   }
 
   // Retire motCle ; aboutie, quand le bouton détruit a laissé le focus au
-  // document, le porte au « Retirer » voisin ou au champ. Un refus remonte
-  // à Commande, qui le pose à côté du bouton resté en place.
+  // document, le porte à la commande de retrait voisine ou au champ. Un
+  // refus remonte à Commande, qui le pose à côté du bouton resté en place.
   async function retirer(motCle) {
     const id = participant.id;
     const rang = pastilles.indexOf(motCle);
@@ -190,13 +196,15 @@
         {#each pastilles as motCle (motCle)}
           <li>
             <Pastille sorte="statut" valeur="neutre" icone="etiquettes" libelle={motCle} />
-            <Commande
-              cle="participants.etiquettes.retirer"
-              details={{ motCle }}
-              nom="retirerEtiquette"
-              variante="discrete"
-              executer={() => retirer(motCle)}
-            />
+            {#if retraitOffert}
+              <Commande
+                cle="participants.etiquettes.retirer"
+                details={{ motCle }}
+                nom="retirerEtiquette"
+                variante="retrait"
+                executer={() => retirer(motCle)}
+              />
+            {/if}
           </li>
         {/each}
       </ul>
@@ -399,8 +407,9 @@
   }
 
   /* Les étiquettes : l'intitulé en petites capitales, les pastilles en
-     rangée qui se replie, chacune suivie de son « Retirer » ; puis le champ
-     d'ajout et son bouton sur une ligne, le refus ou le signal dessous. */
+     rangée qui se replie, chacune suivie, en écriture, de sa croix de
+     retrait ; puis le champ d'ajout et son bouton sur une ligne, le refus
+     ou le signal dessous. */
   .etiquettes {
     display: flex;
     flex-direction: column;

@@ -44,6 +44,8 @@ const DESSINS = [
   ['demarrer', ['M8 5l11 7-11 7z']],
   // Une étiquette (§ 4.5) : l'étiquette à œillet, pointe en bas à droite.
   ['etiquettes', ['M3 3h8l10 10-8 8L3 11z', cercle(7.5, 7.5, 1.5)]],
+  // Un retrait (Commande, variante retrait) : une croix dans un cercle.
+  ['croixCerclee', [cercle(12, 12, 9), 'M9 9l6 6M15 9l-6 6']],
 ];
 
 /** Les noms des icônes, dans l'ordre du module. */

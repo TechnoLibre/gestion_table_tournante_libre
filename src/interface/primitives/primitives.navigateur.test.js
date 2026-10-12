@@ -251,6 +251,46 @@ describe('champ : la fin du geste (§ 2.1, § 8.2)', () => {
   });
 });
 
+describe('champ : le type de l’entrée', () => {
+  test('texte par défaut, sans bornes ; nombre : min, max et pas posés, une lettre ne s’y inscrit pas, et lire refuse le vide qu’elle laisse ; des chiffres s’écrivent', async () => {
+    const montage = await preparer();
+    const { entree } = monterChamp(montage);
+    expect(entree.type).toBe('text');
+    for (const attribut of ['min', 'max', 'step']) expect(entree.hasAttribute(attribut), attribut).toBe(false);
+
+    const recus = [];
+    const cible = monter(
+      Champ,
+      {
+        cle: 'nombre',
+        etiquette: 'communs.commande.modifier',
+        valeur: 3,
+        type: 'number',
+        min: 1,
+        max: 100,
+        pas: 1,
+        lire: (texte) => (/^\d+$/.test(texte) ? { valeur: Number(texte) } : { refus: { code: 'NON_ENTIER', details: { saisie: texte, remede: null } } }),
+        executer: (valeur) => recus.push(valeur),
+      },
+      montage.contexte,
+    );
+    const nombre = cible.querySelector('input[data-champ="nombre"]');
+    expect([nombre.type, nombre.min, nombre.max, nombre.step, nombre.value]).toEqual(['number', '1', '100', '1', '3']);
+    await cliquer(nombre);
+    nombre.select();
+    await taper('x');
+    await cliquerAilleurs();
+    expect(nombre.value).toBe('');
+    expect(cible.querySelector('[data-refus="NON_ENTIER"]')).not.toBeNull();
+    expect(recus).toEqual([]);
+    await cliquer(nombre);
+    await taper('42');
+    await cliquerAilleurs();
+    expect(recus).toEqual([42]);
+    expect(cible.querySelector('[data-refus]')).toBeNull();
+  });
+});
+
 describe('champ : le refus de l’exécution (§ 2.1, § 5.9)', () => {
   test('executer refusé avec un code : le refus se pose contre le champ, la saisie gardée, rien d’écrit ; le refus levé par son remède, le champ rend la valeur enregistrée, et une saisie nouvelle s’écrit', async () => {
     const montage = await preparer();

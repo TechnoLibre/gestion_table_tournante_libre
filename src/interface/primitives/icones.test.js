@@ -17,7 +17,7 @@ describe('icônes des primitives', () => {
     assert.deepEqual(NOMS_ICONES, [
       'crayon', 'listePoints', 'coche', 'cadenas', 'liste', 'importer', 'exporter', 'ajouter', 'chercher',
       'calendrier', 'information', 'triangle', 'interdit', 'dossier', 'oeil', 'stylo', 'defaire', 'imprimer',
-      'etoile', 'croix', 'chevron', 'points', 'demarrer', 'etiquettes',
+      'etoile', 'croix', 'chevron', 'points', 'demarrer', 'etiquettes', 'croixCerclee',
     ]);
     assert.ok(Object.isFrozen(ICONES) && Object.isFrozen(NOMS_ICONES));
     assert.deepEqual(Object.keys(ICONES).sort(), [...NOMS_ICONES].sort());

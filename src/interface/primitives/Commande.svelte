@@ -36,11 +36,17 @@
   // variante : 'secondaire', la défaut, à filet sur le fond de la carte ;
   // 'principale', l'action à faire sur l'écran, pleine de la teinte de
   // l'action, haute d'une cible principale ; 'discrete', sans fond ni filet
-  // au repos. Elle ne change que l'apparence ; une variante hors de
-  // VARIANTES_COMMANDE lève RangeError au montage.
+  // au repos ; 'retrait', l'icône croixCerclee seule, de --couleur-retrait,
+  // sans fond ni filet au repos, dans une cible de --cible-minimale de côté
+  // au moins (§ 14.5) : son libellé, que rien ne montre, devient son nom
+  // accessible, à défaut de nomAccessible, et ses tracés portent la marque
+  // « retrait » du registre (marques.js). Elle ne change que l'apparence ;
+  // une variante hors de VARIANTES_COMMANDE, ou le retrait d'une commande à
+  // confirmer, lève RangeError au montage.
   import { getContext, onDestroy, untrack } from 'svelte';
   import { effetDe } from '../raccourcis.js';
   import { DELAI_CONFIRMATION_MS, creerMachineCommande, exigerVariante } from './commande.js';
+  import Icone from './Icone.svelte';
   import Refus from './Refus.svelte';
 
   let {
@@ -67,7 +73,11 @@
 
   const libelle = $derived(armee ? t(confirmer) : t(cle, details));
   const designation = $derived(nom ?? cle.slice(cle.lastIndexOf('.') + 1));
-  const forme = $derived(exigerVariante(variante));
+  const forme = $derived(exigerVariante(variante, confirmer));
+  // Le nom accessible : le libellé de confirmation, montré, quand elle est
+  // armée ; sinon nomAccessible, ou le libellé d'un retrait, qui ne le
+  // montre pas.
+  const nomDuBouton = $derived(armee ? undefined : (nomAccessible ?? (forme === 'retrait' ? libelle : undefined)));
 
   function desarmer() {
     if (minuterie === null) return;
@@ -119,12 +129,14 @@
     data-commande={designation}
     class:principale={forme === 'principale'}
     class:discrete={forme === 'discrete'}
+    class:retrait={forme === 'retrait'}
     aria-busy={enCours ? 'true' : undefined}
     aria-disabled={enCours ? 'true' : undefined}
-    aria-label={armee ? undefined : (nomAccessible ?? undefined)}
+    aria-label={nomDuBouton}
     aria-describedby={refus === null ? undefined : idRefus}
     onkeydown={surTouche}
-    onclick={cliquer}>{libelle}</button
+    onclick={cliquer}
+    >{#if forme === 'retrait'}<Icone nom="croixCerclee" taille={18} marque="retrait" />{:else}{libelle}{/if}</button
   >
   {#if refus !== null}
     <Refus id={idRefus} {refus} lever={() => (refus = null)} objet={nomAccessible} {gestes} />
@@ -174,6 +186,27 @@
   }
 
   button.discrete:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  /* Le retrait : l'icône seule, de la teinte du retrait, centrée dans une
+     cible ronde de --cible-minimale de côté au moins ; ni fond ni filet au
+     repos, le fond sourd de la carte au survol. */
+  button.retrait {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-width: var(--cible-minimale);
+    min-height: var(--cible-minimale);
+    padding: 0;
+    border-color: transparent;
+    border-radius: var(--rayon-pilule);
+    background-color: transparent;
+    color: var(--couleur-retrait);
+  }
+
+  button.retrait:hover {
     background-color: var(--couleur-carte-fond-sourd);
   }
 

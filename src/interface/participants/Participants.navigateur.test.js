@@ -935,10 +935,11 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
   const rubrique = (m) => fiche(m).querySelector('[data-etiquettes]');
   const champEtiquettes = (m) => fiche(m).querySelector('[data-champ="etiquettes"]');
   const ajoutEtiquettes = (m) => fiche(m).querySelector('[data-commande="ajouterEtiquettes"]');
+  // La commande de retrait d'une étiquette : une croix cerclée sans texte,
+  // nommée par son aria-label.
+  const retraits = (m) => [...fiche(m).querySelectorAll('[data-commande="retirerEtiquette"]')];
   const retrait = (m, motCle) =>
-    [...fiche(m).querySelectorAll('[data-commande="retirerEtiquette"]')].find(
-      (bouton) => bouton.textContent.trim() === t('participants.etiquettes.retirer', { motCle }),
-    ) ?? null;
+    retraits(m).find((bouton) => bouton.getAttribute('aria-label') === t('participants.etiquettes.retirer', { motCle })) ?? null;
   const legendeEtiquettes = (m) => section(m).querySelector('[data-legende-etiquettes]');
   const etiquettesDe = (m, nom) => participants(m).find((p) => p.nom === nom).etiquettes;
 
@@ -964,7 +965,7 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
     await attendreSeance(m);
   }
 
-  test('la fiche montre chaque étiquette en pastille neutre à icône, sa commande « Retirer » nommée par elle ; sans étiquette, elle le dit', async () => {
+  test('la fiche montre chaque étiquette en pastille neutre à icône, sa croix de retrait rouge nommée par elle ; sans étiquette, elle le dit', async () => {
     const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
     await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: 'finance, Montréal' });
     await ouvrirFiche(m, 'Ombrelle');
@@ -980,10 +981,33 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
     // La teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7).
     const teintes = new Set([1, 2, 3, 4, 5, 6].map((rang) => JSON.stringify(jeton(`--couleur-appartenance-${rang}-fond`))));
     for (const li of elements) expect(teintes.has(JSON.stringify(fondDe(pastilleDans(li))))).toBe(false);
-    for (const motCle of ['Montréal', 'finance']) expect(retrait(m, motCle), motCle).not.toBeNull();
-    // En sombre, la pastille prend le neutre sombre.
+    // La croix de retrait : une icône seule, sans texte, la croix cerclée
+    // de la teinte du retrait, marquée « retrait », dans une cible de
+    // 24 px de côté au moins, et un anneau de focus au clavier.
+    for (const motCle of ['Montréal', 'finance']) {
+      const bouton = retrait(m, motCle);
+      expect(bouton, motCle).not.toBeNull();
+      expect(bouton.textContent.trim(), motCle).toBe('');
+      const traces = [...bouton.querySelectorAll('svg path')];
+      expect(traces.length, motCle).toBeGreaterThan(0);
+      for (const trace of traces) {
+        expect(trace.dataset.marque).toBe('retrait');
+        expect(composantes(getComputedStyle(trace).stroke)).toEqual(jeton('--couleur-retrait'));
+      }
+      const { width, height } = bouton.getBoundingClientRect();
+      expect(Math.min(width, height), motCle).toBeGreaterThanOrEqual(24);
+    }
+    // Tab mène d'une croix à la suivante, qui porte l'anneau de focus.
+    retrait(m, 'Montréal').focus();
+    await touche('Tab');
+    expect(document.activeElement).toBe(retrait(m, 'finance'));
+    expect(retrait(m, 'finance').matches(':focus-visible')).toBe(true);
+    expect(getComputedStyle(retrait(m, 'finance')).outlineStyle).toBe('solid');
+    expect(composantes(getComputedStyle(retrait(m, 'finance')).outlineColor)).toEqual(jeton('--couleur-focus'));
+    // En sombre, la pastille prend le neutre sombre, la croix le rouge sombre.
     await sousTheme('sombre', async () => {
       for (const li of elements) expect(fondDe(pastilleDans(li))).toEqual(jeton('--couleur-neutre-fond'));
+      expect(composantes(getComputedStyle(retrait(m, 'finance').querySelector('path')).stroke)).toEqual(jeton('--couleur-retrait'));
     });
 
     await ouvrirFiche(m, 'Pervenche');
@@ -992,7 +1016,7 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
     expect(fiche(m).querySelectorAll('[data-commande="retirerEtiquette"]')).toHaveLength(0);
   });
 
-  test('au clavier : une saisie de trois étiquettes, Entrée, une entrée au journal ; le champ se vide et garde le focus ; « Retirer » ôte la sienne et rend le focus à sa voisine', async () => {
+  test('au clavier : une saisie de trois étiquettes, Entrée, une entrée au journal ; le champ se vide et garde le focus ; la croix de retrait ôte la sienne et rend le focus à sa voisine', async () => {
     const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
     await ouvrirFiche(m, 'Pervenche');
     const champ = champEtiquettes(m);
@@ -1017,8 +1041,8 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
     expect(document.activeElement).toBe(champEtiquettes(m));
     expect([...rubrique(m).querySelectorAll('li')].map((li) => texteDe(pastilleDans(li)))).toEqual(['bénévole', 'ressources humaines', 'voile']);
 
-    // « Retirer » activé par Entrée : le focus passe au « Retirer » suivant,
-    // sinon au précédent, sinon au champ ; jamais au document.
+    // La croix de retrait activée par Entrée : le focus passe à la croix
+    // suivante, sinon à la précédente, sinon au champ ; jamais au document.
     const retirerAuClavier = async (motCle) => {
       retrait(m, motCle).focus();
       await touche('Enter');
@@ -1197,29 +1221,31 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
     expect(legendeEtiquettes(m)).toBeNull();
   });
 
-  test('en lecture : les pastilles restent ; « Ajouter » et « Retirer » sont refusés, chacun avec son remède, et rien ne s’écrit', async () => {
+  test('en lecture : les pastilles restent, sans croix de retrait ; « Ajouter » est refusé avec son remède, rien ne s’écrit ; de retour en écriture, les croix reviennent', async () => {
     const m = await evenementOuvert({ personnes: TROIS_ETIQUETEES });
     await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: 'finance' });
     await m.seance.passerEnLecture();
     await ouvrirFiche(m, 'Ombrelle');
     const avant = texteJournal(m);
     expect(texteDe(pastilleDans(rubrique(m).querySelector('li')))).toBe('finance');
+    expect(retraits(m)).toHaveLength(0);
 
     await ajouterParClavier(m, 'bénévole');
     const message = document.getElementById(champEtiquettes(m).getAttribute('aria-describedby'));
     expect(message.dataset.refus).toBe('MODE_LECTURE');
     expect(message.querySelector('[data-commande]')).not.toBeNull();
-
-    await cliquer(retrait(m, 'finance'));
-    await attendreSeance(m);
-    const refusRetrait = retrait(m, 'finance').parentElement.querySelector('[data-refus]');
-    expect(refusRetrait.dataset.refus).toBe('MODE_LECTURE');
-    expect(refusRetrait.querySelector('[data-commande]')).not.toBeNull();
     expect(etiquettesDe(m, 'Ombrelle')).toEqual(['finance']);
     expect(texteJournal(m)).toBe(avant);
+
+    await m.seance.passerEnEcriture();
+    await rendu();
+    expect(retrait(m, 'finance')).not.toBeNull();
+    await m.seance.passerEnLecture();
+    await rendu();
+    expect(retraits(m)).toHaveLength(0);
   });
 
-  test('plan bloqué, en écriture : « Ajouter » et « Retirer » sont refusés avec « Débloquer » pour remède', async () => {
+  test('plan bloqué : aucune croix de retrait ; « Ajouter » est refusé avec « Débloquer » pour remède', async () => {
     const m = await evenementOuvert({ sieges: 4, tours: 2, tables: 1, personnes: TROIS_ETIQUETEES });
     await m.seance.executer('changerEtiquettes', { id: idDe(m, 'Ombrelle'), ajouter: 'finance' });
     await m.app.generation().generer({ graine: 1, nombre: 1, arret: 50, historique: 1000 });
@@ -1229,13 +1255,12 @@ describe('les étiquettes : la fiche et la légende (§ 4.5, § 10.2, § 5.9)', 
     await ouvrirFiche(m, 'Ombrelle');
     const avant = texteJournal(m);
 
+    expect(texteDe(pastilleDans(rubrique(m).querySelector('li')))).toBe('finance');
+    expect(retraits(m)).toHaveLength(0);
+
     await ajouterParClavier(m, 'bénévole');
     const message = document.getElementById(champEtiquettes(m).getAttribute('aria-describedby'));
     expect(message.querySelector('[data-commande="debloquer"]')).not.toBeNull();
-    await cliquer(retrait(m, 'finance'));
-    await attendreSeance(m);
-    const refusRetrait = retrait(m, 'finance').parentElement.querySelector('[data-refus]');
-    expect(refusRetrait.querySelector('[data-commande="debloquer"]')).not.toBeNull();
     expect(texteJournal(m)).toBe(avant);
   });
 });

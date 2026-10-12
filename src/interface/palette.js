@@ -273,14 +273,14 @@ export function teinte(couleur) {
 
 /** § 12.7 : chaque teinte réservée — celles des conflits — est chromatique,
  *  et la teinte de chaque autre jeton chromatique se tient à ECART_TEINTE
- *  degrés au moins de chacune, dans chaque thème. Les teintes réservées ne
- *  se mesurent pas entre elles : verifierSeparation les distingue. Rend les
- *  fautes [{theme, reservee, jeton, ecart}], ecart en degrés sur le cercle,
- *  dans l'ordre thème, teinte réservée, jeton ; une teinte réservée
- *  achromatique est elle-même une faute, jeton égal à reservee et ecart
- *  null — aucune teinte n'est alors réservée. Un jeton réservé absent d'un
- *  thème lève. */
-export function verifierTeintesReservees(texteCss, reservees) {
+ *  degrés au moins de chacune, dans chaque thème, sauf celle d'un jeton
+ *  d'admis, qui ne se mesure pas. Les teintes réservées ne se mesurent pas
+ *  entre elles : verifierSeparation les distingue. Rend les fautes
+ *  [{theme, reservee, jeton, ecart}], ecart en degrés sur le cercle, dans
+ *  l'ordre thème, teinte réservée, jeton ; une teinte réservée achromatique
+ *  est elle-même une faute, jeton égal à reservee et ecart null — aucune
+ *  teinte n'est alors réservée. Un jeton réservé absent d'un thème lève. */
+export function verifierTeintesReservees(texteCss, reservees, admis = []) {
   const fautes = [];
   for (const theme of THEMES) {
     const jetons = lireJetons(texteCss, theme);
@@ -292,7 +292,7 @@ export function verifierTeintesReservees(texteCss, reservees) {
         continue;
       }
       for (const [nom, couleur] of jetons) {
-        if (reservees.includes(nom)) continue;
+        if (reservees.includes(nom) || admis.includes(nom)) continue;
         const h = teinte(couleur);
         if (h === null) continue;
         const brut = Math.abs(h - reference);

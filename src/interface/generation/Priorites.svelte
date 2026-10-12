@@ -30,11 +30,14 @@
   // contre la liste, avec son remède, et décrit le groupe de l'éditeur
   // (aria-describedby), focalisable par programme (tabindex -1) : après le
   // remède, le focus revient au groupe ; rien ne s'écrit. Le poids d'un
-  // critère d'un palier partagé se saisit dans un Champ entier (poids.<nom>),
-  // écrit à la sortie du champ par changerPriorites ; son refus, un poids
-  // hors de son domaine compris, se pose contre le champ.
+  // critère d'un palier partagé se saisit dans un Champ nombre, étroit, de
+  // 1 à POIDS_MAX par pas de 1 (poids.<nom>), lu par lireEntier et écrit à
+  // la sortie du champ par changerPriorites ; son refus, un poids hors de
+  // son domaine compris, se pose contre le champ : les bornes de l'entrée
+  // guident ses flèches et ne refusent rien.
   import { getContext, tick } from 'svelte';
   import { lireEntier } from '../../application/capacite.js';
+  import { POIDS_MAX } from '../../application/commandes_mobilier.js';
   import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
@@ -134,6 +137,10 @@
                   valeur={poids}
                   lire={lireEntier}
                   executer={ecrirePoids(critere)}
+                  type="number"
+                  min={1}
+                  max={POIDS_MAX}
+                  pas={1}
                 />
               {/if}
               <div class="gestes">

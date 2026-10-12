@@ -24,11 +24,18 @@
    appartenances), --couleur-conflit-voisins (nouveaux voisins) et
    --couleur-conflit-table (nouvelle table). Chacune ne peint que la trame de
    sa règle ; tout autre jeton chromatique se tient à 30° au moins de chacune,
-   et aucun ne porte la valeur de l'une. Elles se distinguent entre elles et
-   des autres marques du plan sous les trois dichromaties (SEPARATIONS,
-   marques.js), et tiennent 3:1 sur le fond du plateau, qui borde leurs
-   traits. Le contour épaissi d'une table en conflit, commun aux trois, est
-   de l'encre forte du plan, --couleur-contour-fort.
+   sauf le rouge du retrait, et aucun ne porte la valeur de l'une. Elles se
+   distinguent entre elles et des autres marques du plan sous les trois
+   dichromaties (SEPARATIONS, marques.js), et tiennent 3:1 sur le fond du
+   plateau, qui borde leurs traits. Le contour épaissi d'une table en
+   conflit, commun aux trois, est de l'encre forte du plan,
+   --couleur-contour-fort.
+
+   Le rouge du retrait, --couleur-retrait, peint la croix cerclée d'une
+   commande qui retire (Commande, variante retrait), sur la carte et son
+   fond sourd, jamais sur le plan : c'est le seul jeton chromatique admis à
+   moins de 30° d'une teinte de conflit (JETON_RETRAIT, marques.js), le
+   canal chromatique que les conflits se réservent étant celui du plan.
 
    La hachure d'une place à pourvoir peint des traits --couleur-hachure sur le
    fond de la chaise, --couleur-chaise-fond : ce sont ses deux couleurs.
@@ -72,7 +79,8 @@
    le neutre et les appartenances, chacun un fond teinté et une marque, que
    lisent les pastilles ; la bande de mode, un fond, un filet et une
    teinte par mode, celle de son icône ; les messages — avis, refus,
-   information —, chacun son encre, un fond, un filet et une marque.
+   information —, chacun son encre, un fond, un filet et une marque ; le
+   retrait, la teinte de sa croix.
 
    Le texte d'une pastille ou de la bande de mode garde l'encre de la page
    (§ 12.7) : la teinte se porte par le fond et la marque. Les marques des
@@ -134,9 +142,11 @@ textarea {
   --rayon-3: 0.75rem;
   --rayon-pilule: 62.5rem;
 
-  /* La hauteur d'une cible principale (44 px), et la largeur au-delà de
-     laquelle le contenu d'un écran se centre. */
+  /* La hauteur d'une cible principale (44 px), le côté minimal d'une cible
+     (24 px, § 14.5), et la largeur au-delà de laquelle le contenu d'un
+     écran se centre. */
   --hauteur-cible: 2.75rem;
+  --cible-minimale: 1.5rem;
   --largeur-page: 87rem;
 
   /* Ombres : une couleur opaque par thème, --couleur-ombre ; celle d'une
@@ -228,6 +238,9 @@ textarea {
   --couleur-information-fond: #e8f0fb;
   --couleur-information-filet: #b7cef0;
   --couleur-information-marque: var(--couleur-information);
+
+  /* Retrait : la croix cerclée d'une commande qui retire. */
+  --couleur-retrait: #c62828;
 
   /* Désignation. Le focus, la sélection, la mise en évidence et le fantôme
      passent sur une chaise vide comme sur une chaise pleine : leur clarté se
@@ -333,6 +346,8 @@ textarea {
   --couleur-information-fond: #172338;
   --couleur-information-filet: #34507a;
   --couleur-information-marque: var(--couleur-information);
+
+  --couleur-retrait: #ff6b6b;
 
   --couleur-focus: #8764e1;
   --couleur-selection: #4070f0;

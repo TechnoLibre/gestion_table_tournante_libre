@@ -103,6 +103,7 @@ sur les captures.
 | `--couleur-pastille-texte` | texte | 4,5 | — | — | 14,51 | 19-ajustement |
 | `--couleur-poignee` | marque | 3 | 7,44 | 07-plan-tables | 11,32 | 07-plan-tables |
 | `--couleur-refus` | texte | 4,5 | 8,34 | 01b-passer-en-ecriture | 8,14 | 01b-passer-en-ecriture |
+| `--couleur-retrait` | marque | 3 | 5,62 | 04a-etiquettes | 5,96 | 04a-etiquettes |
 | `--couleur-selection` | marque | 3 | 4,57 | 08-animateurs-designes | 4,18 | 08-animateurs-designes |
 | `--couleur-table-trait` | marque | 3 | 7,44 | 07-plan-tables | 5,59 | 07-plan-tables |
 | `rgb(24, 33, 47)` | texte | 4,5 | — | — | 16,19 | 22-plan-brouillon |

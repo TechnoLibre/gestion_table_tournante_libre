@@ -18,7 +18,7 @@ const NOMS_MARQUES = [
   'cadenasFerme', 'cadenasOuvert', 'anneau', 'hachure', 'remplissagePlein',
   'contourConflit', 'trameAppartenance', 'trameVoisins', 'trameTable', 'pastille', 'poignee', 'gel', 'miseEnEvidence',
   'selection', 'focus',
-  'contourTable', 'contourChaise', 'echelle', 'fantome', 'chargement', 'filigrane',
+  'contourTable', 'contourChaise', 'echelle', 'fantome', 'chargement', 'filigrane', 'retrait',
 ];
 
 // Les remplissages d'une chaise : fond, pleine, et les deux couleurs de la
@@ -39,7 +39,7 @@ const FONDS_REQUIS = {
 const parNom = (registre, nom) => registre.find((e) => e.nom === nom);
 
 describe('registre des marques', () => {
-  test('les vingt et une marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
+  test('les vingt-deux marques du contrat, noms uniques, seuil 3, au moins un fond chacune', () => {
     assert.equal(MARQUES.length, NOMS_MARQUES.length);
     assert.deepEqual(MARQUES.map((m) => m.nom), NOMS_MARQUES);
     assert.equal(new Set(MARQUES.map((m) => m.nom)).size, MARQUES.length);

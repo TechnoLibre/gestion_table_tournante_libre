@@ -11,7 +11,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, test } from '../../test/lanceur.js';
-import { JETONS_CONFLIT } from './marques.js';
+import { JETONS_CONFLIT, JETON_RETRAIT, MARQUES } from './marques.js';
 import {
   SIMULATIONS,
   contraste,
@@ -320,6 +320,9 @@ describe('teinte et verifierTeintesReservees (§ 12.7)', () => {
     assert.deepEqual(fautes.map((f) => `${f.theme}:${f.jeton}`), [
       'clair:--couleur-b', 'clair:--couleur-d', 'sombre:--couleur-b', 'sombre:--couleur-d',
     ]);
+    // Un jeton admis ne se mesure pas ; les autres, si.
+    const admis = verifierTeintesReservees(css, ['--couleur-conflit'], ['--couleur-b']);
+    assert.deepEqual(admis.map((f) => `${f.theme}:${f.jeton}`), ['clair:--couleur-d', 'sombre:--couleur-d']);
   });
 });
 
@@ -496,6 +499,21 @@ describe('jetons.css', () => {
       // Aucun autre jeton ne porte le préfixe des teintes de conflit.
       assert.deepEqual([...jetons.keys()].filter((n) => n.startsWith('--couleur-conflit')), JETONS_CONFLIT, theme);
     }
-    assert.deepEqual(verifierTeintesReservees(JETONS, JETONS_CONFLIT), []);
+    assert.deepEqual(verifierTeintesReservees(JETONS, JETONS_CONFLIT, [JETON_RETRAIT]), []);
+  });
+
+  test('le rouge du retrait est le seul jeton admis près d’une teinte de conflit : chromatique, sa valeur à lui, peint sur la carte seulement, jamais sur le plan', () => {
+    assert.equal(JETON_RETRAIT, '--couleur-retrait');
+    // Sans l'admission, le retrait est la seule faute.
+    assert.deepEqual([...new Set(verifierTeintesReservees(JETONS, JETONS_CONFLIT).map((f) => f.jeton))], [JETON_RETRAIT]);
+    for (const theme of ['clair', 'sombre']) {
+      const jetons = lireJetons(JETONS, theme);
+      const couleur = jetons.get(JETON_RETRAIT);
+      assert.notEqual(teinte(couleur), null, theme);
+      const memeValeur = [...jetons].filter(([n, c]) => n !== JETON_RETRAIT && String(c) === String(couleur));
+      assert.deepEqual(memeValeur.map(([n]) => n), [], theme);
+    }
+    const peintes = MARQUES.filter((m) => m.jeton === JETON_RETRAIT || m.fonds.includes(JETON_RETRAIT));
+    assert.deepEqual(peintes.map((m) => [m.nom, [...m.fonds]]), [['retrait', ['--couleur-carte-fond', '--couleur-carte-fond-sourd']]]);
   });
 });

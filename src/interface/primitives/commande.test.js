@@ -352,8 +352,8 @@ describe('commande : l’action d’un remède', () => {
 });
 
 describe('commande : la variante', () => {
-  test('trois variantes, la secondaire en tête : celle d’une commande qui n’en donne pas', () => {
-    assert.deepEqual(VARIANTES_COMMANDE, ['secondaire', 'principale', 'discrete']);
+  test('quatre variantes, la secondaire en tête : celle d’une commande qui n’en donne pas', () => {
+    assert.deepEqual(VARIANTES_COMMANDE, ['secondaire', 'principale', 'discrete', 'retrait']);
     assert.ok(Object.isFrozen(VARIANTES_COMMANDE));
   });
 
@@ -362,5 +362,11 @@ describe('commande : la variante', () => {
     for (const autre of ['primaire', '', null, undefined, 'Principale']) {
       assert.throws(() => exigerVariante(autre), (e) => e instanceof RangeError && e.message.includes(JSON.stringify(autre) ?? 'undefined'), String(autre));
     }
+  });
+
+  test('le retrait ne se confirme pas : avec une clé de confirmation, exigerVariante lève RangeError ; les autres variantes la prennent', () => {
+    assert.throws(() => exigerVariante('retrait', 'communs.commande.confirmer'), RangeError);
+    assert.equal(exigerVariante('retrait', null), 'retrait');
+    for (const variante of ['secondaire', 'principale', 'discrete']) assert.equal(exigerVariante(variante, 'communs.commande.confirmer'), variante);
   });
 });

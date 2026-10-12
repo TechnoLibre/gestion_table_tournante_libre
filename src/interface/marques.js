@@ -52,6 +52,14 @@ export const CONFLITS = Object.freeze(
 /** Les jetons des teintes de conflit, dans l'ordre de CONFLITS. */
 export const JETONS_CONFLIT = Object.freeze(CONFLITS.map(({ jeton }) => jeton));
 
+/** Le jeton du rouge du retrait (§ 12.7) : la croix cerclée d'une commande
+ *  qui retire (Commande, variante retrait), sur la carte et son fond sourd,
+ *  jamais sur le plan. C'est le seul jeton chromatique admis à moins de 30°
+ *  d'une teinte de conflit (verifierTeintesReservees, palette.js) : le
+ *  canal chromatique que les conflits se réservent est celui du plan, où il
+ *  ne se pose pas. */
+export const JETON_RETRAIT = c('retrait');
+
 /** Écarts perçus minimaux d'une teinte de conflit, en distance OKLab × 100
  *  mesurée en couleurs d'origine et sous chaque dichromatie (ecartPercu,
  *  palette.js) : entreConflits, d'une teinte de conflit à une autre — la
@@ -152,6 +160,9 @@ export const MARQUES = Object.freeze([
   // contenu d'une feuille imprimée, mesuré sur le papier, clair dans les
   // deux thèmes.
   marque('filigrane', 'filigrane', ['papier']),
+  // La croix cerclée d'un retrait, seul contenu de son bouton : sur la
+  // carte, et sur son fond sourd, celui du survol.
+  marque('retrait', 'retrait', ['carte-fond', 'carte-fond-sourd']),
 ]);
 
 // Les fonds teintés d'une pastille : ceux de ses teintes, puis ceux des

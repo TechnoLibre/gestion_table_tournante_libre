@@ -39,19 +39,26 @@ import { COMMANDES } from '../../application/commandes.js';
 /** Les variantes d'une commande, la secondaire en tête — celle d'une
  *  commande qui n'en donne pas : principale, l'action à faire sur l'écran,
  *  pleine de la teinte de l'action ; secondaire, à filet ; discrète, sans
- *  fond ni filet au repos. La variante ne change que l'apparence : le rôle,
- *  les attributs et la machine restent ceux de toute commande. */
-export const VARIANTES_COMMANDE = Object.freeze(['secondaire', 'principale', 'discrete']);
+ *  fond ni filet au repos ; retrait, une croix cerclée de la teinte du
+ *  retrait, sans fond ni filet au repos, dont le libellé devient le nom
+ *  accessible. La variante ne change que l'apparence : le rôle, la
+ *  désignation et la machine restent ceux de toute commande. */
+export const VARIANTES_COMMANDE = Object.freeze(['secondaire', 'principale', 'discrete', 'retrait']);
 
 /**
- * Une variante de commande, rendue telle quelle.
+ * Une variante de commande, rendue telle quelle. Le retrait ne montre
+ * aucun texte : son libellé armé n'aurait où s'afficher, et une commande à
+ * confirmer ne le prend pas.
  *
  * @param {string} variante
- * @returns {'secondaire'|'principale'|'discrete'}
- * @throws {RangeError} hors de VARIANTES_COMMANDE, en la nommant
+ * @param {string|null} [confirmer]  la clé de confirmation de la commande
+ * @returns {'secondaire'|'principale'|'discrete'|'retrait'}
+ * @throws {RangeError} hors de VARIANTES_COMMANDE, en la nommant ; le
+ *   retrait d'une commande à confirmer
  */
-export function exigerVariante(variante) {
+export function exigerVariante(variante, confirmer = null) {
   if (!VARIANTES_COMMANDE.includes(variante)) throw new RangeError(`commande : variante inconnue ${JSON.stringify(variante) ?? 'undefined'}`);
+  if (variante === 'retrait' && confirmer !== null) throw new RangeError('commande : le retrait ne se confirme pas');
   return variante;
 }
 

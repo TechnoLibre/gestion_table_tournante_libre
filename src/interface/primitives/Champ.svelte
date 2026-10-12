@@ -36,13 +36,32 @@
   // son étiquette seule ne le distingue pas d'un homonyme ; null,
   // l'étiquette le nomme. L'étiquette visible ne change pas. Le refus reçoit
   // nom pour nommer son remède.
+  //
+  // type est celui de l'entrée : 'text', le défaut, ou 'number', un champ
+  // étroit de six caractères, qui porte min, max et pas (step) quand ils
+  // sont donnés. La lecture reste celle de lire, et le domaine celui de
+  // l'exécution : le navigateur rend vide un texte qu'il ne lit pas comme
+  // un nombre, que lire refuse comme tout texte vide.
   import { getContext, onDestroy, untrack } from 'svelte';
   import { effetDe } from '../raccourcis.js';
   import { creerMachineChamp, estRefusSeance, refusSeanceCourant } from './champ.js';
   import { creerGeste } from './geste.js';
   import Refus from './Refus.svelte';
 
-  let { cle, etiquette, valeur, lire, executer, details = {}, nom = null, gestes = {} } = $props();
+  let {
+    cle,
+    etiquette,
+    valeur,
+    lire,
+    executer,
+    details = {},
+    nom = null,
+    gestes = {},
+    type = 'text',
+    min = null,
+    max = null,
+    pas = null,
+  } = $props();
 
   const t = getContext('t');
   const seance = getContext('seance') ?? null;
@@ -192,7 +211,10 @@
   <label for={idEntree}>{t(etiquette, details)}</label>
   <input
     id={idEntree}
-    type="text"
+    {type}
+    min={min ?? undefined}
+    max={max ?? undefined}
+    step={pas ?? undefined}
     data-champ={cle}
     value={saisie}
     aria-label={nom ?? undefined}
@@ -223,6 +245,11 @@
     color: var(--couleur-page-texte);
     font: inherit;
     font-size: var(--taille-texte);
+  }
+
+  /* Un nombre : six caractères de large, flèches comprises. */
+  input[type='number'] {
+    width: 6ch;
   }
 
   input:focus-visible {

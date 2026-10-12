@@ -2751,9 +2751,10 @@ l'appartenance s'affiche en pastille de sa teinte (§ 12.7), le titre pressenti
 et l'exclusion en pastilles à icône.
 
 La fiche d'une personne porte ses étiquettes, en pastilles **neutres** — la
-teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7) —, chacune avec sa
-commande « Retirer », et un champ qui en ajoute une ou plusieurs, séparées comme
-dans une cellule CSV ; la saisie passe par la même lecture que l'import (§ 4.5,
+teinte d'appartenance ne sert qu'à l'appartenance (§ 12.7) —, chacune suivie,
+en mode écriture seulement, d'une petite croix cerclée rouge qui la retire,
+nommée « Retirer « étiquette » » pour les technologies d'assistance, et un
+champ qui en ajoute une ou plusieurs, séparées comme dans une cellule CSV ; la saisie passe par la même lecture que l'import (§ 4.5,
 § 10.1). Quand l'événement porte des étiquettes, une légende des étiquettes suit
 celle des appartenances, chacune avec le nombre de personnes qui la portent,
 exclues comprises.
@@ -3622,6 +3623,9 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   le plan de salle, et ne servent à rien d'autre ; chacune ne peint que les
   marques de sa règle. Elles se distinguent entre elles et des autres marques
   du plan **une fois les trois dichromaties simulées**.
+- **Le rouge du retrait** (`--couleur-retrait`) ne peint que la croix cerclée
+  d'une commande qui retire, sur une carte, jamais sur le plan : c'est le seul
+  jeton chromatique admis à moins de 30° d'une teinte de conflit.
 - **Les couleurs d'appartenance ne vont que sur les listes**, jamais sur le
   plan, dont le canal chromatique appartient aux conflits : au plus six teintes
   catégorielles, chacune à 30° au moins des teintes de conflit dans chaque
@@ -4023,7 +4027,7 @@ des fonctions pures du module de géométrie.
 | tenir hors ligne | se compile en JavaScript ordinaire ; Vite est une dépendance de développement qui ne survit pas à la construction |
 | rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main — à une exception près : la table d'évaluation des propositions, gardée dans le modèle pur sous l'identité de la charge figée de la séance, qu'une écriture remplace |
 | se tester sans navigateur | n'impose d'écrire aucun calcul dans un composant ; le composant ne contient que le câblage |
-| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande de mode, les messages (avis, refus, information), le plan, le papier |
+| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande de mode, les messages (avis, refus, information), le retrait, le plan, le papier |
 
 **Les candidates écartées.** Vue 3 est le second choix défendable, écarté de peu
 sur le poids et sur la discipline qu'exige sa réactivité. React est écarté sur la
@@ -4243,7 +4247,8 @@ l'étage intermédiaire et laisse partir les défauts de coordonnées.
 ### 14.5 Accessibilité et thèmes
 
 Le texte tient **4,5:1** de contraste, les marques porteuses d'information
-**3:1**. Chaque couleur est accompagnée du ratio **mesuré sur la couleur relue du
+**3:1**. Une commande sans texte, à icône seule, offre une cible de 24 × 24 px
+au moins et porte son libellé en nom accessible. Chaque couleur est accompagnée du ratio **mesuré sur la couleur relue du
 rendu**, non sur le jeton source. Les deux thèmes sont éprouvés **par rendu**,
 jamais seulement par calcul, et le tableau des ratios est **engendré pour les
 deux** à partir des styles relevés au pilotage (§ 19.5), jamais recopié. Le

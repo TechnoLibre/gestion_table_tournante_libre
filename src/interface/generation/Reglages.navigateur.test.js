@@ -392,11 +392,22 @@ describe('l’ordre des priorités : l’éditeur (§ 5.7, A11, A12)', () => {
     expect(annonce(m)).toBe(t('generation.priorites.annonce', { critere: CUMULEES, palier: 3, paliers: 7, avec: [] }));
   });
 
-  test('le poids d’un critère d’un palier partagé : 0 refusé contre son champ, rien d’écrit ; 5 écrit, une entrée', async () => {
+  test('le poids d’un critère d’un palier partagé : un champ nombre étroit de 1 à 100 ; 0 refusé contre son champ, rien d’écrit ; 5 écrit, une entrée', async () => {
     const m = await demonstration();
     await cliquer(m, bouton(m, REDONDANCE, 'joindrePalier'));
     const champ = () => editeur(m).querySelector(`input[data-champ="poids.${REDONDANCE}"]`);
     expect(editeur(m).querySelector(`label[for="${champ().id}"]`).textContent.trim()).toBe(t('generation.priorites.poids', { critere: REDONDANCE }));
+    expect([champ().type, champ().min, champ().max, champ().step]).toEqual(['number', '1', '100', '1']);
+    // Étroit : six caractères de large, le contenu de la boîte, flèches
+    // comprises.
+    const sonde = document.createElement('span');
+    sonde.style.cssText = 'position:absolute;font:inherit;visibility:hidden';
+    sonde.textContent = '0'.repeat(6);
+    champ().parentElement.append(sonde);
+    const sixCaracteres = sonde.getBoundingClientRect().width;
+    sonde.remove();
+    const style = getComputedStyle(champ());
+    expect(Number.parseFloat(style.width)).toBeCloseTo(sixCaracteres, 0);
     const e0 = journal(m);
     await cliquer(m, champ());
     champ().select();
