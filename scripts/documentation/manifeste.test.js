@@ -79,7 +79,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.ok(Object.isFrozen(ETAPES));
   });
 
-  test('CAPTURES égale la table du contrat : vingt-deux entrées, leur étape et leur source', () => {
+  test('CAPTURES égale la table du contrat : vingt-six entrées, leur étape et leur source', () => {
     const table = CAPTURES.map((c) => [c.fichier, c.etape, c.source]);
     assert.deepEqual(table, [
       ['01-premier-ecran', '1', 'navigateur'],
@@ -88,7 +88,10 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['02b-import-cp1252', '2', 'navigateur'],
       ['03-import-rapport', '2', 'navigateur'],
       ['04-grille-participants', '3', 'navigateur'],
+      ['04a-etiquettes', '3', 'navigateur'],
       ['05-tables-etat', '4', 'navigateur'],
+      ['05a-objectifs-tables', '4', 'navigateur'],
+      ['05b-import-objectifs', '4', 'navigateur'],
       ['06-defaut-consequence', '4', 'navigateur'],
       ['07-plan-tables', '4', 'navigateur'],
       ['07a-cibles-sieges', '4', 'navigateur'],
@@ -97,6 +100,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['08-animateurs-designes', '6', 'navigateur'],
       ['09-refus-sur-place', '7', 'navigateur'],
       ['10-diagnostic', '8', 'navigateur'],
+      ['10a-ordre-priorites', '9', 'navigateur'],
       ['11-propositions', '9', 'navigateur'],
       ['19-ajustement', '11', 'navigateur'],
       ['20-mode-lecture', '11', 'navigateur'],
@@ -119,6 +123,12 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.equal(configuration.get('02-import-apercu'), 'participants_cas_limites.csv');
     assert.equal(configuration.get('02b-import-cp1252'), 'participants_cas_limites_cp1252.csv');
     assert.equal(configuration.get('03-import-rapport'), 'participants_cas_limites.csv');
+    // L'aperçu des objectifs se prend sur l'exemple d'objectifs, importé
+    // dans l'événement que le parcours construit (A22).
+    assert.equal(configuration.get('05b-import-objectifs'), 'objectifs_cas_limites.csv');
+    for (const fichier of ['04a-etiquettes', '05a-objectifs-tables', '10a-ordre-priorites']) {
+      assert.equal(configuration.get(fichier), 'evenement-construit', fichier);
+    }
     assert.equal(configuration.get('10-diagnostic'), 'grande');
     // Les deux 07a, à l'étape 4, se prennent sur la grande démonstration que
     // le parcours charge pour 10 (§ 19.3).

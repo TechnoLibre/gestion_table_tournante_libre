@@ -12,13 +12,16 @@
 // d'erreurs vide et sans requête hors de la boucle locale (§ 19.11).
 //
 // Le parcours est le parcours photographié (§ 19.1, § 19.3) : il suit les
-// captures du § 19.3 que l'itération photographie — 01, 01b, 02, 02b, 03 à
-// 07, 07b, 08 à 10, les deux 07a sur la grande démonstration que 10 a
-// chargée, 11, 19, 20, puis 22 et 23, l'aperçu avant impression d'une
-// proposition et du retenu, puis 24 et 25, la feuille de contrôle et la
-// première planche du PDF que la section Badges produit, tramées sous node
-// (§ 19.6) —, ces sorties en lecture puis sur un plan bloqué, qui n'écrivent
-// que la planche et reglages_locaux.json (§ 11.6), puis l'ordre de lecture du § 2.1 sur
+// captures du § 19.3 que l'itération photographie — 01, 01b, 02, 02b, 03,
+// 04, 04a, les étiquettes d'une fiche, 05, 05a, les objectifs posés à
+// l'écran, 05b, l'aperçu du CSV des objectifs, 06, 07, 07b, 08 à 10, les deux
+// 07a sur la grande démonstration que 10 a chargée, 10a, l'ordre des
+// priorités réglé, 11, la génération sous ces objectifs et cet ordre (A22,
+// D17), 19, 20, puis 22 et 23, l'aperçu avant impression d'une proposition
+// et du retenu, puis 24 et 25, la feuille de contrôle et la première planche
+// du PDF que la section Badges produit, tramées sous node (§ 19.6) —, ces
+// sorties en lecture puis sur un plan bloqué, qui n'écrivent que la planche
+// et reglages_locaux.json (§ 11.6), puis l'ordre de lecture du § 2.1 sur
 // l'événement retenu, les fenêtres — aucune pendant un geste non
 // destructeur, une qui nomme ce qui part pour chaque geste qui détruit —,
 // enfin chaque famille de geste modifiant en lecture puis sur un plan
@@ -43,7 +46,8 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { cdp, commands } from 'vitest/browser';
 import { flushSync } from 'svelte';
-import { bilanRemplacement, cleNormalisee } from '../application/csv.js';
+import { configurationDe } from '../application/configuration.js';
+import { apercevoirObjectifs, bilanRemplacement, cleNormalisee } from '../application/csv.js';
 import { creerFormat } from '../application/format.js';
 import { creerExecuteurDirect } from '../application/generation.js';
 import { TABLES_APPLICATION, libelle } from '../application/libelles.js';
@@ -60,8 +64,10 @@ import { regimeCibles } from '../geometrie/designation.js';
 import { echelleGraphique } from '../geometrie/echelle.js';
 import { diametre, geometrieTable } from '../geometrie/tables.js';
 import { vueDepuisTransform } from '../geometrie/vue.js';
-import { CRITERES, classer } from '../moteur/classement.js';
+import { classer } from '../moteur/classement.js';
 import { indexerPlan, nombrePlaces, normaliser } from '../moteur/configuration.js';
+import { correspondA } from '../moteur/correspondance.js';
+import { PRIORITES_PAR_DEFAUT, compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
 import { mesurer } from '../moteur/indicateurs.js';
 import { plafondsAPriori } from '../moteur/plafond.js';
@@ -70,9 +76,10 @@ import { serialiserCharge } from '../stockage/canonique.js';
 import { configurationDepuisCharge } from '../stockage/document.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
-import { planDepuisFichier } from '../stockage/placements.js';
+import { derive, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import urlCp1252 from '../../exemples/participants_cas_limites_cp1252.csv?url';
+import urlObjectifs from '../../exemples/objectifs_cas_limites.csv?url';
 import {
   CADRE,
   capturesPrises,
@@ -107,14 +114,30 @@ const ECART_RETENUE_MS = 2 * 60 * 1000;
 // Le CSV des cas limites enregistré en windows-1252 (§ 10.3, capture 02b).
 const NOM_CP1252 = 'participants_cas_limites_cp1252.csv';
 
+// Le CSV des objectifs de table aux cas limites (§ 10.4, capture 05b) : ses
+// lignes valides visent les tables 1 et 2 d'une soirée de moins de neuf
+// tours, et l'une d'elles écrit en capitales une étiquette des participants.
+const NOM_OBJECTIFS = 'objectifs_cas_limites.csv';
+
+// La clé d'une étiquette que l'import des cas limites donne à plusieurs
+// personnes, sous deux orthographes qu'il fond en une (§ 10.1) ; une
+// orthographe voisine, que la fiche reçoit sous la retenue (capture 04a), et
+// que le CSV des objectifs porte aussi (capture 05b).
+const CLE_ETIQUETTE = 'finance';
+const ORTHOGRAPHE_VOISINE = 'FINANCE';
+
 // Ce qui tient lieu de version dans une construction de documentation.
 const MARQUE_PROVENANCE = versionVisible('documentation', VERSION.affichee, t);
 
 // La personne que l'ordre de lecture ajoute : un nom inventé.
 const AJOUTEE = { nom: 'Ombrelle', prenom: 'Iris' };
 
-// Les gestes non destructeurs que les fenêtres surveillent (§ 2.1, § 5.9),
-// chacun exécuté au moins une fois par le parcours.
+// Les gestes non destructeurs que les fenêtres surveillent (§ 2.1, § 5.9,
+// D19), chacun exécuté au moins une fois par le parcours. Les gestes des
+// étiquettes, des objectifs et des priorités portent le nom de leur
+// commande ; les deux cases et le mode des objectifs passent par
+// modifierReglage, que 10a exerce sur chacun d'eux, comme 11 sur le compte
+// d'arrêt.
 const GESTES_NON_DESTRUCTEURS = Object.freeze([
   'ajouter',
   'modifier',
@@ -126,6 +149,61 @@ const GESTES_NON_DESTRUCTEURS = Object.freeze([
   'surcharger',
   'appliquerDefaut',
   'ajouterTour',
+  'modifierReglage',
+  'changerEtiquettes',
+  'poserObjectif',
+  'retirerObjectif',
+  'changerRegleObjectifs',
+  'importerObjectifs',
+  'changerPriorites',
+  'retablirPriorites',
+]);
+
+// Les familles de geste modifiant que la lecture et le plan bloqué refusent
+// (§ 8.4, § 9), dans l'ordre où toutesFamilles les tente ; gestes nomme
+// ceux de GESTES_NON_DESTRUCTEURS que la famille tente sous ce nom, vide
+// pour une famille qui n'en tente aucun. Leur nombre est celui de la
+// liste : toutesFamilles affirme qu'elle les a tentées toutes, dans cet
+// ordre, et chaque geste des étiquettes, des objectifs et des priorités y
+// est tenté. Les deux cases et le mode passent par modifierReglage : la
+// famille des réglages de génération les tente.
+const FAMILLES_MODIFIANTES = Object.freeze(
+  [
+    ['glisser une personne', []],
+    ['glisser une table', []],
+    ['tirer une poignée', []],
+    ['poser une réservation', ['reserver']],
+    ['titrer', ['titrer']],
+    ['désigner', ['designer']],
+    ['saisir dans une cellule', ['modifier']],
+    ['changer les étiquettes', ['changerEtiquettes']],
+    ['coller', []],
+    ['importer', []],
+    ['importer des objectifs', ['importerObjectifs']],
+    ['créer une table', []],
+    ['surcharger', ['surcharger']],
+    ['changer le défaut', []],
+    ['changer les tours', []],
+    ['poser ou retirer un objectif', ['poserObjectif', 'retirerObjectif']],
+    ['changer la règle par défaut', ['changerRegleObjectifs']],
+    ['changer l’état', []],
+    ['changer l’ordre des priorités', ['changerPriorites', 'retablirPriorites']],
+    ['changer un réglage de génération', ['modifierReglage']],
+  ].map(([nom, gestes]) => Object.freeze({ nom, gestes: Object.freeze(gestes) })),
+);
+
+// Les gestes des étiquettes, des objectifs — les deux cases et le mode
+// compris, par modifierReglage — et des priorités : chacun tenté par une
+// famille de FAMILLES_MODIFIANTES.
+const GESTES_DES_OBJECTIFS = Object.freeze([
+  'modifierReglage',
+  'changerEtiquettes',
+  'poserObjectif',
+  'retirerObjectif',
+  'changerRegleObjectifs',
+  'importerObjectifs',
+  'changerPriorites',
+  'retablirPriorites',
 ]);
 
 // Les refus du § 5.9 qui subsistent à la pose, que la capture 09 peut
@@ -343,6 +421,63 @@ async function glisserVers(depuis, vers) {
   await pointer('relacher', vers.x, vers.y);
   flushSync();
   await images(3);
+}
+
+// Choisit au clavier la valeur d'un sélecteur, un cran de flèche à la fois,
+// la page rendue à chaque cran : chaque cran est un choix, comme au clavier
+// de l'opérateur. Au plus autant de crans que d'options.
+async function choisirAuClavier(choix, valeur) {
+  choix.focus();
+  const cible = [...choix.options].findIndex((option) => option.value === valeur);
+  expect(cible, `option ${valeur}`).toBeGreaterThanOrEqual(0);
+  for (let cran = 0; cran < choix.options.length && choix.selectedIndex !== cible; cran += 1) {
+    await touche(choix.selectedIndex < cible ? 'ArrowDown' : 'ArrowUp');
+    flushSync();
+    await images(2);
+  }
+  expect(choix.value, `le choix ${valeur}`).toBe(valeur);
+}
+
+// Fait défiler le premier ancêtre défilant des éléments jusqu'à centrer la
+// réunion de leurs boîtes, qui doit tenir dans sa hauteur visible : l'image
+// les montre ensemble. Sans ancêtre défilant, la fenêtre défile.
+async function cadrerDansLaSurface(elements) {
+  const boites = elements.map((element) => element.getBoundingClientRect());
+  const haut = Math.min(...boites.map((b) => b.top));
+  const bas = Math.max(...boites.map((b) => b.bottom));
+  let porteur = elements[0].parentElement;
+  while (porteur !== null && !(porteur.scrollHeight > porteur.clientHeight && /auto|scroll/.test(getComputedStyle(porteur).overflowY))) {
+    porteur = porteur.parentElement;
+  }
+  if (porteur === null) {
+    await cadrerSur(elements);
+    return;
+  }
+  const cadre = porteur.getBoundingClientRect();
+  const visibleHaut = Math.max(cadre.top + porteur.clientTop, 0);
+  const visibleBas = Math.min(cadre.top + porteur.clientTop + porteur.clientHeight, innerHeight);
+  expect(bas - haut, 'les éléments à montrer tiennent dans la hauteur visible de leur surface').toBeLessThanOrEqual(visibleBas - visibleHaut);
+  porteur.scrollTop += Math.round((haut + bas - visibleHaut - visibleBas) / 2);
+  await images(2);
+}
+
+// Fait défiler en largeur le premier ancêtre des éléments qui défile ainsi,
+// jusqu'à centrer la réunion de leurs boîtes, qui doit tenir dans sa largeur
+// visible : l'image les montre ensemble. Un tel ancêtre est exigé.
+async function cadrerEnLargeur(elements) {
+  const boites = elements.map((element) => element.getBoundingClientRect());
+  const gauche = Math.min(...boites.map((b) => b.left));
+  const droite = Math.max(...boites.map((b) => b.right));
+  let porteur = elements[0].parentElement;
+  while (porteur !== null && !(porteur.scrollWidth > porteur.clientWidth && /auto|scroll/.test(getComputedStyle(porteur).overflowX))) {
+    porteur = porteur.parentElement;
+  }
+  expect(porteur, 'un ancêtre qui défile en largeur').not.toBeNull();
+  const visibleGauche = porteur.getBoundingClientRect().left + porteur.clientLeft;
+  const visibleDroite = visibleGauche + porteur.clientWidth;
+  expect(droite - gauche, 'les éléments à montrer tiennent dans la largeur visible de leur ancêtre').toBeLessThanOrEqual(visibleDroite - visibleGauche);
+  porteur.scrollLeft += Math.round((gauche + droite - visibleGauche - visibleDroite) / 2);
+  await images(2);
 }
 
 // Ferme l'aperçu d'import ouvert, puis ouvre celui du fichier donné ; rend
@@ -570,9 +705,14 @@ async function fermerLaPose() {
   await attendre('la pose fermée', () => m.ui.etat().pose === null);
 }
 
-// Le refus posé à côté d'un élément, dans le porteur donné, avec son remède.
-async function refusPres(porteur, code, remede, geste) {
-  const refus = await attendre(`le refus ${code} de ${geste}`, () => porteur().querySelector(`[data-refus="${code}"]`));
+// Le refus posé à côté d'un élément, dans le porteur donné, avec son remède ;
+// un refus autre que ancien, qu'un geste précédent a laissé dans le même
+// porteur.
+async function refusPres(porteur, code, remede, geste, ancien = null) {
+  const refus = await attendre(`le refus ${code} de ${geste}`, () => {
+    const lu = porteur().querySelector(`[data-refus="${code}"]`);
+    return lu !== ancien ? lu : null;
+  });
   expect(refus.querySelector(`[data-commande="${remede}"]`)?.textContent, geste).toBe(t(`communs.remede.${remede}`));
   return refus;
 }
@@ -1021,7 +1161,74 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     });
   });
 
+  // Étape 3 (§ 4.5, § 10.2, A22) : la fiche d'une personne importée avec
+  // ses étiquettes. Une saisie d'une orthographe voisine d'une étiquette que
+  // d'autres portent reçoit l'existante, et le signal se pose contre le
+  // champ ; la légende chiffre chaque étiquette, exclues comprises.
+  test('04a la fiche : ses étiquettes en pastilles ; « FINANCE » reçu sous l’orthographe retenue, le signal contre le champ ; la légende chiffrée', async () => {
+    const section = () => dans('[data-section="participants"]');
+    const portees = (p) => p.etiquettes ?? [];
+    // L'orthographe que l'import a retenue pour la clé, une seule, et que
+    // plusieurs personnes portent ; la voisine en diffère.
+    const retenues = [...new Set(charge().participants.flatMap(portees).filter((motCle) => cleNormalisee(motCle) === CLE_ETIQUETTE))];
+    expect(retenues).toHaveLength(1);
+    const [existante] = retenues;
+    expect(charge().participants.filter((p) => portees(p).includes(existante)).length).toBeGreaterThan(1);
+    expect(cleNormalisee(ORTHOGRAPHE_VOISINE)).toBe(CLE_ETIQUETTE);
+    expect(ORTHOGRAPHE_VOISINE).not.toBe(existante);
+    memoire.etiquette = existante;
+    const personne = charge().participants.find((p) => !p.exclu && portees(p).length > 0 && !portees(p).includes(existante));
+    expect(personne, 'une personne étiquetée, sans « finance »').toBeDefined();
+    await cliquer(`[data-section="participants"] [data-participant="${personne.id}"] [data-commande="fiche"]`);
+    const fiche = await attendre('la fiche', () => dans(`[data-fiche="${personne.id}"]`));
+    const pastilles = () => [...fiche.querySelectorAll('[data-etiquettes] li')].map((li) => texteDe(li.firstElementChild));
+    expect(pastilles()).toEqual(personne.etiquettes);
+
+    await sansFenetre('changerEtiquettes', async () => {
+      const r = revision();
+      await saisir(fiche.querySelector('input[data-champ="etiquettes"]'), ORTHOGRAPHE_VOISINE);
+      await uneEntree(r, 'ajouter une étiquette');
+    });
+    const apres = charge().participants.find((p) => p.id === personne.id).etiquettes;
+    expect(apres).toContain(existante);
+    expect(apres).not.toContain(ORTHOGRAPHE_VOISINE);
+    expect(pastilles()).toEqual(apres);
+    const champ = fiche.querySelector('input[data-champ="etiquettes"]');
+    expect(champ.value).toBe('');
+    const signal = await attendre('le signal d’orthographe', () => fiche.querySelector('[data-avertissement="ORTHOGRAPHE_RETENUE"]'));
+    expect(texteDe(signal)).toBe(plat(t('ORTHOGRAPHE_RETENUE', { saisie: ORTHOGRAPHE_VOISINE, retenue: existante })));
+    expect(champ.getAttribute('aria-describedby')).toBe(signal.id);
+
+    // La légende : chaque étiquette de la liste, avec le nombre de personnes
+    // qui la portent, exclues comprises.
+    const comptes = new Map();
+    for (const p of charge().participants) for (const motCle of portees(p)) comptes.set(motCle, (comptes.get(motCle) ?? 0) + 1);
+    const legende = section().querySelector('[data-legende-etiquettes]');
+    expect(legende).not.toBeNull();
+    const lus = [...legende.querySelectorAll('li')].map(texteDe).sort();
+    const attendus = [...comptes].map(([nom, compte]) => plat(t('participants.legende.element', { nom, compte }))).sort();
+    expect(lus).toEqual(attendus);
+
+    // L'image montre le champ vidé, sans curseur ni anneau de focus. À
+    // 1 366 × 700, la fiche s'ouvre sous la grille : la légende, en tête de
+    // la section, n'entre pas dans la même fenêtre qu'elle, et 04 la montre.
+    document.activeElement?.blur();
+    await images(2);
+    await photographier(m, '04a-etiquettes', {
+      condition: [
+        `[data-fiche="${personne.id}"] [data-etiquettes]`,
+        `[data-fiche="${personne.id}"] input[data-champ="etiquettes"]`,
+        `[data-fiche="${personne.id}"] [data-avertissement="ORTHOGRAPHE_RETENUE"]`,
+      ],
+    });
+  });
+
   test('05 deux tables à 8, l’une au défaut, l’autre surchargée à 8 : leurs états diffèrent à valeur égale', async () => {
+    // La fiche de 04a se ferme : elle reviendrait avec la section.
+    if (dans('[data-fiche]') !== null) {
+      await cliquer('[data-fiche] [data-commande="fermerFiche"]');
+      await attendre('la fiche fermée', () => dans('[data-fiche]') === null);
+    }
     await ouvrirSection('tables');
     let r = revision();
     await cliquer('[data-section="tables"] [data-commande="creerTableRonde"]');
@@ -1046,6 +1253,145 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await photographier(m, '05-tables-etat', {
       condition: [`[data-section="tables"] [data-table="${premiere.id}"] [data-etat-table]`, `[data-section="tables"] [data-table="${seconde.id}"] [data-etat-table]`],
     });
+  });
+
+  // Étape 4 (§ 4.5, D3, A22) : la règle par défaut, changée puis rendue ;
+  // l'objectif de la soirée de la première table, qui suit cette règle ;
+  // celui du tour 1 de la seconde, qui porte la sienne, « toutes », et
+  // qu'aucune personne présente ne remplit. La correspondance se juge par
+  // correspondA, la fonction du moteur, hors de l'écran (D18). Le choix de
+  // règle de l'objectif qui la suit nomme la règle par défaut, et l'image la
+  // montre par lui : la carte qui la règle, en tête de la section, n'entre
+  // pas dans la même fenêtre que les deux objectifs.
+  test('05a la règle par défaut ; la soirée de la table 1 la suit, le tour 1 de la table 2 porte la sienne ; l’objectif sans correspondant le dit', async () => {
+    const [premiere, seconde] = charge().tables.map(({ id }) => id);
+    const regleDefaut = () => dans('[data-regle-objectifs] select[data-champ="regleObjectifs"]');
+    expect(regleDefaut().value).toBe('ou');
+    await sansFenetre('changerRegleObjectifs', async () => {
+      for (const valeur of ['et', 'ou']) {
+        const r = revision();
+        await choisirAuClavier(regleDefaut(), valeur);
+        await uneEntree(r, `la règle par défaut « ${valeur} »`);
+      }
+    });
+    expect(charge().reglages.regleObjectifs).toBeUndefined();
+
+    const zone = (cle) => dans(`[data-section="tables"] [data-objectif="${cle}"]`);
+    const champ = (cle) => zone(cle).querySelector(`input[data-champ="objectif-${cle}"]`);
+    // Rangées par unités de code, comme la charge les écrit.
+    const visees = ['Montréal', 'bénévole'];
+    await sansFenetre('poserObjectif', async () => {
+      let r = revision();
+      await saisir(champ(String(premiere)), memoire.etiquette);
+      await uneEntree(r, 'l’objectif de la soirée');
+      await cliquer(`[data-section="tables"] [data-table="${seconde}"] [data-commande="basculerObjectifsTours"]`);
+      const cle = `${seconde}-1`;
+      await attendre('l’objectif du tour 1', () => zone(cle));
+      // La règle d'un objectif neuf se choisit avant ses étiquettes, sans
+      // rien écrire.
+      r = revision();
+      await choisirAuClavier(zone(cle).querySelector(`select[data-champ="regle-${cle}"]`), 'et');
+      expect(revision()).toBe(r);
+      await saisir(champ(cle), visees.join(', '));
+      await uneEntree(r, 'l’objectif du tour 1');
+    });
+    const objectifsDe = (id) => charge().tables.find((table) => table.id === id).objectifs;
+    expect(objectifsDe(premiere)).toEqual([{ portee: 'tous', tour: null, regle: null, etiquettes: [memoire.etiquette] }]);
+    expect(objectifsDe(seconde)).toEqual([{ portee: 'tour', tour: 1, regle: 'et', etiquettes: visees }]);
+
+    // Les deux états de règle, en mots, différents.
+    const soiree = texteDe(zone(String(premiere)));
+    const tour = texteDe(zone(`${seconde}-1`));
+    expect(soiree).toContain(t('tables.objectif.suitDefaut'));
+    expect(soiree).not.toContain(t('tables.objectif.reglePropre'));
+    expect(tour).toContain(t('tables.objectif.reglePropre'));
+    expect(tour).not.toContain(t('tables.objectif.suitDefaut'));
+    const regleSoiree = zone(String(premiere)).querySelector(`select[data-champ="regle-${premiere}"]`);
+    expect(regleSoiree.value).toBe('');
+    expect(texteDe(regleSoiree.selectedOptions[0])).toBe(plat(t('tables.objectif.regleDefaut', { regle: 'ou' })));
+
+    // Aucune personne présente ne remplit l'objectif du tour 1 : son signal ;
+    // celui de la soirée a les siennes, et se tait.
+    const presents = charge().participants.filter(({ exclu }) => !exclu);
+    const remplit = (objectif, regle) => presents.some((p) => correspondA(p.etiquettes ?? [], { regle, etiquettes: objectif.etiquettes }));
+    expect(remplit(objectifsDe(seconde)[0], 'et')).toBe(false);
+    expect(remplit(objectifsDe(premiere)[0], 'ou')).toBe(true);
+    expect(zone(`${seconde}-1`).querySelector('[data-avertissement="OBJECTIF_SANS_CORRESPONDANT"]')).not.toBeNull();
+    expect(zone(String(premiere)).querySelector('[data-avertissement="OBJECTIF_SANS_CORRESPONDANT"]')).toBeNull();
+
+    document.activeElement?.blur();
+    await cadrerDansLaSurface([zone(String(premiere)), zone(`${seconde}-1`)]);
+    await photographier(m, '05a-objectifs-tables', {
+      condition: [
+        `[data-objectif="${premiere}"]`,
+        `[data-objectif="${premiere}"] select[data-champ="regle-${premiere}"]`,
+        `[data-objectif="${seconde}-1"] select[data-champ="regle-${seconde}-1"]`,
+        `[data-objectif="${seconde}-1"] [data-avertissement="OBJECTIF_SANS_CORRESPONDANT"]`,
+      ],
+    });
+  });
+
+  // Le CSV des objectifs aux cas limites (§ 10.4, A20, A22), sur la soirée
+  // construite : ses deux tables portent les numéros 1 et 2, et elle compte
+  // moins de neuf tours. L'aperçu, sous la nature « Objectifs de table » et
+  // le mode « Mettre à jour », se compare à apercevoirObjectifs, que l'écran
+  // n'appelle pas : séparateur, lignes refusées, orthographes fondues.
+  test('05b l’aperçu des objectifs : la nature nommée, le séparateur, les lignes refusées, « FINANCE » fondue ; tables 1 et 2, moins de 9 tours', async () => {
+    expect(charge().tables.map(({ numero }) => numero)).toEqual([1, 2]);
+    expect(charge().evenement.tours).toBeLessThan(9);
+    await ouvrirSection('import');
+    await appuyer(dans('[data-nature-import] input[value="objectifs"]'), 'la nature « Objectifs de table »');
+    const octets = new Uint8Array(await (await fetch(urlObjectifs)).arrayBuffer());
+    const avant = fichiers();
+    const apercu = await ouvrirApercu(NOM_OBJECTIFS, octets);
+    const { texte } = decoder(octets);
+    const attendu = apercevoirObjectifs(texte, charge(), { mode: 'mettreAJour' });
+    expect(attendu.refusGlobal).toBeNull();
+
+    const nature = dans('[data-nature-import] input:checked');
+    expect(nature.value).toBe('objectifs');
+    expect(texteDe(nature.closest('label'))).toBe(t('import.nature.objectifs'));
+    expect(apercu.querySelector('[data-champ="mode"] input:checked').value).toBe('mettreAJour');
+    expect(texteDe(apercu.querySelector('[data-separateur]'))).toBe(t(SEPARATEURS.get(attendu.separateur)));
+    const refusees = [...apercu.querySelectorAll('[data-refusees] [data-ligne]')];
+    expect(refusees.map((ligne) => Number(ligne.dataset.ligne))).toEqual(attendu.refusees.map(({ ligne }) => ligne));
+    expect(refusees.length).toBeGreaterThan(0);
+    for (const ligne of refusees) expect(texteDe(ligne.querySelector('[data-motif]')).length, ligne.dataset.ligne).toBeGreaterThan(0);
+    const fondues = [...apercu.querySelectorAll('[data-fusions-etiquettes] [data-affichee]')].map(texteDe);
+    expect(fondues).toEqual(attendu.fusionsEtiquettes.map(({ retenue }) => retenue));
+    expect(fondues).toContain(memoire.etiquette);
+    expect(texteDe(apercu.querySelector('[data-fusions-etiquettes]'))).toContain(ORTHOGRAPHE_VOISINE);
+    memoire.objectifsImportes = attendu.lignes.map(({ champs }) => champs);
+    await rienEcrit(avant, 'l’aperçu des objectifs');
+    // L'image montre les lignes refusées et la fusion ; la nature cochée et
+    // le séparateur, en tête de la section, n'entrent pas dans la même
+    // fenêtre qu'elles.
+    await cadrerDansLaSurface([apercu.querySelector('[data-refusees]'), apercu.querySelector('[data-fusions-etiquettes]')]);
+    await photographier(m, '05b-import-objectifs', {
+      condition: ['[data-apercu] [data-refusees]', '[data-apercu] [data-refusees] [data-ligne] [data-motif]', '[data-apercu] [data-fusions-etiquettes]'],
+    });
+  });
+
+  test('05b « Importer » en « Mettre à jour » : une entrée, sans fenêtre ; les objectifs du fichier posés, celui du tour 1 de la table 2 gardé', async () => {
+    const [, seconde] = charge().tables.map(({ id }) => id);
+    const garde = charge().tables.find(({ id }) => id === seconde).objectifs.find(({ tour }) => tour === 1);
+    expect(garde).toBeDefined();
+    await sansFenetre('importerObjectifs', async () => {
+      const r = revision();
+      await cliquer('[data-apercu] [data-commande="importer"]');
+      await uneEntree(r, 'importer les objectifs');
+    });
+    await attendre('le rapport', () => dans('[data-rapport]'));
+    const objectifs = charge().tables.flatMap(({ id, objectifs: siens = [] }) => siens.map((objectif) => ({ table: id, ...objectif })));
+    for (const { table, tour, regle, etiquettes } of memoire.objectifsImportes) {
+      expect(objectifs, `table ${table}, tour ${tour}`).toContainEqual(expect.objectContaining({ table, tour, regle, etiquettes }));
+    }
+    expect(objectifs).toContainEqual({ table: seconde, ...garde });
+    // La section revient à la nature par défaut : les imports de
+    // participants qui suivent la trouvent cochée.
+    await appuyer(dans('[data-nature-import] input[value="participants"]'), 'la nature « Participants »');
+    expect(dans('[data-nature-import] input:checked').value).toBe('participants');
+    await ouvrirSection('tables');
   });
 
   test('06 l’énoncé d’un changement de défaut, chiffré avant toute application : rien d’écrit', async () => {
@@ -1115,7 +1461,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await attendre('le tour 3 montré', () => m.ui.etat().tour === 3);
     await images(2);
     await regimeSieges();
-    let r = revision();
+    const r = revision();
     const reservee = await choisir('[data-reserve]');
     const libre = chaiseVue((c) => c.occupant === null && c.reservation === null && c.titre === null);
     await cliquerPointeur(chaise(libre.table, libre.siege));
@@ -1138,12 +1484,16 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       plat(t('tables.tours.reservation', { nom, numero, tour: 3 })),
     );
     await rienEcrit(avant, 'l’annonce');
+    memoire.annonce = { fenetre, avant };
     await photographier(m, '07b-nombre-de-tours', { condition: ['dialog[open] h2', 'dialog[open] [data-commande="renoncer"]'] });
+  });
 
+  test('07b « Annuler » : rien d’écrit ; « Défaire » retire la réservation posée pour l’annonce', async () => {
+    const { fenetre, avant } = memoire.annonce;
     await appuyer(fenetre.querySelector('[data-commande="renoncer"]'), 'renoncer');
     await attendre('l’annonce fermée', () => dans('dialog[open]') === null);
     await rienEcrit(avant, 'renoncer');
-    r = revision();
+    const r = revision();
     await cliquer('[data-historique] [data-commande="defaire"]');
     await uneEntree(r, 'défaire la réservation');
     expect(charge().reservations).toEqual([]);
@@ -1240,12 +1590,13 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(vues).toEqual([]);
     await rienEcrit(avant, 'le refus sur la place');
     await photographier(m, '09-refus-sur-place', { condition: [`[data-siege="${t1}:${reservee.siege}"]`] });
-    await oublierChoix();
   });
 
   // La grande démonstration, chargée depuis le premier écran : l'échelle est
   // le propos (§ 19.3), et le diagnostic se lit avant toute génération.
   test('10 la grande démonstration, chargée depuis le premier écran : 99 retours imposés, plafond 24, plancher d’écart, égaux au moteur', async () => {
+    // Le choix que 09 a laissé en attente s'oublie avant de quitter la soirée.
+    await oublierChoix();
     memoire.base = base();
     await cliquer('[data-bandeau] [data-commande="liste"]');
     await attendre('le premier écran', () => dans('[data-ecran="accueil"] [data-demonstration="grande"]'));
@@ -1300,19 +1651,148 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await photographier(m, '07a-cibles-tables', { condition: [`[data-plan] [data-table="${table}"]`] });
   });
 
-  test('11 rouvrir la soirée ; générer, graine écrite, compte réduit : trois propositions du moteur, dans l’ordre de sa clé ; diversité ; retenir', async () => {
+  // Étape 9 (§ 5.3, § 5.7, A11, A22) : la soirée rouverte, l'ordre des
+  // priorités se règle à côté de la génération — les tours hors objectif
+  // montés au palier de l'excédent de collisions, avec le poids 3 —, sous
+  // le mode par défaut et la case des animateurs décochée. Les paliers
+  // affichés sont ceux de la charge ; ceux que compile le moteur, ceux-là
+  // privés des critères qui ne comptent pas, et 11 les nomme.
+  test('10a la soirée rouverte, l’ordre réglé : excédent × 1 et tours hors objectif × 3 en un palier, animateurs décochés, mode par défaut', async () => {
     await cliquer('[data-bandeau] [data-commande="liste"]');
     await cliquer(`[data-evenement="${memoire.base}"] [data-commande="ouvrir"]`);
     await attendre('la soirée rouverte', () => dans('[data-ecran="evenement"]') && etat().evenement?.base === memoire.base);
     await cliquer('[data-place-fixe] [data-commande="modifier"]');
     await attendre('l’écriture', () => etat().mode === 'ecriture');
     await ouvrirSection('generation');
+    const editeur = () => dans('[data-section="generation"] [data-priorites]');
+    const paliersAffiches = () =>
+      [...editeur().querySelectorAll(':scope > [data-palier]')].map((palier) =>
+        [...palier.querySelectorAll('[data-priorite]')].map((critere) => critere.dataset.priorite),
+      );
+    const nomsDe = (liste) => liste.map((palier) => palier.map(({ critere }) => critere));
+    expect(paliersAffiches()).toEqual(nomsDe(PRIORITES_PAR_DEFAUT));
+
+    // Les deux cases et le mode, chacun par modifierReglage, une entrée par
+    // geste, puis rendus à leur défaut, que la charge n'écrit pas : la case
+    // des animateurs cochée puis décochée, celle des objectifs décochée puis
+    // cochée, le mode « l'équité d'abord » puis « le plus de places
+    // servies ». Le mode se choisit avant que les tours hors objectif
+    // partagent un palier, que l'éditeur ne leur offre pas sous un mode qui
+    // compare deux valeurs (D23).
+    const caseDe = (cle) => dans(`[data-section="generation"] input[type="checkbox"][data-champ="${cle}"]`);
+    const choixDuMode = (valeur) => dans(`[data-section="generation"] [data-mode-objectifs] input[value="${valeur}"]`);
+    await sansFenetre('modifierReglage', async () => {
+      for (const [cle, valeurs] of [
+        ['rencontrerAnimateurs', [true, false]],
+        ['respecterObjectifs', [false, true]],
+      ]) {
+        for (const valeur of valeurs) {
+          const r = revision();
+          await appuyer(caseDe(cle), `la case ${cle} à ${valeur}`);
+          await uneEntree(r, `la case ${cle} à ${valeur}`);
+          expect(caseDe(cle).checked, cle).toBe(valeur);
+        }
+      }
+      for (const valeur of ['minimum', 'places']) {
+        const r = revision();
+        await appuyer(choixDuMode(valeur), `le mode ${valeur}`);
+        await uneEntree(r, `le mode ${valeur}`);
+        expect(choixDuMode(valeur).checked, valeur).toBe(true);
+        expect(charge().reglages.modeObjectifs ?? 'places', valeur).toBe(valeur);
+      }
+    });
+    for (const cle of ['rencontrerAnimateurs', 'respecterObjectifs', 'modeObjectifs']) expect(Object.hasOwn(charge().reglages, cle), cle).toBe(false);
+
+    const critere = (nom) => editeur().querySelector(`[data-priorite="${nom}"]`);
+    await sansFenetre('changerPriorites', async () => {
+      let r = revision();
+      await appuyer(critere('toursHorsObjectif').querySelector('[data-commande="monterCritere"]'), 'monter les tours hors objectif');
+      await uneEntree(r, 'monter les tours hors objectif');
+      r = revision();
+      await appuyer(critere('toursHorsObjectif').querySelector('[data-commande="joindrePalier"]'), 'joindre au palier du dessus');
+      await uneEntree(r, 'joindre au palier du dessus');
+      r = revision();
+      await saisir(critere('toursHorsObjectif').querySelector('input[data-champ="poids.toursHorsObjectif"]'), '3');
+      await uneEntree(r, 'le poids 3');
+    });
+    const reglee = [
+      [{ critere: 'ecartAuPlafondAPrioriMax', poids: 1 }],
+      [{ critere: 'excedentCollisions', poids: 1 }, { critere: 'toursHorsObjectif', poids: 3 }],
+      [{ critere: 'collisionsCumulees', poids: 1 }],
+      [{ critere: 'rencontresRepetees', poids: 1 }],
+      [{ critere: 'animateursNonRencontres', poids: 1 }],
+      [{ critere: 'redondance', poids: 1 }],
+    ];
+    expect(charge().reglages.priorites).toEqual(reglee);
+    expect(paliersAffiches()).toEqual(nomsDe(reglee));
+    const numeros = [...editeur().querySelectorAll(':scope > [data-palier]')].map((palier) => texteDe(palier.querySelector('p')));
+    expect(numeros).toEqual(reglee.map((_, rang) => plat(t('generation.priorites.palier', { palier: rang + 1, paliers: reglee.length }))));
+
+    // Le mode par défaut, la case des objectifs cochée, celle des
+    // animateurs décochée, et l'éditeur le dit en mots.
+    const section = dans('[data-section="generation"]');
+    expect(section.querySelector('[data-mode-objectifs] input[value="places"]').checked).toBe(true);
+    expect(section.querySelector('input[data-champ="respecterObjectifs"]').checked).toBe(true);
+    expect(section.querySelector('input[data-champ="rencontrerAnimateurs"]').checked).toBe(false);
+    expect(texteDe(critere('animateursNonRencontres'))).toContain(t('generation.priorites.etat.decoche'));
+    expect(texteDe(critere('toursHorsObjectif'))).not.toContain(t('generation.priorites.etat.sansObjet'));
+
+    // Ce que compile le moteur : la liste de la charge, chaque critère qui ne
+    // compte pas retiré.
+    const instance = normaliser(configurationDe(charge()));
+    const compte = new Set(instance.etatCriteres.filter(({ coche, sansObjet }) => coche && !sansObjet).map(({ nom }) => nom));
+    expect(compte.has('animateursNonRencontres')).toBe(false);
+    expect(compte.has('toursHorsObjectif')).toBe(true);
+    const compilation = compilationDe(instance);
+    const appliques = compilation.paliers.map((palier) => palier.criteres.map(({ nom, poids }) => ({ critere: nom, poids })));
+    expect(appliques).toEqual(reglee.map((palier) => palier.filter(({ critere }) => compte.has(critere))).filter((palier) => palier.length > 0));
+    memoire.paliersRegles = appliques;
+
+    // L'image montre le numéro du palier partagé, ses deux critères et leurs
+    // poids, et la ligne des animateurs qui dit « décoché » ; le choix du
+    // mode, au-dessus, le premier palier et « Rétablir l'ordre par
+    // défaut », au-dessous, n'entrent pas dans la même fenêtre qu'eux.
+    document.activeElement?.blur();
+    await cadrerDansLaSurface([critere('excedentCollisions'), critere('animateursNonRencontres')]);
+    await photographier(m, '10a-ordre-priorites', {
+      condition: [
+        '[data-priorites] > [data-palier="1"] > p',
+        '[data-priorites] [data-priorite="excedentCollisions"]',
+        '[data-priorites] input[data-champ="poids.excedentCollisions"]',
+        '[data-priorites] [data-priorite="toursHorsObjectif"]',
+        '[data-priorites] input[data-champ="poids.toursHorsObjectif"]',
+        '[data-priorites] [data-priorite="animateursNonRencontres"] .etat',
+      ],
+    });
+  });
+
+  // Sous l'ordre de 10a, les tours hors objectif partagent un palier : un
+  // mode qui compare deux valeurs se refuse contre le choix du mode, nomme
+  // ce palier, et le choix revient au mode de la charge (D23).
+  test('10a « chacun au moins une fois » sur le palier partagé : refusé contre le choix du mode, rien d’écrit, le mode gardé', async () => {
+    const groupe = () => dans('[data-section="generation"] [data-mode-objectifs]');
+    const partage = charge().reglages.priorites.findIndex((palier) => palier.some(({ critere }) => critere === 'toursHorsObjectif'));
+    expect(charge().reglages.priorites[partage].length).toBeGreaterThan(1);
+    const avant = fichiers();
+    await sansFenetre('modifierReglage', async () => {
+      await appuyer(groupe().querySelector('input[value="chacun"]'), 'le mode « chacun au moins une fois »');
+      const refus = await attendre('le refus du mode', () => groupe().querySelector('[data-refus="OBJECTIFS_PALIER_PARTAGE"]'));
+      expect(texteDe(refus.querySelector(':scope > p'))).toBe(plat(t('OBJECTIFS_PALIER_PARTAGE', { mode: 'chacun', palier: partage })));
+    });
+    await rienEcrit(avant, 'le mode refusé');
+    expect(groupe().querySelector('input:checked').value).toBe('places');
+    expect(Object.hasOwn(charge().reglages, 'modeObjectifs')).toBe(false);
+  });
+
+  test('11 générer sous objectifs et ordre réglé, graine écrite, compte réduit : trois propositions du moteur, phrase par paliers ; retenir', async () => {
     await taper(dans('[data-section="generation"] input[data-champ="graine"]'), String(GRAINE));
     let r = revision();
-    await saisir(dans('[data-section="generation"] input[data-champ="generation.arret"]'), String(ARRET));
-    await uneEntree(r, 'le compte réduit');
+    await sansFenetre('modifierReglage', async () => {
+      await saisir(dans('[data-section="generation"] input[data-champ="generation.arret"]'), String(ARRET));
+      await uneEntree(r, 'le compte réduit');
+    });
     expect(charge().reglages.generation.arret).toBe(ARRET);
-    const configuration = configurationDepuisCharge(charge());
+    const configuration = configurationDe(charge());
     const { nombre, historique } = charge().reglages.generation;
     const attendues = rechercher(configuration, { graine: GRAINE, nombre, arret: ARRET, historique });
     expect(attendues.length).toBeGreaterThanOrEqual(3);
@@ -1328,17 +1808,34 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await ouvrirSection('propositions');
     const section = dans('[data-section="propositions"]');
     const ids = () => [...section.querySelectorAll('[data-classement] tr[data-proposition]')].map((tr) => Number(tr.dataset.proposition));
-    const instance = normaliser(configurationDepuisCharge(charge()));
+    const instance = normaliser(configurationDe(charge()));
     const aPriori = plafondsAPriori(instance);
-    const { ordre } = classer(
+    const { ordre, criteresAppliques, critereSaute } = classer(
       charge().propositions.map((p) => ({ id: p.id, mesures: mesurer(instance, indexerPlan(instance, planDepuisFichier(p))), plafondsAPriori: aPriori })),
+      compilationDe(instance),
     );
     expect(ordre.length).toBeGreaterThanOrEqual(3);
     await attendre('le tableau classé', () => ids().length === ordre.length);
     expect(ids()).toEqual(ordre);
-    expect(texteDe(section.querySelector('[data-ordre]'))).toBe(t('propositions.ordre.criteres', { criteres: [...CRITERES] }));
+    // Le classement applique les paliers que 10a a réglés, et la phrase les
+    // nomme dans cet ordre : chaque valeur appliquée, puis l'identifiant ;
+    // le palier partagé, « ensemble », avec ses poids.
+    expect(critereSaute).toBeNull();
+    expect(criteresAppliques.map((palier) => palier.criteres.map(({ nom, poids }) => ({ critere: nom, poids })))).toEqual(memoire.paliersRegles);
+    const phrase = section.querySelector('[data-ordre]');
+    const nommes = [...phrase.querySelectorAll('[data-critere]')].map((nom) => nom.dataset.critere);
+    const attendus = criteresAppliques.flatMap((palier) => palier.criteres.flatMap(({ nom, valeurs }) => valeurs.map(() => nom)));
+    expect(nommes).toEqual([...attendus, 'identifiant']);
+    expect(texteDe(phrase)).toContain(plat(t('propositions.ordre.ensemble')));
+    for (const poids of [1, 3]) expect(texteDe(phrase)).toContain(plat(t('propositions.ordre.poids', { poids })));
     const colonnes = [...section.querySelectorAll('th[data-colonne]')].map((th) => th.dataset.colonne);
     for (const colonne of ['appartenancesVues', 'totalRedondance', 'diversite']) expect(colonnes, colonne).toContain(colonne);
+    // Le sixième groupe : les tours hors objectif, que le mode par défaut
+    // classe, et leur minimum ; rien des animateurs, décochés.
+    for (const colonne of ['toursHorsObjectif', 'toursSelonObjectif']) expect(colonnes, colonne).toContain(colonne);
+    for (const colonne of ['jamaisServies', 'horsObjectifMax', 'animateursRencontres', 'animateursNonRencontres']) {
+      expect(colonnes, colonne).not.toContain(colonne);
+    }
     // Le minimum des rencontres seul, jamais la moyenne ; r(p) par sa somme.
     expect(colonnes).not.toContain('redondance');
     for (const th of section.querySelectorAll('th')) expect(texteDe(th)).not.toMatch(/moyenne/i);
@@ -1356,7 +1853,20 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(charge().retenu.proposition).toBe(ordre[0]);
     expect(charge().evenement.etat).toBe('retenu');
     await attendre('la ligne du retenu', () => section.querySelector(`tr[data-retenu="${ordre[0]}"]`));
-    await photographier(m, '11-propositions', { condition: ['[data-section="propositions"] [data-ordre]'], graine: GRAINE });
+    // L'image montre la phrase de l'ordre au-dessus du tableau, défilé en
+    // largeur des colonnes de la diversité (§ 19.3) jusqu'au sixième groupe,
+    // celui des objectifs (D17) : le tableau déborde du cadre, et les
+    // colonnes du rang, de la proposition et des rencontres sortent de
+    // l'image.
+    const enTete = (nom) => section.querySelector(`th[data-colonne="${nom}"]`);
+    await cadrerEnLargeur([enTete('appartenancesVues'), enTete('toursSelonObjectif')]);
+    await photographier(m, '11-propositions', {
+      condition: [
+        '[data-section="propositions"] [data-ordre]',
+        ...['appartenancesVues', 'diversite', 'toursHorsObjectif', 'toursSelonObjectif'].map((nom) => `[data-section="propositions"] th[data-colonne="${nom}"]`),
+      ],
+      graine: GRAINE,
+    });
   });
 
   test('19 un ajustement en cours : le glissement dit lequel des deux gestes, celui du placement retenu', async () => {
@@ -1546,11 +2056,6 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     expect(window.scrollY).toBe(memoire.cadrage);
     barreHorsDeLImage();
     await photographier(m, '23-plan-retenu', { condition: CONDITIONS_FEUILLE, graine: GRAINE });
-
-    await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
-    await attendre('le plan, de retour', () => dans('[data-ecran="evenement"] [data-section="plan"]'));
-    window.scrollTo(0, 0);
-    await images(2);
   });
 
   // La planche du retenu, produite par la section Badges sur le papier que
@@ -1559,6 +2064,11 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
   // productions sous l'horloge pilotée donnent les mêmes octets, que
   // l'empreinte du manifeste suit.
   test('24 la planche du retenu par la section Badges : seul le PDF s’écrit, deux productions identiques ; la feuille de contrôle', async () => {
+    // L'aperçu de 23 se ferme : le plan revient, en haut.
+    await cliquer('[data-ecran="apercu"] [data-commande="fermerApercu"]');
+    await attendre('le plan, de retour', () => dans('[data-ecran="evenement"] [data-section="plan"]'));
+    window.scrollTo(0, 0);
+    await images(2);
     expect(charge().evenement.etat).toBe('retenu');
     expect(etat().papier).toBe('A4');
     const avant = fichiers();
@@ -1634,14 +2144,14 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
       for (const nomBadge of premiers) expect(texte, nomBadge).toContain(plat(nomBadge));
       expect(texte).not.toContain(libelle('planche.brouillon'));
     });
-    // Le parcours reprend sur le plan, comme 23 l'a laissé.
-    await ouvrirSection('plan');
   });
 
   // Les sorties vivent en lecture et sur un plan bloqué, et n'écrivent que
   // la planche et le papier de la machine (§ 11.6, § 8.4, § 9) ; le plan
   // débloqué, le parcours reprend sur le retenu, en écriture.
   test('lecture, puis bloqué : aperçu, impression, papier et planche ; seuls le PDF et reglages_locaux.json s’écrivent', async () => {
+    // Le parcours reprend sur le plan, comme 23 l'a laissé.
+    await ouvrirSection('plan');
     expect(charge().evenement.etat).toBe('retenu');
     await cliquer('[data-place-fixe] [data-commande="lecture"]');
     await attendre('la lecture', () => etat().mode === 'lecture');
@@ -1766,6 +2276,36 @@ describe('l’ordre de lecture, pas une séquence imposée', { timeout: DUREE },
     );
     expect(suivant).toEqual([]);
   });
+
+  // Retirer un objectif et rétablir l'ordre par défaut détruisent chacun un
+  // seul objet, nommé contre sa commande, qu'un retour à l'instant précédent
+  // rend : aucune fenêtre (D19), et le retenu ne dérive pas (D13).
+  test('sur le retenu : retirer l’objectif du tour 1 de t2, rétablir l’ordre par défaut — une entrée chacun, sans fenêtre, sans dérive', async () => {
+    const [, t2] = charge().tables.map(({ id }) => id);
+    // Les raisons de dérive du retenu et de chaque proposition, que
+    // l'ajout d'une table et d'un tour ont posées : aucun des deux gestes
+    // n'en change une.
+    const raisons = () => [charge().retenu, ...charge().propositions].map((placement) => derive(placement, charge()));
+    const avant = raisons();
+    await ouvrirSection('tables');
+    await cliquer(`[data-section="tables"] [data-table="${t2}"] [data-commande="basculerObjectifsTours"]`);
+    const zone = await attendre('l’objectif du tour 1', () => dans(`[data-section="tables"] [data-objectif="${t2}-1"]`));
+    await sansFenetre('retirerObjectif', async () => {
+      const r = revision();
+      await appuyer(zone.querySelector('[data-commande="retirerObjectif"]'), 'retirer l’objectif du tour 1');
+      await uneEntree(r, 'retirer l’objectif');
+    });
+    expect(charge().tables.find(({ id }) => id === t2).objectifs.some(({ tour }) => tour === 1)).toBe(false);
+
+    await ouvrirSection('generation');
+    await sansFenetre('retablirPriorites', async () => {
+      const r = revision();
+      await cliquer('[data-section="generation"] [data-commande="retablirPriorites"]');
+      await uneEntree(r, 'rétablir l’ordre par défaut');
+    });
+    expect(charge().reglages.priorites).toBeUndefined();
+    expect(raisons()).toEqual(avant);
+  });
 });
 
 // --- Les fenêtres (§ 2.1, § 5.9) --------------------------------------------------------
@@ -1777,14 +2317,23 @@ describe('les fenêtres : seul un geste qui détruit en ouvre une', { timeout: D
     expect(fenetresVues).toEqual([]);
   });
 
-  // « Remplacer », « Appliquer et réaligner », retirer un tour réservé,
-  // supprimer une personne ou une table réservées, « Retenir » sur un retenu
-  // ajusté.
-  test('cinq gestes destructeurs : une fenêtre qui nomme ce qui part ; Annuler n’écrit rien', async () => {
+  // « Remplacer », « Appliquer et réaligner », retirer un tour réservé qui
+  // porte un objectif de tour, supprimer une personne réservée ou une table
+  // réservée qui porte des objectifs, « Retenir » sur un retenu ajusté.
+  test('cinq gestes destructeurs : une fenêtre qui nomme ce qui part, objectifs compris ; Annuler n’écrit rien', async () => {
     expect(etat().mode).toBe('ecriture');
     const [t1] = charge().tables.map(({ id }) => id);
 
-    // Préparation : une réservation au tour 4, un ajustement du retenu.
+    // Préparation : un objectif au tour 4 de t1, une réservation au tour 4,
+    // un ajustement du retenu.
+    await ouvrirSection('tables');
+    await cliquer(`[data-section="tables"] [data-table="${t1}"] [data-commande="basculerObjectifsTours"]`);
+    const champTour4 = await attendre('l’objectif du tour 4', () => dans(`[data-section="tables"] input[data-champ="objectif-${t1}-4"]`));
+    let r = revision();
+    await saisir(champTour4, memoire.etiquette);
+    await uneEntree(r, 'l’objectif du tour 4');
+    const objectif4 = charge().tables.find(({ id }) => id === t1).objectifs.find(({ tour }) => tour === 4);
+    expect(objectif4).toMatchObject({ portee: 'tour', etiquettes: [memoire.etiquette] });
     await ouvrirPlan();
     const selecteurTour = dans('[data-champ="tour"]');
     selecteurTour.value = '4';
@@ -1792,7 +2341,7 @@ describe('les fenêtres : seul un geste qui détruit en ouvre une', { timeout: D
     await attendre('le tour 4 montré', () => m.ui.etat().tour === 4);
     await images(2);
     await regimeSieges();
-    let r = revision();
+    r = revision();
     const auTour4 = await choisir('[data-reserve]');
     const libre4 = chaiseVue((c) => c.occupant === null && c.reservation === null && c.titre === null);
     await cliquerPointeur(chaise(libre4.table, libre4.siege));
@@ -1871,16 +2420,23 @@ describe('les fenêtres : seul un geste qui détruit en ouvre une', { timeout: D
     });
     await cliquer('[data-enonce="defaut"] [data-commande="garder"]');
 
-    // Retirer le tour 4 : la réservation qui y tient, sa personne, sa table.
+    // Retirer le tour 4 : la réservation qui y tient, sa personne, sa table ;
+    // l'objectif du tour 4 de t1, sa table et ses étiquettes.
     const reservation4 = charge().reservations.find(({ participant, tour }) => participant === auTour4 && tour === 4);
     await fenetreAnnulee('retirer un tour réservé', () => saisir(dans('[data-section="tables"] input[data-champ="tours"]'), '3'), {
       titre: t('tables.tours.confirmation', { avant: 4, apres: 3 }),
-      parmi: [t('tables.tours.reservation', { nom: nomDe(auTour4), numero: numeroDe(reservation4.table), tour: 4 })],
+      parmi: [
+        t('tables.tours.reservation', { nom: nomDe(auTour4), numero: numeroDe(reservation4.table), tour: 4 }),
+        t('tables.tours.objectif', { numero: numeroDe(t1), tour: 4, etiquettes: objectif4.etiquettes }),
+      ],
     });
     expect(dans('[data-section="tables"] input[data-champ="tours"]').value).toBe('4');
 
     // Supprimer t1 : son numéro, chaque réservation qu'elle tient avec le nom
-    // de sa personne, chaque titre posé à ses sièges.
+    // de sa personne, chaque titre posé à ses sièges, chacun de ses
+    // objectifs, de la soirée et des tours.
+    const objectifsT1 = charge().tables.find(({ id }) => id === t1).objectifs;
+    expect(objectifsT1.length).toBeGreaterThan(1);
     const deT1 = [
       ...charge()
         .reservations.filter(({ table }) => table === t1)
@@ -1888,6 +2444,7 @@ describe('les fenêtres : seul un geste qui détruit en ouvre une', { timeout: D
       ...charge()
         .titres.filter(({ table }) => table === t1)
         .map(({ siege, libelle }) => t('tables.suppression.titre', { siege, libelle })),
+      ...objectifsT1.map(({ tour, etiquettes }) => t('tables.suppression.objectif', { tour, etiquettes })),
     ];
     expect(deT1.length).toBeGreaterThan(0);
     await fenetreAnnulee('supprimer une table réservée', () => cliquer(`[data-section="tables"] [data-table="${t1}"] [data-commande="supprimerTable"]`), {
@@ -2003,6 +2560,19 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
       await touche('Enter');
       await refusPres(cellule, code, remede, 'saisir dans une cellule');
     });
+    // Une étiquette saisie dans la fiche, envoyée par Entrée : refusée contre
+    // le champ, la saisie gardée ; la fiche fermée ensuite.
+    await famille('changer les étiquettes', async () => {
+      const personne = charge().participants.find((p) => !p.exclu);
+      await cliquer(`[data-section="participants"] [data-participant="${personne.id}"] [data-commande="fiche"]`);
+      const fiche = await attendre('la fiche', () => dans(`[data-fiche="${personne.id}"]`));
+      const champ = fiche.querySelector('input[data-champ="etiquettes"]');
+      await saisir(champ, 'bénévole');
+      await refusPres(() => fiche.querySelector('form'), code, remede, 'changer les étiquettes');
+      expect(champ.value).toBe('bénévole');
+      await cliquer('[data-fiche] [data-commande="fermerFiche"]');
+      await attendre('la fiche fermée', () => dans('[data-fiche]') === null);
+    });
     await famille('coller', async () => {
       const cellule = dans('[data-section="participants"] [role="grid"] [tabindex="0"]');
       cellule.focus();
@@ -2022,6 +2592,19 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
       await cliquer('[data-apercu] [data-commande="importer"]');
       await refusPres(() => dans('[data-apercu] [data-commande="importer"]').parentElement, code, remede, 'importer');
       await cliquer('[data-apercu] [data-commande="fermerApercu"]');
+    });
+    // Le CSV des objectifs, sous sa nature : l'aperçu s'ouvre, « Importer »
+    // est refusé à côté de lui ; la nature revient aux participants.
+    await famille('importer des objectifs', async () => {
+      await appuyer(dans('[data-nature-import] input[value="objectifs"]'), 'la nature « Objectifs de table »');
+      const octets = new Uint8Array(await (await fetch(urlObjectifs)).arrayBuffer());
+      m.fs.choisirFichierAImporter = async () => ({ nom: NOM_OBJECTIFS, octets });
+      await cliquer('[data-section="import"] [data-commande="choisirFichier"]');
+      await attendre('l’aperçu des objectifs', () => dans('[data-apercu] [data-commande="importer"]'));
+      await cliquer('[data-apercu] [data-commande="importer"]');
+      await refusPres(() => dans('[data-apercu] [data-commande="importer"]').parentElement, code, remede, 'importer des objectifs');
+      await cliquer('[data-apercu] [data-commande="fermerApercu"]');
+      await appuyer(dans('[data-nature-import] input[value="participants"]'), 'la nature « Participants »');
     });
 
     await ouvrirSection('tables');
@@ -2052,11 +2635,62 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
       await frapper(dans('[data-section="tables"] input[data-champ="tours"]'));
       await refusPres(() => dans('[data-tours]'), code, remede, 'changer les tours');
     });
+    // Une frappe dans l'objectif de la soirée de t2, puis « Retirer
+    // l'objectif » : chacun refusé à côté de lui.
+    await famille('poser ou retirer un objectif', async () => {
+      const zone = () => dans(`[data-section="tables"] [data-objectif="${t2}"]`);
+      await frapper(zone().querySelector(`input[data-champ="objectif-${t2}"]`));
+      await refusPres(zone, code, remede, 'poser un objectif');
+      const retirer = zone().querySelector('[data-commande="retirerObjectif"]');
+      expect(retirer, 'la commande qui retire l’objectif de t2').not.toBeNull();
+      await appuyer(retirer, 'retirer un objectif');
+      await refusPres(() => retirer.parentElement, code, remede, 'retirer un objectif');
+    });
+    // Un cran de flèche sur la règle par défaut : refusé à côté d'elle, le
+    // choix rendu à la règle de la charge.
+    await famille('changer la règle par défaut', async () => {
+      const choix = dans('[data-regle-objectifs] select[data-champ="regleObjectifs"]');
+      const avant = choix.value;
+      choix.scrollIntoView({ block: 'center' });
+      choix.focus();
+      await touche(choix.selectedIndex === 0 ? 'ArrowDown' : 'ArrowUp');
+      flushSync();
+      await refusPres(() => dans('[data-regle-objectifs]'), code, remede, 'changer la règle par défaut');
+      expect(choix.value).toBe(avant);
+    });
     await famille('changer l’état', async () => {
       await cliquer('[data-etat="brouillon"] [data-commande="etat"]');
       await refusPres(() => dans('[data-etat="brouillon"]'), code, remede, 'changer l’état');
     });
-    expect(familles).toHaveLength(14);
+
+    // Monter un critère, puis rétablir l'ordre par défaut : chacun refusé
+    // contre la liste des priorités, le second par un refus neuf.
+    await ouvrirSection('generation');
+    await famille('changer l’ordre des priorités', async () => {
+      const groupe = () => dans('[data-section="generation"] [data-priorites]').closest('fieldset');
+      const monter = dans('[data-priorites] [data-priorite="collisionsCumulees"] [data-commande="monterCritere"]');
+      expect(monter, 'monter les collisions cumulées').not.toBeNull();
+      await appuyer(monter, 'monter un critère');
+      const premier = await refusPres(groupe, code, remede, 'monter un critère');
+      await appuyer(dans('[data-section="generation"] [data-commande="retablirPriorites"]'), 'rétablir l’ordre par défaut');
+      await refusPres(groupe, code, remede, 'rétablir l’ordre par défaut', premier);
+    });
+    // Un clic sur la case des objectifs, puis sur un mode : chacun refusé à
+    // côté de lui, la case et le choix rendus à la valeur de la charge.
+    await famille('changer un réglage de génération', async () => {
+      const caseObjectifs = dans('[data-section="generation"] input[type="checkbox"][data-champ="respecterObjectifs"]');
+      const cochee = caseObjectifs.checked;
+      await appuyer(caseObjectifs, 'la case des objectifs');
+      await refusPres(() => caseObjectifs.parentElement, code, remede, 'la case des objectifs');
+      expect(caseObjectifs.checked).toBe(cochee);
+      const groupe = () => dans('[data-section="generation"] [data-mode-objectifs]');
+      const mode = groupe().querySelector('input:checked').value;
+      const autre = [...groupe().querySelectorAll('input[type="radio"]')].find((choix) => choix.value !== mode);
+      await appuyer(autre, 'un autre mode des objectifs');
+      await refusPres(groupe, code, remede, 'un autre mode des objectifs');
+      expect(groupe().querySelector('input:checked').value).toBe(mode);
+    });
+    expect(familles).toEqual(FAMILLES_MODIFIANTES.map(({ nom }) => nom));
   }
 
   // Le tri, le filtre et les listes de travail restent vivants.
@@ -2084,7 +2718,14 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
   // regarder admet (ecritureAdmise).
   const ecrituresDepuis = (rang) => m.trace.slice(rang).filter(([, , chemin]) => chemin !== '' && !ecritureAdmise(chemin));
 
-  test('en lecture : quatorze familles refusées avec « Modifier », rien d’écrit ; tri, filtre, listes de travail vivants', async () => {
+  test('les familles : des noms uniques, des gestes surveillés, chaque geste des étiquettes, des objectifs et des priorités tenté', () => {
+    const tentes = FAMILLES_MODIFIANTES.flatMap(({ gestes }) => gestes);
+    expect(tentes.filter((geste) => !GESTES_NON_DESTRUCTEURS.includes(geste))).toEqual([]);
+    expect(GESTES_DES_OBJECTIFS.filter((geste) => !tentes.includes(geste))).toEqual([]);
+    expect(new Set(FAMILLES_MODIFIANTES.map(({ nom }) => nom)).size).toBe(FAMILLES_MODIFIANTES.length);
+  });
+
+  test('en lecture : chaque famille modifiante refusée avec « Modifier », rien d’écrit ; tri, filtre, listes de travail vivants', async () => {
     await cliquer('[data-place-fixe] [data-commande="lecture"]');
     await attendre('la lecture', () => etat().mode === 'lecture');
     const empreinte = serialiserCharge(charge());
@@ -2100,7 +2741,7 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
     expect(ecrituresDepuis(rang)).toEqual([]);
   });
 
-  test('plan bloqué : quatorze familles refusées avec « Débloquer », rien d’écrit ; tri, filtre, listes de travail vivants', async () => {
+  test('plan bloqué : chaque famille modifiante refusée avec « Débloquer », rien d’écrit ; tri, filtre, listes de travail vivants', async () => {
     await cliquer('[data-place-fixe] [data-commande="modifier"]');
     await attendre('l’écriture', () => etat().mode === 'ecriture');
     const r = revision();

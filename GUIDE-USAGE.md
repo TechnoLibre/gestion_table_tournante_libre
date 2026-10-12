@@ -7,11 +7,13 @@ soirée ; il ne suppose rien de la façon dont le logiciel est écrit.
 
 Les écrans montrés ici se reproduisent. Le parcours crée un événement nommé
 « Soirée d’essai », y importe le fichier `exemples/participants_cas_limites.csv`
-livré avec le logiciel, pose deux tables, désigne un animateur et génère avec la
-graine 4242 et un compte d’arrêt de 300, les autres réglages de génération
-gardant leur valeur par défaut ; les étapes où la taille compte chargent la
-« Grande démonstration » depuis le premier écran. Suivez les mêmes gestes, avec
-les mêmes réglages, et vous verrez les mêmes écrans.
+livré avec le logiciel, donne une étiquette à une personne, pose deux tables et
+leurs objectifs, importe `exemples/objectifs_cas_limites.csv`, désigne un
+animateur, règle l’ordre des priorités et génère avec la graine 4242 et un
+compte d’arrêt de 300, les autres réglages de génération gardant leur valeur
+par défaut ; les étapes où la taille compte chargent la « Grande
+démonstration » depuis le premier écran. Suivez les mêmes gestes, avec les
+mêmes réglages, et vous verrez les mêmes écrans.
 
 Les étapes sont **un ordre de lecture, pas un assistant** : le logiciel
 n’enchaîne rien et ne vous oblige jamais à revenir au début. Une faute de
@@ -138,6 +140,22 @@ l’ouvre peut prendre pour une formule une cellule qui commence par « = »,
 « + », « - » ou « @ ». Si une valeur commence ainsi, ouvrez le fichier par la
 commande d’import de texte du tableur, colonnes en texte.
 
+Chaque personne peut porter des **étiquettes** — « finance », « bénévole »,
+« Montréal » —, que les objectifs des tables attendent (étape 4). Une colonne
+« Étiquettes » du fichier les importe ; la fiche d’une personne, ouverte par
+« Fiche » dans la grille, les montre et les modifie. Elles ne sont exigées
+nulle part.
+
+![La fiche d’une personne : ses étiquettes, le champ d’ajout, une orthographe reçue sous celle de l’événement](doc/captures/04a-etiquettes.png)
+
+*Chaque étiquette est une pastille grise, suivie de sa commande « Retirer ».
+Tapez une ou plusieurs étiquettes séparées par une virgule, puis « Ajouter »
+ou Entrée. Ici, « FINANCE » s’enregistre sous « Finance », l’orthographe que
+l’événement porte déjà, et le logiciel le dit sous le champ : une même
+étiquette ne s’écrit jamais de deux façons. La légende, au-dessus de la
+grille et hors de cette image, compte les personnes qui portent chaque
+étiquette.*
+
 ## Étape 4 — Préparer les tables
 
 Dans la section « Tables et tours », fixez d’abord les **places par défaut**,
@@ -149,6 +167,35 @@ porte son propre nombre de places : on dit alors qu’elle est surchargée.
 *Les deux tables ont le même nombre de places, mais l’une « Suit le défaut » et
 l’autre est « Surchargée » : seule la première suivra un changement du défaut.
 « Réaligner » ramène une table surchargée au défaut.*
+
+Une table peut aussi porter un **objectif** : les étiquettes des personnes
+qu’elle attend, sous la règle « au moins une » (OU) ou « toutes » (ET). Un
+objectif vaut pour la soirée, ou pour un tour désigné, dont l’objectif
+remplace alors celui de la soirée. Il ne fixe personne : il oriente la
+recherche.
+
+![Deux objectifs : la soirée de la table 1 suit la règle par défaut, le tour 1 de la table 2 porte la sienne](doc/captures/05a-objectifs-tables.png)
+
+*La table 1 attend « Finance » toute la soirée, sous la règle par défaut,
+que son choix nomme : « selon le réglage général (au moins une) ». Au tour 1,
+la table 2 attend les personnes qui portent « Montréal » **et** « bénévole » :
+« Règle propre » le dit. Aucune personne présente ne porte les deux, et le
+logiciel le signale sous l’objectif. La règle par défaut se règle avec les
+places par défaut et le nombre de tours ; la changer ne touche pas une règle
+propre. « Retirer l’objectif » ne demande pas de confirmation : « Défaire » le
+rend.*
+
+Les objectifs s’importent aussi d’un fichier CSV, par le même aperçu que les
+participants : cochez « Objectifs de table » avant de choisir le fichier.
+
+![L’aperçu d’un fichier d’objectifs : les lignes refusées et leur motif, les orthographes fondues](doc/captures/05b-import-objectifs.png)
+
+*Chaque ligne refusée dit pourquoi : une table que la soirée n’a pas, un tour
+au-delà du nombre de tours, une règle inconnue, un objectif déjà donné plus
+haut pour la même table et le même tour. Les orthographes d’une même étiquette
+sont fondues sous celle que l’événement porte déjà. « Mettre à jour » remplace
+les objectifs que le fichier nomme et garde les autres ; « Remplacer » les
+retire tous d’abord, et l’annonce.*
 
 Changer le défaut ne s’applique pas tout de suite : le logiciel annonce d’abord
 la conséquence, chiffrée.
@@ -268,7 +315,9 @@ place les autres personnes autour.
 
 Les propositions montrées ci-dessous, et les écrans qui en découlent aux
 étapes 10 et 11, viennent d’une génération faite avec la graine 4242 et un
-compte d’arrêt de 300 ; les autres réglages gardent leur valeur par défaut.
+compte d’arrêt de 300, sous les objectifs de l’étape 4 et l’ordre des
+priorités montré ci-dessous ; les autres réglages gardent leur valeur par
+défaut.
 Le compte d’arrêt par défaut, bien plus grand, cherche plus longtemps et donne
 d’autres propositions : écrivez ces deux valeurs pour retrouver les mêmes.
 
@@ -282,14 +331,36 @@ Chaque génération **ajoute** ses propositions aux précédentes, et un seul
 classement les ordonne toutes. Le logiciel marque dans l’historique l’instant
 qui précède chaque génération, pour y revenir.
 
-![Les propositions classées, l’ordre du classement écrit au-dessus](doc/captures/11-propositions.png)
+Au même endroit, l’**ordre des priorités** dit ce que la recherche poursuit
+d’abord et ce que le classement compare. Par défaut, chaque critère est seul à
+son palier. Les boutons d’un critère le montent ou le descendent d’un palier,
+ou le joignent au palier du dessus, où chacun reçoit un poids ; « Rétablir
+l’ordre par défaut » revient au départ. Un critère que ses cases ne cochent
+pas garde son rang, mais ne compte nulle part.
 
-*Le tableau range les propositions selon l’ordre écrit au-dessus de lui :
-d’abord l’écart au plafond a priori, puis l’excédent de collisions, et ainsi
-de suite, chaque critère au plus faible d’abord. Les colonnes donnent, pour
-chacune, le moins de personnes distinctes rencontrées, les collisions entre
-personnes d’une même appartenance, les rencontres répétées et la diversité des
-appartenances rencontrées.*
+![L’ordre des priorités : un palier de deux critères et leurs poids, les animateurs décochés](doc/captures/10a-ordre-priorites.png)
+
+*Ici, l’excédent de collisions et les tours hors objectif partagent le
+palier 2, aux poids 1 et 3 : le classement y compare l’excédent plus trois
+fois les tours hors objectif. « Animateurs non rencontrés » est marqué
+« décoché » : la case « Rencontrer le plus d’animateurs différents » ne l’est
+pas. Au-dessus de la liste, hors de l’image, le choix « Objectifs des
+tables : chercher d’abord » reste à son défaut, « le plus de places
+servies ».*
+
+![Les propositions classées, l’ordre du classement écrit au-dessus, le tableau défilé jusqu’aux colonnes des objectifs](doc/captures/11-propositions.png)
+
+*Le tableau range les propositions selon l’ordre écrit au-dessus de lui,
+celui des priorités réglé plus haut : d’abord l’écart au plafond a priori,
+puis, ensemble, l’excédent de collisions et les tours hors objectif avec
+leurs poids, et ainsi de suite, chaque critère au plus faible d’abord. Plus
+large que l’écran, le tableau défile de côté ; il est montré ici défilé vers
+la droite : la diversité des appartenances rencontrées, le manque et le
+plafond a priori, puis, en dernier groupe, les objectifs des tables — les
+tours hors objectif et le moins de tours servis selon l’objectif. À sa
+gauche, hors de l’image, viennent le rang, la proposition, les personnes
+distinctes rencontrées, les collisions entre personnes d’une même
+appartenance et les rencontres répétées.*
 
 ## Étape 10 — Comparer, et retenir
 

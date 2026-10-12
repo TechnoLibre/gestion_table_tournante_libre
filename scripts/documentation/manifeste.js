@@ -34,12 +34,16 @@ export const ETAPES = Object.freeze(['1', '1b', '2', '3', '4', '5', '6', '7', '8
 
 const capture = (fichier, etape, configuration, source = 'navigateur') => Object.freeze({ fichier, etape, configuration, source });
 
-// La table du § 19.3 en données, avec 02b, 07a et 07b. « configuration » nomme
-// ce que la capture exige : le répertoire neuf, le fichier d'import
-// d'exemples/, l'identifiant de démonstration du catalogue, ou l'événement que
-// le parcours construit puis retient. L'étape place une capture dans le guide,
-// la configuration dit sur quoi elle se prend : les deux 07a, à l'étape 4,
-// se photographient sur la grande démonstration que le parcours charge pour 10.
+// La table du § 19.3 en données, avec 02b, 07a et 07b, et les quatre captures
+// des étiquettes, des objectifs et de l'ordre des priorités : 04a, 05a, 05b,
+// 10a (A22). « configuration » nomme ce que la capture exige : le répertoire
+// neuf, le fichier d'import d'exemples/, l'identifiant de démonstration du
+// catalogue, ou l'événement que le parcours construit puis retient. L'étape
+// place une capture dans le guide, la configuration dit sur quoi elle se
+// prend : les deux 07a, à l'étape 4, se photographient sur la grande
+// démonstration que le parcours charge pour 10 ; 05b, sur l'exemple des
+// objectifs importé dans l'événement construit ; 10a, à l'étape 9 où l'ordre
+// des priorités se règle à côté de la génération (§ 2.1).
 export const CAPTURES = Object.freeze([
   capture('01-premier-ecran', '1', 'repertoire-neuf'),
   capture('01b-passer-en-ecriture', '1b', 'repertoire-neuf'),
@@ -47,7 +51,10 @@ export const CAPTURES = Object.freeze([
   capture('02b-import-cp1252', '2', 'participants_cas_limites_cp1252.csv'),
   capture('03-import-rapport', '2', 'participants_cas_limites.csv'),
   capture('04-grille-participants', '3', 'evenement-construit'),
+  capture('04a-etiquettes', '3', 'evenement-construit'),
   capture('05-tables-etat', '4', 'evenement-construit'),
+  capture('05a-objectifs-tables', '4', 'evenement-construit'),
+  capture('05b-import-objectifs', '4', 'objectifs_cas_limites.csv'),
   capture('06-defaut-consequence', '4', 'evenement-construit'),
   capture('07-plan-tables', '4', 'evenement-construit'),
   capture('07a-cibles-sieges', '4', 'grande'),
@@ -56,6 +63,7 @@ export const CAPTURES = Object.freeze([
   capture('08-animateurs-designes', '6', 'evenement-construit'),
   capture('09-refus-sur-place', '7', 'evenement-construit'),
   capture('10-diagnostic', '8', 'grande'),
+  capture('10a-ordre-priorites', '9', 'evenement-construit'),
   capture('11-propositions', '9', 'evenement-construit'),
   capture('19-ajustement', '11', 'evenement-retenu'),
   capture('20-mode-lecture', '11', 'evenement-retenu'),

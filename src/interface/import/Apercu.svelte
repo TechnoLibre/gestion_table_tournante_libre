@@ -220,10 +220,11 @@
             <strong data-affichee>{fusion.retenue}</strong>
             <span>{t('import.apercu.orthographes')}</span>
             <ul class="orthographes">
-              {#each fusion.orthographes as orthographe (orthographe)}
-                <li data-orthographe><span data-texte>{orthographe}</span></li>
+              {#each fusion.orthographes as orthographe, rang (orthographe)}
+                <li data-orthographe><span data-texte>{orthographe}</span>{#if rang < fusion.orthographes.length - 1},{/if}</li>
               {/each}
             </ul>
+            <span aria-hidden="true">—</span>
             <span data-nombre>{format.nombre(fusion.lignes)}</span>
             <span>{t('import.apercu.lignesReecrites', { n: fusion.lignes })}</span>
           </li>
@@ -401,7 +402,8 @@
     padding-left: var(--espace-5);
   }
 
-  /* Les orthographes d'une étiquette fondue, en ligne, séparées d'un blanc. */
+  /* Les orthographes d'une étiquette fondue, en ligne, séparées d'une
+     virgule ; un tiret les sépare du nombre de lignes réécrites. */
   .orthographes {
     display: inline-flex;
     flex-wrap: wrap;
