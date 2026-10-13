@@ -10,7 +10,6 @@
 // Une donnée — un chemin, une base — n'entre dans aucun libellé d'écran :
 // le composant la rend dans son propre nœud, à côté du texte traduit
 // (§ 14.6). Un compte s'accorde dans la phrase qui le porte.
-import { CIBLE_REDONDANCE_PAR_DEFAUT } from '../../application/evaluation.js';
 import { creerFormat } from '../../application/format.js';
 
 const compte = (n, singulier, pluriel) => `${n} ${n <= 1 ? singulier : pluriel}`;
@@ -74,17 +73,17 @@ export const TABLE = new Map([
   ['accueil.colonne.participants', 'Participants'],
   ['accueil.colonne.modification', 'Dernière modification'],
   ['accueil.colonne.chemin', 'Fichier'],
-  // La mesure du placement retenu (§ 5.4, § 8.9), et l'explication que
-  // l'infobulle de son intitulé donne : ce que compte le nombre, d'où il
-  // vient, et quand il vaut « — ».
-  ['accueil.colonne.diffRedondance', "Diff somme d'appartenance"],
+  // La mesure du placement retenu (§ 5.4, § 8.1) : son intitulé est celui de
+  // la colonne du tableau des propositions qui porte la même mesure ;
+  // l'explication que l'infobulle de l'intitulé donne dit ce que compte le
+  // nombre, d'où il vient, et quand il vaut « — ».
   [
-    'accueil.explication.diffRedondance',
-    '|cible \u{2212} Σ r(p)| : la différence, sans signe, entre la cible de la soirée et la somme Σ r(p) du placement ' +
-      "retenu, celle de la colonne « Redondance d'appartenance, somme Σ r(p) » du tableau des propositions. r(p) compte " +
-      "les personnes que p rencontre et qui ont une appartenance, moins le nombre d'appartenances différentes qu'elles " +
-      `portent. La cible vaut ${CIBLE_REDONDANCE_PAR_DEFAUT} tant qu'on ne la change pas, dans la section des ` +
-      "propositions. « \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit plus la configuration.",
+    'accueil.explication.collisionsCumulees',
+    'Les collisions du placement retenu. Chaque fois que deux personnes de la même appartenance partagent une ' +
+      'table, compté une fois par paire et par tour : deux collègues ensemble aux quatre tours font 4. Le même nombre ' +
+      'que la colonne « Collisions cumulées (paire et tour) » du tableau des propositions, sur la ligne du retenu. ' +
+      "Plus il est bas, mieux c'est. « \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit " +
+      "plus la configuration, ou se contredit.",
   ],
 
   // La meilleure proposition du classement de chaque événement (§ 5.4,

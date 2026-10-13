@@ -8,7 +8,9 @@
 // Une opération pose une valeur au bout d'un chemin, ou retire
 // l'enregistrement qu'il désigne : { op: 'poser', chemin, valeur } ou
 // { op: 'retirer', chemin }. Un champ facultatif du schéma (optionnel) se
-// pose aussi quand son objet ne le porte pas, et se retire par sa clé. Un
+// pose aussi quand son objet ne le porte pas, et se retire par sa clé. Une
+// clé oubliée (oubliees de sa règle) ne se pose ni ne se retire : son
+// opération, qu'un journal antérieur porte, s'applique sans rien changer. Un
 // chemin est une liste d'étapes depuis la charge : une clé d'objet, chaîne ;
 // un rang de liste, entier ≥ 0 ; ou
 // { id }, qui désigne dans une liste d'enregistrements à identifiant —
@@ -371,7 +373,10 @@ function retirer(conteneur, etape, regle) {
 // charge, ou que la valeur posée n'y suivrait pas sa règle (valeurAdmise).
 // Un chemin vide n'a pas de dernière étape, et undefined n'en désigne
 // aucune. Une opération poser porte une valeur : JSON n'en écrit pas
-// d'undefined.
+// d'undefined. Une pose ou un retrait à une clé oubliée de l'objet qui la
+// porterait (oubliees de sa règle), qu'écrivait un journal antérieur, rend
+// vrai sans rien changer, quelle que soit la valeur et que la clé soit là
+// ou non : la charge ne la porte jamais.
 function executer(charge, operation) {
   if (!estObjet(operation) || !Array.isArray(operation.chemin)) return false;
   const { op, chemin, valeur } = operation;
@@ -383,6 +388,9 @@ function executer(charge, operation) {
     if (conteneur === undefined) return false;
   }
   const derniere = chemin[chemin.length - 1];
+  if (lecture.regle === undefined && lecture.parent?.oubliees?.has(derniere) === true && estObjet(conteneur)) {
+    return op === 'poser' ? valeur !== undefined : op === 'retirer';
+  }
   if (op === 'poser') {
     if (valeur === undefined || !valeurAdmise(charge, chemin, lecture.regle, valeur)) return false;
     return poser(conteneur, derniere, valeur, lecture.regle, lecture.parent);
@@ -401,12 +409,13 @@ function executer(charge, operation) {
  * garde l'ordre des identifiants.
  *
  * Lève ErreurStockage('CORRECTIF', { rang }) à la première opération qui ne
- * s'applique pas — rang est sa place dans le correctif, à partir de 0 — :
- * une opération mal formée ; une étape { id } hors des participants, des
- * tables et des propositions, même dans une liste vide ; une étape qui ne
- * trouve pas sa clé, que l'objet porte en propre et n'hérite pas, son rang
- * ou exactement un enregistrement ; poser à une clé que l'objet ne porte
- * pas, hors d'un champ facultatif, ou au-delà de la fin d'une liste, ou sous
+ * s'applique pas — rang est sa place dans le correctif, à partir de 0 — : une
+ * opération mal formée ; une étape { id } hors des participants, des tables
+ * et des propositions, même dans une liste vide ; une étape qui ne trouve pas
+ * sa clé, que l'objet porte en propre et n'hérite pas, son rang ou exactement
+ * un enregistrement ; poser à une clé que l'objet ne porte pas, hors d'un
+ * champ facultatif et d'une clé oubliée — dont la pose et le retrait
+ * s'appliquent sans rien changer —, ou au-delà de la fin d'une liste, ou sous
  * une liste d'étiquettes, qui ne se pose qu'entière ; poser par { id } un
  * identifiant déjà présent, ou une valeur qui n'est pas l'enregistrement de
  * cet identifiant ; poser une valeur qui sort de la règle de sa place, en

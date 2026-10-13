@@ -639,7 +639,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     return serialiser(modifier(charge), { revision: 3, produitVersion: V1 });
   }
 
-  test('les mesures du retenu : la seule différence à la cible, celle de resumeDuRetenu ; null sans retenu ; rien d’écrit', async () => {
+  test('les mesures du retenu : ses seules collisions cumulées, celles de resumeDuRetenu ; null sans retenu ; rien d’écrit', async () => {
     const { fs, facade } = await deuxEvenements();
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
     const avant = ecritures(fs);
@@ -648,20 +648,21 @@ describe('lister (§ 8.1, § 19.4)', () => {
     const par = Object.fromEntries(lignes.map((ligne) => [ligne.base, ligne]));
     const charge = analyser(texteRetenu()).charge;
     const { mesures } = evaluer(charge).retenu;
-    assert.deepEqual(par.retenue.mesuresDuRetenu, { diffRedondance: Math.abs(1000 - mesures.totalRedondance) });
+    assert.ok(mesures.collisionsCumulees > 0, 'le retenu porte des collisions');
+    assert.deepEqual(par.retenue.mesuresDuRetenu, { collisionsCumulees: mesures.collisionsCumulees });
     assert.deepEqual(par.retenue.mesuresDuRetenu, resumeDuRetenu(charge));
     assert.equal(par['soiree-a'].mesuresDuRetenu, null);
     assert.equal(par.petite.mesuresDuRetenu, null);
   });
 
-  test("une cible propre à l'événement : la différence se lit contre elle", async () => {
+  test('un état écrit avec la cible de redondance d’un code antérieur se résume sans faute, comme sans elle', async () => {
     const { fs, facade } = await deuxEvenements();
-    const texte = texteRetenu((charge) => appliquerCommande('changerCibleRedondance', charge, { cible: '25' }).charge);
-    fs.deposer('portable', `retenue${SUFFIXES.etat}`, texte);
+    const lu = JSON.parse(texteRetenu());
+    lu.charge.reglages.cibleRedondance = 25;
+    fs.deposer('portable', `retenue${SUFFIXES.etat}`, `${JSON.stringify(lu, null, 2)}\n`);
     const ligne = (await listerResume(facade)).find(({ base }) => base === 'retenue');
-    const { totalRedondance } = evaluer(analyser(texte).charge).retenu.mesures;
-    assert.notEqual(Math.abs(25 - totalRedondance), Math.abs(1000 - totalRedondance));
-    assert.deepEqual(ligne.mesuresDuRetenu, { diffRedondance: Math.abs(25 - totalRedondance) });
+    assert.equal(ligne.illisible, null);
+    assert.deepEqual(ligne.mesuresDuRetenu, resumeDuRetenu(analyser(texteRetenu()).charge));
   });
 
   test('un retenu fautif, ou en dérive, et un état illisible : null, la liste entière rendue, rien d’écrit', async () => {
@@ -894,15 +895,15 @@ describe('lister (§ 8.1, § 19.4)', () => {
     const lignes = await facade.lister();
     const recus = new Map();
     const flux = facade.resumer(lignes, { ceder: pasDe(horloge), recevoir: (base, resume) => recus.set(base, resume) });
-    // La cible de l'événement passe à 25 après la liste : le résumé du pas
-    // la lit, et non celle que la liste a vue.
-    const plusTard = texteRetenu((charge) => appliquerCommande('changerCibleRedondance', charge, { cible: '25' }).charge);
+    // L'autre proposition devient le retenu après la liste : le résumé du
+    // pas lit ses collisions, et non celles du retenu que la liste a vu.
+    const plusTard = texteRetenu((charge) => appliquerCommande('retenirProposition', charge, { id: charge.propositions[0].id }).charge);
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, plusTard);
     for (let pas = 0; pas < lignes.length; pas += 1) await unPas(horloge);
     await flux.fin;
-    const { totalRedondance } = evaluer(analyser(plusTard).charge).retenu.mesures;
-    assert.notEqual(Math.abs(25 - totalRedondance), Math.abs(1000 - totalRedondance));
-    assert.equal(recus.get('retenue').mesuresDuRetenu.diffRedondance, Math.abs(25 - totalRedondance));
+    const { collisionsCumulees } = evaluer(analyser(plusTard).charge).retenu.mesures;
+    assert.notEqual(collisionsCumulees, evaluer(analyser(texteRetenu()).charge).retenu.mesures.collisionsCumulees);
+    assert.equal(recus.get('retenue').mesuresDuRetenu.collisionsCumulees, collisionsCumulees);
     assert.deepEqual(recus.get('retenue'), resumesAttendus(plusTard));
   });
 

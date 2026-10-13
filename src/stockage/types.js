@@ -103,10 +103,6 @@
  *                                       propre siegesAttribues
  * @property {{nombre: number, arret: number, historique: number}} generation
  *                                       entiers ≥ 1
- * @property {number} [cibleRedondance]  entier ≥ 0, facultatif : la cible
- *                                       de la somme de redondance ; absent,
- *                                       elle vaut CIBLE_REDONDANCE_PAR_DEFAUT,
- *                                       que rend la fonction cibleRedondance
  * @property {'et'} [regleObjectifs]     facultatif, présent seulement à
  *                                       « et » : la règle que suit un
  *                                       objectif de règle nulle ; absent,
@@ -288,6 +284,10 @@
  * @property {Array<[string, Regle]>} [champs]   objet : ses champs, dans
  *           l'ordre des clés du texte canonique
  * @property {Set<string>} [cles]            objet : les clés de ses champs
+ * @property {Set<string>} [oubliees]        objet : des clés qu'il a portées
+ *           et ne porte plus. La forme les admet, de toute valeur ; la
+ *           lecture les retire, canoniser ne les copie pas, et un correctif
+ *           qui les pose ou les retire s'applique sans rien changer
  * @property {Regle} [element]               liste : la règle de ses éléments
  * @property {number} [min]                  entier : bornes incluses ;
  *           liste : bornes incluses de sa longueur

@@ -658,21 +658,22 @@ export const ECRANS = Object.freeze([
     nom: 'accueil.mesuresRetenu',
     mode: null,
     async atteindre(contexte) {
-      // La principale, sa proposition retenue : la ligne montre la
-      // différence du retenu et la meilleure proposition du classement, et le
-      // pointeur réel sur l'intitulé de la différence — un en-tête de
-      // colonne du tableau, une fois pour la liste — ouvre son infobulle.
+      // La principale, sa proposition retenue : la ligne montre les
+      // collisions cumulées du retenu et la meilleure proposition du
+      // classement, et le pointeur réel sur l'intitulé des collisions — un
+      // en-tête de colonne du tableau, une fois pour la liste — ouvre son
+      // infobulle.
       const principale = chargePrincipale();
       const charge = executer(principale, 'retenirProposition', { id: principale.propositions[0].id });
       const m = await contexte.monter({ fichiers: [fichierEtat(charge)] });
       const ligne = `[data-evenement="${BASE}"]`;
       await chargerResumes(m);
-      await attendre('la différence du retenu et la meilleure proposition', () =>
-        ['[data-colonne="diffRedondance"]', '[data-meilleure-id]'].every((valeur) => /\d/.test(m.racine.querySelector(`${ligne} ${valeur}`)?.textContent ?? '')),
+      await attendre('les collisions du retenu et la meilleure proposition', () =>
+        ['[data-colonne="collisionsCumulees"]', '[data-meilleure-id]'].every((valeur) => /\d/.test(m.racine.querySelector(`${ligne} ${valeur}`)?.textContent ?? '')),
       );
-      const { x, y } = await centre(await element(m, '[data-ecran="accueil"] thead [data-terme="diffRedondance"]'));
+      const { x, y } = await centre(await element(m, '[data-ecran="accueil"] thead [data-terme="collisionsCumulees"]'));
       await pointer('bouger', x, y);
-      await attendre("l'infobulle de la différence", () => {
+      await attendre("l'infobulle des collisions", () => {
         const bulle = m.racine.querySelector('[data-ecran="accueil"] [role="tooltip"]');
         return bulle !== null && !bulle.hidden && getComputedStyle(bulle).visibility === 'visible';
       });

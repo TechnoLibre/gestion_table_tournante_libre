@@ -1049,6 +1049,12 @@ export function creerSeance({
   // Un retour, sans son suivi : défaire vise le prédécesseur de l'instant
   // courant sur le fil, refaire le sommet de sa pile, revenir l'instant
   // donné ; l'entrée porte la charge restituée, son sens et sa cible.
+  // Revenir à un instant de même contenu que la charge courante est
+  // SANS_EFFET. Défaire et refaire s'écrivent même alors, d'un correctif
+  // vide : leur entrée seule fait avancer le fil. Un instant dont le geste ne
+  // changeait qu'un champ oublié à la lecture (§ 8.9) se restitue comme son
+  // voisin ; le refuser laisserait le fil sur place, et chaque nouveau
+  // défaire retomberait sur le même refus.
   async function retour(sens, visee) {
     const ouvert = exigerEcriture();
     const { cibleDefaire, cibleRefaire, courant } = filDe(ouvert);
@@ -1062,7 +1068,9 @@ export function creerSeance({
       cible = cibleRefaire;
     }
     const charge = avecCompteursCourants(restituer(ouvert, cible), ouvert.charge);
-    if (serialiserCharge(charge) === serialiserCharge(ouvert.charge)) throw new ErreurSeance('SANS_EFFET', { sens });
+    if (sens === 'revenir' && serialiserCharge(charge) === serialiserCharge(ouvert.charge)) {
+      throw new ErreurSeance('SANS_EFFET', { sens });
+    }
     const instant = sens === 'defaire' ? courant : libelleDeRevision(ouvert.journal, cible);
     const entree = { charge, libelle: libelleDuRetour(sens, instant), avertissements: [] };
     const texte = await ecrireGeste(ouvert, entree, { sens, retour: cible });

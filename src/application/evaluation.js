@@ -25,8 +25,8 @@
 // rencontres répétées imposées dépendent du plan, et chaque ligne les lit
 // dans ses mesures, à part des choisies.
 //
-// resumeDuRetenu donne à la liste des événements la différence à la cible
-// du retenu, lue dans la même mesure que sa ligne du tableau, sans le
+// resumeDuRetenu donne à la liste des événements les collisions cumulées
+// du retenu, lues dans la même mesure que sa ligne du tableau, sans le
 // diagnostic ni les plafonds : la liste en résume chaque événement du
 // dossier. premiereDuClassement est la seule définition de la proposition
 // au rang 1 : la section de la génération la lit dans sa table,
@@ -63,12 +63,9 @@ import { borneDiversite, plafondsRealises } from '../moteur/plafond.js';
 import { detailler, planchersParGroupe, profilRencontres } from '../moteur/qualite.js';
 import { verifierIndicateurs, verifierInvariants } from '../moteur/verification.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
-import { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance } from '../stockage/document.js';
 import { derive, deriveSansRevalider, fautes, planDepuisFichier, planSansRevalider } from '../stockage/placements.js';
 import { configurationDe } from './configuration.js';
 import { nomAffiche } from './personnes.js';
-
-export { CIBLE_REDONDANCE_PAR_DEFAUT, cibleRedondance };
 
 // Les modes des objectifs, le défaut en tête, et les cases qui font compter
 // chaque critère, tels que le registre les tient (contrainte 35) :
@@ -220,16 +217,17 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
 }
 
 /**
- * Le résumé du retenu que montre la liste des événements (§ 5.4, § 8.1,
- * § 8.9) : diffRedondance, la valeur absolue de la cible de l'événement
- * (cibleRedondance) moins la somme de redondance Σ r(p) du retenu, celle de
- * mesurer, que la ligne du retenu d'evaluer porte aussi. null sans retenu,
- * pour un retenu fautif ou en dérive, et quand la configuration ne se
- * normalise pas : rien ne s'y mesure, et la liste écrit « — ». Ne modifie
- * pas la charge.
+ * Le résumé du retenu que montre la liste des événements (§ 5.4, § 8.1) :
+ * collisionsCumulees, les occurrences (paire, tour) où deux personnes d'une
+ * même appartenance partagent une table, celles de mesurer — la valeur que
+ * la ligne du retenu d'evaluer porte, et que la colonne « Collisions
+ * cumulées (paire et tour) » du tableau des propositions écrit. null sans
+ * retenu, pour un retenu fautif ou en dérive, et quand la configuration ne
+ * se normalise pas : rien ne s'y mesure, et la liste écrit « — ». Ne
+ * modifie pas la charge.
  *
  * @param {import('../stockage/types.js').Charge} charge
- * @returns {{diffRedondance: number}|null}
+ * @returns {{collisionsCumulees: number}|null}
  */
 export function resumeDuRetenu(charge) {
   const { retenu } = charge;
@@ -241,8 +239,8 @@ export function resumeDuRetenu(charge) {
     if (erreur instanceof ErreurConfiguration) return null;
     throw erreur;
   }
-  const { totalRedondance } = mesurer(instance, indexerPlan(instance, planDepuisFichier(retenu)));
-  return { diffRedondance: Math.abs(cibleRedondance(charge) - totalRedondance) };
+  const { collisionsCumulees } = mesurer(instance, indexerPlan(instance, planDepuisFichier(retenu)));
+  return { collisionsCumulees };
 }
 
 /**

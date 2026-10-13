@@ -29,7 +29,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { cdp } from 'vitest/browser';
 import { flushSync } from 'svelte';
 import { appliquerCommande } from '../application/commandes.js';
-import { cibleRedondance, evaluer } from '../application/evaluation.js';
+import { evaluer } from '../application/evaluation.js';
 import { creerFormat } from '../application/format.js';
 import { TABLES_APPLICATION } from '../application/libelles.js';
 import { creerTraduction } from '../application/traduction.js';
@@ -394,25 +394,18 @@ describe('la liste relue', () => {
 
 describe('les résumés de la liste relue (§ 8.1)', () => {
   // La petite démonstration au conflit inévitable, deux propositions du
-  // moteur, la seconde retenue, sous la cible de redondance donnée ; la
-  // cible par défaut n'a pas de réglage écrit.
-  function texteRetenu(cible) {
+  // moteur, celle du rang donné retenue.
+  function texteRetenu(rang) {
     let charge = analyser(CONFLIT).charge;
     const configuration = configurationDepuisCharge(charge);
     const propositions = rechercher(configuration, { graine: 6, nombre: 2, arret: 300 });
     charge = appliquerCommande('enregistrerGeneration', charge, { propositions, configuration, produitVersion: VERSION.affichee }).charge;
-    charge = appliquerCommande('retenirProposition', charge, { id: charge.propositions[1].id }).charge;
-    if (cible !== cibleRedondance(charge)) {
-      charge = appliquerCommande('changerCibleRedondance', charge, { cible: String(cible) }).charge;
-    }
+    charge = appliquerCommande('retenirProposition', charge, { id: charge.propositions[rang].id }).charge;
     return serialiser(charge, { revision: 1, produitVersion: VERSION.affichee });
   }
-  // La différence à la cible que la ligne d'un texte d'état écrit.
-  const difference = (texte) => {
-    const charge = analyser(texte).charge;
-    return format.nombre(Math.abs(cibleRedondance(charge) - evaluer(charge).retenu.mesures.totalRedondance));
-  };
-  const cellule = (m) => dans(m, '[data-evenement="bal"] [data-colonne="diffRedondance"]');
+  // Les collisions cumulées du retenu que la ligne d'un texte d'état écrit.
+  const collisions = (texte) => format.nombre(evaluer(analyser(texte).charge).retenu.mesures.collisionsCumulees);
+  const cellule = (m) => dans(m, '[data-evenement="bal"] [data-colonne="collisionsCumulees"]');
   const uneImage = () => new Promise((resoudre) => requestAnimationFrame(() => resoudre()));
 
   // Retient la prochaine lecture de l'état de « bal » : elle lit le disque à
@@ -436,9 +429,9 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
   }
 
   test('une relecture pendant le chargement : la ligne ne montre jamais la valeur de l’ancienne lecture, même finie la dernière', async () => {
-    const ancien = texteRetenu(1000);
-    const nouveau = texteRetenu(25);
-    expect(difference(ancien)).not.toBe(difference(nouveau));
+    const ancien = texteRetenu(1);
+    const nouveau = texteRetenu(0);
+    expect(collisions(ancien)).not.toBe(collisions(nouveau));
     const m = await monter({ fichiers: [{ racine: 'documents', chemin: 'bal.gtt.json', texte: ancien }] });
     const retenue = retenirLecture(m);
     // Le premier pas de la première lecture lit l'état, et reste suspendu.
@@ -455,7 +448,7 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
       await uneImage();
       m.horloge.avancer(0);
       flushSync();
-      expect(cellule(m).textContent).toBe(difference(nouveau));
+      expect(cellule(m).textContent).toBe(collisions(nouveau));
     });
     // La lecture d'avant s'achève : son calcul ne se pose pas.
     retenue.liberer();
@@ -463,13 +456,13 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
     for (let image = 0; image < 3; image += 1) await uneImage();
     m.horloge.avancer(0);
     flushSync();
-    expect(cellule(m).textContent).toBe(difference(nouveau));
+    expect(cellule(m).textContent).toBe(collisions(nouveau));
   });
 
   test('un événement ouvert pendant le chargement l’abandonne : l’horloge avancée ne relit plus aucun état', async () => {
     const m = await monter({
       fichiers: [
-        { racine: 'documents', chemin: 'bal.gtt.json', texte: texteRetenu(1000) },
+        { racine: 'documents', chemin: 'bal.gtt.json', texte: texteRetenu(1) },
         { racine: 'documents', chemin: 'club.gtt.json', texte: evenement('Club des Merles', { texte: CONFLIT }) },
       ],
     });
@@ -492,7 +485,7 @@ describe('les résumés de la liste relue (§ 8.1)', () => {
   test('une lecture de la liste qui s’achève sous un événement ouvert ne lance aucun chargement', async () => {
     const m = await monter({
       fichiers: [
-        { racine: 'documents', chemin: 'bal.gtt.json', texte: texteRetenu(1000) },
+        { racine: 'documents', chemin: 'bal.gtt.json', texte: texteRetenu(1) },
         { racine: 'documents', chemin: 'club.gtt.json', texte: evenement('Club des Merles', { texte: CONFLIT }) },
       ],
     });

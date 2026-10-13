@@ -3,8 +3,8 @@
 
 // Épreuves de la définition des réglages de la charge (§ 5.3, § 5.7,
 // § 5.10, § 8.9, § 19.8) : sa forme, figée ; l'ordre des écrans ; les
-// défauts, ceux d'une charge neuve, GENERATION_PAR_DEFAUT et
-// CIBLE_REDONDANCE_PAR_DEFAUT compris, et ceux que les lecteurs du stockage
+// défauts, ceux d'une charge neuve, GENERATION_PAR_DEFAUT compris, et ceux
+// que les lecteurs du stockage
 // donnent aux réglages facultatifs — les deux cases, le mode des objectifs,
 // l'ordre des priorités ; chaque réglage du schéma du fichier, facultatif
 // compris, et lui seul ; les clés que les commandes acceptent et les
@@ -16,7 +16,6 @@ import { appliquerCommande } from '../../application/commandes.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { MODES_OBJECTIFS } from '../../moteur/criteres.js';
 import {
-  CIBLE_REDONDANCE_PAR_DEFAUT,
   GENERATION_PAR_DEFAUT,
   SCHEMA,
   creerCharge,
@@ -66,7 +65,6 @@ const ECRITURES = new Map([
     (entree, valeur) =>
       entree.genre === 'ordre' ? ['changerPriorites', { paliers: valeur }] : ['modifierReglage', { cle: entree.cle, valeur }],
   ],
-  ['propositions', (entree, valeur) => ['changerCibleRedondance', { cible: String(valeur) }]],
 ]);
 
 // Une valeur autre que le défaut de l'entrée : la case contraire, un mode
@@ -96,7 +94,7 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
     assert.throws(() => REGLAGES_GENERATION.push({}), TypeError);
   });
 
-  test('l’ordre des écrans : les trois champs de la recherche, les bascules du § 5.3, le mode des objectifs, l’ordre des priorités, puis la cible de la section des propositions', () => {
+  test('l’ordre des écrans : les trois champs de la recherche, les bascules du § 5.3, le mode des objectifs, l’ordre des priorités ; aucun réglage hors de la génération', () => {
     assert.deepEqual(
       REGLAGES_GENERATION.map(({ nom, genre, section }) => [section, genre, nom]),
       [
@@ -112,7 +110,6 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
         ['generation', 'bascule', 'attribuerSieges'],
         ['generation', 'choix', 'modeObjectifs'],
         ['generation', 'ordre', 'priorites'],
-        ['propositions', 'champ', 'cibleRedondance'],
       ],
     );
   });
@@ -178,23 +175,13 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
     assert.ok(Object.isFrozen(ordre.defaut));
   });
 
-  test('la cible de la somme de redondance : un champ de la section des propositions, à la racine des réglages, sous le libellé de son champ, sans unité', () => {
-    assert.deepEqual(reglagesDeSection(REGLAGES_GENERATION, 'propositions'), [
-      {
-        nom: 'cibleRedondance',
-        cle: 'cibleRedondance',
-        etiquette: 'propositions.cible.etiquette',
-        unite: null,
-        defaut: CIBLE_REDONDANCE_PAR_DEFAUT,
-        genre: 'champ',
-        section: 'propositions',
-      },
-    ]);
+  test('la cible de la somme de redondance n’est plus un réglage : ni entrée, ni section des propositions', () => {
+    assert.equal(REGLAGES_GENERATION.some(({ nom, cle }) => nom === 'cibleRedondance' || cle === 'cibleRedondance'), false);
+    assert.deepEqual(reglagesDeSection(REGLAGES_GENERATION, 'propositions'), []);
   });
 
-  test('chaque défaut est celui d’une charge neuve : GENERATION_PAR_DEFAUT pour les champs, les bascules de creerCharge, CIBLE_REDONDANCE_PAR_DEFAUT pour la cible absente', () => {
+  test('chaque défaut est celui d’une charge neuve : GENERATION_PAR_DEFAUT pour les champs, les bascules de creerCharge', () => {
     const { reglages } = chargeNeuveEpreuve();
-    assert.equal(Object.hasOwn(reglages, 'cibleRedondance'), false);
     for (const entree of REGLAGES_GENERATION) {
       assert.equal(entree.defaut, valeurDuReglage(reglages, entree), entree.nom);
     }
@@ -218,7 +205,7 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
 
   test('chaque réglage du schéma du fichier, facultatif compris, a son entrée, et chaque entrée en désigne un : aucun n’échappe aux écrans ni au tableau, hors des réglages nommés sans entrée', () => {
     const chemins = cheminsDuSchema();
-    assert.ok(chemins.includes('cibleRedondance') && chemins.includes('generation.nombre'), chemins.join(', '));
+    assert.ok(chemins.includes('generation.nombre') && !chemins.includes('cibleRedondance'), chemins.join(', '));
     const cles = REGLAGES_GENERATION.map(({ cle }) => cle);
     for (const cle of SANS_ENTREE.keys()) {
       assert.ok(chemins.includes(cle), `${cle} : absent du schéma, à retirer de SANS_ENTREE`);
@@ -242,19 +229,18 @@ describe('REGLAGES_GENERATION : la définition que lisent les écrans et la docu
 
 describe('valeurDuReglage, reglagesDuGenre et reglagesDeSection', () => {
   test('la valeur d’un réglage se lit au chemin de sa clé : sous generation pour un champ de la génération, à la racine sinon', () => {
-    const reglages = { nouvelleTable: false, cibleRedondance: 7, generation: { nombre: 9 } };
+    const reglages = { nouvelleTable: false, modeObjectifs: 'minimum', generation: { nombre: 9 } };
     const [nombre] = REGLAGES_GENERATION;
     const nouvelleTable = REGLAGES_GENERATION.find(({ nom }) => nom === 'nouvelleTable');
-    const cible = REGLAGES_GENERATION.find(({ nom }) => nom === 'cibleRedondance');
+    const mode = REGLAGES_GENERATION.find(({ nom }) => nom === 'modeObjectifs');
     assert.equal(valeurDuReglage(reglages, nombre), 9);
     assert.equal(valeurDuReglage(reglages, nouvelleTable), false);
-    assert.equal(valeurDuReglage(reglages, cible), 7);
+    assert.equal(valeurDuReglage(reglages, mode), 'minimum');
   });
 
   test('un réglage facultatif absent vaut son défaut', () => {
-    const cible = REGLAGES_GENERATION.find(({ nom }) => nom === 'cibleRedondance');
-    assert.equal(valeurDuReglage({ generation: {} }, cible), CIBLE_REDONDANCE_PAR_DEFAUT);
-    assert.equal(valeurDuReglage({ generation: {} }, { ...cible, defaut: 3 }), 3);
+    const mode = REGLAGES_GENERATION.find(({ nom }) => nom === 'modeObjectifs');
+    assert.equal(valeurDuReglage({ generation: {} }, { ...mode, defaut: 'chacun' }), 'chacun');
     for (const entree of REGLAGES_GENERATION.filter(({ genre }) => genre !== 'champ')) {
       assert.equal(valeurDuReglage({ generation: {} }, entree), entree.defaut, entree.cle);
     }
@@ -277,7 +263,7 @@ describe('valeurDuReglage, reglagesDuGenre et reglagesDeSection', () => {
     const definition = [...REGLAGES_GENERATION].reverse();
     assert.deepEqual(
       reglagesDuGenre(definition, 'champ').map(({ nom }) => nom),
-      ['cibleRedondance', 'historique', 'arret', 'nombre'],
+      ['historique', 'arret', 'nombre'],
     );
     assert.deepEqual(
       reglagesDeSection(definition, 'generation').slice(0, 2).map(({ nom }) => nom),

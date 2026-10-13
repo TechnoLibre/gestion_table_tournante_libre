@@ -80,8 +80,8 @@ describe('ligneAffichee : les six informations (§ 8.1)', () => {
     const affichee = ligneAffichee(ligne(), format);
     assert.deepEqual(Object.keys(affichee).sort(), [
       'chemin',
+      'collisionsCumulees',
       'date',
-      'diffRedondance',
       'enAttente',
       'etat',
       'meilleure',
@@ -334,35 +334,39 @@ describe('saisieDe : la saisie d’un nom pour copier ou renommer (§ 8.7)', () 
   });
 });
 
-describe('ligneAffichee : les mesures du retenu (§ 5.4, § 8.1, § 8.9)', () => {
-  test('la différence à la cible, celle de la façade, mise en forme, sans calcul ici', () => {
-    for (const diffRedondance of [500, 7, 0]) {
-      const affichee = ligneAffichee(ligne(), format, { ...AUCUN, mesuresDuRetenu: { diffRedondance } });
-      assert.equal(affichee.diffRedondance, format.nombre(diffRedondance), String(diffRedondance));
+describe('ligneAffichee : les mesures du retenu (§ 5.4, § 8.1)', () => {
+  test('les collisions cumulées du retenu, celles de la façade, mises en forme, sans calcul ici', () => {
+    for (const collisionsCumulees of [500, 7, 0]) {
+      const affichee = ligneAffichee(ligne(), format, { ...AUCUN, mesuresDuRetenu: { collisionsCumulees } });
+      assert.equal(affichee.collisionsCumulees, format.nombre(collisionsCumulees), String(collisionsCumulees));
     }
   });
 
-  test('sans retenu mesurable, et pour une ligne illisible, la différence vaut « — »', () => {
+  test('sans retenu mesurable, et pour une ligne illisible, les collisions valent « — »', () => {
     for (const champs of [{}, { nom: null, etat: null, participants: null, illisible: { raison: 'VIDE', chemin: null } }]) {
       const affichee = ligneAffichee(ligne(champs), format, AUCUN);
-      assert.equal(affichee.diffRedondance, VIDE);
+      assert.equal(affichee.collisionsCumulees, VIDE);
     }
   });
 
-  test('COLONNES_DU_RETENU : la seule différence à la cible, avec son intitulé et son explication, qui existent ; aucune clé des collisions cumulées dans la liste', () => {
-    assert.deepEqual(
-      COLONNES_DU_RETENU.map(({ colonne }) => colonne),
-      ['diffRedondance'],
-    );
+  test('COLONNES_DU_RETENU : les seules collisions cumulées, sous l’intitulé de la colonne du tableau des propositions, avec l’explication propre à la liste ; plus rien de la différence à la cible', () => {
+    assert.deepEqual(COLONNES_DU_RETENU, [
+      {
+        colonne: 'collisionsCumulees',
+        cle: 'propositions.colonne.collisionsCumulees',
+        explication: 'accueil.explication.collisionsCumulees',
+      },
+    ]);
     assert.ok(Object.isFrozen(COLONNES_DU_RETENU));
-    for (const { colonne, cle, explication } of COLONNES_DU_RETENU) {
-      assert.equal(cle, `accueil.colonne.${colonne}`);
-      assert.equal(explication, `accueil.explication.${colonne}`);
-      assert.ok(t(cle).length > 0);
-      assert.ok(t(explication).length > 0);
+    assert.ok(Object.isFrozen(COLONNES_DU_RETENU[0]));
+    assert.equal(t('propositions.colonne.collisionsCumulees'), 'Collisions cumulées (paire et tour)');
+    const explication = t('accueil.explication.collisionsCumulees');
+    for (const fragment of ['paire', 'tour', 'Collisions cumulées (paire et tour)', '\u{2014}']) {
+      assert.ok(explication.includes(fragment), fragment);
     }
-    assert.equal(t('accueil.colonne.diffRedondance'), "Diff somme d'appartenance");
-    for (const cle of ['accueil.colonne.collisionsCumulees', 'accueil.explication.collisionsCumulees']) assert.throws(() => t(cle), RangeError, cle);
+    for (const cle of ['accueil.colonne.diffRedondance', 'accueil.explication.diffRedondance', 'accueil.colonne.collisionsCumulees']) {
+      assert.throws(() => t(cle), RangeError, cle);
+    }
   });
 });
 
@@ -370,20 +374,20 @@ describe('ligneAffichee : les résumés en attente (§ 8.1)', () => {
   test('sans résumé reçu, la ligne est en attente et ses deux valeurs de résumé ne disent rien ; reçu, elle ne l’est plus', () => {
     const attente = ligneAffichee(ligne(), format);
     assert.equal(attente.enAttente, true);
-    assert.equal(attente.diffRedondance, VIDE);
+    assert.equal(attente.collisionsCumulees, VIDE);
     assert.deepEqual(attente.meilleure, { id: VIDE });
     assert.equal(ligneAffichee(ligne(), format, AUCUN).enAttente, false);
     const recu = ligneAffichee(ligne(), format, {
-      mesuresDuRetenu: { diffRedondance: 10 },
+      mesuresDuRetenu: { collisionsCumulees: 10 },
       meilleureDuClassement: { id: 3 },
     });
     assert.equal(recu.enAttente, false);
-    assert.equal(recu.diffRedondance, format.nombre(10));
+    assert.equal(recu.collisionsCumulees, format.nombre(10));
     assert.deepEqual(recu.meilleure, { id: format.nombre(3) });
   });
 
   test('les six informations ne dépendent pas des résumés : en attente ou non, elles sont les mêmes', () => {
-    const sans = ({ enAttente, diffRedondance, meilleure, ...reste }) => reste;
+    const sans = ({ enAttente, collisionsCumulees, meilleure, ...reste }) => reste;
     assert.deepEqual(sans(ligneAffichee(ligne(), format)), sans(ligneAffichee(ligne(), format, AUCUN)));
   });
 });

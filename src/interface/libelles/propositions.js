@@ -340,14 +340,6 @@ export const TABLE = new Map([
   ['propositions.statut.derive', 'Non comparable : la proposition ne décrit plus la configuration courante.'],
   ['propositions.statut.fautif', 'Non comparable : le placement se contredit.'],
 
-  // --- La cible de la somme de redondance (§ 5.4, § 8.1, § 8.9) -------------------
-  ['propositions.cible.etiquette', 'Cible de la somme de redondance'],
-  [
-    'propositions.cible.aide',
-    "La liste des événements montre, pour le placement retenu, la différence sans signe entre cette cible et la " +
-      "somme Σ r(p) de la colonne « Redondance d'appartenance ». Un nombre entier, 0 ou plus.",
-  ],
-
   // --- Les commandes (§ 2.1 étape 10, § 5.7) ------------------------------------
   ['propositions.commande.voir', 'Voir sur le plan'],
   ['propositions.commande.retenir', 'Retenir'],

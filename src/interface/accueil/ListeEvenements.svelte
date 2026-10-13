@@ -14,7 +14,7 @@
   //
   // Les en-têtes de colonnes sont groupés : l'événement — nom, état,
   // participants, dernière modification —, le placement retenu, à la teinte
-  // de Retenu — sa différence à la cible (COLONNES_DU_RETENU) —, la
+  // de Retenu — ses collisions cumulées (COLONNES_DU_RETENU) —, la
   // meilleure proposition du classement, à la teinte de Proposé, sous le
   // titre et le libellé du bloc de la génération (MEILLEURE) — son
   // identifiant —, puis les actions. Chaque valeur est dans son propre

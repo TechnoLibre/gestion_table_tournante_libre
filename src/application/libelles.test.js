@@ -578,7 +578,6 @@ const EXEMPLES = new Map([
   ['ENTREE_CHANGER_DEFAUT', { sieges: 10, realignees: 4 }],
   ['ENTREE_CHANGER_TOURS', { tours: 3, retirees: 2 }],
   ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerAppartenances', valeur: false }],
-  ['ENTREE_CHANGER_CIBLE_REDONDANCE', { cible: 1200 }],
   // Objectifs des tables
   ['OBJECTIF_HORS_SOIREE', { tour: 5, remede: null }],
   ['OBJECTIF_SANS_ETIQUETTE', { table: 2, tour: 3, remede: { commande: 'retirerObjectif', arguments: { table: 2, tour: 3 } } }],

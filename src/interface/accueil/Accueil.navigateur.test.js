@@ -1231,16 +1231,18 @@ async function eprouverTermes(racine, cas) {
   }
 }
 
-describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
+describe('les mesures du retenu dans la liste (§ 5.4, § 8.1)', () => {
   // Les mesures du retenu, par le moteur sollicité une seconde fois (§ 19.1).
   function mesuresDe(charge) {
     const instance = normaliser(configurationDepuisCharge(charge));
     return mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
   }
 
-  test('un événement retenu : |1000 \u{2212} Σ r(p)|, sans colonne des collisions cumulées ; sans retenu : « — » ; rien d’écrit', async () => {
+  test('un événement retenu : ses collisions cumulées (paire et tour), sous l’intitulé du tableau des propositions ; sans retenu : « — » ; rien d’écrit', async () => {
     const charge = chargeRetenue();
     const mesures = mesuresDe(charge);
+    expect(mesures.collisionsCumulees).toBeGreaterThan(0);
+    expect(mesures.collisionsCumulees).not.toBe(Math.abs(1000 - mesures.totalRedondance));
     const m = await monter({
       fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(charge)), fichier(`club${SUFFIXES.etat}`, texteRenomme('Club des Merles'))],
     });
@@ -1248,51 +1250,44 @@ describe('les mesures du retenu dans la liste (§ 5.4, § 8.1, § 8.9)', () => {
     await chargerResumes(m);
     const avant = ecritures(m);
     const retenue = ligneDe(m, 'retenue');
-    expect(colonne(retenue, 'diffRedondance')).toBe(format.nombre(Math.abs(1000 - mesures.totalRedondance)));
+    expect(colonne(retenue, 'collisionsCumulees')).toBe(format.nombre(mesures.collisionsCumulees));
+    expect(colonne(retenue, 'collisionsCumulees')).toBe(format.nombre(evaluer(charge).retenu.mesures.collisionsCumulees));
     const club = ligneDe(m, 'club');
-    expect(colonne(club, 'diffRedondance')).toBe(TIRET);
+    expect(colonne(club, 'collisionsCumulees')).toBe(TIRET);
     // L'intitulé est un en-tête de colonne, une seule fois pour toute la
-    // liste ; aucune colonne ni aucun intitulé ne nomme les collisions
-    // cumulées.
-    expect(tous(m, '[data-terme="diffRedondance"]').length).toBe(1);
-    expect(terme(accueil(m), 'diffRedondance').closest('thead')).not.toBeNull();
-    expect(terme(accueil(m), 'diffRedondance').textContent).toBe(t('accueil.colonne.diffRedondance'));
-    expect(tous(m, '[data-colonne="collisionsCumulees"], [data-terme="collisionsCumulees"]')).toEqual([]);
-    expect(tous(m, '[data-ecran="accueil"] thead th').filter((th) => th.textContent.includes(t('propositions.colonne.collisionsCumulees')))).toEqual([]);
-    expect(visible(retenue.querySelector('[data-colonne="diffRedondance"]'))).toBe(true);
+    // liste, au texte de la colonne du tableau des propositions ; plus rien
+    // ne nomme la différence à la cible.
+    expect(tous(m, '[data-terme="collisionsCumulees"]').length).toBe(1);
+    expect(terme(accueil(m), 'collisionsCumulees').closest('thead')).not.toBeNull();
+    expect(terme(accueil(m), 'collisionsCumulees').textContent).toBe(t('propositions.colonne.collisionsCumulees'));
+    expect(tous(m, '[data-colonne="diffRedondance"], [data-terme="diffRedondance"]')).toEqual([]);
+    expect(accueil(m).textContent).not.toContain("Diff somme d'appartenance");
+    expect(visible(retenue.querySelector('[data-colonne="collisionsCumulees"]'))).toBe(true);
     expect(ecritures(m)).toBe(avant);
   });
 
   test('chaque intitulé s’explique : le survol puis le focus ouvrent son infobulle, Échap et la sortie la ferment', async () => {
     const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(chargeRetenue()))] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
-    await eprouverTermes(accueil(m), [['diffRedondance', 'accueil.explication.diffRedondance']]);
+    await eprouverTermes(accueil(m), [['collisionsCumulees', 'accueil.explication.collisionsCumulees']]);
   });
 
-  test('la cible changée dans les propositions, puis la liste : la différence se lit contre la nouvelle cible', async () => {
+  test('un état écrit avec la cible de redondance d’un code antérieur : la ligne se lit sans signalement, ses collisions comme sans elle ; l’ouvrir n’écrit rien', async () => {
     const charge = chargeRetenue();
-    const { totalRedondance } = mesuresDe(charge);
-    const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, etat(charge))] });
+    const lu = JSON.parse(etat(charge));
+    lu.charge.reglages.cibleRedondance = 25;
+    const m = await monter({ fichiers: [fichier(`retenue${SUFFIXES.etat}`, `${JSON.stringify(lu, null, 2)}\n`)] });
     await vi.waitFor(() => expect(lignes(m).length).toBe(1));
     await chargerResumes(m);
-    expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(1000 - totalRedondance)));
+    const ligne = ligneDe(m, 'retenue');
+    expect(ligne.querySelector('[data-signalement]')).toBeNull();
+    expect(colonne(ligne, 'collisionsCumulees')).toBe(format.nombre(mesuresDe(charge).collisionsCumulees));
+    const avant = ecritures(m);
     await ouvrirLigne(m, 'retenue');
     await attendreEvenement(m);
-    await m.seance.passerEnEcriture();
-    m.ui.allerA('propositions');
-    await vi.waitFor(() => expect(dans(m, '[data-section="propositions"] [data-champ="cibleRedondance"]')).not.toBeNull());
-    const entree = dans(m, '[data-champ="cibleRedondance"]');
-    expect(entree.value).toBe('1000');
-    entree.focus();
-    saisir(entree, '25');
-    entree.blur();
-    await vi.waitFor(() => expect(m.seance.etat().charge.reglages.cibleRedondance).toBe(25));
-    // Le résumé que la liste relue reçoit, non celui de la lecture d'avant,
-    // que la ligne montre encore tant que la relecture ne s'est pas posée.
-    const resumeRecu = suivreResumes(m);
-    await revenirALaListe(m, 1);
-    await resumeRecu('retenue');
-    expect(colonne(ligneDe(m, 'retenue'), 'diffRedondance')).toBe(format.nombre(Math.abs(25 - totalRedondance)));
+    expect(Object.hasOwn(m.seance.etat().charge.reglages, 'cibleRedondance')).toBe(false);
+    expect(m.seance.etat().avertissements ?? []).toEqual([]);
+    expect(ecritures(m)).toBe(avant);
   });
 });
 
@@ -1452,14 +1447,14 @@ describe('le chargement des résumés de la liste (§ 8.1, § 14.5, § 19.2)', (
   }
 
   // Les deux valeurs de résumé d'une ligne, dans l'ordre du rendu.
-  const CELLULES = ['[data-colonne="diffRedondance"]', '[data-meilleure-id]'];
+  const CELLULES = ['[data-colonne="collisionsCumulees"]', '[data-meilleure-id]'];
   const cellules = (ligne) => CELLULES.map((selecteur) => ligne.querySelector(selecteur));
   // Ce que la ligne d'une charge écrit, par la table d'évaluation sollicitée
   // une seconde fois (§ 19.1).
   function attendues(charge) {
     const table = evaluer(charge);
     const [premiere] = table.propositions;
-    return [Math.abs(1000 - table.retenu.mesures.totalRedondance), premiere.id].map((n) => format.nombre(n));
+    return [table.retenu.mesures.collisionsCumulees, premiere.id].map((n) => format.nombre(n));
   }
   // Chaque valeur de la ligne attend : la cellule se dit occupée, porte un
   // seul signe, muet pour l'accessibilité (aria-hidden, sans rôle ni nom),
@@ -1812,7 +1807,7 @@ describe('la liste en tableau : en-tête, tuiles, groupes et cartes (§ 8.1, § 
     };
     const ligne = ligneDe(m, 'gala');
     for (const nom of ['nom', 'etat', 'participants', 'modification']) expect(dans2(ligne.querySelector(`[data-colonne="${nom}"]`), entetes[0]), nom).toBe(true);
-    expect(dans2(ligne.querySelector('[data-colonne="diffRedondance"]'), entetes[1])).toBe(true);
+    expect(dans2(ligne.querySelector('[data-colonne="collisionsCumulees"]'), entetes[1])).toBe(true);
     expect(dans2(ligne.querySelector('[data-meilleure-id]'), entetes[2])).toBe(true);
     // Le nom est l'en-tête de sa ligne ; la date et le chemin le suivent,
     // dessous, en plus petit.

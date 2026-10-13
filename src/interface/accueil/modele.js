@@ -4,8 +4,8 @@
 // Le modèle de l'accueil, pur (§ 8.1, § 8.6, § 8.8) : ce que les composants
 // de la liste des événements affichent, sans arithmétique ni texte. Une
 // ligne de la liste (LigneListe de la façade, evenements.js) devient ses six
-// informations et ses signalements, mis en forme, puis, son résumé reçu, la
-// différence à la cible de son retenu et l'identifiant de la meilleure
+// informations et ses signalements, mis en forme, puis, son résumé reçu, les
+// collisions cumulées de son retenu et l'identifiant de la meilleure
 // proposition de son classement ; les lignes de la liste, les tuiles de ses
 // filtres par état du plan, le résumé de son en-tête et les groupes de son
 // tableau ; une question du dossier de travail, ses réponses ; un état
@@ -25,17 +25,20 @@ const CLES_ETATS = new Map([
 export const ETATS = Object.freeze([...CLES_ETATS.keys()]);
 
 /**
- * La mesure du placement retenu qu'une ligne montre (§ 5.4, § 8.9) : la
- * différence à la cible, { colonne, cle, explication } — le nom de sa valeur
+ * La mesure du placement retenu qu'une ligne montre (§ 5.4, § 8.1) : ses
+ * collisions cumulées, { colonne, cle, explication } — le nom de sa valeur
  * dans ligneAffichee et son data-colonne, la clé de son intitulé, celle de
- * son explication, que l'infobulle de l'intitulé montre. Les collisions
- * cumulées du retenu ne se montrent pas dans la liste.
+ * la colonne du tableau des propositions qui porte la même mesure, et celle
+ * de son explication, propre à la liste, que l'infobulle de l'intitulé
+ * montre.
  */
-export const COLONNES_DU_RETENU = Object.freeze(
-  ['diffRedondance'].map((colonne) =>
-    Object.freeze({ colonne, cle: `accueil.colonne.${colonne}`, explication: `accueil.explication.${colonne}` }),
-  ),
-);
+export const COLONNES_DU_RETENU = Object.freeze([
+  Object.freeze({
+    colonne: 'collisionsCumulees',
+    cle: 'propositions.colonne.collisionsCumulees',
+    explication: 'accueil.explication.collisionsCumulees',
+  }),
+]);
 
 /**
  * Les clés de la meilleure proposition du classement qu'une ligne montre
@@ -127,7 +130,7 @@ export function signalementsDe(ligne) {
 }
 
 /**
- * Les six informations d'une ligne (§ 8.1), la différence à la cible de son
+ * Les six informations d'une ligne (§ 8.1), les collisions cumulées de son
  * retenu et l'identifiant de la meilleure proposition de son classement,
  * mis en forme, et ses signalements. nom : celui inscrit dans le fichier, ou la base quand l'état
  * ne se lit pas ; date, participants et dernière modification par format,
@@ -138,21 +141,20 @@ export function signalementsDe(ligne) {
  * l'affiche, en entier.
  *
  * Les deux valeurs de résumé lisent resume, ce que facade.resumer a rendu
- * pour la ligne : diffRedondance, celle de mesuresDuRetenu, par format, la
- * valeur absente sans retenu mesurable — elle se lit telle quelle, jamais
- * refaite ; meilleure.id, l'identifiant de meilleureDuClassement, par
- * format, la valeur absente sans proposition classée. Sans resume, la
- * ligne est enAttente : son résumé se calcule encore, et les deux valeurs
- * valent la valeur absente, que le composant remplace par le signe du
- * chargement.
+ * pour la ligne : collisionsCumulees, celles de mesuresDuRetenu, par format,
+ * la valeur absente sans retenu mesurable — elles se lisent telles quelles,
+ * jamais refaites ; meilleure.id, l'identifiant de meilleureDuClassement, par
+ * format, la valeur absente sans proposition classée. Sans resume, la ligne
+ * est enAttente : son résumé se calcule encore, et les deux valeurs valent la
+ * valeur absente, que le composant remplace par le signe du chargement.
  *
  * @param {Object} ligne   LigneListe (evenements.js)
  * @param {ReturnType<import('../../application/format.js').creerFormat>} format
- * @param {{mesuresDuRetenu: {diffRedondance: number}|null,
+ * @param {{mesuresDuRetenu: {collisionsCumulees: number}|null,
  *          meilleureDuClassement: {id: number}|null}} [resume]
  * @returns {{nom: string, date: string, etat: string, participants: string,
  *            modification: string, chemin: string, enAttente: boolean,
- *            diffRedondance: string, meilleure: {id: string},
+ *            collisionsCumulees: string, meilleure: {id: string},
  *            signalements: Array<{cle: string, details: Object, noms: string[]}>}}
  */
 export function ligneAffichee(ligne, format, resume) {
@@ -164,7 +166,7 @@ export function ligneAffichee(ligne, format, resume) {
     modification: ligne.derniereModification === null ? format.nombre(null) : format.horodatage(ligne.derniereModification),
     chemin: ligne.chemin,
     enAttente: resume === undefined,
-    diffRedondance: format.nombre(resume?.mesuresDuRetenu?.diffRedondance ?? null),
+    collisionsCumulees: format.nombre(resume?.mesuresDuRetenu?.collisionsCumulees ?? null),
     meilleure: { id: format.nombre(resume?.meilleureDuClassement?.id ?? null) },
     signalements: signalementsDe(ligne),
   };

@@ -199,8 +199,8 @@ table, les objectifs des tables tour par tour, les animateurs, et la performance
 du calcul qui a produit la proposition. Le logiciel sépare ce que le moteur a
 décidé de ce que les réservations imposent (§ 5.4). Retenir fait passer le plan
 à l'état *Retenu* (§ 9) ; les propositions non retenues restent disponibles. Le
-retenu se résume ensuite dans la liste des événements, par la différence absolue
-de sa somme de redondance à la cible de l'événement (§ 8.1).
+retenu se résume ensuite dans la liste des événements, par ses collisions
+cumulées (§ 5.4, § 8.1).
 
 **11. Ajuster à la main.** *Facultative, reprenable.* Le même geste qu'à
 l'étape 7 déplace maintenant une personne réelle dans le placement retenu. **Le
@@ -1905,35 +1905,32 @@ en-têtes de colonnes se groupent en « Événement », « Placement retenu » e
 « Meilleure proposition du classement », et le nom de chaque ligne en est
 l'en-tête, la date et le chemin en petite ligne dessous. Sous le tableau, des
 cartes offrent la création, le dossier de travail et les démonstrations. Une
-colonne résume en plus le **placement retenu** : « Diff somme d'appartenance »,
-|cible − Σ r(p)|, où Σ r(p) est la somme de redondance du retenu — le nombre de
-la colonne « Redondance d'appartenance, somme Σ r(p) » du tableau des
-propositions — et la cible celle de l'événement (§ 8.9), 1000 par défaut,
-réglable dans la section des propositions. Elle se lit dans la même mesure que
-le tableau, sans rien écrire ; un événement sans retenu, ou dont le retenu est
-fautif ou en dérive (§ 8.9, § 9), y porte « — ». Chaque ligne porte aussi la
-**« Meilleure proposition du classement »**, sous les libellés du bloc que la
-section de la génération montre en tête : l'identifiant de la proposition au
-rang 1 du classement (§ 5.7) — la même proposition que ce bloc et que la
-première ligne du tableau des propositions, retenue ou non ; une proposition
-fautive, que l'ouverture écarte (§ 8.9, point 3), n'y entre pas. Sans
-proposition classée — aucune, ou aucune qui décrive encore la configuration —,
-elle vaut « — ». La liste ne montre les collisions cumulées ni du retenu ni de
-la meilleure proposition : le tableau des propositions et le bloc de la
-génération les portent. Chaque intitulé s'explique dans une infobulle, posée
-sur l'en-tête de sa colonne.
-**La liste paraît avant ses colonnes calculées** : ses lignes s'affichent dès le
-relevé du dossier, et les mesures du retenu et la meilleure proposition, qui
-évaluent chaque événement, se calculent ensuite, un événement après l'autre, la
-main rendue au navigateur entre deux. Tant que celles d'une ligne se calculent,
-chacune de ses valeurs porte un signe de chargement qui tourne ; chaque ligne
-montre les siennes dès qu'elles sont obtenues, et une liste relue abandonne les
-calculs de la précédente.
-**Un répertoire vide n'affiche pas une liste vide** : il présente la commande de
-création et les démonstrations — ni tuiles, ni tableau, ni résumé —, car une
-liste vide sans issue est le premier écran que voit un opérateur qui lance
-l'exécutable. Un filtre qui ne retient aucune ligne le dit, sans laisser un
-tableau vide.
+colonne résume en plus le **placement retenu** : « Collisions cumulées (paire et
+tour) », les collisions cumulées du retenu (§ 5.4) — le nombre que la colonne du
+même intitulé du tableau des propositions porte sur la ligne du retenu. Elle se
+lit dans la même mesure que le tableau, sans rien écrire ; un événement sans
+retenu, ou dont le retenu est fautif ou en dérive (§ 8.9, § 9), y porte « — ».
+Chaque ligne porte aussi la **« Meilleure proposition du classement »**, sous
+les libellés du bloc que la section de la génération montre en tête :
+l'identifiant de la proposition au rang 1 du classement (§ 5.7) — la même
+proposition que ce bloc et que la première ligne du tableau des propositions,
+retenue ou non ; une proposition fautive, que l'ouverture écarte (§ 8.9, point
+3), n'y entre pas. Sans proposition classée — aucune, ou aucune qui décrive
+encore la configuration —, elle vaut « — ». La liste ne montre pas les
+collisions cumulées de la meilleure proposition : le tableau des propositions et
+le bloc de la génération les portent. Chaque intitulé s'explique dans une
+infobulle, posée sur l'en-tête de sa colonne. **La liste paraît avant ses
+colonnes calculées** : ses lignes s'affichent dès le relevé du dossier, et les
+mesures du retenu et la meilleure proposition, qui évaluent chaque événement, se
+calculent ensuite, un événement après l'autre, la main rendue au navigateur
+entre deux. Tant que celles d'une ligne se calculent, chacune de ses valeurs
+porte un signe de chargement qui tourne ; chaque ligne montre les siennes dès
+qu'elles sont obtenues, et une liste relue abandonne les calculs de la
+précédente. **Un répertoire vide n'affiche pas une liste vide** : il présente la
+commande de création et les démonstrations — ni tuiles, ni tableau, ni résumé —,
+car une liste vide sans issue est le premier écran que voit un opérateur qui
+lance l'exécutable. Un filtre qui ne retient aucune ligne le dit, sans laisser
+un tableau vide.
 
 Le logiciel n'ouvre **qu'un événement à la fois**, et ferme le précédent sans
 question : il n'y a rien à enregistrer.
@@ -2003,6 +2000,12 @@ retour est **l'entrée qu'elle vise**. *Défaire* vise le prédécesseur sur ce 
 **distingue le fil courant des fils abandonnés** : un opérateur qui croit
 remonter son fil et atterrit sur un fil mort obtient un état légitime, jamais
 celui qu'il visait.
+
+**Défaire et refaire avancent toujours d'un pas.** Quand l'instant visé a le
+même contenu que l'instant courant, leur entrée s'écrit quand même : c'est elle
+qui déplace le fil, et un refus laisserait chaque nouveau « Défaire » buter sur
+le même instant. Revenir à un tel instant, choisi dans la liste, ne change rien
+et ne s'écrit pas.
 
 **Les jalons.** L'opérateur peut **nommer l'instant courant**, et filtrer
 l'historique sur les instants nommés. Nommer ne modifie pas le contenu : c'est
@@ -2514,19 +2517,21 @@ retrouve-t-il ?*
 | participants, tables, tours, réservations, titres de place, filiation | **champs nommés**, un objet par chose | c'est de la saisie d'opérateur : perdue, elle est perdue, et elle doit se lire à l'œil quand un fichier s'abîme. Elle est petite — de l'ordre de 40 ko pour 260 personnes avec courriels |
 | placements engendrés | **forme positionnelle** | c'est la partie volumineuse, et la seule qui se **recalcule** : une proposition perdue coûte une relance |
 
-#### Un réglage facultatif : la cible de la somme de redondance
+#### Un champ ancien, oublié : la cible de la somme de redondance
 
-Les réglages de l'événement portent un champ **facultatif**, `cibleRedondance`,
-un entier ≥ 0 : la cible à laquelle la liste des événements compare la somme de
-redondance Σ r(p) du retenu (§ 8.1). **Absent, il vaut 1000.** Un fichier qui ne
-le porte pas — chaque fichier écrit avant lui, chaque démonstration livrée — se
-lit à la cible 1000, et s'écrit sans lui. Une valeur négative, non entière, hors
-des entiers exacts ou d'une autre sorte est une faute de forme du fichier
-(§ 8.8). La commande « Cible de la somme de redondance », un champ de la section
-des propositions, le pose — une entrée d'historique, refusée en lecture et sur
-un plan bloqué — et le retire quand la cible revient à 1000 : deux fichiers de
-même cible s'écrivent pareil. Un correctif du journal (§ 8.6) le pose quand il
-apparaît et le retire quand il disparaît.
+Un fichier écrit par une construction antérieure peut porter, dans les
+réglages de l'événement, un champ `cibleRedondance` : la cible à laquelle la
+liste des événements comparait la somme de redondance Σ r(p) du retenu. La
+liste montre les collisions cumulées du retenu (§ 8.1), et ce champ ne sert
+plus. **Il est oublié** : un fichier qui le porte se lit sans faute de forme, sans
+refus ni avertissement, quelle que soit sa valeur ; la charge lue ne le porte
+pas, et le premier geste écrit le fichier sans lui. Aucune commande ne le pose.
+Un correctif du journal (§ 8.6) qui le pose ou le retire, qu'un journal plus
+ancien porte, s'applique sans rien changer : chaque instant se restitue sans
+lui. L'instant qui le posait ou le retirait se restitue donc comme son
+voisin : le défaire ou le refaire s'écrit quand même, d'une entrée qui ne
+change rien, et le fil avance d'un pas (§ 8.3). Hors des réglages, la même clé
+reste une clé inconnue, et une faute de forme.
 
 #### Deux champs facultatifs : le placement daté
 
@@ -2552,7 +2557,7 @@ là, et nulle part ailleurs : le pied des pages, la feuille de contrôle, le bad
 
 Chacun est **absent tant qu'il vaut son défaut** et s'écrit après les clés du
 format 1 de son objet, dans l'ordre du tableau qui suit — pour les réglages,
-`cibleRedondance`, `regleObjectifs`, `respecterObjectifs`, `modeObjectifs`,
+`regleObjectifs`, `respecterObjectifs`, `modeObjectifs`,
 `rencontrerAnimateurs`, `priorites` : un événement qui n'emploie ni étiquette,
 ni objectif, ni ordre réglé s'écrit comme un fichier du format 1, au numéro de
 format près. Chacun se pose par une commande — une entrée d'historique, refusée

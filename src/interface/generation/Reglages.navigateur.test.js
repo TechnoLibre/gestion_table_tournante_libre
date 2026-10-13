@@ -130,10 +130,10 @@ const entree = (cible, cle) => cible.querySelector(`input[data-champ="${cle}"]`)
 const libelleDe = (cible, cle) => cible.querySelector(`label[for="${entree(cible, cle).id}"]`).textContent.trim();
 
 describe('Reglages : l’écran montre la définition (§ 19.8)', () => {
-  test('la définition livrée : la graine, chaque entrée de la génération dans son ordre, sous son libellé, à la valeur de la charge, puis les cœurs ; la cible des propositions n’y est pas', async () => {
+  test('la définition livrée : la graine, chaque entrée de la génération dans son ordre, sous son libellé, à la valeur de la charge, puis les cœurs ; aucune cible de redondance', async () => {
     const cible = await monter();
     expect(DE_LA_GENERATION.length).toBeGreaterThan(0);
-    expect(DE_LA_GENERATION.length).toBeLessThan(REGLAGES_GENERATION.length);
+    expect(DE_LA_GENERATION.length).toBe(REGLAGES_GENERATION.length);
     expect(designations(cible)).toEqual(['graine', ...designationsAttendues(REGLAGES_GENERATION), 'coeursAutomatiques']);
     expect(cible.querySelector('[data-champ="cibleRedondance"]')).toBeNull();
     for (const { cle, etiquette, genre, defaut, valeurs } of DE_LA_GENERATION) {

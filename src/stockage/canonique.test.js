@@ -737,7 +737,6 @@ describe('les champs facultatifs du format 2 (§ 8.9, A16)', () => {
     charge.reglages.modeObjectifs = 'chacun';
     charge.reglages.respecterObjectifs = false;
     charge.reglages.regleObjectifs = 'et';
-    charge.reglages.cibleRedondance = 800;
     charge.participants[0].etiquettes = ['finance', 'bénévole', 'Montréal'];
     charge.tables[1].objectifs = [
       { portee: 'tour', tour: 2, regle: 'ou', etiquettes: ['ressources humaines', 'finance'] },
@@ -751,7 +750,7 @@ describe('les champs facultatifs du format 2 (§ 8.9, A16)', () => {
       remplacer(
         TEXTE_CONTRAT,
         '"generation":{"nombre":5,"arret":200000,"historique":1000}}',
-        '"generation":{"nombre":5,"arret":200000,"historique":1000},"cibleRedondance":800,"regleObjectifs":"et","respecterObjectifs":false,"modeObjectifs":"chacun","rencontrerAnimateurs":true}',
+        '"generation":{"nombre":5,"arret":200000,"historique":1000},"regleObjectifs":"et","respecterObjectifs":false,"modeObjectifs":"chacun","rencontrerAnimateurs":true}',
       ),
       '"notes":null,"exclu":false},\n      {"id":2',
       '"notes":null,"exclu":false,"etiquettes":["Montréal","bénévole","finance"]},\n      {"id":2',
@@ -769,12 +768,20 @@ describe('les champs facultatifs du format 2 (§ 8.9, A16)', () => {
 
   test('absents, ils ne s’écrivent pas : la charge du format 1 rend le texte du contrat', () => {
     const charge = chargeFormat2();
-    for (const cle of ['cibleRedondance', 'regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs']) {
+    for (const cle of ['regleObjectifs', 'respecterObjectifs', 'modeObjectifs', 'rencontrerAnimateurs']) {
       delete charge.reglages[cle];
     }
     delete charge.participants[0].etiquettes;
     delete charge.tables[1].objectifs;
     assert.equal(serialiser(charge, ENTETE), TEXTE_CONTRAT);
+  });
+
+  test('la cible de redondance, un ancien réglage qu’une charge porte encore, ne se copie ni ne s’écrit', () => {
+    const charge = chargeFormat2();
+    charge.reglages = { cibleRedondance: 800, ...charge.reglages };
+    assert.equal(Object.hasOwn(canoniser(charge).reglages, 'cibleRedondance'), false);
+    assert.equal(serialiser(charge, ENTETE), TEXTE_FORMAT_2);
+    assert.equal(serialiserCharge(charge), serialiserCharge(chargeFormat2()));
   });
 
   test('l’ordre des étiquettes est celui des unités de code : une lettre hors du plan de base passe avant U+FF21, une majuscule avant une minuscule', () => {

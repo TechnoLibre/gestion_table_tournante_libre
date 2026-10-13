@@ -40,7 +40,6 @@ const ENTREES = [
   ['data-chemin-planche', 'badges : le chemin de la planche produite, ou son nom téléchargé', ['']],
   ['data-choix-siege', 'plan : un siège offert par le panneau d’une table, par son rang', null],
   ['data-cible', 'la cible d’une commande : section, groupe, colonne, vue imprimée ou papier', null],
-  ['data-cible-redondance', 'propositions : le champ de la cible de redondance', ['']],
   ['data-classement', 'propositions : les lignes classées', ['']],
   ['data-coeurs', 'génération : le réglage des cœurs de calcul', ['']],
   ['data-coeurs-disponibles', 'génération : la valeur automatique des cœurs', ['']],

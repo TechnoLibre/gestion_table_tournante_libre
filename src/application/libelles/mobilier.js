@@ -251,7 +251,6 @@ export const TABLE = new Map([
     ({ cle, valeur }) =>
       `${nomDans(NOMS_DES_REGLAGES, cle, 'réglage')} : ${cle === 'modeObjectifs' ? nomMode(valeur) : valeurDeReglage(valeur)}`,
   ],
-  ['ENTREE_CHANGER_CIBLE_REDONDANCE', ({ cible }) => `Cible de la somme de redondance : ${cible}`],
   [
     'ENTREE_POSER_OBJECTIF',
     ({ numero, tour, regle, etiquettes }) =>

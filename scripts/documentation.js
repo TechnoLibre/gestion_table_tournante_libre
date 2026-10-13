@@ -373,7 +373,6 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   changerDefaut: { sieges: 10, realignees: 4 },
   changerTours: { tours: 3, retirees: 2 },
   modifierReglage: { cle: 'separerAppartenances', valeur: false },
-  changerCibleRedondance: { cible: 1200 },
   changerEtiquettes: { personne: 'Iris Ombrelle', ajoutees: ['finance'], retirees: [] },
   poserObjectif: { numero: 3, tour: null, regle: null, etiquettes: ['finance'] },
   retirerObjectif: { numero: 3, tour: 2 },

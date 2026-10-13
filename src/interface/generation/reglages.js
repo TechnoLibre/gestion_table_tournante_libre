@@ -16,8 +16,7 @@
 //              generation.<nom> pour un champ de la génération, <nom> sinon ;
 //   etiquette  la clé du libellé, qui porte l'unité pour un champ ;
 //   unite      ce qu'un champ compte, 'propositions' ou 'mouvements' ; null
-//              pour une bascule, un choix, l'ordre, et pour la cible, une
-//              somme sans unité ;
+//              pour une bascule, un choix, l'ordre ;
 //   defaut     la valeur d'une charge neuve, ou celle d'un réglage facultatif
 //              que la charge ne porte pas ;
 //   genre      'champ', une saisie entière ; 'bascule', une case à cocher ;
@@ -25,9 +24,7 @@
 //              l'ordre des priorités, une liste de paliers que son éditeur
 //              règle (Priorites.svelte) ;
 //   section    la section de l'écran qui le montre : 'generation', écrit par
-//              modifierReglage — l'ordre par changerPriorites —, ou
-//              'propositions', la cible de la somme de redondance, écrite par
-//              changerCibleRedondance ;
+//              modifierReglage — l'ordre par changerPriorites — ;
 //   valeurs    les valeurs d'un choix, dans l'ordre de ses boutons ; le
 //              libellé de chacune est <etiquette>.<valeur>, son explication
 //              <etiquette>.<valeur>.explication ;
@@ -40,23 +37,22 @@
 //
 // Les défauts se lisent sur la charge d'un événement neuf, telle que la
 // commande de création la pose (chargeNeuve) : creerCharge y copie
-// GENERATION_PAR_DEFAUT et y écrit les bascules, et l'interface n'importe
-// pas le stockage. La charge lue ici n'est écrite nulle part. Les réglages
-// facultatifs n'y sont pas : la cible a pour défaut
-// CIBLE_REDONDANCE_PAR_DEFAUT, l'ordre des priorités LISTE_PAR_DEFAUT, lue
-// dans le registre par l'application (priorites.js). Le mode prend ses
-// valeurs et son défaut, le premier, dans MODES_OBJECTIFS, et son critère
-// dans CASES, celui que sa case fait compter : le registre, que
+// GENERATION_PAR_DEFAUT et y écrit les bascules, et l'interface n'importe pas
+// le stockage. La charge lue ici n'est écrite nulle part. Les réglages
+// facultatifs n'y sont pas : l'ordre des priorités a pour défaut
+// LISTE_PAR_DEFAUT, lue dans le registre par l'application (priorites.js). Le
+// mode prend ses valeurs et son défaut, le premier, dans MODES_OBJECTIFS, et
+// son critère dans CASES, celui que sa case fait compter : le registre, que
 // l'application réexporte (contrainte 35). Les deux cases portent ici le
 // défaut que le stockage leur lit (§ 8.9), et les épreuves de
 // reglages.test.js les comparent à ses lecteurs.
 import { chargeNeuve } from '../../application/commandes.js';
-import { CASES, CIBLE_REDONDANCE_PAR_DEFAUT, MODES_OBJECTIFS } from '../../application/evaluation.js';
+import { CASES, MODES_OBJECTIFS } from '../../application/evaluation.js';
 import { SIEGES_PAR_DEFAUT, TOURS_PAR_DEFAUT } from '../../application/evenements.js';
 import { LISTE_PAR_DEFAUT } from './priorites.js';
 
 /** @typedef {'champ'|'bascule'|'choix'|'ordre'} GenreReglage */
-/** @typedef {'generation'|'propositions'} SectionReglage */
+/** @typedef {'generation'} SectionReglage */
 /**
  * @typedef {Readonly<{nom: string, cle: string, etiquette: string, unite: 'propositions'|'mouvements'|null,
  *                     defaut: number|boolean|string|ReadonlyArray<ReadonlyArray<{critere: string, poids: number}>>,
@@ -126,22 +122,11 @@ const PRIORITES = Object.freeze({
   section: 'generation',
 });
 
-const CIBLE = Object.freeze({
-  nom: 'cibleRedondance',
-  cle: 'cibleRedondance',
-  etiquette: 'propositions.cible.etiquette',
-  unite: null,
-  defaut: CIBLE_REDONDANCE_PAR_DEFAUT,
-  genre: 'champ',
-  section: 'propositions',
-});
-
 /**
  * Les réglages de la charge, dans l'ordre des écrans : les trois champs de
  * la recherche (§ 5.7, § 5.10), puis les six contraintes et l'attribution
  * des sièges, dans l'ordre du § 5.3 ; le mode des objectifs, que l'écran
- * montre sous sa case ; l'ordre des priorités ; enfin la cible de la somme
- * de redondance (§ 8.9), de la section des propositions.
+ * montre sous sa case ; enfin l'ordre des priorités.
  *
  * @type {ReadonlyArray<EntreeReglage>}
  */
@@ -158,7 +143,6 @@ export const REGLAGES_GENERATION = Object.freeze([
   bascule('attribuerSieges'),
   MODE_OBJECTIFS,
   PRIORITES,
-  CIBLE,
 ]);
 
 /**

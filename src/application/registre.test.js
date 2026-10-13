@@ -401,14 +401,6 @@ const EXEMPLES = new Map([
     },
   ],
   [
-    'changerCibleRedondance',
-    {
-      accepte: { args: { cible: '1200' } },
-      refuse: { args: { cible: '-1' }, code: 'NON_ENTIER', remede: null },
-      sansEffet: { args: { cible: '1000' } },
-    },
-  ],
-  [
     'changerEtiquettes',
     {
       accepte: { args: { id: 2, ajouter: 'finance, Montréal' } },

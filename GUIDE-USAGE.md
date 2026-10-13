@@ -807,7 +807,6 @@ réglage du poste, pour la séance, automatique par défaut (étape 9).
 | Attribuer les sièges | Génération | décochée |
 | Objectifs des tables : chercher d'abord | Génération | le plus de places servies |
 | Ordre des priorités | Génération | écart au plafond a priori, puis excédent de collisions, puis collisions cumulées, puis tours hors objectif, puis rencontres répétées et retours, puis animateurs non rencontrés, puis redondance d'appartenance |
-| Cible de la somme de redondance | Propositions | 1 000 |
 
 <!-- engendre:fin reglages -->
 
@@ -877,7 +876,6 @@ l’historique ; les noms des exemples sont inventés.
 | `changerDefaut` | Sièges par défaut : 10 ; 4 tables réalignées |
 | `changerTours` | Nombre de tours : 3 ; 2 réservations retirées |
 | `modifierReglage` | Séparer les appartenances : désactivé |
-| `changerCibleRedondance` | Cible de la somme de redondance : 1200 |
 | `poserObjectif` | Table 3 : objectif de la soirée « finance », règle par défaut |
 | `retirerObjectif` | Table 3, tour 2 : objectif retiré |
 | `changerRegleObjectifs` | Règle par défaut des objectifs : toutes les étiquettes |

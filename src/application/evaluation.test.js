@@ -46,9 +46,8 @@ import { deriveSansRevalider, fautes, planDepuisFichier } from '../stockage/plac
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
 import { configurationDe } from './configuration.js';
+import * as EVALUATION from './evaluation.js';
 import {
-  CIBLE_REDONDANCE_PAR_DEFAUT,
-  cibleRedondance,
   detaillerQualite,
   evaluer,
   premiereDuClassement,
@@ -484,36 +483,32 @@ describe("évaluation : une configuration qui ne se tient pas", () => {
   });
 });
 
-describe('resumeDuRetenu : la différence à la cible que lit la liste des événements (§ 5.4, § 8.1, § 8.9)', () => {
+describe('resumeDuRetenu : les collisions cumulées du retenu que lit la liste des événements (§ 5.4, § 8.1)', () => {
   // La petite démonstration, trois propositions générées, la deuxième retenue.
   function retenue() {
     const generees = generee(chargeDemo('petite-conflit'), { graine: 3, nombre: 3, arret: 300 });
     return executer(generees, 'retenirProposition', { id: generees.propositions[1].id });
   }
 
-  test("la seule différence à la cible, 1000 par défaut, contre le Σ r(p) de la ligne du retenu d'evaluer", () => {
+  test("les seules collisions cumulées (paire et tour), celles de la ligne du retenu d'evaluer et de mesurer", () => {
     const charge = figer(retenue());
     const resume = resumeDuRetenu(charge);
     const { mesures } = evaluer(charge).retenu;
-    assert.ok(mesures.totalRedondance !== 1000, 'la différence se distingue de zéro');
-    assert.deepEqual(resume, { diffRedondance: Math.abs(1000 - mesures.totalRedondance) });
+    assert.ok(mesures.collisionsCumulees > 0, 'le retenu porte des collisions');
+    assert.notEqual(mesures.collisionsCumulees, mesures.totalRedondance);
+    assert.deepEqual(resume, { collisionsCumulees: mesures.collisionsCumulees });
     const instance = normaliser(configurationDe(charge));
     const attendues = mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
-    assert.equal(attendues.totalRedondance, mesures.totalRedondance);
-    assert.equal(CIBLE_REDONDANCE_PAR_DEFAUT, 1000);
-    assert.equal(cibleRedondance(charge), 1000);
+    assert.equal(attendues.collisionsCumulees, mesures.collisionsCumulees);
   });
 
-  test("une cible propre à l'événement : la différence se lit contre elle, en valeur absolue, des deux côtés", () => {
+  test('aucune cible : le résumé ne dépend pas d’un champ cibleRedondance resté dans les réglages, et le module n’en exporte plus', () => {
     const charge = retenue();
-    const total = evaluer(charge).retenu.mesures.totalRedondance;
-    for (const cible of [0, total, total + 7, 5_000]) {
-      const avecCible = executer(charge, 'changerCibleRedondance', { cible: String(cible) });
-      assert.equal(cibleRedondance(avecCible), cible);
-      assert.deepEqual(resumeDuRetenu(avecCible), { diffRedondance: Math.abs(cible - total) }, String(cible));
-    }
-    const dessous = executer(charge, 'changerCibleRedondance', { cible: '0' });
-    assert.equal(resumeDuRetenu(dessous).diffRedondance, total);
+    const avecChamp = structuredClone(charge);
+    avecChamp.reglages.cibleRedondance = 25;
+    assert.deepEqual(resumeDuRetenu(avecChamp), resumeDuRetenu(charge));
+    assert.equal(Object.hasOwn(EVALUATION, 'cibleRedondance'), false);
+    assert.equal(Object.hasOwn(EVALUATION, 'CIBLE_REDONDANCE_PAR_DEFAUT'), false);
   });
 
   test('sans retenu, null ; un retenu fautif ou en dérive, null, sans lever', () => {

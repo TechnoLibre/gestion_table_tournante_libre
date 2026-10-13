@@ -987,7 +987,6 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['changerDefaut', { sieges: 3, realigner: false }],
       ['changerTours', { tours: 3 }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
-      ['changerCibleRedondance', { cible: '1200' }],
       ['changerEtiquettes', { id: 3, ajouter: 'finance' }],
       ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
       ['retirerObjectif', { table: 2, tour: null }],

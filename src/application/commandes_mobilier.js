@@ -2,10 +2,10 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Le registre des commandes du mobilier — tables, sièges, tours, réglages,
-// cible de la somme de redondance, objectifs des tables et leur règle par
-// défaut, ordre des priorités et mode des objectifs (§ 4, § 4.5, § 5.3,
-// § 5.7, § 6, § 7.1, § 8.2, § 8.9, § 9), que commandes.js réunit aux autres. Ses imports n'atteignent jamais commandes.js : le registre
-// réuni dépend de lui, non l'inverse.
+// objectifs des tables et leur règle par défaut, ordre des priorités et
+// mode des objectifs (§ 4, § 4.5, § 5.3, § 5.7, § 6, § 7.1, § 8.2, § 8.9,
+// § 9), que commandes.js réunit aux autres. Ses imports n'atteignent jamais
+// commandes.js : le registre réuni dépend de lui, non l'inverse.
 //
 // Chaque commande suit le contrat de commandes.js : une fonction pure
 // (charge, arguments) → { charge, libelle, avertissements }, la charge reçue
@@ -27,11 +27,9 @@
 import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js';
 import { CRITERES, MODES_OBJECTIFS, POIDS_MAX, seulsASonPalier, verifierPriorites } from '../moteur/criteres.js';
 import {
-  CIBLE_REDONDANCE_PAR_DEFAUT,
   SCHEMA,
   TOURS_MAX,
   capacite,
-  cibleRedondance,
   critereCoche,
   modeObjectifs,
   priorites,
@@ -377,27 +375,6 @@ function modifierReglage(charge, { cle, valeur } = {}) {
   return { charge: suivante, libelle: libelle('ENTREE_MODIFIER_REGLAGE', { cle, valeur }), avertissements: [] };
 }
 
-/**
- * changerCibleRedondance {cible} (§ 5.4, § 8.1, § 8.9) : la cible de la
- * somme de redondance de l'événement, que la liste des événements compare à
- * Σ r(p) du retenu ; une saisie lue par lireEntier, un entier ≥ 0, NON_ENTIER
- * sinon — un signe moins compris —, remède null. La valeur par défaut,
- * CIBLE_REDONDANCE_PAR_DEFAUT, retire le champ des réglages : la charge
- * s'écrit alors comme une charge qui ne l'a jamais porté. La même valeur que
- * la cible courante, lue par cibleRedondance, est SANS_EFFET, champ écrit ou
- * non : une cible de 1000 écrite au fichier ne se retire pas par une saisie
- * qui ne change rien.
- */
-function changerCibleRedondance(charge, { cible: saisie } = {}) {
-  exigerModifiable(charge);
-  const cible = entierSaisi(saisie);
-  if (cible === cibleRedondance(charge)) throw refus('SANS_EFFET', { commande: 'changerCibleRedondance' });
-  const suivante = structuredClone(charge);
-  if (cible === CIBLE_REDONDANCE_PAR_DEFAUT) delete suivante.reglages.cibleRedondance;
-  else suivante.reglages.cibleRedondance = cible;
-  return { charge: suivante, libelle: libelle('ENTREE_CHANGER_CIBLE_REDONDANCE', { cible }), avertissements: [] };
-}
-
 // L'enregistrement de la table d'identifiant id qu'un objectif vise, ou
 // TABLE_DISPARUE {table}, remède null : aucun geste ne rend une table
 // supprimée.
@@ -715,7 +692,6 @@ export const COMMANDES_MOBILIER = new Map([
   ['changerDefaut', changerDefaut],
   ['changerTours', changerTours],
   ['modifierReglage', modifierReglage],
-  ['changerCibleRedondance', changerCibleRedondance],
   ['poserObjectif', poserObjectif],
   ['retirerObjectif', retirerObjectif],
   ['changerRegleObjectifs', changerRegleObjectifs],

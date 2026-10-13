@@ -45,6 +45,13 @@
 // fichier du format 1 ne les porte pas, et se lit sans conversion. Il ne se
 // réécrit qu'au premier geste, au format courant.
 //
+// Une clé que les réglages ont portée et ne portent plus — la cible de la
+// somme de redondance, cibleRedondance — est oubliée (oubliees de la règle
+// des réglages) : un fichier qui la porte se lit sans faute, quelle que soit
+// sa valeur, la charge rendue ne la porte pas, et le premier geste écrit le
+// fichier sans elle. Un correctif du journal qui la pose ou la retire
+// s'applique sans rien changer (correctifs.js).
+//
 // Les autres fonctions créent une charge ou dérivent d'elle la configuration
 // du moteur, l'état qu'impose son contenu, la capacité d'une table et la
 // valeur d'un réglage facultatif. Aucune ne modifie ce qu'elle reçoit.
@@ -86,13 +93,6 @@ export const TOURS_MAX = 100;
  */
 export const GENERATION_PAR_DEFAUT = Object.freeze({ nombre: 5, arret: 200_000, historique: HISTORIQUE_PAR_DEFAUT });
 
-/**
- * La cible de la somme de redondance d'un événement quand ses réglages n'en
- * portent pas (§ 8.9) : la liste des événements la compare à Σ r(p) du
- * placement retenu. Un fichier sans le champ se lit à cette valeur.
- */
-export const CIBLE_REDONDANCE_PAR_DEFAUT = 1000;
-
 // AAAA-MM-JJTHH:MM:SS±HH:MM, la forme que rend l'horloge de l'application.
 // Le calendrier ne se contrôle pas : un horodatage ne décide d'aucun ordre.
 const HORODATAGE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/;
@@ -113,10 +113,12 @@ export const estHorodatage = (valeur) => typeof valeur === 'string' && HORODATAG
 
 // Une règle du schéma ; types.js en décrit les propriétés (Regle). Un objet
 // porte ses champs, paires [clé, règle] dans l'ordre des clés, et l'ensemble
-// de leurs clés ; une liste porte la règle de ses éléments, et peut borner
-// sa longueur (min, max) et exiger des éléments distincts (distincts). Un
-// champ facultatif (optionnel) peut manquer à son objet : absent, il ne
-// s'écrit pas, et sa valeur par défaut se lit par la fonction qui le nomme.
+// de leurs clés, et peut nommer des clés oubliées (oubliees), admises de
+// toute valeur et jamais copiées ; une liste porte la règle de ses éléments,
+// et peut borner sa longueur (min, max) et exiger des éléments distincts
+// (distincts). Un champ facultatif (optionnel) peut manquer à son objet :
+// absent, il ne s'écrit pas, et sa valeur par défaut se lit par la fonction
+// qui le nomme.
 function regle(genre, proprietes) {
   return Object.freeze({ genre, nul: false, optionnel: false, ...proprietes });
 }
@@ -275,28 +277,32 @@ const PRIORITES = liste(
   { min: 1, optionnel: true },
 );
 
-const REGLAGES = objet([
-  ['separerAppartenances', BOOLEEN],
-  ['nouveauxVoisins', BOOLEEN],
-  ['nouvelleTable', BOOLEEN],
-  ['varierAppartenances', BOOLEEN],
-  ['attribuerSieges', BOOLEEN],
-  ['generation', objet([['nombre', entier(1)], ['arret', entier(1)], ['historique', entier(1)]])],
-  // Facultatifs, en dernier, dans l'ordre de A16 : un fichier qui n'en porte
-  // aucun s'écrit sans eux, au numéro de format près. La cible de la somme
-  // de redondance (cibleRedondance) ; la règle par défaut des objectifs,
-  // « et » seulement (regleObjectifs) ; la case des objectifs, décochée
-  // seulement (respecterObjectifs) ; le mode des objectifs hors du plus de
-  // places servies (modeObjectifs) ; la case des animateurs, cochée
-  // seulement (rencontrerAnimateurs) ; l'ordre des priorités hors de l'ordre
-  // par défaut (priorites).
-  ['cibleRedondance', entier(0, Infinity, { optionnel: true })],
-  ['regleObjectifs', horsDuDefaut('et')],
-  ['respecterObjectifs', horsDuDefaut(false)],
-  ['modeObjectifs', horsDuDefaut('chacun', 'minimum')],
-  ['rencontrerAnimateurs', horsDuDefaut(true)],
-  ['priorites', PRIORITES],
-]);
+// La cible de la somme de redondance (cibleRedondance), un réglage que les
+// fichiers ont porté : oubliée, elle se lit de toute valeur et ne s'écrit
+// plus.
+const REGLAGES = objet(
+  [
+    ['separerAppartenances', BOOLEEN],
+    ['nouveauxVoisins', BOOLEEN],
+    ['nouvelleTable', BOOLEEN],
+    ['varierAppartenances', BOOLEEN],
+    ['attribuerSieges', BOOLEEN],
+    ['generation', objet([['nombre', entier(1)], ['arret', entier(1)], ['historique', entier(1)]])],
+    // Facultatifs, en dernier, dans l'ordre de A16 : un fichier qui n'en
+    // porte aucun s'écrit sans eux, au numéro de format près. La règle par
+    // défaut des objectifs, « et » seulement (regleObjectifs) ; la case des
+    // objectifs, décochée seulement (respecterObjectifs) ; le mode des
+    // objectifs hors du plus de places servies (modeObjectifs) ; la case des
+    // animateurs, cochée seulement (rencontrerAnimateurs) ; l'ordre des
+    // priorités hors de l'ordre par défaut (priorites).
+    ['regleObjectifs', horsDuDefaut('et')],
+    ['respecterObjectifs', horsDuDefaut(false)],
+    ['modeObjectifs', horsDuDefaut('chacun', 'minimum')],
+    ['rencontrerAnimateurs', horsDuDefaut(true)],
+    ['priorites', PRIORITES],
+  ],
+  { oubliees: new Set(['cibleRedondance']) },
+);
 
 const PARTICIPANT = objet([
   ['id', IDENTIFIANT],
@@ -577,9 +583,11 @@ export function clesRangees(valeur) {
   return Object.keys(valeur).sort(comparerTextes);
 }
 
-// Plus petite des clés de valeur absentes de cles, en comparant les unités
-// UTF-16, ou undefined.
-const cleInconnue = (valeur, cles) => clesRangees(valeur).find((cle) => !cles.has(cle));
+// Plus petite des clés de valeur que la règle objet ne connaît pas — ni
+// l'une de ses clés, ni l'une de ses clés oubliées —, en comparant les
+// unités UTF-16, ou undefined.
+const cleInconnue = (valeur, { cles, oubliees }) =>
+  clesRangees(valeur).find((cle) => !cles.has(cle) && oubliees?.has(cle) !== true);
 
 // Format du fichier lu, contrôlé avant toute autre règle : il dit comment
 // lire le reste. Une racine qui n'est pas un objet, un en-tête ou un format
@@ -627,7 +635,7 @@ function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
       const faute = fauteDeForme(valeur[cle], regleDuChamp, joindre(chemin, cle), false);
       if (faute !== null) return faute;
     }
-    const inconnue = cleInconnue(valeur, regleDeValeur.cles);
+    const inconnue = cleInconnue(valeur, regleDeValeur);
     return inconnue === undefined ? null : joindre(chemin, inconnue);
   }
   if (regleDeValeur.genre === 'liste') {
@@ -642,7 +650,8 @@ function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
 /**
  * Chemin de la première valeur qui sort de sa règle, en profondeur, ou null
  * quand valeur est conforme ; ne lève jamais. D'un objet, chaque champ dans
- * l'ordre du schéma, puis la plus petite de ses clés inconnues ; d'une
+ * l'ordre du schéma, puis la plus petite de ses clés inconnues — une clé
+ * oubliée de sa règle n'en est pas une, quelle que soit sa valeur ; d'une
  * liste, chaque élément dans l'ordre des rangs. null est conforme à une
  * règle qui l'admet. Un champ absent se lit undefined, qu'admet seule une
  * règle facultative ; ailleurs, il se nomme par son chemin comme une valeur
@@ -810,14 +819,21 @@ function examinerReferences(charge, plus) {
   charge.titres.forEach((titre, rang) => examinerPlace(titre, `charge.titres[${rang}]`));
 }
 
+// Retire des réglages lus, en place, chaque clé oubliée de leur règle
+// (oubliees) : la charge que rend la lecture ne la porte pas.
+function oublierDesReglages(reglages) {
+  for (const cle of REGLAGES.oubliees) delete reglages[cle];
+}
+
 /**
  * Lit le texte d'un fichier d'état, sans rien écrire (§ 8.4, § 8.8). Une
  * marque d'ordre d'octets en tête est ignorée. Rend l'en-tête, la charge,
  * formatPlusRecent, vrai quand le format dépasse FORMAT, et manquants, ce que
  * les comptes des propositions et du retenu annoncent sans que la charge le
  * porte, qui ne refuse jamais le fichier (§ 8.9, point 3). Au format courant,
- * l'en-tête et la charge sont ceux que le texte porte, ni copiés ni triés :
- * canoniser les met dans l'ordre canonique. Un fichier d'un format plus
+ * l'en-tête et la charge sont ceux que le texte porte, ni copiés ni triés,
+ * les clés oubliées des réglages retirées (oublierDesReglages) : canoniser
+ * les met dans l'ordre canonique. Un fichier d'un format plus
  * récent s'ouvre en lecture seule et ne se réécrit jamais : l'en-tête et la
  * charge rendus sont des copies réduites aux clés que le schéma connaît, et
  * une faute de forme y porte la raison FORMAT_PLUS_RECENT ; les comptes et
@@ -856,6 +872,7 @@ export function analyser(texte) {
   const cheminFautif = premiereFaute(fichier, SCHEMA);
   if (cheminFautif !== null) faute(cheminFautif);
   const { entete, charge } = fichier;
+  oublierDesReglages(charge.reglages);
   examinerIdentifiants(charge, faute);
   examinerTours(charge, faute);
   examinerObjectifs(charge, faute);
@@ -945,18 +962,6 @@ export function configurationDepuisCharge(charge) {
 export function etatDeduit({ retenu, propositions }) {
   if (retenu !== null) return 'retenu';
   return propositions.length > 0 ? 'propose' : 'brouillon';
-}
-
-/**
- * La cible de la somme de redondance de l'événement (§ 8.9) : le réglage
- * cibleRedondance quand la charge le porte, CIBLE_REDONDANCE_PAR_DEFAUT
- * sinon. C'est la seule lecture de ce réglage.
- *
- * @param {import('./types.js').Charge} charge
- * @returns {number}
- */
-export function cibleRedondance(charge) {
-  return charge.reglages.cibleRedondance ?? CIBLE_REDONDANCE_PAR_DEFAUT;
 }
 
 // La règle par défaut des objectifs et le mode des objectifs quand les

@@ -63,18 +63,9 @@
   //
   // Habillage : le tableau et la phrase de l'ordre vivent dans une carte
   // titrée, « Effacer les propositions » à droite de son en-tête ; le message
-  // d'une liste vide et le champ de la cible, chacun dans sa carte.
-  //
-  // Le champ de la cible de la somme de redondance montre la cible de
-  // l'événement (cibleRedondance), et exécute changerCibleRedondance à la
-  // sortie du champ — une entrée ; la saisie se lit par lireEntier, et un
-  // refus se pose contre le champ (Champ).
+  // d'une liste vide dans sa carte.
   import { getContext, tick, untrack } from 'svelte';
-  import { lireEntier } from '../../application/capacite.js';
-  import { cibleRedondance } from '../../application/evaluation.js';
-  import { REGLAGES_GENERATION, reglagesDeSection } from '../generation/reglages.js';
   import Carte from '../primitives/Carte.svelte';
-  import Champ from '../primitives/Champ.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
   import Infobulle from '../primitives/Infobulle.svelte';
@@ -96,9 +87,6 @@
 
   const t = getContext('t');
   const format = getContext('format');
-  // Le champ de la cible lit l'entrée que lit aussi le tableau des réglages
-  // de la documentation (§ 19.8).
-  const [entreeCible] = reglagesDeSection(REGLAGES_GENERATION, 'propositions');
   const seance = getContext('seance');
   const ui = getContext('ui');
 
@@ -196,7 +184,6 @@
   }
 
   const effacer = () => seance.executer('effacerPropositions', {});
-  const changerCible = (cible) => seance.executer('changerCibleRedondance', { cible });
   const nommer = (id) => nomDe(charge, id);
 </script>
 
@@ -277,21 +264,6 @@
   {/if}
 
   <Infobulle id={idExplication} ouverte={expliquee} fermer={fermerExplication} />
-
-  {#if charge !== null}
-    <Carte>
-      <div class="cible" data-cible-redondance>
-        <Champ
-          cle={entreeCible.cle}
-          etiquette={entreeCible.etiquette}
-          valeur={cibleRedondance(charge)}
-          lire={lireEntier}
-          executer={changerCible}
-        />
-        <p class="aide">{t('propositions.cible.aide')}</p>
-      </div>
-    </Carte>
-  {/if}
 
   {#if aConfirmer !== null}
     <Confirmation
@@ -379,17 +351,5 @@
   .etendue:focus-visible {
     outline: 2px solid var(--couleur-focus);
     outline-offset: 2px;
-  }
-
-  .cible {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--espace-1);
-  }
-
-  .aide {
-    color: var(--couleur-page-texte-secondaire);
-    font-size: var(--taille-texte-petit);
   }
 </style>

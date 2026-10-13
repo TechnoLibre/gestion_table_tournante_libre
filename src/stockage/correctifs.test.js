@@ -1836,8 +1836,9 @@ describe('le marqueur de chaise vide : correctifs et forme canonique (§ 8.9)', 
   });
 });
 
-describe('la cible de la somme de redondance : un champ facultatif dans un correctif (§ 8.6, § 8.9)', () => {
-  // Une charge neuve, sans la cible, et la même portant la cible donnée.
+describe('la cible de la somme de redondance : un ancien réglage, que le correctif oublie (§ 8.6, § 8.9)', () => {
+  // Une charge neuve, sans la cible, et la même portant encore la cible
+  // donnée en mémoire.
   const sans = () => creerCharge({ id: 'evt-cible', nom: 'Veillée des Grives', siegesParDefaut: 6, tours: 2 });
   const avec = (cible) => {
     const charge = sans();
@@ -1846,34 +1847,51 @@ describe('la cible de la somme de redondance : un champ facultatif dans un corre
   };
   const CHEMIN = ['reglages', 'cibleRedondance'];
 
-  test('absente puis posée : une pose ; posée puis retirée : un retrait ; changée : une pose ; absente des deux côtés : rien', () => {
-    const cas = [
-      [sans(), avec(1200), [{ op: 'poser', chemin: CHEMIN, valeur: 1200 }]],
-      [avec(1200), sans(), [{ op: 'retirer', chemin: CHEMIN }]],
-      [avec(1200), avec(0), [{ op: 'poser', chemin: CHEMIN, valeur: 0 }]],
-      [sans(), sans(), []],
-    ];
-    assert.ok(cas.length > 0);
-    for (const [a, b, attendu] of cas) {
-      const correctif = difference(a, b);
-      assert.deepEqual(correctif, attendu);
-      const rendue = appliquer(a, JSON.parse(JSON.stringify(correctif)));
-      assert.deepEqual(rendue, canoniser(b));
-      assert.equal(serialiser(rendue, ENTETE), serialiser(b, ENTETE));
+  test('difference ne la pose ni ne la retire jamais : deux charges qui ne diffèrent que par elle ont un correctif vide', () => {
+    for (const [a, b] of [
+      [sans(), avec(1200)],
+      [avec(1200), sans()],
+      [avec(1200), avec(0)],
+    ]) {
+      assert.deepEqual(difference(a, b), []);
+      assert.equal(serialiser(a, ENTETE), serialiser(b, ENTETE));
     }
   });
 
-  test('une cible hors de sa règle, un retrait de cible absente ou de tout autre champ, une pose sous une clé inconnue lèvent CORRECTIF', () => {
+  test('la pose et le retrait qu’écrivait un journal antérieur s’appliquent sans rien changer, de toute valeur, la clé présente ou non', () => {
+    const operations = [
+      { op: 'poser', chemin: CHEMIN, valeur: 800 },
+      { op: 'poser', chemin: CHEMIN, valeur: 0 },
+      { op: 'poser', chemin: CHEMIN, valeur: -1 },
+      { op: 'poser', chemin: CHEMIN, valeur: null },
+      { op: 'poser', chemin: CHEMIN, valeur: '1000' },
+      { op: 'retirer', chemin: CHEMIN },
+    ];
+    for (const depart of [sans(), avec(800)]) {
+      for (const operation of operations) {
+        const rendue = appliquer(depart, [JSON.parse(JSON.stringify(operation))]);
+        assert.equal(Object.hasOwn(rendue.reglages, 'cibleRedondance'), false, JSON.stringify(operation));
+        assert.deepEqual(rendue, canoniser(sans()), JSON.stringify(operation));
+      }
+    }
+    const suite = appliquer(sans(), [
+      { op: 'poser', chemin: CHEMIN, valeur: 800 },
+      { op: 'poser', chemin: ['reglages', 'regleObjectifs'], valeur: 'et' },
+      { op: 'retirer', chemin: CHEMIN },
+    ]);
+    assert.equal(suite.reglages.regleObjectifs, 'et');
+    assert.equal(Object.hasOwn(suite.reglages, 'cibleRedondance'), false);
+  });
+
+  test('l’oubli ne vaut que pour elle, à sa place : un réglage obligatoire retiré, une autre clé inconnue, la cible hors des réglages ou sous elle lèvent CORRECTIF', () => {
     const cas = [
-      ['cible négative', sans(), { op: 'poser', chemin: CHEMIN, valeur: -1 }],
-      ['cible non entière', avec(10), { op: 'poser', chemin: CHEMIN, valeur: 2.5 }],
-      ['cible nulle', sans(), { op: 'poser', chemin: CHEMIN, valeur: null }],
-      ['retrait de la cible absente', sans(), { op: 'retirer', chemin: CHEMIN }],
       ["retrait d'un réglage obligatoire", avec(10), { op: 'retirer', chemin: ['reglages', 'attribuerSieges'] }],
       ['pose sous une clé inconnue', sans(), { op: 'poser', chemin: ['reglages', 'cibleInconnue'], valeur: 3 }],
+      ['retrait d’une clé inconnue', sans(), { op: 'retirer', chemin: ['reglages', 'cibleInconnue'] }],
       ['pose de la cible hors des réglages', sans(), { op: 'poser', chemin: ['evenement', 'cibleRedondance'], valeur: 3 }],
+      ['pose sous la cible', avec(10), { op: 'poser', chemin: [...CHEMIN, 'valeur'], valeur: 3 }],
+      ['opération inconnue sur la cible', sans(), { op: 'changer', chemin: CHEMIN, valeur: 3 }],
     ];
-    assert.ok(cas.length > 0);
     for (const [libelle, charge, operation] of cas) {
       assert.deepEqual(refusDe(charge, [operation]), { rang: 0 }, libelle);
     }
@@ -2055,13 +2073,13 @@ describe('les étiquettes, les objectifs et les réglages du format 2 dans un co
       c.participants[0].exclu = true;
     });
     const b = base((c) => {
-      c.reglages.cibleRedondance = 900;
+      c.reglages.regleObjectifs = 'et';
       c.reglages.respecterObjectifs = false;
       c.reglages.rencontrerAnimateurs = true;
       c.participants[0].etiquettes = ['finance'];
     });
     const rendue = appliquer(a, difference(a, b));
-    assert.deepEqual(Object.keys(rendue.reglages).slice(-3), ['cibleRedondance', 'respecterObjectifs', 'rencontrerAnimateurs']);
+    assert.deepEqual(Object.keys(rendue.reglages).slice(-3), ['regleObjectifs', 'respecterObjectifs', 'rencontrerAnimateurs']);
     assert.equal(JSON.stringify(rendue), JSON.stringify(canoniser(b)));
   });
 

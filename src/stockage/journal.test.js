@@ -1156,6 +1156,23 @@ describe('le journal d’un format plus ancien se lit (§ 8.8, A15)', () => {
     assert.deepEqual([lu.format, lu.entrees.length, lu.ecartees], [1, 36, 64]);
   });
 
+  test('la cible de redondance qu’écrivait un code antérieur — dans un instantané, posée puis retirée par un correctif — se lit, et chaque instant se restitue sans elle', () => {
+    const courant = lireJournal(cent());
+    const lignes = lignesDe(auFormat(cent(), 1)).map((ligne) => JSON.parse(ligne));
+    const entree = (revision) => lignes.find((ligne) => ligne.type === 'entree' && ligne.revision === revision);
+    entree(1).instantane.reglages.cibleRedondance = 800;
+    entree(2).correctif.unshift({ op: 'poser', chemin: ['reglages', 'cibleRedondance'], valeur: 1200 });
+    entree(3).correctif.push({ op: 'retirer', chemin: ['reglages', 'cibleRedondance'] });
+    entree(4).correctif.push({ op: 'retirer', chemin: ['reglages', 'cibleRedondance'] });
+    const lu = lireJournal(texteDe(lignes.map((ligne) => JSON.stringify(ligne))));
+    assert.deepEqual([lu.format, lu.ecartees, lu.entrees.length], [1, 0, courant.entrees.length]);
+    for (const revision of [1, 2, 3, 4, 5, 51, 100]) {
+      const charge = reconstruire(lu, revision);
+      assert.equal(Object.hasOwn(charge.reglages, 'cibleRedondance'), false, String(revision));
+      assert.equal(texteCanonique(charge), texteCanonique(reconstruire(courant, revision)), String(revision));
+    }
+  });
+
   test('élagué, un journal du format 1 se réécrit au format courant : seule son ouverture change', () => {
     const etapes = suite(650);
     const texte = journalDe(etapes);

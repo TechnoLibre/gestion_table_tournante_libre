@@ -1042,51 +1042,15 @@ describe('les infobulles d’explication : chaque nom de critère, chaque en-tê
   });
 });
 
-// --- La cible de la somme de redondance (§ 5.4, § 8.1, § 8.9) ---------------------
+// --- La cible de la somme de redondance n'est plus un réglage (§ 8.9) -----------
 
-describe('la cible de la somme de redondance : un champ de la section', () => {
-  const champCible = (m) => section(m).querySelector('[data-champ="cibleRedondance"]');
-
-  // Saisit un texte dans le champ, comme une frappe, puis quitte le champ :
-  // la sortie valide la saisie (Champ).
-  async function saisirCible(m, texte) {
-    const entree = champCible(m);
-    entree.focus();
-    entree.value = texte;
-    entree.dispatchEvent(new Event('input', { bubbles: true }));
-    flushSync();
-    entree.blur();
-    flushSync();
-  }
-
-  test('le champ montre 1000 sans réglage ; 25 saisi écrit une entrée, la cible 25 ; défaire rend 1000', async () => {
-    const m = await ouvrir(chargeDemo('petite'));
-    const entree = champCible(m);
-    expect(entree).not.toBeNull();
-    expect(entree.value).toBe('1000');
-    expect(texteDe(entree.closest('label') ?? section(m))).toContain(t('propositions.cible.etiquette'));
-    const avant = revision(m);
-    await saisirCible(m, '25');
-    await attendre(() => expect(charge(m).reglages.cibleRedondance).toBe(25));
-    expect(revision(m)).toBe(avant + 1);
-    await m.seance.defaire();
-    await attendre(() => expect(champCible(m).value).toBe('1000'));
-    expect(Object.hasOwn(charge(m).reglages, 'cibleRedondance')).toBe(false);
-  });
-
-  test('en lecture, la saisie est refusée MODE_LECTURE contre le champ, rien n’écrit ; une saisie négative, NON_ENTIER', async () => {
-    const lecture = await ouvrir(chargeDemo('petite'), { mode: 'lecture' });
-    const avant = revision(lecture);
-    await saisirCible(lecture, '25');
-    await attendre(() => expect(section(lecture).querySelector('[data-refus="MODE_LECTURE"]')).not.toBeNull());
-    expect(revision(lecture)).toBe(avant);
-    expect(Object.hasOwn(charge(lecture).reglages, 'cibleRedondance')).toBe(false);
-
-    const ecriture = await ouvrir(chargeDemo('petite'));
-    const revisionEcriture = revision(ecriture);
-    await saisirCible(ecriture, '-3');
-    await attendre(() => expect(section(ecriture).querySelector('[data-refus="NON_ENTIER"]')).not.toBeNull());
-    expect(revision(ecriture)).toBe(revisionEcriture);
+describe('la cible de la somme de redondance : aucun champ dans la section', () => {
+  test('la section ne porte ni le champ de la cible ni son libellé, en écriture comme en lecture', async () => {
+    for (const options of [{}, { mode: 'lecture' }]) {
+      const m = await ouvrir(chargeDemo('petite'), options);
+      expect(section(m).querySelector('[data-champ="cibleRedondance"]')).toBeNull();
+      expect(texteDe(section(m))).not.toContain('Cible de la somme de redondance');
+    }
   });
 });
 
