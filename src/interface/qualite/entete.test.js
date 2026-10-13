@@ -329,7 +329,7 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
 
   test('rouge : les deux lignes du plancher, mot pour mot, ne disent rien que de la mesure de leur tuile', () => {
     assert.equal(t('qualite.tuile.plancher', { plancher: 4 }), 'plancher 4');
-    assert.equal(t('qualite.tuile.plancherAtteint', { plancher: 4 }), 'plancher 4 atteint : impossible de faire moins');
+    assert.equal(t('qualite.tuile.plancherAtteint', { plancher: 4 }), 'plancher 4, le meilleur atteint');
   });
 
   test('rouge : une tuile des objectifs qui ne classe pas n’écrit aucun plancher, même prouvé, comme le diagnostic (§ 5.6)', () => {

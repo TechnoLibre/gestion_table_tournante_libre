@@ -3780,7 +3780,7 @@ atteint », ou « atteignabilité inconnue », suit les tuiles (§ 5.5).
 
 **Une tuile écrit le plancher que le diagnostic écrit pour sa mesure** (§ 5.6),
 et là seulement, en dernière ligne, sous son chiffre : « plancher 4 », ou
-« plancher 4 atteint : impossible de faire moins » quand la mesure que la tuile
+« plancher 4, le meilleur atteint » quand la mesure que la tuile
 écrit l'égale. Ces deux lignes ne parlent que de cette mesure, jamais du
 placement entier, et ne nomment personne. Sept tuiles peuvent en porter un : les
 collisions cumulées, les paires distinctes et l'excédent, chacun la somme des

@@ -105,7 +105,7 @@
   sans objet — une seule table, un seul tour, aucune appartenance, aucune
   collision… — s'écrit en une phrase, jamais par des axes vides.
 - Une tuile écrit sous son chiffre le plancher que le diagnostic prouve pour sa
-  mesure, « plancher 4 », et « plancher 4 atteint : impossible de faire moins »
+  mesure, « plancher 4 », et « plancher 4, le meilleur atteint »
   quand la mesure l'égale : collisions cumulées, paires distinctes, excédent,
   écart d'itinéraire maximal et, chacun quand le critère des objectifs le
   compare sous le mode réglé, personnes jamais servies, plus de tours hors
