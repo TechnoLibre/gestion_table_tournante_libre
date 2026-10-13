@@ -13,15 +13,26 @@
 // participants porte souvent une colonne « Table » d'une soirée passée, et
 // un en-tête d'objectifs lu sous Participants reste refusé, jamais lu comme
 // des objectifs.
-import { CHAMPS, CHAMPS_OBJECTIFS, apercevoir, apercevoirObjectifs } from '../../application/csv.js';
+//
+// Le modèle à télécharger suit la nature cochée : le modèle fixe des
+// participants, ou celui des objectifs de l'événement ouvert.
+import {
+  CHAMPS,
+  CHAMPS_OBJECTIFS,
+  apercevoir,
+  apercevoirObjectifs,
+  modeleObjectifs,
+  modeleParticipants,
+} from '../../application/csv.js';
 
 /** Les deux natures d'un fichier importé (§ 10.4), dans l'ordre où l'écran
- *  les offre, et la clé de leur nom. */
+ *  les offre, la clé de leur nom, et celle du nom accessible de
+ *  « Télécharger un modèle » sous cette nature. */
 export const NATURES_D_IMPORT = Object.freeze(
   [
-    ['participants', 'import.nature.participants'],
-    ['objectifs', 'import.nature.objectifs'],
-  ].map(([nature, cle]) => Object.freeze({ nature, cle })),
+    ['participants', 'import.nature.participants', 'import.modele.participants'],
+    ['objectifs', 'import.nature.objectifs', 'import.modele.objectifs'],
+  ].map(([nature, cle, modele]) => Object.freeze({ nature, cle, modele })),
 );
 
 /** La nature cochée à l'ouverture de la section : les participants. */
@@ -115,6 +126,28 @@ const MODES_D_IMPORT_OBJECTIFS = modes([
  */
 export function modesDImport(nature) {
   return exigerNature(nature) === 'participants' ? MODES_D_IMPORT : MODES_D_IMPORT_OBJECTIFS;
+}
+
+/**
+ * Le modèle à télécharger sous une nature (§ 10.1, § 10.4), et le nom que
+ * l'enregistrement propose : modele-participants.csv pour le modèle fixe des
+ * participants, qui ne dépend d'aucun événement ; ‹base›-modele-objectifs.csv
+ * pour celui des objectifs, fait des tables et des tours de l'événement, sur
+ * le patron de ‹base›-objectifs.csv. Rien ne s'écrit dans la charge.
+ *
+ * @param {'participants'|'objectifs'} nature
+ * @param {{base: string, charge: Object}} evenement  la base de l'événement
+ *   ouvert et sa charge
+ * @returns {{nom: string, octets: Uint8Array}}
+ * @throws {RangeError} une nature inconnue
+ * @throws {import('../../application/erreurs.js').ErreurCommande}
+ *   sous Objectifs, OBJECTIFS_SANS_TABLE pour un événement sans table et
+ *   OBJECTIFS_NUMEROS_PARTAGES pour un événement dont chaque numéro de table
+ *   est partagé
+ */
+export function modeleATelecharger(nature, { base, charge }) {
+  if (exigerNature(nature) === 'participants') return { nom: 'modele-participants.csv', octets: modeleParticipants() };
+  return { nom: `${base}-modele-objectifs.csv`, octets: modeleObjectifs(charge) };
 }
 
 /**

@@ -3018,6 +3018,17 @@ courriels, d'un geste qui s'annonce comme une mise à jour.
 l'avertissement de dérive en retenu ; **refusé** en bloqué, le message nommant
 la commande qui déverrouille.
 
+**Le modèle à télécharger.** La section d'import offre « Télécharger un
+modèle » pour la nature cochée (§ 10.4) ; la commande passe par « Enregistrer
+sous… » et n'écrit rien dans l'événement : elle est permise en lecture et sur
+un plan bloqué. Son nom accessible nomme la nature, et le chemin enregistré
+s'annonce sous elle. Le modèle a la forme de l'export — UTF-8 avec marque, `;`,
+CRLF, les en-têtes de l'import — et **s'importe tel quel sans refuser aucune
+ligne**. Celui des participants, `modele-participants.csv`, est fixe : quatre
+personnes inventées, dont les cellules remplissent chaque colonne du tableau
+ci-dessus, `exclu` sous ses deux valeurs et une cellule à deux étiquettes.
+Celui des objectifs suit l'événement (§ 10.4).
+
 ### 10.2 La saisie
 
 Seul `nom` est obligatoire : refuser une personne faute de courriel pousse
@@ -3139,11 +3150,20 @@ associée à `table` (`TABLE_NON_ASSOCIEE`) ou à `objectif`
 dont le remède mène à la section des tables. **Refus de ligne**, un motif par
 ligne, dans cet ordre : champs en trop ; numéro de table absent, non entier,
 inconnu, ou porté par deux tables ; tour non entier ou hors de la soirée ;
-objectif vide ; étiquette mal formée ou vingt-et-unième étiquette ; règle hors
-de la liste fermée — l'inconnu ne se lit jamais comme le défaut ; deuxième ligne
-pour un même couple (table, tour), qui nomme la première. **Avis** : après
-l'import, un objectif écrit par le fichier auquel aucune personne présente ne
-correspond ; l'aperçu ne le calcule pas.
+objectif vide sous une règle écrite ; étiquette mal formée ou vingt-et-unième
+étiquette ; règle hors de la liste fermée — l'inconnu ne se lit jamais comme le
+défaut ; deuxième ligne pour un même couple (table, tour), qui nomme la
+première. **Avis** : après l'import, un objectif écrit par le fichier auquel
+aucune personne présente ne correspond ; l'aperçu ne le calcule pas.
+
+**La ligne à remplir.** Une ligne dont la cellule `objectif` ne porte aucune
+étiquette — vide, ou faite de blancs et de séparateurs — et dont la cellule
+`regle` est vide ne demande rien : l'import la passe, ni importée ni refusée,
+quels que soient sa table et son tour ; seul un champ en trop la refuse. En
+mise à jour, l'objectif de son couple reste ; en remplacement, son couple est
+de ceux que le fichier ne nomme pas. Sous une règle écrite, la même cellule est
+un objectif vide, refusé (`OBJECTIF_VIDE`). Un fichier fait des seules lignes à
+remplir n'a aucune ligne valide.
 
 **L'export des objectifs** écrit `table;tour;objectif;regle`, une ligne par
 objectif, les tables par numéro affiché puis identifiant croissant, et pour
@@ -3152,6 +3172,32 @@ vide quand l'objectif suit le défaut ; il est le gabarit de l'import et sa
 sauvegarde, et l'aller-retour s'éprouve comme celui des participants. La
 commande « Exporter les objectifs » se trouve dans la section des tables ; elle
 est permise en lecture et sur un plan bloqué : sortir n'est pas modifier.
+
+**Le modèle des objectifs**, `‹base›-modele-objectifs.csv` (§ 10.1), écrit
+l'en-tête de l'export puis une ligne par couple (table, tour) de l'événement,
+les tables par numéro affiché puis identifiant : la soirée d'une table qui ne
+porte aucun objectif de tour ; la soirée puis chaque tour, de 1 à R, d'une table
+qui en porte au moins un — le mode se lit dans les données (§ 4.5). Sur une
+table dont aucune autre ne partage le numéro, un couple qui porte un objectif
+l'écrit, comme l'export, et les deux premiers couples libres reçoivent un
+exemple, `finance, ressources humaines` sous `ou`, puis `finance, Montréal`
+sous `et` ; les autres couples sont des lignes à remplir. Une ligne nomme sa
+table par son numéro : l'import refuse l'objectif d'une table dont le numéro est
+partagé (`PLUSIEURS_TABLES`), et chacun de ses couples, objectif existant
+compris, est au modèle une ligne à remplir. Quand les tables à numéro unique
+offrent moins de deux couples libres — chacune garnie à sa soirée, ou une seule
+table sans objectif —, les premières d'entre elles sans objectif de tour
+prennent aussi leurs lignes de tour 1 à R, une table après l'autre, jusqu'à en
+offrir deux. Le modèle montre ainsi les deux formes, sauf quand ces tables
+n'offrent qu'un couple libre et aucune table à étendre — il n'écrit alors que
+l'exemple `ou` — ou aucun — il n'en écrit aucun. Importé tel quel, sous l'un ou
+l'autre mode, il ne refuse aucune ligne, rend inchangés les objectifs existants
+des tables à numéro unique et ajoute les exemples ; *Remplacer* retire ceux
+d'une table à numéro partagé, comme son bilan l'annonce avant d'agir. Un
+événement sans table refuse le modèle (`OBJECTIFS_SANS_TABLE`), et un événement
+dont chaque numéro de table est partagé aussi (`OBJECTIFS_NUMEROS_PARTAGES`) —
+aucune ligne de son modèle ne s'importerait —, l'un et l'autre avec le remède
+qui ouvre la section des tables.
 
 ---
 

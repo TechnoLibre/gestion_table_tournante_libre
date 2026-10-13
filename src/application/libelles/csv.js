@@ -82,6 +82,11 @@ export const TABLE = new Map([
   ['TABLE_NON_ASSOCIEE', () => "Aucune colonne ne porte le numéro de table : l'en-tête doit compter une colonne « table »."],
   ['OBJECTIF_NON_ASSOCIE', () => "Aucune colonne ne porte l'objectif : l'en-tête doit compter une colonne « objectif »."],
   ['OBJECTIFS_SANS_TABLE', () => "L'événement n'a aucune table : créez les tables avant d'importer leurs objectifs."],
+  [
+    'OBJECTIFS_NUMEROS_PARTAGES',
+    () =>
+      'Chaque numéro de table est porté par plusieurs tables : aucune ligne du modèle ne dirait laquelle elle vise. Donnez aux tables des numéros distincts.',
+  ],
   ['TABLE_ABSENTE', () => 'Le numéro de table manque.'],
   [
     'TABLE_NON_ENTIERE',

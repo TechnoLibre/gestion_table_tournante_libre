@@ -6,12 +6,22 @@
 // celle du remède de chaque refus global, l'encodage et le séparateur
 // nommés, les titres que « Remplacer » annonce, comptés par la règle unique
 // des titres pourvus, la nature du fichier reçue et jamais devinée, les
-// objectifs de table et les étiquettes fondues, à part des appartenances.
+// objectifs de table et les étiquettes fondues, à part des appartenances ;
+// le modèle à télécharger de chaque nature, son nom et son nom accessible.
 // Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
-import { apercevoir, apercevoirObjectifs, bilanRemplacement, CHAMPS, CHAMPS_OBJECTIFS, decoder } from '../../application/csv.js';
+import {
+  apercevoir,
+  apercevoirObjectifs,
+  bilanRemplacement,
+  CHAMPS,
+  CHAMPS_OBJECTIFS,
+  decoder,
+  modeleObjectifs,
+  modeleParticipants,
+} from '../../application/csv.js';
 import { comptesTitres, titresNonPourvus } from '../../application/listes_travail.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { creerCharge } from '../../stockage/document.js';
@@ -31,6 +41,7 @@ import {
   messageDuBloc,
   modesDImport,
   modeleApercu,
+  modeleATelecharger,
   modePropose,
   motifLigne,
   nommer,
@@ -491,7 +502,7 @@ const TEXTE_DES_MOTIFS = lignes(
   '3;;finance;',
   '2;2.0;finance;',
   '2;5;finance;',
-  '2;1;;',
+  '2;1;;ou',
   `2;1;${'x'.repeat(41)};`,
   `2;1;${VINGT_ET_UNE};`,
   '2;1;finance;peut-être',
@@ -745,5 +756,41 @@ describe('le rapport et la fenêtre de « Remplacer » selon la nature', () => {
     assert.equal(t('import.remplacer.tables', { n: 2 }), '2 tables perdront leurs objectifs');
     assert.equal(t('import.remplacer.tables', { n: 1 }), '1 table perdra ses objectifs');
     assert.ok(t('import.remplacer.titreObjectifs').length > 0);
+  });
+});
+
+describe('le modèle à télécharger de chaque nature (§ 10.1, § 10.4)', () => {
+  test('chaque nature porte la clé du nom accessible de sa commande, qui nomme la nature après le libellé visible', () => {
+    const visible = t('import.commande.telechargerModele');
+    assert.equal(visible, 'Télécharger un modèle');
+    const noms = NATURES_D_IMPORT.map(({ modele }) => t(modele));
+    assert.deepEqual(noms, ['Télécharger un modèle de liste de participants', "Télécharger un modèle d'objectifs de table"]);
+    for (const nom of noms) assert.ok(nom.startsWith(visible), nom);
+    assert.ok(t('import.modele.enregistre').length > 0);
+  });
+
+  test('Participants : le modèle fixe, sous modele-participants.csv, quel que soit l’événement', () => {
+    const charge = chargeDesObjectifs();
+    const { nom, octets } = modeleATelecharger('participants', { base: 'soiree', charge });
+    assert.equal(nom, 'modele-participants.csv');
+    assert.deepEqual(octets, modeleParticipants());
+  });
+
+  test('Objectifs de table : le modèle de l’événement ouvert, sous ‹base›-modele-objectifs.csv', () => {
+    const charge = chargeDesObjectifs();
+    const { nom, octets } = modeleATelecharger('objectifs', { base: 'soiree', charge });
+    assert.equal(nom, 'soiree-modele-objectifs.csv');
+    assert.deepEqual(octets, modeleObjectifs(charge));
+  });
+
+  test('un événement sans table, ou dont chaque numéro est partagé, refuse le modèle des objectifs, jamais celui des participants ; une nature inconnue lève', () => {
+    const charge = chargeDesObjectifs({ tables: [] });
+    assert.throws(() => modeleATelecharger('objectifs', { base: 'soiree', charge }), { code: 'OBJECTIFS_SANS_TABLE' });
+    const partages = chargeDesObjectifs();
+    for (const table of partages.tables) table.numero = 7;
+    assert.throws(() => modeleATelecharger('objectifs', { base: 'soiree', charge: partages }), { code: 'OBJECTIFS_NUMEROS_PARTAGES' });
+    assert.equal(modeleATelecharger('participants', { base: 'soiree', charge: partages }).nom, 'modele-participants.csv');
+    assert.equal(modeleATelecharger('participants', { base: 'soiree', charge }).nom, 'modele-participants.csv');
+    assert.throws(() => modeleATelecharger('tables', { base: 'soiree', charge }), RangeError);
   });
 });

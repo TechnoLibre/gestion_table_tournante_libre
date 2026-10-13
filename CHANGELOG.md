@@ -179,6 +179,20 @@
   fenêtre dit d'abord combien de propositions partent, et « Défaire » les rend.
   Une longue liste allégée garde le logiciel rapide ; le nombre choisi ne
   s'enregistre pas dans l'événement.
+- La section « Import » offre « Télécharger un modèle » pour le contenu choisi.
+  Le modèle des participants montre chaque colonne sur quatre personnes
+  inventées ; celui des objectifs de table porte une ligne par table de
+  l'événement, et par tour pour une table qui a des objectifs par tour, avec
+  deux objectifs d'exemple, « au moins une » et « toutes », sur des lignes
+  sans objectif — il en ajoute au besoin une par tour ; un événement dont
+  chaque table a déjà ses objectifs n'en reçoit aucun. Une table dont le
+  numéro est porté par une autre n'a que des lignes à remplir, et le modèle se
+  refuse quand chaque numéro est ainsi partagé, en menant à la section des
+  tables. Les deux s'importent tels quels sans aucun refus. Le modèle n'écrit
+  rien dans l'événement et reste disponible en lecture.
+- Dans un fichier d'objectifs, une ligne sans objectif ni règle est une ligne à
+  remplir : l'import la passe sans la refuser, et l'objectif de sa table reste
+  en mise à jour.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

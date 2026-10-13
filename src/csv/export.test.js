@@ -9,7 +9,8 @@
 // test/fixtures/csv/, sur les fichiers d'exemple et sur une liste aux valeurs
 // difficiles. L'écriture d'un
 // CSV, que l'export partage avec le CSV des refus, s'éprouve contre la
-// découpe qui la relit.
+// découpe qui la relit. Le modèle à télécharger (§ 10.1) s'éprouve par son
+// texte exact, par chaque colonne qu'il remplit et par son import tel quel.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
@@ -18,7 +19,7 @@ import { SEPARATEURS_ETIQUETTES, lireEtiquettes } from '../stockage/etiquettes.j
 import { VALEURS_EXCLU, apercevoir } from './apercu.js';
 import { CHAMPS } from './colonnes.js';
 import { decoder } from './encodage.js';
-import { JOINTURE_ETIQUETTES, SEPARATEUR, ecrireCsv, exporterParticipants } from './export.js';
+import { JOINTURE_ETIQUETTES, SEPARATEUR, ecrireCsv, exporterParticipants, modeleParticipants } from './export.js';
 import { appliquerImport } from './import.js';
 import { decouper } from './lecture.js';
 
@@ -246,5 +247,60 @@ describe("ecrireCsv : l'écriture d'un CSV, qu'une découpe relit telle quelle",
       assert.equal(encodage, 'utf-8-bom');
       assert.deepEqual(decouper(texte, separateur), { enregistrements, guillemetOuvert: false }, separateur);
     }
+  });
+});
+
+describe("modeleParticipants : le modèle à télécharger, dans la forme de l'export (§ 10.1)", () => {
+  const ATTENDU = csv(
+    'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes',
+    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal',
+    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines',
+    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;',
+    'Tourteau;Basile;;;;non;;bénévole',
+  );
+
+  test("marque UTF-8, « ; », CRLF, l'en-tête de l'export puis quatre personnes inventées", () => {
+    const octets = modeleParticipants();
+    assert.ok(octets instanceof Uint8Array);
+    assert.deepEqual([...octets.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+    assert.equal(texteDe(octets), MARQUE + ATTENDU);
+  });
+
+  test("chaque colonne que l'import lit porte au moins une valeur ; exclu ses deux valeurs, une cellule plusieurs étiquettes", () => {
+    const { enregistrements } = decouper(decoder(modeleParticipants()).texte, SEPARATEUR);
+    const [entete, ...lignes] = enregistrements;
+    assert.deepEqual(entete, [...CHAMPS]);
+    CHAMPS.forEach((champ, rang) => assert.ok(lignes.some((ligne) => ligne[rang] !== ''), champ));
+    const exclus = new Set(lignes.map((ligne) => ligne[CHAMPS.indexOf('exclu')]));
+    assert.deepEqual([...exclus].sort(), ['non', 'oui']);
+    assert.ok(lignes.some((ligne) => ligne[CHAMPS.indexOf('etiquettes')].includes(JOINTURE_ETIQUETTES)));
+  });
+
+  test("importé tel quel : aucun refus, les quatre personnes, champ par champ", () => {
+    memesParticipants(importer(modeleParticipants(), 'modèle'), [
+      personne(1, 'Ombrelle', {
+        prenom: 'Iris', appartenance: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
+        etiquettes: ['Montréal', 'finance'],
+      }),
+      personne(2, 'Pervenche', {
+        prenom: 'Théo', appartenance: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],
+      }),
+      personne(3, 'Lacasse', {
+        prenom: 'Ondine', appartenance: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé',
+        exclu: true,
+      }),
+      personne(4, 'Tourteau', { prenom: 'Basile', etiquettes: ['bénévole'] }),
+    ], 'modèle');
+    const apercu = apercevoir(decoder(modeleParticipants()).texte);
+    assert.deepEqual([apercu.doublons, apercu.multilignes], [[], []]);
+  });
+
+  test('deux appels rendent les mêmes octets, dans deux tableaux distincts', () => {
+    const premier = modeleParticipants();
+    const second = modeleParticipants();
+    assert.notEqual(premier, second);
+    assert.deepEqual(premier, second);
+    premier.fill(0);
+    assert.equal(texteDe(modeleParticipants()), MARQUE + ATTENDU);
   });
 });

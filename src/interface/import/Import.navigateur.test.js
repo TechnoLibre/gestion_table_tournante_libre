@@ -7,7 +7,7 @@
 // séparateur nommés, l'association par en-tête, l'ambiguïté, les refus
 // d'une ligne et les refus globaux, les étiquettes en pastilles et leurs
 // fusions à part, le rapport, le CSV des refus, les modes, l'import selon
-// l'état, le collage. Chaque épreuve monte App par
+// l'état, le collage, le modèle à télécharger. Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé, ouvre un événement et sa
 // section d'import ; le dialogue de choix sert, dans l'ordre, les fichiers
 // que l'épreuve prépare, et le dialogue d'enregistrement relève ce qu'il
@@ -31,7 +31,8 @@ import { apercevoir } from '../../csv/apercu.js';
 import { decoder } from '../../csv/encodage.js';
 import { bilanRemplacement, exporterRefus as exporterRefusCsv } from '../../csv/import.js';
 import { decouper } from '../../csv/lecture.js';
-import { apercevoirObjectifs, bilanRemplacementObjectifs } from '../../csv/objectifs.js';
+import { modeleParticipants } from '../../csv/export.js';
+import { apercevoirObjectifs, bilanRemplacementObjectifs, modeleObjectifs } from '../../csv/objectifs.js';
 import { serialiser } from '../../stockage/canonique.js';
 import { creerCharge } from '../../stockage/document.js';
 import { lireJournal } from '../../stockage/journal.js';
@@ -1051,7 +1052,7 @@ const TEXTE_DES_MOTIFS = [
   '3;;finance;',
   '2;2.0;finance;',
   '2;5;finance;',
-  '2;1;;',
+  '2;1;;ou',
   `2;1;${'x'.repeat(41)};`,
   `2;1;${VINGT_ET_UNE};`,
   '2;1;finance;peut-être',
@@ -1385,5 +1386,102 @@ describe('les étiquettes des participants dans l’aperçu (§ 10.1, A17)', () 
       for (const affichee of appartenances.querySelectorAll('[data-affichee]')) expect(retenues.has(affichee.textContent), lieu).toBe(false);
       expect(appartenances.querySelectorAll('[data-fusion]').length, lieu).toBe(apercu.fusions.length);
     }
+  });
+});
+
+describe('le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4)', () => {
+  // Le chemin annoncé après l'enregistrement du modèle, quand il paraît.
+  const noteDuModele = (e) => dans(e, '[data-modele-enregistre]');
+
+  test('« Télécharger un modèle » remet à « Enregistrer sous… » le modèle de la nature cochée, sous son nom ; le chemin s’annonce ; rien ne s’écrit', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    const avant = ecritures(e);
+    const bouton = commande(e, 'telechargerModele');
+    expect(bouton.textContent.trim()).toBe(t('import.commande.telechargerModele'));
+    expect(bouton.getAttribute('aria-label')).toBe(t('import.modele.participants'));
+    expect(noteDuModele(e)).toBeNull();
+    bouton.click();
+    await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
+    expect(e.enregistres[0].nomPropose).toBe('modele-participants.csv');
+    expect([...e.enregistres[0].octets]).toEqual([...modeleParticipants()]);
+    await vi.waitFor(() => expect(noteDuModele(e)).not.toBeNull());
+    expect(noteDuModele(e).getAttribute('role')).toBe('status');
+    expect(texteDe(noteDuModele(e))).toBe(`${t('import.modele.enregistre')} modele-participants.csv`);
+
+    choisirNature(e, 'objectifs');
+    expect(noteDuModele(e)).toBeNull();
+    const objectifs = commande(e, 'telechargerModele');
+    expect(objectifs.getAttribute('aria-label')).toBe(t('import.modele.objectifs'));
+    objectifs.click();
+    await vi.waitFor(() => expect(e.enregistres.length).toBe(2));
+    const { charge } = e.m.seance.etat();
+    expect(e.enregistres[1].nomPropose).toBe(`${BASE}-modele-objectifs.csv`);
+    expect([...e.enregistres[1].octets]).toEqual([...modeleObjectifs(charge.tables, charge.evenement.tours)]);
+    await vi.waitFor(() => expect(texteDe(noteDuModele(e))).toBe(`${t('import.modele.enregistre')} ${BASE}-modele-objectifs.csv`));
+    expect(dans(e, '[data-apercu]')).toBeNull();
+    expect(e.espion).not.toHaveBeenCalled();
+    expect(ecritures(e)).toBe(avant);
+  });
+
+  test('en lecture aussi : le modèle s’enregistre, le mode reste la lecture', async () => {
+    const e = await ouvrir({ ecriture: false, tables: NEUF_TABLES() });
+    expect(e.m.seance.etat().mode).toBe('lecture');
+    choisirNature(e, 'objectifs');
+    commande(e, 'telechargerModele').click();
+    await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
+    expect(e.enregistres[0].nomPropose).toBe(`${BASE}-modele-objectifs.csv`);
+    expect(e.m.seance.etat().mode).toBe('lecture');
+  });
+
+  test('un enregistrement annulé n’annonce rien, et retire la note du précédent', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    commande(e, 'telechargerModele').click();
+    await vi.waitFor(() => expect(noteDuModele(e)).not.toBeNull());
+    let annules = 0;
+    e.m.fs.enregistrerSous = async () => {
+      annules += 1;
+      return null;
+    };
+    commande(e, 'telechargerModele').click();
+    await vi.waitFor(() => expect(annules).toBe(1));
+    await vi.waitFor(() => expect(noteDuModele(e)).toBeNull());
+    expect(texteDe(section(e))).not.toContain('null');
+  });
+
+  test('le modèle des objectifs, rechoisi tel quel, deux tables du même numéro comprises : un aperçu sans refus, et l’import n’en refuse aucune ligne', async () => {
+    const e = await ouvrir({ tables: NEUF_TABLES() });
+    choisirNature(e, 'objectifs');
+    commande(e, 'telechargerModele').click();
+    await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
+    await choisir(e, e.enregistres[0].nomPropose, e.enregistres[0].octets);
+    expect(dans(e, '[data-apercu] [data-refus]')).toBeNull();
+    const { rendu } = await importer(e, 'importerObjectifs');
+    expect(rendu.resume).toMatchObject({ ajoutes: 2, remplaces: 0, retires: 0, refusees: [] });
+  });
+
+  test('sans table, le modèle des objectifs est refusé à côté de la commande, et son remède ouvre la section des tables', async () => {
+    const e = await ouvrir();
+    choisirNature(e, 'objectifs');
+    commande(e, 'telechargerModele').click();
+    await vi.waitFor(() => expect(dans(e, '[data-refus="OBJECTIFS_SANS_TABLE"]')).not.toBeNull());
+    expect(e.enregistres).toEqual([]);
+    const remede = dans(e, '[data-refus="OBJECTIFS_SANS_TABLE"] [data-commande="ouvrirSection"]');
+    expect(remede.textContent.trim()).toBe(t('communs.remede.ouvrirSection.tables'));
+    choisirNature(e, 'participants');
+    expect(dans(e, '[data-refus="OBJECTIFS_SANS_TABLE"]')).toBeNull();
+    commande(e, 'telechargerModele').click();
+    await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
+    expect(e.enregistres[0].nomPropose).toBe('modele-participants.csv');
+  });
+
+  test('chaque numéro de table partagé : le modèle des objectifs est refusé à côté de la commande, remède vers la section des tables', async () => {
+    const e = await ouvrir({ tables: [table(1, 4), table(2, 4)] });
+    choisirNature(e, 'objectifs');
+    commande(e, 'telechargerModele').click();
+    await vi.waitFor(() => expect(dans(e, '[data-refus="OBJECTIFS_NUMEROS_PARTAGES"]')).not.toBeNull());
+    expect(texteDe(dans(e, '[data-refus="OBJECTIFS_NUMEROS_PARTAGES"]'))).toContain(t('OBJECTIFS_NUMEROS_PARTAGES'));
+    expect(e.enregistres).toEqual([]);
+    const remede = dans(e, '[data-refus="OBJECTIFS_NUMEROS_PARTAGES"] [data-commande="ouvrirSection"]');
+    expect(remede.textContent.trim()).toBe(t('communs.remede.ouvrirSection.tables'));
   });
 });

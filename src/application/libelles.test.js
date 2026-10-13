@@ -350,6 +350,7 @@ const EXEMPLES = new Map([
   ['TABLE_NON_ASSOCIEE', {}],
   ['OBJECTIF_NON_ASSOCIE', {}],
   ['OBJECTIFS_SANS_TABLE', { ligne: null, remede: { geste: 'ouvrirSection', section: 'tables' } }],
+  ['OBJECTIFS_NUMEROS_PARTAGES', { remede: { geste: 'ouvrirSection', section: 'tables' } }],
   ['TABLE_ABSENTE', { ligne: 3, valeur: null }],
   ['TABLE_NON_ENTIERE', { ligne: 3, valeur: '3b' }],
   ['NUMERO_TABLE_INCONNU', { ligne: 4, valeur: '9' }],

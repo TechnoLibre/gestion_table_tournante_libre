@@ -25,6 +25,14 @@ export const TABLE = new Map([
   ['import.commande.fermerRapport', 'Fermer le rapport'],
   ['import.refusEnregistres', 'Lignes refusées enregistrées :'],
 
+  // --- Le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4) -----------
+  // Le nom accessible de la commande commence par son libellé visible, puis
+  // nomme la nature : le même texte ne désigne pas deux fichiers.
+  ['import.commande.telechargerModele', 'Télécharger un modèle'],
+  ['import.modele.participants', 'Télécharger un modèle de liste de participants'],
+  ['import.modele.objectifs', "Télécharger un modèle d'objectifs de table"],
+  ['import.modele.enregistre', 'Modèle enregistré :'],
+
   // --- La sorte d'un message de l'aperçu et du rapport (messageDuBloc) ------
   ['import.sorte.refus', 'Refus'],
   ['import.sorte.avis', 'Avis'],

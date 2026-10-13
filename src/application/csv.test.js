@@ -5,8 +5,8 @@
 // atteint src/csv par ce module, qui réexporte ses fonctions telles quelles
 // et lie le motif du CSV des refus au libellé français ; les textes des
 // deux refus d'une ligne pour ses étiquettes ; le CSV des objectifs de table,
-// son CSV des refus et les textes de ses refus (§ 10.4). Les noms sont
-// inventés.
+// son CSV des refus et les textes de ses refus (§ 10.4) ; le modèle des
+// objectifs de l'événement, refusé sans table. Les noms sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import * as apercu from '../csv/apercu.js';
@@ -27,13 +27,14 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
       ['decoder', encodage.decoder],
       ['apercevoir', apercu.apercevoir],
       ['exporterParticipants', exportCsv.exporterParticipants],
+      ['modeleParticipants', exportCsv.modeleParticipants],
       ['bilanRemplacement', importCsv.bilanRemplacement],
       ['cleNormalisee', normalisation.cleNormalisee],
       ['apercevoirObjectifs', objectifs.apercevoirObjectifs],
       ['exporterObjectifs', objectifs.exporterObjectifs],
       ['bilanRemplacementObjectifs', objectifs.bilanRemplacementObjectifs],
     ];
-    assert.equal(attendus.length, 8);
+    assert.equal(attendus.length, 9);
     for (const [nom, fonction] of attendus) {
       assert.equal(typeof fonction, 'function', nom);
       assert.equal(relais[nom], fonction, nom);
@@ -45,6 +46,7 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
     assert.deepEqual(Object.keys(relais).sort(), [
       'CHAMPS', 'CHAMPS_OBJECTIFS', 'JOINTURE_ETIQUETTES', 'apercevoir', 'apercevoirObjectifs', 'bilanRemplacement',
       'bilanRemplacementObjectifs', 'cleNormalisee', 'decoder', 'exporterObjectifs', 'exporterParticipants', 'exporterRefus',
+      'modeleObjectifs', 'modeleParticipants',
     ]);
   });
 
@@ -122,6 +124,52 @@ describe('csv : le CSV des objectifs de table par le relais (§ 10.4)', () => {
     });
     assert.equal(lignes[0][5], "La ligne 2 donne déjà l'objectif de la table 1 pour la soirée : rien n'est fusionné.");
     assert.equal(lignes[1][5], "La soirée compte 4 tours : le tour 6 n'en est pas un.");
+  });
+
+  test('modeleObjectifs lit les tables et les tours de la charge, comme le modèle de src/csv', () => {
+    const charge = creerCharge({ id: 'evt-modele', nom: 'Soirée des Hérons', siegesParDefaut: 4, tours: 3 });
+    charge.tables = [
+      { id: 1, numero: 2, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
+      { id: 2, numero: 1, sieges: null, forme: 'ronde', position: { x: 200, y: 0 }, objectifs: [
+        { portee: 'tour', tour: 2, regle: null, etiquettes: ['bénévole'] },
+      ] },
+    ];
+    assert.deepEqual(relais.modeleObjectifs(charge), objectifs.modeleObjectifs(charge.tables, 3));
+    assert.match(relais.decoder(relais.modeleObjectifs(charge)).texte, /^1;3;;\r$/m);
+  });
+
+  test('modeleObjectifs refuse un événement sans table, OBJECTIFS_SANS_TABLE, et son remède ouvre la section des tables', () => {
+    const charge = creerCharge({ id: 'evt-modele', nom: 'Soirée des Hérons', siegesParDefaut: 4, tours: 3 });
+    assert.throws(
+      () => relais.modeleObjectifs(charge),
+      (erreur) => {
+        assert.equal(erreur.name, 'ErreurCommande');
+        assert.equal(erreur.code, 'OBJECTIFS_SANS_TABLE');
+        assert.deepEqual(erreur.details, { remede: { geste: 'ouvrirSection', section: 'tables' } });
+        assert.match(libelle(erreur.code, erreur.details), /créez les tables/);
+        return true;
+      },
+    );
+  });
+
+  test('modeleObjectifs refuse un événement dont chaque numéro de table est partagé, OBJECTIFS_NUMEROS_PARTAGES, remède vers la section des tables ; un seul numéro propre suffit', () => {
+    const charge = creerCharge({ id: 'evt-modele', nom: 'Soirée des Hérons', siegesParDefaut: 4, tours: 3 });
+    charge.tables = [
+      { id: 1, numero: 4, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
+      { id: 2, numero: 4, sieges: null, forme: 'ronde', position: { x: 200, y: 0 } },
+    ];
+    assert.throws(
+      () => relais.modeleObjectifs(charge),
+      (erreur) => {
+        assert.equal(erreur.name, 'ErreurCommande');
+        assert.equal(erreur.code, 'OBJECTIFS_NUMEROS_PARTAGES');
+        assert.deepEqual(erreur.details, { remede: { geste: 'ouvrirSection', section: 'tables' } });
+        assert.match(libelle(erreur.code, erreur.details), /numéros distincts/);
+        return true;
+      },
+    );
+    charge.tables.push({ id: 3, numero: 6, sieges: null, forme: 'ronde', position: { x: 400, y: 0 } });
+    assert.deepEqual(relais.modeleObjectifs(charge), objectifs.modeleObjectifs(charge.tables, 3));
   });
 
   test('exporterObjectifs écrit les objectifs des tables, que apercevoirObjectifs relit', () => {

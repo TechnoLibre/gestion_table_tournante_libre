@@ -6,7 +6,8 @@
 // des participants. Il garde son séparateur, son en-tête et son CSV des
 // refus ; tout le § 10.1 vaut, sauf ce qui nomme les participants. Ce module
 // en porte l'aperçu, l'import appliqué selon le mode, ce que remplacer
-// touche et l'export, qui est le gabarit de l'import et sa sauvegarde.
+// touche, l'export, qui est le gabarit de l'import et sa sauvegarde, et le
+// modèle à télécharger, qui donne une ligne à remplir par couple.
 //
 // La lecture reprend, dans l'ordre, celle de l'aperçu des participants :
 //   1. un caractère nul refuse le texte ;
@@ -19,8 +20,9 @@
 //      (TABLE_NON_ASSOCIEE), puis à objectif (OBJECTIF_NON_ASSOCIE), puis un
 //      événement sans table (OBJECTIFS_SANS_TABLE) refusent ;
 //   5. chaque enregistrement non vide qui suit l'en-tête est une ligne,
-//      valide ou refusée pour un seul motif (lireLigne) ; zéro ligne valide
-//      refuse (AUCUNE_LIGNE_VALIDE) ;
+//      valide, refusée pour un seul motif, ou à remplir — sans objectif ni
+//      règle —, que l'import passe (lireLigne) ; zéro ligne valide refuse
+//      (AUCUNE_LIGNE_VALIDE) ;
 //   6. les étiquettes des lignes valides se réconcilient avec celles de
 //      l'événement : celles des personnes, exclues comprises, et celles des
 //      objectifs de table, sauf sous remplacer, qui retire ces objectifs.
@@ -259,19 +261,24 @@ function etiquettesDe(cellule) {
 }
 
 // Lit un enregistrement de données selon les colonnes associées, largeur
-// étant le nombre d'en-têtes. Rend { champs } ou le motif du refus, un seul,
-// dans l'ordre du § 10.4 : un champ non vide au-delà de l'en-tête ; le
-// numéro de table ; le tour ; l'objectif ; la règle hors de sa liste fermée.
-// Le doublon d'un couple (table, tour) se juge après, contre les lignes
-// valides qui précèdent.
+// étant le nombre d'en-têtes. Rend { champs }, { aRemplir: true }, ou le
+// motif du refus, un seul, dans l'ordre du § 10.4 : un champ non vide
+// au-delà de l'en-tête ; le numéro de table ; le tour ; l'objectif ; la
+// règle hors de sa liste fermée. Après le champ en trop, une ligne dont
+// l'objectif n'a aucune étiquette — cellule absente, vide, ou faite de
+// blancs et de séparateurs — et dont la règle est vide est à remplir : elle
+// ne demande rien, et sa table et son tour ne se lisent pas. Sous une règle
+// écrite, le même objectif est vide, OBJECTIF_VIDE. Le doublon d'un couple
+// (table, tour) se juge après, contre les lignes valides qui précèdent.
 function lireLigne(brut, largeur, colonnes, { tables, tours }) {
   if (!enregistrementVide(brut.slice(largeur))) return { code: 'CHAMPS_EN_TROP', valeur: null };
   const lire = (nom) => valeurDe(brut, colonnes[nom]);
+  const objectif = etiquettesDe(colonnes.objectif < brut.length ? brut[colonnes.objectif] : undefined);
+  if (objectif.refus?.code === 'OBJECTIF_VIDE' && lire('regle') === null) return { aRemplir: true };
   const visee = tableDe(lire('table'), tables);
   if (visee.refus !== undefined) return visee.refus;
   const lu = tourDe(lire('tour'), tours);
   if (lu.refus !== undefined) return lu.refus;
-  const objectif = etiquettesDe(colonnes.objectif < brut.length ? brut[colonnes.objectif] : undefined);
   if (objectif.refus !== undefined) return objectif.refus;
   const valeurRegle = lire('regle');
   const regle = VALEURS_REGLE.get(cleNormalisee(valeurRegle ?? ''));
@@ -314,7 +321,8 @@ const cleDuCouple = (table, tour) => JSON.stringify([table, tour]);
 /**
  * Aperçu d'un texte décodé du CSV des objectifs (§ 10.4), contre la charge,
  * pour un mode de l'import : rien n'est importé. Les lignes se lisent dans
- * l'ordre du texte ; une ligne refusée ne refuse que soi. Le doublon d'un
+ * l'ordre du texte ; une ligne refusée ne refuse que soi ; une ligne à
+ * remplir, sans objectif ni règle, n'est ni valide ni refusée. Le doublon d'un
  * couple (table, tour) se juge contre les lignes valides qui précèdent : une
  * ligne refusée n'est la première d'aucun couple.
  *
@@ -372,7 +380,11 @@ export function apercevoirObjectifs(texte, charge, { choix = {}, mode = 'mettreA
     const brut = enregistrements[indice];
     if (enregistrementVide(brut)) continue;
     const ligne = indice + 1;
-    const { champs, ...refus } = lireLigne(brut, entetes.length, association.colonnes, { tables: charge.tables, tours });
+    const { champs, aRemplir = false, ...refus } = lireLigne(brut, entetes.length, association.colonnes, {
+      tables: charge.tables,
+      tours,
+    });
+    if (aRemplir) continue;
     if (champs === undefined) {
       refusees.push({ ligne, ...refus, brut });
       continue;
@@ -567,5 +579,91 @@ export function exporterObjectifs(tables) {
           celluleRegle(regle, numero),
         ]),
     );
+  return ecrireCsv([[...CHAMPS_OBJECTIFS], ...lignes], SEPARATEUR);
+}
+
+// Les objectifs d'exemple du modèle, dans l'ordre où ils prennent les
+// premiers couples libres : la règle « ou », puis la règle « et ».
+const EXEMPLES_D_OBJECTIFS = [
+  { regle: 'ou', etiquettes: ['finance', 'ressources humaines'] },
+  { regle: 'et', etiquettes: ['finance', 'Montréal'] },
+];
+
+/**
+ * Le modèle du CSV des objectifs d'un événement, à télécharger (§ 10.4) :
+ * la forme de l'export — UTF-8 avec marque, « ; », CRLF, l'en-tête
+ * table;tour;objectif;regle —, puis une ligne par couple (table, tour) à
+ * remplir. Les tables se rangent par numéro affiché puis identifiant. Une
+ * table qui ne porte aucun objectif de tour a la ligne de sa soirée ; une
+ * table qui en porte au moins un, celle de sa soirée puis une par tour, de
+ * 1 à tours. Sur une table dont le numéro n'est porté par aucune autre, un
+ * couple qui porte un objectif l'écrit, comme l'export, et les deux premiers
+ * couples libres reçoivent les exemples, « ou » puis « et ». Les autres
+ * couples restent à remplir, objectif et règle vides — tous ceux d'une table
+ * à numéro partagé, objectif existant compris, puisque l'import refuse ce
+ * numéro (PLUSIEURS_TABLES). Quand ces tables offrent moins de deux couples
+ * libres, les premières d'entre elles sans objectif de tour prennent aussi
+ * leurs lignes de tour, une à une, jusqu'à en offrir deux ; sans table à
+ * étendre, un seul couple libre ne reçoit que l'exemple « ou », et aucun
+ * exemple ne s'écrit sans couple libre. Importé tel quel, sous l'un ou
+ * l'autre mode, il ne refuse aucune ligne : les lignes à remplir passent,
+ * les objectifs existants des tables à numéro unique reviennent inchangés et
+ * les exemples s'ajoutent ; en remplacement, ceux d'une table à numéro
+ * partagé partent. Quand chaque numéro est partagé, le fichier n'a aucune
+ * ligne valide : l'application refuse ce modèle (src/application/csv.js).
+ * Sans table, l'en-tête seul. Les tables reçues ne sont pas modifiées.
+ *
+ * @param {Array<{id: number, numero: number, objectifs?: Array<{tour: number|null, regle: 'ou'|'et'|null, etiquettes: string[]}>}>} tables
+ * @param {number} tours  le nombre de tours de l'événement
+ * @returns {Uint8Array}
+ * @throws {TypeError} pour un nombre de tours qui n'est pas un entier
+ *   positif, et pour un objectif existant de forme fausse sur une table à
+ *   numéro unique, comme l'export ; ceux d'une table à numéro partagé ne se
+ *   lisent pas
+ */
+export function modeleObjectifs(tables, tours) {
+  if (!Number.isSafeInteger(tours) || tours < 1) throw new TypeError(`tours : entier positif attendu, reçu ${String(tours)}`);
+  const portees = new Map();
+  for (const { numero } of tables) portees.set(numero, (portees.get(numero) ?? 0) + 1);
+  const triees = [...tables].sort((a, b) => a.numero - b.numero || a.id - b.id);
+  // Les tables écrites par tour : celles qui portent un objectif de tour,
+  // puis, tant que les tables à numéro unique offrent moins de couples
+  // libres que d'exemples, la suivante d'entre elles qui n'en porte pas —
+  // ses tours sont tous libres.
+  const parTour = new Set(triees.filter(({ objectifs = [] }) => objectifs.some(({ tour }) => tour !== null)));
+  const unique = ({ numero }) => portees.get(numero) === 1;
+  const libresDe = (table) => {
+    const pris = new Set((table.objectifs ?? []).map(({ tour }) => tour));
+    const couples = [null, ...(parTour.has(table) ? Array.from({ length: tours }, (_, rang) => rang + 1) : [])];
+    return couples.filter((tour) => !pris.has(tour)).length;
+  };
+  let libres = triees.filter(unique).reduce((somme, table) => somme + libresDe(table), 0);
+  for (const table of triees) {
+    if (libres >= EXEMPLES_D_OBJECTIFS.length) break;
+    if (!unique(table) || parTour.has(table)) continue;
+    parTour.add(table);
+    libres += tours;
+  }
+  const lignes = [];
+  let exemples = 0;
+  for (const table of triees) {
+    const { numero, objectifs = [] } = table;
+    const couples = [null, ...(parTour.has(table) ? Array.from({ length: tours }, (_, rang) => rang + 1) : [])];
+    for (const tour of couples) {
+      // Un numéro partagé ne s'importe pas (PLUSIEURS_TABLES) : chacun de
+      // ses couples est une ligne à remplir, son objectif existant tu.
+      let objectif = unique(table) ? (objectifs.find((existant) => existant.tour === tour) ?? null) : null;
+      if (objectif === null && unique(table) && exemples < EXEMPLES_D_OBJECTIFS.length) {
+        objectif = EXEMPLES_D_OBJECTIFS[exemples];
+        exemples += 1;
+      }
+      lignes.push([
+        String(numero),
+        tour === null ? '' : String(tour),
+        objectif === null ? '' : celluleObjectif(objectif.etiquettes, numero),
+        objectif === null ? '' : celluleRegle(objectif.regle, numero),
+      ]);
+    }
+  }
   return ecrireCsv([[...CHAMPS_OBJECTIFS], ...lignes], SEPARATEUR);
 }

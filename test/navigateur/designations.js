@@ -132,6 +132,7 @@ const ENTREES = [
   ['data-mode', 'événement : la barre, la tête et la surface de l’événement, par son mode', null],
   ['data-mode-libelle', 'le libellé de mode', ['bandeau', 'barre']],
   ['data-mode-objectifs', 'génération : le groupe du choix du mode des objectifs', ['']],
+  ['data-modele-enregistre', 'import : l’annonce du chemin où le modèle à télécharger est enregistré', ['']],
   ['data-motif', 'import : le motif d’une ligne refusée', ['']],
   ['data-multiligne', 'import : une ligne sur plusieurs lignes de texte', null],
   ['data-nature-import', 'import : le choix de la nature du fichier', ['']],

@@ -5,7 +5,8 @@
 // des en-têtes et son association, l'aperçu et ses refus globaux, les refus
 // d'une ligne dans l'ordre de A20, la règle lue dans sa liste fermée, la
 // réconciliation des étiquettes, l'import appliqué selon le mode, l'export
-// et l'aller-retour, le fichier d'exemple et la boucle de son CSV des refus.
+// et l'aller-retour, le fichier d'exemple et la boucle de son CSV des refus,
+// la ligne à remplir, que l'import passe, et le modèle à télécharger.
 // Les noms, les étiquettes et les événements sont inventés.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -29,6 +30,7 @@ import {
   associerObjectifs,
   bilanRemplacementObjectifs,
   exporterObjectifs,
+  modeleObjectifs,
   reconnaitreObjectif,
 } from './objectifs.js';
 
@@ -250,9 +252,9 @@ describe('objectifs : les refus d’une ligne, un motif, dans l’ordre de A20 (
     }
   });
 
-  test("l'objectif : vide ou fait de séparateurs, puis une étiquette mal formée, puis une vingt-et-unième étiquette", () => {
-    assert.deepEqual(refusDe('1;;;'), { ligne: 2, code: 'OBJECTIF_VIDE', valeur: null });
-    assert.deepEqual(refusDe('1;;" , | ";'), { ligne: 2, code: 'OBJECTIF_VIDE', valeur: null });
+  test("l'objectif : vide ou fait de séparateurs sous une règle écrite, puis une étiquette mal formée, puis une vingt-et-unième étiquette", () => {
+    assert.deepEqual(refusDe('1;;;et'), { ligne: 2, code: 'OBJECTIF_VIDE', valeur: null });
+    assert.deepEqual(refusDe('1;;" , | ";ou'), { ligne: 2, code: 'OBJECTIF_VIDE', valeur: null });
     assert.deepEqual(refusDe(`1;;finance, ressources${TAB}humaines;`), {
       ligne: 2, code: 'ETIQUETTE_MAL_FORMEE', valeur: `ressources${TAB}humaines`, raison: 'controle',
     });
@@ -508,6 +510,248 @@ describe('objectifs : l’export, gabarit de l’import et sauvegarde (§ 10.4)'
     assert.throws(() => exporterObjectifs(charge.tables), (erreur) => erreur instanceof TypeError && /table 2/.test(erreur.message));
     charge.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: 'finance' }];
     assert.throws(() => exporterObjectifs(charge.tables), TypeError);
+  });
+});
+
+describe('objectifs : la ligne à remplir, sans objectif ni règle, que l’import passe (§ 10.4)', () => {
+  test('ni valide ni refusée, quels que soient sa table et son tour ; seule, aucune ligne valide', () => {
+    for (const ligne of ['1;;;', '1;2;;', '1;;" , | ";', '9;;;', 'un;cinq;;', ';3; ;']) {
+      const apercu = apercevoirObjectifs(csv('table;tour;objectif;regle', ligne), evenement());
+      assert.equal(apercu.refusGlobal, 'AUCUNE_LIGNE_VALIDE', ligne);
+      assert.deepEqual(apercu.refusees, [], ligne);
+    }
+    const sansRegle = apercevoirObjectifs(csv('table;objectif', '1;', '2;finance'), evenement());
+    assert.deepEqual(sansRegle.refusees, []);
+    assert.deepEqual(sansRegle.lignes.map(({ ligne }) => ligne), [3]);
+  });
+
+  test('un champ en trop la refuse encore, et une règle écrite en fait un objectif vide', () => {
+    // Vingt lignes à remplir précèdent le champ en trop, que l'analyse du
+    // séparateur ne lit qu'au-delà de ses vingt premiers enregistrements.
+    const apercu = apercevoirObjectifs(
+      csv('table;tour;objectif;regle', '1;;finance;', ...Array(20).fill('3;;;'), '2;;;;x', '2;1;;toutes'),
+      evenement(),
+    );
+    assert.deepEqual(refus(apercu), [[23, 'CHAMPS_EN_TROP'], [24, 'OBJECTIF_VIDE']]);
+    assert.deepEqual(apercu.lignes.map(({ ligne }) => ligne), [2]);
+  });
+
+  test('elle ne touche pas l’objectif de son couple en mise à jour ; en remplacement, son couple est de ceux que le fichier ne nomme pas', () => {
+    const charge = avecObjectifs();
+    const texte = csv('table;tour;objectif;regle', '1;;;', '1;2;;', '2;;finance;');
+    const misAJour = appliquerImportObjectifs(charge, apercevoirObjectifs(texte, charge), 'mettreAJour');
+    assert.deepEqual(misAJour.charge.tables[0].objectifs, charge.tables[0].objectifs);
+    assert.deepEqual([misAJour.resume.ajoutes, misAJour.resume.inchanges, misAJour.resume.retires], [1, 0, 0]);
+    const remplace = appliquerImportObjectifs(charge, apercevoirObjectifs(texte, charge, { mode: 'remplacer' }), 'remplacer');
+    assert.equal(remplace.charge.tables[0].objectifs, undefined);
+    assert.deepEqual([remplace.resume.ajoutes, remplace.resume.retires], [1, 3]);
+  });
+});
+
+describe('objectifs : le modèle à télécharger, adapté à l’événement (§ 10.4)', () => {
+  test('sans objectif : une ligne de soirée par table, les deux premières portent l’exemple « ou » puis l’exemple « et »', () => {
+    const charge = evenement();
+    const octets = modeleObjectifs(charge.tables, charge.evenement.tours);
+    assert.ok(octets instanceof Uint8Array);
+    assert.deepEqual([...octets.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
+    assert.equal(
+      texteDe(octets),
+      MARQUE + csv('table;tour;objectif;regle', '1;;finance, ressources humaines;ou', '2;;finance, Montréal;et', '3;;;'),
+    );
+  });
+
+  test('une table qui porte un objectif de tour : sa soirée puis chaque tour ; un objectif existant s’écrit à son couple, les exemples aux premiers couples libres', () => {
+    const charge = avecObjectifs();
+    // Une quatrième table numérotée 0 vient en tête par son numéro.
+    charge.tables.push(table(4, 0));
+    charge.tables.reverse();
+    const avant = structuredClone(charge.tables);
+    assert.equal(
+      texteDe(modeleObjectifs(charge.tables, charge.evenement.tours)),
+      MARQUE +
+        csv(
+          'table;tour;objectif;regle',
+          '0;;finance, ressources humaines;ou',
+          '1;;finance;',
+          '1;1;finance, Montréal;et',
+          '1;2;Montréal, bénévole;et',
+          '1;3;;',
+          '1;4;;',
+          '2;;;',
+          '3;;;',
+          '3;1;;',
+          '3;2;;',
+          '3;3;Vélo;ou',
+          '3;4;;',
+        ),
+    );
+    assert.deepEqual(charge.tables, avant);
+  });
+
+  test('deux tables d’un même numéro ont leurs lignes, à remplir, leurs objectifs existants tus : aucun exemple n’y va, l’import refuserait ce numéro', () => {
+    const charge = evenement();
+    charge.tables = [table(1, 3), table(2, 3), table(3, 5)];
+    assert.equal(
+      texteDe(modeleObjectifs(charge.tables, 2)),
+      MARQUE + csv('table;tour;objectif;regle', '3;;;', '3;;;', '5;;finance, ressources humaines;ou', '5;1;finance, Montréal;et', '5;2;;'),
+    );
+    const garnie = evenement();
+    garnie.tables = [
+      table(1, 3, { objectifs: [
+        { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] },
+        { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['Montréal', 'bénévole'] },
+      ] }),
+      table(2, 3),
+      table(3, 5),
+    ];
+    assert.equal(
+      texteDe(modeleObjectifs(garnie.tables, 2)),
+      MARQUE + csv('table;tour;objectif;regle', '3;;;', '3;1;;', '3;2;;', '3;;;', '5;;finance, ressources humaines;ou', '5;1;finance, Montréal;et', '5;2;;'),
+    );
+    assert.equal(texteDe(modeleObjectifs([], 2)), `${MARQUE}table;tour;objectif;regle\r\n`);
+  });
+
+  test('moins de deux couples libres : la première table à numéro unique sans objectif de tour prend ses lignes de tour, et les deux formes s’y montrent', () => {
+    const garnies = evenement();
+    garnies.tables = [
+      table(1, 1, { objectifs: [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }] }),
+      table(2, 2, { objectifs: [{ portee: 'tous', tour: null, regle: null, etiquettes: ['bénévole'] }] }),
+    ];
+    assert.equal(
+      texteDe(modeleObjectifs(garnies.tables, 3)),
+      MARQUE +
+        csv(
+          'table;tour;objectif;regle',
+          '1;;finance;',
+          '1;1;finance, ressources humaines;ou',
+          '1;2;finance, Montréal;et',
+          '1;3;;',
+          '2;;bénévole;',
+        ),
+    );
+    const seule = evenement();
+    seule.tables = [table(1, 4)];
+    assert.equal(
+      texteDe(modeleObjectifs(seule.tables, 3)),
+      MARQUE + csv('table;tour;objectif;regle', '4;;finance, ressources humaines;ou', '4;1;finance, Montréal;et', '4;2;;', '4;3;;'),
+    );
+    // Un seul tour : la première table n'offre qu'un couple de tour, la
+    // suivante prend aussi sa ligne de tour pour le second exemple.
+    const tourUnique = evenement();
+    tourUnique.tables = [
+      table(1, 1, { objectifs: [{ portee: 'tous', tour: null, regle: 'et', etiquettes: ['finance'] }] }),
+      table(2, 2, { objectifs: [{ portee: 'tous', tour: null, regle: null, etiquettes: ['Montréal'] }] }),
+    ];
+    assert.equal(
+      texteDe(modeleObjectifs(tourUnique.tables, 1)),
+      MARQUE + csv('table;tour;objectif;regle', '1;;finance;et', '1;1;finance, ressources humaines;ou', '2;;Montréal;', '2;1;finance, Montréal;et'),
+    );
+    // Une table déjà écrite par tour, avant une table garnie à sa soirée :
+    // son couple libre ne suffit pas, ses tours ne se recomptent pas, et la
+    // table suivante prend ses lignes de tour pour l'exemple « et ».
+    const parTourDabord = evenement();
+    parTourDabord.tables = [
+      table(1, 1, { objectifs: [
+        { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] },
+        { portee: 'tour', tour: 1, regle: null, etiquettes: ['finance'] },
+        { portee: 'tour', tour: 2, regle: null, etiquettes: ['finance'] },
+      ] }),
+      table(2, 2, { objectifs: [{ portee: 'tous', tour: null, regle: null, etiquettes: ['bénévole'] }] }),
+    ];
+    assert.equal(
+      texteDe(modeleObjectifs(parTourDabord.tables, 3)),
+      MARQUE +
+        csv(
+          'table;tour;objectif;regle',
+          '1;;finance;',
+          '1;1;finance;',
+          '1;2;finance;',
+          '1;3;finance, ressources humaines;ou',
+          '2;;bénévole;',
+          '2;1;finance, Montréal;et',
+          '2;2;;',
+          '2;3;;',
+        ),
+    );
+  });
+
+  test('sans couple libre sur une table à numéro unique, aucun exemple : un événement entièrement garni, ou des numéros tous partagés, dont le fichier n’a aucune ligne valide', () => {
+    const garni = evenement();
+    garni.tables = [
+      table(1, 1, { objectifs: [
+        { portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] },
+        { portee: 'tour', tour: 1, regle: 'ou', etiquettes: ['Montréal'] },
+        { portee: 'tour', tour: 2, regle: 'et', etiquettes: ['bénévole'] },
+      ] }),
+    ];
+    assert.equal(
+      texteDe(modeleObjectifs(garni.tables, 2)),
+      MARQUE + csv('table;tour;objectif;regle', '1;;finance;', '1;1;Montréal;ou', '1;2;bénévole;et'),
+    );
+    const partages = evenement();
+    partages.tables = [table(1, 3), table(2, 3)];
+    assert.equal(texteDe(modeleObjectifs(partages.tables, 2)), MARQUE + csv('table;tour;objectif;regle', '3;;;', '3;;;'));
+    // Ce fichier ne s'importe pas : l'application refuse ce modèle
+    // (OBJECTIFS_NUMEROS_PARTAGES, src/application/csv.js).
+    const texte = decoder(modeleObjectifs(partages.tables, 2)).texte;
+    for (const mode of MODES_IMPORT_OBJECTIFS) {
+      const apercu = apercevoirObjectifs(texte, partages, { mode });
+      assert.equal(apercu.refusGlobal, 'AUCUNE_LIGNE_VALIDE', mode);
+      assert.deepEqual(apercu.refusees, [], mode);
+    }
+  });
+
+  test('importé tel quel, sous les deux modes : aucun refus, les objectifs existants inchangés, les exemples ajoutés', () => {
+    const garnies = evenement();
+    garnies.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+    garnies.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['bénévole'] }];
+    garnies.tables[2].objectifs = [{ portee: 'tous', tour: null, regle: 'ou', etiquettes: ['Montréal'] }];
+    for (const depart of [evenement(), avecObjectifs(), garnies]) {
+      const texte = decoder(modeleObjectifs(depart.tables, depart.evenement.tours)).texte;
+      const parMode = MODES_IMPORT_OBJECTIFS.map((mode) => {
+        const apercu = apercevoirObjectifs(texte, depart, { mode });
+        assert.equal(apercu.refusGlobal, null, mode);
+        assert.deepEqual(apercu.refusees, [], mode);
+        assert.deepEqual(apercu.multilignes, [], mode);
+        return appliquerImportObjectifs(depart, apercu, mode);
+      });
+      const [misAJour, remplace] = parMode;
+      assert.deepEqual(remplace.charge, misAJour.charge);
+      assert.deepEqual([misAJour.resume.ajoutes, misAJour.resume.remplaces, misAJour.resume.retires], [2, 0, 0]);
+      for (const avant of depart.tables) {
+        const apres = misAJour.charge.tables.find(({ id }) => id === avant.id);
+        for (const objectif of avant.objectifs ?? []) assert.ok(apres.objectifs.some((o) => JSON.stringify(o) === JSON.stringify(objectif)));
+      }
+    }
+    // Un numéro partagé, dont une table porte un objectif : ses lignes sont à
+    // remplir, aucune n'est refusée ; la mise à jour garde son objectif, le
+    // remplacement le retire, comme son bilan l'annonce.
+    const partagee = evenement();
+    partagee.tables = [
+      table(1, 3, { objectifs: [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }] }),
+      table(2, 3),
+      table(3, 5),
+    ];
+    const texte = decoder(modeleObjectifs(partagee.tables, partagee.evenement.tours)).texte;
+    const [misAJour, remplace] = MODES_IMPORT_OBJECTIFS.map((mode) => {
+      const apercu = apercevoirObjectifs(texte, partagee, { mode });
+      assert.equal(apercu.refusGlobal, null, mode);
+      assert.deepEqual(apercu.refusees, [], mode);
+      const applique = appliquerImportObjectifs(partagee, apercu, mode);
+      assert.deepEqual(applique.resume.refusees, [], mode);
+      return applique;
+    });
+    assert.deepEqual(misAJour.charge.tables[0].objectifs, partagee.tables[0].objectifs);
+    assert.deepEqual([misAJour.resume.ajoutes, misAJour.resume.remplaces, misAJour.resume.retires], [2, 0, 0]);
+    assert.equal(remplace.charge.tables[0].objectifs, undefined);
+    assert.deepEqual([remplace.resume.ajoutes, remplace.resume.remplaces, remplace.resume.retires], [2, 0, 1]);
+  });
+
+  test('un nombre de tours qui n’est pas un entier positif lève TypeError ; une forme fausse d’objectif aussi, qui nomme la table', () => {
+    const charge = avecObjectifs();
+    for (const tours of [0, -1, 1.5, '4', null]) assert.throws(() => modeleObjectifs(charge.tables, tours), TypeError, String(tours));
+    charge.tables[1].objectifs = [{ portee: 'tous', tour: null, regle: 'toutes', etiquettes: ['finance'] }];
+    assert.throws(() => modeleObjectifs(charge.tables, 4), (erreur) => erreur instanceof TypeError && /table 2/.test(erreur.message));
   });
 });
 

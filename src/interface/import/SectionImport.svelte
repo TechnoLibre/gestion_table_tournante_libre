@@ -34,6 +34,16 @@
   // libelle ; la façade l'enregistre sous ‹base›-refus.csv. La détection
   // d'encodage ou de séparateur ne se force pas : l'opérateur ferme l'aperçu
   // et corrige le fichier.
+  //
+  // « Télécharger un modèle », sous le choix de la nature, remet à
+  // facade.enregistrerSous le modèle de la nature cochée
+  // (modeleATelecharger) : elle n'écrit rien dans l'événement, et part en
+  // lecture comme sur un plan bloqué. Son nom accessible nomme la nature ;
+  // le chemin enregistré s'annonce sous elle, sous la seule nature de son
+  // modèle ; un enregistrement annulé n'annonce rien. Le modèle des
+  // objectifs se refuse à côté d'elle sans table, ou quand chaque numéro de
+  // table est partagé, avec le remède qui ouvre la section des tables ; la
+  // commande se recrée à chaque nature, son refus avec elle.
   import { getContext, untrack } from 'svelte';
   import { appliquerCommande } from '../../application/commandes.js';
   import { bilanRemplacement, bilanRemplacementObjectifs, decoder, exporterRefus } from '../../application/csv.js';
@@ -48,6 +58,7 @@
     apercevoirSelon,
     avecEntetesDeLaGrille,
     modeleApercu,
+    modeleATelecharger,
     modePropose,
     modesDImport,
   } from './modele.js';
@@ -78,8 +89,14 @@
   let confirmation = $state.raw(null);
   // Le chemin où le CSV des refus vient d'être enregistré.
   let enregistre = $state(null);
+  // Le dernier modèle enregistré : { nature, chemin } ; il ne s'annonce que
+  // sous sa nature.
+  let modeleEnregistre = $state.raw(null);
 
   const charge = $derived($seance.charge ?? null);
+  // Le nom accessible de « Télécharger un modèle » sous la nature cochée.
+  const nomDuModele = $derived(t(NATURES_D_IMPORT.find((offerte) => offerte.nature === nature).modele));
+  const cheminDuModele = $derived(modeleEnregistre?.nature === nature ? modeleEnregistre.chemin : null);
   const participants = $derived(charge?.participants ?? []);
   const apercu = $derived(
     source === null || source.refusDecodage !== null || charge === null
@@ -114,6 +131,15 @@
   function choisirNature(nouvelle) {
     nature = nouvelle;
     repartir();
+  }
+
+  // Le modèle de la nature cochée, remis à la façade sous son nom.
+  async function telechargerModele() {
+    const { evenement, charge: courante } = seance.etat();
+    const saNature = nature;
+    const { nom, octets } = modeleATelecharger(saNature, { base: evenement.base, charge: courante });
+    const chemin = await facade.enregistrerSous(nom, octets);
+    modeleEnregistre = chemin === null ? null : { nature: saNature, chemin };
   }
 
   // Les octets d'un fichier : leur texte décodé, ou le refus de decoder,
@@ -269,6 +295,21 @@
         </label>
       {/each}
     </fieldset>
+    <div class="modele">
+      {#key nature}
+        <Commande
+          cle="import.commande.telechargerModele"
+          nom="telechargerModele"
+          nomAccessible={nomDuModele}
+          executer={telechargerModele}
+        />
+      {/key}
+      {#if cheminDuModele !== null}
+        <p role="status" data-modele-enregistre>
+          <span>{t('import.modele.enregistre')}</span> <span class="chemin">{cheminDuModele}</span>
+        </p>
+      {/if}
+    </div>
   </Carte>
 
   {#if source !== null}
@@ -360,6 +401,19 @@
 
   p {
     margin: 0;
+  }
+
+  .modele {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--espace-2);
+    margin-top: var(--espace-3);
+  }
+
+  /* Un chemin long se coupe où il faut, plutôt que de déborder. */
+  .chemin {
+    overflow-wrap: anywhere;
   }
 
   .commandes {

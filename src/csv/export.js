@@ -13,6 +13,9 @@
 // lirait comme une formule : la neutraliser romprait l'aller-retour. Une
 // valeur se relit sans ses blancs de bord, que l'aperçu retire de chaque
 // champ ; une valeur importée n'en porte pas.
+//
+// Le modèle des participants (§ 10.1) est l'export d'une liste fixe de
+// personnes inventées : il a la forme de l'export, et s'importe tel quel.
 
 import { CHAMPS } from './colonnes.js';
 
@@ -126,4 +129,38 @@ function cellule(participant, champ, rang) {
 export function exporterParticipants(participants) {
   const lignes = participants.map((participant, rang) => CHAMPS.map((champ) => cellule(participant, champ, rang)));
   return ecrireCsv([[...CHAMPS], ...lignes], SEPARATEUR);
+}
+
+// Une personne inventée du modèle, ses champs omis vides et non exclue.
+const exemple = (nom, prenom, autres) => ({
+  nom, prenom, appartenance: null, courriel: null, titrePressenti: null, notes: null, exclu: false, etiquettes: [], ...autres,
+});
+
+// Les personnes du modèle : à elles quatre, elles remplissent chaque colonne
+// de CHAMPS, exclu sous ses deux valeurs, une appartenance partagée, une
+// absente, et une cellule à deux étiquettes.
+const EXEMPLES_DU_MODELE = [
+  exemple('Ombrelle', 'Iris', {
+    appartenance: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
+    etiquettes: ['finance', 'Montréal'],
+  }),
+  exemple('Pervenche', 'Théo', {
+    appartenance: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],
+  }),
+  exemple('Lacasse', 'Ondine', {
+    appartenance: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé', exclu: true,
+  }),
+  exemple('Tourteau', 'Basile', { etiquettes: ['bénévole'] }),
+];
+
+/**
+ * Le modèle du CSV des participants, à télécharger (§ 10.1) : l'export
+ * (exporterParticipants) de quatre personnes inventées, toujours les mêmes,
+ * dont les cellules remplissent chaque colonne que l'import lit. Importé
+ * tel quel, il ne refuse aucune ligne. Chaque appel rend un tableau neuf.
+ *
+ * @returns {Uint8Array}  UTF-8 avec marque, « ; », CRLF
+ */
+export function modeleParticipants() {
+  return exporterParticipants(EXEMPLES_DU_MODELE);
 }
