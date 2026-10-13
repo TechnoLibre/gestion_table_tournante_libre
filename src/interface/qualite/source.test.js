@@ -97,12 +97,12 @@ describe('la source de la page de qualité (§ 12, B9, D25)', () => {
     assert.ok(Object.isFrozen(CAS_QUALITE));
   });
 
-  test('ni proposition ni retenu : aucun placement, la barre dit les réservations, rien à mesurer', () => {
+  test('ni proposition ni retenu : aucun placement, la barre dit les réservations, la ligne de source « aucun », rien à mesurer', () => {
     const charge = chargeSix();
     const source = sourceQualite(charge);
     assert.deepEqual(sourceDuPlan(charge, null), { source: 'reservations', proposition: null, refus: null });
     assert.equal(source.cas, 'aucunPlacement');
-    assert.deepEqual(source.libelle, { cle: 'plan.source.reservations', details: {} });
+    assert.deepEqual(source.libelle, { cle: 'qualite.source.aucun', details: {} });
     assert.equal(source.revenir, null);
     assert.equal(source.id, null);
     assert.equal(source.ligne, null);
@@ -118,7 +118,7 @@ describe('la source de la page de qualité (§ 12, B9, D25)', () => {
     const source = sourceQualite(charge);
     assert.equal(source.cas, 'aucuneMontree');
     assert.equal(source.premiere, premiere.id);
-    assert.deepEqual(source.libelle, { cle: 'plan.source.reservations', details: {} });
+    assert.deepEqual(source.libelle, { cle: 'qualite.source.aucun', details: {} });
     assert.equal(source.id, null);
     assert.equal(source.ligne, null);
   });
@@ -182,6 +182,7 @@ describe('la source de la page de qualité (§ 12, B9, D25)', () => {
     assert.deepEqual(sourceDuPlan(sansElle, disparue), { source: 'reservations', proposition: null, refus: null });
     const aucune = sourceQualite(sansElle, { demandee: disparue });
     assert.equal(aucune.cas, 'aucuneMontree');
+    assert.deepEqual(aucune.libelle, { cle: 'qualite.source.aucun', details: {} });
     assert.equal(aucune.revenir, 'plan.source.revenirReservations');
     // Une génération qui remplace la liste sous un retenu : le retenu revient.
     const retenue = executer(generees, 'retenirProposition', { id: generees.propositions[1].id });
@@ -247,6 +248,15 @@ describe('la source de la page de qualité (§ 12, B9, D25)', () => {
     assert.deepEqual(source.raisons, raisonsDe(evaluer(retenue).propositions.find((candidate) => candidate.id === id)));
     assert.deepEqual(source.libelle, { cle: 'qualite.source.propositionFautive', details: { proposition: id } });
     assert.equal(source.revenir, 'plan.source.revenirRetenu');
+  });
+
+  test('une configuration qui ne se normalise pas, sans proposition ni retenu : la ligne de source n’en nomme aucun', () => {
+    const charge = avec(chargeSix(), enConflit);
+    assert.equal(charge.retenu, null);
+    assert.equal(charge.propositions.length, 0);
+    const source = sourceQualite(charge);
+    assert.equal(source.cas, 'configuration');
+    assert.deepEqual(source.libelle, { cle: 'qualite.source.aucun', details: {} });
   });
 
   test('une configuration qui ne se normalise pas l’emporte : sans placement, avec des propositions, avec un retenu, le refus de la génération', () => {

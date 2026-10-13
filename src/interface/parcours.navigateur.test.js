@@ -3321,7 +3321,9 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     expect(texteDe(phrase)).toBe(plat(t('qualite.phrase.aucunPlacement')));
     expect(phrasesQualite()).toEqual(['aucunPlacement']);
     expect(tous('[data-section="qualite"] svg[data-graphique]')).toEqual([]);
-    expect(dans('[data-section="qualite"] [data-source-qualite]')).not.toBeNull();
+    // La ligne de source ne nomme aucun placement mesuré : les réservations
+    // que le plan montre ne se mesurent pas.
+    expect(texteDe(dans('[data-section="qualite"] [data-source-qualite]'))).toBe(plat(`${t('qualite.source.intitule')} ${t('qualite.source.aucun')}`));
     expect(tous('[data-section="qualite"] [data-phrase]').length, 'le diagnostic préalable').toBeGreaterThan(0);
     await photographier(m, '12a-qualite-sans-placement', {
       condition: ['[data-section="qualite"] [data-source-qualite]', '[data-section="qualite"] [data-phrase-qualite="aucunPlacement"]'],
@@ -3625,7 +3627,26 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     await uneEntree(r, 'débloquer');
     await passerEnEcriture();
     await generer();
+    // Le retenu que les familles laissent et les propositions d'avant elles
+    // ne décrivent plus la liste : leur annonce couvrirait l'image. La
+    // première du classement est retenue — la fenêtre confirmée quand le
+    // retenu qu'elle remplace est ajusté —, puis l'effacement garde d'elle
+    // seule.
+    await ouvrirSection('propositions');
+    const classee = await attendre('le tableau classé', () => dans('[data-section="propositions"] [data-classement] tr[data-proposition]'));
+    const retenue = Number(classee.dataset.proposition);
+    let entree = revision();
+    await cliquer(`[data-section="propositions"] tr[data-proposition="${retenue}"] [data-commande="retenir"]`);
+    await attendre('le retenu, ou sa fenêtre', () => revision() > entree || dans('dialog[open]'));
+    if (revision() === entree) await appuyer(dans('dialog[open] [data-commande="confirmer"]'), 'confirmer retenir');
+    await uneEntree(entree, 'retenir');
+    entree = revision();
+    await cliquer('[data-section="propositions"] [data-commande="effacer"]');
+    await uneEntree(entree, 'effacer les propositions');
+    expect(charge().propositions.map((proposition) => proposition.id)).toEqual([retenue]);
+    expect(charge().retenu.proposition).toBe(retenue);
     const id = await qualiteDeLaPremiere();
+    expect(id).toBe(retenue);
     const vue = vueQualite('objectifs');
     expect(vue.querySelector('[data-jamais-servies]')).not.toBeNull();
     const soiree = vue.querySelector('[data-soiree-objectifs]');
@@ -3661,6 +3682,9 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
 
     const objectifs = vueQualite('objectifs');
     await cadrerDansLaSurface([objectifs.querySelector('[data-jamais-servies]'), objectifs.querySelector('ol.tours')]);
+    // L'image montre les objectifs sans annonce : aucun placement de la
+    // charge ne contredit la liste.
+    expect(tous('[data-avertissement]').map((annonce) => annonce.dataset.avertissement)).toEqual([]);
     await photographier(m, '15a-qualite-objectifs', {
       condition: ['[data-vue-qualite="objectifs"] [data-soiree-objectifs]', '[data-vue-qualite="objectifs"] ol.tours'],
       graine: GRAINE,

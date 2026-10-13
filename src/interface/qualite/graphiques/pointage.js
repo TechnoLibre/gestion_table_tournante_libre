@@ -619,21 +619,42 @@ export function dispositionBarres({ largeur, lignes, segments = null, colonnes =
       ? geometries.map((g, k) => ({ ...g.lignes[indice].segments[0], genre: parts[k].genre, colonne: k }))
       : geometries[0].lignes[indice].segments.map((s, k) => ({ ...s, genre: parts[k].genre, colonne: k }));
     // Empilé, un segment qui suit un segment non nul s'en écarte. Un
-    // segment en contour garde LARGEUR_MIN_CONTOUR_PX ; empilé, ce qu'il
-    // gagne au-delà de sa fin se retranche du segment qui le suit, sans le
-    // rendre négatif : la barre finit où sa valeur la fait finir, sauf quand
-    // le segment en contour est seul.
-    let gagne = 0;
-    const tracees = traces
-      .filter((s) => l.valeurs[s.colonne] > 0)
-      .map((s) => {
-        const ecart = !juxtaposees && s.colonne > 0 && l.valeurs[s.colonne - 1] > 0 ? ECART_SEGMENTS_PX : 0;
-        const x = s.x + ecart + gagne;
-        const propre = Math.max(0, s.x + s.largeur - x);
-        const largeurTracee = REMPLISSAGES[s.genre].contour ? Math.max(propre, LARGEUR_MIN_CONTOUR_PX) : propre;
-        gagne = juxtaposees ? 0 : Math.max(0, x + largeurTracee - (s.x + s.largeur));
-        return { ...s, x, largeur: largeurTracee, y, hauteur: hauteurLigne, ...REMPLISSAGES[s.genre] };
-      });
+    // segment en contour garde au moins LARGEUR_MIN_CONTOUR_PX, et la
+    // barre finit au plus loin à sa limite : la fin de sa valeur, ou, pour
+    // une ligne plus étroite que le contour minimal de son premier segment à
+    // sa valeur, son premier segment plus ce minimum. Ce que le contour
+    // gagne au-delà de sa fin se prend sur les segments qui le suivent, dans
+    // l'ordre, chacun jusqu'à zéro ; ce qui dépasse encore la limite, sur
+    // ceux qui le précèdent, du plus proche au premier, chacun jusqu'à zéro
+    // — un segment ramené à zéro cède aussi l'écart qui le suivait —, et le
+    // contour recule d'autant. Seul le prouvé se trace en contour, et deux
+    // segments n'ont jamais le même genre : ce qui précède le contour est en
+    // aplat. Juxtaposé, chaque segment est seul sur son axe, et sa limite est
+    // la sienne.
+    const visibles = traces.filter((s) => l.valeurs[s.colonne] > 0);
+    const limiteDe = (premier, dernier) => Math.max(dernier.x + dernier.largeur, premier.x + LARGEUR_MIN_CONTOUR_PX);
+    const limiteEmpilee = visibles.length === 0 ? 0 : limiteDe(visibles[0], visibles.at(-1));
+    let finPrecedente = null;
+    const tracees = visibles.map((s) => {
+      const ecart = !juxtaposees && s.colonne > 0 && l.valeurs[s.colonne - 1] > 0 ? ECART_SEGMENTS_PX : 0;
+      const limite = juxtaposees ? limiteDe(s, s) : limiteEmpilee;
+      const depart = juxtaposees || finPrecedente === null ? s.x : Math.max(s.x, finPrecedente);
+      const x = Math.min(limite, depart + ecart);
+      const propre = Math.max(0, s.x + s.largeur - x);
+      const largeurTracee = REMPLISSAGES[s.genre].contour ? Math.max(propre, LARGEUR_MIN_CONTOUR_PX) : propre;
+      finPrecedente = x + largeurTracee;
+      return { ...s, x, largeur: largeurTracee, y, hauteur: hauteurLigne, ...REMPLISSAGES[s.genre] };
+    });
+    let depasse = juxtaposees || finPrecedente === null ? 0 : finPrecedente - limiteEmpilee;
+    for (let i = tracees.length - 2; depasse > 0 && i >= 0; i -= 1) {
+      const s = tracees[i];
+      const ecartSuivant = tracees[i + 1].x - (s.x + s.largeur);
+      const pris = Math.min(depasse, s.largeur);
+      s.largeur -= pris;
+      const recul = pris + (s.largeur === 0 ? Math.min(ecartSuivant, depasse - pris) : 0);
+      for (let j = i + 1; j < tracees.length; j += 1) tracees[j].x -= recul;
+      depasse -= recul;
+    }
     const intitule = intitules[indice];
     const centre = y + hauteurLigne / 2;
     const pastille =

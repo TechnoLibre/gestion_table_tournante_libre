@@ -313,7 +313,7 @@ describe('les quatre cas sans source mesurable (§ 12, § 12.6, B9)', () => {
     expect(texteDe(page(m).querySelector('[data-phrase-qualite="aucunPlacement"]'))).toBe(t('qualite.phrase.aucunPlacement'));
     expect(texteDe(page(m))).toContain(t('coquille.section.diagnostic'));
     expect(page(m).querySelector('[data-enonce]')).not.toBeNull();
-    expect(ligneDeSource(m)).toBe(attendueDeSource('plan.source.reservations'));
+    expect(ligneDeSource(m)).toBe(attendueDeSource('qualite.source.aucun'));
     expect(vuesRendues(m)).toEqual([]);
     expect(page(m).querySelector('svg, nav')).toBeNull();
   });
@@ -404,7 +404,7 @@ describe('une source qui disparaît sous la page ouverte (§ 12, B9)', () => {
     await m.seance.executer('enregistrerGeneration', { propositions, configuration, produitVersion: V1 });
     await attendre(() => expect(phrases(m)).toEqual(['aucuneMontree']));
     expect(charge(m).propositions.some((proposition) => proposition.id === id)).toBe(false);
-    expect(ligneDeSource(m)).toBe(attendueDeSource('plan.source.reservations'));
+    expect(ligneDeSource(m)).toBe(attendueDeSource('qualite.source.aucun'));
     expect(vuesRendues(m)).toEqual([]);
     const revenir = commande(page(m), 'revenir');
     expect(texteDe(revenir)).toBe(t('plan.source.revenirReservations'));

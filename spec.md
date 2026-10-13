@@ -47,11 +47,11 @@ Le parcours est **un ordre de lecture, pas une séquence imposée**. Le logiciel
 n'enchaîne aucun assistant et n'exige jamais de recommencer au début : un
 assistant linéaire obligerait l'opérateur qui découvre une faute de saisie au
 moment d'imprimer à ressortir de toutes les étapes pour y revenir, or corriger
-est ce qu'il fait le plus (§ 10.2). La navigation de l'événement groupe ses huit
+est ce qu'il fait le plus (§ 10.2). La navigation de l'événement groupe ses neuf
 sections en trois phases nommées : **Préparer** (import, participants, tables et
-tours), **Placer** (plan, diagnostic, génération, propositions), **Produire**
-(badges). Le groupement est une lecture, non un ordre : chaque section reste
-offerte depuis toutes les autres.
+tours), **Placer** (plan, diagnostic, génération, propositions, qualité),
+**Produire** (badges). Le groupement est une lecture, non un ordre : chaque
+section reste offerte depuis toutes les autres.
 
 **Deux verrous existent pourtant, et ils sont ailleurs.** L'état **bloqué**
 refuse toute modification, import compris (§ 9, § 10.1) ; le **mode lecture**,
@@ -190,11 +190,17 @@ logiciel nomme automatiquement l'instant qui précède chaque génération (§ 8
 retenu sort en filigrane BROUILLON (§ 11.7) — nécessaire en fait pour distribuer
 quoi que ce soit.* L'opérateur lit la page de qualité (§ 12), compare deux
 propositions sur le même axe — celui du **manque** (§ 12.10) —, retient celle
-qu'il préfère. Le logiciel sépare ce que le moteur a décidé de ce que les
-réservations imposent (§ 5.4). Retenir fait passer le plan à l'état *Retenu*
-(§ 9) ; les propositions non retenues restent disponibles. Le retenu se résume
-ensuite dans la liste des événements, par la différence absolue de sa somme de
-redondance à la cible de l'événement (§ 8.1).
+qu'il préfère. La page de qualité est la section « Qualité » de l'événement :
+elle mesure le placement que le plan montre, et chaque ligne du tableau des
+propositions y mène. Elle répond à deux questions — ce placement est-il bon, qui
+s'y trouve mal servi — par le profil des rencontres, les collisions
+d'appartenance, les paires répétées, le mélange des appartenances à chaque
+table, les objectifs des tables tour par tour, les animateurs, et la performance
+du calcul qui a produit la proposition. Le logiciel sépare ce que le moteur a
+décidé de ce que les réservations imposent (§ 5.4). Retenir fait passer le plan
+à l'état *Retenu* (§ 9) ; les propositions non retenues restent disponibles. Le
+retenu se résume ensuite dans la liste des événements, par la différence absolue
+de sa somme de redondance à la cible de l'événement (§ 8.1).
 
 **11. Ajuster à la main.** *Facultative, reprenable.* Le même geste qu'à
 l'étape 7 déplace maintenant une personne réelle dans le placement retenu. **Le
@@ -204,11 +210,11 @@ lit, elle ne recalcule rien).
 
 **12. Imprimer.** La **planche de badges** (§ 11.1), qui est le seul document
 PDF, et au besoin les vues imprimables : liste d'accueil, feuille par table,
-plan, rapport, page de qualité (§ 11.7). Le logiciel n'interdit pas d'imprimer
-un plan qui n'est ni retenu ni bloqué ; il le marque **BROUILLON** en filigrane.
-**Produire la planche n'est pas une modification** : elle reste disponible en
-mode lecture et sur un plan bloqué. L'opérateur bloque ensuite le plan pour le
-distribuer (§ 9).
+plan (§ 11.7). La page de qualité se lit à l'écran et ne s'imprime pas. Le
+logiciel n'interdit pas d'imprimer un plan qui n'est ni retenu ni bloqué ; il le
+marque **BROUILLON** en filigrane. **Produire la planche n'est pas une
+modification** : elle reste disponible en mode lecture et sur un plan bloqué.
+L'opérateur bloque ensuite le plan pour le distribuer (§ 9).
 
 **Ce qui doit avoir eu lieu.** Les étapes 2, 3, 5, 6, 7, 10 et 11 sont
 facultatives ; 2, 3, 4, 5, 6, 7, 9 et 11 se reprennent indéfiniment, dans
@@ -741,6 +747,61 @@ au diagnostic préalable ; elles ne corrigent jamais après coup un chiffre
 mesuré. Deux arithmétiques pour une même quantité sont le mode de défaillance
 que le § 13.2 interdit.
 
+**La page de qualité lit, en plus, des mesures qui ne classent rien.** Elles
+décrivent un placement à la fois (§ 12) ; aucune n'entre dans la recherche ni
+dans le classement, et aucune ne s'affiche dans le tableau des propositions.
+Elles se mesurent, comme les autres, sur le plan complet, par le même parcours
+des tours.
+
+| mesure | définition | population, et « — » |
+|---|---|---|
+| **capacité** — c_t | sièges de la table t (§ 4) | toute table |
+| **occupants** — o_{t,r} | personnes assises à la table t au tour r | toute table, tout tour ; une table vide à un tour donne une case vide, « — » |
+| **affiliés assis** — α_{t,r} | occupants qui portent une appartenance | idem |
+| **appartenances à la table** — δ_{t,r} | appartenances distinctes portées par les affiliés assis | « — » quand α_{t,r} = 0 |
+| **sièges sans appartenance nouvelle** — c_t − δ_{t,r} | sièges de la table au-delà du nombre de ses appartenances distinctes : siège vide, assis sans appartenance, ou second d'une appartenance ; zéro veut dire que chaque siège porte une appartenance de plus | « — » quand α_{t,r} = 0 |
+| **assis sans appartenance nouvelle** — o_{t,r} − δ_{t,r} | occupants au-delà du nombre des appartenances distinctes ; zéro veut dire que chaque assis porte une appartenance de plus | idem |
+| **doublons d'appartenance** — α_{t,r} − δ_{t,r} | affiliés assis au-delà du premier de leur appartenance ; zéro veut dire qu'aucune appartenance n'est assise deux fois à cette table ce tour-là | idem |
+| **possibles du tour** — Π_r | couples (p, r) possibles au tour r (§ 4.5), fixés compris | personnes concernées ; « — » sans couple possible à ce tour |
+| **servis du tour** — S_r | couples (p, r) servis au tour r : p assis à une table dont l'objectif en vigueur au tour r lui correspond et qu'il peut occuper | idem |
+| **hors objectif du tour** | Π_r − S_r ; la somme sur les tours est le total des tours hors objectif | idem |
+| **assis sans table possible** — σ_r | personnes présentes assises à une table au tour r dont le couple (p, r) n'est pas possible : concernées ou non, sans étiquette comprises ; une personne en réserve à ce tour n'y est pas | tout tour, dès qu'une personne est concernée ; écrit même quand Π_r = 0 |
+| **personnes rencontrées en animant** — U_f, U_{f,r} | pour un animateur f, les personnes distinctes assises à sa table à un tour où il anime, à une table qu'elles peuvent occuper (§ 4.5), lui non compté : sur l'union de ses tours animés, U_f ; au seul tour r, U_{f,r} | animateurs présents ; « — » sans animateur |
+| **appartenances rencontrées en animant** — A_f, A_{f,r} | appartenances distinctes portées par les affiliés de U_f, de U_{f,r} | idem |
+| **étiquettes rencontrées en animant** — E_f, E_{f,r} | étiquettes distinctes portées par les personnes de U_f, de U_{f,r}, chaque étiquette comptée une fois quel que soit le nombre de ses porteurs | animateurs présents, quand une personne présente porte une étiquette ; « — » sinon |
+| **tours animés** — T_f | tours où f anime | animateurs présents |
+
+Les trois comptes du mélange d'une table s'emboîtent : c_t − δ ≥ o − δ ≥ α − δ
+≥ 0, chacun nul exactement quand son dénominateur ne porte que des appartenances
+distinctes.
+
+Un couple fixé n'est possible que si sa table réservée lui correspond, et il y
+est servi (§ 4.5) : Π_r − S_r = P_r − S^nf_r, où P_r compte les couples
+possibles du tour dont la personne n'est pas fixée (§ 5.6) et S^nf_r les servis
+non fixés. Les symboles P_r, P′_r et L_r gardent le sens du § 5.6 ; U_f se lit
+comme les rencontres d'animateurs du § 4.5, qui ne comptent qu'à une table que
+la personne peut occuper.
+
+Le compte de personnes rencontrées par chacun, défini plus haut, est déjà le
+nombre de personnes **nouvelles** qu'elle rencontre : une personne revue y
+compte une fois. Son mélange se lit par la répartition de ce compte (§ 12.3) et
+par son pourcentage du plafond réalisé, toujours accompagné du compte.
+
+**Les pourcentages de la page de qualité** sont ceux de quatre rapports, et
+d'eux seuls (§ 12.8) :
+
+| rapport | numérateur | dénominateur |
+|---|---|---|
+| rencontres d'une personne | rencontres(p) | plafond réalisé(p) |
+| tours possibles servis, d'un tour ou de la soirée | S_r, ou Σ_r S_r | Π_r, ou Σ_r Π_r |
+| tours servis d'une personne | s(p) | P(p), ses tours possibles |
+| appartenances d'une table à un tour, par siège, par assis, par affilié | δ_{t,r} | c_t, o_{t,r}, α_{t,r} |
+
+Le moteur les calcule, par une seule fonction : ⌊100 · n / d⌋, borné à 1 et à 99
+quand 0 < n < d, et « — » quand d vaut 0. Jamais 0 % tant que le compte n'est
+pas nul, jamais 100 % tant qu'un manque existe. Aucun n'entre dans la recherche,
+le classement ou le tableau des propositions.
+
 ### 5.5 Le plafond et la borne prouvée
 
 Deux notions, **deux noms, jamais trois**.
@@ -783,16 +844,18 @@ base :
 | **plafond a priori** | maximisé sur les itinéraires admissibles | **capacités** | diagnostic § 5.6, tuile § 12.2 |
 | **plafond réalisé** | calculé sur l'itinéraire de la proposition | **occupation** | à côté de chaque mesure |
 | **borne prouvée** | l'affirmation qu'une construction atteint le plafond | — | mention « minimum atteint » |
-| **manque** | plafond réalisé − rencontres | — | tuile 2, courbe de comparaison (§ 12.10) |
-| **écart d'itinéraire** | plafond a priori − plafond réalisé | — | tuile 3, avec son plancher |
+| **manque** | plafond réalisé − rencontres | — | tuile du manque maximal (§ 12.2), courbe de comparaison (§ 12.10) |
+| **écart d'itinéraire** | plafond a priori − plafond réalisé | — | tuile de l'écart d'itinéraire maximal (§ 12.2), avec son plancher, comme au diagnostic (§ 5.6) |
 | **écart au plafond a priori** | manque + écart d'itinéraire | — | départage § 5.7, certificat |
 
 Ces six lignes sont la **seule** définition faisant autorité, et l'expression
 « l'écart », employée seule, ne paraît nulle part : trois quantités affichées
 sous un même libellé font conclure à l'opérateur que le logiciel compte mal. La
 règle « deux notions, deux noms, jamais trois » n'est pas affaiblie — aucun de
-ces noms ne désigne une **borne**, et il n'existe toujours que deux bornes ; elle
-est simplement tenue par un tableau plutôt que par la mémoire du rédacteur.
+ces noms ne désigne une **borne**, et il n'existe toujours que deux bornes sur
+les rencontres — la borne de diversité et la borne des animateurs bornent
+d'autres grandeurs et ne prouvent rien — ; elle est simplement tenue par un
+tableau plutôt que par la mémoire du rédacteur.
 
 Sans le partage a priori / réalisé, le diagnostic annonce 28, la page de qualité
 affiche 27, et l'opérateur conclut à une régression du moteur.
@@ -849,17 +912,47 @@ Quand aucun chemin ne conclut, le logiciel affiche l'**écart au plafond a
 priori** et écrit **« atteignabilité inconnue »**, jamais « peut mieux faire » :
 l'un invite à relancer, l'autre dit que relancer ne prouvera rien.
 
-**La borne de diversité.** Soit G le nombre d'appartenances déclarées et g_p
-l'effectif de celle de p :
+**La borne de diversité.** A(p) a sa propre borne arithmétique, calculée comme
+le plafond réalisé, sur l'occupation de la proposition. Elle borne une autre
+grandeur que les rencontres et ne prouve rien : elle se nomme **borne de
+diversité**, jamais plafond, pour ne jamais se confondre avec le plafond des
+rencontres. Soit G le nombre d'appartenances distinctes des personnes
+présentes — les exclues n'en apportent aucune —, N_aff le nombre de personnes
+présentes affiliées, g_p l'effectif de l'appartenance de p, et ε_p = 1 si p est
+affiliée, 0 sinon :
 
 ```
-A_max(p) = min( Φ(p) , G , (N − g_p) + 1 )
+A_max(p) = min( Φ_aff(p) , G , (N_aff − g_p) + 1 )     si p est affiliée
+A_max(p) = min( Φ_aff(p) , G )                          sinon
 ```
 
-où Φ(p) est le plafond recalculé en ne comptant comme occupants que les
-affiliés. Le « + 1 » compte sa propre appartenance, qu'un collègue rencontré
-suffit à apporter : sans lui, un événement où tout le monde partage une
-appartenance annoncerait A_max = 0 alors que chacun en rencontre une.
+où Φ_aff(p) est le **plafond réalisé des affiliés** : la formule du plafond
+réalisé, où seuls les affiliés comptent comme occupants —
+
+```
+Φ_aff(p) = min( N_aff − ε_p ,  Σ a^aff_t  +  min( n^aff_p ,   Σ     v^aff_{t,r} ) )
+                              t∈D                       (t,r)∈I
+
+           avec  v^aff_{t,r} = α_{t,r} − ε_p − a^aff_t
+```
+
+a^aff_t compte les ancrés affiliés de t, p non compté ; n^aff_p, les mobiles et
+partiellement fixés affiliés, p non compté ; α_{t,r}, les affiliés assis
+(§ 5.4). Φ_aff(p) borne |F(p)|, les affiliés que p rencontre, pour la même
+raison que le plafond réalisé borne ses rencontres. Le « + 1 » compte
+l'appartenance de p, qu'un collègue rencontré suffit à apporter : sans lui, un
+événement où tout le monde partage une appartenance annoncerait A_max = 0 alors
+que chacun en rencontre une. Une personne sans appartenance n'en apporte aucune,
+et ses autres termes la bornent déjà. Chaque autre appartenance comptant au
+moins une personne présente, (N_aff − g_p) + 1 ne descend jamais sous G : le
+terme rappelle d'où vient la borne, G la tient.
+
+La borne de diversité se trace sur le profil en comptes, en pointillés, sous son
+nom, et s'écrit dans la tuile des appartenances distinctes rencontrées, dans le
+jumeau et dans l'infobulle du profil (§ 12.2, § 12.3) ; aucun pourcentage ne la
+prend pour dénominateur. La garde du § 12.3 éprouve A(p) ≤ |F(p)| ≤ Φ_aff(p) et
+A(p) ≤ A_max(p). Elle ne se calcule pas a priori : le diagnostic garde sa
+redondance minimale (§ 5.6).
 
 ### 5.6 Le diagnostic, avant la recherche
 
@@ -887,8 +980,9 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   l'événement ;
 - **le plancher de l'écart d'itinéraire maximal**, quand la configuration en
   impose un (§ 12.10.4). Le diagnostic ne l'écrit que là où il sait le prouver,
-  et se tait ailleurs — **jamais 0 par défaut**. Sans lui, le troisième chiffre
-  de la page de qualité envoie relancer indéfiniment vers un zéro que la
+  et se tait ailleurs — **jamais 0 par défaut** ; sur la page de qualité, la
+  tuile de ce chiffre l'écrit dessous (§ 12.2). Sans ce plancher, le troisième
+  chiffre de la page envoie relancer indéfiniment vers un zéro que la
   configuration interdit ;
 - **le manque de places**, `Σ (c_t − k_t) < n`. Ce n'est pas un refus de geste
   mais une **propriété de la configuration** (§ 5.9) : le diagnostic la nomme
@@ -1340,6 +1434,47 @@ partiel.** L'annulation est immédiate — elle n'attend pas la fin d'une itéra
 longue. Une proposition issue d'une recherche tronquée porterait la même graine
 et le même compte qu'une proposition complète, et ne s'en distinguerait dans aucun
 fichier.
+
+**La recherche rapporte sa course, sans lire l'horloge.** Elle compte les
+**mouvements évalués** de chaque proposition : le compte d'arrêt, ou moins quand
+le n-uplet devient nul, rien ne restant à reprendre, ou zéro quand le plan
+initial l'est déjà. Elle garde la meilleure affectation à chaque **point de
+relevé** — 1, 10, 100, 1 000 mouvements, chaque puissance de dix strictement
+sous le dernier mouvement évalué. Ce dernier est aussi un point de relevé, et
+son plan est celui de la proposition, qui ne se copie pas : au plus ⌊log₁₀
+a⌋ + 1 copies de N·R entiers pour un compte d'arrêt a. Le mot « jalon » reste à
+l'historique (§ 8.3). Copier une affectation ne tire rien et ne change aucune
+comparaison : à graine égale, le plan est celui d'avant. Tant que la règle
+d'arrêt ne lit que le compte et les mouvements déjà évalués, le point de relevé
+k est exactement le plan que la même graine rend au compte d'arrêt k, la
+descente ne lisant le compte qu'à sa borne de boucle ; une règle d'arrêt qui
+lirait autre chose romprait cette égalité, et l'épreuve du § 14.10 la refuse.
+
+**La durée est celle de la génération** : l'application la prend autour du
+calcul entier (§ 5.10), quel que soit le nombre de fils, et ne date aucune
+proposition seule. La **cadence** de la génération est la somme des mouvements
+évalués de toutes les propositions qu'elle a calculées, celles qu'elle écarte
+comme identiques comprises, divisée par cette durée, par seconde : une mesure de
+la génération entière, sur tous ses fils, qui ne se ramène ni à une proposition,
+cherchée sur un seul fil, ni à un point de relevé ; aucune durée ne s'estime par
+point. Une durée nulle ou absente s'écrit « inconnue », et la cadence avec elle.
+
+**Les mouvements évalués et les plans des points de relevé s'écrivent dans le
+compagnon des courses** (§ 8.6), sous l'identité de la proposition : ils sont un
+fait de la recherche, que la configuration courante ne change pas. **Leurs
+valeurs ne s'écrivent nulle part** : la page de qualité mesure chaque point de
+relevé sous les réglages courants, par le recalcul complet, quand elle montre la
+proposition (§ 12.14), jamais par le score incrémental ; elle garde ces valeurs
+tant que la charge ne change pas, et n'affiche jamais une valeur mesurée sous
+d'autres réglages. **La durée et la cadence valent pour la séance**, comme la
+durée du dernier calcul : elles ne s'écrivent ni dans le fichier d'état ni dans
+le journal, et dépendent de la machine. Elles se rattachent à la génération —
+chaque proposition qu'elle ajoute, sous son identifiant, sa graine, son compte
+d'arrêt et son historique — : un rechargement les retire, et une proposition qui
+ne porte plus la même graine ou le même historique sous son identifiant ne les
+retrouve pas. Une proposition rouverte montre la course que le compagnon garde
+et dit sa durée inconnue. Le coût de la course dans la boucle est un compteur
+par mouvement et, par point de relevé, une copie de l'affectation.
 
 **Le recalcul complet est la mesure**, celui dont sortent les chiffres du § 5.4
 et de la page de qualité ; **l'incrémental n'existe que dans la boucle de
@@ -1886,12 +2021,11 @@ fichier : c'est une posture de la séance, pas une propriété du plan.
 
 **Ce qui reste vivant en lecture** : le sélecteur de tour, le zoom, le cadrage,
 l'ajustement, le plein écran, la mise en évidence, l'affichage des listes, la
-**page de qualité** — son export CSV des indicateurs et son impression
-(§ 11.7) —, la comparaison des propositions, la lecture de l'historique,
-l'impression, et la **production de la planche de badges**, qui n'écrit aucun
-fichier d'événement (§ 11.6). C'est la condition pour que la protection
-tienne : si naviguer exigeait de passer en écriture, l'opérateur y resterait en
-permanence et le mode lecture ne protégerait plus rien.
+**page de qualité** (§ 12), la comparaison des propositions, la lecture de
+l'historique, l'impression, et la **production de la planche de badges**, qui
+n'écrit aucun fichier d'événement (§ 11.6). C'est la condition pour que la
+protection tienne : si naviguer exigeait de passer en écriture, l'opérateur y
+resterait en permanence et le mode lecture ne protégerait plus rien.
 
 **On en sort par un seul geste délibéré** — une commande « Modifier » à place
 fixe — et le logiciel y retourne **seul après dix minutes d'inactivité**. Ce
@@ -2092,15 +2226,101 @@ a récrits après la sortie ou qu'une séance coupée a laissés. Un exécutable
 portable ne laisse ainsi, hors du dossier de travail, rien qui survive à la
 séance suivante.
 
-**Deux fichiers par événement :**
+**Deux fichiers par événement, et le compagnon des courses :**
 
 | fichier | contenu | écriture |
 |---|---|---|
 | `<nom>.gtt.json` | l'état courant, complet | réécrit en entier à chaque entrée |
 | `<nom>.gtt-journal.jsonl` | les entrées d'historique | **ajout en fin**, une ligne par entrée ; réécrit en entier, de façon atomique, à la conversion de format (§ 8.8) et après des lignes écartées |
+| `<nom>.gtt-courses.json` | la course de la recherche de chaque proposition (§ 5.10) : ses mouvements évalués et les placements de ses points de relevé | réécrit en entier, de façon atomique, après l'état, **seulement quand les propositions changent** — une génération, un effacement, un retour qui en rend ou en retire — ; jamais à un autre geste |
 
 Les deux portent **l'identifiant interne de l'événement**, et c'est lui qui les
 apparie — jamais leurs noms.
+
+**Le compagnon des courses** suit le nom du fichier d'état, et porte lui aussi
+l'identifiant de l'événement. Il garde ce que la recherche a rapporté
+d'elle-même (§ 5.10), que ni le fichier d'état ni le journal ne portent : une
+course pèse environ cinq fois sa proposition, et chaque geste, qui réécrit
+l'état en entier (§ 8.2), en paierait le poids. À part, elle ne coûte qu'à la
+génération qui la produit.
+
+Sa première ligne porte son propre format, 1, et l'identifiant de l'événement ;
+puis une ligne par proposition, `{id, graine, arret, historique, horodatage,
+empreinte, course}`, puis la fermeture. `horodatage` est celui que la génération
+a posé sur la proposition (§ 8.9), absent quand elle n'en porte pas. `empreinte`
+est un entier de 0 à 2⁵³ − 1, l'empreinte du texte canonique du placement de la
+proposition (§ 8.9) : sa réserve rangée par identifiant croissant, chaque liste
+de table aussi quand `siegesAttribues` est faux ; ni l'horodatage ni la version
+qui l'a produite n'y entrent. Elle n'est pas cryptographique : elle départage
+deux placements qui partagent déjà les autres champs. `course` porte :
+
+| clé | forme |
+|---|---|
+| `evalues` | entier, de 0 à l'`arret` de la proposition : ses mouvements évalués |
+| `releves` | liste d'un objet `{mouvements, placement}` par puissance de dix strictement inférieure à `evalues`, dans l'ordre croissant : `mouvements` vaut exactement 1, puis 10, puis 100… ; la liste est vide quand `evalues` vaut 0 ou 1. `placement` a la forme positionnelle de celui de la proposition (§ 8.9), sur ses tables, ses capacités, son nombre de tours et ses participants déclarés, mis en forme sous son drapeau `siegesAttribues` exactement comme celui de la proposition : sièges attribués, rangé par siège, chaises vides et sièges réservés compris |
+
+Le dernier point de relevé, à `evalues` mouvements, est le placement de la
+proposition : il ne s'écrit pas deux fois. La course ne porte rien d'autre :
+aucune valeur mesurée — la page de qualité mesure chaque point sous les réglages
+courants (§ 12.14) —, ni durée, ni cadence, qui valent pour la séance (§ 5.10).
+Une génération écrit la course de chaque proposition qu'elle ajoute,
+`{"evalues":0,"releves":[]}` quand le plan initial n'avait rien à reprendre. Le
+retenu n'en a pas : il lit celle de la proposition d'où il vient, tant qu'elle
+est dans la liste.
+
+**Une entrée ne vaut que pour sa proposition** : celle de l'état qui porte
+exactement son identifiant, sa graine, son compte d'arrêt, son historique, son
+horodatage — ou n'en porte pas, comme l'entrée — et l'empreinte de son
+placement. Les quatre premiers ne suffisent pas à désigner une recherche : le
+compteur des propositions recule quand l'opérateur reprend un état d'avant une
+génération (un `.precedent`), et la graine proposée peut être la même ; après un
+changement qui laisse la déclaration intacte — une appartenance, une
+réservation, un réglage —, la recherche suivante porte les mêmes quatre champs
+et une autre course, qui finit sur un autre placement **ou sur le même**.
+L'empreinte seule ne départage donc pas deux recherches ; l'horodatage, que la
+génération pose une fois sur chaque proposition à la seconde de son horloge et
+que les gestes suivants gardent, les départage. Deux recherches ne se confondent
+que générées sous la même graine à la même seconde de leurs horloges, et finies
+sur le même placement à une collision d'empreinte près : la course de l'une ne
+se prête pas à la proposition de l'autre, et un retour à la première génération
+réécrit le compagnon. Une proposition sans horodatage — d'un état écrit avant
+que la génération ne date ses propositions — n'est reconnue qu'aux quatre champs
+et à l'empreinte : deux recherches de même identité qui finissent sur le même
+placement s'y confondent, et l'une peut recevoir la course de l'autre. Une
+entrée périmée — laissée par une coupure entre l'état et le compagnon, par une
+copie à la main, par une autre recherche de même identité — ne trouve pas sa
+proposition et s'ignore. Une entrée d'une autre forme, ou dont la course
+contredit sa proposition — un `evalues` hors de ses bornes, une abscisse
+manquante, en trop ou hors d'ordre, un placement de relevé dont les chaises
+vides, les longueurs ou le multiensemble des identifiants, réserve comprise,
+contredisent la déclaration de la proposition —, s'ignore seule, les autres
+gardées. La course se contrôle contre sa proposition à la lecture du compagnon,
+et de nouveau quand la page de qualité la lit : **une course contradictoire
+n'atteint jamais le détail**.
+
+**Le compagnon ne bloque jamais rien.** Ce qu'il porte se dérive de la
+recherche, jamais de l'opérateur : absent, illisible, aux octets hors UTF-8,
+d'un autre format ou d'un autre événement, il laisse inconnues les courses qu'il
+ne confirme pas ; l'événement s'ouvre et s'écrit, et la page de qualité dit que
+la course n'est pas gardée. Un fichier écrit avant le compagnon, ou par une
+version antérieure, n'en a pas : ses propositions n'ont pas de course connue. Un
+refus d'écrire le compagnon ne refuse pas le geste : l'état et le journal sont
+écrits, la course reste connue pour la séance, et l'écriture suivante qui change
+les propositions le pose.
+
+**Il ne s'écrit que quand les propositions changent** : le logiciel écrit les
+courses qu'il connaît des propositions de l'état, et seulement quand elles ne
+sont plus celles que le compagnon porte — après une génération, un effacement,
+un retour qui rend ou retire des propositions. Il garde pour la séance les
+courses lues et celles de ses générations, même d'une proposition retirée : un
+retour qui la rend retrouve sa course et la réécrit. Après une réouverture, une
+proposition effacée puis rendue par un retour n'a plus de course connue.
+
+**Ce qu'il coûte.** Sur la grande démonstration — 1 040 places par
+proposition —, une course au compte d'arrêt de 200 000 mouvements porte six
+placements de relevé, de l'ordre de 25 ko ; vingt propositions, de l'ordre de
+0,5 Mo, deux cents, de l'ordre de 5 Mo. Il s'écrit au plus une fois par
+génération, et sa lecture ne coûte qu'à l'ouverture.
 
 **Le nom du fichier dérive du nom de l'événement** — un dossier d'identifiants
 opaques est inutilisable dans un explorateur. La dérivation retire les
@@ -2111,16 +2331,16 @@ complet sur le plus long chemin que l'événement écrit**, et **retombe sur un 
 générique** quand la dérivation ne laisse rien. Ce plus long chemin assemble les
 plus longues parties qu'un fichier de l'événement peut porter : le dossier daté
 de la corbeille (§ 8.7) au rang de collision le plus long — deux suppressions
-dans la même seconde se départagent par `_2`, `_3`… jusqu'à `_99` —, le plus long
-suffixe, celui de la génération de secours, `.gtt.json.precedent`, dix-neuf
+dans la même seconde se départagent par `_2`, `_3`… jusqu'à `_99` —, le plus
+long suffixe, celui de la génération de secours, `.gtt.json.precedent`, dix-neuf
 caractères, et le suffixe `.ecriture` de l'écriture atomique (§ 8.8) :
 `corbeille/AAAA-MM-JJ_HH-MM-SS_99/<nom>.gtt.json.precedent.ecriture`, soixante
-et un caractères outre le nom. `.gtt-journal.jsonl` n'en compte que dix-huit, et
-`.gtt.json` neuf : une borne posée sur l'état ou sur le journal laisserait
-déborder tout le reste. **La dérivation reçoit la racine du dossier de travail
-en paramètre**, celle-ci n'étant plus connue à l'écriture du code, et son test
-l'exerce sur les deux issues. **L'autorité reste le nom inscrit dans le
-fichier.**
+et un caractères outre le nom. `.gtt-journal.jsonl` n'en compte que dix-huit,
+`.gtt-courses.json` dix-sept, et `.gtt.json` neuf : une borne posée sur l'état
+ou sur le journal laisserait déborder tout le reste. **La dérivation reçoit la
+racine du dossier de travail en paramètre**, celle-ci n'étant plus connue à
+l'écriture du code, et son test l'exerce sur les deux issues. **L'autorité reste
+le nom inscrit dans le fichier.**
 
 **Pourquoi l'historique n'est pas dans le fichier d'état**, pour deux raisons
 distinctes. *La taille* : un plan de 260 personnes sur 4 tours pèse de l'ordre
@@ -2166,6 +2386,16 @@ figé, je travaille sur une variante ».
 complète sous les nouveaux noms, puis supprime l'ancienne — jamais l'inverse.
 Une panne laisse alors deux paires, ce qui se voit et se répare, au lieu
 d'aucune.
+
+Le compagnon des courses suit : écrit sous le nouveau nom après l'état, supprimé
+avec l'ancienne paire ; quand l'écriture du nouveau est refusée, l'ancien se
+déplace sous le nouveau nom, ou reste où il est si le déplacement l'est aussi,
+et n'est jamais supprimé. **Copier** donne à la copie le compagnon des courses
+de ses propositions, sous son identifiant ; **supprimer** le met à la corbeille
+avec les autres fichiers. **Importer de l'autre emplacement** le recopie tel
+quel après l'état, quand il se lit ; l'ouverture le revalide entrée par entrée,
+et un refus de l'écrire ne refuse pas l'import. Un **fichier d'état venu
+d'ailleurs** n'en a pas : ses courses ne sont pas connues.
 
 **Importer** un fichier venu d'ailleurs le **copie** dans le dossier de travail.
 Travailler en place écrirait dans un dossier de téléchargements que l'opérateur
@@ -2456,6 +2686,10 @@ propositions (§ 15.1), soit 1 040 places par proposition :
 |---|---|---|
 | un enregistrement nommé par place (`tour`, `table`, `siege`, `participant`) | de l'ordre de 50 ko | **de l'ordre de 1 Mo** |
 | positionnelle, en-têtes compris | de l'ordre de 5 ko | **de l'ordre de 100 ko** |
+
+La course de la recherche n'est pas dans ce tableau : elle est dans le compagnon
+des courses (§ 8.6), sous la même forme positionnelle. Le fichier d'état et le
+journal n'en portent rien, et leurs ordres de grandeur valent tels quels.
 
 Un facteur de l'ordre de **dix**. Trois conséquences sur des chiffres écrits
 ailleurs :
@@ -3313,22 +3547,21 @@ page ; aucune ne se découpe, aucune ne doit entrer dans une pochette.
 | **liste d'accueil** | l'accueil, du début à la fin de l'arrivée | la pile de badges triée la remplace **pour l'arrivée** ; elle ne la remplace ni pour « où est assise telle personne ? » posé par un tiers, ni pour un badge perdu en cours de soirée. Le logiciel la conserve : c'est une table de texte, la sortie la moins exposée au risque de pagination, et la plus manipulée |
 | **feuille par table** | l'animateur de table, à chaque changement de tour | chacun connaît sa table par son badge, donc la rotation se fait ; ce qui disparaît est l'appel nominal, et une place vide ne se remarque plus |
 | **plan de salle** | l'opérateur et le personnel, au montage | il reste à l'écran, où il est interactif ; c'est la vue qui perd le plus à n'être pas sur papier pendant le montage d'une salle sans portable |
-| **rapport de placement** | l'opérateur seul, avant la soirée, pour choisir une proposition | il a l'écran sous les yeux au moment où il choisit ; le logiciel exporte en plus les indicateurs en **CSV** |
-| **page de qualité** | l'opérateur seul, au même moment | idem ; ses graphiques sont en SVG, que le navigateur imprime à la résolution de l'imprimante, et chacun garde le **jumeau tabulaire** du § 12.7, qui est ce qui s'imprime proprement |
 
 **Toute impression passe par un écran d'aperçu**, que la commande « Imprimer… »
 de l'événement ouvre et qui se referme vers la section d'où il vient. Il offre
 **trois vues** : le plan, tour par tour ; la liste d'accueil ; la feuille par
-table. Le rapport de placement et la page de qualité ne s'impriment pas : leurs
-lignes du tableau décrivent l'impression qui accompagne la page de qualité
-(§ 12), non ce que l'aperçu offre. L'aperçu imprime la source que le plan montre
-— le retenu, la proposition montrée, ou les seules réservations — et n'écrit
-rien dans l'événement : il vit en lecture et sur un plan bloqué. Sa commande
-« Imprimer » demande à la plateforme le papier et l'orientation de la vue : la
-boîte de dialogue du navigateur sous `web`, celle du système sous `electron`. Un
-échec se dit sur la commande ; une annulation ne dit rien. La barre de l'aperçu,
-qui ne s'imprime pas, groupe ses commandes : la vue imprimée, les réglages de la
-vue, le papier et « Imprimer », puis « Fermer l'aperçu » à part.
+table. Le tableau des propositions (§ 5.7) et la page de qualité (§ 12) se
+lisent à l'écran, où l'opérateur choisit sa proposition : ils ne s'impriment
+pas, et aucun indicateur ne s'exporte en CSV. L'aperçu imprime la source que le
+plan montre — le retenu, la proposition montrée, ou les seules réservations — et
+n'écrit rien dans l'événement : il vit en lecture et sur un plan bloqué. Sa
+commande « Imprimer » demande à la plateforme le papier et l'orientation de la
+vue : la boîte de dialogue du navigateur sous `web`, celle du système sous
+`electron`. Un échec se dit sur la commande ; une annulation ne dit rien. La
+barre de l'aperçu, qui ne s'imprime pas, groupe ses commandes : la vue imprimée,
+les réglages de la vue, le papier et « Imprimer », puis « Fermer l'aperçu » à
+part.
 
 **La feuille par table couvre la soirée** : une feuille par table, une colonne
 par tour, que l'animateur garde d'un tour à l'autre. L'aperçu offre aussi « Une
@@ -3389,23 +3622,13 @@ le pied et, sur le plan, ses mentions, son échelle graphique et son cartouche �
 marges ôtées, et la découpe du plan reçoit la même hauteur. Le registre n'en
 écrit aucune valeur (§ 14.1) : elle suit la police et le rendu.
 
-**L'export CSV des indicateurs suit les conventions du § 10.3** : UTF-8 avec
-marque d'ordre d'octets, séparé par `;`, décimale française. Un fichier séparé par
-des virgules dont les nombres portent une virgule décimale s'ouvre en colonnes
-fausses dans un tableur francophone, et l'opérateur en conclut que le logiciel
-compte mal. L'ordre des colonnes et des lignes est **fixé** : deux exports du même
-placement sont identiques octet pour octet, sans quoi les comparer dans un
-tableur est un exercice de tri. Il porte **en tête une ligne qui dit qu'il n'est
-pas un format d'entrée** : le CSV des lignes refusées du § 10.1, lui, se réimporte
-tel quel, et deux fichiers CSV dans le même logiciel dont l'un se réimporte et
-l'autre non se confondent au premier essai.
-
 **Fiches participants : la sortie imprimée est supprimée.** Son contenu — nom,
-appartenance, titre, table et siège par tour — est exactement celui du badge. Deux
-sorties pour la même information divergent ; celle qui tient autour du cou gagne.
-**La fiche à l'écran demeure** : le § 12.5 en fait le chemin d'accès garanti à la
-ligne d'une seule personne quand la matrice n'est pas dessinée, et le § 7.4 la
-range parmi les documents qui ne tronquent jamais.
+appartenance, titre, table et siège par tour — est exactement celui du badge.
+Deux sorties pour la même information divergent ; celle qui tient autour du cou
+gagne. **La fiche à l'écran demeure** : sa rubrique « Rencontres » est le chemin
+d'accès garanti à la ligne d'une seule personne quand la matrice n'est pas
+dessinée (§ 12.5), et le § 7.4 la range parmi les documents qui ne tronquent
+jamais.
 
 ### 11.8 Ce que le logiciel refuse encore
 
@@ -3424,6 +3647,67 @@ range parmi les documents qui ne tronquent jamais.
 
 ## 12. La page de qualité
 
+La page de qualité est la section « Qualité » de l'événement, dans la phase
+Placer, après Propositions (§ 2.1). Elle **ne modifie rien** : elle vit en
+lecture, en écriture et sur un plan bloqué, et reste ouverte pendant une
+génération (§ 5.10).
+
+**Elle mesure le placement que le plan montre** — le retenu, ou la proposition
+montrée —, comme l'aperçu d'impression (§ 11.7), et une ligne de source le
+nomme : « Placement retenu », « Proposition n° 4 » ; sans placement à mesurer,
+elle n'en nomme aucun et dit que le plan ne montre que les réservations, qui ne
+se mesurent pas. Chaque ligne du tableau des propositions offre la commande
+« Qualité », qui montre la proposition au plan et ouvre la page. Sans source
+mesurable, la page ne dessine aucune vue, et quatre cas se partagent sans se
+recouvrir :
+
+- **ni proposition ni retenu** — « aucun placement » (§ 12.6) : le diagnostic
+  préalable et sa phrase ;
+- **des propositions, aucune montrée** : une phrase et la commande qui montre la
+  première proposition comparable du classement ; sans proposition comparable,
+  la phrase seule ;
+- **la source est en dérive ou fautive** (§ 9) : ses raisons, comme au tableau
+  des propositions ;
+- **la configuration ne se normalise pas** : la phrase du refus de la
+  génération, qui l'emporte sur les trois autres.
+
+Quand la source disparaît — une génération qui remplace la proposition montrée,
+un retour à un instant de l'historique, une exclusion qui la fait dériver —, la
+page suit le plan, qui revient au retenu ou aux réservations, et la ligne de
+source le dit.
+
+**Les vues, dans leur ordre à l'écran.** Une liste en tête de page les nomme et
+mène à chacune.
+
+| vue | question (§ 12.1) | forme | jumeau tabulaire |
+|---|---|---|---|
+| en-tête chiffré (§ 12.2) | les deux | une rangée de tuiles | les tuiles sont du texte |
+| profil trié (§ 12.3) | qui est le plus mal servi, de combien, et combien sont-ils ? | deux graphiques au même ordre de rangs : l'escalier en comptes, deux séries, le plafond réalisé et la borne de diversité en repères ; dessous, les rencontres en pourcentage du plafond réalisé | une ligne par personne dans l'ordre du profil, comptes et pourcentage, et la répartition des rencontres |
+| collisions d'appartenance (§ 12.4) | d'où vient le problème, et relancer peut-il y changer quelque chose ? | barres horizontales à deux segments | une ligne par appartenance |
+| appartenances à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table, et par tour les trois comptes et leurs pourcentages |
+| paires répétées (§ 12.5) | qui revoit trop souvent la même personne ? | tableau paginé ; matrice sous le seuil | le tableau est la vue ; la matrice a le sien |
+| objectifs des tables (§ 12.12) | qui n'est jamais assis à une table qui lui correspond, et à quel tour l'objectif perd-il ? | la soirée en texte, puis des barres horizontales par tour, à deux segments, chacune avec son pourcentage et ses assis sans table possible | une ligne par tour, et la liste des personnes jamais servies |
+| animateurs rencontrés (§ 12.13) | qui a rencontré le moins d'animateurs ? | escalier, une série, la borne des animateurs en repère | une ligne par personne concernée, et la répartition |
+| diversité par animateur (§ 12.13) | quel animateur voit le moins de diversité à sa table ? | deux colonnes de barres horizontales juxtaposées, appartenances et étiquettes, chacune son axe, sur la soirée | une ligne par animateur sur la soirée, puis une par animateur et tour animé |
+| performance du calcul (§ 12.14) | relancer plus longtemps aurait-il donné mieux ? | petits multiples, un indicateur par graphique, points aux seuls points de relevé, abscisse logarithmique | une ligne par point de relevé, une colonne par indicateur |
+
+Une vue sans objet — aucune personne concernée par les objectifs, aucun
+animateur, aucune course connue — cède la place à sa phrase (§ 12.6), jamais à
+des axes vides.
+
+**Un pourcentage de la page est toujours suivi, juste dessous, du pire cas en
+compte** : « 88 % », puis « minimum 24 sur 27 » ; « 77 % des tours possibles
+servis », puis « 3 personnes jamais servies ». Le pire cas d'une tuile, d'une
+phrase de synthèse ou de la soirée est celui de sa population. **Le pourcentage
+d'une ligne** — une ligne de jumeau, une infobulle — est suivi du **compte de
+cette ligne**, son numérateur sur son dénominateur, une ligne n'ayant qu'un
+cas : « 24 sur 27 », « 5 appartenances pour 8 sièges », « 24 servis sur 30
+possibles ». Les graduations d'un axe en pourcentages et le libellé « 100 % » de
+sa règle sont des repères, non le pourcentage d'une mesure, et n'ont pas de
+compte. Les rapports admis sont ceux du § 5.4, et d'eux seuls (§ 12.8). Les
+pourcentages s'écrivent sur cette page seulement : le tableau des propositions
+garde ses comptes (§ 5.7).
+
 ### 12.1 Les deux questions
 
 L'opérateur n'ouvre pas cette page pour connaître une variance :
@@ -3437,6 +3721,11 @@ chaque vue porte en toutes lettres la question qu'elle traite — **la vue de
 comparaison du § 12.10.6 comprise** : *laquelle des deux sert mieux, et qui y
 perd ?*
 
+Les vues des mélanges — appartenances à chaque table, objectifs des tables,
+animateurs — et celle de la performance écrivent la leur (§ 12) : chacune
+précise l'une des deux, sur une table, un tour, un animateur ou un compte de
+mouvements.
+
 **Le minimum gouverne la page** : chaque vue place le cas le plus défavorable à
 une position **fixe et prévisible** — le premier point, la première ligne —
 jamais là où il faut le chercher. La moyenne des rencontres ne s'affiche pas : à
@@ -3446,8 +3735,17 @@ excellente moyenne et un problème.
 
 ### 12.2 L'en-tête chiffré
 
-Les indicateurs du § 5.4 en une rangée de tuiles, chacun avec son **plafond** et
-la mention de la population mesurée. **Trois tuiles de tête**, dans cet ordre :
+Les indicateurs du § 5.4 en une rangée de tuiles, chacun avec **sa borne, et
+son plancher quand le diagnostic le prouve**, lus au détail du placement
+(§ 12.9), et la mention de la population mesurée. **Une tuile par colonne de
+mesure du tableau des propositions** (§ 5.7), dans son ordre et sous ses
+groupes. Une tuile qui a sa colonne en lit la valeur, le libellé et
+l'explication (§ 12.9) ; une tuile sans colonne — critère décoché, valeur que le
+mode réglé ne compare pas — lit la même mesure de la ligne d'évaluation sous son
+propre libellé, et dit qu'elle ne classe pas.
+**Trois tuiles portent les questions de tête** — le minimum brut ouvre la
+rangée, le manque maximal et l'écart d'itinéraire maximal se lisent dans le
+groupe du manque, à la place de leurs colonnes :
 
 | tuile | la question qu'elle pose |
 |---|---|
@@ -3457,6 +3755,63 @@ la mention de la population mesurée. **Trois tuiles de tête**, dans cet ordre 
 
 Le chiffre de tête est une **mesure avec son unité et son plafond**, jamais un
 score composite.
+
+**Chaque borne d'une tuile est celle d'une personne nommée.** Les tuiles suivent
+l'ordre des colonnes, chacune avec sa population. Le minimum brut porte le
+**plafond réalisé et le plafond a priori de la personne au rang 1 du profil**
+(§ 12.3), qu'elle nomme ; ses deux lignes secondaires, les mobiles et les ancrés
+(§ 5.4), le suivent, chacune sa tuile. Puis les collisions cumulées, les paires
+distinctes et l'excédent ; les rencontres répétées choisies, les imposées
+énoncées à part ; le plus grand nombre de rencontres d'une paire ; les retours
+choisis, les imposés à part ; le minimum de A(p), avec la borne de diversité de
+la personne au rang 1 du même tri sur A(p) (§ 5.5) — une phrase dit à sa place
+qu'aucune personne présente ne porte d'appartenance — ; la somme de redondance ;
+le minimum du taux de diversité d(p), au centième, comme au tableau des
+propositions. Puis le manque maximal, avec l'effectif au manque maximal et le
+**plafond réalisé de la personne au rang 1 du profil de manque** (§ 12.10.6) ;
+l'effectif du manque ; l'écart d'itinéraire maximal et l'écart au plafond a
+priori, « inconnu » quand le plafond a priori l'est (§ 12.6). Quand une personne
+est concernée, les personnes jamais servies, le plus de tours hors objectif
+d'une personne et les tours hors objectif, puis le minimum de s(p) avec les
+tours possibles de la personne à ce minimum ; quand une personne est concernée
+par les animateurs, le minimum de m(p) avec la borne des animateurs de la
+personne à ce minimum, et les animateurs non rencontrés. La mention « minimum
+atteint », ou « atteignabilité inconnue », suit les tuiles (§ 5.5).
+
+**Une tuile écrit le plancher que le diagnostic écrit pour sa mesure** (§ 5.6),
+et là seulement, en dernière ligne, sous son chiffre : « plancher 4 », ou
+« plancher 4 atteint : impossible de faire moins » quand la mesure que la tuile
+écrit l'égale. Ces deux lignes ne parlent que de cette mesure, jamais du
+placement entier, et ne nomment personne. Sept tuiles peuvent en porter un : les
+collisions cumulées, les paires distinctes et l'excédent, chacun la somme des
+planchers de ses appartenances en collision ; l'écart d'itinéraire maximal,
+aucun quand le plafond a priori est inconnu ; les personnes jamais servies, le
+plus de tours hors objectif d'une personne et les tours hors objectif, chacun
+seulement quand le critère des objectifs est coché et que le mode réglé compare
+sa valeur, comme au diagnostic : une tuile des objectifs qui ne classe pas n'en
+porte aucun. Un plancher nul ne s'écrit jamais, pas plus qu'un 0 à sa place, et
+aucune tuile n'en porte sur un plan hors du domaine des planchers (§ 12.4). Le
+détail du placement en porte d'autres, qui se lisent dans leur propre vue :
+ceux des collisions par appartenance (§ 12.4), ceux des objectifs par tour
+(§ 12.12), que cette vue dessine même quand le critère ne classe pas.
+
+**Trois tuiles portent un pourcentage** (§ 5.4), écrit sous leur valeur et
+suivi, juste dessous, du compte du pire : le minimum brut, le pourcentage de son
+plafond réalisé qu'atteint la personne au rang 1 du profil, puis « minimum 24
+sur 27 » ; les tours hors objectif, le pourcentage des tours possibles servis
+sur la soirée, puis « 3 personnes jamais servies » ; le minimum de s(p), le
+pourcentage de ses tours possibles que sert la personne à ce minimum, puis
+« minimum 1 sur 4 ». Le pourcentage d'une tuile est celui de la personne que sa
+borne nomme, ou de la soirée pour les objectifs, jamais une moyenne de la
+population. Les autres tuiles n'en portent pas : leur grandeur n'a pas de
+dénominateur admis — une collision, une paire, une redondance —, ou n'a qu'une
+borne (§ 5.5), qui ne prouve rien ; le taux de diversité garde sa forme au
+centième.
+
+Les bornes, les planchers et les pourcentages qui accompagnent les tuiles
+viennent du détail du placement (§ 12.9), qui les rend une fois et dit lui-même
+quel plancher est atteint, sur la valeur même que la ligne d'évaluation porte :
+l'en-tête ne compare rien. Un critère sans objet n'a pas de tuile.
 
 ### 12.3 Première vue — le profil trié
 
@@ -3477,25 +3832,76 @@ rencontrées.
 désigne toujours le même participant. La seconde courbe est donc irrégulière, et
 cette irrégularité est de l'information.
 
-**Les égalités se départagent par une clé stable** — sinon deux affichages du
-même placement donnent deux dessins, et deux impressions ne se superposent pas.
+**Les égalités se départagent par une clé stable** : à rencontres égales, le
+plafond réalisé le plus haut d'abord — son manque est le plus grand —, puis
+l'identifiant croissant. Sans clé stable, deux ouvertures du même placement
+donnent deux dessins.
 
 **Le plafond réalisé se trace dans le même ordre** : règle horizontale quand il
 est constant, **ligne en escalier** dès qu'une table est incomplète. Une règle
 unique mentirait.
 
+Le plafond tracé est un **repère, pas une série** (§ 12.7) : encre neutre, trait
+mince et mixte — tiret-point —, son nom posé sur le tracé ; son motif n'est ni
+le plein de la première série ni les tirets de la seconde. **La borne de
+diversité se trace aussi, dans le même ordre, en repère pointillé** sous son
+nom : elle borne la seconde série comme le plafond borne la première, et son
+trait ne se confond ni avec les tirets de la seconde série ni avec le plafond.
+Le graphique porte ainsi deux séries et deux repères, sur un seul axe, en
+comptes de personnes.
+
+**Sous lui, un second graphique dit la même chose en pourcentages** : les
+rencontres de chacun en pourcentage de son plafond réalisé (§ 5.4), une seule
+série, une règle à 100 % en repère — l'image du plafond réalisé, de son motif
+mixte, libellée « 100 % » —, **dans le même ordre de rangs**, les abscisses des
+deux graphiques alignées. Le pourcentage n'y est pas une clé de tri : trier sur
+lui serait trier sur le manque relatif, que le § 12.10.3 refuse. Un rang dont le
+plafond réalisé est nul n'y a pas de point, et le tracé s'interrompt. Les
+appartenances rencontrées n'y ont pas de série : leur seule borne est la borne
+de diversité, dont aucun pourcentage ne se prend. Deux graphiques, jamais deux
+axes sur un même graphique (§ 12.7). Sa phrase de synthèse porte le pire cas en
+compte : « minimum 24 sur 27 ».
+
 **Le logiciel vérifie les trois inégalités de la ligne de décomposition du
-§ 12.10.5** — `N − 1 ≥ plafond a priori ≥ plafond réalisé ≥ rencontres`. La garde
-est une fonction du moteur,
-`verifier_indicateurs(mesures, plafonds_a_priori, plafonds_realises)` (§ 14.12) :
-avec une seule famille de plafonds, l'inégalité `a priori ≥ réalisé` — la seule
-que la bascule vers l'occupation rend non triviale — ne serait éprouvée nulle
-part. Si une inégalité tombe, le calcul est faux : la page **refuse de dessiner**
-et le dit, plutôt que d'afficher un graphique impossible que personne ne
-regardera d'assez près.
+§ 12.10.5** — `N − 1 ≥ plafond a priori ≥ plafond réalisé ≥ rencontres`. La
+garde est une fonction du moteur, `verifier_indicateurs(mesures,
+plafonds_a_priori, plafonds_realises, complements)` (§ 14.12), dont le quatrième
+paramètre est facultatif : avec une seule famille de plafonds, l'inégalité
+`a priori ≥ réalisé` — la seule que la bascule vers l'occupation rend non
+triviale — ne serait éprouvée nulle part. Si une inégalité tombe, le calcul est
+faux : la page **refuse de dessiner** et le dit, plutôt que d'afficher un
+graphique impossible que personne ne regardera d'assez près.
+
+La page lui passe en complément les planchers des collisions cumulées par
+appartenance, les planchers des objectifs par tour (§ 12.12), la validité de ces
+planchers pour le plan (§ 12.4) et les bornes de diversité : la garde éprouve
+alors aussi que le segment « reste » n'est jamais négatif, ni pour une
+appartenance ni pour un tour, et que A(p) ne dépasse ni les rencontres de p,
+ni |F(p)|, ni sa borne de diversité, |F(p)| ne dépassant pas Φ_aff(p) (§ 5.5).
+La propriété A(p) ≤ rencontres(p) fonde l'axe unique de cette vue ; elle n'est
+vraie que par construction tant qu'aucune garde ne l'éprouve. Le refus vaut pour
+la page entière, et nomme la mesure et les personnes en cause.
 
 **Les places contraintes sont marquées.** Sans cela, l'opérateur attribue au
 générateur un minimum que sa propre réservation impose.
+
+Un point marqué porte un signe de forme, non une couleur : ancré ou
+partiellement fixé, en réserve à un tour au moins, plafond réalisé nul. Les
+autres rangs ne portent aucune marque : un escalier est un tracé, non 260
+points.
+
+**Le pointage au plus proche** (§ 12.7) désigne le rang sous le pointeur ; son
+infobulle porte la ligne entière — le rang, le nom entier, l'appartenance, les
+rencontres, le plafond réalisé, leur pourcentage suivi de leur compte (§ 12), le
+plafond a priori, A(p), la borne de diversité, les tours non assis ; le rang
+pointé est le même dans les deux graphiques. **Le jumeau tabulaire** porte une
+ligne par personne dans l'ordre du profil, avec les mêmes colonnes, et **la
+répartition des rencontres** : une ligne par valeur, de la plus basse à la plus
+haute, avec l'effectif, l'effectif cumulé et le nombre de personnes à leur
+plafond réalisé. C'est le mélange des rencontres par personne, dont le second
+graphique donne la part. La phrase de synthèse, visible sous le premier
+graphique, en donne l'essentiel : le minimum, l'effectif au minimum et
+l'effectif sous son plafond réalisé.
 
 **Pourquoi cette forme.** L'histogramme fait de la personne la plus mal servie
 une barre de quelques pixels au bord du dessin, que l'œil saute. La boîte à
@@ -3546,6 +3952,35 @@ appartenance est celle qui remet le plus souvent les mêmes personnes ensemble,
 non celle qui porte le plus d'occurrences — c'est le même arbitrage qu'au § 5.7,
 et deux tris opposés dans une même page se contredisent devant l'opérateur.
 
+À excédent égal, les collisions cumulées décroissantes, puis la clé normalisée
+de l'appartenance (§ 10.1), puis sa chaîne.
+
+**« Prouvé inévitable » est le plancher des collisions cumulées du diagnostic**
+(§ 5.6) pour cette appartenance, zéro quand le diagnostic n'en écrit pas. **Ce
+plancher vaut sur un plan qui assoit chacun à chaque tour et honore les
+réservations** : c'est le domaine où il se démontre. Un placement ajusté qui
+laisse quelqu'un en réserve peut mesurer moins ; ses barres n'ont alors qu'un
+segment, les collisions cumulées, et la vue écrit pourquoi le plancher ne s'y
+applique pas. La garde n'éprouve le segment « reste » que sur le domaine.
+
+L'intitulé de chaque ligne porte la **pastille de l'appartenance** (§ 12.7) :
+c'est une liste. Les segments ne portent ni teinte d'appartenance ni teinte de
+conflit : « prouvé inévitable » et « reste » ont chacun leur jeton de graphique,
+leur forme et leur libellé, posé sur la première barre où leur segment est non
+nul et repris par la légende. Les barres partent de zéro, sur un axe commun à
+toutes les lignes de la vue.
+
+**« Prouvé inévitable » se trace en contour** — un trait de 2 px de son jeton,
+tenu dans la boîte du segment —, « reste » en aplat : les deux se séparent par
+la forme comme par la couleur, à toute largeur, et le prouvé ne retombe jamais
+en aplat. Un segment prouvé n'est donc jamais plus étroit que ses deux traits
+et leur vide, 6 px : ce qui lui manque se prend sur les autres segments de la
+ligne, ceux qui le suivent d'abord, puis ceux qui le précèdent, chacun jusqu'à
+zéro. La barre finit ainsi au plus loin à sa valeur ou, pour une ligne plus
+étroite que ces 6 px de son premier segment à sa valeur, à 6 px de son début.
+L'infobulle et le jumeau nomment la part prouvée, « Prouvé
+inévitable », et en portent la valeur, quelle que soit sa largeur.
+
 **Le second segment ne s'appelle pas « évitable ».** Le plancher se calcule en
 relâchant les contraintes : c'est une **borne inférieure**, jamais un fait.
 Nommer « évitable » le complément affirmerait qu'un meilleur placement le
@@ -3573,13 +4008,36 @@ ne montre qu'un grain aléatoire où l'opérateur croira voir un motif.
 
 **Ce qui la remplace** : un **tableau des paires répétées**, trié par nombre
 décroissant — les deux noms, leurs appartenances, le nombre de fois, les tours.
-Chaque ligne est cliquable et amène sur le plan, au tour fautif.
+Une ligne n'est pas cliquable : **sa première commande mène au plan au premier
+tour où la paire se revoit**, la première des deux personnes mise en évidence,
+et chacun de ses tours est une commande sœur vers le plan à ce tour. Les
+**paires choisies** viennent d'abord, triées par nombre de fois décroissant,
+puis par les identifiants ; les **paires que les réservations imposent** —
+chacune de leurs rencontres a lieu à une table où les deux sont réservées ce
+tour-là — suivent sous leur intitulé, triées de même : le § 5.4 les énonce à
+part. Le tableau **se pagine comme celui des propositions**, par pages de cent
+(§ 5.7), l'étendue et le total écrits.
 
 **Deux exceptions** : la matrice se dessine sous un seuil de participants
-**mesuré sur le rendu réel**, et la **ligne d'une seule personne** reste toujours
-accessible par sa **fiche à l'écran** — chemin garanti vers une personne quand la
-matrice n'est pas dessinée, et c'est pourquoi la fiche écran demeure alors que sa
-version imprimée est supprimée (§ 11.7).
+**mesuré sur le rendu réel**, `SEUIL_MATRICE_PARTICIPANTS` (§ 19.10), et la
+**ligne d'une seule personne** reste toujours accessible par la rubrique
+« Rencontres » de sa **fiche à l'écran** — les personnes qu'elle a rencontrées
+dans le placement que le plan montre, avec le nombre de fois et les tours, les
+plus revues d'abord, sous la ligne de source de la page de qualité ; quand la
+source ne se mesure pas ou que la personne est exclue, une phrase le dit ; sans
+placement, la rubrique est absente —, chemin garanti vers une personne quand la
+matrice n'est pas dessinée, et c'est pourquoi la fiche écran demeure alors que
+sa version imprimée est supprimée (§ 11.7).
+
+La matrice se dessine sous ce seuil **et** quand ses cases tiennent la cible de
+24 px dans la largeur réelle de la carte, que la géométrie éprouve ; sinon, la
+vue écrit qu'elle ne dessine pas la matrice et pourquoi, et renvoie à la fiche.
+Elle range les personnes par l'ordre du profil (§ 12.3), jamais par l'alphabet.
+Une case porte le nombre de rencontres de la paire, écrit, sur l'échelle
+séquentielle à **quatre niveaux** — 0, 1, 2, 3 et plus — : les trois valeurs
+décisionnelles et ce qui les dépasse. La diagonale est vide et neutre. Une case
+n'est pas une cible : son jumeau, le même tableau en texte, et la fiche portent
+les mêmes comptes.
 
 > **Les paires répétées ne sont pas garanties sur la grande démonstration.** À
 > 260 personnes, 33 tables et 4 tours, chacun occupe au plus 28 créneaux de
@@ -3598,11 +4056,12 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 |---|---|
 | participants exclus | retirés de toutes les statistiques, effectifs mesuré et exclu annoncés |
 | personne en réserve à un tour | gardée, point marqué, avec le nombre de tours non assis ; son plafond réalisé se calcule sur les seuls tours où elle est assise, **et son écart d'itinéraire porte ce que son manque ne porte pas** |
-| aucun placement | le diagnostic préalable et une phrase, **jamais des axes vides** |
-| une seule table | une phrase ; pas trois vues qui disent la même chose |
+| aucun placement — ni proposition ni retenu | le diagnostic préalable et une phrase, **jamais des axes vides** |
+| une seule table | le profil, les collisions, les appartenances à chaque table et les paires cèdent la place à une phrase : elles diraient la même chose ; les objectifs, les animateurs et la performance restent |
 | un seul tour | le tableau des paires est remplacé par une phrase, non par un tableau vide |
-| une seule appartenance, ou aucune | une phrase ; **pas** une seconde courbe plate à zéro, qui se lit comme une panne |
-| aucune collision | la deuxième vue est remplacée par sa phrase |
+| une seule appartenance | le profil n'a qu'une série et pas de borne de diversité, et la phrase le dit ; les collisions et les appartenances à chaque table restent : les doublons disent où le groupe se retrouve |
+| aucune appartenance | le profil n'a qu'une série et pas de borne de diversité ; les collisions et les appartenances à chaque table cèdent la place à une phrase ; **jamais** une seconde courbe plate à zéro, qui se lit comme une panne |
+| aucune collision | la vue des collisions cède la place à sa phrase ; la grille des tables aussi sous la position « doublons » du sélecteur, dont toutes les cases vaudraient zéro ; sous « sièges » et « assis », la grille reste, ses comptes ne dépendant pas des collisions |
 | noms longs | tronqués à une largeur **mesurée**, entiers dans l'infobulle et le tableau |
 | homonymes | distingués par leur appartenance ; la navigation se fait par identifiant |
 | le manque ne prend qu'une ou deux valeurs distinctes | une phrase portant les effectifs, non une courbe à deux marches |
@@ -3610,19 +4069,50 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | deux profils qui alternent plusieurs fois | les trois effectifs de rangs, **sans** rang de bascule ; le jumeau tabulaire porte le détail |
 | populations mesurées différentes entre deux propositions — ce que produit la dérive du § 9 sur des générations accumulées | ni courbe ni dominance : la page nomme les personnes exclues de part et d'autre et le dit **non comparable** |
 | le plafond réalisé d'une personne vaut 0 | son manque vaut 0 et n'enseigne rien : la page marque le point et renvoie à l'écart d'itinéraire. Un manque nul n'est jamais lu comme « bien servi » sans son plafond à côté |
-| le plafond a priori n'a pas pu être maximisé | l'écart d'itinéraire s'écrit **« inconnu »**, jamais 0 ; le certificat reste hors d'atteinte (§ 5.5) et le départage du § 5.7 qui en dépend est sauté, la page nommant le palier suivant |
+| le plafond a priori n'a pas pu être maximisé | l'écart d'itinéraire s'écrit **« inconnu »**, jamais 0, et sans plancher (§ 12.2) ; le certificat reste hors d'atteinte (§ 5.5) et le départage du § 5.7 qui en dépend est sauté, la page nommant le palier suivant |
+| des propositions, aucune montrée | une phrase, et la commande qui montre la première proposition comparable du classement ; sans proposition comparable, la phrase seule |
+| la source est en dérive ou fautive | ses raisons, comme au tableau des propositions ; aucune vue |
+| la configuration ne se normalise pas | la phrase du refus de la génération ; aucune vue |
+| la source disparaît | la page suit le plan, qui revient au retenu ou aux réservations ; la ligne de source le dit |
+| un plan qui laisse quelqu'un en réserve | collisions et objectifs sans segment « prouvé inévitable », et la phrase qui dit pourquoi (§ 12.4) ; aucune tuile n'écrit de plancher (§ 12.2) |
+| un pourcentage de dénominateur nul — plafond réalisé nul, tour sans couple possible, personne sans tour possible, table vide ou sans affilié | « — », jamais 0 % ni 100 % ; le compte reste écrit |
+| une table sans affilié à un tour | sa case écrit « — » sous les trois positions du sélecteur, sans couleur, et se range après les tables qui portent un compte |
+| aucune personne concernée par les objectifs | la vue des objectifs cède la place à sa phrase |
+| un tour sans couple possible | sa ligne écrit « — », sans barre ni pourcentage ; ses assis sans table possible restent écrits |
+| aucune personne concernée par les animateurs, ou aucun animateur | les deux vues des animateurs cèdent la place à leur phrase |
+| aucune étiquette portée | la diversité par animateur n'a que la colonne des appartenances, et la phrase le dit |
+| aucune appartenance, ou une seule, mais des étiquettes | la diversité par animateur n'a que la colonne des étiquettes, triée sur E_f |
+| ni étiquette, ni plus d'une appartenance | la diversité par animateur cède la place à sa phrase ; son jumeau garde les tours animés et les personnes rencontrées en animant |
+| une grille tables × tours trop large pour ses cases | le jumeau seul, et la phrase qui le dit |
+| la matrice sous le seuil, mais trop étroite pour la largeur de la carte | la phrase de la matrice non dessinée, qui renvoie à la fiche |
+| le placement retenu | la performance dit qu'elle mesure une proposition ; un retenu non ajusté nomme la proposition d'où il vient et en montre la course tant qu'elle est dans la liste ; un retenu ajusté, ou dont la proposition a été effacée, n'en a aucune |
+| une proposition rouverte, dont le compagnon des courses garde la course | la performance la montre, ses valeurs mesurées sous les réglages courants ; la durée et la cadence s'écrivent « inconnues » (§ 5.10) |
+| une proposition dont la course n'est pas gardée — écrite avant le compagnon ou par une version antérieure, compagnon absent, illisible ou contradictoire, proposition effacée puis rendue après une réouverture (§ 8.6) | la performance cède la place à sa phrase : sa course n'est pas gardée |
+| une proposition dont la recherche a atteint un n-uplet nul | la performance l'écrit : « rien à reprendre après 3 412 mouvements sur 20 000 » ; à zéro mouvement, « le plan initial n'avait rien à reprendre » |
+| une génération de durée nulle ou inconnue | « durée inconnue », sans cadence |
 
 ### 12.7 Les règles de forme
 
 - **Jamais deux axes verticaux.**
 - **L'identité d'une série ne repose jamais sur la seule couleur** : au plus
-  deux séries, **étiquetées directement sur le tracé** en plus de la légende. La
-  page s'imprime, souvent en noir et blanc.
+  deux séries, **étiquetées directement sur le tracé** en plus de la légende, et
+  distinctes aussi par le trait — plein et tirets — ou par la forme du segment.
+  Une personne daltonienne, un écran en niveaux de gris et un lecteur d'écran
+  lisent la page sans sa couleur. Un plafond ou une borne tracés sont des
+  **repères**, non des séries : encre neutre, trait mince, nommés sur le tracé ;
+  **un plafond en trait mixte — tiret-point —, une borne en pointillés**, chacun
+  sous son jeton. Chaque trait d'un graphique a son motif — plein et tirets pour
+  les séries, mixte et pointillé pour les repères — : aucun repère n'a le motif
+  d'une série ni de l'autre repère. La règle à 100 % d'un graphique en
+  pourcentages est l'image d'un plafond, et prend son motif. **Deux grandeurs
+  d'unités différentes se dessinent en deux graphiques**, chacun son seul axe
+  vertical, au même ordre quand ils portent les mêmes rangs : le profil en
+  comptes, puis en pourcentages (§ 12.3).
 - **Les couleurs d'état sont réservées** : **les teintes de conflit** — trois,
-  une par règle que le plan localise (§ 7.5) — sont ici **les mêmes** que sur
-  le plan de salle, et ne servent à rien d'autre ; chacune ne peint que les
-  marques de sa règle. Elles se distinguent entre elles et des autres marques
-  du plan **une fois les trois dichromaties simulées**.
+  une par règle que le plan localise (§ 7.5) — ne peignent que le plan de salle,
+  et la page de qualité n'en emploie aucune ; chacune ne peint que les marques
+  de sa règle. Elles se distinguent entre elles et des autres marques du plan
+  **une fois les trois dichromaties simulées**.
 - **Le rouge du retrait** (`--couleur-retrait`) ne peint que la croix cerclée
   d'une commande qui retire, sur une carte, jamais sur le plan : c'est le seul
   jeton chromatique admis à moins de 30° d'une teinte de conflit.
@@ -3639,7 +4129,15 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   pastille porte toujours le nom.
 - **Une échelle séquentielle est une seule teinte, du clair au foncé.** Jamais
   d'arc-en-ciel : un dégradé multicolore invente des frontières là où la
-  grandeur est continue.
+  grandeur est continue. Ses niveaux sont peu nombreux — quatre, 0, 1, 2, 3 et
+  plus, pour la matrice comme pour la grille tables × tours —, en couleurs
+  pleines, chaque case bordée d'un trait qui tient 3:1 sur le fond de la carte,
+  son compte écrit dans l'une de **deux encres neutres au plus**, chacune
+  déclarée pour les niveaux qu'elle sert et mesurée à 4,5:1 sur chacun. **Le
+  niveau zéro est le plus proche du fond de la carte dans chaque thème**, et la
+  grandeur croît en s'en éloignant : en thème sombre, l'échelle va du sombre au
+  clair. Le niveau zéro n'est pas tenu à 3:1 : il ne porte rien que la bordure
+  et le chiffre ne portent déjà.
 - **Le texte garde une encre neutre** ; la couleur est portée par la marque. Une
   pastille d'état, de statut ou d'appartenance est un fond teinté, un signe —
   icône ou point — de la teinte, et un libellé de l'encre de la page.
@@ -3648,11 +4146,32 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   dit rien de ce que voit une personne daltonienne. **4,5:1** pour le texte,
   **3:1** pour les marques porteuses d'information.
 - **Chaque graphique a son jumeau tabulaire** : un survol n'est jamais le seul
-  chemin vers une valeur, et un tableau s'imprime. Celui de la vue de comparaison
-  est **l'escalier du manque** (§ 12.10.6), qui accepte en outre plus de deux
-  propositions là où le tracé s'arrête à deux.
+  chemin vers une valeur, et un tableau se parcourt au clavier et au lecteur
+  d'écran. Il s'ouvre à la demande, par une commande sous le graphique. Chaque
+  graphique est une image nommée par la question de sa vue et décrite par une
+  phrase de synthèse — le pire cas et son effectif. **Un jumeau porte au moins
+  les valeurs de son graphique, et peut détailler au-delà** — les trois comptes
+  du mélange d'une table, quand la grille n'en dessine qu'un ; la diversité de
+  chaque animateur tour par tour, quand le graphique dessine la soirée —, jamais
+  en deçà. Celui de la vue de comparaison est **l'escalier du manque**
+  (§ 12.10.6), qui accepte en outre plus de deux propositions là où le tracé
+  s'arrête à deux.
 - **Le pointage se fait au plus proche** : à 260 points, le pas est de quelques
   pixels, et sans cette couche la vue est inutilisable au pavé tactile.
+- **Les jetons de graphique forment une famille** (§ 13.3) : deux séries, le
+  repère d'un plafond, celui d'une borne, l'axe, « prouvé inévitable » et
+  « reste », l'échelle séquentielle, ses encres et la bordure des cases, dans
+  les deux thèmes. Les deux séries se distinguent l'une de l'autre et des six
+  teintes d'appartenance une fois les trois dichromaties simulées, chacune à 3:1
+  au moins sur le fond de la carte et à 30° au moins des teintes de conflit :
+  une série voisine d'une pastille se lirait comme cette appartenance. Une
+  grille de fond ne porte pas d'information et n'est pas tenue à 3:1 ; elle
+  reste en couleur pleine.
+- **Le pointage au plus proche a une règle par forme** : sur un escalier, le
+  rang sous le pointeur ; sur des barres, la ligne sous le pointeur ; sur une
+  grille, la case ; sur les petits multiples, le point de relevé le plus proche
+  sur l'abscisse commune, désigné dans tous les graphiques à la fois.
+  L'infobulle porte la ligne du jumeau qui correspond.
 
 ### 12.8 Ce que le logiciel ne dessine pas
 
@@ -3689,6 +4208,34 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 - **Le rapport manque / plafond** : indéfini quand le plafond vaut 0, et il fait
   passer un manque de 1 sur un plafond de 3 devant un manque de 3 sur 28
   (§ 12.10.3).
+- **Un pourcentage hors de la liste du § 5.4**, ou sans son compte : ni le
+  pourcentage d'une borne — la borne de diversité, la borne des animateurs, qui
+  ne prouvent rien —, ni le rapport manque / plafond, ni Σ rencontres / Σ
+  plafond réalisé, ni un pourcentage au tableau des propositions (§ 5.7), dans
+  un critère ou comme clé de tri. Le **taux de diversité** d(p), défini au
+  § 5.4, garde sa forme, au centième.
+- **Un indice d'équité entre animateurs** : l'équité se lit par le moins varié,
+  le plus varié et l'effectif au minimum.
+- **Un histogramme des rencontres** : la répartition est un tableau, le profil
+  trié la dessine (§ 12.3).
+- **Une durée seule comme qualité du calcul** : le temps dépend de la machine ;
+  la performance se lit en mouvements, la durée observée à côté.
+
+**Les pourcentages de mélange sont une exception nommée à cette liste**, bornée
+aux quatre rapports du § 5.4 : les rencontres d'une personne sur son plafond
+réalisé, les tours possibles servis d'un tour ou de la soirée, les tours servis
+d'une personne sur ses tours possibles, les appartenances distinctes d'une table
+et d'un tour sur ses sièges, ses assis ou ses affiliés. La première est le
+complément du rapport manque / plafond ; la deuxième, prise sur la soirée, est
+le taux de satisfaction transposé aux objectifs. Leur défaut est celui que le
+premier point de cette liste nomme — 99,8 % cache la personne à 14 sur 27 —, et
+la page le corrige par la règle qui fonde l'exception : **chaque pourcentage est
+suivi, juste dessous, du pire cas en compte** — « minimum 14 sur 27 », « 3
+personnes jamais servies », ou, sur une ligne, son propre compte (§ 12) —, et ne
+sert ni à trier, ni à classer, ni à comparer deux propositions, qui se comparent
+sur le manque (§ 12.10). Sur la soirée, les rencontres ne se somment pas : le
+pourcentage d'une tuile est celui de la personne que sa borne nomme (§ 12.2), et
+le taux de satisfaction reste refusé.
 
 ### 12.9 D'où viennent les chiffres
 
@@ -3696,13 +4243,33 @@ Les statistiques sont calculées par le **moteur**, en fonctions pures, testées
 sous `node`. **La page ne recalcule rien** : elle lit les mêmes valeurs que le
 tableau d'indicateurs et que le classement. Dès que la même arithmétique existe
 en deux endroits, le graphique et le tableau finissent par se contredire devant
-l'opérateur. La règle vaut pour **l'export CSV des indicateurs** (§ 11.7) comme
-pour le dessin : il lit le même tableau, quel que soit le support.
+l'opérateur.
 
-Les trois vues se dessinent en **SVG**, avec **un module de géométrie frère** de
-celui du plan — même principe, même discipline d'épreuve, mais **pas le même
-module** : l'unité du plan est le centimètre réel, celle d'un graphique est le
-rang et le nombre. Les confondre ferait fuir l'unité du bâtiment dans les axes.
+**Le détail d'un placement** — son profil trié, ses collisions jointes aux
+planchers, ses paires, sa matrice, ses mélanges, ses bornes de diversité — se
+calcule pour lui seul, à l'ouverture de la page, par les fonctions du moteur, en
+une lecture du plan ; jamais pour toutes les propositions, dont la table
+d'évaluation se recalcule à chaque écriture. Les points de relevé de la
+performance s'y ajoutent, leurs plans lus dans la course que le compagnon des
+courses garde pour la proposition (§ 8.6), chacun mesuré sous les réglages
+courants par la mesure qui fait foi ; les pourcentages aussi, par la seule
+fonction du moteur qui les calcule (§ 5.4). Le détail d'une charge se garde tant
+qu'elle ne change pas, et se refait sur la suivante : aucune valeur ne survit à
+un changement de réglage. Les tuiles lisent les mesures de la ligne de cette
+table. Le détail ne reçoit pas cette ligne, que la table calcule pour chaque
+proposition : il mesure son placement par le même chemin qu'elle — la mesure,
+les plafonds réalisés et les trois chiffres du § 12.10.4, pris d'une seule
+fonction de l'application —, et ses fonctions du moteur n'en recomptent rien.
+Elles rendent une fois les bornes et les planchers qui accompagnent les tuiles,
+et jugent un plancher atteint sur la valeur même que la ligne porte. Les tris,
+les échelles, les chemins des tracés et le pointage au plus proche sont des
+fonctions pures : un composant n'en fait aucun.
+
+Les vues se dessinent en **SVG**, avec **un module de géométrie frère** de celui
+du plan, dans la même couche (§ 13.4) — même principe, même discipline
+d'épreuve, mais **pas le même module** : l'unité du plan est le centimètre réel,
+celle d'un graphique est le rang et le nombre. Les confondre ferait fuir l'unité
+du bâtiment dans les axes.
 
 
 ### 12.10 Le manque : la grandeur qui compare deux propositions
@@ -3748,8 +4315,15 @@ qui ne bougera pas.
 
 Le manque absolu ne distingue pas un manque de 1 sur un plafond de 3 d'un manque
 de 1 sur un plafond de 28. Le logiciel **ne fait pourtant pas du rapport
-manque / plafond une grandeur** : ni axe, ni clé de tri, ni tuile d'en-tête, et
-il ne le calcule nulle part.
+manque / plafond une grandeur** : ni clé de tri, ni critère, ni colonne du
+tableau des propositions, ni grandeur de comparaison, et il ne le calcule nulle
+part. Son complément, les rencontres d'une personne en pourcentage de son
+plafond réalisé, s'écrit sur la page de qualité seule, sous l'exception nommée
+du § 12.8 : sur l'axe du second graphique du profil, rangé dans l'ordre du
+premier, dans l'infobulle et le jumeau, et dans la tuile du minimum brut pour la
+personne au rang 1 — chaque fois suivi du compte du pire. Il ne gouverne rien :
+l'ordre des rangs reste celui des rencontres (§ 12.3), et la relance se décide
+sur le manque.
 
 | choix | mode de défaillance |
 |---|---|
@@ -3804,18 +4378,18 @@ réserve à trois tours sur quatre a un plafond réalisé minuscule et un manque
 nul : elle n'apparaît ni au premier chiffre, ni au second, alors qu'elle est la
 plus mal servie de la soirée. Son écart d'itinéraire, lui, est énorme.
 
-**Et c'est une borne, pas une promesse.** Un écart d'itinéraire non nul n'est pas
-toujours récupérable : dans la grande démonstration, les tables de 7 offrent 112
-sièges-tours dont 16 aux animateurs, donc **96 sièges-tours mobiles** qu'un
-placement ne peut pas ne pas servir ; chaque mobile n'en absorbant que 4 au plus,
-**au moins 24 mobiles** terminent sous leur plafond a priori de 28, et l'écart
-d'itinéraire maximal **ne descend jamais sous 1**. Il en va de même dans la
-variante, où les 4 sièges vides laissent à chaque tour une table d'au moins 3
-mobiles incomplète. **La page écrit ce plancher à côté du chiffre**, comme le
-diagnostic du § 5.6, et n'appelle jamais « récupérable » le complément —
-exactement la discipline du § 12.4 sur « prouvé inévitable » et « reste ». Sans
-ce plancher, le troisième chiffre envoie l'opérateur relancer indéfiniment vers
-un 0 que la configuration interdit.
+**Et c'est une borne, pas une promesse.** Un écart d'itinéraire non nul n'est
+pas toujours récupérable : dans la grande démonstration, les tables de 7 offrent
+112 sièges-tours dont 16 aux animateurs, donc **96 sièges-tours mobiles** qu'un
+placement ne peut pas ne pas servir ; chaque mobile n'en absorbant que 4 au
+plus, **au moins 24 mobiles** terminent sous leur plafond a priori de 28, et
+l'écart d'itinéraire maximal **ne descend jamais sous 1**. Il en va de même dans
+la variante, où les 4 sièges vides laissent à chaque tour une table d'au moins 3
+mobiles incomplète. **La page écrit ce plancher sous le chiffre** (§ 12.2),
+comme le diagnostic du § 5.6, et n'appelle jamais « récupérable » le
+complément — exactement la discipline du § 12.4 sur « prouvé inévitable » et
+« reste ». Sans ce plancher, le troisième chiffre enverrait l'opérateur
+relancer indéfiniment vers un 0 que la configuration interdit.
 
 #### 12.10.5 La décomposition, et ce qu'elle autorise à écrire
 
@@ -3830,7 +4404,8 @@ Le logiciel **ne nomme que deux** de ces différences — celles qu'il affiche. 
 première est le diagnostic du § 5.6, qui a déjà ses mots. Le § 5.5 pose « deux
 notions, deux noms, jamais trois » ; la discipline tient, parce que **aucun de
 ces deux noms ne désigne une borne** : ce sont des différences entre deux termes
-voisins de la même ligne, et il n'existe toujours que deux bornes.
+voisins de la même ligne, et il n'existe toujours que deux bornes sur les
+rencontres.
 
 La décomposition tranche une ambiguïté : le certificat de « minimum atteint » se
 lit **contre le plafond a priori**, donc sur `manque + écart d'itinéraire`,
@@ -3863,8 +4438,8 @@ pas ; dès **deux** propositions, le logiciel dessine donc l'écart lui-même.
 - **Le jumeau tabulaire** (§ 12.7) est **l'escalier du manque** : une ligne par
   valeur de manque, et par proposition une colonne d'effectif et une colonne
   d'effectif cumulé — la seconde est la courbe elle-même, lue à l'envers. Il
-  s'imprime, et il accepte plus de deux propositions là où le tracé s'arrête à
-  deux. Il lit le même tableau que le tracé (§ 12.9).
+  accepte plus de deux propositions là où le tracé s'arrête à deux. Il lit le
+  même tableau que le tracé (§ 12.9).
 
 **Quand aucune ne domine**, le § 12.3 dit déjà que l'arbitrage est réel. Le
 manque change ce qui se lit : avec des nombres bruts, un croisement peut n'être
@@ -3940,6 +4515,198 @@ se calcule à chaque évaluation** : le coût est mesuré, et il ne retarde pas 
 page. Le chemin « inconnu » reste celui du moteur, que l'application n'emprunte
 pas : là, le troisième chiffre s'écrit **« inconnu »** et le départage du § 5.7
 qui en dépend est sauté en nommant le palier appliqué à sa place.
+
+### 12.11 Les appartenances à chaque table
+
+**Question : où les mêmes cercles se retrouvent-ils à une même table ?**
+
+**Un sélecteur à trois positions** choisit ce que la grille compte, pour la
+table t au tour r (§ 5.4) :
+
+| position | la case écrit et colore | son pourcentage, à l'infobulle et au jumeau |
+|---|---|---|
+| **appartenances par siège** — par défaut | les **sièges sans appartenance nouvelle**, c_t − δ_{t,r} | δ appartenances pour c sièges |
+| **appartenances par personne assise** | les **assis sans appartenance nouvelle**, o_{t,r} − δ_{t,r} | δ appartenances pour o assis |
+| **doublons parmi les affiliés** | les **doublons d'appartenance**, α_{t,r} − δ_{t,r} | δ appartenances pour α affiliés |
+
+La position est un état de la séance, comme le tour montré : elle survit au
+changement de section, repart de « par siège » à l'ouverture d'un événement,
+n'écrit rien et ne fait aucune entrée d'historique ; elle vit en lecture et sur
+un plan bloqué (§ 8.4). C'est un groupe de boutons radio, au clavier.
+
+Une **grille**, une ligne par table, une colonne par tour. Sous chaque position,
+chaque case **écrit et colore le même nombre** — le compte de la position —, sur
+l'échelle séquentielle à quatre niveaux, 0, 1, 2, 3 et plus. Les trois comptes
+ont le même sens : zéro veut dire que chaque siège, chaque assis ou chaque
+affilié porte une appartenance de plus, et ce niveau est le plus proche du fond
+de la carte (§ 12.7). Ils s'emboîtent, le compte des sièges majorant celui des
+assis, qui majore les doublons (§ 5.4). Une case sans affilié, ou d'une table
+vide à ce tour, écrit « — » sous les trois positions, sans couleur : une table
+de bénévoles sans appartenance n'a rien à mélanger, et ne se lit pas comme la
+pire de la soirée. L'infobulle d'une case porte le pourcentage de la position,
+puis ses deux comptes — « 62 % », puis « 5 appartenances pour 8 sièges » —, les
+occupants, les affiliés et la capacité. Une case ne porte qu'un nombre : le
+pourcentage n'y tient pas à côté du compte, et la couleur ne porte que ce que la
+case écrit.
+
+**Les tables se rangent de la pire à la meilleure, sous la position choisie** :
+le plus grand compte d'une case, puis la somme des comptes sur les tours, puis
+l'ordre des tables ; une table dont toutes les cases écrivent « — » vient en
+dernier. La pire case est donc dans la première ligne. Le moteur rend les trois
+ordres ; l'écran lit celui de la position.
+
+La vue décrit **la sortie**, pas les entrées : elle ne dit jamais combien chaque
+appartenance compte de membres (§ 12.8, le camembert). Elle complète la vue des
+collisions (§ 12.4) : celle-ci dit quelle appartenance se retrouve, la grille où
+et quand ; un doublon d'appartenance non nul est exactement une table où la vue
+des collisions compte au moins une collision ce tour-là.
+
+**Le jumeau** porte une ligne par table dans l'ordre de la position, et par tour
+**les trois comptes et leurs trois pourcentages**, chaque pourcentage suivi du
+compte de sa ligne (§ 12), les occupants, les affiliés et la capacité : il
+détaille au-delà de la grille (§ 12.7). Une case tient son chiffre et 24 px de
+côté ; une grille dont les cases ne tiennent pas dans la largeur de la carte
+cède la place à son jumeau, avec la phrase qui le dit, et le sélecteur reste.
+Une case n'est pas une cible : le pointage au plus proche désigne la case sous
+le pointeur (§ 12.7), et le jumeau porte les mêmes valeurs. Sans collision, la
+grille cède la place à la phrase de la vue des collisions sous la position
+« doublons » seulement ; sans appartenance, à celle du § 12.6 sous les trois ;
+avec une seule appartenance, elle reste.
+
+### 12.12 Les objectifs des tables
+
+**Question : qui n'est jamais assis à une table qui lui correspond, et à quel
+tour l'objectif perd-il ?**
+
+**Les personnes jamais servies viennent d'abord**, nommées, chacune avec ses
+tours possibles : c'est la seconde question du § 12.1, à place fixe.
+
+**La soirée s'écrit ensuite en texte**, non en barre : le pourcentage des tours
+possibles servis, puis juste dessous le pire cas en compte — « 77 % des tours
+possibles servis », « 3 personnes jamais servies » —, ses deux comptes — « 31
+servis sur 40 possibles » —, ses tours hors objectif et leur plancher. À un seul
+tour, la soirée ne s'écrit pas : la ligne du tour la dit.
+
+Puis des **barres horizontales, une par tour**. Chaque barre porte les **tours
+hors objectif** du tour, Π_r − S_r (§ 5.4), en deux segments : **prouvé
+inévitable**, le **plancher du tour** max(0, P_r − L_r), avec le P_r et le L_r
+du § 5.6, et **reste**. Un couple fixé possible étant servi, Π_r − S_r = P_r
+− S^nf_r, et une personne servie non fixée occupe un siège libre : S^nf_r ≤ L_r,
+donc le plancher du tour borne la barre. **La première barre est celle du tour
+au plus grand reste**, à place fixe ; les autres tours suivent dans leur ordre ;
+aucune couleur ne désigne un tour. En encre secondaire, chaque ligne porte le
+pourcentage des tours possibles servis à ce tour, ses deux comptes dessous —
+« 80 % », « 24 servis sur 30 possibles » —, puis **ses assis sans table
+possible** σ_r (§ 5.4) : « 10 assis sans table possible ». Ce compte lit tous
+les assis du tour, concernés ou non : il dit combien de personnes aucune table
+ne pouvait servir, sans entrer dans le dénominateur, que le plancher borne. Un
+tour sans couple possible écrit « — », sans barre ni pourcentage, et garde ses
+assis sans table possible. Les mots, la forme des segments et le domaine des
+planchers sont ceux du § 12.4.
+
+**Le diagnostic calcule le plancher de chaque tour**, que le critère classe ou
+non, et en rend les termes et la somme ; le détail les lit et ne les recompte
+pas (§ 13.2). La vue les dessine dans tous les cas ; la somme des planchers des
+tours égale le plancher des tours hors objectif quand le diagnostic l'écrit
+(§ 5.6). Le diagnostic ne calcule aucun flot : le plancher d'un tour est
+immédiat, comme celui de la soirée.
+
+**Le jumeau** porte une ligne par tour — possibles, servis, leur pourcentage,
+hors objectif, plancher, assis sans table possible —, la ligne de la soirée, la
+liste des personnes jamais servies, chacune avec ses tours possibles, et la
+répartition du nombre de tours hors objectif d'une personne, P(p) − s(p), de la
+plus grande valeur à la plus petite, avec l'effectif.
+
+La vue lit les personnes concernées (§ 5.4) ; sans elles, elle cède la place à
+sa phrase. Le critère décoché ne la retire pas : elle dit qu'il ne classe pas.
+
+### 12.13 Les animateurs
+
+**Les animateurs rencontrés.** *Qui a rencontré le moins d'animateurs ?* Un
+**profil trié** de m(p) (§ 5.4), sur les personnes concernées par les
+animateurs, de la moins servie à la mieux servie : à m égal, la borne la plus
+haute d'abord, puis l'identifiant. Une seule série ; la **borne des animateurs**
+B(p) tracée dans le même ordre, en repère pointillé (§ 12.7), sous ce nom —
+jamais « plafond » : aucun plan ne garantit de l'atteindre (§ 4.5), et la vue
+n'en tire ni manque ni pourcentage. Le jumeau porte une ligne par personne, avec
+m(p), B(p) et son statut, puis la répartition de m(p), de la plus basse valeur à
+la plus haute.
+
+**La diversité par animateur.** *Quel animateur voit le moins de diversité à sa
+table ?* Pour chaque animateur, **sur la soirée** — l'union de ses tours
+animés — **et à chacun de ses tours animés** : les appartenances rencontrées en
+animant A_f, A_{f,r} et, quand une personne présente porte une étiquette, les
+étiquettes rencontrées en animant E_f, E_{f,r} (§ 5.4). Le graphique dessine la
+soirée ; les deux grandeurs se dessinent en **deux colonnes de barres
+horizontales juxtaposées**, chacune avec son axe et sa graduation, les
+animateurs dans le même ordre d'une colonne à l'autre : ce sont de petits
+multiples, jamais deux séries empilées ni un axe commun — une appartenance et
+une étiquette ne s'additionnent pas et ne se comparent pas. **Le moins varié en
+tête** : A_f croissant, puis E_f, puis les personnes rencontrées en animant,
+puis l'identifiant. Chaque ligne porte en encre secondaire ses tours animés et
+ses personnes rencontrées en animant : un animateur d'un seul tour en rencontre
+moins, et la vue le montre au lieu de le corriger.
+
+**Le jumeau** porte, dans l'ordre du graphique, la ligne de la soirée de chaque
+animateur — tours animés, personnes, appartenances et étiquettes rencontrées en
+animant —, puis sous elle une ligne par tour animé, dans l'ordre des tours, avec
+les mêmes comptes pour ce tour seul : il détaille au-delà du graphique (§ 12.7),
+et dit lequel des tours d'un animateur a appauvri sa soirée. Le pire (animateur,
+tour) n'a pas de place fixe : la soirée gouverne l'ordre.
+
+**Au-dessus de chaque colonne, trois nombres** : le moins varié, le plus varié,
+et combien d'animateurs sont au minimum — pour A_f, et pour E_f quand sa colonne
+existe. Leurs libellés à l'écran sont « le moins varié », « le plus varié » et
+« au minimum » ; le mot « équité » n'y paraît pas, réservé au libellé du mode
+« l'équité d'abord » (§ 5.3). Aucun indice ne les résume (§ 12.8).
+
+Sans appartenance, ou avec une seule, mais avec des étiquettes, la vue ne trace
+que la colonne des étiquettes, triée sur E_f puis comme ci-dessus ; les autres
+cas sont au § 12.6.
+
+### 12.14 La performance du calcul
+
+**Question : relancer plus longtemps aurait-il donné mieux ?**
+
+La vue lit la course que le compagnon des courses garde pour la proposition
+montrée (§ 8.6) : ses **mouvements évalués** sur son compte d'arrêt, et les
+plans de ses points de relevé. Pour la génération qui l'a produite dans cette
+séance, elle lit aussi sa **durée observée**, ses cœurs et sa **cadence**
+(§ 5.10). Une durée nulle, ou absente — une proposition lue d'un fichier, une
+génération d'une séance précédente —, s'écrit « inconnue », et la cadence avec
+elle. Sans mouvement évalué, la vue écrit que le plan initial n'avait rien à
+reprendre.
+
+Puis des **petits multiples** : un graphique par indicateur, une valeur par
+critère que le classement applique, dans son ordre, jamais la clé pondérée d'un
+palier, précédés du minimum brut. Chacun marque la valeur de l'indicateur pour
+la meilleure affectation **aux seuls points de relevé** — les plans de la
+course, puis le plan de la proposition au dernier —, **mesurée sous les réglages
+courants** par le recalcul complet, les points reliés par un trait mince ; la
+phrase de synthèse le dit, car un indicateur seul n'est pas monotone le long de
+la recherche. Changer une étiquette, un objectif ou l'ordre des priorités
+remesure les points : le dernier point égale toujours la ligne de la proposition
+au tableau des propositions, et aucune valeur mesurée sous d'autres réglages ne
+s'affiche. L'abscisse, commune, est le nombre de mouvements en échelle
+logarithmique, graduée aux points de relevé ; chaque graphique a son seul axe
+vertical (§ 12.7), de zéro à sa plus grande valeur. Une phrase dit le dernier
+point de relevé où une valeur a changé : « aucune valeur n'a changé entre 10 000
+et 20 000 mouvements ; une autre graine est l'autre façon de chercher ». Elle
+n'affirme rien des mouvements que la recherche n'a pas évalués.
+
+**Le jumeau** porte une ligne par point de relevé — le nombre de mouvements,
+puis une colonne par indicateur. Il ne porte aucune durée : la cadence est celle
+de la génération entière, répartie sur ses fils, et ne date aucun point
+(§ 5.10).
+
+La vue mesure une proposition : sur le placement retenu, elle le dit, et montre
+la course de la proposition d'où il vient quand il en vient sans ajustement et
+qu'elle est encore dans la liste. Une proposition dont la course n'est pas
+gardée — écrite avant le compagnon ou par une version antérieure, compagnon
+absent, illisible ou contradictoire, proposition effacée puis rendue après une
+réouverture — n'a pas ces données : la vue dit que sa course n'est pas gardée.
+La page ne lit l'horloge que par l'application ; le moteur ne la lit jamais
+(§ 14.7).
 
 ---
 
@@ -4027,7 +4794,7 @@ des fonctions pures du module de géométrie.
 | tenir hors ligne | se compile en JavaScript ordinaire ; Vite est une dépendance de développement qui ne survit pas à la construction |
 | rester rapide | compile des mises à jour fines, sans arbre virtuel ni mémoïsation à poser à la main — à une exception près : la table d'évaluation des propositions, gardée dans le modèle pur sous l'identité de la charge figée de la séance, qu'une écriture remplace |
 | se tester sans navigateur | n'impose d'écrire aucun calcul dans un composant ; le composant ne contient que le câblage |
-| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande de mode, les messages (avis, refus, information), le retrait, le plan, le papier |
+| être joli sans y passer des semaines | un fichier de jetons — couleurs, rayons, ombres, échelle typographique, cible principale, largeur de page — décliné en deux thèmes ; ses familles de couleur : la page, le bandeau, la carte, l'action principale, les quatre états du plan, le neutre, les appartenances, la bande de mode, les messages (avis, refus, information), le retrait, le plan, le graphique, le papier |
 
 **Les candidates écartées.** Vue 3 est le second choix défendable, écarté de peu
 sur le poids et sur la discipline qu'exige sa réactivité. React est écarté sur la
@@ -4426,9 +5193,9 @@ n'égale, octet pour octet, un fichier livré.
 
 | module (§ 13.4) | niveau | ce qui s'y éprouve |
 |---|---|---|
-| moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut |
-| géométrie | `node` + navigateur | conversions, ajustement, bornes de zoom, désignation d'un siège ; l'oracle du moteur de rendu au niveau 2 ; la découpe du plan en pages (§ 11.7) |
-| stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), conversion du format 1 avec son journal |
+| moteur | `node` | indicateurs, plafonds et borne, diagnostic, invariants d'un plan, accord de l'incrémental et du recalcul, registre et compilation de l'ordre des priorités, correspondance des objectifs, empreintes de référence de l'ordre par défaut, détail d'un placement pour la page de qualité, borne de diversité, points de relevé de la recherche |
+| géométrie | `node` + navigateur | conversions, ajustement, bornes de zoom, désignation d'un siège ; l'oracle du moteur de rendu au niveau 2 ; la découpe du plan en pages (§ 11.7) ; les échelles, tracés et pointage des graphiques (§ 12.9) |
+| stockage | `node` | sérialisation canonique, équivalence geste/entrée/état, reprise après panne, dérivation des noms de fichiers, forme positionnelle et champs facultatifs (§ 8.9), conversion du format 1 avec son journal, compagnon des courses (§ 8.6) |
 | analyseur CSV | `node` | encodage, séparateur, association des colonnes, réconciliation des appartenances et des étiquettes, lignes refusées, aller-retour, CSV des objectifs de table |
 | générateur de démonstrations | `node` | vecteur du générateur pseudo-aléatoire, empreinte des fichiers livrés, refus, noms forgés |
 | PDF | `node` | couche de texte, pagination, police embarquée et table `ToUnicode`, géométrie de la planche, reproductibilité |
@@ -4571,6 +5338,41 @@ l'égalité.** Trois propositions inventées, dont deux égales sur la somme
 pondérée d'un palier : la troisième, moins bonne sur ce palier et meilleure sur
 le suivant, reste derrière. Il refuse le palier lu critère par critère.
 
+**La borne de diversité tient sur tous les plans**, et s'arbitre par énumération
+exhaustive comme le plafond : sur des configurations inventées de quelques
+personnes, chaque plan admissible mesure A(p) ≤ A_max(p) et |F(p)| ≤ Φ_aff(p)
+pour chacun, et au moins un plan atteint Φ_aff(p) pour une personne. Une seule
+appartenance partagée par tous donne A_max = 1 à toute personne qui rencontre au
+moins une personne ; puis un cas où Φ_aff(p) l'emporte, un où G l'emporte, et un
+où (N_aff − g_p) + 1 égale G — chaque autre appartenance réduite à une
+personne —, sans jamais descendre sous lui (§ 5.5).
+
+**Un point de relevé est le plan d'un compte d'arrêt plus court.** Pour une
+graine donnée, la meilleure affectation gardée au point de relevé k égale le
+plan que la même graine rend au compte d'arrêt k, à 1, 10, 100 et 1 000
+mouvements, sur la petite démonstration et la grande ; et le plan final ne
+change pas quand les points de relevé sont gardés. L'épreuve refuse une copie
+qui tirerait un nombre ou changerait l'ordre d'acceptation. La course écrite au
+compagnon des courses se relit à l'identique (§ 8.6) : une génération écrite,
+rouverte, montre les mêmes points, mesurés sous les réglages courants, et le
+dernier égale la ligne de la proposition.
+
+**Le détail d'un placement ne recompte rien.** Ses doublons d'appartenance d'une
+case sont non nuls exactement là où les collisions de ce tour et de cette table
+le sont ; ses servis des tours somment s(p) ; ses paires répétées ont l'effectif
+que compte `mesurer`, choisies et imposées ; ses planchers par tour sont ceux
+que le diagnostic rend, leur somme est le plancher des tours hors objectif qu'il
+écrit quand il l'écrit, et chacun borne les tours hors objectif de son tour sur
+le domaine des planchers ; ses assis sans table possible et ses possibles d'un
+tour ne dépassent pas ensemble les présents. Les trois comptes du mélange d'une
+table s'emboîtent, sièges ≥ assis ≥ doublons, et chacun des trois ordres des
+tables suit le sien.
+
+**Un pourcentage s'écrit par une seule fonction.** Elle rend « — » à
+dénominateur nul, 0 à numérateur nul, 100 au numérateur égal au dénominateur, et
+entre 1 et 99 partout ailleurs : 259 sur 260 donne 99, 1 sur 300 donne 1.
+L'épreuve refuse un pourcentage de la page qui ne sortirait pas d'elle.
+
 #### La géométrie
 
 **Le plan vide donne `k_ajusté = 1 px/cm`, pas `Infinity`.** Il refuse la division
@@ -4606,6 +5408,14 @@ s'en décale ; qu'aucun ancêtre, ni lui-même, ne porte de transformation CSS. 
 refuse la feuille de style qui ajoute un jour `transform: translateZ(0)` « pour
 la fluidité » : le plan répondrait faux partout, et la cause serait cherchée
 dans le module de géométrie.
+
+**Le module des graphiques est frère de celui du plan, et n'en importe rien.**
+Ses échelles rendent un pixel d'écran depuis un rang ou un nombre ; ses
+graduations sont des entiers ronds pour des comptes ; son escalier ne trace que
+des segments horizontaux et verticaux, un pas par rang ; le rang au plus proche
+d'une abscisse est borné aux rangs existants, y compris hors du tracé. L'épreuve
+refuse une graduation non entière sur un axe de comptes, et un escalier qui
+relierait deux rangs en diagonale.
 
 #### Le stockage
 
@@ -4847,18 +5657,22 @@ d'être appelé** ; appelé par les commandes, il refuse au moment du geste, là
 § 5.9 veut les refus.
 
 **La garde du § 12.3 est une seconde fonction, de signature différente.**
-`verifier_indicateurs(mesures, plafonds_a_priori, plafonds_realises)` éprouve
-les **trois** inégalités de la ligne de décomposition du § 12.10.5. Quand les
-mesures portent les objectifs des tables ou les animateurs (§ 5.4), elle éprouve
-aussi, pour chacun, s(p) ≤ P(p), s(p) ≤ ses tours assis et m(p) ≤ B(p), puis,
-sur les totaux, les personnes jamais servies contre les concernées et le plus de
-tours hors objectif d'une personne contre le plus de tours possibles. P(p) ne se
-compare pas aux tours assis : un plan qui laisse une personne en réserve à un
-tour possible le tient au-delà. Elle ne prend pas un plan mais des mesures, et
-ce qu'elle refuse n'est pas un geste mais un **dessin**. Les deux fonctions
-vivent dans le moteur, sous la même discipline ; les confondre obligerait le
-vérificateur de plan à recevoir des indicateurs qu'il n'a aucune raison de
-connaître.
+`verifier_indicateurs(mesures, plafonds_a_priori, plafonds_realises,
+complements)` éprouve les **trois** inégalités de la ligne de décomposition du
+§ 12.10.5. Avec ses compléments, que seule la page de qualité lui passe, elle
+éprouve aussi le segment « reste » de chaque appartenance et de chaque tour sur
+le domaine des planchers (§ 12.4, § 12.12) et la diversité de chacun contre ses
+rencontres et sa borne (§ 5.5) ; la table d'évaluation l'appelle sans eux. Quand
+les mesures portent les objectifs des tables ou les animateurs (§ 5.4), elle
+éprouve aussi, pour chacun, s(p) ≤ P(p), s(p) ≤ ses tours assis et m(p) ≤ B(p),
+puis, sur les totaux, les personnes jamais servies contre les concernées et le
+plus de tours hors objectif d'une personne contre le plus de tours possibles.
+P(p) ne se compare pas aux tours assis : un plan qui laisse une personne en
+réserve à un tour possible le tient au-delà. Elle ne prend pas un plan mais des
+mesures, et ce qu'elle refuse n'est pas un geste mais un **dessin**. Les deux
+fonctions vivent dans le moteur, sous la même discipline ; les confondre
+obligerait le vérificateur de plan à recevoir des indicateurs qu'il n'a aucune
+raison de connaître.
 
 **Le vérificateur est lui-même éprouvé par mutation.** Le test prend un plan
 valide, déplace une personne pour qu'elle occupe deux tables au tour 2, et affirme
@@ -4921,21 +5735,28 @@ d'un participant partiellement fixé, la frontière d'instantané, le renommage 
 **La couverture se mesure et se publie par module**, jamais agrégée. Sa valeur est
 de **désigner ce qui n'est jamais exécuté** ; c'est une liste à lire, pas une note.
 
-**Trois seuils durs, en branches, sur trois paires de modules.** Le module des
-indicateurs et du plafond, les chemins de reprise du stockage, et le registre
-des critères avec la règle de correspondance des objectifs tiennent **100 % de
-branches**. Ils sont petits, purs — le deuxième à la condition d'injection du
-§ 13.4 — et chaque branche non couverte y est un cas que l'opérateur rencontre
-au pire moment. Une branche qu'on ne sait pas couvrir est soit du code mort — on
-le retire — soit un cas que la spécification n'a pas prévu — on l'écrit.
+**Des seuils durs, en branches, sur dix modules.** Le module des indicateurs
+et du plafond, les chemins de reprise du stockage, le registre des critères
+avec la règle de correspondance des objectifs, et les quatre modules qui
+calculent la page de qualité — le détail d'un placement, les paires répétées,
+la diversité par animateur et la géométrie des graphiques — tiennent **100 %
+de branches**. Ils sont petits, purs — les chemins de reprise à la condition
+d'injection du § 13.4 — et chaque branche non couverte y est un cas que
+l'opérateur rencontre au pire moment. Ceux de la page de qualité rendent
+chaque nombre qu'elle écrit, l'écran ne faisant que les mettre en forme
+(§ 12.9) : une branche nue y est un chiffre affiché que rien n'éprouve. Une
+branche qu'on ne sait pas couvrir est soit du code mort — on le retire — soit
+un cas que la spécification n'a pas prévu — on l'écrit.
 
 **La mesure est sa propre commande**, `make couverture` : la série `node` sous
 instrumentation, hors des budgets du § 14.14. Elle publie un tableau par couche
 et par module, et un rapport à parcourir qui montre, ligne à ligne, ce qui n'est
-jamais exécuté. Les seuils portent sur six fichiers —
+jamais exécuté. Les seuils portent sur dix fichiers —
 `src/moteur/indicateurs.js` et `src/moteur/plafond.js`, `src/stockage/depot.js`
 et `src/stockage/journal.js`, `src/moteur/criteres.js` et
-`src/moteur/correspondance.js` — et la commande échoue en deçà. Un test de
+`src/moteur/correspondance.js`, `src/moteur/qualite.js`,
+`src/moteur/paires.js`, `src/moteur/diversite.js` et
+`src/geometrie/graphique.js` — et la commande échoue en deçà. Un test de
 l'arborescence refuse un seuil abaissé, un seuil global, et un seuil posé sur un
 fichier absent ou hors de la mesure : l'outil tiendrait ce dernier pour atteint,
 faute de branche à compter. Il refuse de même une commande qui ne mesure pas —
@@ -5903,11 +6724,23 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `10-diagnostic.png` | **grande démonstration** | le diagnostic préalable (§ 5.6), le plafond a priori, les **99 retours imposés** énoncés à part, et le plancher de l'écart d'itinéraire | les valeurs affichées égalent celles du moteur pour la même entrée ; le plafond des quatre animateurs des tables de 7 vaut **24** |
 | `10a-ordre-priorites.png` | l'événement en construction | l'ordre des priorités : paliers numérotés, un palier de deux critères avec leurs poids — excédent de collisions × 1 et tours hors objectif × 3 —, « rencontrer le plus d'animateurs différents » marqué décoché (§ 5.3, § 5.7) | l'ordre affiché est celui que compile le moteur ; la capture `11` qui suit nomme les mêmes paliers ; le choix du mode des objectifs, à son défaut « le plus de places servies », et la commande qui rétablit le défaut sont affirmés hors de l'image |
 | `11-propositions.png` | l'événement en construction | plusieurs propositions comparées, l'ordre de classement **écrit dans l'interface** par paliers (§ 5.7), le tableau défilé en largeur des colonnes de diversité jusqu'à celles des objectifs | au moins trois propositions ; l'ordre affiché est celui que produit la clé de tri du moteur |
-| `12-qualite-profil.png` | **grande démonstration** | la courbe en escalier, deux séries sur **un seul axe**, le plafond réalisé tracé dans le même ordre, le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée |
+| `12-qualite-profil.png` | **grande démonstration** | le profil en deux graphiques au même ordre de rangs : l'escalier en comptes de personnes, deux séries — rencontres en trait plein, appartenances en tirets —, le plafond réalisé en repère mixte et la borne de diversité en repère pointillé, chacun nommé sur le tracé ; dessous, les rencontres en pourcentage du plafond réalisé jusqu'à la règle à 100 %, du motif du plafond, l'axe des rangs de ce second graphique hors de l'image ; le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée ; chaque graphique a un seul axe vertical ; le rang 1 est le même dans les deux ; chaque pourcentage écrit est suivi de son compte du pire ; aucun repère n'a le motif d'une série |
+| `12a-qualite-sans-placement.png` | **petite démonstration, variante « conflit inévitable »**, avant sa génération | la page sans placement : la ligne de source, le diagnostic préalable et sa phrase (§ 12.6) | aucun graphique n'est dessiné ; la phrase est celle d'« aucun placement » |
+| `12b-qualite-une-table.png` | **6 personnes de trois appartenances, une table de 6, 3 tours**, construite, sa génération faite | la phrase d'une seule table à la place du profil, des collisions, de la grille et des paires ; la performance (§ 12.6) | ni profil, ni barre de collision, ni grille, ni tableau des paires n'est dessiné ; la phrase est celle d'« une seule table » |
+| `12c-qualite-un-tour.png` | **12 personnes de trois appartenances, 3 tables de 4, 1 tour**, construite, sa génération faite | la vue des tables entière, le sélecteur sur « par siège » et la grille d'une seule colonne, puis la phrase du tableau des paires ; le profil et les collisions, dessinés plus haut, sont affirmés sans l'image (§ 12.6) | aucun tableau des paires, vide ou non, n'est rendu ; la phrase est celle d'« un seul tour » |
+| `12d-qualite-une-appartenance.png` | **12 personnes d'une même appartenance, 3 tables de 4, 3 tours**, construite, sa génération faite | le profil à une seule série et sa phrase ; les collisions et la grille des tables, qui restent (§ 12.6) | le profil porte une série et aucune borne de diversité ; les barres des collisions sont dessinées |
+| `12e-qualite-sans-collision.png` | **9 personnes de neuf appartenances distinctes, 3 tables de 3, 2 tours**, construite, sa génération faite | la phrase de la vue des collisions ; la grille sous la position « par siège », qui reste (§ 12.6, § 12.11) | aucune barre de collision n'est dessinée ; le sélecteur est sur « par siège » et chaque case écrit 0 |
+| `12f-qualite-reserve.png` | **petite démonstration, variante « conflit inévitable »**, sa première proposition retenue puis ajustée au plan : une personne mobile — ni ancrée ni partiellement fixée — mise en réserve au tour 2 | le premier graphique du profil, le point de la personne marqué « en réserve » ; les collisions à un seul segment et la phrase qui dit pourquoi le plancher ne s'applique pas, plus bas, sont affirmées sans l'image (§ 12.4, § 12.6) | aucun segment « prouvé inévitable » n'est dessiné ; le point de la personne porte la marque de la réserve |
+| `12g-qualite-plafond-nul.png` | **5 personnes, une table de 4 et une table de 2, 2 tours**, construite : quatre réservées à la table de 4 aux deux tours, la cinquième sans réservation, que sa génération assoit seule à la table de 2 aux deux tours | le point marqué d'un plafond réalisé nul au rang 1 du profil, son infobulle ouverte ; au second graphique, ce rang sans point (§ 12.3, § 12.6) | la cinquième, ni ancrée, ni partiellement fixée, ni en réserve, porte la marque du plafond réalisé nul ; l'infobulle écrit le plafond réalisé 0 et le pourcentage « — » ; le second graphique n'a pas de point à ce rang |
 | `13-qualite-collisions.png` | **petite démonstration, variante « conflit inévitable »** | les barres horizontales à deux segments, « prouvé inévitable » et « reste », en **collisions cumulées**, avec l'effectif, les paires distinctes et l'**excédent** en encre secondaire | le segment prouvé vaut **4 collisions cumulées** et égale le plancher du diagnostic, au chiffre près ; les lignes sont triées sur l'excédent (§ 12.4) |
-| `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et chaque ligne mène au tour fautif |
+| `13a-qualite-tables.png` | **petite démonstration, variante « conflit inévitable »** | le sélecteur à trois positions sur « par siège », la grille tables × tours, chaque case ses sièges sans appartenance nouvelle, la pire table en première ligne (§ 12.11) | la première ligne porte le plus grand compte de la position « par siège » ; chaque case écrit le nombre que son niveau colore ; une case sans affilié écrit « — » |
+| `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et la première commande de chaque ligne mène au premier tour où la paire se revoit |
+| `14a-fiche-rencontres.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | la rubrique « Rencontres » de la fiche d'une personne, ses premières lignes, les plus revues d'abord ; le haut de la fiche, son nom compris, hors de l'image (§ 12.5) | la ligne de la fiche égale la ligne de la personne dans le tableau des paires |
 | `15-pas-de-matrice.png` | **grande démonstration** | à 260 participants, le tableau et non la matrice, avec la phrase qui le dit | aucune matrice n'est dessinée |
-| `16-minimum-atteint.png` | **petite démonstration** | **« minimum atteint »**, les compteurs de collision et de répétition **mesurés** à zéro, la ligne secondaire « ancrés » à **« — »** (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
+| `15a-qualite-objectifs.png` | l'événement en construction, la première proposition du classement montrée | les personnes jamais servies en tête, la soirée en texte, son pourcentage et le compte des jamais servies dessous, puis les barres des tours hors objectif, « prouvé inévitable » et « reste », chacune avec son pourcentage, ses deux comptes et ses assis sans table possible (§ 12.12) | la somme des planchers des tours égale le plancher du diagnostic ; possibles − servis de la soirée égale la colonne des tours hors objectif du tableau des propositions ; chaque ligne de tour écrit ses assis sans table possible |
+| `15b-qualite-animateurs.png` | **grande démonstration** | le profil des animateurs rencontrés avec la borne des animateurs en repère pointillé, puis le début de la diversité par animateur sur la soirée, le moins varié en tête ; ses colonnes et leurs trois nombres, plus bas, sont affirmés sans l'image (§ 12.13) | le mot « plafond » n'est pas écrit dans la vue ; la première barre porte le minimum annoncé |
+| `15c-qualite-performance.png` | **grande démonstration**, une proposition montrée, dans la séance qui l'a engendrée | la ligne de tête — mouvements évalués, durée et cadence de la génération — et les deux premiers rangs des petits multiples sur l'abscisse logarithmique ; les autres multiples et la phrase du dernier changement, plus bas, sont affirmés sans l'image (§ 12.14) | le dernier point de relevé est le plan de la proposition ; ses valeurs égalent la ligne du tableau des propositions ; la durée écrite est celle dont le parcours a avancé l'horloge |
+| `16-minimum-atteint.png` | **petite démonstration** | le bas de l'en-tête chiffré : la diversité d'appartenance, le manque à zéro et **« minimum atteint »** ; les compteurs de collision et de répétition **mesurés** à zéro et la ligne secondaire « ancrés » à **« — »**, plus haut, sont affirmés sans l'image (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
 | `17-comparaison-manque.png` | **variante sans exception** (§ 15.1) | les deux profils de manque qui se croisent, l'axe commun, le zéro libellé, les trois effectifs de rangs (§ 12.10.6) | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe |
 | `18-comparaison-escalier.png` | idem | l'escalier du manque, jumeau tabulaire de la vue précédente | les effectifs cumulés du tableau reproduisent la courbe |
 | `19-ajustement.png` | l'événement retenu | le déplacement d'une personne après la retenue, l'interface disant **lequel des deux gestes** est en cours (§ 5.8) | le libellé de l'état des données est visible |
@@ -5915,6 +6748,10 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `21-historique.png` | idem | la liste des instants, le fil courant distingué des fils abandonnés, un jalon nommé (§ 8.3) | au moins un fil abandonné est présent et marqué comme tel |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
 | `24-badges-controle.png` / `25-badges-planche.png` | idem | la **feuille de contrôle** avec son échelle de 100 mm et ses comptes, puis une **planche** de quatre A6 et ses trois filets de coupe | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle avant d'engager la rame, et une planche seule ne le montre pas |
+
+Une image montre ce que tient la surface défilante d'un cadre de 1 366 × 700
+(§ 19.4), soit 482 px de haut sous la barre du plan ; ce que la ligne du tableau
+décrit au-delà s'affirme par l'épreuve, sans l'image.
 
 **L'événement en construction est généré sous ses objectifs et son ordre
 réglé.** Les objectifs posés en `05a` et l'import de `05b` restent, et l'ordre
@@ -5924,15 +6761,30 @@ elles, et les captures du placement qui en découle changent avec elle. Que
 l'ordre par défaut rende les plans de l'ordre fixe de référence ne se
 photographie pas : les empreintes de référence le gardent (§ 14.10).
 
-**Huit captures sont déclarées et reportées** : `12` à `18`, à l'étape 10, et
-`21`, à l'étape 11, montrent la page de qualité, la comparaison et la vue
-d'historique, que le logiciel n'offre pas. Le manifeste les porte comme
-reportées, à leur étape et sans image, et le contrôle d'ordre les compte :
-l'étape 10 n'est pas une étape sans capture, et leur place dans l'ordre est déjà
-gardée. Les deux `07a` se photographient sur la grande démonstration, chargée
-pour la capture `10` : sur la soirée que le parcours construit, deux tables,
-même le zoom le plus faible laisse les sièges pour cibles, et la bascule ne se
-montre pas.
+**Trois captures sont déclarées et reportées** : `17` et `18`, à l'étape 10, et
+`21`, à l'étape 11, montrent la comparaison et la vue d'historique, que le
+logiciel n'offre pas encore. Le manifeste les porte comme reportées, à leur
+étape et sans image, et le contrôle d'ordre les compte : l'étape 10 n'est pas
+une étape sans capture, et leur place dans l'ordre est déjà gardée. Les deux
+`07a` se photographient sur la grande démonstration, chargée pour la capture
+`10` : sur la soirée que le parcours construit, deux tables, même le zoom le
+plus faible laisse les sièges pour cibles, et la bascule ne se montre pas.
+
+Les captures de la page de qualité, `12` à `16` et leurs voisines en « a » à
+« g », illustrent l'étape 10 et se prennent **à la fin du parcours**, après les
+familles en lecture et sur un plan bloqué, chacune sur sa charge, pour ne rien
+changer de ce que les captures précédentes reçoivent : `12`, `15`, `15b` et
+`15c` sur la grande démonstration, dont le parcours engendre les propositions
+sous une graine écrite et un compte réduit ; `12a`, puis `13` et `13a` après la
+génération, puis `12f` après l'ajustement du retenu, sur la variante « conflit
+inévitable » ; `12b`, `12c`, `12d`, `12e` et `12g` chacune sur sa configuration
+construite ; `14` et `14a` sur la configuration construite des paires ; `15a`
+sur l'événement en construction ; `16` sur la petite. **La durée de `15c` est
+pilotée** : la génération de la grande se fait sous l'horloge pilotée, que le
+parcours avance d'un pas écrit à chaque avancement du moteur ; la durée et la
+cadence affichées sont alors les mêmes à chaque exécution (§ 19.4). Le parcours
+rouvre ensuite l'événement, sans photographier : la même proposition montre la
+même course, la durée « inconnue ».
 
 **L'aperçu d'impression est plus haut que la fenêtre.** `22` et `23` le
 photographient au défilement où le filigrane et le pied de la première page
@@ -5960,12 +6812,14 @@ scénarios courts, et le catalogue reste à quatre entrées — sans cette règl
 l'étape `01-premier-ecran` change de valeur chaque fois qu'une épreuve a besoin
 d'une configuration de plus.
 
-**Les cas dégénérés du § 12.6 se photographient à part**, par des scénarios courts
-qui montent la configuration visée et vont droit à l'écran : aucun placement, une
-seule table, un seul tour, une seule appartenance, aucune collision, une personne
-en réserve, un plafond réalisé nul. La raison n'est pas la fragilité d'une chaîne
-longue : **chacun exige une configuration différente**, et un parcours linéaire
-n'en porte qu'une à la fois.
+**Les cas dégénérés du § 12.6 se photographient à part**, par des scénarios
+courts qui montent la configuration visée et vont droit à l'écran : aucun
+placement (`12a`), une seule table (`12b`), un seul tour (`12c`), une seule
+appartenance (`12d`), aucune collision (`12e`), une personne en réserve (`12f`),
+un plafond réalisé nul (`12g`). Chacune affirme qu'aucun axe vide n'est dessiné
+et que la phrase est celle du cas. Les autres cas du § 12.6 s'éprouvent sans
+image. La raison n'est pas la fragilité d'une chaîne longue : **chacun exige une
+configuration différente**, et un parcours linéaire n'en porte qu'une à la fois.
 
 S'y ajoute, au même titre, le fichier `participants_cas_limites_cp1252.csv`
 (§ 10.3) : la décision d'encodage en quatre temps du § 10.1 est le mécanisme dont
@@ -6244,14 +7098,16 @@ du moteur, et **font croire au lecteur que le texte ne lui est pas destiné** �
 après quoi il ne lit plus la section, qui est la seule réponse écrite à la question
 qu'il posera.
 
-La section s'appuie sur les captures d'écran `10`, `11`, `12`, `16`, `17` et `18` :
-le diagnostic, les propositions classées, le profil trié, « minimum atteint » sur
-la petite démonstration, et les deux vues de comparaison. Tant que `12` à `18`
-sont reportées (§ 19.3), elle s'appuie sur `10` et `11` seules, et décrit le
-manque par les colonnes du tableau des propositions. Le contraste de la
-variante « conflit inévitable » (§ 15.3) — une personne déplacée d'une appartenance
-à l'autre, et la mention bascule — est le plus court exposé de toute la section, et
-il tient en deux images.
+La section s'appuie sur les captures d'écran `10`, `11`, `12`, `16`, `17` et
+`18` : le diagnostic, les propositions classées, le profil trié, « minimum
+atteint » sur la petite démonstration, et les deux vues de comparaison. Tant que
+`17` et `18` sont reportées (§ 19.3), elle s'appuie sur `10`, `11`, `12` et
+`16`, et décrit la comparaison par le manque en mots, sur les colonnes du
+tableau des propositions. Le point 3 s'appuie en outre sur `15c` : la course
+d'une recherche, et son plateau. Le contraste de la variante « conflit
+inévitable » (§ 15.3) — une personne déplacée d'une appartenance à l'autre, et
+la mention bascule — est le plus court exposé de toute la section, et il tient
+en deux images.
 
 ### 19.10 Le banc de mesure
 
@@ -6281,10 +7137,24 @@ Le banc est un projet à part, hors des trois séries, que sa seule commande lan
 un geste du développeur : il l'écrit au registre des constantes, la déclare
 mesurée et y cite la configuration du relevé. Une garde refuse ensuite une
 constante du banc déclarée mesurée que le relevé ne soutient pas, en valeur ou en
-configuration. Deux constantes sont ainsi adoptées : le nombre de sièges lisibles,
-`SEUIL_SIEGES_LISIBLES`, à **18 places**, et la tolérance de la chaîne témoin,
-`TOLERANCE_CHAINE_TEMOIN`, à **0,011** — le quart de l'écart relatif qu'introduit
-une famille de repli forcée, et au moins trois fois la gigue de dix mesures.
+configuration. Quatre constantes sont ainsi adoptées. Deux le sont hors de la
+page de qualité : le nombre de sièges lisibles, `SEUIL_SIEGES_LISIBLES`, à
+**18 places**, et la tolérance de la chaîne témoin, `TOLERANCE_CHAINE_TEMOIN`,
+à **0,011** — le quart de l'écart relatif qu'introduit une famille de repli
+forcée, et au moins trois fois la gigue de dix mesures.
+
+Les deux autres sont celles de la page de qualité, relevées au même banc,
+chacune avec le protocole écrit à son entrée du registre :
+`SEUIL_MATRICE_PARTICIPANTS`, le nombre de participants au-delà duquel une case
+de la matrice tombe sous la cible de 24 px dans la largeur de la carte, au cadre
+d'affichage fixé, à **44 participants** ; et `LARGEUR_TRONCATURE_NOM_PX`, la
+largeur à laquelle un nom se tronque dans une étiquette de graphique, calée sur
+une longueur de nom écrite au registre, composée du glyphe le plus large de
+l'alphabet visé (§ 14.1), jamais sur les noms d'une démonstration, à **168 px**.
+Le seuil de la matrice borne son coût et sa lisibilité au cadre fixé ; la page
+éprouve en plus, par la géométrie, que les cases tiennent 24 px dans la largeur
+réelle de la carte (§ 12.5). Le nombre de valeurs distinctes de manque sous
+lequel la courbe cède la place à une phrase appartient à la comparaison.
 
 **Le relevé nomme la classe de la machine, jamais la machine.** Sa configuration
 est une liste fermée : le cadre d'affichage, le facteur d'échelle, le navigateur et

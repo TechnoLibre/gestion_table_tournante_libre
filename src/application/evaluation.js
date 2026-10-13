@@ -128,6 +128,18 @@ function exigerAPriori(fonction, plafondsAPriori) {
 // jamais.
 const seCompare = (placement, charge) => fautes(placement).length === 0 && derive(placement, charge).length === 0;
 
+// La mesure d'un plan indexé que porte sa ligne d'évaluation : mesurer,
+// les plafonds réalisés et les trois chiffres sous le plafond a priori
+// aPriori, null quand il est inconnu. ligneDe et detaillerQualite la
+// prennent ici l'une et l'autre : la tuile écrit la valeur de la ligne, et
+// le détail juge un plancher atteint sur la même, sans la recompter
+// autrement.
+function mesureDuPlan(instance, tableDe, aPriori) {
+  const mesures = mesurer(instance, tableDe);
+  const realises = plafondsRealises(instance, tableDe);
+  return { mesures, realises, chiffres: troisChiffres(instance, mesures, aPriori, realises) };
+}
+
 // Une ligne qui ne se mesure pas.
 const nonMesuree = (id, statut, raisons) => ({
   id,
@@ -171,9 +183,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
     const raisons = deriveSansRevalider(placement, charge);
     if (raisons.length > 0) return nonMesuree(id, 'derive', raisons);
     const plan = planSansRevalider(placement);
-    const tableDe = indexerPlan(instance, plan);
-    const mesures = mesurer(instance, tableDe);
-    const realises = plafondsRealises(instance, tableDe);
+    const { mesures, realises, chiffres } = mesureDuPlan(instance, indexerPlan(instance, plan), aPriori);
     return {
       id,
       statut: 'comparable',
@@ -181,7 +191,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
       violations: verifierInvariants(instance, plan, { reserveAutorisee: true }).filter(({ code }) => code === 'RESERVATION'),
       mesures,
       plafondsRealises: realises,
-      troisChiffres: troisChiffres(instance, mesures, aPriori, realises),
+      troisChiffres: chiffres,
       ecartAuPlafondAPrioriMax: plusGrand(ecartsAuPlafondAPriori(mesures, aPriori)),
       minimumAtteint: minimumAtteint(mesures, aPriori),
       refusDessin: verifierIndicateurs(mesures, aPriori, realises).map((violation) => ({
@@ -527,6 +537,7 @@ function enIdentifiants(instance, brut, critere) {
       animateurs: avecId(bornes.animateurs),
       objectifs: avecId(bornes.objectifs),
       soiree: bornes.soiree,
+      planchers: bornes.planchers,
     },
     profil: brut.profil.map(avecId),
     synthese: brut.synthese,
@@ -594,7 +605,9 @@ function placementDe(charge, id) {
  * La configuration figée et l'instance sont celles de la charge, comme dans
  * evaluer ; le placement se valide une fois (fautes), puis se lit sans
  * seconde validation. Fautif ou en dérive, il rend ses raisons et chaque
- * champ de mesure à null. Sinon : le diagnostic une fois ; les planchers
+ * champ de mesure à null. Sinon : le diagnostic une fois ; le plan mesuré
+ * comme sa ligne d'évaluation le mesure (mesureDuPlan), dont detailler lit
+ * les trois chiffres pour juger un plancher atteint ; les planchers
  * valent sur un plan qui assoit chacun à chaque tour et ne laisse aucune
  * réservation non tenue (D31) ; la borne de diversité ; detailler, en une
  * lecture du plan, la matrice seulement jusqu'à SEUIL_MATRICE_PARTICIPANTS
@@ -647,8 +660,7 @@ export function detaillerQualite(charge, id, options = {}) {
   const aPriori = plafondsAPriori === 'calcul' ? diagnostic.plafondAPriori.parPersonne : null;
   const plan = planSansRevalider(placement);
   const tableDe = indexerPlan(instance, plan);
-  const mesures = mesurer(instance, tableDe);
-  const realises = plafondsRealises(instance, tableDe);
+  const { mesures, realises, chiffres } = mesureDuPlan(instance, tableDe, aPriori);
   const nonTenues = verifierInvariants(instance, plan, { reserveAutorisee: true }).filter(({ code }) => code === 'RESERVATION');
   const planchersValides = nonTenues.length === 0 && mesures.toursAssis.every((assis) => assis === instance.R);
   const { phiAffilies, aMax } = borner(instance, tableDe);
@@ -661,6 +673,7 @@ export function detaillerQualite(charge, id, options = {}) {
     mesures,
     plafondsRealises: realises,
     plafondsAPriori: aPriori,
+    troisChiffres: chiffres,
     planchersValides,
     cle: cleNormalisee,
     ordreMatrice,

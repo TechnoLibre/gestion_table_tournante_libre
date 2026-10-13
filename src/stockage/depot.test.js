@@ -2380,6 +2380,26 @@ describe('dépôt : le compagnon des courses (§ 8.6, § 8.9, B31)', () => {
     assert.equal(fs.contenu('documents', COURSES), valide);
   });
 
+  test("une lecture du compagnon que le système refuse n'empêche pas l'ouverture : ses courses sont inconnues ; une erreur qui ne vient pas du stockage remonte telle quelle", async () => {
+    const charge = chargeEssai();
+    const [p] = charge.propositions;
+    const { disque } = disqueAvec([[ETAT, etatTexte(charge)], [COURSES, texteDesCourses('evt-lucioles', [entreeDe(p)])]]);
+    // Un lecteur du disque dont la lecture du compagnon rejette l'erreur
+    // que rend erreurDe(chemin), les autres fichiers lus comme d'ordinaire.
+    const refusant = (erreurDe) => {
+      const fs = creerFichiersSimules({ disque });
+      const lire = fs.lireTexte;
+      fs.lireTexte = (racine, chemin) => (chemin === COURSES ? Promise.reject(erreurDe(chemin)) : lire(racine, chemin));
+      return fs;
+    };
+    assert.equal(courseDe(await rouvrir(disque, BASE), 1).evalues, 100);
+    const refuse = await ouvrir(refusant((chemin) => new ErreurStockage('LECTURE', { chemin, dossier: DOCUMENTS, cause: 'EACCES' })), DOC, BASE);
+    assert.deepEqual(refuse.avertissements, []);
+    assert.equal(courseDe(refuse, 1), null);
+    const panne = new TypeError('lecteur en panne');
+    await assert.rejects(ouvrir(refusant(() => panne), DOC, BASE), (erreur) => erreur === panne);
+  });
+
   test("un refus d'écrire le compagnon n'empêche pas le geste : journal et état écrits, la course connue de l'Ouvert pour la séance ; le geste qui change ensuite les propositions le réécrit", async () => {
     const { fs } = nouveauDisque();
     const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);

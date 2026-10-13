@@ -26,8 +26,11 @@ export const TABLE = new Map([
   // --- La source et les cas sans source mesurable (§ 12, B9, § 12.6) ---------
   // La ligne de source nomme le placement mesuré, après cet intitulé, par le
   // libellé que la barre de vue du plan lui donne (plan.source.*) ; une
-  // proposition fautive, que le plan ne montre jamais, a le sien.
+  // proposition fautive, que le plan ne montre jamais, a le sien. Sans
+  // placement à mesurer, elle n'en nomme aucun : les réservations que le
+  // plan montre alors ne se mesurent pas.
   ['qualite.source.intitule', 'Placement mesuré :'],
+  ['qualite.source.aucun', 'aucun, le plan ne montre que les réservations'],
   ['qualite.source.propositionFautive', ({ proposition }) => `Proposition n° ${proposition}, fautive : le plan ne la montre pas`],
   ['qualite.source.montrerPremiere', ({ proposition }) => `Montrer la proposition n° ${proposition}`],
   [
@@ -101,6 +104,7 @@ export const TABLE = new Map([
   ['qualite.tuile.borneDiversite', ({ borne }) => `borne de diversité ${borne}`],
   ['qualite.tuile.borneAnimateurs', ({ borne }) => `borne des animateurs ${borne}`],
   ['qualite.tuile.plancher', ({ plancher }) => `plancher ${plancher}`],
+  ['qualite.tuile.plancherAtteint', ({ plancher }) => `plancher ${plancher} atteint : impossible de faire moins`],
   ['qualite.tuile.toursPossibles', ({ possibles }) => compte(possibles, 'tour possible', 'tours possibles')],
   ['qualite.tuile.imposees', ({ imposees }) => `${compte(imposees, 'imposée', 'imposées')}, à part`],
   ['qualite.tuile.imposes', ({ imposes }) => `${compte(imposes, 'imposé', 'imposés')}, à part`],

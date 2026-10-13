@@ -365,6 +365,105 @@ describe('pointage : les barres (§ 12.4)', () => {
     assert.equal(large.largeur, ordinaire.ex.versPx(1) - ordinaire.ex.versPx(0), 'un prouvé assez large garde sa largeur');
   });
 
+  test('rouge : une barre ne finit jamais au-delà de sa valeur ; seule une ligne plus étroite que le contour minimal s’allonge, jusqu’à lui', () => {
+    // Une première ligne de 600 fixe l'axe : une unité y fait moins de
+    // 2 px, si bien qu'un prouvé de 1 et un reste de 2 tiennent dans moins
+    // que LARGEUR_MIN_CONTOUR_PX.
+    const axe = { id: 'a', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [0, 600] };
+    const unite = (() => {
+      const d = disposer({ lignes: [axe] });
+      return d.ex.versPx(1) - d.ex.versPx(0);
+    })();
+    assert.ok(3 * unite < LARGEUR_MIN_CONTOUR_PX, `une unité : ${unite} px`);
+    // Le plus petit reste qui fait la ligne au moins aussi large que le
+    // contour minimal, sans lui laisser l'écart d'un second segment.
+    const reste = Math.ceil(LARGEUR_MIN_CONTOUR_PX / unite) - 1;
+    assert.ok((1 + reste) * unite < LARGEUR_MIN_CONTOUR_PX + ECART_SEGMENTS_PX, `un plus ${reste} : ${(1 + reste) * unite} px`);
+    const d = disposer({
+      lignes: [
+        axe,
+        { id: 'b', nom: 'Atelier Ressac', appartenance: 2, valeurs: [1, 2] },
+        { id: 'c', nom: 'Iris Ombrelle', appartenance: null, valeurs: [1, reste] },
+      ],
+    });
+    const zero = d.ex.versPx(0);
+    const finDe = (segment) => segment.x + segment.largeur;
+    // 1 et 2, plus étroite que le contour minimal : la barre s'allonge
+    // jusqu'à lui, et pas d'un pixel de plus.
+    const etroite = d.lignes[1];
+    assert.equal(etroite.segments[0].largeur, LARGEUR_MIN_CONTOUR_PX);
+    assert.ok(Math.abs(etroite.fin - (zero + LARGEUR_MIN_CONTOUR_PX)) < 1e-9, `fin ${etroite.fin - zero} px`);
+    assert.ok(etroite.segments.every((s) => finDe(s) <= etroite.fin + 1e-9 && s.largeur >= 0));
+    // 1 et le reste, au moins aussi large : le prouvé garde son contour, le
+    // reste cède ce qu'il faut, jusqu'à zéro, et la barre finit à sa valeur.
+    const juste = d.lignes[2];
+    const valeur = d.ex.versPx(1 + reste);
+    assert.equal(juste.segments[0].largeur, LARGEUR_MIN_CONTOUR_PX);
+    assert.ok(Math.abs(juste.fin - valeur) < 1e-9, `fin ${juste.fin - zero} px, valeur ${valeur - zero} px`);
+    for (const s of juste.segments) assert.ok(finDe(s) <= valeur + 1e-9 && s.x <= valeur + 1e-9 && s.largeur >= 0, `${s.genre} : ${s.x - zero} + ${s.largeur}`);
+    // La hauteur réservée reste celle du dessin.
+    assert.equal(d.hauteurTotale, hauteurBarres({ n: 3, juxtaposees: false, hauteurTexte: HAUTEUR_TEXTE }));
+    // Un prouvé en dernier n'a aucun segment après lui où prendre : il ne
+    // passe pas la valeur de sa ligne, plus large que le contour minimal.
+    const inverse = disposer({
+      segments: [...segments].reverse(),
+      lignes: [
+        { ...axe, valeurs: [600, 0] },
+        { id: 'd', nom: 'Théo Pervenche', appartenance: null, valeurs: [reste + 1, 1] },
+      ],
+    });
+    const derniere = inverse.lignes[1];
+    const fin = inverse.ex.versPx(reste + 2);
+    assert.equal(derniere.segments.at(-1).genre, 'prouve');
+    assert.ok(Math.abs(derniere.fin - fin) < 1e-9, `fin ${derniere.fin - inverse.ex.versPx(0)} px, valeur ${fin - inverse.ex.versPx(0)} px`);
+    for (const s of derniere.segments) assert.ok(finDe(s) <= fin + 1e-9 && s.largeur >= 0, `${s.genre} : ${s.x} + ${s.largeur}`);
+  });
+
+  test('rouge : un prouvé en dernier garde aussi le contour minimal, pris sur le segment qui le précède ; la barre ne passe sa valeur que pour une ligne plus étroite que lui', () => {
+    const d = disposer({
+      segments: [...segments].reverse(),
+      lignes: [
+        { id: 'a', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [300, 0] },
+        { id: 'b', nom: 'Atelier Ressac', appartenance: 2, valeurs: [9, 1] },
+        { id: 'c', nom: 'Iris Ombrelle', appartenance: null, valeurs: [1, 1] },
+        { id: 'd', nom: 'Théo Pervenche', appartenance: null, valeurs: [0, 1] },
+      ],
+    });
+    const zero = d.ex.versPx(0);
+    const unite = d.ex.versPx(1) - zero;
+    assert.ok(2 * unite < LARGEUR_MIN_CONTOUR_PX && 10 * unite > LARGEUR_MIN_CONTOUR_PX + ECART_SEGMENTS_PX, `une unité : ${unite} px`);
+    const proche = (a, b) => Math.abs(a - b) < 1e-9;
+    // 9 et 1 : le prouvé prend son contour sur le reste, qui le précède ;
+    // la barre finit à sa valeur.
+    const [reste, prouve] = d.lignes[1].segments;
+    assert.deepEqual([reste.genre, prouve.genre], ['reste', 'prouve']);
+    assert.equal(prouve.largeur, LARGEUR_MIN_CONTOUR_PX);
+    assert.ok(proche(prouve.x + prouve.largeur, d.ex.versPx(10)), `fin ${prouve.x + prouve.largeur - zero} px`);
+    assert.ok(proche(d.lignes[1].fin, d.ex.versPx(10)));
+    assert.equal(reste.x, zero);
+    assert.ok(proche(reste.x + reste.largeur + ECART_SEGMENTS_PX, prouve.x), 'le reste cède, l’écart reste');
+    // 1 et 1, plus étroite que le contour minimal : le reste cède tout,
+    // l'écart avec lui, et la barre s'allonge jusqu'au contour minimal.
+    const [vide, seul] = d.lignes[2].segments;
+    assert.equal(vide.largeur, 0);
+    assert.equal(seul.x, zero);
+    assert.equal(seul.largeur, LARGEUR_MIN_CONTOUR_PX);
+    assert.ok(proche(d.lignes[2].fin, zero + LARGEUR_MIN_CONTOUR_PX));
+    // Un prouvé seul : le contour minimal, depuis zéro.
+    assert.deepEqual(
+      d.lignes[3].segments.map(({ genre, x, largeur }) => [genre, x, largeur]),
+      [['prouve', zero, LARGEUR_MIN_CONTOUR_PX]],
+    );
+    // Aucun segment prouvé plus étroit que le contour minimal, aucun segment
+    // de largeur négative ; la hauteur réservée reste celle du dessin.
+    const traces = d.lignes.flatMap((ligne) => ligne.segments);
+    assert.ok(traces.every((s) => s.largeur >= 0));
+    const prouves = traces.filter((s) => s.contour);
+    assert.equal(prouves.length, 3);
+    assert.ok(prouves.every((s) => s.largeur >= LARGEUR_MIN_CONTOUR_PX), prouves.map((s) => s.largeur).join(', '));
+    assert.equal(d.hauteurTotale, hauteurBarres({ n: 4, juxtaposees: false, hauteurTexte: HAUTEUR_TEXTE }));
+  });
+
   test('rouge : le libellé de chaque segment se pose sur la première barre où il est non nul', () => {
     const d = disposer();
     assert.deepEqual(d.etiquettesSegments.map((e) => [e.genre, e.indice]), [['prouve', 1], ['reste', 0]]);

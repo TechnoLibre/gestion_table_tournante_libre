@@ -18,6 +18,7 @@ import { LIBRE, indexerPlan, normaliser } from './configuration.js';
 import { diagnostiquer } from './diagnostic.js';
 import { diversiteAnimateurs } from './diversite.js';
 import { mesurer, parcourirTours } from './indicateurs.js';
+import { troisChiffres } from './manque.js';
 import { matriceRencontres, pairesRepetees } from './paires.js';
 import { borneDiversite, occupations, plafondsAPriori, plafondsRealises } from './plafond.js';
 import {
@@ -64,8 +65,8 @@ const participant = ([id, appartenance = null, etiquettes, anime]) => ({
 // Configuration, instance et plan indexé. tables : [id, capacité], dans
 // l'ordre de la configuration ; plan[r] associe à un identifiant de table
 // les identifiants qui s'y assoient au tour r + 1 ; un présent absent d'un
-// tour est en réserve.
-function preparer({ personnes, tables, plan, reservations = [], objectifs = [], contraintes = SANS_CONTRAINTE }) {
+// tour est en réserve ; modeObjectifs, facultatif, le mode des objectifs.
+function preparer({ personnes, tables, plan, reservations = [], objectifs = [], contraintes = SANS_CONTRAINTE, modeObjectifs }) {
   const configuration = {
     participants: personnes.map(participant),
     tables: tables.map(([id, capacite], i) => ({ id, numero: i + 1, capacite })),
@@ -73,6 +74,7 @@ function preparer({ personnes, tables, plan, reservations = [], objectifs = [], 
     reservations,
     contraintes,
     ...(objectifs.length === 0 ? {} : { objectifs }),
+    ...(modeObjectifs === undefined ? {} : { modeObjectifs }),
   };
   const instance = normaliser(configuration);
   const ids = configuration.tables.map(({ id }) => id);
@@ -93,6 +95,22 @@ function mesurerTout(prepare) {
     realises: plafondsRealises(instance, tableDe),
     aPriori: plafondsAPriori(instance),
     aMax: borneDiversite(instance, tableDe).aMax,
+  };
+}
+
+// Les options de detailler sur un plan préparé et ses mesures : le
+// diagnostic de sa configuration, les trois chiffres de sa ligne
+// d'évaluation, aucune matrice.
+function optionsDe({ configuration, instance }, { mesures, realises, aPriori }, planchersValides = true) {
+  return {
+    diagnostic: diagnostiquer(configuration),
+    mesures,
+    plafondsRealises: realises,
+    plafondsAPriori: aPriori,
+    troisChiffres: troisChiffres(instance, mesures, aPriori, realises),
+    planchersValides,
+    cle,
+    ordreMatrice: null,
   };
 }
 
@@ -659,13 +677,42 @@ describe('profilAnimateurs (§ 12.13, D37)', () => {
   });
 });
 
+// Ce que bornesDesTuiles lit pour les planchers des tuiles : le diagnostic
+// de la configuration préparée, sur un plan du domaine des planchers sauf
+// demande contraire, et les trois chiffres que la ligne d'évaluation du
+// plan porte sous le plafond a priori reçu.
+const duDiagnostic = ({ configuration, instance, tableDe }, plafondsAPriori, planchersValides = true) => ({
+  diagnostic: diagnostiquer(configuration),
+  planchersValides,
+  troisChiffres: troisChiffres(instance, mesurer(instance, tableDe), plafondsAPriori, plafondsRealises(instance, tableDe)),
+});
+
+// Les sept tuiles qui peuvent porter un plancher, chacune sans plancher.
+const SANS_PLANCHER = {
+  collisionsCumulees: null,
+  pairesDistinctes: null,
+  excedentCollisions: null,
+  ecartItineraireMax: null,
+  jamaisServies: null,
+  horsObjectifMax: null,
+  toursHorsObjectif: null,
+};
+
 describe('bornesDesTuiles (§ 12.2, D29, D34, D52, B11)', () => {
   test('le rang 1 du profil, la tête du profil de manque, le minimum de A(p) au même tri : chacun une personne nommée', () => {
     const prepare = preparer(PROFIL);
     const { instance } = prepare;
     const { mesures, realises, aPriori, aMax } = mesurerTout(prepare);
     const profil = profilRencontres(instance, mesures, realises, aPriori, aMax);
-    const bornes = bornesDesTuiles(instance, { mesures, plafondsRealises: realises, aMax, profil, animateurs: null, objectifs: null });
+    const bornes = bornesDesTuiles(instance, {
+      mesures,
+      plafondsRealises: realises,
+      aMax,
+      profil,
+      animateurs: null,
+      objectifs: null,
+      ...duDiagnostic(prepare, aPriori),
+    });
     const un = index(instance, 1);
     assert.deepEqual(bornes.rang1, { p: un, rencontres: 2, plafondRealise: 2, plafondAPriori: aPriori[un], pourcent: 100 });
     // Manque 1 pour 4 et 5, au même plafond 4 : l'identifiant le plus petit.
@@ -683,7 +730,15 @@ describe('bornesDesTuiles (§ 12.2, D29, D34, D52, B11)', () => {
     const { mesures, realises, aPriori, aMax } = mesurerTout(avec);
     const profil = profilRencontres(instance, mesures, realises, aPriori, aMax);
     const { objectifs } = objectifsDe(avec);
-    const bornes = bornesDesTuiles(instance, { mesures, plafondsRealises: realises, aMax, profil, animateurs: null, objectifs });
+    const bornes = bornesDesTuiles(instance, {
+      mesures,
+      plafondsRealises: realises,
+      aMax,
+      profil,
+      animateurs: null,
+      objectifs,
+      ...duDiagnostic(avec, aPriori),
+    });
     // s(p) = 0 pour 4 et 5 : 5, aux tours possibles les plus nombreux.
     assert.deepEqual(bornes.objectifs, { p: index(instance, 5), servis: 0, possibles: 2, pourcent: 0 });
     assert.deepEqual(bornes.soiree, { servis: 5, possibles: 11, pourcent: 45, jamaisServies: 2 });
@@ -711,6 +766,7 @@ describe('bornesDesTuiles (§ 12.2, D29, D34, D52, B11)', () => {
       profil: profilRencontres(servis.instance, lu.mesures, lu.realises, lu.aPriori, lu.aMax),
       animateurs: null,
       objectifs: objectifsDe(servis).objectifs,
+      ...duDiagnostic(servis, lu.aPriori),
     });
     assert.deepEqual(lu.mesures.objectifs.tours, [1, 1, 1, 1, 1, 2, 0, 0, 0]);
     // s(p) = 1 pour 1, 2, 3, 5 à P(p) = 2 et pour 4 à P(p) = 1 : 1, le
@@ -728,22 +784,304 @@ describe('bornesDesTuiles (§ 12.2, D29, D34, D52, B11)', () => {
       profil: profilA,
       animateurs: profilAnimateurs(animes.instance, m),
       objectifs: null,
+      ...duDiagnostic(animes, tout.aPriori),
     });
     assert.deepEqual(deAnimateurs.animateurs, { p: index(animes.instance, 5), borne: 2 });
   });
 
   test('sans personne présente : ni rang 1, ni tête de manque', () => {
-    const vide = normaliser({
+    const configuration = {
       participants: [{ id: 1, nom: 'P1', appartenance: AUBIER, exclu: true }],
       tables: [{ id: 1, numero: 1, capacite: 2 }],
       tours: 1,
       reservations: [],
       contraintes: SANS_CONTRAINTE,
-    });
+    };
+    const vide = normaliser(configuration);
     const plan = new Int32Array(0);
     const mesures = mesurer(vide, plan);
-    const bornes = bornesDesTuiles(vide, { mesures, plafondsRealises: [], aMax: [], profil: [], animateurs: null, objectifs: null });
-    assert.deepEqual(bornes, { rang1: null, manque: null, diversite: null, animateurs: null, objectifs: null, soiree: null });
+    const bornes = bornesDesTuiles(vide, {
+      mesures,
+      plafondsRealises: [],
+      aMax: [],
+      profil: [],
+      animateurs: null,
+      objectifs: null,
+      ...duDiagnostic({ configuration, instance: vide, tableDe: plan }, []),
+    });
+    assert.deepEqual(bornes, {
+      rang1: null,
+      manque: null,
+      diversite: null,
+      animateurs: null,
+      objectifs: null,
+      soiree: null,
+      planchers: SANS_PLANCHER,
+    });
+  });
+});
+
+// Les bornes des tuiles d'un plan préparé, sous le diagnostic de sa
+// configuration ; aPrioriConnu faux passe un plafond a priori inconnu.
+function bornesDuPlan(prepare, { planchersValides = true, aPrioriConnu = true } = {}) {
+  const { instance } = prepare;
+  const { mesures, realises, aPriori, aMax } = mesurerTout(prepare);
+  const plafonds = aPrioriConnu ? aPriori : null;
+  return bornesDesTuiles(instance, {
+    mesures,
+    plafondsRealises: realises,
+    aMax,
+    profil: profilRencontres(instance, mesures, realises, plafonds, aMax),
+    animateurs: null,
+    objectifs: objectifsDe(prepare).objectifs,
+    ...duDiagnostic(prepare, plafonds, planchersValides),
+  });
+}
+
+// Cinq de la Coopérative Aubier et une personne sans appartenance, deux
+// tables de trois, trois tours : chaque tour assied trois membres à une
+// table et deux à l'autre, quatre collisions. Le diagnostic prouve 12
+// collisions cumulées, 4 paires distinctes — le plus grand minimum d'un
+// tour — et un excédent de 12 − C(5, 2) = 2.
+const CINQ_MEMBRES = {
+  personnes: [[1, AUBIER], [2, AUBIER], [3, AUBIER], [4, AUBIER], [5, AUBIER], [6]],
+  tables: [[1, 3], [2, 3]],
+};
+// Les mêmes tables à chaque tour : 4 paires distinctes, revues trois fois,
+// excédent 8.
+const MEMES_TABLES = [
+  { 1: [1, 2, 3], 2: [4, 5, 6] },
+  { 1: [1, 2, 3], 2: [4, 5, 6] },
+  { 1: [1, 2, 3], 2: [4, 5, 6] },
+];
+// Chaque tour ne revoit que 1 et 2 : les dix paires de l'appartenance,
+// excédent 2.
+const TABLES_VARIEES = [
+  { 1: [1, 2, 3], 2: [4, 5, 6] },
+  { 1: [1, 2, 4], 2: [3, 5, 6] },
+  { 1: [1, 2, 5], 2: [3, 4, 6] },
+];
+
+// Cinq personnes sans appartenance, une table de trois et une de deux, deux
+// tours : le diagnostic prouve un écart d'itinéraire maximal de 1 au moins
+// (diagnostic.test.js, § 12.10.4). Le plan qui fait passer quatre personnes
+// distinctes par la table de deux l'atteint ; celui qui y garde les deux
+// mêmes laisse 4 et 5 à deux sous leur plafond a priori de 4.
+const ITINERAIRE = { personnes: [[1], [2], [3], [4], [5]], tables: [[10, 3], [20, 2]] };
+const PAR_LA_TABLE_DE_DEUX = [
+  { 10: [1, 2, 3], 20: [4, 5] },
+  { 10: [1, 4, 5], 20: [2, 3] },
+];
+const MEMES_A_LA_TABLE_DE_DEUX = [
+  { 10: [1, 2, 3], 20: [4, 5] },
+  { 10: [1, 2, 3], 20: [4, 5] },
+];
+
+// Cinq « finance » et une autre personne, une table de deux qui attend
+// « finance » et une de quatre, deux tours : cinq couples possibles pour
+// deux sièges à chaque tour. Le diagnostic prouve 3 + 3 = 6 tours hors
+// objectif, 5 − (2 + 2) = 1 personne jamais servie et ⌈6 / 5⌉ = 2 tours
+// hors objectif au moins pour une personne.
+const DEUX_SIEGES = {
+  personnes: [[1, null, ['finance']], [2, null, ['finance']], [3, null, ['finance']], [4, null, ['finance']], [5, null, ['finance']], [6]],
+  tables: [[1, 2], [2, 4]],
+  objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }],
+};
+// Quatre « finance » servies une fois chacune, 5 jamais : chaque plancher
+// atteint.
+const QUATRE_SERVIES = [
+  { 1: [1, 2], 2: [3, 4, 5, 6] },
+  { 1: [3, 4], 2: [1, 2, 5, 6] },
+];
+
+describe('bornesDesTuiles : les planchers des tuiles (§ 12.2, § 5.6, B11)', () => {
+  test('rouge : les collisions cumulées, les paires distinctes et l’excédent portent la somme des planchers du diagnostic ; atteint quand la mesure les égale', () => {
+    const memes = preparer({ ...CINQ_MEMBRES, plan: MEMES_TABLES });
+    const lu = mesurer(memes.instance, memes.tableDe);
+    assert.deepEqual([lu.collisionsCumulees, lu.pairesDistinctes, lu.excedentCollisions], [12, 4, 8]);
+    assert.deepEqual(
+      diagnostiquer(memes.configuration).collisions.map(({ plancherCumulees, plancherPairesDistinctes, plancherExcedent }) => [
+        plancherCumulees,
+        plancherPairesDistinctes,
+        plancherExcedent,
+      ]),
+      [[12, 4, 2]],
+    );
+    assert.deepEqual(bornesDuPlan(memes).planchers, {
+      ...SANS_PLANCHER,
+      collisionsCumulees: { plancher: 12, atteint: true },
+      pairesDistinctes: { plancher: 4, atteint: true },
+      excedentCollisions: { plancher: 2, atteint: false },
+    });
+    const variees = preparer({ ...CINQ_MEMBRES, plan: TABLES_VARIEES });
+    assert.equal(mesurer(variees.instance, variees.tableDe).pairesDistinctes, 10);
+    assert.deepEqual(bornesDuPlan(variees).planchers, {
+      ...SANS_PLANCHER,
+      collisionsCumulees: { plancher: 12, atteint: true },
+      pairesDistinctes: { plancher: 4, atteint: false },
+      excedentCollisions: { plancher: 2, atteint: true },
+    });
+  });
+
+  test('rouge : deux appartenances en collision : chaque plancher somme ceux des deux, l’excédent ceux qui en écrivent un', () => {
+    // Trois de la Coopérative Aubier et trois de l'Atelier Ressac, deux
+    // tables de trois, trois tours : un tour réunit au moins deux membres
+    // de chacune, une collision ; 3 cumulées, 1 distincte, excédent 3 − 3 =
+    // 0, que le diagnostic n'écrit pas, pour chacune.
+    const deux = preparer({
+      personnes: [[1, AUBIER], [2, AUBIER], [3, AUBIER], [4, RESSAC], [5, RESSAC], [6, RESSAC]],
+      tables: [[1, 3], [2, 3]],
+      plan: [
+        { 1: [1, 2, 4], 2: [3, 5, 6] },
+        { 1: [1, 3, 5], 2: [2, 4, 6] },
+        { 1: [2, 3, 6], 2: [1, 4, 5] },
+      ],
+    });
+    assert.deepEqual(
+      diagnostiquer(deux.configuration).collisions.map(({ plancherCumulees, plancherPairesDistinctes, plancherExcedent }) => [
+        plancherCumulees,
+        plancherPairesDistinctes,
+        plancherExcedent,
+      ]),
+      [[3, 1, null], [3, 1, null]],
+    );
+    const lu = mesurer(deux.instance, deux.tableDe);
+    assert.deepEqual([lu.collisionsCumulees, lu.pairesDistinctes], [6, 6]);
+    assert.deepEqual(bornesDuPlan(deux).planchers, {
+      ...SANS_PLANCHER,
+      collisionsCumulees: { plancher: 6, atteint: true },
+      pairesDistinctes: { plancher: 2, atteint: false },
+    });
+  });
+
+  test('rouge : l’écart d’itinéraire maximal porte le plancher du diagnostic, atteint ou non ; aucun sous un plafond a priori inconnu', () => {
+    const distincts = preparer({ ...ITINERAIRE, plan: PAR_LA_TABLE_DE_DEUX });
+    assert.deepEqual(diagnostiquer(distincts.configuration).ecartItineraire, { plancher: 1, mobilesAuMoins: 2 });
+    assert.deepEqual(bornesDuPlan(distincts).planchers, { ...SANS_PLANCHER, ecartItineraireMax: { plancher: 1, atteint: true } });
+    const memes = preparer({ ...ITINERAIRE, plan: MEMES_A_LA_TABLE_DE_DEUX });
+    assert.deepEqual(bornesDuPlan(memes).planchers, { ...SANS_PLANCHER, ecartItineraireMax: { plancher: 1, atteint: false } });
+    assert.deepEqual(bornesDuPlan(distincts, { aPrioriConnu: false }).planchers, SANS_PLANCHER);
+  });
+
+  test('rouge : l’écart d’itinéraire se dit atteint sur la valeur que la ligne d’évaluation porte, reçue, jamais recomptée', () => {
+    const memes = preparer({ ...ITINERAIRE, plan: MEMES_A_LA_TABLE_DE_DEUX });
+    const { instance } = memes;
+    const { mesures, realises, aPriori, aMax } = mesurerTout(memes);
+    const ligne = troisChiffres(instance, mesures, aPriori, realises);
+    assert.equal(ligne.ecartItineraireMax.tous, 2);
+    const lus = {
+      mesures,
+      plafondsRealises: realises,
+      aMax,
+      profil: profilRencontres(instance, mesures, realises, aPriori, aMax),
+      animateurs: null,
+      objectifs: null,
+      diagnostic: diagnostiquer(memes.configuration),
+      planchersValides: true,
+    };
+    // Une ligne qui porterait 1 : le détail la lit telle quelle, sans
+    // remesurer le plan, qui en donnerait 2.
+    const recue = { ...ligne, ecartItineraireMax: { ...ligne.ecartItineraireMax, tous: 1 } };
+    assert.deepEqual(bornesDesTuiles(instance, { ...lus, troisChiffres: recue }).planchers.ecartItineraireMax, {
+      plancher: 1,
+      atteint: true,
+    });
+    // Une ligne sans écart d'itinéraire, sous un plafond a priori inconnu :
+    // la tuile écrit « inconnu », et aucun plancher.
+    const sansEcart = { ...ligne, ecartItineraireMax: null };
+    assert.equal(bornesDesTuiles(instance, { ...lus, troisChiffres: sansEcart }).planchers.ecartItineraireMax, null);
+  });
+
+  test('rouge : les personnes jamais servies, le plus de tours hors objectif d’une personne et les tours hors objectif portent ceux du diagnostic, chacun sous le mode qui le compare', () => {
+    const servies = preparer({ ...DEUX_SIEGES, plan: QUATRE_SERVIES });
+    assert.deepEqual(diagnostiquer(servies.configuration).objectifsInevitables, {
+      horsObjectif: 6,
+      jamaisServies: 1,
+      horsObjectifMax: 2,
+      parTour: [3, 3],
+    });
+    const objectifsDuPlan = (prepare) => {
+      const { jamaisServies, horsObjectifMax, toursHorsObjectif } = bornesDuPlan(prepare).planchers;
+      return [jamaisServies, horsObjectifMax, toursHorsObjectif];
+    };
+    assert.deepEqual(objectifsDuPlan(preparer({ ...DEUX_SIEGES, plan: QUATRE_SERVIES, modeObjectifs: 'chacun' })), [
+      { plancher: 1, atteint: true },
+      null,
+      { plancher: 6, atteint: true },
+    ]);
+    assert.deepEqual(objectifsDuPlan(preparer({ ...DEUX_SIEGES, plan: QUATRE_SERVIES, modeObjectifs: 'minimum' })), [
+      null,
+      { plancher: 2, atteint: true },
+      { plancher: 6, atteint: true },
+    ]);
+    // 1 et 2 servies aux deux tours : autant de tours hors objectif, mais 3,
+    // 4 et 5 jamais servies.
+    const memes = [
+      { 1: [1, 2], 2: [3, 4, 5, 6] },
+      { 1: [1, 2], 2: [3, 4, 5, 6] },
+    ];
+    const chacun = preparer({ ...DEUX_SIEGES, plan: memes, modeObjectifs: 'chacun' });
+    assert.equal(mesurer(chacun.instance, chacun.tableDe).objectifs.jamaisServies, 3);
+    assert.deepEqual(objectifsDuPlan(chacun), [{ plancher: 1, atteint: false }, null, { plancher: 6, atteint: true }]);
+    assert.deepEqual(objectifsDuPlan(preparer({ ...DEUX_SIEGES, plan: memes, modeObjectifs: 'minimum' })), [
+      null,
+      { plancher: 2, atteint: true },
+      { plancher: 6, atteint: true },
+    ]);
+    // Le siège d'une « finance » donné à 6, qui n'attend rien : un tour
+    // hors objectif de plus.
+    const cede = bornesDuPlan(preparer({ ...DEUX_SIEGES, plan: [QUATRE_SERVIES[0], { 1: [3, 6], 2: [1, 2, 4, 5] }] })).planchers;
+    assert.deepEqual(cede.toursHorsObjectif, { plancher: 6, atteint: false });
+  });
+
+  test('rouge : un plancher des objectifs ne s’écrit que pour une valeur que le mode réglé compare, critère coché, comme au diagnostic (§ 5.6)', () => {
+    // Sous le mode par défaut, seuls les tours hors objectif se comparent :
+    // le diagnostic prouve 1 personne jamais servie et 2 tours hors
+    // objectif pour une personne, et aucune tuile ne les écrit.
+    const desObjectifs = ({ jamaisServies, horsObjectifMax, toursHorsObjectif }) => [jamaisServies, horsObjectifMax, toursHorsObjectif];
+    const parDefaut = bornesDuPlan(preparer({ ...DEUX_SIEGES, plan: QUATRE_SERVIES })).planchers;
+    assert.deepEqual(desObjectifs(parDefaut), [null, null, { plancher: 6, atteint: true }]);
+    // Le critère décoché ne compare rien, sous aucun mode, et les mesures
+    // des objectifs restent : aucun plancher.
+    for (const modeObjectifs of ['places', 'chacun', 'minimum']) {
+      const decoche = preparer({
+        ...DEUX_SIEGES,
+        plan: QUATRE_SERVIES,
+        modeObjectifs,
+        contraintes: { ...SANS_CONTRAINTE, respecterObjectifs: false },
+      });
+      assert.notEqual(mesurer(decoche.instance, decoche.tableDe).objectifs, null, modeObjectifs);
+      assert.deepEqual(desObjectifs(bornesDuPlan(decoche).planchers), [null, null, null], modeObjectifs);
+    }
+  });
+
+  test('rouge : hors du domaine des planchers, aucun ; un plancher nul ne s’écrit pas, jamais 0', () => {
+    assert.deepEqual(bornesDuPlan(preparer({ ...CINQ_MEMBRES, plan: MEMES_TABLES }), { planchersValides: false }).planchers, SANS_PLANCHER);
+    assert.deepEqual(bornesDuPlan(preparer({ ...DEUX_SIEGES, plan: QUATRE_SERVIES }), { planchersValides: false }).planchers, SANS_PLANCHER);
+    // Deux membres par appartenance pour deux tables, aucune table
+    // inférieure, aucun objectif : le diagnostic ne prouve rien.
+    const rien = preparer(PROFIL);
+    const diagnostic = diagnostiquer(rien.configuration);
+    assert.deepEqual([diagnostic.collisions, diagnostic.ecartItineraire], [[], null]);
+    assert.deepEqual(bornesDuPlan(rien).planchers, SANS_PLANCHER);
+    // Cinq sièges pour cinq « finance » : des planchers des objectifs nuls,
+    // que la tuile tait.
+    const large = preparer({
+      ...DEUX_SIEGES,
+      tables: [[1, 5], [2, 2]],
+      plan: [
+        { 1: [1, 2, 3, 4, 5], 2: [6] },
+        { 1: [1, 2, 3, 4, 5], 2: [6] },
+      ],
+    });
+    assert.deepEqual(diagnostiquer(large.configuration).objectifsInevitables, {
+      horsObjectif: 0,
+      jamaisServies: 0,
+      horsObjectifMax: 0,
+      parTour: [0, 0],
+    });
+    const planchers = bornesDuPlan(large).planchers;
+    assert.deepEqual([planchers.jamaisServies, planchers.horsObjectifMax, planchers.toursHorsObjectif], [null, null, null]);
   });
 });
 
@@ -848,17 +1186,9 @@ describe('detailler (§ 12.9, D27)', () => {
       personnes: OBJECTIFS.personnes.map(([id, , etiquettes], i) => [id, [AUBIER, RESSAC, null][i % 3], etiquettes, id === 7 ? [2] : undefined]),
       reservations: [...OBJECTIFS.reservations, auTour(7, 1, 2)],
     });
-    const { configuration, instance, tableDe } = prepare;
+    const { instance, tableDe } = prepare;
     const { mesures, realises, aPriori, aMax } = mesurerTout(prepare);
-    const options = {
-      diagnostic: diagnostiquer(configuration),
-      mesures,
-      plafondsRealises: realises,
-      plafondsAPriori: aPriori,
-      planchersValides: true,
-      cle,
-      ordreMatrice: null,
-    };
+    const options = optionsDe(prepare, { mesures, realises, aPriori });
     return { prepare, instance, tableDe, mesures, realises, aPriori, aMax, options };
   }
 
@@ -887,7 +1217,20 @@ describe('detailler (§ 12.9, D27)', () => {
       repartition: repartition(animateurs.map(({ rencontres }) => rencontres), null),
       diversite: diversiteAnimateurs(instance, tableDe),
     });
-    assert.deepEqual(detail.bornes, bornesDesTuiles(instance, { mesures, plafondsRealises: realises, aMax, profil, animateurs, objectifs }));
+    assert.deepEqual(
+      detail.bornes,
+      bornesDesTuiles(instance, {
+        mesures,
+        plafondsRealises: realises,
+        aMax,
+        profil,
+        animateurs,
+        objectifs,
+        diagnostic: options.diagnostic,
+        planchersValides: true,
+        troisChiffres: options.troisChiffres,
+      }),
+    );
     assert.equal(detail.matrice, null);
   });
 
@@ -904,21 +1247,49 @@ describe('detailler (§ 12.9, D27)', () => {
 
   test('sans animateur ni personne concernée, les animateurs valent null ; hors du domaine, les barres n’ont qu’un segment', () => {
     const prepare = preparer(PROFIL);
-    const { configuration, instance, tableDe } = prepare;
-    const { mesures, realises, aPriori } = mesurerTout(prepare);
-    const detail = detailler(instance, tableDe, {
-      diagnostic: diagnostiquer(configuration),
-      mesures,
-      plafondsRealises: realises,
-      plafondsAPriori: aPriori,
-      planchersValides: false,
-      cle,
-      ordreMatrice: null,
-    });
+    const { instance, tableDe } = prepare;
+    const detail = detailler(instance, tableDe, optionsDe(prepare, mesurerTout(prepare), false));
     assert.equal(detail.animateurs, null);
     assert.equal(detail.objectifs, null);
     assert.ok(detail.collisions.lignes.every(({ prouve, reste }) => prouve === null && reste === null));
     assert.equal(detail.collisions.planchersValides, false);
+  });
+
+  test('hors du domaine des planchers, aucune tuile ne porte de plancher, même prouvé par le diagnostic', () => {
+    // Cinq membres d'une appartenance, 5 en réserve à chaque tour : deux
+    // collisions par tour, 6 en tout, sous les 12 que le diagnostic prouve
+    // pour un plan qui assoit chacun. Ce plancher ne tient pas ici.
+    const prepare = preparer({ ...CINQ_MEMBRES, plan: [0, 1, 2].map(() => ({ 1: [1, 2, 6], 2: [3, 4] })) });
+    const { instance, tableDe } = prepare;
+    const lu = mesurerTout(prepare);
+    const options = optionsDe(prepare, lu, false);
+    assert.deepEqual(options.diagnostic.collisions.map(({ plancherCumulees }) => plancherCumulees), [12]);
+    assert.equal(lu.mesures.collisionsCumulees, 6);
+    const detail = detailler(instance, tableDe, options);
+    assert.deepEqual(detail.bornes.planchers, SANS_PLANCHER);
+    assert.equal(detail.collisions.planchersValides, false);
+  });
+
+  test('rouge : les trois chiffres reçus passent aux tuiles : le plancher de l’écart d’itinéraire, atteint ou non, aucun sous un plafond a priori inconnu', () => {
+    for (const [plan, atteint] of [
+      [PAR_LA_TABLE_DE_DEUX, true],
+      [MEMES_A_LA_TABLE_DE_DEUX, false],
+    ]) {
+      const prepare = preparer({ ...ITINERAIRE, plan });
+      const lu = mesurerTout(prepare);
+      const detail = detailler(prepare.instance, prepare.tableDe, optionsDe(prepare, lu));
+      assert.deepEqual(detail.bornes.planchers, { ...SANS_PLANCHER, ecartItineraireMax: { plancher: 1, atteint } }, `${atteint}`);
+      const inconnu = detailler(prepare.instance, prepare.tableDe, optionsDe(prepare, { ...lu, aPriori: null }));
+      assert.deepEqual(inconnu.bornes.planchers, SANS_PLANCHER, `${atteint}`);
+    }
+    // Les chiffres reçus font foi, même quand le plan en donnerait
+    // d'autres : 1 reçu pour les mêmes à la table de deux, qui mesurent 2.
+    const memes = preparer({ ...ITINERAIRE, plan: MEMES_A_LA_TABLE_DE_DEUX });
+    const options = optionsDe(memes, mesurerTout(memes));
+    assert.equal(options.troisChiffres.ecartItineraireMax.tous, 2);
+    const recus = { ...options.troisChiffres, ecartItineraireMax: { ...options.troisChiffres.ecartItineraireMax, tous: 1 } };
+    const detail = detailler(memes.instance, memes.tableDe, { ...options, troisChiffres: recus });
+    assert.deepEqual(detail.bornes.planchers.ecartItineraireMax, { plancher: 1, atteint: true });
   });
 
   test('des animateurs sans personne concernée : le profil et sa répartition valent null, la diversité reste', () => {
@@ -930,18 +1301,10 @@ describe('detailler (§ 12.9, D27)', () => {
       reservations: [auTour(1, 1, 1)],
       plan: [{ 1: [1] }],
     });
-    const { configuration, instance, tableDe } = prepare;
-    const { mesures, realises, aPriori } = mesurerTout(prepare);
-    assert.equal(mesures.animateurs, null);
-    const detail = detailler(instance, tableDe, {
-      diagnostic: diagnostiquer(configuration),
-      mesures,
-      plafondsRealises: realises,
-      plafondsAPriori: aPriori,
-      planchersValides: true,
-      cle,
-      ordreMatrice: null,
-    });
+    const { instance, tableDe } = prepare;
+    const lu = mesurerTout(prepare);
+    assert.equal(lu.mesures.animateurs, null);
+    const detail = detailler(instance, tableDe, optionsDe(prepare, lu));
     assert.equal(detail.animateurs.profil, null);
     assert.equal(detail.animateurs.repartition, null);
     assert.equal(detail.animateurs.diversite.lignes.length, 1);
@@ -950,6 +1313,12 @@ describe('detailler (§ 12.9, D27)', () => {
 
 describe('qualite : la source du module', () => {
   const source = readFileSync(new URL('./qualite.js', import.meta.url), 'utf8');
+
+  test('rouge : aucune mesure de la ligne d’évaluation recomptée : les trois chiffres se reçoivent', () => {
+    assert.doesNotMatch(source, /\btroisChiffres\(/);
+    // Ni importés sous un autre nom : aucun import n'en nomme.
+    assert.doesNotMatch(source, /^import[^;]*\btroisChiffres\b/m);
+  });
 
   test('aucun couple possible ni correspondance relus : les comptes par tour viennent de parcourirTours', () => {
     assert.doesNotMatch(source, /\bpossible\[/);

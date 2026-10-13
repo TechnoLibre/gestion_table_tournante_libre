@@ -987,6 +987,53 @@ describe('detaillerQualite : une seule arithmétique (§ 12.9, § 13.2, contrain
     assert.ok(detail.collisions.lignes.every((ligne) => !Object.hasOwn(ligne, 'g')));
   });
 
+  test('les planchers des tuiles passent tels que le moteur les rend, sur des plans écrits à la main', () => {
+    // La petite démonstration au conflit : l'appartenance de cinq pour
+    // quatre tables prouve 4 collisions cumulées, une par tour, et 1 paire
+    // distincte ; l'excédent, 4 sous C(5, 2), ne s'écrit pas. « (4, 1) »
+    // atteint les deux, « (4, 2) » les cumulées seules, « (6, 6) » aucun.
+    const charge = structuredClone(chargeDemo('petite-conflit'));
+    charge.propositions = PLANS_CONFLIT.map(({ tours }, rang) => propositionDe(charge, rang + 1, tours));
+    charge.prochainsIds.proposition = 5;
+    charge.evenement.etat = 'propose';
+    figer(charge);
+    const collisionsDe = (id) => {
+      const { collisionsCumulees, pairesDistinctes, excedentCollisions } = detaillerQualite(charge, id).bornes.planchers;
+      return [collisionsCumulees, pairesDistinctes, excedentCollisions];
+    };
+    assert.deepEqual(collisionsDe(1), [{ plancher: 4, atteint: true }, { plancher: 1, atteint: true }, null]);
+    assert.deepEqual(collisionsDe(2), [{ plancher: 4, atteint: true }, { plancher: 1, atteint: false }, null]);
+    assert.deepEqual(collisionsDe(3), [{ plancher: 4, atteint: false }, { plancher: 1, atteint: false }, null]);
+  });
+
+  test('l’écart d’itinéraire porte son plancher sous le plafond a priori calculé, aucun sous un plafond a priori inconnu', () => {
+    // Cinq personnes, une table de trois et une de deux, deux tours : le
+    // diagnostic prouve un écart d'itinéraire maximal de 1 au moins. Le
+    // plan qui fait passer quatre personnes par la table de deux l'atteint,
+    // celui qui y garde les deux mêmes laisse 4 et 5 deux sous leur plafond
+    // a priori.
+    const charge = chargeDeN(5);
+    charge.tables = [3, 2].map((sieges, rang) => ({ id: rang + 1, numero: rang + 1, sieges, forme: 'ronde', position: { x: 300 * rang, y: 0 } }));
+    charge.prochainsIds.table = 3;
+    charge.propositions = [
+      propositionDe(charge, 1, [
+        [[1, 2, 3], [4, 5]],
+        [[1, 4, 5], [2, 3]],
+      ]),
+      propositionDe(charge, 2, [
+        [[1, 2, 3], [4, 5]],
+        [[1, 2, 3], [4, 5]],
+      ]),
+    ];
+    charge.prochainsIds.proposition = 3;
+    charge.evenement.etat = 'propose';
+    figer(charge);
+    assert.deepEqual(detaillerQualite(charge, 1).bornes.planchers.ecartItineraireMax, { plancher: 1, atteint: true });
+    assert.deepEqual(detaillerQualite(charge, 2).bornes.planchers.ecartItineraireMax, { plancher: 1, atteint: false });
+    assert.equal(evaluer(charge).propositions.find(({ id }) => id === 2).troisChiffres.ecartItineraireMax.tous, 2);
+    for (const id of [1, 2]) assert.equal(detaillerQualite(charge, id, { plafondsAPriori: null }).bornes.planchers.ecartItineraireMax, null);
+  });
+
   test("chaque personne en entier — appartenance ou null, statut ancré, partiel ou mobile — et le numéro de chaque table, distinct de son identifiant", () => {
     const charge = structuredClone(chargeDemo('petite-conflit'));
     const [premiere, seconde] = [...charge.tables].sort((a, b) => a.id - b.id);
@@ -1101,6 +1148,9 @@ describe('detaillerQualite : la garde à quatre paramètres (§ 12.3, D31, D42)'
       assert.equal(detail.statut, 'comparable', `${id}`);
       assert.equal(detail.collisions.planchersValides, false, `${id}`);
       assert.ok(detail.collisions.lignes.every(({ prouve, reste }) => prouve === null && reste === null), `${id}`);
+      // Aucune tuile ne porte de plancher, pas même des 1000 relevés.
+      const planchers = Object.entries(detail.bornes.planchers).filter(([, plancher]) => plancher !== null);
+      assert.deepEqual(planchers, [], `${id}`);
       const codes = detail.refusDessin.map(({ code }) => code);
       assert.equal(codes.includes('RESTE_NEGATIF'), false, `${id}`);
       assert.equal(codes.includes('RESTE_OBJECTIFS_NEGATIF'), false, `${id}`);

@@ -6,8 +6,9 @@
 // propositions, dans son ordre et sous ses groupes, la cellule même du
 // tableau quand la colonne y est ; une tuile sans colonne lit la même
 // mesure et dit qu'elle ne classe pas ; un critère sans objet n'a pas de
-// tuile ; chaque borne est celle d'une personne nommée, lue dans le détail ;
-// trois tuiles seulement portent un pourcentage, suivi du compte du pire.
+// tuile ; chaque borne est celle d'une personne nommée, lue dans le détail,
+// et le plancher, là où le diagnostic l'écrit, ne nomme personne ; trois
+// tuiles seulement portent un pourcentage, suivi du compte du pire.
 // Les charges s'écrivent ici ou partent des démonstrations livrées ; leurs
 // propositions s'enregistrent par la commande. Les noms d'épreuve sont
 // inventés.
@@ -87,6 +88,21 @@ const tuile = (entete, nom) => {
 };
 const nomDe = (detail, id) => detail.personnes.find((personne) => personne.id === id).nom;
 const valeur = (pourcent) => t('qualite.pourcentage.valeur', { pourcent });
+
+// Les tuiles qui portent un plancher quand le diagnostic en prouve un.
+const TUILES_A_PLANCHER = [
+  'collisionsCumulees',
+  'pairesDistinctes',
+  'excedentCollisions',
+  'ecartItineraireMax',
+  'jamaisServies',
+  'horsObjectifMax',
+  'toursHorsObjectif',
+];
+// La ligne qu'une tuile écrit pour son plancher, et les lignes de plancher
+// parmi les bornes d'une tuile.
+const ligneDuPlancher = ({ plancher, atteint }) => t(atteint ? 'qualite.tuile.plancherAtteint' : 'qualite.tuile.plancher', { plancher });
+const lignesDePlancher = (bornes) => bornes.filter((ligne) => ligne.startsWith('plancher'));
 
 // Les tuiles des objectifs et des animateurs.
 const SIXIEME = ['jamaisServies', 'horsObjectifMax', 'toursHorsObjectif', 'toursSelonObjectif', 'animateursRencontres', 'animateursNonRencontres'];
@@ -264,23 +280,80 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
     });
   });
 
-  test('les tours hors objectif : le plancher de la soirée quand le diagnostic en écrit un, sous des planchers valides ; aucun sinon', () => {
+  test('rouge : chaque tuile au plancher prouvé l’écrit sous son chiffre, « atteint » quand il l’est ; aucune autre', () => {
+    const vue = vueDe(generee(chargeSix({ objectifs: true })));
+    assert.deepEqual(Object.keys(vue.detail.bornes.planchers).sort(), [...TUILES_A_PLANCHER].sort());
+    for (const nom of TUILES_A_PLANCHER) {
+      for (const atteint of [false, true]) {
+        const detail = structuredClone(vue.detail);
+        detail.bornes.planchers = Object.fromEntries(TUILES_A_PLANCHER.map((autre) => [autre, null]));
+        detail.bornes.planchers[nom] = { plancher: 3, atteint };
+        const entete = enteteDe({ ...vue, detail }, outils);
+        const attendue = t(atteint ? 'qualite.tuile.plancherAtteint' : 'qualite.tuile.plancher', { plancher: 3 });
+        assert.equal(tuile(entete, nom).bornes.at(-1), attendue, nom);
+        assert.deepEqual(lignesDePlancher(tuile(entete, nom).bornes), [attendue], nom);
+        for (const autre of tuiles(entete)) if (autre.nom !== nom) assert.deepEqual(lignesDePlancher(autre.bornes), [], `${nom} : ${autre.nom}`);
+      }
+    }
+    // Sans plancher prouvé, aucune ligne, jamais « plancher 0 ».
+    const detail = structuredClone(vue.detail);
+    detail.bornes.planchers = Object.fromEntries(TUILES_A_PLANCHER.map((nom) => [nom, null]));
+    for (const autre of tuiles(enteteDe({ ...vue, detail }, outils))) assert.deepEqual(lignesDePlancher(autre.bornes), [], autre.nom);
+  });
+
+  test('rouge : cinq membres d’une appartenance pour deux tables de trois : 12 collisions cumulées au moins, atteintes ; chaque plancher du détail écrit', () => {
+    const charge = chargeSix();
+    for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+    const vue = vueDe(generee(charge));
+    assert.equal(vue.ligne.mesures.collisionsCumulees, 12);
+    assert.deepEqual(vue.detail.bornes.planchers.collisionsCumulees, { plancher: 12, atteint: true });
+    const entete = enteteDe(vue, outils);
+    assert.deepEqual(tuile(entete, 'collisionsCumulees').bornes, [t('qualite.tuile.plancherAtteint', { plancher: 12 })]);
+    for (const nom of TUILES_A_PLANCHER) {
+      const plancher = vue.detail.bornes.planchers[nom];
+      const ecrites = tuiles(entete).some((candidate) => candidate.nom === nom) ? lignesDePlancher(tuile(entete, nom).bornes) : [];
+      assert.deepEqual(ecrites, plancher === null ? [] : [ligneDuPlancher(plancher)], nom);
+    }
+  });
+
+  test('les tours hors objectif : le plancher de la soirée, sous son pourcentage et le compte du pire', () => {
     // Quatre personnes attendues à une table de trois places, deux autres
     // réservées à l'autre table : au moins trois tours hors objectif.
     const vue = vueDe(generee(chargeSix({ objectifs: true, finance: 4, reservees: true })));
-    const { soiree } = vue.detail.objectifs;
-    assert.equal(vue.detail.collisions.planchersValides, true);
-    assert.ok(soiree.plancher > 0, `plancher ${soiree.plancher}`);
-    const ligneDuPlancher = t('qualite.tuile.plancher', { plancher: soiree.plancher });
-    assert.ok(tuile(enteteDe(vue, outils), 'toursHorsObjectif').bornes.includes(ligneDuPlancher));
-    // Hors du domaine des planchers, le même plancher ne s'écrit pas.
-    const detail = structuredClone(vue.detail);
-    detail.collisions.planchersValides = false;
-    assert.ok(!tuile(enteteDe({ ...vue, detail }, outils), 'toursHorsObjectif').bornes.some((ligne) => ligne.startsWith('plancher')));
-    // Un plancher nul : le diagnostic se tait, aucune ligne.
-    detail.collisions.planchersValides = true;
-    detail.objectifs.soiree = { ...detail.objectifs.soiree, plancher: 0 };
-    assert.ok(!tuile(enteteDe({ ...vue, detail }, outils), 'toursHorsObjectif').bornes.some((ligne) => ligne.startsWith('plancher')));
+    const plancher = vue.detail.bornes.planchers.toursHorsObjectif;
+    assert.ok(plancher !== null && plancher.plancher === vue.detail.objectifs.soiree.plancher, JSON.stringify(plancher));
+    const horsObjectif = tuile(enteteDe(vue, outils), 'toursHorsObjectif');
+    assert.notEqual(horsObjectif.pourcentage, null);
+    assert.deepEqual(horsObjectif.bornes, [ligneDuPlancher(plancher)]);
+  });
+
+  test('rouge : les deux lignes du plancher, mot pour mot, ne disent rien que de la mesure de leur tuile', () => {
+    assert.equal(t('qualite.tuile.plancher', { plancher: 4 }), 'plancher 4');
+    assert.equal(t('qualite.tuile.plancherAtteint', { plancher: 4 }), 'plancher 4 atteint : impossible de faire moins');
+  });
+
+  test('rouge : une tuile des objectifs qui ne classe pas n’écrit aucun plancher, même prouvé, comme le diagnostic (§ 5.6)', () => {
+    // Quatre personnes attendues à une table de trois places : 3 tours hors
+    // objectif au moins, et 1 au moins pour une personne.
+    const sous = (reglages) => {
+      const vue = vueDe(generee(chargeSix({ objectifs: true, finance: 4, reservees: true, reglages })));
+      return { vue, entete: enteteDe(vue, outils) };
+    };
+    const places = sous({});
+    assert.equal(tuile(places.entete, 'horsObjectifMax').classe, false);
+    assert.deepEqual(lignesDePlancher(tuile(places.entete, 'horsObjectifMax').bornes), []);
+    assert.equal(lignesDePlancher(tuile(places.entete, 'toursHorsObjectif').bornes).length, 1);
+    const minimum = sous({ modeObjectifs: 'minimum' });
+    const auPlus = minimum.vue.detail.bornes.planchers.horsObjectifMax;
+    assert.equal(auPlus.plancher, 1);
+    assert.equal(tuile(minimum.entete, 'horsObjectifMax').classe, true);
+    assert.deepEqual(lignesDePlancher(tuile(minimum.entete, 'horsObjectifMax').bornes), [ligneDuPlancher(auPlus)]);
+    // Le critère décoché ne compare rien : ses tuiles restent, sans plancher.
+    const decoche = sous({ respecterObjectifs: false });
+    for (const nom of ['jamaisServies', 'horsObjectifMax', 'toursHorsObjectif']) {
+      assert.equal(tuile(decoche.entete, nom).classe, false, nom);
+      assert.deepEqual(lignesDePlancher(tuile(decoche.entete, nom).bornes), [], nom);
+    }
   });
 
   test('les rencontres répétées et les retours : les choisis en valeur, les imposés énoncés à part', () => {

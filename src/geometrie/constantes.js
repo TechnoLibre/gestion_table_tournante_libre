@@ -293,7 +293,7 @@ export const CONSTANTES = Object.freeze(
     },
     {
       nom: 'SEUIL_MATRICE_PARTICIPANTS',
-      valeur: 40,
+      valeur: 44,
       unite: 'participants',
       mesure:
         "nombre de participants au-delà duquel une case de la matrice « qui a rencontré qui » tombe sous la " +
@@ -302,9 +302,11 @@ export const CONSTANTES = Object.freeze(
         'au-delà, la matrice coûte et ne se lit plus : la vue renvoie à la fiche de chaque personne, qui porte ' +
         'ses rencontres (§ 12.5). La page éprouve en plus, par la géométrie, que les cases tiennent 24 px ' +
         'dans la largeur réelle de la carte',
-      configuration: 'banc de mesure, cadre de 1 366 × 700 px, facteur 1, vue des paires de la page de qualité',
+      configuration:
+        'banc de mesure, cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, ' +
+        '16 processeurs logiques, processeur non ralenti, police Noto Sans, vue des paires de la page de qualité',
       proprietaire: 'banc',
-      statut: 'defautDeTravail',
+      statut: 'mesuree',
       protocole:
         'banc de mesure, cadre de 1 366 × 700 px : le plus grand nombre de participants dont la case de la ' +
         'matrice tient 24 px dans la largeur de la carte de la vue, noms en tête compris, relevé sur le rendu ; ' +
@@ -312,15 +314,17 @@ export const CONSTANTES = Object.freeze(
     },
     {
       nom: 'LARGEUR_TRONCATURE_NOM_PX',
-      valeur: 180,
+      valeur: 168,
       unite: 'px',
       mesure: "largeur à laquelle un nom se tronque dans une étiquette de graphique",
       raison:
         "un nom plus long déborderait sur le tracé ou sur l'étiquette voisine ; le nom entier reste dans " +
         "l'infobulle et dans le jumeau (§ 12.6)",
-      configuration: "banc de mesure, cadre de 1 366 × 700 px, facteur 1, police Noto Sans, corps des étiquettes de graphique",
+      configuration:
+        'banc de mesure, cadre de 1 366 × 700 px, facteur 1, Chromium 153.0.8010.12, Node v26.10.0, ' +
+        '16 processeurs logiques, processeur non ralenti, police Noto Sans, corps des étiquettes de graphique',
       proprietaire: 'banc',
-      statut: 'defautDeTravail',
+      statut: 'mesuree',
       protocole:
         `banc de mesure, police Noto Sans : la largeur rendue d'un nom de ${LONGUEUR_NOM_REFERENCE} caractères, ` +
         "chacun le glyphe le plus large de l'alphabet visé, au corps des étiquettes de graphique, dans la marge " +

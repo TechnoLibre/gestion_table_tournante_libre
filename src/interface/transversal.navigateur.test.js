@@ -6,9 +6,10 @@
 // témoin, erreurs par leur libellé, contrastes et marques dans les deux
 // thèmes, aucune atténuation, jamais la seule couleur, teinte réservée, aucun
 // emoji, balisage littéral, bandeau, formulaires, transitions annulées ; la
-// page de qualité — chaque pourcentage suivi de son compte, le signe « % »
-// à ses seules places, chaque niveau de l'échelle rendu, les motifs des
-// tracés, ses graphiques nommés et décrits, ses jumeaux au clavier ; puis
+// page de qualité — chaque pourcentage suivi de son compte, celui de sa
+// ligne sur une ligne, le signe « % » à ses seules places, chaque niveau de
+// l'échelle rendu, les motifs des tracés, ses graphiques nommés et décrits,
+// ses jumeaux au clavier ; puis
 // le mécanisme des captures d'écran (§ 19.4, § 19.5, § 19.7, § 19.11),
 // chaque contrôle montré en train d'échouer sur un dossier d'épreuve.
 //
@@ -38,6 +39,7 @@ import { analyser } from '../stockage/document.js';
 import { lireEtiquettes } from '../stockage/etiquettes.js';
 import { lireJournal } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
+import { pourcentage } from '../moteur/qualite.js';
 import { VERSION } from '../version.genere.js';
 import INDEX from '../../index.html?raw';
 import {
@@ -592,15 +594,62 @@ function pourcentAdmis(element) {
   return texte.getAttribute('text-anchor') === 'end' && !texte.hasAttribute('data-serie') && !texte.hasAttribute('data-repere');
 }
 
+// Les entiers qu'écrit un texte, dans son ordre.
+const entiersDe = (texte) => (texte.match(/\d+/g) ?? []).map(Number);
+
+// Le compte qui suit un pourcentage est-il le sien (contrainte 44, D34) ?
+// Sur une ligne — d'un jumeau ou d'une infobulle —, le compte est celui de
+// la ligne : son numérateur puis son dénominateur, ses deux seuls entiers ;
+// seule une ligne sans rien à compter, sa valeur « — », écrit à la place
+// une phrase sans entier (« aucun affilié à ce tour »). Partout, un compte
+// de deux entiers redonne, par pourcentage du moteur, la valeur écrite —
+// son premier entier, ou « — » quand le dénominateur est nul : le compte
+// d'une autre ligne ou d'une autre population se trahit ainsi dès que leurs
+// rapports diffèrent. Le pire cas d'une population écrit d'un seul entier
+// (« 3 personnes jamais servies ») ne se recoupe pas. → null, ou la faute.
+function fauteDuCompte(valeur, compte) {
+  const texte = compte.textContent.trim();
+  const entiers = entiersDe(texte);
+  const ecrit = entiersDe(valeur.textContent)[0] ?? null;
+  if (entiers.length !== 2) {
+    if (valeur.closest('[data-jumeau], [role="tooltip"]') === null) return null;
+    if (ecrit === null && entiers.length === 0) return null;
+    return `« ${extrait(texte)} » n’est pas le compte de sa ligne, numérateur sur dénominateur`;
+  }
+  const [n, d] = entiers;
+  const attendu = pourcentage(n, d);
+  if (ecrit === attendu) return null;
+  return `son compte ${extrait(texte)} donne ${attendu === null ? '\u{2014}' : `${attendu}\u{202F}%`}`;
+}
+
+// Vrai quand une ligne de jumeau porte deux comptes de même numérateur, de
+// dénominateurs qui donnent deux pourcentages distincts — les sièges et les
+// assis d'une table incomplète : un compte permuté avec l'autre y redonne
+// un pourcentage qui n'est pas le sien, et fauteDuCompte le relève.
+function ligneQuiDistingue(rangee) {
+  const parNumerateur = new Map();
+  for (const compte of rangee.querySelectorAll('[data-compte-pire]')) {
+    const entiers = entiersDe(compte.textContent);
+    if (entiers.length !== 2) continue;
+    const [n, d] = entiers;
+    const autres = parNumerateur.get(n) ?? [];
+    if (autres.some((autre) => pourcentage(n, autre) !== pourcentage(n, d))) return true;
+    parNumerateur.set(n, [...autres, d]);
+  }
+  return false;
+}
+
 /**
  * Les pourcentages et le signe « % » rendus sous racine (contrainte 44,
  * D34) : chaque [data-pourcentage] rendu suivi, son voisin immédiat dans
- * le composant Pourcentage, d'un [data-compte-pire] rendu et non vide ; et
- * chaque texte rendu — nœud de texte ou attribut annoncé — qui porte « % »
- * hors des places que pourcentAdmis admet. → { lus, dansInfobulle,
- * dansJumeaux, fautes, signes: { lus, fautes } }, lus le nombre de
- * pourcentages rendus, dansInfobulle et dansJumeaux ceux d'une infobulle
- * et d'un jumeau ; signes.lus le nombre de textes rendus qui portent « % ».
+ * le composant Pourcentage, d'un [data-compte-pire] rendu, non vide et
+ * qui est le sien (fauteDuCompte) ; et chaque texte rendu — nœud de texte
+ * ou attribut annoncé — qui porte « % » hors des places que pourcentAdmis
+ * admet. → { lus, dansInfobulle, dansJumeaux, lignesQuiDistinguent, fautes,
+ * signes: { lus, fautes } }, lus le nombre de pourcentages rendus,
+ * dansInfobulle et dansJumeaux ceux d'une infobulle et d'un jumeau ;
+ * lignesQuiDistinguent, les lignes de jumeau rendues où ligneQuiDistingue
+ * est vrai ; signes.lus le nombre de textes rendus qui portent « % ».
  */
 export function releverPourcentages(racine) {
   const fautes = [];
@@ -616,7 +665,12 @@ export function releverPourcentages(racine) {
     const nomme = `${situer(valeur)} « ${extrait(valeur.textContent)} »`;
     if (compte === null || !compte.matches('[data-compte-pire]')) fautes.push(`${nomme} : aucun [data-compte-pire] ne le suit`);
     else if (!rendu(compte) || compte.textContent.trim() === '') fautes.push(`${nomme} : son compte du pire est vide`);
+    else {
+      const faute = fauteDuCompte(valeur, compte);
+      if (faute !== null) fautes.push(`${nomme} : ${faute}`);
+    }
   }
+  const lignesQuiDistinguent = [...racine.querySelectorAll('[data-jumeau] tbody tr')].filter((rangee) => rendu(rangee) && ligneQuiDistingue(rangee)).length;
   const signes = { lus: 0, fautes: [] };
   const marcheur = document.createTreeWalker(racine, NodeFilter.SHOW_TEXT);
   for (let noeud = marcheur.nextNode(); noeud !== null; noeud = marcheur.nextNode()) {
@@ -635,7 +689,7 @@ export function releverPourcentages(racine) {
       signes.fautes.push(`${situer(element)}[${nom}] : « ${extrait(valeur)} »`);
     }
   }
-  return { lus, dansInfobulle, dansJumeaux, fautes, signes };
+  return { lus, dansInfobulle, dansJumeaux, lignesQuiDistinguent, fautes, signes };
 }
 
 /** Les niveaux de l'échelle que chaque grille rend sous racine (§ 12.7,
@@ -1161,6 +1215,36 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(signes.fautes.join('\n')).toContain('[aria-label] : « 9 % »');
   });
 
+  test('qualité, pourcentages : le compte d’une ligne est le sien, numérateur sur dénominateur ; deux entiers rendent la valeur écrite', () => {
+    const paire = (valeur, compte) => `<span data-pourcentage>${valeur}</span><span data-compte-pire>${compte}</span>`;
+    const ligne = (valeur, compte) => `<tr><td>${paire(valeur, compte)}</td></tr>`;
+    const { lus, fautes } = avecFragment(
+      `<p>${paire('88\u{202F}%', 'minimum 24 sur 27')}</p><p>${paire('77\u{202F}% des tours possibles servis', '3 personnes jamais servies')}</p>` +
+        '<table data-jumeau="0"><tbody>' +
+        ligne('62\u{202F}%', '5 appartenances pour 8 sièges') +
+        ligne('80\u{202F}%', '24 servis sur 30 possibles') +
+        ligne('1\u{202F}%', '1 sur 250') +
+        ligne('\u{2014}', '0 sur 0') +
+        ligne('\u{2014}', 'aucun affilié à ce tour') +
+        ligne('12\u{202F}%', 'aucun affilié à ce tour') +
+        ligne('9\u{202F}%', '1 sur 14') +
+        ligne('\u{2014}', '2 sur 5') +
+        ligne('40\u{202F}%', '2 sur 0') +
+        '</tbody></table>' +
+        `<div role="tooltip">${paire('50\u{202F}%', '3 personnes jamais servies')}</div>` +
+        `<p>${paire('70\u{202F}%', 'minimum 24 sur 27')}</p>`,
+      (c) => releverPourcentages(c),
+    );
+    expect(lus).toBe(13);
+    expect(fautes).toHaveLength(6);
+    expect(fautes[0]).toContain('« aucun affilié à ce tour » n’est pas le compte de sa ligne');
+    expect(fautes[1]).toMatch(/« 9\s% » : son compte 1 sur 14 donne 7\u{202F}%$/u);
+    expect(fautes[2]).toContain('2 sur 5 donne 40\u{202F}%');
+    expect(fautes[3]).toContain('2 sur 0 donne \u{2014}');
+    expect(fautes[4]).toContain('« 3 personnes jamais servies » n’est pas le compte de sa ligne');
+    expect(fautes[5]).toContain('minimum 24 sur 27 donne 88\u{202F}%');
+  });
+
   test('qualité, niveaux : une grille rend les niveaux que portent ses cases, lus sur leur remplissage calculé ; une forme hors d’une case ne compte pas', () => {
     const cases = [0, 2, 2]
       .map((k, i) => `<g data-case="0:${i}"><rect x="${30 * i}" width="20" height="20" style="fill:var(--couleur-graphique-niveau-${k})" /></g>`)
@@ -1570,8 +1654,11 @@ describe('la page de qualité, sur chacun de ses écrans (§ 12.7, § 14.5, D30,
     }
     const q = (nom) => releveDe(nom)?.qualite ?? null;
     if (q('qualite.infobulle') !== null && q('qualite.infobulle').pourcentages.dansInfobulle === 0) fautes.push('qualite.infobulle : aucun pourcentage dans l’infobulle');
-    for (const nom of ['qualite.jumeaux', 'qualite.objectifs', 'qualite.performance']) {
+    for (const nom of ['qualite.jumeaux', 'qualite.objectifs', 'qualite.performance', 'qualite.tables.assis']) {
       if (q(nom) !== null && q(nom).pourcentages.dansJumeaux === 0) fautes.push(`${nom} : aucun pourcentage dans un jumeau`);
+    }
+    if (q('qualite.tables.assis') !== null && q('qualite.tables.assis').pourcentages.lignesQuiDistinguent === 0) {
+      fautes.push('qualite.tables.assis : aucune ligne du jumeau où sièges et assis donnent deux pourcentages, une permutation passerait');
     }
     if (q('qualite.objectifs') !== null && !q('qualite.objectifs').vuesJumeau.includes('objectifs')) fautes.push('qualite.objectifs : le jumeau des objectifs fermé');
     if (q('qualite.performance') !== null && !q('qualite.performance').vuesJumeau.includes('performance')) fautes.push('qualite.performance : le jumeau de la performance fermé');
@@ -1603,7 +1690,7 @@ describe('la page de qualité, sur chacun de ses écrans (§ 12.7, § 14.5, D30,
     aucuneFaute(fautes, 'jumeau en lecture et bloqué');
   });
 
-  test('chaque pourcentage rendu est suivi, dans son composant, de son compte du pire, sur chaque écran de la page, infobulle et jumeaux compris — le jumeau de chaque vue qui en porte un ouvert sur un écran au moins', () => {
+  test('chaque pourcentage rendu est suivi, dans son composant, de son compte du pire — celui de sa ligne sur une ligne —, sur chaque écran de la page, infobulle et jumeaux compris — le jumeau de chaque vue qui en porte un ouvert sur un écran au moins', () => {
     expect(deQualite().reduce((n, r) => n + r.qualite.pourcentages.lus, 0), 'pourcentages lus').toBeGreaterThan(0);
     expect(VUES_A_JUMEAU.length, 'vues à jumeau').toBeGreaterThan(0);
     const ouvertes = new Set(deQualite().flatMap((r) => r.qualite.vuesJumeau));

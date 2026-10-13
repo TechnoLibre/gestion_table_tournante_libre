@@ -12,7 +12,8 @@
 // Le détail ne recompte rien (§ 13.2) : les comptes par paire, par table et
 // par tour sortent de parcourirTours (indicateurs.js), l'occupation de
 // occupations (plafond.js), les planchers du diagnostic (diagnostic.js), les
-// valeurs par personne des mesures et des plafonds que l'appelant passe.
+// valeurs par personne des mesures et des plafonds que l'appelant passe,
+// comme les trois chiffres de la ligne d'évaluation du plan (manque.js).
 // Chaque pourcentage sort de pourcentage, la seule division d'un
 // pourcentage (D52), et se rend à côté de ses deux comptes.
 //
@@ -216,7 +217,7 @@ function premier(N, estCandidat, avant) {
 
 /**
  * Les bornes des tuiles (§ 12.2, D29, D34, D52, B11), chacune celle d'une
- * personne nommée :
+ * personne nommée, et les planchers, qui ne nomment personne :
  * - rang1 : la personne au rang 1 du profil, ses rencontres, son plafond
  *   réalisé, son plafond a priori et leur pourcentage ; null sans personne ;
  * - manque : la tête du profil de manque (profilManque, § 12.10.6) et son
@@ -231,18 +232,27 @@ function premier(N, estCandidat, avant) {
  *   possibles et leur pourcentage ; null sans personne concernée ;
  * - soiree : Σ S_r, Σ Π_r et leur pourcentage, lus dans les objectifs par
  *   tour, et les personnes jamais servies de la mesure ; null sans personne
- *   concernée.
+ *   concernée ;
+ * - planchers : le plancher de chaque tuile qui en porte un, le même
+ *   pour toute personne (planchersDe).
  *
- * @param {import('./types.js').Instance} instance  N, ids, indexDe et
- *        groupes sont lus
+ * @param {import('./types.js').Instance} instance  N, ids, indexDe, statut,
+ *        groupes et etatCriteres sont lus
  * @param {{mesures: import('./indicateurs.js').Mesures,
  *          plafondsRealises: ArrayLike<number>, aMax: ArrayLike<number>,
  *          profil: LigneProfil[], animateurs: Array<Object>|null,
- *          objectifs: Object|null}} lus
+ *          objectifs: Object|null,
+ *          diagnostic: import('./diagnostic.js').Diagnostic,
+ *          planchersValides: boolean,
+ *          troisChiffres: import('./manque.js').TroisChiffres}} lus
  *        profil, profilRencontres ; animateurs, profilAnimateurs ;
- *        objectifs, objectifsParTour
+ *        objectifs, objectifsParTour ; diagnostic, celui de la
+ *        configuration ; planchersValides, vrai sur un plan du domaine des
+ *        planchers ; troisChiffres, ceux que la ligne d'évaluation du plan
+ *        porte, lus sans être recomptés
  */
-export function bornesDesTuiles(instance, { mesures, plafondsRealises, aMax, profil, animateurs, objectifs }) {
+export function bornesDesTuiles(instance, lus) {
+  const { mesures, plafondsRealises, aMax, profil, animateurs, objectifs } = lus;
   const { N, indexDe, groupes } = instance;
   let rang1 = null;
   let manque = null;
@@ -278,7 +288,73 @@ export function bornesDesTuiles(instance, { mesures, plafondsRealises, aMax, pro
     animateurs: animateurs === null ? null : { p: animateurs[0].p, borne: animateurs[0].borne },
     objectifs: parObjectif,
     soiree,
+    planchers: planchersDe(instance, lus),
   };
+}
+
+// Un plancher strictement positif et la valeur mesurée qu'il borne :
+// {plancher, atteint}, atteint quand la valeur l'égale ; null pour un
+// plancher nul, que le diagnostic ne prouve pas.
+const plancherDe = (plancher, valeur) => (plancher > 0 ? { plancher, atteint: valeur === plancher } : null);
+
+// La somme d'un champ des planchers de collisions du diagnostic, un par
+// appartenance en collision ; un champ null compte pour 0.
+const sommeDe = (collisions, champ) => collisions.reduce((total, ligne) => total + (ligne[champ] ?? 0), 0);
+
+// Le nom du critère des objectifs dans instance.etatCriteres, et, pour
+// chaque valeur qu'il peut comparer, sous le nom de sa colonne, le champ
+// qui la porte dans objectifsInevitables comme dans mesures.objectifs.
+const CRITERE_DES_OBJECTIFS = 'toursHorsObjectif';
+const CHAMPS_DES_OBJECTIFS = [
+  ['jamaisServies', 'jamaisServies'],
+  ['horsObjectifMax', 'horsObjectifMax'],
+  ['toursHorsObjectif', 'horsObjectif'],
+];
+
+// Le plancher de chaque tuile qui en porte un (§ 5.6, § 12.2, B11), sous le
+// nom de sa colonne (§ 5.7), {plancher, atteint} ou null, jamais 0 — là où
+// le diagnostic écrit le sien, et là seulement :
+// - collisionsCumulees, pairesDistinctes, excedentCollisions : la somme des
+//   planchers de chaque appartenance en collision ; chaque mesure somme
+//   celles des appartenances, et chaque plancher minore la sienne ;
+// - ecartItineraireMax : le plancher de l'écart d'itinéraire maximal, null
+//   quand la ligne n'a pas d'écart d'itinéraire — plafond a priori inconnu,
+//   la tuile écrit « inconnu » ;
+// - jamaisServies, horsObjectifMax, toursHorsObjectif : le plancher de
+//   chaque valeur que le critère des objectifs compare sous le mode réglé,
+//   null pour une autre, et tous null quand le critère est décoché ou sans
+//   objet, qui ne compare rien.
+// atteint compare au plancher la valeur même que la tuile écrit, lue sans
+// recompte : les mesures du plan, et l'écart d'itinéraire maximal des trois
+// chiffres de sa ligne d'évaluation. Hors du domaine des planchers — un plan
+// qui laisse quelqu'un en réserve ou ne tient pas une réservation —, aucun
+// ne tient : tous null.
+function planchersDe({ etatCriteres }, { mesures, troisChiffres, diagnostic, planchersValides }) {
+  const planchers = {
+    collisionsCumulees: null,
+    pairesDistinctes: null,
+    excedentCollisions: null,
+    ecartItineraireMax: null,
+    jamaisServies: null,
+    horsObjectifMax: null,
+    toursHorsObjectif: null,
+  };
+  if (!planchersValides) return planchers;
+  const { collisions, ecartItineraire, objectifsInevitables } = diagnostic;
+  planchers.collisionsCumulees = plancherDe(sommeDe(collisions, 'plancherCumulees'), mesures.collisionsCumulees);
+  planchers.pairesDistinctes = plancherDe(sommeDe(collisions, 'plancherPairesDistinctes'), mesures.pairesDistinctes);
+  planchers.excedentCollisions = plancherDe(sommeDe(collisions, 'plancherExcedent'), mesures.excedentCollisions);
+  const { ecartItineraireMax } = troisChiffres;
+  if (ecartItineraire !== null && ecartItineraireMax !== null) {
+    planchers.ecartItineraireMax = plancherDe(ecartItineraire.plancher, ecartItineraireMax.tous);
+  }
+  const critere = etatCriteres.find(({ nom }) => nom === CRITERE_DES_OBJECTIFS);
+  if (critere.coche && !critere.sansObjet) {
+    for (const [colonne, champ] of CHAMPS_DES_OBJECTIFS) {
+      if (critere.valeurs.includes(colonne)) planchers[colonne] = plancherDe(objectifsInevitables[champ], mesures.objectifs[champ]);
+    }
+  }
+  return planchers;
 }
 
 /**
@@ -545,7 +621,9 @@ export function profilAnimateurs({ N, statut }, mesures) {
  * occupations se lisent une fois chacun, et chaque partie en dérive.
  *
  * - profil, synthese, repartitionRencontres, bornes : profilRencontres et ce
- *   qu'on en tire ;
+ *   qu'on en tire, les planchers des tuiles lus dans le diagnostic sous
+ *   planchersValides, jugés atteints sur les mesures et les trois chiffres
+ *   reçus ;
  * - collisions : {planchersValides, lignes}, les barres, les planchers lus
  *   dans diagnostic.collisions ;
  * - tables : mixTables ; paires : pairesRepetees ;
@@ -568,13 +646,14 @@ export function profilAnimateurs({ N, statut }, mesures) {
  *          mesures: import('./indicateurs.js').Mesures,
  *          plafondsRealises: ArrayLike<number>,
  *          plafondsAPriori: ArrayLike<number>|null,
+ *          troisChiffres: import('./manque.js').TroisChiffres,
  *          planchersValides: boolean,
  *          cle: (libelle: string) => string,
  *          ordreMatrice?: number[]|null,
  *          aMax?: ArrayLike<number>}} options
  */
 export function detailler(instance, tableDe, options) {
-  const { diagnostic, mesures, plafondsRealises, plafondsAPriori, planchersValides, cle, ordreMatrice = null } = options;
+  const { diagnostic, mesures, plafondsRealises, plafondsAPriori, troisChiffres, planchersValides, cle, ordreMatrice = null } = options;
   const aMax = options.aMax ?? borneDiversite(instance, tableDe).aMax;
   const parcours = parcourirTours(instance, tableDe);
   const occupation = occupations(instance, tableDe, { affilies: true });
@@ -592,10 +671,13 @@ export function detailler(instance, tableDe, options) {
     bornes: bornesDesTuiles(instance, {
       mesures,
       plafondsRealises,
+      troisChiffres,
       aMax,
       profil,
       animateurs: profilDesAnimateurs,
       objectifs,
+      diagnostic,
+      planchersValides,
     }),
     collisions: { planchersValides, lignes: barresCollisions(instance, mesures, planchers, planchersValides, cle) },
     tables: mixTables(instance, tableDe, occupation, parcours),

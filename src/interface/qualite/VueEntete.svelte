@@ -14,9 +14,11 @@
   // Une tuile porte son libellé, sa valeur écrite comme au tableau, « ne
   // classe pas » quand le tableau ne porte pas sa colonne, son pourcentage
   // et le compte du pire (Pourcentage) sur trois tuiles seulement, puis les
-  // lignes de sa borne, chacune d'une personne nommée. Le libellé est un
-  // terme : le survol et le focus du clavier ouvrent l'infobulle de son
-  // explication, celle de la colonne au tableau (Infobulle, primitive).
+  // lignes de sa borne, celles d'une personne qu'elle nomme, et en dernier,
+  // quand le détail en porte un, son plancher, qui ne nomme personne : il
+  // borne la mesure de la tuile. Le libellé est un terme : le survol et le
+  // focus du clavier ouvrent l'infobulle de son explication, celle de la
+  // colonne au tableau (Infobulle, primitive).
   //
   // Désignations : data-vue-qualite sur le <div> qui enveloppe la carte,
   // que la carte ne transmet pas ; data-tuile sur chaque tuile, par le nom

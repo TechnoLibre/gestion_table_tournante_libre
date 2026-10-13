@@ -15,15 +15,17 @@
 // La ligne de source reprend le libellé que la barre de vue du plan donne à
 // ce placement (sourceMontree, plan/vue_plan.js), sa commande de retour
 // comprise, configuration normalisée ou non ; une proposition fautive, que la
-// barre ne nomme jamais, a le sien, qui dit que le plan ne la montre pas. La
-// ligne d'évaluation est celle de la table d'évaluation de la charge
-// (evaluation, propositions/modele.js), la même que le tableau des
-// propositions lit : rien ne se mesure ici. Sans source mesurable, quatre cas
-// se partagent la page sans se recouvrir, éprouvés dans l'ordre de
-// CAS_QUALITE : la configuration qui ne se normalise pas l'emporte ; puis ni
-// proposition ni retenu ; puis des propositions sans source, avec la première
-// comparable du classement (premiereDuClassement) ; puis une source en dérive
-// ou fautive, avec ses raisons.
+// barre ne nomme jamais, a le sien, qui dit que le plan ne la montre pas ;
+// sans placement à mesurer, elle n'en nomme aucun, et dit que le plan ne
+// montre que les réservations, qui ne se mesurent pas. La ligne
+// d'évaluation est celle de la table d'évaluation de la charge (evaluation,
+// propositions/modele.js), la même que le tableau des propositions lit :
+// rien ne se mesure ici. Sans source mesurable, quatre cas se partagent la
+// page sans se recouvrir, éprouvés dans l'ordre de CAS_QUALITE : la
+// configuration qui ne se normalise pas l'emporte ; puis ni proposition ni
+// retenu ; puis des propositions sans source, avec la première comparable
+// du classement (premiereDuClassement) ; puis une source en dérive ou
+// fautive, avec ses raisons.
 import { formeNommeeDe } from '../../application/commandes.js';
 import { diagnostiquerCharge } from '../../application/diagnostic.js';
 import { premiereDuClassement } from '../../application/evaluation.js';
@@ -45,9 +47,10 @@ const raisonDe = (raison) => ({ cle: raison.code, details: raison, participant: 
 // le placement id ('retenu', un identifiant de proposition, ou null) : ceux
 // que la barre de vue du plan donne à ce placement, l'état des places
 // qu'elle lit étant reconstitué sans tour ; une proposition fautive a le
-// sien. Fautif se lit aux fautes du placement (formeNommeeDe), comme la
-// barre le lit, et non à la table d'évaluation, nulle quand la
-// configuration ne se normalise pas.
+// sien, et l'absence de placement (id null) aussi, la commande de retour
+// restant celle de la barre. Fautif se lit aux fautes du placement
+// (formeNommeeDe), comme la barre le lit, et non à la table d'évaluation,
+// nulle quand la configuration ne se normalise pas.
 function ligneDeSource(charge, demandee, id) {
   const retenu = charge.retenu !== null;
   const cible = id === 'retenu' ? { retenu: true } : { proposition: id };
@@ -61,7 +64,8 @@ function ligneDeSource(charge, demandee, id) {
     etat = { source: 'reservations', refus: null };
   }
   const montree = sourceMontree(etat, demandee, retenu);
-  if (id === null || id === 'retenu' || !fautif) return montree;
+  if (id === null) return { libelle: { cle: 'qualite.source.aucun', details: {} }, revenir: montree.revenir };
+  if (id === 'retenu' || !fautif) return montree;
   return { libelle: { cle: 'qualite.source.propositionFautive', details: { proposition: id } }, revenir: montree.revenir };
 }
 

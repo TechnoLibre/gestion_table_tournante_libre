@@ -17,10 +17,13 @@
 //
 // Les bornes des tuiles viennent du détail du placement (detail.bornes),
 // chacune celle d'une personne nommée, que la tuile nomme : rien ne s'y
-// recompte, rien ne s'y moyenne. Les tours hors objectif portent le
-// plancher de la soirée (detail.objectifs) quand le diagnostic en écrit
-// un — non nul, sous des planchers valides — ; les rencontres répétées et
-// les retours choisis énoncent à part les imposés, lus dans la ligne
+// recompte, rien ne s'y moyenne. Le plancher, lui, ne nomme personne : il
+// borne la mesure de la tuile. Chaque tuile dont le détail porte le plancher
+// (detail.bornes.planchers, là où le diagnostic du § 5.6 l'écrit) l'écrit
+// en dernière ligne, sous son chiffre, et dit « atteint : impossible de
+// faire moins » quand le détail le dit atteint ; sans plancher, aucune
+// ligne, jamais un 0. Les rencontres répétées
+// et les retours choisis énoncent à part les imposés, lus dans la ligne
 // d'évaluation et dans la table. Trois tuiles portent un pourcentage, un
 // entier que le détail porte déjà, suivi du compte du pire : le minimum
 // brut (la personne au rang 1 du profil), les tours hors objectif (la
@@ -42,7 +45,8 @@ const EN_TETES = new Map(COLONNES.map(({ nom, cle }) => [nom, cle]));
  * @property {string} texte          la valeur, écrite comme au tableau
  * @property {boolean} classe        vrai quand le tableau porte la colonne
  * @property {string|null} neClassePas   la mention, null quand elle classe
- * @property {string[]} bornes       les lignes de la borne, traduites
+ * @property {string[]} bornes       les lignes de la borne, traduites, la
+ *           ligne du plancher en dernier quand il est prouvé
  * @property {{texte: string|null, compte: string}|null} pourcentage
  *           le pourcentage écrit, null quand son dénominateur est nul, et
  *           le compte du pire ; null hors des trois tuiles
@@ -85,9 +89,7 @@ function bornesDe(nom, { detail, ligne, table, t, nommer, lire }) {
     case 'toursHorsObjectif': {
       const { soiree } = bornes;
       if (soiree === null) return rendu([]);
-      const plancher = detail.objectifs?.soiree.plancher ?? null;
-      const ecrit = detail.collisions.planchersValides && plancher !== null && plancher > 0;
-      return rendu(ecrit ? [t('qualite.tuile.plancher', { plancher })] : [], {
+      return rendu([], {
         texte: soiree.pourcent === null ? null : t('qualite.pourcentage.servis', { pourcent: soiree.pourcent }),
         compte: t('qualite.tuile.pireJamaisServies', { personnes: soiree.jamaisServies }),
       });
@@ -112,6 +114,24 @@ function bornesDe(nom, { detail, ligne, table, t, nommer, lire }) {
     default:
       return rendu([]);
   }
+}
+
+// La ligne du plancher de la tuile nom, lue dans le détail : {plancher,
+// atteint} ou null, que le moteur ne rend que prouvé et non nul. Une liste
+// d'une ligne, ou vide.
+function plancherDe(nom, { detail, t }) {
+  const { planchers } = detail.bornes;
+  const lu = Object.hasOwn(planchers, nom) ? planchers[nom] : null;
+  if (lu === null) return [];
+  const { plancher, atteint } = lu;
+  return [t(atteint ? 'qualite.tuile.plancherAtteint' : 'qualite.tuile.plancher', { plancher })];
+}
+
+// Les lignes de la borne d'une tuile, son plancher en dernier, et son
+// pourcentage.
+function bornesEtPlancher(nom, contexte) {
+  const { bornes, pourcentage } = bornesDe(nom, contexte);
+  return { bornes: [...bornes, ...plancherDe(nom, contexte)], pourcentage };
 }
 
 /**
@@ -156,7 +176,7 @@ export function enteteDe({ detail, ligne, table }, { t, format }) {
         texte: texteCellule(cellule, { t, format }),
         classe,
         neClassePas: classe ? null : t('qualite.tuile.neClassePas'),
-        ...bornesDe(nom, contexte),
+        ...bornesEtPlancher(nom, contexte),
       });
     }
     if (deGroupe.length > 0) groupes.push({ cle, libelle: t(cle), tuiles: deGroupe });

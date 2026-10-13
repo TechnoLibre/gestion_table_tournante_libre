@@ -222,6 +222,22 @@ describe('l’en-tête chiffré (§ 12.2, B11, D48)', () => {
     expect(copie.textContent).not.toContain('%');
   });
 
+  test('rouge : un plancher prouvé s’écrit dans le texte de sa tuile, sous son chiffre, rendu et lu par l’assistance', async () => {
+    // Cinq de la Coopérative Aubier pour deux tables de trois : au moins
+    // quatre collisions par tour, douze sur trois tours, que tout plan
+    // atteint.
+    const charge = chargeSix();
+    for (const personne of charge.participants) personne.appartenance = personne.id <= 5 ? 'Coopérative Aubier' : null;
+    const cible = await monter(VueEntete, vueDe(generee(charge)));
+    const tuile = tuileDe(cible, 'collisionsCumulees');
+    const ligne = t('qualite.tuile.plancherAtteint', { plancher: 12 });
+    const porteuse = [...tuile.querySelectorAll('.borne')].find((element) => texteDe(element) === ligne);
+    expect(porteuse, texteDe(tuile)).toBeDefined();
+    expect(porteuse.compareDocumentPosition(tuile.querySelector('.valeur')) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(porteuse.closest('[aria-hidden="true"], [hidden]')).toBeNull();
+    expect(porteuse.checkVisibility({ visibilityProperty: true })).toBe(true);
+  });
+
   test('le libellé d’une tuile s’explique au focus du clavier : l’infobulle porte l’explication de la colonne', async () => {
     const cible = await monter(VueEntete, vueDe(generee(chargeSix())));
     const terme = tuileDe(cible, 'manqueMax').querySelector('[data-terme]');

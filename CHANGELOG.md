@@ -90,11 +90,89 @@
   environ 5 %.
 - Le guide d'usage montre les étiquettes, les objectifs des tables, leur
   import et l'ordre des priorités, captures à l'appui.
+- Une neuvième section, « Qualité », suit « Propositions » dans la phase Placer.
+  Elle mesure le placement que le plan montre — le retenu ou la proposition
+  montrée — et répond à deux questions : ce placement est-il bon, et qui s'y
+  trouve mal servi ? Chaque ligne du tableau des propositions offre « Qualité »,
+  qui montre la proposition au plan et ouvre la page. La page ne modifie rien :
+  elle reste ouverte en lecture, sur un plan bloqué et pendant une génération.
+- La page se lit vue par vue, une liste en tête menant à chacune : l'en-tête
+  chiffré, une tuile par colonne du tableau des propositions, chaque borne celle
+  d'une personne nommée ; le profil trié des rencontres ; les collisions
+  d'appartenance, « prouvé inévitable » et « reste » ; les appartenances à
+  chaque table ; les paires répétées ; les objectifs des tables ; les animateurs
+  rencontrés ; la diversité par animateur ; la performance du calcul. Un cas
+  sans objet — une seule table, un seul tour, aucune appartenance, aucune
+  collision… — s'écrit en une phrase, jamais par des axes vides.
+- Une tuile écrit sous son chiffre le plancher que le diagnostic prouve pour sa
+  mesure, « plancher 4 », et « plancher 4 atteint : impossible de faire moins »
+  quand la mesure l'égale : collisions cumulées, paires distinctes, excédent,
+  écart d'itinéraire maximal et, chacun quand le critère des objectifs le
+  compare sous le mode réglé, personnes jamais servies, plus de tours hors
+  objectif d'une personne et tours hors objectif. Sur un placement qui assoit
+  chacun à chaque tour et tient chaque réservation, relancer ne fera pas passer
+  la mesure sous ce plancher ; hors de là, un placement ajusté qui laisse
+  quelqu'un en réserve par exemple, la page n'en écrit aucun. Sans plancher
+  prouvé, la tuile n'en écrit aucun, jamais un 0.
+- Chaque graphique a son tableau jumeau, qui s'ouvre à la demande sous le
+  graphique et se parcourt au clavier et au lecteur d'écran ; l'infobulle d'un
+  point en porte la ligne. Les graphiques se lisent dans les deux thèmes et sans
+  leur couleur : chaque tracé a son motif.
+- Les parts se lisent en pourcentages, sur la page de qualité seulement, et
+  chaque pourcentage est suivi, juste dessous, du pire cas en compte : « 88 % »,
+  puis « minimum 24 sur 27 » ; « 77 % des tours possibles servis », puis « 3
+  personnes jamais servies ». Sur une ligne de tableau ou d'infobulle, il est
+  suivi du compte de cette ligne, « 5 appartenances pour 8 sièges ». Le tableau
+  des propositions garde ses comptes.
+- Le profil des rencontres se dessine en deux graphiques, au même ordre de
+  personnes, de la plus mal servie à la mieux servie : en comptes, avec le
+  plafond réalisé en trait mixte et la **borne de diversité** — une borne
+  arithmétique, qui ne prouve rien, des appartenances qu'une personne peut
+  rencontrer à ses tables — en pointillés ; puis en pourcentage du plafond
+  réalisé, jusqu'à la règle à 100 %.
+- Les appartenances à chaque table se lisent sur une grille tables × tours, sous
+  trois positions d'un sélecteur : « appartenances par siège », par défaut,
+  « appartenances par personne assise » et « doublons parmi les affiliés ». La
+  pire table vient en tête ; la position choisie se garde jusqu'à la fermeture
+  de l'événement et n'écrit rien.
+- La fiche d'une personne porte une rubrique « Rencontres » : les personnes
+  qu'elle a rencontrées, le nombre de fois et les tours, les plus revues
+  d'abord. C'est le chemin vers une personne quand la matrice « qui a rencontré
+  qui » ne se dessine pas, au-delà de 44 participants.
+- Les objectifs des tables se lisent tour par tour : les personnes jamais
+  servies d'abord, la soirée, puis une barre par tour, avec ses tours hors
+  objectif, la part que la configuration rend inévitable, et les personnes
+  assises sans table possible.
+- Les animateurs se lisent en deux vues : les animateurs que chacun a
+  rencontrés, avec la borne des animateurs en pointillés ; puis la diversité que
+  chaque animateur voit à sa table, appartenances et étiquettes, sur la soirée,
+  et tour par tour dans le tableau jumeau, avec le moins varié, le plus varié et
+  combien sont au minimum.
+- La performance du calcul montre la course de la recherche qui a produit la
+  proposition : ses mouvements évalués, la valeur de chaque critère à 1, 10,
+  100… mouvements, toujours remesurée sous les réglages courants, et le dernier
+  point où une valeur a changé. La durée et la cadence de la génération
+  s'affichent pendant la séance qui l'a produite ; rouverte plus tard, la
+  proposition garde sa course et dit sa durée inconnue.
+- La course de chaque proposition se garde dans un fichier à côté de celui de
+  l'événement, `<nom>.gtt-courses.json`, écrit seulement quand les propositions
+  changent — génération, effacement, retour dans l'historique. Le perdre ne perd
+  rien de votre travail : la page dit seulement que la course n'est pas gardée.
+  Renommer, copier et supprimer l'événement l'emportent avec lui ; un fichier
+  d'événement venu d'ailleurs arrive sans course connue.
+- Rien de la page de qualité ne s'imprime, et aucun indicateur ne s'exporte en
+  CSV : elle se lit à l'écran, où l'on choisit sa proposition.
+- À graine égale, les propositions et leur classement sont les mêmes qu'avant la
+  page de qualité.
+- Le guide d'usage montre la page de qualité, ses vues et ses cas limites,
+  captures à l'appui.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
 s'enregistrent dans des champs facultatifs, absents à leur défaut. Un fichier
 de format 1, écrit par une version de développement, s'ouvre tel quel et se
 convertit, son historique avec lui, au premier geste en écriture.
+La course de la recherche ne va ni dans le fichier de l'événement ni dans son
+historique : elle a son propre fichier, `<nom>.gtt-courses.json`.
 
 **En remplaçant** : rien à faire, c'est la première version.

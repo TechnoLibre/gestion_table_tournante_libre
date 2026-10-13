@@ -7,10 +7,11 @@
 // l'accord du registre avec le relevé committé du banc : le banc écrit un
 // relevé, jamais le registre, et une constante du banc déclarée mesurée
 // porte la valeur que le relevé propose, sur la configuration qu'il décrit.
-// Deux valeurs du relevé sont adoptées — le seuil de sièges lisibles et la
-// tolérance de la chaîne témoin — ; le ralentissement à pleine charge garde
-// son défaut de travail : la machine de référence est le poste de
-// développement, ρ à son défaut (Q13 b).
+// Quatre valeurs du relevé sont adoptées — le seuil de sièges lisibles, la
+// tolérance de la chaîne témoin, et les deux seuils de la page de qualité,
+// celui de la matrice et la largeur de troncature des noms — ; le
+// ralentissement à pleine charge garde son défaut de travail : la machine de
+// référence est le poste de développement, ρ à son défaut (Q13 b).
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { accordRegistre } from '../../scripts/banc/releve.js';
@@ -38,12 +39,12 @@ const CONTRAT = [
   ['HAUTEUR_BANDE_IMPRESSION', null, 'mm', 'execution', 'mesuree'],
   ['TOLERANCE_CHAINE_TEMOIN', 0.011, 'rapport', 'banc', 'mesuree'],
   ['RALENTISSEMENT_PLEINE_CHARGE', 2, '×', 'banc', 'defautDeTravail'],
-  ['SEUIL_MATRICE_PARTICIPANTS', 40, 'participants', 'banc', 'defautDeTravail'],
-  ['LARGEUR_TRONCATURE_NOM_PX', 180, 'px', 'banc', 'defautDeTravail'],
+  ['SEUIL_MATRICE_PARTICIPANTS', 44, 'participants', 'banc', 'mesuree'],
+  ['LARGEUR_TRONCATURE_NOM_PX', 168, 'px', 'banc', 'mesuree'],
 ];
 
 // Les constantes du banc dont le registre a adopté la valeur relevée.
-const ADOPTEES = ['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN'];
+const ADOPTEES = ['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN', 'SEUIL_MATRICE_PARTICIPANTS', 'LARGEUR_TRONCATURE_NOM_PX'];
 
 // Une copie du registre, entrée par entrée, que l'épreuve peut altérer.
 const copie = () => CONSTANTES.map((entree) => ({ ...entree }));
@@ -76,7 +77,7 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
     assert.match(entree('TOLERANCE_CHAINE_TEMOIN').protocole, /repli/);
   });
 
-  test('les deux seuils de la page de qualité attendent le banc, protocole écrit (B29) ; la troncature se cale sur une longueur de nom écrite ici', () => {
+  test('les deux seuils de la page de qualité sont adoptés du banc, protocole écrit (B29) ; la troncature se cale sur une longueur de nom écrite ici', () => {
     const entree = (nom) => CONSTANTES.find((c) => c.nom === nom);
     const matrice = entree('SEUIL_MATRICE_PARTICIPANTS');
     assert.match(matrice.mesure, /24 px/);
@@ -88,11 +89,13 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
     assert.match(troncature.protocole, /glyphe le plus large/);
     // Jamais les noms d'une démonstration, que sa régénération change.
     assert.match(troncature.protocole, /jamais un nom de démonstration/);
-    // Le banc les relève ; le registre garde leur défaut de travail jusqu'à
-    // l'adoption à la main d'une valeur relevée.
+    // Le banc les relève ; le registre les déclare mesurés, sur la
+    // configuration du relevé non ralenti, ce que l'accord avec le relevé
+    // committé éprouve à son tour.
     for (const seuil of [matrice, troncature]) {
       assert.equal(seuil.proprietaire, 'banc', seuil.nom);
-      assert.equal(seuil.statut, 'defautDeTravail', seuil.nom);
+      assert.equal(seuil.statut, 'mesuree', seuil.nom);
+      assert.match(seuil.configuration, /processeur non ralenti, police Noto Sans/, seuil.nom);
     }
   });
 

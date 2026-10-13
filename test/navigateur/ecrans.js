@@ -271,11 +271,13 @@ const NIVEAUX = Object.freeze([
   [[1, 2, 3, 4], [5, 6, 9, 10], [7, 8, 11, 12], [13, 14, 15, 16]],
 ]);
 
-/** Seize personnes inventées, quatre tables de quatre, trois tours : les
- *  quatre de la première appartenance réservées ensemble à la table 1 pour
- *  tous les tours, et la proposition NIVEAUX, écrite à la main, où la
- *  grille des tables, sous chaque position, et la matrice des rencontres
- *  portent les quatre niveaux de l'échelle (§ 12.7, D33, D35). */
+/** Seize personnes inventées, trois tables de quatre et une de cinq, trois
+ *  tours : les quatre de la première appartenance réservées ensemble à la
+ *  table 1 pour tous les tours, et la proposition NIVEAUX, écrite à la
+ *  main, où la grille des tables, sous chaque position, et la matrice des
+ *  rencontres portent les quatre niveaux de l'échelle (§ 12.7, D33, D35).
+ *  La table 4 garde un siège vide à chaque tour : ses sièges et ses assis
+ *  diffèrent, et leurs deux pourcentages aussi aux tours 1 et 2. */
 export function chargeNiveaux() {
   const appartenances = [
     ...Array(4).fill(AUBIER),
@@ -286,6 +288,7 @@ export function chargeNiveaux() {
     ...Array(5).fill(null),
   ];
   let charge = chargeInventee({ appartenances, tables: 4, sieges: 4, tours: 3 });
+  charge.tables[3].sieges = 5;
   for (const participant of [1, 2, 3, 4]) {
     charge = executer(charge, 'reserver', { participant, table: 1, siege: participant, portee: 'tous', tour: null });
   }
@@ -575,12 +578,14 @@ async function jumeauSansEcriture(contexte, charge) {
 }
 
 // La page de qualité de chargeNiveaux, son sélecteur du mélange des tables
-// posé sur la position donnée par un clic.
+// posé sur la position donnée par un clic, et son jumeau ouvert : chaque
+// ligne y écrit les trois pourcentages, chacun suivi du compte de sa ligne.
 async function tablesSurPosition(contexte, position) {
   const m = await ouvrirQualite(contexte, chargeNiveaux());
   await cliquer(m, `[data-vue-qualite="tables"] [data-position-tables="${position}"]`);
   await attendre(`la position « ${position} » choisie`, () => m.racine.querySelector(`[data-position-tables="${position}"]`)?.checked === true);
   await qualiteDessinee(m);
+  await ouvrirJumeaux(m, '[data-vue-qualite="tables"]');
   return m.racine;
 }
 
