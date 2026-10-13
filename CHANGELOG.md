@@ -166,12 +166,13 @@
   page de qualité.
 - Le guide d'usage montre la page de qualité, ses vues et ses cas limites,
   captures à l'appui.
-- Dans la liste des événements, la colonne du placement retenu montre ses
-  « Collisions cumulées (paire et tour) », le même nombre que la colonne du
-  tableau des propositions, au lieu de « Diff somme d'appartenance ». Le réglage
-  « Cible de la somme de redondance », qui ne servait qu'à cette colonne, quitte
-  la section des propositions : un fichier qui le porte s'ouvre sans message, et
-  le perd au premier enregistrement.
+- Dans la liste des événements, le placement retenu montre ses « Collisions
+  cumulées (paire et tour) » et ses « Rencontres répétées choisies (paires) »,
+  les mêmes nombres que les colonnes du tableau des propositions, au lieu de
+  « Diff somme d'appartenance ». Le réglage « Cible de la somme de redondance »,
+  qui ne servait qu'à cette ancienne colonne, quitte la section des
+  propositions : un fichier qui le porte s'ouvre sans message, et le perd au
+  premier enregistrement.
 - La section « Propositions » offre « Garder les 10 meilleures » : les dix
   premières du classement restent, et celle d'où vient le placement retenu
   aussi, les autres s'effacent. Le nombre se règle dans le champ voisin. Une

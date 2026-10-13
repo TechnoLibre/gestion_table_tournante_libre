@@ -639,7 +639,7 @@ describe('lister (§ 8.1, § 19.4)', () => {
     return serialiser(modifier(charge), { revision: 3, produitVersion: V1 });
   }
 
-  test('les mesures du retenu : ses seules collisions cumulées, celles de resumeDuRetenu ; null sans retenu ; rien d’écrit', async () => {
+  test('les mesures du retenu : ses collisions cumulées et ses rencontres répétées choisies, celles de resumeDuRetenu ; null sans retenu ; rien d’écrit', async () => {
     const { fs, facade } = await deuxEvenements();
     fs.deposer('portable', `retenue${SUFFIXES.etat}`, texteRetenu());
     const avant = ecritures(fs);
@@ -649,7 +649,11 @@ describe('lister (§ 8.1, § 19.4)', () => {
     const charge = analyser(texteRetenu()).charge;
     const { mesures } = evaluer(charge).retenu;
     assert.ok(mesures.collisionsCumulees > 0, 'le retenu porte des collisions');
-    assert.deepEqual(par.retenue.mesuresDuRetenu, { collisionsCumulees: mesures.collisionsCumulees });
+    assert.ok(mesures.rencontresRepetees.choisies > 0, 'le retenu porte des rencontres répétées choisies');
+    assert.deepEqual(par.retenue.mesuresDuRetenu, {
+      collisionsCumulees: mesures.collisionsCumulees,
+      rencontresRepetees: mesures.rencontresRepetees.choisies,
+    });
     assert.deepEqual(par.retenue.mesuresDuRetenu, resumeDuRetenu(charge));
     assert.equal(par['soiree-a'].mesuresDuRetenu, null);
     assert.equal(par.petite.mesuresDuRetenu, null);

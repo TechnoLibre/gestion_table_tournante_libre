@@ -643,13 +643,14 @@ export const ECRANS = Object.freeze([
     mode: null,
     async atteindre(contexte) {
       // La liste paraît avant ses résumés : tant que l'horloge pilotée
-      // n'avance pas, chaque valeur de résumé porte le signe du chargement.
-      // Rien ici ne l'avance : les signes restent pendant les relevés des
-      // deux thèmes, où le trait de chacun se mesure comme la marque
-      // « chargement ».
+      // n'avance pas, chaque valeur de résumé porte le signe du chargement :
+      // trois par ligne, les deux mesures du retenu et la meilleure
+      // proposition. Rien ici ne l'avance : les signes restent pendant les
+      // relevés des deux thèmes, où le trait de chacun se mesure comme la
+      // marque « chargement ».
       const m = await contexte.monter({ fichiers: [fichierEtat(chargePrincipale()), fichierEtat(chargeGelee(), 'gelee')] });
       await attendre('le signe du chargement dans chaque valeur de résumé', () =>
-        [BASE, 'gelee'].every((base) => m.racine.querySelectorAll(`[data-evenement="${base}"] [aria-busy="true"] [data-chargement]`).length === 2),
+        [BASE, 'gelee'].every((base) => m.racine.querySelectorAll(`[data-evenement="${base}"] [aria-busy="true"] [data-chargement]`).length === 3),
       );
       return m.racine;
     },
@@ -659,17 +660,19 @@ export const ECRANS = Object.freeze([
     mode: null,
     async atteindre(contexte) {
       // La principale, sa proposition retenue : la ligne montre les
-      // collisions cumulées du retenu et la meilleure proposition du
-      // classement, et le pointeur réel sur l'intitulé des collisions — un
-      // en-tête de colonne du tableau, une fois pour la liste — ouvre son
-      // infobulle.
+      // collisions cumulées et les rencontres répétées choisies du retenu et
+      // la meilleure proposition du classement, et le pointeur réel sur
+      // l'intitulé des collisions — un en-tête de colonne du tableau, une
+      // fois pour la liste — ouvre son infobulle.
       const principale = chargePrincipale();
       const charge = executer(principale, 'retenirProposition', { id: principale.propositions[0].id });
       const m = await contexte.monter({ fichiers: [fichierEtat(charge)] });
       const ligne = `[data-evenement="${BASE}"]`;
       await chargerResumes(m);
-      await attendre('les collisions du retenu et la meilleure proposition', () =>
-        ['[data-colonne="collisionsCumulees"]', '[data-meilleure-id]'].every((valeur) => /\d/.test(m.racine.querySelector(`${ligne} ${valeur}`)?.textContent ?? '')),
+      await attendre('les mesures du retenu et la meilleure proposition', () =>
+        ['[data-colonne="collisionsCumulees"]', '[data-colonne="rencontresRepetees"]', '[data-meilleure-id]'].every((valeur) =>
+          /\d/.test(m.racine.querySelector(`${ligne} ${valeur}`)?.textContent ?? ''),
+        ),
       );
       const { x, y } = await centre(await element(m, '[data-ecran="accueil"] thead [data-terme="collisionsCumulees"]'));
       await pointer('bouger', x, y);

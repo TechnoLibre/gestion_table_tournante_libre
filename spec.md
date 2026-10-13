@@ -201,7 +201,7 @@ du calcul qui a produit la proposition. Le logiciel sépare ce que le moteur a
 décidé de ce que les réservations imposent (§ 5.4). Retenir fait passer le plan
 à l'état *Retenu* (§ 9) ; les propositions non retenues restent disponibles. Le
 retenu se résume ensuite dans la liste des événements, par ses collisions
-cumulées (§ 5.4, § 8.1).
+cumulées et ses rencontres répétées choisies (§ 5.4, § 8.1).
 
 **11. Ajuster à la main.** *Facultative, reprenable.* Le même geste qu'à
 l'étape 7 déplace maintenant une personne réelle dans le placement retenu. **Le
@@ -1950,12 +1950,16 @@ pastille de l'état et son compte —, ou ne les groupe pas, au choix ; ses
 en-têtes de colonnes se groupent en « Événement », « Placement retenu » et
 « Meilleure proposition du classement », et le nom de chaque ligne en est
 l'en-tête, la date et le chemin en petite ligne dessous. Sous le tableau, des
-cartes offrent la création, le dossier de travail et les démonstrations. Une
-colonne résume en plus le **placement retenu** : « Collisions cumulées (paire et
-tour) », les collisions cumulées du retenu (§ 5.4) — le nombre que la colonne du
-même intitulé du tableau des propositions porte sur la ligne du retenu. Elle se
-lit dans la même mesure que le tableau, sans rien écrire ; un événement sans
-retenu, ou dont le retenu est fautif ou en dérive (§ 8.9, § 9), y porte « — ».
+cartes offrent la création, le dossier de travail et les démonstrations. Deux
+colonnes résument en plus le **placement retenu**, sous l'en-tête du groupe qui
+les couvre toutes deux : « Collisions cumulées (paire et tour) », les collisions
+cumulées du retenu, puis « Rencontres répétées choisies (paires) », les paires
+réunies plus d'une fois que le placement a choisies, sans celles que les
+réservations imposent (§ 5.4) — dans chacune, le nombre que la colonne du même
+intitulé du tableau des propositions porte sur la ligne du retenu. Les deux se
+lisent dans une seule mesure du retenu, celle du tableau, sans rien écrire ; un
+événement sans retenu, ou dont le retenu est fautif ou en dérive (§ 8.9, § 9),
+porte « — » dans l'une et l'autre.
 Chaque ligne porte aussi la **« Meilleure proposition du classement »**, sous
 les libellés du bloc que la section de la génération montre en tête :
 l'identifiant de la proposition au rang 1 du classement (§ 5.7) — la même

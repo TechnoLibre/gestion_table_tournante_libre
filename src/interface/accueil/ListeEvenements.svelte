@@ -14,13 +14,14 @@
   //
   // Les en-têtes de colonnes sont groupés : l'événement — nom, état,
   // participants, dernière modification —, le placement retenu, à la teinte
-  // de Retenu — ses collisions cumulées (COLONNES_DU_RETENU) —, la
-  // meilleure proposition du classement, à la teinte de Proposé, sous le
-  // titre et le libellé du bloc de la génération (MEILLEURE) — son
-  // identifiant —, puis les actions. Chaque valeur est dans son propre
-  // nœud : data-colonne, data-meilleure-id, « — » sans valeur. Le nom est
-  // l'en-tête de sa ligne ; la date et le chemin le suivent en petite
-  // ligne, chacun précédé de son intitulé, que
+  // de Retenu — ses collisions cumulées et ses rencontres répétées choisies,
+  // une colonne chacune (COLONNES_DU_RETENU), que l'en-tête du groupe
+  // couvre —, la meilleure proposition du classement, à la teinte de
+  // Proposé, sous le titre et le libellé du bloc de la génération
+  // (MEILLEURE) — son identifiant —, puis les actions. Chaque valeur est
+  // dans son propre nœud : data-colonne, data-meilleure-id, « — » sans
+  // valeur. Le nom est l'en-tête de sa ligne ; la date et le chemin le
+  // suivent en petite ligne, chacun précédé de son intitulé, que
   // lisent les technologies d'assistance et que l'œil ne voit pas, puis ses
   // signalements traduits — les bases qu'un doublon nomme suivent son
   // texte, chacune dans son propre nœud (data-doublon). L'état est une
@@ -33,7 +34,7 @@
   //
   // lignes : LigneListe[] de la façade ; resumes : les résumés reçus de
   // facade.resumer, par base — une ligne sans le sien attend, et chacune de
-  // ses deux valeurs de résumé porte le signe du chargement (Chargement),
+  // ses trois valeurs de résumé porte le signe du chargement (Chargement),
   // décoratif, dans une cellule qui se dit occupée (aria-busy), jusqu'à ce
   // qu'il arrive. La région d'état qui suit le tableau
   // (data-chargement-liste) existe tant que la liste a des lignes, et écrit
@@ -44,7 +45,7 @@
   // du dernier échec, ou null ; apresOperation() : à appeler quand une
   // opération a changé le dossier.
   //
-  // L'intitulé de la mesure du retenu et le titre de la meilleure
+  // L'intitulé de chaque mesure du retenu et le titre de la meilleure
   // proposition s'expliquent dans l'infobulle de la liste, une seule
   // (Infobulle, primitive) : chaque terme (data-terme, que pose le fragment termeExplique), un en-tête de colonne,
   // se focalise au clavier, son survol ou son focus ouvre l'explication, le
@@ -72,9 +73,9 @@
   const enChargement = $derived(lignes.some((ligne) => ligneAffichee(ligne, format, resumes.get(ligne.base)).enAttente));
   const groupes = $derived(groupesDeLaListe(lignes, vue.filtre, vue.groupement));
   // Le nombre de colonnes du tableau, que l'intitulé d'un groupe couvre :
-  // les quatre de l'événement, celle du retenu, celle de la meilleure
+  // les quatre de l'événement, les deux du retenu, celle de la meilleure
   // proposition, les actions.
-  const COLONNES = 7;
+  const COLONNES = 8;
 
   // Le terme expliqué : {ancre, terme, cle, details} — son élément, son nom
   // et la clé de son explication — ; null sans infobulle.
@@ -136,13 +137,13 @@
       <div class="defilement">
         <table>
           <colgroup span="4"></colgroup>
-          <colgroup></colgroup>
+          <colgroup span={COLONNES_DU_RETENU.length}></colgroup>
           <colgroup></colgroup>
           <colgroup></colgroup>
           <thead>
             <tr>
               <th scope="colgroup" colspan="4" class="groupe">{t('accueil.entete.evenement')}</th>
-              <th scope="colgroup" class="groupe retenu"
+              <th scope="colgroup" colspan={COLONNES_DU_RETENU.length} class="groupe retenu"
                 ><span class="entete-groupe"
                   ><span class="signe"><Icone nom="coche" taille={14} /></span><span>{t('accueil.entete.retenu')}</span></span
                 ></th

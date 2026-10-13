@@ -484,23 +484,52 @@ describe("évaluation : une configuration qui ne se tient pas", () => {
   });
 });
 
-describe('resumeDuRetenu : les collisions cumulées du retenu que lit la liste des événements (§ 5.4, § 8.1)', () => {
+describe('resumeDuRetenu : les collisions cumulées et les rencontres répétées choisies du retenu que lit la liste des événements (§ 5.4, § 8.1)', () => {
   // La petite démonstration, trois propositions générées, la deuxième retenue.
   function retenue() {
     const generees = generee(chargeDemo('petite-conflit'), { graine: 3, nombre: 3, arret: 300 });
     return executer(generees, 'retenirProposition', { id: generees.propositions[1].id });
   }
 
-  test("les seules collisions cumulées (paire et tour), celles de la ligne du retenu d'evaluer et de mesurer", () => {
+  test("les collisions cumulées (paire et tour) et les rencontres répétées choisies, celles de la ligne du retenu d'evaluer et de mesurer, et rien d'autre", () => {
     const charge = figer(retenue());
     const resume = resumeDuRetenu(charge);
     const { mesures } = evaluer(charge).retenu;
     assert.ok(mesures.collisionsCumulees > 0, 'le retenu porte des collisions');
+    assert.ok(mesures.rencontresRepetees.choisies > 0, 'le retenu porte des rencontres répétées choisies');
     assert.notEqual(mesures.collisionsCumulees, mesures.totalRedondance);
-    assert.deepEqual(resume, { collisionsCumulees: mesures.collisionsCumulees });
+    assert.notEqual(mesures.rencontresRepetees.choisies, mesures.collisionsCumulees);
+    assert.deepEqual(resume, {
+      collisionsCumulees: mesures.collisionsCumulees,
+      rencontresRepetees: mesures.rencontresRepetees.choisies,
+    });
     const instance = normaliser(configurationDe(charge));
     const attendues = mesurer(instance, indexerPlan(instance, planDepuisFichier(charge.retenu)));
     assert.equal(attendues.collisionsCumulees, mesures.collisionsCumulees);
+    assert.deepEqual(attendues.rencontresRepetees, mesures.rencontresRepetees);
+  });
+
+  test('les rencontres répétées du résumé sont les seules choisies : une paire réservée ensemble, imposée, n’y entre pas', () => {
+    const charge = structuredClone(chargeDemo('petite'));
+    charge.reservations = [1, 2].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+    const avec = generee(charge, { graine: 6, nombre: 3, arret: 500 });
+    for (const proposition of avec.propositions) {
+      const retenue = figer(executer(avec, 'retenirProposition', { id: proposition.id }));
+      const { mesures } = evaluer(retenue).retenu;
+      assert.equal(mesures.rencontresRepetees.imposees, 1);
+      assert.deepEqual(resumeDuRetenu(retenue), {
+        collisionsCumulees: mesures.collisionsCumulees,
+        rencontresRepetees: mesures.rencontresRepetees.choisies,
+      });
+    }
+  });
+
+  test('les deux valeurs sortent d’une seule mesure du retenu : un seul appel à mesurer, dont le résumé lit les deux', () => {
+    const source = readFileSync(new URL('./evaluation.js', import.meta.url), 'utf8');
+    const debut = source.indexOf('export function resumeDuRetenu(');
+    assert.ok(debut >= 0);
+    const corps = source.slice(debut, source.indexOf('\n}\n', debut));
+    assert.equal(corps.match(/\bmesurer\(/g)?.length, 1);
   });
 
   test('aucune cible : le résumé ne dépend pas d’un champ cibleRedondance resté dans les réglages, et le module n’en exporte plus', () => {

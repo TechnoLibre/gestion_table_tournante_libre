@@ -73,10 +73,10 @@ export const TABLE = new Map([
   ['accueil.colonne.participants', 'Participants'],
   ['accueil.colonne.modification', 'Dernière modification'],
   ['accueil.colonne.chemin', 'Fichier'],
-  // La mesure du placement retenu (§ 5.4, § 8.1) : son intitulé est celui de
-  // la colonne du tableau des propositions qui porte la même mesure ;
-  // l'explication que l'infobulle de l'intitulé donne dit ce que compte le
-  // nombre, d'où il vient, et quand il vaut « — ».
+  // Les mesures du placement retenu (§ 5.4, § 8.1) : l'intitulé de chacune
+  // est celui de la colonne du tableau des propositions qui porte la même
+  // mesure ; l'explication que l'infobulle de l'intitulé donne dit ce que
+  // compte le nombre, d'où il vient, et quand il vaut « — ».
   [
     'accueil.explication.collisionsCumulees',
     'Les collisions du placement retenu. Chaque fois que deux personnes de la même appartenance partagent une ' +
@@ -84,6 +84,15 @@ export const TABLE = new Map([
       'que la colonne « Collisions cumulées (paire et tour) » du tableau des propositions, sur la ligne du retenu. ' +
       "Plus il est bas, mieux c'est. « \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit " +
       "plus la configuration, ou se contredit.",
+  ],
+  [
+    'accueil.explication.rencontresRepetees',
+    "Les rencontres répétées du placement retenu : les paires de personnes réunies à la même table à plus d'un " +
+      'tour que le placement a choisies, comptées une fois par paire : deux personnes ensemble à trois tours font 1. ' +
+      "Une paire que les réservations réunissent à chacune de ses rencontres n'y entre pas. Le même nombre que " +
+      'la colonne « Rencontres répétées choisies (paires) » du tableau des propositions, sur la ligne du retenu. ' +
+      "Plus il est bas, mieux c'est. « \u{2014} » quand aucun placement n'est retenu, ou que le retenu ne décrit " +
+      'plus la configuration, ou se contredit.',
   ],
 
   // La meilleure proposition du classement de chaque événement (§ 5.4,

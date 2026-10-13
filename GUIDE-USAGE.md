@@ -378,8 +378,9 @@ réservations imposent de ce que la recherche a choisi.
 proposition alors que le retenu a été ajusté à la main détruit ces ajustements :
 une fenêtre le dit avant.
 
-La liste des événements résume ensuite le retenu par l’écart de sa somme de
-redondance d’appartenance à la cible de la soirée.
+La liste des événements résume ensuite le retenu par ses collisions cumulées
+(paire et tour) et ses rencontres répétées choisies (paires), les nombres du
+tableau des propositions.
 
 Retenir n’est pas obligatoire, mais tout ce qui s’imprime sans placement retenu
 porte la mention BROUILLON (étape 12).

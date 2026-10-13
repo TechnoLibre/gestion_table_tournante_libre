@@ -5,13 +5,13 @@
 // de la liste des événements affichent, sans arithmétique ni texte. Une
 // ligne de la liste (LigneListe de la façade, evenements.js) devient ses six
 // informations et ses signalements, mis en forme, puis, son résumé reçu, les
-// collisions cumulées de son retenu et l'identifiant de la meilleure
-// proposition de son classement ; les lignes de la liste, les tuiles de ses
-// filtres par état du plan, le résumé de son en-tête et les groupes de son
-// tableau ; une question du dossier de travail, ses réponses ; un état
-// illisible, ses secours ; un refus de la façade, le refus affiché sur la
-// liste. Chaque clé rendue est écrite ici en entier : aucun composant ne
-// compose une clé.
+// collisions cumulées et les rencontres répétées choisies de son retenu et
+// l'identifiant de la meilleure proposition de son classement ; les lignes
+// de la liste, les tuiles de ses filtres par état du plan, le résumé de son
+// en-tête et les groupes de son tableau ; une question du dossier de
+// travail, ses réponses ; un état illisible, ses secours ; un refus de la
+// façade, le refus affiché sur la liste. Chaque clé rendue est écrite ici
+// en entier : aucun composant ne compose une clé.
 
 // Les états du plan (§ 9) et la clé de leur nom, dans l'ordre du § 9.
 const CLES_ETATS = new Map([
@@ -25,18 +25,26 @@ const CLES_ETATS = new Map([
 export const ETATS = Object.freeze([...CLES_ETATS.keys()]);
 
 /**
- * La mesure du placement retenu qu'une ligne montre (§ 5.4, § 8.1) : ses
- * collisions cumulées, { colonne, cle, explication } — le nom de sa valeur
- * dans ligneAffichee et son data-colonne, la clé de son intitulé, celle de
- * la colonne du tableau des propositions qui porte la même mesure, et celle
- * de son explication, propre à la liste, que l'infobulle de l'intitulé
- * montre.
+ * Les mesures du placement retenu qu'une ligne montre (§ 5.4, § 8.1), dans
+ * l'ordre de leurs colonnes : ses collisions cumulées, puis ses rencontres
+ * répétées choisies. Chacune est { colonne, cle, explication } — le nom de
+ * sa valeur dans ligneAffichee et dans le résumé du retenu, qui est aussi son
+ * data-colonne et son data-terme, la clé de son intitulé, celle de la
+ * colonne du tableau des propositions qui porte la même mesure, et celle de
+ * son explication, propre à la liste, que l'infobulle de l'intitulé montre.
+ * L'en-tête du groupe « Placement retenu » couvre autant de colonnes que la
+ * liste en compte.
  */
 export const COLONNES_DU_RETENU = Object.freeze([
   Object.freeze({
     colonne: 'collisionsCumulees',
     cle: 'propositions.colonne.collisionsCumulees',
     explication: 'accueil.explication.collisionsCumulees',
+  }),
+  Object.freeze({
+    colonne: 'rencontresRepetees',
+    cle: 'propositions.colonne.rencontresRepetees',
+    explication: 'accueil.explication.rencontresRepetees',
   }),
 ]);
 
@@ -130,8 +138,9 @@ export function signalementsDe(ligne) {
 }
 
 /**
- * Les six informations d'une ligne (§ 8.1), les collisions cumulées de son
- * retenu et l'identifiant de la meilleure proposition de son classement,
+ * Les six informations d'une ligne (§ 8.1), les collisions cumulées et les
+ * rencontres répétées choisies de son retenu et l'identifiant de la
+ * meilleure proposition de son classement,
  * mis en forme, et ses signalements. nom : celui inscrit dans le fichier, ou la base quand l'état
  * ne se lit pas ; date, participants et dernière modification par format,
  * la valeur absente quand ils manquent — la dernière modification est
@@ -140,21 +149,23 @@ export function signalementsDe(ligne) {
  * clé de son nom, que le composant traduit ; chemin : tel que la façade
  * l'affiche, en entier.
  *
- * Les deux valeurs de résumé lisent resume, ce que facade.resumer a rendu
- * pour la ligne : collisionsCumulees, celles de mesuresDuRetenu, par format,
- * la valeur absente sans retenu mesurable — elles se lisent telles quelles,
- * jamais refaites ; meilleure.id, l'identifiant de meilleureDuClassement, par
- * format, la valeur absente sans proposition classée. Sans resume, la ligne
- * est enAttente : son résumé se calcule encore, et les deux valeurs valent la
- * valeur absente, que le composant remplace par le signe du chargement.
+ * Les trois valeurs de résumé lisent resume, ce que facade.resumer a rendu
+ * pour la ligne : collisionsCumulees et rencontresRepetees, celles de
+ * mesuresDuRetenu, par format, la valeur absente sans retenu mesurable —
+ * elles se lisent telles quelles, jamais refaites ; meilleure.id,
+ * l'identifiant de meilleureDuClassement, par format, la valeur absente sans
+ * proposition classée. Sans resume, la ligne est enAttente : son résumé se
+ * calcule encore, et les trois valeurs valent la valeur absente, que le
+ * composant remplace par le signe du chargement.
  *
  * @param {Object} ligne   LigneListe (evenements.js)
  * @param {ReturnType<import('../../application/format.js').creerFormat>} format
- * @param {{mesuresDuRetenu: {collisionsCumulees: number}|null,
+ * @param {{mesuresDuRetenu: {collisionsCumulees: number, rencontresRepetees: number}|null,
  *          meilleureDuClassement: {id: number}|null}} [resume]
  * @returns {{nom: string, date: string, etat: string, participants: string,
  *            modification: string, chemin: string, enAttente: boolean,
- *            collisionsCumulees: string, meilleure: {id: string},
+ *            collisionsCumulees: string, rencontresRepetees: string,
+ *            meilleure: {id: string},
  *            signalements: Array<{cle: string, details: Object, noms: string[]}>}}
  */
 export function ligneAffichee(ligne, format, resume) {
@@ -167,6 +178,7 @@ export function ligneAffichee(ligne, format, resume) {
     chemin: ligne.chemin,
     enAttente: resume === undefined,
     collisionsCumulees: format.nombre(resume?.mesuresDuRetenu?.collisionsCumulees ?? null),
+    rencontresRepetees: format.nombre(resume?.mesuresDuRetenu?.rencontresRepetees ?? null),
     meilleure: { id: format.nombre(resume?.meilleureDuClassement?.id ?? null) },
     signalements: signalementsDe(ligne),
   };

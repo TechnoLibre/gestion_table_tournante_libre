@@ -26,9 +26,10 @@
 // dans ses mesures, à part des choisies.
 //
 // resumeDuRetenu donne à la liste des événements les collisions cumulées
-// du retenu, lues dans la même mesure que sa ligne du tableau, sans le
-// diagnostic ni les plafonds : la liste en résume chaque événement du
-// dossier. premiereDuClassement est la seule définition de la proposition
+// et les rencontres répétées choisies du retenu, lues dans une seule
+// mesure, celle de sa ligne du tableau, sans le diagnostic ni les
+// plafonds : la liste en résume chaque événement du dossier.
+// premiereDuClassement est la seule définition de la proposition
 // au rang 1 : la section de la génération la lit dans sa table,
 // resumeDuMeilleur en donne l'identifiant à la liste, sur la même table
 // d'évaluation, diagnostic compris — le premier critère du classement lit
@@ -217,17 +218,23 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
 }
 
 /**
- * Le résumé du retenu que montre la liste des événements (§ 5.4, § 8.1) :
- * collisionsCumulees, les occurrences (paire, tour) où deux personnes d'une
- * même appartenance partagent une table, celles de mesurer — la valeur que
- * la ligne du retenu d'evaluer porte, et que la colonne « Collisions
- * cumulées (paire et tour) » du tableau des propositions écrit. null sans
- * retenu, pour un retenu fautif ou en dérive, et quand la configuration ne
- * se normalise pas : rien ne s'y mesure, et la liste écrit « — ». Ne
- * modifie pas la charge.
+ * Le résumé du retenu que montre la liste des événements (§ 5.4, § 8.1),
+ * lu dans un seul appel à mesurer, la mesure que la ligne du retenu
+ * d'evaluer porte :
+ * - collisionsCumulees, les occurrences (paire, tour) où deux personnes
+ *   d'une même appartenance partagent une table — la valeur que la colonne
+ *   « Collisions cumulées (paire et tour) » du tableau des propositions
+ *   écrit ;
+ * - rencontresRepetees, les paires réunies à plus d'un tour que le placement
+ *   a choisies, sans celles que les réservations imposent
+ *   (mesures.rencontresRepetees.choisies) — la valeur que la colonne
+ *   « Rencontres répétées choisies (paires) » écrit.
+ * null sans retenu, pour un retenu fautif ou en dérive, et quand la
+ * configuration ne se normalise pas : rien ne s'y mesure, et la liste écrit
+ * « — » dans les deux colonnes. Ne modifie pas la charge.
  *
  * @param {import('../stockage/types.js').Charge} charge
- * @returns {{collisionsCumulees: number}|null}
+ * @returns {{collisionsCumulees: number, rencontresRepetees: number}|null}
  */
 export function resumeDuRetenu(charge) {
   const { retenu } = charge;
@@ -239,8 +246,8 @@ export function resumeDuRetenu(charge) {
     if (erreur instanceof ErreurConfiguration) return null;
     throw erreur;
   }
-  const { collisionsCumulees } = mesurer(instance, indexerPlan(instance, planDepuisFichier(retenu)));
-  return { collisionsCumulees };
+  const { collisionsCumulees, rencontresRepetees } = mesurer(instance, indexerPlan(instance, planDepuisFichier(retenu)));
+  return { collisionsCumulees, rencontresRepetees: rencontresRepetees.choisies };
 }
 
 /**

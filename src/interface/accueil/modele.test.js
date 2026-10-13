@@ -88,6 +88,7 @@ describe('ligneAffichee : les six informations (§ 8.1)', () => {
       'modification',
       'nom',
       'participants',
+      'rencontresRepetees',
       'signalements',
     ]);
     assert.equal(affichee.nom, 'Bal des Grisailles');
@@ -335,59 +336,85 @@ describe('saisieDe : la saisie d’un nom pour copier ou renommer (§ 8.7)', () 
 });
 
 describe('ligneAffichee : les mesures du retenu (§ 5.4, § 8.1)', () => {
-  test('les collisions cumulées du retenu, celles de la façade, mises en forme, sans calcul ici', () => {
-    for (const collisionsCumulees of [500, 7, 0]) {
-      const affichee = ligneAffichee(ligne(), format, { ...AUCUN, mesuresDuRetenu: { collisionsCumulees } });
+  test('les collisions cumulées et les rencontres répétées choisies du retenu, celles de la façade, mises en forme chacune à sa place, sans calcul ici', () => {
+    for (const [collisionsCumulees, rencontresRepetees] of [
+      [500, 3],
+      [7, 12],
+      [0, 0],
+    ]) {
+      const affichee = ligneAffichee(ligne(), format, { ...AUCUN, mesuresDuRetenu: { collisionsCumulees, rencontresRepetees } });
       assert.equal(affichee.collisionsCumulees, format.nombre(collisionsCumulees), String(collisionsCumulees));
+      assert.equal(affichee.rencontresRepetees, format.nombre(rencontresRepetees), String(rencontresRepetees));
     }
   });
 
-  test('sans retenu mesurable, et pour une ligne illisible, les collisions valent « — »', () => {
+  test('sans retenu mesurable, et pour une ligne illisible, les collisions et les rencontres répétées valent « — »', () => {
     for (const champs of [{}, { nom: null, etat: null, participants: null, illisible: { raison: 'VIDE', chemin: null } }]) {
       const affichee = ligneAffichee(ligne(champs), format, AUCUN);
       assert.equal(affichee.collisionsCumulees, VIDE);
+      assert.equal(affichee.rencontresRepetees, VIDE);
     }
   });
 
-  test('COLONNES_DU_RETENU : les seules collisions cumulées, sous l’intitulé de la colonne du tableau des propositions, avec l’explication propre à la liste ; plus rien de la différence à la cible', () => {
+  test('COLONNES_DU_RETENU : les collisions cumulées puis les rencontres répétées choisies, chacune sous l’intitulé de sa colonne du tableau des propositions, avec son explication propre à la liste ; plus rien de la différence à la cible', () => {
     assert.deepEqual(COLONNES_DU_RETENU, [
       {
         colonne: 'collisionsCumulees',
         cle: 'propositions.colonne.collisionsCumulees',
         explication: 'accueil.explication.collisionsCumulees',
       },
+      {
+        colonne: 'rencontresRepetees',
+        cle: 'propositions.colonne.rencontresRepetees',
+        explication: 'accueil.explication.rencontresRepetees',
+      },
     ]);
     assert.ok(Object.isFrozen(COLONNES_DU_RETENU));
-    assert.ok(Object.isFrozen(COLONNES_DU_RETENU[0]));
+    for (const colonne of COLONNES_DU_RETENU) assert.ok(Object.isFrozen(colonne), colonne.colonne);
     assert.equal(t('propositions.colonne.collisionsCumulees'), 'Collisions cumulées (paire et tour)');
+    assert.equal(t('propositions.colonne.rencontresRepetees'), 'Rencontres répétées choisies (paires)');
     const explication = t('accueil.explication.collisionsCumulees');
     for (const fragment of ['paire', 'tour', 'Collisions cumulées (paire et tour)', '\u{2014}']) {
       assert.ok(explication.includes(fragment), fragment);
     }
-    for (const cle of ['accueil.colonne.diffRedondance', 'accueil.explication.diffRedondance', 'accueil.colonne.collisionsCumulees']) {
+    // L'explication des rencontres répétées dit ce qu'elle compte, d'où elle
+    // vient et quand elle vaut « — », et n'est pas celle des collisions.
+    const repetees = t('accueil.explication.rencontresRepetees');
+    for (const fragment of ['paires', "plus d'un tour", 'réservations', 'Rencontres répétées choisies (paires)', 'retenu', '\u{2014}']) {
+      assert.ok(repetees.includes(fragment), fragment);
+    }
+    assert.notEqual(repetees, explication);
+    for (const cle of [
+      'accueil.colonne.diffRedondance',
+      'accueil.explication.diffRedondance',
+      'accueil.colonne.collisionsCumulees',
+      'accueil.colonne.rencontresRepetees',
+    ]) {
       assert.throws(() => t(cle), RangeError, cle);
     }
   });
 });
 
 describe('ligneAffichee : les résumés en attente (§ 8.1)', () => {
-  test('sans résumé reçu, la ligne est en attente et ses deux valeurs de résumé ne disent rien ; reçu, elle ne l’est plus', () => {
+  test('sans résumé reçu, la ligne est en attente et ses trois valeurs de résumé ne disent rien ; reçu, elle ne l’est plus', () => {
     const attente = ligneAffichee(ligne(), format);
     assert.equal(attente.enAttente, true);
     assert.equal(attente.collisionsCumulees, VIDE);
+    assert.equal(attente.rencontresRepetees, VIDE);
     assert.deepEqual(attente.meilleure, { id: VIDE });
     assert.equal(ligneAffichee(ligne(), format, AUCUN).enAttente, false);
     const recu = ligneAffichee(ligne(), format, {
-      mesuresDuRetenu: { collisionsCumulees: 10 },
+      mesuresDuRetenu: { collisionsCumulees: 10, rencontresRepetees: 4 },
       meilleureDuClassement: { id: 3 },
     });
     assert.equal(recu.enAttente, false);
     assert.equal(recu.collisionsCumulees, format.nombre(10));
+    assert.equal(recu.rencontresRepetees, format.nombre(4));
     assert.deepEqual(recu.meilleure, { id: format.nombre(3) });
   });
 
   test('les six informations ne dépendent pas des résumés : en attente ou non, elles sont les mêmes', () => {
-    const sans = ({ enAttente, collisionsCumulees, meilleure, ...reste }) => reste;
+    const sans = ({ enAttente, collisionsCumulees, rencontresRepetees, meilleure, ...reste }) => reste;
     assert.deepEqual(sans(ligneAffichee(ligne(), format)), sans(ligneAffichee(ligne(), format, AUCUN)));
   });
 });
