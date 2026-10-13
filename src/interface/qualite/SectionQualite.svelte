@@ -38,7 +38,11 @@
   // seule source mesurable, avec la course que la séance garde et la
   // génération qui l'a produite ; sa garde à quatre paramètres donne les
   // contradictions qui retirent le dessin.
-  import { getContext } from 'svelte';
+  //
+  // Elle pose le contexte dessinDiffere : un graphique loin de la zone
+  // visible n'est dessiné que quand il en approche (Graphique), si bien que
+  // l'ouverture ne mesure et ne rend que ce qui se voit.
+  import { flushSync, getContext, setContext } from 'svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -55,12 +59,14 @@
   import VuePerformance from './VuePerformance.svelte';
   import VueProfil from './VueProfil.svelte';
   import VueTables from './VueTables.svelte';
+  import { creerDessinDiffere } from './graphiques/dessin_differe.js';
 
   const t = getContext('t');
   const ui = getContext('ui');
   const seance = getContext('seance');
   const generation = getContext('generation');
   const uid = $props.id();
+  const dessinDiffere = setContext('dessinDiffere', creerDessinDiffere());
 
   // Les vues, dans leur ordre à l'écran (§ 12, B9), chacune sous le nom de
   // la clé de son titre, qualite.vue.<nom>.titre.
@@ -94,12 +100,17 @@
   const idVue = (nom) => `${uid}-vue-${nom}`;
 
   // Porte le focus sur la vue nommée, qui se fait voir ; le lien ne change
-  // pas l'adresse de la page.
+  // pas l'adresse de la page. Les graphiques en attente qui la précèdent se
+  // dessinent d'abord, rendus avant le défilement : aucun dessin au-dessus
+  // d'elle ne la déplace ensuite.
   function allerALaVue(evenement, nom) {
     evenement.preventDefault();
     const cible = document.getElementById(idVue(nom));
-    cible?.scrollIntoView({ block: 'start' });
-    cible?.focus({ preventScroll: true });
+    if (cible === null) return;
+    dessinDiffere.dessinerAvant(cible);
+    flushSync();
+    cible.scrollIntoView({ block: 'start' });
+    cible.focus({ preventScroll: true });
   }
 </script>
 

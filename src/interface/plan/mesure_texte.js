@@ -5,6 +5,8 @@
 // d'une ligne de liste et la largeur d'une chaîne, relevées sur la police
 // rendue, jamais déduites de la taille de police. La hauteur se mesure dans
 // un OffscreenCanvas, hors du document : le plan ne porte aucun <canvas>.
+// Les graphiques de la page de qualité mesurent par mesuresDuTexte, qui
+// garde les largeurs pour la séance et les relève par lots.
 
 import { GABARIT_HAUTEUR_LIGNE } from '../../geometrie/texte.js';
 
@@ -65,4 +67,116 @@ export function creerMesureur(elementTexte) {
     if (largeur > 0 || chaine === '') deja.set(chaine, largeur);
     return largeur;
   };
+}
+
+// Les mesures déjà prises pendant la séance, par style de texte (cleDuStyle)
+// : { largeurs, hauteur }, largeurs une Map de la chaîne à sa largeur,
+// hauteur celle de hauteurLigne, null tant qu'elle n'est pas lue. Une
+// police qui finit de se charger change les largeurs sous le même style
+// calculé : chaque fin de chargement du document vide la table.
+const MESURES_DE_SEANCE = new Map();
+let polices = null;
+
+// La clé du style de texte de l'élément : la densité de pixels de l'écran,
+// que le lissage des glyphes suit, puis chaque propriété calculée qui
+// change la largeur d'une chaîne.
+function cleDuStyle(elementTexte) {
+  const style = getComputedStyle(elementTexte);
+  const proprietes = [
+    'fontStyle',
+    'fontVariant',
+    'fontWeight',
+    'fontStretch',
+    'fontSize',
+    'fontFamily',
+    'letterSpacing',
+    'wordSpacing',
+    'fontKerning',
+    'fontFeatureSettings',
+    'fontVariationSettings',
+    'textRendering',
+  ];
+  return [devicePixelRatio, ...proprietes.map((nom) => style[nom])].join('|');
+}
+
+// Les mesures de séance du style de l'élément, créées vides au premier
+// appel ; la première écoute aussi les fins de chargement des polices.
+function mesuresDuStyle(elementTexte) {
+  const documentTexte = elementTexte.ownerDocument;
+  if (polices !== documentTexte.fonts) {
+    polices = documentTexte.fonts;
+    polices.addEventListener('loadingdone', () => MESURES_DE_SEANCE.clear());
+  }
+  const cle = cleDuStyle(elementTexte);
+  let connues = MESURES_DE_SEANCE.get(cle);
+  if (connues === undefined) {
+    connues = { largeurs: new Map(), hauteur: null };
+    MESURES_DE_SEANCE.set(cle, connues);
+  }
+  return connues;
+}
+
+/**
+ * Les mesures du texte d'un graphique au style de l'élément, gardées pour
+ * la séance : deux éléments du même style calculé, à la même densité de
+ * pixels, partagent leurs largeurs. L'élément est un <text> d'un dessin
+ * sans viewBox, dont l'unité est le pixel CSS.
+ *
+ * - mesurer(chaine) : la largeur de la chaîne, mesurée à la première
+ *   demande ;
+ * - calculer(calcul) : ce que calcul(mesurer) rend, calcul une fonction
+ *   pure de ses arguments et des largeurs lues. Les chaînes inconnues se
+ *   mesurent par lots : calcul s'exécute avec 0 pour chacune, ce qu'il
+ *   a demandé et que la séance ignore se mesure d'un seul relevé, puis il
+ *   s'exécute de nouveau, jusqu'à ce qu'il ne demande plus rien
+ *   d'inconnu. Le rendu final ne lit que des largeurs mesurées, et le
+ *   document ne se met en page qu'une fois par lot, au lieu d'une fois par
+ *   chaîne ;
+ * - hauteurTexte : hauteurLigne de l'élément, lue une fois par style.
+ *
+ * Chaque chaîne d'un lot se mesure sur sa propre copie de l'élément
+ * (cloneNode, sans enfant), posée juste après lui le temps du relevé puis
+ * retirée : même style, même contexte, aucun crénage avec une voisine. Une
+ * largeur nulle d'une chaîne non vide — l'élément n'est pas rendu — ne se
+ * garde pas, comme pour creerMesureur : elle vaut 0 pour le calcul en
+ * cours et se mesure de nouveau à la demande suivante.
+ *
+ * @param {Element} elementTexte
+ * @returns {{mesurer: (chaine: string) => number, calculer: <T>(calcul: (mesurer: (chaine: string) => number) => T) => T, hauteurTexte: number}}
+ */
+export function mesuresDuTexte(elementTexte) {
+  const connues = mesuresDuStyle(elementTexte);
+  // Mesure les chaînes d'un seul relevé ; garde les largeurs non nulles,
+  // et rend la largeur de chacune, nulle comprise.
+  const relever = (chaines) => {
+    const copies = chaines.map((chaine) => {
+      const copie = elementTexte.cloneNode(false);
+      copie.textContent = chaine;
+      return copie;
+    });
+    elementTexte.after(...copies);
+    const largeurs = copies.map((copie) => copie.getComputedTextLength());
+    for (const copie of copies) copie.remove();
+    chaines.forEach((chaine, i) => {
+      if (largeurs[i] > 0 || chaine === '') connues.largeurs.set(chaine, largeurs[i]);
+    });
+    return largeurs;
+  };
+  const mesurer = (chaine) => connues.largeurs.get(chaine) ?? relever([chaine])[0];
+  const calculer = (calcul) => {
+    const nulles = new Set();
+    for (;;) {
+      const inconnues = new Set();
+      const resultat = calcul((chaine) => {
+        const connue = connues.largeurs.get(chaine);
+        if (connue === undefined && !nulles.has(chaine)) inconnues.add(chaine);
+        return connue ?? 0;
+      });
+      if (inconnues.size === 0) return resultat;
+      relever([...inconnues]);
+      for (const chaine of inconnues) if (!connues.largeurs.has(chaine)) nulles.add(chaine);
+    }
+  };
+  if (connues.hauteur === null) connues.hauteur = hauteurLigne(elementTexte);
+  return { mesurer, calculer, hauteurTexte: connues.hauteur };
 }

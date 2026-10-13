@@ -24,7 +24,7 @@ import { serialiser } from '../../stockage/canonique.js';
 import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { fixerCadre } from '../../../test/navigateur/entrees.js';
+import { dessinerGraphiques, fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -96,6 +96,10 @@ async function attendre(assertion) {
       return assertion();
     } catch (erreur) {
       if (essai >= 200) throw erreur;
+      // Un graphique de la page de qualité que l'assertion lit attend
+      // peut-être d'approcher de la zone visible : chacun se dessine, puis
+      // elle se relit.
+      await dessinerGraphiques(document.body);
       await new Promise((resoudre) => requestAnimationFrame(resoudre));
     }
   }

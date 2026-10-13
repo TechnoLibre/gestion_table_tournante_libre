@@ -32,7 +32,7 @@ import { serialiser } from '../../stockage/canonique.js';
 import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { fixerCadre, touche, pointer } from '../../../test/navigateur/entrees.js';
+import { dessinerGraphiques, fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { teintesAppartenances } from '../appartenances.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -232,6 +232,9 @@ async function attendre(assertion) {
       return assertion();
     } catch (erreur) {
       if (essai >= 200) throw erreur;
+      // Un graphique que l'assertion lit attend peut-être d'approcher de la
+      // zone visible : chacun se dessine, puis elle se relit.
+      await dessinerGraphiques(document.body);
       await new Promise((resoudre) => requestAnimationFrame(resoudre));
     }
   }
@@ -264,10 +267,18 @@ const positionCochee = (m) => [...vue(m, 'tables').querySelectorAll('[data-posit
 const intitulesGrille = (svg) =>
   [...svg.querySelectorAll('text')].map((x) => x.textContent).filter((x) => /^Table \d+$/.test(x));
 
-// Les cases de la grille : par ligne et colonne, le texte écrit et le
-// remplissage du niveau, null sans remplissage.
+// Les cases de la grille : par ligne et colonne, le texte écrit, le
+// remplissage du niveau, null sans remplissage, et le côté, lu sur le
+// sous-chemin de sa bordure — le chemin des bordures en porte un par case,
+// dans l'ordre des cases : « M x y h c v c h -c z », de côté c + 1.
 function casesDe(svg) {
-  return [...svg.querySelectorAll('[data-case]')].map((g) => {
+  const cotes = svg
+    .querySelector('[data-marque="graphiqueBordureCase"]')
+    .getAttribute('d')
+    .split('z')
+    .filter((sousChemin) => sousChemin !== '')
+    .map((sousChemin) => Number(/h([\d.]+)/.exec(sousChemin)[1]) + 1);
+  return [...svg.querySelectorAll('[data-case]')].map((g, i) => {
     const [ligne, colonne] = g.dataset.case.split(':').map(Number);
     const fond = [...g.querySelectorAll('rect')].find((r) => r.style.fill !== '') ?? null;
     return {
@@ -276,7 +287,7 @@ function casesDe(svg) {
       texte: g.querySelector('text').textContent,
       marque: fond?.getAttribute('data-marque') ?? null,
       fond: fond === null ? null : getComputedStyle(fond).fill,
-      cote: Number(g.querySelector('[data-marque="graphiqueBordureCase"]').getAttribute('width')) + 1,
+      cote: cotes[i],
     };
   });
 }
@@ -324,7 +335,7 @@ describe('collisions d’appartenance (§ 12.4, B13, D31)', () => {
     const m = await ouvrir(charge);
     const collisions = await attendre(() => {
       const v = vue(m, 'collisions');
-      expect(v.querySelector('svg[data-graphique="collisions"]')).not.toBeNull();
+      expect(v.querySelector('svg[data-graphique="collisions"]:not([data-dessin-differe])')).not.toBeNull();
       return v;
     });
     const ligne = collisions.querySelector(`[data-ligne-graphique="${plancher[0].groupe}"]`);
@@ -476,7 +487,7 @@ describe('appartenances à chaque table (§ 12.11, B20, D35)', () => {
   test('l’infobulle d’une case : le pourcentage de la position puis ses deux comptes, occupants, affiliés, capacité', async () => {
     const m = await ouvrir(chargeMelange());
     const svg = await attendre(() => {
-      const s = vue(m, 'tables').querySelector('svg[data-graphique="tables"]');
+      const s = vue(m, 'tables').querySelector('svg[data-graphique="tables"]:not([data-dessin-differe])');
       expect(s).not.toBeNull();
       return s;
     });
@@ -588,7 +599,7 @@ describe('appartenances à chaque table (§ 12.11, B20, D35)', () => {
     const m = await ouvrir(chargeUneAppartenance());
     const tables = await attendre(() => {
       const v = vue(m, 'tables');
-      expect(v.querySelector('svg[data-graphique="tables"]')).not.toBeNull();
+      expect(v.querySelector('svg[data-graphique="tables"]:not([data-dessin-differe])')).not.toBeNull();
       return v;
     });
     expect(tables.querySelectorAll('[data-position-tables]')).toHaveLength(3);

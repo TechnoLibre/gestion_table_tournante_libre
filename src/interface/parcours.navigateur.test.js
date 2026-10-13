@@ -102,7 +102,7 @@ import {
   requeteHorsBoucle,
 } from '../../test/navigateur/captures.js';
 import { NOM_CAS_LIMITES, attendre, centre, octetsCasLimites } from '../../test/navigateur/ecrans.js';
-import { fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
+import { dessinerGraphiques, fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
 import { poserFeuille } from '../../test/navigateur/feuilles.js';
 import { monterApp } from '../../test/navigateur/montage.js';
 import { visible } from '../../test/navigateur/rendu.js';
@@ -588,10 +588,13 @@ function enHaut(element) {
 // L'élément du document qu'atteint le point (x, y) de la fenêtre.
 const atteintAuPoint = ({ x, y }) => document.elementFromPoint(x, y);
 
-// Ouvre une section de l'événement par sa navigation.
+// Ouvre une section de l'événement par sa navigation. La page de qualité
+// ne dessine que les graphiques proches de la zone visible : chacun s'y
+// amène à son tour (dessinerGraphiques), et l'épreuve lit la page entière.
 async function ouvrirSection(nom) {
   await cliquer(`[data-commande="section"][data-cible="${nom}"]`);
   await attendre(`la section ${nom}`, () => dans(`[data-section="${nom}"]`));
+  if (nom === 'qualite') await dessinerGraphiques(dans('[data-section="qualite"]'));
 }
 
 // Ouvre le plan et l'ajuste au tour montré : toutes les tables dans le cadre.
@@ -2950,6 +2953,7 @@ async function qualiteDeLaPremiere() {
   await appuyer(premiere.querySelector('[data-commande="qualite"]'), 'la commande « Qualité »');
   await attendre('la page de qualité de la proposition', () => dans('[data-section="qualite"] [data-vue-qualite="performance"]') && m.ui.etat().proposition === id);
   await images(3);
+  await dessinerGraphiques(dans('[data-section="qualite"]'));
   return id;
 }
 
@@ -3115,6 +3119,7 @@ async function revenirALaQualite(id) {
   await ouvrirSection('qualite');
   await attendre('la page de qualité', () => vueQualite('performance') && m.ui.etat().proposition === id);
   await images(3);
+  await dessinerGraphiques(dans('[data-section="qualite"]'));
 }
 
 // La page mesure la proposition id que la séance montre, avant toute

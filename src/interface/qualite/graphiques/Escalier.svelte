@@ -57,6 +57,7 @@
     cibleRang,
     dispositionEscalier,
     dispositionPoints,
+    legendeTraces,
     margesVerticales,
   } from './pointage.js';
 
@@ -86,6 +87,7 @@
 
   let largeur = $state(0);
   let mesures = $state(null);
+  let dessine = $state(false);
 
   const titre = $derived(titreX === undefined ? t(enPoints ? 'graphiques.axe.mouvements' : 'graphiques.axe.rangs') : titreX);
   const reperesTraces = $derived(enPoints ? [] : reperes);
@@ -95,28 +97,36 @@
   const requises = $derived(
     mesures === null
       ? null
-      : margesVerticales({ series, reperes: reperesTraces, mesurer: mesures.mesurer, graduer: graduer ?? nombre, titreX: titre }),
+      : mesures.calculer((mesurer) =>
+          margesVerticales({ series, reperes: reperesTraces, mesurer, graduer: graduer ?? nombre, titreX: titre }),
+        ),
   );
   $effect(() => {
     marges = requises;
   });
 
   const disposition = $derived.by(() => {
-    if (mesures === null || largeur === 0) return null;
-    const communes = {
-      largeur,
-      hauteur,
-      series,
-      mesurer: mesures.mesurer,
-      hauteurTexte: mesures.hauteurTexte,
-      graduer: graduer ?? nombre,
-      titreX: titre,
-      aligner: alignerSur,
-    };
-    return enPoints
-      ? dispositionPoints({ ...communes, abscisses, graduerX: graduerX ?? nombre })
-      : dispositionEscalier({ ...communes, reperes, marques, graduerX: graduerX ?? nombre });
+    if (!dessine || mesures === null || largeur === 0) return null;
+    return mesures.calculer((mesurer) => {
+      const communes = {
+        largeur,
+        hauteur,
+        series,
+        mesurer,
+        hauteurTexte: mesures.hauteurTexte,
+        graduer: graduer ?? nombre,
+        titreX: titre,
+        aligner: alignerSur,
+      };
+      return enPoints
+        ? dispositionPoints({ ...communes, abscisses, graduerX: graduerX ?? nombre })
+        : dispositionEscalier({ ...communes, reperes, marques, graduerX: graduerX ?? nombre });
+    });
   });
+
+  // La légende, des seules données : un graphique qui attend son dessin la
+  // porte déjà.
+  const legende = $derived(legendeTraces({ series, reperes: reperesTraces, marques: enPoints ? null : marques }));
 
   const cibler = (x) => (enPoints ? ciblePoint(x, disposition) : cibleRang(x, disposition));
   const ancrer = (indice) => (enPoints ? ancrePoint(indice, disposition) : ancreRang(indice, disposition));
@@ -132,11 +142,12 @@
   {hauteur}
   {infobulle}
   zone={disposition?.zone ?? null}
-  legende={disposition?.legende ?? []}
+  {legende}
   {cibler}
   {ancrer}
   bind:largeur
   bind:mesures
+  bind:dessine
   bind:pointe
 >
   {#if disposition !== null}

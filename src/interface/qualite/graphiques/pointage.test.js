@@ -25,6 +25,7 @@ import {
   TRAITS,
   ancrePoint,
   ancreRang,
+  cadreGrille,
   celluleDe,
   ciblePoint,
   cibleCase,
@@ -38,6 +39,9 @@ import {
   exigerColonnes,
   exigerCompte,
   exigerTraces,
+  hauteurBarres,
+  legendeBarres,
+  legendeTraces,
   ligneInfobulle,
   margesCommunes,
   margesVerticales,
@@ -502,6 +506,15 @@ describe('pointage : la grille (§ 12.5, § 12.11, D33)', () => {
     assert.equal(c[2].fond.x + c[2].fond.cote, c[2].x + c[2].cote - RETRAIT_CASE_PX);
   });
 
+  test('bordures : un sous-chemin fermé par case, diagonale comprise, dans l’ordre des cases, chacun le carré de son bord', () => {
+    const d = disposer();
+    const sousChemins = d.bordures.split('z').filter((x) => x !== '');
+    assert.equal(sousChemins.length, d.cases.length);
+    d.cases.forEach(({ bord }, i) => {
+      assert.equal(sousChemins[i], `M${bord.x} ${bord.y}h${bord.cote}v${bord.cote}h${-bord.cote}`);
+    });
+  });
+
   test('une case sans compte écrit « — » sans couleur ; elle n’est pas sur la diagonale', () => {
     const d = disposer({ diagonale: false, valeurs: [null, 1, 2, 0] , lignes: lignes.slice(0, 2), colonnes: lignes.slice(0, 2) });
     assert.deepEqual([d.cases[0].texte, d.cases[0].niveau, d.cases[0].jeton, d.cases[0].diagonale], [null, null, null, false]);
@@ -522,6 +535,95 @@ describe('pointage : la grille (§ 12.5, § 12.11, D33)', () => {
 
   test('autant de valeurs que de cases, sinon refus', () => {
     assert.throws(() => disposer({ valeurs: [1, 2] }), RangeError);
+  });
+});
+
+describe('pointage : ce qu’un graphique en attente de son dessin porte déjà (E2s)', () => {
+  const nom = (i) => (i % 3 === 0 ? 'Maëlle-Hortense Quenouille-Vasque de Belle-Rive' : `Personne ${i}`);
+  const segments = [
+    { genre: 'prouve', libelle: 'prouvé inévitable' },
+    { genre: 'reste', libelle: 'reste' },
+  ];
+  const colonnes = [
+    { genre: 'serie1', libelle: 'appartenances' },
+    { genre: 'serie2', libelle: 'étiquettes' },
+  ];
+
+  test('hauteurBarres est la hauteur du dessin, à tout nombre de lignes, empilées ou juxtaposées, et legendeBarres sa légende', () => {
+    for (const n of [0, 1, 2, 7, 74]) {
+      for (const hauteurTexte of [12, 15.5]) {
+        for (const forme of [{ segments }, { colonnes }]) {
+          const lignes = Array.from({ length: n }, (_, i) => ({ id: i, nom: nom(i), valeurs: [i % 2, i % 5], secondaire: i % 4 === 0 ? `${i} sur ${n}` : null }));
+          for (const largeur of [0, 320, 1200]) {
+            const d = dispositionBarres({ largeur, lignes, mesurer, hauteurTexte, graduer, marque: MARQUE, ...forme });
+            const juxtaposees = forme.colonnes !== undefined;
+            assert.equal(hauteurBarres({ n, juxtaposees, hauteurTexte }), d.hauteurTotale, `${n} lignes, ${largeur} px`);
+            assert.equal(d.axes[0].axe.y2, d.hauteurTotale, 'l’axe finit au bas du dessin');
+            assert.deepEqual(legendeBarres(forme), d.legende);
+          }
+        }
+      }
+    }
+  });
+
+  test('legendeBarres : chaque segment empilé sous son libellé ; rien pour des colonnes juxtaposées', () => {
+    assert.deepEqual(legendeBarres({ segments }), [
+      { genre: 'prouve', libelle: 'prouvé inévitable', signe: null },
+      { genre: 'reste', libelle: 'reste', signe: null },
+    ]);
+    assert.deepEqual(legendeBarres({ colonnes }), []);
+  });
+
+  test('legendeTraces est la légende du dessin : séries, repères, puis les signes présents dans l’ordre de SIGNES', () => {
+    const series = [serie([3, 2, 1]), serie([1, 1, 2], 'à neuf')];
+    const reperes = [{ genre: 'plafond', libelle: 'plafond', valeurs: [3, 3, 3] }];
+    for (const marques of [null, [null, null, null], ['reserve', null, 'ancre'], ['partiel', 'partiel', null]]) {
+      const legende = legendeTraces({ series, reperes, marques });
+      assert.deepEqual(legende, escalier({ series, reperes, marques }).legende);
+      const signes = legende.filter((e) => e.genre === 'signe').map((e) => e.signe);
+      assert.deepEqual(signes, SIGNES.filter((s) => (marques ?? []).includes(s)));
+    }
+    assert.deepEqual(legendeTraces({ series, reperes })[2], { genre: 'plafond', libelle: 'plafond', signe: null });
+    const points = dispositionPoints({ largeur: 600, hauteur: 160, abscisses: [1, 10, 100], series, mesurer, hauteurTexte: HAUTEUR_TEXTE, graduer, graduerX: graduer });
+    assert.deepEqual(legendeTraces({ series }), points.legende);
+    assert.throws(() => legendeTraces({ series: [] }), RangeError);
+  });
+
+  test('cadreGrille est le cadre du dessin — hauteur, case, en-tête tourné ou non, dessinable — et ne mesure que les intitulés', () => {
+    const intitules = (n, prefixe) => Array.from({ length: n }, (_, i) => ({ libelle: `${prefixe} ${i + 1}` }));
+    const longues = [{ libelle: 'Une table au nom très long' }, { libelle: 'Deux' }];
+    const cas = [
+      [intitules(3, 'Tour'), intitules(8, 'Table')],
+      [intitules(5, 'Tour'), longues],
+      [intitules(2, 'Personne'), intitules(2, 'Personne')],
+      [intitules(1, 'Tour'), intitules(60, 'Table')],
+      [[], []],
+    ];
+    for (const [lignes, colonnes] of cas) {
+      for (const largeur of [0, 90, 480, 1200]) {
+        for (const coteMax of [Number.POSITIVE_INFINITY, 3 * HAUTEUR_TEXTE, 2 * HAUTEUR_TEXTE]) {
+          const lus = new Set();
+          const compter = (texte) => {
+            lus.add(texte);
+            return mesurer(texte);
+          };
+          const cadre = cadreGrille({ largeur, lignes, colonnes, mesurer: compter, hauteurTexte: HAUTEUR_TEXTE, coteMax });
+          const valeurs = Array.from({ length: lignes.length * colonnes.length }, (_, i) => (i % 7 === 0 ? null : i % 4));
+          const d = dispositionGrille({ largeur, lignes, colonnes, valeurs, mesurer, hauteurTexte: HAUTEUR_TEXTE, ecrire: graduer, coteMax });
+          const quoi = `${lignes.length} × ${colonnes.length}, ${largeur} px, borne ${coteMax}`;
+          assert.deepEqual(
+            [cadre.hauteur, cadre.largeur, cadre.cote, cadre.x0, cadre.y0, cadre.dessinable],
+            [d.hauteur, d.largeur, d.cote, d.x0, d.y0, d.dessinable],
+            quoi,
+          );
+          assert.equal(cadre.tournes, d.intitulesColonnes.some((i) => i.tourne), quoi);
+          for (const texte of lus) assert.ok([...lignes, ...colonnes].some((l) => l.libelle === texte), `${quoi} : ${texte} mesuré`);
+        }
+      }
+    }
+    const tournee = cadreGrille({ largeur: 600, lignes: intitules(2, 'Tour'), colonnes: longues, mesurer, hauteurTexte: HAUTEUR_TEXTE, coteMax: 2 * HAUTEUR_TEXTE });
+    assert.equal(tournee.tournes, true);
+    assert.equal(tournee.y0, mesurer('Une table au nom très long') + ESPACE_PX);
   });
 });
 

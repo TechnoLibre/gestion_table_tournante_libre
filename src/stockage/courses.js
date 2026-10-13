@@ -87,8 +87,10 @@ function empreinteDuTexte(texte) {
 // drapeau siegesAttribues sous lequel elle l'a été. Un placement de
 // proposition ne se modifie jamais en place : une commande en fait un neuf,
 // ou modifie une copie (structuredClone) avant toute lecture. Chaque
-// placement se hache ainsi une fois, et les propositions qu'un geste garde,
-// ou qu'une datation recopie, retrouvent la leur sans la recalculer.
+// placement se hache ainsi une fois. Une datation, qui recopie la
+// proposition sans copier son placement, retrouve la sienne ; la copie
+// qu'un geste fait d'un placement qu'il garde reçoit celle de l'original
+// (heriterEmpreintes).
 const EMPREINTES = new WeakMap();
 
 /**
@@ -109,6 +111,64 @@ export function empreinteDe(p) {
   return empreinte;
 }
 
+// Vrai quand les listes a et b portent les mêmes valeurs dans le même
+// ordre, comparées par ===.
+function memeListe(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+// Vrai quand les placements a et b, chacun de la forme du schéma — une
+// entrée par tour, { sieges, reserve } —, portent les mêmes listes : leurs
+// textes canoniques sont alors égaux sous un même drapeau siegesAttribues,
+// puisque texteDuPlacement ne lit que ces deux champs. La comparaison lit
+// chaque occupant une fois et n'alloue rien.
+function memePlacement(a, b) {
+  if (a.length !== b.length) return false;
+  for (let tour = 0; tour < a.length; tour += 1) {
+    const x = a[tour];
+    const y = b[tour];
+    if (!memeListe(x.reserve, y.reserve) || x.sieges.length !== y.sieges.length) return false;
+    for (let table = 0; table < x.sieges.length; table += 1) {
+      if (!memeListe(x.sieges[table], y.sieges[table])) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Reporte les empreintes déjà calculées des propositions precedentes sur
+ * leurs copies dans suivantes, sans rien hacher. Une proposition de
+ * suivantes reçoit l'empreinte de la proposition de precedentes de même
+ * identifiant quand celle-ci en a une (EMPREINTES) et que leurs
+ * placements portent les mêmes listes (memePlacement) ; une proposition
+ * dont le placement diffère, même sous la même identité, ne reçoit rien
+ * et se hachera à sa prochaine clé. Le drapeau siegesAttribues suit
+ * l'empreinte reportée : sous un autre drapeau, empreinteDe la recalcule.
+ * Ne modifie aucune proposition. Un geste copie la charge entière
+ * (structuredClone) : sans ce report, chaque geste hacherait de nouveau
+ * chaque placement qu'il garde.
+ *
+ * @param {{id: number, placement: Object[]}[]} precedentes
+ * @param {{id: number, placement: Object[]}[]} suivantes   propositions
+ *        qui suivent le schéma, comme celles d'une charge examinée
+ */
+export function heriterEmpreintes(precedentes, suivantes) {
+  const parId = new Map(precedentes.map((p) => [p.id, p]));
+  for (const q of suivantes) {
+    const p = parId.get(q.id);
+    if (p === undefined || p.placement === q.placement || EMPREINTES.has(q.placement)) continue;
+    const connue = EMPREINTES.get(p.placement);
+    if (connue !== undefined && memePlacement(p.placement, q.placement)) EMPREINTES.set(q.placement, connue);
+  }
+}
+
+// L'identité d'une proposition ou d'une entrée hors empreinte : son
+// identifiant, sa graine, son compte d'arrêt, son historique et son
+// horodatage, vide quand x n'en porte pas, joints par « | ».
+const identiteDe = (x) => `${x.id}|${x.graine}|${x.arret}|${x.historique}|${x.horodatage ?? ''}`;
+
 /**
  * La clé d'une proposition dans les courses en mémoire : son identifiant,
  * sa graine, son compte d'arrêt, son historique, son horodatage — vide
@@ -124,7 +184,7 @@ export function empreinteDe(p) {
  */
 export function cleDeCourse(x) {
   const empreinte = Object.hasOwn(x, 'empreinte') ? x.empreinte : empreinteDe(x);
-  return `${x.id}|${x.graine}|${x.arret}|${x.historique}|${x.horodatage ?? ''}|${empreinte}`;
+  return `${identiteDe(x)}|${empreinte}`;
 }
 
 /**
@@ -232,14 +292,24 @@ export function avecCourses(courses, entrees) {
 /**
  * Les entrées de courses pour les propositions données, dans leur ordre :
  * celle de la clé de chacune, quand courses la connaît. C'est ce que le
- * compagnon d'une charge porte.
+ * compagnon d'une charge porte. Seule une proposition dont l'identité hors
+ * empreinte est celle d'une entrée de courses peut avoir la sienne : la
+ * clé, et donc l'empreinte, ne se calcule que pour elle.
  *
  * @param {Map<string, Object>} courses
  * @param {Object[]} propositions
  * @returns {Object[]}
  */
 export function entreesPour(courses, propositions) {
-  return propositions.map((p) => courses.get(cleDeCourse(p))).filter((entree) => entree !== undefined);
+  if (courses.size === 0) return [];
+  const identites = new Set();
+  for (const entree of courses.values()) identites.add(identiteDe(entree));
+  const entrees = [];
+  for (const p of propositions) {
+    const entree = identites.has(identiteDe(p)) ? courses.get(cleDeCourse(p)) : undefined;
+    if (entree !== undefined) entrees.push(entree);
+  }
+  return entrees;
 }
 
 /**

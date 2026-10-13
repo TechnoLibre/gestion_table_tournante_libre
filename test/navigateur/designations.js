@@ -63,6 +63,7 @@ const ENTREES = [
   ['data-demonstration', 'accueil : une démonstration, par sa clé', null],
   ['data-derive', 'événement : un placement en dérive, par son identifiant', null],
   ['data-dernier-changement', 'qualité : la phrase du dernier changement de la performance du calcul', ['']],
+  ['data-dessin-differe', 'qualité : le <svg> d’un graphique dont les marques attendent d’approcher de la zone visible, posé sans valeur', null],
   ['data-devient', 'import : ce que devient une ligne', ['']],
   ['data-donnee', 'diagnostic : une donnée nommée dans une phrase', ['']],
   ['data-dossier', 'accueil : le dossier de travail montré', ['']],

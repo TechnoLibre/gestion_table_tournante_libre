@@ -55,7 +55,7 @@ import {
   octetsCasLimites,
   ouvrirEvenement,
 } from '../../test/navigateur/ecrans.js';
-import { fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
+import { dessinerGraphiques, fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
 import { monterApp } from '../../test/navigateur/montage.js';
 import {
   CADRE,
@@ -1708,6 +1708,8 @@ describe('la page de qualité, sur chacun de ses écrans (§ 12.7, § 14.5, D30,
       try {
         const { charge, fichiers } = preparer();
         const m = await ouvrirEvenement(contexte, charge, { section: 'qualite', options: { fichiers } });
+        await attendre(`la page de qualité (${nom})`, () => m.racine.querySelector('[data-section="qualite"] [data-vue-qualite]'));
+        await dessinerGraphiques(m.racine.querySelector('[data-section="qualite"]'));
         await attendre(`la page de qualité dessinée (${nom})`, () => m.racine.querySelector('[data-section="qualite"] svg[data-graphique] [data-marque]'));
         const commandes = [...m.racine.querySelectorAll('[data-section="qualite"] [data-commande="ouvrirJumeau"]')];
         expect(commandes.length, `commandes de jumeau (${nom})`).toBeGreaterThan(0);

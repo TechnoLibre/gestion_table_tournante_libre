@@ -20,10 +20,12 @@ import '../../jetons.css';
 import { TABLES_APPLICATION } from '../../../application/libelles.js';
 import { creerFormat } from '../../../application/format.js';
 import { creerTraduction } from '../../../application/traduction.js';
+import { creerMesureur, mesuresDuTexte } from '../../plan/mesure_texte.js';
 import { releverMarques } from '../../../../test/navigateur/captures.js';
 import { fixerCadre, pointer, touche } from '../../../../test/navigateur/entrees.js';
 import { attenuations, sousTheme } from '../../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../../libelles.js';
+import { creerDessinDiffere } from './dessin_differe.js';
 import { LARGEUR_NOM_PX, margesCommunes } from './pointage.js';
 import Barres from './Barres.svelte';
 import Escalier from './Escalier.svelte';
@@ -584,7 +586,16 @@ describe('graphiques : la grille (§ 12.5, § 12.11, D33)', () => {
     expect(cases).toHaveLength(9);
     const trois = cible.querySelector('[data-case="0:2"]');
     expect(trois.querySelector('[data-marque="graphiqueNiveau3"]')).not.toBeNull();
-    expect(trois.querySelector('[data-marque="graphiqueBordureCase"]')).not.toBeNull();
+    // Les bordures : un seul <path>, un sous-chemin fermé par case,
+    // diagonale comprise ; le bord gauche de 0:2 est sur son trait, à
+    // RETRAIT_CASE_PX − 0,5 px à gauche de son remplissage.
+    const bordures = cible.querySelectorAll('[data-marque="graphiqueBordureCase"]');
+    expect(bordures).toHaveLength(1);
+    expect(bordures[0].getAttribute('d').match(/M/g)).toHaveLength(9);
+    const fond = trois.querySelector('[data-marque="graphiqueNiveau3"]');
+    const [x, y, cote] = ['x', 'y', 'height'].map((nom) => Number(fond.getAttribute(nom)));
+    const bord = new DOMPoint(x - 1.5, y + cote / 2);
+    expect(bordures[0].isPointInStroke(bord)).toBe(true);
     expect(trois.querySelector('text').textContent).toBe('3');
     expect(getComputedStyle(trois.querySelector('text')).fill).toBe(couleurDuJeton('--couleur-graphique-encre-claire'));
     const diagonale = cible.querySelector('[data-case="1:1"]');
@@ -601,13 +612,16 @@ describe('graphiques : la grille (§ 12.5, § 12.11, D33)', () => {
 
   test('le pointage désigne la case ; la diagonale n’ouvre rien', async () => {
     const cible = await monter(Grille, props());
-    const boite = cible.querySelector('[data-case="1:2"] [data-marque="graphiqueBordureCase"]').getBoundingClientRect();
+    const boite = cible.querySelector('[data-case="1:2"] rect').getBoundingClientRect();
     await pointer('bouger', boite.left + boite.width / 2, boite.top + boite.height / 2);
     flushSync();
     expect(infobulleDe(cible).hidden).toBe(false);
     expect(infobulleDe(cible).textContent).toContain('Théo Pervenche et Basile Tourteau');
-    const diag = cible.querySelector('[data-case="1:1"] [data-marque="graphiqueBordureCase"]').getBoundingClientRect();
-    await pointer('bouger', diag.left + diag.width / 2, diag.top + diag.height / 2);
+    // La case 1:1, vide : la colonne du compte de 0:1, la ligne de celui de
+    // 1:0.
+    const colonne = cible.querySelector('[data-case="0:1"] text').getBoundingClientRect();
+    const ligne = cible.querySelector('[data-case="1:0"] text').getBoundingClientRect();
+    await pointer('bouger', colonne.left + colonne.width / 2, ligne.top + ligne.height / 2);
     flushSync();
     expect(infobulleDe(cible).hidden).toBe(true);
   });
@@ -739,5 +753,217 @@ describe('graphiques : les marques mesurées dans les deux thèmes (§ 14.5)', (
     } finally {
       racine.remove();
     }
+  });
+});
+
+describe('graphiques : le dessin différé et les mesures de la séance (E2s)', () => {
+  // Une zone qui défile de 400 px de haut, posée en tête du document : un
+  // graphique, puis un intervalle de 2 000 px, puis un second, puis fin, un
+  // élément vide. Chacun est monté sous les contextes de App, et sous
+  // dessinDiffere quand differe est vrai, comme la page de qualité les
+  // monte ; registre est ce contexte, null sans lui.
+  async function monterDansUneZone(premier, second, { differe = true } = {}) {
+    const zone = document.createElement('div');
+    zone.style.cssText = 'width: 800px; height: 400px; overflow-y: auto;';
+    const intervalle = document.createElement('div');
+    intervalle.style.height = '2000px';
+    const cibles = [document.createElement('div'), document.createElement('div')];
+    const fin = document.createElement('div');
+    zone.append(cibles[0], intervalle, cibles[1], fin);
+    document.body.prepend(zone);
+    const registre = differe ? creerDessinDiffere() : null;
+    const context = new Map([...CONTEXTE, ...(differe ? [['dessinDiffere', registre]] : [])]);
+    for (const [i, [Composant, props]] of [premier, second].entries()) {
+      const composant = mount(Composant, { target: cibles[i], props, context });
+      montes.push({ composant, cible: i === 0 ? zone : cibles[i] });
+    }
+    flushSync();
+    await tick();
+    flushSync();
+    return { zone, fin, registre, svgs: cibles.map((cible) => cible.querySelector('svg[data-graphique]')) };
+  }
+
+  const image = () => new Promise((resoudre) => requestAnimationFrame(resoudre));
+
+  test('sous dessinDiffere : le graphique visible se dessine au montage, l’autre attend, nommé et décrit, et se dessine en approchant ; leurs marges sont communes dès le montage', async () => {
+    const partager = margesPartagees(2);
+    const props = [partager(propsProfil(12, { graphique: 'haut' }), 0), partager(propsProfil(12, { graphique: 'bas' }), 1)];
+    const { zone, svgs } = await monterDansUneZone([Escalier, props[0]], [Escalier, props[1]]);
+    const [haut, bas] = svgs;
+    expect(haut.hasAttribute('data-dessin-differe')).toBe(false);
+    expect(haut.querySelector('[data-marque]')).not.toBeNull();
+    expect(bas.hasAttribute('data-dessin-differe')).toBe(true);
+    expect(bas.querySelector('[data-marque]')).toBeNull();
+    expect(document.getElementById(bas.getAttribute('aria-labelledby')).textContent).toBe('Qui rencontre le moins de monde ?');
+    expect(document.getElementById(bas.getAttribute('aria-describedby')).textContent).toBe('Minimum 10 rencontres, une personne.');
+    // Les marges du second se mesurent sans son dessin : le premier est
+    // aligné sur elles avant que le second ne se dessine, et ne bouge pas
+    // quand il se dessine.
+    expect(props[1].marges).not.toBeNull();
+    const avant = surfaceDe(haut).getAttribute('x');
+    bas.scrollIntoView({ block: 'center' });
+    for (let n = 0; n < 60 && bas.hasAttribute('data-dessin-differe'); n += 1) await image();
+    expect(bas.hasAttribute('data-dessin-differe')).toBe(false);
+    expect(bas.querySelector('[data-marque]')).not.toBeNull();
+    expect(surfaceDe(haut).getAttribute('x')).toBe(avant);
+    expect(surfaceDe(bas).getAttribute('x')).toBe(avant);
+    // Remonté, le second reste dessiné.
+    zone.scrollTo(0, 0);
+    await image();
+    await image();
+    expect(bas.querySelector('[data-marque]')).not.toBeNull();
+  });
+
+  test('en attente, Barres et Grille réservent la hauteur de leur dessin, chaque graphique porte déjà sa légende ; le registre dessine ce qui précède une cible, rien de ce qui la suit', async () => {
+    const barres = {
+      graphique: 'collisions',
+      nom: 'Collisions',
+      synthese: 'Trois appartenances.',
+      lignes: [
+        { id: 'aubier', nom: 'Coopérative Aubier', appartenance: 1, valeurs: [0, 3] },
+        { id: 'long', nom: NOM_LONG, appartenance: null, valeurs: [2, 0] },
+        { id: 'ressac', nom: 'Atelier Ressac', appartenance: 2, valeurs: [1, 1] },
+      ],
+      segments: [
+        { genre: 'prouve', libelle: 'prouvé inévitable' },
+        { genre: 'reste', libelle: 'reste' },
+      ],
+    };
+    const colonnes = {
+      ...barres,
+      graphique: 'diversite',
+      segments: undefined,
+      colonnes: [
+        { genre: 'serie1', libelle: 'Appartenances' },
+        { genre: 'serie2', libelle: 'Personnes' },
+      ],
+    };
+    const grille = (extra) => ({
+      graphique: 'tables',
+      nom: 'Tables',
+      synthese: 'Quatre niveaux.',
+      lignes: [{ libelle: 'Tour 1' }, { libelle: 'Tour 2' }],
+      colonnes: [{ libelle: 'Table 1' }, { libelle: 'Table 2' }, { libelle: 'Table 3' }],
+      valeurs: [0, 1, 2, 3, null, 1],
+      ...extra,
+    });
+    const cas = [
+      ['barres empilées', Barres, barres],
+      ['barres juxtaposées', Barres, colonnes],
+      ['grille bornée', Grille, grille({ coteMaxTextes: 3 })],
+      ['grille, intitulés tournés', Grille, grille({ colonnes: [{ libelle: 'Une table au nom très long' }, { libelle: 'Deux' }, { libelle: 'Trois' }], coteMaxTextes: 2 })],
+      ['grille sans borne', Grille, grille()],
+      ['escalier', Escalier, propsProfil(12, { graphique: 'bas' })],
+    ];
+    for (const [quoi, Composant, props] of cas) {
+      const { svgs, registre, fin } = await monterDansUneZone([Escalier, propsProfil(12, { graphique: 'haut' })], [Composant, props]);
+      const [haut, bas] = svgs;
+      const cadre = bas.parentElement;
+      const releve = () => ({
+        svg: bas.getAttribute('height'),
+        cadre: cadre.getBoundingClientRect().height,
+        legende: [...cadre.querySelectorAll('ul li')].map((li) => li.textContent),
+      });
+      expect(bas.hasAttribute('data-dessin-differe'), quoi).toBe(true);
+      expect(bas.querySelector('[data-marque]'), quoi).toBeNull();
+      const avant = releve();
+      expect(Number(avant.svg), quoi).toBeGreaterThan(0);
+      if (quoi === 'barres empilées' || quoi === 'escalier') expect(avant.legende.length, quoi).toBeGreaterThan(0);
+      // Le graphique en attente suit la cible haut : il reste en attente.
+      registre.dessinerAvant(haut);
+      flushSync();
+      expect(bas.hasAttribute('data-dessin-differe'), quoi).toBe(true);
+      registre.dessinerAvant(fin);
+      flushSync();
+      expect(bas.hasAttribute('data-dessin-differe'), quoi).toBe(false);
+      expect(bas.querySelector('[data-marque]'), quoi).not.toBeNull();
+      expect(releve(), quoi).toEqual(avant);
+      for (const { composant, cible } of montes.splice(0)) {
+        unmount(composant);
+        cible.remove();
+      }
+    }
+  });
+
+  test('hors de dessinDiffere, un graphique loin de la zone visible se dessine au montage', async () => {
+    const haut = [Escalier, propsProfil(12, { graphique: 'haut' })];
+    const bas = [Escalier, propsProfil(12, { graphique: 'bas' })];
+    const { svgs } = await monterDansUneZone(haut, bas, { differe: false });
+    for (const svg of svgs) {
+      expect(svg.hasAttribute('data-dessin-differe')).toBe(false);
+      expect(svg.querySelector('[data-marque]')).not.toBeNull();
+    }
+  });
+
+  // Un <svg> sans viewBox au style des textes de graphique, une sonde, et le
+  // compte des appels de getComputedTextLength et des relevés (after) que
+  // faire() provoque.
+  function sousSonde(faire) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.style.fontSize = '13px';
+    const sonde = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    svg.append(sonde);
+    document.body.prepend(svg);
+    const longueur = SVGTextContentElement.prototype.getComputedTextLength;
+    const apres = Element.prototype.after;
+    const comptes = { longueurs: 0, releves: 0 };
+    SVGTextContentElement.prototype.getComputedTextLength = function compter() {
+      comptes.longueurs += 1;
+      return longueur.call(this);
+    };
+    Element.prototype.after = function compter(...noeuds) {
+      comptes.releves += 1;
+      return apres.apply(this, noeuds);
+    };
+    try {
+      return { rendu: faire(sonde), comptes };
+    } finally {
+      SVGTextContentElement.prototype.getComputedTextLength = longueur;
+      Element.prototype.after = apres;
+      svg.remove();
+    }
+  }
+
+  test('mesuresDuTexte : les largeurs de creerMesureur ; un relevé par lot, calcul relu jusqu’à ne rien demander d’inconnu ; gardées pour la séance, oubliées à la fin d’un chargement de police', () => {
+    document.fonts.dispatchEvent(new Event('loadingdone'));
+    const chaines = ['Iris Ombrelle', 'Théo Pervenche', '27', ''];
+    const temoins = sousSonde((sonde) => chaines.map(creerMesureur(sonde))).rendu;
+    // Le calcul demande d'abord trois chaînes, puis une quatrième qui
+    // dépend de la largeur de la première : deux lots, trois passages.
+    let passages = 0;
+    const calcul = (mesurer) => {
+      passages += 1;
+      const premieres = chaines.slice(0, 3).map(mesurer);
+      return premieres[0] > 0 ? [...premieres, mesurer(chaines[3])] : premieres;
+    };
+    const premier = sousSonde((sonde) => mesuresDuTexte(sonde).calculer(calcul));
+    expect(premier.rendu).toEqual(temoins);
+    expect(passages).toBe(3);
+    expect(premier.comptes).toEqual({ longueurs: 4, releves: 2 });
+    // Une autre sonde du même style : tout vient de la séance.
+    passages = 0;
+    const second = sousSonde((sonde) => mesuresDuTexte(sonde).calculer(calcul));
+    expect(second.rendu).toEqual(temoins);
+    expect(passages).toBe(1);
+    expect(second.comptes).toEqual({ longueurs: 0, releves: 0 });
+    // Une police chargée : les largeurs se relèvent.
+    document.fonts.dispatchEvent(new Event('loadingdone'));
+    const releve = sousSonde((sonde) => mesuresDuTexte(sonde).calculer(calcul));
+    expect(releve.rendu).toEqual(temoins);
+    expect(releve.comptes.longueurs).toBe(4);
+  });
+
+  test('mesuresDuTexte : sous un ancêtre caché, une largeur nulle vaut 0 pour le calcul, ne se garde pas, et le calcul finit', () => {
+    document.fonts.dispatchEvent(new Event('loadingdone'));
+    const { rendu, comptes } = sousSonde((sonde) => {
+      sonde.parentNode.style.display = 'none';
+      const mesures = mesuresDuTexte(sonde);
+      const cache = mesures.calculer((mesurer) => mesurer('Ondine Lacasse'));
+      sonde.parentNode.style.display = '';
+      return [cache, mesures.mesurer('Ondine Lacasse')];
+    });
+    expect(rendu[0]).toBe(0);
+    expect(rendu[1]).toBeGreaterThan(0);
+    expect(comptes.longueurs).toBe(2);
   });
 });

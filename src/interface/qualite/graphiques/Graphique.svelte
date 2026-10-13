@@ -14,10 +14,19 @@
   // qu'un dessin dont la hauteur suit la largeur — une grille — ne change
   // pas, dans l'image même, la taille d'un élément déjà mesuré, ce que
   // ResizeObserver signale comme une boucle. Le texte se mesure sur
-  // une sonde du dessin (mesures, liable : {mesurer, hauteurTexte}, null
-  // tant que la sonde n'est pas rendue) : le composant qui remplit le cadre
-  // en tire sa disposition (pointage.js), puis rend ses marques par
+  // une sonde du dessin (mesures, liable : {mesurer, calculer,
+  // hauteurTexte} de mesuresDuTexte, null tant que la sonde n'est pas
+  // rendue) : le composant qui remplit le cadre en tire sa disposition
+  // (pointage.js) par calculer, qui relève ses libellés inconnus par lots
+  // et garde leurs largeurs pour la séance, puis rend ses marques par
   // children.
+  //
+  // dessine, liable, dit que les marques se rendent (le dessin différé,
+  // plus bas) : le composant qui remplit le cadre ne calcule sa disposition
+  // qu'alors. Avant, il ne mesure que ce qui fixe sa place dans la page :
+  // les marges d'alignement d'un escalier, qui alignent deux graphiques, et
+  // les intitulés d'une grille, qui décident de sa hauteur. La hauteur
+  // qu'il passe est déjà celle de son dessin.
   //
   // Le pointage au plus proche (§ 12.7) : zone, {x, y, largeur, hauteur} en
   // px du dessin, porte la surface de pointage, un <rect fill="none"
@@ -44,13 +53,32 @@
   //
   // legende : [{genre, libelle, signe}] — un trait, un remplissage ou un
   // signe, chacun dessiné de son jeton et de son motif, puis son libellé ;
-  // libelle null pour un signe, que la table des graphiques nomme. synthese :
-  // un texte déjà traduit, ou un snippet qui le rend.
+  // libelle null pour un signe, que la table des graphiques nomme. Elle se
+  // tire des données (legendeTraces, legendeBarres), jamais du dessin : la
+  // liste se rend dès le montage, marques en attente ou non. synthese : un
+  // texte déjà traduit, ou un snippet qui le rend.
+  //
+  // Le dessin différé : sous le contexte dessinDiffere (dessin_differe.js),
+  // que la page de qualité pose, les marques d'un graphique loin de la zone
+  // visible ne se disposent ni ne se rendent, et leurs libellés ne se
+  // mesurent pas. Le <svg> garde la hauteur de son dessin, la légende et la
+  // phrase de synthèse sont rendues : le dessin ne déplace rien dans la
+  // page. L'image nommée et décrite reste, et le <svg> porte
+  // data-dessin-differe tant que ses marques attendent : un <svg role="img">
+  // ne montre pas ses enfants au lecteur d'écran, et le jumeau, chemin du
+  // clavier et du lecteur d'écran, ne dépend pas du dessin. Une fois sa
+  // largeur lue, un graphique qui coupe la zone visible — celle du plus
+  // proche ancêtre qui défile, sinon la fenêtre — se dessine aussitôt ; un
+  // autre s'inscrit au registre du contexte, qui peut le dessiner sur
+  // demande, et attend qu'un IntersectionObserver, de marge une hauteur de
+  // cette zone au-dessus et au-dessous, le voie approcher. Un graphique
+  // dessiné le reste. Hors de ce contexte, chaque graphique se dessine dès
+  // sa largeur lue.
   //
   // Aucune opacité, aucun filtre, aucun mode de fusion sur une marque, un
   // texte ou leur ascendance (§ 14.5).
   import { getContext } from 'svelte';
-  import { creerMesureur, hauteurLigne, mesurable } from '../../plan/mesure_texte.js';
+  import { mesurable, mesuresDuTexte } from '../../plan/mesure_texte.js';
   import { placerInfobulle } from '../../primitives/infobulle.js';
   import { effetDe } from '../../raccourcis.js';
   import Pourcentage from './Pourcentage.svelte';
@@ -69,6 +97,7 @@
     largeur = $bindable(0),
     mesures = $bindable(null),
     pointe = $bindable(null),
+    dessine = $bindable(false),
     children,
   } = $props();
 
@@ -77,8 +106,10 @@
   const uid = $props.id();
   const idNom = `${uid}-nom`;
   const idSynthese = `${uid}-synthese`;
+  const differe = getContext('dessinDiffere') ?? null;
 
   let svg = $state(null);
+  let cadre = $state(null);
   let sonde = $state(null);
   let bulle = $state(null);
   let survole = $state(false);
@@ -86,11 +117,53 @@
   // qu'elle n'est pas placée.
   let place = $state(null);
 
+  // Le plus proche ancêtre de l'élément qui fait défiler son contenu à la
+  // verticale, ou null.
+  function ancetreQuiDefile(element) {
+    for (let ancetre = element.parentElement; ancetre !== null; ancetre = ancetre.parentElement) {
+      const { overflowY } = getComputedStyle(ancetre);
+      if (overflowY === 'auto' || overflowY === 'scroll') return ancetre;
+    }
+    return null;
+  }
+
+  // Le dessin, dès la largeur lue ; différé, le cadre lu une fois, dans la
+  // mise en page que la lecture de la largeur vient de faire, sinon le
+  // registre et l'observateur, retirés au dessin.
+  $effect(() => {
+    if (dessine || cadre === null || largeur === 0) return undefined;
+    if (differe === null) {
+      dessine = true;
+      return undefined;
+    }
+    const defile = ancetreQuiDefile(cadre);
+    const zone = defile === null ? { top: 0, bottom: innerHeight } : defile.getBoundingClientRect();
+    const boite = cadre.getBoundingClientRect();
+    if (boite.bottom >= zone.top && boite.top <= zone.bottom) {
+      dessine = true;
+      return undefined;
+    }
+    const observateur = new IntersectionObserver(
+      (entrees) => {
+        if (entrees.some((entree) => entree.isIntersecting)) dessine = true;
+      },
+      { root: defile, rootMargin: '100% 0px' },
+    );
+    observateur.observe(cadre);
+    const retirer = differe.inscrire(cadre, () => {
+      dessine = true;
+    });
+    return () => {
+      observateur.disconnect();
+      retirer();
+    };
+  });
+
   // La mesure du texte, relevée sur la sonde dès qu'elle est rendue : sous
   // un ancêtre caché, elle attend que la largeur mesurée change.
   $effect(() => {
     if (largeur > 0 && sonde !== null && mesures === null && mesurable(sonde)) {
-      mesures = { mesurer: creerMesureur(sonde), hauteurTexte: hauteurLigne(sonde) };
+      mesures = mesuresDuTexte(sonde);
     }
   });
 
@@ -116,14 +189,10 @@
   // repère de la fenêtre, du plus proche ancêtre qui fait défiler son
   // contenu à la verticale ; {} sans un tel ancêtre.
   function zoneVisible(element) {
-    for (let ancetre = element.parentElement; ancetre !== null; ancetre = ancetre.parentElement) {
-      const { overflowY } = getComputedStyle(ancetre);
-      if (overflowY === 'auto' || overflowY === 'scroll') {
-        const boite = ancetre.getBoundingClientRect();
-        return { haut: boite.top, bas: boite.bottom };
-      }
-    }
-    return {};
+    const defile = ancetreQuiDefile(element);
+    if (defile === null) return {};
+    const boite = defile.getBoundingClientRect();
+    return { haut: boite.top, bas: boite.bottom };
   }
 
   function placer() {
@@ -191,7 +260,7 @@
   </svg>
 {/snippet}
 
-<div class="graphique">
+<div class="graphique" bind:this={cadre}>
   <div class="mesure" bind:clientWidth={largeur}></div>
   <span id={idNom} hidden>{nom}</span>
   <svg
@@ -200,11 +269,14 @@
     role="img"
     aria-labelledby={idNom}
     aria-describedby={idSynthese}
+    data-dessin-differe={dessine ? undefined : ''}
     width={largeur}
     height={hauteur}
   >
     <text bind:this={sonde} class="sonde" x="0" y="0"></text>
-    {@render children()}
+    {#if dessine}
+      {@render children()}
+    {/if}
     {#if zone !== null}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <rect

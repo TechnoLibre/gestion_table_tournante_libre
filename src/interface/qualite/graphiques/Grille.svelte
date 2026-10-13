@@ -28,11 +28,13 @@
   // Désignations : data-graphique sur le <svg>, data-case sur chaque case,
   // par « ligne:colonne » à partir de 0, data-rang sur la désignation de la
   // case pointée, par son indice à partir de 1. Le niveau d'une case à
-  // partir de 1 et sa bordure portent chacun data-marque ; le niveau 0 est un
-  // fond, sans marque.
+  // partir de 1 porte data-marque ; le niveau 0 est un fond, sans marque.
+  // Les bordures de toutes les cases sont un seul <path>, après les cases,
+  // qui porte data-marque : aucune case ne chevauche la bordure d'une autre,
+  // et l'ordre de peinture ne change aucun pixel.
   import { getContext } from 'svelte';
   import Graphique from './Graphique.svelte';
-  import { ESPACE_PX, cibleCase, dispositionGrille } from './pointage.js';
+  import { ESPACE_PX, cadreGrille, cibleCase, dispositionGrille } from './pointage.js';
 
   let {
     graphique,
@@ -55,25 +57,44 @@
 
   let largeur = $state(0);
   let mesures = $state(null);
+  let dessine = $state(false);
 
-  const disposition = $derived(
+  const coteMax = $derived(
+    coteMaxTextes === null || mesures === null ? Number.POSITIVE_INFINITY : coteMaxTextes * mesures.hauteurTexte,
+  );
+
+  // Le cadre, que les seuls intitulés décident (cadreGrille) : mesuré dès
+  // la sonde rendue, dessin fait ou non, il donne la hauteur que le
+  // graphique réserve — celle de son dessin — et dit si la grille cède la
+  // place.
+  const cadre = $derived(
     mesures === null || largeur === 0
       ? null
-      : dispositionGrille({
-          largeur,
-          lignes,
-          colonnes,
-          valeurs,
-          diagonale,
-          mesurer: mesures.mesurer,
-          hauteurTexte: mesures.hauteurTexte,
-          ecrire: ecrire ?? ((v) => format.nombre(v)),
-          coteMax: coteMaxTextes === null ? Number.POSITIVE_INFINITY : coteMaxTextes * mesures.hauteurTexte,
-        }),
+      : mesures.calculer((mesurer) =>
+          cadreGrille({ largeur, lignes, colonnes, mesurer, hauteurTexte: mesures.hauteurTexte, coteMax }),
+        ),
+  );
+
+  const disposition = $derived(
+    !dessine || mesures === null || largeur === 0
+      ? null
+      : mesures.calculer((mesurer) =>
+          dispositionGrille({
+            largeur,
+            lignes,
+            colonnes,
+            valeurs,
+            diagonale,
+            mesurer,
+            hauteurTexte: mesures.hauteurTexte,
+            ecrire: ecrire ?? ((v) => format.nombre(v)),
+            coteMax,
+          }),
+        ),
   );
 
   $effect(() => {
-    if (disposition !== null) dessinable = disposition.dessinable;
+    if (cadre !== null) dessinable = cadre.dessinable;
   });
 
   const zone = $derived(
@@ -94,7 +115,7 @@
      largeur, et le conteneur qui la porte ne se mesure pas. -->
 <div>
 <div class="mesure" bind:clientWidth={largeur}></div>
-{#if disposition !== null && !disposition.dessinable}
+{#if cadre !== null && !cadre.dessinable}
   <p class="phrase">{#if typeof phrase === 'function'}{@render phrase()}{:else}{phrase}{/if}</p>
 {:else}
   <Graphique
@@ -102,12 +123,13 @@
     {nom}
     {synthese}
     {infobulle}
-    hauteur={disposition?.hauteur ?? 0}
+    hauteur={cadre?.hauteur ?? 0}
     {zone}
     {cibler}
     {ancrer}
     bind:largeur
     bind:mesures
+    bind:dessine
     bind:pointe
   >
     {#if disposition !== null}
@@ -136,7 +158,6 @@
               style:fill={`var(${c.jeton})`}
             />
           {/if}
-          <rect class="bordure" data-marque="graphiqueBordureCase" x={c.bord.x} y={c.bord.y} width={c.bord.cote} height={c.bord.cote} />
           {#if !c.diagonale}
             <text
               class="compte"
@@ -149,6 +170,7 @@
           {/if}
         </g>
       {/each}
+      <path class="bordure" data-marque="graphiqueBordureCase" d={disposition.bordures} />
       {#if pointe !== null && disposition.cases[pointe] !== undefined}
         {@const c = disposition.cases[pointe]}
         <rect class="designation" data-rang={pointe + 1} x={c.x - ESPACE_PX / 3} y={c.y - ESPACE_PX / 3} width={c.cote + (2 * ESPACE_PX) / 3} height={c.cote + (2 * ESPACE_PX) / 3} />
@@ -172,10 +194,15 @@
     fill: var(--couleur-page-texte);
   }
 
+  /* Les bordures, un seul chemin, sans lissage : un coin de sous-chemin
+     lissé se peint plus clair que celui d'un <rect>, et un trait sans
+     lissage peint son jeton entier, sur la même rangée de pixels qu'un
+     <rect> posé à la demi-unité. */
   .bordure {
     fill: none;
     stroke: var(--couleur-graphique-bordure-case);
     stroke-width: 1;
+    shape-rendering: crispEdges;
   }
 
   /* Un compte sans niveau — « — » — se lit de l'encre de la page. */

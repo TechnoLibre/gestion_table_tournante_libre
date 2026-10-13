@@ -34,7 +34,7 @@ import { SUFFIXES } from '../../src/stockage/noms.js';
 import { FICHIER_REGLAGES, serialiserReglages } from '../../src/stockage/reglages_locaux.js';
 import { VERSION } from '../../src/version.genere.js';
 import urlCasLimites from '../../exemples/participants_cas_limites.csv?url';
-import { pointer, touche } from './entrees.js';
+import { dessinerGraphiques, pointer, touche } from './entrees.js';
 import { monterApp } from './montage.js';
 
 /** La base du fichier d'état de chaque événement d'épreuve. */
@@ -507,6 +507,9 @@ function ecranDeSection(section, mode) {
     async atteindre(contexte) {
       const charge = mode === 'bloque' ? chargeBloquee() : chargePrincipale();
       const m = await ouvrirEvenement(contexte, charge, { ecriture: mode === 'ecriture', section });
+      // La page de qualité se lit dessinée, chaque graphique amené à son
+      // tour : les gardes lisent ses marques sous chaque mode.
+      if (section === 'qualite') await qualiteDessinee(m);
       return m.racine;
     },
   };
@@ -516,8 +519,11 @@ function ecranDeSection(section, mode) {
 const planEnEcriture = (contexte, options) => ouvrirEvenement(contexte, chargePrincipale(), { ecriture: true, section: 'plan', options });
 
 // La page de qualité du montage dessinée : une vue posée au moins, chaque
-// graphique de la section mesuré et porteur d'une marque au moins.
+// graphique de la section amené à son tour dans la zone visible
+// (dessinerGraphiques), mesuré et porteur d'une marque au moins.
 async function qualiteDessinee(m) {
+  await attendre('une vue de la page de qualité', () => m.racine.querySelector('[data-section="qualite"] [data-vue-qualite]'));
+  await dessinerGraphiques(m.racine.querySelector('[data-section="qualite"]'));
   await attendre('la page de qualité dessinée', () => {
     const section = m.racine.querySelector('[data-section="qualite"]');
     if (section === null || section.querySelector('[data-vue-qualite]') === null) return false;

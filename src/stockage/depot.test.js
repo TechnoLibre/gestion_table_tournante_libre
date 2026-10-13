@@ -2241,6 +2241,25 @@ function generation(charge) {
 // Le texte du compagnon des courses de l'événement d'épreuve.
 const compagnon = (entrees) => texteDesCourses('evt-lucioles', entrees);
 
+// Le nombre d'appels de Math.imul pendant faire(), et ce que faire rend :
+// l'empreinte d'un placement (courses.js) est le seul code de src à
+// l'appeler, si bien qu'un compte nul dit qu'aucun placement ne s'est
+// haché.
+async function hachages(faire) {
+  const imul = Math.imul;
+  let n = 0;
+  Math.imul = (a, b) => {
+    n += 1;
+    return imul(a, b);
+  };
+  try {
+    const rendu = await faire();
+    return { n, rendu };
+  } finally {
+    Math.imul = imul;
+  }
+}
+
 describe('dépôt : le compagnon des courses (§ 8.6, § 8.9, B31)', () => {
   test("une génération écrit le compagnon après l'état ; un geste qui garde les mêmes propositions ne l'écrit pas ; rouvert, l'événement retrouve chaque course", async () => {
     const { disque, fs } = nouveauDisque();
@@ -2270,6 +2289,34 @@ describe('dépôt : le compagnon des courses (§ 8.6, § 8.9, B31)', () => {
     const rouvert = await rouvrir(disque, BASE);
     assert.deepEqual(courseDe(rouvert, 3), courseDe(genere, 3));
     assert.deepEqual(courseDe(rouvert, 2), courseDe(genere, 2));
+  });
+
+  test("un geste qui garde les mêmes placements n'en hache aucun ; un placement changé sous la même identité se hache, et le compagnon se réécrit sans sa course", async () => {
+    const { fs } = nouveauDisque();
+    const ouvert = await creer(fs, DOC, chargeEssai(), CREATION);
+    const { apres, courses } = generation(ouvert.charge);
+    const genere = await enregistrer(ouvert, apres, geste(2, { courses }));
+
+    const trace = tracer(fs);
+    let suite = genere;
+    for (const n of [3, 4]) {
+      const charge = gesteSur(suite.charge, n);
+      const ordinaire = await hachages(() => enregistrer(suite, charge, geste(n)));
+      assert.equal(ordinaire.n, 0, `le geste ${n} ne hache aucun placement`);
+      suite = ordinaire.rendu;
+    }
+    assert.deepEqual(trace.filter(([, chemin]) => chemin === COURSES), []);
+    assert.equal(courseDe(suite, 2).evalues, 100);
+
+    // La proposition 2 garde son identifiant, sa graine, son arrêt et son
+    // historique, sur un autre premier tour.
+    const changee = structuredClone(suite.charge);
+    changee.propositions[1].placement[0].sieges = [[1, 4], [2, 3]];
+    const geste5 = await hachages(() => enregistrer(suite, changee, geste(5)));
+    assert.ok(geste5.n > 0, 'le placement changé se hache');
+    assert.equal(fs.contenu('documents', COURSES), compagnon([courses[1]]));
+    assert.equal(courseDe(geste5.rendu, 2), null);
+    assert.equal(courseDe(geste5.rendu, 3).evalues, 1_000);
   });
 
   test("effacer puis défaire : le compagnon se réécrit sans les courses effacées, l'Ouvert les garde en mémoire, et le retour les réécrit ; après une réouverture, elles ne sont plus connues", async () => {

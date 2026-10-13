@@ -107,7 +107,7 @@
 // propositions écrites ne sont plus celles qu'il porte (poserCompagnon) ;
 // un refus d'écrire le compagnon ne refuse pas l'écriture.
 import { canoniser, serialiser } from './canonique.js';
-import { avecCourses, cleDeCourse, entreesPour, lireCourses, texteDesCourses } from './courses.js';
+import { avecCourses, cleDeCourse, entreesPour, heriterEmpreintes, lireCourses, texteDesCourses } from './courses.js';
 import { FORMAT, analyser } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import {
@@ -1186,11 +1186,14 @@ const memesCles = (a, b) => a.length === b.length && [...a].sort().join('\n') ==
 // le disque porte, ou que celles-ci sont inconnues : une génération, un
 // effacement, un retour qui rend ou retire des propositions, et l'écriture
 // qui suit un compagnon refusé. Un geste qui garde les mêmes propositions
-// ne l'écrit jamais. L'écriture est atomique, comme celle de l'état. Un
-// refus du système de fichiers ne remonte pas : le compagnon reste ce
-// qu'il était, l'Ouvert le dit inconnu, et la course reste connue de
-// l'Ouvert pour la séance. Toute autre erreur remonte.
-async function poserCompagnon(ouvert) {
+// ne l'écrit jamais. precedentes, les propositions de l'Ouvert d'avant le
+// geste, lui passent leurs empreintes (heriterEmpreintes) : un geste qui
+// garde les mêmes placements n'en hache aucun. L'écriture est atomique,
+// comme celle de l'état. Un refus du système de fichiers ne remonte pas :
+// le compagnon reste ce qu'il était, l'Ouvert le dit inconnu, et la course
+// reste connue de l'Ouvert pour la séance. Toute autre erreur remonte.
+async function poserCompagnon(ouvert, precedentes = []) {
+  if (ouvert.courses.size > 0) heriterEmpreintes(precedentes, ouvert.charge.propositions);
   const entrees = entreesPour(ouvert.courses, ouvert.charge.propositions);
   const cles = entrees.map(cleDeCourse);
   if (ouvert.compagnon !== null && memesCles(cles, ouvert.compagnon)) return ouvert;
@@ -1366,7 +1369,7 @@ export async function enregistrer(ouvert, apres, options) {
   const memoire = avecCourses(ouvert.courses, courses);
   const avance = { ...suite.depart, ...ecrit, produitVersion, chargeJournal: canoniser(apres), courses: memoire };
   const examine = apresEcriture(avance, { charge: apres, revision, journal: ecrit.journal, recree });
-  return poserCompagnon(await ecrireEtat(examine, texteEtat));
+  return poserCompagnon(await ecrireEtat(examine, texteEtat), ouvert.charge.propositions);
 }
 
 /**

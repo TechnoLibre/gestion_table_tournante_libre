@@ -17,6 +17,7 @@ import {
   courseDe,
   entreeDeCourse,
   entreesPour,
+  heriterEmpreintes,
   lireCourses,
   texteDesCourses,
 } from './courses.js';
@@ -70,6 +71,24 @@ function texteAbime(entrees, abimer) {
 }
 
 const cles = (courses) => [...courses.keys()];
+
+// Le nombre d'appels de Math.imul pendant faire(), et ce que faire rend :
+// l'empreinte d'un placement est le seul code de src à l'appeler, si bien
+// qu'un compte nul dit qu'aucun placement ne s'est haché.
+function hachages(faire) {
+  const imul = Math.imul;
+  let n = 0;
+  Math.imul = (a, b) => {
+    n += 1;
+    return imul(a, b);
+  };
+  try {
+    const rendu = faire();
+    return { n, rendu };
+  } finally {
+    Math.imul = imul;
+  }
+}
 
 describe('le compagnon des courses : son texte (§ 8.9, B31)', () => {
   test("une entrée par ligne, l'identité de la proposition puis sa course ; aucune entrée, une seule ligne ; le texte finit par une fin de ligne", () => {
@@ -279,5 +298,90 @@ describe("le compagnon des courses : la course d'une proposition (§ 8.9, B31)",
     assert.deepEqual(entreesPour(apres, inverses), [...entrees].reverse());
     assert.deepEqual(entreesPour(avant, charge.propositions), [entrees[0]]);
     assert.deepEqual(entreesPour(apres, []), []);
+  });
+});
+
+describe("le compagnon des courses : l'empreinte d'un placement copié (§ 8.9)", () => {
+  test("heriterEmpreintes : la copie d'un placement déjà haché reçoit son empreinte sans rien hacher ; un autre placement sous la même identité, ou un autre drapeau siegesAttribues, se hache de nouveau", () => {
+    const { charge } = chargeEtEntrees([1, 2]);
+    const inverse = chargeEtEntrees([1, 2], PLAN_INVERSE).charge.propositions[1];
+    const avant = charge.propositions.map(cleDeCourse);
+    const copies = structuredClone(charge.propositions);
+    copies[1].placement = structuredClone(inverse.placement);
+    const copieSansAttribution = structuredClone(charge.propositions[0]);
+
+    const report = hachages(() => heriterEmpreintes(charge.propositions, [...copies, copieSansAttribution]));
+    assert.equal(report.n, 0, 'le report ne hache rien');
+    const gardee = hachages(() => cleDeCourse(copies[0]));
+    assert.equal(gardee.n, 0, 'la copie du même placement ne se hache pas');
+    assert.equal(gardee.rendu, avant[0]);
+
+    // Même identifiant, graine, arrêt et historique, autre placement : la
+    // clé suit le placement, jamais l'empreinte de l'original.
+    const changee = hachages(() => cleDeCourse(copies[1]));
+    assert.ok(changee.n > 0, 'un autre placement se hache');
+    assert.notEqual(changee.rendu, avant[1]);
+    assert.equal(changee.rendu, cleDeCourse(inverse));
+
+    // L'empreinte reportée porte le drapeau de l'original.
+    copieSansAttribution.siegesAttribues = true;
+    assert.ok(hachages(() => cleDeCourse(copieSansAttribution)).n > 0);
+  });
+
+  // Chaque liste que lit le texte canonique compte : une copie dont une
+  // seule liste diffère n'hérite de rien, se hache, et prend la clé d'un
+  // clone neuf, qui ne porte aucune empreinte.
+  for (const [quoi, changer] of [
+    ['seule une réserve change', (placement) => placement[0].reserve.push(99)],
+    [
+      'seul le dernier tour change',
+      (placement) => {
+        const { sieges } = placement.at(-1);
+        [sieges[0][0], sieges[1][0]] = [sieges[1][0], sieges[0][0]];
+      },
+    ],
+    ['un tour compte une liste de sièges de plus', (placement) => placement[0].sieges.push([])],
+    [
+      'seule la deuxième liste de sièges change',
+      (placement) => {
+        const { sieges } = placement[0];
+        [sieges[1][0], sieges[2][0]] = [sieges[2][0], sieges[1][0]];
+      },
+    ],
+    [
+      'seuls deux occupants après le premier de leur liste changent',
+      (placement) => {
+        const { sieges } = placement[0];
+        [sieges[0][1], sieges[1][1]] = [sieges[1][1], sieges[0][1]];
+      },
+    ],
+    ['le placement compte un tour de plus', (placement) => placement.push(structuredClone(placement.at(-1)))],
+  ]) {
+    test(`heriterEmpreintes : ${quoi}, sous la même identité — la copie se hache et prend la clé d'un clone neuf`, () => {
+      const { charge } = chargeEtEntrees([1, 2]);
+      const avant = charge.propositions.map(cleDeCourse);
+      const copies = structuredClone(charge.propositions);
+      changer(copies[0].placement);
+      const neuve = structuredClone(copies[0]);
+
+      assert.equal(hachages(() => heriterEmpreintes(charge.propositions, copies)).n, 0, 'le report ne hache rien');
+      const changee = hachages(() => cleDeCourse(copies[0]));
+      assert.ok(changee.n > 0, 'le placement changé se hache');
+      assert.equal(changee.rendu, cleDeCourse(neuve));
+      assert.notEqual(changee.rendu, avant[0]);
+      const gardee = hachages(() => cleDeCourse(copies[1]));
+      assert.deepEqual(gardee, { n: 0, rendu: avant[1] }, 'la proposition inchangée hérite');
+    });
+  }
+
+  test("entreesPour ne hache que les propositions dont l'identité est celle d'une entrée ; sans aucune course, elle ne hache rien", () => {
+    const { charge, entrees } = chargeEtEntrees([1, 2, 3]);
+    const copies = structuredClone(charge.propositions);
+    const courses = avecCourses(new Map(), [entrees[1]]);
+    assert.deepEqual(hachages(() => entreesPour(new Map(), copies)), { n: 0, rendu: [] });
+    const une = hachages(() => entreesPour(courses, copies));
+    assert.deepEqual(une.rendu, [entrees[1]]);
+    const seule = hachages(() => cleDeCourse(structuredClone(charge.propositions[1])));
+    assert.equal(une.n, seule.n, "seule la proposition 2 s'est hachée");
   });
 });

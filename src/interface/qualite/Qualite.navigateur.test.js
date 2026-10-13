@@ -21,12 +21,13 @@ import { appliquerCommande } from '../../application/commandes.js';
 import { evaluer, premiereDuClassement } from '../../application/evaluation.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { texteLivre } from '../../demo/livrees.js';
 import { rechercher } from '../../moteur/recherche.js';
 import { serialiser } from '../../stockage/canonique.js';
-import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
+import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { fixerCadre } from '../../../test/navigateur/entrees.js';
+import { dessinerGraphiques, fixerCadre } from '../../../test/navigateur/entrees.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import '../impression.css';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -453,6 +454,81 @@ describe('les vues d’attente et la liste qui y mène (§ 12, B9, B10)', () => 
     }
     expect(window.location.href).toBe(adresse);
   });
+});
+
+describe('le poids de la page à son ouverture (E2s)', () => {
+  test('la grande, une proposition : sous 1 500 éléments à l’ouverture, chaque vue posée, les graphiques loin de la zone visible en attente ; amenés, chacun se dessine', async () => {
+    const m = await ouvrir(generee(analyser(texteLivre('grande')).charge, { graine: 1, arret: 200_000, nombre: 1 }));
+    m.ui.montrerProposition(charge(m).propositions[0].id);
+    flushSync();
+    await attendre(() => expect(vuesRendues(m)).toEqual(VUES));
+    for (let n = 0; n < 3; n += 1) await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    const elements = page(m).querySelectorAll('*').length + 1;
+    expect(elements).toBeLessThan(1500);
+    const graphiques = () => [...page(m).querySelectorAll('svg[data-graphique]')];
+    const enAttente = graphiques().filter((svg) => svg.hasAttribute('data-dessin-differe'));
+    expect(enAttente.length).toBeGreaterThan(0);
+    for (const svg of enAttente) expect(svg.querySelector('[data-marque]')).toBeNull();
+    expect(await dessinerGraphiques(page(m))).toBeGreaterThan(0);
+    for (const svg of graphiques()) {
+      expect(svg.hasAttribute('data-dessin-differe'), svg.dataset.graphique).toBe(false);
+      expect(svg.querySelector('[data-marque]'), svg.dataset.graphique).not.toBeNull();
+    }
+  }, 60_000);
+});
+
+describe('le dessin différé ne déplace pas la vue montrée (E2s, B9)', () => {
+  const image = () => new Promise((resoudre) => requestAnimationFrame(resoudre));
+  // Le plus proche ancêtre de l'élément qui défile à la verticale.
+  const defileur = (element) => {
+    for (let ancetre = element.parentElement; ancetre !== null; ancetre = ancetre.parentElement) {
+      if (['auto', 'scroll'].includes(getComputedStyle(ancetre).overflowY)) return ancetre;
+    }
+    return document.scrollingElement;
+  };
+
+  test('la grande : le lien vers la dernière vue, puis le défilement jusqu’au bas, la posent où la page dessinée entière la pose, et 30 images n’y changent rien', async () => {
+    const m = await ouvrir(generee(analyser(texteLivre('grande')).charge, { graine: 1, arret: 200_000, nombre: 1 }));
+    m.ui.montrerProposition(charge(m).propositions[0].id);
+    flushSync();
+    await attendre(() => expect(vuesRendues(m)).toEqual(VUES));
+    for (let n = 0; n < 3; n += 1) await image();
+    const zone = defileur(page(m));
+    const lien = page(m).querySelector('nav a[href$="-vue-performance"]');
+    const cible = document.getElementById(lien.getAttribute('href').slice(1));
+    const haut = () => cible.getBoundingClientRect().top - zone.getBoundingClientRect().top;
+    // Le haut de la vue à chacune des 30 images qui suivent le geste.
+    async function suite(geste) {
+      geste();
+      flushSync();
+      const hauts = [haut()];
+      for (let n = 0; n < 30; n += 1) {
+        await image();
+        flushSync();
+        hauts.push(haut());
+      }
+      return hauts;
+    }
+    const parLeLien = () => suite(() => lien.click());
+    const jusquAuBas = () => suite(() => zone.scrollTo(0, zone.scrollHeight));
+
+    expect(page(m).querySelectorAll('svg[data-dessin-differe]').length).toBeGreaterThan(0);
+    const lienDiffere = await parLeLien();
+    expect(document.activeElement).toBe(cible);
+    const basDiffere = await jusquAuBas();
+    for (const hauts of [lienDiffere, basDiffere]) {
+      expect(new Set(hauts).size, hauts.join(', ')).toBe(1);
+      expect(hauts[0]).toBeGreaterThanOrEqual(0);
+      expect(hauts[0]).toBeLessThan(zone.clientHeight);
+    }
+
+    // La même page, chaque graphique dessiné : les mêmes positions.
+    zone.scrollTo(0, 0);
+    await dessinerGraphiques(page(m));
+    expect(page(m).querySelectorAll('svg[data-dessin-differe]')).toHaveLength(0);
+    expect(await parLeLien()).toEqual(lienDiffere);
+    expect(await jusquAuBas()).toEqual(basDiffere);
+  }, 60_000);
 });
 
 describe('la page ne s’imprime pas (§ 11.7, B8)', () => {

@@ -41,7 +41,7 @@
   // pointée, par son rang à partir de 1. Chaque marque porte data-marque.
   import { getContext } from 'svelte';
   import Graphique from './Graphique.svelte';
-  import { ESPACE_PX, TRAIT_CONTOUR_PX, cibleLigne, dispositionBarres } from './pointage.js';
+  import { TRAIT_CONTOUR_PX, cibleLigne, dispositionBarres, hauteurBarres, legendeBarres } from './pointage.js';
 
   let {
     graphique,
@@ -60,21 +60,31 @@
 
   let largeur = $state(0);
   let mesures = $state(null);
+  let dessine = $state(false);
 
   const disposition = $derived(
-    mesures === null || largeur === 0
+    !dessine || mesures === null || largeur === 0
       ? null
-      : dispositionBarres({
-          largeur,
-          lignes,
-          segments,
-          colonnes,
-          mesurer: mesures.mesurer,
-          hauteurTexte: mesures.hauteurTexte,
-          graduer: graduer ?? ((v) => format.nombre(v)),
-          marque: t('graphiques.troncature'),
-        }),
+      : mesures.calculer((mesurer) =>
+          dispositionBarres({
+            largeur,
+            lignes,
+            segments,
+            colonnes,
+            mesurer,
+            hauteurTexte: mesures.hauteurTexte,
+            graduer: graduer ?? ((v) => format.nombre(v)),
+            marque: t('graphiques.troncature'),
+          }),
+        ),
   );
+
+  // La hauteur du dessin et la légende ne lisent aucune largeur de texte :
+  // un graphique qui attend son dessin les porte déjà.
+  const hauteur = $derived(
+    mesures === null ? 0 : hauteurBarres({ n: lignes.length, juxtaposees: colonnes !== null, hauteurTexte: mesures.hauteurTexte }),
+  );
+  const legende = $derived(legendeBarres({ segments, colonnes }));
 
   // La surface de pointage couvre les lignes, intitulés compris.
   const zone = $derived(
@@ -94,13 +104,14 @@
   {nom}
   {synthese}
   {infobulle}
-  hauteur={disposition?.hauteurTotale ?? 0}
+  {hauteur}
   {zone}
-  legende={disposition?.legende ?? []}
+  {legende}
   {cibler}
   {ancrer}
   bind:largeur
   bind:mesures
+  bind:dessine
   bind:pointe
 >
   {#if disposition !== null}

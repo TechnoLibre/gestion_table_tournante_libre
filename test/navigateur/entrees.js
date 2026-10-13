@@ -179,3 +179,40 @@ export async function fixerCadre(largeur, hauteur, { poser = (l, h) => page.view
   }
   return lu;
 }
+
+// Images attendues au plus pour qu'un graphique amené dans la zone visible
+// se dessine : son observateur répond à l'image qui suit le défilement, et
+// le dessin vient avec le rendu suivant.
+const IMAGES_DESSIN = 120;
+
+/** Dessine chaque graphique de racine dont le dessin attend d'approcher de
+ *  la zone visible (data-dessin-differe, Graphique.svelte) : le premier qui
+ *  attend s'amène au centre de la zone visible, puis les images passent
+ *  jusqu'à ce qu'il soit dessiné — ses voisins proches avec lui —, et ainsi
+ *  de suite. Un graphique dessiné le reste. Chaque position de défilement
+ *  que les amenées changent — la fenêtre, chaque ancêtre qui défile — se
+ *  rétablit ensuite : l'épreuve retrouve la page où elle la regardait, ses
+ *  marques toutes rendues. Lève en nommant le graphique qui ne se dessine
+ *  pas en IMAGES_DESSIN images. Rend le nombre de graphiques amenés. */
+export async function dessinerGraphiques(racine) {
+  const positions = new Map();
+  const garder = (element) => {
+    for (let ancetre = element.parentElement; ancetre !== null; ancetre = ancetre.parentElement) {
+      if (!positions.has(ancetre)) positions.set(ancetre, [ancetre.scrollLeft, ancetre.scrollTop]);
+    }
+  };
+  const fenetre = [scrollX, scrollY];
+  let amenes = 0;
+  for (let differe = racine.querySelector('svg[data-dessin-differe]'); differe !== null; differe = racine.querySelector('svg[data-dessin-differe]')) {
+    garder(differe);
+    differe.scrollIntoView({ block: 'center' });
+    amenes += 1;
+    for (let image = 0; differe.isConnected && differe.hasAttribute('data-dessin-differe'); image += 1) {
+      if (image === IMAGES_DESSIN) throw new Error(`le graphique ${differe.dataset.graphique} ne se dessine pas`);
+      await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    }
+  }
+  for (const [ancetre, [gauche, haut]] of positions) ancetre.scrollTo(gauche, haut);
+  scrollTo(...fenetre);
+  return amenes;
+}

@@ -300,10 +300,17 @@ export function cheminSigne(genre, x, y) {
   return `M ${n(x - s)} ${n(y - s)} L ${n(x + s)} ${n(y + s)} M ${n(x + s)} ${n(y - s)} L ${n(x - s)} ${n(y + s)}`;
 }
 
-// La légende d'un graphique à traces : chaque trace sous son libellé, puis
-// chaque signe présent, dans l'ordre de SIGNES.
-function legendeDe(traces, signes = []) {
-  const presents = new Set(signes.map((s) => s.genre));
+/**
+ * La légende d'un escalier ou de points (Graphique) : chaque trace sous son
+ * libellé — les séries, puis les repères —, puis chaque signe que marques
+ * porte, dans l'ordre de SIGNES. Elle ne lit que les données reçues, aucune
+ * mesure ni disposition : un graphique qui attend son dessin la rend déjà.
+ * Lève comme exigerTraces.
+ * @returns {Array<{genre: string, libelle: string|null, signe: string|null}>}
+ */
+export function legendeTraces({ series, reperes = [], marques = null }) {
+  const { traces } = exigerTraces(series, reperes);
+  const presents = new Set(marques ?? []);
   return [
     ...traces.map((t) => ({ genre: t.genre, libelle: t.libelle, signe: null })),
     ...SIGNES.filter((s) => presents.has(s)).map((signe) => ({ genre: 'signe', libelle: null, signe })),
@@ -368,7 +375,7 @@ export function dispositionEscalier({
     n === 0
       ? []
       : graduations(1, n, GRADUATIONS_RANGS, { entieres: true }).map((rang) => ({ valeur: rang, texte: graduerX(rang), x: ex.versPx(rang - 0.5) }));
-  return { ...cadre, n, ex, traces: tracees, signes, graduationsX, legende: legendeDe(tracees, signes) };
+  return { ...cadre, n, ex, traces: tracees, signes, graduationsX, legende: legendeTraces({ series, reperes, marques }) };
 }
 
 /** L'indice du rang sous l'abscisse x d'un escalier, au plus proche, borné
@@ -444,7 +451,7 @@ export function dispositionPoints({
       gardees.unshift({ valeur: abscisses[i], texte, x });
     }
   }
-  return { ...cadre, n, ex, traces: tracees, abscissesPx, graduationsX: gardees, legende: legendeDe(tracees) };
+  return { ...cadre, n, ex, traces: tracees, abscissesPx, graduationsX: gardees, legende: legendeTraces({ series }) };
 }
 
 /** L'indice du point de relevé le plus proche de l'abscisse x, sur
@@ -512,6 +519,33 @@ function exigerIdentifiants(lignes) {
 }
 
 /**
+ * La hauteur, en px, de barres de n lignes (dispositionBarres) : l'en-tête
+ * — le titre de chaque colonne juxtaposée, puis les graduations — et les
+ * lignes, chacune d'une hauteur de texte et d'ESPACE_PX, écartées de
+ * ECART_LIGNES_PX. Elle ne lit aucune largeur de texte : un graphique qui
+ * attend son dessin la réserve, et son dessin ne change pas sa hauteur.
+ */
+export function hauteurBarres({ n, juxtaposees, hauteurTexte }) {
+  const ligne = hauteurTexte + ESPACE_PX;
+  return enTeteBarres(juxtaposees, hauteurTexte) + (n === 0 ? 0 : n * ligne + (n - 1) * ECART_LIGNES_PX);
+}
+
+// La hauteur de l'en-tête des barres : le titre de chaque colonne
+// juxtaposée, puis les graduations.
+const enTeteBarres = (juxtaposees, hauteurTexte) => (juxtaposees ? 2 : 1) * (hauteurTexte + ESPACE_PX);
+
+/**
+ * La légende de barres (Graphique) : chaque segment empilé sous son
+ * libellé, rien pour des colonnes juxtaposées, que leurs titres nomment.
+ * Elle ne lit que les données reçues : un graphique qui attend son dessin
+ * la rend déjà.
+ * @returns {Array<{genre: string, libelle: string, signe: null}>}
+ */
+export function legendeBarres({ segments = null, colonnes = null }) {
+  return colonnes !== null ? [] : segments.map((s) => ({ genre: s.genre, libelle: s.libelle, signe: null }));
+}
+
+/**
  * La disposition de barres horizontales (§ 12.4, § 12.12, § 12.13) : une
  * ligne par entrée de lignes, {id, nom, appartenance?, valeurs}, dans
  * l'ordre reçu, chacune intitulée de son nom tronqué à LARGEUR_NOM_PX —
@@ -558,8 +592,7 @@ export function dispositionBarres({ largeur, lignes, segments = null, colonnes =
   const retraitNom = avecPastille ? 2 * RETRAIT_PASTILLE_PX + 2 * POINT_PASTILLE_PX : 0;
   const largeurNoms = Math.max(0, ...intitules.map((i) => i.largeur)) + retraitNom + (avecPastille ? RETRAIT_PASTILLE_PX : 0);
   const x0 = largeurNoms + ESPACE_PX;
-  // En tête : le titre de chaque colonne juxtaposée, puis les graduations.
-  const haut = (juxtaposees ? 2 : 1) * (hauteurTexte + ESPACE_PX);
+  const haut = enTeteBarres(juxtaposees, hauteurTexte);
   // À droite : les libellés des segments, au pire tous sur une même ligne,
   // puis le plus long texte secondaire.
   const etiquettes = juxtaposees ? [] : parts.map((s) => s.libelle);
@@ -674,9 +707,9 @@ export function dispositionBarres({ largeur, lignes, segments = null, colonnes =
     colonnes: juxtaposees ? colonnesDisposees : [],
     axes: colonnesDisposees,
     etiquettesSegments,
-    legende: juxtaposees ? [] : parts.map((s) => ({ genre: s.genre, libelle: s.libelle, signe: null })),
+    legende: legendeBarres({ segments, colonnes }),
     haut,
-    hauteurTotale: haut + corps,
+    hauteurTotale: hauteurBarres({ n: lignes.length, juxtaposees, hauteurTexte }),
   };
 }
 
@@ -691,6 +724,26 @@ export function cibleLigne(y, disposition) {
 }
 
 /**
+ * Le cadre d'une grille (dispositionGrille) : ce que ses seuls intitulés
+ * décident, mesurés par mesurer. x0, la largeur des intitulés de ligne et
+ * d'un espace ; cote et dessinable, la case que la largeur restante tient
+ * (grille, graphique.js) ; tournes, vrai quand un intitulé de colonne
+ * dépasse la case, et y0, la hauteur de l'en-tête : la hauteur d'un texte,
+ * ou du plus long intitulé de colonne tourné, et un espace ; largeur et
+ * hauteur, le dessin entier. Les comptes des cases n'y entrent pas : un
+ * graphique qui attend son dessin réserve cette hauteur, et sait déjà s'il
+ * cède la place.
+ */
+export function cadreGrille({ largeur, lignes, colonnes, mesurer, hauteurTexte, coteMax = Number.POSITIVE_INFINITY }) {
+  exiger(Array.isArray(lignes) && Array.isArray(colonnes), 'grille : lignes et colonnes attendues', TypeError);
+  const x0 = plusLarge(lignes.map((l) => l.libelle), mesurer) + ESPACE_PX;
+  const g = grille(lignes.length, colonnes.length, Math.max(0, largeur - x0), hauteurTexte, coteMax);
+  const tournes = colonnes.some((c) => mesurer(c.libelle) > g.cote);
+  const y0 = (tournes ? plusLarge(colonnes.map((c) => c.libelle), mesurer) : hauteurTexte) + ESPACE_PX;
+  return { x0, y0, cote: g.cote, dessinable: g.dessinable, tournes, largeur: x0 + g.largeur, hauteur: y0 + g.hauteur };
+}
+
+/**
  * La disposition d'une grille (§ 12.5, § 12.11, D33, D35) : lignes ×
  * colonnes de cases carrées, chacune {libelle}, valeurs les comptes en ordre
  * de lignes, null pour une case sans compte. Chaque case porte le niveau de
@@ -701,7 +754,10 @@ export function cibleLigne(y, disposition) {
  * « — ». Sous diagonale, une case de même ligne et colonne est vide et
  * neutre. Une case porte sa bordure, bord, un trait d'un pixel au bord de
  * la case, et son remplissage, fond, en retrait de RETRAIT_CASE_PX dans
- * elle. dessinable faux quand les cases ne tiennent pas dans la largeur
+ * elle. bordures, le chemin de toutes les bordures, un sous-chemin fermé
+ * par case dans l'ordre des cases, chacun le carré de son bord : un seul
+ * <path> trace ce que traceraient autant de <rect>, sans un élément par
+ * case. dessinable faux quand les cases ne tiennent pas dans la largeur
  * (grille, graphique.js) : la vue cède la place. Les intitulés de colonne
  * se tournent d'un quart de tour quand l'un d'eux dépasse la case. ecrire(v)
  * écrit un compte.
@@ -721,29 +777,25 @@ export function dispositionGrille({
   const nl = lignes.length;
   const nc = colonnes.length;
   exiger(Array.isArray(valeurs) && valeurs.length === nl * nc, `grille : ${nl * nc} valeurs attendues`);
-  const largeurIntitules = plusLarge(lignes.map((l) => l.libelle), mesurer) + ESPACE_PX;
-  const g = grille(nl, nc, Math.max(0, largeur - largeurIntitules), hauteurTexte, coteMax);
-  const tournes = colonnes.some((c) => mesurer(c.libelle) > g.cote);
-  const enTete = (tournes ? plusLarge(colonnes.map((c) => c.libelle), mesurer) : hauteurTexte) + ESPACE_PX;
-  const x0 = largeurIntitules;
-  const y0 = enTete;
+  const cadre = cadreGrille({ largeur, lignes, colonnes, mesurer, hauteurTexte, coteMax });
+  const { x0, y0, tournes, cote } = cadre;
   const cases = valeurs.map((v, index) => {
     const ligne = Math.floor(index / nc);
     const colonne = index % nc;
     const surDiagonale = diagonale && ligne === colonne;
     const n = surDiagonale || v === null ? null : niveau(v);
     const entree = n === null ? null : NIVEAUX_GRAPHIQUE[n];
-    const x = x0 + colonne * g.cote;
-    const y = y0 + ligne * g.cote;
+    const x = x0 + colonne * cote;
+    const y = y0 + ligne * cote;
     return {
       index,
       ligne,
       colonne,
       x,
       y,
-      cote: g.cote,
-      bord: { x: x + 0.5, y: y + 0.5, cote: Math.max(0, g.cote - 1) },
-      fond: { x: x + RETRAIT_CASE_PX, y: y + RETRAIT_CASE_PX, cote: Math.max(0, g.cote - 2 * RETRAIT_CASE_PX) },
+      cote,
+      bord: { x: x + 0.5, y: y + 0.5, cote: Math.max(0, cote - 1) },
+      fond: { x: x + RETRAIT_CASE_PX, y: y + RETRAIT_CASE_PX, cote: Math.max(0, cote - 2 * RETRAIT_CASE_PX) },
       diagonale: surDiagonale,
       niveau: n,
       jeton: entree?.jeton ?? null,
@@ -753,17 +805,18 @@ export function dispositionGrille({
     };
   });
   return {
-    dessinable: g.dessinable,
-    cote: g.cote,
+    dessinable: cadre.dessinable,
+    cote,
     x0,
     y0,
-    largeur: x0 + g.largeur,
-    hauteur: y0 + g.hauteur,
+    largeur: cadre.largeur,
+    hauteur: cadre.hauteur,
     nl,
     nc,
-    intitulesLignes: lignes.map((l, i) => ({ texte: l.libelle, x: x0 - ESPACE_PX, y: y0 + (i + 0.5) * g.cote })),
-    intitulesColonnes: colonnes.map((c, j) => ({ texte: c.libelle, x: x0 + (j + 0.5) * g.cote, y: y0 - ESPACE_PX, tourne: tournes })),
+    intitulesLignes: lignes.map((l, i) => ({ texte: l.libelle, x: x0 - ESPACE_PX, y: y0 + (i + 0.5) * cote })),
+    intitulesColonnes: colonnes.map((c, j) => ({ texte: c.libelle, x: x0 + (j + 0.5) * cote, y: y0 - ESPACE_PX, tourne: tournes })),
     cases,
+    bordures: cases.map(({ bord }) => `M${bord.x} ${bord.y}h${bord.cote}v${bord.cote}h${-bord.cote}z`).join(''),
   };
 }
 
