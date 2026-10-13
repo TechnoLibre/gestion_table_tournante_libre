@@ -172,6 +172,12 @@
   « Cible de la somme de redondance », qui ne servait qu'à cette colonne, quitte
   la section des propositions : un fichier qui le porte s'ouvre sans message, et
   le perd au premier enregistrement.
+- La section « Propositions » offre « Garder les 10 meilleures » : les dix
+  premières du classement restent, et celle d'où vient le placement retenu
+  aussi, les autres s'effacent. Le nombre se règle dans le champ voisin. Une
+  fenêtre dit d'abord combien de propositions partent, et « Défaire » les rend.
+  Une longue liste allégée garde le logiciel rapide ; le nombre choisi ne
+  s'enregistre pas dans l'événement.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

@@ -3645,6 +3645,37 @@ describe('séance : la course de la recherche dans son compagnon (§ 5.10, § 8.
     assert.equal(fs.contenu('documents', COURSES), texte);
   });
 
+  test("garder les meilleures retire du compagnon les courses des effacées ; une entrée, que défaire rend, compagnon compris ; en lecture, refusé sans rien écrire", async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs);
+    const montage = monter({ fs });
+    await ouvrirSansEcrire(montage);
+    const { seance } = montage;
+    await seance.passerEnEcriture();
+    await seance.executer('enregistrerGeneration', generer(seance.charge, 3));
+    assert.deepEqual(dansLeCompagnon(fs), [1, 2, 3]);
+    const entrees = journalDe(fs).entrees.length;
+
+    const rendu = await seance.executer('garderMeilleures', { n: 1 });
+    assert.deepEqual(rendu.resume, { effacees: 2 });
+    const gardees = seance.charge.propositions.map(({ id }) => id);
+    assert.equal(gardees.length, 1);
+    assert.deepEqual(dansLeCompagnon(fs), gardees);
+    assert.equal(seance.charge.prochainsIds.proposition, 4);
+    assert.equal(journalDe(fs).entrees.length, entrees + 1);
+    assert.equal(libellesDe(journalDe(fs)).at(-1), 'Gardé la meilleure proposition, effacé 2 propositions');
+
+    await seance.defaire();
+    assert.deepEqual(seance.charge.propositions.map(({ id }) => id), [1, 2, 3]);
+    assert.deepEqual(dansLeCompagnon(fs), [1, 2, 3]);
+
+    await seance.passerEnLecture();
+    const etat = fs.contenu('documents', `${BASE}${SUFFIXES.etat}`);
+    await refus(seance.executer('garderMeilleures', { n: 1 }), 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    assert.equal(fs.contenu('documents', `${BASE}${SUFFIXES.etat}`), etat);
+    assert.deepEqual(dansLeCompagnon(fs), [1, 2, 3]);
+  });
+
   // Le compteur des propositions ne recule jamais sous défaire ni revenir ;
   // il recule quand l'opérateur reprend un état d'avant la génération, ici
   // son .precedent. La génération suivante, sous la même graine, porte

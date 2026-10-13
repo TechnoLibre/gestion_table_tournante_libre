@@ -50,6 +50,7 @@ import * as EVALUATION from './evaluation.js';
 import {
   detaillerQualite,
   evaluer,
+  nettoyage,
   premiereDuClassement,
   rencontresDePersonne,
   resumeDuMeilleur,
@@ -599,6 +600,61 @@ describe('resumeDuMeilleur : la proposition au rang 1 que lit la liste des évé
     charge.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table, siege: null, portee: 'tous', tour: null }));
     assert.throws(() => evaluer(charge), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION');
     assert.equal(resumeDuMeilleur(charge), null);
+  });
+});
+
+describe('nettoyage : les n premières du tableau, et la proposition du retenu (§ 5.7)', () => {
+  // Les plans écrits à la main, que le classement range 3, 2, 1, 4.
+  function chargeConflit() {
+    const charge = structuredClone(chargeDemo('petite-conflit'));
+    charge.propositions = PLANS_CONFLIT.map(({ tours }, rang) => propositionDe(charge, rang + 1, tours));
+    charge.prochainsIds.proposition = 5;
+    charge.evenement.etat = 'propose';
+    return charge;
+  }
+
+  test("garde les n premières dans l'ordre de la table, efface les suivantes ; sans retenu, rien de plus", () => {
+    const table = evaluer(figer(chargeConflit()));
+    assert.deepEqual(table.propositions.map(({ id }) => id), [3, 2, 1, 4]);
+    assert.deepEqual(nettoyage(table, 2), { gardees: [3, 2], effacees: [1, 4], origineEnPlus: null });
+    assert.deepEqual(nettoyage(table, 1), { gardees: [3], effacees: [2, 1, 4], origineEnPlus: null });
+    assert.deepEqual(nettoyage(table, 4), { gardees: [3, 2, 1, 4], effacees: [], origineEnPlus: null });
+    assert.deepEqual(nettoyage(table, 10), { gardees: [3, 2, 1, 4], effacees: [], origineEnPlus: null });
+  });
+
+  test("la proposition du retenu, après les n premières, est gardée en plus ; parmi elles, rien de plus", () => {
+    const charge = executer(chargeConflit(), 'retenirProposition', { id: 4 });
+    const table = evaluer(figer(charge));
+    assert.equal(table.retenu.id, 4);
+    assert.deepEqual(nettoyage(table, 2), { gardees: [3, 2, 4], effacees: [1], origineEnPlus: 4 });
+    assert.deepEqual(nettoyage(table, 3), { gardees: [3, 2, 1, 4], effacees: [], origineEnPlus: 4 });
+    const parmi = evaluer(figer(executer(chargeConflit(), 'retenirProposition', { id: 2 })));
+    assert.deepEqual(nettoyage(parmi, 2), { gardees: [3, 2], effacees: [1, 4], origineEnPlus: null });
+  });
+
+  test("un retenu dont la proposition n'est plus dans la liste ne garde rien de plus", () => {
+    const charge = executer(chargeConflit(), 'retenirProposition', { id: 1 });
+    charge.propositions = charge.propositions.filter(({ id }) => id !== 1);
+    const table = evaluer(figer(charge));
+    assert.equal(table.retenu.id, 1);
+    assert.deepEqual(nettoyage(table, 1), { gardees: [3], effacees: [2, 4], origineEnPlus: null });
+  });
+
+  test('les hors classement viennent après les classées, par identifiant, comme au tableau', () => {
+    let charge = generee(chargeDemo('petite'), { graine: 1, nombre: 2, arret: 200 });
+    charge = executer(charge, 'exclureParticipant', { id: 4 });
+    charge = generee(charge, { graine: 2, nombre: 2, arret: 200 });
+    const table = evaluer(figer(charge));
+    const ordre = table.classement.ordre;
+    assert.deepEqual(nettoyage(table, 2), { gardees: ordre, effacees: [1, 2], origineEnPlus: null });
+    assert.deepEqual(nettoyage(table, 3), { gardees: [...ordre, 1], effacees: [2], origineEnPlus: null });
+  });
+
+  test('n hors des entiers ≥ 1 est une faute du code', () => {
+    const table = evaluer(figer(chargeConflit()));
+    for (const n of [0, -1, 1.5, '2', null, undefined, Number.NaN, 2 ** 53]) {
+      assert.throws(() => nettoyage(table, n), TypeError, String(n));
+    }
   });
 });
 

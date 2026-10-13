@@ -24,10 +24,12 @@
 // retenu quand un placement est retenu ; bloqué se pose de chacun d'eux, et
 // seul debloquer le lève, vers l'état que le contenu impose (etatDeduit). Une
 // génération fait passer un brouillon à proposé ; retenir pose retenu ;
-// effacer les propositions ramène un plan proposé sans retenu à brouillon.
+// effacer les propositions ramène un plan proposé sans retenu à brouillon ;
+// garder les meilleures en laisse une au moins, et ne change pas l'état.
 import { ErreurCsv } from '../csv/erreurs.js';
 import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { appliquerImportObjectifs } from '../csv/objectifs.js';
+import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { entreeDeCourse } from '../stockage/courses.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
@@ -38,6 +40,7 @@ import { courseVersFichier, fautes, formeNommee, versFichier } from '../stockage
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
 import { ErreurCommande, refus } from './erreurs.js';
+import { evaluer, nettoyage } from './evaluation.js';
 import { libelle } from './libelles.js';
 import { avisObjectifs, etiquettesDeLEvenement, etiquettesRangees, recevoirEtiquettes } from './objectifs.js';
 import { nomAffiche } from './personnes.js';
@@ -583,6 +586,43 @@ function effacerPropositions(charge) {
 }
 
 /**
+ * garderMeilleures {n} (§ 5.7) : les n premières propositions du classement
+ * unique, celles que le tableau montre en tête, restent, et celle d'où vient
+ * le retenu avec elles ; les autres s'effacent. Le partage est celui de
+ * nettoyage, sur la table d'evaluer de la charge reçue : la mesure qui
+ * classe le tableau, refaite ici, puisque la commande ne lit que sa charge.
+ * Les gardées restent dans l'ordre du fichier ; le compteur ne recule pas,
+ * et l'état ne change pas, une proposition au moins restant. Rien à
+ * effacer : SANS_EFFET. Une configuration qui ne se normalise pas ne se
+ * classe pas : son refus, du code de normaliser, remède nul. n ne s'écrit
+ * pas dans la charge : le libellé seul le nomme. Le résumé rendu,
+ * {effacees}, compte les propositions que cette exécution efface : l'annonce
+ * de l'écran le lit, plutôt que l'écart de deux lectures de la séance entre
+ * lesquelles une autre écriture de la file peut passer.
+ */
+function garderMeilleures(charge, { n }) {
+  exigerModifiable(charge);
+  let table;
+  try {
+    table = evaluer(charge);
+  } catch (erreur) {
+    if (erreur instanceof ErreurConfiguration) throw refus(erreur.code, erreur.details);
+    throw erreur;
+  }
+  const { gardees, effacees, origineEnPlus } = nettoyage(table, n);
+  if (effacees.length === 0) throw refus('SANS_EFFET', { commande: 'garderMeilleures' });
+  const restent = new Set(gardees);
+  const suivante = structuredClone(charge);
+  suivante.propositions = suivante.propositions.filter(({ id }) => restent.has(id));
+  return {
+    charge: suivante,
+    libelle: libelle('ENTREE_GARDER_MEILLEURES', { n, effacees: effacees.length, gardee: origineEnPlus }),
+    avertissements: [],
+    resume: { effacees: effacees.length },
+  };
+}
+
+/**
  * Un registre réuni de plusieurs : chaque nom une fois, dans l'ordre des
  * registres reçus, puis de chacun.
  *
@@ -627,6 +667,7 @@ export const COMMANDES = reunirCommandes(
     ['enregistrerGeneration', enregistrerGeneration],
     ['retenirProposition', retenirProposition],
     ['effacerPropositions', effacerPropositions],
+    ['garderMeilleures', garderMeilleures],
   ]),
   COMMANDES_MOBILIER,
   COMMANDES_PLACES,

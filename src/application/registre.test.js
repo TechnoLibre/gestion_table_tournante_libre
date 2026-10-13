@@ -171,6 +171,19 @@ const RETIRER_UN_LIBRE_DE_LA_TABLE = (idTable) => [
   (charge) => ({ tour: 1, participant: libresA(charge, 1, idTable)[0] }),
 ];
 
+// Deux propositions de plus sur la charge où le geste s'exécute, sous une
+// graine qui n'est pas celle de la charge témoin : de quoi effacer au-delà
+// de la première du classement et de la retenue.
+const GENERER_DEUX_DE_PLUS = [
+  'enregistrerGeneration',
+  (charge) => {
+    const configuration = configurationDepuisCharge(charge);
+    const { historique } = charge.reglages.generation;
+    const propositions = rechercher(configuration, { graine: 23, nombre: 2, arret: 200, historique });
+    return { propositions, configuration, produitVersion: V };
+  },
+];
+
 /**
  * Par commande : accepte, refuse, sansEffet, chacun { args, avant?, sur? }
  * — args, un objet ou une fonction de la charge où l'exemple s'exécute ;
@@ -321,6 +334,16 @@ const EXEMPLES = new Map([
       accepte: { args: {} },
       refuse: "effacer ne refuse rien du domaine : une liste réduite à la proposition du retenu est sans effet",
       sansEffet: { avant: [['effacerPropositions', {}]], args: {} },
+    },
+  ],
+  [
+    'garderMeilleures',
+    {
+      accepte: { avant: [GENERER_DEUX_DE_PLUS], args: { n: 1 } },
+      refuse:
+        "garder ne refuse du domaine qu'une configuration qui ne se normalise pas, que la charge témoin ne porte " +
+        "pas : ses réservations tiennent ; commandes.test.js l'éprouve",
+      sansEffet: { args: (charge) => ({ n: charge.propositions.length }) },
     },
   ],
   [

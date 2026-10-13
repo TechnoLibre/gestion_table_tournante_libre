@@ -2,16 +2,16 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // La fenêtre à confirmer (§ 2.1) : la seule fenêtre du logiciel, réservée
-  // à la destruction de saisie. Un <dialog> modal, ouvert au montage, qui
-  // porte le titre — la clé titre traduite — et nomme chaque élément détruit,
-  // chacun dans son propre nœud de texte. Annuler a le focus par défaut ;
-  // Échap annule. Annuler ferme la fenêtre puis appelle surAnnuler.
-  // Confirmer appelle surConfirmer et attend sa promesse : aboutie, la
-  // fenêtre se ferme ; refusée — une erreur qui porte un code —, elle reste
-  // ouverte et le refus, avec son remède, s'y pose, là où le geste a eu
-  // lieu ; une erreur sans code ferme la fenêtre et remonte. Le parent la
-  // démonte.
+  // La fenêtre à confirmer (§ 2.1) : la seule fenêtre du logiciel, réservée à
+  // la destruction de saisie et au nettoyage des propositions (§ 5.7). Un
+  // <dialog> modal, ouvert au montage, qui porte le titre — la clé titre
+  // traduite — et nomme chaque élément détruit, chacun dans son propre nœud
+  // de texte. Annuler a le focus par défaut ; Échap annule. Annuler ferme la
+  // fenêtre puis appelle surAnnuler. Confirmer appelle surConfirmer et attend
+  // sa promesse : aboutie, la fenêtre se ferme ; refusée — une erreur qui
+  // porte un code —, elle reste ouverte et le refus, avec son remède, s'y
+  // pose, là où le geste a eu lieu ; une erreur sans code ferme la fenêtre et
+  // remonte. Le parent la démonte.
   //
   // Pendant l'attente, la fenêtre est occupée : la destruction est déjà
   // demandée, et rien ne la dit annulée pendant qu'elle s'achève. Annuler,

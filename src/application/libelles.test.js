@@ -519,6 +519,7 @@ const EXEMPLES = new Map([
   ['ENTREE_ENREGISTRER_GENERATION', { n: 5, premier: 3, dernier: 7 }],
   ['ENTREE_RETENIR_PROPOSITION', { id: 3 }],
   ['ENTREE_EFFACER_PROPOSITIONS', { n: 4, gardee: 2 }],
+  ['ENTREE_GARDER_MEILLEURES', { n: 10, effacees: 37, gardee: 42 }],
   // Places : refus d'une pose, titres, réservations, retenu
   ['SIEGE_INEXISTANT', { table: 2, siege: 9, capacite: 8, remede: null }],
   ['DEUX_PLACES_MEME_TOUR', { participant: 1, tour: 2, autre: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
@@ -940,7 +941,7 @@ describe('libellés : les tables par domaine (§ 14.6)', () => {
       ['seance', ['MODE_LECTURE', 'SUPPORT_ROMPU', 'SANS_EFFET', 'ENTREE_DEFAIRE', 'JALON_CREATION']],
       ['participants', ['NOM_REQUIS', 'PARTICIPANT_INCONNU', 'RESERVATIONS_SUSPENDUES', 'IMPORT_EN_RETENU', 'ENTREE_AJOUTER_PARTICIPANT']],
       ['evenements', ['ENTREE_CREATION', 'DATE_INVALIDE', 'AUCUN_RETENU', 'PLAN_NON_BLOQUE', 'ENTREE_DEBLOQUER']],
-      ['generation', ['PROPOSITION_INCONNUE', 'ENTREE_ENREGISTRER_GENERATION', 'ENTREE_EFFACER_PROPOSITIONS']],
+      ['generation', ['PROPOSITION_INCONNUE', 'ENTREE_ENREGISTRER_GENERATION', 'ENTREE_EFFACER_PROPOSITIONS', 'ENTREE_GARDER_MEILLEURES']],
       ['format', ['format.vide', 'format.duree.vingtMinutes']],
     ];
     assert.equal(ATTENDUS.length, 7);

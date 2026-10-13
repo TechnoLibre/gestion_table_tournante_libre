@@ -868,6 +868,7 @@ l’historique ; les noms des exemples sont inventés.
 | `enregistrerGeneration` | Généré 5 propositions (n° 3 à 7) |
 | `retenirProposition` | Retenu la proposition n° 3 |
 | `effacerPropositions` | Effacé 4 propositions, gardé la retenue (n° 2) |
+| `garderMeilleures` | Gardé les 10 meilleures propositions, effacé 37 propositions, gardé aussi la retenue (n° 42) |
 | `creerTable` | Ajouté la table 3 |
 | `supprimerTable` | Supprimé la table 2 ; retirés : 2 réservations et 1 titre |
 | `deplacerTable` | Déplacé la table 3 |

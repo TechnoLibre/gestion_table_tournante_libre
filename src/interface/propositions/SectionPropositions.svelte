@@ -3,10 +3,11 @@
 
 <script>
   // La section des propositions (§ 2.1 étape 10, § 5.7, § 9) : la phrase de
-  // l'ordre du classement, le tableau, et la commande qui efface la liste en
-  // épargnant le retenu. Regarder n'écrit jamais (§ 8.4) : le tableau se lit
-  // en lecture et sur un plan bloqué, où la séance refuse elle-même
-  // « Retenir » et « Effacer », le refus posé à côté du bouton.
+  // l'ordre du classement, le tableau, la commande qui garde les meilleures
+  // et celle qui efface la liste en épargnant le retenu. Regarder n'écrit
+  // jamais (§ 8.4) : le tableau se lit en lecture et sur un plan bloqué, où
+  // la séance refuse elle-même « Retenir », « Garder » et « Effacer », le
+  // refus posé à côté du bouton.
   //
   // La table d'évaluation se lit dans la charge de l'état observable, par
   // evaluation (modele.js) : une seule mesure, celle d'evaluer
@@ -23,6 +24,26 @@
   // s'exécute sans fenêtre, et son refus s'affiche. « Effacer » ne détruit
   // aucune saisie — chaque proposition se régénère de sa graine, et le geste
   // se défait — : il s'exécute sans fenêtre.
+  //
+  // « Garder les N meilleures » garde les N premières lignes du tableau, et
+  // la proposition du retenu quand elle vient après elles, par la commande
+  // garderMeilleures {n}. N se saisit dans le champ étroit qui précède le
+  // bouton, dix au départ : une saisie de la section, que ni le fichier ni le
+  // journal ne portent, vivante en lecture, et qui repart de dix quand la
+  // section se remonte. La saisie se valide à la sortie du champ ou par
+  // Entrée, lue par lireGardees ; refusée, son refus se pose contre le champ,
+  // la saisie gardée, et le bouton garde le dernier nombre accepté ; Échap
+  // rend celui-ci. Le geste efface d'un coup des lignes que l'opérateur ne
+  // voit pas toutes : la fenêtre à confirmer dit combien s'effacent et ce
+  // qui reste (demandeNettoyage), sur la table même que le tableau montre.
+  // Ouverte, elle se recalcule sur chaque état publié : une génération
+  // enregistrée en arrière-plan pendant qu'elle attend change son compte,
+  // celui que Confirmer applique. Un geste que la séance refuserait, ou qui
+  // n'effacerait rien, part sans fenêtre, et son refus se pose à côté du
+  // bouton. Abouti, une région role="status" annonce le nombre d'effacées
+  // que la commande rend dans son résumé, tant que l'événement reste à la
+  // révision du nettoyage, et la page montrée qui n'existe plus ramène à la
+  // première (pageApresNettoyage).
   //
   // La phrase de l'ordre se met bout à bout, morceau par morceau (modele.js) :
   // les paliers appliqués, chaque nom celui de la valeur que son palier
@@ -62,8 +83,9 @@
   // plan, le retenu — ne dépend de la page.
   //
   // Habillage : le tableau et la phrase de l'ordre vivent dans une carte
-  // titrée, « Effacer les propositions » à droite de son en-tête ; le message
-  // d'une liste vide dans sa carte.
+  // titrée, le nombre à garder, « Garder les N meilleures » et « Effacer les
+  // propositions » à droite de son en-tête ; le message d'une liste vide
+  // dans sa carte.
   import { getContext, tick, untrack } from 'svelte';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
@@ -71,12 +93,18 @@
   import Infobulle from '../primitives/Infobulle.svelte';
   import Refus from '../primitives/Refus.svelte';
   import TableauPropositions from './TableauPropositions.svelte';
+  import { effetDe } from '../raccourcis.js';
   import {
+    GARDEES_PAR_DEFAUT,
+    annonceNettoyage,
     changerDePage,
     demandeConfirmation,
+    demandeNettoyage,
     evaluation,
     explicationDeColonne,
+    lireGardees,
     nomDe,
+    pageApresNettoyage,
     pagine,
     retenuAjuste,
     suivrePage,
@@ -184,6 +212,85 @@
   }
 
   const effacer = () => seance.executer('effacerPropositions', {});
+
+  // Le nombre à garder : le dernier accepté, le texte du champ, et le refus
+  // de la saisie, null sans lui.
+  const idGardees = `${uid}-gardees`;
+  const idRefusGardees = `${uid}-gardees-refus`;
+  let gardees = $state(GARDEES_PAR_DEFAUT);
+  let saisieGardees = $state(String(GARDEES_PAR_DEFAUT));
+  let refusGardees = $state(null);
+
+  // Rend au champ le dernier nombre accepté, sans refus.
+  function rendreGardees() {
+    saisieGardees = String(gardees);
+    refusGardees = null;
+  }
+
+  function validerGardees() {
+    const lu = lireGardees(saisieGardees);
+    if (lu.refus !== undefined) {
+      refusGardees = lu.refus;
+      return;
+    }
+    gardees = lu.valeur;
+    rendreGardees();
+  }
+
+  function toucheGardees(evenement) {
+    const effet = effetDe('champ', evenement.key);
+    if (effet === 'rendre') rendreGardees();
+    else if (effet === 'valider') {
+      evenement.preventDefault();
+      validerGardees();
+    }
+  }
+
+  // Le nettoyage en attente de confirmation, tel que demandeNettoyage le
+  // rend à l'ouverture de la fenêtre ; null sans fenêtre. La fenêtre montre
+  // nettoyageMontre : la demande refaite sur l'état publié, dont le compte
+  // suit chaque écriture qui arrive pendant qu'elle attend. Quand l'état
+  // publié ne donnerait plus de fenêtre — la séance refuserait, ou rien ne
+  // s'effacerait —, elle reprend aNettoyer : Confirmer n'efface alors rien
+  // et reçoit le refus de la commande, posé dans la fenêtre. Confirmer
+  // retient dans aNettoyer la demande montrée : l'écriture de la commande,
+  // qui ne laisse rien à effacer, ne ramène pas la fenêtre au compte de son
+  // ouverture avant qu'elle se ferme. L'annonce du dernier nettoyage abouti,
+  // {cle, details, revision}, ou null : elle ne se montre que tant que
+  // l'événement ouvert est à la révision que le nettoyage a écrite — un
+  // geste suivant, « Défaire » compris, la tait.
+  let aNettoyer = $state(null);
+  const nettoyageMontre = $derived(aNettoyer === null ? null : (demandeNettoyage($seance, aNettoyer.n) ?? aNettoyer));
+  let annonce = $state(null);
+  const annonceMontree = $derived(annonce !== null && annonce.revision === $seance.evenement?.revision ? annonce : null);
+
+  // Garde les n meilleures, puis annonce les effacées que la commande
+  // compte ; la page montrée avant le geste, qui n'existe plus, ramène à la
+  // première.
+  async function nettoyerSansQuestion(n) {
+    const pageAvant = page?.page ?? 1;
+    annonce = null;
+    const { resume } = await seance.executer('garderMeilleures', { n });
+    await tick();
+    ui.retenirPagePropositions(pageApresNettoyage(ui.etat().pagePropositions, pageAvant));
+    annonce = { ...annonceNettoyage(resume.effacees), revision: seance.etat().evenement.revision };
+  }
+
+  function garder() {
+    const demande = demandeNettoyage(seance.etat(), gardees);
+    if (demande === null) return nettoyerSansQuestion(gardees);
+    aNettoyer = demande;
+    return undefined;
+  }
+
+  // Confirmé, le nettoyage abouti démonte la fenêtre, qui ne rend pas le
+  // focus d'elle-même une fois retirée : le bouton « Garder » le reprend.
+  async function confirmerNettoyage() {
+    aNettoyer = nettoyageMontre;
+    await nettoyerSansQuestion(aNettoyer.n);
+    aNettoyer = null;
+    tick().then(() => racine?.querySelector('[data-commande="garder"]')?.focus());
+  }
   const nommer = (id) => nomDe(charge, id);
 </script>
 
@@ -213,6 +320,29 @@
   <Commande cle="propositions.commande.effacer" executer={effacer} />
 {/snippet}
 
+{#snippet commandesListe()}
+  <div class="garder">
+    <label for={idGardees}>{t('propositions.nettoyage.champ')}</label>
+    <input
+      id={idGardees}
+      type="text"
+      inputmode="numeric"
+      data-champ="gardees"
+      bind:value={saisieGardees}
+      aria-invalid={refusGardees === null ? undefined : 'true'}
+      aria-describedby={refusGardees === null ? undefined : idRefusGardees}
+      onkeydown={toucheGardees}
+      onblur={validerGardees}
+    />
+    {#if refusGardees !== null}
+      <Refus id={idRefusGardees} refus={refusGardees} />
+    {/if}
+    <Commande cle="propositions.commande.garder" details={{ n: gardees }} executer={garder} />
+    <p class="annonce" role="status" data-annonce-nettoyage>{annonceMontree === null ? '' : t(annonceMontree.cle, annonceMontree.details)}</p>
+  </div>
+  {@render effacerListe()}
+{/snippet}
+
 <section data-section="propositions" bind:this={racine}>
   <h2>{t('coquille.section.propositions')}</h2>
 
@@ -227,7 +357,7 @@
   {/if}
 
   {#if vue !== null}
-    <Carte titre={t('propositions.tableau.titre')} niveau={3} plein actions={charge.propositions.length > 0 ? effacerListe : null}>
+    <Carte titre={t('propositions.tableau.titre')} niveau={3} plein actions={charge.propositions.length > 0 ? commandesListe : null}>
       <div class="ordre" data-ordre>
         {#each vue.ordre as morceaux, rang (rang)}
           <p>
@@ -272,6 +402,16 @@
       elements={aConfirmer.elements.map((element) => t(element.cle, element.details))}
       surConfirmer={confirmer}
       surAnnuler={() => (aConfirmer = null)}
+    />
+  {/if}
+
+  {#if nettoyageMontre !== null}
+    <Confirmation
+      titre={nettoyageMontre.titre.cle}
+      details={nettoyageMontre.titre.details}
+      elements={nettoyageMontre.elements.map((element) => t(element.cle, element.details))}
+      surConfirmer={confirmerNettoyage}
+      surAnnuler={() => (aNettoyer = null)}
     />
   {/if}
 </section>
@@ -323,6 +463,36 @@
 
   .effacer {
     display: flex;
+  }
+
+  /* Le nombre à garder, son bouton et l'annonce, sur une ligne qui se replie
+     quand l'en-tête manque de place. */
+  .garder {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--espace-2);
+  }
+
+  .garder input {
+    width: 6ch;
+    padding: var(--espace-1) var(--espace-2);
+    border: 1px solid var(--couleur-page-filet);
+    border-radius: var(--rayon-2);
+    background-color: var(--couleur-carte-fond);
+    color: var(--couleur-page-texte);
+    font: inherit;
+    font-size: var(--taille-texte);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .garder input:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 1px;
+  }
+
+  .garder input[aria-invalid='true'] {
+    border-color: var(--couleur-refus);
   }
 
   /* Une nav des pages : l'étendue au centre, « Précédentes » contre elle à

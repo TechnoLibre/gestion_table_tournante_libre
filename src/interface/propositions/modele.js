@@ -31,7 +31,8 @@
 // virgule ; sinon le texte est t(cle) — « — » pour une population vide,
 // « inconnu » pour une grandeur que l'a priori inconnu ne permet pas, le
 // certificat en mots.
-import { evaluer, retenuAjuste } from '../../application/evaluation.js';
+import { lireEntier } from '../../application/capacite.js';
+import { evaluer, nettoyage, retenuAjuste } from '../../application/evaluation.js';
 import { nomAffiche } from '../../application/personnes.js';
 
 const VIDE = 'format.vide';
@@ -710,4 +711,86 @@ export function texteEtendue({ premier, dernier, total }, { t, format }) {
     total: format.nombre(total),
     nombre: dernier - premier + 1,
   });
+}
+
+/** Le nombre de propositions que « Garder les N meilleures » garde au
+ *  départ (§ 5.7). Le nombre réglé est une saisie de la section, que ni le
+ *  fichier ni le journal ne portent. */
+export const GARDEES_PAR_DEFAUT = 10;
+
+/**
+ * Lit la saisie du nombre de propositions à garder : un entier
+ * (lireEntier, NON_ENTIER {saisie}), puis au moins 1 (HORS_DOMAINE {min: 1,
+ * max: null}) ; chaque refus porte un remède nul, la valeur se corrigeant
+ * dans le champ même.
+ *
+ * @param {string} saisie
+ * @returns {{valeur: number}|{refus: {code: string, details: Object}}}
+ */
+export function lireGardees(saisie) {
+  const lu = lireEntier(saisie);
+  if (lu.refus !== undefined) return { refus: { code: lu.refus.code, details: lu.refus.details } };
+  if (lu.valeur < 1) return { refus: { code: 'HORS_DOMAINE', details: { min: 1, max: null, remede: null } } };
+  return { valeur: lu.valeur };
+}
+
+/**
+ * La fenêtre à confirmer avant de garder les n meilleures propositions
+ * (§ 5.7) : elle dit combien s'effacent, combien restent, et que la
+ * proposition du retenu reste aussi quand elle vient après les n premières.
+ * Le partage est celui de nettoyage (evaluation.js), sur la table que le
+ * tableau montre (evaluation) : la fenêtre ne range rien elle-même. Sans
+ * fenêtre — null —, le geste part tel quel et son refus s'affiche : quand la
+ * séance le refuserait (etat.refus), quand rien ne se classe, faute de
+ * charge ou de table, et quand rien ne s'effacerait.
+ *
+ * @param {{refus: Object|null, charge: Object|null}} etat  l'état observable de la séance
+ * @param {number} n  entier ≥ 1, le nombre à garder
+ * @returns {null|{n: number, effacees: number, titre: {cle: string, details: Object},
+ *   elements: Array<{cle: string, details: Object}>}}  null sans fenêtre ;
+ *   sinon n, le nombre d'effacées, le titre, puis les éléments : les
+ *   premières qui restent, la proposition du retenu quand elle reste en
+ *   plus, et le retour que « Défaire » offre
+ */
+export function demandeNettoyage({ refus, charge }, n) {
+  if (refus !== null || charge === null) return null;
+  const { table } = evaluation(charge);
+  if (table === null) return null;
+  const { effacees, origineEnPlus } = nettoyage(table, n);
+  if (effacees.length === 0) return null;
+  const nombre = effacees.length;
+  return {
+    n,
+    effacees: nombre,
+    titre: { cle: 'propositions.nettoyage.titre', details: { n, effacees: nombre } },
+    elements: [
+      { cle: 'propositions.nettoyage.gardees', details: { n } },
+      ...(origineEnPlus === null ? [] : [{ cle: 'propositions.nettoyage.origine', details: { proposition: origineEnPlus } }]),
+      { cle: 'propositions.nettoyage.defaire', details: { effacees: nombre } },
+    ],
+  };
+}
+
+/**
+ * L'annonce qui suit le nettoyage : le nombre de propositions effacées, tel
+ * que la commande garderMeilleures le rend dans son résumé.
+ *
+ * @param {number} effacees  resume.effacees du geste abouti
+ * @returns {{cle: string, details: {effacees: number}}}
+ */
+export function annonceNettoyage(effacees) {
+  return { cle: 'propositions.nettoyage.annonce', details: { effacees } };
+}
+
+/**
+ * La page après un nettoyage : la première quand la page montrée avant,
+ * pageAvant, n'existe plus — le suivi recalé par suivrePage la bornerait à
+ * la dernière —, le suivi tel quel sinon, null compris.
+ *
+ * @param {SuiviDePage|null} suivi  le suivi recalé sur le tableau d'après
+ * @param {number} pageAvant
+ * @returns {SuiviDePage|null}
+ */
+export function pageApresNettoyage(suivi, pageAvant) {
+  return suivi !== null && pageAvant > suivi.pages ? changerDePage(suivi, 1) : suivi;
 }

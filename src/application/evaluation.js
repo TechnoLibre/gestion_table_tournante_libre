@@ -281,6 +281,36 @@ export function resumeDuMeilleur(charge) {
   return premiere === null ? null : { id: premiere.id };
 }
 
+/**
+ * Le partage d'un nettoyage des propositions (§ 5.7) : les n premières de
+ * la table, dans l'ordre où le tableau des propositions les montre — les
+ * comparables dans l'ordre du classement, puis les autres par identifiant
+ * —, se gardent, et la proposition d'où vient le retenu avec elles quand
+ * elle vient après ; les autres s'effacent. La commande garderMeilleures et
+ * la fenêtre qui la confirme lisent ce partage, chacune sur la table de la
+ * charge qu'elle tient : aucun ordre ne se refait ailleurs.
+ *
+ * @param {TableEvaluation} table
+ * @param {number} n  entier ≥ 1
+ * @returns {{gardees: number[], effacees: number[], origineEnPlus: number|null}}
+ *   gardees et effacees : des identifiants, dans l'ordre de la table ;
+ *   origineEnPlus : la proposition du retenu gardée au-delà des n premières,
+ *   null quand elle en est, sans retenu, et quand la liste ne la porte plus
+ * @throws {TypeError} n qui n'est pas un entier ≥ 1
+ */
+export function nettoyage(table, n) {
+  if (!Number.isSafeInteger(n) || n < 1) throw new TypeError(`nettoyage : entier ≥ 1 attendu, reçu ${JSON.stringify(n)}`);
+  const ids = table.propositions.map(({ id }) => id);
+  const origine = table.retenu?.id ?? null;
+  const origineEnPlus = origine !== null && ids.indexOf(origine) >= n ? origine : null;
+  const premieres = ids.slice(0, n);
+  return {
+    gardees: origineEnPlus === null ? premieres : [...premieres, origineEnPlus],
+    effacees: ids.slice(n).filter((id) => id !== origineEnPlus),
+    origineEnPlus,
+  };
+}
+
 // --- Le détail d'un placement (§ 12, § 12.9, D27, D29, D40, D42) ------------
 
 /**

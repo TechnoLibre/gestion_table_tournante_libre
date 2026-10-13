@@ -582,6 +582,204 @@ describe('effacer', () => {
   });
 });
 
+// --- Garder les meilleures (§ 5.7) ---------------------------------------------------
+
+// Le champ du nombre à garder, le bouton qui garde, et l'annonce de leur
+// geste.
+const champGardees = (m) => section(m).querySelector('[data-champ="gardees"]');
+const garder = (m) => commande(section(m), 'garder');
+const annonce = (m) => section(m).querySelector('[data-annonce-nettoyage]');
+
+// Saisit texte dans le champ du nombre à garder, puis le valide par Entrée.
+async function saisirGardees(m, texte) {
+  const entree = champGardees(m);
+  entree.focus();
+  entree.value = texte;
+  entree.dispatchEvent(new Event('input', { bubbles: true }));
+  await touche('Enter');
+  flushSync();
+}
+
+// Active le bouton au clavier, qui prend d'abord le focus, puis rend la
+// fenêtre ouverte.
+async function ouvrirFenetre(m) {
+  garder(m).focus();
+  await touche('Enter');
+  return attendre(() => {
+    const ouverte = fenetreOuverte(m);
+    expect(ouverte).not.toBeNull();
+    return ouverte;
+  });
+}
+
+describe('garder les meilleures', () => {
+  test('dix au départ, à côté d’« Effacer » ; rien à effacer : le geste part sans fenêtre et « sans effet » se pose à côté, rien d’écrit', async () => {
+    const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    expect(champGardees(m).value).toBe('10');
+    expect(texteDe(garder(m))).toBe(t('propositions.commande.garder', { n: 10 }));
+    expect(texteDe(garder(m))).toBe('Garder les 10 meilleures');
+    const etiquette = section(m).querySelector(`label[for="${champGardees(m).id}"]`);
+    expect(texteDe(etiquette)).toBe(t('propositions.nettoyage.champ'));
+    expect(commande(section(m), 'effacer')).not.toBeNull();
+    expect(annonce(m).getAttribute('role')).toBe('status');
+    expect(texteDe(annonce(m))).toBe('');
+    const ecritures = m.trace.length;
+    garder(m).click();
+    await attendre(() => expect(refusPres(garder(m), 'SANS_EFFET')).not.toBeNull());
+    expect(fenetreOuverte(m)).toBeNull();
+    expect(m.trace.length).toBe(ecritures);
+    expect(ids(m)).toEqual([3, 2, 1]);
+  });
+
+  test('N à 1 : le bouton le dit ; la fenêtre compte les effacées ; Annuler et Échap n’écrivent rien et rendent le focus au bouton ; Confirmer garde la première, une entrée, l’annonce le dit, « Défaire » les rend et la tait', async () => {
+    const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    await saisirGardees(m, '1');
+    await attendre(() => expect(texteDe(garder(m))).toBe('Garder la meilleure'));
+    const ecritures = m.trace.length;
+    const fenetre = await ouvrirFenetre(m);
+    expect(texteDe(fenetre.querySelector('h2'))).toBe('Effacer 2 propositions et garder la meilleure ?');
+    expect(texteDe(fenetre)).toContain(t('propositions.nettoyage.gardees', { n: 1 }));
+    expect(texteDe(fenetre)).not.toContain(t('propositions.nettoyage.origine', { proposition: 1 }));
+    expect(document.activeElement).toBe(commande(fenetre, 'renoncer'));
+    commande(fenetre, 'renoncer').click();
+    await attendre(() => expect(fenetreOuverte(m)).toBeNull());
+    await attendre(() => expect(document.activeElement).toBe(garder(m)));
+    await ouvrirFenetre(m);
+    await touche('Escape');
+    await attendre(() => expect(fenetreOuverte(m)).toBeNull());
+    await attendre(() => expect(document.activeElement).toBe(garder(m)));
+    expect(m.trace.length).toBe(ecritures);
+    expect(ids(m)).toEqual([3, 2, 1]);
+
+    const avant = revision(m);
+    const seconde = await ouvrirFenetre(m);
+    commande(seconde, 'confirmer').click();
+    await attendre(() => expect(ids(m)).toEqual([3]));
+    await attendre(() => expect(fenetreOuverte(m)).toBeNull());
+    expect(charge(m).propositions.map(({ id }) => id)).toEqual([3]);
+    expect(charge(m).prochainsIds.proposition).toBe(4);
+    expect(charge(m).evenement.etat).toBe('propose');
+    expect(revision(m)).toBe(avant + 1);
+    await attendre(() => expect(texteDe(annonce(m))).toBe('2 propositions effacées.'));
+    await attendre(() => expect(document.activeElement).toBe(garder(m)));
+    await m.seance.defaire();
+    await attendre(() => expect(ids(m)).toEqual([3, 2, 1]));
+    // L'annonce ne vaut que pour la charge qu'elle décrit : défaite, elle se tait.
+    await attendre(() => expect(texteDe(annonce(m))).toBe(''));
+  });
+
+  test('la proposition du retenu, au-delà de N, reste aussi : la fenêtre le dit, le retenu ne bouge pas', async () => {
+    const m = await ouvrir(executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 1 }));
+    const retenu = structuredClone(charge(m).retenu);
+    await saisirGardees(m, '1');
+    const fenetre = await ouvrirFenetre(m);
+    expect(texteDe(fenetre.querySelector('h2'))).toBe('Effacer 1 proposition et garder la meilleure ?');
+    expect(texteDe(fenetre)).toContain('La proposition n° 1 reste aussi : le placement retenu en vient.');
+    commande(fenetre, 'confirmer').click();
+    await attendre(() => expect(ids(m)).toEqual([3, 1]));
+    expect(charge(m).propositions.map(({ id }) => id)).toEqual([1, 3]);
+    expect(charge(m).retenu).toEqual(retenu);
+    expect(charge(m).evenement.etat).toBe('retenu');
+    await attendre(() => expect(texteDe(annonce(m))).toBe('1 proposition effacée.'));
+  });
+
+  test('une saisie hors des entiers ≥ 1 se refuse contre le champ, et le bouton garde le dernier nombre accepté ; Échap le rend', async () => {
+    const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    await saisirGardees(m, '2');
+    await attendre(() => expect(texteDe(garder(m))).toBe('Garder les 2 meilleures'));
+    await saisirGardees(m, '0');
+    await attendre(() => expect(champGardees(m).getAttribute('aria-invalid')).toBe('true'));
+    const refus = section(m).querySelector(`#${champGardees(m).getAttribute('aria-describedby')}`);
+    expect(texteDe(refus)).toContain("La valeur doit être d'au moins 1.");
+    expect(texteDe(garder(m))).toBe('Garder les 2 meilleures');
+    await saisirGardees(m, 'dix');
+    await attendre(() => expect(champGardees(m).getAttribute('aria-describedby')).not.toBeNull());
+    expect(texteDe(garder(m))).toBe('Garder les 2 meilleures');
+    champGardees(m).focus();
+    await touche('Escape');
+    await attendre(() => expect(champGardees(m).value).toBe('2'));
+    expect(champGardees(m).getAttribute('aria-invalid')).toBeNull();
+  });
+
+  // Deux propositions du moteur, que la séance enregistre comme le fait une
+  // génération qui s'achève en arrière-plan ; rend la promesse de l'écriture.
+  function genererPendant(m) {
+    const configuration = configurationDepuisCharge(charge(m));
+    const propositions = rechercher(configuration, { graine: 2, nombre: 2, arret: 300 });
+    return m.seance.executer('enregistrerGeneration', { propositions, configuration, produitVersion: V1 });
+  }
+
+  test('une génération enregistrée pendant que la fenêtre est ouverte : la fenêtre recompte les effacées sans perdre le focus, et Confirmer efface ce qu’elle dit', async () => {
+    const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    await saisirGardees(m, '1');
+    const fenetre = await ouvrirFenetre(m);
+    expect(texteDe(fenetre.querySelector('h2'))).toBe('Effacer 2 propositions et garder la meilleure ?');
+    await genererPendant(m);
+    expect(charge(m).propositions.length).toBe(5);
+    await attendre(() => expect(texteDe(fenetre.querySelector('h2'))).toBe('Effacer 4 propositions et garder la meilleure ?'));
+    expect(texteDe(fenetre)).toContain('« Défaire » rend les 4 propositions effacées.');
+    expect(fenetreOuverte(m)).toBe(fenetre);
+    expect(document.activeElement).toBe(commande(fenetre, 'renoncer'));
+    const premiere = evaluation(charge(m)).table.propositions[0].id;
+    const avant = revision(m);
+    // Chaque titre que la fenêtre montre entre Confirmer et sa fermeture :
+    // l'écriture de la commande ne le recompte pas.
+    const titres = [];
+    const observateur = new MutationObserver(() => titres.push(texteDe(fenetre.querySelector('h2'))));
+    observateur.observe(fenetre.querySelector('h2'), { childList: true, characterData: true, subtree: true });
+    commande(fenetre, 'confirmer').click();
+    await attendre(() => expect(ids(m)).toEqual([premiere]));
+    await attendre(() => expect(fenetreOuverte(m)).toBeNull());
+    observateur.disconnect();
+    expect(titres.filter((titre) => titre !== 'Effacer 4 propositions et garder la meilleure ?')).toEqual([]);
+    expect(revision(m)).toBe(avant + 1);
+    await attendre(() => expect(texteDe(annonce(m))).toBe('4 propositions effacées.'));
+  });
+
+  test('une écriture déjà dans la file quand Confirmer part : l’annonce dit le compte que la commande a effacé, non l’écart de deux lectures', async () => {
+    const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
+    await saisirGardees(m, '1');
+    const fenetre = await ouvrirFenetre(m);
+    const enregistree = genererPendant(m);
+    commande(fenetre, 'confirmer').click();
+    await enregistree;
+    await attendre(() => expect(ids(m).length).toBe(1));
+    await attendre(() => expect(texteDe(annonce(m))).toBe('4 propositions effacées.'));
+  });
+
+  test('en lecture, le nombre se règle ; le geste part sans fenêtre et « Modifier » se pose à côté, rien d’écrit ; le fichier ne garde jamais N', async () => {
+    const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), { mode: 'lecture' });
+    const ecritures = m.trace.length;
+    await saisirGardees(m, '1');
+    await attendre(() => expect(texteDe(garder(m))).toBe('Garder la meilleure'));
+    garder(m).click();
+    const refus = await attendre(() => {
+      const pose = refusPres(garder(m), 'MODE_LECTURE');
+      expect(pose).not.toBeNull();
+      return pose;
+    });
+    expect(commande(refus, 'modifier')).not.toBeNull();
+    expect(fenetreOuverte(m)).toBeNull();
+    expect(m.trace.length).toBe(ecritures);
+    expect(ids(m)).toEqual([3, 2, 1]);
+  });
+
+  test('sur un plan bloqué, refusé avec « Débloquer », sans fenêtre', async () => {
+    const bloquee = executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'changerEtat', { etat: 'bloque' });
+    const m = await ouvrir(bloquee, { mode: 'lecture' });
+    await saisirGardees(m, '1');
+    garder(m).click();
+    const refus = await attendre(() => {
+      const pose = refusPres(garder(m), 'LECTURE_SEULE');
+      expect(pose).not.toBeNull();
+      return pose;
+    });
+    expect(commande(refus, 'debloquer')).not.toBeNull();
+    expect(fenetreOuverte(m)).toBeNull();
+    expect(ids(m)).toEqual([3, 2, 1]);
+  });
+});
+
 // --- Les populations différentes (§ 9, § 12.6) -------------------------------------
 
 describe('les populations différentes', () => {
@@ -1607,5 +1805,23 @@ describe('les pages du classement (§ 5.7)', () => {
     const attendues = colonne(m, 'excedentCollisions');
     expect(attendues.length).toBe(102);
     await attendre(() => expect(surlignees(m)).toEqual(attendues));
+  });
+});
+
+describe('garder les meilleures, sur les pages du classement', () => {
+  test('237 propositions, la page 3 montrée, garder 150 : la page 3 n’existe plus, la 1 revient ; les 150 premières du classement restent', async () => {
+    const { brute, ordre } = pagesDEpreuve();
+    const m = await ouvrir(brute);
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 201, 237, 237);
+    await saisirGardees(m, '150');
+    const fenetre = await ouvrirFenetre(m);
+    expect(texteDe(fenetre.querySelector('h2'))).toBe('Effacer 87 propositions et garder les 150 meilleures ?');
+    commande(fenetre, 'confirmer').click();
+    await exigerPage(m, ordre, 1, 100, 150);
+    expect(charge(m).propositions.map(({ id }) => id)).toEqual(ordre.slice(0, 150).sort((a, b) => a - b));
+    await attendre(() => expect(texteDe(annonce(m))).toBe('87 propositions effacées.'));
   });
 });

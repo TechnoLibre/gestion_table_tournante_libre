@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
 import { appliquerCommande } from '../../application/commandes.js';
-import { detaillerQualite, evaluer, retenuAjuste as retenuAjusteDeLEvaluation } from '../../application/evaluation.js';
+import { detaillerQualite, evaluer, nettoyage, retenuAjuste as retenuAjusteDeLEvaluation } from '../../application/evaluation.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { nomAffiche } from '../../application/personnes.js';
@@ -33,16 +33,21 @@ import { TABLES_INTERFACE } from '../libelles.js';
 import * as MODELE from './modele.js';
 import {
   COLONNES,
+  GARDEES_PAR_DEFAUT,
   GROUPES_COLONNES,
   TAILLE_PAGE,
+  annonceNettoyage,
   changerDePage,
   colonneDeValeur,
   demandeConfirmation,
+  demandeNettoyage,
   evaluation,
   explicationDeColonne,
   lireColonne,
   nomDe,
   nombreDePages,
+  lireGardees,
+  pageApresNettoyage,
   pageDe,
   pagine,
   retenuAjuste,
@@ -1082,6 +1087,109 @@ describe('demandeConfirmation (§ 2.1)', () => {
     });
     // Re-retenir l'origine détruit aussi les ajustements.
     assert.equal(demandeConfirmation({ refus: null, charge: deplacee }, 1).id, 1);
+  });
+});
+
+describe('garder les meilleures (§ 5.7) : la saisie, la fenêtre, l’annonce, la page', () => {
+  // Les trois plans de la petite démonstration au conflit inévitable, que
+  // le classement range 3, 2, 1 ; la charge figée, comme celle de l'état
+  // observable de la séance.
+  const conflit = () => avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT);
+  const figee = (charge) => Object.freeze(structuredClone(charge));
+
+  test('dix au départ ; la saisie se lit en entier ≥ 1, blancs de bord admis ; sinon son refus, remède nul', () => {
+    assert.equal(GARDEES_PAR_DEFAUT, 10);
+    assert.deepEqual(lireGardees('10'), { valeur: 10 });
+    assert.deepEqual(lireGardees(' 3 '), { valeur: 3 });
+    assert.deepEqual(lireGardees('0'), { refus: { code: 'HORS_DOMAINE', details: { min: 1, max: null, remede: null } } });
+    for (const saisie of ['', 'dix', '2,5', '-1', '1e3']) {
+      assert.deepEqual(lireGardees(saisie), { refus: { code: 'NON_ENTIER', details: { saisie, remede: null } } }, saisie);
+    }
+    assert.equal(t('HORS_DOMAINE', { min: 1, max: null }), "La valeur doit être d'au moins 1.");
+  });
+
+  test('la fenêtre dit combien s’effacent et combien restent, sur la table que le tableau montre ; aucun ordre refait', () => {
+    const charge = figee(conflit());
+    const table = evaluation(charge).table;
+    assert.deepEqual(table.propositions.map(({ id }) => id), [3, 2, 1]);
+    const demande = demandeNettoyage({ refus: null, charge }, 1);
+    assert.deepEqual(demande, {
+      n: 1,
+      effacees: 2,
+      titre: { cle: 'propositions.nettoyage.titre', details: { n: 1, effacees: 2 } },
+      elements: [
+        { cle: 'propositions.nettoyage.gardees', details: { n: 1 } },
+        { cle: 'propositions.nettoyage.defaire', details: { effacees: 2 } },
+      ],
+    });
+    assert.equal(demande.effacees, nettoyage(table, 1).effacees.length);
+    assert.equal(t(demande.titre.cle, demande.titre.details), 'Effacer 2 propositions et garder la meilleure ?');
+    assert.deepEqual(
+      demande.elements.map(({ cle, details }) => t(cle, details)),
+      ['La première proposition du classement reste.', '« Défaire » rend les 2 propositions effacées.'],
+    );
+  });
+
+  test('la proposition du retenu, au-delà des n premières, reste aussi, et la fenêtre le dit', () => {
+    const charge = figee(executer(conflit(), 'retenirProposition', { id: 1 }));
+    const demande = demandeNettoyage({ refus: null, charge }, 1);
+    assert.equal(demande.effacees, 1);
+    assert.deepEqual(demande.elements, [
+      { cle: 'propositions.nettoyage.gardees', details: { n: 1 } },
+      { cle: 'propositions.nettoyage.origine', details: { proposition: 1 } },
+      { cle: 'propositions.nettoyage.defaire', details: { effacees: 1 } },
+    ]);
+    assert.equal(t(demande.titre.cle, demande.titre.details), 'Effacer 1 proposition et garder la meilleure ?');
+    assert.deepEqual(
+      demande.elements.map(({ cle, details }) => t(cle, details)),
+      [
+        'La première proposition du classement reste.',
+        'La proposition n° 1 reste aussi : le placement retenu en vient.',
+        '« Défaire » rend la proposition effacée.',
+      ],
+    );
+  });
+
+  test('sans fenêtre : la séance refuserait, rien à effacer, ou rien à classer — le geste part, et son refus se pose', () => {
+    const charge = figee(conflit());
+    const refus = { code: 'MODE_LECTURE', details: { remede: { geste: 'modifier' } } };
+    assert.equal(demandeNettoyage({ refus, charge }, 1), null);
+    assert.equal(demandeNettoyage({ refus: null, charge }, 3), null);
+    assert.equal(demandeNettoyage({ refus: null, charge }, 12), null);
+    assert.equal(demandeNettoyage({ refus: null, charge: null }, 1), null);
+    const retenue = figee(executer(conflit(), 'retenirProposition', { id: 1 }));
+    assert.equal(demandeNettoyage({ refus: null, charge: retenue }, 2), null);
+    const surreservee = structuredClone(conflit());
+    surreservee.reservations = [1, 2, 3, 4].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+    assert.equal(evaluation(figee(surreservee)).table, null);
+    assert.equal(demandeNettoyage({ refus: null, charge: figee(surreservee) }, 1), null);
+  });
+
+  test('les libellés : le bouton nomme N, la fenêtre et l’annonce accordent leurs nombres, mis en forme', () => {
+    const fine = '\u{202F}';
+    assert.equal(t('propositions.commande.garder', { n: 10 }), 'Garder les 10 meilleures');
+    assert.equal(t('propositions.commande.garder', { n: 1 }), 'Garder la meilleure');
+    assert.equal(t('propositions.commande.garder', { n: 1500 }), `Garder les 1${fine}500 meilleures`);
+    assert.equal(t('propositions.nettoyage.titre', { n: 10, effacees: 37 }), 'Effacer 37 propositions et garder les 10 meilleures ?');
+    assert.equal(t('propositions.nettoyage.gardees', { n: 10 }), 'Les 10 premières propositions du classement restent.');
+    assert.equal(t('propositions.nettoyage.champ'), 'Propositions à garder');
+    assert.deepEqual(annonceNettoyage(37), { cle: 'propositions.nettoyage.annonce', details: { effacees: 37 } });
+    assert.equal(t('propositions.nettoyage.annonce', { effacees: 37 }), '37 propositions effacées.');
+    assert.equal(t('propositions.nettoyage.annonce', { effacees: 1 }), '1 proposition effacée.');
+  });
+
+  test('après le nettoyage, la page qui n’existe plus ramène à la première ; une page qui existe encore reste', () => {
+    const avant = changerDePage(suivrePage(null, observee(vueDe(450))), 4);
+    assert.equal(avant.page, 4);
+    const apres = suivrePage(avant, observee(vueDe(250)));
+    assert.equal(apres.page, 3);
+    const premiere = pageApresNettoyage(apres, 4);
+    assert.deepEqual([premiere.page, premiere.pages, premiere.cles], [1, 3, apres.cles]);
+    assert.ok(Object.isFrozen(premiere));
+    const deuxieme = changerDePage(suivrePage(null, observee(vueDe(450))), 2);
+    const garde = suivrePage(deuxieme, observee(vueDe(250)));
+    assert.equal(pageApresNettoyage(garde, 2), garde);
+    assert.equal(pageApresNettoyage(null, 2), null);
   });
 });
 

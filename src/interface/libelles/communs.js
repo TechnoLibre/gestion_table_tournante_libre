@@ -72,6 +72,7 @@ export const TABLE = new Map([
   ['communs.remede.enregistrerGeneration', 'Enregistrer la génération'],
   ['communs.remede.retenirProposition', 'Retenir la proposition'],
   ['communs.remede.effacerPropositions', 'Effacer les propositions'],
+  ['communs.remede.garderMeilleures', 'Garder les meilleures propositions'],
   ['communs.remede.creerTable', 'Créer une table'],
   ['communs.remede.supprimerTable', 'Supprimer la table'],
   ['communs.remede.deplacerTable', 'Déplacer la table'],

@@ -20,6 +20,7 @@ import { VERSION } from '../version.genere.js';
 import { readFileSync } from 'node:fs';
 import { chargements } from '../../test/chargements.js';
 import { COMMANDES, ErreurCommande, appliquerCommande, chargeNeuve, formeNommeeDe, reunirCommandes } from './commandes.js';
+import { evaluer, nettoyage } from './evaluation.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
 import { ErreurCommande as ErreurDesErreurs, refus } from './erreurs.js';
@@ -99,7 +100,7 @@ const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
 const CSV_DEUX = 'nom;prenom;appartenance\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, changerEtiquettes, les dix des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, garderMeilleures, les dix des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
       'ajouterParticipant',
       'changerEtat',
@@ -113,6 +114,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'effacerPropositions',
       'enregistrerGeneration',
       'exclureParticipant',
+      'garderMeilleures',
       'importerObjectifs',
       'importerParticipants',
       'modifierParticipant',
@@ -125,7 +127,7 @@ describe('commandes : le registre (§ 8.2)', () => {
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 23);
+    assert.equal(attendues.length, 24);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
   });
@@ -771,6 +773,85 @@ describe('commandes : générer, retenir, effacer (§ 5.7, § 8.9)', () => {
   });
 });
 
+describe('commandes : garder les meilleures propositions (§ 5.7)', () => {
+  // La charge d'essai, deux générations : cinq propositions, 1 à 5.
+  function chargeCinq() {
+    const premiere = executer('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 3)).charge;
+    return executer('enregistrerGeneration', premiere, generer(premiere, 2, 11)).charge;
+  }
+
+  // L'ordre du tableau des propositions : celui de la table d'évaluation.
+  const ordreDe = (charge) => evaluer(charge).propositions.map(({ id }) => id);
+
+  test("garde les n premières du classement, dans l'ordre du fichier ; le compteur et l'état ne bougent pas ; une entrée qui le dit", () => {
+    const avant = figer(chargeCinq());
+    const ordre = ordreDe(avant);
+    assert.equal(ordre.length, 5);
+    const { charge, libelle, avertissements, resume } = executer('garderMeilleures', avant, { n: 2 });
+    const gardees = new Set(ordre.slice(0, 2));
+    // Le compte des effacées, rendu par la commande même : l'annonce le lit.
+    assert.deepEqual(resume, { effacees: 3 });
+    assert.deepEqual(charge.propositions, avant.propositions.filter(({ id }) => gardees.has(id)));
+    assert.equal(charge.prochainsIds.proposition, avant.prochainsIds.proposition);
+    assert.equal(charge.evenement.etat, 'propose');
+    assert.equal(charge.retenu, null);
+    assert.equal(libelle, 'Gardé les 2 meilleures propositions, effacé 3 propositions');
+    assert.deepEqual(avertissements, []);
+    const une = executer('garderMeilleures', avant, { n: 4 });
+    assert.deepEqual(une.charge.propositions.map(({ id }) => id).sort(), ordre.slice(0, 4).sort());
+    assert.equal(une.libelle, 'Gardé les 4 meilleures propositions, effacé 1 proposition');
+    const seule = executer('garderMeilleures', avant, { n: 1 });
+    assert.deepEqual(seule.charge.propositions.map(({ id }) => id), [ordre[0]]);
+    assert.equal(seule.libelle, 'Gardé la meilleure proposition, effacé 4 propositions');
+  });
+
+  test('la proposition du retenu, hors des n premières, reste en plus, et le libellé la nomme ; le plan reste retenu', () => {
+    const generee = chargeCinq();
+    const derniere = ordreDe(generee).at(-1);
+    const avant = figer(executer('retenirProposition', generee, { id: derniere }).charge);
+    const ordre = ordreDe(avant);
+    assert.equal(ordre.at(-1), derniere);
+    const { charge, libelle, resume } = executer('garderMeilleures', avant, { n: 2 });
+    assert.deepEqual(charge.propositions.map(({ id }) => id).sort(), [...ordre.slice(0, 2), derniere].sort());
+    assert.deepEqual(resume, { effacees: 2 });
+    assert.deepEqual(charge.retenu, avant.retenu);
+    assert.equal(charge.evenement.etat, 'retenu');
+    assert.equal(libelle, `Gardé les 2 meilleures propositions, effacé 2 propositions, gardé aussi la retenue (n° ${derniere})`);
+    assert.deepEqual(nettoyage(evaluer(avant), 2).effacees.sort(), ordre.slice(2, 4).sort());
+  });
+
+  test("rien à effacer — n au moins le compte, ou la seule au-delà est la retenue : SANS_EFFET", () => {
+    const avant = figer(chargeCinq());
+    refuse(() => executer('garderMeilleures', avant, { n: 5 }), 'SANS_EFFET', { commande: 'garderMeilleures', remede: null });
+    refuse(() => executer('garderMeilleures', avant, { n: 50 }), 'SANS_EFFET');
+    const derniere = ordreDe(avant).at(-1);
+    const retenue = figer(executer('retenirProposition', avant, { id: derniere }).charge);
+    refuse(() => executer('garderMeilleures', retenue, { n: 4 }), 'SANS_EFFET');
+  });
+
+  test("une configuration qui ne se normalise pas ne se classe pas : son refus, remède nul ; un plan bloqué refuse d'abord", () => {
+    const charge = structuredClone(chargeCinq());
+    charge.reservations = [1, 2, 3].map((participant) => ({ participant, table: 1, siege: null, portee: 'tous', tour: null }));
+    refuse(() => executer('garderMeilleures', figer(charge), { n: 1 }), 'SURRESERVATION');
+    assert.throws(() => executer('garderMeilleures', charge, { n: 1 }), (erreur) => erreur.details.remede === null);
+    const bloquee = figer({ ...charge, evenement: { ...charge.evenement, etat: 'bloque' } });
+    refuse(() => executer('garderMeilleures', bloquee, { n: 1 }), 'PLAN_BLOQUE', { remede: { geste: 'debloquer' } });
+  });
+
+  test("n hors des entiers ≥ 1 est une faute du code ; la commande ne rend aucune course", () => {
+    const avant = figer(chargeCinq());
+    for (const n of [0, -2, 1.5, '1', null]) assert.throws(() => executer('garderMeilleures', avant, { n }), TypeError, String(n));
+    assert.throws(() => executer('garderMeilleures', avant, {}), TypeError);
+    assert.equal(Object.hasOwn(executer('garderMeilleures', avant, { n: 1 }), 'courses'), false);
+  });
+
+  test("après le nettoyage, aucun identifiant ne revient : la génération suivante continue le compteur", () => {
+    const gardee = executer('garderMeilleures', chargeCinq(), { n: 1 }).charge;
+    const suite = executer('enregistrerGeneration', gardee, generer(gardee, 1, 13)).charge;
+    assert.equal(suite.propositions.at(-1).id, 6);
+  });
+});
+
 describe('commandes : la course de la recherche, rendue à côté de la charge (§ 8.9, B31, D53)', () => {
   // La charge d'essai sur trois tours, sièges attribués, deux tables de
   // trois places pour quatre personnes : Iris Ombrelle réservée au siège 3
@@ -934,9 +1015,11 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
   ];
 
   // La charge que reçoit chaque commande : la charge riche, sauf debloquer,
-  // qui la reçoit bloquée ; convertirEnTous, qui y trouve Théo réservé à la
-  // table 2 à chaque tour, en portée « tour » ; deplacerDansRetenu, qui y
-  // trouve l'autre personne du tour 1 retirée dans la réserve.
+  // qui la reçoit bloquée ; garderMeilleures, qui y trouve deux propositions
+  // de plus, de quoi effacer au-delà de la première et de la retenue ;
+  // convertirEnTous, qui y trouve Théo réservé à la table 2 à chaque tour, en
+  // portée « tour » ; deplacerDansRetenu, qui y trouve l'autre personne du
+  // tour 1 retirée dans la réserve.
   function recues(charge) {
     const { autre } = auTour1(charge);
     const reservee = structuredClone(charge);
@@ -950,6 +1033,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['deplacerDansRetenu', executer('retirerDuTour', charge, { tour: 1, participant: autre }).charge],
       ['retirerObjectif', executer('poserObjectif', charge, { table: 2, tour: null, etiquettes: 'finance', regle: null }).charge],
       ['retablirPriorites', executer('changerPriorites', charge, { paliers: PRIORITES_REGLEES }).charge],
+      ['garderMeilleures', executer('enregistrerGeneration', charge, generer(charge, 2, 5)).charge],
     ]);
   }
 
@@ -969,6 +1053,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['enregistrerGeneration', generer(charge, 1, 5)],
       ['retenirProposition', { id: 2 }],
       ['effacerPropositions', {}],
+      ['garderMeilleures', { n: 1 }],
       ['reserver', { participant: 4, table: 2, siege: null, portee: 'tour', tour: 1 }],
       ['retirerReservation', { participant: 1, table: 1, portee: 'tous', tour: null }],
       ['deplacerReservation', { participant: 1, de: { table: 1, portee: 'tous', tour: null }, vers: { table: 2, siege: null } }],
@@ -1040,8 +1125,8 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, importerObjectifs et les deux registres de F1", () => {
-    assert.equal(COMMANDES.size, 13 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, importerObjectifs, garderMeilleures et les deux registres de F1", () => {
+    assert.equal(COMMANDES.size, 14 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
     for (const registre of [COMMANDES_MOBILIER, COMMANDES_PLACES]) {

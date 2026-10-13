@@ -62,6 +62,15 @@ export const TABLE = new Map([
       `Effacé ${compte(n, 'proposition', 'propositions')}` +
       `${gardee === null || gardee === undefined ? '' : `, gardé la retenue (n° ${gardee})`}`,
   ],
+  // n : les premières du classement gardées ; effacees : le nombre
+  // d'effacées ; gardee : la proposition du retenu, gardée en plus, ou null.
+  [
+    'ENTREE_GARDER_MEILLEURES',
+    ({ n, effacees, gardee }) =>
+      `Gardé ${n <= 1 ? 'la meilleure proposition' : `les ${n} meilleures propositions`}, ` +
+      `effacé ${compte(effacees, 'proposition', 'propositions')}` +
+      `${gardee === null || gardee === undefined ? '' : `, gardé aussi la retenue (n° ${gardee})`}`,
+  ],
 
   // --- Le contrôleur de génération (§ 5.9, § 5.10, § 15.4) -------------------
   ['GENERATION_EN_COURS', () => "Une génération est déjà en cours : l'annuler, ou attendre qu'elle s'achève."],

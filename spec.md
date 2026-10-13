@@ -69,7 +69,8 @@ Aucun des deux ne dépend de l'étape atteinte.
    geste (§ 5.9), **là où le geste a eu lieu** : sur la place pour un geste du
    plan, dans l'aperçu d'import pour une ligne de CSV (§ 10.1), sur le champ
    pour une saisie. Seul un geste qui détruit de la saisie ouvre une fenêtre à
-   confirmer.
+   confirmer, et « Garder les N meilleures », qui efface d'un coup des
+   propositions que l'écran ne montre pas toutes (§ 5.7).
 
 Les étapes 8 et 10 — lire le diagnostic, comparer — ne modifient rien et restent
 vivantes en lecture (§ 8.4).
@@ -1029,13 +1030,57 @@ réglages ajoute des candidats plutôt que d'effacer les précédents, et un
 classement unique les ordonne tous. Une commande efface la liste en épargnant
 celui qui est retenu.
 
+**« Garder les N meilleures » allège la liste sans la vider.** La commande
+`garderMeilleures {n}` garde les n premières propositions du classement unique
+— les n premières lignes que le tableau montre, dans son ordre : les
+comparables dans l'ordre du classement, puis celles hors classement par
+identifiant —, et la proposition d'où vient le placement retenu quand elle
+vient après elles : n + 1 au plus. Les autres s'effacent, en une seule entrée
+d'historique que « Défaire » reprend (§ 8.3), libellée « Gardé les 10
+meilleures propositions, effacé 37 propositions », et « gardé aussi la retenue
+(n° 42) » quand la proposition du retenu reste en plus. Le partage se lit sur
+la mesure qui classe le tableau, jamais sur un ordre que l'écran referait. Le
+compteur ne recule pas (§ 8.9), et l'état du plan ne change pas : une
+proposition au moins reste. Rien à effacer — n au moins le nombre de
+propositions, ou la seule au-delà est celle du retenu — : le geste est sans
+effet, refusé comme tel (§ 8.2). En lecture et sur un plan bloqué, la séance le
+refuse comme tout geste qui modifie (§ 8.4, § 9) ; une configuration qui ne se
+normalise pas ne se classe pas, et son refus nomme sa cause, sans remède. Les
+courses des propositions effacées quittent le compagnon des courses comme à
+l'effacement (§ 8.6) ; rien de nouveau ne s'écrit dans le fichier (§ 8.9).
+
+**N est une saisie de la section, jamais écrite.** Il se saisit dans un champ
+étroit à côté du bouton, dix au départ, un entier d'au moins 1, et le bouton le
+nomme : « Garder les 10 meilleures », « Garder la meilleure ». Comme le filtre
+d'une liste, ni le fichier ni le journal ne le portent : il se règle en
+lecture, et revient à dix quand la section se rouvre. Une saisie qui n'est pas
+un entier d'au moins 1 se refuse contre le champ, et le bouton garde le dernier
+nombre accepté.
+
+**Une fenêtre à confirmer précède le nettoyage**, parce qu'il efface d'un coup
+des lignes que l'opérateur ne voit pas toutes : « Effacer 37 propositions et
+garder les 10 meilleures ? ». Elle dit que les premières du classement restent,
+que la proposition du retenu reste aussi quand elle vient après elles, et que
+« Défaire » rend les effacées. Ouverte, elle se recompte sur chaque écriture
+qui arrive pendant qu'elle attend — une génération qui s'achève en
+arrière-plan ajoute des propositions à effacer —, et le compte qu'elle montre
+est celui que « Confirmer » applique, sauf pour une écriture déjà en file au
+moment du clic, que la commande voit avant elle : l'annonce donne alors le
+compte réel, et « Défaire » rend tout. « Annuler » et Échap la referment sans
+rien écrire, le focus revenu au bouton. Un geste que la séance refuserait, ou
+qui n'effacerait rien, part sans fenêtre, et son refus se pose à côté du
+bouton. Abouti, une annonce dit le nombre de propositions effacées, celui que
+la commande rend dans son résumé (`{effacees}`), et la page montrée qui
+n'existe plus ramène à la première.
+
 Au-delà de cent propositions, le tableau se lit par pages de cent : la page
 découpe ce classement unique sans le retrier, chaque ligne y garde son rang, et
 la ligne du retenu reste en tête de chaque page, hors du compte. La page est une
 posture de la navigation, jamais écrite (§ 8.4) : elle repart de la première à
 chaque ouverture d'un événement et après une génération, se borne à la dernière
-quand des propositions partent, et amène la proposition visée à chaque demande
-au plan, même répétée.
+quand des propositions partent — à la première quand « Garder les N meilleures »
+fait disparaître la page montrée —, et amène la proposition visée à chaque
+demande au plan, même répétée.
 
 **La commande prend une graine entière et un compte d'arrêt**, et une longueur
 d'historique d'acceptation dont l'algorithme fixe la valeur par défaut. Chaque
@@ -1310,8 +1355,9 @@ dans l'outil.
 
 Un refus **nomme sa cause et propose le geste qui le lève**, et se manifeste
 **sur la place concernée**, pas dans une boîte de dialogue. Seul un geste qui
-détruit de la saisie ouvre une fenêtre à confirmer : une suite de modales
-apprend à cliquer sans lire, et le premier refus qui comptait passe inaperçu.
+détruit de la saisie ouvre une fenêtre à confirmer — et « Garder les N
+meilleures », qui efface en bloc (§ 5.7) — : une suite de modales apprend à
+cliquer sans lire, et le premier refus qui comptait passe inaperçu.
 
 **Quand aucun geste ne lève le refus, il nomme sa cause seule.** Ainsi d'une
 valeur qui se corrige dans le champ même, dont le texte dit la valeur attendue —

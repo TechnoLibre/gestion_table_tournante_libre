@@ -11,7 +11,14 @@
 // chaque valeur qu'un palier applique par sa clé moteur.valeur.<valeur>,
 // puis l'identifiant croissant, qui départage deux propositions égales sur
 // tous (§ 5.7, A11).
+import { creerFormat } from '../../application/format.js';
 import { compte } from '../../application/libelles/aides.js';
+
+// Un nombre de propositions, mis en forme, et son nom accordé.
+const propositions = (n, texte) => `${creerFormat(texte).nombre(n)} ${n <= 1 ? 'proposition' : 'propositions'}`;
+
+// « la meilleure » pour une, « les N meilleures » au-delà, N mis en forme.
+const meilleures = (n, texte) => (n <= 1 ? 'la meilleure' : `les ${creerFormat(texte).nombre(n)} meilleures`);
 
 // Le nom d'un critère du classement, celui de la table du moteur.
 const critere = (nom, texte) => texte(`moteur.critere.${nom}`);
@@ -347,6 +354,36 @@ export const TABLE = new Map([
   // de qualité, qui la mesure (§ 12).
   ['propositions.commande.qualite', 'Qualité'],
   ['propositions.commande.effacer', 'Effacer les propositions'],
+  ['propositions.commande.garder', ({ n }, texte) => `Garder ${meilleures(n, texte)}`],
+
+  // --- Garder les meilleures (§ 5.7) ---------------------------------------------
+  // n : le nombre à garder ; effacees : celles qui s'effacent, comptées par
+  // nettoyage (evaluation.js) ; proposition : celle du retenu, gardée en plus.
+  ['propositions.nettoyage.champ', 'Propositions à garder'],
+  [
+    'propositions.nettoyage.titre',
+    ({ n, effacees }, texte) => `Effacer ${propositions(effacees, texte)} et garder ${meilleures(n, texte)} ?`,
+  ],
+  [
+    'propositions.nettoyage.gardees',
+    ({ n }, texte) =>
+      n <= 1
+        ? 'La première proposition du classement reste.'
+        : `Les ${creerFormat(texte).nombre(n)} premières propositions du classement restent.`,
+  ],
+  [
+    'propositions.nettoyage.origine',
+    ({ proposition }) => `La proposition n° ${proposition} reste aussi : le placement retenu en vient.`,
+  ],
+  [
+    'propositions.nettoyage.defaire',
+    ({ effacees }, texte) =>
+      effacees <= 1 ? '« Défaire » rend la proposition effacée.' : `« Défaire » rend les ${propositions(effacees, texte)} effacées.`,
+  ],
+  [
+    'propositions.nettoyage.annonce',
+    ({ effacees }, texte) => `${propositions(effacees, texte)} ${effacees <= 1 ? 'effacée' : 'effacées'}.`,
+  ],
 
   // --- Retenir sur un retenu ajusté (§ 2.1) ----------------------------------------
   [

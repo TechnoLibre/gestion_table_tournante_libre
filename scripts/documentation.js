@@ -365,6 +365,7 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   enregistrerGeneration: { n: 5, premier: 3, dernier: 7 },
   retenirProposition: { id: 3 },
   effacerPropositions: { n: 4, gardee: 2 },
+  garderMeilleures: { n: 10, effacees: 37, gardee: 42 },
   creerTable: { numero: 3 },
   supprimerTable: { numero: 2, reservations: 2, titres: 1 },
   deplacerTable: { numero: 3 },

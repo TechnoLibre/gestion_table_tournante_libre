@@ -19,6 +19,7 @@
 // [attribut, porteur, valeurs], dans l'ordre des attributs.
 const ENTREES = [
   ['data-affichee', 'import : la valeur affichée d’une cellule de l’aperçu', ['']],
+  ['data-annonce-nettoyage', 'propositions : l’annonce des propositions effacées par « Garder les N meilleures »', ['']],
   ['data-annonce-planche', 'badges : l’annonce de la planche, avant de produire', ['']],
   ['data-annonces', 'événement : la zone des annonces à côté de la tête', ['']],
   ['data-apercu', 'import : l’aperçu d’un fichier ou d’un collage', ['']],
