@@ -110,8 +110,8 @@ help: ##W Affiche cette liste
 	@findstr /R /C:"^[a-z_]*:.*## " /C:"^[a-z_]*:.*##W " Makefile
 else
 .PHONY: windows
-windows: ##U Construit l'exécutable Windows portable, sous podman (§ 16)
-	$(AVEC_NODE) scripts/construire_windows.sh
+windows: ##U Construit l'exécutable Windows portable, sous podman (§ 16), comme ./create_exe.sh
+	./create_exe.sh
 
 .PHONY: verifier_systemes
 verifier_systemes: ##U Installe et éprouve sur chaque système du catalogue, en conteneurs

@@ -43,7 +43,7 @@ forcent l'un ou l'autre.
 | `make test_long` | épreuves lourdes, avant un commit |
 | `make test_navigateur` | épreuves de rendu dans Chromium, avant une livraison |
 | `make build` | construit la page dans `www/` |
-| `make windows` | construit l'exécutable Windows portable, sous `podman`, depuis Linux |
+| `make windows` | construit l'exécutable Windows portable, sous `podman`, depuis Linux, comme `./create_exe.sh` |
 | `make essai_demarrage` | lance la vraie coquille Electron, lit son titre et ferme |
 | `make help` | toutes les cibles |
 

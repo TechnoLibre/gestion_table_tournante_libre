@@ -2,12 +2,13 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les points d'entrée de l'installation et du lancement : ./install.sh,
-// ./install_dev.sh, ./run.sh et le Makefile sous Linux et macOS ;
-// install.cmd, install_dev.cmd et run.cmd sous Windows, qui passent la main
-// à PowerShell ; shell.nix sous NixOS. Ces épreuves gardent ce qui les casse
-// sans rien faire échouer ailleurs : un bit d'exécution perdu, un chemin
-// renommé, une commande npm qui contourne le Node du projet, une fin de ligne
-// d'Unix dans un fichier de commandes, une marque d'ordre d'octets absente.
+// ./install_dev.sh, ./run.sh, ./create_exe.sh et le Makefile sous Linux et
+// macOS ; install.cmd, install_dev.cmd et run.cmd sous Windows, qui passent
+// la main à PowerShell ; shell.nix sous NixOS. Ces épreuves gardent ce qui
+// les casse sans rien faire échouer ailleurs : un bit d'exécution perdu, un
+// chemin renommé, une commande npm qui contourne le Node du projet, une fin
+// de ligne d'Unix dans un fichier de commandes, une marque d'ordre d'octets
+// absente.
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,7 +17,7 @@ import { describe, test } from './lanceur.js';
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url));
 const lire = (chemin) => readFileSync(join(RACINE, chemin), 'utf8');
-const SCRIPTS_BASH = ['install.sh', 'install_dev.sh', 'run.sh', 'scripts/installation/avec_node.sh'];
+const SCRIPTS_BASH = ['install.sh', 'install_dev.sh', 'run.sh', 'create_exe.sh', 'scripts/installation/avec_node.sh'];
 
 describe('installation : les scripts bash', () => {
   test('ils sont exécutables, et cherchent bash dans le PATH : /bin/bash manque sous NixOS', () => {
