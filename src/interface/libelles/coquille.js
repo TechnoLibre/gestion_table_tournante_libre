@@ -37,18 +37,17 @@ export const TABLE = new Map([
 
   ['coquille.liste', 'Liste des événements'],
 
-  // Le panneau « À propos ». Le bloc : nom, version affichée, version
-  // Windows, plateforme, provenance — son libellé, ou le mode lui-même quand
-  // il n'en a pas —, version de format.
+  // Le panneau « À propos ». Le bloc : nom, version affichée, plateforme,
+  // provenance — son libellé, ou le mode lui-même quand il n'en a pas —,
+  // version de format. Sous lui, l'éditeur et l'auteur du logiciel.
   ['coquille.apropos.titre', 'À propos'],
   [
     'coquille.apropos.bloc',
-    ({ affichee, windows, plateforme, provenance, format }, texte) => {
+    ({ version, plateforme, provenance, format }, texte) => {
       const cle = `coquille.provenance.${provenance}`;
       return [
         texte('coquille.nom'),
-        affichee,
-        windows,
+        version,
         plateforme,
         texte.existe(cle) ? texte(cle) : provenance,
         texte('coquille.apropos.format', { format }),
@@ -56,6 +55,9 @@ export const TABLE = new Map([
     },
   ],
   ['coquille.apropos.format', ({ format }) => `format ${format}`],
+  ['coquille.apropos.editeur', 'TechnoLibre Inc.'],
+  ['coquille.apropos.auteur', 'Mathieu Benoit'],
+  ['coquille.apropos.role', 'Développeur, concepteur et mainteneur du logiciel'],
   ['coquille.apropos.copier', 'Copier'],
   ['coquille.apropos.fermer', 'Fermer'],
   ['coquille.apropos.copie', 'Bloc copié dans le presse-papiers'],

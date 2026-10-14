@@ -86,7 +86,6 @@ mount(App, {
     demonstrations: demonstrationsLivrees(),
     formatCourant: FORMAT,
     produitVersion: VERSION.affichee,
-    versionWindows: VERSION.windows,
     polices: chargerPolices,
     imprimante,
     sectionQualite: chargerSectionQualite,

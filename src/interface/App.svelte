@@ -93,7 +93,6 @@
     demonstrations,
     formatCourant,
     produitVersion,
-    versionWindows,
     // () => Promise<{regulier: Uint8Array, gras: Uint8Array}> : les octets
     // de la police que la production de la planche embarque (§ 11.1).
     polices,
@@ -110,12 +109,9 @@
   const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue });
   const format = creerFormat(t);
   // Le bloc « À propos » se compose au montage, avant toute séance : une
-  // forme de la version que les dépendances ne portent pas lève RangeError
-  // ici, et App ne se monte pas avec un bloc copiable faux (§ 18.6).
-  const bloc = blocAPropos(
-    { version: { affichee: produitVersion, windows: versionWindows }, plateforme: fs.nature, provenance, format: formatCourant },
-    t,
-  );
+  // version que les dépendances ne portent pas lève RangeError ici, et App
+  // ne se monte pas avec un bloc copiable faux (§ 18.6).
+  const bloc = blocAPropos({ version: produitVersion, plateforme: fs.nature, provenance, format: formatCourant }, t);
   const seanceApp = creerSeance({
     fs,
     horloge,

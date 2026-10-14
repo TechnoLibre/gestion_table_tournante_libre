@@ -2,13 +2,15 @@
      License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl) -->
 
 <script>
-  // Le panneau « À propos » (§ 18.6) : le bloc d'une ligne que l'opérateur
-  // copie dans un courriel, tel que blocAPropos l'a composé, et sa copie dans
-  // le presse-papiers de la plateforme. « Copier » remet exactement le texte
-  // affiché ; l'issue de la copie se lit sous les commandes.
+  // Le panneau « À propos » (§ 18.6) : l'éditeur et l'auteur du logiciel,
+  // puis le bloc d'une ligne que l'opérateur copie dans un courriel, tel que
+  // blocAPropos l'a composé, et sa copie dans le presse-papiers de la
+  // plateforme. « Copier » remet exactement le texte du bloc, sans l'éditeur
+  // ni l'auteur ; l'issue de la copie se lit sous les commandes.
   //
-  // Habillage : le titre de l'écran, puis une carte qui porte le bloc, sur
-  // le fond sourd de la carte, et les commandes — « Copier », l'action
+  // Habillage : le titre de l'écran, puis une carte qui porte l'éditeur,
+  // l'auteur en gras et son rôle dans l'encre secondaire, le bloc, sur le
+  // fond sourd de la carte, et les commandes — « Copier », l'action
   // principale, et « Fermer ». Une copie refusée se dit dans l'encre du
   // refus.
   import { getContext } from 'svelte';
@@ -36,6 +38,11 @@
   <h1>{t('coquille.apropos.titre')}</h1>
   <Carte>
     <div class="contenu">
+      <div class="credits" data-credits>
+        <p data-editeur>{t('coquille.apropos.editeur')}</p>
+        <p class="auteur" data-auteur>{t('coquille.apropos.auteur')}</p>
+        <p class="role" data-role>{t('coquille.apropos.role')}</p>
+      </div>
       <p class="bloc" data-bloc>{bloc}</p>
       <div class="commandes">
         <Commande cle="coquille.apropos.copier" nom="copier" variante="principale" executer={copier} />
@@ -73,6 +80,20 @@
 
   /* Le bloc se sélectionne d'un clic, entier, et se coupe où il faut
      plutôt que de déborder. */
+  .credits {
+    display: flex;
+    flex-direction: column;
+    gap: var(--espace-1);
+  }
+
+  .auteur {
+    font-weight: bold;
+  }
+
+  .role {
+    color: var(--couleur-page-texte-secondaire);
+  }
+
   .bloc {
     padding: var(--espace-3) var(--espace-4);
     border: 1px solid var(--couleur-carte-filet);

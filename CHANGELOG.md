@@ -193,6 +193,9 @@
 - Dans un fichier d'objectifs, une ligne sans objectif ni règle est une ligne à
   remplir : l'import la passe sans la refuser, et l'objectif de sa table reste
   en mise à jour.
+- Le panneau « À propos » nomme l'éditeur, TechnoLibre Inc., et l'auteur,
+  Mathieu Benoit, développeur, concepteur et mainteneur du logiciel. Son bloc à
+  copier ne porte plus que la version affichée, sans sa forme Windows.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

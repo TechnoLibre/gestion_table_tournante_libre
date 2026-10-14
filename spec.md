@@ -6643,7 +6643,7 @@ question. Le logiciel fait donc en sorte qu'on n'ait pas à la chercher.
 | **bandeau d'application**, sur tout écran (§ 8.4) | `2026.10.05.01`, avec la provenance et — quand un plan est ouvert — le libellé de mode |
 | **premier écran** (§ 8.1), liste des événements comme répertoire vide | `version 2026.10.05.01`, ou la marque de provenance d'une construction de documentation |
 | **titre de la fenêtre** | `Gestion table tournante Libre — 2026.10.05.01` |
-| **panneau « À propos »** | un bloc d'une ligne que l'opérateur **copie** |
+| **panneau « À propos »** | un bloc d'une ligne que l'opérateur **copie**, sous l'éditeur et l'auteur |
 | **pied de chaque page imprimée** (§ 11.7) | la version, à côté de l'horodatage du placement |
 | **en-tête du fichier d'état** (§ 8.8) | champ `produit_version` |
 
@@ -6665,12 +6665,14 @@ moment où l'opérateur peut encore se ménager un retour en arrière, c'est-à-
 avant le premier geste.
 
 **Le bloc copiable** du panneau « À propos » tient en une ligne — version affichée,
-version Windows, plateforme, provenance de la construction, version de format
-des fichiers — et se colle dans un courriel. Un chiffre recopié à la main se
-recopie faux. Il porte les **deux** formes parce qu'un opérateur qui lit la fiche
-de propriétés du fichier sous Windows y trouve `2026.1005.1.0` et non
-`2026.10.05.01` ; sans la correspondance écrite quelque part, il cite un numéro qui
-ne figure dans aucun changelog.
+plateforme, provenance de la construction, version de format des fichiers — et se
+colle dans un courriel. Un chiffre recopié à la main se recopie faux. Il ne porte
+que la version affichée, `2026.10.05.01`, celle du changelog et du nom du
+livrable : la forme Windows, `2026.1005.1.0`, reste dans la fiche de propriétés du
+fichier, et le guide Windows renvoie au nom de l'exécutable pour la version.
+Au-dessus du bloc, le panneau nomme l'éditeur, **TechnoLibre Inc.**, et l'auteur,
+**Mathieu Benoit**, développeur, concepteur et mainteneur du logiciel ; « Copier »
+ne les emporte pas.
 
 **Le pied des impressions** porte la version parce qu'une feuille circule et survit
 à la séance. La règle vaut pour la **page** ; un carton découpé et porté au cou

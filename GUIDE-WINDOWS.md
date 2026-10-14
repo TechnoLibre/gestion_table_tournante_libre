@@ -156,14 +156,14 @@ La version se lit sans rien chercher :
 - dans le **bandeau** en haut de chaque écran, et sur la liste des événements ;
 - dans le **titre de la fenêtre**, après le nom du logiciel ;
 - au **pied de chaque page imprimée** ; un badge découpé n’en porte pas ;
-- dans le panneau « À propos », ouvert depuis le bandeau. Il montre un bloc
-  d’une ligne — la version, la version Windows, la plateforme, la provenance de
-  la construction et la version de format des fichiers — que la commande
-  « Copier » met dans le presse-papiers.
+- dans le panneau « À propos », ouvert depuis le bandeau. Sous l’éditeur,
+  TechnoLibre Inc., et l’auteur du logiciel, il montre un bloc d’une ligne — la
+  version, la plateforme, la provenance de la construction et la version de
+  format des fichiers — que la commande « Copier » met dans le presse-papiers.
 
-Les propriétés du fichier, dans l’Explorateur, montrent la **version
-Windows**, une autre écriture du même numéro : le bloc d’« À propos » porte les
-deux, ce qui permet de faire le lien.
+Les propriétés du fichier, dans l’Explorateur, écrivent le même numéro
+autrement, `2026.1005.1.0` pour `2026.10.05.01` : citez celui du bandeau ou
+d’« À propos », qui figure aussi dans le nom de l’exécutable.
 
 ## Signaler un problème
 

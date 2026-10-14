@@ -121,7 +121,7 @@ const LETTRE = /\p{L}/u;
  * racines: string[] }, valeurs de la plus longue à la plus courte.
  */
 async function donneesConnues(contexte, { cellules = [] } = {}) {
-  const valeurs = new Set([VERSION.affichee, VERSION.windows, PROVENANCE, ...CATALOGUE.map(({ nom }) => nom), ...cellules]);
+  const valeurs = new Set([VERSION.affichee, PROVENANCE, ...CATALOGUE.map(({ nom }) => nom), ...cellules]);
   const racines = new Set();
   const personne = (p) => {
     for (const v of [p.nom, p.prenom, p.appartenance, p.courriel, p.titrePressenti, p.notes, ...(p.etiquettes ?? [])]) if (v) valeurs.add(v);

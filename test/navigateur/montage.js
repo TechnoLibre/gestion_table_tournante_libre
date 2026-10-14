@@ -197,7 +197,6 @@ export async function monterApp({
       demonstrations: demonstrations ?? demonstrationsLivrees(),
       formatCourant: formatCourant ?? FORMAT,
       produitVersion: VERSION.affichee,
-      versionWindows: VERSION.windows,
       polices,
       imprimante,
       sectionQualite,

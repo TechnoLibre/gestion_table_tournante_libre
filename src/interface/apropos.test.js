@@ -2,8 +2,8 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Le bloc « À propos » (§ 18.6) : une ligne que l'opérateur copie dans un
-// courriel — nom, version affichée, version Windows, plateforme, provenance,
-// version de format. Ce qui tient lieu de version à l'écran, et la
+// courriel — nom, version affichée, plateforme, provenance, version de
+// format. Ce qui tient lieu de version à l'écran, et la
 // provenance, s'éprouvent avec leur définition (src/application/version.js),
 // que ce module réexporte.
 import assert from 'node:assert/strict';
@@ -20,15 +20,15 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const temoin = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE], { langue: 'temoin' }).t;
 
 describe('blocAPropos (§ 18.6)', () => {
-  test('une ligne : nom, version affichée, version Windows, plateforme, provenance, format, séparés par « · »', () => {
-    assert.match(VERSION.windows ?? '', /^\d+\.\d+\.\d+\.0$/, 'VERSION.windows engendré');
-    const bloc = blocAPropos({ version: VERSION, plateforme: 'electron', provenance: 'livraison', format: FORMAT }, t);
+  test('une ligne : nom, version affichée, plateforme, provenance, format, séparés par « · » ; la forme Windows n’y est pas', () => {
+    const bloc = blocAPropos({ version: VERSION.affichee, plateforme: 'electron', provenance: 'livraison', format: FORMAT }, t);
     assert.equal(typeof bloc, 'string');
     assert.doesNotMatch(bloc, /[\n\r\u{2028}\u{2029}]/u);
+    assert.match(VERSION.affichee, /^\d{4}\.\d{2}\.\d{2}\.\d{2}$/);
+    assert.equal(bloc.includes(VERSION.windows), false, bloc);
     assert.deepEqual(bloc.split(' \u{00B7} '), [
       t('coquille.nom'),
       VERSION.affichee,
-      VERSION.windows,
       'electron',
       libelleProvenance('livraison'),
       t('coquille.apropos.format', { format: FORMAT }),
@@ -45,31 +45,32 @@ describe('blocAPropos (§ 18.6)', () => {
     ];
     assert.ok(cas.length > 0);
     for (const [plateforme, provenance, libelle] of cas) {
-      const champs = blocAPropos({ version: VERSION, plateforme, provenance, format: FORMAT }, t).split(' \u{00B7} ');
-      assert.equal(champs[3], plateforme, provenance);
-      assert.equal(champs[4], libelle, provenance);
+      const champs = blocAPropos({ version: VERSION.affichee, plateforme, provenance, format: FORMAT }, t).split(' \u{00B7} ');
+      assert.equal(champs[2], plateforme, provenance);
+      assert.equal(champs[3], libelle, provenance);
     }
   });
 
-  test('une forme de la version absente, vide ou qui n’est pas une chaîne lève RangeError en la nommant : jamais un bloc copiable faux', () => {
-    const fautes = [undefined, null, '', 7];
-    assert.equal(fautes.length, 4);
+  test('une version absente, vide ou qui n’est pas une chaîne lève RangeError : jamais un bloc copiable faux', () => {
+    const fautes = [undefined, null, '', 7, VERSION];
+    assert.equal(fautes.length, 5);
     for (const faute of fautes) {
-      for (const [forme, version] of [
-        ['windows', { affichee: VERSION.affichee, windows: faute }],
-        ['affichee', { affichee: faute, windows: VERSION.windows }],
-      ]) {
-        assert.throws(
-          () => blocAPropos({ version, plateforme: 'web', provenance: 'test', format: FORMAT }, t),
-          (erreur) => erreur instanceof RangeError && erreur.message.includes(forme),
-          `${forme} ${String(faute)}`,
-        );
-      }
+      assert.throws(
+        () => blocAPropos({ version: faute, plateforme: 'web', provenance: 'test', format: FORMAT }, t),
+        (erreur) => erreur instanceof RangeError && erreur.message.includes('version'),
+        String(faute),
+      );
     }
+  });
+
+  test('l’éditeur, l’auteur et son rôle ont chacun leur libellé', () => {
+    assert.equal(t('coquille.apropos.editeur'), 'TechnoLibre Inc.');
+    assert.equal(t('coquille.apropos.auteur'), 'Mathieu Benoit');
+    assert.equal(t('coquille.apropos.role'), 'Développeur, concepteur et mainteneur du logiciel');
   });
 
   test('en langue témoin, le bloc entier est encadré une fois', () => {
-    const bloc = blocAPropos({ version: VERSION, plateforme: 'web', provenance: 'test', format: FORMAT }, temoin);
+    const bloc = blocAPropos({ version: VERSION.affichee, plateforme: 'web', provenance: 'test', format: FORMAT }, temoin);
     const { ouverture, fermeture } = MARQUE_TEMOIN;
     assert.ok(bloc.startsWith(ouverture) && bloc.endsWith(fermeture), bloc);
     assert.equal(bloc.split(ouverture).length, 2, bloc);
@@ -78,7 +79,7 @@ describe('blocAPropos (§ 18.6)', () => {
 });
 
 describe('la version de l’interface vient des dépendances (§ 13.4, § 18.6)', () => {
-  test('App.svelte ne lit pas la version engendrée : la version affichée et la forme Windows arrivent par ses propriétés, produitVersion et versionWindows', () => {
+  test('App.svelte ne lit pas la version engendrée : la version affichée arrive par sa propriété produitVersion, et la forme Windows n’y entre pas', () => {
     const source = readFileSync(new URL('./App.svelte', import.meta.url), 'utf8');
     const imports = [...source.matchAll(/^\s*import\s[^;]*?from\s+'([^']+)'/gmu)].map(([, chemin]) => chemin);
     assert.ok(imports.length > 0, 'des imports relevés');
@@ -86,7 +87,7 @@ describe('la version de l’interface vient des dépendances (§ 13.4, § 18.6)'
       imports.filter((chemin) => chemin.includes('version.genere')),
       [],
     );
-    assert.match(source, /\bversionWindows\b/u);
-    assert.match(source, /blocAPropos\(\s*\{\s*version:\s*\{\s*affichee:\s*produitVersion,\s*windows:\s*versionWindows\s*\}/u);
+    assert.doesNotMatch(source, /\bversionWindows\b/u);
+    assert.match(source, /blocAPropos\(\s*\{\s*version:\s*produitVersion,/u);
   });
 });

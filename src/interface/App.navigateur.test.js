@@ -544,7 +544,7 @@ describe('« À propos » (§ 18.6)', () => {
 
   test('le panneau s’ouvre depuis le bandeau sur la liste puis sur un événement ; « Copier » remet exactement le bloc affiché', async () => {
     const m = await monter({ fichiers: [fichier('bal', 'Bal des Grisailles')] });
-    const attendu = blocAPropos({ version: VERSION, plateforme: m.fs.nature, provenance: 'test', format: FORMAT }, t);
+    const attendu = blocAPropos({ version: VERSION.affichee, plateforme: m.fs.nature, provenance: 'test', format: FORMAT }, t);
     dans(m, '[data-commande="apropos"]').click();
     flushSync();
     expect(visible(panneau(m))).toBe(true);
@@ -563,6 +563,22 @@ describe('« À propos » (§ 18.6)', () => {
     flushSync();
     expect(visible(panneau(m))).toBe(true);
     expect(dans(m, '[data-bloc]').textContent).toBe(attendu);
+  });
+
+  test('l’éditeur, l’auteur et son rôle s’y lisent, au-dessus du bloc ; « Copier » ne les emporte pas, ni la forme Windows', async () => {
+    const m = await monter();
+    dans(m, '[data-commande="apropos"]').click();
+    flushSync();
+    const credits = dans(m, '[data-credits]');
+    expect(visible(credits)).toBe(true);
+    expect(dans(m, '[data-editeur]').textContent.trim()).toBe('TechnoLibre Inc.');
+    expect(dans(m, '[data-auteur]').textContent.trim()).toBe('Mathieu Benoit');
+    expect(dans(m, '[data-role]').textContent.trim()).toBe('Développeur, concepteur et mainteneur du logiciel');
+    expect(credits.compareDocumentPosition(dans(m, '[data-bloc]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(panneau(m).textContent.includes(VERSION.windows)).toBe(false);
+    dans(m, '[data-commande="copier"]').click();
+    await vi.waitFor(() => expect(m.presse.copies).toEqual([dans(m, '[data-bloc]').textContent]));
+    expect(m.presse.copies[0]).not.toContain('TechnoLibre Inc.');
   });
 });
 
