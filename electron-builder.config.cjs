@@ -31,5 +31,9 @@ module.exports = {
   // d'exécution, aucun node_modules n'entre dans le paquet.
   files: ['www/**', 'electron/**', 'package.json'],
   artifactName: deriver(lireJson('version.json').version).nomFichier,
+  // Les traductions des textes propres à Chromium (locales/*.pak) gardées
+  // dans le paquet : le français, et l'anglais des États-Unis, la langue de
+  // repli de Chromium. L'interface ne les lit pas : elle porte ses libellés.
+  electronLanguages: ['fr', 'en-US'],
   win: { target: [{ target: 'portable', arch: ['x64'] }] },
 };

@@ -113,6 +113,10 @@ describe('livrable : forme et contenu', () => {
     assert.deepEqual(configuration.files, ['www/**', 'electron/**', 'package.json']);
   });
 
+  test('le paquet ne garde que les traductions de Chromium en français et en anglais des États-Unis, sa langue de repli (§ 16)', () => {
+    assert.deepEqual(charger(RACINE).electronLanguages, ['fr', 'en-US']);
+  });
+
   test("la configuration n'a pas d'autre clé que celles que ces épreuves examinent (§ 14.15, § 18.1)", () => {
     // Une clé de plus change ce que le paquet emporte (extraResources,
     // extraFiles, asar) ou la version qu'il porte (buildVersion, buildNumber),
@@ -124,6 +128,7 @@ describe('livrable : forme et contenu', () => {
       'artifactName',
       'copyright',
       'directories',
+      'electronLanguages',
       'files',
       'productName',
       'win',

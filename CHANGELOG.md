@@ -196,6 +196,9 @@
 - Le panneau « À propos » nomme l'éditeur, TechnoLibre Inc., et l'auteur,
   Mathieu Benoit, développeur, concepteur et mainteneur du logiciel. Son bloc à
   copier ne porte plus que la version affichée, sans sa forme Windows.
+- L'exécutable pèse environ 8 Mo de moins : il ne garde que le français et
+  l'anglais parmi les traductions internes du navigateur qu'il embarque.
+  L'interface ne change pas.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

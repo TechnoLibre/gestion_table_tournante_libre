@@ -6236,6 +6236,9 @@ au même titre que la publication du dossier d'origine par le lanceur portable
 beaucoup plus cher que de le découvrir tout de suite.
 
 Ce qui est livré au client : **un exécutable**, et rien d'autre à installer.
+Le paquet ne garde que les traductions des textes propres à Chromium en français
+et en anglais des États-Unis, sa langue de repli : l'interface porte ses propres
+libellés, et les autres langues alourdiraient l'exécutable sans servir.
 
 **Le livrable est un exécutable portable à fichier unique, non un
 installateur**, et ce n'est pas une préférence : la règle du dossier de travail du
