@@ -38,11 +38,14 @@ import {
   espacerEtiquettes,
   exigerColonnes,
   exigerCompte,
+  exigerInfobulle,
+  exigerInfobulleDesTraces,
   exigerTraces,
   hauteurBarres,
   legendeBarres,
   legendeTraces,
   ligneInfobulle,
+  lignesInfobulle,
   margesCommunes,
   margesVerticales,
   tronquerNom,
@@ -241,6 +244,89 @@ describe('pointage : la disposition d’un escalier (§ 12.3)', () => {
     assert.equal(new Set(d.graduationsX.map((g) => g.x)).size, 1, 'toutes au même pixel');
     assert.equal(new Set(valeurs).size, valeurs.length, valeurs.join(' | '));
     for (const g of d.graduationsX) assert.equal(g.texte, graduer(g.valeur));
+  });
+});
+
+describe('pointage : deux séries sur une borne haute reçue (C20, D59, D60)', () => {
+  // Deux placements comparés, chacun une série de manques par rang, nommée
+  // comme la vue les nomme.
+  const a = (valeurs = [3, 2, 1, 0]) => ({ libelle: 'n° 4', valeurs, cle: 'a' });
+  const b = (valeurs = [7, 5, 0, 0]) => ({ libelle: 'n° 7', valeurs, cle: 'b' });
+
+  test('rouge : deux séries partagent une seule échelle verticale, bornée par la borne reçue, jamais recalculée sur la plus grande série', () => {
+    const d = escalier({ series: [a(), b()], borneHaute: 7 });
+    assert.deepEqual(d.ey.domaine, [0, 7]);
+    assert.equal(d.axes.filter((x) => x.x1 === x.x2).length, 1, 'un seul axe vertical');
+    assert.ok(Math.abs(d.ey.versPx(7) - d.zone.y) < 1e-9, 'la plus grande série atteint le haut, à la borne');
+    assert.ok(d.ey.versPx(3) > d.zone.y, 'la première ne s’étire pas jusqu’au haut');
+    const large = escalier({ series: [a(), b()], borneHaute: 9 });
+    assert.deepEqual(large.ey.domaine, [0, 9], 'la borne reçue, au-delà de la plus grande valeur');
+    assert.ok(large.ey.versPx(7) > large.zone.y, 'la plus grande série ne touche pas le haut d’une borne plus haute');
+    assert.ok(large.graduationsY.every(({ valeur }) => Number.isInteger(valeur) && valeur <= 9));
+    assert.equal(large.graduationsY[0].texte, '0', 'zéro en bas');
+  });
+
+  test('rouge : les marges se mesurent sur les graduations de la borne reçue, comme la disposition', () => {
+    const avec = margesVerticales({ series: [a([3, 1])], borneHaute: 1000, mesurer, graduer });
+    assert.equal(avec.gauche, mesurer('1000') + ESPACE_PX);
+    const sans = margesVerticales({ series: [a([3, 1])], mesurer, graduer });
+    assert.equal(sans.gauche, mesurer('3') + ESPACE_PX, 'sans borne, celles des données');
+    const d = escalier({ series: [a([3, 1])], borneHaute: 1000 });
+    assert.equal(d.zone.x, avec.gauche, 'la zone suit les mêmes marges');
+  });
+
+  test('une borne absente garde le domaine des données ; les points de relevé la reçoivent aussi', () => {
+    assert.deepEqual(escalier({ series: [a(), b()] }).ey.domaine, [0, 7]);
+    assert.deepEqual(escalier({ series: [a(), b()], borneHaute: null }).ey.domaine, [0, 7]);
+    const d = dispositionPoints({
+      largeur: 600,
+      hauteur: 120,
+      mesurer,
+      hauteurTexte: HAUTEUR_TEXTE,
+      graduer,
+      graduerX: graduer,
+      abscisses: [1, 10],
+      series: [serie([2, 1])],
+      borneHaute: 4,
+    });
+    assert.deepEqual(d.ey.domaine, [0, 4]);
+  });
+
+  test('une borne sous une valeur tracée, négative ou non finie est refusée', () => {
+    assert.throws(() => escalier({ series: [a(), b()], borneHaute: 6 }), RangeError, 'sous la plus grande série');
+    assert.throws(
+      () => escalier({ series: [a()], reperes: [{ genre: 'borne', libelle: 'borne', valeurs: [5, 5, 5, 5] }], borneHaute: 4 }),
+      RangeError,
+      'sous un repère',
+    );
+    const nonFini = { name: 'RangeError', message: /nombre fini/ };
+    for (const faux of [Number.NaN, Number.POSITIVE_INFINITY, '7']) {
+      assert.throws(() => escalier({ series: [a()], borneHaute: faux }), nonFini, String(faux));
+      assert.throws(() => margesVerticales({ series: [a()], borneHaute: faux, mesurer, graduer }), nonFini, String(faux));
+    }
+    // Une borne négative passe sous le zéro des données, que tout domaine
+    // contient : elle se refuse comme une borne sous une valeur tracée.
+    const sousZero = { name: 'RangeError', message: /borne haute : -1 sous la valeur tracée/ };
+    assert.throws(() => escalier({ series: [a()], borneHaute: -1 }), sousZero);
+    assert.throws(() => margesVerticales({ series: [a()], borneHaute: -1, mesurer, graduer }), sousZero);
+  });
+
+  test('chaque série porte sa clé de désignation, la sienne ou son genre ; A en plein, B en tirets', () => {
+    const { traces } = exigerTraces([a(), b()], [{ genre: 'plafond', libelle: 'plafond', valeurs: [7, 7, 7, 7] }]);
+    assert.deepEqual(traces.map((t) => [t.genre, t.cle]), [['serie1', 'a'], ['serie2', 'b'], ['plafond', 'plafond']]);
+    assert.equal(TRAITS[traces[0].genre].motif, 'none');
+    assert.notEqual(TRAITS[traces[1].genre].motif, 'none');
+    const sansCle = exigerTraces([serie([1]), serie([2], 'appartenances')], []).traces;
+    assert.deepEqual(sansCle.map((t) => t.cle), ['serie1', 'serie2'], 'sans clé, la désignation par rang');
+    const d = escalier({ series: [a(), b()], borneHaute: 7 });
+    assert.deepEqual(d.traces.map((t) => [t.cle, t.libelle]), [['a', 'n° 4'], ['b', 'n° 7']]);
+    assert.deepEqual(d.legende.map((e) => e.libelle), ['n° 4', 'n° 7'], 'chacune nommée dans la légende');
+  });
+
+  test('deux séries de même clé, ou une clé qui n’est pas un texte non vide, sont refusées', () => {
+    assert.throws(() => exigerTraces([a(), { ...b(), cle: 'a' }], []), RangeError);
+    assert.throws(() => exigerTraces([{ ...a(), cle: '' }], []), TypeError);
+    assert.throws(() => exigerTraces([{ ...a(), cle: 3 }], []), TypeError);
   });
 });
 
@@ -783,6 +869,69 @@ describe('pointage : la ligne de l’infobulle et les cellules du jumeau (§ 12.
     assert.throws(() => exigerColonnes([{ cle: 'x', libelle: 'X', genre: 'date' }]), RangeError);
     assert.throws(() => exigerColonnes([colonnes[0], colonnes[0]]), RangeError);
     assert.throws(() => exigerColonnes([{ cle: 'x', genre: 'texte' }]), TypeError);
+  });
+});
+
+describe('pointage : l’infobulle d’un rang à plusieurs lignes (C20, D66)', () => {
+  const ecrire = (v, { decimales = 0 } = {}) => `n(${v};${decimales})`;
+  // L'infobulle à une série : une ligne par rang, un pourcentage suivi de son compte.
+  const COLONNES_UNE_SERIE = [
+    { cle: 'nom', libelle: 'Personne', genre: 'texte' },
+    { cle: 'part', libelle: 'Part', genre: 'pourcentage' },
+  ];
+  const LIGNES_UNE_SERIE = [{ nom: 'Iris Ombrelle', part: { texte: '88 \u{25}', compte: '24 sur 27' } }];
+  // L'infobulle de deux placements : en comptes, une ligne par rang et par
+  // série.
+  const COLONNES = [
+    { cle: 'nom', libelle: 'Personne', genre: 'texte' },
+    { cle: 'manque', libelle: 'manque', genre: 'nombre' },
+    { cle: 'rencontres', libelle: 'rencontres', genre: 'nombre' },
+  ];
+  const A = { nom: 'n° 4', lignes: [{ nom: 'Théo Pervenche', manque: 3, rencontres: 24 }, { nom: 'Iris Ombrelle', manque: 1, rencontres: 26 }] };
+  const B = { nom: 'n° 7', lignes: [{ nom: 'Ondine Lacasse', manque: 2, rencontres: 25 }] };
+
+  test('rouge : une infobulle à une série rend sa ligne, sans nom de série', () => {
+    const uneSerie = { colonnes: COLONNES_UNE_SERIE, lignes: LIGNES_UNE_SERIE };
+    assert.deepEqual(lignesInfobulle(uneSerie, 0, ecrire), [{ nom: null, cellules: ligneInfobulle(COLONNES_UNE_SERIE, LIGNES_UNE_SERIE[0], ecrire) }]);
+    assert.equal(lignesInfobulle(uneSerie, 1, ecrire), null, 'un rang sans ligne n’ouvre rien');
+  });
+
+  test('rouge : deux séries, une ligne par série au même rang, chacune précédée du nom de sa série, dans l’ordre des séries', () => {
+    const bulle = { colonnes: COLONNES, series: [A, B] };
+    assert.deepEqual(lignesInfobulle(bulle, 0, ecrire), [
+      { nom: 'n° 4', cellules: ligneInfobulle(COLONNES, A.lignes[0], ecrire) },
+      { nom: 'n° 7', cellules: ligneInfobulle(COLONNES, B.lignes[0], ecrire) },
+    ]);
+    assert.deepEqual(lignesInfobulle(bulle, 1, ecrire), [{ nom: 'n° 4', cellules: ligneInfobulle(COLONNES, A.lignes[1], ecrire) }], 'une série sans ce rang se tait');
+    assert.equal(lignesInfobulle(bulle, 2, ecrire), null);
+  });
+
+  test('rouge : une infobulle à plusieurs séries est en comptes — une colonne de pourcentage est refusée (D67, C29)', () => {
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES_UNE_SERIE, series: [{ nom: 'n° 4', lignes: LIGNES_UNE_SERIE }] }), /pourcentage/);
+    assert.equal(exigerInfobulle({ colonnes: COLONNES_UNE_SERIE, lignes: LIGNES_UNE_SERIE }).lignes, LIGNES_UNE_SERIE, 'à une série, le pourcentage reste');
+  });
+
+  test('exigerInfobulle : des lignes ou des séries, l’un des deux ; une ou deux séries, chacune nommée, de noms distincts', () => {
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES, lignes: [], series: [A] }), RangeError);
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES }), RangeError);
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES, lignes: 'abc' }), TypeError);
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES, series: [] }), RangeError);
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES, series: [A, B, { ...B, nom: 'n° 9' }] }), RangeError);
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES, series: [A, { ...B, nom: 'n° 4' }] }), RangeError);
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES, series: [{ ...A, nom: '' }] }), TypeError);
+    assert.throws(() => exigerInfobulle({ colonnes: COLONNES, series: [{ nom: 'n° 4' }] }), TypeError);
+    assert.throws(() => exigerInfobulle({ colonnes: [], series: [A] }), RangeError);
+  });
+
+  test('exigerInfobulleDesTraces : une ligne par série du tracé, sous le nom de la série ; l’infobulle à une série passe telle quelle', () => {
+    const series = [{ libelle: 'n° 4', valeurs: [3, 1] }, { libelle: 'n° 7', valeurs: [2, 0] }];
+    const bulle = { colonnes: COLONNES, series: [A, B] };
+    assert.equal(exigerInfobulleDesTraces(bulle, series), bulle);
+    assert.equal(exigerInfobulleDesTraces(null, series), null);
+    const uneSerie = { colonnes: COLONNES_UNE_SERIE, lignes: LIGNES_UNE_SERIE };
+    assert.equal(exigerInfobulleDesTraces(uneSerie, series), uneSerie);
+    assert.throws(() => exigerInfobulleDesTraces({ colonnes: COLONNES, series: [A] }, series), RangeError, 'une série sans sa ligne');
+    assert.throws(() => exigerInfobulleDesTraces({ colonnes: COLONNES, series: [B, A] }, series), RangeError, 'les noms dans l’ordre des séries');
   });
 });
 

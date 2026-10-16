@@ -39,9 +39,13 @@
   // remet pointe à null.
   //
   // L'infobulle porte la ligne du jumeau de la cible pointée : infobulle,
-  // {colonnes, lignes}, la ligne d'indice pointe (ligneInfobulle,
-  // pointage.js), un nombre écrit par format.nombre comme les graduations,
-  // une cellule de pourcentage rendue par Pourcentage, son compte dessous.
+  // {colonnes, lignes}, la ligne d'indice pointe, une liste de libellés et
+  // de valeurs ; ou {colonnes, series}, une ligne par série à cet indice,
+  // chacune précédée du nom de sa série et dans l'ordre des séries — deux
+  // placements comparés, une personne chacun au même rang (C20, D66), en
+  // comptes (lignesInfobulle, pointage.js). Un nombre s'écrit par
+  // format.nombre comme les graduations, une cellule de pourcentage par
+  // Pourcentage, son compte dessous.
   // Elle ne s'ouvre que dans le graphique survolé, sur le modèle de
   // l'infobulle primitive : un seul élément [role=tooltip], caché tant
   // qu'aucune cible n'est pointée, placé par placerInfobulle contre le point
@@ -82,7 +86,7 @@
   import { placerInfobulle } from '../../primitives/infobulle.js';
   import { effetDe } from '../../raccourcis.js';
   import Pourcentage from './Pourcentage.svelte';
-  import { REMPLISSAGES, TRAITS, TRAIT_CONTOUR_PX, cheminSigne, ligneInfobulle } from './pointage.js';
+  import { REMPLISSAGES, TRAITS, TRAIT_CONTOUR_PX, cheminSigne, lignesInfobulle } from './pointage.js';
 
   let {
     graphique,
@@ -167,11 +171,9 @@
     }
   });
 
-  const ligne = $derived(
-    survole && pointe !== null && infobulle !== null && infobulle.lignes[pointe] !== undefined
-      ? ligneInfobulle(infobulle.colonnes, infobulle.lignes[pointe], format.nombre)
-      : null,
-  );
+  // Les lignes de la cible pointée, [{nom, cellules}], nom null sous la
+  // forme {colonnes, lignes} ; null quand rien ne s'ouvre.
+  const ligne = $derived(survole && pointe !== null && infobulle !== null ? lignesInfobulle(infobulle, pointe, format.nombre) : null);
 
   function pointer(evenement) {
     if (svg === null) return;
@@ -313,20 +315,25 @@
     style:top={place === null ? null : `${place.haut}px`}
   >
     {#if ligne !== null}
-      <dl>
-        {#each ligne as cellule (cellule.cle)}
-          <div class="cellule">
-            <dt>{cellule.libelle}</dt>
-            <dd>
-              {#if cellule.genre === 'pourcentage'}
-                <Pourcentage texte={cellule.texte} compte={cellule.compte} />
-              {:else}
-                {cellule.texte ?? t('format.vide')}
-              {/if}
-            </dd>
-          </div>
-        {/each}
-      </dl>
+      {#each ligne as serie, rang (rang)}
+        {#if serie.nom !== null}
+          <p class="nom-serie">{serie.nom}</p>
+        {/if}
+        <dl>
+          {#each serie.cellules as cellule (cellule.cle)}
+            <div class="cellule">
+              <dt>{cellule.libelle}</dt>
+              <dd>
+                {#if cellule.genre === 'pourcentage'}
+                  <Pourcentage texte={cellule.texte} compte={cellule.compte} />
+                {:else}
+                  {cellule.texte ?? t('format.vide')}
+                {/if}
+              </dd>
+            </div>
+          {/each}
+        </dl>
+      {/each}
     {/if}
   </div>
 </div>
@@ -435,6 +442,17 @@
 
   .infobulle[hidden] {
     display: none;
+  }
+
+  /* Le nom de la série devant sa ligne ; une seconde série s'écarte de la
+     ligne qui la précède. */
+  .nom-serie {
+    margin: 0 0 var(--espace-1);
+    font-weight: bold;
+  }
+
+  dl + .nom-serie {
+    margin-top: var(--espace-2);
   }
 
   dl {

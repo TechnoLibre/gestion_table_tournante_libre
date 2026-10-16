@@ -5,7 +5,8 @@
 // recherche du moteur, et le contrôleur qui la lance depuis la séance.
 //
 // Un exécuteur rend, pour une configuration et des réglages, une exécution :
-// son résultat, une promesse des propositions de rechercher ; ses
+// son résultat, une promesse des propositions de rechercher — de repartir
+// sous un départ ; ses
 // avancements ; son annulation, qui rejette le résultat par ErreurAnnulee,
 // sans résultat partiel. L'exécuteur direct calcule dans le fil, une
 // microtâche après le lancement : il sert les épreuves et le premier
@@ -35,6 +36,19 @@
 // commande enregistrerGeneration, une seule entrée du journal. Le nombre de
 // propositions d'une génération est un réglage, jamais une constante d'ici.
 //
+// Le départ (§ 5.7, C6, C8). generer reçoit, pour une génération dérivée, le
+// départ {id, toursFiges} que l'interface a choisi ; le contrôleur n'en
+// garde rien d'une génération à l'autre. Les refus du départ (refusDuDepart)
+// se posent après ceux de la séance et de la charge, avant la question de la
+// génération longue, dont l'estimation ne distingue pas une dérivée. Sous un
+// départ, l'exécuteur reçoit le plan du départ, par identifiants, et ses
+// tours figés, et calcule par repartir ; l'enregistrement reçoit la
+// dérivation {depart, toursFiges}. Sans départ, ni l'exécuteur ni
+// l'enregistrement ne reçoivent de clé de plus : une génération ordinaire
+// lance rechercher sur les seuls cœurs. Une dérivée identique à son départ,
+// proposition présente sans dérive, est écartée comme toute identique, et
+// comptée aussi à part (identiquesAuDepart).
+//
 // La course (§ 5.10). Chaque proposition du moteur porte ses mouvements
 // évalués et ses points de relevé ; le contrôleur la confie telle quelle à
 // enregistrerGeneration. Ce qui dépend de la machine ne vaut que pour la
@@ -54,12 +68,13 @@
 import { constante } from '../geometrie/constantes.js';
 import { normaliser, nombrePlacesManquantes } from '../moteur/configuration.js';
 import { ErreurAnnulee, ErreurConfiguration } from '../moteur/erreurs.js';
-import { rechercher, verifierReglages } from '../moteur/recherche.js';
+import { rechercher, repartir, verifierReglages } from '../moteur/recherche.js';
 import { verifierInvariants } from '../moteur/verification.js';
 import { GENERATION_PAR_DEFAUT } from '../stockage/document.js';
 import { derive, planDepuisFichier, versFichier } from '../stockage/placements.js';
 import { lireEntier } from './capacite.js';
 import { configurationDe } from './configuration.js';
+import { planDuDepart, refusDuDepart } from './depart.js';
 
 // src/interface reçoit l'annulation d'ici : elle ne joint pas le moteur.
 export { ErreurAnnulee } from '../moteur/erreurs.js';
@@ -193,14 +208,20 @@ export function versErreurGeneration(erreur) {
  *           ne le dit pas
  *
  * @typedef {Object} Executeur
- * @property {(configuration: Object, reglages: Object, options?: {coeurs?: number}) => Execution} lancer
- *           options.coeurs : les cœurs que le calcul peut employer, 1 par défaut
+ * @property {(configuration: Object, reglages: Object, options?: {coeurs?: number,
+ *           depart?: import('../moteur/recherche.js').DepartRecherche|null}) => Execution} lancer
+ *           options.coeurs : les cœurs que le calcul peut employer, 1 par
+ *           défaut ; options.depart : le départ d'une génération dérivée, le
+ *           plan par identifiants et les tours figés, que repartir reçoit ;
+ *           null ou absent, une génération ordinaire, par rechercher
  * @property {number} [coeursDisponibles]   les processeurs logiques du poste ;
  *           1 s'il ne le dit pas
  */
 
 /**
- * L'exécuteur direct : rechercher dans le fil, une microtâche après lancer.
+ * L'exécuteur direct : rechercher dans le fil, une microtâche après lancer ;
+ * repartir sous un départ (options.depart non null), qui lui donne le plan et
+ * les tours figés tels quels.
  * Rien d'autre ne s'exécute pendant la recherche. annuler(), avant ce départ
  * ou depuis un rappel d'avancement, fait lever ErreurAnnulee à la lecture
  * suivante du signal par le moteur : avant la proposition suivante, au plus
@@ -216,7 +237,7 @@ export function versErreurGeneration(erreur) {
 export function creerExecuteurDirect({ coeursDisponibles } = {}) {
   return {
     coeursDisponibles: coeursDe(coeursDisponibles),
-    lancer(configuration, reglages) {
+    lancer(configuration, reglages, { depart = null } = {}) {
       const signal = { aborted: false };
       const abonnes = new Set();
       const progression = (fait, total) => {
@@ -225,7 +246,8 @@ export function creerExecuteurDirect({ coeursDisponibles } = {}) {
       const resultat = Promise.resolve().then(() => {
         exigerReglages(reglages);
         try {
-          return rechercher(configuration, reglages, { signal, progression });
+          if (depart === null) return rechercher(configuration, reglages, { signal, progression });
+          return repartir(configuration, reglages, depart, { signal, progression });
         } catch (erreur) {
           throw versErreurGeneration(erreur);
         }
@@ -370,9 +392,11 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
   }
 
   // Les refus d'avant lancement : les réglages d'abord, puis l'ordre du
-  // contrat ; rend la configuration et son instance quand la génération peut
-  // partir.
-  function exigerLancement(reglages, confirmee) {
+  // contrat, le refus du départ après les places manquantes et avant la
+  // confirmation ; rend la configuration, son instance et le départ du
+  // moteur — plan du départ et copie des tours figés, null sans départ —
+  // quand la génération peut partir.
+  function exigerLancement(reglages, confirmee, depart) {
     exigerReglages(reglages);
     const etat = seance.etat();
     if (etat.evenement === null) throw new ErreurGeneration('AUCUN_EVENEMENT', { remede: null });
@@ -395,20 +419,28 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     if (placesManquantes > 0) {
       throw new ErreurGeneration('PLACES_MANQUANTES', { placesManquantes, remede: versSection('tables') });
     }
+    let departDuMoteur = null;
+    if (depart !== null) {
+      const refusDepart = refusDuDepart(charge, depart);
+      if (refusDepart !== null) throw new ErreurGeneration(refusDepart.code, refusDepart.details);
+      departDuMoteur = { plan: planDuDepart(charge, depart.id), toursFiges: [...depart.toursFiges] };
+    }
     const estimation = estimer(reglages);
     if (!confirmee && estLongue(reglages, estimation)) {
       throw new ErreurGeneration('CONFIRMATION_REQUISE', { estimation, remede: null });
     }
-    return { configuration, instance };
+    return { configuration, instance, departDuMoteur };
   }
 
   // Le calcul confié à l'exécuteur : ses avancements publiés, son annulation
   // par la séance suivie ; rend les propositions et la durée du calcul. Une
   // annulation lève ErreurAnnulee, même quand l'exécuteur a rendu un
-  // résultat entre-temps.
-  async function calculer(configuration, reglages) {
+  // résultat entre-temps. Sans départ, les options du lancer n'ont que coeurs.
+  async function calculer(configuration, reglages, departDuMoteur) {
     const debut = horloge.instant();
-    execution = executeur.lancer(configuration, reglages, { coeurs: coeursPour(reglages.nombre) });
+    const options = { coeurs: coeursPour(reglages.nombre) };
+    if (departDuMoteur !== null) options.depart = departDuMoteur;
+    execution = executeur.lancer(configuration, reglages, options);
     const employes = coeursDe(execution.coeurs);
     const desabonner = execution.surAvancement((fait, total) => publier({ fait, total }));
     const desannuler = seance.surAnnulation(() => annulerAvec('seance'));
@@ -428,8 +460,10 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
   // rang compris — la place de la proposition dans la suite des graines du
   // lancement, qui n'est l'identifiant d'aucune proposition enregistrée ; puis sans
   // celles dont le plan est celui d'une proposition présente sans dérive, ou
-  // d'une proposition déjà gardée de ce lancement.
-  function trier(propositions, configuration, instance) {
+  // d'une proposition déjà gardée de ce lancement. auDepart compte, parmi
+  // les écartées, celles dont le plan est celui du départ ; 0 sans départ,
+  // planDuDepartLu valant alors null.
+  function trier(propositions, configuration, instance, departDuMoteur) {
     const ordonnees = [...propositions].sort((a, b) => a.id - b.id);
     for (const proposition of ordonnees) {
       const violations = verifierInvariants(instance, proposition.plan);
@@ -441,14 +475,19 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     const presents = new Set(
       charge.propositions.filter((p) => derive(p, charge).length === 0).map((p) => JSON.stringify(planDepuisFichier(p))),
     );
+    const planDuDepartLu = departDuMoteur === null ? null : JSON.stringify(departDuMoteur.plan);
     const gardees = [];
+    let auDepart = 0;
     for (const proposition of ordonnees) {
       const plan = planRange(proposition, configuration, produitVersion);
-      if (presents.has(plan)) continue;
+      if (presents.has(plan)) {
+        if (plan === planDuDepartLu) auDepart += 1;
+        continue;
+      }
       presents.add(plan);
       gardees.push(proposition);
     }
-    return { gardees, identiques: ordonnees.length - gardees.length };
+    return { gardees, identiques: ordonnees.length - gardees.length, identiquesAuDepart: auDepart };
   }
 
   // Les identifiants que l'enregistrement a donnés : ceux des propositions
@@ -471,13 +510,16 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
     }
   }
 
-  async function generer(reglages, { confirmee = false } = {}) {
-    const { configuration, instance } = exigerLancement(reglages, confirmee);
+  async function generer(reglages, { confirmee = false, depart = null } = {}) {
+    const { configuration, instance, departDuMoteur } = exigerLancement(reglages, confirmee, depart);
+    // Le départ rendu et la dérivation enregistrée : une copie de ce qui est
+    // reçu, prise une fois les refus passés.
+    const departRendu = depart === null ? null : { id: depart.id, toursFiges: [...departDuMoteur.toursFiges] };
     graine = (reglages.graine + 1) % GRAINES;
     publier({ enCours: true, fait: 0, total: reglages.nombre * reglages.arret, annulee: null });
     seance.debuterCalcul();
     try {
-      const { propositions, dureeMs, coeurs: employes } = await calculer(configuration, reglages);
+      const { propositions, dureeMs, coeurs: employes } = await calculer(configuration, reglages, departDuMoteur);
       mesure = {
         dureeMs,
         mouvements: reglages.nombre * reglages.arret,
@@ -486,16 +528,21 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
         arret: reglages.arret,
         coeurs: employes,
       };
-      const { gardees, identiques } = trier(propositions, configuration, instance);
-      if (gardees.length === 0) return { ajoutees: [], identiques, dureeMs };
+      const { gardees, identiques, identiquesAuDepart } = trier(propositions, configuration, instance, departDuMoteur);
+      const issue = { identiques, identiquesAuDepart, dureeMs, depart: departRendu };
+      if (gardees.length === 0) return { ajoutees: [], ...issue };
       const avant = new Set(seance.etat().charge.propositions.map(({ id }) => id));
-      await seance.executer('enregistrerGeneration', { propositions: gardees, configuration, produitVersion });
+      const enregistrement = { propositions: gardees, configuration, produitVersion };
+      if (departRendu !== null) {
+        enregistrement.derivation = { depart: departRendu.id, toursFiges: [...departRendu.toursFiges] };
+      }
+      await seance.executer('enregistrerGeneration', enregistrement);
       const charge = seance.etat().charge;
       const ajoutees = ajouteesDans(charge, avant, gardees);
       let evalues = 0;
       for (const proposition of propositions) evalues += proposition.evalues;
       garder(charge, ajoutees, Object.freeze({ dureeMs, coeurs: employes, evalues, nombre: propositions.length }));
-      return { ajoutees, identiques, dureeMs };
+      return { ajoutees, ...issue };
     } finally {
       seance.finirCalcul();
       publier({ enCours: false });
@@ -578,12 +625,23 @@ export function creerControleurGeneration({ seance, executeur, horloge, produitV
       return { ...gardee.resume };
     },
     /**
-     * Lance une génération et l'enregistre : { ajoutees, identiques, dureeMs }.
+     * Lance une génération et l'enregistre : { ajoutees, identiques,
+     * identiquesAuDepart, dureeMs, depart }. Options : confirmee ; depart,
+     * {id, toursFiges} — l'identifiant d'une proposition de la charge et ses
+     * tours figés, une liste d'entiers ≥ 1 strictement croissante —, ou null
+     * pour une génération ordinaire. Un tour figé au-delà de la soirée est
+     * le refus TOUR_FIGE_HORS_SOIREE de refusDuDepart ; une autre forme de
+     * toursFiges, absente comprise, lève la TypeError de refusDuDepart, au
+     * rang de son refus dans l'ordre ci-dessous, sans lancement ni écriture.
+     * identiquesAuDepart : les propositions calculées égales au plan du
+     * départ, écartées et comptées aussi dans identiques ; 0 sans départ.
+     * depart : une copie du départ reçu, null sans lui.
      * Refuse avant tout lancement, par ErreurGeneration, dans cet ordre :
      * REGLAGE_HORS_DOMAINE {reglage} ; AUCUN_EVENEMENT ; le refus courant de
      * la séance ; GENERATION_EN_COURS ;
      * AUCUN_PARTICIPANT ; AUCUNE_TABLE ; le refus de normaliser ;
-     * PLACES_MANQUANTES ; CONFIRMATION_REQUISE {estimation}, que
+     * PLACES_MANQUANTES ; sous un départ, le refus de refusDuDepart, son code
+     * et ses détails, remède compris ; CONFIRMATION_REQUISE {estimation}, que
      * confirmee lève. Après la recherche : GENERATION_INVARIANT_VIOLE
      * {rang, violations}, puis ce
      * qu'executer lève, tel quel. Annulée : ErreurAnnulee.

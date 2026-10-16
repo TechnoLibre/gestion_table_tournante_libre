@@ -51,21 +51,49 @@
 // la configuration de la charge reçue. La génération d'où vient la
 // proposition, durée et cœurs, vient de la séance aussi (generationDe) ;
 // rien ici ne lit l'horloge.
+//
+// La comparaison de deux placements (§ 12.10.6, D56 à D67, D83 à D85) lit
+// deux lignes de la table, jamais un détail : comparerPlacements ne
+// diagnostique ni ne mesure rien, et tient chaque nombre d'une fonction du
+// moteur — profils de manque, rangs, escalier, tête des colonnes, planchers,
+// palier qui départage. La table porte pour elle deux champs de la
+// configuration, calculés une fois par evaluer : le plafond a priori par
+// personne et le diagnostic, dont les planchers des colonnes se lisent.
+// candidatsDeComparaison donne les placements qu'un second côté peut
+// prendre et son défaut, comparaisonOfferte dit s'il en existe deux.
 import { cleNormalisee } from '../csv/normalisation.js';
 import { constante } from '../geometrie/constantes.js';
-import { classer } from '../moteur/classement.js';
+import { classer, premierPalierQuiDepartage } from '../moteur/classement.js';
 import { SANS_GROUPE, STATUT, figerConfiguration, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
 import { mesurer } from '../moteur/indicateurs.js';
-import { ecartsAuPlafondAPriori, minimumAtteint, troisChiffres } from '../moteur/manque.js';
+import {
+  borneHaute,
+  comparerProfils,
+  ecartsAuPlafondAPriori,
+  escalierDuManque,
+  manques,
+  minimumAtteint,
+  profilManque,
+  troisChiffres,
+  valeursDistinctes,
+} from '../moteur/manque.js';
 import { rencontresDe } from '../moteur/paires.js';
 import { borneDiversite, plafondsRealises } from '../moteur/plafond.js';
-import { detailler, planchersParGroupe, profilRencontres } from '../moteur/qualite.js';
+import {
+  detailler,
+  planchersAtteints,
+  planchersDesColonnes,
+  planchersParGroupe,
+  profilRencontres,
+  teteDesColonnes,
+} from '../moteur/qualite.js';
 import { verifierIndicateurs, verifierInvariants } from '../moteur/verification.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { derive, deriveSansRevalider, fautes, planDepuisFichier, planSansRevalider } from '../stockage/placements.js';
 import { configurationDe } from './configuration.js';
+import { derivationDe } from './depart.js';
 import { nomAffiche } from './personnes.js';
 
 // Les modes des objectifs, le défaut en tête, et les cases qui font compter
@@ -103,6 +131,12 @@ export { CASES, MODES_OBJECTIFS } from '../moteur/criteres.js';
  *           l'état de chaque critère, instance.etatCriteres, dans l'ordre du
  *           registre
  * @property {{retours: number, ancrages: number}} imposes
+ * @property {number[]|null} plafondsAPriori   le plafond a priori de chaque
+ *           personne, dans l'ordre de population, une liste ; null quand il
+ *           est inconnu
+ * @property {import('../moteur/diagnostic.js').Diagnostic} diagnostic
+ *           celui de la configuration, d'où se lisent les planchers des
+ *           colonnes de la comparaison
  */
 
 // Le plus grand élément d'une liste ; null pour une liste vide ou absente.
@@ -157,6 +191,13 @@ const nonMesuree = (id, statut, raisons) => ({
  * charge. Chaque proposition et le retenu se valident une seule fois, par
  * fautes : fautif, le placement s'arrête là ; sans faute, sa dérive et son
  * plan se lisent sans seconde validation.
+ *
+ * La table porte deux champs de la configuration, pour la comparaison :
+ * plafondsAPriori et le diagnostic qu'evaluer calcule déjà. Les planchers
+ * des colonnes ne s'y calculent pas : planchersDesColonnes appartient au
+ * détail d'un placement, que la table n'atteint jamais ;
+ * comparerPlacements les tire du diagnostic de la table, une fois par
+ * appel.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {{plafondsAPriori?: 'calcul'|null}} [options]
@@ -214,6 +255,8 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
     classement,
     criteres: instance.etatCriteres,
     imposes: { retours: diagnostic.retoursImposes, ancrages: diagnostic.ancragesImposantRetours },
+    plafondsAPriori: aPriori === null ? null : Array.from(aPriori),
+    diagnostic,
   };
 }
 
@@ -365,6 +408,12 @@ export function nettoyage(table, n) {
  *           à partir de 0 ; objectifs porte en plus critere, {coche,
  *           sansObjet} du critère des objectifs
  * @property {CourseDetaillee|null} course
+ * @property {{depart: number, toursFiges: number[], departPresent: boolean}|null} derivation
+ *           la filiation de la proposition dont la course est montrée
+ *           (derivationDe) — la proposition mesurée, ou celle d'où vient un
+ *           retenu non ajusté —, quel que soit le statut ; null sans elle
+ *           (retenu ajusté, ou dont la proposition est effacée) et pour une
+ *           proposition sans départ
  * @property {object[]} refusDessin   verifierIndicateurs à quatre paramètres,
  *           chaque violation complétée de participant (index) et
  *           d'appartenance (groupe)
@@ -617,10 +666,10 @@ function enIdentifiants(instance, brut, critere) {
   };
 }
 
-// Le détail d'une source qui ne se compare pas : ses raisons, chaque champ
-// de mesure à null.
-function nonDetaille(id, statut, raisons) {
-  const detail = { id, statut, raisons };
+// Le détail d'une source qui ne se compare pas : ses raisons, sa
+// filiation, chaque champ de mesure à null.
+function nonDetaille(id, statut, raisons, derivation) {
+  const detail = { id, statut, raisons, derivation };
   for (const champ of CHAMPS_DE_MESURE) detail[champ] = null;
   detail.refusDessin = [];
   return detail;
@@ -648,6 +697,10 @@ function placementDe(charge, id) {
  * lecture du plan, la matrice seulement jusqu'à SEUIL_MATRICE_PARTICIPANTS
  * personnes, dans l'ordre du profil ; puis la garde à quatre paramètres,
  * planchers des collisions et des objectifs par tour compris (D42).
+ *
+ * La filiation (D76, C23) : derivation, celle de la proposition dont la
+ * course est montrée ; un retenu non ajusté venu d'une dérivée porte donc
+ * celle de sa proposition d'origine.
  *
  * La course (§ 12.14, D40) : celle de la proposition, ou, pour un retenu,
  * celle de la proposition d'où il vient quand il en porte encore le
@@ -686,10 +739,12 @@ export function detaillerQualite(charge, id, options = {}) {
   if (placement === null) return null;
   const configuration = figerConfiguration(configurationDe(charge));
   const instance = normaliser(configuration);
+  const origine = id === 'retenu' ? origineDuRetenu(charge) : placement;
+  const derivation = origine === null ? null : derivationDe(charge, origine.id);
   const sesFautes = fautes(placement);
-  if (sesFautes.length > 0) return nonDetaille(id, 'fautif', sesFautes);
+  if (sesFautes.length > 0) return nonDetaille(id, 'fautif', sesFautes, derivation);
   const raisons = deriveSansRevalider(placement, charge);
-  if (raisons.length > 0) return nonDetaille(id, 'derive', raisons);
+  if (raisons.length > 0) return nonDetaille(id, 'derive', raisons, derivation);
 
   const diagnostic = diagnostiquerLa(configuration);
   const aPriori = plafondsAPriori === 'calcul' ? diagnostic.plafondAPriori.parPersonne : null;
@@ -724,7 +779,6 @@ export function detaillerQualite(charge, id, options = {}) {
 
   const { criteresAppliques } = classer([{ id: 1, mesures, plafondsAPriori: aPriori }], compilationDe(instance));
   const indicateurs = indicateursDe(criteresAppliques);
-  const origine = id === 'retenu' ? origineDuRetenu(charge) : placement;
   const course = origine === null || courseDe === null ? null : courseDe(origine.id);
   const parId = new Map(charge.participants.map((personne) => [personne.id, personne]));
   const numeroDe = new Map(charge.tables.map((table) => [table.id, table.numero]));
@@ -734,6 +788,7 @@ export function detaillerQualite(charge, id, options = {}) {
     id,
     statut: 'comparable',
     raisons: [],
+    derivation,
     population: { mesuree: instance.N, exclue: charge.participants.filter(({ exclu }) => exclu).length },
     T: instance.T,
     R: instance.R,
@@ -811,4 +866,327 @@ export function rencontresDePersonne(charge, id, personne) {
     tours: tours.map(({ tour, t }) => ({ tour, table: instance.idsTables[t] })),
   }));
   return rendu('mesuree', lignes);
+}
+
+// --- La comparaison de deux placements (§ 12.10.6, D56 à D67, D83 à D85) ---
+
+/**
+ * @typedef {number|'retenu'} ClePlacement  l'identifiant d'une proposition,
+ *          ou 'retenu'
+ *
+ * @typedef {Object} LigneManque  un rang du profil de manque d'un côté
+ * @property {number} id
+ * @property {number} manque
+ * @property {number} rencontres
+ * @property {number} plafondRealise
+ * @property {number|null} plafondAPriori  null quand il est inconnu
+ *
+ * @typedef {Object} Cote  un des deux placements comparés
+ * @property {ClePlacement} cle
+ * @property {number|null} rang   sa place au classement, à partir de 1 ;
+ *           celle de sa proposition pour un retenu non ajusté, null pour un
+ *           retenu ajusté
+ * @property {boolean} ajuste     vrai pour un retenu ajusté
+ * @property {{depart: number, toursFiges: number[], departPresent: boolean}|null} derivation
+ *           sa filiation : celle de la proposition, ou de la proposition
+ *           d'origine d'un retenu non ajusté ; null sinon
+ * @property {{rang1: {id: number, rencontres: number, plafondRealise: number,
+ *            plafondAPriori: number|null, pourcent: number|null}|null,
+ *            manque: {id: number, plafondRealise: number}|null,
+ *            objectifs: {id: number, servis: number, possibles: number, pourcent: number|null}|null,
+ *            soiree: {servis: number, possibles: number, pourcent: number|null, jamaisServies: number}|null,
+ *            planchers: Record<string, {plancher: number, atteint: boolean}|null>}} bornes
+ *           ces champs de detail.bornes, de même forme et de mêmes valeurs
+ *
+ * @typedef {Object} ComparaisonPlacements
+ * @property {Cote} a
+ * @property {Cote} b
+ * @property {'comparable'|'refusDessin'|'populationsDifferentes'} statut
+ * @property {{cote: 'a'|'b', violations: object[]}|null} refusDessin
+ *           le premier côté dont la ligne porte un refus de dessin
+ * @property {{seulementA: number[], seulementB: number[]}|null} populations
+ *           sous 'populationsDifferentes', les personnes d'un seul côté,
+ *           croissantes
+ * Les champs qui suivent valent null — trace faux — hors de 'comparable'.
+ * @property {{a: LigneManque[], b: LigneManque[]}|null} profils
+ * @property {{a: number, b: number, egalite: number, bascule: number|null,
+ *            domine: 'a'|'b'|null}|null} rangs
+ * @property {number|null} borneHaute
+ * @property {number|null} valeursDistinctes
+ * @property {boolean} trace   valeursDistinctes ≥ VALEURS_MANQUE_COURBE
+ * @property {Array<{valeur: number, a: {effectif: number, cumul: number},
+ *            b: {effectif: number, cumul: number}}>|null} escalier
+ * @property {{palier: {rang: number, criteres: string[]}|null, retenu: boolean}|null} indiscernables
+ *           quand les deux profils sont égaux rang pour rang
+ */
+
+const croissant = (x, y) => x - y;
+
+// Le seuil de valeurs distinctes sous lequel la comparaison écrit une phrase
+// au lieu de tracer, nommé dans le registre des constantes (§ 12.6,
+// § 19.10, D62) : un nom de constante, que la table des libellés ne connaît
+// pas.
+const VALEURS_COURBE = Object.freeze({ nom: 'VALEURS_MANQUE_COURBE' });
+
+// Le côté que nomme la domination de comparerProfils.
+const COTE_QUI_DOMINE = new Map([
+  ['A', 'a'],
+  ['B', 'b'],
+]);
+
+// La ligne de la table du placement cle : celle du retenu pour 'retenu',
+// celle de la proposition de cet identifiant sinon ; null sans elle.
+function ligneDuPlacement(table, cle) {
+  if (cle === 'retenu') return table.retenu;
+  return table.propositions.find(({ id }) => id === cle) ?? null;
+}
+
+// Le placement identique à cle : la proposition d'origine d'un retenu non
+// ajusté pour 'retenu', le retenu non ajusté pour sa proposition d'origine ;
+// null sinon. ajuste est retenuAjuste(charge).
+function identiqueA(charge, cle, ajuste) {
+  if (charge.retenu === null || ajuste) return null;
+  if (cle === 'retenu') return charge.retenu.proposition;
+  return cle === charge.retenu.proposition ? 'retenu' : null;
+}
+
+// La filiation du placement cle : celle de la proposition, ou de la
+// proposition d'origine d'un retenu non ajusté ; null pour un retenu
+// ajusté, et pour 'retenu' sans retenu. ajuste est retenuAjuste(charge).
+function filiationDe(charge, cle, ajuste) {
+  if (cle !== 'retenu') return derivationDe(charge, cle);
+  return charge.retenu === null || ajuste ? null : derivationDe(charge, charge.retenu.proposition);
+}
+
+// La place au classement du placement cle, à partir de 1 : celle de sa
+// proposition pour un retenu non ajusté ; null pour un retenu ajusté et
+// hors du classement.
+function rangDe(charge, table, cle, ajuste) {
+  if (cle === 'retenu' && ajuste) return null;
+  const rang = table.classement.ordre.indexOf(cle === 'retenu' ? charge.retenu.proposition : cle);
+  return rang < 0 ? null : rang + 1;
+}
+
+/**
+ * Vrai quand la page de qualité a deux placements mesurables et distincts à
+ * comparer (§ 12, § 12.10.6, D85, C14) : parmi les propositions comparables
+ * et le retenu dont la ligne se compare, un retenu non ajusté et sa
+ * proposition d'origine comptent pour un. La commande « Comparer » d'une
+ * ligne ne s'offre qu'à cette condition. Ne modifie rien.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {TableEvaluation} table   evaluer(charge)
+ * @returns {boolean}
+ */
+export function comparaisonOfferte(charge, table) {
+  const comparables = table.propositions.filter(({ statut }) => statut === 'comparable').map(({ id }) => id);
+  const retenu = table.retenu !== null && table.retenu.statut === 'comparable';
+  const distincts = comparables.length + (retenu && !comparables.includes(identiqueA(charge, 'retenu', retenuAjuste(charge))) ? 1 : 0);
+  return distincts >= 2;
+}
+
+/**
+ * Les placements que le second côté de la comparaison peut prendre quand le
+ * premier est a (§ 12.10.6, D56, D58, C20) : le retenu d'abord, quand sa
+ * ligne se compare, puis les propositions comparables dans l'ordre du
+ * classement, chacune avec sa place (rangDe), moins a et moins le placement
+ * identique à a — un retenu non ajusté et sa proposition d'origine ne se
+ * comparent pas l'un à l'autre. a qui n'est pas un placement mesurable ne
+ * retire que lui-même.
+ *
+ * defaut est le premier de ces candidats qui existe parmi : le départ de a
+ * quand a est une dérivée — un retenu non ajusté a la filiation de sa
+ * proposition —, la proposition d'origine de a quand a est un retenu
+ * ajusté, la première proposition candidate du classement, le retenu ; null
+ * sans candidat. Ne modifie rien.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {TableEvaluation} table   evaluer(charge)
+ * @param {ClePlacement} a
+ * @returns {{candidats: Array<{cle: ClePlacement, rang: number|null}>, defaut: ClePlacement|null}}
+ */
+export function candidatsDeComparaison(charge, table, a) {
+  const ajuste = retenuAjuste(charge);
+  const identique = identiqueA(charge, a, ajuste);
+  const exclu = (cle) => cle === a || cle === identique;
+  const candidats = [];
+  if (table.retenu !== null && table.retenu.statut === 'comparable' && !exclu('retenu')) {
+    candidats.push({ cle: 'retenu', rang: rangDe(charge, table, 'retenu', ajuste) });
+  }
+  for (const { id, statut } of table.propositions) {
+    if (statut === 'comparable' && !exclu(id)) candidats.push({ cle: id, rang: rangDe(charge, table, id, ajuste) });
+  }
+  const estCandidat = (cle) => candidats.some((candidat) => candidat.cle === cle);
+  const depart = filiationDe(charge, a, ajuste)?.depart ?? null;
+  const origine = a === 'retenu' && ajuste && charge.retenu !== null ? charge.retenu.proposition : null;
+  const premiere = candidats.find(({ cle }) => cle !== 'retenu')?.cle ?? null;
+  const defaut = [depart, origine, premiere, 'retenu'].find((cle) => cle !== null && estCandidat(cle)) ?? null;
+  return { candidats, defaut };
+}
+
+// Un côté de la comparaison, lu dans sa ligne de la table : ses personnes,
+// les identifiants que son placement déclare, croissants — ceux de la
+// population sur un état sain, dans l'ordre de ses mesures ; son profil de
+// manque complété des rencontres et du plafond a priori de chacun ; ses
+// bornes. RangeError quand cle ne désigne pas un placement mesurable ; et,
+// par manques et profilManque, qui exigent une case par personne des
+// rencontres et des plafonds réalisés, quand la ligne n'a pas une case par
+// personne du placement.
+function coteDe({ charge, table, instance, planchers, ajuste }, cle) {
+  const ligne = ligneDuPlacement(table, cle);
+  const placement = placementDe(charge, cle);
+  if (ligne === null || ligne.statut !== 'comparable' || placement === null) {
+    throw new RangeError(`comparerPlacements : ${JSON.stringify(cle)} n'est pas un placement mesurable`);
+  }
+  const { mesures, plafondsRealises: realises, troisChiffres: chiffres, violations } = ligne;
+  const ids = [...placement.participants].sort(croissant);
+  const personnes = { N: ids.length, ids };
+  const aPriori = table.plafondsAPriori;
+  const indexDe = new Map(ids.map((id, p) => [id, p]));
+  const profil = profilManque(personnes, manques(realises, mesures.rencontres), realises).map(({ id, manque, plafondRealise }) => {
+    const p = indexDe.get(id);
+    return { id, manque, rencontres: mesures.rencontres[p], plafondRealise, plafondAPriori: aPriori === null ? null : aPriori[p] };
+  });
+  const tete = teteDesColonnes(personnes, mesures, realises);
+  const planchersValides = violations.length === 0 && mesures.toursAssis.every((assis) => assis === instance.R);
+  return {
+    ligne,
+    ids,
+    profil,
+    cote: {
+      cle,
+      rang: rangDe(charge, table, cle, ajuste),
+      ajuste: cle === 'retenu' && ajuste,
+      derivation: filiationDe(charge, cle, ajuste),
+      bornes: {
+        rang1:
+          tete.rang1 === null
+            ? null
+            : {
+                id: ids[tete.rang1.p],
+                rencontres: tete.rang1.rencontres,
+                plafondRealise: tete.rang1.plafondRealise,
+                plafondAPriori: aPriori === null ? null : aPriori[tete.rang1.p],
+                pourcent: tete.rang1.pourcent,
+              },
+        manque: profil.length === 0 ? null : { id: profil[0].id, plafondRealise: profil[0].plafondRealise },
+        objectifs:
+          tete.objectifs === null
+            ? null
+            : { id: ids[tete.objectifs.p], servis: tete.objectifs.servis, possibles: tete.objectifs.possibles, pourcent: tete.objectifs.pourcent },
+        soiree: tete.soiree,
+        planchers: planchersAtteints(planchers, { mesures, troisChiffres: chiffres, planchersValides }),
+      },
+    },
+  };
+}
+
+/**
+ * La comparaison de deux placements de la charge (§ 12.10.6, § 12.10.7,
+ * D60 à D67, D83, C17, C20, C22, C29) : a, la source de la page, et b, le
+ * second placement, chacun une proposition ou le retenu.
+ *
+ * Les deux lignes se lisent dans table, telles qu'evaluer les a mesurées :
+ * ni diagnostic, ni mesure, ni détail, ni cache. L'instance et la
+ * compilation se refont à chaque appel, par normaliser(configurationDe) et
+ * compilationDe ; les planchers des colonnes, par planchersDesColonnes sur
+ * table.diagnostic, une fois par appel et communs aux deux côtés — la
+ * table porte le diagnostic et non les planchers, qu'evaluer ne calcule
+ * pas. Chaque côté porte ses bornes — teteDesColonnes pour le rang 1, les
+ * objectifs et la soirée, le pire cas de son placement et jamais une
+ * moyenne ; la tête de son profil de manque ; planchersAtteints sur sa
+ * ligne —, personnes sous id.
+ *
+ * Le statut se décide dans cet ordre :
+ * - refusDessin, quand la ligne de l'un des deux porte un refus de dessin
+ *   (§ 12.10.5, D65) : les deux se jugent sur le même test, et le premier
+ *   côté qui le porte est nommé ;
+ * - populationsDifferentes, quand comparerProfils rend comparable faux :
+ *   les deux placements ne déclarent pas les mêmes personnes (D64) ;
+ * - comparable : profils (profilManque), rangs (comparerProfils, domine
+ *   traduit en côté), borneHaute, valeursDistinctes, trace (au moins
+ *   VALEURS_MANQUE_COURBE valeurs réunies), escalier (escalierDuManque) ;
+ *   indiscernables quand les deux profils sont égaux rang pour rang — entre
+ *   deux propositions, le premier palier qui les départage
+ *   (premierPalierQuiDepartage, null : l'identifiant) ; avec le retenu, qui
+ *   ne se classe pas, palier null et retenu vrai (D63).
+ * Ne modifie rien.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {TableEvaluation} table   evaluer(charge)
+ * @param {ClePlacement} a
+ * @param {ClePlacement} b
+ * @returns {ComparaisonPlacements}
+ * @throws {RangeError} a égal à b, ou un côté qui n'est pas un placement
+ *         mesurable ; jamais pour deux placements identiques, un retenu non
+ *         ajusté et sa proposition
+ * @throws {ErreurConfiguration} la configuration ne se normalise pas
+ */
+export function comparerPlacements(charge, table, a, b) {
+  if (a === b) throw new RangeError(`comparerPlacements : deux fois le placement ${JSON.stringify(a)}`);
+  const instance = normaliser(configurationDe(charge));
+  const contexte = { charge, table, instance, planchers: planchersDesColonnes(instance, table.diagnostic), ajuste: retenuAjuste(charge) };
+  const cotes = [coteDe(contexte, a), coteDe(contexte, b)];
+  const [lu, autre] = cotes;
+  const sansTrace = {
+    refusDessin: null,
+    populations: null,
+    profils: null,
+    rangs: null,
+    borneHaute: null,
+    valeursDistinctes: null,
+    trace: false,
+    escalier: null,
+    indiscernables: null,
+  };
+  const refuse = cotes.findIndex(({ ligne }) => ligne.refusDessin.length > 0);
+  if (refuse >= 0) {
+    return {
+      a: lu.cote,
+      b: autre.cote,
+      statut: 'refusDessin',
+      ...sansTrace,
+      refusDessin: { cote: refuse === 0 ? 'a' : 'b', violations: [...cotes[refuse].ligne.refusDessin] },
+    };
+  }
+  const rangs = comparerProfils(lu.profil, autre.profil);
+  if (!rangs.comparable) {
+    const seulement = (ids, autres) => ids.filter((id) => !autres.includes(id));
+    return {
+      a: lu.cote,
+      b: autre.cote,
+      statut: 'populationsDifferentes',
+      ...sansTrace,
+      populations: { seulementA: seulement(lu.ids, autre.ids), seulementB: seulement(autre.ids, lu.ids) },
+    };
+  }
+  const distinctes = valeursDistinctes(lu.profil, autre.profil);
+  let indiscernables = null;
+  if (rangs.rangsA === 0 && rangs.rangsB === 0) {
+    const entree = ({ ligne }, id) => ({ id, mesures: ligne.mesures, plafondsAPriori: table.plafondsAPriori });
+    indiscernables =
+      a === 'retenu' || b === 'retenu'
+        ? { palier: null, retenu: true }
+        : { palier: premierPalierQuiDepartage(entree(lu, a), entree(autre, b), compilationDe(instance)), retenu: false };
+  }
+  return {
+    a: lu.cote,
+    b: autre.cote,
+    statut: 'comparable',
+    refusDessin: null,
+    populations: null,
+    profils: { a: lu.profil, b: autre.profil },
+    rangs: {
+      a: rangs.rangsA,
+      b: rangs.rangsB,
+      egalite: rangs.egalite,
+      bascule: rangs.rangBascule,
+      domine: COTE_QUI_DOMINE.get(rangs.domine) ?? null,
+    },
+    borneHaute: borneHaute(lu.profil, autre.profil),
+    valeursDistinctes: distinctes,
+    trace: distinctes >= constante(VALEURS_COURBE.nom),
+    escalier: escalierDuManque(lu.profil, autre.profil),
+    indiscernables,
+  };
 }

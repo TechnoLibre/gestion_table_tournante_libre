@@ -11,11 +11,12 @@
 import assert from 'node:assert/strict';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
+import { PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { texteLivre } from '../demo/livrees.js';
 import { constante } from '../geometrie/constantes.js';
 import { normaliser } from '../moteur/configuration.js';
 import { ErreurAnnulee as ErreurAnnuleeDuMoteur, ErreurConfiguration } from '../moteur/erreurs.js';
-import { rechercher, regenerer } from '../moteur/recherche.js';
+import { rechercher, regenerer, repartir } from '../moteur/recherche.js';
 import { verifierInvariants } from '../moteur/verification.js';
 import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
@@ -25,6 +26,7 @@ import { SUFFIXES } from '../stockage/noms.js';
 import { derive, planDepuisFichier, versFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { configurationDe } from './configuration.js';
+import { planDuDepart } from './depart.js';
 import { ErreurCommande } from './erreurs.js';
 import { creerExecuteurTravailleur } from './executeur_travailleur.js';
 import {
@@ -153,12 +155,13 @@ function executeurManuel({ differer = false, coeursDisponibles } = {}) {
   };
 }
 
-// Un exécuteur qui calcule par le moteur, puis transforme la liste rendue.
+// Un exécuteur qui calcule par le moteur, options du lancer comprises, puis
+// transforme la liste rendue.
 function executeurTransforme(transformer) {
   const direct = creerExecuteurDirect();
   return {
-    lancer(configuration, reglages) {
-      const execution = direct.lancer(configuration, reglages);
+    lancer(configuration, reglages, options) {
+      const execution = direct.lancer(configuration, reglages, options);
       return { ...execution, resultat: execution.resultat.then((propositions) => transformer(propositions, configuration)) };
     },
   };
@@ -1098,19 +1101,25 @@ describe("génération : l'estimation et la génération longue (§ 5.10)", () =
 
 // Une fabrique de travailleurs qui calculent par brancherTravailleur, le
 // vrai côté travailleur : la proposition de rang r rend sa réponse après
-// (8 − r) tours de la file des microtâches, et les derniers rangs
-// s'achèvent ainsi avant les premiers.
-function travailleursCalculants() {
+// attente(r) tours de la file des microtâches. Par défaut (8 − r), les
+// derniers rangs s'achèvent avant les premiers.
+const A_REBOURS = (rang) => 8 - rang;
+// Les rangs du milieu d'abord : 3, 2, puis 1, puis 4 ; quatre rangs au plus,
+// un rang de plus lève dans travailleursCalculants.
+const MILIEU_D_ABORD = (rang) => [4, 1, 0, 6][rang - 1];
+
+function travailleursCalculants(attente = A_REBOURS) {
   return () => {
     const travailleur = {
       onmessage: null,
       termine: false,
       postMessage(message) {
         const copie = structuredClone(message);
-        let attente = 8 - copie.rang;
+        let restants = attente(copie.rang);
+        if (!Number.isSafeInteger(restants) || restants < 0) throw new RangeError(`attente du rang ${copie.rang} : ${restants}`);
         const tour = () => {
-          if (attente > 0) {
-            attente -= 1;
+          if (restants > 0) {
+            restants -= 1;
             return Promise.resolve().then(tour);
           }
           if (travailleur.termine) return undefined;
@@ -1649,7 +1658,12 @@ describe('génération : la course, et la génération gardée pour la séance (
   test("les exécuteurs direct et à fils rendent la même course à la séance, quel que soit l'ordre d'achèvement des fils", async () => {
     const executeurs = [
       ['direct', () => creerExecuteurDirect(), null],
-      ['quatre cœurs', () => creerExecuteurTravailleur(travailleursCalculants(), { coeursDisponibles: 4 }), 4],
+      ['quatre cœurs à rebours', () => creerExecuteurTravailleur(travailleursCalculants(A_REBOURS), { coeursDisponibles: 4 }), 4],
+      [
+        "quatre cœurs, le milieu d'abord",
+        () => creerExecuteurTravailleur(travailleursCalculants(MILIEU_D_ABORD), { coeursDisponibles: 4 }),
+        4,
+      ],
     ];
     const recus = [];
     for (const [nom, creer, coeurs] of executeurs) {
@@ -1667,8 +1681,9 @@ describe('génération : la course, et la génération gardée pour la séance (
       const { evalues, nombre } = montage.controleur.generationDe(1);
       assert.deepEqual([evalues, nombre], [sommeEvalues(recus.at(-1)), 4], nom);
     }
-    assert.equal(recus.length, 2);
+    assert.equal(recus.length, 3);
     assert.deepStrictEqual(recus[1], recus[0]);
+    assert.deepStrictEqual(recus[2], recus[0]);
     assert.ok(recus[0].every(({ releves }) => releves.length === 4));
   });
 
@@ -1733,5 +1748,314 @@ describe('génération : la course, et la génération gardée pour la séance (
       }
       assert.equal(ici.controleur.generationDe(1), null, champ);
     }
+  });
+});
+
+// --- La génération dérivée (§ 5.7, § 5.10, C6, C8, C24) ---------------------------------
+
+// Le plan d'un départ loin du plan parfait : la première proposition de la
+// petite démonstration à un compte court, sous la graine donnée.
+const planCourt = (graine) => rechercher(configurationDe(chargeDemo('petite')), { graine, arret: 40, nombre: 1 })[0].plan;
+
+// La petite démonstration, plan proposé, qui porte les propositions données,
+// chacune [id, plan, derivation] mise en forme de fichier par versFichier —
+// derivation {depart, toursFiges}, absente pour une proposition ordinaire ;
+// le compteur passe au-delà de la dernière. attribuerSieges règle
+// l'événement et chaque proposition.
+function chargeAvecPropositions(entrees, { attribuerSieges = false } = {}) {
+  const charge = chargeDemo('petite');
+  charge.evenement.etat = 'propose';
+  charge.reglages.attribuerSieges = attribuerSieges;
+  const configuration = configurationDe(charge);
+  charge.propositions = entrees.map(([id, plan, derivation = null]) =>
+    versFichier({ id, graine: 4_000 + id, arret: 40, historique: 1000, plan }, configuration, {
+      produitVersion: V1,
+      attribuerSieges,
+      decalage: 0,
+      derivation,
+    }),
+  );
+  charge.prochainsIds.proposition = Math.max(...entrees.map(([id]) => id)) + 1;
+  return charge;
+}
+
+// Le départ que le moteur reçoit pour la proposition id de la charge.
+const departRecherche = (charge, id, toursFiges) => ({ plan: planDuDepart(charge, id), toursFiges });
+
+// Remplace executer de la séance par un espion qui note chaque commande, ses
+// arguments compris, avant de la confier à la séance ; rend la liste notée.
+function espionnerExecuter(seance) {
+  const recus = [];
+  const executer = seance.executer;
+  seance.executer = (nom, args) => {
+    recus.push({ nom, args });
+    return executer(nom, args);
+  };
+  return recus;
+}
+
+// Le refus d'une génération dérivée, avant tout lancement et toute écriture.
+async function refuseSousDepart(montage, depart, code, details, reglages = COURT) {
+  const avant = montage.fs.compteurs.ecritures;
+  const leve = await refuse(montage.controleur.generer(reglages, { depart }), code, details);
+  assert.equal(montage.fs.compteurs.ecritures, avant, `${code} : une écriture`);
+  assert.equal(montage.espion.lancements.length, 0, `${code} : lancé`);
+  return leve;
+}
+
+const REPARTIR_DE_ZERO = { geste: 'repartirDeZero' };
+const DERIVEE = { graine: 3, nombre: 2, arret: 300, historique: 50 };
+
+describe('génération dérivée : les refus du lancement (§ 5.7, C6, C24)', () => {
+  test('une génération dérivée refuse avant tout calcul : départ absent, en dérive, réservation non tenue, tous les tours figés, un tour hors de la soirée', async () => {
+    const charge = () => chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]]);
+    const absent = await monter({ charges: [charge()] });
+    await refuseSousDepart(absent, { id: 9, toursFiges: [] }, 'DEPART_ABSENT', { depart: 9, remede: REPARTIR_DE_ZERO });
+    const tous = await monter({ charges: [charge()] });
+    await refuseSousDepart(tous, { id: 4, toursFiges: [1, 2, 3, 4] }, 'TOURS_FIGES_TOUS', { tours: 4, remede: null });
+    const horsSoiree = await monter({ charges: [charge()] });
+    await refuseSousDepart(horsSoiree, { id: 4, toursFiges: [2, 5] }, 'TOUR_FIGE_HORS_SOIREE', {
+      tour: 5,
+      tours: 4,
+      remede: { geste: 'libererTour', tour: 5 },
+    });
+    // Une seule personne exclue après le départ : il est en dérive.
+    const enDerive = await monter({ charges: [charge()] });
+    await enDerive.seance.executer('exclureParticipant', { id: 12 });
+    const refusEnDerive = await refuseSousDepart(enDerive, { id: 4, toursFiges: [] }, 'DEPART_NON_COMPARABLE');
+    assert.deepEqual(
+      [refusEnDerive.details.depart, refusEnDerive.details.statut, refusEnDerive.details.remede],
+      [4, 'derive', REPARTIR_DE_ZERO],
+    );
+    assert.deepEqual(refusEnDerive.details.raisons.map(({ code }) => code), ['PARTICIPANT_EXCLU']);
+    // Une réservation posée après le départ, à une table où il ne l'assied
+    // pas, dans un tour qu'il ne fige pas.
+    const reservee = await monter({ charges: [charge()] });
+    await reservee.seance.executer('reserver', { participant: 1, table: 2, portee: 'tous' });
+    const nonTenue = await refuseSousDepart(reservee, { id: 4, toursFiges: [3] }, 'DEPART_RESERVATION_NON_TENUE');
+    assert.deepEqual(
+      [nonTenue.details.depart, nonTenue.details.participant, nonTenue.details.table, nonTenue.details.tour, nonTenue.details.remede],
+      [4, 1, 2, 1, REPARTIR_DE_ZERO],
+    );
+  });
+
+  test('une réservation à un siège posée après le départ, dans un tour figé, est refusée au lancement ; ce tour libéré, la génération part', async () => {
+    const manuel = executeurManuel();
+    const charge = chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]], { attribuerSieges: true });
+    const montage = await monter({ charges: [charge], executeur: manuel });
+    // Au tour 1, le départ assied 1 au siège 1 de la table 1.
+    await montage.seance.executer('reserver', { participant: 1, table: 1, siege: 2, portee: 'tour', tour: 1 });
+    const leve = await refuseSousDepart(montage, { id: 4, toursFiges: [1] }, 'DEPART_SIEGE_NON_TENU');
+    assert.deepEqual(
+      [leve.details.depart, leve.details.participant, leve.details.table, leve.details.siege, leve.details.tour, leve.details.remede],
+      [4, 1, 1, 2, 1, { geste: 'libererTour', tour: 1 }],
+    );
+    const enCours = montage.controleur.generer(COURT, { depart: { id: 4, toursFiges: [2] } });
+    await Promise.resolve();
+    assert.equal(montage.espion.lancements.length, 1);
+    assert.deepEqual(montage.espion.lancements[0].options.depart, departRecherche(montage.charge(), 4, [2]));
+    montage.controleur.annuler();
+    assert.ok((await rejet(enCours)) instanceof ErreurAnnulee);
+  });
+
+  test('en lecture, sur un plan bloqué, avec des places manquantes ou un réglage hors domaine : le refus ordinaire passe avant celui du départ ; celui du départ avant la confirmation', async () => {
+    const absent = { id: 9, toursFiges: [] };
+    const lecture = await monter({ charges: [chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]])], ecriture: false });
+    await refuseSousDepart(lecture, absent, 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    const bloquee = chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]]);
+    bloquee.evenement.etat = 'bloque';
+    await refuseSousDepart(await monter({ charges: [bloquee], ecriture: false }), absent, 'LECTURE_SEULE', {
+      raison: 'BLOQUE',
+      remede: { geste: 'debloquer' },
+    });
+    await refuseSousDepart(await monter({ charges: [chargeDe({ n: 13, tables: 4, sieges: 3 })] }), absent, 'PLACES_MANQUANTES', {
+      placesManquantes: 1,
+      remede: VERS_TABLES,
+    });
+    const reglage = await monter({ charges: [chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]])] });
+    await refuseSousDepart(reglage, absent, 'REGLAGE_HORS_DOMAINE', { reglage: 'graine', remede: null }, { ...COURT, graine: -1 });
+    // Sans mesure, au-delà de 10 000 000 mouvements : la confirmation suit le départ.
+    const longue = { graine: 1, nombre: 5, arret: 2000001, historique: 1000 };
+    const confirmation = await monter({ charges: [chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]])] });
+    await refuseSousDepart(confirmation, absent, 'DEPART_ABSENT', { depart: 9, remede: REPARTIR_DE_ZERO }, longue);
+    await refuseSousDepart(confirmation, { id: 4, toursFiges: [] }, 'CONFIRMATION_REQUISE', {
+      estimation: { inconnue: true },
+      remede: null,
+    }, longue);
+  });
+
+  test("des tours figés d'une autre forme qu'une liste d'entiers ≥ 1 strictement croissante lèvent une TypeError, après le refus de la séance, sans lancement ni écriture", async () => {
+    const charge = () => chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]]);
+    for (const depart of [{ id: 4, toursFiges: [2, 1] }, { id: 4, toursFiges: [0] }, { id: 4, toursFiges: [1.5] }, { id: 4 }]) {
+      const montage = await monter({ charges: [charge()] });
+      const avant = montage.fs.compteurs.ecritures;
+      const leve = await rejet(montage.controleur.generer(COURT, { depart }));
+      assert.ok(leve instanceof TypeError, `${JSON.stringify(depart)} : TypeError attendue, reçu ${leve}`);
+      assert.equal(montage.fs.compteurs.ecritures, avant, `${JSON.stringify(depart)} : une écriture`);
+      assert.equal(montage.espion.lancements.length, 0, `${JSON.stringify(depart)} : lancé`);
+      const lecture = await monter({ charges: [charge()], ecriture: false });
+      await refuseSousDepart(lecture, depart, 'MODE_LECTURE', { remede: { geste: 'modifier' } });
+    }
+  });
+
+  test('une génération en cours passe avant le refus du départ', async () => {
+    const manuel = executeurManuel({ differer: true });
+    const montage = await monter({ charges: [chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]])], executeur: manuel });
+    const premiere = montage.controleur.generer(COURT);
+    await Promise.resolve();
+    await refuse(montage.controleur.generer(COURT, { depart: { id: 9, toursFiges: [] } }), 'GENERATION_EN_COURS', { remede: null });
+    assert.equal(montage.espion.lancements.length, 1);
+    montage.controleur.annuler();
+    manuel.executions[0].rejeter(new ErreurAnnulee());
+    assert.ok((await rejet(premiere)) instanceof ErreurAnnulee);
+  });
+});
+
+describe('génération dérivée : le lancement, la forme rendue, les identiques (§ 5.7, § 5.10, C6, C8)', () => {
+  test('lancer reçoit le plan du départ et ses tours figés ; enregistrerGeneration, la dérivation ; la génération suivante sans départ est ordinaire, le contrôleur ne garde rien du départ', async () => {
+    const montage = await monter({ charges: [chargeAvecPropositions([[4, planCourt(5)]])] });
+    const recus = espionnerExecuter(montage.seance);
+    const configuration = configurationDe(montage.charge());
+    const depart = departRecherche(montage.charge(), 4, [2]);
+    const derivee = await montage.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [2] } });
+    assert.deepEqual(montage.espion.lancements[0].options, { coeurs: 1, depart });
+    assert.deepEqual(derivee.depart, { id: 4, toursFiges: [2] });
+    assert.deepEqual([derivee.ajoutees, derivee.identiques, derivee.identiquesAuDepart], [[5, 6], 0, 0]);
+    assert.deepEqual(recus.map(({ nom }) => nom), ['enregistrerGeneration']);
+    assert.deepStrictEqual(recus[0].args.propositions, repartir(configuration, DERIVEE, depart));
+    assert.deepEqual(recus[0].args.derivation, { depart: 4, toursFiges: [2] });
+    const ordinaire = await montage.controleur.generer(DERIVEE);
+    assert.deepEqual(montage.espion.lancements[1].options, { coeurs: 1 });
+    assert.deepEqual([ordinaire.depart, ordinaire.identiquesAuDepart], [null, 0]);
+    assert.equal(recus.length, 2);
+    assert.equal(Object.hasOwn(recus[1].args, 'derivation'), false);
+    assert.deepStrictEqual(recus[1].args.propositions, rechercher(configuration, DERIVEE));
+  });
+
+  test('la dérivée du plan parfait de la petite démonstration est écartée comme identique à son départ, sans tour figé comme tour 1 figé : rien d’écrit', async () => {
+    const montage = await monter({ charges: [chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]])] });
+    const reglages = { graine: 6, nombre: 3, arret: 3_000, historique: 20 };
+    for (const toursFiges of [[], [1]]) {
+      const ecritures = montage.fs.compteurs.ecritures;
+      const bilan = await montage.controleur.generer(reglages, { depart: { id: 4, toursFiges } });
+      assert.deepEqual(
+        [bilan.ajoutees, bilan.identiques, bilan.identiquesAuDepart, bilan.depart],
+        [[], 3, 3, { id: 4, toursFiges }],
+        `figés ${toursFiges}`,
+      );
+      assert.equal(montage.fs.compteurs.ecritures, ecritures);
+    }
+    assert.deepEqual(ids(montage.charge()), [4]);
+  });
+
+  test('une dérivée identique à une autre proposition présente, non à son départ, compte dans identiques, jamais dans identiquesAuDepart', async () => {
+    const depart = planCourt(5);
+    const reglages = { graine: 8, nombre: 1, arret: 300, historique: 50 };
+    const [{ plan: derivee }] = repartir(
+      configurationDe(chargeDemo('petite')),
+      reglages,
+      departRecherche(chargeAvecPropositions([[4, depart]]), 4, []),
+    );
+    const charge = chargeAvecPropositions([[4, depart], [5, derivee]]);
+    assert.notDeepEqual(planDuDepart(charge, 5), planDuDepart(charge, 4));
+    const montage = await monter({ charges: [charge] });
+    const bilan = await montage.controleur.generer(reglages, { depart: { id: 4, toursFiges: [] } });
+    assert.deepEqual([bilan.ajoutees, bilan.identiques, bilan.identiquesAuDepart], [[], 1, 0]);
+  });
+
+  test('trois dérivées, l’une égale à son départ, l’autre à une proposition présente : identiques 2, dont 1 au départ ; la troisième ajoutée', async () => {
+    const autre = planCourt(7);
+    const charge = chargeAvecPropositions([[4, planCourt(5)], [5, autre]]);
+    const planDepart = planDuDepart(charge, 4);
+    const montage = await monter({
+      charges: [charge],
+      executeur: executeurTransforme(([premiere, seconde, troisieme]) => [
+        { ...premiere, plan: planDepart },
+        { ...seconde, plan: autre },
+        troisieme,
+      ]),
+    });
+    const bilan = await montage.controleur.generer({ ...DERIVEE, nombre: 3 }, { depart: { id: 4, toursFiges: [1] } });
+    assert.deepEqual([bilan.ajoutees, bilan.identiques, bilan.identiquesAuDepart], [[8], 2, 1]);
+  });
+
+  test('relancée depuis le même départ sous une autre graine, la génération repart du même plan ; generationDe dit la génération de chaque dérivée', async () => {
+    const montage = await monter({ charges: [chargeAvecPropositions([[4, planCourt(5)]])] });
+    const configuration = configurationDe(montage.charge());
+    const depart = departRecherche(montage.charge(), 4, [1]);
+    const premiere = await montage.controleur.generer({ ...DERIVEE, graine: 1 }, { depart: { id: 4, toursFiges: [1] } });
+    const seconde = await montage.controleur.generer({ ...DERIVEE, graine: 2 }, { depart: { id: 4, toursFiges: [1] } });
+    assert.deepEqual([premiere.ajoutees, seconde.ajoutees], [[5, 6], [7, 8]]);
+    assert.deepEqual(montage.espion.lancements.map(({ options }) => options), [{ coeurs: 1, depart }, { coeurs: 1, depart }]);
+    assert.equal(montage.controleur.grainePropose(), 3);
+    for (const [graine, ajoutees] of [[1, [5, 6]], [2, [7, 8]]]) {
+      const calculees = repartir(configuration, { ...DERIVEE, graine }, depart);
+      for (const id of ajoutees) {
+        assert.deepEqual(montage.controleur.generationDe(id), { dureeMs: 0, coeurs: 1, evalues: sommeEvalues(calculees), nombre: 2 }, `n° ${id}`);
+      }
+    }
+  });
+
+  test('annulée, une génération dérivée ne garde rien : ni écriture, ni génération', async () => {
+    const manuel = executeurManuel();
+    const montage = await monter({ charges: [chargeAvecPropositions([[4, planCourt(5)]])], executeur: manuel });
+    const ecritures = montage.fs.compteurs.ecritures;
+    const enCours = montage.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [2] } });
+    await Promise.resolve();
+    assert.deepEqual(montage.espion.lancements[0].options.depart, departRecherche(montage.charge(), 4, [2]));
+    montage.controleur.annuler();
+    assert.ok((await rejet(enCours)) instanceof ErreurAnnulee);
+    assert.equal(montage.fs.compteurs.ecritures, ecritures);
+    assert.deepEqual(ids(montage.charge()), [4]);
+    assert.equal(montage.controleur.generationDe(5), null);
+  });
+
+  test('un départ qui est lui-même une dérivée, son propre départ présent ou non : aucun refus, le moteur reçoit son plan', async () => {
+    for (const entrees of [
+      [[1, planCourt(5)], [2, planCourt(7), { depart: 1, toursFiges: [1] }]],
+      [[2, planCourt(7), { depart: 1, toursFiges: [1] }]],
+    ]) {
+      const manuel = executeurManuel();
+      const montage = await monter({ charges: [chargeAvecPropositions(entrees)], executeur: manuel });
+      const enCours = montage.controleur.generer(DERIVEE, { depart: { id: 2, toursFiges: [3] } });
+      await Promise.resolve();
+      assert.equal(montage.espion.lancements.length, 1, JSON.stringify(entrees.map(([id]) => id)));
+      assert.deepEqual(montage.espion.lancements[0].options.depart, departRecherche(montage.charge(), 2, [3]));
+      montage.controleur.annuler();
+      assert.ok((await rejet(enCours)) instanceof ErreurAnnulee);
+    }
+  });
+
+  test('à départ, tours figés et graine égaux, l’exécuteur direct et l’exécuteur à fils rendent les mêmes propositions, quel que soit l’ordre d’achèvement des fils', async () => {
+    const reglages = { graine: 4, nombre: 4, arret: 1_500, historique: 100 };
+    const recus = [];
+    let attendues = null;
+    for (const [nom, creer, coeurs] of [
+      ['direct', () => creerExecuteurDirect(), null],
+      ['un cœur', () => creerExecuteurTravailleur(travailleursCalculants(), { coeursDisponibles: 4 }), 1],
+      ['quatre cœurs à rebours', () => creerExecuteurTravailleur(travailleursCalculants(A_REBOURS), { coeursDisponibles: 4 }), 4],
+      [
+        "quatre cœurs, le milieu d'abord",
+        () => creerExecuteurTravailleur(travailleursCalculants(MILIEU_D_ABORD), { coeursDisponibles: 4 }),
+        4,
+      ],
+    ]) {
+      const montage = await monter({ charges: [chargeAvecPropositions([[4, planCourt(5)]])], executeur: creer() });
+      if (coeurs !== null) {
+        montage.controleur.reglerCoeurs({ automatique: false });
+        montage.controleur.reglerCoeurs({ saisie: String(coeurs) });
+      }
+      const notes = espionnerExecuter(montage.seance);
+      const bilan = await montage.controleur.generer(reglages, { depart: { id: 4, toursFiges: [2, 3] } });
+      assert.deepEqual(bilan.ajoutees, [5, 6, 7, 8], nom);
+      attendues ??= repartir(configurationDe(montage.charge()), reglages, departRecherche(montage.charge(), 4, [2, 3]));
+      recus.push([nom, notes[0].args.propositions]);
+    }
+    assert.equal(recus.length, 4);
+    for (const [nom, propositions] of recus) assert.deepStrictEqual(propositions, attendues, nom);
+    assert.notDeepEqual(
+      attendues.map(({ plan }) => plan),
+      rechercher(configurationDe(chargeDemo('petite')), reglages).map(({ plan }) => plan),
+    );
   });
 });

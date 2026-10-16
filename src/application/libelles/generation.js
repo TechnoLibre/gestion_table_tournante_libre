@@ -7,7 +7,7 @@
 // table ne porte que des codes. Un nombre et une durée se mettent en forme
 // par creerFormat, sur la composition que la traduction passe à l'entrée.
 import { creerFormat } from '../format.js';
-import { cite, compte, phraseDeRaison } from './aides.js';
+import { cite, compte, enumeration, phraseDeRaison } from './aides.js';
 
 // Le nom de chaque réglage de génération, celui que la saisie affiche.
 const NOMS_DES_REGLAGES = new Map([
@@ -58,6 +58,19 @@ export const TABLE = new Map([
     ({ n, premier, dernier }) =>
       `Généré ${compte(n, 'proposition', 'propositions')} ` +
       `(n° ${premier === dernier ? premier : `${premier} à ${dernier}`})`,
+  ],
+  // Une génération dérivée (§ 5.7, D77) : depart, le numéro du départ, figé à
+  // l'écriture comme toute la phrase ; toursFiges, croissants, [] sans tour
+  // figé, qui tait alors la fin.
+  [
+    'ENTREE_ENREGISTRER_GENERATION_DERIVEE',
+    ({ n, premier, dernier, depart, toursFiges }) =>
+      `Généré ${compte(n, 'proposition dérivée', 'propositions dérivées')} de n° ${depart} ` +
+      `(n° ${premier === dernier ? premier : `${premier} à ${dernier}`})` +
+      (toursFiges.length === 0
+        ? ''
+        : `, ${toursFiges.length === 1 ? 'tour' : 'tours'} ${enumeration(toursFiges.map(String))} ` +
+          `${toursFiges.length === 1 ? 'figé' : 'figés'}`),
   ],
   ['ENTREE_RETENIR_PROPOSITION', ({ id }) => `Retenu la proposition n° ${id}`],
   [
@@ -122,6 +135,17 @@ export const TABLE = new Map([
       `La proposition n° ${depart} n'assied pas ${personne ?? `la personne n° ${participant}`} ` +
       `au siège ${siege} de la ${laTable(table, numero)} au tour ${tour}, où une réservation la fixe : ` +
       `un tour figé garde les sièges du départ. Ne plus figer ce tour, ou ${cite('Repartir de zéro')}.`,
+  ],
+
+  // Avant d'enregistrer une génération dérivée, un tour figé qui diffère de
+  // celui du départ : une violation d'invariant, qu'aucun geste ne déclenche
+  // (§ 14.12). rang : la place du placement dans la suite des graines du
+  // lancement, comme pour GENERATION_INVARIANT_VIOLE.
+  [
+    'TOUR_FIGE_DIFFERENT',
+    ({ rang, tour }) =>
+      `Le placement que la génération a rendu au rang ${rang} de ce lancement ne reprend pas tel quel le tour ${tour} ` +
+      "de son départ, que ce tour figé doit garder ; rien n'est enregistré.",
   ],
 
   // --- Le contrôleur de génération (§ 5.9, § 5.10, § 15.4) -------------------

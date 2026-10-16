@@ -21,9 +21,11 @@ import { TABLES_APPLICATION } from '../../../application/libelles.js';
 import { creerFormat } from '../../../application/format.js';
 import { creerTraduction } from '../../../application/traduction.js';
 import { creerMesureur, mesuresDuTexte } from '../../plan/mesure_texte.js';
+import { SEPARATIONS } from '../../marques.js';
+import { SIMULATIONS, ecartPercu, simuler } from '../../palette.js';
 import { releverMarques } from '../../../../test/navigateur/captures.js';
 import { fixerCadre, pointer, touche } from '../../../../test/navigateur/entrees.js';
-import { attenuations, sousTheme } from '../../../../test/navigateur/rendu.js';
+import { attenuations, composantes, sousTheme } from '../../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../../libelles.js';
 import { creerDessinDiffere } from './dessin_differe.js';
 import { LARGEUR_NOM_PX, margesCommunes } from './pointage.js';
@@ -377,6 +379,179 @@ describe('graphiques : l’escalier du profil (§ 12.3, D30)', () => {
     });
     const d = cible.querySelector('[data-serie="serie1"]').getAttribute('d');
     expect(d.match(/M/g)).toHaveLength(2);
+  });
+});
+
+describe('graphiques : deux séries sur une borne reçue, l’infobulle à plusieurs lignes (C20, D59, D60, D66)', () => {
+  // Deux placements comparés : le manque de chacun par rang, trié par son
+  // propre manque décroissant ; A monte à 3, B à 7.
+  const MANQUES_A = [3, 3, 2, 2, 1, 1, 1, 0, 0, 0, 0, 0];
+  const MANQUES_B = [7, 5, 4, 2, 2, 1, 0, 0, 0, 0, 0, 0];
+  const COLONNES_MANQUE = [
+    { cle: 'nom', libelle: 'Personne', genre: 'texte' },
+    { cle: 'manque', libelle: 'manque', genre: 'nombre' },
+    { cle: 'rencontres', libelle: 'rencontres', genre: 'nombre' },
+    { cle: 'plafond', libelle: 'plafond réalisé', genre: 'nombre' },
+  ];
+  const lignesDe = (manques, decalage) =>
+    manques.map((manque, i) => ({ nom: nomDe(i + decalage), manque, rencontres: 27 - manque, plafond: 27 }));
+
+  function propsComparaison(borneHaute, extra = {}) {
+    return {
+      graphique: 'comparaison',
+      nom: 'Laquelle des deux sert mieux, et qui y perd ?',
+      synthese: 'n° 4 sert mieux à 5 rangs, n° 7 à 2, égalité à 5.',
+      series: [
+        { libelle: 'n° 4', valeurs: MANQUES_A, cle: 'a' },
+        { libelle: 'n° 7', valeurs: MANQUES_B, cle: 'b' },
+      ],
+      borneHaute,
+      infobulle: {
+        colonnes: COLONNES_MANQUE,
+        series: [
+          { nom: 'n° 4', lignes: lignesDe(MANQUES_A, 0) },
+          { nom: 'n° 7', lignes: lignesDe(MANQUES_B, 1) },
+        ],
+      },
+      ...extra,
+    };
+  }
+
+  // Le haut du tracé d'une série, en px du dessin : la plus petite ordonnée
+  // de son chemin, hors de l'épaisseur du trait.
+  const hautDe = (trace) => trace.getBBox().y;
+
+  // Pointe le rang donné, à partir de 1, d'un escalier de n rangs.
+  async function pointerRang(cible, rang, n) {
+    const svg = cible.querySelector('svg');
+    const surface = surfaceDe(svg);
+    const pas = Number(surface.getAttribute('width')) / n;
+    const p = versFenetre(svg, Number(surface.getAttribute('x')) + (rang - 0.5) * pas, Number(surface.getAttribute('y')) + 4);
+    await pointer('bouger', p.x, p.y);
+    flushSync();
+  }
+
+  test('rouge : deux séries partagent une seule échelle verticale, bornée par la borne fournie', async () => {
+    for (const borne of [7, 9]) {
+      const cible = await monter(Escalier, propsComparaison(borne));
+      const svg = cible.querySelector('svg[data-graphique="comparaison"]');
+      const axes = [...svg.querySelectorAll('line[data-marque="graphiqueAxe"]')];
+      expect(axes.filter((x) => x.getAttribute('x1') === x.getAttribute('x2')), `borne ${borne}`).toHaveLength(1);
+      const surface = surfaceDe(svg);
+      const haut = Number(surface.getAttribute('y'));
+      const bas = haut + Number(surface.getAttribute('height'));
+      // Chaque série à la hauteur de son plus grand manque sur la borne
+      // reçue : A ne s'étire pas jusqu'au haut, B ne l'atteint qu'à la borne.
+      const a = svg.querySelector('path[data-serie="a"]');
+      const b = svg.querySelector('path[data-serie="b"]');
+      expect(a, `borne ${borne}`).not.toBeNull();
+      expect(b, `borne ${borne}`).not.toBeNull();
+      expect(hautDe(a), `A, borne ${borne}`).toBeCloseTo(bas - ((bas - haut) * 3) / borne, 1);
+      expect(hautDe(b), `B, borne ${borne}`).toBeCloseTo(bas - ((bas - haut) * 7) / borne, 1);
+      expect(hautDe(a) - hautDe(b), `borne ${borne}`).toBeGreaterThan(10);
+    }
+  });
+
+  test('A en trait plein, B en tirets, chacune étiquetée de son nom au bout du tracé et dans la légende ; leurs couleurs se séparent sous les trois dichromaties, dans les deux thèmes', async () => {
+    const cible = await monter(Escalier, propsComparaison(7));
+    const svg = cible.querySelector('svg');
+    const [a, b] = ['a', 'b'].map((cle) => svg.querySelector(`path[data-serie="${cle}"]`));
+    expect(getComputedStyle(a).strokeDasharray).toBe('none');
+    expect(motifDe(b).length).toBeGreaterThan(0);
+    expect(svg.querySelector('text[data-serie="a"]').textContent).toBe('n° 4');
+    expect(svg.querySelector('text[data-serie="b"]').textContent).toBe('n° 7');
+    const fin = Number(surfaceDe(svg).getAttribute('x')) + Number(surfaceDe(svg).getAttribute('width'));
+    for (const cle of ['a', 'b']) expect(Number(svg.querySelector(`text[data-serie="${cle}"]`).getAttribute('x'))).toBeGreaterThan(fin);
+    expect([...cible.querySelectorAll('ul li')].map((li) => li.textContent)).toEqual(['n° 4', 'n° 7']);
+    for (const theme of ['clair', 'sombre']) {
+      const [ca, cb, ja, jb] = await sousTheme(theme, () => [
+        ...[a, b].map((trace) => composantes(getComputedStyle(trace).stroke)),
+        ...['--couleur-graphique-serie-1', '--couleur-graphique-serie-2'].map((jeton) => composantes(couleurDuJeton(jeton))),
+      ]);
+      // Les jetons existants des deux séries, sans couleur neuve.
+      expect([ca, cb], theme).toEqual([ja, jb]);
+      for (const vue of ['origine', ...Object.keys(SIMULATIONS)]) {
+        const vu = (c) => (vue === 'origine' ? c : simuler(c, vue));
+        expect(ecartPercu(vu(ca), vu(cb)), `${theme}, ${vue}`).toBeGreaterThanOrEqual(SEPARATIONS.autresMarques);
+      }
+    }
+  });
+
+  test('rouge : l’infobulle d’un rang porte une ligne par placement, chacune précédée du nom de sa série, sans pourcentage ; Échap la ferme', async () => {
+    const cible = await monter(Escalier, propsComparaison(7));
+    const focalisable = document.createElement('button');
+    cible.append(focalisable);
+    focalisable.focus();
+    await pointerRang(cible, 2, MANQUES_A.length);
+    const bulle = infobulleDe(cible);
+    expect(bulle.hidden).toBe(false);
+    expect(cible.querySelector('[data-rang]').getAttribute('data-rang')).toBe('2');
+    const blocs = [...bulle.querySelectorAll('dl')];
+    expect(blocs).toHaveLength(2);
+    // Chaque ligne suit le nom de sa série, dans l'ordre des séries : la
+    // personne au rang 2 de A, puis celle au rang 2 de B.
+    for (const [k, [nom, personne, manque]] of [['n° 4', nomDe(1), '3'], ['n° 7', nomDe(2), '5']].entries()) {
+      const precedent = blocs[k].previousElementSibling;
+      expect(precedent?.textContent, nom).toBe(nom);
+      expect(blocs[k].textContent, nom).toContain(personne);
+      const cellules = [...blocs[k].querySelectorAll('dt')].map((dt) => [dt.textContent, dt.nextElementSibling.textContent.trim()]);
+      expect(cellules, nom).toContainEqual(['manque', manque]);
+    }
+    expect(bulle.querySelector('[data-pourcentage]')).toBeNull();
+    expect(bulle.textContent).not.toContain('%');
+    await touche('Escape');
+    flushSync();
+    expect(bulle.hidden).toBe(true);
+  });
+
+  test('rouge : les marges liées se mesurent sur la borne reçue, celles de la zone tracée', async () => {
+    // Une borne bien plus large que les données : sa graduation, plus
+    // longue que celle de la plus grande valeur, fixe la marge de gauche.
+    const marges = fromStore(writable(null));
+    const props = Object.defineProperty(propsComparaison(1000), 'marges', {
+      get: () => marges.current,
+      set: (v) => (marges.current = v),
+      enumerable: true,
+    });
+    const cible = await monter(Escalier, props);
+    const surface = surfaceDe(cible.querySelector('svg'));
+    expect(marges.current).not.toBeNull();
+    expect(marges.current.gauche).toBeCloseTo(Number(surface.getAttribute('x')), 3);
+  });
+
+  test('rouge : une série d’infobulle sous un autre nom que la série tracée de même rang lève au montage', () => {
+    const inverse = propsComparaison(7);
+    inverse.infobulle = { ...inverse.infobulle, series: [...inverse.infobulle.series].reverse() };
+    const cible = document.createElement('div');
+    document.body.prepend(cible);
+    let composant = null;
+    try {
+      expect(() => {
+        composant = mount(Escalier, { target: cible, props: inverse, context: CONTEXTE });
+        flushSync();
+      }).toThrow(RangeError);
+    } finally {
+      if (composant !== null) unmount(composant);
+      cible.remove();
+    }
+  });
+
+  test('rouge : une série seule s’infobulle en une seule liste, sans nom de série, avec les cellules de sa ligne', async () => {
+    const p = profil(5);
+    const cible = await monter(Escalier, propsProfil(5));
+    await pointerRang(cible, 3, 5);
+    const bulle = infobulleDe(cible);
+    expect(bulle.hidden).toBe(false);
+    expect([...bulle.children].map((e) => e.localName)).toEqual(['dl']);
+    const ligne = infobulleProfil(p).lignes[2];
+    const lus = [...bulle.querySelectorAll('dt')].map((dt) => [dt.textContent, dt.nextElementSibling]);
+    expect(lus.map(([libelle]) => libelle)).toEqual(COLONNES_PROFIL.map((c) => c.libelle));
+    expect(lus.slice(0, 3).map(([, dd]) => dd.textContent.trim())).toEqual(['3', ligne.nom, String(ligne.rencontres)]);
+    expect(lus[3][1].querySelector('[data-pourcentage]').textContent).toBe(ligne.part.texte);
+    expect(lus[3][1].querySelector('[data-pourcentage] + [data-compte-pire]').textContent).toBe(ligne.part.compte);
+    // Une seule série : son tracé garde la désignation d’une série seule.
+    expect(cible.querySelector('path[data-serie="serie1"]')).not.toBeNull();
+    expect(cible.querySelector('path[data-serie="a"]')).toBeNull();
   });
 });
 

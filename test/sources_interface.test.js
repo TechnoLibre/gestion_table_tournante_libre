@@ -962,12 +962,14 @@ function releverTexteEtAnimation(racine, exceptions = ANIMATIONS_ADMISES) {
 // --- Garde 7 : le câblage (§ 12.9, § 13.3) ------------------------------------
 
 const TRIS_ET_REDUCTIONS = new Set(['sort', 'toSorted', 'reduce', 'reduceRight']);
-// Les mesures de la table d'évaluation et du détail d'un placement, que
-// src/application/evaluation.js seul importe (§ 12.9, contrainte 41) :
-// celles de la table, nommées, puis chaque export de qualite.js, de
+// Les mesures de la table d'évaluation, du détail d'un placement et de la
+// comparaison de deux placements, que src/application/evaluation.js seul
+// importe (§ 12.9, § 12.10.6, contrainte 41) : celles de la table, nommées,
+// puis celles de la comparaison — profils de manque, rangs, escalier, axe,
+// palier qui départage —, nommées, puis chaque export de qualite.js, de
 // paires.js et de diversite.js, lu dans l'espace de noms du module — un
-// export ajouté y entre sans qu'on le nomme —, la borne de diversité et les
-// occupations.
+// export ajouté y entre sans qu'on le nomme, la tête et les planchers des
+// colonnes compris —, la borne de diversité et les occupations.
 const MESURES = new Set([
   'mesurer',
   'plafondsRealises',
@@ -976,6 +978,12 @@ const MESURES = new Set([
   'manques',
   'ecartsAuPlafondAPriori',
   'minimumAtteint',
+  'profilManque',
+  'comparerProfils',
+  'escalierDuManque',
+  'valeursDistinctes',
+  'borneHaute',
+  'premierPalierQuiDepartage',
   ...Object.keys(QUALITE),
   ...Object.keys(PAIRES),
   ...Object.keys(DIVERSITE),

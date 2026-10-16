@@ -36,9 +36,10 @@ import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { estHorodatage } from '../stockage/journal.js';
-import { courseVersFichier, fautes, formeNommee, versFichier } from '../stockage/placements.js';
+import { courseVersFichier, fauteDeCourse, fautes, formeNommee, versFichier } from '../stockage/placements.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
+import { recopierPlacement, recopierToursFiges, tourFigeDifferent } from './depart.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { evaluer, nettoyage } from './evaluation.js';
 import { libelle } from './libelles.js';
@@ -483,32 +484,115 @@ function rangerParSiege(charge, plan, configuration) {
   };
 }
 
+// Le fichier et la course d'une proposition dérivée, dont les tours figés
+// reprennent ceux du départ (§ 5.7, D72), dans cet ordre : le fichier qui
+// porte la dérivation (versFichier), recopié du départ (recopierToursFiges),
+// puis la course mise en forme sous lui ; sous sièges attribués des deux
+// côtés, chaque point de relevé recopié à son tour, depuis le placement du
+// fichier recopié, qui range ses listes dans l'ordre de ses tables, et la
+// course contrôlée de nouveau. Chaque tour figé du fichier et de chaque
+// point de relevé se compare à celui du départ (tourFigeDifferent) deux
+// fois : par ensemble d'occupants, sur le placement que le moteur a rendu,
+// avant toute recopie, qui sinon effacerait l'écart ; puis tel qu'il est
+// enregistré, après elle. Un écart est une violation d'invariant, que la
+// recherche partie du départ ne produit pas, refusée TOUR_FIGE_DIFFERENT
+// {rang, tour}, rang étant l'identifiant du moteur. Le premier contrôle
+// porte seul ce refus. Le second est une garde de la recopie, qu'aucune
+// entrée de cette commande n'atteint : hors sièges attribués des deux
+// côtés, la recopie rend les listes telles quelles et il refait la
+// comparaison par ensemble ; sous eux, il ne vérifie que ce que
+// recopierToursFiges et recopierPlacement écrivent, seule une recopie
+// fautive le lève. Rend {fichier, course}, course null quand le moteur n'en
+// rapporte pas.
+function deriveeVersFichier(rangee, configuration, options, derivation, fichierDuDepart) {
+  const { toursFiges } = derivation;
+  const exigerToursFiges = (fichierLu, placement) => {
+    const tour = tourFigeDifferent({ ...fichierLu, placement }, fichierDuDepart, toursFiges);
+    if (tour !== null) throw refus('TOUR_FIGE_DIFFERENT', { rang: rangee.id, tour });
+  };
+  const rendu = versFichier(rangee, configuration, { ...options, derivation });
+  // siegesAttribues faux : la comparaison par ensemble, qui ne lit ni l'ordre
+  // des listes ni les chaises vides, que la recopie fixe ensuite.
+  const enEnsemble = { ...rendu, siegesAttribues: false };
+  exigerToursFiges(enEnsemble, rendu.placement);
+  const fichier = recopierToursFiges(rendu, fichierDuDepart, toursFiges);
+  let course = courseVersFichier(rangee, fichier, options);
+  for (const { placement } of course === null ? [] : course.releves) exigerToursFiges(enEnsemble, placement);
+  if (course !== null && fichier.siegesAttribues && fichierDuDepart.siegesAttribues) {
+    course = {
+      ...course,
+      releves: course.releves.map(({ mouvements, placement }) => ({
+        mouvements,
+        placement: recopierPlacement(placement, fichier.placement, toursFiges),
+      })),
+    };
+    const faute = fauteDeCourse(fichier, course);
+    if (faute !== null) {
+      throw new TypeError(`enregistrerGeneration : course recopiée fautive ${JSON.stringify({ chemin: faute })}`);
+    }
+  }
+  const releves = course === null ? [] : course.releves;
+  const placements = [fichier.placement, ...releves.map(({ placement }) => placement)];
+  // Garde de la recopie, comparée dans l'ordre sous sièges attribués des
+  // deux côtés : elle ne se lève que sur une recopie fautive.
+  for (const placement of placements) exigerToursFiges(fichier, placement);
+  return { fichier, course };
+}
+
+// La dérivation reçue, null ou {depart, toursFiges} : depart, un identifiant
+// entier ; toursFiges, une liste, que versFichier contrôle ensuite. Toute
+// autre forme est une faute du code.
+function exigerDerivation(derivation) {
+  const lisible =
+    derivation === null ||
+    (typeof derivation === 'object' && Number.isSafeInteger(derivation.depart) && Array.isArray(derivation.toursFiges));
+  if (!lisible) {
+    throw new TypeError(`derivation : {depart, toursFiges} ou null attendue, reçu ${JSON.stringify(derivation)}`);
+  }
+}
+
 /**
- * enregistrerGeneration {propositions, configuration, produitVersion} (§ 5.7,
- * § 8.9) : les propositions du moteur, mises en forme de fichier
- * (versFichier) sous les identifiants qui suivent prochainsIds.proposition —
- * la proposition d'identifiant k du moteur prend prochainsIds.proposition +
- * k − 1 —, s'ajoutent aux précédentes, et le compteur passe au-delà de la
- * dernière. Sièges attribués, chaque liste se range d'abord par siège
- * (rangerParSiege), celles du plan de la proposition et celles du plan de
- * chacun de ses points de relevé : un placement de relevé a ainsi la forme
- * d'un placement de proposition, chaises vides et sièges réservés compris.
- * Un brouillon passe à proposé.
+ * enregistrerGeneration {propositions, configuration, produitVersion,
+ * derivation = null} (§ 5.7, § 8.9) : les propositions du moteur, mises en
+ * forme de fichier (versFichier) sous les identifiants qui suivent
+ * prochainsIds.proposition — la proposition d'identifiant k du moteur prend
+ * prochainsIds.proposition + k − 1 —, s'ajoutent aux précédentes, et le
+ * compteur passe au-delà de la dernière. Sièges attribués, chaque liste se
+ * range d'abord par siège (rangerParSiege), celles du plan de la proposition
+ * et celles du plan de chacun de ses points de relevé : un placement de
+ * relevé a ainsi la forme d'un placement de proposition, chaises vides et
+ * sièges réservés compris. Un brouillon passe à proposé.
+ *
+ * Sous derivation {depart, toursFiges} — une génération dérivée, depart
+ * l'identifiant de fichier de son départ —, chaque proposition porte depart
+ * et toursFiges (versFichier), et ses tours figés reprennent ceux du départ,
+ * plan et points de relevé (deriveeVersFichier) : les listes d'un tour figé
+ * sont celles du départ, jamais rangées de nouveau. Un départ absent de la
+ * charge est refusé PROPOSITION_INCONNUE {id}, avant toute mise en forme ;
+ * un tour figé qui diffère du départ, TOUR_FIGE_DIFFERENT {rang, tour}. Le
+ * libellé est alors ENTREE_ENREGISTRER_GENERATION_DERIVEE. Sans derivation,
+ * ou sous null, la génération ordinaire, rien de plus.
  *
  * La course que le moteur rapporte de chaque proposition (§ 5.10) n'entre
  * pas dans la charge : le rendu la porte à côté, courses, l'entrée du
  * compagnon des courses de chaque proposition qui en rapporte une, dans
- * l'ordre des propositions (courseVersFichier, entreeDeCourse). Le dépôt
- * l'écrit dans le compagnon, après l'état (§ 8.9).
+ * l'ordre des propositions (courseVersFichier, entreeDeCourse). L'entrée se
+ * prend sur le fichier enregistré, tours figés recopiés : son empreinte est
+ * celle que cleDeCourse calcule à la relecture. Le dépôt l'écrit dans le
+ * compagnon, après l'état (§ 8.9). Les champs que le moteur ajoute à une
+ * proposition, relances compris, n'entrent ni au fichier ni à la course.
  */
-function enregistrerGeneration(charge, { propositions, configuration, produitVersion }) {
+function enregistrerGeneration(charge, { propositions, configuration, produitVersion, derivation = null }) {
   exigerModifiable(charge);
   if (!Array.isArray(propositions)) throw new TypeError('propositions : liste attendue');
+  exigerDerivation(derivation);
   if (propositions.length === 0) throw refus('SANS_EFFET', { commande: 'enregistrerGeneration' });
   const rangs = propositions.map(({ id }) => id);
   if (!rangs.every((id) => Number.isSafeInteger(id) && id >= 1) || new Set(rangs).size !== rangs.length) {
     throw new TypeError('propositions : identifiants du moteur entiers, ≥ 1 et distincts attendus');
   }
+  const fichierDuDepart = derivation === null ? null : charge.propositions.find(({ id }) => id === derivation.depart);
+  if (fichierDuDepart === undefined) throw refus('PROPOSITION_INCONNUE', { id: derivation.depart });
   const decalage = charge.prochainsIds.proposition - 1;
   const options = { produitVersion, attribuerSieges: charge.reglages.attribuerSieges, decalage };
   const fichiers = [];
@@ -523,8 +607,10 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
           rangee.releves = proposition.releves.map((releve) => ({ ...releve, plan: ranger(releve.plan) }));
         }
       }
-      const fichier = versFichier(rangee, configuration, options);
-      const course = courseVersFichier(rangee, fichier, options);
+      const { fichier, course } =
+        derivation === null
+          ? sansDerivation(rangee, configuration, options)
+          : deriveeVersFichier(rangee, configuration, options, derivation, fichierDuDepart);
       fichiers.push(fichier);
       if (course !== null) courses.push(entreeDeCourse(fichier, course));
     }
@@ -541,12 +627,29 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
   suivante.propositions.push(...fichiers);
   suivante.prochainsIds.proposition = dernier + 1;
   if (suivante.evenement.etat === 'brouillon') suivante.evenement.etat = 'propose';
+  const n = fichiers.length;
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_ENREGISTRER_GENERATION', { n: fichiers.length, premier, dernier }),
+    libelle:
+      derivation === null
+        ? libelle('ENTREE_ENREGISTRER_GENERATION', { n, premier, dernier })
+        : libelle('ENTREE_ENREGISTRER_GENERATION_DERIVEE', {
+            n,
+            premier,
+            dernier,
+            depart: derivation.depart,
+            toursFiges: derivation.toursFiges,
+          }),
     avertissements: [],
     courses,
   };
+}
+
+// Le fichier et la course d'une proposition ordinaire : versFichier, puis la
+// course mise en forme sous ce fichier.
+function sansDerivation(rangee, configuration, options) {
+  const fichier = versFichier(rangee, configuration, options);
+  return { fichier, course: courseVersFichier(rangee, fichier, options) };
 }
 
 /**

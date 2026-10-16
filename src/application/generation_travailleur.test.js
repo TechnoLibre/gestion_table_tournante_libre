@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
-import { rechercher } from '../moteur/recherche.js';
+import { rechercher, repartir, repartirUne } from '../moteur/recherche.js';
 import { analyser, configurationDepuisCharge } from '../stockage/document.js';
 import { CADENCE_AVANCEMENT, brancherTravailleur } from './generation_travailleur.js';
 
@@ -114,5 +114,51 @@ describe('travailleur de génération (§ 5.7, § 5.10)', () => {
     envoyer({ type: 'lancer', configuration: configurationDe('petite'), reglages: { graine: 1, nombre: 1, arret: 10 } });
     envoyer(null);
     assert.deepEqual(postes, []);
+  });
+});
+
+describe('travailleur de génération : le départ (§ 5.7, § 5.10, C8, C24)', () => {
+  // Le départ du moteur : la première proposition de la petite
+  // démonstration à un compte court, tours 1 et 3 figés.
+  const departDe = (configuration) => ({
+    plan: rechercher(configuration, { graine: 5, arret: 40, nombre: 1 })[0].plan,
+    toursFiges: [1, 3],
+  });
+
+  test('proposer avec depart : la proposition de ce rang de repartir, relances comprises ; le même message sans depart, celle de rechercher', () => {
+    const configuration = configurationDe('petite');
+    const reglages = { graine: 31, nombre: 4, arret: 2_000, historique: 100 };
+    const depart = departDe(configuration);
+    const { postes, envoyer } = porteeFactice();
+    for (const rang of [3, 1]) envoyer({ type: 'proposer', configuration, reglages, rang, depart });
+    envoyer({ type: 'proposer', configuration, reglages, rang: 3 });
+    const rendues = postes.filter(({ type }) => type === 'proposition').map(({ proposition }) => proposition);
+    const derivees = repartir(configuration, reglages, depart);
+    assert.deepStrictEqual(rendues, [derivees[2], derivees[0], rechercher(configuration, reglages)[2]]);
+    assert.ok(Object.hasOwn(rendues[0], 'relances'));
+    assert.notDeepEqual(rendues[0].plan, rendues[2].plan);
+  });
+
+  test('un départ que le moteur refuse poste erreur DEPART_INCOMPATIBLE, ses détails ; des tours figés hors domaine, une faute', () => {
+    const configuration = configurationDe('petite');
+    const reglages = { graine: 1, nombre: 2, arret: 10 };
+    const { plan } = departDe(configuration);
+    // Au tour 1, la dernière personne de la dernière table n'est plus assise.
+    const tronque = structuredClone(plan);
+    tronque.tours[0].at(-1).pop();
+    let attendue = null;
+    try {
+      repartirUne(configuration, reglages, { plan: tronque, toursFiges: [] }, 1);
+    } catch (erreur) {
+      attendue = erreur;
+    }
+    assert.equal(attendue?.code, 'DEPART_INCOMPATIBLE');
+    const { postes, envoyer } = porteeFactice();
+    envoyer({ type: 'proposer', configuration, reglages, rang: 1, depart: { plan: tronque, toursFiges: [] } });
+    assert.deepEqual(postes, [{ type: 'erreur', code: 'DEPART_INCOMPATIBLE', details: attendue.details }]);
+    envoyer({ type: 'proposer', configuration, reglages, rang: 1, depart: { plan, toursFiges: [1, 2, 3, 4] } });
+    assert.equal(postes.length, 2);
+    assert.equal(postes[1].type, 'faute');
+    assert.match(postes[1].message, /^RangeError: /);
   });
 });

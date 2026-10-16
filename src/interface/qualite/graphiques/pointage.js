@@ -19,7 +19,8 @@
 // Un indice désigne une cible dans l'ordre reçu, à partir de 0 : le rang
 // d'indice i est le rang i + 1 du profil ; une case de grille a l'indice
 // ligne × colonnes + colonne. La ligne de l'infobulle d'une cible est la
-// ligne de même indice des données que le composant reçoit.
+// ligne de même indice des données que le composant reçoit — une par série
+// sous la forme à séries (exigerInfobulle).
 
 import { constante } from '../../../geometrie/constantes.js';
 import {
@@ -144,17 +145,25 @@ function exigerTrace(trace, quoi) {
  * Les traces d'un escalier ou de points : une ou deux séries, la première
  * en plein, la seconde en tirets, et zéro à deux repères, chacun plafond,
  * borne ou règle à 100 % (cent), de motifs distincts. Toutes ont autant de
- * valeurs, n. Lève RangeError sur un compte, un genre ou une longueur hors
- * contrat, ou deux repères du même motif — un plafond et une règle à
- * 100 % —, TypeError sur une trace qui n'a pas de libellé ou de valeurs.
- * @param {Array<{libelle: string, valeurs: Array<number|null>}>} series
+ * valeurs, n. Une série peut porter cle, un texte non vide, sa désignation
+ * (data-serie) — a et b pour les deux placements d'une comparaison — ; sans
+ * elle, sa désignation est son genre, serie1 ou serie2. Chaque trace rendue
+ * porte sa clé : celle de la série, ou le genre d'un repère. Lève
+ * RangeError sur un compte, un genre ou une longueur hors contrat, deux
+ * repères du même motif — un plafond et une règle à 100 % — ou deux séries
+ * de même clé, TypeError sur une trace qui n'a pas de libellé ou de
+ * valeurs, ou sur une clé qui n'est pas un texte non vide.
+ * @param {Array<{libelle: string, valeurs: Array<number|null>, cle?: string}>} series
  * @param {Array<{genre: string, libelle: string, valeurs: Array<number|null>}>} reperes
- * @returns {{n: number, traces: Array<{genre: string, libelle: string, valeurs: Array<number|null>}>}}
+ * @returns {{n: number, traces: Array<{genre: string, cle: string, libelle: string, valeurs: Array<number|null>}>}}
  */
 export function exigerTraces(series, reperes = []) {
   exiger(Array.isArray(series) && series.length >= 1 && series.length <= 2, 'séries : une ou deux attendues');
   exiger(Array.isArray(reperes) && reperes.length <= 2, 'repères : deux au plus');
-  series.forEach((s, i) => exigerTrace(s, `série ${i + 1}`));
+  series.forEach((s, i) => {
+    exigerTrace(s, `série ${i + 1}`);
+    exiger(s.cle === undefined || (estTexte(s.cle) && s.cle !== ''), `série ${i + 1} : clé, un texte non vide`, TypeError);
+  });
   reperes.forEach((r, i) => {
     exigerTrace(r, `repère ${i + 1}`);
     exiger(GENRES_REPERE.includes(r.genre), `repère ${i + 1} : genre plafond, borne ou cent attendu, reçu ${r.genre}`);
@@ -164,9 +173,10 @@ export function exigerTraces(series, reperes = []) {
   }
   const n = series[0].valeurs.length;
   const traces = [
-    ...series.map((s, i) => ({ genre: GENRES_SERIE[i], libelle: s.libelle, valeurs: s.valeurs })),
-    ...reperes.map((r) => ({ genre: r.genre, libelle: r.libelle, valeurs: r.valeurs })),
+    ...series.map((s, i) => ({ genre: GENRES_SERIE[i], cle: s.cle ?? GENRES_SERIE[i], libelle: s.libelle, valeurs: s.valeurs })),
+    ...reperes.map((r) => ({ genre: r.genre, cle: r.genre, libelle: r.libelle, valeurs: r.valeurs })),
   ];
+  exiger(series.length === 1 || traces[0].cle !== traces[1].cle, `séries : deux clés distinctes attendues, reçu ${traces[0].cle} deux fois`);
   for (const t of traces) exiger(t.valeurs.length === n, `${t.libelle} : ${n} valeurs attendues, reçu ${t.valeurs.length}`);
   return { n, traces };
 }
@@ -222,9 +232,20 @@ function axesDe(zone) {
 }
 
 // L'axe des valeurs de traces : son domaine, de zéro à la plus grande
-// valeur, et ses graduations entières, écrites.
-function axeDesValeurs(traces, graduer) {
-  const domaine = domaineDe(...traces.map((t) => t.valeurs));
+// valeur, ou à la borne haute reçue quand elle n'est pas null, et ses
+// graduations entières, écrites. La borne se reçoit, jamais ne se calcule
+// ici (C20, D60 : la plus grande des deux bornes, que le moteur rend) : un
+// nombre fini, au moins la plus grande valeur tracée, sinon RangeError — une
+// trace au-dessus de la borne sortirait du tracé. Le domaine des données
+// part de zéro : une borne négative, sous ce zéro, tombe sous la seconde
+// exigence.
+function axeDesValeurs(traces, graduer, borneHaute = null) {
+  const donnees = domaineDe(...traces.map((t) => t.valeurs));
+  if (borneHaute !== null) {
+    exiger(estFini(borneHaute), `borne haute : nombre fini attendu, reçu ${String(borneHaute)}`);
+    exiger(borneHaute >= donnees[1], `borne haute : ${borneHaute} sous la valeur tracée ${donnees[1]}`);
+  }
+  const domaine = borneHaute === null ? donnees : [0, borneHaute];
   const valeursY = graduations(domaine[0], domaine[1], GRADUATIONS_VALEURS, { entieres: true });
   return { domaine, valeursY, textesY: valeursY.map((v) => graduer(v)) };
 }
@@ -242,14 +263,15 @@ function margesDe(traces, textesY, titreX, mesurer) {
 /**
  * Les marges qu'un escalier ou des points de relevé demandent pour leur
  * texte, {gauche, droite} en px : elles ne dépendent que des traces, des
- * graduations et du titre de l'abscisse, jamais d'un graphique voisin.
+ * graduations — celles de la borne haute reçue, quand elle n'est pas
+ * null — et du titre de l'abscisse, jamais d'un graphique voisin.
  * Deux graphiques empilés, ou des petits multiples, s'alignent en recevant
  * chacun, par l'option aligner de leur disposition, margesCommunes des
  * marges de tous (§ 12.3 : les abscisses alignées).
  */
-export function margesVerticales({ series, reperes = [], mesurer, graduer, titreX = null }) {
+export function margesVerticales({ series, reperes = [], mesurer, graduer, titreX = null, borneHaute = null }) {
   const { traces } = exigerTraces(series, reperes);
-  return margesDe(traces, axeDesValeurs(traces, graduer).textesY, titreX, mesurer);
+  return margesDe(traces, axeDesValeurs(traces, graduer, borneHaute).textesY, titreX, mesurer);
 }
 
 /** Les plus grandes marges d'une liste, {gauche, droite} ; null ignoré,
@@ -267,8 +289,9 @@ export function margesCommunes(liste) {
 // leur tracé — à la dernière valeur non nulle, au bas de la zone sans
 // valeur —, écartés d'une ligne de texte au moins. aligner, null ou des
 // marges communes, élargit les marges du texte propre jusqu'à elles.
-function cadreVertical({ largeur, hauteur, traces, mesurer, hauteurTexte, graduer, titreX, aligner }) {
-  const { domaine, valeursY, textesY } = axeDesValeurs(traces, graduer);
+// borneHaute, null ou la borne reçue de l'axe (axeDesValeurs).
+function cadreVertical({ largeur, hauteur, traces, mesurer, hauteurTexte, graduer, titreX, aligner, borneHaute = null }) {
+  const { domaine, valeursY, textesY } = axeDesValeurs(traces, graduer, borneHaute);
   const propres = margesDe(traces, textesY, titreX, mesurer);
   const { gauche, droite } = margesCommunes([propres, aligner]);
   const zone = zoneDe({ largeur, hauteur, gauche, droite, hauteurTexte });
@@ -330,10 +353,13 @@ export function legendeTraces({ series, reperes = [], marques = null }) {
  * null. Les libellés des traces se posent au bout de leur
  * tracé, dans la marge droite mesurée. aligner : null, ou les marges
  * communes d'un groupe de graphiques (margesVerticales, margesCommunes).
+ * borneHaute : null, l'axe monte à la plus grande valeur tracée ; ou la
+ * borne reçue, commune aux deux séries — les deux placements d'une
+ * comparaison sur un seul axe (C20, D60) —, au moins cette valeur.
  * Chaque graduation de l'abscisse, {valeur, texte, x}, porte son rang :
  * à zone nulle, toutes ont le même x, et la valeur reste propre à chacune.
  * @returns {{n, zone, ex, ey, axes, graduationsY, graduationsX, titreX,
- *   traces: Array<{genre, libelle, valeurs, d, etiquette: {x, y}}>,
+ *   traces: Array<{genre, cle, libelle, valeurs, d, etiquette: {x, y}}>,
  *   signes: Array<{indice, genre, x, y, d, plein}>, legende}}
  */
 export function dispositionEscalier({
@@ -348,13 +374,14 @@ export function dispositionEscalier({
   graduerX = graduer,
   titreX = null,
   aligner = null,
+  borneHaute = null,
 }) {
   const { n, traces } = exigerTraces(series, reperes);
   if (marques !== null) {
     exiger(Array.isArray(marques) && marques.length === n, `marques : ${n} entrées attendues`);
     for (const m of marques) exiger(m === null || SIGNES.includes(m), `marque inconnue : ${m}`);
   }
-  const cadre = cadreVertical({ largeur, hauteur, traces, mesurer, hauteurTexte, graduer, titreX, aligner });
+  const cadre = cadreVertical({ largeur, hauteur, traces, mesurer, hauteurTexte, graduer, titreX, aligner, borneHaute });
   const { zone, ey } = cadre;
   const ex = echelleLineaire({ domaine: [0, n], plage: [zone.x, zone.x + zone.largeur] });
   const bas = zone.y + zone.hauteur;
@@ -402,9 +429,10 @@ export function ancreRang(indice, disposition) {
  * croissants, autant que de valeurs. Deux graduations qui se chevauchent
  * gardent la plus à droite : le dernier point, la proposition elle-même,
  * reste écrit. graduerX écrit une graduation de l'abscisse ; chacune,
- * {valeur, texte, x}, porte ses mouvements.
+ * {valeur, texte, x}, porte ses mouvements. borneHaute : celle de
+ * dispositionEscalier.
  * @returns {{n, zone, ex, ey, axes, graduationsY, graduationsX, titreX,
- *   traces: Array<{genre, libelle, valeurs, d, etiquette, points: Array<{indice, mouvements, x, y: number|null}>}>,
+ *   traces: Array<{genre, cle, libelle, valeurs, d, etiquette, points: Array<{indice, mouvements, x, y: number|null}>}>,
  *   abscissesPx: number[], legende}}
  */
 export function dispositionPoints({
@@ -418,6 +446,7 @@ export function dispositionPoints({
   graduerX,
   titreX = null,
   aligner = null,
+  borneHaute = null,
 }) {
   const { n, traces } = exigerTraces(series, []);
   exiger(Array.isArray(abscisses) && abscisses.length === n && n >= 1, `abscisses : ${n} mouvements attendus`);
@@ -425,7 +454,7 @@ export function dispositionPoints({
     exiger(Number.isInteger(m) && m >= 1, `abscisse ${i} : entier ≥ 1 attendu, reçu ${m}`);
     exiger(i === 0 || m > abscisses[i - 1], `abscisse ${i} : les mouvements croissent strictement`);
   });
-  const cadre = cadreVertical({ largeur, hauteur, traces, mesurer, hauteurTexte, graduer, titreX, aligner });
+  const cadre = cadreVertical({ largeur, hauteur, traces, mesurer, hauteurTexte, graduer, titreX, aligner, borneHaute });
   const { zone, ey } = cadre;
   const ex = echelleLog10({ domaine: [1, abscisses[n - 1]], plage: [zone.x, zone.x + zone.largeur] });
   const abscissesPx = abscisses.map((m) => ex.versPx(m));
@@ -919,4 +948,79 @@ export function celluleDe(colonne, ligne, ecrire) {
  *  ligne du jumeau) ; ecrire, celle de celluleDe. */
 export function ligneInfobulle(colonnes, ligne, ecrire) {
   return exigerColonnes(colonnes).map((c) => ({ cle: c.cle, libelle: c.libelle, ...celluleDe(c, ligne, ecrire) }));
+}
+
+/**
+ * L'infobulle d'un graphique, sous l'une de ses deux formes, rendue telle
+ * quelle. {colonnes, lignes} : une ligne par cible, celle du jumeau (§ 12.7).
+ * {colonnes, series} : une ou deux séries {nom, lignes}, chacune ses lignes
+ * par cible sous les mêmes colonnes — un rang désigne une personne par
+ * placement comparé (C20, D66). nom, déjà traduit, le nom de la série, que
+ * l'infobulle écrit devant sa ligne ; deux séries ont deux noms. La forme à
+ * séries est en comptes : le tracé de deux placements, son infobulle et
+ * l'escalier n'écrivent aucun pourcentage (D67, C29), et une colonne de
+ * pourcentage y est refusée. Lève RangeError sur les deux formes à la fois
+ * ou aucune, un compte de séries hors contrat, deux noms égaux ou une
+ * colonne de pourcentage sous des séries ; TypeError sur des lignes qui ne
+ * sont pas une liste ou un nom qui n'est pas un texte non vide ; comme
+ * exigerColonnes sur les colonnes.
+ * @param {{colonnes: Array<Object>, lignes?: Array<Object>, series?: Array<{nom: string, lignes: Array<Object>}>}} infobulle
+ */
+export function exigerInfobulle(infobulle) {
+  exiger(infobulle !== null && typeof infobulle === 'object', 'infobulle : objet attendu', TypeError);
+  const { colonnes, lignes, series } = infobulle;
+  exiger((lignes === undefined) !== (series === undefined), 'infobulle : des lignes ou des séries, l’un des deux');
+  exigerColonnes(colonnes);
+  if (series === undefined) {
+    exiger(Array.isArray(lignes), 'infobulle : liste de lignes attendue', TypeError);
+    return infobulle;
+  }
+  exiger(Array.isArray(series) && series.length >= 1 && series.length <= 2, 'infobulle : une ou deux séries attendues');
+  for (const [i, s] of series.entries()) {
+    exiger(s !== null && typeof s === 'object' && estTexte(s.nom) && s.nom !== '', `infobulle, série ${i + 1} : nom attendu`, TypeError);
+    exiger(Array.isArray(s.lignes), `infobulle, série ${i + 1} : liste de lignes attendue`, TypeError);
+  }
+  exiger(series.length === 1 || series[0].nom !== series[1].nom, `infobulle : deux noms distincts attendus, reçu ${series[0].nom} deux fois`);
+  for (const c of colonnes) exiger(c.genre !== 'pourcentage', `infobulle à séries : en comptes, la colonne ${c.cle} est un pourcentage`);
+  return infobulle;
+}
+
+/**
+ * L'infobulle d'un escalier rapportée à ses séries (Escalier) : null, ou la
+ * forme {colonnes, lignes}, passent telles quelles ; la forme à séries porte
+ * une série par série tracée, dans leur ordre, chacune sous le libellé de sa
+ * série — l'infobulle nomme chaque ligne comme le tracé nomme sa série
+ * (§ 12.7, C20). Rend l'infobulle reçue ; lève comme exigerInfobulle, et
+ * RangeError sur un compte ou un nom qui ne suit pas les séries.
+ * @param {Object|null} infobulle
+ * @param {Array<{libelle: string}>} series
+ */
+export function exigerInfobulleDesTraces(infobulle, series) {
+  if (infobulle === null) return null;
+  exigerInfobulle(infobulle);
+  if (infobulle.series === undefined) return infobulle;
+  exiger(infobulle.series.length === series.length, `infobulle : ${series.length} séries attendues, reçu ${infobulle.series.length}`);
+  infobulle.series.forEach((s, i) => exiger(s.nom === series[i].libelle, `infobulle, série ${i + 1} : nom ${series[i].libelle} attendu, reçu ${s.nom}`));
+  return infobulle;
+}
+
+/**
+ * Les lignes de l'infobulle de la cible d'indice donné (Graphique) :
+ * [{nom, cellules}], cellules celles de ligneInfobulle, ou null quand la
+ * cible n'a aucune ligne. Forme {colonnes, lignes} : sa ligne seule, nom
+ * null, sans nom de série. Forme à séries : une ligne par
+ * série qui en porte une à cet indice, dans l'ordre des séries, chacune
+ * sous le nom de sa série. Lève comme exigerInfobulle.
+ * @param {Object} infobulle
+ * @param {number} indice
+ * @param {(valeur: number, options: {decimales: number}) => string} ecrire
+ * @returns {Array<{nom: string|null, cellules: Array<Object>}>|null}
+ */
+export function lignesInfobulle(infobulle, indice, ecrire) {
+  const { colonnes, lignes, series } = exigerInfobulle(infobulle);
+  const parSerie = series ?? [{ nom: null, lignes }];
+  const rendues = parSerie
+    .filter((s) => s.lignes[indice] !== undefined)
+    .map((s) => ({ nom: s.nom, cellules: ligneInfobulle(colonnes, s.lignes[indice], ecrire) }));
+  return rendues.length === 0 ? null : rendues;
 }

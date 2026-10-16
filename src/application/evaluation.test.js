@@ -28,6 +28,7 @@ import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
 import { constante } from '../geometrie/constantes.js';
 import { classer } from '../moteur/classement.js';
+import { premierPalierQuiDepartage } from '../moteur/classement.js';
 import { SANS_GROUPE, STATUT, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
@@ -35,6 +36,7 @@ import * as DIVERSITE from '../moteur/diversite.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { mesurer } from '../moteur/indicateurs.js';
 import { ecartsAuPlafondAPriori } from '../moteur/manque.js';
+import { borneHaute, comparerProfils, escalierDuManque, manques, profilManque, valeursDistinctes } from '../moteur/manque.js';
 import * as PAIRES from '../moteur/paires.js';
 import { borneDiversite, plafondsAPriori } from '../moteur/plafond.js';
 import * as QUALITE from '../moteur/qualite.js';
@@ -46,8 +48,12 @@ import { deriveSansRevalider, fautes, planDepuisFichier } from '../stockage/plac
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
 import { configurationDe } from './configuration.js';
+import { derivationDe } from './depart.js';
 import * as EVALUATION from './evaluation.js';
 import {
+  candidatsDeComparaison,
+  comparaisonOfferte,
+  comparerPlacements,
   detaillerQualite,
   evaluer,
   nettoyage,
@@ -1731,5 +1737,536 @@ describe('rencontresDePersonne : la ligne de la fiche (§ 12.5, D33)', () => {
     assert.throws(() => normaliser(configurationDe(surreservee)), (erreur) => erreur instanceof ErreurConfiguration);
     assert.deepEqual(rencontresDePersonne(surreservee, 1, 6), { source: 1, statut: 'nonMesurable', lignes: [] });
     assert.throws(() => rencontresDePersonne(charge, 1, 999), RangeError);
+  });
+});
+
+// --- La comparaison de deux placements (§ 12.10.6, D56 à D67, D83 à D85) ----
+
+// La petite démonstration, quatre propositions générées et classées
+// [4, 1, 2, 3] : 1 et 4 ont le même profil de manque, 1 et 3 basculent une
+// fois, 4 sert mieux que 2 à tous les rangs, et le rang 1 du profil des
+// rencontres n'est pas la même personne pour 4 et pour 3.
+const chargeComparee = () => generee(chargeDemo('petite'), { graine: 2, nombre: 4, arret: 60 });
+
+// La charge dont la proposition id est devenue une dérivée de depart, ses
+// tours figés donnés, comme versFichier l'écrit.
+function deriver(charge, id, depart, toursFiges = []) {
+  const copie = structuredClone(charge);
+  const proposition = copie.propositions.find((element) => element.id === id);
+  proposition.depart = depart;
+  if (toursFiges.length > 0) proposition.toursFiges = [...toursFiges];
+  return copie;
+}
+
+// La charge dont le retenu est tiré de la proposition id ; ajusté : deux
+// personnes des deux premières tables échangées au premier tour, les listes
+// gardées croissantes.
+function avecRetenu(charge, id, { ajuste = false } = {}) {
+  const copie = structuredClone(charge);
+  copie.retenu = retenuDe(copie.propositions.find((element) => element.id === id));
+  if (ajuste) {
+    const [premiere, seconde] = copie.retenu.placement[0].sieges;
+    [premiere[0], seconde[0]] = [seconde[0], premiere[0]];
+    for (const liste of [premiere, seconde]) liste.sort((x, y) => x - y);
+  }
+  copie.evenement.etat = 'retenu';
+  return copie;
+}
+
+// La charge sans les propositions nommées.
+function sans(charge, ids) {
+  const copie = structuredClone(charge);
+  copie.propositions = copie.propositions.filter(({ id }) => !ids.includes(id));
+  return copie;
+}
+
+// La charge dont la proposition id est fautive : une personne déjà assise
+// au premier tour mise aussi en réserve.
+function rendreFautive(charge, id) {
+  const copie = structuredClone(charge);
+  const proposition = copie.propositions.find((element) => element.id === id);
+  proposition.placement[0].reserve.push(proposition.participants[0]);
+  return copie;
+}
+
+// La table dont la ligne de la proposition id (ou du retenu) est remplacée
+// par ce que forger fait d'une copie d'elle.
+function tableForgee(table, cle, forger) {
+  const forgee = (ligne) => {
+    const copie = structuredClone(ligne);
+    forger(copie);
+    return copie;
+  };
+  if (cle === 'retenu') return { ...table, retenu: forgee(table.retenu) };
+  return { ...table, propositions: table.propositions.map((ligne) => (ligne.id === cle ? forgee(ligne) : ligne)) };
+}
+
+// Pose le manque voulu de chaque personne d'une ligne : ses rencontres
+// deviennent son plafond réalisé moins ce manque.
+const poserManques = (voulus) => (ligne) => {
+  voulus.forEach((manque, p) => {
+    ligne.mesures.rencontres[p] = ligne.plafondsRealises[p] - manque;
+  });
+};
+
+// Les champs de bornes que portent les colonnes de la comparaison.
+const bornesDesColonnes = ({ rang1, manque, objectifs, soiree, planchers }) => ({ rang1, manque, objectifs, soiree, planchers });
+
+// La ligne d'évaluation d'un placement de la table.
+const ligneDe = (table, cle) => (cle === 'retenu' ? table.retenu : table.propositions.find(({ id }) => id === cle));
+
+// Le profil de manque d'une ligne, par les fonctions du moteur.
+const profilDeLigne = (instance, ligne) =>
+  profilManque(instance, manques(ligne.plafondsRealises, ligne.mesures.rencontres), ligne.plafondsRealises);
+
+const cles = ({ candidats }) => candidats.map(({ cle }) => cle);
+
+describe('comparaison : le second placement, ses candidats et son défaut (§ 12.10.6, D56, D58, D85, C14, C20)', () => {
+  test('rouge : le défaut du second placement suit ses quatre branches', () => {
+    const base = chargeComparee();
+    assert.deepEqual(evaluer(base).classement.ordre, [4, 1, 2, 3]);
+    const defautDe = (charge, a) => candidatsDeComparaison(charge, evaluer(figer(charge)), a).defaut;
+    // A dérivée : son départ, avant la première du classement.
+    const derivee = deriver(base, 3, 2, [1]);
+    assert.equal(defautDe(derivee, 3), 2);
+    // A retenu ajusté : sa proposition d'origine.
+    assert.equal(defautDe(avecRetenu(base, 2, { ajuste: true }), 'retenu'), 2);
+    // Sinon la première du classement, retenu présent ou non ; A en tête du
+    // classement : la suivante.
+    assert.equal(defautDe(base, 2), 4);
+    assert.equal(defautDe(avecRetenu(base, 2, { ajuste: true }), 1), 4);
+    assert.equal(defautDe(base, 4), 1);
+    // Sinon le retenu : une seule proposition et le retenu ajusté.
+    const seule = sans(base, [1, 2, 3]);
+    assert.equal(defautDe(avecRetenu(seule, 4, { ajuste: true }), 4), 'retenu');
+    // Le départ effacé : la branche suivante.
+    assert.equal(defautDe(sans(derivee, [2]), 3), 4);
+    // La proposition d'origine effacée : le retenu est ajusté, et la branche
+    // suivante vaut.
+    assert.equal(defautDe(sans(avecRetenu(base, 2), [2]), 'retenu'), 4);
+    // Un retenu non ajusté venu d'une dérivée : le départ de sa proposition.
+    assert.equal(defautDe(avecRetenu(derivee, 3), 'retenu'), 2);
+    // Un retenu non ajusté et sa proposition ne sont jamais candidats l'un de
+    // l'autre.
+    const retenue = figer(avecRetenu(base, 4));
+    const table = evaluer(retenue);
+    assert.deepEqual(candidatsDeComparaison(retenue, table, 'retenu'), {
+      candidats: [{ cle: 1, rang: 2 }, { cle: 2, rang: 3 }, { cle: 3, rang: 4 }],
+      defaut: 1,
+    });
+    assert.deepEqual(cles(candidatsDeComparaison(retenue, table, 4)), [1, 2, 3]);
+    // Sans candidat : null.
+    assert.deepEqual(candidatsDeComparaison(seule, evaluer(seule), 4), { candidats: [], defaut: null });
+    const seuleRetenue = avecRetenu(seule, 4);
+    assert.deepEqual(candidatsDeComparaison(seuleRetenue, evaluer(seuleRetenue), 'retenu'), { candidats: [], defaut: null });
+  });
+
+  test('les candidats : le retenu d’abord, puis les comparables dans l’ordre du classement, chacun à sa place ; ni A, ni son identique, ni une ligne qui ne se compare pas', () => {
+    const base = rendreFautive(avecRetenu(chargeComparee(), 2), 3);
+    const table = evaluer(figer(base));
+    assert.deepEqual(table.classement.ordre, [4, 1, 2]);
+    // Le retenu non ajusté prend la place de sa proposition.
+    assert.deepEqual(candidatsDeComparaison(base, table, 1).candidats, [
+      { cle: 'retenu', rang: 3 },
+      { cle: 4, rang: 1 },
+      { cle: 2, rang: 3 },
+    ]);
+    assert.deepEqual(cles(candidatsDeComparaison(base, table, 2)), [4, 1]);
+    assert.deepEqual(cles(candidatsDeComparaison(base, table, 'retenu')), [4, 1]);
+    // Le retenu ajusté ne se classe pas, et n'est identique à aucune.
+    const ajustee = rendreFautive(avecRetenu(chargeComparee(), 2, { ajuste: true }), 3);
+    const tableAjustee = evaluer(figer(ajustee));
+    assert.deepEqual(candidatsDeComparaison(ajustee, tableAjustee, 2).candidats, [
+      { cle: 'retenu', rang: null },
+      { cle: 4, rang: 1 },
+      { cle: 1, rang: 2 },
+    ]);
+    assert.deepEqual(cles(candidatsDeComparaison(ajustee, tableAjustee, 'retenu')), [4, 1, 2]);
+    // Un retenu fautif n'est pas candidat.
+    const retenuFautif = structuredClone(base);
+    retenuFautif.retenu.placement[0].reserve.push(retenuFautif.retenu.participants[0]);
+    assert.deepEqual(cles(candidatsDeComparaison(retenuFautif, evaluer(figer(retenuFautif)), 1)), [4, 2]);
+    // A qui n'est pas un placement mesurable ne retire que lui-même.
+    const sansRetenu = figer(rendreFautive(chargeComparee(), 3));
+    const tableSansRetenu = evaluer(sansRetenu);
+    assert.deepEqual(candidatsDeComparaison(sansRetenu, tableSansRetenu, 'retenu'), {
+      candidats: [{ cle: 4, rang: 1 }, { cle: 1, rang: 2 }, { cle: 2, rang: 3 }],
+      defaut: 4,
+    });
+    assert.deepEqual(cles(candidatsDeComparaison(sansRetenu, tableSansRetenu, 3)), [4, 1, 2]);
+  });
+
+  test('comparaisonOfferte : vrai dès deux placements mesurables et distincts, un retenu non ajusté et sa proposition comptant pour un', () => {
+    const base = chargeComparee();
+    const offerte = (charge) => comparaisonOfferte(charge, evaluer(figer(charge)));
+    assert.equal(offerte(base), true);
+    const seule = sans(base, [1, 2, 3]);
+    assert.equal(offerte(seule), false);
+    assert.equal(offerte(avecRetenu(seule, 4)), false);
+    assert.equal(offerte(avecRetenu(seule, 4, { ajuste: true })), true);
+    // Le même retenu ajusté, fautif : il ne se mesure pas et ne compte pas, la
+    // seule proposition reste seule.
+    const retenuFautif = avecRetenu(seule, 4, { ajuste: true });
+    retenuFautif.retenu.placement[0].reserve.push(retenuFautif.retenu.participants[0]);
+    assert.equal(evaluer(figer(retenuFautif)).retenu.statut, 'fautif');
+    assert.equal(offerte(retenuFautif), false);
+    assert.equal(offerte(rendreFautive(sans(base, [1, 2]), 3)), false);
+    assert.equal(offerte(sans(base, [1, 2])), true);
+    assert.equal(offerte(sans(base, [1, 2, 3, 4])), false);
+  });
+});
+
+describe('comparerPlacements : deux lignes de la table, une seule arithmétique (§ 12.10.6, D60 à D67, D83, C20, C22, C29)', () => {
+  test('les bornes de chaque côté sont, champ pour champ, celles du détail de son placement, personnes sous id et plafond a priori compris', () => {
+    // La seconde charge réserve 7 et 8 ensemble à la deuxième table pour la
+    // soirée : leur plafond a priori tombe sous celui des autres, et le rang 1
+    // de chaque côté est l'un d'eux, loin de l'index 0.
+    const reservee = chargeAObjectifs();
+    reservee.reservations = [7, 8].map((participant) => ({ participant, table: reservee.tables[1].id, siege: null, portee: 'tous', tour: null }));
+    for (const depart of [chargeAObjectifs(), reservee]) {
+      const generees = generee(depart, { graine: 3, nombre: 3, arret: 300 });
+      let distingues = 0;
+      let lignesDistinguees = 0;
+      for (const charge of [avecRetenu(generees, 2), avecRetenu(generees, 2, { ajuste: true })]) {
+        figer(charge);
+        for (const plafondsAPriori of ['calcul', null]) {
+          const table = evaluer(charge, { plafondsAPriori });
+          const [premiere, seconde] = table.classement.ordre;
+          for (const [a, b] of [[premiere, seconde], ['retenu', premiere], [seconde, 'retenu']]) {
+            const comparaison = comparerPlacements(charge, table, a, b);
+            for (const [cote, cle] of [['a', a], ['b', b]]) {
+              const detail = detaillerQualite(charge, cle, { plafondsAPriori });
+              assert.notEqual(detail.bornes.objectifs, null);
+              assert.equal(detail.bornes.rang1.plafondAPriori === null, plafondsAPriori === null);
+              assert.deepEqual(comparaison[cote].bornes, bornesDesColonnes(detail.bornes), `${cote} ${cle} ${plafondsAPriori}`);
+              // Le plafond a priori du rang 1 est celui de sa personne dans la population.
+              const { rang1 } = comparaison[cote].bornes;
+              const p = table.population.indexOf(rang1.id);
+              assert.equal(rang1.plafondAPriori, plafondsAPriori === null ? null : table.plafondsAPriori[p], `${cote} ${cle}`);
+              if (plafondsAPriori !== null && table.plafondsAPriori[p] !== table.plafondsAPriori[0]) distingues += 1;
+              // Chaque ligne du profil porte, de même, le plafond a priori de
+              // sa propre personne.
+              for (const l of comparaison.profils?.[cote] ?? []) {
+                const q = table.population.indexOf(l.id);
+                assert.equal(l.plafondAPriori, plafondsAPriori === null ? null : table.plafondsAPriori[q], `${cote} ${cle} ${l.id}`);
+                if (plafondsAPriori !== null && table.plafondsAPriori[q] !== table.plafondsAPriori[0]) lignesDistinguees += 1;
+              }
+            }
+          }
+          if (depart === reservee && plafondsAPriori !== null) assert.ok(new Set(table.plafondsAPriori).size > 1);
+        }
+      }
+      // Sur la charge réservée, un rang 1 au moins ne partage pas le plafond
+      // a priori de la première personne : le champ se lit à sa place.
+      if (depart === reservee) assert.ok(distingues > 0, 'aucun rang 1 ne se distingue de la première personne');
+      if (depart === reservee) assert.ok(lignesDistinguees > 0, 'aucune ligne de profil ne se distingue de la première personne');
+    }
+  });
+
+  test('hors du domaine des planchers — une personne en réserve à un tour, une réservation que le retenu ne tient pas —, chaque colonne de planchers de ce côté vaut null, comme dans le détail', () => {
+    const generees = figer(generee(chargeAObjectifs(), { graine: 3, nombre: 3, arret: 300 }));
+    // Les planchers d'un côté, ceux de son détail, et vrai quand chaque
+    // colonne vaut null.
+    const planchersDesCotes = (charge, a, b) => {
+      const comparaison = comparerPlacements(charge, evaluer(charge), a, b);
+      return [['a', a], ['b', b]].map(([cote, cle]) => {
+        const { planchers } = comparaison[cote].bornes;
+        assert.deepEqual(planchers, bornesDesColonnes(detaillerQualite(charge, cle).bornes).planchers, `${cote} ${cle}`);
+        return Object.values(planchers).every((colonne) => colonne === null);
+      });
+    };
+    // La référence : sur le domaine des planchers, chaque côté en porte.
+    assert.deepEqual(planchersDesCotes(generees, 1, 2), [false, false]);
+
+    // La première personne de la première table du premier tour de la
+    // proposition 1 passe en réserve à ce tour : aucune violation, un tour
+    // sans siège.
+    const enReserve = structuredClone(generees);
+    const proposition = enReserve.propositions.find(({ id }) => id === 1);
+    assert.equal(proposition.siegesAttribues, false);
+    proposition.placement[0].reserve.push(...proposition.placement[0].sieges[0].splice(0, 1));
+    figer(enReserve);
+    const ligneEnReserve = ligneDe(evaluer(enReserve), 1);
+    assert.equal(ligneEnReserve.statut, 'comparable');
+    assert.deepEqual(ligneEnReserve.violations, []);
+    assert.ok(ligneEnReserve.mesures.toursAssis.some((assis) => assis < enReserve.evenement.tours));
+    assert.deepEqual(planchersDesCotes(enReserve, 1, 2), [true, false]);
+
+    // Le retenu, tiré de la proposition 2, ne tient pas la réservation de
+    // la personne 1 à une autre table au premier tour : chacun assis à
+    // chaque tour, une violation RESERVATION.
+    const nonTenue = avecRetenu(generees, 2);
+    const sienne = nonTenue.retenu.placement[0].sieges.findIndex((liste) => liste.includes(1));
+    const autre = nonTenue.retenu.tables.find((_, t) => t !== sienne);
+    nonTenue.reservations = [{ participant: 1, table: autre, siege: null, portee: 'tour', tour: 1 }];
+    figer(nonTenue);
+    const ligneNonTenue = ligneDe(evaluer(nonTenue), 'retenu');
+    assert.deepEqual(ligneNonTenue.violations, [{ code: 'RESERVATION', participant: 1, table: autre, tour: 1 }]);
+    assert.ok(ligneNonTenue.mesures.toursAssis.every((assis) => assis === nonTenue.evenement.tours));
+    assert.deepEqual(planchersDesCotes(nonTenue, 'retenu', 1), [true, true]);
+  });
+
+  test('rouge : le pourcentage de chaque colonne est celui du pire cas de son placement, deux personnes différentes, jamais une moyenne', () => {
+    const charge = figer(chargeComparee());
+    const table = evaluer(charge);
+    const comparaison = comparerPlacements(charge, table, 4, 3);
+    const { rang1: rang1A } = comparaison.a.bornes;
+    const { rang1: rang1B } = comparaison.b.bornes;
+    assert.notEqual(rang1A.id, rang1B.id);
+    assert.notEqual(rang1A.pourcent, rang1B.pourcent);
+    const somme = (valeurs) => Array.from(valeurs).reduce((total, valeur) => total + valeur, 0);
+    for (const [cote, cle] of [['a', 4], ['b', 3]]) {
+      const { rang1 } = comparaison[cote].bornes;
+      const ligne = ligneDe(table, cle);
+      const p = table.population.indexOf(rang1.id);
+      assert.deepEqual([rang1.rencontres, rang1.plafondRealise], [ligne.mesures.rencontres[p], ligne.plafondsRealises[p]]);
+      assert.equal(rang1.pourcent, QUALITE.pourcentage(ligne.mesures.rencontres[p], ligne.plafondsRealises[p]));
+      assert.notEqual(rang1.pourcent, QUALITE.pourcentage(somme(ligne.mesures.rencontres), somme(ligne.plafondsRealises)));
+      // Le pire cas : personne n'a moins de rencontres.
+      assert.equal(rang1.rencontres, Math.min(...ligne.mesures.rencontres));
+    }
+  });
+
+  test('profils, rangs, borne haute, valeurs distinctes et escalier : ceux du moteur sur les deux lignes ; domine traduit en côté ; les cumuls reproduisent la courbe', () => {
+    const charge = figer(chargeComparee());
+    const table = evaluer(charge);
+    const instance = normaliser(configurationDe(charge));
+    const attendus = { '1,3': { bascule: 9, domine: null }, '4,2': { bascule: null, domine: 'a' }, '2,4': { bascule: null, domine: 'b' } };
+    for (const [a, b] of [[1, 3], [4, 2], [2, 4]]) {
+      const comparaison = comparerPlacements(charge, table, a, b);
+      const [ligneA, ligneB] = [ligneDe(table, a), ligneDe(table, b)];
+      const [profilA, profilB] = [profilDeLigne(instance, ligneA), profilDeLigne(instance, ligneB)];
+      const moteur = comparerProfils(profilA, profilB);
+      assert.equal(comparaison.statut, 'comparable');
+      assert.deepEqual([comparaison.refusDessin, comparaison.populations, comparaison.indiscernables], [null, null, null]);
+      assert.deepEqual(comparaison.rangs, {
+        a: moteur.rangsA,
+        b: moteur.rangsB,
+        egalite: moteur.egalite,
+        bascule: moteur.rangBascule,
+        domine: { A: 'a', B: 'b' }[moteur.domine] ?? null,
+      });
+      assert.deepEqual({ bascule: comparaison.rangs.bascule, domine: comparaison.rangs.domine }, attendus[`${a},${b}`]);
+      for (const [cote, ligne, profil] of [['a', ligneA, profilA], ['b', ligneB, profilB]]) {
+        assert.deepEqual(
+          comparaison.profils[cote],
+          profil.map(({ id, manque, plafondRealise }) => {
+            const p = table.population.indexOf(id);
+            return { id, manque, rencontres: ligne.mesures.rencontres[p], plafondRealise, plafondAPriori: table.plafondsAPriori[p] };
+          }),
+        );
+      }
+      assert.equal(comparaison.borneHaute, borneHaute(profilA, profilB));
+      assert.equal(comparaison.valeursDistinctes, valeursDistinctes(profilA, profilB));
+      assert.equal(comparaison.trace, comparaison.valeursDistinctes >= constante('VALEURS_MANQUE_COURBE'));
+      assert.deepEqual(comparaison.escalier, escalierDuManque(profilA, profilB));
+      // Le cumul d'une valeur est le dernier rang où la courbe l'atteint.
+      for (const { valeur, a: escalierA, b: escalierB } of comparaison.escalier) {
+        for (const [{ cumul }, profil] of [[escalierA, comparaison.profils.a], [escalierB, comparaison.profils.b]]) {
+          if (cumul > 0) assert.ok(profil[cumul - 1].manque >= valeur, `${valeur} ${cumul}`);
+          if (cumul < profil.length) assert.ok(profil[cumul].manque < valeur, `${valeur} ${cumul}`);
+        }
+      }
+    }
+  });
+
+  test('le tracé au seuil du registre, la phrase au seuil moins un : la règle porte sur les deux profils réunis', () => {
+    const charge = figer(chargeComparee());
+    const table = evaluer(charge);
+    const seuil = constante('VALEURS_MANQUE_COURBE');
+    // A prend les valeurs 0 à k − 1, B n'a aucun manque : k valeurs réunies.
+    const forgee = (k) =>
+      tableForgee(
+        tableForgee(table, 4, poserManques(table.population.map((_, p) => (p < k ? p : 0)))),
+        1,
+        poserManques(table.population.map(() => 0)),
+      );
+    const auSeuil = comparerPlacements(charge, forgee(seuil), 4, 1);
+    assert.deepEqual([auSeuil.statut, auSeuil.valeursDistinctes, auSeuil.trace], ['comparable', seuil, true]);
+    const sousLeSeuil = comparerPlacements(charge, forgee(seuil - 1), 4, 1);
+    assert.deepEqual([sousLeSeuil.statut, sousLeSeuil.valeursDistinctes, sousLeSeuil.trace], ['comparable', seuil - 1, false]);
+    assert.equal(sousLeSeuil.escalier.length, seuil - 1);
+  });
+
+  test('rouge : un refus de dessin sur la seule ligne de B refuse toute la comparaison et nomme B ; sur A, ou sur les deux, nomme A', () => {
+    const charge = figer(chargeComparee());
+    const table = evaluer(charge);
+    const violations = [{ code: 'DEPASSEMENT', index: 0, participant: table.population[0] }];
+    const refuser = (ligne) => {
+      ligne.refusDessin = structuredClone(violations);
+    };
+    const refuseeB = comparerPlacements(charge, tableForgee(table, 3, refuser), 1, 3);
+    assert.equal(refuseeB.statut, 'refusDessin');
+    assert.deepEqual(refuseeB.refusDessin, { cote: 'b', violations });
+    assert.deepEqual(
+      [refuseeB.populations, refuseeB.profils, refuseeB.rangs, refuseeB.borneHaute, refuseeB.valeursDistinctes, refuseeB.trace, refuseeB.escalier, refuseeB.indiscernables],
+      [null, null, null, null, null, false, null, null],
+    );
+    assert.deepEqual(comparerPlacements(charge, tableForgee(table, 1, refuser), 1, 3).refusDessin, { cote: 'a', violations });
+    const lesDeux = tableForgee(tableForgee(table, 1, refuser), 3, refuser);
+    assert.equal(comparerPlacements(charge, lesDeux, 1, 3).refusDessin.cote, 'a');
+    assert.equal(comparerPlacements(charge, lesDeux, 3, 1).refusDessin.cote, 'a');
+  });
+
+  test('populations différentes : une charge falsifiée où B déclare une personne que A ne place pas — ni profil ni rangs, les personnes de chaque côté nommées', () => {
+    const charge = chargeComparee();
+    const table = evaluer(figer(charge));
+    const falsifiee = structuredClone(charge);
+    const proposition = falsifiee.propositions.find(({ id }) => id === 3);
+    proposition.participants = proposition.participants.map((id) => (id === 12 ? 99 : id));
+    const comparaison = comparerPlacements(figer(falsifiee), table, 1, 3);
+    assert.equal(comparaison.statut, 'populationsDifferentes');
+    assert.deepEqual(comparaison.populations, { seulementA: [12], seulementB: [99] });
+    assert.deepEqual(
+      [comparaison.refusDessin, comparaison.profils, comparaison.rangs, comparaison.borneHaute, comparaison.valeursDistinctes, comparaison.trace, comparaison.escalier, comparaison.indiscernables],
+      [null, null, null, null, null, false, null, null],
+    );
+  });
+
+  test('rouge : indiscernables — entre deux propositions, le premier palier qui les départage, puis l’identifiant ; avec le retenu, l’indiscernabilité seule', () => {
+    const base = chargeComparee();
+    // La proposition 5, copie de la 1 : mêmes clés à chaque palier.
+    const copie = structuredClone(base);
+    copie.propositions.push({ ...structuredClone(copie.propositions.find(({ id }) => id === 1)), id: 5, graine: 5 });
+    copie.prochainsIds.proposition = 6;
+    const charge = figer(avecRetenu(copie, 1));
+    const table = evaluer(charge);
+    const instance = normaliser(configurationDe(charge));
+    const entree = (id) => ({ id, mesures: ligneDe(table, id).mesures, plafondsAPriori: table.plafondsAPriori });
+    const palier = premierPalierQuiDepartage(entree(1), entree(4), compilationDe(instance));
+    assert.notEqual(palier, null);
+    assert.deepEqual(comparerPlacements(charge, table, 1, 4).indiscernables, { palier, retenu: false });
+    assert.deepEqual(comparerPlacements(charge, table, 1, 5).indiscernables, { palier: null, retenu: false });
+    // Le retenu contre sa proposition, et contre une autre de même profil.
+    for (const [a, b] of [['retenu', 1], [1, 'retenu'], ['retenu', 4], [4, 'retenu']]) {
+      assert.deepEqual(comparerPlacements(charge, table, a, b).indiscernables, { palier: null, retenu: true }, `${a} ${b}`);
+    }
+    assert.equal(comparerPlacements(charge, table, 1, 3).indiscernables, null);
+  });
+
+  test('chaque côté : sa clé, sa place au classement — celle de sa proposition pour un retenu non ajusté, null ajusté —, ajusté ou non, sa filiation', () => {
+    const derivee = deriver(chargeComparee(), 3, 2, [1]);
+    const nonAjuste = figer(avecRetenu(derivee, 3));
+    const table = evaluer(nonAjuste);
+    const comparaison = comparerPlacements(nonAjuste, table, 'retenu', 4);
+    const filiation = { depart: 2, toursFiges: [1], departPresent: true };
+    assert.deepEqual(derivationDe(nonAjuste, 3), filiation);
+    const { bornes: _a, ...coteA } = comparaison.a;
+    const { bornes: _b, ...coteB } = comparaison.b;
+    assert.deepEqual(coteA, { cle: 'retenu', rang: table.classement.ordre.indexOf(3) + 1, ajuste: false, derivation: filiation });
+    assert.deepEqual(coteB, { cle: 4, rang: 1, ajuste: false, derivation: null });
+    assert.deepEqual(comparerPlacements(nonAjuste, table, 4, 3).b.derivation, filiation);
+    const ajuste = figer(avecRetenu(derivee, 3, { ajuste: true }));
+    const { bornes: _c, ...coteAjuste } = comparerPlacements(ajuste, evaluer(ajuste), 2, 'retenu').b;
+    assert.deepEqual(coteAjuste, { cle: 'retenu', rang: null, ajuste: true, derivation: null });
+    // Face au retenu ajusté, la proposition n'est pas ajustée : sa place au
+    // classement, sans filiation.
+    const tableAjustee = evaluer(ajuste);
+    const { bornes: _d, ...coteProposition } = comparerPlacements(ajuste, tableAjustee, 2, 'retenu').a;
+    assert.deepEqual(coteProposition, { cle: 2, rang: tableAjustee.classement.ordre.indexOf(2) + 1, ajuste: false, derivation: null });
+    // Le départ effacé : la filiation le dit absent.
+    const orpheline = figer(sans(derivee, [2]));
+    assert.deepEqual(comparerPlacements(orpheline, evaluer(orpheline), 3, 1).a.derivation, { ...filiation, departPresent: false });
+  });
+
+  test('RangeError pour un côté qui n’est pas un placement mesurable, et pour a = b ; jamais pour un retenu et sa proposition, deux placements égaux', () => {
+    const charge = figer(rendreFautive(avecRetenu(chargeComparee(), 1), 3));
+    const table = evaluer(charge);
+    for (const [a, b] of [[1, 1], ['retenu', 'retenu'], [1, 99], [99, 1], [1, 3], [3, 1], [1, '1'], [1, null]]) {
+      assert.throws(() => comparerPlacements(charge, table, a, b), RangeError, `${a} ${b}`);
+    }
+    const sansRetenu = figer(rendreFautive(chargeComparee(), 3));
+    assert.throws(() => comparerPlacements(sansRetenu, evaluer(sansRetenu), 1, 'retenu'), RangeError);
+    let enDerive = executer(chargeComparee(), 'exclureParticipant', { id: 4 });
+    enDerive = figer(generee(enDerive, { graine: 3, nombre: 1, arret: 60 }));
+    assert.throws(() => comparerPlacements(enDerive, evaluer(enDerive), 5, 1), RangeError);
+    // Une ligne comparable qui n'a pas une case par personne de son
+    // placement : ses rencontres seules, puis ses rencontres et ses plafonds
+    // réalisés ensemble.
+    const courte = tableForgee(table, 2, (ligne) => {
+      ligne.mesures.rencontres = ligne.mesures.rencontres.slice(1);
+    });
+    assert.throws(() => comparerPlacements(charge, courte, 1, 2), RangeError);
+    const courteEnTout = tableForgee(table, 2, (ligne) => {
+      ligne.mesures.rencontres = ligne.mesures.rencontres.slice(1);
+      ligne.plafondsRealises = ligne.plafondsRealises.slice(1);
+    });
+    assert.throws(() => comparerPlacements(charge, courteEnTout, 1, 2), RangeError);
+    assert.equal(comparerPlacements(charge, table, 'retenu', 1).statut, 'comparable');
+  });
+
+  test('rouge : les deux côtés se lisent dans la table, jamais dans un détail — une ligne forgée se lit telle quelle', () => {
+    const charge = figer(chargeComparee());
+    const table = evaluer(charge);
+    const voulus = table.population.map((_, p) => (p === 0 ? 5 : 0));
+    const comparaison = comparerPlacements(charge, tableForgee(table, 3, poserManques(voulus)), 1, 3);
+    const ligne = ligneDe(table, 3);
+    const id = table.population[0];
+    assert.deepEqual(comparaison.profils.b[0], {
+      id,
+      manque: 5,
+      rencontres: ligne.plafondsRealises[0] - 5,
+      plafondRealise: ligne.plafondsRealises[0],
+      plafondAPriori: table.plafondsAPriori[0],
+    });
+    assert.deepEqual(comparaison.b.bornes.manque, { id, plafondRealise: ligne.plafondsRealises[0] });
+    assert.equal(comparaison.b.bornes.rang1.id, id);
+    assert.notDeepEqual(comparaison.b.bornes, bornesDesColonnes(detaillerQualite(charge, 3).bornes));
+  });
+
+  test('rouge : comparerPlacements, candidatsDeComparaison et comparaisonOfferte n’atteignent ni diagnostiquer, ni detailler, ni mesurer, ni le détail, ni evaluer', () => {
+    // La fermeture de ce que chacune atteint dans le texte du module, comme
+    // pour evaluer : un espion de vitest ne se pose pas dans la série node.
+    const texte = readFileSync(new URL('./evaluation.js', import.meta.url), 'utf8');
+    for (const depart of ['comparerPlacements', 'candidatsDeComparaison', 'comparaisonOfferte']) {
+      const { liaisons, importes } = atteintDepuis(texte, depart);
+      assert.deepEqual(['diagnostiquer', 'detailler', 'mesurer'].filter((nom) => importes.has(nom)), [], depart);
+      assert.deepEqual(['detaillerQualite', 'evaluer', 'rencontresDePersonne', 'resumeDuRetenu'].filter((nom) => liaisons.has(nom)), [], depart);
+    }
+    const deLaComparaison = atteintDepuis(texte, 'comparerPlacements');
+    for (const nom of ['profilManque', 'comparerProfils', 'escalierDuManque', 'teteDesColonnes', 'premierPalierQuiDepartage', 'planchersAtteints']) {
+      assert.ok(deLaComparaison.importes.has(nom), `la fermeture voit ${nom}`);
+    }
+  });
+});
+
+describe('evaluer : les deux champs de la configuration que lit la comparaison (contrainte 42, D83)', () => {
+  test('la table porte le plafond a priori par personne, une liste dans l’ordre de la population, et le diagnostic dont se lisent les planchers ; les lignes ne gagnent rien', () => {
+    const charge = figer(generee(chargeAObjectifs(), { graine: 3, nombre: 2, arret: 200 }));
+    const table = evaluer(charge);
+    const diagnostic = diagnostiquer(configurationDe(charge));
+    assert.ok(Array.isArray(table.plafondsAPriori));
+    assert.deepEqual(table.plafondsAPriori, Array.from(diagnostic.plafondAPriori.parPersonne));
+    assert.deepEqual(table.plafondsAPriori, Array.from(plafondsAPriori(normaliser(configurationDe(charge)))));
+    assert.deepEqual(table.diagnostic, diagnostic);
+    const instance = normaliser(configurationDe(charge));
+    assert.deepEqual(QUALITE.planchersDesColonnes(instance, table.diagnostic), QUALITE.planchersDesColonnes(instance, diagnostic));
+    assert.deepEqual(Object.keys(table), ['population', 'propositions', 'retenu', 'classement', 'criteres', 'imposes', 'plafondsAPriori', 'diagnostic']);
+    const CHAMPS = ['id', 'statut', 'raisons', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
+    for (const ligne of table.propositions) assert.deepEqual(Object.keys(ligne), CHAMPS);
+    assert.equal(evaluer(charge, { plafondsAPriori: null }).plafondsAPriori, null);
+  });
+});
+
+describe('detaillerQualite : la filiation du placement mesuré (D76, C23)', () => {
+  test('la dérivée porte la sienne ; le retenu non ajusté, celle de sa proposition d’origine ; le retenu ajusté et une proposition sans départ, null', () => {
+    const derivee = deriver(chargeComparee(), 3, 2, [1, 2]);
+    const filiation = { depart: 2, toursFiges: [1, 2], departPresent: true };
+    const nonAjuste = figer(avecRetenu(derivee, 3));
+    assert.deepEqual(detaillerQualite(nonAjuste, 3).derivation, filiation);
+    assert.deepEqual(detaillerQualite(nonAjuste, 'retenu').derivation, filiation);
+    assert.equal(detaillerQualite(nonAjuste, 4).derivation, null);
+    assert.equal(detaillerQualite(figer(avecRetenu(derivee, 3, { ajuste: true })), 'retenu').derivation, null);
+    assert.deepEqual(detaillerQualite(figer(sans(derivee, [2])), 3).derivation, { ...filiation, departPresent: false });
+    // Une dérivée qui ne se compare pas garde sa filiation.
+    const fautive = figer(rendreFautive(derivee, 3));
+    const detail = detaillerQualite(fautive, 3);
+    assert.equal(detail.statut, 'fautif');
+    assert.deepEqual(detail.derivation, filiation);
+    // En dérive — une personne exclue sans regénérer —, elle la garde aussi.
+    const enDerive = figer(executer(derivee, 'exclureParticipant', { id: 4 }));
+    const detailEnDerive = detaillerQualite(enDerive, 3);
+    assert.equal(detailEnDerive.statut, 'derive');
+    assert.deepEqual(detailEnDerive.derivation, filiation);
   });
 });

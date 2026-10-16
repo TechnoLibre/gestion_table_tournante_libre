@@ -11,11 +11,19 @@ import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
 import { bilanRemplacement } from '../csv/import.js';
 import { apercevoirObjectifs } from '../csv/objectifs.js';
-import { rechercher } from '../moteur/recherche.js';
-import { serialiserCharge } from '../stockage/canonique.js';
-import { configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
-import { cleDeCourse } from '../stockage/courses.js';
-import { courseDepuisFichier, derive, fauteDeCourse, fautes, formeNommee, planDepuisFichier } from '../stockage/placements.js';
+import { rechercher, repartir } from '../moteur/recherche.js';
+import { serialiser, serialiserCharge } from '../stockage/canonique.js';
+import { analyser, configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
+import { cleDeCourse, courseDe, lireCourses, texteDesCourses } from '../stockage/courses.js';
+import {
+  courseDepuisFichier,
+  derive,
+  examiner,
+  fauteDeCourse,
+  fautes,
+  formeNommee,
+  planDepuisFichier,
+} from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { readFileSync } from 'node:fs';
 import { chargements } from '../../test/chargements.js';
@@ -23,6 +31,7 @@ import { COMMANDES, ErreurCommande, appliquerCommande, chargeNeuve, formeNommeeD
 import { evaluer, nettoyage } from './evaluation.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
+import { derivationDe, planDuDepart, refusDuDepart } from './depart.js';
 import { ErreurCommande as ErreurDesErreurs, refus } from './erreurs.js';
 
 const V1 = VERSION.affichee;
@@ -963,6 +972,288 @@ describe('commandes : la course de la recherche, rendue à côté de la charge (
     const retenue = executer('retenirProposition', sans.charge, { id: 1 });
     assert.equal(Object.hasOwn(retenue, 'courses'), false);
     assert.equal(Object.hasOwn(executer('effacerPropositions', retenue.charge, {}), 'courses'), false);
+  });
+});
+
+describe('commandes : la génération dérivée (§ 5.7, § 8.9, C6, C24)', () => {
+  // Les arguments d'enregistrerGeneration d'une génération dérivée courte du
+  // moteur : partie du plan de la proposition depart de la charge, sous
+  // toursFiges, à 200 mouvements.
+  function genererDepuis(charge, depart, toursFiges, graine = 11, nombre = 2) {
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = repartir(configuration, { graine, arret: 200, nombre }, { plan: planDuDepart(charge, depart), toursFiges });
+    return { propositions, configuration, produitVersion: V1, derivation: { depart, toursFiges } };
+  }
+
+  // Sièges attribués, trois tours, deux tables de trois places pour quatre
+  // personnes. La proposition n° 1 s'engendre quand Iris Ombrelle est
+  // réservée au siège 3 de la table 1 et Ondine Lacasse au siège 3 de la
+  // table 2, à chaque tour ; la réservation d'Iris se retire ensuite. Le
+  // rangement ne met plus Iris au siège 3, et la proposition n° 1 reste un
+  // départ qui tient les réservations courantes : retirer une réservation
+  // est un geste légitime.
+  function chargeDepartAuxSieges() {
+    const charge = chargeEssai();
+    charge.evenement.siegesParDefaut = 3;
+    charge.evenement.tours = 3;
+    charge.reglages.attribuerSieges = true;
+    charge.reservations = [
+      { participant: 1, table: 1, siege: 3, portee: 'tous', tour: null },
+      { participant: 4, table: 2, siege: 3, portee: 'tous', tour: null },
+    ];
+    charge.titres = [];
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 7, arret: 200, nombre: 1 });
+    const generee = executer('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
+    return { ...generee, reservations: generee.reservations.filter(({ participant }) => participant !== 1) };
+  }
+
+  // La charge d'essai, trois propositions courtes, puis deux dérivées, n° 4
+  // et n° 5, de la dernière du classement, sans tour figé : elles se
+  // rangent devant leur départ.
+  function chargeAvecDerivees() {
+    const charge = chargeEssai();
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 4, arret: 1, nombre: 3 });
+    const generee = executer('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
+    const derniere = evaluer(generee).classement.ordre.at(-1);
+    const derivee = executer('enregistrerGeneration', generee, genererDepuis(generee, derniere, [])).charge;
+    return { charge: derivee, depart: derniere };
+  }
+
+  test("sous sièges attribués des deux côtés, la liste d'un tour figé est celle du départ, chaises vides comprises, même quand une réservation à un siège a changé l'ordre que le rangement donnerait : au plan et à chaque point de relevé", () => {
+    const avant = figer(chargeDepartAuxSieges());
+    const depart = avant.propositions[0];
+    const args = genererDepuis(avant, 1, [1, 2]);
+    assert.equal(refusDuDepart(avant, { id: 1, toursFiges: [1, 2] }), null);
+    // Les mêmes propositions du moteur enregistrées sans dérivation : les
+    // listes que le rangement donne.
+    const { derivation, ...ordinaire } = args;
+    const rangees = executer('enregistrerGeneration', avant, ordinaire).charge.propositions.slice(1);
+    const { charge, courses } = executer('enregistrerGeneration', avant, args);
+    const derivees = charge.propositions.slice(1);
+    assert.deepEqual(derivees.map(({ id }) => id), [2, 3]);
+    assert.equal(courses.length, 2);
+    let reordonnees = 0;
+    let chaisesVides = 0;
+    derivees.forEach((p, rang) => {
+      assert.deepEqual([p.depart, p.toursFiges, p.siegesAttribues], [1, [1, 2], true], `proposition ${p.id}`);
+      assert.deepEqual(p.tables, depart.tables);
+      const { course } = courses[rang];
+      assert.ok(course.releves.length > 0, `proposition ${p.id} : aucun point de relevé`);
+      const placements = [p.placement, ...course.releves.map(({ placement }) => placement)];
+      placements.forEach((placement, point) => {
+        for (const tour of derivation.toursFiges) {
+          assert.deepEqual(placement[tour - 1], depart.placement[tour - 1], `proposition ${p.id}, point ${point}, tour ${tour}`);
+          chaisesVides += placement[tour - 1].sieges.flat().filter((id) => id === null).length;
+        }
+        // Le tour non figé se range comme celui de toute proposition.
+        const rangee = point === 0 ? rangees[rang].placement : null;
+        if (rangee !== null) assert.deepEqual(placement[2], rangee[2], `proposition ${p.id}, tour 3`);
+      });
+      for (const tour of derivation.toursFiges) {
+        if (JSON.stringify(rangees[rang].placement[tour - 1]) !== JSON.stringify(depart.placement[tour - 1])) reordonnees += 1;
+      }
+    });
+    assert.ok(reordonnees > 0, "le rangement donnerait l'ordre du départ : l'épreuve ne distinguerait pas la recopie");
+    assert.ok(chaisesVides > 0, "aucune chaise vide dans les tours figés : l'épreuve ne les éprouverait pas");
+  });
+
+  test("sous sièges attribués, la course d'une dérivée se relit après réouverture : cleDeCourse de la proposition enregistrée trouve son entrée, courseDe la rend ; datée à son instant aussi", () => {
+    const avant = chargeDepartAuxSieges();
+    const args = genererDepuis(avant, 1, [1, 2]);
+    for (const options of [{}, { horodatage: '2031-05-17T08:02:00-04:00' }]) {
+      const { charge, courses } = appliquerCommande('enregistrerGeneration', avant, args, options);
+      const rouverte = examiner(analyser(serialiser(charge, { revision: 1, produitVersion: V1 })).charge).charge;
+      const lues = lireCourses(texteDesCourses(rouverte.evenement.id, courses), rouverte);
+      const derivees = rouverte.propositions.slice(1);
+      assert.deepEqual(derivees.map(({ id, depart }) => [id, depart]), [[2, 1], [3, 1]]);
+      derivees.forEach((p, rang) => {
+        const ici = `${JSON.stringify(options)}, proposition ${p.id}`;
+        assert.ok(lues.has(cleDeCourse(p)), `${ici} : la clé de la proposition ne trouve pas son entrée`);
+        const relue = courseDe({ charge: rouverte, courses: lues }, p.id);
+        assert.notEqual(relue, null, ici);
+        assert.equal(relue.evalues, args.propositions[rang].evalues, ici);
+        assert.equal(relue.releves.length, args.propositions[rang].releves.length, ici);
+      });
+    }
+  });
+
+  test('le libellé du journal nomme le départ, les propositions et les tours figés : trois formes', () => {
+    const avant = chargeDepartAuxSieges();
+    assert.equal(
+      executer('enregistrerGeneration', avant, genererDepuis(avant, 1, [1, 2])).libelle,
+      'Généré 2 propositions dérivées de n° 1 (n° 2 à 3), tours 1 et 2 figés',
+    );
+    const sansFige = executer('enregistrerGeneration', avant, genererDepuis(avant, 1, []));
+    assert.equal(sansFige.libelle, 'Généré 2 propositions dérivées de n° 1 (n° 2 à 3)');
+    // Sans tour figé, la dérivée porte son départ et ne porte pas toursFiges.
+    for (const p of sansFige.charge.propositions.slice(1)) {
+      assert.equal(p.depart, 1);
+      assert.equal(Object.hasOwn(p, 'toursFiges'), false);
+    }
+    const une = executer('enregistrerGeneration', avant, genererDepuis(avant, 1, [2], 11, 1));
+    assert.equal(une.libelle, 'Généré 1 proposition dérivée de n° 1 (n° 2), tour 2 figé');
+    assert.deepEqual(derivationDe(une.charge, 2), { depart: 1, toursFiges: [2], departPresent: true });
+  });
+
+  test("sans dérivation, ou sous derivation null, la commande rend la charge, le libellé et les courses d'une génération ordinaire", () => {
+    const avant = chargeDepartAuxSieges();
+    const args = generer(avant, 2, 7);
+    const sans = executer('enregistrerGeneration', avant, args);
+    const nulle = executer('enregistrerGeneration', avant, { ...args, derivation: null });
+    assert.equal(serialiserCharge(nulle.charge), serialiserCharge(sans.charge));
+    assert.equal(nulle.libelle, 'Généré 2 propositions (n° 2 à 3)');
+    assert.equal(sans.libelle, nulle.libelle);
+    assert.deepEqual(nulle.courses, sans.courses);
+    for (const p of sans.charge.propositions) {
+      assert.equal(Object.hasOwn(p, 'depart'), false);
+      assert.equal(Object.hasOwn(p, 'toursFiges'), false);
+    }
+  });
+
+  test('un départ absent de la charge est refusé PROPOSITION_INCONNUE, rien enregistré ; une dérivation de forme fausse est une faute du code', () => {
+    const avant = figer(chargeDepartAuxSieges());
+    const args = genererDepuis(avant, 1, [1]);
+    refuse(() => executer('enregistrerGeneration', avant, { ...args, derivation: { depart: 9, toursFiges: [1] } }), 'PROPOSITION_INCONNUE', {
+      id: 9,
+      remede: null,
+    });
+    for (const derivation of [{ depart: 1 }, { toursFiges: [1] }, 'x', { depart: 'un', toursFiges: [1] }]) {
+      assert.throws(() => executer('enregistrerGeneration', avant, { ...args, derivation }), TypeError, JSON.stringify(derivation));
+    }
+  });
+
+  test("TOUR_FIGE_DIFFERENT, atteint en forçant le défaut : un plan, ou un seul point de relevé, dont le tour figé n'est pas celui du départ ; aucune dérivée du moteur ne l'atteint", () => {
+    const { charge: avant, depart } = chargeAvecDerivees();
+    const tourDuDepart = planDuDepart(avant, depart).tours[0];
+    const configuration = configurationDepuisCharge(avant);
+    // Une proposition ordinaire dont le tour 1 n'est pas celui du départ.
+    const autre = rechercher(configuration, { graine: 4, arret: 200, nombre: 5 }).find(
+      ({ plan }) => JSON.stringify(plan.tours[0]) !== JSON.stringify(tourDuDepart),
+    );
+    assert.ok(autre !== undefined);
+    const forcee = { ...autre, id: 3 };
+    const derivation = { depart, toursFiges: [1] };
+    refuse(
+      () => executer('enregistrerGeneration', avant, { propositions: [forcee], configuration, produitVersion: V1, derivation }),
+      'TOUR_FIGE_DIFFERENT',
+      { rang: 3, tour: 1, remede: null },
+    );
+    // Une dérivée du moteur dont un seul point de relevé porte un tour 1
+    // aux deux listes échangées.
+    const args = genererDepuis(avant, depart, [1]);
+    assert.doesNotThrow(() => executer('enregistrerGeneration', avant, args));
+    const [premiere, seconde] = args.propositions;
+    assert.ok(seconde.releves.length > 1);
+    const releves = seconde.releves.map((releve, i) => {
+      if (i !== 1) return releve;
+      const [a, b] = releve.plan.tours[0];
+      return { ...releve, plan: { ...releve.plan, tours: [[b, a], ...releve.plan.tours.slice(1)] } };
+    });
+    refuse(
+      () => executer('enregistrerGeneration', avant, { ...args, propositions: [premiere, { ...seconde, releves }] }),
+      'TOUR_FIGE_DIFFERENT',
+      { rang: 2, tour: 1, remede: null },
+    );
+  });
+
+  test("TOUR_FIGE_DIFFERENT sous sièges attribués des deux côtés : un tour figé que le moteur a changé, au plan ou à un seul point de relevé, est refusé avant que la recopie ne l'efface", () => {
+    const avant = figer(chargeDepartAuxSieges());
+    const args = genererDepuis(avant, 1, [1, 2]);
+    assert.doesNotThrow(() => executer('enregistrerGeneration', avant, args));
+    // Les deux listes d'un tour échangées entre les tables : les occupants de
+    // chaque table ne sont plus ceux du départ.
+    const echange = (plan) => {
+      const [a, b] = plan.tours[0];
+      return { ...plan, tours: [[b, a], ...plan.tours.slice(1)] };
+    };
+    const [premiere, seconde] = args.propositions;
+    refuse(
+      () =>
+        executer('enregistrerGeneration', avant, { ...args, propositions: [{ ...premiere, plan: echange(premiere.plan) }, seconde] }),
+      'TOUR_FIGE_DIFFERENT',
+      { rang: 1, tour: 1, remede: null },
+    );
+    assert.ok(seconde.releves.length > 0);
+    const releves = seconde.releves.map((releve, i) => (i === 0 ? { ...releve, plan: echange(releve.plan) } : releve));
+    refuse(
+      () => executer('enregistrerGeneration', avant, { ...args, propositions: [premiere, { ...seconde, releves }] }),
+      'TOUR_FIGE_DIFFERENT',
+      { rang: 2, tour: 1, remede: null },
+    );
+  });
+
+  test("un départ et un événement qui n'attribuent pas tous deux les sièges : les listes se rangent comme celles de toute proposition, au plan et aux points de relevé", () => {
+    // Iris Ombrelle réservée au siège 2 de la table 1 : le rangement l'y
+    // met après sa voisine, qu'un tri par identifiant mettrait après elle.
+    const essai = chargeEssai();
+    essai.reservations = [{ participant: 1, table: 1, siege: 2, portee: 'tous', tour: null }];
+    for (const [auDepart, ensuite] of [
+      [false, true],
+      [true, false],
+    ]) {
+      const charge = structuredClone(essai);
+      charge.reglages.attribuerSieges = auDepart;
+      const configuration = configurationDepuisCharge(charge);
+      const propositions = rechercher(configuration, { graine: 7, arret: 200, nombre: 1 });
+      const generee = executer('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
+      const avant = { ...generee, reglages: { ...generee.reglages, attribuerSieges: ensuite } };
+      const args = genererDepuis(avant, 1, [1]);
+      const { derivation, ...ordinaire } = args;
+      const attendu = executer('enregistrerGeneration', avant, ordinaire);
+      const rendu = executer('enregistrerGeneration', avant, args);
+      const ici = `départ ${auDepart}, événement ${ensuite}`;
+      assert.notDeepEqual(generee.propositions[0].placement[0], attendu.charge.propositions[1].placement[0], ici);
+      rendu.charge.propositions.slice(1).forEach((p, rang) => {
+        const h = attendu.charge.propositions[rang + 1];
+        assert.deepEqual([p.siegesAttribues, p.placement], [ensuite, h.placement], ici);
+        assert.deepEqual(rendu.courses[rang].course, attendu.courses[rang].course, ici);
+      });
+    }
+  });
+
+  test("Effacer emporte le départ : la dérivée gardée, d'où vient le retenu, reste comparable et classée, et dit que son départ n'est plus dans la liste ; l'état d'avant, qu'un retour rend, le porte", () => {
+    const { charge: generee, depart } = chargeAvecDerivees();
+    assert.ok(evaluer(generee).classement.ordre.indexOf(4) < evaluer(generee).classement.ordre.indexOf(depart));
+    const avant = figer(executer('retenirProposition', generee, { id: 4 }).charge);
+    assert.deepEqual(derivationDe(avant, 4), { depart, toursFiges: [], departPresent: true });
+    const { charge, libelle } = executer('effacerPropositions', avant, {});
+    assert.deepEqual(charge.propositions.map(({ id }) => id), [4]);
+    assert.equal(libelle, 'Effacé 4 propositions, gardé la retenue (n° 4)');
+    assert.deepEqual(derivationDe(charge, 4), { depart, toursFiges: [], departPresent: false });
+    const table = evaluer(charge);
+    assert.deepEqual(table.classement.ordre, [4]);
+    assert.equal(table.propositions[0].statut, 'comparable');
+    assert.deepEqual(derivationDe(avant, 4).departPresent, true);
+  });
+
+  test("garderMeilleures emporte le départ d'une dérivée gardée hors des n premières, comme Effacer : rien ne le protège, et la dérivée le dit", () => {
+    const { charge: avant, depart } = chargeAvecDerivees();
+    const ordre = evaluer(avant).classement.ordre;
+    const n = ordre.indexOf(4) + 1;
+    assert.ok(ordre.indexOf(depart) >= n, `le départ n° ${depart} est parmi les ${n} premières : ${ordre}`);
+    const { charge } = executer('garderMeilleures', figer(avant), { n });
+    assert.deepEqual(charge.propositions.map(({ id }) => id).sort(), ordre.slice(0, n).sort());
+    assert.equal(charge.propositions.some(({ id }) => id === depart), false);
+    assert.deepEqual(derivationDe(charge, 4), { depart, toursFiges: [], departPresent: false });
+    assert.ok(evaluer(charge).classement.ordre.includes(4));
+  });
+
+  test("relances, que portent les propositions de repartir, n'entre ni au fichier ni à l'entrée de course : leurs clés sont celles d'une proposition ordinaire, la dérivation en plus", () => {
+    const avant = chargeDepartAuxSieges();
+    const args = genererDepuis(avant, 1, [1]);
+    assert.ok(args.propositions.every((p) => Object.hasOwn(p, 'relances')));
+    args.propositions = args.propositions.map((p) => ({ ...p, relances: 3 }));
+    const { charge, courses } = executer('enregistrerGeneration', avant, args);
+    const ordinaire = executer('enregistrerGeneration', avant, generer(avant, 1, 7));
+    const clesOrdinaires = Object.keys(ordinaire.charge.propositions[1]);
+    const rang = clesOrdinaires.indexOf('historique') + 1;
+    const attendues = [...clesOrdinaires.slice(0, rang), 'depart', 'toursFiges', ...clesOrdinaires.slice(rang)];
+    for (const p of charge.propositions.slice(1)) assert.deepEqual(Object.keys(p), attendues);
+    for (const entree of courses) assert.deepEqual(Object.keys(entree), Object.keys(ordinaire.courses[0]));
+    assert.equal(serialiserCharge(charge).includes('relances'), false);
+    assert.equal(JSON.stringify(courses).includes('relances'), false);
   });
 });
 

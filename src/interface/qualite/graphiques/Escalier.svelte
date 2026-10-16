@@ -17,14 +17,19 @@
   // seuls points de relevé, reliés par un trait mince, sur l'abscisse
   // logarithmique des mouvements évalués (abscisses), graduée à ces points.
   //
-  // series : [{libelle, valeurs}] ; reperes : [{genre, libelle, valeurs}],
-  // genre plafond, borne ou cent ; libellés déjà traduits, valeurs une par
-  // rang ou par point, dans l'ordre du détail : rien ne se trie ni ne se
-  // recompte ici. Chaque trace porte son libellé au bout de son tracé, et la
-  // légende le reprend. graduer(v) écrit une graduation de l'axe vertical,
-  // graduerX(v) une graduation de l'abscisse — un rang ou des mouvements
-  // évalués —, chacun par défaut le nombre mis en forme ; titreX nomme
-  // l'abscisse, null pour aucun titre, par défaut celui de la forme.
+  // series : [{libelle, valeurs, cle?}] ; reperes : [{genre, libelle,
+  // valeurs}], genre plafond, borne ou cent ; libellés déjà traduits, valeurs
+  // une par rang ou par point, dans l'ordre du détail : rien ne se trie ni ne
+  // se recompte ici. cle, facultative, désigne la série (data-serie) — a et b
+  // pour les deux placements d'une comparaison —, son genre sans elle.
+  // Chaque trace porte son libellé au bout de son tracé, et la légende le
+  // reprend. borneHaute : null, l'axe vertical monte à la plus grande valeur
+  // tracée ; ou la borne reçue, commune aux deux séries, que le composant ne
+  // calcule jamais (C20, D60, contrainte 41). graduer(v) écrit une
+  // graduation de l'axe vertical, graduerX(v) une graduation de l'abscisse
+  // — un rang ou des mouvements évalués —, chacun par défaut le nombre mis
+  // en forme ; titreX nomme l'abscisse, null pour aucun titre, par défaut
+  // celui de la forme.
   //
   // marges, liable en sortie : les marges que le graphique demande pour son
   // texte (margesVerticales, pointage.js) ; alignerSur : null, ou les marges
@@ -37,15 +42,17 @@
   // puis en pourcentages, ou les petits multiples — désignent la même cible
   // à la fois, l'infobulle dans le seul graphique survolé. infobulle :
   // {colonnes, lignes}, les colonnes et les lignes du jumeau, une ligne par
-  // rang ou par point (Graphique).
+  // rang ou par point ; ou {colonnes, series}, une ligne par rang et par
+  // série, chaque série de l'infobulle sous le libellé de la série tracée
+  // de même rang (exigerInfobulleDesTraces, Graphique).
   //
   // Désignations : data-graphique sur le <svg>, data-serie sur le tracé de
-  // chaque série (serie1, serie2) puis sur son libellé, data-repere sur le
-  // tracé de chaque repère (plafond, borne, cent) puis sur son libellé — le
-  // tracé vient d'abord —, data-point-releve sur chaque point, par ses
-  // mouvements, data-rang sur la désignation de la cible pointée, par son
-  // rang à partir de 1. Chaque marque porte data-marque, son nom au registre
-  // (marques.js).
+  // chaque série (sa clé : serie1, serie2, ou celle reçue) puis sur son
+  // libellé, data-repere sur le tracé de chaque repère (plafond, borne,
+  // cent) puis sur son libellé — le tracé vient d'abord —, data-point-releve
+  // sur chaque point, par ses mouvements, data-rang sur la désignation de la
+  // cible pointée, par son rang à partir de 1. Chaque marque porte
+  // data-marque, son nom au registre (marques.js).
   import { getContext } from 'svelte';
   import Graphique from './Graphique.svelte';
   import {
@@ -57,6 +64,7 @@
     cibleRang,
     dispositionEscalier,
     dispositionPoints,
+    exigerInfobulleDesTraces,
     legendeTraces,
     margesVerticales,
   } from './pointage.js';
@@ -71,6 +79,7 @@
     forme = 'escalier',
     abscisses = null,
     hauteur = 240,
+    borneHaute = null,
     graduer = null,
     graduerX = null,
     titreX = undefined,
@@ -98,7 +107,7 @@
     mesures === null
       ? null
       : mesures.calculer((mesurer) =>
-          margesVerticales({ series, reperes: reperesTraces, mesurer, graduer: graduer ?? nombre, titreX: titre }),
+          margesVerticales({ series, reperes: reperesTraces, mesurer, graduer: graduer ?? nombre, titreX: titre, borneHaute }),
         ),
   );
   $effect(() => {
@@ -117,6 +126,7 @@
         graduer: graduer ?? nombre,
         titreX: titre,
         aligner: alignerSur,
+        borneHaute,
       };
       return enPoints
         ? dispositionPoints({ ...communes, abscisses, graduerX: graduerX ?? nombre })
@@ -128,10 +138,14 @@
   // porte déjà.
   const legende = $derived(legendeTraces({ series, reperes: reperesTraces, marques: enPoints ? null : marques }));
 
+  // L'infobulle, rapportée aux séries tracées : une forme à séries nomme
+  // chaque ligne comme le tracé nomme sa série.
+  const bulle = $derived(exigerInfobulleDesTraces(infobulle, series));
+
   const cibler = (x) => (enPoints ? ciblePoint(x, disposition) : cibleRang(x, disposition));
   const ancrer = (indice) => (enPoints ? ancrePoint(indice, disposition) : ancreRang(indice, disposition));
-  // L'attribut de désignation d'une trace : data-serie pour une série,
-  // data-repere pour un repère ; undefined l'omet.
+  // L'attribut de désignation d'une trace : data-serie pour une série, de
+  // sa clé, data-repere pour un repère, de son genre ; undefined l'omet.
   const estSerie = (genre) => genre.startsWith('serie');
 </script>
 
@@ -140,7 +154,7 @@
   {nom}
   {synthese}
   {hauteur}
-  {infobulle}
+  infobulle={bulle}
   zone={disposition?.zone ?? null}
   {legende}
   {cibler}
@@ -184,7 +198,7 @@
       <path
         class="trace"
         class:serie={estSerie(trace.genre)}
-        data-serie={estSerie(trace.genre) ? trace.genre : undefined}
+        data-serie={estSerie(trace.genre) ? trace.cle : undefined}
         data-repere={estSerie(trace.genre) ? undefined : trace.genre}
         data-marque={TRAITS[trace.genre].marque}
         d={trace.d}
@@ -207,7 +221,7 @@
       {/if}
       <text
         class="etiquette"
-        data-serie={estSerie(trace.genre) ? trace.genre : undefined}
+        data-serie={estSerie(trace.genre) ? trace.cle : undefined}
         data-repere={estSerie(trace.genre) ? undefined : trace.genre}
         x={trace.etiquette.x}
         y={trace.etiquette.y}

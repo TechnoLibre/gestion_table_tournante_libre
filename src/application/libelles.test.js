@@ -523,6 +523,7 @@ const EXEMPLES = new Map([
   ['ENTREE_RETENIR_PROPOSITION', { id: 3 }],
   ['ENTREE_EFFACER_PROPOSITIONS', { n: 4, gardee: 2 }],
   ['ENTREE_GARDER_MEILLEURES', { n: 10, effacees: 37, gardee: 42 }],
+  ['ENTREE_ENREGISTRER_GENERATION_DERIVEE', { n: 5, premier: 21, dernier: 25, depart: 4, toursFiges: [1, 2] }],
   // Le départ d'une génération dérivée : les refus du lancement
   ['DEPART_ABSENT', { depart: 4, remede: { geste: 'repartirDeZero' } }],
   [
@@ -553,6 +554,8 @@ const EXEMPLES = new Map([
       remede: { geste: 'libererTour', tour: 1 },
     },
   ],
+  // Le tour figé que l'enregistrement trouve différent de son départ
+  ['TOUR_FIGE_DIFFERENT', { rang: 3, tour: 2, remede: null }],
   // Places : refus d'une pose, titres, réservations, retenu
   ['SIEGE_INEXISTANT', { table: 2, siege: 9, capacite: 8, remede: null }],
   ['DEUX_PLACES_MEME_TOUR', { participant: 1, tour: 2, autre: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
@@ -768,6 +771,20 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
       'Les 3 tours sont tous figés : il ne reste rien à refaire. Décocher au moins un tour.',
     );
     assert.equal(libelle('TOURS_FIGES_TOUS', { tours: 1, remede: null }), 'Le seul tour de la soirée est figé : il ne reste rien à refaire.');
+  });
+
+  test("le libellé figé d'une génération dérivée nomme son départ, ses propositions et ses tours figés (D77) ; TOUR_FIGE_DIFFERENT nomme le rang et le tour", () => {
+    const derivee = (details) => libelle('ENTREE_ENREGISTRER_GENERATION_DERIVEE', { n: 5, premier: 21, dernier: 25, depart: 4, ...details });
+    assert.equal(derivee({ toursFiges: [1, 2] }), 'Généré 5 propositions dérivées de n° 4 (n° 21 à 25), tours 1 et 2 figés');
+    assert.equal(derivee({ toursFiges: [] }), 'Généré 5 propositions dérivées de n° 4 (n° 21 à 25)');
+    assert.equal(derivee({ toursFiges: [3] }), 'Généré 5 propositions dérivées de n° 4 (n° 21 à 25), tour 3 figé');
+    assert.equal(derivee({ toursFiges: [1, 2, 3] }), 'Généré 5 propositions dérivées de n° 4 (n° 21 à 25), tours 1, 2 et 3 figés');
+    assert.equal(derivee({ n: 1, dernier: 21, toursFiges: [] }), 'Généré 1 proposition dérivée de n° 4 (n° 21)');
+    assert.equal(
+      libelle('TOUR_FIGE_DIFFERENT', { rang: 3, tour: 2, remede: null }),
+      "Le placement que la génération a rendu au rang 3 de ce lancement ne reprend pas tel quel le tour 2 de son départ, " +
+        "que ce tour figé doit garder ; rien n'est enregistré.",
+    );
   });
 
   test('RESERVATION_NON_HONOREE nomme la personne et le numéro de la table quand ils sont donnés, sinon leurs identifiants', () => {

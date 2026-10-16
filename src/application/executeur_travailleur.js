@@ -15,11 +15,16 @@
 // dérivée, la même quel que soit le travailleur qui la calcule (proposerUne) :
 // le résultat, rangé par identifiant, est octet pour octet celui de
 // rechercher, course de chaque proposition comprise, quel que soit W et quel
-// que soit l'ordre d'achèvement (§ 5.7). Aucun travailleur ne date une
+// que soit l'ordre d'achèvement (§ 5.7). Sous un départ, chaque message le
+// porte, plan et tours figés, et chaque proposition se calcule de lui et de
+// sa graine dérivée (repartirUne) : le résultat est celui de repartir. Sans
+// départ, le message n'a pas de clé depart. Aucun travailleur ne date une
 // proposition : la durée est celle que le contrôleur prend autour du calcul
 // entier.
 //
 //   → { type: 'proposer', configuration, reglages, rang }  un rang à la fois
+//   → { type: 'proposer', configuration, reglages, rang, depart }   sous un
+//                                                départ, {plan, toursFiges}
 //   ← { type: 'avancement', fait, total }        fait dans la proposition en
 //                                                cours de ce travailleur
 //   ← { type: 'proposition', proposition }       range la proposition, puis
@@ -57,8 +62,10 @@ import { ErreurAnnulee, ErreurGeneration, coeursDe, exigerReglages } from './gen
  *   logiques du poste, que l'exécuteur rend par coeursDe : 1 quand il n'est
  *   pas un entier d'au moins 1
  * @returns {import('./generation.js').Executeur}
- *   coeursDisponibles ; lancer(configuration, reglages, { coeurs = 1 }) rend
- *   une Execution, coeurs étant le nombre de travailleurs qu'elle emploie.
+ *   coeursDisponibles ; lancer(configuration, reglages, { coeurs = 1,
+ *   depart = null }) rend une Execution, coeurs étant le nombre de
+ *   travailleurs qu'elle emploie ; depart, le départ d'une génération
+ *   dérivée, passe tel quel dans chaque message, et null n'en écrit aucun.
  *   Un réglage hors de son domaine la rejette par REGLAGE_HORS_DOMAINE
  *   (exigerReglages), sans travailleur, coeurs valant 0 ; un nombre de
  *   cœurs qui n'est pas un entier d'au moins 1 lève une RangeError, une
@@ -79,7 +86,7 @@ import { ErreurAnnulee, ErreurGeneration, coeursDe, exigerReglages } from './gen
 export function creerExecuteurTravailleur(fabrique, { coeursDisponibles } = {}) {
   return {
     coeursDisponibles: coeursDe(coeursDisponibles),
-    lancer(configuration, reglages, { coeurs = 1 } = {}) {
+    lancer(configuration, reglages, { coeurs = 1, depart = null } = {}) {
       if (!Number.isInteger(coeurs) || coeurs < 1) {
         throw new RangeError(`coeurs : entier d'au moins 1 attendu, reçu ${String(coeurs)}`);
       }
@@ -152,6 +159,12 @@ export function creerExecuteurTravailleur(fabrique, { coeursDisponibles } = {}) 
         terminer();
       }
 
+      // Le message d'un rang : le départ seulement sous un départ.
+      const message = (rang) =>
+        depart === null
+          ? { type: 'proposer', configuration, reglages, rang }
+          : { type: 'proposer', configuration, reglages, rang, depart };
+
       // Donne au travailleur suivi le rang suivant, ou l'arrête quand il
       // n'en reste plus.
       function confier(suivi) {
@@ -163,7 +176,7 @@ export function creerExecuteurTravailleur(fabrique, { coeursDisponibles } = {}) 
         }
         suivi.rang = prochain;
         prochain += 1;
-        suivi.travailleur.postMessage({ type: 'proposer', configuration, reglages, rang: suivi.rang });
+        suivi.travailleur.postMessage(message(suivi.rang));
       }
 
       function recevoir(suivi, data) {

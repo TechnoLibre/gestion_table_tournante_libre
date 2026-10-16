@@ -12,7 +12,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
-import { rechercher } from '../moteur/recherche.js';
+import { rechercher, repartir } from '../moteur/recherche.js';
 import { analyser, configurationDepuisCharge } from '../stockage/document.js';
 import { creerExecuteurTravailleur } from './executeur_travailleur.js';
 import { ErreurAnnulee, ErreurGeneration, creerExecuteurDirect } from './generation.js';
@@ -433,5 +433,85 @@ describe('exécuteur du travailleur : le groupe (§ 5.7, § 5.10)', () => {
       assert.throws(() => executeur.lancer(CONFIGURATION, REGLAGES, { coeurs }), RangeError, String(coeurs));
     }
     assert.equal(travailleurs.length, 0);
+  });
+});
+
+describe('exécuteur du travailleur : le départ (§ 5.7, § 5.10, C8, C24)', () => {
+  // Un départ d'épreuve, que le groupe transmet sans le lire.
+  const DEPART = Object.freeze({ plan: { tables: [1], tours: [[[1]]], reserves: [[]] }, toursFiges: [1] });
+
+  // Le départ du moteur sur une configuration : la première proposition à un
+  // compte court, tours 1 et 3 figés.
+  const departDe = (configuration) => ({
+    plan: rechercher(configuration, { graine: 5, arret: 40, nombre: 1 })[0].plan,
+    toursFiges: [1, 3],
+  });
+
+  test('sous un départ, chaque proposer le porte, rangs suivants compris ; sans départ — option absente ou null —, le message n’a pas de clé depart', () => {
+    const { fabrique, travailleurs } = fabriqueFactice();
+    const reglages = { ...REGLAGES, nombre: 3 };
+    const execution = creerExecuteurTravailleur(fabrique).lancer(CONFIGURATION, reglages, { coeurs: 2, depart: DEPART });
+    execution.resultat.catch(() => undefined);
+    travailleurs[0].rendre();
+    assert.deepEqual(
+      travailleurs.flatMap(({ recus }) => recus),
+      [1, 3, 2].map((rang) => ({ type: 'proposer', configuration: CONFIGURATION, reglages, rang, depart: DEPART })),
+    );
+    execution.annuler();
+    for (const options of [{ coeurs: 2 }, { coeurs: 2, depart: null }]) {
+      const ordinaire = fabriqueFactice();
+      const sans = creerExecuteurTravailleur(ordinaire.fabrique).lancer(CONFIGURATION, reglages, options);
+      sans.resultat.catch(() => undefined);
+      ordinaire.travailleurs[0].rendre();
+      const messages = ordinaire.travailleurs.flatMap(({ recus }) => recus);
+      assert.equal(messages.length, 3, JSON.stringify(options));
+      for (const message of messages) assert.equal(Object.hasOwn(message, 'depart'), false, JSON.stringify(options));
+      sans.annuler();
+    }
+  });
+
+  test('travailleurs calculants sous un départ : pour 1, 2 et 3 cœurs, servis dans trois ordres, le résultat sérialisé égale celui de repartir, et l’exécuteur direct rend le même', async () => {
+    const configuration = configurationDe('petite-conflit');
+    const reglages = { graine: 77, nombre: 5, arret: 3_000, historique: 100 };
+    const depart = departDe(configuration);
+    const attendues = repartir(configuration, reglages, depart);
+    const attendu = JSON.stringify(attendues);
+    assert.notEqual(attendu, JSON.stringify(rechercher(configuration, reglages)));
+    const ordres = [() => 0, (n) => n - 1, (n) => Math.floor(n / 2)];
+    let comparaisons = 0;
+    for (const w of [1, 2, 3]) {
+      for (const choisir of ordres) {
+        const { fabrique, servir } = fabriqueCalculante();
+        const execution = creerExecuteurTravailleur(fabrique).lancer(configuration, reglages, { coeurs: w, depart });
+        servir(choisir);
+        const lue = await issue(execution.resultat);
+        assert.equal(lue.etat, 'resolue', `${w} cœurs`);
+        assert.equal(JSON.stringify(lue.valeur), attendu, `${w} cœurs`);
+        comparaisons += 1;
+      }
+    }
+    assert.equal(comparaisons, 9);
+    const direct = await creerExecuteurDirect().lancer(configuration, reglages, { coeurs: 3, depart }).resultat;
+    assert.deepStrictEqual(direct, attendues);
+    const sansDepart = await creerExecuteurDirect().lancer(configuration, reglages, { depart: null }).resultat;
+    assert.deepStrictEqual(sansDepart, rechercher(configuration, reglages));
+  });
+
+  test('l’exécuteur direct sous un départ : un départ que le moteur refuse rejette ErreurGeneration DEPART_INCOMPATIBLE ; l’annulation lève ErreurAnnulee', async () => {
+    const configuration = configurationDe('petite');
+    const reglages = { graine: 2, nombre: 2, arret: 3_000, historique: 100 };
+    const { plan } = departDe(configuration);
+    const tronque = structuredClone(plan);
+    tronque.tours[1].at(-1).pop();
+    const refus = await issue(creerExecuteurDirect().lancer(configuration, reglages, { depart: { plan: tronque, toursFiges: [] } }).resultat);
+    assert.equal(refus.etat, 'rejetee');
+    assert.ok(refus.erreur instanceof ErreurGeneration, String(refus.erreur));
+    assert.equal(refus.erreur.code, 'DEPART_INCOMPATIBLE');
+    assert.equal(refus.erreur.details.tour, 2);
+    const execution = creerExecuteurDirect().lancer(configuration, reglages, { depart: { plan, toursFiges: [2] } });
+    execution.annuler();
+    const lue = await issue(execution.resultat);
+    assert.equal(lue.etat, 'rejetee');
+    assert.ok(lue.erreur instanceof ErreurAnnulee);
   });
 });
