@@ -24,7 +24,7 @@ module.exports = {
   appId: lireJson('capacitor.config.json').appId,
   productName: lireJson('package.json').productName,
   // Champ LegalCopyright de la ressource de version de l'exécutable.
-  copyright: '© 2026 TechnoLibre',
+  copyright: '© 2026 TechnoLibre Inc.',
   directories: { output: 'dist-electron' },
   // La page construite, la coquille, et package.json, dont electron-builder
   // tire le point d'entrée. package.json ne déclarant aucune dépendance

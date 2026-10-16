@@ -206,7 +206,7 @@ describe('livrable : identité', () => {
   });
 
   test('le titulaire entre dans la ressource de version, champ LegalCopyright', () => {
-    assert.equal(charger(RACINE).copyright, '© 2026 TechnoLibre');
+    assert.equal(charger(RACINE).copyright, '© 2026 TechnoLibre Inc.');
   });
 
   test("le nom de l'application est un seul : productName de package.json, appName de Capacitor, celui du titre de la fenêtre (§ 18.6)", () => {
