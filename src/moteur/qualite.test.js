@@ -719,8 +719,9 @@ describe('bornesDesTuiles (§ 12.2, D29, D34, D52, B11)', () => {
     });
     const un = index(instance, 1);
     assert.deepEqual(bornes.rang1, { p: un, rencontres: 2, plafondRealise: 2, plafondAPriori: aPriori[un], pourcent: 100 });
-    // Manque 1 pour 4 et 5, au même plafond 4 : l'identifiant le plus petit.
-    assert.deepEqual(bornes.manque, { p: index(instance, 4), plafondRealise: 4 });
+    // Manque 1 pour 4 et 5, au même plafond 4 : l'identifiant le plus petit,
+    // et les deux au manque maximal.
+    assert.deepEqual(bornes.manque, { p: index(instance, 4), plafondRealise: 4, effectif: 2 });
     // A(p) = 1 pour 4 et 5 : 5, à la borne de diversité la plus haute.
     assert.deepEqual(bornes.diversite, { p: index(instance, 5), aMax: 2 });
     assert.equal(bornes.animateurs, null);
@@ -747,7 +748,7 @@ describe('bornesDesTuiles (§ 12.2, D29, D34, D52, B11)', () => {
     assert.deepEqual(bornes.objectifs, { p: index(instance, 5), servis: 0, possibles: 2, pourcent: 0 });
     assert.deepEqual(bornes.soiree, { servis: 5, possibles: 11, pourcent: 45, jamaisServies: 2 });
     assert.equal(bornes.soiree.jamaisServies, mesurer(instance, tableDe).objectifs.jamaisServies);
-    assert.deepEqual(Object.keys(bornes.manque), ['p', 'plafondRealise']);
+    assert.deepEqual(Object.keys(bornes.manque), ['p', 'plafondRealise', 'effectif']);
     assert.equal(bornes.diversite, null);
 
     // La table 1 à quatre places : chaque « finance » libre est servi une
@@ -1377,9 +1378,12 @@ function bornesDeReference(instance, { mesures, plafondsRealises, aMax, profil, 
   if (profil.length > 0) {
     const { p, rencontres, plafondRealise, plafondAPriori, pourcent } = profil[0];
     rang1 = { p, rencontres, plafondRealise, plafondAPriori, pourcent };
-    const [tete] = profilManque(instance, manques(plafondsRealises, mesures.rencontres), plafondsRealises);
+    const manquesLus = manques(plafondsRealises, mesures.rencontres);
+    const [tete] = profilManque(instance, manquesLus, plafondsRealises);
     const q = indexDe.get(tete.id);
-    manque = { p: q, plafondRealise: plafondsRealises[q] };
+    // L'effectif au manque maximal, compté sur la liste des manques.
+    const effectif = Array.from(manquesLus).filter((valeur) => valeur === tete.manque).length;
+    manque = { p: q, plafondRealise: plafondsRealises[q], effectif };
   }
   let diversite = null;
   if (groupes.length > 0) {

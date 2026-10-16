@@ -222,7 +222,7 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
     const detail = structuredClone(vue.detail);
     const [, autre] = detail.personnes;
     detail.bornes.rang1 = { ...detail.bornes.rang1, id: autre.id, pourcent: 37, rencontres: 3, plafondRealise: 8, plafondAPriori: null };
-    detail.bornes.manque = { id: autre.id, plafondRealise: 41 };
+    detail.bornes.manque = { id: autre.id, plafondRealise: 41, effectif: 5 };
     detail.bornes.diversite = { id: autre.id, aMax: 17 };
     const entete = enteteDe({ ...vue, detail }, outils);
     const minimum = tuile(entete, 'rencontresTous');
@@ -235,6 +235,7 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
     const manque = tuile(entete, 'manqueMax');
     assert.ok(manque.bornes.includes(t('qualite.tuile.plafondRealise', { plafond: 41 })), manque.bornes.join(' | '));
     assert.ok(manque.bornes.includes(t('qualite.tuile.personne', { nom: autre.nom })));
+    assert.ok(manque.bornes.includes(t('qualite.tuile.effectifAuManqueMax', { effectif: 5 })), manque.bornes.join(' | '));
     assert.equal(manque.pourcentage, null);
     // A(p) : la borne de diversité de la personne nommée, sans pourcentage.
     const diversite = tuile(entete, 'appartenancesVues');
@@ -246,14 +247,44 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
     assert.deepEqual(tuile(enteteDe({ ...vue, detail }, outils), 'rencontresTous').pourcentage, { texte: null, compte: 'minimum 0 sur 0' });
   });
 
-  test('le manque maximal porte l’effectif au manque maximal et le plafond réalisé de la tête du profil de manque', () => {
-    const vue = vueDe(generee(chargeSix()));
+  test('rouge : le manque maximal porte l’effectif au manque maximal — non l’effectif du manque — et le plafond réalisé de la tête du profil de manque', () => {
+    // Une recherche arrêtée au premier pas : sa deuxième proposition laisse
+    // à trois personnes un manque, de valeurs différentes.
+    const vue = vueDe(generee(chargeSix(), { graine: 3, nombre: 4, arret: 1 }), 2);
     const { manque } = vue.detail.bornes;
-    assert.deepEqual(tuile(enteteDe(vue, outils), 'manqueMax').bornes, [
+    // Les personnes dont le manque égale le plus grand, lues dans la ligne
+    // d'évaluation : moins que les personnes à qui il en manque, que
+    // l'effectif du manque compte.
+    const { mesures, plafondsRealises, troisChiffres } = vue.ligne;
+    const auMaximum = plafondsRealises.filter((plafond, p) => plafond - mesures.rencontres[p] === troisChiffres.manqueMax.tous).length;
+    assert.notEqual(auMaximum, troisChiffres.effectifManque.tous);
+    const entete = enteteDe(vue, outils);
+    assert.deepEqual(tuile(entete, 'manqueMax').bornes, [
       t('qualite.tuile.personne', { nom: nomDe(vue.detail, manque.id) }),
-      t('qualite.tuile.effectifManque', { effectif: vue.ligne.troisChiffres.effectifManque.tous }),
+      t('qualite.tuile.effectifAuManqueMax', { effectif: auMaximum }),
       t('qualite.tuile.plafondRealise', { plafond: manque.plafondRealise }),
     ]);
+    // L'effectif du manque garde sa tuile, sous le libellé de sa colonne.
+    const effectif = tuile(entete, 'effectifManque');
+    assert.equal(effectif.libelle, t('propositions.colonne.effectifManque'));
+    assert.equal(effectif.texte, format.nombre(troisChiffres.effectifManque.tous));
+  });
+
+  test('rouge : un manque maximal nul ne compte personne « au manque maximal » ; la personne et son plafond restent', () => {
+    // Une ligne forgée à manque maximal nul : chacun y est « au manque
+    // maximal » de 0, ce qu'aucune ligne n'écrit.
+    const vue = vueDe(generee(chargeSix()));
+    const ligne = structuredClone(vue.ligne);
+    ligne.troisChiffres.manqueMax = { ...ligne.troisChiffres.manqueMax, tous: 0 };
+    const { manque } = vue.detail.bornes;
+    const sansManque = tuile(enteteDe({ ...vue, ligne }, outils), 'manqueMax');
+    assert.equal(sansManque.texte, format.nombre(0));
+    assert.deepEqual(sansManque.bornes, [
+      t('qualite.tuile.personne', { nom: nomDe(vue.detail, manque.id) }),
+      t('qualite.tuile.plafondRealise', { plafond: manque.plafondRealise }),
+    ]);
+    // Un manque maximal non nul garde la ligne.
+    assert.ok(tuile(enteteDe(vue, outils), 'manqueMax').bornes.includes(t('qualite.tuile.effectifAuManqueMax', { effectif: manque.effectif })));
   });
 
   test('sans appartenance : la tuile de A(p) le dit, sans borne de diversité', () => {

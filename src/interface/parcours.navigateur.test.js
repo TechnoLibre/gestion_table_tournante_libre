@@ -25,19 +25,24 @@
 // l'événement retenu, les fenêtres — aucune pendant un geste non
 // destructeur, une qui nomme ce qui part pour chaque geste qui détruit —,
 // puis chaque famille de geste modifiant en lecture puis sur un plan
-// bloqué, enfin la page de qualité de l'étape 10 (B27). Ses captures se
-// prennent toutes après les familles, chacune sur sa charge, pour ne rien
-// changer de ce que 10a, 11, 19, 20 et les familles reçoivent : 12, 15, 15b
-// et 15c sur la grande démonstration rouverte et générée sous la graine
-// écrite, au compte réduit de la grande, la durée de 15c pilotée par le
-// relais de l'exécuteur ; 12a, 13, 13a puis 12f sur la variante « conflit
-// inévitable » ; 12b à 12e et 12g, chacune sur une configuration qu'un
-// scénario court construit et génère ; 14 et 14a sur celle des paires ;
-// 15a sur l'événement construit, rouvert, débloqué et généré de nouveau ;
-// 16 sur la petite démonstration. Les valeurs attendues viennent du
-// moteur, du CSV et du stockage, sollicités une seconde fois (§ 19.1), et
-// le texte de la même traduction que celle de l'application. Aucun délai
-// fixe : chaque étape attend un état du document (§ 19.3).
+// bloqué, la page de qualité de l'étape 10 (B27), enfin la dérivée et la
+// comparaison (D81, C26). Ces captures se prennent toutes après les
+// familles, chacune sur sa charge, pour ne rien changer de ce que 10a, 11,
+// 19, 20 et les familles reçoivent : 12, 15, 15b et 15c sur la grande
+// démonstration rouverte et générée sous la graine écrite, au compte réduit
+// de la grande, la durée de 15c pilotée par le relais de l'exécuteur ; 12a,
+// 13, 13a puis 12f sur la variante « conflit inévitable » ; 12b à 12e et
+// 12g, chacune sur une configuration qu'un scénario court construit et
+// génère ; 14 et 14a sur celle des paires ; 15a sur l'événement construit,
+// rouvert, débloqué et généré de nouveau ; 16 sur la petite démonstration ;
+// puis, les dernières, 11a, 11b, 17, 17a et 18 sur la grande
+// démonstration sans exception, chargée depuis le premier écran, générée
+// sous la graine écrite au compte réduit de la grande, la durée pilotée par
+// le relais, puis dérivée de sa première proposition, un tour figé, sous
+// une seconde graine écrite, la paire comparée écrite avec elle. Les valeurs attendues viennent du moteur, du CSV et du
+// stockage, sollicités une seconde fois (§ 19.1), et le texte de la même
+// traduction que celle de l'application. Aucun délai fixe : chaque étape
+// attend un état du document (§ 19.3).
 //
 // Une épreuve qui porte une capture finit, ses conditions affirmées, par
 // photographier (test/navigateur/captures.js), ou, pour une page du PDF de
@@ -58,6 +63,7 @@ import { flushSync } from 'svelte';
 import { configurationDe } from '../application/configuration.js';
 import { apercevoirObjectifs, bilanRemplacement, cleNormalisee } from '../application/csv.js';
 import { creerFormat } from '../application/format.js';
+import { comparerPlacements, evaluer } from '../application/evaluation.js';
 import { creerExecuteurDirect } from '../application/generation.js';
 import { TABLES_APPLICATION, libelle } from '../application/libelles.js';
 import { nomAffiche } from '../application/personnes.js';
@@ -247,9 +253,11 @@ const epreuvesEnEchec = [];
 const memoire = {};
 
 // Le pas dont le relais avance l'horloge pilotée à chaque avancement du
-// moteur, pendant la génération de la grande démonstration de la page de
-// qualité : la durée que 15c affiche vaut le nombre d'avancements multiplié
-// par ce pas, la même à chaque exécution (§ 19.3, § 19.4).
+// moteur, pendant les deux générations qui l'arment : celle de la grande
+// démonstration de la page de qualité, dont 15c affiche la durée, et celle
+// de la grande démonstration sans exception, dont 11a affiche la durée.
+// Chacune vaut le nombre d'avancements de sa génération multiplié par ce
+// pas, la même à chaque exécution (§ 19.3, § 19.4).
 const PAS_HORLOGE_GENERATION_MS = 250;
 
 // Le relais d'épreuve : armé, il compte chaque avancement que le moteur
@@ -3719,8 +3727,9 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     const valeur = (nom) => texteDe(entete.querySelector(`[data-tuile="${nom}"] .valeur`));
     for (const nom of ['collisionsCumulees', 'rencontresRepetees']) expect(valeur(nom), nom).toBe('0');
     expect(valeur('rencontresAncres')).toBe(t('format.vide'));
-    // Le relais est resté inerte pour chaque génération qui suit la grande.
-    expect(relais.avancements, 'aucun avancement compté après la grande').toBe(memoire.grande.avancements);
+    // Désarmé depuis la génération de la grande, le relais n'a rien compté
+    // pour celles qui l'ont suivie jusqu'ici.
+    expect(relais.avancements, 'aucun avancement compté depuis la grande').toBe(memoire.grande.avancements);
     // Le bas de l'en-tête, du groupe de la diversité à la mention : le bord
     // haut tombe entre deux groupes de tuiles, aucune n'y est coupée. Du
     // groupe des collisions à la mention, l'en-tête est plus haut que la
@@ -3734,6 +3743,444 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
         '[data-vue-qualite="entete"] .certificat',
       ],
       graine: GRAINE,
+    });
+  });
+});
+
+// --- La dérivée et la comparaison (§ 5.7, § 12.10.6, D81, C26) -------------------------------
+
+// La paire que 17, 17a et 18 photographient, écrite ici et non cherchée à chaque
+// exécution (C26) : sur la grande démonstration sans exception, la
+// génération ordinaire sous GRAINE, au compte d'arrêt de la grande, range
+// la proposition depart en tête du classement ; une génération dérivée de
+// depart, son tour figé, sous graine, ajoute les propositions ajoutees ; la
+// meilleure dérivée, meilleure, passe en tête, depart au rang placeDepart,
+// et leurs profils de manque se croisent une seule fois, au rang bascule,
+// sur cinq valeurs distinctes. Sur une soirée détendue, une dérivée domine
+// le plus souvent son départ : une paire qui se croise ne s'obtient pas de
+// n'importe quelle graine.
+const DERIVATION = Object.freeze({
+  graine: 4258,
+  depart: 1,
+  tour: 1,
+  ajoutees: Object.freeze([6, 7, 8, 9, 10]),
+  meilleure: 9,
+  placeDepart: 4,
+  bascule: 148,
+});
+
+// Les captures de la dérivée et de la comparaison : les dernières du
+// parcours.
+const CAPTURES_DERIVATION = Object.freeze([
+  '11a-depart-derive',
+  '11b-propositions-derivees',
+  '17-comparaison-manque',
+  '17a-comparaison-colonnes',
+  '18-comparaison-escalier',
+]);
+
+// La durée qu'une génération de cette partie ne dépasse pas, en temps réel,
+// du clic jusqu'à son entrée au journal. Sur les 260 personnes de la grande
+// sans exception, au compte d'arrêt de la grande, chacune des deux dure
+// moins d'une seconde au navigateur du pilotage : elles restent au parcours
+// principal (§ 19.3). La borne, le double de cette seconde, laisse la marge
+// d'un pilotage chargé : elle garde leur place au parcours principal, non le
+// compte d'arrêt, que leur durée ne suit pas de près.
+const DUREE_GENERATION_MAX_MS = 2_000;
+
+// Le nom d'un placement dans la vue de comparaison.
+const nomCompare = (proposition) => t('qualite.comparaison.nom.proposition', { proposition });
+
+describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: DUREE }, () => {
+  // Chaque capture se prend sur la grande démonstration sans exception,
+  // chargée depuis le premier écran après la page de qualité : aucune ne
+  // change ce que les captures d'avant et les familles reçoivent.
+  test('11a la grande sans exception générée ; « Repartir d’elle » sur la première : son départ, le tour 1 coché, rien d’écrit', async () => {
+    const { depart, tour } = DERIVATION;
+    await chargerDemonstration('grande-sans-exception');
+    await passerEnEcriture();
+    // Le relais armé le temps de la génération ordinaire : la durée du
+    // dernier calcul que la section affiche au-dessus de la carte, dans
+    // l'image, est celle de l'horloge pilotée, comme pour 15c, et non zéro.
+    const avancementsAvant = relais.avancements;
+    relais.arme = true;
+    const debut = performance.now();
+    try {
+      await generer(ARRET_GRANDE);
+    } finally {
+      relais.arme = false;
+    }
+    const duree = performance.now() - debut;
+    expect(relais.avancements, 'les avancements de la génération ordinaire').toBeGreaterThan(avancementsAvant);
+    expect(duree, 'la génération ordinaire, en temps réel').toBeLessThan(DUREE_GENERATION_MAX_MS);
+    const ordre = evaluer(charge()).classement.ordre;
+    expect(ordre[0], 'le départ, en tête du classement').toBe(depart);
+
+    // « Repartir d'elle » sur la ligne du départ : un état de navigation,
+    // rien d'écrit jusqu'au lancement — ni le choix, ni la case, ni la
+    // graine saisie.
+    await ouvrirSection('propositions');
+    const ligne = await attendre('la ligne du départ', () => dans(`[data-section="propositions"] [data-classement] tr[data-proposition="${depart}"]`));
+    const avant = fichiers();
+    await appuyer(ligne.querySelector('[data-commande="repartir"]'), 'Repartir d’elle');
+    const carte = await attendre('la carte du départ', () => dans('[data-section="generation"] [data-depart]'));
+    expect(m.ui.etat().depart).toEqual({ id: depart, toursFiges: [] });
+    expect(texteDe(carte.querySelector('h4'))).toBe(plat(t('generation.depart.titre', { depart })));
+    expect(texteDe(carte.querySelector('[data-commande="repartirDeZero"]'))).toBe(plat(t('generation.commande.repartirDeZero')));
+    const cases = () => [...carte.querySelectorAll('input[data-tour-fige]')].map((c) => [Number(c.dataset.tourFige), c.checked]);
+    const tours = Array.from({ length: charge().evenement.tours }, (_, rang) => rang + 1);
+    expect(cases()).toEqual(tours.map((n) => [n, false]));
+    await appuyer(carte.querySelector(`input[data-tour-fige="${tour}"]`), `figer le tour ${tour}`);
+    await attendre(`le tour ${tour} figé`, () => m.ui.etat().depart?.toursFiges.length === 1);
+    expect(m.ui.etat().depart).toEqual({ id: depart, toursFiges: [tour] });
+    expect(cases()).toEqual(tours.map((n) => [n, n === tour]));
+    const lancement = dans('[data-section="generation"] [data-commande="genererDepuis"]');
+    expect(texteDe(lancement)).toBe(plat(t('generation.commande.genererDepuis', { depart })));
+    expect(dans('[data-section="generation"] [data-commande="generer"]')).toBeNull();
+    await taper(dans('[data-section="generation"] input[data-champ="graine"]'), String(DERIVATION.graine));
+    await rienEcrit(avant, 'choisir le départ, figer un tour, saisir la graine');
+    expect(entreesApres(avant.revision)).toEqual([]);
+
+    // Les captures d'avant sont toutes prises : celles-ci sont les dernières.
+    const { captures } = await commands.declarationsCaptures();
+    const prises = new Set([...capturesPrises(), ...capturesPdf]);
+    const restantes = captures.map(({ fichier }) => fichier).filter((fichier) => !CAPTURES_DERIVATION.includes(fichier) && !prises.has(fichier));
+    expect(restantes, 'les captures qui restent à prendre avant la dérivée').toEqual([]);
+
+    // La carte et « Générer depuis » ensemble, sans focus ni contour ; la
+    // section finit sur eux, et la ligne du dernier calcul reste au-dessus.
+    document.activeElement?.blur();
+    await images(2);
+    await cadrerDansLaSurface([carte, lancement]);
+    await photographier(m, '11a-depart-derive', {
+      condition: [
+        '[data-section="generation"] [data-depart] h4',
+        '[data-section="generation"] [data-depart] [data-commande="repartirDeZero"]',
+        `[data-section="generation"] [data-depart] input[data-tour-fige="${tour}"]`,
+        '[data-section="generation"] [data-commande="genererDepuis"]',
+      ],
+      graine: GRAINE,
+    });
+  });
+
+  test('11b « Générer depuis » : cinq dérivées, chacune « Dérivée de n° 1, tour 1 figé. », son tour 1 celui du départ', async () => {
+    const { depart, tour, ajoutees, meilleure, placeDepart } = DERIVATION;
+    const r = revision();
+    const debut = performance.now();
+    await cliquer('[data-section="generation"] [data-commande="genererDepuis"]');
+    await attendre('la génération dérivée, ou sa question', () => revision() > r || dans('[data-question="longue"]'));
+    if (revision() === r) await cliquer('[data-commande="confirmerGeneration"]');
+    const lu = await uneEntree(r, 'générer depuis');
+    const duree = performance.now() - debut;
+    expect(duree, 'la génération dérivée, en temps réel').toBeLessThan(DUREE_GENERATION_MAX_MS);
+    // Le libellé d'historique du § 5.7.
+    expect(lu).toBe(
+      libelle('ENTREE_ENREGISTRER_GENERATION_DERIVEE', { n: ajoutees.length, premier: ajoutees[0], dernier: ajoutees.at(-1), depart, toursFiges: [tour] }),
+    );
+    // Chaque dérivée porte sa filiation, et garde le tour figé de son
+    // départ case par case.
+    const duDepart = charge().propositions.find((p) => p.id === depart);
+    const derivees = charge().propositions.filter((p) => p.depart !== undefined);
+    expect(derivees.map((p) => p.id)).toEqual(ajoutees);
+    for (const p of derivees) {
+      expect([p.depart, p.toursFiges], `n° ${p.id}`).toEqual([depart, [tour]]);
+      expect(p.placement[tour - 1], `n° ${p.id}, tour ${tour}`).toEqual(duDepart.placement[tour - 1]);
+    }
+    // L'issue nomme la meilleure dérivée et la place du départ, et offre de
+    // les comparer.
+    const ordre = evaluer(charge()).classement.ordre;
+    expect(ordre[0]).toBe(meilleure);
+    expect(ordre.indexOf(depart) + 1).toBe(placeDepart);
+    const issue = await attendre('l’issue de la génération dérivée', () => dans('[data-section="generation"] [data-issue]'));
+    expect(texteDe(issue)).toBe(
+      plat(
+        t('generation.issue.derivee', {
+          ajoutees: ajoutees.length,
+          premier: ajoutees[0],
+          dernier: ajoutees.at(-1),
+          depart,
+          meilleure,
+          placeMeilleure: 1,
+          placeDepart,
+          identiques: 0,
+        }),
+      ),
+    );
+    expect(texteDe(dans('[data-section="generation"] [data-commande="comparerIssue"]'))).toBe(plat(t('generation.commande.comparerIssue', { a: meilleure, depart })));
+
+    // Le tableau : un seul classement, les dérivées et leur départ ; la
+    // filiation sous le numéro de chaque dérivée, aucune sous les autres.
+    await ouvrirSection('propositions');
+    const section = dans('[data-section="propositions"]');
+    const lignes = await attendre('le tableau classé', () => {
+      const lues = [...section.querySelectorAll('[data-classement] tr[data-proposition]')];
+      return lues.length === ordre.length ? lues : null;
+    });
+    expect(lignes.map((tr) => Number(tr.dataset.proposition))).toEqual(ordre);
+    const filiation = plat(t('propositions.filiation.deriveeFiges', { depart, tours: [format.nombre(tour)] }));
+    for (const tr of lignes) {
+      const id = Number(tr.dataset.proposition);
+      const phrase = tr.querySelector('td[data-colonne="proposition"] [data-filiation]');
+      if (ajoutees.includes(id)) expect(texteDe(phrase), `n° ${id}`).toBe(filiation);
+      else expect(phrase, `n° ${id}`).toBeNull();
+    }
+
+    // L'image : le tableau ramené à sa gauche — le rang, la proposition et
+    // sa filiation —, la dérivée classée juste avant le départ, puis le
+    // départ. Une ligne porte ses commandes l'une sous l'autre : deux lignes
+    // entières tiennent dans la surface, les autres s'affirment sans
+    // l'image.
+    for (let porteur = lignes[0].parentElement; porteur !== null; porteur = porteur.parentElement) {
+      if (porteur.scrollWidth > porteur.clientWidth) porteur.scrollLeft = 0;
+    }
+    document.activeElement?.blur();
+    await images(2);
+    const montree = ordre[placeDepart - 2];
+    expect(ajoutees, 'la ligne qui précède le départ').toContain(montree);
+    await cadrerDansLaSurface(lignes.slice(placeDepart - 2, placeDepart));
+    await photographier(m, '11b-propositions-derivees', {
+      condition: [
+        `[data-section="propositions"] tr[data-proposition="${montree}"] [data-filiation]`,
+        `[data-section="propositions"] tr[data-proposition="${depart}"] td[data-colonne="proposition"]`,
+      ],
+      graine: DERIVATION.graine,
+    });
+  });
+
+  test('17 « Comparer » : la meilleure dérivée et son départ, en colonnes et en courbes qui se croisent ; rien d’écrit', async () => {
+    const { depart, meilleure, bascule } = DERIVATION;
+    // La comparaison qu'attend la vue, du moteur sollicité une seconde fois :
+    // deux profils qui se croisent une fois, tracés.
+    const attendue = comparerPlacements(charge(), evaluer(charge()), meilleure, depart);
+    expect(attendue.statut).toBe('comparable');
+    expect(attendue.trace).toBe(true);
+    expect(attendue.valeursDistinctes).toBeGreaterThanOrEqual(constante('VALEURS_MANQUE_COURBE'));
+    expect(attendue.rangs.domine).toBeNull();
+    expect(attendue.rangs.bascule).toBe(bascule);
+
+    // La meilleure dérivée devient la source de la page ; « Comparer » sur
+    // la ligne du départ le met en second placement et ouvre la vue.
+    const avant = fichiers();
+    await cliquer(`[data-section="propositions"] tr[data-proposition="${meilleure}"] [data-commande="qualite"]`);
+    await attendre('la page de qualité de la meilleure dérivée', () => dans('[data-section="qualite"]') && m.ui.etat().proposition === meilleure);
+    await ouvrirSection('propositions');
+    await cliquer(`[data-section="propositions"] tr[data-proposition="${depart}"] [data-commande="comparer"]`);
+    await attendre('la vue de comparaison', () => vueQualite('comparaison')?.querySelector('svg[data-graphique="comparaison"] path[data-serie="b"]'));
+    expect(m.ui.etat().comparee).toBe(depart);
+    const vue = vueQualite('comparaison');
+
+    // La question, la ligne des deux placements, deux colonnes.
+    expect(texteDe(vue)).toContain(plat(t('qualite.vue.comparaison.question')));
+    expect(texteDe(vue.querySelector('[data-placements-compares]'))).toBe(plat(t('qualite.comparaison.placements', { a: nomCompare(meilleure), b: nomCompare(depart) })));
+    for (const [cote, id] of [['a', meilleure], ['b', depart]]) {
+      expect(texteDe(vue.querySelector(`th[data-colonne-comparaison="${cote}"] .nom`)), cote).toBe(plat(nomCompare(id)));
+      // Le minimum brut en pourcentage, suivi du compte du pire.
+      const cellule = vue.querySelector(`tr[data-colonne="rencontresTous"] td[data-colonne-comparaison="${cote}"]`);
+      const pourcentage = cellule.querySelector('[data-pourcentage]');
+      expect(texteDe(pourcentage), cote).toContain(format.nombre(attendue[cote].bornes.rang1.pourcent));
+      expect(texteDe(pourcentage), cote).toContain('%');
+    }
+    // « Tous les indicateurs » replié : un pourcentage par colonne, le
+    // minimum brut, chacun suivi de son compte.
+    expect(vue.querySelector('[data-tous-les-indicateurs]').getAttribute('aria-expanded')).toBe('false');
+    expect(exigerComptes(vue)).toBe(2);
+    expect([...vue.querySelectorAll('[data-pourcentage]')].every((element) => element.closest('[data-colonne-comparaison]') !== null)).toBe(true);
+
+    // Un seul tracé, un seul axe vertical, les deux courbes dessous, le zéro
+    // libellé.
+    const svgs = vue.querySelectorAll('svg[data-graphique]');
+    expect(svgs).toHaveLength(1);
+    const [svg] = svgs;
+    expect(axesVerticaux(svg)).toBe(1);
+    for (const serie of ['a', 'b']) expect(svg.querySelector(`path[data-serie="${serie}"]`), serie).not.toBeNull();
+    expect([...svg.querySelectorAll('text[text-anchor="end"]')].map(texteDe)).toContain(plat(t('qualite.comparaison.zero')));
+
+    // La synthèse du tracé, sous lui : le plus grand manque de chaque
+    // placement, au rang 1 de son profil, et le nombre de rangs qui le
+    // prennent.
+    const [premierA] = attendue.profils.a;
+    const [premierB] = attendue.profils.b;
+    const effectifDuPire = (profil, manque) => profil.filter((rang) => rang.manque === manque).length;
+    const syntheses = vue.querySelectorAll('.synthese');
+    expect(syntheses).toHaveLength(1);
+    expect(texteDe(syntheses[0])).toBe(
+      plat(
+        t('qualite.comparaison.synthese', {
+          a: nomCompare(meilleure),
+          manqueA: premierA.manque,
+          effectifA: effectifDuPire(attendue.profils.a, premierA.manque),
+          b: nomCompare(depart),
+          manqueB: premierB.manque,
+          effectifB: effectifDuPire(attendue.profils.b, premierB.manque),
+        }),
+      ),
+    );
+
+    // Les phrases : le rang 1 des deux côtés, les trois effectifs, la
+    // bascule.
+    const phrases = [...vue.querySelectorAll('[data-phrase-comparaison]')];
+    expect(premierA.id).not.toBe(premierB.id);
+    expect(phrases.map((phrase) => phrase.dataset.phraseComparaison)).toEqual(['rang1', 'effectifs', 'bascule']);
+    const { rangs } = attendue;
+    expect(texteDe(phrases[1])).toBe(
+      plat(t('qualite.comparaison.effectifs', { a: nomCompare(meilleure), rangsA: rangs.a, b: nomCompare(depart), rangsB: rangs.b, egalite: rangs.egalite })),
+    );
+    const aGagne = attendue.profils.a[bascule - 1].manque < attendue.profils.b[bascule - 1].manque;
+    const [gagne, perd] = aGagne ? [meilleure, depart] : [depart, meilleure];
+    expect(texteDe(phrases[2])).toBe(plat(t('qualite.comparaison.bascule', { rang: bascule, gagne: nomCompare(gagne), perd: nomCompare(perd) })));
+    // Aucun « % » hors des colonnes : ni la question, ni la ligne des
+    // placements, ni le tracé — graduations, légende, synthèse —, ni une
+    // phrase.
+    const horsColonnes = vue.cloneNode(true);
+    for (const colonnes of horsColonnes.querySelectorAll('.colonnes')) colonnes.remove();
+    expect(horsColonnes.querySelector('svg[data-graphique="comparaison"]')).not.toBeNull();
+    expect(horsColonnes.querySelector('.synthese')).not.toBeNull();
+    expect(horsColonnes.querySelectorAll('[data-phrase-comparaison]')).toHaveLength(phrases.length);
+    expect(horsColonnes.textContent).not.toContain('%');
+    await rienEcrit(avant, 'Qualité, puis Comparer');
+
+    // L'image, l'infobulle fermée, sans focus : « Tous les indicateurs »
+    // replié au haut de la surface, puis les deux courbes sur leur axe et
+    // les phrases. La vue entière est plus haute que la surface : la
+    // question, la ligne des placements et les colonnes, plus haut,
+    // s'affirment sans l'image.
+    await ecarterLePointeur();
+    document.activeElement?.blur();
+    await images(2);
+    expect(tous('[data-section="qualite"] [role="tooltip"]').every((bulle) => bulle.hidden)).toBe(true);
+    await cadrerAuBord(vue.querySelector('[data-tous-les-indicateurs]'), 'haut');
+    await photographier(m, '17-comparaison-manque', {
+      condition: [
+        '[data-vue-qualite="comparaison"] [data-tous-les-indicateurs]',
+        '[data-vue-qualite="comparaison"] svg[data-graphique="comparaison"]',
+        '[data-vue-qualite="comparaison"] [data-phrase-comparaison="effectifs"]',
+        '[data-vue-qualite="comparaison"] [data-phrase-comparaison="bascule"]',
+      ],
+      graine: DERIVATION.graine,
+    });
+  });
+
+  test('17a les colonnes côte à côte, « Tous les indicateurs » replié : le minimum brut de chacune en pourcentage, le compte du pire dessous', async () => {
+    const { depart, meilleure } = DERIVATION;
+    const attendue = comparerPlacements(charge(), evaluer(charge()), meilleure, depart);
+    const vue = vueQualite('comparaison');
+    expect([m.ui.etat().proposition, m.ui.etat().comparee]).toEqual([meilleure, depart]);
+    const avant = fichiers();
+
+    // Replié, le repli ne laisse que la tête des colonnes : la place au
+    // classement, le minimum brut, le plus grand manque, l'effectif du
+    // manque, l'écart d'itinéraire maximal (D84).
+    const repli = vue.querySelector('[data-tous-les-indicateurs]');
+    expect(repli.getAttribute('aria-expanded')).toBe('false');
+    const colonnes = repli.parentElement;
+    const tables = colonnes.querySelectorAll('table');
+    expect(tables).toHaveLength(1);
+    const [tete] = tables;
+    const lignes = [...tete.querySelectorAll('tbody tr[data-colonne]')];
+    expect(lignes.map((tr) => tr.dataset.colonne)).toEqual(['rang', 'rencontresTous', 'manqueMax', 'effectifManque', 'ecartItineraireMax']);
+
+    // Deux colonnes côte à côte, a à gauche de b, chacune sous le nom de
+    // son placement.
+    const [enteteA, enteteB] = ['a', 'b'].map((cote) => tete.querySelector(`thead th[data-colonne-comparaison="${cote}"]`));
+    expect(texteDe(enteteA.querySelector('.nom'))).toBe(plat(nomCompare(meilleure)));
+    expect(texteDe(enteteB.querySelector('.nom'))).toBe(plat(nomCompare(depart)));
+    expect(enteteA.getBoundingClientRect().top).toBe(enteteB.getBoundingClientRect().top);
+    expect(enteteA.getBoundingClientRect().right).toBeLessThanOrEqual(enteteB.getBoundingClientRect().left);
+
+    // Un pourcentage par indicateur visible qui en porte un, dans chaque
+    // colonne : le minimum brut seul, le pire cas de son placement, suivi
+    // juste dessous de son compte du pire.
+    const portants = lignes.filter((tr) => tr.querySelector('[data-pourcentage]') !== null).map((tr) => tr.dataset.colonne);
+    expect(portants).toEqual(['rencontresTous']);
+    for (const [cote, id] of [['a', meilleure], ['b', depart]]) {
+      const cellule = tete.querySelector(`tr[data-colonne="rencontresTous"] td[data-colonne-comparaison="${cote}"]`);
+      const pourcentages = cellule.querySelectorAll('[data-pourcentage]');
+      expect(pourcentages, `n° ${id}`).toHaveLength(1);
+      const { rang1 } = attendue[cote].bornes;
+      expect(texteDe(pourcentages[0]), `n° ${id}`).toBe(plat(t('qualite.pourcentage.valeur', { pourcent: rang1.pourcent })));
+      const compte = pourcentages[0].nextElementSibling;
+      expect(compte?.hasAttribute('data-compte-pire'), `n° ${id}`).toBe(true);
+      expect(texteDe(compte), `n° ${id}`).toBe(plat(t('qualite.tuile.pireRencontres', { rencontres: rang1.rencontres, plafond: rang1.plafondRealise })));
+      expect(compte.getBoundingClientRect().top, `n° ${id} : le compte sous le pourcentage`).toBeGreaterThanOrEqual(pourcentages[0].getBoundingClientRect().bottom);
+    }
+    expect(exigerComptes(colonnes)).toBe(2);
+
+    // Sous le plus grand manque de chaque colonne, les personnes dont le
+    // manque l'égale, comptées sur le profil du moteur : le nombre que la
+    // synthèse du tracé écrit, jamais l'effectif du manque de la ligne
+    // suivante.
+    for (const [cote, id] of [['a', meilleure], ['b', depart]]) {
+      const profil = attendue.profils[cote];
+      const auMaximum = profil.filter((rang) => rang.manque === profil[0].manque).length;
+      const cellule = tete.querySelector(`tr[data-colonne="manqueMax"] td[data-colonne-comparaison="${cote}"]`);
+      expect([...cellule.querySelectorAll('.secondaire')].map(texteDe), `n° ${id}`).toContain(plat(t('qualite.tuile.effectifAuManqueMax', { effectif: auMaximum })));
+    }
+    await rienEcrit(avant, 'relire les colonnes');
+
+    // L'image : de la ligne des placements jusqu'à « Tous les indicateurs »
+    // replié, les deux colonnes entre eux, l'infobulle fermée, sans focus.
+    // L'intitulé de la vue et sa question, juste au-dessus, ne tiennent pas
+    // avec eux dans la surface : 17 les affirme sans l'image.
+    await ecarterLePointeur();
+    document.activeElement?.blur();
+    await images(2);
+    expect(tous('[data-section="qualite"] [role="tooltip"]').every((bulle) => bulle.hidden)).toBe(true);
+    await cadrerDansLaSurface([vue.querySelector('[data-placements-compares]'), repli]);
+    await photographier(m, '17a-comparaison-colonnes', {
+      condition: [
+        '[data-vue-qualite="comparaison"] [data-placements-compares]',
+        '[data-vue-qualite="comparaison"] tr[data-colonne="rencontresTous"] td[data-colonne-comparaison="a"] [data-compte-pire]',
+        '[data-vue-qualite="comparaison"] tr[data-colonne="rencontresTous"] td[data-colonne-comparaison="b"] [data-compte-pire]',
+        '[data-vue-qualite="comparaison"] [data-tous-les-indicateurs]',
+      ],
+      graine: DERIVATION.graine,
+    });
+  });
+
+  test('18 l’escalier du manque ouvert : effectifs et cumuls des deux placements, les cumuls égaux aux courbes, sans pourcentage', async () => {
+    const { depart, meilleure } = DERIVATION;
+    const attendue = comparerPlacements(charge(), evaluer(charge()), meilleure, depart);
+    const vue = vueQualite('comparaison');
+    const avant = fichiers();
+    await appuyer(vue.querySelector('[data-commande="ouvrirJumeau"]'), 'ouvrir l’escalier');
+    const jumeau = await attendre('l’escalier du manque', () => vue.querySelector('table[data-jumeau]'));
+    const lignes = [...jumeau.querySelectorAll('tbody tr')].map(
+      (tr) => new Map([...tr.querySelectorAll('[data-colonne]')].map((cellule) => [cellule.dataset.colonne, texteDe(cellule)])),
+    );
+    // Une ligne par valeur de manque, de la plus grande à zéro ; chaque
+    // effectif et chaque cumul recomptés sur les courbes : le cumul d'une
+    // valeur est le nombre de rangs dont le manque l'atteint.
+    const plusGrand = Math.max(...attendue.profils.a.map(({ manque }) => manque), ...attendue.profils.b.map(({ manque }) => manque));
+    expect(lignes.map((ligne) => ligne.get('valeur'))).toEqual(Array.from({ length: plusGrand + 1 }, (_, rang) => format.nombre(plusGrand - rang)));
+    const compter = (profil, garde) => format.nombre(profil.filter(({ manque }) => garde(manque)).length);
+    for (const ligne of lignes) {
+      const valeur = plusGrand - lignes.indexOf(ligne);
+      for (const [cote, profil] of [['A', attendue.profils.a], ['B', attendue.profils.b]]) {
+        expect(ligne.get(`effectif${cote}`), `effectif ${cote}, manque ${valeur}`).toBe(compter(profil, (manque) => manque === valeur));
+        expect(ligne.get(`cumul${cote}`), `cumul ${cote}, manque ${valeur}`).toBe(compter(profil, (manque) => manque >= valeur));
+      }
+    }
+    expect([...jumeau.querySelectorAll('thead th')].map(texteDe)).toEqual(
+      [
+        t('qualite.comparaison.escalier.valeur'),
+        t('qualite.comparaison.escalier.effectif', { nom: nomCompare(meilleure) }),
+        t('qualite.comparaison.escalier.cumul', { nom: nomCompare(meilleure) }),
+        t('qualite.comparaison.escalier.effectif', { nom: nomCompare(depart) }),
+        t('qualite.comparaison.escalier.cumul', { nom: nomCompare(depart) }),
+      ].map(plat),
+    );
+    expect(jumeau.textContent).not.toContain('%');
+    expect(jumeau.querySelector('[data-pourcentage]')).toBeNull();
+    await rienEcrit(avant, 'ouvrir l’escalier');
+
+    // L'image : la phrase de la bascule au haut de la surface, puis
+    // l'escalier ouvert, sans focus.
+    document.activeElement?.blur();
+    await images(2);
+    await cadrerAuBord(vue.querySelector('[data-phrase-comparaison="bascule"]'), 'haut');
+    await photographier(m, '18-comparaison-escalier', {
+      condition: ['[data-vue-qualite="comparaison"] table[data-jumeau]'],
+      graine: DERIVATION.graine,
     });
   });
 });

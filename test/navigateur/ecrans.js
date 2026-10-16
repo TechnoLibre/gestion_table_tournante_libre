@@ -22,11 +22,12 @@
 // travail, qui se pose au démarrage, par les options du système simulé.
 import { flushSync } from 'svelte';
 import { appliquerCommande } from '../../src/application/commandes.js';
+import { planDuDepart } from '../../src/application/depart.js';
 import { ErreurAnnulee } from '../../src/application/generation.js';
 import { texteLivre } from '../../src/demo/livrees.js';
 import { SECTIONS } from '../../src/interface/evenement/sections.js';
 import { LISTE_PAR_DEFAUT, listeApres } from '../../src/interface/generation/priorites.js';
-import { rechercher } from '../../src/moteur/recherche.js';
+import { rechercher, repartir } from '../../src/moteur/recherche.js';
 import { serialiser } from '../../src/stockage/canonique.js';
 import { texteDesCourses } from '../../src/stockage/courses.js';
 import { analyser, capacite, configurationDepuisCharge, creerCharge } from '../../src/stockage/document.js';
@@ -248,14 +249,30 @@ export function chargePaires() {
   return generee(charge, { graine: 5, nombre: 2, arret: 60 }).charge;
 }
 
+// Douze personnes, trois tables de quatre, trois tours ; les six premières
+// portent l'étiquette « finance », que la table 1 a pour objectif à tous
+// les tours. Aucune proposition.
+function sousObjectif() {
+  const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
+  for (const personne of charge.participants) if (personne.id <= 6) personne.etiquettes = ['finance'];
+  charge.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
+  return charge;
+}
+
 /** Douze personnes, trois tables de quatre, trois tours ; les six premières
  *  portent l'étiquette « finance », que la table 1 a pour objectif à tous
  *  les tours. Une génération d'une proposition, sous cet objectif. */
 export function chargeObjectifs() {
-  const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
-  for (const personne of charge.participants) if (personne.id <= 6) personne.etiquettes = ['finance'];
-  charge.tables[0].objectifs = [{ portee: 'tous', tour: null, regle: null, etiquettes: ['finance'] }];
-  return generee(charge, { graine: 3, nombre: 1, arret: 300 }).charge;
+  return generee(sousObjectif(), { graine: 3, nombre: 1, arret: 300 }).charge;
+}
+
+/** La forme de chargeObjectifs, une génération de deux propositions sous la
+ *  graine 4 : la colonne de chacune porte les trois pourcentages — minimum
+ *  brut, tours hors objectif, minimum de s(p) —, et les deux diffèrent par
+ *  le compte des personnes jamais servies hors objectif comme par le
+ *  minimum de s(p). */
+export function chargeComparaisonObjectifs() {
+  return generee(sousObjectif(), { graine: 4, nombre: 2, arret: 300 }).charge;
 }
 
 /** Douze personnes, trois tables de quatre, trois tours ; une génération de
@@ -263,8 +280,43 @@ export function chargeObjectifs() {
  *  de la seconde prennent quatre valeurs, se tracent, et se croisent une
  *  fois : la vue de comparaison de la première écrit sa bascule. */
 export function chargeComparaison() {
+  return deuxPropositions(8);
+}
+
+// Douze personnes, trois tables de quatre, trois tours ; une génération de
+// deux propositions sous la graine donnée, sans retenu.
+function deuxPropositions(graine) {
   const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
-  return generee(charge, { graine: 8, nombre: 2, arret: 60 }).charge;
+  return generee(charge, { graine, nombre: 2, arret: 60 }).charge;
+}
+
+/** La forme de chargeComparaison, sous la graine 10 : les profils de manque
+ *  des deux propositions réunis ne prennent que deux valeurs, sous le seuil
+ *  du tracé ; la vue de la première écrit ses effectifs en une phrase, et
+ *  sa dominance. */
+export function chargeComparaisonPhrase() {
+  return deuxPropositions(10);
+}
+
+/** chargeComparaison, sa proposition 1 retenue, puis le retenu ajusté : au
+ *  tour 1, la première personne de la table 1 et celle de la table 2
+ *  échangées. Le retenu, source de la page, se compare par défaut à sa
+ *  proposition d'origine, et se trace contre elle. */
+export function chargeRetenuAjuste() {
+  const retenue = executer(chargeComparaison(), 'retenirProposition', { id: 1 });
+  const [premiere, seconde] = retenue.retenu.placement[0].sieges;
+  return executer(retenue, 'echangerDansRetenu', { tour: 1, a: premiere[0], b: seconde[0] });
+}
+
+/** chargeComparaison et une génération dérivée de la proposition 1, tour 1
+ *  figé, sous la graine 1 : deux dérivées, n° 3 et 4, chacune le tour 1 de
+ *  son départ, toutes quatre comparables et classées ensemble. */
+export function chargeDerivees() {
+  const charge = chargeComparaison();
+  const configuration = configurationDepuisCharge(charge);
+  const derivation = { depart: 1, toursFiges: [1] };
+  const propositions = repartir(configuration, { historique: 1000, graine: 1, nombre: 2, arret: 60 }, { plan: planDuDepart(charge, derivation.depart), toursFiges: derivation.toursFiges });
+  return executer(charge, 'enregistrerGeneration', { propositions, configuration, produitVersion: VERSION.affichee, derivation });
 }
 
 // Le placement de chargeNiveaux, tours par tours, sièges non attribués.
@@ -579,10 +631,91 @@ async function ouvrirJumeaux(m, sous) {
 // lever l'écran.
 async function jumeauSansEcriture(contexte, charge) {
   const m = await ouvrirQualite(contexte, charge);
+  await sansEcriture(m, 'l’ouverture d’un jumeau', () => ouvrirJumeaux(m, '[data-vue-qualite="profil"]'));
+  return m.racine;
+}
+
+// Regarder ne refuse rien et n'écrit rien (§ 8.4, C9, contrainte 57) :
+// joue gestes(), puis lève quand un refus est rendu ou qu'une primitive
+// d'écriture du système simulé a été appelée depuis, quoi nommant les
+// gestes.
+async function sansEcriture(m, quoi, gestes) {
   const ecritures = m.trace.length;
-  await ouvrirJumeaux(m, '[data-vue-qualite="profil"]');
-  if (m.racine.querySelector('[data-refus]') !== null) throw new Error('écran : un refus rendu à l’ouverture d’un jumeau');
-  if (m.trace.length !== ecritures) throw new Error(`écran : l’ouverture d’un jumeau a écrit ${JSON.stringify(m.trace.slice(ecritures))}`);
+  await gestes();
+  if (m.racine.querySelector('[data-refus]') !== null) throw new Error(`écran : un refus rendu à ${quoi}`);
+  if (m.trace.length !== ecritures) throw new Error(`écran : ${quoi} a écrit ${JSON.stringify(m.trace.slice(ecritures))}`);
+}
+
+// Le sélecteur de la vue de comparaison.
+const COMPARAISON = '[data-vue-qualite="comparaison"]';
+
+// La vue de comparaison du montage amenée en haut de la zone visible, où
+// elle se calcule, puis rendue : sa première phrase écrite — la seule sans
+// second placement —, et son tracé, quand elle en porte un, dessiné et
+// marqué.
+async function comparaisonRendue(m) {
+  await attendre('une vue de la page de qualité', () => m.racine.querySelector('[data-section="qualite"] [data-vue-qualite]'));
+  (await element(m, COMPARAISON)).scrollIntoView({ block: 'start' });
+  await element(m, `${COMPARAISON} [data-phrase-comparaison]`);
+  if (m.racine.querySelector(`${COMPARAISON} svg[data-graphique="comparaison"]`) !== null) {
+    await dessinerGraphiques(m.racine.querySelector(COMPARAISON));
+    await element(m, `${COMPARAISON} [data-graphique="comparaison"] [data-marque]`);
+  }
+}
+
+// Ouvre l'événement de la charge sur la page de qualité, au mode donné,
+// puis rend sa vue de comparaison (comparaisonRendue) : les graphiques des
+// autres vues gardent leur dessin différé. Rend le montage.
+async function ouvrirComparaison(contexte, charge, { ecriture = false } = {}) {
+  const m = await ouvrirEvenement(contexte, charge, { ecriture, section: 'qualite' });
+  await comparaisonRendue(m);
+  return m;
+}
+
+// Le repli « Tous les indicateurs » de la vue de comparaison ouvert par sa
+// commande : elle le dit, et son tableau est rendu.
+async function ouvrirRepli(m) {
+  await cliquer(m, `${COMPARAISON} [data-tous-les-indicateurs]`);
+  await attendre('« Tous les indicateurs » ouvert', () => {
+    const commande = m.racine.querySelector(`${COMPARAISON} [data-tous-les-indicateurs]`);
+    return commande?.getAttribute('aria-expanded') === 'true' && document.getElementById(commande.getAttribute('aria-controls') ?? '')?.querySelector('table');
+  });
+}
+
+// La vue de comparaison de la charge, au mode de l'événement : la vue
+// rendue, puis, sans rien écrire ni rien refuser, le second placement
+// changé par la liste « Comparer à : » au clavier, le repli ouvert, et le
+// jumeau, quand la vue en porte un. La charge offre plusieurs candidats :
+// une liste de moins de deux options lève, comme un second placement que
+// la touche ne change pas.
+async function comparaisonSansEcriture(contexte, charge) {
+  const m = await ouvrirComparaison(contexte, charge);
+  await sansEcriture(m, 'la vue de comparaison regardée', async () => {
+    const liste = m.racine.querySelector(`${COMPARAISON} select[data-comparer-a]`);
+    if (liste === null || liste.options.length < 2) throw new Error(`écran : la liste « Comparer à : » offre ${liste === null ? 'aucune' : liste.options.length} option, deux au moins attendues`);
+    const avant = liste.value;
+    liste.focus();
+    await touche(liste.selectedIndex === liste.options.length - 1 ? 'ArrowUp' : 'ArrowDown');
+    await attendre('un autre second placement', () => m.racine.querySelector(`${COMPARAISON} select[data-comparer-a]`)?.value !== avant);
+    await comparaisonRendue(m);
+    await ouvrirRepli(m);
+    await ouvrirJumeaux(m, COMPARAISON);
+  });
+  return m.racine;
+}
+
+// La carte du départ de la section Génération : la ligne de la proposition
+// 1 choisie pour départ par « Repartir d'elle » au tableau des
+// propositions, puis la case du tour 1 cochée par un clic, sans rien écrire
+// ni rien refuser, à tout mode.
+async function departChoisi(contexte, charge, { ecriture = false } = {}) {
+  const m = await ouvrirEvenement(contexte, charge, { ecriture, section: 'propositions' });
+  await sansEcriture(m, 'le choix d’un départ', async () => {
+    await cliquer(m, '[data-proposition="1"] [data-commande="repartir"]');
+    await element(m, '[data-section="generation"] [data-depart]');
+    await cliquerPointeur(await element(m, '[data-depart] [data-tour-fige="1"]'));
+    await attendre('le tour 1 coché', () => m.racine.querySelector('[data-depart] [data-tour-fige="1"]')?.checked === true);
+  });
   return m.racine;
 }
 
@@ -1074,6 +1207,34 @@ export const ECRANS = Object.freeze([
     },
   },
   {
+    nom: 'generation.depart',
+    mode: 'ecriture',
+    atteindre: (contexte) => departChoisi(contexte, chargeComparaison(), { ecriture: true }),
+  },
+  {
+    nom: 'generation.depart.lecture',
+    mode: 'lecture',
+    atteindre: (contexte) => departChoisi(contexte, chargeComparaison()),
+  },
+  {
+    nom: 'generation.depart.bloque',
+    mode: 'bloque',
+    atteindre: (contexte) => departChoisi(contexte, chargeBloquee()),
+  },
+  {
+    nom: 'propositions.derivees',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // Les deux dérivées de la proposition 1, chacune sa filiation sous
+      // son numéro, classées avec leur départ ; chaque ligne comparable
+      // porte « Repartir d'elle » et « Comparer ».
+      const m = await ouvrirEvenement(contexte, chargeDerivees(), { section: 'propositions' });
+      await attendre('les filiations des deux dérivées', () => m.racine.querySelectorAll('[data-section="propositions"] [data-filiation]').length === 2);
+      await element(m, '[data-proposition="4"] [data-commande="comparer"]');
+      return m.racine;
+    },
+  },
+  {
     nom: 'propositions.critereSurvole',
     mode: 'lecture',
     async atteindre(contexte) {
@@ -1164,15 +1325,68 @@ export const ECRANS = Object.freeze([
       // zone visible, où elle se calcule ; son tracé dessiné, sa bascule
       // écrite, puis son jumeau, l'escalier du manque, ouvert par sa
       // commande.
-      const m = await ouvrirQualite(contexte, chargeComparaison());
-      (await element(m, '[data-vue-qualite="comparaison"]')).scrollIntoView({ block: 'start' });
-      await element(m, '[data-vue-qualite="comparaison"] svg[data-graphique="comparaison"]');
-      await dessinerGraphiques(m.racine.querySelector('[data-vue-qualite="comparaison"]'));
-      await element(m, '[data-graphique="comparaison"] [data-marque]');
-      await element(m, '[data-vue-qualite="comparaison"] [data-phrase-comparaison="bascule"]');
-      await ouvrirJumeaux(m, '[data-vue-qualite="comparaison"]');
+      const m = await ouvrirComparaison(contexte, chargeComparaison());
+      await element(m, `${COMPARAISON} [data-graphique="comparaison"] [data-marque]`);
+      await element(m, `${COMPARAISON} [data-phrase-comparaison="bascule"]`);
+      await ouvrirJumeaux(m, COMPARAISON);
       return m.racine;
     },
+  },
+  {
+    nom: 'qualite.comparaison.phrase',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // Deux valeurs de manque : les effectifs en une phrase, sans tracé, et
+      // la dominance ; les colonnes au-dessus.
+      const m = await ouvrirComparaison(contexte, chargeComparaisonPhrase());
+      await element(m, `${COMPARAISON} [data-phrase-comparaison="peuDeValeurs"]`);
+      await element(m, `${COMPARAISON} [data-colonne-comparaison="b"] [data-pourcentage]`);
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.comparaison.seul',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // La principale : un seul placement mesurable, la phrase seule.
+      const m = await ouvrirComparaison(contexte, chargePrincipale());
+      await element(m, `${COMPARAISON} [data-phrase-comparaison="seul"]`);
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.comparaison.retenu',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // Le retenu ajusté, source de la page, contre sa proposition
+      // d'origine : le tracé des deux, la place « — » du retenu.
+      const m = await ouvrirComparaison(contexte, chargeRetenuAjuste());
+      await element(m, `${COMPARAISON} svg[data-graphique="comparaison"] [data-serie="b"]`);
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.comparaison.repli',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // « Tous les indicateurs » ouvert : les autres tuiles, sous leurs
+      // groupes, dans chaque colonne ; sous un objectif qui concerne des
+      // personnes, les deux pourcentages du repli s'y ajoutent au minimum
+      // brut de la tête.
+      const m = await ouvrirComparaison(contexte, chargeComparaisonObjectifs());
+      await ouvrirRepli(m);
+      return m.racine;
+    },
+  },
+  {
+    nom: 'qualite.comparaison.lecture',
+    mode: 'lecture',
+    atteindre: (contexte) => comparaisonSansEcriture(contexte, chargeDerivees()),
+  },
+  {
+    nom: 'qualite.comparaison.bloque',
+    mode: 'bloque',
+    atteindre: (contexte) => comparaisonSansEcriture(contexte, executer(chargeRetenuAjuste(), 'changerEtat', { etat: 'bloque' })),
   },
   {
     nom: 'qualite.paires',

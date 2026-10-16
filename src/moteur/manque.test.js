@@ -23,6 +23,7 @@ import {
   manques,
   minimumAtteint,
   profilManque,
+  teteDuManque,
   troisChiffres,
   valeursDistinctes,
 } from './manque.js';
@@ -500,6 +501,38 @@ function chacunRencontreHuit(plan) {
   }
   return rencontres.size === 12 && [...rencontres.values()].every((vus) => vus.size === 8);
 }
+
+describe('teteDuManque (§ 12.2, § 12.10.6)', () => {
+  test('rouge : la personne au rang 1, son plafond réalisé, et les rangs au manque maximal — non ceux dont le manque vaut au moins 1', () => {
+    const instance = normaliser({
+      participants: sansAppartenance([10, 20, 30, 40, 50]),
+      tables: tablesDe([5]),
+      tours: 1,
+      reservations: [],
+      contraintes: SANS_CONTRAINTE,
+    });
+    //   id               10  20  30  40  50
+    //   manque            2   1   2   1   0
+    //   plafond réalisé   5   3   4   5   2
+    const profilLu = profilManque(instance, figer([2, 1, 2, 1, 0]), figer([5, 3, 4, 5, 2]));
+    assert.deepEqual(teteDuManque(figer(profilLu)), { id: 30, plafondRealise: 4, effectif: 2 });
+    // Quatre personnes ont un manque d'au moins 1 : un autre chiffre.
+    assert.equal(profilLu.filter(({ manque }) => manque >= 1).length, 4);
+  });
+
+  test('l’effectif est celui que l’escalier porte à la valeur du rang 1', () => {
+    for (const profilLu of [A_TROUS, B_TROUS, profil([0, 0, 0]), profil([4, 4, 4, 1]), profilDe(PETITE, PLAN_DEGRADE)]) {
+      const [rang1] = profilLu;
+      const ligne = escalierDuManque(profilLu, []).find(({ valeur }) => valeur === rang1.manque);
+      assert.equal(teteDuManque(profilLu).effectif, ligne.a.effectif, JSON.stringify(profilLu.map(({ manque }) => manque)));
+    }
+  });
+
+  test('un profil vide rend null ; un profil qui n’est pas une liste lève TypeError', () => {
+    assert.equal(teteDuManque([]), null);
+    assert.throws(() => teteDuManque(PAS_UNE_LISTE), TypeError);
+  });
+});
 
 describe('comparerProfils : dominance de profil (§ 12.10.7)', () => {
   test("petite démonstration : le plan parfait domine tout plan qui n'est pas à manque nul, et rien ne le domine", () => {

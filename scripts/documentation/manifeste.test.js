@@ -79,7 +79,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.ok(Object.isFrozen(ETAPES));
   });
 
-  test('CAPTURES égale la table du contrat : quarante-trois entrées, leur étape et leur source', () => {
+  test('CAPTURES égale la table du contrat : quarante-huit entrées, leur étape et leur source', () => {
     const table = CAPTURES.map((c) => [c.fichier, c.etape, c.source]);
     assert.deepEqual(table, [
       ['01-premier-ecran', '1', 'navigateur'],
@@ -102,6 +102,8 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['10-diagnostic', '8', 'navigateur'],
       ['10a-ordre-priorites', '9', 'navigateur'],
       ['11-propositions', '9', 'navigateur'],
+      ['11a-depart-derive', '9', 'navigateur'],
+      ['11b-propositions-derivees', '9', 'navigateur'],
       ['12-qualite-profil', '10', 'navigateur'],
       ['12a-qualite-sans-placement', '10', 'navigateur'],
       ['12b-qualite-une-table', '10', 'navigateur'],
@@ -119,6 +121,9 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['15b-qualite-animateurs', '10', 'navigateur'],
       ['15c-qualite-performance', '10', 'navigateur'],
       ['16-minimum-atteint', '10', 'navigateur'],
+      ['17-comparaison-manque', '10', 'navigateur'],
+      ['17a-comparaison-colonnes', '10', 'navigateur'],
+      ['18-comparaison-escalier', '10', 'navigateur'],
       ['19-ajustement', '11', 'navigateur'],
       ['20-mode-lecture', '11', 'navigateur'],
       ['22-plan-brouillon', '12', 'navigateur'],
@@ -174,20 +179,22 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['16-minimum-atteint', 'petite'],
     ];
     assert.deepEqual(qualite.map(([fichier]) => [fichier, configuration.get(fichier)]), qualite);
+    // La dérivée et la comparaison (D81, C26) : la grande démonstration sans
+    // exception, chargée à la fin du parcours, générée puis dérivée.
+    const derivees = ['11a-depart-derive', '11b-propositions-derivees', '17-comparaison-manque', '17a-comparaison-colonnes', '18-comparaison-escalier'];
+    for (const fichier of derivees) assert.equal(configuration.get(fichier), 'grande-sans-exception', fichier);
   });
 
-  test('REPORTEES : 17 et 18 à l’étape 10, 21 à l’étape 11, raison « iteration5 », rien d’autre', () => {
+  test('REPORTEES : 21 à l’étape 11, raison « iteration5 », rien d’autre ; 17, 17a et 18 photographiées', () => {
     assert.deepEqual(
       REPORTEES.map((r) => [r.fichier, r.etape, r.raison]),
-      [
-        ['17-comparaison-manque', '10', 'iteration5'],
-        ['18-comparaison-escalier', '10', 'iteration5'],
-        ['21-historique', '11', 'iteration5'],
-      ],
+      [['21-historique', '11', 'iteration5']],
     );
-    // La page de qualité se photographie : aucune de ses captures n'est
-    // reportée, et aucune reportée n'est déclarée photographiée.
+    // La page de qualité se photographie, sa vue de comparaison comprise :
+    // aucune de ses captures n'est reportée, et aucune reportée n'est
+    // déclarée photographiée.
     const declarees = new Set(CAPTURES.map((c) => c.fichier));
+    for (const fichier of ['17-comparaison-manque', '17a-comparaison-colonnes', '18-comparaison-escalier']) assert.ok(declarees.has(fichier), fichier);
     for (const reportee of REPORTEES) assert.ok(!declarees.has(reportee.fichier), reportee.fichier);
     assert.ok(Object.isFrozen(REPORTEES));
     for (const reportee of REPORTEES) assert.ok(Object.isFrozen(reportee), reportee.fichier);
@@ -390,7 +397,7 @@ describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
 
   test('les captures de la page de qualité couvrent l’étape 10 sans les reportées ; sans les unes ni les autres, elle manque', () => {
     const etape10 = CAPTURES.filter((c) => c.etape === '10').map((c) => c.fichier);
-    assert.equal(etape10.length, 17);
+    assert.equal(etape10.length, 20);
     assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [] })), []);
     assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: etape10 })), [
       { chemin: CHEMIN_MANIFESTE, faute: 'étape 10 : aucune capture ni reportée' },

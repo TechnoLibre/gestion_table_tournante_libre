@@ -27,6 +27,9 @@
 // (§ 14.8).
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { commands } from 'vitest/browser';
+import { appliquerCommande } from '../application/commandes.js';
+import { comparerPlacements, evaluer } from '../application/evaluation.js';
+import { creerFormat } from '../application/format.js';
 import { creerExecuteurDirect } from '../application/generation.js';
 import { TABLES_APPLICATION } from '../application/libelles.js';
 import { nomAffiche } from '../application/personnes.js';
@@ -47,6 +50,8 @@ import {
   NOM_CAS_LIMITES,
   attendre,
   centre,
+  chargeComparaison,
+  chargeComparaisonObjectifs,
   chargeObjectifs,
   chargePaires,
   chargePrincipale,
@@ -81,6 +86,8 @@ import { poserFeuille } from '../../test/navigateur/feuilles.js';
 import { composantes, couleursPeintes, designation, sousTheme, visible } from '../../test/navigateur/rendu.js';
 import { provenanceVisible } from './apropos.js';
 import { TABLES_INTERFACE } from './libelles.js';
+import { nomDe } from './propositions/modele.js';
+import { colonnesComparaison } from './qualite/colonnes.js';
 import SOURCE_CAPTURES from '../../test/navigateur/captures.js?raw';
 import { CONFLITS, FONDS_GRAPHIQUE, JETON_RETRAIT, MARQUES, MARQUES_GRAPHIQUE, NIVEAUX_GRAPHIQUE, SEPARATIONS, TEINTES_APPARTENANCE } from './marques.js';
 import { SIMULATIONS, ecartPercu, simuler } from './palette.js';
@@ -883,6 +890,129 @@ export function fautesGraphiques(graphiques) {
   return fautes;
 }
 
+// --- La vue de comparaison, le départ et les dérivées ----------------------------------------
+
+// Les pourcentages qu'une colonne côte à côte porte au plus : ceux des
+// trois tuiles qui en portent un (D67, C29).
+const POURCENTAGES_PAR_COLONNE = 3;
+
+// La vue de comparaison sous racine, racine comprise.
+const vuesComparaison = (racine) => [...(racine.matches?.('[data-vue-qualite="comparaison"]') ? [racine] : []), ...racine.querySelectorAll('[data-vue-qualite="comparaison"]')];
+
+/**
+ * Les pourcentages rendus dans la vue de comparaison sous racine (contrainte
+ * 44, D67, C29) : chaque [data-pourcentage] rendu de la vue se tient dans
+ * une colonne côte à côte — le plus proche [data-colonne-comparaison] —,
+ * jamais dans une phrase, au tracé, à son infobulle ni à l'escalier ; le
+ * [data-compte-pire] qui le suit est dans la même colonne et, de deux
+ * entiers, redonne la valeur écrite (fauteDuCompte) : le compte de l'autre
+ * placement se trahit dès que leurs rapports diffèrent. Une colonne en
+ * porte au plus POURCENTAGES_PAR_COLONNE, et les deux colonnes autant. Un
+ * pourcentage hors de la vue — une tuile — ne se lit pas ici.
+ * → { lus, parColonne: { a, b }, fautes }.
+ */
+export function releverPourcentagesComparaison(racine) {
+  const fautes = [];
+  const parColonne = { a: 0, b: 0 };
+  let lus = 0;
+  for (const vue of vuesComparaison(racine)) {
+    for (const valeur of vue.querySelectorAll('[data-pourcentage]')) {
+      if (!rendu(valeur)) continue;
+      lus += 1;
+      const nomme = `${situer(valeur)} « ${extrait(valeur.textContent)} »`;
+      const colonne = valeur.closest('[data-colonne-comparaison]')?.dataset.colonneComparaison ?? null;
+      if (colonne === null) {
+        fautes.push(`${nomme} : hors d’une colonne côte à côte`);
+        continue;
+      }
+      parColonne[colonne] = (parColonne[colonne] ?? 0) + 1;
+      const compte = valeur.nextElementSibling;
+      if (compte === null || !compte.matches('[data-compte-pire]')) continue;
+      const colonneDuCompte = compte.closest('[data-colonne-comparaison]').dataset.colonneComparaison;
+      if (colonneDuCompte !== colonne) fautes.push(`${nomme} : son compte est dans la colonne ${colonneDuCompte}, lui dans la colonne ${colonne}`);
+      const faute = fauteDuCompte(valeur, compte);
+      if (faute !== null) fautes.push(`${nomme} : ${faute}`);
+    }
+  }
+  for (const [colonne, n] of Object.entries(parColonne)) {
+    if (n > POURCENTAGES_PAR_COLONNE) fautes.push(`colonne ${colonne} : ${n} pourcentages, trois au plus`);
+  }
+  if (parColonne.a !== parColonne.b) fautes.push(`colonnes a et b : ${parColonne.a} et ${parColonne.b} pourcentages, autant de chaque côté`);
+  return { lus, parColonne, fautes };
+}
+
+/** Fautes des deux séries du tracé de la comparaison (D60, § 12.7) — jamais
+ *  la seule couleur : traces, celles de releverTraces, dont les genres a et
+ *  b sont les deux placements ; la série a et la série b ont des signatures
+ *  distinctes et des motifs distincts. Une paire absente est une faute. */
+export function fautesSeriesComparaison(traces) {
+  const de = (genre) => traces[genre] ?? [];
+  const motifs = (genre) => de(genre).map(({ ou, motif }) => ({ ou, sig: motif }));
+  return [...fautesPaire('série a / série b', de('a'), de('b')), ...fautesPaire('motif a / motif b', motifs('a'), motifs('b'))];
+}
+
+/** Les couleurs que peignent les deux séries du tracé de la comparaison
+ *  sous racine, dans le thème courant : { a, b }, chacune [{ ou, couleur }],
+ *  le trait calculé de chaque tracé rendu, une couleur relevée une fois. */
+export function releverSeriesComparaison(racine) {
+  const series = { a: [], b: [] };
+  for (const trace of racine.querySelectorAll('svg[data-graphique="comparaison"] path[data-serie="a"], svg[data-graphique="comparaison"] path[data-serie="b"]')) {
+    if (!rendu(trace)) continue;
+    const liste = series[trace.dataset.serie];
+    for (const couleur of couleursPeintes(trace).stroke) if (!liste.some((x) => egales(x.couleur, couleur))) liste.push({ ou: situer(trace), couleur });
+  }
+  return series;
+}
+
+/** Fautes de séparation des deux séries de la comparaison
+ *  (releverSeriesComparaison) : chaque couleur de a s'écarte de chaque
+ *  couleur de b d'au moins SEPARATIONS.autresMarques (ecartPercu), sur les
+ *  couleurs d'origine puis sous chaque dichromatie (§ 12.7, D43). Une série
+ *  sans couleur relevée est une faute : la mesure n'a pas eu lieu. */
+export function fautesSeparationComparaison({ a, b }) {
+  if (a.length === 0 || b.length === 0) return [`séries a / b : paire absente (${a.length} et ${b.length})`];
+  const fautes = [];
+  for (const x of a) {
+    for (const y of b) {
+      for (const vue of VUES_SEPARATION) {
+        const vu = (c) => (vue === 'origine' ? c : simuler(c, vue));
+        const ecart = ecartPercu(vu(x.couleur), vu(y.couleur));
+        if (ecart < SEPARATIONS.autresMarques) fautes.push(`${x.ou} ${rgb(x.couleur)} et ${y.ou} ${rgb(y.couleur)} : écart ${ecart.toFixed(1)} (${vue}), ${SEPARATIONS.autresMarques} au moins`);
+      }
+    }
+  }
+  return fautes;
+}
+
+// Les commandes de ligne du tableau des propositions (D85) : « Repartir
+// d'elle » et « Comparer » d'une proposition, « Comparer » du retenu.
+const COMMANDES_DE_LIGNE = ['[data-proposition] [data-commande="repartir"]', '[data-proposition] [data-commande="comparer"]', '[data-retenu] [data-commande="comparer"]'].join(', ');
+
+// Le nom accessible d'un bouton : son aria-label, sinon son texte.
+const nomAccessible = (bouton) => (bouton.getAttribute('aria-label') ?? '').trim() || bouton.textContent.replace(/\s+/g, ' ').trim();
+
+/**
+ * Les noms accessibles des commandes de ligne rendues sous racine (D85) :
+ * deux commandes n'ont jamais le même, et celui d'une commande d'une ligne
+ * de proposition porte le numéro de sa ligne (data-proposition) parmi ses
+ * entiers. → { lues, fautes }, lues le nombre de commandes lues.
+ */
+export function releverCommandesDeLigne(racine) {
+  const fautes = [];
+  const vus = new Map();
+  let lues = 0;
+  for (const bouton of racine.querySelectorAll(COMMANDES_DE_LIGNE)) {
+    if (!rendu(bouton)) continue;
+    lues += 1;
+    const nom = nomAccessible(bouton);
+    const ligne = bouton.closest('[data-proposition]')?.dataset.proposition ?? null;
+    if (ligne !== null && !entiersDe(nom).includes(Number(ligne))) fautes.push(`${situer(bouton)} « ${extrait(nom)} » : ne porte pas le numéro ${ligne} de sa ligne`);
+    if (vus.has(nom)) fautes.push(`${situer(bouton)} et ${vus.get(nom)} : même nom accessible « ${extrait(nom)} »`);
+    else vus.set(nom, situer(bouton));
+  }
+  return { lues, fautes };
+}
+
 /** Ce qu'un écran de la page de qualité rend, hors des thèmes : null hors
  *  de la page. Sinon les pourcentages, les niveaux, les tracés et les
  *  graphiques, les phrases de cas (data-phrase-qualite), le nombre de
@@ -912,7 +1042,83 @@ function releverQualite(racine) {
       .map((segment) => segment.getBoundingClientRect().width),
     pointsReleve: [...section.querySelectorAll('[data-point-releve]')].filter(rendu).length,
     course: section.querySelector('[data-course]') !== null,
+    comparaison: releverComparaison(section),
   };
+}
+
+// Un texte rendu, ses blancs réduits à une espace, sans blanc aux bouts.
+const texteReduit = (texte) => texte.replace(/\s+/g, ' ').trim();
+
+/** Ce que la vue de comparaison rend sous la section de qualité, hors des
+ *  thèmes : null quand elle ne s'est pas calculée. Sinon ses phrases
+ *  (data-phrase-comparaison), ses pourcentages (releverPourcentagesComparaison),
+ *  chaque pourcentage rendu dans une colonne avec son compte, dans l'ordre
+ *  des lignes — { nom, cote, valeur, compte }, nom la ligne, cote la
+ *  colonne —, les tracés de ses deux séries (releverTraces, genres a et b),
+ *  le texte de l'en-tête de chaque colonne, la place de chacune, et l'état
+ *  du repli et de son jumeau. */
+function releverComparaison(section) {
+  const vue = section.querySelector('[data-vue-qualite="comparaison"]');
+  if (vue === null || vue.querySelector('[data-phrase-comparaison]') === null) return null;
+  const texte = (selecteur) => {
+    const element = vue.querySelector(selecteur);
+    return element === null ? null : texteReduit(element.textContent);
+  };
+  const enColonne = (ligne) =>
+    [...ligne.querySelectorAll('td[data-colonne-comparaison]')].flatMap((cellule) =>
+      [...cellule.querySelectorAll('[data-pourcentage]')].filter(rendu).map((valeur) => ({
+        nom: ligne.dataset.colonne,
+        cote: cellule.dataset.colonneComparaison,
+        valeur: texteReduit(valeur.textContent),
+        compte: texteReduit(valeur.nextElementSibling?.textContent ?? ''),
+      })),
+    );
+  return {
+    phrases: [...vue.querySelectorAll('[data-phrase-comparaison]')].filter(rendu).map((p) => p.dataset.phraseComparaison),
+    pourcentages: releverPourcentagesComparaison(vue),
+    pourcentagesEnColonne: [...vue.querySelectorAll('tr[data-colonne]')].flatMap(enColonne),
+    traces: releverTraces(vue).traces,
+    trace: vue.querySelector('svg[data-graphique="comparaison"]') !== null,
+    entetes: { a: texte('th[data-colonne-comparaison="a"]'), b: texte('th[data-colonne-comparaison="b"]') },
+    rangs: { a: texte('tr[data-colonne="rang"] td[data-colonne-comparaison="a"]'), b: texte('tr[data-colonne="rang"] td[data-colonne-comparaison="b"]') },
+    repli: vue.querySelector('[data-tous-les-indicateurs][aria-expanded="true"]') !== null,
+    jumeau: [...vue.querySelectorAll('[data-jumeau]')].some(rendu),
+  };
+}
+
+/** La carte du départ de la section Génération sous racine : null sans
+ *  carte ; sinon son titre — l'élément que nomme son aria-labelledby, qui
+ *  dit le numéro du départ —, null sans titre, et les tours dont la case
+ *  est cochée, croissants. */
+function releverDepart(racine) {
+  const carte = racine.querySelector('[data-section="generation"] [data-depart]');
+  if (carte === null || !rendu(carte)) return null;
+  const titre = document.getElementById(carte.getAttribute('aria-labelledby') ?? '');
+  return {
+    titre: titre === null ? null : texteReduit(titre.textContent),
+    figes: [...carte.querySelectorAll('[data-tour-fige]')].filter((c) => c.checked).map((c) => Number(c.dataset.tourFige)),
+  };
+}
+
+/** Les pourcentages que les colonnes de la comparaison de a à b rendent
+ *  pour charge, en langue témoin, dans l'ordre des lignes et A avant B :
+ *  [{ nom, cote, valeur, compte }], comme pourcentagesEnColonne les relève,
+ *  tirés de colonnesComparaison — le modèle que ColonnesComparaison.svelte
+ *  câble —, les blancs réduits. Un pourcentage sans valeur s'écrit « — ». */
+function pourcentagesAttendus(charge, a, b) {
+  const table = evaluer(charge);
+  const outils = { t: tTemoin, format: creerFormat(tTemoin), nomDe: (id) => nomDe(charge, id) };
+  const { tete, groupes } = colonnesComparaison(comparerPlacements(charge, table, a, b), table, outils);
+  return [...tete, ...groupes.flatMap(({ lignes }) => lignes)].flatMap((ligne) =>
+    ['a', 'b']
+      .filter((cote) => ligne[cote].pourcentage !== null)
+      .map((cote) => ({
+        nom: ligne.nom,
+        cote,
+        valeur: texteReduit(ligne[cote].pourcentage.texte ?? tTemoin('format.vide')),
+        compte: texteReduit(ligne[cote].pourcentage.compte),
+      })),
+  );
 }
 
 // --- Le parcours et ses relevés ----------------------------------------------------------
@@ -945,6 +1151,7 @@ function releverTheme(racine) {
       teinte: fautesTeinte(racine, teintesDeConflit()),
       teintesGraphique: fautesTeintesGraphique(racine),
       separation: section === null ? null : releverSeparation(section),
+      seriesComparaison: section === null ? null : releverSeriesComparaison(section),
     };
   } finally {
     window.scrollTo(0, 0);
@@ -974,6 +1181,9 @@ beforeAll(async () => {
       releve.listes = releverListes(racine);
       releve.signatureMode = signatureMode(racine);
       releve.qualite = releverQualite(racine);
+      releve.depart = releverDepart(racine);
+      releve.commandesDeLigne = releverCommandesDeLigne(racine);
+      releve.filiations = [...racine.querySelectorAll('[data-section="propositions"] [data-filiation]')].filter(rendu).length;
       releve.clair = releverTheme(racine);
       await cliquer(m, '[data-bandeau] [data-commande="theme"][data-theme-choix="sombre"]');
       await attendre('le thème sombre', () => document.documentElement.getAttribute('data-theme') === 'sombre');
@@ -1341,6 +1551,81 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(fautes.filter((f) => f.includes('sans description'))).toHaveLength(2);
     expect(fautes.filter((f) => f.includes('rôle absent'))).toHaveLength(1);
     expect(fautes.filter((f) => f.includes('même nom'))).toHaveLength(1);
+  });
+
+  test('comparaison, pourcentages : dans une phrase, compte échangé entre A et B ou posé dans l’autre colonne, plus de trois par colonne, colonnes inégales — chacun relevé', () => {
+    const paire = (valeur, compte, colonneDuCompte = '') =>
+      `<span data-pourcentage>${valeur}</span><span data-compte-pire${colonneDuCompte}>${compte}</span>`;
+    const ligne = (nom, a, b) => `<tr data-colonne="${nom}"><td data-colonne-comparaison="a">${a}</td><td data-colonne-comparaison="b">${b}</td></tr>`;
+    const vue = (lignes, apres = '') => `<div data-vue-qualite="comparaison"><table><tbody>${lignes}</tbody></table>${apres}</div>`;
+    const juste = ligne('rencontresTous', paire('88\u{202F}%', 'minimum 24 sur 27'), paire('70\u{202F}%', 'minimum 19 sur 27'));
+    const releve = (html) => avecFragment(html, (c) => releverPourcentagesComparaison(c));
+
+    // Hors de la vue, un pourcentage ne se lit pas ici : les tuiles en portent.
+    const bon = releve(`<p>${paire('50\u{202F}%', 'minimum 1 sur 2')}</p>${vue(juste)}`);
+    expect([bon.lus, bon.parColonne]).toEqual([2, { a: 1, b: 1 }]);
+    expect(bon.fautes).toEqual([]);
+
+    const phrase = releve(vue(juste, `<p data-phrase-comparaison="effectifs">3 rangs ${paire('12\u{202F}%', '3 sur 25')}</p>`));
+    expect(phrase.fautes).toHaveLength(1);
+    expect(phrase.fautes[0]).toMatch(/« 12\s% » : hors d’une colonne côte à côte$/u);
+
+    const echanges = releve(vue(ligne('rencontresTous', paire('88\u{202F}%', 'minimum 19 sur 27'), paire('70\u{202F}%', 'minimum 24 sur 27'))));
+    expect(echanges.fautes).toHaveLength(2);
+    expect(echanges.fautes[0]).toMatch(/« 88\s% » : son compte minimum 19 sur 27 donne 70\u{202F}%$/u);
+    expect(echanges.fautes[1]).toMatch(/« 70\s% » : son compte minimum 24 sur 27 donne 88\u{202F}%$/u);
+
+    const ailleurs = releve(vue(ligne('rencontresTous', paire('88\u{202F}%', 'minimum 24 sur 27', ' data-colonne-comparaison="b"'), paire('70\u{202F}%', 'minimum 19 sur 27'))));
+    expect(ailleurs.fautes).toEqual([expect.stringMatching(/« 88\s% » : son compte est dans la colonne b, lui dans la colonne a$/u)]);
+
+    const quatre = ['rencontresTous', 'toursHorsObjectif', 'toursSelonObjectif', 'collisionsCumulees'].map((nom) => ligne(nom, paire('50\u{202F}%', 'minimum 1 sur 2'), ''));
+    const trop = releve(vue(quatre.join('')));
+    expect(trop.parColonne).toEqual({ a: 4, b: 0 });
+    expect(trop.fautes).toEqual(['colonne a : 4 pourcentages, trois au plus', 'colonnes a et b : 4 et 0 pourcentages, autant de chaque côté']);
+  });
+
+  test('comparaison, séries : deux courbes de même trait sont relevées ; deux séries que la vue d’origine ou une dichromatie confond aussi ; sans la série b, la paire absente', () => {
+    const trace = (serie, jeton, motif) =>
+      `<path data-serie="${serie}" data-marque="graphiqueSerie${serie === 'a' ? 1 : 2}" d="M10 10 H190" style="fill:none;stroke:var(${jeton});stroke-width:2px"${motif === null ? '' : ` stroke-dasharray="${motif}"`} />`;
+    const graphique = (b) => `<svg data-graphique="comparaison" width="200" height="30">${trace('a', '--couleur-graphique-serie-1', null)}${b}</svg>`;
+    const lire = (html) => avecFragment(html, (c) => ({ traces: releverTraces(c).traces, couleurs: releverSeriesComparaison(c) }));
+
+    const juste = lire(graphique(trace('b', '--couleur-graphique-serie-2', '6 4')));
+    expect(fautesSeriesComparaison(juste.traces)).toEqual([]);
+    expect([juste.couleurs.a.length, juste.couleurs.b.length]).toEqual([1, 1]);
+    expect(fautesSeparationComparaison(juste.couleurs)).toEqual([]);
+
+    const memeTrait = lire(graphique(trace('b', '--couleur-graphique-serie-2', null)));
+    const fautes = fautesSeriesComparaison(memeTrait.traces);
+    expect(fautes.some((f) => f.startsWith('série a / série b') && f.includes('ne diffèrent que par la couleur'))).toBe(true);
+    expect(fautes.some((f) => f.startsWith('motif a / motif b'))).toBe(true);
+
+    const confondues = lire(graphique(trace('b', '--couleur-graphique-serie-1', '6 4')));
+    expect(fautesSeriesComparaison(confondues.traces)).toEqual([]);
+    expect(fautesSeparationComparaison(confondues.couleurs).map((f) => /\(([a-z]+)\)/.exec(f)[1])).toEqual(['origine', ...Object.keys(SIMULATIONS)]);
+
+    const seule = lire(graphique(''));
+    expect(fautesSeriesComparaison(seule.traces)).toContain('série a / série b : paire absente (1 et 0)');
+    expect(fautesSeparationComparaison(seule.couleurs)).toEqual(['séries a / b : paire absente (1 et 0)']);
+  });
+
+  test('commandes de ligne : deux commandes de même nom accessible, et un nom qui ne porte pas le numéro de sa ligne, sont relevés ; sous le nom, le texte du bouton', () => {
+    const commande = (nom, aria, texte = 'Comparer') => `<button data-commande="${nom}"${aria === null ? '' : ` aria-label="${aria}"`}>${texte}</button>`;
+    const ligne = (id, ...commandes) => `<tr data-proposition="${id}"><td>${commandes.join('')}</td></tr>`;
+    const lire = (lignes) => avecFragment(`<table><tbody>${lignes}</tbody></table>`, (c) => releverCommandesDeLigne(c));
+
+    const justes = lire(
+      ligne(3, commande('repartir', 'Repartir de la proposition n° 3', 'Repartir d’elle'), commande('comparer', 'Comparer la proposition n° 3')) +
+        ligne(14, commande('repartir', 'Repartir de la proposition n° 14', 'Repartir d’elle'), commande('comparer', null, 'Comparer n° 14')) +
+        `<tr data-retenu="3"><td>${commande('comparer', 'Comparer le placement retenu')}</td></tr>`,
+    );
+    expect(justes.lues).toBe(5);
+    expect(justes.fautes).toEqual([]);
+
+    const fautives = lire(ligne(3, commande('comparer', 'Comparer la proposition n° 3')) + ligne(14, commande('comparer', 'Comparer la proposition n° 3'), commande('repartir', null, 'Repartir d’elle')));
+    expect(fautives.fautes).toHaveLength(3);
+    expect(fautives.fautes.filter((f) => f.includes('ne porte pas le numéro 14'))).toHaveLength(2);
+    expect(fautives.fautes.filter((f) => f.includes('même nom accessible'))).toHaveLength(1);
   });
 
   test('teintes réservées : un texte peint d’une teinte de conflit, et la trame d’une règle peinte de la teinte d’une autre, sont relevés ; une trame de sa propre teinte passe', () => {
@@ -1849,6 +2134,183 @@ describe('la page de qualité, sur chacun de ses écrans (§ 12.7, § 14.5, D30,
     }
     expect([...vues].filter((vue) => vue !== null).sort(), 'vues dont le jumeau s’ouvre au clavier').toEqual(expect.arrayContaining(VUES_A_JUMEAU));
   }, 240_000);
+});
+
+// --- La comparaison, le départ et les dérivées, sur leurs écrans ----------------------------
+
+// Les écrans de la vue de comparaison, de la carte du départ et des
+// dérivées (C9, C15, C20, D55, D85) : chacun atteint, et chacun montre ce
+// que son nom annonce.
+const ECRANS_COMPARAISON = [
+  'qualite.comparaison',
+  'qualite.comparaison.phrase',
+  'qualite.comparaison.seul',
+  'qualite.comparaison.retenu',
+  'qualite.comparaison.repli',
+  'qualite.comparaison.lecture',
+  'qualite.comparaison.bloque',
+  'generation.depart',
+  'generation.depart.lecture',
+  'generation.depart.bloque',
+  'propositions.derivees',
+];
+
+// Les écrans où regarder n'écrit rien ni ne refuse rien (§ 8.4, C9,
+// contrainte 57) : l'écran lève à la moindre écriture.
+const ECRANS_SANS_ECRITURE = ['qualite.comparaison.lecture', 'qualite.comparaison.bloque', 'generation.depart.lecture', 'generation.depart.bloque'];
+
+// Les relevés des écrans atteints où la vue de comparaison s'est calculée.
+const deComparaison = () => deQualite().filter((r) => r.qualite.comparaison !== null);
+
+describe('la comparaison, le départ et les dérivées, sur leurs écrans (C9, C15, C20, C29, D55, D66, D67, D85)', () => {
+  test('chaque écran est atteint ; chacun rend ce que son nom annonce', () => {
+    const fautes = [];
+    for (const nom of ECRANS_COMPARAISON) if (releveDe(nom) === undefined) fautes.push(`${nom} : non atteint`);
+    const c = (nom) => releveDe(nom)?.qualite?.comparaison ?? null;
+    for (const nom of ECRANS_COMPARAISON.filter((n) => n.startsWith('qualite.'))) if (releveDe(nom) !== undefined && c(nom) === null) fautes.push(`${nom} : la vue de comparaison non calculée`);
+    for (const nom of ['qualite.comparaison', 'qualite.comparaison.retenu']) {
+      if (c(nom) !== null && !(c(nom).trace && c(nom).traces.a?.length > 0 && c(nom).traces.b?.length > 0)) fautes.push(`${nom} : le tracé des deux séries absent`);
+    }
+    if (c('qualite.comparaison') !== null) {
+      if (!c('qualite.comparaison').phrases.includes('bascule')) fautes.push('qualite.comparaison : la bascule absente');
+      if (!c('qualite.comparaison').jumeau) fautes.push('qualite.comparaison : le jumeau fermé');
+    }
+    if (c('qualite.comparaison.phrase') !== null && (c('qualite.comparaison.phrase').trace || !c('qualite.comparaison.phrase').phrases.includes('peuDeValeurs'))) {
+      fautes.push(`qualite.comparaison.phrase : ${c('qualite.comparaison.phrase').trace ? 'un tracé' : 'la phrase « peuDeValeurs » absente'}`);
+    }
+    if (c('qualite.comparaison.seul') !== null) {
+      const seul = c('qualite.comparaison.seul');
+      if (seul.phrases.join() !== 'seul' || seul.trace || seul.entetes.a !== null || seul.pourcentages.lus > 0) fautes.push(`qualite.comparaison.seul : ${JSON.stringify(seul.phrases)}, des colonnes, un tracé ou un pourcentage`);
+    }
+    if (c('qualite.comparaison.retenu') !== null) {
+      const { entetes, rangs } = c('qualite.comparaison.retenu');
+      if (!entetes.a?.includes(tTemoin('qualite.comparaison.nom.retenu'))) fautes.push(`qualite.comparaison.retenu : la colonne a « ${entetes.a} » ne nomme pas le retenu`);
+      // Le second placement par défaut d'un retenu ajusté : sa proposition
+      // d'origine, la n° 1.
+      if (!entetes.b?.includes(tTemoin('qualite.comparaison.nom.proposition', { proposition: 1 }))) fautes.push(`qualite.comparaison.retenu : la colonne b « ${entetes.b} » ne nomme pas la proposition d’origine n° 1`);
+      if (!rangs.a?.includes(tTemoin('format.vide'))) fautes.push(`qualite.comparaison.retenu : la place du retenu ajusté « ${rangs.a} »`);
+    }
+    for (const nom of ['qualite.comparaison.repli', 'qualite.comparaison.lecture', 'qualite.comparaison.bloque']) {
+      if (c(nom) !== null && !c(nom).repli) fautes.push(`${nom} : « Tous les indicateurs » fermé`);
+    }
+    for (const nom of ['qualite.comparaison.lecture', 'qualite.comparaison.bloque']) if (c(nom) !== null && !c(nom).jumeau) fautes.push(`${nom} : le jumeau fermé`);
+    // « Repartir d'elle » sur la ligne 1 : le départ est la proposition 1.
+    const titreDuDepart = texteReduit(tTemoin('generation.depart.titre', { depart: 1 }));
+    for (const nom of ['generation.depart', 'generation.depart.lecture', 'generation.depart.bloque']) {
+      const depart = releveDe(nom)?.depart;
+      if (depart !== undefined && depart?.figes.join() !== '1') fautes.push(`${nom} : la carte du départ ${depart === null ? 'absente' : `aux tours cochés [${depart.figes}]`}`);
+      if (depart && depart.titre !== titreDuDepart) fautes.push(`${nom} : la carte du départ titrée « ${depart.titre} », « ${titreDuDepart} » attendu`);
+    }
+    const derivees = releveDe('propositions.derivees');
+    if (derivees !== undefined && (derivees.filiations !== 2 || derivees.commandesDeLigne.lues !== 8)) {
+      fautes.push(`propositions.derivees : ${derivees.filiations} filiations, ${derivees.commandesDeLigne.lues} commandes de ligne`);
+    }
+    aucuneFaute(fautes, 'écrans de la comparaison, du départ et des dérivées');
+  });
+
+  test('dans la vue de comparaison, un pourcentage ne se rend que dans une colonne, suivi du compte de la même colonne ; trois au plus par colonne, autant de chaque côté', () => {
+    expect(deComparaison().reduce((n, r) => n + r.qualite.comparaison.pourcentages.lus, 0), 'pourcentages de la vue lus').toBeGreaterThan(0);
+    // Le repli ouvert sous un objectif qui concerne des personnes : les
+    // trois pourcentages de chaque colonne, chacun la valeur et le compte
+    // que le modèle des colonnes donne à son côté.
+    const repli = releveDe('qualite.comparaison.repli')?.qualite?.comparaison ?? null;
+    expect(repli?.pourcentages.parColonne, 'repli ouvert').toEqual({ a: 3, b: 3 });
+    const proposition = (cle) => tTemoin('qualite.comparaison.nom.proposition', { proposition: cle });
+    const a = [1, 2].find((cle) => repli.entetes.a?.includes(proposition(cle)));
+    expect(a, `la colonne a « ${repli.entetes.a} »`).toBeDefined();
+    expect(repli.pourcentagesEnColonne, 'repli ouvert, pourcentages et comptes').toEqual(pourcentagesAttendus(chargeComparaisonObjectifs(), a, 3 - a));
+    aucuneFaute(deComparaison().flatMap((r) => r.qualite.comparaison.pourcentages.fautes.map((f) => `${r.nom} — ${f}`)), 'pourcentages de la comparaison');
+  });
+
+  test('jamais la seule couleur : les deux séries du tracé, deux motifs et deux traits distincts ; leurs couleurs séparées l’une de l’autre sur les couleurs d’origine et sous les trois dichromaties, dans les deux thèmes', () => {
+    const traces = deComparaison().filter((r) => r.qualite.comparaison.trace);
+    expect(traces.length, 'écrans au tracé de la comparaison').toBeGreaterThan(0);
+    const fautes = traces.flatMap((r) => fautesSeriesComparaison(r.qualite.comparaison.traces).map((f) => `${r.nom} — ${f}`));
+    for (const r of traces) {
+      for (const theme of THEMES) fautes.push(...fautesSeparationComparaison(r[theme].seriesComparaison).map((f) => `${r.nom} [${theme}] — ${f}`));
+    }
+    aucuneFaute([...new Set(fautes)], 'séries de la comparaison');
+  });
+
+  test('en lecture et sur un plan bloqué, regarder la comparaison et choisir un départ ne rendent aucun refus (l’écran lève à la moindre écriture)', () => {
+    const fautes = [];
+    for (const nom of ECRANS_SANS_ECRITURE) {
+      const r = releveDe(nom);
+      if (r === undefined) fautes.push(`${nom} : non atteint`);
+      else for (const refus of r.refus) fautes.push(`${nom} : refus ${refus.code}`);
+    }
+    aucuneFaute(fautes, 'regarder sans écrire');
+  });
+
+  test('les commandes de ligne : chacune un nom accessible distinct, qui porte le numéro de sa ligne', () => {
+    expect(releveDe('propositions.derivees')?.commandesDeLigne.lues, 'commandes de ligne des dérivées').toBeGreaterThan(0);
+    aucuneFaute([...new Set(atteints().flatMap((r) => r.commandesDeLigne.fautes.map((f) => `${r.nom} — ${f}`)))], 'commandes de ligne');
+  });
+
+  test('au clavier : le jumeau de la comparaison et « Tous les indicateurs » s’ouvrent et se ferment par Entrée, le focus jamais sur body', async () => {
+    const contexte = creerContexte({ langue: 'temoin', theme: 'clair' });
+    try {
+      const m = await ouvrirEvenement(contexte, chargeComparaison(), { section: 'qualite' });
+      const vue = await attendre('la vue de comparaison', () => m.racine.querySelector('[data-vue-qualite="comparaison"]'));
+      vue.scrollIntoView({ block: 'start' });
+      await attendre('la vue de comparaison calculée', () => vue.querySelector('[data-tous-les-indicateurs]'));
+      await dessinerGraphiques(vue);
+      const commandes = [
+        ['le jumeau', () => vue.querySelector('[data-commande="ouvrirJumeau"], [data-commande="fermerJumeau"]'), (b) => b.dataset.commande === 'fermerJumeau', '[data-jumeau]'],
+        ['« Tous les indicateurs »', () => vue.querySelector('[data-tous-les-indicateurs]'), () => true, 'table'],
+      ];
+      for (const [quoi, lire, ouverteParNom, contenu] of commandes) {
+        const commande = lire();
+        expect(commande, quoi).not.toBeNull();
+        commande.focus();
+        await touche('Enter');
+        await attendre(`${quoi} ouvert au clavier`, () => commande.getAttribute('aria-expanded') === 'true' && ouverteParNom(commande) && document.getElementById(commande.getAttribute('aria-controls') ?? '')?.querySelector(contenu));
+        expect(document.activeElement, `focus après l’ouverture (${quoi})`).toBe(commande);
+        await touche('Enter');
+        await attendre(`${quoi} refermé au clavier`, () => commande.getAttribute('aria-expanded') === 'false');
+        expect(document.activeElement, `focus après la fermeture (${quoi})`).toBe(commande);
+        expect(document.activeElement).not.toBe(document.body);
+      }
+      expect(contexte.erreurs()).toEqual([]);
+    } finally {
+      await contexte.defaire();
+    }
+  });
+
+  test('le chemin jusqu’à la vue : « Comparer » d’une ligne, puis « Comparer n° a à n° X » de l’issue d’une génération dérivée, ouvrent la vue de comparaison sur la paire, le focus sur elle', async () => {
+    const nom = (proposition) => tTemoin('qualite.comparaison.nom.proposition', { proposition });
+    const paire = (a, b) => tTemoin('qualite.comparaison.placements', { a: nom(a), b: nom(b) });
+    // La vue rendue sur la paire, et le focus sur l'élément qui la porte.
+    const surLaPaire = async (m, a, b) => {
+      const ligne = await attendre(`la vue sur n° ${a} et n° ${b}`, () => {
+        const trouvee = m.racine.querySelector('[data-section="qualite"] [data-vue-qualite="comparaison"] [data-placements-compares]');
+        return trouvee?.textContent === paire(a, b) ? trouvee : null;
+      });
+      await attendre('le focus sur la vue de comparaison', () => document.activeElement?.querySelector(':scope > [data-vue-qualite="comparaison"]') !== null);
+      expect(document.activeElement.contains(ligne)).toBe(true);
+    };
+    const contexte = creerContexte({ langue: 'temoin', theme: 'clair' });
+    try {
+      let charge = chargeComparaison();
+      for (const [cle, valeur] of [['generation.nombre', 2], ['generation.arret', 60]]) charge = appliquerCommande('modifierReglage', charge, { cle, valeur }).charge;
+      const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'propositions' });
+      // La proposition 1 au plan : « Comparer » sur la ligne 2.
+      await cliquer(m, '[data-proposition="2"] [data-commande="comparer"]');
+      await surLaPaire(m, 1, 2);
+
+      await cliquer(m, '[data-commande="section"][data-cible="propositions"]');
+      await cliquer(m, '[data-proposition="2"] [data-commande="repartir"]');
+      await cliquer(m, '[data-section="generation"] [data-commande="genererDepuis"]');
+      const comparer = await attendre("l'issue de la génération dérivée", () => m.racine.querySelector('[data-section="generation"] [data-commande="comparerIssue"]'), 3000);
+      const [meilleure, depart] = entiersDe(comparer.textContent);
+      expect([meilleure >= 3, depart], 'la meilleure dérivée et son départ nommés par la commande').toEqual([true, 2]);
+      await cliquer(m, '[data-section="generation"] [data-commande="comparerIssue"]');
+      await surLaPaire(m, meilleure, 2);
+      expect(contexte.erreurs()).toEqual([]);
+    } finally {
+      await contexte.defaire();
+    }
+  }, 60_000);
 });
 
 // --- Le balisage littéral -------------------------------------------------------------------

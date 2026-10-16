@@ -76,6 +76,7 @@ import {
   manques,
   minimumAtteint,
   profilManque,
+  teteDuManque,
   troisChiffres,
   valeursDistinctes,
 } from '../moteur/manque.js';
@@ -892,7 +893,7 @@ export function rencontresDePersonne(charge, id, personne) {
  *           d'origine d'un retenu non ajusté ; null sinon
  * @property {{rang1: {id: number, rencontres: number, plafondRealise: number,
  *            plafondAPriori: number|null, pourcent: number|null}|null,
- *            manque: {id: number, plafondRealise: number}|null,
+ *            manque: {id: number, plafondRealise: number, effectif: number}|null,
  *            objectifs: {id: number, servis: number, possibles: number, pourcent: number|null}|null,
  *            soiree: {servis: number, possibles: number, pourcent: number|null, jamaisServies: number}|null,
  *            planchers: Record<string, {plancher: number, atteint: boolean}|null>}} bornes
@@ -1072,7 +1073,7 @@ function coteDe({ charge, table, instance, planchers, ajuste }, cle) {
                 plafondAPriori: aPriori === null ? null : aPriori[tete.rang1.p],
                 pourcent: tete.rang1.pourcent,
               },
-        manque: profil.length === 0 ? null : { id: profil[0].id, plafondRealise: profil[0].plafondRealise },
+        manque: teteDuManque(profil),
         objectifs:
           tete.objectifs === null
             ? null
@@ -1097,8 +1098,9 @@ function coteDe({ charge, table, instance, planchers, ajuste }, cle) {
  * table porte le diagnostic et non les planchers, qu'evaluer ne calcule
  * pas. Chaque côté porte ses bornes — teteDesColonnes pour le rang 1, les
  * objectifs et la soirée, le pire cas de son placement et jamais une
- * moyenne ; la tête de son profil de manque ; planchersAtteints sur sa
- * ligne —, personnes sous id.
+ * moyenne ; la tête de son profil de manque et l'effectif au manque
+ * maximal (teteDuManque) ; planchersAtteints sur sa ligne —, personnes
+ * sous id.
  *
  * Le statut se décide dans cet ordre :
  * - refusDessin, quand la ligne de l'un des deux porte un refus de dessin

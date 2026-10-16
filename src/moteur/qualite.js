@@ -25,7 +25,7 @@
 import { STATUT, decrire } from './configuration.js';
 import { diversiteAnimateurs } from './diversite.js';
 import { parcourirTours } from './indicateurs.js';
-import { manques, profilManque } from './manque.js';
+import { manques, profilManque, teteDuManque } from './manque.js';
 import { matriceRencontres, pairesRepetees } from './paires.js';
 import { borneDiversite, occupations } from './plafond.js';
 
@@ -283,8 +283,9 @@ export function teteDesColonnes(instance, mesures, plafondsRealises) {
  * - rang1 : la personne au rang 1 du profil, ses rencontres, son plafond
  *   réalisé, son plafond a priori et leur pourcentage ; null sans personne ;
  *   teteDesColonnes le donne, et le profil y ajoute le plafond a priori ;
- * - manque : la tête du profil de manque (profilManque, § 12.10.6) et son
- *   plafond réalisé, sans pourcentage ; null sans personne ;
+ * - manque : la tête du profil de manque (teteDuManque, § 12.10.6), son
+ *   plafond réalisé et l'effectif au manque maximal, sans pourcentage ;
+ *   null sans personne ;
  * - diversite : au plus petit A(p), à égalité la plus grande borne de
  *   diversité, puis l'index — le tri du profil sur A(p) —, la personne et
  *   sa borne, sans pourcentage ; null sans appartenance présente ;
@@ -326,9 +327,10 @@ export function bornesDesTuiles(instance, lus) {
     // même personne, dont il porte le plafond a priori.
     const { p, rencontres, plafondRealise, pourcent } = tete.rang1;
     rang1 = { p, rencontres, plafondRealise, plafondAPriori: profil[0].plafondAPriori, pourcent };
-    const [teteManque] = profilManque(instance, manques(plafondsRealises, mesures.rencontres), plafondsRealises);
-    const q = indexDe.get(teteManque.id);
-    manque = { p: q, plafondRealise: plafondsRealises[q] };
+    const { id, plafondRealise: plafondManque, effectif } = teteDuManque(
+      profilManque(instance, manques(plafondsRealises, mesures.rencontres), plafondsRealises),
+    );
+    manque = { p: indexDe.get(id), plafondRealise: plafondManque, effectif };
   }
 
   let diversite = null;

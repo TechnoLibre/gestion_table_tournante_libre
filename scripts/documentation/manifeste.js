@@ -53,6 +53,13 @@ const capture = (fichier, etape, configuration, source = 'navigateur') => Object
 // « conflit inévitable », l'événement construit, ou l'une des six
 // configurations construites — les cinq cas limites 12b à 12e et 12g, et
 // les paires de 14 et 14a.
+//
+// Les captures de la dérivée et de la comparaison (D81) se prennent après
+// elles, sur la grande démonstration sans exception que le parcours charge
+// depuis le premier écran : 11a et 11b, à l'étape 9 où l'on repart d'une
+// proposition, puis 17, 17a et 18, la vue de comparaison de la page de
+// qualité, à l'étape 10 : ses courbes qui se croisent, ses colonnes côte à
+// côte, son escalier.
 export const CAPTURES = Object.freeze([
   capture('01-premier-ecran', '1', 'repertoire-neuf'),
   capture('01b-passer-en-ecriture', '1b', 'repertoire-neuf'),
@@ -74,6 +81,8 @@ export const CAPTURES = Object.freeze([
   capture('10-diagnostic', '8', 'grande'),
   capture('10a-ordre-priorites', '9', 'evenement-construit'),
   capture('11-propositions', '9', 'evenement-construit'),
+  capture('11a-depart-derive', '9', 'grande-sans-exception'),
+  capture('11b-propositions-derivees', '9', 'grande-sans-exception'),
   capture('12-qualite-profil', '10', 'grande'),
   capture('12a-qualite-sans-placement', '10', 'petite-conflit'),
   capture('12b-qualite-une-table', '10', 'construite-une-table'),
@@ -91,6 +100,9 @@ export const CAPTURES = Object.freeze([
   capture('15b-qualite-animateurs', '10', 'grande'),
   capture('15c-qualite-performance', '10', 'grande'),
   capture('16-minimum-atteint', '10', 'petite'),
+  capture('17-comparaison-manque', '10', 'grande-sans-exception'),
+  capture('17a-comparaison-colonnes', '10', 'grande-sans-exception'),
+  capture('18-comparaison-escalier', '10', 'grande-sans-exception'),
   capture('19-ajustement', '11', 'evenement-retenu'),
   capture('20-mode-lecture', '11', 'evenement-retenu'),
   capture('22-plan-brouillon', '12', 'evenement-retenu'),
@@ -101,14 +113,10 @@ export const CAPTURES = Object.freeze([
 
 const reportee = (fichier, etape) => Object.freeze({ fichier, etape, raison: 'iteration5' });
 
-// Les captures des écrans que le logiciel n'offre pas encore — la
-// comparaison de deux propositions et la vue d'historique : déclarées à leur
-// étape, sans image ; le contrôle d'ordre les compte comme présentes.
-export const REPORTEES = Object.freeze([
-  reportee('17-comparaison-manque', '10'),
-  reportee('18-comparaison-escalier', '10'),
-  reportee('21-historique', '11'),
-]);
+// Les captures des écrans que le logiciel n'offre pas encore — la vue
+// d'historique : déclarées à leur étape, sans image ; le contrôle d'ordre
+// les compte comme présentes.
+export const REPORTEES = Object.freeze([reportee('21-historique', '11')]);
 
 // Captures déclarées dans CAPTURES et pas encore photographiées : la
 // publication et le contrôle d'ordre les admettent absentes du manifeste.

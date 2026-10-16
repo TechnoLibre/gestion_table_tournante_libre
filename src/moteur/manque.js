@@ -232,6 +232,30 @@ export function profilManque(instance, manques, plafondsRealises) {
   );
 }
 
+/**
+ * La tête d'un profil de manque (§ 12.2, § 12.10.6) : la personne au rang 1,
+ * son plafond réalisé, et l'effectif au manque maximal — les rangs dont le
+ * manque égale celui du rang 1, à ne pas confondre avec l'effectif du
+ * manque de troisChiffres, qui compte les manques d'au moins 1. Le profil
+ * suit l'ordre de profilManque, manque décroissant : ces rangs sont ceux
+ * de tête, et le parcours s'arrête au premier manque plus petit. L'effectif
+ * vaut celui que escalierDuManque porte à la valeur du rang 1. null pour un
+ * profil vide.
+ *
+ * Lève TypeError quand profil n'est pas une liste.
+ *
+ * @param {RangProfil[]} profil   profilManque
+ * @returns {{id: number, plafondRealise: number, effectif: number}|null}
+ */
+export function teteDuManque(profil) {
+  exigerListe(profil, 'profil');
+  if (profil.length === 0) return null;
+  const [{ id, manque, plafondRealise }] = profil;
+  let effectif = 1;
+  while (effectif < profil.length && profil[effectif].manque === manque) effectif += 1;
+  return { id, plafondRealise, effectif };
+}
+
 // Vrai quand les deux profils portent les mêmes identifiants, chacun autant
 // de fois : leurs listes d'identifiants, triées, coïncident.
 function memesPersonnes(profilA, profilB) {

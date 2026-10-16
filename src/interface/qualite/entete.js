@@ -78,11 +78,15 @@ const BORNE_DE_TUILE = new Map([
 ]);
 
 // Les lignes de borne et le pourcentage d'une tuile, lus dans bornes.
-// nommer(id) rend la ligne qui nomme la personne id ; lire(nom) la valeur
-// d'une colonne de la ligne d'évaluation ; ligne et table, la ligne
-// d'évaluation et la table, qui portent les imposés. Une tuile dont bornes
-// ne porte pas le champ n'a ni ligne de borne ni pourcentage.
-function bornesDe(nom, { bornes, ligne, table, t, nommer, lire }) {
+// nommer(id) rend la ligne qui nomme la personne id ; ligne et table, la
+// ligne d'évaluation et la table, qui portent les imposés. Le manque
+// maximal écrit l'effectif au manque maximal de bornes.manque, le nombre
+// de personnes dont le manque l'égale, que la synthèse du tracé de la
+// comparaison écrit aussi, sauf quand ce manque vaut 0 : personne n'y manque
+// de rien, et la ligne se tait ; l'effectif du manque, les personnes à qui il
+// en manque au moins 1, est la valeur de sa propre tuile. Une tuile dont
+// bornes ne porte pas le champ n'a ni ligne de borne ni pourcentage.
+function bornesDe(nom, { bornes, ligne, table, t, nommer }) {
   const champ = BORNE_DE_TUILE.get(nom);
   if (champ !== undefined && !Object.hasOwn(bornes, champ)) return { bornes: [], pourcentage: null };
   const pourcent = (valeur) => (valeur === null ? null : t('qualite.pourcentage.valeur', { pourcent: valeur }));
@@ -101,10 +105,10 @@ function bornesDe(nom, { bornes, ligne, table, t, nommer, lire }) {
     case 'manqueMax': {
       const { manque } = bornes;
       if (manque === null) return rendu([]);
-      const effectif = lire('effectifManque');
+      const nul = lireColonne(ligne, 'manqueMax').valeur === 0;
       return rendu([
         nommer(manque.id),
-        ...(effectif === null ? [] : [t('qualite.tuile.effectifManque', { effectif })]),
+        ...(nul ? [] : [t('qualite.tuile.effectifAuManqueMax', { effectif: manque.effectif })]),
         t('qualite.tuile.plafondRealise', { plafond: manque.plafondRealise }),
       ]);
     }
@@ -176,7 +180,6 @@ export function celluleDeTuile(nom, { bornes, ligne, table, t, format, nomDe }) 
     table,
     t,
     nommer: (id) => t('qualite.tuile.personne', { nom: nomDe(id) }),
-    lire: (colonne) => lireColonne(ligne, colonne).valeur,
   };
   const { bornes: lignes, pourcentage } = bornesDe(nom, contexte);
   return {

@@ -102,7 +102,7 @@ export const TABLE = new Map([
   ['qualite.tuile.personne', ({ nom }) => `chez ${nom}`],
   ['qualite.tuile.plafondRealise', ({ plafond }) => `plafond réalisé ${plafond}`],
   ['qualite.tuile.plafondAPriori', ({ plafond }) => `plafond a priori ${plafond}`],
-  ['qualite.tuile.effectifManque', ({ effectif }) => `${compte(effectif, 'personne', 'personnes')} au manque maximal`],
+  ['qualite.tuile.effectifAuManqueMax', ({ effectif }) => `${compte(effectif, 'personne', 'personnes')} au manque maximal`],
   ['qualite.tuile.borneDiversite', ({ borne }) => `borne de diversité ${borne}`],
   ['qualite.tuile.borneAnimateurs', ({ borne }) => `borne des animateurs ${borne}`],
   ['qualite.tuile.plancher', ({ plancher }) => `plancher ${plancher}`],
@@ -214,8 +214,11 @@ export const TABLE = new Map([
   // La synthèse du tracé : le pire cas de chaque placement et son effectif.
   [
     'qualite.comparaison.synthese',
-    ({ a, manqueA, effectifA, b, manqueB, effectifB }) =>
-      `Le plus grand manque vaut ${manqueA} pour ${a}, chez ${compte(effectifA, 'personne', 'personnes')}, et ${manqueB} pour ${b}, chez ${compte(effectifB, 'personne', 'personnes')}.`,
+    ({ a, manqueA, effectifA, b, manqueB, effectifB }) => {
+      // Un manque nul ne nomme aucun effectif : personne n'y manque de rien.
+      const chez = (manque, effectif) => (manque === 0 ? '' : `, chez ${compte(effectif, 'personne', 'personnes')}`);
+      return `Le plus grand manque vaut ${manqueA} pour ${a}${chez(manqueA, effectifA)}, et ${manqueB} pour ${b}${chez(manqueB, effectifB)}.`;
+    },
   ],
   [
     'qualite.comparaison.rang1Different',

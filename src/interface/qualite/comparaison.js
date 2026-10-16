@@ -13,8 +13,10 @@
 // s'affiche, et ce module le met en forme dans l'ordre où il le porte :
 // rien ne s'y trie, ne s'y compte ni ne s'y divise (contrainte 41). Une
 // valeur de la comparaison se lit, ou se reconnaît à une égalité : le rang
-// 1 de chaque côté, le côté qui sert mieux au rang de bascule, la ligne de
-// l'escalier d'une valeur, une valeur qu'aucun placement ne prend.
+// 1 de chaque côté, le côté qui sert mieux au rang de bascule, une valeur
+// qu'aucun placement ne prend. L'effectif au manque maximal de la synthèse
+// du tracé se lit dans les bornes de chaque côté, là où la cellule du
+// manque maximal des colonnes et la tuile le lisent.
 //
 // Les cas, dans l'ordre où ils s'éprouvent : seul, un seul placement
 // mesurable ; refus, la ligne de l'un des deux porte un refus de dessin, et
@@ -157,8 +159,6 @@ export function vueComparaison(charge, table, { source, comparee }, { t, format 
   const { profils, rangs, escalier, indiscernables } = comparaison;
   const [premierA] = profils.a;
   const [premierB] = profils.b;
-  // La ligne de l'escalier de la valeur de manque v.
-  const ligneDe = (v) => escalier.find(({ valeur }) => valeur === v);
 
   // Le rang 1, quand il ne désigne pas la même personne des deux côtés ;
   // les trois effectifs de rangs.
@@ -267,10 +267,10 @@ export function vueComparaison(charge, table, { source, comparee }, { t, format 
       synthese: t('qualite.comparaison.synthese', {
         a: sujetA,
         manqueA: premierA.manque,
-        effectifA: ligneDe(premierA.manque).a.effectif,
+        effectifA: comparaison.a.bornes.manque.effectif,
         b: sujetB,
         manqueB: premierB.manque,
-        effectifB: ligneDe(premierB.manque).b.effectif,
+        effectifB: comparaison.b.bornes.manque.effectif,
       }),
       graduer: (valeur) => (valeur === 0 ? t('qualite.comparaison.zero') : format.nombre(valeur)),
     },

@@ -467,6 +467,19 @@ describe('vueComparaison : les deux placements, la liste « Comparer à : », le
   });
 });
 
+describe('la synthèse du tracé (§ 12.10.6)', () => {
+  test('un manque nul ne nomme aucun effectif ; un manque positif nomme le sien', () => {
+    assert.equal(
+      t('qualite.comparaison.synthese', { a: 'n° 9', manqueA: 0, effectifA: 12, b: 'n° 1', manqueB: 3, effectifB: 2 }),
+      'Le plus grand manque vaut 0 pour n° 9, et 3 pour n° 1, chez 2 personnes.',
+    );
+    assert.equal(
+      t('qualite.comparaison.synthese', { a: 'n° 9', manqueA: 3, effectifA: 1, b: 'n° 1', manqueB: 0, effectifB: 12 }),
+      'Le plus grand manque vaut 3 pour n° 9, chez 1 personne, et 0 pour n° 1.',
+    );
+  });
+});
+
 describe('vueComparaison : refus, populations, peu de valeurs, jumeau et infobulle (§ 12.6, § 12.7, C17, C18, C29)', () => {
   test('un refus de dessin d’un côté : la vue nomme ce placement et ses contradictions, et ne trace rien', () => {
     const charge = quatre();

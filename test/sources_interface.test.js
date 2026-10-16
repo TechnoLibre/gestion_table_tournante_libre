@@ -2025,6 +2025,38 @@ describe('sources de l’interface : les sélecteurs élagués (§ 13.3, § 14.2
   });
 });
 
+// Les attributs que déclare la source de test/navigateur/designations.js,
+// lus dans son arbre d'analyse : le premier élément de chaque entrée du
+// tableau ENTREES, dans leur ordre, chaque déclaration comptée, quelle que
+// soit la forme de la chaîne ou sa mise en lignes. Un premier élément qui
+// n'est pas une chaîne fixe se lit null. Lève sans tableau ENTREES.
+function declarationsDe(source) {
+  let entrees = null;
+  parcourir(parse(`<script module>${source}</script>`, { modern: true }).module.content, (noeud) => {
+    if (noeud.type === 'VariableDeclarator' && noeud.id.name === 'ENTREES' && noeud.init?.type === 'ArrayExpression') entrees = noeud.init;
+  });
+  assert.ok(entrees !== null, 'désignations : aucun tableau ENTREES');
+  return entrees.elements.map((entree) => {
+    const [attribut] = entree?.type === 'ArrayExpression' ? entree.elements : [];
+    if (attribut?.type === 'Literal' && typeof attribut.value === 'string') return attribut.value;
+    if (attribut?.type === 'TemplateLiteral' && attribut.expressions.length === 0) return attribut.quasis[0].value.cooked;
+    return null;
+  });
+}
+
+// Les attributs déclarés plus d'une fois dans la source de la liste des
+// désignations, dans l'ordre de leur seconde déclaration : la Map qu'elle
+// bâtit garderait la dernière sans rien dire.
+function entreesDoublees(source) {
+  const vus = new Set();
+  const doublees = [];
+  for (const attribut of declarationsDe(source)) {
+    if (vus.has(attribut) && !doublees.includes(attribut)) doublees.push(attribut);
+    vus.add(attribut);
+  }
+  return doublees;
+}
+
 describe('sources de l’interface : les désignations stables (contrainte 16)', () => {
   test('chaque data-… que pose src/interface — gabarit ou script d’un composant, code d’un module — est dans DESIGNATIONS, et chaque entrée est posée quelque part', () => {
     assert.ok(DESIGNATIONS.size > 100, `${DESIGNATIONS.size} désignations`);
@@ -2075,6 +2107,30 @@ describe('sources de l’interface : les désignations stables (contrainte 16)',
       'data-absente : aucun composant ne le pose',
     ]);
     assert.throws(() => releverDesignations(RACINE, new Map()), /désignations : liste vide/);
+  });
+
+  test('chaque attribut se déclare une fois dans la source de la liste ; une entrée déclarée deux fois — sur une ligne ou sur plusieurs, sous toute forme de chaîne — est relevée', () => {
+    const source = readFileSync(join(RACINE, 'test/navigateur/designations.js'), 'utf8');
+    const declarees = declarationsDe(source);
+    assert.equal(declarees.length, DESIGNATIONS.size, 'entrées déclarées');
+    assert.ok(!declarees.includes(null), 'une entrée sans attribut fixe');
+    assert.deepEqual(entreesDoublees(source), []);
+    // Une entrée de plus, posée à la fin du tableau ENTREES : la première
+    // fermeture de tableau en début de ligne.
+    const fin = source.indexOf('\n];');
+    assert.ok(fin > 0, 'la fin de la liste des entrées');
+    const ajoutee = (entree) => `${source.slice(0, fin)}\n${entree}${source.slice(fin)}`;
+    const [premier, second] = declarees;
+    for (const [entree, doublee] of [
+      [`  ['${premier}', 'x', null],`, premier],
+      [`  ["${premier}", 'x', null],`, premier],
+      [`  [\`${second}\`, 'x', null],`, second],
+      [`  [\n    '${second}',\n    'x',\n    null,\n  ],`, second],
+    ]) {
+      const avecDoublon = ajoutee(entree);
+      assert.equal(declarationsDe(avecDoublon).length, declarees.length + 1, entree);
+      assert.deepEqual(entreesDoublees(avecDoublon), [doublee], entree);
+    }
   });
 
   test('DESIGNATIONS est gelée : ni ajout, ni retrait, ni entrée modifiable', () => {

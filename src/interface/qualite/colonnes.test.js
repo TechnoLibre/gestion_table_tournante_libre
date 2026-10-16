@@ -227,6 +227,27 @@ describe('colonnesComparaison : chaque colonne, le pire cas de son placement (§
     assert.deepEqual(minimum.b.bornes, tuileB.bornes);
   });
 
+  test('rouge : la cellule du manque maximal écrit l’effectif au manque maximal de son profil, non l’effectif du manque, comme la tuile de son placement', () => {
+    const charge = generee(chargeDix());
+    const [a, b] = deuxPremieres(charge);
+    const { table, comparaison, colonnes } = comparees(charge, a, b);
+    const manque = ligneNommee(colonnes, 'manqueMax');
+    let differents = 0;
+    for (const [cote, cle] of [
+      ['a', a],
+      ['b', b],
+    ]) {
+      const profil = comparaison.profils[cote];
+      const auMaximum = profil.filter(({ manque: valeurDuRang }) => valeurDuRang === profil[0].manque).length;
+      const { effectifManque } = (cle === 'retenu' ? table.retenu : table.propositions.find(({ id }) => id === cle)).troisChiffres;
+      if (auMaximum !== effectifManque.tous) differents += 1;
+      assert.equal(manque[cote].bornes[1], t('qualite.tuile.effectifAuManqueMax', { effectif: auMaximum }), cote);
+      const tuile = tuilesDe(enteteDuPlacement(charge, table, cle)).find(({ nom }) => nom === 'manqueMax');
+      assert.deepEqual(manque[cote].bornes, tuile.bornes, cote);
+    }
+    assert.ok(differents > 0, 'aucun côté dont les deux effectifs diffèrent');
+  });
+
   test('un pourcentage vaut celui de la comparaison, jamais une moyenne : une comparaison forgée le fait suivre, soirée et minimum de s(p) compris', () => {
     const charge = generee(chargeDix({ objectifs: true }));
     const [a, b] = deuxPremieres(charge);

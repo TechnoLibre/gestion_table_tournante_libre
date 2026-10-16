@@ -362,6 +362,57 @@ gauche, hors de l’image, viennent le rang, la proposition, les personnes
 distinctes rencontrées, les collisions entre personnes d’une même
 appartenance et les rencontres répétées.*
 
+### Repartir d’une proposition
+
+Une proposition presque à votre goût peut servir de **départ**. « Repartir
+d’elle », sur sa ligne du tableau classé, la choisit et ouvre la section
+« Génération » : la carte du départ nomme la proposition et offre une case
+par tour. Un tour coché est **figé** : chaque nouvelle proposition le
+reprend tel quel du départ, table par table. « Générer » se lit alors
+« Générer depuis n° » suivi du numéro du départ : la génération part du plan
+du départ et ne refait que les tours non figés. Figer tous les tours ne laisse rien à refaire, et
+le lancement le refuse. « Repartir de zéro » retire le départ et rend
+« Générer ». Choisir le départ et cocher un tour n’écrivent rien, en lecture
+comme en écriture : seul le lancement écrit.
+
+Le départ doit être encore dans la liste, et la soirée telle qu’il l’a
+placée : une personne ajoutée ou retirée, une table changée, une réservation
+dont il n’assied pas la personne à sa table, et le lancement est refusé, avec
+« Repartir de zéro » pour remède. Un tour figé qui n’assied pas une personne
+au siège que sa réservation lui fixe est refusé lui aussi : décocher ce tour
+suffit.
+
+Les deux écrans qui suivent viennent de la grande démonstration sans
+exception, générée avec la graine 4242 et un compte d’arrêt de 2 000 ; sa
+proposition n° 1, première du classement, sert de départ, son tour 1 figé,
+à une génération faite avec la graine 4258.
+
+![La carte du départ : la proposition n° 1, son tour 1 figé, et « Générer depuis n° 1 »](doc/captures/11a-depart-derive.png)
+
+*La proposition n° 1 choisie pour départ par « Repartir d’elle ». Sa carte
+offre « Repartir de zéro » et une case par tour, le tour 1 coché ; la note
+dessous rappelle ce qu’un tour figé devient. « Générer depuis n° 1 » lance
+la génération ; jusque-là, rien ne s’est écrit.*
+
+Les propositions ainsi obtenues sont des **dérivées**. Elles entrent au même
+classement que les autres, et chacune porte, sous son numéro, la proposition
+dont elle part et ses tours figés. L’historique nomme la génération :
+« Généré 5 propositions dérivées de n° 1 (n° 6 à 10), tour 1 figé ». À la fin
+du calcul, la section dit la place de la meilleure dérivée et celle du
+départ, et offre « Comparer n° 9 à n° 1 », qui ouvre la vue de comparaison
+de la page « Qualité » (étape 10). Une dérivée identique à son départ, ou à
+une autre proposition, est écartée ; quand toutes égalent leur départ, la
+section dit que le départ n’avait rien à reprendre. Le départ reste choisi après la
+génération : une génération ordinaire passe par « Repartir de zéro ».
+
+![Une dérivée et son départ dans le tableau classé, la filiation sous le numéro de la dérivée](doc/captures/11b-propositions-derivees.png)
+
+*Après la génération dérivée : la proposition n° 10, troisième du
+classement, porte « Dérivée de n° 1, tour 1 figé. » sous son numéro ; son
+départ, n° 1, la suit au quatrième rang du même classement. Chaque dérivée
+reprend le tour 1 de n° 1, table par table. Les commandes de chaque ligne,
+à droite, sont hors de l’image.*
+
 ## Étape 10 — Comparer, et retenir
 
 Comparer se fait dans le [tableau classé](doc/captures/11-propositions.png) de
@@ -370,7 +421,9 @@ classement ; les colonnes du **manque** — « Plus grand manque », « Personne
 qui il en manque », « Écart d’itinéraire maximal » — permettent de comparer deux
 propositions même quand des tables sont incomplètes (voir « Comment le logiciel
 cherche », plus bas). « Imposé par les réservations » sépare ce que vos
-réservations imposent de ce que la recherche a choisi.
+réservations imposent de ce que la recherche a choisi. Pour deux placements
+précis, la vue « Comparaison » de la page « Qualité », plus bas, les met côte
+à côte.
 
 « Voir sur le plan » montre une proposition sur le plan, sans rien écrire.
 « Retenir » en fait le **placement retenu** : l’état du plan passe à
@@ -415,6 +468,48 @@ marquent les personnes ancrées par une réservation. Dessous, au même ordre
 de rangs, les rencontres de chacun en pourcentage de son plafond réalisé,
 sous la règle à 100 % ; le bas de ce second graphique sort de l’image.
 Le pire cas est au premier rang des deux graphiques.*
+
+La vue suivante, « Comparaison », répond à une autre question : laquelle de
+deux propositions sert mieux, et qui y perd ? Elle oppose le placement que la
+page mesure à un second, choisi dans la liste « Comparer à : » ; pour une
+dérivée, c’est d’abord son départ. « Comparer », sur une ligne du tableau
+classé, ouvre la vue avec cette ligne. Les chiffres des deux viennent
+d’abord, en deux colonnes : la place au classement, le minimum brut en
+pourcentage avec le compte du pire dessous, comme sur les tuiles, le plus
+grand manque, les personnes à qui il en manque, l’écart d’itinéraire ;
+« Tous les indicateurs » déplie les autres. Puis le manque des deux,
+superposé sur un même axe : chaque placement rangé de son plus grand manque
+au plus petit. Les phrases comptent les rangs où chacun sert mieux, et
+nomment le rang où l’avantage change de côté quand il n’en change qu’une
+fois. Le tracé, ses phrases et son tableau jumeau sont en comptes, jamais en
+pourcentages. La vue ne fait que regarder : elle n’écrit rien.
+
+![Les chiffres de deux propositions en deux colonnes côte à côte, « Tous les indicateurs » replié](doc/captures/17a-comparaison-colonnes.png)
+
+*Les colonnes de la meilleure dérivée, n° 9, sa filiation sous son nom, et de
+son départ, n° 1, sur la grande démonstration sans exception. Le minimum brut
+s’écrit 89 % et 85 %, chacun avec le compte du pire dessous, « minimum 25 sur
+28 » et « minimum 24 sur 28 » ; suivent le plus grand manque, 3 et 4, les
+personnes à qui il en manque, 152 et 147, et l’écart d’itinéraire, 3 des deux
+côtés. Aucun écart n’est calculé entre les deux colonnes, et aucune n’est mise
+en évidence. « Tous les indicateurs », replié dessous, garde les autres
+chiffres. La question de la vue, juste au-dessus, est hors de l’image.*
+
+![Le manque de deux propositions superposé sur un même axe : les courbes se croisent](doc/captures/17-comparaison-manque.png)
+
+*La meilleure dérivée, n° 9, en trait plein, contre son départ, n° 1, en
+tirets : la même vue, sous ses colonnes de l’image précédente. Le zéro de
+l’axe se lit « rien à reprendre à ce placement ». N° 1 laisse une
+personne à quatre rencontres de son plafond réalisé, n° 9 personne au-delà
+de trois ; les courbes se croisent au rang 148, d’où n° 1 sert mieux. Les
+phrases le disent en comptes de rangs.*
+
+![L’escalier du manque des deux propositions, ouvert sous la vue](doc/captures/18-comparaison-escalier.png)
+
+*L’escalier du manque, ouvert par « Voir le tableau » : pour chaque valeur
+de manque, de la plus grande à zéro, le nombre de rangs qui la prennent dans
+chaque placement, et l’effectif cumulé, le nombre de rangs qui l’atteignent
+ou la dépassent — le dernier rang où la courbe atteint cette valeur.*
 
 ![Les collisions d’appartenance de la variante « conflit inévitable », en deux segments](doc/captures/13-qualite-collisions.png)
 
@@ -775,6 +870,18 @@ C’est la troisième colonne qui évite le contresens : une personne laissée e
 réserve pendant presque toute la soirée a un manque nul, puisqu’elle n’avait
 presque personne à rencontrer. Un manque nul sur un itinéraire bas n’est pas
 une bonne nouvelle.
+
+La page « Qualité » pose la même question pour deux placements à la fois :
+le manque de chacun, rang par rang, sur un même axe
+([la comparaison de deux placements](doc/captures/17-comparaison-manque.png)),
+et le même escalier en tableau
+([l’escalier du manque](doc/captures/18-comparaison-escalier.png)) ; les
+colonnes du tableau des propositions en donnent les chiffres. Deux courbes
+qui se croisent disent que chacune sert mieux une part de la salle : aucune
+n’est meilleure partout, et c’est l’ordre des priorités qui tranche. Une
+proposition dérivée d’une autre entre au même classement que son départ
+([les propositions dérivées](doc/captures/11b-propositions-derivees.png)) :
+c’est ce classement qui dit laquelle des deux sert mieux.
 
 ### L’écart entre les propositions d’une génération
 

@@ -2232,9 +2232,26 @@ describe('comparerPlacements : deux lignes de la table, une seule arithmétique 
       plafondRealise: ligne.plafondsRealises[0],
       plafondAPriori: table.plafondsAPriori[0],
     });
-    assert.deepEqual(comparaison.b.bornes.manque, { id, plafondRealise: ligne.plafondsRealises[0] });
+    assert.deepEqual(comparaison.b.bornes.manque, { id, plafondRealise: ligne.plafondsRealises[0], effectif: 1 });
     assert.equal(comparaison.b.bornes.rang1.id, id);
     assert.notDeepEqual(comparaison.b.bornes, bornesDesColonnes(detaillerQualite(charge, 3).bornes));
+  });
+
+  test('rouge : chaque côté porte l’effectif au manque maximal, celui de l’escalier à la valeur de son rang 1, et non l’effectif du manque', () => {
+    const charge = figer(chargeComparee());
+    const table = evaluer(charge);
+    // Deux personnes au manque 3, une au manque 1 : deux au manque
+    // maximal, trois à qui il en manque.
+    const voulus = table.population.map((_, p) => [3, 3, 1][p] ?? 0);
+    const forgee = tableForgee(table, 3, poserManques(voulus));
+    const comparaison = comparerPlacements(charge, forgee, 1, 3);
+    assert.equal(comparaison.b.bornes.manque.effectif, 2);
+    assert.equal(comparaison.profils.b.filter(({ manque }) => manque >= 1).length, 3);
+    for (const cote of ['a', 'b']) {
+      const [rang1] = comparaison.profils[cote];
+      const ligne = comparaison.escalier.find(({ valeur }) => valeur === rang1.manque);
+      assert.equal(comparaison[cote].bornes.manque.effectif, ligne[cote].effectif, cote);
+    }
   });
 
   test('rouge : comparerPlacements, candidatsDeComparaison et comparaisonOfferte n’atteignent ni diagnostiquer, ni detailler, ni mesurer, ni le détail, ni evaluer', () => {
