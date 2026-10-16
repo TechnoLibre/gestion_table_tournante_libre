@@ -14,9 +14,11 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { CRITERES, classer } from './classement.js';
+import { premierPalierQuiDepartage } from './classement.js';
 import { indexerPlan, normaliser } from './configuration.js';
 import { CRITERES as REGISTRE, compilationDe, estCoche, valeursQuiClassent } from './criteres.js';
 import { mesurer } from './indicateurs.js';
+import EMPREINTES from '../../test/fixtures/moteur/empreintes_defaut.json' with { type: 'json' };
 
 // Les noms des critères appliqués, palier après palier : la liste aplatie,
 // égale à CRITERES sous l'ordre fixe de référence.
@@ -534,5 +536,201 @@ describe('classer : chaque mode des objectifs compare ce qu’il dit (A21)', () 
 
   test("l'équité d'abord : le dernier passe devant les deux autres", () => {
     assert.deepEqual(classerFinance('minimum').classement.ordre, [3, 2, 1]);
+  });
+});
+
+// Les classements de référence de l'étape 1 (test/fixtures/moteur/
+// empreintes_defaut.json) : pour chaque charge, douze propositions et leurs
+// grandeurs nommées, l'ordre et les critères appliqués sous l'ordre par
+// défaut, plafond a priori connu puis inconnu. Chaque critère appliqué y
+// départage le premier une paire voisine au moins
+// (src/application/empreintes.test.js) : le fichier est lu tel quel, jamais
+// récrit ici. Importé, il entre au graphe de l'épreuve, qui se relance
+// quand il change.
+
+// La grandeur nommée que lit chaque critère de l'ordre par défaut.
+const GRANDEUR_DU_CRITERE = new Map([
+  ['ecartAuPlafondAPrioriMax', 'ecartAuPlafondAPrioriMax'],
+  ['excedentCollisions', 'excedentCollisions'],
+  ['collisionsCumulees', 'collisionsCumulees'],
+  ['rencontresRepetees', 'rencontresRepeteesChoisies'],
+  ['redondance', 'redondance'],
+]);
+
+// L'entrée de classer d'une proposition de la référence, refaite de ses
+// grandeurs : une personne, dont l'écart au plafond a priori est le plus
+// grand de la proposition (0 rencontre, plafond a priori égal à cet écart),
+// ou un plafond a priori inconnu ; les autres grandeurs telles quelles.
+function entreeDeReference(id, grandeurs, connu) {
+  return {
+    id,
+    mesures: {
+      rencontres: [0],
+      collisionsCumulees: grandeurs.collisionsCumulees,
+      excedentCollisions: grandeurs.excedentCollisions,
+      rencontresRepetees: { choisies: grandeurs.rencontresRepeteesChoisies, imposees: 0 },
+      totalRetoursChoisis: grandeurs.retoursChoisis,
+      totalRedondance: grandeurs.redondance,
+      objectifs: null,
+      animateurs: null,
+    },
+    plafondsAPriori: connu ? [grandeurs.ecartAuPlafondAPrioriMax] : null,
+  };
+}
+
+// Chaque classement de la référence : son nom, ses entrées refaites, son
+// ordre, ses critères appliqués et les grandeurs de ses propositions.
+const CLASSEMENTS_DE_REFERENCE = Object.keys(EMPREINTES.classements).flatMap((cle) =>
+  ['connu', 'inconnu'].map((plafond) => {
+    const { propositions } = EMPREINTES.classements[cle];
+    const { ordre, criteresAppliques } = EMPREINTES.classements[cle][plafond];
+    return {
+      nom: `${cle}, plafond a priori ${plafond}`,
+      entrees: new Map(ordre.map((id) => [id, entreeDeReference(id, propositions[String(id)], plafond === 'connu')])),
+      ordre,
+      criteresAppliques,
+      grandeurs: propositions,
+    };
+  }),
+);
+
+// La grandeur qu'un critère de l'ordre par défaut lit pour la proposition id.
+const grandeur = (grandeurs, id, critere) => grandeurs[String(id)][GRANDEUR_DU_CRITERE.get(critere)];
+
+describe('premierPalierQuiDepartage (§ 12.6, § 5.7, D63, C17)', () => {
+  test('les entrées refaites des grandeurs de la référence redonnent son ordre et ses critères : l’épreuve suivante lit les mêmes clés que classer', () => {
+    assert.equal(CLASSEMENTS_DE_REFERENCE.length, 4);
+    for (const { nom, entrees, ordre, criteresAppliques } of CLASSEMENTS_DE_REFERENCE) {
+      assert.equal(ordre.length, 12, nom);
+      const classement = classer([...entrees.values()]);
+      assert.deepEqual(classement.ordre, ordre, nom);
+      assert.deepEqual(aplatir(classement.criteresAppliques), criteresAppliques, nom);
+    }
+  });
+
+  test('rouge : chaque paire voisine de la référence : le premier palier appliqué où leurs clés diffèrent, compté de 1, l’ordre des deux suivant classer', () => {
+    const vus = new Set();
+    let egales = 0;
+    for (const { nom, entrees, ordre, criteresAppliques, grandeurs } of CLASSEMENTS_DE_REFERENCE) {
+      for (let i = 1; i < ordre.length; i += 1) {
+        const [avant, apres] = [ordre[i - 1], ordre[i]];
+        const paire = `${nom}, n° ${avant} et n° ${apres}`;
+        const rang = criteresAppliques.findIndex((critere) => grandeur(grandeurs, avant, critere) !== grandeur(grandeurs, apres, critere));
+        const palier = premierPalierQuiDepartage(entrees.get(avant), entrees.get(apres));
+        if (rang === -1) {
+          egales += 1;
+          assert.equal(palier, null, paire);
+          continue;
+        }
+        const critere = criteresAppliques[rang];
+        assert.deepEqual(palier, { rang: rang + 1, criteres: [critere] }, paire);
+        // L'ordre des deux suit classer : la première porte la plus petite
+        // valeur sur ce palier, et classer, reçu dans l'autre ordre, les
+        // rend ainsi.
+        assert.ok(grandeur(grandeurs, avant, critere) < grandeur(grandeurs, apres, critere), paire);
+        assert.deepEqual(classer([entrees.get(apres), entrees.get(avant)]).ordre, [avant, apres], paire);
+        // Le palier ne dépend pas de l'ordre des deux arguments.
+        assert.deepEqual(premierPalierQuiDepartage(entrees.get(apres), entrees.get(avant)), palier, paire);
+        vus.add(`${critere}@${rang + 1}`);
+      }
+    }
+    // L'épreuve refuse de passer sans avoir vu chaque critère appliqué
+    // départager une paire, sous l'un et l'autre plafond a priori : le
+    // premier, l'écart au plafond a priori, au rang 1 quand il est connu,
+    // chacun des autres au rang qu'il prend quand il est sauté.
+    assert.deepEqual([...vus].sort(), [
+      'collisionsCumulees@2',
+      'collisionsCumulees@3',
+      'ecartAuPlafondAPrioriMax@1',
+      'excedentCollisions@1',
+      'excedentCollisions@2',
+      'rencontresRepetees@3',
+      'rencontresRepetees@4',
+      'redondance@4',
+      'redondance@5',
+    ].sort());
+    assert.equal(egales, 0);
+  });
+
+  test('rouge : deux propositions égales sur toutes les clés : null, l’identifiant départage', () => {
+    const { entrees, ordre } = CLASSEMENTS_DE_REFERENCE[0];
+    const modele = entrees.get(ordre[0]);
+    const jumelle = { ...modele, id: 99 };
+    assert.equal(premierPalierQuiDepartage(modele, jumelle), null);
+    assert.equal(premierPalierQuiDepartage(proposition(3, { repetees: 1 }), proposition(5, { repetees: 1 })), null);
+  });
+
+  test('rouge : le palier sauté, a priori inconnu d’un seul côté, ne compte pas : le premier palier appliqué est alors l’excédent', () => {
+    // Écart au plafond a priori 1 contre 0, excédent 1 contre 0 : connu des
+    // deux côtés, le premier palier les départage ; inconnu d'un côté, il
+    // est sauté, et l'excédent devient le palier 1.
+    const premiere = proposition(1, { rencontres: [7, 8, 8], collisions: [1, 0, 1] });
+    const seconde = proposition(2);
+    assert.deepEqual(premierPalierQuiDepartage(premiere, seconde), { rang: 1, criteres: ['ecartAuPlafondAPrioriMax'] });
+    for (const [a, b] of [[inconnu(premiere), seconde], [premiere, inconnu(seconde)], [inconnu(premiere), inconnu(seconde)]]) {
+      assert.deepEqual(premierPalierQuiDepartage(a, b), { rang: 1, criteres: ['excedentCollisions'] });
+    }
+    // Égales hors de l'écart au plafond a priori : sautées, rien ne les
+    // départage.
+    assert.equal(premierPalierQuiDepartage(inconnu(proposition(1, { rencontres: [7, 8, 8] })), proposition(2)), null);
+  });
+
+  test('rouge : un palier compte une fois, quelles que soient les valeurs qu’il compare : le rang est celui du palier, non de la composante', () => {
+    // Sous « chacun au moins une fois », le critère des objectifs compare
+    // deux valeurs dans un seul palier, le deuxième. L'excédent, au
+    // troisième palier, départage deux propositions égales sur les deux.
+    const liste = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('toursHorsObjectif')],
+      [e('excedentCollisions')],
+      [e('collisionsCumulees')],
+      [e('rencontresRepetees')],
+      [e('animateursNonRencontres')],
+      [e('redondance')],
+    ];
+    const compilation = compilationSous(liste, { mode: 'chacun', avecObjet: ['toursHorsObjectif'] });
+    assert.deepEqual(
+      compilation.paliers.slice(0, 3).map(({ criteres }) => criteres.map(({ nom, valeurs }) => [nom, valeurs.length])),
+      [[['ecartAuPlafondAPrioriMax', 1]], [['toursHorsObjectif', 2]], [['excedentCollisions', 1]]],
+    );
+    const premiere = proposition(1, { collisions: [1, 0, 1], objectifs: objectifs(3, 1, 2) });
+    const seconde = proposition(2, { objectifs: objectifs(3, 1, 2) });
+    assert.deepEqual(premierPalierQuiDepartage(premiere, seconde, compilation), { rang: 3, criteres: ['excedentCollisions'] });
+    // La seconde valeur du palier des objectifs départage : toujours le
+    // palier 2.
+    const moinsServie = proposition(3, { objectifs: objectifs(4, 1, 2) });
+    assert.deepEqual(premierPalierQuiDepartage(seconde, moinsServie, compilation), { rang: 2, criteres: ['toursHorsObjectif'] });
+    assert.deepEqual(classer([moinsServie, seconde], compilation).ordre, [2, 3]);
+  });
+
+  test('rouge : un palier partagé compare la somme pondérée, comme classer : deux sommes égales ne le départagent pas, et il nomme tous ses critères', () => {
+    const liste = [
+      [e('ecartAuPlafondAPrioriMax')],
+      [e('excedentCollisions', 2), e('redondance')],
+      [e('collisionsCumulees')],
+      [e('toursHorsObjectif')],
+      [e('rencontresRepetees')],
+      [e('animateursNonRencontres')],
+    ];
+    const compilation = compilationSous(liste);
+    // 2 × 1 + 0 = 2 contre 2 × 0 + 2 = 2 : le palier 2 ne départage pas ;
+    // les collisions cumulées, 3 contre 0, au palier 3.
+    const egalesAuPalier = [proposition(1, { collisions: [3, 2, 1] }), proposition(2, { redondance: 2 })];
+    assert.deepEqual(premierPalierQuiDepartage(...egalesAuPalier, compilation), { rang: 3, criteres: ['collisionsCumulees'] });
+    assert.deepEqual(classer(egalesAuPalier, compilation).ordre, [2, 1]);
+    // 2 × 1 + 0 = 2 contre 2 × 0 + 3 = 3 : le palier 2, ses deux critères.
+    assert.deepEqual(premierPalierQuiDepartage(proposition(1, { collisions: [1, 0, 1] }), proposition(2, { redondance: 3 }), compilation), {
+      rang: 2,
+      criteres: ['excedentCollisions', 'redondance'],
+    });
+  });
+
+  test('ne modifie pas les entrées ; un identifiant répété, des populations de tailles différentes lèvent RangeError', () => {
+    const premiere = figer(proposition(1, { collisions: [1, 0, 1] }));
+    const seconde = figer(proposition(2));
+    assert.deepEqual(premierPalierQuiDepartage(premiere, seconde), { rang: 2, criteres: ['excedentCollisions'] });
+    assert.throws(() => premierPalierQuiDepartage(proposition(1), proposition(1)), RangeError);
+    const courte = { ...proposition(2), mesures: { ...proposition(2).mesures, rencontres: [8, 8] }, plafondsAPriori: [8, 8] };
+    assert.throws(() => premierPalierQuiDepartage(proposition(1), courte), RangeError);
   });
 });

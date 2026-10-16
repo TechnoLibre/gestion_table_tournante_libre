@@ -53,6 +53,16 @@ function touchees({ ids, retenu }) {
 const laPersonne = ({ participant, personne = null }) => personne ?? `La personne n° ${participant}`;
 const laTable = ({ table, numero = null }) => (numero === null ? `La table d'identifiant ${table}` : `La table ${numero}`);
 
+// La phrase de chaque raison de la faute DERIVATION (placements.js), sans
+// son point ni son chemin, que le texte ajoute.
+const PHRASES_DE_DERIVATION = new Map([
+  ['departNonAnterieur', 'Le départ de cette proposition dérivée ne la précède pas'],
+  ['tourHorsSoiree', 'Un tour figé de cette proposition dérivée dépasse les tours de sa soirée'],
+  ['tousLesTours', "Cette proposition dérivée fige tous ses tours : elle n'en refait aucun"],
+  ['sansDepart', 'Cette proposition porte des tours figés sans départ'],
+]);
+const DERIVATION_GENERIQUE = 'La dérivation de cette proposition se contredit';
+
 export const TABLE = new Map([
   // --- Le système de fichiers et le dépôt (src/stockage/types.js) ------------
   [
@@ -180,6 +190,9 @@ export const TABLE = new Map([
   ['MANQUANT', ({ tour, participant }) => `Au tour ${tour}, la personne n° ${participant} n'est placée nulle part.`],
   ['IDENTIFIANT_REPETE', () => 'Une autre proposition porte déjà ce numéro.'],
   ['IDENTIFIANT_HORS_COMPTEUR', () => 'Ce numéro de proposition dépasse le compteur du fichier.'],
+  // La dérivation d'une proposition qui se contredit : une phrase par raison,
+  // une phrase générique pour une raison qu'elle ne connaît pas.
+  ['DERIVATION', ({ chemin, raison }) => `${PHRASES_DE_DERIVATION.get(raison) ?? DERIVATION_GENERIQUE}${element(chemin)}.`],
   // Une raison de dérive nomme la personne par personne et la table par
   // numero quand ses détails les portent (raisonsNommees, de l'application) ;
   // sinon par leur identifiant.

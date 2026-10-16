@@ -79,6 +79,8 @@ export const GESTES = Object.freeze([
   'ecrireAilleurs',
   'enregistrerSous',
   'choisirPapier',
+  'repartirDeZero',
+  'libererTour',
 ]);
 
 /** Les sources d'un secours (seance.ouvrirSecours). */
@@ -146,7 +148,8 @@ function exigerParmi(valeur, liste, quoi) {
 
 /**
  * Le libellé d'un remède : sa clé dans la table communs et les détails que
- * le texte reçoit — les arguments d'une commande, le tour d'afficherTour.
+ * le texte reçoit — les arguments d'une commande, le tour d'afficherTour et
+ * celui de libererTour.
  *
  * @param {Object} remede  non null
  * @returns {{cle: string, details: Object}}
@@ -168,7 +171,7 @@ export function libelleRemede(remede) {
   if (geste === 'ouvrirSection') {
     return { cle: `communs.remede.ouvrirSection.${exigerParmi(remede.section, SECTIONS_REMEDE, 'section')}`, details: {} };
   }
-  if (geste === 'afficherTour') return { cle: 'communs.remede.afficherTour', details: { tour: remede.tour } };
+  if (geste === 'afficherTour' || geste === 'libererTour') return { cle: `communs.remede.${geste}`, details: { tour: remede.tour } };
   return { cle: `communs.remede.${geste}`, details: {} };
 }
 

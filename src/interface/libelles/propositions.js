@@ -12,7 +12,7 @@
 // puis l'identifiant croissant, qui départage deux propositions égales sur
 // tous (§ 5.7, A11).
 import { creerFormat } from '../../application/format.js';
-import { compte } from '../../application/libelles/aides.js';
+import { compte, enumeration } from '../../application/libelles/aides.js';
 
 // Un nombre de propositions, mis en forme, et son nom accordé.
 const propositions = (n, texte) => `${creerFormat(texte).nombre(n)} ${n <= 1 ? 'proposition' : 'propositions'}`;
@@ -346,6 +346,18 @@ export const TABLE = new Map([
   ['propositions.horsClassement.titre', 'Hors classement'],
   ['propositions.statut.derive', 'Non comparable : la proposition ne décrit plus la configuration courante.'],
   ['propositions.statut.fautif', 'Non comparable : le placement se contredit.'],
+
+  // --- La filiation d'une dérivée (§ 5.7, D76, C7) ---------------------------------
+  // depart : le numéro du départ ; tours : les numéros des tours figés, déjà
+  // mis en forme, dans l'ordre croissant (texteFiliation,
+  // propositions/filiation.js). Seul le départ immédiat est nommé.
+  ['propositions.filiation.derivee', ({ depart }) => `Dérivée de n° ${depart}.`],
+  [
+    'propositions.filiation.deriveeFiges',
+    ({ depart, tours }) =>
+      `Dérivée de n° ${depart}, ${tours.length === 1 ? 'tour' : 'tours'} ${enumeration(tours)} ${tours.length === 1 ? 'figé' : 'figés'}.`,
+  ],
+  ['propositions.filiation.departAbsent', ({ depart }) => `Dérivée de n° ${depart}, qui n'est plus dans la liste.`],
 
   // --- Les commandes (§ 2.1 étape 10, § 5.7) ------------------------------------
   ['propositions.commande.voir', 'Voir sur le plan'],

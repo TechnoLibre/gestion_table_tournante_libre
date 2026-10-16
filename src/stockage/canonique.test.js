@@ -815,3 +815,44 @@ describe('les champs facultatifs du format 2 (§ 8.9, A16)', () => {
     assert.deepEqual(charge.participants[0].etiquettes, ['finance', 'bénévole', 'Montréal']);
   });
 });
+
+describe('la dérivation : depart et toursFiges dans le texte canonique (§ 8.9, C11, D74)', () => {
+  // La charge du contrat, sa proposition 1 suivie d'une proposition 3
+  // dérivée de la 1, de même plan, derivation posant ses champs.
+  function avecDerivee(derivation) {
+    const charge = chargeContrat();
+    charge.prochainsIds.proposition = 4;
+    charge.propositions.push({ ...structuredClone(charge.propositions[0]), id: 3, ...derivation });
+    return charge;
+  }
+  const LIGNE_1 = `{"id":1,"graine":48271,"arret":200000,"historique":1000,"produitVersion":"${VERSION.affichee}",`;
+  const ligneDerivee = (champs) => `{"id":3,"graine":48271,"arret":200000,"historique":1000,${champs}"produitVersion":"${VERSION.affichee}",`;
+
+  test('une dérivée écrit depart puis toursFiges juste après historique, sans tour figé depart seul ; le texte se relit et se réécrit à l’identique', () => {
+    const cas = [
+      [{ depart: 1, toursFiges: [1] }, '"depart":1,"toursFiges":[1],'],
+      [{ toursFiges: [2], depart: 1 }, '"depart":1,"toursFiges":[2],'],
+      [{ depart: 1 }, '"depart":1,'],
+    ];
+    for (const [derivation, champs] of cas) {
+      const texte = serialiser(avecDerivee(derivation), ENTETE);
+      assert.ok(texte.includes(`\n      ${LIGNE_1}`), texte);
+      assert.ok(texte.includes(`\n      ${ligneDerivee(champs)}`), texte);
+      assert.equal(texte.split('"depart"').length, 2, texte);
+      const lu = analyser(texte);
+      assert.equal(serialiser(lu.charge, lu.entete), texte);
+      assert.deepEqual(canoniser(lu.charge), canoniser(avecDerivee(derivation)));
+    }
+  });
+
+  test('les tours figés s’écrivent dans l’ordre reçu, sans tri : une liste désordonnée est une faute, que le texte ne corrige pas', () => {
+    const texte = serialiser(avecDerivee({ depart: 1, toursFiges: [2, 1] }), ENTETE);
+    assert.ok(texte.includes('"depart":1,"toursFiges":[2,1],'), texte);
+  });
+
+  test('sans dérivation, la charge du contrat s’écrit octet pour octet comme son texte', () => {
+    const charge = avecDerivee({ depart: 1, toursFiges: [1] });
+    charge.propositions.pop();
+    assert.equal(serialiser(charge, ENTETE), TEXTE_CONTRAT.replace('"proposition":2}', '"proposition":4}'));
+  });
+});

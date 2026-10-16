@@ -16,7 +16,9 @@
 // propositions chacune ; une recherche longue sur la grande démonstration
 // rend des plans que jugent verifierInvariants et verifierIndicateurs, et
 // chaque point de relevé de sa course égale le plan que regenerer rend à son
-// compte.
+// compte. Une dérivée sur la grande démonstration, deux tours figés, rend de
+// même chaque point de relevé par regenerer sous son départ, chacun portant
+// les tours figés du départ, liste pour liste.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
@@ -30,6 +32,7 @@ import {
   proposerEtAppliquer,
   rechercher,
   regenerer,
+  repartir,
   scoreComplet,
   scoreIncremental,
 } from './recherche.js';
@@ -306,6 +309,35 @@ describe('recherche : la course sur la grande démonstration (§ 5.10, B6, D40)'
         assert.deepStrictEqual(copie, regenerer(configuration, { graine, arret: mouvements, historique }), `${cle}, point ${mouvements}`);
       }
       assert.deepStrictEqual(plan, regenerer(configuration, { graine, arret: evalues, historique }));
+    });
+  }
+});
+
+describe('repartir : la course d\'une dérivée sur la grande démonstration (§ 5.7, § 8.9, C24)', () => {
+  // Le départ : une proposition à compte court. La dérivée compte 20 000
+  // mouvements, cinq points copiés de 1 à 10 000, chacun le plan que
+  // regenerer rend à son compte sous le même départ et les mêmes tours
+  // figés ; le dernier, 20 000, est le plan de la proposition.
+  for (const cle of ['grande', 'grande-sans-exception']) {
+    test(`${cle}, tours 1 et 3 figés, arret 20 000 : le point de relevé k égale regenerer au compte k, de 1 à 10 000`, () => {
+      const configuration = CATALOGUE.find((entree) => entree.cle === cle).construire();
+      const instance = normaliser(configuration);
+      const [{ plan: planDuDepart }] = rechercher(configuration, { graine: 17, arret: 2_000, nombre: 1 });
+      const toursFiges = [1, 3];
+      const [proposition] = repartir(configuration, { graine: 31, arret: 20_000, nombre: 1 }, { plan: planDuDepart, toursFiges });
+      const { evalues, releves, plan } = proposition;
+      assert.equal(evalues, 20_000);
+      assert.deepEqual(releves.map(({ mouvements }) => mouvements), puissancesSous(evalues));
+      const fichier = { ...proposition, depart: 1, toursFiges };
+      for (const { mouvements, plan: copie } of releves) {
+        assert.deepStrictEqual(copie, regenerer(configuration, { ...fichier, arret: mouvements }, { planDuDepart }), `${cle}, point ${mouvements}`);
+      }
+      assert.deepStrictEqual(plan, regenerer(configuration, fichier, { planDuDepart }));
+      for (const { mouvements, plan: point } of [...releves, { mouvements: evalues, plan }]) {
+        for (const r of [0, 2]) assert.deepEqual(point.tours[r], planDuDepart.tours[r], `${cle}, point ${mouvements}, tour ${r + 1}`);
+      }
+      assert.deepEqual(verifierInvariants(instance, plan), []);
+      assert.notDeepStrictEqual(plan.tours[1], planDuDepart.tours[1]);
     });
   }
 });

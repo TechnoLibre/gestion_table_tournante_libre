@@ -162,6 +162,22 @@ export const TABLE = new Map([
   ['PLAN_DOUBLE_PLACE', ({ participant, tour }) => `Au tour ${tour}, le plan place plus d'une fois la personne n° ${participant}.`],
   ['PLAN_NON_ASSIS', ({ participant, tour }) => `Au tour ${tour}, le plan ne place nulle part la personne n° ${participant}.`],
 
+  // --- Le départ d'une génération dérivée (repartir, regenerer, § 5.7) ------------
+  // DEPART_INCOMPATIBLE {tour, table, participant} : la garde du moteur, que
+  // les refus du lancement précèdent ; table et participant, chacun null
+  // quand l'écart ne le désigne pas.
+  [
+    'DEPART_INCOMPATIBLE',
+    ({ tour, table = null, participant = null }) => {
+      const designes = [
+        participant === null ? null : `la personne n° ${participant}`,
+        table === null ? null : `la table d'identifiant ${table}`,
+      ].filter((designe) => designe !== null);
+      return `Au tour ${tour}, le plan du départ ne s'assied pas tel quel dans l'événement` +
+        `${designes.length === 0 ? '' : ` (${designes.join(', ')})`} : la génération ne part d'aucun autre placement.`;
+    },
+  ],
+
   // --- Les violations de verifierInvariants (§ 14.12) -----------------------------
   [
     'TABLE_INCONNUE',

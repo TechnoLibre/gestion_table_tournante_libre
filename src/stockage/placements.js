@@ -52,9 +52,16 @@ import { ErreurStockage } from './erreurs.js';
  * IDENTIFIANT_HORS_COMPTEUR : une proposition cohérente, ou le retenu par sa
  * proposition d'origine, porte un identifiant qui atteint
  * prochainsIds.proposition. examiner seul nomme ces deux-là, en comparant
- * les propositions entre elles et à la charge.
+ * les propositions entre elles et à la charge. DERIVATION : la dérivation
+ * d'une proposition de forme conforme contredit son identifiant ou ses tours
+ * déclarés ; raison departNonAnterieur, un depart qui ne précède pas id
+ * (chemin depart) ; tourHorsSoiree, un tour figé au-delà de tours (chemin
+ * toursFiges[i], le premier) ; tousLesTours, des tours figés qui portent
+ * chaque tour (chemin toursFiges) ; sansDepart, des tours figés sans depart
+ * (chemin toursFiges). Un depart absent de la liste n'en est pas une.
  *
  * @typedef {{code: 'FORME', chemin: string}
+ *   | {code: 'DERIVATION', chemin: string, raison: 'departNonAnterieur'|'tourHorsSoiree'|'tousLesTours'|'sansDepart'}
  *   | {code: 'LONGUEUR', tour: number|null, table: number|null, declare: number, ecrit: number}
  *   | {code: 'DOUBLON'|'INCONNU'|'MANQUANT', tour: number, participant: number}
  *   | {code: 'IDENTIFIANT_REPETE'|'IDENTIFIANT_HORS_COMPTEUR'}} Faute
@@ -294,11 +301,34 @@ export function fauteDeCourse(p, course) {
   return course.releves.length < attendues.length ? `course.releves[${course.releves.length}]` : null;
 }
 
-// Fautes de valeur sous regle : la première faute de forme, de
-// déclaration ou de chaise vide seule, qui rend la cohérence illisible ;
-// sinon les fautes de cohérence.
+// Faute de la dérivation d'une proposition de forme conforme (§ 8.9), ou
+// null, la première dans cet ordre : un départ qui ne précède pas son
+// identifiant ; un tour figé au-delà des tours déclarés, le premier ; des
+// tours figés qui portent chaque tour déclaré — une liste strictement
+// croissante de tours de 1 à tours qui en compte autant ; des tours figés
+// sans départ. La forme garantit des entiers et une liste croissante. Un
+// départ absent de la liste n'en est pas une : seule la proposition se lit.
+function fauteDeDerivation({ id, depart, toursFiges, tours }) {
+  const faute = (chemin, raison) => ({ code: 'DERIVATION', chemin, raison });
+  if (depart !== undefined && depart >= id) return faute('depart', 'departNonAnterieur');
+  if (toursFiges === undefined) return null;
+  const hors = toursFiges.findIndex((tour) => tour > tours);
+  if (hors >= 0) return faute(`toursFiges[${hors}]`, 'tourHorsSoiree');
+  if (toursFiges.length === tours) return faute('toursFiges', 'tousLesTours');
+  if (depart === undefined) return faute('toursFiges', 'sansDepart');
+  return null;
+}
+
+// Fautes de valeur sous regle : la première faute de forme, seule ; puis,
+// d'une proposition, la faute de sa dérivation, seule ; puis la première
+// faute de déclaration ou de chaise vide, seule, qui rend la cohérence
+// illisible ; sinon les fautes de cohérence.
 function fautesSelon(valeur, regle) {
-  const chemin = premiereFaute(valeur, regle) ?? fauteDeDeclaration(valeur) ?? fauteDeChaiseVide(valeur);
+  const forme = premiereFaute(valeur, regle);
+  if (forme !== null) return [{ code: 'FORME', chemin: forme }];
+  const derivation = regle === PROPOSITION ? fauteDeDerivation(valeur) : null;
+  if (derivation !== null) return [derivation];
+  const chemin = fauteDeDeclaration(valeur) ?? fauteDeChaiseVide(valeur);
   return chemin === null ? fautesDeCoherence(valeur) : [{ code: 'FORME', chemin }];
 }
 
@@ -307,11 +337,15 @@ function fautesSelon(valeur, regle) {
  * 2) : il se compare à lui-même, jamais à la charge. La règle est celle du
  * retenu quand p porte la clé proposition, celle d'une proposition sinon.
  *
- * La forme se contrôle d'abord, dans l'ordre du schéma, puis la
- * déclaration, puis les chaises vides : null, admis par la règle d'une
- * liste de table, n'y est cohérent que sous des sièges attribués et avant
- * le dernier rang. La première de ces fautes est seule rendue,
- * { code: 'FORME', chemin }. Sinon, dans l'ordre des tours puis des tables :
+ * La forme se contrôle d'abord, dans l'ordre du schéma — une liste de tours
+ * figés vide, désordonnée ou non entière comprise —, puis la dérivation
+ * d'une proposition, puis la déclaration, puis les chaises vides : null,
+ * admis par la règle d'une liste de table, n'y est cohérent que sous des
+ * sièges attribués et avant le dernier rang. La première de ces fautes est
+ * seule rendue : { code: 'FORME', chemin }, ou, pour la dérivation,
+ * { code: 'DERIVATION', chemin, raison }, que décrit Faute. Un départ
+ * absent de la liste n'est pas une faute : fautes ne lit que p. Sinon, dans
+ * l'ordre des tours puis des tables :
  * { code: 'LONGUEUR', tour, table, declare, ecrit } — tour null pour le
  * nombre de tours, rendu en premier ; table null pour le nombre de listes
  * d'un tour ; une table pour une liste plus longue que sa capacité — puis,
@@ -362,6 +396,15 @@ function placementDeFichier({ tours, reserves }, attribuerSieges) {
   }));
 }
 
+// Les champs de dérivation d'une proposition de fichier, dans l'ordre du
+// schéma : aucun sans derivation ; depart, puis toursFiges, copiée, quand
+// elle porte au moins un tour.
+function champsDeDerivation(derivation) {
+  if (derivation === null) return {};
+  const { depart, toursFiges } = derivation;
+  return toursFiges.length === 0 ? { depart } : { depart, toursFiges: [...toursFiges] };
+}
+
 /**
  * Forme de fichier d'une proposition du moteur (§ 8.9). Son identifiant est
  * decalage + proposition.id : la place de la proposition dans la suite des
@@ -378,7 +421,11 @@ function placementDeFichier({ tours, reserves }, attribuerSieges) {
  * identifiant, et examiner, qui écarte à l'ouverture la seconde proposition
  * d'un identifiant répété, les garde toutes.
  *
- * Elle porte ensuite graine, arret et historique de la proposition,
+ * Elle porte ensuite graine, arret et historique de la proposition ; sous
+ * derivation, { depart, toursFiges }, depart, un identifiant de fichier, déjà
+ * décalé par l'appelant, puis toursFiges, une copie de la liste reçue,
+ * absente quand elle est vide ; derivation null, aucun des deux, et la forme
+ * reste octet pour octet celle d'une proposition ordinaire ; puis
  * produitVersion, et siegesAttribues, qui vaut attribuerSieges au moment où
  * elle est produite ; puis ce que la configuration déclare : les tables du
  * plan, dans l'ordre de ses listes, chacune avec sa capacité dans la
@@ -399,22 +446,33 @@ function placementDeFichier({ tours, reserves }, attribuerSieges) {
  * compteur écrit à la main à 2^31 − 1, ou un identifiant qui l'y relève — et
  * le compteur ne recule jamais : l'appelant lit ce code avant d'écrire la
  * génération. Lève TypeError, sans rien rendre, quand decalage n'est pas un
- * entier ≥ 0, ou quand la forme produite serait fautive : attribuerSieges
- * qui n'est pas un booléen, version vide ou absente, réglage hors de son
- * domaine, plan que la configuration contredit — table inconnue d'elle,
- * nombre de tours, personne non placée, liste au-delà d'une capacité,
- * chaise vide sans attribution ou en fin de liste.
+ * entier ≥ 0, quand derivation n'est ni null ni un objet qui porte depart
+ * et la liste toursFiges, ou quand la forme produite serait fautive :
+ * attribuerSieges qui n'est pas un booléen, version vide ou absente, réglage
+ * hors de son domaine, plan que la configuration contredit — table inconnue
+ * d'elle, nombre de tours, personne non placée, liste au-delà d'une
+ * capacité, chaise vide sans attribution ou en fin de liste —, dérivation
+ * fautive (fautes : FORME ou DERIVATION).
  *
  * @param {import('../moteur/recherche.js').Proposition} proposition
  * @param {import('../moteur/types.js').Configuration} configuration
- * @param {{produitVersion: string, attribuerSieges: boolean, decalage: number}} options
+ * @param {{produitVersion: string, attribuerSieges: boolean, decalage: number,
+ *          derivation?: {depart: number, toursFiges: number[]}|null}} options
  * @returns {import('./types.js').PropositionFichier}
  */
-export function versFichier(proposition, configuration, { produitVersion, attribuerSieges, decalage }) {
+export function versFichier(proposition, configuration, { produitVersion, attribuerSieges, decalage, derivation = null }) {
   // Le décalage se contrôle avant la forme : négatif, il peut rendre un
   // identifiant que la forme admet et qu'une autre proposition porte déjà.
   if (!Number.isSafeInteger(decalage) || decalage < 0) {
     throw new TypeError(`versFichier : décalage entier ≥ 0 attendu, reçu ${JSON.stringify(decalage)}`);
+  }
+  // Un départ absent laisserait la clé à undefined, que la forme d'un champ
+  // facultatif admet : il se refuse ici.
+  const derivationLisible =
+    derivation === null ||
+    (typeof derivation === 'object' && derivation.depart !== undefined && Array.isArray(derivation.toursFiges));
+  if (!derivationLisible) {
+    throw new TypeError(`versFichier : dérivation {depart, toursFiges} ou null attendue, reçu ${JSON.stringify(derivation)}`);
   }
   // Le compteur que l'appelant porte au-delà de l'identifiant écrit suit la
   // règle d'un identifiant : un identifiant qui atteint le plus grand
@@ -428,6 +486,7 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
     graine: proposition.graine,
     arret: proposition.arret,
     historique: proposition.historique,
+    ...champsDeDerivation(derivation),
     produitVersion,
     siegesAttribues: attribuerSieges,
     tables: [...plan.tables],

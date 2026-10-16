@@ -2,7 +2,7 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Épreuves du registre des constantes mesurées (§ 14.1, § 19.10) : les
-// vingt entrées du contrat de données, chacune complète et de statut
+// vingt et une entrées du contrat de données, chacune complète et de statut
 // épinglé, la vérification qui nomme l'entrée et le champ d'une faute, et
 // l'accord du registre avec le relevé committé du banc : le banc écrit un
 // relevé, jamais le registre, et une constante du banc déclarée mesurée
@@ -11,7 +11,9 @@
 // tolérance de la chaîne témoin, et les deux seuils de la page de qualité,
 // celui de la matrice et la largeur de troncature des noms — ; le
 // ralentissement à pleine charge garde son défaut de travail : la machine de
-// référence est le poste de développement, ρ à son défaut (Q13 b).
+// référence est le poste de développement, ρ à son défaut (Q13 b). Le seuil
+// de la comparaison, une règle de forme, reste un défaut de travail que le
+// banc ne relève pas.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { accordRegistre } from '../../scripts/banc/releve.js';
@@ -41,6 +43,7 @@ const CONTRAT = [
   ['RALENTISSEMENT_PLEINE_CHARGE', 2, '×', 'banc', 'defautDeTravail'],
   ['SEUIL_MATRICE_PARTICIPANTS', 44, 'participants', 'banc', 'mesuree'],
   ['LARGEUR_TRONCATURE_NOM_PX', 168, 'px', 'banc', 'mesuree'],
+  ['VALEURS_MANQUE_COURBE', 3, 'valeurs', 'manuel', 'defautDeTravail'],
 ];
 
 // Les constantes du banc dont le registre a adopté la valeur relevée.
@@ -50,8 +53,8 @@ const ADOPTEES = ['SEUIL_SIEGES_LISIBLES', 'TOLERANCE_CHAINE_TEMOIN', 'SEUIL_MAT
 const copie = () => CONSTANTES.map((entree) => ({ ...entree }));
 
 describe('constantes : le registre (§ 14.1, § 19.10)', () => {
-  test('le registre porte les vingt entrées du contrat, dans son ordre, chacune complète', () => {
-    assert.equal(CONSTANTES.length, 20);
+  test('le registre porte les vingt et une entrées du contrat, dans son ordre, chacune complète', () => {
+    assert.equal(CONSTANTES.length, 21);
     assert.deepEqual(
       CONSTANTES.map(({ nom, valeur, unite, proprietaire, statut }) => [nom, valeur, unite, proprietaire, statut]),
       CONTRAT,
@@ -97,6 +100,18 @@ describe('constantes : le registre (§ 14.1, § 19.10)', () => {
       assert.equal(seuil.statut, 'mesuree', seuil.nom);
       assert.match(seuil.configuration, /processeur non ralenti, police Noto Sans/, seuil.nom);
     }
+  });
+
+  test('le seuil de la comparaison est une règle de forme du § 12.6, au défaut de travail, que le banc ne relève pas (C28, D62)', () => {
+    const entree = CONSTANTES.find((c) => c.nom === 'VALEURS_MANQUE_COURBE');
+    assert.equal(constante('VALEURS_MANQUE_COURBE'), 3);
+    assert.equal(entree.statut, 'defautDeTravail');
+    assert.equal(entree.raison, "règle de forme du § 12.6 : une ou deux valeurs se disent mieux qu'elles ne se tracent");
+    assert.notEqual(entree.proprietaire, 'banc');
+    assert.match(entree.mesure, /deux profils/);
+    assert.match(entree.protocole, /le banc ne la relève pas/);
+    // Le relevé committé ne la porte pas : aucune garde du banc ne la juge.
+    assert.equal(releveCommite.mesures.find((m) => m.nom === 'VALEURS_MANQUE_COURBE'), undefined);
   });
 
   test('constante rend la valeur par le nom ; un nom inconnu lève', () => {

@@ -41,9 +41,10 @@
 // Un fichier d'un format plus ancien se lit comme un fichier du format
 // courant : chaque format n'ajoute au précédent que des champs facultatifs
 // (§ 8.8, § 8.9). Le format 2 ajoute les étiquettes des personnes, les
-// objectifs des tables et cinq réglages, chacun absent à son défaut ; un
-// fichier du format 1 ne les porte pas, et se lit sans conversion. Il ne se
-// réécrit qu'au premier geste, au format courant.
+// objectifs des tables, cinq réglages, chacun absent à son défaut, et la
+// dérivation d'une proposition, depart et toursFiges, absente hors
+// dérivation ; un fichier du format 1 ne les porte pas, et se lit sans
+// conversion. Il ne se réécrit qu'au premier geste, au format courant.
 //
 // Une clé que les réglages ont portée et ne portent plus — la cible de la
 // somme de redondance, cibleRedondance — est oubliée (oubliees de la règle
@@ -115,8 +116,9 @@ export const estHorodatage = (valeur) => typeof valeur === 'string' && HORODATAG
 // porte ses champs, paires [clé, règle] dans l'ordre des clés, et l'ensemble
 // de leurs clés, et peut nommer des clés oubliées (oubliees), admises de
 // toute valeur et jamais copiées ; une liste porte la règle de ses éléments,
-// et peut borner sa longueur (min, max) et exiger des éléments distincts
-// (distincts). Un champ facultatif (optionnel) peut manquer à son objet :
+// et peut borner sa longueur (min, max), exiger des éléments distincts
+// (distincts) ou strictement croissants (croissante), un ordre que l'écriture
+// garde sans trier. Un champ facultatif (optionnel) peut manquer à son objet :
 // absent, il ne s'écrit pas, et sa valeur par défaut se lit par la fonction
 // qui le nomme.
 function regle(genre, proprietes) {
@@ -389,9 +391,25 @@ const IDENTITE = [
   ['historique', entier(1)],
 ];
 
-const PROPOSITION = objet([...IDENTITE, ['produitVersion', CHAINE], ['siegesAttribues', BOOLEEN], ...PLAN], {
-  mise: 'ouverte',
-});
+// La dérivation d'une proposition (§ 5.7, § 8.9), juste après son identité :
+// depart, l'identifiant de la proposition d'où sa recherche est partie ;
+// toursFiges, les numéros des tours repris de son départ, une liste non
+// vide d'entiers ≥ 1 strictement croissante, écrite dans l'ordre reçu.
+// Facultatifs, absents hors dérivation, toursFiges absent d'une dérivée sans
+// tour figé : une proposition qui n'est pas dérivée s'écrit octet pour octet
+// sans eux. Hors d'IDENTITE, que partage l'entrée du compagnon des courses,
+// dont la clé ne les lit pas. Le retenu ne les porte pas. Les fautes qui les
+// croisent à l'identifiant et aux tours déclarés sont l'affaire du contrôle
+// des placements (fautes, DERIVATION).
+const CHAMPS_DE_DERIVATION = [
+  ['depart', regle('entier', { ...IDENTIFIANT, optionnel: true })],
+  ['toursFiges', liste(entier(1), { min: 1, croissante: true, optionnel: true })],
+];
+
+const PROPOSITION = objet(
+  [...IDENTITE, ...CHAMPS_DE_DERIVATION, ['produitVersion', CHAINE], ['siegesAttribues', BOOLEEN], ...PLAN],
+  { mise: 'ouverte' },
+);
 
 const RETENU = objet([['proposition', IDENTIFIANT], ['siegesAttribues', BOOLEEN], ...PLAN], {
   nul: true,
@@ -621,10 +639,16 @@ function reduire(valeur, regleDeValeur) {
   return valeur;
 }
 
+// Vrai quand chaque élément de valeur, une liste de nombres, dépasse le
+// précédent.
+const strictementCroissante = (valeur) => valeur.every((element, rang) => rang === 0 || element > valeur[rang - 1]);
+
 // Chemin de la première valeur qui sort de sa règle, ou null. Une règle
 // aPart rencontrée sous une autre n'examine que son conteneur ; racine
 // vrai fait examiner tout le contenu de la règle donnée, même aPart, et
-// faux la lit à sa place sous une autre, comme l'analyse.
+// faux la lit à sa place sous une autre, comme l'analyse. L'ordre d'une
+// liste croissante se contrôle après ses éléments : un élément hors de sa
+// règle se nomme par son rang, un ordre rompu par la liste.
 function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
   if (valeur === undefined && regleDeValeur.optionnel) return null;
   if (valeur === null && regleDeValeur.nul) return null;
@@ -643,6 +667,7 @@ function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
       const faute = fauteDeForme(valeur[rang], regleDeValeur.element, `${chemin}[${rang}]`, false);
       if (faute !== null) return faute;
     }
+    if (regleDeValeur.croissante === true && !strictementCroissante(valeur)) return chemin;
   }
   return null;
 }
@@ -652,7 +677,8 @@ function fauteDeForme(valeur, regleDeValeur, chemin, racine) {
  * quand valeur est conforme ; ne lève jamais. D'un objet, chaque champ dans
  * l'ordre du schéma, puis la plus petite de ses clés inconnues — une clé
  * oubliée de sa règle n'en est pas une, quelle que soit sa valeur ; d'une
- * liste, chaque élément dans l'ordre des rangs. null est conforme à une
+ * liste, chaque élément dans l'ordre des rangs, puis, quand sa règle la veut
+ * croissante, son ordre, nommé par le chemin de la liste. null est conforme à une
  * règle qui l'admet. Un champ absent se lit undefined, qu'admet seule une
  * règle facultative ; ailleurs, il se nomme par son chemin comme une valeur
  * fautive. Le chemin

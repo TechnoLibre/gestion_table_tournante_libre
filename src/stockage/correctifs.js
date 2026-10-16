@@ -37,9 +37,10 @@
 // l'échange ne coûte jamais plus que les deux listes posées entières. Une
 // liste qui change de longueur se pose entière. Une liste dont la règle
 // veut les éléments distincts — les étiquettes d'une personne ou d'un
-// objectif — se pose toujours entière, et rien ne se pose sous elle : une
-// pose à un rang y répéterait un élément sans que la règle de ce rang le
-// voie.
+// objectif — ou strictement croissants — les tours figés d'une proposition
+// dérivée — se pose toujours entière, et rien ne se pose sous elle : une
+// pose à un rang y répéterait un élément, ou romprait l'ordre, sans que la
+// règle de ce rang le voie.
 //
 // Une charge que rend appliquer, l'analyse l'admet comme celle qu'il
 // reçoit, et chacune de ses propositions suit sa règle, comme dans la
@@ -89,8 +90,9 @@ const OCCUPANT = regleDuChamp(regleDuChamp(PROPOSITION, 'placement').element, 's
 const estObjet = (valeur) => typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
 
 // Vrai pour la règle d'une liste qui se pose entière : ses éléments sont
-// distincts, et seule sa règle, qui voit la liste entière, le contrôle.
-const sePoseEntiere = (regle) => regle?.genre === 'liste' && regle.distincts === true;
+// distincts, ou strictement croissants, et seule sa règle, qui voit la liste
+// entière, le contrôle.
+const sePoseEntiere = (regle) => regle?.genre === 'liste' && (regle.distincts === true || regle.croissante === true);
 
 // Vrai quand chaque élément de liste est un objet dont l'id est un entier
 // exact, et qu'aucun id ne s'y répète : la seule forme où { id } désigne un

@@ -15,13 +15,16 @@ import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { indexerPlan, normaliser } from './configuration.js';
 import { mesurer } from './indicateurs.js';
 import {
+  borneHaute,
   comparerProfils,
   ecartsAuPlafondAPriori,
+  escalierDuManque,
   ecartsItineraire,
   manques,
   minimumAtteint,
   profilManque,
   troisChiffres,
+  valeursDistinctes,
 } from './manque.js';
 import { plafondsAPriori, plafondsRealises } from './plafond.js';
 
@@ -701,5 +704,99 @@ describe('minimumAtteint : le certificat du § 5.5', () => {
   test('des rencontres qui ne sont pas une liste lèvent TypeError, le plafond a priori connu ou inconnu', () => {
     assert.throws(() => minimumAtteint({ rencontres: PAS_UNE_LISTE }, HUIT), TypeError);
     assert.throws(() => minimumAtteint({ rencontres: PAS_UNE_LISTE }, null), TypeError);
+  });
+});
+
+// Deux profils écrits à la main, à trous : A prend les valeurs 5, 2 et 0, B
+// les valeurs 3, 1 et 0. Ni 4 ni l'une des valeurs de l'autre n'est commune
+// aux deux, hors 0 : les cinq valeurs réunies sont 0, 1, 2, 3 et 5.
+const A_TROUS = profil([5, 2, 2, 0]);
+const B_TROUS = profil([3, 3, 1, 0], [4, 3, 2, 1]);
+
+describe('escalierDuManque (§ 12.10.6, D61, C20)', () => {
+  test('rouge : l’effectif cumulé d’une ligne est le dernier rang où la courbe atteint sa valeur', () => {
+    // Une ligne par entier de 5 à 0, 4 compris, qu'aucun profil ne prend.
+    // effectif : les rangs de manque égal à la valeur ; cumul : les rangs de
+    // manque au moins égal, comptés à la main sur chaque profil.
+    assert.deepEqual(escalierDuManque(A_TROUS, B_TROUS), [
+      { valeur: 5, a: { effectif: 1, cumul: 1 }, b: { effectif: 0, cumul: 0 } },
+      { valeur: 4, a: { effectif: 0, cumul: 1 }, b: { effectif: 0, cumul: 0 } },
+      { valeur: 3, a: { effectif: 0, cumul: 1 }, b: { effectif: 2, cumul: 2 } },
+      { valeur: 2, a: { effectif: 2, cumul: 3 }, b: { effectif: 0, cumul: 2 } },
+      { valeur: 1, a: { effectif: 0, cumul: 3 }, b: { effectif: 1, cumul: 3 } },
+      { valeur: 0, a: { effectif: 1, cumul: 4 }, b: { effectif: 1, cumul: 4 } },
+    ]);
+  });
+
+  test('le cumul de chaque ligne recoupe la courbe : le dernier rang, compté de 1, dont le manque atteint la valeur', () => {
+    const dernierRang = (profilLu, valeur) => {
+      let rang = 0;
+      profilLu.forEach(({ manque }, i) => {
+        if (manque >= valeur) rang = i + 1;
+      });
+      return rang;
+    };
+    for (const { valeur, a, b } of escalierDuManque(A_TROUS, B_TROUS)) {
+      assert.equal(a.cumul, dernierRang(A_TROUS, valeur), `A, ${valeur}`);
+      assert.equal(b.cumul, dernierRang(B_TROUS, valeur), `B, ${valeur}`);
+    }
+  });
+
+  test('la plus grande valeur des deux ouvre l’escalier, qu’elle soit à A ou à B ; l’ordre des arguments ne fait qu’échanger les colonnes', () => {
+    const inverse = escalierDuManque(B_TROUS, A_TROUS);
+    assert.deepEqual(
+      inverse.map(({ valeur }) => valeur),
+      [5, 4, 3, 2, 1, 0],
+    );
+    assert.deepEqual(
+      inverse.map(({ valeur, a, b }) => ({ valeur, a: b, b: a })),
+      escalierDuManque(A_TROUS, B_TROUS),
+    );
+  });
+
+  test('manques tous nuls : une seule ligne, 0, qui porte chaque rang', () => {
+    assert.deepEqual(escalierDuManque(profil([0, 0, 0]), profil([0, 0, 0])), [
+      { valeur: 0, a: { effectif: 3, cumul: 3 }, b: { effectif: 3, cumul: 3 } },
+    ]);
+  });
+
+  test('deux profils vides : la ligne 0, sans rang', () => {
+    assert.deepEqual(escalierDuManque([], []), [{ valeur: 0, a: { effectif: 0, cumul: 0 }, b: { effectif: 0, cumul: 0 } }]);
+  });
+
+  test('ne modifie pas les profils reçus', () => {
+    assert.doesNotThrow(() => escalierDuManque(figer(profil([2, 1, 0])), figer(profil([1, 1, 0]))));
+  });
+
+  test('un profil qui n’est pas une liste lève TypeError ; un manque négatif ou non entier, RangeError', () => {
+    assert.throws(() => escalierDuManque(PAS_UNE_LISTE, A_TROUS), TypeError);
+    assert.throws(() => escalierDuManque(A_TROUS, PAS_UNE_LISTE), TypeError);
+    assert.throws(() => escalierDuManque(profil([1, -1]), A_TROUS), RangeError);
+    assert.throws(() => escalierDuManque(A_TROUS, profil([1.5, 0])), RangeError);
+  });
+});
+
+describe('valeursDistinctes (§ 12.6, D62)', () => {
+  test('rouge : les valeurs des deux profils réunis, chacune comptée une fois', () => {
+    assert.equal(valeursDistinctes(A_TROUS, B_TROUS), 5);
+    // 2 et 0 pour A, 1 et 0 pour B : trois valeurs réunies, deux pour chaque
+    // profil, quatre en les ajoutant.
+    assert.equal(valeursDistinctes(profil([2, 0]), profil([1, 0])), 3);
+    assert.equal(valeursDistinctes(profil([1, 0]), profil([1, 0])), 2);
+  });
+
+  test('manques tous nuls : une valeur ; deux profils vides : aucune', () => {
+    assert.equal(valeursDistinctes(profil([0, 0]), profil([0, 0])), 1);
+    assert.equal(valeursDistinctes([], []), 0);
+  });
+});
+
+describe('borneHaute (§ 12.10.4, § 12.10.6, D60, C19)', () => {
+  test('rouge : le plus grand des deux manques maximaux, au moins 1', () => {
+    assert.equal(borneHaute(A_TROUS, B_TROUS), 5);
+    assert.equal(borneHaute(B_TROUS, A_TROUS), 5);
+    assert.equal(borneHaute(profil([0, 0]), profil([2, 0])), 2);
+    assert.equal(borneHaute(profil([0, 0]), profil([0, 0])), 1);
+    assert.equal(borneHaute([], []), 1);
   });
 });

@@ -58,6 +58,8 @@ export const TABLE = new Map([
   ['qualite.vue.entete.question', "Ce placement est-il bon, et qui s'y trouve mal servi ?"],
   ['qualite.vue.profil.titre', 'Profil trié des rencontres'],
   ['qualite.vue.profil.question', 'Qui est le plus mal servi, de combien, et combien sont-ils ?'],
+  ['qualite.vue.comparaison.titre', 'Comparaison'],
+  ['qualite.vue.comparaison.question', 'Laquelle des deux sert mieux, et qui y perd ?'],
   ['qualite.vue.collisions.titre', "Collisions d'appartenance"],
   ['qualite.vue.collisions.question', "D'où vient le problème, et relancer peut-il y changer quelque chose ?"],
   ['qualite.vue.tables.titre', 'Appartenances à chaque table'],

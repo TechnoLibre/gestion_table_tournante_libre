@@ -216,10 +216,73 @@ function premier(N, estCandidat, avant) {
 }
 
 /**
+ * La tête des colonnes de la comparaison (§ 12.10.6, D67, D83) : les trois
+ * chiffres dont la tuile porte un pourcentage (§ 12.2), chacun le pire cas
+ * du placement, lus dans les seules mesures et plafonds réalisés de sa ligne
+ * d'évaluation — ni profil, ni objectifs par tour, ni diagnostic :
+ * - rang1 : la personne au rang 1 du profil des rencontres, au tri du profil
+ *   (rencontres croissantes, plafond réalisé décroissant, index croissant,
+ *   D28), ses rencontres, son plafond réalisé et leur pourcentage, null à
+ *   plafond réalisé nul ; sans plafond a priori, que la ligne ne connaît
+ *   pas ; null sans personne ;
+ * - objectifs : au plus petit s(p) des concernées, P(p) > 0, à égalité les
+ *   tours possibles les plus nombreux, puis l'index, la personne, ses servis,
+ *   ses possibles et leur pourcentage ; null sans personne concernée ;
+ * - soiree : Σ_p s(p) sur Σ_p P(p) — la somme des tours, Σ_r S_r sur Σ_r Π_r,
+ *   un servi ayant son couple possible —, leur pourcentage, jamais une
+ *   moyenne des personnes, et les personnes jamais servies de la mesure ;
+ *   null sans personne concernée.
+ * Personnes par index canonique.
+ *
+ * Lève RangeError quand mesures.rencontres ou plafondsRealises n'a pas une
+ * case par personne.
+ *
+ * @param {import('./types.js').Instance} instance  N est lu
+ * @param {import('./indicateurs.js').Mesures} mesures  rencontres et
+ *        objectifs sont lus
+ * @param {ArrayLike<number>} plafondsRealises
+ * @returns {{rang1: {p: number, rencontres: number, plafondRealise: number, pourcent: number|null}|null,
+ *            objectifs: {p: number, servis: number, possibles: number, pourcent: number|null}|null,
+ *            soiree: {servis: number, possibles: number, pourcent: number|null, jamaisServies: number}|null}}
+ */
+export function teteDesColonnes(instance, mesures, plafondsRealises) {
+  const { N } = instance;
+  const { rencontres } = mesures;
+  exigerParPersonne(rencontres, N, 'mesures.rencontres');
+  exigerParPersonne(plafondsRealises, N, 'plafondsRealises');
+  const r1 = premier(
+    N,
+    () => true,
+    (x, y) => rencontres[x] < rencontres[y] || (rencontres[x] === rencontres[y] && plafondsRealises[x] > plafondsRealises[y]),
+  );
+  const rang1 =
+    r1 === null
+      ? null
+      : { p: r1, rencontres: rencontres[r1], plafondRealise: plafondsRealises[r1], pourcent: pourcentage(rencontres[r1], plafondsRealises[r1]) };
+
+  let objectifs = null;
+  let soiree = null;
+  if (mesures.objectifs !== null) {
+    const { tours: s, possibles: P, jamaisServies } = mesures.objectifs;
+    const p = premier(N, (x) => P[x] > 0, (x, y) => s[x] < s[y] || (s[x] === s[y] && P[x] > P[y]));
+    objectifs = { p, servis: s[p], possibles: P[p], pourcent: pourcentage(s[p], P[p]) };
+    let servis = 0;
+    let possibles = 0;
+    for (let q = 0; q < N; q += 1) {
+      servis += s[q];
+      possibles += P[q];
+    }
+    soiree = { servis, possibles, pourcent: pourcentage(servis, possibles), jamaisServies };
+  }
+  return { rang1, objectifs, soiree };
+}
+
+/**
  * Les bornes des tuiles (§ 12.2, D29, D34, D52, B11), chacune celle d'une
  * personne nommée, et les planchers, qui ne nomment personne :
  * - rang1 : la personne au rang 1 du profil, ses rencontres, son plafond
  *   réalisé, son plafond a priori et leur pourcentage ; null sans personne ;
+ *   teteDesColonnes le donne, et le profil y ajoute le plafond a priori ;
  * - manque : la tête du profil de manque (profilManque, § 12.10.6) et son
  *   plafond réalisé, sans pourcentage ; null sans personne ;
  * - diversite : au plus petit A(p), à égalité la plus grande borne de
@@ -230,37 +293,41 @@ function premier(N, estCandidat, avant) {
  * - objectifs : au plus petit s(p) des concernées, à égalité les tours
  *   possibles les plus nombreux, puis l'index, la personne, ses servis, ses
  *   possibles et leur pourcentage ; null sans personne concernée ;
- * - soiree : Σ S_r, Σ Π_r et leur pourcentage, lus dans les objectifs par
- *   tour, et les personnes jamais servies de la mesure ; null sans personne
- *   concernée ;
+ * - soiree : Σ S_r, Σ Π_r et leur pourcentage, et les personnes jamais
+ *   servies de la mesure ; null sans personne concernée ;
  * - planchers : le plancher de chaque tuile qui en porte un, le même
  *   pour toute personne (planchersDe).
+ * rang1, objectifs et soiree sont ceux de teteDesColonnes, que les colonnes
+ * de la comparaison lisent aussi : une seule arithmétique pour les tuiles et
+ * pour les colonnes.
  *
  * @param {import('./types.js').Instance} instance  N, ids, indexDe, statut,
  *        groupes et etatCriteres sont lus
  * @param {{mesures: import('./indicateurs.js').Mesures,
  *          plafondsRealises: ArrayLike<number>, aMax: ArrayLike<number>,
  *          profil: LigneProfil[], animateurs: Array<Object>|null,
- *          objectifs: Object|null,
  *          diagnostic: import('./diagnostic.js').Diagnostic,
  *          planchersValides: boolean,
  *          troisChiffres: import('./manque.js').TroisChiffres}} lus
  *        profil, profilRencontres ; animateurs, profilAnimateurs ;
- *        objectifs, objectifsParTour ; diagnostic, celui de la
+ *        diagnostic, celui de la
  *        configuration ; planchersValides, vrai sur un plan du domaine des
  *        planchers ; troisChiffres, ceux que la ligne d'évaluation du plan
  *        porte, lus sans être recomptés
  */
 export function bornesDesTuiles(instance, lus) {
-  const { mesures, plafondsRealises, aMax, profil, animateurs, objectifs } = lus;
+  const { mesures, plafondsRealises, aMax, profil, animateurs } = lus;
   const { N, indexDe, groupes } = instance;
+  const tete = teteDesColonnes(instance, mesures, plafondsRealises);
   let rang1 = null;
   let manque = null;
-  if (profil.length > 0) {
-    const { p, rencontres, plafondRealise, plafondAPriori, pourcent } = profil[0];
-    rang1 = { p, rencontres, plafondRealise, plafondAPriori, pourcent };
-    const [tete] = profilManque(instance, manques(plafondsRealises, mesures.rencontres), plafondsRealises);
-    const q = indexDe.get(tete.id);
+  if (tete.rang1 !== null) {
+    // Le profil suit le tri de teteDesColonnes : son premier rang est la
+    // même personne, dont il porte le plafond a priori.
+    const { p, rencontres, plafondRealise, pourcent } = tete.rang1;
+    rang1 = { p, rencontres, plafondRealise, plafondAPriori: profil[0].plafondAPriori, pourcent };
+    const [teteManque] = profilManque(instance, manques(plafondsRealises, mesures.rencontres), plafondsRealises);
+    const q = indexDe.get(teteManque.id);
     manque = { p: q, plafondRealise: plafondsRealises[q] };
   }
 
@@ -271,35 +338,34 @@ export function bornesDesTuiles(instance, lus) {
     diversite = { p, aMax: aMax[p] };
   }
 
-  let parObjectif = null;
-  let soiree = null;
-  if (mesures.objectifs !== null) {
-    const { tours: s, possibles: P, jamaisServies } = mesures.objectifs;
-    const p = premier(N, (x) => P[x] > 0, (x, y) => s[x] < s[y] || (s[x] === s[y] && P[x] > P[y]));
-    parObjectif = { p, servis: s[p], possibles: P[p], pourcent: pourcentage(s[p], P[p]) };
-    const { servis, possibles, pourcent } = objectifs.soiree;
-    soiree = { servis, possibles, pourcent, jamaisServies };
-  }
-
   return {
     rang1,
     manque,
     diversite,
     animateurs: animateurs === null ? null : { p: animateurs[0].p, borne: animateurs[0].borne },
-    objectifs: parObjectif,
-    soiree,
+    objectifs: tete.objectifs,
+    soiree: tete.soiree,
     planchers: planchersDe(instance, lus),
   };
 }
 
 // Un plancher strictement positif et la valeur mesurée qu'il borne :
 // {plancher, atteint}, atteint quand la valeur l'égale ; null pour un
-// plancher nul, que le diagnostic ne prouve pas.
+// plancher nul, que le diagnostic ne prouve pas, ou absent (null).
 const plancherDe = (plancher, valeur) => (plancher > 0 ? { plancher, atteint: valeur === plancher } : null);
 
 // La somme d'un champ des planchers de collisions du diagnostic, un par
 // appartenance en collision ; un champ null compte pour 0.
 const sommeDe = (collisions, champ) => collisions.reduce((total, ligne) => total + (ligne[champ] ?? 0), 0);
+
+// Les colonnes de collisions, chacune avec le champ qui porte son plancher
+// dans chaque ligne de diagnostic.collisions ; la mesure porte la valeur
+// sous le nom de la colonne.
+const COLONNES_DE_COLLISIONS = [
+  ['collisionsCumulees', 'plancherCumulees'],
+  ['pairesDistinctes', 'plancherPairesDistinctes'],
+  ['excedentCollisions', 'plancherExcedent'],
+];
 
 // Le nom du critère des objectifs dans instance.etatCriteres, et, pour
 // chaque valeur qu'il peut comparer, sous le nom de sa colonne, le champ
@@ -311,50 +377,95 @@ const CHAMPS_DES_OBJECTIFS = [
   ['toursHorsObjectif', 'horsObjectif'],
 ];
 
-// Le plancher de chaque tuile qui en porte un (§ 5.6, § 12.2, B11), sous le
-// nom de sa colonne (§ 5.7), {plancher, atteint} ou null, jamais 0 — là où
-// le diagnostic écrit le sien, et là seulement :
-// - collisionsCumulees, pairesDistinctes, excedentCollisions : la somme des
-//   planchers de chaque appartenance en collision ; chaque mesure somme
-//   celles des appartenances, et chaque plancher minore la sienne ;
-// - ecartItineraireMax : le plancher de l'écart d'itinéraire maximal, null
-//   quand la ligne n'a pas d'écart d'itinéraire — plafond a priori inconnu,
-//   la tuile écrit « inconnu » ;
-// - jamaisServies, horsObjectifMax, toursHorsObjectif : le plancher de
-//   chaque valeur que le critère des objectifs compare sous le mode réglé,
-//   null pour une autre, et tous null quand le critère est décoché ou sans
-//   objet, qui ne compare rien.
-// atteint compare au plancher la valeur même que la tuile écrit, lue sans
-// recompte : les mesures du plan, et l'écart d'itinéraire maximal des trois
-// chiffres de sa ligne d'évaluation. Hors du domaine des planchers — un plan
-// qui laisse quelqu'un en réserve ou ne tient pas une réservation —, aucun
-// ne tient : tous null.
-function planchersDe({ etatCriteres }, { mesures, troisChiffres, diagnostic, planchersValides }) {
-  const planchers = {
-    collisionsCumulees: null,
-    pairesDistinctes: null,
-    excedentCollisions: null,
-    ecartItineraireMax: null,
-    jamaisServies: null,
-    horsObjectifMax: null,
-    toursHorsObjectif: null,
-  };
-  if (!planchersValides) return planchers;
+// Les sept colonnes qui peuvent porter un plancher, chacune sans plancher,
+// dans l'ordre où le détail et les colonnes les rendent.
+const aucunPlancher = () => ({
+  collisionsCumulees: null,
+  pairesDistinctes: null,
+  excedentCollisions: null,
+  ecartItineraireMax: null,
+  jamaisServies: null,
+  horsObjectifMax: null,
+  toursHorsObjectif: null,
+});
+
+/**
+ * Les planchers prouvés des colonnes (§ 5.6, § 12.2, D84), communs à tous
+ * les placements d'une configuration : lus dans son diagnostic, une fois,
+ * avant d'être confrontés aux mesures de chaque placement
+ * (planchersAtteints). Sous le nom de chaque colonne (§ 5.7) :
+ * - collisionsCumulees, pairesDistinctes, excedentCollisions : la somme des
+ *   planchers de chaque appartenance en collision ; chaque mesure somme
+ *   celles des appartenances, et chaque plancher minore la sienne ; 0 quand
+ *   le diagnostic n'en nomme aucune ;
+ * - ecartItineraireMax : le plancher de l'écart d'itinéraire maximal, null
+ *   quand le diagnostic n'en porte pas ;
+ * - jamaisServies, horsObjectifMax, toursHorsObjectif : le plancher de
+ *   chaque valeur que le critère des objectifs compare sous le mode réglé,
+ *   0 quand il est nul, null pour une valeur que le mode ne compare pas ;
+ *   tous null quand le critère est décoché ou sans objet, qui ne compare
+ *   rien.
+ * Un plancher est un nombre là où la tuile peut en porter un, null là où
+ * elle n'en porte jamais.
+ *
+ * @param {import('./types.js').Instance} instance  etatCriteres est lu
+ * @param {import('./diagnostic.js').Diagnostic} diagnostic  celui de la
+ *        configuration
+ * @returns {{collisionsCumulees: number, pairesDistinctes: number, excedentCollisions: number,
+ *            ecartItineraireMax: number|null, jamaisServies: number|null,
+ *            horsObjectifMax: number|null, toursHorsObjectif: number|null}}
+ */
+export function planchersDesColonnes({ etatCriteres }, diagnostic) {
   const { collisions, ecartItineraire, objectifsInevitables } = diagnostic;
-  planchers.collisionsCumulees = plancherDe(sommeDe(collisions, 'plancherCumulees'), mesures.collisionsCumulees);
-  planchers.pairesDistinctes = plancherDe(sommeDe(collisions, 'plancherPairesDistinctes'), mesures.pairesDistinctes);
-  planchers.excedentCollisions = plancherDe(sommeDe(collisions, 'plancherExcedent'), mesures.excedentCollisions);
-  const { ecartItineraireMax } = troisChiffres;
-  if (ecartItineraire !== null && ecartItineraireMax !== null) {
-    planchers.ecartItineraireMax = plancherDe(ecartItineraire.plancher, ecartItineraireMax.tous);
-  }
+  const planchers = aucunPlancher();
+  for (const [colonne, champ] of COLONNES_DE_COLLISIONS) planchers[colonne] = sommeDe(collisions, champ);
+  if (ecartItineraire !== null) planchers.ecartItineraireMax = ecartItineraire.plancher;
   const critere = etatCriteres.find(({ nom }) => nom === CRITERE_DES_OBJECTIFS);
   if (critere.coche && !critere.sansObjet) {
     for (const [colonne, champ] of CHAMPS_DES_OBJECTIFS) {
-      if (critere.valeurs.includes(colonne)) planchers[colonne] = plancherDe(objectifsInevitables[champ], mesures.objectifs[champ]);
+      if (critere.valeurs.includes(colonne)) planchers[colonne] = objectifsInevitables[champ];
     }
   }
   return planchers;
+}
+
+/**
+ * Les planchers des colonnes d'un placement, jugés atteints ou non (§ 12.2,
+ * B11) : par colonne, {plancher, atteint} — atteint quand la valeur que la
+ * tuile écrit l'égale — ou null, jamais 0 : pour un plancher nul, que le
+ * diagnostic ne prouve pas, ou null. atteint compare au plancher la valeur
+ * même que la tuile écrit, lue sans recompte : les mesures du placement, et
+ * l'écart d'itinéraire maximal des trois chiffres de sa ligne d'évaluation,
+ * null quand cette ligne n'en porte pas — plafond a priori inconnu, la tuile
+ * écrit « inconnu ». Hors du domaine des planchers — un placement qui laisse
+ * quelqu'un en réserve ou ne tient pas une réservation —, aucun ne tient :
+ * tous null. Une colonne des objectifs sans plancher ne lit pas
+ * mesures.objectifs, null sans personne concernée.
+ *
+ * @param {ReturnType<typeof planchersDesColonnes>} planchers
+ * @param {{mesures: import('./indicateurs.js').Mesures,
+ *          troisChiffres: import('./manque.js').TroisChiffres,
+ *          planchersValides: boolean}} lus
+ * @returns {Record<string, {plancher: number, atteint: boolean}|null>}
+ *          les sept colonnes de planchersDesColonnes, dans son ordre
+ */
+export function planchersAtteints(planchers, { mesures, troisChiffres, planchersValides }) {
+  const atteints = aucunPlancher();
+  if (!planchersValides) return atteints;
+  for (const [colonne] of COLONNES_DE_COLLISIONS) atteints[colonne] = plancherDe(planchers[colonne], mesures[colonne]);
+  const { ecartItineraireMax } = troisChiffres;
+  if (ecartItineraireMax !== null) atteints.ecartItineraireMax = plancherDe(planchers.ecartItineraireMax, ecartItineraireMax.tous);
+  for (const [colonne, champ] of CHAMPS_DES_OBJECTIFS) {
+    if (planchers[colonne] !== null) atteints[colonne] = plancherDe(planchers[colonne], mesures.objectifs[champ]);
+  }
+  return atteints;
+}
+
+// Le plancher de chaque tuile qui en porte un (§ 5.6, § 12.2, B11), sous le
+// nom de sa colonne : les planchers des colonnes, lus dans le diagnostic de
+// la configuration, jugés sur les mesures et les trois chiffres reçus.
+function planchersDe(instance, lus) {
+  return planchersAtteints(planchersDesColonnes(instance, lus.diagnostic), lus);
 }
 
 /**
@@ -675,7 +786,6 @@ export function detailler(instance, tableDe, options) {
       aMax,
       profil,
       animateurs: profilDesAnimateurs,
-      objectifs,
       diagnostic,
       planchersValides,
     }),

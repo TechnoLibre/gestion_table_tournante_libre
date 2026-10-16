@@ -306,6 +306,108 @@ export function comparerProfils(profilA, profilB) {
   };
 }
 
+// Le plus grand manque de deux profils réunis ; null quand les deux sont
+// vides.
+function plusGrandManque(profilA, profilB) {
+  let plus = null;
+  for (const profil of [profilA, profilB]) {
+    for (const { manque } of profil) if (plus === null || manque > plus) plus = manque;
+  }
+  return plus;
+}
+
+// Les effectifs d'un profil par valeur de manque, de 0 à haut : effectifs[v]
+// compte les rangs de manque v. Lève RangeError pour un manque qui n'est
+// pas un entier positif ou nul, signe d'un calcul faux que la garde de la
+// ligne d'évaluation refuse avant toute comparaison (§ 12.10.5).
+function effectifsParValeur(profil, haut, nom) {
+  const effectifs = new Array(haut + 1).fill(0);
+  for (const { manque } of profil) {
+    if (!Number.isInteger(manque) || manque < 0) {
+      throw new RangeError(`${nom} : manque ${String(manque)}, entier positif ou nul attendu`);
+    }
+    effectifs[manque] += 1;
+  }
+  return effectifs;
+}
+
+/**
+ * L'escalier du manque (§ 12.10.6, D61), jumeau tabulaire de la comparaison
+ * : une ligne par entier, de la plus grande valeur de manque des deux
+ * profils jusqu'à 0, que la valeur soit prise ou non, et, par profil,
+ * effectif — les rangs de manque égal à la valeur — et cumul — les rangs de
+ * manque au moins égal. Un profil trié par manque décroissant atteint donc
+ * la valeur v jusqu'au rang cumul et pas au-delà : le cumul est le dernier
+ * rang où la courbe atteint v, la courbe lue à l'envers, sans trou. Deux
+ * profils vides rendent la seule ligne 0.
+ *
+ * Le cumul se fait de la plus grande valeur vers 0 ; les effectifs ne lisent
+ * que les manques, si bien que l'ordre des rangs reçus n'y change rien.
+ *
+ * Lève TypeError quand un profil n'est pas une liste, et RangeError pour un
+ * manque qui n'est pas un entier positif ou nul.
+ *
+ * @param {RangProfil[]} profilA   profilManque
+ * @param {RangProfil[]} profilB   profilManque
+ * @returns {Array<{valeur: number, a: {effectif: number, cumul: number}, b: {effectif: number, cumul: number}}>}
+ */
+export function escalierDuManque(profilA, profilB) {
+  exigerListe(profilA, 'profilA');
+  exigerListe(profilB, 'profilB');
+  const haut = Math.max(plusGrandManque(profilA, profilB) ?? 0, 0);
+  const effectifsA = effectifsParValeur(profilA, haut, 'profilA');
+  const effectifsB = effectifsParValeur(profilB, haut, 'profilB');
+  const lignes = [];
+  let cumulA = 0;
+  let cumulB = 0;
+  for (let valeur = haut; valeur >= 0; valeur -= 1) {
+    cumulA += effectifsA[valeur];
+    cumulB += effectifsB[valeur];
+    lignes.push({
+      valeur,
+      a: { effectif: effectifsA[valeur], cumul: cumulA },
+      b: { effectif: effectifsB[valeur], cumul: cumulB },
+    });
+  }
+  return lignes;
+}
+
+/**
+ * Le nombre de valeurs de manque distinctes des deux profils réunis (§ 12.6,
+ * D62) : une valeur prise par l'un et par l'autre compte une fois. Sous le
+ * seuil du registre, VALEURS_MANQUE_COURBE, la comparaison écrit une phrase
+ * au lieu de tracer ; la règle porte sur la réunion, jamais sur chaque
+ * profil. 0 pour deux profils vides.
+ *
+ * L'ensemble ne sert qu'à compter : aucun ordre n'en sort.
+ *
+ * @param {RangProfil[]} profilA
+ * @param {RangProfil[]} profilB
+ * @returns {number}
+ */
+export function valeursDistinctes(profilA, profilB) {
+  const valeurs = new Set();
+  for (const profil of [profilA, profilB]) {
+    for (const { manque } of profil) valeurs.add(manque);
+  }
+  return valeurs.size;
+}
+
+/**
+ * La borne haute de l'axe de la comparaison (§ 12.10.6, D60, C19) : le plus
+ * grand des deux manques maximaux, au moins 1, pour que des manques tous
+ * nuls gardent un axe. Le majorant du § 12.10.4, le plus grand plafond
+ * réalisé, borne le manque, pas l'axe : il écraserait les courbes contre le
+ * zéro.
+ *
+ * @param {RangProfil[]} profilA
+ * @param {RangProfil[]} profilB
+ * @returns {number}
+ */
+export function borneHaute(profilA, profilB) {
+  return Math.max(plusGrandManque(profilA, profilB) ?? 1, 1);
+}
+
 /**
  * Certificat de « minimum atteint » (§ 5.5) : vrai quand chacun atteint son
  * plafond a priori, son écart au plafond a priori valant 0 ; faux sinon. Le

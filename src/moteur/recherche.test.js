@@ -24,11 +24,17 @@
 // animateurs, sous chacun des trois modes et sous un ordre réglé, l'état tenu
 // à jour s'accorde au recalcul ; la bascule suit l'ordre réglé ; chaque mode
 // descend jusqu'aux planchers du diagnostic, et le mode ou l'ordre ne
-// changent aucun tirage. Un plan rendu se juge par verifierInvariants et se
-// mesure par mesurer, deux modules distincts du module éprouvé.
+// changent aucun tirage. Une génération sans départ tire les nombres que
+// comptent des littéraux. Une dérivée égale la descente du paragraphe
+// « Départ », récrite de même, relances comprises ; ses tours figés ne
+// bougent pas, elle n'est jamais pire que son départ, rend le plan parfait
+// dont elle part, et son point de relevé k égale regenerer au compte k sous
+// le même départ ; un départ que l'instance ne peut pas asseoir tel quel est
+// refusé avant tout calcul. Un plan rendu se juge par verifierInvariants et
+// se mesure par mesurer, deux modules distincts du module éprouvé.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
-import { CATALOGUE } from '../demo/catalogue.js';
+import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { FLUX, creerPcg32 } from '../demo/prng.js';
 import {
   LIBRE,
@@ -47,9 +53,12 @@ import {
   creerEtat,
   defaire,
   proposerEtAppliquer,
+  proposerParmi,
   proposerUne,
   rechercher,
   regenerer,
+  repartir,
+  repartirUne,
   scoreComplet,
   scoreIncremental,
   verifierReglages,
@@ -396,49 +405,63 @@ function comparerDans(ordre, a, b) {
 // compilation donne au plus grand écart ; dans cet ordre, un score courant
 // inchangé pendant PATIENCE × L itérations fait repartir la descente d'un
 // placement neuf, tiré du même générateur, l'historique à son score (en-tête
-// de recherche.js). Rend le plan et trois comptes : bascules, relances, et
-// meilleures affectations trouvées après une relance.
-function descendreALaLettre(instance, graineDerivee, arret, L, { bascule }) {
+// de recherche.js). Rend le plan et quatre comptes : bascules, relances,
+// meilleures affectations trouvées après une relance, et meilleures
+// affectations qu'un mouvement trouve après la dernière relance (zéro sans
+// relance).
+//
+// rng, le générateur des mouvements, est par défaut celui de la graine
+// dérivée ; partir() construit l'état du début et de chaque relance,
+// creerEtat sur rng par défaut ; mouvoir(etat, rng) tire et applique un
+// mouvement, proposerEtAppliquer par défaut. Une dérivée (paragraphe
+// « Départ ») se récrit en passant l'état de son départ et proposerParmi.
+function descendreALaLettre(instance, graineDerivee, arret, L, {
+  bascule,
+  rng = creerPcg32(graineDerivee, FLUX.RECHERCHE),
+  partir = () => creerEtat(instance, rng),
+  mouvoir = proposerEtAppliquer,
+}) {
   const { ORDRE_DU_SCORE, ORDRE_DES_CONTRAINTES, rangEcart } = ordresDe(instance);
-  const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
-  let etat = creerEtat(instance, rng);
+  let etat = partir();
   let courant = scoreIncremental(etat);
   let meilleur = courant;
   let meilleurPlan = Int32Array.from(etat.tableDe);
   let H = Array(L).fill(courant);
   let ordre = ORDRE_DU_SCORE;
   let immobile = 0;
-  const comptes = { bascules: 0, relances: 0, apresRelance: 0 };
+  const comptes = { bascules: 0, relances: 0, apresRelance: 0, apresDerniere: 0 };
   const basculer = () => {
     if (!bascule || ordre === ORDRE_DES_CONTRAINTES || rangEcart === null || meilleur[rangEcart] !== 0) return;
     ordre = ORDRE_DES_CONTRAINTES;
     comptes.bascules += 1;
   };
-  const retenir = () => {
+  const retenir = (parMouvement) => {
     if (comparerDans(ORDRE_DU_SCORE, courant, meilleur) >= 0) return;
     meilleur = courant;
     meilleurPlan = Int32Array.from(etat.tableDe);
     if (comptes.relances > 0) comptes.apresRelance += 1;
+    if (comptes.relances > 0 && parMouvement) comptes.apresDerniere += 1;
     basculer();
   };
   basculer();
   for (let i = 0; i < arret && courant.some((composante) => composante !== 0); i += 1) {
     if (immobile >= PATIENCE * L && ordre === ORDRE_DES_CONTRAINTES) {
-      etat = creerEtat(instance, rng);
+      etat = partir();
       courant = scoreIncremental(etat);
       H = Array(L).fill(courant);
       comptes.relances += 1;
-      retenir();
+      comptes.apresDerniere = 0;
+      retenir(false);
       immobile = 0;
     }
-    const mouvement = proposerEtAppliquer(etat, rng);
+    const mouvement = mouvoir(etat, rng);
     let change = false;
     if (mouvement !== null) {
       const candidat = scoreIncremental(etat);
       if (comparerDans(ordre, candidat, courant) <= 0 || comparerDans(ordre, candidat, H[i % L]) <= 0) {
         change = comparerDans(ORDRE_DU_SCORE, candidat, courant) !== 0;
         courant = candidat;
-        retenir();
+        retenir(true);
       } else {
         defaire(etat, mouvement);
       }
@@ -1688,5 +1711,527 @@ describe('rechercher : la course de la recherche (§ 5.10, B6, D40)', () => {
     assert.deepEqual(Object.keys(plan), Object.keys(proposition.plan));
     assert.deepStrictEqual(plan, proposition.plan);
     assert.equal('evalues' in plan || 'releves' in plan, false);
+  });
+});
+
+// --- Le chemin ordinaire et le départ (§ 5.7, § 5.10, § 8.9, § 15.5, C24) ----
+
+// Le nombre de sorties de 32 bits que rng a produites depuis sa création,
+// rng étant creerPcg32(graine, flux) : ses trois sorties suivantes se
+// cherchent dans la suite d'un jumeau neuf. Les tirages internes de borne
+// (rejet) et de melanger y comptent, qu'aucune enveloppe ne verrait.
+// Consomme trois sorties de rng.
+function sortiesProduites(rng, graine, flux) {
+  const suivantes = [rng.suivant(), rng.suivant(), rng.suivant()];
+  const jumeau = creerPcg32(graine, flux);
+  const fenetre = [jumeau.suivant(), jumeau.suivant(), jumeau.suivant()];
+  for (let n = 0; n < 1_000_000; n += 1) {
+    if (fenetre.every((sortie, i) => sortie === suivantes[i])) return n;
+    fenetre.shift();
+    fenetre.push(jumeau.suivant());
+  }
+  throw new Error(`sorties introuvables pour la graine ${graine}`);
+}
+
+// Les clés d'une proposition de rechercher, dans leur ordre.
+const CLES_PROPOSITION = ['id', 'graine', 'arret', 'historique', 'plan', 'evalues', 'releves'];
+
+describe('rechercher : le chemin ordinaire ne tire pas un nombre de plus (§ 5.10, § 15.5, C8)', () => {
+  // Les comptes attendus sont des littéraux, jamais recalculés par le code
+  // éprouvé : les sorties de 32 bits d'une descente sans départ, un appel de
+  // borne par tour tiré et par siège, sans rejet sur ces instances, plus
+  // n − 1 par mélange de n éléments, un mélange par tour et par placement
+  // tiré.
+  //
+  // La réplique, qui tire comme rechercher, produit exactement ces sorties ;
+  // le plan de rechercher égale le sien. Ce plan ne voit un tirage de plus
+  // que s'il le précède une meilleure affectation qui en dépend : chaque cas
+  // à relance exige donc qu'un mouvement trouve une meilleure affectation
+  // après la DERNIÈRE relance, et arret s'arrête avant la relance suivante.
+  // Un tirage de plus n'importe où sur le chemin de la relance décale alors
+  // le placement de cette relance ou les mouvements qui la suivent, et
+  // change le plan rendu par rechercher.
+  const CAS = [
+    { graine: 1, arret: 20_000, historique: 1_000, sorties: 60_044, relances: 0 },
+    { graine: 30, arret: 2_600, historique: 20, sorties: 7_888, relances: 1 },
+    { graine: 35, arret: 5_500, historique: 20, sorties: 16_632, relances: 2 },
+    { graine: 59, arret: 1_950, historique: 5, sorties: 6_026, relances: 3 },
+    { graine: 25, arret: 20_000, historique: 50, sorties: 60_176, relances: 3 },
+    { graine: 8, arret: 15_000, historique: 5, sorties: 47_112, relances: 47 },
+  ];
+  for (const { graine, arret, historique, sorties, relances } of CAS) {
+    test(`petite, graine ${graine}, arret ${arret}, historique ${historique} : ${sorties} sorties, ${relances} relance(s), le plan de rechercher`, () => {
+      const configuration = demo('petite');
+      const instance = normaliser(configuration);
+      const graines = creerPcg32(graine, FLUX.GRAINES);
+      const graineDerivee = graines.suivant();
+      assert.equal(sortiesProduites(graines, graine, FLUX.GRAINES), 1);
+      const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
+      const replique = descendreALaLettre(instance, graineDerivee, arret, historique, { bascule: true, rng });
+      assert.equal(replique.relances, relances);
+      if (relances > 0) {
+        assert.ok(replique.apresDerniere >= 1, `meilleures après la dernière relance : ${replique.apresDerniere}`);
+      }
+      assert.equal(sortiesProduites(rng, graineDerivee, FLUX.RECHERCHE), sorties);
+      const [proposition] = rechercher(configuration, { graine, arret, historique, nombre: 1 });
+      assert.deepEqual(Object.keys(proposition), CLES_PROPOSITION);
+      assert.equal(proposition.graine, graineDerivee);
+      assert.equal(proposition.evalues, arret);
+      assert.deepStrictEqual(proposition.plan, replique.plan);
+    });
+  }
+
+  // Deux cas à relance où la réplique tire le même nombre de sorties que
+  // rechercher. Aucune meilleure affectation n'y suit la dernière relance,
+  // si bien que l'égalité des plans n'y voit pas les tirages de la relance :
+  // seuls les cas de CAS les éprouvent.
+  for (const { graine, historique, sorties, relances } of [
+    { graine: 3, historique: 10, sorties: 6_088, relances: 1 },
+    { graine: 1, historique: 5, sorties: 6_132, relances: 2 },
+  ]) {
+    test(`réplique, petite, graine ${graine}, arret 2000, historique ${historique} : ${sorties} sorties, ${relances} relance(s)`, () => {
+      const instance = normaliser(demo('petite'));
+      const graineDerivee = creerPcg32(graine, FLUX.GRAINES).suivant();
+      const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
+      const replique = descendreALaLettre(instance, graineDerivee, 2_000, historique, { bascule: true, rng });
+      assert.equal(replique.relances, relances);
+      assert.equal(sortiesProduites(rng, graineDerivee, FLUX.RECHERCHE), sorties);
+    });
+  }
+
+  test('le placement tiré : 44 sorties sur la petite démonstration, 904 sur la grande, un mélange par tour', () => {
+    for (const [cle, sorties] of [['petite', 44], ['grande', 904]]) {
+      const rng = creerPcg32(1, FLUX.RECHERCHE);
+      creerEtat(normaliser(demo(cle)), rng);
+      assert.equal(sortiesProduites(rng, 1, FLUX.RECHERCHE), sorties, cle);
+    }
+  });
+});
+
+// Un générateur dont melanger range les libres de chaque tour par la table
+// que plan leur donne, puis par index croissant, au lieu de les mélanger :
+// creerEtat assied alors exactement plan, sur une instance où chaque table
+// reçoit autant de libres que de sièges mobiles, sans place fantôme. Les
+// appels se comptent par tour, dans l'ordre où creerEtat les fait : un
+// rangeur neuf sert chaque état.
+function rangeurDe(instance, plan) {
+  const tableDe = indexerPlan(instance, plan);
+  const { R } = instance;
+  let r = 0;
+  return {
+    melanger(liste) {
+      const tour = r;
+      r += 1;
+      return Int32Array.from([...liste].sort((p, q) => tableDe[p * R + tour] - tableDe[q * R + tour] || p - q));
+    },
+  };
+}
+
+// Les index des tours non figés, croissants.
+const tirablesDe = (R, toursFiges) => Array.from({ length: R }, (_, r) => r).filter((r) => !toursFiges.includes(r + 1));
+
+// La descente d'une proposition dérivée selon le paragraphe « Départ » de
+// recherche.js, récrite avec les primitives publiques, sur une instance sans
+// place fantôme : l'état du départ par creerEtat et rangeurDe, au début et à
+// chaque relance ; chaque mouvement par proposerParmi sur les tours non
+// figés, tiré du générateur de la graine dérivée ; l'acceptation, la
+// bascule et la relance de descendreALaLettre. Rend son plan et ses comptes.
+function repartirALaLettre(instance, graineDerivee, arret, L, { plan, toursFiges }) {
+  const tirables = tirablesDe(instance.R, toursFiges);
+  return descendreALaLettre(instance, graineDerivee, arret, L, {
+    bascule: true,
+    partir: () => creerEtat(instance, rangeurDe(instance, plan)),
+    mouvoir: (etat, rng) => proposerParmi(etat, rng, tirables),
+  });
+}
+
+// Le départ des épreuves sur la petite démonstration : une proposition à
+// compte court, loin du plan parfait, ses tables dans l'ordre de l'instance.
+const departPetite = (graine = 5) => rechercher(demo('petite'), { graine, arret: 40, nombre: 1 })[0].plan;
+
+// La graine de departPetite, puis graine, compte et historique, où une
+// dérivée de la petite démonstration, tour 1 figé, voit l'écart maximal de
+// sa meilleure affectation tomber à zéro sans que son score s'annule : elle
+// bascule, relance, et trouve une meilleure affectation après une relance
+// (en-tête de recherche.js).
+const RELANCE = { depart: 6, graine: 13, arret: 20_000, historique: 5 };
+
+// Le plan, tables dans l'ordre déclaré, dont chaque liste et l'ordre des
+// tables sont renversés : le même placement, écrit autrement.
+const renverse = ({ tables, tours, reserves }) => ({
+  tables: [...tables].reverse(),
+  tours: tours.map((listes) => [...listes].reverse().map((liste) => [...liste].reverse())),
+  reserves: reserves.map((reserve) => [...reserve]),
+});
+
+// Un départ valide de salleReservee : chacun à sa table réservée, une place
+// fantôme par tour, ailleurs à chaque tour.
+const departSalle = () => ({
+  tables: [10, 20, 30],
+  tours: [
+    [[2, 4, 5, 6], [1, 7, 8], [3, 9]],
+    [[2, 3, 7], [1, 4, 9], [5, 6, 8]],
+    [[2, 5, 7, 9], [1, 4, 6], [3, 8]],
+  ],
+  reserves: [[], [], []],
+});
+
+// Le n-uplet du score d'un plan, par l'oracle.
+const scoreDuPlan = (instance, plan) => scoreOracle(instance, indexerPlan(instance, plan), plafondsAPriori(instance)).nUplet;
+
+describe('repartir : une dérivée continue son départ (§ 5.7, D69 à D71, C24)', () => {
+  test('une dérivée part du plan de son départ, au début et à chaque relance : petite démonstration, tour 1 figé', () => {
+    const configuration = demo('petite');
+    const instance = normaliser(configuration);
+    const depart = { plan: departPetite(RELANCE.depart), toursFiges: [1] };
+    const { graine, arret, historique } = RELANCE;
+    const [proposition] = repartir(configuration, { graine, arret, historique, nombre: 1 }, depart);
+    // Sans relance, l'épreuve n'éprouverait pas la relance : elle refuse de
+    // passer.
+    assert.ok(proposition.relances >= 1, `relances : ${proposition.relances}`);
+    const replique = repartirALaLettre(instance, proposition.graine, arret, historique, depart);
+    assert.equal(proposition.relances, replique.relances);
+    assert.ok(replique.apresRelance >= 1, `meilleures après une relance : ${replique.apresRelance}`);
+    assert.deepStrictEqual(proposition.plan, replique.plan);
+    assert.ok(proposition.releves.length >= 3);
+    for (const { mouvements, plan } of [...proposition.releves, { mouvements: proposition.evalues, plan: proposition.plan }]) {
+      depart.plan.tables.forEach((table, i) => {
+        assert.deepEqual(plan.tours[0][i], depart.plan.tours[0][i], `point ${mouvements}, table ${table}`);
+      });
+    }
+  });
+
+  test('une dérivée est la descente du paragraphe « Départ », à la lettre : sans tour figé, tour 2, tours 1 et 3', () => {
+    const configuration = demo('petite-conflit');
+    const instance = normaliser(configuration);
+    const plan = rechercher(configuration, { graine: 8, arret: 60, nombre: 1 })[0].plan;
+    for (const toursFiges of [[], [2], [1, 3]]) {
+      const reglages = { graine: 4, arret: 4_000, nombre: 2, historique: 20 };
+      const propositions = repartir(configuration, reglages, { plan, toursFiges });
+      for (const proposition of propositions) {
+        const replique = repartirALaLettre(instance, proposition.graine, reglages.arret, reglages.historique, { plan, toursFiges });
+        assert.deepStrictEqual(proposition.plan, replique.plan, `figés ${toursFiges}, n° ${proposition.id}`);
+        assert.equal(proposition.relances, replique.relances);
+      }
+    }
+  });
+
+  test('chaque proposition porte ses champs, sa course et ses relances ; ses graines dérivées sont celles de rechercher', () => {
+    const configuration = demo('petite');
+    const reglages = { graine: 12, arret: 500, nombre: 3, historique: 30 };
+    const derivees = repartir(configuration, reglages, { plan: departPetite(), toursFiges: [] });
+    const ordinaires = rechercher(configuration, reglages);
+    assert.deepEqual(derivees.map(({ id }) => id), [1, 2, 3]);
+    for (const [i, proposition] of derivees.entries()) {
+      assert.deepEqual(Object.keys(proposition), [...CLES_PROPOSITION, 'relances']);
+      assert.ok(Number.isInteger(proposition.relances) && proposition.relances >= 0);
+      for (const champ of ['graine', 'arret', 'historique']) assert.equal(proposition[champ], ordinaires[i][champ], champ);
+    }
+  });
+
+  test("même graine saisie, ordinaire et dérivée : même triplet, d'autres plans", () => {
+    const configuration = demo('petite');
+    const reglages = { graine: 21, arret: 1_000, nombre: 3, historique: 50 };
+    const derivees = repartir(configuration, reglages, { plan: departPetite(), toursFiges: [1] });
+    const ordinaires = rechercher(configuration, reglages);
+    for (const [i, { graine, arret, historique, plan }] of derivees.entries()) {
+      assert.deepEqual([graine, arret, historique], [ordinaires[i].graine, ordinaires[i].arret, ordinaires[i].historique]);
+      assert.notDeepStrictEqual(plan, ordinaires[i].plan, `n° ${i + 1}`);
+    }
+  });
+
+  test('repartirUne égale repartir au rang k : rangs 1, 3 et 5, dans le désordre', () => {
+    const configuration = demo('petite');
+    const reglages = { graine: 33, arret: 800, nombre: 5, historique: 40 };
+    const depart = { plan: departPetite(), toursFiges: [2] };
+    const toutes = repartir(configuration, reglages, depart);
+    for (const rang of [5, 1, 3]) {
+      assert.deepStrictEqual(repartirUne(configuration, reglages, depart, rang), toutes[rang - 1], `rang ${rang}`);
+    }
+    for (const rang of [0, 6, 1.5]) {
+      assert.throws(() => repartirUne(configuration, reglages, depart, rang), { name: 'RangeError', reglage: 'rang' });
+    }
+  });
+
+  test('le point de relevé k d\'une dérivée égale regenerer au compte k, départ et tours figés compris : 1, 10, 100, 1 000', () => {
+    const configuration = demo('petite');
+    const planDuDepart = departPetite();
+    for (const toursFiges of [[1], [2, 4]]) {
+      const [proposition] = repartir(configuration, { graine: 9, arret: 2_500, nombre: 1, historique: 25 }, { plan: planDuDepart, toursFiges });
+      const { graine, historique, releves, evalues, plan } = proposition;
+      assert.deepEqual(releves.map(({ mouvements }) => mouvements), puissancesSous(evalues));
+      assert.deepEqual(releves.map(({ mouvements }) => mouvements), [1, 10, 100, 1_000]);
+      const fichier = { ...proposition, depart: 7, toursFiges };
+      for (const releve of releves) {
+        assert.deepStrictEqual(
+          releve.plan,
+          regenerer(configuration, { ...fichier, arret: releve.mouvements }, { planDuDepart }),
+          `figés ${toursFiges}, point ${releve.mouvements}`,
+        );
+      }
+      assert.deepStrictEqual(plan, regenerer(configuration, fichier, { planDuDepart }));
+    }
+  });
+
+  test('regenerer sous un départ sans toursFiges part de lui sans tour figé', () => {
+    const configuration = demo('petite');
+    const planDuDepart = departPetite();
+    const [proposition] = repartir(configuration, { graine: 2, arret: 700, nombre: 1, historique: 30 }, { plan: planDuDepart, toursFiges: [] });
+    const { graine, arret, historique } = proposition;
+    assert.deepStrictEqual(regenerer(configuration, { graine, arret, historique, depart: 3 }, { planDuDepart }), proposition.plan);
+    assert.notDeepStrictEqual(regenerer(configuration, { graine, arret, historique }), proposition.plan);
+  });
+
+  test('aucun mouvement dans un tour figé : proposerParmi tire son tour parmi les tirables, puis ses deux sièges', () => {
+    const instance = normaliser(demo('petite'));
+    const rng = creerPcg32(97, FLUX.RECHERCHE);
+    const etat = creerEtat(instance, rng);
+    const avant = Int32Array.from(etat.tableDe);
+    const tirables = [1, 3];
+    // Chaque appel de borne est noté : le premier d'un mouvement tire son
+    // tour dans la liste des tirables, les deux suivants ses sièges.
+    const appels = [];
+    const enveloppe = {
+      borne(n) {
+        const valeur = rng.borne(n);
+        appels.push([n, valeur]);
+        return valeur;
+      },
+    };
+    const tires = [0, 0, 0, 0];
+    const appliques = [0, 0, 0, 0];
+    for (let i = 0; i < 4_000; i += 1) {
+      appels.length = 0;
+      const mouvement = proposerParmi(etat, enveloppe, tirables);
+      const [[n, valeur], ...sieges] = appels;
+      assert.equal(n, tirables.length);
+      tires[tirables[valeur]] += 1;
+      assert.deepEqual(sieges.map(([m]) => m), [3 * 4, 3 * 4]);
+      if (mouvement !== null) {
+        assert.equal(mouvement.tour, tirables[valeur]);
+        appliques[mouvement.tour] += 1;
+      }
+    }
+    assert.equal(tires[0] + tires[2], 0);
+    assert.equal(appliques[0] + appliques[2], 0);
+    assert.ok(appliques[1] > 1_000 && appliques[3] > 1_000, `${appliques}`);
+    for (let p = 0; p < instance.N; p += 1) {
+      for (const r of [0, 2]) assert.equal(etat.tableDe[p * instance.R + r], avant[p * instance.R + r], `p ${p}, tour ${r + 1}`);
+    }
+  });
+
+  test('une dérivée du plan parfait de la petite démonstration rend ce plan : sans tour figé, et tour 1 figé', () => {
+    const configuration = demo('petite');
+    for (const toursFiges of [[], [1]]) {
+      const propositions = repartir(configuration, { graine: 6, arret: 3_000, nombre: 3, historique: 20 }, { plan: PLAN_PARFAIT_PETITE, toursFiges });
+      for (const { id, plan } of propositions) assert.deepStrictEqual(plan, PLAN_PARFAIT_PETITE, `figés ${toursFiges}, n° ${id}`);
+    }
+  });
+
+  test("une dérivée n'est jamais pire que son départ dans l'ordre de la recherche, et le dépasse souvent", () => {
+    let meilleures = 0;
+    let examinees = 0;
+    for (const [nom, configuration, plan] of [
+      ['petite', demo('petite'), departPetite()],
+      ['salle réservée', salleReservee(), departSalle()],
+    ]) {
+      const instance = normaliser(configuration);
+      const { ORDRE_DU_SCORE } = ordresDe(instance);
+      const auDepart = scoreDuPlan(instance, plan);
+      for (const toursFiges of [[], [2]]) {
+        for (const graine of [1, 2, 3]) {
+          for (const proposition of repartir(configuration, { graine, arret: 600, nombre: 2, historique: 30 }, { plan, toursFiges })) {
+            const signe = comparerDans(ORDRE_DU_SCORE, scoreDuPlan(instance, proposition.plan), auDepart);
+            assert.ok(signe <= 0, `${nom}, figés ${toursFiges}, graine ${graine}, n° ${proposition.id}`);
+            examinees += 1;
+            if (signe < 0) meilleures += 1;
+          }
+        }
+      }
+    }
+    assert.equal(examinees, 24);
+    assert.ok(meilleures >= 12, `${meilleures} meilleures`);
+  });
+
+  test("le remplissage ne dépend pas de l'ordre des listes du plan : places fantômes, ancrés et partiellement fixés compris", () => {
+    for (const [nom, configuration, plan] of [
+      ['petite', demo('petite'), departPetite()],
+      ['salle réservée', salleReservee(), departSalle()],
+    ]) {
+      const reglages = { graine: 14, arret: 900, nombre: 2, historique: 30 };
+      for (const toursFiges of [[], [3]]) {
+        assert.deepStrictEqual(
+          repartir(configuration, reglages, { plan: renverse(plan), toursFiges }),
+          repartir(configuration, reglages, { plan, toursFiges }),
+          `${nom}, figés ${toursFiges}`,
+        );
+      }
+    }
+  });
+
+  test('sous des places fantômes et des réservations, chaque plan tient les invariants, et chaque tour figé reste celui du départ', () => {
+    const configuration = salleReservee();
+    const instance = normaliser(configuration);
+    const plan = departSalle();
+    const propositions = repartir(configuration, { graine: 3, arret: 2_000, nombre: 3, historique: 20 }, { plan, toursFiges: [1, 3] });
+    for (const proposition of propositions) {
+      assert.deepEqual(verifierInvariants(instance, proposition.plan), [], `n° ${proposition.id}`);
+      assert.deepEqual(reservationsRompues(configuration, proposition.plan).rompues, []);
+      for (const releve of [...proposition.releves, proposition]) {
+        for (const r of [0, 2]) assert.deepEqual(releve.plan.tours[r], plan.tours[r], `n° ${proposition.id}, tour ${r + 1}`);
+      }
+    }
+  });
+
+  test("un tour non figé dont les sièges mobiles sont moins de deux ne bouge pas ; un tour figé d'une seule table mobile reste celui du départ", () => {
+    // Deux tables de 2 et une de 3, sept personnes, trois tours. Au tour 2,
+    // cinq personnes sont réservées : deux sièges restent mobiles, à la
+    // même table ; au tour 3, six le sont, un seul siège reste mobile.
+    const configuration = configurationDe({
+      appartenances: ['A', 'B', 'A', 'B', 'A', 'B', null],
+      tables: [
+        { id: 1, capacite: 2 },
+        { id: 2, capacite: 2 },
+        { id: 3, capacite: 3 },
+      ],
+      tours: 3,
+      reservations: [
+        auTour(1, 1, 2), auTour(2, 1, 2), auTour(3, 2, 2), auTour(4, 2, 2), auTour(5, 3, 2),
+        auTour(1, 2, 3), auTour(2, 3, 3), auTour(3, 1, 3), auTour(4, 3, 3), auTour(5, 1, 3), auTour(6, 2, 3),
+      ],
+    });
+    const instance = normaliser(configuration);
+    const plan = {
+      tables: [1, 2, 3],
+      tours: [
+        [[1, 2], [3, 4], [5, 6, 7]],
+        [[1, 2], [3, 4], [5, 6, 7]],
+        [[3, 5], [1, 6], [2, 4, 7]],
+      ],
+      reserves: [[], [], []],
+    };
+    for (const toursFiges of [[1], [3]]) {
+      for (const proposition of repartir(configuration, { graine: 5, arret: 300, nombre: 2, historique: 10 }, { plan, toursFiges })) {
+        assert.deepEqual(verifierInvariants(instance, proposition.plan), []);
+        assert.deepEqual(proposition.plan.tours.slice(1), plan.tours.slice(1), `figés ${toursFiges}`);
+      }
+    }
+  });
+
+  test('R = 1 : figer le seul tour est refusé, aucun tour figé est admis', () => {
+    const configuration = troisTablesDeDeux();
+    const plan = { tables: [1, 2, 3], tours: [[[1, 2], [3, 4], [5, 6]]], reserves: [[]] };
+    assert.throws(() => repartir(configuration, { graine: 1, arret: 10, nombre: 1 }, { plan, toursFiges: [1] }), {
+      name: 'RangeError',
+      reglage: 'toursFiges',
+    });
+    const [proposition] = repartir(configuration, { graine: 1, arret: 10, nombre: 1 }, { plan, toursFiges: [] });
+    assert.deepStrictEqual(proposition.plan, plan);
+    assert.equal(proposition.evalues, 0);
+  });
+
+  test('repartir ne modifie ni la configuration ni le départ ; un signal levé avant le départ fait lever ErreurAnnulee', () => {
+    const configuration = salleReservee();
+    const plan = departSalle();
+    const toursFiges = [2];
+    const copies = structuredClone({ configuration, plan, toursFiges });
+    repartir(configuration, { graine: 1, arret: 300, nombre: 2 }, { plan, toursFiges });
+    assert.deepStrictEqual({ configuration, plan, toursFiges }, copies);
+    assert.throws(
+      () => repartir(configuration, { graine: 1, arret: 300, nombre: 2 }, { plan, toursFiges }, { signal: { aborted: true } }),
+      ErreurAnnulee,
+    );
+  });
+});
+
+describe('repartir et regenerer : le contrôle du départ, avant tout calcul (§ 5.7, § 8.9, C12, C24)', () => {
+  const reglages = { graine: 1, arret: 1_000, nombre: 2 };
+  // Les trois points d'entrée, chacun sur le départ reçu ; progression note
+  // tout appel, qu'aucun refus ne doit précéder.
+  const entrees = (configuration, plan, toursFiges, appels) => [
+    ['repartir', () => repartir(configuration, reglages, { plan, toursFiges }, { progression: () => appels.push(1) })],
+    ['repartirUne', () => repartirUne(configuration, reglages, { plan, toursFiges }, 2, { progression: () => appels.push(1) })],
+    ['regenerer', () => regenerer(configuration, { graine: 5, arret: 1_000, historique: 30, depart: 1, toursFiges }, { planDuDepart: plan })],
+  ];
+
+  test('toursFiges désordonné, répété, hors de 1 à R, non entier, ou complet : RangeError qui nomme toursFiges', () => {
+    const configuration = demo('petite');
+    const plan = departPetite();
+    for (const toursFiges of [[2, 1], [1, 1], [0], [5], [1.5], ['1'], [1, 2, 3, 4], 2]) {
+      const appels = [];
+      for (const [nom, appel] of entrees(configuration, plan, toursFiges, appels)) {
+        assert.throws(appel, { name: 'RangeError', reglage: 'toursFiges' }, `${nom}, ${JSON.stringify(toursFiges)}`);
+      }
+      assert.deepEqual(appels, []);
+    }
+  });
+
+  test("regenerer : depart sans le plan du départ refuse, au lieu de rendre la proposition ordinaire ; toursFiges sans depart refuse", () => {
+    const configuration = demo('petite');
+    const [proposition] = rechercher(configuration, { graine: 4, arret: 300, nombre: 1 });
+    assert.throws(() => regenerer(configuration, { ...proposition, depart: 1 }), { name: 'RangeError', reglage: 'depart' });
+    assert.throws(() => regenerer(configuration, { ...proposition, depart: 1, toursFiges: [1] }, {}), { name: 'RangeError', reglage: 'depart' });
+    assert.throws(
+      () => regenerer(configuration, { ...proposition, toursFiges: [1] }, { planDuDepart: departPetite() }),
+      { name: 'RangeError', reglage: 'toursFiges' },
+    );
+    assert.throws(() => regenerer(configuration, { ...proposition, toursFiges: [] }), { name: 'RangeError', reglage: 'toursFiges' });
+    for (const depart of [0, 1.5, '1']) {
+      assert.throws(
+        () => regenerer(configuration, { ...proposition, depart }, { planDuDepart: departPetite() }),
+        { name: 'RangeError', reglage: 'depart' },
+        String(depart),
+      );
+    }
+    // Sans depart ni toursFiges, regenerer rend le plan de la proposition :
+    // le plan du départ reçu n'est pas lu.
+    assert.deepStrictEqual(regenerer(configuration, proposition, { planDuDepart: departPetite() }), proposition.plan);
+  });
+
+  // Les départs fautifs de salleReservee, chacun tiré de departSalle par une
+  // seule retouche, et le refus attendu.
+  const retouche = (modifier) => {
+    const plan = departSalle();
+    modifier(plan);
+    return plan;
+  };
+  const FAUTIFS = [
+    ['une personne en réserve', retouche((p) => { p.tours[0][2] = [3]; p.reserves[0] = [9]; }), { tour: 1, table: null, participant: 9 }],
+    ['une personne assise et en réserve', retouche((p) => { p.reserves[0] = [9]; }), { tour: 1, table: null, participant: 9 }],
+    ['une personne absente', retouche((p) => { p.tours[2][0] = [2, 5, 9]; }), { tour: 3, table: null, participant: 7 }],
+    ['une personne étrangère', retouche((p) => { p.tours[1][2] = [5, 6, 42]; }), { tour: 2, table: 30, participant: 42 }],
+    ['une personne assise deux fois', retouche((p) => { p.tours[0][1] = [1, 7, 9]; }), { tour: 1, table: 30, participant: 9 }],
+    ['une table inconnue', retouche((p) => { p.tables = [10, 20, 99]; }), { tour: 1, table: 99, participant: null }],
+    ['une table qui déborde', retouche((p) => { p.tours[1][1] = [1, 4, 6, 9]; p.tours[1][2] = [5, 8]; }), { tour: 2, table: 20, participant: null }],
+    [
+      'une personne fixée assise ailleurs, sa table réservée ayant de la place',
+      retouche((p) => { p.tours[1][0] = [3, 7, 8]; p.tours[1][2] = [2, 5, 6]; }),
+      { tour: 2, table: 10, participant: 2 },
+    ],
+    [
+      'un ancré assis ailleurs à un seul tour',
+      retouche((p) => { p.tours[2][1] = [4, 6, 8]; p.tours[2][2] = [1, 3]; }),
+      { tour: 3, table: 20, participant: 1 },
+    ],
+  ];
+
+  for (const [nom, plan, details] of FAUTIFS) {
+    test(`DEPART_INCOMPATIBLE, ${nom} : refusé par repartir, repartirUne et regenerer, dans un tour figé comme non figé`, () => {
+      const configuration = salleReservee();
+      for (const toursFiges of [[], [details.tour], [details.tour === 1 ? 2 : 1]]) {
+        const appels = [];
+        for (const [entree, appel] of entrees(configuration, plan, toursFiges, appels)) {
+          assert.throws(appel, { name: 'ErreurConfiguration', code: 'DEPART_INCOMPATIBLE', details }, `${entree}, figés ${toursFiges}`);
+        }
+        assert.deepEqual(appels, []);
+      }
+    });
+  }
+
+  test('le départ valide de ces épreuves est admis par les trois points d\'entrée', () => {
+    const appels = [];
+    const rendus = entrees(salleReservee(), departSalle(), [2], appels).map(([, appel]) => appel());
+    assert.equal(appels.length, 3);
+    assert.deepEqual(rendus.map((rendu) => Array.isArray(rendu) ? rendu.length : Object.keys(rendu).length), [2, 8, 3]);
   });
 });

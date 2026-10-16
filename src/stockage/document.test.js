@@ -1924,3 +1924,72 @@ describe('configurationDepuisCharge : l’ordre des priorités (contrat de donn�
     assert.equal(charge.reglages.priorites[0][0].poids, 1);
   });
 });
+
+describe('la dérivation : deux champs facultatifs de la proposition, hors de son identité (§ 8.9, C11, D74, D78)', () => {
+  const PROPOSITION = regleDuChamp(CHARGE_SCHEMA, 'propositions').element;
+  const RETENU = regleDuChamp(CHARGE_SCHEMA, 'retenu');
+  const cles = (regle) => regle.champs.map(([cle]) => cle);
+
+  // Le document valide, sa proposition 1 suivie d'une proposition 2 dérivée
+  // de la 1 ; derivation porte ses champs.
+  function avecDerivee(derivation, format = FORMAT) {
+    const copie = documentValide();
+    copie.entete.format = format;
+    copie.entete.comptes.propositions = 2;
+    copie.charge.prochainsIds.proposition = 3;
+    const [p1] = copie.charge.propositions;
+    const p2 = { id: 2, graine: 8, arret: p1.arret, historique: p1.historique, ...derivation };
+    for (const [cle, valeur] of Object.entries(p1)) if (!Object.hasOwn(p2, cle)) p2[cle] = structuredClone(valeur);
+    copie.charge.propositions.push(p2);
+    return copie;
+  }
+
+  test('le schéma de la proposition porte depart puis toursFiges, facultatifs, juste après historique ; l’identité, le retenu, l’entrée du compagnon et le format ne changent pas', () => {
+    assert.deepEqual(cles(PROPOSITION), [
+      'id', 'graine', 'arret', 'historique', 'depart', 'toursFiges', 'produitVersion', 'siegesAttribues',
+      'tables', 'capacites', 'tours', 'participants', 'placement', 'horodatage',
+    ]);
+    assert.deepEqual(PROPOSITION.champs.slice(3, 7).map(([cle, regle]) => [cle, regle.optionnel]), [
+      ['historique', false], ['depart', true], ['toursFiges', true], ['produitVersion', false],
+    ]);
+    assert.deepEqual(cles(ENTREE_DE_COURSE), ['id', 'graine', 'arret', 'historique', 'horodatage', 'empreinte', 'course']);
+    assert.deepEqual(cles(RETENU), [
+      'proposition', 'siegesAttribues', 'tables', 'capacites', 'tours', 'participants', 'placement', 'horodatage',
+    ]);
+    assert.equal(FORMAT, 2);
+  });
+
+  test('la règle de toursFiges : une liste d’entiers ≥ 1, strictement croissante, d’au moins un élément ; depart, un identifiant', () => {
+    const regleDeToursFiges = regleDuChamp(PROPOSITION, 'toursFiges');
+    const regleDeDepart = regleDuChamp(PROPOSITION, 'depart');
+    for (const valeur of [[1], [1, 2], [2, 4, 9]]) assert.equal(premiereFaute(valeur, regleDeToursFiges, 't'), null, JSON.stringify(valeur));
+    const fautives = [
+      [[], 't'], [[2, 1], 't'], [[1, 1], 't'], [[1, 3, 2], 't'], [[0], 't[0]'], [[1, 2.5], 't[1]'], [['1'], 't[0]'],
+      [[1, null], 't[1]'], [3, 't'], [null, 't'], [{}, 't'],
+    ];
+    for (const [valeur, chemin] of fautives) assert.equal(premiereFaute(valeur, regleDeToursFiges, 't'), chemin, JSON.stringify(valeur));
+    assert.equal(premiereFaute(undefined, regleDeToursFiges, 't'), null);
+    for (const valeur of [0, -1, 1.5, '2', null, 2 ** 31]) assert.equal(premiereFaute(valeur, regleDeDepart, 'd'), 'd', JSON.stringify(valeur));
+    assert.equal(premiereFaute(1, regleDeDepart, 'd'), null);
+  });
+
+  test('une dérivée se lit telle qu’écrite, avec et sans tours figés, au format courant comme au format 1 ; sa faute de dérivation ne refuse pas le fichier', () => {
+    for (const format of [FORMAT, 1]) {
+      for (const derivation of [{ depart: 1 }, { depart: 1, toursFiges: [2] }, { depart: 2 }, { toursFiges: [1, 2] }]) {
+        const document = avecDerivee(derivation, format);
+        const lu = analyser(JSON.stringify(document));
+        assert.deepEqual(lu.charge, document.charge, JSON.stringify([format, derivation]));
+      }
+    }
+  });
+
+  test('un fichier d’un format plus récent garde depart et toursFiges, réduits aux clés connues', () => {
+    const document = avecDerivee({ depart: 1, toursFiges: [1] }, FORMAT + 1);
+    document.charge.propositions[1].autreCle = 4;
+    const lu = analyser(JSON.stringify(document));
+    assert.equal(lu.formatPlusRecent, true);
+    const [, p2] = lu.charge.propositions;
+    assert.deepEqual([p2.depart, p2.toursFiges, Object.hasOwn(p2, 'autreCle')], [1, [1], false]);
+    assert.deepEqual(Object.keys(p2).slice(0, 7), ['id', 'graine', 'arret', 'historique', 'depart', 'toursFiges', 'produitVersion']);
+  });
+});

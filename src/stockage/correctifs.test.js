@@ -2109,3 +2109,130 @@ describe('les étiquettes, les objectifs et les réglages du format 2 dans un co
     }
   });
 });
+
+describe('la dérivation : depart et toursFiges dans un correctif (§ 8.6, § 8.9, C11, C13, D74)', () => {
+  const DEPART = ['propositions', { id: 2 }, 'depart'];
+  const TOURS_FIGES = ['propositions', { id: 2 }, 'toursFiges'];
+
+  // La petite démonstration et sa proposition 1, suivies d'une proposition
+  // 2 au plan de la 1 décalé d'un tour, dérivée de la 1 selon derivation ;
+  // null : aucune proposition 2.
+  function avecDerivee(derivation) {
+    const charge = petite();
+    charge.prochainsIds.proposition = 3;
+    if (derivation === null) return charge;
+    const [p1] = charge.propositions;
+    const p2 = { ...copie(p1), id: 2, graine: p1.graine + 1, ...derivation };
+    p2.placement = [...p2.placement.slice(1), p2.placement[0]];
+    charge.propositions.push(p2);
+    return charge;
+  }
+
+  test('un correctif pose, change et retire chaque champ, pose toursFiges entier, et rien quand rien ne change', () => {
+    const cas = [
+      ['tours figés ajoutés', avecDerivee({ depart: 1 }), avecDerivee({ depart: 1, toursFiges: [2] }), [{ op: 'poser', chemin: TOURS_FIGES, valeur: [2] }]],
+      ['un tour figé de plus', avecDerivee({ depart: 1, toursFiges: [2] }), avecDerivee({ depart: 1, toursFiges: [2, 3] }), [{ op: 'poser', chemin: TOURS_FIGES, valeur: [2, 3] }]],
+      ['un tour figé changé', avecDerivee({ depart: 1, toursFiges: [2, 3] }), avecDerivee({ depart: 1, toursFiges: [1, 3] }), [{ op: 'poser', chemin: TOURS_FIGES, valeur: [1, 3] }]],
+      ['tours figés retirés', avecDerivee({ depart: 1, toursFiges: [1, 3] }), avecDerivee({ depart: 1 }), [{ op: 'retirer', chemin: TOURS_FIGES }]],
+      ['départ posé sur une ordinaire', avecDerivee({}), avecDerivee({ depart: 1 }), [{ op: 'poser', chemin: DEPART, valeur: 1 }]],
+      ['dérivation retirée', avecDerivee({ depart: 1, toursFiges: [4] }), avecDerivee({}), [{ op: 'retirer', chemin: DEPART }, { op: 'retirer', chemin: TOURS_FIGES }]],
+      ['inchangée', avecDerivee({ depart: 1, toursFiges: [4] }), avecDerivee({ depart: 1, toursFiges: [4] }), []],
+    ];
+    assert.equal(cas.length, 7);
+    for (const [libelle, a, b, attendu] of cas) {
+      const correctif = difference(a, b);
+      assert.deepEqual(correctif, attendu, libelle);
+      const rendue = appliquer(a, JSON.parse(JSON.stringify(correctif)));
+      assert.deepEqual(rendue, canoniser(b), libelle);
+      assert.equal(serialiser(rendue, ENTETE), serialiser(b, ENTETE), libelle);
+    }
+  });
+
+  test('une dérivée ajoutée, effacée puis rendue fait l’aller-retour avec ses deux champs ; de part et d’autre d’un retour, une ordinaire et une dérivée de même identifiant se remplacent', () => {
+    const ordinaire = avecDerivee({});
+    const autre = avecDerivee({ depart: 1, toursFiges: [3] });
+    autre.propositions[1].placement = copie(ordinaire.propositions[0].placement);
+    const paires = [
+      [avecDerivee(null), avecDerivee({ depart: 1, toursFiges: [2] })],
+      [avecDerivee({ depart: 1, toursFiges: [2] }), avecDerivee(null)],
+      [avecDerivee(null), avecDerivee({ depart: 1 })],
+      [ordinaire, autre],
+      [autre, ordinaire],
+    ];
+    for (const [a, b] of paires) {
+      const correctif = JSON.parse(JSON.stringify(difference(a, b)));
+      const rendue = appliquer(a, correctif);
+      assert.deepEqual(rendue, canoniser(b));
+      assert.equal(serialiser(rendue, ENTETE), serialiser(b, ENTETE));
+      assert.deepEqual(examiner(rendue).fautives, []);
+    }
+    const ajout = difference(avecDerivee(null), avecDerivee({ depart: 1, toursFiges: [2] }));
+    assert.equal(ajout.length, 1);
+    assert.deepEqual([ajout[0].valeur.depart, ajout[0].valeur.toursFiges], [1, [2]]);
+    assert.deepEqual(Object.keys(ajout[0].valeur).slice(3, 7), ['historique', 'depart', 'toursFiges', 'produitVersion']);
+  });
+
+  test('un champ de dérivation hors de sa forme, une pose sous toursFiges, ou leur retrait quand ils manquent, lèvent CORRECTIF', () => {
+    const cas = [
+      ['toursFiges vide', avecDerivee({ depart: 1 }), { op: 'poser', chemin: TOURS_FIGES, valeur: [] }],
+      ['toursFiges désordonnés', avecDerivee({ depart: 1 }), { op: 'poser', chemin: TOURS_FIGES, valeur: [3, 1] }],
+      ['toursFiges répétés', avecDerivee({ depart: 1 }), { op: 'poser', chemin: TOURS_FIGES, valeur: [1, 1] }],
+      ['toursFiges non entiers', avecDerivee({ depart: 1 }), { op: 'poser', chemin: TOURS_FIGES, valeur: [1.5] }],
+      ['une pose sous toursFiges', avecDerivee({ depart: 1, toursFiges: [1, 2] }), { op: 'poser', chemin: [...TOURS_FIGES, 1], valeur: 3 }],
+      ['départ nul', avecDerivee({}), { op: 'poser', chemin: DEPART, valeur: 0 }],
+      ['départ texte', avecDerivee({}), { op: 'poser', chemin: DEPART, valeur: '1' }],
+      ['retrait d’un départ absent', avecDerivee({}), { op: 'retirer', chemin: DEPART }],
+      ['retrait de tours figés absents', avecDerivee({ depart: 1 }), { op: 'retirer', chemin: TOURS_FIGES }],
+      ['un départ sur le retenu', (() => {
+        const charge = avecDerivee({});
+        charge.evenement.etat = 'retenu';
+        charge.retenu = retenuDe(charge.propositions[0]);
+        return charge;
+      })(), { op: 'poser', chemin: ['retenu', 'depart'], valeur: 1 }],
+    ];
+    assert.equal(cas.length, 10);
+    for (const [libelle, charge, operation] of cas) {
+      assert.deepEqual(refusDe(charge, [operation]), { rang: 0 }, libelle);
+    }
+  });
+
+  test('reconstruire redonne chaque charge du journal, par un instantané et par des correctifs : une dérivée posée, ses tours figés changés, effacée, rendue, puis remplacée par une ordinaire de même identifiant', () => {
+    const H = '2031-05-17T20:15:00-04:00';
+    const charges = [
+      avecDerivee(null),
+      avecDerivee({ depart: 1, toursFiges: [2] }),
+      avecDerivee({ depart: 1 }),
+      avecDerivee(null),
+      avecDerivee({ depart: 1, toursFiges: [1, 2, 3] }),
+      avecDerivee({}),
+    ];
+    // Le journal qui part de la charge sans dérivée, puis celui qui part de
+    // la dérivée, écrite dans l'instantané de sa première entrée ; les
+    // suivantes sont des correctifs.
+    for (const debut of [0, 1]) {
+      const suite = charges.slice(debut);
+      const lignes = [ligneOuverture('demo-petite')];
+      suite.forEach((apres, rang) => {
+        lignes.push(ligneEntree({
+          revision: rang + 1,
+          libelle: `Geste ${rang + 1}`,
+          horodatage: H,
+          produitVersion: rang === 0 ? VERSION.affichee : null,
+          avant: rang === 0 ? undefined : suite[rang - 1],
+          apres,
+          instantane: rang === 0,
+        }));
+      });
+      // Trois entrées nomment le départ dans l'un et l'autre : la pose de la
+      // dérivée, ou son instantané, sa pose après l'effacement, et le
+      // retrait de son départ.
+      assert.equal(lignes.slice(1).filter((ligne) => ligne.includes('"depart"')).length, 3, `début ${debut}`);
+      if (debut === 1) assert.ok(lignes[1].includes('"depart":1,"toursFiges":[2]'), lignes[1]);
+      const journal = lireJournal(`${lignes.join('\n')}\n`);
+      assert.equal(journal.entrees.length, suite.length);
+      suite.forEach((charge, rang) => {
+        assert.deepEqual(reconstruire(journal, rang + 1), canoniser(charge), `révision ${rang + 1}, début ${debut}`);
+      });
+    }
+  });
+});

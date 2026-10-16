@@ -50,6 +50,12 @@
   // zone que ce dont elle dépasse la tête, quel que soit le nombre des
   // avertissements, et le support rompu, en tête de la zone, garde ses
   // issues en vue (SurfaceEvenement.svelte).
+  //
+  // À chaque charge, l'état de navigation oublie le départ et le second
+  // placement qui ont quitté la liste (oublierAbsents, etat_ui.js ; § 5.7,
+  // § 12) : un effacement les retire, et le retour qui rend la proposition
+  // ne les rend pas. L'oubli se fait avant le rendu des sections, qui ne
+  // lisent jamais un départ absent.
   import { getContext } from 'svelte';
   import SectionBadges from '../badges/SectionBadges.svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
@@ -96,6 +102,12 @@
   // La zone des annonces n'existe que lorsqu'elle a quelque chose à dire :
   // sans annonce, aucune hauteur ni aucun trait ne lui est gardé.
   const annoncer = $derived($seance.supportRompu !== null || avertissementsOrdonnes($seance).length > 0);
+
+  $effect.pre(() => {
+    const charge = $seance.charge;
+    if (charge === null) return;
+    ui.oublierAbsents({ propositions: charge.propositions.map(({ id }) => id), retenu: charge.retenu !== null });
+  });
 </script>
 
 {#snippet outils()}

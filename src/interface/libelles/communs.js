@@ -44,6 +44,10 @@ export const TABLE = new Map([
   ['communs.remede.debloquer', meme('communs.commande.debloquer')],
   ['communs.remede.reprendreVerrou', 'Reprendre le verrou'],
   ['communs.remede.afficherTour', ({ tour }) => `Afficher le tour ${tour}`],
+  // Les remèdes d'un départ refusé (§ 5.7) : le retirer, ou décocher le tour
+  // figé que le refus nomme.
+  ['communs.remede.repartirDeZero', 'Repartir de zéro'],
+  ['communs.remede.libererTour', ({ tour }) => `Ne plus figer le tour ${tour}`],
   ['communs.remede.choisirPlace', 'Choisir une place'],
   ['communs.remede.enregistrerSous', 'Enregistrer sous\u{2026}'],
   ['communs.remede.choisirPapier', 'Choisir le papier'],

@@ -331,6 +331,22 @@ export const CONSTANTES = Object.freeze(
         "gauche d'une vue à barres — jamais un nom de démonstration ; arrondie au pixel supérieur, adoptée à " +
         'la main dans ce registre',
     },
+    {
+      nom: 'VALEURS_MANQUE_COURBE',
+      valeur: 3,
+      unite: 'valeurs',
+      mesure:
+        'nombre de valeurs distinctes de manque, sur les deux profils comparés réunis, sous lequel la vue de ' +
+        'comparaison écrit les effectifs en une phrase au lieu de tracer',
+      raison: "règle de forme du § 12.6 : une ou deux valeurs se disent mieux qu'elles ne se tracent",
+      configuration: 'vue de comparaison de la page de qualité, une soirée détendue et une soirée serrée',
+      proprietaire: 'manuel',
+      statut: 'defautDeTravail',
+      protocole:
+        "règle de forme, non une mesure : le banc ne la relève pas. Une personne qui n'a pas écrit le logiciel " +
+        'lit la vue de comparaison sur une soirée détendue et sur une soirée serrée ; le plus petit nombre de ' +
+        'valeurs dont le tracé dit plus que la phrase, écrit dans ce registre',
+    },
   ].map((entree) => Object.freeze(entree)),
 );
 

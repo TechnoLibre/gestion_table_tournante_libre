@@ -59,6 +59,8 @@ const PROCESSUS = { pool: SERIES.pool, maxWorkers: SERIES.maxWorkers };
 // est : elle lit ces motifs pour les fichiers que scripts/documentation.js
 // lit par le disque. La garde de la contrainte 35 (src/moteur/criteres.test.js)
 // lit chaque composant à la recherche d'une liste littérale de critères.
+// L'état de navigation (src/interface/etat_ui.test.js) lit le gabarit de
+// chaque vue que la page de qualité se laisse demander.
 const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/arborescence.test.js',
   'test/sources_interface.test.js',
@@ -75,6 +77,7 @@ const RELANCES_D_UN_COMPOSANT = Object.freeze([
   'test/documentation.test.js',
   'src/stockage/etiquettes.test.js',
   'src/moteur/criteres.test.js',
+  'src/interface/etat_ui.test.js',
 ]);
 
 // Les épreuves node qui lisent la feuille des jetons par le système de
@@ -119,6 +122,7 @@ export default defineConfig({
       reporter: [['text', { skipFull: false }], 'html'],
       reportsDirectory: 'coverage',
       thresholds: {
+        'src/application/depart.js': { branches: 100 },
         'src/geometrie/graphique.js': { branches: 100 },
         'src/moteur/correspondance.js': { branches: 100 },
         'src/moteur/criteres.js': { branches: 100 },

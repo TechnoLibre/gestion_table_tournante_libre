@@ -1218,3 +1218,95 @@ describe('le format plus récent (§ 8.8)', () => {
     expect(m.trace.length).toBe(avant);
   });
 });
+
+describe('le départ et le second placement suivent la liste (§ 5.7, § 8.4, § 12, C6, C9, C14)', () => {
+  const tenus = (m) => [m.ui.etat().depart, m.ui.etat().comparee];
+  const identifiants = (m) => m.seance.etat().charge.propositions.map(({ id }) => id);
+
+  test('un effacement, puis un retour d’avant la génération, retirent le départ et le second placement ; le retour qui rend les propositions ne les rend pas ; un départ présent reste, même en dérive', async () => {
+    const m = await neuf();
+    await garnir(m);
+    const avantGeneration = m.seance.etat().evenement.revision;
+    await generer(m, { retenir: false });
+    const [premiere, seconde] = identifiants(m);
+    m.ui.choisirDepart(premiere);
+    m.ui.reglerToursFiges([1]);
+    m.ui.comparerA(seconde);
+    // Une personne de plus met les deux propositions en dérive : elles
+    // restent dans la liste, et le départ avec elles.
+    await m.seance.executer('ajouterParticipant', { champs: { nom: 'Quenouille' } });
+    flushSync();
+    expect(tenus(m)).toEqual([{ id: premiere, toursFiges: [1] }, seconde]);
+    const revision = m.seance.etat().evenement.revision;
+    await m.seance.executer('effacerPropositions', {});
+    await attendre(() => expect(tenus(m)).toEqual([null, null]));
+    await m.seance.revenir(revision);
+    await attendre(() => expect(identifiants(m)).toEqual([premiere, seconde]));
+    expect(tenus(m)).toEqual([null, null]);
+    // Le retour à l'instant d'avant la génération vide la liste : le départ
+    // et le second placement la quittent avec elle, et le retour qui la rend
+    // ne les rend pas.
+    m.ui.choisirDepart(premiere);
+    m.ui.comparerA(seconde);
+    flushSync();
+    expect(tenus(m)).toEqual([{ id: premiere, toursFiges: [] }, seconde]);
+    await m.seance.revenir(avantGeneration);
+    await attendre(() => expect(identifiants(m)).toEqual([]));
+    expect(tenus(m)).toEqual([null, null]);
+    await m.seance.revenir(revision);
+    await attendre(() => expect(identifiants(m)).toEqual([premiere, seconde]));
+    expect(tenus(m)).toEqual([null, null]);
+  });
+
+  test('le second placement « retenu » se retire quand le retenu part, par un retour ; un départ présent reste', async () => {
+    const m = await neuf();
+    await garnir(m);
+    await generer(m, { retenir: false });
+    const [premiere, seconde] = identifiants(m);
+    const revision = m.seance.etat().evenement.revision;
+    await m.seance.executer('retenirProposition', { id: premiere });
+    flushSync();
+    m.ui.choisirDepart(seconde);
+    m.ui.comparerA('retenu');
+    flushSync();
+    expect(tenus(m)).toEqual([{ id: seconde, toursFiges: [] }, 'retenu']);
+    await m.seance.revenir(revision);
+    await attendre(() => expect(m.seance.etat().charge.retenu).toBeNull());
+    expect(tenus(m)).toEqual([{ id: seconde, toursFiges: [] }, null]);
+  });
+
+  test('choisir, régler et retirer un départ, poser et retirer le second placement : en lecture puis sur un plan bloqué, aucun refus, rien d’écrit, aucune entrée au journal', async () => {
+    const m = await neuf();
+    await garnir(m);
+    await generer(m);
+    const [premiere, seconde] = identifiants(m);
+    fixe(m, 'lecture').click();
+    await attendre(() => expect(m.seance.etat().mode).toBe('lecture'));
+    for (const etape of ['lecture', 'bloque']) {
+      if (etape === 'bloque') {
+        await m.seance.passerEnEcriture();
+        flushSync();
+        boutonEtat(m, 'bloque').click();
+        await attendre(() => expect([m.seance.etat().mode, m.seance.etat().evenement.etat]).toEqual(['lecture', 'bloque']));
+      }
+      await viderFile(m);
+      const avant = m.trace.length;
+      const { entrees } = journalDe(m);
+      m.ui.choisirDepart(premiere);
+      m.ui.reglerToursFiges([2]);
+      m.ui.comparerA(seconde);
+      m.ui.demanderVueQualite('comparaison');
+      flushSync();
+      expect([...tenus(m), m.ui.etat().vueQualite], etape).toEqual([{ id: premiere, toursFiges: [2] }, seconde, 'comparaison']);
+      m.ui.comparerA('retenu');
+      m.ui.vueQualiteAtteinte();
+      m.ui.retirerDepart();
+      m.ui.comparerA(null);
+      await viderFile(m);
+      expect(tenus(m), etape).toEqual([null, null]);
+      expect(tous(m, '[data-refus]'), etape).toEqual([]);
+      expect(m.trace.length, etape).toBe(avant);
+      expect(journalDe(m).entrees.length, etape).toBe(entrees.length);
+    }
+  });
+});

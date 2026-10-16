@@ -222,6 +222,19 @@
  * @property {number} graine          graine dérivée, 0 ≤ g < 2^32
  * @property {number} arret           compte d'arrêt, ≥ 1
  * @property {number} historique      longueur de l'historique d'acceptation, ≥ 1
+ * @property {number} [depart]        facultatif, présent sur une dérivée
+ *                                    seulement (§ 5.7) : l'identifiant de la
+ *                                    proposition d'où sa recherche est
+ *                                    partie, strictement inférieur à id ;
+ *                                    absent de la liste, il n'est pas une
+ *                                    faute. Hors de l'identité que partage
+ *                                    l'entrée du compagnon des courses
+ * @property {number[]} [toursFiges]  facultatif, présent sur une dérivée
+ *                                    qui a figé des tours seulement : les
+ *                                    numéros des tours repris de son départ,
+ *                                    de 1 à tours, strictement croissants,
+ *                                    au moins un, jamais tous ; jamais sans
+ *                                    depart
  * @property {string} produitVersion  construction qui l'a produite
  * @property {boolean} siegesAttribues   l'ordre dans une table est un numéro
  *                                    de siège ; faux : chaque liste de table
@@ -294,6 +307,10 @@
  * @property {number} [max]
  * @property {boolean} [distincts]           liste : aucun élément répété ;
  *           un correctif la pose entière (correctifs.js)
+ * @property {boolean} [croissante]          liste : chaque élément dépasse
+ *           le précédent, un ordre que la forme contrôle après les
+ *           éléments, nommé par le chemin de la liste, et que l'écriture
+ *           garde sans trier ; un correctif la pose entière (correctifs.js)
  * @property {string[]} [valeurs]            parmi
  * @property {'lignes'|'ouverte'} [mise]     absente : la valeur s'écrit
  *           compacte. lignes : un champ, ou un élément, par ligne. ouverte :
@@ -526,6 +543,17 @@
  *                        participant}     déclaré
  *   MANQUANT            {tour,            un identifiant déclaré sans être
  *                        participant}     écrit
+ *   DERIVATION          {chemin, raison}  la dérivation d'une proposition de
+ *                                         forme conforme contredit son
+ *                                         identifiant ou ses tours déclarés :
+ *                                         departNonAnterieur (depart ≥ id,
+ *                                         chemin depart), tourHorsSoiree (un
+ *                                         tour figé au-delà de tours, chemin
+ *                                         toursFiges[i]), tousLesTours,
+ *                                         sansDepart (chemin toursFiges) ;
+ *                                         rendue seule, avant la déclaration.
+ *                                         Un depart absent de la liste n'en
+ *                                         est pas une
  *   IDENTIFIANT_REPETE  {}                une proposition cohérente porte
  *                                         l'identifiant d'une proposition
  *                                         gardée avant elle dans la liste ;

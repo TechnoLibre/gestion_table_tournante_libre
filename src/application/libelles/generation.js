@@ -44,6 +44,10 @@ function phraseEstimation(estimation, texte) {
   );
 }
 
+// Une table par son numéro quand les détails le portent, sinon par son
+// identifiant.
+const laTable = (table, numero) => (numero === null ? `table d'identifiant ${table}` : `table ${numero}`);
+
 export const TABLE = new Map([
   // --- Les refus des propositions (§ 5.7) ------------------------------------
   ['PROPOSITION_INCONNUE', ({ id }) => `La proposition n° ${id} n'est pas dans cet événement.`],
@@ -70,6 +74,54 @@ export const TABLE = new Map([
       `Gardé ${n <= 1 ? 'la meilleure proposition' : `les ${n} meilleures propositions`}, ` +
       `effacé ${compte(effacees, 'proposition', 'propositions')}` +
       `${gardee === null || gardee === undefined ? '' : `, gardé aussi la retenue (n° ${gardee})`}`,
+  ],
+
+  // --- Le départ d'une génération dérivée (§ 5.7) -----------------------------
+  // Les refus que le lancement pose avant tout calcul (application/depart.js).
+  // depart : l'identifiant choisi ; une valeur qui n'est pas un identifiant
+  // de proposition ne se nomme pas par un numéro.
+  [
+    'DEPART_ABSENT',
+    ({ depart }) =>
+      Number.isInteger(depart)
+        ? `La proposition n° ${depart} n'est plus dans la liste : elle ne peut pas servir de départ.`
+        : "Seule une proposition de la liste sert de départ, et ce placement n'en est pas une.",
+  ],
+  // statut 'derive' : chaque raison de dérive par son texte ; 'fautif' : les
+  // fautes ne se détaillent pas, comme pour toute proposition qui se
+  // contredit.
+  [
+    'DEPART_NON_COMPARABLE',
+    ({ depart, statut, raisons }, texte) =>
+      statut === 'fautif'
+        ? `La proposition n° ${depart} se contredit : elle ne peut pas servir de départ.`
+        : `La proposition n° ${depart} ne décrit plus la soirée : les participants ou le mobilier ont changé depuis elle, ` +
+          'et elle ne peut plus servir de départ.' +
+          raisons.map((raison) => ` ${phraseDeRaison(raison.code, raison, texte)}`).join(''),
+  ],
+  ['TOUR_FIGE_HORS_SOIREE', ({ tour, tours }) => `Le tour ${tour} est figé, mais la soirée compte ${compte(tours, 'tour', 'tours')} : ce tour n'existe pas.`],
+  [
+    'TOURS_FIGES_TOUS',
+    ({ tours }) =>
+      tours <= 1
+        ? 'Le seul tour de la soirée est figé : il ne reste rien à refaire.'
+        : `Les ${tours} tours sont tous figés : il ne reste rien à refaire. Décocher au moins un tour.`,
+  ],
+  // personne et numero nomment la personne et la table quand les détails les
+  // portent ; sinon leurs identifiants.
+  [
+    'DEPART_RESERVATION_NON_TENUE',
+    ({ depart, participant, table, tour, personne = null, numero = null }) =>
+      `La proposition n° ${depart} n'assied pas ${personne ?? `la personne n° ${participant}`} ` +
+      `à la ${laTable(table, numero)} au tour ${tour}, où une réservation la fixe : elle ne peut plus servir de départ.`,
+  ],
+  // Le remède offert décoche le tour ; le texte nomme aussi l'autre issue.
+  [
+    'DEPART_SIEGE_NON_TENU',
+    ({ depart, participant, table, siege, tour, personne = null, numero = null }) =>
+      `La proposition n° ${depart} n'assied pas ${personne ?? `la personne n° ${participant}`} ` +
+      `au siège ${siege} de la ${laTable(table, numero)} au tour ${tour}, où une réservation la fixe : ` +
+      `un tour figé garde les sièges du départ. Ne plus figer ce tour, ou ${cite('Repartir de zéro')}.`,
   ],
 
   // --- Le contrôleur de génération (§ 5.9, § 5.10, § 15.4) -------------------

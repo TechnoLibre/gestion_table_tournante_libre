@@ -216,7 +216,7 @@ const ENTREES = [
   [
     'data-vue-qualite',
     'qualité : le <div> qui enveloppe la carte d’une vue',
-    ['entete', 'profil', 'collisions', 'tables', 'paires', 'objectifs', 'animateurs', 'diversite', 'performance'],
+    ['entete', 'profil', 'comparaison', 'collisions', 'tables', 'paires', 'objectifs', 'animateurs', 'diversite', 'performance'],
   ],
 ];
 

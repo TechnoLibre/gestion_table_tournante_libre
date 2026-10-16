@@ -188,7 +188,7 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
   test('chaque geste du contrat, chaque variante comprise, a son libellé', () => {
     assert.deepEqual([...GESTES], [
       'modifier', 'debloquer', 'afficherTour', 'ouvrirSection', 'choisirPlace', 'ouvrirSecours', 'ecrireAilleurs',
-      'enregistrerSous', 'choisirPapier',
+      'enregistrerSous', 'choisirPapier', 'repartirDeZero', 'libererTour',
     ]);
     assert.deepEqual([...SOURCES_SECOURS], ['precedent', 'journal']);
     assert.deepEqual([...SECTIONS_REMEDE], ['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions']);
@@ -203,8 +203,10 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
       { geste: 'ecrireAilleurs', racine: null },
       { geste: 'enregistrerSous' },
       { geste: 'choisirPapier' },
+      { geste: 'repartirDeZero' },
+      { geste: 'libererTour', tour: 3 },
     ];
-    assert.equal(remedes.length, 17);
+    assert.equal(remedes.length, 19);
     const textes = remedes.map((remede) => {
       const { cle, details } = libelleRemede(remede);
       return t(cle, details);
@@ -219,6 +221,13 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
     assert.deepEqual(libelleRemede({ geste: 'choisirPapier' }), { cle: 'communs.remede.choisirPapier', details: {} });
     assert.equal(t('communs.remede.enregistrerSous'), 'Enregistrer sous\u{2026}');
     assert.equal(t('communs.remede.choisirPapier'), 'Choisir le papier');
+  });
+
+  test('les remèdes du départ : repartirDeZero sans détail, libererTour porte son tour comme afficherTour', () => {
+    assert.deepEqual(libelleRemede({ geste: 'repartirDeZero' }), { cle: 'communs.remede.repartirDeZero', details: {} });
+    assert.deepEqual(libelleRemede({ geste: 'libererTour', tour: 2 }), { cle: 'communs.remede.libererTour', details: { tour: 2 } });
+    assert.equal(t('communs.remede.repartirDeZero'), 'Repartir de zéro');
+    assert.equal(t('communs.remede.libererTour', { tour: 2 }), 'Ne plus figer le tour 2');
   });
 
   test('reprendreVerrou, offert à côté de VERROU_PRIS, a sa clé', () => {
@@ -239,6 +248,8 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
       libelleRemede({ geste: 'ecrireAilleurs', racine: null }).cle,
       libelleRemede({ geste: 'enregistrerSous' }).cle,
       libelleRemede({ geste: 'choisirPapier' }).cle,
+      libelleRemede({ geste: 'repartirDeZero' }).cle,
+      libelleRemede({ geste: 'libererTour', tour: 1 }).cle,
     ]);
     const posees = [...COMMUNS.keys()].filter((cle) => cle.startsWith('communs.remede.'));
     assert.ok(posees.length > 0);

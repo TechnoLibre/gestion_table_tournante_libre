@@ -7,10 +7,16 @@
 // attente, les listes de noms, le plein écran, la place sélectionnée, la
 // fiche ouverte, le choix en attente du plan, le refus posé sur une place,
 // l'appartenance collante du formulaire d'ajout, l'aperçu avant impression,
-// la page du tableau des propositions et la position du sélecteur du
+// la page du tableau des propositions, la position du sélecteur du
 // mélange des tables de la page de qualité (§ 12.11, D54) — ce que la
-// grille compte : sièges, assis ou doublons. Ce qu'il tient survit au
-// démontage des sections.
+// grille compte : sièges, assis ou doublons —, le départ d'une génération
+// dérivée et ses tours figés (§ 5.7), le second placement de la vue de
+// comparaison (§ 12.10.6) et la vue de la qualité demandée. Ce qu'il tient
+// survit au démontage des sections.
+// Le départ et le second placement sont des états de navigation (§ 8.4) :
+// les choisir n'écrit rien, en lecture comme sur un plan bloqué ;
+// oublierAbsents les retire quand ils quittent la liste, et un événement
+// qui s'ouvre en repart sans eux.
 // Regarder n'écrit jamais (§ 8.4) : cet état ne reçoit ni la séance, ni la
 // façade, ni un système de fichiers, et rien de ce qu'il tient ne quitte la
 // mémoire.
@@ -61,6 +67,16 @@ import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
  * @property {'sieges'|'assis'|'doublons'} melangeTables  la position du sélecteur du
  *           mélange des tables (§ 12.11) : une de POSITIONS_MELANGE, 'sieges' au départ ;
  *           chaque événement qui s'ouvre en repart, et un changement de section la garde
+ * @property {null|{id: number, toursFiges: number[]}} depart  le départ de la génération
+ *           dérivée (§ 5.7, C6) : l'identifiant de la proposition et les tours à figer,
+ *           numéros distincts, croissants, figés ; null sans départ
+ * @property {number|'retenu'|null} comparee  le second placement de la vue de comparaison
+ *           (§ 12.10.6, C14) : une proposition, le retenu, ou null pour le défaut de la vue
+ * @property {'comparaison'|null} vueQualite  la vue que la page de qualité doit porter à
+ *           l'écran et au focus, null sans demande ; SectionQualite la consomme
+ *           (vueQualiteAtteinte)
+ * Chaque événement qui s'ouvre repart de depart, comparee et vueQualite à null, et un
+ * changement de section les garde.
  */
 
 // L'état de navigation d'un événement qui s'ouvre, panneau « À propos »
@@ -82,7 +98,14 @@ const DEPART = Object.freeze({
   visee: 0,
   pagePropositions: null,
   melangeTables: 'sieges',
+  depart: null,
+  comparee: null,
+  vueQualite: null,
 });
+
+/** Les vues de la page de qualité qu'une autre section peut demander
+ *  (demanderVueQualite) : la comparaison, que « Comparer » ouvre (C14). */
+export const VUES_QUALITE_DEMANDABLES = Object.freeze(['comparaison']);
 
 /** Les positions du sélecteur du mélange des tables (§ 12.11, D35), dans
  *  l'ordre du sélecteur : les sièges, les assis, les doublons parmi les
@@ -108,6 +131,13 @@ const GENRES_CHOIX = new Set(['personne', 'reservation']);
 const PORTEES = new Set(['tous', 'tour']);
 
 const entierPositif = (n) => Number.isInteger(n) && n >= 1;
+
+// Vrai pour la valeur du second placement : un identifiant, le retenu, ou
+// null.
+const estComparee = (cle) => cle === null || cle === 'retenu' || entierPositif(cle);
+
+// Vrai quand deux listes d'entiers sont égales terme à terme.
+const memesTours = (a, b) => a.length === b.length && a.every((tour, i) => tour === b[i]);
 
 // Vrai pour une place {table, siege|null} : table entière positive, siège
 // entier positif ou null.
@@ -165,7 +195,10 @@ function choixValide(choix) {
  *   selectionner: Function, ouvrirFiche: Function, choisir: Function,
  *   poserSurPlace: Function, garderAppartenance: Function,
  *   ouvrirApercu: Function, reglerApercu: Function, fermerApercu: Function,
- *   retenirPagePropositions: Function, reglerMelangeTables: Function}}
+ *   retenirPagePropositions: Function, reglerMelangeTables: Function,
+ *   choisirDepart: Function, reglerToursFiges: Function, retirerDepart: Function,
+ *   comparerA: Function, demanderVueQualite: Function, vueQualiteAtteinte: Function,
+ *   oublierAbsents: Function}}
  */
 export function creerEtatUi() {
   let etat = Object.freeze({ ...DEPART, apropos: false });
@@ -242,6 +275,71 @@ export function creerEtatUi() {
         throw new RangeError(`mélange des tables : position hors de ${POSITIONS_MELANGE.join(', ')}, reçu ${JSON.stringify(position)}`);
       }
       changer({ melangeTables: position });
+    },
+    /** Choisit le départ de la génération dérivée, l'identifiant id d'une
+     *  proposition, entier ≥ 1 ; RangeError sinon, sans rien changer. Chaque
+     *  choix, du même départ comme d'un autre, décoche tous les tours (C6) ;
+     *  le même départ sans tour figé ne publie rien. */
+    choisirDepart(id) {
+      if (!entierPositif(id)) throw new RangeError(`départ : identifiant entier ≥ 1 attendu, reçu ${JSON.stringify(id)}`);
+      if (etat.depart?.id === id && etat.depart.toursFiges.length === 0) return;
+      changer({ depart: Object.freeze({ id, toursFiges: Object.freeze([]) }) });
+    },
+    /** Règle les tours à figer du départ choisi : une liste d'entiers ≥ 1,
+     *  distincts, gardée croissante dans une copie figée, la liste vide les
+     *  décochant tous. RangeError pour une autre liste, et sans départ
+     *  choisi, sans rien changer. Que les tours tiennent dans la soirée, et
+     *  n'y soient pas tous, se juge au lancement : la soirée n'est pas ici. */
+    reglerToursFiges(tours) {
+      if (etat.depart === null) throw new RangeError('tours figés : aucun départ choisi');
+      if (!Array.isArray(tours) || !tours.every(entierPositif) || new Set(tours).size !== tours.length) {
+        throw new RangeError(`tours figés : entiers ≥ 1 distincts attendus, reçu ${JSON.stringify(tours)}`);
+      }
+      const croissants = [...tours].sort((a, b) => a - b);
+      if (memesTours(croissants, etat.depart.toursFiges)) return;
+      changer({ depart: Object.freeze({ id: etat.depart.id, toursFiges: Object.freeze(croissants) }) });
+    },
+    /** Retire le départ et ses tours figés : « Repartir de zéro ». */
+    retirerDepart() {
+      changer({ depart: null });
+    },
+    /** Pose le second placement de la vue de comparaison : l'identifiant
+     *  d'une proposition, entier ≥ 1, 'retenu', ou null, le défaut de la
+     *  vue ; RangeError sinon, sans rien changer. Il ne change ni la
+     *  proposition montrée ni la section. */
+    comparerA(cle) {
+      if (!estComparee(cle)) throw new RangeError(`second placement : identifiant, 'retenu' ou null attendu, reçu ${JSON.stringify(cle)}`);
+      changer({ comparee: cle });
+    },
+    /** Demande à la page de qualité de porter la vue nom, l'une de
+     *  VUES_QUALITE_DEMANDABLES, à l'écran et au focus ; RangeError sinon,
+     *  sans rien changer. La section n'en change pas. */
+    demanderVueQualite(nom) {
+      if (!VUES_QUALITE_DEMANDABLES.includes(nom)) {
+        throw new RangeError(`vue de la qualité : l'une de ${VUES_QUALITE_DEMANDABLES.join(', ')} attendue, reçu ${JSON.stringify(nom)}`);
+      }
+      changer({ vueQualite: nom });
+    },
+    /** Retire la demande de vue, une fois la vue portée à l'écran. */
+    vueQualiteAtteinte() {
+      changer({ vueQualite: null });
+    },
+    /** Oublie ce qui a quitté la charge : le départ dont l'identifiant n'est
+     *  plus parmi propositions, et le second placement absent — un
+     *  identifiant hors de propositions, ou 'retenu' quand retenu est faux.
+     *  propositions : les identifiants de la charge ; retenu : vrai quand la
+     *  charge a un retenu. Rien d'autre ne change, et ce qui est retiré ne
+     *  revient pas avec la proposition qu'un retour rend. RangeError pour
+     *  une autre forme, sans rien changer. */
+    oublierAbsents(presents) {
+      const forme = presents !== null && typeof presents === 'object' && Array.isArray(presents.propositions) && typeof presents.retenu === 'boolean';
+      if (!forme) throw new RangeError(`absents : { propositions: identifiants, retenu: booléen } attendu, reçu ${JSON.stringify(presents)}`);
+      const ids = new Set(presents.propositions);
+      const { depart, comparee } = etat;
+      const changements = {};
+      if (depart !== null && !ids.has(depart.id)) changements.depart = null;
+      if (comparee === 'retenu' ? !presents.retenu : comparee !== null && !ids.has(comparee)) changements.comparee = null;
+      changer(changements);
     },
     /** Garde un texte à importer et ouvre la section de l'import. */
     ouvrirImport({ texte, origine }) {

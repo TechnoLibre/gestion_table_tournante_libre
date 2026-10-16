@@ -1886,3 +1886,210 @@ describe("la course de la recherche hors du fichier d'état (§ 8.9, B31, D53)",
     assert.ok(octets > 15_000 && octets < 40_000, `course ${octets} o`);
   });
 });
+
+describe('la dérivation : deux champs facultatifs de la proposition (§ 8.9, C11, C13, D74)', () => {
+  const OPTIONS = Object.freeze({ produitVersion: 'construction-epreuve', attribuerSieges: false, decalage: 6 });
+
+  // La proposition du moteur de la table d'épreuve à 13 personnes : le plan
+  // parfait, ses listes à rebours, la personne 13 à la réserve à chaque
+  // tour et la 12 au premier.
+  function propositionAReserve() {
+    const tours = PLAN_PARFAIT_PETITE.tours.map((listes) => listes.map((liste) => [...liste].reverse()));
+    tours[0][3] = [11, 10];
+    return { ...PARFAITE, id: 2, graine: 7, plan: { tables: [1, 2, 3, 4], tours, reserves: [[13, 12], [13], [13], [13]] } };
+  }
+  function configurationATreize() {
+    const configuration = petite();
+    configuration.participants.push({ id: 13, nom: TREIZIEME[0], prenom: TREIZIEME[1], appartenance: null });
+    return configuration;
+  }
+
+  // Ce que versFichier écrit sans dérivation, pour PARFAITE puis pour
+  // propositionAReserve, chacune sièges non attribués puis attribués, sous
+  // OPTIONS : JSON.stringify de la forme rendue, octet pour octet.
+  const ECRITS_SANS_DERIVATION = Object.freeze([
+    '{"id":7,"graine":48271,"arret":20000,"historique":1000,"produitVersion":"construction-epreuve","siegesAttribues":false,"tables":[1,2,3,4],"capacites":[3,3,3,3],"tours":4,"participants":[1,2,3,4,5,6,7,8,9,10,11,12],"placement":[{"sieges":[[1,2,3],[4,5,6],[7,8,9],[10,11,12]],"reserve":[]},{"sieges":[[6,9,12],[3,8,11],[2,5,10],[1,4,7]],"reserve":[]},{"sieges":[[4,8,10],[2,7,12],[1,6,11],[3,5,9]],"reserve":[]},{"sieges":[[5,7,11],[1,9,10],[3,4,12],[2,6,8]],"reserve":[]}]}',
+    '{"id":7,"graine":48271,"arret":20000,"historique":1000,"produitVersion":"construction-epreuve","siegesAttribues":true,"tables":[1,2,3,4],"capacites":[3,3,3,3],"tours":4,"participants":[1,2,3,4,5,6,7,8,9,10,11,12],"placement":[{"sieges":[[1,2,3],[4,5,6],[7,8,9],[10,11,12]],"reserve":[]},{"sieges":[[6,9,12],[3,8,11],[2,5,10],[1,4,7]],"reserve":[]},{"sieges":[[4,8,10],[2,7,12],[1,6,11],[3,5,9]],"reserve":[]},{"sieges":[[5,7,11],[1,9,10],[3,4,12],[2,6,8]],"reserve":[]}]}',
+    '{"id":8,"graine":7,"arret":20000,"historique":1000,"produitVersion":"construction-epreuve","siegesAttribues":false,"tables":[1,2,3,4],"capacites":[3,3,3,3],"tours":4,"participants":[1,2,3,4,5,6,7,8,9,10,11,12,13],"placement":[{"sieges":[[1,2,3],[4,5,6],[7,8,9],[10,11]],"reserve":[12,13]},{"sieges":[[6,9,12],[3,8,11],[2,5,10],[1,4,7]],"reserve":[13]},{"sieges":[[4,8,10],[2,7,12],[1,6,11],[3,5,9]],"reserve":[13]},{"sieges":[[5,7,11],[1,9,10],[3,4,12],[2,6,8]],"reserve":[13]}]}',
+    '{"id":8,"graine":7,"arret":20000,"historique":1000,"produitVersion":"construction-epreuve","siegesAttribues":true,"tables":[1,2,3,4],"capacites":[3,3,3,3],"tours":4,"participants":[1,2,3,4,5,6,7,8,9,10,11,12,13],"placement":[{"sieges":[[3,2,1],[6,5,4],[9,8,7],[11,10]],"reserve":[12,13]},{"sieges":[[12,9,6],[11,8,3],[10,5,2],[7,4,1]],"reserve":[13]},{"sieges":[[10,8,4],[12,7,2],[11,6,1],[9,5,3]],"reserve":[13]},{"sieges":[[11,7,5],[10,9,1],[12,4,3],[8,6,2]],"reserve":[13]}]}',
+  ]);
+
+  // Les quatre cas d'ECRITS_SANS_DERIVATION : [proposition du moteur,
+  // configuration, attribuerSieges].
+  const CAS_SANS_DERIVATION = () => [
+    [PARFAITE, petite(), false],
+    [PARFAITE, petite(), true],
+    [propositionAReserve(), configurationATreize(), false],
+    [propositionAReserve(), configurationATreize(), true],
+  ];
+
+  // Le texte canonique d'une proposition de fichier dans une charge qui ne
+  // porte qu'elle, ses retours de ligne et leur retrait retirés.
+  function texteCanoniqueCompact(fichier) {
+    const charge = { ...chargePetite(), propositions: [fichier] };
+    const texte = serialiser(charge, ENTETE);
+    const ouverture = '"propositions": [\n';
+    const debut = texte.indexOf(ouverture) + ouverture.length;
+    return texte.slice(debut, texte.indexOf('\n    ],\n    "retenu"')).replace(/\n */g, '').trimStart();
+  }
+
+  test('versFichier sous derivation écrit depart puis toursFiges juste après historique, avant produitVersion ; une liste vide n’écrit pas la clé', () => {
+    const fichier = versFichier(PARFAITE, petite(), { ...OPTIONS, derivation: { depart: 3, toursFiges: [1, 3] } });
+    assert.deepStrictEqual(Object.keys(fichier), [
+      'id', 'graine', 'arret', 'historique', 'depart', 'toursFiges', 'produitVersion', 'siegesAttribues',
+      'tables', 'capacites', 'tours', 'participants', 'placement',
+    ]);
+    assert.deepStrictEqual([fichier.id, fichier.depart, fichier.toursFiges], [7, 3, [1, 3]]);
+    assert.deepStrictEqual(fautes(fichier), []);
+    const { depart, toursFiges, ...reste } = fichier;
+    assert.equal(JSON.stringify(reste), ECRITS_SANS_DERIVATION[0]);
+    assert.ok(JSON.stringify(fichier).startsWith('{"id":7,"graine":48271,"arret":20000,"historique":1000,"depart":3,"toursFiges":[1,3],"produitVersion":'));
+
+    const sansTour = versFichier(PARFAITE, petite(), { ...OPTIONS, derivation: { depart: 3, toursFiges: [] } });
+    assert.equal(Object.hasOwn(sansTour, 'toursFiges'), false);
+    assert.equal(sansTour.depart, 3);
+    assert.ok(JSON.stringify(sansTour).startsWith('{"id":7,"graine":48271,"arret":20000,"historique":1000,"depart":3,"produitVersion":'));
+    assert.deepStrictEqual(fautes(sansTour), []);
+
+    // La liste écrite n'est pas celle reçue : la changer ensuite ne change
+    // pas la proposition.
+    const recue = [2];
+    const copie = versFichier(PARFAITE, petite(), { ...OPTIONS, derivation: geler({ depart: 1, toursFiges: recue }) });
+    assert.notEqual(copie.toursFiges, recue);
+    assert.deepStrictEqual(copie.toursFiges, [2]);
+  });
+
+  test('garde : une proposition sans dérivation s’écrit octet pour octet comme une proposition ordinaire, objet rendu et texte canonique, derivation absente ou nulle', () => {
+    const cas = CAS_SANS_DERIVATION();
+    assert.equal(cas.length, ECRITS_SANS_DERIVATION.length);
+    cas.forEach(([proposition, configuration, attribuerSieges], rang) => {
+      for (const options of [{ ...OPTIONS, attribuerSieges }, { ...OPTIONS, attribuerSieges, derivation: null }]) {
+        const fichier = versFichier(proposition, configuration, options);
+        assert.equal(JSON.stringify(fichier), ECRITS_SANS_DERIVATION[rang], `cas ${rang}`);
+        assert.equal(texteCanoniqueCompact(fichier), ECRITS_SANS_DERIVATION[rang], `cas ${rang}`);
+      }
+    });
+  });
+
+  test('une dérivée s’écrit dans le texte canonique ses deux champs après historique, et se relit telle quelle', () => {
+    const fichier = versFichier(PARFAITE, petite(), { ...OPTIONS, derivation: { depart: 2, toursFiges: [2, 4] } });
+    const attendu = ECRITS_SANS_DERIVATION[0].replace('"historique":1000,', '"historique":1000,"depart":2,"toursFiges":[2,4],');
+    assert.equal(texteCanoniqueCompact(fichier), attendu);
+    const charge = { ...chargePetite(), propositions: [fichier] };
+    charge.prochainsIds.proposition = 8;
+    const lue = relire(charge);
+    assert.deepStrictEqual(lue.propositions, [fichier]);
+    assert.deepStrictEqual(examiner(lue).fautives, []);
+    assert.equal(serialiser(lue, ENTETE), serialiser(charge, ENTETE));
+  });
+
+  test('versFichier lève TypeError pour une dérivation que la proposition écrite contredirait', () => {
+    const cas = [
+      ['départ égal à l’identifiant', { depart: 7, toursFiges: [] }],
+      ['départ postérieur', { depart: 9, toursFiges: [1] }],
+      ['un tour hors de la soirée', { depart: 1, toursFiges: [5] }],
+      ['tous les tours', { depart: 1, toursFiges: [1, 2, 3, 4] }],
+      ['une liste désordonnée', { depart: 1, toursFiges: [2, 1] }],
+      ['un départ qui n’est pas un identifiant', { depart: 0, toursFiges: [] }],
+      // Une dérivation illisible se refuse avant d'être écrite : sans départ,
+      // la clé depart vaudrait undefined ; sans liste, toursFiges ne se lit
+      // pas.
+      ['sans départ', { toursFiges: [] }],
+      ['un départ undefined', { depart: undefined, toursFiges: [1] }],
+      ['sans liste de tours figés', { depart: 1 }],
+      ['un texte', 'x'],
+    ];
+    assert.equal(cas.length, 10);
+    for (const [libelle, derivation] of cas) {
+      leveTypeError(() => versFichier(PARFAITE, petite(), { ...OPTIONS, derivation }), /versFichier/, libelle);
+    }
+  });
+
+  test('fautes : chaque faute de dérivation se nomme par son chemin — la forme d’abord, puis DERIVATION et sa raison, seule, avant la déclaration', () => {
+    // La proposition 7 de la petite démonstration, dérivée ou non selon
+    // modifier.
+    const derivee = (modifier) => {
+      const p = { ...fichierParfait(), id: 7 };
+      modifier(p);
+      return p;
+    };
+    const ordre = (p, cles) => Object.fromEntries([...cles.map((cle) => [cle, p[cle]]), ...Object.entries(p)]);
+    const cas = [
+      ['départ égal', (p) => { p.depart = 7; }, [{ code: 'DERIVATION', chemin: 'depart', raison: 'departNonAnterieur' }]],
+      ['départ supérieur', (p) => { p.depart = 8; }, [{ code: 'DERIVATION', chemin: 'depart', raison: 'departNonAnterieur' }]],
+      ['départ nul', (p) => { p.depart = 0; }, [{ code: 'FORME', chemin: 'depart' }]],
+      ['départ texte', (p) => { p.depart = '3'; }, [{ code: 'FORME', chemin: 'depart' }]],
+      ['départ null', (p) => { p.depart = null; }, [{ code: 'FORME', chemin: 'depart' }]],
+      ['toursFiges vide', (p) => { p.depart = 3; p.toursFiges = []; }, [{ code: 'FORME', chemin: 'toursFiges' }]],
+      ['toursFiges désordonnés', (p) => { p.depart = 3; p.toursFiges = [3, 1]; }, [{ code: 'FORME', chemin: 'toursFiges' }]],
+      ['toursFiges répétés', (p) => { p.depart = 3; p.toursFiges = [2, 2]; }, [{ code: 'FORME', chemin: 'toursFiges' }]],
+      ['toursFiges non entiers', (p) => { p.depart = 3; p.toursFiges = [1, 2.5]; }, [{ code: 'FORME', chemin: 'toursFiges[1]' }]],
+      ['toursFiges à zéro', (p) => { p.depart = 3; p.toursFiges = [0, 1]; }, [{ code: 'FORME', chemin: 'toursFiges[0]' }]],
+      ['toursFiges hors liste', (p) => { p.depart = 3; p.toursFiges = 2; }, [{ code: 'FORME', chemin: 'toursFiges' }]],
+      ['un tour hors de la soirée', (p) => { p.depart = 3; p.toursFiges = [1, 5]; }, [{ code: 'DERIVATION', chemin: 'toursFiges[1]', raison: 'tourHorsSoiree' }]],
+      ['tous les tours', (p) => { p.depart = 3; p.toursFiges = [1, 2, 3, 4]; }, [{ code: 'DERIVATION', chemin: 'toursFiges', raison: 'tousLesTours' }]],
+      ['toursFiges sans départ', (p) => { p.toursFiges = [1]; }, [{ code: 'DERIVATION', chemin: 'toursFiges', raison: 'sansDepart' }]],
+      // La forme passe avant la dérivation, la dérivation avant la
+      // déclaration et la cohérence.
+      ['graine fautive et départ égal', (p) => { p.depart = 7; p.graine = -1; }, [{ code: 'FORME', chemin: 'graine' }]],
+      ['départ égal et table déclarée deux fois', (p) => { p.depart = 7; p.tables[1] = 1; }, [{ code: 'DERIVATION', chemin: 'depart', raison: 'departNonAnterieur' }]],
+      ['départ égal et une personne manquante', (p) => { p.depart = 7; p.placement[0].sieges[0].pop(); }, [{ code: 'DERIVATION', chemin: 'depart', raison: 'departNonAnterieur' }]],
+    ];
+    assert.equal(cas.length, 17);
+    for (const [libelle, modifier, attendu] of cas) {
+      const p = derivee(modifier);
+      assert.deepStrictEqual(fautes(p), attendu, libelle);
+      // L'ordre des clés de l'objet reçu ne change rien.
+      assert.deepStrictEqual(fautes(ordre(p, ['placement', 'toursFiges'])), attendu, `${libelle}, clés désordonnées`);
+    }
+    // Admises : un départ antérieur, avec ou sans tours figés, jusqu'à tous
+    // les tours sauf un.
+    for (const modifier of [(p) => { p.depart = 6; }, (p) => { p.depart = 1; p.toursFiges = [4]; }, (p) => { p.depart = 1; p.toursFiges = [1, 2, 4]; }]) {
+      assert.deepStrictEqual(fautes(derivee(modifier)), []);
+    }
+    // Le retenu ne porte ni l'un ni l'autre : une clé inconnue de sa règle.
+    assert.deepStrictEqual(fautes({ ...retenuDe(fichierParfait()), depart: 1 }), [{ code: 'FORME', chemin: 'depart' }]);
+    assert.deepStrictEqual(fautes({ ...retenuDe(fichierParfait()), toursFiges: [1] }), [{ code: 'FORME', chemin: 'toursFiges' }]);
+  });
+
+  test('examiner écarte la seule dérivée fautive, nommée par son chemin, et garde la dérivée dont le départ est absent de la liste', () => {
+    const charge = chargeAvecGeneration();
+    const [p1, p2, p3] = charge.propositions;
+    const copieDe = (p, id, champs) => ({ ...structuredClone(p), id, ...champs });
+    const fautivesAttendues = [
+      [copieDe(p2, 4, { depart: 4 }), { code: 'DERIVATION', chemin: 'depart', raison: 'departNonAnterieur' }],
+      [copieDe(p2, 5, { depart: 6 }), { code: 'DERIVATION', chemin: 'depart', raison: 'departNonAnterieur' }],
+      [copieDe(p2, 6, { depart: 1, toursFiges: [] }), { code: 'FORME', chemin: 'toursFiges' }],
+      [copieDe(p2, 7, { depart: 1, toursFiges: [2, 1] }), { code: 'FORME', chemin: 'toursFiges' }],
+      [copieDe(p2, 8, { depart: 1, toursFiges: [1.5] }), { code: 'FORME', chemin: 'toursFiges[0]' }],
+      [copieDe(p2, 9, { depart: 1, toursFiges: [5] }), { code: 'DERIVATION', chemin: 'toursFiges[0]', raison: 'tourHorsSoiree' }],
+      [copieDe(p2, 10, { depart: 1, toursFiges: [1, 2, 3, 4] }), { code: 'DERIVATION', chemin: 'toursFiges', raison: 'tousLesTours' }],
+      [copieDe(p2, 11, { toursFiges: [1] }), { code: 'DERIVATION', chemin: 'toursFiges', raison: 'sansDepart' }],
+    ];
+    // La 12 part de la 1, tour 2 figé ; la 13 part de la 2, effacée de la
+    // liste, sans tour figé : ni l'une ni l'autre n'est fautive.
+    const gardees = [p1, p3, copieDe(p2, 12, { depart: 1, toursFiges: [2] }), copieDe(p3, 13, { depart: 2 })];
+    charge.propositions = [p1, p3, ...fautivesAttendues.map(([p]) => p), ...gardees.slice(2)];
+    charge.prochainsIds.proposition = 14;
+    for (const lue of [charge, relire(charge)]) {
+      const examen = examiner(lue);
+      assert.deepStrictEqual(
+        examen.fautives,
+        fautivesAttendues.map(([p, faute], i) => ({ rang: i + 2, id: p.id, fautes: [faute] })),
+      );
+      assert.deepStrictEqual(examen.charge.propositions, gardees);
+      assert.deepStrictEqual(examen.derives, []);
+    }
+  });
+
+  test('ordreDesPropositions ne lit pas la dérivation : les propositions se rangent par identifiant, graine, arrêt et historique', () => {
+    const charge = chargeAvecGeneration();
+    const [p1, p2, p3] = charge.propositions;
+    // Une dérivée reçue avant une ordinaire d'identifiant supérieur : un
+    // rangement par départ placerait la 3 avant la 2.
+    charge.propositions = [{ ...p2, depart: 1, toursFiges: [3] }, p3, p1];
+    const lue = relire(charge);
+    assert.deepStrictEqual(lue.propositions.map(({ id }) => id), [1, 2, 3]);
+    assert.deepStrictEqual(lue.propositions.map(({ depart }) => depart), [undefined, 1, undefined]);
+  });
+});

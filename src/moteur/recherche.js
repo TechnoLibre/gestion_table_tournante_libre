@@ -16,8 +16,10 @@
 // de 3 est celle d'une demande de 5, quel que soit l'ordre dans lequel les
 // propositions s'achèvent, et regenerer en rend le plan à partir de ces trois
 // champs seuls (§ 8.9). proposerUne calcule la proposition d'un seul rang, ce
-// qui répartit une génération entre plusieurs fils. Les trois passent par la
-// même descente, proposer.
+// qui répartit une génération entre plusieurs fils. repartir et repartirUne
+// en sont les pendants sous un départ (paragraphe « Départ »), qui tirent
+// leurs graines dérivées de la même suite. Tous passent par la même
+// descente, proposer.
 //
 // Sièges. Chaque tour offre S = Σ c_t sièges, rangés table par table dans
 // l'ordre des tables. Les personnes que instance.fixe impose à un tour
@@ -117,7 +119,8 @@
 // Relance. Dans l'ordre des contraintes, un score courant inchangé pendant
 // PATIENCE × L itérations fait relancer la descente : le reste du compte
 // sert une nouvelle descente, depuis un nouveau placement tiré du même
-// générateur, l'historique au score de ce placement ; la meilleure
+// générateur — pour une dérivée, depuis le plan de son départ (paragraphe
+// « Départ ») —, l'historique au score de ce placement ; la meilleure
 // affectation, et l'ordre des contraintes qu'elle fixe, sont conservés. Une
 // descente de cet ordre s'arrête parfois sur un minimum local des voisins et
 // des tables, des rencontres en deçà de leur plafond ; une descente neuve en
@@ -137,6 +140,32 @@
 // aucune comparaison. La boucle ne lit le compte d'arrêt qu'à sa borne :
 // le point k est donc le plan que la même graine rend au compte d'arrêt k.
 // La recherche ne lit pas l'horloge et ne date rien.
+//
+// Départ (§ 5.7). repartir, repartirUne et regenerer sous un départ font
+// partir chaque descente du plan d'une proposition, son départ, au lieu d'un
+// placement tiré : chaque fois que la descente tirerait un placement — à son
+// début et à chaque relance —, elle repart de ce plan, tours figés compris.
+// Le remplissage canonique l'assied sans rien tirer : à chaque tour, les
+// fixés à leurs sièges comme ailleurs, puis chaque libre, par index
+// croissant, au prochain siège mobile de la table que le plan lui donne, les
+// places fantômes en fin de table ; l'ordre des listes du plan n'y entre pas.
+// Le tour d'un mouvement se tire parmi les seuls tours non figés, par
+// borne(k) sur leur liste, puis les deux sièges comme ailleurs : un tour
+// figé ne consomme rien du compte, et reste celui du départ dans le plan
+// rendu comme dans chaque point de relevé. Un tour figé n'est pas une
+// réservation : instance.fixe ne change pas, et le score se compose sur les
+// plafonds de la configuration. La meilleure affectation part du départ et
+// ne change que sur un score strictement meilleur : une dérivée n'est jamais
+// pire que son départ dans l'ordre du score, et rend son plan, case pour
+// case, quand rien ne l'améliore. Le départ se contrôle avant tout calcul :
+// un plan que l'instance ne peut pas asseoir tel quel — une personne en
+// réserve, absente ou étrangère, une table inconnue ou qui déborde, une
+// personne fixée assise à une autre table que la sienne — lève
+// DEPART_INCOMPATIBLE au lieu de partir d'un autre état que le plan. Le
+// chemin ordinaire ne tire pas un nombre de plus : sans départ, le mélange
+// est celui du paragraphe « Sièges » et le tour se tire par borne(R), comme
+// au paragraphe « Mouvement » ; la descente choisit sa fonction de mouvement
+// une fois, avant sa boucle.
 import { FLUX, creerPcg32 } from '../demo/prng.js';
 import {
   LIBRE,
@@ -171,6 +200,14 @@ import { plafondsAPriori } from './plafond.js';
  *           les points de relevé copiés, mouvements croissants : chaque
  *           puissance de dix strictement sous evalues ; le dernier point,
  *           evalues, est plan
+ * @property {number} [relances]    relances de la descente ; seules les
+ *           propositions de repartir et repartirUne le portent
+ *
+ * @typedef {Object} DepartRecherche
+ * @property {import('./types.js').Plan} plan   le plan du départ, par
+ *           identifiants
+ * @property {number[]} toursFiges   numéros des tours figés, de 1 à R,
+ *           strictement croissants, possiblement vide, jamais tous les tours
  *
  * @typedef {Object} EtatRecherche
  * Rendu par creerEtat ; les champs qui suivent se lisent, aucun ne s'écrit
@@ -621,7 +658,11 @@ function echanger(etat, r, a, b) {
 // l'est à une table qu'elle peut occuper — sa table fixée, ou un siège
 // mobile, que seule une table à siège libre offre — : servie et rencontres
 // d'animateurs s'y lisent sans autre condition, comme mesurer les lit.
-function etatInitial(structure, rng) {
+//
+// remplir, quand il n'est pas null, assied les libres à la place du
+// mélange : remplir(etat) écrit leurs sièges dans etat.siege, où les fixés
+// sont déjà, sans rien tirer de rng (remplisseur, paragraphe « Départ »).
+function etatInitial(structure, rng, remplir = null) {
   const { instance, N, T, R, S, mobiles, libres, aPriori, tableDuSiege, debut } = structure;
   const G = instance.groupes.length;
   const { suitAnimateurs } = structure.composition;
@@ -695,9 +736,13 @@ function etatInitial(structure, rng) {
     if (suitAnimateurs) etat.animateursNonRencontres += instance.borneAnimateurs[p];
   }
   const { siege, tableDe } = etat;
-  for (let r = 0; r < R; r += 1) {
-    const melanges = rng.melanger(Int32Array.from(libres[r]));
-    for (let i = 0; i < melanges.length; i += 1) siege[r * S + mobiles[r * S + i]] = melanges[i];
+  if (remplir === null) {
+    for (let r = 0; r < R; r += 1) {
+      const melanges = rng.melanger(Int32Array.from(libres[r]));
+      for (let i = 0; i < melanges.length; i += 1) siege[r * S + mobiles[r * S + i]] = melanges[i];
+    }
+  } else {
+    remplir(etat);
   }
   for (let r = 0; r < R; r += 1) {
     const base = r * S;
@@ -773,11 +818,11 @@ function lireSignal(signal) {
 }
 
 // Descente par acceptation tardive depuis un placement initial tiré de rng ;
-// rend { plan, evalues, releves } : la meilleure affectation vue, en plan
-// indexé, les mouvements évalués, et les copies de la meilleure affectation
-// aux points de relevé, { mouvements, tableDe }, mouvements croissants (en-tête
-// du module, « La course »). L'ordre d'acceptation
-// suit la meilleure affectation (ordreAccepte). Dans l'ordre des
+// rend { plan, evalues, releves, relances } : la meilleure affectation vue,
+// en plan indexé, les mouvements évalués, et les copies de la meilleure
+// affectation aux points de relevé, { mouvements, tableDe }, mouvements
+// croissants (en-tête du module, « La course »). L'ordre d'acceptation suit
+// la meilleure affectation (ordreAccepte). Dans l'ordre des
 // contraintes, un score courant inchangé pendant PATIENCE × historique
 // itérations fait relancer la descente (en-tête du module). La bascule vers
 // cet ordre suit une meilleure affectation, donc un changement du score
@@ -785,10 +830,28 @@ function lireSignal(signal) {
 // depuis le début de la génération, à partir de dejaFaits, ceux des
 // propositions précédentes : à chaque multiple de CADENCE,
 // progression(fait, total), puis une lecture du signal.
-function descendre(structure, rng, { arret, historique, dejaFaits, total, signal, progression }) {
+//
+// Sous un départ (paragraphe « Départ »), depart() construit l'état du
+// départ, au début et à chaque relance, et tirables liste les index des
+// tours non figés, où proposerParmi tire chaque mouvement ; null pour l'un
+// et l'autre, la descente tire son placement de rng et ses mouvements par
+// proposerEtAppliquer. La fonction de mouvement se choisit une fois, avant
+// la boucle. Rend aussi relances, le nombre de relances.
+function descendre(structure, rng, {
+  arret,
+  historique,
+  dejaFaits,
+  total,
+  signal,
+  progression,
+  depart = null,
+  tirables = null,
+}) {
   const { composition: forme } = structure;
   const { taille, ordreScore, ordreContraintes } = forme;
-  let etat = etatInitial(structure, rng);
+  const partir = depart ?? (() => etatInitial(structure, rng));
+  const mouvoir = tirables === null ? proposerEtAppliquer : (e, g) => proposerParmi(e, g, tirables);
+  let etat = partir();
   const courant = composer(forme, etat, new Float64Array(taille));
   const candidat = new Float64Array(taille);
   const meilleurScore = Float64Array.from(courant);
@@ -809,6 +872,7 @@ function descendre(structure, rng, { arret, historique, dejaFaits, total, signal
   let ordre = ordreAccepte(forme, meilleurScore);
   const patience = PATIENCE * historique;
   let immobile = 0;
+  let relances = 0;
   // releve : la prochaine puissance de dix ; i, à la sortie de la boucle, les
   // mouvements évalués.
   const releves = [];
@@ -816,13 +880,14 @@ function descendre(structure, rng, { arret, historique, dejaFaits, total, signal
   let i = 0;
   for (; i < arret && !estNul(courant); i += 1) {
     if (immobile >= patience && ordre === ordreContraintes) {
-      etat = etatInitial(structure, rng);
+      etat = partir();
       composer(forme, etat, courant);
       remplirMemoire();
       ordre = retenir(ordre);
       immobile = 0;
+      relances += 1;
     }
-    const mouvement = proposerEtAppliquer(etat, rng);
+    const mouvement = mouvoir(etat, rng);
     const v = (i % historique) * taille;
     let change = false;
     if (mouvement !== null) {
@@ -852,14 +917,15 @@ function descendre(structure, rng, { arret, historique, dejaFaits, total, signal
       lireSignal(signal);
     }
   }
-  return { plan: meilleurPlan, evalues: i, releves };
+  return { plan: meilleurPlan, evalues: i, releves, relances };
 }
 
 // La descente de la proposition de graine dérivée graineDerivee, depuis
 // creerPcg32(graineDerivee, FLUX.RECHERCHE), en plans indexés (descendre).
-// rechercher, proposerUne et regenerer l'appellent tous trois. À instance
-// égale, le résultat ne dépend que de la graine dérivée, d'options.arret et
-// d'options.historique : les autres options ne servent qu'à rapporter
+// rechercher, proposerUne, repartir, repartirUne et regenerer l'appellent
+// tous. À instance égale, le résultat ne dépend que de la graine dérivée,
+// d'options.arret, d'options.historique et, sous un départ, d'options.depart
+// et d'options.tirables : les autres options ne servent qu'à rapporter
 // l'avancement et à lire le signal.
 function proposer(structure, graineDerivee, options) {
   const rng = creerPcg32(graineDerivee, FLUX.RECHERCHE);
@@ -878,6 +944,213 @@ const propositionDe = (instance, { id, graine, arret, historique }, { plan, eval
   evalues,
   releves: releves.map(({ mouvements, tableDe }) => ({ mouvements, plan: planDepuisIndex(instance, tableDe) })),
 });
+
+// Case d'un plan indexé que le départ n'a encore assise nulle part.
+const NON_ASSIS = -2;
+
+// Lève une RangeError dont le message commence par nom et dont le champ
+// reglage le porte, comme exigerReglage.
+function refuserReglage(nom, raison) {
+  const erreur = new RangeError(`${nom} : ${raison}`);
+  erreur.reglage = nom;
+  throw erreur;
+}
+
+// Lève une RangeError de champ reglage 'toursFiges' quand toursFiges n'est
+// pas une liste d'entiers de 1 à R strictement croissante, ou qu'elle les
+// porte tous : il ne resterait rien à refaire.
+function exigerToursFiges(toursFiges, R) {
+  const refuser = (raison) => refuserReglage('toursFiges', raison);
+  if (!Array.isArray(toursFiges)) refuser(`liste attendue, reçu ${decrire(toursFiges)}`);
+  toursFiges.forEach((tour, i) => {
+    if (!Number.isInteger(tour) || tour < 1 || tour > R) refuser(`tour de 1 à ${R} attendu, reçu ${decrire(tour)}`);
+    if (i > 0 && tour <= toursFiges[i - 1]) refuser('liste strictement croissante attendue');
+  });
+  if (toursFiges.length === R) refuser(`les ${R} tours figés ne laissent rien à refaire`);
+}
+
+// Le plan indexé du départ, tableDe[p × R + r] = index de table, contrôlé
+// contre la structure : chaque personne de l'instance assise une fois à
+// chaque tour, à une table de l'instance, chaque personne fixée à sa table,
+// aucune table au-delà de sa capacité. Lève ErreurConfiguration
+// ('DEPART_INCOMPATIBLE', {tour, table, participant}), tour de 1 à R, table
+// et participant par identifiant ou null, pour le premier écart, tour après
+// tour : un plan qui n'a pas R tours (tour, le premier qui manque ou qui est
+// de trop) ou pas une liste par table déclarée ; une table inconnue qui
+// assied quelqu'un (table) ; une personne étrangère à l'instance, exclue
+// comprise, ou assise deux fois (table et participant) ; une table qui
+// déborde (table) ; une personne en réserve, puis absente du tour
+// (participant) ; une personne fixée assise ailleurs (participant, et table,
+// celle où elle est fixée). L'ordre des listes et des tables n'y entre pas.
+function tableDuDepart(structure, plan) {
+  const { instance, N, T, R } = structure;
+  const { ids, idsTables, indexDe, indexTableDe, capacite, fixe } = instance;
+  const refuser = (tour, table, participant) => {
+    throw new ErreurConfiguration('DEPART_INCOMPATIBLE', { tour, table, participant });
+  };
+  if (plan.tours.length !== R) refuser(Math.min(plan.tours.length, R) + 1, null, null);
+  const tableDe = new Int32Array(N * R).fill(NON_ASSIS);
+  const occupants = new Int32Array(T);
+  for (let r = 0; r < R; r += 1) {
+    const tour = r + 1;
+    const listes = plan.tours[r];
+    if (listes.length !== plan.tables.length) refuser(tour, null, null);
+    occupants.fill(0);
+    listes.forEach((liste, i) => {
+      const table = plan.tables[i];
+      const t = indexTableDe.get(table);
+      if (t === undefined && liste.length > 0) refuser(tour, table, null);
+      for (const participant of liste) {
+        const p = indexDe.get(participant);
+        if (p === undefined || tableDe[p * R + r] !== NON_ASSIS) refuser(tour, table, participant);
+        tableDe[p * R + r] = t;
+        occupants[t] += 1;
+      }
+    });
+    for (let t = 0; t < T; t += 1) if (occupants[t] > capacite[t]) refuser(tour, idsTables[t], null);
+    for (const participant of plan.reserves?.[r] ?? []) refuser(tour, null, participant);
+    for (let p = 0; p < N; p += 1) {
+      const t = tableDe[p * R + r];
+      if (t === NON_ASSIS) refuser(tour, null, ids[p]);
+      const fixee = fixe[p * R + r];
+      if (fixee !== LIBRE && fixee !== t) refuser(tour, idsTables[fixee], ids[p]);
+    }
+  }
+  return tableDe;
+}
+
+// Le remplissage canonique d'un plan indexé contrôlé (paragraphe
+// « Départ ») : remplir(etat) assied, à chaque tour, chaque libre par index
+// croissant au prochain siège mobile de sa table. Les fixés occupent les
+// premiers sièges de leur table (preparer) : les sièges mobiles d'une table
+// suivent, et ceux qui restent sont des places fantômes, en fin de table.
+// Aucun tirage.
+function remplisseur(structure, tableDe) {
+  const { T, R, S, debut, siegesFixes, libres } = structure;
+  const prochain = new Int32Array(T);
+  return (etat) => {
+    const { siege } = etat;
+    for (let r = 0; r < R; r += 1) {
+      const base = r * S;
+      for (let t = 0; t < T; t += 1) {
+        let s = debut[t];
+        while (s < debut[t + 1] && siegesFixes[base + s] !== FANTOME) s += 1;
+        prochain[t] = s;
+      }
+      for (const p of libres[r]) {
+        const t = tableDe[p * R + r];
+        siege[base + prochain[t]] = p;
+        prochain[t] += 1;
+      }
+    }
+  };
+}
+
+// Les options de descendre sous un départ {plan, toursFiges}, contrôlé avant
+// tout calcul : depart, le constructeur de l'état du départ, et tirables,
+// les index des tours non figés. Lève la RangeError d'exigerToursFiges, puis
+// DEPART_INCOMPATIBLE (tableDuDepart).
+function preparerDepart(structure, { plan, toursFiges }) {
+  exigerToursFiges(toursFiges, structure.R);
+  const remplir = remplisseur(structure, tableDuDepart(structure, plan));
+  const tirables = [];
+  for (let r = 0; r < structure.R; r += 1) if (!toursFiges.includes(r + 1)) tirables.push(r);
+  return { depart: () => etatInitial(structure, null, remplir), tirables: Int32Array.from(tirables) };
+}
+
+/**
+ * Les propositions d'une génération dérivée (§ 5.7) : celles de rechercher,
+ * mêmes identifiants, mêmes graines dérivées, mêmes réglages, mêmes
+ * avancement et annulation, chaque descente partie du plan du départ au lieu
+ * d'un placement tiré, au début et à chaque relance, et ne tirant ses
+ * mouvements que dans les tours non figés (paragraphe « Départ »). Chacune
+ * porte en plus relances, le nombre de relances de sa descente. À
+ * configuration, réglages et départ égaux, le résultat est identique. Ne
+ * modifie ni la configuration ni le départ.
+ *
+ * Lève ce que rechercher lève, puis, avant tout calcul, une RangeError de
+ * champ reglage 'toursFiges' pour une liste qui n'est pas strictement
+ * croissante, un tour hors de 1 à R, ou tous les tours ; ErreurConfiguration
+ * ('DEPART_INCOMPATIBLE', {tour, table, participant}) pour un plan que
+ * l'instance ne peut pas asseoir tel quel (paragraphe « Départ ») : une
+ * garde, l'application refusant ces départs avant.
+ *
+ * @param {import('./types.js').Configuration} configuration
+ * @param {ReglagesGeneration} reglages
+ * @param {DepartRecherche} depart
+ * @param {{signal?: {aborted: boolean}, progression?: function(number, number): void}} [options]
+ * @returns {Proposition[]}
+ */
+export function repartir(configuration, reglages, depart, { signal, progression } = {}) {
+  verifierReglages(reglages);
+  const { graine, arret, nombre, historique = HISTORIQUE_PAR_DEFAUT } = reglages;
+  const instance = normaliser(configuration);
+  const structure = preparer(instance);
+  const options = preparerDepart(structure, depart);
+  const graines = creerPcg32(graine, FLUX.GRAINES);
+  const total = nombre * arret;
+  const propositions = [];
+  for (let id = 1; id <= nombre; id += 1) {
+    lireSignal(signal);
+    const graineDerivee = graines.suivant();
+    const descente = proposer(structure, graineDerivee, {
+      arret,
+      historique,
+      dejaFaits: (id - 1) * arret,
+      total,
+      signal,
+      progression,
+      ...options,
+    });
+    propositions.push({
+      ...propositionDe(instance, { id, graine: graineDerivee, arret, historique }, descente),
+      relances: descente.relances,
+    });
+  }
+  return propositions;
+}
+
+/**
+ * La proposition de rang rang d'une génération dérivée : celle que
+ * repartir(configuration, reglages, depart) rend à l'indice rang − 1, octet
+ * pour octet, comme proposerUne l'est pour rechercher. L'avancement et le
+ * signal sont ceux de proposerUne.
+ *
+ * Lève ce que proposerUne lève, contrôle de rang compris, puis ce que
+ * repartir lève pour le départ, avant tout calcul.
+ *
+ * @param {import('./types.js').Configuration} configuration
+ * @param {ReglagesGeneration} reglages
+ * @param {DepartRecherche} depart
+ * @param {number} rang   1 à reglages.nombre
+ * @param {{signal?: {aborted: boolean}, progression?: function(number, number): void}} [options]
+ * @returns {Proposition}
+ */
+export function repartirUne(configuration, reglages, depart, rang, { signal, progression } = {}) {
+  verifierReglages(reglages);
+  const { graine, arret, nombre, historique = HISTORIQUE_PAR_DEFAUT } = reglages;
+  exigerReglage('rang', rang, 1, nombre);
+  const instance = normaliser(configuration);
+  const structure = preparer(instance);
+  const options = preparerDepart(structure, depart);
+  const graines = creerPcg32(graine, FLUX.GRAINES);
+  let graineDerivee = 0;
+  for (let tirage = 1; tirage <= rang; tirage += 1) graineDerivee = graines.suivant();
+  lireSignal(signal);
+  const descente = proposer(structure, graineDerivee, {
+    arret,
+    historique,
+    dejaFaits: 0,
+    total: arret,
+    signal,
+    progression,
+    ...options,
+  });
+  return {
+    ...propositionDe(instance, { id: rang, graine: graineDerivee, arret, historique }, descente),
+    relances: descente.relances,
+  };
+}
 
 /**
  * Propositions de placement d'une configuration (§ 5.7) : nombre
@@ -1003,28 +1276,60 @@ export function verifierReglages({ graine, arret, nombre, historique = HISTORIQU
  * cette proposition, quel que soit son rang dans sa génération. La descente
  * elle-même fait aussi partie du résultat, ordre des tirages, PATIENCE et
  * ordres d'acceptation : une proposition rendue par une autre version de ce
- * module n'est pas garantie régénérable (§ 8.9). Aucun autre champ n'est lu,
- * ni id ni plan. Rend le seul plan, sans la course que rechercher joint à
- * la proposition. Ne modifie ni la configuration ni la proposition.
+ * module n'est pas garantie régénérable (§ 8.9). Rend le seul plan, sans la
+ * course que rechercher joint à la proposition. Ne modifie ni la
+ * configuration, ni la proposition, ni le plan du départ.
+ *
+ * Une proposition dérivée porte en plus depart, l'identifiant de son départ,
+ * et toursFiges quand elle en a : sa descente part alors du plan de son
+ * départ, options.planDuDepart, sous ses tours figés, toursFiges absent
+ * valant aucun, et regenerer rend le plan que repartir a rendu pour elle.
+ * Sans depart ni toursFiges, options.planDuDepart n'est pas lu. Aucun autre
+ * champ n'est lu, ni id ni plan : un fichier de proposition entier se passe
+ * tel quel.
  *
  * Lève RangeError quand l'un des trois champs n'est pas un entier de son
  * domaine, graine de 0 à 2^32 − 1, arret et historique ≥ 1 : un champ absent
  * ne reçoit pas la valeur par défaut de rechercher, qui ferait régénérer une
- * autre proposition sans le dire. Lève ce que rechercher lève pour la
- * configuration : ErreurConfiguration de normaliser, PLACES_MANQUANTES.
+ * autre proposition sans le dire. Lève ensuite une RangeError de champ
+ * reglage 'toursFiges' pour toursFiges présent sans depart, et de champ
+ * reglage 'depart' pour un depart qui n'est pas un entier ≥ 1 ou qui vient
+ * sans planDuDepart : sans lui, la descente rendrait en silence la
+ * proposition ordinaire de même graine. Lève ce que rechercher lève pour la
+ * configuration : ErreurConfiguration de normaliser, PLACES_MANQUANTES ;
+ * puis ce que repartir lève pour le départ.
  *
  * @param {import('./types.js').Configuration} configuration
- * @param {{graine: number, arret: number, historique: number}} proposition
+ * @param {{graine: number, arret: number, historique: number, depart?: number, toursFiges?: number[]}} proposition
+ * @param {{planDuDepart?: import('./types.js').Plan|null}} [options]
  * @returns {import('./types.js').Plan}
  */
-export function regenerer(configuration, { graine, arret, historique }) {
+export function regenerer(
+  configuration,
+  { graine, arret, historique, depart, toursFiges },
+  { planDuDepart = null } = {},
+) {
   exigerChampsProposition({ graine, arret, historique });
+  if (depart === undefined && toursFiges !== undefined) {
+    refuserReglage('toursFiges', 'des tours figés sans depart ne désignent aucun plan');
+  }
+  if (depart !== undefined) {
+    exigerReglage('depart', depart, 1, Number.MAX_SAFE_INTEGER);
+    if (planDuDepart === null) {
+      refuserReglage('depart', `le plan du départ n° ${depart} est requis pour régénérer une dérivée`);
+    }
+  }
   const instance = normaliser(configuration);
-  const { plan } = proposer(preparer(instance), graine, {
+  const structure = preparer(instance);
+  const options = depart === undefined
+    ? {}
+    : preparerDepart(structure, { plan: planDuDepart, toursFiges: toursFiges ?? [] });
+  const { plan } = proposer(structure, graine, {
     arret,
     historique,
     dejaFaits: 0,
     total: arret,
+    ...options,
   });
   return planDepuisIndex(instance, plan);
 }
@@ -1125,8 +1430,30 @@ export function scoreComplet(etat) {
  * @returns {Mouvement|null}
  */
 export function proposerEtAppliquer(etat, rng) {
-  const { R, S, mobiles, nombreMobiles, tableDuSiege, siege } = etat;
-  const r = rng.borne(R);
+  return mouvoirDans(etat, rng, rng.borne(etat.R));
+}
+
+/**
+ * Un mouvement d'une dérivée (paragraphe « Départ ») : son tour se tire
+ * parmi tirables, les index des tours non figés, par borne(k) sur leur
+ * nombre k, puis ses deux sièges comme ceux de proposerEtAppliquer. Aucun
+ * mouvement ne tombe dans un tour hors de tirables. Rend de quoi le défaire,
+ * ou null pour un mouvement évalué et rejeté.
+ *
+ * @param {EtatRecherche} etat
+ * @param {ReturnType<typeof creerPcg32>} rng
+ * @param {ArrayLike<number>} tirables   index de tours, non vide
+ * @returns {Mouvement|null}
+ */
+export function proposerParmi(etat, rng, tirables) {
+  return mouvoirDans(etat, rng, tirables[rng.borne(tirables.length)]);
+}
+
+// Les deux sièges mobiles du tour r, tirés chacun par borne(m), puis
+// l'échange de leurs occupants (en-tête du module, « Mouvement ») ; null
+// pour un mouvement évalué et rejeté.
+function mouvoirDans(etat, rng, r) {
+  const { S, mobiles, nombreMobiles, tableDuSiege, siege } = etat;
   const m = nombreMobiles[r];
   if (m < 2) return null;
   const base = r * S;

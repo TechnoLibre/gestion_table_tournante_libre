@@ -1181,3 +1181,62 @@ describe('le journal d’un format plus ancien se lit (§ 8.8, A15)', () => {
     assert.equal(lireJournal(elague).format, FORMAT);
   });
 });
+
+describe('la dérivation traverse le journal (§ 8.3, § 8.6, § 8.9, C11, C25, D77)', () => {
+  // La petite démonstration, puis deux propositions ordinaires (1 et 2),
+  // deux dérivées de la 1, tour 2 figé (3 et 4), l'effacement de leur
+  // départ et de la 2, un retour à l'état des dérivées, l'effacement de
+  // tout, et une proposition ordinaire de plus (5).
+  function etapesDerivees() {
+    const base = chargeDe('petite');
+    const configuration = configurationDepuisCharge(base);
+    const poser = (charge, graine, derivation) => {
+      const suivante = copie(charge);
+      const decalage = suivante.prochainsIds.proposition - 1;
+      const options = { produitVersion: V1, attribuerSieges: false, decalage, derivation };
+      const posees = rechercher(configuration, { graine, arret: ARRET, nombre: 2 }).map((p) => versFichier(p, configuration, options));
+      suivante.propositions.push(...posees);
+      suivante.prochainsIds.proposition = decalage + posees.length + 1;
+      suivante.evenement.etat = 'propose';
+      return suivante;
+    };
+    const garder = (charge, ids) => ({ ...copie(charge), propositions: copie(charge.propositions.filter(({ id }) => ids.includes(id))) });
+    const ordinaires = poser(base, 3, null);
+    const derivees = poser(ordinaires, 4, { depart: 1, toursFiges: [2] });
+    const sansDepart = garder(derivees, [3, 4]);
+    const vide = garder(derivees, []);
+    const suivante = poser(vide, 5, null);
+    return [
+      { apres: base },
+      { apres: ordinaires },
+      { apres: derivees },
+      { apres: sansDepart },
+      { apres: copie(derivees), sens: 'revenir', retour: 3 },
+      { apres: vide },
+      { apres: { ...suivante, propositions: suivante.propositions.slice(0, 1) } },
+    ];
+  }
+
+  test('chaque révision se reconstruit, dérivées comprises ; l’effacement du départ garde les dérivées, et le retour rend leur départ', () => {
+    const etapes = etapesDerivees();
+    const texte = journalDe(etapes);
+    const journal = lireJournal(texte);
+    assert.equal(journal.ecartees, 0);
+    etapes.forEach(({ apres }, rang) => {
+      const reconstruite = reconstruire(journal, rang + 1);
+      assert.equal(texteCanonique(reconstruite), texteCanonique(apres), `révision ${rang + 1}`);
+      assert.deepEqual(examiner(reconstruite).fautives, [], `révision ${rang + 1}`);
+    });
+    const derivation = (r) => reconstruire(journal, r).propositions.map(({ id, depart, toursFiges }) => [id, depart, toursFiges]);
+    assert.deepEqual(derivation(3), [[1, undefined, undefined], [2, undefined, undefined], [3, 1, [2]], [4, 1, [2]]]);
+    assert.deepEqual(derivation(4), [[3, 1, [2]], [4, 1, [2]]]);
+    assert.deepEqual(derivation(5), derivation(3));
+    assert.deepEqual(derivation(7), [[5, undefined, undefined]]);
+    // Les révisions 3, 4 et 5 sont des correctifs, qui portent les champs.
+    const lignes = lignesDe(texte);
+    assert.deepEqual([3, 4, 5].map((r) => estInstantane(r, 1)), [false, false, false]);
+    assert.ok(lignes[3].includes('"depart":1,"toursFiges":[2]'), lignes[3]);
+    // Le retour de la révision 5 y prend la place de la 3, qu'il rend.
+    assert.deepEqual(fil(journal).courant, [7, 6, 3, 2, 1]);
+  });
+});

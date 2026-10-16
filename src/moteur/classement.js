@@ -158,6 +158,36 @@ function comparerCles(a, b) {
   return 0;
 }
 
+// La somme d'une composante pour une entrée lue : Σ poids × valeur sur ses
+// termes, ceux de composantesDuPalier.
+function sommer(termes, lue) {
+  let somme = 0;
+  for (const [poids, lire] of termes) somme += poids * lire(lue);
+  return somme;
+}
+
+// Ce que classer et premierPalierQuiDepartage lisent des entrées, après leurs
+// gardes : lues, chaque entrée {id, mesures, ecarts} ; appliques, les paliers
+// de la compilation que le classement applique, le palier du plafond a
+// priori ôté quand une seule entrée l'a inconnu ; saute, vrai dans ce cas ;
+// rangSaute, le rang de ce palier dans la compilation, à partir de 0, -1
+// quand rien n'est sauté.
+function lirePaliers(entrees, compilation) {
+  exigerIdentifiants(entrees);
+  exigerMemeTaille(entrees);
+  const lues = entrees.map(({ id, mesures, plafondsAPriori }) => ({
+    id,
+    mesures,
+    ecarts: ecartsAuPlafondAPriori(mesures, plafondsAPriori),
+  }));
+  const saute = lues.some(({ ecarts }) => ecarts === null);
+  const rangSaute = saute
+    ? compilation.paliers.findIndex(({ criteres }) => criteres.some(({ nom }) => nom === CRITERE_A_PRIORI))
+    : -1;
+  const appliques = compilation.paliers.filter((_, rang) => rang !== rangSaute);
+  return { lues, appliques, saute, rangSaute };
+}
+
 /**
  * Ordre des propositions (§ 5.7, A11), la meilleure d'abord : palier par
  * palier dans l'ordre de la compilation, chacun croissant, puis identifiant
@@ -204,26 +234,11 @@ function comparerCles(a, b) {
  *            critereSaute: string|null, rangSaute: number|null}}
  */
 export function classer(entrees, compilation = REFERENCE) {
-  exigerIdentifiants(entrees);
-  exigerMemeTaille(entrees);
-  const lues = entrees.map(({ id, mesures, plafondsAPriori }) => ({
-    id,
-    mesures,
-    ecarts: ecartsAuPlafondAPriori(mesures, plafondsAPriori),
-  }));
-  const saute = lues.some(({ ecarts }) => ecarts === null);
-  const rangSaute = saute
-    ? compilation.paliers.findIndex(({ criteres }) => criteres.some(({ nom }) => nom === CRITERE_A_PRIORI))
-    : -1;
-  const appliques = compilation.paliers.filter((_, rang) => rang !== rangSaute);
+  const { lues, appliques, saute, rangSaute } = lirePaliers(entrees, compilation);
   const composantes = appliques.flatMap(composantesDuPalier);
   const classees = lues.map((lue) => ({
     id: lue.id,
-    cle: composantes.map((termes) => {
-      let somme = 0;
-      for (const [poids, lire] of termes) somme += poids * lire(lue);
-      return somme;
-    }),
+    cle: composantes.map((termes) => sommer(termes, lue)),
   }));
   classees.sort((a, b) => comparerCles(a.cle, b.cle) || a.id - b.id);
   return {
@@ -234,4 +249,40 @@ export function classer(entrees, compilation = REFERENCE) {
     critereSaute: saute ? CRITERE_A_PRIORI : null,
     rangSaute: rangSaute < 0 ? null : rangSaute,
   };
+}
+
+/**
+ * Ce qui départage deux propositions au classement (§ 12.6, D63, C17) : le
+ * premier palier appliqué où leurs clés diffèrent, sous les composantes
+ * mêmes que classer compare — chaque valeur d'un critère seul à son palier,
+ * la somme pondérée d'un palier partagé —, lues, jamais recomptées.
+ *
+ * Rend {rang, criteres} : rang, le rang de ce palier parmi les paliers
+ * appliqués, compté de 1 ; le palier que classer saute, plafond a priori
+ * inconnu d'un côté au moins, n'y compte pas, et un palier compte une fois
+ * quel que soit le nombre de valeurs qu'il compare. criteres, les noms de
+ * ses critères, dans l'ordre du palier. null quand toutes les clés sont
+ * égales : l'identifiant départage. L'ordre des deux arguments n'y change
+ * rien ; classer range devant celle dont la composante est la plus petite.
+ *
+ * Chaque entrée a la forme que classer reçoit ; mêmes gardes que classer,
+ * si bien que deux entrées de même identifiant lèvent RangeError. Ne
+ * modifie pas ce qu'il reçoit.
+ *
+ * @param {{id: number, mesures: import('./indicateurs.js').Mesures, plafondsAPriori: ArrayLike<number>|null}} entreeA
+ * @param {{id: number, mesures: import('./indicateurs.js').Mesures, plafondsAPriori: ArrayLike<number>|null}} entreeB
+ * @param {ReturnType<typeof compilationDe>} [compilation]  par défaut,
+ *        l'ordre fixe de référence, comme classer
+ * @returns {{rang: number, criteres: string[]}|null}
+ */
+export function premierPalierQuiDepartage(entreeA, entreeB, compilation = REFERENCE) {
+  const { lues, appliques } = lirePaliers([entreeA, entreeB], compilation);
+  const [a, b] = lues;
+  for (let rang = 0; rang < appliques.length; rang += 1) {
+    const palier = appliques[rang];
+    if (composantesDuPalier(palier).some((termes) => sommer(termes, a) !== sommer(termes, b))) {
+      return { rang: rang + 1, criteres: palier.criteres.map(({ nom }) => nom) };
+    }
+  }
+  return null;
 }

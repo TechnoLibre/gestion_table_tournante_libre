@@ -385,3 +385,62 @@ describe("le compagnon des courses : l'empreinte d'un placement copié (§ 8.9)"
     assert.equal(une.n, seule.n, "seule la proposition 2 s'est hachée");
   });
 });
+
+describe('le compagnon des courses : la course d’une dérivée, sous la clé de toute proposition (§ 8.6, § 8.9, C10, D78)', () => {
+  const HORODATAGE = '2031-05-17T08:02:00-04:00';
+  const options = { produitVersion: VERSION.affichee, attribuerSieges: false, decalage: 0 };
+
+  // La proposition 4 du moteur sur plan, mise en fichier avec derivation
+  // (null : ordinaire), datée de HORODATAGE, et son entrée.
+  function fichierEtEntree(plan, derivation) {
+    const proposition = propositionDuMoteur(4, 120, plan);
+    const fichier = { ...versFichier(proposition, petite(), { ...options, derivation }), horodatage: HORODATAGE };
+    return { fichier, entree: entreeDeCourse(fichier, courseVersFichier(proposition, fichier, { attribuerSieges: false })) };
+  }
+
+  test('l’entrée d’une dérivée a les clés d’une proposition ordinaire, sans depart ni toursFiges, et sa clé la forme id|graine|arret|historique|horodatage|empreinte', () => {
+    for (const derivation of [{ depart: 1, toursFiges: [] }, { depart: 1, toursFiges: [2, 3] }]) {
+      // Une dérivée porte un identifiant au-delà de son départ.
+      const proposition = propositionDuMoteur(4);
+      const fichier = { ...versFichier(proposition, petite(), { ...options, derivation }), horodatage: HORODATAGE };
+      const entree = entreeDeCourse(fichier, courseVersFichier(proposition, fichier, { attribuerSieges: false }));
+      assert.deepEqual(Object.keys(entree), ['id', 'graine', 'arret', 'historique', 'horodatage', 'empreinte', 'course']);
+      const cle = cleDeCourse(fichier);
+      assert.match(cle, /^4\|104\|20000\|1000\|2031-05-17T08:02:00-04:00\|\d+$/);
+      assert.equal(cleDeCourse(entree), cle);
+      // Sa clé est celle de la même proposition sans dérivation.
+      const { depart, toursFiges, ...ordinaire } = fichier;
+      assert.equal(cleDeCourse(ordinaire), cle);
+      // Le compagnon la relit sous cette clé.
+      const charge = creerCharge({ id: EVENEMENT, nom: 'Soirée des Mésanges', siegesParDefaut: 3, tours: 4 });
+      charge.propositions = [fichier];
+      assert.deepEqual(cles(lireCourses(texteDesCourses(EVENEMENT, [entree]), charge)), [cle]);
+    }
+  });
+
+  // Deux états de part et d'autre d'un retour : la même génération,
+  // ordinaire dans l'un, dérivée de la 1 dans l'autre, a donné la
+  // proposition 4 au même triplet et au même horodatage, sur deux
+  // placements.
+  test('deux propositions de même identifiant, même triplet et même horodatage, l’une ordinaire, l’autre dérivée, de placements différents : deux clés que seule l’empreinte sépare', () => {
+    const ordinaire = fichierEtEntree(PLAN_PARFAIT_PETITE, null);
+    const derivee = fichierEtEntree(PLAN_INVERSE, { depart: 1, toursFiges: [2] });
+    assert.deepEqual(
+      [ordinaire.fichier.id, ordinaire.fichier.graine, ordinaire.fichier.arret, ordinaire.fichier.historique, ordinaire.fichier.horodatage],
+      [derivee.fichier.id, derivee.fichier.graine, derivee.fichier.arret, derivee.fichier.historique, derivee.fichier.horodatage],
+    );
+    const [a, b] = [cleDeCourse(ordinaire.fichier), cleDeCourse(derivee.fichier)];
+    assert.notEqual(a, b);
+    const sansEmpreinte = (cle) => cle.slice(0, cle.lastIndexOf('|'));
+    assert.equal(sansEmpreinte(a), sansEmpreinte(b));
+    // Chaque état ne relit que sa propre course.
+    const chargeDe = (fichier) => {
+      const charge = creerCharge({ id: EVENEMENT, nom: 'Soirée des Mésanges', siegesParDefaut: 3, tours: 4 });
+      charge.propositions = [fichier];
+      return charge;
+    };
+    const texte = texteDesCourses(EVENEMENT, [ordinaire.entree, derivee.entree]);
+    assert.deepEqual(cles(lireCourses(texte, chargeDe(ordinaire.fichier))), [a]);
+    assert.deepEqual(cles(lireCourses(texte, chargeDe(derivee.fichier))), [b]);
+  });
+});

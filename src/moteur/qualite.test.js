@@ -19,6 +19,7 @@ import { diagnostiquer } from './diagnostic.js';
 import { diversiteAnimateurs } from './diversite.js';
 import { mesurer, parcourirTours } from './indicateurs.js';
 import { troisChiffres } from './manque.js';
+import { manques, profilManque } from './manque.js';
 import { matriceRencontres, pairesRepetees } from './paires.js';
 import { borneDiversite, occupations, plafondsAPriori, plafondsRealises } from './plafond.js';
 import {
@@ -27,12 +28,15 @@ import {
   detailler,
   mixTables,
   objectifsParTour,
+  planchersAtteints,
+  planchersDesColonnes,
   planchersParGroupe,
   pourcentage,
   profilAnimateurs,
   profilRencontres,
   repartition,
   synthese,
+  teteDesColonnes,
 } from './qualite.js';
 
 const AUBIER = 'Coopérative Aubier';
@@ -1332,5 +1336,427 @@ describe('qualite : la source du module', () => {
 
   test('aucun plan relu case à case : le détail lit le parcours et l’occupation', () => {
     assert.doesNotMatch(source, /\btableDe\[/);
+  });
+});
+
+// La tête des colonnes de la comparaison et les planchers des colonnes
+// (§ 12.10.6, D67, D84, C20). Les valeurs attendues sont comptées à la main
+// dans le commentaire de chaque configuration, plus haut. bornesDeReference
+// calcule les bornes des tuiles sans teteDesColonnes ni planchersAtteints :
+// rang 1 lu dans le profil trié, soirée lue dans les objectifs par tour,
+// planchers sommés du diagnostic. bornesDesTuiles lui est égal en copie
+// profonde sur chaque configuration de ce fichier et sur les neuf cents plans
+// de la petite.
+
+// Les colonnes de collisions, le champ du plancher de chaque appartenance
+// dans le diagnostic ; les colonnes des objectifs, leur champ dans
+// objectifsInevitables comme dans mesures.objectifs.
+const COLLISIONS_DE_REFERENCE = [
+  ['collisionsCumulees', 'plancherCumulees'],
+  ['pairesDistinctes', 'plancherPairesDistinctes'],
+  ['excedentCollisions', 'plancherExcedent'],
+];
+const OBJECTIFS_DE_REFERENCE = [
+  ['jamaisServies', 'jamaisServies'],
+  ['horsObjectifMax', 'horsObjectifMax'],
+  ['toursHorsObjectif', 'horsObjectif'],
+];
+
+// Les bornes des tuiles calculées sans teteDesColonnes ni planchersAtteints :
+// rang 1 lu dans le profil, minimum de s(p) par un parcours des index, soirée
+// lue dans les objectifs par tour, planchers sommés du diagnostic.
+function bornesDeReference(instance, { mesures, plafondsRealises, aMax, profil, animateurs, objectifs, diagnostic, planchersValides, troisChiffres: chiffres }) {
+  const { N, indexDe, groupes, etatCriteres } = instance;
+  const premierIndex = (estCandidat, avant) => {
+    let tete = null;
+    for (let p = 0; p < N; p += 1) if (estCandidat(p) && (tete === null || avant(p, tete))) tete = p;
+    return tete;
+  };
+  let rang1 = null;
+  let manque = null;
+  if (profil.length > 0) {
+    const { p, rencontres, plafondRealise, plafondAPriori, pourcent } = profil[0];
+    rang1 = { p, rencontres, plafondRealise, plafondAPriori, pourcent };
+    const [tete] = profilManque(instance, manques(plafondsRealises, mesures.rencontres), plafondsRealises);
+    const q = indexDe.get(tete.id);
+    manque = { p: q, plafondRealise: plafondsRealises[q] };
+  }
+  let diversite = null;
+  if (groupes.length > 0) {
+    const A = mesures.appartenancesVues;
+    const p = premierIndex(() => true, (x, y) => A[x] < A[y] || (A[x] === A[y] && aMax[x] > aMax[y]));
+    diversite = { p, aMax: aMax[p] };
+  }
+  let parObjectif = null;
+  let soiree = null;
+  if (mesures.objectifs !== null) {
+    const { tours: s, possibles: P, jamaisServies } = mesures.objectifs;
+    const p = premierIndex((x) => P[x] > 0, (x, y) => s[x] < s[y] || (s[x] === s[y] && P[x] > P[y]));
+    parObjectif = { p, servis: s[p], possibles: P[p], pourcent: pourcentage(s[p], P[p]) };
+    const { servis, possibles, pourcent } = objectifs.soiree;
+    soiree = { servis, possibles, pourcent, jamaisServies };
+  }
+  const plancher = (valeur, mesure) => (valeur > 0 ? { plancher: valeur, atteint: mesure === valeur } : null);
+  const planchers = { ...SANS_PLANCHER };
+  if (planchersValides) {
+    for (const [colonne, champ] of COLLISIONS_DE_REFERENCE) {
+      planchers[colonne] = plancher(somme(diagnostic.collisions.map((ligne) => ligne[champ] ?? 0)), mesures[colonne]);
+    }
+    if (diagnostic.ecartItineraire !== null && chiffres.ecartItineraireMax !== null) {
+      planchers.ecartItineraireMax = plancher(diagnostic.ecartItineraire.plancher, chiffres.ecartItineraireMax.tous);
+    }
+    const critere = etatCriteres.find(({ nom }) => nom === 'toursHorsObjectif');
+    if (critere.coche && !critere.sansObjet) {
+      for (const [colonne, champ] of OBJECTIFS_DE_REFERENCE) {
+        if (critere.valeurs.includes(colonne)) planchers[colonne] = plancher(diagnostic.objectifsInevitables[champ], mesures.objectifs[champ]);
+      }
+    }
+  }
+  return {
+    rang1,
+    manque,
+    diversite,
+    animateurs: animateurs === null ? null : { p: animateurs[0].p, borne: animateurs[0].borne },
+    objectifs: parObjectif,
+    soiree,
+    planchers,
+  };
+}
+
+// Ce que bornesDesTuiles lit pour un plan préparé : tout, objectifs par tour
+// et profil des animateurs compris, sous le plafond a priori calculé ou
+// inconnu, dans le domaine des planchers ou non.
+function lusDuPlan(prepare, { planchersValides = true, aPrioriConnu = true } = {}) {
+  const { instance } = prepare;
+  const { mesures, realises, aPriori, aMax } = mesurerTout(prepare);
+  const plafonds = aPrioriConnu ? aPriori : null;
+  return {
+    mesures,
+    plafondsRealises: realises,
+    aMax,
+    profil: profilRencontres(instance, mesures, realises, plafonds, aMax),
+    animateurs: profilAnimateurs(instance, mesures),
+    objectifs: objectifsDe(prepare).objectifs,
+    ...duDiagnostic(prepare, plafonds, planchersValides),
+  };
+}
+
+// Six personnes, la sixième seule à la table 30 aux deux tours : plafond
+// réalisé nul, aucune rencontre. Elle est au rang 1 du profil, à 0
+// rencontre, avant la septième, en réserve au tour 2, au même plafond nul
+// (épreuve des marques de profilRencontres).
+const PLAFOND_NUL = {
+  personnes: [[1], [2], [3], [4], [5], [6], [7]],
+  tables: [[10, 2], [20, 2], [30, 2], [40, 2]],
+  plan: [
+    { 10: [1, 3], 20: [2, 4], 30: [6], 40: [7] },
+    { 10: [1, 5], 20: [3, 4], 30: [6] },
+  ],
+  reservations: [tous(1, 10), auTour(2, 20, 1)],
+};
+
+// Chaque configuration préparée de ce fichier, sous son nom, avec ses
+// variantes de mode et de critère : celles des épreuves de bornesDesTuiles.
+function configurationsDuFichier() {
+  const decoche = (modeObjectifs) => ({ ...DEUX_SIEGES, plan: QUATRE_SERVIES, modeObjectifs, contraintes: { ...SANS_CONTRAINTE, respecterObjectifs: false } });
+  return [
+    ['PROFIL', PROFIL],
+    ['PLAFOND_NUL', PLAFOND_NUL],
+    ['OBJECTIFS', OBJECTIFS],
+    ['COLLISIONS', COLLISIONS],
+    ['ANIMATEURS', ANIMATEURS],
+    ['CINQ_MEMBRES, mêmes tables', { ...CINQ_MEMBRES, plan: MEMES_TABLES }],
+    ['CINQ_MEMBRES, tables variées', { ...CINQ_MEMBRES, plan: TABLES_VARIEES }],
+    ['CINQ_MEMBRES, cinq en réserve', { ...CINQ_MEMBRES, plan: [0, 1, 2].map(() => ({ 1: [1, 2, 6], 2: [3, 4] })) }],
+    ['ITINERAIRE, par la table de deux', { ...ITINERAIRE, plan: PAR_LA_TABLE_DE_DEUX }],
+    ['ITINERAIRE, mêmes à la table de deux', { ...ITINERAIRE, plan: MEMES_A_LA_TABLE_DE_DEUX }],
+    ...['places', 'chacun', 'minimum'].flatMap((modeObjectifs) => [
+      [`DEUX_SIEGES, ${modeObjectifs}`, { ...DEUX_SIEGES, plan: QUATRE_SERVIES, modeObjectifs }],
+      [`DEUX_SIEGES décoché, ${modeObjectifs}`, decoche(modeObjectifs)],
+    ]),
+    ['DEUX_SIEGES, siège cédé', { ...DEUX_SIEGES, plan: [QUATRE_SERVIES[0], { 1: [3, 6], 2: [1, 2, 4, 5] }] }],
+  ].map(([nom, donnees]) => [nom, preparer(donnees)]);
+}
+
+describe('teteDesColonnes (§ 12.10.6, D67, D28)', () => {
+  test('rouge : le rang 1 du profil des rencontres, ses rencontres, son plafond réalisé et leur pourcentage, sans plafond a priori', () => {
+    const prepare = preparer(PROFIL);
+    const { instance } = prepare;
+    const { mesures, realises } = mesurerTout(prepare);
+    const tete = teteDesColonnes(instance, mesures, realises);
+    assert.deepEqual(tete.rang1, { p: index(instance, 1), rencontres: 2, plafondRealise: 2, pourcent: 100 });
+    assert.deepEqual(Object.keys(tete.rang1), ['p', 'rencontres', 'plafondRealise', 'pourcent']);
+    // Aucun objectif : ni minimum de s(p), ni soirée.
+    assert.equal(tete.objectifs, null);
+    assert.equal(tete.soiree, null);
+  });
+
+  test('rouge : plafond réalisé nul au rang 1 : le pourcentage vaut null, jamais 0, les comptes restent', () => {
+    const prepare = preparer(PLAFOND_NUL);
+    const { instance } = prepare;
+    const { mesures, realises } = mesurerTout(prepare);
+    assert.deepEqual(teteDesColonnes(instance, mesures, realises).rang1, { p: index(instance, 6), rencontres: 0, plafondRealise: 0, pourcent: null });
+  });
+
+  test('rouge : le minimum de s(p) parmi les concernées, et la soirée, Σ s(p) sur Σ P(p), jamais une moyenne des personnes', () => {
+    // s(p) : 1, 1, 1, 0, 0, 2 ; P(p) : 2, 2, 2, 1, 2, 2 ; 7, 8 et 9 ne sont
+    // pas concernées. Σ s = 5, Σ P = 11 : 45 %. La moyenne des pourcentages
+    // par personne, (50 + 50 + 50 + 0 + 0 + 100) / 6, en donnerait 41.
+    const prepare = preparer(OBJECTIFS);
+    const { instance, tableDe } = prepare;
+    const { mesures, realises } = mesurerTout(prepare);
+    const tete = teteDesColonnes(instance, mesures, realises);
+    assert.deepEqual(tete.objectifs, { p: index(instance, 5), servis: 0, possibles: 2, pourcent: 0 });
+    assert.deepEqual(tete.soiree, { servis: 5, possibles: 11, pourcent: 45, jamaisServies: 2 });
+    assert.equal(tete.soiree.jamaisServies, mesurer(instance, tableDe).objectifs.jamaisServies);
+  });
+
+  test('sans personne présente : rang 1, objectifs et soirée null', () => {
+    const configuration = {
+      participants: [{ id: 1, nom: 'P1', appartenance: AUBIER, exclu: true }],
+      tables: [{ id: 1, numero: 1, capacite: 2 }],
+      tours: 1,
+      reservations: [],
+      contraintes: SANS_CONTRAINTE,
+    };
+    const vide = normaliser(configuration);
+    const plan = new Int32Array(0);
+    assert.deepEqual(teteDesColonnes(vide, mesurer(vide, plan), []), { rang1: null, objectifs: null, soiree: null });
+  });
+
+  test('ne lit que les mesures et les plafonds réalisés : un plafond réalisé d’une autre population lève RangeError', () => {
+    const prepare = preparer(PROFIL);
+    const { mesures, realises } = mesurerTout(prepare);
+    assert.throws(() => teteDesColonnes(prepare.instance, mesures, realises.slice(1)), RangeError);
+    assert.throws(() => teteDesColonnes(prepare.instance, { ...mesures, rencontres: mesures.rencontres.slice(1) }, realises), RangeError);
+  });
+
+  test('sur chacun des neuf cents plans de la petite configuration : la soirée égale celle des objectifs par tour, et le rang 1 la tête du profil trié', () => {
+    const configuration = {
+      participants: [
+        participant([1, AUBIER, ['finance']]),
+        participant([2, AUBIER, ['finance']]),
+        participant([3, RESSAC, ['finance']]),
+        participant([4, RESSAC]),
+        participant([5, null, ['finance']]),
+        participant([6]),
+      ],
+      tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 2 }, { id: 3, numero: 3, capacite: 2 }],
+      tours: 2,
+      reservations: [tous(1, 1)],
+      contraintes: SANS_CONTRAINTE,
+      objectifs: [
+        { table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] },
+        { table: 2, tour: 2, regle: 'ou', etiquettes: ['finance'] },
+      ],
+    };
+    const instance = normaliser(configuration);
+    const diagnostic = diagnostiquer(configuration);
+    const aPriori = plafondsAPriori(instance);
+    let plans = 0;
+    for (const tableDe of tousLesPlans(instance)) {
+      plans += 1;
+      const mesures = mesurer(instance, tableDe);
+      const realises = plafondsRealises(instance, tableDe);
+      const tete = teteDesColonnes(instance, mesures, realises);
+      const { soiree } = objectifsParTour(instance, parcourirTours(instance, tableDe), diagnostic.objectifsInevitables.parTour);
+      assert.deepEqual(tete.soiree, { servis: soiree.servis, possibles: soiree.possibles, pourcent: soiree.pourcent, jamaisServies: mesures.objectifs.jamaisServies });
+      const [premiere] = profilRencontres(instance, mesures, realises, aPriori, borneDiversite(instance, tableDe).aMax);
+      assert.deepEqual(tete.rang1, { p: premiere.p, rencontres: premiere.rencontres, plafondRealise: premiere.plafondRealise, pourcent: premiere.pourcent });
+    }
+    assert.equal(plans, 900);
+  });
+});
+
+describe('bornesDesTuiles lit teteDesColonnes et planchersAtteints (§ 12.2, D67)', () => {
+  test('sur chaque configuration de ce fichier, la même valeur que bornesDeReference, copie profonde comparée : plafond a priori calculé ou inconnu, dans le domaine des planchers ou non', () => {
+    const configurations = configurationsDuFichier();
+    assert.equal(configurations.length, 17);
+    for (const [nom, prepare] of configurations) {
+      for (const options of [{}, { aPrioriConnu: false }, { planchersValides: false }]) {
+        const lus = lusDuPlan(prepare, options);
+        assert.deepEqual(bornesDesTuiles(prepare.instance, lus), bornesDeReference(prepare.instance, lus), `${nom}, ${JSON.stringify(options)}`);
+      }
+    }
+  });
+
+  test('sur chacun des neuf cents plans de la petite configuration, la même valeur que bornesDeReference', () => {
+    const configuration = {
+      participants: [
+        participant([1, AUBIER, ['finance']]),
+        participant([2, AUBIER, ['finance']]),
+        participant([3, RESSAC, ['finance']]),
+        participant([4, RESSAC]),
+        participant([5, null, ['finance']]),
+        participant([6]),
+      ],
+      tables: [{ id: 1, numero: 1, capacite: 2 }, { id: 2, numero: 2, capacite: 2 }, { id: 3, numero: 3, capacite: 2 }],
+      tours: 2,
+      reservations: [tous(1, 1)],
+      contraintes: SANS_CONTRAINTE,
+      objectifs: [
+        { table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] },
+        { table: 2, tour: 2, regle: 'ou', etiquettes: ['finance'] },
+      ],
+    };
+    const instance = normaliser(configuration);
+    let plans = 0;
+    for (const tableDe of tousLesPlans(instance)) {
+      plans += 1;
+      const lus = lusDuPlan({ configuration, instance, tableDe });
+      assert.deepEqual(bornesDesTuiles(instance, lus), bornesDeReference(instance, lus));
+    }
+    assert.equal(plans, 900);
+  });
+
+  test('rouge : la soirée se lit dans teteDesColonnes : des objectifs par tour absents n’y changent rien', () => {
+    const prepare = preparer(OBJECTIFS);
+    const lus = lusDuPlan(prepare);
+    const sans = bornesDesTuiles(prepare.instance, { ...lus, objectifs: undefined });
+    assert.deepEqual(sans, bornesDesTuiles(prepare.instance, lus));
+    assert.deepEqual(sans.soiree, { servis: 5, possibles: 11, pourcent: 45, jamaisServies: 2 });
+  });
+
+  test('rouge : le rang 1 se lit dans teteDesColonnes : un profil forgé n’en fournit que le plafond a priori', () => {
+    const prepare = preparer(PROFIL);
+    const { instance } = prepare;
+    const lus = lusDuPlan(prepare);
+    const tete = teteDesColonnes(instance, lus.mesures, lus.plafondsRealises).rang1;
+    // La deuxième ligne du profil (personne 4 : 3 rencontres, plafond 4, 75 %)
+    // passe en tête, avec un plafond a priori qu'aucune mesure ne donne.
+    const forgee = { ...lus.profil[1], plafondAPriori: 17 };
+    assert.notEqual(forgee.p, tete.p);
+    assert.notEqual(forgee.rencontres, tete.rencontres);
+    assert.notEqual(forgee.plafondRealise, tete.plafondRealise);
+    assert.notEqual(forgee.pourcent, tete.pourcent);
+    const bornes = bornesDesTuiles(instance, { ...lus, profil: [forgee, ...lus.profil.slice(2)] });
+    assert.deepEqual(bornes.rang1, { ...tete, plafondAPriori: 17 });
+  });
+
+  test('rouge : la source de bornesDesTuiles appelle teteDesColonnes et planchersAtteints, et ne calcule aucun pourcentage elle-même', () => {
+    const source = readFileSync(new URL('./qualite.js', import.meta.url), 'utf8');
+    const debut = source.indexOf('export function bornesDesTuiles(');
+    const corps = source.slice(debut, source.indexOf('\n}\n', debut));
+    assert.ok(debut > 0);
+    assert.match(corps, /\bteteDesColonnes\(/);
+    assert.match(corps, /\bplanchersDe\(|\bplanchersAtteints\(/);
+    assert.doesNotMatch(corps, /\bpourcentage\(/);
+    assert.doesNotMatch(corps, /\bpremier\(N, \(x\) => P\[x\]/);
+  });
+});
+
+describe('planchersDesColonnes (§ 12.2, § 5.6, D84)', () => {
+  test('rouge : la somme des planchers de collisions du diagnostic, 0 quand il se tait ; l’écart d’itinéraire, null sans plancher a priori', () => {
+    const memes = preparer({ ...CINQ_MEMBRES, plan: MEMES_TABLES });
+    assert.deepEqual(planchersDesColonnes(memes.instance, diagnostiquer(memes.configuration)), {
+      collisionsCumulees: 12,
+      pairesDistinctes: 4,
+      excedentCollisions: 2,
+      ecartItineraireMax: null,
+      jamaisServies: null,
+      horsObjectifMax: null,
+      toursHorsObjectif: null,
+    });
+    const rien = preparer(PROFIL);
+    assert.deepEqual(planchersDesColonnes(rien.instance, diagnostiquer(rien.configuration)), {
+      ...SANS_PLANCHER,
+      collisionsCumulees: 0,
+      pairesDistinctes: 0,
+      excedentCollisions: 0,
+    });
+    const itineraire = preparer({ ...ITINERAIRE, plan: PAR_LA_TABLE_DE_DEUX });
+    assert.equal(planchersDesColonnes(itineraire.instance, diagnostiquer(itineraire.configuration)).ecartItineraireMax, 1);
+  });
+
+  test('rouge : les objectifs, chaque valeur que le mode réglé compare, critère coché ; un plancher nul reste 0', () => {
+    const objectifsDu = (donnees) => {
+      const { instance, configuration } = preparer(donnees);
+      const { jamaisServies, horsObjectifMax, toursHorsObjectif } = planchersDesColonnes(instance, diagnostiquer(configuration));
+      return [jamaisServies, horsObjectifMax, toursHorsObjectif];
+    };
+    assert.deepEqual(objectifsDu({ ...DEUX_SIEGES, plan: QUATRE_SERVIES }), [null, null, 6]);
+    assert.deepEqual(objectifsDu({ ...DEUX_SIEGES, plan: QUATRE_SERVIES, modeObjectifs: 'chacun' }), [1, null, 6]);
+    assert.deepEqual(objectifsDu({ ...DEUX_SIEGES, plan: QUATRE_SERVIES, modeObjectifs: 'minimum' }), [null, 2, 6]);
+    const large = {
+      ...DEUX_SIEGES,
+      tables: [[1, 5], [2, 2]],
+      plan: [
+        { 1: [1, 2, 3, 4, 5], 2: [6] },
+        { 1: [1, 2, 3, 4, 5], 2: [6] },
+      ],
+    };
+    assert.deepEqual(objectifsDu(large), [null, null, 0]);
+  });
+
+  test('rouge : critère des objectifs décoché : aucun plancher des objectifs, sous aucun mode', () => {
+    for (const modeObjectifs of ['places', 'chacun', 'minimum']) {
+      const { instance, configuration } = preparer({
+        ...DEUX_SIEGES,
+        plan: QUATRE_SERVIES,
+        modeObjectifs,
+        contraintes: { ...SANS_CONTRAINTE, respecterObjectifs: false },
+      });
+      const planchers = planchersDesColonnes(instance, diagnostiquer(configuration));
+      assert.deepEqual([planchers.jamaisServies, planchers.horsObjectifMax, planchers.toursHorsObjectif], [null, null, null], modeObjectifs);
+    }
+  });
+});
+
+describe('planchersAtteints (§ 12.2, B11)', () => {
+  // Des planchers de colonnes forgés, et les mesures d'un plan qui en égale
+  // certains : 12 collisions cumulées, 4 paires distinctes, un excédent de 8 ;
+  // un écart d'itinéraire maximal de 2 ; 6 tours hors objectif, 1 personne
+  // jamais servie, 2 tours hors objectif au plus pour une personne.
+  const planchers = {
+    collisionsCumulees: 12,
+    pairesDistinctes: 0,
+    excedentCollisions: 2,
+    ecartItineraireMax: 2,
+    jamaisServies: 1,
+    horsObjectifMax: null,
+    toursHorsObjectif: 7,
+  };
+  const mesures = {
+    collisionsCumulees: 12,
+    pairesDistinctes: 4,
+    excedentCollisions: 8,
+    objectifs: { horsObjectif: 6, jamaisServies: 1, horsObjectifMax: 2 },
+  };
+  const chiffres = { ecartItineraireMax: { tous: 2, mobiles: 2, ancres: null } };
+
+  test('rouge : par colonne {plancher, atteint}, atteint quand la mesure l’égale ; null pour un plancher nul ou absent', () => {
+    assert.deepEqual(planchersAtteints(planchers, { mesures, troisChiffres: chiffres, planchersValides: true }), {
+      collisionsCumulees: { plancher: 12, atteint: true },
+      pairesDistinctes: null,
+      excedentCollisions: { plancher: 2, atteint: false },
+      ecartItineraireMax: { plancher: 2, atteint: true },
+      jamaisServies: { plancher: 1, atteint: true },
+      horsObjectifMax: null,
+      toursHorsObjectif: { plancher: 7, atteint: false },
+    });
+  });
+
+  test('rouge : hors du domaine des planchers, tous null ; une ligne sans écart d’itinéraire, aucun pour lui', () => {
+    assert.deepEqual(planchersAtteints(planchers, { mesures, troisChiffres: chiffres, planchersValides: false }), SANS_PLANCHER);
+    assert.equal(planchersAtteints(planchers, { mesures, troisChiffres: { ecartItineraireMax: null }, planchersValides: true }).ecartItineraireMax, null);
+  });
+
+  test('des objectifs sans plancher ne lisent pas les mesures des objectifs, absentes sans personne concernée', () => {
+    const sansObjectif = { ...planchers, jamaisServies: null, toursHorsObjectif: null };
+    const lus = planchersAtteints(sansObjectif, { mesures: { ...mesures, objectifs: null }, troisChiffres: chiffres, planchersValides: true });
+    assert.deepEqual([lus.jamaisServies, lus.horsObjectifMax, lus.toursHorsObjectif], [null, null, null]);
+  });
+
+  test('composés, ils redonnent les planchers des tuiles sur chaque configuration de ce fichier', () => {
+    for (const [nom, prepare] of configurationsDuFichier()) {
+      for (const options of [{}, { aPrioriConnu: false }, { planchersValides: false }]) {
+        const lus = lusDuPlan(prepare, options);
+        assert.deepEqual(
+          planchersAtteints(planchersDesColonnes(prepare.instance, lus.diagnostic), lus),
+          bornesDesTuiles(prepare.instance, lus).planchers,
+          `${nom}, ${JSON.stringify(options)}`,
+        );
+      }
+    }
   });
 });

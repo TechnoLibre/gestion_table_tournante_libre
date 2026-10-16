@@ -292,6 +292,7 @@ const EXEMPLES = new Map([
   ['MANQUANT', { tour: 2, participant: 7 }],
   ['IDENTIFIANT_REPETE', {}],
   ['IDENTIFIANT_HORS_COMPTEUR', {}],
+  ['DERIVATION', { chemin: 'toursFiges[1]', raison: 'tourHorsSoiree' }],
   // Raisons de dérive
   ['PARTICIPANT_EXCLU', { participant: 3 }],
   ['PARTICIPANT_SUPPRIME', { participant: 4 }],
@@ -422,6 +423,7 @@ const EXEMPLES = new Map([
   ['PLAN_EXCLU_PLACE', { participant: 3, tour: 2 }],
   ['PLAN_DOUBLE_PLACE', { participant: 5, tour: 3 }],
   ['PLAN_NON_ASSIS', { participant: 6, tour: 4 }],
+  ['DEPART_INCOMPATIBLE', { tour: 2, table: 10, participant: 4 }],
   ['TABLE_INCONNUE', { table: 9, detail: 'inconnue' }],
   ['DOUBLE_PLACE', { participant: 5, tour: 3 }],
   ['EXCLU_PLACE', { participant: 3, tour: 2 }],
@@ -521,6 +523,36 @@ const EXEMPLES = new Map([
   ['ENTREE_RETENIR_PROPOSITION', { id: 3 }],
   ['ENTREE_EFFACER_PROPOSITIONS', { n: 4, gardee: 2 }],
   ['ENTREE_GARDER_MEILLEURES', { n: 10, effacees: 37, gardee: 42 }],
+  // Le départ d'une génération dérivée : les refus du lancement
+  ['DEPART_ABSENT', { depart: 4, remede: { geste: 'repartirDeZero' } }],
+  [
+    'DEPART_NON_COMPARABLE',
+    {
+      depart: 4,
+      statut: 'derive',
+      raisons: [{ code: 'PARTICIPANT_EXCLU', participant: 5, personne: 'Maëlle Quenouille' }],
+      remede: { geste: 'repartirDeZero' },
+    },
+  ],
+  ['TOUR_FIGE_HORS_SOIREE', { tour: 4, tours: 3, remede: { geste: 'libererTour', tour: 4 } }],
+  ['TOURS_FIGES_TOUS', { tours: 3, remede: null }],
+  [
+    'DEPART_RESERVATION_NON_TENUE',
+    { depart: 4, participant: 2, table: 1, tour: 2, personne: 'Théo Pervenche', numero: 3, remede: { geste: 'repartirDeZero' } },
+  ],
+  [
+    'DEPART_SIEGE_NON_TENU',
+    {
+      depart: 4,
+      participant: 1,
+      table: 1,
+      siege: 2,
+      tour: 1,
+      personne: 'Iris Ombrelle',
+      numero: 3,
+      remede: { geste: 'libererTour', tour: 1 },
+    },
+  ],
   // Places : refus d'une pose, titres, réservations, retenu
   ['SIEGE_INEXISTANT', { table: 2, siege: 9, capacite: 8, remede: null }],
   ['DEUX_PLACES_MEME_TOUR', { participant: 1, tour: 2, autre: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
@@ -682,6 +714,60 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
       libelle('ENTREE_IMPORTER_PARTICIPANTS', { mode: 'remplacer', ajoutes: 250, misAJour: 0, retires: 260 }),
       'Remplacé la liste par import : 260 retirés, 250 ajoutés',
     );
+  });
+
+  test('les refus du départ nomment la proposition, la personne, la table et le tour, sinon leurs identifiants (C6)', () => {
+    const remede = { geste: 'repartirDeZero' };
+    assert.equal(
+      libelle('DEPART_RESERVATION_NON_TENUE', { depart: 4, participant: 2, table: 1, tour: 2, personne: 'Théo Pervenche', numero: 3, remede }),
+      "La proposition n° 4 n'assied pas Théo Pervenche à la table 3 au tour 2, où une réservation la fixe : " +
+        'elle ne peut plus servir de départ.',
+    );
+    assert.equal(
+      libelle('DEPART_RESERVATION_NON_TENUE', { depart: 4, participant: 2, table: 99, tour: 2, remede }),
+      "La proposition n° 4 n'assied pas la personne n° 2 à la table d'identifiant 99 au tour 2, où une réservation la fixe : " +
+        'elle ne peut plus servir de départ.',
+    );
+    const siege = { depart: 4, participant: 1, table: 1, siege: 2, tour: 1, remede: { geste: 'libererTour', tour: 1 } };
+    assert.equal(
+      libelle('DEPART_SIEGE_NON_TENU', { ...siege, personne: 'Iris Ombrelle', numero: 3 }),
+      "La proposition n° 4 n'assied pas Iris Ombrelle au siège 2 de la table 3 au tour 1, où une réservation la fixe : " +
+        'un tour figé garde les sièges du départ. Ne plus figer ce tour, ou « Repartir de zéro ».',
+    );
+    assert.match(libelle('DEPART_SIEGE_NON_TENU', siege), /la personne n° 1 au siège 2 de la table d'identifiant 1 au tour 1/);
+  });
+
+  test('le départ en dérive dit ses raisons ; fautif, il se contredit ; absent, il a quitté la liste', () => {
+    const derive = libelle('DEPART_NON_COMPARABLE', {
+      depart: 4,
+      statut: 'derive',
+      raisons: [{ code: 'PARTICIPANT_EXCLU', participant: 5, personne: 'Maëlle Quenouille' }],
+      remede: { geste: 'repartirDeZero' },
+    });
+    assert.equal(
+      derive,
+      'La proposition n° 4 ne décrit plus la soirée : les participants ou le mobilier ont changé depuis elle, ' +
+        'et elle ne peut plus servir de départ. Maëlle Quenouille est exclue depuis.',
+    );
+    const fautif = libelle('DEPART_NON_COMPARABLE', { depart: 4, statut: 'fautif', raisons: [{ code: 'FORME', chemin: 'placement' }], remede: null });
+    assert.equal(fautif, 'La proposition n° 4 se contredit : elle ne peut pas servir de départ.');
+    assert.equal(libelle('DEPART_ABSENT', { depart: 4, remede: null }), "La proposition n° 4 n'est plus dans la liste : elle ne peut pas servir de départ.");
+    assert.equal(
+      libelle('DEPART_ABSENT', { depart: 'retenu', remede: null }),
+      "Seule une proposition de la liste sert de départ, et ce placement n'en est pas une.",
+    );
+  });
+
+  test('les tours figés hors de la soirée, ou tous figés, se disent contre les cases', () => {
+    assert.equal(
+      libelle('TOUR_FIGE_HORS_SOIREE', { tour: 4, tours: 3, remede: null }),
+      "Le tour 4 est figé, mais la soirée compte 3 tours : ce tour n'existe pas.",
+    );
+    assert.equal(
+      libelle('TOURS_FIGES_TOUS', { tours: 3, remede: null }),
+      'Les 3 tours sont tous figés : il ne reste rien à refaire. Décocher au moins un tour.',
+    );
+    assert.equal(libelle('TOURS_FIGES_TOUS', { tours: 1, remede: null }), 'Le seul tour de la soirée est figé : il ne reste rien à refaire.');
   });
 
   test('RESERVATION_NON_HONOREE nomme la personne et le numéro de la table quand ils sont donnés, sinon leurs identifiants', () => {
@@ -1264,5 +1350,26 @@ describe("libellés : l'ordre des priorités et le mode des objectifs (§ 5.7, �
     // Posé contre le groupe du mode, il ne nomme pas le mode autrement que
     // le bouton choisi.
     assert.doesNotMatch(partage, /minimum|total/);
+  });
+});
+
+describe('libellés : la faute de dérivation d’une proposition (§ 8.9, C11)', () => {
+  test('DERIVATION dit une phrase par raison, chacune suivie de son chemin ; une raison inconnue garde une phrase générique', () => {
+    const RAISONS = [
+      ['departNonAnterieur', 'depart', /départ/],
+      ['tourHorsSoiree', 'toursFiges[1]', /tour figé .*soirée/],
+      ['tousLesTours', 'toursFiges', /tous ses tours/],
+      ['sansDepart', 'toursFiges', /sans départ/],
+    ];
+    const textes = RAISONS.map(([raison, chemin, motif]) => {
+      const texte = libelle('DERIVATION', { chemin, raison });
+      assert.match(texte, motif, raison);
+      assert.ok(texte.endsWith(` (${chemin}).`), texte);
+      return texte;
+    });
+    assert.equal(new Set(textes).size, RAISONS.length);
+    const inconnue = libelle('DERIVATION', { chemin: 'depart', raison: 'autreRaison' });
+    assert.ok(!textes.includes(inconnue), inconnue);
+    assert.ok(inconnue.endsWith(' (depart).'), inconnue);
   });
 });

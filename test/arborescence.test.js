@@ -2081,9 +2081,11 @@ describe('arborescence : un seul propriétaire des valeurs du contrat (types.js)
 });
 
 // Modules que le § 14.13 tient à 100 % de branches : les calculs du
-// moteur qui décrivent ou bornent un plan, la géométrie des graphiques, et
-// les chemins de reprise du stockage.
+// moteur qui décrivent ou bornent un plan, la géométrie des graphiques, les
+// chemins de reprise du stockage, et les refus et la recopie du départ
+// d'une génération dérivée.
 const MODULES_A_SEUIL = [
+  'src/application/depart.js',
   'src/geometrie/graphique.js',
   'src/moteur/correspondance.js',
   'src/moteur/criteres.js',
@@ -2231,6 +2233,7 @@ describe('arborescence : la couverture (§ 14.13)', () => {
       thresholds: {
         branches: 90,
         perFile: true,
+        'src/application/depart.js': { branches: 100 },
         'src/geometrie/graphique.js': { branches: 100 },
         'src/moteur/correspondance.js': { branches: 100 },
         'src/moteur/criteres.js': { branches: 100 },
@@ -2245,6 +2248,7 @@ describe('arborescence : la couverture (§ 14.13)', () => {
     };
     const fichiers = {
       ...COMMANDE_CONFORME,
+      'src/application/depart.js': '',
       'src/geometrie/graphique.js': '',
       'src/moteur/correspondance.js': '',
       'src/moteur/criteres.js': '',
@@ -2268,6 +2272,7 @@ describe('arborescence : la couverture (§ 14.13)', () => {
     assert.deepEqual(
       avecArbre(fichiers, (racine) => releverCouverture(racine, sansInclude)).filter((e) => e.endsWith('mesure')),
       [
+        'src/application/depart.js : hors de la mesure',
         'src/geometrie/graphique.js : hors de la mesure',
         'src/moteur/correspondance.js : hors de la mesure',
         'src/moteur/criteres.js : hors de la mesure',

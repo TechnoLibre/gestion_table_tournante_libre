@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
-import { creerEtatUi } from './etat_ui.js';
+import { VUES_QUALITE_DEMANDABLES, creerEtatUi } from './etat_ui.js';
 import { SECTION_OUVERTURE, SECTIONS } from './evenement/sections.js';
 
 const DEPART = {
@@ -28,6 +28,9 @@ const DEPART = {
   visee: 0,
   pagePropositions: null,
   melangeTables: 'sieges',
+  depart: null,
+  comparee: null,
+  vueQualite: null,
 };
 
 // Un état et le relevé de ce que reçoit son abonné.
@@ -479,5 +482,184 @@ describe('état de navigation : l’aperçu avant impression (§ 11.7)', () => {
     ui.ouvrirApercu({ vue: 'tables', tour: 'tous' });
     ui.reinitialiser();
     assert.equal(ui.etat().apercu, null);
+  });
+});
+
+describe('état de navigation : le départ, le second placement et la vue demandée (§ 5.7, § 8.4, § 12, C6, C9, C14)', () => {
+  test('le départ et le second placement repartent à l’ouverture d’un événement, et un changement de section les garde', () => {
+    const ui = creerEtatUi();
+    ui.choisirDepart(4);
+    ui.reglerToursFiges([2, 1]);
+    ui.comparerA(7);
+    ui.demanderVueQualite('comparaison');
+    const tenu = { depart: { id: 4, toursFiges: [1, 2] }, comparee: 7, vueQualite: 'comparaison' };
+    for (const section of SECTIONS) {
+      ui.allerA(section);
+      assert.deepEqual(ui.etat(), { ...DEPART, section, ...tenu }, section);
+    }
+    ui.montrerTour(2);
+    ui.montrerProposition(3);
+    ui.ouvrirFiche(1);
+    ui.ouvrirApropos();
+    assert.deepEqual([ui.etat().depart, ui.etat().comparee, ui.etat().vueQualite], [tenu.depart, 7, 'comparaison']);
+    ui.reinitialiser();
+    assert.deepEqual(ui.etat(), { ...DEPART, apropos: true });
+  });
+
+  test('choisirDepart pose le départ, ses cases toutes décochées, figé ; chaque choix — un autre départ, ou le même — décoche les cases', () => {
+    const ui = creerEtatUi();
+    ui.choisirDepart(4);
+    assert.deepEqual(ui.etat(), { ...DEPART, depart: { id: 4, toursFiges: [] } });
+    assert.ok(Object.isFrozen(ui.etat().depart));
+    assert.ok(Object.isFrozen(ui.etat().depart.toursFiges));
+    ui.reglerToursFiges([1, 3]);
+    ui.choisirDepart(9);
+    assert.deepEqual(ui.etat().depart, { id: 9, toursFiges: [] });
+    ui.reglerToursFiges([2]);
+    ui.choisirDepart(9);
+    assert.deepEqual(ui.etat().depart, { id: 9, toursFiges: [] });
+  });
+
+  test('choisirDepart refuse un identifiant qui n’est pas un entier ≥ 1, par RangeError, sans rien changer', () => {
+    const ui = creerEtatUi();
+    ui.choisirDepart(2);
+    ui.reglerToursFiges([1]);
+    const avant = ui.etat();
+    for (const faute of [0, -1, 1.5, Number.NaN, '4', null, undefined, 'retenu', [4]]) {
+      assert.throws(() => ui.choisirDepart(faute), RangeError, String(faute));
+    }
+    assert.equal(ui.etat(), avant);
+  });
+
+  test('reglerToursFiges garde une liste d’entiers ≥ 1 distincts, croissante et figée ; dix tours ; la liste vide décoche tout ; la même liste ne publie rien', () => {
+    const { ui, recus } = suivi();
+    ui.choisirDepart(5);
+    const dix = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+    ui.reglerToursFiges(dix);
+    assert.deepEqual(ui.etat().depart, { id: 5, toursFiges: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] });
+    assert.ok(Object.isFrozen(ui.etat().depart.toursFiges));
+    assert.deepEqual(dix, [10, 9, 8, 7, 6, 5, 4, 3, 2, 1], 'la liste reçue reste telle');
+    const publies = recus.length;
+    ui.reglerToursFiges([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    assert.equal(recus.length, publies);
+    ui.reglerToursFiges([]);
+    assert.deepEqual(ui.etat().depart, { id: 5, toursFiges: [] });
+  });
+
+  test('reglerToursFiges refuse, par RangeError et sans rien changer, une liste hors du contrat, et toute liste sans départ choisi', () => {
+    const sansDepart = creerEtatUi();
+    assert.throws(() => sansDepart.reglerToursFiges([1]), RangeError);
+    assert.throws(() => sansDepart.reglerToursFiges([]), RangeError);
+    assert.deepEqual(sansDepart.etat(), DEPART);
+    const ui = creerEtatUi();
+    ui.choisirDepart(3);
+    ui.reglerToursFiges([2]);
+    const avant = ui.etat();
+    for (const faute of [[0], [1, 1], [2, 1, 2], [1.5], ['2'], [-1], [Number.NaN], [null], null, undefined, 2, '1,2', { 0: 1, length: 1 }]) {
+      assert.throws(() => ui.reglerToursFiges(faute), RangeError, JSON.stringify(faute));
+    }
+    assert.equal(ui.etat(), avant);
+  });
+
+  test('retirerDepart retire le départ et ses cases ; sans départ, il ne publie rien', () => {
+    const { ui, recus } = suivi();
+    ui.retirerDepart();
+    assert.equal(recus.length, 1);
+    ui.choisirDepart(6);
+    ui.reglerToursFiges([1]);
+    ui.retirerDepart();
+    assert.deepEqual(ui.etat(), DEPART);
+  });
+
+  test('comparerA pose le second placement — un identifiant, le retenu, ou null pour le défaut — ; hors de là, RangeError sans rien changer', () => {
+    const ui = creerEtatUi();
+    ui.comparerA(12);
+    assert.deepEqual(ui.etat(), { ...DEPART, comparee: 12 });
+    ui.comparerA('retenu');
+    assert.equal(ui.etat().comparee, 'retenu');
+    ui.comparerA(null);
+    assert.deepEqual(ui.etat(), DEPART);
+    ui.comparerA(3);
+    const avant = ui.etat();
+    for (const faute of [0, -3, 2.5, '3', 'Retenu', '', undefined, {}, ['retenu']]) {
+      assert.throws(() => ui.comparerA(faute), RangeError, JSON.stringify(faute));
+    }
+    assert.equal(ui.etat(), avant);
+  });
+
+  test('demanderVueQualite pose la vue demandée, vueQualiteAtteinte la retire ; une vue que la page ne demande pas lève RangeError sans rien changer', () => {
+    const { ui, recus } = suivi();
+    ui.demanderVueQualite('comparaison');
+    assert.deepEqual(ui.etat(), { ...DEPART, vueQualite: 'comparaison' });
+    ui.vueQualiteAtteinte();
+    assert.deepEqual(ui.etat(), DEPART);
+    const publies = recus.length;
+    ui.vueQualiteAtteinte();
+    assert.equal(recus.length, publies);
+    for (const faute of ['profil', 'Comparaison', null, undefined, '']) {
+      assert.throws(() => ui.demanderVueQualite(faute), RangeError, String(faute));
+    }
+    assert.deepEqual(ui.etat(), DEPART);
+  });
+
+  test('oublierAbsents retire le départ absent de la liste et le second placement absent — un identifiant absent, ou le retenu sans retenu — ; rien d’autre', () => {
+    const ui = creerEtatUi();
+    ui.montrerProposition(9);
+    ui.choisirDepart(4);
+    ui.reglerToursFiges([2]);
+    ui.comparerA(7);
+    ui.oublierAbsents({ propositions: [4, 7], retenu: false });
+    assert.deepEqual([ui.etat().depart, ui.etat().comparee], [{ id: 4, toursFiges: [2] }, 7], 'présents : gardés');
+    ui.oublierAbsents({ propositions: [7, 8], retenu: true });
+    assert.deepEqual([ui.etat().depart, ui.etat().comparee], [null, 7], 'le départ effacé');
+    ui.oublierAbsents({ propositions: [], retenu: true });
+    assert.equal(ui.etat().comparee, null, 'le second placement effacé');
+    ui.comparerA('retenu');
+    ui.oublierAbsents({ propositions: [], retenu: true });
+    assert.equal(ui.etat().comparee, 'retenu', 'le retenu présent : gardé');
+    ui.oublierAbsents({ propositions: [1, 2, 3], retenu: false });
+    assert.equal(ui.etat().comparee, null, 'le retenu parti');
+    assert.deepEqual(ui.etat(), { ...DEPART, proposition: 9, visee: 1 }, 'la proposition montrée ne se retire pas ici');
+  });
+
+  test('oublierAbsents ne publie rien quand rien n’est absent, et ne rend jamais ce qu’il a retiré', () => {
+    const { ui, recus } = suivi();
+    ui.choisirDepart(2);
+    ui.comparerA('retenu');
+    const publies = recus.length;
+    ui.oublierAbsents({ propositions: [1, 2], retenu: true });
+    assert.equal(recus.length, publies);
+    ui.oublierAbsents({ propositions: [1], retenu: false });
+    ui.oublierAbsents({ propositions: [1, 2], retenu: true });
+    assert.deepEqual([ui.etat().depart, ui.etat().comparee], [null, null]);
+  });
+
+  test('oublierAbsents refuse ce qui n’est pas {propositions: identifiants, retenu: booléen}, par RangeError, sans rien changer', () => {
+    const ui = creerEtatUi();
+    ui.choisirDepart(2);
+    const avant = ui.etat();
+    for (const faute of [null, undefined, {}, { propositions: [2] }, { propositions: null, retenu: false }, { propositions: [2], retenu: 1 }, { propositions: '2', retenu: true }]) {
+      assert.throws(() => ui.oublierAbsents(faute), RangeError, JSON.stringify(faute));
+    }
+    assert.equal(ui.etat(), avant);
+  });
+});
+
+describe('état de navigation : chaque vue demandable porte son <div data-vue-qualite> littéral (§ 12.10.6, D55)', () => {
+  const source = (nom) => readFileSync(new URL(`./qualite/${nom}`, import.meta.url), 'utf8');
+  // Le composant de chaque vue demandable, sous son nom de fichier.
+  const COMPOSANTS = new Map([['comparaison', 'VueComparaison.svelte']]);
+
+  // demanderVueQualite mène à l'élément qui porte data-vue-qualite à son nom :
+  // le gabarit s'ouvre sur ce <div>, hors de tout bloc conditionnel, et c'est
+  // le seul élément à porter ce nom. Ce que le <div> contient est libre.
+  test('chaque vue demandable — la comparaison — : le gabarit s’ouvre sur un <div data-vue-qualite> littéral à son nom, seul à le porter', () => {
+    assert.deepEqual(VUES_QUALITE_DEMANDABLES, [...COMPOSANTS.keys()]);
+    for (const nom of VUES_QUALITE_DEMANDABLES) {
+      const texte = source(COMPOSANTS.get(nom));
+      const gabarit = texte.slice(texte.lastIndexOf('</script>') + '</script>'.length);
+      assert.match(gabarit, new RegExp(`^(?:\\s|<!--[^]*?-->)*<div data-vue-qualite="${nom}">`), nom);
+      assert.equal(gabarit.split(`data-vue-qualite="${nom}"`).length, 2, nom);
+    }
   });
 });
