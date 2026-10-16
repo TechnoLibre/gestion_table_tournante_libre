@@ -28,20 +28,34 @@
 // création laisse, comme le fera la commande qui les créera — le journal
 // d'abord, l'état ensuite. Les noms viennent du CSV d'exemple livré et, pour
 // les corrections, sont inventés ; la version vient du module engendré.
+//
+// Un second parcours, plus bas, fait l'aller-retour d'un départ (§ 5.7) :
+// du contrôleur de génération à la commande, de la commande au fichier, du
+// fichier à un processus neuf.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
 import { decoder } from '../csv/encodage.js';
 import { exporterRefus } from '../csv/import.js';
-import { rechercher } from '../moteur/recherche.js';
-import { serialiser } from '../stockage/canonique.js';
-import { enregistrer } from '../stockage/depot.js';
-import { analyser, configurationDepuisCharge } from '../stockage/document.js';
+import { rechercher, regenerer, repartir } from '../moteur/recherche.js';
+import { serialiser, serialiserCharge } from '../stockage/canonique.js';
+import { lireCourses } from '../stockage/courses.js';
+import { creer as creerDansLeDepot, enregistrer } from '../stockage/depot.js';
+import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
 import { fil, lireJournal, reconstruire, versionDe } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
+import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
+import { appliquerCommande } from './commandes.js';
+import { configurationDe } from './configuration.js';
+import { derivationDe, planDuDepart } from './depart.js';
+import { creerExecuteurTravailleur } from './executeur_travailleur.js';
+import { creerControleurGeneration, creerExecuteurDirect } from './generation.js';
+import { brancherTravailleur } from './generation_travailleur.js';
+import { creerHorlogePilotee } from './horloge.js';
 import { libelle } from './libelles.js';
 import { creerSeance } from './seance.js';
 
@@ -416,5 +430,456 @@ describe('intégration : les trois garanties d’un geste, sur le journal entier
       releve.ouvertures,
       [1, 2, 3].map(() => ({ base: vu.base, ecritures: 0, lu: true, disqueInchange: true, mode: 'lecture' })),
     );
+  });
+});
+
+// --- L'aller-retour d'un départ ---------------------------------------------
+//
+// Le second parcours (§ 5.7, § 8.6, § 8.9, C6, C11, C24) : une génération
+// ordinaire, puis deux générations dérivées et une ordinaire, chacune lancée
+// par le contrôleur de génération sur la séance, enregistrée par la vraie
+// commande, écrite sur le disque d'épreuve ; un retour et sa reprise entre
+// les deux dérivées ; puis un processus neuf relit le disque. Les sièges sont
+// attribués : la première génération se fait sous deux réservations à un
+// siège, et l'une se retire avant la première dérivée — un geste légitime,
+// après lequel le rangement par siège ne redonne plus les listes du départ,
+// que le tour figé doit garder telles quelles. Le parcours se joue sur
+// l'exécuteur direct et, une seconde fois, sur l'exécuteur à fils, dont les
+// fils, en mémoire, répondent par brancherTravailleur, le vrai côté
+// travailleur. Chaque épreuve lit le parcours direct, sauf celles qui lisent
+// les messages des fils ou comparent les deux disques.
+
+const NOM_EVENEMENT_RICOCHETS = 'Soirée des Ricochets';
+
+// Neuf personnes inventées ; trois tables de cinq places, trois tours : six
+// places libres à chaque tour, et une chaise vide là où une table assied
+// moins de personnes que le siège réservé ne le demande.
+const GENS = [
+  ['Ombrelle', 'Iris', 'Coopérative Aubier'],
+  ['Pervenche', 'Théo', 'Atelier Ressac'],
+  ['Lacasse', 'Ondine', 'Coopérative Aubier'],
+  ['Tourteau', 'Basile', 'Atelier Ressac'],
+  ['Quenouille', 'Maëlle', null],
+  ['Grisaille', 'Anouk', 'Coopérative Aubier'],
+  ['Bruyère', 'Capucine', null],
+  ['Sarcelle', 'Gaspard', 'Atelier Ressac'],
+  ['Mélèze', 'Hortense', null],
+];
+
+// La réservation d'Iris Ombrelle, retirée avant la première dérivée ; celle
+// d'Ondine Lacasse reste, et chaque départ la tient.
+const RESERVATION_RETIREE = { participant: 1, table: 1, siege: 5, portee: 'tous', tour: null };
+const RESERVATION_GARDEE = { participant: 3, table: 2, siege: 5, portee: 'tous', tour: null };
+
+// Les réglages des quatre générations. La première, au plus court compte
+// d'arrêt, laisse aux dérivées de quoi améliorer : aucune dérivée n'égale son
+// départ, ce que les épreuves vérifient par les identifiants ajoutés.
+const REGLAGES = Object.freeze({
+  ordinaire: { graine: 21, nombre: 2, arret: 1, historique: 1000 },
+  derivee: { graine: 31, nombre: 2, arret: 60, historique: 1000 },
+  deriveeDeDerivee: { graine: 41, nombre: 2, arret: 300, historique: 1000 },
+  ensuite: { graine: 51, nombre: 2, arret: 300, historique: 1000 },
+});
+
+// Ce que la génération ordinaire d'après les dérivées écrit pour ses
+// propositions n° 7 et 8 : la fin du fichier d'état et celle du compagnon
+// des courses, chacune depuis la ligne qui ouvre la proposition n° 7, la
+// version du produit remplacée par « V », réduites à leur empreinte SHA-256.
+// La valeur est écrite ici et non recalculée : une comparaison à la commande
+// ordinaire du même arbre retrouverait des deux côtés un changement du
+// chemin ordinaire — moteur, commande sans dérivation, sérialiseur —, que
+// cette empreinte refuse. Elle ne change qu'avec ce chemin, quand il change à
+// dessein.
+const EMPREINTE_ORDINAIRE = '84f91d6d9f9135f5387b6f1b2544cc48ad96c0074126dee486227f1d478695a5';
+
+// Les départs des deux générations dérivées : n° 1, tour 1 figé ; puis n° 3,
+// une dérivée de la génération précédente, tours 1 et 2 figés.
+const DEPARTS = Object.freeze({
+  derivee: { id: 1, toursFiges: [1] },
+  deriveeDeDerivee: { id: 3, toursFiges: [1, 2] },
+});
+
+function chargeDuParcours() {
+  const charge = creerCharge({ id: 'evt-ricochets', nom: NOM_EVENEMENT_RICOCHETS, date: '2033-11-12', siegesParDefaut: 5, tours: 3 });
+  charge.participants = GENS.map(([nom, prenom, appartenance], rang) => ({
+    id: rang + 1,
+    nom,
+    prenom,
+    appartenance,
+    courriel: null,
+    titrePressenti: null,
+    notes: null,
+    exclu: false,
+  }));
+  charge.tables = [1, 2, 3].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 250 * (id - 1), y: 0 } }));
+  charge.reglages.attribuerSieges = true;
+  charge.reservations = [{ ...RESERVATION_RETIREE }, { ...RESERVATION_GARDEE }];
+  charge.prochainsIds = { participant: GENS.length + 1, table: 4, proposition: 1 };
+  return charge;
+}
+
+// Une fabrique de fils en mémoire : chaque message reçu est gardé, cloné,
+// dans messages, puis servi une microtâche plus tard par
+// brancherTravailleur ; ce que celui-ci poste revient au fil, cloné, tant
+// que le fil n'est pas terminé.
+function fabriqueDeFils(messages) {
+  return () => {
+    const fil = {
+      onmessage: null,
+      termine: false,
+      postMessage(message) {
+        messages.push(structuredClone(message));
+        const recu = structuredClone(message);
+        queueMicrotask(() => {
+          if (fil.termine) return;
+          const portee = {
+            onmessage: null,
+            postMessage: (data) => {
+              if (!fil.termine) fil.onmessage?.({ data: structuredClone(data) });
+            },
+          };
+          brancherTravailleur(portee);
+          portee.onmessage({ data: recu });
+        });
+      },
+      terminate() {
+        fil.termine = true;
+      },
+    };
+    return fil;
+  };
+}
+
+// Un processus du second parcours : une instance du système d'épreuve sur
+// le disque, une horloge pilotée, la séance, et le contrôleur de génération
+// sur l'exécuteur donné, dont chaque lancer garde ses options, clonées.
+function demarrerAvecControleur(disque, prefixe, executeur) {
+  const fs = creerFichiersSimules({ disque });
+  const horloge = creerHorlogePilotee({ depart: '2033-11-12T18:00:00-05:00' });
+  const seance = creerSeance({
+    fs,
+    racine: DOC,
+    horloge,
+    identifiant: creerIdentifiants(prefixe),
+    produitVersion: V,
+    planifier: horloge.planifier,
+    annuler: horloge.annuler,
+  });
+  const lancements = [];
+  const espion = {
+    coeursDisponibles: executeur.coeursDisponibles,
+    lancer(configuration, reglages, options) {
+      lancements.push(structuredClone(options));
+      return executeur.lancer(configuration, reglages, options);
+    },
+  };
+  const controleur = creerControleurGeneration({ seance, executeur: espion, horloge, produitVersion: V });
+  return { fs, seance, controleur, lancements };
+}
+
+// Les textes de l'état, du journal et du compagnon des courses de base.
+const textesDuDisque = ({ fs }, base) =>
+  Object.fromEntries(['etat', 'journal', 'courses'].map((cle) => [cle, fs.contenu('documents', base + SUFFIXES[cle])]));
+
+// sorte : 'direct' ou 'fils'.
+async function deroulerDepart(sorte) {
+  const disque = new Map();
+  const messages = [];
+  const executeur =
+    sorte === 'fils' ? creerExecuteurTravailleur(fabriqueDeFils(messages), { coeursDisponibles: 2 }) : creerExecuteurDirect();
+  const depot = creerFichiersSimules({ disque });
+  depot.deposerDossier('documents');
+  const { base } = await creerDansLeDepot(depot, DOC, chargeDuParcours(), {
+    libelle: libelle('ENTREE_CREATION', { nom: NOM_EVENEMENT_RICOCHETS }),
+    nomJalon: libelle('JALON_CREATION'),
+    horodatage: '2033-11-12T17:59:00-05:00',
+    produitVersion: V,
+  });
+  const vu = { base };
+  let processus = demarrerAvecControleur(disque, 'q1', executeur);
+  await processus.seance.ouvrir(base);
+  await processus.seance.passerEnEcriture();
+  const charge = () => structuredClone(processus.seance.charge);
+
+  // Une génération du contrôleur, et ce qu'elle laisse : la charge avant et
+  // après, l'issue, les options du lancer, les messages aux fils, le
+  // libellé de la dernière entrée du journal.
+  async function generation(nom, depart = null) {
+    const avant = charge();
+    const debut = messages.length;
+    const lancement = processus.lancements.length;
+    const issue = await processus.controleur.generer(REGLAGES[nom], depart === null ? {} : { depart });
+    vu[nom] = {
+      avant,
+      issue,
+      apres: charge(),
+      options: processus.lancements.slice(lancement),
+      messages: messages.slice(debut),
+      libelle: lireJournal(texteDuJournal(processus, base)).entrees.at(-1).libelle,
+    };
+  }
+
+  await generation('ordinaire');
+  const { participant, table, portee, tour } = RESERVATION_RETIREE;
+  await processus.seance.executer('retirerReservation', { participant, table, portee, tour });
+  await generation('derivee', DEPARTS.derivee);
+  vu.defait = await processus.seance.defaire();
+  vu.chargeDefaite = charge();
+  vu.refait = await processus.seance.refaire();
+  vu.chargeRefaite = charge();
+  await generation('deriveeDeDerivee', DEPARTS.deriveeDeDerivee);
+  await generation('ensuite');
+  await processus.seance.fermer();
+
+  // Rouvrir, dans un processus neuf.
+  processus = demarrerAvecControleur(disque, 'q2', executeur);
+  await processus.seance.ouvrir(base);
+  vu.rouverte = charge();
+  vu.courses = new Map(vu.rouverte.propositions.map(({ id }) => [id, processus.seance.courseDe(id)]));
+  vu.textes = textesDuDisque(processus, base);
+  return vu;
+}
+
+// Chaque sorte de parcours ne se déroule qu'une fois.
+const parcoursDepart = new Map();
+const leParcoursDepart = (sorte = 'direct') => {
+  if (!parcoursDepart.has(sorte)) parcoursDepart.set(sorte, deroulerDepart(sorte));
+  return parcoursDepart.get(sorte);
+};
+
+// Les propositions que le moteur rend pour la génération nom du parcours,
+// recalculées hors du contrôleur sur la charge d'avant elle, lue dans vue :
+// repartir sous un départ, rechercher sinon.
+function duMoteur(vue, nom) {
+  const configuration = configurationDe(vue.avant);
+  const depart = DEPARTS[nom];
+  if (depart === undefined) return rechercher(configuration, REGLAGES[nom]);
+  return repartir(configuration, REGLAGES[nom], { plan: planDuDepart(vue.avant, depart.id), toursFiges: depart.toursFiges });
+}
+
+const propositionDe = (charge, id) => charge.propositions.find((p) => p.id === id);
+
+// La fin d'un texte de fichier, depuis la ligne qui ouvre la proposition
+// n° 7 ; une proposition n° 7 absente fait échouer l'épreuve.
+function depuisLaProposition7(texte) {
+  const debut = texte.indexOf('{"id":7,"graine":');
+  assert.ok(debut >= 0, 'la proposition n° 7 manque au texte');
+  return texte.slice(debut);
+}
+
+// Les entrées du compagnon des courses que la charge confirme, par
+// identifiant de proposition.
+function entreesDuCompagnon(texte, charge) {
+  return new Map([...lireCourses(texte, charge).values()].map((entree) => [entree.id, entree]));
+}
+
+describe('intégration : l’aller-retour d’un départ, du contrôleur au fichier (§ 5.7, § 8.9, C6, C11, C24)', () => {
+  test('un départ choisi, tour 1 figé, une génération : la charge porte depart et toursFiges, chaque tour 1 égal à celui du départ', async () => {
+    const { derivee, rouverte } = await leParcoursDepart();
+    assert.deepEqual(derivee.issue.ajoutees, [3, 4]);
+    assert.deepEqual(derivee.issue.depart, DEPARTS.derivee);
+    assert.equal(derivee.issue.identiquesAuDepart, 0);
+    const depart = propositionDe(derivee.avant, 1);
+    // La charge de la séance, et celle que le fichier rend à un processus neuf.
+    for (const [ici, charge] of [['séance', derivee.apres], ['fichier rouvert', rouverte]]) {
+      for (const id of [3, 4]) {
+        const p = propositionDe(charge, id);
+        assert.deepEqual([p.depart, p.toursFiges], [1, [1]], `${ici}, proposition ${id}`);
+        assert.deepEqual(p.placement[0], depart.placement[0], `${ici}, proposition ${id}, tour 1`);
+        assert.deepEqual(derivationDe(charge, id), { depart: 1, toursFiges: [1], departPresent: true }, `${ici}, proposition ${id}`);
+      }
+    }
+  });
+
+  test('sous sièges attribués, le tour 1 de chaque dérivée égale celui du départ case pour case, sièges et chaises vides compris, au plan et à chaque point de relevé du compagnon', async () => {
+    const { derivee, rouverte, textes } = await leParcoursDepart();
+    const depart = propositionDe(derivee.avant, 1);
+    const entrees = entreesDuCompagnon(textes.courses, rouverte);
+    let chaisesVides = 0;
+    let releves = 0;
+    for (const id of [3, 4]) {
+      const p = propositionDe(rouverte, id);
+      assert.equal(p.siegesAttribues, true, `proposition ${id}`);
+      assert.deepEqual(p.tables, depart.tables, `proposition ${id}`);
+      const entree = entrees.get(id);
+      assert.notEqual(entree, undefined, `proposition ${id} : le compagnon relu n'a pas sa course`);
+      const points = entree.course.releves.map(({ placement }) => placement);
+      releves += points.length;
+      [p.placement, ...points].forEach((placement, point) => {
+        assert.deepEqual(placement[0], depart.placement[0], `proposition ${id}, point ${point}, tour 1`);
+        chaisesVides += placement[0].sieges.flat().filter((siege) => siege === null).length;
+      });
+    }
+    assert.ok(releves > 0, 'aucun point de relevé : l’épreuve ne les éprouverait pas');
+    assert.ok(chaisesVides > 0, 'aucune chaise vide au tour 1 : l’épreuve ne les éprouverait pas');
+    // Les mêmes propositions du moteur, enregistrées sans dérivation sous les
+    // réservations courantes : le rangement par siège donnerait au tour 1
+    // d'autres listes que celles du départ.
+    const moteur = duMoteur(derivee, 'derivee');
+    const configuration = configurationDe(derivee.avant);
+    const rangees = appliquerCommande('enregistrerGeneration', derivee.avant, { propositions: moteur, configuration, produitVersion: V })
+      .charge.propositions.slice(-2);
+    assert.ok(
+      rangees.some((p) => JSON.stringify(p.placement[0]) !== JSON.stringify(depart.placement[0])),
+      'le rangement redonnerait les listes du départ : l’épreuve ne distinguerait pas la recopie',
+    );
+    // Hors des listes du tour figé, la dérivée est la proposition du moteur.
+    rangees.forEach((rangee, rang) => {
+      assert.deepEqual(planDepuisFichier(propositionDe(rouverte, rang + 3)), planDepuisFichier(rangee), `proposition ${rang + 3}`);
+    });
+  });
+
+  test('le journal porte le libellé de chaque génération dérivée, fixé à l’écriture : le départ, les propositions, les tours figés', async () => {
+    const { ordinaire, derivee, deriveeDeDerivee, rouverte, textes } = await leParcoursDepart();
+    assert.equal(ordinaire.libelle, 'Généré 2 propositions (n° 1 à 2)');
+    assert.equal(derivee.libelle, 'Généré 2 propositions dérivées de n° 1 (n° 3 à 4), tour 1 figé');
+    assert.equal(deriveeDeDerivee.libelle, 'Généré 2 propositions dérivées de n° 3 (n° 5 à 6), tours 1 et 2 figés');
+    // Le journal relu garde ces libellés, et l'état rouvert est celui que le
+    // journal reconstruit à sa dernière révision.
+    const journal = lireJournal(textes.journal);
+    const libelles = journal.entrees.map((entree) => entree.libelle);
+    assert.ok(libelles.includes(derivee.libelle), JSON.stringify(libelles));
+    assert.ok(libelles.includes(deriveeDeDerivee.libelle), JSON.stringify(libelles));
+    const revision = journal.entrees.at(-1).revision;
+    assert.equal(serialiserCharge(reconstruire(journal, revision)), serialiserCharge(rouverte));
+  });
+
+  test('un retour rend la charge d’avant la génération dérivée, son compteur excepté ; le refaire rend ses dérivées', async () => {
+    const { derivee, defait, chargeDefaite, refait, chargeRefaite } = await leParcoursDepart();
+    assert.equal(defait.libelle, `Défait : « ${derivee.libelle} »`);
+    assert.equal(refait.libelle, `Refait : « ${derivee.libelle} »`);
+    const sansCompteurs = (charge) => ({ ...charge, prochainsIds: undefined });
+    assert.deepEqual(sansCompteurs(chargeDefaite), sansCompteurs(derivee.avant));
+    assert.equal(chargeDefaite.prochainsIds.proposition, 5);
+    assert.deepEqual(chargeDefaite.propositions.map(({ id }) => id), [1, 2]);
+    assert.equal(serialiserCharge(chargeRefaite), serialiserCharge(derivee.apres));
+    assert.deepEqual(derivationDe(chargeRefaite, 3), { depart: 1, toursFiges: [1], departPresent: true });
+  });
+
+  test('la course de chaque dérivée se relit après réouverture (courseDe) : celle de sa descente, partie du départ', async () => {
+    const vu = await leParcoursDepart();
+    for (const nom of ['derivee', 'deriveeDeDerivee', 'ensuite']) {
+      const vue = vu[nom];
+      duMoteur(vue, nom).forEach((proposition, rang) => {
+        const id = vue.issue.ajoutees[rang];
+        const course = vu.courses.get(id);
+        assert.notEqual(course, null, `${nom}, proposition ${id} : sa course n'est pas relue`);
+        assert.equal(course.evalues, proposition.evalues, `${nom}, proposition ${id}`);
+        assert.deepEqual(
+          course.releves.map(({ mouvements }) => mouvements),
+          proposition.releves.map(({ mouvements }) => mouvements),
+          `${nom}, proposition ${id}`,
+        );
+      });
+    }
+  });
+
+  test('ni la charge, ni le journal, ni le compagnon des courses ne portent relances, que portent les propositions de repartir', async () => {
+    const vu = await leParcoursDepart();
+    for (const nom of ['derivee', 'deriveeDeDerivee']) {
+      for (const proposition of duMoteur(vu[nom], nom)) {
+        assert.equal(typeof proposition.relances, 'number', `${nom}, rang ${proposition.id}`);
+      }
+    }
+    for (const [cle, texte] of Object.entries(vu.textes)) {
+      assert.equal(typeof texte, 'string', cle);
+      assert.equal(texte.includes('relances'), false, cle);
+    }
+    for (const p of vu.rouverte.propositions) assert.equal(Object.hasOwn(p, 'relances'), false, `proposition ${p.id}`);
+  });
+
+  test('une dérivée d’une dérivée écrite par la génération précédente ne nomme que son départ immédiat ; ses tours figés sont ceux de ce départ', async () => {
+    const { deriveeDeDerivee, rouverte } = await leParcoursDepart();
+    assert.deepEqual(deriveeDeDerivee.issue.ajoutees, [5, 6]);
+    assert.deepEqual(deriveeDeDerivee.options, [{ coeurs: 1, depart: { plan: planDuDepart(deriveeDeDerivee.avant, 3), toursFiges: [1, 2] } }]);
+    assert.notDeepEqual(planDuDepart(deriveeDeDerivee.avant, 3), planDuDepart(deriveeDeDerivee.avant, 1));
+    const depart = propositionDe(rouverte, 3);
+    assert.equal(depart.depart, 1);
+    for (const id of [5, 6]) {
+      const p = propositionDe(rouverte, id);
+      assert.deepEqual([p.depart, p.toursFiges], [3, [1, 2]], `proposition ${id}`);
+      assert.deepEqual(derivationDe(rouverte, id), { depart: 3, toursFiges: [1, 2], departPresent: true });
+      assert.deepEqual(p.placement.slice(0, 2), depart.placement.slice(0, 2), `proposition ${id}, tours 1 et 2`);
+    }
+  });
+
+  test('chaque dérivée rouverte se régénère de ses champs et du plan de son départ, relus du fichier ; sans ce plan, regenerer refuse', async () => {
+    const { rouverte } = await leParcoursDepart();
+    const configuration = configurationDe(rouverte);
+    let toursFigesLus = 0;
+    for (const id of [3, 4, 5, 6]) {
+      const p = propositionDe(rouverte, id);
+      const options = { planDuDepart: planDuDepart(rouverte, p.depart) };
+      assert.deepEqual(regenerer(configuration, p, options), planDepuisFichier(p), `proposition ${id}`);
+      assert.throws(() => regenerer(configuration, p), (erreur) => erreur instanceof RangeError && erreur.reglage === 'depart', `proposition ${id}`);
+      // Sans ses tours figés, la même descente rend un autre plan : l'épreuve
+      // lit bien ceux que le fichier rend.
+      const sansTours = regenerer(configuration, { ...p, toursFiges: undefined }, options);
+      if (JSON.stringify(sansTours) !== JSON.stringify(planDepuisFichier(p))) toursFigesLus += 1;
+    }
+    assert.ok(toursFigesLus > 0, 'aucune dérivée ne dépend de ses tours figés : l’épreuve ne les éprouverait pas');
+  });
+
+  test('une génération ordinaire après une dérivée : lancer sans départ, charge, libellé et courses de la commande ordinaire, texte écrit égal à son empreinte fixée', async () => {
+    const { ensuite, derivee, textes, rouverte } = await leParcoursDepart();
+    assert.deepEqual(derivee.options, [{ coeurs: 1, depart: { plan: planDuDepart(derivee.avant, 1), toursFiges: [1] } }]);
+    assert.deepEqual(ensuite.options, [{ coeurs: 1 }]);
+    assert.deepEqual(ensuite.issue.ajoutees, [7, 8]);
+    assert.equal(ensuite.issue.depart, null);
+    assert.equal(ensuite.issue.identiquesAuDepart, 0);
+    // La commande ordinaire, appliquée hors de la séance aux propositions de
+    // rechercher, sous l'horodatage que la séance a posé : le contrôleur ne
+    // laisse rien d'une génération dérivée à la suivante.
+    const { horodatage } = propositionDe(ensuite.apres, 7);
+    const configuration = configurationDe(ensuite.avant);
+    const attendu = appliquerCommande(
+      'enregistrerGeneration',
+      ensuite.avant,
+      { propositions: duMoteur(ensuite, 'ensuite'), configuration, produitVersion: V },
+      { horodatage },
+    );
+    assert.equal(serialiserCharge(ensuite.apres), serialiserCharge(attendu.charge));
+    assert.equal(ensuite.libelle, attendu.libelle);
+    assert.equal(ensuite.libelle, 'Généré 2 propositions (n° 7 à 8)');
+    for (const id of [7, 8]) {
+      const p = propositionDe(rouverte, id);
+      assert.equal(Object.hasOwn(p, 'depart'), false, `proposition ${id}`);
+      assert.equal(Object.hasOwn(p, 'toursFiges'), false, `proposition ${id}`);
+    }
+    const entrees = entreesDuCompagnon(textes.courses, rouverte);
+    assert.deepEqual(
+      attendu.courses.map((entree) => entrees.get(entree.id)),
+      attendu.courses,
+    );
+    // Le texte écrit sur le disque, contre sa valeur fixée.
+    const ecrit = [textes.etat, textes.courses].map(depuisLaProposition7).join('').replaceAll(JSON.stringify(V), '"V"');
+    assert.equal(createHash('sha256').update(ecrit).digest('hex'), EMPREINTE_ORDINAIRE);
+  });
+
+  test('sur l’exécuteur à fils : chaque message d’une dérivée porte son départ, celui de la génération ordinaire suivante n’a pas de clé depart', async () => {
+    const vu = await leParcoursDepart('fils');
+    for (const nom of ['derivee', 'deriveeDeDerivee']) {
+      const { messages, avant } = vu[nom];
+      const { id, toursFiges } = DEPARTS[nom];
+      assert.deepEqual(messages.map(({ rang }) => rang).sort(), [1, 2], nom);
+      for (const message of messages) {
+        assert.deepEqual(message.depart, { plan: planDuDepart(avant, id), toursFiges }, `${nom}, rang ${message.rang}`);
+      }
+    }
+    for (const nom of ['ordinaire', 'ensuite']) {
+      assert.deepEqual(vu[nom].messages.map(({ rang }) => rang).sort(), [1, 2], nom);
+      for (const message of vu[nom].messages) {
+        assert.deepEqual(Object.keys(message), ['type', 'configuration', 'reglages', 'rang'], `${nom}, rang ${message.rang}`);
+      }
+    }
+  });
+
+  test('le même parcours sur un fil et sur deux écrit le même disque : état, journal et compagnon octet pour octet', async () => {
+    const direct = await leParcoursDepart('direct');
+    const fils = await leParcoursDepart('fils');
+    for (const cle of ['etat', 'journal', 'courses']) {
+      assert.equal(typeof direct.textes[cle], 'string', cle);
+      assert.equal(fils.textes[cle], direct.textes[cle], cle);
+    }
   });
 });

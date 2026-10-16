@@ -25,6 +25,14 @@
   // le refus affiché par aria-describedby, sur l'id que porte le refus : le
   // remède qui le retire rend le focus au bouton (Refus).
   //
+  // refusExterne, {code, details} ou null : un refus que le porteur tient
+  // dans son propre état, et qu'il retire en passant null — celui qui doit
+  // tomber quand l'état du porteur change, sans que la commande se remonte
+  // et perde l'exécution en cours. Il se pose à la place du refus de
+  // l'exécution, de la même façon, désigné par le bouton ; le refus de
+  // l'exécution passe devant lui. La commande ne le retire jamais : son
+  // remède abouti change l'état du porteur, qui le retire.
+  //
   // data-commande porte nom, ou à défaut le dernier segment de la clé.
   // nomAccessible, déjà traduit, nomme le bouton quand son libellé seul ne
   // le distingue pas d'un homonyme ; null, le libellé le nomme. Armée, la
@@ -58,6 +66,7 @@
     nomAccessible = null,
     gestes = {},
     variante = 'secondaire',
+    refusExterne = null,
   } = $props();
 
   const t = getContext('t');
@@ -72,6 +81,10 @@
   let minuterie = null;
 
   const libelle = $derived(armee ? t(confirmer) : t(cle, details));
+  // Le refus montré : celui de l'exécution, sinon celui du porteur ; le
+  // remède abouti du premier le retire, celui du second ne retire rien.
+  const montre = $derived(refus ?? refusExterne);
+  const lever = $derived(refus !== null ? () => (refus = null) : null);
   const designation = $derived(nom ?? cle.slice(cle.lastIndexOf('.') + 1));
   const forme = $derived(exigerVariante(variante, confirmer));
   // Le nom accessible : le libellé de confirmation, montré, quand elle est
@@ -133,13 +146,13 @@
     aria-busy={enCours ? 'true' : undefined}
     aria-disabled={enCours ? 'true' : undefined}
     aria-label={nomDuBouton}
-    aria-describedby={refus === null ? undefined : idRefus}
+    aria-describedby={montre === null ? undefined : idRefus}
     onkeydown={surTouche}
     onclick={cliquer}
     >{#if forme === 'retrait'}<Icone nom="croixCerclee" taille={18} marque="retrait" />{:else}{libelle}{/if}</button
   >
-  {#if refus !== null}
-    <Refus id={idRefus} {refus} lever={() => (refus = null)} objet={nomAccessible} {gestes} />
+  {#if montre !== null}
+    <Refus id={idRefus} refus={montre} {lever} objet={nomAccessible} {gestes} />
   {/if}
 </div>
 

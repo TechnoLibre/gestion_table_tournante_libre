@@ -901,6 +901,9 @@ export function rencontresDePersonne(charge, id, personne) {
  * @typedef {Object} ComparaisonPlacements
  * @property {Cote} a
  * @property {Cote} b
+ * @property {number} total   les autres personnes de l'instance, N − 1,
+ *           communes aux deux côtés et sous chaque statut : le « N au
+ *           total » d'une ligne de l'infobulle d'un rang (§ 12.10.3, D66)
  * @property {'comparable'|'refusDessin'|'populationsDifferentes'} statut
  * @property {{cote: 'a'|'b', violations: object[]}|null} refusDessin
  *           le premier côté dont la ligne porte un refus de dessin
@@ -1128,6 +1131,9 @@ export function comparerPlacements(charge, table, a, b) {
   const contexte = { charge, table, instance, planchers: planchersDesColonnes(instance, table.diagnostic), ajuste: retenuAjuste(charge) };
   const cotes = [coteDe(contexte, a), coteDe(contexte, b)];
   const [lu, autre] = cotes;
+  // N vient de normaliser (src/moteur) ; aucune personne ne se rencontre
+  // elle-même.
+  const total = instance.N - 1;
   const sansTrace = {
     refusDessin: null,
     populations: null,
@@ -1144,6 +1150,7 @@ export function comparerPlacements(charge, table, a, b) {
     return {
       a: lu.cote,
       b: autre.cote,
+      total,
       statut: 'refusDessin',
       ...sansTrace,
       refusDessin: { cote: refuse === 0 ? 'a' : 'b', violations: [...cotes[refuse].ligne.refusDessin] },
@@ -1155,6 +1162,7 @@ export function comparerPlacements(charge, table, a, b) {
     return {
       a: lu.cote,
       b: autre.cote,
+      total,
       statut: 'populationsDifferentes',
       ...sansTrace,
       populations: { seulementA: seulement(lu.ids, autre.ids), seulementB: seulement(autre.ids, lu.ids) },
@@ -1172,6 +1180,7 @@ export function comparerPlacements(charge, table, a, b) {
   return {
     a: lu.cote,
     b: autre.cote,
+    total,
     statut: 'comparable',
     refusDessin: null,
     populations: null,

@@ -287,30 +287,37 @@ function dessousLePlusFrequent(forme, quoi) {
 }
 
 // Le frère avant lequel se pose la sonde de ce qui est peint sous une forme :
-// la forme elle-même, sauf pour un repère de graphique à motif — data-repere
-// et un stroke-dasharray —, tracé par-dessus les séries qu'il borne et qui
-// recouvre une série sur toute sa longueur quand chaque rang est à sa borne.
-// Les vides de son motif laissent alors voir la série : le repère se mesure
-// contre ce qui est peint sous la première série tracée avant lui, le fond du
-// graphique et sa grille. Un repère plein, sans vide, se mesure contre la
-// série qu'il recouvre. Un point de relevé — data-point-releve —, posé sur
-// le tracé de sa série, de la même marque, se mesure contre ce qui est peint
-// sous ce tracé, le premier frère qui le précède sous la même marque : le
-// point et son tracé sont une seule marque. Dans un graphique de la page de
-// qualité, une autre forme se mesure de même contre ce qui est peint sous la
-// première forme de sa marque qui la précède chez son parent : les signes de
-// rangs voisins se chevauchent quand les rangs sont serrés, et ce qu'une forme
-// de sa propre encre recouvre n'est pas son fond.
+// la forme elle-même, sauf pour un tracé de graphique à motif — data-repere ou
+// data-serie, et un stroke-dasharray. Un repère à motif est tracé par-dessus
+// les séries qu'il borne, et recouvre une série sur toute sa longueur quand
+// chaque rang est à sa borne ; une série à motif est tracée par-dessus la
+// série pleine qui la précède, et la recouvre sur chaque rang où les deux
+// valent autant. Les vides de son motif laissent alors voir la série
+// recouverte : le tracé se mesure contre ce qui est peint sous la première
+// série tracée avant lui, le fond du graphique et sa grille. Une série à motif
+// peinte de la couleur de la série qu'elle recouvre, du même jeton, ne s'en
+// distingue que par son motif : elle se mesure contre elle, comme un tracé
+// plein, sans vide, contre la série qu'il recouvre. Un point de relevé —
+// data-point-releve —, posé sur le tracé de sa série, de la même marque, se
+// mesure contre ce qui est peint sous ce tracé, le premier frère qui le
+// précède sous la même marque : le point et son tracé sont une seule marque.
+// Dans un graphique de la page de qualité, une autre forme se mesure de même
+// contre ce qui est peint sous la première forme de sa marque qui la précède
+// chez son parent : les signes de rangs voisins se chevauchent quand les rangs
+// sont serrés, et ce qu'une forme de sa propre encre recouvre n'est pas son
+// fond.
 function sondeAvant(forme) {
   if (forme.matches('[data-point-releve]')) {
     let trace = forme.previousElementSibling;
     while (trace !== null && !(trace.localName === 'path' && trace.dataset.marque === forme.dataset.marque)) trace = trace.previousElementSibling;
     return trace ?? forme;
   }
-  if (!forme.matches('[data-repere]') || getComputedStyle(forme).strokeDasharray === 'none') return memeMarqueAvant(forme);
+  if (!forme.matches('[data-repere], [data-serie]') || getComputedStyle(forme).strokeDasharray === 'none') return memeMarqueAvant(forme);
   for (const frere of forme.parentNode.children) {
     if (frere === forme) break;
-    if (frere.matches('[data-serie]')) return frere;
+    if (!frere.matches('[data-serie]')) continue;
+    const memeCouleur = forme.matches('[data-serie]') && getComputedStyle(frere).stroke === getComputedStyle(forme).stroke;
+    return memeCouleur ? forme : frere;
   }
   return forme;
 }

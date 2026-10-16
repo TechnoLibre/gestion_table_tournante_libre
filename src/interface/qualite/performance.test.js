@@ -18,9 +18,10 @@ import { detaillerQualite } from '../../application/evaluation.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
-import { rechercher } from '../../moteur/recherche.js';
+import { rechercher, repartir } from '../../moteur/recherche.js';
 import { avecCourses, courseDe } from '../../stockage/courses.js';
 import { configurationDepuisCharge, creerCharge } from '../../stockage/document.js';
+import { planDepuisFichier } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { cleIndicateur, vuePerformance } from './performance.js';
@@ -39,7 +40,7 @@ const valeurs = (minimumBrut, excedentCollisions, rencontresRepeteesChoisies) =>
 
 // Un détail comparable d'épreuve, sur le contrat de detaillerQualite : la
 // proposition 4, sa course de quatre points, une génération de la séance.
-function detailDe({ id = 4, propositionDuRetenu = null, course = {} } = {}) {
+function detailDe({ id = 4, propositionDuRetenu = null, course = {}, derivation = null } = {}) {
   const base = {
     source: id === 'retenu' ? 'retenu' : 'proposition',
     propositionDuRetenu: id === 'retenu' ? propositionDuRetenu : null,
@@ -61,6 +62,7 @@ function detailDe({ id = 4, propositionDuRetenu = null, course = {} } = {}) {
     raisons: [],
     propositionDuRetenu,
     course: course === null ? null : { ...base, ...course },
+    derivation,
   };
 }
 
@@ -295,5 +297,89 @@ describe('qualite/performance : sur le détail d’une génération du moteur (�
     assert.ok(vue.multiples.length >= 1);
     assert.equal(vue.multiples[0].nom, 'minimumBrut');
     assert.ok(vue.tete.includes('durée inconnue'));
+  });
+});
+
+describe('qualite/performance : la course d’une dérivée part du plan de son départ (§ 12.14, C23, D76)', () => {
+  // Une filiation de la forme que rend derivationDe (src/application/depart.js).
+  const filiation = (depart, toursFiges = [], departPresent = true) => ({ depart, toursFiges, departPresent });
+
+  test('une dérivée : « partie de la proposition n° 2 » suit les mouvements évalués, en tête de la génération', () => {
+    const vue = vuePerformance(detailDe({ derivation: filiation(2, [1]) }), ecrire);
+    assert.deepEqual(vue.tete, [
+      t('qualite.performance.mouvements', { evalues: '200', arret: '200' }),
+      'partie de la proposition n° 2',
+      t('qualite.performance.duree', { duree: format.duree(2500) }),
+      t('qualite.performance.coeurs', { coeurs: 2 }),
+      t('qualite.performance.cadence', { cadence: format.nombre(1600) }),
+      t('qualite.performance.propositions', { nombre: 3 }),
+    ]);
+  });
+
+  test('le départ qui n’est plus dans la liste, sans tour figé, ou à zéro mouvement : la phrase reste, au même numéro', () => {
+    assert.equal(vuePerformance(detailDe({ derivation: filiation(7, [], false) }), ecrire).tete[1], 'partie de la proposition n° 7');
+    const aZero = vuePerformance(detailDe({ derivation: filiation(7), course: { evalues: 0, releves: [{ mouvements: 0, valeurs: valeurs(1, 6, 9) }] } }), ecrire);
+    assert.deepEqual(aZero.tete.slice(0, 2), [t('qualite.performance.planInitial'), 'partie de la proposition n° 7']);
+  });
+
+  test('un retenu non ajusté venu d’une dérivée le dit aussi ; sans filiation, la tête est celle d’une proposition tirée', () => {
+    const retenu = vuePerformance(detailDe({ id: 'retenu', propositionDuRetenu: 5, course: { propositionDuRetenu: 5 }, derivation: filiation(2) }), ecrire);
+    assert.equal(retenu.tete[1], 'partie de la proposition n° 2');
+    for (const detail of [detailDe(), detailDe({ id: 'retenu', propositionDuRetenu: 5, course: { propositionDuRetenu: 5 } })]) {
+      const tete = vuePerformance(detail, ecrire).tete;
+      assert.equal(tete.filter((morceau) => morceau.startsWith('partie de')).length, 0, String(detail.id));
+    }
+  });
+
+  test('sans course gardée, aucune tête : rien ne dit d’où part une course qui n’est pas montrée', () => {
+    const vue = vuePerformance(detailDe({ course: null, derivation: filiation(2) }), ecrire);
+    assert.equal(vue.tete, null);
+    assert.deepEqual(vue.phrases.map(({ code }) => code), ['sansCourse']);
+  });
+
+  test('sur le détail d’une dérivée du moteur, enregistrée sous son départ : la tête le nomme', () => {
+    const charge = creerCharge({ id: 'evt-performance', nom: 'Atelier Ressac', siegesParDefaut: 3, tours: 2 });
+    const noms = [
+      ['Ombrelle', 'Iris'],
+      ['Pervenche', 'Théo'],
+      ['Lacasse', 'Ondine'],
+      ['Tourteau', 'Basile'],
+      ['Quenouille', 'Maëlle'],
+      ['Varech', 'Sidonie'],
+    ];
+    charge.participants = noms.map(([nom, prenom], rang) => ({
+      id: rang + 1,
+      nom,
+      prenom,
+      appartenance: rang < 3 ? 'Coopérative Aubier' : null,
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: false,
+    }));
+    charge.tables = [1, 2].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 300 * id, y: 0 } }));
+    charge.prochainsIds = { participant: 7, table: 3, proposition: 1 };
+    const configuration = configurationDepuisCharge(charge);
+    const produitVersion = VERSION.affichee;
+    const premiere = appliquerCommande('enregistrerGeneration', charge, {
+      propositions: rechercher(configuration, { graine: 5, nombre: 1, arret: 300 }),
+      configuration,
+      produitVersion,
+    });
+    const depart = { plan: planDepuisFichier(premiere.charge.propositions[0]), toursFiges: [1] };
+    const derivees = appliquerCommande('enregistrerGeneration', premiere.charge, {
+      propositions: repartir(configuration, { graine: 9, nombre: 1, arret: 300 }, depart),
+      configuration,
+      produitVersion,
+      derivation: { depart: 1, toursFiges: [1] },
+    });
+    const courses = avecCourses(avecCourses(new Map(), premiere.courses), derivees.courses);
+    const lire = (id) => courseDe({ charge: derivees.charge, courses }, id);
+    const detail = detaillerQualite(derivees.charge, 2, { courseDe: lire });
+    assert.notEqual(detail.course, null);
+    assert.deepEqual(detail.derivation, { depart: 1, toursFiges: [1], departPresent: true });
+    assert.equal(vuePerformance(detail, ecrire).tete[1], 'partie de la proposition n° 1');
+    const duDepart = vuePerformance(detaillerQualite(derivees.charge, 1, { courseDe: lire }), ecrire);
+    assert.equal(duDepart.tete.filter((morceau) => morceau.startsWith('partie de')).length, 0);
   });
 });

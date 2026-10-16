@@ -2123,6 +2123,29 @@ describe('comparerPlacements : deux lignes de la table, une seule arithmétique 
     );
   });
 
+  test('total : les autres personnes de la population, N − 1, communes aux deux côtés et sous chaque statut (§ 12.10.3, D66)', () => {
+    const charge = figer(chargeComparee());
+    const table = evaluer(charge);
+    const autres = table.population.length - 1;
+    assert.ok(autres > 1);
+    const comparable = comparerPlacements(charge, table, 1, 3);
+    assert.equal(comparable.statut, 'comparable');
+    assert.equal(comparable.total, autres);
+    // Chaque ligne du profil désigne l'une des N personnes : N − 1 autres.
+    assert.equal(comparable.total, comparable.profils.a.length - 1);
+    assert.equal(comparable.total, comparable.profils.b.length - 1);
+    const refuser = (ligne) => {
+      ligne.refusDessin = [{ code: 'DEPASSEMENT', index: 0, participant: table.population[0] }];
+    };
+    const refusee = comparerPlacements(charge, tableForgee(table, 3, refuser), 1, 3);
+    assert.deepEqual([refusee.statut, refusee.total], ['refusDessin', autres]);
+    const falsifiee = structuredClone(charge);
+    const proposition = falsifiee.propositions.find(({ id }) => id === 3);
+    proposition.participants = proposition.participants.map((id) => (id === 12 ? 99 : id));
+    const populations = comparerPlacements(figer(falsifiee), table, 1, 3);
+    assert.deepEqual([populations.statut, populations.total], ['populationsDifferentes', autres]);
+  });
+
   test('rouge : indiscernables — entre deux propositions, le premier palier qui les départage, puis l’identifiant ; avec le retenu, l’indiscernabilité seule', () => {
     const base = chargeComparee();
     // La proposition 5, copie de la 1 : mêmes clés à chaque palier.

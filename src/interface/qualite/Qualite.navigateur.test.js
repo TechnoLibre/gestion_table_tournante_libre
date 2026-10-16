@@ -7,7 +7,7 @@
 // nomme sur sa ligne de source ; la commande « Qualité » du tableau des
 // propositions l'ouvre sur sa proposition ; les quatre cas sans source
 // mesurable ne dessinent aucune vue ; une génération qui retire la
-// proposition montrée rend la page au plan ; les neuf vues d'attente,
+// proposition montrée rend la page au plan ; les dix vues d'attente,
 // chacune sous son [data-vue-qualite], et la liste qui mène à chacune ;
 // aucune règle d'impression ne la vise. Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé où un fichier d'état
@@ -38,7 +38,7 @@ const V1 = VERSION.affichee;
 const BASE = 'soiree';
 
 // Les vues de la page, dans leur ordre à l'écran (§ 12, B9).
-const VUES = ['entete', 'profil', 'collisions', 'tables', 'paires', 'objectifs', 'animateurs', 'diversite', 'performance'];
+const VUES = ['entete', 'profil', 'comparaison', 'collisions', 'tables', 'paires', 'objectifs', 'animateurs', 'diversite', 'performance'];
 
 // --- Les charges d'épreuve -------------------------------------------------------
 
@@ -427,7 +427,7 @@ describe('une source qui disparaît sous la page ouverte (§ 12, B9)', () => {
 });
 
 describe('les vues d’attente et la liste qui y mène (§ 12, B9, B10)', () => {
-  test('les neuf vues, dans leur ordre : chacune un <div> [data-vue-qualite] qui enveloppe la carte titrée de sa question', async () => {
+  test('les dix vues, dans leur ordre : chacune un <div> [data-vue-qualite] qui enveloppe la carte titrée de sa question', async () => {
     const generees = generee(chargeSix());
     const m = await ouvrir(executer(generees, 'retenirProposition', { id: generees.propositions[0].id }));
     expect(vuesRendues(m)).toEqual(VUES);
@@ -538,5 +538,88 @@ describe('la page ne s’imprime pas (§ 11.7, B8)', () => {
     const regles = reglesImpression();
     expect(regles.length).toBeGreaterThan(0);
     expect(regles.filter((texte) => /qualite/i.test(texte))).toEqual([]);
+  });
+});
+
+describe('une source dérivée : sa filiation, et la course partie de son départ (§ 12.6, § 12.14, C17, C23, D76)', () => {
+  // Douze personnes inventées, trois tables de quatre places, trois tours.
+  function chargeDouze() {
+    const charge = creerCharge({ id: 'evt-qualite', nom: 'Atelier Ressac', siegesParDefaut: 4, tours: 3 });
+    const noms = [
+      ['Ombrelle', 'Iris'], ['Pervenche', 'Théo'], ['Lacasse', 'Ondine'], ['Tourteau', 'Basile'],
+      ['Quenouille', 'Maëlle'], ['Varech', 'Sidonie'], ['Aubépin', 'Lucien'], ['Bruyère', 'Aglaé'],
+      ['Cormier', 'Félix'], ['Dorine', 'Ysé'], ['Escourgeon', 'Paulin'], ['Fenouil', 'Rosalie'],
+    ];
+    charge.participants = noms.map(([nom, prenom], rang) => ({
+      id: rang + 1,
+      nom,
+      prenom,
+      appartenance: rang % 3 === 0 ? 'Coopérative Aubier' : 'Atelier Ressac',
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: false,
+    }));
+    charge.tables = [1, 2, 3].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 300 * id, y: 0 } }));
+    charge.prochainsIds = { participant: 13, table: 4, proposition: 1 };
+    return charge;
+  }
+
+  const filiation = (m) => page(m).querySelector('[data-filiation]');
+  const tete = (m) => [...page(m).querySelectorAll('[data-vue-qualite="performance"] [data-course] li')].map(texteDe);
+  const partieDe = (m) => tete(m).filter((morceau) => morceau.startsWith('partie de'));
+
+  // L'événement ouvert, une génération tirée, puis une dérivée de la
+  // proposition 1, tour 1 figé, toutes deux par le contrôleur de la séance :
+  // leurs courses sont gardées. Rend le montage et l'identifiant de la
+  // dérivée.
+  async function avecDerivee() {
+    const m = await ouvrir(chargeDouze());
+    await m.app.generation().generer({ graine: 3, nombre: 1, arret: 1, historique: 1000 });
+    const { ajoutees } = await m.app.generation().generer({ graine: 8, nombre: 1, arret: 400, historique: 1000 }, { depart: { id: 1, toursFiges: [1] } });
+    expect(ajoutees.length).toBe(1);
+    const [derivee] = ajoutees;
+    expect(charge(m).propositions.find(({ id }) => id === derivee).depart).toBe(1);
+    return { m, derivee };
+  }
+
+  test('la source dérivée : sa filiation sous la ligne de source, « partie de la proposition n° 1 » dans la performance ; son départ, ni l’une ni l’autre', async () => {
+    const { m, derivee } = await avecDerivee();
+    m.ui.montrerProposition(derivee);
+    await attendre(() => expect(partieDe(m)).toEqual(['partie de la proposition n° 1']));
+    expect(texteDe(filiation(m))).toBe('Dérivée de n° 1, tour 1 figé.');
+    expect(filiation(m).closest('[data-source-qualite]')).toBeNull();
+    expect(page(m).querySelector('[data-source-qualite]').compareDocumentPosition(filiation(m)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ligneDeSource(m)).toBe(attendueDeSource('plan.source.propositionReservations', { proposition: derivee }));
+    m.ui.montrerProposition(1);
+    await attendre(() => expect(tete(m).length).toBeGreaterThan(0));
+    expect(partieDe(m)).toEqual([]);
+    expect(filiation(m)).toBeNull();
+  });
+
+  test('un retenu non ajusté venu d’une dérivée : sa ligne de source garde son libellé, sa performance dit d’où part la course ; ajusté, rien', async () => {
+    const { m, derivee } = await avecDerivee();
+    await m.seance.executer('retenirProposition', { id: derivee });
+    m.ui.montrerProposition(null);
+    await attendre(() => expect(partieDe(m)).toEqual(['partie de la proposition n° 1']));
+    expect(ligneDeSource(m)).toBe(attendueDeSource('plan.source.retenu'));
+    expect(filiation(m)).toBeNull();
+    const [premierTour] = charge(m).retenu.placement;
+    await m.seance.executer('echangerDansRetenu', { tour: 1, a: premierTour.sieges[0][0], b: premierTour.sieges[1][0] });
+    await attendre(() => expect(page(m).querySelector('[data-vue-qualite="performance"] [data-phrase-qualite="retenuSansCourse"]')).not.toBeNull());
+    expect(partieDe(m)).toEqual([]);
+    expect(filiation(m)).toBeNull();
+  });
+
+  test('le départ effacé : la ligne de source dit qu’il n’est plus dans la liste, la performance le nomme encore ; en dérive, la filiation reste avec ses raisons', async () => {
+    const { m, derivee } = await avecDerivee();
+    await m.seance.executer('retenirProposition', { id: derivee });
+    await m.seance.executer('effacerPropositions', {});
+    m.ui.montrerProposition(derivee);
+    await attendre(() => expect(partieDe(m)).toEqual(['partie de la proposition n° 1']));
+    expect(texteDe(filiation(m))).toBe("Dérivée de n° 1, qui n'est plus dans la liste.");
+    await m.seance.executer('exclureParticipant', { id: 12 });
+    await attendre(() => expect(phrases(m)).toEqual(['derive']));
+    expect(texteDe(filiation(m))).toBe("Dérivée de n° 1, qui n'est plus dans la liste.");
   });
 });

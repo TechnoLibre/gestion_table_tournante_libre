@@ -9,7 +9,12 @@
 //
 // La ligne de tête dit les mouvements évalués sur le compte d'arrêt — ou
 // « rien à reprendre après … » sous le compte, ou « le plan initial n'avait
-// rien à reprendre » à zéro mouvement —, puis la génération de la séance :
+// rien à reprendre » à zéro mouvement —, puis, pour une dérivée, que sa
+// course part du plan de son départ, « partie de la proposition n° X »
+// (C23, D76) : ses premiers points mesurent déjà un plan cherché. Un retenu
+// non ajusté venu d'une dérivée le dit aussi, sa course étant celle de sa
+// proposition ; le détail porte cette filiation (derivation), null pour un
+// placement tiré. Viennent ensuite la génération de la séance :
 // durée observée, cœurs, cadence, nombre de propositions. Une durée
 // inconnue — nulle, absente, d'une proposition rouverte — s'écrit « durée
 // inconnue », et aucune cadence ne s'écrit sans durée, même si le détail
@@ -70,8 +75,9 @@ function phraseDeSource({ id, propositionDuRetenu, course }, t) {
   return course === null ? { code: 'sansCourse', texte: t('qualite.performance.sansCourse') } : null;
 }
 
-// Les morceaux de la ligne de tête, chacun un texte.
-function teteDe({ evalues, arret, generation }, { t, format }) {
+// Les morceaux de la ligne de tête, chacun un texte ; derivation, la
+// filiation du détail, null hors d'une dérivée.
+function teteDe({ evalues, arret, generation }, derivation, { t, format }) {
   const nombres = { evalues: format.nombre(evalues), arret: format.nombre(arret) };
   let mouvements;
   if (evalues === 0) mouvements = t('qualite.performance.planInitial');
@@ -79,10 +85,9 @@ function teteDe({ evalues, arret, generation }, { t, format }) {
   else mouvements = t('qualite.performance.mouvements', nombres);
   const { dureeMs, coeurs, cadence, nombre } = generation;
   const connue = dureeMs !== null;
-  const morceaux = [
-    mouvements,
-    connue ? t('qualite.performance.duree', { duree: format.duree(dureeMs) }) : t('qualite.performance.dureeInconnue'),
-  ];
+  const morceaux = [mouvements];
+  if (derivation !== null) morceaux.push(t('qualite.performance.depart', { proposition: derivation.depart }));
+  morceaux.push(connue ? t('qualite.performance.duree', { duree: format.duree(dureeMs) }) : t('qualite.performance.dureeInconnue'));
   if (coeurs !== null) morceaux.push(t('qualite.performance.coeurs', { coeurs }));
   if (connue && cadence !== null) morceaux.push(t('qualite.performance.cadence', { cadence: format.nombre(cadence) }));
   if (nombre !== null) morceaux.push(t('qualite.performance.propositions', { nombre }));
@@ -136,7 +141,7 @@ export function vuePerformance(detail, { t, format }) {
     ],
     lignes: releves.map(({ mouvements, valeurs }) => ({ mouvements, ...valeurs })),
   };
-  const tete = teteDe(course, { t, format });
+  const tete = teteDe(course, detail.derivation, { t, format });
   if (releves.length < 2) {
     if (course.evalues > 0) phrases.push({ code: 'unPoint', texte: t('qualite.performance.unPoint') });
     return { ...RIEN, phrases, tete, jumeau };

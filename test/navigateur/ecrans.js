@@ -258,6 +258,15 @@ export function chargeObjectifs() {
   return generee(charge, { graine: 3, nombre: 1, arret: 300 }).charge;
 }
 
+/** Douze personnes, trois tables de quatre, trois tours ; une génération de
+ *  deux propositions, sans retenu. Les profils de manque de la première et
+ *  de la seconde prennent quatre valeurs, se tracent, et se croisent une
+ *  fois : la vue de comparaison de la première écrit sa bascule. */
+export function chargeComparaison() {
+  const charge = chargeInventee({ appartenances: Array.from({ length: 12 }, (_, rang) => [AUBIER, RESSAC, null][rang % 3]), tables: 3, sieges: 4, tours: 3 });
+  return generee(charge, { graine: 8, nombre: 2, arret: 60 }).charge;
+}
+
 // Le placement de chargeNiveaux, tours par tours, sièges non attribués.
 // Les doublons parmi les affiliés (α − δ) valent 3 à la table 1 à chaque
 // tour, 2 et 1 aux tables 2 et 3 du tour 1, 0 ailleurs ; les sièges sans
@@ -1146,6 +1155,24 @@ export const ECRANS = Object.freeze([
     nom: 'qualite.jumeaux.bloque',
     mode: 'bloque',
     atteindre: (contexte) => jumeauSansEcriture(contexte, chargeBloquee()),
+  },
+  {
+    nom: 'qualite.comparaison',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // La vue de comparaison de chargeComparaison amenée en haut de la
+      // zone visible, où elle se calcule ; son tracé dessiné, sa bascule
+      // écrite, puis son jumeau, l'escalier du manque, ouvert par sa
+      // commande.
+      const m = await ouvrirQualite(contexte, chargeComparaison());
+      (await element(m, '[data-vue-qualite="comparaison"]')).scrollIntoView({ block: 'start' });
+      await element(m, '[data-vue-qualite="comparaison"] svg[data-graphique="comparaison"]');
+      await dessinerGraphiques(m.racine.querySelector('[data-vue-qualite="comparaison"]'));
+      await element(m, '[data-graphique="comparaison"] [data-marque]');
+      await element(m, '[data-vue-qualite="comparaison"] [data-phrase-comparaison="bascule"]');
+      await ouvrirJumeaux(m, '[data-vue-qualite="comparaison"]');
+      return m.racine;
+    },
   },
   {
     nom: 'qualite.paires',

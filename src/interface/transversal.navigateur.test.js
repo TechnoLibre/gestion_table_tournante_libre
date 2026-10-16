@@ -1160,6 +1160,23 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(plein.fautes[0]).toContain('graphiqueBorne');
   });
 
+  test('marques de graphique : une série à motif posée sur une autre série se mesure contre le fond ; une série pleine, contre la série qu’elle recouvre', () => {
+    const trace = (designation, jeton, marque) =>
+      `<path ${designation} data-marque="${marque}" d="M10 20 H190" style="fill:none;stroke:var(${jeton});stroke-width:2px" />`;
+    const fragment = (motif) =>
+      '<svg width="200" height="40" style="background:var(--couleur-carte-fond)">' +
+      trace('data-serie="a"', '--couleur-graphique-serie-1', 'graphiqueSerie1') +
+      trace(`data-serie="b"${motif}`, '--couleur-graphique-serie-2', 'graphiqueSerie2') +
+      '</svg>';
+    const tirets = avecFragment(fragment(' stroke-dasharray="6 4"'), (c) => releverTheme(c).marques);
+    expect(tirets.vues).toEqual(['graphiqueSerie1', 'graphiqueSerie2']);
+    expect(tirets.mesures).toBe(2);
+    expect(tirets.fautes).toEqual([]);
+    const plein = avecFragment(fragment(''), (c) => releverTheme(c).marques);
+    expect(plein.fautes).toHaveLength(1);
+    expect(plein.fautes[0]).toContain('graphiqueSerie2');
+  });
+
   test('marques de graphique : le relevé du parcours photographié (stylesDuTheme) les connaît aussi — une série sur la carte ne porte aucune faute et se range sous son jeton, rôle marque', () => {
     const { styles, fautes } = avecFragment(
       '<svg width="200" height="40" style="background:var(--couleur-carte-fond)">' +

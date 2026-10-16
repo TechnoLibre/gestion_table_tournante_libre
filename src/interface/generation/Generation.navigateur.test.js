@@ -9,7 +9,9 @@
 // sur deux ; l'application
 // vivante pendant le calcul ; l'annulation ; les refus posés à côté de
 // « Générer » avec leur remède ; la durée observée ; la génération longue,
-// annoncée en place.
+// annoncée en place ; le départ d'une génération dérivée, ses tours à
+// figer, ses refus et leurs remèdes, son issue et la paire qu'elle offre de
+// comparer (§ 5.7, C6).
 //
 // Chaque épreuve monte App par monterApp, sur le système de fichiers
 // simulé, et nomme son exécuteur : le travailleur — inclus en ligne comme
@@ -25,8 +27,9 @@
 // (§ 14.8).
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { flushSync } from 'svelte';
+import { planDuDepart } from '../../application/depart.js';
 import { creerExecuteurTravailleur } from '../../application/executeur_travailleur.js';
-import { ErreurAnnulee, creerExecuteurDirect } from '../../application/generation.js';
+import { ErreurAnnulee, ErreurGeneration, creerExecuteurDirect } from '../../application/generation.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { constante } from '../../geometrie/constantes.js';
@@ -40,6 +43,7 @@ import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, contraste, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
+import { evaluation } from '../propositions/modele.js';
 import { REGLAGES_GENERATION, valeurDuReglage } from './reglages.js';
 import Travailleur from './travailleur.js?worker&inline';
 
@@ -999,5 +1003,389 @@ describe('l’habillage de la génération', () => {
         expect(generer(m).getBoundingClientRect().height, theme).toBeGreaterThanOrEqual(44);
       });
     }
+  });
+});
+
+// --- Le départ d'une génération dérivée (§ 5.7, § 8.4, C6, C9) ---------------------
+
+const carteDepart = (m) => section(m).querySelector('[data-depart]');
+const cases = (m) => [...section(m).querySelectorAll('input[type="checkbox"][data-tour-fige]')];
+const caseDuTour = (m, tour) => section(m).querySelector(`input[type="checkbox"][data-tour-fige="${tour}"]`);
+const genererDepuis = (m) => section(m).querySelector('[data-commande="genererDepuis"]');
+const issue = (m) => section(m).querySelector('[data-issue]');
+
+// Le nom accessible d'un bouton ou d'une case : aria-label, sinon le texte de
+// son étiquette, sinon son texte.
+const nomAccessible = (element) =>
+  (element.getAttribute('aria-label') ?? element.labels?.[0]?.textContent ?? element.textContent).trim();
+
+// Enregistre nombre propositions de la petite démonstration, calculées sous
+// la graine donnée à un compte court ; rend les identifiants de la charge.
+async function avecPropositions(m, { graine = 7, nombre = 3 } = {}) {
+  const configuration = configurationDepuisCharge(charge(m));
+  const propositions = rechercher(configuration, { graine, nombre, arret: 2000 });
+  await m.seance.executer('enregistrerGeneration', { propositions, configuration, produitVersion: VERSION.affichee });
+  flushSync();
+  return charge(m).propositions.map(({ id }) => id);
+}
+
+// L'exécuteur direct, chaque lancer relevé — reglages, options —, dont
+// transformer(propositions, options) remplace le résultat.
+function executeurTransforme(transformer = (propositions) => propositions) {
+  const base = creerExecuteurDirect();
+  const lancements = [];
+  const executeur = {
+    coeursDisponibles: base.coeursDisponibles,
+    lancer(configuration, reglages, options) {
+      lancements.push({ reglages, options });
+      const execution = base.lancer(configuration, reglages, options);
+      return { ...execution, resultat: execution.resultat.then((propositions) => transformer(propositions, options)) };
+    },
+  };
+  return { executeur, lancements };
+}
+
+// Les états de navigation publiés à partir de maintenant.
+function suivreUi(m) {
+  const etats = [];
+  const desabonner = m.ui.subscribe((etat) => etats.push(etat));
+  return { etats, desabonner };
+}
+
+// Coche ou décoche la case du tour par un clic réel.
+const cocher = (m, tour) => cliquer(m, caseDuTour(m, tour));
+
+// Un exécuteur dont le résultat attend l'épreuve : rejeter(erreur) le
+// refuse ; lancements compte les lancers.
+function executeurRetenu() {
+  const suivi = { lancements: 0, rejeter: null };
+  const executeur = {
+    lancer(configuration, reglages, options) {
+      suivi.lancements += 1;
+      const resultat = new Promise((_, ko) => {
+        suivi.rejeter = ko;
+      });
+      return {
+        surAvancement: () => () => undefined,
+        resultat,
+        annuler: () => suivi.rejeter(new ErreurAnnulee()),
+        coeurs: options?.coeurs,
+      };
+    },
+  };
+  return { executeur, suivi };
+}
+
+// Lance « Générer depuis n° 1 » sur l'exécuteur retenu, puis, le calcul en
+// cours, retire le départ par « Repartir de zéro » de la carte quand
+// repartir est vrai ; rend le montage et le suivi de l'exécuteur.
+async function deriveeEnCours({ repartir }) {
+  const { executeur, suivi } = executeurRetenu();
+  const m = await demonstration('petite', { executeur });
+  await avecPropositions(m);
+  m.ui.choisirDepart(1);
+  flushSync();
+  await cliquer(m, genererDepuis(m));
+  await attendre(() => expect(enCours(m)).toBe(true));
+  expect(suivi.lancements).toBe(1);
+  if (repartir) await cliquer(m, carteDepart(m).querySelector('[data-commande="repartirDeZero"]'));
+  return { m, suivi };
+}
+
+describe('le départ d’une génération dérivée (§ 5.7, C6)', () => {
+  test('sous un départ, la section montre le départ, les cases décochées et « Générer depuis n° X » ; « Repartir de zéro » rend « Générer », le focus sur lui', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
+    await avecPropositions(m);
+    expect(carteDepart(m)).toBeNull();
+    expect(cases(m)).toEqual([]);
+    const ecritures = m.trace.length;
+    m.ui.choisirDepart(2);
+    flushSync();
+    expect(carteDepart(m)).not.toBeNull();
+    expect(carteDepart(m).textContent).toContain(t('generation.depart.titre', { depart: 2 }));
+    expect(carteDepart(m).querySelector('fieldset legend').textContent).toBe(t('generation.depart.legende'));
+    expect(cases(m).map((c) => [c.getAttribute('data-tour-fige'), c.checked, nomAccessible(c)])).toEqual(
+      [1, 2, 3, 4].map((tour) => [String(tour), false, t('generation.depart.tour', { tour })]),
+    );
+    expect(generer(m)).toBeNull();
+    expect(genererDepuis(m).textContent).toBe('Générer depuis n° 2');
+    // La carte est au-dessus de « Générer », dans la carte des réglages.
+    expect(carteDepart(m).getBoundingClientRect().bottom).toBeLessThanOrEqual(genererDepuis(m).getBoundingClientRect().top);
+
+    await cliquer(m, carteDepart(m).querySelector('[data-commande="repartirDeZero"]'));
+    expect(m.ui.etat().depart).toBeNull();
+    expect(carteDepart(m)).toBeNull();
+    expect(genererDepuis(m)).toBeNull();
+    expect(generer(m).textContent).toBe(t('generation.commande.generer'));
+    expect(document.activeElement).toBe(generer(m));
+    expect(m.trace.length).toBe(ecritures);
+  });
+
+  test('« Générer depuis n° 2 », tour 1 coché : le moteur part du plan du départ, tour figé compris ; l’issue nomme la meilleure dérivée, sa place et celle du départ ; le départ reste choisi', async () => {
+    const { executeur, lancements } = executeurTransforme();
+    const m = await demonstration('petite', { executeur });
+    await regler(m, { nombre: 3, arret: 2000 });
+    const avant = await avecPropositions(m);
+    m.ui.choisirDepart(2);
+    flushSync();
+    await cocher(m, 1);
+    expect(m.ui.etat().depart).toEqual({ id: 2, toursFiges: [1] });
+    expect(cases(m).map((c) => c.checked)).toEqual([true, false, false, false]);
+    const plan = planDuDepart(charge(m), 2);
+    await cliquer(m, genererDepuis(m));
+    await attendre(() => expect(enCours(m)).toBe(false));
+    expect(lancements.map(({ options }) => options.depart)).toEqual([{ plan, toursFiges: [1] }]);
+    const ajoutees = charge(m).propositions.map(({ id }) => id).filter((id) => !avant.includes(id));
+    expect(ajoutees.length).toBeGreaterThan(0);
+    for (const id of ajoutees) expect(charge(m).propositions.find((p) => p.id === id)).toMatchObject({ depart: 2, toursFiges: [1] });
+
+    const { ordre } = evaluation(charge(m)).table.classement;
+    const meilleure = ordre.find((id) => ajoutees.includes(id));
+    const texte = issue(m).textContent;
+    expect(texte).toContain(`dérivée${ajoutees.length > 1 ? 's' : ''} de n° 2`);
+    expect(texte).toContain(`n° 2 est ${ordre.indexOf(2) + 1 === 1 ? '1\u{02B3}\u{1D49}' : `${ordre.indexOf(2) + 1}\u{1D49}`}`);
+    expect(texte).toContain(`${ordre.indexOf(meilleure) + 1 === 1 ? '1\u{02B3}\u{1D49}' : `${ordre.indexOf(meilleure) + 1}\u{1D49}`} du classement`);
+    // Le départ reste choisi, ses cases telles quelles, pour une autre graine.
+    expect(m.ui.etat().depart).toEqual({ id: 2, toursFiges: [1] });
+    expect(cases(m).map((c) => c.checked)).toEqual([true, false, false, false]);
+    expect(genererDepuis(m).textContent).toBe('Générer depuis n° 2');
+
+    // « Comparer n° a à n° 2 » pose la paire : a au plan, 2 en second, la
+    // page de qualité et sa vue de comparaison demandées ; rien d'écrit.
+    const comparer = section(m).querySelector('[data-commande="comparerIssue"]');
+    expect(comparer.textContent).toBe(t('generation.commande.comparerIssue', { a: meilleure, depart: 2 }));
+    const ecritures = m.trace.length;
+    const { etats, desabonner } = suivreUi(m);
+    await cliquer(m, comparer);
+    desabonner();
+    expect(
+      etats.some((e) => e.proposition === meilleure && e.comparee === 2 && e.section === 'qualite' && e.vueQualite === 'comparaison'),
+    ).toBe(true);
+    expect(m.ui.etat()).toMatchObject({ proposition: meilleure, comparee: 2, section: 'qualite' });
+    expect(m.trace.length).toBe(ecritures);
+  });
+
+  test('toutes les dérivées égales à leur départ : « n’avait rien à reprendre », rien d’écrit ; une seule, égale à une autre proposition : l’issue ordinaire', async () => {
+    let remplacer = (propositions, options) => propositions.map((p) => ({ ...p, plan: options.depart.plan }));
+    const { executeur } = executeurTransforme((propositions, options) => remplacer(propositions, options));
+    const m = await demonstration('petite', { executeur });
+    await regler(m, { nombre: 3, arret: 2000 });
+    await avecPropositions(m);
+    m.ui.choisirDepart(2);
+    flushSync();
+    const ecritures = m.trace.length;
+    await cliquer(m, genererDepuis(m));
+    await attendre(() => expect(enCours(m)).toBe(false));
+    expect(issue(m).textContent).toBe(t('generation.issue.departSansReprise', { depart: 2 }));
+    expect(section(m).querySelector('[data-commande="comparerIssue"]')).toBeNull();
+    expect(m.trace.length).toBe(ecritures);
+
+    await regler(m, { nombre: 1 });
+    const autre = planDuDepart(charge(m), 3);
+    remplacer = (propositions) => propositions.map((p) => ({ ...p, plan: autre }));
+    await cliquer(m, genererDepuis(m));
+    await attendre(() => expect(enCours(m)).toBe(false));
+    expect(issue(m).textContent).toBe(t('generation.issue.ajoutees', { ajoutees: 0, identiques: 1 }));
+    expect(issue(m).textContent).not.toContain('reprendre');
+  });
+
+  test('en lecture puis sur un plan bloqué : la carte se lit, choisir et cocher n’écrivent rien et ne refusent rien ; « Générer depuis » refusé avec « Modifier », puis « Débloquer »', async () => {
+    const { executeur, lancements } = executeurTransforme();
+    const m = await demonstration('petite', { executeur });
+    await avecPropositions(m);
+    await m.seance.passerEnLecture();
+    flushSync();
+    let ecritures = m.trace.length;
+    let journal = journalDe(m);
+    m.ui.choisirDepart(1);
+    flushSync();
+    await cocher(m, 2);
+    expect(m.ui.etat().depart).toEqual({ id: 1, toursFiges: [2] });
+    expect(caseDuTour(m, 2).checked).toBe(true);
+    expect(section(m).querySelector('[data-refus]')).toBeNull();
+    expect(m.trace.length).toBe(ecritures);
+    expect(journalDe(m)).toEqual(journal);
+    await cliquer(m, genererDepuis(m));
+    const lecture = refusPres(genererDepuis(m), 'MODE_LECTURE');
+    expect(lecture).not.toBeNull();
+    expect(lecture.querySelector('[data-commande="modifier"]').textContent).toBe(t('communs.remede.modifier'));
+    expect(m.trace.length).toBe(ecritures);
+    // « Modifier » passe en écriture et lève le refus.
+    await cliquer(m, lecture.querySelector('[data-commande="modifier"]'));
+    await attendre(() => expect(m.seance.etat().mode).toBe('ecriture'), 120);
+    expect(section(m).querySelector('[data-refus]')).toBeNull();
+
+    await m.seance.executer('retenirProposition', { id: 1 });
+    await m.seance.executer('changerEtat', { etat: 'bloque' });
+    m.ui.retirerDepart();
+    flushSync();
+    ecritures = m.trace.length;
+    journal = journalDe(m);
+    m.ui.choisirDepart(3);
+    flushSync();
+    expect(carteDepart(m)).not.toBeNull();
+    await cocher(m, 4);
+    await cocher(m, 1);
+    expect(m.ui.etat().depart).toEqual({ id: 3, toursFiges: [1, 4] });
+    expect(section(m).querySelector('[data-refus]')).toBeNull();
+    expect(m.trace.length).toBe(ecritures);
+    expect(journalDe(m)).toEqual(journal);
+    await cliquer(m, genererDepuis(m));
+    const bloque = refusPres(genererDepuis(m), 'LECTURE_SEULE');
+    expect(bloque.querySelector('[data-commande="debloquer"]').textContent).toBe(t('communs.remede.debloquer'));
+    expect(m.trace.length).toBe(ecritures);
+    expect(lancements).toEqual([]);
+  });
+
+  test('tous les tours figés : le refus se pose contre les cases, non à côté de « Générer depuis » ; décocher un tour le lève ; rien de lancé', async () => {
+    const { executeur, lancements } = executeurTransforme();
+    const m = await demonstration('petite', { executeur });
+    await avecPropositions(m);
+    m.ui.choisirDepart(2);
+    flushSync();
+    for (const tour of [1, 2, 3, 4]) await cocher(m, tour);
+    await cliquer(m, genererDepuis(m));
+    const refus = carteDepart(m).querySelector('fieldset [data-refus="TOURS_FIGES_TOUS"]');
+    expect(refus).not.toBeNull();
+    expect(refus.querySelector('p').textContent).toBe(t('TOURS_FIGES_TOUS', { tours: 4 }));
+    expect(refusPres(genererDepuis(m), 'TOURS_FIGES_TOUS')).toBeNull();
+    for (const c of cases(m)) expect(c.getAttribute('aria-describedby')).toBe(refus.id);
+    expect(lancements).toEqual([]);
+    await cocher(m, 3);
+    expect(carteDepart(m).querySelector('[data-refus]')).toBeNull();
+    expect(cases(m).map((c) => c.getAttribute('aria-describedby'))).toEqual([null, null, null, null]);
+  });
+
+  test('DEPART_SIEGE_NON_TENU : le remède décoche le tour, le refus se lève, le focus revient à « Générer depuis » ; le lancement suivant part', async () => {
+    const { executeur, lancements } = executeurTransforme();
+    const m = await demonstration('petite', { executeur });
+    await regler(m, { nombre: 1, arret: 2000 });
+    await m.seance.executer('modifierReglage', { cle: 'attribuerSieges', valeur: true });
+    await avecPropositions(m, { nombre: 1 });
+    const [depart] = charge(m).propositions;
+    expect(depart.siegesAttribues).toBe(true);
+    // Au tour 1, la première personne de la première table, au siège 1 ; une
+    // réservation la fixe au siège 2 de la même table.
+    const participant = depart.placement[0].sieges[0][0];
+    await m.seance.executer('reserver', { participant, table: depart.tables[0], siege: 2, portee: 'tour', tour: 1 });
+    m.ui.choisirDepart(depart.id);
+    flushSync();
+    await cocher(m, 1);
+    await cliquer(m, genererDepuis(m));
+    const refus = refusPres(genererDepuis(m), 'DEPART_SIEGE_NON_TENU');
+    expect(refus).not.toBeNull();
+    const remede = refus.querySelector('[data-commande="libererTour"]');
+    expect(remede.textContent).toBe(t('communs.remede.libererTour', { tour: 1 }));
+    await cliquer(m, remede);
+    expect(m.ui.etat().depart).toEqual({ id: depart.id, toursFiges: [] });
+    expect(caseDuTour(m, 1).checked).toBe(false);
+    expect(refusPres(genererDepuis(m), 'DEPART_SIEGE_NON_TENU')).toBeNull();
+    expect(document.activeElement).toBe(genererDepuis(m));
+    expect(lancements).toEqual([]);
+    await cliquer(m, genererDepuis(m));
+    await attendre(() => expect(enCours(m)).toBe(false));
+    expect(lancements.map(({ options }) => options.depart.toursFiges)).toEqual([[]]);
+  });
+
+  test('un refus du départ remédié par « Repartir de zéro » : le départ retiré, « Générer » rendu, le focus sur lui ; noms accessibles distincts tant que les deux « Repartir de zéro » se côtoient', async () => {
+    const { executeur, lancements } = executeurTransforme();
+    const m = await demonstration('petite', { executeur });
+    await avecPropositions(m, { nombre: 1 });
+    const [depart] = charge(m).propositions;
+    // Au tour 2, une réservation fixe la première personne de la première
+    // table à la deuxième table : le départ ne la tient pas.
+    const participant = depart.placement[1].sieges[0][0];
+    await m.seance.executer('reserver', { participant, table: depart.tables[1], portee: 'tour', tour: 2 });
+    m.ui.choisirDepart(depart.id);
+    flushSync();
+    await cliquer(m, genererDepuis(m));
+    const refus = refusPres(genererDepuis(m), 'DEPART_RESERVATION_NON_TENUE');
+    expect(refus).not.toBeNull();
+    const controles = [
+      ...carteDepart(m).querySelectorAll('button, input'),
+      ...genererDepuis(m).parentElement.querySelectorAll('button, input'),
+    ];
+    const noms = controles.map(nomAccessible);
+    expect(noms.filter((nom) => nom.startsWith(t('communs.remede.repartirDeZero')))).toHaveLength(2);
+    expect(new Set(noms).size).toBe(noms.length);
+    await cliquer(m, refus.querySelector('[data-commande="repartirDeZero"]'));
+    expect(m.ui.etat().depart).toBeNull();
+    expect(carteDepart(m)).toBeNull();
+    expect(generer(m)).not.toBeNull();
+    expect(section(m).querySelector('[data-refus]')).toBeNull();
+    expect(document.activeElement).toBe(generer(m));
+
+    // Le même refus, puis « Repartir de zéro » de la carte : le refus de
+    // l'ancien départ ne reste pas à côté de « Générer ».
+    m.ui.choisirDepart(depart.id);
+    flushSync();
+    await cliquer(m, genererDepuis(m));
+    expect(refusPres(genererDepuis(m), 'DEPART_RESERVATION_NON_TENUE')).not.toBeNull();
+    await cliquer(m, carteDepart(m).querySelector('[data-commande="repartirDeZero"]'));
+    expect(section(m).querySelector('[data-refus]')).toBeNull();
+    expect(document.activeElement).toBe(generer(m));
+    expect(lancements).toEqual([]);
+  });
+
+  test('« Repartir de zéro » pendant un calcul dérivé : « Générer » reste occupé ; le refus que le calcul rend ensuite se pose à côté de lui', async () => {
+    const { m, suivi } = await deriveeEnCours({ repartir: true });
+    expect(m.ui.etat().depart).toBeNull();
+    expect(genererDepuis(m)).toBeNull();
+    expect(generer(m).getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(generer(m));
+    const details = { rang: 1, violations: [{ code: 'CAPACITE', table: 5, tour: 2 }], remede: null };
+    suivi.rejeter(new ErreurGeneration('GENERATION_INVARIANT_VIOLE', details));
+    const refus = await attendre(() => {
+      const pose = refusPres(generer(m), 'GENERATION_INVARIANT_VIOLE');
+      expect(pose).not.toBeNull();
+      return pose;
+    }, 120);
+    expect(refus.querySelector('p').textContent).toBe(t('GENERATION_INVARIANT_VIOLE', details));
+    expect(generer(m).getAttribute('aria-describedby')).toBe(refus.id);
+    expect(generer(m).getAttribute('aria-busy')).toBeNull();
+    expect(enCours(m)).toBe(false);
+  });
+
+  test('un refus du départ rendu par le calcul : posé à côté de « Générer depuis » sous le même départ ; le départ retiré pendant le calcul, il tombe avec lui', async () => {
+    const details = { tour: 2, table: 10, participant: 4, remede: null };
+    const tenu = await deriveeEnCours({ repartir: false });
+    tenu.suivi.rejeter(new ErreurGeneration('DEPART_INCOMPATIBLE', details));
+    const refus = await attendre(() => {
+      const pose = refusPres(genererDepuis(tenu.m), 'DEPART_INCOMPATIBLE');
+      expect(pose).not.toBeNull();
+      return pose;
+    }, 120);
+    expect(refus.querySelector('p').textContent).toBe(t('DEPART_INCOMPATIBLE', details));
+    expect(genererDepuis(tenu.m).getAttribute('aria-describedby')).toBe(refus.id);
+
+    const retire = await deriveeEnCours({ repartir: true });
+    retire.suivi.rejeter(new ErreurGeneration('DEPART_INCOMPATIBLE', details));
+    await attendre(() => expect(enCours(retire.m)).toBe(false), 120);
+    await images(2);
+    flushSync();
+    expect(section(retire.m).querySelector('[data-refus]')).toBeNull();
+    expect(generer(retire.m).getAttribute('aria-describedby')).toBeNull();
+  });
+
+  test('le départ effacé, la carte disparaît et « Générer » revient ; un autre départ choisi décoche les cases à l’écran', async () => {
+    const m = await demonstration('petite', { executeur: creerExecuteurDirect() });
+    await avecPropositions(m, { nombre: 3 });
+    m.ui.choisirDepart(2);
+    flushSync();
+    await cocher(m, 2);
+    expect(caseDuTour(m, 2).checked).toBe(true);
+    // « Repartir d'elle » sur une autre ligne choisit un autre départ.
+    m.ui.choisirDepart(3);
+    flushSync();
+    expect(carteDepart(m).textContent).toContain(t('generation.depart.titre', { depart: 3 }));
+    expect(cases(m).map((c) => c.checked)).toEqual([false, false, false, false]);
+    await cocher(m, 4);
+    expect(m.ui.etat().depart).toEqual({ id: 3, toursFiges: [4] });
+
+    await m.seance.executer('effacerPropositions', {});
+    flushSync();
+    expect(m.ui.etat().depart).toBeNull();
+    expect(carteDepart(m)).toBeNull();
+    expect(generer(m)).not.toBeNull();
   });
 });

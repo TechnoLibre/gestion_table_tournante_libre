@@ -11,8 +11,10 @@
   //   la proposition qu'elle mesure ; sans course gardée, que sa course ne
   //   l'est pas ; d'un seul point de relevé, qu'il n'y a rien à relier ;
   // - la ligne de tête [data-course], un morceau par élément de liste :
-  //   mouvements évalués sur le compte, puis durée, cœurs, cadence et
-  //   nombre de propositions de la génération, ou « durée inconnue » ;
+  //   mouvements évalués sur le compte, puis, pour une dérivée ou un retenu
+  //   non ajusté venu d'une dérivée, « partie de la proposition n° X »,
+  //   puis durée, cœurs, cadence et nombre de propositions de la
+  //   génération, ou « durée inconnue » ;
   // - les petits multiples : un Escalier en forme points par valeur, sur
   //   l'abscisse logarithmique des mouvements, graduée aux points de
   //   relevé ; ils partagent leurs marges — l'abscisse alignée, point

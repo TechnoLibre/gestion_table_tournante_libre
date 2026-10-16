@@ -456,6 +456,57 @@ const TEMOINS_DES_GROUPES = [
 ];
 const DU_PDF = /[\\/]node_modules[\\/](?:pdf-lib|pako|tslib|@pdf-lib[\\/](?:fontkit|standard-fonts|upng))[\\/]/;
 
+// Les modules de la vue de comparaison (contrainte 53) : la page de qualité
+// seule les importe, et ils voyagent dans son morceau, chargé à la demande.
+const MODULES_DE_LA_COMPARAISON = [
+  'src/interface/qualite/VueComparaison.svelte',
+  'src/interface/qualite/comparaison.js',
+  'src/interface/qualite/ColonnesComparaison.svelte',
+  'src/interface/qualite/colonnes.js',
+];
+
+describe('construction : le morceau de la page de qualité (§ 12.10.6, D55)', () => {
+  test('la vue de comparaison voyage dans le seul morceau de la page de qualité, chargé à la demande : aucun de ses modules n’est dans un morceau chargé ou préchargé au lancement', async () => {
+    const sortie = mkdtempSync(join(tmpdir(), 'construction-qualite-'));
+    try {
+      const resultat = await construireLivraison(sortie, releveDuTravailleur());
+      const sorties = (Array.isArray(resultat) ? resultat : [resultat]).flatMap((r) => r.output);
+      const morceaux = sorties.filter((s) => s.type === 'chunk');
+      // Les morceaux qui portent le module au chemin donné, sa requête
+      // retirée : un composant y entre aussi par sa feuille de style.
+      const porteurs = (chemin) => {
+        const id = join(RACINE, ...chemin.split('/'));
+        return morceaux.filter((m) => m.moduleIds.some((module) => module.replace(/\?.*$/, '') === id)).map((m) => m.fileName);
+      };
+      const deLaQualite = porteurs('src/interface/qualite/SectionQualite.svelte');
+      assert.equal(deLaQualite.length, 1, `SectionQualite.svelte dans ${deLaQualite.length} morceaux`);
+      const [qualite] = deLaQualite;
+      const morceau = morceaux.find((m) => m.fileName === qualite);
+      assert.ok(morceau.isDynamicEntry && !morceau.isEntry, `${qualite} n'est pas un morceau différé`);
+      for (const chemin of MODULES_DE_LA_COMPARAISON) assert.deepEqual(porteurs(chemin), [qualite], chemin);
+
+      // Au lancement : les imports statiques des points d'entrée, de proche
+      // en proche, et les modulepreload du HTML.
+      const statiques = new Set();
+      const aSuivre = morceaux.filter((m) => m.isEntry).map((m) => m.fileName);
+      assert.ok(aSuivre.length > 0, 'aucun point d’entrée');
+      while (aSuivre.length > 0) {
+        const nom = aSuivre.pop();
+        if (statiques.has(nom)) continue;
+        statiques.add(nom);
+        aSuivre.push(...(morceaux.find((m) => m.fileName === nom)?.imports ?? []));
+      }
+      const html = readFileSync(join(sortie, 'index.html'), 'utf8');
+      const prechargements = [...html.matchAll(/<link\b[^>]*\brel=["']?modulepreload\b[^>]*>/gi)].map(
+        ([balise]) => /\shref\s*=\s*["']?\.?\/?([^"'\s>]+)/i.exec(balise)?.[1] ?? '',
+      );
+      assert.deepEqual([...statiques, ...prechargements].filter((nom) => nom === qualite), []);
+    } finally {
+      rmSync(sortie, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('construction : les sorties (§ 11.1, § 14.15)', () => {
   test('vite.config.js range fontkit dans un morceau, pdf-lib et ce qu’il tire dans un autre, et rien d’autre', async () => {
     const { default: vite } = await import(pathToFileURL(join(RACINE, 'vite.config.js')).href);

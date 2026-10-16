@@ -23,7 +23,28 @@
   // plan — le retenu sur la ligne du retenu — et ouvre la page de qualité,
   // qui mesure la proposition de sa ligne, ou le retenu (§ 12), que le plan
   // la montre ou non : l'état de navigation seul change, sans écriture ni
-  // refus, en lecture comme sur un plan bloqué. surlignee : le nom de la
+  // refus, en lecture comme sur un plan bloqué.
+  //
+  // Une proposition dérivée porte sous son numéro, dans sa cellule
+  // d'identité, la phrase qui la rattache à son départ (texteFiliation,
+  // filiation.js), sans colonne de plus ; la ligne du retenu garde « Tel que
+  // la proposition n° X. ». Une ligne comparable porte aussi « Repartir
+  // d'elle », qui choisit sa proposition pour départ et ouvre la section
+  // Génération, et « Comparer », qui ouvre la page de qualité à sa vue de
+  // comparaison, la ligne y devenant le second placement ou la source
+  // (gesteComparer, comparer.js, jugé sur la source de la page) ; la ligne
+  // du retenu porte « Comparer » seul, une ligne en dérive ou fautive ni
+  // l'une ni l'autre. « Comparer » ne s'offre que quand deux placements
+  // mesurables et distincts existent (comparaisonOfferte, evaluation.js).
+  // Chacune se nomme, pour le lecteur d'écran, par une phrase qui porte le
+  // numéro de sa ligne : cent lignes par page ne portent pas cent boutons
+  // de même nom. Ni l'une ni l'autre n'écrit ni ne refuse : seul l'état de
+  // navigation change, en lecture comme sur un plan bloqué (§ 8.4). La
+  // charge et sa table d'évaluation se lisent dans l'état observable de la
+  // séance, la table par evaluation (modele.js), celle que la section met en
+  // tableau, gardée sous la charge.
+  //
+  // surlignee : le nom de la
   // colonne que la phrase de l'ordre désigne — une colonne de mesure, ou
   // celle des propositions —, null sans surlignage ; son en-tête et chacune
   // de ses cellules se surlignent, hors la cellule des raisons d'une ligne
@@ -48,15 +69,21 @@
   //
   // Désignations : data-retenu sur la ligne du retenu, data-proposition sur
   // chaque autre ligne, data-colonne sur chaque cellule et chaque en-tête ;
-  // data-classement et data-hors-classement sur les deux groupes de lignes.
+  // data-classement et data-hors-classement sur les deux groupes de lignes ;
+  // data-filiation sur la phrase de filiation d'une dérivée.
   // Une cellule surlignée porte data-marque="selection" : ses filets
   // portent l'information, et la garde des marques (§ 14.5) les mesure à
   // 3:1 contre le fond, dans les deux thèmes. Les autres n'en portent pas.
   import { getContext } from 'svelte';
+  import { derivationDe } from '../../application/depart.js';
+  import { comparaisonOfferte } from '../../application/evaluation.js';
   import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
   import Pastille from '../primitives/Pastille.svelte';
-  import { texteCellule } from './modele.js';
+  import { sourceQualite } from '../qualite/source.js';
+  import { gesteComparer } from './comparer.js';
+  import { texteFiliation } from './filiation.js';
+  import { evaluation, texteCellule } from './modele.js';
 
   let { vue, surlignee = null, nommer, voir, retenir, expliquer, taire, decrit } = $props();
 
@@ -67,13 +94,37 @@
   const t = getContext('t');
   const format = getContext('format');
   const ui = getContext('ui');
+  const seance = getContext('seance');
   const outils = { t, format };
+
+  const charge = $derived($seance.charge);
+  const table = $derived(charge === null ? null : evaluation(charge).table);
+  const offerte = $derived(table !== null && comparaisonOfferte(charge, table));
 
   // Demande la proposition id au plan, ou le retenu pour null, puis ouvre
   // la page de qualité.
   function qualite(id) {
     ui.montrerProposition(id);
     ui.allerA('qualite');
+  }
+
+  // Choisit la proposition id pour départ, ses tours tous décochés, puis
+  // ouvre la section Génération.
+  function repartir(id) {
+    ui.choisirDepart(id);
+    ui.allerA('generation');
+  }
+
+  // Ouvre la page de qualité à sa vue de comparaison, cible — une
+  // proposition, ou 'retenu' — devenue le second placement de la source de
+  // la page, ou la source même (gesteComparer).
+  function comparer(cible) {
+    const source = sourceQualite(charge, { demandee: ui.etat().proposition });
+    const { montrer, comparee } = gesteComparer(charge, table, { source, cible });
+    if (montrer !== undefined) ui.montrerProposition(montrer);
+    ui.comparerA(comparee);
+    ui.allerA('qualite');
+    ui.demanderVueQualite('comparaison');
   }
 
   // Les noms des colonnes de nombres.
@@ -117,10 +168,14 @@
 {/snippet}
 
 {#snippet identite(ligne)}
+  {@const filiation = texteFiliation(derivationDe(charge, ligne.id), outils)}
   <td data-colonne="proposition" data-marque={marque('proposition')} class:surlignee={surlignee === 'proposition'}>
     <span class="identifiant">{format.nombre(ligne.id)}</span>
     {#if ligne.retenue}
       <Pastille sorte="statut" valeur="retenu" icone="coche" libelle={t('propositions.marque.retenue')} />
+    {/if}
+    {#if filiation !== null}
+      <p data-filiation>{filiation}</p>
     {/if}
     {@render violations(ligne)}
   </td>
@@ -132,6 +187,20 @@
       <Commande cle="propositions.commande.voir" nom="voir" executer={() => voir(ligne.id)} />
       <Commande cle="propositions.commande.qualite" nom="qualite" executer={() => qualite(ligne.id)} />
       <Commande cle="propositions.commande.retenir" executer={() => retenir(ligne.id)} />
+      {#if ligne.comparable}
+        <Commande
+          cle="propositions.commande.repartir"
+          nomAccessible={t('propositions.nom.repartir', { proposition: ligne.id })}
+          executer={() => repartir(ligne.id)}
+        />
+        {#if offerte}
+          <Commande
+            cle="propositions.commande.comparer"
+            nomAccessible={t('propositions.nom.comparer', { proposition: ligne.id })}
+            executer={() => comparer(ligne.id)}
+          />
+        {/if}
+      {/if}
     </div>
   </td>
 {/snippet}
@@ -188,6 +257,9 @@
             <div class="commandes">
               <Commande cle="propositions.commande.voir" nom="voir" executer={() => voir(null)} />
               <Commande cle="propositions.commande.qualite" nom="qualite" executer={() => qualite(null)} />
+              {#if vue.retenu.comparable && offerte}
+                <Commande cle="propositions.commande.comparer" nomAccessible={t('propositions.nom.comparerRetenu')} executer={() => comparer('retenu')} />
+              {/if}
             </div>
           </td>
         </tr>

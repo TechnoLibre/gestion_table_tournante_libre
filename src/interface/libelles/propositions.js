@@ -367,6 +367,20 @@ export const TABLE = new Map([
   ['propositions.commande.qualite', 'Qualité'],
   ['propositions.commande.effacer', 'Effacer les propositions'],
   ['propositions.commande.garder', ({ n }, texte) => `Garder ${meilleures(n, texte)}`],
+  // « Repartir d'elle » choisit la proposition de sa ligne pour départ et
+  // ouvre la section Génération ; « Comparer » ouvre la page de qualité à
+  // sa vue de comparaison (§ 5.7, § 12, C7, C14). Ni l'une ni l'autre
+  // n'écrit.
+  ['propositions.commande.repartir', "Repartir d'elle"],
+  ['propositions.commande.comparer', 'Comparer'],
+
+  // --- Les noms accessibles des commandes de ligne (§ 5.7, C7, D85) -----------------
+  // Cent lignes par page portent chacune ces commandes : le nom accessible
+  // de chacune porte le numéro de sa ligne, proposition, et les distingue au
+  // lecteur d'écran.
+  ['propositions.nom.repartir', ({ proposition }) => `Repartir de la proposition n° ${proposition}`],
+  ['propositions.nom.comparer', ({ proposition }) => `Comparer la proposition n° ${proposition}`],
+  ['propositions.nom.comparerRetenu', 'Comparer le placement retenu'],
 
   // --- Garder les meilleures (§ 5.7) ---------------------------------------------
   // n : le nombre à garder ; effacees : celles qui s'effacent, comptées par

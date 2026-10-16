@@ -28,6 +28,19 @@
 // entier que le détail porte déjà, suivi du compte du pire : le minimum
 // brut (la personne au rang 1 du profil), les tours hors objectif (la
 // soirée), le minimum de s(p) (la personne à ce minimum). Aucune autre.
+//
+// Une tuile et une cellule des colonnes de la vue de comparaison
+// (colonnes.js, § 12.10.6) s'écrivent par la même fonction, celluleDeTuile,
+// qui lit ses bornes dans l'objet qu'elle reçoit — detail.bornes pour une
+// tuile, les bornes d'un côté de la comparaison pour une colonne — : une
+// seule écriture des chiffres sur toute la page. Une tuile dont cet objet
+// ne porte pas le champ de borne — la comparaison ne porte ni la borne de
+// diversité ni celle des animateurs — n'écrit ni ligne de borne, personne
+// nommée ou phrase, ni pourcentage ; le plancher reste. Un champ présent et
+// nul garde le sens qu'il a dans le détail.
+// groupesDeTuiles dit quelles tuiles existent, sous quels groupes, et
+// enTeteDeTuile leur libellé : l'en-tête et les colonnes en partagent la
+// règle.
 import { COLONNES, GROUPES_COLONNES, explicationDeColonne, lireColonne, tableau, texteCellule } from '../propositions/modele.js';
 
 /** Les tuiles qui portent un pourcentage (B11, D34), dans l'ordre de
@@ -52,12 +65,26 @@ const EN_TETES = new Map(COLONNES.map(({ nom, cle }) => [nom, cle]));
  *           le compte du pire ; null hors des trois tuiles
  */
 
-// Les lignes de borne et le pourcentage d'une tuile, lus dans le détail.
+// La borne que lit chaque tuile qui nomme une personne ou la soirée : le
+// champ de detail.bornes, ou des bornes d'un côté de la comparaison. La Map
+// ne sert qu'à retrouver le champ d'une tuile.
+const BORNE_DE_TUILE = new Map([
+  ['rencontresTous', 'rang1'],
+  ['manqueMax', 'manque'],
+  ['appartenancesVues', 'diversite'],
+  ['toursHorsObjectif', 'soiree'],
+  ['toursSelonObjectif', 'objectifs'],
+  ['animateursRencontres', 'animateurs'],
+]);
+
+// Les lignes de borne et le pourcentage d'une tuile, lus dans bornes.
 // nommer(id) rend la ligne qui nomme la personne id ; lire(nom) la valeur
 // d'une colonne de la ligne d'évaluation ; ligne et table, la ligne
-// d'évaluation et la table, qui portent les imposés.
-function bornesDe(nom, { detail, ligne, table, t, nommer, lire }) {
-  const { bornes } = detail;
+// d'évaluation et la table, qui portent les imposés. Une tuile dont bornes
+// ne porte pas le champ n'a ni ligne de borne ni pourcentage.
+function bornesDe(nom, { bornes, ligne, table, t, nommer, lire }) {
+  const champ = BORNE_DE_TUILE.get(nom);
+  if (champ !== undefined && !Object.hasOwn(bornes, champ)) return { bornes: [], pourcentage: null };
   const pourcent = (valeur) => (valeur === null ? null : t('qualite.pourcentage.valeur', { pourcent: valeur }));
   const rendu = (lignes, pourcentage = null) => ({ bornes: lignes, pourcentage });
   switch (nom) {
@@ -116,22 +143,93 @@ function bornesDe(nom, { detail, ligne, table, t, nommer, lire }) {
   }
 }
 
-// La ligne du plancher de la tuile nom, lue dans le détail : {plancher,
-// atteint} ou null, que le moteur ne rend que prouvé et non nul. Une liste
-// d'une ligne, ou vide.
-function plancherDe(nom, { detail, t }) {
-  const { planchers } = detail.bornes;
+// La ligne du plancher de la tuile nom, lue dans bornes.planchers :
+// {plancher, atteint} ou null, que le moteur ne rend que prouvé et non nul.
+// Une liste d'une ligne, ou vide.
+function plancherDe(nom, { bornes, t }) {
+  const { planchers } = bornes;
   const lu = Object.hasOwn(planchers, nom) ? planchers[nom] : null;
   if (lu === null) return [];
   const { plancher, atteint } = lu;
   return [t(atteint ? 'qualite.tuile.plancherAtteint' : 'qualite.tuile.plancher', { plancher })];
 }
 
-// Les lignes de la borne d'une tuile, son plancher en dernier, et son
-// pourcentage.
-function bornesEtPlancher(nom, contexte) {
-  const { bornes, pourcentage } = bornesDe(nom, contexte);
-  return { bornes: [...bornes, ...plancherDe(nom, contexte)], pourcentage };
+/**
+ * La cellule d'une tuile : la valeur de sa colonne écrite comme au tableau,
+ * les lignes de sa borne, son plancher en dernier, et son pourcentage. La
+ * tuile de l'en-tête chiffré et la cellule d'une colonne de la comparaison
+ * s'écrivent par elle.
+ *
+ * @param {string} nom  le nom d'une colonne de mesure de COLONNES
+ * @param {{bornes: Object, ligne: Object, table: Object, t: Function,
+ *   format: {nombre: Function}, nomDe: (id: number) => string}} contexte
+ *   bornes : detail.bornes, ou les bornes d'un côté de la comparaison, de
+ *   même forme, personnes sous id ; ligne : la ligne d'évaluation
+ *   comparable du placement ; table : la table d'évaluation ; nomDe(id) :
+ *   le nom affiché de la personne id
+ * @returns {{texte: string, bornes: string[], pourcentage: {texte: string|null, compte: string}|null}}
+ */
+export function celluleDeTuile(nom, { bornes, ligne, table, t, format, nomDe }) {
+  const contexte = {
+    bornes,
+    ligne,
+    table,
+    t,
+    nommer: (id) => t('qualite.tuile.personne', { nom: nomDe(id) }),
+    lire: (colonne) => lireColonne(ligne, colonne).valeur,
+  };
+  const { bornes: lignes, pourcentage } = bornesDe(nom, contexte);
+  return {
+    texte: texteCellule(lireColonne(ligne, nom), { t, format }),
+    bornes: [...lignes, ...plancherDe(nom, contexte)],
+    pourcentage,
+  };
+}
+
+/**
+ * Les tuiles que portent des lignes d'évaluation d'une même table, sous
+ * les groupes de GROUPES_COLONNES, dans leur ordre : une colonne de mesure
+ * d'un groupe a sa tuile quand le tableau la porte, ou, sinon, quand l'une
+ * des lignes en a une valeur — un critère sans objet n'a pas de tuile. Un
+ * groupe sans tuile n'est pas rendu.
+ *
+ * @param {Object} table   la table d'évaluation
+ * @param {Object[]} lignes  des lignes comparables de cette table
+ * @param {Function} t
+ * @returns {Array<{cle: string, libelle: string, tuiles: Array<{nom: string, classe: boolean}>}>}
+ *   classe : vrai quand le tableau porte la colonne
+ */
+export function groupesDeTuiles(table, lignes, t) {
+  const portees = new Set(tableau(table).colonnes.map(({ nom }) => nom));
+  const groupes = [];
+  for (const { cle, colonnes } of GROUPES_COLONNES) {
+    if (cle === null) continue;
+    const deGroupe = [];
+    for (const nom of colonnes) {
+      const classe = portees.has(nom);
+      if (classe || lignes.some((ligne) => lireColonne(ligne, nom).valeur !== null)) deGroupe.push({ nom, classe });
+    }
+    if (deGroupe.length > 0) groupes.push({ cle, libelle: t(cle), tuiles: deGroupe });
+  }
+  return groupes;
+}
+
+/**
+ * Le libellé d'une tuile, celui de sa colonne quand le tableau la porte,
+ * qualite.tuile.<nom> sinon ; la clé de son explication ; et la mention
+ * « ne classe pas », null quand elle classe.
+ *
+ * @param {string} nom
+ * @param {boolean} classe  vrai quand le tableau porte la colonne
+ * @param {Function} t
+ * @returns {{libelle: string, explication: string, neClassePas: string|null}}
+ */
+export function enTeteDeTuile(nom, classe, t) {
+  return {
+    libelle: t(classe ? EN_TETES.get(nom) : `qualite.tuile.${nom}`),
+    explication: explicationDeColonne(nom),
+    neClassePas: classe ? null : t('qualite.tuile.neClassePas'),
+  };
 }
 
 /**
@@ -151,36 +249,17 @@ function bornesEtPlancher(nom, contexte) {
  */
 export function enteteDe({ detail, ligne, table }, { t, format }) {
   if (detail === null || detail.statut !== 'comparable' || ligne === null || table === null) return null;
-  const portees = new Set(tableau(table).colonnes.map(({ nom }) => nom));
   const noms = new Map(detail.personnes.map(({ id, nom }) => [id, nom]));
-  const contexte = {
-    detail,
-    ligne,
-    table,
-    t,
-    nommer: (id) => t('qualite.tuile.personne', { nom: noms.get(id) }),
-    lire: (nom) => lireColonne(ligne, nom).valeur,
-  };
-  const groupes = [];
-  for (const { cle, colonnes } of GROUPES_COLONNES) {
-    if (cle === null) continue;
-    const deGroupe = [];
-    for (const nom of colonnes) {
-      const cellule = lireColonne(ligne, nom);
-      const classe = portees.has(nom);
-      if (!classe && cellule.valeur === null) continue;
-      deGroupe.push({
-        nom,
-        libelle: t(classe ? EN_TETES.get(nom) : `qualite.tuile.${nom}`),
-        explication: explicationDeColonne(nom),
-        texte: texteCellule(cellule, { t, format }),
-        classe,
-        neClassePas: classe ? null : t('qualite.tuile.neClassePas'),
-        ...bornesEtPlancher(nom, contexte),
-      });
-    }
-    if (deGroupe.length > 0) groupes.push({ cle, libelle: t(cle), tuiles: deGroupe });
-  }
+  const contexte = { bornes: detail.bornes, ligne, table, t, format, nomDe: (id) => noms.get(id) };
+  const groupes = groupesDeTuiles(table, [ligne], t).map(({ cle, libelle, tuiles }) => ({
+    cle,
+    libelle,
+    tuiles: tuiles.map(({ nom, classe }) => {
+      const { libelle: libelleDeTuile, explication, neClassePas } = enTeteDeTuile(nom, classe, t);
+      const { texte, bornes, pourcentage } = celluleDeTuile(nom, contexte);
+      return { nom, libelle: libelleDeTuile, explication, texte, classe, neClassePas, bornes, pourcentage };
+    }),
+  }));
   return {
     population: t('qualite.tuile.population', detail.population),
     groupes,

@@ -1825,3 +1825,237 @@ describe('garder les meilleures, sur les pages du classement', () => {
     await attendre(() => expect(texteDe(annonce(m))).toBe('87 propositions effacées.'));
   });
 });
+
+// --- La dérivée et les commandes de ligne (§ 5.7, § 12, C7, C14, D76, D85) ----------
+
+// La charge dont chaque proposition nommée porte une filiation :
+// identifiant → [départ, tours figés], la clé toursFiges absente pour [].
+function avecFiliations(charge, filiations) {
+  const copie = structuredClone(charge);
+  for (const [id, [depart, toursFiges]] of filiations) {
+    const proposition = copie.propositions.find((element) => element.id === id);
+    proposition.depart = depart;
+    if (toursFiges.length > 0) proposition.toursFiges = [...toursFiges];
+  }
+  return copie;
+}
+
+const filiationDe = (tr) => tr.querySelector('[data-filiation]');
+// Les noms des commandes de la cellule des commandes d'une ligne.
+const commandesDe = (tr) => [...tr.querySelectorAll('td[data-colonne="commandes"] [data-commande]')].map((bouton) => bouton.dataset.commande);
+
+// Chaque état que l'état de navigation publie pendant geste, dans l'ordre.
+async function etatsPendant(m, geste) {
+  const publies = [];
+  const desabonner = m.ui.subscribe((etat) => publies.push(etat));
+  await geste();
+  desabonner();
+  return publies;
+}
+
+describe('la dérivée au tableau des propositions, et ses commandes de ligne (§ 5.7, § 12, C7, C14, D76, D85)', () => {
+  test('une dérivée porte sa filiation sous son numéro, et une ligne en dérive ou fautive ne porte ni « Repartir d’elle » ni « Comparer »', async () => {
+    // Les trois premières en dérive, une personne exclue après elles ; deux
+    // de plus générées ensuite, comparables ; la 4 retenue, non ajustée.
+    let chargeLue = avecFiliations(chargeSix(), [
+      [2, [1, []]],
+      [3, [1, [1, 2]]],
+    ]);
+    chargeLue = generee(executer(chargeLue, 'exclureParticipant', { id: 6 }), { graine: 4, nombre: 2, arret: 40 });
+    chargeLue = executer(avecFiliations(chargeLue, [[5, [4, [1]]]]), 'retenirProposition', { id: 4 });
+    const m = await ouvrir(chargeLue);
+    const horsClassement = [...section(m).querySelectorAll('[data-hors-classement] tr[data-proposition]')].map((tr) => Number(tr.dataset.proposition));
+    expect(horsClassement.sort((a, b) => a - b)).toEqual([1, 2, 3]);
+
+    const attendues = new Map([
+      [1, null],
+      [2, 'Dérivée de n° 1.'],
+      [3, 'Dérivée de n° 1, tours 1 et 2 figés.'],
+      [4, null],
+      [5, 'Dérivée de n° 4, tour 1 figé.'],
+    ]);
+    const colonnesSansFiliation = [...ligne(m, 4).querySelectorAll('td[data-colonne]')].map((td) => td.dataset.colonne);
+    for (const [id, texte] of attendues) {
+      const tr = ligne(m, id);
+      const phrase = filiationDe(tr);
+      if (texte === null) {
+        expect(phrase, String(id)).toBeNull();
+        continue;
+      }
+      expect(texteDe(phrase), String(id)).toBe(texte);
+      // Sous le numéro, dans la cellule d'identité : aucune colonne de plus.
+      const cellule = phrase.closest('td');
+      expect(cellule.dataset.colonne, String(id)).toBe('proposition');
+      const numero = cellule.firstElementChild;
+      expect(texteDe(numero), String(id)).toBe(format.nombre(id));
+      expect(numero.compareDocumentPosition(phrase) & Node.DOCUMENT_POSITION_FOLLOWING, String(id)).toBeTruthy();
+      expect([...phrase.attributes].map(({ name }) => name).filter((nom) => nom.startsWith('data-derive')), String(id)).toEqual([]);
+      if (id === 5) expect([...tr.querySelectorAll('td[data-colonne]')].map((td) => td.dataset.colonne)).toEqual(colonnesSansFiliation);
+    }
+    expect([...section(m).querySelectorAll('thead th')].some((th) => /dérivée/i.test(texteDe(th)))).toBe(false);
+    // La ligne du retenu garde sa phrase, sans filiation.
+    expect(filiationDe(ligneRetenu(m))).toBeNull();
+    expect(texteDe(ligneRetenu(m))).toContain(t('propositions.retenu.origine', { proposition: 4 }));
+
+    for (const id of [1, 2, 3]) {
+      const noms = commandesDe(ligne(m, id));
+      expect(noms, String(id)).toEqual(['voir', 'qualite', 'retenir']);
+    }
+    for (const id of [4, 5]) {
+      const tr = ligne(m, id);
+      expect(commandesDe(tr), String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir', 'comparer']);
+      expect(texteDe(commande(tr, 'repartir'))).toBe(t('propositions.commande.repartir'));
+      expect(texteDe(commande(tr, 'comparer'))).toBe(t('propositions.commande.comparer'));
+      expect(commande(tr, 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
+      expect(commande(tr, 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparer', { proposition: id }));
+    }
+    expect(commandesDe(ligneRetenu(m))).toEqual(['voir', 'qualite', 'comparer']);
+    expect(commande(ligneRetenu(m), 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparerRetenu'));
+    expect(t('propositions.commande.repartir')).toBe("Repartir d'elle");
+    expect(t('propositions.nom.comparer', { proposition: 4 })).toBe('Comparer la proposition n° 4');
+    expect(t('propositions.nom.repartir', { proposition: 4 })).toBe('Repartir de la proposition n° 4');
+    expect(t('propositions.nom.comparerRetenu')).toBe('Comparer le placement retenu');
+  });
+
+  test('un retenu en dérive ne porte pas « Comparer », même quand deux propositions comparables l’offrent', async () => {
+    // La 1 retenue, puis une personne exclue : le retenu passe en dérive ;
+    // deux de plus générées ensuite, comparables.
+    const enDerive = executer(executer(chargeSix(), 'retenirProposition', { id: 1 }), 'exclureParticipant', { id: 6 });
+    const m = await ouvrir(generee(enDerive, { graine: 4, nombre: 2, arret: 40 }));
+    expect(ligneRetenu(m).querySelector('td.raisons')).not.toBeNull();
+    for (const id of [4, 5]) expect(commandesDe(ligne(m, id)), String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir', 'comparer']);
+    expect(commandesDe(ligneRetenu(m))).toEqual(['voir', 'qualite']);
+    expect(commande(ligneRetenu(m), 'comparer')).toBeNull();
+  });
+
+  test('« Comparer » n’est offert que quand deux placements mesurables et distincts existent ; « Repartir d’elle » l’est sur toute ligne comparable', async () => {
+    const seule = structuredClone(chargeSix());
+    seule.propositions = seule.propositions.slice(0, 1);
+    const retenue = executer(seule, 'retenirProposition', { id: 1 });
+    const ajustee = executer(retenue, 'deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
+    for (const [cas, chargeLue, avecRetenu, offerte] of [
+      ['une seule proposition', seule, false, false],
+      ['un retenu non ajusté et sa proposition d’origine', retenue, true, false],
+      ['un retenu ajusté et sa proposition d’origine', ajustee, true, true],
+    ]) {
+      const m = await ouvrir(chargeLue, { mode: 'lecture' });
+      const attendues = ['voir', 'qualite', 'retenir', 'repartir', ...(offerte ? ['comparer'] : [])];
+      expect(commandesDe(ligne(m, 1)), cas).toEqual(attendues);
+      if (avecRetenu) expect(commandesDe(ligneRetenu(m)), cas).toEqual(['voir', 'qualite', ...(offerte ? ['comparer'] : [])]);
+    }
+  });
+
+  test('cent lignes par page : chaque « Repartir d’elle » et chaque « Comparer » a un nom accessible qui porte son numéro, deux à deux distincts', async () => {
+    const { retenue, idRetenue } = pagesDEpreuve();
+    const m = await ouvrir(retenue, { mode: 'lecture' });
+    expect(lignes(m).length).toBe(100);
+    const noms = [];
+    for (const tr of lignes(m)) {
+      const id = Number(tr.dataset.proposition);
+      expect(commande(tr, 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
+      expect(commande(tr, 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparer', { proposition: id }));
+      noms.push(commande(tr, 'repartir').getAttribute('aria-label'), commande(tr, 'comparer').getAttribute('aria-label'));
+    }
+    noms.push(commande(ligneRetenu(m), 'comparer').getAttribute('aria-label'));
+    expect(noms.length).toBe(201);
+    expect(new Set(noms).size).toBe(201);
+    expect(ligne(m, idRetenue)).toBeNull();
+  }, 60_000);
+
+  test('« Comparer » pose l’état de navigation sur la source de la page : la ligne devient le second placement, ou la source ; la page de qualité, sa vue de comparaison demandée ; rien ne s’écrit', async () => {
+    const m = await ouvrir(executer(chargeSix(), 'retenirProposition', { id: 1 }));
+    const ecritures = m.trace.length;
+    // La ligne et la page telles que l'état publié par le geste les pose :
+    // section, proposition demandée, second placement, vue demandée.
+    const exiger = async (tr, [proposition, comparee], quoi) => {
+      m.ui.allerA('propositions');
+      m.ui.vueQualiteAtteinte();
+      flushSync();
+      const publies = await etatsPendant(m, () => commande(tr(), 'comparer').click());
+      flushSync();
+      const pose = publies.at(-1);
+      expect(pose.vueQualite, quoi).toBe('comparaison');
+      expect([pose.section, pose.proposition, pose.comparee], quoi).toEqual(['qualite', proposition, comparee]);
+      expect([m.ui.etat().section, m.ui.etat().proposition, m.ui.etat().comparee], quoi).toEqual(['qualite', proposition, comparee]);
+    };
+    // Rien de demandé : le retenu est la source, la ligne le second placement.
+    await exiger(() => ligne(m, 2), [null, 2], 'sous le retenu');
+    // Sa proposition d'origine lui est identique : elle devient la source.
+    await exiger(() => ligne(m, 1), [1, null], 'l’origine du retenu');
+    // La 1 montrée : la 3 devient le second placement, la 1 reste montrée.
+    await exiger(() => ligne(m, 3), [1, 3], 'une autre ligne');
+    // La ligne du retenu, la 3 montrée : le retenu devient le second placement.
+    m.ui.montrerProposition(3);
+    await exiger(() => ligneRetenu(m), [3, 'retenu'], 'la ligne du retenu');
+    // La ligne du retenu sous sa proposition d'origine montrée : le retenu
+    // devient la source, montré par null.
+    m.ui.montrerProposition(1);
+    await exiger(() => ligneRetenu(m), [null, null], 'le retenu sous son origine');
+    expect(m.racine.querySelector('[data-refus]')).toBeNull();
+    expect(m.trace.length).toBe(ecritures);
+  });
+
+  test('retenu ajusté montré, rien de demandé au plan : « Comparer » sur sa proposition d’origine garde le retenu en premier placement et la met en second', async () => {
+    const chargeLue = executer(executer(chargeSix(), 'retenirProposition', { id: 2 }), 'deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
+    const m = await ouvrir(chargeLue, { mode: 'lecture' });
+    expect(m.ui.etat().proposition).toBe(null);
+    commande(ligne(m, 2), 'comparer').click();
+    flushSync();
+    expect([m.ui.etat().section, m.ui.etat().proposition, m.ui.etat().comparee]).toEqual(['qualite', null, 2]);
+  });
+
+  test('« Repartir d’elle » depuis la deuxième page : le départ choisi, ses cases décochées, la section Génération ouverte ; rien ne s’écrit', async () => {
+    const { retenue, ordre } = pagesDEpreuve();
+    const m = await ouvrir(retenue);
+    const ecritures = m.trace.length;
+    m.ui.choisirDepart(ordre[0]);
+    m.ui.reglerToursFiges([1]);
+    commandePage(m, 'haut', 'suivantes').click();
+    await exigerPage(m, ordre, 101, 200, 237);
+    const id = ordre[120];
+    commande(ligne(m, id), 'repartir').click();
+    flushSync();
+    expect(m.ui.etat().depart).toEqual({ id, toursFiges: [] });
+    expect(m.ui.etat().section).toBe('generation');
+    expect(m.racine.querySelector('[data-refus]')).toBeNull();
+    expect(m.trace.length).toBe(ecritures);
+  }, 60_000);
+
+  test('en lecture, puis sur un plan bloqué : « Repartir d’elle » et « Comparer » naviguent, sans refus ni écriture', async () => {
+    const retenue = executer(chargeSix(), 'retenirProposition', { id: 2 });
+    const bloquee = executer(executer(retenue, 'deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null }), 'changerEtat', { etat: 'bloque' });
+    // Sans retenu, la ligne devient la source ; sous le retenu ajusté, rien
+    // de demandé, elle devient le second placement.
+    for (const [cas, chargeLue, attendu] of [
+      ['en lecture', chargeSix(), [1, null]],
+      ['sur un plan bloqué', bloquee, [null, 1]],
+    ]) {
+      const m = await ouvrir(chargeLue, { mode: 'lecture' });
+      const ecritures = m.trace.length;
+      commande(ligne(m, 3), 'repartir').click();
+      flushSync();
+      expect(m.ui.etat().depart, cas).toEqual({ id: 3, toursFiges: [] });
+      expect(m.ui.etat().section, cas).toBe('generation');
+      m.ui.allerA('propositions');
+      flushSync();
+      commande(ligne(m, 1), 'comparer').click();
+      flushSync();
+      expect([m.ui.etat().section, m.ui.etat().proposition, m.ui.etat().comparee], cas).toEqual(['qualite', ...attendu]);
+      expect(m.racine.querySelector('[data-refus]'), cas).toBeNull();
+      expect(m.trace.length, cas).toBe(ecritures);
+    }
+  });
+
+  test('le départ effacé : « qui n’est plus dans la liste » ; le retour qui le rend rend le libellé', async () => {
+    const chargeLue = executer(avecFiliations(chargeSix(), [[3, [1, [2]]]]), 'retenirProposition', { id: 3 });
+    const m = await ouvrir(chargeLue);
+    expect(texteDe(filiationDe(ligne(m, 3)))).toBe('Dérivée de n° 1, tour 2 figé.');
+    const revisionAvant = revision(m);
+    await m.seance.executer('effacerPropositions', {});
+    await attendre(() => expect(ids(m)).toEqual([3]));
+    expect(texteDe(filiationDe(ligne(m, 3)))).toBe("Dérivée de n° 1, qui n'est plus dans la liste.");
+    await m.seance.revenir(revisionAvant);
+    await attendre(() => expect(ids(m).length).toBe(3));
+    expect(texteDe(filiationDe(ligne(m, 3)))).toBe('Dérivée de n° 1, tour 2 figé.');
+  });
+});

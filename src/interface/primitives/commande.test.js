@@ -14,6 +14,7 @@ import { describe, test } from '../../../test/lanceur.js';
 import { COMMANDES } from '../../application/commandes.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
+import { creerEtatUi } from '../etat_ui.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { TABLE as COMMUNS } from '../libelles/communs.js';
 import {
@@ -335,6 +336,32 @@ describe('commande : l’action d’un remède', () => {
     assert.deepEqual(ui.appels, [['montrerProposition', null], ['montrerTour', 2], ['allerA', 'participants']]);
     assert.equal(actionRemede({ geste: 'ouvrirSection', section: 'tables' }, { seance }), null);
     assert.deepEqual(seance.appels, []);
+  });
+
+  test('repartirDeZero retire le départ, libererTour décoche son seul tour : par l’état de navigation, sans rien écrire ; sans lui, aucune action', () => {
+    const seance = seanceEnregistreuse();
+    const ui = creerEtatUi();
+    ui.choisirDepart(4);
+    ui.reglerToursFiges([1, 2, 3]);
+    const liberer = actionRemede({ geste: 'libererTour', tour: 2 }, { seance, ui });
+    assert.deepEqual([liberer.nom, liberer.cle, liberer.details, liberer.confirmer], ['libererTour', 'communs.remede.libererTour', { tour: 2 }, null]);
+    // Le remède abouti ne rend pas null : Refus lève alors le refus qu'il portait.
+    assert.notEqual(liberer.executer(), null);
+    assert.deepEqual(ui.etat().depart, { id: 4, toursFiges: [1, 3] });
+    // Un tour déjà décoché : rien ne change.
+    actionRemede({ geste: 'libererTour', tour: 2 }, { seance, ui }).executer();
+    assert.deepEqual(ui.etat().depart, { id: 4, toursFiges: [1, 3] });
+    const repartir = actionRemede({ geste: 'repartirDeZero' }, { seance, ui });
+    assert.deepEqual([repartir.nom, repartir.cle, repartir.details, repartir.confirmer], ['repartirDeZero', 'communs.remede.repartirDeZero', {}, null]);
+    assert.notEqual(repartir.executer(), null);
+    assert.equal(ui.etat().depart, null);
+    // Sans départ, décocher un tour ne lève pas : il n'y a rien à décocher.
+    actionRemede({ geste: 'libererTour', tour: 1 }, { seance, ui }).executer();
+    assert.equal(ui.etat().depart, null);
+    assert.deepEqual(seance.appels, []);
+    for (const remede of [{ geste: 'repartirDeZero' }, { geste: 'libererTour', tour: 1 }]) {
+      assert.equal(actionRemede(remede, { seance }), null, remede.geste);
+    }
   });
 
   test('enregistrerSous et choisirPapier passent par les gestes de l’écran, qui sait la planche et le papier ; sans eux, aucune action', () => {

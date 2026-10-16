@@ -3459,9 +3459,23 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     expect(axesVides()).toEqual([]);
     const phrase = vueQualite('profil').querySelector('[data-phrase-qualite="uneTable"]');
     expect(texteDe(phrase)).toBe(plat(t('qualite.profil.uneTable')));
-    await cadrerDansLaSurface([phrase, vueQualite('paires').querySelector('[data-phrase-qualite="pairesUneTable"]')]);
+    // La vue de comparaison, entre le profil et les collisions, se calcule
+    // quand elle entre dans la zone visible : amenée d'abord, elle écrit sa
+    // phrase « seul » avant que le cadrage ne mesure. La phrase du profil,
+    // celle de la comparaison, celle des collisions et celle des tables
+    // tiennent ensemble dans la surface ; celle des paires, plus bas,
+    // s'affirme sans l'image.
+    vueQualite('comparaison').scrollIntoView({ block: 'center' });
+    const seul = await attendre('la phrase « seul » de la comparaison', () => vueQualite('comparaison').querySelector('[data-phrase-comparaison="seul"]'));
+    expect(texteDe(seul)).toBe(plat(t('qualite.comparaison.seul')));
+    await cadrerDansLaSurface([phrase, vueQualite('tables').querySelector('[data-phrase-qualite="tablesUneTable"]')]);
     await photographier(m, '12b-qualite-une-table', {
-      condition: ['[data-vue-qualite="profil"] [data-phrase-qualite="uneTable"]', '[data-vue-qualite="paires"] [data-phrase-qualite="pairesUneTable"]'],
+      condition: [
+        '[data-vue-qualite="profil"] [data-phrase-qualite="uneTable"]',
+        '[data-vue-qualite="comparaison"] [data-phrase-comparaison="seul"]',
+        '[data-vue-qualite="collisions"] [data-phrase-qualite="collisionsUneTable"]',
+        '[data-vue-qualite="tables"] [data-phrase-qualite="tablesUneTable"]',
+      ],
       graine: GRAINE,
     });
   });

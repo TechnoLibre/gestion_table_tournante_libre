@@ -4,8 +4,8 @@
 // Les libellés de la page de qualité (§ 12 à § 12.14, § 14.6), une table.
 // Chaque clé commence par « qualite. » : la source et ses cas, la liste des
 // vues, le refus de dessiner, les pourcentages, puis un sous-préfixe par vue
-// — tuile, profil, collisions, tables, paires, objectifs, animateurs,
-// diversite, performance.
+// — tuile, profil, comparaison, collisions, tables, paires, objectifs,
+// animateurs, diversite, performance.
 //
 // Le signe « % » ne s'écrit que sous qualite.pourcentage.* : la valeur
 // « N % », les graduations d'un axe en pourcentages et le libellé de sa
@@ -20,7 +20,7 @@
 // « points de relevé » de la recherche ; « le moins varié », « le plus
 // varié » et « au minimum » pour la diversité d'un animateur ; « des tours
 // possibles servis » pour la part servie des objectifs.
-import { compte } from '../../application/libelles/aides.js';
+import { capitale, compte, enumeration } from '../../application/libelles/aides.js';
 
 export const TABLE = new Map([
   // --- La source et les cas sans source mesurable (§ 12, B9, § 12.6) ---------
@@ -118,6 +118,15 @@ export const TABLE = new Map([
     ({ personnes }) => compte(personnes, 'personne jamais servie', 'personnes jamais servies'),
   ],
 
+  // --- Les colonnes côte à côte de la comparaison (§ 12.10.6, D67, D84) ------
+  // Une colonne par placement, nommée sous les clés qualite.comparaison.nom.*
+  // comme dans le tracé et les phrases ; chaque cellule s'écrit sous les clés
+  // de la tuile (qualite.tuile.*), et la tête dit seulement qu'un retenu
+  // ajusté ne se classe pas.
+  ['qualite.colonnes.titre', 'Chiffres des deux placements, côte à côte'],
+  ['qualite.colonnes.rangRetenu', 'ajusté à la main : ne se classe pas'],
+  ['qualite.colonnes.tousLesIndicateurs', 'Tous les indicateurs'],
+
   // --- Le profil trié (§ 12.3, B12, D28, D30, D41, D51) ----------------------
   ['qualite.profil.graphique.comptes', 'Profil trié des rencontres, en comptes de personnes'],
   ['qualite.profil.graphique.pourcentages', 'Profil trié des rencontres, en pourcentage du plafond réalisé'],
@@ -181,6 +190,98 @@ export const TABLE = new Map([
     ({ nom }) =>
       `La personne au rang 1, ${nom}, a un plafond réalisé nul : elle ne rencontre personne, et son rang n’a pas de point en pourcentage.`,
   ],
+
+  // --- La comparaison de deux placements (§ 12.10.6, § 12.10.7, C20, C21) ----
+  // Un placement se nomme « n° 4 », ou « placement retenu » ; dans une
+  // phrase, sujet ou complément, « le placement retenu ». Les phrases, le
+  // tracé, son infobulle et l'escalier sont en comptes : aucune de ces clés
+  // n'écrit de pourcentage (D67, C29), et aucune ne dit qu'un placement sert
+  // mieux une personne plutôt qu'un rang (§ 12.10.7).
+  ['qualite.comparaison.seul', 'Un seul placement mesurable : rien à comparer.'],
+  ['qualite.comparaison.nom.proposition', ({ proposition }) => `n° ${proposition}`],
+  ['qualite.comparaison.nom.retenu', 'placement retenu'],
+  ['qualite.comparaison.sujet.retenu', 'le placement retenu'],
+  ['qualite.comparaison.placements', ({ a, b }) => `Placements comparés : ${a} et ${b}`],
+  ['qualite.comparaison.comparerA', 'Comparer à :'],
+  // Une entrée de la liste « Comparer à : » : le placement, puis sa place au
+  // classement, celle de sa proposition pour un retenu non ajusté.
+  ['qualite.comparaison.candidat', ({ nom, rang }) => `${nom}, rang ${rang} au classement`],
+  ['qualite.comparaison.candidatHorsClassement', ({ nom }) => `${nom}, hors classement`],
+  ['qualite.comparaison.graphique', 'Manque par rang, les deux placements superposés'],
+  ['qualite.comparaison.axe', 'Rangs, chaque placement de son plus grand manque au plus petit'],
+  // Le libellé du zéro de l'axe vertical.
+  ['qualite.comparaison.zero', 'rien à reprendre à ce placement'],
+  // La synthèse du tracé : le pire cas de chaque placement et son effectif.
+  [
+    'qualite.comparaison.synthese',
+    ({ a, manqueA, effectifA, b, manqueB, effectifB }) =>
+      `Le plus grand manque vaut ${manqueA} pour ${a}, chez ${compte(effectifA, 'personne', 'personnes')}, et ${manqueB} pour ${b}, chez ${compte(effectifB, 'personne', 'personnes')}.`,
+  ],
+  [
+    'qualite.comparaison.rang1Different',
+    ({ a, nomA, b, nomB }) => `Le rang 1 ne désigne pas la même personne : ${nomA} pour ${a}, ${nomB} pour ${b}.`,
+  ],
+  // Les trois effectifs de rangs ; a et b, les sujets.
+  [
+    'qualite.comparaison.effectifs',
+    ({ a, rangsA, b, rangsB, egalite }) =>
+      `${capitale(a)} sert mieux à ${compte(rangsA, 'rang', 'rangs')}, ${b} à ${rangsB}, égalité à ${egalite}.`,
+  ],
+  // Le rang où le signe de l'écart de manque change, quand il ne change
+  // qu'une fois : gagne ne sert mieux à aucun rang avant lui, perd à aucun
+  // à partir de lui.
+  [
+    'qualite.comparaison.bascule',
+    ({ rang, gagne, perd }) => `Bascule au rang ${rang} : ${gagne} ne sert mieux qu’à partir de ce rang, ${perd} seulement avant lui.`,
+  ],
+  ['qualite.comparaison.domine', ({ proposition }) => `La proposition n° ${proposition} sert mieux à tous les rangs.`],
+  ['qualite.comparaison.dominePlacementRetenu', 'Le placement retenu sert mieux à tous les rangs.'],
+  // Deux profils de manque égaux rang pour rang : le premier palier
+  // appliqué du classement où leurs clés diffèrent, ses critères nommés
+  // comme la table du moteur les nomme ; l'identifiant quand toutes sont
+  // égales ; rien contre le retenu, qui ne se classe pas (D63).
+  [
+    'qualite.comparaison.indiscernables.palier',
+    ({ rang, criteres }, texte) =>
+      `Indiscernables sur le manque : le classement les départage à son palier ${rang}, ${enumeration(criteres.map((critere) => texte(`moteur.critere.${critere}`)))}.`,
+  ],
+  [
+    'qualite.comparaison.indiscernables.identifiant',
+    'Indiscernables sur le manque : chaque palier du classement les tient à égalité, et l’identifiant les départage.',
+  ],
+  [
+    'qualite.comparaison.indiscernables.retenu',
+    'Indiscernables sur le manque : le placement retenu ne se classe pas, et rien ne les départage.',
+  ],
+  // Peu de valeurs de manque : la phrase, puis une ligne par valeur prise.
+  ['qualite.comparaison.peuDeValeurs.phrase', 'Le manque prend trop peu de valeurs pour se tracer ; par valeur, les rangs de chaque placement :'],
+  [
+    'qualite.comparaison.peuDeValeurs.valeur',
+    ({ valeur, a, effectifA, b, effectifB }) => `manque ${valeur} : ${compte(effectifA, 'rang', 'rangs')} pour ${a}, ${effectifB} pour ${b}`,
+  ],
+  [
+    'qualite.comparaison.refus',
+    ({ nom }) => `Pour ${nom}, le calcul contredit une borne : la vue ne compare rien, pour ces raisons.`,
+  ],
+  [
+    'qualite.comparaison.populations',
+    ({ a, b }) => `Non comparable : ${a} et ${b} ne mesurent pas les mêmes personnes.`,
+  ],
+  ['qualite.comparaison.populationsSeulement', ({ nom }) => `Mesurées pour ${nom} seulement :`],
+  ['qualite.comparaison.personneInconnue', ({ id }) => `personne n° ${id}, absente de l’événement`],
+  // Les colonnes de l'infobulle d'un rang, une ligne par placement.
+  ['qualite.comparaison.colonne.nom', 'Personne'],
+  ['qualite.comparaison.colonne.manque', 'Manque'],
+  ['qualite.comparaison.colonne.rencontres', 'Rencontres'],
+  ['qualite.comparaison.colonne.plafondRealise', 'Plafond réalisé'],
+  ['qualite.comparaison.colonne.plafondAPriori', 'Plafond a priori'],
+  ['qualite.comparaison.colonne.total', 'Au total'],
+  // Le jumeau : l'escalier du manque, une colonne d'effectif et une
+  // d'effectif cumulé par placement.
+  ['qualite.comparaison.escalier.titre', 'Escalier du manque'],
+  ['qualite.comparaison.escalier.valeur', 'Manque'],
+  ['qualite.comparaison.escalier.effectif', ({ nom }) => `Effectif, ${nom}`],
+  ['qualite.comparaison.escalier.cumul', ({ nom }) => `Effectif cumulé, ${nom}`],
 
   // --- Les collisions d'appartenance (§ 12.4, B13, D31) ----------------------
   ['qualite.collisions.graphique', "Collisions d'appartenance, par appartenance"],
@@ -472,6 +573,9 @@ export const TABLE = new Map([
     ({ evalues, arret }) => `rien à reprendre après ${compte(evalues, 'mouvement', 'mouvements')} sur ${arret}`,
   ],
   ['qualite.performance.planInitial', "le plan initial n'avait rien à reprendre"],
+  // Une dérivée : sa course part du plan de son départ, la proposition n° X,
+  // et non d'un placement tiré (§ 12.14, C23, D76).
+  ['qualite.performance.depart', ({ proposition }) => `partie de la proposition n° ${proposition}`],
   [
     'qualite.performance.dernierChangement',
     ({ de, a }) => `Aucune valeur n'a changé entre ${de} et ${a} mouvements ; une autre graine est l'autre façon de chercher.`,

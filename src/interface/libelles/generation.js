@@ -35,6 +35,16 @@ function calculMesure({ dureeMs, nombre, arret, coeurs }, texte) {
   );
 }
 
+// Les placements écartés comme identiques à une proposition présente, dits
+// après ce qui est ajouté, précédés d'un point-virgule ; rien pour 0.
+function ecartees(identiques) {
+  if (identiques === 0) return '';
+  return ` ; ${compte(identiques, 'placement identique à une proposition présente, écarté', 'placements identiques à des propositions présentes, écartés')}`;
+}
+
+// Une place au classement, en ordinal abrégé, lettres en exposant : 1re, 2e.
+const place = (rang) => (rang === 1 ? '1\u{02B3}\u{1D49}' : `${rang}\u{1D49}`);
+
 export const TABLE = new Map([
   // --- La meilleure proposition, en tête de la section (§ 5.4, § 5.7) --------
   // Le libellé de ses collisions cumulées et son explication sont ceux de la
@@ -198,9 +208,24 @@ export const TABLE = new Map([
   ['generation.longue.confirmer', 'Générer quand même'],
   ['generation.longue.renoncer', 'Ne pas générer'],
 
+  // --- Le départ d'une génération dérivée (§ 5.7, C6) -----------------------------
+  // depart : l'identifiant de la proposition choisie, écrit tel quel comme
+  // tout numéro de proposition ; tour : le numéro d'un tour.
+  ['generation.depart.titre', ({ depart }) => `Départ : proposition n° ${depart}`],
+  ['generation.depart.legende', 'Tours à figer'],
+  ['generation.depart.tour', ({ tour }) => `Tour ${tour}`],
+  [
+    'generation.depart.note',
+    'Un tour figé est repris tel quel du départ ; la génération ne refait que les autres, et part du plan du départ.',
+  ],
+
   // --- Les commandes ----------------------------------------------------------------
   ['generation.commande.generer', 'Générer'],
+  ['generation.commande.genererDepuis', ({ depart }) => `Générer depuis n° ${depart}`],
+  ['generation.commande.repartirDeZero', 'Repartir de zéro'],
   ['generation.commande.annuler', 'Annuler la génération'],
+  // a : la meilleure proposition dérivée ; depart : son départ.
+  ['generation.commande.comparerIssue', ({ a, depart }) => `Comparer n° ${a} à n° ${depart}`],
 
   // --- L'avancement (§ 5.10) --------------------------------------------------------
   ['generation.avancement.barre', 'Avancement de la génération'],
@@ -220,12 +245,34 @@ export const TABLE = new Map([
     ({ ajoutees, identiques }) => {
       const nouvelles =
         ajoutees === 0 ? 'Aucune proposition nouvelle' : `${compte(ajoutees, 'proposition ajoutée', 'propositions ajoutées')}`;
-      const ecartees =
-        identiques === 0
-          ? ''
-          : ` ; ${compte(identiques, 'placement identique à une proposition présente, écarté', 'placements identiques à des propositions présentes, écartés')}`;
-      return `${nouvelles}${ecartees}.`;
+      return `${nouvelles}${ecartees(identiques)}.`;
     },
+  ],
+  // Une génération dérivée (§ 5.7, D82) : ajoutees, le nombre de propositions
+  // enregistrées, premier et dernier leurs identifiants extrêmes ; depart, son
+  // départ ; meilleure, la dérivée que le classement range la première, et
+  // placeMeilleure sa place ; placeDepart, celle du départ ; chacun null
+  // quand le classement ne le range pas, et la phrase le tait ; identiques,
+  // comme pour une génération ordinaire.
+  [
+    'generation.issue.derivee',
+    ({ ajoutees, premier, dernier, depart, meilleure, placeMeilleure, placeDepart, identiques }) => {
+      const etendue = premier === dernier ? `n° ${premier}` : `n° ${premier} à ${dernier}`;
+      const tete = `${compte(ajoutees, 'proposition dérivée', 'propositions dérivées')} de n° ${depart} (${etendue})`;
+      let rangs = '';
+      if (meilleure !== null) {
+        rangs = ajoutees === 1 ? ` ; elle est ${place(placeMeilleure)} du classement` : ` ; la meilleure, n° ${meilleure}, est ${place(placeMeilleure)} du classement`;
+      }
+      if (placeDepart !== null) rangs += ` ; n° ${depart} est ${place(placeDepart)}${meilleure === null ? ' du classement' : ''}`;
+      return `${tete}${rangs}${ecartees(identiques)}.`;
+    },
+  ],
+  // Toutes les propositions calculées égalent leur départ, et sont écartées.
+  [
+    'generation.issue.departSansReprise',
+    ({ depart }) =>
+      `La proposition n° ${depart} n'avait rien à reprendre sous ces réglages : ses propositions dérivées ` +
+      "l'égalent toutes, et sont écartées.",
   ],
   ['generation.issue.annuleeCommande', "Génération annulée : rien n'est enregistré."],
   ['generation.issue.annuleeSeance', "Génération annulée par le retour en lecture : rien n'est enregistré."],

@@ -2082,11 +2082,17 @@ describe('arborescence : un seul propriétaire des valeurs du contrat (types.js)
 
 // Modules que le § 14.13 tient à 100 % de branches : les calculs du
 // moteur qui décrivent ou bornent un plan, la géométrie des graphiques, les
-// chemins de reprise du stockage, et les refus et la recopie du départ
-// d'une génération dérivée.
+// chemins de reprise du stockage, les refus et la recopie du départ d'une
+// génération dérivée, sa carte et son issue dans la section de la
+// génération, le geste « Comparer » d'une ligne du tableau des propositions,
+// les colonnes côte à côte et les cas de la vue de comparaison.
 const MODULES_A_SEUIL = [
   'src/application/depart.js',
   'src/geometrie/graphique.js',
+  'src/interface/generation/depart.js',
+  'src/interface/propositions/comparer.js',
+  'src/interface/qualite/colonnes.js',
+  'src/interface/qualite/comparaison.js',
   'src/moteur/correspondance.js',
   'src/moteur/criteres.js',
   'src/moteur/diversite.js',
@@ -2235,6 +2241,10 @@ describe('arborescence : la couverture (§ 14.13)', () => {
         perFile: true,
         'src/application/depart.js': { branches: 100 },
         'src/geometrie/graphique.js': { branches: 100 },
+        'src/interface/generation/depart.js': { branches: 100 },
+        'src/interface/propositions/comparer.js': { branches: 100 },
+        'src/interface/qualite/colonnes.js': { branches: 100 },
+        'src/interface/qualite/comparaison.js': { branches: 100 },
         'src/moteur/correspondance.js': { branches: 100 },
         'src/moteur/criteres.js': { branches: 100 },
         'src/moteur/diversite.js': { branches: 100 },
@@ -2250,6 +2260,10 @@ describe('arborescence : la couverture (§ 14.13)', () => {
       ...COMMANDE_CONFORME,
       'src/application/depart.js': '',
       'src/geometrie/graphique.js': '',
+      'src/interface/generation/depart.js': '',
+      'src/interface/propositions/comparer.js': '',
+      'src/interface/qualite/colonnes.js': '',
+      'src/interface/qualite/comparaison.js': '',
       'src/moteur/correspondance.js': '',
       'src/moteur/criteres.js': '',
       'src/moteur/diversite.js': '',
@@ -2274,6 +2288,10 @@ describe('arborescence : la couverture (§ 14.13)', () => {
       [
         'src/application/depart.js : hors de la mesure',
         'src/geometrie/graphique.js : hors de la mesure',
+        'src/interface/generation/depart.js : hors de la mesure',
+        'src/interface/propositions/comparer.js : hors de la mesure',
+        'src/interface/qualite/colonnes.js : hors de la mesure',
+        'src/interface/qualite/comparaison.js : hors de la mesure',
         'src/moteur/correspondance.js : hors de la mesure',
         'src/moteur/criteres.js : hors de la mesure',
         'src/moteur/diversite.js : hors de la mesure',

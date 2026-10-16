@@ -124,6 +124,10 @@ export default defineConfig({
       thresholds: {
         'src/application/depart.js': { branches: 100 },
         'src/geometrie/graphique.js': { branches: 100 },
+        'src/interface/generation/depart.js': { branches: 100 },
+        'src/interface/propositions/comparer.js': { branches: 100 },
+        'src/interface/qualite/colonnes.js': { branches: 100 },
+        'src/interface/qualite/comparaison.js': { branches: 100 },
         'src/moteur/correspondance.js': { branches: 100 },
         'src/moteur/criteres.js': { branches: 100 },
         'src/moteur/diversite.js': { branches: 100 },

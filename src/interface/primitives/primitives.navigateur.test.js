@@ -1332,6 +1332,39 @@ describe('commande (§ 2.1)', () => {
     expect(remede).toHaveAccessibleName(t('communs.nom.remede', { cle: 'communs.remede.modifier', objet }));
   });
 
+  test('refusExterne : le refus que le porteur tient se pose à côté du bouton, qui le désigne ; son remède abouti ne le retire pas ; le refus de l’exécution passe devant lui', async () => {
+    const montage = await preparer({ mode: 'lecture' });
+    const refus = { code: 'MODE_LECTURE', details: { remede: { geste: 'modifier' } } };
+    const cible = monter(Commande, { cle: 'communs.commande.lecture', executer: () => undefined, refusExterne: refus }, montage.contexte);
+    const bouton = cible.querySelector('button[data-commande="lecture"]');
+    const message = cible.querySelector('[data-refus="MODE_LECTURE"]');
+    expect(message).not.toBeNull();
+    expect(message.querySelector('p').textContent).toBe(t('MODE_LECTURE', refus.details));
+    expect(ecart(message, bouton)).toBeLessThanOrEqual(8);
+    expect(bouton.getAttribute('aria-describedby')).toBe(message.id);
+    await cliquer(message.querySelector('button[data-commande="modifier"]'));
+    await vi.waitFor(() => expect(montage.seance.etat().mode).toBe('ecriture'));
+    expect(cible.querySelector('[data-refus="MODE_LECTURE"]')).not.toBeNull();
+    expect(bouton.getAttribute('aria-describedby')).toBe(message.id);
+
+    const refusee = monter(
+      Commande,
+      {
+        cle: 'communs.remede.ajouterParticipant',
+        executer: () => {
+          throw Object.assign(new Error('refus'), { code: 'NOM_REQUIS', details: { remede: null } });
+        },
+        refusExterne: refus,
+      },
+      montage.contexte,
+    );
+    await cliquer(refusee.querySelector('button[data-commande="ajouterParticipant"]'));
+    expect([...refusee.querySelectorAll('[data-refus]')].map((r) => r.getAttribute('data-refus'))).toEqual(['NOM_REQUIS']);
+    expect(refusee.querySelector('button[data-commande="ajouterParticipant"]').getAttribute('aria-describedby')).toBe(
+      refusee.querySelector('[data-refus]').id,
+    );
+  });
+
   test('sans refus, son libellé est celui de sa clé, et data-commande le dernier segment de la clé', async () => {
     const montage = await preparer();
     const cible = monter(Commande, { cle: 'communs.commande.lecture', executer: () => undefined }, montage.contexte);

@@ -26,6 +26,7 @@ import { VERSION } from '../../version.genere.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { COLONNES, GROUPES_COLONNES, explicationDeColonne, lireColonne, tableau, texteCellule } from '../propositions/modele.js';
 import { TUILES_A_POURCENTAGE, enteteDe } from './entete.js';
+import { celluleDeTuile } from './entete.js';
 
 const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 const format = creerFormat(t);
@@ -397,6 +398,46 @@ describe('enteteDe : les bornes, chacune d’une personne nommée (§ 12.2, B11,
       for (const texte of [tuileDe.libelle, tuileDe.texte, ...tuileDe.bornes, tuileDe.pourcentage?.compte ?? '']) {
         assert.ok(!texte.includes('%'), `${tuileDe.nom} : ${texte}`);
       }
+    }
+  });
+});
+
+describe('celluleDeTuile : la tuile et la cellule d’une colonne de la comparaison s’écrivent par une seule fonction (§ 12.10.6, D67, C20)', () => {
+  // Le contexte d'une cellule, lu dans la vue d'un placement : ses bornes,
+  // sa ligne d'évaluation, la table, et le nom de chaque personne.
+  const contexteDe = (vue, bornes = vue.detail.bornes) => ({
+    bornes,
+    ligne: vue.ligne,
+    table: vue.table,
+    t,
+    format,
+    nomDe: (id) => nomDe(vue.detail, id),
+  });
+
+  test('chaque tuile d’enteteDe est, valeur, bornes, plancher et pourcentage compris, la cellule que celluleDeTuile écrit de son détail', () => {
+    for (const charge of [generee(chargeSix({ objectifs: true })), generee(chargeSix()), generee(chargeSix({ objectifs: true, reservees: true }))]) {
+      const vue = vueDe(charge);
+      const entete = enteteDe(vue, outils);
+      for (const tuileDe of tuiles(entete)) {
+        const { texte, bornes, pourcentage } = tuileDe;
+        assert.deepEqual(celluleDeTuile(tuileDe.nom, contexteDe(vue)), { texte, bornes, pourcentage }, tuileDe.nom);
+      }
+    }
+  });
+
+  test('une tuile dont le contexte ne porte pas la borne n’écrit aucune ligne de borne ni pourcentage ; son propre plancher reste écrit, en seule ligne', () => {
+    const vue = vueDe(generee(chargeSix({ objectifs: true })));
+    const { diversite, animateurs, ...portees } = vue.detail.bornes;
+    assert.notEqual(diversite, undefined);
+    assert.notEqual(animateurs, undefined);
+    // Un plancher forgé sur chacune des deux tuiles dont la borne manque.
+    const forges = { appartenancesVues: { plancher: 2, atteint: false }, animateursRencontres: { plancher: 1, atteint: true } };
+    const planchers = { ...Object.fromEntries(TUILES_A_PLANCHER.map((nom) => [nom, null])), ...forges };
+    for (const [nom, plancher] of Object.entries(forges)) {
+      const cellule = celluleDeTuile(nom, contexteDe(vue, { ...portees, planchers }));
+      assert.deepEqual(cellule.bornes, [ligneDuPlancher(plancher)], nom);
+      assert.equal(cellule.pourcentage, null, nom);
+      assert.equal(cellule.texte, texteCellule(lireColonne(vue.ligne, nom), outils), nom);
     }
   });
 });

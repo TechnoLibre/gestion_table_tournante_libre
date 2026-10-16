@@ -12,7 +12,12 @@
   // observable et la proposition demandée au plan — le placement entier, à
   // chaque tour du plan : la ligne de source reprend le libellé de la barre
   // de vue du plan, ou dit qu'une proposition fautive n'y est pas montrée,
-  // et sa commande de retour ne montre plus la proposition demandée. Sans
+  // et sa commande de retour ne montre plus la proposition demandée. Une
+  // source qui est une proposition dérivée porte, sous cette ligne, la
+  // phrase qui la rattache à son départ, celle du tableau des propositions
+  // (texteFiliation, propositions/filiation.js), quel que soit son statut ;
+  // le retenu garde son libellé, sa filiation se lisant dans la
+  // performance (§ 12.6, § 12.14, C17, C23, D76). Sans
   // source mesurable, la page ne dessine aucune vue, et un seul de ses cas
   // s'écrit, chacun par sa phrase [data-phrase-qualite] :
   //
@@ -31,7 +36,7 @@
   // contradiction, son code traduit et la personne nommée.
   //
   // Sinon, la liste des vues, dans leur ordre à l'écran, mène à chacune :
-  // un lien porte le focus sur la vue, qui se fait voir. Puis les neuf vues,
+  // un lien porte le focus sur la vue, qui se fait voir. Puis les dix vues,
   // chacune sous le contrat de propriétés {detail, ligne, table} — le
   // détail du placement (detailDe, modele.js), la ligne d'évaluation de la
   // source, la table d'évaluation de la charge. Le détail se mesure pour la
@@ -40,18 +45,28 @@
   // contradictions qui retirent le dessin.
   //
   // Elle pose le contexte dessinDiffere : un graphique loin de la zone
-  // visible n'est dessiné que quand il en approche (Graphique), si bien que
-  // l'ouverture ne mesure et ne rend que ce qui se voit.
+  // visible n'est dessiné que quand il en approche (Graphique), et la vue
+  // de comparaison ne se calcule qu'à son premier dessin (VueComparaison),
+  // si bien que l'ouverture ne mesure et ne rend que ce qui se voit.
+  //
+  // La vue que la navigation demande (ui.demanderVueQualite, la
+  // comparaison que « Comparer » ouvre) se porte à l'écran et au focus
+  // comme par son lien, une fois la page rendue, puis la demande se retire
+  // (ui.vueQualiteAtteinte) ; sans vue à l'écran — une source qui ne se
+  // mesure pas —, elle se retire aussi, et le focus ne bouge pas.
   import { flushSync, getContext, setContext } from 'svelte';
   import Diagnostic from '../diagnostic/Diagnostic.svelte';
   import Carte from '../primitives/Carte.svelte';
   import Commande from '../primitives/Commande.svelte';
   import Refus from '../primitives/Refus.svelte';
+  import { derivationDe } from '../../application/depart.js';
+  import { texteFiliation } from '../propositions/filiation.js';
   import { evaluation, nomDe } from '../propositions/modele.js';
   import { detailDe } from './modele.js';
   import { sourceQualite } from './source.js';
   import VueAnimateurs from './VueAnimateurs.svelte';
   import VueCollisions from './VueCollisions.svelte';
+  import VueComparaison from './VueComparaison.svelte';
   import VueDiversite from './VueDiversite.svelte';
   import VueEntete from './VueEntete.svelte';
   import VueObjectifs from './VueObjectifs.svelte';
@@ -62,6 +77,7 @@
   import { creerDessinDiffere } from './graphiques/dessin_differe.js';
 
   const t = getContext('t');
+  const format = getContext('format');
   const ui = getContext('ui');
   const seance = getContext('seance');
   const generation = getContext('generation');
@@ -73,6 +89,7 @@
   const VUES = [
     ['entete', VueEntete],
     ['profil', VueProfil],
+    ['comparaison', VueComparaison],
     ['collisions', VueCollisions],
     ['tables', VueTables],
     ['paires', VuePaires],
@@ -86,6 +103,9 @@
   const source = $derived(charge === null ? null : sourceQualite(charge, { demandee: $ui.proposition }));
   const table = $derived(charge === null ? null : evaluation(charge).table);
   const ligne = $derived(source?.ligne ?? null);
+  // La phrase de filiation de la source, null pour le retenu, sans source
+  // et hors d'une dérivée.
+  const filiation = $derived(typeof source?.id === 'number' ? texteFiliation(derivationDe(charge, source.id), { t, format }) : null);
   const detail = $derived(
     source?.cas === 'mesurable'
       ? detailDe(charge, source.id, { courseDe: (id) => seance.courseDe(id), generationDe: (id) => generation.generationDe(id) })
@@ -99,12 +119,12 @@
   // L'identifiant de l'élément qui porte une vue.
   const idVue = (nom) => `${uid}-vue-${nom}`;
 
-  // Porte le focus sur la vue nommée, qui se fait voir ; le lien ne change
-  // pas l'adresse de la page. Les graphiques en attente qui la précèdent se
-  // dessinent d'abord, rendus avant le défilement : aucun dessin au-dessus
-  // d'elle ne la déplace ensuite.
-  function allerALaVue(evenement, nom) {
-    evenement.preventDefault();
+  // Porte le focus sur la vue nommée, qui se fait voir ; rien quand elle
+  // n'est pas à l'écran. Ce qui attend son premier dessin au-dessus d'elle
+  // — les graphiques, la vue de comparaison — se dessine d'abord, rendu
+  // avant le défilement : aucun dessin au-dessus d'elle ne la déplace
+  // ensuite.
+  function porterALaVue(nom) {
     const cible = document.getElementById(idVue(nom));
     if (cible === null) return;
     dessinDiffere.dessinerAvant(cible);
@@ -112,6 +132,24 @@
     cible.scrollIntoView({ block: 'start' });
     cible.focus({ preventScroll: true });
   }
+
+  // Le lien d'une vue : il la porte à l'écran sans changer l'adresse de la
+  // page.
+  function allerALaVue(evenement, nom) {
+    evenement.preventDefault();
+    porterALaVue(nom);
+  }
+
+  // La vue demandée, portée une fois la page rendue : flushSync ne se
+  // prend pas dans un effet, la vue se porte à la microtâche qui le suit.
+  $effect(() => {
+    const demandee = $ui.vueQualite;
+    if (demandee === null || charge === null) return;
+    queueMicrotask(() => {
+      porterALaVue(demandee);
+      ui.vueQualiteAtteinte();
+    });
+  });
 </script>
 
 {#snippet personne(id)}
@@ -132,6 +170,9 @@
       </p>
       {#if source.revenir !== null}
         <Commande cle={source.revenir} nom="revenir" executer={() => ui.montrerProposition(null)} />
+      {/if}
+      {#if filiation !== null}
+        <p class="filiation" data-filiation>{filiation}</p>
       {/if}
     </div>
 
@@ -243,6 +284,12 @@
 
   .placement {
     font-weight: bold;
+  }
+
+  /* La filiation d'une dérivée, sous la ligne de source, sur toute sa
+     largeur. */
+  .filiation {
+    flex-basis: 100%;
   }
 
   .cas {

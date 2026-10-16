@@ -376,7 +376,9 @@ const normaliser = (texte) =>
 // Mots que le logiciel n'écrit pas, cherchés dans le texte normalisé. Un
 // « écart » nu n'existe pas au glossaire (§ 5.5) : seuls l'écart
 // d'itinéraire et l'écart au plafond a priori y figurent ; « écarté », du
-// verbe, n'en est pas un.
+// verbe, n'en est pas un. « Sert mieux chaque personne » promettrait qu'on
+// bascule d'un placement à l'autre sans léser personne : la dominance se
+// dit des rangs, jamais des personnes (§ 12.10.7).
 const MOTS_INTERDITS = [
   ['conforme', /conform/],
   ['écart hors du glossaire', /\becarts?\b(?!\s+(?:d'itineraire|au plafond a priori))/],
@@ -390,6 +392,7 @@ const MOTS_INTERDITS = [
   ['récupérable', /recuperable/],
   ['évitable', /(?<!in)evitable/],
   ['pourcentage', /%/],
+  ['sert mieux chaque personne', /\bsert mieux chaque personne\b/],
 ];
 const PICTOGRAMME = /\p{Extended_Pictographic}/u;
 
@@ -1467,6 +1470,19 @@ describe('sources de l’interface : le contenu des tables de traduction (§ 5.5
       'a.satisfaction : satisfaction « Taux de satisfaction »',
       'a.score : score « Score »',
       'a.variance : variance « variance »',
+    ]);
+  });
+
+  test('rouge : « sert mieux chaque personne » se relève, en chaîne comme en fonction, sans égard à la casse ; « sert mieux à tous les rangs » passe (§ 12.10.7, C21)', () => {
+    const tables = new Map([
+      ['a.dominance', 'Elle sert mieux chaque personne.'],
+      ['a.fonction', ({ nom }) => `${nom} SERT MIEUX CHAQUE PERSONNE`],
+      ['b.rangs', 'La proposition n° 4 sert mieux à tous les rangs.'],
+      ['b.retenu', ({ nom }) => `${nom} sert mieux à tous les rangs, chaque personne comprise ou non`],
+    ]);
+    assert.deepEqual(releverContenuTables([tables], () => null, []), [
+      'a.dominance : sert mieux chaque personne « Elle sert mieux chaque personne. »',
+      'a.fonction : sert mieux chaque personne « SERT MIEUX CHAQUE PERSONNE »',
     ]);
   });
 

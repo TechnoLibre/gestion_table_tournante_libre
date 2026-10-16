@@ -29,7 +29,8 @@
 // libellés selon ses arguments : la source d'ouvrirSecours, la racine
 // d'ecrireAilleurs — documents quand elle est donnée, choisi quand
 // l'opérateur la désigne —, la section d'ouvrirSection. Son action passe par
-// la séance, par l'état de navigation pour ce qui ne fait que montrer, ou
+// la séance, par l'état de navigation pour ce qui ne fait que montrer ou
+// régler un choix de la navigation — le départ d'une génération dérivée —, ou
 // par un geste que l'écran fournit : choisirPlace se choisit sur le plan,
 // enregistrerSous reprend la planche que l'écran a demandée, choisirPapier
 // pose la question du papier.
@@ -196,6 +197,15 @@ function executionDuGeste(remede, seance, ui) {
     case 'ouvrirSection':
       if (ui === null) return null;
       return () => ui.allerA(remede.section);
+    case 'repartirDeZero':
+      if (ui === null) return null;
+      return () => ui.retirerDepart();
+    case 'libererTour':
+      if (ui === null) return null;
+      return () => {
+        const { depart } = ui.etat();
+        if (depart !== null) ui.reglerToursFiges(depart.toursFiges.filter((tour) => tour !== remede.tour));
+      };
     default:
       return null;
   }
@@ -209,7 +219,10 @@ function executionDuGeste(remede, seance, ui) {
  * debloquer, ouvrirSecours et ecrireAilleurs par la méthode de la séance de
  * même nom — passerEnEcriture pour modifier, la base de l'événement ouvert
  * pour ouvrirSecours ;
- * afficherTour et ouvrirSection par l'état de navigation, ui.
+ * afficherTour et ouvrirSection par l'état de navigation, ui, comme les deux
+ * gestes d'un départ refusé : repartirDeZero retire le départ
+ * (ui.retirerDepart), libererTour décoche son tour des tours figés du
+ * départ (ui.reglerToursFiges), et ne change rien sans départ.
  *
  * @param {Object|null} remede
  * @param {{seance: Object, ui?: Object|null, gestes?: Object<string, (remede: Object) => unknown>}} dependances
