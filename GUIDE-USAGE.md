@@ -365,9 +365,9 @@ appartenance et les rencontres répétées.*
 ### Repartir d’une proposition
 
 Une proposition presque à votre goût peut servir de **départ**. « Repartir
-d’elle », sur sa ligne du tableau classé, la choisit et ouvre la section
-« Génération » : la carte du départ nomme la proposition et offre une case
-par tour. Un tour coché est **figé** : chaque nouvelle proposition le
+d’elle », dans le menu « Actions » de sa ligne du tableau classé, la choisit
+et ouvre la section « Génération » : la carte du départ nomme la
+proposition et offre une case par tour. Un tour coché est **figé** : chaque nouvelle proposition le
 reprend tel quel du départ, table par table. « Générer » se lit alors
 « Générer depuis n° » suivi du numéro du départ : la génération part du plan
 du départ et ne refait que les tours non figés. Figer tous les tours ne laisse rien à refaire, et
@@ -389,7 +389,8 @@ proposition n° 1, première du classement, sert de départ, son tour 1 figé,
 
 ![La carte du départ : la proposition n° 1, son tour 1 figé, et « Générer depuis n° 1 »](doc/captures/11a-depart-derive.png)
 
-*La proposition n° 1 choisie pour départ par « Repartir d’elle ». Sa carte
+*La proposition n° 1 choisie pour départ par « Repartir d’elle », dans le
+menu « Actions » de sa ligne. Sa carte
 offre « Repartir de zéro » et une case par tour, le tour 1 coché ; la note
 dessous rappelle ce qu’un tour figé devient. « Générer depuis n° 1 » lance
 la génération ; jusque-là, rien ne s’est écrit.*
@@ -410,8 +411,8 @@ génération : une génération ordinaire passe par « Repartir de zéro ».
 *Après la génération dérivée : la proposition n° 10, troisième du
 classement, porte « Dérivée de n° 1, tour 1 figé. » sous son numéro ; son
 départ, n° 1, la suit au quatrième rang du même classement. Chaque dérivée
-reprend le tour 1 de n° 1, table par table. Les commandes de chaque ligne,
-à droite, sont hors de l’image.*
+reprend le tour 1 de n° 1, table par table. Le menu « Actions » de chaque
+ligne, à droite, est hors de l’image.*
 
 ## Étape 10 — Comparer, et retenir
 
@@ -425,6 +426,8 @@ réservations imposent de ce que la recherche a choisi. Pour deux placements
 précis, la vue « Comparaison » de la page « Qualité », plus bas, les met côte
 à côte.
 
+Les commandes d’une ligne sont dans son menu : cliquez « Actions », au bout de
+la ligne, puis la commande ; au clavier, Entrée ou les flèches ouvrent le menu.
 « Voir sur le plan » montre une proposition sur le plan, sans rien écrire.
 « Retenir » en fait le **placement retenu** : l’état du plan passe à
 « Retenu », et les autres propositions restent dans la liste. Retenir une autre
@@ -441,8 +444,8 @@ porte la mention BROUILLON (étape 12).
 ### La page « Qualité »
 
 Avant de retenir, la section « Qualité » dit si un placement est bon, et qui
-y est mal servi. La commande « Qualité » de chaque ligne du tableau classé
-montre la proposition sur le plan et ouvre la page ; sans proposition
+y est mal servi. La commande « Qualité », dans le menu « Actions » de chaque
+ligne du tableau classé, montre la proposition sur le plan et ouvre la page ; sans proposition
 montrée, la page mesure le placement retenu. Sa première ligne dit toujours
 quel placement elle mesure. Regarder la page n’écrit rien : elle se lit en
 lecture comme en écriture.
@@ -472,8 +475,8 @@ Le pire cas est au premier rang des deux graphiques.*
 La vue suivante, « Comparaison », répond à une autre question : laquelle de
 deux propositions sert mieux, et qui y perd ? Elle oppose le placement que la
 page mesure à un second, choisi dans la liste « Comparer à : » ; pour une
-dérivée, c’est d’abord son départ. « Comparer », sur une ligne du tableau
-classé, ouvre la vue avec cette ligne. Les chiffres des deux viennent
+dérivée, c’est d’abord son départ. « Comparer », dans le menu « Actions »
+d’une ligne du tableau classé, ouvre la vue avec cette ligne. Les chiffres des deux viennent
 d’abord, en deux colonnes : la place au classement, le minimum brut en
 pourcentage avec le compte du pire dessous, comme sur les tuiles, le plus
 grand manque, les personnes à qui il en manque, l’écart d’itinéraire ;
@@ -1026,6 +1029,14 @@ l’historique ; les noms des exemples sont inventés.
 | Champ de saisie | Entrée | Valide la saisie. |
 | Champ de saisie | Échap | Rend la valeur d'avant la saisie. |
 | Bouton de commande | Entrée ou Espace | Exécute la commande une fois, même maintenue. |
+| Bouton de menu | Entrée ou Espace ou ↓ | Ouvre le menu sur sa première action. |
+| Bouton de menu | ↑ | Ouvre le menu sur sa dernière action. |
+| Menu ouvert | ↓ | Passe à l'action suivante ; après la dernière, revient à la première. |
+| Menu ouvert | ↑ | Passe à l'action précédente ; avant la première, va à la dernière. |
+| Menu ouvert | Début | Va à la première action. |
+| Menu ouvert | Fin | Va à la dernière action. |
+| Menu ouvert | Échap | Ferme le menu et rend le focus à son bouton. |
+| Menu ouvert | Tab | Ferme le menu ; le focus passe au contrôle suivant. |
 | Geste en cours | Échap | Annule le geste en cours : la table revient où elle était. |
 | Panneau ou infobulle | Échap | Ferme le panneau ou l'infobulle. |
 

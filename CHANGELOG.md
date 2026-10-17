@@ -227,6 +227,12 @@
   fenêtre dit d'abord combien de propositions partent, et « Défaire » les rend.
   Une longue liste allégée garde le logiciel rapide ; le nombre choisi ne
   s'enregistre pas dans l'événement.
+- Dans le tableau des propositions, les commandes d'une ligne — « Voir sur le
+  plan », « Qualité », « Retenir », « Repartir d'elle », « Comparer » — passent
+  dans son menu « Actions », un seul bouton par ligne, et chaque phrase
+  « Imposé par les réservations » tient sur une ligne : chaque ligne reprend la
+  hauteur de ses chiffres. Le menu s'ouvre au clic ou au clavier, et le refus
+  d'une commande reste affiché à côté de son bouton.
 - La section « Import » offre « Télécharger un modèle » pour le contenu choisi.
   Le modèle des participants montre chaque colonne sur quatre personnes
   inventées ; celui des objectifs de table porte une ligne par table de

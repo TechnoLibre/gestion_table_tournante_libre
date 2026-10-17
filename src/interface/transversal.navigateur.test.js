@@ -56,6 +56,7 @@ import {
   chargePaires,
   chargePrincipale,
   cliquer,
+  cliquerAction,
   creerContexte,
   fichierCourses,
   generationPrincipale,
@@ -984,9 +985,17 @@ export function fautesSeparationComparaison({ a, b }) {
   return fautes;
 }
 
-// Les commandes de ligne du tableau des propositions (D85) : « Repartir
-// d'elle » et « Comparer » d'une proposition, « Comparer » du retenu.
-const COMMANDES_DE_LIGNE = ['[data-proposition] [data-commande="repartir"]', '[data-proposition] [data-commande="comparer"]', '[data-retenu] [data-commande="comparer"]'].join(', ');
+// Les commandes de ligne du tableau des propositions (D85) : le bouton du
+// menu « Actions » de chaque ligne, celle du retenu comprise, et, dans un
+// menu ouvert, « Repartir d'elle » et « Comparer » d'une proposition,
+// « Comparer » du retenu.
+const COMMANDES_DE_LIGNE = [
+  '[data-proposition] [data-menu-actions]',
+  '[data-retenu] [data-menu-actions]',
+  '[data-proposition] [role="menuitem"][data-commande="repartir"]',
+  '[data-proposition] [role="menuitem"][data-commande="comparer"]',
+  '[data-retenu] [role="menuitem"][data-commande="comparer"]',
+].join(', ');
 
 // Le nom accessible d'un bouton : son aria-label, sinon son texte.
 const nomAccessible = (bouton) => (bouton.getAttribute('aria-label') ?? '').trim() || bouton.textContent.replace(/\s+/g, ' ').trim();
@@ -1609,23 +1618,27 @@ describe('les gardes relèvent la faute qu’un fragment porte (§ 14.2)', () =>
     expect(fautesSeparationComparaison(seule.couleurs)).toEqual(['séries a / b : paire absente (1 et 0)']);
   });
 
-  test('commandes de ligne : deux commandes de même nom accessible, et un nom qui ne porte pas le numéro de sa ligne, sont relevés ; sous le nom, le texte du bouton', () => {
-    const commande = (nom, aria, texte = 'Comparer') => `<button data-commande="${nom}"${aria === null ? '' : ` aria-label="${aria}"`}>${texte}</button>`;
+  test('commandes de ligne : deux commandes de même nom accessible, et un nom qui ne porte pas le numéro de sa ligne, sont relevés ; sous le nom, le texte du bouton ; les boutons des menus « Actions » comptent', () => {
+    const menu = (aria) => `<button data-menu-actions aria-haspopup="menu"${aria === null ? '' : ` aria-label="${aria}"`}>Actions</button>`;
+    const commande = (nom, aria, texte = 'Comparer') => `<button role="menuitem" data-commande="${nom}"${aria === null ? '' : ` aria-label="${aria}"`}>${texte}</button>`;
     const ligne = (id, ...commandes) => `<tr data-proposition="${id}"><td>${commandes.join('')}</td></tr>`;
     const lire = (lignes) => avecFragment(`<table><tbody>${lignes}</tbody></table>`, (c) => releverCommandesDeLigne(c));
 
     const justes = lire(
-      ligne(3, commande('repartir', 'Repartir de la proposition n° 3', 'Repartir d’elle'), commande('comparer', 'Comparer la proposition n° 3')) +
-        ligne(14, commande('repartir', 'Repartir de la proposition n° 14', 'Repartir d’elle'), commande('comparer', null, 'Comparer n° 14')) +
-        `<tr data-retenu="3"><td>${commande('comparer', 'Comparer le placement retenu')}</td></tr>`,
+      ligne(3, menu('Actions de la proposition n° 3'), commande('voir', null, 'Voir sur le plan'), commande('repartir', 'Repartir de la proposition n° 3', 'Repartir d’elle'), commande('comparer', 'Comparer la proposition n° 3')) +
+        ligne(14, menu('Actions de la proposition n° 14'), commande('repartir', 'Repartir de la proposition n° 14', 'Repartir d’elle'), commande('comparer', null, 'Comparer n° 14')) +
+        `<tr data-retenu="3"><td>${menu('Actions du placement retenu')}${commande('comparer', 'Comparer le placement retenu')}</td></tr>`,
     );
-    expect(justes.lues).toBe(5);
+    expect(justes.lues).toBe(8);
     expect(justes.fautes).toEqual([]);
 
-    const fautives = lire(ligne(3, commande('comparer', 'Comparer la proposition n° 3')) + ligne(14, commande('comparer', 'Comparer la proposition n° 3'), commande('repartir', null, 'Repartir d’elle')));
-    expect(fautives.fautes).toHaveLength(3);
-    expect(fautives.fautes.filter((f) => f.includes('ne porte pas le numéro 14'))).toHaveLength(2);
-    expect(fautives.fautes.filter((f) => f.includes('même nom accessible'))).toHaveLength(1);
+    const fautives = lire(
+      ligne(3, menu('Actions de la proposition n° 3'), commande('comparer', 'Comparer la proposition n° 3')) +
+        ligne(14, menu('Actions de la proposition n° 3'), commande('comparer', 'Comparer la proposition n° 3'), commande('repartir', null, 'Repartir d’elle')),
+    );
+    expect(fautives.fautes).toHaveLength(5);
+    expect(fautives.fautes.filter((f) => f.includes('ne porte pas le numéro 14'))).toHaveLength(3);
+    expect(fautives.fautes.filter((f) => f.includes('même nom accessible'))).toHaveLength(2);
   });
 
   test('teintes réservées : un texte peint d’une teinte de conflit, et la trame d’une règle peinte de la teinte d’une autre, sont relevés ; une trame de sa propre teinte passe', () => {
@@ -2153,11 +2166,12 @@ const ECRANS_COMPARAISON = [
   'generation.depart.lecture',
   'generation.depart.bloque',
   'propositions.derivees',
+  'propositions.actions',
 ];
 
 // Les écrans où regarder n'écrit rien ni ne refuse rien (§ 8.4, C9,
 // contrainte 57) : l'écran lève à la moindre écriture.
-const ECRANS_SANS_ECRITURE = ['qualite.comparaison.lecture', 'qualite.comparaison.bloque', 'generation.depart.lecture', 'generation.depart.bloque'];
+const ECRANS_SANS_ECRITURE = ['qualite.comparaison.lecture', 'qualite.comparaison.bloque', 'generation.depart.lecture', 'generation.depart.bloque', 'propositions.actions'];
 
 // Les relevés des écrans atteints où la vue de comparaison s'est calculée.
 const deComparaison = () => deQualite().filter((r) => r.qualite.comparaison !== null);
@@ -2201,10 +2215,14 @@ describe('la comparaison, le départ et les dérivées, sur leurs écrans (C9, C
       if (depart !== undefined && depart?.figes.join() !== '1') fautes.push(`${nom} : la carte du départ ${depart === null ? 'absente' : `aux tours cochés [${depart.figes}]`}`);
       if (depart && depart.titre !== titreDuDepart) fautes.push(`${nom} : la carte du départ titrée « ${depart.titre} », « ${titreDuDepart} » attendu`);
     }
+    // Quatre lignes, chacune son menu fermé ; puis le menu de la n° 4
+    // ouvert : ses deux commandes nommées par la ligne s'y ajoutent.
     const derivees = releveDe('propositions.derivees');
-    if (derivees !== undefined && (derivees.filiations !== 2 || derivees.commandesDeLigne.lues !== 8)) {
+    if (derivees !== undefined && (derivees.filiations !== 2 || derivees.commandesDeLigne.lues !== 4)) {
       fautes.push(`propositions.derivees : ${derivees.filiations} filiations, ${derivees.commandesDeLigne.lues} commandes de ligne`);
     }
+    const actions = releveDe('propositions.actions');
+    if (actions !== undefined && actions.commandesDeLigne.lues !== 6) fautes.push(`propositions.actions : ${actions.commandesDeLigne.lues} commandes de ligne, 6 attendues`);
     aucuneFaute(fautes, 'écrans de la comparaison, du départ et des dérivées');
   });
 
@@ -2295,11 +2313,11 @@ describe('la comparaison, le départ et les dérivées, sur leurs écrans (C9, C
       for (const [cle, valeur] of [['generation.nombre', 2], ['generation.arret', 60]]) charge = appliquerCommande('modifierReglage', charge, { cle, valeur }).charge;
       const m = await ouvrirEvenement(contexte, charge, { ecriture: true, section: 'propositions' });
       // La proposition 1 au plan : « Comparer » sur la ligne 2.
-      await cliquer(m, '[data-proposition="2"] [data-commande="comparer"]');
+      await cliquerAction(m, '[data-proposition="2"]', 'comparer');
       await surLaPaire(m, 1, 2);
 
       await cliquer(m, '[data-commande="section"][data-cible="propositions"]');
-      await cliquer(m, '[data-proposition="2"] [data-commande="repartir"]');
+      await cliquerAction(m, '[data-proposition="2"]', 'repartir');
       await cliquer(m, '[data-section="generation"] [data-commande="genererDepuis"]');
       const comparer = await attendre("l'issue de la génération dérivée", () => m.racine.querySelector('[data-section="generation"] [data-commande="comparerIssue"]'), 3000);
       const [meilleure, depart] = entiersDe(comparer.textContent);

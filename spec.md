@@ -197,9 +197,9 @@ retenu sort en filigrane BROUILLON (§ 11.7) — nécessaire en fait pour distri
 quoi que ce soit.* L'opérateur lit la page de qualité (§ 12), compare deux
 placements sur le même axe — celui du **manque** (§ 12.10) — dans sa vue de
 comparaison, qui trace les deux courbes sur un même tracé et pose leurs chiffres
-côte à côte, puis retient celui qu'il préfère. « Comparer », sur la ligne d'une
-proposition comparable du tableau des propositions et sur celle du placement
-retenu, y mène. La page de qualité est la section « Qualité » de l'événement :
+côte à côte, puis retient celui qu'il préfère. « Comparer », dans le menu
+« Actions » de la ligne d'une proposition comparable du tableau des propositions
+et de celle du placement retenu, y mène. La page de qualité est la section « Qualité » de l'événement :
 elle mesure le placement que le plan montre, et chaque ligne du tableau des
 propositions y mène. Elle répond à deux questions — ce placement est-il bon, qui
 s'y trouve mal servi — par le profil des rencontres, les collisions
@@ -1131,17 +1131,18 @@ identifiant attribué à l'achèvement ferait départager deux propositions à
 deux ordres.
 
 **Une génération peut repartir d'une proposition.** La commande « Repartir
-d'elle », sur la ligne d'une proposition comparable du tableau, en fait le
-**départ** de la génération suivante et ouvre la section de la génération, qui
-le montre au-dessus de « Générer » — « Départ : proposition n° 4 » — avec la
-commande « Repartir de zéro », qui le retire ; sous un départ, « Générer » se
-lit « Générer depuis n° 4 ». Choisir le départ n'écrit rien : c'est un état de
-la navigation (§ 8.4), vivant en lecture et sur un plan bloqué, retiré à
-l'ouverture d'un événement et quand le départ quitte la liste. La génération
-lancée sous un départ est une **génération dérivée**, et ses propositions sont
-des **propositions dérivées** (§ 4). C'est une génération : la même graine
-saisie, dont la suite donne les graines dérivées, les mêmes nombre, compte
-d'arrêt et historique, la même estimation et la même question au-delà d'une
+d'elle », dans le menu « Actions » de la ligne d'une proposition comparable du
+tableau, en fait le **départ** de la génération suivante et ouvre la section
+de la génération, qui le montre au-dessus de « Générer »
+— « Départ : proposition n° 4 » — avec la commande « Repartir de zéro », qui
+le retire ; sous un départ, « Générer » se lit « Générer depuis n° 4 ».
+Choisir le départ n'écrit rien : c'est un état de la navigation (§ 8.4),
+vivant en lecture et sur un plan bloqué, retiré à l'ouverture d'un événement
+et quand le départ quitte la liste. La génération lancée sous un départ est
+une **génération dérivée**, et ses propositions sont des **propositions
+dérivées** (§ 4). C'est une génération : la même graine saisie, dont la
+suite donne les graines dérivées, les mêmes nombre, compte d'arrêt et
+historique, la même estimation et la même question au-delà d'une
 minute (§ 5.10), le même avancement, la même annulation, le même jalon
 automatique avant elle (§ 8.3), la même entrée d'historique, refusée en lecture
 et sur un plan bloqué. Ses identifiants suivent le compteur. Une dérivée et une
@@ -1397,13 +1398,24 @@ numéro, la phrase qui la rattache à son départ — « Dérivée de n° 4. »,
 ligne du retenu porte « Tel que la proposition n° X. ». Seul le départ immédiat
 est nommé : la ligne du départ dit le sien. Quand le départ n'est plus dans la
 liste, la phrase le dit — « Dérivée de n° 4, qui n'est plus dans la liste. » —
-et ne désigne aucune autre proposition. La ligne d'une proposition comparable
-porte aussi « Repartir d'elle » et « Comparer » (§ 12), avec « Voir sur le
-plan », « Qualité » et « Retenir » ; une ligne en dérive ou fautive ne porte ni
-l'une ni l'autre ; la ligne du placement retenu porte « Comparer » seul. Ces
-deux commandes ont un nom accessible qui porte le numéro de la ligne :
-« Comparer la proposition n° 4 », « Repartir de la proposition n° 4 »,
-« Comparer le placement retenu ».
+et ne désigne aucune autre proposition. Les commandes d'une ligne vivent dans
+son **menu « Actions »**, un seul bouton dans la dernière cellule : fermé, il
+ne montre que ce bouton. Chaque phrase de la colonne « Imposé par les
+réservations » tient sur une ligne, et chaque ligne a la hauteur de ses
+chiffres, phrase de filiation comprise. Le menu d'une proposition porte « Voir
+sur le plan », « Qualité » et « Retenir » ; celui d'une proposition comparable
+porte aussi « Repartir d'elle » et « Comparer » (§ 12), celui d'une ligne en
+dérive ou fautive ni l'une ni l'autre ; le menu du placement retenu porte
+« Voir sur le plan », « Qualité » et « Comparer ». Le bouton suit le motif du
+bouton de menu de WAI-ARIA : il annonce son menu, s'ouvre au clic, par Entrée,
+l'espace et les flèches, et le menu se parcourt aux flèches, à Début et à Fin,
+se ferme par Échap, par Tab ou par un clic au dehors. Une commande exécutée
+ferme le menu ; le refus d'une commande — « Retenir » en lecture — reste
+affiché à côté du bouton, que le bouton désigne. Le bouton a un nom accessible
+qui porte le numéro de la ligne, « Actions de la proposition n° 4 », « Actions
+du placement retenu », comme « Repartir d'elle » et « Comparer » : « Comparer
+la proposition n° 4 », « Repartir de la proposition n° 4 », « Comparer le
+placement retenu ».
 
 ### 5.8 Le placement à la main
 
@@ -3955,14 +3967,14 @@ génération (§ 5.10).
 montrée —, comme l'aperçu d'impression (§ 11.7), et une ligne de source le
 nomme : « Placement retenu », « Proposition n° 4 » ; sans placement à mesurer,
 elle n'en nomme aucun et dit que le plan ne montre que les réservations, qui ne
-se mesurent pas. Chaque ligne du tableau des propositions offre la commande
-« Qualité », qui montre la proposition au plan et ouvre la page. La ligne d'une
-proposition comparable offre aussi « Comparer », qui ouvre la page à sa vue de
-comparaison (§ 12.10.6) : la proposition de la ligne y devient le **second
-placement**, mesuré contre la source ; quand le plan ne montre rien, ou montre
+se mesurent pas. Le menu « Actions » de chaque ligne du tableau des propositions
+offre la commande « Qualité », qui montre la proposition au plan et ouvre la
+page. Celui d'une proposition comparable offre aussi « Comparer », qui ouvre la
+page à sa vue de comparaison (§ 12.10.6) : la proposition de la ligne y devient
+le **second placement**, mesuré contre la source ; quand le plan ne montre rien, ou montre
 déjà cette proposition ou le retenu non ajusté qui lui est identique, celle-ci
 devient la source, montrée au plan, et le second placement prend son défaut.
-La ligne du retenu l'offre aussi, aux mêmes règles. « Comparer » n'est offert
+Le menu du retenu l'offre aussi, aux mêmes règles. « Comparer » n'est offert
 que quand la vue aurait un second placement, c'est-à-dire quand deux placements
 mesurables et distincts existent. Le second placement ne vit que dans cette
 vue : il ne change ni la source, ni le plan, ni les autres vues. Sans source
@@ -4773,8 +4785,8 @@ moins le placement identique à A — un retenu non ajusté et sa proposition
 d'origine sont un même placement, et ne se comparent pas l'un à l'autre. Une
 liste en tête de la vue, « Comparer à : », porte exactement les candidats, le
 retenu d'abord, puis les propositions dans l'ordre du classement, chacune sous
-son numéro et son rang ; la commande « Comparer » d'une ligne du tableau des
-propositions pose aussi B (§ 12). Sans choix, B est le premier qui existe, parmi
+son numéro et son rang ; la commande « Comparer » du menu d'une ligne du tableau
+des propositions pose aussi B (§ 12). Sans choix, B est le premier qui existe, parmi
 les candidats, de : le départ de A, quand A est une dérivée ; la proposition
 d'origine de A, quand A est un retenu ajusté ; la première proposition du
 classement ; le retenu. La vue s'ouvre ainsi sur la question qu'on se pose —
@@ -7222,7 +7234,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `10-diagnostic.png` | **grande démonstration** | le diagnostic préalable (§ 5.6), le plafond a priori, les **99 retours imposés** énoncés à part, et le plancher de l'écart d'itinéraire | les valeurs affichées égalent celles du moteur pour la même entrée ; le plafond des quatre animateurs des tables de 7 vaut **24** |
 | `10a-ordre-priorites.png` | l'événement en construction | l'ordre des priorités : paliers numérotés, un palier de deux critères avec leurs poids — excédent de collisions × 1 et tours hors objectif × 3 —, « rencontrer le plus d'animateurs différents » marqué décoché (§ 5.3, § 5.7) | l'ordre affiché est celui que compile le moteur ; la capture `11` qui suit nomme les mêmes paliers ; le choix du mode des objectifs, à son défaut « le plus de places servies », et la commande qui rétablit le défaut sont affirmés hors de l'image |
 | `11-propositions.png` | l'événement en construction | plusieurs propositions comparées, l'ordre de classement **écrit dans l'interface** par paliers (§ 5.7), le tableau défilé en largeur des colonnes de diversité jusqu'à celles des objectifs | au moins trois propositions ; l'ordre affiché est celui que produit la clé de tri du moteur |
-| `11a-depart-derive.png` | **variante sans exception** (§ 15.1), ses propositions engendrées sous une graine écrite et un compte réduit | la section de la génération sous un départ choisi : « Départ : proposition n° X », « Repartir de zéro », les cases des tours, le tour 1 coché, et la commande « Générer depuis n° X » (§ 5.7) | le départ nommé est celui dont la ligne a reçu « Repartir d'elle » ; aucune écriture n'a eu lieu avant le lancement |
+| `11a-depart-derive.png` | **variante sans exception** (§ 15.1), ses propositions engendrées sous une graine écrite et un compte réduit | la section de la génération sous un départ choisi : « Départ : proposition n° X », « Repartir de zéro », les cases des tours, le tour 1 coché, et la commande « Générer depuis n° X » (§ 5.7) | le départ nommé est celui dont la ligne a reçu « Repartir d'elle », de son menu « Actions » ; aucune écriture n'a eu lieu avant le lancement |
 | `11b-propositions-derivees.png` | idem, la génération dérivée faite | les lignes des dérivées au tableau des propositions, chacune portant « Dérivée de n° X, tour 1 figé. » sous son numéro, et le départ dans le même classement (§ 5.7) | chaque dérivée garde le tour 1 de son départ case par case ; le libellé d'historique est celui du § 5.7 |
 | `12-qualite-profil.png` | **grande démonstration** | le profil en deux graphiques au même ordre de rangs : l'escalier en comptes de personnes, deux séries — rencontres en trait plein, appartenances en tirets —, le plafond réalisé en repère mixte et la borne de diversité en repère pointillé, chacun nommé sur le tracé ; dessous, les rencontres en pourcentage du plafond réalisé jusqu'à la règle à 100 %, du motif du plafond, l'axe des rangs de ce second graphique hors de l'image ; le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée ; chaque graphique a un seul axe vertical ; le rang 1 est le même dans les deux ; chaque pourcentage écrit est suivi de son compte du pire ; aucun repère n'a le motif d'une série |
 | `12a-qualite-sans-placement.png` | **petite démonstration, variante « conflit inévitable »**, avant sa génération | la page sans placement : la ligne de source, le diagnostic préalable et sa phrase (§ 12.6) | aucun graphique n'est dessiné ; la phrase est celle d'« aucun placement » |

@@ -428,6 +428,8 @@ const NOMS_CONTEXTES = new Map([
   ['grille', 'Grille des participants'],
   ['champ', 'Champ de saisie'],
   ['commande', 'Bouton de commande'],
+  ['boutonMenu', 'Bouton de menu'],
+  ['menu', 'Menu ouvert'],
   ['geste', 'Geste en cours'],
   ['fenetre', 'Panneau ou infobulle'],
 ]);
@@ -442,6 +444,8 @@ const NOMS_TOUCHES = new Map([
   [' ', 'Espace'],
   ['Escape', 'Échap'],
   ['Tab', 'Tab'],
+  ['Home', 'Début'],
+  ['End', 'Fin'],
   ['F2', 'F2'],
 ]);
 

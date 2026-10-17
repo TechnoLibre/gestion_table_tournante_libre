@@ -4,7 +4,8 @@
 // Épreuves de la table des raccourcis clavier (§ 7.3, § 13.5, § 19.8) : sa
 // forme, figée ; une touche par contexte au plus une fois ; les contextes et
 // les effets que le plan, la grille des participants, un champ, une
-// commande, un geste et une fenêtre lisent ; et effetDe, qui rend l'effet
+// commande, le bouton d'un menu, un menu ouvert, un geste et une fenêtre
+// lisent ; et effetDe, qui rend l'effet
 // d'une touche dans un contexte ; le libellé de chaque clé, que le tableau
 // engendré lit par la traduction.
 import assert from 'node:assert/strict';
@@ -31,12 +32,12 @@ describe('RACCOURCIS : la table, seule source des touches (§ 19.8)', () => {
     assert.throws(() => RACCOURCIS.push({}), TypeError);
   });
 
-  test('les six contextes, dans l’ordre du tableau ; chaque entrée en porte un, et chacun a ses entrées, groupées', () => {
-    assert.deepEqual(CONTEXTES_RACCOURCIS, ['plan', 'grille', 'champ', 'commande', 'geste', 'fenetre']);
+  test('les huit contextes, dans l’ordre du tableau ; chaque entrée en porte un, et chacun a ses entrées, groupées', () => {
+    assert.deepEqual(CONTEXTES_RACCOURCIS, ['plan', 'grille', 'champ', 'commande', 'boutonMenu', 'menu', 'geste', 'fenetre']);
     const ordre = RACCOURCIS.map(({ contexte }) => CONTEXTES_RACCOURCIS.indexOf(contexte));
     assert.ok(!ordre.includes(-1), 'contexte hors de la liste');
     assert.deepEqual(ordre, [...ordre].sort((a, b) => a - b));
-    assert.deepEqual([...new Set(ordre)], [0, 1, 2, 3, 4, 5]);
+    assert.deepEqual([...new Set(ordre)], [0, 1, 2, 3, 4, 5, 6, 7]);
   });
 
   test('une touche au plus une fois par contexte : son effet n’est jamais ambigu', () => {
@@ -50,6 +51,7 @@ describe('RACCOURCIS : la table, seule source des touches (§ 19.8)', () => {
     assert.deepEqual(partagees('plan', 'entrer'), ['Enter', ' ']);
     assert.deepEqual(partagees('grille', 'editer'), ['Enter', 'F2']);
     assert.deepEqual(partagees('commande', 'activer'), ['Enter', ' ']);
+    assert.deepEqual(partagees('boutonMenu', 'ouvrirPremier'), ['Enter', ' ', 'ArrowDown']);
   });
 
   test('chaque clé a son libellé dans les tables de l’application et de l’interface', () => {
@@ -59,7 +61,7 @@ describe('RACCOURCIS : la table, seule source des touches (§ 19.8)', () => {
     for (const cle of cles) assert.ok(t(cle).length > 0, cle);
   });
 
-  test('les raccourcis du plan, de la grille, d’un champ, d’une commande, d’un geste et d’une fenêtre (§ 7.3)', () => {
+  test('les raccourcis du plan, de la grille, d’un champ, d’une commande, d’un menu, d’un geste et d’une fenêtre (§ 7.3)', () => {
     assert.deepEqual(
       RACCOURCIS.map(({ touche, contexte, effet }) => [contexte, touche, effet]),
       [
@@ -83,6 +85,16 @@ describe('RACCOURCIS : la table, seule source des touches (§ 19.8)', () => {
         ['champ', 'Escape', 'rendre'],
         ['commande', 'Enter', 'activer'],
         ['commande', ' ', 'activer'],
+        ['boutonMenu', 'Enter', 'ouvrirPremier'],
+        ['boutonMenu', ' ', 'ouvrirPremier'],
+        ['boutonMenu', 'ArrowDown', 'ouvrirPremier'],
+        ['boutonMenu', 'ArrowUp', 'ouvrirDernier'],
+        ['menu', 'ArrowDown', 'suivant'],
+        ['menu', 'ArrowUp', 'precedent'],
+        ['menu', 'Home', 'premier'],
+        ['menu', 'End', 'dernier'],
+        ['menu', 'Escape', 'fermer'],
+        ['menu', 'Tab', 'quitter'],
         ['geste', 'Escape', 'annuler'],
         ['fenetre', 'Escape', 'fermer'],
       ],
@@ -95,11 +107,17 @@ describe('effetDe : l’effet d’une touche dans un contexte', () => {
     for (const { contexte, touche, effet } of RACCOURCIS) assert.equal(effetDe(contexte, touche), effet);
   });
 
-  test('une même touche agit selon son contexte : Échap remonte, efface, rend, annule ou ferme ; une commande ne la prend pas', () => {
+  test('une même touche agit selon son contexte : Échap remonte, efface, rend, annule ou ferme ; une commande et le bouton d’un menu ne la prennent pas', () => {
     assert.deepEqual(
       CONTEXTES_RACCOURCIS.map((contexte) => effetDe(contexte, 'Escape')),
-      ['remonter', 'effacer', 'rendre', null, 'annuler', 'fermer'],
+      ['remonter', 'effacer', 'rendre', null, null, 'fermer', 'annuler', 'fermer'],
     );
+  });
+
+  test('↓ ouvre le menu depuis son bouton, puis passe à l’élément suivant dans le menu ouvert ; Entrée ouvre le menu, et le menu ouvert la laisse aux commandes de ses éléments', () => {
+    assert.deepEqual([effetDe('boutonMenu', 'ArrowDown'), effetDe('menu', 'ArrowDown')], ['ouvrirPremier', 'suivant']);
+    assert.deepEqual([effetDe('boutonMenu', 'Enter'), effetDe('menu', 'Enter'), effetDe('commande', 'Enter')], ['ouvrirPremier', null, 'activer']);
+    assert.equal(effetDe('boutonMenu', 'Home'), null);
   });
 
   test('une touche que le contexte ne prend pas : null, majuscule et code physique compris', () => {

@@ -38,6 +38,7 @@ import { VERSION } from '../../version.genere.js';
 import { couleurDeJeton } from '../../../test/navigateur/captures.js';
 import { centre } from '../../../test/navigateur/ecrans.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
+import { actionDe, actionsDe, boutonActions } from '../../../test/navigateur/menus.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { composantes, contraste, couleurTexte, fondPeintSous, sousTheme } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -196,6 +197,28 @@ const revision = (m) => m.seance.etat().evenement.revision;
 // Le refus posé à côté d'un bouton de Commande : dans son conteneur.
 const refusPres = (bouton, code) => bouton.parentElement.querySelector(`[data-refus="${code}"]`);
 
+// Les lignes du texte d'un élément : les boîtes de ses fragments de
+// texte, rangées de haut en bas, dont chacune ouvre une ligne quand elle
+// commence sous le milieu de la ligne courante.
+function lignesDuTexte(element) {
+  const boites = [];
+  const parcours = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let noeud = parcours.nextNode(); noeud !== null; noeud = parcours.nextNode()) {
+    const plage = document.createRange();
+    plage.selectNodeContents(noeud);
+    boites.push(...[...plage.getClientRects()].filter((r) => r.width > 0 && r.height > 0));
+  }
+  boites.sort((a, b) => a.top - b.top);
+  let lignes = 0;
+  let milieu = -Infinity;
+  for (const r of boites) {
+    if (r.top < milieu) continue;
+    lignes += 1;
+    milieu = (r.top + r.bottom) / 2;
+  }
+  return lignes;
+}
+
 // Ce que le plan dessiné montre au tour affiché : pour chaque [data-table]
 // rendu, les noms de sa liste [data-liste], triés. Rien n'est lu dans l'état
 // des places : la valeur vient du rendu même.
@@ -346,7 +369,7 @@ describe('retenir, voir sur le plan', () => {
   test('retenir la 3 : l’état affiché est « Retenu », charge.retenu.proposition vaut 3, les trois lignes restent et la 3 est marquée', async () => {
     const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
     const avant = revision(m);
-    commande(ligne(m, 3), 'retenir').click();
+    actionDe(ligne(m, 3), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(3));
     expect(revision(m)).toBe(avant + 1);
     const etat = m.racine.querySelector('[data-etat="retenu"]');
@@ -360,11 +383,11 @@ describe('retenir, voir sur le plan', () => {
 
   test('retenir la 3, voir la 1 sur le plan : la section du plan s’ouvre sur la proposition 1, sans écriture ; retenir la 2 rend le plan au retenu', async () => {
     const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
-    commande(ligne(m, 3), 'retenir').click();
+    actionDe(ligne(m, 3), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(3));
     const retenu = structuredClone(charge(m).retenu);
     const ecritures = m.trace.length;
-    commande(ligne(m, 1), 'voir').click();
+    actionDe(ligne(m, 1), 'voir').click();
     await attendre(() => expect(m.racine.querySelector('[data-section="plan"]')).not.toBeNull());
     expect(m.ui.etat().proposition).toBe(1);
     const proposition = (id) => charge(m).propositions.find((candidate) => candidate.id === id);
@@ -377,7 +400,7 @@ describe('retenir, voir sur le plan', () => {
     expect(charge(m).retenu).toEqual(retenu);
     m.ui.allerA('propositions');
     flushSync();
-    commande(ligne(m, 2), 'retenir').click();
+    actionDe(ligne(m, 2), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(2));
     expect(m.ui.etat().proposition).toBe(null);
     m.ui.allerA('plan');
@@ -403,28 +426,6 @@ describe('retenir, voir sur le plan', () => {
     expect(ids(m)).toEqual(vue.lignes.map(({ id }) => id));
   });
 
-  // Les lignes du texte d'un élément : les boîtes de ses fragments de
-  // texte, rangées de haut en bas, dont chacune ouvre une ligne quand elle
-  // commence sous le milieu de la ligne courante.
-  function lignesDuTexte(element) {
-    const boites = [];
-    const parcours = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-    for (let noeud = parcours.nextNode(); noeud !== null; noeud = parcours.nextNode()) {
-      const plage = document.createRange();
-      plage.selectNodeContents(noeud);
-      boites.push(...[...plage.getClientRects()].filter((r) => r.width > 0 && r.height > 0));
-    }
-    boites.sort((a, b) => a.top - b.top);
-    let lignes = 0;
-    let milieu = -Infinity;
-    for (const r of boites) {
-      if (r.top < milieu) continue;
-      lignes += 1;
-      milieu = (r.top + r.bottom) / 2;
-    }
-    return lignes;
-  }
-
   test('à 1 366 px, la cellule de la ligne du retenu tient son numéro et « Tel que la proposition n° 3. » en trois lignes au plus', async () => {
     const m = await ouvrir(executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 }));
     const cellule = await attendre(() => {
@@ -441,7 +442,7 @@ describe('retenir, voir sur le plan', () => {
 
   test('à 1 366 px, la cellule du retenu ajusté tient son numéro et « Ajusté à la main depuis la proposition n° 2. » en trois lignes au plus', async () => {
     const m = await ouvrir(chargeSix());
-    commande(ligne(m, 2), 'retenir').click();
+    actionDe(ligne(m, 2), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(2));
     await m.seance.executer('deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
     const libelle = t('propositions.retenu.ajuste', { proposition: 2 });
@@ -457,7 +458,7 @@ describe('retenir, voir sur le plan', () => {
     const m = await ouvrir(executer(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), 'retenirProposition', { id: 3 }));
     m.ui.montrerProposition(1);
     const ecritures = m.trace.length;
-    const voir = commande(ligneRetenu(m), 'voir');
+    const voir = actionDe(ligneRetenu(m), 'voir');
     expect(texteDe(voir)).toBe(t('propositions.commande.voir'));
     voir.click();
     await attendre(() => expect(m.racine.querySelector('[data-section="plan"]')).not.toBeNull());
@@ -468,7 +469,7 @@ describe('retenir, voir sur le plan', () => {
 
   test('les indicateurs suivent l’ajustement : la ligne du retenu égale sa mesure, celle de la proposition 2 n’a pas changé', async () => {
     const m = await ouvrir(chargeSix());
-    commande(ligne(m, 2), 'retenir').click();
+    actionDe(ligne(m, 2), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(2));
     const avant = cellules(ligne(m, 2));
     await m.seance.executer('deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
@@ -484,13 +485,13 @@ describe('retenir, voir sur le plan', () => {
 describe('retenir sur un retenu ajusté', () => {
   test('retenir la 3 ouvre une fenêtre qui nomme le retenu ajusté et la 3 ; Annuler n’écrit rien ; Confirmer retient la 3, une entrée', async () => {
     const m = await ouvrir(chargeSix());
-    commande(ligne(m, 2), 'retenir').click();
+    actionDe(ligne(m, 2), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(2));
     await m.seance.executer('deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
     flushSync();
     const ajuste = structuredClone(charge(m).retenu);
     const ecritures = m.trace.length;
-    commande(ligne(m, 3), 'retenir').click();
+    actionDe(ligne(m, 3), 'retenir').click();
     const fenetre = await attendre(() => {
       const ouverte = fenetreOuverte(m);
       expect(ouverte).not.toBeNull();
@@ -504,7 +505,7 @@ describe('retenir sur un retenu ajusté', () => {
     expect(m.trace.length).toBe(ecritures);
     expect(charge(m).retenu).toEqual(ajuste);
     const avant = revision(m);
-    commande(ligne(m, 3), 'retenir').click();
+    actionDe(ligne(m, 3), 'retenir').click();
     const seconde = await attendre(() => {
       const ouverte = fenetreOuverte(m);
       expect(ouverte).not.toBeNull();
@@ -518,9 +519,9 @@ describe('retenir sur un retenu ajusté', () => {
 
   test('sans ajustement, retenir une autre proposition n’ouvre aucune fenêtre', async () => {
     const m = await ouvrir(chargeSix());
-    commande(ligne(m, 2), 'retenir').click();
+    actionDe(ligne(m, 2), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(2));
-    commande(ligne(m, 3), 'retenir').click();
+    actionDe(ligne(m, 3), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(3));
     expect(fenetreOuverte(m)).toBeNull();
   });
@@ -541,15 +542,15 @@ describe('« Qualité », sur chaque ligne', () => {
     const rangees = [ligneRetenu(m), ...lignes(m)];
     expect(rangees.length).toBe(1 + chargeLue.propositions.length);
     for (const tr of rangees) {
-      const noms = [...tr.querySelectorAll('td[data-colonne="commandes"] [data-commande]')].map((bouton) => bouton.dataset.commande);
+      const noms = actionsDe(tr);
       expect(noms.slice(0, 2), tr.dataset.proposition ?? 'retenu').toEqual(['voir', 'qualite']);
-      expect(texteDe(commande(tr, 'qualite'))).toBe(t('propositions.commande.qualite'));
+      expect(texteDe(actionDe(tr, 'qualite'))).toBe(t('propositions.commande.qualite'));
     }
     for (const id of [...ids(m), null]) {
       m.ui.allerA('propositions');
       flushSync();
       const tr = id === null ? ligneRetenu(m) : ligne(m, id);
-      commande(tr, 'qualite').click();
+      actionDe(tr, 'qualite').click();
       await attendre(() => expect(m.racine.querySelector('[data-section="qualite"]')).not.toBeNull());
       expect(m.ui.etat().proposition).toBe(id);
       expect(m.racine.querySelector('[data-refus]')).toBeNull();
@@ -557,12 +558,49 @@ describe('« Qualité », sur chaque ligne', () => {
     expect(m.trace.length).toBe(ecritures);
     expect(charge(m).retenu.proposition).toBe(3);
   });
+
+  test('un double-clic réel sur « Qualité » ouvre la page de qualité une fois ; le second clic tombe sur la section ouverte sans y porter le focus', async () => {
+    const m = await ouvrir(chargeSix());
+    const ecritures = m.trace.length;
+    const bouton = boutonActions(ligne(m, 1));
+    let { x, y } = await centre(bouton);
+    await pointer('presser', x, y);
+    await pointer('relacher', x, y);
+    await attendre(() => expect(bouton.getAttribute('aria-expanded')).toBe('true'));
+    ({ x, y } = await centre(actionDe(ligne(m, 1), 'qualite')));
+    await pointer('presser', x, y, { clickCount: 1 });
+    await pointer('relacher', x, y, { clickCount: 1 });
+    const qualite = await attendre(() => {
+      const ouverte = m.racine.querySelector('[data-section="qualite"]');
+      expect(ouverte).not.toBeNull();
+      return ouverte;
+    });
+    await new Promise((resoudre) => requestAnimationFrame(resoudre));
+    flushSync();
+    const actif = document.activeElement;
+    expect(qualite.contains(actif)).toBe(false);
+    // Le second clic tombe dans la section ouverte.
+    expect(qualite.contains(document.elementFromPoint(x, y))).toBe(true);
+    try {
+      await pointer('presser', x, y, { clickCount: 2 });
+      await pointer('relacher', x, y, { clickCount: 2 });
+      await new Promise((resoudre) => requestAnimationFrame(resoudre));
+      flushSync();
+      expect(document.activeElement).toBe(actif);
+      expect([m.ui.etat().section, m.ui.etat().proposition]).toEqual(['qualite', 1]);
+      expect(m.trace.length).toBe(ecritures);
+    } finally {
+      // L'horloge passe le délai de la série : l'écoute qui la retient se
+      // retire avant l'épreuve suivante, même quand une attente échoue.
+      m.horloge.avancer(500);
+    }
+  });
 });
 
 describe('effacer', () => {
   test('retenir la 2, effacer : seule la 2 reste, charge.retenu intact, une entrée', async () => {
     const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT));
-    commande(ligne(m, 2), 'retenir').click();
+    actionDe(ligne(m, 2), 'retenir').click();
     await attendre(() => expect(charge(m).retenu?.proposition).toBe(2));
     const retenu = structuredClone(charge(m).retenu);
     const avant = revision(m);
@@ -809,13 +847,16 @@ describe('en lecture et sur un plan bloqué', () => {
     const m = await ouvrir(avecPlans(chargeDemo('petite-conflit'), PLANS_CONFLIT), { mode: 'lecture' });
     expect(ids(m)).toEqual([3, 2, 1]);
     const ecritures = m.trace.length;
-    const retenir = commande(ligne(m, 3), 'retenir');
-    retenir.click();
+    actionDe(ligne(m, 3), 'retenir').click();
+    const menu = boutonActions(ligne(m, 3));
     const refus = await attendre(() => {
-      const pose = refusPres(retenir, 'MODE_LECTURE');
+      const pose = refusPres(menu, 'MODE_LECTURE');
       expect(pose).not.toBeNull();
       return pose;
     });
+    // Le menu fermé, le refus reste à côté de son bouton, qui le désigne.
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    expect(menu.getAttribute('aria-describedby')).toBe(refus.id);
     expect(commande(refus, 'modifier')).not.toBeNull();
     const effacer = commande(section(m), 'effacer');
     effacer.click();
@@ -831,13 +872,15 @@ describe('en lecture et sur un plan bloqué', () => {
     const m = await ouvrir(bloquee, { mode: 'lecture' });
     expect(lignes(m).length).toBe(3);
     const ecritures = m.trace.length;
-    const retenir = commande(ligne(m, 3), 'retenir');
-    retenir.click();
+    actionDe(ligne(m, 3), 'retenir').click();
+    const menu = boutonActions(ligne(m, 3));
     const refus = await attendre(() => {
-      const pose = refusPres(retenir, 'LECTURE_SEULE');
+      const pose = refusPres(menu, 'LECTURE_SEULE');
       expect(pose).not.toBeNull();
       return pose;
     });
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    expect(menu.getAttribute('aria-describedby')).toBe(refus.id);
     expect(texteDe(refus)).toContain(t('LECTURE_SEULE', { raison: 'BLOQUE' }));
     expect(commande(refus, 'debloquer')).not.toBeNull();
     expect(fenetreOuverte(m)).toBeNull();
@@ -1664,7 +1707,7 @@ describe('les pages du classement (§ 5.7)', () => {
     commandePage(m, 'haut', 'suivantes').click();
     await exigerPage(m, ordre, 101, 200, 237);
     const montree = ordre[120];
-    commande(ligne(m, montree), 'voir').click();
+    actionDe(ligne(m, montree), 'voir').click();
     await attendre(() => expect(m.racine.querySelector('[data-section="plan"]')).not.toBeNull());
     expect(m.ui.etat().proposition).toBe(montree);
     m.ui.allerA('propositions');
@@ -1841,8 +1884,8 @@ function avecFiliations(charge, filiations) {
 }
 
 const filiationDe = (tr) => tr.querySelector('[data-filiation]');
-// Les noms des commandes de la cellule des commandes d'une ligne.
-const commandesDe = (tr) => [...tr.querySelectorAll('td[data-colonne="commandes"] [data-commande]')].map((bouton) => bouton.dataset.commande);
+// Les désignations des actions du menu d'une ligne, le menu ouvert d'abord.
+const commandesDe = actionsDe;
 
 // Chaque état que l'état de navigation publie pendant geste, dans l'ordre.
 async function etatsPendant(m, geste) {
@@ -1904,18 +1947,101 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     for (const id of [4, 5]) {
       const tr = ligne(m, id);
       expect(commandesDe(tr), String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir', 'comparer']);
-      expect(texteDe(commande(tr, 'repartir'))).toBe(t('propositions.commande.repartir'));
-      expect(texteDe(commande(tr, 'comparer'))).toBe(t('propositions.commande.comparer'));
-      expect(commande(tr, 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
-      expect(commande(tr, 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparer', { proposition: id }));
+      expect(texteDe(actionDe(tr, 'repartir'))).toBe(t('propositions.commande.repartir'));
+      expect(texteDe(actionDe(tr, 'comparer'))).toBe(t('propositions.commande.comparer'));
+      expect(actionDe(tr, 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
+      expect(actionDe(tr, 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparer', { proposition: id }));
     }
     expect(commandesDe(ligneRetenu(m))).toEqual(['voir', 'qualite', 'comparer']);
-    expect(commande(ligneRetenu(m), 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparerRetenu'));
+    expect(actionDe(ligneRetenu(m), 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparerRetenu'));
     expect(t('propositions.commande.repartir')).toBe("Repartir d'elle");
     expect(t('propositions.nom.comparer', { proposition: 4 })).toBe('Comparer la proposition n° 4');
     expect(t('propositions.nom.repartir', { proposition: 4 })).toBe('Repartir de la proposition n° 4');
     expect(t('propositions.nom.comparerRetenu')).toBe('Comparer le placement retenu');
   });
+
+  test('chaque ligne porte un seul bouton « Actions », qui annonce son menu et se nomme par sa ligne ; fermé, le menu ne montre aucune commande', async () => {
+    const chargeLue = executer(avecFiliations(chargeSix(), [[3, [1, [1]]]]), 'retenirProposition', { id: 1 });
+    const m = await ouvrir(chargeLue);
+    const rangees = [ligneRetenu(m), ...lignes(m)];
+    expect(rangees.length).toBe(4);
+    for (const tr of rangees) {
+      const id = tr.dataset.proposition ?? null;
+      const cellule = tr.querySelector('td[data-colonne="commandes"]');
+      const boutons = [...cellule.querySelectorAll('button')];
+      expect(boutons, id ?? 'retenu').toHaveLength(1);
+      const [bouton] = boutons;
+      expect(bouton).toBe(boutonActions(tr));
+      expect(texteDe(bouton)).toBe(t('communs.menu.actions'));
+      expect(bouton.getAttribute('aria-haspopup')).toBe('menu');
+      expect(bouton.getAttribute('aria-expanded')).toBe('false');
+      expect(bouton.getAttribute('aria-label')).toBe(id === null ? t('propositions.nom.actionsRetenu') : t('propositions.nom.actions', { proposition: Number(id) }));
+      expect(cellule.querySelectorAll('[data-commande]')).toHaveLength(0);
+    }
+    expect(t('propositions.nom.actions', { proposition: 4 })).toBe('Actions de la proposition n° 4');
+    expect(t('propositions.nom.actionsRetenu')).toBe('Actions du placement retenu');
+    expect(t('communs.menu.actions')).toBe('Actions');
+  });
+
+  // La hauteur du contenu d'une cellule, sans son remplissage : la boîte
+  // de tout ce qu'elle porte, texte et éléments.
+  function hauteurDuContenu(cellule) {
+    const plage = document.createRange();
+    plage.selectNodeContents(cellule);
+    return plage.getBoundingClientRect().height;
+  }
+
+  // Ce qu'une ligne ajoute au contenu de sa cellule : le remplissage haut et
+  // bas de la cellule, et le filet sous la ligne.
+  function habillageDe(cellule) {
+    const style = getComputedStyle(cellule);
+    return parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) + parseFloat(style.borderBottomWidth);
+  }
+
+  for (const [cas, construire, derivees] of [
+    ['la petite', () => executer(avecFiliations(chargeSix(), [[3, [1, [1, 2]]]]), 'retenirProposition', { id: 1 }), [3]],
+    [
+      'la grande',
+      () => executer(avecFiliations(generee(chargeDemo('grande'), { graine: 1, nombre: 3, arret: 2_000 }), [[2, [1, [1]]], [3, [1, [1]]]]), 'retenirProposition', { id: 1 }),
+      [2, 3],
+    ],
+  ]) {
+    test(`à 1 366 px, chaque ligne a la hauteur de ses chiffres, filiation comprise : ni « Actions » ni les phrases imposées ne l’allongent — ${cas}`, async () => {
+      const m = await ouvrir(construire());
+      for (const id of derivees) expect(filiationDe(ligne(m, id)), String(id)).not.toBeNull();
+      const rangees = [ligneRetenu(m), ...lignes(m)];
+      expect(rangees.length).toBe(4);
+      for (const tr of rangees) {
+        const quoi = tr.dataset.proposition ?? 'retenu';
+        // Le bouton « Actions » n'ajoute rien à la hauteur.
+        const contenu = tr.querySelector('td[data-colonne="commandes"]').firstElementChild;
+        const avec = tr.getBoundingClientRect().height;
+        contenu.style.display = 'none';
+        const sans = tr.getBoundingClientRect().height;
+        contenu.style.display = '';
+        expect(Math.abs(avec - sans), `${quoi} : ${avec} px avec les commandes, ${sans} px sans`).toBeLessThan(0.5);
+        // Hors la cellule d'identité, chaque cellule de chiffres tient sur
+        // une ligne : le rang, chaque mesure, le certificat, et les deux
+        // phrases imposées, l'une après l'autre.
+        expect(tr.querySelectorAll('td[data-colonne="imposes"] p').length, quoi).toBe(2);
+        const uneLigne = [...tr.children].filter((cellule) => !['proposition', 'commandes'].includes(cellule.dataset.colonne));
+        expect(uneLigne.length, quoi).toBeGreaterThan(10);
+        for (const cellule of uneLigne) expect(lignesDuTexte(cellule), `${quoi}, ${cellule.dataset.colonne} : « ${texteDe(cellule)} »`).toBe(1);
+        // La ligne a la hauteur de sa plus haute cellule de chiffres : la
+        // cellule d'identité, filiation comprise, ou une ligne de texte.
+        const plafond = Math.max(...[...tr.children].filter((cellule) => cellule.dataset.colonne !== 'commandes').map((cellule) => hauteurDuContenu(cellule) + habillageDe(cellule)));
+        expect(avec, `${quoi} : ${avec} px pour des chiffres de ${plafond} px`).toBeLessThanOrEqual(plafond + 0.5);
+        const identite = tr.querySelector('[data-colonne="proposition"]');
+        const rang = tr.querySelector('[data-colonne="rang"]');
+        const hauteur = Math.max(...[identite, rang].map((cellule) => hauteurDuContenu(cellule) + habillageDe(cellule)));
+        expect(avec, `${quoi} : ${avec} px pour une cellule d’identité de ${hauteur} px`).toBeLessThanOrEqual(hauteur + 0.5);
+        // Une dérivée et le retenu portent une phrase sous leur numéro ; les
+        // autres lignes, leur seul numéro, tiennent sur une ligne de texte.
+        if (quoi === 'retenu' || derivees.includes(Number(quoi))) expect(lignesDuTexte(identite), quoi).toBeGreaterThanOrEqual(2);
+        else expect(lignesDuTexte(identite), quoi).toBe(1);
+      }
+    }, 60_000);
+  }
 
   test('un retenu en dérive ne porte pas « Comparer », même quand deux propositions comparables l’offrent', async () => {
     // La 1 retenue, puis une personne exclue : le retenu passe en dérive ;
@@ -1925,7 +2051,7 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     expect(ligneRetenu(m).querySelector('td.raisons')).not.toBeNull();
     for (const id of [4, 5]) expect(commandesDe(ligne(m, id)), String(id)).toEqual(['voir', 'qualite', 'retenir', 'repartir', 'comparer']);
     expect(commandesDe(ligneRetenu(m))).toEqual(['voir', 'qualite']);
-    expect(commande(ligneRetenu(m), 'comparer')).toBeNull();
+    expect(actionDe(ligneRetenu(m), 'comparer')).toBeNull();
   });
 
   test('« Comparer » n’est offert que quand deux placements mesurables et distincts existent ; « Repartir d’elle » l’est sur toute ligne comparable', async () => {
@@ -1952,13 +2078,18 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     const noms = [];
     for (const tr of lignes(m)) {
       const id = Number(tr.dataset.proposition);
-      expect(commande(tr, 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
-      expect(commande(tr, 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparer', { proposition: id }));
-      noms.push(commande(tr, 'repartir').getAttribute('aria-label'), commande(tr, 'comparer').getAttribute('aria-label'));
+      expect(actionDe(tr, 'repartir').getAttribute('aria-label')).toBe(t('propositions.nom.repartir', { proposition: id }));
+      expect(actionDe(tr, 'comparer').getAttribute('aria-label')).toBe(t('propositions.nom.comparer', { proposition: id }));
+      noms.push(actionDe(tr, 'repartir').getAttribute('aria-label'), actionDe(tr, 'comparer').getAttribute('aria-label'));
     }
-    noms.push(commande(ligneRetenu(m), 'comparer').getAttribute('aria-label'));
+    noms.push(actionDe(ligneRetenu(m), 'comparer').getAttribute('aria-label'));
     expect(noms.length).toBe(201);
     expect(new Set(noms).size).toBe(201);
+    // Les boutons des menus, de même : chacun porte le numéro de sa ligne.
+    const menus = lignes(m).map((tr) => boutonActions(tr).getAttribute('aria-label'));
+    expect(menus).toEqual(lignes(m).map((tr) => t('propositions.nom.actions', { proposition: Number(tr.dataset.proposition) })));
+    menus.push(boutonActions(ligneRetenu(m)).getAttribute('aria-label'));
+    expect(new Set(menus).size).toBe(101);
     expect(ligne(m, idRetenue)).toBeNull();
   }, 60_000);
 
@@ -1971,7 +2102,7 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
       m.ui.allerA('propositions');
       m.ui.vueQualiteAtteinte();
       flushSync();
-      const publies = await etatsPendant(m, () => commande(tr(), 'comparer').click());
+      const publies = await etatsPendant(m, () => actionDe(tr(), 'comparer').click());
       flushSync();
       const pose = publies.at(-1);
       expect(pose.vueQualite, quoi).toBe('comparaison');
@@ -1999,7 +2130,7 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     const chargeLue = executer(executer(chargeSix(), 'retenirProposition', { id: 2 }), 'deplacerDansRetenu', { tour: 1, participant: 1, table: 2, siege: null });
     const m = await ouvrir(chargeLue, { mode: 'lecture' });
     expect(m.ui.etat().proposition).toBe(null);
-    commande(ligne(m, 2), 'comparer').click();
+    actionDe(ligne(m, 2), 'comparer').click();
     flushSync();
     expect([m.ui.etat().section, m.ui.etat().proposition, m.ui.etat().comparee]).toEqual(['qualite', null, 2]);
   });
@@ -2013,7 +2144,7 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     commandePage(m, 'haut', 'suivantes').click();
     await exigerPage(m, ordre, 101, 200, 237);
     const id = ordre[120];
-    commande(ligne(m, id), 'repartir').click();
+    actionDe(ligne(m, id), 'repartir').click();
     flushSync();
     expect(m.ui.etat().depart).toEqual({ id, toursFiges: [] });
     expect(m.ui.etat().section).toBe('generation');
@@ -2032,13 +2163,13 @@ describe('la dérivée au tableau des propositions, et ses commandes de ligne (�
     ]) {
       const m = await ouvrir(chargeLue, { mode: 'lecture' });
       const ecritures = m.trace.length;
-      commande(ligne(m, 3), 'repartir').click();
+      actionDe(ligne(m, 3), 'repartir').click();
       flushSync();
       expect(m.ui.etat().depart, cas).toEqual({ id: 3, toursFiges: [] });
       expect(m.ui.etat().section, cas).toBe('generation');
       m.ui.allerA('propositions');
       flushSync();
-      commande(ligne(m, 1), 'comparer').click();
+      actionDe(ligne(m, 1), 'comparer').click();
       flushSync();
       expect([m.ui.etat().section, m.ui.etat().proposition, m.ui.etat().comparee], cas).toEqual(['qualite', ...attendu]);
       expect(m.racine.querySelector('[data-refus]'), cas).toBeNull();

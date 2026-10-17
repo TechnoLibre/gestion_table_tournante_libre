@@ -136,6 +136,7 @@ const ENTREES = [
   ['data-meilleure-vide', 'génération : la meilleure absente', ['']],
   ['data-mention', 'aperçu : une mention d’une page du plan imprimé — disposition relative, listes hors d’échelle', ['listes', 'relative']],
   ['data-menu', 'plan : le menu d’une personne', null],
+  ['data-menu-actions', 'le bouton d’un menu d’actions', ['']],
   ['data-mode', 'événement : la barre, la tête et la surface de l’événement, par son mode', null],
   ['data-mode-libelle', 'le libellé de mode', ['bandeau', 'barre']],
   ['data-mode-objectifs', 'génération : le groupe du choix du mode des objectifs', ['']],

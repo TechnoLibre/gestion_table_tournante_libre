@@ -36,6 +36,7 @@ import { FICHIER_REGLAGES, serialiserReglages } from '../../src/stockage/reglage
 import { VERSION } from '../../src/version.genere.js';
 import urlCasLimites from '../../exemples/participants_cas_limites.csv?url';
 import { dessinerGraphiques, pointer, touche } from './entrees.js';
+import { actionDe } from './menus.js';
 import { monterApp } from './montage.js';
 
 /** La base du fichier d'état de chaque événement d'épreuve. */
@@ -96,6 +97,20 @@ export async function cliquer(m, selecteur) {
   flushSync();
   await uneImage();
   return bouton;
+}
+
+/** Ouvre le menu « Actions » de la ligne du montage que désigne
+ *  selecteurLigne, une fois présente, clique son action nom par son clic
+ *  HTML, puis laisse le rendu suivre ; rend l'action. Une action que le
+ *  menu n'offre pas lève en la nommant. */
+export async function cliquerAction(m, selecteurLigne, nom) {
+  const ligne = await element(m, selecteurLigne);
+  const action = actionDe(ligne, nom);
+  if (action === null) throw new Error(`écran : le menu de ${selecteurLigne} n’offre pas l’action ${nom}`);
+  action.click();
+  flushSync();
+  await uneImage();
+  return action;
 }
 
 /** Mène le chargement des résumés de la liste à son terme (§ 8.1) : l'horloge
@@ -528,7 +543,7 @@ export async function ouvrirEvenement(contexte, charge, { ecriture = false, sect
   }
   if (charge.retenu === null && charge.propositions.length > 0) {
     await cliquer(m, '[data-commande="section"][data-cible="propositions"]');
-    await cliquer(m, `[data-proposition="${charge.propositions[0].id}"] [data-commande="voir"]`);
+    await cliquerAction(m, `[data-proposition="${charge.propositions[0].id}"]`, 'voir');
     await element(m, '[data-section="plan"]');
   }
   await cliquer(m, `[data-commande="section"][data-cible="${section}"]`);
@@ -705,13 +720,13 @@ async function comparaisonSansEcriture(contexte, charge) {
 }
 
 // La carte du départ de la section Génération : la ligne de la proposition
-// 1 choisie pour départ par « Repartir d'elle » au tableau des
-// propositions, puis la case du tour 1 cochée par un clic, sans rien écrire
+// 1 choisie pour départ par « Repartir d'elle », dans son menu « Actions »
+// au tableau des propositions, puis la case du tour 1 cochée par un clic, sans rien écrire
 // ni rien refuser, à tout mode.
 async function departChoisi(contexte, charge, { ecriture = false } = {}) {
   const m = await ouvrirEvenement(contexte, charge, { ecriture, section: 'propositions' });
   await sansEcriture(m, 'le choix d’un départ', async () => {
-    await cliquer(m, '[data-proposition="1"] [data-commande="repartir"]');
+    await cliquerAction(m, '[data-proposition="1"]', 'repartir');
     await element(m, '[data-section="generation"] [data-depart]');
     await cliquerPointeur(await element(m, '[data-depart] [data-tour-fige="1"]'));
     await attendre('le tour 1 coché', () => m.racine.querySelector('[data-depart] [data-tour-fige="1"]')?.checked === true);
@@ -1226,11 +1241,26 @@ export const ECRANS = Object.freeze([
     mode: 'lecture',
     async atteindre(contexte) {
       // Les deux dérivées de la proposition 1, chacune sa filiation sous
-      // son numéro, classées avec leur départ ; chaque ligne comparable
-      // porte « Repartir d'elle » et « Comparer ».
+      // son numéro, classées avec leur départ ; chaque ligne porte son menu
+      // « Actions », fermé.
       const m = await ouvrirEvenement(contexte, chargeDerivees(), { section: 'propositions' });
       await attendre('les filiations des deux dérivées', () => m.racine.querySelectorAll('[data-section="propositions"] [data-filiation]').length === 2);
-      await element(m, '[data-proposition="4"] [data-commande="comparer"]');
+      await element(m, '[data-proposition="4"] [data-menu-actions][aria-expanded="false"]');
+      return m.racine;
+    },
+  },
+  {
+    nom: 'propositions.actions',
+    mode: 'lecture',
+    async atteindre(contexte) {
+      // Le menu « Actions » de la dérivée n° 4 ouvert par un clic réel sur
+      // son bouton : ses cinq actions, « Repartir d'elle » et « Comparer »
+      // comprises, le focus sur la première ; rien d'écrit.
+      const m = await ouvrirEvenement(contexte, chargeDerivees(), { section: 'propositions' });
+      await sansEcriture(m, 'l’ouverture d’un menu « Actions »', async () => {
+        await cliquerPointeur(await element(m, '[data-proposition="4"] [data-menu-actions]'));
+        await attendre('le menu ouvert, le focus sur sa première action', () => document.activeElement?.matches('[data-proposition="4"] [role="menu"] [role="menuitem"]:first-child'));
+      });
       return m.racine;
     },
   },

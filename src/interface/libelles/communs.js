@@ -1,8 +1,8 @@
 // © 2026 TechnoLibre (http://www.technolibre.ca)
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
-// Les libellés communs aux écrans : commandes, confirmations, remèdes d'un
-// refus (§ 14.6). Chaque clé commence par « communs. ».
+// Les libellés communs aux écrans : commandes, menu d'actions,
+// confirmations, remèdes d'un refus (§ 14.6). Chaque clé commence par « communs. ».
 //
 // communs.commande.* nomme les commandes de mode et de secours, que la place
 // fixe de l'événement et les écrans de la liste reprennent. communs.remede.*
@@ -27,6 +27,11 @@ export const TABLE = new Map([
   ['communs.commande.choisirDossier', 'Choisir un dossier\u{2026}'],
   ['communs.commande.ouvrirPrecedent', 'Ouvrir la version précédente'],
   ['communs.commande.ouvrirJournal', 'Ouvrir le dernier instant du journal'],
+
+  // --- Le menu d'actions (§ 14.5) ------------------------------------------------
+  // Le libellé du bouton qui ouvre un menu d'actions (MenuActions) ; son nom
+  // accessible, distinct, vient de l'écran qui le pose.
+  ['communs.menu.actions', 'Actions'],
 
   // --- La fenêtre à confirmer (§ 2.1) -------------------------------------------
   ['communs.confirmation.confirmer', 'Confirmer'],

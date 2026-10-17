@@ -110,6 +110,7 @@ import {
 import { NOM_CAS_LIMITES, attendre, centre, octetsCasLimites } from '../../test/navigateur/ecrans.js';
 import { dessinerGraphiques, fixerCadre, pointer, touche } from '../../test/navigateur/entrees.js';
 import { poserFeuille } from '../../test/navigateur/feuilles.js';
+import { actionDe } from '../../test/navigateur/menus.js';
 import { monterApp } from '../../test/navigateur/montage.js';
 import { visible } from '../../test/navigateur/rendu.js';
 import { ENCODAGES, SEPARATEURS } from './import/modele.js';
@@ -420,6 +421,14 @@ async function cliquer(selecteur) {
   const element = await attendre(selecteur, () => dans(selecteur));
   await appuyer(element, selecteur);
   return element;
+}
+
+// L'action nom du menu « Actions » de la ligne que désigne selecteurLigne,
+// la ligne attendue : le menu s'ouvre par son bouton, puis l'action se
+// presse.
+async function cliquerAction(selecteurLigne, nom) {
+  const ligne = await attendre(selecteurLigne, () => dans(selecteurLigne));
+  await appuyer(actionDe(ligne, nom), `${selecteurLigne} : ${nom}`);
 }
 
 // Remplace le texte d'un champ par une frappe réelle : le champ prend le
@@ -1919,7 +1928,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     r = revision();
     memoire.retenue = ordre[0];
     const vues = await sousObservation(async () => {
-      await cliquer(`[data-proposition="${ordre[0]}"] [data-commande="retenir"]`);
+      await cliquerAction(`[data-proposition="${ordre[0]}"]`, 'retenir');
       await uneEntree(r, 'retenir');
     });
     expect(vues).toEqual([]);
@@ -2059,7 +2068,7 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     const avant = fichiers();
     const rang = m.trace.length;
     await ouvrirSection('propositions');
-    await cliquer(`[data-proposition="${proposition}"] [data-commande="voir"]`);
+    await cliquerAction(`[data-proposition="${proposition}"]`, 'voir');
     await attendre('la proposition montrée au plan', () => m.ui.etat().proposition === proposition && dans('[data-section="plan"]'));
     await cliquer('[data-ecran="evenement"] [data-commande="apercu"]');
     // Le premier aperçu de la machine pose la question du papier, avant tout
@@ -2539,7 +2548,7 @@ describe('les fenêtres : seul un geste qui détruit en ouvre une', { timeout: D
     const autre = charge().propositions.find(({ id }) => id !== charge().retenu.proposition).id;
     // Retenir : le retenu ajusté, par sa proposition d'origine, et celle qui
     // le remplace.
-    await fenetreAnnulee('retenir sur un retenu ajusté', () => cliquer(`[data-proposition="${autre}"] [data-commande="retenir"]`), {
+    await fenetreAnnulee('retenir sur un retenu ajusté', () => cliquerAction(`[data-proposition="${autre}"]`, 'retenir'), {
       titre: t('propositions.confirmation.titre', { proposition: autre }),
       elements: [
         t('propositions.confirmation.retenuAjuste', { proposition: memoire.retenue }),
@@ -2958,7 +2967,7 @@ async function qualiteDeLaPremiere() {
   await ouvrirSection('propositions');
   const premiere = await attendre('le tableau classé', () => dans('[data-section="propositions"] [data-classement] tr[data-proposition]'));
   const id = Number(premiere.dataset.proposition);
-  await appuyer(premiere.querySelector('[data-commande="qualite"]'), 'la commande « Qualité »');
+  await appuyer(actionDe(premiere, 'qualite'), 'la commande « Qualité »');
   await attendre('la page de qualité de la proposition', () => dans('[data-section="qualite"] [data-vue-qualite="performance"]') && m.ui.etat().proposition === id);
   await images(3);
   await dessinerGraphiques(dans('[data-section="qualite"]'));
@@ -3307,7 +3316,7 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     const { id, points } = memoire.grande;
     await rouvrir(memoire.baseGrande);
     await ouvrirSection('propositions');
-    await cliquer(`[data-section="propositions"] tr[data-proposition="${id}"] [data-commande="qualite"]`);
+    await cliquerAction(`[data-section="propositions"] tr[data-proposition="${id}"]`, 'qualite');
     await revenirALaQualite(id);
     const vue = vueQualite('performance');
     const tete = [...vue.querySelectorAll('[data-course] li')].map(texteDe);
@@ -3400,7 +3409,7 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     const { id } = memoire.conflit;
     await ouvrirSection('propositions');
     let r = revision();
-    await cliquer(`[data-section="propositions"] tr[data-proposition="${id}"] [data-commande="retenir"]`);
+    await cliquerAction(`[data-section="propositions"] tr[data-proposition="${id}"]`, 'retenir');
     await uneEntree(r, 'retenir');
     expect(charge().retenu.proposition).toBe(id);
     await ouvrirPlan();
@@ -3658,7 +3667,7 @@ describe('la page de qualité (§ 12, § 19.3, B27)', { timeout: DUREE }, () => 
     const classee = await attendre('le tableau classé', () => dans('[data-section="propositions"] [data-classement] tr[data-proposition]'));
     const retenue = Number(classee.dataset.proposition);
     let entree = revision();
-    await cliquer(`[data-section="propositions"] tr[data-proposition="${retenue}"] [data-commande="retenir"]`);
+    await cliquerAction(`[data-section="propositions"] tr[data-proposition="${retenue}"]`, 'retenir');
     await attendre('le retenu, ou sa fenêtre', () => revision() > entree || dans('dialog[open]'));
     if (revision() === entree) await appuyer(dans('dialog[open] [data-commande="confirmer"]'), 'confirmer retenir');
     await uneEntree(entree, 'retenir');
@@ -3822,7 +3831,7 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
     await ouvrirSection('propositions');
     const ligne = await attendre('la ligne du départ', () => dans(`[data-section="propositions"] [data-classement] tr[data-proposition="${depart}"]`));
     const avant = fichiers();
-    await appuyer(ligne.querySelector('[data-commande="repartir"]'), 'Repartir d’elle');
+    await appuyer(actionDe(ligne, 'repartir'), 'Repartir d’elle');
     const carte = await attendre('la carte du départ', () => dans('[data-section="generation"] [data-depart]'));
     expect(m.ui.etat().depart).toEqual({ id: depart, toursFiges: [] });
     expect(texteDe(carte.querySelector('h4'))).toBe(plat(t('generation.depart.titre', { depart })));
@@ -3927,9 +3936,9 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
 
     // L'image : le tableau ramené à sa gauche — le rang, la proposition et
     // sa filiation —, la dérivée classée juste avant le départ, puis le
-    // départ. Une ligne porte ses commandes l'une sous l'autre : deux lignes
-    // entières tiennent dans la surface, les autres s'affirment sans
-    // l'image.
+    // départ, centrés ensemble dans la surface ; chaque ligne a la hauteur
+    // de ses chiffres, et les lignes voisines y paraissent aussi. Les
+    // autres s'affirment sans l'image.
     for (let porteur = lignes[0].parentElement; porteur !== null; porteur = porteur.parentElement) {
       if (porteur.scrollWidth > porteur.clientWidth) porteur.scrollLeft = 0;
     }
@@ -3961,10 +3970,10 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
     // La meilleure dérivée devient la source de la page ; « Comparer » sur
     // la ligne du départ le met en second placement et ouvre la vue.
     const avant = fichiers();
-    await cliquer(`[data-section="propositions"] tr[data-proposition="${meilleure}"] [data-commande="qualite"]`);
+    await cliquerAction(`[data-section="propositions"] tr[data-proposition="${meilleure}"]`, 'qualite');
     await attendre('la page de qualité de la meilleure dérivée', () => dans('[data-section="qualite"]') && m.ui.etat().proposition === meilleure);
     await ouvrirSection('propositions');
-    await cliquer(`[data-section="propositions"] tr[data-proposition="${depart}"] [data-commande="comparer"]`);
+    await cliquerAction(`[data-section="propositions"] tr[data-proposition="${depart}"]`, 'comparer');
     await attendre('la vue de comparaison', () => vueQualite('comparaison')?.querySelector('svg[data-graphique="comparaison"] path[data-serie="b"]'));
     expect(m.ui.etat().comparee).toBe(depart);
     const vue = vueQualite('comparaison');

@@ -28,6 +28,7 @@ import { analyser, configurationDepuisCharge, creerCharge } from '../../stockage
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
 import { dessinerGraphiques, fixerCadre } from '../../../test/navigateur/entrees.js';
+import { actionDe } from '../../../test/navigateur/menus.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import '../impression.css';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -213,7 +214,7 @@ describe('la commande « Qualité » du tableau des propositions (§ 12, D25)', 
       const m = await ouvrir(lue, { mode, section: 'propositions' });
       const ecritures = m.trace.length;
       const id = lue.propositions[2].id;
-      const bouton = commande(m.racine.querySelector(`[data-proposition="${id}"]`), 'qualite');
+      const bouton = actionDe(m.racine.querySelector(`[data-proposition="${id}"]`), 'qualite');
       expect(texteDe(bouton)).toBe(t('propositions.commande.qualite'));
       bouton.click();
       await attendre(() => expect(page(m)).not.toBeNull());
@@ -230,7 +231,7 @@ describe('la commande « Qualité » du tableau des propositions (§ 12, D25)', 
     for (const proposition of charge(m).propositions) {
       m.ui.allerA('propositions');
       flushSync();
-      commande(m.racine.querySelector(`[data-proposition="${proposition.id}"]`), 'qualite').click();
+      actionDe(m.racine.querySelector(`[data-proposition="${proposition.id}"]`), 'qualite').click();
       await attendre(() => expect(page(m)).not.toBeNull());
       expect(ligneDeSource(m)).toBe(attendueDeSource('plan.source.propositionReservations', { proposition: proposition.id }));
       m.ui.allerA('plan');
@@ -254,7 +255,7 @@ describe('la commande « Qualité » du tableau des propositions (§ 12, D25)', 
         expect(trouvee).not.toBeNull();
         return trouvee;
       });
-      commande(ligne, 'qualite').click();
+      actionDe(ligne, 'qualite').click();
       await attendre(() => expect(page(m)).not.toBeNull());
       expect(m.ui.etat().proposition).toBe(id);
       expect(phrases(m)).toEqual(['derive']);
@@ -277,7 +278,7 @@ describe('la commande « Qualité » du tableau des propositions (§ 12, D25)', 
       expect(trouvee).not.toBeNull();
       return trouvee;
     });
-    commande(ligne, 'qualite').click();
+    actionDe(ligne, 'qualite').click();
     await attendre(() => expect(page(m)).not.toBeNull());
     const raisons = evaluer(lue).propositions.find((candidate) => candidate.id === id).raisons;
     expect(raisons.length).toBeGreaterThan(0);
@@ -294,11 +295,11 @@ describe('la commande « Qualité » du tableau des propositions (§ 12, D25)', 
   test('« Qualité » de la ligne du retenu ouvre la page sur le retenu, même après une proposition montrée', async () => {
     const generees = generee(chargeSix());
     const m = await ouvrir(executer(generees, 'retenirProposition', { id: generees.propositions[0].id }), { section: 'propositions' });
-    commande(m.racine.querySelector(`[data-proposition="${generees.propositions[1].id}"]`), 'qualite').click();
+    actionDe(m.racine.querySelector(`[data-proposition="${generees.propositions[1].id}"]`), 'qualite').click();
     await attendre(() => expect(page(m)).not.toBeNull());
     m.ui.allerA('propositions');
     flushSync();
-    commande(m.racine.querySelector('[data-retenu]'), 'qualite').click();
+    actionDe(m.racine.querySelector('[data-retenu]'), 'qualite').click();
     await attendre(() => expect(page(m)).not.toBeNull());
     expect(m.ui.etat().proposition).toBe(null);
     expect(ligneDeSource(m)).toBe(attendueDeSource('plan.source.retenu'));

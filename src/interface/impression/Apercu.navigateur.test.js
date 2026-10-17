@@ -39,6 +39,7 @@ import {
   chargeBloquee,
   chargePrincipale,
   cliquer,
+  cliquerAction,
   creerContexte,
   fichierReglages,
   ouvrirApercu,
@@ -254,7 +255,7 @@ describe('le filigrane BROUILLON (§ 11.7, § 14.5)', () => {
     expect(estBrouillon(charge, { source: 'retenu', tour: 1 })).toBe(false);
     expect(estBrouillon(charge, { source: 'proposition', tour: 1 })).toBe(true);
     const m = await ouvrirEvenement(contexte, charge, { section: 'propositions', options: { fichiers: [fichierReglages('A4')] } });
-    await cliquer(m, '[data-classement] [data-commande="voir"]');
+    await cliquerAction(m, '[data-classement] tr[data-proposition]', 'voir');
     await attendre('la proposition montrée', () => m.ui.etat().proposition !== null, IMAGES);
     await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
     await attendre('le document', () => feuilles(m).length > 0, IMAGES);

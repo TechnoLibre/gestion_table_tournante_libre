@@ -18,8 +18,18 @@
   // garde son rang global. nommer(id) : le nom affiché d'une personne, null
   // pour id null ou pour une personne que la charge n'a plus. voir(id) et
   // retenir(id) : les gestes d'une ligne, que la section câble ; voir(null)
-  // montre le retenu. Un refus de « Retenir » se pose à côté du bouton, par
-  // la Commande. « Qualité », sur chaque ligne, demande sa proposition au
+  // montre le retenu.
+  //
+  // Les commandes d'une ligne vivent dans son menu « Actions »
+  // (MenuActions, primitive), dernière cellule de la ligne : fermé, il ne
+  // montre que son bouton, et la ligne garde la hauteur de ses chiffres. Le
+  // bouton se nomme par une phrase qui porte le numéro de sa ligne,
+  // « Actions de la proposition n° 4 », ou « Actions du placement
+  // retenu ». Le menu d'une proposition porte « Voir sur le plan »,
+  // « Qualité » et « Retenir », puis, sur une ligne comparable, « Repartir
+  // d'elle » et « Comparer » ; celui du retenu, « Voir sur le plan »,
+  // « Qualité » et « Comparer ». Un refus de « Retenir » se pose à côté du
+  // bouton du menu, par MenuActions. « Qualité » demande sa proposition au
   // plan — le retenu sur la ligne du retenu — et ouvre la page de qualité,
   // qui mesure la proposition de sa ligne, ou le retenu (§ 12), que le plan
   // la montre ou non : l'état de navigation seul change, sans écriture ni
@@ -28,13 +38,13 @@
   // Une proposition dérivée porte sous son numéro, dans sa cellule
   // d'identité, la phrase qui la rattache à son départ (texteFiliation,
   // filiation.js), sans colonne de plus ; la ligne du retenu garde « Tel que
-  // la proposition n° X. ». Une ligne comparable porte aussi « Repartir
-  // d'elle », qui choisit sa proposition pour départ et ouvre la section
+  // la proposition n° X. ». Le menu d'une ligne comparable porte aussi
+  // « Repartir d'elle », qui choisit sa proposition pour départ et ouvre la section
   // Génération, et « Comparer », qui ouvre la page de qualité à sa vue de
   // comparaison, la ligne y devenant le second placement ou la source
-  // (gesteComparer, comparer.js, jugé sur la source de la page) ; la ligne
-  // du retenu porte « Comparer » seul, une ligne en dérive ou fautive ni
-  // l'une ni l'autre. « Comparer » ne s'offre que quand deux placements
+  // (gesteComparer, comparer.js, jugé sur la source de la page) ; le menu
+  // du retenu porte « Comparer » seul, celui d'une ligne en dérive ou
+  // fautive ni l'une ni l'autre. « Comparer » ne s'offre que quand deux placements
   // mesurables et distincts existent (comparaisonOfferte, evaluation.js).
   // Chacune se nomme, pour le lecteur d'écran, par une phrase qui porte le
   // numéro de sa ligne : cent lignes par page ne portent pas cent boutons
@@ -77,8 +87,8 @@
   import { getContext } from 'svelte';
   import { derivationDe } from '../../application/depart.js';
   import { comparaisonOfferte } from '../../application/evaluation.js';
-  import Commande from '../primitives/Commande.svelte';
   import Icone from '../primitives/Icone.svelte';
+  import MenuActions from '../primitives/MenuActions.svelte';
   import Pastille from '../primitives/Pastille.svelte';
   import { sourceQualite } from '../qualite/source.js';
   import { gesteComparer } from './comparer.js';
@@ -126,6 +136,31 @@
     ui.allerA('qualite');
     ui.demanderVueQualite('comparaison');
   }
+
+  // Les éléments du menu d'une proposition : voir, qualité et retenir, puis,
+  // sur une ligne comparable, repartir et, quand la comparaison est offerte,
+  // comparer.
+  function actionsDeLigne(ligne) {
+    const actions = [
+      { cle: 'propositions.commande.voir', nom: 'voir', executer: () => voir(ligne.id) },
+      { cle: 'propositions.commande.qualite', nom: 'qualite', executer: () => qualite(ligne.id) },
+      { cle: 'propositions.commande.retenir', executer: () => retenir(ligne.id) },
+    ];
+    if (!ligne.comparable) return actions;
+    actions.push({ cle: 'propositions.commande.repartir', nomAccessible: t('propositions.nom.repartir', { proposition: ligne.id }), executer: () => repartir(ligne.id) });
+    if (offerte) actions.push({ cle: 'propositions.commande.comparer', nomAccessible: t('propositions.nom.comparer', { proposition: ligne.id }), executer: () => comparer(ligne.id) });
+    return actions;
+  }
+
+  // Les éléments du menu du retenu : voir et qualité, puis comparer quand
+  // le retenu est comparable et la comparaison offerte.
+  const actionsDuRetenu = $derived([
+    { cle: 'propositions.commande.voir', nom: 'voir', executer: () => voir(null) },
+    { cle: 'propositions.commande.qualite', nom: 'qualite', executer: () => qualite(null) },
+    ...(vue.retenu?.comparable && offerte
+      ? [{ cle: 'propositions.commande.comparer', nomAccessible: t('propositions.nom.comparerRetenu'), executer: () => comparer('retenu') }]
+      : []),
+  ]);
 
   // Les noms des colonnes de nombres.
   const nombres = $derived(new Set(vue.colonnes.filter((colonne) => colonne.nombre).map((colonne) => colonne.nom)));
@@ -183,25 +218,7 @@
 
 {#snippet commandes(ligne)}
   <td data-colonne="commandes">
-    <div class="commandes">
-      <Commande cle="propositions.commande.voir" nom="voir" executer={() => voir(ligne.id)} />
-      <Commande cle="propositions.commande.qualite" nom="qualite" executer={() => qualite(ligne.id)} />
-      <Commande cle="propositions.commande.retenir" executer={() => retenir(ligne.id)} />
-      {#if ligne.comparable}
-        <Commande
-          cle="propositions.commande.repartir"
-          nomAccessible={t('propositions.nom.repartir', { proposition: ligne.id })}
-          executer={() => repartir(ligne.id)}
-        />
-        {#if offerte}
-          <Commande
-            cle="propositions.commande.comparer"
-            nomAccessible={t('propositions.nom.comparer', { proposition: ligne.id })}
-            executer={() => comparer(ligne.id)}
-          />
-        {/if}
-      {/if}
-    </div>
+    <MenuActions nomAccessible={t('propositions.nom.actions', { proposition: ligne.id })} elements={actionsDeLigne(ligne)} />
   </td>
 {/snippet}
 
@@ -254,13 +271,7 @@
           </td>
           {@render mesures(vue.retenu)}
           <td data-colonne="commandes">
-            <div class="commandes">
-              <Commande cle="propositions.commande.voir" nom="voir" executer={() => voir(null)} />
-              <Commande cle="propositions.commande.qualite" nom="qualite" executer={() => qualite(null)} />
-              {#if vue.retenu.comparable && offerte}
-                <Commande cle="propositions.commande.comparer" nomAccessible={t('propositions.nom.comparerRetenu')} executer={() => comparer('retenu')} />
-              {/if}
-            </div>
+            <MenuActions nomAccessible={t('propositions.nom.actionsRetenu')} elements={actionsDuRetenu} />
           </td>
         </tr>
       </tbody>
@@ -413,15 +424,40 @@
     border-left: 3px solid var(--couleur-etat-retenu-marque);
   }
 
-  /* Les colonnes de phrases ont la largeur d'une phrase courte : la
-     cellule des propositions tient son numéro et « Tel que la proposition
-     n° 3. » en deux lignes, « Ajusté à la main depuis… » en trois, et celle
-     des retours imposés chacune de ses deux phrases en deux lignes au plus.
-     Plus étroites, leurs phrases passeraient à la ligne mot à mot et
-     allongeraient la ligne entière ; le tableau défile déjà en largeur. */
-  td[data-colonne='proposition'],
-  td[data-colonne='imposes'] {
+  /* La cellule des propositions a la largeur d'une phrase courte : elle
+     tient son numéro et « Tel que la proposition n° 3. » ou la phrase de
+     filiation en deux lignes, « Ajusté à la main depuis… » en trois. Plus
+     étroite, sa phrase passerait à la ligne mot à mot et allongerait la
+     ligne entière. Le certificat et les retours imposés tiennent sur une
+     ligne, les deux phrases imposées l'une après l'autre : seule la cellule
+     des propositions donne à une ligne plus d'une ligne de texte, et la
+     ligne garde la hauteur de ses chiffres ; le tableau défile déjà en
+     largeur. */
+  td[data-colonne='proposition'] {
     min-width: 14rem;
+  }
+
+  td[data-colonne='certificat'],
+  td[data-colonne='imposes'] {
+    white-space: nowrap;
+  }
+
+  td[data-colonne='imposes'] p {
+    display: inline;
+  }
+
+  td[data-colonne='imposes'] p + p {
+    margin-left: var(--espace-2);
+  }
+
+  /* La cellule du menu « Actions » : le bouton porte en plus du texte son
+     remplissage de --espace-1 et son filet de 1 px (MenuActions) ; la
+     cellule les retire de son propre remplissage, si bien que le texte du
+     bouton s'aligne sur celui des chiffres et que la cellule n'est pas plus
+     haute qu'une ligne de texte. */
+  td[data-colonne='commandes'] {
+    padding-top: calc(var(--espace-2) - var(--espace-1) - 1px);
+    padding-bottom: calc(var(--espace-2) - var(--espace-1) - 1px);
   }
 
   .identifiant {
@@ -451,12 +487,5 @@
     text-decoration: underline;
     text-decoration-thickness: 2px;
     text-underline-offset: 0.2em;
-  }
-
-  .commandes {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--espace-1);
   }
 </style>

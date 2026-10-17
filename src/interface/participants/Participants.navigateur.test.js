@@ -32,6 +32,7 @@ import { SUFFIXES } from '../../stockage/noms.js';
 import { formeNommee } from '../../stockage/placements.js';
 import { VERSION } from '../../version.genere.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
+import { actionDe, boutonActions } from '../../../test/navigateur/menus.js';
 import { fixerCadre, pointer, touche } from '../../../test/navigateur/entrees.js';
 import { composantes, sousTheme, visible } from '../../../test/navigateur/rendu.js';
 import CAS_LIMITES from '../../../exemples/participants_cas_limites.csv?url';
@@ -1909,12 +1910,23 @@ describe('la liste groupée par une colonne ou plusieurs', () => {
       return m;
     }
 
-    // Un geste de la ligne d'une proposition dans sa section, puis le retour
-    // aux participants par la navigation des sections.
+    // Un geste du menu « Actions » de la ligne d'une proposition dans sa
+    // section, puis le retour aux participants par la navigation des
+    // sections.
     async function gesteDeProposition(m, id, nom) {
       m.ui.allerA('propositions');
       await rendu();
-      await cliquer(m.racine.querySelector(`[data-section="propositions"] [data-proposition="${id}"] [data-commande="${nom}"]`));
+      // La ligne amenée dans la fenêtre avant d'ouvrir le menu : le menu, en
+      // position fixe, se presse ensuite là où il est posé, sans défiler.
+      const ligneProposition = m.racine.querySelector(`[data-section="propositions"] [data-proposition="${id}"]`);
+      boutonActions(ligneProposition).scrollIntoView({ block: 'center' });
+      await rendu();
+      const action = actionDe(ligneProposition, nom);
+      await rendu();
+      const { x, y } = centre(action);
+      await pointer('presser', x, y);
+      await pointer('relacher', x, y);
+      await rendu();
       await attendreSeance(m);
       await cliquer(m.racine.querySelector('[data-commande="section"][data-cible="participants"]'));
       expect(section(m)).not.toBeNull();

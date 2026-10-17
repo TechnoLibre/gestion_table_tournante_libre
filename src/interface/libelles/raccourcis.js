@@ -27,6 +27,15 @@ export const TABLE = new Map([
   ['raccourcis.champ.rendre', "Rend la valeur d'avant la saisie."],
   // --- Une commande ----------------------------------------------------------------
   ['raccourcis.commande.activer', 'Exécute la commande une fois, même maintenue.'],
+  // --- Un menu d'actions : son bouton, puis le menu ouvert ----------------------
+  ['raccourcis.boutonMenu.ouvrirPremier', 'Ouvre le menu sur sa première action.'],
+  ['raccourcis.boutonMenu.ouvrirDernier', 'Ouvre le menu sur sa dernière action.'],
+  ['raccourcis.menu.suivant', "Passe à l'action suivante ; après la dernière, revient à la première."],
+  ['raccourcis.menu.precedent', "Passe à l'action précédente ; avant la première, va à la dernière."],
+  ['raccourcis.menu.premier', 'Va à la première action.'],
+  ['raccourcis.menu.dernier', 'Va à la dernière action.'],
+  ['raccourcis.menu.fermer', 'Ferme le menu et rend le focus à son bouton.'],
+  ['raccourcis.menu.quitter', 'Ferme le menu ; le focus passe au contrôle suivant.'],
   // --- Un geste, une fenêtre -------------------------------------------------------
   ['raccourcis.geste.annuler', 'Annule le geste en cours : la table revient où elle était.'],
   ['raccourcis.fenetre.fermer', "Ferme le panneau ou l'infobulle."],

@@ -313,8 +313,9 @@ export const TABLE = new Map([
   ],
   [
     'propositions.explication.commandes',
-    '« Voir sur le plan » montre la proposition sur le plan de salle, sans rien écrire. « Retenir » en fait le ' +
-      "placement retenu, celui qu'on ajuste à la main ; les autres propositions restent dans la liste.",
+    "Le bouton « Actions » de chaque ligne ouvre le menu de ses commandes. « Voir sur le plan » y montre la " +
+      "proposition sur le plan de salle, sans rien écrire. « Retenir » en fait le placement retenu, celui qu'on " +
+      'ajuste à la main ; les autres propositions restent dans la liste.',
   ],
 
   // --- Les valeurs écrites en mots (§ 5.5, § 12.6) ------------------------------
@@ -375,9 +376,12 @@ export const TABLE = new Map([
   ['propositions.commande.comparer', 'Comparer'],
 
   // --- Les noms accessibles des commandes de ligne (§ 5.7, C7, D85) -----------------
-  // Cent lignes par page portent chacune ces commandes : le nom accessible
-  // de chacune porte le numéro de sa ligne, proposition, et les distingue au
-  // lecteur d'écran.
+  // Cent lignes par page portent chacune ces commandes, dans le menu
+  // « Actions » de la ligne : le nom accessible de chacune, et celui du
+  // bouton du menu, porte le numéro de sa ligne, proposition, et les
+  // distingue au lecteur d'écran.
+  ['propositions.nom.actions', ({ proposition }) => `Actions de la proposition n° ${proposition}`],
+  ['propositions.nom.actionsRetenu', 'Actions du placement retenu'],
   ['propositions.nom.repartir', ({ proposition }) => `Repartir de la proposition n° ${proposition}`],
   ['propositions.nom.comparer', ({ proposition }) => `Comparer la proposition n° ${proposition}`],
   ['propositions.nom.comparerRetenu', 'Comparer le placement retenu'],

@@ -391,6 +391,11 @@ describe('documentation : les producteurs, chacun sur sa source unique (§ 19.8)
     assert.equal(entrer[1], 'Entrée ou Espace');
     assert.equal(lignes[effets.indexOf('plan.droite')][1], '\u{2192}');
     assert.equal(lignes[effets.indexOf('grille.precedente')][1], 'Maj+Tab');
+    assert.deepEqual(lignes[effets.indexOf('boutonMenu.ouvrirPremier')].slice(0, 2), ['Bouton de menu', 'Entrée ou Espace ou \u{2193}']);
+    assert.deepEqual(
+      ['menu.premier', 'menu.dernier', 'menu.quitter'].map((effet) => lignes[effets.indexOf(effet)].slice(0, 2)),
+      [['Menu ouvert', 'Début'], ['Menu ouvert', 'Fin'], ['Menu ouvert', 'Tab']],
+    );
     assert.throws(() => tableauRaccourcis([...RACCOURCIS, { ...RACCOURCIS[0], touche: 'Pause' }]), /Pause/);
   });
 
