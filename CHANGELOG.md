@@ -166,6 +166,54 @@
   page de qualité.
 - Le guide d'usage montre la page de qualité, ses vues et ses cas limites,
   captures à l'appui.
+- Une génération peut **repartir d'une proposition** : « Repartir d'elle », sur
+  sa ligne du tableau, en fait le départ et ouvre la section « Génération », qui
+  le nomme — « Départ : proposition n° 4 » — et lance « Générer depuis n° 4 ».
+  Les propositions qu'elle produit, dites dérivées, partent du plan du départ
+  sous de nouvelles graines, ne gardent un changement que s'il améliore, et
+  entrent au même classement que les autres. « Repartir de zéro » retire le
+  départ ; le choisir n'écrit rien et reste possible en lecture.
+- Sous le départ, une case par tour **fige** ce tour : chaque dérivée le reprend
+  tel quel, sièges compris quand l'événement les attribue, et la recherche ne
+  refait que les autres tours, en tenant compte des rencontres déjà faites dans
+  les tours figés. Figer tous les tours est refusé.
+- Le lancement refuse, en nommant la cause et le remède, un départ qui n'est
+  plus dans la liste, qui ne décrit plus la soirée — une personne ajoutée ou
+  retirée, une table changée depuis lui —, ou qui n'assied pas quelqu'un là où
+  une réservation posée depuis le fixe. Le placement retenu n'est pas un départ.
+- Chaque dérivée porte sous son numéro « Dérivée de n° 4. », ou « Dérivée de
+  n° 4, tours 1 et 2 figés. », et « qui n'est plus dans la liste » quand son
+  départ a été effacé. La même phrase se lit sur la page de qualité, dont la
+  performance dit que la course est « partie de la proposition n° 4 ».
+- L'issue d'une génération dérivée nomme la place au classement de la meilleure
+  dérivée et celle du départ, et offre « Comparer n° 23 à n° 4 » ; quand toutes
+  les dérivées égalent leur départ, elle dit que le départ n'avait rien à
+  reprendre. L'historique écrit « Généré 5 propositions dérivées de n° 4 (n° 21
+  à 25), tours 1 et 2 figés ».
+- La page de qualité gagne une vue « Comparaison », la troisième, qui répond à
+  « laquelle des deux sert mieux, et qui y perd ? » pour deux placements : la
+  proposition montrée, ou le retenu, et un second choisi par « Comparer » sur
+  une ligne du tableau des propositions ou dans la liste « Comparer à : » de la
+  vue. Le retenu se compare aussi, ajusté contre sa proposition d'origine. Sans
+  choix, la vue compare une dérivée à son départ.
+- La vue superpose les deux profils de manque sur un même axe, compte les rangs
+  où chacun sert mieux, nomme le rang de bascule quand il n'y en a qu'un, et
+  dit quand l'un sert mieux à tous les rangs. Au-dessus, les chiffres des deux
+  placements se lisent en deux colonnes côte à côte, puis, sous « Tous les
+  indicateurs », ceux de toutes les tuiles. Le minimum brut, les tours hors
+  objectif et le minimum des tours selon l'objectif y portent leur
+  pourcentage, chacun suivi du compte du pire, comme sur les tuiles ; le tracé,
+  son infobulle et les phrases restent en comptes. Son tableau jumeau est
+  l'escalier du manque. Quand le manque prend trop peu de valeurs, une phrase
+  remplace le tracé.
+- Sur la page de qualité, la ligne « … au manque maximal » sous le plus grand
+  manque compte les personnes à ce manque, et non toutes celles à qui il en
+  manque ; elle se tait quand personne ne manque de rien.
+- Rien de la comparaison ni des dérivées ne s'imprime, et rien ne s'exporte en
+  CSV. À graine égale, une génération ordinaire donne les mêmes propositions
+  qu'avant les dérivées.
+- Le guide d'usage montre le départ, les dérivées au tableau et la vue de
+  comparaison, captures à l'appui.
 - Dans la liste des événements, le placement retenu montre ses « Collisions
   cumulées (paire et tour) » et ses « Rencontres répétées choisies (paires) »,
   les mêmes nombres que les colonnes du tableau des propositions, au lieu de
@@ -202,7 +250,9 @@
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
-s'enregistrent dans des champs facultatifs, absents à leur défaut. Un fichier
+s'enregistrent dans des champs facultatifs, absents à leur défaut ; une
+proposition dérivée y porte aussi son départ et ses tours figés, `depart` et
+`toursFiges`, absents de toute autre proposition. Un fichier
 de format 1, écrit par une version de développement, s'ouvre tel quel et se
 convertit, son historique avec lui, au premier geste en écriture.
 La course de la recherche ne va ni dans le fichier de l'événement ni dans son

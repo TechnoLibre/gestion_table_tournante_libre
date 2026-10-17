@@ -186,12 +186,20 @@ priorités** qu'il règle à côté (§ 5.7) ; pour les objectifs des tables, il
 choisit aussi ce que le critère cherche d'abord, le **mode** (§ 5.3). Sans
 réglage, c'est l'ordre par défaut et le mode « le plus de places servies ». Le
 logiciel nomme automatiquement l'instant qui précède chaque génération (§ 8.3).
+Une génération peut aussi **repartir d'une proposition** choisie au tableau,
+son **départ**, et en figer des tours : ses propositions, dites
+**dérivées**, continuent le plan du départ sous de nouvelles graines, ne
+refont que les tours non figés, et entrent au même classement, chacune
+libellée « dérivée de n° X » (§ 5.7).
 
 **10. Comparer, et retenir.** *Facultative en droit — l'impression d'un plan non
 retenu sort en filigrane BROUILLON (§ 11.7) — nécessaire en fait pour distribuer
 quoi que ce soit.* L'opérateur lit la page de qualité (§ 12), compare deux
-propositions sur le même axe — celui du **manque** (§ 12.10) —, retient celle
-qu'il préfère. La page de qualité est la section « Qualité » de l'événement :
+placements sur le même axe — celui du **manque** (§ 12.10) — dans sa vue de
+comparaison, qui trace les deux courbes sur un même tracé et pose leurs chiffres
+côte à côte, puis retient celui qu'il préfère. « Comparer », sur la ligne d'une
+proposition comparable du tableau des propositions et sur celle du placement
+retenu, y mène. La page de qualité est la section « Qualité » de l'événement :
 elle mesure le placement que le plan montre, et chaque ligne du tableau des
 propositions y mène. Elle répond à deux questions — ce placement est-il bon, qui
 s'y trouve mal servi — par le profil des rencontres, les collisions
@@ -298,6 +306,20 @@ attendue. Une personne en porte de zéro à vingt.
 règle : *au moins une* de ces étiquettes, ou *toutes*. Il vaut pour la soirée,
 ou pour un tour désigné. Il ne fixe personne : c'est un critère de la recherche
 (§ 5.3), jamais une réservation.
+
+**Proposition dérivée** — une proposition dont la recherche est partie du
+plan d'une autre, son **départ**, au lieu d'un placement tiré (§ 5.7). Elle
+nomme son départ — « dérivée de n° 4 » — et entre au classement comme toute
+proposition. « Dérivée » dit d'où elle vient, jamais qu'elle est **en
+dérive** (§ 9) : une proposition en dérive se dit « non comparable », avec
+ses raisons ; la **graine dérivée** reste le nom de la graine de chaque
+proposition, dérivée ou non. Le mot « variante » reste aux démonstrations
+(§ 15) et à la copie d'un plan (§ 8.7), et ne désigne pas une dérivée.
+
+**Tour figé** — un tour qu'une génération dérivée reprend tel quel de son
+départ, sans y déplacer personne. Il ne fixe personne dans l'événement : il
+n'est pas une réservation, ne change aucun statut (§ 4.2), et ne survit pas à
+la génération qui l'a reçu.
 
 ### 4.1 Pourquoi le titre appartient à la place
 
@@ -514,7 +536,11 @@ Moyennant cet ajout, le moteur n'a **qu'un seul chemin de code** : la
 réservation est un prétraitement qui réduit les capacités, retire des
 participants et annote les tables — jamais un second algorithme. Une garde de
 l'arborescence le tient : dans le moteur, seuls la normalisation de la
-configuration et le diagnostic lisent les réservations.
+configuration et le diagnostic lisent les réservations. Les tours figés d'une
+génération dérivée (§ 5.7) n'y entrent pas : ils ne réduisent aucune capacité,
+ne retirent personne et n'annotent aucune table. La recherche les reçoit à
+part, ne tire aucun mouvement dans ces tours, et compte leurs rencontres dans
+le score de la soirée.
 
 ### 5.3 Les contraintes, activables une à une
 
@@ -1028,7 +1054,13 @@ Une génération produit **plusieurs placements distincts et comparables**, en
 nombre réglable. Les générations **s'accumulent** : relancer avec d'autres
 réglages ajoute des candidats plutôt que d'effacer les précédents, et un
 classement unique les ordonne tous. Une commande efface la liste en épargnant
-celui qui est retenu.
+celui qui est retenu. Une génération **écarte la proposition dont le placement
+est déjà celui** d'une proposition comparable de la liste, ou d'une qu'elle
+vient de garder, et l'annonce comme identique : deux lignes du classement sont
+toujours deux placements. Effacer épargne la seule proposition d'où vient le
+retenu ; il emporte le départ d'une proposition dérivée comme toute autre
+proposition, et la dérivée gardée nomme alors un départ qui n'est plus dans la
+liste (§ 8.9).
 
 **« Garder les N meilleures » allège la liste sans la vider.** La commande
 `garderMeilleures {n}` garde les n premières propositions du classement unique
@@ -1048,6 +1080,9 @@ refuse comme tout geste qui modifie (§ 8.4, § 9) ; une configuration qui ne se
 normalise pas ne se classe pas, et son refus nomme sa cause, sans remède. Les
 courses des propositions effacées quittent le compagnon des courses comme à
 l'effacement (§ 8.6) ; rien de nouveau ne s'écrit dans le fichier (§ 8.9).
+Comme l'effacement, il ne protège aucun départ : il peut emporter le départ
+d'une proposition dérivée qu'il garde, et celle-ci nomme alors un départ qui
+n'est plus dans la liste.
 
 **N est une saisie de la section, jamais écrite.** Il se saisit dans un champ
 étroit à côté du bouton, dix au départ, un entier d'au moins 1, et le bouton le
@@ -1094,6 +1129,99 @@ propositions se calculent en parallèle, leur ordre d'arrivée varie : un
 identifiant attribué à l'achèvement ferait départager deux propositions à
 égalité par la vitesse de la machine, et deux exécutions les classeraient dans
 deux ordres.
+
+**Une génération peut repartir d'une proposition.** La commande « Repartir
+d'elle », sur la ligne d'une proposition comparable du tableau, en fait le
+**départ** de la génération suivante et ouvre la section de la génération, qui
+le montre au-dessus de « Générer » — « Départ : proposition n° 4 » — avec la
+commande « Repartir de zéro », qui le retire ; sous un départ, « Générer » se
+lit « Générer depuis n° 4 ». Choisir le départ n'écrit rien : c'est un état de
+la navigation (§ 8.4), vivant en lecture et sur un plan bloqué, retiré à
+l'ouverture d'un événement et quand le départ quitte la liste. La génération
+lancée sous un départ est une **génération dérivée**, et ses propositions sont
+des **propositions dérivées** (§ 4). C'est une génération : la même graine
+saisie, dont la suite donne les graines dérivées, les mêmes nombre, compte
+d'arrêt et historique, la même estimation et la même question au-delà d'une
+minute (§ 5.10), le même avancement, la même annulation, le même jalon
+automatique avant elle (§ 8.3), la même entrée d'historique, refusée en lecture
+et sur un plan bloqué. Ses identifiants suivent le compteur. Une dérivée et une
+proposition ordinaire peuvent porter la même graine dérivée, le même compte et
+le même historique pour deux plans : leur identifiant et le départ les
+distinguent.
+
+**Le départ est une proposition comparable qui tient les réservations
+courantes.** Le lancement refuse, en nommant la cause, un départ qui a quitté
+la liste, un départ en dérive ou fautif (§ 9), et un départ qui ne tient pas
+une réservation posée depuis — « la proposition n° 4 n'assied pas Prénom Nom
+à la table 3 au tour 2, où une réservation la fixe » ; le remède de chacun
+est « Repartir de zéro ». Un départ est en dérive dès que les participants ou
+le mobilier ont changé depuis lui : après l'ajout ou le retrait d'une seule
+personne, aucune proposition ne sert plus de départ, et garder un tour déjà
+annoncé passe par des réservations (§ 5.8 : le placement se prépare, il ne
+suit pas la salle). Le placement retenu n'est pas un départ : non
+ajusté, il est le placement de sa proposition, qui l'est ; ajusté à la main,
+il n'est le plan d'aucune proposition et ne se régénère pas.
+
+**La dérivée continue son départ.** Sa recherche part du plan du départ — chaque
+personne, à chaque tour, à la table qu'il lui donne — au lieu d'un placement
+tiré, et ne garde une autre affectation que strictement meilleure dans l'ordre
+de la recherche : une dérivée n'est jamais pire que son départ dans cet ordre,
+et la descente s'en éloigne pourtant beaucoup — sur la grande démonstration, à
+200 000 mouvements, elle change la plupart des places. Chaque fois que la
+recherche tirerait un placement — à son début, et quand elle repart d'un autre
+point après une longue immobilité —, une dérivée repart du plan de son départ,
+tours figés compris. **Une dérivée n'est pas promise devant son départ au
+classement** : la recherche descend un n-uplet que le classement ne compare pas
+en entier — la somme des carrés le conduit sans classer —, et une dérivée peut
+se ranger derrière lui ; à égalité sur tous les paliers, son identifiant, plus
+grand, la range après.
+
+**Une génération dérivée peut figer des tours.** Sous le départ, une case par
+tour, toutes décochées à chaque choix d'un départ ; un tour coché est
+**figé** : chaque proposition le reprend du départ tel quel — chaque table
+avec ses occupants, et, quand le départ et l'événement attribuent tous deux
+les sièges, leur ordre et ses chaises vides —, et la recherche ne refait que
+les autres. Elle ne tire ses mouvements que dans les tours non figés : un tour
+figé ne consomme rien du compte d'arrêt. Les rencontres, les tours servis et
+les animateurs rencontrés des tours figés comptent dans le score de toute la
+soirée, et la recherche range les autres tours en fonction d'eux — ce qui
+sépare figer de greffer après coup les tours du départ sur une proposition
+nouvelle, qui refait les rencontres que ces tours ont déjà faites. Figer tous
+les tours est refusé, le refus posé contre les cases : il ne reste rien à
+refaire.
+
+**Sous des sièges attribués, un tour figé garde ses sièges.** L'application
+range d'ordinaire chaque table d'une proposition selon les réservations à un
+siège du moment (§ 8.9) ; les listes d'un tour figé, elles, sont recopiées du
+départ, jamais rangées de nouveau. Le lancement refuse donc, avant tout
+calcul, un départ dont un tour figé n'assied pas une personne au siège
+qu'une réservation courante lui fixe — « la proposition n° 4 n'assied pas
+Prénom Nom au siège 2 de la table 3 au tour 1 » —, avec pour remède de
+décocher ce tour, ou « Repartir de zéro ». Avant d'enregistrer, l'application
+vérifie que chaque tour figé égale celui du départ, et refuse la génération
+sinon, comme une violation d'invariant (§ 14.12) : aucun geste légitime ne
+la déclenche.
+
+**Un tour figé n'est pas une réservation** (§ 4, § 5.2). Statuts, diagnostic,
+plafond a priori, planchers et populations mesurées sont ceux de la
+configuration, et la recherche compose son score sur ses plafonds, ceux du
+classement (§ 5.10). Les planchers du diagnostic bornent donc toute
+proposition, dérivée ou non ; sous des tours figés, le meilleur atteignable
+peut rester au-dessus d'eux, et « le meilleur atteint » ne s'écrit que s'il
+l'est (§ 12.2).
+
+**L'issue d'une génération dérivée** nomme ses propositions, la place de la
+meilleure au classement et celle du départ — « 5 propositions dérivées de
+n° 4 (n° 21 à 25) ; la meilleure, n° 23, est 2ᵉ du classement ; n° 4 est
+5ᵉ » — et offre « Comparer n° 23 à n° 4 », qui montre n° 23 au plan et ouvre
+la vue de comparaison sur la paire, sans rien écrire (§ 12.10.6). Quand toutes
+ses propositions égalent leur départ, elles sont écartées comme identiques et
+l'issue le dit : « la proposition n° 4 n'avait rien à reprendre sous ces
+réglages ». Son entrée d'historique porte un libellé fixé à l'écriture (§ 8.2) :
+« Généré 5 propositions dérivées de n° 4 (n° 21 à 25), tours 1 et 2 figés ».
+Le départ reste choisi après la génération, pour une autre graine ; « Générer
+depuis n° 4 » le rappelle, et une génération ordinaire demande d'abord
+« Repartir de zéro ».
 
 **L'ordre des priorités est un réglage de l'événement, et l'interface l'écrit.**
 Il range les critères en **paliers**, du premier au dernier. Deux propositions
@@ -1263,7 +1391,19 @@ Chacun de ces deux minimums porte sur tous les concernés, sans ses lignes
 secondaires (§ 5.4). Le regroupement ne change l'en-tête ni l'explication
 d'aucune colonne ; ses nombres s'alignent à droite en chiffres tabulaires. La
 ligne du placement retenu porte la teinte de l'état Retenu, et la proposition
-retenue, la pastille « retenue ».
+retenue, la pastille « retenue ». Une proposition dérivée porte, sous son
+numéro, la phrase qui la rattache à son départ — « Dérivée de n° 4. », ou
+« Dérivée de n° 4, tours 1 et 2 figés. » —, sans colonne de plus, comme la
+ligne du retenu porte « Tel que la proposition n° X. ». Seul le départ immédiat
+est nommé : la ligne du départ dit le sien. Quand le départ n'est plus dans la
+liste, la phrase le dit — « Dérivée de n° 4, qui n'est plus dans la liste. » —
+et ne désigne aucune autre proposition. La ligne d'une proposition comparable
+porte aussi « Repartir d'elle » et « Comparer » (§ 12), avec « Voir sur le
+plan », « Qualité » et « Retenir » ; une ligne en dérive ou fautive ne porte ni
+l'une ni l'autre ; la ligne du placement retenu porte « Comparer » seul. Ces
+deux commandes ont un nom accessible qui porte le numéro de la ligne :
+« Comparer la proposition n° 4 », « Repartir de la proposition n° 4 »,
+« Comparer le placement retenu ».
 
 ### 5.8 Le placement à la main
 
@@ -1413,6 +1553,15 @@ ne se déplace (§ 15.5, point 3). La liste se lit dans l'ordre où le fichier
 l'écrit, jamais par le parcours des clés d'un objet, et les sommes d'un palier
 sont des entiers exacts.
 
+**Une génération dérivée ne touche pas au hasard d'une génération
+ordinaire.** Son départ remplace chaque tirage d'un placement, au début de la
+recherche et à chaque relance, et ses mouvements se tirent dans les seuls
+tours non figés : une génération ordinaire tire les mêmes nombres dans le
+même ordre qu'avant les dérivées, ce que les empreintes de référence gardent
+(§ 14.10). Une dérivée coûte de l'ordre d'un dixième de plus qu'une
+proposition ordinaire au même compte, sur la grande démonstration ;
+l'estimation ne distingue pas les deux.
+
 **La recherche s'arrête sur un compte, jamais sur une durée** — un nombre
 d'itérations, ou un nombre de mouvements consécutifs sans amélioration — fixé
 dans les réglages de génération et enregistré avec la proposition, à côté de sa
@@ -1459,21 +1608,23 @@ d'inactivité du § 8.4 est suspendu tant qu'un calcul tourne, donc le retour
 automatique en lecture ne tombe jamais au milieu d'une génération.
 
 **Les propositions d'une génération se calculent en parallèle, sur les cœurs du
-poste.** Chaque proposition ne dépend que de sa graine dérivée (§ 5.7) : un
-groupe de fils d'exécution, hors de celui de l'interface, s'en partage les rangs,
-chacun prenant le suivant dès qu'il a rendu le sien, et le résultat, rangé par
-identifiant, est octet pour octet celui d'un calcul sur un seul fil, quel que
-soit le nombre de cœurs. Ce nombre est un **réglage du poste, non de
-l'événement** : une case « Cœurs automatiques », cochée par défaut, en emploie un
-par processeur logique, hyperthreads compris ; décochée, elle laisse saisir un
-« Nombre de cœurs », un entier de 1 au nombre de processeurs logiques, la valeur
-automatique affichée à côté, et refuse toute autre saisie là où elle a eu lieu.
-Le réglage vaut pour la séance du logiciel, comme la durée observée : il ne
-s'écrit ni dans le fichier d'état ni dans le journal, et se règle en lecture
-comme en écriture. Une génération n'emploie jamais plus de cœurs que de
-propositions demandées. L'avancement reste une seule barre, la somme des
-mouvements évalués de toutes les propositions ; l'annulation arrête tous les fils
-à la fois, et l'échec de l'un les arrête tous, sans résultat partiel.
+poste.** Chaque proposition ne dépend que de sa graine dérivée — et, pour une
+dérivée, du plan de son départ et de ses tours figés, que chaque fil reçoit avec
+elle (§ 5.7) — : un groupe de fils d'exécution, hors de celui de l'interface,
+s'en partage les rangs, chacun prenant le suivant dès qu'il a rendu le sien, et
+le résultat, rangé par identifiant, est octet pour octet celui d'un calcul sur
+un seul fil, quel que soit le nombre de cœurs. Ce nombre est un **réglage du
+poste, non de l'événement** : une case « Cœurs automatiques », cochée par
+défaut, en emploie un par processeur logique, hyperthreads compris ; décochée,
+elle laisse saisir un « Nombre de cœurs », un entier de 1 au nombre de
+processeurs logiques, la valeur automatique affichée à côté, et refuse toute
+autre saisie là où elle a eu lieu. Le réglage vaut pour la séance du logiciel,
+comme la durée observée : il ne s'écrit ni dans le fichier d'état ni dans le
+journal, et se règle en lecture comme en écriture. Une génération n'emploie
+jamais plus de cœurs que de propositions demandées. L'avancement reste une seule
+barre, la somme des mouvements évalués de toutes les propositions ; l'annulation
+arrête tous les fils à la fois, et l'échec de l'un les arrête tous, sans
+résultat partiel.
 
 **Une commande annule une génération en cours, et elle écarte le résultat
 partiel.** L'annulation est immédiate — elle n'attend pas la fin d'une itération
@@ -2074,7 +2225,8 @@ fichier : c'est une posture de la séance, pas une propriété du plan.
 
 **Ce qui reste vivant en lecture** : le sélecteur de tour, le zoom, le cadrage,
 l'ajustement, le plein écran, la mise en évidence, l'affichage des listes, la
-**page de qualité** (§ 12), la comparaison des propositions, la lecture de
+**page de qualité** (§ 12), la comparaison de deux placements et le choix
+du second, le choix d'un départ et des tours à figer (§ 5.7), la lecture de
 l'historique, l'impression, et la **production de la planche de badges**, qui
 n'écrit aucun fichier d'événement (§ 11.6). C'est la condition pour que la
 protection tienne : si naviguer exigeait de passer en écriture, l'opérateur y
@@ -2319,7 +2471,10 @@ courants (§ 12.14) —, ni durée, ni cadence, qui valent pour la séance (§ 5
 Une génération écrit la course de chaque proposition qu'elle ajoute,
 `{"evalues":0,"releves":[]}` quand le plan initial n'avait rien à reprendre. Le
 retenu n'en a pas : il lit celle de la proposition d'où il vient, tant qu'elle
-est dans la liste.
+est dans la liste. La course d'une proposition dérivée est celle de sa propre
+descente, partie du plan de son départ : ses points de relevé ne comptent pas
+les mouvements qui ont produit le départ, et son entrée porte la même clé que
+toute autre.
 
 **Une entrée ne vaut que pour sa proposition** : celle de l'état qui porte
 exactement son identifiant, sa graine, son compte d'arrêt, son historique, son
@@ -2644,6 +2799,35 @@ qui annonce la suppression le compte (§ 2.1). Retirer un tour détruit les
 objectifs de ce tour, que l'annonce compte avec les réservations (§ 2.1, étape
 5).
 
+#### Deux champs facultatifs : la dérivation
+
+Une proposition dérivée (§ 5.7) porte deux champs facultatifs, écrits juste
+après `historique` : `depart`, l'identifiant entier de la proposition d'où sa
+recherche est partie, et `toursFiges`, la liste strictement croissante des
+numéros des tours qu'elle a repris de son départ, de 1 au nombre de tours
+qu'elle déclare. Une proposition qui n'est pas dérivée ne porte ni l'un ni
+l'autre, et une dérivée sans tour figé ne porte pas `toursFiges` : un
+événement sans dérivée s'écrit octet pour octet comme sans eux. La génération
+les pose, et aucun geste ne les change ensuite. Le retenu ne les porte pas :
+il désigne sa proposition, qui les porte.
+
+Sont des fautes de la proposition, qui la rendent fautive seule (« Ce que la
+compacité coûte, et ce qui le paie », point 3) : un `depart` qui n'est pas un
+entier strictement inférieur à son identifiant — le départ précède toujours sa
+dérivée —, un `toursFiges` vide, non strictement croissant, hors des tours
+déclarés ou qui les porte tous, un `toursFiges` sans `depart`. **Un `depart`
+absent de la liste n'est pas une faute** : effacer les propositions l'emporte
+(§ 5.7), et la dérivée reste comparable et classée. L'ouverture ne compare pas
+les tours figés à ceux du départ : les propositions tombent chacune seule, et
+cette égalité se vérifie à la génération (§ 5.7). Les deux champs entrent au
+format 2 avant sa première livraison : aucune version livrée du format ne les
+ignore.
+
+**La référence reste juste à travers le journal.** Un état restitué (§ 8.3)
+a existé avec ses dérivées et leurs départs ; un identifiant que la
+génération suivante réattribue après un retour désigne, dans chaque état, la
+proposition de cet état.
+
 #### La forme positionnelle
 
 Une proposition porte un **identifiant entier séquentiel**, et les propositions
@@ -2683,7 +2867,14 @@ supposée rendrait une autre proposition, sans le dire. Les trois champs ne
 déterminent le plan que pour l'algorithme de recherche qui l'a produit, dont
 l'ordre des tirages et les règles d'acceptation font partie du résultat : une
 proposition produite par une autre version du moteur n'est pas garantie
-régénérable.
+régénérable. **Une proposition dérivée se régénère de ces trois champs, de ses
+tours figés et du plan de son départ**, que la liste porte et qui ne se
+régénère pas. La régénération reçoit donc, avec les trois champs, `depart` et
+`toursFiges` ; en présence de `depart`, elle exige le plan du départ, et refuse
+sans lui, plutôt que de rendre en silence la proposition ordinaire de même
+graine. Tant que son départ est dans la liste, à configuration égale, une
+dérivée se régénère ; son départ effacé, elle ne l'est plus, comme une
+proposition ordinaire cesse de l'être quand l'ordre des priorités change.
 
 **« À configuration égale » comprend les étiquettes, les objectifs, la règle par
 défaut, le mode des objectifs, les cases du § 5.3 et l'ordre des priorités.**
@@ -2841,6 +3032,13 @@ Quatre exigences rendent ce coût acceptable, et aucune n'est facultative.
   réduit une capacité, et exige que les propositions touchées soient **signalées
   comme dérive et conservées**, jamais écartées. C'est le test qui empêche la
   correction suivante de reclasser le périmé en fautif.
+- **Dérivation** : une proposition sans `depart` s'écrit octet pour octet
+  comme avant ; une dérivée, avec et sans tours figés, fait l'aller-retour par
+  l'état, par un instantané et par un correctif du journal ; chaque faute de
+  dérivation — `depart` égal ou supérieur à l'identifiant, `toursFiges` vide,
+  désordonné, hors des tours, complet, ou sans `depart` — écarte la seule
+  proposition fautive et se nomme ; une dérivée dont le départ est effacé
+  reste comparable et classée.
 - **Coût d'enregistrement** : le test mesure la durée d'un enregistrement complet
   sur la grande démonstration et échoue au-delà du seuil mesuré du § 8.2. Il écrit
   sur un système de fichiers réel, donc il est dans `node:long`.
@@ -3758,7 +3956,16 @@ montrée —, comme l'aperçu d'impression (§ 11.7), et une ligne de source le
 nomme : « Placement retenu », « Proposition n° 4 » ; sans placement à mesurer,
 elle n'en nomme aucun et dit que le plan ne montre que les réservations, qui ne
 se mesurent pas. Chaque ligne du tableau des propositions offre la commande
-« Qualité », qui montre la proposition au plan et ouvre la page. Sans source
+« Qualité », qui montre la proposition au plan et ouvre la page. La ligne d'une
+proposition comparable offre aussi « Comparer », qui ouvre la page à sa vue de
+comparaison (§ 12.10.6) : la proposition de la ligne y devient le **second
+placement**, mesuré contre la source ; quand le plan ne montre rien, ou montre
+déjà cette proposition ou le retenu non ajusté qui lui est identique, celle-ci
+devient la source, montrée au plan, et le second placement prend son défaut.
+La ligne du retenu l'offre aussi, aux mêmes règles. « Comparer » n'est offert
+que quand la vue aurait un second placement, c'est-à-dire quand deux placements
+mesurables et distincts existent. Le second placement ne vit que dans cette
+vue : il ne change ni la source, ni le plan, ni les autres vues. Sans source
 mesurable, la page ne dessine aucune vue, et quatre cas se partagent sans se
 recouvrir :
 
@@ -3775,7 +3982,10 @@ recouvrir :
 Quand la source disparaît — une génération qui remplace la proposition montrée,
 un retour à un instant de l'historique, une exclusion qui la fait dériver —, la
 page suit le plan, qui revient au retenu ou aux réservations, et la ligne de
-source le dit.
+source le dit. Le second placement qui disparaît — effacé, retiré par un retour,
+en dérive, devenu la source — cède la place au défaut de la vue, qui nomme
+toujours les deux placements qu'elle compare, ou, sans candidat, à sa phrase
+(§ 12.6).
 
 **Les vues, dans leur ordre à l'écran.** Une liste en tête de page les nomme et
 mène à chacune.
@@ -3784,6 +3994,7 @@ mène à chacune.
 |---|---|---|---|
 | en-tête chiffré (§ 12.2) | les deux | une rangée de tuiles | les tuiles sont du texte |
 | profil trié (§ 12.3) | qui est le plus mal servi, de combien, et combien sont-ils ? | deux graphiques au même ordre de rangs : l'escalier en comptes, deux séries, le plafond réalisé et la borne de diversité en repères ; dessous, les rencontres en pourcentage du plafond réalisé | une ligne par personne dans l'ordre du profil, comptes et pourcentage, et la répartition des rencontres |
+| comparaison (§ 12.10.6) | laquelle des deux sert mieux, et qui y perd ? | un tracé, le manque des deux placements en escaliers superposés sur un axe commun, en comptes ; au-dessus, leurs chiffres en deux colonnes côte à côte, chacun en compte, ou en pourcentage suivi du compte du pire là où sa tuile en porte un | l'escalier du manque : une ligne par valeur de manque, et par placement l'effectif et l'effectif cumulé, en comptes |
 | collisions d'appartenance (§ 12.4) | d'où vient le problème, et relancer peut-il y changer quelque chose ? | barres horizontales à deux segments | une ligne par appartenance |
 | appartenances à chaque table (§ 12.11) | où les mêmes cercles se retrouvent-ils à une même table ? | un sélecteur à trois positions, puis la grille tables × tours, chaque case le compte de la position, échelle d'une teinte | une ligne par table, et par tour les trois comptes et leurs pourcentages |
 | paires répétées (§ 12.5) | qui revoit trop souvent la même personne ? | tableau paginé ; matrice sous le seuil | le tableau est la vue ; la matrice a le sien |
@@ -3794,20 +4005,23 @@ mène à chacune.
 
 Une vue sans objet — aucune personne concernée par les objectifs, aucun
 animateur, aucune course connue — cède la place à sa phrase (§ 12.6), jamais à
-des axes vides.
+des axes vides. La vue de comparaison n'y fait pas exception : sans second
+placement — un seul placement mesurable —, elle garde son entrée dans la liste
+des vues et cède la place à sa phrase, « un seul placement mesurable : rien à
+comparer ».
 
 **Un pourcentage de la page est toujours suivi, juste dessous, du pire cas en
 compte** : « 88 % », puis « minimum 24 sur 27 » ; « 77 % des tours possibles
 servis », puis « 3 personnes jamais servies ». Le pire cas d'une tuile, d'une
-phrase de synthèse ou de la soirée est celui de sa population. **Le pourcentage
-d'une ligne** — une ligne de jumeau, une infobulle — est suivi du **compte de
-cette ligne**, son numérateur sur son dénominateur, une ligne n'ayant qu'un
-cas : « 24 sur 27 », « 5 appartenances pour 8 sièges », « 24 servis sur 30
-possibles ». Les graduations d'un axe en pourcentages et le libellé « 100 % » de
-sa règle sont des repères, non le pourcentage d'une mesure, et n'ont pas de
-compte. Les rapports admis sont ceux du § 5.4, et d'eux seuls (§ 12.8). Les
-pourcentages s'écrivent sur cette page seulement : le tableau des propositions
-garde ses comptes (§ 5.7).
+colonne de la vue de comparaison (§ 12.10.6), d'une phrase de synthèse ou de la
+soirée est celui de sa population. **Le pourcentage d'une ligne** — une ligne de
+jumeau, une infobulle — est suivi du **compte de cette ligne**, son numérateur
+sur son dénominateur, une ligne n'ayant qu'un cas : « 24 sur 27 », « 5
+appartenances pour 8 sièges », « 24 servis sur 30 possibles ». Les graduations
+d'un axe en pourcentages et le libellé « 100 % » de sa règle sont des repères,
+non le pourcentage d'une mesure, et n'ont pas de compte. Les rapports admis sont
+ceux du § 5.4, et d'eux seuls (§ 12.8). Les pourcentages s'écrivent sur cette
+page seulement : le tableau des propositions garde ses comptes (§ 5.7).
 
 ### 12.1 Les deux questions
 
@@ -3868,15 +4082,17 @@ choisis, les imposés à part ; le minimum de A(p), avec la borne de diversité 
 la personne au rang 1 du même tri sur A(p) (§ 5.5) — une phrase dit à sa place
 qu'aucune personne présente ne porte d'appartenance — ; la somme de redondance ;
 le minimum du taux de diversité d(p), au centième, comme au tableau des
-propositions. Puis le manque maximal, avec l'effectif au manque maximal et le
-**plafond réalisé de la personne au rang 1 du profil de manque** (§ 12.10.6) ;
-l'effectif du manque ; l'écart d'itinéraire maximal et l'écart au plafond a
-priori, « inconnu » quand le plafond a priori l'est (§ 12.6). Quand une personne
-est concernée, les personnes jamais servies, le plus de tours hors objectif
-d'une personne et les tours hors objectif, puis le minimum de s(p) avec les
-tours possibles de la personne à ce minimum ; quand une personne est concernée
-par les animateurs, le minimum de m(p) avec la borne des animateurs de la
-personne à ce minimum, et les animateurs non rencontrés. La mention « minimum
+propositions. Puis le manque maximal, avec l'effectif au manque maximal — les
+personnes dont le manque l'égale, que la tuile tait quand il vaut 0, personne
+n'y manquant de rien — et le **plafond réalisé de la personne au rang 1 du
+profil de manque** (§ 12.10.6) ; l'effectif du manque, les personnes à qui il en
+manque au moins une rencontre ; l'écart d'itinéraire maximal et l'écart au
+plafond a priori, « inconnu » quand le plafond a priori l'est (§ 12.6). Quand
+une personne est concernée, les personnes jamais servies, le plus de tours hors
+objectif d'une personne et les tours hors objectif, puis le minimum de s(p) avec
+les tours possibles de la personne à ce minimum ; quand une personne est
+concernée par les animateurs, le minimum de m(p) avec la borne des animateurs de
+la personne à ce minimum, et les animateurs non rencontrés. La mention « minimum
 atteint », ou « atteignabilité inconnue », suit les tuiles (§ 5.5).
 
 **Une tuile écrit le plancher que le diagnostic écrit pour sa mesure** (§ 5.6),
@@ -4017,13 +4233,14 @@ rencontrent beaucoup de monde et toujours les mêmes cercles, l'échec exact que
 la diversité cherche à éviter et qu'aucun chiffre global ne montre.
 
 **Cette vue est inchangée pour UNE proposition** : le nombre de rencontres s'y
-lit en absolu, l'escalier du plafond est tracé à côté, et l'opérateur lit l'écart
-à l'œil. **Dès deux propositions, la comparaison change de quantité** : elle
+lit en absolu, l'escalier du plafond est tracé à côté, et l'opérateur lit
+l'écart à l'œil. **Dès deux placements, la comparaison change de quantité**,
+dans sa vue à elle (§ 12.10.6), le profil restant celui de la source : elle
 trace le **manque**, et non les nombres bruts, pour la raison exposée au
 § 12.10.1. **Quand les courbes se croisent, l'arbitrage est réel** — l'un sert
-mieux les plus mal lotis, l'autre la masse — et le graphique le montre au lieu de
-le trancher. En comparaison, l'abscisse change de sens et **la page l'écrit** : le
-rang 1 de l'une et de l'autre ne désignent pas la même personne.
+mieux les plus mal lotis, l'autre la masse — et le graphique le montre au lieu
+de le trancher. En comparaison, l'abscisse change de sens et **la page
+l'écrit** : le rang 1 de l'une et de l'autre ne désignent pas la même personne.
 
 ### 12.4 Deuxième vue — les collisions d'appartenance
 
@@ -4165,10 +4382,14 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | aucune collision | la vue des collisions cède la place à sa phrase ; la grille des tables aussi sous la position « doublons » du sélecteur, dont toutes les cases vaudraient zéro ; sous « sièges » et « assis », la grille reste, ses comptes ne dépendant pas des collisions |
 | noms longs | tronqués à une largeur **mesurée**, entiers dans l'infobulle et le tableau |
 | homonymes | distingués par leur appartenance ; la navigation se fait par identifiant |
-| le manque ne prend qu'une ou deux valeurs distinctes | une phrase portant les effectifs, non une courbe à deux marches |
-| deux propositions au même profil de manque | « indiscernables sur le manque » ; l'ordre des priorités du § 5.7 les départage sur le palier suivant, et la page le nomme |
+| les deux profils de manque réunis prennent moins de valeurs distinctes que le seuil du registre (§ 19.10) — le cas courant d'une soirée détendue, où le manque est nul pour presque tous | ni tracé ni escalier dessiné : une phrase portant, par valeur et par placement, les effectifs, puis les trois effectifs de rangs, puis, quand le rang 1 ne désigne pas la même personne, la phrase qui le dit ; le jumeau reste |
+| deux placements au même profil de manque | « indiscernables sur le manque » ; entre deux propositions, la page nomme ce qui les départage au classement — le premier palier appliqué (§ 5.7) où leurs clés diffèrent, ou l'identifiant quand toutes sont égales ; avec le retenu, qui ne se classe pas, l'indiscernabilité seule |
 | deux profils qui alternent plusieurs fois | les trois effectifs de rangs, **sans** rang de bascule ; le jumeau tabulaire porte le détail |
-| populations mesurées différentes entre deux propositions — ce que produit la dérive du § 9 sur des générations accumulées | ni courbe ni dominance : la page nomme les personnes exclues de part et d'autre et le dit **non comparable** |
+| un seul placement mesurable | la vue de comparaison garde son entrée et écrit « un seul placement mesurable : rien à comparer » ; aucune ligne n'offre « Comparer » |
+| la ligne d'évaluation de l'un des deux placements porte un refus de dessin (§ 12.10.5) | la vue ne trace rien, et nomme celui des deux dont le calcul est faux ; les deux se jugent sur le même test, celui de leur ligne |
+| le second placement disparaît | la vue revient à son défaut et nomme les deux placements qu'elle compare ; sans candidat, elle écrit sa phrase |
+| la source est une proposition dérivée | la ligne de source porte « dérivée de n° X », et la performance dit que la course part du plan de son départ (§ 12.14) |
+| populations mesurées différentes entre deux placements | ne survient pas entre deux placements comparables d'un même état, qui mesurent la population de la configuration courante, la dérive les écartant avant toute mesure (§ 9) ; la garde reste : si elle tombe, ni courbe ni dominance, la page nomme les personnes mesurées d'un seul côté et dit **non comparable** |
 | le plafond réalisé d'une personne vaut 0 | son manque vaut 0 et n'enseigne rien : la page marque le point et renvoie à l'écart d'itinéraire. Un manque nul n'est jamais lu comme « bien servi » sans son plafond à côté |
 | le plafond a priori n'a pas pu être maximisé | l'écart d'itinéraire s'écrit **« inconnu »**, jamais 0, et sans plancher (§ 12.2) ; le certificat reste hors d'atteinte (§ 5.5) et le départage du § 5.7 qui en dépend est sauté, la page nommant le palier suivant |
 | des propositions, aucune montrée | une phrase, et la commande qui montre la première proposition comparable du classement ; sans proposition comparable, la phrase seule |
@@ -4255,8 +4476,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   du mélange d'une table, quand la grille n'en dessine qu'un ; la diversité de
   chaque animateur tour par tour, quand le graphique dessine la soirée —, jamais
   en deçà. Celui de la vue de comparaison est **l'escalier du manque**
-  (§ 12.10.6), qui accepte en outre plus de deux propositions là où le tracé
-  s'arrête à deux.
+  (§ 12.10.6), une colonne par placement comparé.
 - **Le pointage se fait au plus proche** : à 260 points, le pas est de quelques
   pixels, et sans cette couche la vue est inutilisable au pavé tactile.
 - **Les jetons de graphique forment une famille** (§ 13.3) : deux séries, le
@@ -4266,8 +4486,13 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
   teintes d'appartenance une fois les trois dichromaties simulées, chacune à 3:1
   au moins sur le fond de la carte et à 30° au moins des teintes de conflit :
   une série voisine d'une pastille se lirait comme cette appartenance. Une
-  grille de fond ne porte pas d'information et n'est pas tenue à 3:1 ; elle
-  reste en couleur pleine.
+  série à motif tracée par-dessus une autre — les tirets du second placement
+  sur le trait plein du premier (§ 12.10.6) — se mesure contre le fond de la
+  carte, que les vides de son motif laissent voir, quand sa couleur diffère de
+  celle de la série qu'elle recouvre ; peinte de la même couleur, elle ne s'en
+  distingue que par son motif, et les deux séries se mesurent l'une contre
+  l'autre. Une grille de fond ne porte pas d'information et n'est pas tenue à
+  3:1 ; elle reste en couleur pleine.
 - **Le pointage au plus proche a une règle par forme** : sur un escalier, le
   rang sous le pointeur ; sur des barres, la ligne sous le pointeur ; sur une
   grille, la case ; sur les petits multiples, le point de relevé le plus proche
@@ -4333,8 +4558,19 @@ premier point de cette liste nomme — 99,8 % cache la personne à 14 sur 27 —
 la page le corrige par la règle qui fonde l'exception : **chaque pourcentage est
 suivi, juste dessous, du pire cas en compte** — « minimum 14 sur 27 », « 3
 personnes jamais servies », ou, sur une ligne, son propre compte (§ 12) —, et ne
-sert ni à trier, ni à classer, ni à comparer deux propositions, qui se comparent
-sur le manque (§ 12.10). Sur la soirée, les rencontres ne se somment pas : le
+sert ni à trier, ni à classer, ni à départager deux placements, qui se
+comparent sur le manque (§ 12.10). **La vue de comparaison est le seul
+affichage qui en pose deux côte à côte** (§ 12.10.6) : ses deux colonnes
+portent, chacune pour son placement, les pourcentages que portent les tuiles
+(§ 12.2), et eux seuls, chacun suivi du compte du pire, pour que la page
+n'écrive ses chiffres que d'une seule façon. Ils s'y lisent, ils n'y
+départagent rien : la vue n'écrit ni leur écart, ni lequel est le plus haut,
+n'en tire aucune phrase, et ne les porte ni au tracé, ni à son infobulle, ni
+à l'escalier, qui restent en comptes — un manque en pourcentage serait le
+rapport manque / plafond que cette liste refuse. Deux pourcentages voisins
+peuvent cacher deux pires cas sans commune mesure — 51 % d'un côté, une
+personne à 14 sur 27 ; 50 % de l'autre, une personne à 1 sur 2 — : le compte
+sous chacun le dit. Sur la soirée, les rencontres ne se somment pas : le
 pourcentage d'une tuile est celui de la personne que sa borne nomme (§ 12.2), et
 le taux de satisfaction reste refusé.
 
@@ -4450,10 +4686,13 @@ trois s'écrivent « — ».
 **1. Le manque maximal.** *De combien la personne la plus privée est-elle privée,
 compte tenu de là où ce placement l'a assise ?* Le plus grand manque sur la
 population mesurée. Vaut **0** sur un placement dont personne ne peut plus rien
-tirer, et le logiciel écrit alors le nombre de personnes mesurées à côté. Vaut
+tirer : la tuile ne compte alors personne au manque maximal, et la mention de la
+population mesurée (§ 12.2) dit sur combien de personnes ce zéro tient. Vaut
 **13** sur le placement du § 12.1 où chacun atteint un plafond réalisé de 27 sauf
-une personne qui ne rencontre que 14. Majorant : le plus grand plafond réalisé,
-qui borne l'axe. C'est la transposition du « le minimum gouverne la page » sur
+une personne qui ne rencontre que 14. Majorant : le plus grand plafond réalisé.
+L'axe de la comparaison, lui, s'arrête au plus grand manque des deux
+placements (§ 12.10.6) : borné au majorant, il écraserait les courbes contre
+le zéro. C'est la transposition du « le minimum gouverne la page » sur
 une échelle comparable ; la page écrit **« le plus grand manque »**, jamais
 « manque minimal », qui désignerait le mieux servi.
 
@@ -4520,60 +4759,154 @@ tracer.
 
 #### 12.10.6 La vue de comparaison
 
-Elle porte sa question en toutes lettres, comme le § 12.1 l'exige de chaque vue :
-**laquelle des deux sert mieux, et qui y perd ?**
+Elle porte sa question en toutes lettres, comme le § 12.1 l'exige de chaque
+vue : **laquelle des deux sert mieux, et qui y perd ?**
 
 Le § 12.3 reste inchangé pour **une** proposition. Quatre lignes ne se lisent
-pas ; dès **deux** propositions, le logiciel dessine donc l'écart lui-même.
+pas ; dès **deux** placements, le logiciel dessine donc l'écart lui-même, dans
+une vue de la page de qualité, la troisième, après le profil trié (§ 12).
 
-- **La quantité** : le manque, et lui seul. Une seule série par proposition, deux
-  propositions au plus sur le tracé, étiquetées directement (§ 12.7).
+**Les deux placements.** Le premier, **A**, est la source de la page — la
+proposition montrée, ou le retenu. Le second, **B**, se choisit parmi les
+**candidats** : les propositions comparables et le retenu mesurable, moins A, et
+moins le placement identique à A — un retenu non ajusté et sa proposition
+d'origine sont un même placement, et ne se comparent pas l'un à l'autre. Une
+liste en tête de la vue, « Comparer à : », porte exactement les candidats, le
+retenu d'abord, puis les propositions dans l'ordre du classement, chacune sous
+son numéro et son rang ; la commande « Comparer » d'une ligne du tableau des
+propositions pose aussi B (§ 12). Sans choix, B est le premier qui existe, parmi
+les candidats, de : le départ de A, quand A est une dérivée ; la proposition
+d'origine de A, quand A est un retenu ajusté ; la première proposition du
+classement ; le retenu. La vue s'ouvre ainsi sur la question qu'on se pose —
+« a-t-elle fait mieux que son départ ? », « mon ajustement a-t-il coûté ? ».
+Sans candidat, elle cède la place à sa phrase (§ 12.6). Le choix est un état de
+la navigation (§ 8.4) : il n'écrit rien, vit en lecture et sur un plan bloqué,
+et se retire à l'ouverture d'un événement. La vue ne retient rien : retenir se
+fait au tableau des propositions. Une ligne nomme les deux placements, « n° 4 »
+et « n° 7 », ou « placement retenu », sous les noms que le tracé et les phrases
+leur donnent ensuite.
+
+**Côte à côte, au-dessus du tracé**, deux colonnes juxtaposées, une par
+placement, portent les mêmes chiffres dans le même ordre. En tête, ceux de la
+question de la vue : la place au classement — celle de sa proposition pour un
+retenu non ajusté, « — » pour un retenu ajusté, qui ne se classe pas —, le
+minimum brut, le plus grand manque avec le plafond réalisé de la personne au
+rang 1, l'effectif du manque et l'écart d'itinéraire maximal. Dessous, repliés
+sous « Tous les indicateurs », un repli que le clavier ouvre et ferme, les
+indicateurs des tuiles de l'en-tête chiffré (§ 12.2), par les groupes des
+colonnes du tableau des propositions (§ 5.7) — personnes rencontrées, collisions
+d'appartenance, rencontres répétées et retours, diversité, objectifs des tables
+et animateurs ; une colonne que le tableau ne porte pas sous un critère décoché
+y reste, comme sa tuile, avec « ne classe pas » —, lus dans les deux lignes de
+la table d'évaluation, sans le détail de B. Chaque chiffre porte son plancher
+quand il est prouvé, comme sur les tuiles (§ 12.2) ; les planchers sont ceux du
+diagnostic, communs aux deux placements. Une colonne nomme la personne que la
+tuile nomme, sauf au minimum de A(p) et au minimum de m(p), dont la borne ne se
+lit que dans le détail : ces deux chiffres s'y écrivent sans personne ni borne ;
+quand aucune personne présente ne porte d'appartenance, la cellule de la
+diversité écrit, comme sa tuile, la phrase qui le dit (§ 12.2). Une dérivée y
+porte « dérivée de n° X ».
+
+**Les colonnes portent les pourcentages des tuiles**, et eux seuls
+(§ 12.2) : un chiffre dont la tuile porte un pourcentage le porte aussi dans
+sa colonne, écrit sous sa valeur et suivi, juste dessous, du compte du pire,
+comme sur la tuile. Ils sont trois. Le minimum brut, en tête : le
+pourcentage de son plafond réalisé qu'atteint la personne au rang 1 du
+profil de ce placement, puis « minimum 24 sur 27 ». Sous « Tous les
+indicateurs », les tours hors objectif : le pourcentage des tours possibles
+servis sur la soirée, Σ_r S_r sur Σ_r Π_r, puis « 3 personnes jamais
+servies » ; et le minimum de s(p) : le pourcentage de ses tours possibles que
+sert la personne à ce minimum, puis « minimum 1 sur 4 ». Le pourcentage
+d'une colonne est celui du **pire cas de son placement** — la personne que
+sa borne nomme, ou la soirée —, jamais une moyenne de la population ; chaque
+colonne lit le sien dans la ligne d'évaluation de son placement, et le pire
+cas d'une colonne n'est pas forcément la personne de l'autre. Il s'écrit par
+la fonction unique du § 5.4 : « — » quand son dénominateur vaut 0 — un
+plafond réalisé nul au rang 1 —, jamais 0 % ni 100 %, le compte restant
+écrit (§ 12.6). Le manque maximal, l'effectif du manque, l'écart
+d'itinéraire maximal, la place au classement et les autres indicateurs
+restent en comptes ; le taux de diversité garde sa forme, au centième.
+
+**Aucun pourcentage ne compare** (§ 12.8) : la vue n'écrit pas l'écart des
+deux, ne marque pas le plus haut, et ses phrases — les trois effectifs de
+rangs, la bascule, la dominance, l'indiscernabilité — ne portent que sur le
+manque. Le tracé, son infobulle et l'escalier restent en comptes : un manque
+en pourcentage serait le manque relatif que le § 12.10.3 refuse.
+
+- **La quantité** : le manque, et lui seul. Une seule série par placement,
+  deux au plus sur le tracé, **superposées**, A en trait plein et B en
+  tirets, chacune étiquetée directement de son nom (§ 12.7).
 - **L'axe vertical** : le manque en personnes, **zéro en bas**, graduations
-  entières, borne haute commune aux deux courbes — jamais une échelle par courbe,
-  que le § 12.8 refuse. Le zéro porte son libellé : « rien à reprendre à ce
+  entières, borne haute commune aux deux courbes — **le plus grand des deux
+  manques maximaux**, au moins 1 —, jamais une échelle par courbe, que le
+  § 12.8 refuse. Le zéro porte son libellé : « rien à reprendre à ce
   placement ».
-- **L'abscisse** : le rang, chaque proposition triée **par son propre manque
-  décroissant**, départagé par plafond réalisé croissant puis par identifiant.
-  Les deux courbes descendent. Le rang 1 de l'une et de l'autre ne désigne pas la
-  même personne, et la page l'écrit.
-- **Le jumeau tabulaire** (§ 12.7) est **l'escalier du manque** : une ligne par
-  valeur de manque, et par proposition une colonne d'effectif et une colonne
-  d'effectif cumulé — la seconde est la courbe elle-même, lue à l'envers. Il
-  accepte plus de deux propositions là où le tracé s'arrête à deux. Il lit le
-  même tableau que le tracé (§ 12.9).
+- **La synthèse du tracé** dit, pour chaque placement, son plus grand manque
+  et l'effectif à ce manque — « chez 2 personnes » —, l'effectif qu'écrit sa
+  tuile (§ 12.2) ; elle tait cet effectif pour un placement dont le plus grand
+  manque vaut 0, où personne ne manque de rien.
+- **L'abscisse** : le rang, chaque placement trié **par son propre manque
+  décroissant**, départagé par plafond réalisé croissant puis par
+  identifiant. Les deux courbes descendent. Le rang 1 de l'une et de l'autre
+  ne désigne pas la même personne, et la page l'écrit.
+- **L'infobulle d'un rang** porte deux lignes, une par placement, chacune
+  au format du § 12.10.3 précédé du nom de la personne : « n° 4 — Prénom
+  Nom : manque 3 · rencontres 24 · plafond réalisé 27 · plafond a priori
+  28 · 259 au total ».
+- **Le jumeau tabulaire** (§ 12.7) est **l'escalier du manque** : une ligne
+  par entier, de la plus grande valeur de manque à 0, présente ou non, et par
+  placement une colonne d'effectif et une colonne d'effectif cumulé — le
+  nombre de rangs dont le manque atteint au moins la valeur de la ligne,
+  c'est-à-dire le dernier rang où la courbe atteint cette valeur : la courbe
+  elle-même, lue à l'envers, sans trou. Il lit le même tableau que le tracé
+  (§ 12.9).
 
 **Quand aucune ne domine**, le § 12.3 dit déjà que l'arbitrage est réel. Le
-manque change ce qui se lit : avec des nombres bruts, un croisement peut n'être
-qu'un artefact des plafonds — la courbe du bas appartient peut-être à des gens
-assis à des tables de 7. Avec le manque, **le croisement porte sur le
-placement**. Le logiciel ne laisse pas lire la position du croisement à l'œil sur
-260 points : **il compte les rangs**, parce que deux profils décroissants peuvent
-se recroiser plusieurs fois et qu'un « rang de croisement » unique n'existe pas
-en général. La page écrit les trois effectifs — « A sert mieux à 12 rangs, B à
-200, égalité à 48 » — et, **quand le signe ne change qu'une fois**, nomme en plus
-le rang de bascule.
+manque change ce qui se lit : avec des nombres bruts, un croisement peut
+n'être qu'un artefact des plafonds — la courbe du bas appartient peut-être à
+des gens assis à des tables de 7. Avec le manque, **le croisement porte sur le
+placement**. Le logiciel ne laisse pas lire la position du croisement à l'œil
+sur 260 points : **il compte les rangs**, parce que deux profils décroissants
+peuvent se recroiser plusieurs fois et qu'un « rang de croisement » unique
+n'existe pas en général. La page écrit les trois effectifs — « n° 4 sert
+mieux à 12 rangs, n° 7 à 200, égalité à 48 » — et, **quand le signe ne change
+qu'une fois**, nomme en plus le rang de bascule.
 
-Ce que la vue ne dit pas, et que l'en-tête garde à côté : le manque mesure chacun
-contre son propre placement, donc **une proposition peut avoir un manque plus bas
-en offrant moins de rencontres réelles**. La tuile du minimum brut et l'écart
-d'itinéraire maximal restent affichés à côté des courbes ; une implémentation qui
-les retire rend le piège invisible.
+**Peu de valeurs, une phrase.** Quand les deux profils réunis prennent moins de
+valeurs distinctes que le seuil du registre (§ 19.10), la vue ne trace rien et
+écrit, par valeur, l'effectif de chaque placement, puis les trois effectifs de
+rangs, puis, quand le rang 1 ne désigne pas la même personne, la phrase qui le
+dit ; le jumeau reste. Une courbe à deux marches ne dit rien que la phrase ne
+dise mieux (§ 12.6).
+
+**Un calcul faux d'un côté refuse toute la vue** : quand la ligne
+d'évaluation de l'un des deux placements porte un refus de dessin
+(§ 12.10.5), la vue ne trace aucune des deux courbes et nomme celui dont le
+calcul est faux. Les deux côtés se jugent sur ce même test, celui de leur
+ligne, jamais l'un sur le détail de la source et l'autre sur sa ligne.
+
+Ce que la vue ne dit pas, et que les colonnes gardent à côté : le manque
+mesure chacun contre son propre placement, donc **un placement peut avoir un
+manque plus bas en offrant moins de rencontres réelles**. Le minimum brut et
+l'écart d'itinéraire maximal des deux restent affichés à côté des courbes ;
+une implémentation qui les retire rend le piège invisible.
 
 #### 12.10.7 La dominance
 
 **Dominance de profil.** La proposition A domine B quand, à **chaque rang** i,
-`manque_A(i) ≤ manque_B(i)`, avec au moins une inégalité stricte, les deux séries
-étant triées chacune par son propre ordre. C'est exactement « les courbes ne se
-croisent pas ». Un parcours linéaire après le tri suffit. Le logiciel l'énonce en
-toutes lettres quand elle tient — « la proposition A sert mieux à tous les
-rangs » — et **n'affiche rien quand elle ne tient pas** : un témoin presque
-toujours éteint apprend à ne plus être regardé, et la page montre déjà le
-croisement.
+`manque_A(i) ≤ manque_B(i)`, avec au moins une inégalité stricte, les deux
+séries étant triées chacune par son propre ordre. C'est exactement « les courbes
+ne se croisent pas ». Un parcours linéaire après le tri suffit. Le logiciel
+l'énonce en toutes lettres quand elle tient — « la proposition n° 4 sert mieux à
+tous les rangs », « le placement retenu sert mieux à tous les rangs » — et
+**n'affiche rien quand elle ne tient pas** : un témoin presque toujours éteint
+apprend à ne plus être regardé, et la page montre déjà le croisement.
 
 **La formulation est à surveiller mot à mot** : « sert mieux à tous les rangs »
 n'est pas « sert mieux chaque personne ». Le rang 3 des deux propositions désigne
 deux personnes différentes. Écrire la seconde phrase promet à l'opérateur qu'il
-peut basculer sans léser personne, ce qui est faux.
+peut basculer sans léser personne, ce qui est faux. Une garde des libellés
+refuse la seconde phrase dans toute table de traduction.
 
 **Dominance personne par personne** — `manque_A(p) ≤ manque_B(p)` pour tout p —
 se calcule aussi, en une passe, et **le logiciel ne la calcule pas**. La raison
@@ -4606,7 +4939,15 @@ Du moteur, en fonctions pures, comme tout le § 12.9. Le manque et l'écart
 d'itinéraire sont deux soustractions sur des tableaux déjà calculés ; ils
 n'ouvrent aucun parcours des ensembles de rencontres et ne changent pas le coût
 du § 5.10. Le tri du profil est en O(N log N) sur une clé stable. La page ne
-recalcule rien.
+recalcule rien : la vue de comparaison lit les deux lignes de la table
+d'évaluation, qui portent déjà, par personne, les rencontres et le plafond
+réalisé, et ne demande pas le détail du second placement (§ 12.9) ; elle se
+recompose à chaque dessin, sans cache de plus que la table (§ 13.3) — deux tris
+et un parcours, de l'ordre de deux millisecondes sur la grande démonstration.
+La table porte aussi le diagnostic que l'évaluation calcule déjà et le plafond
+a priori de chaque personne mesurée ; la comparaison en tire, par une fonction
+du moteur, les planchers des colonnes une fois par appel, communs aux deux
+placements.
 
 Une réserve honnête sur l'un des deux : le manque ne coûte rien, le plafond
 réalisé se lisant sur le placement. **L'écart d'itinéraire suppose le plafond a
@@ -4776,7 +5117,11 @@ séance, elle lit aussi sa **durée observée**, ses cœurs et sa **cadence**
 (§ 5.10). Une durée nulle, ou absente — une proposition lue d'un fichier, une
 génération d'une séance précédente —, s'écrit « inconnue », et la cadence avec
 elle. Sans mouvement évalué, la vue écrit que le plan initial n'avait rien à
-reprendre.
+reprendre. Pour une proposition dérivée, la vue dit que la course part du plan
+de son départ — « partie de la proposition n° 4 » — et non d'un placement tiré :
+ses premiers points mesurent déjà un plan cherché, et ses mouvements ne
+comptent pas ceux qui ont produit le départ (§ 8.6). Le retenu non ajusté qui
+vient d'une dérivée, dont la vue montre la course, le dit aussi.
 
 Puis des **petits multiples** : un graphique par indicateur, une valeur par
 critère que le classement applique, dans son ordre, jamais la clé pondérée d'un
@@ -5458,6 +5803,46 @@ compagnon des courses se relit à l'identique (§ 8.6) : une génération écrit
 rouverte, montre les mêmes points, mesurés sous les réglages courants, et le
 dernier égale la ligne de la proposition.
 
+**Une dérivée est déterministe, et ne touche pas au chemin ordinaire.** Les
+empreintes de référence ne changent pas. À départ, tours figés et graine
+égaux, une génération dérivée rend les mêmes plans sur un fil et sur tous, et
+la proposition de rang k calculée seule égale celle de la génération entière.
+Son point de relevé k égale le plan que le même départ et la même graine
+rendent au compte d'arrêt k. Il refuse la génération ordinaire qui tire un
+nombre de plus ou de moins, et la dérivée qui tire son placement initial.
+
+**Un tour figé ne bouge pas, relances comprises.** L'épreuve court sur une
+instance, une graine et un historique court, écrits une fois dans l'épreuve,
+où l'écart au plafond a priori de la meilleure affectation tombe à zéro sans
+que le score s'annule — la recherche ne relance que dans l'ordre des
+contraintes, et s'arrête sur un score nul — : la petite démonstration, tour 1
+figé, ou, si aucune graine ne l'y mène, une instance construite dans
+l'épreuve. Elle constate au moins une relance, par le nombre de relances que
+la recherche rend aux épreuves, et refuse de passer sans relance. Chaque tour
+figé du plan rendu et de chaque point de relevé égale, case par case, celui
+du départ, sièges compris sous des sièges attribués ; aucun mouvement évalué
+ne tombe dans un tour figé. Il refuse la relance qui tire un placement neuf,
+et le tour figé qui ne se reprend qu'au premier départ.
+
+**Une dérivée n'est jamais pire que son départ dans l'ordre de la recherche,
+et lui est identique quand rien ne l'améliore.** Partie du plan parfait de la
+petite démonstration, la dérivée rend ce plan, et la génération l'écarte comme
+identique, l'issue disant que le départ n'avait rien à reprendre. L'épreuve
+n'affirme rien du classement, qui peut ranger une dérivée derrière son départ
+(§ 5.7).
+
+**Les refus se posent au lancement.** Un départ absent, en dérive, fautif ou
+qui ne tient pas une réservation courante, un tour figé où le départ
+n'assied pas une personne au siège qu'une réservation courante lui fixe, tous
+les tours figés, un tour hors de la soirée : chacun est refusé avant tout
+calcul, nommé, avec son remède ; en lecture et sur un plan bloqué, le refus
+de la séance passe avant eux. Une réservation à un siège posée après le
+départ, dans un tour figé, se refuse au lancement et non à l'enregistrement.
+L'application recopie les tours figés du départ, et refuse d'enregistrer une
+dérivée dont un tour figé en diffère ; une épreuve atteint ce refus en
+forçant le défaut, aucune par un geste. La régénération d'une dérivée sans
+le plan de son départ est refusée.
+
 **Le détail d'un placement ne recompte rien.** Ses doublons d'appartenance d'une
 case sont non nuls exactement là où les collisions de ce tour et de cette table
 le sont ; ses servis des tours somment s(p) ; ses paires répétées ont l'effectif
@@ -5574,6 +5959,13 @@ entrée de réserve — et le logiciel doit nommer chacune et écarter la **seul
 proposition fautive. Un second test **périme** délibérément : il exclut une
 personne, supprime une table, réduit une capacité, et exige que les propositions
 touchées soient **signalées comme dérive et conservées**, jamais écartées.
+
+**La dérivation se lit, s'écrit et se défait.** Une proposition sans
+dérivation s'écrit comme avant ; une dérivée garde `depart` et `toursFiges`
+par l'état, l'instantané et le correctif du journal ; chaque faute de
+dérivation du § 8.9 écarte la seule dérivée fautive ; une dérivée dont le
+départ est effacé reste comparable, et un retour qui rend le départ rend le
+libellé « dérivée de n° X » à son état.
 
 **Le coût d'un enregistrement complet se mesure** sur la grande démonstration et
 échoue au-delà du seuil du § 8.2. Il écrit sur un système de fichiers réel : série
@@ -6830,6 +7222,8 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `10-diagnostic.png` | **grande démonstration** | le diagnostic préalable (§ 5.6), le plafond a priori, les **99 retours imposés** énoncés à part, et le plancher de l'écart d'itinéraire | les valeurs affichées égalent celles du moteur pour la même entrée ; le plafond des quatre animateurs des tables de 7 vaut **24** |
 | `10a-ordre-priorites.png` | l'événement en construction | l'ordre des priorités : paliers numérotés, un palier de deux critères avec leurs poids — excédent de collisions × 1 et tours hors objectif × 3 —, « rencontrer le plus d'animateurs différents » marqué décoché (§ 5.3, § 5.7) | l'ordre affiché est celui que compile le moteur ; la capture `11` qui suit nomme les mêmes paliers ; le choix du mode des objectifs, à son défaut « le plus de places servies », et la commande qui rétablit le défaut sont affirmés hors de l'image |
 | `11-propositions.png` | l'événement en construction | plusieurs propositions comparées, l'ordre de classement **écrit dans l'interface** par paliers (§ 5.7), le tableau défilé en largeur des colonnes de diversité jusqu'à celles des objectifs | au moins trois propositions ; l'ordre affiché est celui que produit la clé de tri du moteur |
+| `11a-depart-derive.png` | **variante sans exception** (§ 15.1), ses propositions engendrées sous une graine écrite et un compte réduit | la section de la génération sous un départ choisi : « Départ : proposition n° X », « Repartir de zéro », les cases des tours, le tour 1 coché, et la commande « Générer depuis n° X » (§ 5.7) | le départ nommé est celui dont la ligne a reçu « Repartir d'elle » ; aucune écriture n'a eu lieu avant le lancement |
+| `11b-propositions-derivees.png` | idem, la génération dérivée faite | les lignes des dérivées au tableau des propositions, chacune portant « Dérivée de n° X, tour 1 figé. » sous son numéro, et le départ dans le même classement (§ 5.7) | chaque dérivée garde le tour 1 de son départ case par case ; le libellé d'historique est celui du § 5.7 |
 | `12-qualite-profil.png` | **grande démonstration** | le profil en deux graphiques au même ordre de rangs : l'escalier en comptes de personnes, deux séries — rencontres en trait plein, appartenances en tirets —, le plafond réalisé en repère mixte et la borne de diversité en repère pointillé, chacun nommé sur le tracé ; dessous, les rencontres en pourcentage du plafond réalisé jusqu'à la règle à 100 %, du motif du plafond, l'axe des rangs de ce second graphique hors de l'image ; le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée ; chaque graphique a un seul axe vertical ; le rang 1 est le même dans les deux ; chaque pourcentage écrit est suivi de son compte du pire ; aucun repère n'a le motif d'une série |
 | `12a-qualite-sans-placement.png` | **petite démonstration, variante « conflit inévitable »**, avant sa génération | la page sans placement : la ligne de source, le diagnostic préalable et sa phrase (§ 12.6) | aucun graphique n'est dessiné ; la phrase est celle d'« aucun placement » |
 | `12b-qualite-une-table.png` | **6 personnes de trois appartenances, une table de 6, 3 tours**, construite, sa génération faite | la phrase d'une seule table à la place du profil, des collisions, de la grille et des paires ; la performance (§ 12.6) | ni profil, ni barre de collision, ni grille, ni tableau des paires n'est dessiné ; la phrase est celle d'« une seule table » |
@@ -6847,8 +7241,9 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `15b-qualite-animateurs.png` | **grande démonstration** | le profil des animateurs rencontrés avec la borne des animateurs en repère pointillé, puis le début de la diversité par animateur sur la soirée, le moins varié en tête ; ses colonnes et leurs trois nombres, plus bas, sont affirmés sans l'image (§ 12.13) | le mot « plafond » n'est pas écrit dans la vue ; la première barre porte le minimum annoncé |
 | `15c-qualite-performance.png` | **grande démonstration**, une proposition montrée, dans la séance qui l'a engendrée | la ligne de tête — mouvements évalués, durée et cadence de la génération — et les deux premiers rangs des petits multiples sur l'abscisse logarithmique ; les autres multiples et la phrase du dernier changement, plus bas, sont affirmés sans l'image (§ 12.14) | le dernier point de relevé est le plan de la proposition ; ses valeurs égalent la ligne du tableau des propositions ; la durée écrite est celle dont le parcours a avancé l'horloge |
 | `16-minimum-atteint.png` | **petite démonstration** | le bas de l'en-tête chiffré : la diversité d'appartenance, le manque à zéro et **« minimum atteint »** ; les compteurs de collision et de répétition **mesurés** à zéro et la ligne secondaire « ancrés » à **« — »**, plus haut, sont affirmés sans l'image (§ 15.3) | la mention est présente, les compteurs mesurés sont nuls, et la population vide affiche un tiret, **jamais zéro** |
-| `17-comparaison-manque.png` | **variante sans exception** (§ 15.1) | les deux profils de manque qui se croisent, l'axe commun, le zéro libellé, les trois effectifs de rangs (§ 12.10.6) | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe |
-| `18-comparaison-escalier.png` | idem | l'escalier du manque, jumeau tabulaire de la vue précédente | les effectifs cumulés du tableau reproduisent la courbe |
+| `17-comparaison-manque.png` | **variante sans exception** (§ 15.1), une paire de placements écrite dans le scénario | la vue de comparaison : « Tous les indicateurs » replié, les deux profils de manque superposés qui se croisent, l'axe commun, le zéro libellé, la synthèse du tracé, les trois effectifs de rangs (§ 12.10.6) ; la question, la ligne qui nomme les deux placements et leurs colonnes, plus haut, sont affirmées sans l'image, et `17a` les montre | la page écrit sa question en toutes lettres et les trois effectifs ; aucune échelle propre à une courbe ; chaque pourcentage d'une colonne est suivi de son compte du pire ; aucun pourcentage hors des colonnes — ni au tracé, ni à sa synthèse, ni dans les phrases ; le signe change au moins une fois |
+| `17a-comparaison-colonnes.png` | idem, la même paire | la même vue, cadrée sur ses colonnes : la ligne qui nomme les deux placements, leurs chiffres en deux colonnes côte à côte — le minimum brut de chacune en pourcentage, le compte du pire dessous —, « Tous les indicateurs » replié | chaque colonne porte un pourcentage par indicateur visible qui en a un, le pire cas de son placement, chacun suivi de son compte du pire |
+| `18-comparaison-escalier.png` | idem | l'escalier du manque ouvert, jumeau tabulaire de la vue précédente, une colonne d'effectif et une d'effectif cumulé par placement | les effectifs cumulés du tableau reproduisent la courbe ; l'escalier n'écrit aucun pourcentage |
 | `19-ajustement.png` | l'événement retenu | le déplacement d'une personne après la retenue, l'interface disant **lequel des deux gestes** est en cours (§ 5.8) | le libellé de l'état des données est visible |
 | `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
 | `21-historique.png` | idem | la liste des instants, le fil courant distingué des fils abandonnés, un jalon nommé (§ 8.3) | au moins un fil abandonné est présent et marqué comme tel |
@@ -6867,14 +7262,14 @@ elles, et les captures du placement qui en découle changent avec elle. Que
 l'ordre par défaut rende les plans de l'ordre fixe de référence ne se
 photographie pas : les empreintes de référence le gardent (§ 14.10).
 
-**Trois captures sont déclarées et reportées** : `17` et `18`, à l'étape 10, et
-`21`, à l'étape 11, montrent la comparaison et la vue d'historique, que le
-logiciel n'offre pas encore. Le manifeste les porte comme reportées, à leur
-étape et sans image, et le contrôle d'ordre les compte : l'étape 10 n'est pas
-une étape sans capture, et leur place dans l'ordre est déjà gardée. Les deux
-`07a` se photographient sur la grande démonstration, chargée pour la capture
-`10` : sur la soirée que le parcours construit, deux tables, même le zoom le
-plus faible laisse les sièges pour cibles, et la bascule ne se montre pas.
+**Une capture est déclarée et reportée** : `21`, à l'étape 11, montre la vue
+d'historique, que le logiciel n'offre pas encore. Le manifeste la porte comme
+reportée, à son étape et sans image, et le contrôle d'ordre la compte : l'étape
+11 n'est pas une étape sans capture, et sa place dans l'ordre est déjà gardée.
+Les deux `07a` se photographient sur la grande démonstration, chargée pour la
+capture `10` : sur la soirée que le parcours construit, deux tables, même le
+zoom le plus faible laisse les sièges pour cibles, et la bascule ne se montre
+pas.
 
 Les captures de la page de qualité, `12` à `16` et leurs voisines en « a » à
 « g », illustrent l'étape 10 et se prennent **à la fin du parcours**, après les
@@ -6891,6 +7286,25 @@ parcours avance d'un pas écrit à chaque avancement du moteur ; la durée et la
 cadence affichées sont alors les mêmes à chaque exécution (§ 19.4). Le parcours
 rouvre ensuite l'événement, sans photographier : la même proposition montre la
 même course, la durée « inconnue ».
+
+**Les captures des dérivées et de la comparaison se prennent aussi à la fin**,
+sur la variante sans exception, que le parcours charge depuis le premier écran
+et génère sous une graine écrite et un compte réduit : `11a` au départ choisi,
+`11b` après la génération dérivée, puis `17`, `17a` et `18` sur une paire de
+placements dont les profils de manque se croisent et prennent au moins le seuil
+de valeurs distinctes (§ 19.10) — la dérivée et son départ si une graine écrite
+le donne, sinon deux propositions de la génération. La paire se cherche une
+fois, sous un compte réduit, et ses numéros et ses graines s'écrivent dans le
+scénario : la recherche n'est pas refaite à chaque exécution. `11a` et `11b`
+appartiennent à l'étape 9 et se rangent entre `11` et `12` ; prises à la fin,
+elles ne changent rien de ce que `19`, `20` et les familles reçoivent. Le guide
+d'utilisation cite `11a` et `11b` à l'étape 9, sous « Repartir d'une
+proposition », et `17`, `17a` et `18` à l'étape 10 ; l'appariement les garde
+(§ 19.7). Les deux générations que ces captures demandent, ordinaire puis
+dérivée, sur 260 personnes, ont un coût **mesuré, non supposé** : le scénario
+écrit leur compte réduit avec la durée relevée, et cette durée décide, comme
+pour toute étape de la grande démonstration, si elles restent au parcours
+principal (§ 19.3).
 
 **L'aperçu d'impression est plus haut que la fenêtre.** `22` et `23` le
 photographient au défilement où le filigrane et le pied de la première page
@@ -7204,24 +7618,24 @@ du moteur, et **font croire au lecteur que le texte ne lui est pas destiné** �
 après quoi il ne lit plus la section, qui est la seule réponse écrite à la question
 qu'il posera.
 
-La section s'appuie sur les captures d'écran `10`, `11`, `12`, `16`, `17` et
-`18` : le diagnostic, les propositions classées, le profil trié, « minimum
-atteint » sur la petite démonstration, et les deux vues de comparaison. Tant que
-`17` et `18` sont reportées (§ 19.3), elle s'appuie sur `10`, `11`, `12` et
-`16`, et décrit la comparaison par le manque en mots, sur les colonnes du
-tableau des propositions. Le point 3 s'appuie en outre sur `15c` : la course
-d'une recherche, et son plateau. Le contraste de la variante « conflit
-inévitable » (§ 15.3) — une personne déplacée d'une appartenance à l'autre, et
-la mention bascule — est le plus court exposé de toute la section, et il tient
-en deux images.
+La section s'appuie sur les captures d'écran `10`, `11`, `11b`, `12`, `16`,
+`17` et `18` : le diagnostic, les propositions classées, les dérivées, le
+profil trié, « minimum atteint » sur la petite démonstration, et la vue de
+comparaison et son escalier. La
+comparaison par le manque s'y lit sur `17` et `18`, les colonnes du tableau des
+propositions en donnant les chiffres ; une dérivée s'y lit sur `11b`, qui montre
+qu'elle entre au même classement que son départ. Le point 3 s'appuie en outre
+sur `15c` : la course d'une recherche, et son plateau. Le contraste de la
+variante « conflit inévitable » (§ 15.3) — une personne déplacée d'une
+appartenance à l'autre, et la mention bascule — est le plus court exposé de
+toute la section, et il tient en deux images.
 
 ### 19.10 Le banc de mesure
 
 La spécification exige à plusieurs endroits un seuil « mesuré » — le nombre de
 sièges au-delà duquel le dessin cesse d'être lisible (§ 6.2), le seuil de
 participants sous lequel la matrice se dessine (§ 12.5), la largeur de troncature
-des noms longs (§ 12.6), le nombre de valeurs distinctes de manque sous lequel
-la courbe cède la place à une phrase (§ 12.6), la tolérance de la chaîne témoin
+des noms longs (§ 12.6), la tolérance de la chaîne témoin
 (§ 19.4), le ralentissement d'un cœur chargé (§ 5.10). Le niveau navigateur est
 le seul endroit qui le peut, puisqu'une mesure sur le rendu réel est précisément
 ce que `jsdom` ne sait pas faire (§ 14.4).
@@ -7260,7 +7674,11 @@ l'alphabet visé (§ 14.1), jamais sur les noms d'une démonstration, à **168 p
 Le seuil de la matrice borne son coût et sa lisibilité au cadre fixé ; la page
 éprouve en plus, par la géométrie, que les cases tiennent 24 px dans la largeur
 réelle de la carte (§ 12.5). Le nombre de valeurs distinctes de manque sous
-lequel la courbe cède la place à une phrase appartient à la comparaison.
+lequel la comparaison cède la place à une phrase, sur les deux profils réunis
+(§ 12.10.6), appartient à la comparaison : `VALEURS_MANQUE_COURBE`, au
+registre, à **3**, au statut de défaut de travail — une ou deux valeurs se
+disent mieux qu'elles ne se tracent (§ 12.6). C'est une règle de forme, non une
+mesure : le banc ne la relève pas, et les constantes adoptées restent quatre.
 
 **Le relevé nomme la classe de la machine, jamais la machine.** Sa configuration
 est une liste fermée : le cadre d'affichage, le facteur d'échelle, le navigateur et
