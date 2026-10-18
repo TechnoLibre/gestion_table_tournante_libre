@@ -206,10 +206,11 @@ function ancrage({ T, idsTables, capacite, ancresParTable }) {
 
 // Plafonds a priori regroupés par valeur, valeurs croissantes : à chacune,
 // les ancrés et les mobiles, partiellement fixés compris (§ 5.4), qui la
-// portent. Les personnes se parcourent par plafond, puis par index.
+// portent. Les personnes se parcourent par plafond, puis par index : le tri
+// est stable et part de l'ordre des index.
 function repartition(aPriori, statut) {
   const ordre = Array.from({ length: aPriori.length }, (_, p) => p);
-  ordre.sort((p, q) => aPriori[p] - aPriori[q] || p - q);
+  ordre.sort((p, q) => aPriori[p] - aPriori[q]);
   const lignes = [];
   for (const p of ordre) {
     let ligne = lignes[lignes.length - 1];

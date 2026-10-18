@@ -96,6 +96,16 @@ function ecartDeRefus(fonction, code, details) {
   return 'aucun refus';
 }
 
+// Exige de fonction une TypeError au message donné ; libelle nomme le cas
+// dans l'échec.
+function exigerTypeError(fonction, message, libelle) {
+  assert.throws(fonction, (erreur) => {
+    assert.ok(erreur instanceof TypeError, `${libelle} : ${erreur?.name} au lieu de TypeError`);
+    assert.equal(erreur.message, message, libelle);
+    return true;
+  });
+}
+
 // Chaque cas [libellé, fonction, code, détails] dont le refus s'écarte de
 // l'attendu, en une ligne lisible.
 function ecartsDeRefus(cas) {
@@ -107,13 +117,14 @@ function ecartsDeRefus(cas) {
 }
 
 describe('valeurs du contrat de données (types.js)', () => {
-  test('STATUT, LIBRE, RESERVE et SANS_GROUPE valent ce que types.js écrit, et STATUT ne se modifie pas', () => {
+  test('STATUT, LIBRE, RESERVE, SANS_GROUPE, SANS_OBJECTIF et NON_ANIMATEUR valent ce que types.js écrit, et STATUT ne se modifie pas', () => {
     // Seule épreuve qui écrit ces valeurs en clair : les autres les
     // importent. LIBRE et RESERVE sont égales : une rangée de instance.fixe se
     // lit comme le plan qui laisse en réserve chaque tour libre.
     assert.deepEqual(STATUT, { MOBILE: 0, PARTIELLEMENT_FIXE: 1, ANCRE: 2 });
     assert.ok(Object.isFrozen(STATUT));
     assert.deepEqual([LIBRE, RESERVE, SANS_GROUPE], [-1, -1, -1]);
+    assert.deepEqual([SANS_OBJECTIF, NON_ANIMATEUR], [-1, -1]);
   });
 });
 
@@ -283,6 +294,16 @@ describe('normaliser : exclusion (§ 4.4)', () => {
       ]]),
       [],
     );
+  });
+
+  test('les exclus se rangent par identifiant croissant, quel que soit l’ordre fourni', () => {
+    // L'ordre d'un ensemble est celui de ses insertions : il se lit en liste.
+    const instance = normaliser(configuration({
+      participants: [exclu(7), ...personnes([2]), exclu(3), exclu(5)],
+      tables: tablesDe([11], 2),
+      tours: 1,
+    }));
+    assert.deepEqual([...instance.exclus], [3, 5, 7]);
   });
 
   test('une réservation suspendue reste vérifiée dans sa forme, et n’a aucun effet', () => {
@@ -544,6 +565,14 @@ describe('normaliser : refus (§ 5.9, § 6.2)', () => {
     assert.ok(cas.length > 0, 'aucun cas examiné');
     assert.deepEqual(ecarts, []);
   });
+
+  test('des contraintes qui ne sont pas un objet lèvent TypeError, au message qui le dit, avant toute case', () => {
+    // Une chaîne se lirait case par case sans lever ; undefined et null
+    // lèveraient sur la première lecture, sous le message du moteur JavaScript.
+    for (const contraintes of [undefined, null, 'separerAppartenances', true]) {
+      exigerTypeError(avec({ contraintes }), 'configuration.contraintes : objet attendu', libelleDe(contraintes));
+    }
+  });
 });
 
 describe('nombrePlaces (§ 5.9)', () => {
@@ -783,8 +812,9 @@ describe('plans : forme par identifiants et forme indexée (§ 8.9)', () => {
   // refuse. Les ids [3, 6, 8, 11] occupent les index 0 à 3 ; la case p × 2 + r
   // est celle de l'index p au tour r + 1. Trois tables : un index de table va
   // de 0 à 2. Une chaîne numérique n'est pas un index, et se cite entre
-  // guillemets. Deux cases fautives : la première dans l'ordre des cases est
-  // nommée, la case 1 (3 au tour 2) avant la case 2 (6 au tour 1).
+  // guillemets ; NaN se cite tel quel, et non comme null. Deux cases
+  // fautives : la première dans l'ordre des cases est nommée, la case 1 (3 au
+  // tour 2) avant la case 2 (6 au tour 1).
   const FAUTIFS = [
     ['longueur N × R − 1', TABLE_DE.slice(1), 'plan indexé de 7 cases, N × R = 8 attendues'],
     ['longueur N × R + 1', [...TABLE_DE, RESERVE], 'plan indexé de 9 cases, N × R = 8 attendues'],
@@ -793,6 +823,7 @@ describe('plans : forme par identifiants et forme indexée (§ 8.9)', () => {
     ['index −2', avecFautes([[3, -2]]), 'participant 6, tour 2, index de table -2'],
     ['index non entier', avecFautes([[5, 0.5]]), 'participant 8, tour 2, index de table 0.5'],
     ['index null', avecFautes([[4, null]]), 'participant 8, tour 1, index de table null'],
+    ['index NaN', avecFautes([[2, Number.NaN]]), 'participant 6, tour 1, index de table NaN'],
     ['chaîne "0"', avecFautes([[6, '0']]), 'participant 11, tour 1, index de table "0"'],
     ['chaîne "-1"', avecFautes([[7, '-1']]), 'participant 11, tour 2, index de table "-1"'],
     ['deux cases fautives', avecFautes([[2, 9], [1, 9]]), 'participant 3, tour 2, index de table 9'],
@@ -891,6 +922,21 @@ describe('figerConfiguration : une normalisation par configuration figée', () =
     for (let appel = 0; appel < 2; appel += 1) {
       assert.throws(() => normaliser(figee), (erreur) => erreur instanceof ErreurConfiguration && erreur.code === 'TOURS');
     }
+  });
+
+  test('figer de nouveau une configuration déjà normalisée garde son instance', () => {
+    const figee = figerConfiguration(recue());
+    const premiere = normaliser(figee);
+    assert.equal(figerConfiguration(figee), figee);
+    assert.equal(normaliser(figee), premiere);
+  });
+
+  test('seuls les objets se figent : une fonction atteinte reste telle quelle', () => {
+    // Une fonction, que typeof distingue d'un objet, n'est pas une donnée de
+    // configuration : figerConfiguration la laisse modifiable.
+    const fonction = () => 0;
+    figerConfiguration({ ...recue(), contraintes: fonction });
+    assert.equal(Object.isFrozen(fonction), false);
   });
 });
 
@@ -1077,6 +1123,16 @@ describe('normaliser : objectifs des tables et correspondance (§ 4.5, A7, A21)'
     assert.notEqual(instance.priorites, PRIORITES_PAR_DEFAUT);
   });
 
+  test('un objectif sans champ tour vaut pour la soirée, comme un tour nul', () => {
+    const avecObjectifs = (objectifs) => normaliser({
+      ...configuration({ participants: [etiquete(1, ['finance'])], tables: tablesDe([12, 11], 2), tours: 2 }),
+      objectifs,
+    });
+    const sansTour = avecObjectifs([{ table: 11, regle: 'ou', etiquettes: ['finance'] }]);
+    assert.deepEqual(sansTour.objectifDe, Int32Array.from([SANS_OBJECTIF, SANS_OBJECTIF, 0, 0]));
+    assert.deepEqual(sansTour, avecObjectifs([objectif(11, null, 'ou', ['finance'])]));
+  });
+
   test('les deux cases facultatives se copient quand la configuration les porte, et aucune autre clé', () => {
     const contraintes = { ...SANS_CONTRAINTE, respecterObjectifs: false, rencontrerAnimateurs: true, autre: true };
     const instance = normaliser(configuration({ participants: personnes([1]), tables: tablesDe([11], 2), tours: 1, contraintes }));
@@ -1134,10 +1190,68 @@ describe('normaliser : animateurs et borne des animateurs (§ 4.5, D6, D21)', ()
     assert.deepEqual(ecartsDeRefus([
       ['un tour 3 sur deux', avecAnime(2, [1, 3]), 'ANIMATION_NON_FIXEE', { participant: 2, tour: 3 }],
       ['un tour 0', avecAnime(2, [0]), 'ANIMATION_NON_FIXEE', { participant: 2, tour: 0 }],
+      // Le tour 0 de la première personne désignerait la case qui précède
+      // instance.fixe : il se refuse avant toute lecture de case.
+      ['un tour 0 de la première personne', avecAnime(1, [0]), 'ANIMATION_NON_FIXEE', { participant: 1, tour: 0 }],
       ['un tour non entier', avecAnime(2, [1.5]), 'ANIMATION_NON_FIXEE', { participant: 2, tour: 1.5 }],
       ['un tour en texte', avecAnime(2, ['1']), 'ANIMATION_NON_FIXEE', { participant: 2, tour: '1' }],
       ['un tour où la personne est libre', avecAnime(1, [1]), 'ANIMATION_NON_FIXEE', { participant: 1, tour: 1 }],
     ]), []);
+  });
+});
+
+describe('normaliser : animateurs, formes de la liste des tours animés', () => {
+  const avecAnime = (anime) => normaliser(configuration({
+    participants: [etiquete(1, undefined, anime), etiquete(2)],
+    tables: tablesDe([11], 2),
+    tours: 2,
+    reservations: [tous(1, 11)],
+  }));
+
+  test('une liste vide : la personne n’anime pas et ne reçoit aucun rang', () => {
+    const instance = avecAnime([]);
+    assert.equal(instance.A, 0);
+    assert.deepEqual(instance.rangAnimateur, Int32Array.from([NON_ANIMATEUR, NON_ANIMATEUR]));
+    assert.deepEqual(instance.animateurs, new Int32Array(0));
+  });
+
+  test('des tours animés qui ne sont pas une liste lèvent TypeError, au message qui le dit', () => {
+    // Une chaîne se parcourrait caractère par caractère, un nombre ne se
+    // parcourt pas : chacun se refuse avant le premier tour.
+    for (const anime of [1, '12', { 0: 1, length: 1 }]) {
+      exigerTypeError(() => avecAnime(anime), 'participant 1 : tours animés en liste attendus', libelleDe(anime));
+    }
+  });
+});
+
+describe('normaliser : la borne des animateurs, tables pleines et tours fixés', () => {
+  test('une table sans siège libre au tour ne compte pas pour qui y est libre ; un fixé y rencontre ceux qui l’animent, à chaque tour', () => {
+    // Tables 11 et 12 de deux places, deux tours. 2 anime au tour 2 à 12, où
+    // 3 est aussi fixé : la table 12, d'index 1, y est pleine. 1, libre aux
+    // deux tours, n'y peut pas siéger au tour 2 : B = 0. 3 rencontre 2 au
+    // tour 2 : B = min(1, 1) = 1. 2 ne se rencontre pas lui-même.
+    const instance = normaliser(configuration({
+      participants: [etiquete(1), etiquete(2, undefined, [2]), etiquete(3)],
+      tables: tablesDe([11, 12], 2),
+      tours: 2,
+      reservations: [auTour(2, 12, 2), auTour(3, 12, 2)],
+    }));
+    assert.deepEqual(instance.siegesLibres, Int32Array.from([2, 2, 2, 0]));
+    assert.deepEqual(instance.borneAnimateurs, Int32Array.from([0, 0, 1]));
+  });
+
+  test('chaque animateur de la table fixée compte une fois dans Σ φ_r(p), qui borne alors #Φ(p)', () => {
+    // Trois tables de trois places, deux tours. 5 anime au tour 1 à 11 ; 6 et
+    // 7 animent au tour 2, à 12 et à 13. 1, fixé à 11 au tour 1, y rencontre
+    // 5 : φ_1 = 1. Libre au tour 2, il peut rejoindre 6 ou 7, une table à la
+    // fois : φ_2 = 1. #Φ(1) = 3, Σ φ = 2 : B = 2.
+    const instance = normaliser(configuration({
+      participants: [etiquete(1), etiquete(5, undefined, [1]), etiquete(6, undefined, [2]), etiquete(7, undefined, [2])],
+      tables: tablesDe([11, 12, 13], 3),
+      tours: 2,
+      reservations: [auTour(1, 11, 1), tous(5, 11), auTour(6, 12, 2), auTour(7, 13, 2)],
+    }));
+    assert.equal(instance.borneAnimateurs[instance.indexDe.get(1)], 2);
   });
 });
 
@@ -1180,6 +1294,19 @@ describe('normaliser : les étiquettes des personnes, en index (§ 4.5, D39)', (
     assert.equal(instance.debutEtiquettes.length, instance.N + 1);
   });
 
+  test('une étiquette répétée ne s’inscrit qu’une fois, en tête ou en fin de liste comme ailleurs', () => {
+    // 1 répète la seule étiquette qu'il porte ; 2 répète sa plus petite, puis
+    // sa plus grande.
+    const instance = normaliser(configuration({
+      participants: [etiquete(1, ['tricot', 'tricot']), etiquete(2, ['voile', 'aquarelle', 'aquarelle', 'voile'])],
+      tables: tablesDe([11], 2),
+      tours: 1,
+    }));
+    assert.deepEqual(instance.libellesEtiquettes, ['aquarelle', 'tricot', 'voile']);
+    assert.deepEqual(instance.debutEtiquettes, Int32Array.from([0, 1, 3]));
+    assert.deepEqual(instance.etiquettes, Int32Array.from([1, 0, 2]));
+  });
+
   test('sans étiquette : aucun libellé, aucune entrée, et debutEtiquettes ne porte que des zéros', () => {
     const instance = normaliser(configuration({
       participants: [...personnes([3, 1]), etiquete(2, []), { ...etiquete(4, ['finance']), exclu: true }],
@@ -1210,6 +1337,10 @@ describe('normaliser : refus des objectifs, du mode et des priorités (A12, A16)
         'OBJECTIF_CONFLIT', { table: 11, tour: null }],
       ['deux objectifs du tour 2', avec({ objectifs: [objectif(12, 2, 'ou', ['finance']), objectif(12, 2, 'ou', ['finance'])] }),
         'OBJECTIF_CONFLIT', { table: 12, tour: 2 }],
+      // Un objectif sans champ tour est de soirée : le conflit le dit au tour nul.
+      ['deux objectifs de soirée, le second sans champ tour',
+        avec({ objectifs: [objectif(11, null, 'ou', ['finance']), { table: 11, regle: 'et', etiquettes: ['bénévole'] }] }),
+        'OBJECTIF_CONFLIT', { table: 11, tour: null }],
       ['une liste de priorités qui n’est pas une liste', avec({ priorites: 'ordre' }), 'PRIORITES', { faute: 'forme' }],
       ['un palier vide', avec({ priorites: [[]] }), 'PRIORITES', { faute: 'palierVide', palier: 0 }],
       ['un poids hors domaine', avec({ priorites: [[{ critere: excedent, poids: 101 }]] }),

@@ -494,6 +494,11 @@ describe("paires : la ligne d'une personne (§ 12.5)", () => {
   test('une personne qui ne rencontre personne a une ligne vide', () => {
     const { instance, tableDe } = preparer({ N: 3, capacite: 2, tours: [[[1, 2], [3]]] });
     assert.deepEqual(rencontresDe(instance, tableDe, 2), []);
+    // La première personne seule, les deux autres ensemble : la ligne ne
+    // parcourt que les index de l'instance, et la paire des deux autres n'y
+    // entre pas.
+    const premiere = preparer({ N: 3, capacite: 2, tours: [[[2, 3], [1]]] });
+    assert.deepEqual(rencontresDe(premiere.instance, premiere.tableDe, 0), []);
   });
 
   test('un parcours déjà lu rend la même ligne', () => {

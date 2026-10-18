@@ -477,6 +477,19 @@ describe('verifierInvariants : ce que chaque code couvre', () => {
     assert.deepEqual(obtenu, [{ code: 'TABLE_INCONNUE', tour: 3, detail: 'listes' }]);
   });
 
+  test('un identifiant étranger assis à une table ne tient la place d’aucun participant', () => {
+    // Au tour 1, la table de numéro 1 réunit l'étranger et 2 : 1 et 3, les
+    // participants de rang 0 et 2 dans l'ordre canonique, manquent au tour.
+    const obtenu = apresMutation((plan) => {
+      plan.tours[0][0] = [ETRANGER, participant(2)];
+    });
+    assert.deepEqual(obtenu, [
+      { code: 'INCONNU', participant: ETRANGER, tour: 1 },
+      { code: 'NON_ASSIS', participant: participant(1), tour: 1 },
+      { code: 'NON_ASSIS', participant: participant(3), tour: 1 },
+    ]);
+  });
+
   test('CAPACITE compte chaque entrée de la liste, étrangère ou répétée', () => {
     // Le siège est la position dans la liste : un id étranger ou répété
     // occupe un siège comme un autre.
@@ -883,6 +896,13 @@ describe('verifierIndicateurs : les objectifs et les animateurs (§ 5.4, A9)', (
         [{ code: 'JAMAIS_SERVIES' }]],
       ['le plus de tours hors objectif 3 > tours possibles 2', avec((m) => { m.objectifs.horsObjectifMax = 3; }),
         [{ code: 'HORS_OBJECTIF_MAX' }]],
+      // Personne n'a de tour possible : le plus de tours possibles vaut 0, et
+      // un seul tour hors objectif le dépasse.
+      ['le plus de tours hors objectif 1 > aucun tour possible', avec((m) => {
+        m.objectifs.tours = [0, 0, 0, 0];
+        m.objectifs.possibles = [0, 0, 0, 0];
+        m.objectifs.horsObjectifMax = 1;
+      }), [{ code: 'HORS_OBJECTIF_MAX' }]],
     ].map(([libelle, mesures, attendu]) => [libelle, () => verifierIndicateurs(mesures, plafonds(), plafonds()), attendu]);
     assert.deepEqual(ecarts(cas), []);
   });
@@ -1087,10 +1107,14 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
       ['Φ_aff de 3 cases', (m, c) => { c.phiAffilies.pop(); }, RangeError],
       ['A_max de 5 cases', (m, c) => { c.aMax.push(3); }, RangeError],
       ['un plancher de collisions de plus que parGroupe', (m, c) => { c.planchersCollisions.push(0); }, RangeError],
-      ['parGroupe absent, des planchers de collisions', (m) => { delete m.parGroupe; }, TypeError],
+      ['parGroupe absent, des planchers de collisions', (m) => { delete m.parGroupe; },
+        { name: 'TypeError', message: 'parGroupe : liste attendue avec planchersCollisions' }],
+      ['parGroupe en objet, des planchers de collisions', (m) => { m.parGroupe = { length: 2 }; },
+        { name: 'TypeError', message: 'parGroupe : liste attendue avec planchersCollisions' }],
       ['A(p) absent', (m) => { delete m.appartenancesVues; }, TypeError],
       ['|F(p)| de 3 cases', (m) => { m.affilies.pop(); }, RangeError],
-      ['objectifsParTour qui n’est pas une liste', (m, c) => { c.objectifsParTour = { hors: 0, plancher: 0 }; }, TypeError],
+      ['objectifsParTour qui n’est pas une liste', (m, c) => { c.objectifsParTour = { hors: 0, plancher: 0 }; },
+        { name: 'TypeError', message: 'objectifsParTour : liste ou null attendue' }],
       // Une erreur nommée, et non celle d'une déstructuration de null.
       ['un tour null dans objectifsParTour', (m, c) => { c.objectifsParTour[1] = null; },
         { name: 'TypeError', message: /^objectifsParTour\[1\] : objet attendu/ }],
@@ -1102,8 +1126,12 @@ describe('verifierIndicateurs : les compléments de la page de qualité (§ 12.3
       ['planchersValides absent', (m, c) => { delete c.planchersValides; }, TypeError],
     ];
     for (const [libelle, modifier, erreur] of cas) assert.throws(() => verifier(avec(modifier)), erreur, libelle);
-    for (const valeur of [3, 'compléments']) {
-      assert.throws(() => verifierIndicateurs(base(), plafonds(), plafonds(), valeur), TypeError, String(valeur));
+    for (const valeur of [3, 'compléments', true]) {
+      assert.throws(
+        () => verifierIndicateurs(base(), plafonds(), plafonds(), valeur),
+        { name: 'TypeError', message: 'complements : objet ou null attendu' },
+        String(valeur),
+      );
     }
   });
 

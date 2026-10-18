@@ -528,6 +528,16 @@ describe('teteDuManque (§ 12.2, § 12.10.6)', () => {
     }
   });
 
+  test('le rang 1 compte toujours dans l’effectif, même quand son manque ne s’égale pas à lui-même', () => {
+    // NaN n'est égal à aucune valeur, pas même à lui-même : le rang 1 se
+    // compte sans comparaison, les suivants par égalité à son manque.
+    const profilLu = [
+      { id: 7, manque: Number.NaN, plafondRealise: 3 },
+      { id: 9, manque: Number.NaN, plafondRealise: 4 },
+    ];
+    assert.deepEqual(teteDuManque(profilLu), { id: 7, plafondRealise: 3, effectif: 1 });
+  });
+
   test('un profil vide rend null ; un profil qui n’est pas une liste lève TypeError', () => {
     assert.equal(teteDuManque([]), null);
     assert.throws(() => teteDuManque(PAS_UNE_LISTE), TypeError);

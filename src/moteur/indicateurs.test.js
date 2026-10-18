@@ -938,6 +938,29 @@ describe('mesurer : les objectifs des tables (§ 5.4, A9, A21)', () => {
     });
   });
 
+  test('un seul tour possible suffit à concerner une personne : P(p) = 1', () => {
+    // L'objectif « finance » ne vaut qu'au tour 1 de la table 1 : 1 y a son
+    // seul tour possible, et y est servi ; 2 ne porte aucune étiquette.
+    const configuration = configurer({
+      personnes: [[1, ['finance']], [2]],
+      tables: [[1, 2]],
+      tours: 2,
+      objectifs: [{ table: 1, tour: 1, regle: 'ou', etiquettes: ['finance'] }],
+    });
+    const { objectifs } = mesurerSur(configuration, [[[1, 2]], [[1, 2]]]).mesures;
+    const servi = { min: 1, moyenne: 1, effectif: 1 };
+    assert.deepEqual(objectifs, {
+      tours: [1, 0],
+      possibles: [1, 0],
+      horsObjectif: 0,
+      jamaisServies: 0,
+      horsObjectifMax: 0,
+      personnesAuMax: 0,
+      concernes: 1,
+      agregat: { tous: servi, mobiles: servi, ancres: AUCUN },
+    });
+  });
+
   test('sans personne concernée, les objectifs valent null : aucun objectif, ou un objectif que personne ne porte', () => {
     const sans = configurer({ personnes: [[1, ['finance']], [2]], tables: [[1, 2]], tours: 1 });
     assert.equal(mesurerSur(sans, [[[1, 2]]]).mesures.objectifs, null);
@@ -1153,6 +1176,26 @@ describe('mesurer : les animateurs rencontrés (§ 5.4, A9, A21)', () => {
     assert.deepEqual(fautif.objectifs.possibles, [0, 2, 0, 0]);
     assert.deepEqual(fautif.animateurs.rencontres, [0, 0, 0, 0]);
     assert.equal(fautif.animateurs.nonRencontres, 1);
+  });
+
+  test('la première personne de l’ordre canonique compte parmi les concernés, seule concernée', () => {
+    // 1, libre, peut rejoindre la table où 2 anime, réservé : B = 1, et le
+    // plan l'y assoit. 2 n'a aucun autre animateur à rencontrer : B = 0.
+    const configuration = configurer({
+      personnes: [[1], [2, undefined, [1]]],
+      tables: [[1, 2]],
+      tours: 1,
+      reservations: [{ participant: 2, table: 1, portee: 'tous' }],
+    });
+    const { animateurs } = mesurerSur(configuration, [[[1, 2]]]).mesures;
+    const rencontre = { min: 1, moyenne: 1, effectif: 1 };
+    assert.deepEqual(animateurs, {
+      rencontres: [1, 0],
+      bornes: [1, 0],
+      nonRencontres: 0,
+      concernes: 1,
+      agregat: { tous: rencontre, mobiles: rencontre, ancres: AUCUN },
+    });
   });
 
   test('sans personne concernée, les animateurs valent null : aucun titre pourvu, ou un seul animateur, seul présent', () => {

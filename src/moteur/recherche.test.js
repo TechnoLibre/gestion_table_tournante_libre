@@ -566,6 +566,17 @@ describe('rechercher : reproductibilité et identifiants (§ 5.7, § 19.4)', () 
     }
   });
 
+  test("le message cite le domaine et la valeur reçue : un nombre tel quel, toute autre valeur suivie de son type", () => {
+    const cas = [
+      [{ graine: -1, arret: 10, nombre: 1 }, 'graine : entier de 0 à 4294967295 attendu, reçu -1'],
+      [{ graine: 1, arret: '10', nombre: 1 }, `arret : entier de 1 à ${Number.MAX_SAFE_INTEGER} attendu, reçu 10 (string)`],
+      [{ graine: 1, arret: 10, nombre: null }, `nombre : entier de 1 à ${Number.MAX_SAFE_INTEGER} attendu, reçu null (object)`],
+    ];
+    for (const [reglages, message] of cas) {
+      assert.throws(() => rechercher(demo('petite'), reglages), { name: 'RangeError', message }, JSON.stringify(reglages));
+    }
+  });
+
   test('verifierReglages : la règle de rechercher, la même RangeError, qui porte le nom du réglage', () => {
     const cas = [
       [{ graine: 2 ** 32, arret: 10, nombre: 1 }, 'graine'],
@@ -1002,6 +1013,27 @@ describe('rechercher : avancement et annulation (§ 5.10)', () => {
     assert.equal(lectures, 2);
     assert.deepEqual(etapes, [[1_000, 15_000]]);
   });
+
+  test('arret 999 : aucun millième mouvement, donc ni progression ni lecture du signal pendant la descente, pour rechercher comme pour proposerUne', () => {
+    // Le rang du mouvement en cours part de 1 : le dernier vaut 999, la
+    // cadence de 1 000 n'est pas atteinte, et le signal ne se lit qu'avant
+    // la proposition.
+    const reglages = { graine: 3, arret: 999, nombre: 1 };
+    let lectures = 0;
+    const signal = {
+      get aborted() {
+        lectures += 1;
+        return false;
+      },
+    };
+    const etapes = [];
+    const options = { signal, progression: (fait, total) => etapes.push([fait, total]) };
+    const [proposition] = rechercher(demo('petite'), reglages, options);
+    const une = proposerUne(demo('petite'), reglages, 1, options);
+    assert.deepEqual([proposition.evalues, une.evalues], [999, 999]);
+    assert.deepEqual(etapes, []);
+    assert.equal(lectures, 2);
+  });
 });
 
 describe('état de recherche : placement initial et score incrémental (§ 5.10)', () => {
@@ -1080,6 +1112,95 @@ describe("rechercher : l'échange avec une place fantôme (paragraphe « Mouveme
       collisions.push(mesurer(instance, indexerPlan(instance, plan)).collisionsCumulees);
     }
     assert.deepEqual(collisions, Array(20).fill(0));
+  });
+});
+
+// Un générateur qui rend, appel après appel, les valeurs imposées, et note
+// chaque borne qu'on lui demande.
+function tiragesImposes(valeurs) {
+  const bornes = [];
+  return {
+    bornes,
+    borne(n) {
+      bornes.push(n);
+      return valeurs.shift();
+    },
+  };
+}
+
+describe("mouvement : les tirages d'un tour et ses refus (paragraphe « Mouvement » de recherche.js)", () => {
+  // Deux tables de 2, quatre personnes, trois tours ; 1 est ancré à la
+  // table 1, 3 à la table 2. Au tour 1, 2 est réservé à la table 1 : un seul
+  // siège mobile, le second de la table 2, pour 4. Au tour 2, deux sièges
+  // mobiles, le second de chaque table, pour 2 et 4. Au tour 3, 2 est à la
+  // table 1 et 4 à la table 2 : aucun siège mobile.
+  const configuration = () =>
+    configurationDe({
+      appartenances: [null, null, null, null],
+      tables: [
+        { id: 1, capacite: 2 },
+        { id: 2, capacite: 2 },
+      ],
+      tours: 3,
+      reservations: [tous(1, 1), tous(3, 2), auTour(2, 1, 1), auTour(2, 1, 3), auTour(4, 2, 3)],
+    });
+
+  test('un tour de moins de deux sièges mobiles ne tire que son tour, et rend un mouvement rejeté', () => {
+    const etat = creerEtat(normaliser(configuration()), creerPcg32(1, FLUX.RECHERCHE));
+    const avant = Int32Array.from(etat.tableDe);
+    for (const r of [0, 2]) {
+      const rng = tiragesImposes([0, 0, 0]);
+      assert.equal(proposerParmi(etat, rng, [r]), null, `tour ${r + 1}`);
+      assert.deepEqual(rng.bornes, [1], `tour ${r + 1}`);
+    }
+    assert.deepStrictEqual(etat.tableDe, avant);
+  });
+
+  test('deux sièges mobiles à deux tables différentes suffisent à un échange', () => {
+    const instance = normaliser(configuration());
+    const etat = creerEtat(instance, creerPcg32(1, FLUX.RECHERCHE));
+    const { R, indexDe } = instance;
+    const cases = [indexDe.get(2) * R + 1, indexDe.get(4) * R + 1];
+    const avant = cases.map((i) => etat.tableDe[i]);
+    assert.deepEqual([...avant].sort(), [0, 1]);
+    // Au tour 2, les sièges mobiles sont le siège 1, à la table 1, et le
+    // siège 3, à la table 2.
+    const rng = tiragesImposes([0, 0, 1]);
+    assert.deepEqual(proposerParmi(etat, rng, [1]), { tour: 1, a: 1, b: 3 });
+    assert.deepEqual(rng.bornes, [1, 2, 2]);
+    assert.deepEqual(cases.map((i) => etat.tableDe[i]), [avant[1], avant[0]]);
+  });
+
+  test('deux places fantômes de deux tables : mouvement rejeté, rien ne change ; une personne et une place fantôme : elle change de table', () => {
+    // Deux personnes, trois tables de 2, un tour : le placement initial les
+    // assied aux sièges 0 et 1, ceux de la table 1 ; les sièges 2 à 5, aux
+    // tables 2 et 3, sont des places fantômes.
+    const instance = normaliser(configurationDe({
+      appartenances: [null, null],
+      tables: [
+        { id: 1, capacite: 2 },
+        { id: 2, capacite: 2 },
+        { id: 3, capacite: 2 },
+      ],
+      tours: 1,
+    }));
+    const etat = creerEtat(instance, creerPcg32(1, FLUX.RECHERCHE));
+    assert.deepEqual(Array.from(etat.tableDe), [0, 0]);
+    const score = scoreIncremental(etat);
+    assert.equal(proposerEtAppliquer(etat, tiragesImposes([0, 2, 4])), null);
+    assert.deepEqual(Array.from(etat.tableDe), [0, 0]);
+    assert.deepStrictEqual(scoreIncremental(etat), score);
+    assert.deepEqual(proposerEtAppliquer(etat, tiragesImposes([0, 0, 4])), { tour: 0, a: 0, b: 4 });
+    assert.deepEqual(Array.from(etat.tableDe).sort(), [0, 2]);
+  });
+
+  test('defaire(null) ne fait rien', () => {
+    const etat = creerEtat(normaliser(demo('petite')), creerPcg32(4, FLUX.RECHERCHE));
+    const plan = Int32Array.from(etat.tableDe);
+    const score = scoreIncremental(etat);
+    defaire(etat, null);
+    assert.deepStrictEqual(etat.tableDe, plan);
+    assert.deepStrictEqual(scoreIncremental(etat), score);
   });
 });
 
@@ -1390,6 +1511,81 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
   });
 });
 
+describe("état de recherche : valeurs de départ, bornes de la composition, comptes au-delà d'un octet et de seize bits (§ 5.10)", () => {
+  test('une personne seule ne peut rencontrer personne : écart et score nuls dès le placement, aucun mouvement évalué', () => {
+    const configuration = configurationDe({ appartenances: [null], tables: [{ id: 1, capacite: 2 }], tours: 2 });
+    const instance = normaliser(configuration);
+    assert.deepEqual(plafondsAPriori(instance), [0]);
+    const etat = creerEtat(instance, creerPcg32(1, FLUX.RECHERCHE));
+    assert.deepStrictEqual(scoreIncremental(etat), [0, 0]);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
+    assert.equal(rechercher(configuration, { graine: 1, arret: 50, nombre: 1 })[0].evalues, 0);
+  });
+
+  test('sans personne concernée, ou chacun servi à chacun de ses tours possibles : les quatre valeurs des objectifs sont nulles au placement initial', () => {
+    const valeurs = (etat) => [etat.horsObjectif, etat.jamaisServies, etat.horsObjectifMax, etat.personnesAuMax];
+    const sans = creerEtat(normaliser(troisTablesDeDeux()), creerPcg32(1, FLUX.RECHERCHE));
+    assert.deepEqual(valeurs(sans), [0, 0, 0, 0]);
+    // Deux personnes « finance » à la seule table, « finance » : chacune y
+    // est servie à son seul tour possible.
+    const servies = {
+      participants: [1, 2].map((id) => ({ id, nom: `F${id}`, appartenance: null, exclu: false, etiquettes: ['finance'] })),
+      tables: [{ id: 1, numero: 1, capacite: 2 }],
+      tours: 1,
+      reservations: [],
+      contraintes: { ...SANS_CONTRAINTE, respecterObjectifs: true },
+      objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }],
+    };
+    const instance = normaliser(servies);
+    assert.deepEqual(Array.from(instance.possibles), [1, 1]);
+    const etat = creerEtat(instance, creerPcg32(1, FLUX.RECHERCHE));
+    assert.deepEqual(Array.from(etat.servis), [1, 1]);
+    assert.deepEqual(valeurs(etat), [0, 0, 0, 0]);
+  });
+
+  test('la composition délimite les termes de chaque composante : taille + 1 bornes, de 0 au nombre de termes, croissantes', () => {
+    for (const { nom, configuration } of JEUX_A_OBJECTIFS) {
+      const { composition } = creerEtat(normaliser(configuration), creerPcg32(1, FLUX.RECHERCHE));
+      const { taille, debut, codes, poids } = composition;
+      assert.equal(debut.length, taille + 1, nom);
+      assert.equal(debut[0], 0, nom);
+      assert.equal(debut[taille], codes.length, nom);
+      assert.equal(poids.length, codes.length, nom);
+      for (let k = 0; k < taille; k += 1) assert.ok(debut[k + 1] > debut[k], `${nom}, composante ${k}`);
+    }
+  });
+
+  test("deux animateurs ancrés côte à côte, animant chacun des 257 tours, se rencontrent une fois : le compte d'un couple dépasse un octet", () => {
+    const R = 257;
+    const anime = Array.from({ length: R }, (_, r) => r + 1);
+    const base = configurationDe({
+      appartenances: [null, null],
+      tables: [{ id: 1, capacite: 2 }],
+      tours: R,
+      reservations: [tous(1, 1), tous(2, 1)],
+      contraintes: { ...SANS_CONTRAINTE, rencontrerAnimateurs: true },
+    });
+    const configuration = { ...base, participants: base.participants.map((participant) => ({ ...participant, anime })) };
+    const etat = creerEtat(normaliser(configuration), creerPcg32(1, FLUX.RECHERCHE));
+    assert.equal(etat.suitAnimateurs, true);
+    assert.deepEqual(Array.from(etat.rencontresAnimateurs), [1, 1]);
+    assert.equal(etat.animateursNonRencontres, 0);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
+  });
+
+  test("deux personnes ancrées à la même table pendant 65 537 tours ont une seule rencontre chacune : le compte d'une paire dépasse seize bits", () => {
+    const configuration = configurationDe({
+      appartenances: [null, null],
+      tables: [{ id: 1, capacite: 2 }],
+      tours: 65_537,
+      reservations: [tous(1, 1), tous(2, 1)],
+    });
+    const etat = creerEtat(normaliser(configuration), creerPcg32(1, FLUX.RECHERCHE));
+    assert.deepEqual(Array.from(etat.rencontres), [1, 1]);
+    assert.deepStrictEqual(scoreIncremental(etat), [0, 0]);
+  });
+});
+
 describe("recherche : le mode et l'ordre réglé ne touchent pas au hasard (A13, § 15.5)", () => {
   test('même graine : mêmes mouvements tirés, le générateur au même point, quels que soient objectifs, mode et ordre', () => {
     const sans = { ...soireeAObjectifs(), objectifs: [], contraintes: { ...QUATRE_CASES } };
@@ -1435,6 +1631,35 @@ describe("rechercher : la bascule suit l'ordre réglé (A11, A21)", () => {
         descentesALaLettre(configuration, reglages, { bascule: true }).map(({ plan }) => plan),
         nom,
       );
+    }
+  });
+});
+
+describe("rechercher : l'arrêt sur le n-uplet nul lit chaque composante (§ 5.10)", () => {
+  test("les collisions cumulées en tête, toute autre composante nulle : la descente ne s'arrête qu'au n-uplet nul", () => {
+    // A, A, B, B sur deux tables de 2, un tour : chacun rencontre son seul
+    // voisin, l'écart et l'excédent sont nuls dans tout placement, et seules
+    // les collisions de la composante de tête varient. Un placement qui
+    // réunit les deux A et les deux B n'est pas nul : la descente le quitte.
+    const base = configurationDe({
+      appartenances: ['A', 'A', 'B', 'B'],
+      tables: [
+        { id: 1, capacite: 2 },
+        { id: 2, capacite: 2 },
+      ],
+      tours: 1,
+      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+    });
+    const configuration = {
+      ...base,
+      priorites: [[e('collisionsCumulees')], ...CRITERES.filter((nom) => nom !== 'collisionsCumulees').map((nom) => [e(nom)])],
+    };
+    const instance = normaliser(configuration);
+    const propositions = rechercher(configuration, { graine: 2, arret: 200, nombre: 6 });
+    assert.ok(propositions.some(({ evalues }) => evalues > 0), 'aucun placement initial à collisions');
+    for (const { id, plan, evalues } of propositions) {
+      assert.equal(mesurer(instance, indexerPlan(instance, plan)).collisionsCumulees, 0, `proposition ${id}`);
+      assert.ok(evalues < 200, `proposition ${id} : ${evalues} mouvements évalués`);
     }
   });
 });
@@ -2142,6 +2367,46 @@ describe('repartir : une dérivée continue son départ (§ 5.7, D69 à D71, C24
       ErreurAnnulee,
     );
   });
+
+  test("l'avancement d'une génération dérivée se compte comme celui de rechercher, sur nombre × arret à partir du rang de chaque proposition ; celui de repartirUne sur arret seul", () => {
+    const configuration = demo('petite-conflit');
+    const plan = rechercher(configuration, { graine: 8, arret: 60, nombre: 1 })[0].plan;
+    const depart = { plan, toursFiges: [2] };
+    const etapes = [];
+    const progression = (fait, total) => etapes.push([fait, total]);
+    const propositions = repartir(configuration, { graine: 4, arret: 1_500, nombre: 2, historique: 20 }, depart, { progression });
+    assert.deepEqual(propositions.map(({ evalues }) => evalues), [1_500, 1_500]);
+    assert.deepEqual(etapes, [
+      [1_000, 3_000],
+      [2_000, 3_000],
+      [3_000, 3_000],
+    ]);
+    // 999 mouvements évalués : le millième n'est pas atteint.
+    etapes.length = 0;
+    const une = repartirUne(configuration, { graine: 4, arret: 999, nombre: 2, historique: 20 }, depart, 2, { progression });
+    assert.equal(une.evalues, 999);
+    assert.deepEqual(etapes, []);
+  });
+
+  test("dans l'ordre des contraintes, la descente se relance après PATIENCE × L itérations sans changement du score courant : historique 1, relance à la onzième itération, puis à la vingt et unième", () => {
+    // Trois A et un B sur deux tables de 2, un tour : chaque placement réunit
+    // deux A, le score courant ne change jamais, et l'écart est nul dès le
+    // départ : l'acceptation compare dans l'ordre des contraintes, et chaque
+    // itération compte sans changement.
+    const configuration = configurationDe({
+      appartenances: ['A', 'A', 'A', 'B'],
+      tables: [
+        { id: 1, capacite: 2 },
+        { id: 2, capacite: 2 },
+      ],
+      tours: 1,
+      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+    });
+    const depart = { plan: { tables: [1, 2], tours: [[[1, 2], [3, 4]]], reserves: [[]] }, toursFiges: [] };
+    const relances = [10, 11, 20, 21].map((arret) =>
+      repartir(configuration, { graine: 1, arret, nombre: 1, historique: 1 }, depart)[0].relances);
+    assert.deepEqual(relances, [0, 1, 1, 2]);
+  });
 });
 
 describe('repartir et regenerer : le contrôle du départ, avant tout calcul (§ 5.7, § 8.9, C12, C24)', () => {
@@ -2213,6 +2478,18 @@ describe('repartir et regenerer : le contrôle du départ, avant tout calcul (§
       retouche((p) => { p.tours[2][1] = [4, 6, 8]; p.tours[2][2] = [1, 3]; }),
       { tour: 3, table: 20, participant: 1 },
     ],
+    ['un tour sans une liste par table déclarée', retouche((p) => { p.tours[1] = [[2, 3, 7], [1, 4, 9, 5, 6, 8]]; }), { tour: 2, table: null, participant: null }],
+    [
+      'une table inconnue qui assied une seule personne',
+      retouche((p) => {
+        p.tables.push(99);
+        p.tours[0] = [[2, 4, 5, 6], [1, 7, 8], [3], [9]];
+        p.tours[1].push([]);
+        p.tours[2].push([]);
+      }),
+      { tour: 1, table: 99, participant: null },
+    ],
+    ['la première table qui déborde', retouche((p) => { p.tours[1] = [[2, 3, 7, 9, 5], [1, 4], [6, 8]]; }), { tour: 2, table: 10, participant: null }],
   ];
 
   for (const [nom, plan, details] of FAUTIFS) {
@@ -2227,6 +2504,33 @@ describe('repartir et regenerer : le contrôle du départ, avant tout calcul (§
       }
     });
   }
+
+  test("un plan qui n'a pas R tours : DEPART_INCOMPATIBLE au premier tour qui manque ou qui est de trop", () => {
+    const configuration = salleReservee();
+    for (const [nom, plan, tour] of [
+      ['deux tours', retouche((p) => { p.tours.pop(); p.reserves.pop(); }), 3],
+      ['quatre tours', retouche((p) => { p.tours.push(p.tours[0]); p.reserves.push([]); }), 4],
+    ]) {
+      const appels = [];
+      for (const [entree, appel] of entrees(configuration, plan, [], appels)) {
+        assert.throws(
+          appel,
+          { name: 'ErreurConfiguration', code: 'DEPART_INCOMPATIBLE', details: { tour, table: null, participant: null } },
+          `${entree}, ${nom}`,
+        );
+      }
+      assert.deepEqual(appels, []);
+    }
+  });
+
+  test("une table inconnue dont chaque liste est vide n'assied personne : le départ est admis, et rend ce que rend le même plan sans elle", () => {
+    const avecInconnue = retouche((p) => {
+      p.tables.push(99);
+      for (const listes of p.tours) listes.push([]);
+    });
+    const rendus = (plan) => entrees(salleReservee(), plan, [2], []).map(([, appel]) => appel());
+    assert.deepStrictEqual(rendus(avecInconnue), rendus(departSalle()));
+  });
 
   test('le départ valide de ces épreuves est admis par les trois points d\'entrée', () => {
     const appels = [];

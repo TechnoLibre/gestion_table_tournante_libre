@@ -277,6 +277,13 @@ describe('repartition et synthese (§ 12.3)', () => {
     assert.throws(() => repartition([1, 2], [1]), RangeError);
   });
 
+  test('avec plafonds, une valeur dont personne n’est à son plafond porte auPlafond 0, jamais null', () => {
+    assert.deepEqual(repartition([2, 1, 2], [3, 2, 2]), [
+      { valeur: 1, effectif: 1, cumul: 1, auPlafond: 0 },
+      { valeur: 2, effectif: 2, cumul: 3, auPlafond: 1 },
+    ]);
+  });
+
   test('la synthèse : le minimum, son effectif, et les personnes sous leur plafond réalisé', () => {
     const prepare = preparer(PROFIL);
     const { instance } = prepare;
@@ -463,6 +470,18 @@ describe('barresCollisions et planchersParGroupe (§ 12.4, D31, B13)', () => {
     assert.deepEqual(lignes.map(({ cumulees, pairesDistinctes, excedent }) => [cumulees, pairesDistinctes, excedent]), [[2, 1, 1], [3, 3, 0], [1, 1, 0], [1, 1, 0], [1, 1, 0]]);
     // Sans réservation, le diagnostic se tait : « prouvé inévitable » vaut 0.
     assert.deepEqual(planchers, [0, 0, 0, 0, 0]);
+    // Les deux libellés de même clé, présentés dans l'autre ordre : la
+    // chaîne les départage encore, et non l'ordre d'apparition.
+    const inverse = preparer({
+      ...COLLISIONS,
+      personnes: [[1, RESSAC], [2, RESSAC], [3, 'atelier ressac'], [4, 'atelier ressac'], ...COLLISIONS.personnes.slice(4)],
+    });
+    const mesuresInverses = mesurer(inverse.instance, inverse.tableDe);
+    assert.deepEqual(inverse.instance.groupes.slice(0, 2), [RESSAC, 'atelier ressac']);
+    assert.deepEqual(
+      barresCollisions(inverse.instance, mesuresInverses, [0, 0, 0, 0, 0], true, cle).map(({ groupe }) => groupe),
+      [AUBIER, 'Grès', RESSAC, 'atelier ressac', 'Zinc'],
+    );
   });
 
   test('hors du domaine des planchers, prouvé et reste valent null ; le compte reste', () => {
@@ -639,7 +658,10 @@ describe('mixTables (§ 12.11, D35, B20)', () => {
 
   test('sans les affiliés de l’occupation, lève TypeError', () => {
     const { instance, tableDe } = preparer(TROIS_ORDRES);
-    assert.throws(() => mixTables(instance, tableDe, occupations(instance, tableDe)), TypeError);
+    assert.throws(() => mixTables(instance, tableDe, occupations(instance, tableDe)), {
+      name: 'TypeError',
+      message: 'occupation sans affiliés : occupations(instance, tableDe, {affilies: true}) attendue',
+    });
   });
 });
 
@@ -673,6 +695,20 @@ describe('profilAnimateurs (§ 12.13, D37)', () => {
       [2, 2, 'mobile'],
     ]);
     assert.deepEqual(Object.keys(profil[0]), ['p', 'rencontres', 'borne', 'statut']);
+  });
+
+  test('m(p) croissant, quel que soit l’ordre des index : la personne qui a rencontré l’animateur passe après celle qui ne l’a pas rencontré', () => {
+    // 1 anime au tour 1 à la table 1, seul animateur : B(1) = 0, B(2) =
+    // B(3) = 1. 2 le rencontre au tour 1, 3 jamais.
+    const prepare = preparer({
+      personnes: [[1, null, undefined, [1]], [2], [3]],
+      tables: [[1, 2], [2, 2]],
+      reservations: [auTour(1, 1, 1)],
+      plan: [{ 1: [1, 2], 2: [3] }, { 1: [1, 3], 2: [2] }],
+    });
+    const profil = profilAnimateurs(prepare.instance, mesurer(prepare.instance, prepare.tableDe));
+    assert.deepEqual(idsDe(prepare.instance, profil), [3, 2]);
+    assert.deepEqual(profil.map(({ rencontres, borne }) => [rencontres, borne]), [[0, 1], [1, 1]]);
   });
 
   test('sans personne concernée, null', () => {
@@ -792,6 +828,24 @@ describe('bornesDesTuiles (§ 12.2, D29, D34, D52, B11)', () => {
       ...duDiagnostic(animes, tout.aPriori),
     });
     assert.deepEqual(deAnimateurs.animateurs, { p: index(animes.instance, 5), borne: 2 });
+
+    // Au tour 2, 6 rencontre 2, qui anime, et 5 ne rencontre personne : le
+    // rang 1, 5 à la borne 2, précède 1 et 2 à la borne 1, et la tuile porte
+    // sa borne à lui.
+    const seul = preparer({ ...ANIMATEURS, plan: [ANIMATEURS.plan[0], { 1: [1, 5], 2: [2, 6], 3: [3, 4] }] });
+    const lus = mesurerTout(seul);
+    const profilSeul = profilAnimateurs(seul.instance, lus.mesures);
+    assert.deepEqual(profilSeul.map(({ borne }) => borne).slice(0, 2), [2, 1]);
+    const deSeul = bornesDesTuiles(seul.instance, {
+      mesures: lus.mesures,
+      plafondsRealises: lus.realises,
+      aMax: lus.aMax,
+      profil: profilRencontres(seul.instance, lus.mesures, lus.realises, lus.aPriori, lus.aMax),
+      animateurs: profilSeul,
+      objectifs: null,
+      ...duDiagnostic(seul, lus.aPriori),
+    });
+    assert.deepEqual(deSeul.animateurs, { p: index(seul.instance, 5), borne: 2 });
   });
 
   test('sans personne présente : ni rang 1, ni tête de manque', () => {
@@ -1513,6 +1567,20 @@ describe('teteDesColonnes (§ 12.10.6, D67, D28)', () => {
     assert.deepEqual(tete.objectifs, { p: index(instance, 5), servis: 0, possibles: 2, pourcent: 0 });
     assert.deepEqual(tete.soiree, { servis: 5, possibles: 11, pourcent: 45, jamaisServies: 2 });
     assert.equal(tete.soiree.jamaisServies, mesurer(instance, tableDe).objectifs.jamaisServies);
+  });
+
+  test('une personne à un seul tour possible est concernée : jamais servie, elle porte le minimum de s(p)', () => {
+    // 5 servi au tour 2 à la place de 7 : s(p) 1, 1, 1, 0, 1, 2 ; 4, à P(p)
+    // = 1, reste seule au minimum.
+    const prepare = preparer({ ...OBJECTIFS, plan: [OBJECTIFS.plan[0], { 1: [6, 3, 5], 2: [1, 2, 8], 3: [4, 7] }, OBJECTIFS.plan[2]] });
+    const { mesures, realises } = mesurerTout(prepare);
+    assert.deepEqual(mesures.objectifs.tours.slice(0, 6), [1, 1, 1, 0, 1, 2]);
+    assert.deepEqual(teteDesColonnes(prepare.instance, mesures, realises).objectifs, {
+      p: index(prepare.instance, 4),
+      servis: 0,
+      possibles: 1,
+      pourcent: 0,
+    });
   });
 
   test('sans personne présente : rang 1, objectifs et soirée null', () => {

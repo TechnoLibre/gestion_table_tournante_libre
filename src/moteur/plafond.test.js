@@ -876,4 +876,15 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     assert.deepEqual(borneDiversite(instance, tableDe), { phiAffilies: [0, 0, 0, 0, 0], aMax: [0, 0, 0, 0, 0] });
     assert.throws(() => borneDiversite(instance, tableDe.subarray(1)), RangeError);
   });
+
+  test('une salle dont chacun est exclu : N = 0, le plan vide, et chaque fonction rend une liste vide', () => {
+    // Le seul participant est exclu : aucune personne présente, aucune
+    // appartenance, un plan indexé sans case.
+    const instance = salle({ personnes: [[1, AUBIER]], capacites: [3], tours: 2, exclus: [1] });
+    assert.equal(instance.N, 0);
+    const tableDe = new Int32Array(0);
+    assert.deepEqual(borneDiversite(instance, tableDe), { phiAffilies: [], aMax: [] });
+    assert.deepEqual(plafondsRealises(instance, tableDe), []);
+    assert.deepEqual(plafondsAPriori(instance), []);
+  });
 });

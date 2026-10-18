@@ -330,6 +330,29 @@ describe('classer : la forme des critères appliqués (contrat du classement)', 
     assert.deepEqual(compilation.paliers[0].criteres[0].valeurs, ['ecartAuPlafondAPrioriMax']);
     assert.deepEqual(aplatir(classer([proposition(1)], compilation).criteresAppliques), [...CRITERES]);
   });
+
+  test("une valeur qu'aucune lecture ne porte lève RangeError, qui la nomme", () => {
+    const compilation = compilationSous(PAR_DEFAUT);
+    const palier = compilation.paliers.find(({ criteres }) => criteres[0].nom === 'redondance');
+    palier.criteres[0].valeurs = ['redondanceInventee'];
+    assert.throws(() => classer([proposition(1)], compilation), (erreur) => {
+      assert.ok(erreur instanceof RangeError, String(erreur));
+      assert.equal(erreur.message, 'valeur de classement inconnue : redondanceInventee');
+      return true;
+    });
+  });
+
+  test('un critère à deux valeurs dans un palier partagé lève RangeError, qui le nomme', () => {
+    const partage = [[e('ecartAuPlafondAPrioriMax')], [e('excedentCollisions'), e('collisionsCumulees', 3)], ...PAR_DEFAUT.slice(3)];
+    const compilation = compilationSous(partage);
+    const palier = compilation.paliers.find(({ criteres }) => criteres.length === 2);
+    palier.criteres[1].valeurs = ['collisionsCumulees', 'excedentCollisions'];
+    assert.throws(() => classer([proposition(1)], compilation), (erreur) => {
+      assert.ok(erreur instanceof RangeError, String(erreur));
+      assert.equal(erreur.message, 'critère collisionsCumulees : 2 valeurs dans un palier partagé');
+      return true;
+    });
+  });
 });
 
 describe('classer : un palier pondéré classe par sa somme (A11, A21)', () => {

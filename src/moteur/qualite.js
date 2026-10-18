@@ -147,7 +147,9 @@ export function profilRencontres(instance, mesures, plafondsRealises, plafondsAP
       marque: marqueDe(statut[p], toursNonAssis, plafondsRealises[p]),
     });
   }
-  return lignes.sort((a, b) => a.rencontres - b.rencontres || b.plafondRealise - a.plafondRealise || a.p - b.p);
+  // Les lignes entrent par index croissant, et le tri est stable : à
+  // rencontres et plafond égaux, l'index croissant reste.
+  return lignes.sort((a, b) => a.rencontres - b.rencontres || b.plafondRealise - a.plafondRealise);
 }
 
 /**
@@ -620,13 +622,15 @@ export function mixTables(instance, tableDe, occupation, parcours = parcourirTou
     }
     lignes.push({ t, capacite: c, tours, pire, somme });
   }
+  // Les rangs entrent dans l'ordre des tables, et le tri est stable : à
+  // égalité, l'ordre des tables reste.
   const ordre = (position) => {
     const rangs = Array.from({ length: T }, (_, i) => i);
     return rangs.sort((i, j) => {
       const x = lignes[i];
       const y = lignes[j];
-      if (x.pire === null || y.pire === null) return (x.pire === null) - (y.pire === null) || i - j;
-      return y.pire[position] - x.pire[position] || y.somme[position] - x.somme[position] || i - j;
+      if (x.pire === null || y.pire === null) return (x.pire === null) - (y.pire === null);
+      return y.pire[position] - x.pire[position] || y.somme[position] - x.somme[position];
     });
   };
   return { lignes, ordres: { sieges: ordre('sieges'), assis: ordre('assis'), doublons: ordre('doublons') } };
@@ -695,7 +699,8 @@ export function objectifsParTour(instance, parcours, planchers) {
     if (s[p] === 0) jamaisServies.push({ p, possibles: P[p] });
     horsParPersonne.push(P[p] - s[p]);
   }
-  jamaisServies.sort((a, b) => b.possibles - a.possibles || a.p - b.p);
+  // Les personnes entrent par index croissant, et le tri est stable.
+  jamaisServies.sort((a, b) => b.possibles - a.possibles);
   const lignes = repartition(horsParPersonne).reverse();
   return {
     parTour,
@@ -726,7 +731,8 @@ export function profilAnimateurs({ N, statut }, mesures) {
     if (bornes[p] === 0) continue;
     lignes.push({ p, rencontres: rencontres[p], borne: bornes[p], statut: NOM_DU_STATUT[statut[p]] });
   }
-  return lignes.sort((a, b) => a.rencontres - b.rencontres || b.borne - a.borne || a.p - b.p);
+  // Les lignes entrent par index croissant, et le tri est stable.
+  return lignes.sort((a, b) => a.rencontres - b.rencontres || b.borne - a.borne);
 }
 
 /**

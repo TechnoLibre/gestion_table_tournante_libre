@@ -315,17 +315,17 @@ function lire(q, code) {
 // critère dans sa composante. Les rencontres répétées posent un terme par
 // case cochée de « nouveaux voisins » et « nouvelle table », au même poids.
 // suitAnimateurs dit qu'un terme lit les animateurs non rencontrés : l'état
-// ne les tient qu'alors. Lève RangeError pour une grandeur que la
-// composition ne sait pas lire.
+// ne les tient qu'alors. Tout nom que pose la compilation a son code dans
+// CODE_DE : compilationDe refuse un critère hors du registre CRITERES, et
+// composantesDe ne rend, pour l'écart et les tours hors objectif, que des
+// grandeurs de cette table.
 function composition(instance) {
   const { paliers, ordreScore, ordreContraintes, rangEcart, taille } = compilationDe(instance);
   const { contraintes, modeObjectifs } = instance;
   const parComposante = Array.from({ length: taille }, () => []);
   const poser = (k, nom, poids) => {
     if (nom !== 'rencontresRepetees') {
-      const code = CODE_DE.get(nom);
-      if (code === undefined) throw new RangeError(`grandeur du score inconnue : ${nom}`);
-      parComposante[k].push([code, poids]);
+      parComposante[k].push([CODE_DE.get(nom), poids]);
       return;
     }
     if (contraintes.nouveauxVoisins) parComposante[k].push([EXCEDENT_PAIRES, poids]);
