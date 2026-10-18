@@ -36,7 +36,9 @@ export const TABLE = new Map([
   ['raccourcis.menu.dernier', 'Va à la dernière action.'],
   ['raccourcis.menu.fermer', 'Ferme le menu et rend le focus à son bouton.'],
   ['raccourcis.menu.quitter', 'Ferme le menu ; le focus passe au contrôle suivant.'],
-  // --- Un geste, une fenêtre -------------------------------------------------------
+  // --- Un geste, l'écran de l'événement, une fenêtre -------------------------------
   ['raccourcis.geste.annuler', 'Annule le geste en cours : la table revient où elle était.'],
+  ['raccourcis.evenement.defaire', 'Défait le dernier geste.'],
+  ['raccourcis.evenement.refaire', 'Refait le dernier retour.'],
   ['raccourcis.fenetre.fermer', "Ferme le panneau ou l'infobulle."],
 ]);

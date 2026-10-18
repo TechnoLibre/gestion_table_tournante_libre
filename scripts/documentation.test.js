@@ -396,7 +396,19 @@ describe('documentation : les producteurs, chacun sur sa source unique (§ 19.8)
       ['menu.premier', 'menu.dernier', 'menu.quitter'].map((effet) => lignes[effets.indexOf(effet)].slice(0, 2)),
       [['Menu ouvert', 'Début'], ['Menu ouvert', 'Fin'], ['Menu ouvert', 'Tab']],
     );
+    // Les retours au clavier : Ctrl+ et Maj+ devant la lettre, dans l'ordre
+    // que toucheDe écrit ; les deux touches de refaire sur une ligne.
+    assert.deepEqual(
+      ['evenement.defaire', 'evenement.refaire'].map((effet) => lignes[effets.indexOf(effet)].slice(0, 2)),
+      [['Écran de l\u{2019}événement, hors saisie', 'Ctrl+Z'], ['Écran de l\u{2019}événement, hors saisie', 'Ctrl+Maj+Z ou Ctrl+Y']],
+    );
+    assert.ok(effets.indexOf('evenement.refaire') < effets.indexOf('fenetre.fermer'));
     assert.throws(() => tableauRaccourcis([...RACCOURCIS, { ...RACCOURCIS[0], touche: 'Pause' }]), /Pause/);
+    // Une lettre en minuscule, un préfixe hors de l'ordre de toucheDe : la
+    // table ne les atteint jamais, le tableau les refuse en les nommant.
+    for (const touche of ['Ctrl+z', 'Maj+Ctrl+Z', 'Ctrl+']) {
+      assert.throws(() => tableauRaccourcis([...RACCOURCIS, { ...RACCOURCIS[0], touche }]), (erreur) => erreur.message.includes(JSON.stringify(touche)), touche);
+    }
   });
 
   test('demonstrations : effectif, tables, tours et plafond a priori égaux à diagnostiquer sur chaque fichier livré', () => {

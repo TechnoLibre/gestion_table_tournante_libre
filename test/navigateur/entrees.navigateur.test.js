@@ -233,6 +233,28 @@ describe('clavier', () => {
   test('une touche inconnue lève en la nommant', async () => {
     await expect(touche('Hyperespace')).rejects.toThrow(/Hyperespace/);
   });
+
+  test("touche('z', {ctrl}) livre Ctrl tenue, sans caractère saisi ; avec maj, la lettre en majuscule ; repete marque la répétition", async () => {
+    const champ = document.createElement('input');
+    document.body.append(champ);
+    champ.focus();
+    try {
+      const releves = relever(document, ['keydown']);
+      await touche('z', { ctrl: true });
+      await touche('z', { ctrl: true, maj: true });
+      await touche('y', { ctrl: true, repete: true });
+      await touche('a');
+      expect(releves.map((e) => [e.key, e.code, e.ctrlKey, e.shiftKey, e.repeat, e.isTrusted])).toEqual([
+        ['z', 'KeyZ', true, false, false, true],
+        ['Z', 'KeyZ', true, true, false, true],
+        ['y', 'KeyY', true, false, true, true],
+        ['a', 'KeyA', false, false, false, true],
+      ]);
+      expect(champ.value).toBe('a');
+    } finally {
+      champ.remove();
+    }
+  });
 });
 
 describe('le cadre (§ 19.4)', () => {

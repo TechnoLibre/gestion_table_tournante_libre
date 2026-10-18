@@ -2205,6 +2205,13 @@ Camille Roy de la table 4 à la table 7, tour 2 ». Jamais reconstruit ensuite :
 les objets nommés peuvent avoir disparu, et un historique qui affiche « déplacé
 ‹participant supprimé› » ne sert plus à rien.
 
+**Un retour fait au clavier nomme sa touche dans son libellé** : « Défait
+(Ctrl+Z) : », « Refait (Ctrl+Maj+Z) : » ou « Refait (Ctrl+Y) : », suivi du
+libellé cité de l'instant ; « Défaire » et « Refaire », les commandes de la
+barre, écrivent « Défait : » et « Refait : », sans touche. Avec la date et
+l'heure de l'entrée, l'historique garde ainsi, pour chaque retour, la touche
+ou la commande qui l'a fait, sans que le format du journal change.
+
 **L'ordre des entrées est celui des lignes, jamais celui des horodatages.** Une
 horloge reculée rendrait le tri non monotone.
 
@@ -2235,7 +2242,43 @@ celui qu'il visait.
 même contenu que l'instant courant, leur entrée s'écrit quand même : c'est elle
 qui déplace le fil, et un refus laisserait chaque nouveau « Défaire » buter sur
 le même instant. Revenir à un tel instant, choisi dans la liste, ne change rien
-et ne s'écrit pas.
+et ne s'écrit pas : le refus le dit, « Cet instant a déjà le contenu courant :
+rien n'est enregistré. »
+
+**La vue d'historique est un panneau**, ouvert et refermé par « Historique… »
+dans la barre de l'événement, à côté de « Défaire » et « Refaire ». Il se pose
+à droite de la surface, sur toute sa hauteur, ou par-dessus elle quand la
+fenêtre est étroite ; il défile seul, et Échap, le focus dans le panneau, le
+referme. Sa liste est **plate, dans l'ordre du journal, la plus récente en
+haut** : chaque ligne porte la date et l'heure de son instant, puis son libellé
+figé. La pastille « instant courant » marque la ligne la plus récente, celle de
+l'état que l'écran montre — après un retour, la ligne de ce retour. Une entrée
+d'un fil abandonné est en encre secondaire et porte la pastille « fil
+abandonné » : elle reste dans la liste, et on peut encore y revenir. Chaque
+jalon est une pastille de son nom, sur la ligne de l'entrée dont il porte la
+révision : le nom que « Nommer » donne se lit sur la ligne marquée « instant
+courant ». « Revenir à cet instant », sur chaque ligne sauf la courante,
+restitue l'instant **sans confirmation**, puisque ce retour se défait comme un
+autre. Une ligne de même contenu que l'instant courant — la cible d'un retour,
+par exemple — garde « Revenir », qui refuse : « Cet instant a déjà le contenu
+courant ». En tête du panneau, un champ nomme l'instant courant — la
+saisie n'écrit rien, seul « Nommer » écrit —, et la case « Instants nommés
+seulement » ne garde que les lignes qui portent un jalon. La liste se pagine
+par cent lignes. Quand le journal et l'état sur le disque ne finissent pas au
+même instant — l'un en avance sur l'autre, ou le journal absent —, le panneau
+le dit, sans marquer d'instant courant : le prochain geste inscrit l'entrée de
+reprise (§ 8.8). **En lecture, la vue se lit** ; « Revenir »,
+« Nommer », « Défaire » et « Refaire » refusent à côté de leur commande, et
+leurs touches à côté de « Défaire », avec « Modifier » pour remède (§ 8.4).
+
+**Au clavier**, sur l'écran de l'événement et hors d'une saisie, **Ctrl+Z
+défait, Ctrl+Maj+Z et Ctrl+Y refont**. Dans un champ, Ctrl+Z défait la frappe,
+comme partout, et jamais le plan. Une touche tenue ne défait qu'une fois. Un
+menu d'actions ouvert, une fenêtre à confirmer, un pointeur enfoncé ou un
+fichier d'un format plus récent (§ 8.8) laissent la touche sans effet. Le
+refus d'une touche — en lecture, ou sans rien à défaire ou à refaire — se pose
+à côté de « Défaire », pour les trois touches : « Refaire » n'est dans la
+barre que lorsqu'un retour reste à refaire.
 
 **Les jalons.** L'opérateur peut **nommer l'instant courant**, et filtrer
 l'historique sur les instants nommés. Nommer ne modifie pas le contenu : c'est
@@ -7300,7 +7343,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `18-comparaison-escalier.png` | idem | l'escalier du manque ouvert, jumeau tabulaire de la vue précédente, une colonne d'effectif et une d'effectif cumulé par placement | les effectifs cumulés du tableau reproduisent la courbe ; l'escalier n'écrit aucun pourcentage |
 | `19-ajustement.png` | l'événement retenu | le déplacement d'une personne après la retenue, l'interface disant **lequel des deux gestes** est en cours (§ 5.8) | le libellé de l'état des données est visible |
 | `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
-| `21-historique.png` | idem | la liste des instants, le fil courant distingué des fils abandonnés, un jalon nommé (§ 8.3) | au moins un fil abandonné est présent et marqué comme tel |
+| `21-historique.png` | idem | le panneau d'historique ouvert à côté du plan : la liste, la plus récente en haut, chaque ligne sa date et son heure ; un geste défait au clavier, sa ligne « Défait (Ctrl+Z) : … », qui n'est pas abandonnée, et sous elle le geste défait, sur un fil abandonné, en encre secondaire et marqué ; en tête, l'instant courant, nommé « Avant l'accueil » par le champ du panneau (§ 8.2, § 8.3) | au moins un fil abandonné est présent et marqué comme tel ; le libellé du retour nomme la touche ; le jalon est sur l'instant courant, et le nommer ne change pas la révision |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
 | `24-badges-controle.png` / `25-badges-planche.png` | idem | la **feuille de contrôle** avec son échelle de 100 mm et ses comptes, puis une **planche** de quatre A6 et ses trois filets de coupe | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle avant d'engager la rame, et une planche seule ne le montre pas |
 
@@ -7316,10 +7359,13 @@ elles, et les captures du placement qui en découle changent avec elle. Que
 l'ordre par défaut rende les plans de l'ordre fixe de référence ne se
 photographie pas : les empreintes de référence le gardent (§ 14.10).
 
-**Une capture est déclarée et reportée** : `21`, à l'étape 11, montre la vue
-d'historique, que le logiciel n'offre pas encore. Le manifeste la porte comme
-reportée, à son étape et sans image, et le contrôle d'ordre la compte : l'étape
-11 n'est pas une étape sans capture, et sa place dans l'ordre est déjà gardée.
+**La capture `21` ne change pas ce que l'étape 12 reçoit.** Elle se prend
+après `20`, l'événement repassé en écriture : le geste défait au clavier, puis
+celui qui le remplace, changent le courriel de deux personnes, que rien
+n'imprime, et le parcours défait le second au clavier après l'image.
+L'événement revient au contenu qu'il avait après `20`, et `22` à `25`
+photographient le même plan.
+
 Les deux `07a` se photographient sur la grande démonstration, chargée pour la
 capture `10` : sur la soirée que le parcours construit, deux tables, même le
 zoom le plus faible laisse les sièges pour cibles, et la bascule ne se montre

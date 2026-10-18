@@ -114,7 +114,7 @@ import {
 } from '../stockage/depot.js';
 import { FORMAT, analyser } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
-import { fil, reconstruire } from '../stockage/journal.js';
+import { fil, lignesHistorique, reconstruire } from '../stockage/journal.js';
 import { SUFFIXES } from '../stockage/noms.js';
 import {
   FICHIER_REGLAGES,
@@ -193,11 +193,37 @@ const derniereEntree = ({ journal }) => journal?.entrees.at(-1)?.revision ?? nul
 const libelleDeRevision = (journal, revision) => journal.entrees.find((entree) => entree.revision === revision).libelle;
 
 // Le libellé figé d'une entrée de retour, qui nomme l'instant : celui que
-// défaire quitte, celui que refaire ou revenir restituent.
-function libelleDuRetour(sens, instant) {
-  if (sens === 'defaire') return libelle('ENTREE_DEFAIRE', { libelle: instant });
-  if (sens === 'refaire') return libelle('ENTREE_REFAIRE', { libelle: instant });
+// défaire quitte, celui que refaire ou revenir restituent ; et la touche qui
+// a défait ou refait, quand il y en a une.
+function libelleDuRetour(sens, instant, touche) {
+  const parTouche = touche === null ? {} : { touche };
+  if (sens === 'defaire') return libelle('ENTREE_DEFAIRE', { libelle: instant, ...parTouche });
+  if (sens === 'refaire') return libelle('ENTREE_REFAIRE', { libelle: instant, ...parTouche });
   return libelle('ENTREE_REVENIR', { libelle: instant });
+}
+
+// Les touches qui défont ou refont, par sens (§ 8.3) : le libellé figé de
+// l'entrée les nomme, et la traçabilité dit ainsi qu'elles ont servi.
+const TOUCHES_DU_RETOUR = new Map([
+  ['defaire', ['Ctrl+Z']],
+  ['refaire', ['Ctrl+Maj+Z', 'Ctrl+Y']],
+]);
+
+// La touche d'un défaire ou d'un refaire, de ses options facultatives
+// {touche} : null sans options ou sans touche. Des options qui ne sont pas
+// un objet, ou une touche que TOUCHES_DU_RETOUR ne donne pas à ce sens —
+// celle de l'autre sens comprise —, lèvent TypeError : une faute du code.
+function toucheDuRetour(sens, options) {
+  if (options === undefined) return null;
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError(`${sens} : options objet attendues, reçu ${JSON.stringify(options)}`);
+  }
+  const { touche } = options;
+  if (touche === undefined) return null;
+  if (!TOUCHES_DU_RETOUR.get(sens).includes(touche)) {
+    throw new TypeError(`${sens} : touche ${JSON.stringify(touche)} hors de ${TOUCHES_DU_RETOUR.get(sens).join(', ')}`);
+  }
+  return touche;
 }
 
 /**
@@ -447,7 +473,9 @@ export function creerSeance({
   // Sur la racine du choix de la séance, le papier du choix s'écrit avec ce
   // que transformer rend, et l'écriture faite le retient (retenirPapier).
   // L'écriture faite, EtatSeance.papier est celui qu'elle a écrit, à défaut
-  // celui du choix de la séance, quand dossier est la racine de la séance.
+  // celui du choix de la séance, quand dossier est la racine de la séance,
+  // et l'état se publie. Une écriture hors de la racine courante ne publie
+  // pas : l'appel en file qui a changé la racine publie en finissant.
   function ecrireReglagesLocaux(dossier, transformer) {
     return enFileReglages(async () => {
       const { reglages, avertissement } = await lireReglages(fs, dossier);
@@ -459,7 +487,7 @@ export function creerSeance({
       if (choisi !== undefined) retenirPapier();
       const surRacine = memeRacine(dossier, etat.racine);
       if (surRacine) etat.papier = ecrits.papier ?? choixSeance?.papier ?? null;
-      if (surRacine || choisi !== undefined) publier();
+      if (surRacine) publier();
     });
   }
 
@@ -988,12 +1016,27 @@ export function creerSeance({
 
   // --- Les retours (§ 8.3) -----------------------------------------------------
 
-  // {defaire, refaire} : les retours qui existent sur le fil de l'Ouvert ;
-  // faux sans événement.
+  // {defaire, refaire, jalons} : les retours qui existent sur le fil de
+  // l'Ouvert, faux sans événement ; et le nombre de lignes de jalon de son
+  // journal, 0 sans événement ou sans journal. Un jalon ne change pas la
+  // révision : ce compte fait changer l'état observable avec lui.
   function retoursDe(ouvert) {
-    if (ouvert === null) return { defaire: false, refaire: false };
+    if (ouvert === null) return { defaire: false, refaire: false, jalons: 0 };
     const { cibleDefaire, cibleRefaire } = filDe(ouvert);
-    return { defaire: cibleDefaire !== null, refaire: cibleRefaire !== null };
+    return { defaire: cibleDefaire !== null, refaire: cibleRefaire !== null, jalons: ouvert.journal?.jalons.length ?? 0 };
+  }
+
+  // L'historique de l'Ouvert (§ 8.3) : null sans événement ; sinon les
+  // lignes de son journal et la position courante (lignesHistorique), et
+  // reprise, vrai quand le journal manque, est vide ou finit sur une autre
+  // révision que la charge ouverte — la prochaine écriture pose d'abord
+  // l'entrée de reprise (filDe). Aucune ligne n'est alors l'instant courant :
+  // la position vaut null.
+  function historiqueDe(ouvert) {
+    if (ouvert === null) return null;
+    const { position, lignes } = ouvert.journal === null ? { position: null, lignes: [] } : lignesHistorique(ouvert.journal);
+    const reprise = derniereEntree(ouvert) !== ouvert.revision;
+    return { position: reprise ? null : position, lignes, reprise };
   }
 
   // Le fil de l'Ouvert : les cibles de défaire et de refaire, null quand
@@ -1048,14 +1091,17 @@ export function creerSeance({
 
   // Un retour, sans son suivi : défaire vise le prédécesseur de l'instant
   // courant sur le fil, refaire le sommet de sa pile, revenir l'instant
-  // donné ; l'entrée porte la charge restituée, son sens et sa cible.
+  // donné ; l'entrée porte la charge restituée, son sens et sa cible, et son
+  // libellé la touche qui a défait ou refait (toucheDuRetour), contrôlée
+  // avant tout refus de la séance.
   // Revenir à un instant de même contenu que la charge courante est
   // SANS_EFFET. Défaire et refaire s'écrivent même alors, d'un correctif
   // vide : leur entrée seule fait avancer le fil. Un instant dont le geste ne
   // changeait qu'un champ oublié à la lecture (§ 8.9) se restitue comme son
   // voisin ; le refuser laisserait le fil sur place, et chaque nouveau
   // défaire retomberait sur le même refus.
-  async function retour(sens, visee) {
+  async function retour(sens, visee, options) {
+    const touche = sens === 'revenir' ? null : toucheDuRetour(sens, options);
     const ouvert = exigerEcriture();
     const { cibleDefaire, cibleRefaire, courant } = filDe(ouvert);
     let cible = visee;
@@ -1072,7 +1118,7 @@ export function creerSeance({
       throw new ErreurSeance('SANS_EFFET', { sens });
     }
     const instant = sens === 'defaire' ? courant : libelleDeRevision(ouvert.journal, cible);
-    const entree = { charge, libelle: libelleDuRetour(sens, instant), avertissements: [] };
+    const entree = { charge, libelle: libelleDuRetour(sens, instant, touche), avertissements: [] };
     const texte = await ecrireGeste(ouvert, entree, { sens, retour: cible });
     return { libelle: texte };
   }
@@ -1385,7 +1431,10 @@ export function creerSeance({
     get avertissements() {
       return [...lireEtat().avertissements];
     },
-    /** {defaire, refaire} : les retours qui existent sur le fil courant (§ 8.3). */
+    /**
+     * {defaire, refaire, jalons} : les retours qui existent sur le fil
+     * courant, et le nombre de jalons du journal (§ 8.3).
+     */
     get retours() {
       return retoursDe(etat.ouvert);
     },
@@ -1513,8 +1562,18 @@ export function creerSeance({
     passerEnLecture: () => enFile(passerEnLecture),
     executer: (nom, args = {}) => enFile(() => suivi(() => geste(nom, args))),
     debloquer: () => enFile(() => suivi(() => geste('debloquer', {}))),
-    defaire: () => enFile(() => suivi(() => retour('defaire', null))),
-    refaire: () => enFile(() => suivi(() => retour('refaire', null))),
+    /**
+     * Défait le dernier geste du fil courant (§ 8.3). options facultatives,
+     * {touche} : 'Ctrl+Z', que le libellé figé de l'entrée nomme ; une autre
+     * valeur lève TypeError, sans rien écrire.
+     */
+    defaire: (options) => enFile(() => suivi(() => retour('defaire', null, options))),
+    /**
+     * Refait le dernier retour (§ 8.3). options facultatives, {touche} :
+     * 'Ctrl+Maj+Z' ou 'Ctrl+Y', que le libellé figé de l'entrée nomme ; une
+     * autre valeur lève TypeError, sans rien écrire.
+     */
+    refaire: (options) => enFile(() => suivi(() => retour('refaire', null, options))),
     revenir: (revision) => enFile(() => suivi(() => retour('revenir', revision))),
     nommer: (nom) => enFile(() => nommer(nom)),
     ecrireAilleurs: (nouvelle) => enFile(() => ecrireAilleurs(nouvelle)),
@@ -1533,6 +1592,17 @@ export function creerSeance({
      * lit l'Ouvert courant sans rien écrire.
      */
     courseDe: (id) => (etat.ouvert === null ? null : courseDe(etat.ouvert, id)),
+    /**
+     * L'historique de l'événement ouvert (§ 8.3) : { position, lignes,
+     * reprise }, null sans événement. lignes, une par entrée du journal, la
+     * plus ancienne d'abord, chacune avec son fil et ses jalons
+     * (lignesHistorique) ; position, la révision de l'instant courant ;
+     * reprise, vrai quand le journal manque, n'a pas d'entrée, ou finit sur
+     * une autre révision que l'état, position valant alors null. Une lecture, admise dans
+     * tout mode, hors de la file : elle lit l'Ouvert courant sans rien écrire
+     * ni publier, et rend des objets neufs à chaque appel.
+     */
+    historique: () => historiqueDe(etat.ouvert),
     /**
      * L'annonce de la planche de badges (planche_seance.js), avant de
      * produire : une lecture, admise dans tout mode, qui n'écrit rien.

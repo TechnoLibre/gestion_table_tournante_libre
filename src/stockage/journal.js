@@ -21,12 +21,13 @@
 // Le module n'a ni fichier ni horloge. Il rend le texte d'une ligne, sans fin
 // de ligne — l'ajout au fichier appartient au système de fichiers —, lit le
 // texte entier d'un journal, en décode les octets ligne par ligne, restitue
-// la charge d'un instant, suit le fil courant et élague. Une table par sorte
-// de ligne — OUVERTURE, ENTREE, JALON — donne à la fois l'ordre des clés à
-// l'écriture et la règle de chaque clé à la lecture : l'écriture refuse par
-// TypeError la ligne dont la lecture refuserait la forme. La suite des
-// révisions et la cadence des instantanés, que la lecture contrôle aussi,
-// dépendent des lignes voisines : elles appartiennent à l'appelant.
+// la charge d'un instant, suit le fil courant, rend les lignes de
+// l'historique et élague. Une table par sorte de ligne — OUVERTURE, ENTREE,
+// JALON — donne à la fois l'ordre des clés à l'écriture et la règle de
+// chaque clé à la lecture : l'écriture refuse par TypeError la ligne dont la
+// lecture refuserait la forme. La suite des révisions et la cadence des
+// instantanés, que la lecture contrôle aussi, dépendent des lignes voisines :
+// elles appartiennent à l'appelant.
 //
 // Une entrée porte soit l'instantané de la charge qui en résulte, soit le
 // correctif qui y mène depuis la charge de l'entrée qui la précède dans
@@ -466,6 +467,37 @@ export function fil({ entrees }) {
   const courant = [];
   for (let p = position; p !== null; p = predecesseur(p)) courant.push(p);
   return { position, pile, courant, cibleDefaire: courant[1] ?? null, cibleRefaire: pile.at(-1) ?? null };
+}
+
+/**
+ * Les lignes de l'historique (§ 8.3) : une par entrée, dans l'ordre des
+ * lignes du journal, la plus ancienne d'abord, et la position courante,
+ * celle de fil, null pour un journal sans entrée.
+ *
+ * Chaque ligne porte revision, libelle, horodatage, sens et retour, tels que
+ * l'entrée les porte, puis fil : 'courant' pour une révision du fil courant
+ * — un retour dont la cible précède le journal est sa propre position, et
+ * en fait partie —, sinon 'abandonne' pour une entrée ordinaire, 'retour'
+ * pour une entrée de retour. jalons, enfin, liste {nom, horodatage} des
+ * jalons de sa révision, dans l'ordre des lignes ; un jalon dont la révision
+ * n'est celle d'aucune entrée — l'élagage l'a retirée — n'apparaît nulle
+ * part. Rend des objets neufs, qui ne partagent rien avec le journal.
+ *
+ * @param {Journal} journal
+ * @returns {{position: number|null, lignes: Array<{revision: number, libelle: string, horodatage: string, sens: null|'defaire'|'refaire'|'revenir', retour: number|null, fil: 'courant'|'abandonne'|'retour', jalons: Array<{nom: string, horodatage: string}>}>}}
+ */
+export function lignesHistorique(journal) {
+  const { position, courant } = fil(journal);
+  const surLeFil = new Set(courant);
+  const jalonsDe = new Map(journal.entrees.map(({ revision }) => [revision, []]));
+  for (const { revision, nom, horodatage } of journal.jalons) jalonsDe.get(revision)?.push({ nom, horodatage });
+  const lignes = journal.entrees.map(({ revision, libelle, horodatage, sens, retour }) => {
+    let place = 'retour';
+    if (surLeFil.has(revision)) place = 'courant';
+    else if (sens === null) place = 'abandonne';
+    return { revision, libelle, horodatage, sens, retour, fil: place, jalons: jalonsDe.get(revision) };
+  });
+  return { position, lignes };
 }
 
 /**

@@ -79,7 +79,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.ok(Object.isFrozen(ETAPES));
   });
 
-  test('CAPTURES égale la table du contrat : quarante-huit entrées, leur étape et leur source', () => {
+  test('CAPTURES égale la table du contrat : quarante-neuf entrées, leur étape et leur source', () => {
     const table = CAPTURES.map((c) => [c.fichier, c.etape, c.source]);
     assert.deepEqual(table, [
       ['01-premier-ecran', '1', 'navigateur'],
@@ -126,6 +126,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['18-comparaison-escalier', '10', 'navigateur'],
       ['19-ajustement', '11', 'navigateur'],
       ['20-mode-lecture', '11', 'navigateur'],
+      ['21-historique', '11', 'navigateur'],
       ['22-plan-brouillon', '12', 'navigateur'],
       ['23-plan-retenu', '12', 'navigateur'],
       ['24-badges-controle', '12', 'pdf'],
@@ -183,21 +184,19 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     // exception, chargée à la fin du parcours, générée puis dérivée.
     const derivees = ['11a-depart-derive', '11b-propositions-derivees', '17-comparaison-manque', '17a-comparaison-colonnes', '18-comparaison-escalier'];
     for (const fichier of derivees) assert.equal(configuration.get(fichier), 'grande-sans-exception', fichier);
+    // L'étape 11 se photographie sur l'événement que le parcours construit
+    // puis retient : l'ajustement, la lecture, l'historique.
+    for (const fichier of ['19-ajustement', '20-mode-lecture', '21-historique']) assert.equal(configuration.get(fichier), 'evenement-retenu', fichier);
   });
 
-  test('REPORTEES : 21 à l’étape 11, raison « iteration5 », rien d’autre ; 17, 17a et 18 photographiées', () => {
-    assert.deepEqual(
-      REPORTEES.map((r) => [r.fichier, r.etape, r.raison]),
-      [['21-historique', '11', 'iteration5']],
-    );
-    // La page de qualité se photographie, sa vue de comparaison comprise :
-    // aucune de ses captures n'est reportée, et aucune reportée n'est
-    // déclarée photographiée.
-    const declarees = new Set(CAPTURES.map((c) => c.fichier));
-    for (const fichier of ['17-comparaison-manque', '17a-comparaison-colonnes', '18-comparaison-escalier']) assert.ok(declarees.has(fichier), fichier);
-    for (const reportee of REPORTEES) assert.ok(!declarees.has(reportee.fichier), reportee.fichier);
+  test('REPORTEES est vide : chaque écran déclaré existe ; 17, 17a, 18 et 21 photographiées', () => {
+    assert.deepEqual(REPORTEES, []);
     assert.ok(Object.isFrozen(REPORTEES));
-    for (const reportee of REPORTEES) assert.ok(Object.isFrozen(reportee), reportee.fichier);
+    // La vue de comparaison et la vue d'historique se photographient :
+    // chacune est déclarée dans CAPTURES, à son étape.
+    const etapes = new Map(CAPTURES.map((c) => [c.fichier, c.etape]));
+    const photographiees = ['17-comparaison-manque', '17a-comparaison-colonnes', '18-comparaison-escalier', '21-historique'];
+    assert.deepEqual(photographiees.map((fichier) => etapes.get(fichier)), ['10', '10', '10', '11']);
   });
 
   test('A_VENIR est vide : chaque capture déclarée est photographiée, 24 et 25 tramées du PDF de la planche', () => {
@@ -382,6 +381,13 @@ describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
     const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche'];
     assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: etape12 })), [
       { chemin: CHEMIN_MANIFESTE, faute: 'étape 12 : aucune capture ni reportée' },
+    ]);
+  });
+
+  test('sans reportée, 21 couvre seule l’étape 11 ; sans 19, 20 ni 21, elle manque', () => {
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '20-mode-lecture'] })), []);
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '20-mode-lecture', '21-historique'] })), [
+      { chemin: CHEMIN_MANIFESTE, faute: 'étape 11 : aucune capture ni reportée' },
     ]);
   });
 

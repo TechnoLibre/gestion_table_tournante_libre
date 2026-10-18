@@ -6,13 +6,13 @@
 // chaque instant d'une séance de 120 gestes sur la petite démonstration,
 // restitué tel qu'il s'est écrit ; la lecture qui s'arrête à la première
 // ligne illisible et compte ce qu'elle écarte ; le fil courant, défaire et
-// refaire ; la construction notée ; l'élagage ; le journal d'un format
-// plus ancien, qui se lit. Les journaux s'écrivent comme les écrit
-// l'enregistreur, une ligne après l'autre, par les fonctions du module ;
-// chaque charge de la séance passe l'analyse du fichier d'état et le contrôle
-// des placements. Les noms des personnes ajoutées sont inventés, hors des
-// réservoirs des démonstrations ; les versions viennent du module engendré,
-// seul à en porter le texte.
+// refaire ; les lignes de l'historique ; la construction notée ; l'élagage ;
+// le journal d'un format plus ancien, qui se lit. Les journaux s'écrivent
+// comme les écrit l'enregistreur, une ligne après l'autre, par les fonctions
+// du module ; chaque charge de la séance passe l'analyse du fichier d'état et
+// le contrôle des placements. Les noms des personnes ajoutées sont inventés,
+// hors des réservoirs des démonstrations ; les versions viennent du module
+// engendré, seul à en porter le texte.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
@@ -33,6 +33,7 @@ import {
   ligneEntree,
   ligneJalon,
   ligneOuverture,
+  lignesHistorique,
   lireJournal,
   reconstruire,
   versionDe,
@@ -980,6 +981,101 @@ describe('le fil courant, défaire et refaire (§ 8.3)', () => {
       cibleDefaire: null,
       cibleRefaire: null,
     });
+  });
+});
+
+// --- Les lignes de l'historique ---------------------------------------------
+
+describe("les lignes de l'historique : le fil de chaque entrée et ses jalons (§ 8.3)", () => {
+  // La ligne attendue de l'entrée revision d'un journal de journalDe : son
+  // libellé par défaut, son horodatage, et ce que l'épreuve précise.
+  const ligne = (revision, fil, { sens = null, retour = null, jalons = [] } = {}) => ({
+    revision,
+    libelle: `Geste ${revision}`,
+    horodatage: horodatage(revision),
+    sens,
+    retour,
+    fil,
+    jalons: jalons.map((nom) => ({ nom, horodatage: horodatage(revision) })),
+  });
+
+  test('un journal de gestes : chaque entrée sur le fil courant, la position à la dernière, les jalons sur leur révision', () => {
+    const etapes = suite(3);
+    etapes[0] = { ...etapes[0], jalons: ['Création'] };
+    const journal = lireJournal(journalDe(etapes));
+    assert.deepEqual(lignesHistorique(journal), {
+      position: 3,
+      lignes: [ligne(1, 'courant', { jalons: ['Création'] }), ligne(2, 'courant'), ligne(3, 'courant')],
+    });
+  });
+
+  test('un défaire suivi d’un geste : le geste défait est abandonné, le retour se dit retour, le reste est le fil courant', () => {
+    // 1 à 3 des gestes ; 4 défait vers 2 ; 5 un geste.
+    const etapes = suite(5);
+    etapes[3] = { apres: etapes[1].apres, sens: 'defaire', retour: 2 };
+    const journal = lireJournal(journalDe(etapes));
+    assert.deepEqual(lignesHistorique(journal), {
+      position: 5,
+      lignes: [
+        ligne(1, 'courant'),
+        ligne(2, 'courant'),
+        ligne(3, 'abandonne'),
+        ligne(4, 'retour', { sens: 'defaire', retour: 2 }),
+        ligne(5, 'courant'),
+      ],
+    });
+  });
+
+  test('un retour dont la cible précède le journal est sa propre position : sur le fil courant, ni abandonné ni retour', () => {
+    // Révisions 101 et 102 : revenir vers 60, que l'élagage a retirée, puis
+    // un geste.
+    const etapes = suite(2);
+    etapes[0] = { ...etapes[0], sens: 'revenir', retour: 60 };
+    const journal = lireJournal(journalDe(etapes, { premiere: 101 }));
+    assert.deepEqual(lignesHistorique(journal), {
+      position: 102,
+      lignes: [ligne(101, 'courant', { sens: 'revenir', retour: 60 }), ligne(102, 'courant')],
+    });
+    assert.deepEqual(lignesHistorique(lireJournal(journalDe(etapes.slice(0, 1), { premiere: 101 }))), {
+      position: 101,
+      lignes: [ligne(101, 'courant', { sens: 'revenir', retour: 60 })],
+    });
+  });
+
+  test('les jalons se groupent sur leur révision dans l’ordre des lignes ; un jalon sans entrée n’apparaît pas', () => {
+    const etapes = suite(3);
+    etapes[0] = { ...etapes[0], jalons: ['Création'] };
+    etapes[1] = { ...etapes[1], jalons: ['Avant le repas', 'Avant la génération'] };
+    const lu = lireJournal(journalDe(etapes));
+    const orphelin = { type: 'jalon', revision: 9, nom: 'Instant élagué', horodatage: horodatage(9) };
+    const journal = { ...lu, jalons: [orphelin, ...lu.jalons, { ...orphelin, revision: 4 }] };
+    assert.deepEqual(lignesHistorique(journal).lignes, [
+      ligne(1, 'courant', { jalons: ['Création'] }),
+      ligne(2, 'courant', { jalons: ['Avant le repas', 'Avant la génération'] }),
+      ligne(3, 'courant'),
+    ]);
+  });
+
+  test('un journal sans entrée : aucune position, aucune ligne', () => {
+    for (const texte of ['', texteDe([ligneOuverture(EVENEMENT)])]) {
+      assert.deepEqual(lignesHistorique(lireJournal(texte)), { position: null, lignes: [] });
+    }
+  });
+
+  test('les lignes sont neuves : les changer ne touche pas le journal, et deux lectures ne partagent rien', () => {
+    const etapes = suite(2);
+    etapes[0] = { ...etapes[0], jalons: ['Création'] };
+    const journal = lireJournal(journalDe(etapes));
+    const avant = copie(journal);
+    const premiere = lignesHistorique(journal);
+    premiere.lignes[0].libelle = 'Changé';
+    premiere.lignes[0].jalons[0].nom = 'Changé';
+    premiere.lignes[1].jalons.push({ nom: 'Ajouté', horodatage: horodatage(2) });
+    assert.deepEqual(journal, avant);
+    assert.deepEqual(lignesHistorique(journal).lignes.map(({ libelle, jalons }) => [libelle, jalons.length]), [
+      ['Geste 1', 1],
+      ['Geste 2', 0],
+    ]);
   });
 });
 

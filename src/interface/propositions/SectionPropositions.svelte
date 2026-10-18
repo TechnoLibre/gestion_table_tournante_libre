@@ -66,13 +66,13 @@
   // Au-delà de TAILLE_PAGE propositions (modele.js), le tableau se lit page
   // à page : pagine découpe le classement unique, sans le retrier, et la
   // ligne du retenu reste en tête de chaque page, hors du compte. Une nav
-  // nommée au-dessus du tableau, répétée sous lui, porte « Précédentes »,
-  // l'étendue de la page et « Suivantes » ; une commande sans objet n'y est
-  // pas, comme « Refaire » sans retour à refaire. Changer de page n'écrit
-  // rien (§ 8.4) : le focus va à l'étendue de la nav du dessus, une région
-  // role="status" qui annonce la page ; chaque étendue se focalise par
-  // programme (tabindex -1), jamais par Tab. La page est un état
-  // d'interface que l'état de navigation retient (pagePropositions,
+  // nommée (Pages, primitive) au-dessus du tableau, répétée sous lui, porte
+  // « Précédentes », l'étendue de la page et « Suivantes » ; une commande
+  // sans objet n'y est pas, comme « Refaire » sans retour à refaire. Changer
+  // de page n'écrit rien (§ 8.4) : le focus va à l'étendue de la nav du
+  // dessus, une région role="status" qui annonce la page ; chaque étendue
+  // se focalise par programme (tabindex -1), jamais par Tab. La page est un
+  // état d'interface que l'état de navigation retient (pagePropositions,
   // retenirPagePropositions) : elle survit au démontage de la section, et
   // repart de la première à chaque ouverture d'un événement, quand
   // l'état de navigation revient à son départ. suivrePage la recale à chaque
@@ -91,6 +91,7 @@
   import Commande from '../primitives/Commande.svelte';
   import Confirmation from '../primitives/Confirmation.svelte';
   import Infobulle from '../primitives/Infobulle.svelte';
+  import Pages from '../primitives/Pages.svelte';
   import Refus from '../primitives/Refus.svelte';
   import TableauPropositions from './TableauPropositions.svelte';
   import { effetDe } from '../raccourcis.js';
@@ -295,25 +296,16 @@
 </script>
 
 {#snippet pages(ou)}
-  <nav class="pages" data-pages={ou} aria-label={t(`propositions.pages.${ou}`)}>
-    <div class="precedentes">
-      {#if page.page > 1}
-        <Commande cle="propositions.pages.precedentes" executer={() => tourner(page.page - 1)} />
-      {/if}
-    </div>
-    <p
-      class="etendue"
-      data-etendue
-      role={ou === 'haut' ? 'status' : undefined}
-      tabindex="-1">
-      {texteEtendue(page, { t, format })}
-    </p>
-    <div class="suivantes">
-      {#if page.page < page.pages}
-        <Commande cle="propositions.pages.suivantes" executer={() => tourner(page.page + 1)} />
-      {/if}
-    </div>
-  </nav>
+  <Pages
+    {ou}
+    nom={t(`propositions.pages.${ou}`)}
+    page={page.page}
+    pages={page.pages}
+    etendue={texteEtendue(page, { t, format })}
+    precedentes="propositions.pages.precedentes"
+    suivantes="propositions.pages.suivantes"
+    {tourner}
+  />
 {/snippet}
 
 {#snippet effacerListe()}
@@ -493,33 +485,5 @@
 
   .garder input[aria-invalid='true'] {
     border-color: var(--couleur-refus);
-  }
-
-  /* Une nav des pages : l'étendue au centre, « Précédentes » contre elle à
-     gauche, « Suivantes » à droite ; une commande absente laisse sa place
-     vide, et l'étendue ne bouge pas d'une page à l'autre. */
-  .pages {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: var(--espace-3);
-    padding: var(--espace-3) var(--espace-5);
-  }
-
-  .precedentes {
-    justify-self: end;
-  }
-
-  .suivantes {
-    justify-self: start;
-  }
-
-  .etendue {
-    font-variant-numeric: tabular-nums;
-  }
-
-  .etendue:focus-visible {
-    outline: 2px solid var(--couleur-focus);
-    outline-offset: 2px;
   }
 </style>

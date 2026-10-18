@@ -17,16 +17,17 @@
 // l'écran, 05b, l'aperçu du CSV des objectifs, 06, 07, 07b, 08 à 10, les deux
 // 07a sur la grande démonstration que 10 a chargée, 10a, l'ordre des
 // priorités réglé, 11, la génération sous ces objectifs et cet ordre (A22,
-// D17), 19, 20, puis 22 et 23, l'aperçu avant impression d'une proposition
-// et du retenu, puis 24 et 25, la feuille de contrôle et la première planche
-// du PDF que la section Badges produit, tramées sous node (§ 19.6) —, ces
-// sorties en lecture puis sur un plan bloqué, qui n'écrivent que la planche
-// et reglages_locaux.json (§ 11.6), puis l'ordre de lecture du § 2.1 sur
-// l'événement retenu, les fenêtres — aucune pendant un geste non
-// destructeur, une qui nomme ce qui part pour chaque geste qui détruit —,
-// puis chaque famille de geste modifiant en lecture puis sur un plan
-// bloqué, la page de qualité de l'étape 10 (B27), enfin la dérivée et la
-// comparaison (D81, C26). Ces captures se prennent toutes après les
+// D17), 19, 20, 21, la vue d'historique — un geste défait au clavier, le fil
+// abandonné, l'instant nommé par le panneau —, puis 22 et 23, l'aperçu avant
+// impression d'une proposition et du retenu, puis 24 et 25, la feuille de
+// contrôle et la première planche du PDF que la section Badges produit,
+// tramées sous node (§ 19.6) —, ces sorties en lecture puis sur un plan
+// bloqué, qui n'écrivent que la planche et reglages_locaux.json (§ 11.6), puis
+// l'ordre de lecture du § 2.1 sur l'événement retenu, les fenêtres — aucune
+// pendant un geste non destructeur, une qui nomme ce qui part pour chaque
+// geste qui détruit —, puis chaque famille de geste modifiant en lecture puis
+// sur un plan bloqué, la page de qualité de l'étape 10 (B27), enfin la dérivée
+// et la comparaison (D81, C26). Ces captures se prennent toutes après les
 // familles, chacune sur sa charge, pour ne rien changer de ce que 10a, 11,
 // 19, 20 et les familles reçoivent : 12, 15, 15b et 15c sur la grande
 // démonstration rouverte et générée sous la graine écrite, au compte réduit
@@ -124,6 +125,9 @@ const { t } = creerTraduction([...TABLES_APPLICATION, ...TABLES_INTERFACE]);
 // compte réduit de la recherche (§ 5.10).
 const NOM_SOIREE = 'Soirée d\u{2019}essai';
 const GRAINE = 4242;
+// Le nom que le parcours donne à l'instant courant par le panneau
+// d'historique (capture 21).
+const NOM_INSTANT = 'Avant l\u{2019}accueil';
 const ARRET = 300;
 
 // L'écart de l'horloge pilotée entre la génération et la retenue : plus
@@ -2055,6 +2059,101 @@ describe('le parcours par gestes, depuis un répertoire neuf', { timeout: DUREE 
     await cliquer('[data-historique] [data-commande="defaire"]');
     await uneEntree(r, 'défaire');
     expect(serialiserCharge(charge())).toBe(memoire.avantAjustement);
+  });
+
+  // La vue d'historique (§ 8.3) : un geste défait au clavier, puis un autre
+  // geste, laissent le premier sur un fil abandonné ; l'instant courant se
+  // nomme par le champ du panneau. Les deux gestes changent le courriel de
+  // deux personnes, que rien n'imprime ; la seconde épreuve défait le
+  // dernier au clavier, et l'événement revient au contenu d'avant 21 pour
+  // les étapes qui suivent.
+  test('21 l’historique : Ctrl+Z puis un geste, un fil abandonné marqué ; « Défait (Ctrl+Z) » ; l’instant nommé par le panneau', async () => {
+    expect(etat().mode).toBe('ecriture');
+    expect(charge().evenement.etat).toBe('retenu');
+    memoire.avantHistorique = serialiserCharge(charge());
+    const [premiere, seconde] = charge().participants.filter((p) => !p.exclu && p.courriel === null);
+    expect(seconde, 'deux personnes sans courriel').toBeDefined();
+    await ouvrirSection('participants');
+    // Une cellule de courriel saisie au clavier et validée : une entrée.
+    const modifierCourriel = async (personne, courriel) => {
+      const r = revision();
+      dans(`[data-section="participants"] [data-participant="${personne.id}"] [data-champ="courriel"]`).focus();
+      await touche('Enter');
+      await images(1);
+      await cdp().send('Input.insertText', { text: courriel });
+      await touche('Enter');
+      const libelleGeste = await uneEntree(r, `le courriel de ${nomAffiche(personne)}`);
+      document.activeElement?.blur();
+      return libelleGeste;
+    };
+
+    const abandonne = await modifierCourriel(premiere, 'accueil.avance@exemple.test');
+    const revisionAbandonnee = revision();
+    const r = revision();
+    await touche('z', { ctrl: true });
+    const defait = await uneEntree(r, 'Ctrl+Z');
+    expect(defait).toBe(libelle('ENTREE_DEFAIRE', { libelle: abandonne, touche: 'Ctrl+Z' }));
+    // La touche se lit dans le libellé figé, quelle que soit la table des
+    // libellés que l'épreuve partage avec l'application (§ 8.2).
+    expect(defait.startsWith('Défait (Ctrl+Z) : ')).toBe(true);
+    expect(charge().participants.find((p) => p.id === premiere.id).courriel).toBeNull();
+    const revisionDefait = revision();
+    await modifierCourriel(seconde, 'accueil.tardif@exemple.test');
+    const courante = revision();
+
+    await ouvrirPlan();
+    await cliquer('[data-ecran="evenement"] [data-commande="historique"]');
+    const panneau = await attendre('le panneau d’historique', () => dans('[data-panneau="historique"]'));
+    const ligne = (revisionLigne) => panneau.querySelector(`li[data-revision="${revisionLigne}"]`);
+    const pastilles = (li, sorte) => [...li.querySelectorAll(`[data-pastille-instant="${sorte}"]`)].map(texteDe);
+    // Nommer : le nom saisi se pose à la sortie du champ, que l'appui réel
+    // sur « Nommer » provoque ; seul « Nommer » écrit, et la révision ne
+    // change pas.
+    const avantNom = m.fs.contenu('documents', `${base()}${SUFFIXES.journal}`);
+    await taper(panneau.querySelector('[data-champ="nomInstant"]'), NOM_INSTANT);
+    expect(m.fs.contenu('documents', `${base()}${SUFFIXES.journal}`)).toBe(avantNom);
+    await cliquerPointeur(panneau.querySelector('[data-commande="nommer"]'));
+    await attendre('le jalon sur l’instant courant', () => pastilles(ligne(courante), 'jalon').includes(NOM_INSTANT));
+    expect(revision()).toBe(courante);
+    expect(lireJournal(m.fs.contenu('documents', `${base()}${SUFFIXES.journal}`)).jalons.at(-1)).toMatchObject({ revision: courante, nom: NOM_INSTANT });
+    document.activeElement?.blur();
+    await images(2);
+
+    // La liste, la plus récente en tête : le geste courant, nommé ; le
+    // retour au clavier, qui n'est pas abandonné ; le geste défait, d'un
+    // fil abandonné, marqué et d'encre secondaire, qui offre le retour.
+    const lignes = [...panneau.querySelectorAll('li[data-revision]')];
+    expect(lignes.slice(0, 3).map((li) => Number(li.dataset.revision))).toEqual([courante, revisionDefait, revisionAbandonnee]);
+    expect(pastilles(lignes[0], 'courant')).toEqual([t('evenement.historique.courant')]);
+    expect(texteDe(lignes[1].querySelector('.libelle'))).toBe(defait);
+    expect(lignes[1].dataset.fil).toBe('retour');
+    expect(pastilles(lignes[1], 'abandonne')).toEqual([]);
+    const abandonnee = lignes[2];
+    expect(abandonnee.dataset.fil).toBe('abandonne');
+    expect(texteDe(abandonnee.querySelector('.libelle'))).toBe(abandonne);
+    expect(pastilles(abandonnee, 'abandonne')).toEqual([t('evenement.historique.abandonne')]);
+    expect(abandonnee.querySelector('[data-commande="revenir"]')).not.toBeNull();
+    expect(getComputedStyle(abandonnee.querySelector('.libelle')).color).not.toBe(getComputedStyle(lignes[0].querySelector('.libelle')).color);
+    // Le fil abandonné et le jalon tiennent dans l'image.
+    for (const element of [abandonnee.querySelector('[data-pastille-instant="abandonne"]'), ligne(courante).querySelector('[data-pastille-instant="jalon"]')]) {
+      expect(entiereDansLaFenetre(element), texteDe(element)).toBe(true);
+    }
+    await photographier(m, '21-historique', {
+      condition: [
+        '[data-panneau="historique"] li[data-fil="abandonne"] [data-pastille-instant="abandonne"]',
+        `[data-panneau="historique"] li[data-revision="${courante}"] [data-pastille-instant="jalon"]`,
+      ],
+      graine: GRAINE,
+    });
+  });
+
+  test('21 Ctrl+Z défait le dernier geste, le panneau se referme : le contenu d’avant 21', async () => {
+    const r = revision();
+    await touche('z', { ctrl: true });
+    await uneEntree(r, 'Ctrl+Z, après la capture');
+    expect(serialiserCharge(charge())).toBe(memoire.avantHistorique);
+    await cliquer('[data-ecran="evenement"] [data-commande="historique"]');
+    await attendre('le panneau refermé', () => dans('[data-panneau="historique"]') === null);
   });
 
   // Étape 12 (§ 11.7, § 19.3) : l'aperçu avant impression du plan, d'une

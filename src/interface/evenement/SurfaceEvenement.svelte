@@ -7,15 +7,16 @@
   // mode (BandeMode.svelte), dans le libellé de mode du bandeau, et dans
   // celui de la barre, à côté de la place fixe. data-mode porte le mode —
   // lecture, ecriture ou bloque. La barre porte, de gauche à droite, la
-  // place fixe, le libellé de mode, puis « Défaire » et « Refaire » (§ 8.3),
-  // puis les outils, outils — la suite des états du plan —, et les actions,
-  // actions — « Imprimer… », calée à droite —, quand ils sont donnés.
-  // Outils et actions suivent la place fixe et ne la déplacent donc jamais :
-  // un refus posé à côté de la place fixe les repousse sur la ligne
-  // suivante, à côté du libellé, sans ligne de plus. Une barre de moins de
-  // 80rem — la fenêtre de 1 366 px lui en donne davantage — passe les outils
-  // sous les commandes et les actions, sur une ligne à eux : la barre garde
-  // deux lignes là où, dans l'ordre du document, elle en prendrait trois.
+  // place fixe, le libellé de mode, puis « Défaire », « Refaire » et
+  // « Historique… » (§ 8.3), puis les outils, outils — la suite des états
+  // du plan —, et les actions, actions — « Imprimer… », calée à droite —,
+  // quand ils sont donnés. Outils et actions suivent la place fixe et ne la
+  // déplacent donc jamais : un refus posé à côté de la place fixe les
+  // repousse sur la ligne suivante, à côté du libellé, sans ligne de plus.
+  // Une barre de moins de 80rem — la fenêtre de 1 366 px lui en donne
+  // davantage — passe les outils sous les commandes et les actions, sur une
+  // ligne à eux : la barre garde deux lignes là où, dans l'ordre du
+  // document, elle en prendrait trois.
   //
   // Sous la barre vient la tête, tete, quand elle est donnée — l'en-tête de
   // l'événement et la navigation des sections —, puis les annonces,
@@ -60,6 +61,49 @@
   // retour se refait ; « Défaire » est toujours là, et la séance refuse à
   // côté de lui ce qui ne se défait pas.
   //
+  // « Historique… », après eux dans le même groupe, présent hors d'un
+  // format plus récent, ouvre et ferme le panneau d'historique
+  // (Historique.svelte), qu'il désigne par aria-expanded et aria-controls.
+  // Le panneau se pose à droite de la surface, dans la zone de travail, sur
+  // toute sa hauteur ; la surface garde le reste. Sous 80rem de barre, il
+  // passe par-dessus elle : la zone de travail est pour cela un conteneur
+  // de largeur, et le repère de sa position. Ouvrir porte le focus sur son
+  // titre ; un second clic, ou Échap dans le panneau, le ferme et rend le
+  // focus au bouton. Le second clic d'une série — detail supérieur à 1 —
+  // est sans effet, comme sur une commande : un double-clic laisse le
+  // panneau ouvert. L'ouverture est un état de ce composant, que l'écran de
+  // l'événement garde d'une section à l'autre, et qui ne s'écrit nulle part.
+  // Dans une barre de moins de 30rem — celle d'un téléphone —, le bouton ne
+  // montre que son icône, son libellé lu hors de la vue le nommant : la
+  // barre n'y prend pas de ligne de plus.
+  //
+  // Les raccourcis de l'écran de l'événement (raccourcis.js, contexte
+  // 'evenement') : un écouteur keydown sur le document, monté avec le
+  // composant, nomme la touche par toucheDe, et sur Ctrl+Z appelle
+  // seance.defaire({touche}), sur Ctrl+Maj+Z ou Ctrl+Y seance.refaire
+  // ({touche}) — le libellé figé de l'entrée nomme la touche —, l'action par
+  // défaut empêchée. Il laisse la touche passer, sans rien appeler, quand
+  // elle est répétée — une touche tenue ne défait qu'une fois —, déjà prise
+  // par un autre écouteur, ou que le focus est dans une saisie — un input
+  // qui porte du texte, textarea, select, élément éditable : Ctrl+Z y
+  // défait la frappe —, dans une fenêtre modale, qu'un pointeur est
+  // enfoncé, qu'un menu d'actions est ouvert, ou devant un format plus
+  // récent. Une case à cocher, un bouton radio ou tout input sans texte n'a
+  // pas d'annulation à lui : Ctrl+Z y défait le plan. Les pointeurs
+  // enfoncés se comptent par pointerdown et pointerup ou pointercancel, en
+  // capture sur le document ; la fenêtre qui perd le focus les oublie, son
+  // relâcher ne lui parvenant pas.
+  //
+  // Le refus d'un défaire, d'un clic sur « Défaire » comme d'un raccourci,
+  // et celui d'un refaire au clavier se rangent dans un seul état,
+  // refusDefaire, que « Défaire » montre par son refusExterne, avec le même
+  // remède ; celui d'un clic sur « Refaire » se range dans refusRefaire, que
+  // « Refaire » montre de la même façon. Un seul refus est montré, le
+  // dernier posé : les deux tombent à chaque raccourci, à chaque clic sur
+  // « Défaire » ou « Refaire », et dès que le mode, l'état du plan, la
+  // révision ou le support rompu changent — un remède abouti change l'un
+  // d'eux.
+  //
   // « Modifier » est l'action principale de la lecture, pleine de la teinte
   // de l'action ; « Revenir en lecture » et « Débloquer » ne le sont pas.
   // Chaque commande de la barre a la hauteur d'une cible principale, et la
@@ -72,10 +116,13 @@
   // barre sur le fond sourd de la carte, la tête sur son fond, séparées et
   // closes par le filet de la carte. La surface reste sur le fond de la
   // page.
-  import { getContext } from 'svelte';
+  import { getContext, onMount, tick, untrack } from 'svelte';
   import Commande from '../primitives/Commande.svelte';
   import { CONFIRMATION_DEBLOCAGE } from '../primitives/commande.js';
+  import Icone from '../primitives/Icone.svelte';
   import Refus from '../primitives/Refus.svelte';
+  import { effetDe, toucheDe } from '../raccourcis.js';
+  import Historique from './Historique.svelte';
   import { bandeDeMode, commandeFixe, repriseOfferte } from './modele.js';
 
   let { children, tete = null, annonces = null, outils = null, actions = null } = $props();
@@ -92,6 +139,105 @@
   const reprise = $derived(repriseOfferte($seance));
   // Les annonces se posent à côté de la tête, ou dessous.
   const aCote = $derived(tete !== null && annonces !== null && $seance.supportRompu === null);
+
+  // --- Le panneau d'historique ----------------------------------------------------
+  const uid = $props.id();
+  const idHistorique = `${uid}-historique`;
+  let historiqueOuvert = $state(false);
+  let boutonHistorique = $state(null);
+  const panneauMontre = $derived(historiqueOuvert && commande !== 'format');
+
+  function basculerHistorique(evenement) {
+    if (evenement.detail > 1) return;
+    if (historiqueOuvert) fermerHistorique();
+    else historiqueOuvert = true;
+  }
+
+  function fermerHistorique() {
+    historiqueOuvert = false;
+    tick().then(() => boutonHistorique?.focus());
+  }
+
+  // Une touche tenue sur le bouton ne le bascule qu'une fois.
+  function surToucheBouton(evenement) {
+    if (evenement.repeat && effetDe('commande', evenement.key) === 'activer') evenement.preventDefault();
+  }
+
+  // --- Les retours, au clic et au clavier ------------------------------------------
+  let refusDefaire = $state(null);
+  let refusRefaire = $state(null);
+  const modeCourant = $derived($seance.mode);
+  const etatCourant = $derived($seance.evenement?.etat ?? null);
+  const revisionCourante = $derived($seance.evenement?.revision ?? null);
+  const supportCourant = $derived($seance.supportRompu);
+  $effect.pre(() => {
+    void modeCourant;
+    void etatCourant;
+    void revisionCourante;
+    void supportCourant;
+    untrack(() => {
+      refusDefaire = null;
+      refusRefaire = null;
+    });
+  });
+
+  // Le défaire ou le refaire, options passées à la séance ; un refus, une
+  // erreur qui porte un code, se range dans refusRefaire pour un clic sur
+  // « Refaire », dans refusDefaire sinon ; toute autre erreur remonte.
+  async function retourner(effet, options, clicRefaire = false) {
+    refusDefaire = null;
+    refusRefaire = null;
+    try {
+      await (effet === 'defaire' ? seance.defaire(options) : seance.refaire(options));
+    } catch (erreur) {
+      if (typeof erreur?.code !== 'string') throw erreur;
+      const refus = { code: erreur.code, details: erreur.details ?? {} };
+      if (clicRefaire) refusRefaire = refus;
+      else refusDefaire = refus;
+    }
+  }
+
+  const defaire = () => retourner('defaire');
+  const refaire = () => retourner('refaire', undefined, true);
+
+  // Les types d'input qui ne portent pas de texte : aucune frappe à défaire.
+  const SANS_TEXTE = new Set(['button', 'checkbox', 'color', 'file', 'image', 'radio', 'range', 'reset', 'submit']);
+
+  // Vrai quand l'élément cible d'une touche est une saisie de texte, ou dans
+  // une fenêtre modale.
+  const enSaisie = (cible) =>
+    cible instanceof Element &&
+    (cible.closest('textarea, select, dialog') !== null ||
+      (cible instanceof HTMLInputElement && !SANS_TEXTE.has(cible.type)) ||
+      (cible instanceof HTMLElement && cible.isContentEditable));
+
+  onMount(() => {
+    const enfonces = new Set();
+    const presser = (evenement) => enfonces.add(evenement.pointerId);
+    const relacher = (evenement) => enfonces.delete(evenement.pointerId);
+    const oublier = () => enfonces.clear();
+    const surTouche = (evenement) => {
+      const touche = toucheDe(evenement);
+      const effet = effetDe('evenement', touche);
+      if (effet === null || evenement.repeat || evenement.defaultPrevented) return;
+      if (enSaisie(evenement.target) || enfonces.size > 0 || commande === 'format' || $seance.evenement === null) return;
+      if (document.querySelector('[data-menu-actions][aria-expanded="true"]') !== null) return;
+      evenement.preventDefault();
+      retourner(effet, { touche });
+    };
+    document.addEventListener('keydown', surTouche);
+    document.addEventListener('pointerdown', presser, true);
+    document.addEventListener('pointerup', relacher, true);
+    document.addEventListener('pointercancel', relacher, true);
+    window.addEventListener('blur', oublier);
+    return () => {
+      document.removeEventListener('keydown', surTouche);
+      document.removeEventListener('pointerdown', presser, true);
+      document.removeEventListener('pointerup', relacher, true);
+      document.removeEventListener('pointercancel', relacher, true);
+      window.removeEventListener('blur', oublier);
+    };
+  });
 </script>
 
 <div class="corps" data-mode={mode}>
@@ -122,10 +268,21 @@
       {/if}
       {#if commande !== 'format'}
         <div class="historique" data-historique>
-          <Commande cle="evenement.commande.defaire" nom="defaire" executer={() => seance.defaire()} />
+          <Commande cle="evenement.commande.defaire" nom="defaire" refusExterne={refusDefaire} executer={defaire} />
           {#if $seance.retours.refaire}
-            <Commande cle="evenement.commande.refaire" nom="refaire" executer={() => seance.refaire()} />
+            <Commande cle="evenement.commande.refaire" nom="refaire" refusExterne={refusRefaire} executer={refaire} />
           {/if}
+          <button
+            type="button"
+            class="panneau"
+            data-commande="historique"
+            aria-expanded={panneauMontre ? 'true' : 'false'}
+            aria-controls={panneauMontre ? idHistorique : undefined}
+            bind:this={boutonHistorique}
+            onkeydown={surToucheBouton}
+            onclick={basculerHistorique}
+            ><Icone nom="listePoints" /><span class="nom">{t('evenement.commande.historique')}</span></button
+          >
         </div>
       {/if}
       {#if outils !== null}
@@ -179,8 +336,13 @@
       {@render annonces()}
     </div>
   {/if}
-  <div class="surface">
-    {@render children()}
+  <div class="travail">
+    <div class="surface">
+      {@render children()}
+    </div>
+    {#if panneauMontre}
+      <Historique id={idHistorique} fermer={fermerHistorique} />
+    {/if}
   </div>
 </div>
 
@@ -284,6 +446,63 @@
     flex-wrap: wrap;
     align-items: flex-start;
     gap: var(--espace-2);
+  }
+
+  /* « Historique… » : l'apparence d'une commande discrète — ni fond ni
+     filet au repos, le fond sourd de la carte au survol —, haute d'une
+     cible principale comme ses voisines, son icône devant son libellé.
+     Ouvert, il prend le filet et le fond d'une commande secondaire : la
+     barre, du fond sourd de la carte, ne le distinguerait pas sinon. */
+  .panneau {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--espace-1);
+    min-height: var(--hauteur-cible);
+    padding: var(--espace-1) var(--espace-3);
+    border: 1px solid transparent;
+    border-radius: var(--rayon-2);
+    background-color: transparent;
+    color: var(--couleur-page-texte);
+    font: inherit;
+    font-size: var(--taille-texte);
+    cursor: pointer;
+  }
+
+  .panneau:hover {
+    background-color: var(--couleur-carte-fond-sourd);
+  }
+
+  .panneau[aria-expanded='true'] {
+    border-color: var(--couleur-page-filet);
+    background-color: var(--couleur-carte-fond);
+  }
+
+  .panneau:focus-visible {
+    outline: 2px solid var(--couleur-focus);
+    outline-offset: 2px;
+  }
+
+  /* Dans une barre de téléphone, l'icône seule, dans une cible carrée de la
+     hauteur d'une cible principale ; le libellé, une boîte d'un pixel,
+     rognée, qui ne pousse rien, nomme encore le bouton. */
+  @container barre (max-width: 30rem) {
+    .panneau {
+      justify-content: center;
+      min-width: var(--hauteur-cible);
+      padding-inline: 0;
+    }
+
+    .nom {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
   }
 
   .verrou {
@@ -423,12 +642,25 @@
     flex-shrink: 0;
   }
 
-  /* La surface part des trois quarts du composant, s'étend à ce qui reste, et
-     ne rétrécit, après les annonces, que pour la barre et la tête. Sa
-     hauteur ne dépend pas de son contenu : elle est un conteneur de taille,
-     dont une section borne un panneau à la hauteur visible (unités cqb). */
-  .surface {
+  /* La zone de travail part des trois quarts du composant, s'étend à ce qui
+     reste, et ne rétrécit, après les annonces, que pour la barre et la
+     tête. Elle porte la surface et, à sa droite, le panneau d'historique
+     ouvert ; conteneur de largeur, elle est le repère du panneau qui passe
+     par-dessus la surface (Historique.svelte). */
+  .travail {
+    display: flex;
+    position: relative;
     flex: 1 1 75%;
+    min-height: 0;
+    container: travail / inline-size;
+  }
+
+  /* La surface prend la largeur que le panneau laisse. Sa hauteur ne dépend
+     pas de son contenu : elle est un conteneur de taille, dont une section
+     borne un panneau à la hauteur visible (unités cqb). */
+  .surface {
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 0;
     overflow: auto;
     padding: var(--espace-3);

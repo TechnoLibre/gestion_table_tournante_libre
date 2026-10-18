@@ -5,13 +5,15 @@
 // § 9, § 14.5) : aucune section n'en exige une autre ; la place fixe de
 // « Modifier », de « Débloquer » et de « Revenir en lecture », plein écran
 // compris ; la surface de travail sans cadre, le mode porté par la bande et
-// le libellé ; l'inactivité ; l'état bloqué
-// et son déblocage confirmé en place ; les états du plan ; défaire et
-// refaire ; les annonces d'ouverture, du journal et de la dérive ; le verrou
-// d'une autre séance et sa reprise ; le support rompu ; le format plus
-// récent. Chaque épreuve monte App par monterApp, sur le système de fichiers
-// simulé, au cadre de 1 366 × 700, et lit le rendu : la boîte, l'élément
-// qu'atteint un point, le style calculé, le texte — jamais une classe.
+// le libellé ; l'inactivité ; l'état bloqué et son déblocage confirmé en
+// place ; les états du plan ; défaire et refaire, au clic et au clavier ;
+// le panneau d'historique, son ouverture, sa place et son focus, et son
+// bouton dans la barre d'un téléphone ; les annonces d'ouverture, du
+// journal et de la dérive ; le verrou d'une autre séance et sa reprise ; le
+// support rompu ; le format plus récent. Chaque épreuve monte App par
+// monterApp, sur le système de fichiers simulé, au cadre de 1 366 × 700
+// sauf mention, et lit le rendu : la boîte, l'élément qu'atteint un point,
+// le style calculé, le texte — jamais une classe.
 //
 // Les éléments s'atteignent par leurs attributs data-… : data-place-fixe, la
 // place fixe de la barre ; data-etat, un état du plan de l'en-tête ;
@@ -31,7 +33,8 @@ import { FORMAT, analyser, configurationDepuisCharge, etatDeduit } from '../../s
 import { lireJournal } from '../../stockage/journal.js';
 import { SUFFIXES } from '../../stockage/noms.js';
 import { VERSION } from '../../version.genere.js';
-import { fixerCadre, molette, pointer } from '../../../test/navigateur/entrees.js';
+import { fixerCadre, molette, pointer, touche } from '../../../test/navigateur/entrees.js';
+import { boutonActions, ouvrirActions } from '../../../test/navigateur/menus.js';
 import { monterApp } from '../../../test/navigateur/montage.js';
 import { visible } from '../../../test/navigateur/rendu.js';
 import { TABLES_INTERFACE } from '../libelles.js';
@@ -585,6 +588,438 @@ describe('défaire, refaire (§ 8.3)', () => {
     });
     expect(refus.querySelector('[data-commande="debloquer"]')).not.toBeNull();
     expect(m.trace.length).toBe(bloque);
+  });
+});
+
+describe('le panneau d’historique (§ 8.3, § 8.4)', () => {
+  const panneau = (m) => dans(m, '[data-panneau="historique"]');
+  const boutonHistorique = (m) => historique(m, 'historique');
+  const titre = (m) => panneau(m).querySelector('h2');
+  const surface = (m) => dans(m, '[data-section]').parentElement;
+  const boite = (element) => element.getBoundingClientRect();
+
+  test('« Historique… » suit « Défaire » dans son groupe ; il ouvre le panneau à droite de la surface, sur toute sa hauteur, le focus sur son titre ; un second clic le ferme et rend le focus ; rien ne s’écrit', async () => {
+    const m = await neuf();
+    await garnir(m);
+    m.ui.allerA('plan');
+    flushSync();
+    const groupe = dans(m, '[data-historique]');
+    const commandes = [...groupe.querySelectorAll('[data-commande]')].map((element) => element.dataset.commande);
+    expect(commandes).toEqual(['defaire', 'historique']);
+    expect(boutonHistorique(m).textContent).toBe(t('evenement.commande.historique'));
+    expect(boutonHistorique(m).getAttribute('aria-expanded')).toBe('false');
+    expect(panneau(m)).toBeNull();
+    const largeurSeule = boite(surface(m)).width;
+    const avant = m.trace.length;
+    boutonHistorique(m).click();
+    await attendre(() => expect(panneau(m)).not.toBeNull());
+    expect(boutonHistorique(m).getAttribute('aria-expanded')).toBe('true');
+    expect(boutonHistorique(m).getAttribute('aria-controls')).toBe(panneau(m).id);
+    expect(panneau(m).tagName).toBe('ASIDE');
+    expect(panneau(m).getAttribute('aria-labelledby')).toBe(titre(m).id);
+    expect(titre(m).textContent).toBe(t('evenement.historique.titre'));
+    await attendre(() => expect(document.activeElement).toBe(titre(m)));
+    // À droite de la surface, sur sa hauteur, d'environ 24rem ; la surface
+    // garde le reste, sans rien sous le panneau.
+    const cote = boite(panneau(m));
+    const reste = boite(surface(m));
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+    expect(Math.abs(cote.width - 24 * rem)).toBeLessThanOrEqual(1);
+    expect(cote.left).toBeGreaterThanOrEqual(reste.right - 0.5);
+    expect([cote.top, cote.bottom]).toEqual([reste.top, reste.bottom]);
+    expect(reste.width).toBeLessThan(largeurSeule - 24 * rem + 1);
+    expect(panneau(m).contains(document.elementFromPoint(cote.left + cote.width / 2, cote.top + 10))).toBe(true);
+    // Ouvert d'une section à l'autre.
+    m.ui.allerA('participants');
+    flushSync();
+    expect(panneau(m)).not.toBeNull();
+    boutonHistorique(m).click();
+    await attendre(() => expect(panneau(m)).toBeNull());
+    expect(boutonHistorique(m).getAttribute('aria-expanded')).toBe('false');
+    await attendre(() => expect(document.activeElement).toBe(boutonHistorique(m)));
+    expect(m.trace.length).toBe(avant);
+  });
+
+  test('Échap dans le panneau le ferme et rend le focus au bouton ; un double-clic sur le bouton le laisse ouvert', async () => {
+    const m = await neuf();
+    boutonHistorique(m).click();
+    await attendre(() => expect(document.activeElement).toBe(titre(m)));
+    await touche('Escape');
+    await attendre(() => expect(panneau(m)).toBeNull());
+    await attendre(() => expect(document.activeElement).toBe(boutonHistorique(m)));
+    const point = await cliquerEnSerie(boutonHistorique(m), 1);
+    await attendre(() => expect(panneau(m)).not.toBeNull());
+    await cliquerEnSerie(point, 2);
+    expect(panneau(m)).not.toBeNull();
+    expect(boutonHistorique(m).getAttribute('aria-expanded')).toBe('true');
+  });
+
+  test('à 1 024 px, sous 80rem de barre : le panneau passe par-dessus la surface, collé à droite, et la surface garde sa largeur', async () => {
+    await fixerCadre(1024, 700);
+    const m = await neuf();
+    m.ui.allerA('plan');
+    flushSync();
+    const avant = boite(surface(m));
+    boutonHistorique(m).click();
+    await attendre(() => expect(panneau(m)).not.toBeNull());
+    const cote = boite(panneau(m));
+    const apres = boite(surface(m));
+    expect(apres.width).toBe(avant.width);
+    expect(cote.right).toBeCloseTo(avant.right, 0);
+    expect(cote.left).toBeLessThan(avant.right);
+    expect(cote.top).toBe(avant.top);
+    expect(cote.bottom).toBe(avant.bottom);
+    expect(panneau(m).contains(document.elementFromPoint(cote.left + cote.width / 2, cote.top + cote.height / 2))).toBe(true);
+  });
+
+  test('à 414 px, la barre d’un téléphone : « Historique… » ne montre que son icône, nommé par son libellé, dans une cible de 24 px au moins, et ne fait pas passer la barre sur une ligne de plus', async () => {
+    await fixerCadre(414, 896);
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    await m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[0] } });
+    flushSync();
+    const bouton = boutonHistorique(m);
+    const barre = bouton.closest('[role="group"]');
+    expect(bouton.textContent).toBe(t('evenement.commande.historique'));
+    expect(bouton.getAttribute('aria-label')).toBeNull();
+    const libelleBouton = [...bouton.children].find((enfant) => enfant.textContent === t('evenement.commande.historique'));
+    expect(boite(libelleBouton).width).toBeLessThanOrEqual(1);
+    const cible = boite(bouton);
+    expect(Math.min(cible.width, cible.height)).toBeGreaterThanOrEqual(24);
+    const hauteur = boite(barre).height;
+    bouton.style.display = 'none';
+    try {
+      expect(boite(barre).height).toBe(hauteur);
+    } finally {
+      bouton.style.display = '';
+    }
+  });
+});
+
+describe('les raccourcis de retour (§ 7.3, § 8.3)', () => {
+  const nombre = (m) => m.seance.etat().charge.participants.length;
+  const derniere = (m) => journalDe(m).entrees.at(-1);
+  // Le libellé de la première ligne du panneau ouvert.
+  const enTete = (m) => dans(m, '[data-panneau="historique"] li[data-revision] .libelle')?.textContent ?? null;
+
+  test('Ctrl+Z défait, puis Ctrl+Y refait : leurs entrées nomment la touche, et la liste du panneau les montre en tête ; Ctrl+Maj+Z refait aussi', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    for (const nom of NOMS.slice(0, 3)) await m.seance.executer('ajouterParticipant', { champs: { nom } });
+    flushSync();
+    historique(m, 'historique').click();
+    await attendre(() => expect(dans(m, '[data-panneau="historique"]')).not.toBeNull());
+    const troisieme = derniere(m).libelle;
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(2));
+    const defait = libelle('ENTREE_DEFAIRE', { libelle: troisieme, touche: 'Ctrl+Z' });
+    expect(derniere(m).libelle).toBe(defait);
+    await attendre(() => expect(enTete(m)).toBe(defait));
+    await touche('y', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(3));
+    const refait = libelle('ENTREE_REFAIRE', { libelle: troisieme, touche: 'Ctrl+Y' });
+    expect(derniere(m).libelle).toBe(refait);
+    await attendre(() => expect(enTete(m)).toBe(refait));
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(2));
+    await touche('z', { ctrl: true, maj: true });
+    await attendre(() => expect(nombre(m)).toBe(3));
+    expect(derniere(m).libelle).toBe(libelle('ENTREE_REFAIRE', { libelle: troisieme, touche: 'Ctrl+Maj+Z' }));
+  });
+
+  test('une touche tenue ne défait qu’une fois : les répétitions de Ctrl+Z n’écrivent rien', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    for (const nom of NOMS.slice(0, 3)) await m.seance.executer('ajouterParticipant', { champs: { nom } });
+    flushSync();
+    const { entrees } = journalDe(m);
+    await touche('z', { ctrl: true });
+    await touche('z', { ctrl: true, repete: true });
+    await touche('z', { ctrl: true, repete: true });
+    await viderFile(m);
+    expect(nombre(m)).toBe(2);
+    expect(journalDe(m).entrees.length).toBe(entrees.length + 1);
+  });
+
+  test('Ctrl+Z dans un champ de saisie ne touche pas le plan ; un pointeur enfoncé non plus ; relâché, Ctrl+Z défait', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    for (const nom of NOMS.slice(0, 2)) await m.seance.executer('ajouterParticipant', { champs: { nom } });
+    flushSync();
+    historique(m, 'historique').click();
+    await attendre(() => expect(dans(m, '[data-panneau="historique"]')).not.toBeNull());
+    const { entrees } = journalDe(m);
+    const entree = dans(m, '[data-panneau="historique"] [data-champ="nomInstant"]');
+    entree.focus();
+    await touche('A');
+    await touche('z', { ctrl: true });
+    await viderFile(m);
+    expect(nombre(m)).toBe(2);
+    expect(journalDe(m).entrees.length).toBe(entrees.length);
+    expect(dans(m, '[data-historique] [data-refus]')).toBeNull();
+    // Un pointeur tenu sur la barre, hors de toute commande.
+    entree.blur();
+    const barre = dans(m, '[data-mode-libelle="barre"]').getBoundingClientRect();
+    await pointer('presser', barre.left + 2, barre.top + 2);
+    await touche('z', { ctrl: true });
+    await viderFile(m);
+    expect(nombre(m)).toBe(2);
+    await pointer('relacher', barre.left + 2, barre.top + 2);
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(1));
+  });
+
+  test('en lecture, Ctrl+Z refuse à côté de « Défaire » avec « Modifier » ; rien ne s’écrit ; le refus tombe au passage en écriture, et Ctrl+Z défait', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    await m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[0] } });
+    await m.seance.passerEnLecture();
+    flushSync();
+    const avant = m.trace.length;
+    await touche('z', { ctrl: true });
+    const refus = await attendre(() => {
+      const element = refusPres(historique(m, 'defaire'), 'MODE_LECTURE');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    expect(refus.querySelector('[data-commande="modifier"]').textContent).toBe(t('communs.remede.modifier'));
+    expect(m.trace.length).toBe(avant);
+    expect(nombre(m)).toBe(1);
+    // Ctrl+Y, sans rien à refaire, refuse au même endroit.
+    await touche('y', { ctrl: true });
+    await viderFile(m);
+    expect(refusPres(historique(m, 'defaire'), 'MODE_LECTURE')).not.toBeNull();
+    await m.seance.passerEnEcriture();
+    await attendre(() => expect(dans(m, '[data-historique] [data-refus]')).toBeNull());
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(0));
+  });
+
+  test('rien à défaire : Ctrl+Z refuse à côté de « Défaire » ; le geste suivant retire le refus', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    flushSync();
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(refusPres(historique(m, 'defaire'), 'RIEN_A_DEFAIRE')).not.toBeNull());
+    await m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[1] } });
+    await attendre(() => expect(dans(m, '[data-historique] [data-refus]')).toBeNull());
+  });
+
+  test('le refus d’un clic sur « Défaire » tombe au changement de mode ; le Ctrl+Z qui suit pose le sien à côté de « Défaire », avec « Modifier »', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    flushSync();
+    const refusDuGroupe = () => tous(m, '[data-historique] [data-refus]').map((element) => element.dataset.refus);
+    // Le focus dans le cadre : les touches qui suivent y parviennent.
+    historique(m, 'defaire').focus();
+    historique(m, 'defaire').click();
+    await attendre(() => expect(refusDuGroupe()).toEqual(['RIEN_A_DEFAIRE']));
+    await m.seance.passerEnLecture();
+    await attendre(() => expect(refusDuGroupe()).toEqual([]));
+    await touche('z', { ctrl: true });
+    const refus = await attendre(() => {
+      expect(refusDuGroupe()).toEqual(['MODE_LECTURE']);
+      return refusPres(historique(m, 'defaire'), 'MODE_LECTURE');
+    });
+    expect(refus.querySelector('[data-commande="modifier"]').textContent).toBe(t('communs.remede.modifier'));
+    // Le clic suivant pose le sien à la place.
+    await m.seance.passerEnEcriture();
+    await attendre(() => expect(refusDuGroupe()).toEqual([]));
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(refusDuGroupe()).toEqual(['RIEN_A_DEFAIRE']));
+    await m.seance.passerEnLecture();
+    flushSync();
+    historique(m, 'defaire').click();
+    await attendre(() => expect(refusDuGroupe()).toEqual(['MODE_LECTURE']));
+  });
+
+  test('le refus d’un clic sur « Refaire » se pose à côté de lui, tombe au raccourci suivant et au changement de mode', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    await m.seance.executer('ajouterParticipant', { champs: { nom: NOMS[0] } });
+    await m.seance.defaire();
+    await m.seance.passerEnLecture();
+    flushSync();
+    const refusDuGroupe = () => tous(m, '[data-historique] [data-refus]').map((element) => element.dataset.refus);
+    historique(m, 'refaire').focus();
+    historique(m, 'refaire').click();
+    await attendre(() => expect(refusPres(historique(m, 'refaire'), 'MODE_LECTURE')).not.toBeNull());
+    expect(refusDuGroupe()).toEqual(['MODE_LECTURE']);
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(refusPres(historique(m, 'defaire'), 'MODE_LECTURE')).not.toBeNull());
+    expect(refusDuGroupe()).toEqual(['MODE_LECTURE']);
+    expect(refusPres(historique(m, 'refaire'), 'MODE_LECTURE')).toBeNull();
+    historique(m, 'refaire').click();
+    await attendre(() => expect(refusPres(historique(m, 'refaire'), 'MODE_LECTURE')).not.toBeNull());
+    await m.seance.passerEnEcriture();
+    await attendre(() => expect(refusDuGroupe()).toEqual([]));
+  });
+
+  test('le focus sur une case à cocher : Ctrl+Z défait, une case n’ayant pas d’annulation à elle', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    for (const nom of NOMS.slice(0, 2)) await m.seance.executer('ajouterParticipant', { champs: { nom } });
+    flushSync();
+    historique(m, 'historique').click();
+    await attendre(() => expect(dans(m, '[data-panneau="historique"]')).not.toBeNull());
+    const caseJalons = dans(m, '[data-panneau="historique"] [data-jalons-seuls]');
+    expect(caseJalons.type).toBe('checkbox');
+    caseJalons.focus();
+    expect(document.activeElement).toBe(caseJalons);
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(1));
+  });
+
+  test('le focus dans une fenêtre modale : Ctrl+Z ne touche pas le plan ; la fenêtre refermée, Ctrl+Z défait', async () => {
+    const m = await neuf();
+    await garnir(m);
+    const { participants, tables } = m.seance.etat().charge;
+    await m.seance.executer('reserver', { participant: participants[0].id, table: tables[0].id, siege: 1, portee: 'tous', tour: null });
+    m.ui.allerA('participants');
+    flushSync();
+    const { entrees } = journalDe(m);
+    dans(m, `[data-section="participants"] [data-participant="${participants[0].id}"] [data-commande="supprimerParticipant"]`).click();
+    const fenetre = await attendre(() => {
+      const element = document.querySelector('dialog[open]');
+      expect(element).not.toBeNull();
+      return element;
+    });
+    await attendre(() => expect(fenetre.contains(document.activeElement)).toBe(true));
+    await touche('z', { ctrl: true });
+    await viderFile(m);
+    expect(nombre(m)).toBe(NOMS.length);
+    expect(m.seance.etat().charge.reservations).toHaveLength(1);
+    expect(journalDe(m).entrees.length).toBe(entrees.length);
+    expect(dans(m, '[data-historique] [data-refus]')).toBeNull();
+    fenetre.querySelector('[data-commande="renoncer"]').click();
+    await attendre(() => expect(document.querySelector('dialog[open]')).toBeNull());
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(m.seance.etat().charge.reservations).toHaveLength(0));
+    expect(journalDe(m).entrees.length).toBe(entrees.length + 1);
+  });
+
+  test('le focus dans une zone de texte, une liste de choix ou un élément éditable : Ctrl+Z ne touche pas le plan ; hors d’eux, Ctrl+Z défait', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    for (const nom of NOMS.slice(0, 2)) await m.seance.executer('ajouterParticipant', { champs: { nom } });
+    m.ui.allerA('participants');
+    flushSync();
+    const { entrees } = journalDe(m);
+    const section = dans(m, '[data-section="participants"]');
+    // Aucun écran n'a d'élément éditable : l'épreuve en pose un, retiré
+    // avant le Ctrl+Z qui défait.
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    section.append(editable);
+    const saisies = [section.querySelector('textarea[data-champ="notes"]'), section.querySelector('select[data-champ="grouper"]'), editable];
+    for (const saisie of saisies) {
+      saisie.focus();
+      expect(document.activeElement).toBe(saisie);
+      await touche('z', { ctrl: true });
+      await viderFile(m);
+      expect(nombre(m), saisie.tagName).toBe(2);
+      expect(journalDe(m).entrees.length, saisie.tagName).toBe(entrees.length);
+    }
+    expect(dans(m, '[data-historique] [data-refus]')).toBeNull();
+    editable.remove();
+    document.activeElement.blur();
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(1));
+  });
+
+  test('un menu d’actions ouvert, le focus sur son élément : Ctrl+Z ne touche pas le plan ; le menu refermé par Échap, Ctrl+Z défait', async () => {
+    const m = await neuf();
+    await garnir(m);
+    await generer(m, { retenir: false });
+    m.ui.allerA('propositions');
+    flushSync();
+    const propositions = () => m.seance.etat().charge.propositions.length;
+    const { entrees } = journalDe(m);
+    const ligne = dans(m, '[data-section="propositions"] [data-menu-actions]').closest('tr');
+    const menu = ouvrirActions(ligne);
+    await attendre(() => expect(menu.contains(document.activeElement)).toBe(true));
+    await touche('z', { ctrl: true });
+    await viderFile(m);
+    expect(propositions()).toBe(2);
+    expect(journalDe(m).entrees.length).toBe(entrees.length);
+    expect(dans(m, '[data-historique] [data-refus]')).toBeNull();
+    await touche('Escape');
+    await attendre(() => expect(boutonActions(ligne).getAttribute('aria-expanded')).toBe('false'));
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(propositions()).toBe(0));
+    expect(journalDe(m).entrees.length).toBe(entrees.length + 1);
+  });
+
+  test('une touche déjà prise par un autre écouteur passe : Ctrl+Z ne défait rien ; libre, il défait', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    for (const nom of NOMS.slice(0, 2)) await m.seance.executer('ajouterParticipant', { champs: { nom } });
+    flushSync();
+    // Un écouteur en capture sur le document passe avant celui de l'écran.
+    const prendre = (evenement) => {
+      if (evenement.ctrlKey && evenement.key === 'z') evenement.preventDefault();
+    };
+    document.addEventListener('keydown', prendre, true);
+    try {
+      await touche('z', { ctrl: true });
+      await viderFile(m);
+      expect(nombre(m)).toBe(2);
+    } finally {
+      document.removeEventListener('keydown', prendre, true);
+    }
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(1));
+  });
+
+  test('la fenêtre qui perd le focus oublie le pointeur enfoncé : Ctrl+Z défait avant son relâcher', async () => {
+    const m = await neuf();
+    await m.seance.passerEnEcriture();
+    for (const nom of NOMS.slice(0, 2)) await m.seance.executer('ajouterParticipant', { champs: { nom } });
+    flushSync();
+    const barre = dans(m, '[data-mode-libelle="barre"]').getBoundingClientRect();
+    await pointer('presser', barre.left + 2, barre.top + 2);
+    await touche('z', { ctrl: true });
+    await viderFile(m);
+    expect(nombre(m)).toBe(2);
+    window.dispatchEvent(new Event('blur'));
+    await touche('z', { ctrl: true });
+    await attendre(() => expect(nombre(m)).toBe(1));
+    await pointer('relacher', barre.left + 2, barre.top + 2);
+  });
+
+  test('devant un format plus récent, Ctrl+Z et Ctrl+Y passent : l’action par défaut reste, et la séance n’est appelée ni pour défaire ni pour refaire', async () => {
+    const m = await neuf();
+    const appels = [];
+    const { defaire, refaire } = m.seance;
+    m.seance.defaire = (options) => {
+      appels.push(['defaire', options]);
+      return defaire(options);
+    };
+    m.seance.refaire = (options) => {
+      appels.push(['refaire', options]);
+      return refaire(options);
+    };
+    // Une touche synthétique, adressée au corps du document : dispatchEvent
+    // rend faux quand un écouteur en a empêché l'action par défaut.
+    const presser = (key) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey: true, bubbles: true, cancelable: true }));
+    // Au format courant, en lecture, l'écran prend la touche et appelle la
+    // séance, qui refuse.
+    expect(presser('z')).toBe(false);
+    await viderFile(m);
+    expect(appels).toEqual([['defaire', { touche: 'Ctrl+Z' }]]);
+    const base = baseDe(m);
+    await m.seance.fermer();
+    const chemin = `${base}${SUFFIXES.etat}`;
+    m.fs.deposer('documents', chemin, m.fs.contenu('documents', chemin).replace(`"format":${FORMAT}`, `"format":${FORMAT + 1}`));
+    await m.seance.ouvrir(base);
+    flushSync();
+    expect(m.seance.etat().evenement).not.toBeNull();
+    expect(dans(m, '[data-place-fixe] [data-refus="LECTURE_SEULE"]')).not.toBeNull();
+    appels.length = 0;
+    expect(presser('z')).toBe(true);
+    expect(presser('y')).toBe(true);
+    await viderFile(m);
+    expect(appels).toEqual([]);
   });
 });
 
@@ -1196,6 +1631,7 @@ describe('le format plus récent (§ 8.8)', () => {
     await m.seance.ouvrir(base);
     flushSync();
     expect(fixe(m, 'modifier')).toBeNull();
+    expect(dans(m, '[data-commande="historique"]')).toBeNull();
     const explication = dans(m, '[data-place-fixe] [data-refus="LECTURE_SEULE"]');
     expect(explication.textContent).toContain(t('LECTURE_SEULE', { raison: 'FORMAT', remede: null }));
     expect(visible(explication)).toBe(true);

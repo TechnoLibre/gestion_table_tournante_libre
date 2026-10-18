@@ -372,7 +372,7 @@ describe('intégration : le parcours de l’opérateur par la séance (§ 2.1)',
       });
     }
     assert.deepEqual(vu.seconde.avertissements, []);
-    assert.deepEqual(vu.retoursFinaux, { defaire: true, refaire: true });
+    assert.deepEqual(vu.retoursFinaux, { defaire: true, refaire: true, jalons: 6 });
     const { entrees } = vu.journalFinal;
     const retours = entrees.slice(-3).map(({ sens, retour }) => [sens, retour]);
     assert.deepEqual(retours, [

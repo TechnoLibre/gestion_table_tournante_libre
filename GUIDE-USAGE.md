@@ -680,6 +680,23 @@ Glisser une personne ou une table, tirer une poignée, poser une réservation :
 chaque geste est refusé avec « Modifier » pour remède, et rien ne change sur le
 disque.*
 
+**L’historique** s’ouvre par « Historique… », dans la barre de l’événement :
+à côté du plan, la liste de vos gestes, le plus récent en haut, chacun avec sa
+date et son heure ; « Revenir à cet instant » rend l’état de l’un d’eux sans
+rien effacer. Une ligne grisée marquée « fil abandonné » est un geste que vous
+avez défait puis remplacé par un autre : il reste dans la liste, et vous pouvez
+encore y revenir. Pour nommer l’instant courant, tapez son nom dans le champ du
+panneau, puis « Nommer » ; la case « Instants nommés seulement » ne garde que
+ceux-là.
+
+![Le panneau d’historique : un instant nommé, un retour au clavier, un fil abandonné](doc/captures/21-historique.png)
+
+*En tête, l’instant courant, nommé « Avant l’accueil ». Dessous, le retour fait
+au clavier : son libellé nomme la touche, « Défait (Ctrl+Z) ». Plus bas, le
+geste défait, en gris, porte la pastille « fil abandonné ». Hors d’un champ de
+saisie, Ctrl+Z défait le dernier geste, Ctrl+Maj+Z ou Ctrl+Y le refait
+(annexe D).*
+
 ## Étape 12 — Imprimer
 
 La commande « Imprimer… », en haut de l’événement, ouvre l’**aperçu
@@ -1038,6 +1055,8 @@ l’historique ; les noms des exemples sont inventés.
 | Menu ouvert | Échap | Ferme le menu et rend le focus à son bouton. |
 | Menu ouvert | Tab | Ferme le menu ; le focus passe au contrôle suivant. |
 | Geste en cours | Échap | Annule le geste en cours : la table revient où elle était. |
+| Écran de l’événement, hors saisie | Ctrl+Z | Défait le dernier geste. |
+| Écran de l’événement, hors saisie | Ctrl+Maj+Z ou Ctrl+Y | Refait le dernier retour. |
 | Panneau ou infobulle | Échap | Ferme le panneau ou l'infobulle. |
 
 <!-- engendre:fin raccourcis -->

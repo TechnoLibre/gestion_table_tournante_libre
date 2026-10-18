@@ -203,13 +203,15 @@ describe('documentation : le guide d’usage suit les étapes et apparie ses ima
     }
   });
 
-  test('les captures reportées ou à venir ne sont pas citées : sans image, elles seraient orphelines', () => {
+  test('chaque capture publiée est citée ; une reportée ou à venir ne l’est pas : sans image, elle serait orpheline', () => {
     const citees = new Set(imagesReferencees(lire(GUIDE_USAGE)));
+    // Sans reportée ni capture à venir, la première comparaison ne juge
+    // rien ; la seconde, sur toutes les captures publiées, juge le guide.
     const absentes = [...REPORTEES.map((r) => r.fichier), ...A_VENIR].map(cheminImage);
-    assert.ok(absentes.length > 0);
     assert.deepEqual(absentes.filter((chemin) => citees.has(chemin)), []);
     // Chaque capture déclarée qui n'est pas à venir est publiée, donc citée.
     const publiees = CAPTURES.filter((c) => !A_VENIR.includes(c.fichier)).map((c) => cheminImage(c.fichier));
+    assert.ok(publiees.length > 0);
     assert.deepEqual(publiees.filter((chemin) => !citees.has(chemin)), []);
   });
 

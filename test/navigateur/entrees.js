@@ -136,18 +136,37 @@ export async function toucher(type, points) {
   await cdp().send('Input.dispatchTouchEvent', { type: typeCdp, touchPoints });
 }
 
+// Le masque des modificateurs de CDP : Alt 1, Ctrl 2, Méta 4, Maj 8.
+const MASQUE_CTRL = 2;
+const MASQUE_MAJ = 8;
+
+// Une lettre latine sans accent : sa touche physique se nomme Key<lettre>,
+// et son code virtuel est celui de sa majuscule.
+const LETTRE_LATINE = /^[a-z]$/i;
+
 /** Presse puis relâche une touche nommée par sa valeur de key ('Escape',
  *  'Enter', 'ArrowDown'…) ou un caractère imprimable. Les événements vont au
- *  document qui a le focus. Une touche inconnue lève en la nommant. */
-export async function touche(cle) {
+ *  document qui a le focus. Une touche inconnue lève en la nommant.
+ *  Options : ctrl et maj tiennent Ctrl et Maj pendant l'appui — sous Maj,
+ *  une lettre arrive en majuscule ; sous Ctrl, aucun caractère ne se
+ *  saisit, comme d'un raccourci — ; repete marque l'appui comme une
+ *  répétition automatique, keydown portant repeat vrai. */
+export async function touche(cle, { ctrl = false, maj = false, repete = false } = {}) {
   const connue = TOUCHES[cle];
   const caractere = connue === undefined && [...cle].length === 1;
   if (connue === undefined && !caractere) throw new Error(`touche inconnue : « ${cle} »`);
-  const { code, touche: virtuelle, texte } = connue ?? { code: '', touche: 0, texte: cle };
-  const commun = { key: cle, code, windowsVirtualKeyCode: virtuelle, nativeVirtualKeyCode: virtuelle };
+  const lettre = caractere && LETTRE_LATINE.test(cle);
+  const key = lettre && maj ? cle.toUpperCase() : cle;
+  let decrite = connue ?? { code: '', touche: 0, texte: key };
+  if (lettre) decrite = { code: `Key${cle.toUpperCase()}`, touche: cle.toUpperCase().charCodeAt(0), texte: key };
+  const { code, touche: virtuelle } = decrite;
+  const texte = ctrl ? undefined : decrite.texte;
+  const modifiers = (ctrl ? MASQUE_CTRL : 0) | (maj ? MASQUE_MAJ : 0);
+  const commun = { key, code, windowsVirtualKeyCode: virtuelle, nativeVirtualKeyCode: virtuelle, modifiers };
   await cdp().send('Input.dispatchKeyEvent', {
     type: texte === undefined ? 'rawKeyDown' : 'keyDown',
     ...commun,
+    autoRepeat: repete,
     ...(texte === undefined ? {} : { text: texte, unmodifiedText: texte }),
   });
   await cdp().send('Input.dispatchKeyEvent', { type: 'keyUp', ...commun });

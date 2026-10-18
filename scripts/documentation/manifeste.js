@@ -59,7 +59,8 @@ const capture = (fichier, etape, configuration, source = 'navigateur') => Object
 // depuis le premier écran : 11a et 11b, à l'étape 9 où l'on repart d'une
 // proposition, puis 17, 17a et 18, la vue de comparaison de la page de
 // qualité, à l'étape 10 : ses courbes qui se croisent, ses colonnes côte à
-// côte, son escalier.
+// côte, son escalier. La vue d'historique, 21, se photographie à l'étape 11
+// sur l'événement retenu, après l'ajustement et la lecture.
 export const CAPTURES = Object.freeze([
   capture('01-premier-ecran', '1', 'repertoire-neuf'),
   capture('01b-passer-en-ecriture', '1b', 'repertoire-neuf'),
@@ -105,18 +106,18 @@ export const CAPTURES = Object.freeze([
   capture('18-comparaison-escalier', '10', 'grande-sans-exception'),
   capture('19-ajustement', '11', 'evenement-retenu'),
   capture('20-mode-lecture', '11', 'evenement-retenu'),
+  capture('21-historique', '11', 'evenement-retenu'),
   capture('22-plan-brouillon', '12', 'evenement-retenu'),
   capture('23-plan-retenu', '12', 'evenement-retenu'),
   capture('24-badges-controle', '12', 'evenement-retenu', 'pdf'),
   capture('25-badges-planche', '12', 'evenement-retenu', 'pdf'),
 ]);
 
-const reportee = (fichier, etape) => Object.freeze({ fichier, etape, raison: 'iteration5' });
-
-// Les captures des écrans que le logiciel n'offre pas encore — la vue
-// d'historique : déclarées à leur étape, sans image ; le contrôle d'ordre
-// les compte comme présentes.
-export const REPORTEES = Object.freeze([reportee('21-historique', '11')]);
+// Les captures des écrans que le logiciel n'offre pas encore, chacune
+// { fichier, etape, raison } : déclarées à leur étape, sans image ; le
+// contrôle d'ordre les compte comme présentes. Vide : chaque écran déclaré
+// existe et se photographie.
+export const REPORTEES = Object.freeze([]);
 
 // Captures déclarées dans CAPTURES et pas encore photographiées : la
 // publication et le contrôle d'ordre les admettent absentes du manifeste.

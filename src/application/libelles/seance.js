@@ -31,6 +31,14 @@ const phraseDeViolation = (violation, texte) =>
     ? texte('RESERVATION_NON_HONOREE', violation)
     : phraseDeRaison(violation.code, violation, texte);
 
+// Les commandes du nettoyage des propositions, dont le refus SANS_EFFET dit
+// qu'aucune proposition n'est à effacer.
+const NETTOYAGES = new Set(['effacerPropositions', 'garderMeilleures']);
+
+// La touche qui a défait ou refait, entre parenthèses après le verbe ; rien
+// sans touche.
+const parTouche = (touche) => (touche === undefined ? '' : ` (${touche})`);
+
 export const TABLE = new Map([
   // --- La séance (§ 8.3, § 8.4, § 8.5, § 8.6, § 8.8) -------------------------
   ['AUCUN_EVENEMENT', () => "Aucun événement n'est ouvert."],
@@ -170,14 +178,26 @@ export const TABLE = new Map([
       `Le geste est enregistré, mais le jalon qui le nomme n'a pas pu s'écrire ` +
       `dans le dossier ${cite(dossier)}${causeEntreParentheses(cause, texte)}.`,
   ],
-  ['SANS_EFFET', () => "Ce geste ne change rien : rien n'est enregistré."],
+  // Un geste qui ne change rien : revenir à un instant qui a déjà le contenu
+  // courant ({sens: 'revenir'}), nettoyer des propositions sans rien à
+  // effacer ({commande}), ou tout autre.
+  [
+    'SANS_EFFET',
+    ({ sens, commande }) => {
+      if (sens === 'revenir') return "Cet instant a déjà le contenu courant : rien n'est enregistré.";
+      if (NETTOYAGES.has(commande)) return "Aucune proposition n'est à effacer : rien n'est enregistré.";
+      return "Ce geste ne change rien : rien n'est enregistré.";
+    },
+  ],
 
   // --- Les libellés figés du journal (§ 8.2, § 8.3) --------------------------
   ['JALON_CREATION', () => 'Création'],
   ['JALON_ETAT', ({ etat }) => `État ${cite(nomEtat(etat))}`],
   ['JALON_AVANT_GENERATION', () => 'Avant la génération'],
   ['ENTREE_REPRISE', () => "Reprise de l'état trouvé sur le disque"],
-  ['ENTREE_DEFAIRE', ({ libelle: instant }) => `Défait : ${cite(instant)}`],
-  ['ENTREE_REFAIRE', ({ libelle: instant }) => `Refait : ${cite(instant)}`],
+  // touche, facultative : celle qui a défait ou refait, que la séance
+  // contrôle.
+  ['ENTREE_DEFAIRE', ({ libelle: instant, touche }) => `Défait${parTouche(touche)} : ${cite(instant)}`],
+  ['ENTREE_REFAIRE', ({ libelle: instant, touche }) => `Refait${parTouche(touche)} : ${cite(instant)}`],
   ['ENTREE_REVENIR', ({ libelle: instant }) => `Retour à ${cite(instant)}`],
 ]);

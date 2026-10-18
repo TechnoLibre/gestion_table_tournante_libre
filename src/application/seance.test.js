@@ -343,7 +343,7 @@ describe('séance : créer et ouvrir (§ 2.1, § 8.1, § 8.4)', () => {
     await refus(seance.nommer('Jalon'), 'AUCUN_EVENEMENT');
     await refus(seance.ecrireAilleurs(DOC), 'AUCUN_EVENEMENT');
     assert.equal(fs.compteurs.ecritures, avant);
-    assert.deepEqual(seance.retours, { defaire: false, refaire: false });
+    assert.deepEqual(seance.retours, { defaire: false, refaire: false, jalons: 0 });
   });
 });
 
@@ -1413,24 +1413,24 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
   test("refaire n'existe qu'après des retours, tant qu'aucun geste ne les suit", async () => {
     const montage = await troisGestes();
     const { fs, seance } = montage;
-    assert.deepEqual(seance.retours, { defaire: true, refaire: false });
+    assert.deepEqual(seance.retours, { defaire: true, refaire: false, jalons: 1 });
     const avant = fs.compteurs.ecritures;
     await refus(seance.refaire(), 'RIEN_A_REFAIRE');
     assert.equal(fs.compteurs.ecritures, avant);
     await seance.defaire();
     await seance.defaire();
-    assert.deepEqual(seance.retours, { defaire: true, refaire: true });
+    assert.deepEqual(seance.retours, { defaire: true, refaire: true, jalons: 1 });
     await seance.refaire();
     assert.deepEqual(noms(seance.charge), ['Ancolie', 'Bruyère']);
     await seance.executer('ajouterParticipant', { champs: { nom: 'Dauphinelle' } });
-    assert.deepEqual(seance.retours, { defaire: true, refaire: false });
+    assert.deepEqual(seance.retours, { defaire: true, refaire: false, jalons: 1 });
     await refus(seance.refaire(), 'RIEN_A_REFAIRE');
   });
 
   test("rien à défaire au premier instant", async () => {
     const montage = monter();
     await enEcriture(montage);
-    assert.deepEqual(montage.seance.retours, { defaire: false, refaire: false });
+    assert.deepEqual(montage.seance.retours, { defaire: false, refaire: false, jalons: 1 });
     const avant = montage.fs.compteurs.ecritures;
     await refus(montage.seance.defaire(), 'RIEN_A_DEFAIRE');
     assert.equal(montage.fs.compteurs.ecritures, avant);
@@ -1462,7 +1462,7 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
     await ouvrirSansEcrire(montage);
     assert.deepEqual(seance.ouvert.avertissements, [{ code: 'JOURNAL_INCOMPLET', details: { etat: 4, journal: 1 } }]);
     await seance.passerEnEcriture();
-    assert.deepEqual(seance.retours, { defaire: true, refaire: false });
+    assert.deepEqual(seance.retours, { defaire: true, refaire: false, jalons: 1 });
     const reprise = "Reprise de l'état trouvé sur le disque";
     assert.deepEqual(await seance.defaire(), { libelle: `Défait : « ${reprise} »`, avertissements: [] });
     assert.deepEqual(
@@ -1474,7 +1474,7 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
       ],
     );
     assert.deepEqual(noms(seance.charge), noms(chargeEssai()));
-    assert.deepEqual(seance.retours, { defaire: false, refaire: true });
+    assert.deepEqual(seance.retours, { defaire: false, refaire: true, jalons: 1 });
     await seance.refaire();
     assert.deepEqual(noms(seance.charge), noms(plus));
   });
@@ -1487,7 +1487,7 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
     const { seance } = montage;
     await ouvrirSansEcrire(montage);
     await seance.passerEnEcriture();
-    assert.deepEqual(seance.retours, { defaire: false, refaire: false });
+    assert.deepEqual(seance.retours, { defaire: false, refaire: false, jalons: 0 });
     await refus(seance.defaire(), 'RIEN_A_DEFAIRE');
     await seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
     assert.deepEqual(
@@ -1497,7 +1497,7 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
         [4, 'Ajouté Ancolie'],
       ],
     );
-    assert.deepEqual(seance.retours, { defaire: true, refaire: false });
+    assert.deepEqual(seance.retours, { defaire: true, refaire: false, jalons: 0 });
   });
 
   test("revenir à un instant que le journal ne restitue plus est refusé, sans écriture", async () => {
@@ -1520,6 +1520,181 @@ describe('séance : revenir, défaire, refaire (§ 8.3)', () => {
     await refus(seance.revenir(11), 'INSTANT_NON_RESTITUABLE', { revision: 11, remede: null });
     await refus(seance.defaire(), 'RIEN_A_DEFAIRE');
     assert.equal(fs.compteurs.ecritures, avant);
+  });
+
+  test('la touche qui défait ou refait se lit dans le libellé figé de son entrée ; sans touche, le libellé reste le même', async () => {
+    const { fs, seance } = await troisGestes();
+    assert.deepEqual(await seance.defaire({ touche: 'Ctrl+Z' }), { libelle: 'Défait (Ctrl+Z) : « Ajouté Capucine »', avertissements: [] });
+    assert.deepEqual(await seance.refaire({ touche: 'Ctrl+Maj+Z' }), { libelle: 'Refait (Ctrl+Maj+Z) : « Ajouté Capucine »', avertissements: [] });
+    await seance.defaire({});
+    assert.deepEqual(await seance.refaire({ touche: 'Ctrl+Y' }), { libelle: 'Refait (Ctrl+Y) : « Ajouté Capucine »', avertissements: [] });
+    assert.deepEqual(libellesDe(journalDe(fs)).slice(4), [
+      'Défait (Ctrl+Z) : « Ajouté Capucine »',
+      'Refait (Ctrl+Maj+Z) : « Ajouté Capucine »',
+      'Défait : « Ajouté Capucine »',
+      'Refait (Ctrl+Y) : « Ajouté Capucine »',
+    ]);
+    assert.deepEqual(noms(seance.charge), ['Ancolie', 'Bruyère', 'Capucine']);
+  });
+
+  test("une touche inconnue, ou de l'autre sens, est une faute du code : TypeError, sans rien écrire, dans tout mode", async () => {
+    const { fs, seance } = await troisGestes();
+    const avant = fs.compteurs.ecritures;
+    const fautes = [
+      () => seance.defaire({ touche: 'Ctrl+Y' }),
+      () => seance.defaire({ touche: 'Ctrl+Maj+Z' }),
+      () => seance.refaire({ touche: 'Ctrl+Z' }),
+      () => seance.defaire({ touche: 'ctrl+z' }),
+      () => seance.defaire({ touche: null }),
+      () => seance.refaire({ touche: 'Ctrl+Shift+Z' }),
+      () => seance.defaire('Ctrl+Z'),
+      () => seance.refaire(null),
+    ];
+    for (const faute of fautes) await assert.rejects(faute(), TypeError);
+    await seance.passerEnLecture();
+    await assert.rejects(seance.defaire({ touche: 'Ctrl+Y' }), TypeError);
+    assert.equal(fs.compteurs.ecritures - avant, 1, 'seul le rendu du verrou s’écrit');
+    assert.equal(journalDe(fs).entrees.length, 4);
+  });
+
+  test('en lecture, défaire et refaire par leur touche se refusent comme leur commande, remède « Modifier »', async () => {
+    const { fs, seance } = await troisGestes();
+    await seance.defaire();
+    await seance.passerEnLecture();
+    const avant = fs.compteurs.ecritures;
+    const lecture = { remede: { geste: 'modifier' } };
+    await refus(seance.defaire({ touche: 'Ctrl+Z' }), 'MODE_LECTURE', lecture);
+    await refus(seance.refaire({ touche: 'Ctrl+Maj+Z' }), 'MODE_LECTURE', lecture);
+    await refus(seance.refaire({ touche: 'Ctrl+Y' }), 'MODE_LECTURE', lecture);
+    assert.equal(fs.compteurs.ecritures, avant);
+  });
+});
+
+describe("séance : l'historique se lit dans tout mode, sans rien écrire (§ 8.3, § 8.4)", () => {
+  // L'historique sans ses horodatages, chaque jalon réduit à son nom : les
+  // horodatages se comparent à part, à ceux du journal.
+  const sansHeure = ({ lignes, ...reste }) => ({
+    ...reste,
+    lignes: lignes.map(({ horodatage, jalons, ...ligne }) => ({ ...ligne, jalons: jalons.map(({ nom }) => nom) })),
+  });
+
+  test("en lecture, les instants du journal : le fil de chacun, ses jalons, la position courante ; aucune écriture", async () => {
+    const montage = monter();
+    const { fs, seance } = montage;
+    await enEcriture(montage);
+    for (const nom of ['Ancolie', 'Bruyère', 'Capucine']) await seance.executer('ajouterParticipant', { champs: { nom } });
+    await seance.defaire();
+    await seance.nommer('Avant le repas');
+    await seance.executer('ajouterParticipant', { champs: { nom: 'Dauphinelle' } });
+    await seance.passerEnLecture();
+    const avant = [fs.compteurs.ecritures, seance.etat()];
+    const historique = seance.historique();
+    assert.deepEqual(sansHeure(historique), {
+      position: 6,
+      reprise: false,
+      lignes: [
+        { revision: 1, libelle: CREATION, sens: null, retour: null, fil: 'courant', jalons: ['Création'] },
+        { revision: 2, libelle: 'Ajouté Ancolie', sens: null, retour: null, fil: 'courant', jalons: [] },
+        { revision: 3, libelle: 'Ajouté Bruyère', sens: null, retour: null, fil: 'courant', jalons: [] },
+        { revision: 4, libelle: 'Ajouté Capucine', sens: null, retour: null, fil: 'abandonne', jalons: [] },
+        { revision: 5, libelle: 'Défait : « Ajouté Capucine »', sens: 'defaire', retour: 3, fil: 'retour', jalons: ['Avant le repas'] },
+        { revision: 6, libelle: 'Ajouté Dauphinelle', sens: null, retour: null, fil: 'courant', jalons: [] },
+      ],
+    });
+    const journal = journalDe(fs);
+    assert.deepEqual(
+      historique.lignes.map(({ horodatage, jalons }) => [horodatage, jalons.map((jalon) => jalon.horodatage)]),
+      journal.entrees.map(({ revision, horodatage }) => [
+        horodatage,
+        journal.jalons.filter((jalon) => jalon.revision === revision).map((jalon) => jalon.horodatage),
+      ]),
+    );
+    assert.deepEqual([fs.compteurs.ecritures, seance.etat()], avant, 'lire l’historique n’écrit ni ne publie rien');
+    assert.notEqual(seance.historique().lignes, historique.lignes, 'chaque lecture est neuve');
+  });
+
+  test('sans événement, aucun historique', () => {
+    assert.equal(monter().seance.historique(), null);
+  });
+
+  test("un journal qui finit avant l'état : reprise, sans instant courant, ses lignes telles quelles", async () => {
+    const fs = creerFichiersSimules();
+    await deposerEssai(fs);
+    const plus = chargeEssai();
+    plus.participants.push(personne(5, 'Ancolie'));
+    plus.prochainsIds.participant = 6;
+    fs.deposer('documents', ETAT, serialiser(plus, { revision: 4, produitVersion: V1 }));
+    const montage = monter({ fs });
+    await ouvrirSansEcrire(montage);
+    const creation = libelle('ENTREE_CREATION', { nom: BASE });
+    assert.deepEqual(sansHeure(montage.seance.historique()), {
+      position: null,
+      reprise: true,
+      lignes: [{ revision: 1, libelle: creation, sens: null, retour: null, fil: 'courant', jalons: ['Création'] }],
+    });
+  });
+
+  test('un état sans journal : reprise, sans instant courant ni ligne', async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    fs.deposer('documents', ETAT, serialiser(chargeEssai(), { revision: 3, produitVersion: V1 }));
+    const montage = monter({ fs });
+    await ouvrirSansEcrire(montage);
+    assert.deepEqual(montage.seance.historique(), { position: null, lignes: [], reprise: true });
+  });
+
+  test("un journal réduit à sa ligne d'ouverture : reprise, sans instant courant ni ligne", async () => {
+    const fs = creerFichiersSimules();
+    fs.deposerDossier('documents');
+    const charge = chargeEssai();
+    fs.deposer('documents', JOURNAL, `${ligneOuverture(charge.evenement.id)}\n`);
+    fs.deposer('documents', ETAT, serialiser(charge, { revision: 3, produitVersion: V1 }));
+    const montage = monter({ fs });
+    await ouvrirSansEcrire(montage);
+    assert.deepEqual(montage.seance.historique(), { position: null, lignes: [], reprise: true });
+    assert.equal(montage.seance.retours.jalons, 0);
+  });
+
+  test("un journal qui finit après l'état : reprise, sans instant courant, ses lignes telles quelles", async () => {
+    const montage = monter();
+    const { fs, seance } = montage;
+    await enEcriture(montage);
+    const prenoms = ['Ancolie', 'Bruyère', 'Capucine', 'Dauphinelle', 'Églantine'];
+    let etatRevision4 = null;
+    for (const nom of prenoms) {
+      await seance.executer('ajouterParticipant', { champs: { nom } });
+      if (seance.ouvert.revision === 4) etatRevision4 = fs.contenu('documents', ETAT);
+    }
+    await seance.passerEnLecture();
+    // L'état du disque revient à la révision 4 ; le journal finit à la 6.
+    fs.deposer('documents', ETAT, etatRevision4);
+    await ouvrirSansEcrire(montage);
+    assert.deepEqual(seance.ouvert.avertissements, [{ code: 'JOURNAL_EN_AVANCE_DE', details: { n: 2 } }]);
+    assert.deepEqual(sansHeure(seance.historique()), {
+      position: null,
+      reprise: true,
+      lignes: [
+        { revision: 1, libelle: CREATION, sens: null, retour: null, fil: 'courant', jalons: ['Création'] },
+        ...prenoms.map((nom, rang) => ({ revision: rang + 2, libelle: `Ajouté ${nom}`, sens: null, retour: null, fil: 'courant', jalons: [] })),
+      ],
+    });
+  });
+
+  test("nommer change l'état observable par le compte des jalons, sans changer la révision", async () => {
+    const montage = monter();
+    const { seance } = montage;
+    await enEcriture(montage);
+    await seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
+    const avant = seance.etat();
+    assert.deepEqual([avant.evenement.revision, avant.retours], [2, { defaire: true, refaire: false, jalons: 1 }]);
+    const recus = [];
+    seance.subscribe((suivant) => recus.push(suivant));
+    await seance.nommer('Avant le repas');
+    const apres = seance.etat();
+    assert.deepEqual([apres.evenement.revision, apres.retours], [2, { defaire: true, refaire: false, jalons: 2 }]);
+    assert.deepEqual(seance.retours, { defaire: true, refaire: false, jalons: 2 });
+    assert.equal(recus.at(-1), apres, 'le nouvel état est publié');
+    assert.deepEqual(seance.historique().lignes.at(-1).jalons.map(({ nom }) => nom), ['Avant le repas']);
   });
 });
 
@@ -1604,8 +1779,9 @@ describe('séance : défaire et refaire sur un journal du format 1 qui porte la 
     const { fs, seance } = await surLaFixture();
     await seance.defaire();
     const avant = fs.compteurs.ecritures;
-    await refus(seance.revenir(4), 'SANS_EFFET', { sens: 'revenir', remede: null });
+    const erreur = await refus(seance.revenir(4), 'SANS_EFFET', { sens: 'revenir', remede: null });
     assert.equal(fs.compteurs.ecritures, avant);
+    assert.equal(libelle(erreur.code, erreur.details), "Cet instant a déjà le contenu courant : rien n'est enregistré.");
   });
 });
 
@@ -2297,7 +2473,7 @@ describe('séance observable : etat() et subscribe (§ 8.4)', () => {
       [vide.evenement, vide.charge, vide.examen, vide.fautives, vide.avertissements, vide.refus, vide.supportRompu, vide.verrouAutre],
       [null, null, null, [], [], null, null, null],
     );
-    assert.deepEqual([vide.mode, vide.retours, vide.calculEnCours, vide.racine], ['lecture', { defaire: false, refaire: false }, false, DOC]);
+    assert.deepEqual([vide.mode, vide.retours, vide.calculEnCours, vide.racine], ['lecture', { defaire: false, refaire: false, jalons: 0 }, false, DOC]);
     const { seance } = await ouvertSur();
     await seance.passerEnEcriture();
     await seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } });
@@ -2305,7 +2481,7 @@ describe('séance observable : etat() et subscribe (§ 8.4)', () => {
     assert.deepEqual(etat.evenement, { base: BASE, id: 'evt-lucioles', nom: BASE, etat: 'brouillon', revision: 2, annonceFormat: null });
     assert.deepEqual(etat.charge, seance.charge);
     assert.deepEqual(etat.examen, seance.ouvert.examen);
-    assert.deepEqual(etat.retours, { defaire: true, refaire: false });
+    assert.deepEqual(etat.retours, { defaire: true, refaire: false, jalons: 1 });
     const recus = [];
     seance.subscribe((suivant) => recus.push(suivant));
     seance.debuterCalcul();
@@ -3055,6 +3231,20 @@ describe("séance observable : les textes des codes qu'elle ajoute (§ 14.6)", (
     }
     assert.match(libelle('CONFIGURATION_INCOHERENTE', { code: 'CODE_INVENTE', details: {} }), /« CODE_INVENTE »/);
   });
+
+  test("effacer ou garder les meilleures sans rien à effacer dit qu'aucune proposition n'est à effacer ; un autre geste sans effet garde le texte commun", async () => {
+    const { seance } = await ouvertSur();
+    await seance.passerEnEcriture();
+    await seance.executer('enregistrerGeneration', generer(seance.charge));
+    const aucune = "Aucune proposition n'est à effacer : rien n'est enregistré.";
+    const garder = await refus(seance.executer('garderMeilleures', { n: 5 }), 'SANS_EFFET', { commande: 'garderMeilleures', remede: null });
+    assert.equal(libelle(garder.code, garder.details), aucune);
+    await seance.executer('effacerPropositions', {});
+    const effacer = await refus(seance.executer('effacerPropositions', {}), 'SANS_EFFET', { commande: 'effacerPropositions', remede: null });
+    assert.equal(libelle(effacer.code, effacer.details), aucune);
+    const autre = await refus(seance.executer('modifierParticipant', { id: 1, champs: { nom: 'Ombrelle' } }), 'SANS_EFFET');
+    assert.equal(libelle(autre.code, autre.details), "Ce geste ne change rien : rien n'est enregistré.");
+  });
 });
 
 describe('séance : le placement daté (§ 8.9, § 11.8, Q2)', () => {
@@ -3433,6 +3623,40 @@ describe('séance : le papier de la machine (§ 8.5, § 11.2, Q1)', () => {
     await seance.attendre();
     assert.equal(papierLu(fs), 'Lettre', 'écrit à sa racine');
     assert.deepEqual(publies.filter(([racine, papier]) => racine === PORTABLE.id && papier !== null), []);
+    assert.equal(seance.etat().papier, null);
+  });
+
+  test("une écriture des réglages de l'ancienne racine, en cours pendant écrire ailleurs, ne publie jamais son papier sur la racine nouvelle", async () => {
+    const fs = creerFichiersSimules({ executable: 'E:\\soirees' });
+    const montage = monter({ fs, racine: PORTABLE });
+    const { seance, planificateur } = montage;
+    await enEcriture(montage);
+    // Des réglages illisibles : le papier choisi vaut pour la séance, sur
+    // la racine du portable ; réparés, ils s'écrivent ensuite avec lui.
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"format":1,');
+    await seance.choisirPapier('Lettre');
+    fs.deposer(PORTABLE.id, FICHIER_REGLAGES, '{"cadrages":[],"format":1,"papier":null}\n');
+    // L'état d'un geste refusé rompt le support.
+    fs.pannes.renommage(PORTABLE.id, 11);
+    await refus(seance.executer('ajouterParticipant', { champs: { nom: 'Ancolie' } }), 'ETAT_NON_ECRIT');
+    assert.equal(seance.supportRompu, true);
+    // Le cadrage différé part, et sa lecture des réglages attend.
+    seance.demanderCadrage({ k: 2, tx: 0, ty: 0 });
+    const lecture = retenirLectureReglages(fs);
+    await planificateur.avancer(DELAI_REGLAGES_MS);
+    await laisser();
+    assert.equal(lecture.prise(), true, 'la lecture du cadrage est partie');
+    const publies = [];
+    seance.subscribe(({ racine, papier }) => publies.push([racine?.id ?? null, papier]));
+    const ailleurs = seance.ecrireAilleurs(DOC);
+    for (let pas = 0; pas < 50 && seance.racine.id !== DOC.id; pas += 1) await laisser();
+    assert.equal(seance.racine.id, DOC.id, 'la racine a changé, le cadrage attend');
+    lecture.liberer();
+    await ailleurs;
+    await seance.attendre();
+    const relus = JSON.parse(fs.contenu(PORTABLE.id, FICHIER_REGLAGES));
+    assert.deepEqual([relus.papier, relus.cadrages.length], ['Lettre', 1], 'écrit et retenu à sa racine');
+    assert.deepEqual(publies.filter(([racine, papier]) => racine === DOC.id && papier !== null), []);
     assert.equal(seance.etat().papier, null);
   });
 

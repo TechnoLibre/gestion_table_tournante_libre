@@ -253,6 +253,25 @@
 - L'exécutable pèse environ 8 Mo de moins : il ne garde que le français et
   l'anglais parmi les traductions internes du navigateur qu'il embarque.
   L'interface ne change pas.
+- Une **vue d'historique** s'ouvre par « Historique… », à côté de « Défaire »
+  et « Refaire » : la liste des gestes de l'événement, le plus récent en haut,
+  chacun avec sa date et son heure. L'instant courant y est marqué ; un geste
+  défait puis remplacé par un autre reste dans la liste, grisé, avec la
+  pastille « fil abandonné ». « Revenir à cet instant » rend l'état d'une ligne
+  sans rien effacer, et se défait comme un autre geste. Le panneau nomme
+  l'instant courant, ne garde au besoin que les instants nommés, et se lit par
+  pages de cent. En lecture, il se lit, et ses commandes demandent « Modifier ».
+- Au clavier, sur l'écran de l'événement et hors d'un champ de saisie,
+  **Ctrl+Z** défait le dernier geste, **Ctrl+Maj+Z** et **Ctrl+Y** le refont.
+  Dans un champ, Ctrl+Z défait la frappe, comme ailleurs ; une touche tenue ne
+  défait qu'une fois.
+- Un retour fait au clavier nomme sa touche dans l'historique : « Défait
+  (Ctrl+Z) : … », « Refait (Ctrl+Y) : … » ; « Défaire » et « Refaire »
+  écrivent toujours « Défait : … » et « Refait : … ». Revenir à un instant qui
+  a déjà le contenu courant le dit, et nettoyer des propositions sans rien à
+  effacer dit qu'aucune n'est à effacer, au lieu de « Ce geste ne change
+  rien ».
+- Le guide d'usage montre l'historique à l'étape 11, capture à l'appui.
 - La liste d'accueil imprimée garde à chaque tour la largeur de son libellé
   de place. Une soirée dont les tours ne tiennent plus côte à côte — une
   trentaine de tours, ou quelques-uns sous des libellés longs — s'y répartit en

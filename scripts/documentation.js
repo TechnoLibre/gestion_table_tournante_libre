@@ -431,6 +431,7 @@ const NOMS_CONTEXTES = new Map([
   ['boutonMenu', 'Bouton de menu'],
   ['menu', 'Menu ouvert'],
   ['geste', 'Geste en cours'],
+  ['evenement', 'Écran de l\u{2019}événement, hors saisie'],
   ['fenetre', 'Panneau ou infobulle'],
 ]);
 
@@ -449,12 +450,21 @@ const NOMS_TOUCHES = new Map([
   ['F2', 'F2'],
 ]);
 
-// Le nom d'une touche, « Maj+ » gardé devant celui de sa touche.
+// Les modificateurs d'une touche de la table, dans l'ordre où toucheDe les
+// écrit (« Ctrl+ » puis « Maj+ »), et la touche qu'ils précèdent.
+const MODIFICATEURS = /^((?:Ctrl\+)?(?:Maj\+)?)(.*)$/su;
+// Une lettre seule, que toucheDe écrit en majuscule : elle se nomme elle-même.
+const LETTRE_MAJUSCULE = /^\p{Lu}$/u;
+
+// Le nom d'une touche : ses modificateurs gardés devant le nom de sa
+// touche. Une touche sans nom — absente de NOMS_TOUCHES, une lettre en
+// minuscule, des modificateurs dans un autre ordre — lève en nommant la
+// touche entière.
 function nomDeTouche(touche) {
-  if (touche.startsWith('Maj+')) return `Maj+${nomDeTouche(touche.slice('Maj+'.length))}`;
-  const nom = NOMS_TOUCHES.get(touche);
+  const [, modificateurs, base] = MODIFICATEURS.exec(touche);
+  const nom = LETTRE_MAJUSCULE.test(base) ? base : NOMS_TOUCHES.get(base);
   if (nom === undefined) throw new RangeError(`raccourcis : touche sans nom ${JSON.stringify(touche)}`);
-  return nom;
+  return `${modificateurs}${nom}`;
 }
 
 /**
