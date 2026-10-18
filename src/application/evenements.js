@@ -51,6 +51,7 @@ import {
   supprimer as supprimerSurDisque,
 } from '../stockage/operations.js';
 import { lireReglages } from '../stockage/reglages_locaux.js';
+import { refusNomEvenement } from './commandes.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { resumeDuMeilleur, resumeDuRetenu } from './evaluation.js';
 import { libelle } from './libelles.js';
@@ -87,12 +88,16 @@ function avisDe(dossier, avertissementReglages) {
   return avis;
 }
 
-// Un nom saisi : en NFC, ses blancs de bout retirés ; vide, NOM_REQUIS. Ce
-// qui n'est pas une chaîne est une faute du code.
+// Un nom saisi pour copier ou renommer : en NFC, ses blancs de bout
+// retirés ; vide, NOM_REQUIS ; plus long que NOM_EVENEMENT_MAX caractères,
+// NOM_EVENEMENT_TROP_LONG {longueur, maximum}, la règle de la création
+// (refusNomEvenement). Ce qui n'est pas une chaîne est une faute du code.
 function nomSaisi(nom) {
   if (typeof nom !== 'string') throw new TypeError(`nom : chaîne attendue, reçu ${JSON.stringify(nom)}`);
   const texte = nom.normalize('NFC').trim();
   if (texte === '') throw refus('NOM_REQUIS');
+  const tropLong = refusNomEvenement(texte);
+  if (tropLong !== null) throw tropLong;
   return texte;
 }
 

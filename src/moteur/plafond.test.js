@@ -877,12 +877,31 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     assert.throws(() => borneDiversite(instance, tableDe.subarray(1)), RangeError);
   });
 
-  test('une salle dont chacun est exclu : N = 0, le plan vide, et chaque fonction rend une liste vide', () => {
+  test('une salle dont chacun est exclu : N = 0, le plan vide, et chaque fonction rend une liste vide sans lire une case d’une liste vide', () => {
     // Le seul participant est exclu : aucune personne présente, aucune
-    // appartenance, un plan indexé sans case.
-    const instance = salle({ personnes: [[1, AUBIER]], capacites: [3], tours: 2, exclus: [1] });
-    assert.equal(instance.N, 0);
-    const tableDe = new Int32Array(0);
+    // appartenance, un plan indexé sans case. Chaque liste vide de
+    // l'instance, et le plan, lèvent à la lecture d'un index : une boucle
+    // sur les personnes qui tournerait à N = 0 échoue sur sa première
+    // lecture, nommée, au lieu de ne jamais finir.
+    const brute = salle({ personnes: [[1, AUBIER]], capacites: [3], tours: 2, exclus: [1] });
+    assert.equal(brute.N, 0);
+    const garder = (liste, nom) => new Proxy(liste, {
+      get(cible, cle) {
+        if (typeof cle === 'string' && /^\d+$/.test(cle)) throw new RangeError(`lecture de ${nom}[${cle}], liste vide`);
+        const valeur = Reflect.get(cible, cle);
+        return typeof valeur === 'function' ? valeur.bind(cible) : valeur;
+      },
+    });
+    const instance = { ...brute };
+    const gardees = [];
+    for (const [nom, valeur] of Object.entries(brute)) {
+      if ((Array.isArray(valeur) || ArrayBuffer.isView(valeur)) && valeur.length === 0) {
+        instance[nom] = garder(valeur, nom);
+        gardees.push(nom);
+      }
+    }
+    assert.ok(['groupe', 'statut', 'fixe', 'ids'].every((nom) => gardees.includes(nom)), gardees.join(', '));
+    const tableDe = garder(new Int32Array(0), 'tableDe');
     assert.deepEqual(borneDiversite(instance, tableDe), { phiAffilies: [], aMax: [] });
     assert.deepEqual(plafondsRealises(instance, tableDe), []);
     assert.deepEqual(plafondsAPriori(instance), []);

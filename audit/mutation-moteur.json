@@ -5,16 +5,16 @@
     "perimetre": [
       "src/moteur"
     ],
-    "empreinte": "d3a3a3188af0e82cfd0357a24e1b81869c343d0caebf8ce2b5d9bcdde1b16eac",
+    "empreinte": "9d29ff506ad68dc6cc35390cbc5160c8f8b052c0bcc99d3283997ea40befc62f",
     "node": "v26.10.0"
   },
   "bilan": {
     "total": 5147,
-    "tues": 4537,
+    "tues": 4535,
     "tuesSerieLongue": 7,
     "survivants": 0,
-    "equivalents": 240,
-    "delais": 363,
+    "equivalents": 239,
+    "delais": 366,
     "erreurs": 0
   },
   "parFichier": [
@@ -31,11 +31,11 @@
     {
       "fichier": "src/moteur/configuration.js",
       "total": 907,
-      "tues": 815,
+      "tues": 813,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 22,
-      "delais": 70,
+      "delais": 72,
       "erreurs": 0
     },
     {
@@ -101,11 +101,11 @@
     {
       "fichier": "src/moteur/manque.js",
       "total": 218,
-      "tues": 198,
+      "tues": 197,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 12,
-      "delais": 8,
+      "delais": 9,
       "erreurs": 0
     },
     {
@@ -121,11 +121,11 @@
     {
       "fichier": "src/moteur/plafond.js",
       "total": 490,
-      "tues": 377,
+      "tues": 380,
       "tuesSerieLongue": 2,
       "survivants": 0,
-      "equivalents": 42,
-      "delais": 69,
+      "equivalents": 41,
+      "delais": 67,
       "erreurs": 0
     },
     {
@@ -141,11 +141,11 @@
     {
       "fichier": "src/moteur/recherche.js",
       "total": 1078,
-      "tues": 938,
+      "tues": 936,
       "tuesSerieLongue": 5,
       "survivants": 0,
       "equivalents": 57,
-      "delais": 78,
+      "delais": 80,
       "erreurs": 0
     },
     {
@@ -163,31 +163,31 @@
     {
       "operateur": "arithmetique",
       "total": 547,
-      "tues": 533,
+      "tues": 531,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 12,
-      "delais": 2,
+      "delais": 4,
       "erreurs": 0
     },
     {
       "operateur": "frontiere",
       "total": 298,
-      "tues": 212,
+      "tues": 213,
       "tuesSerieLongue": 2,
       "survivants": 0,
-      "equivalents": 83,
+      "equivalents": 82,
       "delais": 1,
       "erreurs": 0
     },
     {
       "operateur": "negation",
       "total": 721,
-      "tues": 669,
+      "tues": 670,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 2,
-      "delais": 50,
+      "delais": 49,
       "erreurs": 0
     },
     {
@@ -253,21 +253,21 @@
     {
       "operateur": "si-vrai",
       "total": 401,
-      "tues": 383,
+      "tues": 382,
       "tuesSerieLongue": 1,
       "survivants": 0,
       "equivalents": 15,
-      "delais": 2,
+      "delais": 3,
       "erreurs": 0
     },
     {
       "operateur": "si-faux",
       "total": 401,
-      "tues": 390,
+      "tues": 389,
       "tuesSerieLongue": 0,
       "survivants": 0,
       "equivalents": 9,
-      "delais": 2,
+      "delais": 3,
       "erreurs": 0
     },
     {
@@ -1545,7 +1545,7 @@
     {
       "cle": "src/moteur/manque.js:frontiere:a42a37da6acfc1b0:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 311,
+      "ligne": 313,
       "colonne": 34,
       "operateur": "frontiere",
       "original": "<",
@@ -1555,7 +1555,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-plus-un:a42a37da6acfc1b0:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 311,
+      "ligne": 313,
       "colonne": 36,
       "operateur": "nombre-plus-un",
       "original": "0",
@@ -1565,7 +1565,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-plus-un:1bad6b8cf97131fc:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 311,
+      "ligne": 313,
       "colonne": 41,
       "operateur": "nombre-plus-un",
       "original": "1",
@@ -1575,7 +1575,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-plus-un:499febce3e9d753b:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 311,
+      "ligne": 313,
       "colonne": 45,
       "operateur": "nombre-plus-un",
       "original": "1",
@@ -1585,7 +1585,7 @@
     {
       "cle": "src/moteur/manque.js:frontiere:09493d576cddf072:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 312,
+      "ligne": 314,
       "colonne": 19,
       "operateur": "frontiere",
       "original": "<",
@@ -1595,7 +1595,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-plus-un:09493d576cddf072:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 312,
+      "ligne": 314,
       "colonne": 21,
       "operateur": "nombre-plus-un",
       "original": "0",
@@ -1605,7 +1605,7 @@
     {
       "cle": "src/moteur/manque.js:si-vrai:3f2ec15cfbc2d410:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 316,
+      "ligne": 318,
       "colonne": 11,
       "operateur": "si-vrai",
       "original": "changements === 1",
@@ -1615,7 +1615,7 @@
     {
       "cle": "src/moteur/manque.js:frontiere:fcf7cd9cc7372948:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 338,
+      "ligne": 340,
       "colonne": 66,
       "operateur": "frontiere",
       "original": ">",
@@ -1625,7 +1625,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-plus-un:e8c6511e63adbd17:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 348,
+      "ligne": 350,
       "colonne": 38,
       "operateur": "nombre-plus-un",
       "original": "1",
@@ -1635,7 +1635,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-zero:4be3251ecbe8de82:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 432,
+      "ligne": 434,
       "colonne": 56,
       "operateur": "nombre-zero",
       "original": "1",
@@ -1721,16 +1721,6 @@
       "original": "0",
       "remplacement": "1",
       "raison": "plafond.js, borneDiversite, compte des effectifs à partir de p = 1 : effectifs ne se lit que dans le troisième terme de A_max, N_aff − effectifs[g] + 1. Toute mutation qui ne fait que diminuer effectifs[g] laisse ce terme au moins égal à N_aff − g_p + 1, qui ne descend jamais sous G (chaque appartenance de instance.groupes compte au moins un présent) : min(Φ_aff, G, terme) vaut min(Φ_aff, G) avant comme après. Sauter la personne 0 diminue un effectif."
-    },
-    {
-      "cle": "src/moteur/plafond.js:frontiere:6f32f41253f60a4b:3",
-      "fichier": "src/moteur/plafond.js",
-      "ligne": 270,
-      "colonne": 21,
-      "operateur": "frontiere",
-      "original": "<",
-      "remplacement": "<=",
-      "raison": "plafond.js, borneDiversite, compte des effectifs jusqu'à p <= N : groupe[N] est undefined, différent de SANS_GROUPE ; effectifs[undefined] += 1 pose une propriété « undefined » sur l'Int32Array, hors de ses éléments, que le troisième terme ne lit pas (il lit effectifs[g], g un numéro d'appartenance)."
     },
     {
       "cle": "src/moteur/plafond.js:nombre-plus-un:a216dbba9047bdaf:3",
@@ -2852,6 +2842,26 @@
       "operateur": "nombre-zero",
       "original": "1",
       "remplacement": "0",
+      "issue": "delai"
+    },
+    {
+      "cle": "src/moteur/configuration.js:si-faux:7ff24b57b9b4ec74:0",
+      "fichier": "src/moteur/configuration.js",
+      "ligne": 254,
+      "colonne": 11,
+      "operateur": "si-faux",
+      "original": "!Number.isInteger(tour) || tour < 1 || tour > R",
+      "remplacement": "false",
+      "issue": "delai"
+    },
+    {
+      "cle": "src/moteur/configuration.js:si-vrai:8435dafaa62310bb:0",
+      "fichier": "src/moteur/configuration.js",
+      "ligne": 265,
+      "colonne": 9,
+      "operateur": "si-vrai",
+      "original": "p === undefined",
+      "remplacement": "true",
       "issue": "delai"
     },
     {
@@ -4525,6 +4535,16 @@
       "issue": "delai"
     },
     {
+      "cle": "src/moteur/manque.js:negation:6a2ff51fc0f8fb38:0",
+      "fichier": "src/moteur/manque.js",
+      "ligne": 80,
+      "colonne": 21,
+      "operateur": "negation",
+      "original": "<",
+      "remplacement": ">=",
+      "issue": "delai"
+    },
+    {
       "cle": "src/moteur/manque.js:mise-a-jour:a216dbba9047bdaf:0",
       "fichier": "src/moteur/manque.js",
       "ligne": 80,
@@ -4567,7 +4587,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-zero:97d5bf4fdd1d09b0:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 255,
+      "ligne": 257,
       "colonne": 86,
       "operateur": "nombre-zero",
       "original": "1",
@@ -4577,7 +4597,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-zero:a09689f630889c59:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 305,
+      "ligne": 307,
       "colonne": 44,
       "operateur": "nombre-zero",
       "original": "1",
@@ -4587,7 +4607,7 @@
     {
       "cle": "src/moteur/manque.js:mise-a-jour:0d85316782a4bf5d:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 387,
+      "ligne": 389,
       "colonne": 47,
       "operateur": "mise-a-jour",
       "original": "-=",
@@ -4597,7 +4617,7 @@
     {
       "cle": "src/moteur/manque.js:nombre-zero:0d85316782a4bf5d:0",
       "fichier": "src/moteur/manque.js",
-      "ligne": 387,
+      "ligne": 389,
       "colonne": 50,
       "operateur": "nombre-zero",
       "original": "1",
@@ -4732,16 +4752,6 @@
       "operateur": "nombre-zero",
       "original": "1",
       "remplacement": "0",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/plafond.js:negation:6f32f41253f60a4b:0",
-      "fichier": "src/moteur/plafond.js",
-      "ligne": 76,
-      "colonne": 21,
-      "operateur": "negation",
-      "original": "<",
-      "remplacement": ">=",
       "issue": "delai"
     },
     {
@@ -4922,16 +4932,6 @@
       "operateur": "nombre-zero",
       "original": "1",
       "remplacement": "0",
-      "issue": "delai"
-    },
-    {
-      "cle": "src/moteur/plafond.js:negation:6f32f41253f60a4b:3",
-      "fichier": "src/moteur/plafond.js",
-      "ligne": 270,
-      "colonne": 21,
-      "operateur": "negation",
-      "original": "<",
-      "remplacement": ">=",
       "issue": "delai"
     },
     {
@@ -5755,6 +5755,16 @@
       "issue": "delai"
     },
     {
+      "cle": "src/moteur/recherche.js:arithmetique:236bcd62508201f9:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 493,
+      "colonne": 15,
+      "operateur": "arithmetique",
+      "original": "*",
+      "remplacement": "/",
+      "issue": "delai"
+    },
+    {
       "cle": "src/moteur/recherche.js:negation:0c7cb59d78537391:0",
       "fichier": "src/moteur/recherche.js",
       "ligne": 570,
@@ -5802,6 +5812,16 @@
       "operateur": "nombre-zero",
       "original": "1",
       "remplacement": "0",
+      "issue": "delai"
+    },
+    {
+      "cle": "src/moteur/recherche.js:arithmetique:d7c80814857374ac:0",
+      "fichier": "src/moteur/recherche.js",
+      "ligne": 624,
+      "colonne": 18,
+      "operateur": "arithmetique",
+      "original": "*",
+      "remplacement": "/",
       "issue": "delai"
     },
     {

@@ -15,6 +15,7 @@ import { etatPlaces } from '../../application/places.js';
 import { geometrieTable } from '../../geometrie/tables.js';
 import { creerCharge } from '../../stockage/document.js';
 import { commandeDeDepot, deposer, reservationTenue } from './depot.js';
+import { cleFantome } from './gestes.js';
 
 const NOMS = [
   ['Ombrelle', 'Iris'],
@@ -27,10 +28,10 @@ const NOMS = [
 ];
 
 // Sept personnes, trois rondes de trois places, deux tours, et une
-// proposition à sièges non attribués : au tour 1, la table 1 est pleine
-// (1, 2, 3), la table 2 assied 4 et 5, la table 3 assied 6 et 7 ; au
-// tour 2, 1, 4, 6 ; 2, 5, 7 ; 3.
-function chargeDepot() {
+// proposition à sièges non attribués, sauf siegesAttribues : au tour 1, la
+// table 1 est pleine (1, 2, 3), la table 2 assied 4 et 5, la table 3 assied
+// 6 et 7 ; au tour 2, 1, 4, 6 ; 2, 5, 7 ; 3.
+function chargeDepot({ siegesAttribues = false } = {}) {
   const charge = creerCharge({ id: 'evt-depot', nom: 'Club des Merles', siegesParDefaut: 3, tours: 2 });
   charge.participants = NOMS.map(([nom, prenom], rang) => ({
     id: rang + 1,
@@ -51,7 +52,7 @@ function chargeDepot() {
       arret: 40,
       historique: 1000,
       produitVersion: 'epreuve',
-      siegesAttribues: false,
+      siegesAttribues,
       tables: [1, 2, 3],
       capacites: [3, 3, 3],
       tours: 2,
@@ -75,6 +76,19 @@ function depot(etat, depuis, cible, surLeSol = false) {
   const personne = table.chaises[depuis.siege - 1].occupant;
   assert.notEqual(personne, null, `une personne est assise à ${depuis.table}:${depuis.siege}`);
   return commandeDeDepot({ etatPlaces: etat, tour: etat.tour, personne, depuis, cible, surLeSol });
+}
+
+// Ce que la charge répond au rendu d'un dépôt : le code d'un refus — celui
+// du dépôt, ou celui que la commande lève —, sinon 'execute'.
+function reponse(charge, rendu) {
+  if (Object.hasOwn(rendu, 'refus')) return rendu.refus.code;
+  try {
+    executer(charge, rendu.commande, rendu.arguments);
+    return 'execute';
+  } catch (erreur) {
+    if (erreur.code === undefined) throw erreur;
+    return erreur.code;
+  }
 }
 
 describe('commandeDeDepot sous la cible « reservations » : avant la retenue (§ 5.8)', () => {
@@ -172,6 +186,40 @@ describe('commandeDeDepot sous la cible « reservations » : avant la retenue (�
     });
   });
 
+  test('sièges attribués, la personne assise à une chaise et réservée à une autre de sa table : le dépôt lit sa réservation sur toute la table, et la charge exécute ce qu’il rend', () => {
+    // La personne 4 est assise à la table 2, siège 1, et sa réservation
+    // tient le siège 2, que l'état des places montre hachuré sous la
+    // personne 5. Sur sa propre chaise réservée, deplacerReservation
+    // lèverait SANS_EFFET : le dépôt ne rend rien, comme sur la chaise
+    // d'origine.
+    const depuis = { table: 2, siege: 1 };
+    const CAS = [
+      [{ portee: 'tour', tour: 1 }, null, true, { commande: 'retirerReservation', arguments: { participant: 4, table: 2, portee: 'tour', tour: 1 } }],
+      [{ portee: 'tous', tour: null }, null, true, 'RESERVATION_TOUS_LES_TOURS'],
+      [{ portee: 'tour', tour: 1 }, { table: 3, siege: 3 }, false, { commande: 'deplacerReservation', arguments: { participant: 4, de: { table: 2, portee: 'tour', tour: 1 }, vers: { table: 3, siege: 3 } } }],
+      [{ portee: 'tous', tour: null }, { table: 3, siege: 3 }, false, { commande: 'deplacerReservation', arguments: { participant: 4, de: { table: 2, portee: 'tous', tour: null }, vers: { table: 3, siege: 3 } } }],
+      [{ portee: 'tour', tour: 1 }, { table: 2, siege: 2 }, false, null],
+      [{ portee: 'tous', tour: null }, { table: 2, siege: 2 }, false, null],
+    ];
+    for (const [reservation, cible, surLeSol, attendu] of CAS) {
+      const charge = executer(chargeDepot({ siegesAttribues: true }), 'reserver', { participant: 4, table: 2, siege: 2, ...reservation });
+      const etat = etatPlaces(charge, { tour: 1, proposition: 1 });
+      const cas = JSON.stringify({ reservation, cible });
+      assert.equal(etat.cible, 'reservations', cas);
+      assert.deepEqual(etat.tables[1].chaises.slice(0, 2).map(({ occupant, reservation: tenue }) => [occupant, tenue?.participant ?? null]), [[4, null], [5, 4]], cas);
+      const rendu = depot(etat, depuis, cible, surLeSol);
+      if (attendu === null) {
+        assert.equal(rendu, null, cas);
+      } else if (typeof attendu === 'string') {
+        assert.equal(rendu.refus?.code, attendu, cas);
+        assert.equal(reponse(charge, rendu.refus.details.remede), 'execute', cas);
+      } else {
+        assert.deepEqual(rendu, attendu, cas);
+        assert.equal(reponse(charge, rendu), 'execute', cas);
+      }
+    }
+  });
+
   test('un tour que le retenu ne porte pas : la cible est « reservations », la commande reserver, quoiqu’un retenu existe', () => {
     const charge = executer(retenue(chargeDepot()), 'changerTours', { tours: '3' });
     const etat = etatPlaces(charge, { tour: 3 });
@@ -223,6 +271,102 @@ describe('commandeDeDepot sous la cible « retenu » (§ 5.8, § 7.1)', () => {
     const suivante = executer(charge, commande, args);
     assert.deepEqual(suivante.retenu.placement[0].sieges, [[1, 2, 3], [5], [4, 6, 7]]);
     assert.deepEqual(suivante.retenu.placement[1], charge.retenu.placement[1]);
+  });
+});
+
+describe('commandeDeDepot sous la cible « retenu » : une personne que sa réservation tient, sur le sol (§ 5.8, § 7.1)', () => {
+  // La personne 4, assise à la table 2, siège 1, au tour 1 du retenu,
+  // réservée à la table 2 : au siège donné, ou sans siège.
+  const tenue = (reservation, options) => {
+    const charge = executer(retenue(chargeDepot(options)), 'reserver', { participant: 4, table: 2, tour: null, ...reservation });
+    return { charge, etat: etatPlaces(charge, { tour: 1 }) };
+  };
+
+  test('« tous les tours » → { refus } RESERVATION_TOUS_LES_TOURS, remède retirerReservation de portée « tous » ; le remède exécuté, le dépôt retire du tour', () => {
+    for (const siege of [1, null]) {
+      const { charge, etat } = tenue({ siege, portee: 'tous' });
+      assert.equal(etat.cible, 'retenu');
+      const remede = { commande: 'retirerReservation', arguments: { participant: 4, table: 2, portee: 'tous', tour: null } };
+      assert.deepEqual(depot(etat, { table: 2, siege: 1 }, null, true), {
+        refus: { code: 'RESERVATION_TOUS_LES_TOURS', details: { participant: 4, table: 2, remede } },
+      });
+      const levee = executer(charge, remede.commande, remede.arguments);
+      const rendu = depot(etatPlaces(levee, { tour: 1 }), { table: 2, siege: 1 }, null, true);
+      assert.deepEqual(rendu, { commande: 'retirerDuTour', arguments: { tour: 1, participant: 4 } });
+      assert.deepEqual(executer(levee, rendu.commande, rendu.arguments).retenu.placement[0].reserve, [4]);
+    }
+  });
+
+  test('« ce tour » → { refus } RESERVATION_CE_TOUR, remède retirerReservation de portée « tour » à ce tour ; le remède exécuté, le dépôt retire du tour', () => {
+    for (const siege of [1, null]) {
+      const { charge, etat } = tenue({ siege, portee: 'tour', tour: 1 });
+      const remede = { commande: 'retirerReservation', arguments: { participant: 4, table: 2, portee: 'tour', tour: 1 } };
+      assert.deepEqual(depot(etat, { table: 2, siege: 1 }, null, true), {
+        refus: { code: 'RESERVATION_CE_TOUR', details: { participant: 4, table: 2, tour: 1, remede } },
+      });
+      const levee = executer(charge, remede.commande, remede.arguments);
+      const rendu = depot(etatPlaces(levee, { tour: 1 }), { table: 2, siege: 1 }, null, true);
+      assert.deepEqual(rendu, { commande: 'retirerDuTour', arguments: { tour: 1, participant: 4 } });
+      assert.deepEqual(executer(levee, rendu.commande, rendu.arguments).retenu.placement[0].reserve, [4]);
+    }
+  });
+
+  test('les deux portées à la même table : l’état des places montre « tous les tours », et le retrait exige les deux remèdes, chacun refusé à son tour par le dépôt', () => {
+    // Une réservation « tous les tours » couvre aussi ce tour : tant que
+    // l'une des deux reste, retirerDuTour lève INVARIANT_VIOLE. Le dépôt
+    // refuse d'abord « tous les tours », dont le texte dit qu'elle part de
+    // tous les tours, puis « ce tour » ; les deux retirées, le retrait passe.
+    for (const ordre of [['tour', 'tous'], ['tous', 'tour']]) {
+      let charge = retenue(chargeDepot());
+      for (const portee of ordre) {
+        charge = executer(charge, 'reserver', { participant: 4, table: 2, siege: null, portee, tour: portee === 'tour' ? 1 : null });
+      }
+      const premier = depot(etatPlaces(charge, { tour: 1 }), { table: 2, siege: 1 }, null, true);
+      assert.equal(premier.refus.code, 'RESERVATION_TOUS_LES_TOURS', JSON.stringify(ordre));
+      for (const portee of ['tour', 'tous']) {
+        const seule = executer(charge, 'retirerReservation', { participant: 4, table: 2, portee, tour: portee === 'tour' ? 1 : null });
+        assert.throws(() => executer(seule, 'retirerDuTour', { tour: 1, participant: 4 }), { code: 'INVARIANT_VIOLE' });
+      }
+      charge = executer(charge, premier.refus.details.remede.commande, premier.refus.details.remede.arguments);
+      const second = depot(etatPlaces(charge, { tour: 1 }), { table: 2, siege: 1 }, null, true);
+      assert.equal(second.refus.code, 'RESERVATION_CE_TOUR', JSON.stringify(ordre));
+      charge = executer(charge, second.refus.details.remede.commande, second.refus.details.remede.arguments);
+      assert.deepEqual(charge.reservations, []);
+      const rendu = depot(etatPlaces(charge, { tour: 1 }), { table: 2, siege: 1 }, null, true);
+      assert.deepEqual(executer(charge, rendu.commande, rendu.arguments).retenu.placement[0].reserve, [4]);
+    }
+  });
+
+  test('reservationTenue lit la réservation de la personne sur une autre chaise de sa table : sièges attribués, assise au siège 1, réservée au siège 2', () => {
+    const { etat } = tenue({ siege: 2, portee: 'tous' }, { siegesAttribues: true });
+    const [assise, reservee] = etat.tables[1].chaises;
+    assert.deepEqual([assise.occupant, assise.reservation], [4, null]);
+    assert.deepEqual(reservee.reservation, { participant: 4, portee: 'tous', tour: null });
+    assert.deepEqual(reservationTenue(etat, 4, { table: 2, siege: 1 }), { participant: 4, portee: 'tous', tour: null });
+    assert.equal(reservationTenue(etat, 5, { table: 2, siege: 2 }), null);
+    assert.equal(reservationTenue(etat, 4, { table: 3, siege: 1 }), null);
+    assert.equal(depot(etat, { table: 2, siege: 1 }, null, true).refus.code, 'RESERVATION_TOUS_LES_TOURS');
+  });
+
+  test('le fantôme au-dessus du sol dit ce que la charge répond : « retire du tour » seulement quand le retrait s’exécute, un refus sinon', () => {
+    // Comme Plan.svelte : la clé se lit sur la portée de reservationTenue.
+    // Le menu « Retirer du tour » rend le même dépôt (MenuPersonne).
+    const CAS = [
+      [null, {}, 'plan.fantome.retireDuTour', 'execute'],
+      [{ siege: 1, portee: 'tour', tour: 1 }, {}, 'plan.fantome.refuseTour', 'RESERVATION_CE_TOUR'],
+      [{ siege: null, portee: 'tour', tour: 1 }, {}, 'plan.fantome.refuseTour', 'RESERVATION_CE_TOUR'],
+      [{ siege: 1, portee: 'tous' }, {}, 'plan.fantome.refuseTous', 'RESERVATION_TOUS_LES_TOURS'],
+      [{ siege: 2, portee: 'tour', tour: 1 }, { siegesAttribues: true }, 'plan.fantome.refuseTour', 'RESERVATION_CE_TOUR'],
+      [{ siege: 2, portee: 'tous' }, { siegesAttribues: true }, 'plan.fantome.refuseTous', 'RESERVATION_TOUS_LES_TOURS'],
+    ];
+    for (const [reservation, options, cle, attendue] of CAS) {
+      const { charge, etat } = reservation === null ? { charge: retenue(chargeDepot()), etat: null } : tenue(reservation, options);
+      const vu = etat ?? etatPlaces(charge, { tour: 1 });
+      const depuis = { table: 2, siege: 1 };
+      const cas = JSON.stringify({ reservation, options });
+      assert.equal(cleFantome(vu.cible, reservationTenue(vu, 4, depuis)?.portee ?? null, true), cle, cas);
+      assert.equal(reponse(charge, depot(vu, depuis, null, true)), attendue, cas);
+    }
   });
 });
 

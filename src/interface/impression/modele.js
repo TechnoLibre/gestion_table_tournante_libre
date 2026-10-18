@@ -5,10 +5,13 @@
 // ce qu'une vue imprime — papier, orientation, tour —, les dimensions d'une
 // page et de sa zone de contenu, la bande mesurée, la page nommée que la
 // feuille d'impression déclare pour chaque papier et chaque orientation, le
-// pied de cinq éléments et le filigrane d'une feuille, et la source que
-// l'aperçu imprime. La découpe du plan en pages n'est pas ici : pagesDuPlan
-// (plan.js) l'appelle seule. Le modèle ne rend que des nombres, des codes,
-// des clés et des données ; les composants les traduisent et les posent.
+// pied de cinq éléments et le filigrane d'une feuille, la source que
+// l'aperçu imprime, et le refus d'un nom d'événement que la feuille ne
+// porterait pas (refusApercu). La découpe du plan en pages n'est pas ici :
+// pagesDuPlan (plan.js) l'appelle seule. Le modèle ne rend que des nombres,
+// des codes, des clés et des données ; les composants les traduisent et les
+// posent.
+import { refusNomEvenement } from '../../application/commandes.js';
 import { etatPlaces } from '../../application/places.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
 import { DECOUPES, VUES_IMPRESSION } from '../etat_ui.js';
@@ -198,6 +201,28 @@ export function feuilleDe(pied, brouillon) {
     ],
     filigrane: brouillon,
   };
+}
+
+// Le remède d'un nom trop long pour s'imprimer : le renommer, depuis la
+// liste des événements.
+const RENOMMER = Object.freeze({ geste: 'renommer' });
+
+/**
+ * Le refus d'imprimer, que l'aperçu lit avant de mettre une page en forme
+ * (§ 8.1, § 11.7) : NOM_EVENEMENT_TROP_LONG {longueur, maximum}, remède
+ * « Renommer », quand le nom de l'événement du pied passe la borne de la
+ * saisie (refusNomEvenement) — un fichier écrit hors de l'application ; null
+ * sinon. Le pied de chaque page porte le nom entier, jamais tronqué : un nom
+ * de plusieurs milliers de caractères replie le pied sur plus d'une page, et
+ * aucune bande ne laisse alors de zone de contenu. Le refus se rend, il ne
+ * se lève pas.
+ *
+ * @param {{nom: string}} pied   celui de piedDePage
+ * @returns {import('../../application/erreurs.js').ErreurCommande|null}
+ * @throws {TypeError} un nom qui n'est pas une chaîne
+ */
+export function refusApercu({ nom }) {
+  return refusNomEvenement(nom, RENOMMER);
 }
 
 /**

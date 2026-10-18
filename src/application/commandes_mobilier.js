@@ -27,6 +27,7 @@
 import { caseLibre, geometrieTable, listeSurTable } from '../geometrie/tables.js';
 import { CRITERES, MODES_OBJECTIFS, POIDS_MAX, seulsASonPalier, verifierPriorites } from '../moteur/criteres.js';
 import {
+  CASES_FACULTATIVES,
   SCHEMA,
   TOURS_MAX,
   capacite,
@@ -56,12 +57,6 @@ const IDENTIFIANT_MAX = regleDuChamp(regleDuChamp(regleDuChamp(SCHEMA, 'charge')
 // de la génération (§ 5.3, § 5.10).
 const INTERRUPTEURS = new Set(['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances', 'attribuerSieges']);
 const ENTIERS_DE_GENERATION = new Set(['generation.nombre', 'generation.arret', 'generation.historique']);
-// Les deux cases facultatives du format 2 (§ 5.3, § 8.9) : absentes des
-// réglages à leur défaut, que critereCoche donne seul — lu sur des réglages
-// qui ne les portent pas.
-const CASES_FACULTATIVES = new Set(['respecterObjectifs', 'rencontrerAnimateurs']);
-const defautDeLaCase = (cle) => critereCoche({ reglages: {} }, cle);
-
 const REGLES = new Set(['ou', 'et']);
 
 // Le mode des objectifs que les réglages ne portent pas (§ 8.9).
@@ -362,7 +357,7 @@ function modifierReglage(charge, { cle, valeur } = {}) {
   } else if (CASES_FACULTATIVES.has(cle)) {
     if (typeof valeur !== 'boolean') throw new TypeError(`${cle} : booléen attendu, reçu ${JSON.stringify(valeur)}`);
     if (valeur === critereCoche(charge, cle)) throw refus('SANS_EFFET', { commande: 'modifierReglage' });
-    if (valeur === defautDeLaCase(cle)) delete suivante.reglages[cle];
+    if (valeur === CASES_FACULTATIVES.get(cle)) delete suivante.reglages[cle];
     else suivante.reglages[cle] = valeur;
   } else if (cle === 'modeObjectifs') {
     changerModeObjectifs(charge, suivante, valeur);

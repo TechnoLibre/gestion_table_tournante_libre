@@ -15,6 +15,7 @@ import { COMMANDES } from '../../application/commandes.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
 import { creerTraduction } from '../../application/traduction.js';
 import { creerEtatUi } from '../etat_ui.js';
+import { refusApercu } from '../impression/modele.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { TABLE as COMMUNS } from '../libelles/communs.js';
 import {
@@ -48,6 +49,7 @@ function seanceEnregistreuse() {
     debloquer: consigner('debloquer'),
     ouvrirSecours: consigner('ouvrirSecours'),
     ecrireAilleurs: consigner('ecrireAilleurs'),
+    fermer: consigner('fermer'),
   };
 }
 
@@ -189,7 +191,7 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
   test('chaque geste du contrat, chaque variante comprise, a son libellé', () => {
     assert.deepEqual([...GESTES], [
       'modifier', 'debloquer', 'afficherTour', 'ouvrirSection', 'choisirPlace', 'ouvrirSecours', 'ecrireAilleurs',
-      'enregistrerSous', 'choisirPapier', 'repartirDeZero', 'libererTour',
+      'enregistrerSous', 'choisirPapier', 'repartirDeZero', 'libererTour', 'renommer',
     ]);
     assert.deepEqual([...SOURCES_SECOURS], ['precedent', 'journal']);
     assert.deepEqual([...SECTIONS_REMEDE], ['import', 'participants', 'tables', 'plan', 'diagnostic', 'generation', 'propositions']);
@@ -206,8 +208,9 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
       { geste: 'choisirPapier' },
       { geste: 'repartirDeZero' },
       { geste: 'libererTour', tour: 3 },
+      { geste: 'renommer' },
     ];
-    assert.equal(remedes.length, 19);
+    assert.equal(remedes.length, 20);
     const textes = remedes.map((remede) => {
       const { cle, details } = libelleRemede(remede);
       return t(cle, details);
@@ -231,6 +234,13 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
     assert.equal(t('communs.remede.libererTour', { tour: 2 }), 'Ne plus figer le tour 2');
   });
 
+  test('le remède du nom trop long pour s’imprimer : refusApercu offre le geste renommer, du contrat, libellé « Renommer »', () => {
+    const { remede } = refusApercu({ nom: 'v'.repeat(201) }).details;
+    assert.ok(GESTES.includes(remede.geste), remede.geste);
+    assert.deepEqual(libelleRemede(remede), { cle: 'communs.remede.renommer', details: {} });
+    assert.equal(t('communs.remede.renommer'), 'Renommer');
+  });
+
   test('reprendreVerrou, offert à côté de VERROU_PRIS, a sa clé', () => {
     assert.equal(t('communs.remede.reprendreVerrou'), 'Reprendre le verrou');
   });
@@ -251,6 +261,7 @@ describe('commande : les clés des remèdes, par énumération (§ 14.6)', () =>
       libelleRemede({ geste: 'choisirPapier' }).cle,
       libelleRemede({ geste: 'repartirDeZero' }).cle,
       libelleRemede({ geste: 'libererTour', tour: 1 }).cle,
+      libelleRemede({ geste: 'renommer' }).cle,
     ]);
     const posees = [...COMMUNS.keys()].filter((cle) => cle.startsWith('communs.remede.'));
     assert.ok(posees.length > 0);
@@ -362,6 +373,14 @@ describe('commande : l’action d’un remède', () => {
     for (const remede of [{ geste: 'repartirDeZero' }, { geste: 'libererTour', tour: 1 }]) {
       assert.equal(actionRemede(remede, { seance }), null, remede.geste);
     }
+  });
+
+  test('renommer ferme l’événement par la séance : la liste des événements, où chacun porte « Renommer » ; sans confirmation', async () => {
+    const seance = seanceEnregistreuse();
+    const action = actionRemede({ geste: 'renommer' }, { seance });
+    assert.deepEqual([action.nom, action.cle, action.details, action.confirmer], ['renommer', 'communs.remede.renommer', {}, null]);
+    assert.notEqual(await action.executer(), null);
+    assert.deepEqual(seance.appels, [['fermer']]);
   });
 
   test('enregistrerSous et choisirPapier passent par les gestes de l’écran, qui sait la planche et le papier ; sans eux, aucune action', () => {

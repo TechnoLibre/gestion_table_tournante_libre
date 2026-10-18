@@ -239,7 +239,9 @@ export function profilManque(instance, manques, plafondsRealises) {
  * manque de troisChiffres, qui compte les manques d'au moins 1. Le profil
  * suit l'ordre de profilManque, manque décroissant : ces rangs sont ceux
  * de tête, et le parcours s'arrête au premier manque plus petit. L'effectif
- * vaut celui que escalierDuManque porte à la valeur du rang 1. null pour un
+ * vaut celui que escalierDuManque porte à la valeur du rang 1. Le rang 1
+ * compte sans comparaison, les suivants par égalité stricte à son manque :
+ * un manque NaN, égal à aucune valeur, donne l'effectif 1. null pour un
  * profil vide.
  *
  * Lève TypeError quand profil n'est pas une liste.

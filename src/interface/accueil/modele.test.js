@@ -10,7 +10,7 @@
 // traduction. Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../../test/lanceur.js';
-import { appliquerCommande } from '../../application/commandes.js';
+import { NOM_EVENEMENT_MAX, appliquerCommande, refusNomEvenement } from '../../application/commandes.js';
 import { resumeDuMeilleur } from '../../application/evaluation.js';
 import { creerFormat } from '../../application/format.js';
 import { TABLES_APPLICATION } from '../../application/libelles.js';
@@ -299,8 +299,10 @@ describe('surLaListe : une opération de la liste et son refus', () => {
 });
 
 describe('champDuRefus : le champ contre lequel un refus se pose', () => {
-  test('le nom pour NOM_REQUIS, la date pour DATE_INVALIDE, aucun sinon', () => {
+  test('le nom pour NOM_REQUIS et un nom trop long, la date pour DATE_INVALIDE, aucun sinon', () => {
     assert.equal(champDuRefus({ code: 'NOM_REQUIS', details: {} }), 'nom');
+    // Le refus même que la création, la copie et le renommage lèvent.
+    assert.equal(champDuRefus(refusNomEvenement('h'.repeat(NOM_EVENEMENT_MAX + 1))), 'nom');
     assert.equal(champDuRefus({ code: 'DATE_INVALIDE', details: { date: '2031-02-30' } }), 'date');
     assert.equal(champDuRefus({ code: 'CHEMIN_TROP_LONG', details: {} }), null);
     assert.equal(champDuRefus(null), null);

@@ -532,10 +532,6 @@
     "raison": "plafond.js, borneDiversite, compte des effectifs à partir de p = 1 : effectifs ne se lit que dans le troisième terme de A_max, N_aff − effectifs[g] + 1. Toute mutation qui ne fait que diminuer effectifs[g] laisse ce terme au moins égal à N_aff − g_p + 1, qui ne descend jamais sous G (chaque appartenance de instance.groupes compte au moins un présent) : min(Φ_aff, G, terme) vaut min(Φ_aff, G) avant comme après. Sauter la personne 0 diminue un effectif."
   },
   {
-    "cle": "src/moteur/plafond.js:frontiere:6f32f41253f60a4b:3",
-    "raison": "plafond.js, borneDiversite, compte des effectifs jusqu'à p <= N : groupe[N] est undefined, différent de SANS_GROUPE ; effectifs[undefined] += 1 pose une propriété « undefined » sur l'Int32Array, hors de ses éléments, que le troisième terme ne lit pas (il lit effectifs[g], g un numéro d'appartenance)."
-  },
-  {
     "cle": "src/moteur/plafond.js:nombre-plus-un:a216dbba9047bdaf:3",
     "raison": "plafond.js, borneDiversite, compte des effectifs par pas de 2 : une personne sur deux est sautée, les effectifs ne font que diminuer ; même raison que le compte à partir de p = 1 — le troisième terme reste au moins N_aff − g_p + 1 ≥ G."
   },

@@ -20,8 +20,9 @@
 // racine du dossier de travail, tient sous la même borne : son plus long
 // suffixe sans marque, prolongé de SUFFIXE_ECRITURE, ne dépasse pas la partie
 // fixe de longueurRelativeMax, et un nom marqué raccourcit sa base dans le
-// dossier qui le reçoit, suivie d'un point qui le distingue de tout nom
-// entier.
+// dossier qui le reçoit, suivie d'un point. Un nom qui peut se confondre
+// avec un autre — base raccourcie, ou base lue sur le disque qui finit par
+// un point — se choisit parmi les entrées du dossier.
 import { PAPIERS } from '../geometrie/papiers.js';
 import { ErreurStockage } from './erreurs.js';
 
@@ -331,9 +332,13 @@ const REEDITION_MAX = 9999;
 const HORODATAGE_INCONNU = 'horodatage-inconnu';
 
 // Ce qui suit une base raccourcie dans le nom de la planche : un point. Une
-// base que rend deriverBase ne finit jamais par un point, si bien qu'un nom
-// raccourci ne se confond avec aucun nom entier : la planche entière d'une
-// base qui tient ne remplace jamais la planche raccourcie d'une autre.
+// base que rend deriverBase ne finit jamais par un point, si bien que son nom
+// entier ne se confond avec aucun nom raccourci. Une base lue sur le disque,
+// celle de « Gala..gtt.json », peut finir par un point : son nom entier est
+// alors aussi celui qu'une base plus longue raccourcit en la même tête, et il
+// se choisit parmi les entrées du dossier comme un nom raccourci. La planche
+// entière d'une base qui tient ne remplace donc jamais la planche raccourcie
+// d'une autre.
 const MARQUE_COUPE = '.';
 
 // Le dossier de travail où la planche se dépose, contrôlé : null, ou sa
@@ -351,7 +356,8 @@ function dossierLu(dossier) {
 
 // Les options de nomPlanche contrôlées, et ce qu'il en tire : le dossier lu,
 // le nom de rang donné, et si le nom se choisit parmi les entrées du dossier
-// — une réédition, ou une base que la borne raccourcit dès le premier rang.
+// — une réédition, une base qui finit par MARQUE_COUPE, ou une base que la
+// borne raccourcit dès le premier rang.
 // Lève comme nomPlanche.
 function composer(
   base,
@@ -394,7 +400,8 @@ function composer(
     const tete = tenir(base, libres - MARQUE_COUPE.length);
     return tete === null ? base + fin : tete + MARQUE_COUPE + fin;
   };
-  return { leDossier, nomDeRang, exigeListe: reedition !== null || nomDeRang(1) !== base + suffixe(1) };
+  const exigeListe = reedition !== null || base.endsWith(MARQUE_COUPE) || nomDeRang(1) !== base + suffixe(1);
+  return { leDossier, nomDeRang, exigeListe };
 }
 
 /**
@@ -415,13 +422,14 @@ function composer(
  * même imposition, même ordre, même placement : même nom, et la planche
  * entière d'un placement remplace la sienne quand sa base tient entière.
  * Un nom qui se choisit parmi les entrées du dossier — celui d'une
- * réédition, ou celui dont la base se raccourcit (nomPlancheExigeListe) — ne
- * remplace jamais un fichier : quand le dossier porte déjà ce nom, comparé
- * par la majuscule de sa NFC comme Windows compare les noms, il prend le
- * premier rang libre, « _2 », « _3 »…, comme le dossier daté de la
- * corbeille. Deux bases qui ne diffèrent qu'au-delà de la coupe, celle d'un
- * événement et celle de sa copie, se raccourcissent en une même tête : la
- * seconde planche prend un rang plutôt que de remplacer la première.
+ * réédition, celui d'une base qui finit par un point, ou celui dont la base
+ * se raccourcit (nomPlancheExigeListe) — ne remplace jamais un fichier :
+ * quand le dossier porte déjà ce nom, comparé par la majuscule de sa NFC
+ * comme Windows compare les noms, il prend le premier rang libre, « _2 »,
+ * « _3 »…, comme le dossier daté de la corbeille. Deux bases qui ne
+ * diffèrent qu'au-delà de la coupe, celle d'un événement et celle de sa
+ * copie, se raccourcissent en une même tête : la seconde planche prend un
+ * rang plutôt que de remplacer la première.
  *
  * La borne du chemin (§ 8.6) : le plus long suffixe sans marque, 51 unités,
  * prolongé de SUFFIXE_ECRITURE, tient sous la partie fixe de
@@ -432,13 +440,16 @@ function composer(
  * nom réservé, et prend un point à sa suite, jusqu'à ce que racine +
  * séparateur + nom + SUFFIXE_ECRITURE tienne en LONGUEUR_CHEMIN_MAX ; le
  * suffixe reste entier. Aucune base que rend deriverBase ne finit par un
- * point : un nom raccourci ne se confond avec aucun nom entier.
+ * point : un nom raccourci ne se confond avec aucun nom entier. Une base lue
+ * sur le disque peut finir par un point, et son nom entier être celui qu'une
+ * autre base raccourcit : il se choisit parmi les entrées du dossier.
  * Quand même un caractère de base ne tient pas, le nom garde sa base
  * entière : l'écriture refusée par le support se dit, et « Enregistrer
  * sous… » la dépose ailleurs. Sans dossier — sous web, où la planche se
  * télécharge, et pour le dialogue d'enregistrement —, ni rang ni coupe.
  *
- * @param {string} base  celle de l'événement, que rend deriverBase
+ * @param {string} base  celle de l'événement, que rend deriverBase ou que
+ *        donne le nom d'un fichier d'état lu sur le disque
  * @param {Object} options
  * @param {import('../geometrie/papiers.js').Papier} options.papier
  * @param {'feuille'|'pile'} options.imposition
@@ -474,9 +485,10 @@ export function nomPlanche(base, options) {
 
 /**
  * Vrai quand le nom de la planche (nomPlanche), sous le dossier donné, se
- * choisit parmi les entrées du dossier : pour une réédition, ou quand la
- * borne raccourcit la base. Faux sans dossier. Les entrées du dossier n'y
- * sont pas lues : l'appelant liste le dossier seulement quand il le faut.
+ * choisit parmi les entrées du dossier : pour une réédition, pour une base
+ * qui finit par un point, ou quand la borne raccourcit la base. Faux sans
+ * dossier. Les entrées du dossier n'y sont pas lues : l'appelant liste le
+ * dossier seulement quand il le faut.
  *
  * @param {string} base
  * @param {Object} options  celles de nomPlanche

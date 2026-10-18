@@ -387,19 +387,46 @@ describe('les libellés d’un geste : le fantôme et la place d’une pose', ()
   });
 
   test('cleFantome : au-dessus du sol, le retenu se dit retiré du tour ; une personne que rien ne tient, rien ne change', () => {
-    // Sous 'retenu', le dépôt sur le sol est retirerDuTour : la personne
-    // attend dans la réserve (§ 7.1). Sous 'reservations', une personne
-    // qu'aucune réservation ne tient n'a rien à retirer : le dépôt ne rend
-    // rien, et le fantôme ne promet pas une réservation.
-    for (const portee of [null, 'tour', 'tous']) {
-      assert.equal(cleFantome('retenu', portee, true), 'plan.fantome.retireDuTour');
-      assert.equal(cleFantome('retenu', portee, false), 'plan.fantome.retenu');
-    }
+    // Sous 'retenu', le dépôt sur le sol d'une personne libre est
+    // retirerDuTour : elle attend dans la réserve (§ 7.1). Sous
+    // 'reservations', une personne qu'aucune réservation ne tient n'a rien à
+    // retirer : le dépôt ne rend rien, et le fantôme ne promet pas une
+    // réservation.
+    assert.equal(cleFantome('retenu', null, true), 'plan.fantome.retireDuTour');
+    for (const portee of [null, 'tour', 'tous']) assert.equal(cleFantome('retenu', portee, false), 'plan.fantome.retenu');
     assert.equal(cleFantome('reservations', null, true), 'plan.fantome.rienNeChange');
     assert.equal(cleFantome('reservations', null, false), 'plan.fantome.reservations');
     assert.match(LIBELLES.get('plan.fantome.retireDuTour'), /retire du tour/);
     assert.match(LIBELLES.get('plan.fantome.retireDuTour'), /réserve/);
     assert.match(LIBELLES.get('plan.fantome.rienNeChange'), /rien ne change/);
+  });
+
+  test('cleFantome : sous le retenu, au-dessus du sol, une personne que sa réservation tient se dit refusée, jamais retirée du tour (§ 5.8)', () => {
+    // Le retrait du tour d'une personne que sa réservation tient à sa table
+    // enfreint cette réservation : le dépôt le refuse lui-même,
+    // RESERVATION_TOUS_LES_TOURS ou RESERVATION_CE_TOUR selon la portée. Le
+    // fantôme dit le refus et la portée.
+    assert.equal(cleFantome('retenu', 'tous', true), 'plan.fantome.refuseTous');
+    assert.equal(cleFantome('retenu', 'tour', true), 'plan.fantome.refuseTour');
+    for (const portee of ['tour', 'tous']) {
+      const texte = LIBELLES.get(cleFantome('retenu', portee, true));
+      assert.match(texte, /^refusé : /);
+      assert.doesNotMatch(texte, /retire du tour/);
+    }
+    assert.match(LIBELLES.get('plan.fantome.refuseTour'), /ce tour/);
+  });
+
+  test('cleFantome : chaque clé qu’elle rend, sur chaque cible, portée et point, a son libellé', () => {
+    // Fantome.svelte traduit la clé sans repli : une clé absente lève au
+    // milieu du geste.
+    for (const cible of ['reservations', 'retenu', null]) {
+      for (const portee of [null, 'tour', 'tous']) {
+        for (const surLeSol of [false, true]) {
+          const cle = cleFantome(cible, portee, surLeSol);
+          assert.equal(LIBELLES.has(cle), true, `${JSON.stringify({ cible, portee, surLeSol })} : ${cle}`);
+        }
+      }
+    }
   });
 
   test('cleFantome dit l’effet du relâcher : chaque clé, sur chaque cible, portée et point, suit la commande de commandeDeDepot', () => {
@@ -408,12 +435,14 @@ describe('les libellés d’un geste : le fantôme et la place d’une pose', ()
     // réservation, ou tenue « ce tour » ou « tous les tours ». Elle se
     // dépose sur une chaise libre, sur une chaise occupée, ou sur le sol.
     // L'effet est la commande exécutée, le code du refus rendu, ou « rien ».
+    // depot.test.js confronte en outre le fantôme à ce que répond une charge.
     const EFFETS = new Map([
       ['plan.fantome.reservations', ['reserver']],
       ['plan.fantome.reservationTour', ['deplacerReservation']],
       ['plan.fantome.reservationTous', ['deplacerReservation']],
       ['plan.fantome.retireReservationTour', ['retirerReservation']],
       ['plan.fantome.refuseTous', ['RESERVATION_TOUS_LES_TOURS']],
+      ['plan.fantome.refuseTour', ['RESERVATION_CE_TOUR']],
       ['plan.fantome.retenu', ['deplacerDansRetenu', 'echangerDansRetenu']],
       ['plan.fantome.retireDuTour', ['retirerDuTour']],
       ['plan.fantome.rienNeChange', ['rien']],

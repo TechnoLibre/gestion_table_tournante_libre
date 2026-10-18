@@ -567,8 +567,10 @@ describe('normaliser : refus (§ 5.9, § 6.2)', () => {
   });
 
   test('des contraintes qui ne sont pas un objet lèvent TypeError, au message qui le dit, avant toute case', () => {
-    // Une chaîne se lirait case par case sans lever ; undefined et null
-    // lèveraient sur la première lecture, sous le message du moteur JavaScript.
+    // Sans la garde, une chaîne ou un booléen lèveraient à la première case,
+    // sous le message d'une contrainte non booléenne qui « reçoit undefined » ;
+    // undefined et null, à la première lecture, sous le message du moteur
+    // JavaScript. Seul le message distingue la garde.
     for (const contraintes of [undefined, null, 'separerAppartenances', true]) {
       exigerTypeError(avec({ contraintes }), 'configuration.contraintes : objet attendu', libelleDe(contraintes));
     }

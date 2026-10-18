@@ -10,6 +10,11 @@ import { cite, nomEtat } from './aides.js';
 export const TABLE = new Map([
   // --- Les refus de la création, des états et du déblocage (§ 8.1, § 9) -----
   ['PLAN_NON_BLOQUE', () => "Le plan n'est pas bloqué : il n'y a rien à débloquer."],
+  // longueur : les caractères du nom saisi ; maximum : NOM_EVENEMENT_MAX.
+  [
+    'NOM_EVENEMENT_TROP_LONG',
+    ({ longueur, maximum }) => `Le nom compte ${longueur} caractères : celui d'un événement en compte au plus ${maximum}.`,
+  ],
   ['DATE_INVALIDE', ({ date }) => `La date ${cite(String(date))} n'est pas un jour du calendrier, écrit AAAA-MM-JJ.`],
   ['SIEGES_INVALIDES', () => 'Une table compte au moins deux sièges.'],
   ['TOURS_INVALIDES', () => 'La soirée compte au moins un tour.'],

@@ -12,11 +12,12 @@
   // hauteur d'une ligne dépend donc de son texte, et la pagination se fait
   // sur les hauteurs rendues : la liste entière se rend d'abord, hors de la
   // vue, dans une feuille de la bande reçue, où se lisent la hauteur utile,
-  // celle de l'en-tête — titre et têtes de colonnes — et celle de chaque
-  // ligne (mesurerListes) ; paginerFeuilles en fait les pages, et chaque
-  // page se rend dans sa feuille, sous l'en-tête répété. La feuille de
-  // mesure disparaît une fois lue, et revient quand le papier, la bande ou
-  // les lignes changent. Les colonnes ont des largeurs fixées
+  // et pour chaque bloc de tours celle de son en-tête — titre, tours du
+  // bloc et têtes de colonnes — et celle de chaque ligne (mesurerListes) ;
+  // paginerFeuilles en fait les pages, et chaque page se rend dans sa
+  // feuille, sous l'en-tête répété de son bloc. La feuille de mesure
+  // disparaît une fois lue, et revient quand le papier, la bande ou les
+  // lignes changent. Les colonnes ont des largeurs fixées
   // (largeursColonnes) : la mesure et les pages replient de même.
   //
   // Une ligne plus haute qu'une page — un nom de milliers de caractères —
@@ -30,10 +31,17 @@
   // Les colonnes de tour se règlent sur leur texte. La feuille de mesure
   // porte une sonde : un tableau d'une colonne, sans repli, qui réunit chaque
   // libellé de place et chaque tête de tour. Sa largeur, sur celle de la
-  // liste, donne la part d'un tour (mesurerPlace), que largeursColonnes
-  // borne par le plancher des noms. La mesure se fait donc en deux temps :
-  // la part d'abord, puis, la liste rendue aux largeurs qui en suivent, les
-  // hauteurs.
+  // liste, donne la part d'un tour (mesurerPlace) : chaque colonne de tour
+  // la reçoit. Des tours qui ne tiennent pas tous côte à côte en laissant
+  // aux noms leur plancher se répartissent en blocs de tours consécutifs
+  // (toursParBloc, blocsAccueil) : chaque bloc reprend chaque ligne, nom,
+  // prénom et appartenance répétés, sous un en-tête qui nomme ses tours
+  // (« Tours 1 à 34 »), et commence une page ; un bloc plus long qu'une page
+  // continue sur la suivante, sous son en-tête répété. Une soirée dont les
+  // tours tiennent garde un seul bloc, sans en-tête de bloc. La mesure se
+  // fait donc en deux temps : la part d'abord, la liste rendue en un seul
+  // bloc, puis, les blocs rendus aux largeurs qui en suivent, les hauteurs
+  // de chacun.
   //
   // La source est celle de l'aperçu, tour par tour : la proposition que
   // porte l'état reçu, sinon le retenu, sinon les réservations
@@ -43,7 +51,7 @@
   import { getContext, tick } from 'svelte';
   import { cleNormalisee } from '../../application/csv.js';
   import Feuille from './Feuille.svelte';
-  import { etatsDesTours, largeursColonnes, libellePlace, lignesAccueil, textesLigneAccueil } from './listes.js';
+  import { blocsAccueil, etatsDesTours, largeursColonnes, libellePlace, lignesAccueil, textesLigneAccueil, toursParBloc } from './listes.js';
   import { couperLigne, mesurerListes, mesurerPlace, morcelerPages, paginerFeuilles, trancher } from './pagination.js';
 
   let { etat, options, feuille, bandeMm = null, orientation = $bindable(null) } = $props();
@@ -69,40 +77,47 @@
   ]);
 
   // Les mesures de la feuille de mesure, et ce qu'elles mesuraient : la
-  // part d'un tour, puis les hauteurs ; les pages, null tant qu'elles ne
-  // sont pas celles des lignes courantes.
+  // part d'un tour, null tant qu'elle n'est pas celle des lignes courantes ;
+  // les blocs qui en suivent, un seul sans elle ; puis les hauteurs ; les
+  // pages, null tant qu'elles ne sont pas celles des blocs courants.
   const cle = $derived(JSON.stringify([options.papier, bandeMm, lignes]));
   let part = $state(null);
+  const partTour = $derived(part !== null && part.cle === cle ? part.valeur : null);
+  const blocs = $derived(blocsAccueil(lignes, tours, partTour === null ? tours.length : toursParBloc(partTour, tours.length)));
+  const cleBlocs = $derived(JSON.stringify([cle, partTour]));
   let mesures = $state(null);
-  const largeurs = $derived(largeursColonnes('accueil', tours.length, part !== null && part.cle === cle ? part.valeur : null));
   let sonde = $state(null);
   const pages = $derived(
-    mesures !== null && mesures.cle === cle ? morcelerPages(paginerFeuilles(mesures.feuilles, mesures.utile), mesures.coupures) : null,
+    mesures !== null && mesures.cle === cleBlocs ? morcelerPages(paginerFeuilles(mesures.feuilles, mesures.utile), mesures.coupures) : null,
   );
   const feuilleMesure = $derived({ ...feuille, filigrane: false });
 
   // Mesure la feuille de mesure une fois le rendu à jour (tick) : la
   // clé lue alors est celle des valeurs que le DOM porte. Sans part à jour,
-  // lit la part d'un tour ; avec elle, les hauteurs de la liste rendue à ses
-  // largeurs, et les morceaux de chaque ligne seule sur sa page. La lecture
-  // de cle et de part relance la mesure quand l'une change avant que les
-  // pages viennent.
+  // lit la part d'un tour ; avec elle, les hauteurs de chaque bloc rendu à
+  // ses largeurs, et les morceaux de chaque ligne seule sur sa page, dans
+  // son bloc. La lecture de cleBlocs, qui porte la clé et la part, relance
+  // la mesure quand l'une change avant que les pages viennent.
   function mesurer(conteneur) {
-    const voulue = cle;
-    const partLue = part;
+    const voulue = cleBlocs;
+    const partLue = partTour;
     let active = true;
     tick().then(() => {
-      if (!active || voulue !== cle) return;
+      if (!active || voulue !== cleBlocs) return;
       const contenu = conteneur.querySelector('[data-contenu]');
-      if (partLue === null || partLue.cle !== cle) {
+      if (partLue === null) {
         part = { cle, valeur: mesurerPlace(sonde, contenu.querySelector('[data-liste-imprimee] table')) };
       } else {
         const lues = mesurerListes(contenu);
-        const corps = contenu.querySelector('[data-liste-imprimee] tbody');
+        const listesRendues = contenu.querySelectorAll('[data-liste-imprimee]');
         const coupures = paginerFeuilles(lues.feuilles, lues.utile)
           .filter(({ seule }) => seule)
-          .map(({ feuille, debut }) => ({ feuille, ligne: debut, bornes: couperLigne(corps.rows[debut], lues.utile - lues.feuilles[feuille].entete) }));
-        mesures = { cle, ...lues, coupures };
+          .map(({ feuille, debut }) => ({
+            feuille,
+            ligne: debut,
+            bornes: couperLigne(listesRendues[feuille].querySelector('tbody').rows[debut], lues.utile - lues.feuilles[feuille].entete),
+          }));
+        mesures = { cle: voulue, ...lues, coupures };
       }
     });
     return () => {
@@ -115,15 +130,20 @@
   });
 </script>
 
-<!-- La liste, de la ligne debut (comprise) à fin (exclue) ; sous un
-     morceau {debut, fin}, chaque cellule de la ligne continuée ne pose que
-     la part de ses textes (textesLigneAccueil) qui tombe dans ce morceau. -->
-{#snippet liste(debut, fin, morceau = null)}
-  <div class="liste" data-liste-imprimee={0}>
+<!-- Le bloc de rang rangBloc, de la ligne debut (comprise) à fin (exclue),
+     sous l'en-tête qui nomme ses tours quand la liste a plusieurs blocs ;
+     sous un morceau {debut, fin}, chaque cellule de la ligne continuée ne
+     pose que la part de ses textes (textesLigneAccueil) qui tombe dans ce
+     morceau. -->
+{#snippet liste(bloc, rangBloc, debut, fin, morceau = null)}
+  <div class="liste" data-liste-imprimee={rangBloc}>
     <p class="titre">{t('feuilles.accueil.titre')}</p>
+    {#if blocs.length > 1}
+      <p class="tours" data-tours-bloc>{t('feuilles.accueil.tours', { premier: bloc.tours[0], dernier: bloc.tours.at(-1) })}</p>
+    {/if}
     <table>
       <colgroup>
-        {#each largeurs as largeur, rang (rang)}
+        {#each largeursColonnes('accueil', bloc.tours.length, partTour) as largeur, rang (rang)}
           <col style:width="{largeur}%" />
         {/each}
       </colgroup>
@@ -132,13 +152,13 @@
           <th scope="col">{t('feuilles.accueil.nom')}</th>
           <th scope="col">{t('feuilles.accueil.prenom')}</th>
           <th scope="col">{t('feuilles.accueil.appartenance')}</th>
-          {#each tours as tour (tour)}
+          {#each bloc.tours as tour (tour)}
             <th scope="col">{t('feuilles.tour', { tour })}</th>
           {/each}
         </tr>
       </thead>
       <tbody>
-        {#each lignes.slice(debut, fin) as ligne, rang (ligne.participant)}
+        {#each bloc.lignes.slice(debut, fin) as ligne, rang (ligne.participant)}
           {@const textes = textesLigneAccueil(ligne, t)}
           {@const [nom, prenom, appartenance, ...places] = morceau === null ? textes : trancher(textes, morceau.debut, morceau.fin)}
           <tr data-ligne-imprimee={debut + rang} data-participant={ligne.participant}>
@@ -163,7 +183,9 @@
   <div class="mesure" aria-hidden="true" {@attach mesurer}>
     <Feuille papier={options.papier} orientation="portrait" feuille={feuilleMesure} {bandeMm}>
       {#snippet contenu()}
-        {@render liste(0, lignes.length)}
+        {#each blocs as bloc, rangBloc (rangBloc)}
+          {@render liste(bloc, rangBloc, 0, bloc.lignes.length)}
+        {/each}
         <table class="sonde" bind:this={sonde}>
           <tbody>
             {#each tours as tour (tour)}
@@ -181,7 +203,7 @@
   {#each pages as page (page.rang)}
     <Feuille rang={page.rang} papier={options.papier} orientation="portrait" {feuille} {bandeMm}>
       {#snippet contenu()}
-        {@render liste(page.debut, page.fin, page.morceau)}
+        {@render liste(blocs[page.feuille], page.feuille, page.debut, page.fin, page.morceau)}
       {/snippet}
     </Feuille>
   {/each}
@@ -192,6 +214,13 @@
     margin: 0;
     padding-bottom: var(--espace-2);
     font-size: var(--taille-titre);
+    font-weight: bold;
+  }
+
+  .tours {
+    margin: 0;
+    padding-bottom: var(--espace-2);
+    font-size: var(--taille-texte);
     font-weight: bold;
   }
 

@@ -9,7 +9,9 @@
 // passent par seance.executer sur le système de fichiers d'épreuve. Les noms
 // d'épreuve sont inventés ; la version vient du module engendré.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { fautesBandes as fautesBandesPosees } from '../../test/bandes.js';
+import { chargements } from '../../test/chargements.js';
 import { creerFichiersSimules } from '../../test/fichiers_simules.js';
 import { describe, test } from '../../test/lanceur.js';
 import { texteLivre } from '../demo/livrees.js';
@@ -20,6 +22,7 @@ import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { serialiser } from '../stockage/canonique.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import {
+  CASES_FACULTATIVES,
   SIEGES_MAX,
   TOURS_MAX,
   analyser,
@@ -1403,6 +1406,20 @@ describe('mobilier : les cases des objectifs et des animateurs (§ 5.3, § 8.9)'
       refuse(() => COMMANDES.get('modifierReglage')(charge, { cle, valeur }), 'SANS_EFFET', { commande: 'modifierReglage', remede: null });
       assert.throws(() => COMMANDES.get('modifierReglage')(charge, { cle, valeur: 'oui' }), TypeError);
     }
+  });
+
+  test('les cases écrites hors de leur défaut sont celles de CASES_FACULTATIVES, que le registre importe du stockage sans la redéclarer', () => {
+    const charge = chargeEtiquetee();
+    for (const [cle, defaut] of CASES_FACULTATIVES) {
+      const ecrite = accepter('modifierReglage', charge, { cle, valeur: !defaut });
+      assert.equal(ecrite.charge.reglages[cle], !defaut, cle);
+      const revenue = accepter('modifierReglage', ecrite.charge, { cle, valeur: defaut });
+      assert.equal(Object.hasOwn(revenue.charge.reglages, cle), false, cle);
+    }
+    // Le registre charge le stockage, lu par l'analyseur même des gardes : la
+    // boucle ci-dessus suit les cases et leurs défauts de l'export du stockage.
+    const source = readFileSync(new URL('./commandes_mobilier.js', import.meta.url), 'utf8');
+    assert.ok(chargements(source).some(({ specificateur }) => specificateur === '../stockage/document.js'));
   });
 });
 

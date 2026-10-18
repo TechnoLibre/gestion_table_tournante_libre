@@ -22,6 +22,7 @@ import { VERSION } from '../version.genere.js';
 import { serialiser, serialiserCharge } from './canonique.js';
 import * as DOCUMENT from './document.js';
 import {
+  CASES_FACULTATIVES,
   ENTREE_DE_COURSE,
   FORMAT,
   GENERATION_PAR_DEFAUT,
@@ -1665,6 +1666,25 @@ describe('les lecteurs des réglages facultatifs (§ 8.9)', () => {
     for (const cle of ['attribuerSieges', 'generation', 'cibleRedondance', 'modeObjectifs', 'inconnue', '__proto__', 'toString']) {
       assert.throws(() => critereCoche(charge, cle), RangeError, cle);
     }
+  });
+
+  test('CASES_FACULTATIVES nomme les deux cases facultatives et leur défaut ; critereCoche rend ce défaut sur des réglages qui ne les portent pas', () => {
+    assert.equal(critereCoche({ reglages: {} }, 'respecterObjectifs'), true);
+    assert.equal(critereCoche({ reglages: {} }, 'rencontrerAnimateurs'), false);
+    assert.deepEqual([...CASES_FACULTATIVES], [['respecterObjectifs', true], ['rencontrerAnimateurs', false]]);
+  });
+
+  test('CASES_FACULTATIVES ne se modifie pas : la vue est gelée, sans set ni delete, et une paire itérée changée laisse les défauts intacts', () => {
+    assert.ok(Object.isFrozen(CASES_FACULTATIVES));
+    for (const methode of ['set', 'delete', 'clear']) assert.equal(CASES_FACULTATIVES[methode], undefined, methode);
+    // Un module est en mode strict : écrire une propriété gelée lève.
+    assert.throws(() => {
+      CASES_FACULTATIVES.get = () => true;
+    }, TypeError);
+    for (const paire of CASES_FACULTATIVES) paire[1] = !paire[1];
+    assert.equal(CASES_FACULTATIVES.get('rencontrerAnimateurs'), false);
+    assert.equal(critereCoche({ reglages: {} }, 'rencontrerAnimateurs'), false);
+    assert.deepEqual([...CASES_FACULTATIVES], [['respecterObjectifs', true], ['rencontrerAnimateurs', false]]);
   });
 });
 

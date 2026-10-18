@@ -217,6 +217,7 @@ const ENTREES = [
   ['data-titre', 'plan : un titre non pourvu d’une liste de travail', null],
   ['data-tour-fige', 'génération : la case d’un tour à figer sous un départ, par son numéro', null],
   ['data-tours', 'tables : le réglage du nombre de tours', ['']],
+  ['data-tours-bloc', 'aperçu : l’en-tête d’un bloc de la liste d’accueil, qui nomme ses tours', ['']],
   ['data-tous-les-indicateurs', 'qualité : la commande qui ouvre et referme « Tous les indicateurs » des colonnes de la comparaison', ['']],
   ['data-tuile', 'qualité : une tuile de l’en-tête chiffré, par le nom de sa colonne', null],
   ['data-valides', 'import : le compte des lignes valides', ['']],

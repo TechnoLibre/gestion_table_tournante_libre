@@ -18,6 +18,11 @@
   // (piedDePage). Sans papier choisi, l'aperçu pose la question du papier
   // (Papier.svelte) à la place du document.
   //
+  // Un nom d'événement que le pied ne porte pas (refusApercu) — lu d'un
+  // fichier, au-delà de la borne de la saisie — ne monte ni gabarit ni
+  // document, dans aucune vue : son refus se pose sur « Imprimer », avec le
+  // remède « Renommer », et « Imprimer » le rend sans appeler l'imprimante.
+  //
   // La bande — ce qu'une feuille porte hors de sa zone de contenu — se
   // mesure sur une feuille gabarit, que la vue rend hors de la vue, à
   // l'ouverture et chaque fois que la vue, le papier ou le pied changent
@@ -46,7 +51,7 @@
   import FeuillesTables from './FeuillesTables.svelte';
   import ListeAccueil from './ListeAccueil.svelte';
   import PlanImprime from './PlanImprime.svelte';
-  import { bandeDeFeuille, cleDecoupe, cleVue, feuilleDe, optionsApercu, sortieApercu, toursOfferts } from './modele.js';
+  import { bandeDeFeuille, cleDecoupe, cleVue, feuilleDe, optionsApercu, refusApercu, sortieApercu, toursOfferts } from './modele.js';
 
   // provenance et version : celles du bandeau, que le pied reprend ;
   // fermer : ferme l'aperçu et rend le focus à « Imprimer… ».
@@ -73,6 +78,7 @@
     piedDePage(charge, { source: sortie.source, proposition: sortie.proposition, tour: sortie.tour, provenance, version, texte: t }),
   );
   const feuille = $derived(feuilleDe(pied, estBrouillon(charge, { source: sortie.source, tour: sortie.tour })));
+  const refusNom = $derived(refusApercu(pied));
   const Vue = $derived(VUES.get(options.vue));
   const cleMode = $derived(cleDeMode($seance));
   const tours = $derived(toursOfferts(charge.evenement.tours));
@@ -104,6 +110,7 @@
   }
 
   async function imprimer() {
+    if (refusNom !== null) throw refusNom;
     const refus = refusImpression(await imprimante.imprimer({ papier: options.papier, orientation }));
     if (refus !== null) throw refus;
   }
@@ -156,7 +163,7 @@
     {#if !options.question}
       <div class="groupe" role="group" aria-label={t('impression.groupe.sortie')}>
         <Papier />
-        <Commande cle="impression.commande.imprimer" nom="imprimer" variante="principale" executer={imprimer} />
+        <Commande cle="impression.commande.imprimer" nom="imprimer" variante="principale" executer={imprimer} refusExterne={refusNom} />
       </div>
     {/if}
     <div class="fermer">
@@ -168,7 +175,7 @@
     <div class="question">
       <Papier />
     </div>
-  {:else}
+  {:else if refusNom === null}
     {#key cleGabarit}
       <div class="gabarit" aria-hidden="true" {@attach mesurer}>
         <Vue etat={sortie.etat} {options} {feuille} />

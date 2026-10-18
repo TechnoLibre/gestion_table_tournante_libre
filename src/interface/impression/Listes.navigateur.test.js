@@ -7,7 +7,9 @@
 // feuilles sont les pages de paginer sur les hauteurs rendues, chacune sous
 // son en-tête et son pied, aucune ligne hors de sa zone de contenu ; les
 // colonnes de tour de la liste d'accueil à la largeur de leur texte, chaque
-// place sur une ligne tant que le plancher des noms le permet ; chaque
+// place sur une ligne, des tours trop nombreux pour tenir côte à côte au
+// plancher des noms répartis en blocs de tours consécutifs, chacun sous
+// l'en-tête qui nomme ses tours, les noms répétés ; chaque
 // place d'une table listée, une place vide écrite comme telle, les titres
 // nommés, « non pourvu » quand rien ne les pourvoit ; « Une feuille par
 // tour » donne une feuille par table et par tour, chacune au pied et au
@@ -261,14 +263,100 @@ describe('la liste d’accueil : les colonnes de tour à la largeur de leur text
     });
   }
 
-  test('sous sièges attribués, des tours trop larges pour la page replient entre les mots, sur deux lignes au plus, jamais dans un mot', async () => {
-    const m = await ouvrirApercu(contexte, chargeSiegesAttribues(), { section: 'participants' });
+});
+
+describe('la liste d’accueil : des tours trop nombreux pour la page, en blocs de tours consécutifs (§ 7.4)', () => {
+  // Les blocs de la liste rendue, dans l'ordre du document : pour chaque
+  // liste, ses têtes de tour, l'en-tête de bloc de chacune de ses feuilles
+  // (null sans en-tête), et les participants de ses lignes, ses feuilles
+  // réunies.
+  function blocsRendus(m) {
+    const blocs = new Map();
+    for (const liste of tous(m.racine, '[data-impression] [data-liste-imprimee]')) {
+      const rang = liste.dataset.listeImprimee;
+      if (!blocs.has(rang)) {
+        blocs.set(rang, { tours: [...liste.querySelector('[data-entete-liste] tr').cells].slice(3).map(texte), entetes: [], participants: [] });
+      }
+      const bloc = blocs.get(rang);
+      const entete = liste.querySelector('[data-tours-bloc]');
+      bloc.entetes.push(entete === null ? null : texte(entete));
+      bloc.participants.push(...tous(liste, '[data-participant]').map((ligne) => Number(ligne.dataset.participant)));
+    }
+    return [...blocs.values()];
+  }
+
+  // Vérifie les blocs de la liste rendue : les pages de paginer, bloc par
+  // bloc ; chaque tour une fois, dans l'ordre ; des blocs de même taille, le
+  // dernier au plus aussi long ; sur chaque feuille d'un bloc, l'en-tête qui
+  // nomme ses tours — aucun sous un seul bloc ; dans chaque bloc, chaque
+  // personne non exclue, dans l'ordre de la liste ; chaque place et chaque
+  // tête de tour sur une ligne ; nom, prénom et appartenance sur un tiers au
+  // moins de la largeur ; le moins de blocs que ce plancher permet. Rend les
+  // blocs.
+  function verifierBlocs(m, charge) {
+    const blocs = blocsRendus(m);
+    expect(verifierPagination(m)).toBe(blocs.length);
+    const R = charge.evenement.tours;
+    expect(blocs.flatMap(({ tours }) => tours), 'chaque tour une fois, dans l’ordre').toEqual(
+      Array.from({ length: R }, (_, rang) => t('feuilles.tour', { tour: rang + 1 })),
+    );
+    const tailles = blocs.map(({ tours }) => tours.length);
+    expect(tailles.slice(0, -1), 'des blocs de même taille').toEqual(tailles.slice(0, -1).map(() => tailles[0]));
+    expect(tailles.at(-1), 'le dernier bloc au plus aussi long').toBeLessThanOrEqual(tailles[0]);
+    let premier = 1;
+    for (const bloc of blocs) {
+      const dernier = premier + bloc.tours.length - 1;
+      const attendu = blocs.length === 1 ? null : t('feuilles.accueil.tours', { premier, dernier });
+      expect(bloc.entetes, `tours ${premier} à ${dernier}`).toEqual(bloc.entetes.map(() => attendu));
+      premier = dernier + 1;
+    }
+    const attendus = lignesAccueil(charge, etatsDesTours(charge, m.ui.etat().proposition), cleNormalisee).map(({ participant }) => participant);
+    expect(attendus.length).toBeGreaterThan(0);
+    for (const [rang, bloc] of blocs.entries()) expect(bloc.participants, `bloc ${rang} : chaque ligne`).toEqual(attendus);
+    expect(cellulesDeTour(m).filter((cellule) => lignesDeTexte(cellule) !== 1).map(texte), 'cellules de tour sur plus d’une ligne').toEqual([]);
+    const tableaux = tous(m.racine, '[data-impression] [data-liste-imprimee] table');
+    for (const tableau of tableaux) {
+      const noms = [...tableau.querySelector('[data-entete-liste] tr').cells].slice(0, 3).reduce((somme, cellule) => somme + boite(cellule).width, 0);
+      expect(noms, 'le plancher des noms').toBeGreaterThanOrEqual(boite(tableau).width / 3 - JEU_PX);
+    }
+    if (blocs.length > 1) {
+      // Le moins de blocs possible : en un bloc de moins, le plus long
+      // porterait ⌈R / (blocs − 1)⌉ colonnes de tour à la largeur rendue
+      // de la plus large, qui passeraient sous le plancher des noms.
+      const largeur = Math.max(...tableaux.map((tableau) => boite(tableau).width));
+      const colonne = Math.max(...tableaux.flatMap((tableau) => [...tableau.querySelector('[data-entete-liste] tr').cells].slice(3).map((cellule) => boite(cellule).width)));
+      expect(Math.ceil(R / (blocs.length - 1)) * colonne, 'un bloc de moins passerait sous le plancher des noms').toBeGreaterThan((largeur * 2) / 3 - JEU_PX);
+    }
+    expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
+    return blocs;
+  }
+
+  for (const tours of [30, 31, 60, 100]) {
+    test(`${tours} tours, A4 : des blocs de tours consécutifs, chacun sous l’en-tête qui nomme ses tours, les noms répétés ; chaque place sur une ligne`, async () => {
+      const charge = appliquerCommande('changerTours', chargePrincipale(), { tours }).charge;
+      const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
+      await choisirVue(m, 'accueil');
+      expect(verifierBlocs(m, charge).length).toBeGreaterThan(1);
+      for (const feuille of feuilles(m)) expect(texte(feuille.querySelector('[data-pied]'))).toContain(t('impression.pied.tousLesTours'));
+    });
+  }
+
+  test('un seul tour : un seul bloc, sans en-tête de bloc', async () => {
+    const charge = appliquerCommande('changerTours', chargePrincipale(), { tours: 1 }).charge;
+    const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
     await choisirVue(m, 'accueil');
+    expect(verifierBlocs(m, charge)).toHaveLength(1);
+    expect(tous(m.racine, '[data-impression] [data-tours-bloc]')).toEqual([]);
+  });
+
+  test('des libellés longs, sous sièges attribués : des tours trop larges côte à côte se répartissent en blocs, chaque place entière sur une ligne, aucun mot coupé', async () => {
+    const charge = chargeSiegesAttribues();
+    const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
+    await choisirVue(m, 'accueil');
+    expect(verifierBlocs(m, charge).length).toBeGreaterThan(1);
     const cellules = cellulesDeTour(m);
     expect(cellules.some((cellule) => texte(cellule).includes(t('feuilles.accueil.tableSiege', { table: 1, siege: 1 })))).toBe(true);
-    expect(cellules.filter((cellule) => lignesDeTexte(cellule) > 2).map(texte), 'cellules de tour sur plus de deux lignes').toEqual([]);
     expect(cellules.flatMap(motsCoupes), 'mots coupés').toEqual([]);
-    verifierPagination(m);
   });
 });
 
@@ -532,6 +620,44 @@ describe('la liste d’accueil : une ligne plus haute qu’une page (§ 7.4)', (
     // Chaque autre personne garde sa ligne entière, sur une feuille.
     const autres = tous(m.racine, '[data-impression] [data-participant]').filter((autre) => autre.dataset.participant !== '1');
     expect(autres).toHaveLength(charge.participants.filter(({ id, exclu }) => id !== 1 && !exclu).length);
+    expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
+  });
+
+  test('sept tours, A4 : la ligne se continue dans chaque bloc de tours, le dernier plus court, sous l’en-tête du bloc ; chaque texte du bloc une fois, dans l’ordre', async () => {
+    const charge = chargeNomDePages(7);
+    const m = await ouvrirApercu(contexte, charge, { section: 'participants' });
+    await choisirVue(m, 'accueil');
+    verifierDansLesZones(m);
+    const ligne = lignesAccueil(charge, etatsDesTours(charge, m.ui.etat().proposition), cleNormalisee).find(({ participant }) => participant === 1);
+    const parBloc = new Map();
+    for (const rangee of tous(m.racine, '[data-impression] [data-participant="1"]')) {
+      const liste = rangee.closest('[data-liste-imprimee]');
+      if (!parBloc.has(liste.dataset.listeImprimee)) parBloc.set(liste.dataset.listeImprimee, { liste, rangees: [] });
+      parBloc.get(liste.dataset.listeImprimee).rangees.push(rangee);
+    }
+    expect(parBloc.size, 'la ligne dans plusieurs blocs').toBeGreaterThan(1);
+    // Sept tours ne se partagent en blocs égaux sous aucune taille de 2 à
+    // 6 : le dernier bloc, plus court, pose d'autres textes que le premier,
+    // et ses morceaux se mesurent sur sa propre ligne.
+    const vus = [];
+    const tailles = [];
+    for (const [bloc, { liste, rangees }] of parBloc) {
+      const pages = new Set(rangees.map((rangee) => rangee.closest('[data-feuille]').dataset.feuille));
+      expect(pages.size, `bloc ${bloc} : la ligne continuée sur plusieurs feuilles`).toBeGreaterThan(1);
+      expect(rangees.length, `bloc ${bloc}`).toBe(pages.size);
+      const tetes = [...liste.querySelector('[data-entete-liste] tr').cells].slice(3).map(texte);
+      const places = ligne.places.filter(({ tour }) => tetes.includes(t('feuilles.tour', { tour })));
+      expect(places, `bloc ${bloc} : une place par tête de tour`).toHaveLength(tetes.length);
+      tailles.push(places.length);
+      vus.push(...places.map(({ tour }) => tour));
+      expect(rangees.map(texteDesDonnees).join(''), `bloc ${bloc} : la ligne entière`).toBe(textesLigneAccueil({ ...ligne, places }, t).join(''));
+      for (const rangee of rangees) {
+        const entete = rangee.closest('[data-liste-imprimee]').querySelector('[data-tours-bloc]');
+        expect(texte(entete), `bloc ${bloc}`).toBe(t('feuilles.accueil.tours', { premier: places[0].tour, dernier: places.at(-1).tour }));
+      }
+    }
+    expect(vus, 'chaque tour une fois, dans l’ordre').toEqual(Array.from({ length: 7 }, (_, rang) => rang + 1));
+    expect(tailles.at(-1), 'le dernier bloc plus court').toBeLessThan(tailles[0]);
     expect(dans(m, '[data-impression]').textContent).not.toContain(ABREVIATION);
   });
 });

@@ -252,13 +252,14 @@ export async function surLaListe(operation) {
 // Le champ que désigne chaque refus d'un nom ou d'une date saisis.
 const CHAMPS_DES_REFUS = new Map([
   ['NOM_REQUIS', 'nom'],
+  ['NOM_EVENEMENT_TROP_LONG', 'nom'],
   ['DATE_INVALIDE', 'date'],
 ]);
 
 /**
- * Le champ contre lequel un refus se pose : 'nom' pour NOM_REQUIS, 'date'
- * pour DATE_INVALIDE ; null pour tout autre refus, qui se pose contre la
- * commande, et sans refus.
+ * Le champ contre lequel un refus se pose : 'nom' pour NOM_REQUIS et
+ * NOM_EVENEMENT_TROP_LONG, 'date' pour DATE_INVALIDE ; null pour tout autre
+ * refus, qui se pose contre la commande, et sans refus.
  *
  * @param {{code: string}|null} refus
  * @returns {'nom'|'date'|null}

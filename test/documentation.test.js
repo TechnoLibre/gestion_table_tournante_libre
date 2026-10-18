@@ -242,6 +242,15 @@ describe('documentation : le guide d’usage suit les étapes et apparie ses ima
 // Un lecteur de l'arbre réel où un document est remplacé par un texte donné.
 const lireAvec = (remplace, texte) => (chemin) => (chemin === remplace ? texte : lire(chemin));
 
+// Un lecteur de l'arbre réel dont le manifeste porte version pour chaque
+// version réelle : seules les versions diffèrent, images et empreintes
+// restent celles de l'arbre.
+const versionDuManifeste = (version) => {
+  const manifeste = lireManifeste();
+  manifeste.captures = manifeste.captures.map((capture) => ({ ...capture, versionReelle: version }));
+  return lireAvec(CHEMIN_MANIFESTE, `${JSON.stringify(manifeste, null, 2)}\n`);
+};
+
 describe('documentation : les documents n’affichent que les captures, telles que le manifeste les inscrit (§ 19.1, § 19.7)', () => {
   test('le guide d’usage et README.md ne citent aucune image hors de doc/captures', () => {
     for (const document of [GUIDE_USAGE, README]) assert.deepEqual(fautesImagesCitees(document, lire(document)), [], document);
@@ -408,14 +417,25 @@ describe('documentation : les régions engendrées des documents livrés (§ 19.
   });
 
   test('verifier, sur l’arbre réel et la liste par défaut : aucune faute, toutes les régions lues ; l’écart de version affiché, non bloquant', () => {
-    // L'écrivain relève chaque ligne et la passe à la sortie d'erreur de
-    // l'épreuve : la série surveillée affiche l'écart de l'arbre réel.
-    const lignes = [];
-    const { bilan } = verifierEtAfficher({ ecrire: (ligne) => { lignes.push(ligne); console.warn(ligne); } });
-    assert.deepEqual(lignes, bilan.ecart === null ? [] : [ligneEcart(bilan.ecart)]);
+    // L'arbre réel passe par l'écrivain par défaut, console.warn, que
+    // releverConsole relève et transmet : la série surveillée affiche son
+    // écart, et l'épreuve en attend la ligne, aucune sans écart.
+    const { rendu: { bilan }, recues } = releverConsole(() => verifierEtAfficher(), true);
+    assert.deepEqual(recues, bilan.ecart === null ? [] : [ligneEcart(bilan.ecart)]);
     assert.deepEqual(bilan.fautes, []);
     assert.equal(bilan.regions, PRODUCTEURS.length);
     assert.equal(bilan.code, 0);
+    // Le même chemin, sur l'arbre réel dont seul le manifeste passe à une
+    // version voisine, écrit la ligne de cet écart : l'affichage s'éprouve
+    // que l'arbre réel ait un écart ou non. Deux relevés s'emboîtent : la
+    // ligne que l'intérieur relève et transmet parvient à l'extérieur, qui
+    // la relève sans la transmettre, et la série surveillée ne la montre pas.
+    const voisine = versionVoisine(VERSION.affichee);
+    const exterieur = releverConsole(() => releverConsole(() => verifierEtAfficher({ lire: versionDuManifeste(voisine) }), true), false);
+    const interieur = exterieur.rendu;
+    assert.deepEqual([interieur.rendu.bilan.fautes, interieur.rendu.bilan.code], [[], 0]);
+    assert.deepEqual(interieur.recues, [ligneEcart({ manifeste: voisine, construction: VERSION.affichee })]);
+    assert.deepEqual(exterieur.recues, interieur.recues);
   });
 
   test('aucun document de la racine hors de PORTEURS ne porte de région : rien n’échappe à la vérification', () => {
@@ -452,14 +472,33 @@ describe('documentation : les régions engendrées des documents livrés (§ 19.
 // la sortie d'erreur de l'épreuve, que le rapporteur imprime sous le nom de
 // l'épreuve sans la faire échouer (§ 19.7). L'épreuve du manifeste voisin
 // éprouve les deux écrivains, l'injecté et celui par défaut ; celle de
-// l'arbre réel passe un écrivain qui relève puis transmet à console.warn,
-// et attend la ligne de son propre écart, aucune sans écart.
+// l'arbre réel passe par l'écrivain par défaut, relève et transmet son
+// propre écart, puis force un écart par le manifeste et en relève la ligne
+// sans la transmettre.
 // Rend { bilan, ligne } : ligne est la ligne écrite, null sans écart.
 function verifierEtAfficher({ lire, ecrire = (ligne) => console.warn(ligne) } = {}) {
   const bilan = verifierArbre({ lire });
   const ligne = ligneEcart(bilan.ecart);
   if (ligne !== null) ecrire(ligne);
   return { bilan, ligne };
+}
+
+// Appelle appel, console.warn remplacé par un relevé de chaque ligne, qui la
+// transmet au console.warn en place à l'appel quand transmettre est vrai ;
+// ce dernier est rétabli au retour, même sur une levée. Rend { rendu,
+// recues } : le rendu de l'appel et les lignes relevées, dans leur ordre.
+function releverConsole(appel, transmettre) {
+  const recues = [];
+  const avertir = console.warn;
+  console.warn = (...valeurs) => {
+    recues.push(valeurs.join(' '));
+    if (transmettre) avertir.apply(console, valeurs);
+  };
+  try {
+    return { rendu: appel(), recues };
+  } finally {
+    console.warn = avertir;
+  }
 }
 
 // Les épreuves que la série surveillée relance quand chemin change : la
@@ -471,15 +510,6 @@ function relanceesPar(chemin) {
 }
 
 describe('documentation : l’écart de version, la ligne de commande, la surveillance (§ 19.7, § 14.4)', () => {
-  // Le manifeste réel, chaque version réelle passée à la voisine de la
-  // construction : seules les versions diffèrent, images et empreintes
-  // restent celles de l'arbre.
-  const versionDuManifeste = (version) => {
-    const manifeste = lireManifeste();
-    manifeste.captures = manifeste.captures.map((capture) => ({ ...capture, versionReelle: version }));
-    return lireAvec(CHEMIN_MANIFESTE, `${JSON.stringify(manifeste, null, 2)}\n`);
-  };
-
   test('rouge : un manifeste à une version voisine — au cycle court, l’écart s’affiche, se nomme et ne bloque pas ; à la livraison, il bloque', () => {
     const voisine = versionVoisine(VERSION.affichee);
     const lire = versionDuManifeste(voisine);

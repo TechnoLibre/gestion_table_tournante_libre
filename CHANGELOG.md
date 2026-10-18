@@ -253,6 +253,18 @@
 - L'exécutable pèse environ 8 Mo de moins : il ne garde que le français et
   l'anglais parmi les traductions internes du navigateur qu'il embarque.
   L'interface ne change pas.
+- La liste d'accueil imprimée garde à chaque tour la largeur de son libellé
+  de place. Une soirée dont les tours ne tiennent plus côte à côte — une
+  trentaine de tours, ou quelques-uns sous des libellés longs — s'y répartit en
+  blocs de tours consécutifs, chacun sur ses pages, sous un en-tête qui nomme
+  ses tours (« Tours 1 à 6 ») ; chaque bloc reprend les noms.
+- Le nom d'un événement compte au plus 200 caractères, à la création, à la
+  copie et au renommage. Un événement dont le fichier porte un nom plus long
+  s'ouvre comme avant ; son aperçu d'impression refuse d'imprimer, au lieu
+  d'échouer, et offre « Renommer », qui ramène à la liste des événements.
+- Sous le placement retenu, glisser hors des tables une personne que sa
+  réservation tient à la sienne annonce le refus dès le survol, au lieu de
+  « retire du tour ».
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités

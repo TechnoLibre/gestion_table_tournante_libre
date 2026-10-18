@@ -1061,6 +1061,19 @@ describe('creer (§ 2.1, § 8.3)', () => {
     assert.equal(ecritures(fs), avant);
   });
 
+  test('un nom de 200 caractères est créé ; de 201, NOM_EVENEMENT_TROP_LONG qui dit le maximum, rien d’écrit', async () => {
+    const { fs, facade } = monter();
+    await facade.demarrer();
+    const avant = ecritures(fs);
+    const refus = await refusDe(facade.creer({ nom: ` ${'h'.repeat(201)} ` }));
+    assert.equal(refus.code, 'NOM_EVENEMENT_TROP_LONG');
+    assert.deepEqual(refus.details, { longueur: 201, maximum: 200, remede: null });
+    assert.equal(libelle(refus.code, refus.details), "Le nom compte 201 caractères : celui d'un événement en compte au plus 200.");
+    assert.equal(ecritures(fs), avant);
+    const { base } = await facade.creer({ nom: ` ${'h'.repeat(200)} ` });
+    assert.equal(analyser(fs.contenu('documents', base + SUFFIXES.etat)).charge.evenement.nom, 'h'.repeat(200));
+  });
+
   test('des Documents sous un chemin de 250 caractères : CHEMIN_TROP_LONG, rien d’écrit', async () => {
     assert.equal(PROFOND.length, 250);
     const { fs, facade } = monter({ fs: creerFichiersSimules({ documents: PROFOND }) });
@@ -1153,6 +1166,17 @@ describe('copier (§ 8.7)', () => {
     assert.equal(copie.filiation.instant.libelle, creation);
     const apres = await photographier(fs, DOC);
     for (const [fichier, texte] of Object.entries(original)) assert.equal(apres[fichier], texte);
+  });
+
+  test('un nom de plus de 200 caractères : NOM_EVENEMENT_TROP_LONG, sans écrire', async () => {
+    const { fs, facade } = monter();
+    await facade.demarrer();
+    await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+    const avant = ecritures(fs);
+    const refus = await refusDe(facade.copier(LUCIOLES, { nom: 'c'.repeat(201) }));
+    assert.equal(refus.code, 'NOM_EVENEMENT_TROP_LONG');
+    assert.deepEqual(refus.details, { longueur: 201, maximum: 200, remede: null });
+    assert.equal(ecritures(fs), avant);
   });
 
   test('un nom vide est refusé, sans écrire, et aucun « (copie) » ne paraît', async () => {
@@ -1299,6 +1323,31 @@ describe('renommer (§ 8.7, § 8.8)', () => {
     const avant = ecritures(fs);
     assert.equal((await refusDe(facade.renommer(LUCIOLES, { nom: '   ' }))).code, 'NOM_REQUIS');
     assert.equal(ecritures(fs), avant);
+  });
+
+  test('un nom de 201 caractères : NOM_EVENEMENT_TROP_LONG avant toute sonde, rien d’écrit ; de 200, renommé', async () => {
+    const { fs, facade } = monter();
+    await facade.demarrer();
+    await deposerEvenement(fs, DOC, { id: 'evt-lucioles', nom: LUCIOLES });
+    const avant = ecritures(fs);
+    const refus = await refusDe(facade.renommer(LUCIOLES, { nom: 'e\u{301}'.repeat(201) }));
+    assert.equal(refus.code, 'NOM_EVENEMENT_TROP_LONG');
+    assert.deepEqual(refus.details, { longueur: 201, maximum: 200, remede: null });
+    assert.equal(ecritures(fs), avant);
+    const { base } = await facade.renommer(LUCIOLES, { nom: `\t${'e\u{301}'.repeat(200)} ` });
+    assert.equal(analyser(fs.contenu('documents', base + SUFFIXES.etat)).charge.evenement.nom, '\u{E9}'.repeat(200));
+  });
+
+  test('un fichier dont le nom passe la borne s’ouvre comme avant, en lecture, son nom entier', async () => {
+    const montage = monter();
+    const { fs, facade } = montage;
+    await facade.demarrer();
+    const long = 'Gala des Grèbes '.repeat(500);
+    assert.equal(long.length, 8000);
+    fs.deposer('documents', `Long${SUFFIXES.etat}`, texteEtat({ id: 'evt-long', nom: long }));
+    await montage.seance.ouvrir('Long');
+    assert.equal(montage.seance.mode, 'lecture');
+    assert.equal(montage.seance.etat().charge.evenement.nom, long);
   });
 
   test('un nom en NFD : le nom et la base renommés sont en NFC', async () => {

@@ -481,6 +481,7 @@ const EXEMPLES = new Map([
   ],
   // Refus et avertissements des commandes
   ['NOM_REQUIS', { remede: null }],
+  ['NOM_EVENEMENT_TROP_LONG', { longueur: 201, maximum: 200, remede: null }],
   ['DATE_INVALIDE', { date: '2031-02-30', remede: null }],
   ['SIEGES_INVALIDES', { sieges: 1, remede: null }],
   ['TOURS_INVALIDES', { tours: 0, remede: null }],
@@ -573,6 +574,7 @@ const EXEMPLES = new Map([
   ['SIEGE_OCCUPE', { table: 5, siege: 2, tour: 1, occupant: 2, remede: null }],
   ['TABLE_PLEINE', { table: 5, tour: 1, capacite: 6, remede: null }],
   ['RESERVATION_TOUS_LES_TOURS', { participant: 1, table: 3, remede: null }],
+  ['RESERVATION_CE_TOUR', { participant: 1, table: 3, tour: 2, remede: null }],
   ['ENTREE_RESERVER', { personne: 'Théo Pervenche', numero: 4, siege: 2, portee: 'tour', tour: 2 }],
   ['ENTREE_RETIRER_RESERVATION', { personne: 'Théo Pervenche', numero: 4, portee: 'tous', tour: null }],
   ['ENTREE_DEPLACER_RESERVATION', { personne: 'Théo Pervenche', de: 4, vers: 7, siege: null, portee: 'tour', tour: 2 }],
@@ -679,6 +681,14 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
     const texte = libelle('RESERVATION_TOUS_LES_TOURS', { participant: 1, table: 3, remede: null });
     assert.doesNotMatch(texte, /d[ée]pos/i);
     assert.match(texte, /tous les tours/);
+    assert.match(texte, /« Retirer la réservation »/);
+  });
+
+  test('RESERVATION_CE_TOUR ne nomme aucun geste, dit le tour et le remède, et ne parle pas de tous les tours', () => {
+    const texte = libelle('RESERVATION_CE_TOUR', { participant: 1, table: 3, tour: 2, remede: null });
+    assert.doesNotMatch(texte, /d[ée]pos/i);
+    assert.doesNotMatch(texte, /tous les tours/);
+    assert.match(texte, /au tour 2/);
     assert.match(texte, /« Retirer la réservation »/);
   });
 

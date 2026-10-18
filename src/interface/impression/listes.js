@@ -6,8 +6,10 @@
 // chaque tour (etatPlaces) — la source que l'aperçu imprime, tour par tour.
 // Le modèle rend des nombres, des identifiants et des données — noms,
 // appartenances, libellés de titre — tels que la charge les porte, jamais
-// abrégés : ces deux vues replient (§ 7.4). Les composants les traduisent
-// et les posent.
+// abrégés : ces deux vues replient (§ 7.4). Des tours trop nombreux pour
+// tenir côte à côte se répartissent en groupes (feuille par table) ou en
+// blocs (liste d'accueil) de tours consécutifs. Les composants les
+// traduisent et les posent.
 //
 // L'ordre de la liste d'accueil ne dépend pas de l'environnement (§ 15.5) :
 // la clé normalisée injectée, comparée point de code par point de code,
@@ -245,7 +247,10 @@ const BRUIT = 1e-9;
  * noms PLANCHER_NOMS, sinon les tours se partagent à parts égales ce que le
  * plancher laisse ; les noms prennent le reste, dans les proportions de
  * COLONNES_FIXES. Un tour à sa part tient sur une ligne ; sous le plancher,
- * son libellé replie, entre ses mots d'abord.
+ * son libellé replie, entre ses mots d'abord. La liste d'accueil reçoit ses
+ * tours par blocs (toursParBloc, blocsAccueil), dont chaque tour tient à sa
+ * part : seul un bloc d'un tour plus large que ce que le plancher laisse
+ * passe sous sa part.
  *
  * @param {'accueil'|'tables'} vue
  * @param {number} tours   le nombre de colonnes de tour, entier ≥ 1
@@ -267,6 +272,74 @@ export function largeursColonnes(vue, tours, partTour = null) {
   const tour = tours * partTour <= 100 - PLANCHER_NOMS + BRUIT ? partTour : (100 - PLANCHER_NOMS) / tours;
   const noms = 100 - tours * tour;
   return [...fixes.map((part) => (part * noms) / somme), ...Array.from({ length: tours }, () => tour)];
+}
+
+// La part de la largeur que les colonnes de tour d'un bloc de la liste
+// d'accueil se partagent au plus, en pour cent : ce que le plancher des
+// noms laisse.
+const PART_TOURS_ACCUEIL = 100 - PLANCHER_NOMS;
+
+// Le plus grand n de 1 à tours dont n colonnes de part chacune tiennent
+// dans budget ; 1 quand une seule colonne le dépasse déjà.
+const colonnesQuiTiennent = (budget, part, tours) => Math.max(1, Math.min(tours, Math.floor((budget + BRUIT) / part)));
+
+/**
+ * Le nombre de colonnes de tour qu'un bloc de la liste d'accueil garde côte
+ * à côte quand chacune prend part de la largeur — la part de son plus large
+ * libellé de place ou tête de tour (mesurerPlace) — et que nom, prénom et
+ * appartenance gardent PLANCHER_NOMS : le plus grand n de 1 à tours dont
+ * n × part tient dans ce que le plancher laisse. Un libellé plus large que
+ * toute cette part donne 1 : il replie, entre ses mots d'abord, dans la plus
+ * large colonne que le plancher permet (largeursColonnes).
+ *
+ * @param {number} part   en pour cent, finie, > 0
+ * @param {number} tours   le nombre de tours de la soirée, entier ≥ 1
+ * @returns {number}
+ * @throws {RangeError} une part ou un nombre de tours hors du domaine
+ */
+export function toursParBloc(part, tours) {
+  if (typeof part !== 'number' || !Number.isFinite(part) || part <= 0) {
+    throw new RangeError(`toursParBloc : part finie > 0 attendue, reçu ${String(part)}`);
+  }
+  if (!Number.isSafeInteger(tours) || tours < 1) throw new RangeError(`toursParBloc : tours entier ≥ 1 attendu, reçu ${String(tours)}`);
+  return colonnesQuiTiennent(PART_TOURS_ACCUEIL, part, tours);
+}
+
+/**
+ * La liste d'accueil répartie en blocs de tours consécutifs (§ 7.4) : au
+ * plus taille tours par bloc, en ⌈T / taille⌉ blocs, T les tours, tous de
+ * ⌈T / blocs⌉ tours sauf le dernier, plus court quand la division ne tombe
+ * pas juste — 31 tours par 30 donnent 16 et 15, 100 par 34 donnent 34, 34 et
+ * 32. Chaque bloc porte ses tours et chaque ligne de la liste, dans l'ordre
+ * reçu, nom, prénom et appartenance entiers, ses places réduites à celles
+ * des tours du bloc : chaque bloc se lit seul, les colonnes de noms répétées.
+ * Une liste qui garde tous ses tours donne un seul bloc, égal à elle. Les
+ * lignes reçues ne changent pas.
+ *
+ * @param {ReturnType<typeof lignesAccueil>} lignes
+ * @param {number[]} tours   les tours de la soirée, ceux des places de chaque ligne, dans leur ordre
+ * @param {number} taille   entier ≥ 1 (toursParBloc)
+ * @returns {Array<{tours: number[], lignes: ReturnType<typeof lignesAccueil>}>}
+ * @throws {RangeError} une taille hors du domaine ; aucun tour ; une ligne
+ *         dont les places ne sont pas une par tour
+ */
+export function blocsAccueil(lignes, tours, taille) {
+  if (!Number.isSafeInteger(taille) || taille < 1) throw new RangeError(`blocsAccueil : taille entière ≥ 1 attendue, reçu ${String(taille)}`);
+  if (tours.length < 1) throw new RangeError('blocsAccueil : au moins un tour attendu');
+  for (const { participant, places } of lignes) {
+    if (places.length !== tours.length) {
+      throw new RangeError(`blocsAccueil : ${places.length} place(s) pour ${tours.length} tour(s), personne ${participant}`);
+    }
+  }
+  const pas = Math.ceil(tours.length / Math.ceil(tours.length / taille));
+  return Array.from({ length: Math.ceil(tours.length / pas) }, (_, rang) => {
+    const debut = rang * pas;
+    const fin = debut + pas;
+    return {
+      tours: tours.slice(debut, fin),
+      lignes: lignes.map((ligne) => ({ ...ligne, places: ligne.places.slice(debut, fin) })),
+    };
+  });
 }
 
 // La part de la largeur que les colonnes de tour de la feuille par table
@@ -292,7 +365,7 @@ export function toursParGroupe(part, tours) {
     throw new RangeError(`toursParGroupe : part finie > 0 attendue, reçu ${String(part)}`);
   }
   if (!Number.isSafeInteger(tours) || tours < 1) throw new RangeError(`toursParGroupe : tours entier ≥ 1 attendu, reçu ${String(tours)}`);
-  return Math.max(1, Math.min(tours, Math.floor((PART_TOURS_TABLES + BRUIT) / part)));
+  return colonnesQuiTiennent(PART_TOURS_TABLES, part, tours);
 }
 
 /**

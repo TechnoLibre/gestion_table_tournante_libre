@@ -23,14 +23,14 @@
 // personne du badge refusé, puis le papier à choisir.
 //
 // Le nom du fichier (nomPlanche) porte tout ce qui change la pile : la
-// source, l'imposition, l'ordre, le placement. Une réédition, ou une
-// planche dont la borne du chemin raccourcit la base (nomPlancheExigeListe),
-// ne remplace jamais un fichier du dossier : son nom prend le premier rang
-// libre parmi les entrées que le dossier porte, listées à chaque
-// préparation et à chaque production. Un dossier qui ne se liste pas laisse
-// à l'annonce le nom sans dossier, et refuse la production
-// PLANCHE_NON_ECRITE avant d'écrire, plutôt que de risquer de remplacer une
-// planche précédente.
+// source, l'imposition, l'ordre, le placement. Une réédition, une base qui
+// finit par un point, ou une planche dont la borne du chemin raccourcit la
+// base (nomPlancheExigeListe), ne remplace jamais un fichier du dossier :
+// son nom prend le premier rang libre parmi les entrées que le dossier
+// porte, listées à chaque préparation et à chaque production. Un dossier
+// qui ne se liste pas laisse à l'annonce le nom sans dossier, et refuse la
+// production PLANCHE_NON_ECRITE avant d'écrire, plutôt que de risquer de
+// remplacer une planche précédente.
 import { PAPIERS } from '../geometrie/papiers.js';
 import { nombrePlanches } from '../pdf/imposition.js';
 import { ErreurStockage } from '../stockage/erreurs.js';

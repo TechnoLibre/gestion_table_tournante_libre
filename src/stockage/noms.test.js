@@ -1290,6 +1290,70 @@ describe('nomPlanche : le nom du fichier de la planche (§ 11.6, § 8.6)', () =>
     assert.equal(nomPlanche('Gala', { ...court, dossier: { ...dossier, existants: [] } }), 'Gala.badges-p3_A4_feuille_2031-05-17_20-15-07.pdf');
   });
 
+  test('une base lue sur le disque qui finit par un point, comme celle de « Gala..gtt.json » : sa planche se choisit parmi les entrées du dossier, et ne remplace pas la planche qu’une autre base raccourcit en la même tête', () => {
+    const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: null, proposition: 12, ordre: 'table' };
+    const suffixe = '.badges-p12_Lettre_feuille_table_2031-05-17_20-15-07.pdf';
+    const auRang2 = suffixe.replace(/\.pdf$/, '_2.pdf');
+    // La racine qui laisse cinq unités au nom avant son suffixe : racine,
+    // séparateur, nom, suffixe, « .ecriture ». « Gala. » y tient entière,
+    // « Gala soir » s'y raccourcit en « Gala » suivi du point de la coupe.
+    const dossier = dossierDeLongueur(259 - 1 - 5 - suffixe.length - '.ecriture'.length);
+    const sous = (existants) => ({ ...options, dossier: { ...dossier, existants } });
+    assert.equal(derive('Gala soir', dossier), 'Gala soir');
+    const raccourcie = nomPlanche('Gala soir', sous([]));
+    assert.equal(raccourcie, `Gala.${suffixe}`);
+    assert.equal(`${dossier.racine}${dossier.separateur}${raccourcie}.ecriture`.length, LONGUEUR_CHEMIN_MAX);
+    // Le dossier vide : la base au point garde son nom entier, que rien ne
+    // distingue du nom raccourci.
+    assert.equal(nomPlancheExigeListe('Gala.', sous([])), true);
+    assert.equal(nomPlanche('Gala.', sous([])), raccourcie);
+    // La planche raccourcie présente, la base au point prend le rang suivant,
+    // sans égard à la casse ; et l'inverse.
+    assert.equal(nomPlanche('Gala.', sous([raccourcie])), `Ga.${auRang2}`);
+    assert.equal(nomPlanche('Gala.', sous([raccourcie.toUpperCase()])), `Ga.${auRang2}`);
+    assert.equal(nomPlanche('Gala soir', sous([raccourcie])), `Ga.${auRang2}`);
+    // Sous un dossier où elle tient sans peine, de même.
+    for (const ailleurs of DOSSIERS) {
+      const large = (existants) => ({ ...options, dossier: { ...ailleurs, existants } });
+      for (const base of ['Gala.', 'Gala..', 'Soir\u{E9}e du 14.']) {
+        assert.equal(nomPlancheExigeListe(base, large([])), true, `${base} — ${ailleurs.racine}`);
+        assert.equal(nomPlanche(base, large([])), base + suffixe, `${base} — ${ailleurs.racine}`);
+        assert.equal(nomPlanche(base, large([base + suffixe])), base + auRang2, `${base} — ${ailleurs.racine}`);
+      }
+      // Une espace finale ne se confond avec aucun nom raccourci : le nom
+      // reste celui d'une base qui tient, et remplace sa propre planche.
+      assert.equal(nomPlancheExigeListe('Gala ', large([])), false, ailleurs.racine);
+      assert.equal(nomPlanche('Gala ', large([`Gala ${suffixe}`])), `Gala ${suffixe}`, ailleurs.racine);
+    }
+    // Sans dossier, ni liste ni rang.
+    assert.equal(nomPlancheExigeListe('Gala.', options), false);
+    assert.equal(nomPlanche('Gala.', options), `Gala.${suffixe}`);
+  });
+
+  test('la coupe sous une racine de lecteur, « E:\\ », ou sous « / » : la racine ne compte pas un séparateur de plus, et le chemin en écriture atomique remplit 259 unités', () => {
+    const options = { papier: 'Lettre', imposition: 'feuille', horodatage: HORODATAGE, reedition: reeditionDe(9999), proposition: 2 ** 31 - 1, ordre: 'table' };
+    const suffixe = '.badges-p2147483647-9999_Lettre_feuille_table_2031-05-17_20-15-07.pdf';
+    // Le dossier, dont la racine porte déjà son séparateur final, et la
+    // longueur de la tête que laisse 259 − racine − point de la coupe −
+    // suffixe − « .ecriture ».
+    const cas = [
+      [{ racine: 'E:\\', separateur: '\\' }, 259 - 3 - 1 - suffixe.length - 9],
+      [{ racine: '/', separateur: '/' }, 259 - 1 - 1 - suffixe.length - 9],
+    ];
+    for (const [dossier, longueurTete] of cas) {
+      const base = derive(lettres(400), dossier);
+      assert.equal(base, lettres(longueurMaxDeBase(dossier)), dossier.racine);
+      const nom = nomPlanche(base, { ...options, dossier: { ...dossier, existants: [] } });
+      assert.equal(nom, `${lettres(longueurTete)}.${suffixe}`, dossier.racine);
+      assert.equal(`${dossier.racine}${nom}.ecriture`.length, 259, dossier.racine);
+    }
+    // Avec ou sans le séparateur final, un même dossier donne le même nom.
+    const base = derive(lettres(400), DOSSIERS[1]);
+    const nom = (racine) => nomPlanche(base, { ...options, dossier: { racine, separateur: '\\', existants: [] } });
+    assert.equal(nom('E:\\soirees\\data\\'), nom('E:\\soirees\\data'));
+    assert.equal(`E:\\soirees\\data\\${nom('E:\\soirees\\data\\')}.ecriture`.length, 259);
+  });
+
   test('un domaine hors contrat lève sans rien rendre : base, papier, imposition ou horodatage, TypeError ; réédition vide, de plus de 9 999 badges ou d’une autre forme, RangeError ou TypeError', () => {
     const valides = { papier: 'A4', imposition: 'feuille', horodatage: HORODATAGE, reedition: null };
     const fautes = [

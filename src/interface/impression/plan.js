@@ -9,11 +9,14 @@
 // hors d'échelle. Les blocs de noms entrent dans la découpe à la largeur du
 // registre, LARGEUR_BLOC_NOMS_CM, celle de l'écran, et à la hauteur que leur
 // donne la hauteur de ligne mesurée au rendu (HAUTEUR_LIGNE). Le module ne
-// rend que des nombres et des données ; PlanImprime les pose.
+// rend que des nombres et des données ; PlanImprime les pose. Un pied dont
+// le nom d'événement ne s'imprime pas (refusApercu) se refuse avant toute
+// découpe.
 import { constante } from '../../geometrie/constantes.js';
 import { echelleGraphique } from '../../geometrie/echelle.js';
 import { decouperPlan } from '../../geometrie/pages.js';
 import { englobantImpression } from '../../geometrie/tables.js';
+import { refusApercu } from './modele.js';
 
 /** Largeur maximale de la barre de l'échelle graphique imprimée, en mm de
  *  papier. */
@@ -75,6 +78,15 @@ function exigerPiedDUnTour(pied) {
   }
 }
 
+// Lève le refus de refusApercu quand le nom que porte le pied ne s'imprime
+// pas : la bande mesurée sous un tel pied ne laisse aucune zone de contenu,
+// et la découpe lèverait RangeError sur elle.
+function exigerNomImprimable(pied) {
+  const { donnee } = pied.elements.find(({ element }) => element === 'nom');
+  const refus = refusApercu({ nom: donnee });
+  if (refus !== null) throw refus;
+}
+
 /**
  * Les pages du plan imprimé d'un tour (§ 11.7).
  *
@@ -105,6 +117,8 @@ function exigerPiedDUnTour(pied) {
  *            cartouche: Object, pied: Object}>}
  * @throws {RangeError} un pied de la soirée ; des listes montrées sans hauteur de ligne ; ce que
  *         decouperPlan refuse
+ * @throws {import('../../application/erreurs.js').ErreurCommande} NOM_EVENEMENT_TROP_LONG
+ *         {longueur, maximum}, remède « Renommer » (refusApercu), avant la découpe
  */
 export function pagesDuPlan(
   etat,
@@ -113,6 +127,7 @@ export function pagesDuPlan(
   { papier, bandeMm, listes = false, hauteurLigne = null, pied, largeurEchelleMm = LARGEUR_ECHELLE_MM },
 ) {
   exigerPiedDUnTour(pied);
+  exigerNomImprimable(pied);
   const blocs = listes ? { largeur: constante('LARGEUR_BLOC_NOMS_CM'), hauteurs: hauteursListes(etat, hauteurLigne) } : null;
   const resultat = decouperPlan(englobantImpression(geometries, { listes: blocs }), {
     papier,

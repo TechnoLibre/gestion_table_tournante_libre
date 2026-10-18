@@ -1284,6 +1284,48 @@ describe('le fantôme d’une personne réservée au-dessus du sol (§ 5.8)', ()
     await rienEcrit(m, avant);
     expect(charge(m).reservations).toEqual(base.reservations);
   });
+
+  test('sous le retenu, une personne que sa réservation tient se dit refusée au-dessus du sol, à chaque portée ; relâchée, le refus se pose sur sa chaise, et rien d’écrit', async () => {
+    // Deux rondes de quatre, six personnes assises de même aux trois tours ;
+    // Iris réservée à la table 1 pour tous les tours, Théo au tour 1 seul.
+    const listes = [[1, 2, 3], [4, 5, 6]];
+    const base = executer(
+      executer(chargeDe({ id: 'evt-retenu-tenu', places: [4, 4], personnes: 6, tours: [listes, listes, listes] }), 'reserver', {
+        participant: IRIS,
+        table: 1,
+        siege: null,
+        portee: 'tous',
+        tour: null,
+      }),
+      'reserver',
+      { participant: THEO, table: 1, siege: null, portee: 'tour', tour: 1 },
+    );
+    const m = await ouvrir(base);
+    expect(etatMontre(m).cible).toBe('retenu');
+    const etatDuFantome = () => texteDe(dans(m, '[data-fantome] [data-partie="etat"]'));
+    const avant = fichiers(m);
+    const cas = [
+      { personne: IRIS, cle: 'plan.fantome.refuseTous', code: 'RESERVATION_TOUS_LES_TOURS' },
+      { personne: THEO, cle: 'plan.fantome.refuseTour', code: 'RESERVATION_CE_TOUR' },
+    ];
+    for (const { personne, cle, code } of cas) {
+      const { siege } = etatMontre(m).tables[0].chaises.find(({ occupant }) => occupant === personne);
+      const sol = pointSol(m);
+      await presserEtBouger(pointChaise(m, 1, siege), sol);
+      expect(etatDuFantome(), cle).toBe(t(cle));
+      await pointer('relacher', sol.x, sol.y);
+      const place = () => chaiseEl(m, 1, siege);
+      const refusSur = () => decrit(place())?.querySelector(`[data-refus="${code}"]`) ?? null;
+      await attendre(() => expect(refusSur(), code).not.toBeNull());
+      expect(texteDe(decrit(place()))).toContain(t(code, { participant: personne, table: 1, tour: 1 }).replace(/\s+/g, ' ').trim());
+      expect(refusSur().querySelector('[data-commande="retirerReservation"]'), code).not.toBeNull();
+      await rienEcrit(m, avant);
+      await presserBouton(decrit(place()).querySelector('[data-commande="fermerPose"]'));
+      await attendre(() => expect(m.ui.etat().pose).toBeNull());
+    }
+    await rienEcrit(m, avant);
+    expect(charge(m).reservations).toEqual(base.reservations);
+  });
 });
 
 // --- Réserver, titrer, désigner (§ 4, § 2.1 étape 6, § 5.8) ---------------------

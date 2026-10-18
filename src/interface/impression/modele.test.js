@@ -14,6 +14,8 @@ import { MARQUE_TEMOIN, creerTraduction } from '../../application/traduction.js'
 import { constante } from '../../geometrie/constantes.js';
 import { PAPIERS } from '../../geometrie/papiers.js';
 import { texteLivre } from '../../demo/livrees.js';
+import { ErreurCommande } from '../../application/erreurs.js';
+import { serialiser } from '../../stockage/canonique.js';
 import { analyser } from '../../stockage/document.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import {
@@ -29,6 +31,7 @@ import {
   hauteurContenu,
   nomPage,
   optionsApercu,
+  refusApercu,
   sortieApercu,
   toursOfferts,
 } from './modele.js';
@@ -201,6 +204,38 @@ describe('feuilleDe : le pied de cinq éléments et le filigrane (§ 11.7, § 18
     assert.throws(() => feuilleDe({ ...PIED, tour: 0 }, false), TypeError);
     assert.throws(() => feuilleDe({ ...PIED, nom: 3 }, false), TypeError);
     assert.throws(() => feuilleDe(PIED, 'oui'), TypeError);
+  });
+});
+
+describe('refusApercu : un nom d’événement au-delà de la borne ne s’imprime pas (§ 8.1, § 11.7)', () => {
+  // Le refus attendu d'un nom de longueur donnée : le code, la longueur, la
+  // borne, et le remède « Renommer ».
+  function refusAttendu(refus, longueur) {
+    assert.ok(refus instanceof ErreurCommande, `ErreurCommande attendue, reçu ${refus}`);
+    assert.equal(refus.code, 'NOM_EVENEMENT_TROP_LONG');
+    assert.deepEqual(refus.details, { longueur, maximum: 200, remede: { geste: 'renommer' } });
+  }
+
+  test('200 caractères s’impriment ; 201, le refus et son remède, sans troncature', () => {
+    assert.equal(refusApercu({ ...PIED, nom: 'k'.repeat(200) }), null);
+    assert.equal(refusApercu(PIED), null);
+    refusAttendu(refusApercu({ ...PIED, nom: 'k'.repeat(201) }), 201);
+  });
+
+  test('un nom de 8 000 caractères lu d’un fichier : la charge s’ouvre, le pied se compose, l’aperçu rend le refus sans lever', () => {
+    const long = 'Gala des Grèbes '.repeat(500);
+    assert.equal(long.length, 8000);
+    const ecrite = petite();
+    ecrite.evenement.nom = long;
+    const { charge } = analyser(serialiser(ecrite, { revision: 1, produitVersion: 'v' }));
+    assert.equal(charge.evenement.nom, long);
+    const pied = { ...PIED, nom: charge.evenement.nom };
+    assert.equal(feuilleDe(pied, true).elements[0].donnee, long);
+    refusAttendu(refusApercu(pied), long.trim().length);
+  });
+
+  test('un pied sans nom de texte est une faute du code', () => {
+    assert.throws(() => refusApercu({ ...PIED, nom: 3 }), TypeError);
   });
 });
 

@@ -8,6 +8,8 @@
 // par tour (Q6 c) ; le pied et le filigrane d'une feuille d'un seul tour ;
 // les groupes de tours de la feuille par table, leur taille tirée de la
 // part mesurée d'un tour, et leur resserrement sous une page seule ; les
+// blocs de tours de la liste d'accueil, chaque tour à sa part, les noms à
+// leur plancher, chaque ligne répétée dans chaque bloc ; les
 // textes d'une cellule de la feuille par table et d'une ligne de la liste
 // d'accueil, dans l'ordre où elles les posent.
 // Les noms d'épreuve sont inventés, hors du réservoir des démonstrations.
@@ -20,6 +22,7 @@ import { creerTraduction } from '../../application/traduction.js';
 import { TABLES_INTERFACE } from '../libelles.js';
 import { feuilleDe } from './modele.js';
 import {
+  blocsAccueil,
   etatsDesTours,
   feuilleDuTour,
   feuillesTables,
@@ -30,6 +33,7 @@ import {
   resserrerGroupes,
   textesCellule,
   textesLigneAccueil,
+  toursParBloc,
   toursParGroupe,
 } from './listes.js';
 
@@ -335,6 +339,115 @@ describe('largeursColonnes : les colonnes d’une liste imprimée, en pour cent'
       assert.throws(() => largeursColonnes('accueil', 2, part), RangeError, String(part));
     }
     assert.throws(() => largeursColonnes('tables', 2, 10), RangeError);
+  });
+});
+
+describe('les blocs de tours de la liste d’accueil (§ 7.4)', () => {
+  // La part que les tours d'un bloc se partagent au plus : ce que le
+  // plancher d'un tiers des noms laisse.
+  const BUDGET = 200 / 3;
+  const numeros = (n) => Array.from({ length: n }, (_, rang) => rang + 1);
+  // Une ligne de la liste d'accueil à tours tours : la personne id, à la
+  // table du numéro de chaque tour, sans siège.
+  const ligneDeTours = (id, tours) => ({
+    participant: id,
+    nom: `Brumaire${id}`,
+    prenom: id % 2 === 0 ? null : 'Ysaline',
+    appartenance: null,
+    places: numeros(tours).map((tour) => ({ tour, table: tour, siege: null })),
+  });
+  const lignesDeTours = (tours) => [3, 1, 2].map((id) => ligneDeTours(id, tours));
+  const tailles = (blocs) => blocs.map(({ tours }) => tours.length);
+  const proche = (a, b) => Math.abs(a - b) < 1e-9;
+
+  test('toursParBloc : autant de tours que leur part en tient dans ce que le plancher des noms laisse, entre 1 et les tours', () => {
+    assert.equal(toursParBloc(2, 30), 30);
+    assert.equal(toursParBloc(2, 31), 31);
+    assert.equal(toursParBloc(2, 34), 33);
+    assert.equal(toursParBloc(BUDGET / 34, 100), 34, 'juste au plancher, le bruit flottant ne retire pas un tour');
+    assert.equal(toursParBloc(10, 30), 6);
+    assert.equal(toursParBloc(100 / 3, 3), 2);
+    // Un libellé plus large que tout ce que le plancher laisse : un tour par bloc.
+    assert.equal(toursParBloc(80, 5), 1);
+    assert.equal(toursParBloc(80, 1), 1);
+    assert.equal(toursParBloc(0.5, 1), 1);
+    for (const part of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '10']) assert.throws(() => toursParBloc(part, 3), RangeError, String(part));
+    for (const tours of [0, 1.5, Number.NaN]) assert.throws(() => toursParBloc(10, tours), RangeError, String(tours));
+  });
+
+  test('blocsAccueil : des blocs consécutifs de taille égale, le dernier plus court ; 30, 31, 60 et 100 tours', () => {
+    for (const [tours, taille, attendues] of [
+      [30, 30, [30]],
+      [30, 6, [6, 6, 6, 6, 6]],
+      [31, 30, [16, 15]],
+      [31, 6, [6, 6, 6, 6, 6, 1]],
+      [60, 34, [30, 30]],
+      [60, 7, [7, 7, 7, 7, 7, 7, 7, 7, 4]],
+      [100, 34, [34, 34, 32]],
+      [100, 6, [...Array.from({ length: 16 }, () => 6), 4]],
+      [1, 1, [1]],
+      [1, 5, [1]],
+    ]) {
+      const blocs = blocsAccueil(lignesDeTours(tours), numeros(tours), taille);
+      assert.deepEqual(tailles(blocs), attendues, `${tours} tours par ${taille}`);
+      assert.deepEqual(
+        blocs.flatMap((bloc) => bloc.tours),
+        numeros(tours),
+        `${tours} tours par ${taille} : chaque tour une fois, dans l’ordre`,
+      );
+    }
+    const [premier] = blocsAccueil(lignesDeTours(100), numeros(100), 34);
+    assert.deepEqual([premier.tours[0], premier.tours.at(-1)], [1, 34]);
+    assert.equal(t('feuilles.accueil.tours', { premier: 1, dernier: 34 }), 'Tours 1 à 34');
+    assert.equal(t('feuilles.accueil.tours', { premier: 7, dernier: 7 }), t('feuilles.tour', { tour: 7 }));
+  });
+
+  test('blocsAccueil : chaque bloc répète chaque ligne, ses noms entiers, et ne garde de ses places que celles de ses tours', () => {
+    const lignes = lignesDeTours(31);
+    const blocs = blocsAccueil(lignes, numeros(31), 6);
+    for (const bloc of blocs) {
+      assert.deepEqual(ids(bloc.lignes), ids(lignes), `tours ${bloc.tours[0]} à ${bloc.tours.at(-1)}`);
+      bloc.lignes.forEach((ligne, rang) => {
+        const { places, ...noms } = lignes[rang];
+        const { places: gardees, ...nomsDuBloc } = ligne;
+        assert.deepEqual(nomsDuBloc, noms);
+        assert.deepEqual(gardees, places.filter(({ tour }) => bloc.tours.includes(tour)));
+      });
+    }
+    // Une liste sans personne garde ses blocs de tours, chacun sans ligne.
+    assert.deepEqual(blocsAccueil([], numeros(31), 30).map(({ tours, lignes: l }) => [tours.length, l.length]), [[16, 0], [15, 0]]);
+    // Les lignes reçues ne changent pas.
+    assert.deepEqual(lignes, lignesDeTours(31));
+  });
+
+  test('blocsAccueil : une taille hors du domaine, des places qui ne suivent pas les tours lèvent RangeError', () => {
+    for (const taille of [0, -1, 1.5, Number.NaN, '6']) assert.throws(() => blocsAccueil(lignesDeTours(3), numeros(3), taille), RangeError, String(taille));
+    assert.throws(() => blocsAccueil(lignesDeTours(3), numeros(4), 2), RangeError, 'une place de moins que de tours');
+  });
+
+  test('chaque bloc à ses largeurs : chaque tour au moins sa part, les noms au moins leur plancher ; un libellé plus large que la page replie dans un bloc d’un tour', () => {
+    for (const [tours, part] of [
+      [30, 10],
+      [31, 10],
+      [60, 9.5],
+      [100, BUDGET / 34],
+      [100, 11],
+      [1, 20],
+    ]) {
+      const blocs = blocsAccueil(lignesDeTours(tours), numeros(tours), toursParBloc(part, tours));
+      for (const bloc of blocs) {
+        const largeurs = largeursColonnes('accueil', bloc.tours.length, part);
+        const ou = `${tours} tours, part ${part}, tours ${bloc.tours[0]} à ${bloc.tours.at(-1)}`;
+        for (const largeur of largeurs.slice(3)) assert.ok(proche(largeur, part), `${ou} : ${largeur}`);
+        assert.ok(largeurs.slice(0, 3).reduce((a, b) => a + b, 0) >= 100 / 3 - 1e-9, ou);
+        assert.ok(proche(largeurs.reduce((a, b) => a + b, 0), 100), ou);
+      }
+    }
+    // Plus large que ce que le plancher laisse : un tour par bloc, à toute
+    // cette largeur, où son libellé replie ; les noms gardent leur tiers.
+    const blocs = blocsAccueil(lignesDeTours(3), numeros(3), toursParBloc(80, 3));
+    assert.deepEqual(tailles(blocs), [1, 1, 1]);
+    assert.ok(proche(largeursColonnes('accueil', 1, 80)[3], BUDGET));
   });
 });
 

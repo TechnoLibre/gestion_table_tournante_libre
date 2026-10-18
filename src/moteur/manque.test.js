@@ -529,8 +529,9 @@ describe('teteDuManque (§ 12.2, § 12.10.6)', () => {
   });
 
   test('le rang 1 compte toujours dans l’effectif, même quand son manque ne s’égale pas à lui-même', () => {
-    // NaN n'est égal à aucune valeur, pas même à lui-même : le rang 1 se
-    // compte sans comparaison, les suivants par égalité à son manque.
+    // La docstring de teteDuManque le dit : NaN n'est égal à aucune valeur,
+    // pas même à lui-même ; le rang 1 se compte sans comparaison, les
+    // suivants par égalité stricte à son manque, d'où l'effectif 1.
     const profilLu = [
       { id: 7, manque: Number.NaN, plafondRealise: 3 },
       { id: 9, manque: Number.NaN, plafondRealise: 4 },

@@ -1948,12 +1948,22 @@ page.
 **Sur une feuille imprimée, replier s'étend à la page.** La feuille par table
 garde à chaque colonne de tour au moins la largeur de son plus long mot ; des
 tours qui n'y tiennent pas côte à côte se scindent en **groupes de tours
-consécutifs**, chacun sur ses pages, sous ses propres têtes de tour. Une ligne
-encore plus haute qu'une page — un nom de plusieurs milliers de caractères — ne
-se coupe pas au bord de la feuille : son texte se poursuit sur la page suivante,
-sous l'en-tête répété, coupé au début d'un mot, ou entre deux caractères quand
-un mot seul dépasse la page — jamais entre une lettre et son accent. Rien d'une
-ligne ne tombe hors de la page, et aucun nom n'est tronqué.
+consécutifs**, chacun sur ses pages, sous ses propres têtes de tour. La liste
+d'accueil donne à chaque colonne de tour au moins la largeur du plus large
+libellé de place ou tête de tour, sur une ligne, et garde aux nom, prénom et
+appartenance au moins le tiers de la largeur ; des tours qui n'y tiennent pas
+côte à côte se répartissent en **blocs de tours consécutifs**, aussi peu que
+possible, de même taille, le dernier plus court s'il le faut. Un libellé plus
+large que les deux tiers laissés aux tours tient seul dans son bloc et y replie,
+entre ses mots d'abord. Chaque bloc commence une page et reprend chaque ligne,
+les colonnes de noms répétées, sous un en-tête qui nomme ses tours (« Tours 1 à
+34 ») ; un bloc plus long qu'une page continue sur la suivante, sous son en-tête
+répété. Une soirée dont les tours tiennent n'a qu'un bloc, sans cet en-tête. Une
+ligne encore plus haute qu'une page — un nom de plusieurs milliers de caractères
+— ne se coupe pas au bord de la feuille : son texte se poursuit sur la page
+suivante, sous l'en-tête répété, coupé au début d'un mot, ou entre deux
+caractères quand un mot seul dépasse la page — jamais entre une lettre et son
+accent. Rien d'une ligne ne tombe hors de la page, et aucun nom n'est tronqué.
 
 ### 7.5 Les tables en conflit
 
@@ -2098,6 +2108,13 @@ et n'est jamais nécessaire pour ouvrir.
 
 **Ce que le fichier ne porte pas : ni le mode, ni le cadrage.** Une liste de ce
 qui est dedans, sans son complément, laisse l'implémenteur ajouter.
+
+**Le nom d'un événement compte au plus 200 caractères.** La création, la copie
+et le renommage le comptent en NFC, ses blancs de bord retirés, un caractère
+par point de code, et refusent au-delà : `NOM_EVENEMENT_TROP_LONG`, qui dit la
+longueur saisie et le maximum. Rien n'est tronqué. La lecture ne borne pas : un
+fichier dont le nom passe la borne, écrit hors de l'application, s'ouvre et se
+lit comme un autre. Seule son impression se refuse (§ 11.7).
 
 Le logiciel ouvre sur une **liste des événements**, avec pour chacun le nom, la
 date, l'état, le nombre de participants, la dernière modification et le chemin.
@@ -3808,6 +3825,9 @@ le premier rang libre, `_2`, `_3`…, comme le dossier daté de la corbeille
 (§ 8.7). Une planche dont la base se raccourcit (ci-dessous) prend aussi le
 premier rang libre : la base d'un événement et celle de sa copie (§ 8.7), qui
 partagent propositions et horodatages, peuvent se raccourcir en une même tête.
+Une base lue sur le disque qui finit par un point — celle d'un fichier
+« Gala..gtt.json » déposé dans le dossier — prend aussi le premier rang libre :
+son nom entier est celui qu'une base plus longue raccourcit en la même tête.
 Un dossier qui ne se liste pas refuse ces planches plutôt que de risquer un
 remplacement, et offre « Enregistrer sous… ».
 
@@ -3816,10 +3836,12 @@ suffixe tient dans la réserve que la borne fait à chaque base. Les marques et 
 rang l'allongent : quand le chemin complet dépasserait la borne, la base se
 raccourcit dans le nom de la planche, sans couper un caractère, espaces et points
 finaux retirés, sans laisser un nom réservé (§ 8.6), suivie d'un point ; le reste
-du nom demeure entier. Aucune base ne finit par un point, que Windows retire de
-la fin d'un nom et que la dérivation retire donc aussi (§ 8.6) : un nom
-raccourci ne se confond avec aucun nom entier, et la planche entière d'une base
-qui tient ne remplace jamais une planche raccourcie. Le nom raccourci dépend de
+du nom demeure entier. Aucune base dérivée ne finit par un point, que Windows
+retire de la fin d'un nom et que la dérivation retire donc aussi (§ 8.6) : un
+nom raccourci ne se confond avec aucun nom entier. Une base lue sur le disque
+peut finir par un point ; son nom se choisit alors parmi les entrées du
+dossier, si bien que la planche entière d'une base qui tient ne remplace jamais
+une planche raccourcie. Le nom raccourci dépend de
 la racine du dossier qui le reçoit. Quand même un caractère de la base ne tient
 pas, le nom garde sa base, l'écriture refusée se dit, et « Enregistrer sous… »
 dépose la planche ailleurs.
@@ -3879,7 +3901,10 @@ par tour, que l'animateur garde d'un tour à l'autre. L'aperçu offre aussi « U
 feuille par tour », une feuille par table et par tour. Ses colonnes et ses
 lignes suivent le § 7.4 : des tours qui ne tiennent pas côte à côte se scindent
 en groupes de tours consécutifs, et une ligne plus haute qu'une page se poursuit
-sur la suivante. **Les listes s'impriment en portrait.**
+sur la suivante. La liste d'accueil couvre aussi la soirée, une colonne par
+tour ; des tours trop nombreux pour la page se répartissent en blocs de tours
+consécutifs, chacun sous l'en-tête qui nomme ses tours (§ 7.4). **Les listes
+s'impriment en portrait.**
 
 **Chaque page imprimée porte un pied de cinq éléments** : le nom de l'événement,
 sa date, **le tour** — ou la soirée, pour une vue qui les couvre tous —,
@@ -3887,6 +3912,12 @@ sa date, **le tour** — ou la soirée, pour une vue qui les couvre tous —,
 Une feuille sans horodatage circule après avoir été invalidée et personne ne peut
 dire laquelle des deux versions posées sur la table est la bonne. La règle vise
 la **page** ; un carton découpé et porté au cou n'est pas une page (§ 11.4).
+Le pied porte le nom entier, jamais tronqué. Un nom qui passe la borne du § 8.1
+ne s'imprime pas : l'aperçu le refuse avant de mettre une page en forme, dans
+aucune vue, et pose sur « Imprimer » le refus `NOM_EVENEMENT_TROP_LONG` avec le
+remède « Renommer ». Ce remède ferme l'événement et rend la liste des
+événements, où il se renomme. « Imprimer » rend ce refus sans appeler
+l'imprimante.
 
 **Toute page imprimée porte la mention BROUILLON en filigrane, sauf dans un seul
 cas** : celle qui imprime le placement retenu, quand le plan est retenu ou
@@ -5871,6 +5902,13 @@ dénominateur nul, 0 à numérateur nul, 100 au numérateur égal au dénominate
 entre 1 et 99 partout ailleurs : 259 sur 260 donne 99, 1 sur 300 donne 1.
 L'épreuve refuse un pourcentage de la page qui ne sortirait pas d'elle.
 
+**Chaque critère se lit sous sa propre grandeur.** Sous chaque mode des
+objectifs, une épreuve parcourt `CRITERES` et confronte chaque composante du
+score, complet et incrémental, à la grandeur que l'oracle lit sous le nom du
+critère. Elle refuse un critère ajouté sans code, que la recherche lirait sans
+lever comme l'écart au plafond, ou inconnu de l'oracle : l'épreuve échoue à son
+nom.
+
 #### La géométrie
 
 **Le plan vide donne `k_ajusté = 1 px/cm`, pas `Infinity`.** Il refuse la division
@@ -6289,6 +6327,10 @@ couverture :
    rapport à lire, et `mutation-moteur.json`, le même à comparer d'un audit à
    l'autre ; `mutants-equivalents.json` y déclare, un par un et avec sa raison,
    les survivants qui ne changent rien et qu'aucune épreuve ne peut donc tuer.
+   Un mutant qui ferait tourner sans fin une boucle sur une entrée vide ne se
+   tue pas par le délai : l'épreuve garde chaque liste vide de l'instance, et
+   le plan, par un mandataire qui lève `RangeError` à la lecture d'un index, si
+   bien que le mutant échoue à sa première lecture, qui nomme la liste.
    Le rapport porte la version, le périmètre, l'empreinte des sources et la
    version de Node, jamais la machine ni une date. L'audit ne bloque rien, et
    n'écrit rien quand il n'a pas mesuré.
@@ -7673,7 +7715,9 @@ configuration. Quatre constantes sont ainsi adoptées. Deux le sont hors de la
 page de qualité : le nombre de sièges lisibles, `SEUIL_SIEGES_LISIBLES`, à
 **18 places**, et la tolérance de la chaîne témoin, `TOLERANCE_CHAINE_TEMOIN`,
 à **0,011** — le quart de l'écart relatif qu'introduit une famille de repli
-forcée, et au moins trois fois la gigue de dix mesures.
+forcée, et au moins trois fois la gigue de dix mesures. L'épreuve de la police
+la juge au même corps, 16 px, celui du texte courant : l'écart admis est
+relatif, et l'arrondi des avances pèse plus à petit corps.
 
 Les deux autres sont celles de la page de qualité, relevées au même banc,
 chacune avec le protocole écrit à son entrée du registre :

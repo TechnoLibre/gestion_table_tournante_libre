@@ -238,9 +238,9 @@ const CLES_FANTOME = new Map([
   [null, 'plan.fantome.vueSeule'],
 ]);
 
-// Les mêmes, au-dessus du sol (commandeDeDepot, depot.js) : sous le retenu,
-// le dépôt retire la personne du tour (retirerDuTour) ; sous les
-// réservations, une personne qu'aucune réservation ne tient n'a rien à
+// Les mêmes, au-dessus du sol (commandeDeDepot, depot.js), pour une
+// personne qu'aucune réservation ne tient : sous le retenu, le dépôt la
+// retire du tour (retirerDuTour) ; sous les réservations, elle n'a rien à
 // retirer, et le dépôt ne rend rien ; sous une cible null, le refus de la
 // vue seule, comme sur une chaise.
 const CLES_FANTOME_SUR_LE_SOL = new Map([
@@ -265,6 +265,15 @@ const CLES_RESERVATION_SUR_LE_SOL = new Map([
   ['tous', 'plan.fantome.refuseTous'],
 ]);
 
+// Sous le retenu, au-dessus du sol, une personne que sa réservation tient à
+// sa table, par portée : la retirer du tour enfreint la réservation, et le
+// dépôt refuse le relâcher (RESERVATION_TOUS_LES_TOURS, RESERVATION_CE_TOUR).
+// Sur une chaise, la clé reste celle du retenu.
+const CLES_RETENU_SUR_LE_SOL = new Map([
+  ['tour', 'plan.fantome.refuseTour'],
+  ['tous', 'plan.fantome.refuseTous'],
+]);
+
 /**
  * La clé du libellé que le fantôme porte pendant le glissement d'une
  * personne (§ 5.8, § 7.1), qui dit ce que le relâcher au point courant
@@ -275,8 +284,10 @@ const CLES_RESERVATION_SUR_LE_SOL = new Map([
  *    sol, la même réservation se dit retirée (« ce tour ») ou refusée
  *    (« tous les tours »), et « rien ne change » pour une personne que rien
  *    ne tient ;
- *  - sous 'retenu', « déplace dans le placement retenu » sur une chaise,
- *    « retire du tour » au-dessus du sol ;
+ *  - sous 'retenu', « déplace dans le placement retenu » sur une chaise ;
+ *    au-dessus du sol, « retire du tour » pour une personne que rien ne
+ *    tient, le refus et sa portée pour une personne que sa réservation
+ *    tient ;
  *  - la vue seule sous une cible null, partout.
  * Une cible, une portée ou un sol hors du contrat lève : il ne prend aucun
  * libellé par défaut.
@@ -293,7 +304,8 @@ export function cleFantome(cible, portee = null, surLeSol = false) {
     throw new TypeError(`portée du fantôme hors du contrat : ${JSON.stringify(portee)}`);
   }
   if (typeof surLeSol !== 'boolean') throw new TypeError(`sol du fantôme hors du contrat : ${JSON.stringify(surLeSol)}`);
-  if (cible !== 'reservations' || portee === null) return (surLeSol ? CLES_FANTOME_SUR_LE_SOL : CLES_FANTOME).get(cible);
+  if (cible === null || portee === null) return (surLeSol ? CLES_FANTOME_SUR_LE_SOL : CLES_FANTOME).get(cible);
+  if (cible === 'retenu') return surLeSol ? CLES_RETENU_SUR_LE_SOL.get(portee) : CLES_FANTOME.get(cible);
   return (surLeSol ? CLES_RESERVATION_SUR_LE_SOL : CLES_RESERVATION_TENUE).get(portee);
 }
 

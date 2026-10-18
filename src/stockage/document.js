@@ -995,14 +995,33 @@ export function etatDeduit({ retenu, propositions }) {
 const REGLE_OBJECTIFS_PAR_DEFAUT = 'ou';
 const MODE_OBJECTIFS_PAR_DEFAUT = 'places';
 
-// Les quatre cases du format 1, toujours portées par les réglages, et les
-// deux cases facultatives du format 2, chacune avec la valeur qu'elle prend
-// quand les réglages ne la portent pas (§ 5.3, § 8.9).
+// Les quatre cases du format 1, toujours portées par les réglages (§ 5.3,
+// § 8.9).
 const CASES_DU_FORMAT_1 = new Set(['separerAppartenances', 'nouveauxVoisins', 'nouvelleTable', 'varierAppartenances']);
-const CASES_FACULTATIVES = new Map([
+
+// Les défauts des cases facultatives, que seul CASES_FACULTATIVES expose.
+const DEFAUTS_DES_CASES = new Map([
   ['respecterObjectifs', true],
   ['rencontrerAnimateurs', false],
 ]);
+
+/**
+ * Les deux cases facultatives du format 2 (§ 5.3, § 8.9), chacune avec la
+ * valeur qu'elle prend quand les réglages ne la portent pas, dans cet
+ * ordre. La seule déclaration de ces cases : le registre des commandes
+ * l'importe. La vue est gelée et ne lit qu'une Map privée au module : ni
+ * set, ni delete, ni clear, et chaque paire [cle, defaut] qu'elle itère est
+ * un tableau neuf, qu'un appelant peut changer sans toucher aux défauts que
+ * lisent critereCoche et le registre.
+ *
+ * @type {Readonly<{has: (cle: string) => boolean, get: (cle: string) => boolean|undefined,
+ *   [Symbol.iterator]: () => Iterator<['respecterObjectifs'|'rencontrerAnimateurs', boolean]>}>}
+ */
+export const CASES_FACULTATIVES = Object.freeze({
+  has: (cle) => DEFAUTS_DES_CASES.has(cle),
+  get: (cle) => DEFAUTS_DES_CASES.get(cle),
+  [Symbol.iterator]: () => DEFAUTS_DES_CASES.entries(),
+});
 
 /**
  * La règle par défaut des objectifs de l'événement (§ 4.5, § 8.9) : « et »

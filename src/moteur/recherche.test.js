@@ -44,7 +44,7 @@ import {
   normaliser,
   planDepuisIndex,
 } from './configuration.js';
-import { CRITERES, compilationDe, composantesDe } from './criteres.js';
+import { CRITERES, MODES_OBJECTIFS, compilationDe, composantesDe } from './criteres.js';
 import { diagnostiquer } from './diagnostic.js';
 import { ErreurAnnulee, ErreurConfiguration } from './erreurs.js';
 import { mesurer } from './indicateurs.js';
@@ -1508,6 +1508,76 @@ describe('score : objectifs et animateurs, sous chaque mode et sous un ordre dé
     assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
     const reglages = { graine: 9, arret: 3_000, nombre: 2 };
     assert.deepEqual(rechercher(decochee, reglages), rechercher(sansAnimateur, reglages));
+  });
+});
+
+describe('score : chaque critère de CRITERES se lit sous sa propre grandeur, sous chaque mode (en-tête de recherche.js)', () => {
+  test("chaque critère, seul à son palier, pose ses composantes ; chacune égale la grandeur que l'oracle lit sous son nom, et s'écarte au moins une fois de l'écart ; une faute nomme le critère", () => {
+    // La composition retrouve le code d'une grandeur par son nom : un nom
+    // sans code se lirait, sans lever, au code du plus grand écart. Sur la
+    // soirée inventée, où chaque critère compte, l'ordre par défaut met
+    // chaque critère seul à son palier ; un palier partagé lit le code sous
+    // le nom du critère, la seule grandeur qu'il descend alors. À chaque
+    // relevé, chaque composante d'un critère est confrontée à l'oracle, et
+    // doit prendre au moins une fois une autre valeur que l'écart. Un
+    // critère sans palier à lui seul, dont composantesDe ne nomme aucune
+    // composante ou en nomme un autre nombre que son palier, ou dont l'oracle
+    // ne connaît pas une grandeur, est une faute à son nom, citée à son
+    // premier relevé.
+    const RELEVES = 20;
+    const PAS = 10;
+    const fautes = new Map();
+    const signaler = (cle, faute) => { if (!fautes.has(cle)) fautes.set(cle, faute); };
+    for (const mode of MODES_OBJECTIFS) {
+      const instance = normaliser(soireeAObjectifs({ mode }));
+      const aPriori = plafondsAPriori(instance);
+      const { paliers } = compilationDe(instance);
+      const termes = CRITERES.flatMap((critere) => {
+        const palier = paliers.find(({ criteres }) => criteres.length === 1 && criteres[0].nom === critere);
+        if (palier === undefined) {
+          signaler(`${mode} ${critere}`, `${mode}, ${critere} : aucune composante seule à son palier`);
+          return [];
+        }
+        const grandeurs = composantesDe(critere, mode);
+        if (grandeurs.length === 0 || grandeurs.length !== palier.composantes.length) {
+          signaler(`${mode} ${critere}`, `${mode}, ${critere} : ${grandeurs.length} composantes nommées pour ${palier.composantes.length}`);
+          return [];
+        }
+        return grandeurs.map((grandeur, k) => ({
+          critere,
+          grandeur,
+          composante: palier.composantes[k],
+          poids: palier.criteres[0].poids,
+        }));
+      });
+      const distinctes = new Set();
+      const rng = creerPcg32(13, FLUX.RECHERCHE);
+      const etat = creerEtat(instance, rng);
+      for (let releve = 0; releve <= RELEVES; releve += 1) {
+        if (releve > 0) for (let i = 0; i < PAS; i += 1) proposerEtAppliquer(etat, rng);
+        const { brutes } = scoreOracle(instance, etat.tableDe, aPriori, soireeAObjectifs({ mode }));
+        const [complet, incremental] = [scoreComplet(etat), scoreIncremental(etat)];
+        for (const { critere, grandeur, composante, poids } of termes) {
+          if (grandeur !== 'rencontresRepetees' && !Object.hasOwn(brutes, grandeur)) {
+            signaler(`${mode} ${grandeur}`, `${mode}, ${critere} : grandeur ${grandeur} inconnue de l'oracle`);
+            continue;
+          }
+          const attendue = poids * valeurDescendue(brutes, grandeur, instance.contraintes);
+          for (const [nom, score] of [['scoreComplet', complet], ['scoreIncremental', incremental]]) {
+            if (score[composante] !== attendue) {
+              signaler(`${mode} ${grandeur} ${nom}`, `${mode}, ${critere}, relevé ${releve} : ${nom} lit ${score[composante]} pour ${grandeur}, l'oracle ${attendue}`);
+            }
+          }
+          if (attendue !== poids * brutes.ecartAuPlafondAPrioriMax) distinctes.add(grandeur);
+        }
+      }
+      for (const { critere, grandeur } of termes) {
+        if (grandeur !== 'ecartAuPlafondAPrioriMax' && !distinctes.has(grandeur) && !fautes.has(`${mode} ${grandeur}`)) {
+          signaler(`${mode} ${grandeur} écart`, `${mode}, ${critere} : ${grandeur} vaut l'écart à chaque relevé, sa lecture ne s'en distingue pas`);
+        }
+      }
+    }
+    assert.deepEqual([...fautes.values()], []);
   });
 });
 

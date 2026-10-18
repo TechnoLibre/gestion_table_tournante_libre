@@ -964,6 +964,9 @@ describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
     // Le refus du dépôt sur le sol (src/interface/plan/depot.js) et de
     // « Retirer du tour », dont le texte vit ici.
     ['RESERVATION_TOUS_LES_TOURS', [{ participant: 1, table: 3 }, 'tous les tours']],
+    // Le refus du dépôt sur le sol et de « Retirer du tour » sous le
+    // retenu, pour une réservation de ce tour.
+    ['RESERVATION_CE_TOUR', [{ participant: 1, table: 3, tour: 2 }, 'au tour 2']],
   ]);
 
   test('chaque code de la table des places a son texte, composé de ses détails', () => {
@@ -983,6 +986,9 @@ describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
     const tous = libelle('RESERVATION_TOUS_LES_TOURS', { participant: 1, table: 3, remede: null });
     assert.ok(tous.includes('pour un seul tour'), tous);
     assert.ok(!tous.includes('ne change que'), tous);
+    // Celui d'une réservation de ce tour dit que seule celle-ci part.
+    const ceTour = libelle('RESERVATION_CE_TOUR', { participant: 1, table: 3, tour: 2, remede: null });
+    assert.ok(ceTour.includes('ce tour seulement'), ceTour);
     assert.equal(libelle('places.titreParDefaut'), 'animateur');
   });
 });

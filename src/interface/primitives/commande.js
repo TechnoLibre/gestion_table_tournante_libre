@@ -33,7 +33,8 @@
 // régler un choix de la navigation — le départ d'une génération dérivée —, ou
 // par un geste que l'écran fournit : choisirPlace se choisit sur le plan,
 // enregistrerSous reprend la planche que l'écran a demandée, choisirPapier
-// pose la question du papier.
+// pose la question du papier. renommer ferme l'événement : la liste des
+// événements porte « Renommer » sur chacun.
 
 import { COMMANDES } from '../../application/commandes.js';
 
@@ -82,6 +83,7 @@ export const GESTES = Object.freeze([
   'choisirPapier',
   'repartirDeZero',
   'libererTour',
+  'renommer',
 ]);
 
 /** Les sources d'un secours (seance.ouvrirSecours). */
@@ -188,6 +190,8 @@ function executionDuGeste(remede, seance, ui) {
       return () => seance.ouvrirSecours(seance.etat().evenement.base, remede.source);
     case 'ecrireAilleurs':
       return () => seance.ecrireAilleurs(remede.racine ?? null);
+    case 'renommer':
+      return () => seance.fermer();
     case 'afficherTour':
       if (ui === null) return null;
       return () => {
@@ -218,7 +222,8 @@ function executionDuGeste(remede, seance, ui) {
  * remède de commande s'exécute par seance.executer, tel quel ; modifier,
  * debloquer, ouvrirSecours et ecrireAilleurs par la méthode de la séance de
  * même nom — passerEnEcriture pour modifier, la base de l'événement ouvert
- * pour ouvrirSecours ;
+ * pour ouvrirSecours ; renommer par seance.fermer, qui rend la liste des
+ * événements, où chacun se renomme ;
  * afficherTour et ouvrirSection par l'état de navigation, ui, comme les deux
  * gestes d'un départ refusé : repartirDeZero retire le départ
  * (ui.retirerDepart), libererTour décoche son tour des tours figés du

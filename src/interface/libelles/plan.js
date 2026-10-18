@@ -103,13 +103,15 @@ export const TABLE = new Map([
   // personne réservée déplace sa réservation, dont il dit la portée, et
   // au-dessus du sol la retire (« ce tour ») ou se la voit refuser (« tous
   // les tours ») ; une personne que rien ne tient n'y change rien ; sous le
-  // retenu, le sol retire du tour. Le nom de la personne est une donnée,
-  // dans son propre nœud.
+  // retenu, le sol retire du tour une personne que rien ne tient, et refuse
+  // celle que sa réservation tient à sa table, de l'une ou l'autre portée.
+  // Le nom de la personne est une donnée, dans son propre nœud.
   ['plan.fantome.reservations', 'pose une réservation'],
   ['plan.fantome.reservationTour', 'déplace sa réservation de ce tour'],
   ['plan.fantome.reservationTous', 'déplace sa réservation, à tous les tours'],
   ['plan.fantome.retireReservationTour', 'retire sa réservation de ce tour'],
   ['plan.fantome.refuseTous', 'refusé : sa réservation vaut pour tous les tours'],
+  ['plan.fantome.refuseTour', 'refusé : sa réservation de ce tour la tient à cette table'],
   ['plan.fantome.rienNeChange', 'aucune réservation à retirer : rien ne change'],
   ['plan.fantome.retenu', 'déplace dans le placement retenu'],
   ['plan.fantome.retireDuTour', 'retire du tour : attend dans la réserve'],

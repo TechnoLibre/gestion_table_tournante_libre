@@ -27,7 +27,16 @@ import {
 import { VERSION } from '../version.genere.js';
 import { readFileSync } from 'node:fs';
 import { chargements } from '../../test/chargements.js';
-import { COMMANDES, ErreurCommande, appliquerCommande, chargeNeuve, formeNommeeDe, reunirCommandes } from './commandes.js';
+import {
+  COMMANDES,
+  ErreurCommande,
+  NOM_EVENEMENT_MAX,
+  appliquerCommande,
+  chargeNeuve,
+  formeNommeeDe,
+  refusNomEvenement,
+  reunirCommandes,
+} from './commandes.js';
 import { evaluer, nettoyage } from './evaluation.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
@@ -1276,6 +1285,49 @@ describe("commandes : la charge d'un événement neuf (§ 8.1)", () => {
       ...creerCharge({ id: 'evt-1', nom: 'Soir\u{E9}e des Lucioles', date: '2031-05-17', siegesParDefaut: 8, tours: 3 }),
     });
     assert.equal(libelle, "Création de l'événement « Soir\u{E9}e des Lucioles »");
+  });
+
+  test('chargeNeuve borne le nom à 200 caractères, comptés après NFC et le retrait des blancs de bord, avant de tirer l’identifiant', () => {
+    assert.equal(NOM_EVENEMENT_MAX, 200);
+    let tirages = 0;
+    const identifiant = () => {
+      tirages += 1;
+      return `evt-${tirages}`;
+    };
+    const base = { date: null, siegesParDefaut: 8, tours: 3 };
+    // 200 « é » en NFD : 400 unités avant NFC, 200 après ; les blancs de bord
+    // ne comptent pas.
+    const nfd = 'e\u{301}'.repeat(NOM_EVENEMENT_MAX);
+    const { charge } = chargeNeuve({ ...base, nom: `  ${nfd}\t` }, identifiant);
+    assert.equal(charge.evenement.nom, '\u{E9}'.repeat(NOM_EVENEMENT_MAX));
+    // Un caractère hors du plan de base compte pour un, non pour deux unités.
+    const astral = '\u{1D11E}'.repeat(NOM_EVENEMENT_MAX);
+    assert.equal(chargeNeuve({ ...base, nom: astral }, identifiant).charge.evenement.nom, astral);
+    assert.equal(tirages, 2);
+    refuse(() => chargeNeuve({ ...base, nom: 'e\u{301}'.repeat(201) }, identifiant), 'NOM_EVENEMENT_TROP_LONG', {
+      longueur: 201,
+      maximum: 200,
+      remede: null,
+    });
+    refuse(() => chargeNeuve({ ...base, nom: 'x'.repeat(8000) }, identifiant), 'NOM_EVENEMENT_TROP_LONG', {
+      longueur: 8000,
+      maximum: 200,
+      remede: null,
+    });
+    assert.equal(tirages, 2);
+  });
+
+  test('refusNomEvenement : null jusqu’à la borne, le refus au-delà, avec le remède reçu ; une autre valeur qu’une chaîne est une faute du code', () => {
+    assert.equal(refusNomEvenement('y'.repeat(200)), null);
+    assert.equal(refusNomEvenement(` ${'y'.repeat(200)} `), null);
+    // Un nom lu d'un fichier, en NFD : compté après NFC.
+    assert.equal(refusNomEvenement('e\u{301}'.repeat(200)), null);
+    const trop = refusNomEvenement('y'.repeat(201), { geste: 'modifier' });
+    assert.ok(trop instanceof ErreurCommande);
+    assert.equal(trop.code, 'NOM_EVENEMENT_TROP_LONG');
+    assert.deepEqual(trop.details, { longueur: 201, maximum: 200, remede: { geste: 'modifier' } });
+    assert.deepEqual(refusNomEvenement('y'.repeat(201)).details.remede, null);
+    assert.throws(() => refusNomEvenement(null), TypeError);
   });
 });
 

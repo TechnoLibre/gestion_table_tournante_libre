@@ -444,6 +444,45 @@ describe('imprimer en lecture et sur un plan bloqué (§ 8.4, § 2.1 garantie 3)
   });
 });
 
+describe('un nom d’événement au-delà de la borne de la saisie (§ 8.1, § 11.7)', () => {
+  test('lu d’un fichier, un nom de 8 000 caractères : l’aperçu ne met aucune page en forme et pose NOM_EVENEMENT_TROP_LONG sur « Imprimer », remède « Renommer », sans lever', async () => {
+    const charge = structuredClone(chargePrincipale());
+    charge.evenement.nom = 'Gala des Grèbes '.repeat(500);
+    expect(charge.evenement.nom).toHaveLength(8000);
+    const imprimante = creerImprimanteSimulee();
+    const m = await ouvrirEvenement(contexte, charge, { options: { imprimante, fichiers: [fichierReglages('A4')] } });
+    await cliquer(m, '[data-ecran="evenement"] [data-commande="apercu"]');
+    const refus = await attendre(
+      'le refus sur « Imprimer »',
+      () => dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]')?.parentElement.querySelector('[data-refus="NOM_EVENEMENT_TROP_LONG"]'),
+      IMAGES,
+    );
+    expect(texte(refus.querySelector('p'))).toBe(plat(t('NOM_EVENEMENT_TROP_LONG', { longueur: 7999, maximum: 200 })));
+    const remede = refus.querySelector('[data-commande="renommer"]');
+    expect(remede, 'le remède « Renommer »').not.toBeNull();
+    expect(texte(remede)).toBe(t('communs.remede.renommer'));
+    expect(dans(m, '[data-ecran="apercu"] [data-commande="imprimer"]').getAttribute('aria-describedby')).toBe(refus.id);
+    // Ni gabarit ni document : aucune page n'est mise en forme.
+    expect(dans(m, '[data-ecran="apercu"] [data-feuille]')).toBeNull();
+    expect(dans(m, '[data-impression]')).toBeNull();
+    // « Imprimer » n'imprime pas : le refus reste, l'imprimante n'est pas appelée.
+    await cliquer(m, '[data-ecran="apercu"] [data-commande="imprimer"]');
+    await attendre('la commande rendue', () => dans(m, '[data-commande="imprimer"]').getAttribute('aria-busy') === null, IMAGES);
+    expect(imprimante.appels()).toEqual([]);
+    expect(dans(m, '[data-commande="imprimer"]').parentElement.querySelector('[data-refus="NOM_EVENEMENT_TROP_LONG"]')).not.toBeNull();
+    // La vue des listes et celle des feuilles de tables se refusent de même.
+    for (const vue of ['accueil', 'tables']) {
+      await cliquer(m, `[data-ecran="apercu"] [data-commande="vue"][data-cible="${vue}"]`);
+      expect(dans(m, '[data-ecran="apercu"] [data-feuille]'), vue).toBeNull();
+      expect(dans(m, '[data-commande="imprimer"]').parentElement.querySelector('[data-refus="NOM_EVENEMENT_TROP_LONG"]'), vue).not.toBeNull();
+    }
+    // Le remède ferme l'événement : la liste, où chacun porte « Renommer ».
+    await cliquer(m, '[data-ecran="apercu"] [data-refus="NOM_EVENEMENT_TROP_LONG"] [data-commande="renommer"]');
+    await attendre('la liste des événements', () => dans(m, '[data-ecran="accueil"]'), IMAGES);
+    expect(dans(m, '[data-ecran="apercu"]')).toBeNull();
+  });
+});
+
 describe('fermer l’aperçu (§ 11.7)', () => {
   test('« Fermer l’aperçu » revient à la section d’origine, le focus sur « Imprimer… »', async () => {
     const m = await ouvrirApercu(contexte, chargePrincipale(), { section: 'participants' });

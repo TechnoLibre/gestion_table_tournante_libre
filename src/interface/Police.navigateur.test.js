@@ -41,7 +41,12 @@ import SOURCE_APP from './App.svelte?raw';
 const SVG = 'http://www.w3.org/2000/svg';
 const FAMILLE = 'Noto Sans';
 const TOLERANCE = constante('TOLERANCE_CHAINE_TEMOIN');
-const CORPS = 100;
+// Le corps de chaque mesure de la chaîne témoin : celui où le banc relève
+// TOLERANCE_CHAINE_TEMOIN (scripts/banc/temoin.banc.js, CORPS_PX), le texte
+// courant de l'interface. L'écart admis est relatif, et l'arrondi des
+// avances pèse plus à petit corps : la tolérance se juge au corps où elle
+// est relevée.
+const CORPS = 16;
 
 // Le nom d'une famille sans ses guillemets.
 const sansGuillemets = (texte) => texte.trim().replace(/^(["'])(.*)\1$/, '$2');
@@ -207,7 +212,7 @@ describe('police : Noto Sans est la police de l’interface (§ 14.15, § 19.4, 
     }
   });
 
-  test('la chaîne témoin, à 100 px, crénage et ligatures coupés, a la longueur des avances de chaque graisse, dans TOLERANCE_CHAINE_TEMOIN', async () => {
+  test('la chaîne témoin, au corps du banc, crénage et ligatures coupés, a la longueur des avances de chaque graisse, dans TOLERANCE_CHAINE_TEMOIN', async () => {
     const m = await monterApp();
     try {
       const polices = await m.polices();

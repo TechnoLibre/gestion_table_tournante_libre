@@ -902,12 +902,37 @@ export function formeNommeeDe(charge, cible) {
   return { lignes: lisible ? formeNommee(placement, charge) : null, fautes: lues };
 }
 
+/** Le nombre de caractères le plus grand qu'admet le nom d'un événement
+ *  saisi — créé, copié ou renommé (§ 8.1). Le fichier lu n'est pas borné :
+ *  un nom plus long s'ouvre, et seule son impression se refuse (§ 11.7). */
+export const NOM_EVENEMENT_MAX = 200;
+
+/**
+ * Le refus d'un nom d'événement trop long (§ 8.1) : NOM_EVENEMENT_TROP_LONG
+ * {longueur, maximum} quand le nom, en NFC et ses blancs de bord retirés,
+ * compte plus de NOM_EVENEMENT_MAX caractères ; null sinon. Un caractère est
+ * un point de code : un caractère hors du plan de base compte pour un, une
+ * lettre et son accent combinant, que NFC ne compose pas, pour deux. Le nom
+ * n'est jamais tronqué.
+ *
+ * @param {string} nom
+ * @param {Object|null} [remede]   celui que l'appelant offre, null sans lui
+ * @returns {ErreurCommande|null}
+ * @throws {TypeError} un nom qui n'est pas une chaîne
+ */
+export function refusNomEvenement(nom, remede = null) {
+  if (typeof nom !== 'string') throw new TypeError(`nom : chaîne attendue, reçu ${JSON.stringify(nom)}`);
+  const longueur = [...nom.normalize('NFC').trim()].length;
+  if (longueur <= NOM_EVENEMENT_MAX) return null;
+  return refus('NOM_EVENEMENT_TROP_LONG', { longueur, maximum: NOM_EVENEMENT_MAX }, remede);
+}
+
 /**
  * La charge d'un événement neuf (§ 8.1) et le libellé de sa création. Chaque
  * champ se contrôle selon sa règle avant que l'identifiant ne se tire :
- * NOM_REQUIS, DATE_INVALIDE {date}, SIEGES_INVALIDES {sieges},
- * TOURS_INVALIDES {tours}. Le nom entre en NFC, ses blancs de bord retirés ;
- * une date vide vaut null.
+ * NOM_REQUIS, NOM_EVENEMENT_TROP_LONG {longueur, maximum} (refusNomEvenement),
+ * DATE_INVALIDE {date}, SIEGES_INVALIDES {sieges}, TOURS_INVALIDES {tours}.
+ * Le nom entre en NFC, ses blancs de bord retirés ; une date vide vaut null.
  *
  * @param {{nom: string, date?: string|null, siegesParDefaut: number, tours: number}} evenement
  * @param {() => string} identifiant  tiré une fois, après les contrôles
@@ -919,6 +944,8 @@ export function chargeNeuve({ nom, date = null, siegesParDefaut, tours }, identi
   const nomLu = saisie(nom, 'nom');
   const dateLue = saisie(date, 'date');
   if (premiereFaute(nomLu, regle('nom')) !== null) throw refus('NOM_REQUIS');
+  const tropLong = refusNomEvenement(nomLu);
+  if (tropLong !== null) throw tropLong;
   if (premiereFaute(dateLue, regle('date')) !== null) throw refus('DATE_INVALIDE', { date });
   if (premiereFaute(siegesParDefaut, regle('siegesParDefaut')) !== null) {
     throw refus('SIEGES_INVALIDES', { sieges: siegesParDefaut });

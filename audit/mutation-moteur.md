@@ -6,7 +6,7 @@
 |---|---|
 | version | 2026.10.05.01 |
 | périmètre | `src/moteur` |
-| sources et épreuves du périmètre (SHA-256) | `d3a3a3188af0e82cfd0357a24e1b81869c343d0caebf8ce2b5d9bcdde1b16eac` |
+| sources et épreuves du périmètre (SHA-256) | `9d29ff506ad68dc6cc35390cbc5160c8f8b052c0bcc99d3283997ea40befc62f` |
 | Node | v26.10.0 |
 
 Chaque mutant se joue contre les épreuves de la série node qui atteignent son module, sous `node --test`.
@@ -17,42 +17,42 @@ Un survivant sur une ligne couverte désigne une épreuve qui exécute sans affi
 
 | mutants | tués | tués par la série longue | survivants | équivalents | délais | erreurs |
 |---:|---:|---:|---:|---:|---:|---:|
-| 5147 | 4537 | 7 | 0 | 240 | 363 | 0 |
+| 5147 | 4535 | 7 | 0 | 239 | 366 | 0 |
 
 ## Par fichier
 
 | fichier | total | tués | tués par la série longue | survivants | équivalents | délais | erreurs |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | `src/moteur/classement.js` | 93 | 81 | 0 | 0 | 8 | 4 | 0 |
-| `src/moteur/configuration.js` | 907 | 815 | 0 | 0 | 22 | 70 | 0 |
+| `src/moteur/configuration.js` | 907 | 813 | 0 | 0 | 22 | 72 | 0 |
 | `src/moteur/conflits.js` | 24 | 24 | 0 | 0 | 0 | 0 | 0 |
 | `src/moteur/correspondance.js` | 18 | 18 | 0 | 0 | 0 | 0 | 0 |
 | `src/moteur/criteres.js` | 211 | 203 | 0 | 0 | 8 | 0 | 0 |
 | `src/moteur/diagnostic.js` | 525 | 447 | 0 | 0 | 33 | 45 | 0 |
 | `src/moteur/diversite.js` | 220 | 183 | 0 | 0 | 19 | 18 | 0 |
 | `src/moteur/indicateurs.js` | 488 | 429 | 0 | 0 | 23 | 36 | 0 |
-| `src/moteur/manque.js` | 218 | 198 | 0 | 0 | 12 | 8 | 0 |
+| `src/moteur/manque.js` | 218 | 197 | 0 | 0 | 12 | 9 | 0 |
 | `src/moteur/paires.js` | 123 | 108 | 0 | 0 | 2 | 13 | 0 |
-| `src/moteur/plafond.js` | 490 | 377 | 2 | 0 | 42 | 69 | 0 |
+| `src/moteur/plafond.js` | 490 | 380 | 2 | 0 | 41 | 67 | 0 |
 | `src/moteur/qualite.js` | 412 | 394 | 0 | 0 | 5 | 13 | 0 |
-| `src/moteur/recherche.js` | 1078 | 938 | 5 | 0 | 57 | 78 | 0 |
+| `src/moteur/recherche.js` | 1078 | 936 | 5 | 0 | 57 | 80 | 0 |
 | `src/moteur/verification.js` | 340 | 322 | 0 | 0 | 9 | 9 | 0 |
 
 ## Par opérateur
 
 | opérateur | total | tués | tués par la série longue | survivants | équivalents | délais | erreurs |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| arithmetique | 547 | 533 | 0 | 0 | 12 | 2 | 0 |
-| frontiere | 298 | 212 | 2 | 0 | 83 | 1 | 0 |
-| negation | 721 | 669 | 0 | 0 | 2 | 50 | 0 |
+| arithmetique | 547 | 531 | 0 | 0 | 12 | 4 | 0 |
+| frontiere | 298 | 213 | 2 | 0 | 82 | 1 | 0 |
+| negation | 721 | 670 | 0 | 0 | 2 | 49 | 0 |
 | logique | 189 | 181 | 0 | 0 | 2 | 6 | 0 |
 | retrait-non | 83 | 83 | 0 | 0 | 0 | 0 | 0 |
 | mise-a-jour | 306 | 175 | 2 | 0 | 2 | 127 | 0 |
 | nombre-plus-un | 1014 | 928 | 2 | 0 | 80 | 4 | 0 |
 | nombre-zero | 538 | 357 | 0 | 0 | 14 | 167 | 0 |
 | booleen | 40 | 39 | 0 | 0 | 1 | 0 | 0 |
-| si-vrai | 401 | 383 | 1 | 0 | 15 | 2 | 0 |
-| si-faux | 401 | 390 | 0 | 0 | 9 | 2 | 0 |
+| si-vrai | 401 | 382 | 1 | 0 | 15 | 3 | 0 |
+| si-faux | 401 | 389 | 0 | 0 | 9 | 3 | 0 |
 | ternaire-vrai | 86 | 82 | 0 | 0 | 4 | 0 | 0 |
 | ternaire-faux | 86 | 82 | 0 | 0 | 4 | 0 | 0 |
 | min-max | 36 | 34 | 0 | 0 | 2 | 0 | 0 |
@@ -76,7 +76,7 @@ Survivants de la série node que les épreuves longues tuent : la série node ex
 | `src/moteur/recherche.js:496:20` | mise-a-jour | `+=` | `-=` | oui |
 | `src/moteur/recherche.js:499:31` | mise-a-jour | `+=` | `-=` | oui |
 
-## Mutants équivalents (240)
+## Mutants équivalents (239)
 
 Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 
@@ -197,16 +197,16 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/indicateurs.js:496:9` | si-vrai | `groupe[p] !== SANS_GROUPE` | `true` | indicateurs.js, mesurer, if (true) au compte des effectifs : une personne sans appartenance incrémente effectifs[SANS_GROUPE], soit effectifs[−1], propriété hors des index d'un tableau ordinaire ; parGroupe ne lit que les index 0 à G − 1. |
 | `src/moteur/manque.js:91:64` | frontiere | `>` | `>=` | manque.js, plusGrand, valeur >= cumul : à égalité, le cumul retenu est la même valeur. |
 | `src/moteur/manque.js:231:82` | arithmetique | `-` | `+` | manque.js, profilManque, départage a.id + b.id : à manque et plafond réalisé égaux, le comparateur rend un nombre positif. Le tri de V8 ne lit que « < 0 » et est stable : un positif s'y lit comme 0, et l'ordre reçu reste, celui de instance.ids, que normaliser trie par identifiant croissant et sans doublon — l'ordre de a.id − b.id. Une liste reçue dans un autre ordre ne peut pas se construire : profilManque parcourt instance.ids. |
-| `src/moteur/manque.js:311:34` | frontiere | `<` | `<=` | manque.js, comparerProfils, difference <= 0 : la ligne ne s'atteint que pour difference !== 0, où <= 0 et < 0 coïncident. |
-| `src/moteur/manque.js:311:36` | nombre-plus-un | `0` | `1` | manque.js, comparerProfils, difference < 1 : un manque est un entier (plafond réalisé − rencontres, deux comptes), et la ligne ne s'atteint que pour difference !== 0 : < 1 et < 0 coïncident. |
-| `src/moteur/manque.js:311:41` | nombre-plus-un | `1` | `2` | manque.js, comparerProfils, signeRang = −2 au lieu de −1 : signeRang ne se lit que par < 0 et par comparaison à signe, qui reçoit les mêmes valeurs ; signe ne se rend pas. |
-| `src/moteur/manque.js:311:45` | nombre-plus-un | `1` | `2` | manque.js, comparerProfils, signeRang = 2 au lieu de 1 : signeRang ne se lit que par < 0 et par comparaison à signe, qui reçoit les mêmes valeurs ; signe ne se rend pas. |
-| `src/moteur/manque.js:312:19` | frontiere | `<` | `<=` | manque.js, comparerProfils, signeRang <= 0 : signeRang vaut −1 ou 1, jamais 0. |
-| `src/moteur/manque.js:312:21` | nombre-plus-un | `0` | `1` | manque.js, comparerProfils, signeRang < 1 : signeRang vaut −1 ou 1 ; < 1 et < 0 coïncident. |
-| `src/moteur/manque.js:316:11` | si-vrai | `changements === 1` | `true` | manque.js, comparerProfils, bascule posée à chaque changement : rangBascule ne la rend que pour changements === 1, où la première et la dernière affectation sont la même. |
-| `src/moteur/manque.js:338:66` | frontiere | `>` | `>=` | manque.js, plusGrandManque, manque >= plus au lieu de > : à égalité, la valeur retenue est la même. Pour des manques numériques (RangProfil), seul −0 contre 0 peut changer le signe du zéro rendu, et les deux appelants le passent par Math.max avec 0 (escalierDuManque) ou 1 (borneHaute), qui rend le même nombre ; null et NaN sont hors du type des manques. |
-| `src/moteur/manque.js:348:38` | nombre-plus-un | `1` | `2` | manque.js, effectifsParValeur, haut + 2 cases : une case de plus au-delà de haut, à 0, jamais écrite (chaque manque vaut au plus haut, le plus grand manque des deux profils) ni lue (escalierDuManque parcourt les valeurs de haut à 0). |
-| `src/moteur/manque.js:432:56` | nombre-zero | `1` | `0` | manque.js, borneHaute, plusGrandManque(…) ?? 0 : la valeur de repli ne sert que pour deux profils vides, où Math.max(0, 1) et Math.max(1, 1) valent tous deux 1. |
+| `src/moteur/manque.js:313:34` | frontiere | `<` | `<=` | manque.js, comparerProfils, difference <= 0 : la ligne ne s'atteint que pour difference !== 0, où <= 0 et < 0 coïncident. |
+| `src/moteur/manque.js:313:36` | nombre-plus-un | `0` | `1` | manque.js, comparerProfils, difference < 1 : un manque est un entier (plafond réalisé − rencontres, deux comptes), et la ligne ne s'atteint que pour difference !== 0 : < 1 et < 0 coïncident. |
+| `src/moteur/manque.js:313:41` | nombre-plus-un | `1` | `2` | manque.js, comparerProfils, signeRang = −2 au lieu de −1 : signeRang ne se lit que par < 0 et par comparaison à signe, qui reçoit les mêmes valeurs ; signe ne se rend pas. |
+| `src/moteur/manque.js:313:45` | nombre-plus-un | `1` | `2` | manque.js, comparerProfils, signeRang = 2 au lieu de 1 : signeRang ne se lit que par < 0 et par comparaison à signe, qui reçoit les mêmes valeurs ; signe ne se rend pas. |
+| `src/moteur/manque.js:314:19` | frontiere | `<` | `<=` | manque.js, comparerProfils, signeRang <= 0 : signeRang vaut −1 ou 1, jamais 0. |
+| `src/moteur/manque.js:314:21` | nombre-plus-un | `0` | `1` | manque.js, comparerProfils, signeRang < 1 : signeRang vaut −1 ou 1 ; < 1 et < 0 coïncident. |
+| `src/moteur/manque.js:318:11` | si-vrai | `changements === 1` | `true` | manque.js, comparerProfils, bascule posée à chaque changement : rangBascule ne la rend que pour changements === 1, où la première et la dernière affectation sont la même. |
+| `src/moteur/manque.js:340:66` | frontiere | `>` | `>=` | manque.js, plusGrandManque, manque >= plus au lieu de > : à égalité, la valeur retenue est la même. Pour des manques numériques (RangProfil), seul −0 contre 0 peut changer le signe du zéro rendu, et les deux appelants le passent par Math.max avec 0 (escalierDuManque) ou 1 (borneHaute), qui rend le même nombre ; null et NaN sont hors du type des manques. |
+| `src/moteur/manque.js:350:38` | nombre-plus-un | `1` | `2` | manque.js, effectifsParValeur, haut + 2 cases : une case de plus au-delà de haut, à 0, jamais écrite (chaque manque vaut au plus haut, le plus grand manque des deux profils) ni lue (escalierDuManque parcourt les valeurs de haut à 0). |
+| `src/moteur/manque.js:434:56` | nombre-zero | `1` | `0` | manque.js, borneHaute, plusGrandManque(…) ?? 0 : la valeur de repli ne sert que pour deux profils vides, où Math.max(0, 1) et Math.max(1, 1) valent tous deux 1. |
 | `src/moteur/paires.js:53:50` | frontiere | `<` | `<=` | paires.js, compte, a <= b au lieu de a < b : le choix de branche ne change qu'à a = b, où les deux branches calculent rangPaire(N, a, a) ; la valeur lue est la même pour toute entrée. |
 | `src/moteur/paires.js:153:21` | frontiere | `<` | `<=` | paires.js, matriceRencontres, boucle extérieure jusqu'à i <= n : au tour de trop, i = n, la boucle intérieure part de j = n + 1 et ne s'exécute pas ; rien n'est écrit. |
 | `src/moteur/plafond.js:74:18` | nombre-plus-un | `0` | `1` | plafond.js, affiliesDe, effectif part de 1 : N_aff grandit de 1, et il ne se lit qu'à deux places où un terme plus grand ne mord pas. Dans borne, le terme Σ a^aff_t + min(n^aff_p, S) vaut au plus N_aff − ε_p : un affilié ancré voit au plus k_aff − 1 ancrés affiliés sur ses tables distinctes et n^aff_p = n_aff ; un affilié mobile au plus k_aff, avec n^aff_p = n_aff − 1 ; un non-affilié au plus k_aff, avec n^aff_p = n_aff ; et N_aff = k_aff + n_aff, chaque membre étant ancré ou mobile. Dans borneDiversite, le troisième terme N_aff − g_p + 1 ne descend jamais sous G (chaque appartenance de instance.groupes compte au moins un présent, numeroterGroupes) : plus grand, il ne mord pas davantage. Φ_aff et A_max restent. |
@@ -215,7 +215,6 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/plafond.js:104:74` | nombre-plus-un | `1` | `2` | plafond.js, ancrageDe, −2 au lieu de −1 pour un non-ancré : l'ancrage ne sert qu'à t === ancrage, où t est un index de table ≥ 0, et à la clé de signature, où −2 remplace −1 pour tous les non-ancrés à la fois : aucune comparaison ni aucun regroupement ne change. |
 | `src/moteur/plafond.js:115:21` | frontiere | `<` | `<=` | plafond.js, tablesAdmissibles, t <= T : ancresParTable[T] et capacite[T] sont undefined, undefined < undefined est faux, rien ne s'ajoute. |
 | `src/moteur/plafond.js:270:16` | nombre-plus-un | `0` | `1` | plafond.js, borneDiversite, compte des effectifs à partir de p = 1 : effectifs ne se lit que dans le troisième terme de A_max, N_aff − effectifs[g] + 1. Toute mutation qui ne fait que diminuer effectifs[g] laisse ce terme au moins égal à N_aff − g_p + 1, qui ne descend jamais sous G (chaque appartenance de instance.groupes compte au moins un présent) : min(Φ_aff, G, terme) vaut min(Φ_aff, G) avant comme après. Sauter la personne 0 diminue un effectif. |
-| `src/moteur/plafond.js:270:21` | frontiere | `<` | `<=` | plafond.js, borneDiversite, compte des effectifs jusqu'à p <= N : groupe[N] est undefined, différent de SANS_GROUPE ; effectifs[undefined] += 1 pose une propriété « undefined » sur l'Int32Array, hors de ses éléments, que le troisième terme ne lit pas (il lit effectifs[g], g un numéro d'appartenance). |
 | `src/moteur/plafond.js:270:31` | nombre-plus-un | `1` | `2` | plafond.js, borneDiversite, compte des effectifs par pas de 2 : une personne sur deux est sautée, les effectifs ne font que diminuer ; même raison que le compte à partir de p = 1 — le troisième terme reste au moins N_aff − g_p + 1 ≥ G. |
 | `src/moteur/plafond.js:270:38` | si-vrai | `groupe[p] !== SANS_GROUPE` | `true` | plafond.js, borneDiversite, if (true) au compte des effectifs : une personne sans appartenance incrémente effectifs[SANS_GROUPE], soit effectifs[−1] ; un index hors des éléments d'un tableau typé n'écrit rien. |
 | `src/moteur/plafond.js:270:38` | si-faux | `groupe[p] !== SANS_GROUPE` | `false` | plafond.js, borneDiversite, if (false) au compte des effectifs : tous les effectifs restent à 0, le troisième terme vaut N_aff + 1 ≥ N_aff − g_p + 1 ≥ G ; même raison que le compte à partir de p = 1. |
@@ -323,7 +322,7 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/verification.js:186:50` | nombre-plus-un | `1` | `2` | verification.js, verifierInvariants, aSaTable[p] = 2 au lieu de 1 : la marque ne se lit que par !aSaTable[p], et fill(0) la remet à zéro à chaque tour. |
 | `src/moteur/verification.js:191:44` | frontiere | `<` | `<=` | verification.js, verifierInvariants, boucle des capacités jusqu'à i <= tableDeListe.length : le tour de trop n'a lieu que pour une liste au-delà de plan.tables ; t = tableDeListe[i] vaut undefined, et listes[i].length > capacite[undefined] compare à undefined (propriété absente de l'Int32Array), toujours faux : aucun CAPACITE n'est ajouté. |
 
-## Délais et erreurs (363)
+## Délais et erreurs (366)
 
 | lieu | opérateur | avant | après | issue |
 |---|---|---|---|---|
@@ -333,6 +332,8 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/classement.js:281:55` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/configuration.js:189:45` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/configuration.js:237:49` | nombre-zero | `1` | `0` | délai |
+| `src/moteur/configuration.js:254:11` | si-faux | `!Number.isInteger(tour) \|\| tour < 1 \|\| tour > R` | `false` | délai |
+| `src/moteur/configuration.js:265:9` | si-vrai | `p === undefined` | `true` | délai |
 | `src/moteur/configuration.js:266:46` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/configuration.js:290:21` | negation | `<` | `>=` | délai |
 | `src/moteur/configuration.js:290:28` | mise-a-jour | `+=` | `-=` | délai |
@@ -500,14 +501,15 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/indicateurs.js:495:21` | negation | `<` | `>=` | délai |
 | `src/moteur/indicateurs.js:495:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/indicateurs.js:495:31` | nombre-zero | `1` | `0` | délai |
+| `src/moteur/manque.js:80:21` | negation | `<` | `>=` | délai |
 | `src/moteur/manque.js:80:40` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/manque.js:80:43` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/manque.js:227:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/manque.js:227:31` | nombre-zero | `1` | `0` | délai |
-| `src/moteur/manque.js:255:86` | nombre-zero | `1` | `0` | délai |
-| `src/moteur/manque.js:305:44` | nombre-zero | `1` | `0` | délai |
-| `src/moteur/manque.js:387:47` | mise-a-jour | `-=` | `+=` | délai |
-| `src/moteur/manque.js:387:50` | nombre-zero | `1` | `0` | délai |
+| `src/moteur/manque.js:257:86` | nombre-zero | `1` | `0` | délai |
+| `src/moteur/manque.js:307:44` | nombre-zero | `1` | `0` | délai |
+| `src/moteur/manque.js:389:47` | mise-a-jour | `-=` | `+=` | délai |
+| `src/moteur/manque.js:389:50` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/paires.js:58:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/paires.js:58:31` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/paires.js:94:21` | negation | `<` | `>=` | délai |
@@ -521,7 +523,6 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/paires.js:154:27` | negation | `<` | `>=` | délai |
 | `src/moteur/paires.js:154:34` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/paires.js:154:37` | nombre-zero | `1` | `0` | délai |
-| `src/moteur/plafond.js:76:21` | negation | `<` | `>=` | délai |
 | `src/moteur/plafond.js:76:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/plafond.js:76:31` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/plafond.js:115:21` | negation | `<` | `>=` | délai |
@@ -540,7 +541,6 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/plafond.js:235:21` | negation | `<` | `>=` | délai |
 | `src/moteur/plafond.js:235:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/plafond.js:235:31` | nombre-zero | `1` | `0` | délai |
-| `src/moteur/plafond.js:270:21` | negation | `<` | `>=` | délai |
 | `src/moteur/plafond.js:270:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/plafond.js:270:31` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/plafond.js:273:28` | mise-a-jour | `+=` | `-=` | délai |
@@ -623,11 +623,13 @@ Déclarés dans `audit/mutants-equivalents.json`, avec leur raison.
 | `src/moteur/recherche.js:443:48` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/recherche.js:449:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/recherche.js:449:31` | nombre-zero | `1` | `0` | délai |
+| `src/moteur/recherche.js:493:15` | arithmetique | `*` | `/` | délai |
 | `src/moteur/recherche.js:570:68` | negation | `<` | `>=` | délai |
 | `src/moteur/recherche.js:570:77` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/recherche.js:570:80` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/recherche.js:611:57` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/recherche.js:611:60` | nombre-zero | `1` | `0` | délai |
+| `src/moteur/recherche.js:624:18` | arithmetique | `*` | `/` | délai |
 | `src/moteur/recherche.js:732:28` | mise-a-jour | `+=` | `-=` | délai |
 | `src/moteur/recherche.js:732:31` | nombre-zero | `1` | `0` | délai |
 | `src/moteur/recherche.js:740:33` | nombre-zero | `1` | `0` | délai |

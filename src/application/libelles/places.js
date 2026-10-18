@@ -82,6 +82,12 @@ export const TABLE = new Map([
       'Cette personne est réservée ici pour tous les tours : la retirer de cette table pour un seul tour ne retire pas sa réservation. ' +
       '« Retirer la réservation » la retire de tous les tours.',
   ],
+  [
+    'RESERVATION_CE_TOUR',
+    ({ tour }) =>
+      `Cette personne est réservée ici au tour ${tour} : le placement retenu l'y assied tant que sa réservation tient. ` +
+      '« Retirer la réservation » retire celle de ce tour seulement.',
+  ],
 
   // --- Les libellés figés du journal (§ 8.2) ---------------------------------
   [
