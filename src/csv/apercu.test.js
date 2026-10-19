@@ -8,12 +8,14 @@
 // par la découpe de la saisie et réconciliée avec l'événement, le même aperçu
 // pour un texte collé et pour le même texte décodé d'un fichier, les données
 // d'épreuve de test/fixtures/csv/, chacune un CSV tel qu'un tableur l'écrit,
-// et la colonne des étiquettes du fichier d'exemple des cas limites. Les
+// la colonne des étiquettes du fichier d'exemple des cas limites, et la
+// colonne de la présence, lue sous le nombre de tours de l'aperçu. Les
 // lettres décomposées et les blancs autres que l'espace s'écrivent par leur
 // point de code.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
+import { TOURS_MAX } from '../stockage/document.js';
 import { lireEtiquettes } from '../stockage/etiquettes.js';
 import { VALEURS_EXCLU, apercevoir } from './apercu.js';
 import { contientNul, decoder } from './encodage.js';
@@ -48,8 +50,8 @@ const existant = (id, nom, prenom, appartenance) => ({
 // Champs d'une ligne valide, dans l'ordre de l'aperçu ; un champ omis vaut null.
 const champs = ({
   nom, prenom = null, appartenance = null, courriel = null, titrePressenti = null, notes = null, exclu = null,
-  etiquettes = null,
-}) => ({ nom, prenom, appartenance, courriel, titrePressenti, notes, exclu, etiquettes });
+  etiquettes = null, presence = null,
+}) => ({ nom, prenom, appartenance, courriel, titrePressenti, notes, exclu, etiquettes, presence });
 
 // Aperçu d'un texte refusé en entier : ce que la lecture a établi avant le
 // refus, aucune ligne.
@@ -59,6 +61,7 @@ const refusGlobal = (
   ligne = null,
 ) => ({
   mode: 'ajouter',
+  tours: TOURS_MAX,
   separateur,
   entetes,
   association,
@@ -104,6 +107,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
     );
     assert.deepEqual(apercevoir(texte), {
       mode: 'ajouter',
+      tours: TOURS_MAX,
       separateur: ';',
       entetes: ['Nom', 'Prénom', 'Équipe', 'Courriel', 'Rôle', 'Exclu', 'Notes'],
       association: {
@@ -144,7 +148,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
     assert.equal(
       JSON.stringify(ligne.champs),
       '{"nom":"Ombrelle","prenom":"p","appartenance":"a","courriel":"c@exemple.test","titrePressenti":"t","notes":"n",' +
-        '"exclu":true,"etiquettes":["e"]}',
+        '"exclu":true,"etiquettes":["e"],"presence":null}',
     );
   });
 
@@ -1535,7 +1539,107 @@ describe("apercevoir : la colonne Étiquettes du fichier d'exemple des cas limit
       assert.ok(cellules.some((cellule) => cellule === ''), `${nom} : une cellule vide`);
       assert.ok(apercu.lignes.some(({ champs: lus }) => lus.etiquettes?.length >= 2), nom);
       assert.ok(apercu.fusionsEtiquettes.some(({ orthographes }) => orthographes.length >= 2), `${nom} : une fusion`);
-      assert.deepEqual(apercu.refusees.map(({ code }) => code), ['NOM_ABSENT'], nom);
+      assert.deepEqual(apercu.refusees.map(({ code }) => code), ['NOM_ABSENT', 'PRESENCE_HORS_TOURS'], nom);
+    }
+  });
+});
+
+describe("apercevoir : la colonne Présence du fichier d'exemple des cas limites (§ 10.3)", () => {
+  test('dans ses deux encodages : des cellules vides, un « tous », une plage hors de la soirée qui refuse sa ligne, sous tout nombre de tours', () => {
+    for (const nom of ['participants_cas_limites.csv', 'participants_cas_limites_cp1252.csv']) {
+      for (const tours of [1, 4, TOURS_MAX]) {
+        const apercu = apercevoir(decoder(readFileSync(new URL(nom, EXEMPLES))).texte, { tours });
+        const rang = apercu.association.colonnes.presence;
+        assert.equal(apercu.entetes[rang], 'Présence', nom);
+        assert.deepEqual(apercu.association.nonReconnues, [apercu.entetes.length - 1], nom);
+        // Aucune présence partielle : chaque ligne valide est présente à tous les tours.
+        const lues = apercu.lignes.map(({ champs: lus }) => lus.presence);
+        assert.ok(lues.every((presence) => presence === null || presence.length === tours), nom);
+        assert.equal(lues.filter((presence) => presence !== null).length, 1, `${nom} : un « tous »`);
+        assert.ok(lues.filter((presence) => presence === null).length > 1, `${nom} : des cellules vides`);
+        const [horsSoiree] = apercu.refusees.filter(({ code }) => code === 'PRESENCE_HORS_TOURS');
+        assert.deepEqual([horsSoiree.tour, horsSoiree.tours], [0, tours], nom);
+        assert.match(horsSoiree.valeur, /^[0-9]+-[0-9]+$/u, nom);
+      }
+    }
+  });
+});
+
+describe('apercevoir : la colonne de la présence, lue sous le nombre de tours (§ 10.1)', () => {
+  // Les tours de présence de chaque ligne valide.
+  const presencesDe = (apercu) => apercu.lignes.map(({ ligne, champs: lus }) => [ligne, lus.presence]);
+
+  test('une cellule vide → null ; « tous » → 1..R ; une plage, une liste, ce que l’aperçu écrit → les tours croissants', () => {
+    const apercu = apercevoir(
+      csv('nom;présence', 'Ombrelle;', 'Pervenche;Tous', 'Lacasse;1-3', 'Tilleraie;"3, 1"', 'Brumeval;tours 2 à 4', 'Sarcelle;1-4'),
+      { tours: 4 },
+    );
+    assert.equal(apercu.tours, 4);
+    assert.deepEqual(presencesDe(apercu), [
+      [2, null], [3, [1, 2, 3, 4]], [4, [1, 2, 3]], [5, [1, 3]], [6, [2, 3, 4]], [7, [1, 2, 3, 4]],
+    ]);
+    assert.deepEqual(apercu.refusees, []);
+  });
+
+  test('chaque refus, avec ses détails : PRESENCE_ILLISIBLE et sa raison, PRESENCE_HORS_TOURS et le premier tour fautif', () => {
+    const apercu = apercevoir(
+      csv('nom;presence', 'Ombrelle;deux', 'Pervenche;3-1', 'Lacasse;01-mars', 'Tilleraie; 2, 5-6 ', 'Brumeval;0', 'Sarcelle;2'),
+      { tours: 4 },
+    );
+    assert.deepEqual(apercu.refusees, [
+      { ligne: 2, code: 'PRESENCE_ILLISIBLE', valeur: 'deux', raison: 'syntaxe', brut: ['Ombrelle', 'deux'] },
+      { ligne: 3, code: 'PRESENCE_ILLISIBLE', valeur: '3-1', raison: 'intervalle', brut: ['Pervenche', '3-1'] },
+      { ligne: 4, code: 'PRESENCE_ILLISIBLE', valeur: '01-mars', raison: 'date', brut: ['Lacasse', '01-mars'] },
+      { ligne: 5, code: 'PRESENCE_HORS_TOURS', valeur: '2, 5-6', tour: 5, tours: 4, brut: ['Tilleraie', ' 2, 5-6 '] },
+      { ligne: 6, code: 'PRESENCE_HORS_TOURS', valeur: '0', tour: 0, tours: 4, brut: ['Brumeval', '0'] },
+    ]);
+    assert.deepEqual(presencesDe(apercu), [[7, [2]]]);
+  });
+
+  test('un seul motif par ligne, la présence après les étiquettes : nom, exclu et étiquettes d’abord', () => {
+    const apercu = apercevoir(
+      csv('nom;exclu;etiquettes;presence', ';non;;9', 'Ombrelle;peut-être;;9', 'Pervenche;;fin\tance;9', 'Lacasse;;finance;9'),
+      { tours: 4 },
+    );
+    assert.deepEqual(
+      apercu.refusees.map(({ ligne, code }) => [ligne, code]),
+      [[2, 'NOM_ABSENT'], [3, 'EXCLU_INCONNU'], [4, 'ETIQUETTE_MAL_FORMEE'], [5, 'PRESENCE_HORS_TOURS']],
+    );
+  });
+
+  test('le nombre de tours décide de la même cellule : « 5 » lu sous cinq tours, refusé sous quatre', () => {
+    const texte = csv('nom;presence', 'Ombrelle;5', 'Pervenche;1');
+    assert.deepEqual(presencesDe(apercevoir(texte, { tours: 5 })), [[2, [5]], [3, [1]]]);
+    assert.deepEqual(apercevoir(texte, { tours: 4 }).refusees.map(({ code }) => code), ['PRESENCE_HORS_TOURS']);
+  });
+
+  test('Apercu.tours reflète l’option, TOURS_MAX par défaut, sous un refus global comme sans', () => {
+    assert.equal(apercevoir(csv('nom', 'Ombrelle')).tours, TOURS_MAX);
+    assert.equal(apercevoir(csv('nom', 'Ombrelle'), { tours: 3 }).tours, 3);
+    assert.equal(apercevoir('', { tours: 3 }).tours, 3);
+    assert.equal(apercevoir(csv('nom;presence', ';1'), { tours: 2 }).refusGlobal, 'AUCUNE_LIGNE_VALIDE');
+    assert.equal(apercevoir(csv('nom;presence', ';1'), { tours: 2 }).tours, 2);
+  });
+
+  test('sans colonne de présence, chaque ligne lit null, et le nombre de tours ne change rien d’autre', () => {
+    const texte = csv(
+      'Nom;Prénom;Équipe;Exclu;Étiquettes',
+      'Ombrelle;Iris;Club des Merles;non;finance',
+      'Pervenche;Théo;club des merles;oui;',
+      ';Ondine;;;',
+    );
+    const parDefaut = apercevoir(texte);
+    for (const tours of [1, 4, TOURS_MAX]) {
+      const apercu = apercevoir(texte, { tours });
+      assert.deepEqual({ ...apercu, tours: TOURS_MAX }, parDefaut, `tours = ${tours}`);
+    }
+    assert.deepEqual(presencesDe(parDefaut), [[2, null], [3, null]]);
+    assert.equal(parDefaut.association.colonnes.presence, undefined);
+  });
+
+  test('un nombre de tours qui n’est pas un entier de 1 à TOURS_MAX : TypeError, avant toute lecture', () => {
+    for (const tours of [0, TOURS_MAX + 1, 2.5, '4', null]) {
+      assert.throws(() => apercevoir(csv('nom', 'Ombrelle'), { tours }), TypeError, String(tours));
     }
   });
 });

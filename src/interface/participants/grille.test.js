@@ -299,7 +299,7 @@ describe('reservationsDe : les réservations d’une personne, pour la fiche (§
 });
 
 describe("l'ordre de la grille est celui de l'export (§ 10.2)", () => {
-  test('la cellule de rang i de la ligne exportée égale p[COLONNES[i]], exclu écrit « non » ; l’export compte une colonne de plus, les étiquettes, en dernier', () => {
+  test('la cellule de rang i de la ligne exportée égale p[COLONNES[i]], exclu écrit « non » ; l’export compte deux colonnes de plus, les étiquettes puis la présence, en dernier', () => {
     const p = {
       id: 1,
       nom: 'Ombrelle',
@@ -310,17 +310,18 @@ describe("l'ordre de la grille est celui de l'export (§ 10.2)", () => {
       notes: 'arrive à neuf heures',
       exclu: false,
       etiquettes: ['Montréal', 'finance'],
+      presence: [2, 3],
     };
     const { texte } = decoder(exporterParticipants([p]));
     const [entete, ligne] = texte.split('\r\n');
     const cellules = ligne.split(';');
     assert.equal(COLONNES.length, 7);
-    assert.equal(cellules.length, COLONNES.length + 1);
+    assert.equal(cellules.length, COLONNES.length + 2);
     COLONNES.forEach((colonne, i) => {
       assert.equal(cellules[i], colonne === 'exclu' ? 'non' : p[colonne], colonne);
     });
-    assert.equal(entete.split(';').at(-1), 'etiquettes');
-    assert.equal(cellules.at(-1), 'Montréal, finance');
+    assert.deepEqual(entete.split(';').slice(-2), ['etiquettes', 'presence']);
+    assert.deepEqual(cellules.slice(-2), ['Montréal, finance', '2, 3']);
   });
 
   test('le nom proposé à l’enregistrement : ‹base›-participants.csv', () => {

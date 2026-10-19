@@ -14,10 +14,13 @@
 // valeur se relit sans ses blancs de bord, que l'aperçu retire de chaque
 // champ ; une valeur importée n'en porte pas.
 //
-// Le modèle des participants (§ 10.1) est l'export d'une liste fixe de
-// personnes inventées : il a la forme de l'export, et s'importe tel quel.
+// Le modèle des participants (§ 10.1) est l'export de quatre personnes
+// inventées, dont seule la présence suit le nombre de tours de l'événement :
+// il a la forme de l'export, et s'importe tel quel sous ce nombre de tours.
 
+import { TOURS_MAX } from '../stockage/document.js';
 import { CHAMPS } from './colonnes.js';
+import { ecrirePresence } from './presence.js';
 
 /** Séparateur de l'export : celui qu'un tableur francophone rouvre sans manipulation (§ 10.3). */
 export const SEPARATEUR = ';';
@@ -49,6 +52,7 @@ const PROPRIETE_DU_CHAMP = new Map([
   ['exclu', 'exclu'],
   ['notes', 'notes'],
   ['etiquettes', 'etiquettes'],
+  ['presence', 'presence'],
 ]);
 
 // Un champ s'écrit cité (RFC 4180) quand il porte le séparateur, un retour
@@ -80,12 +84,21 @@ export function ecrireCsv(enregistrements, separateur) {
   return new TextEncoder().encode(MARQUE_ORDRE_OCTETS + lignes.join(''));
 }
 
+// Vrai pour une liste non vide d'entiers positifs strictement croissants :
+// une présence que ecrirePresence écrit.
+const presenceEcrite = (valeur) =>
+  Array.isArray(valeur) &&
+  valeur.length > 0 &&
+  valeur.every((tour, rang) => Number.isInteger(tour) && tour >= 1 && (rang === 0 || tour > valeur[rang - 1]));
+
 // Cellule d'un champ de CHAMPS pour le participant de rang donné, à partir
 // de 0 : exclu en oui ou non, les étiquettes jointes par JOINTURE_ETIQUETTES
-// dans l'ordre de leur liste, vide quand la clé manque, un texte tel quel,
-// null vide. Lèvent TypeError un exclu qui n'est pas un booléen, des
-// étiquettes présentes qui ne sont pas une liste de textes, un nom qui n'est
-// pas une chaîne, un autre texte ni chaîne ni null. Écrit sans bruit « non »
+// dans l'ordre de leur liste, vide quand la clé manque, la présence par
+// ecrirePresence, vide quand elle manque, un texte tel quel, null vide.
+// Lèvent TypeError un exclu qui n'est pas un booléen, des étiquettes
+// présentes qui ne sont pas une liste de textes, une présence présente qui
+// n'est pas une liste croissante de tours, un nom qui n'est pas une chaîne,
+// un autre texte ni chaîne ni null. Écrit sans bruit « non »
 // ou vide, un exclu de travers réinviterait au réimport une personne qui
 // s'est désistée ; un texte d'un autre genre lèverait plus loin, dans
 // l'écriture, sans nommer ni la personne ni le champ.
@@ -104,6 +117,11 @@ function cellule(participant, champ, rang) {
     if (!Array.isArray(valeur) || !valeur.every((motCle) => typeof motCle === 'string')) refuser('liste de textes');
     return valeur.join(JOINTURE_ETIQUETTES);
   }
+  if (champ === 'presence') {
+    if (valeur === undefined) return '';
+    if (!presenceEcrite(valeur)) refuser('liste croissante de tours');
+    return ecrirePresence(valeur);
+  }
   if (valeur === null && champ !== 'nom') return '';
   if (typeof valeur !== 'string') refuser(champ === 'nom' ? 'texte' : 'texte ou null');
   return valeur;
@@ -112,18 +130,21 @@ function cellule(participant, champ, rang) {
 /**
  * La liste des participants en CSV, dans la forme exacte que l'import lit
  * (§ 10.2) : UTF-8 avec marque, « ; », CRLF ; l'en-tête
- * nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes,
+ * nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes;presence,
  * les champs de CHAMPS dans leur ordre ; puis un participant par ligne, dans
  * l'ordre de la liste reçue, que la charge range par identifiant. exclu
  * s'écrit oui ou non, un champ null vide, la colonne etiquettes toujours,
- * ses étiquettes jointes par « , », vide sans étiquette ; un champ qui porte
- * « ; », un guillemet ou une fin de ligne entre guillemets. L'identifiant ne s'écrit pas : le réimport en
+ * ses étiquettes jointes par « , », vide sans étiquette, puis la colonne
+ * presence toujours, vide pour tous les tours, sinon en plages et en listes
+ * (ecrirePresence) ; un champ qui porte « ; », un guillemet ou une fin de
+ * ligne entre guillemets. L'identifiant ne s'écrit pas : le réimport en
  * attribue de neufs. La liste reçue n'est pas modifiée.
  *
  * @param {import('../stockage/types.js').Participant[]} participants
  * @returns {Uint8Array}
  * @throws {TypeError} pour un exclu qui n'est pas un booléen, des étiquettes
- *   présentes qui ne sont pas une liste de textes, un nom qui n'est pas une
+ *   présentes qui ne sont pas une liste de textes, une présence présente
+ *   qui n'est pas une liste croissante de tours, un nom qui n'est pas une
  *   chaîne, un autre texte ni chaîne ni null
  */
 export function exporterParticipants(participants) {
@@ -138,7 +159,8 @@ const exemple = (nom, prenom, autres) => ({
 
 // Les personnes du modèle : à elles quatre, elles remplissent chaque colonne
 // de CHAMPS, exclu sous ses deux valeurs, une appartenance partagée, une
-// absente, et une cellule à deux étiquettes.
+// absente, et une cellule à deux étiquettes. Leur présence s'ajoute selon le
+// nombre de tours (presencesDuModele).
 const EXEMPLES_DU_MODELE = [
   exemple('Ombrelle', 'Iris', {
     appartenance: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
@@ -153,14 +175,39 @@ const EXEMPLES_DU_MODELE = [
   exemple('Tourteau', 'Basile', { etiquettes: ['bénévole'] }),
 ];
 
+// Les tours de 1 à n.
+const jusqua = (n) => Array.from({ length: n }, (_, rang) => rang + 1);
+
+// La présence de chaque personne du modèle, rang à rang, sous tours tours :
+// à deux tours au moins, une liste et une plage — Pervenche aux tours 2 et
+// 3, Tourteau aux tours 1 à R − 1 —, « 2, 3 » et « 1-3 » à quatre tours,
+// « 2 » et « 1 » à deux ; à un tour, aucune, la colonne reste vide. Aucune
+// ne nomme chaque tour, si bien que chacune s'importe telle qu'écrite.
+function presencesDuModele(tours) {
+  if (tours === 1) return [undefined, undefined, undefined, undefined];
+  return [undefined, [2, 3].filter((tour) => tour <= tours), undefined, jusqua(tours - 1)];
+}
+
 /**
  * Le modèle du CSV des participants, à télécharger (§ 10.1) : l'export
  * (exporterParticipants) de quatre personnes inventées, toujours les mêmes,
- * dont les cellules remplissent chaque colonne que l'import lit. Importé
- * tel quel, il ne refuse aucune ligne. Chaque appel rend un tableau neuf.
+ * dont les cellules remplissent chaque colonne que l'import lit, et dont la
+ * présence suit le nombre de tours de l'événement (presencesDuModele).
+ * Importé tel quel sous ce nombre de tours, il ne refuse aucune ligne.
+ * Chaque appel rend un tableau neuf.
  *
+ * @param {{tours: number}} evenement  le nombre de tours de l'événement
  * @returns {Uint8Array}  UTF-8 avec marque, « ; », CRLF
+ * @throws {TypeError} quand tours n'est pas un entier de 1 à TOURS_MAX
  */
-export function modeleParticipants() {
-  return exporterParticipants(EXEMPLES_DU_MODELE);
+export function modeleParticipants({ tours } = {}) {
+  if (!Number.isInteger(tours) || tours < 1 || tours > TOURS_MAX) {
+    throw new TypeError(`modeleParticipants : tours, entier de 1 à ${TOURS_MAX} attendu, reçu ${String(tours)}`);
+  }
+  const presences = presencesDuModele(tours);
+  return exporterParticipants(
+    EXEMPLES_DU_MODELE.map((personne, rang) =>
+      presences[rang] === undefined ? personne : { ...personne, presence: presences[rang] },
+    ),
+  );
 }

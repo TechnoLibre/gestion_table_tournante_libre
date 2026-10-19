@@ -7,7 +7,8 @@
 // séparateur nommés, l'association par en-tête, l'ambiguïté, les refus
 // d'une ligne et les refus globaux, les étiquettes en pastilles et leurs
 // fusions à part, le rapport, le CSV des refus, les modes, l'import selon
-// l'état, le collage, le modèle à télécharger. Chaque épreuve monte App par
+// l'état, le collage, le modèle à télécharger, la colonne de la présence.
+// Chaque épreuve monte App par
 // monterApp, sur le système de fichiers simulé, ouvre un événement et sa
 // section d'import ; le dialogue de choix sert, dans l'ordre, les fichiers
 // que l'épreuve prépare, et le dialogue d'enregistrement relève ce qu'il
@@ -92,14 +93,17 @@ afterEach(() => {
 });
 
 /**
- * Un montage dont l'événement « Soirée des Merles » est ouvert sur sa
- * section d'import : les participants donnés, en écriture sauf demande,
+ * Un montage dont l'événement « Soirée des Merles », de deux tours sauf
+ * demande, est ouvert sur sa section d'import : les participants donnés,
+ * en écriture sauf demande,
  * préparé par prepare(seance, generation) avant que l'espion se pose. Le
  * dialogue de choix sert aServir dans l'ordre ; l'enregistreur relève
  * enregistres et rend le nom proposé.
  */
-async function ouvrir({ participants = [], tables = [], ecriture = true, langue = 'fr', siegesParDefaut = 6, prepare = null } = {}) {
-  const charge = creerCharge({ id: 'epreuve-import', nom: 'Soirée des Merles', siegesParDefaut, tours: 2 });
+async function ouvrir({
+  participants = [], tables = [], ecriture = true, langue = 'fr', siegesParDefaut = 6, prepare = null, tours = 2,
+} = {}) {
+  const charge = creerCharge({ id: 'epreuve-import', nom: 'Soirée des Merles', siegesParDefaut, tours });
   charge.participants = participants;
   charge.prochainsIds.participant = participants.length + 1;
   charge.tables = tables;
@@ -452,8 +456,8 @@ describe('une ligne fausse n’arrête pas le reste (§ 10.1, § 2.1)', () => {
     const e = await ouvrir();
     const { texte } = decoder(await lireLivre(urlGrande));
     const enregistrements = texte.split('\r\n');
-    expect(enregistrements[212]).toMatch(/;non;;$/);
-    enregistrements[212] = enregistrements[212].replace(/;non;;$/, ';peut-être;;');
+    expect(enregistrements[212]).toMatch(/;non;;;$/);
+    enregistrements[212] = enregistrements[212].replace(/;non;;;$/, ';peut-être;;;');
     await choisir(e, 'grande.csv', enUtf8(enregistrements.join('\r\n')));
     const apercu = dans(e, '[data-apercu]');
     expect(dans(e, '[data-valides] [data-nombre]').textContent).toBe('259');
@@ -469,7 +473,7 @@ describe('une ligne fausse n’arrête pas le reste (§ 10.1, § 2.1)', () => {
     const e = await ouvrir();
     await choisir(e, 'participants_cas_limites.csv', await lireLivre(urlCasLimites));
     const apercu = dans(e, '[data-apercu]');
-    expect(tous(e, '[data-apercu] [data-refusees] [data-ligne]').map((ligne) => ligne.dataset.ligne)).toEqual(['13']);
+    expect(tous(e, '[data-apercu] [data-refusees] [data-ligne]').map((ligne) => ligne.dataset.ligne)).toEqual(['13', '16']);
     expect(texteDe(refusee(apercu, 13))).toContain('13');
     expect(texteDe(refusee(apercu, 13))).toContain(t('NOM_ABSENT'));
     expect(refusee(apercu, 14)).toBeNull();
@@ -523,18 +527,23 @@ describe('le CSV des lignes refusées (§ 10.1)', () => {
     await choisir(e, 'participants_cas_limites.csv', octets);
     commande(e, 'enregistrerRefus').click();
     await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
-    const apercu = apercevoir(decoder(octets).texte, { participants: [], mode: 'ajouter' });
+    const apercu = apercevoir(decoder(octets).texte, { participants: [], mode: 'ajouter', tours: 2 });
     expect(e.enregistres[0].nomPropose).toBe(`${BASE}-refus.csv`);
     expect([...e.enregistres[0].octets]).toEqual([...exporterRefusCsv(apercu, libelle)]);
 
-    const corrige = decoder(e.enregistres[0].octets).texte.replace('\r\n;Clotilde;', '\r\nRavenelle;Clotilde;');
+    const corrige = decoder(e.enregistres[0].octets)
+      .texte.replace('\r\n;Clotilde;', '\r\nRavenelle;Clotilde;')
+      .replace(';0-2;555-0115;', ';2;555-0115;');
     expect(corrige).toContain('Ravenelle;Clotilde;');
     await choisir(e, 'corrige.csv', enUtf8(corrige));
     const vu = new Map(association(dans(e, '[data-apercu]')));
     expect(vu.get('ligne')).toBe(t('import.colonne.nonReconnue'));
     expect(vu.get('motif')).toBe(t('import.colonne.nonReconnue'));
     await importer(e);
-    expect(participantsDe(e).map(({ nom, prenom }) => [nom, prenom])).toEqual([['Ravenelle', 'Clotilde']]);
+    expect(participantsDe(e).map(({ nom, prenom, presence }) => [nom, prenom, presence])).toEqual([
+      ['Ravenelle', 'Clotilde', undefined],
+      ['Quenouillet', 'Aurèle', [2]],
+    ]);
   });
 
   test('après une mise à jour qui refuse des lignes, le rapport remet exporterRefus(apercu, libelle, resume.refusees), refus de la mise à jour compris', async () => {
@@ -561,8 +570,9 @@ describe('le CSV des lignes refusées (§ 10.1)', () => {
     const [entete, ...refus] = decouper(texte, ';').enregistrements;
     const rang = entete.indexOf('motif');
     expect(rang).toBeGreaterThan(0);
-    expect(refus.length).toBe(1);
+    expect(refus.map((ligne) => ligne[entete.indexOf('ligne')])).toEqual(['13', '16']);
     expect(refus[0][rang]).toBe(libelle('NOM_ABSENT', { ligne: 13, valeur: null }));
+    expect(refus[1][rang]).toBe(libelle('PRESENCE_HORS_TOURS', { ligne: 16, valeur: '0-2', tour: 0, tours: 2 }));
     expect(texte).not.toContain(OUVERTURE_TEMOIN);
     expect(texte).not.toContain(FERMETURE_TEMOIN);
   });
@@ -1403,7 +1413,7 @@ describe('le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4)',
     bouton.click();
     await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
     expect(e.enregistres[0].nomPropose).toBe('modele-participants.csv');
-    expect([...e.enregistres[0].octets]).toEqual([...modeleParticipants()]);
+    expect([...e.enregistres[0].octets]).toEqual([...modeleParticipants({ tours: 2 })]);
     await vi.waitFor(() => expect(noteDuModele(e)).not.toBeNull());
     expect(noteDuModele(e).getAttribute('role')).toBe('status');
     expect(texteDe(noteDuModele(e))).toBe(`${t('import.modele.enregistre')} modele-participants.csv`);
@@ -1483,5 +1493,50 @@ describe('le modèle à télécharger, de la nature cochée (§ 10.1, § 10.4)',
     expect(e.enregistres).toEqual([]);
     const remede = dans(e, '[data-refus="OBJECTIFS_NUMEROS_PARTAGES"] [data-commande="ouvrirSection"]');
     expect(remede.textContent.trim()).toBe(t('communs.remede.ouvrirSection.tables'));
+  });
+});
+
+describe('la colonne de la présence (§ 10.1)', () => {
+  test('le modèle téléchargé porte la neuvième colonne, « presence » ; importé sous quatre tours, son aperçu montre « tours 2 et 3 » et « tours 1 à 3 », les autres vides', async () => {
+    const e = await ouvrir({ tours: 4 });
+    commande(e, 'telechargerModele').click();
+    await vi.waitFor(() => expect(e.enregistres.length).toBe(1));
+    const octets = e.enregistres[0].octets;
+    expect([...octets]).toEqual([...modeleParticipants({ tours: 4 })]);
+    const [entete] = decouper(decoder(octets).texte, ';').enregistrements;
+    expect(entete.length).toBe(9);
+    expect(entete[8]).toBe('presence');
+    await choisir(e, 'modele-participants.csv', octets);
+    const apercu = dans(e, '[data-apercu]');
+    expect(new Map(association(apercu)).get('presence')).toBe(t('import.champ.presence'));
+    expect([2, 3, 4, 5].map((ligne) => cellule(apercu, ligne, 'presence'))).toEqual(['', 'tours 2 et 3', '', 'tours 1 à 3']);
+    expect(tous(e, '[data-apercu] [data-refusees] [data-ligne]')).toEqual([]);
+    await importer(e);
+    expect(participantsDe(e).map(({ presence }) => presence)).toEqual([undefined, [2, 3], undefined, [1, 2, 3]]);
+  });
+
+  test('l’aperçu montre « tours 2 à 4 » et « tous les tours » ; une ligne refusée porte son motif, à son rang', async () => {
+    const e = await ouvrir({ tours: 4 });
+    await choisir(e, 'presences.csv', enUtf8('nom;présence\r\nOmbrelle;2-4\r\nPervenche;tous\r\nLacasse;5\r\nSarcelle;01-mars\r\n'));
+    const apercu = dans(e, '[data-apercu]');
+    expect(cellule(apercu, 2, 'presence')).toBe('tours 2 à 4');
+    expect(cellule(apercu, 3, 'presence')).toBe(t('import.presence.tous'));
+    expect(tous(e, '[data-apercu] [data-refusees] [data-ligne]').map((ligne) => ligne.dataset.ligne)).toEqual(['4', '5']);
+    expect(texteDe(refusee(apercu, 4))).toContain(libelle('PRESENCE_HORS_TOURS', { ligne: 4, valeur: '5', tour: 5, tours: 4 }));
+    expect(texteDe(refusee(apercu, 5))).toContain(libelle('PRESENCE_ILLISIBLE', { ligne: 5, valeur: '01-mars', raison: 'date' }));
+  });
+
+  test('en mise à jour, une cellule vide se lit « présence inchangée », et la présence de la personne reste', async () => {
+    const e = await ouvrir({
+      tours: 4,
+      participants: [personne(1, 'Ombrelle', 'Iris', { presence: [1, 2] }), personne(2, 'Pervenche', 'Théo', { presence: [3] })],
+    });
+    await choisir(e, 'maj.csv', enUtf8('nom;prenom;presence\r\nOmbrelle;Iris;\r\nPervenche;Théo;tous\r\n'));
+    expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
+    const apercu = dans(e, '[data-apercu]');
+    expect(cellule(apercu, 2, 'presence')).toBe('présence inchangée');
+    expect(cellule(apercu, 3, 'presence')).toBe('tous les tours');
+    await importer(e);
+    expect(participantsDe(e).map(({ presence }) => presence)).toEqual([[1, 2], undefined]);
   });
 });

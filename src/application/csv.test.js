@@ -6,7 +6,10 @@
 // et lie le motif du CSV des refus au libellé français ; les textes des
 // deux refus d'une ligne pour ses étiquettes ; le CSV des objectifs de table,
 // son CSV des refus et les textes de ses refus (§ 10.4) ; le modèle des
-// objectifs de l'événement, refusé sans table. Les noms sont inventés.
+// objectifs de l'événement, refusé sans table ; le modèle des participants,
+// dont la présence suit les tours de l'événement ; les textes des refus de
+// la présence, et celui d'un aperçu calculé pour un autre nombre de tours.
+// Les noms sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import * as apercu from '../csv/apercu.js';
@@ -18,6 +21,7 @@ import { decouper } from '../csv/lecture.js';
 import * as normalisation from '../csv/normalisation.js';
 import * as objectifs from '../csv/objectifs.js';
 import { creerCharge } from '../stockage/document.js';
+import { appliquerCommande } from './commandes.js';
 import * as relais from './csv.js';
 import { libelle } from './libelles.js';
 
@@ -27,14 +31,13 @@ describe('csv : le relais de src/csv pour l’interface (§ 13.4)', () => {
       ['decoder', encodage.decoder],
       ['apercevoir', apercu.apercevoir],
       ['exporterParticipants', exportCsv.exporterParticipants],
-      ['modeleParticipants', exportCsv.modeleParticipants],
       ['bilanRemplacement', importCsv.bilanRemplacement],
       ['cleNormalisee', normalisation.cleNormalisee],
       ['apercevoirObjectifs', objectifs.apercevoirObjectifs],
       ['exporterObjectifs', objectifs.exporterObjectifs],
       ['bilanRemplacementObjectifs', objectifs.bilanRemplacementObjectifs],
     ];
-    assert.equal(attendus.length, 9);
+    assert.equal(attendus.length, 8);
     for (const [nom, fonction] of attendus) {
       assert.equal(typeof fonction, 'function', nom);
       assert.equal(relais[nom], fonction, nom);
@@ -221,5 +224,75 @@ describe('csv : les textes des refus et des avis du CSV des objectifs (§ 10.4)'
       'Remplacé les objectifs de table par import : 4 retirés, 1 ajouté, 0 remplacé',
     );
     assert.throws(() => libelle('ENTREE_IMPORTER_OBJECTIFS', { mode: 'ajouter', ajoutes: 1, remplaces: 0, retires: 0 }), RangeError);
+  });
+});
+
+describe('csv : le modèle des participants, sur l’événement (§ 10.1)', () => {
+  test('modeleParticipants lit le nombre de tours de la charge, comme le modèle de src/csv, sous chaque nombre de tours de 1 à 6', () => {
+    for (let tours = 1; tours <= 6; tours += 1) {
+      const charge = creerCharge({ id: 'evt-modele', nom: 'Soirée des Hérons', siegesParDefaut: 4, tours });
+      assert.deepEqual(relais.modeleParticipants(charge), exportCsv.modeleParticipants({ tours }), `${tours} tours`);
+      const lu = relais.apercevoir(relais.decoder(relais.modeleParticipants(charge)).texte, { tours });
+      assert.deepEqual([lu.refusGlobal, lu.refusees], [null, []], `${tours} tours`);
+    }
+    const quatre = creerCharge({ id: 'evt-modele', nom: 'Soirée des Hérons', siegesParDefaut: 4, tours: 4 });
+    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /^Tourteau;Basile;;;;non;;bénévole;1-3\r$/m);
+    assert.match(relais.decoder(relais.modeleParticipants(quatre)).texte, /;2, 3\r$/m);
+  });
+});
+
+describe('csv : les textes des refus de la présence (§ 10.1)', () => {
+  test('PRESENCE_ILLISIBLE cite la valeur ; la date dit de mettre la colonne en texte ; trois raisons, trois textes', () => {
+    const syntaxe = libelle('PRESENCE_ILLISIBLE', { ligne: 3, valeur: 'deux', raison: 'syntaxe' });
+    const intervalle = libelle('PRESENCE_ILLISIBLE', { ligne: 3, valeur: '3-1', raison: 'intervalle' });
+    const date = libelle('PRESENCE_ILLISIBLE', { ligne: 3, valeur: '01-mars', raison: 'date' });
+    assert.match(syntaxe, /« deux »/);
+    assert.match(intervalle, /« 3-1 »/);
+    assert.match(date, /« 01-mars »/);
+    assert.match(date, /texte/);
+    assert.equal(new Set([syntaxe, intervalle, date].map((texte) => texte.replace(/« [^»]* »/u, ''))).size, 3);
+  });
+
+  test('PRESENCE_HORS_TOURS cite la valeur, nomme le tour fautif et le nombre de tours de la soirée', () => {
+    const texte = libelle('PRESENCE_HORS_TOURS', { ligne: 4, valeur: '2, 5-6', tour: 5, tours: 4 });
+    assert.match(texte, /« 2, 5-6 »/);
+    assert.match(texte, /tour 5/);
+    assert.match(texte, /4 tours/);
+    assert.match(libelle('PRESENCE_HORS_TOURS', { ligne: 4, valeur: '0-2', tour: 0, tours: 1 }), /1 tour\b/);
+  });
+
+  test('une raison inconnue lève RangeError plutôt que d’écrire un motif faux', () => {
+    assert.throws(() => libelle('PRESENCE_ILLISIBLE', { ligne: 3, valeur: 'x', raison: 'horsTours' }), RangeError);
+  });
+
+  test('exporterRefus écrit sous motif le texte de chaque refus de la présence', () => {
+    const texte = ['nom;presence', 'Ombrelle;tours 1 et 2', 'Pervenche;0-2', 'Lacasse;1/3', ''].join('\r\n');
+    const lu = relais.apercevoir(texte, { tours: 3 });
+    assert.deepEqual(lu.refusees.map(({ code }) => code), ['PRESENCE_HORS_TOURS', 'PRESENCE_ILLISIBLE']);
+    const [entete, ...lignes] = decouper(relais.decoder(relais.exporterRefus(lu)).texte, ';').enregistrements;
+    lu.refusees.forEach(({ code, brut, ...details }, rang) => {
+      assert.equal(lignes[rang][entete.indexOf('motif')], libelle(code, details), code);
+    });
+  });
+
+  test("importerParticipants refuse un aperçu calculé pour un autre nombre de tours : APERCU_TOURS_CHANGES, remède null, le texte dit de relire le fichier", () => {
+    const charge = creerCharge({ id: 'evt-tours', nom: 'Soirée des Hérons', siegesParDefaut: 4, tours: 3 });
+    const apercuDeQuatre = relais.apercevoir(['nom;presence', 'Ombrelle;4', ''].join('\r\n'), { tours: 4 });
+    assert.throws(
+      () => appliquerCommande('importerParticipants', charge, { apercu: apercuDeQuatre, mode: 'ajouter' }),
+      (erreur) => {
+        assert.equal(erreur.name, 'ErreurCommande');
+        assert.equal(erreur.code, 'APERCU_TOURS_CHANGES');
+        assert.deepEqual(erreur.details, { tours: 3, toursApercu: 4, remede: null });
+        assert.equal(
+          libelle(erreur.code, erreur.details),
+          "Le nombre de tours a changé depuis l'aperçu (4 → 3) : relire le fichier pour refaire l'aperçu.",
+        );
+        return true;
+      },
+    );
+    const apercuDeTrois = relais.apercevoir(['nom;presence', 'Ombrelle;3', ''].join('\r\n'), { tours: 3 });
+    const { charge: apres } = appliquerCommande('importerParticipants', charge, { apercu: apercuDeTrois, mode: 'ajouter' });
+    assert.deepEqual(apres.participants.map(({ nom, presence }) => [nom, presence]), [['Ombrelle', [3]]]);
   });
 });

@@ -2,8 +2,9 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les textes des codes de src/csv (§ 10.1, § 10.4, § 14.6) : encodage,
-// séparateur, en-tête, refus d'une ligne, refus de la mise à jour, et ceux du
-// CSV des objectifs de table, son import et son libellé d'historique.
+// séparateur, en-tête, refus d'une ligne, présence comprise, refus de la
+// mise à jour, aperçu calculé pour un autre nombre de tours, et ceux du CSV
+// des objectifs de table, son import et son libellé d'historique.
 import { ETIQUETTE_LONGUEUR_MAX, ETIQUETTES_MAX } from '../../stockage/etiquettes.js';
 import { cite, compte, enumeration, nomDans } from './aides.js';
 
@@ -16,6 +17,24 @@ const refusEncodage = (constat) => () => `${constat} ${REMEDE_UTF8}`;
 const FAUTES_D_ETIQUETTE = new Map([
   ['longueur', `dépasse ${ETIQUETTE_LONGUEUR_MAX} caractères`],
   ['controle', 'porte un caractère de contrôle ou invisible, tabulation comprise'],
+]);
+
+// Ce qui rend illisible une cellule de présence, par la raison que rend
+// lirePresence (§ 10.1) : la suite de la phrase qui cite la cellule. Une
+// date dit de mettre la colonne en texte, seul remède à un tableur qui
+// convertit « 1-3 ».
+const FAUTES_DE_PRESENCE = new Map([
+  [
+    'syntaxe',
+    'ne se lit pas : des tours et des plages, comme « 1-3 », « 2, 3 » ou « tours 1 et 2 », ' +
+      '« tous », ou vide pour tous les tours.',
+  ],
+  ['intervalle', 'porte une plage à rebours : le premier tour vient avant le dernier, comme « 1-3 ».'],
+  [
+    'date',
+    'est une date : un tableur a changé la cellule. ' +
+      'Mettez la colonne de la présence au format texte, puis saisissez de nouveau ses tours.',
+  ],
 ]);
 
 export const TABLE = new Map([
@@ -61,6 +80,20 @@ export const TABLE = new Map([
   [
     'ETIQUETTES_TROP_NOMBREUSES',
     ({ nombre }) => `La ligne porte ${nombre} étiquettes : une personne ou un objectif en porte ${ETIQUETTES_MAX} au plus.`,
+  ],
+  [
+    'PRESENCE_ILLISIBLE',
+    ({ valeur, raison }) => `La présence ${cite(valeur)} ${nomDans(FAUTES_DE_PRESENCE, raison, 'raison')}`,
+  ],
+  [
+    'PRESENCE_HORS_TOURS',
+    ({ valeur, tour, tours }) =>
+      `La présence ${cite(valeur)} nomme le tour ${tour} : la soirée compte ${compte(tours, 'tour', 'tours')}.`,
+  ],
+  [
+    'APERCU_TOURS_CHANGES',
+    ({ tours, toursApercu }) =>
+      `Le nombre de tours a changé depuis l'aperçu (${toursApercu} → ${tours}) : relire le fichier pour refaire l'aperçu.`,
   ],
   [
     'PLUSIEURS_CORRESPONDENT',

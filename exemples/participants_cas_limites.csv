@@ -1,16 +1,17 @@
-﻿Nom;Prénom;Organisation;Courriel;Rôle;Exclu;Notes;Étiquettes;Téléphone
-Lanterneau;Basile;Chœur de l’Anse;basile.lanterneau@exemple.test;animation;;;"finance, Montréal";555-0101
-Pommerel;Capucine;Société des Hérons;capucine.pommerel@exemple.test;;;;bénévole|ressources humaines;555-0102
-Marbrelle;Gaspard;Cercle des Saules;;animation;;;Finance;555-0103
-Sablonnet;Ysaline;Chœur de l’Anse;;;;;;555-0104
-Givrecœur;Anselme;;anselme.givrecoeur@exemple.test;;;;;555-0105
-Tourterel;Héloïse;Cercle des Saules;;;oui;S’est désistée la veille;;555-0106
-Fenouillet;Côme;Société des Hérons;;;;"végétarien; sans noix, ni arachides";;555-0107
+﻿Nom;Prénom;Organisation;Courriel;Rôle;Exclu;Notes;Étiquettes;Présence;Téléphone
+Lanterneau;Basile;Chœur de l’Anse;basile.lanterneau@exemple.test;animation;;;"finance, Montréal";;555-0101
+Pommerel;Capucine;Société des Hérons;capucine.pommerel@exemple.test;;;;bénévole|ressources humaines;Tous;555-0102
+Marbrelle;Gaspard;Cercle des Saules;;animation;;;Finance;;555-0103
+Sablonnet;Ysaline;Chœur de l’Anse;;;;;;;555-0104
+Givrecœur;Anselme;;anselme.givrecoeur@exemple.test;;;;;;555-0105
+Tourterel;Héloïse;Cercle des Saules;;;oui;S’est désistée la veille;;;555-0106
+Fenouillet;Côme;Société des Hérons;;;;"végétarien; sans noix, ni arachides";;;555-0107
 Coudraie;Apolline;Chœur de l’Anse;;;;"Arrive après le premier tour
-repart avant le dessert";;555-0108
-Lanterneau;Basile;Chœur de l’Anse;;;;;;555-0109
-Brunœil;;Cercle des Saules;brunoeil@exemple.test;;;;;555-0110
-Ormelin;Faustine;Societe des herons;;;;;;555-0111
-;Clotilde;Cercle des Saules;clotilde@exemple.test;;;;;555-0112
-Ardoisier;Edgar;Société des Hérons;;;;;;555-0113
-Cressonnier;Bertille;Cercle des Saules;;;;;;555-0114
+repart avant le dessert";;;555-0108
+Lanterneau;Basile;Chœur de l’Anse;;;;;;;555-0109
+Brunœil;;Cercle des Saules;brunoeil@exemple.test;;;;;;555-0110
+Ormelin;Faustine;Societe des herons;;;;;;;555-0111
+;Clotilde;Cercle des Saules;clotilde@exemple.test;;;;;;555-0112
+Ardoisier;Edgar;Société des Hérons;;;;;;;555-0113
+Cressonnier;Bertille;Cercle des Saules;;;;;;;555-0114
+Quenouillet;Aurèle;Cercle des Saules;;;;;;0-2;555-0115

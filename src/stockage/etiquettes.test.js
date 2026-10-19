@@ -520,6 +520,11 @@ const DECOUPES_ADMISES = Object.freeze([
     source: '^data:[^,;]*(?:;[^,;=]+=[^,;]*)*;base64,([A-Za-z0-9+/]*={0,2})$',
     raison: 'la syntaxe d’une URL data:, où « , » et « ; » séparent type, paramètres et données',
   },
+  {
+    chemin: 'src/csv/presence.js',
+    source: '^(?:\\s*(?:,|;|et)\\s*|\\s+)',
+    raison: 'la grammaire d’une cellule de présence, où « , », « ; », « et » et les blancs séparent les tours',
+  },
 ]);
 
 /**

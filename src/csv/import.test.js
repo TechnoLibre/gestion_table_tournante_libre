@@ -6,7 +6,10 @@
 // du plan ; les refus globaux ; les identifiants jamais réutilisés ; le CSV
 // des lignes refusées, sa forme, et la boucle qui le corrige et le réimporte
 // tel quel ; la colonne des étiquettes, qu'une personne créée porte rangée
-// et qu'une mise à jour remplace sans jamais l'effacer. Les marques
+// et qu'une mise à jour remplace sans jamais l'effacer ; la colonne de la
+// présence, écrite canonique, gardée par une cellule vide en mise à jour,
+// et refusée sous un aperçu calculé pour un autre nombre de tours ; les
+// titres que pourvoient les seules personnes présentes. Les marques
 // combinantes s'écrivent par leur point de code.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
@@ -81,15 +84,15 @@ function proposition(id, participants) {
   };
 }
 
-// Charge d'un événement de deux tours, tables de quatre sièges par défaut,
-// qui porte ce qu'on lui donne. Le compteur des identifiants de participant
-// dépasse par défaut le plus grand donné ; ceux des tables et des
-// propositions, toujours.
+// Charge d'un événement de deux tours par défaut, tables de quatre sièges
+// par défaut, qui porte ce qu'on lui donne. Le compteur des identifiants de
+// participant dépasse par défaut le plus grand donné ; ceux des tables et
+// des propositions, toujours.
 function chargeDe({
   participants = [], tables = [], reservations = [], titres = [], propositions = [], retenu = null,
-  etat = 'brouillon', attribuerSieges = false, prochain,
+  etat = 'brouillon', attribuerSieges = false, prochain, tours = 2,
 } = {}) {
-  const charge = creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours: 2 });
+  const charge = creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours });
   const auDela = (ids) => ids.reduce((plus, id) => Math.max(plus, id), 0) + 1;
   charge.evenement.etat = etat;
   charge.reglages.attribuerSieges = attribuerSieges;
@@ -133,10 +136,13 @@ function retenuDe({ id, siegesAttribues, tables, capacites, tours, participants,
   return { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
 }
 
-// Aperçu d'un texte contre les participants et les tables de la charge, dans
-// le mode donné, puis import dans ce même mode.
+// Aperçu d'un texte contre les participants, les tables et le nombre de
+// tours de la charge, comme l'interface le calcule, dans le mode donné, puis
+// import dans ce même mode.
 function importer(charge, texte, mode, choix = {}) {
-  const apercu = apercevoir(texte, { participants: charge.participants, tables: charge.tables, choix, mode });
+  const apercu = apercevoir(texte, {
+    participants: charge.participants, tables: charge.tables, choix, mode, tours: charge.evenement.tours,
+  });
   return appliquerImport(charge, apercu, mode);
 }
 
@@ -1118,5 +1124,160 @@ describe('exporterRefus : la forme du CSV des refus (§ 10.1)', () => {
       const refusees = decoder(exporterRefus(apercevoir(lu.texte), MOTIF));
       assert.deepEqual(refusees, { texte: attendu, encodage: 'utf-8-bom' }, encodageLu);
     }
+  });
+});
+
+describe('appliquerImport : la colonne de la présence (§ 10.1)', () => {
+  test('une personne créée porte sa présence canonique, après ses étiquettes ; une cellule vide ou qui nomme chaque tour laisse le champ absent', () => {
+    const { charge: apres, resume } = importer(
+      chargeDe({ tours: 4 }),
+      csv('nom;etiquettes;presence', 'Ombrelle;finance;"3, 1, 3"', 'Pervenche;;', 'Lacasse;;tous', 'Sarcelle;;1-4', 'Bruyère;;tours 2 à 4'),
+      'ajouter',
+    );
+    assert.equal(resume.ajoutes, 5);
+    assert.deepEqual(apres.participants.map(({ nom, presence }) => [nom, presence]), [
+      ['Ombrelle', [1, 3]], ['Pervenche', undefined], ['Lacasse', undefined], ['Sarcelle', undefined], ['Bruyère', [2, 3, 4]],
+    ]);
+    assert.deepEqual(Object.keys(apres.participants[0]).slice(-2), ['etiquettes', 'presence']);
+    for (const participant of apres.participants.slice(1, 4)) assert.ok(!Object.hasOwn(participant, 'presence'), participant.nom);
+  });
+
+  test('en mise à jour : une cellule non vide remplace, une cellule vide garde, « tous » retire le champ', () => {
+    const charge = chargeDe({
+      tours: 4,
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', null, { presence: [1, 2] }),
+        personne(2, 'Pervenche', 'Théo', null, { presence: [3] }),
+        personne(3, 'Lacasse', 'Ondine', null, { presence: [2, 4] }),
+        personne(4, 'Sarcelle', null, null),
+        personne(5, 'Bruyère', 'Anouk', null, { presence: [1, 2] }),
+      ],
+    });
+    const { charge: apres, resume } = importer(
+      charge,
+      csv('nom;presence', 'Ombrelle;2-4', 'Pervenche;', 'Lacasse;Tous', 'Sarcelle;1', 'Bruyère;"3, 4"'),
+      'mettreAJour',
+    );
+    assert.deepEqual(apres.participants.map(({ presence }) => presence), [[2, 3, 4], [3], undefined, [1], [3, 4]]);
+    assert.ok(!Object.hasOwn(apres.participants[2], 'presence'));
+    assert.deepEqual(resume, resumeDe({ misAJour: 4, inchanges: 1 }), 'une présence de même longueur, aux tours autres, compte un modifié');
+  });
+
+  test('la comparaison se fait sur la forme canonique : un export réimporté, ou la même présence écrite autrement, ne compte aucun modifié', () => {
+    const charge = chargeDe({
+      tours: 4,
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', null, { presence: [1, 3] }),
+        personne(2, 'Pervenche', 'Théo', null, { presence: [2, 3, 4] }),
+        personne(3, 'Lacasse', 'Ondine'),
+      ],
+    });
+    const exporte = decoder(exporterParticipants(charge.participants)).texte;
+    assert.deepEqual(importer(charge, exporte, 'mettreAJour').resume, resumeDe({ inchanges: 3 }));
+    const autrement = csv('nom;présence', 'Ombrelle;tours 3 et 1', 'Pervenche;2 à 4', 'Lacasse;1-4');
+    const { charge: apres, resume } = importer(charge, autrement, 'mettreAJour');
+    assert.deepEqual(resume, resumeDe({ inchanges: 3 }));
+    assert.deepEqual(apres.participants, charge.participants);
+  });
+
+  test("un aperçu calculé pour un autre nombre de tours, la colonne associée : APERCU_TOURS_CHANGES, après PLAN_BLOQUE, avant le refus global de l'aperçu", () => {
+    const charge = chargeDe({ tours: 2 });
+    for (const mode of MODES) {
+      const apercu = apercevoir(csv('nom;presence', 'Ombrelle;3'), { mode, tours: 4 });
+      assert.throws(() => appliquerImport(charge, apercu, mode), refus('APERCU_TOURS_CHANGES', { tours: 2, toursApercu: 4 }), mode);
+      const refuse = apercevoir(csv('nom;presence', ';3'), { mode, tours: 4 });
+      assert.equal(refuse.refusGlobal, 'AUCUNE_LIGNE_VALIDE');
+      assert.throws(() => appliquerImport(charge, refuse, mode), refus('APERCU_TOURS_CHANGES', { tours: 2, toursApercu: 4 }), mode);
+      const bloquee = chargeDe({ tours: 2, etat: 'bloque' });
+      assert.throws(() => appliquerImport(bloquee, apercu, mode), refus('PLAN_BLOQUE', {}), mode);
+    }
+  });
+
+  test("sans colonne de présence, aucun refus pour un autre nombre de tours : l'aperçu par défaut s'applique", () => {
+    const charge = chargeDe({ tours: 3 });
+    for (const mode of MODES) {
+      const apercu = apercevoir(csv('nom;prenom', 'Ombrelle;Iris'), { mode });
+      assert.notEqual(apercu.tours, charge.evenement.tours);
+      assert.equal(appliquerImport(charge, apercu, mode).resume.ajoutes, 1, mode);
+    }
+  });
+
+  test('le CSV des refus reprend une ligne refusée pour sa présence, motif compris ; corrigée, elle se réimporte, sinon elle est refusée de nouveau', () => {
+    const charge = chargeDe({ tours: 2 });
+    const apercu = apercevoir(csv('nom;presence', 'Ombrelle;1', 'Pervenche;0-2', 'Lacasse;1/2'), { tours: 2 });
+    const { charge: apres, resume } = appliquerImport(charge, apercu, 'ajouter');
+    assert.deepEqual(resume.refusees.map(({ ligne, code }) => [ligne, code]), [[3, 'PRESENCE_HORS_TOURS'], [4, 'PRESENCE_ILLISIBLE']]);
+    const { texte } = decoder(exporterRefus(apercu, MOTIF, resume.refusees));
+    const { enregistrements } = decouper(texte, ';');
+    assert.deepEqual(enregistrements[1].slice(0, 3), ['Pervenche', '0-2', '3']);
+    assert.match(enregistrements[1][3], /^PRESENCE_HORS_TOURS .*"tour":0,"tours":2/);
+    assert.match(enregistrements[2][3], /^PRESENCE_ILLISIBLE .*"raison":"date"/);
+
+    const tel = apercevoir(texte, { participants: apres.participants, tours: 2 });
+    assert.deepEqual(tel.refusees.map(({ code }) => code), ['PRESENCE_HORS_TOURS', 'PRESENCE_ILLISIBLE']);
+    const corrige = texte.replace(';0-2;3;', ';2;3;').replace(';1/2;4;', ';1, 2;4;');
+    const relu = apercevoir(corrige, { participants: apres.participants, tours: 2 });
+    assert.deepEqual(relu.refusees, []);
+    const fin = appliquerImport(apres, relu, 'ajouter');
+    assert.deepEqual(fin.charge.participants.slice(-2).map(({ nom, presence }) => [nom, presence]), [['Pervenche', [2]], ['Lacasse', undefined]]);
+  });
+
+  test("la charge rendue, présences comprises, s'écrit et se relit : l'analyse du stockage l'admet", () => {
+    const charge = chargeDe({ tours: 4, participants: [personne(1, 'Ombrelle', 'Iris', null, { presence: [4] })] });
+    for (const mode of MODES) {
+      const { charge: apres } = importer(charge, csv('nom;prenom;presence', 'Ombrelle;Iris;1-3', 'Bruyère;Anouk;2, 4'), mode);
+      const relue = analyser(serialiser(apres, { revision: 2, produitVersion: VERSION.affichee })).charge;
+      assert.deepEqual(relue.participants, apres.participants, mode);
+      assert.ok(apres.participants.some(({ presence }) => presence !== undefined), mode);
+    }
+  });
+});
+
+describe('pourvoyeursDesTitres : seules pourvoient les personnes présentes (§ 4.1, § 4.4)', () => {
+  // Le pourvoyeur de chaque titre, par identifiant : la soirée, puis chaque tour.
+  const pourvoyeurs = (charge) =>
+    pourvoyeursDesTitres(charge).map(({ soiree, tours }) => [soiree?.participant ?? null, tours.map((r) => r?.participant ?? null)]);
+
+  test("une réservation ne pourvoit pas un tour d'absence ; une réservation « tous » d'une présence partielle ne pourvoit pas la soirée", () => {
+    const charge = chargeDe({
+      tours: 3,
+      participants: [
+        personne(1, 'Ombrelle', 'Iris', null, { presence: [1, 3] }),
+        personne(2, 'Pervenche', 'Théo', null, { presence: [2] }),
+        personne(3, 'Lacasse', 'Ondine'),
+      ],
+      tables: [table(1), table(2)],
+      reservations: [reservation(1, 1, 1), reservation(2, 1, 1, 2), reservation(2, 2, 1, 3), reservation(3, 2, 2)],
+      titres: [titre(1, 1), titre(2, 1), titre(2, 2)],
+      attribuerSieges: true,
+    });
+    assert.deepEqual(pourvoyeurs(charge), [
+      [null, [1, 2, 1]],
+      [null, [null, null, null]],
+      [3, [3, 3, 3]],
+    ]);
+    assert.equal(bilanRemplacement(charge).titresPourvus, 2);
+  });
+
+  test('en mode table, une présente pourvoit le titre que l’absente laisse à ce tour', () => {
+    const charge = chargeDe({
+      tours: 2,
+      participants: [personne(1, 'Ombrelle', 'Iris', null, { presence: [2] }), personne(2, 'Pervenche', 'Théo')],
+      tables: [table(1)],
+      reservations: [reservation(1, 1, null), reservation(2, 1, null)],
+      titres: [titre(1, 1)],
+    });
+    assert.deepEqual(pourvoyeurs(charge), [[2, [2, 1]]]);
+  });
+
+  test('sans présence, rien ne change : la soirée et chaque tour comme avant', () => {
+    const charge = chargeDe({
+      participants: [personne(1, 'Ombrelle', 'Iris'), personne(2, 'Pervenche', 'Théo')],
+      tables: [table(1)],
+      reservations: [reservation(1, 1, 1), reservation(2, 1, 2, 2)],
+      titres: [titre(1, 1), titre(1, 2)],
+      attribuerSieges: true,
+    });
+    assert.deepEqual(pourvoyeurs(charge), [[1, [1, 1]], [null, [null, 2]]]);
   });
 });

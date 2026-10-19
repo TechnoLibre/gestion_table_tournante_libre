@@ -5,7 +5,9 @@
 // table : nature du fichier, aperçu et rapport (§ 10.4, § 14.6). Chaque
 // clé commence par « import. ». Un nombre, un nom ou un rang s'affiche dans
 // son propre nœud de texte : les libellés qui le suivent ne reçoivent que ce
-// qui accorde le nom au compte.
+// qui accorde le nom au compte, ou, pour la présence, les tours que
+// toursNommes met en mots.
+import { toursNommes } from '../../application/libelles/aides.js';
 
 // Le singulier jusqu'à un, le pluriel au-delà, comme le veut le français.
 const accorde = (n, singulier, pluriel) => (n <= 1 ? singulier : pluriel);
@@ -77,6 +79,7 @@ export const TABLE = new Map([
   ['import.champ.exclu', 'exclu'],
   ['import.champ.notes', 'notes'],
   ['import.champ.etiquettes', 'étiquettes'],
+  ['import.champ.presence', 'présence'],
   ['import.champ.table', 'table'],
   ['import.champ.tour', 'tour'],
   ['import.champ.objectif', 'objectif'],
@@ -87,6 +90,11 @@ export const TABLE = new Map([
   ['import.regle.defaut', 'règle par défaut'],
   ['import.exclu.oui', 'oui'],
   ['import.exclu.non', 'non'],
+  // La présence lue : tous les tours, les tours nommés, ou, en mise à jour,
+  // une cellule vide qui garde la présence de la personne (§ 10.1).
+  ['import.presence.tous', 'tous les tours'],
+  ['import.presence.tours', ({ tours }) => toursNommes(tours)],
+  ['import.presence.inchangee', 'présence inchangée'],
   ['import.colonne.nonReconnue', 'non reconnue : ignorée'],
   ['import.colonne.aTrancher', 'à trancher'],
   ['import.colonne.ecartee', 'écartée par le choix'],

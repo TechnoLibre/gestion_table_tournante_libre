@@ -2,19 +2,21 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Épreuves de l'export de la liste (§ 10.2, § 10.3) : la forme exacte que
-// l'import lit — marque UTF-8, « ; », CRLF, les huit en-têtes de l'import —,
+// l'import lit — marque UTF-8, « ; », CRLF, les neuf en-têtes de l'import —,
 // les champs cités au besoin, les étiquettes jointes par « , » et relues par
-// la découpe de la saisie, et l'aller-retour qui importe, exporte, réimporte
+// la découpe de la saisie, la présence en plages et en listes, relue par la
+// grammaire de l'import, et l'aller-retour qui importe, exporte, réimporte
 // et compare champ par champ, sur chaque donnée d'épreuve de
 // test/fixtures/csv/, sur les fichiers d'exemple et sur une liste aux valeurs
 // difficiles. L'écriture d'un
 // CSV, que l'export partage avec le CSV des refus, s'éprouve contre la
 // découpe qui la relit. Le modèle à télécharger (§ 10.1) s'éprouve par son
-// texte exact, par chaque colonne qu'il remplit et par son import tel quel.
+// texte exact, par chaque colonne qu'il remplit et par son import tel quel,
+// sous chaque nombre de tours de 1 à 6, puisque sa présence le suit.
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
-import { creerCharge } from '../stockage/document.js';
+import { TOURS_MAX, creerCharge } from '../stockage/document.js';
 import { SEPARATEURS_ETIQUETTES, lireEtiquettes } from '../stockage/etiquettes.js';
 import { VALEURS_EXCLU, apercevoir } from './apercu.js';
 import { CHAMPS } from './colonnes.js';
@@ -22,6 +24,7 @@ import { decoder } from './encodage.js';
 import { JOINTURE_ETIQUETTES, SEPARATEUR, ecrireCsv, exporterParticipants, modeleParticipants } from './export.js';
 import { appliquerImport } from './import.js';
 import { decouper } from './lecture.js';
+import { JOINTURE_PRESENCE } from './presence.js';
 
 const FIXTURES = new URL('../../test/fixtures/csv/', import.meta.url);
 const EXEMPLES = new URL('../../exemples/', import.meta.url);
@@ -41,17 +44,18 @@ const personne = (id, nom, autres = {}) => ({
 
 // Champs d'un participant, dans l'ordre du fichier d'état.
 const CHAMPS_DU_PARTICIPANT = [
-  'id', 'nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes', 'exclu', 'etiquettes',
+  'id', 'nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes', 'exclu', 'etiquettes', 'presence',
 ];
 
-// Participants qu'un import crée, en ajoutant, sur une charge neuve, à
-// partir des octets d'un fichier ; l'aperçu ne doit refuser ni le texte ni
-// aucune ligne, sauf celles que refusesAdmis nomme par leur code.
-function importer(octets, nom, refusesAdmis = []) {
-  const apercu = apercevoir(decoder(octets).texte);
+// Participants qu'un import crée, en ajoutant, sur une charge neuve de tours
+// tours, à partir des octets d'un fichier, l'aperçu calculé sous ce nombre
+// de tours ; l'aperçu ne doit refuser ni le texte ni aucune ligne, sauf
+// celles que refusesAdmis nomme par leur code.
+function importer(octets, nom, refusesAdmis = [], tours = 4) {
+  const apercu = apercevoir(decoder(octets).texte, { tours });
   assert.equal(apercu.refusGlobal, null, nom);
   assert.deepEqual(apercu.refusees.map(({ code }) => code), refusesAdmis, nom);
-  const charge = creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours: 2 });
+  const charge = creerCharge({ id: 'evt-essai', nom: "Soirée d'essai", siegesParDefaut: 4, tours });
   return appliquerImport(charge, apercu, 'ajouter').charge.participants;
 }
 
@@ -67,7 +71,7 @@ function memesParticipants(obtenus, attendus, nom) {
 }
 
 describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", () => {
-  test("marque UTF-8, « ; », CRLF, les huit en-têtes de l'import dans leur ordre, un participant par ligne", () => {
+  test("marque UTF-8, « ; », CRLF, les neuf en-têtes de l'import dans leur ordre, un participant par ligne", () => {
     const octets = exporterParticipants([
       personne(1, 'Ombrelle', {
         prenom: 'Iris', appartenance: 'Club des Merles', courriel: 'iris@exemple.test', titrePressenti: 'animation',
@@ -80,16 +84,16 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
       texteDe(octets),
       MARQUE +
         csv(
-          'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes',
-          'Ombrelle;Iris;Club des Merles;iris@exemple.test;animation;non;;',
-          'Pervenche;Théo;;;;oui;arrive tard;',
+          'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes;presence',
+          'Ombrelle;Iris;Club des Merles;iris@exemple.test;animation;non;;;',
+          'Pervenche;Théo;;;;oui;arrive tard;;',
         ),
     );
   });
 
   test("les en-têtes sont les champs de l'import, CHAMPS, et le séparateur « ; »", () => {
     assert.equal(SEPARATEUR, ';');
-    assert.equal(CHAMPS.join(';'), 'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes');
+    assert.equal(CHAMPS.join(';'), 'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes;presence');
     assert.equal(texteDe(exporterParticipants([])), `${MARQUE}${CHAMPS.join(SEPARATEUR)}\r\n`);
   });
 
@@ -97,7 +101,7 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
     assert.equal(VALEURS_EXCLU.get('oui'), true);
     assert.equal(VALEURS_EXCLU.get('non'), false);
     const texte = texteDe(exporterParticipants([personne(1, 'Ombrelle', { exclu: true }), personne(2, 'Pervenche')]));
-    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;oui;;', 'Pervenche;;;;;non;;'));
+    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;oui;;;', 'Pervenche;;;;;non;;;'));
   });
 
   test('un champ qui porte « ; », un guillemet ou une fin de ligne s\'écrit cité, ses guillemets doublés', () => {
@@ -111,20 +115,22 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
       MARQUE +
         csv(
           CHAMPS.join(';'),
-          'Ombrelle;;"Club ""Les Merles"" ; nord";;;non;"premier\r\nsecond";',
-          '"""Pervenche""";;;"theo\r@exemple.test";;non;"a\nb";',
-          'Sarcelle;;;;;non;virgule, tabulation\tseules;',
+          'Ombrelle;;"Club ""Les Merles"" ; nord";;;non;"premier\r\nsecond";;',
+          '"""Pervenche""";;;"theo\r@exemple.test";;non;"a\nb";;',
+          'Sarcelle;;;;;non;virgule, tabulation\tseules;;',
         ),
     );
   });
 
   test("les lignes suivent l'ordre de la liste reçue", () => {
     const texte = texteDe(exporterParticipants([personne(7, 'Sarcelle'), personne(2, 'Ombrelle')]));
-    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Sarcelle;;;;;non;;', 'Ombrelle;;;;;non;;'));
+    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Sarcelle;;;;;non;;;', 'Ombrelle;;;;;non;;;'));
   });
 
   test("exporterParticipants ne modifie pas la liste reçue", () => {
-    const participants = [personne(1, 'Ombrelle', { prenom: 'Iris', notes: 'a;b', exclu: true, etiquettes: ['b', 'a'] })];
+    const participants = [
+      personne(1, 'Ombrelle', { prenom: 'Iris', notes: 'a;b', exclu: true, etiquettes: ['b', 'a'], presence: [2, 3] }),
+    ];
     const avant = structuredClone(participants);
     exporterParticipants(participants);
     assert.deepEqual(participants, avant);
@@ -141,11 +147,17 @@ describe("exporterParticipants : la forme exacte que l'import lit (§ 10.2)", ()
     refuse(personne(2, 'Ombrelle', { etiquettes: 'finance' }), 'participant 2 de la liste, etiquettes : liste de textes attendu, reçu "finance"');
     refuse(personne(2, 'Ombrelle', { etiquettes: null }), 'participant 2 de la liste, etiquettes : liste de textes attendu, reçu null');
     refuse(personne(2, 'Ombrelle', { etiquettes: ['finance', 3] }), 'participant 2 de la liste, etiquettes : liste de textes attendu, reçu ["finance",3]');
+    const tours = 'liste croissante de tours attendu';
+    refuse(personne(2, 'Ombrelle', { presence: 'tous' }), `participant 2 de la liste, presence : ${tours}, reçu "tous"`);
+    refuse(personne(2, 'Ombrelle', { presence: null }), `participant 2 de la liste, presence : ${tours}, reçu null`);
+    refuse(personne(2, 'Ombrelle', { presence: [] }), `participant 2 de la liste, presence : ${tours}, reçu []`);
+    refuse(personne(2, 'Ombrelle', { presence: [3, 1] }), `participant 2 de la liste, presence : ${tours}, reçu [3,1]`);
+    refuse(personne(2, 'Ombrelle', { presence: [0, 1] }), `participant 2 de la liste, presence : ${tours}, reçu [0,1]`);
   });
 });
 
 describe("exporterParticipants : la colonne des étiquettes (§ 10.2, A18)", () => {
-  test("toujours écrite, en dernier : les étiquettes jointes par « , », dans l'ordre de la liste ; sans étiquette, vide", () => {
+  test("toujours écrite, avant la présence : les étiquettes jointes par « , », dans l'ordre de la liste ; sans étiquette, vide", () => {
     assert.equal(JOINTURE_ETIQUETTES, ', ');
     const texte = texteDe(exporterParticipants([
       personne(1, 'Ombrelle', { etiquettes: ['Montréal', 'finance'] }),
@@ -154,7 +166,7 @@ describe("exporterParticipants : la colonne des étiquettes (§ 10.2, A18)", () 
     ]));
     assert.equal(
       texte,
-      MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;non;;Montréal, finance', 'Pervenche;;;;;non;;', 'Lacasse;;;;;non;;bénévole'),
+      MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;non;;Montréal, finance;', 'Pervenche;;;;;non;;;', 'Lacasse;;;;;non;;bénévole;'),
     );
   });
 
@@ -166,7 +178,7 @@ describe("exporterParticipants : la colonne des étiquettes (§ 10.2, A18)", () 
 
   test("une étiquette qui commence par « = » s'exporte telle quelle : aucune neutralisation de formule", () => {
     const texte = texteDe(exporterParticipants([personne(1, 'Ombrelle', { etiquettes: ['=SOMME(A1)', '+33', '@arobase'] })]));
-    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;non;;=SOMME(A1), +33, @arobase'));
+    assert.equal(texte, MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;non;;=SOMME(A1), +33, @arobase;'));
     const [personneRelue] = importer(new TextEncoder().encode(texte), 'formule');
     assert.deepEqual(personneRelue.etiquettes, ['+33', '=SOMME(A1)', '@arobase']);
   });
@@ -188,8 +200,8 @@ describe("exporterParticipants : l'aller-retour, champ par champ (§ 10.2)", () 
 
   test("chaque fichier d'exemple : importé, exporté, réimporté, les mêmes participants, étiquettes comprises", () => {
     const exemples = [
-      ['participants_cas_limites.csv', ['NOM_ABSENT']],
-      ['participants_cas_limites_cp1252.csv', ['NOM_ABSENT']],
+      ['participants_cas_limites.csv', ['NOM_ABSENT', 'PRESENCE_HORS_TOURS']],
+      ['participants_cas_limites_cp1252.csv', ['NOM_ABSENT', 'PRESENCE_HORS_TOURS']],
       ['participants_demo_petite.csv', []],
       ['participants_demo_grande.csv', []],
     ];
@@ -215,10 +227,40 @@ describe("exporterParticipants : l'aller-retour, champ par champ (§ 10.2)", () 
       personne(5, 'Bruyère', { titrePressenti: 'fin"', notes: '"' }),
       personne(6, 'Lacasse', { etiquettes: ['=SOMME(A1)', 'Montréal', 'finance', 'ressources humaines', 'é'] }),
       personne(7, 'Pervenche', { etiquettes: Array.from({ length: 20 }, (_, i) => `m${String(i).padStart(2, '0')}`) }),
+      personne(8, 'Tilleraie', { presence: [1, 2, 3] }),
+      personne(9, 'Brumeval', { presence: [2, 4], etiquettes: ['finance'] }),
+      personne(10, 'Grisaille', { presence: [3], exclu: true }),
     ];
     const octets = exporterParticipants(difficiles);
     assert.equal(apercevoir(decoder(octets).texte).separateur, ';');
     memesParticipants(importer(octets, 'difficiles'), difficiles, 'difficiles');
+  });
+});
+
+describe('exporterParticipants : la colonne de la présence (§ 10.2)', () => {
+  test('la neuvième et dernière, toujours écrite : vide sans champ, chaque suite d’au moins trois tours en « a-b », les autres tours joints par « , »', () => {
+    assert.equal(JOINTURE_PRESENCE, ', ');
+    assert.equal(CHAMPS.at(-1), 'presence');
+    const texte = texteDe(exporterParticipants([
+      personne(1, 'Ombrelle', { presence: [1, 2, 3, 5] }),
+      personne(2, 'Pervenche'),
+      personne(3, 'Lacasse', { presence: [2, 3], etiquettes: ['finance'] }),
+      personne(4, 'Sarcelle', { presence: [4] }),
+    ]));
+    assert.equal(
+      texte,
+      MARQUE + csv(CHAMPS.join(';'), 'Ombrelle;;;;;non;;;1-3, 5', 'Pervenche;;;;;non;;;', 'Lacasse;;;;;non;;finance;2, 3', 'Sarcelle;;;;;non;;;4'),
+    );
+  });
+
+  test('l’aller-retour export → import (ajouter) rend les mêmes présences, sous le nombre de tours de l’événement', () => {
+    const participants = [
+      personne(1, 'Ombrelle', { presence: [1, 2, 3] }),
+      personne(2, 'Pervenche', { presence: [2, 3] }),
+      personne(3, 'Lacasse'),
+      personne(4, 'Sarcelle', { presence: [1, 3, 4, 5] }),
+    ];
+    memesParticipants(importer(exporterParticipants(participants), 'présences', [], 5), participants, 'présences');
   });
 });
 
@@ -251,23 +293,52 @@ describe("ecrireCsv : l'écriture d'un CSV, qu'une découpe relit telle quelle",
 });
 
 describe("modeleParticipants : le modèle à télécharger, dans la forme de l'export (§ 10.1)", () => {
+  // Le modèle sous quatre tours : la plage « 1-3 », la liste « 2, 3 ».
   const ATTENDU = csv(
-    'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes',
-    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal',
-    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines',
-    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;',
-    'Tourteau;Basile;;;;non;;bénévole',
+    'nom;prenom;appartenance;courriel;titre_pressenti;exclu;notes;etiquettes;presence',
+    'Ombrelle;Iris;Coopérative Aubier;iris.ombrelle@exemple.test;animation;non;;finance, Montréal;',
+    'Pervenche;Théo;Coopérative Aubier;;;non;arrive au deuxième tour;ressources humaines;2, 3',
+    'Lacasse;Ondine;Atelier Ressac;ondine.lacasse@exemple.test;;oui;désistement annoncé;;',
+    'Tourteau;Basile;;;;non;;bénévole;1-3',
   );
 
+  // Les cellules de présence du modèle, rang à rang, sous tours tours.
+  const presencesDuModele = (tours) =>
+    decouper(decoder(modeleParticipants({ tours })).texte, SEPARATEUR).enregistrements.slice(1).map((ligne) => ligne.at(-1));
+
   test("marque UTF-8, « ; », CRLF, l'en-tête de l'export puis quatre personnes inventées", () => {
-    const octets = modeleParticipants();
+    const octets = modeleParticipants({ tours: 4 });
     assert.ok(octets instanceof Uint8Array);
     assert.deepEqual([...octets.subarray(0, 3)], [0xef, 0xbb, 0xbf]);
     assert.equal(texteDe(octets), MARQUE + ATTENDU);
   });
 
+  test('la présence suit le nombre de tours : « 1-3 » et « 2, 3 » à quatre, « 1, 2 » et « 2, 3 » à trois, « 1 » et « 2 » à deux, vide à un', () => {
+    assert.deepEqual(presencesDuModele(4), ['', '2, 3', '', '1-3']);
+    assert.deepEqual(presencesDuModele(3), ['', '2, 3', '', '1, 2']);
+    assert.deepEqual(presencesDuModele(2), ['', '2', '', '1']);
+    assert.deepEqual(presencesDuModele(1), ['', '', '', '']);
+    assert.deepEqual(presencesDuModele(6), ['', '2, 3', '', '1-5']);
+    assert.deepEqual(presencesDuModele(TOURS_MAX), ['', '2, 3', '', `1-${TOURS_MAX - 1}`]);
+  });
+
+  test('pour R de 1 à 6, importé tel quel sous R tours : aucun refus, la présence de chaque personne celle de sa cellule', () => {
+    for (let tours = 1; tours <= 6; tours += 1) {
+      const importes = importer(modeleParticipants({ tours }), `modèle, ${tours} tours`, [], tours);
+      const attendues = tours === 1 ? [undefined, undefined] : tours === 2 ? [[2], [1]] : [[2, 3], Array.from({ length: tours - 1 }, (_, i) => i + 1)];
+      assert.deepEqual(importes.map(({ presence }) => presence), [undefined, attendues[0], undefined, attendues[1]], `${tours} tours`);
+    }
+  });
+
+  test('un nombre de tours qui n’est pas un entier de 1 à TOURS_MAX : TypeError', () => {
+    for (const tours of [0, TOURS_MAX + 1, 2.5, '4', undefined]) {
+      assert.throws(() => modeleParticipants({ tours }), TypeError, String(tours));
+    }
+    assert.throws(() => modeleParticipants(), TypeError);
+  });
+
   test("chaque colonne que l'import lit porte au moins une valeur ; exclu ses deux valeurs, une cellule plusieurs étiquettes", () => {
-    const { enregistrements } = decouper(decoder(modeleParticipants()).texte, SEPARATEUR);
+    const { enregistrements } = decouper(decoder(modeleParticipants({ tours: 4 })).texte, SEPARATEUR);
     const [entete, ...lignes] = enregistrements;
     assert.deepEqual(entete, [...CHAMPS]);
     CHAMPS.forEach((champ, rang) => assert.ok(lignes.some((ligne) => ligne[rang] !== ''), champ));
@@ -277,30 +348,31 @@ describe("modeleParticipants : le modèle à télécharger, dans la forme de l'e
   });
 
   test("importé tel quel : aucun refus, les quatre personnes, champ par champ", () => {
-    memesParticipants(importer(modeleParticipants(), 'modèle'), [
+    memesParticipants(importer(modeleParticipants({ tours: 4 }), 'modèle'), [
       personne(1, 'Ombrelle', {
         prenom: 'Iris', appartenance: 'Coopérative Aubier', courriel: 'iris.ombrelle@exemple.test', titrePressenti: 'animation',
         etiquettes: ['Montréal', 'finance'],
       }),
       personne(2, 'Pervenche', {
         prenom: 'Théo', appartenance: 'Coopérative Aubier', notes: 'arrive au deuxième tour', etiquettes: ['ressources humaines'],
+        presence: [2, 3],
       }),
       personne(3, 'Lacasse', {
         prenom: 'Ondine', appartenance: 'Atelier Ressac', courriel: 'ondine.lacasse@exemple.test', notes: 'désistement annoncé',
         exclu: true,
       }),
-      personne(4, 'Tourteau', { prenom: 'Basile', etiquettes: ['bénévole'] }),
+      personne(4, 'Tourteau', { prenom: 'Basile', etiquettes: ['bénévole'], presence: [1, 2, 3] }),
     ], 'modèle');
-    const apercu = apercevoir(decoder(modeleParticipants()).texte);
+    const apercu = apercevoir(decoder(modeleParticipants({ tours: 4 })).texte, { tours: 4 });
     assert.deepEqual([apercu.doublons, apercu.multilignes], [[], []]);
   });
 
   test('deux appels rendent les mêmes octets, dans deux tableaux distincts', () => {
-    const premier = modeleParticipants();
-    const second = modeleParticipants();
+    const premier = modeleParticipants({ tours: 4 });
+    const second = modeleParticipants({ tours: 4 });
     assert.notEqual(premier, second);
     assert.deepEqual(premier, second);
     premier.fill(0);
-    assert.equal(texteDe(modeleParticipants()), MARQUE + ATTENDU);
+    assert.equal(texteDe(modeleParticipants({ tours: 4 })), MARQUE + ATTENDU);
   });
 });

@@ -20,7 +20,9 @@
 //      dans un seul champ, et deux personnes se fondraient en une ;
 //   5. aucun en-tête reconnu, puis aucune colonne associée à nom, refusent ;
 //   6. chaque enregistrement non vide qui suit l'en-tête est une ligne,
-//      valide ou refusée pour un seul motif ; zéro ligne valide refuse ;
+//      valide ou refusée pour un seul motif ; zéro ligne valide refuse. La
+//      présence se lit sous le nombre de tours de l'aperçu (Apercu.tours),
+//      le seul réglage de l'événement que l'aperçu reçoive ;
 //   7. les appartenances des lignes valides se réconcilient avec celles des
 //      existants, et les doublons se relèvent ; en mode remplacer, qui
 //      retire chaque existant, avec ceux du fichier seuls. Leurs étiquettes
@@ -33,6 +35,7 @@
 // Une ligne refusée ne refuse pas le texte : le reste s'importe, et la ligne
 // revient dans le CSV des refus (§ 10.1).
 
+import { TOURS_MAX } from '../stockage/document.js';
 import { ETIQUETTES_MAX, lireEtiquettes } from '../stockage/etiquettes.js';
 import { associer, reconnaitre } from './colonnes.js';
 import { contientNul } from './encodage.js';
@@ -40,6 +43,7 @@ import { ErreurCsv } from './erreurs.js';
 import { cleEtiquette, reconcilier as reconcilierEtiquettes } from './etiquettes.js';
 import { choisirSeparateur, decouper, enregistrementVide } from './lecture.js';
 import { cleNormalisee } from './normalisation.js';
+import { lirePresence } from './presence.js';
 
 /**
  * Modes de l'import, que l'aperçu et l'import reçoivent tous deux (§ 10.1).
@@ -89,11 +93,20 @@ export const VALEURS_EXCLU = new Map([
  *           même clé, ETIQUETTES_MAX au plus ; null pour une colonne absente
  *           ou une cellule qui n'en donne aucune — vide, blanche ou faite de
  *           séparateurs —, qui laisse celles d'une personne mise à jour
+ * @property {number[]|null} presence      les tours de présence lus par
+ *           lirePresence sous Apercu.tours, croissants, 1..R pour « tous » ;
+ *           null pour une colonne absente ou une cellule vide ou blanche :
+ *           vide vaut tous les tours pour une personne créée, et laisse la
+ *           présence d'une personne mise à jour
  *
  * @typedef {Object} Apercu
  * @property {'ajouter'|'mettreAJour'|'remplacer'} mode   le mode pour lequel
  *           l'aperçu est calculé : appliquerImport n'applique l'aperçu que
  *           dans ce mode
+ * @property {number} tours                le nombre de tours sous lequel la
+ *           présence est lue, porté sous un refus global comme sans :
+ *           appliquerImport refuse un aperçu dont la colonne de la présence
+ *           est associée sous un autre nombre de tours que l'événement
  * @property {string|null} separateur      null pour un fichier à une colonne,
  *           et quand aucun séparateur n'est établi : sous CARACTERE_NUL, sous
  *           SEPARATEUR_INTROUVABLE, pour un texte vide ou blanc
@@ -104,15 +117,20 @@ export const VALEURS_EXCLU = new Map([
  *           les lignes valides ; ligne : rang de l'enregistrement à partir de
  *           1, l'en-tête compris ; champs : chaînes en NFC, blancs de bord
  *           retirés, vide → null ; brut : les champs tels que découpés
- * @property {Array<{ligne: number, code: string, valeur: string|null, raison?: string, nombre?: number, brut: string[]}>} refusees
+ * @property {Array<{ligne: number, code: string, valeur: string|null, raison?: string, nombre?: number,
+ *             tour?: number, tours?: number, brut: string[]}>} refusees
  *           code : CHAMPS_EN_TROP, NOM_ABSENT, EXCLU_INCONNU,
- *           ETIQUETTE_MAL_FORMEE, ETIQUETTES_TROP_NOMBREUSES ; valeur : la
- *           valeur d'« exclu » refusée, en NFC sans ses blancs de bord, ou la
- *           première étiquette fautive de la cellule, mise en forme ; null
- *           pour les autres codes ; raison, sous ETIQUETTE_MAL_FORMEE :
- *           'controle' ou 'longueur', celle de lireEtiquettes ; nombre, sous
+ *           ETIQUETTE_MAL_FORMEE, ETIQUETTES_TROP_NOMBREUSES,
+ *           PRESENCE_ILLISIBLE, PRESENCE_HORS_TOURS ; valeur : la valeur
+ *           d'« exclu » ou de la présence refusée, en NFC sans ses blancs de
+ *           bord, ou la première étiquette fautive de la cellule, mise en
+ *           forme ; null pour les autres codes ; raison, sous
+ *           ETIQUETTE_MAL_FORMEE : 'controle' ou 'longueur', celle de
+ *           lireEtiquettes ; sous PRESENCE_ILLISIBLE : 'syntaxe',
+ *           'intervalle' ou 'date', celle de lirePresence ; nombre, sous
  *           ETIQUETTES_TROP_NOMBREUSES : les étiquettes de clés distinctes
- *           que porte la cellule
+ *           que porte la cellule ; tour et tours, sous PRESENCE_HORS_TOURS :
+ *           le premier tour fautif et le nombre de tours de l'aperçu
  * @property {Array<{affichee: string, orthographes: Array<{texte: string, lignes: number[]}>}>} fusions
  *           chaque groupe d'au moins deux orthographes, existantes comprises
  *           hors du mode remplacer, qui porte une ligne valide, rangé par sa
@@ -161,16 +179,17 @@ export const VALEURS_EXCLU = new Map([
  *           null sinon
  */
 
-// Aperçu d'un texte refusé en entier : son mode, ce que la lecture a établi
-// avant le refus, aucune ligne.
+// Aperçu d'un texte refusé en entier : son mode et son nombre de tours, ce
+// que la lecture a établi avant le refus, aucune ligne.
 function refuserEn(
-  mode,
+  { mode, tours },
   code,
   { separateur = null, entetes = [], association = { colonnes: {}, ambigus: [], nonReconnues: [] } } = {},
   ligne = null,
 ) {
   return {
     mode,
+    tours,
     separateur,
     entetes,
     association,
@@ -227,15 +246,32 @@ function etiquettesDe(cellule) {
   return { etiquettes: etiquettes.length === 0 ? null : etiquettes };
 }
 
+// La présence d'une cellule (§ 10.1), par la grammaire de lirePresence sous
+// tours : { presence }, null pour une cellule vide ou blanche, ou le motif
+// du refus de la ligne, PRESENCE_HORS_TOURS pour un tour hors de la soirée,
+// PRESENCE_ILLISIBLE avec sa raison sinon. Lire un tour inconnu comme « tous
+// les tours » assiérait une personne aux tours où elle ne vient pas.
+// cellule : undefined quand le champ n'a pas de colonne ou que
+// l'enregistrement s'arrête avant elle.
+function presenceDe(cellule, tours) {
+  if (cellule === undefined) return { presence: null };
+  const { presence, faute } = lirePresence(cellule, tours);
+  if (faute === undefined) return { presence };
+  const { raison, valeur, tour } = faute;
+  if (raison === 'horsTours') return { refus: { code: 'PRESENCE_HORS_TOURS', valeur, tour, tours } };
+  return { refus: { code: 'PRESENCE_ILLISIBLE', valeur, raison } };
+}
+
 // Lit un enregistrement de données selon les colonnes associées, largeur
-// étant le nombre d'en-têtes. Rend { champs }, l'appartenance telle qu'écrite
-// ou null quand elle n'en nomme aucune, les étiquettes telles que découpées,
-// ou le motif du refus { code, valeur }, avec raison ou nombre pour les
-// étiquettes, un seul, dans cet ordre : un champ non vide au-delà de
-// l'en-tête, qui dit une ligne décalée dont aucune valeur n'est sûre ; un nom
-// vide ; une valeur d'« exclu » hors de la liste fermée ; une étiquette mal
-// formée ; trop d'étiquettes.
-function lireLigne(brut, largeur, colonnes) {
+// étant le nombre d'en-têtes et tours celui de l'aperçu. Rend { champs },
+// l'appartenance telle qu'écrite ou null quand elle n'en nomme aucune, les
+// étiquettes telles que découpées, ou le motif du refus { code, valeur },
+// avec raison, nombre, tour ou tours selon le code, un seul, dans cet
+// ordre : un champ non vide au-delà de l'en-tête, qui dit une ligne décalée
+// dont aucune valeur n'est sûre ; un nom vide ; une valeur d'« exclu » hors
+// de la liste fermée ; une étiquette mal formée ; trop d'étiquettes ; une
+// présence illisible ou hors de la soirée.
+function lireLigne(brut, largeur, colonnes, tours) {
   if (!enregistrementVide(brut.slice(largeur))) return { code: 'CHAMPS_EN_TROP', valeur: null };
   const lire = (champ) => valeurDe(brut, colonnes[champ]);
   const nom = lire('nom');
@@ -245,6 +281,8 @@ function lireLigne(brut, largeur, colonnes) {
   if (exclu === undefined) return { code: 'EXCLU_INCONNU', valeur: valeurExclu };
   const { etiquettes, refus } = etiquettesDe(colonnes.etiquettes === undefined ? undefined : brut[colonnes.etiquettes]);
   if (refus !== undefined) return refus;
+  const lue = presenceDe(colonnes.presence === undefined ? undefined : brut[colonnes.presence], tours);
+  if (lue.refus !== undefined) return lue.refus;
   const appartenance = lire('appartenance');
   return {
     champs: {
@@ -256,6 +294,7 @@ function lireLigne(brut, largeur, colonnes) {
       notes: lire('notes'),
       exclu,
       etiquettes,
+      presence: lue.presence,
     },
   };
 }
@@ -444,15 +483,25 @@ function multilignesDe(lignes, separateur) {
  *   une ambiguïté de l'en-tête (voir associer)
  * @param {'ajouter'|'mettreAJour'|'remplacer'} [options.mode]  ajouter par
  *   défaut
+ * @param {number} [options.tours]  le nombre de tours de l'événement, sous
+ *   lequel la présence se lit ; TOURS_MAX par défaut, qui ne refuse qu'un
+ *   tour au-delà du plus grand nombre de tours admis
  * @returns {Apercu}
  * @throws {TypeError} quand texte n'est pas une chaîne : des octets passent
- *   d'abord par decoder ; pour un mode inconnu
+ *   d'abord par decoder ; pour un mode inconnu ; pour un nombre de tours qui
+ *   n'est pas un entier de 1 à TOURS_MAX
  */
-export function apercevoir(texte, { participants = [], tables = [], choix = {}, mode = 'ajouter' } = {}) {
+export function apercevoir(
+  texte,
+  { participants = [], tables = [], choix = {}, mode = 'ajouter', tours = TOURS_MAX } = {},
+) {
   if (typeof texte !== 'string') throw new TypeError('texte : chaîne attendue');
   if (!MODES.includes(mode)) throw new TypeError(`mode : ${MODES.join(', ')} attendu, reçu ${String(mode)}`);
-  // Chaque refus global porte le mode de l'aperçu.
-  const refuser = (...refus) => refuserEn(mode, ...refus);
+  if (!Number.isInteger(tours) || tours < 1 || tours > TOURS_MAX) {
+    throw new TypeError(`tours : entier de 1 à ${TOURS_MAX} attendu, reçu ${String(tours)}`);
+  }
+  // Chaque refus global porte le mode et le nombre de tours de l'aperçu.
+  const refuser = (...refus) => refuserEn({ mode, tours }, ...refus);
   if (contientNul(texte)) return refuser('CARACTERE_NUL');
 
   let separateur;
@@ -488,7 +537,7 @@ export function apercevoir(texte, { participants = [], tables = [], choix = {}, 
     const brut = enregistrements[indice];
     if (enregistrementVide(brut)) continue;
     const ligne = indice + 1;
-    const { champs: lus, ...refus } = lireLigne(brut, entetes.length, association.colonnes);
+    const { champs: lus, ...refus } = lireLigne(brut, entetes.length, association.colonnes, tours);
     if (lus === undefined) refusees.push({ ligne, ...refus, brut });
     else valides.push({ ligne, champs: lus, brut });
   }
@@ -511,6 +560,7 @@ export function apercevoir(texte, { participants = [], tables = [], choix = {}, 
   }));
   return {
     mode,
+    tours,
     ...lu,
     lignes,
     refusees,

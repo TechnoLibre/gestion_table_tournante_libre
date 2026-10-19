@@ -103,8 +103,12 @@ const csv = (personnes) =>
     ...personnes.map((p) => [p.nom, p.prenom ?? '', p.appartenance ?? '', p.exclu ? 'oui' : '', p.titre ?? '', p.notes ?? ''].join(';')),
   ].join('\n');
 
+// L'aperçu d'un texte sous le nombre de tours de l'événement ouvert, comme
+// la section d'import le calcule : la présence s'y lit sous ce nombre.
+const apercuPour = (m, texte) => apercevoir(texte, { tours: m.seance.etat().charge.evenement.tours });
+
 // Importe un texte par la commande, comme le ferait l'aperçu.
-const importer = (m, texte) => m.seance.executer('importerParticipants', { apercu: apercevoir(texte), mode: 'ajouter' });
+const importer = (m, texte) => m.seance.executer('importerParticipants', { apercu: apercuPour(m, texte), mode: 'ajouter' });
 
 // Les octets d'un CSV livré, lus par son adresse.
 async function octetsLivres(url) {
@@ -663,7 +667,7 @@ describe('la grille (§ 10.2, § 19.3)', () => {
     const m = await evenementOuvert();
     const octets = await octetsLivres(CAS_LIMITES);
     const { resume } = await m.seance.executer('importerParticipants', {
-      apercu: apercevoir(decoder(octets).texte),
+      apercu: apercuPour(m, decoder(octets).texte),
       mode: 'ajouter',
     });
     await rendu();
@@ -1270,7 +1274,7 @@ describe('export et collage (§ 10.2)', () => {
   test('« Exporter la liste » remet les octets d’exporterParticipants ; réimportés dans un événement neuf, ils rendent les mêmes participants, exclu compris', async () => {
     const m = await evenementOuvert();
     const octets = await octetsLivres(CAS_LIMITES);
-    await m.seance.executer('importerParticipants', { apercu: apercevoir(decoder(octets).texte), mode: 'ajouter' });
+    await m.seance.executer('importerParticipants', { apercu: apercuPour(m, decoder(octets).texte), mode: 'ajouter' });
     await rendu();
     const releves = [];
     m.fs.enregistrerSous = async (nomPropose, contenu) => {
@@ -1290,7 +1294,7 @@ describe('export et collage (§ 10.2)', () => {
     await m.seance.fermer();
     await m.seance.creer({ nom: 'Soirée des Grisailles', date: null, siegesParDefaut: 8, tours: 2 });
     await m.seance.passerEnEcriture();
-    await m.seance.executer('importerParticipants', { apercu: apercevoir(decoder(releves[0].octets).texte), mode: 'ajouter' });
+    await m.seance.executer('importerParticipants', { apercu: apercuPour(m, decoder(releves[0].octets).texte), mode: 'ajouter' });
     const sansId = (liste) => liste.map(({ id, ...champs }) => champs);
     expect(avant.length).toBeGreaterThan(0);
     expect(sansId(participants(m))).toEqual(sansId(avant));

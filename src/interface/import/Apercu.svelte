@@ -12,7 +12,8 @@
   // puis, dans un bloc à part, celles d'étiquettes, les doublons, les
   // homonymes d'une mise à jour, les cellules sur plusieurs lignes. Le
   // rapport le reprend pour l'aperçu appliqué, ses refus remplacés par ceux
-  // du résumé. Une cellule d'étiquettes montre chacune en pastille.
+  // du résumé. Une cellule d'étiquettes montre chacune en pastille ; une
+  // cellule à clé se traduit avec ses détails, les tours de la présence.
   //
   // modele : le modèle ; source : { origine: 'fichier'|'collage', nom } ;
   // participants : ceux de la charge, qui nomment les personnes désignées ;
@@ -136,7 +137,7 @@
           {#each modele.lignes as { ligne, cellules } (ligne)}
             <tr data-ligne={ligne}>
               <th scope="row">{format.nombre(ligne)}</th>
-              {#each cellules as { champ, texte, cle, etiquettes } (champ)}
+              {#each cellules as { champ, texte, cle, etiquettes, details } (champ)}
                 <td data-cellule={champ}>
                   {#if etiquettes !== null}
                     {#if etiquettes.length > 0}
@@ -146,7 +147,7 @@
                         {/each}
                       </ul>
                     {/if}
-                  {:else}{cle === null ? (texte ?? '') : t(cle)}{/if}
+                  {:else}{cle === null ? (texte ?? '') : t(cle, details ?? {})}{/if}
                 </td>
               {/each}
             </tr>

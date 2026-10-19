@@ -5,8 +5,9 @@
 // d'agir ; l'aperçu appliqué à une charge, selon le mode ; le CSV des lignes
 // refusées, qui se corrige et se réimporte tel quel.
 //
-// appliquerImport n'agit que sur un plan qui n'est pas bloqué, et sur un
-// aperçu sans refus global ni ambiguïté. Il rend une charge neuve, qui ne
+// appliquerImport n'agit que sur un plan qui n'est pas bloqué, sur un
+// aperçu dont la présence est lue sous le nombre de tours de l'événement, et
+// sans refus global ni ambiguïté. Il rend une charge neuve, qui ne
 // partage aucun objet avec celle qu'il reçoit : l'import entier tient dans
 // une seule entrée d'historique, que la commande d'import écrit (§ 8.2). Les
 // personnes ajoutées prennent leurs identifiants à partir de
@@ -21,6 +22,7 @@
 // champs en trop parmi les vingt premiers enregistrements, qui fait refuser
 // le texte entier, à son rang, par le choix du séparateur.
 
+import { estPresentAuTour, presenceCanonique } from '../moteur/presence.js';
 import { MODES, designer, indexerParNom } from './apercu.js';
 import { ErreurCsv } from './erreurs.js';
 import { SEPARATEUR, ecrireCsv } from './export.js';
@@ -28,7 +30,8 @@ import { enregistrementVide } from './lecture.js';
 
 // Champs d'une ligne de l'aperçu, dans l'ordre du participant : ceux que
 // porte une personne créée, et que pose une mise à jour quand la cellule
-// n'est pas vide. Les étiquettes, une liste, se posent à part (poser).
+// n'est pas vide. Les étiquettes et la présence, des listes, se posent à
+// part (poser).
 const CHAMPS_LUS = Object.freeze(['nom', 'prenom', 'appartenance', 'courriel', 'titrePressenti', 'notes', 'exclu']);
 
 // En-têtes des deux colonnes qu'ajoute le CSV des refus, inconnues de
@@ -43,16 +46,22 @@ const ENTETE_MOTIF = 'motif';
  * @typedef {Object} LigneRefusee
  * @property {number} ligne          rang de l'enregistrement, en-tête compris
  * @property {string} code           CHAMPS_EN_TROP, NOM_ABSENT,
- *           EXCLU_INCONNU, ETIQUETTE_MAL_FORMEE ou
- *           ETIQUETTES_TROP_NOMBREUSES, de l'aperçu ; PLUSIEURS_CORRESPONDENT
- *           ou DEJA_DESIGNE, de la mise à jour
+ *           EXCLU_INCONNU, ETIQUETTE_MAL_FORMEE, ETIQUETTES_TROP_NOMBREUSES,
+ *           PRESENCE_ILLISIBLE ou PRESENCE_HORS_TOURS, de l'aperçu ;
+ *           PLUSIEURS_CORRESPONDENT ou DEJA_DESIGNE, de la mise à jour
  * @property {string|null} valeur    la valeur d'« exclu » refusée sous
  *           EXCLU_INCONNU, l'étiquette fautive sous ETIQUETTE_MAL_FORMEE,
- *           null sous tout autre code
+ *           la cellule de présence sous PRESENCE_ILLISIBLE et
+ *           PRESENCE_HORS_TOURS, null sous tout autre code
  * @property {string} [raison]       ETIQUETTE_MAL_FORMEE : 'controle' ou
- *           'longueur'
+ *           'longueur' ; PRESENCE_ILLISIBLE : 'syntaxe', 'intervalle' ou
+ *           'date'
  * @property {number} [nombre]       ETIQUETTES_TROP_NOMBREUSES : le nombre
  *           d'étiquettes de la cellule
+ * @property {number} [tour]         PRESENCE_HORS_TOURS : le premier tour
+ *           fautif de la cellule
+ * @property {number} [tours]        PRESENCE_HORS_TOURS : le nombre de
+ *           tours de l'aperçu
  * @property {number[]} [participants]  refus de la mise à jour : les
  *           identifiants croissants que la ligne désigne
  * @property {number} [premiereLigne]   DEJA_DESIGNE : la ligne qui désigne
@@ -141,41 +150,54 @@ function repartirTitres(rangs, titres, couvrantes, attribuerSieges) {
   return pris;
 }
 
+// Vrai quand le participant est présent à chacun des tours 1..tours.
+function presentATousLesTours(participant, tours) {
+  for (let tour = 1; tour <= tours; tour += 1) if (!estPresentAuTour(participant, tour)) return false;
+  return true;
+}
+
 /**
  * La règle d'un titre pourvu (§ 4.1, § 4.4, § 2.1 étape 6), seule
  * implémentation : bilanRemplacement en compte les titres, l'application en
  * tire ses listes de travail et l'état de ses places. Un titre n'est pourvu
  * que par la réservation d'une personne non exclue — la réservation d'une
  * exclue est suspendue — qui tient sa place : même table, et même siège
- * quand la réservation en porte un. Sous des sièges attribués, une
- * réservation sans siège ne pourvoit aucun titre. En mode table, une
+ * quand la réservation en porte un. Au tour r, seules pourvoient les
+ * réservations des personnes présentes à r : la réservation d'une absente y
+ * est suspendue. Sous des sièges attribués, une réservation sans siège ne
+ * pourvoit aucun titre. En mode table, une
  * réservation sans siège pourvoit au plus un titre de sa table, dans l'ordre
  * des sièges des titres, après ceux que les réservations à un siège
  * pourvoient (repartirTitres).
  *
  * Rend, rang à rang de charge.titres, { soiree, tours } : soiree, la
  * réservation « tous les tours » qui le pourvoit pour la soirée, null sans
- * elle — la répartition des seules réservations « tous », la même à chaque
- * tour ; tours[r − 1], la réservation qui le pourvoit au tour r, parmi
- * toutes celles qui couvrent ce tour, null sans elle. Une réservation d'un
- * tour désigné pourvoit le titre à ce tour seulement. La charge n'est pas
+ * elle — la répartition des seules réservations « tous » des personnes
+ * présentes à chaque tour, la même à chaque tour ; tours[r − 1], la
+ * réservation qui le pourvoit au tour r, parmi toutes celles qui couvrent ce
+ * tour et dont la personne y est présente, null sans elle. Une réservation
+ * d'un tour désigné pourvoit le titre à ce tour seulement. La charge n'est pas
  * modifiée.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @returns {Array<{soiree: Object|null, tours: Array<Object|null>}>}
  */
 export function pourvoyeursDesTitres({ evenement, reglages, participants, reservations, titres }) {
-  const presents = new Set(participants.filter(({ exclu }) => !exclu).map(({ id }) => id));
+  const presents = new Map(participants.filter(({ exclu }) => !exclu).map((personne) => [personne.id, personne]));
   const actives = reservations.filter(({ participant }) => presents.has(participant)).sort(ordreDesReservations);
   const rendus = titres.map(() => ({ soiree: null, tours: Array.from({ length: evenement.tours }, () => null) }));
   for (const [idTable, rangs] of titresParTable(titres)) {
     const aLaTable = actives.filter(({ table }) => table === idTable);
-    const tous = aLaTable.filter(({ portee }) => portee === 'tous');
+    const tous = aLaTable.filter(
+      ({ portee, participant }) => portee === 'tous' && presentATousLesTours(presents.get(participant), evenement.tours),
+    );
     for (const [rang, reservation] of repartirTitres(rangs, titres, tous, reglages.attribuerSieges)) {
       rendus[rang].soiree = reservation;
     }
     for (let tour = 1; tour <= evenement.tours; tour += 1) {
-      const couvrantes = aLaTable.filter((r) => r.portee === 'tous' || r.tour === tour);
+      const couvrantes = aLaTable.filter(
+        (r) => (r.portee === 'tous' || r.tour === tour) && estPresentAuTour(presents.get(r.participant), tour),
+      );
       for (const [rang, reservation] of repartirTitres(rangs, titres, couvrantes, reglages.attribuerSieges)) {
         rendus[rang].tours[tour - 1] = reservation;
       }
@@ -229,22 +251,33 @@ const rangees = (etiquettes) => [...etiquettes].sort(comparerTextes);
 // à rang : deux listes distinctes de même contenu sont égales.
 const memesEtiquettes = (a, b) => a.length === b.length && a.every((motCle, rang) => motCle === b[rang]);
 
-// Participant créé d'une ligne de l'aperçu, ses clés dans l'ordre du
-// fichier d'état : un exclu vide vaut non ; les étiquettes, rangées, en
-// dernier, la clé absente quand la ligne n'en porte pas (§ 8.9).
-function creer(id, { nom, prenom, appartenance, courriel, titrePressenti, notes, exclu, etiquettes }) {
+// Vrai quand deux présences canoniques sont la même : undefined (tous les
+// tours) des deux côtés, ou les mêmes tours rang à rang.
+const memePresence = (a, b) =>
+  a === undefined || b === undefined ? a === b : a.length === b.length && a.every((tour, rang) => tour === b[rang]);
+
+// Participant créé d'une ligne de l'aperçu, sous tours tours, ses clés dans
+// l'ordre du fichier d'état : un exclu vide vaut non ; les étiquettes,
+// rangées, puis la présence canonique, en dernier, chaque clé absente quand
+// la ligne n'en porte pas (§ 8.9). Une présence vide ou qui nomme chaque
+// tour laisse le champ absent : la personne vient à tous les tours.
+function creer(id, { nom, prenom, appartenance, courriel, titrePressenti, notes, exclu, etiquettes, presence }, tours) {
   const participant = { id, nom, prenom, appartenance, courriel, titrePressenti, notes, exclu: exclu ?? false };
   if (etiquettes !== null) participant.etiquettes = rangees(etiquettes);
+  const canonique = presence === null ? undefined : presenceCanonique(presence, tours);
+  if (canonique !== undefined) participant.presence = canonique;
   return participant;
 }
 
-// Pose sur le participant chaque champ non vide de la ligne : un champ vide
-// garde la valeur (§ 10.1). Une cellule d'étiquettes non vide remplace la
-// liste entière, une cellule vide la garde : un CSV n'efface pas les
-// étiquettes. Les listes se comparent étiquette par étiquette, une fois
-// rangées : un fichier réimporté ne compte aucun modifié. Rend vrai quand
-// une valeur a changé.
-function poser(participant, champs) {
+// Pose sur le participant chaque champ non vide de la ligne, sous tours
+// tours : un champ vide garde la valeur (§ 10.1). Une cellule d'étiquettes
+// non vide remplace la liste entière, une cellule vide la garde : un CSV
+// n'efface pas les étiquettes. De même, une cellule de présence non vide
+// remplace la présence, une cellule vide la garde, et « tous » retire le
+// champ. Les listes se comparent élément par élément, les étiquettes une
+// fois rangées, la présence sous sa forme canonique : un fichier réimporté
+// ne compte aucun modifié. Rend vrai quand une valeur a changé.
+function poser(participant, champs, tours) {
   let change = false;
   for (const champ of CHAMPS_LUS) {
     if (champs[champ] !== null && champs[champ] !== participant[champ]) {
@@ -256,6 +289,14 @@ function poser(participant, champs) {
     const etiquettes = rangees(champs.etiquettes);
     if (!memesEtiquettes(etiquettes, participant.etiquettes ?? [])) {
       participant.etiquettes = etiquettes;
+      change = true;
+    }
+  }
+  if (champs.presence !== null) {
+    const canonique = presenceCanonique(champs.presence, tours);
+    if (!memePresence(canonique, participant.presence)) {
+      if (canonique === undefined) delete participant.presence;
+      else participant.presence = canonique;
       change = true;
     }
   }
@@ -272,8 +313,9 @@ function poser(participant, champs) {
 // jamais ajoutée. Le participant qu'une ligne désigne seule est mis à jour
 // par la première de ces lignes, dans l'ordre du fichier ; chaque suivante
 // est refusée DEJA_DESIGNE : deux lignes ne se fondent pas en silence dans
-// une même personne.
-function mettreAJour(participants, lignes) {
+// une même personne. tours est celui de l'événement, sous lequel la
+// présence d'une ligne se met en forme.
+function mettreAJour(participants, lignes, tours) {
   const index = indexerParNom(participants);
   const parId = new Map(participants.map((participant) => [participant.id, participant]));
   const designes = new Map();
@@ -300,7 +342,7 @@ function mettreAJour(participants, lignes) {
       continue;
     }
     designes.set(id, ligne);
-    if (poser(parId.get(id), champs)) misAJour += 1;
+    if (poser(parId.get(id), champs, tours)) misAJour += 1;
     else inchanges += 1;
   }
   return { nouvelles, refusees, misAJour, inchanges };
@@ -318,7 +360,9 @@ function mettreAJour(participants, lignes) {
  *   l'aperçu nomme dans homonymes. Désigné seul, le participant prend chaque champ non vide de
  *   la ligne, nom, prénom et appartenance compris, et garde la valeur d'un
  *   champ vide ; exclu vide le garde ; une cellule d'étiquettes non vide
- *   remplace la liste, vide la garde. Une ligne qui ne désigne personne est
+ *   remplace la liste, vide la garde ; une cellule de présence non vide
+ *   remplace la présence, vide la garde, et « tous » la retire. Une ligne
+ *   qui ne désigne personne est
  *   ajoutée ; qui en désigne plusieurs, refusée PLUSIEURS_CORRESPONDENT ; qui
  *   désigne un participant qu'une ligne précédente désigne déjà, refusée
  *   DEJA_DESIGNE ;
@@ -327,8 +371,9 @@ function mettreAJour(participants, lignes) {
  *   restent (bilanRemplacement).
  * Une personne créée prend les champs de sa ligne, exclu vide valant non,
  * ses étiquettes rangées par unités de code, absentes quand la ligne n'en
- * porte pas ; les identifiants partent de prochainsIds.participant, dans
- * l'ordre du fichier, et le compteur avance d'autant. La charge et l'aperçu
+ * porte pas, sa présence canonique, absente quand la cellule est vide ou
+ * nomme chaque tour ; les identifiants partent de prochainsIds.participant,
+ * dans l'ordre du fichier, et le compteur avance d'autant. La charge et l'aperçu
  * reçus ne sont pas modifiés ; la charge rendue n'en partage aucun objet.
  *
  * Le résumé (ResumeImport) compte les participants ajoutés, mis à jour,
@@ -347,8 +392,13 @@ function mettreAJour(participants, lignes) {
  * @param {'ajouter'|'mettreAJour'|'remplacer'} mode
  * @returns {{charge: import('../stockage/types.js').Charge, resume: ResumeImport}}
  * @throws {ErreurCsv} dans cet ordre : PLAN_BLOQUE, détails {}, en état
- *   bloqué ; le refus global de l'aperçu, son code, détails { ligne }, le rang
- *   que nomme l'aperçu ou null ; AMBIGUITE, détails { champs }, les champs
+ *   bloqué ; APERCU_TOURS_CHANGES, détails { tours, toursApercu }, quand la
+ *   colonne de la présence est associée et que l'aperçu l'a lue sous un
+ *   autre nombre de tours que l'événement — le nombre a changé depuis
+ *   l'aperçu, par un Défaire par exemple : c'est un état de la séance, et
+ *   relire le fichier refait l'aperçu ; le refus global de l'aperçu, son
+ *   code, détails { ligne }, le rang que nomme l'aperçu ou null ;
+ *   AMBIGUITE, détails { champs }, les champs
  *   que l'en-tête laisse ambigus, tant que le choix ne les tranche pas
  * @throws {TypeError} pour un mode inconnu, et pour un aperçu calculé pour un
  *   autre mode : l'aperçu montré à l'opérateur est celui que l'import
@@ -358,6 +408,10 @@ export function appliquerImport(charge, apercu, mode) {
   if (!MODES.includes(mode)) throw new TypeError(`mode : ${MODES.join(', ')} attendu, reçu ${String(mode)}`);
   if (apercu.mode !== mode) throw new TypeError(`aperçu calculé pour ${String(apercu.mode)}, import en ${mode}`);
   if (charge.evenement.etat === 'bloque') throw new ErreurCsv('PLAN_BLOQUE');
+  const { tours } = charge.evenement;
+  if (apercu.association.colonnes.presence !== undefined && apercu.tours !== tours) {
+    throw new ErreurCsv('APERCU_TOURS_CHANGES', { tours, toursApercu: apercu.tours });
+  }
   if (apercu.refusGlobal !== null) throw new ErreurCsv(apercu.refusGlobal, { ligne: apercu.refusGlobalLigne });
   const { ambigus } = apercu.association;
   if (ambigus.length > 0) throw new ErreurCsv('AMBIGUITE', { champs: ambigus.map(({ champ }) => champ) });
@@ -373,11 +427,11 @@ export function appliquerImport(charge, apercu, mode) {
     resultat.participants = [];
     resultat.reservations = [];
   } else if (mode === 'mettreAJour') {
-    suite = mettreAJour(resultat.participants, apercu.lignes);
+    suite = mettreAJour(resultat.participants, apercu.lignes, tours);
     aAjouter = suite.nouvelles;
   }
   for (const { champs } of aAjouter) {
-    resultat.participants.push(creer(resultat.prochainsIds.participant, champs));
+    resultat.participants.push(creer(resultat.prochainsIds.participant, champs, tours));
     resultat.prochainsIds.participant += 1;
   }
   return {

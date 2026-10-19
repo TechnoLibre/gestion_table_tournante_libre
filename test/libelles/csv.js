@@ -26,6 +26,9 @@ export const EXEMPLES = [
   ['EXCLU_INCONNU', { ligne: 6, valeur: 'peut-être' }],
   ['ETIQUETTE_MAL_FORMEE', { ligne: 6, valeur: 'ressources\thumaines', raison: 'controle' }],
   ['ETIQUETTES_TROP_NOMBREUSES', { ligne: 6, valeur: null, nombre: 21 }],
+  ['PRESENCE_ILLISIBLE', { ligne: 6, valeur: '01-mars', raison: 'date' }],
+  ['PRESENCE_HORS_TOURS', { ligne: 6, valeur: '2, 5-6', tour: 5, tours: 4 }],
+  ['APERCU_TOURS_CHANGES', { tours: 3, toursApercu: 4, remede: null }],
   ['PLUSIEURS_CORRESPONDENT', { ligne: 7, valeur: null, participants: [3, 8] }],
   ['DEJA_DESIGNE', { ligne: 9, valeur: null, participants: [3], premiereLigne: 4 }],
   ['PLAN_BLOQUE', { remede: { geste: 'debloquer' } }],
@@ -48,4 +51,32 @@ export const EXEMPLES = [
   ['ENTREE_IMPORTER_OBJECTIFS', { mode: 'mettreAJour', ajoutes: 3, remplaces: 1, retires: 0 }],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  [
+    'PRESENCE_ILLISIBLE',
+    { ligne: 6, valeur: 'deux', raison: 'syntaxe' },
+    "La présence « deux » ne se lit pas : des tours et des plages, comme « 1-3 », « 2, 3 » ou « tours 1 et 2 », " +
+      '« tous », ou vide pour tous les tours.',
+  ],
+  [
+    'PRESENCE_ILLISIBLE',
+    { ligne: 6, valeur: '3-1', raison: 'intervalle' },
+    'La présence « 3-1 » porte une plage à rebours : le premier tour vient avant le dernier, comme « 1-3 ».',
+  ],
+  [
+    'PRESENCE_ILLISIBLE',
+    { ligne: 6, valeur: '01-mars', raison: 'date' },
+    'La présence « 01-mars » est une date : un tableur a changé la cellule. ' +
+      'Mettez la colonne de la présence au format texte, puis saisissez de nouveau ses tours.',
+  ],
+  [
+    'PRESENCE_HORS_TOURS',
+    { ligne: 6, valeur: '2, 5-6', tour: 5, tours: 4 },
+    "La présence « 2, 5-6 » nomme le tour 5 : la soirée compte 4 tours.",
+  ],
+  [
+    'APERCU_TOURS_CHANGES',
+    { tours: 3, toursApercu: 4, remede: null },
+    "Le nombre de tours a changé depuis l'aperçu (4 → 3) : relire le fichier pour refaire l'aperçu.",
+  ],
+];

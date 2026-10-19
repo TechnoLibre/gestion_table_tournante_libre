@@ -32,9 +32,12 @@ export const ENTETES_DES_CHAMPS = Object.freeze([
   champ('titre_pressenti', ['titre_pressenti', 'titre', 'rôle']),
   champ('exclu', ['exclu']),
   champ('notes', ['notes']),
-  // En dernier : l'export l'écrit après les sept champs d'avant les
-  // étiquettes, et le collage en bloc les lit à la huitième colonne (§ 10.2).
+  // En dernier : l'export écrit les étiquettes après les sept premiers
+  // champs, puis la présence, et le collage en bloc les lit à la huitième et
+  // à la neuvième colonne (§ 10.2). « presence » et « présence » partagent
+  // leur clé d'en-tête, sous le même champ.
   champ('etiquettes', ['etiquettes', 'étiquette', 'mots-clés']),
+  champ('presence', ['presence', 'présence', 'tours de présence']),
 ]);
 
 /** Champs d'un participant que porte un CSV, dans l'ordre de l'export. */

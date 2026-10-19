@@ -956,6 +956,7 @@ majuscules ni aux accents.
 | `exclu` | — |
 | `notes` | — |
 | `etiquettes` | `étiquette`, `mots-clés` |
+| `presence` | `présence`, `tours de présence` |
 
 <!-- engendre:fin colonnes-csv -->
 

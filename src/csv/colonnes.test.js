@@ -13,9 +13,9 @@ import { CHAMPS, ENTETES_DES_CHAMPS, associer, associerSelon, reconnaitre, recon
 import { cleEntete } from './normalisation.js';
 
 describe('CHAMPS', () => {
-  test('les huit champs du § 10.1, dans leur ordre, etiquettes en dernier, figés', () => {
+  test('les neuf champs du § 10.1, dans leur ordre, etiquettes puis presence en dernier, figés', () => {
     assert.deepEqual(CHAMPS, [
-      'nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes',
+      'nom', 'prenom', 'appartenance', 'courriel', 'titre_pressenti', 'exclu', 'notes', 'etiquettes', 'presence',
     ]);
     assert.ok(Object.isFrozen(CHAMPS));
   });
@@ -34,6 +34,7 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
         ['exclu', ['exclu']],
         ['notes', ['notes']],
         ['etiquettes', ['etiquettes', 'étiquette', 'mots-clés']],
+        ['presence', ['presence', 'présence', 'tours de présence']],
       ],
     );
     assert.deepEqual(ENTETES_DES_CHAMPS.map(([champ]) => champ), [...CHAMPS]);
@@ -53,14 +54,21 @@ describe('ENTETES_DES_CHAMPS : la table des colonnes reconnues, seule source (§
 
   test('chaque en-tête de la table est reconnu sous son champ : la reconnaissance la lit', () => {
     const paires = ENTETES_DES_CHAMPS.flatMap(([champ, entetes]) => entetes.map((entete) => [entete, champ]));
-    assert.equal(paires.length, 15);
+    assert.equal(paires.length, 18);
     for (const [entete, champ] of paires) assert.equal(reconnaitre(entete), champ, entete);
   });
 
-  test('aucune clé d’en-tête n’est celle de deux en-têtes : un synonyme ne vole la colonne d’aucun autre champ', () => {
-    const cles = ENTETES_DES_CHAMPS.flatMap(([, entetes]) => entetes.map((entete) => cleEntete(entete)));
-    assert.equal(cles.length, 15);
-    assert.equal(new Set(cles).size, cles.length);
+  test('aucune clé d’en-tête n’est celle de deux champs : un synonyme ne vole la colonne d’aucun autre champ', () => {
+    const champDeCle = new Map();
+    for (const [champ, entetes] of ENTETES_DES_CHAMPS) {
+      for (const entete of entetes) {
+        const cle = cleEntete(entete);
+        assert.equal(champDeCle.get(cle) ?? champ, champ, entete);
+        champDeCle.set(cle, champ);
+      }
+    }
+    // « presence » et « présence » partagent leur clé, sous le même champ.
+    assert.equal(champDeCle.size, 17);
   });
 });
 
@@ -83,6 +91,16 @@ describe('reconnaitre (§ 10.1)', () => {
       ['etiquettes', 'etiquettes', 'etiquettes', 'etiquettes', 'etiquettes'],
     );
     assert.deepEqual(['mot-clé', 'tags', 'étiquettes 2'].map((entete) => reconnaitre(entete)), [null, null, null]);
+  });
+
+  test('presence, Présence et Tours de présence désignent la présence ; « tours » et « présences » restent inconnus', () => {
+    assert.deepEqual(
+      ['presence', 'Présence', 'PRÉSENCE', 'Tours de présence', 'tours_de_presence', 'Tours-de-Presence'].map((entete) =>
+        reconnaitre(entete),
+      ),
+      ['presence', 'presence', 'presence', 'presence', 'presence', 'presence'],
+    );
+    assert.deepEqual(['tours', 'présences', 'tour', 'présent'].map((entete) => reconnaitre(entete)), [null, null, null, null]);
   });
 
   test('sans égard à la casse, aux accents ni aux espaces', () => {

@@ -14,8 +14,9 @@
 // un en-tête d'objectifs lu sous Participants reste refusé, jamais lu comme
 // des objectifs.
 //
-// Le modèle à télécharger suit la nature cochée : le modèle fixe des
-// participants, ou celui des objectifs de l'événement ouvert.
+// Le modèle à télécharger suit la nature cochée : celui des participants,
+// dont la présence suit le nombre de tours de l'événement ouvert, ou celui
+// des objectifs de l'événement ouvert.
 import {
   CHAMPS,
   CHAMPS_OBJECTIFS,
@@ -76,6 +77,7 @@ const CLES_DES_CHAMPS = new Map([
   ['exclu', 'import.champ.exclu'],
   ['notes', 'import.champ.notes'],
   ['etiquettes', 'import.champ.etiquettes'],
+  ['presence', 'import.champ.presence'],
   ['table', 'import.champ.table'],
   ['tour', 'import.champ.tour'],
   ['objectif', 'import.champ.objectif'],
@@ -130,10 +132,11 @@ export function modesDImport(nature) {
 
 /**
  * Le modèle à télécharger sous une nature (§ 10.1, § 10.4), et le nom que
- * l'enregistrement propose : modele-participants.csv pour le modèle fixe des
- * participants, qui ne dépend d'aucun événement ; ‹base›-modele-objectifs.csv
- * pour celui des objectifs, fait des tables et des tours de l'événement, sur
- * le patron de ‹base›-objectifs.csv. Rien ne s'écrit dans la charge.
+ * l'enregistrement propose : modele-participants.csv pour celui des
+ * participants, dont seule la présence suit le nombre de tours de
+ * l'événement ; ‹base›-modele-objectifs.csv pour celui des objectifs, fait
+ * des tables et des tours de l'événement, sur le patron de
+ * ‹base›-objectifs.csv. Rien ne s'écrit dans la charge.
  *
  * @param {'participants'|'objectifs'} nature
  * @param {{base: string, charge: Object}} evenement  la base de l'événement
@@ -146,15 +149,16 @@ export function modesDImport(nature) {
  *   est partagé
  */
 export function modeleATelecharger(nature, { base, charge }) {
-  if (exigerNature(nature) === 'participants') return { nom: 'modele-participants.csv', octets: modeleParticipants() };
+  if (exigerNature(nature) === 'participants') return { nom: 'modele-participants.csv', octets: modeleParticipants(charge) };
   return { nom: `${base}-modele-objectifs.csv`, octets: modeleObjectifs(charge) };
 }
 
 /**
  * L'aperçu d'un texte décodé sous la nature choisie, contre la charge : celui
  * des participants (apercevoir, contre ses personnes et ses tables, dont les
- * objectifs donnent leur orthographe aux étiquettes) ou celui des objectifs
- * de table (apercevoirObjectifs). Rien ne s'écrit.
+ * objectifs donnent leur orthographe aux étiquettes, la présence lue sous
+ * son nombre de tours) ou celui des objectifs de table
+ * (apercevoirObjectifs). Rien ne s'écrit.
  *
  * @param {'participants'|'objectifs'} nature
  * @param {string} texte
@@ -168,7 +172,9 @@ export function modeleATelecharger(nature, { base, charge }) {
 export function apercevoirSelon(nature, texte, charge, { choix = {}, mode } = {}) {
   const options = mode === undefined ? { choix } : { choix, mode };
   if (exigerNature(nature) === 'objectifs') return apercevoirObjectifs(texte, charge, options);
-  return apercevoir(texte, { participants: charge.participants, tables: charge.tables, ...options });
+  return apercevoir(texte, {
+    participants: charge.participants, tables: charge.tables, tours: charge.evenement.tours, ...options,
+  });
 }
 
 /** Les trois sortes d'un message de l'aperçu et du rapport, chacune un ton
@@ -373,20 +379,37 @@ function colonnesDe({ entetes, association }, champs) {
   });
 }
 
-// Une cellule de l'aperçu : un texte lu, une clé de libellé, ou une liste
-// d'étiquettes, chacune une pastille ; les deux autres null.
-const cellule = (champ, { texte = null, cle = null, etiquettes = null }) => ({ champ, texte, cle, etiquettes });
+// Une cellule de l'aperçu : un texte lu, une clé de libellé et ses détails,
+// ou une liste d'étiquettes, chacune une pastille ; les autres null.
+const cellule = (champ, { texte = null, cle = null, etiquettes = null, details = null }) => ({
+  champ, texte, cle, etiquettes, details,
+});
+
+// La cellule de la présence lue, sous tours tours (§ 10.1) : les tours
+// nommés, par leurs détails ; « tous les tours » pour 1..tours. Une cellule
+// vide ne dit rien à la création, qui vaut tous les tours ; en mise à jour,
+// quand la colonne existe, elle garde la présence de la personne, et le
+// dit : « présence inchangée ».
+function celluleDePresence(presence, { tours, inchangee }) {
+  if (presence === null) return cellule('presence', { cle: inchangee ? 'import.presence.inchangee' : null });
+  if (presence.length === tours) return cellule('presence', { cle: 'import.presence.tous' });
+  return cellule('presence', { cle: 'import.presence.tours', details: { tours: [...presence] } });
+}
 
 // Chaque ligne valide des participants : son rang, puis une cellule par
 // champ, dans l'ordre de CHAMPS : le texte lu, ou la clé de la valeur
-// d'« exclu » ; les étiquettes une à une, aucune pour une cellule vide.
-function lignesDesParticipants(lignes) {
+// d'« exclu » ; les étiquettes une à une, aucune pour une cellule vide ; la
+// présence par celluleDePresence, sous le nombre de tours et le mode de
+// l'aperçu.
+function lignesDesParticipants({ lignes, tours, mode, association }) {
+  const lecture = { tours, inchangee: mode === 'mettreAJour' && association.colonnes.presence !== undefined };
   return lignes.map(({ ligne, champs }) => ({
     ligne,
     cellules: CHAMPS.map((champ) => {
       const valeur = champs[CHAMPS_LUS.get(champ) ?? champ];
       if (champ === 'exclu') return cellule(champ, { cle: valeur === null ? null : CLES_D_EXCLU.get(valeur) });
       if (champ === 'etiquettes') return cellule(champ, { etiquettes: valeur ?? [] });
+      if (champ === 'presence') return celluleDePresence(valeur, lecture);
       return cellule(champ, { texte: valeur });
     }),
   }));
@@ -495,7 +518,8 @@ const RIEN = Object.freeze({
  *   colonnes: Array<{rang: number, entete: string, cle: string}>,
  *   ambigus: Array<{champ: string, cle: string, rangs: Array<{rang: number, entete: string}>}>,
  *   valides: number,
- *   lignes: Array<{ligne: number, cellules: Array<{champ: string, texte: string|null, cle: string|null, etiquettes: string[]|null}>}>,
+ *   lignes: Array<{ligne: number, cellules: Array<{champ: string, texte: string|null, cle: string|null,
+ *     etiquettes: string[]|null, details: Object|null}>}>,
  *   refusees: Array<{ligne: number, code: string, details: Object}>,
  *   fusions: Array<{affichee: string, orthographes: Array<{texte: string, lignes: number}>}>,
  *   fusionsEtiquettes: Array<{retenue: string, orthographes: string[], lignes: number}>,
@@ -508,8 +532,9 @@ const RIEN = Object.freeze({
  *   champs : les colonnes du tableau des lignes de la nature ; encodage,
  *   separateur, colonnes[].cle et ambigus[].cle sont des clés de
  *   traduction, comme lignes[].cellules[].cle — la valeur d'« exclu », la
- *   soirée, la règle d'un objectif ; refusees[].details, ceux que reçoit le
- *   motif d'une ligne (motifLigne) ; fusions[].orthographes[].lignes, le
+ *   soirée, la règle d'un objectif, la présence —, que composent les
+ *   détails de la cellule quand elle en porte ; refusees[].details, ceux
+ *   que reçoit le motif d'une ligne (motifLigne) ; fusions[].orthographes[].lignes, le
  *   nombre de lignes de l'orthographe, 0 pour celle que seuls des
  *   participants existants portent ; fusionsEtiquettes[].lignes, le nombre
  *   de lignes réécrites sous l'orthographe retenue
@@ -533,7 +558,7 @@ export function modeleApercu({ nature = 'participants', encodage = null, apercu 
       rangs: rangs.map((rang) => ({ rang, entete: entetes[rang] })),
     })),
     valides: apercu.lignes.length,
-    lignes: objectifs ? lignesDesObjectifs(apercu.lignes) : lignesDesParticipants(apercu.lignes),
+    lignes: objectifs ? lignesDesObjectifs(apercu.lignes) : lignesDesParticipants(apercu),
     refusees: refuseesDe(apercu.refusees),
     fusions: (apercu.fusions ?? []).map(({ affichee, orthographes }) => ({
       affichee,
@@ -554,7 +579,7 @@ export function modeleApercu({ nature = 'participants', encodage = null, apercu 
 /**
  * Le texte relu dans l'ordre de la grille, sous la nature des participants
  * seule : précédé d'une ligne d'en-têtes —
- * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de huit —,
+ * les largeur premiers de CHAMPS, puis des en-têtes vides au-delà de neuf —,
  * joints par le séparateur de l'aperçu. Sous AUCUN_ENTETE d'un texte non
  * blanc, largeur vaut apercu.entetes.length ; sous SEPARATEUR_INTROUVABLE
  * sans candidat (refusGlobalLigne null : une seule colonne), largeur vaut 1

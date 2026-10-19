@@ -215,7 +215,9 @@ async function derouler() {
 
   // 2. Importer le CSV des cas limites, en une entrée.
   const { texte } = decoder(readFileSync(CSV));
-  const apercu = apercevoir(texte, { participants: processus.seance.charge.participants });
+  const apercu = apercevoir(texte, {
+    participants: processus.seance.charge.participants, tours: processus.seance.charge.evenement.tours,
+  });
   vu.apercu = apercu;
   const entreesAvantImport = lireJournal(texteDuJournal(processus, base)).entrees.length;
   vu.import = await processus.seance.executer('importerParticipants', { apercu, mode: 'ajouter' });
@@ -303,12 +305,15 @@ describe('intégration : le parcours de l’opérateur par la séance (§ 2.1)',
     assert.equal(vu.entreesImport, 1);
     assert.deepEqual(
       vu.import.resume.refusees.map(({ ligne, code }) => [ligne, code]),
-      [[13, 'NOM_ABSENT']],
+      [[13, 'NOM_ABSENT'], [16, 'PRESENCE_HORS_TOURS']],
     );
-    assert.match(vu.refus, /;13;Le nom manque\.\r\n$/);
+    assert.match(vu.refus, /;13;Le nom manque\.\r\n/);
+    assert.match(vu.refus, /;0-2;555-0115;16;La présence « 0-2 » nomme le tour 0 : la soirée compte 3 tours\.\r\n$/);
     assert.equal(vu.import.resume.ajoutes, 13);
     const charge = vu.chargeRouverte;
     assert.equal(charge.participants.length, 13);
+    // La colonne Présence ne porte ni plage ni liste admise : personne n'a de présence partielle.
+    assert.deepEqual(charge.participants.filter((p) => Object.hasOwn(p, 'presence')), []);
     assert.equal(charge.participants.filter((p) => p.nom === 'Lanterneau' && p.prenom === 'Basile').length, 2);
     assert.equal(personneDe(charge, 'Tourterel', 'Héloïse').exclu, true);
     assert.equal(personneDe(charge, 'Ormelin', 'Faustine').appartenance, 'Société des Hérons');

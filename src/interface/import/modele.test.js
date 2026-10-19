@@ -7,6 +7,7 @@
 // nommés, les titres que « Remplacer » annonce, comptés par la règle unique
 // des titres pourvus, la nature du fichier reçue et jamais devinée, les
 // objectifs de table et les étiquettes fondues, à part des appartenances ;
+// la cellule de la présence, lue sous le nombre de tours de l'événement ;
 // le modèle à télécharger de chaque nature, son nom et son nom accessible.
 // Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
@@ -98,23 +99,25 @@ describe('avecEntetesDeLaGrille : un collage sans en-tête lu dans l’ordre de 
     assert.deepEqual(nomsLus(lu), ['Ombrelle', 'Pervenche']);
   });
 
-  test('dix colonnes : les huit champs de l’export, la huitième celle des étiquettes, puis deux en-têtes vides, listés non reconnus', () => {
+  test('onze colonnes : les neuf champs de l’export, la huitième celle des étiquettes, la neuvième celle de la présence, puis deux en-têtes vides, listés non reconnus', () => {
     const rangee = (nom) =>
-      [nom, 'Iris', 'Grisaille', 'iris@exemple.test', 'animation', 'non', 'note', 'finance|Montréal', 'x1', 'x2'].join(TAB);
+      [nom, 'Iris', 'Grisaille', 'iris@exemple.test', 'animation', 'non', 'note', 'finance|Montréal', 'tours 2 et 3', 'x1', 'x2'].join(TAB);
     const texte = lignes(rangee('Ombrelle'), rangee('Lacasse'));
     const sans = apercevoir(texte);
     assert.equal(sans.refusGlobal, 'AUCUN_ENTETE');
-    assert.equal(sans.entetes.length, 10);
+    assert.equal(sans.entetes.length, 11);
     const avec = avecEntetesDeLaGrille(texte, sans);
     assert.equal(avec.split('\n')[0], [...CHAMPS, '', ''].join(TAB));
-    const lu = apercevoir(avec);
+    const lu = apercevoir(avec, { tours: 4 });
     assert.equal(lu.refusGlobal, null);
-    assert.equal(CHAMPS.length, 8);
+    assert.equal(CHAMPS.length, 9);
     assert.equal(CHAMPS[7], 'etiquettes');
+    assert.equal(CHAMPS[8], 'presence');
     assert.deepEqual(lu.association.colonnes, Object.fromEntries(CHAMPS.map((champ, rang) => [champ, rang])));
-    assert.deepEqual(lu.association.nonReconnues, [8, 9]);
+    assert.deepEqual(lu.association.nonReconnues, [9, 10]);
     assert.deepEqual(nomsLus(lu), ['Ombrelle', 'Lacasse']);
     assert.deepEqual(lu.lignes.map(({ champs }) => champs.etiquettes), [['finance', 'Montréal'], ['finance', 'Montréal']]);
+    assert.deepEqual(lu.lignes.map(({ champs }) => champs.presence), [[2, 3], [2, 3]]);
   });
 
   test('une liste de noms d’une colonne, « Lacasse, Ondine » compris : SEPARATEUR_INTROUVABLE sans rang, puis une colonne, la ligne entière en nom', () => {
@@ -290,9 +293,9 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
   });
 
   test('chaque champ de CHAMPS a sa clé, qui se traduit', () => {
-    const texte = lignes(CHAMPS.join(';'), ['Ombrelle', 'Iris', 'Grisaille', 'i@exemple.test', 'x', 'non', 'n', 'finance'].join(';'));
+    const texte = lignes(CHAMPS.join(';'), ['Ombrelle', 'Iris', 'Grisaille', 'i@exemple.test', 'x', 'non', 'n', 'finance', 'tous'].join(';'));
     const { colonnes } = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte) });
-    assert.equal(colonnes.length, 8);
+    assert.equal(colonnes.length, 9);
     for (const { cle } of colonnes) {
       assert.match(cle, /^import\.champ\./);
       assert.ok(t(cle).length > 0, cle);
@@ -334,7 +337,7 @@ describe('modeleApercu : ce que l’aperçu montre (§ 10.1)', () => {
 });
 
 describe('les lignes, les refus de la mise à jour, les personnes désignées, le mode proposé (§ 10.1)', () => {
-  test('chaque ligne valide montre ses huit champs dans l’ordre de CHAMPS ; exclu par sa clé, vide sans valeur ; les étiquettes une à une, chacune sa pastille', () => {
+  test('chaque ligne valide montre ses neuf champs dans l’ordre de CHAMPS ; exclu par sa clé, vide sans valeur ; les étiquettes une à une, chacune sa pastille', () => {
     const texte = lignes(
       'notes;exclu;nom;prenom;mots-clés',
       'arrive tard;Oui;Ombrelle;Iris;',
@@ -348,10 +351,11 @@ describe('les lignes, les refus de la mise à jour, les personnes désignées, l
     assert.deepEqual(COLONNES_DES_LIGNES.map(({ champ }) => champ), [...CHAMPS]);
     for (const { cle } of COLONNES_DES_LIGNES) assert.ok(t(cle).length > 0, cle);
     const [premiere, deuxieme, troisieme] = lues;
-    assert.deepEqual(premiere.cellules.map(({ texte: valeur }) => valeur), ['Ombrelle', 'Iris', null, null, null, null, 'arrive tard', null]);
-    assert.deepEqual(deuxieme.cellules.at(-1), { champ: 'etiquettes', texte: null, cle: null, etiquettes: ['finance', 'Montréal'] });
-    assert.deepEqual(premiere.cellules.at(-1), { champ: 'etiquettes', texte: null, cle: null, etiquettes: [] });
-    for (const { champ, etiquettes } of premiere.cellules.slice(0, -1)) assert.equal(etiquettes, null, champ);
+    assert.deepEqual(premiere.cellules.map(({ texte: valeur }) => valeur), ['Ombrelle', 'Iris', null, null, null, null, 'arrive tard', null, null]);
+    assert.deepEqual(deuxieme.cellules.at(-2), { champ: 'etiquettes', texte: null, cle: null, etiquettes: ['finance', 'Montréal'], details: null });
+    assert.deepEqual(premiere.cellules.at(-2), { champ: 'etiquettes', texte: null, cle: null, etiquettes: [], details: null });
+    assert.deepEqual(premiere.cellules.at(-1), { champ: 'presence', texte: null, cle: null, etiquettes: null, details: null });
+    for (const { champ, etiquettes } of premiere.cellules.filter(({ champ: nom }) => nom !== 'etiquettes')) assert.equal(etiquettes, null, champ);
     assert.equal(premiere.cellules[5].cle, 'import.exclu.oui');
     assert.equal(deuxieme.cellules[5].cle, null);
     assert.equal(troisieme.cellules[5].cle, 'import.exclu.non');
@@ -545,7 +549,7 @@ describe('la nature du fichier : choisie par l’opérateur, jamais devinée (§
     const texte = lignes('table;tour;objectif;regle', '1;;finance;');
     const lu = apercevoirSelon('participants', texte, charge);
     assert.equal(lu.refusGlobal, 'AUCUN_ENTETE');
-    assert.deepEqual(lu, apercevoir(texte, { participants: charge.participants, tables: charge.tables }));
+    assert.deepEqual(lu, apercevoir(texte, { participants: charge.participants, tables: charge.tables, tours: charge.evenement.tours }));
     const objectifs = apercevoirSelon('objectifs', texte, charge);
     assert.equal(objectifs.refusGlobal, null);
     assert.deepEqual(objectifs, apercevoirObjectifs(texte, charge));
@@ -612,28 +616,28 @@ describe('modeleApercu des objectifs de table (§ 10.4)', () => {
       {
         ligne: 2,
         cellules: [
-          { champ: 'table', texte: '1', cle: null, etiquettes: null },
-          { champ: 'tour', texte: null, cle: 'import.tour.soiree', etiquettes: null },
-          { champ: 'objectif', texte: null, cle: null, etiquettes: ['finance', 'Montréal'] },
-          { champ: 'regle', texte: null, cle: 'import.regle.defaut', etiquettes: null },
+          { champ: 'table', texte: '1', cle: null, etiquettes: null, details: null },
+          { champ: 'tour', texte: null, cle: 'import.tour.soiree', etiquettes: null, details: null },
+          { champ: 'objectif', texte: null, cle: null, etiquettes: ['finance', 'Montréal'], details: null },
+          { champ: 'regle', texte: null, cle: 'import.regle.defaut', etiquettes: null, details: null },
         ],
       },
       {
         ligne: 3,
         cellules: [
-          { champ: 'table', texte: '2', cle: null, etiquettes: null },
-          { champ: 'tour', texte: '2', cle: null, etiquettes: null },
-          { champ: 'objectif', texte: null, cle: null, etiquettes: ['bénévole'] },
-          { champ: 'regle', texte: null, cle: 'import.regle.et', etiquettes: null },
+          { champ: 'table', texte: '2', cle: null, etiquettes: null, details: null },
+          { champ: 'tour', texte: '2', cle: null, etiquettes: null, details: null },
+          { champ: 'objectif', texte: null, cle: null, etiquettes: ['bénévole'], details: null },
+          { champ: 'regle', texte: null, cle: 'import.regle.et', etiquettes: null, details: null },
         ],
       },
       {
         ligne: 4,
         cellules: [
-          { champ: 'table', texte: '4', cle: null, etiquettes: null },
-          { champ: 'tour', texte: '1', cle: null, etiquettes: null },
-          { champ: 'objectif', texte: null, cle: null, etiquettes: ['finance'] },
-          { champ: 'regle', texte: null, cle: 'import.regle.ou', etiquettes: null },
+          { champ: 'table', texte: '4', cle: null, etiquettes: null, details: null },
+          { champ: 'tour', texte: '1', cle: null, etiquettes: null, details: null },
+          { champ: 'objectif', texte: null, cle: null, etiquettes: ['finance'], details: null },
+          { champ: 'regle', texte: null, cle: 'import.regle.ou', etiquettes: null, details: null },
         ],
       },
     ]);
@@ -769,11 +773,17 @@ describe('le modèle à télécharger de chaque nature (§ 10.1, § 10.4)', () =
     assert.ok(t('import.modele.enregistre').length > 0);
   });
 
-  test('Participants : le modèle fixe, sous modele-participants.csv, quel que soit l’événement', () => {
+  test('Participants : le modèle de l’événement, sous modele-participants.csv ; sa présence suit le nombre de tours', () => {
     const charge = chargeDesObjectifs();
     const { nom, octets } = modeleATelecharger('participants', { base: 'soiree', charge });
     assert.equal(nom, 'modele-participants.csv');
-    assert.deepEqual(octets, modeleParticipants());
+    assert.deepEqual(octets, modeleParticipants(charge));
+    const quatre = chargeDesObjectifs();
+    quatre.evenement.tours = 4;
+    const deQuatre = modeleATelecharger('participants', { base: 'soiree', charge: quatre }).octets;
+    assert.deepEqual(deQuatre, modeleParticipants(quatre));
+    assert.notDeepEqual(deQuatre, octets);
+    assert.match(decoder(deQuatre).texte, /;1-3\r$/m);
   });
 
   test('Objectifs de table : le modèle de l’événement ouvert, sous ‹base›-modele-objectifs.csv', () => {
@@ -792,5 +802,53 @@ describe('le modèle à télécharger de chaque nature (§ 10.1, § 10.4)', () =
     assert.equal(modeleATelecharger('participants', { base: 'soiree', charge: partages }).nom, 'modele-participants.csv');
     assert.equal(modeleATelecharger('participants', { base: 'soiree', charge }).nom, 'modele-participants.csv');
     assert.throws(() => modeleATelecharger('tables', { base: 'soiree', charge }), RangeError);
+  });
+});
+
+describe('la cellule de la présence (§ 10.1)', () => {
+  const texte = lignes('nom;présence', 'Ombrelle;', 'Pervenche;tous', 'Lacasse;2-4', 'Sarcelle;3, 1');
+
+  // La cellule de la présence de chaque ligne valide.
+  const cellulesDePresence = (modele) => modele.lignes.map(({ cellules }) => cellules.find(({ champ }) => champ === 'presence'));
+
+  test('à la création : vide pour une cellule vide, « tous les tours » pour 1..R, les tours nommés sinon, par leurs détails', () => {
+    const modele = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte, { tours: 4 }) });
+    assert.deepEqual(cellulesDePresence(modele), [
+      { champ: 'presence', texte: null, cle: null, etiquettes: null, details: null },
+      { champ: 'presence', texte: null, cle: 'import.presence.tous', etiquettes: null, details: null },
+      { champ: 'presence', texte: null, cle: 'import.presence.tours', etiquettes: null, details: { tours: [2, 3, 4] } },
+      { champ: 'presence', texte: null, cle: 'import.presence.tours', etiquettes: null, details: { tours: [1, 3] } },
+    ]);
+    const [, tous, plage, liste] = cellulesDePresence(modele);
+    assert.equal(t(tous.cle, tous.details ?? {}), 'tous les tours');
+    assert.equal(t(plage.cle, plage.details), 'tours 2 à 4');
+    assert.equal(t(liste.cle, liste.details), 'tours 1 et 3');
+    assert.equal(t('import.champ.presence'), 'présence');
+  });
+
+  test('en mise à jour, une cellule vide se lit « présence inchangée » : elle garde la présence de la personne', () => {
+    const modele = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte, { tours: 4, mode: 'mettreAJour' }) });
+    const [vide, tous] = cellulesDePresence(modele);
+    assert.deepEqual(vide, { champ: 'presence', texte: null, cle: 'import.presence.inchangee', etiquettes: null, details: null });
+    assert.equal(t(vide.cle), 'présence inchangée');
+    assert.equal(tous.cle, 'import.presence.tous');
+    const remplace = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte, { tours: 4, mode: 'remplacer' }) });
+    assert.equal(cellulesDePresence(remplace)[0].cle, null);
+  });
+
+  test('sans colonne de présence, la cellule reste vide dans chaque mode : rien ne se lit, rien ne s’annonce', () => {
+    for (const mode of ['ajouter', 'mettreAJour', 'remplacer']) {
+      const modele = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(lignes('nom', 'Ombrelle'), { mode }) });
+      assert.deepEqual(cellulesDePresence(modele), [{ champ: 'presence', texte: null, cle: null, etiquettes: null, details: null }], mode);
+    }
+  });
+
+  test('apercevoirSelon lit la présence sous le nombre de tours de l’événement', () => {
+    const charge = chargeDesObjectifs();
+    const lu = apercevoirSelon('participants', lignes('nom;presence', 'Ombrelle;2', 'Pervenche;3'), charge);
+    assert.equal(lu.tours, 2);
+    assert.deepEqual(lu.lignes.map(({ champs }) => champs.presence), [[2]]);
+    assert.deepEqual(lu.refusees.map(({ code, tour, tours }) => [code, tour, tours]), [['PRESENCE_HORS_TOURS', 3, 2]]);
+    assert.equal(apercevoirSelon('participants', lignes('nom', 'Ombrelle'), charge, { mode: 'mettreAJour' }).tours, 2);
   });
 });
