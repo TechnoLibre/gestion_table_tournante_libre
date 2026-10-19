@@ -501,8 +501,10 @@ describe('exécuteur du travailleur : le départ (§ 5.7, § 5.10, C8, C24)', ()
     const configuration = configurationDe('petite');
     const reglages = { graine: 2, nombre: 2, arret: 3_000, historique: 100 };
     const { plan } = departDe(configuration);
+    // Au tour 2, la première personne de la première table est assise une
+    // seconde fois, à la dernière table : le moteur refuse ce départ.
     const tronque = structuredClone(plan);
-    tronque.tours[1].at(-1).pop();
+    tronque.tours[1].at(-1).push(tronque.tours[1][0][0]);
     const refus = await issue(creerExecuteurDirect().lancer(configuration, reglages, { depart: { plan: tronque, toursFiges: [] } }).resultat);
     assert.equal(refus.etat, 'rejetee');
     assert.ok(refus.erreur instanceof ErreurGeneration, String(refus.erreur));

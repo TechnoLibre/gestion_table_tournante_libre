@@ -8,7 +8,11 @@
 // l'énumération à sa frontière exacte ; le coût du plafond a priori et du
 // diagnostic sur la grande démonstration, sa variante et la configuration
 // pessimiste, chacun sous un seuil tiré de sa référence (§ 17, point 4) ; la
-// borne de diversité contre chaque plan de deux salles inventées (§ 5.5).
+// borne de diversité contre chaque plan de deux salles inventées (§ 5.5) ;
+// sous la présence par tour, l'accord avec l'énumération sur des présences
+// tirées, la chaîne rencontres ≤ plafond réalisé ≤ plafond a priori ≤ C(p) ≤
+// N − 1 sur un plan de chaque instance, et le coût sur la grande
+// démonstration à six motifs de présence.
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import { configurationPessimiste, FORME_PESSIMISTE } from '../../test/fixtures/banc/pessimiste.js';
@@ -18,7 +22,13 @@ import { LIBRE, RESERVE, STATUT, normaliser } from './configuration.js';
 import { diagnostiquer } from './diagnostic.js';
 import { ErreurConfiguration } from './erreurs.js';
 import { mesurer as mesurerPlan } from './indicateurs.js';
-import { borneDiversite, plafondsAPriori, plafondsAPrioriParEnumeration } from './plafond.js';
+import {
+  borneDiversite,
+  plafondsAPriori,
+  plafondsAPrioriParEnumeration,
+  plafondsRealises,
+  programmesDuPlafond,
+} from './plafond.js';
 
 const SANS_CONTRAINTE = {
   separerAppartenances: false,
@@ -36,14 +46,17 @@ const GRAINE = 314_159;
  * d'index t ; partiels[j][r] est la table imposée au j-ème partiellement
  * fixé au tour r, LIBRE pour un tour libre. Identifiants 1 à N : les ancrés,
  * table par table, puis les partiels, puis les mobiles ; la table d'index t
- * a pour identifiant 100 + t. Lève ce que normaliser lève.
+ * a pour identifiant 100 + t. presences[id − 1], quand il est donné, est la
+ * présence de la personne id ; absent, elle est présente à chaque tour. Lève
+ * ce que normaliser lève.
  */
-function instanceDe({ capacites, ancres, mobiles, tours, partiels = [] }) {
+function instanceDe({ capacites, ancres, mobiles, tours, partiels = [], presences = [] }) {
   const participants = [];
   const reservations = [];
   const nouveau = () => {
     const id = participants.length + 1;
-    participants.push({ id, nom: `P${id}`, appartenance: null });
+    const presence = presences[id - 1];
+    participants.push({ id, nom: `P${id}`, appartenance: null, ...(presence === undefined ? {} : { presence }) });
     return id;
   };
   ancres.forEach((a, t) => {
@@ -292,6 +305,91 @@ function configurationDe(cle) {
   return CATALOGUE.find((entree) => entree.cle === cle).construire();
 }
 
+// Un plan de l'instance, sans rien tirer : à chaque tour, chaque présent
+// fixé à sa table, puis chaque présent libre, par index croissant, au
+// premier siège qui reste, de la table d'index (p + r) modulo T en
+// avançant ; sans siège, en réserve. Un absent vaut RESERVE. Les tables qui
+// reçoivent un libre gardent un siège après les fixés : aucune n'est
+// entièrement ancrée.
+function planDesPresents({ N, T, R, fixe, capacite, present }) {
+  const tableDe = new Int32Array(N * R).fill(RESERVE);
+  for (let r = 0; r < R; r += 1) {
+    const sieges = Int32Array.from(capacite);
+    for (let p = 0; p < N; p += 1) {
+      const t = fixe[p * R + r];
+      if (present[p * R + r] === 1 && t !== LIBRE) {
+        tableDe[p * R + r] = t;
+        sieges[t] -= 1;
+      }
+    }
+    for (let p = 0; p < N; p += 1) {
+      if (present[p * R + r] === 0 || fixe[p * R + r] !== LIBRE) continue;
+      for (let essai = 0; essai < T; essai += 1) {
+        const t = (p + r + essai) % T;
+        if (sieges[t] === 0) continue;
+        tableDe[p * R + r] = t;
+        sieges[t] -= 1;
+        break;
+      }
+    }
+  }
+  return tableDe;
+}
+
+describe('plafond a priori sous la présence par tour : des présences tirées (§ 5.5, § 14.12)', () => {
+  test("de 2 à 5 tables et de 2 à 5 tours, chacun présent à des tours tirés : le même plafond que l'énumération, et la chaîne des plafonds sur un plan", () => {
+    // Une présence sur trois couvre chaque tour ; les autres, une partie
+    // non vide des tours, tirée. Les ancrés en reçoivent aussi : absents à un
+    // tour, ils deviennent partiellement fixés.
+    const arbitraire = fc
+      .tuple(fc.integer({ min: 2, max: 5 }), fc.integer({ min: 2, max: 5 }))
+      .chain(([T, R]) =>
+        fc.tuple(
+          arbitraireCase(T, R),
+          fc.array(
+            fc.oneof(
+              { arbitrary: fc.constant(undefined), weight: 1 },
+              { arbitrary: fc.subarray(Array.from({ length: R }, (_, r) => r + 1), { minLength: 1 }), weight: 2 },
+            ),
+            { minLength: 40, maxLength: 40 },
+          ),
+        ),
+      );
+    const bilan = { acceptees: 0, absences: 0, partiels: 0, ancres: 0 };
+    fc.assert(
+      fc.property(arbitraire, ([description, presences]) => {
+        let instance;
+        try {
+          instance = instanceDe({ ...description, presences });
+        } catch (erreur) {
+          if (erreur instanceof ErreurConfiguration && erreur.code === 'SURRESERVATION') return;
+          throw erreur;
+        }
+        if (instance.N === 0) return;
+        bilan.acceptees += 1;
+        bilan.absences += instance.absences;
+        for (const statut of instance.statut) {
+          if (statut === STATUT.PARTIELLEMENT_FIXE) bilan.partiels += 1;
+          if (statut === STATUT.ANCRE) bilan.ancres += 1;
+        }
+        const aPriori = plafondsAPriori(instance);
+        assert.deepEqual(aPriori, plafondsAPrioriParEnumeration(instance));
+        const tableDe = planDesPresents(instance);
+        const { rencontres } = mesurerPlan(instance, tableDe);
+        const realises = plafondsRealises(instance, tableDe);
+        for (let p = 0; p < instance.N; p += 1) {
+          const chaine = [rencontres[p], realises[p], aPriori[p], instance.coPresents[p], instance.N - 1];
+          assert.ok(chaine.every((valeur, i) => i === 0 || chaine[i - 1] <= valeur), `personne d'index ${p} : ${chaine.join(' ≤ ')}`);
+        }
+      }),
+      { seed: GRAINE + 7, numRuns: 2000 },
+    );
+    assert.ok(bilan.acceptees >= 1500, `${bilan.acceptees} instances acceptées, 1500 au moins`);
+    assert.ok(bilan.absences >= 10_000, `${bilan.absences} absences, 10 000 au moins`);
+    assert.ok(bilan.partiels >= 1000 && bilan.ancres >= 1000, `${bilan.partiels} partiels, ${bilan.ancres} ancrés`);
+  });
+});
+
 describe("plafond a priori : le coût, sous un seuil tiré d'une référence (§ 17, point 4)", () => {
   test('la configuration pessimiste : 260 personnes sur 33 tables de 8 et 10 tours, deux tours fixés chacune, 260 signatures distinctes', () => {
     const instance = normaliser(configurationPessimiste());
@@ -333,6 +431,46 @@ describe("plafond a priori : le coût, sous un seuil tiré d'une référence (§
       );
     });
   }
+
+  test('la grande démonstration à six motifs de présence : plafondsAPriori et diagnostiquer sous le double de leur durée sans absence, mesurée ici', () => {
+    const sans = configurationDe('grande');
+    // Chaque personne sans réservation ni tour animé reçoit, une fois sur
+    // trois, l'un de six motifs de présence, par un générateur congruentiel
+    // de graine fixe dont seuls les bits de poids fort servent.
+    const MOTIFS = [[1], [1, 2], [2, 3, 4], [3, 4], [1, 3], [4]];
+    const reservees = new Set(sans.reservations.map(({ participant }) => participant));
+    let etat = GRAINE;
+    const tirer = (n) => {
+      etat = (Math.imul(etat, 1_103_515_245) + 12_345) >>> 0;
+      return (etat >>> 16) % n;
+    };
+    const avec = {
+      ...sans,
+      participants: sans.participants.map((personne) =>
+        reservees.has(personne.id) || personne.anime !== undefined || tirer(3) !== 0
+          ? personne
+          : { ...personne, presence: MOTIFS[tirer(MOTIFS.length)] }),
+    };
+    const instanceSans = normaliser(sans);
+    const instanceAvec = normaliser(avec);
+    const motifs = new Set(avec.participants.filter(({ presence }) => presence !== undefined).map(({ presence }) => presence.join(',')));
+    assert.equal(motifs.size, 6);
+    assert.ok(instanceAvec.absences >= 100, `${instanceAvec.absences} absences`);
+    // Le nombre de programmes ne croît pas avec les motifs : un de plus par
+    // compte de tours libres présents, ici de 1 à 3.
+    assert.equal(programmesDuPlafond(instanceAvec), programmesDuPlafond(instanceSans) + 3);
+    const eprouver = (quoi, faireSans, faireAvec) => {
+      const reference = mesurer(faireSans, Number.POSITIVE_INFINITY);
+      const seuil = 2 * Math.min(...reference.durees);
+      const mesure = mesurer(faireAvec, seuil);
+      assert.ok(
+        Math.min(...mesure.durees) <= seuil,
+        depasse(`${quoi} sous absences`, mesure, seuil, Math.min(...reference.durees)),
+      );
+    };
+    eprouver('plafondsAPriori', () => plafondsAPriori(instanceSans), () => plafondsAPriori(instanceAvec));
+    eprouver('diagnostiquer', () => diagnostiquer(sans), () => diagnostiquer(avec));
+  });
 });
 
 // Appartenances inventées des salles énumérées.

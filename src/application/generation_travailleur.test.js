@@ -143,9 +143,10 @@ describe('travailleur de génération : le départ (§ 5.7, § 5.10, C8, C24)', 
     const configuration = configurationDe('petite');
     const reglages = { graine: 1, nombre: 2, arret: 10 };
     const { plan } = departDe(configuration);
-    // Au tour 1, la dernière personne de la dernière table n'est plus assise.
+    // Au tour 1, la première personne de la première table est assise une
+    // seconde fois, à la dernière table.
     const tronque = structuredClone(plan);
-    tronque.tours[0].at(-1).pop();
+    tronque.tours[0].at(-1).push(tronque.tours[0][0][0]);
     let attendue = null;
     try {
       repartirUne(configuration, reglages, { plan: tronque, toursFiges: [] }, 1);

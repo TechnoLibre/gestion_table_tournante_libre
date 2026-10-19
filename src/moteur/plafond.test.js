@@ -27,6 +27,7 @@ import {
   plafondsAPriori,
   plafondsAPrioriParEnumeration,
   plafondsRealises,
+  programmesDuPlafond,
 } from './plafond.js';
 
 const SANS_CONTRAINTE = {
@@ -905,5 +906,120 @@ describe('borneDiversite : Φ_aff(p) et A_max(p) sur l\u{2019}occupation (§ 5.5
     assert.deepEqual(borneDiversite(instance, tableDe), { phiAffilies: [], aMax: [] });
     assert.deepEqual(plafondsRealises(instance, tableDe), []);
     assert.deepEqual(plafondsAPriori(instance), []);
+  });
+});
+
+// Instance d'une salle à présences : presences[i] est la présence de la
+// personne d'identifiant i + 1, undefined pour tous les tours ; la table
+// d'index t a l'identifiant 10 × (t + 1) et la capacité capacites[t] ;
+// reservations porte des réservations de portée « tous », [id, index de
+// table].
+function salleAPresences({ capacites, tours, presences, reservations = [] }) {
+  return normaliser({
+    participants: presences.map((presence, i) => ({
+      id: i + 1,
+      nom: `P${i + 1}`,
+      appartenance: null,
+      ...(presence === undefined ? {} : { presence }),
+    })),
+    tables: capacites.map((capacite, t) => ({ id: 10 * (t + 1), numero: t + 1, capacite })),
+    tours,
+    reservations: reservations.map(([participant, t]) => ({ participant, table: 10 * (t + 1), portee: 'tous' })),
+    contraintes: SANS_CONTRAINTE,
+  });
+}
+
+describe('plafonds sous la présence par tour : C(p) et n_p^C (§ 5.5)', () => {
+  // Deux tables de 3, cinq tours, six personnes : 1 n'est présente qu'au
+  // tour 1, 2 aux tours 2 à 5. Elles ne se croisent jamais : C = 4 pour
+  // chacune, 5 pour les autres.
+  const coPresence = () => salleAPresences({
+    capacites: [3, 3],
+    tours: 5,
+    presences: [[1], [2, 3, 4, 5], undefined, undefined, undefined, undefined],
+  });
+
+  test('le plafond se borne aux co-présents : la personne 2 vaut 4, là où N − 1 et n_p diraient 5', () => {
+    // 1 : un tour, 2 sièges qui changent d'occupant : min(4, 2) = 2.
+    // 2 : quatre tours, 8 sièges, mais 4 co-présents, tous mobiles :
+    // min(4, min(4, 8)) = 4. Les autres : 5.
+    const instance = coPresence();
+    assert.deepEqual(instance.coPresents, Int32Array.from([4, 4, 5, 5, 5, 5]));
+    assert.deepEqual(plafondsAPriori(instance), [2, 4, 5, 5, 5, 5]);
+    assert.deepEqual(plafondsAPrioriParEnumeration(instance), [2, 4, 5, 5, 5, 5]);
+  });
+
+  test('le terme des mobiles est n_p^C : une personne qui ne croise que deux mobiles en rencontre au plus deux', () => {
+    // Une table de 4, un ancré présent partout (4), trois tours. 1 n'est
+    // présente qu'au tour 1, 2 et 3 qu'au tour 3 : 1 croise l'ancré et
+    // aucun mobile, n_p^C = 0 ; 2 croise 3 et l'ancré, n_p^C = 1.
+    const instance = salleAPresences({
+      capacites: [4, 2],
+      tours: 3,
+      presences: [[1], [3], [3], undefined],
+      reservations: [[4, 0]],
+    });
+    assert.deepEqual(instance.mobilesCoPresents, Int32Array.from([0, 1, 1, 3]));
+    // 1 : min(1, 1 + min(0, 2)) = 1 ; 2 et 3 : min(2, 1 + min(1, 2)) = 2 ;
+    // l'ancré : min(3, 0 + min(3, 3 × 3)) = 3.
+    assert.deepEqual(plafondsAPriori(instance), [1, 2, 2, 3]);
+    assert.deepEqual(plafondsAPrioriParEnumeration(instance), [1, 2, 2, 3]);
+  });
+
+  test('deux personnes de même statut et de mêmes tables fixées, présentes à 1 et à 3 tours, ont des plafonds distincts', () => {
+    // Deux tables de 3, trois tours. 1 n'est présente qu'au tour 1 : 2 sièges,
+    // plafond 2 ; 2 est présente partout : 6 sièges, plafond 5. Une clé de
+    // mémoïsation sans le compte des tours libres présents donnerait à l'une
+    // le plafond de l'autre.
+    const instance = salleAPresences({ capacites: [3, 3], tours: 3, presences: [[1], undefined, undefined, undefined, undefined, undefined] });
+    assert.deepEqual(plafondsAPriori(instance), [2, 5, 5, 5, 5, 5]);
+    assert.deepEqual(plafondsAPrioriParEnumeration(instance), [2, 5, 5, 5, 5, 5]);
+  });
+
+  test('un tour d’absence n’est pas un tour libre : le plafond est celui de l’itinéraire assis au seul tour de présence', () => {
+    // Trois tables de 3 et une de 4, trois tours, dix personnes ; 1 n'est
+    // présente qu'au tour 1. Sa meilleure table est celle de 4 (index 3).
+    const presences = [[1], ...Array(9).fill(undefined)];
+    const instance = salleAPresences({ capacites: [3, 3, 3, 4], tours: 3, presences });
+    assert.equal(plafondsAPriori(instance)[0], plafondItineraire(instance, 0, [3, RESERVE, RESERVE]));
+    assert.equal(plafondsAPriori(instance)[0], 3);
+    assert.ok(plafondItineraire(instance, 0, [3, 3, 0]) > 3);
+  });
+
+  test('le plafond réalisé ne compte aucun siège à un tour d’absence, et se borne aux co-présents', () => {
+    // Le plan de coPresence : au tour 1, 1, 3 et 4 à la table 10, 5 et 6 à
+    // 20 ; aux tours 2 à 5, 2, 3 et 4 à 10, 5 et 6 à 20.
+    const instance = coPresence();
+    const listes = [[[1, 3, 4], [5, 6]], ...Array.from({ length: 4 }, () => [[2, 3, 4], [5, 6]])];
+    const tableDe = planIndexe(instance, listes);
+    // 1 : un tour à 10, deux sièges : min(4, 2) = 2. 2 : quatre tours à 10,
+    // 8 sièges, C = 4 : 4. 3 et 4 : cinq tours à 10, 10 sièges : 5. 5 et
+    // 6 : cinq tours à 20, un siège par tour : 5.
+    assert.deepEqual(plafondsRealises(instance, tableDe), [2, 4, 5, 5, 5, 5]);
+    assert.deepEqual(occupations(instance, tableDe).occupants, [3, 3, 3, 3, 3, 2, 2, 2, 2, 2]);
+  });
+
+  test('une signature ne garde ni C(p) ni n_p^C : deux personnes qui ne diffèrent que par eux partagent un programme, et chacune garde son plafond exact', () => {
+    // Deux tables de 3, trois tours, six personnes. 1 aux tours 2 et 3, 2
+    // aux tours 1 et 2 : même statut, aucune table fixée, deux tours libres
+    // présents. 3 et 4 ne sont présentes qu'au tour 1 : 1 ne les croise
+    // jamais, C = 3 = n_p^C ; 2 les croise, C = 5. 1 vient avant 2 : un
+    // programme calculé pour la première personne de la signature, avec son
+    // n_p^C, plafonnerait 2 à 3.
+    const instance = salleAPresences({ capacites: [3, 3], tours: 3, presences: [[2, 3], [1, 2], [1], [1], undefined, undefined] });
+    assert.deepEqual(instance.coPresents, Int32Array.from([3, 5, 4, 4, 5, 5]));
+    // 1 : min(3, min(3, 4)) = 3 ; 2 : min(5, min(5, 4)) = 4 ; 3 et 4 :
+    // min(4, 2) = 2 ; 5 et 6 : min(5, 6) = 5.
+    assert.deepEqual(plafondsAPriori(instance), [3, 4, 2, 2, 5, 5]);
+    assert.deepEqual(plafondsAPrioriParEnumeration(instance), [3, 4, 2, 2, 5, 5]);
+    // Trois signatures : deux, un et trois tours libres présents.
+    assert.equal(programmesDuPlafond(instance), 3);
+  });
+
+  test('sans absence, un programme par signature, comme avant la présence', () => {
+    const { instance } = grandeForme();
+    // Chacun des 33 ancrés a sa table d'ancrage, donc sa signature ; les 227
+    // mobiles en partagent une.
+    assert.equal(programmesDuPlafond(instance), 34);
   });
 });

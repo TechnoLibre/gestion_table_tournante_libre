@@ -8,7 +8,7 @@
 // est une violation de la liste rendue, et la liste vide dit que tout tient.
 // Aucun ne modifie ce qu'il reçoit. Les formes reçues sont décrites dans
 // types.js.
-import { LIBRE } from './configuration.js';
+import { LIBRE, decrire } from './configuration.js';
 
 /**
  * @typedef {{code: string, participant?: number, table?: number, tour?: number,
@@ -74,6 +74,23 @@ function rattacherListes(tables, { idsTables, indexTableDe }, violations) {
   return tableDeListe;
 }
 
+// Les réserves imposées marquées, [p × R + r] → 1 quand la personne p est
+// imposée en réserve au tour r ; lève ce que verifierInvariants annonce
+// pour une liste mal formée.
+function marquerReservesImposees(reservesImposees, { N, R, indexDe }) {
+  if (!Array.isArray(reservesImposees)) throw new TypeError('reservesImposees : liste attendue');
+  const marque = new Uint8Array(N * R);
+  for (const entree of reservesImposees) {
+    if (entree === null || typeof entree !== 'object') throw new TypeError('reservesImposees : {participant, tour} attendu');
+    const { participant, tour } = entree;
+    const p = indexDe.get(participant);
+    if (p === undefined) throw new RangeError(`reservesImposees : personne ${decrire(participant)} hors de l'instance`);
+    if (!Number.isInteger(tour) || tour < 1 || tour > R) throw new RangeError(`reservesImposees : tour ${decrire(tour)} hors de 1..${R}`);
+    marque[p * R + tour - 1] = 1;
+  }
+  return marque;
+}
+
 /**
  * Violations d'un plan par identifiants (§ 8.9), jugé contre l'instance
  * (§ 14.12). Code de l'application : appelé après une génération, après un
@@ -94,10 +111,15 @@ function rattacherListes(tables, { idsTables, indexTableDe }, violations) {
  * - EXCLU_PLACE : un participant exclu, à une table ou en réserve ;
  * - DOUBLE_PLACE : un participant présent plus d'une fois dans un tour,
  *   réserve comprise ;
- * - NON_ASSIS : un participant absent d'un tour, que la réserve soit permise
- *   ou non, ou présent seulement en réserve quand reserveAutorisee est faux.
- *   La réserve est une liste du plan (§ 8.9) : un participant qui ne figure
- *   ni à une table ni en réserve manque au plan, il n'attend pas ;
+ * - NON_ASSIS : un participant présent au tour que le plan ne place nulle
+ *   part, que la réserve soit permise ou non, ou présent seulement en
+ *   réserve quand reserveAutorisee est faux. La réserve est une liste du
+ *   plan (§ 8.9) : un participant qui ne figure ni à une table ni en réserve
+ *   manque au plan, il n'attend pas. Une réserve imposée en réserve à son
+ *   tour n'en relève pas ;
+ * - ABSENT_PLACE : un participant absent du tour (instance.present), listé à
+ *   une table ou en réserve. Un absent omis du tour est en règle, et ne
+ *   relève jamais de NON_ASSIS ni de RESERVATION ;
  * - CAPACITE : une liste plus longue que la capacité de sa table. Le siège
  *   est la position dans la liste : chaque entrée en occupe un, et le siège
  *   au-delà de la capacité est hors de sa table ;
@@ -107,8 +129,11 @@ function rattacherListes(tables, { idsTables, indexTableDe }, violations) {
  *   réservé présent seulement en réserve reçoit RESERVATION que la réserve
  *   soit permise ou non, précédée de NON_ASSIS quand elle est interdite. Ce
  *   sont deux règles enfreintes : l'asseoir à une autre table lèverait la
- *   première et non la seconde. Un participant absent du tour, que le plan
- *   ne place nulle part, ne relève que de NON_ASSIS.
+ *   première et non la seconde. Un participant présent que le plan ne place
+ *   nulle part ne relève que de NON_ASSIS. Une réservation suspendue par une
+ *   absence ne se lit pas : instance.fixe vaut LIBRE à ce tour. Une réserve
+ *   imposée en réserve à son tour n'en relève pas ; assise à une table, elle
+ *   se contrôle comme les autres.
  *
  * Une liste se rattache à la table que plan.tables déclare à sa position,
  * quand cette déclaration est la première d'un id de l'instance. Une liste
@@ -130,17 +155,28 @@ function rattacherListes(tables, { idsTables, indexTableDe }, violations) {
  * listes ; les ids des listes dans l'ordre déclaré puis ceux de la réserve,
  * un id étranger à sa première apparition dans le tour et DOUBLE_PLACE à la
  * seconde ; les capacités, liste par liste ; enfin les participants par id
- * croissant, chacun avec son NON_ASSIS puis sa RESERVATION.
+ * croissant, chacun avec son NON_ASSIS puis sa RESERVATION, ou, absent du
+ * tour, son ABSENT_PLACE. Un absent listé deux fois reçoit donc DOUBLE_PLACE
+ * au comptage, avant son ABSENT_PLACE.
+ *
+ * Lève TypeError quand reservesImposees n'est pas une liste d'objets, et
+ * RangeError quand une entrée désigne une personne hors de l'instance ou un
+ * tour qui n'est pas un entier de 1 à R : la liste vient du moteur ou de
+ * l'application, et l'écart est une faute de code.
  *
  * @param {import('./types.js').Instance} instance
  * @param {import('./types.js').Plan} plan
- * @param {{reserveAutorisee?: boolean}} [options]  reserveAutorisee, faux par
- *        défaut : un participant présent seulement en réserve est NON_ASSIS
- *        (§ 12.6)
+ * @param {{reserveAutorisee?: boolean,
+ *          reservesImposees?: Array<{participant: number, tour: number}>}} [options]
+ *        reserveAutorisee, faux par défaut : un participant présent seulement
+ *        en réserve est NON_ASSIS (§ 12.6). reservesImposees, vide par
+ *        défaut : les présentes qu'un tour figé d'un départ laisse en
+ *        réserve (recherche.js, DepartRecherche), par identifiant et tour
  * @returns {Violation[]}
  */
-export function verifierInvariants(instance, plan, { reserveAutorisee = false } = {}) {
-  const { N, R, ids, indexDe, exclus, idsTables, capacite, fixe } = instance;
+export function verifierInvariants(instance, plan, { reserveAutorisee = false, reservesImposees = [] } = {}) {
+  const { N, R, ids, indexDe, exclus, idsTables, capacite, fixe, present } = instance;
+  const imposee = marquerReservesImposees(reservesImposees, instance);
   const violations = [];
   if (plan.tours.length !== R || plan.reserves.length !== R) violations.push({ code: 'TOURS' });
   const tableDeListe = rattacherListes(plan.tables, instance, violations);
@@ -196,12 +232,17 @@ export function verifierInvariants(instance, plan, { reserveAutorisee = false } 
     }
 
     for (let p = 0; p < N; p += 1) {
+      if (present[p * R + r] === 0) {
+        if (presences[p] > 0) violations.push({ code: 'ABSENT_PLACE', participant: ids[p], tour });
+        continue;
+      }
+      if (imposee[p * R + r] === 1 && presences[p] > 0 && !aUneTable[p]) continue;
       if (!aUneTable[p] && (presences[p] === 0 || !reserveAutorisee)) {
         violations.push({ code: 'NON_ASSIS', participant: ids[p], tour });
       }
-      const imposee = fixe[p * R + r];
-      if (imposee !== LIBRE && presences[p] > 0 && !aSaTable[p]) {
-        violations.push({ code: 'RESERVATION', participant: ids[p], table: idsTables[imposee], tour });
+      const table = fixe[p * R + r];
+      if (table !== LIBRE && presences[p] > 0 && !aSaTable[p]) {
+        violations.push({ code: 'RESERVATION', participant: ids[p], table: idsTables[table], tour });
       }
     }
   }

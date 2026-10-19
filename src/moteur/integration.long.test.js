@@ -12,14 +12,16 @@
 // propriétés du § 14.12, sur des configurations tirées. Enfin l'ordre réglé
 // (A21) : sur cinq graines, l'excédent et les cumulées atteints sous l'ordre
 // par défaut et sous un ordre qui range les objectifs au deuxième palier ne
-// s'écartent que d'une borne mesurée.
+// s'écartent que d'une borne mesurée. Enfin la présence par tour (§ 5.5,
+// § 5.7, § 12.4) : des propositions sous absences, puis une dérivée dont un
+// tour figé laisse une arrivante en réserve imposée.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { FLUX, creerPcg32 } from '../demo/prng.js';
 import { STATUT, indexerPlan, nombrePlaces, normaliser } from './configuration.js';
 import { diagnostiquer } from './diagnostic.js';
-import { mesurer } from './indicateurs.js';
+import { assisAChaqueTourPresent, mesurer } from './indicateurs.js';
 import {
   ecartsAuPlafondAPriori,
   ecartsItineraire,
@@ -33,11 +35,13 @@ import {
   proposerEtAppliquer,
   rechercher,
   regenerer,
+  repartir,
   scoreComplet,
   scoreIncremental,
 } from './recherche.js';
 import { verifierIndicateurs, verifierInvariants } from './verification.js';
 import { CRITERES } from './criteres.js';
+import { classer } from './classement.js';
 
 // Compte d'arrêt choisi par la mesure. À 1 000 000 mouvements, chacune des
 // trois propositions atteint, sur chaque seuil ci-dessous, la meilleure
@@ -594,5 +598,93 @@ describe("intégration : l'ordre réglé ne défait pas les collisions (A21)", (
     const [defaut, objectifsDevant] = sommes;
     assert.ok(Math.abs(objectifsDevant.excedent - defaut.excedent) <= ECART_EXCEDENT_MAX, JSON.stringify(sommes));
     assert.ok(Math.abs(objectifsDevant.cumulees - defaut.cumulees) <= ECART_CUMULEES_RELATIF_MAX * defaut.cumulees, JSON.stringify(sommes));
+  });
+});
+
+// La démonstration du catalogue, le participant d'id i recevant presences[i]
+// pour présence, et les réservations ajoutées.
+function demonstrationAvec(cle, presences, reservations = []) {
+  const base = CATALOGUE.find((entree) => entree.cle === cle).construire();
+  return {
+    ...base,
+    participants: base.participants.map((personne) =>
+      (presences[personne.id] === undefined ? personne : { ...personne, presence: presences[personne.id] })),
+    reservations: [...base.reservations, ...reservations],
+  };
+}
+
+// Les listes d'un tour, chacune triée, dans l'ordre des tables du plan.
+const tourTrie = (plan, tour) => plan.tours[tour - 1].map((liste) => [...liste].sort((a, b) => a - b));
+
+const REGLAGES_PRESENCE = Object.freeze({ graine: 271_828, arret: 50_000, nombre: 3 });
+
+describe('intégration : la présence par tour de bout en bout (§ 5.5, § 5.7, § 12.4)', () => {
+  test('petite à conflit, trois présences partielles : chaque proposition n’assied que les présentes, tient les deux vérificateurs, les retours imposés et les planchers gardés, et se classe', () => {
+    // 2 arrive au tour 2, 7 part après le tour 2, 10 (« A ») manque le
+    // tour 2.
+    const configuration = demonstrationAvec('petite-conflit', { 2: [2, 3, 4], 7: [1, 2], 10: [1, 3, 4] });
+    const instance = normaliser(configuration);
+    assert.equal(instance.absences, 4);
+    const aPriori = plafondsAPriori(instance);
+    const diagnostic = diagnostiquer(configuration);
+    assert.deepEqual(diagnostic.placesManquantesParTour, [0, 0, 0, 0]);
+    assert.equal(diagnostic.ecartItineraire, null);
+    assert.deepEqual(diagnostic.planchersRetires, ['ecartItineraire']);
+    // Cinq « A » sur quatre tables à trois tours, quatre au tour 2 : un
+    // plancher de collisions demeure.
+    assert.ok(diagnostic.collisions.length > 0, JSON.stringify(diagnostic.collisions));
+    const propositions = rechercher(configuration, REGLAGES_PRESENCE);
+    assert.equal(propositions.length, REGLAGES_PRESENCE.nombre);
+    const entrees = propositions.map(({ id, plan }) => {
+      const nom = `proposition ${id}`;
+      assert.deepEqual(verifierInvariants(instance, plan), [], nom);
+      for (const [absente, tours] of [[2, [1]], [7, [3, 4]], [10, [2]]]) {
+        for (const tour of tours) {
+          assert.ok(!plan.tours[tour - 1].flat().includes(absente) && !plan.reserves[tour - 1].includes(absente), `${nom}, ${absente} au tour ${tour}`);
+        }
+      }
+      const tableDe = indexerPlan(instance, plan);
+      const mesures = mesurer(instance, tableDe);
+      const realises = plafondsRealises(instance, tableDe);
+      assert.deepEqual(verifierIndicateurs(mesures, aPriori, realises), [], nom);
+      assert.equal(assisAChaqueTourPresent(instance, mesures.toursAssis), true, nom);
+      assert.equal(mesures.totalRetoursImposes, diagnostic.retoursImposes, nom);
+      for (const plancher of diagnostic.collisions) {
+        const mesure = mesures.parGroupe.find(({ groupe }) => groupe === plancher.groupe);
+        assert.ok(mesure.collisionsCumulees >= plancher.plancherCumulees && mesure.pairesDistinctes >= plancher.plancherPairesDistinctes, `${nom}, ${plancher.groupe}`);
+      }
+      return { id, mesures, plafondsAPriori: aPriori };
+    });
+    const { ordre } = classer(entrees);
+    assert.deepEqual([...ordre].sort((a, b) => a - b), [1, 2, 3]);
+  });
+
+  test('une dérivée sous réserve imposée : le tour figé garde son départ, la réserve imposée y reste, et verifierInvariants ne la tient pour faute que sans l’option', () => {
+    // Départ : la petite, 5 absente au tour 1. Puis 5 est dite présente à
+    // chaque tour et réservée au tour 1 à une table que le départ remplit :
+    // au tour 1, figé, elle reste en réserve.
+    const [{ plan: depart }] = rechercher(demonstrationAvec('petite', { 5: [2, 3, 4] }), { ...REGLAGES_PRESENCE, nombre: 1 });
+    const pleine = depart.tables.find((_, i) => depart.tours[0][i].length === 3);
+    const configuration = demonstrationAvec('petite', {}, [{ participant: 5, table: pleine, portee: 'tour', tour: 1 }]);
+    const instance = normaliser(configuration);
+    const aPriori = plafondsAPriori(instance);
+    const reservesImposees = [{ participant: 5, tour: 1 }];
+    const propositions = repartir(configuration, REGLAGES_PRESENCE, { plan: depart, toursFiges: [1], reservesImposees });
+    assert.equal(propositions.length, REGLAGES_PRESENCE.nombre);
+    for (const { id, plan } of propositions) {
+      const nom = `dérivée ${id}`;
+      assert.deepEqual(tourTrie(plan, 1), tourTrie(depart, 1), nom);
+      assert.deepEqual(plan.reserves[0], [5], nom);
+      assert.deepEqual(verifierInvariants(instance, plan, { reservesImposees }), [], nom);
+      assert.deepEqual(verifierInvariants(instance, plan), [
+        { code: 'NON_ASSIS', participant: 5, tour: 1 },
+        { code: 'RESERVATION', participant: 5, table: pleine, tour: 1 },
+      ], nom);
+      const tableDe = indexerPlan(instance, plan);
+      const mesures = mesurer(instance, tableDe);
+      assert.deepEqual(verifierIndicateurs(mesures, aPriori, plafondsRealises(instance, tableDe)), [], nom);
+      // Une présente en réserve sort le plan du domaine des planchers.
+      assert.equal(assisAChaqueTourPresent(instance, mesures.toursAssis), false, nom);
+    }
   });
 });

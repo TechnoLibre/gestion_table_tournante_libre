@@ -25,11 +25,15 @@
 // l'ordre des tables. Les personnes que instance.fixe impose à un tour
 // occupent les premiers sièges de leur table, par index croissant, et n'en
 // bougent jamais. Les autres sièges sont mobiles : chacun porte une personne
-// libre à ce tour, ou une place fantôme, siège vide. Le placement initial
-// mélange les personnes libres de chaque tour par melanger, tour après tour,
-// et les assied dans les sièges mobiles pris dans l'ordre ; les sièges qui
-// restent sont des places fantômes. Sans place manquante, personne n'est en
-// réserve.
+// libre à ce tour, ou une place fantôme, siège vide. Une personne absente à
+// un tour n'y a ni siège fixé, sa réservation y étant suspendue, ni place
+// parmi les libres : les sièges qu'elle laisse sont des places fantômes de
+// plus, et sa case du plan indexé vaut RESERVE, qu'aucun mouvement ne change.
+// Le placement initial mélange les personnes libres présentes de chaque tour
+// par melanger, tour après tour, et les assied dans les sièges mobiles pris
+// dans l'ordre ; les sièges qui restent sont des places fantômes. Sans place
+// manquante à aucun tour, chaque présente est assise, et la réserve est
+// vide.
 //
 // Mouvement. Un tour tiré par borne(R), puis deux sièges mobiles de ce tour,
 // chacun par borne(m), m le nombre de ses sièges mobiles ; un tour de moins
@@ -142,25 +146,53 @@
 // La recherche ne lit pas l'horloge et ne date rien.
 //
 // Départ (§ 5.7). repartir, repartirUne et regenerer sous un départ font
-// partir chaque descente du plan d'une proposition, son départ, au lieu d'un
-// placement tiré : chaque fois que la descente tirerait un placement — à son
-// début et à chaque relance —, elle repart de ce plan, tours figés compris.
-// Le remplissage canonique l'assied sans rien tirer : à chaque tour, les
-// fixés à leurs sièges comme ailleurs, puis chaque libre, par index
-// croissant, au prochain siège mobile de la table que le plan lui donne, les
-// places fantômes en fin de table ; l'ordre des listes du plan n'y entre pas.
-// Le tour d'un mouvement se tire parmi les seuls tours non figés, par
-// borne(k) sur leur liste, puis les deux sièges comme ailleurs : un tour
-// figé ne consomme rien du compte, et reste celui du départ dans le plan
-// rendu comme dans chaque point de relevé. Un tour figé n'est pas une
-// réservation : instance.fixe ne change pas, et le score se compose sur les
-// plafonds de la configuration. La meilleure affectation part du départ et
-// ne change que sur un score strictement meilleur : une dérivée n'est jamais
-// pire que son départ dans l'ordre du score, et rend son plan, case pour
-// case, quand rien ne l'améliore. Le départ se contrôle avant tout calcul :
-// un plan que l'instance ne peut pas asseoir tel quel — une personne en
-// réserve, absente ou étrangère, une table inconnue ou qui déborde, une
-// personne fixée assise à une autre table que la sienne — lève
+// partir chaque descente du départ ajusté à la présence, tiré du plan d'une
+// proposition, au lieu d'un placement tiré : chaque fois que la descente
+// tirerait un placement — à son début et à chaque relance —, elle repart de
+// cet état, tours figés compris, construit une fois. L'ajustement lit le plan
+// tour par tour : un identifiant que l'instance ne connaît pas, exclu ou
+// supprimé, et une personne absente au tour sont ignorés, où que le plan les
+// liste, et leur chaise devient libre ; une présente en réserve, ou que le
+// plan n'assied pas, est à asseoir, sauf une réserve imposée par l'appelant
+// (reservesImposees, tours figés seulement), qui reste en réserve à son tour ;
+// une fixée à asseoir va à sa table. Aux tours non figés seulement, quand ses
+// arrivantes fixées font déborder une table, les libres en trop de cette
+// table, par index décroissants, passent à asseoir. Le plan du départ, brut
+// ou déjà ajusté par le stockage — absents retirés, arrivantes en réserve —,
+// donne ainsi le même état. Le remplissage canonique l'assied sans rien
+// tirer : à chaque tour, les fixés à leurs sièges comme ailleurs, une fixée
+// en réserve imposée hors du sien ; puis chaque libre gardé, par index
+// croissant, au prochain siège mobile de la table que le plan lui donne, ou,
+// quand ils manquent, au siège fixé qu'une réserve imposée de sa table
+// laisse ; puis chaque libre à asseoir, par index croissant, au premier
+// siège mobile resté vide, dans l'ordre des sièges ; l'ordre des listes du
+// plan n'y entre pas. Aux tours non figés, ce siège canonique suffit : la
+// recherche déplacera l'arrivante. Aux tours figés, aucun mouvement ne la
+// déplacera : chaque libre à asseoir essaie la première place fantôme de
+// chaque autre table, sa table restant celle de son siège canonique, et
+// garde la première table, dans l'ordre des tables, au meilleur score dans
+// l'ordre du score ; une fixée reste à sa table. Un tour figé est donc celui du départ, ajusté à la présence : les
+// absents et les retirés quittent leur chaise, une arrivante prend la
+// meilleure chaise libre admissible, ou reste en réserve quand l'appelant
+// l'impose ; personne d'autre ne bouge. Le tour d'un mouvement se tire parmi
+// les seuls tours non figés, par borne(k) sur leur liste, puis les deux
+// sièges comme ailleurs : un tour figé ne consomme rien du compte, et reste
+// celui du départ ajusté dans le plan rendu comme dans chaque point de
+// relevé. Un tour figé n'est pas une réservation : instance.fixe ne change
+// pas, et le score se compose sur les plafonds de la configuration. Une
+// réserve imposée se mesure comme mesurer la lit : une fixée en réserve n'y
+// fait aucune visite réservée, une animatrice en réserve n'y est rencontrée
+// par personne, et le libre assis à son siège fixé, à une table sans siège
+// libre, n'y est ni servi ni ne rencontre d'animateur. La meilleure
+// affectation part du départ ajusté et ne change que sur un score
+// strictement meilleur : une dérivée n'est jamais pire que son départ ajusté
+// dans l'ordre du score, et le rend, case pour case, quand rien ne
+// l'améliore. Le départ se contrôle avant tout calcul : un plan malformé ou
+// qui contredit le mobilier — un plan qui n'a pas R tours ou pas une liste
+// par table, une table inconnue qui assied quelqu'un, une présente assise
+// deux fois, une table qui déborde de ses présentes, une présente fixée
+// assise à une autre table que la sienne — et, à un tour figé, une table que
+// ses arrivantes fixées font déborder faute de réserve imposée, lèvent
 // DEPART_INCOMPATIBLE au lieu de partir d'un autre état que le plan. Le
 // chemin ordinaire ne tire pas un nombre de plus : sans départ, le mélange
 // est celui du paragraphe « Sièges » et le tour se tire par borne(R), comme
@@ -172,8 +204,8 @@ import {
   RESERVE,
   SANS_GROUPE,
   SANS_OBJECTIF,
-  nombrePlacesManquantes,
   normaliser,
+  placesManquantesParTour,
   planDepuisIndex,
 } from './configuration.js';
 import { compilationDe, composantesDe } from './criteres.js';
@@ -208,12 +240,17 @@ import { plafondsAPriori } from './plafond.js';
  *           identifiants
  * @property {number[]} toursFiges   numéros des tours figés, de 1 à R,
  *           strictement croissants, possiblement vide, jamais tous les tours
+ * @property {{participant: number, tour: number}[]} [reservesImposees=[]]
+ *           les présentes qu'un tour figé laisse en réserve, triées par tour
+ *           puis participant : chacune désigne une personne de l'instance,
+ *           présente à ce tour, que le plan n'assied à aucune table à ce tour
  *
  * @typedef {Object} EtatRecherche
  * Rendu par creerEtat ; les champs qui suivent se lisent, aucun ne s'écrit
  * hors de ce module. Un champ qui tient une grandeur que mesurer rend en
  * porte le nom.
- * @property {Int32Array} tableDe            plan indexé courant, N × R
+ * @property {Int32Array} tableDe            plan indexé courant, N × R ;
+ *           RESERVE pour un absent, et pour une réserve imposée d'un départ
  * @property {Int32Array} rencontres         |met(p)|, ordre canonique
  * @property {Int32Array} affilies           |F(p)|
  * @property {Int32Array} appartenancesVues  A(p)
@@ -383,15 +420,26 @@ function exigerChampsProposition({ graine, arret, historique }) {
 
 // Ce que toutes les propositions d'une instance partagent : la disposition
 // des sièges, les sièges fixés et les sièges mobiles de chaque tour, les
-// personnes libres de chaque tour par index croissant, le plafond a priori
-// de chacun, par (personne, table), le seuil de visites au-delà duquel une
-// visite est un retour choisi, et la composition du n-uplet. Lève
-// PLACES_MANQUANTES quand les sièges d'un tour ne suffisent pas à asseoir
-// tout le monde (§ 5.9).
+// personnes libres présentes à chaque tour par index croissant, le plafond a
+// priori de chacun, par (personne, table), le seuil de visites au-delà duquel
+// une visite est un retour choisi, les animateurs de chaque table à chaque
+// tour, et la composition du n-uplet. Un absent n'a ni siège fixé, sa
+// réservation étant suspendue, ni entrée parmi les libres : les sièges qu'il
+// laisse sont des places fantômes. Lève PLACES_MANQUANTES quand les sièges
+// d'un tour ne suffisent pas à asseoir ses présents (§ 5.9) : détails
+// {placesManquantes}, le plus grand manque, et, dès qu'une absence existe,
+// tours, chaque tour à manque positif {tour, manque}, croissants ; sans
+// absence, tours manque, et les détails sont ceux du compte sur N.
 function preparer(instance) {
-  const placesManquantes = nombrePlacesManquantes(instance);
-  if (placesManquantes > 0) throw new ErreurConfiguration('PLACES_MANQUANTES', { placesManquantes });
-  const { N, T, R, capacite, fixe } = instance;
+  const manques = placesManquantesParTour(instance);
+  const placesManquantes = Math.max(...manques);
+  if (placesManquantes > 0) {
+    const details = instance.absences === 0
+      ? { placesManquantes }
+      : { placesManquantes, tours: manques.flatMap((manque, r) => (manque > 0 ? [{ tour: r + 1, manque }] : [])) };
+    throw new ErreurConfiguration('PLACES_MANQUANTES', details);
+  }
+  const { N, T, R, capacite, fixe, present } = instance;
 
   const debut = new Int32Array(T + 1);
   for (let t = 0; t < T; t += 1) debut[t + 1] = debut[t] + capacite[t];
@@ -413,7 +461,7 @@ function preparer(instance) {
     for (let p = 0; p < N; p += 1) {
       const t = fixe[p * R + r];
       if (t === LIBRE) {
-        libresDuTour.push(p);
+        if (present[p * R + r] === 1) libresDuTour.push(p);
       } else {
         siegesFixes[r * S + debut[t] + occupes[t]] = p;
         occupes[t] += 1;
@@ -461,6 +509,8 @@ function preparer(instance) {
     nombreMobiles,
     libres,
     seuilRetour,
+    debutAnimes: instance.debutAnimes,
+    animes: instance.animes,
     aPriori,
     largeurHistogramme: plusGrand + 1,
     composition: composition(instance),
@@ -647,8 +697,9 @@ function echanger(etat, r, a, b) {
 }
 
 // Placement initial d'une instance préparée : les personnes fixées à leurs
-// sièges, les libres de chaque tour mélangées puis assises dans l'ordre des
-// sièges mobiles. Les compteurs partent de zéro et suivent chaque paire,
+// sièges, les libres présentes de chaque tour mélangées puis assises dans
+// l'ordre des sièges mobiles ; une case du plan indexé sans siège, celle d'un
+// absent, vaut RESERVE. Les compteurs partent de zéro et suivent chaque paire,
 // chaque visite et chaque rencontre d'animateur par les mêmes fonctions que
 // les mouvements ; les écarts partent du plafond a priori, aucune rencontre
 // n'étant encore comptée, et les animateurs non rencontrés de Σ B(p),
@@ -657,13 +708,18 @@ function echanger(etat, r, a, b) {
 // P(p) − s(p) se forme sur les personnes concernées. Chaque personne assise
 // l'est à une table qu'elle peut occuper — sa table fixée, ou un siège
 // mobile, que seule une table à siège libre offre — : servie et rencontres
-// d'animateurs s'y lisent sans autre condition, comme mesurer les lit.
+// d'animateurs s'y lisent alors, comme mesurer les lit. Un libre que le
+// départ assied au siège fixé d'une réserve imposée, à une table sans siège
+// libre (paragraphe « Départ »), n'y est ni servi ni ne rencontre
+// d'animateur, comme mesurer le lit ; aucun mouvement ne l'y conduit, ce
+// siège n'étant pas mobile.
 //
 // remplir, quand il n'est pas null, assied les libres à la place du
-// mélange : remplir(etat) écrit leurs sièges dans etat.siege, où les fixés
-// sont déjà, sans rien tirer de rng (remplisseur, paragraphe « Départ »).
+// mélange : remplir(etat) écrit les sièges dans etat.siege, où les fixés
+// sont déjà, sans rien tirer de rng (paragraphe « Départ »).
 function etatInitial(structure, rng, remplir = null) {
   const { instance, N, T, R, S, mobiles, libres, aPriori, tableDuSiege, debut } = structure;
+  const { fixe, siegesLibres } = instance;
   const G = instance.groupes.length;
   const { suitAnimateurs } = structure.composition;
   const etat = {
@@ -688,7 +744,7 @@ function etatInitial(structure, rng, remplir = null) {
     seuilRetour: structure.seuilRetour,
     aPriori,
     siege: Int32Array.from(structure.siegesFixes),
-    tableDe: new Int32Array(N * R),
+    tableDe: new Int32Array(N * R).fill(RESERVE),
     paires: R <= UINT16_MAX ? new Uint16Array(N * N) : new Uint32Array(N * N),
     rencontres: new Int32Array(N),
     affilies: new Int32Array(N),
@@ -721,8 +777,8 @@ function etatInitial(structure, rng, remplir = null) {
     suitAnimateurs,
     A: instance.A,
     rangAnimateur: instance.rangAnimateur,
-    debutAnimes: instance.debutAnimes,
-    animes: instance.animes,
+    debutAnimes: structure.debutAnimes,
+    animes: structure.animes,
     rencontresAnimees: !suitAnimateurs
       ? null
       : R <= UINT8_MAX ? new Uint8Array(N * instance.A) : new Uint32Array(N * instance.A),
@@ -756,6 +812,7 @@ function etatInitial(structure, rng, remplir = null) {
         const q = siege[base + voisin];
         if (q !== FANTOME) modifierPaire(etat, p, q, 1);
       }
+      if (fixe[p * R + r] === LIBRE && siegesLibres[t * R + r] === 0) continue;
       if (etat.O > 0) etat.servis[p] += sert(etat, p, t, r);
       if (suitAnimateurs) changerAnimateurs(etat, p, t, r, 1);
     }
@@ -945,8 +1002,10 @@ const propositionDe = (instance, { id, graine, arret, historique }, { plan, eval
   releves: releves.map(({ mouvements, tableDe }) => ({ mouvements, plan: planDepuisIndex(instance, tableDe) })),
 });
 
-// Case d'un plan indexé que le départ n'a encore assise nulle part.
+// Cases d'un plan indexé que le départ n'a encore assises nulle part, ou
+// qu'il range en réserve.
 const NON_ASSIS = -2;
+const EN_RESERVE = -3;
 
 // Lève une RangeError dont le message commence par nom et dont le champ
 // reglage le porte, comme exigerReglage.
@@ -969,27 +1028,73 @@ function exigerToursFiges(toursFiges, R) {
   if (toursFiges.length === R) refuser(`les ${R} tours figés ne laissent rien à refaire`);
 }
 
-// Le plan indexé du départ, tableDe[p × R + r] = index de table, contrôlé
-// contre la structure : chaque personne de l'instance assise une fois à
-// chaque tour, à une table de l'instance, chaque personne fixée à sa table,
-// aucune table au-delà de sa capacité. Lève ErreurConfiguration
-// ('DEPART_INCOMPATIBLE', {tour, table, participant}), tour de 1 à R, table
-// et participant par identifiant ou null, pour le premier écart, tour après
-// tour : un plan qui n'a pas R tours (tour, le premier qui manque ou qui est
-// de trop) ou pas une liste par table déclarée ; une table inconnue qui
-// assied quelqu'un (table) ; une personne étrangère à l'instance, exclue
-// comprise, ou assise deux fois (table et participant) ; une table qui
-// déborde (table) ; une personne en réserve, puis absente du tour
-// (participant) ; une personne fixée assise ailleurs (participant, et table,
-// celle où elle est fixée). L'ordre des listes et des tables n'y entre pas.
-function tableDuDepart(structure, plan) {
+// Les réserves imposées du départ, contrôlées : imposee[p × R + r] vaut 1
+// quand {participant, tour} désigne la personne d'index p au tour r + 1.
+// Chaque entrée nomme un tour figé (fige[r] = 1), une personne de l'instance,
+// présente à ce tour et absente des listes de table du plan à ce tour ; les
+// entrées croissent strictement par tour, puis par participant. Lève, pour la
+// première entrée fautive, une RangeError de champ reglage
+// 'reservesImposees' ; une liste qui n'en est pas une la lève aussi. Un tour
+// que le plan n'a pas se lit sans liste : DEPART_INCOMPATIBLE le refuse
+// ensuite.
+function exigerReservesImposees({ instance, N, R }, reservesImposees, fige, plan) {
+  const refuser = (raison) => refuserReglage('reservesImposees', raison);
+  if (!Array.isArray(reservesImposees)) refuser(`liste attendue, reçu ${decrire(reservesImposees)}`);
+  const { indexDe, present } = instance;
+  const imposee = new Uint8Array(N * R);
+  let precedente = null;
+  for (const entree of reservesImposees) {
+    const { participant, tour } = entree ?? {};
+    if (!Number.isInteger(tour) || tour < 1 || tour > R || fige[tour - 1] === 0) {
+      refuser(`tour figé attendu, reçu ${decrire(tour)}`);
+    }
+    const p = indexDe.get(participant);
+    if (p === undefined) refuser(`participant ${decrire(participant)} inconnu de l'instance`);
+    if (precedente !== null
+      && (tour < precedente.tour || (tour === precedente.tour && participant <= precedente.participant))) {
+      refuser('entrées strictement croissantes par tour, puis par participant, attendues');
+    }
+    if (present[p * R + tour - 1] === 0) refuser(`participant ${participant} absent au tour ${tour}`);
+    const listes = plan?.tours?.[tour - 1];
+    if (Array.isArray(listes) && listes.some((liste) => Array.isArray(liste) && liste.includes(participant))) {
+      refuser(`participant ${participant} assis au tour ${tour} du départ`);
+    }
+    imposee[p * R + tour - 1] = 1;
+    precedente = { participant, tour };
+  }
+  return imposee;
+}
+
+// Le départ ajusté à la présence, contrôlé contre la structure (paragraphe
+// « Départ »). Rend tableDe[p × R + r], l'index de la table où le départ
+// garde p, RESERVE pour un absent, une réserve imposée et une personne à
+// asseoir ; et aAsseoir[r], les présents que le départ n'assied pas au tour
+// r, réserves imposées mises à part, ou qu'une arrivante fixée chasse de sa
+// table, index croissants. Un identifiant étranger à l'instance (exclu,
+// supprimé) et une personne absente du tour sont ignorés, où que le plan les
+// liste : leur chaise devient libre, et ils ne comptent dans aucune table.
+// Lève ErreurConfiguration('DEPART_INCOMPATIBLE', {tour, table,
+// participant}), tour de 1 à R, table et participant par identifiant ou
+// null, pour le premier écart, tour après tour : un plan qui n'a pas R tours
+// (tour, le premier qui manque ou qui est de trop) ou pas une liste par table
+// déclarée ; une table inconnue qui assied quelqu'un, même un ignoré
+// (table) ; une présente assise deux fois, réserve comprise (table et
+// participant, table null pour la réserve) ; une table qui déborde de ses
+// présentes (table) ; une présente fixée assise ailleurs (participant, et
+// table, celle où elle est fixée) ; à un tour figé, une table que ses
+// arrivantes fixées font déborder (table). À un tour non figé, ce
+// débordement fait passer à asseoir ses libres en trop, par index
+// décroissants : le nombre de sièges suffit, preparer ayant garanti n_r ≤ S.
+// L'ordre des listes et des tables n'y entre pas.
+function tableDuDepart(structure, plan, fige, imposee) {
   const { instance, N, T, R } = structure;
-  const { ids, idsTables, indexDe, indexTableDe, capacite, fixe } = instance;
+  const { ids, idsTables, indexDe, indexTableDe, capacite, fixe, present } = instance;
   const refuser = (tour, table, participant) => {
     throw new ErreurConfiguration('DEPART_INCOMPATIBLE', { tour, table, participant });
   };
   if (plan.tours.length !== R) refuser(Math.min(plan.tours.length, R) + 1, null, null);
   const tableDe = new Int32Array(N * R).fill(NON_ASSIS);
+  const aAsseoir = [];
   const occupants = new Int32Array(T);
   for (let r = 0; r < R; r += 1) {
     const tour = r + 1;
@@ -1002,78 +1107,229 @@ function tableDuDepart(structure, plan) {
       if (t === undefined && liste.length > 0) refuser(tour, table, null);
       for (const participant of liste) {
         const p = indexDe.get(participant);
-        if (p === undefined || tableDe[p * R + r] !== NON_ASSIS) refuser(tour, table, participant);
+        if (p === undefined || present[p * R + r] === 0) continue;
+        if (tableDe[p * R + r] !== NON_ASSIS) refuser(tour, table, participant);
         tableDe[p * R + r] = t;
         occupants[t] += 1;
       }
     });
     for (let t = 0; t < T; t += 1) if (occupants[t] > capacite[t]) refuser(tour, idsTables[t], null);
-    for (const participant of plan.reserves?.[r] ?? []) refuser(tour, null, participant);
-    for (let p = 0; p < N; p += 1) {
-      const t = tableDe[p * R + r];
-      if (t === NON_ASSIS) refuser(tour, null, ids[p]);
-      const fixee = fixe[p * R + r];
-      if (fixee !== LIBRE && fixee !== t) refuser(tour, idsTables[fixee], ids[p]);
+    for (const participant of plan.reserves?.[r] ?? []) {
+      const p = indexDe.get(participant);
+      if (p === undefined || present[p * R + r] === 0) continue;
+      if (tableDe[p * R + r] !== NON_ASSIS) refuser(tour, null, participant);
+      tableDe[p * R + r] = EN_RESERVE;
     }
+    const duTour = [];
+    for (let p = 0; p < N; p += 1) {
+      const i = p * R + r;
+      const t = tableDe[i];
+      const fixee = fixe[i];
+      if (present[i] === 0) {
+        tableDe[i] = RESERVE;
+      } else if (t >= 0) {
+        if (fixee !== LIBRE && fixee !== t) refuser(tour, idsTables[fixee], ids[p]);
+      } else {
+        tableDe[i] = RESERVE;
+        if (imposee[i] === 1) continue;
+        duTour.push(p);
+        if (fixee !== LIBRE) occupants[fixee] += 1;
+      }
+    }
+    for (let t = 0; t < T; t += 1) {
+      let enTrop = occupants[t] - capacite[t];
+      if (enTrop <= 0) continue;
+      if (fige[r] === 1) refuser(tour, idsTables[t], null);
+      for (let p = N - 1; p >= 0 && enTrop > 0; p -= 1) {
+        if (tableDe[p * R + r] !== t || fixe[p * R + r] !== LIBRE) continue;
+        tableDe[p * R + r] = RESERVE;
+        duTour.push(p);
+        enTrop -= 1;
+      }
+    }
+    aAsseoir.push(Int32Array.from(duTour).sort());
   }
-  return tableDe;
+  return { tableDe, aAsseoir };
 }
 
-// Le remplissage canonique d'un plan indexé contrôlé (paragraphe
-// « Départ ») : remplir(etat) assied, à chaque tour, chaque libre par index
-// croissant au prochain siège mobile de sa table. Les fixés occupent les
-// premiers sièges de leur table (preparer) : les sièges mobiles d'une table
-// suivent, et ceux qui restent sont des places fantômes, en fin de table.
-// Aucun tirage.
-function remplisseur(structure, tableDe) {
-  const { T, R, S, debut, siegesFixes, libres } = structure;
+// La structure sous laquelle se mesure un départ à réserves imposées :
+// structure elle-même quand aucune réserve imposée n'est fixée à son tour,
+// sinon une copie dont le seuil des retours ne compte plus, parmi les tours
+// fixés d'une personne, ceux où elle est en réserve imposée, et dont les
+// animateurs d'une table n'y comptent plus une animatrice en réserve
+// imposée à ce tour. mesurer lit ainsi le même plan : une fixée en réserve
+// n'y fait aucune visite réservée, une animatrice en réserve n'y est
+// rencontrée par personne.
+function structureDuDepart(structure, imposee) {
+  const { instance, N, T, R } = structure;
+  const { fixe, debutAnimes, animes, animateurs } = instance;
+  let fixeeImposee = false;
+  for (let i = 0; i < N * R; i += 1) if (imposee[i] === 1 && fixe[i] !== LIBRE) fixeeImposee = true;
+  if (!fixeeImposee) return structure;
+  const seuilRetour = new Int32Array(N * T);
+  for (let p = 0; p < N; p += 1) {
+    for (let r = 0; r < R; r += 1) {
+      const t = fixe[p * R + r];
+      if (t !== LIBRE && imposee[p * R + r] === 0) seuilRetour[p * T + t] += 1;
+    }
+  }
+  for (let i = 0; i < seuilRetour.length; i += 1) {
+    if (seuilRetour[i] === 0) seuilRetour[i] = 1;
+  }
+  const debut = new Int32Array(T * R + 1);
+  const gardes = [];
+  for (let ligne = 0; ligne < T * R; ligne += 1) {
+    const r = ligne % R;
+    for (let k = debutAnimes[ligne]; k < debutAnimes[ligne + 1]; k += 1) {
+      if (imposee[animateurs[animes[k]] * R + r] === 0) gardes.push(animes[k]);
+    }
+    debut[ligne + 1] = gardes.length;
+  }
+  return { ...structure, seuilRetour, debutAnimes: debut, animes: Int32Array.from(gardes) };
+}
+
+// Le remplissage canonique du départ ajusté (paragraphe « Départ ») :
+// remplir(etat) écrit les sièges dans etat.siege, où les fixés sont déjà,
+// sans rien tirer. À chaque tour, une fixée en réserve imposée quitte son
+// siège fixé ; chaque libre que le départ garde, par index croissant, va au
+// prochain siège mobile de sa table, ou, quand ils manquent, au prochain siège
+// fixé laissé par une réserve imposée de sa table ; puis chaque libre à
+// asseoir, par index croissant, va au premier siège mobile resté vide, dans
+// l'ordre des sièges. Une fixée à asseoir est déjà à son siège fixé. Les
+// fixés occupant les premiers sièges de leur table (preparer), ses sièges
+// mobiles suivent, et ceux qui restent sont des places fantômes.
+function remplisseur(structure, { tableDe, aAsseoir }, imposee) {
+  const { instance, T, R, S, debut, siegesFixes, libres, mobiles } = structure;
+  const { fixe } = instance;
   const prochain = new Int32Array(T);
+  const laisse = new Int32Array(T);
   return (etat) => {
     const { siege } = etat;
     for (let r = 0; r < R; r += 1) {
       const base = r * S;
+      for (let s = 0; s < S; s += 1) {
+        const p = siegesFixes[base + s];
+        if (p !== FANTOME && imposee[p * R + r] === 1) siege[base + s] = FANTOME;
+      }
       for (let t = 0; t < T; t += 1) {
         let s = debut[t];
         while (s < debut[t + 1] && siegesFixes[base + s] !== FANTOME) s += 1;
         prochain[t] = s;
+        laisse[t] = debut[t];
       }
       for (const p of libres[r]) {
         const t = tableDe[p * R + r];
-        siege[base + prochain[t]] = p;
-        prochain[t] += 1;
+        if (t === RESERVE) continue;
+        if (prochain[t] < debut[t + 1]) {
+          siege[base + prochain[t]] = p;
+          prochain[t] += 1;
+        } else {
+          while (siege[base + laisse[t]] !== FANTOME) laisse[t] += 1;
+          siege[base + laisse[t]] = p;
+          laisse[t] += 1;
+        }
+      }
+      let i = 0;
+      for (const p of aAsseoir[r]) {
+        if (fixe[p * R + r] !== LIBRE) continue;
+        while (siege[base + mobiles[base + i]] !== FANTOME) i += 1;
+        siege[base + mobiles[base + i]] = p;
       }
     }
   };
 }
 
-// Les options de descendre sous un départ {plan, toursFiges}, contrôlé avant
-// tout calcul : depart, le constructeur de l'état du départ, et tirables,
-// les index des tours non figés. Lève la RangeError d'exigerToursFiges, puis
-// DEPART_INCOMPATIBLE (tableDuDepart).
-function preparerDepart(structure, { plan, toursFiges }) {
-  exigerToursFiges(toursFiges, structure.R);
-  const remplir = remplisseur(structure, tableDuDepart(structure, plan));
+// Aux tours figés, aucun mouvement ne déplacera une arrivante : chaque libre
+// de aAsseoir[r], r figé, par tours puis index croissants, essaie chaque
+// table dans l'ordre des tables — la sienne en restant à son siège
+// canonique, une autre en passant, par echanger, à sa première place
+// fantôme, l'échange défait après le score composé — et garde la première
+// table au meilleur score dans l'ordre du score : à égalité, une table qui
+// précède celle de son siège canonique l'emporte. Les compteurs suivent
+// l'échange gardé. Une fixée reste à sa table. Rien n'est tiré.
+function placerArrivantsFiges(etat, structure, aAsseoir, fige) {
+  const { instance, T, R, S, debut, tableDuSiege, composition: forme } = structure;
+  const { fixe } = instance;
+  const { siege } = etat;
+  const meilleur = new Float64Array(forme.taille);
+  const essai = new Float64Array(forme.taille);
+  for (let r = 0; r < R; r += 1) {
+    if (fige[r] === 0) continue;
+    const base = r * S;
+    for (const p of aAsseoir[r]) {
+      if (fixe[p * R + r] !== LIBRE) continue;
+      const a = siege.subarray(base, base + S).indexOf(p);
+      const ta = tableDuSiege[a];
+      let choix = -1;
+      for (let t = 0; t < T; t += 1) {
+        let b = a;
+        if (t === ta) {
+          composer(forme, etat, essai);
+        } else {
+          b = debut[t];
+          while (b < debut[t + 1] && siege[base + b] !== FANTOME) b += 1;
+          if (b === debut[t + 1]) continue;
+          echanger(etat, r, a, b);
+          composer(forme, etat, essai);
+          echanger(etat, r, a, b);
+        }
+        if (choix === -1 || comparer(forme.ordreScore, essai, 0, meilleur, 0) < 0) {
+          meilleur.set(essai);
+          choix = b;
+        }
+      }
+      if (choix !== a) echanger(etat, r, a, choix);
+    }
+  }
+}
+
+// Les options de descendre sous un départ {plan, toursFiges,
+// reservesImposees}, contrôlé avant tout calcul : depart, le constructeur de
+// l'état du départ ajusté, et tirables, les index des tours non figés. L'état
+// ajusté se construit une fois — remplissage canonique, puis
+// placerArrivantsFiges —, et depart() en recopie les sièges dans un état
+// neuf, ses compteurs recomptés. Lève la RangeError d'exigerToursFiges, puis
+// celle d'exigerReservesImposees, puis DEPART_INCOMPATIBLE (tableDuDepart).
+function preparerDepart(structure, { plan, toursFiges, reservesImposees = [] }) {
+  const { R } = structure;
+  exigerToursFiges(toursFiges, R);
+  const fige = new Uint8Array(R);
+  for (const tour of toursFiges) fige[tour - 1] = 1;
+  const imposee = exigerReservesImposees(structure, reservesImposees, fige, plan);
+  const ajuste = tableDuDepart(structure, plan, fige, imposee);
+  const mesure = structureDuDepart(structure, imposee);
+  const etat = etatInitial(mesure, null, remplisseur(mesure, ajuste, imposee));
+  placerArrivantsFiges(etat, mesure, ajuste.aAsseoir, fige);
+  const sieges = Int32Array.from(etat.siege);
   const tirables = [];
-  for (let r = 0; r < structure.R; r += 1) if (!toursFiges.includes(r + 1)) tirables.push(r);
-  return { depart: () => etatInitial(structure, null, remplir), tirables: Int32Array.from(tirables) };
+  for (let r = 0; r < R; r += 1) if (fige[r] === 0) tirables.push(r);
+  return {
+    depart: () => etatInitial(mesure, null, (neuf) => neuf.siege.set(sieges)),
+    tirables: Int32Array.from(tirables),
+  };
 }
 
 /**
  * Les propositions d'une génération dérivée (§ 5.7) : celles de rechercher,
  * mêmes identifiants, mêmes graines dérivées, mêmes réglages, mêmes
- * avancement et annulation, chaque descente partie du plan du départ au lieu
- * d'un placement tiré, au début et à chaque relance, et ne tirant ses
- * mouvements que dans les tours non figés (paragraphe « Départ »). Chacune
- * porte en plus relances, le nombre de relances de sa descente. À
- * configuration, réglages et départ égaux, le résultat est identique. Ne
- * modifie ni la configuration ni le départ.
+ * avancement et annulation, chaque descente partie du départ ajusté à la
+ * présence au lieu d'un placement tiré, au début et à chaque relance, et ne
+ * tirant ses mouvements que dans les tours non figés (paragraphe
+ * « Départ »). Chacune porte en plus relances, le nombre de relances de sa
+ * descente. À configuration, réglages et départ égaux, réserves imposées
+ * comprises, le résultat est identique. Ne modifie ni la configuration ni le
+ * départ.
  *
  * Lève ce que rechercher lève, puis, avant tout calcul, une RangeError de
  * champ reglage 'toursFiges' pour une liste qui n'est pas strictement
- * croissante, un tour hors de 1 à R, ou tous les tours ; ErreurConfiguration
- * ('DEPART_INCOMPATIBLE', {tour, table, participant}) pour un plan que
- * l'instance ne peut pas asseoir tel quel (paragraphe « Départ ») : une
- * garde, l'application refusant ces départs avant.
+ * croissante, un tour hors de 1 à R, ou tous les tours ; une RangeError de
+ * champ reglage 'reservesImposees' pour une liste mal formée ou dont une
+ * entrée ne désigne pas une présente de l'instance qu'un tour figé du plan
+ * n'assied pas ; ErreurConfiguration ('DEPART_INCOMPATIBLE', {tour, table,
+ * participant}) pour un plan malformé ou qui contredit le mobilier, et, à un
+ * tour figé, pour une table que ses arrivantes fixées font déborder faute de
+ * réserve imposée (paragraphe « Départ ») : une garde, l'application
+ * refusant ces départs avant.
  *
  * @param {import('./types.js').Configuration} configuration
  * @param {ReglagesGeneration} reglages
@@ -1173,9 +1429,11 @@ export function repartirUne(configuration, reglages, depart, rang, { signal, pro
  * Lève RangeError quand un réglage n'est pas un entier de son domaine —
  * graine de 0 à 2^32 − 1, arret, nombre et historique ≥ 1 ;
  * ErreurConfiguration de normaliser ; ErreurConfiguration
- * ('PLACES_MANQUANTES', { placesManquantes }) quand les tables n'offrent pas
- * assez de sièges, placesManquantes étant le nombre de places qui manquent à
- * chaque tour, celui que rend nombrePlacesManquantes.
+ * ('PLACES_MANQUANTES', { placesManquantes, tours? }) quand les tables
+ * n'offrent pas assez de sièges à un tour pour ses présents :
+ * placesManquantes, le plus grand manque d'un tour, celui que rend
+ * nombrePlacesManquantes ; tours, dès qu'une personne est absente à un tour,
+ * chaque tour à manque positif {tour, manque}, croissants, et absent sinon.
  *
  * @param {import('./types.js').Configuration} configuration
  * @param {ReglagesGeneration} reglages
@@ -1281,10 +1539,11 @@ export function verifierReglages({ graine, arret, nombre, historique = HISTORIQU
  * configuration, ni la proposition, ni le plan du départ.
  *
  * Une proposition dérivée porte en plus depart, l'identifiant de son départ,
- * et toursFiges quand elle en a : sa descente part alors du plan de son
- * départ, options.planDuDepart, sous ses tours figés, toursFiges absent
- * valant aucun, et regenerer rend le plan que repartir a rendu pour elle.
- * Sans depart ni toursFiges, options.planDuDepart n'est pas lu. Aucun autre
+ * et toursFiges quand elle en a : sa descente part alors du départ ajusté de
+ * options.planDuDepart, sous ses tours figés, toursFiges absent valant aucun,
+ * et sous options.reservesImposees, vide par défaut, et regenerer rend le
+ * plan que repartir a rendu pour elle sous les mêmes réserves imposées. Sans
+ * depart ni toursFiges, options.planDuDepart n'est pas lu. Aucun autre
  * champ n'est lu, ni id ni plan : un fichier de proposition entier se passe
  * tel quel.
  *
@@ -1295,23 +1554,29 @@ export function verifierReglages({ graine, arret, nombre, historique = HISTORIQU
  * reglage 'toursFiges' pour toursFiges présent sans depart, et de champ
  * reglage 'depart' pour un depart qui n'est pas un entier ≥ 1 ou qui vient
  * sans planDuDepart : sans lui, la descente rendrait en silence la
- * proposition ordinaire de même graine. Lève ce que rechercher lève pour la
+ * proposition ordinaire de même graine ; de champ reglage
+ * 'reservesImposees' pour des réserves imposées non vides sans depart, qui
+ * ne désignent aucun tour figé. Lève ce que rechercher lève pour la
  * configuration : ErreurConfiguration de normaliser, PLACES_MANQUANTES ;
  * puis ce que repartir lève pour le départ.
  *
  * @param {import('./types.js').Configuration} configuration
  * @param {{graine: number, arret: number, historique: number, depart?: number, toursFiges?: number[]}} proposition
- * @param {{planDuDepart?: import('./types.js').Plan|null}} [options]
+ * @param {{planDuDepart?: import('./types.js').Plan|null,
+ *          reservesImposees?: {participant: number, tour: number}[]}} [options]
  * @returns {import('./types.js').Plan}
  */
 export function regenerer(
   configuration,
   { graine, arret, historique, depart, toursFiges },
-  { planDuDepart = null } = {},
+  { planDuDepart = null, reservesImposees = [] } = {},
 ) {
   exigerChampsProposition({ graine, arret, historique });
   if (depart === undefined && toursFiges !== undefined) {
     refuserReglage('toursFiges', 'des tours figés sans depart ne désignent aucun plan');
+  }
+  if (depart === undefined && !(Array.isArray(reservesImposees) && reservesImposees.length === 0)) {
+    refuserReglage('reservesImposees', 'des réserves imposées sans depart ne désignent aucun tour figé');
   }
   if (depart !== undefined) {
     exigerReglage('depart', depart, 1, Number.MAX_SAFE_INTEGER);
@@ -1323,7 +1588,7 @@ export function regenerer(
   const structure = preparer(instance);
   const options = depart === undefined
     ? {}
-    : preparerDepart(structure, { plan: planDuDepart, toursFiges: toursFiges ?? [] });
+    : preparerDepart(structure, { plan: planDuDepart, toursFiges: toursFiges ?? [], reservesImposees });
   const { plan } = proposer(structure, graine, {
     arret,
     historique,
@@ -1336,10 +1601,10 @@ export function regenerer(
 
 /**
  * État de recherche au placement initial (§ 5.10) : fixés à leurs tables,
- * libres mélangés par rng.melanger, tour après tour, puis assis table après
- * table dans l'ordre des tables. L'état porte la composition du n-uplet de
- * l'instance. Lève ErreurConfiguration('PLACES_MANQUANTES',
- * { placesManquantes }) comme rechercher.
+ * libres présents mélangés par rng.melanger, tour après tour, puis assis
+ * table après table dans l'ordre des tables ; un absent n'occupe aucun siège.
+ * L'état porte la composition du n-uplet de l'instance. Lève
+ * ErreurConfiguration('PLACES_MANQUANTES') comme rechercher.
  *
  * @param {import('./types.js').Instance} instance
  * @param {ReturnType<typeof creerPcg32>} rng
@@ -1348,6 +1613,24 @@ export function regenerer(
 export function creerEtat(instance, rng) {
   const structure = preparer(instance);
   const etat = etatInitial(structure, rng);
+  etat.composition = structure.composition;
+  return etat;
+}
+
+/**
+ * État de recherche au départ ajusté à la présence (paragraphe « Départ ») :
+ * celui dont part chaque descente de repartir, repartirUne et regenerer sous
+ * ce départ, au début et à chaque relance. L'état porte la composition du
+ * n-uplet de l'instance. Lève ce que creerEtat lève, puis ce que repartir
+ * lève pour le départ, dans le même ordre.
+ *
+ * @param {import('./types.js').Instance} instance
+ * @param {DepartRecherche} depart
+ * @returns {EtatRecherche}
+ */
+export function creerEtatDuDepart(instance, depart) {
+  const structure = preparer(instance);
+  const etat = preparerDepart(structure, depart).depart();
   etat.composition = structure.composition;
   return etat;
 }

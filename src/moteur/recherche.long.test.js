@@ -18,7 +18,11 @@
 // chaque point de relevé de sa course égale le plan que regenerer rend à son
 // compte. Une dérivée sur la grande démonstration, deux tours figés, rend de
 // même chaque point de relevé par regenerer sous son départ, chacun portant
-// les tours figés du départ, liste pour liste.
+// les tours figés du départ, liste pour liste. Sur la grande démonstration où
+// une personne sur sept est absente à un tour, l'état tenu à jour s'accorde
+// au recalcul à chaque palier, et une recherche longue n'assied aucune
+// absente, assied chaque présente une fois par tour, et tient la chaîne des
+// plafonds jusqu'aux co-présents.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE } from '../demo/catalogue.js';
@@ -340,4 +344,52 @@ describe('repartir : la course d\'une dérivée sur la grande démonstration (§
       assert.notDeepStrictEqual(plan.tours[1], planDuDepart.tours[1]);
     });
   }
+});
+
+// La grande démonstration où une personne sur sept, sans réservation ni tour
+// animé, est absente à un tour : la k-ième d'entre elles l'est au tour
+// (k mod R) + 1.
+function grandeSousAbsences() {
+  const configuration = CATALOGUE.find((entree) => entree.cle === 'grande').construire();
+  const reserves = new Set(configuration.reservations.map(({ participant }) => participant));
+  let k = 0;
+  const participants = configuration.participants.map((participant, rang) => {
+    if (rang % 7 !== 0 || reserves.has(participant.id) || participant.anime !== undefined || participant.exclu) return participant;
+    const absent = (k % configuration.tours) + 1;
+    k += 1;
+    const presence = Array.from({ length: configuration.tours }, (_, r) => r + 1).filter((tour) => tour !== absent);
+    return { ...participant, presence };
+  });
+  return { ...configuration, participants };
+}
+
+describe('recherche : la grande démonstration sous absences (§ 5.9, § 5.10, § 14.10)', () => {
+  test('accord à 1, 10, 100, 1 000 et 10 000 mouvements, plus de trente absences', () => {
+    const instance = normaliser(grandeSousAbsences());
+    assert.ok(instance.absences >= 30, `${instance.absences} absences`);
+    const { releve, appliques } = suivre(instance);
+    assert.equal(appliques, PALIERS.at(-1));
+    assert.deepEqual(releve, []);
+  });
+
+  test("arret 200 000 : aucune absente listée, chaque présente assise une fois par tour, et rencontres ≤ plafond réalisé ≤ plafond a priori ≤ co-présents", () => {
+    const configuration = grandeSousAbsences();
+    const instance = normaliser(configuration);
+    const { N, R, ids, present, coPresents } = instance;
+    const aPriori = plafondsAPriori(instance);
+    for (const { id, plan } of rechercher(configuration, { graine: 31, arret: 200_000, nombre: 2 })) {
+      const tableDe = indexerPlan(instance, plan);
+      assert.deepEqual(plan.reserves, plan.reserves.map(() => []), `proposition ${id}`);
+      for (let r = 0; r < R; r += 1) {
+        const listes = plan.tours[r].flat();
+        assert.equal(new Set(listes).size, listes.length, `proposition ${id}, tour ${r + 1}`);
+        for (let p = 0; p < N; p += 1) {
+          assert.equal(listes.includes(ids[p]), present[p * R + r] === 1, `proposition ${id}, ${ids[p]}, tour ${r + 1}`);
+        }
+      }
+      const mesures = mesurer(instance, tableDe);
+      assert.deepEqual(verifierIndicateurs(mesures, aPriori, plafondsRealises(instance, tableDe)), [], `proposition ${id}`);
+      for (let p = 0; p < N; p += 1) assert.ok(aPriori[p] <= coPresents[p], `${ids[p]}`);
+    }
+  });
 });

@@ -15,8 +15,9 @@
 // deux listes ont les longueurs de mesures.rencontresRepetees (§ 13.2).
 //
 // Les tours d'une paire se lisent dans le plan, case à case : les tours où les
-// deux sont assis à la même table, la réserve n'étant pas une table. Ils sont
-// autant que son compte.
+// deux sont assis à la même table, la réserve, où le plan indexé range aussi
+// une personne absente du tour, n'étant pas une table. Ils sont autant que
+// son compte.
 //
 // Chaque fonction prend en dernier paramètre, facultatif, le parcours déjà lu
 // du même plan : un appelant qui en tire d'autres mesures ne relit pas le

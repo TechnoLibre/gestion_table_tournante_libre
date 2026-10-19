@@ -25,12 +25,14 @@ import {
   nombrePlaces,
   nombrePlacesManquantes,
   normaliser,
+  placesManquantesParTour,
   planDepuisIndex,
   replierParPopulation,
 } from './configuration.js';
 import { CRITERES, PRIORITES_PAR_DEFAUT, verifierPriorites } from './criteres.js';
+import { diversiteAnimateurs } from './diversite.js';
 import { mesurer } from './indicateurs.js';
-import { plafondsRealises } from './plafond.js';
+import { occupations, plafondsRealises } from './plafond.js';
 
 const { MOBILE, PARTIELLEMENT_FIXE, ANCRE } = STATUT;
 
@@ -1443,5 +1445,453 @@ describe('normaliser : état des critères (§ 5.3, A8, D10)', () => {
     });
     assert.equal(instance.O, 1);
     assert.equal(etat(instance, 'toursHorsObjectif').sansObjet, true);
+  });
+});
+
+// --- La présence par tour (§ 4.4, § 5.2, § 5.9) ------------------------------
+
+// Participant présent aux seuls tours de presence ; etiquettes et anime, quand
+// ils sont donnés, comme etiquete.
+const presente = (id, presence, { etiquettes, anime } = {}) => ({ ...etiquete(id, etiquettes, anime), presence });
+
+describe('normaliser : la présence par tour, le masque et ses comptes', () => {
+  // Trois tours, deux tables de 3 déclarées hors de l'ordre de leurs
+  // identifiants, cinq personnes d'identifiants pairs, fournies dans le
+  // désordre : 4 est présente aux tours 1 et 3, 10 au seul tour 2.
+  const MASQUE = configuration({
+    participants: [presente(10, [2]), ...personnes([2, 6]), presente(4, [1, 3]), ...personnes([8])],
+    tables: tablesDe([12, 11], 3),
+    tours: 3,
+  });
+
+  test('le masque present, les tours de présence de chacun, les présents de chaque tour et le compte des absences', () => {
+    const instance = normaliser(MASQUE);
+    assert.deepEqual(instance.ids, [2, 4, 6, 8, 10]);
+    // Rangées p × R + r, ids [2, 4, 6, 8, 10].
+    assert.deepEqual(instance.present, Uint8Array.from([
+      1, 1, 1,
+      1, 0, 1,
+      1, 1, 1,
+      1, 1, 1,
+      0, 1, 0,
+    ]));
+    assert.deepEqual(instance.toursPresents, Int32Array.from([3, 2, 3, 3, 1]));
+    assert.deepEqual(instance.presentsParTour, Int32Array.from([4, 4, 4]));
+    assert.equal(instance.absences, 3);
+  });
+
+  test('une présence qui couvre chaque tour vaut le champ absent : la même instance, champ pour champ', () => {
+    const avecReservation = { reservations: [tous(2, 11), auTour(6, 12, 2)] };
+    const sans = normaliser({ ...MASQUE, participants: personnes([10, 2, 6, 4, 8]), ...avecReservation });
+    const pleine = normaliser({
+      ...MASQUE,
+      participants: [presente(10, [1, 2, 3]), ...personnes([2]), presente(6, [1, 2, 3]), ...personnes([4, 8])],
+      ...avecReservation,
+    });
+    assert.deepEqual(pleine, sans);
+  });
+
+  test('sans aucune présence, chaque champ de la présence prend sa valeur neutre : tous présents, N − 1 co-présents, n_p mobiles co-présents', () => {
+    // 3 est ancré à la table 11 : n = 4, n_p = 3 pour un non-ancré, 4 pour
+    // l'ancré.
+    const instance = normaliser(configuration({
+      participants: personnes([5, 1, 3, 9, 7]),
+      tables: tablesDe([12, 11], 3),
+      tours: 2,
+      reservations: [tous(3, 11)],
+    }));
+    assert.deepEqual(instance.present, new Uint8Array(10).fill(1));
+    assert.deepEqual(instance.toursPresents, new Int32Array(5).fill(2));
+    assert.deepEqual(instance.presentsParTour, new Int32Array(2).fill(5));
+    assert.equal(instance.absences, 0);
+    assert.deepEqual(instance.coPresents, new Int32Array(5).fill(4));
+    assert.deepEqual(instance.mobilesCoPresents, Int32Array.from([3, 4, 3, 3, 3]));
+  });
+
+  test('la présence d’un exclu ne change rien à l’instance', () => {
+    const base = configuration({ participants: [...personnes([1, 2]), exclu(3)], tables: tablesDe([11], 2), tours: 3 });
+    const avecPresence = { ...base, participants: [...personnes([1, 2]), { ...exclu(3), presence: [2] }] };
+    assert.deepEqual(normaliser(avecPresence), normaliser(base));
+  });
+
+  test('co-présence : les autres personnes présentes avec p à un tour au moins, et parmi elles les non-ancrées', () => {
+    // Six personnes, trois tours, deux tables de 3. 1 n'est présente qu'au
+    // tour 1, 2 qu'aux tours 2 et 3 : elles ne se croisent jamais, et chacune
+    // a 4 co-présents ; les autres en ont 5.
+    const participants = [presente(1, [1]), presente(2, [2, 3]), ...personnes([3, 4, 5, 6])];
+    const sansAncre = normaliser(configuration({ participants, tables: tablesDe([12, 11], 3), tours: 3 }));
+    assert.deepEqual(sansAncre.coPresents, Int32Array.from([4, 4, 5, 5, 5, 5]));
+    assert.deepEqual(sansAncre.mobilesCoPresents, Int32Array.from([4, 4, 5, 5, 5, 5]));
+    // 6, ancrée à la table 11, est présente partout : chacun la compte parmi
+    // ses co-présents, aucun parmi ses mobiles co-présents ; elle-même voit
+    // les cinq autres, toutes mobiles (n = 5).
+    const avecAncre = normaliser(configuration({
+      participants,
+      tables: tablesDe([12, 11], 3),
+      tours: 3,
+      reservations: [tous(6, 11)],
+    }));
+    assert.deepEqual(avecAncre.statut, Uint8Array.from([MOBILE, MOBILE, MOBILE, MOBILE, MOBILE, ANCRE]));
+    assert.deepEqual(avecAncre.coPresents, Int32Array.from([4, 4, 5, 5, 5, 5]));
+    assert.deepEqual(avecAncre.mobilesCoPresents, Int32Array.from([3, 3, 4, 4, 4, 5]));
+  });
+
+  test('co-présence : deux personnes au même motif de présence lisent le même compte, deux motifs disjoints aucun co-présent de l’autre', () => {
+    // Trois tours. 1 et 2 aux tours 1 et 2, 3 au seul tour 3, 4 partout.
+    const instance = normaliser(configuration({
+      participants: [presente(1, [1, 2]), presente(2, [1, 2]), presente(3, [3]), ...personnes([4])],
+      tables: tablesDe([11], 4),
+      tours: 3,
+    }));
+    assert.deepEqual(instance.coPresents, Int32Array.from([2, 2, 1, 3]));
+  });
+
+  test('co-présence au-delà de 32 personnes : chaque compte vaut le décompte paire par paire, bits 31 et 32 et au-delà compris', () => {
+    // Quarante personnes (index = id − 1), trois tours, six tables de 8. Les
+    // présences partielles tombent sur le dernier bit du premier mot (index
+    // 31) et dans le second mot (index 32, 35, 39) ; 1 à 10 ne sont qu'au
+    // tour 1. 20 et 34, ancrées, sont présentes partout.
+    const presences = new Map([[32, [2]], [33, [1, 2]], [36, [1, 3]], [40, [3]]]);
+    for (const id of suite(1, 10)) presences.set(id, [1]);
+    const ancrees = new Set([20, 34]);
+    const ids = suite(1, 40);
+    const participants = ids.map((id) => (presences.has(id) ? presente(id, presences.get(id)) : personnes([id])[0]));
+    const instance = normaliser(configuration({
+      participants,
+      tables: tablesDe(suite(101, 106), 8),
+      tours: 3,
+      reservations: [tous(20, 101), tous(34, 102)],
+    }));
+    // Le décompte direct : q ≠ p partage un tour de présence avec p ; parmi
+    // elles, les mobiles co-présentes ne sont pas ancrées.
+    const toursDe = (id) => presences.get(id) ?? [1, 2, 3];
+    const croise = (a, b) => toursDe(a).some((tour) => toursDe(b).includes(tour));
+    const attendus = ids.map((p) => ids.filter((q) => q !== p && croise(p, q)));
+    assert.deepEqual(instance.ids, ids);
+    assert.deepEqual(instance.coPresents, Int32Array.from(attendus, (autres) => autres.length));
+    assert.deepEqual(
+      instance.mobilesCoPresents,
+      Int32Array.from(attendus, (autres) => autres.filter((q) => !ancrees.has(q)).length),
+    );
+    // Deux comptes lus en clair : le tour 1 a 38 présents (tous sauf 32 et
+    // 40), d'où 37 pour 1 ; le tour 2 en a 28 (tous sauf 1 à 10, 36 et 40),
+    // d'où 27 pour 32.
+    assert.equal(instance.coPresents[0], 37);
+    assert.equal(instance.coPresents[31], 27);
+  });
+});
+
+describe('normaliser : la présence par tour, ses refus', () => {
+  // Trois personnes, deux tables de 2, trois tours ; 3 est exclue.
+  const base = configuration({
+    participants: [...personnes([1, 2]), exclu(3)],
+    tables: tablesDe([11, 12], 2),
+    tours: 3,
+  });
+  // La configuration où la personne id porte presence.
+  const avecPresence = (id, presence, modification = {}) => () => normaliser({
+    ...base,
+    participants: base.participants.map((personne) => (personne.id === id ? { ...personne, presence } : personne)),
+    ...modification,
+  });
+
+  test('chaque code, sur une présente et sur une exclue', () => {
+    const cas = [2, 3].flatMap((id) => [
+      ...[0, 4, 1.5, '1', -1].map((tour) => [
+        `${id} au tour ${libelleDe(tour)}`, avecPresence(id, [tour]), 'PRESENCE_TOUR', { participant: id, tour },
+      ]),
+      [`${id} au tour 4 après le tour 1`, avecPresence(id, [1, 4]), 'PRESENCE_TOUR', { participant: id, tour: 4 }],
+      [`${id} présente à aucun tour`, avecPresence(id, []), 'PRESENCE_VIDE', { participant: id }],
+    ]);
+    assert.deepEqual(ecartsDeRefus(cas), []);
+  });
+
+  test('une exclue présente au seul tour 5 de quatre tours lève PRESENCE_TOUR : le contrôle couvre les exclus', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['exclue au tour 5 sur quatre', avecPresence(3, [5], { tours: 4 }), 'PRESENCE_TOUR', { participant: 3, tour: 5 }],
+    ]), []);
+  });
+
+  test('une présence qui n’est pas une liste strictement croissante lève TypeError, exclus compris', () => {
+    for (const id of [2, 3]) {
+      for (const presence of ['x', null, 2, { 0: 1 }]) {
+        exigerTypeError(avecPresence(id, presence), `participant ${id} : présence en liste attendue`, `${id}, ${String(presence)}`);
+      }
+      for (const presence of [[2, 1], [1, 1], [1, 3, 2]]) {
+        exigerTypeError(
+          avecPresence(id, presence),
+          `participant ${id} : tours de présence strictement croissants attendus`,
+          `${id}, [${presence.join(', ')}]`,
+        );
+      }
+    }
+  });
+
+  test('la présence se contrôle après le nombre de tours, et avant les réservations', () => {
+    assert.deepEqual(ecartsDeRefus([
+      ['des tours faux et une présence fautive', avecPresence(2, [9], { tours: 0 }), 'TOURS', { tours: 0 }],
+      ['une réservation fautive et une présence fautive', avecPresence(2, [9], { reservations: [tous(42, 11)] }),
+        'PRESENCE_TOUR', { participant: 2, tour: 9 }],
+      ['une réservation fautive et une présence vide', avecPresence(1, [], { reservations: [auTour(1, 11, 7)] }),
+        'PRESENCE_VIDE', { participant: 1 }],
+    ]), []);
+  });
+});
+
+describe('normaliser : la présence par tour, les réservations, les couples et les animateurs', () => {
+  // Tables 20 puis 10, de 3 places : la table 10 a l'index 1.
+  const tables = tablesDe([20, 10], 3);
+
+  test('une réservation est suspendue aux tours d’absence : la personne n’y est pas fixée, et n’est plus ancrée', () => {
+    const avec = (presence) => normaliser(configuration({
+      participants: [presente(1, presence), ...personnes([2])],
+      tables,
+      tours: 3,
+      reservations: [tous(1, 10)],
+    }));
+    const partielle = avec([1, 2]);
+    assert.deepEqual(partielle.fixe.subarray(0, 3), Int32Array.from([1, 1, LIBRE]));
+    assert.equal(partielle.statut[0], PARTIELLEMENT_FIXE);
+    assert.equal(partielle.k, 0);
+    assert.deepEqual(partielle.ancresParTable, Int32Array.from([0, 0]));
+    // Sièges libres de la table d'index 1 aux trois tours : sa place se rend
+    // au tour 3.
+    assert.deepEqual(partielle.siegesLibres.subarray(3, 6), Int32Array.from([2, 2, 3]));
+    const pleine = avec(undefined);
+    assert.deepEqual(pleine.fixe.subarray(0, 3), Int32Array.from([1, 1, 1]));
+    assert.equal(pleine.statut[0], ANCRE);
+    assert.equal(pleine.k, 1);
+  });
+
+  test('deux réservations contraires à un tour d’absence ne sont pas en conflit', () => {
+    const avec = (presence) => () => normaliser(configuration({
+      participants: [presente(1, presence), ...personnes([2])],
+      tables,
+      tours: 3,
+      reservations: [tous(1, 10), auTour(1, 20, 3)],
+    }));
+    assert.deepEqual(avec([1, 2])().fixe.subarray(0, 3), Int32Array.from([1, 1, LIBRE]));
+    assert.deepEqual(ecartsDeRefus([
+      ['sans la présence', avec(undefined), 'RESERVATION_CONFLIT', { participant: 1, tour: 3, tables: [10, 20] }],
+    ]), []);
+  });
+
+  test('une absence au tour réservé ne fait pas surréserver : la place se rend', () => {
+    // Table 10 de 3 places, quatre réservations « tous » ; 4 est absente au
+    // tour 2.
+    const avec = (presence) => () => normaliser(configuration({
+      participants: [...personnes([1, 2, 3]), presente(4, presence)],
+      tables,
+      tours: 2,
+      reservations: [tous(1, 10), tous(2, 10), tous(3, 10), auTour(4, 10, 2)],
+    }));
+    assert.equal(avec([1])().siegesLibres[1 * 2 + 1], 0);
+    assert.deepEqual(ecartsDeRefus([
+      ['présente au tour 2', avec([2]), 'SURRESERVATION', { table: 10, tour: 2, reservees: 4, capacite: 3 }],
+    ]), []);
+  });
+
+  test('ANIMATION_ABSENTE : un tour animé où la personne est absente, contrôlé avant ANIMATION_NON_FIXEE', () => {
+    const avec = (anime, presence) => () => normaliser(configuration({
+      participants: [presente(1, presence, { anime }), ...personnes([2])],
+      tables,
+      tours: 3,
+      reservations: [tous(1, 10)],
+    }));
+    assert.deepEqual(ecartsDeRefus([
+      // La réservation, suspendue au tour 3, n'y fixe plus la personne :
+      // ANIMATION_NON_FIXEE y dirait un motif faux.
+      ['un tour animé d’absence', avec([3], [1, 2]), 'ANIMATION_ABSENTE', { participant: 1, tour: 3 }],
+      ['le second tour animé d’absence', avec([1, 3], [1, 2]), 'ANIMATION_ABSENTE', { participant: 1, tour: 3 }],
+      // Un tour hors de 1..R se refuse avant toute lecture du masque.
+      ['un tour animé hors des tours', avec([4], [1, 2]), 'ANIMATION_NON_FIXEE', { participant: 1, tour: 4 }],
+      ['un tour animé 0', avec([0], [1, 2]), 'ANIMATION_NON_FIXEE', { participant: 1, tour: 0 }],
+    ]), []);
+    // Présente et réservée à chacun de ses tours animés : elle anime.
+    assert.equal(avec([1, 2], [1, 2])().A, 1);
+  });
+
+  test('un couple (personne, tour) n’est pas possible à un tour d’absence', () => {
+    // L'objectif « x » vaut pour la soirée à la table 10 ; 1 porte « x ».
+    const avec = (presence) => normaliser({
+      ...configuration({ participants: [presente(1, presence, { etiquettes: ['x'] }), ...personnes([2])], tables, tours: 3 }),
+      objectifs: [objectif(10, null, 'ou', ['x'])],
+    });
+    const partielle = avec([1, 3]);
+    assert.deepEqual(partielle.possible.subarray(0, 3), Uint8Array.from([1, 0, 1]));
+    assert.equal(partielle.possibles[0], 2);
+    assert.equal(partielle.etatCriteres.find(({ nom }) => nom === 'toursHorsObjectif').sansObjet, false);
+    assert.deepEqual(avec(undefined).possible.subarray(0, 3), Uint8Array.from([1, 1, 1]));
+  });
+
+  test('la borne des animateurs ne compte que les tours de présence', () => {
+    // 1 anime à la table 10 au tour 1, 2 à la table 20 au tour 2 ; 3 est
+    // libre. Présente aux deux tours, 3 peut rejoindre l'un puis l'autre :
+    // B = 2 ; présente au seul tour 1 : B = 1.
+    const avec = (presence) => normaliser(configuration({
+      participants: [etiquete(1, undefined, [1]), etiquete(2, undefined, [2]), presente(3, presence)],
+      tables,
+      tours: 2,
+      reservations: [auTour(1, 10, 1), auTour(2, 20, 2)],
+    }));
+    assert.equal(avec(undefined).borneAnimateurs[2], 2);
+    assert.equal(avec([1]).borneAnimateurs[2], 1);
+    assert.equal(avec([2]).borneAnimateurs[2], 1);
+  });
+
+  test('figerConfiguration fige aussi la présence de chaque participant', () => {
+    const figee = figerConfiguration(configuration({
+      participants: [presente(1, [2]), ...personnes([2])],
+      tables,
+      tours: 2,
+    }));
+    assert.equal(Object.isFrozen(figee.participants[0].presence), true);
+    assert.equal(normaliser(figee), normaliser(figee));
+  });
+});
+
+describe('placesManquantesParTour (§ 5.9)', () => {
+  // Deux tables de 2, soit 4 places, cinq personnes, deux tours.
+  const salle = (participants) => normaliser(configuration({ participants, tables: tablesDe([12, 11], 2), tours: 2 }));
+
+  test('sans absence, le même manque à chaque tour, celui de nombrePlacesManquantes', () => {
+    const instance = salle(personnes(suite(1, 5)));
+    assert.deepEqual(placesManquantesParTour(instance), [1, 1]);
+    assert.equal(nombrePlacesManquantes(instance), 1);
+  });
+
+  test('par tour, sur les présents : une absente au tour 2 y rend la place qui manque', () => {
+    const instance = salle([...personnes([1, 2, 3, 4]), presente(5, [1])]);
+    assert.deepEqual(placesManquantesParTour(instance), [1, 0]);
+    assert.equal(nombrePlacesManquantes(instance), 1);
+  });
+
+  test('une salle trop petite pour tous suffit aux présents de chaque tour', () => {
+    const instance = salle([...personnes([1, 2, 3]), presente(4, [1]), presente(5, [2])]);
+    assert.deepEqual(placesManquantesParTour(instance), [0, 0]);
+    assert.equal(nombrePlacesManquantes(instance), 0);
+  });
+
+  test('nombrePlacesManquantes rend le plus grand manque d’un tour', () => {
+    const instance = salle([...personnes(suite(1, 5)), presente(6, [2]), presente(7, [2])]);
+    assert.deepEqual(placesManquantesParTour(instance), [1, 3]);
+    assert.equal(nombrePlacesManquantes(instance), 3);
+  });
+});
+
+describe('plans : la présence par tour (§ 8.9)', () => {
+  // Deux tables de 2, d'identifiants 12 puis 11, cinq personnes, deux
+  // tours : 4 n'est présente qu'au tour 1, 5 qu'au tour 2.
+  const instanceAbsences = () => normaliser(configuration({
+    participants: [...personnes([1, 2, 3]), presente(4, [1]), presente(5, [2])],
+    tables: tablesDe([12, 11], 2),
+    tours: 2,
+  }));
+  // Tour 1 : 1 et 2 à 12, 3 et 4 à 11 ; tour 2 : 1 et 2 à 12, 3 et 5 à 11.
+  // Rangées p × R + r, ids 1 à 5.
+  const TABLE_DE = [
+    0, 0,
+    0, 0,
+    1, 1,
+    1, RESERVE,
+    RESERVE, 1,
+  ];
+  const PLAN = {
+    tables: [12, 11],
+    tours: [[[1, 2], [3, 4]], [[1, 2], [3, 5]]],
+    reserves: [[], []],
+  };
+
+  test('planDepuisIndex ne liste un absent nulle part : les réserves ne portent que des présents', () => {
+    const instance = instanceAbsences();
+    assert.deepEqual(planDepuisIndex(instance, Int32Array.from(TABLE_DE)), PLAN);
+    // 1 en réserve au tour 1 y figure, 5, absente, non.
+    const tableDe = Int32Array.from(TABLE_DE);
+    tableDe[0] = RESERVE;
+    assert.deepEqual(planDepuisIndex(instance, tableDe).reserves, [[1], []]);
+  });
+
+  test('indexerPlan : un absent placé à une table ou en réserve lève PLAN_ABSENT_PLACE ; omis, il vaut RESERVE', () => {
+    const instance = instanceAbsences();
+    const variante = (modifier) => () => {
+      const plan = structuredClone(PLAN);
+      modifier(plan);
+      return indexerPlan(instance, plan);
+    };
+    assert.deepEqual(ecartsDeRefus([
+      ['5 assise au tour 1', variante((plan) => plan.tours[0][1].push(5)), 'PLAN_ABSENT_PLACE', { participant: 5, tour: 1 }],
+      ['5 en réserve au tour 1', variante((plan) => plan.reserves[0].push(5)), 'PLAN_ABSENT_PLACE', { participant: 5, tour: 1 }],
+      ['4 assise au tour 2', variante((plan) => plan.tours[1][0].push(4)), 'PLAN_ABSENT_PLACE', { participant: 4, tour: 2 }],
+      // Le placement d'un absent se refuse là où il se lit, avant qu'un
+      // doublon ne se voie.
+      ['5 assise deux fois au tour 1', variante((plan) => plan.tours[0][0].push(5, 5)), 'PLAN_ABSENT_PLACE', { participant: 5, tour: 1 }],
+      // Une présente omise reste refusée.
+      ['3 omise au tour 2', variante((plan) => plan.tours[1][1].shift()), 'PLAN_NON_ASSIS', { participant: 3, tour: 2 }],
+    ]), []);
+    assert.deepEqual(indexerPlan(instance, PLAN), Int32Array.from(TABLE_DE));
+  });
+
+  test('indexerPlan ∘ planDepuisIndex est l’identité sur chaque plan indexé à absents', () => {
+    const instance = instanceAbsences();
+    const { N, R, T, present } = instance;
+    // Chaque case de présence prend une valeur de RESERVE à T − 1 ; une case
+    // d'absence reste RESERVE.
+    const presentes = [];
+    for (let i = 0; i < N * R; i += 1) if (present[i] === 1) presentes.push(i);
+    const valeurs = T + 1;
+    const ecarts = [];
+    let examines = 0;
+    for (let rang = 0; rang < valeurs ** presentes.length; rang += 1) {
+      const tableDe = new Int32Array(N * R).fill(RESERVE);
+      let reste = rang;
+      for (const i of presentes) {
+        tableDe[i] = (reste % valeurs) - 1;
+        reste = Math.floor(reste / valeurs);
+      }
+      const retour = indexerPlan(instance, planDepuisIndex(instance, tableDe));
+      if (!retour.every((t, i) => t === tableDe[i])) ecarts.push(`${[...tableDe]} → ${[...retour]}`);
+      examines += 1;
+    }
+    assert.equal(examines, 3 ** 8);
+    assert.deepEqual(ecarts, []);
+  });
+
+  test('exigerPlanIndexe refuse un absent à une table : RangeError qui nomme le participant, le tour et la table, première case fautive', () => {
+    const instance = instanceAbsences();
+    const avec = (fautes) => {
+      const tableDe = [...TABLE_DE];
+      for (const [i, valeur] of fautes) tableDe[i] = valeur;
+      return tableDe;
+    };
+    const cas = [
+      ['5 à la table 0 au tour 1', avec([[8, 0]]), 'plan indexé : participant 5, absent au tour 1, à la table 0'],
+      ['4 à la table 1 au tour 2', avec([[7, 1]]), 'plan indexé : participant 4, absent au tour 2, à la table 1'],
+      // Une case hors forme qui précède l'absent est nommée d'abord, et
+      // l'inverse.
+      ['une case hors forme avant', avec([[8, 0], [5, 7]]), 'plan indexé : participant 3, tour 2, index de table 7 hors de −1..1'],
+      ['un absent avant', avec([[7, 0], [9, 7]]), 'plan indexé : participant 4, absent au tour 2, à la table 0'],
+    ];
+    const appelants = [
+      ['exigerPlanIndexe', (tableDe) => exigerPlanIndexe(instance, tableDe)],
+      ['planDepuisIndex', (tableDe) => planDepuisIndex(instance, tableDe)],
+      ['mesurer', (tableDe) => mesurer(instance, tableDe)],
+      ['occupations', (tableDe) => occupations(instance, tableDe)],
+      ['plafondsRealises', (tableDe) => plafondsRealises(instance, tableDe)],
+      ['diversiteAnimateurs', (tableDe) => diversiteAnimateurs(instance, tableDe)],
+    ];
+    const ecarts = [];
+    for (const [libelle, tableDe, message] of cas) {
+      for (const [nom, appeler] of appelants) {
+        try {
+          appeler(tableDe);
+          ecarts.push(`${nom}, ${libelle} : aucun refus`);
+        } catch (erreur) {
+          const recue = `${erreur?.name} : ${erreur?.message}`;
+          if (recue !== `RangeError : ${message}`) ecarts.push(`${nom}, ${libelle} : « ${recue} »`);
+        }
+      }
+    }
+    assert.deepEqual(ecarts, []);
+    assert.equal(exigerPlanIndexe(instance, TABLE_DE), undefined);
   });
 });

@@ -10,7 +10,11 @@
 //
 // Une rencontre est une paire de personnes assises à la même table au même
 // tour : la réserve n'est pas une table, une table vide ou à un seul occupant
-// ne forme aucune paire, et personne ne se rencontre soi-même. Deux personnes
+// ne forme aucune paire, et personne ne se rencontre soi-même. Le plan
+// indexé range à la réserve une personne absente du tour (types.js) : chaque
+// chiffre se lit donc sur les seuls tours de présence, et les rencontres
+// d'une personne aux tours où elle est assise comptent, qu'elle parte ou
+// arrive ensuite. Deux personnes
 // sans appartenance ne sont pas collègues. Un ensemble vide rend null, jamais
 // 0 : le taux de diversité de qui ne rencontre aucun affilié, le minimum et la
 // moyenne d'une population sans membre.
@@ -530,4 +534,21 @@ export function mesurer(instance, tableDe) {
     objectifs: lireObjectifs(instance, servis),
     animateurs: lireAnimateurs(instance, rencontresAnimateurs),
   };
+}
+
+/**
+ * Vrai quand le plan assied chacun à chacun de ses tours de présence :
+ * toursAssis[p] égale toursPresents[p] pour tout p. C'est, avec les
+ * réservations tenues que l'appelant juge, le domaine où les planchers du
+ * diagnostic valent (§ 12.4). Une absence n'en sort pas un plan, puisque le
+ * plan indexé range l'absent à la réserve et que toursAssis ne compte pas
+ * ce tour ; une présente laissée en réserve, si.
+ *
+ * @param {import('./types.js').Instance} instance  N et toursPresents sont lus
+ * @param {ArrayLike<number>} toursAssis  mesures.toursAssis, ordre canonique
+ * @returns {boolean}
+ */
+export function assisAChaqueTourPresent({ N, toursPresents }, toursAssis) {
+  for (let p = 0; p < N; p += 1) if (toursAssis[p] !== toursPresents[p]) return false;
+  return true;
 }

@@ -21,7 +21,7 @@
 // son rang sinon ; l'appartenance d'un reste négatif, de même, par son
 // libellé ou par son rang. INCONNU, aux mêmes détails que la faute de
 // placement du stockage, a son texte dans libelles/stockage.js.
-import { capitale, compte, nomDans } from './aides.js';
+import { auxToursNommes, capitale, compte, enumeration, nomDans } from './aides.js';
 
 // Les cas d'une table que le plan ne rattache pas à l'instance, par detail.
 const CAS_DE_TABLE = new Map([
@@ -43,6 +43,15 @@ const appartenanceDe = ({ groupe, appartenance }) =>
     ? `l'appartenance de rang ${groupe + 1}`
     : `l'appartenance « ${appartenance} »`;
 
+// Les manques d'une salle trop petite, tour par tour : les tours d'un même
+// manque se nomment ensemble, les manques dans l'ordre de leur premier tour.
+// La Map ne sert qu'à retrouver un manque déjà rencontré.
+function manquesParTour(tours) {
+  const toursDe = new Map();
+  for (const { tour, manque } of tours) toursDe.set(manque, [...(toursDe.get(manque) ?? []), tour]);
+  return enumeration([...toursDe].map(([manque, siens]) => `${compte(manque, 'place', 'places')} ${auxToursNommes(siens)}`));
+}
+
 // Un rang de réservation, compté à partir de 0 par le moteur.
 const reservationDe = (rang) => `la réservation n° ${rang + 1}`;
 
@@ -60,11 +69,17 @@ const FAUTES_DE_PRIORITES = new Map([
 export const TABLE = new Map([
   // Une salle trop petite : avertissement d'un geste qui fait croître le
   // manque (A2), refus de la génération (A6) ; un seul texte pour les deux.
+  // Sans tours, chaque tour manque des mêmes places, et le texte le dit ;
+  // tours, que portent les détails dès qu'une présence est partielle, liste
+  // chaque tour à manque positif, que le texte nomme.
   [
     'PLACES_MANQUANTES',
-    ({ placesManquantes }) =>
-      `Il manque ${compte(placesManquantes, 'place', 'places')} à chaque tour pour asseoir toutes les personnes : ` +
-      'ajouter des tables ou des sièges, ou exclure des personnes, rend la génération possible.',
+    ({ placesManquantes, tours }) =>
+      tours === undefined
+        ? `Il manque ${compte(placesManquantes, 'place', 'places')} à chaque tour pour asseoir toutes les personnes : ` +
+          'ajouter des tables ou des sièges, ou exclure des personnes, rend la génération possible.'
+        : `Il manque ${manquesParTour(tours)} pour asseoir les personnes présentes : ` +
+          'ajouter des tables ou des sièges, ou changer des présences, rend la génération possible.',
   ],
   [
     'SURRESERVATION',
@@ -93,6 +108,18 @@ export const TABLE = new Map([
         : `Le nombre de tours, ${tours}, n'est pas un entier d'au moins 1.`,
   ],
   ['PARTICIPANT_DOUBLON', ({ participant }) => `La personne n° ${participant} figure plus d'une fois dans la liste.`],
+  // PRESENCE_VIDE {participant, personne?} : le moteur ne nomme la personne
+  // que par son numéro, la commande par son nom.
+  [
+    'PRESENCE_TOUR',
+    ({ participant, tour }) => `La présence de la personne n° ${participant} désigne le tour ${tour}, que l'événement n'a pas.`,
+  ],
+  [
+    'PRESENCE_VIDE',
+    ({ participant, personne }) =>
+      `${personne ?? `La personne n° ${participant}`} ne serait présente à aucun tour : ` +
+      "pour l'écarter de toute la soirée, l'exclure.",
+  ],
   ['TABLE_DOUBLON', ({ table }) => `La table d'identifiant ${table} figure plus d'une fois.`],
   [
     'RESERVATION_INCONNUE',
@@ -137,6 +164,10 @@ export const TABLE = new Map([
       `La personne n° ${participant} anime au tour ${tour}, où aucune réservation ne la place à une table.`,
   ],
   [
+    'ANIMATION_ABSENTE',
+    ({ participant, tour }) => `La personne n° ${participant} anime au tour ${tour}, où elle n'est pas présente.`,
+  ],
+  [
     'ENUMERATION_TROP_GRANDE',
     ({ participant, limite }) =>
       `Le plafond a priori de la personne n° ${participant} demanderait d'énumérer plus de ${limite} itinéraires.`,
@@ -161,6 +192,10 @@ export const TABLE = new Map([
   ['PLAN_EXCLU_PLACE', ({ participant, tour }) => `Au tour ${tour}, le plan place la personne n° ${participant}, qui est exclue.`],
   ['PLAN_DOUBLE_PLACE', ({ participant, tour }) => `Au tour ${tour}, le plan place plus d'une fois la personne n° ${participant}.`],
   ['PLAN_NON_ASSIS', ({ participant, tour }) => `Au tour ${tour}, le plan ne place nulle part la personne n° ${participant}.`],
+  [
+    'PLAN_ABSENT_PLACE',
+    ({ participant, tour }) => `Au tour ${tour}, le plan place la personne n° ${participant}, qui n'est pas présente à ce tour.`,
+  ],
 
   // --- Le départ d'une génération dérivée (repartir, regenerer, § 5.7) ------------
   // DEPART_INCOMPATIBLE {tour, table, participant} : la garde du moteur, que
@@ -189,6 +224,10 @@ export const TABLE = new Map([
   ['DOUBLE_PLACE', ({ participant, tour }) => `Au tour ${tour}, la personne n° ${participant} est placée plus d'une fois.`],
   ['EXCLU_PLACE', ({ participant, tour }) => `Au tour ${tour}, la personne n° ${participant} est placée alors qu'elle est exclue.`],
   ['NON_ASSIS', ({ participant, tour }) => `Au tour ${tour}, la personne n° ${participant} n'est assise à aucune table.`],
+  [
+    'ABSENT_PLACE',
+    ({ participant, tour }) => `Au tour ${tour}, la personne n° ${participant} est placée alors qu'elle n'est pas présente à ce tour.`,
+  ],
   [
     'RESERVATION',
     ({ participant, table, tour }) =>

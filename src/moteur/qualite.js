@@ -40,8 +40,10 @@ import { borneDiversite, occupations } from './plafond.js';
  * @property {number} appartenances     A(p)
  * @property {number} affilies          |F(p)|
  * @property {number} borneDiversite    A_max(p)
- * @property {number} toursNonAssis     tours en réserve
- * @property {'ancre'|'partiel'|'reserve'|'plafondNul'|null} marque
+ * @property {number} toursNonAssis     tours de présence passés en réserve
+ * @property {number} toursAbsents      tours où la personne est absente,
+ *                                      R − tours de présence
+ * @property {'ancre'|'partiel'|'reserve'|'absente'|'plafondNul'|null} marque
  *
  * @typedef {Object} TroisComptes
  * @property {number} sieges     c_t − δ_{t,r}
@@ -100,12 +102,14 @@ export function pourcentage(n, d) {
 }
 
 // La marque d'un rang du profil (§ 12.3, B12) : la première qui s'applique,
-// ancré, partiellement fixé, en réserve à un tour au moins, plafond réalisé
-// nul ; null sinon.
-function marqueDe(statut, toursNonAssis, plafondRealise) {
+// ancré, partiellement fixé, en réserve à un tour de présence au moins,
+// absente à un tour au moins, plafond réalisé nul ; null sinon. La réserve,
+// qui appelle un geste, passe avant l'absence, qui est une donnée.
+function marqueDe(statut, toursNonAssis, toursAbsents, plafondRealise) {
   if (statut === STATUT.ANCRE) return 'ancre';
   if (statut === STATUT.PARTIELLEMENT_FIXE) return 'partiel';
   if (toursNonAssis > 0) return 'reserve';
+  if (toursAbsents > 0) return 'absente';
   if (plafondRealise === 0) return 'plafondNul';
   return null;
 }
@@ -115,10 +119,14 @@ function marqueDe(statut, toursNonAssis, plafondRealise) {
  * rencontres croissantes, puis plafond réalisé décroissant — à rencontres
  * égales, le plus grand manque d'abord —, puis index croissant. Le
  * pourcentage de la ligne se lit dans cet ordre (D51) et n'en décide rien.
+ * Les tours non assis sont les tours de présence passés en réserve, et les
+ * tours absents les autres : le plan indexé range l'absent à la réserve, et
+ * toursAssis ne compte que des tours de présence.
  *
  * Lève RangeError quand une liste n'a pas une case par personne.
  *
- * @param {import('./types.js').Instance} instance  N, R et statut sont lus
+ * @param {import('./types.js').Instance} instance  N, R, statut et
+ *        toursPresents sont lus
  * @param {import('./indicateurs.js').Mesures} mesures
  * @param {ArrayLike<number>} plafondsRealises
  * @param {ArrayLike<number>|null} plafondsAPriori  null quand il est inconnu
@@ -126,14 +134,15 @@ function marqueDe(statut, toursNonAssis, plafondRealise) {
  * @returns {LigneProfil[]}
  */
 export function profilRencontres(instance, mesures, plafondsRealises, plafondsAPriori, aMax) {
-  const { N, R, statut } = instance;
+  const { N, R, statut, toursPresents } = instance;
   exigerParPersonne(plafondsRealises, N, 'plafondsRealises');
   if (plafondsAPriori !== null) exigerParPersonne(plafondsAPriori, N, 'plafondsAPriori');
   exigerParPersonne(aMax, N, 'aMax');
   const { rencontres, appartenancesVues, affilies, toursAssis } = mesures;
   const lignes = [];
   for (let p = 0; p < N; p += 1) {
-    const toursNonAssis = R - toursAssis[p];
+    const toursNonAssis = toursPresents[p] - toursAssis[p];
+    const toursAbsents = R - toursPresents[p];
     lignes.push({
       p,
       rencontres: rencontres[p],
@@ -144,7 +153,8 @@ export function profilRencontres(instance, mesures, plafondsRealises, plafondsAP
       affilies: affilies[p],
       borneDiversite: aMax[p],
       toursNonAssis,
-      marque: marqueDe(statut[p], toursNonAssis, plafondsRealises[p]),
+      toursAbsents,
+      marque: marqueDe(statut[p], toursNonAssis, toursAbsents, plafondsRealises[p]),
     });
   }
   // Les lignes entrent par index croissant, et le tri est stable : à

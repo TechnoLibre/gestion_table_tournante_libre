@@ -27,6 +27,11 @@
  *                                   où la personne pourvoit un titre, fixée à
  *                                   la table du titre (D6) ; absent = n'anime
  *                                   à aucun tour
+ * @property {number[]} [presence]   tours, de 1 à R, strictement croissants,
+ *                                   où la personne est présente ; liste non
+ *                                   vide ; absent = chacun des R tours, que
+ *                                   lit toursDePresence (presence.js) ; une
+ *                                   liste qui couvre 1..R vaut le champ absent
  *
  * @typedef {Object} Table
  * @property {number} id             entier ≥ 1, unique
@@ -67,7 +72,9 @@
  * @typedef {Object} Plan           forme par identifiants (§ 8.9)
  * @property {number[]} tables       ids de table, dans l'ordre des listes
  * @property {number[][][]} tours    tours[r][i] = ids assis à tables[i], croissants
- * @property {number[][]} reserves   reserves[r] = ids assis nulle part au tour r
+ * @property {number[][]} reserves   reserves[r] = ids présents au tour r et
+ *                                   assis nulle part ; un absent du tour ne
+ *                                   figure dans aucune liste de ce tour
  *
  * @typedef {Object} Instance       forme indexée, consommée par le moteur
  * @property {number} N              participants non exclus
@@ -95,12 +102,26 @@
  *                                   rangées par unités de code ; [] sans
  *                                   étiquette
  * @property {Int32Array} fixe       [p * R + r] → index de table imposé (r à
- *                                   partir de 0), LIBRE (−1) si libre
+ *                                   partir de 0), LIBRE (−1) si libre ou
+ *                                   absent au tour
  * @property {Uint8Array} statut     STATUT.MOBILE (0), STATUT.PARTIELLEMENT_FIXE
  *                                   (1), STATUT.ANCRE (2) (§ 4.2)
  * @property {Int32Array} ancresParTable  a_t
  * @property {number} k              ancrés
  * @property {number} n              N − k
+ * @property {Uint8Array} present    [p * R + r] → 1 quand p est présent au
+ *                                   tour r, 0 quand il est absent
+ * @property {Int32Array} toursPresents   tours de présence de chacun, ≥ 1
+ * @property {Int32Array} presentsParTour n_r, les présents de chaque tour, R
+ *                                   cases
+ * @property {number} absences       Σ_p (R − toursPresents[p]) ; 0 quand
+ *                                   chacun est présent à chaque tour
+ * @property {Int32Array} coPresents C(p) : les autres personnes présentes à
+ *                                   un tour au moins où p l'est ; N − 1 sans
+ *                                   absence
+ * @property {Int32Array} mobilesCoPresents  n_p^C : parmi elles, les
+ *                                   non-ancrées ; n − 1 pour un non-ancré, n
+ *                                   pour un ancré, sans absence
  * @property {Contraintes} contraintes   copie ; les cases facultatives n'y
  *                                   figurent que si la configuration les porte
  * @property {Int32Array} siegesLibres    [t * R + r] → c_t moins les personnes
@@ -139,8 +160,11 @@
  *           la liste complète (completerPriorites), valide sous le mode
  *
  * Un plan indexé est un Int32Array `tableDe` de longueur N × R :
- * tableDe[p * R + r] = index de table, RESERVE (−1) pour la réserve.
- * exigerPlanIndexe (configuration.js) en garde la forme.
+ * tableDe[p * R + r] = index de table, RESERVE (−1) pour la réserve. Une
+ * personne absente au tour r y vaut RESERVE : present[p * R + r] = 0 ⇒
+ * tableDe[p * R + r] = RESERVE, et seul le masque la distingue d'une
+ * personne en réserve. exigerPlanIndexe (configuration.js) en garde la
+ * forme.
  *
  * L'ordre canonique des tableaux par personne est celui de `instance.ids` :
  * tout tableau rendu par le moteur et indexé par personne suit cet ordre.

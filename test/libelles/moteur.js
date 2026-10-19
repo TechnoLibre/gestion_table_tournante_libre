@@ -34,6 +34,7 @@ export const EXEMPLES = [
   ['DOUBLE_PLACE', { participant: 5, tour: 3 }],
   ['EXCLU_PLACE', { participant: 3, tour: 2 }],
   ['NON_ASSIS', { participant: 6, tour: 4 }],
+  ['ABSENT_PLACE', { participant: 5, tour: 2 }],
   ['RESERVATION', { participant: 4, table: 5, tour: 1 }],
   ['PLAFOND_A_PRIORI', { index: 2, participant: 3 }],
   ['ORDRE_PLAFONDS', { index: 2, participant: 3 }],
@@ -44,6 +45,10 @@ export const EXEMPLES = [
   ['OBJECTIF_CONFLIT', { table: 2, tour: null }],
   ['PRIORITES', { faute: 'seulASonPalier', critere: 'toursHorsObjectif', palier: 2 }],
   ['ANIMATION_NON_FIXEE', { participant: 4, tour: 3 }],
+  ['ANIMATION_ABSENTE', { participant: 4, tour: 3 }],
+  ['PRESENCE_TOUR', { participant: 6, tour: 5 }],
+  ['PRESENCE_VIDE', { participant: 6 }],
+  ['PLAN_ABSENT_PLACE', { participant: 5, tour: 2 }],
   ['TOURS_SERVIS', { index: 2, participant: 3 }],
   ['TOURS_SERVIS_NON_ASSIS', { index: 2, participant: 3 }],
   ['ANIMATEURS_RENCONTRES', { index: 4, participant: 9 }],
@@ -57,4 +62,51 @@ export const EXEMPLES = [
   ['BORNE_DIVERSITE', { index: 4, participant: 9 }],
 ];
 
-export const TEXTES = [];
+// PLACES_MANQUANTES garde le texte d'aujourd'hui sans tours ; avec tours, il
+// nomme chaque tour à manque positif, ceux d'un même manque ensemble.
+const SUITE_DU_MANQUE = 'ajouter des tables ou des sièges, ou changer des présences, rend la génération possible.';
+
+export const TEXTES = [
+  [
+    'PLACES_MANQUANTES',
+    { placesManquantes: 3 },
+    'Il manque 3 places à chaque tour pour asseoir toutes les personnes : '
+      + 'ajouter des tables ou des sièges, ou exclure des personnes, rend la génération possible.',
+  ],
+  [
+    'PLACES_MANQUANTES',
+    { placesManquantes: 1 },
+    'Il manque 1 place à chaque tour pour asseoir toutes les personnes : '
+      + 'ajouter des tables ou des sièges, ou exclure des personnes, rend la génération possible.',
+  ],
+  [
+    'PLACES_MANQUANTES',
+    { placesManquantes: 2, tours: [{ tour: 3, manque: 2 }, { tour: 4, manque: 2 }] },
+    `Il manque 2 places aux tours 3 et 4 pour asseoir les personnes présentes : ${SUITE_DU_MANQUE}`,
+  ],
+  [
+    'PLACES_MANQUANTES',
+    { placesManquantes: 2, tours: [{ tour: 3, manque: 2 }, { tour: 4, manque: 1 }] },
+    `Il manque 2 places au tour 3 et 1 place au tour 4 pour asseoir les personnes présentes : ${SUITE_DU_MANQUE}`,
+  ],
+  [
+    'PLACES_MANQUANTES',
+    { placesManquantes: 3, tours: [{ tour: 1, manque: 1 }, { tour: 2, manque: 3 }, { tour: 3, manque: 3 }, { tour: 4, manque: 1 }] },
+    `Il manque 1 place aux tours 1 et 4 et 3 places aux tours 2 et 3 pour asseoir les personnes présentes : ${SUITE_DU_MANQUE}`,
+  ],
+  [
+    'PLACES_MANQUANTES',
+    { placesManquantes: 1, tours: [{ tour: 1, manque: 1 }, { tour: 2, manque: 1 }, { tour: 3, manque: 1 }] },
+    `Il manque 1 place aux tours 1 à 3 pour asseoir les personnes présentes : ${SUITE_DU_MANQUE}`,
+  ],
+  ['PRESENCE_TOUR', { participant: 6, tour: 5 }, 'La présence de la personne n° 6 désigne le tour 5, que l\'événement n\'a pas.'],
+  ['PRESENCE_VIDE', { participant: 6 }, 'La personne n° 6 ne serait présente à aucun tour : pour l\'écarter de toute la soirée, l\'exclure.'],
+  [
+    'PRESENCE_VIDE',
+    { participant: 6, personne: 'Ondine Vasseur' },
+    'Ondine Vasseur ne serait présente à aucun tour : pour l\'écarter de toute la soirée, l\'exclure.',
+  ],
+  ['ANIMATION_ABSENTE', { participant: 4, tour: 3 }, 'La personne n° 4 anime au tour 3, où elle n\'est pas présente.'],
+  ['PLAN_ABSENT_PLACE', { participant: 5, tour: 2 }, 'Au tour 2, le plan place la personne n° 5, qui n\'est pas présente à ce tour.'],
+  ['ABSENT_PLACE', { participant: 5, tour: 2 }, 'Au tour 2, la personne n° 5 est placée alors qu\'elle n\'est pas présente à ce tour.'],
+];

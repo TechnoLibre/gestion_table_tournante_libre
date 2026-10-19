@@ -1139,6 +1139,9 @@ describe('diagnostic : population vide, forme, refus', () => {
       ancragesImposantRetours: 0,
       ecartItineraire: null,
       objectifsInevitables: { horsObjectif: 0, jamaisServies: 0, horsObjectifMax: 0, parTour: [0, 0] },
+      placesManquantesParTour: [0, 0],
+      presence: { absences: 0, presentsParTour: [0, 0] },
+      planchersRetires: [],
     };
     // Les mêmes chiffres, séparation active ou non : sans présent, aucune
     // appartenance n'est portée par chacun, et aucune table n'est forcée.
@@ -1744,5 +1747,150 @@ describe('diagnostic : les objectifs hors d’atteinte (§ 5.6, A10, D16)', () =
     configuration.participants[1].etiquettes = ['finance'];
     configuration.objectifs = [{ table: 20, tour: 4, regle: 'ou', etiquettes: ['finance'] }];
     assert.deepEqual(diagnostiquer(configuration).remedes, { toursSansRedondance: 3 });
+  });
+});
+
+describe('diagnostic : la présence par tour (§ 5.6, § 12.6)', () => {
+  // La configuration, le participant d'id i recevant presences[i] pour
+  // présence ; les autres restent présents à chaque tour.
+  const avecPresences = (configuration, presences) => ({
+    ...configuration,
+    participants: configuration.participants.map((personne) =>
+      (presences[personne.id] === undefined ? personne : { ...personne, presence: presences[personne.id] })),
+  });
+
+  test('collisions : seuls les membres présents au tour s’y assoient', () => {
+    // Trois « Grisaille », deux tables de 3, deux tours ; 3 n'est présente
+    // qu'au tour 1. Tour 1 : trois membres sur deux tables, une paire au
+    // moins ; tour 2 : deux membres, aucune. Compter 3 au tour 2 donnerait
+    // 2 collisions cumulées.
+    const configuration = avecPresences(salle({ tables: [[10, 3], [20, 3]], appartenances: fois(3, 'Grisaille'), tours: 2 }), { 3: [1] });
+    assert.deepEqual(planchersCollisions(normaliser(configuration)), [
+      { groupe: 'Grisaille', effectif: 3, plancherCumulees: 1, plancherPairesDistinctes: 1, plancherExcedent: null },
+    ]);
+    assert.deepEqual(diagnostiquer(configuration).collisions, [
+      { groupe: 'Grisaille', effectif: 3, plancherCumulees: 1, plancherPairesDistinctes: 1, plancherExcedent: null, tablesManquantes: 1 },
+    ]);
+  });
+
+  test("écart d'itinéraire : null et retiré dès qu'une absence existe ; sans absence, le plancher, rien de retiré", () => {
+    // La salle tendue du plancher de l'écart d'itinéraire : tables de 3 et
+    // de 2, cinq mobiles, deux tours, plancher 1. 5 absente au tour 2 : le
+    // nombre de places égale encore N, mais un plan n'y remplit plus chaque
+    // siège à chaque tour.
+    const tendue = salle({ tables: [[10, 3], [20, 2]], appartenances: fois(5, null), tours: 2 });
+    const sans = diagnostiquer(tendue);
+    assert.deepEqual(sans.ecartItineraire, { plancher: 1, mobilesAuMoins: 2 });
+    assert.deepEqual(sans.planchersRetires, []);
+    const avec = diagnostiquer(avecPresences(tendue, { 5: [1] }));
+    assert.equal(avec.ecartItineraire, null);
+    assert.deepEqual(avec.planchersRetires, ['ecartItineraire']);
+  });
+
+  // Six personnes, deux tables de 3, deux tours, séparation active : chaque
+  // table reçoit au moins n_r − 3 personnes au tour r. La collision y est
+  // forcée au-delà de G_r + U_r, les appartenances et les personnes sans
+  // appartenance présentes au tour r.
+  const deuxTablesDeTrois = (appartenances) => salle({ tables: [[10, 3], [20, 3]], appartenances, tours: 2, contraintes: SEPARER });
+
+  test('collisionPartout se juge par tour : une absence qui rend la collision évitable à un tour la rend fausse', () => {
+    // Cinq « Grisaille » et une personne sans appartenance : 6 − 3 = 3 > 1 + 1.
+    const base = deuxTablesDeTrois([...fois(5, 'Grisaille'), null]);
+    assert.equal(diagnostiquer(base).collisionPartout, true);
+    // 1 absente au tour 2 : 5 − 3 = 2, pas plus que 1 + 1 ; au tour 2, une
+    // table assied un membre et la personne sans appartenance.
+    assert.equal(diagnostiquer(avecPresences(base, { 1: [1] })).collisionPartout, false);
+  });
+
+  test('collisionPartout compte U_r : la personne sans appartenance absente au tour 2 laisse la collision forcée', () => {
+    // 6 absente au tour 2 : 5 − 3 = 2 > 1 + 0. Avec U compté sur la soirée,
+    // 2 ≤ 1 + 1 rendrait faux.
+    const base = deuxTablesDeTrois([...fois(5, 'Grisaille'), null]);
+    assert.equal(diagnostiquer(avecPresences(base, { 6: [1] })).collisionPartout, true);
+  });
+
+  test('collisionPartout compte G_r : une appartenance dont le seul membre est absent au tour 2 n’y compte pas', () => {
+    // Cinq « Grisaille », un « Club des Merles » absent au tour 2 :
+    // 6 − 3 = 3 > 2 au tour 1, 5 − 3 = 2 > 1 au tour 2. Avec G compté sur la
+    // soirée, 2 ≤ 2 rendrait faux.
+    const base = deuxTablesDeTrois([...fois(5, 'Grisaille'), 'Club des Merles']);
+    assert.equal(diagnostiquer(base).collisionPartout, true);
+    assert.equal(diagnostiquer(avecPresences(base, { 6: [1] })).collisionPartout, true);
+  });
+
+  test('collisionPartout : un tour où il manque des places rend faux, même si un autre tour suffit', () => {
+    // Sept « Grisaille » pour six sièges ; 7 présente au seul tour 1 : il
+    // manque une place au tour 1.
+    const configuration = avecPresences(deuxTablesDeTrois(fois(7, 'Grisaille')), { 7: [1] });
+    const diagnostic = diagnostiquer(configuration);
+    assert.deepEqual(diagnostic.placesManquantesParTour, [1, 0]);
+    assert.equal(diagnostic.collisionPartout, false);
+  });
+
+  // 28 personnes, dix appartenances de 2 et huit de 1, G = 18 ; quatre
+  // tables de 7, quatre tours : redondance minimale 6, annulée en 3 tours
+  // (voir « remède en tours »).
+  const DIX_PAIRES_HUIT_SEULS = [
+    ...Array.from({ length: 10 }, (_, g) => fois(2, `Grisaille ${g + 1}`)).flat(),
+    ...Array.from({ length: 8 }, (_, g) => `Club des Merles ${g + 1}`),
+  ];
+  const vingtHuit = () => salle({ tables: [[10, 7], [20, 7], [30, 7], [40, 7]], appartenances: DIX_PAIRES_HUIT_SEULS, tours: 4 });
+
+  test('toursSansRedondance : la sonde à R′ tours tronque la présence, sans lever', () => {
+    // 1 présente aux tours 2 et 4 : [2] à 3 tours ou moins. Sa paire garde
+    // un membre à chaque tour, et la sonde à 3 tours annule la redondance.
+    const diagnostic = diagnostiquer(avecPresences(vingtHuit(), { 1: [2, 4] }));
+    assert.equal(diagnostic.redondanceMinimale, 6);
+    assert.deepEqual(diagnostic.remedes, { toursSansRedondance: 3 });
+  });
+
+  test('toursSansRedondance : une personne sans tour sous R′ en sort, exclue, et son appartenance avec elle', () => {
+    // 28, seule de « Club des Merles 8 », présente au seul tour 4. À 3 tours,
+    // exclue : G = 17, min(18, 26) − 17 = 1 ; à 2 tours, 12 − 17 < 0. Gardée
+    // présente, G resterait 18 et la sonde à 3 tours annulerait la
+    // redondance.
+    const diagnostic = diagnostiquer(avecPresences(vingtHuit(), { 28: [4] }));
+    assert.equal(diagnostic.redondanceMinimale, 6);
+    assert.deepEqual(diagnostic.remedes, { toursSansRedondance: 2 });
+  });
+
+  test('toursSansRedondance : une exclue dont la présence se viderait sous R′ ne lève pas non plus', () => {
+    const configuration = vingtHuit();
+    configuration.participants.push({ id: 29, nom: 'P29', appartenance: 'Grisaille 1', exclu: true, presence: [4] });
+    assert.deepEqual(diagnostiquer(configuration).remedes, { toursSansRedondance: 3 });
+  });
+
+  test('objectifs : P_r ne compte pas le tour d’absence', () => {
+    // Dix « finance » pour la table 1 de huit places, quatre tours ; 1 n'est
+    // présente qu'aux tours 1 et 3 : P_r = 10, 9, 10, 9, d'où 2, 1, 2, 1 ;
+    // ⌈6 / 10⌉ = 1.
+    const configuration = salle({ tables: [[1, 8], [2, 10]], appartenances: fois(10, null), tours: 4 });
+    configuration.participants.forEach((personne) => { personne.etiquettes = ['finance']; });
+    configuration.participants[0].presence = [1, 3];
+    configuration.objectifs = [{ table: 1, tour: null, regle: 'ou', etiquettes: ['finance'] }];
+    assert.deepEqual(diagnostiquer(configuration).objectifsInevitables, { horsObjectif: 6, jamaisServies: 0, horsObjectifMax: 1, parTour: [2, 1, 2, 1] });
+  });
+
+  test('les champs de la présence : places manquantes par tour, absences, présents par tour', () => {
+    // Deux tables de 2, sept personnes, deux tours ; 6 et 7 ne sont
+    // présentes qu'au tour 2 : 5 présents au tour 1, 7 au tour 2.
+    const configuration = avecPresences(salle({ tables: [[12, 2], [11, 2]], appartenances: fois(7, null), tours: 2 }), { 6: [2], 7: [2] });
+    const diagnostic = diagnostiquer(configuration);
+    assert.deepEqual(diagnostic.placesManquantesParTour, [1, 3]);
+    assert.equal(diagnostic.placesManquantes, 3);
+    assert.deepEqual(diagnostic.presence, { absences: 2, presentsParTour: [5, 7] });
+    assert.deepEqual(diagnostic.planchersRetires, ['ecartItineraire']);
+    // Sans absence : le même manque à chaque tour, aucune absence.
+    const pleine = diagnostiquer(salle({ tables: [[12, 2], [11, 2]], appartenances: fois(5, null), tours: 2 }));
+    assert.deepEqual(pleine.placesManquantesParTour, [1, 1]);
+    assert.deepEqual(pleine.presence, { absences: 0, presentsParTour: [5, 5] });
+    assert.deepEqual(pleine.planchersRetires, []);
+  });
+
+  test('les champs de la présence sont des listes neuves, jamais les tableaux typés de l’instance', () => {
+    const diagnostic = diagnostiquer(avecPresences(salle({ tables: [[12, 2], [11, 2]], appartenances: fois(4, null), tours: 2 }), { 4: [1] }));
+    assert.ok(Array.isArray(diagnostic.placesManquantesParTour));
+    assert.ok(Array.isArray(diagnostic.presence.presentsParTour));
+    assert.deepEqual(diagnostic.presence, { absences: 1, presentsParTour: [4, 3] });
   });
 });

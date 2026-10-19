@@ -29,9 +29,17 @@
 // « Départ », récrite de même, relances comprises ; ses tours figés ne
 // bougent pas, elle n'est jamais pire que son départ, rend le plan parfait
 // dont elle part, et son point de relevé k égale regenerer au compte k sous
-// le même départ ; un départ que l'instance ne peut pas asseoir tel quel est
-// refusé avant tout calcul. Un plan rendu se juge par verifierInvariants et
-// se mesure par mesurer, deux modules distincts du module éprouvé.
+// le même départ ; un départ malformé, ou qui contredit le mobilier, est
+// refusé avant tout calcul. Sous la présence par tour, une salle se juge tour
+// par tour, un absent n'est assis nulle part, et le départ d'une dérivée
+// s'ajuste : absents, exclus et supprimés ignorés, arrivantes au siège
+// canonique, puis, à un tour figé, à la meilleure chaise libre ou en réserve
+// imposée, sans que personne d'autre ne bouge ; le départ brut et le départ
+// ajusté par le stockage rendent les mêmes propositions, et une réserve
+// imposée se mesure comme indicateurs.js la lit. Un plan rendu se juge par
+// verifierInvariants, ou, sous absence, par ses listes lues sur la
+// configuration, et se mesure par mesurer, deux modules distincts du module
+// éprouvé.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
@@ -51,6 +59,7 @@ import { mesurer } from './indicateurs.js';
 import { plafondsAPriori } from './plafond.js';
 import {
   creerEtat,
+  creerEtatDuDepart,
   defaire,
   proposerEtAppliquer,
   proposerParmi,
@@ -2531,10 +2540,8 @@ describe('repartir et regenerer : le contrôle du départ, avant tout calcul (§
     return plan;
   };
   const FAUTIFS = [
-    ['une personne en réserve', retouche((p) => { p.tours[0][2] = [3]; p.reserves[0] = [9]; }), { tour: 1, table: null, participant: 9 }],
     ['une personne assise et en réserve', retouche((p) => { p.reserves[0] = [9]; }), { tour: 1, table: null, participant: 9 }],
-    ['une personne absente', retouche((p) => { p.tours[2][0] = [2, 5, 9]; }), { tour: 3, table: null, participant: 7 }],
-    ['une personne étrangère', retouche((p) => { p.tours[1][2] = [5, 6, 42]; }), { tour: 2, table: 30, participant: 42 }],
+    ['une personne en réserve deux fois', retouche((p) => { p.tours[0][2] = [3]; p.reserves[0] = [9, 9]; }), { tour: 1, table: null, participant: 9 }],
     ['une personne assise deux fois', retouche((p) => { p.tours[0][1] = [1, 7, 9]; }), { tour: 1, table: 30, participant: 9 }],
     ['une table inconnue', retouche((p) => { p.tables = [10, 20, 99]; }), { tour: 1, table: 99, participant: null }],
     ['une table qui déborde', retouche((p) => { p.tours[1][1] = [1, 4, 6, 9]; p.tours[1][2] = [5, 8]; }), { tour: 2, table: 20, participant: null }],
@@ -2554,6 +2561,16 @@ describe('repartir et regenerer : le contrôle du départ, avant tout calcul (§
       retouche((p) => {
         p.tables.push(99);
         p.tours[0] = [[2, 4, 5, 6], [1, 7, 8], [3], [9]];
+        p.tours[1].push([]);
+        p.tours[2].push([]);
+      }),
+      { tour: 1, table: 99, participant: null },
+    ],
+    [
+      'une table inconnue qui assied un seul identifiant inconnu, ignoré partout ailleurs',
+      retouche((p) => {
+        p.tables.push(99);
+        p.tours[0].push([42]);
         p.tours[1].push([]);
         p.tours[2].push([]);
       }),
@@ -2607,5 +2624,679 @@ describe('repartir et regenerer : le contrôle du départ, avant tout calcul (§
     const rendus = entrees(salleReservee(), departSalle(), [2], appels).map(([, appel]) => appel());
     assert.equal(appels.length, 3);
     assert.deepEqual(rendus.map((rendu) => Array.isArray(rendu) ? rendu.length : Object.keys(rendu).length), [2, 8, 3]);
+  });
+});
+
+// La configuration retouchée : le participant d'id i reçoit presences[i] pour
+// présence, les autres restent tels quels.
+const avecPresences = (configuration, presences) => ({
+  ...configuration,
+  participants: configuration.participants.map((participant) =>
+    (presences[participant.id] === undefined ? participant : { ...participant, presence: presences[participant.id] })),
+});
+
+// Vrai quand le participant est présent au tour, lu sur la configuration :
+// non exclu, et sans présence ou d'une présence qui nomme le tour.
+const presentAuTour = (participant, tour) => !participant.exclu && (participant.presence?.includes(tour) ?? true);
+
+// Les fautes d'un plan par identifiants, lues sur la configuration seule,
+// chacune « tour r : … » : une table au-delà de sa capacité ; un identifiant
+// listé à une table qui n'est pas un présent du tour (absent, exclu ou
+// inconnu) ; un présent assis zéro ou plusieurs fois, réserves imposées mises
+// à part ; une réserve qui n'est pas la liste des réserves imposées du tour ;
+// une réservation d'un présent qui n'est pas tenue, réserve imposée mise à
+// part.
+function fautesDuPlan(configuration, plan, reservesImposees = []) {
+  const fautes = [];
+  const parId = new Map(configuration.participants.map((participant) => [participant.id, participant]));
+  for (let r = 0; r < configuration.tours; r += 1) {
+    const tour = r + 1;
+    const imposees = reservesImposees.filter((entree) => entree.tour === tour).map(({ participant }) => participant);
+    const assis = new Map();
+    plan.tours[r].forEach((liste, i) => {
+      const { capacite } = configuration.tables.find(({ id }) => id === plan.tables[i]);
+      if (liste.length > capacite) fautes.push(`tour ${tour} : la table ${plan.tables[i]} déborde`);
+      for (const id of liste) {
+        assis.set(id, (assis.get(id) ?? 0) + 1);
+        const participant = parId.get(id);
+        if (participant === undefined || !presentAuTour(participant, tour)) fautes.push(`tour ${tour} : ${id} listé`);
+      }
+    });
+    if (JSON.stringify(plan.reserves[r]) !== JSON.stringify(imposees)) fautes.push(`tour ${tour} : réserve [${plan.reserves[r]}]`);
+    for (const participant of configuration.participants) {
+      if (!presentAuTour(participant, tour) || imposees.includes(participant.id)) continue;
+      const fois = assis.get(participant.id) ?? 0;
+      if (fois !== 1) fautes.push(`tour ${tour} : ${participant.id} assis ${fois} fois`);
+    }
+    for (const { participant: id, table, portee, tour: reserve } of configuration.reservations) {
+      if (portee !== 'tous' && reserve !== tour) continue;
+      if (!presentAuTour(parId.get(id), tour) || imposees.includes(id)) continue;
+      if (!plan.tours[r][plan.tables.indexOf(table)].includes(id)) fautes.push(`tour ${tour} : ${id}@${table} non tenue`);
+    }
+  }
+  return fautes;
+}
+
+// Deux tables de 2, cinq personnes sans appartenance, deux tours : quatre
+// sièges par tour ; presences dit qui est absent où.
+const deuxTablesDeDeux = (presences) =>
+  avecPresences(configurationDe({
+    appartenances: Array(5).fill(null),
+    tables: [
+      { id: 1, capacite: 2 },
+      { id: 2, capacite: 2 },
+    ],
+    tours: 2,
+  }), presences);
+
+describe('rechercher : la présence par tour (§ 5.9, § 5.10)', () => {
+  // Les quatre points d'entrée qui préparent une instance.
+  const entreesDe = (configuration) => [
+    ['rechercher', () => rechercher(configuration, { graine: 1, arret: 10, nombre: 1 })],
+    ['proposerUne', () => proposerUne(configuration, { graine: 1, arret: 10, nombre: 1 }, 1)],
+    ['regenerer', () => regenerer(configuration, { graine: 1, arret: 10, historique: 5 })],
+    ['creerEtat', () => creerEtat(normaliser(configuration), creerPcg32(1, FLUX.RECHERCHE))],
+  ];
+
+  test('PLACES_MANQUANTES se juge tour par tour : sous absence, tours nomme chaque tour à manque positif ; sans absence, les détails restent { placesManquantes }', () => {
+    const cas = [
+      [deuxTablesDeDeux({ 5: [1] }), { placesManquantes: 1, tours: [{ tour: 1, manque: 1 }] }],
+      // Cinq présents au tour 2 seulement : le manque d'un tour tardif compte.
+      [deuxTablesDeDeux({ 5: [2] }), { placesManquantes: 1, tours: [{ tour: 2, manque: 1 }] }],
+      [deuxTablesDeDeux({}), { placesManquantes: 1 }],
+      // Six personnes sur quatre sièges, trois tours : 6 au tour 1 seulement,
+      // 5 aux tours 1 et 2 ; il manque 2, 1 et 0 places.
+      [
+        avecPresences(configurationDe({
+          appartenances: Array(6).fill(null),
+          tables: [
+            { id: 1, capacite: 2 },
+            { id: 2, capacite: 2 },
+          ],
+          tours: 3,
+        }), { 5: [1, 2], 6: [1] }),
+        { placesManquantes: 2, tours: [{ tour: 1, manque: 2 }, { tour: 2, manque: 1 }] },
+      ],
+    ];
+    for (const [configuration, details] of cas) {
+      for (const [nom, appel] of entreesDe(configuration)) {
+        assert.throws(appel, { name: 'ErreurConfiguration', code: 'PLACES_MANQUANTES', details }, `${nom}, ${JSON.stringify(details)}`);
+      }
+    }
+  });
+
+  test('une salle trop petite pour tous, assez grande pour les présents de chaque tour, est servie', () => {
+    const configuration = deuxTablesDeDeux({ 4: [1], 5: [2] });
+    const propositions = rechercher(configuration, { graine: 1, arret: 50, nombre: 2 });
+    assert.deepEqual(propositions.map(({ id }) => id), [1, 2]);
+  });
+
+  test("un absent n'est listé nulle part, chaque présent est assis une fois, la réserve reste vide, points de relevé compris", () => {
+    const configuration = deuxTablesDeDeux({ 4: [1], 5: [2] });
+    const instance = normaliser(configuration);
+    for (const graine of [1, 2, 3]) {
+      for (const proposition of rechercher(configuration, { graine, arret: 300, nombre: 2, historique: 20 })) {
+        for (const { mouvements, plan } of [...proposition.releves, { mouvements: proposition.evalues, plan: proposition.plan }]) {
+          assert.deepEqual(fautesDuPlan(configuration, plan), [], `graine ${graine}, n° ${proposition.id}, point ${mouvements}`);
+          assert.deepEqual(plan.reserves, [[], []]);
+          indexerPlan(instance, plan);
+        }
+      }
+    }
+  });
+
+  test("dans l'état de recherche, un absent vaut RESERVE et n'occupe aucun siège, à chaque pas de 2 000 mouvements ; le score tenu à jour égale le recalcul", () => {
+    const instance = normaliser(deuxTablesDeDeux({ 4: [1], 5: [2] }));
+    const { R } = instance;
+    // Deux tables de 2 : quatre sièges par tour.
+    const S = 4;
+    const rng = creerPcg32(7, FLUX.RECHERCHE);
+    const etat = creerEtat(instance, rng);
+    // L'index 3 (id 4) est absent au tour 2, l'index 4 (id 5) au tour 1.
+    const absents = [[3, 1], [4, 0]];
+    let appliques = 0;
+    for (let i = 0; i <= 2_000; i += 1) {
+      if (i > 0 && proposerEtAppliquer(etat, rng) !== null) appliques += 1;
+      for (const [p, r] of absents) {
+        assert.equal(etat.tableDe[p * R + r], RESERVE, `pas ${i}, index ${p}`);
+        assert.ok(!etat.siege.subarray(r * S, (r + 1) * S).includes(p), `pas ${i}, index ${p}`);
+      }
+      if (i % 100 === 0) assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat), `pas ${i}`);
+    }
+    assert.ok(appliques > 500, `${appliques} mouvements appliqués`);
+  });
+});
+
+// Les trois points d'entrée sous un départ : repartir, repartirUne au rang 2
+// et regenerer de chaque proposition rendue. repartirUne égale repartir au
+// rang 2, et regenerer rend le plan de chacune, octet pour octet. Rend les
+// propositions de repartir.
+function sousLeDepart(configuration, depart, reglages = { graine: 3, arret: 400, nombre: 2, historique: 20 }) {
+  const propositions = repartir(configuration, reglages, depart);
+  assert.deepStrictEqual(repartirUne(configuration, reglages, depart, 2), propositions[1], 'repartirUne');
+  const { plan: planDuDepart, toursFiges, reservesImposees } = depart;
+  for (const proposition of propositions) {
+    assert.deepStrictEqual(
+      regenerer(configuration, { ...proposition, depart: 1, toursFiges }, { planDuDepart, reservesImposees }),
+      proposition.plan,
+      `regenerer, n° ${proposition.id}`,
+    );
+  }
+  return propositions;
+}
+
+// Le départ ajusté, par identifiants : le plan de l'état dont part chaque
+// descente sous ce départ.
+function departAjuste(configuration, depart) {
+  const instance = normaliser(configuration);
+  return planDepuisIndex(instance, creerEtatDuDepart(instance, depart).tableDe);
+}
+
+// La table d'un participant à un tour d'un plan par identifiants, null hors
+// de toute table.
+function tableAu(plan, participant, tour) {
+  const i = plan.tours[tour - 1].findIndex((liste) => liste.includes(participant));
+  return i === -1 ? null : plan.tables[i];
+}
+
+// Les listes d'un tour, chacune triée : la comparaison ne lit pas l'ordre
+// d'une liste.
+const tourTrie = (plan, tour) => plan.tours[tour - 1].map((liste) => [...liste].sort((a, b) => a - b));
+
+// departSalle, retouché par modifier.
+const departRetouche = (modifier) => {
+  const plan = departSalle();
+  modifier(plan);
+  return plan;
+};
+
+describe('repartir : le départ ajusté à la présence (§ 5.7)', () => {
+  test("un absent assis au départ est ignoré ; un tour figé garde le reste, sa chaise libre", () => {
+    const configuration = avecPresences(salleReservee(), { 9: [2, 3] });
+    const plan = departSalle();
+    for (const toursFiges of [[], [1], [2]]) {
+      for (const proposition of sousLeDepart(configuration, { plan, toursFiges })) {
+        assert.deepEqual(fautesDuPlan(configuration, proposition.plan), [], `figés ${toursFiges}`);
+        if (toursFiges.includes(1)) assert.deepEqual(tourTrie(proposition.plan, 1), [[2, 4, 5, 6], [1, 7, 8], [3]]);
+        if (toursFiges.includes(2)) assert.deepEqual(tourTrie(proposition.plan, 2), tourTrie(plan, 2));
+      }
+    }
+  });
+
+  test('un exclu assis au départ est ignoré, à chaque tour, figé ou non', () => {
+    const configuration = salleReservee();
+    configuration.participants[8].exclu = true;
+    const plan = departSalle();
+    for (const toursFiges of [[], [1], [1, 3]]) {
+      for (const proposition of sousLeDepart(configuration, { plan, toursFiges })) {
+        assert.deepEqual(fautesDuPlan(configuration, proposition.plan), [], `figés ${toursFiges}`);
+        if (toursFiges.includes(1)) assert.deepEqual(tourTrie(proposition.plan, 1), [[2, 4, 5, 6], [1, 7, 8], [3]]);
+        if (toursFiges.includes(3)) assert.deepEqual(tourTrie(proposition.plan, 3), [[2, 5, 7], [1, 4, 6], [3, 8]]);
+      }
+    }
+  });
+
+  test("un exclu listé en réserve au départ, seul ou en plus de sa table, est ignoré : le départ rend ce que rend le plan qui l'assied", () => {
+    const configuration = salleReservee();
+    configuration.participants[8].exclu = true;
+    for (const [nom, plan] of [
+      ['en réserve seulement', departRetouche((p) => { p.tours[0][2] = [3]; p.reserves[0] = [9]; })],
+      ['à sa table et en réserve', departRetouche((p) => { p.reserves[0] = [9]; })],
+    ]) {
+      for (const toursFiges of [[], [1]]) {
+        assert.deepStrictEqual(
+          sousLeDepart(configuration, { plan, toursFiges }),
+          sousLeDepart(configuration, { plan: departSalle(), toursFiges }),
+          `${nom}, figés ${toursFiges}`,
+        );
+      }
+    }
+  });
+
+  test("un identifiant inconnu (supprimé) est ignoré, listé une fois ou deux, même à une table pleine, ou en réserve : le départ rend ce que rend le même plan sans lui", () => {
+    const configuration = salleReservee();
+    for (const [nom, plan] of [
+      ['une fois', departRetouche((p) => { p.tours[0][2] = [3, 9, 42]; })],
+      ['deux fois', departRetouche((p) => { p.tours[0][0] = [2, 4, 5, 6, 42]; p.tours[0][2] = [3, 9, 42]; })],
+      ['en réserve seulement', departRetouche((p) => { p.reserves[0] = [42]; })],
+      ['à une table et en réserve', departRetouche((p) => { p.tours[0][2] = [3, 9, 42]; p.reserves[0] = [42]; })],
+    ]) {
+      for (const toursFiges of [[], [1]]) {
+        const propositions = sousLeDepart(configuration, { plan, toursFiges });
+        assert.deepStrictEqual(propositions, sousLeDepart(configuration, { plan: departSalle(), toursFiges }), `${nom}, figés ${toursFiges}`);
+        for (const proposition of propositions) {
+          assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+          if (toursFiges.includes(1)) assert.deepEqual(tourTrie(proposition.plan, 1), tourTrie(departSalle(), 1));
+        }
+      }
+    }
+  });
+
+  test("une arrivante libre d'un tour non figé part du siège canonique, la première place libre dans l'ordre des sièges, puis la proposition l'assied", () => {
+    const configuration = salleReservee();
+    // Au tour 2, 9 n'est plus assise : les tables 10 et 20 gardent chacune une
+    // place, et la table 10 vient la première.
+    const sansElle = departRetouche((p) => { p.tours[1][1] = [1, 4]; });
+    const aLaPremiere = departRetouche((p) => { p.tours[1][0] = [2, 3, 7, 9]; p.tours[1][1] = [1, 4]; });
+    for (const toursFiges of [[], [1], [3]]) {
+      assert.equal(tableAu(departAjuste(configuration, { plan: sansElle, toursFiges }), 9, 2), 10, `figés ${toursFiges}`);
+      const propositions = sousLeDepart(configuration, { plan: sansElle, toursFiges });
+      assert.deepStrictEqual(propositions, sousLeDepart(configuration, { plan: aLaPremiere, toursFiges }), `figés ${toursFiges}`);
+      for (const proposition of propositions) assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+    }
+  });
+
+  // Au tour 2, 6 (appartenance A) n'est plus assise ; la table 10 est pleine,
+  // les tables 20 et 30 gardent chacune une place. La table 20, la première
+  // dans l'ordre des sièges, assied 1, de A ; la table 30 assied deux B.
+  const departSansSix = () => departRetouche((p) => { p.tours[1] = [[2, 3, 4, 7], [1, 9], [5, 8]]; });
+  const avecSixA = (plan, table) => {
+    const copie = structuredClone(plan);
+    copie.tours[1][copie.tables.indexOf(table)].push(6);
+    return copie;
+  };
+
+  test("une arrivante libre d'un tour figé prend la meilleure chaise libre : la table sans collègue plutôt que la première", () => {
+    const configuration = salleReservee();
+    const instance = normaliser(configuration);
+    const { ORDRE_DU_SCORE } = ordresDe(instance);
+    const plan = departSansSix();
+    // La chaise de la table 30 vaut mieux, dans l'ordre du score, que la
+    // canonique, à la table 20.
+    assert.ok(comparerDans(ORDRE_DU_SCORE, scoreDuPlan(instance, avecSixA(plan, 30)), scoreDuPlan(instance, avecSixA(plan, 20))) < 0);
+    for (const toursFiges of [[2], [1, 2]]) {
+      assert.equal(tableAu(departAjuste(configuration, { plan, toursFiges }), 6, 2), 30, `figés ${toursFiges}`);
+      for (const proposition of sousLeDepart(configuration, { plan, toursFiges })) {
+        assert.deepEqual(tourTrie(proposition.plan, 2), [[2, 3, 4, 7], [1, 9], [5, 6, 8]], `figés ${toursFiges}`);
+        assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+      }
+    }
+    // Au tour non figé, le siège canonique suffit : la recherche la déplacera.
+    assert.equal(tableAu(departAjuste(configuration, { plan, toursFiges: [] }), 6, 2), 20);
+  });
+
+  test("sans meilleure chaise, l'arrivante prend la première table à égalité, ici celle de son siège canonique ; une collègue l'en écarte", () => {
+    // Trois tables de 2, quatre personnes, deux tours, sans contrainte. Au
+    // tour 1, figé, 4 arrive ; 1 et 2 sont seules à leur table, et jouent le
+    // même rôle au tour 2 : les deux chaises se valent, la table 3, où 4
+    // retrouverait 3, vaut moins.
+    const tables = [
+      { id: 1, capacite: 2 },
+      { id: 2, capacite: 2 },
+      { id: 3, capacite: 2 },
+    ];
+    const plan = { tables: [1, 2, 3], tours: [[[1], [2], [3]], [[1, 2], [3, 4], []]], reserves: [[], []] };
+    const avecQuatre = (i) => {
+      const copie = structuredClone(plan);
+      copie.tours[0][i].push(4);
+      return copie;
+    };
+    const egales = configurationDe({ appartenances: [null, null, null, null], tables, tours: 2 });
+    const instance = normaliser(egales);
+    const { ORDRE_DU_SCORE } = ordresDe(instance);
+    const [a1, a2, a3] = [0, 1, 2].map((i) => scoreDuPlan(instance, avecQuatre(i)));
+    assert.equal(comparerDans(ORDRE_DU_SCORE, a1, a2), 0);
+    assert.ok(comparerDans(ORDRE_DU_SCORE, a1, a3) < 0);
+    assert.equal(tableAu(departAjuste(egales, { plan, toursFiges: [1] }), 4, 1), 1);
+    // 1 et 4 de même appartenance, séparation cochée : la table 2 l'emporte.
+    const collegues = configurationDe({
+      appartenances: ['A', null, null, 'A'],
+      tables,
+      tours: 2,
+      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+    });
+    assert.equal(tableAu(departAjuste(collegues, { plan, toursFiges: [1] }), 4, 1), 2);
+    for (const proposition of sousLeDepart(collegues, { plan, toursFiges: [1] })) {
+      assert.deepEqual(proposition.plan.tours[0], [[1], [2, 4], [3]]);
+    }
+  });
+
+  test("deux arrivantes au même tour figé : la seconde prend la première table à égalité, avant celle de son siège canonique", () => {
+    // Six personnes sans appartenance, tables 1 et 2 de 2 places, table 3 de
+    // 3 places, deux tours, le tour 1 figé. Au tour 1, 4 et 5 arrivent, leurs
+    // sièges canoniques aux tables 1 et 2. 4 part à la table 3 ; pour 5, les
+    // tables 1 et 2 se valent, et la table 1 vient la première.
+    const configuration = configurationDe({
+      appartenances: Array(6).fill(null),
+      tables: [
+        { id: 1, capacite: 2 },
+        { id: 2, capacite: 2 },
+        { id: 3, capacite: 3 },
+      ],
+      tours: 2,
+    });
+    const plan = { tables: [1, 2, 3], tours: [[[1], [2], [3, 6]], [[1, 4], [2, 3], [5, 6]]], reserves: [[], []] };
+    const instance = normaliser(configuration);
+    const { ORDRE_DU_SCORE } = ordresDe(instance);
+    const avecCinq = (i) => {
+      const copie = structuredClone(plan);
+      copie.tours[0][2].push(4);
+      copie.tours[0][i].push(5);
+      return copie;
+    };
+    assert.equal(comparerDans(ORDRE_DU_SCORE, scoreDuPlan(instance, avecCinq(0)), scoreDuPlan(instance, avecCinq(1))), 0);
+    const attendu = [[1, 5], [2], [3, 4, 6]];
+    assert.deepEqual(tourTrie(departAjuste(configuration, { plan, toursFiges: [1] }), 1), attendu);
+    for (const proposition of sousLeDepart(configuration, { plan, toursFiges: [1] })) {
+      assert.deepEqual(tourTrie(proposition.plan, 1), attendu);
+    }
+  });
+
+  test("une arrivante fixée d'un tour figé reste à sa table réservée, même quand une place fantôme ailleurs vaudrait mieux", () => {
+    // Deux tables de 2, trois personnes, deux tours, le tour 1 figé. 2,
+    // collègue de 1, est réservée à la table 1 au tour 1, où le départ ne
+    // l'assied pas : la table 2, sans collègue, vaudrait mieux.
+    const configuration = configurationDe({
+      appartenances: ['A', 'A', null],
+      tables: [
+        { id: 1, capacite: 2 },
+        { id: 2, capacite: 2 },
+      ],
+      tours: 2,
+      reservations: [auTour(2, 1, 1)],
+      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+    });
+    const plan = { tables: [1, 2], tours: [[[1], [3]], [[1, 3], [2]]], reserves: [[], []] };
+    const instance = normaliser(configuration);
+    const { ORDRE_DU_SCORE } = ordresDe(instance);
+    const sonTour = (tour) => ({ ...plan, tours: [tour, plan.tours[1]] });
+    assert.ok(comparerDans(ORDRE_DU_SCORE, scoreDuPlan(instance, sonTour([[1], [2, 3]])), scoreDuPlan(instance, sonTour([[1, 2], [3]]))) < 0);
+    assert.deepEqual(tourTrie(departAjuste(configuration, { plan, toursFiges: [1] }), 1), [[1, 2], [3]]);
+    for (const proposition of sousLeDepart(configuration, { plan, toursFiges: [1] })) {
+      assert.deepEqual(tourTrie(proposition.plan, 1), [[1, 2], [3]]);
+      assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+    }
+  });
+
+  test("une arrivante libre d'un tour figé prend la meilleure chaise libre même à une table qui en a deux : la première place fantôme de la table", () => {
+    // departSansSix, 5 absente au tour 2 : la table 30 n'y assied que 8, et
+    // garde deux places ; la table 20 assied 1, collègue de 6.
+    const configuration = avecPresences(salleReservee(), { 5: [1, 3] });
+    const instance = normaliser(configuration);
+    const { ORDRE_DU_SCORE } = ordresDe(instance);
+    const plan = departRetouche((p) => { p.tours[1] = [[2, 3, 4, 7], [1, 9], [8]]; });
+    assert.ok(comparerDans(ORDRE_DU_SCORE, scoreDuPlan(instance, avecSixA(plan, 30)), scoreDuPlan(instance, avecSixA(plan, 20))) < 0);
+    for (const toursFiges of [[2], [1, 2]]) {
+      assert.equal(tableAu(departAjuste(configuration, { plan, toursFiges }), 6, 2), 30, `figés ${toursFiges}`);
+      for (const proposition of sousLeDepart(configuration, { plan, toursFiges })) {
+        assert.deepEqual(tourTrie(proposition.plan, 2), [[2, 3, 4, 7], [1, 9], [6, 8]], `figés ${toursFiges}`);
+        assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+      }
+    }
+  });
+
+  test("aux tours non figés, une arrivante réservée à une table pleine de libres fait passer le libre de plus grand index à asseoir, ailleurs ; le plus petit ne bouge pas", () => {
+    const configuration = salleReservee();
+    // Au tour 3, 3 (réservée à 30) n'est plus assise, et 30 est pleine de
+    // libres : 5, 8 et 9.
+    const plan = departRetouche((p) => { p.tours[2] = [[2, 7], [1, 4, 6], [5, 8, 9]]; });
+    const neufCede = departRetouche((p) => { p.tours[2] = [[2, 7], [1, 4, 6], [3, 5, 8]]; });
+    const cinqCede = departRetouche((p) => { p.tours[2] = [[2, 7], [1, 4, 6], [3, 8, 9]]; });
+    for (const toursFiges of [[], [1], [2]]) {
+      const ajuste = departAjuste(configuration, { plan, toursFiges });
+      assert.deepEqual(tourTrie(ajuste, 3), [[2, 7, 9], [1, 4, 6], [3, 5, 8]], `figés ${toursFiges}`);
+      assert.notDeepStrictEqual(tourTrie(departAjuste(configuration, { plan: cinqCede, toursFiges }), 3), tourTrie(ajuste, 3));
+      const propositions = sousLeDepart(configuration, { plan, toursFiges });
+      assert.deepStrictEqual(propositions, sousLeDepart(configuration, { plan: neufCede, toursFiges }), `figés ${toursFiges}`);
+      for (const proposition of propositions) assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+    }
+  });
+
+  test('une présente en réserve au départ est à asseoir, comme une présente omise, figé ou non', () => {
+    const configuration = salleReservee();
+    const enReserve = departRetouche((p) => { p.tours[0][2] = [3]; p.reserves[0] = [9]; });
+    const omise = departRetouche((p) => { p.tours[0][2] = [3]; });
+    for (const toursFiges of [[], [1], [2]]) {
+      const propositions = sousLeDepart(configuration, { plan: enReserve, toursFiges });
+      assert.deepStrictEqual(propositions, sousLeDepart(configuration, { plan: omise, toursFiges }), `figés ${toursFiges}`);
+      for (const proposition of propositions) assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+      if (toursFiges.includes(1)) assert.equal(tableAu(propositions[0].plan, 9, 1), 30);
+    }
+  });
+
+  test("une absente rangée en réserve au départ est ignorée : ni assise, ni en réserve", () => {
+    const configuration = avecPresences(salleReservee(), { 9: [2, 3] });
+    const enReserve = departRetouche((p) => { p.tours[0][2] = [3]; p.reserves[0] = [9]; });
+    const omise = departRetouche((p) => { p.tours[0][2] = [3]; });
+    for (const toursFiges of [[], [1]]) {
+      const propositions = sousLeDepart(configuration, { plan: enReserve, toursFiges });
+      assert.deepStrictEqual(propositions, sousLeDepart(configuration, { plan: omise, toursFiges }), `figés ${toursFiges}`);
+      for (const proposition of propositions) assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+    }
+  });
+
+  test('une fixée que le départ n\'assied pas est assise à sa table, sans refus', () => {
+    const configuration = salleReservee();
+    // 4 est réservée à la table 10 au tour 1.
+    const plan = departRetouche((p) => { p.tours[0][0] = [2, 5, 6]; });
+    for (const toursFiges of [[], [1], [2]]) {
+      assert.equal(tableAu(departAjuste(configuration, { plan, toursFiges }), 4, 1), 10);
+      for (const proposition of sousLeDepart(configuration, { plan, toursFiges })) {
+        assert.equal(tableAu(proposition.plan, 4, 1), 10, `figés ${toursFiges}`);
+        assert.deepEqual(fautesDuPlan(configuration, proposition.plan), []);
+      }
+    }
+  });
+
+  test("sous arrivantes et absentes, une dérivée rend son départ ajusté case pour case, ou un plan strictement meilleur dans l'ordre du score", () => {
+    const configuration = avecPresences(salleReservee(), { 5: [1, 2] });
+    const instance = normaliser(configuration);
+    const { ORDRE_DU_SCORE } = ordresDe(instance);
+    const plan = departRetouche((p) => { p.tours[1][1] = [1, 4]; });
+    let meilleures = 0;
+    for (const toursFiges of [[], [1]]) {
+      const ajuste = departAjuste(configuration, { plan, toursFiges });
+      const auDepart = scoreDuPlan(instance, ajuste);
+      for (const arret of [1, 30, 600]) {
+        for (const proposition of repartir(configuration, { graine: 2, arret, nombre: 2, historique: 20 }, { plan, toursFiges })) {
+          const signe = comparerDans(ORDRE_DU_SCORE, scoreDuPlan(instance, proposition.plan), auDepart);
+          assert.ok(signe <= 0, `figés ${toursFiges}, arret ${arret}, n° ${proposition.id}`);
+          if (signe === 0) assert.deepStrictEqual(proposition.plan, ajuste);
+          else meilleures += 1;
+        }
+      }
+    }
+    assert.ok(meilleures >= 2, `${meilleures} meilleures`);
+  });
+
+  test("tous les tours figés sauf un, sous un départ ajusté optimal, la dérivée le rend : petite démonstration, 12 absente au tour 4, 1 arrivante au tour 2", () => {
+    const configuration = avecPresences(demo('petite'), { 12: [1, 2, 3] });
+    const plan = structuredClone(PLAN_PARFAIT_PETITE);
+    plan.tours[1][3] = [4, 7];
+    const attendu = structuredClone(PLAN_PARFAIT_PETITE);
+    attendu.tours[3][2] = [3, 4];
+    for (const proposition of sousLeDepart(configuration, { plan, toursFiges: [1, 2, 3] }, { graine: 5, arret: 2_000, nombre: 3, historique: 20 })) {
+      assert.deepStrictEqual(proposition.plan, attendu, `n° ${proposition.id}`);
+    }
+  });
+
+  test('le départ brut et le même départ ajusté par le stockage, absents retirés et arrivantes en réserve, rendent les mêmes propositions', () => {
+    const configuration = avecPresences(salleReservee(), { 9: [2, 3] });
+    // Brut : 9, absente au tour 1, y est encore assise ; 6 n'est plus assise
+    // au tour 2. Ajusté : 9 quitte le tour 1, 6 est en réserve au tour 2.
+    const brut = departRetouche((p) => { p.tours[1][2] = [5, 8]; });
+    const ajuste = departRetouche((p) => { p.tours[0][2] = [3]; p.tours[1][2] = [5, 8]; p.reserves[1] = [6]; });
+    for (const toursFiges of [[], [1], [2], [1, 3]]) {
+      assert.deepStrictEqual(sousLeDepart(configuration, { plan: brut, toursFiges }), sousLeDepart(configuration, { plan: ajuste, toursFiges }), `figés ${toursFiges}`);
+    }
+  });
+
+  test("une table qui ne déborde qu'à cause d'une absente est admise, et l'absente n'y est plus", () => {
+    const configuration = avecPresences(salleReservee(), { 5: [1, 3] });
+    const plan = departRetouche((p) => { p.tours[1][1] = [1, 4, 9, 5]; p.tours[1][2] = [6, 8]; });
+    for (const toursFiges of [[], [2]]) {
+      for (const proposition of sousLeDepart(configuration, { plan, toursFiges })) {
+        assert.deepEqual(fautesDuPlan(configuration, proposition.plan), [], `figés ${toursFiges}`);
+        if (toursFiges.includes(2)) assert.deepEqual(tourTrie(proposition.plan, 2), [[2, 3, 7], [1, 4, 9], [6, 8]]);
+      }
+    }
+  });
+
+  // Au tour 3, 3 (réservée à 30) n'est plus assise, et 30 est pleine de
+  // libres : 5, 8 et 9.
+  const departTableTrenteRemplie = () => departRetouche((p) => { p.tours[2] = [[2, 7], [1, 4, 6], [5, 8, 9]]; });
+
+  test("au tour figé, une réserve imposée y reste ; chaque libre garde sa table, et le tour égale le départ ajusté hors d'elle", () => {
+    const configuration = salleReservee();
+    const plan = departTableTrenteRemplie();
+    const reservesImposees = [{ participant: 3, tour: 3 }];
+    for (const toursFiges of [[3], [1, 3]]) {
+      const depart = { plan, toursFiges, reservesImposees };
+      const ajuste = departAjuste(configuration, depart);
+      assert.deepEqual(tourTrie(ajuste, 3), tourTrie(plan, 3));
+      assert.deepEqual(ajuste.reserves, [[], [], [3]]);
+      for (const proposition of sousLeDepart(configuration, depart)) {
+        assert.deepEqual(tourTrie(proposition.plan, 3), tourTrie(plan, 3), `figés ${toursFiges}`);
+        assert.deepEqual(proposition.plan.reserves, [[], [], [3]]);
+        assert.deepEqual(fautesDuPlan(configuration, proposition.plan, reservesImposees), []);
+      }
+    }
+  });
+
+  test("au tour figé, une arrivante fixée à une table pleine de libres, sans réserve imposée, la fait déborder : DEPART_INCOMPATIBLE, avant tout calcul", () => {
+    const configuration = salleReservee();
+    const plan = departTableTrenteRemplie();
+    const appels = [];
+    const progression = () => appels.push(1);
+    const reglages = { graine: 1, arret: 1_000, nombre: 2 };
+    const details = { tour: 3, table: 30, participant: null };
+    for (const toursFiges of [[3], [2, 3]]) {
+      for (const appel of [
+        () => repartir(configuration, reglages, { plan, toursFiges }, { progression }),
+        () => repartirUne(configuration, reglages, { plan, toursFiges, reservesImposees: [] }, 2, { progression }),
+        () => regenerer(configuration, { graine: 5, arret: 1_000, historique: 30, depart: 1, toursFiges }, { planDuDepart: plan }),
+      ]) {
+        assert.throws(appel, { name: 'ErreurConfiguration', code: 'DEPART_INCOMPATIBLE', details }, `figés ${toursFiges}`);
+      }
+    }
+    assert.deepEqual(appels, []);
+  });
+
+  test("une réserve imposée hors d'un tour figé, d'une absente, d'un inconnu, d'une personne assise au départ, ou une liste mal formée : RangeError qui nomme reservesImposees, avant tout calcul", () => {
+    const base = salleReservee();
+    // 3 et 7 ne sont plus assises au tour 3, 9 ne l'est plus au tour 2.
+    const plan = departRetouche((p) => { p.tours[1][1] = [1, 4]; p.tours[2] = [[2], [1, 4, 6], [5, 8, 9]]; });
+    const reglages = { graine: 1, arret: 1_000, nombre: 2 };
+    const absente = avecPresences(base, { 3: [1, 2] });
+    const e = (participant, tour) => ({ participant, tour });
+    const cas = [
+      ['un tour non figé', base, [3], [e(9, 2)]],
+      ['une absente', absente, [3], [e(3, 3)]],
+      ['un identifiant inconnu', base, [3], [e(42, 3)]],
+      ['une personne assise au départ', base, [3], [e(5, 3)]],
+      ['deux entrées dans le désordre', base, [3], [e(7, 3), e(3, 3)]],
+      ['une entrée répétée', base, [3], [e(3, 3), e(3, 3)]],
+      ['des tours dans le désordre', base, [2, 3], [e(3, 3), e(9, 2)]],
+      ['un tour qui n\'est pas un entier', base, [3], [e(3, '3')]],
+      ['une entrée nulle', base, [3], [null]],
+      ['un objet au lieu d\'une liste', base, [3], e(3, 3)],
+    ];
+    for (const [nom, configuration, toursFiges, reservesImposees] of cas) {
+      const appels = [];
+      const progression = () => appels.push(1);
+      const depart = { plan, toursFiges, reservesImposees };
+      for (const appel of [
+        () => repartir(configuration, reglages, depart, { progression }),
+        () => repartirUne(configuration, reglages, depart, 2, { progression }),
+        () => regenerer(configuration, { graine: 5, arret: 1_000, historique: 30, depart: 1, toursFiges }, { planDuDepart: plan, reservesImposees }),
+      ]) {
+        assert.throws(appel, { name: 'RangeError', reglage: 'reservesImposees' }, nom);
+      }
+      assert.deepEqual(appels, [], nom);
+    }
+    // Les mêmes entrées, bien formées, sont admises.
+    for (const [toursFiges, reservesImposees] of [[[3], [e(3, 3), e(7, 3)]], [[2, 3], [e(9, 2), e(3, 3)]]]) {
+      for (const proposition of sousLeDepart(base, { plan, toursFiges, reservesImposees })) {
+        assert.deepEqual(fautesDuPlan(base, proposition.plan, reservesImposees), [], `figés ${toursFiges}`);
+      }
+    }
+    // Sans départ, regenerer refuse une réserve imposée au lieu de l'ignorer.
+    const [proposition] = rechercher(base, { graine: 4, arret: 50, nombre: 1 });
+    assert.throws(() => regenerer(base, proposition, { reservesImposees: [e(3, 3)] }), { name: 'RangeError', reglage: 'reservesImposees' });
+    assert.deepStrictEqual(regenerer(base, proposition, { reservesImposees: [] }), proposition.plan);
+  });
+
+  test('sous une réserve imposée, regenerer égale repartir octet pour octet, à chaque point de relevé', () => {
+    const configuration = salleReservee();
+    const planDuDepart = departTableTrenteRemplie();
+    const reservesImposees = [{ participant: 3, tour: 3 }];
+    const toursFiges = [3];
+    const [proposition] = repartir(configuration, { graine: 9, arret: 1_500, nombre: 1, historique: 25 }, { plan: planDuDepart, toursFiges, reservesImposees });
+    assert.deepEqual(proposition.releves.map(({ mouvements }) => mouvements), [1, 10, 100, 1_000]);
+    const fichier = { ...proposition, depart: 4, toursFiges };
+    for (const releve of proposition.releves) {
+      assert.deepStrictEqual(releve.plan, regenerer(configuration, { ...fichier, arret: releve.mouvements }, { planDuDepart, reservesImposees }), `point ${releve.mouvements}`);
+    }
+    assert.deepStrictEqual(proposition.plan, regenerer(configuration, fichier, { planDuDepart, reservesImposees }));
+  });
+});
+
+// Huit personnes, trois tables (la 1 de deux places, la 2 et la 3 de trois),
+// trois tours, objectifs et animateurs cochés. Au tour 2, les deux places de
+// la table 1 sont réservées à 2 et à 3, et 4, réservée à la table 3, y anime.
+// 3 l'est aussi à la table 1 au tour 1. La table 1 porte l'objectif « x »
+// pour la soirée, que 7 porte.
+const soireeAReservesImposees = () => ({
+  participants: Array.from({ length: 8 }, (_, rang) => ({
+    id: rang + 1,
+    appartenance: ['A', 'B', null, 'A'][rang % 4],
+    ...(rang + 1 === 7 ? { etiquettes: ['x'] } : {}),
+    ...(rang + 1 === 4 ? { anime: [2] } : {}),
+  })),
+  tables: [
+    { id: 1, numero: 1, capacite: 2 },
+    { id: 2, numero: 2, capacite: 3 },
+    { id: 3, numero: 3, capacite: 3 },
+  ],
+  tours: 3,
+  reservations: [auTour(2, 1, 2), auTour(3, 1, 2), auTour(3, 1, 1), auTour(4, 3, 2)],
+  contraintes: { ...TOUTES_CONTRAINTES, respecterObjectifs: true, rencontrerAnimateurs: true },
+  objectifs: [{ table: 1, tour: null, regle: 'ou', etiquettes: ['x'] }],
+});
+
+// Son départ : au tour 2, ni 3 ni 4 ne sont assises, et 7, libre, l'est à la
+// table 1, qui n'a aucun siège mobile ; au tour 3, 3, libre, revient à la
+// table 1.
+const departAReservesImposees = () => ({
+  tables: [1, 2, 3],
+  tours: [
+    [[3, 5], [1, 2, 6], [4, 7, 8]],
+    [[2, 7], [1, 5, 6], [8]],
+    [[3, 6], [4, 5, 8], [1, 2, 7]],
+  ],
+  reserves: [[], [], []],
+});
+
+describe('repartir : une réserve imposée se mesure comme indicateurs.js la lit (§ 5.10)', () => {
+  test("le score tenu à jour égale le recalcul au départ et après 2 000 mouvements : retours d'une fixée en réserve, animatrice en réserve, libre assis au siège fixé d'une table sans siège mobile", () => {
+    const configuration = soireeAReservesImposees();
+    const instance = normaliser(configuration);
+    assert.ok(instance.etatCriteres.every(({ coche, sansObjet }) => coche && !sansObjet));
+    const reservesImposees = [{ participant: 3, tour: 2 }, { participant: 4, tour: 2 }];
+    const etat = creerEtatDuDepart(instance, { plan: departAReservesImposees(), toursFiges: [2], reservesImposees });
+    const { R, indexDe } = instance;
+    assert.equal(etat.tableDe[indexDe.get(3) * R + 1], RESERVE);
+    assert.equal(etat.tableDe[indexDe.get(4) * R + 1], RESERVE);
+    assert.equal(etat.tableDe[indexDe.get(7) * R + 1], 0);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat), 'au départ');
+    const rng = creerPcg32(11, FLUX.RECHERCHE);
+    let appliques = 0;
+    for (let i = 1; i <= 2_000; i += 1) {
+      if (proposerParmi(etat, rng, [0, 2]) !== null) appliques += 1;
+      if (i % 200 === 0) assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat), `pas ${i}`);
+    }
+    assert.ok(appliques > 500, `${appliques} mouvements appliqués`);
+  });
+
+  test("creerEtatDuDepart contrôle le départ comme repartir, et porte la composition de l'instance", () => {
+    const instance = normaliser(salleReservee());
+    const etat = creerEtatDuDepart(instance, { plan: departSalle(), toursFiges: [2] });
+    assert.deepStrictEqual(planDepuisIndex(instance, etat.tableDe), departSalle());
+    assert.equal(etat.composition.taille, scoreIncremental(etat).length);
+    assert.throws(() => creerEtatDuDepart(instance, { plan: departSalle(), toursFiges: [1, 2, 3] }), { name: 'RangeError', reglage: 'toursFiges' });
+    assert.throws(() => creerEtatDuDepart(instance, { plan: departSalle(), toursFiges: [], reservesImposees: [{ participant: 3, tour: 3 }] }), {
+      name: 'RangeError',
+      reglage: 'reservesImposees',
+    });
   });
 });

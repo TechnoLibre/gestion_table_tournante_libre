@@ -4,10 +4,16 @@
 // Diagnostic d'une configuration, avant toute recherche (§ 5.6) : ce que la
 // configuration impose à tout plan, chiffré. Un plancher est une borne
 // inférieure démontrée sur les plans que produit la recherche, ceux qui
-// assoient chacun à chaque tour et honorent les réservations ; un plan édité
-// à la main qui laisse quelqu'un en réserve (§ 12.6) peut mesurer moins. Un
-// plancher s'écrit là où le diagnostic sait le prouver, et vaut null
-// ailleurs, jamais 0 par défaut.
+// assoient chacun à chacun de ses tours de présence et honorent les
+// réservations ; un plan édité à la main qui laisse une présente en réserve
+// (§ 12.6) peut mesurer moins. Un plancher s'écrit là où le diagnostic sait
+// le prouver, et vaut null ailleurs, jamais 0 par défaut.
+//
+// Sous la présence par tour, chaque plancher se raisonne sur les présents
+// de chaque tour : un absent n'occupe aucun siège et ne forme aucune paire.
+// Seul l'écart d'itinéraire perd sa preuve, qui suppose chaque siège rempli
+// à chaque tour : il vaut null dès qu'une absence existe, et planchersRetires
+// le nomme.
 //
 // Les quantités que le moteur calcule déjà viennent de leur unique
 // implémentation (§ 13.2) : nombre de places et places manquantes de
@@ -34,7 +40,9 @@
  *           réservations assoient alors deux membres à une même table d'un tour
  *
  * @typedef {Object} Diagnostic
- * @property {number} placesManquantes          max(0, N − Σ c_t), par tour
+ * @property {number} placesManquantes          le plus grand des manques par
+ *                                              tour
+ * @property {number[]} placesManquantesParTour max(0, n_r − Σ c_t), R cases
  * @property {{min: number|null, max: number|null, parPersonne: number[],
  *             repartition: Array<{valeur: number, ancres: number, mobiles: number}>}} plafondAPriori
  *           parPersonne dans l'ordre de instance.ids ; min et max null pour
@@ -68,6 +76,12 @@
  *           (D16, A10) ; 0 quand rien n'est prouvé, chacun calculé sous tout
  *           mode, critère coché ou non ; parTour, le plancher de chaque tour,
  *           max(0, P_r − L_r), R cases, dont horsObjectif est la somme
+ * @property {{absences: number, presentsParTour: number[]}} presence
+ *           absences, Σ_p (R − tours de présence de p) ; presentsParTour, n_r,
+ *           R cases
+ * @property {string[]} planchersRetires   les planchers que la présence par
+ *           tour retire : ['ecartItineraire'] dès qu'une absence existe, []
+ *           sinon
  */
 import {
   LIBRE,
@@ -77,6 +91,7 @@ import {
   nombrePlaces,
   nombrePlacesManquantes,
   normaliser,
+  placesManquantesParTour,
 } from './configuration.js';
 import { mesurer } from './indicateurs.js';
 import { plafondsAPriori } from './plafond.js';
@@ -111,7 +126,8 @@ function pairesMinimales(poses, libres) {
 // instance.groupes ; un groupe n'y figure que si son plancher de collisions
 // cumulées est positif. À chaque tour, les membres que les réservations fixent
 // à ce tour, ancrés comme partiellement fixés, sont posés à leur table, et
-// pairesMinimales place les autres. Les paires d'un même tour sont
+// pairesMinimales place les autres ; un membre absent du tour ne s'y assied
+// pas et n'y compte pas. Les paires d'un même tour sont
 // distinctes : le plus grand minimum d'un tour minore les paires distinctes,
 // la somme des minimums les collisions cumulées. Un groupe de s membres
 // n'offre que C(s, 2) paires distinctes : l'excédent, cumulées − distinctes,
@@ -121,7 +137,7 @@ function pairesMinimales(poses, libres) {
 // avecLibres faux : les membres libres ne comptent pas. Le plancher est
 // alors celui des seules places réservées, la limite du plancher quand les
 // tables ajoutées sont assez nombreuses pour asseoir chaque libre seul.
-export function planchersCollisions({ N, T, R, groupe, groupes, fixe }, { avecLibres = true } = {}) {
+export function planchersCollisions({ N, T, R, groupe, groupes, fixe, present }, { avecLibres = true } = {}) {
   const membres = groupes.map(() => []);
   for (let p = 0; p < N; p += 1) if (groupe[p] !== SANS_GROUPE) membres[groupe[p]].push(p);
   const planchers = [];
@@ -132,6 +148,7 @@ export function planchersCollisions({ N, T, R, groupe, groupes, fixe }, { avecLi
       const poses = new Int32Array(T);
       let libres = 0;
       for (const p of membres[g]) {
+        if (present[p * R + r] === 0) continue;
         const t = fixe[p * R + r];
         if (t !== LIBRE) poses[t] += 1;
         else if (avecLibres) libres += 1;
@@ -259,17 +276,28 @@ function avecTablesManquantes(configuration, instance, planchers, chiffrer) {
 // La configuration ramenée à ses R′ premiers tours : les réservations de
 // portée « tous », qui couvrent alors ses R′ tours, restent, et celles d'un
 // tour au-delà de R′ se retirent, exclus compris ; de même les objectifs d'un
-// tour au-delà de R′ et les tours animés au-delà de R′. normaliser les
-// refuserait (RESERVATION_TOUR, OBJECTIF_TOUR, ANIMATION_NON_FIXEE) ; un tour
-// animé gardé reste fixé, sa réservation couvrant un tour de 1 à R′.
+// tour au-delà de R′, les tours animés au-delà de R′ et les tours de
+// présence au-delà de R′, exclus compris. normaliser les refuserait
+// (RESERVATION_TOUR, OBJECTIF_TOUR, ANIMATION_NON_FIXEE, PRESENCE_TOUR) ; un
+// tour animé gardé reste fixé, sa réservation couvrant un tour de 1 à R′, et
+// un tour de présence. Une personne qui ne garde aucun tour de présence
+// sort de la sonde, exclue et sans présence : une liste vide lèverait
+// PRESENCE_VIDE.
 function surMoinsDeTours(configuration, tours) {
   const avant = (tour) => tour <= tours;
   const reduite = {
     ...configuration,
     tours,
     reservations: configuration.reservations.filter(({ portee, tour }) => portee !== 'tour' || avant(tour)),
-    participants: configuration.participants.map((personne) =>
-      (personne.anime === undefined ? personne : { ...personne, anime: personne.anime.filter(avant) })),
+    participants: configuration.participants.map((personne) => {
+      const ramenee = personne.anime === undefined ? personne : { ...personne, anime: personne.anime.filter(avant) };
+      if (personne.presence === undefined) return ramenee;
+      const presence = personne.presence.filter(avant);
+      if (presence.length > 0) return { ...ramenee, presence };
+      const sortie = { ...ramenee, exclu: true };
+      delete sortie.presence;
+      return sortie;
+    }),
   };
   if (configuration.objectifs !== undefined) {
     reduite.objectifs = configuration.objectifs.filter(({ tour }) => tour === null || tour === undefined || avant(tour));
@@ -298,20 +326,37 @@ function uneSeuleAppartenance({ groupe, groupes, contraintes }) {
 }
 
 // Vrai quand tout plan qui assied chacun porte une collision à chaque table
-// de chaque tour (§ 7.5). Les autres tables tiennent au plus Σ c − c_t
-// personnes : la table t en reçoit au moins N − (Σ c − c_t). Sans collision,
-// elle n'assied qu'un membre de chacune des G appartenances et les U présents
-// sans appartenance : au-delà de G + U, la collision est forcée. Faux quand
-// la séparation est inactive, qu'une place manque — aucun plan n'assied
-// chacun —, ou sans table : rien ne le prouve.
+// de chaque tour (§ 7.5). Au tour r, les autres tables tiennent au plus
+// Σ c − c_t personnes : la table t reçoit au moins n_r − (Σ c − c_t) des
+// n_r présents du tour. Sans collision, elle n'assied qu'un membre de
+// chacune des G_r appartenances présentes au tour et les U_r présents sans
+// appartenance : au-delà de G_r + U_r, la collision est forcée. Vrai quand
+// elle l'est à chaque table de chaque tour. Faux quand la séparation est
+// inactive, qu'une place manque à un tour — aucun plan n'assied chacun —, ou
+// sans table : rien ne le prouve.
 function collisionPartout(instance, placesManquantes) {
-  const { N, T, capacite, groupe, groupes, contraintes } = instance;
+  const { N, T, R, capacite, groupe, groupes, contraintes, present, presentsParTour } = instance;
   if (!contraintes.separerAppartenances || placesManquantes > 0 || T === 0) return false;
-  let sansAppartenance = 0;
-  for (let p = 0; p < N; p += 1) if (groupe[p] === SANS_GROUPE) sansAppartenance += 1;
   const places = nombrePlaces(instance);
-  for (let t = 0; t < T; t += 1) {
-    if (N - (places - capacite[t]) <= groupes.length + sansAppartenance) return false;
+  let plusPetite = capacite[0];
+  for (let t = 1; t < T; t += 1) if (capacite[t] < plusPetite) plusPetite = capacite[t];
+  const vue = new Uint8Array(groupes.length);
+  for (let r = 0; r < R; r += 1) {
+    vue.fill(0);
+    let appartenances = 0;
+    let sansAppartenance = 0;
+    for (let p = 0; p < N; p += 1) {
+      if (present[p * R + r] === 0) continue;
+      const g = groupe[p];
+      if (g === SANS_GROUPE) sansAppartenance += 1;
+      else if (vue[g] === 0) {
+        vue[g] = 1;
+        appartenances += 1;
+      }
+    }
+    // La plus petite table reçoit le moins de personnes : elle décide du
+    // tour.
+    if (presentsParTour[r] - (places - plusPetite) <= appartenances + sansAppartenance) return false;
   }
   return true;
 }
@@ -338,7 +383,9 @@ function plafondPassantPar(configuration, instance, p, t) {
 }
 
 // Plancher de l'écart d'itinéraire maximal (§ 12.10.4), écrit pour une
-// configuration tendue, Σ c_t = N, sans partiellement fixé ; null ailleurs.
+// configuration tendue, Σ c_t = N, sans partiellement fixé ni absence ; null
+// ailleurs. Une absence laisse des sièges vides à un tour au moins, et la
+// preuve qui suit ne tient plus.
 // Là, tout plan qui assied chacun remplit chaque siège à chaque tour :
 // l'occupation vaut la capacité, et le plafond réalisé d'un mobile vaut le
 // plafond de son itinéraire. Les mobiles partagent alors un plafond a priori
@@ -355,8 +402,8 @@ function plafondPassantPar(configuration, instance, p, t) {
 // libres égaux, les sièges qui tournent sont les mêmes, et les k_t ancrés
 // s'ajoutent au plafond hors du terme que n_p borne.
 function ecartItineraire(configuration, instance, aPriori) {
-  const { N, T, R, capacite, ancresParTable, statut } = instance;
-  if (nombrePlaces(instance) !== N || statut.includes(STATUT.PARTIELLEMENT_FIXE)) return null;
+  const { N, T, R, capacite, ancresParTable, statut, absences } = instance;
+  if (absences > 0 || nombrePlaces(instance) !== N || statut.includes(STATUT.PARTIELLEMENT_FIXE)) return null;
   const mobile = statut.indexOf(STATUT.MOBILE);
   if (mobile === -1) return null;
   const plafondCommun = aPriori[mobile];
@@ -461,26 +508,33 @@ function etendue(valeurs) {
 /**
  * Diagnostic d'une configuration, avant la recherche (§ 5.6).
  *
- * - placesManquantes : nombrePlacesManquantes ; la recherche refuse une
- *   configuration où elles sont positives, le diagnostic les chiffre (§ 5.9).
+ * - placesManquantes : nombrePlacesManquantes, le plus grand manque d'un
+ *   tour ; la recherche refuse une configuration où il est positif, le
+ *   diagnostic le chiffre (§ 5.9) ; placesManquantesParTour, le manque de
+ *   chaque tour sur ses présents.
  * - plafondAPriori : plafondsAPriori, son étendue et sa répartition par
  *   valeur.
  * - collisions : planchers de collisions par groupe, posés sur les tours
- *   fixés, capacités relâchées ; chacun avec les tables qui l'annulent.
+ *   fixés, capacités relâchées, sur les seuls membres présents à chaque
+ *   tour ; chacun avec les tables qui l'annulent.
  * - redondanceMinimale : max_p max(0, min(a priori(p), affiliés autres que
  *   p) − G) ; remedes.toursSansRedondance, le nombre de tours qui l'annule.
  * - animateursMemeAppartenance, et redondanceImposeeParAnimateurs : la forme
  *   close min(R, T) − 1 du § 5.6, qui compte un animateur à chaque table
  *   visitée ; 0 quand les animateurs ne partagent pas une appartenance.
  * - uneSeuleAppartenance et collisionPartout : une séparation vide de sens,
- *   une collision forcée à chaque table.
+ *   une collision forcée à chaque table de chaque tour, jugée sur les
+ *   présents du tour.
  * - ancrage : ancrés, capacité, gel et demi-ancrage de chaque table.
  * - retoursImposes : la rangée de instance.fixe se lit comme le plan qui
  *   assied chacun aux seuls tours fixés, en réserve ailleurs ; sa mesure
  *   compte max(0, f − 1) retours pour f tours réservés à une même table, ce
  *   que mesure tout plan qui honore les réservations (§ 5.4) ;
  *   ancragesImposantRetours, les personnes qui en portent un au moins.
- * - ecartItineraire : plancher de l'écart d'itinéraire maximal, ou null.
+ * - ecartItineraire : plancher de l'écart d'itinéraire maximal, ou null ;
+ *   null dès qu'une absence existe, et planchersRetires le nomme alors.
+ * - presence : le nombre d'absences et les présents de chaque tour, lus
+ *   dans l'instance, en listes neuves.
  * - objectifsInevitables : planchers immédiats des tours hors objectif, des
  *   personnes jamais servies et du plus de tours hors objectif d'une
  *   personne, nuls sans objectif ; l'interface écrit ceux que le mode
@@ -499,6 +553,7 @@ export function diagnostiquer(configuration, { planchersCollisions: chiffrer = p
   const aPriori = plafondsAPriori(instance);
   const memeAppartenance = animateursMemeAppartenance(instance);
   const placesManquantes = nombrePlacesManquantes(instance);
+  const avecAbsences = instance.absences > 0;
   const minimale = redondanceMinimale(instance, aPriori);
   const imposes = mesurer(instance, instance.fixe);
   return {
@@ -520,5 +575,8 @@ export function diagnostiquer(configuration, { planchersCollisions: chiffrer = p
     ancragesImposantRetours: imposes.retoursImposes.filter((retours) => retours > 0).length,
     ecartItineraire: ecartItineraire(configuration, instance, aPriori),
     objectifsInevitables: objectifsInevitables(instance),
+    placesManquantesParTour: placesManquantesParTour(instance),
+    presence: { absences: instance.absences, presentsParTour: Array.from(instance.presentsParTour) },
+    planchersRetires: avecAbsences ? ['ecartItineraire'] : [],
   };
 }

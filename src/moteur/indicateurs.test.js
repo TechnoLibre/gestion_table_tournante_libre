@@ -8,9 +8,9 @@
 // indexerPlan comme un plan enregistré.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
-import { LIBRE, indexerPlan, normaliser } from './configuration.js';
+import { LIBRE, RESERVE, indexerPlan, normaliser } from './configuration.js';
 import { VALEURS_DES_MODES } from './criteres.js';
-import { mesurer, parcourirTours } from './indicateurs.js';
+import { assisAChaqueTourPresent, mesurer, parcourirTours } from './indicateurs.js';
 
 const SANS_CONTRAINTE = {
   separerAppartenances: false,
@@ -1404,5 +1404,69 @@ describe('mesurer : un objectif et des sièges libres qui changent d’un tour �
     assert.equal(somme(servisParTour), somme(mesures.servis));
     const instance = normaliser(VARIABLE);
     assert.equal(somme(possiblesParTour), somme(instance.possibles));
+  });
+});
+
+describe('mesurer et assisAChaqueTourPresent : les tours de présence (§ 5.4, § 12.4)', () => {
+  // Des personnes sans appartenance, d'identifiants 1..presences.length,
+  // presences[i] étant la présence de i + 1 (undefined : chaque tour) ; une
+  // table de capacité donnée par élément de capacites, d'identifiants 1, 2…
+  // tours[r][i] liste les assis de la table i + 1 au tour r + 1, reserves[r]
+  // les présents qui n'y sont assis nulle part.
+  function avecPresences({ presences, capacites, tours, reserves = tours.map(() => []) }) {
+    const participants = presences.map((presence, i) => ({
+      id: i + 1,
+      nom: `P${i + 1}`,
+      appartenance: null,
+      ...(presence === undefined ? {} : { presence }),
+    }));
+    const tables = capacites.map((capacite, i) => ({ id: i + 1, numero: i + 1, capacite }));
+    const instance = normaliser({ participants, tables, tours: tours.length, reservations: [], contraintes: SANS_CONTRAINTE });
+    const tableDe = indexerPlan(instance, { tables: tables.map(({ id }) => id), tours, reserves });
+    return { instance, tableDe };
+  }
+
+  // Une table de 3, deux tours ; 3 n'est présente qu'au tour 1. Ses
+  // rencontres du tour 1 comptent pour 1 et 2, qui se revoient au tour 2 :
+  // la paire {1, 2} est la seule répétée, choisie.
+  const UNE_ABSENTE = { presences: [undefined, undefined, [1]], capacites: [3], tours: [[[1, 2, 3]], [[1, 2]]] };
+
+  test('une absente vaut la réserve dans le plan indexé, et ses rencontres des tours où elle est assise comptent', () => {
+    const { instance, tableDe } = avecPresences(UNE_ABSENTE);
+    assert.deepEqual(Array.from(tableDe), [0, 0, 0, 0, 0, RESERVE]);
+    const mesures = mesurer(instance, tableDe);
+    assert.deepEqual(mesures.rencontres, [2, 2, 2]);
+    assert.deepEqual(mesures.toursAssis, [2, 2, 1]);
+    assert.deepEqual(mesures.rencontresRepetees, { choisies: 1, imposees: 0 });
+    assert.equal(mesures.maxRencontresPaire, 2);
+  });
+
+  test('vrai quand chacun est assis à chacun de ses tours de présence, une absente omise comprise', () => {
+    const { instance, tableDe } = avecPresences(UNE_ABSENTE);
+    assert.equal(assisAChaqueTourPresent(instance, mesurer(instance, tableDe).toursAssis), true);
+  });
+
+  test('vrai sans absence quand chacun est assis à chaque tour', () => {
+    const { instance, tableDe } = avecPresences({ presences: [undefined, undefined, undefined], capacites: [3], tours: [[[1, 2, 3]], [[1, 2, 3]]] });
+    assert.equal(assisAChaqueTourPresent(instance, mesurer(instance, tableDe).toursAssis), true);
+  });
+
+  test('faux quand une présente est en réserve, sans absence comme sous absence', () => {
+    const sansAbsence = avecPresences({ presences: [undefined, undefined, undefined], capacites: [3], tours: [[[1, 2, 3]], [[1, 2]]], reserves: [[], [3]] });
+    assert.equal(assisAChaqueTourPresent(sansAbsence.instance, mesurer(sansAbsence.instance, sansAbsence.tableDe).toursAssis), false);
+    // 4 n'est présente qu'au tour 2, où la table de 3 laisse 3 en réserve.
+    const sousAbsence = avecPresences({
+      presences: [undefined, undefined, undefined, [2]],
+      capacites: [3],
+      tours: [[[1, 2, 3]], [[1, 2, 4]]],
+      reserves: [[], [3]],
+    });
+    assert.equal(assisAChaqueTourPresent(sousAbsence.instance, mesurer(sousAbsence.instance, sousAbsence.tableDe).toursAssis), false);
+  });
+
+  test('lit toursPresents et non R : un tableau de tours assis égal à R partout est faux pour qui n’a qu’un tour de présence', () => {
+    const { instance } = avecPresences(UNE_ABSENTE);
+    assert.equal(assisAChaqueTourPresent(instance, [2, 2, 2]), false);
+    assert.equal(assisAChaqueTourPresent(instance, [2, 2, 1]), true);
   });
 });

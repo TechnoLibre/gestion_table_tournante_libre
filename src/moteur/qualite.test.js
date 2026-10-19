@@ -198,6 +198,7 @@ describe('profilRencontres (§ 12.3, D28, D51)', () => {
         affilies: mesures.affilies[p],
         borneDiversite: aMax[p],
         toursNonAssis: 2 - mesures.toursAssis[p],
+        toursAbsents: 0,
         marque: p === index(instance, 1) ? 'reserve' : null,
       });
     }
@@ -1367,6 +1368,75 @@ describe('detailler (§ 12.9, D27)', () => {
     assert.equal(detail.animateurs.profil, null);
     assert.equal(detail.animateurs.repartition, null);
     assert.equal(detail.animateurs.diversite.lignes.length, 1);
+  });
+});
+
+describe('profilRencontres : la présence par tour (§ 12.3, § 12.6)', () => {
+  // Deux tables de 3, trois tours. 1 est ancrée à la table 10. 5 n'est
+  // présente qu'aux tours 1 et 3, assise à chacun. 4 n'est présente qu'aux
+  // tours 1 et 3, et en réserve au tour 3.
+  function prepareAbsences() {
+    const configuration = {
+      participants: [1, 2, 3, 4, 5].map((id) => ({
+        id,
+        nom: `P${id}`,
+        appartenance: null,
+        ...(id >= 4 ? { presence: [1, 3] } : {}),
+      })),
+      tables: [{ id: 10, numero: 1, capacite: 3 }, { id: 20, numero: 2, capacite: 3 }],
+      tours: 3,
+      reservations: [tous(1, 10)],
+      contraintes: SANS_CONTRAINTE,
+    };
+    const instance = normaliser(configuration);
+    const tableDe = indexerPlan(instance, {
+      tables: [10, 20],
+      tours: [
+        [[1, 2, 3], [4, 5]],
+        [[1, 2], [3]],
+        [[1, 3, 5], [2]],
+      ],
+      reserves: [[], [], [4]],
+    });
+    return { instance, tableDe };
+  }
+
+  test('une absente au tour 2, assise à ses autres tours : un tour absent, aucun tour non assis, la marque « absente »', () => {
+    const prepare = prepareAbsences();
+    const { instance } = prepare;
+    const { mesures, realises, aPriori, aMax } = mesurerTout(prepare);
+    const profil = profilRencontres(instance, mesures, realises, aPriori, aMax);
+    const deId = (id) => profil.find(({ p }) => p === index(instance, id));
+    assert.deepEqual([deId(5).toursAbsents, deId(5).toursNonAssis, deId(5).marque], [1, 0, 'absente']);
+  });
+
+  test('absente et en réserve : la réserve passe avant l’absence ; l’ancrée reste « ancre »', () => {
+    const prepare = prepareAbsences();
+    const { instance } = prepare;
+    const { mesures, realises, aPriori, aMax } = mesurerTout(prepare);
+    const profil = profilRencontres(instance, mesures, realises, aPriori, aMax);
+    const deId = (id) => profil.find(({ p }) => p === index(instance, id));
+    assert.deepEqual([deId(4).toursAbsents, deId(4).toursNonAssis, deId(4).marque], [1, 1, 'reserve']);
+    assert.deepEqual([deId(1).toursAbsents, deId(1).toursNonAssis, deId(1).marque], [0, 0, 'ancre']);
+    assert.deepEqual([2, 3].map((id) => [deId(id).toursAbsents, deId(id).toursNonAssis, deId(id).marque]), [[0, 0, null], [0, 0, null]]);
+  });
+
+  test('l’absence passe avant le plafond réalisé nul', () => {
+    // Une table de 3, deux tours ; 2 n'est présente qu'au tour 2, seule à la
+    // table 20 : plafond réalisé nul, mais absente au tour 1.
+    const configuration = {
+      participants: [{ id: 1, nom: 'P1', appartenance: null }, { id: 2, nom: 'P2', appartenance: null, presence: [2] }, { id: 3, nom: 'P3', appartenance: null }],
+      tables: [{ id: 10, numero: 1, capacite: 3 }, { id: 20, numero: 2, capacite: 3 }],
+      tours: 2,
+      reservations: [],
+      contraintes: SANS_CONTRAINTE,
+    };
+    const instance = normaliser(configuration);
+    const tableDe = indexerPlan(instance, { tables: [10, 20], tours: [[[1, 3], []], [[1, 3], [2]]], reserves: [[], []] });
+    const { mesures, realises, aPriori, aMax } = mesurerTout({ instance, tableDe });
+    const profil = profilRencontres(instance, mesures, realises, aPriori, aMax);
+    const ligne = profil.find(({ p }) => p === index(instance, 2));
+    assert.deepEqual([ligne.plafondRealise, ligne.toursAbsents, ligne.toursNonAssis, ligne.marque], [0, 1, 0, 'absente']);
   });
 });
 

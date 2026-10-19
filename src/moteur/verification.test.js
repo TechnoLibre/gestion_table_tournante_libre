@@ -618,6 +618,130 @@ describe('verifierInvariants : la liste rendue', () => {
   });
 });
 
+describe('verifierInvariants : la présence par tour (§ 8.9, § 14.12)', () => {
+  // Deux tables de 3, d'identifiants 22 puis 21, deux tours. 103 n'est
+  // présente qu'au tour 1, réservée à la table 22 pour la soirée : la
+  // réservation est suspendue au tour 2. 105 n'est présente qu'au tour 2.
+  // 104 est réservée à la table 22 au seul tour 2. Les identifiants des
+  // personnes ne suivent pas leurs index.
+  const PRESENCES = normaliser({
+    participants: [
+      { id: 101, nom: 'P101', appartenance: null },
+      { id: 102, nom: 'P102', appartenance: null },
+      { id: 103, nom: 'P103', appartenance: null, presence: [1] },
+      { id: 104, nom: 'P104', appartenance: null },
+      { id: 105, nom: 'P105', appartenance: null, presence: [2] },
+    ],
+    tables: [{ id: 22, numero: 1, capacite: 3 }, { id: 21, numero: 2, capacite: 3 }],
+    tours: 2,
+    reservations: [
+      { participant: 103, table: 22, portee: 'tous' },
+      { participant: 104, table: 22, portee: 'tour', tour: 2 },
+    ],
+    contraintes: SANS_CONTRAINTE,
+  });
+  // Le plan qui tient : chaque absente omise de son tour d'absence, chaque
+  // réservation active tenue, personne en réserve.
+  const planPresences = (modifier = () => {}) => {
+    const plan = {
+      tables: [22, 21],
+      tours: [
+        [[103, 104], [101, 102]],
+        [[102, 104], [101, 105]],
+      ],
+      reserves: [[], []],
+    };
+    modifier(plan);
+    return gelerPlan(plan);
+  };
+  const verifier = (modifier, options) => verifierInvariants(PRESENCES, planPresences(modifier), options);
+
+  test('une absente omise de son tour ne manque pas au plan : ni NON_ASSIS, ni RESERVATION pour sa réservation « tous » suspendue', () => {
+    assert.deepEqual(verifier(), []);
+    assert.deepEqual(verifier(undefined, { reserveAutorisee: true }), []);
+  });
+
+  test('ABSENT_PLACE pour une absente assise à une table, et rien d’autre, sa réservation suspendue comprise', () => {
+    assert.deepEqual(verifier((plan) => { plan.tours[0][1].push(105); }), [
+      { code: 'ABSENT_PLACE', participant: 105, tour: 1 },
+    ]);
+    // 103, réservée à 22 pour la soirée, assise à 21 au tour 2 où elle est
+    // absente : la réservation suspendue ne s'y lit pas.
+    assert.deepEqual(verifier((plan) => { plan.tours[1][1].push(103); }), [
+      { code: 'ABSENT_PLACE', participant: 103, tour: 2 },
+    ]);
+  });
+
+  test('ABSENT_PLACE pour une absente en réserve, que la réserve soit permise ou non', () => {
+    for (const reserveAutorisee of [false, true]) {
+      assert.deepEqual(verifier((plan) => { plan.reserves[1].push(103); }, { reserveAutorisee }), [
+        { code: 'ABSENT_PLACE', participant: 103, tour: 2 },
+      ], `reserveAutorisee ${reserveAutorisee}`);
+    }
+  });
+
+  test('DOUBLE_PLACE au comptage, puis ABSENT_PLACE dans la boucle des participants, par identifiant croissant', () => {
+    // Au tour 1 : 105, absente, assise à 21 et en réserve ; 101 retirée.
+    // DOUBLE_PLACE se lit en comptant la réserve ; puis les participants,
+    // 101 avant 105.
+    const obtenu = verifier((plan) => {
+      plan.tours[0][1] = [102, 105];
+      plan.reserves[0].push(105);
+    });
+    assert.deepEqual(obtenu, [
+      { code: 'DOUBLE_PLACE', participant: 105, tour: 1 },
+      { code: 'NON_ASSIS', participant: 101, tour: 1 },
+      { code: 'ABSENT_PLACE', participant: 105, tour: 1 },
+    ]);
+  });
+
+  test('une réserve imposée en réserve à son tour : ni NON_ASSIS ni RESERVATION sous l’option ; sans elle, les deux', () => {
+    // 104, réservée à 22 au tour 2, y est laissée en réserve.
+    const enReserve = (plan) => {
+      plan.tours[1][0] = [102];
+      plan.reserves[1].push(104);
+    };
+    const imposee = [{ participant: 104, tour: 2 }];
+    assert.deepEqual(verifier(enReserve, { reservesImposees: imposee }), []);
+    assert.deepEqual(verifier(enReserve, { reserveAutorisee: true, reservesImposees: imposee }), []);
+    assert.deepEqual(verifier(enReserve), [
+      { code: 'NON_ASSIS', participant: 104, tour: 2 },
+      { code: 'RESERVATION', participant: 104, table: 22, tour: 2 },
+    ]);
+    assert.deepEqual(verifier(enReserve, { reserveAutorisee: true }), [
+      { code: 'RESERVATION', participant: 104, table: 22, tour: 2 },
+    ]);
+    // L'option ne vaut qu'à son tour : imposée au tour 1, 104 laissée en
+    // réserve au tour 2 reçoit ses deux violations.
+    assert.deepEqual(verifier(enReserve, { reservesImposees: [{ participant: 104, tour: 1 }] }), [
+      { code: 'NON_ASSIS', participant: 104, tour: 2 },
+      { code: 'RESERVATION', participant: 104, table: 22, tour: 2 },
+    ]);
+  });
+
+  test('une réserve imposée assise à une table ou omise du plan se contrôle comme les autres', () => {
+    const imposee = { reservesImposees: [{ participant: 104, tour: 2 }] };
+    // Assise à 21 au lieu de 22 : la réservation n'est pas tenue.
+    assert.deepEqual(verifier((plan) => { plan.tours[1] = [[102], [101, 104, 105]]; }, imposee), [
+      { code: 'RESERVATION', participant: 104, table: 22, tour: 2 },
+    ]);
+    // Assise à sa table : rien.
+    assert.deepEqual(verifier(undefined, imposee), []);
+    // Ni assise ni en réserve : elle manque au plan.
+    assert.deepEqual(verifier((plan) => { plan.tours[1][0] = [102]; }, imposee), [
+      { code: 'NON_ASSIS', participant: 104, tour: 2 },
+    ]);
+  });
+
+  test('une option reservesImposees mal formée lève : TypeError pour une non-liste, RangeError pour une personne ou un tour hors de l’instance', () => {
+    assert.throws(() => verifier(undefined, { reservesImposees: null }), TypeError);
+    assert.throws(() => verifier(undefined, { reservesImposees: [null] }), TypeError);
+    for (const entree of [{ participant: 999, tour: 1 }, { participant: 104, tour: 0 }, { participant: 104, tour: 3 }, { participant: 104, tour: 1.5 }]) {
+      assert.throws(() => verifier(undefined, { reservesImposees: [entree] }), RangeError, JSON.stringify(entree));
+    }
+  });
+});
+
 describe('verifierInvariants et indexerPlan : une même lecture du plan (§ 8.9)', () => {
   // Code sous lequel indexerPlan refuse chaque violation de forme, désignée
   // par son code, suivi de son detail quand elle en porte un. CAPACITE et

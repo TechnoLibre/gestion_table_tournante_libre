@@ -116,7 +116,9 @@ export function manques(plafondsRealises, rencontres) {
  * Écart d'itinéraire de chacun (§ 5.5, § 12.10.4) : plafond a priori −
  * plafond réalisé, ce que l'itinéraire de la proposition retire avant toute
  * rencontre. Une personne en réserve à plusieurs tours le porte quand son
- * manque est nul (§ 12.6). Son plus grand est le troisième des trois chiffres.
+ * manque est nul (§ 12.6) ; une absente, non : son plafond a priori ne
+ * compte déjà que ses tours de présence. Son plus grand est le troisième des
+ * trois chiffres.
  * null quand le plafond a priori est inconnu.
  *
  * Lève TypeError quand plafondsRealises n'est pas une liste, ou que
