@@ -35,6 +35,7 @@ import { FORMAT, analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { PLAFOND_ENTREES, elaguer, fil, ligneJalon, ligneOuverture, lireJournal, reconstruire } from './journal.js';
 import { SUFFIXES } from './noms.js';
+import { ajusterALaPresence } from './placements.js';
 
 const V1 = VERSION.affichee;
 const V2 = versionVoisine(V1);
@@ -3336,5 +3337,65 @@ describe('dépôt : un événement du format 1 se lit, et se convertit au premie
     assert.deepEqual(lignesDe(journal).slice(1), lignesDe(texteDe(fichiers, JOURNAL)).slice(1));
     assert.equal(formatDeLEtat(fs.contenu('documents', `${copie.base}${SUFFIXES.etat}`)), FORMAT);
     for (const nom of [ETAT, PRECEDENT, JOURNAL]) assert.equal(fs.contenu('documents', nom), texteDe(fichiers, nom), nom);
+  });
+});
+
+describe('dépôt : la présence par tour (§ 8.8, § 8.9)', () => {
+  // La charge d'épreuve où Lacasse, personne 4, n'arrive qu'au tour 2 : la
+  // proposition 1 la dit absente au tour 1.
+  function chargePresence() {
+    const charge = chargeEssai();
+    charge.participants[3].presence = [2];
+    charge.propositions[0].placement[0] = { sieges: [[1, 3], [2]], reserve: [], absents: [4] };
+    return charge;
+  }
+
+  test("un événement à présence partielle, propositions, retenu et course compris, s'enregistre et se relit égal ; rien n'est écarté ni en dérive", async () => {
+    const { disque, fs } = nouveauDisque();
+    const ouvert = await creer(fs, DOC, chargePresence(), CREATION);
+    const apres = structuredClone(ouvert.charge);
+    const p2 = placement(2, [[1, 2], [3]]);
+    p2.placement[0].absents = [4];
+    apres.propositions.push(p2);
+    apres.prochainsIds.proposition = 3;
+    apres.retenu = retenuDe(p2);
+    apres.evenement.etat = 'retenu';
+    const courses = [entreeDe(p2)];
+    const genere = await enregistrer(ouvert, apres, geste(2, { courses }));
+    assert.deepEqual(genere.avertissements, []);
+    const texte = fs.contenu('documents', ETAT);
+    assert.ok(texte.includes('"exclu":false,"presence":[2]}'), texte);
+    assert.equal(texte.split('"absents":[4]').length, 4, texte);
+
+    const rouvert = await rouvrir(disque, BASE);
+    assert.equal(serialiserCharge(rouvert.charge), serialiserCharge(apres));
+    assert.deepEqual(rouvert.examen.fautives, []);
+    assert.deepEqual(rouvert.examen.derives, []);
+    assert.deepEqual(rouvert.examen.retenu, { fautes: [], raisons: [] });
+    assert.deepEqual(courseDe(rouvert, 2), courseDe(genere, 2));
+    assert.deepEqual(courseDe(rouvert, 2).releves[0].plan.tours[0], [[1, 2], [3]]);
+    assert.ok(fs.contenu('documents', COURSES).includes('"absents":[4]'), 'le compagnon porte les absents de chaque relevé');
+    exigerEquivalence(rouvert.fs, BASE);
+  });
+
+  test("un geste de présence qui ajuste le retenu s'inscrit et se relit : le retenu suit, les propositions dérivent et sont gardées", async () => {
+    const { disque, fs } = nouveauDisque();
+    const charge = chargePresence();
+    charge.retenu = retenuDe(charge.propositions[0]);
+    charge.evenement.etat = 'retenu';
+    const ouvert = await creer(fs, DOC, charge, CREATION);
+    const apres = structuredClone(ouvert.charge);
+    delete apres.participants[3].presence;
+    apres.retenu = ajusterALaPresence(apres.retenu, apres, [4]).placement;
+    assert.deepEqual(apres.retenu.placement[0], { sieges: [[1, 3], [2]], reserve: [4] });
+    const suite = await enregistrer(ouvert, apres, geste(2));
+    assert.deepEqual(suite.avertissements, [{ code: 'DERIVE', details: { ids: [1], retenu: false } }]);
+
+    const rouvert = await rouvrir(disque, BASE);
+    assert.equal(serialiserCharge(rouvert.charge), serialiserCharge(apres));
+    assert.deepEqual(rouvert.examen.derives, [{ id: 1, raisons: [{ code: 'PRESENCE_AJOUTEE', participant: 4, tours: [1] }] }]);
+    assert.deepEqual(rouvert.examen.retenu, { fautes: [], raisons: [] });
+    assert.equal(serialiserCharge(reconstruire(rouvert.journal, 1)), serialiserCharge(ouvert.charge));
+    exigerEquivalence(rouvert.fs, BASE);
   });
 });

@@ -16,7 +16,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
-import { CATALOGUE } from '../demo/catalogue.js';
+import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { rechercher } from '../moteur/recherche.js';
 import { VERSION } from '../version.genere.js';
 import { serialiser, serialiserCharge } from './canonique.js';
@@ -38,7 +38,7 @@ import {
   reconstruire,
   versionDe,
 } from './journal.js';
-import { examiner, versFichier } from './placements.js';
+import { ajusterALaPresence, examiner, versFichier } from './placements.js';
 
 // L'événement des journaux d'épreuve, et deux constructions : celle du module
 // engendré et sa voisine.
@@ -1334,5 +1334,66 @@ describe('la dérivation traverse le journal (§ 8.3, § 8.6, § 8.9, C11, C25, 
     assert.ok(lignes[3].includes('"depart":1,"toursFiges":[2]'), lignes[3]);
     // Le retour de la révision 5 y prend la place de la 3, qu'il rend.
     assert.deepEqual(fil(journal).courant, [7, 6, 3, 2, 1]);
+  });
+});
+
+describe('la présence par tour traverse le journal (§ 8.3, § 8.6, § 8.9)', () => {
+  // La petite démonstration, son plan parfait proposé et retenu, puis des
+  // gestes de présence, chacun avec le retenu ajusté dans la même étape :
+  // une arrivée au tour 2, un départ après le tour 2, un retour à tous les
+  // tours, une exclusion, une réintégration aux tours 3 et 4.
+  function etapesPresence() {
+    const base = chargeDe('petite');
+    const configuration = configurationDepuisCharge(base);
+    const proposition = versFichier(
+      { id: 1, graine: 48_271, arret: 20_000, historique: 1_000, plan: PLAN_PARFAIT_PETITE },
+      configuration,
+      { produitVersion: V1, attribuerSieges: false, decalage: 0 },
+    );
+    base.propositions = [proposition];
+    base.prochainsIds.proposition = 2;
+    const { id, siegesAttribues, tables, capacites, tours, participants, placement } = copie(proposition);
+    base.retenu = { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
+    base.evenement.etat = 'retenu';
+    // La charge reçue, la personne id changée par changer, le retenu ajusté.
+    const geste = (charge, idPersonne, changer) => {
+      const suivante = copie(charge);
+      changer(suivante.participants.find((p) => p.id === idPersonne));
+      suivante.retenu = ajusterALaPresence(suivante.retenu, suivante, [idPersonne]).placement;
+      return suivante;
+    };
+    const etapes = [base];
+    const suivre = (idPersonne, changer) => etapes.push(geste(etapes.at(-1), idPersonne, changer));
+    suivre(5, (p) => { p.presence = [2, 3, 4]; });
+    suivre(12, (p) => { p.presence = [1, 2]; });
+    suivre(5, (p) => { delete p.presence; });
+    suivre(3, (p) => { p.exclu = true; });
+    suivre(3, (p) => { p.exclu = false; p.presence = [3, 4]; });
+    return etapes.map((apres) => ({ apres }));
+  }
+
+  test('chaque instant se reconstruit, par le correctif depuis l’instant d’avant comme par l’instantané ; le retenu ne dérive jamais par ses participants', () => {
+    const etapes = etapesPresence();
+    for (const { apres } of etapes) {
+      assert.deepEqual(examiner(apres).retenu, { fautes: [], raisons: [] });
+      assert.doesNotThrow(() => analyser(serialiser(apres, { revision: 1, produitVersion: V1 })));
+    }
+    assert.ok(etapes.at(-1).apres.retenu.placement[0].absents.includes(3));
+    for (let debut = 0; debut < etapes.length; debut += 1) {
+      const suite = etapes.slice(debut);
+      const texte = journalDe(suite, { premiere: debut + 1 });
+      const lignes = lignesDe(texte);
+      assert.ok(lignes[1].startsWith('{"type":"entree"'), lignes[1]);
+      const journal = lireJournal(texte);
+      assert.equal(journal.ecartees, 0);
+      suite.forEach(({ apres }, rang) => {
+        const revision = debut + rang + 1;
+        assert.equal(texteCanonique(reconstruire(journal, revision)), texteCanonique(apres), `révision ${revision}, début ${debut + 1}`);
+      });
+    }
+    // Le correctif de l'arrivée pose la présence et touche la liste absents du
+    // tour 1 du retenu.
+    const correctif = lignesDe(journalDe(etapes))[2];
+    assert.ok(correctif.includes('"presence"') && correctif.includes('"absents"'), correctif);
   });
 });

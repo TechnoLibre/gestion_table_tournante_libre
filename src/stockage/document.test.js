@@ -1425,7 +1425,10 @@ describe('les champs facultatifs du format 2 : forme et place (§ 8.9, A16)', ()
         ['priorites', true],
       ],
     );
-    assert.deepEqual(PARTICIPANT.champs.slice(-2).map(([cle, regle]) => [cle, regle.optionnel]), [['exclu', false], ['etiquettes', true]]);
+    assert.deepEqual(
+      PARTICIPANT.champs.slice(-3).map(([cle, regle]) => [cle, regle.optionnel]),
+      [['exclu', false], ['etiquettes', true], ['presence', true]],
+    );
     assert.deepEqual(TABLE.champs.slice(-2).map(([cle, regle]) => [cle, regle.optionnel]), [['position', false], ['objectifs', true]]);
   });
 
@@ -2011,5 +2014,112 @@ describe('la dérivation : deux champs facultatifs de la proposition, hors de so
     const [, p2] = lu.charge.propositions;
     assert.deepEqual([p2.depart, p2.toursFiges, Object.hasOwn(p2, 'autreCle')], [1, [1], false]);
     assert.deepEqual(Object.keys(p2).slice(0, 7), ['id', 'graine', 'arret', 'historique', 'depart', 'toursFiges', 'produitVersion']);
+  });
+});
+
+describe('la présence par tour : participant.presence et les absents d’un placement (§ 8.9, § 4.4)', () => {
+  // Le document valide à trois tours, la personne 2 présente aux tours de
+  // presence quand il est donné.
+  function avecPresence(presence, { tours = 3, format = FORMAT } = {}) {
+    const document = documentValide();
+    document.entete.format = format;
+    document.charge.evenement.tours = tours;
+    document.charge.propositions = [];
+    document.entete.comptes.propositions = 0;
+    if (presence !== undefined) document.charge.participants[1].presence = presence;
+    return document;
+  }
+  const lire = (document) => analyser(JSON.stringify(document));
+  // Texte de avecPresence, une fois modifier passé sur le document.
+  function abimePresence(presence, options, modifier) {
+    const document = avecPresence(presence, options);
+    modifier(document);
+    return JSON.stringify(document);
+  }
+  const PROPOSITION = regleDuChamp(CHARGE_SCHEMA, 'propositions').element;
+  const TOUR = regleDuChamp(PROPOSITION, 'placement').element;
+
+  test('presence est facultative et vient après etiquettes ; absents est facultatif et vient après reserve', () => {
+    const PARTICIPANT = regleDuChamp(CHARGE_SCHEMA, 'participants').element;
+    assert.deepEqual(PARTICIPANT.champs.at(-1)[0], 'presence');
+    assert.deepEqual(TOUR.champs.map(([cle, regle]) => [cle, regle.optionnel]), [['sieges', false], ['reserve', false], ['absents', true]]);
+  });
+
+  test('une présence se lit telle qu’écrite ; désordonnée, elle se lit et s’écrit triée', () => {
+    assert.deepEqual(lire(avecPresence([1, 3])).charge.participants[1].presence, [1, 3]);
+    const lu = lire(avecPresence([3, 1]));
+    assert.deepEqual(lu.charge.participants[1].presence, [3, 1]);
+    const texte = serialiser(lu.charge, lu.entete);
+    assert.ok(texte.includes('"notes":"part à 21 h","exclu":false,"presence":[1,3]}'), texte);
+    assert.deepEqual(analyser(texte).charge.participants[1].presence, [1, 3]);
+  });
+
+  test('FORME par son chemin : vide, doublon, zéro, non entière, au-delà de TOURS_MAX, null, une chaîne', () => {
+    const chemin = 'charge.participants[1].presence';
+    assert.deepEqual(ecartsDeRefus([
+      ['vide', JSON.stringify(avecPresence([])), 'FORME', chemin],
+      ['doublon', JSON.stringify(avecPresence([2, 2])), 'FORME', chemin],
+      ['zéro', JSON.stringify(avecPresence([0, 2])), 'FORME', `${chemin}[0]`],
+      ['non entière', JSON.stringify(avecPresence([1, 2.5])), 'FORME', `${chemin}[1]`],
+      ['au-delà de TOURS_MAX', JSON.stringify(avecPresence([TOURS_MAX + 1])), 'FORME', `${chemin}[0]`],
+      ['null', JSON.stringify(avecPresence(null)), 'FORME', chemin],
+      ['une chaîne', JSON.stringify(avecPresence('1-2')), 'FORME', chemin],
+    ]), []);
+  });
+
+  test('un tour au-delà des tours de l’événement : FORME au premier tour fautif dans l’ordre écrit ; une liste pleine : FORME à la liste', () => {
+    const chemin = 'charge.participants[1].presence';
+    assert.deepEqual(ecartsDeRefus([
+      ['tour 4 sur 3', JSON.stringify(avecPresence([1, 4])), 'FORME', `${chemin}[1]`],
+      ['le premier écrit', JSON.stringify(avecPresence([5, 2, 4])), 'FORME', `${chemin}[0]`],
+      ['pleine', JSON.stringify(avecPresence([1, 2, 3])), 'FORME', chemin],
+      ['pleine, désordonnée', JSON.stringify(avecPresence([3, 1, 2])), 'FORME', chemin],
+      ['R = 1, le seul tour', abimePresence([1], { tours: 1 }, (d) => { d.charge.reservations[1].tour = 1; }), 'FORME', chemin],
+      ['format plus récent', JSON.stringify(avecPresence([1, 4], { format: FORMAT + 1 })), 'FORMAT_PLUS_RECENT', `${chemin}[1]`, { format: FORMAT + 1 }],
+    ]), []);
+  });
+
+  test('l’exclue garde sa présence, contrôlée comme les autres', () => {
+    const document = avecPresence([2]);
+    document.charge.participants[1].exclu = true;
+    assert.deepEqual(lire(document).charge.participants[1], { ...documentValide().charge.participants[1], exclu: true, presence: [2] });
+    document.charge.participants[1].presence = [1, 2, 3];
+    assert.equal(ecartDeRefus(JSON.stringify(document), 'FORME', 'charge.participants[1].presence'), null);
+  });
+
+  test('un fichier du format 1 et un fichier du format 2 sans presence se lisent tous présents', () => {
+    for (const format of [1, FORMAT]) {
+      const lu = lire(avecPresence(undefined, { format }));
+      for (const p of lu.charge.participants) assert.equal(Object.hasOwn(p, 'presence'), false, `format ${format}`);
+      for (const p of configurationDepuisCharge(lu.charge).participants) assert.equal(Object.hasOwn(p, 'presence'), false);
+    }
+  });
+
+  test('configurationDepuisCharge porte presence seulement quand le champ existe, en copie triée, après les étiquettes', () => {
+    const { charge } = avecPresence([3, 1]);
+    charge.participants[1].etiquettes = ['finance'];
+    const configuration = configurationDepuisCharge(charge);
+    assert.deepEqual(configuration.participants[1], { id: 2, nom: 'Sarrasin', appartenance: 'Chorale du Vallon', exclu: false, etiquettes: ['finance'], presence: [1, 3] });
+    assert.deepEqual(Object.keys(configuration.participants[1]), ['id', 'nom', 'appartenance', 'exclu', 'etiquettes', 'presence']);
+    assert.notEqual(configuration.participants[1].presence, charge.participants[1].presence);
+    assert.deepEqual(charge.participants[1].presence, [3, 1]);
+    for (const rang of [0, 2, 3]) assert.equal(Object.hasOwn(configuration.participants[rang], 'presence'), false);
+    // Sans présence, la configuration est celle d’aujourd’hui, clé pour clé.
+    const sans = configurationDepuisCharge(avecPresence(undefined).charge);
+    assert.deepEqual(sans.participants.map((p) => Object.keys(p)), [0, 1, 2, 3].map(() => ['id', 'nom', 'appartenance', 'exclu']));
+  });
+
+  test('absents : une liste non vide d’identifiants, admise désordonnée ; vide ou d’une autre forme, FORME au chemin du placement', () => {
+    const tour = (absents) => ({ sieges: [[2], [1]], reserve: [], absents });
+    assert.equal(premiereFaute(tour([5]), TOUR, 't'), null);
+    assert.equal(premiereFaute(tour([5, 3]), TOUR, 't'), null);
+    assert.equal(premiereFaute({ sieges: [[2], [1]], reserve: [] }, TOUR, 't'), null);
+    for (const [absents, chemin] of [[[], 't.absents'], [[0], 't.absents[0]'], [null, 't.absents'], [[1.5], 't.absents[0]'], [[2 ** 31], 't.absents[0]']]) {
+      assert.equal(premiereFaute(tour(absents), TOUR, 't'), chemin, JSON.stringify(absents));
+    }
+    const { charge } = documentValide();
+    const proposition = structuredClone(charge.propositions[0]);
+    proposition.placement[0].absents = [];
+    assert.deepEqual(fautesDePlacement(proposition), [{ code: 'FORME', chemin: 'placement[0].absents' }]);
   });
 });

@@ -4,8 +4,11 @@
 // Les placements du fichier d'état, sous leur forme positionnelle (§ 8.9) :
 // la proposition du moteur mise en forme de fichier, et le plan du moteur
 // qu'on en tire ; le contrôle de cohérence d'une proposition ou du retenu ;
-// leur dérive contre la charge courante ; leur forme nommée ; le partage
-// d'une charge lue entre propositions gardées et écartées. La course de la
+// leur dérive contre la charge courante, et le partage de ses raisons entre
+// celles des participants et celles qui interdisent un départ ; leur
+// alignement sur la présence et les participants de la charge ; leur forme
+// nommée ; le partage d'une charge lue entre propositions gardées et
+// écartées. La course de la
 // recherche d'une proposition (§ 5.10) n'est pas dans le fichier d'état :
 // ce module la met en forme de fichier, contrôle qu'elle ne contredit pas
 // sa proposition et en tire les plans, pour le compagnon des courses
@@ -19,9 +22,10 @@
 // et à prochainsIds.proposition, que l'analyse du fichier ne lit pas, et
 // rend ce compteur relevé au-delà de chaque identifiant lu : aucun ne se
 // réattribue. Un placement cohérent qui ne décrit plus la configuration
-// courante est périmé : derive dit pourquoi, et examiner le garde (§ 9). Le
-// retenu fautif est signalé et gardé : sa reprise par le .precedent
-// appartient au dépôt (§ 8.8).
+// courante est périmé : derive dit pourquoi, et examiner le garde (§ 9). Un
+// placement porte lui-même ses absents, tour par tour : une présence changée
+// dans la charge le rend périmé, jamais fautif. Le retenu fautif est signalé
+// et gardé : sa reprise par le .precedent appartient au dépôt (§ 8.8).
 //
 // La forme d'une proposition et du retenu suit les règles de SCHEMA, le
 // schéma du fichier d'état, dont l'analyse n'applique que celle du
@@ -32,8 +36,10 @@
 // des sièges attribués, avant le dernier occupant, siège 1 compris. Aucune
 // fonction ne modifie ce qu'elle reçoit ; aucune ne lit l'horloge ni un
 // aléa.
+import { estPresentAuTour } from '../moteur/presence.js';
 import { ENTREE_DE_COURSE, SCHEMA, capacite, premiereFaute } from './document.js';
 import { ErreurStockage } from './erreurs.js';
+import { absentsParTour } from './presence.js';
 
 /**
  * Une faute d'un placement ; types.js en donne la table des codes. FORME :
@@ -44,8 +50,8 @@ import { ErreurStockage } from './erreurs.js';
  * contredit celle que le placement déclare ; tour et table null désignent le
  * nombre de tours, table null seule le nombre de listes du tour. DOUBLON,
  * INCONNU, MANQUANT : un identifiant écrit plus d'une fois, écrit sans être
- * déclaré, déclaré sans être écrit, dans les listes de table et la réserve
- * d'un tour. Les tours se numérotent à partir de 1, tables et participants
+ * déclaré, déclaré sans être écrit, dans les listes de table, la réserve et
+ * les absents d'un tour. Les tours se numérotent à partir de 1, tables et participants
  * par identifiant. Ces quatre codes sont des contradictions internes, que
  * fautes nomme. IDENTIFIANT_REPETE : une proposition cohérente porte
  * l'identifiant d'une proposition gardée avant elle.
@@ -66,9 +72,11 @@ import { ErreurStockage } from './erreurs.js';
  *   | {code: 'DOUBLON'|'INCONNU'|'MANQUANT', tour: number, participant: number}
  *   | {code: 'IDENTIFIANT_REPETE'|'IDENTIFIANT_HORS_COMPTEUR'}} Faute
  *
- * Une raison de dérive d'un placement cohérent contre la charge courante.
+ * Une raison de dérive d'un placement cohérent contre la charge courante ;
+ * tours, croissants et non vides, nomme les tours où la présence a changé.
  *
  * @typedef {{code: 'PARTICIPANT_EXCLU'|'PARTICIPANT_SUPPRIME'|'PARTICIPANT_NON_PLACE', participant: number}
+ *   | {code: 'PRESENCE_RETIREE'|'PRESENCE_AJOUTEE', participant: number, tours: number[]}
  *   | {code: 'TABLE_SUPPRIMEE'|'TABLE_AJOUTEE', table: number}
  *   | {code: 'CAPACITE_CHANGEE', table: number, avant: number, maintenant: number}
  *   | {code: 'TOURS_CHANGES', avant: number, maintenant: number}} Raison
@@ -92,6 +100,9 @@ import { ErreurStockage } from './erreurs.js';
  *                                   une liste écrite au-delà des tables
  *                                   déclarées n'a pas de table et n'est
  *                                   pas la réserve
+ * @property {boolean} absent       vrai pour une personne des absents du
+ *                                   tour : table, numero et siege null,
+ *                                   reserve faux
  *
  * Ce que rend examiner.
  *
@@ -168,8 +179,8 @@ function fauteDeChaiseVide({ siegesAttribues, placement }) {
 // déclaré. Puis, tour après tour : le nombre de listes de table contre celui
 // des tables déclarées ; la longueur de chaque liste appariée à une table
 // déclarée, dans l'ordre déclaré, contre sa capacité, chaises vides
-// comprises ; le multiensemble du tour, listes de table et réserve
-// comprises, où chaque identifiant déclaré figure exactement une fois —
+// comprises ; le multiensemble du tour, listes de table, réserve et absents
+// compris, où chaque identifiant déclaré figure exactement une fois —
 // doublons, inconnus, puis manquants, chacun nommé une fois par tour, par
 // identifiant croissant. Une chaise vide n'y entre pas.
 //
@@ -189,7 +200,7 @@ function fautesDeCoherence({ tables, capacites, tours, participants, placement }
   }
   const declares = [...participants].sort(croissant);
   const estDeclare = new Set(declares);
-  placement.forEach(({ sieges, reserve }, rang) => {
+  placement.forEach(({ sieges, reserve, absents = [] }, rang) => {
     const tour = rang + 1;
     if (sieges.length !== tables.length) {
       liste.push({ code: 'LONGUEUR', tour, table: null, declare: tables.length, ecrit: sieges.length });
@@ -202,7 +213,7 @@ function fautesDeCoherence({ tables, capacites, tours, participants, placement }
     }
     const occurrences = new Map();
     const inconnus = [];
-    for (const ids of [...sieges, reserve]) {
+    for (const ids of [...sieges, reserve, absents]) {
       for (const id of ids) {
         if (id === null) continue;
         const deja = occurrences.get(id) ?? 0;
@@ -222,14 +233,16 @@ function fautesDeCoherence({ tables, capacites, tours, participants, placement }
 }
 
 // Chemin, sous chemin, de la n-ième occurrence de id (n à partir de 1) dans
-// un tour de placement, ses listes de table dans leur ordre puis sa
-// réserve, chacune dans l'ordre de ses rangs ; le tour en porte au moins n.
-function cheminDOccurrence({ sieges, reserve }, id, n, chemin) {
+// un tour de placement, ses listes de table dans leur ordre, puis sa
+// réserve, puis ses absents, chacune dans l'ordre de ses rangs ; le tour en
+// porte au moins n.
+function cheminDOccurrence({ sieges, reserve, absents = [] }, id, n, chemin) {
   const places = [
     ...sieges.flatMap((liste, table) =>
       liste.map((occupant, rang) => [occupant, `${chemin}.sieges[${table}][${rang}]`]),
     ),
     ...reserve.map((occupant, rang) => [occupant, `${chemin}.reserve[${rang}]`]),
+    ...absents.map((occupant, rang) => [occupant, `${chemin}.absents[${rang}]`]),
   ];
   return places.filter(([occupant]) => occupant === id)[n - 1][1];
 }
@@ -270,9 +283,12 @@ function abscisses(evalues) {
  * point, un point en trop, une abscisse qui n'est pas la puissance de dix
  * de son rang, et le placement de relevé, contrôlé sous la déclaration de
  * p comme son propre placement — chaises vides, puis longueurs et
- * multiensemble, réserve comprise, nommés comme fautes les nomme sous
- * course.releves[i].placement ; enfin un point qui manque, nommé au rang
- * qui le porterait. Une abscisse égale à evalues est en trop : ce point est
+ * multiensemble, réserve et absents compris, nommés comme fautes les nomme
+ * sous course.releves[i].placement —, puis les absents de chacun de ses
+ * tours, qui égalent ceux de p au même tour, comme ensembles : la recherche
+ * ne déplace jamais une absente, et un écart se nomme
+ * course.releves[i].placement[r].absents, la liste manquât-elle d'un côté ;
+ * enfin un point qui manque, nommé au rang qui le porterait. Une abscisse égale à evalues est en trop : ce point est
  * le placement de p, qui ne s'écrit pas deux fois. Ne modifie rien ; lève
  * TypeError quand p n'est pas une proposition cohérente (fautes), qui ne
  * déclare rien sous quoi lire la course.
@@ -297,8 +313,21 @@ export function fauteDeCourse(p, course) {
     if (chaise !== null) return `${chemin}.${chaise}`;
     const [premiere] = fautesDeCoherence(releve);
     if (premiere !== undefined) return cheminDeFaute(premiere, releve, `${chemin}.placement`);
+    const ecart = placement.findIndex((tour, rang) => !memesAbsents(tour, p.placement[rang]));
+    if (ecart >= 0) return `${chemin}.placement[${ecart}].absents`;
   }
   return course.releves.length < attendues.length ? `course.releves[${course.releves.length}]` : null;
+}
+
+// Les absents d'un tour de placement, rangés : une liste neuve, vide quand le
+// tour n'en porte pas.
+const absentsRanges = ({ absents = [] }) => [...absents].sort(croissant);
+
+// Vrai quand deux tours de placement portent les mêmes absents, comme
+// ensembles : une liste absente vaut une liste vide.
+function memesAbsents(a, b) {
+  const [x, y] = [absentsRanges(a), absentsRanges(b)];
+  return x.length === y.length && x.every((id, rang) => id === y[rang]);
 }
 
 // Faute de la dérivation d'une proposition de forme conforme (§ 8.9), ou
@@ -386,14 +415,17 @@ function exigerProposition(p, fonction) {
 // Le placement de fichier d'un plan du moteur (§ 8.9), tour par tour : sans
 // attribution de sièges, chaque liste de table triée par identifiant
 // croissant ; avec, dans son ordre, celui des sièges, chaises vides
-// comprises. La réserve, un ensemble, se trie dans les deux cas. Rien n'est
-// partagé avec le plan.
-function placementDeFichier({ tours, reserves }, attribuerSieges) {
+// comprises. La réserve, un ensemble, se trie dans les deux cas. absents[r]
+// donne les absents du tour r + 1, que le plan du moteur ne liste pas : la
+// clé s'écrit triée quand la liste n'est pas vide, et manque sinon. Rien
+// n'est partagé avec le plan ni avec absents.
+function placementDeFichier({ tours, reserves }, attribuerSieges, absents) {
   const ordonner = (liste) => (attribuerSieges ? [...liste] : [...liste].sort(croissant));
-  return tours.map((listes, rang) => ({
-    sieges: listes.map((liste) => ordonner(liste)),
-    reserve: [...reserves[rang]].sort(croissant),
-  }));
+  return tours.map((listes, rang) => {
+    const tour = { sieges: listes.map((liste) => ordonner(liste)), reserve: [...reserves[rang]].sort(croissant) };
+    if (absents[rang].length > 0) tour.absents = [...absents[rang]].sort(croissant);
+    return tour;
+  });
 }
 
 // Les champs de dérivation d'une proposition de fichier, dans l'ordre du
@@ -434,7 +466,10 @@ function champsDeDerivation(derivation) {
  * par tour : sans attribution de sièges, chaque liste de table se trie par
  * identifiant croissant ; avec, elle garde son ordre, celui des sièges, et
  * ses chaises vides, null. La réserve, un ensemble, se trie dans les deux
- * cas. La course que la proposition du moteur rapporte — evalues, releves
+ * cas. Les absents de chaque tour, que le plan du moteur ne liste pas, se
+ * tirent de la présence des participants déclarés dans la configuration
+ * (absentsParTour) : la clé absents s'écrit au tour qui en a. La course que
+ * la proposition du moteur rapporte — evalues, releves
  * — n'y entre pas : courseVersFichier la met en forme pour le compagnon des
  * courses. Les clés suivent l'ordre du schéma ; rien n'est partagé avec les
  * arguments, qui ne sont pas modifiés.
@@ -450,9 +485,10 @@ function champsDeDerivation(derivation) {
  * et la liste toursFiges, ou quand la forme produite serait fautive :
  * attribuerSieges qui n'est pas un booléen, version vide ou absente, réglage
  * hors de son domaine, plan que la configuration contredit — table inconnue
- * d'elle, nombre de tours, personne non placée, liste au-delà d'une
- * capacité, chaise vide sans attribution ou en fin de liste —, dérivation
- * fautive (fautes : FORME ou DERIVATION).
+ * d'elle, nombre de tours, personne non placée, personne assise ou en
+ * réserve à un tour où elle est absente, liste au-delà d'une capacité,
+ * chaise vide sans attribution ou en fin de liste —, dérivation fautive
+ * (fautes : FORME ou DERIVATION).
  *
  * @param {import('../moteur/recherche.js').Proposition} proposition
  * @param {import('../moteur/types.js').Configuration} configuration
@@ -496,7 +532,7 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
       .filter(({ exclu }) => exclu !== true)
       .map(({ id }) => id)
       .sort(croissant),
-    placement: placementDeFichier(plan, attribuerSieges),
+    placement: placementDeFichier(plan, attribuerSieges, absentsParTour(configuration.participants, configuration.tours)),
   };
   exigerCoherent(fichier, 'versFichier');
   return fichier;
@@ -508,7 +544,8 @@ export function versFichier(proposition, configuration, { produitVersion, attrib
  * releves }, chaque point de relevé { mouvements, placement }, dans l'ordre
  * des points reçus, son placement mis en forme du plan du point comme
  * versFichier met en forme celui de la proposition, sous le même drapeau
- * attribuerSieges. fichier est la proposition de fichier que versFichier a
+ * attribuerSieges, chaque tour avec les absents de fichier au même tour.
+ * fichier est la proposition de fichier que versFichier a
  * rendue pour elle, sous laquelle la course se contrôle (fauteDeCourse).
  * Rend null quand proposition.evalues n'est pas un nombre : un appelant qui
  * ne rapporte pas la course. Rien n'est partagé avec les arguments, qui ne
@@ -534,7 +571,7 @@ export function courseVersFichier(proposition, fichier, { attribuerSieges }) {
     if (plan.tables.length !== tables.length || plan.tables.some((id, rang) => id !== tables[rang])) {
       throw new TypeError(`courseVersFichier : le point de relevé ${i} déclare d'autres tables que le plan`);
     }
-    return { mouvements, placement: placementDeFichier(plan, attribuerSieges) };
+    return { mouvements, placement: placementDeFichier(plan, attribuerSieges, fichier.placement.map(absentsRanges)) };
   });
   const course = { evalues: proposition.evalues, releves };
   const faute = fauteDeCourse(fichier, course);
@@ -546,8 +583,10 @@ export function courseVersFichier(proposition, fichier, { attribuerSieges }) {
  * Plan du moteur d'un placement de fichier, proposition ou retenu : les
  * tables dans l'ordre déclaré, chaque liste de table sans ses chaises
  * vides, et chaque réserve, par identifiant croissant, comme le moteur les
- * rend ; l'ordre des sièges n'y entre pas. Aucune liste n'est partagée avec
- * p. Lève TypeError quand p n'est pas cohérent (fautes).
+ * rend ; l'ordre des sièges n'y entre pas. Le plan n'a pas d'absents : une
+ * absente n'y est listée nulle part, et le moteur lit sa présence dans
+ * l'instance. Aucune liste n'est partagée avec p. Lève TypeError quand p
+ * n'est pas cohérent (fautes).
  *
  * @param {import('./types.js').PropositionFichier|import('./types.js').Retenu} p
  * @returns {import('../moteur/types.js').Plan}
@@ -605,17 +644,41 @@ export function courseDepuisFichier(p, course) {
 const ordreDesRaisons = (a, b) =>
   comparerTextes(a.code, b.code) || (a.participant ?? a.table ?? 0) - (b.participant ?? b.table ?? 0);
 
+// Les tours de 1 à n où le placement dit la personne absente et la charge
+// présente, puis ceux où il ne la dit pas absente et où la charge la dit
+// absente : { ajoutes, retires }, croissants. absentsDuTour[r − 1] est
+// l'ensemble des absents du tour r du placement, construit une fois par
+// placement : une personne se lit en O(n), sans parcourir une liste de table.
+function ecartsDePresence(personne, absentsDuTour, n) {
+  const ajoutes = [];
+  const retires = [];
+  for (let tour = 1; tour <= n; tour += 1) {
+    const present = estPresentAuTour(personne, tour);
+    const ditAbsente = absentsDuTour[tour - 1].has(personne.id);
+    if (present && ditAbsente) ajoutes.push(tour);
+    else if (!present && !ditAbsente) retires.push(tour);
+  }
+  return { ajoutes, retires };
+}
+
 // Raisons de dérive d'un placement cohérent, sans contrôle : derive les
 // rend après l'avoir contrôlé, examiner après l'avoir fait lui-même,
 // deriveSansRevalider après que son appelant l'a fait.
-function raisonsDeDerive({ tables, capacites, tours, participants }, charge) {
+function raisonsDeDerive({ tables, capacites, tours, participants, placement }, charge) {
   const raisons = [];
   const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
   const places = new Set(participants);
+  const communs = Math.min(tours, charge.evenement.tours);
+  const absentsDuTour = placement.slice(0, communs).map(({ absents = [] }) => new Set(absents));
   for (const id of participants) {
     const personne = personneDe.get(id);
     if (personne === undefined) raisons.push({ code: 'PARTICIPANT_SUPPRIME', participant: id });
     else if (personne.exclu) raisons.push({ code: 'PARTICIPANT_EXCLU', participant: id });
+    else {
+      const { ajoutes, retires } = ecartsDePresence(personne, absentsDuTour, communs);
+      if (retires.length > 0) raisons.push({ code: 'PRESENCE_RETIREE', participant: id, tours: retires });
+      if (ajoutes.length > 0) raisons.push({ code: 'PRESENCE_AJOUTEE', participant: id, tours: ajoutes });
+    }
   }
   for (const { id, exclu } of charge.participants) {
     if (!exclu && !places.has(id)) raisons.push({ code: 'PARTICIPANT_NON_PLACE', participant: id });
@@ -648,7 +711,13 @@ function raisonsDeDerive({ tables, capacites, tours, participants }, charge) {
  * configuration d'aujourd'hui. Une personne qu'il place et que la charge
  * exclut (§ 4.4), ou n'a plus : PARTICIPANT_EXCLU, PARTICIPANT_SUPPRIME
  * {participant}. Une personne non exclue qu'il ne place pas, ajoutée ou
- * réintégrée depuis : PARTICIPANT_NON_PLACE {participant}. Une table qu'il
+ * réintégrée depuis : PARTICIPANT_NON_PLACE {participant}. Une personne
+ * qu'il déclare, que la charge porte sans l'exclure, et dont la présence a
+ * changé depuis, sur les tours de 1 au plus petit de ses tours et de ceux de
+ * l'événement : PRESENCE_RETIREE {participant, tours} pour les tours où il
+ * l'assied ou la réserve et où la charge la dit absente, PRESENCE_AJOUTEE
+ * {participant, tours} pour ceux où il la dit absente et la charge
+ * présente, tours croissants et non vides. Une table qu'il
  * déclare et que la charge n'a plus, ou une table de la charge qu'il ne
  * déclare pas : TABLE_SUPPRIMEE, TABLE_AJOUTEE {table}. Une capacité
  * déclarée qui n'est plus la capacité courante de sa table :
@@ -657,7 +726,8 @@ function raisonsDeDerive({ tables, capacites, tours, participants }, charge) {
  *
  * Triées par code, unité UTF-16 par unité, puis par identifiant ; [] quand
  * le placement décrit la configuration courante : son plan passe alors
- * indexerPlan du moteur sur elle. Noms, appartenances, numéros, positions,
+ * indexerPlan du moteur sur elle. Le coût est linéaire en participants
+ * déclarés et en tours : les absents de chaque tour s'indexent une fois. Noms, appartenances, numéros, positions,
  * formes de table et réglages n'entrent pas dans la dérive. Lève TypeError
  * quand p n'est pas cohérent (fautes).
  *
@@ -685,6 +755,185 @@ export function deriveSansRevalider(p, charge) {
   return raisonsDeDerive(p, charge);
 }
 
+// Les raisons de dérive des participants, rangées : une dérivée les absorbe
+// en alignant son départ sur la charge (ajusterALaPresence).
+const CODES_DE_PARTICIPANTS = new Set([
+  'PARTICIPANT_EXCLU',
+  'PARTICIPANT_NON_PLACE',
+  'PARTICIPANT_SUPPRIME',
+  'PRESENCE_AJOUTEE',
+  'PRESENCE_RETIREE',
+]);
+
+/**
+ * Les raisons de dérive des participants (§ 5.7) : PARTICIPANT_EXCLU,
+ * PARTICIPANT_NON_PLACE, PARTICIPANT_SUPPRIME, PRESENCE_AJOUTEE et
+ * PRESENCE_RETIREE. Une proposition qui ne dérive que par elles peut servir
+ * de départ : ajusterALaPresence l'aligne sur la charge. La vue est gelée
+ * et ne lit qu'un ensemble privé au module : ni add, ni delete, ni clear ;
+ * elle itère les codes par unités UTF-16 croissantes.
+ *
+ * @type {Readonly<{has: (code: string) => boolean, [Symbol.iterator]: () => Iterator<string>}>}
+ */
+export const RAISONS_DE_PARTICIPANTS = Object.freeze({
+  has: (code) => CODES_DE_PARTICIPANTS.has(code),
+  [Symbol.iterator]: () => CODES_DE_PARTICIPANTS.values(),
+});
+
+/**
+ * Les raisons qui interdisent qu'un placement serve de départ : la
+ * sous-liste des raisons reçues hors de RAISONS_DE_PARTICIPANTS — tables,
+ * capacités, tours —, dans l'ordre reçu, chacune telle quelle. [] quand le
+ * placement ne dérive que par ses participants. Ne modifie pas la liste.
+ *
+ * @param {Raison[]} raisons
+ * @returns {Raison[]}
+ */
+export function raisonsQuiBloquentUnDepart(raisons) {
+  return raisons.filter(({ code }) => !CODES_DE_PARTICIPANTS.has(code));
+}
+
+// Lieux d'une personne à un tour, dans l'index d'un tour de placement : le
+// rang de sa liste de table, ou l'un de ces deux marqueurs.
+const EN_RESERVE = -1;
+const ABSENTE = -2;
+
+// L'index d'un tour de placement : identifiant → lieu, le rang d'une liste
+// de table, EN_RESERVE ou ABSENTE. Une chaise vide n'y entre pas.
+function indexDuTour({ sieges, reserve, absents = [] }) {
+  const index = new Map();
+  sieges.forEach((liste, rang) => {
+    for (const id of liste) if (id !== null) index.set(id, rang);
+  });
+  for (const id of reserve) index.set(id, EN_RESERVE);
+  for (const id of absents) index.set(id, ABSENTE);
+  return index;
+}
+
+// Retire id de son lieu dans le tour, en place, et de l'index : sous des
+// sièges attribués, sa chaise devient null et les null de fin de liste
+// partent ; sans attribution, il quitte sa liste, qui garde son ordre. La
+// clé absents part quand sa liste se vide.
+function retirerDuTour(tour, index, id, siegesAttribues) {
+  const lieu = index.get(id);
+  index.delete(id);
+  if (lieu >= 0) {
+    const liste = tour.sieges[lieu];
+    const rang = liste.indexOf(id);
+    if (siegesAttribues) {
+      liste[rang] = null;
+      while (liste.length > 0 && liste.at(-1) === null) liste.pop();
+    } else {
+      liste.splice(rang, 1);
+    }
+    return;
+  }
+  const cle = lieu === EN_RESERVE ? 'reserve' : 'absents';
+  tour[cle].splice(tour[cle].indexOf(id), 1);
+  if (cle === 'absents' && tour.absents.length === 0) delete tour.absents;
+}
+
+// Pose id dans la réserve ou les absents du tour, en place, et dans
+// l'index ; la liste touchée se range par identifiant croissant, et absents
+// s'écrit après reserve quand le tour n'en portait pas.
+function poserDansLeTour(tour, index, id, lieu) {
+  const cle = lieu === EN_RESERVE ? 'reserve' : 'absents';
+  tour[cle] = [...(tour[cle] ?? []), id].sort(croissant);
+  index.set(id, lieu);
+}
+
+/**
+ * Le placement p — proposition, retenu ou départ — aligné sur les
+ * participants de la charge pour les identifiants ids, sans rien d'autre
+ * (§ 5.7, § 5.8, § 8.9). ids vaut par défaut chaque personne de la charge et
+ * chaque participant que p déclare ; un identifiant que ni l'une ni l'autre
+ * ne porte est ignoré. R est le nombre de tours de l'événement. Pour chaque
+ * identifiant, par ordre croissant :
+ * - absent de la charge, ou exclu, et déclaré : il quitte chaque liste de
+ *   chaque tour — sous des sièges attribués sa chaise devient null et les
+ *   null de fin de liste partent, sans attribution sa liste se resserre —,
+ *   la réserve, les absents et la déclaration ; il va dans retires ;
+ * - présent dans la charge, non exclu, non déclaré : il est déclaré, puis
+ *   va à la réserve des tours de p où il est présent, R au plus, et aux
+ *   absents des autres ; il va dans arrives avec ces tours de réserve, une
+ *   liste vide quand il n'est présent à aucun tour de p ;
+ * - déclaré, présent dans la charge, non exclu, à chaque tour r de 1 au
+ *   plus petit de p.tours et de R : absent à r et assis ou en réserve, il
+ *   quitte sa place et va aux absents de r (partis) ; présent à r et dans
+ *   les absents de r, il va à la réserve de r (arrives). Une présente en
+ *   réserve y reste : une réserve imposée d'une dérivée n'est pas défaite.
+ * Les tables, les capacités, les tours au-delà de R et horodatage ne sont
+ * pas touchés : l'appelant date un retenu changé. Une liste de réserve ou
+ * d'absents qui reçoit quelqu'un se range ; une autre garde son ordre, et la
+ * déclaration ne se récrit, rangée, que lorsqu'elle change.
+ *
+ * Idempotente : ajuster le placement rendu ne change plus rien. Rien n'est
+ * partagé avec p ni avec la charge, qui ne sont pas modifiés. Invariant :
+ * derive(placement rendu, charge) ne porte plus aucune raison de
+ * RAISONS_DE_PARTICIPANTS pour un identifiant de ids, et le placement rendu
+ * est cohérent. Chaque tour s'indexe une fois : le coût est linéaire en
+ * participants et en tours. Lève TypeError quand p n'est pas cohérent
+ * (fautes).
+ *
+ * @template {import('./types.js').PropositionFichier|import('./types.js').Retenu} P
+ * @param {P} p
+ * @param {import('./types.js').Charge} charge
+ * @param {Iterable<number>} [ids]
+ * @returns {{placement: P, partis: Array<{participant: number, tours: number[]}>,
+ *            arrives: Array<{participant: number, tours: number[]}>, retires: number[]}}
+ *          rangés par participant ; tous vides si et seulement si placement
+ *          est égal à p
+ */
+export function ajusterALaPresence(p, charge, ids) {
+  exigerCoherent(p, 'ajusterALaPresence');
+  const ajuste = structuredClone(p);
+  const R = charge.evenement.tours;
+  const communs = Math.min(p.tours, R);
+  const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
+  const declares = new Set(p.participants);
+  const demandes = ids === undefined ? [...personneDe.keys(), ...declares] : [...ids];
+  const index = ajuste.placement.map(indexDuTour);
+  const partis = [];
+  const arrives = [];
+  const retires = [];
+  const nouveaux = [];
+  for (const id of [...new Set(demandes)].sort(croissant)) {
+    const personne = personneDe.get(id);
+    const declare = declares.has(id);
+    if (personne === undefined || personne.exclu === true) {
+      if (!declare) continue;
+      ajuste.placement.forEach((tour, rang) => retirerDuTour(tour, index[rang], id, ajuste.siegesAttribues));
+      retires.push(id);
+    } else if (!declare) {
+      const tours = [];
+      ajuste.placement.forEach((tour, rang) => {
+        const present = rang < R && estPresentAuTour(personne, rang + 1);
+        poserDansLeTour(tour, index[rang], id, present ? EN_RESERVE : ABSENTE);
+        if (present) tours.push(rang + 1);
+      });
+      nouveaux.push(id);
+      arrives.push({ participant: id, tours });
+    } else {
+      const quitte = [];
+      const vient = [];
+      for (let rang = 0; rang < communs; rang += 1) {
+        const present = rang < R && estPresentAuTour(personne, rang + 1);
+        if (present !== (index[rang].get(id) === ABSENTE)) continue;
+        retirerDuTour(ajuste.placement[rang], index[rang], id, ajuste.siegesAttribues);
+        poserDansLeTour(ajuste.placement[rang], index[rang], id, present ? EN_RESERVE : ABSENTE);
+        (present ? vient : quitte).push(rang + 1);
+      }
+      if (quitte.length > 0) partis.push({ participant: id, tours: quitte });
+      if (vient.length > 0) arrives.push({ participant: id, tours: vient });
+    }
+  }
+  if (retires.length > 0 || nouveaux.length > 0) {
+    const partants = new Set(retires);
+    ajuste.participants = [...ajuste.participants.filter((id) => !partants.has(id)), ...nouveaux].sort(croissant);
+  }
+  return { placement: ajuste, partis, arrives, retires };
+}
+
 // Ordre d'affichage des tables : numéro croissant, une table absente de la
 // charge — numéro null — après les autres ; à numéro égal, identifiant
 // croissant.
@@ -694,11 +943,14 @@ const ordreDesTables = (a, b) =>
 /**
  * Forme nommée d'un placement, proposition ou retenu (§ 8.9, point 4) : une
  * ligne par identifiant écrit à un tour, { tour, table, numero, siege,
- * participant, nom, prenom, reserve }, pour la lecture et le signalement
+ * participant, nom, prenom, reserve, absent }, pour la lecture et le
+ * signalement
  * d'un défaut. Les lignes se rangent par tour, puis par numéro de table —
  * une table que la charge n'a plus vient après les autres, sans numéro, et
  * l'identifiant départage deux numéros égaux —, puis par rang dans la
- * liste ; la réserve suit les tables de son tour, table et numéro null.
+ * liste ; la réserve suit les tables de son tour, table et numéro null ;
+ * les absents suivent la réserve, table, numéro et siège null, reserve faux
+ * et absent vrai, le seul cas où absent est vrai.
  * siege est le rang à partir de 1 quand le placement attribue les sièges,
  * null sinon et dans la réserve ; une chaise vide, null dans la liste,
  * garde son rang et n'a pas de ligne. Nom et prénom viennent de la charge ; une
@@ -727,7 +979,7 @@ export function formeNommee(p, charge) {
     .map((id, rang) => ({ id, rang, numero: numeroDe.get(id) ?? null }))
     .sort(ordreDesTables);
   const lignes = [];
-  const ajouter = (tour, table, numero, siege, participant, reserve) => {
+  const ajouter = (tour, table, numero, siege, participant, reserve, absent = false) => {
     const personne = personneDe.get(participant);
     lignes.push({
       tour,
@@ -738,6 +990,7 @@ export function formeNommee(p, charge) {
       nom: personne?.nom ?? null,
       prenom: personne?.prenom ?? null,
       reserve,
+      absent,
     });
   };
   // Les personnes d'une liste de table, sans table pour une liste écrite
@@ -748,11 +1001,12 @@ export function formeNommee(p, charge) {
       ajouter(tour, table, numero, p.siegesAttribues ? position + 1 : null, participant, false);
     });
   };
-  p.placement.forEach(({ sieges, reserve }, rangDuTour) => {
+  p.placement.forEach(({ sieges, reserve, absents = [] }, rangDuTour) => {
     const tour = rangDuTour + 1;
     for (const { id, rang, numero } of tables) ajouterListe(tour, sieges[rang] ?? [], id, numero);
     for (const ids of sieges.slice(p.tables.length)) ajouterListe(tour, ids, null, null);
     for (const participant of reserve) ajouter(tour, null, null, null, participant, true);
+    for (const participant of absents) ajouter(tour, null, null, null, participant, false, true);
   });
   return lignes;
 }

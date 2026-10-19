@@ -22,7 +22,7 @@ import { appliquer, difference } from './correctifs.js';
 import { analyser, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import { ligneEntree, ligneOuverture, lireJournal, reconstruire } from './journal.js';
-import { examiner, fautes } from './placements.js';
+import { ajusterALaPresence, examiner, fautes } from './placements.js';
 
 // En-tête sous lequel une charge d'épreuve s'écrit pour être relue.
 const ENTETE = Object.freeze({ revision: 1, produitVersion: VERSION.affichee });
@@ -2234,5 +2234,79 @@ describe('la dérivation : depart et toursFiges dans un correctif (§ 8.6, § 8.
         assert.deepEqual(reconstruire(journal, rang + 1), canoniser(charge), `révision ${rang + 1}, début ${debut}`);
       });
     }
+  });
+});
+
+describe('la présence par tour dans un correctif (§ 8.6, § 8.9)', () => {
+  const P2 = ['participants', { id: 2 }, 'presence'];
+
+  // Une charge de trois personnes, deux tables, trois tours, sans présence ;
+  // modifier passe sur elle.
+  function base(modifier = () => {}) {
+    const charge = creerCharge({ id: 'evt-presence', nom: 'Veillée des Ancolies', siegesParDefaut: 2, tours: 3 });
+    charge.prochainsIds = { participant: 4, table: 3, proposition: 1 };
+    charge.participants = [1, 2, 3].map((id) => ({
+      id,
+      nom: ['Ancolie', 'Bourrache', 'Capucine'][id - 1],
+      prenom: null,
+      appartenance: null,
+      courriel: null,
+      titrePressenti: null,
+      notes: null,
+      exclu: false,
+    }));
+    charge.tables = [1, 2].map((id) => ({ id, numero: id, sieges: null, forme: 'ronde', position: { x: 300 * id, y: 0 } }));
+    modifier(charge);
+    return charge;
+  }
+  const avec = (presence) => base((c) => { c.participants[1].presence = presence; });
+
+  // Affirme que difference(a, b) rend attendu, et que ce correctif, relu en
+  // JSON, mène a à la copie canonique de b.
+  function exigerCorrectif(a, b, attendu, libelle) {
+    const correctif = difference(a, b);
+    assert.deepEqual(correctif, attendu, libelle);
+    const rendue = appliquer(a, JSON.parse(JSON.stringify(correctif)));
+    assert.deepEqual(rendue, canoniser(b), libelle);
+  }
+
+  test('une présence se pose quand elle apparaît, se pose entière quand elle change, se retire par sa clé quand elle disparaît', () => {
+    exigerCorrectif(base(), avec([1, 2]), [{ op: 'poser', chemin: P2, valeur: [1, 2] }], 'apparaît');
+    exigerCorrectif(avec([1, 2]), avec([1, 3]), [{ op: 'poser', chemin: P2, valeur: [1, 3] }], 'un tour change, longueur égale');
+    exigerCorrectif(avec([1]), avec([1, 3]), [{ op: 'poser', chemin: P2, valeur: [1, 3] }], 'un tour de plus');
+    exigerCorrectif(avec([1, 3]), base(), [{ op: 'retirer', chemin: P2 }], 'disparaît');
+    exigerCorrectif(avec([3, 1]), avec([1, 3]), [], 'même ensemble, autre ordre');
+  });
+
+  test('une personne qui part au tour 3 touche une liste de table et la liste absents de ce tour, rien d’autre : au retenu à sièges attribués comme à une proposition sans attribution', () => {
+    const avant = grande();
+    const [p4, p7] = [4, 7].map((id) => avant.propositions.find((p) => p.id === id));
+    avant.retenu = { proposition: 7, siegesAttribues: true, ...Object.fromEntries(['tables', 'capacites', 'tours', 'participants', 'placement'].map((cle) => [cle, copie(p7[cle])])) };
+    const personne = p7.placement[2].sieges[5][3];
+    const apres = copie(avant);
+    apres.participants.find(({ id }) => id === personne).presence = [1, 2, 4];
+    apres.retenu = ajusterALaPresence(avant.retenu, apres).placement;
+    const ajustee = ajusterALaPresence(p4, apres).placement;
+    apres.propositions = apres.propositions.map((p) => (p.id === 4 ? ajustee : p));
+    const correctif = difference(avant, apres);
+    assert.equal(serialiserCharge(appliquer(avant, correctif)), serialiserCharge(apres));
+    const [presence, ...placements] = correctif;
+    assert.deepEqual(presence, { op: 'poser', chemin: ['participants', { id: personne }, 'presence'], valeur: [1, 2, 4] });
+    const tableDe4 = p4.placement[2].sieges.findIndex((liste) => liste.includes(personne));
+    // Chaque opération désigne, au tour 3 (rang 2), la liste de la table qui
+    // la portait ou la liste absents.
+    const lieux = new Set(
+      placements.map(({ chemin }) => {
+        const [cle, ...reste] = chemin;
+        const prefixe = cle === 'retenu' ? 1 : 2;
+        const [placement, rang, liste, table] = [chemin[prefixe], chemin[prefixe + 1], chemin[prefixe + 2], chemin[prefixe + 3]];
+        assert.deepEqual([placement, rang], ['placement', 2], JSON.stringify(chemin));
+        assert.ok(cle === 'retenu' || (cle === 'propositions' && reste[0].id === 4), JSON.stringify(chemin));
+        return `${cle}/${liste}${liste === 'sieges' ? `/${table}` : ''}`;
+      }),
+    );
+    assert.deepEqual([...lieux].sort(), ['propositions/absents', `propositions/sieges/${tableDe4}`, 'retenu/absents', 'retenu/sieges/5'].sort());
+    const taille = octets(JSON.stringify(placements));
+    assert.ok(taille < 400, `${taille} octets`);
   });
 });

@@ -10,6 +10,7 @@
 // ENOENT ou TypeMismatchError, n'est pas un code de l'application : les
 // textes la citent telle quelle, entre parenthèses.
 import {
+  auxToursNommes,
   capitale,
   causeEntreParentheses,
   cheminDe,
@@ -199,6 +200,10 @@ export const TABLE = new Map([
   ['PARTICIPANT_EXCLU', (details) => `${laPersonne(details)} est exclue depuis.`],
   ['PARTICIPANT_SUPPRIME', (details) => `${laPersonne(details)} a été supprimée depuis.`],
   ['PARTICIPANT_NON_PLACE', (details) => `${laPersonne(details)}, ajoutée ou réintégrée depuis, n'y est pas placée.`],
+  // La présence changée depuis le placement : tours, croissants, nomme les
+  // tours où il la place alors que la charge la dit absente, ou l'inverse.
+  ['PRESENCE_RETIREE', (details) => `${laPersonne(details)} est absente ${auxToursNommes(details.tours)} depuis.`],
+  ['PRESENCE_AJOUTEE', (details) => `${laPersonne(details)} est présente ${auxToursNommes(details.tours)} depuis.`],
   ['TABLE_SUPPRIMEE', (details) => `${laTable(details)} a été supprimée depuis.`],
   ['TABLE_AJOUTEE', (details) => `${laTable(details)} a été ajoutée depuis.`],
   [

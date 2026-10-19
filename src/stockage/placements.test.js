@@ -22,6 +22,8 @@ import { serialiser } from './canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import {
+  RAISONS_DE_PARTICIPANTS,
+  ajusterALaPresence,
   courseDepuisFichier,
   courseVersFichier,
   derive,
@@ -30,6 +32,7 @@ import {
   fautes,
   formeNommee,
   planDepuisFichier,
+  raisonsQuiBloquentUnDepart,
   versFichier,
 } from './placements.js';
 
@@ -220,8 +223,9 @@ function refusDe(appel) {
 const COMPTEUR_SATURE = Object.freeze({ code: 'COMPTEUR_SATURE', details: Object.freeze({ compteur: 'proposition' }) });
 
 // Une ligne attendue de la forme nommée : sans table, une ligne de la
-// réserve, sauf quand enReserve dit le contraire.
-const ligne = (tour, idTable, numero, siege, participant, nom, prenom, enReserve = idTable === null) => ({
+// réserve, sauf quand enReserve dit le contraire ; absente seulement quand
+// absent le dit.
+const ligne = (tour, idTable, numero, siege, participant, nom, prenom, enReserve = idTable === null, absent = false) => ({
   tour,
   table: idTable,
   numero,
@@ -230,6 +234,7 @@ const ligne = (tour, idTable, numero, siege, participant, nom, prenom, enReserve
   nom,
   prenom,
   reserve: enReserve,
+  absent,
 });
 
 describe('versFichier et planDepuisFichier : la proposition du moteur et sa forme positionnelle (§ 8.9)', () => {
@@ -2091,5 +2096,595 @@ describe('la dérivation : deux champs facultatifs de la proposition (§ 8.9, C1
     const lue = relire(charge);
     assert.deepStrictEqual(lue.propositions.map(({ id }) => id), [1, 2, 3]);
     assert.deepStrictEqual(lue.propositions.map(({ depart }) => depart), [undefined, 1, undefined]);
+  });
+});
+
+// --- La présence par tour ---------------------------------------------------
+
+// chargePetite où la personne 5 n'arrive qu'au tour 2 et la personne 12
+// part après le tour 2.
+function chargePresence() {
+  const charge = chargePetite();
+  charge.participants[4].presence = [2, 3, 4];
+  charge.participants[11].presence = [1, 2];
+  return charge;
+}
+
+// fichierParfait aligné à la main sur chargePresence : 5 absente au tour 1,
+// sa chaise libre ; 12 absente aux tours 3 et 4.
+function fichierAbsents() {
+  const p = fichierParfait();
+  p.placement[0] = { sieges: [[1, 2, 3], [4, 6], [7, 8, 9], [10, 11, 12]], reserve: [], absents: [5] };
+  p.placement[2] = { sieges: [[4, 8, 10], [2, 7], [1, 6, 11], [3, 5, 9]], reserve: [], absents: [12] };
+  p.placement[3] = { sieges: [[5, 7, 11], [1, 9, 10], [3, 4], [2, 6, 8]], reserve: [], absents: [12] };
+  return p;
+}
+
+// fichierAbsents sous des sièges attribués : la chaise de 5 au tour 1, la
+// deuxième de sa table, reste marquée null ; celles de 12, en fin de liste,
+// ne s'écrivent pas.
+function fichierAbsentsAttribues() {
+  const p = fichierAbsents();
+  p.siegesAttribues = true;
+  p.placement[0].sieges[1] = [4, null, 6];
+  return p;
+}
+
+// Une course de deux points de relevé sur le placement de p, chacun une copie.
+const courseSur = (p, placement = p.placement) => ({
+  evalues: 100,
+  releves: [1, 10].map((mouvements) => ({ mouvements, placement: structuredClone(placement) })),
+});
+
+// Les objets et listes que porte valeur, elle comprise.
+function objetsDe(valeur) {
+  const objets = new Set();
+  JSON.stringify(valeur, (_, enfant) => {
+    if (typeof enfant === 'object' && enfant !== null) objets.add(enfant);
+    return enfant;
+  });
+  return objets;
+}
+
+describe('la présence par tour : la troisième liste d’un tour, absents (§ 8.9, point 2)', () => {
+  test('un placement qui porte ses absents est cohérent, sièges attribués ou non, proposition ou retenu', () => {
+    assert.deepEqual(fautes(fichierAbsents()), []);
+    assert.deepEqual(fautes(fichierAbsentsAttribues()), []);
+    assert.deepEqual(fautes(retenuDe(fichierAbsents())), []);
+    const desordre = fichierAbsents();
+    desordre.placement[0] = { sieges: [[1, 2], [4], [7, 8, 9], [10, 11, 12]], reserve: [], absents: [6, 3, 5] };
+    assert.deepEqual(fautes(desordre), []);
+  });
+
+  test('une personne déclarée absente à chaque tour n’est pas une faute', () => {
+    const p = fichierAbsents();
+    p.placement[0].sieges[3] = [10, 11];
+    p.placement[0].absents = [5, 12];
+    p.placement[1].sieges[0] = [6, 9];
+    p.placement[1].absents = [12];
+    assert.deepEqual(fautes(p), []);
+  });
+
+  test('corruption délibérée étendue : une absente aussi assise, aussi en réserve, inconnue ; une présente écrite nulle part, même quand le tour porte des absents', () => {
+    const cas = [
+      ['absente aussi assise', (p) => { p.placement[0].sieges[1] = [4, 5, 6]; }, [{ code: 'DOUBLON', tour: 1, participant: 5 }]],
+      ['absente aussi en réserve', (p) => { p.placement[0].reserve = [5]; }, [{ code: 'DOUBLON', tour: 1, participant: 5 }]],
+      ['absente inconnue', (p) => { p.placement[2].absents = [12, 13]; }, [{ code: 'INCONNU', tour: 3, participant: 13 }]],
+      ['absente deux fois', (p) => { p.placement[2].absents = [12, 12]; }, [{ code: 'DOUBLON', tour: 3, participant: 12 }]],
+      ['présente nulle part', (p) => { p.placement[2].sieges[0] = [8, 10]; }, [{ code: 'MANQUANT', tour: 3, participant: 4 }]],
+      ['absente nulle part', (p) => { delete p.placement[0].absents; }, [{ code: 'MANQUANT', tour: 1, participant: 5 }]],
+    ];
+    for (const [libelle, abimer, attendues] of cas) {
+      const p = fichierAbsents();
+      abimer(p);
+      assert.deepEqual(fautes(p), attendues, libelle);
+    }
+  });
+
+  test('le chemin d’une occurrence lit absents après la réserve : le second exemplaire d’un doublon, le premier d’un inconnu', () => {
+    const p = fichierAbsents();
+    const releve = (abimer) => {
+      const placement = structuredClone(p.placement);
+      abimer(placement);
+      return fauteDeCourse(p, courseSur(p, placement));
+    };
+    assert.equal(releve((pl) => { pl[0].reserve = [5]; }), 'course.releves[0].placement[0].absents[0]');
+    assert.equal(releve((pl) => { pl[2].absents = [12, 13]; }), 'course.releves[0].placement[2].absents[1]');
+    assert.equal(releve((pl) => { pl[2].absents = [12, 12]; }), 'course.releves[0].placement[2].absents[1]');
+  });
+
+  test('seule la proposition fautive est écartée ; la cohérente qui porte ses absents est gardée, sans dérive', () => {
+    const charge = chargePresence();
+    const abimee = { ...fichierAbsents(), id: 2 };
+    abimee.placement[0].reserve = [5];
+    charge.propositions = [fichierAbsents(), abimee];
+    charge.prochainsIds.proposition = 3;
+    charge.retenu = retenuDe(fichierAbsents());
+    for (const lue of [charge, relire(charge)]) {
+      const examen = examiner(lue);
+      assert.deepEqual(examen.fautives, [{ rang: 1, id: 2, fautes: [{ code: 'DOUBLON', tour: 1, participant: 5 }] }]);
+      assert.deepEqual(examen.charge.propositions, [fichierAbsents()]);
+      assert.deepEqual(examen.derives, []);
+      assert.deepEqual(examen.retenu, { fautes: [], raisons: [] });
+    }
+  });
+});
+
+describe('la présence par tour : mise en fichier, plan du moteur, course (§ 8.9, § 5.10)', () => {
+  const OPTIONS = Object.freeze({ produitVersion: VERSION.affichee, attribuerSieges: false, decalage: 0 });
+
+  test('versFichier tire absents de la configuration : le plan du moteur ne liste pas les absentes', () => {
+    const configuration = configurationDepuisCharge(chargePresence());
+    const plan = planDepuisFichier(fichierAbsents());
+    assert.deepEqual(versFichier({ ...PARFAITE, plan }, configuration, OPTIONS), fichierAbsents());
+  });
+
+  test('un plan qui assied une absente, ou qui perd une présente, lève TypeError', () => {
+    const configuration = configurationDepuisCharge(chargePresence());
+    leveTypeError(() => versFichier(PARFAITE, configuration, OPTIONS), /versFichier : placement fautif .*DOUBLON/);
+    const plan = planDepuisFichier(fichierAbsents());
+    plan.tours[1][0] = [6, 9];
+    leveTypeError(() => versFichier({ ...PARFAITE, plan }, configuration, OPTIONS), /MANQUANT/);
+  });
+
+  test('une exclue n’est ni déclarée, ni absente : sa présence est suspendue', () => {
+    const charge = chargePresence();
+    charge.participants[11].exclu = true;
+    const plan = planDepuisFichier(fichierAbsents());
+    plan.tours[0][3] = [10, 11];
+    plan.tours[1][0] = [6, 9];
+    const attendu = fichierAbsents();
+    attendu.participants = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+    attendu.placement[0].sieges[3] = [10, 11];
+    attendu.placement[1].sieges[0] = [6, 9];
+    delete attendu.placement[2].absents;
+    delete attendu.placement[3].absents;
+    assert.deepEqual(versFichier({ ...PARFAITE, plan }, configurationDepuisCharge(charge), OPTIONS), attendu);
+  });
+
+  test('planDepuisFichier ne porte jamais absents, et n’y liste aucune absente : ni à une table, ni en réserve', () => {
+    const attendu = {
+      tables: [1, 2, 3, 4],
+      tours: [
+        [[1, 2, 3], [4, 6], [7, 8, 9], [10, 11, 12]],
+        [[6, 9, 12], [3, 8, 11], [2, 5, 10], [1, 4, 7]],
+        [[4, 8, 10], [2, 7], [1, 6, 11], [3, 5, 9]],
+        [[5, 7, 11], [1, 9, 10], [3, 4], [2, 6, 8]],
+      ],
+      reserves: [[], [], [], []],
+    };
+    for (const p of [fichierAbsents(), fichierAbsentsAttribues(), retenuDe(fichierAbsents())]) {
+      const plan = planDepuisFichier(p);
+      assert.deepEqual(plan, attendu);
+      assert.deepEqual(Object.keys(plan), ['tables', 'tours', 'reserves']);
+    }
+  });
+
+  test('fauteDeCourse : les absents de chaque relevé égalent ceux de la proposition, sinon la course s’ignore seule, au chemin de leur liste', () => {
+    const p = fichierAbsents();
+    assert.equal(fauteDeCourse(p, courseSur(p)), null);
+    const releve = (abimer) => {
+      const placement = structuredClone(p.placement);
+      abimer(placement);
+      return fauteDeCourse(p, courseSur(p, placement));
+    };
+    // Assise au relevé, absente à la proposition : le relevé est cohérent, la
+    // course le contredit.
+    assert.equal(releve((pl) => { pl[0] = { sieges: [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], reserve: [] }; }), 'course.releves[0].placement[0].absents');
+    assert.equal(releve((pl) => { pl[1].sieges[0] = [6, 9]; pl[1].absents = [12]; }), 'course.releves[0].placement[1].absents');
+    assert.equal(releve((pl) => { pl[3] = { sieges: [[5, 7, 11], [1, 9, 10], [3, 4, 12], [2, 6, 8]], reserve: [] }; }), 'course.releves[0].placement[3].absents');
+    // Autant d'absents, pas les mêmes : 7 et 12 échangent leur place, le
+    // relevé reste cohérent.
+    assert.equal(releve((pl) => { pl[2] = { sieges: [[4, 8, 10], [2, 12], [1, 6, 11], [3, 5, 9]], reserve: [], absents: [7] }; }), 'course.releves[0].placement[2].absents');
+    // Le second relevé seul.
+    const course = courseSur(p);
+    course.releves[1].placement[2] = { sieges: [[4, 8, 10], [2, 7, 12], [1, 6, 11], [3, 5, 9]], reserve: [] };
+    assert.equal(fauteDeCourse(p, course), 'course.releves[1].placement[2].absents');
+  });
+
+  test('courseVersFichier écrit à chaque relevé les absents de la proposition, et la course se relit en plans sans absents', () => {
+    const plan = planDepuisFichier(fichierAbsents());
+    const proposition = { ...PARFAITE, plan, evalues: 100, releves: [1, 10].map((mouvements) => ({ mouvements, plan })) };
+    const fichier = versFichier(proposition, configurationDepuisCharge(chargePresence()), OPTIONS);
+    const course = courseVersFichier(proposition, fichier, { attribuerSieges: false });
+    assert.deepEqual(course.releves.map(({ placement }) => placement), [fichierAbsents().placement, fichierAbsents().placement]);
+    assert.deepEqual(courseDepuisFichier(fichier, course).releves.map((r) => r.plan), [plan, plan]);
+  });
+});
+
+describe('la présence par tour : la dérive PRESENCE_RETIREE et PRESENCE_AJOUTEE (§ 9)', () => {
+  const avec = (modifier) => {
+    const charge = chargePresence();
+    modifier(charge);
+    return charge;
+  };
+  const presenceDe = (charge, id, presence) => {
+    const p = charge.participants.find((personne) => personne.id === id);
+    if (presence === undefined) delete p.presence;
+    else p.presence = presence;
+  };
+
+  test('un placement aligné sur la présence ne dérive pas, la présence écrite dans un autre ordre comprise', () => {
+    assert.deepEqual(derive(fichierAbsents(), chargePresence()), []);
+    assert.deepEqual(derive(fichierAbsents(), avec((c) => presenceDe(c, 5, [4, 3, 2]))), []);
+    assert.deepEqual(derive(fichierParfait(), chargePetite()), []);
+  });
+
+  test('péremption délibérée étendue : changer une présence donne la seule raison PRESENCE_*, avec ses tours exacts, croissants', () => {
+    assert.deepEqual(derive(fichierAbsents(), avec((c) => presenceDe(c, 12))), [
+      { code: 'PRESENCE_AJOUTEE', participant: 12, tours: [3, 4] },
+    ]);
+    assert.deepEqual(derive(fichierAbsents(), avec((c) => presenceDe(c, 7, [1, 3]))), [
+      { code: 'PRESENCE_RETIREE', participant: 7, tours: [2, 4] },
+    ]);
+    assert.deepEqual(derive(fichierParfait(), chargePresence()), [
+      { code: 'PRESENCE_RETIREE', participant: 5, tours: [1] },
+      { code: 'PRESENCE_RETIREE', participant: 12, tours: [3, 4] },
+    ]);
+  });
+
+  test('les raisons se rangent par code, puis par participant, parmi les autres', () => {
+    const charge = avec((c) => {
+      presenceDe(c, 5);
+      presenceDe(c, 12, [1]);
+      presenceDe(c, 7, [1, 3, 4]);
+      c.participants[2].exclu = true;
+    });
+    assert.deepEqual(derive(fichierAbsents(), charge), [
+      { code: 'PARTICIPANT_EXCLU', participant: 3 },
+      { code: 'PRESENCE_AJOUTEE', participant: 5, tours: [1] },
+      { code: 'PRESENCE_RETIREE', participant: 7, tours: [2] },
+      { code: 'PRESENCE_RETIREE', participant: 12, tours: [2] },
+    ]);
+  });
+
+  test('une personne qui ajoute et retire des tours porte les deux raisons', () => {
+    assert.deepEqual(derive(fichierAbsents(), avec((c) => presenceDe(c, 5, [1, 2]))), [
+      { code: 'PRESENCE_AJOUTEE', participant: 5, tours: [1] },
+      { code: 'PRESENCE_RETIREE', participant: 5, tours: [3, 4] },
+    ]);
+  });
+
+  test('sous TOURS_CHANGES, seuls les tours communs se comparent', () => {
+    const troisTours = (modifier) => avec((c) => {
+      c.evenement.tours = 3;
+      presenceDe(c, 5, [2, 3]);
+      modifier(c);
+    });
+    assert.deepEqual(derive(fichierAbsents(), troisTours(() => {})), [{ code: 'TOURS_CHANGES', avant: 4, maintenant: 3 }]);
+    assert.deepEqual(derive(fichierAbsents(), troisTours((c) => presenceDe(c, 12, [1]))), [
+      { code: 'PRESENCE_RETIREE', participant: 12, tours: [2] },
+      { code: 'TOURS_CHANGES', avant: 4, maintenant: 3 },
+    ]);
+    // Un placement plus court que la soirée ne se compare que sur ses tours.
+    const court = { ...fichierAbsents(), tours: 3, placement: fichierAbsents().placement.slice(0, 3) };
+    assert.deepEqual(derive(court, avec(() => {})), [{ code: 'TOURS_CHANGES', avant: 3, maintenant: 4 }]);
+  });
+
+  test('une exclue ou une supprimée n’a que sa raison d’avant, quelle que soit sa présence', () => {
+    assert.deepEqual(derive(fichierAbsents(), avec((c) => { c.participants[11].exclu = true; presenceDe(c, 12); })), [
+      { code: 'PARTICIPANT_EXCLU', participant: 12 },
+    ]);
+    assert.deepEqual(derive(fichierAbsents(), avec((c) => { c.participants = c.participants.filter(({ id }) => id !== 5); })), [
+      { code: 'PARTICIPANT_SUPPRIME', participant: 5 },
+    ]);
+  });
+
+  test('une proposition périmée par la présence est gardée, jamais écartée, et sa dérive se nomme', () => {
+    const charge = avec((c) => presenceDe(c, 12));
+    charge.propositions = [fichierAbsents()];
+    charge.prochainsIds.proposition = 2;
+    for (const lue of [charge, relire(charge)]) {
+      const examen = examiner(lue);
+      assert.deepEqual(examen.fautives, []);
+      assert.deepEqual(examen.charge.propositions, [fichierAbsents()]);
+      assert.deepEqual(examen.derives, [{ id: 1, raisons: [{ code: 'PRESENCE_AJOUTEE', participant: 12, tours: [3, 4] }] }]);
+    }
+  });
+});
+
+describe('les raisons de participants et celles qui bloquent un départ (§ 5.7)', () => {
+  test('RAISONS_DE_PARTICIPANTS porte les cinq raisons des participants, et ne se modifie pas', () => {
+    assert.deepEqual([...RAISONS_DE_PARTICIPANTS], [
+      'PARTICIPANT_EXCLU',
+      'PARTICIPANT_NON_PLACE',
+      'PARTICIPANT_SUPPRIME',
+      'PRESENCE_AJOUTEE',
+      'PRESENCE_RETIREE',
+    ]);
+    assert.equal(RAISONS_DE_PARTICIPANTS.has('PRESENCE_RETIREE'), true);
+    assert.equal(RAISONS_DE_PARTICIPANTS.has('TOURS_CHANGES'), false);
+    assert.ok(Object.isFrozen(RAISONS_DE_PARTICIPANTS));
+    assert.equal(RAISONS_DE_PARTICIPANTS.add, undefined);
+    assert.equal(RAISONS_DE_PARTICIPANTS.delete, undefined);
+  });
+
+  test('raisonsQuiBloquentUnDepart : vide pour les seules raisons de participants, la sous-liste des autres dans l’ordre reçu sinon', () => {
+    const participants = [
+      { code: 'PARTICIPANT_EXCLU', participant: 3 },
+      { code: 'PARTICIPANT_NON_PLACE', participant: 13 },
+      { code: 'PARTICIPANT_SUPPRIME', participant: 4 },
+      { code: 'PRESENCE_AJOUTEE', participant: 5, tours: [1] },
+      { code: 'PRESENCE_RETIREE', participant: 12, tours: [3] },
+    ];
+    assert.deepEqual(raisonsQuiBloquentUnDepart(participants), []);
+    assert.deepEqual(raisonsQuiBloquentUnDepart([]), []);
+    const mobilier = [
+      { code: 'TOURS_CHANGES', avant: 4, maintenant: 3 },
+      { code: 'TABLE_SUPPRIMEE', table: 2 },
+      { code: 'CAPACITE_CHANGEE', table: 1, avant: 3, maintenant: 2 },
+      { code: 'TABLE_AJOUTEE', table: 5 },
+    ];
+    for (const raison of mobilier) {
+      assert.deepEqual(raisonsQuiBloquentUnDepart([...participants, raison]), [raison], raison.code);
+    }
+    const melees = [participants[0], mobilier[1], participants[3], mobilier[0]];
+    const rendues = raisonsQuiBloquentUnDepart(melees);
+    assert.deepEqual(rendues, [mobilier[1], mobilier[0]]);
+    assert.equal(rendues[0], mobilier[1]);
+    assert.deepEqual(melees.length, 4);
+  });
+});
+
+describe('ajusterALaPresence : le placement aligné sur la charge, sans rien d’autre (§ 5.8, § 8.9)', () => {
+  const avec = (modifier, base = chargePresence) => {
+    const charge = base();
+    modifier(charge);
+    return charge;
+  };
+  const presenceDe = (charge, id, presence) => {
+    const p = charge.participants.find((personne) => personne.id === id);
+    if (presence === undefined) delete p.presence;
+    else p.presence = presence;
+  };
+  const VIDE = Object.freeze({ partis: [], arrives: [], retires: [] });
+  const sansPlacement = ({ placement, ...reste }) => reste;
+
+  // Exige que derive(rendu, charge) ne porte plus de raison des participants
+  // pour un identifiant de ids (tous quand ids manque), et que rendu soit
+  // cohérent.
+  function exigerInvariant(rendu, charge, ids) {
+    assert.deepEqual(fautes(rendu), []);
+    const restantes = derive(rendu, charge).filter(
+      ({ code, participant }) => RAISONS_DE_PARTICIPANTS.has(code) && (ids === undefined || ids.includes(participant)),
+    );
+    assert.deepEqual(restantes, []);
+  }
+
+  test('rien à ajuster : tout est vide, et le placement est égal à celui reçu', () => {
+    for (const [p, charge] of [[fichierAbsents(), chargePresence()], [fichierParfait(), chargePetite()], [fichierAReserve(), chargePetite()]]) {
+      const rendu = ajusterALaPresence(p, charge);
+      assert.deepEqual(sansPlacement(rendu), VIDE);
+      assert.deepEqual(rendu.placement, p);
+    }
+  });
+
+  test('sans attribution, une partante quitte sa table, dont la liste reste triée, et va aux absents du tour, triés', () => {
+    const charge = avec((c) => presenceDe(c, 7, [1, 3]));
+    const rendu = ajusterALaPresence(fichierAbsents(), charge);
+    const attendu = fichierAbsents();
+    attendu.placement[1] = { sieges: [[6, 9, 12], [3, 8, 11], [2, 5, 10], [1, 4]], reserve: [], absents: [7] };
+    attendu.placement[3] = { sieges: [[5, 11], [1, 9, 10], [3, 4], [2, 6, 8]], reserve: [], absents: [7, 12] };
+    assert.deepEqual(rendu.placement, attendu);
+    assert.deepEqual(sansPlacement(rendu), { partis: [{ participant: 7, tours: [2, 4] }], arrives: [], retires: [] });
+    exigerInvariant(rendu.placement, charge);
+  });
+
+  test('sous des sièges attribués, la chaise libérée devient null et les null de fin de liste se retirent', () => {
+    const charge = avec((c) => {
+      presenceDe(c, 6, [2, 3, 4]);
+      presenceDe(c, 1, [1, 2, 4]);
+    });
+    const rendu = ajusterALaPresence(fichierAbsentsAttribues(), charge);
+    const attendu = fichierAbsentsAttribues();
+    attendu.placement[0] = { sieges: [[1, 2, 3], [4], [7, 8, 9], [10, 11, 12]], reserve: [], absents: [5, 6] };
+    attendu.placement[2] = { sieges: [[4, 8, 10], [2, 7], [null, 6, 11], [3, 5, 9]], reserve: [], absents: [1, 12] };
+    assert.deepEqual(rendu.placement, attendu);
+    assert.deepEqual(rendu.partis, [{ participant: 1, tours: [3] }, { participant: 6, tours: [1] }]);
+    exigerInvariant(rendu.placement, charge);
+  });
+
+  test('une partante en réserve quitte la réserve', () => {
+    const p = fichierAReserve();
+    const charge = avec((c) => presenceDe(c, 6, [2, 3, 4]), chargePetite);
+    const rendu = ajusterALaPresence(p, charge);
+    assert.deepEqual(rendu.placement.placement[0], { sieges: [[1, 2], [4, 5], [7, 8, 9], [10, 11, 12]], reserve: [3], absents: [6] });
+    assert.deepEqual(rendu.partis, [{ participant: 6, tours: [1] }]);
+  });
+
+  test('une arrivante entre dans la réserve du tour, triée, et quitte ses absents ; la clé absents part quand la liste se vide', () => {
+    const p = fichierAbsents();
+    p.placement[0] = { sieges: [[1, 2, 3], [4], [7, 8, 9], [10, 11, 12]], reserve: [6], absents: [5] };
+    const charge = avec((c) => {
+      presenceDe(c, 5);
+      presenceDe(c, 12);
+    });
+    const rendu = ajusterALaPresence(p, charge);
+    assert.deepEqual(rendu.placement.placement[0], { sieges: [[1, 2, 3], [4], [7, 8, 9], [10, 11, 12]], reserve: [5, 6] });
+    assert.deepEqual(rendu.placement.placement[2], { sieges: [[4, 8, 10], [2, 7], [1, 6, 11], [3, 5, 9]], reserve: [12] });
+    assert.deepEqual(Object.keys(rendu.placement.placement[3]), ['sieges', 'reserve']);
+    assert.deepEqual(sansPlacement(rendu), { partis: [], arrives: [{ participant: 5, tours: [1] }, { participant: 12, tours: [3, 4] }], retires: [] });
+    exigerInvariant(rendu.placement, charge);
+  });
+
+  test('une présente laissée en réserve, comme une réserve imposée d’une dérivée, y reste', () => {
+    const p = fichierAbsents();
+    p.placement[1] = { sieges: [[6, 9], [3, 8, 11], [2, 5, 10], [1, 4, 7]], reserve: [12] };
+    const rendu = ajusterALaPresence(p, chargePresence());
+    assert.deepEqual(rendu.placement, p);
+    assert.deepEqual(sansPlacement(rendu), VIDE);
+  });
+
+  test('une exclue quitte chaque liste de chaque tour et la déclaration ; sous sièges attribués, sa chaise devient null', () => {
+    const charge = avec((c) => { c.participants[3].exclu = true; presenceDe(c, 4, [1]); });
+    const rendu = ajusterALaPresence(fichierAbsentsAttribues(), charge);
+    const attendu = fichierAbsentsAttribues();
+    attendu.participants = [1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12];
+    attendu.placement[0].sieges[1] = [null, null, 6];
+    attendu.placement[1].sieges[3] = [1, null, 7];
+    attendu.placement[2].sieges[0] = [null, 8, 10];
+    attendu.placement[3].sieges[2] = [3];
+    assert.deepEqual(rendu.placement, attendu);
+    assert.deepEqual(sansPlacement(rendu), { partis: [], arrives: [], retires: [4] });
+    exigerInvariant(rendu.placement, charge);
+  });
+
+  test('une supprimée quitte de même chaque liste, absents et réserve compris, et la déclaration', () => {
+    const charge = avec((c) => { c.participants = c.participants.filter(({ id }) => id !== 12 && id !== 10); });
+    const rendu = ajusterALaPresence(fichierAbsents(), charge);
+    const attendu = fichierAbsents();
+    attendu.participants = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11];
+    attendu.placement[0].sieges[3] = [11];
+    attendu.placement[1].sieges[0] = [6, 9];
+    attendu.placement[1].sieges[2] = [2, 5];
+    attendu.placement[2].sieges[0] = [4, 8];
+    delete attendu.placement[2].absents;
+    attendu.placement[3].sieges[1] = [1, 9];
+    delete attendu.placement[3].absents;
+    assert.deepEqual(rendu.placement, attendu);
+    assert.deepEqual(sansPlacement(rendu), { partis: [], arrives: [], retires: [10, 12] });
+    exigerInvariant(rendu.placement, charge);
+  });
+
+  test('une présente non déclarée est déclarée, en réserve à ses tours de présence, absente ailleurs ; une exclue non déclarée ne l’est pas', () => {
+    const charge = avec((c) => {
+      c.participants.push({ ...personne(13, ...TREIZIEME), presence: [2, 3] });
+      c.participants.push(personne(14, 'Bourrache', 'Capucine'));
+      c.participants.push({ ...personne(15, 'Fenouil', 'Dahlia'), exclu: true });
+      c.prochainsIds.participant = 16;
+    });
+    const rendu = ajusterALaPresence(fichierAbsents(), charge);
+    const attendu = fichierAbsents();
+    attendu.participants = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+    attendu.placement[0].reserve = [14];
+    attendu.placement[0].absents = [5, 13];
+    attendu.placement[1].reserve = [13, 14];
+    attendu.placement[2].reserve = [13, 14];
+    attendu.placement[3].reserve = [14];
+    attendu.placement[3].absents = [12, 13];
+    assert.deepEqual(rendu.placement, attendu);
+    assert.deepEqual(sansPlacement(rendu), {
+      partis: [],
+      arrives: [{ participant: 13, tours: [2, 3] }, { participant: 14, tours: [1, 2, 3, 4] }],
+      retires: [],
+    });
+    exigerInvariant(rendu.placement, charge);
+  });
+
+  test('une exclue réintégrée revient dans la déclaration à son rang, avant des identifiants déjà déclarés ; réserve et absents la reçoivent triés', () => {
+    const exclue = avec((c) => { c.participants[2].exclu = true; });
+    const sans3 = ajusterALaPresence(fichierAbsents(), exclue).placement;
+    assert.deepEqual(sans3.participants, [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    const charge = avec((c) => presenceDe(c, 3, [1, 2, 4]));
+    const rendu = ajusterALaPresence(sans3, charge);
+    assert.deepEqual(rendu.placement.participants, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    assert.deepEqual(rendu.placement.placement.map(({ reserve }) => reserve), [[3], [3], [], [3]]);
+    assert.deepEqual(rendu.placement.placement.map(({ absents }) => absents), [[5], undefined, [3, 12], [12]]);
+    assert.deepEqual(sansPlacement(rendu), { partis: [], arrives: [{ participant: 3, tours: [1, 2, 4] }], retires: [] });
+    exigerInvariant(rendu.placement, charge);
+  });
+
+  test('ids restreint l’ajustement : une autre personne en dérive y reste ; un identifiant que ni la charge ni le placement ne portent est ignoré', () => {
+    const charge = avec((c) => {
+      presenceDe(c, 7, [1, 3, 4]);
+      presenceDe(c, 9, [2, 3, 4]);
+      c.participants[2].exclu = true;
+    });
+    const rendu = ajusterALaPresence(fichierAbsents(), charge, [7, 99]);
+    assert.deepEqual(sansPlacement(rendu), { partis: [{ participant: 7, tours: [2] }], arrives: [], retires: [] });
+    exigerInvariant(rendu.placement, charge, [7, 99]);
+    assert.deepEqual(derive(rendu.placement, charge), [
+      { code: 'PARTICIPANT_EXCLU', participant: 3 },
+      { code: 'PRESENCE_RETIREE', participant: 9, tours: [1] },
+    ]);
+    assert.deepEqual(sansPlacement(ajusterALaPresence(fichierAbsents(), charge, [])), VIDE);
+    assert.deepEqual(ajusterALaPresence(fichierAbsents(), charge, new Set([3])).retires, [3]);
+  });
+
+  test('les tables, les tours au-delà des tours de l’événement et l’horodatage ne sont pas touchés', () => {
+    const charge = avec((c) => {
+      c.evenement.tours = 3;
+      presenceDe(c, 5, [2, 3]);
+      presenceDe(c, 12, [1]);
+      c.tables = c.tables.filter(({ id }) => id !== 4);
+    });
+    const p = { ...fichierAbsents(), horodatage: '2031-05-17T08:05:00-04:00' };
+    const rendu = ajusterALaPresence(p, charge);
+    const attendu = structuredClone(p);
+    attendu.placement[1] = { sieges: [[6, 9], [3, 8, 11], [2, 5, 10], [1, 4, 7]], reserve: [], absents: [12] };
+    assert.deepEqual(rendu.placement, attendu);
+    assert.deepEqual(rendu.partis, [{ participant: 12, tours: [2] }]);
+  });
+
+  test('une arrivante non déclarée entre dans la réserve des tours de l’événement, et aux absents d’un tour au-delà', () => {
+    const charge = avec((c) => {
+      c.evenement.tours = 3;
+      c.participants.push(personne(13, ...TREIZIEME));
+    });
+    const rendu = ajusterALaPresence(fichierAbsents(), charge);
+    for (const rang of [0, 1, 2]) assert.ok(rendu.placement.placement[rang].reserve.includes(13), `tour ${rang + 1}`);
+    assert.ok(rendu.placement.placement[3].absents.includes(13));
+    assert.ok(!rendu.placement.placement[3].reserve.includes(13));
+    assert.deepEqual(rendu.arrives, [{ participant: 13, tours: [1, 2, 3] }]);
+    assert.deepEqual(fautes(rendu.placement), []);
+  });
+
+  test('idempotente : ajuster deux fois rend le même placement, et le second ajustement ne rend rien', () => {
+    const charges = [
+      avec((c) => presenceDe(c, 7, [1, 3])),
+      avec((c) => { presenceDe(c, 5); c.participants[3].exclu = true; c.participants.push(personne(13, ...TREIZIEME)); }),
+    ];
+    for (const charge of charges) {
+      for (const p of [fichierAbsents(), fichierAbsentsAttribues()]) {
+        const une = ajusterALaPresence(p, charge);
+        const deux = ajusterALaPresence(une.placement, charge);
+        assert.deepEqual(deux.placement, une.placement);
+        assert.deepEqual(sansPlacement(deux), VIDE);
+        exigerInvariant(une.placement, charge);
+      }
+    }
+  });
+
+  test('le retenu s’ajuste comme une proposition, et garde sa clé proposition', () => {
+    const charge = avec((c) => presenceDe(c, 12));
+    const rendu = ajusterALaPresence(retenuDe(fichierAbsents()), charge);
+    assert.equal(rendu.placement.proposition, 1);
+    assert.deepEqual(rendu.arrives, [{ participant: 12, tours: [3, 4] }]);
+    exigerInvariant(rendu.placement, charge);
+  });
+
+  test('ne modifie ni le placement ni la charge reçus, et ne partage rien avec eux', () => {
+    const p = geler(fichierAbsentsAttribues());
+    const charge = geler(avec((c) => { presenceDe(c, 7, [1, 3]); c.participants[3].exclu = true; }));
+    for (const rendu of [ajusterALaPresence(p, charge), ajusterALaPresence(p, chargePresence())]) {
+      const recus = new Set([...objetsDe(p), ...objetsDe(charge)]);
+      for (const objet of objetsDe(rendu)) assert.ok(!recus.has(objet));
+    }
+  });
+
+  test('un placement fautif lève TypeError', () => {
+    const p = fichierAbsents();
+    p.placement[0].reserve = [5];
+    leveTypeError(() => ajusterALaPresence(p, chargePresence()), /^ajusterALaPresence : placement fautif /);
+  });
+});
+
+describe('formeNommee : une ligne par absente, après la réserve de son tour', () => {
+  test('une absente a sa ligne, absent vrai, sans table, numéro ni siège, et hors de la réserve ; les autres lignes ont absent faux', () => {
+    const p = fichierAbsentsAttribues();
+    p.placement[0] = { sieges: [[1, 2, 3], [4], [7, 8, 9], [10, 11, 12]], reserve: [6], absents: [5] };
+    const lignes = formeNommee(p, chargePresence());
+    const tour1 = lignes.filter(({ tour }) => tour === 1);
+    assert.deepEqual(tour1.slice(-2), [
+      ligne(1, null, null, null, 6, 'Fougère', 'Firmin'),
+      ligne(1, null, null, null, 5, 'Églantine', 'Edmée', false, true),
+    ]);
+    assert.deepEqual(lignes.filter(({ absent }) => absent), [
+      ligne(1, null, null, null, 5, 'Églantine', 'Edmée', false, true),
+      ligne(3, null, null, null, 12, 'Mélisse', 'Mathurin', false, true),
+      ligne(4, null, null, null, 12, 'Mélisse', 'Mathurin', false, true),
+    ]);
+    assert.equal(lignes.length, 4 * 12);
+    assert.ok(lignes.every(({ absent }) => typeof absent === 'boolean'));
   });
 });

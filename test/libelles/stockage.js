@@ -50,6 +50,8 @@ export const EXEMPLES = [
   ['TABLE_AJOUTEE', { table: 5 }],
   ['CAPACITE_CHANGEE', { table: 1, avant: 8, maintenant: 6 }],
   ['TOURS_CHANGES', { avant: 4, maintenant: 3 }],
+  ['PRESENCE_RETIREE', { participant: 6, tours: [3, 4] }],
+  ['PRESENCE_AJOUTEE', { participant: 7, tours: [1] }],
   // Avertissements de l'ouverture
   ['RETENU_FAUTIF', {}],
   ['JOURNAL_REPRIS', {}],
@@ -76,4 +78,9 @@ export const EXEMPLES = [
   ['REGLAGES_ILLISIBLES', { chemin: 'reglages_locaux.json', raison: 'FORME' }],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  ['PRESENCE_RETIREE', { participant: 6, personne: 'Capucine Ellébore', tours: [3, 4] }, 'Capucine Ellébore est absente aux tours 3 et 4 depuis.'],
+  ['PRESENCE_RETIREE', { participant: 6, tours: [2, 3, 4] }, 'La personne n° 6 est absente aux tours 2 à 4 depuis.'],
+  ['PRESENCE_AJOUTEE', { participant: 7, personne: 'Dahlia Bourrache', tours: [1] }, 'Dahlia Bourrache est présente au tour 1 depuis.'],
+  ['PRESENCE_AJOUTEE', { participant: 7, tours: [1, 3, 5] }, 'La personne n° 7 est présente aux tours 1, 3 et 5 depuis.'],
+];

@@ -120,16 +120,19 @@ function memeListe(a, b) {
 }
 
 // Vrai quand les placements a et b, chacun de la forme du schéma — une
-// entrée par tour, { sieges, reserve } —, portent les mêmes listes : leurs
-// textes canoniques sont alors égaux sous un même drapeau siegesAttribues,
-// puisque texteDuPlacement ne lit que ces deux champs. La comparaison lit
-// chaque occupant une fois et n'alloue rien.
+// entrée par tour, { sieges, reserve, absents? } —, portent les mêmes
+// listes : leurs textes canoniques sont alors égaux sous un même drapeau
+// siegesAttribues, puisque texteDuPlacement ne lit que ces trois champs. Une
+// liste absents qui manque vaut une liste vide. La comparaison lit chaque
+// occupant une fois et n'alloue rien.
+const AUCUN = Object.freeze([]);
 function memePlacement(a, b) {
   if (a.length !== b.length) return false;
   for (let tour = 0; tour < a.length; tour += 1) {
     const x = a[tour];
     const y = b[tour];
-    if (!memeListe(x.reserve, y.reserve) || x.sieges.length !== y.sieges.length) return false;
+    if (!memeListe(x.reserve, y.reserve) || !memeListe(x.absents ?? AUCUN, y.absents ?? AUCUN)) return false;
+    if (x.sieges.length !== y.sieges.length) return false;
     for (let table = 0; table < x.sieges.length; table += 1) {
       if (!memeListe(x.sieges[table], y.sieges[table])) return false;
     }

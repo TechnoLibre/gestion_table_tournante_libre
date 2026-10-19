@@ -856,3 +856,101 @@ describe('la dérivation : depart et toursFiges dans le texte canonique (§ 8.9,
     assert.equal(serialiser(charge, ENTETE), TEXTE_CONTRAT.replace('"proposition":2}', '"proposition":4}'));
   });
 });
+
+describe('la présence par tour dans le texte canonique (§ 8.9)', () => {
+  // La charge témoin : retenu daté, étiquettes, objectif, mode des objectifs,
+  // une dérivée à sièges attribués avec une chaise vide et une réserve ;
+  // aucune présence, aucun absent.
+  function chargeTemoin() {
+    const charge = chargeAvecRetenu();
+    charge.participants[0].etiquettes = ['finance', 'Montréal'];
+    charge.tables[1].objectifs = [{ portee: 'tour', tour: 2, regle: 'et', etiquettes: ['finance'] }];
+    charge.reglages.modeObjectifs = 'chacun';
+    charge.prochainsIds.proposition = 4;
+    charge.propositions.push({
+      ...structuredClone(charge.propositions[0]),
+      id: 3,
+      depart: 1,
+      toursFiges: [1],
+      siegesAttribues: true,
+      placement: [
+        { sieges: [[1, 3], [2, 4]], reserve: [] },
+        { sieges: [[null, 4], [2, 3]], reserve: [1] },
+      ],
+    });
+    charge.retenu.horodatage = '2031-05-17T08:05:00-04:00';
+    return charge;
+  }
+
+  // Empreinte FNV-1a sur 32 bits des unités UTF-16 du texte, et sa longueur.
+  function empreinte(texte) {
+    let valeur = 0x811c9dc5;
+    for (let rang = 0; rang < texte.length; rang += 1) {
+      valeur ^= texte.charCodeAt(rang);
+      valeur = Math.imul(valeur, 0x01000193) >>> 0;
+    }
+    return { longueur: texte.length, valeur };
+  }
+
+  // La charge du contrat où la personne 3 n'arrive qu'au tour 2 : absente au
+  // tour 1 de la proposition, la table 1 y garde une chaise libre.
+  function chargeAbsente() {
+    const charge = chargeContrat();
+    charge.participants[2].presence = [2];
+    charge.propositions[0].placement[0] = { sieges: [[1], [2, 4]], reserve: [], absents: [3] };
+    return charge;
+  }
+
+  test('une charge sans absence garde ses octets : empreinte figée du texte de la charge témoin', () => {
+    assert.deepEqual(empreinte(serialiserCharge(chargeTemoin())), { longueur: 2427, valeur: 1810167972 });
+  });
+
+  test('presence s’écrit après etiquettes, absents après reserve ; chacun omis quand il manque', () => {
+    const texte = serialiser(chargeAbsente(), ENTETE);
+    assert.ok(texte.includes('"notes":"arrive tard","exclu":false,"presence":[2]}'), texte);
+    assert.ok(texte.includes('\n        {"sieges":[[1],[2,4]],"reserve":[],"absents":[3]},\n'), texte);
+    assert.ok(texte.includes('\n        {"sieges":[[1,4],[2,3]],"reserve":[]}\n'), texte);
+    assert.equal(texte.split('"presence"').length, 2, texte);
+    assert.equal(texte.split('"absents"').length, 2, texte);
+    const avecEtiquettes = chargeAbsente();
+    avecEtiquettes.participants[2].etiquettes = ['finance'];
+    assert.ok(serialiser(avecEtiquettes, ENTETE).includes('"exclu":false,"etiquettes":["finance"],"presence":[2]}'));
+    const lu = analyser(texte);
+    assert.equal(serialiser(lu.charge, lu.entete), texte);
+  });
+
+  test('canonicité : presence et absents reçus dans un autre ordre, clés à rebours, rendent le même texte', () => {
+    const rangee = chargeAbsente();
+    rangee.evenement.tours = 3;
+    rangee.participants[2].presence = [2, 3];
+    rangee.participants[3].presence = [2];
+    rangee.propositions[0].placement[0] = { sieges: [[1], [2]], reserve: [], absents: [3, 4] };
+    const attendu = serialiser(rangee, ENTETE);
+    assert.ok(attendu.includes('"exclu":false,"presence":[2,3]}'), attendu);
+    assert.ok(attendu.includes('{"sieges":[[1],[2]],"reserve":[],"absents":[3,4]}'), attendu);
+    const desordre = structuredClone(rangee);
+    desordre.participants[2].presence = [3, 2];
+    desordre.propositions[0].placement[0].absents = [4, 3];
+    assert.equal(serialiser(aRebours(desordre), ENTETE), attendu);
+  });
+
+  test('sous des sièges attribués, les listes de table gardent leur ordre et absents se trie : c’est un ensemble', () => {
+    const charge = chargeAbsente();
+    charge.propositions[0].siegesAttribues = true;
+    charge.propositions[0].placement[0] = { sieges: [[null, 1], [4]], reserve: [], absents: [3, 2] };
+    const texte = serialiser(charge, ENTETE);
+    assert.ok(texte.includes('{"sieges":[[null,1],[4]],"reserve":[],"absents":[2,3]}'), texte);
+    charge.propositions[0].siegesAttribues = false;
+    charge.propositions[0].placement[0] = { sieges: [[4, 1], []], reserve: [], absents: [3, 2] };
+    assert.ok(serialiser(charge, ENTETE).includes('{"sieges":[[1,4],[]],"reserve":[],"absents":[2,3]}'));
+  });
+
+  test('la copie canonique ne partage ni la présence ni les absents avec la charge reçue, qui reste intacte', () => {
+    const charge = geler(chargeAbsente());
+    const copie = canoniser(charge);
+    const recus = objetsDe(charge);
+    for (const objet of objetsDe(copie)) assert.ok(!recus.has(objet));
+    assert.deepEqual(copie.participants[2].presence, [2]);
+    assert.deepEqual(copie.propositions[0].placement[0].absents, [3]);
+  });
+});

@@ -20,7 +20,8 @@
 // dans l'ordre du schéma puis des rangs (FORME) ; les identifiants des
 // participants et des tables, le tour des réservations, la portée et le tour
 // des objectifs de table, l'ordre des priorités sous le mode des objectifs,
-// et les titres répétés à l'identique (FORME) ; les
+// les titres répétés à l'identique et la présence de chaque personne
+// (FORME) ; les
 // comptes de la saisie dans l'en-tête — participants, tables, réservations,
 // titres — (COMPTES) ; les références (REFERENCE). Les comptes des
 // propositions et du retenu ne refusent jamais le fichier (§ 8.9, point 3) :
@@ -40,11 +41,14 @@
 //
 // Un fichier d'un format plus ancien se lit comme un fichier du format
 // courant : chaque format n'ajoute au précédent que des champs facultatifs
-// (§ 8.8, § 8.9). Le format 2 ajoute les étiquettes des personnes, les
-// objectifs des tables, cinq réglages, chacun absent à son défaut, et la
-// dérivation d'une proposition, depart et toursFiges, absente hors
-// dérivation ; un fichier du format 1 ne les porte pas, et se lit sans
-// conversion. Il ne se réécrit qu'au premier geste, au format courant.
+// (§ 8.8, § 8.9). Le format 2 ajoute les étiquettes des personnes, leur
+// présence par tour (presence, absente quand la personne est présente à tous
+// les tours), les objectifs des tables, cinq réglages, chacun absent à son
+// défaut, la dérivation d'une proposition, depart et toursFiges, absente
+// hors dérivation, et les absents de chaque tour d'un placement (absents,
+// absente quand le tour n'en a pas) ; un fichier du format 1 ne les porte
+// pas, et se lit sans conversion. Il ne se réécrit qu'au premier geste, au
+// format courant.
 //
 // Une clé que les réglages ont portée et ne portent plus — la cible de la
 // somme de redondance, cibleRedondance — est oubliée (oubliees de la règle
@@ -63,8 +67,10 @@ import { ErreurStockage } from './erreurs.js';
 
 /**
  * Version de format que ce code écrit (§ 8.8). Le format 2 ajoute au format
- * 1 des champs facultatifs seulement (§ 8.9) : un fichier du format 1 se lit
- * comme un fichier du format 2 qui n'en porte aucun.
+ * 1 des champs facultatifs seulement (§ 8.9), la présence par tour d'une
+ * personne (presence) et les absents d'un tour de placement (absents)
+ * compris : un fichier du format 1 se lit comme un fichier du format 2 qui
+ * n'en porte aucun.
  */
 export const FORMAT = 2;
 
@@ -315,8 +321,13 @@ const PARTICIPANT = objet([
   ['titrePressenti', CHAINE_OU_NUL],
   ['notes', CHAINE_OU_NUL],
   ['exclu', BOOLEEN],
-  // Facultatif, en dernier : absent, la personne ne porte aucune étiquette.
+  // Facultatifs, en dernier. etiquettes absent : la personne ne porte aucune
+  // étiquette. presence absent : la personne est présente à tous les tours
+  // (src/moteur/presence.js) ; présent, les tours où elle l'est, une liste
+  // non vide d'entiers distincts de 1 à TOURS_MAX, rangée croissante à
+  // l'écriture ; examinerPresences la compare au nombre de tours.
   ['etiquettes', regle('liste', { ...ETIQUETTES, optionnel: true })],
+  ['presence', liste(entier(1, TOURS_MAX), { min: 1, distincts: true, tri: croissant, optionnel: true })],
 ]);
 
 const TABLE = objet([
@@ -352,12 +363,16 @@ const TITRE = objet([
 // siège est le rang dans la liste, et une chaise vide avant le dernier
 // occupant, siège 1 compris, y porte null. Une liste qui ne finit jamais
 // par null a ainsi une seule écriture, que le tri ne touche pas. reserve
-// porte ceux qui ne sont assis nulle part à ce tour, un ensemble : elle se
-// trie par identifiant croissant, quel que soit le drapeau.
+// porte ceux qui sont présents à ce tour sans être assis, un ensemble : elle
+// se trie par identifiant croissant, quel que soit le drapeau. absents,
+// facultatif, porte ceux qui sont absents à ce tour, un ensemble non vide
+// rangé de même ; il manque quand le tour n'a pas d'absent, et le tour
+// s'écrit alors octet pour octet comme avant qu'il existe.
 const PLACEMENT = liste(
   objet([
     ['sieges', liste(liste(OCCUPANT, { triSansAttribution: croissant }))],
     ['reserve', liste(IDENTIFIANT, { tri: croissant })],
+    ['absents', liste(IDENTIFIANT, { min: 1, tri: croissant, optionnel: true })],
   ]),
   { mise: 'lignes' },
 );
@@ -771,6 +786,22 @@ function examinerObjectifs({ evenement, tables }, faute) {
   });
 }
 
+// Présence de chaque personne qui la porte, exclues comprises, dans l'ordre
+// des personnes : un tour au-delà des tours de l'événement est fautif, le
+// premier dans l'ordre écrit ; une liste qui porte chaque tour, le défaut
+// écrit, l'est aussi, nommée par la liste. La forme garantit des tours
+// entiers, distincts, de 1 à TOURS_MAX : une liste dont aucun tour ne dépasse
+// R et qui en compte R les porte tous. faute(chemin) lève l'écart.
+function examinerPresences({ evenement, participants }, faute) {
+  participants.forEach(({ presence }, rang) => {
+    if (presence === undefined) return;
+    const chemin = `charge.participants[${rang}].presence`;
+    const hors = presence.findIndex((tour) => tour > evenement.tours);
+    if (hors >= 0) faute(`${chemin}[${hors}]`);
+    if (presence.length === evenement.tours) faute(chemin);
+  });
+}
+
 // L'ordre des priorités, quand les réglages le portent, chaque palier rangé
 // dans l'ordre du registre : la liste se juge par verifierPriorites sous le
 // mode des objectifs de la charge, et l'ordre par défaut écrit est une faute
@@ -902,6 +933,7 @@ export function analyser(texte) {
   examinerIdentifiants(charge, faute);
   examinerTours(charge, faute);
   examinerObjectifs(charge, faute);
+  examinerPresences(charge, faute);
   examinerPriorites(charge, faute);
   examinerTitres(charge, faute);
   const manquants = examinerComptes(entete.comptes, charge, plus);
@@ -911,18 +943,20 @@ export function analyser(texte) {
 
 /**
  * Configuration du moteur tirée d'une charge : les participants avec leur
- * appartenance, leur exclusion et leurs étiquettes ; les tables avec leur
- * capacité courante ; le nombre de tours ; les réservations sans leur siège,
- * que le moteur ne lit pas, et sans tour pour la portée « tous » ; les
- * quatre contraintes des réglages et les deux cases facultatives ; les
- * objectifs des tables, chacun { table, tour, regle, etiquettes }, tour null
- * pour la soirée, sa règle résolue : la sienne, sinon la règle par défaut
- * (regleObjectifs) ; le mode des objectifs ; l'ordre des priorités, tel que
- * le rend priorites. Chaque champ nouveau du format 2 est absent à son
- * défaut — étiquettes d'une personne qui n'en porte pas, objectifs quand
- * aucune table n'en a, modeObjectifs à « places », respecterObjectifs coché,
- * rencontrerAnimateurs décoché, priorites quand les réglages ne le portent
- * pas — : la configuration d'une charge sans eux est celle du format 1. Qui
+ * appartenance, leur exclusion, leurs étiquettes et leur présence ; les
+ * tables avec leur capacité courante ; le nombre de tours ; les réservations
+ * sans leur siège, que le moteur ne lit pas, et sans tour pour la portée
+ * « tous » ; les quatre contraintes des réglages et les deux cases
+ * facultatives ; les objectifs des tables, chacun { table, tour, regle,
+ * etiquettes }, tour null pour la soirée, sa règle résolue : la sienne,
+ * sinon la règle par défaut (regleObjectifs) ; le mode des objectifs ;
+ * l'ordre des priorités, tel que le rend priorites. Chaque champ nouveau du
+ * format 2 est absent à son défaut — étiquettes d'une personne qui n'en
+ * porte pas, présence d'une personne présente à tous les tours, objectifs
+ * quand aucune table n'en a, modeObjectifs à « places », respecterObjectifs
+ * coché, rencontrerAnimateurs décoché, priorites quand les réglages ne le
+ * portent pas — : la configuration d'une charge sans eux est celle du
+ * format 1. Qui
  * anime à chaque tour ne se lit pas ici : configurationDe
  * (src/application/configuration.js) l'ajoute, sur la règle des titres
  * pourvus, que le stockage n'importe pas. Les tables vont
@@ -932,8 +966,9 @@ export function analyser(texte) {
  * Les objectifs suivent l'ordre des tables, puis la soirée et les tours
  * croissants. Les participants et les réservations gardent l'ordre de la
  * charge : le rang d'une réservation que nomme une ErreurConfiguration est
- * son rang dans la charge. Les listes d'étiquettes et de priorités sont des
- * copies.
+ * son rang dans la charge. Les listes d'étiquettes, de présence et de
+ * priorités sont des copies ; la présence, que le fichier admet dans un
+ * autre ordre, s'y range croissante, comme le moteur la lit.
  *
  * @param {import('./types.js').Charge} charge
  * @returns {import('../moteur/types.js').Configuration}
@@ -957,11 +992,12 @@ export function configurationDepuisCharge(charge) {
     if (critereCoche(charge, cle) !== defaut) contraintes[cle] = !defaut;
   }
   const configuration = {
-    participants: charge.participants.map(({ id, nom, appartenance, exclu, etiquettes }) =>
-      etiquettes === undefined
-        ? { id, nom, appartenance, exclu }
-        : { id, nom, appartenance, exclu, etiquettes: [...etiquettes] },
-    ),
+    participants: charge.participants.map(({ id, nom, appartenance, exclu, etiquettes, presence }) => {
+      const participant = { id, nom, appartenance, exclu };
+      if (etiquettes !== undefined) participant.etiquettes = [...etiquettes];
+      if (presence !== undefined) participant.presence = [...presence].sort(croissant);
+      return participant;
+    }),
     tables: tables.map((table) => ({ id: table.id, numero: table.numero, capacite: capacite(charge, table) })),
     tours: evenement.tours,
     reservations: charge.reservations.map(({ participant, table, portee, tour }) =>

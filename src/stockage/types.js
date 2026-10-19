@@ -23,11 +23,12 @@
  * Le fichier d'état, format 2 (§ 8.8, § 8.9). Deux régions : l'en-tête et la
  * charge. Le format 2 ajoute au format 1 des champs facultatifs seulement,
  * chacun absent à son défaut et écrit après les clés du format 1 de son
- * objet : les étiquettes d'un participant, les objectifs d'une table, et
- * quatre réglages. Un fichier du format 1 se lit comme un fichier du format 2
- * qui n'en porte aucun. Les comparaisons qui traversent les constructions —
- * empreinte des démonstrations, aller-retour des fichiers livrés — portent
- * sur la charge seule. Toute clé hors de ces formes est une faute de forme.
+ * objet : les étiquettes et la présence par tour d'un participant, les
+ * objectifs d'une table, des réglages, la dérivation d'une proposition et
+ * les absents d'un tour de placement. Un fichier du format 1 se lit comme
+ * un fichier du format 2 qui n'en porte aucun. Les comparaisons qui
+ * traversent les constructions — empreinte des démonstrations, aller-retour
+ * des fichiers livrés — portent sur la charge seule. Toute clé hors de ces formes est une faute de forme.
  * Le texte est en UTF-8 sans marque d'ordre d'octets, fin de ligne LF, une
  * seule fin de ligne finale, dans la forme canonique qu'écrit canonique.js.
  *
@@ -165,6 +166,13 @@
  *                                          (etiquettes.js), sans doublon
  *                                          exact, rangées par unités UTF-16 ;
  *                                          absent, aucune étiquette (§ 4.5)
+ * @property {number[]} [presence]         facultatif : les tours où la
+ *                                          personne est présente, entiers
+ *                                          distincts de 1 à R, rangés
+ *                                          croissants, au moins un, jamais
+ *                                          tous ; absent, présente à tous
+ *                                          les tours. Une exclue la garde,
+ *                                          suspendue (§ 4.4)
  *
  * @typedef {Object} Table
  * @property {number} id            identifiant, unique
@@ -204,17 +212,22 @@
  * correspondent rang à rang ; placement porte un tour par élément :
  * sieges[i] liste les occupants de tables[i] dans l'ordre des sièges —
  * triés par identifiant quand siegesAttribues est faux —, reserve ceux qui
- * ne sont assis nulle part à ce tour. Sous des sièges attribués, null marque
+ * sont présents à ce tour sans être assis, absents ceux qui y sont absents.
+ * Chaque participant déclaré figure exactement une fois dans les listes de
+ * table, reserve et absents d'un tour. Sous des sièges attribués, null marque
  * une chaise vide, avant le dernier occupant, siège 1 compris : il compte
  * dans la longueur de la liste. siegesAttribues appartient à la
  * proposition, ou au retenu, et non au réglage courant : changer le réglage
  * ne détruit pas l'ordre des sièges d'une proposition déjà produite.
- * participants et chaque reserve sont des ensembles, triés par identifiant
- * croissant quel que soit siegesAttribues.
+ * participants, chaque reserve et chaque absents sont des ensembles, triés
+ * par identifiant croissant quel que soit siegesAttribues.
  *
  * @typedef {Object} TourDePlacement
  * @property {(number|null)[][]} sieges   null : une chaise vide
  * @property {number[]} reserve       triée par identifiant croissant
+ * @property {number[]} [absents]     facultatif : non vide, triée par
+ *                                    identifiant croissant ; absent quand
+ *                                    le tour n'a pas d'absent
  *
  * @typedef {Object} PropositionFichier
  * @property {number} id              identifiant : place dans la suite des
@@ -538,7 +551,8 @@
  *                                         d'un tour (table null), liste d'une
  *                                         table au-delà de sa capacité
  *   DOUBLON             {tour,            un identifiant écrit plus d'une fois
- *                        participant}     dans un tour, réserve comprise
+ *                        participant}     dans un tour, réserve et absents
+ *                                         compris
  *   INCONNU             {tour,            un identifiant écrit sans être
  *                        participant}     déclaré
  *   MANQUANT            {tour,            un identifiant déclaré sans être
