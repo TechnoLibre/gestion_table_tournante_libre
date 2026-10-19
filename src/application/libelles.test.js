@@ -756,6 +756,10 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
     assert.match(libelle('JOURNAL_ECARTEES', { n: 64 }), /^64 entrées de l'historique sont écartées/);
     assert.equal(libelle('DERIVE', { ids: [], retenu: true }).startsWith('Le placement retenu ne décrit plus'), true);
     assert.match(libelle('DERIVE', { ids: [1, 2], retenu: true }), /^Le placement retenu et les propositions n° 1 et 2 ne décrivent plus/);
+    assert.match(libelle('DERIVE', { ids: [1, 2], retenu: true }), /: ils sont gardés, /);
+    assert.match(libelle('DERIVE', { ids: [], retenu: true }), /: il est gardé, /);
+    assert.match(libelle('DERIVE', { ids: [1, 2], retenu: false }), /: elles sont gardées, /);
+    assert.match(libelle('DERIVE', { ids: [3], retenu: false }), /: elle est gardée, /);
     assert.match(libelle('PROPOSITIONS_FAUTIVES', { ids: [3, null] }), /n° 3/);
   });
 });

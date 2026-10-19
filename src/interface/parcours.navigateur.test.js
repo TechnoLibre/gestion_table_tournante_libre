@@ -36,11 +36,17 @@
 // 12g, chacune sur une configuration qu'un scénario court construit et
 // génère ; 14 et 14a sur celle des paires ; 15a sur l'événement construit,
 // rouvert, débloqué et généré de nouveau ; 16 sur la petite démonstration ;
-// puis, les dernières, 11a, 11b, 17, 17a et 18 sur la grande
+// puis 11a, 11b, 17, 17a et 18 sur la grande
 // démonstration sans exception, chargée depuis le premier écran, générée
 // sous la graine écrite au compte réduit de la grande, la durée pilotée par
 // le relais, puis dérivée de sa première proposition, un tour figé, sous
-// une seconde graine écrite, la paire comparée écrite avec elle. Les valeurs attendues viennent du moteur, du CSV et du
+// une seconde graine écrite, la paire comparée écrite avec elle ; enfin,
+// les dernières, celles de la présence par tour, sur la petite démonstration générée et retenue : 02c,
+// l'aperçu du modèle de participants ; 04b et 04c, la présence d'une
+// partante dite par la grille et celle d'une arrivante dite par sa fiche ;
+// 19a, le retenu ajusté au plan ; 11c, la dérivée de la proposition que ce
+// changement a mise en dérive ; 12h, la page de qualité de la meilleure
+// dérivée ; 25a, la réédition de leurs badges. Les valeurs attendues viennent du moteur, du CSV et du
 // stockage, sollicités une seconde fois (§ 19.1), et le texte de la même
 // traduction que celle de l'application. Aucun délai fixe : chaque étape
 // attend un état du document (§ 19.3).
@@ -67,13 +73,16 @@ import { creerFormat } from '../application/format.js';
 import { comparerPlacements, evaluer } from '../application/evaluation.js';
 import { creerExecuteurDirect } from '../application/generation.js';
 import { TABLES_APPLICATION, libelle } from '../application/libelles.js';
+import { toursNommes } from '../application/libelles/aides.js';
 import { nomAffiche } from '../application/personnes.js';
 import { etatPlaces } from '../application/places.js';
 import { estBrouillon } from '../application/sorties.js';
 import { creerTraduction } from '../application/traduction.js';
 import { versionVisible } from '../application/version.js';
 import { apercevoir } from '../csv/apercu.js';
+import { lirePresence } from '../csv/presence.js';
 import { decoder } from '../csv/encodage.js';
+import { ecrireCsv } from '../csv/export.js';
 import { decouper } from '../csv/lecture.js';
 import { CATALOGUE } from '../demo/catalogue.js';
 import { constante } from '../geometrie/constantes.js';
@@ -157,8 +166,8 @@ const AJOUTEE = { nom: 'Ombrelle', prenom: 'Iris' };
 
 // Les gestes non destructeurs que les fenêtres surveillent (§ 2.1, § 5.9,
 // D19), chacun exécuté au moins une fois par le parcours. Les gestes des
-// étiquettes, des objectifs et des priorités portent le nom de leur
-// commande ; les deux cases et le mode des objectifs passent par
+// étiquettes, des objectifs, des priorités et de la présence portent le nom
+// de leur commande ; les deux cases et le mode des objectifs passent par
 // modifierReglage, que 10a exerce sur chacun d'eux, comme 11 sur le compte
 // d'arrêt.
 const GESTES_NON_DESTRUCTEURS = Object.freeze([
@@ -180,6 +189,7 @@ const GESTES_NON_DESTRUCTEURS = Object.freeze([
   'importerObjectifs',
   'changerPriorites',
   'retablirPriorites',
+  'changerPresence',
 ]);
 
 // Les familles de geste modifiant que la lecture et le plan bloqué refusent
@@ -200,6 +210,7 @@ const FAMILLES_MODIFIANTES = Object.freeze(
     ['désigner', ['designer']],
     ['saisir dans une cellule', ['modifier']],
     ['changer les étiquettes', ['changerEtiquettes']],
+    ['changer la présence', ['changerPresence']],
     ['coller', []],
     ['importer', []],
     ['importer des objectifs', ['importerObjectifs']],
@@ -2412,6 +2423,34 @@ describe('l’ordre de lecture, pas une séquence imposée', { timeout: DUREE },
     expect(ajoutee).toMatchObject(AJOUTEE);
     memoire.ajoutee = ajoutee.id;
 
+    // Sa présence, au clavier dans la grille : présente à partir du tour 2,
+    // puis de nouveau à tous les tours. Une entrée chacune, sans fenêtre ;
+    // le retenu la dit absente au tour 1, puis la rend à sa réserve, et ses
+    // raisons de dérive ne changent pas.
+    const presenceDe = () => charge().participants.find(({ id }) => id === ajoutee.id).presence;
+    const cellulePresence = () => dans(`[data-section="participants"] [data-participant="${ajoutee.id}"] [data-champ="presence"]`);
+    const raisonsDuRetenu = derive(charge().retenu, charge());
+    const reserveAuTour1 = [...charge().retenu.placement[0].reserve];
+    expect(reserveAuTour1).toContain(ajoutee.id);
+    for (const [geste, attendue] of [
+      ['sa présence à partir du tour 2', Array.from({ length: charge().evenement.tours - 1 }, (_, rang) => rang + 2)],
+      ['sa présence à tous les tours', undefined],
+    ]) {
+      await sansFenetre('changerPresence', async () => {
+        r = revision();
+        cellulePresence().focus();
+        await touche('Enter');
+        await attendre('les cases de sa présence', () => cellulePresence().querySelector('[data-editeur-presence]'));
+        await touche(' ');
+        await touche('Enter');
+        await uneEntree(r, geste);
+      });
+      expect(presenceDe(), geste).toEqual(attendue);
+      expect(charge().retenu.placement[0].absents, geste).toEqual(attendue === undefined ? undefined : [ajoutee.id]);
+      expect(derive(charge().retenu, charge()), geste).toEqual(raisonsDuRetenu);
+    }
+    expect(charge().retenu.placement[0].reserve).toEqual(reserveAuTour1);
+
     await ouvrirSection('tables');
     r = revision();
     await cliquer('[data-section="tables"] [data-commande="creerTableRonde"]');
@@ -2753,6 +2792,16 @@ describe('lecture et bloqué : tout geste modifiant refusé, rien d’écrit', {
       expect(champ.value).toBe('bénévole');
       await cliquer('[data-fiche] [data-commande="fermerFiche"]');
       await attendre('la fiche fermée', () => dans('[data-fiche]') === null);
+    });
+    // Entrée sur la cellule de présence : le refus se pose dans la cellule,
+    // les cases restent fermées.
+    await famille('changer la présence', async () => {
+      const personne = charge().participants.find((p) => !p.exclu);
+      const cellule = () => dans(`[data-section="participants"] [data-participant="${personne.id}"] [data-champ="presence"]`);
+      cellule().focus();
+      await touche('Enter');
+      await refusPres(cellule, code, remede, 'changer la présence');
+      expect(cellule().querySelector('[data-editeur-presence]'), 'les cases de la présence').toBeNull();
     });
     await famille('coller', async () => {
       const cellule = dans('[data-section="participants"] [role="grid"] [tabindex="0"]');
@@ -3878,7 +3927,7 @@ const DERIVATION = Object.freeze({
 });
 
 // Les captures de la dérivée et de la comparaison : les dernières du
-// parcours.
+// parcours avant celles de la présence par tour.
 const CAPTURES_DERIVATION = Object.freeze([
   '11a-depart-derive',
   '11b-propositions-derivees',
@@ -3949,10 +3998,13 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
     await rienEcrit(avant, 'choisir le départ, figer un tour, saisir la graine');
     expect(entreesApres(avant.revision)).toEqual([]);
 
-    // Les captures d'avant sont toutes prises : celles-ci sont les dernières.
+    // Les captures d'avant sont toutes prises : restent celles-ci, puis
+    // celles de la présence par tour, les dernières.
     const { captures } = await commands.declarationsCaptures();
     const prises = new Set([...capturesPrises(), ...capturesPdf]);
-    const restantes = captures.map(({ fichier }) => fichier).filter((fichier) => !CAPTURES_DERIVATION.includes(fichier) && !prises.has(fichier));
+    const restantes = captures
+      .map(({ fichier }) => fichier)
+      .filter((fichier) => !CAPTURES_DERIVATION.includes(fichier) && !CAPTURES_PRESENCE.includes(fichier) && !prises.has(fichier));
     expect(restantes, 'les captures qui restent à prendre avant la dérivée').toEqual([]);
 
     // La carte et « Générer depuis » ensemble, sans focus ni contour ; la
@@ -4289,6 +4341,456 @@ describe('la dérivée et la comparaison (§ 5.7, § 12.10.6, C26)', { timeout: 
     await photographier(m, '18-comparaison-escalier', {
       condition: ['[data-vue-qualite="comparaison"] table[data-jumeau]'],
       graine: DERIVATION.graine,
+    });
+  });
+});
+
+// --- La présence par tour (§ 4, § 5.7, § 5.8, § 10, § 11.5) ------------------------------
+
+// La configuration construite des captures de la présence : la petite
+// démonstration, chargée depuis le premier écran et générée sous la graine
+// écrite, au compte d'arrêt de l'événement, la proposition depart retenue. La partante, la personne de la
+// démonstration d'identifiant donné, reste aux tours toursPartante, dits
+// par la grille au clavier ; l'arrivante, ajoutée par le formulaire sous un
+// nom inventé, vient aux tours toursArrivante, dits par sa fiche. Elle prend
+// l'appartenance de la personne d'identifiant groupe, d'un autre groupe que
+// la partante : aux tours de l'arrivée, ce groupe compte une personne de
+// plus que les tables, et la configuration y impose une collision par tour,
+// le plancher que les collisions gardent sous l'absence. Aux tours de
+// l'arrivée, la salle reste juste pleine : la partante libère la place de
+// l'arrivante. La dérivée de 11c fige les tours toursFiges.
+const PRESENCE = Object.freeze({
+  depart: 1,
+  partante: 1,
+  toursPartante: Object.freeze([1, 2]),
+  arrivante: Object.freeze({ nom: 'Bruyère', prenom: 'Aglaé' }),
+  toursArrivante: Object.freeze([3, 4]),
+  groupe: 2,
+  toursFiges: Object.freeze([1, 2]),
+});
+
+// Les captures de la présence par tour : les dernières du parcours.
+const CAPTURES_PRESENCE = Object.freeze([
+  '02c-import-presence',
+  '04b-presence-grille',
+  '04c-presence-fiche',
+  '19a-presence-plan',
+  '11c-derivee-presence',
+  '12h-qualite-absence',
+  '25a-badge-absente',
+]);
+
+// Montre au plan le tour donné, par le sélecteur des tours.
+async function montrerTourAuPlan(tour) {
+  const selecteurTour = dans('[data-champ="tour"]');
+  selecteurTour.value = String(tour);
+  selecteurTour.dispatchEvent(new Event('change', { bubbles: true }));
+  await attendre(`le tour ${tour} montré`, () => m.ui.etat().tour === tour);
+  await images(2);
+}
+
+// Les cases de présence que porte un conteneur, cochées ou non, par tour.
+const casesCochees = (conteneur) => [...conteneur.querySelectorAll('[data-presence-tour]')].map((c) => c.checked);
+
+// La personne de la charge d'identifiant donné.
+const personneDe = (id) => charge().participants.find((p) => p.id === id);
+
+describe('la présence par tour (§ 4, § 5.8)', { timeout: DUREE }, () => {
+  // Chaque capture se prend sur la petite démonstration, chargée depuis le
+  // premier écran après la dérivée et la comparaison : aucune ne change ce
+  // que les captures d'avant et les familles reçoivent.
+  test('02c la petite générée, n° 1 retenue ; le modèle à quatre tours : l’aperçu lit « 1-3 » et « 2, 3 »', async () => {
+    const { captures } = await commands.declarationsCaptures();
+    const prises = new Set([...capturesPrises(), ...capturesPdf]);
+    const restantes = captures.map(({ fichier }) => fichier).filter((fichier) => !CAPTURES_PRESENCE.includes(fichier) && !prises.has(fichier));
+    expect(restantes, 'les captures qui restent à prendre avant la présence').toEqual([]);
+
+    const { depart } = PRESENCE;
+    await chargerDemonstration('petite');
+    await passerEnEcriture();
+    await generer();
+    await ouvrirSection('propositions');
+    const r = revision();
+    await cliquerAction(`[data-section="propositions"] tr[data-proposition="${depart}"]`, 'retenir');
+    await uneEntree(r, 'retenir');
+    expect(charge().retenu.proposition).toBe(depart);
+    const { tours } = charge().evenement;
+    expect(tours).toBe(4);
+
+    // « Télécharger un modèle » remet ses octets à « Enregistrer sous… »,
+    // qui renonce ici ; l'aperçu les relit. Rien ne s'écrit.
+    await ouvrirSection('import');
+    const avant = fichiers();
+    memoire.presence = { avant };
+    const enregistrerSous = m.fs.enregistrerSous;
+    const remis = [];
+    m.fs.enregistrerSous = async (nomPropose, octets) => {
+      remis.push({ nomPropose, octets });
+      return null;
+    };
+    try {
+      await cliquer('[data-section="import"] [data-commande="telechargerModele"]');
+      await attendre('le modèle remis', () => remis.length === 1);
+    } finally {
+      m.fs.enregistrerSous = enregistrerSous;
+    }
+    const [{ nomPropose, octets }] = remis;
+    // Le modèle, plus une ligne qui désigne une personne inscrite par son nom
+    // et son prénom seuls, sa présence vide : l'import la met à jour, quand
+    // il crée les quatre personnes inventées du modèle.
+    const [entete, ...lignes] = decouper(decoder(octets).texte, ';').enregistrements;
+    const colonne = entete.indexOf('presence');
+    expect(colonne).toBe(entete.length - 1);
+    const inscrite = personneDe(PRESENCE.groupe);
+    expect(inscrite.appartenance, 'une appartenance : la ligne qui la désigne n’est pas un doublon').not.toBeNull();
+    const designe = entete.map((champ) => ({ nom: inscrite.nom, prenom: inscrite.prenom ?? '' })[champ] ?? '');
+    const complete = ecrireCsv([entete, ...lignes, designe], ';');
+    const apercu = await ouvrirApercu(nomPropose, complete);
+    expect(dans('[data-champ="mode"] input:checked').value, 'l’import met à jour une liste peuplée').toBe('mettreAJour');
+    expect(apercu.querySelectorAll('[data-refusees] [data-ligne]')).toHaveLength(0);
+    expect(apercu.querySelector('[data-doublons]'), 'aucun doublon').toBeNull();
+    const celluleDeLaLigne = (ligne) => `[data-apercu] [data-lignes] [data-ligne="${ligne}"] [data-cellule="presence"]`;
+    // Les cellules brutes du modèle, en plage et en liste, et ce que l'aperçu
+    // en lit, à la ligne du fichier qui les porte.
+    const brutes = lignes.map((ligne) => ligne[colonne] ?? '');
+    const lues = ['1-3', '2, 3'].map((brute) => {
+      const rang = brutes.indexOf(brute);
+      expect(rang, `la cellule « ${brute} » du modèle`).toBeGreaterThanOrEqual(0);
+      const { presence } = lirePresence(brute, tours);
+      expect(texteDe(dans(celluleDeLaLigne(rang + 2))), brute).toBe(plat(t('import.presence.tours', { tours: presence })));
+      return celluleDeLaLigne(rang + 2);
+    });
+    // Une cellule vide du modèle ne dit rien : l'import crée la personne, à
+    // tous les tours. Celle de la personne inscrite garde sa présence.
+    const creees = brutes.flatMap((brute, rang) => (brute === '' ? [rang + 2] : []));
+    expect(creees.length, 'des cellules vides au modèle').toBeGreaterThan(0);
+    for (const ligne of creees) expect(texteDe(dans(celluleDeLaLigne(ligne))), `ligne ${ligne}, créée`).toBe('');
+    const inchangee = celluleDeLaLigne(lignes.length + 2);
+    expect(texteDe(dans(inchangee)), 'la ligne de la personne inscrite').toBe(plat(t('import.presence.inchangee')));
+    await rienEcrit(avant, 'le modèle et son aperçu');
+    document.activeElement?.blur();
+    await cadrerDansLaSurface([...lues, inchangee].map((selecteur) => dans(selecteur)));
+    await photographier(m, '02c-import-presence', { condition: [...lues, inchangee], graine: GRAINE });
+  });
+
+  test('04b l’arrivante aux tours 3 et 4 par sa fiche ; la grille, les cases de la partante, tours 1 et 2', async () => {
+    const { partante, arrivante: nommee, toursArrivante, toursPartante, groupe } = PRESENCE;
+    await cliquer('[data-apercu] [data-commande="fermerApercu"]');
+    await attendre('l’aperçu fermé', () => dans('[data-apercu]') === null);
+    await rienEcrit(memoire.presence.avant, 'Annuler l’aperçu du modèle');
+    const { tours } = charge().evenement;
+    const tous = Array.from({ length: tours }, (_, rang) => rang + 1);
+
+    // L'arrivante, par le formulaire : son appartenance est celle d'un
+    // autre groupe que la partante.
+    await ouvrirSection('participants');
+    const appartenance = personneDe(groupe).appartenance;
+    expect(appartenance).not.toBe(personneDe(partante).appartenance);
+    let r = revision();
+    const formulaire = dans('[data-section="participants"] form');
+    await taper(formulaire.querySelector('input[data-champ="appartenance"]'), appartenance);
+    await taper(formulaire.querySelector('input[data-champ="prenom"]'), nommee.prenom);
+    await taper(formulaire.querySelector('input[data-champ="nom"]'), nommee.nom);
+    await touche('Enter');
+    await uneEntree(r, 'ajouter l’arrivante');
+    const arrivante = charge().participants.at(-1);
+    expect(arrivante).toMatchObject({ ...nommee, appartenance });
+    memoire.presence.arrivante = arrivante.id;
+    memoire.presence.ajout = r;
+    // Le retenu l'attend dans la réserve de chaque tour.
+    for (const tour of tous) expect(charge().retenu.placement[tour - 1].reserve, `tour ${tour}`).toContain(arrivante.id);
+
+    // Sa présence, par sa fiche : les tours d'avant l'arrivée décochés, puis
+    // « Appliquer », une entrée ; le retenu la dit absente à ces tours.
+    await cliquer(`[data-section="participants"] [data-participant="${arrivante.id}"] [data-commande="fiche"]`);
+    const fiche = await attendre('sa fiche', () => dans(`[data-fiche="${arrivante.id}"] [data-presence-fiche]`));
+    for (const tour of tous.filter((n) => !toursArrivante.includes(n))) {
+      await appuyer(fiche.querySelector(`[data-presence-tour="${tour}"]`), `décocher le tour ${tour}`);
+    }
+    expect(casesCochees(fiche)).toEqual(tous.map((n) => toursArrivante.includes(n)));
+    r = revision();
+    await appuyer(fiche.querySelector('[data-commande="changerPresence"]'), 'Appliquer');
+    await uneEntree(r, 'sa présence');
+    expect(personneDe(arrivante.id).presence).toEqual(toursArrivante);
+    for (const tour of tous) {
+      const { reserve, absents = [] } = charge().retenu.placement[tour - 1];
+      expect([reserve.includes(arrivante.id), absents.includes(arrivante.id)], `tour ${tour}`).toEqual(
+        toursArrivante.includes(tour) ? [true, false] : [false, true],
+      );
+    }
+    await cliquer('[data-fiche] [data-commande="fermerFiche"]');
+    await attendre('la fiche fermée', () => dans('[data-fiche]') === null);
+
+    // La grille triée par nom : la partante et l'arrivante dans ses
+    // premières lignes. Entrée ouvre les cases de la partante, le focus sur
+    // le tour 1 ; Fin, l'espace, ← et l'espace décochent ses deux derniers
+    // tours, sans rien écrire.
+    const section = () => dans('[data-section="participants"]');
+    const tri = () => section().querySelector('[data-commande="trier"][data-cible="nom"]');
+    for (let essai = 0; essai < 2 && tri().closest('th').getAttribute('aria-sort') !== 'ascending'; essai += 1) await appuyer(tri(), 'trier par nom');
+    expect(tri().closest('th').getAttribute('aria-sort')).toBe('ascending');
+    const avant = fichiers();
+    const cellule = () => section().querySelector(`[data-participant="${partante}"] [data-champ="presence"]`);
+    cellule().focus();
+    await touche('Enter');
+    const editeur = await attendre('les cases de la partante', () => cellule().querySelector('[data-editeur-presence]'));
+    expect(document.activeElement).toBe(editeur.querySelector('[data-presence-tour="1"]'));
+    for (const cle of ['End', ' ', 'ArrowLeft', ' ']) await touche(cle);
+    await images(2);
+    expect(casesCochees(editeur)).toEqual(tous.map((n) => toursPartante.includes(n)));
+    await rienEcrit(avant, 'les cases de la partante, sans validation');
+    const autre = section().querySelector(`[data-participant="${arrivante.id}"] [data-champ="presence"] [data-presence="partielle"]`);
+    expect(texteDe(autre)).toBe(plat(toursNommes(toursArrivante)));
+    await cadrerDansLaSurface([partante, arrivante.id].map((id) => section().querySelector(`[role="grid"] [data-participant="${id}"]`)));
+    await photographier(m, '04b-presence-grille', {
+      condition: [
+        `[data-section="participants"] [data-participant="${partante}"] [data-editeur-presence]`,
+        `[data-section="participants"] [data-participant="${arrivante.id}"] [data-presence="partielle"]`,
+      ],
+      graine: GRAINE,
+    });
+  });
+
+  test('04c Entrée : une entrée, la partante absente aux tours 3 et 4 du retenu ; la fiche de l’arrivante', async () => {
+    const { partante, toursPartante, toursArrivante } = PRESENCE;
+    const { arrivante } = memoire.presence;
+    const { tours } = charge().evenement;
+    const tous = Array.from({ length: tours }, (_, rang) => rang + 1);
+    const r = revision();
+    await touche('Enter');
+    await uneEntree(r, 'la présence de la partante');
+    expect(personneDe(partante).presence).toEqual(toursPartante);
+    // Le retenu suit la présence dans la même entrée : la partante quitte
+    // sa chaise aux tours où elle est absente, personne d'autre ne bouge, et
+    // le retenu ne dérive pas.
+    for (const tour of tous) {
+      const { sieges, absents = [] } = charge().retenu.placement[tour - 1];
+      const assise = sieges.some((liste) => liste.includes(partante));
+      expect([assise, absents.includes(partante)], `tour ${tour}`).toEqual(toursPartante.includes(tour) ? [true, false] : [false, true]);
+    }
+    expect(derive(charge().retenu, charge())).toEqual([]);
+
+    // La fiche de l'arrivante : « tours 3 et 4 », ses cases, et
+    // l'itinéraire du retenu, absente puis en réserve.
+    await cliquer(`[data-section="participants"] [data-participant="${arrivante}"] [data-commande="fiche"]`);
+    const fiche = await attendre('sa fiche', () => dans(`[data-fiche="${arrivante}"]`));
+    const rubrique = fiche.querySelector('[data-presence-fiche]');
+    expect(texteDe(rubrique.querySelector('[data-presence="partielle"]'))).toBe(plat(toursNommes(toursArrivante)));
+    expect(casesCochees(rubrique)).toEqual(tous.map((n) => toursArrivante.includes(n)));
+    const etapes = tous.map((tour) => fiche.querySelector(`[data-itineraire-tour="${tour}"]`));
+    expect(etapes.map((ligne) => texteDe(ligne.cells[1]))).toEqual(
+      tous.map((n) => plat(t(toursArrivante.includes(n) ? 'participants.fiche.enReserve' : 'participants.fiche.absente'))),
+    );
+    document.activeElement?.blur();
+    await cadrerDansLaSurface([rubrique, etapes.at(-1)]);
+    await photographier(m, '04c-presence-fiche', {
+      condition: [
+        `[data-fiche="${arrivante}"] [data-presence-fiche] [data-presence-tour="${toursArrivante[0]}"]`,
+        `[data-fiche="${arrivante}"] [data-itineraire-tour="1"]`,
+        `[data-fiche="${arrivante}"] [data-itineraire-tour="${tours}"]`,
+      ],
+      graine: GRAINE,
+    });
+  });
+
+  test('19a le retenu au tour 3 : la chaise libre, l’arrivante en réserve, la partante absente', async () => {
+    const { partante, toursArrivante } = PRESENCE;
+    const { arrivante, ajout } = memoire.presence;
+    const tour = toursArrivante[0];
+    await cliquer('[data-fiche] [data-commande="fermerFiche"]');
+    await attendre('la fiche fermée', () => dans('[data-fiche]') === null);
+    // Une entrée par geste depuis l'ajout, et aucune autre.
+    expect(revision()).toBe(ajout + 3);
+    expect(entreesApres(ajout)).toHaveLength(3);
+    expect(derive(charge().retenu, charge())).toEqual([]);
+
+    await ouvrirPlan();
+    if (m.ui.etat().proposition !== null) {
+      await cliquer('[data-commande="quitterProposition"]');
+      await attendre('le retenu montré', () => m.ui.etat().proposition === null);
+    }
+    await montrerTourAuPlan(tour);
+    const avant = fichiers();
+    const { sieges, reserve, absents } = charge().retenu.placement[tour - 1];
+    const places = charge().tables.reduce((somme, table) => somme + (table.sieges ?? charge().evenement.siegesParDefaut), 0);
+    expect(sieges.flat().filter((id) => id !== null)).toHaveLength(places - 1);
+    expect([reserve, absents]).toEqual([[arrivante], [partante]]);
+    const absentes = await attendre('la carte des absentes', () => dans(`[data-absentes="${tour}"]`));
+    expect([...absentes.querySelectorAll('[data-participant]')].map((b) => Number(b.dataset.participant))).toEqual([partante]);
+    expect([...dans(`[data-reserve="${tour}"]`).querySelectorAll('[data-participant]')].map((b) => Number(b.dataset.participant))).toEqual([arrivante]);
+    const liste = dans('[data-liste-travail="reserves"]');
+    expect([...liste.querySelectorAll('[data-participant]')].map((b) => Number(b.dataset.participant))).toEqual([arrivante]);
+    await rienEcrit(avant, 'montrer le tour 3');
+    document.activeElement?.blur();
+    await images(2);
+    await cadrerDansLaSurface([`[data-reserve="${tour}"]`, `[data-absentes="${tour}"]`, '[data-liste-travail="reserves"]'].map((selecteur) => dans(selecteur)));
+    await photographier(m, '19a-presence-plan', {
+      condition: [`[data-absentes="${tour}"] [data-participant]`, `[data-reserve="${tour}"] [data-participant]`, '[data-liste-travail="reserves"] [data-participant]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('11c « Repartir d’elle » sur n° 1 en dérive, tours 1 et 2 figés : ses écarts, l’issue, des dérivées comparables', async () => {
+    const { depart, partante, toursPartante, toursArrivante, toursFiges } = PRESENCE;
+    const { arrivante } = memoire.presence;
+    const { tours } = charge().evenement;
+    const absente = Array.from({ length: tours }, (_, rang) => rang + 1).filter((n) => !toursPartante.includes(n));
+    expect(derive(charge().propositions.find(({ id }) => id === depart), charge()).length).toBeGreaterThan(0);
+    await ouvrirSection('propositions');
+    const ligne = await attendre('la ligne du départ', () => dans(`[data-section="propositions"] tr[data-proposition="${depart}"]`));
+    const avant = fichiers();
+    await appuyer(actionDe(ligne, 'repartir'), 'Repartir d’elle');
+    const carte = await attendre('la carte du départ', () => dans('[data-section="generation"] [data-depart]'));
+    for (const tour of toursFiges) await appuyer(carte.querySelector(`input[data-tour-fige="${tour}"]`), `figer le tour ${tour}`);
+    await attendre('les tours figés', () => m.ui.etat().depart?.toursFiges.length === toursFiges.length);
+    expect(m.ui.etat().depart).toEqual({ id: depart, toursFiges: [...toursFiges] });
+    // Les écarts du départ, avant le lancement : la partante retirée des
+    // tours où elle est absente, l'arrivante à asseoir aux siens ; le retenu
+    // vient de n° 1 sans retouche, aucune phrase ne le compare.
+    const ecarts = await attendre('les écarts du départ', () => carte.querySelector('[data-ecarts-depart]'));
+    const ligneDe = (id) => texteDe(ecarts.querySelector(`li[data-participant="${id}"]`));
+    const nom = (id) => nomAffiche(personneDe(id));
+    expect(ligneDe(partante)).toBe(plat(`${nom(partante)}${t('generation.depart.retiree', { tours: absente })}`));
+    expect(ligneDe(arrivante)).toBe(plat(`${nom(arrivante)}${t('generation.depart.aAsseoir', { tours: [...toursArrivante] })}`));
+    expect(ecarts.querySelectorAll('li')).toHaveLength(2);
+    expect(carte.querySelector('[data-ecart-retenu]')).toBeNull();
+    await taper(dans('[data-section="generation"] input[data-champ="graine"]'), String(GRAINE));
+    await rienEcrit(avant, 'choisir le départ, figer deux tours, saisir la graine');
+
+    const avantIds = new Set(charge().propositions.map(({ id }) => id));
+    const r = revision();
+    await cliquer('[data-section="generation"] [data-commande="genererDepuis"]');
+    await attendre('la génération dérivée, ou sa question', () => revision() > r || dans('[data-question="longue"]'));
+    if (revision() === r) await cliquer('[data-commande="confirmerGeneration"]');
+    await uneEntree(r, 'générer depuis n° 1');
+    // Chaque dérivée reprend les tours figés du départ ajusté, qui sont ceux
+    // du retenu, et décrit la soirée : comparable, classée.
+    const derivees = charge().propositions.filter(({ id }) => !avantIds.has(id));
+    expect(derivees.length).toBeGreaterThan(0);
+    for (const p of derivees) {
+      expect([p.depart, p.toursFiges], `n° ${p.id}`).toEqual([depart, [...toursFiges]]);
+      for (const tour of toursFiges) expect(p.placement[tour - 1], `n° ${p.id}, tour ${tour}`).toEqual(charge().retenu.placement[tour - 1]);
+      expect(derive(p, charge()), `n° ${p.id}`).toEqual([]);
+    }
+    const { ordre } = evaluer(charge()).classement;
+    expect(ordre).not.toContain(depart);
+    const ajoutees = derivees.map(({ id }) => id);
+    const meilleure = ordre.find((id) => ajoutees.includes(id));
+    memoire.presence.meilleure = meilleure;
+    const issue = await attendre('l’issue de la génération dérivée', () => dans('[data-section="generation"] [data-issue]'));
+    expect(texteDe(issue)).toBe(
+      plat(
+        t('generation.issue.derivee', {
+          ajoutees: ajoutees.length,
+          premier: ajoutees[0],
+          dernier: ajoutees.at(-1),
+          depart,
+          meilleure,
+          placeMeilleure: ordre.indexOf(meilleure) + 1,
+          placeDepart: null,
+          identiques: charge().reglages.generation.nombre - ajoutees.length,
+          departEnDerive: true,
+        }),
+      ),
+    );
+    expect(dans('[data-section="generation"] [data-commande="comparerIssue"]')).toBeNull();
+    expect(dans('[data-section="generation"] [data-avertissement="DEPART_ECART_AU_RETENU"]')).toBeNull();
+    // Le départ reste choisi, et la carte dit toujours ses écarts.
+    expect(m.ui.etat().depart).toEqual({ id: depart, toursFiges: [...toursFiges] });
+    document.activeElement?.blur();
+    await images(2);
+    const ecartsApres = dans('[data-section="generation"] [data-depart] [data-ecarts-depart]');
+    await cadrerDansLaSurface([ecartsApres, issue]);
+    await photographier(m, '11c-derivee-presence', {
+      condition: ['[data-section="generation"] [data-depart] [data-ecarts-depart]', '[data-section="generation"] [data-issue]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('12h la meilleure dérivée : l’itinéraire sans plancher prouvé, celui des collisions gardé, les losanges', async () => {
+    const { partante, groupe, toursArrivante } = PRESENCE;
+    const { arrivante, meilleure } = memoire.presence;
+    const id = await qualiteDeLaPremiere();
+    expect(id).toBe(meilleure);
+    expect(m.ui.etat().proposition, 'la proposition montrée').toBe(id);
+    // L'en-tête : seule la tuile de l'écart d'itinéraire dit son plancher
+    // non prouvé.
+    const entete = vueQualite('entete');
+    const nonProuves = [...entete.querySelectorAll('[data-plancher-non-prouve]')];
+    expect(nonProuves).toHaveLength(1);
+    expect(entete.querySelector('[data-tuile="ecartItineraireMax"]').contains(nonProuves[0])).toBe(true);
+    expect(texteDe(nonProuves[0])).toBe(plat(t('qualite.entete.plancherNonProuve')));
+    // Les collisions : le plancher du groupe de l'arrivante, une collision
+    // à chacun de ses tours, reste prouvé et se dessine.
+    const appartenance = personneDe(groupe).appartenance;
+    const diagnostic = diagnostiquer(configurationDepuisCharge(charge()));
+    expect(diagnostic.collisions.find((c) => c.groupe === appartenance)?.plancherCumulees).toBe(toursArrivante.length);
+    const collisions = vueQualite('collisions');
+    expect(collisions.querySelectorAll('svg[data-graphique="collisions"] rect[data-segment="prouve"]').length).toBeGreaterThan(0);
+    const [barres] = await lireJumeau(collisions);
+    expect(barres.find((barre) => barre.get('appartenance') === plat(appartenance))?.get('prouve')).toBe(String(toursArrivante.length));
+    // Le profil : la marque « absente » de la partante et de l'arrivante,
+    // un losange chacune.
+    const profil = vueQualite('profil');
+    const [rangs] = await lireJumeau(profil);
+    const marquees = rangs.filter((rang) => rang.get('marque') === plat(t('qualite.profil.marque.absente'))).map((rang) => rang.get('nom'));
+    expect(marquees.sort()).toEqual([nomAffiche(personneDe(partante)), nomAffiche(personneDe(arrivante))].map(plat).sort());
+    const losange = /^M [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+ L [\d.]+ [\d.]+ Z$/;
+    const signes = [...profil.querySelectorAll('svg[data-graphique="profilComptes"] [data-marque="graphiqueMarque"]')];
+    expect(signes.filter((signe) => losange.test(signe.getAttribute('d') ?? ''))).toHaveLength(2);
+    // La tuile de l'écart d'itinéraire, au bas de l'en-tête ; les
+    // collisions et le profil, plus bas, s'affirment sans l'image.
+    const tuile = entete.querySelector('[data-tuile="ecartItineraireMax"]');
+    document.activeElement?.blur();
+    await cadrerDansLaSurface([tuile]);
+    await photographier(m, '12h-qualite-absence', {
+      condition: ['[data-vue-qualite="entete"] [data-tuile="ecartItineraireMax"] [data-plancher-non-prouve]'],
+      graine: GRAINE,
+    });
+  });
+
+  test('25a la meilleure dérivée retenue ; deux badges réédités : « Tour 3 — absente », « Tour 1 — absente »', async () => {
+    const { partante, toursPartante, toursArrivante } = PRESENCE;
+    const { arrivante, meilleure } = memoire.presence;
+    await ouvrirSection('propositions');
+    // Le retenu n'est ajusté qu'aux participants : « Retenir » ne détruit
+    // aucune retouche, et n'ouvre aucune fenêtre.
+    const r = revision();
+    const vues = await sousObservation(async () => {
+      await cliquerAction(`[data-section="propositions"] tr[data-proposition="${meilleure}"]`, 'retenir');
+      await uneEntree(r, 'retenir la meilleure dérivée');
+    });
+    expect(vues, 'aucune fenêtre').toEqual([]);
+    expect(charge().retenu.proposition).toBe(meilleure);
+    // Le papier, choisi au premier aperçu de la machine, n'est pas redemandé.
+    expect(etat().papier).toBe('A4');
+    const avant = fichiers();
+    await ouvrirSection('badges');
+    for (const id of [partante, arrivante]) {
+      await appuyer(dans(`[data-section="badges"] li[data-participant="${id}"] input[type="checkbox"]`), `cocher n° ${id}`);
+    }
+    const reediter = await attendre('« Rééditer 2 badges »', () => dans('[data-section="badges"] [data-commande="reediter"]'));
+    expect(texteDe(reediter)).toBe(plat(t('badges.reedition.produire', { n: 2 })));
+    const rang = m.trace.length;
+    await appuyer(reediter, 'rééditer');
+    await attendre('la réédition', () => cheminsEcrits(rang).length > 0 && dans('[data-section="badges"] [data-chemin-planche]'), IMAGES_PLANCHE);
+    const ecrits = cheminsEcrits(rang);
+    expect(ecrits).toHaveLength(1);
+    const [nom] = ecrits;
+    expect(nom).toMatch(/\.badges-2_A4_feuille_/);
+    await rienEcrit(avant, 'la réédition');
+    const octets = m.fs.octets('documents', nom);
+    const premierAbsent = (presence) => Array.from({ length: charge().evenement.tours }, (_, n) => n + 1).find((n) => !presence.includes(n));
+    await photographierPdf(octets, { page: 2, fichier: '25a-badge-absente' }, (lue) => {
+      const texte = texteDePage(lue);
+      for (const [id, presence] of [
+        [partante, toursPartante],
+        [arrivante, toursArrivante],
+      ]) {
+        expect(texte, `n° ${id}`).toContain(plat(nomAffiche(personneDe(id)).normalize('NFC')));
+        expect(texte, `n° ${id}`).toContain(plat(libelle('planche.tour', { tour: premierAbsent(presence), absente: true })));
+      }
+      expect(texte).not.toContain(libelle('planche.brouillon'));
     });
   });
 });

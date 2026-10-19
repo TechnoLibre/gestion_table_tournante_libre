@@ -79,16 +79,19 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.ok(Object.isFrozen(ETAPES));
   });
 
-  test('CAPTURES égale la table du contrat : quarante-neuf entrées, leur étape et leur source', () => {
+  test('CAPTURES égale la table du contrat : cinquante-six entrées, leur étape et leur source', () => {
     const table = CAPTURES.map((c) => [c.fichier, c.etape, c.source]);
     assert.deepEqual(table, [
       ['01-premier-ecran', '1', 'navigateur'],
       ['01b-passer-en-ecriture', '1b', 'navigateur'],
       ['02-import-apercu', '2', 'navigateur'],
       ['02b-import-cp1252', '2', 'navigateur'],
+      ['02c-import-presence', '2', 'navigateur'],
       ['03-import-rapport', '2', 'navigateur'],
       ['04-grille-participants', '3', 'navigateur'],
       ['04a-etiquettes', '3', 'navigateur'],
+      ['04b-presence-grille', '3', 'navigateur'],
+      ['04c-presence-fiche', '3', 'navigateur'],
       ['05-tables-etat', '4', 'navigateur'],
       ['05a-objectifs-tables', '4', 'navigateur'],
       ['05b-import-objectifs', '4', 'navigateur'],
@@ -104,6 +107,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['11-propositions', '9', 'navigateur'],
       ['11a-depart-derive', '9', 'navigateur'],
       ['11b-propositions-derivees', '9', 'navigateur'],
+      ['11c-derivee-presence', '9', 'navigateur'],
       ['12-qualite-profil', '10', 'navigateur'],
       ['12a-qualite-sans-placement', '10', 'navigateur'],
       ['12b-qualite-une-table', '10', 'navigateur'],
@@ -112,6 +116,7 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['12e-qualite-sans-collision', '10', 'navigateur'],
       ['12f-qualite-reserve', '10', 'navigateur'],
       ['12g-qualite-plafond-nul', '10', 'navigateur'],
+      ['12h-qualite-absence', '10', 'navigateur'],
       ['13-qualite-collisions', '10', 'navigateur'],
       ['13a-qualite-tables', '10', 'navigateur'],
       ['14-qualite-paires', '10', 'navigateur'],
@@ -125,12 +130,14 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
       ['17a-comparaison-colonnes', '10', 'navigateur'],
       ['18-comparaison-escalier', '10', 'navigateur'],
       ['19-ajustement', '11', 'navigateur'],
+      ['19a-presence-plan', '11', 'navigateur'],
       ['20-mode-lecture', '11', 'navigateur'],
       ['21-historique', '11', 'navigateur'],
       ['22-plan-brouillon', '12', 'navigateur'],
       ['23-plan-retenu', '12', 'navigateur'],
       ['24-badges-controle', '12', 'pdf'],
       ['25-badges-planche', '12', 'pdf'],
+      ['25a-badge-absente', '12', 'pdf'],
     ]);
     for (const capture of CAPTURES) {
       assert.deepEqual(Object.keys(capture).sort(), ['configuration', 'etape', 'fichier', 'source'], capture.fichier);
@@ -187,6 +194,21 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     // L'étape 11 se photographie sur l'événement que le parcours construit
     // puis retient : l'ajustement, la lecture, l'historique.
     for (const fichier of ['19-ajustement', '20-mode-lecture', '21-historique']) assert.equal(configuration.get(fichier), 'evenement-retenu', fichier);
+    // La présence par tour : la petite démonstration générée, n° 1 retenue,
+    // une personne présente aux tours 1 et 2 et une ajoutée présente aux
+    // tours 3 et 4, chaque capture à son étape, de l'aperçu du modèle à la
+    // réédition des badges.
+    const presence = [
+      ['02c-import-presence', '2'],
+      ['04b-presence-grille', '3'],
+      ['04c-presence-fiche', '3'],
+      ['11c-derivee-presence', '9'],
+      ['12h-qualite-absence', '10'],
+      ['19a-presence-plan', '11'],
+      ['25a-badge-absente', '12'],
+    ];
+    const construite = CAPTURES.filter((c) => c.configuration === 'construite-presence').map((c) => [c.fichier, c.etape]);
+    assert.deepEqual(construite, presence);
   });
 
   test('REPORTEES est vide : chaque écran déclaré existe ; 17, 17a, 18 et 21 photographiées', () => {
@@ -199,11 +221,11 @@ describe('manifeste : la liste déclarée (§ 19.3, Q8 a)', () => {
     assert.deepEqual(photographiees.map((fichier) => etapes.get(fichier)), ['10', '10', '10', '11']);
   });
 
-  test('A_VENIR est vide : chaque capture déclarée est photographiée, 24 et 25 tramées du PDF de la planche', () => {
+  test('A_VENIR est vide : chaque capture déclarée est photographiée, 24, 25 et 25a tramées d’un PDF de badges', () => {
     assert.deepEqual(A_VENIR, []);
     assert.ok(Object.isFrozen(A_VENIR));
     const tramees = CAPTURES.filter((c) => c.source === 'pdf').map((c) => [c.fichier, c.etape]);
-    assert.deepEqual(tramees, [['24-badges-controle', '12'], ['25-badges-planche', '12']]);
+    assert.deepEqual(tramees, [['24-badges-controle', '12'], ['25-badges-planche', '12'], ['25a-badge-absente', '12']]);
   });
 
   test('CAPTURES ∪ REPORTEES : des noms uniques, et l’ordre des noms suit celui des étapes', () => {
@@ -373,20 +395,20 @@ describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
   });
 
   test('une capture à venir, absente du manifeste, couvre son étape', () => {
-    const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche'];
+    const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche', '25a-badge-absente'];
     assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: etape12 }), { aVenir: ['24-badges-controle'] }), []);
   });
 
-  test('A_VENIR par défaut, vide : sans ses quatre captures, l’étape 12 est une faute', () => {
-    const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche'];
+  test('A_VENIR par défaut, vide : sans ses cinq captures, l’étape 12 est une faute', () => {
+    const etape12 = ['22-plan-brouillon', '23-plan-retenu', '24-badges-controle', '25-badges-planche', '25a-badge-absente'];
     assert.deepEqual(verifierOrdre(manifesteDeclare({ sans: etape12 })), [
       { chemin: CHEMIN_MANIFESTE, faute: 'étape 12 : aucune capture ni reportée' },
     ]);
   });
 
-  test('sans reportée, 21 couvre seule l’étape 11 ; sans 19, 20 ni 21, elle manque', () => {
-    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '20-mode-lecture'] })), []);
-    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '20-mode-lecture', '21-historique'] })), [
+  test('sans reportée, 21 couvre seule l’étape 11 ; sans 19, 19a, 20 ni 21, elle manque', () => {
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '19a-presence-plan', '20-mode-lecture'] })), []);
+    assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: ['19-ajustement', '19a-presence-plan', '20-mode-lecture', '21-historique'] })), [
       { chemin: CHEMIN_MANIFESTE, faute: 'étape 11 : aucune capture ni reportée' },
     ]);
   });
@@ -403,7 +425,7 @@ describe('manifeste : l’ordre contre les étapes du § 2.1 (§ 19.3)', () => {
 
   test('les captures de la page de qualité couvrent l’étape 10 sans les reportées ; sans les unes ni les autres, elle manque', () => {
     const etape10 = CAPTURES.filter((c) => c.etape === '10').map((c) => c.fichier);
-    assert.equal(etape10.length, 20);
+    assert.equal(etape10.length, 21);
     assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [] })), []);
     assert.deepEqual(verifierOrdre(manifesteDeclare({ reportees: [], sans: etape10 })), [
       { chemin: CHEMIN_MANIFESTE, faute: 'étape 10 : aucune capture ni reportée' },

@@ -110,7 +110,7 @@ sur les captures.
 | `--couleur-hachure` | marque | 3 | 16,48 | 08-animateurs-designes | 15,21 | 08-animateurs-designes |
 | `--couleur-liste-texte` | texte | 4,5 | 14,82 | 07-plan-tables | — | — |
 | `--couleur-marque` | marque | 3 | 3,63 | 07a-cibles-sieges | 3,50 | 07a-cibles-sieges |
-| `--couleur-page-texte` | texte | 4,5 | 13,78 | 01b-passer-en-ecriture | 11,02 | 11-propositions |
+| `--couleur-page-texte` | texte | 4,5 | 13,78 | 01b-passer-en-ecriture | 11,02 | 02c-import-presence |
 | `--couleur-page-texte-secondaire` | texte | 4,5 | 5,57 | 01-premier-ecran | 6,72 | 01b-passer-en-ecriture |
 | `--couleur-papier` | texte | 4,5 | — | — | 5,00 | 12c-qualite-un-tour |
 | `--couleur-pastille-fond` | marque | 3 | 13,44 | 19-ajustement | 11,62 | 19-ajustement |

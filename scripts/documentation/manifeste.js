@@ -61,14 +61,29 @@ const capture = (fichier, etape, configuration, source = 'navigateur') => Object
 // qualité, à l'étape 10 : ses courbes qui se croisent, ses colonnes côte à
 // côte, son escalier. La vue d'historique, 21, se photographie à l'étape 11
 // sur l'événement retenu, après l'ajustement et la lecture.
+//
+// Les captures de la présence par tour se prennent les dernières, sur la
+// configuration construite « construite-presence » : la petite
+// démonstration générée, n° 1 retenue, une personne dite présente aux
+// tours 1 et 2 par la grille, une personne ajoutée dite présente aux tours 3
+// et 4 par sa fiche. Chacune illustre son étape : 02c, l'aperçu du modèle
+// de participants téléchargé, à l'étape 2 ; 04b et 04c, la saisie dans la
+// grille et dans la fiche, à l'étape 3 ; 11c, la dérivée d'un départ que ce
+// changement de participants a mis en dérive, à l'étape 9 ; 12h, la page de
+// qualité de la meilleure dérivée, à l'étape 10 ; 19a, le retenu ajusté au
+// plan, à l'étape 11 ; 25a, la réédition des badges de ces deux personnes,
+// tramée du PDF, à l'étape 12.
 export const CAPTURES = Object.freeze([
   capture('01-premier-ecran', '1', 'repertoire-neuf'),
   capture('01b-passer-en-ecriture', '1b', 'repertoire-neuf'),
   capture('02-import-apercu', '2', 'participants_cas_limites.csv'),
   capture('02b-import-cp1252', '2', 'participants_cas_limites_cp1252.csv'),
+  capture('02c-import-presence', '2', 'construite-presence'),
   capture('03-import-rapport', '2', 'participants_cas_limites.csv'),
   capture('04-grille-participants', '3', 'evenement-construit'),
   capture('04a-etiquettes', '3', 'evenement-construit'),
+  capture('04b-presence-grille', '3', 'construite-presence'),
+  capture('04c-presence-fiche', '3', 'construite-presence'),
   capture('05-tables-etat', '4', 'evenement-construit'),
   capture('05a-objectifs-tables', '4', 'evenement-construit'),
   capture('05b-import-objectifs', '4', 'objectifs_cas_limites.csv'),
@@ -84,6 +99,7 @@ export const CAPTURES = Object.freeze([
   capture('11-propositions', '9', 'evenement-construit'),
   capture('11a-depart-derive', '9', 'grande-sans-exception'),
   capture('11b-propositions-derivees', '9', 'grande-sans-exception'),
+  capture('11c-derivee-presence', '9', 'construite-presence'),
   capture('12-qualite-profil', '10', 'grande'),
   capture('12a-qualite-sans-placement', '10', 'petite-conflit'),
   capture('12b-qualite-une-table', '10', 'construite-une-table'),
@@ -92,6 +108,7 @@ export const CAPTURES = Object.freeze([
   capture('12e-qualite-sans-collision', '10', 'construite-sans-collision'),
   capture('12f-qualite-reserve', '10', 'petite-conflit'),
   capture('12g-qualite-plafond-nul', '10', 'construite-plafond-nul'),
+  capture('12h-qualite-absence', '10', 'construite-presence'),
   capture('13-qualite-collisions', '10', 'petite-conflit'),
   capture('13a-qualite-tables', '10', 'petite-conflit'),
   capture('14-qualite-paires', '10', 'construite-paires'),
@@ -105,12 +122,14 @@ export const CAPTURES = Object.freeze([
   capture('17a-comparaison-colonnes', '10', 'grande-sans-exception'),
   capture('18-comparaison-escalier', '10', 'grande-sans-exception'),
   capture('19-ajustement', '11', 'evenement-retenu'),
+  capture('19a-presence-plan', '11', 'construite-presence'),
   capture('20-mode-lecture', '11', 'evenement-retenu'),
   capture('21-historique', '11', 'evenement-retenu'),
   capture('22-plan-brouillon', '12', 'evenement-retenu'),
   capture('23-plan-retenu', '12', 'evenement-retenu'),
   capture('24-badges-controle', '12', 'evenement-retenu', 'pdf'),
   capture('25-badges-planche', '12', 'evenement-retenu', 'pdf'),
+  capture('25a-badge-absente', '12', 'construite-presence', 'pdf'),
 ]);
 
 // Les captures des écrans que le logiciel n'offre pas encore, chacune

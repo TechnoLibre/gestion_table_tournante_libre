@@ -273,9 +273,13 @@ export const TABLE = new Map([
     'DERIVE',
     (details) => {
       const { texte, pluriel } = touchees(details);
+      // Le retenu seul ou avec des propositions s'accorde au masculin, des
+      // propositions seules au féminin.
+      const masculin = details.retenu === true;
+      const garde = `${masculin ? (pluriel ? 'ils' : 'il') : pluriel ? 'elles' : 'elle'} ${pluriel ? 'sont' : 'est'} gardé${masculin ? '' : 'e'}${pluriel ? 's' : ''}`;
       return pluriel
-        ? `${texte} ne décrivent plus la liste ou les tables actuelles : ils sont gardés, et rien n'est effacé.`
-        : `${texte} ne décrit plus la liste ou les tables actuelles : il est gardé, et rien n'est effacé.`;
+        ? `${texte} ne décrivent plus la liste ou les tables actuelles : ${garde}, et rien n'est effacé.`
+        : `${texte} ne décrit plus la liste ou les tables actuelles : ${garde}, et rien n'est effacé.`;
     },
   ],
 

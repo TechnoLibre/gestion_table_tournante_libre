@@ -41,8 +41,9 @@
   présente — casse, accents, espaces — reçoit l'orthographe existante, et le
   logiciel le dit ; une légende compte les personnes qui portent chacune. En
   mise à jour, une cellule vide garde les étiquettes de la personne.
-- L'export des participants écrit toujours la colonne `etiquettes`, en
-  dernière position ; le collage en bloc suit le même ordre de colonnes.
+- L'export des participants écrit toujours la colonne `etiquettes`, puis la
+  colonne `presence`, en dernières positions ; le collage en bloc suit le même
+  ordre de colonnes.
 - Une table peut porter un **objectif** : les étiquettes des personnes qu'elle
   attend, sous la règle « au moins une » ou « toutes », pour la soirée ou pour
   un tour désigné, dont l'objectif remplace alors celui de la soirée. Un
@@ -178,9 +179,9 @@
   refait que les autres tours, en tenant compte des rencontres déjà faites dans
   les tours figés. Figer tous les tours est refusé.
 - Le lancement refuse, en nommant la cause et le remède, un départ qui n'est
-  plus dans la liste, qui ne décrit plus la soirée — une personne ajoutée ou
-  retirée, une table changée depuis lui —, ou qui n'assied pas quelqu'un là où
-  une réservation posée depuis le fixe. Le placement retenu n'est pas un départ.
+  plus dans la liste, dont les tables ou le nombre de tours ont changé depuis
+  lui, ou qui n'assied pas quelqu'un là où une réservation posée depuis le
+  fixe. Le placement retenu n'est pas un départ.
 - Chaque dérivée porte sous son numéro « Dérivée de n° 4. », ou « Dérivée de
   n° 4, tours 1 et 2 figés. », et « qui n'est plus dans la liste » quand son
   départ a été effacé. La même phrase se lit sur la page de qualité, dont la
@@ -225,6 +226,10 @@
   premières du classement restent, et celle d'où vient le placement retenu
   aussi, les autres s'effacent. Le nombre se règle dans le champ voisin. Une
   fenêtre dit d'abord combien de propositions partent, et « Défaire » les rend.
+  Tant que le classement compte moins de propositions que le nombre choisi,
+  le geste refuse d'effacer une proposition qui sert encore de départ sans
+  avoir été comparée : générer des dérivées jusqu'à en classer autant, ou en
+  garder moins, le lève.
   Une longue liste allégée garde le logiciel rapide ; le nombre choisi ne
   s'enregistre pas dans l'événement.
 - Dans le tableau des propositions, les commandes d'une ligne — « Voir sur le
@@ -235,7 +240,8 @@
   d'une commande reste affiché à côté de son bouton.
 - La section « Import » offre « Télécharger un modèle » pour le contenu choisi.
   Le modèle des participants montre chaque colonne sur quatre personnes
-  inventées ; celui des objectifs de table porte une ligne par table de
+  inventées, sa colonne de présence réglée par le nombre de tours de
+  l'événement ; celui des objectifs de table porte une ligne par table de
   l'événement, et par tour pour une table qui a des objectifs par tour, avec
   deux objectifs d'exemple, « au moins une » et « toutes », sur des lignes
   sans objectif — il en ajoute au besoin une par tour ; un événement dont
@@ -284,12 +290,62 @@
 - Sous le placement retenu, glisser hors des tables une personne que sa
   réservation tient à la sienne annonce le refus dès le survol, au lieu de
   « retire du tour ».
+- Chaque personne porte une **présence** : les tours où elle est là, « tous »
+  tant qu'on ne la change pas. Un retard, un départ avant la fin, une arrivée
+  en cours de soirée se disent dans la grille des participants, par une
+  colonne « Présence » qui s'ouvre en cases, une par tour, ou dans la fiche ;
+  la validation est un seul geste, que « Défaire » reprend. Une présence sans
+  aucun tour est refusée : exclure écarte de toute la soirée.
+- Une personne absente à un tour n'y a ni chaise ni place en réserve, ne
+  compte pas dans les places de ce tour, et ses réservations y sont
+  suspendues, le logiciel le dit ; les indicateurs se lisent sur ses tours de
+  présence, et ses rencontres des tours où elle était là comptent.
+- L'import lit une colonne facultative « présence » : « 1-3 », « 2, 3 »,
+  « tours 1 et 2 », « tous ». À la création, une cellule vide vaut tous les
+  tours ; en mise à jour, elle garde la présence de la personne que la ligne
+  désigne, et l'aperçu écrit « présence inchangée » sur cette seule ligne.
+  Un tour hors de la soirée ou une date qu'un tableur a faite d'une plage
+  refusent la ligne, avec leur motif.
+- Le placement retenu **suit qui est là** : changer une présence, ajouter,
+  exclure, réintégrer ou supprimer une personne, importer la liste l'ajuste
+  dans le même geste. Qui part laisse sa chaise libre, qui arrive attend dans
+  la réserve, que la liste « En réserve dans le placement retenu » nomme au
+  plan ; personne d'autre ne bouge, et le retenu ne dérive pas. Exclure ou
+  supprimer une personne assise au retenu avertit que ses rencontres des
+  tours joués n'y comptent plus.
+- Au plan, une carte « Absentes » nomme, sous la réserve, les personnes
+  absentes au tour affiché ; chacune ouvre sa fiche.
+- Sur le badge, la ligne d'un tour d'absence dit « absente » : « Tour 3 —
+  absente » ; la liste d'accueil l'écrit dans la case de ce tour.
+- La page de qualité marque d'un losange creux une personne absente à un tour
+  au moins ; l'écart d'itinéraire maximal n'y a plus de plancher prouvé dès
+  qu'une personne manque un tour, et sa tuile le dit, les autres planchers
+  restant.
+- Les places manquantes se comptent tour par tour, sur les personnes
+  présentes : dès qu'une présence est partielle, l'avertissement et le refus
+  de générer nomment chaque tour qui en manque ; sans absence, ils disent
+  toujours « Il manque N places à chaque tour ».
+- « Repartir d'elle » reste offert sur une proposition qu'un changement de
+  participants a mise en dérive : la génération part de son plan ajusté à la
+  soirée, et la carte du départ nomme, avant le lancement, qui en est retiré,
+  qui est à asseoir, et, à un tour figé, qui prend la meilleure chaise libre
+  ou reste en réserve. Une telle proposition ne se classe plus ; ses dérivées
+  entrent au classement. Quand le départ est la proposition du placement
+  retenu, le lancement avertit si un tour figé du retenu diffère de cette
+  proposition ajustée à la soirée — une retouche à la main, ou une personne
+  partie puis revenue.
+- Le guide d'usage montre la présence, de l'aperçu du modèle aux badges,
+  captures à l'appui.
 
 **Version de format des fichiers** : 2. Les étiquettes, les objectifs, leurs
 règles, les cases nouvelles, le mode des objectifs et l'ordre des priorités
 s'enregistrent dans des champs facultatifs, absents à leur défaut ; une
 proposition dérivée y porte aussi son départ et ses tours figés, `depart` et
-`toursFiges`, absents de toute autre proposition. Un fichier
+`toursFiges`, absents de toute autre proposition. La présence d'une personne,
+`presence`, est absente quand elle vaut tous les tours, et chaque tour d'un
+placement nomme ses absents, `absents`, seulement quand il en a : un événement
+sans absence s'écrit comme avant. Un fichier de développement qui porte la
+présence ne s'ouvre pas dans une construction antérieure. Un fichier
 de format 1, écrit par une version de développement, s'ouvre tel quel et se
 convertit, son historique avec lui, au premier geste en écriture.
 La course de la recherche ne va ni dans le fichier de l'événement ni dans son

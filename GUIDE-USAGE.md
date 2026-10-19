@@ -117,8 +117,29 @@ liste les lignes refusées avec leur motif. « Enregistrer les lignes refusées 
 les écrit dans un fichier, pour les corriger dans un tableur et les réimporter.
 L’import entier compte pour un seul geste : « Défaire » le reprend d’un coup.*
 
+« Télécharger un modèle » donne un fichier de participants prêt à remplir :
+quatre personnes inventées dont les cellules remplissent chaque colonne
+reconnue (annexe B). Sa colonne « présence » suit le nombre de tours de
+l’événement. Une présence s’écrit en tours et en plages — « 1-3 », « 2, 3 »,
+« tours 1 et 2 » — ; « tous » vaut tous les tours, et une cellule vide aussi,
+pour une personne que l’import crée. Le modèle s’importe tel quel, sans
+qu’aucune ligne soit refusée.
+
+![L’aperçu du modèle de participants d’un événement de quatre tours, plus la ligne d’une personne déjà inscrite : la colonne « présence » lue en tours](doc/captures/02c-import-presence.png)
+
+*L’événement a quatre tours : la cellule « 2, 3 » se lit « tours 2 et 3 », la
+plage « 1-3 », « tours 1 à 3 ». La liste étant peuplée, l’import met à jour.
+Les quatre personnes du modèle n’y sont pas : il les crée, et leur cellule
+vide ne dit rien, elle vaut tous les tours. La dernière ligne, ajoutée au
+modèle, désigne par son nom et son prénom une personne déjà inscrite : sa
+cellule vide garde sa présence, et l’aperçu l’écrit « présence inchangée ».
+Un tour que la soirée n’a pas, ou une cellule qu’un tableur a changée en
+date, refuse sa ligne avec son motif ; mettez la colonne en texte dans le
+tableur.*
+
 Un import est refusé sur un plan bloqué ; le message nomme la commande qui
-débloque.
+débloque. Un aperçu ouvert avant un changement du nombre de tours ne
+s’importe pas : rechoisissez le fichier pour refaire l’aperçu.
 
 ## Étape 3 — Compléter la liste à la main
 
@@ -155,6 +176,44 @@ l’événement porte déjà, et le logiciel le dit sous le champ : une même
 étiquette ne s’écrit jamais de deux façons. La légende, au-dessus de la
 grille et hors de cette image, compte les personnes qui portent chaque
 étiquette.*
+
+Chaque personne a aussi une **présence** : les tours où elle est là. Elle vaut
+« tous » tant que vous ne la changez pas. Un retard, un départ avant la fin,
+une arrivée en cours de soirée se disent là, avant comme pendant la soirée.
+Dans la grille, la colonne « Présence » écrit « tous », ou les tours de
+présence — « tour 2 », « tours 1 et 2 », « tours 1 à 3 » — ; Entrée ou F2 sur
+sa cellule l’ouvre en cases, une par tour.
+
+![La grille triée par nom : les cases de présence d’une personne ouvertes, tours 1 et 2 cochés, et une autre personne présente aux tours 3 et 4](doc/captures/04b-presence-grille.png)
+
+*Les cases de la deuxième ligne sont ouvertes au clavier : ← et → passent
+d’une case à l’autre, Début et Fin à la première et à la dernière, et
+l’espace coche ou décoche sans rien écrire. Entrée, Tab ou la sortie des
+cases enregistrent la présence en un seul geste, que « Défaire » reprend ;
+Échap rend la présence enregistrée. Une saisie revenue à l’enregistrée
+n’écrit rien. La troisième ligne est déjà « tours 3 et 4 ».*
+
+La fiche porte les mêmes cases, sous « Présence », avec « Tous les tours »,
+qui coche chaque case sans rien écrire, et « Appliquer », qui enregistre la
+présence en un geste.
+
+![La fiche d’une personne ajoutée : présente aux tours 3 et 4, absente puis en réserve dans le placement retenu](doc/captures/04c-presence-fiche.png)
+
+*Une personne ajoutée pendant la soirée, présente aux tours 3 et 4.
+L’itinéraire du placement retenu la dit absente aux deux premiers tours, puis
+en réserve, en attente d’une chaise : changer une présence ajuste le placement
+retenu dans le même geste (étape 11). Une présence sans aucun tour est
+refusée contre les cases ; pour écarter quelqu’un de toute la soirée,
+excluez-le. La ligne des comptes, au-dessus de la grille, compte les
+présences partielles, et la grille se trie et se groupe par présence.*
+
+Une personne absente à un tour n’y a ni chaise ni place en réserve, et ne
+compte pas dans les places de ce tour : quand une personne part après le
+tour 2 et qu’une autre arrive au tour 3, la salle reste juste pleine. Une
+réservation ne vaut qu’aux tours de présence de sa personne : ailleurs, elle
+est suspendue, sa place rendue aux autres, et le logiciel le dit. Étendre une
+présence à un tour où sa réservation ferait déborder une table, ou prendrait
+un siège réservé à une autre, est refusé.
 
 ## Étape 4 — Préparer les tables
 
@@ -375,12 +434,12 @@ le lancement le refuse. « Repartir de zéro » retire le départ et rend
 « Générer ». Choisir le départ et cocher un tour n’écrivent rien, en lecture
 comme en écriture : seul le lancement écrit.
 
-Le départ doit être encore dans la liste, et la soirée telle qu’il l’a
-placée : une personne ajoutée ou retirée, une table changée, une réservation
-dont il n’assied pas la personne à sa table, et le lancement est refusé, avec
-« Repartir de zéro » pour remède. Un tour figé qui n’assied pas une personne
-au siège que sa réservation lui fixe est refusé lui aussi : décocher ce tour
-suffit.
+Le départ doit être encore dans la liste, et ses tables celles de la
+soirée : une table ajoutée ou supprimée, une capacité changée, des tours
+ajoutés ou retirés, une réservation posée depuis dont il n’assied pas la
+personne à sa table, et le lancement est refusé, avec « Repartir de zéro »
+pour remède. Un tour figé qui n’assied pas une personne au siège que sa
+réservation lui fixe est refusé lui aussi : décocher ce tour suffit.
 
 Les deux écrans qui suivent viennent de la grande démonstration sans
 exception, générée avec la graine 4242 et un compte d’arrêt de 2 000 ; sa
@@ -414,6 +473,39 @@ départ, n° 1, la suit au quatrième rang du même classement. Chaque dérivée
 reprend le tour 1 de n° 1, table par table. Le menu « Actions » de chaque
 ligne, à droite, est hors de l’image.*
 
+**Un changement de participants ne demande pas de repartir de zéro.** Une
+proposition que l’ajout, l’exclusion, la réintégration, la suppression ou la
+présence d’une personne a mise en dérive ne se classe plus, mais son menu
+garde « Repartir d’elle ». La génération part alors de son plan ajusté à la
+soirée telle qu’elle est : une personne absente à un tour, exclue ou
+supprimée y quitte sa chaise, qui reste libre ; une personne présente que le
+départ n’assied pas est à asseoir. Aux tours non figés, la recherche
+l’assied ; aux tours figés, personne ne bouge : une arrivée y prend la
+meilleure chaise libre, ou attend en réserve quand sa table ou son siège
+réservé n’en a plus.
+
+L’écran qui suit vient de la petite démonstration, générée avec la graine
+4242 et sa proposition n° 1 retenue. Une personne y est ensuite dite
+présente aux tours 1 et 2, une autre ajoutée aux tours 3 et 4 ; n° 1, en
+dérive, sert de départ, ses tours 1 et 2 figés.
+
+![Le départ n° 1, en dérive : ses écarts nommés avant le lancement, puis l’issue de la génération](doc/captures/11c-derivee-presence.png)
+
+*Sous le titre du départ, ses écarts à la soirée, nommés avant le lancement :
+la personne retirée des tours 3 et 4, où elle est absente, et l’arrivée, à
+asseoir à ces tours. Après le calcul, l’issue nomme la meilleure dérivée et
+dit que n° 1, en dérive, n’est pas classée ; les dérivées, elles, décrivent
+la soirée et entrent au classement. Quand le placement retenu vient de ce
+départ et qu’un de ses tours figés diffère du départ ajusté à la soirée —
+une retouche à la main, ou une personne partie puis revenue —, le lancement
+avertit que ce tour du retenu n’y est pas : un tour figé vient de la
+proposition, non du retenu.*
+
+Tant que le classement compte moins de 10 propositions, « Garder les 10
+meilleures » refuse d’effacer une proposition qui sert encore de départ sans
+avoir été comparée : générez des dérivées jusqu’à en classer 10, ou gardez-en
+moins.
+
 ## Étape 10 — Comparer, et retenir
 
 Comparer se fait dans le [tableau classé](doc/captures/11-propositions.png) de
@@ -432,7 +524,9 @@ la ligne, puis la commande ; au clavier, Entrée ou les flèches ouvrent le menu
 « Retenir » en fait le **placement retenu** : l’état du plan passe à
 « Retenu », et les autres propositions restent dans la liste. Retenir une autre
 proposition alors que le retenu a été ajusté à la main détruit ces ajustements :
-une fenêtre le dit avant.
+une fenêtre le dit avant. Un retenu seulement ajusté aux participants
+(étape 11) se remplace sans fenêtre, et la copie retenue s’ajuste à son tour
+à la présence de chacun.
 
 La liste des événements résume ensuite le retenu par ses collisions cumulées
 (paire et tour) et ses rencontres répétées choisies (paires), les nombres du
@@ -655,6 +749,21 @@ premier rang du profil, son infobulle écrit le plafond réalisé 0 et le
 pourcentage « — » ; au second graphique, plus bas, ce rang n’a pas de
 point.*
 
+Une personne absente à un tour ne compte pas ce tour : ses rencontres, son
+plafond et ses tours servis se lisent sur ses tours de présence. Le profil la
+marque d’un losange creux, « absente à un tour au moins », et son infobulle
+dit à combien de tours.
+
+![L’en-tête de la meilleure dérivée de la petite démonstration : l’écart d’itinéraire maximal sans plancher prouvé](doc/captures/12h-qualite-absence.png)
+
+*La meilleure dérivée de l’étape 9, sous l’absence de deux personnes. La
+tuile de l’écart d’itinéraire maximal dit que son plancher n’est pas prouvé :
+sa preuve suppose chacun présent à chaque tour. Les autres planchers se
+calculent tour par tour sur les personnes présentes, et restent ; plus bas,
+hors de l’image, les collisions gardent leur segment « prouvé inévitable ».
+La personne qui a le moins de rencontres est souvent une présence
+partielle : l’infobulle de la tuile du minimum le dit.*
+
 ## Étape 11 — Ajuster à la main
 
 Sur le placement retenu, le geste de l’étape 7 déplace maintenant une personne
@@ -669,6 +778,28 @@ imprimé, sans poser de réservation. Le titre du plan, « Placement retenu »,
 dit quel placement vous regardez.*
 
 Les indicateurs du tableau des propositions suivent l’ajustement.
+
+**Le placement retenu suit qui est là.** Changer la présence d’une personne,
+l’ajouter, l’exclure, la réintégrer, la supprimer ou importer la liste ajuste
+le retenu dans le même geste : une personne absente à un tour quitte sa
+chaise, qui reste libre ; une personne présente qu’il n’asseyait pas attend
+dans la réserve de ce tour. Personne d’autre ne change de place, et le retenu
+ne dérive pas.
+
+![Le placement retenu au tour 3 : une chaise libre, l’arrivée en réserve, et la carte « Absentes »](doc/captures/19a-presence-plan.png)
+
+*Au tour 3 de la petite démonstration, la personne partie après le tour 2 a
+laissé sa chaise libre ; la carte « Absentes », sous la réserve, la nomme
+avec ses tours de présence, et son bouton ouvre sa fiche, où sa présence se
+change. L’arrivée attend dans la réserve. La liste « En réserve dans le
+placement retenu », en haut à droite, la nomme avec ses tours : un clic
+montre le premier et la choisit, pour l’asseoir d’un geste ; une
+proposition dérivée (étape 9) l’assied aussi.*
+
+Exclure ou supprimer une personne assise au retenu la retire aussi des tours
+déjà joués, et le logiciel l’avertit : ses rencontres de ces tours n’y
+comptent plus. Pour les garder, défaites, puis réduisez plutôt sa présence
+aux tours où elle était là.
 
 En lecture, aucun de ces gestes ne passe :
 
@@ -766,6 +897,17 @@ pied, le nom de l’événement et l’instant du placement. Les traits fins
 marquent la coupe : un vertical au milieu de la feuille, un horizontal sous
 chaque rangée de badges.*
 
+Une personne absente à un tour garde la ligne de ce tour sur son badge, qui
+dit « absente » au lieu d’une table :
+
+![La réédition de deux badges : « Tour 3 — absente » sur l’un, « Tour 1 — absente » sur l’autre](doc/captures/25a-badge-absente.png)
+
+*Sur la petite démonstration, la meilleure dérivée de l’étape 9 retenue :
+les badges de la personne partie après le tour 2 et de celle arrivée au
+tour 3, réédités seuls dans la section « Badges ». Chaque tour garde sa
+ligne ; une personne absente à un tour n’a jamais la ligne « Toute la
+soirée ».*
+
 Une fois le plan imprimé, bloquez-le : choisissez l’état « Bloqué » en haut de
 l’événement. Plus rien ne le modifie, jusqu’à « Débloquer ».
 
@@ -781,13 +923,13 @@ même plan diffèrent, et pourquoi relancer aide parfois, et parfois jamais.
 
 ### Le problème
 
-Asseoir chacun, à chaque tour, de sorte que la personne la plus mal servie
-rencontre le plus de monde possible. C’est l’objectif de l’ordre par défaut ;
-vous pouvez en ranger d’autres devant, dans l’ordre des priorités de la
-section « Génération ». Le profil trié de la page « Qualité » range les
-personnes de la moins servie à la mieux servie
-([le profil trié](doc/captures/12-qualite-profil.png)) : la plus mal servie
-est au premier rang.
+Asseoir chaque personne présente, à chacun de ses tours, de sorte que la
+personne la plus mal servie rencontre le plus de monde possible. C’est
+l’objectif de l’ordre par défaut ; vous pouvez en ranger d’autres devant, dans
+l’ordre des priorités de la section « Génération ». Le profil trié de la page
+« Qualité » range les personnes de la moins servie à la mieux servie
+([le profil trié](doc/captures/12-qualite-profil.png)) : la plus mal servie est
+au premier rang.
 
 ### Pourquoi il n’a pas de réponse évidente
 

@@ -102,6 +102,13 @@ La fiche d'une personne porte ses **étiquettes** (§ 4.5), que l'opérateur ajo
 et retire là ; une colonne du CSV les importe (§ 10.1). Elles ne sont exigées
 nulle part : une soirée sans étiquette est une configuration valide.
 
+La fiche et la grille portent aussi sa **présence** (§ 4) : « tous » tant que
+l'opérateur ne la change pas, sinon les tours où elle est là, une case par tour.
+Un retard, un départ anticipé, une arrivée après les premiers tours se disent
+là, avant comme pendant la soirée ; une colonne du CSV les importe (§ 10.1).
+Valider une présence est une entrée d'historique, qui ajuste le placement
+retenu (§ 5.8).
+
 **4. Préparer les tables.** *Obligatoire.* L'opérateur fixe le nombre de sièges
 par défaut, crée les tables, surcharge celles qui diffèrent (§ 6.1) et les
 dispose sur le plan (§ 7.1). Le logiciel énonce la conséquence chiffrée d'un
@@ -119,10 +126,15 @@ retrouve les **ancrages** intacts, parce que la portée « tous les tours » n'e
 jamais développée (§ 4.3). La protection s'arrête là, et le logiciel le dit
 **avant** d'appliquer : retirer le tour *r* détruit les réservations de portée
 « tour désigné » portant sur *r*, et les objectifs de table de ce tour (§ 4.5) ;
-les objectifs de soirée restent. Les placements déjà engendrés, eux, ne sont pas
-tronqués : ils ne portent plus le nombre de tours de la soirée, restent entiers
-**en dérive** (§ 9), et le logiciel nomme ceux que le changement touche. Les
-annoncer après coup ferait découvrir la perte à l'impression.
+les objectifs de soirée restent. Il retire aussi *r* de chaque présence
+énumérée ; une présence qui n'en garderait aucun tour est **refusée**, le refus
+nommant chaque personne (§ 4.3), et l'opérateur change d'abord sa présence ou
+l'exclut. Ajouter un tour ne l'ajoute à aucune présence énumérée, et le logiciel
+nomme les personnes qu'il laisse absentes de ce tour. Les placements déjà
+engendrés, eux, ne sont pas tronqués : ils ne portent plus le nombre de tours de
+la soirée, restent entiers **en dérive** (§ 9), et le logiciel nomme ceux que le
+changement touche. Les annoncer après coup ferait découvrir la perte à
+l'impression.
 
 **6. Désigner les animateurs, table par table.** *Facultative — une soirée sans
 aucun animateur est une configuration valide, et la petite démonstration en est
@@ -152,10 +164,11 @@ attribués, et la liste des titres non pourvus ne sait pas compter.
 plancher ni plafond propre à ce rôle. Des trois contrôles de capacité du § 5.9,
 **un seul garde cette étape** : `k_t > c_t` est refusé — pas plus d'animateurs
 qu'une table n'a de sièges. `k_t = c_t` est accepté et **signalé** : la table ne
-tourne plus. `Σ (c_t − k_t) < n` ne se déclenche jamais ici, l'écart étant
-invariant sous toute réservation (§ 5.9). Les autres refus du § 5.9 gardent
-cette étape comme n'importe quelle autre pose : personne exclue, deux places sur
-un même tour, dépôt sur une place déjà réservée à un autre.
+tourne plus. Le manque de places à un tour ne se déclenche jamais ici, l'écart
+étant invariant sous toute réservation, tour par tour (§ 5.9). Les autres refus
+du § 5.9 gardent cette étape comme n'importe quelle autre pose : personne
+exclue, deux places sur un même tour, dépôt sur une place déjà réservée à un
+autre.
 
 Le logiciel n'assigne pas, il **montre le travail qui reste**, par deux listes
 cliquables qui mènent à la place ou à la personne : la liste des **titres de
@@ -190,7 +203,10 @@ Une génération peut aussi **repartir d'une proposition** choisie au tableau,
 son **départ**, et en figer des tours : ses propositions, dites
 **dérivées**, continuent le plan du départ sous de nouvelles graines, ne
 refont que les tours non figés, et entrent au même classement, chacune
-libellée « dérivée de n° X » (§ 5.7).
+libellée « dérivée de n° X » (§ 5.7). Le départ peut être une proposition qu'un
+changement de participants a mise en dérive — une arrivée, un départ, une
+absence à un tour — : la génération part alors de son plan ajusté à la soirée
+(§ 5.7), et ce changement ne demande pas de « Repartir de zéro ».
 
 **10. Comparer, et retenir.** *Facultative en droit — l'impression d'un plan non
 retenu sort en filigrane BROUILLON (§ 11.7) — nécessaire en fait pour distribuer
@@ -215,7 +231,11 @@ cumulées et ses rencontres répétées choisies (§ 5.4, § 8.1).
 l'étape 7 déplace maintenant une personne réelle dans le placement retenu. **Le
 geste est identique, l'état des données change, et l'interface le dit** (§ 5.8).
 Les indicateurs et la page de qualité suivent l'ajustement (§ 12.9 : la page
-lit, elle ne recalcule rien).
+lit, elle ne recalcule rien). **Le retenu suit qui est là** : changer la
+présence d'une personne, l'ajouter, l'exclure, la réintégrer, la supprimer ou
+importer la liste ajuste le retenu dans la même entrée (§ 5.8). Qui part quitte
+sa chaise aux tours où il est absent, qui arrive attend dans la réserve aux
+tours où il est présent, et personne d'autre ne change de place.
 
 **12. Imprimer.** La **planche de badges** (§ 11.1), qui est le seul document
 PDF, et au besoin les vues imprimables : liste d'accueil, feuille par table,
@@ -271,6 +291,16 @@ information à l'import.
 Un participant peut être **exclu** sans être supprimé : il reste dans la liste,
 il n'est plus placé, et il sort de toutes les statistiques.
 
+Un participant porte une **présence** : les tours où il est là. Elle vaut « tous
+les tours » tant que l'opérateur ne la change pas, et compte au moins un tour.
+Hors de sa présence, la personne est **absente** à ce tour : elle n'y a ni
+chaise ni place en réserve, ne compte pas dans les places de ce tour, et aucun
+indicateur ne compte ce tour pour elle. Absente n'est pas exclue — l'exclusion
+vaut pour toute la soirée et retire la personne de toutes les statistiques — ni
+en réserve — la réserve tient une personne présente qui attend une table
+(§ 7.1). « Personne présente », sans tour, désigne une personne non exclue,
+présente à un tour au moins ; « présente au tour r » désigne ce tour.
+
 **Table** — un **identifiant entier**, unique dans l'événement et jamais
 réutilisé, exactement comme un participant ; un **numéro affiché** à partir
 de 1 ; un nombre de sièges ; une forme (ronde ou carrée) ; une position sur le
@@ -283,8 +313,11 @@ l'autre** : c'est une propriété du mobilier.
 > en silence — trente-trois listes glissent d'un cran et tout le monde change de
 > salle.
 
-**Tour** — une des R rondes de la soirée. À chaque tour, chaque participant non
-exclu est assis à exactement une table.
+**Tour** — une des R rondes de la soirée. Dans une proposition, à chaque tour,
+chaque participant non exclu présent à ce tour est assis à exactement une
+table, sauf l'arrivée qu'un tour figé laisse en réserve (§ 5.7) ; un placement
+ajusté peut tenir des présents en réserve (§ 7.1). Une personne absente à un
+tour n'y occupe aucune place.
 
 **Placement** — pour chaque tour, qui est à quelle table, et à quel siège si
 les sièges sont attribués.
@@ -310,14 +343,19 @@ ou pour un tour désigné. Il ne fixe personne : c'est un critère de la recherc
 **Proposition dérivée** — une proposition dont la recherche est partie du
 plan d'une autre, son **départ**, au lieu d'un placement tiré (§ 5.7). Elle
 nomme son départ — « dérivée de n° 4 » — et entre au classement comme toute
-proposition. « Dérivée » dit d'où elle vient, jamais qu'elle est **en
+proposition. Son départ peut être en dérive par un changement de
+participants : la recherche part alors de son plan ajusté (§ 5.7).
+« Dérivée » dit d'où elle vient, jamais qu'elle est **en
 dérive** (§ 9) : une proposition en dérive se dit « non comparable », avec
 ses raisons ; la **graine dérivée** reste le nom de la graine de chaque
 proposition, dérivée ou non. Le mot « variante » reste aux démonstrations
 (§ 15) et à la copie d'un plan (§ 8.7), et ne désigne pas une dérivée.
 
-**Tour figé** — un tour qu'une génération dérivée reprend tel quel de son
-départ, sans y déplacer personne. Il ne fixe personne dans l'événement : il
+**Tour figé** — un tour qu'une génération dérivée reprend du plan ajusté de son
+départ, sans y déplacer personne : une personne absente à ce tour, exclue ou
+supprimée en est retirée, sa chaise libre ; une personne présente que le départ
+n'y assied pas y prend la meilleure chaise libre, ou y attend en réserve quand
+aucune ne lui est permise (§ 5.7). Il ne fixe personne dans l'événement : il
 n'est pas une réservation, ne change aucun statut (§ 4.2), et ne survit pas à
 la génération qui l'a reçu.
 
@@ -345,9 +383,13 @@ Les trois combinaisons se produisent dans une préparation ordinaire :
 
 | statut | définition |
 |---|---|
-| **ancré** | une réservation fixe la même table à **chacun** des R tours |
-| **mobile** | aucune réservation |
+| **ancré** | la personne est présente aux R tours, et une réservation fixe la même table à **chacun** d'eux |
+| **mobile** | aucune réservation n'a d'effet à ses tours de présence |
 | **partiellement fixé** | le reste : quelques tours, ou des tables différentes |
+
+Une absence suspend la réservation au tour où elle tombe (§ 4.4) : un ancré
+déclaré absent à un tour devient partiellement fixé, et sa place de ce tour
+revient aux mobiles.
 
 Le statut se dérive **du fait**, jamais d'une case à cocher ni de la forme du
 stockage : qu'il résulte d'une portée « tous les tours » ou de R réservations
@@ -374,12 +416,36 @@ tour retiré revient. Un objectif de tour désigné suit les réservations de m�
 portée : retirer son tour le détruit, et le logiciel le dit avant d'appliquer
 (§ 2.1, étape 5).
 
+La présence « tous les tours » est symbolique au même titre : jamais énumérée,
+elle s'étend au tour ajouté. Une présence énumérée — « tours 1 et 2 » — ne
+s'étend pas, et l'ajout d'un tour le dit en nommant les personnes qu'il laisse
+absentes de ce tour (`PRESENCE_TOURS_AJOUTES`). Retirer un tour le retire de
+chaque présence ; une présence qui couvre alors chaque tour redevient « tous
+les tours ». **Une présence qui n'en garderait aucun tour refuse le retrait**
+(`PRESENCE_VIDEE_PAR_TOURS`), le refus nommant chaque personne et menant à la
+liste des participants : retirer un tour ne fait jamais d'une personne une
+exclue en silence. La présence d'une exclue se rogne de même ; quand elle se
+viderait, elle part sans refus, et réintégrée, la personne est présente à tous
+les tours.
+
 ### 4.4 L'exclusion l'emporte
 
 Exclure une personne **suspend toutes ses réservations**, rend ses places aux
 mobiles, rend les titres correspondants non pourvus, et le logiciel le dit. La
 réintégration les rend. L'exclusion décrit une absence physique : aucune table
 ne peut asseoir quelqu'un qui n'est pas là.
+
+**L'absence à un tour suspend les réservations de ce tour**, comme l'exclusion
+suspend toutes celles de la personne : une portée « tous les tours » ne vaut
+plus qu'aux tours de présence, une réservation de tour désigné sur un tour
+d'absence est suspendue, sa place rendue aux mobiles et son titre non pourvu à
+ce tour, et le logiciel le dit. Rendre la présence les rend. La présence d'une
+personne exclue se garde, suspendue : ni la recherche, ni le placement, ni les
+titres ne la lisent, et la réintégration la rend. **Retirer une personne après
+des tours joués se fait par sa présence**, non par l'exclusion : elle garde sa
+place aux tours où elle était là, et ses rencontres y comptent (§ 5.4) ;
+l'exclusion et la suppression la retirent de toute la soirée, tours joués
+compris, et le logiciel le dit quand le placement retenu l'asseyait.
 
 ### 4.5 Les étiquettes et les objectifs de table
 
@@ -456,35 +522,36 @@ qu'une personne correspond à un objectif : le moteur, l'écran et l'import la
 lisent (§ 13.2).
 
 **Un couple possible, un tour servi.** Le couple (p, r) est **possible** quand p
-correspond, au tour r, à au moins une table qui peut l'accueillir à ce tour : sa
-table réservée quand une réservation le fixe à ce tour, sinon toute table qui
-garde à ce tour un siège qu'aucune réservation n'occupe. Le tour r est **servi**
-quand p y est assis à une table qui lui correspond et qu'il peut occuper à ce
-tour, au même sens. Le critère (§ 5.3) et l'indicateur (§ 5.4) ne comptent que
-les couples possibles : une personne qu'aucune table ne peut servir au tour r
-n'est pas « hors objectif » à ce tour, où qu'elle soit assise ; une personne
-qu'une table pouvait servir et qui n'est pas servie compte un tour hors
-objectif. Un couple fixé n'est possible que si sa table réservée lui correspond,
-et il y est alors servi : un couple fixé n'est jamais hors objectif, et le
-critère n'a pas de part imposée. Sur un plan ajusté qui déplace une réservation,
-les tours servis ne dépassent toujours pas les tours possibles.
+est présente au tour r et correspond, à ce tour, à au moins une table qui peut
+l'accueillir à ce tour : sa table réservée quand une réservation le fixe à ce
+tour, sinon toute table qui garde à ce tour un siège qu'aucune réservation
+n'occupe. Le tour r est **servi** quand p y est assis à une table qui lui
+correspond et qu'il peut occuper à ce tour, au même sens. Le critère (§ 5.3) et
+l'indicateur (§ 5.4) ne comptent que les couples possibles : une personne
+qu'aucune table ne peut servir au tour r n'est pas « hors objectif » à ce tour,
+où qu'elle soit assise ; une personne qu'une table pouvait servir et qui n'est
+pas servie compte un tour hors objectif. Un couple fixé n'est possible que si sa
+table réservée lui correspond, et il y est alors servi : un couple fixé n'est
+jamais hors objectif, et le critère n'a pas de part imposée. Sur un plan ajusté
+qui déplace une réservation, les tours servis ne dépassent toujours pas les
+tours possibles.
 
-**L'animateur, pour le critère du § 5.3.** La personne présente qui pourvoit un
-titre de place au tour r **anime** à ce tour, quel que soit le libellé du
-titre ; est **animateur** la personne qui anime à un tour au moins. Le fait se
-lit tour par tour, comme le statut d'ancré (§ 4.2), sur ce qui est tenu et
-jamais sur la forme du stockage : une réservation de portée « tous les tours »
-sur la place titrée fait animer à chaque tour, R réservations de tour désigné
-sur cette place aussi, une seule réservation de tour désigné au seul tour
-qu'elle couvre. Le pourvoyeur d'un titre à un tour se lit par la règle qui
+**L'animateur, pour le critère du § 5.3.** La personne présente au tour r qui
+pourvoit un titre de place à ce tour **anime** à ce tour, quel que soit le
+libellé du titre ; est **animateur** la personne qui anime à un tour au moins.
+Le fait se lit tour par tour, comme le statut d'ancré (§ 4.2), sur ce qui est
+tenu et jamais sur la forme du stockage : une réservation de portée « tous les
+tours » sur la place titrée fait animer à chaque tour, R réservations de tour
+désigné sur cette place aussi, une seule réservation de tour désigné au seul
+tour qu'elle couvre. Le pourvoyeur d'un titre à un tour se lit par la règle qui
 dresse la liste des titres non pourvus (§ 4.1) ; sans sièges attribués,
 plusieurs ancrés d'une table titrée n'en font qu'un animateur par titre, celui
 que cette règle désigne. Une réservation pourvoit le titre : qui anime au tour r
-est fixé à ce tour à la table du titre. Le logiciel ne porte aucune
-case « est animateur » ; une réservation sans titre ne fait pas animer, et le
-titre pressenti reste informatif (§ 4). Le diagnostic du § 5.6 garde son propre
-emploi du mot, les ancrés d'une même appartenance : un ancré sans titre n'anime
-pas, qui n'anime qu'à un tour n'est pas ancré, et le code nomme les deux
+est fixé à ce tour à la table du titre. Le logiciel ne porte aucune case « est
+animateur » ; une réservation sans titre ne fait pas animer, et le titre
+pressenti reste informatif (§ 4). Le diagnostic du § 5.6 garde son propre emploi
+du mot, les ancrés d'une même appartenance : un ancré sans titre n'anime pas,
+qui n'anime qu'à un tour n'est pas ancré, et le code nomme les deux
 différemment.
 
 **Rencontrer un animateur.** La personne p **rencontre** l'animateur f quand p
@@ -497,13 +564,13 @@ qui porte deux titres pourvus.
 **La borne des animateurs.** B(p) borne, sur la seule configuration, le nombre
 d'animateurs distincts que p peut rencontrer ; c'est le plus petit de deux
 nombres. Le premier compte les animateurs f, autres que p, que p peut rejoindre
-à un tour où f anime : à sa table fixée quand une réservation fixe p à ce tour,
-sinon à une table qui garde à ce tour un siège qu'aucune réservation n'occupe.
-Le second somme, sur les tours, le plus grand nombre d'animateurs autres que p
-qui animent à une même table que p peut occuper à ce tour : p ne s'assied qu'à
-une table par tour. Aucun plan ne fait rencontrer à p plus de B(p) animateurs ;
-aucun ne garantit d'atteindre B(p). La personne est **concernée par les
-animateurs** quand B(p) > 0.
+à un tour où p est présente et où f anime : à sa table fixée quand une
+réservation fixe p à ce tour, sinon à une table qui garde à ce tour un siège
+qu'aucune réservation n'occupe. Le second somme, sur les tours de présence de p,
+le plus grand nombre d'animateurs autres que p qui animent à une même table que
+p peut occuper à ce tour : p ne s'assied qu'à une table par tour. Aucun plan ne
+fait rencontrer à p plus de B(p) animateurs ; aucun ne garantit d'atteindre
+B(p). La personne est **concernée par les animateurs** quand B(p) > 0.
 
 ---
 
@@ -511,9 +578,10 @@ animateurs** quand B(p) > 0.
 
 ### 5.1 Le problème
 
-Étant donné N participants, T tables de capacités c₁…c_T et R tours, répartir
-les gens à chaque tour de façon à **maximiser le nombre de personnes distinctes
-que chacun rencontre**, sous les contraintes que l'opérateur active.
+Étant donné N participants et la présence de chacun, T tables de capacités
+c₁…c_T et R tours, asseoir chaque personne à chacun de ses tours de présence de
+façon à **maximiser le nombre de personnes distinctes que chacun rencontre**,
+sous les contraintes que l'opérateur active.
 
 C'est l'objectif de l'ordre des priorités par défaut (§ 5.7) ; l'opérateur peut
 ranger d'autres critères devant, et l'ordre affiché dit alors lequel prime.
@@ -523,6 +591,12 @@ ranger d'autres critères devant, et l'ordre affiché dit alors lequel prime.
 Soit k le nombre d'ancrés, dont k_t à la table t. Le moteur résout une
 **instance réduite** : n = N − k mobiles, des tables de capacité libre
 c′_t = c_t − k_t, les mêmes R tours.
+
+Au tour r, les mobiles présents sont n_r, au plus n. La présence est un masque
+par personne et par tour, qui ne réduit aucune capacité — un ancré est présent à
+chaque tour (§ 4.2) — : un absent n'occupe aucun siège à ce tour, qui reste une
+place libre de la recherche. Une seule fonction dit qu'une personne est présente
+à un tour, une liste absente valant tous les tours (§ 13.2).
 
 C'est la forme du problème initial **à une donnée près, et elle n'est pas
 facultative** : chaque table transporte **l'ensemble des appartenances de ses
@@ -536,7 +610,8 @@ Moyennant cet ajout, le moteur n'a **qu'un seul chemin de code** : la
 réservation est un prétraitement qui réduit les capacités, retire des
 participants et annote les tables — jamais un second algorithme. Une garde de
 l'arborescence le tient : dans le moteur, seuls la normalisation de la
-configuration et le diagnostic lisent les réservations. Les tours figés d'une
+configuration et le diagnostic lisent les réservations, et la normalisation
+seule lit la présence. Les tours figés d'une
 génération dérivée (§ 5.7) n'y entrent pas : ils ne réduisent aucune capacité,
 ne retirent personne et n'annotent aucune table. La recherche les reçoit à
 part, ne tire aucun mouvement dans ces tours, et compte leurs rencontres dans
@@ -550,7 +625,7 @@ le score de la soirée.
 | **Nouveaux voisins à chaque tour** | deux personnes ne se retrouvent pas deux fois à la même table |
 | **Nouvelle table à chaque tour** | *voir ci-dessous* |
 | **Varier les appartenances rencontrées** | sur l'ensemble des tours, chacun rencontre le plus d'appartenances **différentes** possible |
-| **Respecter les objectifs des tables** | à chaque tour, chacun est assis à une table dont l'objectif lui correspond, quand une telle table peut l'accueillir (§ 4.5), selon le mode réglé : le plus de places servies, chacun au moins une fois, ou l'équité d'abord |
+| **Respecter les objectifs des tables** | à chacun de ses tours de présence, chacun est assis à une table dont l'objectif lui correspond, quand une telle table peut l'accueillir (§ 4.5), selon le mode réglé : le plus de places servies, chacun au moins une fois, ou l'équité d'abord |
 | **Rencontrer le plus d'animateurs différents** | sur l'ensemble des tours, chacun rencontre le plus d'animateurs **différents** possible, là où ils animent (§ 4.5) |
 | **Attribuer les sièges** | chacun reçoit un numéro de siège, pas seulement une table |
 
@@ -661,7 +736,7 @@ une lecture et non un jugement :
 
 | indicateur | définition |
 |---|---|
-| **personnes distinctes rencontrées** | sur l'ensemble des tours ; une personne revue compte une fois |
+| **personnes distinctes rencontrées** | sur ses tours de présence ; une personne revue compte une fois |
 | **collisions cumulées** | occurrences (paire, tour) où deux personnes d'une même appartenance partagent une table — l'unité dans laquelle les planchers du § 5.6 se démontrent |
 | **paires de même appartenance** | **paires distinctes** réunies au moins une fois ; jamais la même unité que la ligne précédente |
 | **excédent de collisions** | collisions cumulées − paires distinctes : le nombre de **retrouvailles au-delà de la première** entre deux personnes d'une même appartenance. Nul quand aucune paire de collègues n'est réunie deux fois |
@@ -768,11 +843,15 @@ retours imposés par 33 ancrages ». Sinon l'indicateur affiche la même valeur
 pour toute proposition et cesse de les séparer. La même lecture vaut pour les
 rencontres répétées entre deux personnes réservées à la même table.
 
-**Les indicateurs se mesurent sur le plan complet**, les N participants et les
-R tours, comme si les réservations n'existaient pas. Des formes closes servent
-au diagnostic préalable ; elles ne corrigent jamais après coup un chiffre
-mesuré. Deux arithmétiques pour une même quantité sont le mode de défaillance
-que le § 13.2 interdit.
+**Les indicateurs se mesurent sur le plan complet** — chaque personne présente,
+à chacun de ses tours de présence —, comme si les réservations n'existaient pas.
+Un tour d'absence ne compte ni rencontre, ni retour, ni tour possible, ni tour
+en réserve : la personne n'y est pas. Les rencontres d'une personne dont la
+présence s'arrête après des tours joués comptent, pour elle et pour ceux qu'elle
+a rencontrés, aux tours où elle était là. Des formes closes servent au
+diagnostic préalable ; elles ne corrigent jamais après coup un chiffre mesuré.
+Deux arithmétiques pour une même quantité sont le mode de défaillance que le
+§ 13.2 interdit.
 
 **La page de qualité lit, en plus, des mesures qui ne classent rien.** Elles
 décrivent un placement à la fois (§ 12) ; aucune n'entre dans la recherche ni
@@ -792,7 +871,7 @@ des tours.
 | **possibles du tour** — Π_r | couples (p, r) possibles au tour r (§ 4.5), fixés compris | personnes concernées ; « — » sans couple possible à ce tour |
 | **servis du tour** — S_r | couples (p, r) servis au tour r : p assis à une table dont l'objectif en vigueur au tour r lui correspond et qu'il peut occuper | idem |
 | **hors objectif du tour** | Π_r − S_r ; la somme sur les tours est le total des tours hors objectif | idem |
-| **assis sans table possible** — σ_r | personnes présentes assises à une table au tour r dont le couple (p, r) n'est pas possible : concernées ou non, sans étiquette comprises ; une personne en réserve à ce tour n'y est pas | tout tour, dès qu'une personne est concernée ; écrit même quand Π_r = 0 |
+| **assis sans table possible** — σ_r | personnes présentes au tour r et assises à une table dont le couple (p, r) n'est pas possible : concernées ou non, sans étiquette comprises ; une personne en réserve à ce tour n'y est pas, une personne absente à ce tour non plus | tout tour, dès qu'une personne est concernée ; écrit même quand Π_r = 0 |
 | **personnes rencontrées en animant** — U_f, U_{f,r} | pour un animateur f, les personnes distinctes assises à sa table à un tour où il anime, à une table qu'elles peuvent occuper (§ 4.5), lui non compté : sur l'union de ses tours animés, U_f ; au seul tour r, U_{f,r} | animateurs présents ; « — » sans animateur |
 | **appartenances rencontrées en animant** — A_f, A_{f,r} | appartenances distinctes portées par les affiliés de U_f, de U_{f,r} | idem |
 | **étiquettes rencontrées en animant** — E_f, E_{f,r} | étiquettes distinctes portées par les personnes de U_f, de U_{f,r}, chaque étiquette comptée une fois quel que soit le nombre de ses porteurs | animateurs présents, quand une personne présente porte une étiquette ; « — » sinon |
@@ -840,21 +919,34 @@ construction l'atteint. Elle seule autorise la mention « minimum atteint ».
 **Une seule formule, paramétrée par l'itinéraire.** Écrire une formule par
 statut garantit qu'elles se contrediront, et aucune ne couvrirait un
 participant partiellement fixé. Pour une personne p et un itinéraire — la table
-qu'elle occupe à chaque tour :
+qu'elle occupe à chacun de ses tours de présence :
 
 - D = les tables **distinctes** visitées, m_t = tours passés à la table t ;
 - a_t = le nombre d'**ancrés** de la table t, p non compté ;
 - v_t = c_t − 1 − a_t = les sièges qui changent d'occupant ;
-- n_p = n − 1 si p est mobile ou partiellement fixé, n s'il est ancré.
+- C(p) = les autres personnes présentes à un tour au moins où p l'est, ses
+  **co-présents**, et |C(p)| leur nombre, N − 1 sans absence ;
+- n_p^C = parmi elles, celles qui ne sont pas ancrées ; sans absence,
+  n_p = n − 1 si p est mobile ou partiellement fixé, n s'il est ancré.
 
 ```
-plafond(p) = min( N − 1 , Σ a_t + min( n_p , Σ m_t · v_t ) )
-                          t∈D              t∈D
+plafond(p) = min( |C(p)| , Σ a_t + min( n_p^C , Σ m_t · v_t ) )
+                           t∈D                t∈D
 ```
 
 Les ancrés d'une table visitée sont rencontrés **une fois**, quel que soit le
 nombre de tours passés là ; les sièges libres se renouvellent, mais ne peuvent
-livrer plus de personnes qu'il n'existe de mobiles.
+livrer plus de personnes qu'il n'existe de mobiles que p peut croiser.
+
+Un tour d'absence n'entre dans aucun itinéraire : le plafond a priori d'une
+personne présente à deux tours sur quatre est celui de deux tours, et son écart
+d'itinéraire ne porte rien de son absence. Le premier terme est |C(p)|, et non
+N − 1 : une personne ne rencontre que ses co-présents. Avec N − 1, une seule
+absence laisserait le plafond au-dessus de ce que la soirée permet, et la
+chaîne `rencontres ≤ plafond réalisé ≤ plafond a priori ≤ |C(p)| ≤ N − 1`, que
+les épreuves tiennent contre une énumération, ne tiendrait plus. Un ancré étant
+présent à chaque tour (§ 4.2), les a_t ancrés occupent leur table à chaque
+tour, comme sans absence.
 
 > Le terme `min(n_p, …)` n'est pas décoratif. Un ancré **ne rencontre jamais
 > les ancrés des autres tables**. Sans ce terme, sur 4 tables de 5 avec un
@@ -868,7 +960,7 @@ base :
 
 | terme | définition | base | où il s'affiche |
 |---|---|---|---|
-| **plafond a priori** | maximisé sur les itinéraires admissibles | **capacités** | diagnostic § 5.6, tuile § 12.2 |
+| **plafond a priori** | maximisé sur les itinéraires admissibles de ses tours de présence | **capacités** | diagnostic § 5.6, tuile § 12.2 |
 | **plafond réalisé** | calculé sur l'itinéraire de la proposition | **occupation** | à côté de chaque mesure |
 | **borne prouvée** | l'affirmation qu'une construction atteint le plafond | — | mention « minimum atteint » |
 | **manque** | plafond réalisé − rencontres | — | tuile du manque maximal (§ 12.2), courbe de comparaison (§ 12.10) |
@@ -892,8 +984,8 @@ I l'itinéraire de p — les couples (table, tour) où p est assis —, D les ta
 distinctes de I, et o_{t,r} l'occupation de la table t au tour r :
 
 ```
-plafond réalisé(p) = min( N − 1 ,  Σ a_t  +  min( n_p ,   Σ     v_{t,r} ) )
-                                  t∈D                  (t,r)∈I
+plafond réalisé(p) = min( |C(p)| ,  Σ a_t  +  min( n_p^C ,   Σ     v_{t,r} ) )
+                                   t∈D                    (t,r)∈I
 
                      avec  v_{t,r} = o_{t,r} − 1 − a_t
 ```
@@ -990,7 +1082,9 @@ inévitable, **combien**, et ce qui le rendrait évitable :
 - plus de personnes d'une appartenance que de tables → « au moins 8 collisions
   cumulées sur les 4 tours, portées par au moins 2 paires distinctes ». Le
   plancher se démontre **en occurrences** ; le chiffre nomme donc son unité, et
-  le compte de paires distinctes l'accompagne (§ 5.4) ;
+  le compte de paires distinctes l'accompagne (§ 5.4). Le plancher se calcule
+  tour par tour sur les membres présents à ce tour, et reste prouvé quelles que
+  soient les absences ;
 - **le plancher de l'excédent**, quand un groupe de g personnes subit un plancher
   de C collisions cumulées et que `C > C(g, 2)` : les retrouvailles sont alors
   forcées, et l'excédent ne descend pas sous `C − C(g, 2)`. Le diagnostic l'écrit
@@ -1007,13 +1101,22 @@ inévitable, **combien**, et ce qui le rendrait évitable :
   l'événement ;
 - **le plancher de l'écart d'itinéraire maximal**, quand la configuration en
   impose un (§ 12.10.4). Le diagnostic ne l'écrit que là où il sait le prouver,
-  et se tait ailleurs — **jamais 0 par défaut** ; sur la page de qualité, la
+  et se tait ailleurs — en particulier dès qu'une personne est absente à un
+  tour, sa preuve supposant chacun présent à chaque tour ; **jamais 0 par
+  défaut** ; sur la page de qualité, la
   tuile de ce chiffre l'écrit dessous (§ 12.2). Sans ce plancher, le troisième
   chiffre de la page envoie relancer indéfiniment vers un zéro que la
   configuration interdit ;
-- **le manque de places**, `Σ (c_t − k_t) < n`. Ce n'est pas un refus de geste
-  mais une **propriété de la configuration** (§ 5.9) : le diagnostic la nomme
-  avec le nombre de places manquantes, et **la génération la refuse** ;
+- **le manque de places**, à un tour r où Σ c_t est inférieure au nombre de
+  personnes présentes au tour r. Ce n'est pas un refus de geste mais une
+  **propriété de la configuration** (§ 5.9) : le diagnostic la nomme avec le
+  nombre de places manquantes, et **la génération la refuse**
+  (`PLACES_MANQUANTES`). Sans absence, le manque est le même à chaque tour, et
+  l'énoncé le dit d'un nombre : « Il manque 2 places à chaque tour pour
+  asseoir toutes les personnes ». Dès qu'une présence est partielle, il nomme
+  chaque tour qui en manque — « Il manque 2 places au tour 3 et 1 place au
+  tour 4 pour asseoir les personnes présentes » —, même quand ces tours
+  couvrent la soirée. Une personne absente à un tour n'y demande pas de place ;
 - **les objectifs hors d'atteinte** : au tour r, une personne servie qui n'est
   pas fixée occupe un siège libre — qu'aucune réservation n'occupe — d'une table
   dont l'objectif est en vigueur. Le nombre de tours hors objectif est donc au
@@ -1039,6 +1142,15 @@ inévitable, **combien**, et ce qui le rendrait évitable :
 
 L'objectif auquel aucune personne présente ne correspond est signalé à
 l'objectif même (§ 5.9).
+
+**Sous absence.** Dès qu'une personne non exclue est absente à un tour, le
+diagnostic le dit en tête de la carte de tout l'événement, après les
+collisions et l'excédent : « 2 personnes ne sont pas présentes à chaque tour :
+l'écart d'itinéraire n'a pas de plancher prouvé, et chaque chiffre se lit sur
+les tours de présence. » Les planchers des collisions, de l'excédent et des
+objectifs restent : ils se calculent tour par tour sur les présents, et une
+absence ne sort pas un plan de leur domaine (§ 12.4). Seul l'écart
+d'itinéraire perd le sien.
 
 À l'écran, les énoncés se regroupent en cartes, sans changer d'ordre : la
 séparation des appartenances vidée de son sens, une carte par appartenance en
@@ -1083,6 +1195,25 @@ l'effacement (§ 8.6) ; rien de nouveau ne s'écrit dans le fichier (§ 8.9).
 Comme l'effacement, il ne protège aucun départ : il peut emporter le départ
 d'une proposition dérivée qu'il garde, et celle-ci nomme alors un départ qui
 n'est plus dans la liste.
+
+**Le tableau dit la présence.** Au-dessus du classement, sous une présence
+partielle : « 2 personnes ne sont pas présentes à chaque tour : chaque chiffre
+se lit sur leurs tours de présence. » Quand aucune proposition n'est classée
+parce que les participants ont changé depuis leur calcul : « Aucune
+proposition n'est classée : les participants ont changé depuis leur calcul.
+« Repartir d'elle », dans le menu d'une ligne, en génère des propositions
+dérivées qui suivent la soirée telle qu'elle est. »
+
+**« Garder les N meilleures » refuse d'effacer sans avoir comparé.** Une
+proposition qu'un changement de participants a seul mise en dérive ne se classe
+pas, mais sert encore de départ (plus bas). Quand le classement compte moins de
+n lignes et qu'une ligne à effacer sert ainsi de départ, le geste est refusé
+(`NETTOYAGE_SANS_CLASSEMENT`), sans remède : « 3 propositions ne sont pas
+classées depuis le changement de participants : garder les 10 meilleures les
+effacerait sans les avoir comparées. Générer d'abord une dérivée. » Le refus
+passe avant le geste sans effet, et se pose à côté du bouton, sans fenêtre. Une
+proposition que le mobilier a mise en dérive ne sert pas de départ et n'arrête
+rien.
 
 **N est une saisie de la section, jamais écrite.** Il se saisit dans un champ
 étroit à côté du bouton, dix au départ, un entier d'au moins 1, et le bouton le
@@ -1132,7 +1263,8 @@ deux ordres.
 
 **Une génération peut repartir d'une proposition.** La commande « Repartir
 d'elle », dans le menu « Actions » de la ligne d'une proposition comparable du
-tableau, en fait le **départ** de la génération suivante et ouvre la section
+tableau, ou d'une proposition qu'un changement de participants a seul mise en
+dérive, en fait le **départ** de la génération suivante et ouvre la section
 de la génération, qui le montre au-dessus de « Générer »
 — « Départ : proposition n° 4 » — avec la commande « Repartir de zéro », qui
 le retire ; sous un départ, « Générer » se lit « Générer depuis n° 4 ».
@@ -1150,18 +1282,78 @@ proposition ordinaire peuvent porter la même graine dérivée, le même compte 
 le même historique pour deux plans : leur identifiant et le départ les
 distinguent.
 
-**Le départ est une proposition comparable qui tient les réservations
+**Le départ est une proposition comparable, ou une proposition qu'un
+changement de participants a seul mise en dérive, et il tient les réservations
 courantes.** Le lancement refuse, en nommant la cause, un départ qui a quitté
-la liste, un départ en dérive ou fautif (§ 9), et un départ qui ne tient pas
-une réservation posée depuis — « la proposition n° 4 n'assied pas Prénom Nom
-à la table 3 au tour 2, où une réservation la fixe » ; le remède de chacun
-est « Repartir de zéro ». Un départ est en dérive dès que les participants ou
-le mobilier ont changé depuis lui : après l'ajout ou le retrait d'une seule
-personne, aucune proposition ne sert plus de départ, et garder un tour déjà
-annoncé passe par des réservations (§ 5.8 : le placement se prépare, il ne
-suit pas la salle). Le placement retenu n'est pas un départ : non
-ajusté, il est le placement de sa proposition, qui l'est ; ajusté à la main,
-il n'est le plan d'aucune proposition et ne se régénère pas.
+la liste, un départ fautif (§ 9), un départ que le mobilier ou le nombre de
+tours a mis en dérive — une table ajoutée ou supprimée, une capacité changée,
+des tours ajoutés ou retirés : `DEPART_NON_COMPARABLE`, « le mobilier a changé
+depuis elle » —, et un départ qui ne tient pas une réservation posée depuis sur
+une personne qu'il assied — « la proposition n° 4 n'assied pas Prénom Nom à la
+table 3 au tour 2, où une réservation la fixe » ; le remède de chacun est
+« Repartir de zéro ». Un départ que l'ajout, l'exclusion, la réintégration, la
+suppression ou la présence d'une personne a mis en dérive **sert de départ** :
+la génération dérivée part de son **plan ajusté**, et ce changement ne demande
+pas de repartir de zéro. Le placement retenu n'est pas un départ : il suit les
+participants (§ 5.8) et, retouché à la main, n'est le plan d'aucune
+proposition et ne se régénère pas.
+
+**Le plan ajusté** est le plan du départ, rendu à la configuration courante par
+une règle fixe, sans tirage : celle qui ajuste le placement retenu (§ 5.8). À
+chaque tour, une personne que la configuration n'a plus, qu'elle exclut ou
+qu'elle dit absente à ce tour quitte sa chaise, qui reste libre — vide à sa
+place sous des sièges attribués. Une personne présente que le départ n'assied
+pas — ajoutée, réintégrée, dont la présence s'étend, ou en réserve dans le
+départ — est **à asseoir** à ce tour ; personne d'autre ne change de table.
+- **Aux tours non figés**, elle va, par identifiant croissant, à sa table
+  réservée quand une réservation la fixe à ce tour, sinon au premier siège
+  resté libre, et la recherche la déplace ensuite comme tout mobile. Une libre
+  qu'une arrivée réservée pousse hors d'une table pleine passe à asseoir à son
+  tour.
+- **Aux tours figés, personne ne bouge.** Elle prend la **meilleure chaise
+  libre** de ce tour : chaque table qui garde une chaise libre qu'elle peut
+  occuper est essayée, et le meilleur score de la recherche l'emporte, la
+  première table à égalité, sans tirage. Une personne réservée n'a de chaise
+  qu'à sa table, et, sous des sièges attribués du départ et de l'événement,
+  qu'à son siège réservé. Sans chaise libre qu'elle puisse occuper, elle
+  **reste en réserve** à ce tour : la dérivée la garde en réserve, et sort du
+  domaine des planchers (§ 12.4). Une personne libre trouve toujours une
+  chaise, puisque la génération refuse un manque de places (§ 5.6).
+  L'application seule décide de ces réserves imposées, sur les tables, les
+  sièges et les réservations du moment, et les passe à la recherche avec le
+  départ.
+
+L'ajustement se refait à l'identique à chaque régénération : une dérivée se
+régénère de ses trois champs, de ses tours figés, du plan de son départ et de
+la configuration. Le départ en dérive reste non comparable : il ne se classe
+pas, ses raisons restent écrites (§ 9), et ses dérivées, qui décrivent la
+configuration courante, entrent au classement. « Repartir de zéro » reste
+offert.
+
+**La carte du départ nomme ses écarts avant le lancement.** Sous son titre,
+« Depuis n° 4 : », une ligne par personne, son nom puis chaque écart : « —
+retirée des tours 3 et 4 » pour une personne absente, exclue ou supprimée que
+le départ assied à ces tours ; « — à asseoir aux tours 3 et 4 » aux tours non
+figés où elle arrive ; « — assise à la meilleure chaise libre du tour 1,
+figé » ; « — en réserve au tour 1, figé : sa table n'a plus de chaise libre »,
+ou « … : son siège réservé est pris ». Une exclue ou une supprimée assise à un
+tour figé du départ y est retirée, et la ligne ajoute que ses rencontres de ce
+tour ne comptent plus. La carte se lit avant tout calcul et n'écrit rien ;
+elle reste après la génération, tant que le départ est choisi.
+
+**Une dérivée fige les tours de sa proposition, non ceux du retenu.** Quand le
+départ est la proposition d'où le placement retenu a été retenu et qu'un tour
+figé du retenu diffère du plan ajusté du départ, le lancement **avertit**, sans
+refuser (`DEPART_ECART_AU_RETENU`) : « Les tours figés 1 et 2 viennent de la
+proposition n° 4 : les retouches du placement retenu à ces tours n'y sont
+pas. » La carte le dit sous les cases dès qu'un tel tour est coché, et l'issue
+le répète. La comparaison est stricte — les occupants de chaque table, par
+identifiant de table, et la réserve ; chaise par chaise quand les deux
+attribuent les sièges — : une personne retirée du tour à la main fait un
+écart, une personne partie puis revenue aussi, le retenu la tenant en réserve
+là où le départ l'assied ; un retenu seulement ajusté aux participants n'en
+fait aucun. Un retenu qui vient d'une autre proposition, ou fautif, ne se
+compare pas. Repartir du retenu lui-même n'existe pas.
 
 **La dérivée continue son départ.** Sa recherche part du plan du départ — chaque
 personne, à chaque tour, à la table qu'il lui donne — au lieu d'un placement
@@ -1178,18 +1370,21 @@ se ranger derrière lui ; à égalité sur tous les paliers, son identifiant, pl
 grand, la range après.
 
 **Une génération dérivée peut figer des tours.** Sous le départ, une case par
-tour, toutes décochées à chaque choix d'un départ ; un tour coché est
-**figé** : chaque proposition le reprend du départ tel quel — chaque table
-avec ses occupants, et, quand le départ et l'événement attribuent tous deux
-les sièges, leur ordre et ses chaises vides —, et la recherche ne refait que
-les autres. Elle ne tire ses mouvements que dans les tours non figés : un tour
-figé ne consomme rien du compte d'arrêt. Les rencontres, les tours servis et
-les animateurs rencontrés des tours figés comptent dans le score de toute la
-soirée, et la recherche range les autres tours en fonction d'eux — ce qui
-sépare figer de greffer après coup les tours du départ sur une proposition
-nouvelle, qui refait les rencontres que ces tours ont déjà faites. Figer tous
-les tours est refusé, le refus posé contre les cases : il ne reste rien à
-refaire.
+tour, toutes décochées à chaque choix d'un départ ; un tour coché est **figé** :
+chaque proposition le reprend du départ tel quel — chaque table avec ses
+occupants, et, quand le départ et l'événement attribuent tous deux les sièges,
+leur ordre et ses chaises vides —, et la recherche ne refait que les autres.
+Sous un départ en dérive, le tour figé est celui du plan ajusté (plus haut) :
+qui part y laisse sa chaise libre, et qui arrive y prend la meilleure chaise
+libre ou y attend en réserve, sans que personne y soit déplacé. Elle ne tire ses
+mouvements que dans les tours non figés : un tour figé ne consomme rien du
+compte d'arrêt. Les rencontres, les tours servis et les animateurs rencontrés
+des tours figés comptent dans le score de toute la soirée, y compris pour une
+personne absente aux tours suivants, et la recherche range les autres tours en
+fonction d'eux — ce qui sépare figer de greffer après coup les tours du départ
+sur une proposition nouvelle, qui refait les rencontres que ces tours ont déjà
+faites. Figer tous les tours est refusé, le refus posé contre les cases : il ne
+reste rien à refaire.
 
 **Sous des sièges attribués, un tour figé garde ses sièges.** L'application
 range d'ordinaire chaque table d'une proposition selon les réservations à un
@@ -1198,8 +1393,12 @@ départ, jamais rangées de nouveau. Le lancement refuse donc, avant tout
 calcul, un départ dont un tour figé n'assied pas une personne au siège
 qu'une réservation courante lui fixe — « la proposition n° 4 n'assied pas
 Prénom Nom au siège 2 de la table 3 au tour 1 » —, avec pour remède de
-décocher ce tour, ou « Repartir de zéro ». Avant d'enregistrer, l'application
-vérifie que chaque tour figé égale celui du départ, et refuse la génération
+décocher ce tour, ou « Repartir de zéro » ; une arrivée n'y est pas comptée,
+la règle du plan ajusté la place à son siège ou la laisse en réserve. Avant
+d'enregistrer, l'application recopie chaque tour figé du plan ajusté — une
+arrivée à siège réservé à son siège, une autre à la table que la recherche lui
+donne, une réserve imposée dans la réserve —, vérifie que chacun, arrivées
+retirées, égale le plan ajusté arrivées retirées, et refuse la génération
 sinon, comme une violation d'invariant (§ 14.12) : aucun geste légitime ne
 la déclenche.
 
@@ -1220,6 +1419,11 @@ ses propositions égalent leur départ, elles sont écartées comme identiques e
 l'issue le dit : « la proposition n° 4 n'avait rien à reprendre sous ces
 réglages ». Son entrée d'historique porte un libellé fixé à l'écriture (§ 8.2) :
 « Généré 5 propositions dérivées de n° 4 (n° 21 à 25), tours 1 et 2 figés ».
+Quand le départ est en dérive, l'issue dit qu'il ne se classe pas — « 5
+propositions dérivées de n° 4 (n° 21 à 25) ; la meilleure, n° 23, est 2ᵉ du
+classement ; n° 4, en dérive, n'est pas classée » — et n'offre aucune
+comparaison. Une dérivée égale au plan ajusté de son départ n'est pas
+identique à ce départ, qui est un autre placement : elle est gardée.
 Le départ reste choisi après la génération, pour une autre graine ; « Générer
 depuis n° 4 » le rappelle, et une génération ordinaire demande d'abord
 « Repartir de zéro ».
@@ -1395,7 +1599,11 @@ ligne du placement retenu porte la teinte de l'état Retenu, et la proposition
 retenue, la pastille « retenue ». Une proposition dérivée porte, sous son
 numéro, la phrase qui la rattache à son départ — « Dérivée de n° 4. », ou
 « Dérivée de n° 4, tours 1 et 2 figés. » —, sans colonne de plus, comme la
-ligne du retenu porte « Tel que la proposition n° X. ». Seul le départ immédiat
+ligne du retenu porte « Tel que la proposition n° X. », « Tel que la
+proposition n° X, ajusté aux participants. » quand il ne diffère de sa
+proposition que par l'ajustement aux participants (§ 5.8), et « Ajusté à la
+main depuis la proposition n° X. » quand il porte une retouche que retenir de
+nouveau cette proposition détruirait. Seul le départ immédiat
 est nommé : la ligne du départ dit le sien. Quand le départ n'est plus dans la
 liste, la phrase le dit — « Dérivée de n° 4, qui n'est plus dans la liste. » —
 et ne désigne aucune autre proposition. Les commandes d'une ligne vivent dans
@@ -1404,8 +1612,10 @@ ne montre que ce bouton. Chaque phrase de la colonne « Imposé par les
 réservations » tient sur une ligne, et chaque ligne a la hauteur de ses
 chiffres, phrase de filiation comprise. Le menu d'une proposition porte « Voir
 sur le plan », « Qualité » et « Retenir » ; celui d'une proposition comparable
-porte aussi « Repartir d'elle » et « Comparer » (§ 12), celui d'une ligne en
-dérive ou fautive ni l'une ni l'autre ; le menu du placement retenu porte
+porte aussi « Repartir d'elle » et « Comparer » (§ 12) ; celui d'une
+proposition qu'un changement de participants a seul mise en dérive porte
+« Repartir d'elle », sans « Comparer » ; celui d'une autre ligne en dérive, ou
+fautive, ni l'une ni l'autre ; le menu du placement retenu porte
 « Voir sur le plan », « Qualité » et « Comparer ». Le bouton suit le motif du
 bouton de menu de WAI-ARIA : il annonce son menu, s'ouvre au clic, par Entrée,
 l'espace et les flèches, et le menu se parcourt aux flèches, à Début et à Fin,
@@ -1434,6 +1644,39 @@ table : la chaise reste vide jusqu'à ce qu'un geste y assoie quelqu'un, et un
 geste n'assied que les personnes qu'il nomme. Quand les sièges sont attribués,
 le fichier écrit cette chaise vide à sa place (§ 8.9).
 
+**Le retenu suit qui est là.** Tout changement de participants — la présence
+d'une personne, un ajout, une réintégration, une exclusion, une suppression, un
+import — ajuste le placement retenu dans la même entrée d'historique, et rien
+d'autre, par la règle fixe du plan ajusté (§ 5.7) : à chaque tour où une
+personne devient absente, elle quitte sa chaise, qui reste libre, ou la
+réserve ; à chaque tour où elle devient présente, elle entre dans la réserve de
+ce tour, où un geste ou une proposition dérivée l'assied. Une personne exclue
+ou supprimée quitte chaque tour du retenu, joués compris. Personne d'autre ne
+change de siège ni de table, et **le retenu ne dérive jamais par ses
+participants** : seul le mobilier, les tours ou un fichier écrit ailleurs l'y
+mettent (§ 9). « Défaire » reprend le geste et l'ajustement ensemble. Le
+libellé de l'entrée le dit — « ; placement retenu ajusté » —, et les
+propositions, elles, gardent leur plan : elles entrent en dérive (§ 9), sans
+cesser de servir de départ (§ 5.7).
+
+Une personne ajoutée en état retenu entre en réserve du retenu à ses tours de
+présence, et le logiciel le dit (`A_PLACER_DANS_LE_RETENU`) : quand sa présence
+vaut « tous », il ajoute de dire à quels tours elle est présente si elle arrive
+en cours de soirée. **Exclure ou supprimer une personne assise au retenu**
+avertit (`RENCONTRES_RETIREES_DU_RETENU`) : « Prénom Nom était assise aux tours
+1 et 2 du placement retenu : ses rencontres de ces tours n'y comptent plus.
+Pour les garder, défaire, puis la dire présente aux tours 1 et 2 seulement. » —
+sans remède en un clic, l'exclusion ayant déjà retiré la personne des tours
+joués.
+
+**Retenir une proposition ajuste sa copie** à la présence de chacun, dans la
+même entrée : une proposition en dérive par ses participants, retenue, donne un
+retenu qui ne dérive pas, et le libellé ajoute « ; ajusté à la présence ». Une
+dérive du mobilier reste ce qu'elle est. Retenir une autre proposition ne
+demande confirmation que si le retenu porte une retouche à la main que ce geste
+détruirait (§ 9) : un retenu seulement ajusté aux participants se remplace sans
+fenêtre, sa proposition retenue de nouveau donnant le même ajustement.
+
 **Il n'existe aucune commande qui répartit les animateurs sur les tables.**
 L'opérateur désigne lui-même quelle personne anime quelle table (§ 2.1,
 étape 6). Une commande qui attribuerait un animateur par numéro de table le
@@ -1441,10 +1684,15 @@ ferait sous une **seule** entrée d'historique : revenir sur elle, parce que dou
 attributions sur trente-trois sont fausses, emporterait aussi les vingt-et-une
 qui étaient bonnes — le § 8.3 restitue un état, il ne défait pas un geste.
 
-Ce qui la remplace : le logiciel **montre le travail qui reste**, par deux listes
+Ce qui la remplace : le logiciel **montre le travail qui reste**, par des listes
 cliquables qui mènent à la place ou à la personne — la liste des **titres de
-place non pourvus** (§ 4.1) et la liste des participants portant un **titre
-pressenti** (§ 4) qui ne sont encore réservés nulle part.
+place non pourvus** (§ 4.1), la liste des participants portant un **titre
+pressenti** (§ 4) qui ne sont encore réservés nulle part, et, sous un retenu, la
+liste **« En réserve dans le placement retenu »** : chaque personne que le
+retenu laisse en réserve, avec ses tours, une exclue, une supprimée ou une
+absente au tour n'y figurant pas ; un clic montre le premier de ces tours et la
+choisit. Elle n'existe pas sans retenu, et dit « Aucun. » sous un retenu qui
+n'en laisse pas, ou qui se contredit.
 
 ### 5.9 Ce que le logiciel refuse, au moment du geste
 
@@ -1455,24 +1703,47 @@ dans l'outil.
 - **k_t > c_t** — plus d'ancrés que de sièges : refusé.
 - **k_t = c_t** — table entièrement gelée : accepté, **signalé**, parce que
   c'est rarement l'intention.
-- **Σ (c_t − k_t) < n** — il manque des places à chaque tour. **Celui-ci n'est
-  pas un refus de geste.** L'écart `Σ (c_t − k_t) − n` est **invariant sous
-  toute réservation** : une portée « tous les tours » retire la personne des
-  mobiles et son siège de la capacité libre en parts égales ; une portée « tour
-  désigné » rend la personne partiellement fixée, qui compte parmi les mobiles
-  (§ 5.4) et ne change ni `n` ni `k_t` ; déplacer une réservation décrémente un
-  `k_t` et en incrémente un autre. Aucun geste de réservation ne peut donc le
-  faire franchir. C'est une **propriété de la configuration** : le § 5.6
-  l'évalue au diagnostic et **la génération la refuse**, en nommant le nombre de
-  places manquantes. Les gestes qui la font franchir sont ceux qui augmentent
-  `n` ou diminuent `Σ c_t` — un import, une saisie, la réintégration d'un exclu
-  (§ 4.4), une baisse de capacité (§ 6.2), la suppression d'une table — et
-  **aucun n'est refusé pour cette raison** : refuser un import parce que la
-  salle est devenue trop petite empêcherait d'enregistrer qui s'est présenté, et
-  le § 9 pose déjà que la dérive avertit sans bloquer. Chacun **avertit**, avec
-  le nombre.
+- **Il manque des places à un tour r** quand Σ c_t est inférieure au nombre de
+  personnes présentes au tour r. **Celui-ci n'est pas un refus de geste.** À
+  chaque tour, l'écart `Σ (c_t − k_t) − n_r`, n_r les mobiles présents au tour
+  r, est **invariant sous toute réservation** : une portée « tous les tours »
+  sur une personne présente aux R tours retire la personne des mobiles et son
+  siège de la capacité libre en parts égales ; une portée « tour désigné », ou
+  une portée « tous les tours » sur une personne absente à un tour, la rend
+  partiellement fixée, qui compte parmi les mobiles (§ 5.4) et ne change ni
+  `n_r` ni `k_t` ; déplacer une réservation décrémente un `k_t` et en
+  incrémente un autre. Aucun geste de réservation ne peut donc le faire
+  franchir. C'est une **propriété de la configuration** : le § 5.6 l'évalue au
+  diagnostic et **la génération la refuse**, en nommant le nombre de places
+  manquantes et, dès qu'une présence est partielle, chaque tour. Les gestes qui
+  la font franchir sont ceux qui augmentent un `n_r` ou diminuent `Σ c_t` — un
+  import, une saisie, la réintégration d'un exclu (§ 4.4), une présence
+  étendue à un tour, une baisse de capacité (§ 6.2), la suppression d'une
+  table — et **aucun n'est refusé pour cette raison** : refuser un import
+  parce que la salle est devenue trop petite empêcherait d'enregistrer qui
+  s'est présenté, et le § 9 pose déjà que la dérive avertit sans bloquer.
+  Chacun **avertit** (`PLACES_MANQUANTES`) quand un tour voit son manque
+  devenir positif ou grandir, avec le nombre et, sous une présence partielle,
+  chaque tour qui en manque.
 - Réserver plus de places qu'une table n'en a ; un siège inexistant ; la même
-  personne à deux places sur un même tour ; une personne exclue.
+  personne à deux places sur un même tour ; une personne exclue ; une personne
+  à un tour où elle est absente (`PERSONNE_ABSENTE_AU_TOUR`).
+- Déposer, au plan, une personne absente au tour montré, la déplacer ou
+  l'échanger dans le retenu à un tour d'absence : refusé sur la place
+  (`PERSONNE_ABSENTE_AU_TOUR`), le refus proposant de la dire présente à ce
+  tour — « La dire présente aux tours 1, 3 et 4 », sa présence plus le tour
+  refusé —, un remède qui écrit et nomme son effet. Retirer du tour une
+  personne absente à ce tour est sans effet.
+- Une présence sans aucun tour : refusée contre les cases
+  (`PRESENCE_VIDE`), sans remède — « Prénom Nom ne serait présente à aucun
+  tour : pour l'écarter de toute la soirée, l'exclure. » L'exclusion retire la
+  personne des tours joués : aucun geste destructeur ne s'offre en un clic.
+- Étendre une présence à un tour où une réservation de la personne, suspendue
+  jusque-là, ferait déborder sa table (`SURRESERVATION`), ou prendrait un siège
+  réservé à une autre (`PLACE_RESERVEE`) : refusé, comme la réintégration
+  (§ 4.4), avec les mêmes remèdes. La réintégration ne contrôle que les tours de
+  présence de la personne. Un import qui étend ainsi une présence est refusé
+  entier.
 - Déposer quelqu'un sur une place réservée à un autre, ou l'échanger avec elle.
   **Déplacer la réservation** est une commande séparée et explicite.
 - Une saisie d'étiquettes vide — des blancs ou des séparateurs seuls —, une
@@ -1558,6 +1829,18 @@ celui de six : mesuré sur la grande démonstration, un mouvement coûte quelque
 pour cent de plus que sous l'ordre fixe de référence sans objectif, et moins
 d'un dixième de plus avec des étiquettes, des objectifs, la case des animateurs
 et un ordre réglé.
+
+**La présence ne coûte rien à la recherche.** Une personne absente à un tour
+n'occupe aucun siège de ce tour, aucun mouvement ne la touche, et les grandeurs
+incrémentales ne la lisent qu'aux tours où elle est assise : la boucle des
+mouvements est celle d'une soirée sans absence, et la recherche ne change pas
+sous l'absence. Sans aucune absence, chaque chemin rapide de la co-présence
+s'applique, et une graine donne les mêmes propositions qu'avant la présence.
+Le plafond a priori, calculé une fois par configuration, ne croît pas avec le
+nombre de motifs de présence : son programme dynamique se calcule une fois par
+classe de personnes — statut, ancrage, tables fixées, nombre de tours libres
+présents —, au plus grand nombre de mobiles co-présents de la classe, et
+chacune le lit avec son |C(p)| et son n_p^C (§ 5.5).
 
 **L'ordre des priorités et le mode ne touchent pas au hasard.** Ils changent la
 façon dont deux scores se comparent, jamais les tirages : aucun ne s'ajoute ni
@@ -1730,6 +2013,13 @@ Le logiciel **énonce la conséquence chiffrée avant de l'appliquer** :
 > surchargées (7, 7, 6, 12) ne changent pas. Total : 104 → 122 sièges pour 118
 > participants. »
 
+Sous une présence partielle, le compte est celui des personnes présentes au
+plus à un même tour — « … pour 112 personnes présentes au plus à un même
+tour » —, et la section des tables porte un tableau des présences par tour :
+pour chaque tour, les personnes présentes, les places et le manque, un manque
+positif signalé. Il n'existe pas sans présence partielle. Retirer un tour
+nomme, dans son annonce, chaque présence que le retrait rogne.
+
 Deux boutons : appliquer, ou appliquer **et réaligner les 4 surchargées** — le
 second geste est séparé parce qu'il détruit de la saisie.
 
@@ -1785,6 +2075,16 @@ l'opérateur agit directement dessus.
 
 Un **menu par personne** offre les mêmes actions sans glisser, pour le tactile
 et le clavier.
+
+**La réserve visible ne montre que des personnes présentes.** Une personne
+absente au tour montré n'y est pas : la carte « Absentes », sous la réserve,
+nomme les personnes absentes à ce tour, chacune suivie de ses tours de
+présence — « Prénom Nom — présente aux tours 1 et 2 » ; elle n'existe pas quand
+le tour n'en a pas. Une absente n'a ni chaise ni place en réserve ; son bouton
+ouvre sa fiche, où sa présence se change (§ 10.2), et ne la choisit pas. Le
+plan n'offre pas de commande qui change une présence : la fiche et la grille
+en sont le lieu. La mise en évidence d'une personne absente au tour montré se
+dit dans la barre de vue : « — absente au tour 3 ».
 
 **La poignée pilote le nombre de places, jamais une taille libre.** Chaque table
 est dessinée à l'échelle de son nombre de sièges ; une taille libre permettrait
@@ -2096,7 +2396,7 @@ et n'est jamais nécessaire pour ouvrir.
 
 | | |
 |---|---|
-| participants | avec identifiant entier, titre pressenti, notes, **étiquettes** |
+| participants | avec identifiant entier, titre pressenti, notes, **étiquettes**, **présence** |
 | tables | capacité **et son état** : `sieges: null` (suit le défaut) ou un entier (surcharge) |
 | le **nombre de sièges par défaut** de l'événement | |
 | tours, réglages, réservations avec leur portée, **titres de place** | |
@@ -2522,14 +2822,15 @@ l'état en entier (§ 8.2), en paierait le poids. À part, elle ne coûte qu'à 
 génération qui la produit.
 
 Sa première ligne porte son propre format, 1, et l'identifiant de l'événement ;
-puis une ligne par proposition, `{id, graine, arret, historique, horodatage,
-empreinte, course}`, puis la fermeture. `horodatage` est celui que la génération
-a posé sur la proposition (§ 8.9), absent quand elle n'en porte pas. `empreinte`
-est un entier de 0 à 2⁵³ − 1, l'empreinte du texte canonique du placement de la
-proposition (§ 8.9) : sa réserve rangée par identifiant croissant, chaque liste
-de table aussi quand `siegesAttribues` est faux ; ni l'horodatage ni la version
-qui l'a produite n'y entrent. Elle n'est pas cryptographique : elle départage
-deux placements qui partagent déjà les autres champs. `course` porte :
+puis une ligne par proposition,
+`{id, graine, arret, historique, horodatage, empreinte, course}`, puis la
+fermeture. `horodatage` est celui que la génération a posé sur la proposition
+(§ 8.9), absent quand elle n'en porte pas. `empreinte` est un entier de 0 à 2⁵³
+− 1, l'empreinte du texte canonique du placement de la proposition (§ 8.9) : sa
+réserve et ses absents rangés par identifiant croissant, chaque liste de table
+aussi quand `siegesAttribues` est faux ; ni l'horodatage ni la version qui l'a
+produite n'y entrent. Elle n'est pas cryptographique : elle départage deux
+placements qui partagent déjà les autres champs. `course` porte :
 
 | clé | forme |
 |---|---|
@@ -2572,8 +2873,9 @@ copie à la main, par une autre recherche de même identité — ne trouve pas s
 proposition et s'ignore. Une entrée d'une autre forme, ou dont la course
 contredit sa proposition — un `evalues` hors de ses bornes, une abscisse
 manquante, en trop ou hors d'ordre, un placement de relevé dont les chaises
-vides, les longueurs ou le multiensemble des identifiants, réserve comprise,
-contredisent la déclaration de la proposition —, s'ignore seule, les autres
+vides, les longueurs ou le multiensemble des identifiants, réserve et absents
+compris, contredisent la déclaration de la proposition, ou des absents qui ne
+sont pas ceux de la proposition à ce tour —, s'ignore seule, les autres
 gardées. La course se contrôle contre sa proposition à la lecture du compagnon,
 et de nouveau quand la page de qualité la lit : **une course contradictoire
 n'atteint jamais le détail**.
@@ -2891,14 +3193,47 @@ déclarés ou qui les porte tous, un `toursFiges` sans `depart`. **Un `depart`
 absent de la liste n'est pas une faute** : effacer les propositions l'emporte
 (§ 5.7), et la dérivée reste comparable et classée. L'ouverture ne compare pas
 les tours figés à ceux du départ : les propositions tombent chacune seule, et
-cette égalité se vérifie à la génération (§ 5.7). Les deux champs entrent au
-format 2 avant sa première livraison : aucune version livrée du format ne les
-ignore.
+cette égalité se vérifie à la génération (§ 5.7). Les tours figés d'une
+dérivée sont ceux du plan ajusté de son départ (§ 5.7) : l'ouverture ne les
+compare toujours pas, et la génération vérifie cette égalité. Les deux champs
+entrent au format 2 avant sa première livraison : aucune version livrée du
+format ne les ignore.
 
 **La référence reste juste à travers le journal.** Un état restitué (§ 8.3)
 a existé avec ses dérivées et leurs départs ; un identifiant que la
 génération suivante réattribue après un retour désigne, dans chaque état, la
 proposition de cet état.
+
+#### Deux champs facultatifs : la présence
+
+La présence d'une personne (§ 4) et les absents d'un tour de placement
+s'écrivent dans deux champs facultatifs, absents à leur défaut :
+
+| champ | où | absent, il vaut | forme |
+|---|---|---|---|
+| `presence` | chaque participant, après `etiquettes` | présente à tous les tours | liste non vide de tours de 1 à R, entiers distincts, écrite triée ; une liste qui porte chaque tour est écrite à son défaut, une faute de forme |
+| `absents` | chaque tour d'un placement, après `reserve` | aucun absent à ce tour | liste non vide d'identifiants, écrite triée |
+
+Un événement sans absence s'écrit octet pour octet comme sans ces deux champs,
+démonstrations comprises. Un tour au-delà de R dans `presence` est une faute de
+forme, au chemin du premier dans l'ordre écrit ; une liste pleine aussi, au
+chemin de la liste. Aucun code nouveau d'analyse n'existe : ce sont les fautes
+de forme du § 8.8. La présence d'une exclue s'écrit comme les autres, et se
+rogne avec R (§ 4.3).
+
+Les `absents` d'un tour se tirent de la configuration, jamais d'un geste : à
+l'écriture, ce sont les identifiants déclarés par le placement que la présence
+du moment dit absents à ce tour, exclus mis à part. Le moteur ne les porte pas,
+et la lecture d'un plan les laisse tomber : un absent n'est listé nulle part
+dans un plan, sa présence suffit. **Une absence se change par la présence**, et
+un placement relu qui ne les porte pas tels que la présence les dit est en
+dérive (§ 9), avec les raisons `PRESENCE_RETIREE` — le placement assied ou
+réserve la personne à des tours où elle est absente depuis — et
+`PRESENCE_AJOUTEE` — il la dit absente à des tours où elle est présente
+depuis —, chacune avec ses tours. Les deux champs entrent au format 2 avant sa
+première livraison, comme `depart` et `toursFiges` ; un fichier de
+développement qui porte la présence ne s'ouvre pas dans une construction
+antérieure.
 
 #### La forme positionnelle
 
@@ -2952,13 +3287,16 @@ proposition ordinaire cesse de l'être quand l'ordre des priorités change.
 défaut, le mode des objectifs, les cases du § 5.3 et l'ordre des priorités.**
 Les changer ne met aucune proposition en dérive : elle reste comparable, se
 reclasse sous l'ordre courant (§ 5.7), et sa régénération rend un autre plan,
-comme après un changement de contrainte. Seuls les participants, les tables, les
-capacités et les tours font une dérive (§ 9).
+comme après un changement de contrainte. Seuls les participants, leur présence,
+les tables, les capacités et les tours font une dérive (§ 9) ; un changement de
+participants ou de présence laisse la proposition servir de départ (§ 5.7).
 
 Puis, **par tour** : la liste des tables, chacune étant la liste de ses
 occupants **dans l'ordre des sièges** — leurs **identifiants entiers**, et `null`
-pour une chaise vide sous des sièges attribués — ; et la **réserve**, la liste
-des identifiants assis nulle part à ce tour. Le numéro de
+pour une chaise vide sous des sièges attribués — ; la **réserve**, la liste des
+personnes présentes à ce tour et assises nulle part ; et les **absents**, la
+liste des personnes que le placement dit absentes à ce tour, écrite seulement
+quand elle n'est pas vide. Le numéro de
 siège n'est pas stocké : il est la position dans la liste. Quand les sièges sont
 attribués, une chaise vide avant le dernier occupant, siège 1 compris, s'écrit
 `null` à sa position, et une liste ne finit jamais par `null` : retirer une
@@ -2974,8 +3312,8 @@ drapeau de la proposition qui décide**, jamais le réglage courant de
 l'événement : changer le réglage n'efface pas l'ordre des sièges d'une
 proposition déjà produite. Le placement retenu a la même forme et son propre
 drapeau, avec l'identifiant de la proposition dont il vient. L'ensemble des
-participants et chaque réserve se trient par identifiant croissant dans tous
-les cas : ce sont des ensembles.
+participants, chaque réserve et chaque liste d'absents se trient par
+identifiant croissant dans tous les cas : ce sont des ensembles.
 
 ```
 # illustration, annotée ; le fichier livré est du JSON strict
@@ -2991,6 +3329,8 @@ propositions: [
         reserve: [] },
       { sieges: [[12,33,...], ...],                           tour 2
         reserve: [177] },
+      { sieges: [[12,90,...], ...],                           tour 3
+        reserve: [], absents: [41] },
       ...
     ] } ]
 ```
@@ -3046,9 +3386,11 @@ Quatre exigences rendent ce coût acceptable, et aucune n'est facultative.
    **interne** : il compare le fichier à lui-même. C'est le contrôle de cohérence
    du § 8.8 étendu aux placements — l'analyse syntaxique seule ne distingue pas un
    placement complet d'un placement plausible.
-2. **Les identifiants se vérifient comme un multiensemble, réserve comprise.** À
-   chaque tour, chaque identifiant déclaré par la proposition apparaît **exactement
-   une fois** dans l'union des listes de table et de la réserve. L'égalité
+2. **Les identifiants se vérifient comme un multiensemble, réserve et absents
+   compris.** À chaque tour, chaque identifiant déclaré par la proposition
+   apparaît **exactement une fois** dans l'union des listes de table, de la
+   réserve et des absents. Une personne absente aux R tours d'un placement n'est
+   pas une faute. L'égalité
    d'ensembles ne suffirait pas : sans la réserve stockée et sans le « exactement
    une fois », un identifiant perdu passerait pour quelqu'un qui attend hors des
    tables, cas que le § 12.6 prévoit. Le multiensemble attrape le décalage de
@@ -3062,8 +3404,8 @@ Quatre exigences rendent ce coût acceptable, et aucune n'est facultative.
    Fautif = le fichier se contredit lui-même : une longueur fausse, un identifiant
    dupliqué, un identifiant absent de l'ensemble déclaré. Périmé = la proposition
    est cohérente mais ne décrit plus la configuration courante : une table
-   supprimée, une capacité changée, une personne exclue depuis (§ 4.4), un tour
-   retiré.
+   supprimée, une capacité changée, une personne exclue depuis (§ 4.4), une
+   présence changée depuis, un tour retiré.
    Une proposition **fautive** est nommée, comptée, et l'événement s'ouvre sans
    elle. Une proposition **périmée** n'est pas écartée : c'est la **dérive** du
    § 9, qui avertit et ne bloque pas, et le logiciel dit laquelle et pourquoi.
@@ -3095,15 +3437,17 @@ Quatre exigences rendent ce coût acceptable, et aucune n'est facultative.
 - **Canonicité** : enregistrer deux fois le même état produit deux fichiers
   **identiques octet pour octet**, y compris quand les sièges ne sont pas
   attribués — c'est là que la règle du tri croissant s'éprouve.
-- **Corruption délibérée** : le test abîme un fichier de quatre façons — une
-  longueur fausse, un identifiant dupliqué, un identifiant inconnu, un identifiant
-  manquant sans entrée de réserve — et exige que le logiciel nomme chacune et
-  écarte la seule proposition fautive. Un test qui ne charge que des fichiers bien
-  formés ne peut pas échouer et ne prouve rien (§ 14.2).
-- **Péremption délibérée** : le test exclut une personne, supprime une table,
-  réduit une capacité, et exige que les propositions touchées soient **signalées
-  comme dérive et conservées**, jamais écartées. C'est le test qui empêche la
-  correction suivante de reclasser le périmé en fautif.
+- **Corruption délibérée** : le test abîme un fichier de cinq façons — une
+  longueur fausse, un identifiant dupliqué, un identifiant inconnu, un
+  identifiant manquant sans entrée de réserve, un absent aussi assis — et exige
+  que le logiciel nomme chacune et écarte la seule proposition fautive. Un test
+  qui ne charge que des fichiers bien formés ne peut pas échouer et ne prouve
+  rien (§ 14.2).
+- **Péremption délibérée** : le test exclut une personne, change la présence
+  d'une autre, supprime une table, réduit une capacité, et exige que les
+  propositions touchées soient **signalées comme dérive et conservées**, jamais
+  écartées. C'est le test qui empêche la correction suivante de reclasser le
+  périmé en fautif.
 - **Dérivation** : une proposition sans `depart` s'écrit octet pour octet
   comme avant ; une dérivée, avec et sans tours figés, fait l'aller-retour par
   l'état, par un instantané et par un correctif du journal ; chaque faute de
@@ -3136,10 +3480,29 @@ reste la commande qui pose son état, et le refus s'affiche à côté d'elle.
 import, et jusqu'à la position d'une table à l'écran. La lecture et l'impression
 restent ouvertes : on bloque un plan précisément pour le distribuer.
 
-**La dérive avertit, elle ne bloque pas.** Si les participants ou le mobilier
+**La dérive avertit, elle ne bloque pas.** Si le mobilier ou les tours
 changent après qu'un placement a été retenu, le logiciel le signale et laisse
-l'opérateur décider : lui seul sait si la personne arrivée en retard doit être
-placée.
+l'opérateur décider. **Un changement de participants ne fait pas dériver le
+retenu** : la présence, un ajout, une réintégration, une exclusion, une
+suppression ou un import l'ajustent en place (§ 5.8), et l'arrivée attend dans
+la réserve que l'opérateur décide où l'asseoir — lui seul sait si la personne
+arrivée en retard doit être placée. Les propositions qu'il touche entrent en
+dérive et servent encore de départ (§ 5.7) ; « Retenir » l'une d'elles ajuste
+sa copie, et le retenu qui en naît ne dérive pas. Retenir une autre
+proposition ne demande confirmation que quand le retenu porte une retouche à
+la main : une retouche que retenir de nouveau sa proposition détruirait, à
+l'exclusion de l'ajustement aux participants.
+
+**Les raisons d'une dérive se nomment chacune** : une personne exclue depuis
+(`PARTICIPANT_EXCLU`) ; supprimée depuis (`PARTICIPANT_SUPPRIME`) ; non placée
+depuis — ajoutée ou réintégrée — (`PARTICIPANT_NON_PLACE`) ; « Prénom Nom est
+absente aux tours 3 et 4 depuis » (`PRESENCE_RETIREE`) ; « Prénom Nom est
+présente au tour 3 depuis » (`PRESENCE_AJOUTEE`) ; une table, une capacité ou
+le nombre de tours changés. Les cinq premières sont les **raisons de
+participants** : une proposition qui ne porte qu'elles sert encore de départ
+(§ 5.7), et, tant que le classement compte moins de N lignes, « Garder les N
+meilleures » ne l'efface pas sans l'avoir comparée ; les autres sont celles du
+mobilier et des tours, qui refusent un départ.
 
 **Une proposition rendue incohérente par un changement de configuration est une
 dérive, jamais une corruption** (§ 8.9) : elle est conservée, signalée, et le
@@ -3171,6 +3534,7 @@ appartenances sans rien signaler.
 | `exclu` | non | liste fermée ; vide vaut `non` |
 | `notes` | non | texte libre, jamais interprété |
 | `etiquettes` | non | plusieurs par cellule, séparées par `,`, `;`, `\|` ou une fin de ligne (§ 4.5) ; synonymes : `étiquette`, `mots-clés` |
+| `presence` | non | les tours de présence : des tours et des plages — « 1-3 », « 2, 3 », « tours 1 et 2 » ; `tous` ou `tous les tours` valent tous les tours ; vide, voir plus bas ; synonymes : `présence`, `tours de présence` |
 
 Les en-têtes se reconnaissent **sans tenir compte de la casse, des accents ni
 des espaces**. **Deux colonnes reconnues sous le même nom** ne se départagent
@@ -3181,6 +3545,31 @@ pas toutes seules : le logiciel n'associe ni l'une ni l'autre et demande.
 sans égard à la casse, aux accents ni aux espaces. Toute autre valeur **refuse
 la ligne**. Traiter l'inconnu comme `non` placerait dans la salle une personne
 qui s'est désistée, et la chaise vide ne se verrait que le soir même.
+
+**La valeur de `presence`** se lit par une seule grammaire, celle que l'aperçu,
+l'export et le modèle emploient (§ 13.2) : sans égard à la casse, chaque morceau
+est un tour, entier de 1 à R en chiffres, ou une plage, le trait d'union, le
+tiret demi-cadratin ou « à » entre deux tours ; « et », la virgule, le
+point-virgule et les blancs séparent ; un préfixe « tour » ou « tours » se lit ;
+les recouvrements se fondent ; une cellule qui nomme chaque tour vaut tous les
+tours. Ce qui n'est ni un tour ni une plage, une plage inversée, une date qu'un
+tableur a faite d'une plage — « 01-mars » — refusent la ligne
+(`PRESENCE_ILLISIBLE`, le motif disant de mettre la colonne en texte quand c'est
+une date) ; un tour hors de la soirée aussi (`PRESENCE_HORS_TOURS`, qui nomme le
+tour et le nombre de tours de l'événement) : traiter l'inconnu comme « tous les
+tours » placerait une personne aux tours où elle ne vient pas. Ces refus se
+contrôlent après ceux des étiquettes. **À la création, une cellule vide vaut
+tous les tours ; en mise à jour, elle garde la présence de la personne**, comme
+tout champ, l'aperçu l'écrivant « présence inchangée » sur chaque ligne qui
+désigne une personne existante, et sur elle seule — une ligne qui ne désigne
+personne est créée, même en mise à jour, et sa cellule vide n'y dit rien —, et
+`tous` la rend à tous les tours. Une cellule non vide remplace la présence ; la
+comparaison se fait sur la forme canonique, si bien qu'un réimport de l'export
+ne compte aucune personne modifiée. **Un aperçu calculé avant un changement du
+nombre de tours ne s'applique pas** (`APERCU_TOURS_CHANGES`) : sa lecture des
+tours n'est plus celle de la soirée, et relire le fichier refait l'aperçu. Un
+import qui étend la présence d'une personne existante à un tour où sa
+réservation ferait déborder une table est refusé entier (§ 5.9).
 
 **L'encodage se tranche en quatre temps, dans cet ordre :** marque d'ordre
 d'octets UTF-8 ; marque UTF-16 ; **un octet nul dans les quatre premiers
@@ -3284,9 +3673,10 @@ courriels, d'un geste qui s'annonce comme une mise à jour.
 **Remplacer annonce ce qu'il détruit**, réservations et titres compris :
 « 260 personnes seront supprimées » laisse croire qu'on ne perd que des noms.
 
-**Importer selon l'état** : sans avertissement en brouillon et proposé ; avec
-l'avertissement de dérive en retenu ; **refusé** en bloqué, le message nommant
-la commande qui déverrouille.
+**Importer selon l'état** : sans avertissement en brouillon et proposé ; en
+retenu, avec l'avertissement que le placement retenu suit la présence de chacun,
+les arrivées en réserve et les départs laissant leur chaise vide (§ 5.8) ;
+**refusé** en bloqué, le message nommant la commande qui déverrouille.
 
 **Le modèle à télécharger.** La section d'import offre « Télécharger un
 modèle » pour la nature cochée (§ 10.4) ; la commande passe par « Enregistrer
@@ -3294,9 +3684,14 @@ sous… » et n'écrit rien dans l'événement : elle est permise en lecture et 
 un plan bloqué. Son nom accessible nomme la nature, et le chemin enregistré
 s'annonce sous elle. Le modèle a la forme de l'export — UTF-8 avec marque, `;`,
 CRLF, les en-têtes de l'import — et **s'importe tel quel sans refuser aucune
-ligne**. Celui des participants, `modele-participants.csv`, est fixe : quatre
+ligne**. Celui des participants, `modele-participants.csv`, est réglé par le
+nombre de tours de l'événement pour sa seule colonne `presence` : quatre
 personnes inventées, dont les cellules remplissent chaque colonne du tableau
-ci-dessus, `exclu` sous ses deux valeurs et une cellule à deux étiquettes.
+ci-dessus, `exclu` sous ses deux valeurs, une cellule à deux étiquettes, et
+deux présences, l'une de 1 à l'avant-dernier tour, l'autre aux tours 2 et 3 :
+« 1-3 » et « 2, 3 » à quatre tours, « 1, 2 » et « 2, 3 » à trois, « 1 » et « 2 »
+à deux ; à un tour, la colonne reste vide. Il s'importe tel quel sous tout
+nombre de tours.
 Celui des objectifs suit l'événement (§ 10.4).
 
 ### 10.2 La saisie
@@ -3315,8 +3710,9 @@ Trois mécanismes rendent tenable la saisie de 260 personnes :
    l'opérateur fait le plus, la veille et sur place.
 
 La liste des participants porte une ligne de comptes — personnes, à placer,
-exclues, appartenances — et une légende des appartenances, chacune avec le
-nombre de personnes qui la portent, exclues comprises ; dans la grille,
+exclues, appartenances, et « 2 présences partielles » quand des personnes non
+exclues n'ont pas tous les tours — et une légende des appartenances, chacune
+avec le nombre de personnes qui la portent, exclues comprises ; dans la grille,
 l'appartenance s'affiche en pastille de sa teinte (§ 12.7), le titre pressenti
 et l'exclusion en pastilles à icône.
 
@@ -3329,14 +3725,39 @@ champ qui en ajoute une ou plusieurs, séparées comme dans une cellule CSV ; la
 celle des appartenances, chacune avec le nombre de personnes qui la portent,
 exclues comprises.
 
+**La présence se saisit dans la grille et dans la fiche.** La colonne
+« Présence » de la grille, après celle de l'exclusion, écrit « tous », en encre
+secondaire, ou les tours de présence en pastille d'information à calendrier —
+« tour 2 », « tours 1 et 2 », « tours 1 à 3 et 5 ». Entrée ou F2 l'ouvre en
+cases, une par tour, nommées « Tour 2 » pour les technologies d'assistance,
+dans un groupe nommé « Présence de Prénom Nom, une case par tour » ; ← et →
+passent d'une case à l'autre, Début et Fin à la première et à la dernière, sans
+boucler, et l'espace coche ou décoche **sans rien écrire**. **Entrée, Tab ou la
+sortie du groupe valident**, en une seule entrée d'historique, qui ajuste le
+retenu (§ 5.8) ; Tab puis la sortie qui le suit ne valident pas deux fois, et
+une saisie revenue à la présence enregistrée n'écrit rien. Échap rend la
+présence enregistrée. La fiche porte une rubrique « Présence », entre les
+étiquettes et les réservations : un résumé, les mêmes cases, « Tous les
+tours », qui coche chaque case sans rien écrire, et « Appliquer », qui écrit en
+une entrée ; l'itinéraire du placement retenu y dit « absente » à un tour
+d'absence. Une saisie sans aucun tour est refusée contre les cases, sans
+remède : son texte nomme l'exclusion. Un changement est refusé en lecture et
+sur un plan bloqué, le refus posé dans la cellule ou sous les cases, avec son
+remède. La grille trie la colonne « tous » en tête, puis par la liste des
+tours, et se groupe par présence.
+
 **La liste s'exporte en CSV dans la forme exacte qu'il importe.** L'aller-retour
 est éprouvé par un test qui importe, exporte et compare champ par champ : il
 fait du fichier une sauvegarde, et de l'export le gabarit que personne n'a
 besoin de documenter.
 
-L'export écrit toujours la colonne `etiquettes`, en dernière position, les
-étiquettes jointes par une virgule suivie d'une espace (`, `) ; le collage en
-bloc suit le même ordre de colonnes, la huitième étant celle des étiquettes. Les
+L'export écrit toujours la colonne `etiquettes`, puis la colonne `presence`,
+en dernières positions, les étiquettes jointes par une virgule suivie d'une
+espace (`, `) ; la présence s'écrit vide pour tous les tours, sinon chaque
+suite d'au moins trois tours consécutifs en plage `a-b`, les autres tours un à
+un, joints par `, ` — « 1-3 », « 2, 3 », « 1-3, 5 ». Le collage en bloc suit le
+même ordre de colonnes, la huitième étant celle des étiquettes, la neuvième
+celle de la présence. Les
 objectifs des tables s'exportent par leur propre CSV, dans la forme exacte qu'il
 importe (§ 10.4).
 
@@ -3367,8 +3788,14 @@ fusion d'orthographes et un refus de ligne se montrent ensemble.
 Il porte aussi une colonne `Étiquettes`, en-tête accentué en casse mixte : une
 cellule à plusieurs étiquettes séparées par `,`, une séparée par `|`, une paire
 d'orthographes d'une même étiquette à fondre, et une cellule vide. Sa colonne
-non reconnue reste la dernière. Les deux fichiers `participants_demo_*.csv`,
-exports des démonstrations, portent la colonne `etiquettes`, vide ; les
+non reconnue reste la dernière. Il porte aussi une colonne `Présence`, avant la
+colonne non reconnue : des cellules vides, un « Tous », et une plage qui
+commence avant la soirée, « 0-2 », qui refuse sa ligne sous tout nombre de
+tours. Il ne porte aucune présence partielle admise : ses lignes valides
+passent par le moteur dans les épreuves d'intégration, et y gardent leurs
+personnes. Les deux fichiers `participants_demo_*.csv`, exports des
+démonstrations, portent la colonne `etiquettes`, vide, et la colonne
+`presence`, vide ; les
 démonstrations elles-mêmes ne changent pas. Le fichier des objectifs exerce un
 numéro de table inconnu, un tour hors de la soirée, une règle inconnue, deux
 lignes pour une même table et un même tour, une orthographe qui se fond avec une
@@ -3689,7 +4116,7 @@ cherche à qui il parle.
 | rang | contenu | pourquoi |
 |---|---|---|
 | 1 | **prénom et nom**, le plus grand corps de la planche | c'est l'identité, et c'est ce que lit l'hôte à un mètre |
-| 2 | **une ligne par tour** : « Tour 1 — table 12 », et le siège quand les sièges sont attribués | c'est la question à laquelle le badge existe pour répondre |
+| 2 | **une ligne par tour** : « Tour 1 — table 12 », et le siège quand les sièges sont attribués ; une ligne aussi pour un tour d'absence, qui dit « absente » | c'est la question à laquelle le badge existe pour répondre |
 | 3 | **appartenance**, un corps réduit, sous le nom | elle distingue deux homonymes à l'accueil |
 | 4 | **nom de l'événement et date**, en pied, corps minimal | deux soupers dans la même salle le même mois |
 | 5 | **l'horodatage du placement**, en pied, corps minimal, lisible en main et non à un mètre | sans lui, deux versions d'un plan circulent autour de deux cous et personne ne dit laquelle fait foi |
@@ -3699,12 +4126,12 @@ Le pied des **pages** imprimées porte cinq éléments, la version comprise
 et l'horodatage, **pas le tour** — il les porte tous — et **pas la version**, qui
 ne sert à aucun diagnostic au cou d'un invité et dont la place est comptée.
 
-**Un itinéraire constant s'écrit en une ligne.** Quand une personne occupe la même
-table à chacun des R tours, R ≥ 2 — au même siège sous attribution, sous le même
-titre —, le cas de tout participant ancré (§ 4.2), le badge
-écrit « Toute la soirée — table 7 » plutôt que R lignes identiques. Le rang 2 ne
-perd rien : la question « où vais-je au tour 3 » reçoit la même réponse, et la
-place gagnée revient au nom.
+**Un itinéraire constant s'écrit en une ligne.** Quand une personne, présente
+aux R tours, occupe la même table à chacun d'eux, R ≥ 2 — au même siège sous
+attribution, sous le même titre —, le cas de tout participant ancré (§ 4.2), le
+badge écrit « Toute la soirée — table 7 » plutôt que R lignes identiques. Le
+rang 2 ne perd rien : la question « où vais-je au tour 3 » reçoit la même
+réponse, et la place gagnée revient au nom.
 
 **Le filigrane BROUILLON s'applique au badge comme au reste** (§ 11.7). C'est la
 sortie où la confusion coûte le plus cher : elle ne reste pas sur une table, elle
@@ -3794,6 +4221,12 @@ un débordement.
   La mise en page est donc un flux, non une grille de cases fixes.
 - **Une personne en réserve à un tour.** La ligne porte « pas de table » en toutes
   lettres. Une ligne blanche se lit comme un défaut d'impression.
+- **Une personne absente à un tour.** La ligne de ce tour porte « absente » en
+  toutes lettres — « Tour 3 — absente » —, ni table, ni siège, ni titre, et
+  chaque tour garde sa ligne : une personne absente à un tour n'a jamais la
+  ligne « Toute la soirée », même assise à la même table à chacun de ses tours
+  de présence. Ni ligne blanche ni « pas de table », qui dirait qu'une table
+  l'attend. Elle a son badge et compte dans les badges produits.
 - **Une personne exclue** n'a pas de badge (§ 4). Le logiciel annonce le compte
   produit et le compte attendu — « 257 badges pour 260 participants, 3 exclus » —
   sur la feuille de contrôle, pour que l'écart soit lu avant la coupe et non à
@@ -3818,7 +4251,8 @@ disposer déjà de la réponse que le badge apporte. Le classement par table ser
 autre geste — déposer les cartons sur les tables avant l'arrivée — que le logiciel
 offre en second choix et ne retient pas par défaut. Il range les badges par numéro
 de la table du premier tour, puis dans l'ordre alphabétique ; les personnes en
-réserve au premier tour viennent en dernier.
+réserve au premier tour viennent après les tables, puis celles qui y sont
+absentes.
 
 **L'ordre sur la feuille dépend de la façon de couper, et le logiciel le
 demande.** C'est la différence entre une pile prête à l'emploi et des centaines de
@@ -3945,9 +4379,11 @@ feuille par tour », une feuille par table et par tour. Ses colonnes et ses
 lignes suivent le § 7.4 : des tours qui ne tiennent pas côte à côte se scindent
 en groupes de tours consécutifs, et une ligne plus haute qu'une page se poursuit
 sur la suivante. La liste d'accueil couvre aussi la soirée, une colonne par
-tour ; des tours trop nombreux pour la page se répartissent en blocs de tours
-consécutifs, chacun sous l'en-tête qui nomme ses tours (§ 7.4). **Les listes
-s'impriment en portrait.**
+tour ; la case d'un tour où la personne est absente porte « absente », ni table,
+ni siège, ni réserve. La feuille par table ne nomme pas une personne absente à
+son tour : l'appel nominal ne la cherche pas. Des tours trop nombreux pour la
+page se répartissent en blocs de tours consécutifs, chacun sous l'en-tête qui
+nomme ses tours (§ 7.4). **Les listes s'impriment en portrait.**
 
 **Chaque page imprimée porte un pied de cinq éléments** : le nom de l'événement,
 sa date, **le tour** — ou la soirée, pour une vue qui les couvre tous —,
@@ -4161,7 +4597,10 @@ score composite.
 l'ordre des colonnes, chacune avec sa population. Le minimum brut porte le
 **plafond réalisé et le plafond a priori de la personne au rang 1 du profil**
 (§ 12.3), qu'elle nomme ; ses deux lignes secondaires, les mobiles et les ancrés
-(§ 5.4), le suivent, chacune sa tuile. Puis les collisions cumulées, les paires
+(§ 5.4), le suivent, chacune sa tuile. Le minimum se lit sur la population
+entière : la personne qui en a le moins est souvent une présence partielle, et
+l'infobulle de la tuile le dit alors — « Prénom Nom, au rang 1, est présente
+aux tours 1 et 2. ». Puis les collisions cumulées, les paires
 distinctes et l'excédent ; les rencontres répétées choisies, les imposées
 énoncées à part ; le plus grand nombre de rencontres d'une paire ; les retours
 choisis, les imposés à part ; le minimum de A(p), avec la borne de diversité de
@@ -4183,20 +4622,22 @@ atteint », ou « atteignabilité inconnue », suit les tuiles (§ 5.5).
 
 **Une tuile écrit le plancher que le diagnostic écrit pour sa mesure** (§ 5.6),
 et là seulement, en dernière ligne, sous son chiffre : « plancher 4 », ou
-« plancher 4, le meilleur atteint » quand la mesure que la tuile
-écrit l'égale. Ces deux lignes ne parlent que de cette mesure, jamais du
-placement entier, et ne nomment personne. Sept tuiles peuvent en porter un : les
-collisions cumulées, les paires distinctes et l'excédent, chacun la somme des
-planchers de ses appartenances en collision ; l'écart d'itinéraire maximal,
-aucun quand le plafond a priori est inconnu ; les personnes jamais servies, le
-plus de tours hors objectif d'une personne et les tours hors objectif, chacun
-seulement quand le critère des objectifs est coché et que le mode réglé compare
-sa valeur, comme au diagnostic : une tuile des objectifs qui ne classe pas n'en
-porte aucun. Un plancher nul ne s'écrit jamais, pas plus qu'un 0 à sa place, et
-aucune tuile n'en porte sur un plan hors du domaine des planchers (§ 12.4). Le
-détail du placement en porte d'autres, qui se lisent dans leur propre vue :
-ceux des collisions par appartenance (§ 12.4), ceux des objectifs par tour
-(§ 12.12), que cette vue dessine même quand le critère ne classe pas.
+« plancher 4, le meilleur atteint » quand la mesure que la tuile écrit l'égale.
+Ces deux lignes ne parlent que de cette mesure, jamais du placement entier, et
+ne nomment personne. Sept tuiles peuvent en porter un : les collisions cumulées,
+les paires distinctes et l'excédent, chacun la somme des planchers de ses
+appartenances en collision ; l'écart d'itinéraire maximal, aucun quand le
+plafond a priori est inconnu ou qu'une personne est absente à un tour (§ 5.6),
+sa tuile écrivant alors, sous son chiffre, « Plancher non prouvé : une personne
+au moins est absente à un tour. » ; les personnes jamais servies, le plus de
+tours hors objectif d'une personne et les tours hors objectif, chacun seulement
+quand le critère des objectifs est coché et que le mode réglé compare sa valeur,
+comme au diagnostic : une tuile des objectifs qui ne classe pas n'en porte
+aucun. Un plancher nul ne s'écrit jamais, pas plus qu'un 0 à sa place, et aucune
+tuile n'en porte sur un plan hors du domaine des planchers (§ 12.4). Le détail
+du placement en porte d'autres, qui se lisent dans leur propre vue : ceux des
+collisions par appartenance (§ 12.4), ceux des objectifs par tour (§ 12.12), que
+cette vue dessine même quand le critère ne classe pas.
 
 **Trois tuiles portent un pourcentage** (§ 5.4), écrit sous leur valeur et
 suivi, juste dessous, du compte du pire : le minimum brut, le pourcentage de son
@@ -4289,14 +4730,20 @@ la page entière, et nomme la mesure et les personnes en cause.
 générateur un minimum que sa propre réservation impose.
 
 Un point marqué porte un signe de forme, non une couleur : ancré ou
-partiellement fixé, en réserve à un tour au moins, plafond réalisé nul. Les
+partiellement fixé, en réserve à un tour au moins, absente à un tour au moins
+— un losange creux —, plafond réalisé nul ; une personne qui relève de deux
+marques porte la première dans cet ordre. Une absence n'est pas une réserve :
+les tours en réserve se comptent parmi les tours de présence, et le profil
+gagne une colonne « Absences » — « absente à 2 tours » — quand une personne
+manque un tour, « — » pour qui vient à chaque tour. Les
 autres rangs ne portent aucune marque : un escalier est un tracé, non 260
 points.
 
 **Le pointage au plus proche** (§ 12.7) désigne le rang sous le pointeur ; son
 infobulle porte la ligne entière — le rang, le nom entier, l'appartenance, les
 rencontres, le plafond réalisé, leur pourcentage suivi de leur compte (§ 12), le
-plafond a priori, A(p), la borne de diversité, les tours non assis ; le rang
+plafond a priori, A(p), la borne de diversité, les tours en réserve, et les
+tours d'absence quand la personne en a ; le rang
 pointé est le même dans les deux graphiques. **Le jumeau tabulaire** porte une
 ligne par personne dans l'ordre du profil, avec les mêmes colonnes, et **la
 répartition des rencontres** : une ligne par valeur, de la plus basse à la plus
@@ -4361,11 +4808,15 @@ de l'appartenance (§ 10.1), puis sa chaîne.
 
 **« Prouvé inévitable » est le plancher des collisions cumulées du diagnostic**
 (§ 5.6) pour cette appartenance, zéro quand le diagnostic n'en écrit pas. **Ce
-plancher vaut sur un plan qui assoit chacun à chaque tour et honore les
-réservations** : c'est le domaine où il se démontre. Un placement ajusté qui
-laisse quelqu'un en réserve peut mesurer moins ; ses barres n'ont alors qu'un
-segment, les collisions cumulées, et la vue écrit pourquoi le plancher ne s'y
-applique pas. La garde n'éprouve le segment « reste » que sur le domaine.
+plancher vaut sur un plan qui assoit chaque personne présente à chacun de ses
+tours de présence et honore les réservations** : c'est le domaine où il se
+démontre. Une absence n'en sort pas le plan, le plancher se calculant sur les
+présents de chaque tour (§ 5.6) ; une personne présente laissée en réserve, une
+arrivée qu'un tour figé n'a pu asseoir comprise (§ 5.7), l'en sort. Un placement
+ajusté qui laisse quelqu'un en réserve peut mesurer moins ; ses barres n'ont
+alors qu'un segment, les collisions cumulées, et la vue écrit pourquoi le
+plancher ne s'y applique pas. La garde n'éprouve le segment « reste » que sur le
+domaine.
 
 L'intitulé de chaque ligne porte la **pastille de l'appartenance** (§ 12.7) :
 c'est une liste. Les segments ne portent ni teinte d'appartenance ni teinte de
@@ -4459,6 +4910,8 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | cas | ce que la page affiche |
 |---|---|
 | participants exclus | retirés de toutes les statistiques, effectifs mesuré et exclu annoncés |
+| personne absente à un tour | gardée, point marqué d'un losange creux ; ses mesures, son plafond a priori et son plafond réalisé portent sur ses tours de présence ; l'infobulle et le jumeau disent à combien de tours elle est absente |
+| une personne absente à un tour dans la configuration | les planchers des collisions et des objectifs restent ; l'écart d'itinéraire maximal n'en porte aucun, sa tuile le dit, et le diagnostic dit que sa preuve suppose chacun présent à chaque tour |
 | personne en réserve à un tour | gardée, point marqué, avec le nombre de tours non assis ; son plafond réalisé se calcule sur les seuls tours où elle est assise, **et son écart d'itinéraire porte ce que son manque ne porte pas** |
 | aucun placement — ni proposition ni retenu | le diagnostic préalable et une phrase, **jamais des axes vides** |
 | une seule table | le profil, les collisions, les appartenances à chaque table et les paires cèdent la place à une phrase : elles diraient la même chose ; les objectifs, les animateurs et la performance restent |
@@ -4493,7 +4946,7 @@ Une page de statistiques se casse par ses bords, et chacun se produira.
 | ni étiquette, ni plus d'une appartenance | la diversité par animateur cède la place à sa phrase ; son jumeau garde les tours animés et les personnes rencontrées en animant |
 | une grille tables × tours trop large pour ses cases | le jumeau seul, et la phrase qui le dit |
 | la matrice sous le seuil, mais trop étroite pour la largeur de la carte | la phrase de la matrice non dessinée, qui renvoie à la fiche |
-| le placement retenu | la performance dit qu'elle mesure une proposition ; un retenu non ajusté nomme la proposition d'où il vient et en montre la course tant qu'elle est dans la liste ; un retenu ajusté, ou dont la proposition a été effacée, n'en a aucune |
+| le placement retenu | la performance dit qu'elle mesure une proposition ; un retenu non ajusté nomme la proposition d'où il vient et en montre la course tant qu'elle est dans la liste ; un retenu ajusté, aux participants ou à la main, ou dont la proposition a été effacée, n'en a aucune |
 | une proposition rouverte, dont le compagnon des courses garde la course | la performance la montre, ses valeurs mesurées sous les réglages courants ; la durée et la cadence s'écrivent « inconnues » (§ 5.10) |
 | une proposition dont la course n'est pas gardée — écrite avant le compagnon ou par une version antérieure, compagnon absent, illisible ou contradictoire, proposition effacée puis rendue après une réouverture (§ 8.6) | la performance cède la place à sa phrase : sa course n'est pas gardée |
 | une proposition dont la recherche a atteint un n-uplet nul | la performance l'écrit : « rien à reprendre après 3 412 mouvements sur 20 000 » ; à zéro mouvement, « le plan initial n'avait rien à reprendre » |
@@ -4802,7 +5255,10 @@ que la configuration promettait.
 **C'est le chiffre qui sauve le manque d'un contresens.** Une personne mise en
 réserve à trois tours sur quatre a un plafond réalisé minuscule et un manque
 nul : elle n'apparaît ni au premier chiffre, ni au second, alors qu'elle est la
-plus mal servie de la soirée. Son écart d'itinéraire, lui, est énorme.
+plus mal servie de la soirée. Son écart d'itinéraire, lui, est énorme. Une
+personne absente à trois tours sur quatre n'y ressemble pas : son plafond a
+priori ne compte que son tour de présence, et son écart d'itinéraire ne porte
+rien de son absence.
 
 **Et c'est une borne, pas une promesse.** Un écart d'itinéraire non nul n'est
 pas toujours récupérable : dans la grande démonstration, les tables de 7 offrent
@@ -4875,7 +5331,9 @@ leur donnent ensuite.
 **Côte à côte, au-dessus du tracé**, deux colonnes juxtaposées, une par
 placement, portent les mêmes chiffres dans le même ordre. En tête, ceux de la
 question de la vue : la place au classement — celle de sa proposition pour un
-retenu non ajusté, « — » pour un retenu ajusté, qui ne se classe pas —, le
+retenu non ajusté, « — » pour un retenu ajusté, aux participants ou à la main,
+qui ne se classe pas, avec la mention « ajusté depuis sa proposition : ne se
+classe pas » —, le
 minimum brut, le plus grand manque avec le plafond réalisé de la personne au
 rang 1, l'effectif du manque et l'écart d'itinéraire maximal. Dessous, repliés
 sous « Tous les indicateurs », un repli que le clavier ouvre et ferme, les
@@ -5315,6 +5773,16 @@ dans la boucle de recherche**, où il sert de score et ne s'affiche jamais — e
 une épreuve qui lie les deux à la fin de chaque recherche, à cinq ordres de
 grandeur de mouvements (§ 14.10).
 
+**La présence a une règle de lecture et une grammaire, chacune en un seul
+lieu.** Une seule fonction décide qu'une personne est présente à un tour — une
+liste absente valant tous les tours —, dans le moteur, que la normalisation, les
+mesures, l'application et les sorties lisent. Une seule grammaire lit et écrit
+la présence en texte, dans le CSV : l'import, l'export, le modèle et l'aperçu
+l'emploient, et la grille et la fiche, qui saisissent par cases, écrivent ce
+qu'elle relit. Une seule fonction ajuste un placement à la présence — celle du
+retenu, du plan ajusté d'un départ et de la copie qu'on retient (§ 5.7,
+§ 5.8).
+
 ### 13.3 La bibliothèque d'interface : Svelte 5, construit par Vite
 
 Le logiciel n'emploie **aucune bibliothèque de dessin SVG** : le plan est du SVG
@@ -5596,6 +6064,13 @@ nomme sa table ; une clé portée par deux tables, ou absente, lève — l'écra
 montre jamais une clé brute ni un texte vide. Un texte qui devient une donnée —
 le libellé figé d'une entrée du journal (§ 8.2), le motif du CSV des lignes
 refusées (§ 10.1) — se compose en français, sans la marque de la langue témoin.
+
+**Les tours se nomment par une seule aide**, que les textes de la présence
+emploient tous : « tous les tours », « tour 2 », « tours 1 et 3 », « tours 2 à
+4 », « tours 1 à 3 et 5 » — une suite d'au moins trois tours se lit « a à
+b » —, et sa forme qui porte la préposition : « au tour 3 », « aux tours 3 et
+4 », « à tous les tours ». Un texte qui l'écrit à la main finirait par dire
+« au lieu des tour 4 ».
 
 ### 14.7 Le déterminisme
 
@@ -5917,17 +6392,43 @@ identique, l'issue disant que le départ n'avait rien à reprendre. L'épreuve
 n'affirme rien du classement, qui peut ranger une dérivée derrière son départ
 (§ 5.7).
 
-**Les refus se posent au lancement.** Un départ absent, en dérive, fautif ou
-qui ne tient pas une réservation courante, un tour figé où le départ
-n'assied pas une personne au siège qu'une réservation courante lui fixe, tous
-les tours figés, un tour hors de la soirée : chacun est refusé avant tout
-calcul, nommé, avec son remède ; en lecture et sur un plan bloqué, le refus
-de la séance passe avant eux. Une réservation à un siège posée après le
+**Les refus se posent au lancement.** Un départ absent, fautif, en dérive par le
+mobilier ou les tours, ou qui ne tient pas une réservation courante, un tour
+figé où le départ n'assied pas une personne au siège qu'une réservation courante
+lui fixe, tous les tours figés, un tour hors de la soirée : chacun est refusé
+avant tout calcul, nommé, avec son remède ; en lecture et sur un plan bloqué, le
+refus de la séance passe avant eux. Une réservation à un siège posée après le
 départ, dans un tour figé, se refuse au lancement et non à l'enregistrement.
 L'application recopie les tours figés du départ, et refuse d'enregistrer une
-dérivée dont un tour figé en diffère ; une épreuve atteint ce refus en
-forçant le défaut, aucune par un geste. La régénération d'une dérivée sans
-le plan de son départ est refusée.
+dérivée dont un tour figé en diffère ; une épreuve atteint ce refus en forçant
+le défaut, aucune par un geste. La régénération d'une dérivée sans le plan de
+son départ est refusée.
+
+**Sans aucune présence, rien ne change à l'octet près.** L'instance, les plans
+à graine égale, les empreintes de référence, les démonstrations, la forme
+canonique, les libellés et les détails des codes — `PLACES_MANQUANTES` reste
+`{placesManquantes}` — sont ceux d'une soirée sans présence ; chaque épreuve
+d'empreinte existante en est le témoin.
+
+**La présence s'éprouve contre une énumération.** Sur de petites instances, la
+chaîne `rencontres ≤ plafond réalisé ≤ plafond a priori ≤ |C(p)| ≤ N − 1` tient
+contre un oracle qui énumère les itinéraires, et le coût du plafond ne croît pas
+avec le nombre de motifs de présence ; les planchers gardés sous l'absence —
+collisions, excédent, objectifs — tiennent contre un oracle exhaustif des
+affectations, jusqu'à cinq personnes, dans la série `node:long`. Un plan
+indexé ne place aucun absent, un absent omis vaut la réserve, et le
+vérificateur nomme un absent placé. Une réservation est suspendue aux tours
+d'absence, partout de la même façon : le moteur, le CSV et l'application, une
+épreuve de propriété comparant l'application au moteur.
+
+**Le départ ajusté est déterministe.** À départ, tours figés, réserves imposées
+et graine égaux, la régénération rend, octet pour octet, ce que la génération a
+rendu. Aux tours figés, personne ne bouge : une arrivée prend la meilleure
+chaise libre, la première table à égalité, ou reste en réserve imposée ; une
+épreuve de bout en bout l'éprouve avec et sans sièges attribués. Une propriété
+de l'application garde qu'aucun geste sur les participants ne laisse le retenu
+en dérive par ses participants, et que « Défaire » reprend le geste et
+l'ajustement ensemble.
 
 **Le détail d'un placement ne recompte rien.** Ses doublons d'appartenance d'une
 case sont non nuls exactement là où les collisions de ce tour et de cette table
@@ -6048,17 +6549,23 @@ synchronisation tient le fichier ouvert.
 
 **La forme positionnelle du § 8.9 est abîmée délibérément** — une longueur fausse,
 un identifiant dupliqué, un identifiant inconnu, un identifiant manquant sans
-entrée de réserve — et le logiciel doit nommer chacune et écarter la **seule**
-proposition fautive. Un second test **périme** délibérément : il exclut une
-personne, supprime une table, réduit une capacité, et exige que les propositions
-touchées soient **signalées comme dérive et conservées**, jamais écartées.
+entrée de réserve, un absent aussi assis — et le logiciel doit nommer chacune et
+écarter la **seule** proposition fautive. Un second test **périme**
+délibérément : il exclut une personne, change la présence d'une autre, supprime
+une table, réduit une capacité, et exige que les propositions touchées soient
+**signalées comme dérive et conservées**, jamais écartées, avec les raisons
+`PRESENCE_RETIREE` ou `PRESENCE_AJOUTEE` et leurs tours. L'ajustement d'un
+placement à la présence est idempotent, et ne laisse aucune raison de
+participants pour les personnes qu'il ajuste.
 
 **La dérivation se lit, s'écrit et se défait.** Une proposition sans
 dérivation s'écrit comme avant ; une dérivée garde `depart` et `toursFiges`
 par l'état, l'instantané et le correctif du journal ; chaque faute de
 dérivation du § 8.9 écarte la seule dérivée fautive ; une dérivée dont le
 départ est effacé reste comparable, et un retour qui rend le départ rend le
-libellé « dérivée de n° X » à son état.
+libellé « dérivée de n° X » à son état. Une dérivée d'un départ en dérive par
+la présence fait l'aller-retour. Un événement sans absence s'écrit octet pour
+octet comme sans `presence` ni `absents`.
 
 **Le coût d'un enregistrement complet se mesure** sur la grande démonstration et
 échoue au-delà du seuil du § 8.2. Il écrit sur un système de fichiers réel : série
@@ -6100,6 +6607,15 @@ le lit.
 
 **Une règle d'objectif hors de la liste fermée refuse la ligne, et la ligne
 revient dans le CSV des refus, qui se réimporte tel quel.**
+
+**Une présence hors de la soirée ou illisible refuse la ligne, et la ligne
+revient dans le CSV des refus, qui se réimporte tel quel.** Une forme de date
+qu'un tableur a faite d'une plage se reconnaît et se nomme. **La présence fait
+l'aller-retour** : import, export, réimport, mêmes ensembles, pour chaque
+partie non vide des tours de 1 à 6, et un réimport compte zéro personne
+modifiée. **Le modèle s'importe sans refus sous tout nombre de tours.** En mise
+à jour, une cellule vide garde la présence et une cellule « tous » la retire ;
+un aperçu calculé sous un autre nombre de tours ne s'applique pas.
 
 **Un objectif sur un numéro de table inconnu refuse la ligne, jamais le
 fichier.**
@@ -6228,7 +6744,10 @@ le test les lie à la fin de chaque recherche.
 **Le vérificateur d'invariants est du code de l'application, pas du code de test.**
 `verifier_invariants(plan, configuration)` rend la liste des violations :
 
-- chaque participant non exclu est assis à **exactement une** table par tour ;
+- chaque participant non exclu présent au tour r est assis à **exactement
+  une** table à ce tour, ou en réserve quand le plan l'admet — une réserve
+  imposée d'un tour figé l'est toujours (§ 5.7) ; aucun participant n'est assis
+  ni en réserve à un tour où il est absent ;
 - aucun participant n'occupe deux places sur un même tour — distinct du précédent,
   qui ne dit rien de deux sièges à la **même** table ;
 - aucune table ne dépasse sa capacité, et aucun siège n'est hors de sa table ;
@@ -6642,6 +7161,8 @@ plus court que la spécification puisse offrir.
   proches de la limite, dont un de glyphes larges et un à diacritiques. Sans
   eux, une démonstration faite de noms courts laisse les seuils faux jusqu'à la
   première vraie liste.
+- **Une personne présente à un seul tour** — ses indicateurs portent sur ce
+  tour, et aucun ne la compte absente comme on compterait une réserve.
 
 Le générateur **refuse** une configuration à zéro participant ou à zéro table :
 un fichier vide passe tous les tests sans rien démontrer.
@@ -6673,6 +7194,9 @@ un fichier vide passe tous les tests sans rien démontrer.
    un compte d'arrêt (§ 5.7), et à graine et entrée égales il rend le même plan.
    Ce qui n'est pas figé est le **stockage** d'un résultat dans la démonstration,
    pas le déterminisme du calcul.
+
+Les démonstrations ne portent aucune absence, et s'écrivent octet pour octet
+comme avant la présence.
 
 ### 15.6 Les noms : inventés, lisibles, sans collision
 
@@ -7303,9 +7827,12 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `01b-passer-en-ecriture.png` | idem | la commande « Modifier » à place fixe, la bande de mode et le libellé de mode, sans cadre autour du plan (§ 8.4) | avant ce geste, une tentative de modification est refusée ; après, elle passe |
 | `02-import-apercu.png` | `participants_cas_limites.csv` | le haut de l'aperçu obligatoire (§ 10.1) : la nature du fichier choisie, « Participants » (§ 10.4), le mode de l'import, le nom du fichier, l'encodage et le séparateur détectés et **nommés** ; le tableau des colonnes, qui porte l'association par en-tête, s'ouvre au bord inférieur et se poursuit sous l'image | l'encodage et le séparateur affichés sont ceux que le module d'import a retenus ; l'aperçu n'est pas contournable ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
 | `02b-import-cp1252.png` | `participants_cas_limites_cp1252.csv` | le haut de l'aperçu du même contenu en windows-1252 (§ 10.1) : la nature du fichier choisie, le nom du fichier, l'encodage détecté et **nommé**, le séparateur, « virgule » ; les cellules accentuées sont sous l'image | l'encodage affiché est celui que le module d'import a retenu ; les cellules accentuées de l'aperçu sont celles que rend le décodage du fichier, sans caractère parasite, et sont affirmées sur l'écran, sous l'image : l'épreuve lit le texte de l'aperçu, non ce que la fenêtre laisse voir |
+| `02c-import-presence.png` | **petite démonstration**, générée, n° 1 retenue (« la présence par tour », plus bas) | l'aperçu, en mise à jour, du modèle de participants téléchargé sous quatre tours, plus une ligne qui désigne une personne inscrite par son nom et son prénom, sa présence vide : la colonne « présence » et ses cellules lues en tours ; « présence inchangée » sur la seule ligne de la personne inscrite (§ 10.1) | la cellule « 1-3 » se lit « tours 1 à 3 » et la cellule « 2, 3 » « tours 2 et 3 », par la grammaire du CSV ; les cellules vides des personnes du modèle, que l'import crée, ne disent rien ; aucune ligne refusée, aucun doublon ; « Fermer l'aperçu » n'écrit rien |
 | `03-import-rapport.png` | idem | le haut du rapport : les comptes de l'import — personnes ajoutées, mises à jour, inchangées, retirées, réservations retirées —, le nom du fichier, l'encodage et le séparateur | le compte des personnes ajoutées égale le nombre de participants de l'événement, et l'import fait une seule entrée d'historique ; au moins un groupe d'orthographes fondu et au moins une ligne refusée sont affirmés sur l'écran, sous l'image |
 | `04-grille-participants.png` | l'événement en construction | la grille éditable, le tri, le filtre, une personne exclue, la légende des étiquettes, chacune chiffrée (§ 10.2) | le compte affiché égale le compte importé |
 | `04a-etiquettes.png` | l'événement en construction | la fiche d'une personne avec ses étiquettes en pastilles neutres, le champ d'ajout, et le signal de l'orthographe retenue sous le champ ; la légende des étiquettes, chiffrée, est celle de `04` (§ 10.2) | les étiquettes affichées sont celles de la personne ; une saisie d'une orthographe voisine reçoit l'orthographe existante, et le signal est visible ; la légende compte les porteurs de chaque étiquette, exclues comprises |
+| `04b-presence-grille.png` | idem, l'arrivée ajoutée et dite présente aux tours 3 et 4 par sa fiche | la grille triée par nom, les cases de présence de la partante ouvertes au clavier, tours 1 et 2 cochés, et la ligne de l'arrivée, « tours 3 et 4 » en pastille (§ 10.2) | les cases ouvertes et cochées n'écrivent rien ; Entrée, après l'image, écrit une entrée, et le retenu laisse la chaise de la partante libre aux tours 3 et 4, sans dériver |
+| `04c-presence-fiche.png` | idem | la rubrique « Présence » de la fiche de l'arrivée : son résumé, ses cases 3 et 4 cochées, et l'itinéraire du retenu, « absente, absente, en réserve, en réserve » (§ 10.2) | le résumé, les cases et l'itinéraire égalent la présence et le retenu de la charge |
 | `05-tables-etat.png` | idem, deux tables posées par le scénario | deux tables à 8 places dont l'une **suit le défaut** et l'autre porte une **surcharge de même valeur** (§ 6.1) | les deux états s'affichent différemment **à valeur égale** |
 | `05a-objectifs-tables.png` | idem | une table à objectif de soirée qui suit la règle par défaut, que son choix de règle nomme en mots (« selon le réglage général (…) »), une table à objectif de tour à règle propre (§ 4.5) | les deux états de règle s'affichent différemment ; l'objectif auquel personne ne correspond porte son signal ; la règle par défaut, changée puis rendue, n'est pas écrite |
 | `05b-import-objectifs.png` | `objectifs_cas_limites.csv` | l'aperçu des objectifs : lignes refusées avec leur motif, orthographes fondues (§ 10.4) | au moins une ligne refusée et un groupe fondu sont visibles ; la nature du fichier, cochée et nommée, et le séparateur nommé sont affirmés sur l'écran, au-dessus de l'image |
@@ -7321,6 +7848,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `11-propositions.png` | l'événement en construction | plusieurs propositions comparées, l'ordre de classement **écrit dans l'interface** par paliers (§ 5.7), le tableau défilé en largeur des colonnes de diversité jusqu'à celles des objectifs | au moins trois propositions ; l'ordre affiché est celui que produit la clé de tri du moteur |
 | `11a-depart-derive.png` | **variante sans exception** (§ 15.1), ses propositions engendrées sous une graine écrite et un compte réduit | la section de la génération sous un départ choisi : « Départ : proposition n° X », « Repartir de zéro », les cases des tours, le tour 1 coché, et la commande « Générer depuis n° X » (§ 5.7) | le départ nommé est celui dont la ligne a reçu « Repartir d'elle », de son menu « Actions » ; aucune écriture n'a eu lieu avant le lancement |
 | `11b-propositions-derivees.png` | idem, la génération dérivée faite | les lignes des dérivées au tableau des propositions, chacune portant « Dérivée de n° X, tour 1 figé. » sous son numéro, et le départ dans le même classement (§ 5.7) | chaque dérivée garde le tour 1 de son départ case par case ; le libellé d'historique est celui du § 5.7 |
+| `11c-derivee-presence.png` | idem que `02c`, la partante et l'arrivée dites, n° 1 en dérive par ses participants | la carte du départ n° 1, tours 1 et 2 figés, qui nomme ses écarts — la partante retirée des tours 3 et 4, l'arrivée à asseoir à ces tours —, puis l'issue « … ; n° 1, en dérive, n'est pas classée » (§ 5.7) | les écarts se lisent avant le lancement, sans écriture ; chaque dérivée reprend les tours figés du départ ajusté, qui sont ceux du retenu, et décrit la soirée, comparable ; aucune comparaison n'est offerte, aucun écart au retenu n'est annoncé |
 | `12-qualite-profil.png` | **grande démonstration** | le profil en deux graphiques au même ordre de rangs : l'escalier en comptes de personnes, deux séries — rencontres en trait plein, appartenances en tirets —, le plafond réalisé en repère mixte et la borne de diversité en repère pointillé, chacun nommé sur le tracé ; dessous, les rencontres en pourcentage du plafond réalisé jusqu'à la règle à 100 %, du motif du plafond, l'axe des rangs de ce second graphique hors de l'image ; le pire cas au premier rang (§ 12.3) | la page a **dessiné** plutôt que d'opposer son refus — c'est ainsi que la garde du § 12.3 montre qu'elle n'a pas été déclenchée ; chaque graphique a un seul axe vertical ; le rang 1 est le même dans les deux ; chaque pourcentage écrit est suivi de son compte du pire ; aucun repère n'a le motif d'une série |
 | `12a-qualite-sans-placement.png` | **petite démonstration, variante « conflit inévitable »**, avant sa génération | la page sans placement : la ligne de source, le diagnostic préalable et sa phrase (§ 12.6) | aucun graphique n'est dessiné ; la phrase est celle d'« aucun placement » |
 | `12b-qualite-une-table.png` | **6 personnes de trois appartenances, une table de 6, 3 tours**, construite, sa génération faite | la phrase d'une seule table à la place du profil, des collisions, de la grille et des paires ; la performance (§ 12.6) | ni profil, ni barre de collision, ni grille, ni tableau des paires n'est dessiné ; la phrase est celle d'« une seule table » |
@@ -7329,6 +7857,7 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `12e-qualite-sans-collision.png` | **9 personnes de neuf appartenances distinctes, 3 tables de 3, 2 tours**, construite, sa génération faite | la phrase de la vue des collisions ; la grille sous la position « par siège », qui reste (§ 12.6, § 12.11) | aucune barre de collision n'est dessinée ; le sélecteur est sur « par siège » et chaque case écrit 0 |
 | `12f-qualite-reserve.png` | **petite démonstration, variante « conflit inévitable »**, sa première proposition retenue puis ajustée au plan : une personne mobile — ni ancrée ni partiellement fixée — mise en réserve au tour 2 | le premier graphique du profil, le point de la personne marqué « en réserve » ; les collisions à un seul segment et la phrase qui dit pourquoi le plancher ne s'applique pas, plus bas, sont affirmées sans l'image (§ 12.4, § 12.6) | aucun segment « prouvé inévitable » n'est dessiné ; le point de la personne porte la marque de la réserve |
 | `12g-qualite-plafond-nul.png` | **5 personnes, une table de 4 et une table de 2, 2 tours**, construite : quatre réservées à la table de 4 aux deux tours, la cinquième sans réservation, que sa génération assoit seule à la table de 2 aux deux tours | le point marqué d'un plafond réalisé nul au rang 1 du profil, son infobulle ouverte ; au second graphique, ce rang sans point (§ 12.3, § 12.6) | la cinquième, ni ancrée, ni partiellement fixée, ni en réserve, porte la marque du plafond réalisé nul ; l'infobulle écrit le plafond réalisé 0 et le pourcentage « — » ; le second graphique n'a pas de point à ce rang |
+| `12h-qualite-absence.png` | idem, la meilleure dérivée montrée | le bas de l'en-tête chiffré : la tuile de l'écart d'itinéraire maximal, « Plancher non prouvé : une personne au moins est absente à un tour. », et ses voisines (§ 12.2) | seule cette tuile le dit ; hors de l'image, les collisions gardent leur segment « prouvé inévitable », égal au plancher du diagnostic — une collision à chacun des tours de l'arrivée, son groupe y comptant une personne de plus que les tables —, et le profil marque d'un losange la partante et l'arrivée, « absente à un tour au moins » |
 | `13-qualite-collisions.png` | **petite démonstration, variante « conflit inévitable »** | les barres horizontales à deux segments, « prouvé inévitable » et « reste », en **collisions cumulées**, avec l'effectif, les paires distinctes et l'**excédent** en encre secondaire | le segment prouvé vaut **4 collisions cumulées** et égale le plancher du diagnostic, au chiffre près ; les lignes sont triées sur l'excédent (§ 12.4) |
 | `13a-qualite-tables.png` | **petite démonstration, variante « conflit inévitable »** | le sélecteur à trois positions sur « par siège », la grille tables × tours, chaque case ses sièges sans appartenance nouvelle, la pire table en première ligne (§ 12.11) | la première ligne porte le plus grand compte de la position « par siège » ; chaque case écrit le nombre que son niveau colore ; une case sans affilié écrit « — » |
 | `14-qualite-paires.png` | **12 personnes, 4 tables de 3, 6 tours**, construite | le tableau des paires répétées trié, pas la matrice (§ 12.5) | le tableau n'est pas vide, et la première commande de chaque ligne mène au premier tour où la paire se revoit |
@@ -7342,10 +7871,12 @@ n'interviennent qu'aux étapes où une configuration **déjà tendue** est le pr
 | `17a-comparaison-colonnes.png` | idem, la même paire | la même vue, cadrée sur ses colonnes : la ligne qui nomme les deux placements, leurs chiffres en deux colonnes côte à côte — le minimum brut de chacune en pourcentage, le compte du pire dessous —, « Tous les indicateurs » replié | chaque colonne porte un pourcentage par indicateur visible qui en a un, le pire cas de son placement, chacun suivi de son compte du pire |
 | `18-comparaison-escalier.png` | idem | l'escalier du manque ouvert, jumeau tabulaire de la vue précédente, une colonne d'effectif et une d'effectif cumulé par placement | les effectifs cumulés du tableau reproduisent la courbe ; l'escalier n'écrit aucun pourcentage |
 | `19-ajustement.png` | l'événement retenu | le déplacement d'une personne après la retenue, l'interface disant **lequel des deux gestes** est en cours (§ 5.8) | le libellé de l'état des données est visible |
+| `19a-presence-plan.png` | idem que `02c` | le retenu au tour 3 : la chaise libre de la partante, l'arrivée dans la réserve, la carte « Absentes » qui nomme la partante, et la liste « En réserve dans le placement retenu » (§ 5.8, § 7.1) | une entrée par geste depuis l'ajout, trois en tout ; le retenu ne dérive pas ; la réserve, les absentes et la liste nomment chacune la seule personne attendue |
 | `20-mode-lecture.png` | idem | la bande de mode, le libellé de mode à côté de la place fixe, et le bandeau d'application (§ 8.4) | un geste de chaque famille — glisser une personne, glisser une table, tirer une poignée, poser une réservation — est tenté, et l'empreinte d'état est inchangée après les quatre |
 | `21-historique.png` | idem | le panneau d'historique ouvert à côté du plan : la liste, la plus récente en haut, chaque ligne sa date et son heure ; un geste défait au clavier, sa ligne « Défait (Ctrl+Z) : … », qui n'est pas abandonnée, et sous elle le geste défait, sur un fil abandonné, en encre secondaire et marqué ; en tête, l'instant courant, nommé « Avant l'accueil » par le champ du panneau (§ 8.2, § 8.3) | au moins un fil abandonné est présent et marqué comme tel ; le libellé du retour nomme la touche ; le jalon est sur l'instant courant, et le nommer ne change pas la révision |
 | `22-plan-brouillon.png` / `23-plan-retenu.png` | idem | l'**aperçu d'impression** du plan (§ 11.7) avec son cartouche, son échelle graphique et son horodatage, **avec** puis **sans** le filigrane BROUILLON | **deux images, parce qu'une absence ne se photographie pas** : le filigrane présent sur l'un, absent sur l'autre, et la paire est le seul exposé lisible de la règle |
 | `24-badges-controle.png` / `25-badges-planche.png` | idem | la **feuille de contrôle** avec son échelle de 100 mm et ses comptes, puis une **planche** de quatre A6 et ses trois filets de coupe | voir § 19.6 — ces deux images ne viennent pas du navigateur. La paire est nécessaire : la feuille de contrôle est ce que l'opérateur mesure sous une règle avant d'engager la rame, et une planche seule ne le montre pas |
+| `25a-badge-absente.png` | idem que `02c`, la meilleure dérivée retenue | la page de la réédition des badges de la partante et de l'arrivée : « Tour 3 — absente » sur l'un, « Tour 1 — absente » sur l'autre (§ 11.5) | « Retenir » n'ouvre aucune fenêtre, le retenu n'étant ajusté qu'aux participants ; seule la planche s'écrit ; tramée du PDF comme `24` et `25` (§ 19.6) |
 
 Une image montre ce que tient la surface défilante d'un cadre de 1 366 × 700
 (§ 19.4), soit 482 px de haut sous la barre du plan ; ce que la ligne du tableau
@@ -7405,6 +7936,22 @@ dérivée, sur 260 personnes, ont un coût **mesuré, non supposé** : le scéna
 écrit leur compte réduit avec la durée relevée, et cette durée décide, comme
 pour toute étape de la grande démonstration, si elles restent au parcours
 principal (§ 19.3).
+
+**Les captures de la présence par tour se prennent les dernières**, après
+celles de la dérivée et de la comparaison, sur la petite démonstration chargée
+depuis le premier écran, générée sous la graine écrite, sa proposition n° 1
+retenue : l'aperçu du modèle de participants, plus la ligne d'une personne
+inscrite (`02c`), puis une personne ajoutée
+par le formulaire et dite présente aux tours 3 et 4 par sa fiche, et la
+personne n° 1 dite présente aux tours 1 et 2 par la grille, au clavier (`04b`,
+`04c`) ; le retenu ajusté au plan (`19a`) ; la génération dérivée de n° 1, en
+dérive, ses tours 1 et 2 figés (`11c`) ; la page de qualité de la meilleure
+dérivée (`12h`) ; enfin, la meilleure dérivée retenue, la réédition de leurs
+badges (`25a`). Aux tours 3 et 4, la salle reste juste pleine : la partante
+libère la place de l'arrivée. Prises à la fin, elles ne changent rien de ce que
+les autres captures et les familles reçoivent ; chacune se range à son étape
+par son nom. Le guide les cite aux étapes 2, 3, 9, 10, 11 et 12 ; l'appariement
+les garde (§ 19.7).
 
 **L'aperçu d'impression est plus haut que la fenêtre.** `22` et `23` le
 photographient au défilement où le filigrane et le pied de la première page
@@ -7660,8 +8207,9 @@ questions et s'arrête.
 
 **Ce qu'elle contient, dans cet ordre.**
 
-1. **Le problème, en une phrase** : asseoir chacun à chaque tour de sorte que le
-   plus mal servi rencontre le plus de monde possible. C'est l'objectif de
+1. **Le problème, en une phrase** : asseoir chaque personne présente à chacun
+   de ses tours de sorte que le plus mal servi rencontre le plus de monde
+   possible. C'est l'objectif de
    l'ordre par défaut ; la section dit en une phrase que l'opérateur peut en
    ranger d'autres devant (§ 5.7).
 2. **Pourquoi il n'a pas de réponse évidente**, par un compte, pas par un mot
