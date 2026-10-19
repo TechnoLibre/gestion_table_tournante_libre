@@ -447,15 +447,11 @@ function tablesDifferent(p, depart, tour, lue) {
  * retenu a été retenu de ce départ (retenu.proposition === id) : occupants
  * de chaque table, par identifiant de table, et réserve ; dans l'ordre des
  * chaises quand le retenu et le départ attribuent tous deux les sièges, la
- * chaise vide de fin ne comptant pas. Le retenu s'ajuste à la présence par
- * la même fonction que le départ, mais geste après geste : une personne qui
- * quitte un tour puis y revient y attend en réserve au retenu, alors que le
- * départ, ajusté d'un coup, l'assied encore. Une telle revenue — en réserve
- * au retenu, assise au départ ajusté — se lit donc comme une chaise vide des
- * deux côtés et hors des deux réserves : sa chaise restée libre au retenu ne
- * fait pas d'écart, sa chaise prise à la main en fait un. Ne restent ainsi
- * que les retouches à la main ; une personne mise en réserve à la main, sa
- * chaise laissée libre, ne se distingue pas d'une revenue et n'en fait pas.
+ * chaise vide de fin ne comptant pas. La comparaison est stricte : une
+ * personne retirée du tour à la main, sa chaise laissée libre, fait un
+ * écart. Une personne qui quitte un tour puis y revient en fait un aussi,
+ * puisque le retenu, ajusté geste après geste, l'attend en réserve là où le
+ * départ, ajusté d'un coup, l'assied encore à sa chaise.
  * [] sans retenu, quand il vient d'une autre proposition, quand le départ a
  * quitté la liste, et pour un retenu ou un départ fautif : aucune
  * comparaison. Un tour figé au-delà du retenu ou du départ ne compte pas.
@@ -473,11 +469,8 @@ export function ecartAuRetenu(charge, { id, toursFiges }) {
   const ordonnee = retenu.siegesAttribues && adapte.siegesAttribues;
   return toursFiges.filter((tour) => {
     if (tour > Math.min(retenu.tours, adapte.tours)) return false;
-    const assises = assisDuTour(adapte.placement[tour - 1]);
-    const revenues = new Set(retenu.placement[tour - 1].reserve.filter((personne) => assises.has(personne)));
-    const reserveLue = (p) =>
-      JSON.stringify(p.placement[tour - 1].reserve.filter((personne) => !revenues.has(personne)).sort(croissant));
-    return tablesDifferent(retenu, adapte, tour, lecture(ordonnee, revenues)) || reserveLue(retenu) !== reserveLue(adapte);
+    const reserveLue = (p) => JSON.stringify([...p.placement[tour - 1].reserve].sort(croissant));
+    return tablesDifferent(retenu, adapte, tour, lecture(ordonnee, new Set())) || reserveLue(retenu) !== reserveLue(adapte);
   });
 }
 

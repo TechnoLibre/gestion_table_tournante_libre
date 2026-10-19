@@ -646,7 +646,7 @@ describe('départ : le départ ajusté à la présence (§ 5.7)', () => {
     assert.deepEqual(ecartAuRetenu(departFautif, { id: 4, toursFiges: [1] }), [], 'départ fautif');
   });
 
-  test('ecartAuRetenu : une personne qui quitte un tour figé puis y revient attend en réserve au retenu, le départ ajusté l’assied encore à sa chaise restée libre — aucun écart ; sa chaise prise à la main en est un', () => {
+  test('ecartAuRetenu : une personne qui quitte un tour figé puis y revient attend en réserve au retenu, le départ ajusté l’assied encore à sa chaise — un écart, comme sa chaise prise à la main', () => {
     for (const assise of [false, true]) {
       const charge = assise ? chargeAssise() : chargeDe();
       charge.retenu = retenuDe(charge.propositions[0]);
@@ -657,7 +657,7 @@ describe('départ : le départ ajusté à la présence (§ 5.7)', () => {
       delete charge.participants[2].presence;
       charge.retenu = ajusterALaPresence(charge.retenu, charge, [3]).placement;
       assert.deepEqual(charge.retenu.placement[0].reserve, [3], `sièges attribués : ${assise}`);
-      assert.deepEqual(ecartAuRetenu(gele(structuredClone(charge)), { id: 4, toursFiges: [1, 2] }), [], `sièges attribués : ${assise}`);
+      assert.deepEqual(ecartAuRetenu(gele(structuredClone(charge)), { id: 4, toursFiges: [1, 2] }), [1], `sièges attribués : ${assise}`);
       // Basile Tourteau mis à la main dans sa chaise restée libre, la
       // troisième de la table 3 : la table 7 du retenu n'est plus celle du
       // départ.
@@ -667,21 +667,20 @@ describe('départ : le départ ajusté à la présence (§ 5.7)', () => {
       liste7.splice(liste7.indexOf(4), 1);
       assert.deepEqual(ecartAuRetenu(prise, { id: 4, toursFiges: [1, 2] }), [1], `sièges attribués : ${assise}`);
     }
-    // Retirée du tour à la main, sa chaise laissée libre : la même forme
-    // qu'une revenue, donc aucun écart — un départ en cours de soirée se dit
-    // par la présence, que l'ajustement suit.
+    // Retirée du tour à la main, sa chaise laissée libre : un écart.
     for (const assise of [false, true]) {
       const charge = assise ? chargeAssise() : chargeDe();
-      charge.retenu = retenuDe(charge.propositions[0]);
+      charge.retenu = structuredClone(retenuDe(charge.propositions[0]));
       const tour = charge.retenu.placement[0];
       for (const liste of tour.sieges) {
         const rang = liste.indexOf(3);
         if (rang < 0) continue;
         if (assise) liste[rang] = null;
         else liste.splice(rang, 1);
+        while (liste.at(-1) === null) liste.pop();
       }
       tour.reserve = [3];
-      assert.deepEqual(ecartAuRetenu(charge, { id: 4, toursFiges: [1] }), [], `sièges attribués : ${assise}`);
+      assert.deepEqual(ecartAuRetenu(charge, { id: 4, toursFiges: [1] }), [1], `sièges attribués : ${assise}`);
     }
     // En réserve au retenu sans que le départ ajusté l'asseye — Aurèle
     // Pimprenelle, absente au tour 1 : ce n'est pas une revenue, la réserve

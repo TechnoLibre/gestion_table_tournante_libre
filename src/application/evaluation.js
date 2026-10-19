@@ -109,7 +109,7 @@ import {
   raisonsQuiBloquentUnDepart,
 } from '../stockage/placements.js';
 import { configurationDe } from './configuration.js';
-import { derivationDe } from './depart.js';
+import { derivationDe, ecartAuRetenu } from './depart.js';
 import { nomAffiche } from './personnes.js';
 
 // Les modes des objectifs, le défaut en tête, et les cases qui font compter
@@ -560,6 +560,41 @@ export function retenuAjuste({ retenu, propositions }) {
   return !CHAMPS_DU_PLACEMENT.every((champ) => egaux(retenu[champ], origine[champ]));
 }
 
+// Ce que retenirProposition copie et que l'ajustement à la présence ne
+// touche pas : le mobilier et l'attribution des sièges.
+const CHAMPS_DU_MOBILIER = ['siegesAttribues', 'tables', 'capacites', 'tours'];
+
+/**
+ * Vrai quand le retenu porte une retouche que retenir de nouveau sa
+ * proposition d'origine détruirait (§ 2.1) : retenirProposition copie la
+ * proposition puis l'ajuste à la présence (ajusterALaPresence), et le
+ * retenu diffère de cette copie ajustée par autre chose que l'ajustement.
+ * Faux sans retenu, et pour un retenu non ajusté (retenuAjuste). Pour un
+ * retenu ajusté, vrai quand sa proposition n'est plus dans la liste, quand
+ * l'un ou l'autre est fautif, ou quand le mobilier — sièges attribués,
+ * tables, capacités, tours — diffère ; sinon, vrai quand un tour au moins
+ * diffère du départ ajusté, lu par ecartAuRetenu sur chaque tour du retenu.
+ * Un geste qui change les participants — présence, ajout, exclusion,
+ * réintégration, suppression, import — ajuste le retenu sans le retoucher :
+ * le retenu reste ajusté au sens de retenuAjuste, sans retouche. Une
+ * personne partie puis revenue attend en réserve au retenu et reste assise
+ * au départ ajusté ; ecartAuRetenu ne lit pas cet écart, ni, de même, une
+ * personne mise en réserve à la main, sa chaise laissée libre. Ne modifie
+ * pas la charge.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {boolean}
+ */
+export function retenuRetouche(charge) {
+  if (!retenuAjuste(charge)) return false;
+  const { retenu } = charge;
+  const origine = charge.propositions.find(({ id }) => id === retenu.proposition);
+  if (origine === undefined || fautes(retenu).length > 0 || fautes(origine).length > 0) return true;
+  if (!CHAMPS_DU_MOBILIER.every((champ) => egaux(retenu[champ], origine[champ]))) return true;
+  const tours = Array.from({ length: retenu.tours }, (_, rang) => rang + 1);
+  return ecartAuRetenu(charge, { id: origine.id, toursFiges: tours }).length > 0;
+}
+
 // La proposition d'où vient le retenu de la charge quand il n'est pas
 // ajusté (retenuAjuste) ; null pour un retenu ajusté, ou dont la
 // proposition est effacée.
@@ -917,6 +952,9 @@ export function rencontresDePersonne(charge, id, personne) {
  *           celle de sa proposition pour un retenu non ajusté, null pour un
  *           retenu ajusté
  * @property {boolean} ajuste     vrai pour un retenu ajusté
+ * @property {boolean} retouche   vrai pour un retenu qui porte une retouche à
+ *           la main (retenuRetouche), faux pour un retenu ajusté aux seuls
+ *           participants
  * @property {{depart: number, toursFiges: number[], departPresent: boolean}|null} derivation
  *           sa filiation : celle de la proposition, ou de la proposition
  *           d'origine d'un retenu non ajusté ; null sinon
@@ -1065,7 +1103,7 @@ export function candidatsDeComparaison(charge, table, a) {
 // par manques et profilManque, qui exigent une case par personne des
 // rencontres et des plafonds réalisés, quand la ligne n'a pas une case par
 // personne du placement.
-function coteDe({ charge, table, instance, planchers, ajuste }, cle) {
+function coteDe({ charge, table, instance, planchers, ajuste, retouche }, cle) {
   const ligne = ligneDuPlacement(table, cle);
   const placement = placementDe(charge, cle);
   if (ligne === null || ligne.statut !== 'comparable' || placement === null) {
@@ -1090,6 +1128,7 @@ function coteDe({ charge, table, instance, planchers, ajuste }, cle) {
       cle,
       rang: rangDe(charge, table, cle, ajuste),
       ajuste: cle === 'retenu' && ajuste,
+      retouche: cle === 'retenu' && retouche,
       derivation: filiationDe(charge, cle, ajuste),
       bornes: {
         rang1:
@@ -1159,7 +1198,14 @@ function coteDe({ charge, table, instance, planchers, ajuste }, cle) {
 export function comparerPlacements(charge, table, a, b) {
   if (a === b) throw new RangeError(`comparerPlacements : deux fois le placement ${JSON.stringify(a)}`);
   const instance = normaliser(configurationDe(charge));
-  const contexte = { charge, table, instance, planchers: planchersDesColonnes(instance, table.diagnostic), ajuste: retenuAjuste(charge) };
+  const contexte = {
+    charge,
+    table,
+    instance,
+    planchers: planchersDesColonnes(instance, table.diagnostic),
+    ajuste: retenuAjuste(charge),
+    retouche: retenuRetouche(charge),
+  };
   const cotes = [coteDe(contexte, a), coteDe(contexte, b)];
   const [lu, autre] = cotes;
   // N vient de normaliser (src/moteur) ; aucune personne ne se rencontre

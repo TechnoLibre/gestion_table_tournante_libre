@@ -6,7 +6,8 @@
 // avertissements ; le retenu qui suit qui est là, dans l'entrée du geste,
 // pour chaque commande qui change les participants ; la présence d'une
 // personne ajoutée ; les rencontres qu'une exclusion ou une suppression
-// retire du retenu. Les noms d'épreuve sont inventés ; la version vient du
+// retire du retenu ; le retenu ajusté par ces gestes seuls, que retenir sa
+// proposition d'origine ne détruirait pas (retenuRetouche). Les noms d'épreuve sont inventés ; la version vient du
 // module engendré.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
@@ -17,7 +18,7 @@ import { VERSION } from '../version.genere.js';
 import { avertissementsApres } from './avertissements.js';
 import { COMMANDES, appliquerCommande } from './commandes.js';
 import { ErreurCommande } from './erreurs.js';
-import { retenuAjuste } from './evaluation.js';
+import { retenuAjuste, retenuRetouche } from './evaluation.js';
 import { COMMANDES_PRESENCE, retenuAuxPresences } from './presence.js';
 
 const NOMS = [
@@ -527,5 +528,67 @@ describe('réintégrer et importer : une présence qui s’étend se contrôle (
     const args = { apercu: apercevoir(texte, { participants: charge.participants, mode: 'mettreAJour', tours: 4 }), mode: 'mettreAJour' };
     const leve = refuse(() => executer('importerParticipants', charge, args), 'SURRESERVATION', { table: 1, tour: 3, remede: null });
     assert.deepEqual(leve.details.autres, []);
+  });
+});
+
+describe('retenuRetouche : une retouche que retenir la proposition d’origine détruirait (§ 2.1)', () => {
+  const geste = (charge, nom, args) => executer(nom, charge, args).charge;
+
+  test('faux sans retenu, pour un retenu tel que sa proposition, et après chaque geste qui change les participants', () => {
+    assert.equal(retenuRetouche(chargeDe({ retenu: false })), false);
+    for (const siegesAttribues of [true, false]) {
+      const charge = chargeDe({ siegesAttribues });
+      assert.equal(retenuRetouche(charge), false);
+      for (const [nom, args] of [
+        ['changerPresence', { id: 3, tours: [1, 2] }],
+        ['ajouterParticipant', { champs: { nom: 'Quenouille' }, presence: [3, 4] }],
+        ['exclureParticipant', { id: 1 }],
+        ['supprimerParticipant', { id: 4 }],
+      ]) {
+        const apres = geste(charge, nom, args);
+        const titre = `${nom}, sièges attribués : ${siegesAttribues}`;
+        assert.equal(retenuAjuste(apres), true, titre);
+        assert.equal(retenuRetouche(apres), false, titre);
+      }
+    }
+  });
+
+  test('une partante revenue attend en réserve au retenu, assise au départ ajusté : la comparaison stricte en fait une retouche', () => {
+    for (const siegesAttribues of [true, false]) {
+      const revenue = geste(changer(chargeDe({ siegesAttribues }), 3, [1, 2]).charge, 'changerPresence', { id: 3, tours: null });
+      assert.deepEqual(revenue.retenu.placement[2].reserve, [3, 6, 7]);
+      assert.equal(retenuAjuste(revenue), true);
+      assert.equal(retenuRetouche(revenue), true);
+    }
+  });
+
+  test('une retouche à la main après un changement de participants en est une : la chaise d’une partante prise, une arrivante assise', () => {
+    // 3 quitte les tours 3 et 4 : sa chaise 1 de la table 2 se libère au
+    // tour 3, et 6, en réserve, la prend.
+    const partie = changer(chargeDe(), 3, [1, 2]).charge;
+    assert.equal(retenuRetouche(geste(partie, 'deplacerDansRetenu', { tour: 3, participant: 6, table: 2, siege: 1 })), true);
+    // 8, ajoutée présente aux tours 3 et 4, attend en réserve ; assise à la
+    // chaise 4 de la table 1 au tour 3.
+    const arrivee = geste(chargeDe(), 'ajouterParticipant', { champs: { nom: 'Quenouille' }, presence: [3, 4] });
+    assert.equal(retenuRetouche(arrivee), false);
+    assert.equal(retenuRetouche(geste(arrivee, 'deplacerDansRetenu', { tour: 3, participant: 8, table: 1, siege: 4 })), true);
+  });
+
+  test('vrai sans proposition d’origine, quand le mobilier diffère, et pour un retenu fautif qui diffère de sa proposition', () => {
+    const sansOrigine = chargeDe();
+    sansOrigine.propositions = [];
+    assert.equal(retenuRetouche(sansOrigine), true);
+    const mobilier = chargeDe();
+    mobilier.retenu.capacites = [4, 3];
+    assert.equal(retenuRetouche(mobilier), true);
+    // 1 écrite deux fois au tour 1 : une faute ; la même dans la
+    // proposition, le retenu est tel qu'elle.
+    const fautif = chargeDe();
+    fautif.retenu.placement[0].sieges[1][2] = 1;
+    assert.ok(fautes(fautif.retenu).length > 0);
+    assert.equal(retenuRetouche(fautif), true);
+    fautif.propositions[0].placement[0].sieges[1][2] = 1;
+    assert.equal(retenuAjuste(fautif), false);
+    assert.equal(retenuRetouche(fautif), false);
   });
 });

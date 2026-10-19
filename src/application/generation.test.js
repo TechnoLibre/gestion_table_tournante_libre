@@ -2234,7 +2234,7 @@ describe('génération dérivée : un départ en dérive par ses participants (�
     }
   });
 
-  test('DEPART_ECART_AU_RETENU : un retenu retouché au tour 1, une dérivée de sa proposition, tour 1 figé ; ni pour un retenu seulement ajusté, ni pour une dérivée d’une autre proposition', async () => {
+  test('DEPART_ECART_AU_RETENU : un retenu retouché au tour 1, une dérivée de sa proposition, tour 1 figé ; ni pour un retenu seulement ajusté, ni pour une dérivée d’une autre proposition ; une revenue en fait un', async () => {
     const charge = () => chargeAvecPropositions([[4, planCourt(5)], [5, planCourt(7)]]);
     const retouche = await monter({ charges: [charge()] });
     await retouche.seance.executer('retenirProposition', { id: 4 });
@@ -2254,14 +2254,15 @@ describe('génération dérivée : un départ en dérive par ses participants (�
     assert.deepEqual([sansEcart.departEnDerive, sansEcart.avertissements], [true, []]);
 
     // Partie du tour figé 1 puis revenue : le retenu l'y garde en réserve,
-    // le départ ajusté l'assied à sa chaise restée libre.
+    // le départ ajusté l'assied à sa chaise ; la comparaison stricte en fait
+    // un écart, que l'avertissement nomme.
     const revenue = await monter({ charges: [charge()] });
     await revenue.seance.executer('retenirProposition', { id: 4 });
     await revenue.seance.executer('changerPresence', { id: 1, tours: [2, 3, 4] });
     await revenue.seance.executer('changerPresence', { id: 1, tours: null });
     assert.deepEqual(revenue.charge().retenu.placement[0].reserve, [1]);
-    const sansRetouche = await revenue.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [1, 2] } });
-    assert.deepEqual(sansRetouche.avertissements, []);
+    const avecEcart = await revenue.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [1, 2] } });
+    assert.deepEqual(avecEcart.avertissements, [{ code: 'DEPART_ECART_AU_RETENU', details: { depart: 4, tours: [1] } }]);
   });
 
   test('une génération ordinaire porte une issue sans départ : ni dérive, ni écart, ni avertissement', async () => {

@@ -2178,17 +2178,17 @@ describe('comparerPlacements : deux lignes de la table, une seule arithmétique 
     assert.deepEqual(derivationDe(nonAjuste, 3), filiation);
     const { bornes: _a, ...coteA } = comparaison.a;
     const { bornes: _b, ...coteB } = comparaison.b;
-    assert.deepEqual(coteA, { cle: 'retenu', rang: table.classement.ordre.indexOf(3) + 1, ajuste: false, derivation: filiation });
-    assert.deepEqual(coteB, { cle: 4, rang: 1, ajuste: false, derivation: null });
+    assert.deepEqual(coteA, { cle: 'retenu', rang: table.classement.ordre.indexOf(3) + 1, ajuste: false, retouche: false, derivation: filiation });
+    assert.deepEqual(coteB, { cle: 4, rang: 1, ajuste: false, retouche: false, derivation: null });
     assert.deepEqual(comparerPlacements(nonAjuste, table, 4, 3).b.derivation, filiation);
     const ajuste = figer(avecRetenu(derivee, 3, { ajuste: true }));
     const { bornes: _c, ...coteAjuste } = comparerPlacements(ajuste, evaluer(ajuste), 2, 'retenu').b;
-    assert.deepEqual(coteAjuste, { cle: 'retenu', rang: null, ajuste: true, derivation: null });
+    assert.deepEqual(coteAjuste, { cle: 'retenu', rang: null, ajuste: true, retouche: true, derivation: null });
     // Face au retenu ajusté, la proposition n'est pas ajustée : sa place au
     // classement, sans filiation.
     const tableAjustee = evaluer(ajuste);
     const { bornes: _d, ...coteProposition } = comparerPlacements(ajuste, tableAjustee, 2, 'retenu').a;
-    assert.deepEqual(coteProposition, { cle: 2, rang: tableAjustee.classement.ordre.indexOf(2) + 1, ajuste: false, derivation: null });
+    assert.deepEqual(coteProposition, { cle: 2, rang: tableAjustee.classement.ordre.indexOf(2) + 1, ajuste: false, retouche: false, derivation: null });
     // Le départ effacé : la filiation le dit absent.
     const orpheline = figer(sans(derivee, [2]));
     assert.deepEqual(comparerPlacements(orpheline, evaluer(orpheline), 3, 1).a.derivation, { ...filiation, departPresent: false });
