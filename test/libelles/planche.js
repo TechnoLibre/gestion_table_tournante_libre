@@ -25,4 +25,11 @@ export const EXEMPLES = [
   ['PAPIER_REQUIS', { remede: { geste: 'choisirPapier' } }],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  // Une ligne de tour : la place, « pas de table » en réserve, « absente » à
+  // un tour d'absence, où ni table, ni siège, ni titre ne s'écrivent.
+  ['planche.absente', {}, 'absente'],
+  ['planche.tour', { tour: 2, table: null, siege: null, titre: null, absente: true }, 'Tour 2 \u{2014} absente'],
+  ['planche.tour', { tour: 2, table: null, siege: null, titre: null, absente: false }, 'Tour 2 \u{2014} pas de table'],
+  ['planche.tour', { tour: 3, table: 7, siege: 2, titre: 'animatrice', absente: false }, 'Tour 3 \u{2014} table 7, siège 2 \u{2014} animatrice'],
+];

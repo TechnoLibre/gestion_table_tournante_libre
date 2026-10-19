@@ -37,6 +37,9 @@ import { versionVisible } from './version.js';
  * @property {number|null} siege    sous sièges attribués seulement
  * @property {string|null} titre    le titre dont une réservation fait la
  *                                  personne titulaire à ce tour
+ * @property {boolean} absente      vrai à un tour où la personne est
+ *                                  absente : table, siège et titre null,
+ *                                  tour jamais null
  * @typedef {Object} Badge
  * @property {number} participant
  * @property {string} nom                 le nom affiché, en NFC
@@ -204,13 +207,16 @@ export function refusProduction(code, details) {
 }
 
 // Où chaque personne s'assied à chaque tour du placement, lu de sa forme
-// nommée : Map participant → tableau par tour de { table (identifiant),
-// numero, siege } ; table et numero null dans la réserve.
+// nommée : Map participant → tableau par tour de { absente, table
+// (identifiant), numero, siege } ; table et numero null dans la réserve
+// comme à un tour d'absence, qu'absente seul distingue (Ligne.absent).
 function placesParTour(charge, cible, tours) {
   const places = new Map();
-  for (const { tour, table, numero, siege, participant } of formeNommeeDe(charge, cible).lignes) {
+  for (const { tour, table, numero, siege, participant, absent } of formeNommeeDe(charge, cible).lignes) {
     if (!places.has(participant)) places.set(participant, Array.from({ length: tours }, () => null));
-    places.get(participant)[tour - 1] = { table, numero, siege };
+    places.get(participant)[tour - 1] = absent
+      ? { absente: true, table: null, numero: null, siege: null }
+      : { absente: false, table, numero, siege };
   }
   return places;
 }
@@ -227,8 +233,9 @@ function titresImprimes(charge, places, siegesAttribues) {
     const titre = charge.titres[rang];
     tours.forEach((reservation, indice) => {
       if (reservation === null) return;
-      // La réservation d'une personne non exclue, que le placement cohérent
-      // et sans dérive assied à chaque tour.
+      // La réservation d'une personne non exclue et présente à ce tour, que
+      // le placement cohérent et sans dérive y assied ou y réserve : une
+      // place de la réserve n'a pas de table, et ne porte aucun titre.
       const place = places.get(reservation.participant)[indice];
       if (place.table !== titre.table) return;
       if (siegesAttribues && place.siege !== titre.siege) return;
@@ -240,17 +247,22 @@ function titresImprimes(charge, places, siegesAttribues) {
 }
 
 // Les lignes de tour d'une personne : une par tour, ou une seule « Toute la
-// soirée » quand R ≥ 2 et que table, siège et titre ne changent pas.
+// soirée » quand R ≥ 2, que table, siège et titre ne changent pas et que la
+// personne est présente à chaque tour. Une ligne d'absence garde son tour :
+// « pas de table » et « absente » ont la même table null, et la réserve
+// d'un tour ne se fond pas avec l'absence d'un autre.
 function lignesDe(id, places, titres) {
   const lignes = places.get(id).map((place, indice) => ({
     tour: indice + 1,
     table: place.numero,
     siege: place.siege,
     titre: titres.get(`${id}/${indice + 1}`)?.join(', ') ?? null,
+    absente: place.absente,
   }));
   const [premiere] = lignes;
   const constante = lignes.every(
-    ({ table, siege, titre }) => table === premiere.table && siege === premiere.siege && titre === premiere.titre,
+    ({ table, siege, titre, absente }) =>
+      !absente && table === premiere.table && siege === premiere.siege && titre === premiere.titre,
   );
   if (lignes.length >= 2 && constante) return [{ ...premiere, tour: null }];
   return lignes;
@@ -281,13 +293,17 @@ const ordreAlphabetique = (a, b) =>
   comparerPointsDeCode(cleNormalisee(a.personne.prenom ?? ''), cleNormalisee(b.personne.prenom ?? '')) ||
   a.personne.id - b.personne.id;
 
-// L'ordre par table (décision 9) : le numéro de la table du tour 1, la
-// réserve de ce tour en dernier, l'identifiant de table pour deux numéros
-// égaux, puis l'ordre alphabétique.
+// Le rang d'une place du tour 1 dans l'ordre par table : 0 à une table, 1
+// dans la réserve, 2 absente.
+const rangHorsTable = ({ absente, table }) => (absente ? 2 : table === null ? 1 : 0);
+
+// L'ordre par table (décision 9) : le numéro de la table du tour 1, puis la
+// réserve de ce tour, puis les absentes de ce tour, l'identifiant de table
+// pour deux numéros égaux, puis l'ordre alphabétique.
 function ordreParTable(a, b) {
   const [pa, pb] = [a.places[0], b.places[0]];
-  const enReserve = (pa.table === null) - (pb.table === null);
-  if (enReserve !== 0) return enReserve;
+  const horsTable = rangHorsTable(pa) - rangHorsTable(pb);
+  if (horsTable !== 0) return horsTable;
   if (pa.table !== null && pa.table !== pb.table) return pa.numero - pb.numero || pa.table - pb.table;
   return ordreAlphabetique(a, b);
 }

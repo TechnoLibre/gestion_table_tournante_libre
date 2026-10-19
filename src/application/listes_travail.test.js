@@ -3,15 +3,15 @@
 
 // Épreuves des listes de travail (§ 4, § 4.1, § 4.2, § 5.8, § 2.1 étape 6) :
 // les titres que rien ne pourvoit, les pressentis non réservés, les
-// conversions proposées et les comptes de titres d'une table. Les noms
-// d'épreuve sont inventés.
+// conversions proposées, les comptes de titres d'une table et les personnes
+// en réserve dans le placement retenu. Les noms d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { apercevoir } from '../csv/apercu.js';
 import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { creerCharge } from '../stockage/document.js';
 import { COMMANDES } from './commandes.js';
-import { comptesTitres, conversionsPossibles, pressentisNonReserves, titresNonPourvus } from './listes_travail.js';
+import { comptesTitres, conversionsPossibles, enReserveDansLeRetenu, pressentisNonReserves, titresNonPourvus } from './listes_travail.js';
 
 const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
 
@@ -159,5 +159,78 @@ describe('pressentisNonReserves et conversionsPossibles (§ 4, § 4.2, § 5.8)',
       [resa(2, 1, null)],
     );
     assert.deepEqual(conversionsPossibles(convertie), []);
+  });
+});
+
+// Le retenu de la charge, en mode table, sur ses tables de 6 : un tour par
+// élément de plan, { sieges, reserve?, absents? }, les listes triées ; les
+// participants, tous ceux que le premier tour écrit.
+function retenuDe(charge, plan) {
+  const placement = plan.map(({ sieges, reserve = [], absents }) => ({
+    sieges: sieges.map((liste) => [...liste].sort((a, b) => a - b)),
+    reserve: [...reserve].sort((a, b) => a - b),
+    ...(absents === undefined ? {} : { absents: [...absents].sort((a, b) => a - b) }),
+  }));
+  const [premier] = placement;
+  const participants = [...premier.sieges.flat(), ...premier.reserve, ...(premier.absents ?? [])].sort((a, b) => a - b);
+  charge.retenu = {
+    proposition: 1,
+    siegesAttribues: false,
+    tables: charge.tables.map(({ id }) => id),
+    capacites: charge.tables.map(() => 6),
+    tours: plan.length,
+    participants,
+    placement,
+  };
+  return charge;
+}
+
+describe('enReserveDansLeRetenu (listes de travail)', () => {
+  test('sans retenu, une liste vide', () => {
+    assert.deepEqual(enReserveDansLeRetenu(chargeDe()), []);
+  });
+
+  test('chaque personne en réserve d\u{2019}un tour du retenu, avec ses tours croissants, par identifiant ; une absente n\u{2019}y est pas', () => {
+    const charge = retenuDe(chargeDe(), [
+      { sieges: [[1, 2], [4], [], []], reserve: [3] },
+      { sieges: [[1, 3], [4], [], []], reserve: [2] },
+      { sieges: [[1, 3], [], [], []], reserve: [2], absents: [4] },
+    ]);
+    charge.participants[3].presence = [1, 2];
+    charge.participants = charge.participants.filter(({ exclu }) => !exclu);
+    const avant = structuredClone(charge);
+    assert.deepEqual(enReserveDansLeRetenu(charge), [
+      { participant: 2, tours: [2, 3] },
+      { participant: 3, tours: [1] },
+    ]);
+    assert.deepEqual(charge, avant);
+  });
+
+  test('un retenu sans personne en réserve : une liste vide', () => {
+    const charge = retenuDe(chargeDe(), [1, 2, 3].map(() => ({ sieges: [[1, 2], [3, 4], [5], []] })));
+    assert.deepEqual(enReserveDansLeRetenu(charge), []);
+  });
+
+  test('un retenu en dérive : la réserve d\u{2019}une exclue, d\u{2019}une supprimée, d\u{2019}une absente au tour, ou d\u{2019}un tour au-delà de la soirée ne compte pas', () => {
+    const charge = retenuDe(chargeDe(), [
+      { sieges: [[1], [4], [], []], reserve: [2, 5, 9] },
+      { sieges: [[1, 2], [], [], []], reserve: [4, 5, 9] },
+      { sieges: [[1, 2, 4], [], [], []], reserve: [5, 9] },
+      { sieges: [[1, 4], [], [], []], reserve: [2, 5, 9] },
+    ]);
+    // 4 n'est présente qu'aux tours 1 et 3, 5 est exclue, 9 n'est plus dans
+    // la charge, et la soirée n'a que trois tours.
+    charge.participants[3].presence = [1, 3];
+    assert.deepEqual(enReserveDansLeRetenu(charge), [{ participant: 2, tours: [1] }]);
+  });
+
+  test('un retenu qui se contredit — une personne deux fois au même tour — : une liste vide', () => {
+    const charge = retenuDe(chargeDe(), [
+      { sieges: [[1, 2], [3], [], []], reserve: [2, 4] },
+      { sieges: [[1, 2], [3, 4], [], []] },
+      { sieges: [[1, 2], [3, 4], [], []] },
+    ]);
+    charge.participants = charge.participants.filter(({ exclu }) => !exclu);
+    assert.deepEqual(enReserveDansLeRetenu(charge), []);
   });
 });

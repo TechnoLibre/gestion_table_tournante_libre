@@ -13,7 +13,7 @@
 // petits modèles écrits à la main, que toutes les épreuves du fichier
 // lisent — A4, cinq badges, feuille par feuille, brouillon tiré de la
 // proposition n° 7, horodatage connu, produite deux fois ; Lettre, trois
-// badges, en pile, retenu,
+// badges, dont un absent au tour 2, en pile, retenu,
 // horodatage inconnu, sous un nom d'événement plus large que la page, dont
 // la ligne de contrôle se replie aux espaces, reporte entier un mot qui
 // tient seul, puis coupe un mot qui ne tient pas seul. Les lignes de
@@ -52,9 +52,14 @@ const EVENEMENT_LONG = {
 };
 const HORODATAGE = '2026-10-09T19:00:00-04:00';
 
-/** Un badge écrit à la main : ses textes tels que BA1 les compose. */
-function badge(participant, nom, { appartenance = null, tours = 2, horodatage = HORODATAGE, evenement = EVENEMENT } = {}) {
-  const lignes = Array.from({ length: tours }, (_, i) => ({ tour: i + 1, table: participant + i, siege: null, titre: null }));
+/** Un badge écrit à la main : ses textes tels que BA1 les compose ; chaque
+ *  tour de la liste absentes porte la ligne d'une absente, sans table. */
+function badge(participant, nom, { appartenance = null, tours = 2, horodatage = HORODATAGE, evenement = EVENEMENT, absentes = [] } = {}) {
+  const lignes = Array.from({ length: tours }, (_, i) =>
+    absentes.includes(i + 1)
+      ? { tour: i + 1, table: null, siege: null, titre: null, absente: true }
+      : { tour: i + 1, table: participant + i, siege: null, titre: null, absente: false },
+  );
   const ligneHorodatage = horodatage === null ? libelle('planche.pied.horodatageInconnu') : libelle('planche.pied.horodatage', { horodatage });
   return {
     participant,
@@ -95,7 +100,7 @@ const MODELE_A4 = modele(
 );
 const NOMS_LETTRE = ['Aube Sarcelle', 'Côme Pervenche', 'Ysée Lacasse'];
 const MODELE_LETTRE = modele(
-  NOMS_LETTRE.map((nom, i) => badge(i + 10, nom, { horodatage: null, tours: 3, evenement: EVENEMENT_LONG })),
+  NOMS_LETTRE.map((nom, i) => badge(i + 10, nom, { horodatage: null, tours: 3, evenement: EVENEMENT_LONG, absentes: i === 1 ? [2] : [] })),
   { horodatage: null, evenement: EVENEMENT_LONG },
 );
 
@@ -368,6 +373,16 @@ describe('produirePlanche : les badges (§ 11.3, § 11.4, § 11.6)', () => {
       assert.ok(lus.has(texte), `« ${texte} » absent : ${[...lus].join(' | ')}`);
     }
     assert.ok([...lus].some((texte) => texte.includes(`Tour 2 ${TIRET} table`)));
+  });
+
+  test('un badge à lignes « absente » se compose sans refus : la planche Lettre en porte un, et sa ligne se lit dans la couche de texte', () => {
+    // produirePlanche refuse ce que la mise en page refuse (analyserPlanche,
+    // plus bas) : la production Lettre de la série surveillée, faite, vaut
+    // composition sans refus, sans une analyse de plus.
+    const absente = MODELE_LETTRE.badges[1];
+    assert.deepEqual(absente.textes.lignes, [`Tour 1 ${TIRET} table 11`, `Tour 2 ${TIRET} absente`, `Tour 3 ${TIRET} table 13`]);
+    const lus = new Set(LETTRE.pages.flatMap(({ textes }) => textes.map(({ texte }) => texte)));
+    for (const texte of absente.textes.lignes) assert.ok(lus.has(texte), `« ${texte} » absent : ${[...lus].join(' | ')}`);
   });
 });
 

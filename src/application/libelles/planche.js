@@ -85,10 +85,16 @@ export const TABLE = new Map([
 
   // --- Les lignes de tour d'un badge (§ 11.4, § 11.5) ------------------------
   // Une ligne : le tour, ou « Toute la soirée » pour un itinéraire constant,
-  // puis la place de la personne.
-  ['planche.tour', (ligne, texte) => `Tour ${ligne.tour} — ${place(ligne, texte)}`],
+  // puis la place de la personne ; « absente » à un tour où elle est
+  // absente (ligne.absente vrai), qu'une ligne « Toute la soirée » ne porte
+  // jamais.
+  [
+    'planche.tour',
+    (ligne, texte) => `Tour ${ligne.tour} — ${ligne.absente ? texte('planche.absente') : place(ligne, texte)}`,
+  ],
   ['planche.touteLaSoiree', (ligne, texte) => `Toute la soirée — ${place(ligne, texte)}`],
   ['planche.pasDeTable', 'pas de table'],
+  ['planche.absente', 'absente'],
   ['planche.siege', ({ siege }) => `, siège ${siege}`],
   ['planche.titre', ({ titre }) => ` — ${titre}`],
 

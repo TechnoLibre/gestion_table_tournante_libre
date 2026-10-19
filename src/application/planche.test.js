@@ -113,8 +113,8 @@ describe('planche : ce que porte un badge (§ 11.4, § 11.5, § 4.1)', () => {
     const m = modele(aReserve());
     assert.deepEqual(badgeDe(m, 2).textes.lignes, ['Tour 1 — table 7', 'Tour 2 — pas de table']);
     assert.deepEqual(badgeDe(m, 2).lignes, [
-      { tour: 1, table: 7, siege: null, titre: null },
-      { tour: 2, table: null, siege: null, titre: null },
+      { tour: 1, table: 7, siege: null, titre: null, absente: false },
+      { tour: 2, table: null, siege: null, titre: null, absente: false },
     ]);
     assert.deepEqual(badgeDe(m, 5).textes.lignes, ['Tour 1 — pas de table', 'Tour 2 — table 7']);
   });
@@ -122,7 +122,7 @@ describe('planche : ce que porte un badge (§ 11.4, § 11.5, § 4.1)', () => {
   test('un itinéraire constant s’écrit en une ligne « Toute la soirée » à R ≥ 2 ; à R = 1, la ligne du tour', () => {
     const quatre = modele(deuxATable7(4));
     assert.deepEqual(badgeDe(quatre, 1).textes.lignes, ['Toute la soirée — table 7']);
-    assert.deepEqual(badgeDe(quatre, 1).lignes, [{ tour: null, table: 7, siege: null, titre: null }]);
+    assert.deepEqual(badgeDe(quatre, 1).lignes, [{ tour: null, table: 7, siege: null, titre: null, absente: false }]);
     assert.deepEqual(badgeDe(modele(deuxATable7(1)), 1).textes.lignes, ['Tour 1 — table 7']);
     assert.deepEqual(badgeDe(modele(aReserve()), 3).textes.lignes, ['Toute la soirée — table 3']);
   });
@@ -149,15 +149,15 @@ describe('planche : ce que porte un badge (§ 11.4, § 11.5, § 4.1)', () => {
   test('une réservation d’un seul tour qui fait la titulaire met le titre sur la ligne de ce tour, seule', () => {
     const m = modele(titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }] }));
     assert.deepEqual(badgeDe(m, 1).textes.lignes, ['Tour 1 — table 7, siège 1 — animateur', 'Tour 2 — table 7, siège 2']);
-    assert.deepEqual(badgeDe(m, 1).lignes[0], { tour: 1, table: 7, siege: 1, titre: 'animateur' });
+    assert.deepEqual(badgeDe(m, 1).lignes[0], { tour: 1, table: 7, siege: 1, titre: 'animateur', absente: false });
     assert.deepEqual(badgeDe(m, 2).textes.lignes, ['Tour 1 — table 7, siège 2', 'Tour 2 — table 7, siège 1']);
     // Assise au même siège aux deux tours, la titulaire d'un seul tour garde
     // deux lignes : le titre change, l'itinéraire n'est pas constant.
     const memeSiege = modele(titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tour', tour: 1 }], tour2: [1, 2, 3] }));
     assert.deepEqual(badgeDe(memeSiege, 1).textes.lignes, ['Tour 1 — table 7, siège 1 — animateur', 'Tour 2 — table 7, siège 1']);
     assert.deepEqual(badgeDe(memeSiege, 1).lignes, [
-      { tour: 1, table: 7, siege: 1, titre: 'animateur' },
-      { tour: 2, table: 7, siege: 1, titre: null },
+      { tour: 1, table: 7, siege: 1, titre: 'animateur', absente: false },
+      { tour: 2, table: 7, siege: 1, titre: null, absente: false },
     ]);
   });
 
@@ -226,6 +226,96 @@ describe('planche : ce que porte un badge (§ 11.4, § 11.5, § 4.1)', () => {
     const sansDate = badgeDe(modele(aReserve({ date: null })), 1);
     assert.deepEqual(sansDate.textes.pied, ['Soirée des Lucioles', PIED_HORODATAGE]);
     assert.deepEqual(sansDate.textes.piedReduit, [PIED_HORODATAGE]);
+  });
+});
+
+// La charge c où la personne id n'est présente qu'aux tours presence : son
+// champ presence posé, et le retenu qui la porte aux absents de chacun de
+// ses autres tours, déclarée même quand le premier tour ne la liste pas. Le
+// plan de c ne l'assied ni ne la réserve à ces tours.
+function absenteHors(c, id, presence) {
+  c.participants.find((candidate) => candidate.id === id).presence = presence;
+  c.retenu.placement.forEach((tour, rang) => {
+    if (!presence.includes(rang + 1)) tour.absents = [...(tour.absents ?? []), id].sort((a, b) => a - b);
+  });
+  if (!c.retenu.participants.includes(id)) c.retenu.participants = [...c.retenu.participants, id].sort((a, b) => a - b);
+  return c;
+}
+
+describe('planche : une personne absente à un tour (§ 11.4, § 11.5)', () => {
+  test('présente aux tours 1, 2 et 4 à la même table : une ligne par tour, « Tour 3 — absente », jamais « Toute la soirée »', () => {
+    const charge = absenteHors(
+      soiree({
+        personnes: [personne(1, 'Iris', 'Ombrelle'), personne(2, 'Théo', 'Pervenche'), personne(3, 'Ondine', 'Lacasse'), personne(4, null, 'Grisaille')],
+        tables: [table(1, 7, 2), table(2, 3, 2)],
+        plan: [
+          { sieges: [[1, 2], [3, 4]] },
+          { sieges: [[1, 2], [3, 4]] },
+          { sieges: [[2], [3, 4]] },
+          { sieges: [[1, 2], [3, 4]] },
+        ],
+      }),
+      1,
+      [1, 2, 4],
+    );
+    const m = modele(charge);
+    assert.deepEqual(badgeDe(m, 1).textes.lignes, ['Tour 1 — table 7', 'Tour 2 — table 7', 'Tour 3 — absente', 'Tour 4 — table 7']);
+    assert.deepEqual(badgeDe(m, 1).lignes, [
+      { tour: 1, table: 7, siege: null, titre: null, absente: false },
+      { tour: 2, table: 7, siege: null, titre: null, absente: false },
+      { tour: 3, table: null, siege: null, titre: null, absente: true },
+      { tour: 4, table: 7, siege: null, titre: null, absente: false },
+    ]);
+    // Les présentes de la même table gardent leur ligne unique, et la
+    // personne absente a son badge : les comptes ne changent pas.
+    assert.deepEqual(badgeDe(m, 2).textes.lignes, ['Toute la soirée — table 7']);
+    assert.deepEqual(m.comptes, { participants: 4, exclus: 0, produits: 4 });
+  });
+
+  test('en réserve au tour 1, absente au tour 2 : deux lignes, « pas de table » puis « absente », jamais fondues', () => {
+    const charge = absenteHors(aReserve({ plan: [{ sieges: [[1, 2], [3, 4]], reserve: [5] }, { sieges: [[1, 2], [3, 4]] }] }), 5, [1]);
+    const m = modele(charge);
+    assert.deepEqual(badgeDe(m, 5).textes.lignes, ['Tour 1 — pas de table', 'Tour 2 — absente']);
+    assert.deepEqual(badgeDe(m, 5).lignes.map(({ absente }) => absente), [false, true]);
+  });
+
+  test('sous sièges attribués, la titulaire « tous les tours » absente au tour 2 n\u{2019}y porte ni table, ni siège, ni titre, et personne ne le porte à sa place', () => {
+    const charge = absenteHors(
+      titree({ reservations: [{ participant: 1, table: 1, siege: 1, portee: 'tous', tour: null }], tour2: [null, 2, 3] }),
+      1,
+      [1],
+    );
+    const m = modele(charge);
+    assert.deepEqual(badgeDe(m, 1).textes.lignes, ['Tour 1 — table 7, siège 1 — animateur', 'Tour 2 — absente']);
+    assert.deepEqual(badgeDe(m, 1).lignes[1], { tour: 2, table: null, siege: null, titre: null, absente: true });
+    for (const id of [2, 3]) for (const texte of textesDe(badgeDe(m, id))) assert.doesNotMatch(texte, /animateur/);
+  });
+
+  test('l\u{2019}ordre par table : une absente au tour 1 vient après la réserve de ce tour, quel que soit son nom', () => {
+    const charge = absenteHors(
+      soiree({
+        personnes: [
+          personne(1, 'Iris', 'Ombrelle'),
+          personne(2, 'Théo', 'Pervenche'),
+          personne(3, 'Ondine', 'Lacasse'),
+          personne(4, 'Émile', 'Pervenche'),
+          personne(5, 'Ångel', 'Grisaille'),
+          personne(6, 'Aube', 'Grisaille'),
+        ],
+        tables: [table(1, 7, 2), table(2, 3, 2)],
+        plan: [
+          { sieges: [[1, 2], [3]], reserve: [4] },
+          { sieges: [[1, 2], [3, 5]], reserve: [4, 6] },
+        ],
+      }),
+      5,
+      [2],
+    );
+    absenteHors(charge, 6, [2]);
+    // La table 3 (Lacasse), la table 7 (Ombrelle, Pervenche), la réserve
+    // (Émile Pervenche), puis les absentes, entre elles par ordre alphabétique.
+    assert.deepEqual(modele(charge, { ordre: 'table' }).badges.map(({ participant }) => participant), [3, 1, 2, 4, 5, 6]);
+    assert.deepEqual(modele(charge).badges.map(({ participant }) => participant), [5, 6, 3, 1, 4, 2]);
   });
 });
 
