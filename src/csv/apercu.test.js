@@ -71,6 +71,7 @@ const refusGlobal = (
   fusionsEtiquettes: [],
   doublons: [],
   homonymes: [],
+  designees: [],
   multilignes: [],
   refusGlobal: code,
   refusGlobalLigne: ligne,
@@ -135,6 +136,7 @@ describe("apercevoir : les lignes d'un texte sans défaut (§ 10.1)", () => {
       fusionsEtiquettes: [],
       doublons: [],
       homonymes: [],
+      designees: [],
       multilignes: [],
       refusGlobal: null,
       refusGlobalLigne: null,
@@ -868,6 +870,34 @@ describe("apercevoir : le mode de l'import (§ 10.1)", () => {
       apercevoir(inverse, { participants: [existants[1], existants[0]], mode: 'mettreAJour' }).homonymes,
       [{ ligne: 4, participants: [1, 2] }],
     );
+  });
+
+  test("mettre à jour nomme chaque ligne qui désigne un existant au moins : l'import ne la crée pas", () => {
+    const existants = [
+      existant(1, 'Ombrelle', 'Iris', 'Club des Merles'),
+      existant(2, 'Ombrelle', 'Théo', null),
+      existant(3, 'Lacasse', 'Ondine', null),
+    ];
+    const texte = csv(
+      'nom;prenom;appartenance',
+      // Un homonyme : la Société Alpha écarte 1, Iris écarte 2.
+      'Ombrelle;Iris;Société Alpha',
+      // Désigne 3.
+      'Lacasse;Ondine;',
+      // Aucun existant de ce nom : l'import la crée.
+      'Pervenche;Théo;',
+      // Les deux Ombrelle : un refus de l'import, jamais une création.
+      'Ombrelle;;',
+      // Désigne 2.
+      'OMBRELLE;Théo;Chorale du Givre',
+    );
+    assert.deepEqual(apercevoir(texte, { participants: existants, mode: 'mettreAJour' }).designees, [3, 5, 6]);
+    // Ajouter crée chaque ligne, remplacer retire chaque existant : aucune
+    // ligne n'y désigne personne.
+    for (const mode of ['ajouter', 'remplacer']) {
+      assert.deepEqual(apercevoir(texte, { participants: existants, mode }).designees, [], mode);
+    }
+    assert.deepEqual(apercevoir('', { participants: existants, mode: 'mettreAJour' }).designees, []);
   });
 
   test('un aperçu refusé porte son mode', () => {

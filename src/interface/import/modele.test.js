@@ -826,13 +826,28 @@ describe('la cellule de la présence (§ 10.1)', () => {
     assert.equal(t('import.champ.presence'), 'présence');
   });
 
-  test('en mise à jour, une cellule vide se lit « présence inchangée » : elle garde la présence de la personne', () => {
-    const modele = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte, { tours: 4, mode: 'mettreAJour' }) });
-    const [vide, tous] = cellulesDePresence(modele);
+  test('en mise à jour, la cellule vide d’une personne existante se lit « présence inchangée » ; celle d’une ligne que l’import crée, rien', () => {
+    // Ombrelle et Pervenche existent ; Sarcelle et une Ombrelle neuve non.
+    const existants = [
+      { id: 1, nom: 'Ombrelle', prenom: null, appartenance: null },
+      { id: 2, nom: 'Pervenche', prenom: null, appartenance: null },
+    ];
+    const misAJour = lignes('nom;prénom;présence', 'Ombrelle;;', 'Pervenche;;tous', 'Sarcelle;;', 'Lacasse;;2-4');
+    const modele = modeleApercu({
+      encodage: 'utf-8', apercu: apercevoir(misAJour, { participants: existants, tours: 4, mode: 'mettreAJour' }),
+    });
+    const [vide, tous, creee] = cellulesDePresence(modele);
     assert.deepEqual(vide, { champ: 'presence', texte: null, cle: 'import.presence.inchangee', etiquettes: null, details: null });
     assert.equal(t(vide.cle), 'présence inchangée');
     assert.equal(tous.cle, 'import.presence.tous');
-    const remplace = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte, { tours: 4, mode: 'remplacer' }) });
+    // Sarcelle ne désigne personne : l'import la crée à tous les tours.
+    assert.deepEqual(creee, { champ: 'presence', texte: null, cle: null, etiquettes: null, details: null });
+    // Sans existant, chaque ligne est créée : aucune ne s'annonce inchangée.
+    const sansExistant = modeleApercu({ encodage: 'utf-8', apercu: apercevoir(texte, { tours: 4, mode: 'mettreAJour' }) });
+    assert.equal(cellulesDePresence(sansExistant)[0].cle, null);
+    const remplace = modeleApercu({
+      encodage: 'utf-8', apercu: apercevoir(misAJour, { participants: existants, tours: 4, mode: 'remplacer' }),
+    });
     assert.equal(cellulesDePresence(remplace)[0].cle, null);
   });
 

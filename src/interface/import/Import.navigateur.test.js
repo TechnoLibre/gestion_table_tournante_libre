@@ -1526,17 +1526,18 @@ describe('la colonne de la présence (§ 10.1)', () => {
     expect(texteDe(refusee(apercu, 5))).toContain(libelle('PRESENCE_ILLISIBLE', { ligne: 5, valeur: '01-mars', raison: 'date' }));
   });
 
-  test('en mise à jour, une cellule vide se lit « présence inchangée », et la présence de la personne reste', async () => {
+  test('en mise à jour, une cellule vide se lit « présence inchangée », et la présence de la personne reste ; sur une ligne que l’import crée, elle ne dit rien', async () => {
     const e = await ouvrir({
       tours: 4,
       participants: [personne(1, 'Ombrelle', 'Iris', { presence: [1, 2] }), personne(2, 'Pervenche', 'Théo', { presence: [3] })],
     });
-    await choisir(e, 'maj.csv', enUtf8('nom;prenom;presence\r\nOmbrelle;Iris;\r\nPervenche;Théo;tous\r\n'));
+    await choisir(e, 'maj.csv', enUtf8('nom;prenom;presence\r\nOmbrelle;Iris;\r\nPervenche;Théo;tous\r\nSarcelle;Anouk;\r\n'));
     expect(dans(e, '[data-champ="mode"] input:checked').value).toBe('mettreAJour');
     const apercu = dans(e, '[data-apercu]');
     expect(cellule(apercu, 2, 'presence')).toBe('présence inchangée');
     expect(cellule(apercu, 3, 'presence')).toBe('tous les tours');
+    expect(cellule(apercu, 4, 'presence')).toBe('');
     await importer(e);
-    expect(participantsDe(e).map(({ presence }) => presence)).toEqual([[1, 2], undefined]);
+    expect(participantsDe(e).map(({ presence }) => presence)).toEqual([[1, 2], undefined, undefined]);
   });
 });

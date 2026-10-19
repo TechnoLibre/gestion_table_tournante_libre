@@ -387,9 +387,9 @@ const cellule = (champ, { texte = null, cle = null, etiquettes = null, details =
 
 // La cellule de la présence lue, sous tours tours (§ 10.1) : les tours
 // nommés, par leurs détails ; « tous les tours » pour 1..tours. Une cellule
-// vide ne dit rien à la création, qui vaut tous les tours ; en mise à jour,
-// quand la colonne existe, elle garde la présence de la personne, et le
-// dit : « présence inchangée ».
+// vide ne dit rien sur une ligne que l'import crée, où elle vaut tous les
+// tours ; sur une ligne qui désigne une personne existante (inchangee),
+// elle garde la présence de la personne, et le dit : « présence inchangée ».
 function celluleDePresence(presence, { tours, inchangee }) {
   if (presence === null) return cellule('presence', { cle: inchangee ? 'import.presence.inchangee' : null });
   if (presence.length === tours) return cellule('presence', { cle: 'import.presence.tous' });
@@ -399,17 +399,19 @@ function celluleDePresence(presence, { tours, inchangee }) {
 // Chaque ligne valide des participants : son rang, puis une cellule par
 // champ, dans l'ordre de CHAMPS : le texte lu, ou la clé de la valeur
 // d'« exclu » ; les étiquettes une à une, aucune pour une cellule vide ; la
-// présence par celluleDePresence, sous le nombre de tours et le mode de
-// l'aperçu.
-function lignesDesParticipants({ lignes, tours, mode, association }) {
-  const lecture = { tours, inchangee: mode === 'mettreAJour' && association.colonnes.presence !== undefined };
+// présence par celluleDePresence, sous le nombre de tours : « inchangée »
+// seulement quand la colonne existe et que la ligne désigne une personne
+// existante (designees, que l'aperçu ne remplit qu'en mise à jour).
+function lignesDesParticipants({ lignes, tours, association, designees }) {
+  const colonne = association.colonnes.presence !== undefined;
+  const designee = new Set(designees);
   return lignes.map(({ ligne, champs }) => ({
     ligne,
     cellules: CHAMPS.map((champ) => {
       const valeur = champs[CHAMPS_LUS.get(champ) ?? champ];
       if (champ === 'exclu') return cellule(champ, { cle: valeur === null ? null : CLES_D_EXCLU.get(valeur) });
       if (champ === 'etiquettes') return cellule(champ, { etiquettes: valeur ?? [] });
-      if (champ === 'presence') return celluleDePresence(valeur, lecture);
+      if (champ === 'presence') return celluleDePresence(valeur, { tours, inchangee: colonne && designee.has(ligne) });
       return cellule(champ, { texte: valeur });
     }),
   }));

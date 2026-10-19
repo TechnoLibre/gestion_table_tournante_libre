@@ -157,6 +157,12 @@ export const VALEURS_EXCLU = new Map([
  *           croissants ; rangée par ligne. Toujours vide dans les autres
  *           modes : ajouter crée chaque ligne, remplacer retire chaque
  *           existant
+ * @property {number[]} designees
+ *           en mode mettreAJour, les rangs croissants des lignes valides que
+ *           designer fait désigner à un participant existant au moins :
+ *           l'import met à jour ou refuse ces lignes, et ne les crée jamais ;
+ *           une cellule vide y garde la valeur de la personne. Toujours vide
+ *           dans les autres modes, où chaque ligne est créée
  * @property {Array<{ligne: number, rangs: number[]}>} multilignes
  *           chaque ligne valide dont une cellule au moins s'étend sur
  *           plusieurs lignes du texte et porte le séparateur, rangée par
@@ -170,7 +176,7 @@ export const VALEURS_EXCLU = new Map([
  *           l'aperçu la nomme sans refuser la ligne
  * @property {null|'CARACTERE_NUL'|'AUCUN_ENTETE'|'SEPARATEUR_INTROUVABLE'|'GUILLEMET_OUVERT'|'NOM_NON_ASSOCIE'|'AUCUNE_LIGNE_VALIDE'} refusGlobal
  *           sous un refus global, lignes, fusions, fusionsEtiquettes,
- *           doublons, homonymes et multilignes sont vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les lignes
+ *           doublons, homonymes, designees et multilignes sont vides, et refusees aussi, sauf sous AUCUNE_LIGNE_VALIDE, dont les lignes
  *           refusées sont la cause
  * @property {number|null} refusGlobalLigne   sous GUILLEMET_OUVERT, le rang de
  *           l'enregistrement où le guillemet s'ouvre ; sous
@@ -199,6 +205,7 @@ function refuserEn(
     fusionsEtiquettes: [],
     doublons: [],
     homonymes: [],
+    designees: [],
     multilignes: [],
     refusGlobal: code,
     refusGlobalLigne: ligne,
@@ -446,6 +453,14 @@ function homonymesDe(participants, lignes) {
   return homonymes;
 }
 
+// Lignes désignées d'une mise à jour : le rang de chaque ligne valide que
+// designer fait désigner à un participant existant au moins, contre l'index
+// des participants d'avant l'import, dans l'ordre des lignes.
+function designeesDe(participants, lignes) {
+  const index = indexerParNom(participants);
+  return lignes.filter(({ champs }) => designer(champs, index).candidats.length > 0).map(({ ligne }) => ligne);
+}
+
 // Cellules d'une ligne sur plusieurs lignes du texte qui portent le
 // séparateur, ou toute fin de ligne sans séparateur : les lignes valides qui
 // en ont, avec leurs rangs.
@@ -568,6 +583,7 @@ export function apercevoir(
     fusionsEtiquettes,
     doublons: doublonsDe(existants, lignes),
     homonymes: mode === 'mettreAJour' ? homonymesDe(participants, lignes) : [],
+    designees: mode === 'mettreAJour' ? designeesDe(participants, lignes) : [],
     multilignes: multilignesDe(lignes, separateur),
     refusGlobal: null,
     refusGlobalLigne: null,
