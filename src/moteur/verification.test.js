@@ -740,6 +740,21 @@ describe('verifierInvariants : la présence par tour (§ 8.9, § 14.12)', () => 
       assert.throws(() => verifier(undefined, { reservesImposees: [entree] }), RangeError, JSON.stringify(entree));
     }
   });
+
+  test('une option reservesImposees mal formée lève TypeError avec son message : la liste, puis chaque entrée', () => {
+    // Une non-liste, itérable ou non, se refuse avant toute lecture d'entrée.
+    for (const reservesImposees of [null, { participant: 104, tour: 2 }, '104']) {
+      assert.throws(() => verifier(undefined, { reservesImposees }), { name: 'TypeError', message: 'reservesImposees : liste attendue' });
+    }
+    // Une entrée null ou qui n'est pas un objet se refuse avant d'être lue,
+    // même placée après une entrée valide.
+    for (const entree of [null, 104, 'P104', true]) {
+      assert.throws(() => verifier(undefined, { reservesImposees: [{ participant: 104, tour: 2 }, entree] }), {
+        name: 'TypeError',
+        message: 'reservesImposees : {participant, tour} attendu',
+      });
+    }
+  });
 });
 
 describe('verifierInvariants et indexerPlan : une même lecture du plan (§ 8.9)', () => {

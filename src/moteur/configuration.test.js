@@ -1579,6 +1579,19 @@ describe('normaliser : la présence par tour, le masque et ses comptes', () => {
     assert.equal(instance.coPresents[0], 37);
     assert.equal(instance.coPresents[31], 27);
   });
+
+  test('co-présence à 33 personnes : la 33e, seule dans le second mot de 32 bits, garde ses comptes et ceux des autres', () => {
+    // Trente-trois personnes (index = id − 1), deux tours, cinq tables de 8.
+    // 1 n'est présente qu'au tour 1, 33 qu'au tour 2 : elles ne se croisent
+    // pas et ont chacune 31 co-présents ; les 31 autres, présentes partout,
+    // en ont 32.
+    const participants = [presente(1, [1]), ...personnes(suite(2, 32)), presente(33, [2])];
+    const instance = normaliser(configuration({ participants, tables: tablesDe(suite(101, 105), 8), tours: 2 }));
+    const attendus = Int32Array.from(suite(1, 33), (id) => (id === 1 || id === 33 ? 31 : 32));
+    assert.equal(instance.absences, 2);
+    assert.deepEqual(instance.coPresents, attendus);
+    assert.deepEqual(instance.mobilesCoPresents, attendus);
+  });
 });
 
 describe('normaliser : la présence par tour, ses refus', () => {
@@ -1709,6 +1722,20 @@ describe('normaliser : la présence par tour, les réservations, les couples et 
     ]), []);
     // Présente et réservée à chacun de ses tours animés : elle anime.
     assert.equal(avec([1, 2], [1, 2])().A, 1);
+  });
+
+  test('ANIMATION_ABSENTE se lit dans la rangée du masque de l’animatrice, quel que soit son index', () => {
+    // 7, d'index 2, réservée partout, est absente au tour 2 qu'elle anime ;
+    // 3 et 5 sont présentes partout.
+    const refus = () => normaliser(configuration({
+      participants: [...personnes([3, 5]), presente(7, [1, 3], { anime: [2] })],
+      tables,
+      tours: 3,
+      reservations: [tous(7, 10)],
+    }));
+    assert.deepEqual(ecartsDeRefus([
+      ['7 anime le tour 2 de son absence', refus, 'ANIMATION_ABSENTE', { participant: 7, tour: 2 }],
+    ]), []);
   });
 
   test('un couple (personne, tour) n’est pas possible à un tour d’absence', () => {
@@ -1893,5 +1920,25 @@ describe('plans : la présence par tour (§ 8.9)', () => {
     }
     assert.deepEqual(ecarts, []);
     assert.equal(exigerPlanIndexe(instance, TABLE_DE), undefined);
+  });
+
+  test('exigerPlanIndexe lit le masque dès une seule absence : l’absente à une table lève RangeError', () => {
+    // Trois personnes, deux tours, deux tables de 2 : 2 n'est absente qu'au
+    // tour 2, la seule absence de l'instance.
+    const instance = normaliser(configuration({
+      participants: [...personnes([1, 3]), presente(2, [1])],
+      tables: tablesDe([12, 11], 2),
+      tours: 2,
+    }));
+    assert.equal(instance.absences, 1);
+    // Rangées p × R + r, ids 1 à 3 : 1 et 2 à 12, 3 à 11, aux deux tours.
+    const tableDe = [0, 0, 0, 0, 1, 1];
+    assert.throws(() => exigerPlanIndexe(instance, tableDe), (erreur) => {
+      assert.ok(erreur instanceof RangeError, `${erreur?.name} au lieu de RangeError`);
+      assert.equal(erreur.message, 'plan indexé : participant 2, absent au tour 2, à la table 0');
+      return true;
+    });
+    tableDe[3] = RESERVE;
+    assert.equal(exigerPlanIndexe(instance, tableDe), undefined);
   });
 });

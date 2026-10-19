@@ -1576,6 +1576,31 @@ describe('diagnostic : collision à chaque table (§ 7.5)', () => {
     assert.equal(diagnostiquer(configuration).collisionPartout, false);
   });
 
+  // Tables de 3, 3, 2 et 3, onze personnes, onze places : dix de Grisaille
+  // et une du Club des Merles, G + U = 2. Une table de 3 reçoit au moins
+  // 11 − 8 = 3 > 2 personnes ; la table de 2, la troisième, ni la première
+  // ni la dernière, en reçoit au moins 11 − 9 = 2, un membre de chaque
+  // appartenance, sans collision. La plus petite capacité se cherche parmi
+  // toutes les tables.
+  test('la plus petite table, ni la première ni la dernière, rompt la preuve : faux', () => {
+    const configuration = salle({
+      tables: [[10, 3], [20, 3], [30, 2], [40, 3]],
+      appartenances: [...fois(10, 'Grisaille'), 'Club des Merles'],
+      tours: 1,
+      contraintes: SEPARER,
+    });
+    assert.equal(diagnostiquer(configuration).collisionPartout, false);
+    // La table de 2 portée à 3 et une Grisaille de plus : chaque table
+    // reçoit au moins 12 − 9 = 3 > 2 personnes, vrai.
+    const pleine = salle({
+      tables: [[10, 3], [20, 3], [30, 3], [40, 3]],
+      appartenances: [...fois(11, 'Grisaille'), 'Club des Merles'],
+      tours: 1,
+      contraintes: SEPARER,
+    });
+    assert.equal(diagnostiquer(pleine).collisionPartout, true);
+  });
+
   // Deux tables de 4, huit personnes : chaque table en reçoit 4. Trois
   // présents sans appartenance, aux index 0 à 2, et cinq de Grisaille :
   // G + U = 4, une table assied les trois et un membre sans collision, faux.
@@ -1852,6 +1877,16 @@ describe('diagnostic : la présence par tour (§ 5.6, § 12.6)', () => {
     const diagnostic = diagnostiquer(avecPresences(vingtHuit(), { 28: [4] }));
     assert.equal(diagnostic.redondanceMinimale, 6);
     assert.deepEqual(diagnostic.remedes, { toursSansRedondance: 2 });
+  });
+
+  test('toursSansRedondance : une personne qui garde un seul tour sous R′ reste présente, et son appartenance avec elle', () => {
+    // 28, seule de « Club des Merles 8 », présente aux tours 1 et 4. À 3
+    // tours, sa présence se ramène à [1] : présente, G reste 18 et la sonde
+    // à 3 tours annule la redondance. Sortie de la sonde, G vaudrait 17 et
+    // le remède descendrait à 2 tours, comme pour une présence au seul tour 4.
+    const diagnostic = diagnostiquer(avecPresences(vingtHuit(), { 28: [1, 4] }));
+    assert.equal(diagnostic.redondanceMinimale, 6);
+    assert.deepEqual(diagnostic.remedes, { toursSansRedondance: 3 });
   });
 
   test('toursSansRedondance : une exclue dont la présence se viderait sous R′ ne lève pas non plus', () => {

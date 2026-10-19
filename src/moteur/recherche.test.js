@@ -36,7 +36,11 @@
 // canonique, puis, à un tour figé, à la meilleure chaise libre ou en réserve
 // imposée, sans que personne d'autre ne bouge ; le départ brut et le départ
 // ajusté par le stockage rendent les mêmes propositions, et une réserve
-// imposée se mesure comme indicateurs.js la lit. Un plan rendu se juge par
+// imposée se mesure comme indicateurs.js la lit. Sur de petites salles
+// écrites à la main, le départ ajusté se lit aussi case par case et siège
+// par siège : libres en trop par index décroissants, débordements refusés à
+// chaque table, remplissage canonique, retours et animateurs sous réserve
+// imposée. Un plan rendu se juge par
 // verifierInvariants, ou, sous absence, par ses listes lues sur la
 // configuration, et se mesure par mesurer, deux modules distincts du module
 // éprouvé.
@@ -3298,5 +3302,246 @@ describe('repartir : une réserve imposée se mesure comme indicateurs.js la lit
       name: 'RangeError',
       reglage: 'reservesImposees',
     });
+  });
+});
+
+// Vrai quand le critère nom est coché et a un objet dans l'instance : le
+// n-uplet le compose.
+const compose = (instance, nom) => instance.etatCriteres.some((critere) => critere.nom === nom && critere.coche && !critere.sansObjet);
+
+describe('repartir : le départ ajusté, case par case et siège par siège (§ 5.7)', () => {
+  test("une réserve imposée au tour 0 n'est à aucun tour figé : RangeError qui nomme reservesImposees", () => {
+    const instance = normaliser(salleReservee());
+    assert.throws(
+      () => creerEtatDuDepart(instance, { plan: departSalle(), toursFiges: [1], reservesImposees: [{ participant: 9, tour: 0 }] }),
+      { name: 'RangeError', reglage: 'reservesImposees', message: 'reservesImposees : tour figé attendu, reçu 0' },
+    );
+  });
+
+  test("une absente listée deux fois en réserve est ignorée ; une présente en réserve, à côté d'une assise, est à asseoir", () => {
+    // Deux tables de 3, cinq personnes, deux tours ; 4 est absente au tour 2.
+    // Au tour 2, la réserve liste 3, présente, puis deux fois 4.
+    const configuration = avecPresences(configurationDe({
+      appartenances: Array(5).fill(null),
+      tables: [
+        { id: 1, capacite: 3 },
+        { id: 2, capacite: 3 },
+      ],
+      tours: 2,
+    }), { 4: [1] });
+    const plan = { tables: [1, 2], tours: [[[1, 2, 3], [4, 5]], [[1, 2], [5]]], reserves: [[], [3, 4, 4]] };
+    // 3 prend la première place libre du tour 2, à la table 1.
+    const attendu = { tables: [1, 2], tours: [[[1, 2, 3], [4, 5]], [[1, 2, 3], [5]]], reserves: [[], []] };
+    for (const toursFiges of [[], [1]]) {
+      const ajuste = departAjuste(configuration, { plan, toursFiges });
+      assert.deepEqual([1, 2].map((tour) => tourTrie(ajuste, tour)), attendu.tours, `figés ${toursFiges}`);
+      assert.deepEqual(ajuste.reserves, attendu.reserves, `figés ${toursFiges}`);
+    }
+  });
+
+  test("aux tours non figés, deux arrivantes fixées font passer à asseoir les deux libres de leur table, l'index 0 compris", () => {
+    // Tables 10 et 20 de 2, 30 de 3, six personnes, deux tours. Au tour 2, 3
+    // et 4 sont réservées à la table 20, où le départ assied 1 et 5 : 5 puis
+    // 1 passent à asseoir ; assises ensuite par index croissant, 1 prend la
+    // première place libre, à la table 10, et 5 la suivante, à la table 30.
+    // 6, à la table 30, ne bouge pas.
+    const configuration = configurationDe({
+      appartenances: Array(6).fill(null),
+      tables: [
+        { id: 10, capacite: 2 },
+        { id: 20, capacite: 2 },
+        { id: 30, capacite: 3 },
+      ],
+      tours: 2,
+      reservations: [auTour(3, 20, 2), auTour(4, 20, 2)],
+    });
+    const plan = { tables: [10, 20, 30], tours: [[[1, 2], [3, 4], [5, 6]], [[2], [1, 5], [6]]], reserves: [[], [3, 4]] };
+    for (const toursFiges of [[], [1]]) {
+      const ajuste = departAjuste(configuration, { plan, toursFiges });
+      assert.deepEqual(tourTrie(ajuste, 2), [[1, 2], [3, 4], [5, 6]], `figés ${toursFiges}`);
+      assert.deepEqual(ajuste.reserves, [[], []], `figés ${toursFiges}`);
+    }
+    // Au tour figé, le même débordement est refusé.
+    assert.throws(() => departAjuste(configuration, { plan, toursFiges: [2] }), {
+      name: 'ErreurConfiguration',
+      code: 'DEPART_INCOMPATIBLE',
+      details: { tour: 2, table: 20, participant: null },
+    });
+  });
+
+  test('au tour figé, deux arrivantes fixées qui font déborder la première table : DEPART_INCOMPATIBLE sur cette table', () => {
+    const configuration = configurationDe({
+      appartenances: Array(6).fill(null),
+      tables: [
+        { id: 10, capacite: 2 },
+        { id: 20, capacite: 2 },
+        { id: 30, capacite: 3 },
+      ],
+      tours: 2,
+      reservations: [auTour(1, 10, 2), auTour(2, 10, 2)],
+    });
+    const plan = { tables: [10, 20, 30], tours: [[[1, 2], [3, 4], [5, 6]], [[3, 4], [5], [6]]], reserves: [[], [1, 2]] };
+    assert.throws(() => departAjuste(configuration, { plan, toursFiges: [2] }), {
+      name: 'ErreurConfiguration',
+      code: 'DEPART_INCOMPATIBLE',
+      details: { tour: 2, table: 10, participant: null },
+    });
+  });
+
+  test('sous une réserve imposée fixée, le score tenu à jour égale le recalcul : retours de deux fixées, animateurs gardés à la première ligne, à la dernière et à deux par table', () => {
+    // Trois tables de 3, huit personnes, deux tours, le tour 2 figé. 1 et 2
+    // sont réservées à la table 2 aux deux tours ; 3 anime à la table 1 au
+    // tour 1 ; 4 et 5 animent à la table 3 au tour 2 ; 6, réservée à la
+    // table 1 au tour 2, y est en réserve imposée.
+    const configuration = {
+      participants: Array.from({ length: 8 }, (_, rang) => ({
+        id: rang + 1,
+        appartenance: null,
+        ...(rang + 1 === 3 ? { anime: [1] } : {}),
+        ...(rang + 1 === 4 || rang + 1 === 5 ? { anime: [2] } : {}),
+      })),
+      tables: [1, 2, 3].map((id) => ({ id, numero: id, capacite: 3 })),
+      tours: 2,
+      reservations: [tous(1, 2), tous(2, 2), auTour(3, 1, 1), auTour(4, 3, 2), auTour(5, 3, 2), auTour(6, 1, 2)],
+      contraintes: { ...TOUTES_CONTRAINTES, rencontrerAnimateurs: true },
+    };
+    const instance = normaliser(configuration);
+    assert.ok(compose(instance, 'rencontresRepetees') && compose(instance, 'animateursNonRencontres'));
+    const plan = {
+      tables: [1, 2, 3],
+      tours: [
+        [[3, 6, 7], [1, 2, 8], [4, 5]],
+        [[7, 8], [1, 2], [3, 4, 5]],
+      ],
+      reserves: [[], [6]],
+    };
+    const etat = creerEtatDuDepart(instance, { plan, toursFiges: [2], reservesImposees: [{ participant: 6, tour: 2 }] });
+    assert.deepEqual(planDepuisIndex(instance, etat.tableDe), plan);
+    // 1 et 2 visitent deux fois la table 2, où elles sont fixées deux fois :
+    // aucun retour choisi. 7, jamais fixée, revient à la table 1 ; 4 et 5,
+    // fixées une fois à la table 3, y reviennent : un retour choisi chacune.
+    assert.equal(etat.totalRetoursChoisis, 3);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
+  });
+
+  test("une animatrice seule fixée, en réserve imposée au tour 1 ou au tour 2, n'est rencontrée par personne", () => {
+    // Deux tables de 3, cinq personnes, deux tours : 1 n'est fixée, à la
+    // table 1, qu'au tour qu'elle anime, et ce tour figé la laisse en réserve.
+    for (const tour of [1, 2]) {
+      const configuration = {
+        participants: Array.from({ length: 5 }, (_, rang) => ({ id: rang + 1, appartenance: null, ...(rang === 0 ? { anime: [tour] } : {}) })),
+        tables: [1, 2].map((id) => ({ id, numero: id, capacite: 3 })),
+        tours: 2,
+        reservations: [auTour(1, 1, tour)],
+        contraintes: { ...TOUTES_CONTRAINTES, rencontrerAnimateurs: true },
+      };
+      const instance = normaliser(configuration);
+      assert.ok(compose(instance, 'animateursNonRencontres'), `tour ${tour}`);
+      const sansElle = [[2, 3], [4, 5]];
+      const avecElle = [[1, 2, 4], [3, 5]];
+      const plan = {
+        tables: [1, 2],
+        tours: tour === 1 ? [sansElle, avecElle] : [avecElle, sansElle],
+        reserves: tour === 1 ? [[1], []] : [[], [1]],
+      };
+      const etat = creerEtatDuDepart(instance, { plan, toursFiges: [tour], reservesImposees: [{ participant: 1, tour }] });
+      assert.deepEqual(planDepuisIndex(instance, etat.tableDe), plan, `tour ${tour}`);
+      assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat), `tour ${tour}`);
+    }
+  });
+
+  test("le remplissage canonique, siège par siège : arrivantes aux premières places libres, libres gardés aux prochains sièges mobiles, jamais au siège qu'une réserve imposée laisse quand un siège mobile reste", () => {
+    // Deux tables de 3, six personnes, deux tours, le tour 2 figé. Au tour 2,
+    // 1 est réservée à la table 1 ; 2 et 3 à la table 2, où 2 est en réserve
+    // imposée. Au tour 1, sans fixée, la table 2 assied 1, 2 et 3 ; 4, 5 et
+    // 6 arrivent.
+    const configuration = configurationDe({
+      appartenances: Array(6).fill(null),
+      tables: [
+        { id: 1, capacite: 3 },
+        { id: 2, capacite: 3 },
+      ],
+      tours: 2,
+      reservations: [auTour(1, 1, 2), auTour(2, 2, 2), auTour(3, 2, 2)],
+    });
+    const plan = { tables: [1, 2], tours: [[[], [1, 2, 3]], [[1, 4, 6], [3, 5]]], reserves: [[], [2]] };
+    const instance = normaliser(configuration);
+    const etat = creerEtatDuDepart(instance, { plan, toursFiges: [2], reservesImposees: [{ participant: 2, tour: 2 }] });
+    // Sièges 0 à 2 : la table 1 ; 3 à 5 : la table 2 ; par index, −1 pour
+    // une place fantôme. Tour 1 : les arrivantes 4, 5 et 6 aux sièges 0 à 2,
+    // dans l'ordre des index ; 1, 2 et 3 aux sièges mobiles de la table 2.
+    // Tour 2 : 1 au premier siège de la table 1, puis 4 et 6 à ses sièges
+    // mobiles ; à la table 2, le siège de 2 reste vide, 3 garde le sien, et 5
+    // prend le siège mobile.
+    assert.deepEqual(Array.from(etat.siege), [3, 4, 5, 0, 1, 2, 0, 3, 5, -1, 2, 4]);
+  });
+
+  test("deux libres que le départ assied à une table dont les deux fixées sont en réserve imposée y prennent leurs sièges, et n'y sont pas servies", () => {
+    // Tables 1 de 3, 2 et 3 de 2, cinq personnes, deux tours, le tour 2
+    // figé. 1 et 2 sont réservées à la table 2 au tour 2, et y sont en
+    // réserve imposée ; 3 et 4, d'étiquette x, y sont assises. La table 2
+    // porte l'objectif x : au tour 2, sans siège libre, elle ne sert
+    // personne.
+    const configuration = {
+      participants: Array.from({ length: 5 }, (_, rang) => ({
+        id: rang + 1,
+        appartenance: null,
+        ...(rang + 1 === 3 || rang + 1 === 4 ? { etiquettes: ['x'] } : {}),
+      })),
+      tables: [
+        { id: 1, numero: 1, capacite: 3 },
+        { id: 2, numero: 2, capacite: 2 },
+        { id: 3, numero: 3, capacite: 2 },
+      ],
+      tours: 2,
+      reservations: [auTour(1, 2, 2), auTour(2, 2, 2)],
+      contraintes: { ...TOUTES_CONTRAINTES, respecterObjectifs: true },
+      objectifs: [{ table: 2, tour: null, regle: 'ou', etiquettes: ['x'] }],
+    };
+    const instance = normaliser(configuration);
+    assert.ok(compose(instance, 'toursHorsObjectif'));
+    const plan = { tables: [1, 2, 3], tours: [[[1, 2, 5], [3, 4], []], [[5], [3, 4], []]], reserves: [[], [1, 2]] };
+    const reservesImposees = [{ participant: 1, tour: 2 }, { participant: 2, tour: 2 }];
+    const etat = creerEtatDuDepart(instance, { plan, toursFiges: [2], reservesImposees });
+    assert.deepEqual(planDepuisIndex(instance, etat.tableDe), plan);
+    // Tour 2 : 3 et 4 aux deux sièges de la table 2, 5 au premier de la
+    // table 1.
+    assert.deepEqual(Array.from(etat.siege.subarray(7)), [4, -1, -1, 2, 3, -1, -1]);
+    // Servies au tour 1 seulement, le seul où la table 2 offre un siège.
+    assert.deepEqual(Array.from(etat.servis), [0, 0, 1, 1, 0]);
+    assert.deepStrictEqual(scoreIncremental(etat), scoreComplet(etat));
+  });
+
+  test("au tour figé, une arrivante libre dont la voisine d'index est fixée quitte son siège canonique pour la meilleure table", () => {
+    // Trois tables de 2, quatre personnes, deux tours, le tour 2 figé. 2 est
+    // réservée à la table 2 au tour 2 ; 3 y arrive, son siège canonique à la
+    // table 1, auprès de 1, sa collègue. À la table 3, elle retrouverait 4 :
+    // la table 2 l'emporte.
+    const configuration = configurationDe({
+      appartenances: ['A', null, 'A', null],
+      tables: [1, 2, 3].map((id) => ({ id, capacite: 2 })),
+      tours: 2,
+      reservations: [auTour(2, 2, 2)],
+      contraintes: { ...SANS_CONTRAINTE, separerAppartenances: true },
+    });
+    const plan = { tables: [1, 2, 3], tours: [[[1, 2], [3, 4], []], [[1], [2], [4]]], reserves: [[], []] };
+    assert.equal(tableAu(departAjuste(configuration, { plan, toursFiges: [] }), 3, 2), 1);
+    assert.deepEqual(tourTrie(departAjuste(configuration, { plan, toursFiges: [2] }), 2), [[1], [2, 3], [4]]);
+  });
+
+  test('une fixée à la première place de sa table, en réserve imposée au tour 1, la reprend au tour 2', () => {
+    const configuration = configurationDe({
+      appartenances: Array(4).fill(null),
+      tables: [
+        { id: 1, capacite: 2 },
+        { id: 2, capacite: 2 },
+      ],
+      tours: 2,
+      reservations: [tous(1, 1)],
+    });
+    const plan = { tables: [1, 2], tours: [[[2], [3, 4]], [[1, 2], [3, 4]]], reserves: [[1], []] };
+    const ajuste = departAjuste(configuration, { plan, toursFiges: [1], reservesImposees: [{ participant: 1, tour: 1 }] });
+    assert.deepEqual([1, 2].map((tour) => tourTrie(ajuste, tour)), plan.tours);
+    assert.deepEqual(ajuste.reserves, plan.reserves);
   });
 });

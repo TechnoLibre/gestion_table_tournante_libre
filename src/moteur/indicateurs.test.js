@@ -1469,4 +1469,12 @@ describe('mesurer et assisAChaqueTourPresent : les tours de présence (§ 5.4, �
     assert.equal(assisAChaqueTourPresent(instance, [2, 2, 2]), false);
     assert.equal(assisAChaqueTourPresent(instance, [2, 2, 1]), true);
   });
+
+  test('chaque personne compte : un seul écart, à la première, à la deuxième ou à la dernière, rend faux', () => {
+    // toursPresents vaut [2, 2, 1] ; chaque ligne n'écarte qu'une personne.
+    const { instance } = avecPresences(UNE_ABSENTE);
+    assert.equal(assisAChaqueTourPresent(instance, [1, 2, 1]), false);
+    assert.equal(assisAChaqueTourPresent(instance, [2, 1, 1]), false);
+    assert.equal(assisAChaqueTourPresent(instance, [2, 2, 0]), false);
+  });
 });

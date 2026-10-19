@@ -966,6 +966,31 @@ describe('plafonds sous la présence par tour : C(p) et n_p^C (§ 5.5)', () => {
     assert.deepEqual(plafondsAPrioriParEnumeration(instance), [1, 2, 2, 3]);
   });
 
+  test('n_p^C mord sous C(p) : qui ne visite qu\u{2019}une table d\u{2019}ancré rencontre au plus son ancré et ses mobiles co-présents', () => {
+    // Deux tables de 4, deux tours, huit personnes ; 7 est ancré à la table
+    // d'index 0, 8 à celle d'index 1. 1 et 2 ne sont présentes qu'au tour 1,
+    // 3 à 6 qu'au tour 2. Pour 1 : C = 3 (2, 7 et 8), n_p^C = 1, là où les
+    // six mobiles de la salle donneraient n − 1 = 5.
+    const instance = salleAPresences({
+      capacites: [4, 4],
+      tours: 2,
+      presences: [[1], [1], [2], [2], [2], [2], undefined, undefined],
+      reservations: [[7, 0], [8, 1]],
+    });
+    assert.deepEqual(instance.coPresents, Int32Array.from([3, 3, 5, 5, 5, 5, 7, 7]));
+    assert.deepEqual(instance.mobilesCoPresents, Int32Array.from([1, 1, 3, 3, 3, 3, 6, 6]));
+    // 1 assise à la table 0 au tour 1 : un ancré, 4 − 1 − 1 = 2 sièges ;
+    // min(3, 1 + min(1, 2)) = 2 : le terme des mobiles mord, C(p) non.
+    assert.equal(plafondItineraire(instance, 0, [0, RESERVE]), 2);
+    // Assise aussi à la table 1 au tour 2, les deux ancrés comptent :
+    // min(3, 2 + min(1, 4)) = 3, et C(p) mord à son tour.
+    assert.equal(plafondItineraire(instance, 0, [0, 1]), 3);
+    // 1 et 2 : 2 ; 3 à 6 : min(5, 1 + min(3, 2)) = 3 ; 7 et 8, deux tours à
+    // leur table, 6 sièges : min(7, 0 + min(6, 6)) = 6.
+    assert.deepEqual(plafondsAPriori(instance), [2, 2, 3, 3, 3, 3, 6, 6]);
+    assert.deepEqual(plafondsAPrioriParEnumeration(instance), [2, 2, 3, 3, 3, 3, 6, 6]);
+  });
+
   test('deux personnes de même statut et de mêmes tables fixées, présentes à 1 et à 3 tours, ont des plafonds distincts', () => {
     // Deux tables de 3, trois tours. 1 n'est présente qu'au tour 1 : 2 sièges,
     // plafond 2 ; 2 est présente partout : 6 sièges, plafond 5. Une clé de
