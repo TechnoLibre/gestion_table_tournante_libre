@@ -226,7 +226,12 @@ describe('conflitsDuPlacement : la proposition montrée, sinon le retenu (§ 7.5
   });
 
   test('un retenu en dérive — une personne ajoutée qu’il ne place pas — ne s’évalue pas : null, comme les pastilles absentes du plan', () => {
-    const c = executer('ajouterParticipant', charge({ retenu: 0 }), { champs: { nom: 'Sarcelle', prenom: 'Capucine' } }).charge;
+    // La personne entre dans la charge sans la commande, qui l'ajouterait à
+    // la réserve du retenu : un fichier écrit ainsi le laisse en dérive.
+    const c = structuredClone(charge({ retenu: 0 }));
+    const id = c.prochainsIds.participant;
+    c.participants.push({ ...structuredClone(c.participants[0]), id, nom: 'Sarcelle', prenom: 'Capucine' });
+    c.prochainsIds.participant = id + 1;
     assert.ok(etatPlaces(c, { tour: 1 }).evalue === false);
     assert.equal(conflitsDuPlacement(c, { proposition: null }), null);
   });

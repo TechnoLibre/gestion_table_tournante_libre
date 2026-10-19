@@ -43,9 +43,10 @@ export const EXEMPLES = [
   ['PROPOSITION_INCONNUE', { id: 17, remede: null }],
   // Libellés figés du journal
   ['ENTREE_ENREGISTRER_GENERATION', { n: 5, premier: 3, dernier: 7 }],
-  ['ENTREE_RETENIR_PROPOSITION', { id: 3 }],
+  ['ENTREE_RETENIR_PROPOSITION', { id: 3, ajuste: false }],
   ['ENTREE_EFFACER_PROPOSITIONS', { n: 4, gardee: 2 }],
   ['ENTREE_GARDER_MEILLEURES', { n: 10, effacees: 37, gardee: 42 }],
+  ['NETTOYAGE_SANS_CLASSEMENT', { n: 10, classees: 2, nonClassees: 3, remede: null }],
   ['ENTREE_ENREGISTRER_GENERATION_DERIVEE', { n: 5, premier: 21, dernier: 25, depart: 4, toursFiges: [1, 2] }],
   // Le départ d'une génération dérivée : les refus du lancement
   ['DEPART_ABSENT', { depart: 4, remede: { geste: 'repartirDeZero' } }],
@@ -54,7 +55,7 @@ export const EXEMPLES = [
     {
       depart: 4,
       statut: 'derive',
-      raisons: [{ code: 'PARTICIPANT_EXCLU', participant: 5, personne: 'Maëlle Quenouille' }],
+      raisons: [{ code: 'CAPACITE_CHANGEE', table: 2, avant: 3, maintenant: 4, numero: 7 }],
       remede: { geste: 'repartirDeZero' },
     },
   ],
@@ -79,6 +80,33 @@ export const EXEMPLES = [
   ],
   // Le tour figé que l'enregistrement trouve différent de son départ
   ['TOUR_FIGE_DIFFERENT', { rang: 3, tour: 2, remede: null }],
+  // L'issue d'une génération dérivée dont le retenu vient du départ
+  ['DEPART_ECART_AU_RETENU', { depart: 4, tours: [1, 2] }],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  ['ENTREE_RETENIR_PROPOSITION', { id: 3, ajuste: false }, 'Retenu la proposition n° 3'],
+  ['ENTREE_RETENIR_PROPOSITION', { id: 3, ajuste: true }, 'Retenu la proposition n° 3 ; ajusté à la présence'],
+  [
+    'DEPART_ECART_AU_RETENU',
+    { depart: 4, tours: [1, 2] },
+    "Les tours figés 1 et 2 viennent de la proposition n° 4 : les retouches du placement retenu à ces tours n'y sont pas.",
+  ],
+  [
+    'DEPART_ECART_AU_RETENU',
+    { depart: 4, tours: [3] },
+    "Le tour figé 3 vient de la proposition n° 4 : les retouches du placement retenu à ce tour n'y sont pas.",
+  ],
+  [
+    'NETTOYAGE_SANS_CLASSEMENT',
+    { n: 10, classees: 2, nonClassees: 3, remede: null },
+    '3 propositions ne sont pas classées depuis le changement de participants : garder les 10 meilleures les effacerait ' +
+      "sans les avoir comparées. Générer d'abord une dérivée.",
+  ],
+  [
+    'NETTOYAGE_SANS_CLASSEMENT',
+    { n: 1, classees: 0, nonClassees: 1, remede: null },
+    "1 proposition n'est pas classée depuis le changement de participants : garder la meilleure l'effacerait " +
+      "sans l'avoir comparée. Générer d'abord une dérivée.",
+  ],
+];

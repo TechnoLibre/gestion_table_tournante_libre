@@ -9,15 +9,33 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, test } from '../../test/lanceur.js';
-import { STATUT, indexerPlan, normaliser } from '../moteur/configuration.js';
+import { LIBRE, STATUT, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { conflitsParTable } from '../moteur/conflits.js';
 import { analyser, creerCharge } from '../stockage/document.js';
 import { planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
+import { invariantViole } from './avertissements.js';
+import { bilanChangementDefaut } from './bilans.js';
+import { controlerCapacite } from './capacite.js';
 import { COMMANDES } from './commandes.js';
 import { configurationDe } from './configuration.js';
+import { refusDuDepart } from './depart.js';
 import { titresNonPourvus } from './listes_travail.js';
-import { etatPlaces, libellePropose, repartirSieges, statuts } from './places.js';
+import { nomAffiche } from './personnes.js';
+import {
+  aDesAbsences,
+  etatPlaces,
+  instanceDe,
+  libellePropose,
+  presenceSaisie,
+  presencesPartielles,
+  presentAuTour,
+  presentsAuTour,
+  repartirSieges,
+  reservationsCouvrantes,
+  statuts,
+} from './places.js';
+import { reservationsParTour } from './pose.js';
 
 const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
 
@@ -576,5 +594,295 @@ describe('libellePropose et statuts (§ 4, § 4.2)', () => {
     assert.equal(parId.size, 0);
     assert.doesNotThrow(() => etatPlaces(charge, { tour: 1 }));
     assert.equal(etatPlaces(charge, { tour: 1 }).evalue, false);
+  });
+});
+
+// --- Sans présence, les valeurs d'avant -------------------------------------
+
+// La charge témoin : la petite démonstration, son plan parfait retenu sous
+// des sièges attribués, quatre réservations (une « tous » au siège 3 de la
+// table 1, que 3 occupe au tour 1 ; une de tour sans siège ; une « tous » au
+// siège 1 de la table 3 ; celle d'une exclue), deux titres, et 12 exclue.
+// Aucune personne ne porte de champ presence.
+function chargeTemoin() {
+  const charge = petite();
+  charge.reglages.attribuerSieges = true;
+  charge.propositions = [propositionDe(1, planParfait(true))];
+  charge.prochainsIds.proposition = 2;
+  charge.retenu = retenuDe(1, planParfait(true));
+  charge.evenement.etat = 'retenu';
+  charge.reservations = [resa(2, 1, 3), resa(5, 2, null, 2), resa(7, 3, 1), resa(12, 4, 2)];
+  charge.titres = [{ table: 1, siege: 3, libelle: 'Animation' }, { table: 4, siege: 1, libelle: 'Accueil' }];
+  charge.participants.find(({ id }) => id === 12).exclu = true;
+  return charge;
+}
+
+// Ce qu'un état des places montre, réduit à ce qui se compare : la réserve,
+// les absentes, les occupants de chaque table, chaque chaise réservée
+// (« table:siège:personne:remplissage ») et les titres pourvus par table.
+const resumeEtat = (etat) => ({
+  reserve: etat.reserve,
+  absents: etat.absents,
+  occupants: etat.tables.map(({ chaises }) => chaises.map(({ occupant }) => occupant)),
+  tenues: etat.tables.flatMap(({ id, chaises }) =>
+    chaises.filter(({ reservation }) => reservation !== null).map(({ siege, reservation, remplissage }) => `${id}:${siege}:${reservation.participant}:${remplissage}`),
+  ),
+  titres: etat.tables.map(({ titres }) => titres.pourvus),
+});
+
+describe('sans aucune présence, la règle par tour rend les valeurs figées d’avant', () => {
+  test('la charge témoin : état de chaque tour, réservations par tour, capacités, bilan du défaut, violations du retenu', () => {
+    const charge = chargeTemoin();
+    assert.equal(aDesAbsences(charge), false);
+    assert.deepEqual(presencesPartielles(charge), []);
+    const tours = [1, 2, 3, 4].map((tour) => resumeEtat(etatPlaces(charge, { tour })));
+    assert.deepEqual(tours, [
+      { reserve: [], absents: [], occupants: [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, null]], tenues: ['1:3:2:hachure', '3:1:7:plein'], titres: [1, 0, 0, 0] },
+      { reserve: [], absents: [], occupants: [[5, 9, 10], [1, 7, 11], [2, 6, null], [3, 4, 8]], tenues: ['1:3:2:hachure', '3:1:7:hachure'], titres: [1, 0, 0, 0] },
+      { reserve: [], absents: [], occupants: [[6, 8, 11], [3, 9, null], [1, 4, 10], [2, 5, 7]], tenues: ['1:3:2:hachure', '3:1:7:hachure'], titres: [1, 0, 0, 0] },
+      { reserve: [], absents: [], occupants: [[4, 7, null], [2, 8, 10], [3, 5, 11], [1, 6, 9]], tenues: ['1:3:2:hachure', '3:1:7:hachure'], titres: [1, 0, 0, 0] },
+    ]);
+    assert.deepEqual(charge.tables.map(({ id }) => reservationsParTour(charge, id)), [[1, 1, 1, 1], [0, 1, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0]]);
+    assert.deepEqual(controlerCapacite(charge, 2, 2, { origine: 'poignee' }).refus, {
+      code: 'SOUS_OCCUPES',
+      details: { table: 2, n: 3, tour: 1, remede: { geste: 'afficherTour', tour: 1, proposition: null } },
+    });
+    const bilan = bilanChangementDefaut(charge, 2);
+    assert.equal(bilan.participants, 11);
+    assert.deepEqual(bilan.presentsParTour, [11, 11, 11, 11]);
+    assert.deepEqual(bilan.refus.map(({ table, code }) => [table, code]), [[1, 'SIEGES_RETIRES']]);
+    assert.deepEqual(
+      bilan.avertissements.map(({ details: { table, tour, personnes } }) => [table, tour, ...personnes]),
+      [[2, 1, 6], [2, 2, 11], [2, 4, 10], [3, 1, 9], [3, 3, 10], [3, 4, 11], [4, 2, 8], [4, 3, 7], [4, 4, 9]],
+    );
+    assert.deepEqual(invariantViole(charge).details.violations, [
+      { code: 'RESERVATION', participant: 2, table: 1, tour: 2 },
+      { code: 'RESERVATION', participant: 5, table: 2, tour: 2 },
+      { code: 'RESERVATION', participant: 7, table: 3, tour: 2 },
+      { code: 'RESERVATION', participant: 2, table: 1, tour: 3 },
+      { code: 'RESERVATION', participant: 7, table: 3, tour: 3 },
+      { code: 'RESERVATION', participant: 2, table: 1, tour: 4 },
+      { code: 'RESERVATION', participant: 7, table: 3, tour: 4 },
+      { code: 'RESERVATION', participant: 2, table: 1, tour: 1, siege: 3, occupant: 3 },
+    ]);
+  });
+
+  test('la petite démonstration : sans source, chacun en réserve ; retenue sans attribution, le plan parfait, et la capacité au champ verse le plus grand identifiant', () => {
+    const libre = petite();
+    for (let tour = 1; tour <= 4; tour += 1) {
+      const etat = etatPlaces(libre, { tour });
+      assert.deepEqual([etat.reserve, etat.absents], [DOUZE, []]);
+    }
+    assert.deepEqual(bilanChangementDefaut(libre, 2).presentsParTour, [12, 12, 12, 12]);
+    assert.equal(bilanChangementDefaut(libre, 2).participants, 12);
+    const retenue = petiteRetenue();
+    retenue.reservations = [resa(4, 1, null, 3)];
+    assert.deepEqual(
+      [1, 2, 3, 4].map((tour) => resumeEtat(etatPlaces(retenue, { tour })).occupants),
+      PARFAIT,
+    );
+    assert.deepEqual(controlerCapacite(retenue, 1, 2, { origine: 'champ' }).avertissements, [
+      { code: 'SURNUMERAIRES', details: { table: 1, tour: 1, personnes: [3] } },
+      { code: 'SURNUMERAIRES', details: { table: 1, tour: 2, personnes: [10] } },
+      { code: 'SURNUMERAIRES', details: { table: 1, tour: 3, personnes: [11] } },
+      { code: 'SURNUMERAIRES', details: { table: 1, tour: 4, personnes: [12] } },
+    ]);
+    assert.deepEqual(invariantViole(retenue).details.violations, [{ code: 'RESERVATION', participant: 4, table: 1, tour: 3 }]);
+  });
+
+  test('refusDuDepart : la charge témoin, réintégrée puis réduite aux réservations du tour 1, et la petite démonstration sous sièges attribués', () => {
+    // Le nom affiché de la personne id de la charge, tel que le refus le porte.
+    const nomDe = (charge, id) => nomAffiche(charge.participants.find((personne) => personne.id === id));
+    // Une exclue que le départ assied ne le bloque plus : il s'ajuste à la
+    // présence, et le refus suivant se lit.
+    const temoin = chargeTemoin();
+    assert.deepEqual(refusDuDepart(temoin, { id: 1, toursFiges: [1] }), {
+      code: 'DEPART_RESERVATION_NON_TENUE',
+      details: { depart: 1, participant: 2, table: 1, tour: 2, personne: nomDe(temoin, 2), numero: 1, remede: { geste: 'repartirDeZero' } },
+    });
+    // Une table agrandie le bloque.
+    const agrandie = chargeTemoin();
+    agrandie.tables[0].sieges = 9;
+    const refusAgrandie = refusDuDepart(agrandie, { id: 1, toursFiges: [1] });
+    assert.deepEqual(
+      [refusAgrandie.code, refusAgrandie.details.statut, refusAgrandie.details.raisons.map(({ code }) => code)],
+      ['DEPART_NON_COMPARABLE', 'derive', ['CAPACITE_CHANGEE']],
+    );
+    const reintegree = chargeTemoin();
+    reintegree.participants.find(({ id }) => id === 12).exclu = false;
+    assert.deepEqual(refusDuDepart(reintegree, { id: 1, toursFiges: [1] }), {
+      code: 'DEPART_RESERVATION_NON_TENUE',
+      details: { depart: 1, participant: 2, table: 1, tour: 2, personne: nomDe(reintegree, 2), numero: 1, remede: { geste: 'repartirDeZero' } },
+    });
+    const premierTour = structuredClone(reintegree);
+    premierTour.reservations = [resa(2, 1, 3, 1), resa(7, 3, 1, 1), resa(12, 4, 2, 1)];
+    assert.deepEqual(refusDuDepart(premierTour, { id: 1, toursFiges: [1] }), {
+      code: 'DEPART_SIEGE_NON_TENU',
+      details: { depart: 1, participant: 2, table: 1, siege: 3, tour: 1, personne: nomDe(premierTour, 2), numero: 1, remede: { geste: 'libererTour', tour: 1 } },
+    });
+    assert.equal(refusDuDepart(premierTour, { id: 1, toursFiges: [2, 3] }), null);
+
+    // La petite démonstration, son plan parfait proposé sous sièges
+    // attribués, sans retenu.
+    const attribuee = (reservations) => {
+      const charge = petiteRetenue({ retenu: false });
+      charge.reglages.attribuerSieges = true;
+      charge.propositions = [propositionDe(1, planParfait(true))];
+      charge.reservations = reservations;
+      return charge;
+    };
+    assert.equal(refusDuDepart(attribuee([]), { id: 1, toursFiges: [1] }), null);
+    const auSiege = attribuee([resa(2, 1, 3, 1)]);
+    assert.deepEqual(refusDuDepart(auSiege, { id: 1, toursFiges: [1] }), {
+      code: 'DEPART_SIEGE_NON_TENU',
+      details: { depart: 1, participant: 2, table: 1, siege: 3, tour: 1, personne: nomDe(auSiege, 2), numero: 1, remede: { geste: 'libererTour', tour: 1 } },
+    });
+    assert.equal(refusDuDepart(auSiege, { id: 1, toursFiges: [2] }), null);
+    const auTour3 = attribuee([resa(4, 1, null, 3)]);
+    assert.deepEqual(refusDuDepart(auTour3, { id: 1, toursFiges: [1] }), {
+      code: 'DEPART_RESERVATION_NON_TENUE',
+      details: { depart: 1, participant: 4, table: 1, tour: 3, personne: nomDe(auTour3, 4), numero: 1, remede: { geste: 'repartirDeZero' } },
+    });
+  });
+});
+
+// --- La règle R1 : présente au tour -----------------------------------------
+
+// Le plan parfait de la petite démonstration, où 4 est absente aux tours 3 et
+// 4 : elle quitte sa liste et va aux absents de ces tours.
+function planSans4() {
+  const plan = planParfait();
+  for (const rang of [2, 3]) {
+    const etage = plan.placement[rang];
+    etage.sieges = etage.sieges.map((liste) => liste.filter((id) => id !== 4));
+    etage.absents = [4];
+  }
+  return plan;
+}
+
+describe('la règle R1 : une personne présente au tour, et ses réservations (§ 5.8)', () => {
+  test('presenceSaisie lit le champ : null pour tous les tours, sinon une copie de la liste', () => {
+    const iris = personne(1, 'Ombrelle', 'Iris');
+    assert.equal(presenceSaisie(iris), null);
+    const theo = personne(2, 'Pervenche', 'Théo', { presence: [1, 3] });
+    const lue = presenceSaisie(theo);
+    assert.deepEqual(lue, [1, 3]);
+    lue.push(4);
+    assert.deepEqual(theo.presence, [1, 3]);
+  });
+
+  test('présente au tour : dans la charge, non exclue, et le tour dans sa présence ; presentsAuTour, aDesAbsences, presencesPartielles', () => {
+    const charge = petite();
+    charge.participants[3].presence = [1, 2];
+    charge.participants[6].presence = [2];
+    charge.participants[6].exclu = true;
+    assert.deepEqual([1, 2, 3, 4].map((tour) => presentAuTour(charge, 4, tour)), [true, true, false, false]);
+    assert.deepEqual([1, 2, 3, 4].map((tour) => presentAuTour(charge, 7, tour)), [false, false, false, false]);
+    assert.equal(presentAuTour(charge, 99, 1), false);
+    assert.deepEqual([...presentsAuTour(charge, 3)].sort((a, b) => a - b), [1, 2, 3, 5, 6, 8, 9, 10, 11, 12]);
+    assert.equal(presentsAuTour(charge, 1).size, 11);
+    assert.equal(aDesAbsences(charge), true);
+    assert.deepEqual(presencesPartielles(charge), [4]);
+    // L'exclue seule porte une présence partielle : aucune absence ne compte.
+    delete charge.participants[3].presence;
+    assert.equal(aDesAbsences(charge), false);
+    assert.deepEqual(presencesPartielles(charge), []);
+  });
+
+  test('une réservation « tous » de 4, présente aux tours 1 et 2, ne la tient pas au tour 3 : ni assise, ni en réserve, mais absente', () => {
+    const charge = petite();
+    charge.participants[3].presence = [1, 2];
+    charge.reservations = [resa(4, 2, null), resa(7, 2, null, 3)];
+    assert.deepEqual(reservationsCouvrantes(charge, 1), [resa(4, 2, null)]);
+    assert.deepEqual(reservationsCouvrantes(charge, 3), [resa(7, 2, null, 3)]);
+    const tour1 = etatPlaces(charge, { tour: 1 });
+    assert.deepEqual(occupants(tour1, 1), [4, null, null]);
+    assert.deepEqual(tour1.absents, []);
+    const tour3 = etatPlaces(charge, { tour: 3 });
+    assert.deepEqual(occupants(tour3, 1), [7, null, null]);
+    assert.ok(tour3.tables.every(({ chaises }) => chaises.every(({ occupant, reservation }) => occupant !== 4 && reservation?.participant !== 4)));
+    assert.deepEqual(tour3.reserve, DOUZE.filter((id) => id !== 4 && id !== 7));
+    assert.deepEqual(tour3.absents, [4]);
+  });
+
+  test('un retenu ajusté à la présence : au tour 3, la chaise de 4 est libre, la réserve vide, 4 absente ; un retenu qui l’assied encore ne la montre pas', () => {
+    const charge = petiteRetenue();
+    charge.participants[3].presence = [1, 2];
+    charge.retenu = retenuDe(1, planSans4());
+    const ajuste = etatPlaces(charge, { tour: 3 });
+    assert.equal(ajuste.evalue, true);
+    assert.deepEqual(occupants(ajuste, 2), [1, 10, null]);
+    assert.deepEqual([ajuste.reserve, ajuste.absents], [[], [4]]);
+    assert.deepEqual(etatPlaces(charge, { tour: 2 }).absents, []);
+
+    const enDerive = petiteRetenue();
+    enDerive.participants[3].presence = [1, 2];
+    const tour3 = etatPlaces(enDerive, { tour: 3 });
+    assert.equal(tour3.evalue, false);
+    assert.deepEqual(occupants(tour3, 2), [1, 10, null]);
+    assert.deepEqual([tour3.reserve, tour3.absents], [[], [4]]);
+    // Une exclue n'est pas absente : elle n'est nulle part.
+    enDerive.participants[4].exclu = true;
+    enDerive.participants[4].presence = [1];
+    assert.deepEqual(etatPlaces(enDerive, { tour: 3 }).absents, [4]);
+  });
+});
+
+// Un tirage déterministe : un générateur congruentiel de graine fixe, dont
+// tire(n) rend un entier de 0 à n − 1.
+function tirage(graine) {
+  let etat = graine >>> 0;
+  return (n) => {
+    etat = (Math.imul(etat, 1103515245) + 12345) >>> 0;
+    return (etat >>> 16) % n;
+  };
+}
+
+// Une charge tirée : huit personnes, trois tables de quatre, de un à quatre
+// tours, des présences, des exclues et des réservations quelconques. Elle ne
+// se normalise pas toujours.
+function chargeTiree(tire) {
+  const tours = 1 + tire(4);
+  const charge = creerCharge({ id: 'evt-tirage', nom: 'Soirée des Lucioles', siegesParDefaut: 4, tours });
+  charge.tables = [table(1), table(2), table(3)];
+  charge.participants = Array.from({ length: 8 }, (_, rang) => {
+    const autres = { exclu: tire(8) === 0 };
+    const presence = Array.from({ length: tours }, (__, r) => r + 1).filter(() => tire(3) > 0);
+    if (tire(2) === 0 && presence.length > 0 && presence.length < tours) autres.presence = presence;
+    return personne(rang + 1, `Tirée ${rang + 1}`, null, autres);
+  });
+  charge.reservations = Array.from({ length: tire(7) }, () =>
+    resa(1 + tire(8), 1 + tire(3), tire(2) === 0 ? null : 1 + tire(4), tire(2) === 0 ? null : 1 + tire(tours)),
+  );
+  charge.prochainsIds = { participant: 9, table: 4, proposition: 1 };
+  return charge;
+}
+
+describe('propriété : les réservations couvrantes sont celles que le moteur fixe', () => {
+  test('sur des charges tirées (graine fixe), reservationsCouvrantes(charge, r) désigne exactement les personnes que instance.fixe fixe au tour r, à la même table', () => {
+    const tire = tirage(20261018);
+    let comparees = 0;
+    let suspendues = 0;
+    for (let essai = 0; essai < 150; essai += 1) {
+      const charge = chargeTiree(tire);
+      const instance = instanceDe(charge);
+      if (instance === null) continue;
+      comparees += 1;
+      const { R, ids, idsTables, fixe } = instance;
+      for (let tour = 1; tour <= R; tour += 1) {
+        const couvrantes = new Map(reservationsCouvrantes(charge, tour).map(({ participant, table: idTable }) => [participant, idTable]));
+        const fixees = new Map();
+        ids.forEach((id, p) => {
+          if (fixe[p * R + tour - 1] !== LIBRE) fixees.set(id, idsTables[fixe[p * R + tour - 1]]);
+        });
+        const trie = (carte) => [...carte].sort((a, b) => a[0] - b[0]);
+        assert.deepEqual(trie(couvrantes), trie(fixees), `essai ${essai}, tour ${tour}`);
+        suspendues += charge.reservations.filter(
+          (r) => (r.portee === 'tous' || r.tour === tour) && charge.participants.some(({ id, presence }) => id === r.participant && presence !== undefined && !presence.includes(tour)),
+        ).length;
+      }
+    }
+    assert.ok(comparees >= 60, `${comparees} charges normalisées`);
+    assert.ok(suspendues >= 20, `${suspendues} réservations suspendues par une absence`);
   });
 });

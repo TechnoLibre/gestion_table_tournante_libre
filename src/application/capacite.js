@@ -36,11 +36,18 @@
 // perd ses absents, le plus petit identifiant d'abord : un geste n'assied
 // personne qu'il ne nomme. Un retenu fautif ne se réécrit pas. Aucune
 // fonction ne modifie ce qu'elle reçoit.
+//
+// Un tour de la soirée se lit sous la règle de présence par tour (R1,
+// places.js) : un absent est une personne exclue, supprimée ou absente à ce
+// tour, et sa chaise est libre ; seules les réservations couvrantes du tour
+// (reservationsCouvrantes) y tiennent une personne. Un tour du retenu que la
+// soirée n'a plus garde sa lecture : la présence n'y est pas définie, et un
+// absent n'y est qu'une personne exclue ou supprimée.
 import { ordreDesReservations } from '../csv/import.js';
 import { constante } from '../geometrie/constantes.js';
 import { SIEGES_MAX, capacite } from '../stockage/document.js';
 import { fautes } from '../stockage/placements.js';
-import { couvre, etatPlaces, presents, repartirSieges, reservationsActives } from './places.js';
+import { couvre, etatPlaces, presents, presentsAuTour, repartirSieges, reservationsActives, reservationsCouvrantes } from './places.js';
 import { reservationsParTour } from './pose.js';
 
 const croissant = (a, b) => a - b;
@@ -219,14 +226,14 @@ function ramenerReservees(liste, limite, montres, reservees, ids) {
 }
 
 // Les personnes que la table idTable réserve au tour, chacune avec son siège
-// réservé ou null : les réservations actives (actives, dans l'ordre
-// canonique) qui couvrent ce tour ; un tour que la soirée n'a plus, l'analyse
-// n'admettant aucune portée « tour » au-delà des tours, seules les « tous »
-// le couvrent. Le siège réservé d'une personne est le premier siège non nul
-// de ses réservations, comme l'affichage le lit.
-function reserveesAuTour(actives, idTable, tour) {
+// réservé ou null : parmi couvrantes (dans l'ordre canonique), celles qui
+// couvrent ce tour ; un tour que la soirée n'a plus, l'analyse n'admettant
+// aucune portée « tour » au-delà des tours, seules les « tous » le couvrent.
+// Le siège réservé d'une personne est le premier siège non nul de ses
+// réservations, comme l'affichage le lit.
+function reserveesAuTour(couvrantes, idTable, tour) {
   const reservees = new Map();
-  for (const reservation of actives) {
+  for (const reservation of couvrantes) {
     const { table, participant, siege } = reservation;
     if (table !== idTable || !couvre(reservation, tour)) continue;
     if (!reservees.has(participant) || reservees.get(participant) === null) reservees.set(participant, siege);
@@ -259,13 +266,17 @@ function versements(charge, changements) {
   const { retenu } = charge;
   if (retenu === null || fautes(retenu).length > 0) return null;
   const hypothese = avecCapacites(charge, changements);
-  const ids = presents(charge);
+  const nonExclus = presents(charge);
   const actives = reservationsActives(charge);
   const touchees = charge.tables
     .filter(({ id }) => changements.has(id) && retenu.tables.includes(id))
     .map(({ id }) => ({ table: id, rang: retenu.tables.indexOf(id), sieges: changements.get(id), tours: [] }));
   for (let tour = 1; tour <= retenu.tours; tour += 1) {
     const visible = tour <= charge.evenement.tours;
+    // Les présentes du tour et ses réservations couvrantes ; au-delà de la
+    // soirée, les non-exclus et les réservations actives.
+    const ids = visible ? presentsAuTour(charge, tour) : nonExclus;
+    const couvrantes = visible ? reservationsCouvrantes(charge, tour) : actives;
     const etatAvant = visible ? etatPlaces(charge, { tour }) : null;
     // Sièges attribués, ce qui reste ne se lit pas dans le plan d'après.
     const etatApres = visible && !retenu.siegesAttribues ? etatPlaces(hypothese, { tour }) : null;
@@ -279,7 +290,7 @@ function versements(charge, changements) {
         // se montre pas, et une hausse ne l'assied pas.
         const montres = capacite(charge, tableDe(charge, table));
         const limite = Math.min(sieges, montres);
-        reste = ramenerReservees(liste, limite, montres, reserveesAuTour(actives, table, tour), ids);
+        reste = ramenerReservees(liste, limite, montres, reserveesAuTour(couvrantes, table, tour), ids);
       } else {
         const apres = new Set(assises(hypothese, etatApres, table, tour));
         const gardees = new Set(avant.filter((id) => apres.has(id)));

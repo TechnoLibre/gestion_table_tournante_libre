@@ -8,12 +8,17 @@
 // même bilan : changerDefaut lève le premier de ses refus. Les refus et
 // avertissements d'une capacité sont ceux de controlerCapacites
 // (capacite.js), le seul contrôle ; l'ordre des objectifs, ordreDesObjectifs
-// (objectifs.js). Aucune fonction ne modifie ce qu'elle reçoit.
+// (objectifs.js). Les personnes se comptent par tour, sous la règle de
+// présence par tour (presentsAuTour, places.js) ; la présence après un
+// changement de tours, rognée, se lit dans presencesSousTours
+// (stockage/presence.js), la seule. Aucune fonction ne modifie ce qu'elle
+// reçoit.
 import { ordreDesReservations } from '../csv/import.js';
 import { SIEGES_MAX, capacite } from '../stockage/document.js';
+import { presencesSousTours } from '../stockage/presence.js';
 import { controlerCapacites } from './capacite.js';
 import { ordreDesObjectifs } from './objectifs.js';
-import { presents } from './places.js';
+import { presentsAuTour } from './places.js';
 
 const croissant = (a, b) => a - b;
 const comparerTextes = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -32,6 +37,26 @@ function tableDe(charge, id) {
   return table;
 }
 
+// La somme d'une liste de nombres.
+const somme = (valeurs) => valeurs.reduce((total, valeur) => total + valeur, 0);
+
+// Le nombre de personnes présentes à chaque tour de 1 à R.
+const presentsParTourDe = (charge) => Array.from({ length: charge.evenement.tours }, (_, rang) => presentsAuTour(charge, rang + 1).size);
+
+/**
+ * La capacité de la salle tour par tour (§ 6.1, § 5.9) : à chaque tour de 1
+ * à R, les personnes présentes (règle par tour), les places, somme des
+ * capacités courantes, et le manque, max(0, presentes − places). Sans
+ * absence, chaque tour compte les non-exclus.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {Array<{tour: number, presentes: number, places: number, manque: number}>}
+ */
+export function capaciteParTour(charge) {
+  const places = somme(charge.tables.map((table) => capacite(charge, table)));
+  return presentsParTourDe(charge).map((presentes, rang) => ({ tour: rang + 1, presentes, places, manque: Math.max(0, presentes - places) }));
+}
+
 // Les identifiants croissants des placements de la liste qui satisfont
 // touche ; un placement fautif, de forme quelconque, se lit sans lever.
 const identifiants = (placements, touche) =>
@@ -42,8 +67,10 @@ const identifiants = (placements, touche) =>
  * appliqué : suivent, le nombre de tables qui suivent le défaut ; avant et
  * apres, le défaut d'aujourd'hui et sieges ; surchargees, les capacités des
  * tables surchargées par numéro de table ; totalAvant et totalApres, la
- * somme des capacités avant et après ; participants, les personnes non
- * exclues. realigner : les surchargées passent aussi à sieges.
+ * somme des capacités avant et après ; presentsParTour, les personnes
+ * présentes à chaque tour de 1 à R ; participants, le plus grand de ces
+ * comptes — sans absence, les personnes non exclues. realigner : les
+ * surchargées passent aussi à sieges.
  *
  * Chaque table dont la capacité change se contrôle comme une saisie au champ
  * (§ 6.2) : refus, le premier de chaque table qui refuse, {table, code,
@@ -57,14 +84,15 @@ const identifiants = (placements, touche) =>
  * @param {number} sieges
  * @param {{realigner?: boolean}} [options]
  * @returns {{suivent: number, avant: number, apres: number, surchargees: number[], totalAvant: number,
- *            totalApres: number, participants: number, refus: Array<{table: number|null, code: string, details: Object}>,
+ *            totalApres: number, participants: number, presentsParTour: number[],
+ *            refus: Array<{table: number|null, code: string, details: Object}>,
  *            avertissements: Array<{table: number, code: string, details: Object}>}}
  * @throws {TypeError} sieges qui n'est pas un entier
  */
 export function bilanChangementDefaut(charge, sieges, { realigner = false } = {}) {
   exigerEntier(sieges, 'sieges');
   const apresDe = (table) => (table.sieges === null || realigner ? sieges : table.sieges);
-  const somme = (valeurs) => valeurs.reduce((total, valeur) => total + valeur, 0);
+  const presentsParTour = presentsParTourDe(charge);
   const changements = new Map(
     charge.tables.filter((table) => apresDe(table) !== capacite(charge, table)).map((table) => [table.id, apresDe(table)]),
   );
@@ -83,7 +111,8 @@ export function bilanChangementDefaut(charge, sieges, { realigner = false } = {}
       .map((table) => table.sieges),
     totalAvant: somme(charge.tables.map((table) => capacite(charge, table))),
     totalApres: somme(charge.tables.map(apresDe)),
-    participants: presents(charge).size,
+    participants: Math.max(0, ...presentsParTour),
+    presentsParTour,
     refus: controle.refus,
     avertissements: controle.avertissements,
   };
@@ -98,19 +127,29 @@ export function bilanChangementDefaut(charge, sieges, { realigner = false } = {}
  * propositions qui ne porteront pas tours tours, et retenuTouche de même
  * pour le retenu — ils restent, en dérive TOURS_CHANGES (§ 9). Le nombre de
  * tours d'aujourd'hui ne touche rien. La portée « tous » ne se détruit
- * jamais : elle n'énumère aucun tour.
+ * jamais : elle n'énumère aucun tour. presencesRognees, chaque présence que
+ * la baisse tronque, exclues comprises, {participant, avant, apres}, apres
+ * null quand le champ part (tous les tours), par identifiant croissant ;
+ * presencesVidees, les identifiants croissants des non-exclues dont la
+ * présence se viderait, que le changement de tours refuse. Une exclue dont
+ * la présence se viderait perd le champ, et figure dans presencesRognees
+ * (presencesSousTours). Une hausse ne rogne rien : une présence énumérée ne
+ * s'étend pas. Sous un tour, nombre que le changement de tours refuse,
+ * aucune présence ne se rogne.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {number} tours
  * @returns {{reservationsDetruites: Array<{participant: number, table: number, tour: number}>,
  *            objectifsDetruits: Array<{table: number, tour: number}>, propositionsTouchees: number[],
- *            retenuTouche: boolean}}
+ *            retenuTouche: boolean, presencesRognees: Array<{participant: number, avant: number[], apres: number[]|null}>,
+ *            presencesVidees: number[]}}
  * @throws {TypeError} tours qui n'est pas un entier
  */
 export function bilanTours(charge, tours) {
   exigerEntier(tours, 'tours');
   const change = tours !== charge.evenement.tours;
   const touche = (placement) => change && placement?.tours !== tours;
+  const { rognees, videes } = tours >= 1 ? presencesSousTours(charge.participants, tours) : { rognees: [], videes: [] };
   return {
     reservationsDetruites: charge.reservations
       .filter(({ portee, tour }) => portee === 'tour' && tour > tours)
@@ -126,6 +165,8 @@ export function bilanTours(charge, tours) {
       ),
     propositionsTouchees: identifiants(charge.propositions, touche),
     retenuTouche: charge.retenu !== null && touche(charge.retenu),
+    presencesRognees: rognees,
+    presencesVidees: videes,
   };
 }
 

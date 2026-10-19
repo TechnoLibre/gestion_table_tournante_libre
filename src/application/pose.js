@@ -10,16 +10,23 @@
 //
 // Un refus a la forme { code, details }, le remède dans details.remede.
 // Plusieurs se rangent dans l'ordre SURRESERVATION, SIEGE_INEXISTANT,
-// DEUX_PLACES_MEME_TOUR, PERSONNE_EXCLUE, PLACE_RESERVEE, RESERVEE_AILLEURS ;
-// une commande lève le premier et porte les suivants dans details.autres
-// (leverRefus). Une réservation suspendue — celle d'une personne exclue —
-// ne compte nulle part : une pose peut prendre sa place (§ 4.4), et sa
-// réintégration se contrôle comme une pose (controlerReintegration). Aucune
-// fonction ne modifie ce qu'elle reçoit.
+// DEUX_PLACES_MEME_TOUR, PERSONNE_EXCLUE, PERSONNE_ABSENTE_AU_TOUR,
+// PLACE_RESERVEE, RESERVEE_AILLEURS ; une commande lève le premier et porte
+// les suivants dans details.autres (leverRefus). Une réservation suspendue —
+// celle d'une personne exclue, ou d'une personne à ses tours d'absence (R1,
+// places.js) — ne compte nulle part à ces tours : une pose peut y prendre sa
+// place (§ 4.4), et sa réintégration, ou la présence qui s'étend à ces
+// tours, se contrôle comme une pose (controlerReintegration,
+// controlerPresence). Les réservations de deux personnes ne se disputent
+// une place qu'aux tours où l'une et l'autre tiennent ; celles d'une même
+// personne s'excluent à chaque tour qu'elles couvrent, présente ou non.
+// Aucune fonction ne modifie ce qu'elle reçoit.
 import { ordreDesReservations } from '../csv/import.js';
+import { estPresentAuTour, toursDePresence } from '../moteur/presence.js';
 import { capacite } from '../stockage/document.js';
 import { ErreurCommande } from './erreurs.js';
-import { couvre, instanceDe, reservationsActives } from './places.js';
+import { nomAffiche } from './personnes.js';
+import { couvre, instanceDe, presentsAuTour, reservationsActives, reservationsCouvrantes } from './places.js';
 
 // Un refus : son code, ses détails, et le remède parmi eux.
 const refusDe = (code, details, remede) => ({ code, details: { ...details, remede } });
@@ -50,23 +57,39 @@ function tableDe(charge, id) {
   return table;
 }
 
-// Les personnes distinctes dont une réservation de la liste couvre le tour
-// à cette table.
-const reserveesAuTour = (actives, idTable, tour) =>
-  new Set(actives.filter((r) => r.table === idTable && couvre(r, tour)).map(({ participant }) => participant));
+// Vrai quand la réservation r tient sa personne au tour : elle couvre le
+// tour, et sa personne y est présente (presents, celles du tour).
+const tientAuTour = (r, tour, presents) => couvre(r, tour) && presents.has(r.participant);
+
+// Les présentes de chaque tour de 1 à R (R1) : presentes(tour) les lit une
+// fois par tour, au premier appel.
+function presentesParTour(charge) {
+  const memoire = new Map();
+  return (tour) => {
+    if (!memoire.has(tour)) memoire.set(tour, presentsAuTour(charge, tour));
+    return memoire.get(tour);
+  };
+}
+
+// Les personnes distinctes dont une réservation de la liste tient au tour à
+// cette table.
+const reserveesAuTour = (actives, idTable, tour, presents) =>
+  new Set(actives.filter((r) => r.table === idTable && tientAuTour(r, tour, presents)).map(({ participant }) => participant));
 
 /**
- * [r − 1] : les personnes distinctes non exclues dont une réservation couvre
- * le tour r à cette table — le compte de SURRESERVATION du moteur, sans
- * lever.
+ * [r − 1] : les personnes distinctes dont une réservation couvrante du tour
+ * r tient à cette table (reservationsCouvrantes : non exclues, présentes à
+ * r) — le compte de SURRESERVATION du moteur, sans lever.
  *
  * @param {import('../stockage/types.js').Charge} charge
  * @param {number} idTable
  * @returns {number[]}   R comptes
  */
 export function reservationsParTour(charge, idTable) {
-  const actives = reservationsActives(charge);
-  return Array.from({ length: charge.evenement.tours }, (_, rang) => reserveesAuTour(actives, idTable, rang + 1).size);
+  return Array.from(
+    { length: charge.evenement.tours },
+    (_, rang) => new Set(reservationsCouvrantes(charge, rang + 1).filter((r) => r.table === idTable).map(({ participant }) => participant)).size,
+  );
 }
 
 /**
@@ -84,9 +107,16 @@ export function reservationsParTour(charge, idTable) {
  *   remède la table portée à siege places ;
  * - DEUX_PLACES_MEME_TOUR {participant, tour, autre} : une autre réservation
  *   active de la personne couvre un tour de la pose, à une autre table, ou à
- *   un autre siège de la même ; remède le déplacement de cette réservation
- *   vers la place de la pose ;
+ *   un autre siège de la même — à ses tours d'absence compris, où la présence
+ *   rendue les ferait tenir ensemble ; tour, le premier tour commun ; remède
+ *   le déplacement de cette réservation vers la place de la pose ;
  * - PERSONNE_EXCLUE {participant} : remède la réintégration ;
+ * - PERSONNE_ABSENTE_AU_TOUR {participant, personne, tour} : une
+ *   réservation de tour désigné, ou un dépôt dans le retenu, à un tour où la
+ *   personne, non exclue, est absente ; personne, son nom affiché ; remède
+ *   changerPresence {id, tours}, tours sa présence plus ce tour, croissants
+ *   et sans doublon. Une réservation « tous les tours » ne le reçoit
+ *   jamais : elle ne tient qu'aux tours de présence ;
  * - PLACE_RESERVEE {table, siege, tour, titulaire, portee} : la réservation
  *   active d'une autre personne tient ce siège à un tour de la pose, dans les
  *   deux modes ; remède le choix d'une place pour la réservation de la
@@ -95,7 +125,11 @@ export function reservationsParTour(charge, idTable) {
  *   personne est réservée à ce tour à une autre table — ou, sièges du retenu
  *   attribués, à un autre siège ; remède le déplacement de sa réservation
  *   vers le dépôt.
- * Les trois premiers ne valent que pour une réservation. signaux porte
+ * Les trois premiers ne valent que pour une réservation. Les tours d'une
+ * pose ne comptent qu'où la personne est présente : à ses tours d'absence,
+ * une pose « tous les tours » n'occupe rien et ne dispute rien aux autres
+ * personnes ; seules ses propres réservations s'y excluent encore
+ * (DEUX_PLACES_MEME_TOUR). signaux porte
  * TABLE_GELEE {table} quand, la pose faite, les ancrés de la table en
  * occupent toutes les places (k_t = c_t) : accepté, mais rarement voulu.
  *
@@ -106,16 +140,24 @@ export function reservationsParTour(charge, idTable) {
 export function controlerPose(charge, pose) {
   const { participant, table: idTable, siege = null, portee, tour = null, depuis = null, retenu = false } = pose;
   const places = capacite(charge, tableDe(charge, idTable));
-  const exclu = charge.participants.some(({ id, exclu: estExclu }) => id === participant && estExclu);
+  const personne = charge.participants.find(({ id }) => id === participant);
+  const exclu = personne !== undefined && personne.exclu;
+  // La présence se lit sans l'exclusion, qui a son propre refus.
+  const presenteA = (t) => personne === undefined || estPresentAuTour(personne, t);
   const couverts = retenu ? [tour] : toursCouverts(charge, { portee, tour });
+  const tenus = couverts.filter(presenteA);
+  const presentes = presentesParTour(charge);
   const actives = reservationsActives(charge).filter((r) => depuis === null || !designee(r, participant, depuis));
-  const premierCommun = (r) => couverts.find((t) => couvre(r, t));
+  const premierCommun = (r) => tenus.find((t) => tientAuTour(r, t, presentes(t)));
+  // Les réservations de la personne s'excluent à chaque tour couvert, présente
+  // ou non : une présence rendue ensuite les ferait tenir ensemble.
+  const premierCouvert = (r) => couverts.find((t) => couvre(r, t));
   const refus = [];
 
   if (!retenu) {
     for (const t of couverts) {
-      const reservees = reserveesAuTour(actives, idTable, t);
-      if (!exclu) reservees.add(participant);
+      const reservees = reserveesAuTour(actives, idTable, t, presentes(t));
+      if (!exclu && presenteA(t)) reservees.add(participant);
       if (reservees.size > places) {
         const details = { table: idTable, tour: t, reservees: reservees.size, capacite: places };
         refus.push(refusDe('SURRESERVATION', details, changerPlaces(idTable, reservees.size)));
@@ -128,7 +170,7 @@ export function controlerPose(charge, pose) {
     const autre = actives.find(
       (r) =>
         r.participant === participant &&
-        premierCommun(r) !== undefined &&
+        premierCouvert(r) !== undefined &&
         (r.table !== idTable || (r.siege !== null && siege !== null && r.siege !== siege)),
     );
     if (autre !== undefined) {
@@ -138,7 +180,7 @@ export function controlerPose(charge, pose) {
       };
       const details = {
         participant,
-        tour: premierCommun(autre),
+        tour: premierCouvert(autre),
         autre: { table: autre.table, siege: autre.siege, portee: autre.portee, tour: autre.tour },
       };
       refus.push(refusDe('DEUX_PLACES_MEME_TOUR', details, remede));
@@ -147,6 +189,12 @@ export function controlerPose(charge, pose) {
 
   if (exclu) {
     refus.push(refusDe('PERSONNE_EXCLUE', { participant }, { commande: 'reintegrerParticipant', arguments: { id: participant } }));
+  }
+
+  if (!exclu && personne !== undefined && (retenu || portee === 'tour') && !presenteA(tour)) {
+    const tours = [...new Set([...toursDePresence(personne, charge.evenement.tours), tour])].sort((a, b) => a - b);
+    const details = { participant, personne: nomAffiche(personne), tour };
+    refus.push(refusDe('PERSONNE_ABSENTE_AU_TOUR', details, { commande: 'changerPresence', arguments: { id: participant, tours } }));
   }
 
   if (siege !== null) {
@@ -161,6 +209,7 @@ export function controlerPose(charge, pose) {
     const propre = actives.find(
       (r) =>
         r.participant === participant &&
+        tenus.includes(tour) &&
         couvre(r, tour) &&
         (r.table !== idTable || (attribues && r.siege !== null && siege !== null && r.siege !== siege)),
     );
@@ -198,26 +247,14 @@ function signauxDe(charge, { participant, table: idTable, siege = null, portee, 
   return [{ code: 'TABLE_GELEE', table: idTable }];
 }
 
-/**
- * Les refus de la réintégration de id (§ 4.4, § 5.9) : ses réservations
- * suspendues, posées contre les actives. SURRESERVATION quand une table ne
- * peut plus les recevoir, au premier tour qui déborde, une fois par table,
- * dans l'ordre de ses réservations ; puis PLACE_RESERVEE, une par
- * réservation à un siège qu'une autre personne a pris depuis à un tour
- * qu'elle couvre. [] quand rien ne s'y oppose, et pour une personne qui
- * n'est pas exclue.
- *
- * @param {import('../stockage/types.js').Charge} charge
- * @param {number} id
- * @returns {Array<{code: string, details: Object}>}
- */
-export function controlerReintegration(charge, id) {
-  if (!charge.participants.some((personne) => personne.id === id && personne.exclu)) return [];
-  const apres = {
-    ...charge,
-    participants: charge.participants.map((personne) => (personne.id === id ? { ...personne, exclu: false } : personne)),
-  };
-  const siennes = charge.reservations.filter(({ participant }) => participant === id).sort(ordreDesReservations);
+// Les refus qu'opposent les réservations de id, dans la charge apres, aux
+// seuls tours gagnes (croissants) où elle se met à tenir : SURRESERVATION
+// quand une de ses tables ne peut plus les recevoir, au premier tour gagné
+// qui déborde, une fois par table, dans l'ordre de ses réservations ; puis
+// PLACE_RESERVEE, une par réservation à un siège qu'une autre personne tient
+// à un tour gagné qu'elle couvre.
+function refusDesToursGagnes(apres, id, gagnes) {
+  const siennes = apres.reservations.filter(({ participant }) => participant === id).sort(ordreDesReservations);
   const refus = [];
   const vues = new Set();
   for (const { table: idTable } of siennes) {
@@ -225,20 +262,74 @@ export function controlerReintegration(charge, id) {
     vues.add(idTable);
     const places = capacite(apres, tableDe(apres, idTable));
     const comptes = reservationsParTour(apres, idTable);
-    const rang = comptes.findIndex((n) => n > places);
-    if (rang >= 0) {
-      const details = { table: idTable, tour: rang + 1, reservees: comptes[rang], capacite: places };
-      refus.push(refusDe('SURRESERVATION', details, changerPlaces(idTable, comptes[rang])));
+    const tour = gagnes.find((t) => comptes[t - 1] > places);
+    if (tour !== undefined) {
+      const details = { table: idTable, tour, reservees: comptes[tour - 1], capacite: places };
+      refus.push(refusDe('SURRESERVATION', details, changerPlaces(idTable, comptes[tour - 1])));
     }
   }
-  const actives = reservationsActives(charge);
+  const presentes = presentesParTour(apres);
+  const autres = reservationsActives(apres).filter(({ participant }) => participant !== id);
   for (const sienne of siennes) {
     if (sienne.siege === null) continue;
-    const couverts = toursCouverts(charge, sienne);
-    const autre = actives.find(
-      (r) => r.table === sienne.table && r.siege === sienne.siege && couverts.some((t) => couvre(r, t)),
-    );
-    if (autre !== undefined) refus.push(placeReservee(autre, couverts.find((t) => couvre(autre, t))));
+    const couverts = toursCouverts(apres, sienne).filter((t) => gagnes.includes(t));
+    const tenueA = (r) => couverts.find((t) => tientAuTour(r, t, presentes(t)));
+    const autre = autres.find((r) => r.table === sienne.table && r.siege === sienne.siege && tenueA(r) !== undefined);
+    if (autre !== undefined) refus.push(placeReservee(autre, tenueA(autre)));
+  }
+  return refus;
+}
+
+/**
+ * Les refus de la réintégration de id (§ 4.4, § 5.9) : ses réservations
+ * suspendues, posées contre les actives, à ses seuls tours de présence (R1).
+ * SURRESERVATION quand une table ne peut plus les recevoir, au premier tour
+ * qui déborde, une fois par table, dans l'ordre de ses réservations ; puis
+ * PLACE_RESERVEE, une par réservation à un siège qu'une autre personne a
+ * pris depuis à un tour de présence qu'elle couvre. [] quand rien ne s'y
+ * oppose, et pour une personne qui n'est pas exclue.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {number} id
+ * @returns {Array<{code: string, details: Object}>}
+ */
+export function controlerReintegration(charge, id) {
+  const exclue = charge.participants.find((personne) => personne.id === id && personne.exclu);
+  if (exclue === undefined) return [];
+  const apres = {
+    ...charge,
+    participants: charge.participants.map((personne) => (personne.id === id ? { ...personne, exclu: false } : personne)),
+  };
+  return refusDesToursGagnes(apres, id, toursDePresence(exclue, charge.evenement.tours));
+}
+
+/**
+ * Les refus d'une présence qui s'étend (§ 5.9), de la forme de ceux de
+ * controlerReintegration, sans rien écrire : pour chaque identifiant de
+ * ids, par identifiant croissant, sur les seuls tours où il passe d'absent
+ * à présent (R1) entre charge et apres, SURRESERVATION (remède
+ * changerPlacesTable) quand une de ses tables ne peut plus recevoir ses
+ * réservations à un tour gagné, puis PLACE_RESERVEE (remède le choix d'une
+ * place pour la titulaire) quand son siège réservé est tenu par une autre à
+ * un tour gagné. Une réservation suspendue par une absence redevient active
+ * quand la présence s'étend : ce contrôle refuse le geste avant qu'il
+ * n'écrive une surréservation ou un siège réservé deux fois. [] quand rien
+ * ne s'y oppose ; le geste refuse sur le premier.
+ *
+ * @param {import('../stockage/types.js').Charge} charge   avant le geste
+ * @param {import('../stockage/types.js').Charge} apres    la charge où la présence a changé
+ * @param {number[]} ids
+ * @returns {Array<{code: string, details: Object}>}
+ */
+export function controlerPresence(charge, apres, ids) {
+  const R = apres.evenement.tours;
+  const avantA = presentesParTour(charge);
+  const apresA = presentesParTour(apres);
+  const refus = [];
+  for (const id of [...ids].sort((a, b) => a - b)) {
+    const gagnes = [];
+    for (let tour = 1; tour <= R; tour += 1) if (!avantA(tour).has(id) && apresA(tour).has(id)) gagnes.push(tour);
+    if (gagnes.length > 0) refus.push(...refusDesToursGagnes(apres, id, gagnes));
   }
   return refus;
 }

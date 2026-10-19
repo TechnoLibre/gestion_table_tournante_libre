@@ -13,7 +13,7 @@ import { normaliser } from '../moteur/configuration.js';
 import { rechercher } from '../moteur/recherche.js';
 import { serialiser } from '../stockage/canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
-import { derive, fautes } from '../stockage/placements.js';
+import { ajusterALaPresence, derive, fautes } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { avertissementsApres } from './avertissements.js';
 import { COMMANDES, appliquerCommande } from './commandes.js';
@@ -942,6 +942,96 @@ describe('enregistrerGeneration : les sièges réservés dans une génération (
   });
 });
 
+describe('commandes des places : le retenu et la présence par tour (§ 5.8, § 7.1)', () => {
+  // La charge retenue où chaque personne de presences ({id: liste}) porte
+  // cette présence, le retenu aligné sur elle (ajusterALaPresence) : ses
+  // absentes n'y ont ni chaise ni réserve aux tours d'absence.
+  function presentes(presences, options = {}) {
+    const charge = chargeRetenue(options);
+    for (const p of charge.participants) if (Object.hasOwn(presences, p.id)) p.presence = presences[p.id];
+    charge.retenu = { proposition: 1, ...ajusterALaPresence(charge.retenu, charge).placement };
+    assert.deepEqual(derive(charge.retenu, charge), []);
+    return charge;
+  }
+
+  test('déposer une absente à son tour d’absence : PERSONNE_ABSENTE_AU_TOUR ; le remède, présente aux tours 1 à 3, s’exécute, puis le dépôt passe', () => {
+    const charge = presentes({ 2: [2, 3] });
+    assert.deepEqual(listes(charge, 1), [[1, null, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]]);
+    const leve = refuse(() => executer('deplacerDansRetenu', charge, { tour: 1, participant: 2, table: 5, siege: 2 }), 'PERSONNE_ABSENTE_AU_TOUR', {
+      participant: 2,
+      personne: 'Théo Pervenche',
+      tour: 1,
+      remede: { commande: 'changerPresence', arguments: { id: 2, tours: [1, 2, 3] } },
+    });
+    const { remede } = leve.details;
+    const presente = executer(remede.commande, charge, remede.arguments).charge;
+    assert.deepEqual(reserveDe(presente, 1), [2]);
+    const deposee = executer('deplacerDansRetenu', presente, { tour: 1, participant: 2, table: 5, siege: 2 }).charge;
+    assert.deepEqual(listes(deposee, 1), [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]]);
+    assert.deepEqual(derive(deposee.retenu, deposee), []);
+  });
+
+  test('échanger avec une absente à son tour d’absence : PERSONNE_ABSENTE_AU_TOUR, qu’elle soit a ou b, l’autre assise ou non', () => {
+    const charge = presentes({ 2: [2, 3] });
+    for (const [a, b] of [
+      [2, 7],
+      [7, 2],
+    ]) {
+      refuse(() => executer('echangerDansRetenu', charge, { tour: 1, a, b }), 'PERSONNE_ABSENTE_AU_TOUR', {
+        participant: 2,
+        tour: 1,
+        remede: { commande: 'changerPresence', arguments: { id: 2, tours: [1, 2, 3] } },
+      });
+    }
+    // 7 retirée dans la réserve du tour 1 : l'échange avec l'absente n'est
+    // pas SANS_EFFET, il est refusé de même.
+    const enReserve = executer('retirerDuTour', charge, { tour: 1, participant: 7 }).charge;
+    refuse(() => executer('echangerDansRetenu', enReserve, { tour: 1, a: 7, b: 2 }), 'PERSONNE_ABSENTE_AU_TOUR', { participant: 2 });
+  });
+
+  test('retirer du tour une absente, que le plan ne montre pas assise : SANS_EFFET', () => {
+    const charge = presentes({ 2: [2, 3] });
+    refuse(() => executer('retirerDuTour', charge, { tour: 1, participant: 2 }), 'SANS_EFFET', { commande: 'retirerDuTour' });
+  });
+
+  test('une personne que le retenu ne déclare pas y entre en réserve à ses tours de présence, absente aux autres', () => {
+    const charge = chargeRetenue();
+    charge.participants.push(personne(13, { presence: [1, 2] }));
+    charge.prochainsIds.participant = 14;
+    const { charge: apres } = executer('deplacerDansRetenu', charge, { tour: 1, participant: 13, table: 5, siege: 7 });
+    assert.deepEqual(listes(apres, 1)[0], [1, 2, 3, 4, 5, 6, 13]);
+    assert.deepEqual(reserveDe(apres, 2), [13]);
+    assert.deepEqual(apres.retenu.placement[2].absents, [13]);
+    assert.deepEqual(derive(apres.retenu, apres), []);
+  });
+
+  test('enregistrerGeneration, sièges attribués : le siège réservé d’une absente revient à qui le réserve à ce tour', () => {
+    // 2 réservée « tous » au siège 3 de la table 2, absente au tour 2 ; 5
+    // réservée au même siège au tour 2 seulement.
+    const charge = creerCharge({ id: 'evt-generation', nom: 'Soirée des Lucioles', siegesParDefaut: 8, tours: 3 });
+    charge.reglages.attribuerSieges = true;
+    charge.participants = DOUZE.map((id) => personne(id, id === 2 ? { presence: [1, 3] } : {}));
+    charge.tables = [
+      { id: 1, numero: 1, sieges: null, forme: 'ronde', position: { x: 0, y: 0 } },
+      { id: 2, numero: 2, sieges: null, forme: 'ronde', position: { x: 400, y: 0 } },
+    ];
+    charge.reservations = [resa(2, 2, 3), resa(5, 2, 3, 2)];
+    charge.prochainsIds = { participant: 13, table: 3, proposition: 1 };
+    const configuration = configurationDepuisCharge(charge);
+    const tours = [
+      [[1, 3, 4, 6, 7, 8], [2, 9, 10, 11, 12, 5]],
+      [[1, 3, 4, 6, 7, 8], [5, 9, 10, 11, 12]],
+      [[1, 3, 4, 6, 7, 8], [2, 9, 10, 11, 12, 5]],
+    ];
+    const proposition = { id: 1, graine: 48271, arret: 60, historique: 1000, plan: { tables: [1, 2], tours, reserves: [[], [], []] } };
+    const { charge: apres } = executer('enregistrerGeneration', charge, { propositions: [proposition], configuration, produitVersion: VERSION.affichee });
+    const [{ placement }] = apres.propositions;
+    assert.deepEqual(placement[1].sieges[1], [9, 10, 5, 11, 12]);
+    assert.deepEqual(placement[1].absents, [2]);
+    for (const rang of [0, 2]) assert.equal(placement[rang].sieges[1][2], 2);
+  });
+});
+
 describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
   // Détails d'exemple de chaque code de libelles/places.js, hors libellés
   // figés, que les commandes composent ci-dessus.
@@ -949,6 +1039,7 @@ describe('commandes des places : les textes de leurs codes (§ 14.6)', () => {
     ['SIEGE_INEXISTANT', [{ table: 2, siege: 9, capacite: 8 }, '9']],
     ['DEUX_PLACES_MEME_TOUR', [{ participant: 1, tour: 2, autre: { table: 1, siege: null, portee: 'tous', tour: null } }, 'tour 2']],
     ['PERSONNE_EXCLUE', [{ participant: 3 }, 'exclue']],
+    ['PERSONNE_ABSENTE_AU_TOUR', [{ participant: 2, personne: 'Théo Pervenche', tour: 3 }, 'absente au tour 3']],
     ['PLACE_RESERVEE', [{ table: 2, siege: 3, tour: 2, titulaire: 2, portee: 'tour' }, 'au tour 2']],
     ['RESERVEE_AILLEURS', [{ participant: 1, tour: 2, reservation: { table: 1, siege: null, portee: 'tous', tour: null } }, 'tour 2']],
     ['TABLE_GELEE', [{ table: 1 }, 'réservées']],

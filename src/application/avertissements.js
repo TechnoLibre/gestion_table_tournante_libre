@@ -13,13 +13,13 @@
 // Ni indexerPlan ni derive n'entrent ici : le premier lève sur un plan qui ne
 // décrit plus la configuration, le second sur un placement fautif.
 import { ErreurConfiguration } from '../moteur/erreurs.js';
-import { LIBRE, nombrePlacesManquantes, normaliser } from '../moteur/configuration.js';
+import { LIBRE, normaliser, placesManquantesParTour } from '../moteur/configuration.js';
 import { verifierInvariants } from '../moteur/verification.js';
 import { capacite } from '../stockage/document.js';
 import { examiner, planDepuisFichier } from '../stockage/placements.js';
 import { configurationDe } from './configuration.js';
 import { nomAffiche } from './personnes.js';
-import { couvre, placesTenues, presents, reservationsActives } from './places.js';
+import { aDesAbsences, placesTenues, presentsAuTour, reservationsCouvrantes } from './places.js';
 
 const avertissement = (code, details) => ({ code, details });
 
@@ -50,20 +50,20 @@ function raisonsParPlacement(examen) {
 
 // Les réservations au siège que le retenu, sièges attribués, ne tient pas à
 // ce siège alors que sa personne est assise à la même table : celles qui
-// tiennent une chaise selon la règle de l'affichage (placesTenues), dans la
+// tiennent une chaise selon la règle de l'affichage (placesTenues), parmi
+// les réservations couvrantes du tour (personne présente à ce tour), dans la
 // capacité courante. Par tour, dans l'ordre de retenu.tables, par siège ;
-// occupant, la personne présente sur ce siège, null pour une chaise vide ou
-// celle d'un absent. Une personne assise à une autre table relève de la
-// règle de la table, que verifierInvariants juge.
+// occupant, la personne présente au tour sur ce siège, null pour une chaise
+// vide ou celle d'un absent. Une personne assise à une autre table relève de
+// la règle de la table, que verifierInvariants juge.
 function siegesNonTenus(charge, retenu, instance) {
   if (!retenu.siegesAttribues) return [];
-  const actives = reservationsActives(charge);
-  const ids = presents(charge);
   const enregistrementDe = new Map(charge.tables.map((enregistrement) => [enregistrement.id, enregistrement]));
   const violations = [];
   const lus = Math.min(retenu.tours, instance.R, retenu.placement.length);
   for (let tour = 1; tour <= lus; tour += 1) {
-    const couvrantes = actives.filter((reservation) => couvre(reservation, tour));
+    const couvrantes = reservationsCouvrantes(charge, tour);
+    const ids = presentsAuTour(charge, tour);
     retenu.tables.forEach((idTable, rang) => {
       const enregistrement = enregistrementDe.get(idTable);
       if (enregistrement === undefined || retenu.tables.indexOf(idTable) !== rang) return;
@@ -184,15 +184,26 @@ export function examenNomme(examen, charge) {
 }
 
 const memeRaison = (code, cle, valeur) => (raison) => raison.code === code && raison[cle] === valeur;
+// La raison de présence de ce code qui nomme la personne à ce tour.
+const memePresence = (code, participant, tour) => (raison) =>
+  raison.code === code && raison.participant === participant && raison.tours.includes(tour);
 
 // La raison de dérive qui nomme déjà la violation, ou undefined : la
-// personne exclue, supprimée ou non placée ; la table supprimée, ajoutée, ou
-// dont la capacité a changé ; le nombre de tours changé.
+// personne exclue, supprimée ou non placée ; sa présence retirée au tour où
+// le retenu la place encore, ou ajoutée au tour où il ne la place pas ; la
+// table supprimée, ajoutée, ou dont la capacité a changé ; le nombre de
+// tours changé.
 function raisonQuiLaNomme(violation, raisons) {
-  const { code, participant, table, detail } = violation;
+  const { code, participant, table, tour, detail } = violation;
   if (code === 'EXCLU_PLACE') return raisons.find(memeRaison('PARTICIPANT_EXCLU', 'participant', participant));
   if (code === 'INCONNU') return raisons.find(memeRaison('PARTICIPANT_SUPPRIME', 'participant', participant));
-  if (code === 'NON_ASSIS') return raisons.find(memeRaison('PARTICIPANT_NON_PLACE', 'participant', participant));
+  if (code === 'ABSENT_PLACE') return raisons.find(memePresence('PRESENCE_RETIREE', participant, tour));
+  if (code === 'NON_ASSIS') {
+    return (
+      raisons.find(memeRaison('PARTICIPANT_NON_PLACE', 'participant', participant)) ??
+      raisons.find(memePresence('PRESENCE_AJOUTEE', participant, tour))
+    );
+  }
   if (code === 'CAPACITE') return raisons.find(memeRaison('CAPACITE_CHANGEE', 'table', table));
   if (code === 'TOURS') return raisons.find((raison) => raison.code === 'TOURS_CHANGES');
   if (code === 'TABLE_INCONNUE' && detail === 'inconnue') return raisons.find(memeRaison('TABLE_SUPPRIMEE', 'table', table));
@@ -235,9 +246,15 @@ export function invariantViole(charge, examen = examiner(charge)) {
  *     lève, et celle d'avant se normalisait ; PLACES_MANQUANTES et
  *     RESERVATION_NON_HONOREE, qui lisent l'instance d'après, ne se calculent
  *     alors pas ;
- *   PLACES_MANQUANTES {placesManquantes}   nombrePlacesManquantes de l'instance
- *     d'après, non nul et plus grand que celui d'avant (0 quand avant ne se
- *     normalisait pas) ;
+ *   PLACES_MANQUANTES {placesManquantes, tours?}   quand un tour voit son
+ *     manque (placesManquantesParTour de l'instance d'après) devenir positif
+ *     ou grandir : comparé tour à tour à celui d'avant (0 quand avant ne se
+ *     normalisait pas) ; un tour qu'avant n'avait pas se compare au plus
+ *     grand manque d'avant, si bien que, sans absence, un tour ajouté au
+ *     même manque ne dit rien. placesManquantes, le plus grand manque
+ *     d'après ; tours, seulement quand une personne non exclue manque un tour
+ *     (aDesAbsences), liste chaque tour à manque positif, {tour, manque},
+ *     croissants — sans absence, les détails restent {placesManquantes} ;
  *   DERIVE_NOUVELLE {touchees: [{id|'retenu', raisons}]}   par placement, les
  *     raisons d'examiner(apres) — derives, retenu.raisons — qu'examiner(avant)
  *     ne portait pas, comparées champ pour champ, puis nommées sur la charge
@@ -269,9 +286,15 @@ export function avertissementsApres(avant, apres) {
     rendus.push(avertissement('CONFIGURATION_INCOHERENTE', { code: refus.code, details: refus.details }));
   }
   if (instance !== null) {
-    const manque = nombrePlacesManquantes(instance);
-    const manqueAvant = instanceAvant === null ? 0 : nombrePlacesManquantes(instanceAvant);
-    if (manque > 0 && manque > manqueAvant) rendus.push(avertissement('PLACES_MANQUANTES', { placesManquantes: manque }));
+    const manques = placesManquantesParTour(instance);
+    const manquesAvant = instanceAvant === null ? [] : placesManquantesParTour(instanceAvant);
+    const plusGrandAvant = Math.max(0, ...manquesAvant);
+    const empire = manques.some((manque, rang) => manque > 0 && manque > (manquesAvant[rang] ?? plusGrandAvant));
+    if (empire) {
+      const placesManquantes = Math.max(...manques);
+      const tours = manques.flatMap((manque, rang) => (manque > 0 ? [{ tour: rang + 1, manque }] : []));
+      rendus.push(avertissement('PLACES_MANQUANTES', aDesAbsences(apres) ? { placesManquantes, tours } : { placesManquantes }));
+    }
   }
 
   const anciennes = raisonsParPlacement(examenAvant);

@@ -27,6 +27,85 @@ export const EXEMPLES = [
   ['ENTREE_SUPPRIMER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
   ['ENTREE_CHANGER_ETIQUETTES', { personne: 'Iris Ombrelle', ajoutees: ['Montréal', 'finance'], retirees: ['bénévole'] }],
   ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
+  // La présence par tour
+  ['RESERVATIONS_SUSPENDUES_AUX_TOURS', { participant: 1, personne: 'Iris Ombrelle', reservations: 2, tours: [3, 4], titres: 1 }],
+  ['RESERVATIONS_RETABLIES_AUX_TOURS', { participant: 1, personne: 'Iris Ombrelle', reservations: 1, tours: [2], titres: 0 }],
+  [
+    'A_PLACER_DANS_LE_RETENU',
+    { participant: 3, personne: 'Théo Pervenche', tours: [2], tousLesTours: false, remede: { geste: 'afficherTour', tour: 2 } },
+  ],
+  ['RENCONTRES_RETIREES_DU_RETENU', { participant: 1, personne: 'Iris Ombrelle', tours: [1, 2], remede: null }],
+  ['ENTREE_CHANGER_PRESENCE', { personne: 'Iris Ombrelle', tours: [1, 2], avant: null, retiree: [3, 4], enReserve: [] }],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  [
+    'RESERVATIONS_SUSPENDUES_AUX_TOURS',
+    { participant: 1, personne: 'Iris Ombrelle', reservations: 2, tours: [3, 4], titres: 1 },
+    "Absence de Iris Ombrelle aux tours 3 et 4 : 2 réservations suspendues, ses places y reviennent aux autres, et 1 titre de place n'y est plus pourvu.",
+  ],
+  [
+    'RESERVATIONS_SUSPENDUES_AUX_TOURS',
+    { participant: 3, personne: 'Théo Pervenche', reservations: 1, tours: [2], titres: 0 },
+    'Absence de Théo Pervenche au tour 2 : 1 réservation suspendue, sa place y revient aux autres.',
+  ],
+  [
+    'RESERVATIONS_RETABLIES_AUX_TOURS',
+    { participant: 3, personne: 'Théo Pervenche', reservations: 2, tours: [2, 3, 4], titres: 2 },
+    'Présence de Théo Pervenche aux tours 2 à 4 : 2 réservations rétablies, et 2 titres de place de nouveau pourvus.',
+  ],
+  [
+    'A_PLACER_DANS_LE_RETENU',
+    { participant: 3, personne: 'Théo Pervenche', tours: [2], tousLesTours: false, remede: { geste: 'afficherTour', tour: 2 } },
+    'Théo Pervenche attend en réserve du placement retenu au tour 2 : à placer à la main, ou par une proposition dérivée.',
+  ],
+  [
+    'A_PLACER_DANS_LE_RETENU',
+    { participant: 8, personne: 'Hortense Quenouille', tours: [1, 2, 3, 4], tousLesTours: true, remede: { geste: 'afficherTour', tour: 1 } },
+    'Hortense Quenouille attend en réserve du placement retenu aux tours 1 à 4 : à placer à la main, ou par une proposition ' +
+      'dérivée. Si elle arrive en cours de soirée, dire à quels tours elle est présente.',
+  ],
+  [
+    'RENCONTRES_RETIREES_DU_RETENU',
+    { participant: 1, personne: 'Iris Ombrelle', tours: [1, 2], remede: null },
+    "Iris Ombrelle était assise aux tours 1 et 2 du placement retenu : ses rencontres de ces tours n'y comptent plus. " +
+      'Pour les garder, défaire, puis la dire présente aux tours 1 et 2 seulement.',
+  ],
+  [
+    'ENTREE_CHANGER_PRESENCE',
+    { personne: 'Iris Ombrelle', tours: [1, 2], avant: null, retiree: [3, 4], enReserve: [] },
+    'Présence de Iris Ombrelle : tours 1 et 2, au lieu de tous les tours ; retirée du placement retenu aux tours 3 et 4',
+  ],
+  [
+    'ENTREE_CHANGER_PRESENCE',
+    { personne: 'Théo Pervenche', tours: [2, 3, 4], avant: [3, 4], retiree: [], enReserve: [2] },
+    'Présence de Théo Pervenche : tours 2 à 4, au lieu des tours 3 et 4 ; mise en réserve au tour 2',
+  ],
+  [
+    'ENTREE_CHANGER_PRESENCE',
+    { personne: 'Basile Mélèze', tours: null, avant: [1], retiree: [], enReserve: [] },
+    'Présence de Basile Mélèze : tous les tours, au lieu du tour 1',
+  ],
+  [
+    'ENTREE_CHANGER_PRESENCE',
+    { personne: 'Basile Mélèze', tours: [2, 3], avant: [1, 2], retiree: [1], enReserve: [3] },
+    'Présence de Basile Mélèze : tours 2 et 3, au lieu des tours 1 et 2 ; retirée du placement retenu au tour 1, mise en réserve au tour 3',
+  ],
+  ['ENTREE_AJOUTER_PARTICIPANT', { personne: 'Iris Ombrelle', ajuste: true }, 'Ajouté Iris Ombrelle ; placement retenu ajusté'],
+  ['ENTREE_AJOUTER_PARTICIPANT', { personne: 'Iris Ombrelle', ajuste: false }, 'Ajouté Iris Ombrelle'],
+  ['ENTREE_EXCLURE_PARTICIPANT', { personne: 'Iris Ombrelle', ajuste: true }, 'Exclu Iris Ombrelle ; placement retenu ajusté'],
+  ['ENTREE_REINTEGRER_PARTICIPANT', { personne: 'Iris Ombrelle', ajuste: true }, 'Réintégré Iris Ombrelle ; placement retenu ajusté'],
+  ['ENTREE_SUPPRIMER_PARTICIPANT', { personne: 'Iris Ombrelle', ajuste: true }, 'Supprimé Iris Ombrelle ; placement retenu ajusté'],
+  [
+    'ENTREE_IMPORTER_PARTICIPANTS',
+    { mode: 'mettreAJour', ajoutes: 1, misAJour: 2, retires: 0, ajuste: true },
+    'Mis à jour la liste par import : 1 ajouté, 2 modifiés ; placement retenu ajusté',
+  ],
+  [
+    'IMPORT_EN_RETENU',
+    {},
+    "L'import change la liste après le choix d'un placement : le placement retenu suit la présence de chacun, " +
+      "les arrivées en réserve et les départs laissant leur chaise vide, sans que personne d'autre n'y change de place ; " +
+      "à vous de juger s'il convient encore.",
+  ],
+];

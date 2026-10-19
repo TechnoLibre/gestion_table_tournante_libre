@@ -26,8 +26,9 @@ import { SUFFIXES } from '../stockage/noms.js';
 import { derive, planDepuisFichier, versFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import { configurationDe } from './configuration.js';
-import { planDuDepart } from './depart.js';
+import { departAdapte, departDuMoteur, planDuDepart, tourFigeDifferent } from './depart.js';
 import { ErreurCommande } from './erreurs.js';
+import { detaillerQualite, evaluer, rencontresDePersonne } from './evaluation.js';
 import { creerExecuteurTravailleur } from './executeur_travailleur.js';
 import {
   ErreurAnnulee,
@@ -43,6 +44,7 @@ import {
 import { brancherTravailleur } from './generation_travailleur.js';
 import { creerHorlogePilotee } from './horloge.js';
 import { libelle } from './libelles.js';
+import { nomAffiche } from './personnes.js';
 import { INACTIVITE_MS, creerSeance } from './seance.js';
 
 const V1 = VERSION.affichee;
@@ -1779,8 +1781,9 @@ function chargeAvecPropositions(entrees, { attribuerSieges = false } = {}) {
   return charge;
 }
 
-// Le départ que le moteur reçoit pour la proposition id de la charge.
-const departRecherche = (charge, id, toursFiges) => ({ plan: planDuDepart(charge, id), toursFiges });
+// Le départ que le moteur reçoit pour la proposition id de la charge : sans
+// changement de participants, le plan du départ et aucune réserve imposée.
+const departRecherche = (charge, id, toursFiges) => ({ plan: planDuDepart(charge, id), toursFiges, reservesImposees: [] });
 
 // Remplace executer de la séance par un espion qui note chaque commande, ses
 // arguments compris, avant de la confier à la séance ; rend la liste notée.
@@ -1819,15 +1822,17 @@ describe('génération dérivée : les refus du lancement (§ 5.7, C6, C24)', ()
       tours: 4,
       remede: { geste: 'libererTour', tour: 5 },
     });
-    // Une seule personne exclue après le départ : il est en dérive.
+    // Une table agrandie après le départ, et une personne exclue : il est en
+    // dérive, et seule la raison du mobilier est nommée.
     const enDerive = await monter({ charges: [charge()] });
     await enDerive.seance.executer('exclureParticipant', { id: 12 });
+    await enDerive.seance.executer('changerPlacesTable', { id: 1, sieges: 4, origine: 'champ' });
     const refusEnDerive = await refuseSousDepart(enDerive, { id: 4, toursFiges: [] }, 'DEPART_NON_COMPARABLE');
     assert.deepEqual(
       [refusEnDerive.details.depart, refusEnDerive.details.statut, refusEnDerive.details.remede],
       [4, 'derive', REPARTIR_DE_ZERO],
     );
-    assert.deepEqual(refusEnDerive.details.raisons.map(({ code }) => code), ['PARTICIPANT_EXCLU']);
+    assert.deepEqual(refusEnDerive.details.raisons.map(({ code }) => code), ['CAPACITE_CHANGEE']);
     // Une réservation posée après le départ, à une table où il ne l'assied
     // pas, dans un tour qu'il ne fige pas.
     const reservee = await monter({ charges: [charge()] });
@@ -2057,5 +2062,211 @@ describe('génération dérivée : le lancement, la forme rendue, les identiques
       attendues.map(({ plan }) => plan),
       rechercher(configurationDe(chargeDemo('petite')), reglages).map(({ plan }) => plan),
     );
+  });
+});
+
+// --- Le départ en dérive par ses participants (§ 5.7) ---------------------------
+
+// Une personne inventée de la petite démonstration, présente aux tours donnés.
+const inventee = (id, presence) => ({
+  id,
+  nom: 'Pimprenelle',
+  prenom: 'Aurèle',
+  appartenance: null,
+  courriel: null,
+  titrePressenti: null,
+  notes: null,
+  exclu: false,
+  presence,
+});
+
+// La petite démonstration, son plan parfait proposé sous le n° 4, sièges
+// attribués ou non : la personne 12 absente au tour 1, et la n° 13,
+// présente au seul tour 1, réservée à ce tour par reservation ({table,
+// siege}).
+function chargeAuTour1(reservation, { attribuerSieges = false } = {}) {
+  const charge = chargeAvecPropositions([[4, PLAN_PARFAIT_PETITE]], { attribuerSieges });
+  charge.participants.find(({ id }) => id === 12).presence = [2, 3, 4];
+  charge.participants.push(inventee(13, [1]));
+  charge.prochainsIds.participant = 14;
+  charge.reservations = [{ participant: 13, table: reservation.table, siege: reservation.siege, portee: 'tour', tour: 1 }];
+  return charge;
+}
+
+// Les propositions ajoutées d'une issue, lues dans la charge.
+const ajouteesDe = (charge, issue) => issue.ajoutees.map((id) => charge.propositions.find((p) => p.id === id));
+
+describe('génération dérivée : un départ en dérive par ses participants (§ 5.7)', () => {
+  test('la boucle complète : retenir n° 4, réduire une présence aux tours 1 et 2, ajouter une personne aux tours 3 et 4, en exclure une, générer depuis n° 4, tours 1 et 2 figés', async () => {
+    const montage = await monter({ charges: [chargeAvecPropositions([[4, planCourt(5)]])] });
+    const { seance, controleur } = montage;
+    await seance.executer('retenirProposition', { id: 4 });
+    await seance.executer('changerPresence', { id: 3, tours: [1, 2] });
+    await seance.executer('ajouterParticipant', { champs: { nom: 'Pimprenelle', prenom: 'Aurèle' }, presence: [3, 4] });
+    await seance.executer('exclureParticipant', { id: 7 });
+    const charge = montage.charge();
+    const arrivante = charge.participants.at(-1).id;
+    const toursFiges = [1, 2];
+    const depart = departDuMoteur(charge, { id: 4, toursFiges });
+    const recus = espionnerExecuter(seance);
+    const issue = await controleur.generer({ ...DERIVEE, nombre: 4 }, { depart: { id: 4, toursFiges } });
+    assert.ok(issue.ajoutees.length > 0);
+    assert.deepEqual(montage.espion.lancements[0].options.depart, depart);
+    assert.deepEqual(
+      [issue.departEnDerive, issue.identiquesAuDepart, issue.avertissements],
+      [true, 0, []],
+      'le retenu, seulement ajusté à la présence, ne diffère pas du départ ajusté',
+    );
+    assert.deepEqual(
+      issue.ecarts.map(({ participant, entrees, entreesFigees, enReserveFigee, sorties }) => [participant, entrees, entreesFigees, enReserveFigee, sorties]),
+      [
+        [3, [], [], [], [3, 4]],
+        [7, [], [], [], [1, 2, 3, 4]],
+        [arrivante, [3, 4], [], [], []],
+      ],
+    );
+    const apres = montage.charge();
+    const table = evaluer(apres);
+    const adapte = departAdapte(apres, 4);
+    for (const derivee of ajouteesDe(apres, issue)) {
+      const ici = `n° ${derivee.id}`;
+      assert.equal(table.propositions.find(({ id }) => id === derivee.id).statut, 'comparable', ici);
+      assert.equal(tourFigeDifferent(derivee, adapte, toursFiges), null, ici);
+      const assis = (personne, tour) => derivee.placement[tour - 1].sieges.flat().includes(personne);
+      const absente = (personne, tour) => (derivee.placement[tour - 1].absents ?? []).includes(personne);
+      assert.deepEqual([1, 2, 3, 4].map((tour) => [assis(3, tour), absente(3, tour)]), [[true, false], [true, false], [false, true], [false, true]], ici);
+      assert.deepEqual([1, 2, 3, 4].map((tour) => [assis(arrivante, tour), absente(arrivante, tour)]), [[false, true], [false, true], [true, false], [true, false]], ici);
+      assert.equal(derivee.participants.includes(7), false, ici);
+      // Les rencontres de la partante sont celles des tours figés.
+      const compagnons = new Map();
+      for (const tour of toursFiges) {
+        const liste = derivee.placement[tour - 1].sieges.find((candidate) => candidate.includes(3));
+        for (const autre of liste) if (autre !== 3) compagnons.set(autre, (compagnons.get(autre) ?? 0) + 1);
+      }
+      const lignes = rencontresDePersonne(apres, derivee.id, 3).lignes;
+      assert.deepEqual(new Map(lignes.map(({ id, fois }) => [id, fois])), compagnons, ici);
+    }
+    // Une paire du tour 1, figé, que le tour 3 réunit compte deux fois : la
+    // première dérivée, sa paire du tour 1 réunie au tour 3 par un échange.
+    const [derivee] = ajouteesDe(apres, issue);
+    const [a, b] = derivee.placement[0].sieges.find((liste) => !liste.includes(3));
+    const reunie = structuredClone(derivee);
+    const tour3 = reunie.placement[2].sieges;
+    const tableDeA = tour3.find((liste) => liste.includes(a));
+    const tableDeB = tour3.find((liste) => liste.includes(b));
+    if (tableDeA !== tableDeB) {
+      const c = tableDeA.find((id) => id !== a);
+      tableDeA[tableDeA.indexOf(c)] = b;
+      tableDeB[tableDeB.indexOf(b)] = c;
+    }
+    const avecReunie = { ...apres, propositions: [...apres.propositions, { ...reunie, id: apres.prochainsIds.proposition }] };
+    const ligne = rencontresDePersonne(avecReunie, apres.prochainsIds.proposition, a).lignes.find(({ id }) => id === b);
+    assert.equal(ligne.fois, 2, JSON.stringify(ligne));
+    // Les tours de la ligne sont des index, à partir de 0.
+    assert.deepEqual(ligne.tours.map(({ tour }) => tour), [0, 2]);
+    // À départ égal, la régénération rend le plan de chaque proposition.
+    const configuration = configurationDe(charge);
+    for (const { graine, arret, historique, plan } of recus[0].args.propositions) {
+      assert.deepEqual(
+        regenerer(configuration, { graine, arret, historique, depart: 4, toursFiges }, { planDuDepart: depart.plan, reservesImposees: depart.reservesImposees }),
+        plan,
+      );
+    }
+  });
+
+  test('PLACES_MANQUANTES se juge tour par tour : une salle juste pleine, une arrivante aux tours 3 et 4, refuse en nommant ces tours ; une partante à ces tours, et la génération part', async () => {
+    const pleine = chargeDemo('petite');
+    pleine.participants.push(inventee(13, [3, 4]));
+    pleine.prochainsIds.participant = 14;
+    await refuse((await monter({ charges: [pleine] })).controleur.generer(COURT), 'PLACES_MANQUANTES', {
+      placesManquantes: 1,
+      tours: [{ tour: 3, manque: 1 }, { tour: 4, manque: 1 }],
+      remede: VERS_TABLES,
+    });
+    pleine.participants[0].presence = [1, 2];
+    const issue = await (await monter({ charges: [pleine] })).controleur.generer(COURT);
+    assert.deepEqual(issue.ajoutees, [1]);
+  });
+
+  test('une arrivante réservée à une table pleine d’un tour figé reste en réserve à ce tour, chacun gardant sa chaise ; l’issue l’annonce ; les planchers ne valent plus', async () => {
+    for (const attribuerSieges of [false, true]) {
+      const ici = `sièges attribués : ${attribuerSieges}`;
+      const montage = await monter({ charges: [chargeAuTour1({ table: 1, siege: null }, { attribuerSieges })] });
+      const charge = montage.charge();
+      const issue = await montage.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [1] } });
+      assert.ok(issue.ajoutees.length > 0, ici);
+      assert.deepEqual(issue.ecarts, [
+        { participant: 12, personne: nomAffiche(charge.participants[11]), entrees: [], entreesFigees: [], enReserveFigee: [], sorties: [1] },
+        { participant: 13, personne: 'Aurèle Pimprenelle', entrees: [], entreesFigees: [], enReserveFigee: [{ tour: 1, cause: 'table' }], sorties: [] },
+      ], ici);
+      const apres = montage.charge();
+      const adapte = departAdapte(apres, 4);
+      const instance = normaliser(configurationDe(apres));
+      for (const derivee of ajouteesDe(apres, issue)) {
+        assert.deepEqual(derivee.placement[0].reserve, [13], ici);
+        assert.deepEqual(derivee.placement[0].sieges, adapte.placement[0].sieges, ici);
+        assert.equal(tourFigeDifferent(derivee, adapte, [1]), null, ici);
+        const plan = planDepuisFichier(derivee);
+        assert.deepEqual(verifierInvariants(instance, plan, { reservesImposees: [{ participant: 13, tour: 1 }] }), [], ici);
+        assert.equal(detaillerQualite(apres, derivee.id).collisions.planchersValides, false, ici);
+      }
+    }
+  });
+
+  test('une arrivante à siège réservé d’un tour figé : son siège libre au départ, la dérivée l’y assied ; pris, elle reste en réserve, cause siège', async () => {
+    // Au tour 1, la table 4 du départ ajusté est [10, 11] : le siège 3 est libre.
+    const libre = await monter({ charges: [chargeAuTour1({ table: 4, siege: 3 }, { attribuerSieges: true })] });
+    const issue = await libre.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [1] } });
+    assert.ok(issue.ajoutees.length > 0);
+    assert.deepEqual(issue.ecarts.find(({ participant }) => participant === 13).entreesFigees, [1]);
+    for (const derivee of ajouteesDe(libre.charge(), issue)) {
+      assert.deepEqual(derivee.placement[0].sieges[3], [10, 11, 13], `n° ${derivee.id}`);
+      assert.deepEqual(derivee.placement[0].reserve, [], `n° ${derivee.id}`);
+    }
+    // Le siège 1 est celui de la personne 10.
+    const pris = await monter({ charges: [chargeAuTour1({ table: 4, siege: 1 }, { attribuerSieges: true })] });
+    const enReserve = await pris.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [1] } });
+    assert.deepEqual(enReserve.ecarts.find(({ participant }) => participant === 13).enReserveFigee, [{ tour: 1, cause: 'siege' }]);
+    assert.deepEqual(pris.espion.lancements[0].options.depart.reservesImposees, [{ participant: 13, tour: 1 }]);
+    for (const derivee of ajouteesDe(pris.charge(), enReserve)) {
+      assert.deepEqual(derivee.placement[0].sieges[3], [10, 11], `n° ${derivee.id}`);
+      assert.deepEqual(derivee.placement[0].reserve, [13], `n° ${derivee.id}`);
+    }
+  });
+
+  test('DEPART_ECART_AU_RETENU : un retenu retouché au tour 1, une dérivée de sa proposition, tour 1 figé ; ni pour un retenu seulement ajusté, ni pour une dérivée d’une autre proposition', async () => {
+    const charge = () => chargeAvecPropositions([[4, planCourt(5)], [5, planCourt(7)]]);
+    const retouche = await monter({ charges: [charge()] });
+    await retouche.seance.executer('retenirProposition', { id: 4 });
+    const [[a], [b]] = planDuDepart(retouche.charge(), 4).tours[0];
+    await retouche.seance.executer('echangerDansRetenu', { tour: 1, a, b });
+    const issue = await retouche.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [1, 2] } });
+    assert.deepEqual(issue.avertissements, [{ code: 'DEPART_ECART_AU_RETENU', details: { depart: 4, tours: [1] } }]);
+    assert.deepEqual([issue.departEnDerive, issue.ecarts], [false, []]);
+    assert.equal(typeof libelle(issue.avertissements[0].code, issue.avertissements[0].details), 'string');
+    const autre = await retouche.controleur.generer(DERIVEE, { depart: { id: 5, toursFiges: [1] } });
+    assert.deepEqual(autre.avertissements, []);
+
+    const ajuste = await monter({ charges: [charge()] });
+    await ajuste.seance.executer('retenirProposition', { id: 4 });
+    await ajuste.seance.executer('changerPresence', { id: 1, tours: [1, 2] });
+    const sansEcart = await ajuste.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [1, 2] } });
+    assert.deepEqual([sansEcart.departEnDerive, sansEcart.avertissements], [true, []]);
+
+    // Partie du tour figé 1 puis revenue : le retenu l'y garde en réserve,
+    // le départ ajusté l'assied à sa chaise restée libre.
+    const revenue = await monter({ charges: [charge()] });
+    await revenue.seance.executer('retenirProposition', { id: 4 });
+    await revenue.seance.executer('changerPresence', { id: 1, tours: [2, 3, 4] });
+    await revenue.seance.executer('changerPresence', { id: 1, tours: null });
+    assert.deepEqual(revenue.charge().retenu.placement[0].reserve, [1]);
+    const sansRetouche = await revenue.controleur.generer(DERIVEE, { depart: { id: 4, toursFiges: [1, 2] } });
+    assert.deepEqual(sansRetouche.avertissements, []);
+  });
+
+  test('une génération ordinaire porte une issue sans départ : ni dérive, ni écart, ni avertissement', async () => {
+    const montage = await monter({ charges: [chargeDemo('petite')] });
+    const issue = await montage.controleur.generer(COURT);
+    assert.deepEqual([issue.depart, issue.departEnDerive, issue.ecarts, issue.avertissements], [null, false, [], []]);
   });
 });

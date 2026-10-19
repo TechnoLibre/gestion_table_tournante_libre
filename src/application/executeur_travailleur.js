@@ -16,15 +16,18 @@
 // le résultat, rangé par identifiant, est octet pour octet celui de
 // rechercher, course de chaque proposition comprise, quel que soit W et quel
 // que soit l'ordre d'achèvement (§ 5.7). Sous un départ, chaque message le
-// porte, plan et tours figés, et chaque proposition se calcule de lui et de
-// sa graine dérivée (repartirUne) : le résultat est celui de repartir. Sans
+// porte tel que le contrôleur le donne — plan du départ ajusté à la
+// présence, tours figés et réserves imposées —, et chaque proposition se
+// calcule de lui et de sa graine dérivée (repartirUne) : le résultat est
+// celui de repartir. Sans
 // départ, le message n'a pas de clé depart. Aucun travailleur ne date une
 // proposition : la durée est celle que le contrôleur prend autour du calcul
 // entier.
 //
 //   → { type: 'proposer', configuration, reglages, rang }  un rang à la fois
 //   → { type: 'proposer', configuration, reglages, rang, depart }   sous un
-//                                                départ, {plan, toursFiges}
+//                                                départ, {plan, toursFiges,
+//                                                reservesImposees}
 //   ← { type: 'avancement', fait, total }        fait dans la proposition en
 //                                                cours de ce travailleur
 //   ← { type: 'proposition', proposition }       range la proposition, puis

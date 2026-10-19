@@ -9,8 +9,10 @@
 // nom complet de chaque critère (mobilier.critere.<nom>) et les libellés
 // figés du journal. Les détails désignent tables et personnes par
 // identifiant : le refus se pose sur la table qu'il concerne, et son texte ne
-// les nomme pas. Un libellé figé reçoit le numéro de table que la commande
-// lit dans la charge.
+// les nomme pas ; seuls les textes de la présence que le nombre de tours
+// rogne ou n'étend pas nomment les personnes, que la commande lit dans la
+// charge. Un libellé figé reçoit le numéro de table que la commande lit
+// dans la charge.
 import { POIDS_MAX } from '../../moteur/criteres.js';
 import { cite, compte, enumeration, nomDans } from './aides.js';
 
@@ -112,6 +114,28 @@ export const TABLE = new Map([
   ['MOINS_D_UN_TOUR', () => 'Une soirée compte au moins un tour.'],
   ['TROP_DE_PLACES', ({ max }) => `Une table compte au plus ${max} places : le plan ne dessinerait pas plus de chaises.`],
   ['TROP_DE_TOURS', ({ max }) => `Une soirée compte au plus ${max} tours.`],
+  [
+    'PRESENCE_VIDEE_PAR_TOURS',
+    ({ participants, tours }) => {
+      const seule = participants.length <= 1;
+      return (
+        `Avec ${compte(tours, 'tour', 'tours')}, ${enumeration(participants.map(({ personne }) => personne))} ` +
+        `${seule ? 'ne serait présente' : 'ne seraient présentes'} à aucun tour : ` +
+        `${seule ? "changer d'abord sa présence, ou l'exclure." : "changer d'abord leur présence, ou les exclure."}`
+      );
+    },
+  ],
+  [
+    'PRESENCE_TOURS_AJOUTES',
+    ({ personnes }) => {
+      const seule = personnes.length <= 1;
+      return (
+        `${enumeration(personnes.map(({ personne }) => personne))} ${seule ? 'reste absente' : 'restent absentes'} ` +
+        "aux tours ajoutés : une présence qui nomme ses tours ne s'étend pas d'elle-même. " +
+        `${seule ? "Changer sa présence pour l'y compter." : 'Changer leur présence pour les y compter.'}`
+      );
+    },
+  ],
 
   // --- Les refus d'une capacité (§ 6.2, § 7.1) -------------------------------
   [
@@ -239,10 +263,11 @@ export const TABLE = new Map([
   ],
   [
     'ENTREE_CHANGER_TOURS',
-    ({ tours, retirees, objectifsRetires = 0 }) => {
+    ({ tours, retirees, objectifsRetires = 0, presencesRognees = 0 }) => {
       const retires = [];
       if (retirees > 0) retires.push(compte(retirees, 'réservation retirée', 'réservations retirées'));
       if (objectifsRetires > 0) retires.push(compte(objectifsRetires, 'objectif retiré', 'objectifs retirés'));
+      if (presencesRognees > 0) retires.push(compte(presencesRognees, 'présence rognée', 'présences rognées'));
       return `Nombre de tours : ${tours}${retires.length > 0 ? ` ; ${retires.join(', ')}` : ''}`;
     },
   ],

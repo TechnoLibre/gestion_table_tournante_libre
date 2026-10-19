@@ -38,11 +38,13 @@ import {
 } from '../stockage/document.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { fautes } from '../stockage/placements.js';
+import { presencesSousTours } from '../stockage/presence.js';
 import { bilanChangementDefaut } from './bilans.js';
 import { controlerCapacite, lireEntier, retenuAuxCapacites } from './capacite.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { libelle } from './libelles.js';
 import { avisDeLObjectif, avisObjectifs, etiquettesDeLEvenement, ordreDesObjectifs, recevoirEtiquettes } from './objectifs.js';
+import { nomAffiche } from './personnes.js';
 import { leverRefus } from './pose.js';
 
 const FORMES = new Set(['ronde', 'carree']);
@@ -299,6 +301,16 @@ function changerDefaut(charge, { sieges: saisie, realigner } = {}) {
   };
 }
 
+// PRESENCE_TOURS_AJOUTES des non-exclues dont la présence nomme ses tours,
+// par identifiant croissant, quand il y en a.
+function presencesNonEtendues(charge, nommees) {
+  const ids = charge.participants
+    .filter(({ exclu, presence }) => !exclu && presence !== undefined)
+    .map(({ id }) => id)
+    .sort((a, b) => a - b);
+  return ids.length > 0 ? [{ code: 'PRESENCE_TOURS_AJOUTES', details: { personnes: nommees(ids) } }] : [];
+}
+
 /**
  * changerTours {tours} (§ 2.1 étape 5, § 4.3, § 4.5) : le nombre de tours,
  * lu par lireEntier ; MOINS_D_UN_TOUR {tours} sous 1, TROP_DE_TOURS {max}
@@ -309,14 +321,33 @@ function changerDefaut(charge, { sieges: saisie, realigner } = {}) {
  * « tous » reste, symbolique, et l'objectif de la soirée aussi. Remettre le
  * tour ne rend rien de ce qui est détruit. Propositions et retenu restent,
  * en dérive TOURS_CHANGES, jamais tronqués.
+ *
+ * La présence de chacun suit (presencesSousTours) : à la baisse, chaque
+ * présence se rogne aux tours qui restent, canonique, exclues comprises, et
+ * le libellé compte celles qui changent. Une non-exclue qui ne serait plus
+ * présente à aucun tour refuse le geste, PRESENCE_VIDEE_PAR_TOURS
+ * {participants: [{participant, personne}], tours}, remède la section des
+ * participants : personne n'est exclu en silence. Une exclue dans ce cas
+ * perd son champ, sans refus, et réintégrée elle vient à tous les tours. À
+ * la hausse, une présence qui nomme ses tours ne s'étend pas :
+ * PRESENCE_TOURS_AJOUTES {personnes: [{participant, personne}]} nomme les
+ * non-exclues qui en portent une. Le masque de présence des tours qui
+ * restent ne change pour personne : le retenu n'a rien à suivre.
  */
 function changerTours(charge, { tours: saisie } = {}) {
   exigerModifiable(charge);
   const tours = entierSaisi(saisie);
   if (tours < 1) throw refus('MOINS_D_UN_TOUR', { tours });
   if (tours > TOURS_MAX) throw refus('TROP_DE_TOURS', { max: TOURS_MAX });
+  const personneDe = new Map(charge.participants.map((personne) => [personne.id, personne]));
+  const nommees = (ids) => ids.map((id) => ({ participant: id, personne: nomAffiche(personneDe.get(id)) }));
+  const { participants, rognees, videes } = presencesSousTours(charge.participants, tours);
+  if (videes.length > 0) {
+    throw refus('PRESENCE_VIDEE_PAR_TOURS', { participants: nommees(videes), tours }, { geste: 'ouvrirSection', section: 'participants' });
+  }
   const suivante = structuredClone(charge);
   suivante.evenement.tours = tours;
+  suivante.participants = structuredClone(participants);
   suivante.reservations = suivante.reservations.filter(({ portee, tour }) => portee === 'tous' || tour <= tours);
   let objectifsRetires = 0;
   for (const table of suivante.tables) {
@@ -332,8 +363,9 @@ function changerTours(charge, { tours: saisie } = {}) {
       tours,
       retirees: charge.reservations.length - suivante.reservations.length,
       objectifsRetires,
+      presencesRognees: rognees.length,
     }),
-    avertissements: [],
+    avertissements: tours > charge.evenement.tours ? presencesNonEtendues(charge, nommees) : [],
   };
 }
 

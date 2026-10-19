@@ -74,6 +74,15 @@ function rendreFautif(placement) {
 }
 
 // Gèle en profondeur : un geste qui modifierait sa charge lèverait.
+// La charge où la personne id est exclue sans passer par la commande, qui
+// ajusterait le retenu : propositions et retenu la placent encore, en dérive
+// PARTICIPANT_EXCLU, comme un fichier écrit ainsi.
+function exclueSansGeste(charge, id) {
+  const copie = structuredClone(charge);
+  copie.participants = copie.participants.map((personne) => (personne.id === id ? { ...personne, exclu: true } : personne));
+  return copie;
+}
+
 function figer(valeur) {
   if (valeur !== null && typeof valeur === 'object' && !Object.isFrozen(valeur)) {
     Object.freeze(valeur);
@@ -160,14 +169,14 @@ describe('gesteComparer : la ligne devient le second placement, ou la source (§
 
   test('une source en dérive ne se compare pas : la ligne devient la source', () => {
     const generees = chargeGeneree();
-    const enDerive = appliquerCommande('exclureParticipant', avecRetenu(generees, 3), { id: 6 }).charge;
+    const enDerive = exclueSansGeste(avecRetenu(generees, 3), 6);
     const source = sourceQualite(enDerive, { demandee: null });
     assert.equal(source.cas, 'derive');
     assert.deepEqual(geste(enDerive, null, 1), { montrer: 1, comparee: null });
   });
 
   test('un retenu en dérive, des propositions comparables générées après lui : la ligne devient la source, jamais le second placement du retenu', () => {
-    const exclue = appliquerCommande('exclureParticipant', avecRetenu(chargeGeneree(), 3), { id: 6 }).charge;
+    const exclue = exclueSansGeste(avecRetenu(chargeGeneree(), 3), 6);
     const charge = generee(exclue);
     const nouvelles = nouvellesDe(exclue, charge);
     assert.equal(nouvelles.length, 2);

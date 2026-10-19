@@ -14,6 +14,8 @@
 // communs.nom.remede est le nom accessible d'un remède posé contre un
 // contrôle qui porte un nom distinct (Refus, objet).
 
+import { auxToursNommes } from '../../application/libelles/aides.js';
+
 // Le libellé d'une autre clé de cette table.
 const meme = (cle) => (details, texte) => texte(cle);
 
@@ -77,6 +79,12 @@ export const TABLE = new Map([
   ['communs.remede.exclureParticipant', 'Exclure la personne'],
   ['communs.remede.reintegrerParticipant', 'Réintégrer la personne'],
   ['communs.remede.supprimerParticipant', 'Supprimer la personne'],
+  // tours : la présence que le remède écrit, celle d'avant plus le tour
+  // refusé ; le texte nomme l'effet, quand le remède le fixe.
+  [
+    'communs.remede.changerPresence',
+    ({ tours }) => (Array.isArray(tours) ? `La dire présente ${auxToursNommes(tours)}` : 'Changer sa présence'),
+  ],
   ['communs.remede.importerParticipants', 'Importer la liste'],
   ['communs.remede.importerObjectifs', 'Importer les objectifs'],
   ['communs.remede.changerEtat', "Changer l'état du plan"],

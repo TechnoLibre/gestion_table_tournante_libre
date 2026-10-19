@@ -25,9 +25,15 @@
 // l'affichage assied. Chaque geste lit les places comme le plan les montre
 // (placeDe). Une retouche qui ajoute une violation de verifierInvariants au
 // retenu reçu est refusée (INVARIANT_VIOLE) ; une violation déjà présente,
-// celle d'une dérive (§ 9), ne bloque rien.
+// celle d'une dérive (§ 9), ne bloque rien. Une personne absente au tour ne
+// s'y assied pas, ni en réserve (PERSONNE_ABSENTE_AU_TOUR, remède sa
+// présence étendue à ce tour), et une personne que le retenu ne déclare pas
+// y entre en réserve à ses seuls tours de présence, absente aux autres. Les
+// lieux d'une personne dans le retenu se lisent et se changent par
+// retenu_lieux.js.
 import { ordreDesReservations, pourvoyeursDesTitres } from '../csv/import.js';
 import { capacite } from '../stockage/document.js';
+import { estPresentAuTour, toursDePresence } from '../moteur/presence.js';
 import { fautes } from '../stockage/placements.js';
 import { violationsDuRetenu } from './avertissements.js';
 import { refus } from './erreurs.js';
@@ -36,6 +42,7 @@ import { conversionsPossibles } from './listes_travail.js';
 import { nomAffiche } from './personnes.js';
 import { etatPlaces, instanceDe, presents } from './places.js';
 import { controlerPose, leverRefus } from './pose.js';
+import { enReserve, lieuDans, oter, sansNullDeFin } from './retenu_lieux.js';
 
 const croissant = (a, b) => a - b;
 
@@ -357,53 +364,18 @@ function exigerRetenu(charge, tour) {
   }
 }
 
-// Où le retenu place id à ce tour : { table: rang de la liste, rang } à une
-// table, 'reserve', ou null quand il ne le déclare pas.
-function lieuDans(retenu, tour, id) {
-  if (!retenu.participants.includes(id)) return null;
-  const { sieges } = retenu.placement[tour - 1];
-  for (let table = 0; table < sieges.length; table += 1) {
-    const rang = sieges[table].indexOf(id);
-    if (rang >= 0) return { table, rang };
-  }
-  return 'reserve';
-}
-
-// Retire les null de fin d'une liste, en place.
-function sansNullDeFin(liste) {
-  while (liste.length > 0 && liste.at(-1) === null) liste.pop();
-}
-
-// Déclare id dans le retenu qui ne le place pas encore : parmi ses
-// participants, et en réserve à chaque tour — l'opérateur seul décide où il
-// s'assied (§ 9).
-function declarer(retenu, id) {
+// Déclare la personne dans le retenu qui ne la place pas encore : parmi ses
+// participants, puis en réserve à chaque tour où elle est présente et parmi
+// les absents des tours de 1 à R où elle ne l'est pas — l'opérateur seul
+// décide où elle s'assied (§ 9). Au-delà de R, un tour que la charge n'a
+// plus, elle attend en réserve.
+function declarer(retenu, personne, R) {
+  const { id } = personne;
   retenu.participants = [...retenu.participants, id].sort(croissant);
-  for (const tour of retenu.placement) tour.reserve = [...tour.reserve, id].sort(croissant);
-}
-
-// Ôte id de sa place au tour : sa chaise devient vide sous des sièges
-// attribués, la liste se resserre sinon ; ou il quitte la réserve.
-function oter(retenu, tour, id) {
-  const lieu = lieuDans(retenu, tour, id);
-  const etage = retenu.placement[tour - 1];
-  if (lieu === 'reserve') {
-    etage.reserve = etage.reserve.filter((autre) => autre !== id);
-  } else if (lieu !== null) {
-    const liste = etage.sieges[lieu.table];
-    if (retenu.siegesAttribues) {
-      liste[lieu.rang] = null;
-      sansNullDeFin(liste);
-    } else {
-      liste.splice(lieu.rang, 1);
-    }
-  }
-}
-
-// Verse id dans la réserve du tour.
-function enReserve(retenu, tour, id) {
-  const etage = retenu.placement[tour - 1];
-  etage.reserve = [...etage.reserve, id].sort(croissant);
+  retenu.placement.forEach((etage, rang) => {
+    if (rang < R && !estPresentAuTour(personne, rang + 1)) etage.absents = [...(etage.absents ?? []), id].sort(croissant);
+    else etage.reserve = [...etage.reserve, id].sort(croissant);
+  });
 }
 
 // Le rang de la table idTable dans le retenu, la table ajoutée vide à chaque
@@ -416,6 +388,19 @@ function rangDeTable(retenu, idTable, places) {
   retenu.capacites.push(places);
   for (const tour of retenu.placement) tour.sieges.push([]);
   return retenu.tables.length - 1;
+}
+
+// PERSONNE_ABSENTE_AU_TOUR pour une personne absente au tour : une absente
+// ne s'assied pas, ni en réserve, à son tour d'absence. Le remède la dit
+// présente à ce tour en plus de ses tours de présence, croissants, comme le
+// refus du contrôle de pose (pose.js).
+function exigerPresente(charge, personne, tour) {
+  if (estPresentAuTour(personne, tour)) return;
+  const tours = [...new Set([...toursDePresence(personne, charge.evenement.tours), tour])].sort(croissant);
+  throw refus('PERSONNE_ABSENTE_AU_TOUR', { participant: personne.id, personne: nomAffiche(personne), tour }, {
+    commande: 'changerPresence',
+    arguments: { id: personne.id, tours },
+  });
 }
 
 // Clé d'une violation : ses champs, dans un ordre fixe ; l'occupant d'un
@@ -490,7 +475,9 @@ function numeroDuLieu(charge, tour, id) {
  * charge n'a plus — l'envoie en réserve. Sans attribution, la liste reste
  * triée ; une table pleine de présents refuse TABLE_PLEINE, et, pleine
  * d'une liste qui porte un absent, envoie le plus petit en réserve. Une
- * personne que le retenu ne place pas y entre, en réserve aux autres tours.
+ * personne absente au tour refuse PERSONNE_ABSENTE_AU_TOUR (controlerPose).
+ * Une personne que le retenu ne place pas y entre, en réserve aux autres
+ * tours de sa présence.
  * Le lieu de départ est celui que le plan du tour montre (placeDe) : une
  * personne qu'il ne montre pas assise part de la réserve.
  */
@@ -512,7 +499,7 @@ function deplacerDansRetenu(charge, { tour, participant, table: idTable, siege =
   const suivante = structuredClone(charge);
   const { retenu } = suivante;
   const rangTable = rangDeTable(retenu, idTable, places);
-  if (lieuDans(retenu, tour, participant) === null) declarer(retenu, participant);
+  if (lieuDans(retenu, tour, participant) === null) declarer(retenu, personne, charge.evenement.tours);
   // La table d'arrivée n'a rien à verser : une liste qui porte plus de
   // présents que de places refuse TABLE_PLEINE, et une autre les assied tous.
   reduireAuxAssises(retenu, tour, rangsDesTables(retenu, tour, [participant]), assisesDuTour, ids);
@@ -669,9 +656,11 @@ function rangsDesTables(retenu, tour, personnes) {
 
 /**
  * echangerDansRetenu {tour, a, b} (§ 7.1) : a prend la place de b et b celle
- * de a, au tour donné ; une place peut être la réserve. Chaque arrivée se
- * contrôle comme un dépôt : PLACE_RESERVEE, RESERVEE_AILLEURS. Une personne
- * que le retenu ne place pas y entre, en réserve aux autres tours.
+ * de a, au tour donné ; une place peut être la réserve. Une exclue refuse
+ * PERSONNE_EXCLUE, puis une absente au tour PERSONNE_ABSENTE_AU_TOUR, même
+ * quand aucune des deux n'est assise. Chaque arrivée se contrôle comme un
+ * dépôt : PLACE_RESERVEE, RESERVEE_AILLEURS. Une personne que le retenu ne
+ * place pas y entre, en réserve aux autres tours de sa présence.
  */
 function echangerDansRetenu(charge, { tour, a, b } = {}) {
   exigerModifiable(charge);
@@ -684,6 +673,7 @@ function echangerDansRetenu(charge, { tour, a, b } = {}) {
       throw refus('PERSONNE_EXCLUE', { participant: personne.id }, { commande: 'reintegrerParticipant', arguments: { id: personne.id } });
     }
   }
+  for (const personne of [personneA, personneB]) exigerPresente(charge, personne, tour);
   const assises = assisesAffichees(charge, tour);
   const placeA = placeDe(charge, tour, a, assises);
   const placeB = placeDe(charge, tour, b, assises);
@@ -697,7 +687,9 @@ function echangerDansRetenu(charge, { tour, a, b } = {}) {
   const deB = placeB === null ? null : numeroDuLieu(charge, tour, b);
   const suivante = structuredClone(charge);
   const { retenu } = suivante;
-  for (const id of [a, b]) if (lieuDans(retenu, tour, id) === null) declarer(retenu, id);
+  for (const personne of [personneA, personneB]) {
+    if (lieuDans(retenu, tour, personne.id) === null) declarer(retenu, personne, charge.evenement.tours);
+  }
   reduireAuxAssises(retenu, tour, rangsDesTables(retenu, tour, [a, b]), assises, presents(charge));
   // L'autre remplace dans la réserve une personne que le plan n'y montre pas assise.
   versLaReserveAffichee(retenu, tour, a, placeA);

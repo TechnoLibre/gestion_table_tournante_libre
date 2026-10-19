@@ -127,6 +127,10 @@ const REMEDE_NUL_ADMIS = new Map([
   ['PRIORITES_INVALIDES', "l'éditeur n'offre que des listes valides : le texte nomme le palier et le critère en cause"],
   ['POIDS_HORS_DOMAINE', 'la valeur se corrige dans le champ même, dont le texte dit la valeur attendue'],
   [
+    'PRESENCE_VIDE',
+    "le texte nomme l'exclusion, qui retire aussi la personne des tours joués du placement retenu : aucun geste destructeur en un clic",
+  ],
+  [
     'OBJECTIFS_PALIER_PARTAGE',
     "séparer d'office déplacerait des critères que le choix du mode ne nomme pas (D23) : le texte nomme le palier, que l'opérateur sépare dans l'éditeur",
   ],
@@ -244,6 +248,15 @@ const EXEMPLES = new Map([
       personne: () => 2,
       refuse: { args: { id: 999 }, code: 'PARTICIPANT_INCONNU' },
       sansEffet: 'supprimer retire toujours une personne ; une personne absente est PARTICIPANT_INCONNU',
+    },
+  ],
+  [
+    'changerPresence',
+    {
+      accepte: { args: { id: 2, tours: [1] } },
+      personne: () => 2,
+      refuse: { args: { id: 2, tours: [] }, code: 'PRESENCE_VIDE', remede: null },
+      sansEffet: { args: { id: 2, tours: null } },
     },
   ],
   [
@@ -1100,7 +1113,10 @@ describe('registre : le vérificateur d’invariants juge les retouches et l’o
   test('une violation déjà présente, celle d’une dérive, ne bloque pas les retouches, et INVARIANT_VIOLE la tait à l’ouverture comme après défaire, refaire et revenir', async () => {
     const ouvert = await ouvrirCopie((await departsPrets()).temoin, { ecriture: true });
     const { seance } = ouvert;
-    await seance.executer('exclureParticipant', { id: libresA(seance.charge, 1, 4)[0] });
+    // La table 4 supprimée : le retenu y assied encore des personnes, en
+    // dérive TABLE_SUPPRIMEE. Une exclusion ne laisse plus de dérive, le
+    // retenu suivant qui est là.
+    await seance.executer('supprimerTable', { id: 4 });
     assert.ok(violationsDuRetenu(seance.charge).length > 0, 'la dérive ne laisse aucune violation');
     assert.deepEqual(invariantsAvertis(seance), [], 'après la dérive');
     const revisionDerive = seance.etat().evenement.revision;

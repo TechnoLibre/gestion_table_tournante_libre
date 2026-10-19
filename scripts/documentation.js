@@ -390,6 +390,7 @@ export const EXEMPLES_COMMANDES = Object.freeze({
   deplacerDansRetenu: { personne: 'Iris Ombrelle', de: 4, vers: 7, siege: null, tour: 2 },
   echangerDansRetenu: { a: 'Iris Ombrelle', deA: 4, b: 'Théo Pervenche', deB: null, tour: 2 },
   retirerDuTour: { personne: 'Iris Ombrelle', numero: 4, tour: 2 },
+  changerPresence: { personne: 'Iris Ombrelle', tours: [1, 2], avant: null, retiree: [3, 4], enReserve: [] },
 });
 
 // La clé du libellé d'historique d'une commande : ENTREE_ puis son nom, un

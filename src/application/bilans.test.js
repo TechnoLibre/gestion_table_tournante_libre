@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { nombrePlaces, normaliser } from '../moteur/configuration.js';
 import { SIEGES_MAX, configurationDepuisCharge, creerCharge } from '../stockage/document.js';
-import { bilanChangementDefaut, bilanSuppressionTable, bilanTours } from './bilans.js';
+import { bilanChangementDefaut, bilanSuppressionTable, bilanTours, capaciteParTour } from './bilans.js';
 import { COMMANDES } from './commandes.js';
 
 const NOMS = ['Ombrelle', 'Pervenche', 'Lacasse', 'Grisaille', 'Bruyère', 'Sarcelle', 'Ancolie', 'Mélèze', 'Quenouille', 'Pivoine'];
@@ -86,6 +86,7 @@ describe('bilans : changer le défaut (§ 6.1)', () => {
       totalAvant: 104,
       totalApres: 122,
       participants: 118,
+      presentsParTour: [118, 118],
       refus: [],
       avertissements: [],
     });
@@ -181,12 +182,14 @@ describe('bilans : changer les tours (§ 2.1 étape 5, § 4.3)', () => {
       objectifsDetruits: [],
       propositionsTouchees: [1, 2],
       retenuTouche: true,
+      presencesRognees: [],
+      presencesVidees: [],
     });
   });
 
   test("le même nombre ne touche rien ; en ajouter ne détruit rien, mais périme les placements", () => {
     const charge = quatreTours();
-    const rien = { reservationsDetruites: [], objectifsDetruits: [] };
+    const rien = { reservationsDetruites: [], objectifsDetruits: [], presencesRognees: [], presencesVidees: [] };
     assert.deepEqual(bilanTours(charge, 4), { ...rien, propositionsTouchees: [], retenuTouche: false });
     assert.deepEqual(bilanTours(charge, 5), { ...rien, propositionsTouchees: [1, 2], retenuTouche: true });
   });
@@ -274,5 +277,76 @@ describe("bilans : supprimer une table (§ 6.2, § 4)", () => {
     assert.throws(() => bilanChangementDefaut(garnie(), '6'), TypeError);
     assert.throws(() => bilanTours(garnie(), 2.5), TypeError);
     assert.throws(() => bilanSuppressionTable(garnie(), 9), TypeError);
+  });
+});
+
+describe('bilans : la présence par tour (§ 5.8, § 6.1)', () => {
+  // Trois tables de 8, de 4 et de 4 places, 18 personnes dont l'exclue 18,
+  // trois tours ; 1 et 2 sont présentes au seul tour 1, 3 aux tours 2 et 3,
+  // et l'exclue au tour 1.
+  function partielles() {
+    const charge = chargeDe({ tables: [{ id: 1 }, { id: 2, sieges: 4 }, { id: 3, sieges: 4 }], n: 18, exclus: [18], tours: 3 });
+    const presences = new Map([[1, [1]], [2, [1]], [3, [2, 3]], [18, [1]]]);
+    for (const personne of charge.participants) if (presences.has(personne.id)) personne.presence = presences.get(personne.id);
+    return charge;
+  }
+
+  test('capaciteParTour : les présentes, les places et le manque de chaque tour', () => {
+    assert.deepEqual(capaciteParTour(partielles()), [
+      { tour: 1, presentes: 16, places: 16, manque: 0 },
+      { tour: 2, presentes: 15, places: 16, manque: 0 },
+      { tour: 3, presentes: 15, places: 16, manque: 0 },
+    ]);
+    const serree = partielles();
+    serree.tables[0].sieges = 6;
+    assert.deepEqual(capaciteParTour(serree).map(({ manque }) => manque), [2, 1, 1]);
+    // Sans présence, chaque tour compte les non-exclus.
+    assert.deepEqual(capaciteParTour(chargeDe({ tables: [{ id: 1 }], n: 10, exclus: [3], tours: 2 })), [
+      { tour: 1, presentes: 9, places: 8, manque: 1 },
+      { tour: 2, presentes: 9, places: 8, manque: 1 },
+    ]);
+  });
+
+  test('bilanChangementDefaut : presentsParTour, et participants le plus grand de ses comptes', () => {
+    const bilan = bilanChangementDefaut(partielles(), 10);
+    assert.deepEqual(bilan.presentsParTour, [16, 15, 15]);
+    assert.equal(bilan.participants, 16);
+    // Le plus grand compte n'est pas toujours celui du premier tour.
+    const tardives = partielles();
+    tardives.participants[0].presence = [3];
+    tardives.participants[1].presence = [3];
+    assert.deepEqual(bilanChangementDefaut(tardives, 10).presentsParTour, [14, 15, 17]);
+    assert.equal(bilanChangementDefaut(tardives, 10).participants, 17);
+    const sansPresence = bilanChangementDefaut(treizeTables(), 10);
+    assert.deepEqual(sansPresence.presentsParTour, [118, 118]);
+    assert.equal(sansPresence.participants, 118);
+  });
+
+  test('bilanTours : les présences rognées, exclues comprises, et celles qui se videraient, non exclues seulement', () => {
+    const charge = partielles();
+    assert.deepEqual(bilanTours(charge, 2), {
+      reservationsDetruites: [],
+      objectifsDetruits: [],
+      propositionsTouchees: [],
+      retenuTouche: false,
+      presencesRognees: [{ participant: 3, avant: [2, 3], apres: [2] }],
+      presencesVidees: [],
+    });
+    const baisse = bilanTours(charge, 1);
+    assert.deepEqual(baisse.presencesVidees, [3]);
+    // Au tour 1 seul, 1, 2 et l'exclue couvrent tous les tours : le champ part.
+    assert.deepEqual(baisse.presencesRognees, [
+      { participant: 1, avant: [1], apres: null },
+      { participant: 2, avant: [1], apres: null },
+      { participant: 18, avant: [1], apres: null },
+    ]);
+    const exclueVidee = partielles();
+    exclueVidee.participants[17].presence = [3];
+    assert.deepEqual(bilanTours(exclueVidee, 2).presencesRognees, [
+      { participant: 3, avant: [2, 3], apres: [2] },
+      { participant: 18, avant: [3], apres: null },
+    ]);
+    assert.deepEqual(bilanTours(exclueVidee, 2).presencesVidees, []);
+    assert.deepEqual(bilanTours(charge, 4).presencesRognees, []);
   });
 });

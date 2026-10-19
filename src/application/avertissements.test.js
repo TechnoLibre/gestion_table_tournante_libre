@@ -491,3 +491,112 @@ describe("avertissements : la réservation d'une personne que le retenu ne place
     assert.equal(invariantViole(apres), null);
   });
 });
+
+// La charge où chaque personne de presences ({id: liste}) porte cette
+// présence.
+const presentes = (presences) => (charge) => {
+  for (const personne of charge.participants) if (Object.hasOwn(presences, personne.id)) personne.presence = presences[personne.id];
+};
+
+describe('avertissements : le manque de places par tour (§ 5.9)', () => {
+  test('la dix-septième personne, présente au tour 2 seulement : PLACES_MANQUANTES nomme le tour 2', () => {
+    const avant = sallePleine();
+    const apres = avec(avant, (charge) => {
+      ajouterConvives(charge, 17, 17);
+      presentes({ 17: [2] })(charge);
+    });
+    assert.deepEqual(avertissementsApres(avant, apres), [
+      { code: 'PLACES_MANQUANTES', details: { placesManquantes: 1, tours: [{ tour: 2, manque: 1 }] } },
+    ]);
+  });
+
+  test('un tour qui empire : tours liste chaque tour à manque positif, et placesManquantes le plus grand', () => {
+    const avant = avec(sallePleine(), (charge) => {
+      ajouterConvives(charge, 17, 18);
+      presentes({ 17: [2], 18: [2] })(charge);
+    });
+    const apres = avec(avant, (charge) => {
+      ajouterConvives(charge, 19, 19);
+      presentes({ 19: [1] })(charge);
+    });
+    assert.deepEqual(avertissementsApres(avant, apres), [
+      { code: 'PLACES_MANQUANTES', details: { placesManquantes: 2, tours: [{ tour: 1, manque: 1 }, { tour: 2, manque: 2 }] } },
+    ]);
+  });
+
+  test("un geste qui n'aggrave aucun tour n'en dit rien, même quand un manque demeure ; un manque qui gagne un tour le dit", () => {
+    const deux = avec(sallePleine(), (charge) => {
+      ajouterConvives(charge, 17, 18);
+      presentes({ 17: [2], 18: [2] })(charge);
+    });
+    assert.deepEqual(avertissementsApres(deux, avec(deux, (charge) => charge.participants.pop())), []);
+    assert.deepEqual(avertissementsApres(deux, avec(deux, presentes({ 18: [1, 2] }))), [
+      { code: 'PLACES_MANQUANTES', details: { placesManquantes: 2, tours: [{ tour: 1, manque: 1 }, { tour: 2, manque: 2 }] } },
+    ]);
+    assert.deepEqual(avertissementsApres(deux, avec(deux, (charge) => (charge.participants[0].nom = 'Ancolie'))), []);
+  });
+
+  test('sans aucune présence, un tour ajouté au même manque ne dit rien, comme avant', () => {
+    const manque = avec(sallePleine(), (charge) => ajouterConvives(charge, 17, 17));
+    assert.deepEqual(avertissementsApres(manque, avec(manque, (charge) => (charge.evenement.tours = 3))), []);
+    assert.deepEqual(avertissementsApres(manque, avec(manque, (charge) => (charge.evenement.tours = 1))), []);
+  });
+});
+
+describe('avertissements : les violations que nomme une dérive de présence (§ 14.12)', () => {
+  test('le retenu assied Lacasse au tour 2, où elle est absente : ABSENT_PLACE se tait, nommée par PRESENCE_RETIREE', () => {
+    const charge = avec(petiteSoiree(), presentes({ 4: [1] }));
+    assert.deepEqual(
+      examiner(charge).retenu.raisons.map(({ code }) => code),
+      ['PRESENCE_RETIREE'],
+    );
+    assert.equal(invariantViole(charge), null);
+  });
+
+  test('le retenu dit Lacasse absente au tour 2, où elle est présente : NON_ASSIS se tait, nommée par PRESENCE_AJOUTEE ; une autre violation reste', () => {
+    const absente = (charge) => {
+      charge.retenu.placement[1] = { sieges: [[1, 3], [2]], reserve: [], absents: [4] };
+    };
+    const charge = avec(petiteSoiree(), absente);
+    assert.deepEqual(
+      examiner(charge).retenu.raisons.map(({ code }) => code),
+      ['PRESENCE_AJOUTEE'],
+    );
+    assert.equal(invariantViole(charge), null);
+    const reservee = avec(charge, reserverGrisaille);
+    assert.deepEqual(invariantViole(reservee).details.violations, [{ code: 'RESERVATION', participant: 2, table: 2, tour: 1 }]);
+  });
+
+  // La petite soirée sous sièges attribués : le réglage, le retenu et les
+  // propositions.
+  const attribuer = (charge) => {
+    charge.reglages.attribuerSieges = true;
+    charge.retenu.siegesAttribues = true;
+    for (const proposition of charge.propositions) proposition.siegesAttribues = true;
+  };
+
+  test('sièges attribués : la réservation au siège 2 de Lacasse, absente au tour 2, ne tient pas ce siège à ce tour ; seule PRESENCE_RETIREE, sans violation', () => {
+    const charge = avec(petiteSoiree(), (copie) => {
+      attribuer(copie);
+      copie.reservations.push({ participant: 4, table: 2, siege: 2, portee: 'tous', tour: null });
+      copie.retenu.placement[1].sieges = [[1, 3], [4, 2]];
+      presentes({ 4: [1] })(copie);
+    });
+    assert.deepEqual(
+      examiner(charge).retenu.raisons.map(({ code }) => code),
+      ['PRESENCE_RETIREE'],
+    );
+    assert.equal(invariantViole(charge), null);
+  });
+
+  test('sièges attribués : le siège réservé à Grisaille au tour 2, occupé par Lacasse absente à ce tour, a pour occupant null', () => {
+    const charge = avec(petiteSoiree(), (copie) => {
+      attribuer(copie);
+      copie.reservations.push({ participant: 2, table: 2, siege: 2, portee: 'tour', tour: 2 });
+      presentes({ 4: [1] })(copie);
+    });
+    assert.deepEqual(invariantViole(charge).details.violations, [
+      { code: 'RESERVATION', participant: 2, table: 2, tour: 2, siege: 2, occupant: null },
+    ]);
+  });
+});

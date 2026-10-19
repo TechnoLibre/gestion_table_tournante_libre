@@ -14,9 +14,12 @@
 // réservations : une réservation « tous les tours » sur la place titrée fait
 // animer à chaque tour, R réservations de tour désigné aussi, une seule
 // réservation de tour désigné à son seul tour. La règle des titres pourvus
-// écarte les exclus et lit le réglage « Attribuer les sièges » : sans sièges
-// attribués, une réservation sans siège à une table titrée pourvoit un titre
-// de cette table ; avec, seule une réservation à la place titrée le pourvoit.
+// écarte les exclus, et chaque personne à ses tours d'absence : une
+// animatrice absente au tour 3 n'y pourvoit rien, n'y anime pas, et la place
+// titrée revient à qui la réserve à ce tour. Elle lit le réglage « Attribuer
+// les sièges » : sans sièges attribués, une réservation sans siège à une
+// table titrée pourvoit un titre de cette table ; avec, seule une réservation
+// à la place titrée le pourvoit.
 import { pourvoyeursDesTitres } from '../csv/import.js';
 import { configurationDepuisCharge } from '../stockage/document.js';
 

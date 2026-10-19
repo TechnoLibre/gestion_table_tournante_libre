@@ -11,10 +11,21 @@
 // pas exclue : celle d'une exclue est suspendue (§ 4.4) et ne tient aucune
 // place. Un titre se lit pourvu selon la règle de pourvoyeursDesTitres, la
 // seule (src/csv/import.js).
+//
+// La règle de présence par tour (R1), la seule sous src/application : une
+// personne est présente au tour r quand elle est dans la charge, n'est pas
+// exclue, et que sa présence porte r (estPresentAuTour, champ absent : tous
+// les tours). Une réservation ne tient sa personne qu'à ses tours de
+// présence : à un tour d'absence, elle est suspendue comme celle d'une
+// exclue, et ne tient ni place ni titre (reservationsCouvrantes). Une
+// absente n'est ni assise ni en réserve : l'état d'un tour la range à part
+// (absents). presents garde son sens, les non-exclus, pour qui ne raisonne
+// pas au tour.
 import { ordreDesReservations, pourvoyeursDesTitres } from '../csv/import.js';
 import { STATUT, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { conflitsParTable } from '../moteur/conflits.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
+import { estPresentAuTour } from '../moteur/presence.js';
 import { capacite } from '../stockage/document.js';
 import { derive, fautes, planDepuisFichier } from '../stockage/placements.js';
 import { configurationDe } from './configuration.js';
@@ -34,6 +45,87 @@ export const presents = (charge) => new Set(charge.participants.filter(({ exclu 
 export function reservationsActives(charge) {
   const ids = presents(charge);
   return charge.reservations.filter(({ participant }) => ids.has(participant)).sort(ordreDesReservations);
+}
+
+/**
+ * La présence saisie d'une personne, lue telle quelle : null quand le champ
+ * manque (tous les tours), sinon une copie de sa liste. Ne lit pas exclu.
+ *
+ * @param {{presence?: readonly number[]}} personne
+ * @returns {number[]|null}
+ */
+export function presenceSaisie(personne) {
+  return personne.presence === undefined ? null : [...personne.presence];
+}
+
+/**
+ * Vrai quand la personne id est présente au tour (R1) : dans la charge, non
+ * exclue, et le tour dans sa présence.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {number} id
+ * @param {number} tour
+ * @returns {boolean}
+ */
+export function presentAuTour(charge, id, tour) {
+  const personne = charge.participants.find((candidate) => candidate.id === id);
+  return personne !== undefined && !personne.exclu && estPresentAuTour(personne, tour);
+}
+
+/**
+ * Les identifiants des personnes présentes au tour (R1), dans l'ordre de la
+ * charge.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {number} tour
+ * @returns {Set<number>}
+ */
+export function presentsAuTour(charge, tour) {
+  return new Set(charge.participants.filter((personne) => !personne.exclu && estPresentAuTour(personne, tour)).map(({ id }) => id));
+}
+
+/**
+ * Vrai quand une personne non exclue manque un tour de 1 à R. La présence
+ * d'une exclue, suspendue, n'y entre pas.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {boolean}
+ */
+export function aDesAbsences(charge) {
+  const R = charge.evenement.tours;
+  return charge.participants.some((personne) => {
+    if (personne.exclu) return false;
+    for (let tour = 1; tour <= R; tour += 1) if (!estPresentAuTour(personne, tour)) return true;
+    return false;
+  });
+}
+
+/**
+ * Les identifiants croissants des personnes non exclues qui portent un champ
+ * presence : celles dont la présence ne couvre pas toute la soirée.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @returns {number[]}
+ */
+export function presencesPartielles(charge) {
+  return charge.participants
+    .filter((personne) => !personne.exclu && personne.presence !== undefined)
+    .map(({ id }) => id)
+    .sort(croissant);
+}
+
+/**
+ * Les réservations actives qui couvrent le tour et dont la personne y est
+ * présente (R1), dans l'ordre canonique : celles qui tiennent une place à ce
+ * tour. Les mêmes personnes, aux mêmes tables, que fixe le moteur à ce tour.
+ *
+ * @param {import('../stockage/types.js').Charge} charge
+ * @param {number} tour
+ * @returns {Object[]}
+ */
+export function reservationsCouvrantes(charge, tour) {
+  const ids = presentsAuTour(charge, tour);
+  return charge.reservations.filter((reservation) => ids.has(reservation.participant) && couvre(reservation, tour)).sort(ordreDesReservations);
 }
 
 /**
@@ -194,7 +286,9 @@ function aspect(reservation, occupant, titre) {
  * L'état des places d'un tour (contrat de données, EtatPlaces) : la source
  * — la proposition demandée, le retenu, ou les seules réservations —, ce
  * qu'un geste de personne y modifie, chaque table de la charge dans son
- * ordre avec ses chaises, et la réserve. Sièges attribués, la chaise s porte
+ * ordre avec ses chaises, la réserve, qui ne liste que des présentes du
+ * tour, et absents, les non-exclues absentes du tour, croissantes. Sièges
+ * attribués, la chaise s porte
  * le rang s de la liste de la source, et la source se lit telle quelle : la
  * réservation qui tient un siège que la liste donne à une autre personne,
  * ou laisse vide, se lit sur la chaise sans la remplir — hachure et cadenas
@@ -205,9 +299,11 @@ function aspect(reservation, occupant, titre) {
  * à la table passent avant les autres. Sous les seules réservations, les
  * personnes que les réservations du tour tiennent à la table s'y répartissent
  * de même. Un exclu, une personne que la charge n'a plus, n'occupe rien et
- * n'attend pas ; une personne déjà assise à une table précédente de la
- * charge ne s'assied pas une seconde fois ; une personne présente qu'aucune
- * chaise ne reçoit attend en réserve. Les conflits sont ceux de
+ * n'attend pas ; une personne absente au tour (R1) non plus, et absents la
+ * nomme ; une personne déjà assise à une table précédente de la charge ne
+ * s'assied pas une seconde fois ; une personne présente au tour qu'aucune
+ * chaise ne reçoit attend en réserve. Seules les réservations couvrantes du
+ * tour (reservationsCouvrantes) tiennent une chaise. Les conflits sont ceux de
  * conflitsParTable au tour, null quand la source est en dérive ou que la
  * configuration ne se normalise pas ; evalue le dit.
  *
@@ -224,7 +320,7 @@ export function etatPlaces(charge, { tour, proposition = null }) {
   }
   const { source, placement, cible, refus } = sourceDuTour(charge, tour, proposition);
   const siegesAttribues = placement === null ? charge.reglages.attribuerSieges : placement.siegesAttribues;
-  const ids = presents(charge);
+  const ids = presentsAuTour(charge, tour);
   const instance = instanceDe(charge);
   const tableDe = planEvalue(charge, instance, placement);
   const conflitsDe = new Map(
@@ -242,7 +338,7 @@ export function etatPlaces(charge, { tour, proposition = null }) {
     if (!titreDePlace.has(cle)) titreDePlace.set(cle, rang);
   }
   const pourvuAuTour = (rang) => pourvoyeurs[rang].tours[tour - 1] !== null;
-  const couvrantes = reservationsActives(charge).filter((reservation) => couvre(reservation, tour));
+  const couvrantes = reservationsCouvrantes(charge, tour);
 
   const assis = new Set();
   const tables = charge.tables.map((enregistrement) => {
@@ -316,6 +412,10 @@ export function etatPlaces(charge, { tour, proposition = null }) {
     siegesAttribues,
     tables,
     reserve: [...ids].filter((personne) => !assis.has(personne)).sort(croissant),
+    absents: charge.participants
+      .filter((personne) => !personne.exclu && !ids.has(personne.id))
+      .map(({ id }) => id)
+      .sort(croissant),
     evalue: tableDe !== null,
     cible,
     refus,

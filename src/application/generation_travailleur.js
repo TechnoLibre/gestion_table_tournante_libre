@@ -10,8 +10,11 @@
 //
 //   → { type: 'proposer', configuration, reglages, rang }
 //   → { type: 'proposer', configuration, reglages, rang, depart }   depart,
-//                                           {plan, toursFiges}, le départ
-//                                           d'une génération dérivée
+//                                           {plan, toursFiges,
+//                                           reservesImposees}, le départ
+//                                           d'une génération dérivée, ajusté
+//                                           à la présence (departDuMoteur),
+//                                           tel que repartirUne le reçoit
 //   ← { type: 'avancement', fait, total }   au plus une fois toutes les
 //                                           CADENCE_AVANCEMENT progressions
 //                                           du moteur, fait croissant ; fait

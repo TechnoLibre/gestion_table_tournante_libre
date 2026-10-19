@@ -1117,6 +1117,75 @@ describe('mobilier : les tours (§ 2.1 étape 5, § 4.3)', () => {
   });
 });
 
+describe('mobilier : les tours et la présence de chacun (§ 2.1 étape 5, § 4.3)', () => {
+  // Six personnes, quatre tours : 2 présente aux tours 2 et 4, 3 aux tours 1
+  // à 3, 4 aux tours 1 et 2, 5 exclue, présente au tour 4.
+  const presentes = () => {
+    const charge = chargeDe({ tables: [{ id: 1 }], n: 6, tours: 4, exclus: [5] });
+    const presences = { 2: [2, 4], 3: [1, 2, 3], 4: [1, 2], 5: [4] };
+    for (const p of charge.participants) if (Object.hasOwn(presences, p.id)) p.presence = presences[p.id];
+    return charge;
+  };
+
+  test('4 → 3 : chaque présence se rogne, canonique, exclues comprises ; une exclue dont la présence se vide perd le champ ; le libellé les compte', () => {
+    const { charge: apres, libelle: texte, avertissements } = accepter('changerTours', presentes(), { tours: 3 });
+    assert.deepEqual(
+      apres.participants.map(({ id, presence = null }) => [id, presence]),
+      [
+        [1, null],
+        [2, [2]],
+        [3, null],
+        [4, [1, 2]],
+        [5, null],
+        [6, null],
+      ],
+    );
+    assert.ok(!Object.hasOwn(apres.participants[4], 'presence'));
+    assert.equal(apres.participants[4].exclu, true);
+    assert.equal(texte, 'Nombre de tours : 3 ; 3 présences rognées');
+    assert.deepEqual(avertissements, []);
+  });
+
+  test('4 → 3 sur une personne présente au seul tour 4 : PRESENCE_VIDEE_PAR_TOURS la nomme, remède la section des participants, et rien ne change', () => {
+    const charge = presentes();
+    charge.participants[5].presence = [4];
+    charge.participants[0].presence = [3, 4];
+    const recue = figer(structuredClone(charge));
+    refuse(() => appliquerCommande('changerTours', recue, { tours: 3 }), 'PRESENCE_VIDEE_PAR_TOURS', {
+      participants: [{ participant: 6, personne: 'Capucine Sarcelle' }],
+      tours: 3,
+      remede: { geste: 'ouvrirSection', section: 'participants' },
+    });
+    refuse(() => appliquerCommande('changerTours', recue, { tours: 2 }), 'PRESENCE_VIDEE_PAR_TOURS', {
+      participants: [
+        { participant: 1, personne: 'Iris Ombrelle' },
+        { participant: 6, personne: 'Capucine Sarcelle' },
+      ],
+      tours: 2,
+    });
+  });
+
+  test('3 → 5 : une présence qui nomme ses tours ne s’étend pas ; PRESENCE_TOURS_AJOUTES nomme les non-exclues qui en portent une', () => {
+    const charge = accepter('changerTours', presentes(), { tours: 3 }).charge;
+    const { charge: apres, libelle: texte, avertissements } = accepter('changerTours', charge, { tours: 5 });
+    assert.deepEqual(apres.participants, charge.participants);
+    assert.equal(texte, 'Nombre de tours : 5');
+    assert.deepEqual(avertissements, [
+      {
+        code: 'PRESENCE_TOURS_AJOUTES',
+        details: {
+          personnes: [
+            { participant: 2, personne: 'Théo Pervenche' },
+            { participant: 4, personne: 'Grisaille' },
+          ],
+        },
+      },
+    ]);
+    // Sans présence énumérée, un tour de plus ne dit rien.
+    assert.deepEqual(accepter('changerTours', chargeDe({ tables: [{ id: 1 }], n: 3, tours: 2 }), { tours: 3 }).avertissements, []);
+  });
+});
+
 describe('mobilier : les réglages (§ 5.3, § 15.4)', () => {
   test('« Séparer les appartenances : désactivé », une entrée', async () => {
     const { seance, entrees } = await seanceSur(chargeDe({ tables: [{ id: 1 }], n: 2 }));

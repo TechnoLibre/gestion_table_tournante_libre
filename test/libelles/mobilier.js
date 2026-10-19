@@ -40,6 +40,11 @@ export const EXEMPLES = [
   ['ENTREE_REALIGNER_TABLE', { numero: 5, sieges: 8 }],
   ['ENTREE_CHANGER_DEFAUT', { sieges: 10, realignees: 4 }],
   ['ENTREE_CHANGER_TOURS', { tours: 3, retirees: 2 }],
+  [
+    'PRESENCE_VIDEE_PAR_TOURS',
+    { participants: [{ participant: 4, personne: 'Iris Ombrelle' }], tours: 3, remede: { geste: 'ouvrirSection', section: 'participants' } },
+  ],
+  ['PRESENCE_TOURS_AJOUTES', { personnes: [{ participant: 2, personne: 'Théo Pervenche' }] }],
   ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerAppartenances', valeur: false }],
   // Objectifs des tables
   ['OBJECTIF_HORS_SOIREE', { tour: 5, remede: null }],
@@ -58,4 +63,40 @@ export const EXEMPLES = [
   ['ENTREE_RETABLIR_PRIORITES', {}],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  [
+    'PRESENCE_VIDEE_PAR_TOURS',
+    { participants: [{ participant: 4, personne: 'Iris Ombrelle' }], tours: 3, remede: { geste: 'ouvrirSection', section: 'participants' } },
+    "Avec 3 tours, Iris Ombrelle ne serait présente à aucun tour : changer d'abord sa présence, ou l'exclure.",
+  ],
+  [
+    'PRESENCE_VIDEE_PAR_TOURS',
+    {
+      participants: [
+        { participant: 4, personne: 'Iris Ombrelle' },
+        { participant: 6, personne: 'Théo Pervenche' },
+      ],
+      tours: 1,
+      remede: { geste: 'ouvrirSection', section: 'participants' },
+    },
+    "Avec 1 tour, Iris Ombrelle et Théo Pervenche ne seraient présentes à aucun tour : changer d'abord leur présence, ou les exclure.",
+  ],
+  [
+    'PRESENCE_TOURS_AJOUTES',
+    { personnes: [{ participant: 2, personne: 'Théo Pervenche' }] },
+    "Théo Pervenche reste absente aux tours ajoutés : une présence qui nomme ses tours ne s'étend pas d'elle-même. " +
+      "Changer sa présence pour l'y compter.",
+  ],
+  [
+    'PRESENCE_TOURS_AJOUTES',
+    { personnes: [{ participant: 2, personne: 'Théo Pervenche' }, { participant: 5, personne: 'Grisaille' }] },
+    "Théo Pervenche et Grisaille restent absentes aux tours ajoutés : une présence qui nomme ses tours ne s'étend pas " +
+      "d'elle-même. Changer leur présence pour les y compter.",
+  ],
+  ['ENTREE_CHANGER_TOURS', { tours: 3, retirees: 0, presencesRognees: 1 }, 'Nombre de tours : 3 ; 1 présence rognée'],
+  [
+    'ENTREE_CHANGER_TOURS',
+    { tours: 3, retirees: 2, objectifsRetires: 1, presencesRognees: 2 },
+    'Nombre de tours : 3 ; 2 réservations retirées, 1 objectif retiré, 2 présences rognées',
+  ],
+];

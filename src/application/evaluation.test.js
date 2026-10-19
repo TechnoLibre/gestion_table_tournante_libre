@@ -40,7 +40,7 @@ import { borneHaute, comparerProfils, escalierDuManque, manques, profilManque, v
 import * as PAIRES from '../moteur/paires.js';
 import { borneDiversite, plafondsAPriori } from '../moteur/plafond.js';
 import * as QUALITE from '../moteur/qualite.js';
-import { rechercher } from '../moteur/recherche.js';
+import { rechercher, repartir } from '../moteur/recherche.js';
 import { avecCourses, courseDe } from '../stockage/courses.js';
 import { creer as creerDansLeDepot } from '../stockage/depot.js';
 import { analyser, capacite, creerCharge } from '../stockage/document.js';
@@ -48,7 +48,7 @@ import { deriveSansRevalider, fautes, planDepuisFichier } from '../stockage/plac
 import { VERSION } from '../version.genere.js';
 import { appliquerCommande } from './commandes.js';
 import { configurationDe } from './configuration.js';
-import { derivationDe } from './depart.js';
+import { departDuMoteur, derivationDe } from './depart.js';
 import * as EVALUATION from './evaluation.js';
 import {
   candidatsDeComparaison,
@@ -381,10 +381,12 @@ describe('évaluation : chaque placement se valide une fois (§ 8.9)', () => {
     const retenue = executer(base, 'retenirProposition', { id: base.propositions[0].id });
     const charge = executer(retenue, 'exclureParticipant', { id: retenue.participants[0].id });
     const proposition = charge.propositions[1];
-    for (const placement of [proposition, charge.retenu]) {
-      const [a, b] = placement.placement[0].sieges;
-      a.push(b.shift());
-    }
+    const [a, b] = proposition.placement[0].sieges;
+    a.push(b.shift());
+    // Le retenu suit l'exclusion, sa chaise vide : un identifiant écrit deux
+    // fois le rend fautif.
+    const [premiere] = charge.retenu.placement[0].sieges;
+    premiere.push(premiere.find((id) => id !== null));
     assert.ok(fautes(proposition).length > 0);
     assert.ok(fautes(charge.retenu).length > 0);
     const table = evaluer(figer(charge));
@@ -1177,7 +1179,7 @@ describe('detaillerQualite : une seule arithmétique (§ 12.9, § 13.2, contrain
     const { charge } = genereeAvecCourses(chargeAObjectifs(), { graine: 3, nombre: 2, arret: 200 });
     const retenue = figer(executer(charge, 'retenirProposition', { id: 1 }));
     const table = evaluer(retenue);
-    const CHAMPS = ['id', 'statut', 'raisons', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
+    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
     for (const ligne of [...table.propositions, table.retenu]) assert.deepEqual(Object.keys(ligne), CHAMPS);
     // Le comptage des appels se fait sur le texte du module : la fermeture
     // de ce qu'evaluer atteint, ligneDe comprise et chaque fonction du
@@ -2282,7 +2284,7 @@ describe('evaluer : les deux champs de la configuration que lit la comparaison (
     const instance = normaliser(configurationDe(charge));
     assert.deepEqual(QUALITE.planchersDesColonnes(instance, table.diagnostic), QUALITE.planchersDesColonnes(instance, diagnostic));
     assert.deepEqual(Object.keys(table), ['population', 'propositions', 'retenu', 'classement', 'criteres', 'imposes', 'plafondsAPriori', 'diagnostic']);
-    const CHAMPS = ['id', 'statut', 'raisons', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
+    const CHAMPS = ['id', 'statut', 'raisons', 'sertDeDepart', 'violations', 'mesures', 'plafondsRealises', 'troisChiffres', 'ecartAuPlafondAPrioriMax', 'minimumAtteint', 'refusDessin'];
     for (const ligne of table.propositions) assert.deepEqual(Object.keys(ligne), CHAMPS);
     assert.equal(evaluer(charge, { plafondsAPriori: null }).plafondsAPriori, null);
   });
@@ -2308,5 +2310,99 @@ describe('detaillerQualite : la filiation du placement mesuré (D76, C23)', () =
     const detailEnDerive = detaillerQualite(enDerive, 3);
     assert.equal(detailEnDerive.statut, 'derive');
     assert.deepEqual(detailEnDerive.derivation, filiation);
+  });
+});
+
+describe('évaluation : la présence par tour et le départ en dérive par ses participants (§ 5.7, § 12.3)', () => {
+  // La petite démonstration, trois propositions courtes.
+  const troisPropositions = () => generee(chargeDemo('petite'), { graine: 2, nombre: 3, arret: 40 });
+  const statuts = (table) => table.propositions.map(({ statut, sertDeDepart }) => [statut, sertDeDepart]);
+
+  test('sertDeDepart : comparable, vrai ; en dérive par ses seuls participants, vrai ; par le mobilier, seul ou mêlé, faux ; fautif, faux ; le retenu suit la même règle', () => {
+    const base = troisPropositions();
+    assert.deepEqual(statuts(evaluer(base)), [['comparable', true], ['comparable', true], ['comparable', true]]);
+    const absente = structuredClone(base);
+    absente.participants[0].presence = [1, 2];
+    assert.deepEqual(statuts(evaluer(figer(absente))), [['derive', true], ['derive', true], ['derive', true]]);
+    const exclue = structuredClone(base);
+    exclue.participants[3].exclu = true;
+    assert.deepEqual(statuts(evaluer(figer(exclue))), [['derive', true], ['derive', true], ['derive', true]]);
+    const mobilier = structuredClone(base);
+    mobilier.tables[0].sieges = 4;
+    assert.deepEqual(statuts(evaluer(figer(mobilier))), [['derive', false], ['derive', false], ['derive', false]]);
+    const meles = structuredClone(absente);
+    meles.tables[0].sieges = 4;
+    assert.deepEqual(statuts(evaluer(figer(meles))), [['derive', false], ['derive', false], ['derive', false]]);
+    const fautive = structuredClone(base);
+    fautive.propositions[1].placement[0].sieges[0].push(fautive.propositions[1].placement[0].sieges[1][0]);
+    const table = evaluer(figer(fautive));
+    assert.deepEqual(
+      table.propositions.map(({ id, statut, sertDeDepart }) => [id, statut, sertDeDepart]).filter(([id]) => id === 2),
+      [[2, 'fautif', false]],
+    );
+    // Le retenu, ajusté à la présence en même temps que retenu, se compare.
+    const retenu = executer(absente, 'retenirProposition', { id: 1 });
+    assert.deepEqual([evaluer(retenu).retenu.statut, evaluer(retenu).retenu.sertDeDepart], ['comparable', true]);
+    const retenuMobilier = structuredClone(retenu);
+    retenuMobilier.tables[0].sieges = 4;
+    assert.deepEqual([evaluer(retenuMobilier).retenu.statut, evaluer(retenuMobilier).retenu.sertDeDepart], ['derive', false]);
+  });
+
+  test('planchersValides se juge sur les tours de présence : vrai sous une absence seule, au détail comme à la comparaison ; faux pour une présente laissée en réserve ; planchersRetires recopié du diagnostic', () => {
+    // La démonstration au conflit inévitable : ses planchers de collisions
+    // ne sont pas nuls. Sa dernière personne absente au tour 4.
+    const absente = chargeDemo('petite-conflit');
+    const derniere = absente.participants.length - 1;
+    absente.participants[derniere].presence = [1, 2, 3];
+    const charge = figer(generee(absente, { graine: 1, nombre: 2, arret: 300 }));
+    const diagnostic = diagnostiquer(configurationDe(charge));
+    const detail = detaillerQualite(charge, 1);
+    assert.equal(detail.statut, 'comparable');
+    assert.equal(detail.collisions.planchersValides, true);
+    assert.deepEqual(detail.planchersRetires, diagnostic.planchersRetires);
+    assert.deepEqual(detail.planchersRetires, ['ecartItineraire']);
+    const comparaison = comparerPlacements(charge, evaluer(charge), 1, 2);
+    assert.equal(comparaison.statut, 'comparable');
+    assert.deepEqual(comparaison.a.bornes.planchers, detail.bornes.planchers);
+    assert.ok(Object.values(comparaison.a.bornes.planchers).some((plancher) => plancher !== null), JSON.stringify(comparaison.a.bornes.planchers));
+    // Sans absence, rien de retiré.
+    const sansAbsence = figer(generee(chargeDemo('petite-conflit'), { graine: 1, nombre: 1, arret: 300 }));
+    assert.deepEqual(detaillerQualite(sansAbsence, 1).planchersRetires, []);
+    // La même personne présente au tour 4 et laissée en réserve : hors du
+    // domaine.
+    const enReserve = structuredClone(charge);
+    delete enReserve.participants[derniere].presence;
+    const proposition = enReserve.propositions[0];
+    proposition.placement[3].reserve = [...proposition.placement[3].absents];
+    delete proposition.placement[3].absents;
+    const detailEnReserve = detaillerQualite(figer(enReserve), 1);
+    assert.equal(detailEnReserve.statut, 'comparable');
+    assert.equal(detailEnReserve.collisions.planchersValides, false);
+    // Un placement qui ne se mesure pas n'a pas de planchers retirés.
+    const fautive = structuredClone(charge);
+    fautive.propositions[0].placement[0].sieges[0].push(fautive.propositions[0].placement[0].sieges[1][0]);
+    assert.equal(detaillerQualite(figer(fautive), 1).planchersRetires, null);
+  });
+
+  test('le départ en dérive n’est jamais le défaut de Comparer : le défaut d’une dérivée retombe sur la première proposition comparable du classement', () => {
+    const base = troisPropositions();
+    const absente = executer(base, 'changerPresence', { id: 1, tours: [1, 2] });
+    const configuration = configurationDe(absente);
+    const propositions = repartir(configuration, { graine: 5, nombre: 2, arret: 200 }, departDuMoteur(absente, { id: 1, toursFiges: [1] }));
+    const charge = figer(
+      appliquerCommande('enregistrerGeneration', absente, {
+        propositions,
+        configuration,
+        produitVersion: V1,
+        derivation: { depart: 1, toursFiges: [1] },
+      }).charge,
+    );
+    const table = evaluer(charge);
+    assert.deepEqual(table.classement.ordre.slice().sort(), [4, 5]);
+    for (const a of [4, 5]) {
+      const { candidats, defaut } = candidatsDeComparaison(charge, table, a);
+      assert.equal(candidats.some(({ cle }) => cle === 1), false);
+      assert.equal(defaut, a === 4 ? 5 : 4);
+    }
   });
 });

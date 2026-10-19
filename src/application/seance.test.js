@@ -823,13 +823,12 @@ describe('séance : un geste, une entrée, un état (§ 2.1, § 8.2, § 10.1)', 
     const plus = apercevoir('nom\nEpicéa\n', { participants: seance.charge.participants });
     const enRetenu = await seance.executer('importerParticipants', { apercu: plus, mode: 'ajouter' });
     const nonPlace = [{ code: 'PARTICIPANT_NON_PLACE', participant: 8, personne: 'Epicéa' }];
+    // Le retenu suit l'import, l'arrivée en réserve : seules les propositions dérivent.
+    assert.equal(enRetenu.libelle, 'Importé 1 participant ; placement retenu ajusté');
     assert.deepEqual(enRetenu.avertissements, [
       { code: 'IMPORT_EN_RETENU', details: {} },
       { code: 'PLACES_MANQUANTES', details: { placesManquantes: 1 } },
-      {
-        code: 'DERIVE_NOUVELLE',
-        details: { touchees: [{ id: 1, raisons: nonPlace }, { id: 2, raisons: nonPlace }, { id: 'retenu', raisons: nonPlace }] },
-      },
+      { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons: nonPlace }, { id: 2, raisons: nonPlace }] } },
     ]);
     // La séance montre aussi la dérive que l'Ouvert écrit porte désormais.
     assert.deepEqual(seance.avertissements, [...seance.ouvert.avertissements, ...enRetenu.avertissements]);
@@ -917,12 +916,14 @@ describe("séance : ce qu'un import dit, et ce que la séance montre (§ 4.4, §
     await seance.executer('retenirProposition', { id: 1 });
     assert.deepEqual(seance.avertissements, []);
     const exclusion = await seance.executer('exclureParticipant', { id: 2 });
-    assert.deepEqual(codesDe(exclusion.avertissements), ['DERIVE_NOUVELLE']);
-    assert.deepEqual(seance.avertissements.map(({ code }) => code), ['DERIVE', 'DERIVE_NOUVELLE']);
+    assert.deepEqual(codesDe(exclusion.avertissements), ['RENCONTRES_RETIREES_DU_RETENU', 'DERIVE_NOUVELLE']);
+    assert.deepEqual(seance.avertissements.map(({ code }) => code), ['DERIVE', 'RENCONTRES_RETIREES_DU_RETENU', 'DERIVE_NOUVELLE']);
     assert.deepEqual(seance.avertissements, [...seance.ouvert.avertissements, ...exclusion.avertissements]);
-    assert.equal(seance.avertissements[0].details.retenu, true);
+    // Le retenu suit l'exclusion : seules les propositions dérivent.
+    assert.equal(seance.avertissements[0].details.retenu, false);
     await seance.executer('reintegrerParticipant', { id: 2 });
-    assert.deepEqual(seance.avertissements, []);
+    // Réintégrée, elle attend en réserve du retenu ; plus rien ne dérive.
+    assert.deepEqual(codesDe(seance.avertissements), ['A_PLACER_DANS_LE_RETENU']);
   });
 
   test("le journal incomplet de l'ouverture ne s'affiche plus une fois la reprise écrite", async () => {
@@ -2831,15 +2832,18 @@ describe("séance observable : les avertissements d'un geste (§ 5.9, § 9)", ()
     await seance.executer('retenirProposition', { id: 1 });
     const exclusion = await seance.executer('exclureParticipant', { id: 3 });
     const raisons = [{ code: 'PARTICIPANT_EXCLU', participant: 3, personne: 'Théo Pervenche' }];
+    // Le retenu la perd dans la même entrée : seules les propositions dérivent.
     assert.deepEqual(exclusion.avertissements, [
-      { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons }, { id: 2, raisons }, { id: 'retenu', raisons }] } },
+      { code: 'RENCONTRES_RETIREES_DU_RETENU', details: { participant: 3, personne: 'Théo Pervenche', tours: [1, 2], remede: null } },
+      { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons }, { id: 2, raisons }] } },
     ]);
     const suivant = await seance.executer('modifierParticipant', { id: 4, champs: { nom: 'Lacasse-Ombrelle' } });
     assert.deepEqual(suivant.avertissements, []);
     const autre = await seance.executer('exclureParticipant', { id: 2 });
     const nouvelle = [{ code: 'PARTICIPANT_EXCLU', participant: 2, personne: 'Grisaille' }];
     assert.deepEqual(autre.avertissements, [
-      { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons: nouvelle }, { id: 2, raisons: nouvelle }, { id: 'retenu', raisons: nouvelle }] } },
+      { code: 'RENCONTRES_RETIREES_DU_RETENU', details: { participant: 2, personne: 'Grisaille', tours: [1, 2], remede: null } },
+      { code: 'DERIVE_NOUVELLE', details: { touchees: [{ id: 1, raisons: nouvelle }, { id: 2, raisons: nouvelle }] } },
     ]);
   });
 
@@ -3178,7 +3182,8 @@ describe('séance observable : les invariants du retenu (§ 14.12, § 14.15)', (
       assert.deepEqual(seance.etat().avertissements.find((a) => a.code === 'INVARIANT_VIOLE'), viole);
     }
     const exclusion = await seance.executer('exclureParticipant', { id: 1 });
-    assert.deepEqual(codesDe(exclusion.avertissements), ['RESERVATIONS_SUSPENDUES', 'DERIVE_NOUVELLE']);
+    // Le retenu la perd dans la même entrée : il ne gagne aucune raison de dérive.
+    assert.deepEqual(codesDe(exclusion.avertissements), ['RESERVATIONS_SUSPENDUES', 'RENCONTRES_RETIREES_DU_RETENU']);
     assert.deepEqual(seance.etat().avertissements, [...seance.ouvert.avertissements, viole, ...exclusion.avertissements]);
   });
 

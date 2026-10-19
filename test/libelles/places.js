@@ -13,6 +13,10 @@ export const EXEMPLES = [
   ['SIEGE_INEXISTANT', { table: 2, siege: 9, capacite: 8, remede: null }],
   ['DEUX_PLACES_MEME_TOUR', { participant: 1, tour: 2, autre: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
   ['PERSONNE_EXCLUE', { participant: 3, remede: null }],
+  [
+    'PERSONNE_ABSENTE_AU_TOUR',
+    { participant: 2, personne: 'Théo Pervenche', tour: 3, remede: { commande: 'changerPresence', arguments: { id: 2, tours: [1, 3, 4] } } },
+  ],
   ['PLACE_RESERVEE', { table: 2, siege: 3, tour: 2, titulaire: 2, portee: 'tour', remede: null }],
   ['RESERVEE_AILLEURS', { participant: 1, tour: 2, reservation: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
   ['TABLE_GELEE', { table: 1 }],
@@ -39,4 +43,10 @@ export const EXEMPLES = [
   ['ENTREE_RETIRER_DU_TOUR', { personne: 'Iris Ombrelle', numero: 4, tour: 2 }],
 ];
 
-export const TEXTES = [];
+export const TEXTES = [
+  [
+    'PERSONNE_ABSENTE_AU_TOUR',
+    { participant: 2, personne: 'Théo Pervenche', tour: 3, remede: null },
+    "Théo Pervenche est absente au tour 3 : la marquer présente à ce tour avant de l'y placer.",
+  ],
+];

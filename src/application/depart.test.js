@@ -2,19 +2,27 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Épreuves du départ d'une génération dérivée (§ 5.7, § 8.9, § 14.10) : la
-// filiation lue dans la charge, les refus du lancement dans leur ordre, la
-// recopie des tours figés et leur contrôle. Les noms d'épreuve sont inventés ;
-// la version vient du module engendré.
+// filiation lue dans la charge, les refus du lancement dans leur ordre, le
+// départ ajusté à la présence et ses écarts, la recopie des tours figés et
+// leur contrôle. Les noms d'épreuve sont inventés ; la version vient du
+// module engendré.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { creerCharge } from '../stockage/document.js';
+import { ajusterALaPresence, derive, planDepuisFichier } from '../stockage/placements.js';
 import { VERSION } from '../version.genere.js';
 import {
+  arrivantesSansChaise,
+  departAdapte,
+  departDuMoteur,
   derivationDe,
+  ecartAuRetenu,
+  ecartsDuDepart,
   planDuDepart,
   recopierPlacement,
   recopierToursFiges,
   refusDuDepart,
+  siegesDesArrivantes,
   tourFigeDifferent,
 } from './depart.js';
 
@@ -201,18 +209,28 @@ describe('départ : le plan du départ', () => {
 });
 
 describe('départ : les refus du lancement (C6, C24, D73)', () => {
-  test('un départ en dérive est refusé après le retrait d’une seule personne', () => {
-    const charge = chargeDe();
-    charge.participants = charge.participants.filter(({ id }) => id !== 5);
-    const refus = refusDuDepart(charge, { id: 4, toursFiges: [] });
-    assert.equal(refus.code, 'DEPART_NON_COMPARABLE');
-    assert.equal(refus.details.depart, 4);
-    assert.equal(refus.details.statut, 'derive');
-    assert.deepEqual(
-      refus.details.raisons.map(({ code, participant }) => [code, participant]),
-      [['PARTICIPANT_SUPPRIME', 5]],
-    );
-    assert.deepEqual(refus.details.remede, { geste: 'repartirDeZero' });
+  test('un départ en dérive par ses seuls participants sert de départ : une ajoutée, une ajoutée au seul tour 3, une exclue, une supprimée, une présence réduite aux tours 1 et 2', () => {
+    const cas = [
+      ['ajoutée', (charge) => charge.participants.push(personne([6, 'Aurèle', 'Pimprenelle']))],
+      ['ajoutée au tour 3', (charge) => charge.participants.push({ ...personne([6, 'Aurèle', 'Pimprenelle']), presence: [3] })],
+      ['exclue', (charge) => {
+        charge.participants[4].exclu = true;
+      }],
+      ['supprimée', (charge) => {
+        charge.participants = charge.participants.filter(({ id }) => id !== 5);
+      }],
+      ['réduite', (charge) => {
+        charge.participants[2].presence = [1, 2];
+      }],
+    ];
+    for (const [nom, changer] of cas) {
+      const charge = chargeDe();
+      changer(charge);
+      assert.ok(derive(charge.propositions[0], charge).length > 0, `${nom} : le départ ne dérive pas`);
+      for (const toursFiges of [[], [1, 2]]) {
+        assert.equal(refusDuDepart(charge, { id: 4, toursFiges }), null, `${nom}, figés ${toursFiges}`);
+      }
+    }
   });
 
   test('un départ comparable qui tient les réservations n’est pas refusé, tours figés ou non', () => {
@@ -245,27 +263,69 @@ describe('départ : les refus du lancement (C6, C24, D73)', () => {
     });
   });
 
-  test('DEPART_NON_COMPARABLE en dérive : une personne ajoutée, exclue, ou le mobilier changé ; les raisons nommées', () => {
-    const ajoutee = chargeDe();
-    ajoutee.participants.push(personne([6, 'Aurèle', 'Pimprenelle']));
-    const refus = refusDuDepart(ajoutee, { id: 4, toursFiges: [1] });
-    assert.equal(refus.details.statut, 'derive');
-    assert.deepEqual(refus.details.raisons, [{ code: 'PARTICIPANT_NON_PLACE', participant: 6, personne: 'Aurèle Pimprenelle' }]);
-
-    const exclue = chargeDe();
-    exclue.participants[4].exclu = true;
-    assert.deepEqual(refusDuDepart(exclue, { id: 4, toursFiges: [] }).details.raisons, [
-      { code: 'PARTICIPANT_EXCLU', participant: 5, personne: 'Maëlle Quenouille' },
-    ]);
-
+  test('DEPART_NON_COMPARABLE en dérive : le mobilier changé, seul ou mêlé aux participants, ne nomme que les raisons du mobilier', () => {
+    const attendu = {
+      code: 'DEPART_NON_COMPARABLE',
+      details: {
+        depart: 4,
+        statut: 'derive',
+        raisons: [{ code: 'CAPACITE_CHANGEE', table: 2, avant: 3, maintenant: 4, numero: 7 }],
+        remede: repartirDeZero,
+      },
+    };
     const mobilier = chargeDe();
     mobilier.tables[1].sieges = 4;
-    assert.deepEqual(refusDuDepart(mobilier, { id: 4, toursFiges: [] }).details, {
-      depart: 4,
-      statut: 'derive',
-      raisons: [{ code: 'CAPACITE_CHANGEE', table: 2, avant: 3, maintenant: 4, numero: 7 }],
-      remede: repartirDeZero,
+    assert.deepEqual(refusDuDepart(mobilier, { id: 4, toursFiges: [] }), attendu);
+
+    const meles = chargeDe();
+    meles.tables[1].sieges = 4;
+    meles.participants[4].exclu = true;
+    meles.participants[2].presence = [1, 3];
+    meles.participants.push(personne([6, 'Aurèle', 'Pimprenelle']));
+    assert.deepEqual(
+      derive(meles.propositions[0], meles).map(({ code }) => code),
+      ['CAPACITE_CHANGEE', 'PARTICIPANT_EXCLU', 'PARTICIPANT_NON_PLACE', 'PRESENCE_RETIREE'],
+    );
+    assert.deepEqual(refusDuDepart(meles, { id: 4, toursFiges: [1] }), attendu);
+
+    // Le nombre de tours changé bloque aussi.
+    const tours = chargeDe();
+    tours.evenement.tours = 4;
+    const refus = refusDuDepart(tours, { id: 4, toursFiges: [] });
+    assert.deepEqual([refus.code, refus.details.raisons.map(({ code }) => code)], ['DEPART_NON_COMPARABLE', ['TOURS_CHANGES']]);
+  });
+
+  test('DEPART_RESERVATION_NON_TENUE saute une arrivante, à un tour figé ou non, et refuse encore un départ qui assied une personne à une autre table que sa réservation', () => {
+    const charge = chargeDe();
+    charge.participants.push(personne([6, 'Aurèle', 'Pimprenelle']));
+    // Au tour 1, figé, la table 7 a une chaise libre ; au tour 2, non figé, la
+    // table 3 est pleine.
+    charge.reservations = [resa(6, 2, null, 1), resa(6, 1, null, 2)];
+    assert.equal(refusDuDepart(charge, { id: 4, toursFiges: [1] }), null);
+    assert.equal(refusDuDepart(charge, { id: 4, toursFiges: [] }), null);
+    // Une personne qui revient au tour 3, que le départ dit absente, est une
+    // arrivante comme une ajoutée.
+    const depart = propositionDe(4, TOURS_RANGES);
+    depart.placement[2] = { sieges: [[2, 4], [1, 5]], reserve: [], absents: [3] };
+    const revenue = chargeDe({ propositions: [depart] });
+    revenue.reservations = [resa(3, 1, null, 3)];
+    assert.equal(refusDuDepart(revenue, { id: 4, toursFiges: [] }), null);
+    // Assise ailleurs que sa réservation, elle n'est pas une arrivante.
+    charge.reservations.push(resa(4, 1, null, 1));
+    assert.deepEqual(refusDuDepart(charge, { id: 4, toursFiges: [1] }), {
+      code: 'DEPART_RESERVATION_NON_TENUE',
+      details: { depart: 4, participant: 4, table: 1, tour: 1, personne: 'Basile Tourteau', numero: 3, remede: repartirDeZero },
     });
+  });
+
+  test('DEPART_SIEGE_NON_TENU saute une arrivante : son siège pris la met en réserve, sans refus', () => {
+    const charge = chargeAssise();
+    charge.participants.push({ ...personne([6, 'Aurèle', 'Pimprenelle']), presence: [1] });
+    charge.participants[0].presence = [2, 3];
+    // Le siège 1 de la table 7, au tour 1, est celui de Maëlle Quenouille.
+    charge.reservations = [resa(6, 2, 1, 1)];
+    assert.equal(refusDuDepart(charge, { id: 4, toursFiges: [1] }), null);
+    assert.deepEqual(arrivantesSansChaise(charge, departAdapte(charge, 4), [1]), [{ participant: 6, tour: 1, cause: 'siege' }]);
   });
 
   test('DEPART_NON_COMPARABLE fautif : ses fautes pour raisons, le même remède', () => {
@@ -378,9 +438,13 @@ describe('départ : les refus du lancement (C6, C24, D73)', () => {
     const absent = chargeDe();
     assert.equal(refusDuDepart(absent, { id: 12, toursFiges: [1, 2, 3, 4] }).code, 'DEPART_ABSENT');
 
-    const derive = chargeDe();
-    derive.participants[0].exclu = true;
-    assert.equal(refusDuDepart(derive, { id: 4, toursFiges: [1, 2, 3, 4] }).code, 'DEPART_NON_COMPARABLE');
+    const enDerive = chargeDe();
+    enDerive.tables[0].sieges = 4;
+    assert.equal(refusDuDepart(enDerive, { id: 4, toursFiges: [1, 2, 3, 4] }).code, 'DEPART_NON_COMPARABLE');
+    // Une dérive de participants seule laisse passer au refus suivant.
+    const exclue = chargeDe();
+    exclue.participants[0].exclu = true;
+    assert.equal(refusDuDepart(exclue, { id: 4, toursFiges: [1, 2, 3, 4] }).code, 'TOUR_FIGE_HORS_SOIREE');
 
     const reservee = chargeAssise();
     reservee.reservations = [resa(2, 1, null, 2), resa(1, 1, 1, 1)];
@@ -394,6 +458,238 @@ describe('départ : les refus du lancement (C6, C24, D73)', () => {
     for (const toursFiges of [null, [0], [1.5], [2, 1], [1, 1], ['1']]) {
       assert.throws(() => refusDuDepart(charge, { id: 4, toursFiges }), TypeError, JSON.stringify(toursFiges));
     }
+  });
+});
+
+// Iris Ombrelle exclue, Basile Tourteau supprimé, Théo Pervenche absent au
+// tour 2, Aurèle Pimprenelle ajoutée aux tours 2 et 3 ; les sièges
+// attribués ou non.
+function chargeChangee(assise) {
+  const charge = assise ? chargeAssise() : chargeDe();
+  charge.participants = charge.participants.filter(({ id }) => id !== 4);
+  charge.participants[0].exclu = true;
+  charge.participants[1].presence = [1, 3];
+  charge.participants.push({ ...personne([6, 'Aurèle', 'Pimprenelle']), presence: [2, 3] });
+  return charge;
+}
+
+describe('départ : le départ ajusté à la présence (§ 5.7)', () => {
+  test('departAdapte : la chaise de qui part reste vide sous sièges attribués, sa liste se resserre sinon ; ni exclue ni supprimée ; l’arrivante en réserve à ses tours, absente aux autres ; la charge intacte', () => {
+    const assise = gele(chargeChangee(true));
+    const adapte = departAdapte(assise, 4);
+    assert.deepEqual(adapte.participants, [2, 3, 5, 6]);
+    assert.deepEqual(adapte.placement, [
+      { sieges: [[2, null, 3], [5]], reserve: [], absents: [6] },
+      { sieges: [[], [3, null, 5]], reserve: [6], absents: [2] },
+      { sieges: [[null, 2], [5, null, 3]], reserve: [6] },
+    ]);
+    assert.deepEqual(adapte, ajusterALaPresence(assise.propositions[0], assise).placement);
+    const libre = gele(chargeChangee(false));
+    assert.deepEqual(departAdapte(libre, 4).placement, [
+      { sieges: [[2, 3], [5]], reserve: [], absents: [6] },
+      { sieges: [[5], [3]], reserve: [6], absents: [2] },
+      { sieges: [[2], [3, 5]], reserve: [6] },
+    ]);
+    // Sans changement, le départ tel quel.
+    assert.deepEqual(departAdapte(chargeDe(), 4), chargeDe().propositions[0]);
+    assert.throws(() => departAdapte(chargeDe(), 12), TypeError);
+  });
+
+  test('departDuMoteur : le plan du départ ajusté, sans absents, une copie des tours figés et les réserves imposées, sans leur cause', () => {
+    const charge = gele(chargeChangee(true));
+    const toursFiges = [2];
+    const depart = departDuMoteur(charge, { id: 4, toursFiges });
+    assert.deepEqual(depart, { plan: planDepuisFichier(departAdapte(charge, 4)), toursFiges: [2], reservesImposees: [] });
+    assert.notEqual(depart.toursFiges, toursFiges);
+    assert.deepEqual(depart.plan.reserves, [[], [6], [6]]);
+    // Sans changement, le plan du départ.
+    assert.deepEqual(departDuMoteur(chargeDe(), { id: 4, toursFiges: [1] }), {
+      plan: planDuDepart(chargeDe(), 4),
+      toursFiges: [1],
+      reservesImposees: [],
+    });
+    // Réservée à une table pleine d'un tour figé : sa réserve imposée.
+    const pleine = chargeDe();
+    pleine.participants[0].presence = [2, 3];
+    pleine.participants.push({ ...personne([6, 'Aurèle', 'Pimprenelle']), presence: [1] });
+    pleine.reservations = [resa(6, 1, null, 1), resa(2, 1, null, 1)];
+    pleine.participants.push({ ...personne([7, 'Églantine', 'Cormier']), presence: [1] });
+    pleine.participants[3].presence = [2, 3];
+    pleine.reservations.push(resa(7, 1, null, 1));
+    assert.deepEqual(departDuMoteur(pleine, { id: 4, toursFiges: [1] }).reservesImposees, [{ participant: 7, tour: 1 }]);
+  });
+
+  test('arrivantesSansChaise : une arrivante réservée à une table que ses occupants, et les arrivantes admises avant elle, remplissent ; une libre jamais ; un tour non figé jamais', () => {
+    const charge = chargeDe();
+    // Iris Ombrelle et Basile Tourteau absents au tour 1 : la table 7 n'y
+    // garde que Maëlle Quenouille.
+    charge.participants[0].presence = [2, 3];
+    charge.participants[3].presence = [2, 3];
+    for (const [id, prenom, nom] of [[6, 'Aurèle', 'Pimprenelle'], [7, 'Églantine', 'Cormier'], [8, 'Faustine', 'Lupin']]) {
+      charge.participants.push({ ...personne([id, prenom, nom]), presence: [1] });
+    }
+    charge.reservations = [resa(8, 2, null, 1), resa(6, 2, null, 1), resa(7, 2, null, 1)];
+    const adapte = departAdapte(charge, 4);
+    assert.deepEqual(adapte.placement[0], { sieges: [[2, 3], [5]], reserve: [6, 7, 8], absents: [1, 4] });
+    assert.deepEqual(arrivantesSansChaise(charge, adapte, [1]), [{ participant: 8, tour: 1, cause: 'table' }]);
+    assert.deepEqual(arrivantesSansChaise(charge, adapte, [2]), []);
+    assert.deepEqual(arrivantesSansChaise(charge, adapte, []), []);
+    // Libre, la même arrivante n'y figure pas.
+    charge.reservations = charge.reservations.filter(({ participant }) => participant !== 8);
+    assert.deepEqual(arrivantesSansChaise(charge, adapte, [1]), []);
+    // La capacité courante compte : une table de quatre places l'admet.
+    charge.reservations.push(resa(8, 2, null, 1));
+    charge.tables[1].sieges = 4;
+    assert.deepEqual(arrivantesSansChaise(charge, adapte, [1]), []);
+  });
+
+  test('arrivantesSansChaise sous sièges attribués du départ et de l’événement : un siège tenu pris est la cause ; libre, vide ou au-delà de la liste, il admet ; siegesDesArrivantes rend le siège des admises', () => {
+    const charge = chargeAssise();
+    charge.participants[0].presence = [2, 3];
+    charge.participants[3].presence = [2, 3];
+    for (const [id, prenom, nom] of [[6, 'Aurèle', 'Pimprenelle'], [7, 'Églantine', 'Cormier'], [8, 'Faustine', 'Lupin']]) {
+      charge.participants.push({ ...personne([id, prenom, nom]), presence: [1] });
+    }
+    // Au tour 1 : table 3 [Théo, —, Ondine], table 7 [Maëlle].
+    charge.reservations = [resa(6, 2, 1, 1), resa(7, 1, 2, 1), resa(8, 2, 3, 1)];
+    const adapte = departAdapte(charge, 4);
+    assert.deepEqual(adapte.placement[0].sieges, [[2, null, 3], [5]]);
+    assert.deepEqual(arrivantesSansChaise(charge, adapte, [1]), [{ participant: 6, tour: 1, cause: 'siege' }]);
+    assert.deepEqual(siegesDesArrivantes(charge, adapte, [1]), new Map([[1, new Map([[7, 2], [8, 3]])]]));
+    assert.deepEqual(siegesDesArrivantes(charge, adapte, [2]), new Map([[2, new Map()]]));
+    // L'événement sans attribution : la table seule compte.
+    charge.reglages.attribuerSieges = false;
+    assert.deepEqual(arrivantesSansChaise(charge, adapte, [1]), []);
+    assert.deepEqual(siegesDesArrivantes(charge, adapte, [1]), new Map([[1, new Map()]]));
+  });
+
+  test('ecartsDuDepart : les entrées hors des tours figés, les entrées figées, les réserves imposées et les sorties de chacun, par identifiant ; [] sans écart, sans départ, ou sous une dérive du mobilier', () => {
+    for (const assise of [false, true]) {
+      assert.deepEqual(ecartsDuDepart(gele(chargeChangee(assise)), { id: 4, toursFiges: [2] }), [
+        { participant: 1, personne: 'Iris Ombrelle', entrees: [], entreesFigees: [], enReserveFigee: [], sorties: [1, 2, 3] },
+        { participant: 2, personne: 'Théo Pervenche', entrees: [], entreesFigees: [], enReserveFigee: [], sorties: [2] },
+        { participant: 4, personne: null, entrees: [], entreesFigees: [], enReserveFigee: [], sorties: [1, 2, 3] },
+        { participant: 6, personne: 'Aurèle Pimprenelle', entrees: [3], entreesFigees: [2], enReserveFigee: [], sorties: [] },
+      ], `sièges attribués : ${assise}`);
+    }
+    const pleine = chargeDe();
+    pleine.participants[0].presence = [2, 3];
+    pleine.participants[3].presence = [2, 3];
+    for (const [id, prenom, nom] of [[6, 'Aurèle', 'Pimprenelle'], [7, 'Églantine', 'Cormier'], [8, 'Faustine', 'Lupin']]) {
+      pleine.participants.push({ ...personne([id, prenom, nom]), presence: [1] });
+    }
+    pleine.reservations = [resa(6, 2, null, 1), resa(7, 2, null, 1), resa(8, 2, null, 1)];
+    assert.deepEqual(ecartsDuDepart(pleine, { id: 4, toursFiges: [1] }).map(({ participant, entreesFigees, enReserveFigee }) => [participant, entreesFigees, enReserveFigee]), [
+      [1, [], []],
+      [4, [], []],
+      [6, [1], []],
+      [7, [1], []],
+      [8, [], [{ tour: 1, cause: 'table' }]],
+    ]);
+    assert.deepEqual(ecartsDuDepart(chargeDe(), { id: 4, toursFiges: [1] }), []);
+    // Un tour figé au-delà de la soirée ne compte pas.
+    assert.deepEqual(
+      ecartsDuDepart(chargeChangee(false), { id: 4, toursFiges: [2, 5] }),
+      ecartsDuDepart(chargeChangee(false), { id: 4, toursFiges: [2] }),
+    );
+    assert.deepEqual(ecartsDuDepart(chargeChangee(false), { id: 12, toursFiges: [] }), []);
+    const fautif = chargeChangee(false);
+    fautif.propositions[0].placement[0].sieges[0].push(2);
+    assert.deepEqual(ecartsDuDepart(fautif, { id: 4, toursFiges: [] }), []);
+    const mobilier = chargeChangee(false);
+    mobilier.tables[1].sieges = 4;
+    assert.deepEqual(ecartsDuDepart(mobilier, { id: 4, toursFiges: [] }), []);
+  });
+
+  test('ecartAuRetenu : les tours figés où le retenu, retenu de ce départ, diffère du départ ajusté — occupants par table, réserve, chaises sous sièges attribués des deux côtés ; [] autrement', () => {
+    const charge = chargeDe({ propositions: [propositionDe(4, TOURS_RANGES), propositionDe(5, TOURS_RANGES)] });
+    assert.deepEqual(ecartAuRetenu(charge, { id: 4, toursFiges: [1] }), [], 'sans retenu');
+    // Ondine Lacasse et Basile Tourteau échangés à la main au tour 1.
+    charge.retenu = retenuDe(propositionDe(4, [[[1, 2, 4], [3, 5]], TOURS_RANGES[1], TOURS_RANGES[2]]));
+    assert.deepEqual(ecartAuRetenu(charge, { id: 4, toursFiges: [1, 2] }), [1]);
+    assert.deepEqual(ecartAuRetenu(charge, { id: 4, toursFiges: [2, 3] }), []);
+    assert.deepEqual(ecartAuRetenu(charge, { id: 5, toursFiges: [1, 2] }), [], 'une autre proposition');
+    const efface = { ...charge, propositions: [charge.propositions[1]] };
+    assert.deepEqual(ecartAuRetenu(efface, { id: 4, toursFiges: [1] }), [], 'le départ effacé');
+    const fautif = structuredClone(charge);
+    fautif.retenu.placement[0].sieges[1].push(1);
+    assert.deepEqual(ecartAuRetenu(fautif, { id: 4, toursFiges: [1] }), [], 'retenu fautif');
+
+    // Le retenu seulement ajusté à la présence : aucun écart.
+    const ajuste = chargeChangee(false);
+    ajuste.retenu = ajusterALaPresence(retenuDe(ajuste.propositions[0]), ajuste).placement;
+    assert.deepEqual(ecartAuRetenu(ajuste, { id: 4, toursFiges: [1, 2, 3] }), []);
+    // L'arrivante assise à la main au tour 2 : la table et la réserve diffèrent.
+    ajuste.retenu.placement[1] = { sieges: [[5, 6], [3]], reserve: [], absents: [2] };
+    assert.deepEqual(ecartAuRetenu(ajuste, { id: 4, toursFiges: [1, 2, 3] }), [2]);
+    // La réserve seule diffère : Aurèle Pimprenelle dite absente au tour 3.
+    ajuste.retenu.placement[2] = { sieges: [[2], [3, 5]], reserve: [], absents: [6] };
+    assert.deepEqual(ecartAuRetenu(ajuste, { id: 4, toursFiges: [3] }), [3]);
+
+    // Deux chaises échangées dans une table : un écart sous sièges attribués
+    // des deux côtés seulement.
+    const assise = chargeAssise();
+    assise.retenu = retenuDe(propositionDe(4, [[[1, 2, 3], [5, 4]], TOURS_ASSIS[1], TOURS_ASSIS[2]], { siegesAttribues: true }));
+    assert.deepEqual(ecartAuRetenu(assise, { id: 4, toursFiges: [1] }), [1]);
+    assise.retenu.siegesAttribues = false;
+    assert.deepEqual(ecartAuRetenu(assise, { id: 4, toursFiges: [1] }), []);
+
+    // Un tour figé au-delà du retenu ou du départ ne compte pas ; un départ
+    // fautif ne se compare pas.
+    const court = chargeDe();
+    court.retenu = retenuDe(propositionDe(4, TOURS_RANGES.slice(0, 2)));
+    assert.deepEqual(ecartAuRetenu(court, { id: 4, toursFiges: [3] }), [], 'au-delà du retenu');
+    court.retenu = retenuDe(propositionDe(4, [[[1, 2, 4], [3, 5]], TOURS_RANGES[1], TOURS_RANGES[2]]));
+    assert.deepEqual(ecartAuRetenu(court, { id: 4, toursFiges: [1, 4] }), [1], 'au-delà du départ');
+    const departFautif = structuredClone(court);
+    departFautif.propositions[0].placement[0].sieges[1].push(1);
+    assert.deepEqual(ecartAuRetenu(departFautif, { id: 4, toursFiges: [1] }), [], 'départ fautif');
+  });
+
+  test('ecartAuRetenu : une personne qui quitte un tour figé puis y revient attend en réserve au retenu, le départ ajusté l’assied encore à sa chaise restée libre — aucun écart ; sa chaise prise à la main en est un', () => {
+    for (const assise of [false, true]) {
+      const charge = assise ? chargeAssise() : chargeDe();
+      charge.retenu = retenuDe(charge.propositions[0]);
+      // Ondine Lacasse quitte le tour 1, puis y revient : le retenu s'ajuste
+      // à chaque geste, le départ à la présence du moment.
+      charge.participants[2].presence = [2, 3];
+      charge.retenu = ajusterALaPresence(charge.retenu, charge, [3]).placement;
+      delete charge.participants[2].presence;
+      charge.retenu = ajusterALaPresence(charge.retenu, charge, [3]).placement;
+      assert.deepEqual(charge.retenu.placement[0].reserve, [3], `sièges attribués : ${assise}`);
+      assert.deepEqual(ecartAuRetenu(gele(structuredClone(charge)), { id: 4, toursFiges: [1, 2] }), [], `sièges attribués : ${assise}`);
+      // Basile Tourteau mis à la main dans sa chaise restée libre, la
+      // troisième de la table 3 : la table 7 du retenu n'est plus celle du
+      // départ.
+      const prise = structuredClone(charge);
+      const [liste3, liste7] = prise.retenu.placement[0].sieges;
+      liste3[2] = 4;
+      liste7.splice(liste7.indexOf(4), 1);
+      assert.deepEqual(ecartAuRetenu(prise, { id: 4, toursFiges: [1, 2] }), [1], `sièges attribués : ${assise}`);
+    }
+    // Retirée du tour à la main, sa chaise laissée libre : la même forme
+    // qu'une revenue, donc aucun écart — un départ en cours de soirée se dit
+    // par la présence, que l'ajustement suit.
+    for (const assise of [false, true]) {
+      const charge = assise ? chargeAssise() : chargeDe();
+      charge.retenu = retenuDe(charge.propositions[0]);
+      const tour = charge.retenu.placement[0];
+      for (const liste of tour.sieges) {
+        const rang = liste.indexOf(3);
+        if (rang < 0) continue;
+        if (assise) liste[rang] = null;
+        else liste.splice(rang, 1);
+      }
+      tour.reserve = [3];
+      assert.deepEqual(ecartAuRetenu(charge, { id: 4, toursFiges: [1] }), [], `sièges attribués : ${assise}`);
+    }
+    // En réserve au retenu sans que le départ ajusté l'asseye — Aurèle
+    // Pimprenelle, absente au tour 1 : ce n'est pas une revenue, la réserve
+    // diffère.
+    const ajuste = chargeChangee(false);
+    ajuste.retenu = ajusterALaPresence(retenuDe(ajuste.propositions[0]), ajuste).placement;
+    ajuste.retenu.placement[0] = { sieges: [[2, 3], [5]], reserve: [6] };
+    assert.deepEqual(ecartAuRetenu(ajuste, { id: 4, toursFiges: [1] }), [1]);
   });
 });
 
@@ -456,7 +752,7 @@ describe('départ : la recopie des tours figés (D72)', () => {
     assert.equal(tourFigeDifferent(recopie, duDepart, [1]), 1);
   });
 
-  test('la réserve d’un tour figé est celle du départ, par recopierPlacement comme par recopierToursFiges', () => {
+  test('la réserve d’un tour figé est celle du départ, par recopierPlacement ; recopierToursFiges en retire l’arrivante que la dérivée assied', () => {
     // Au tour 1, figé, le fichier laisse la personne 5 en réserve et le départ
     // la personne 4 ; au tour 2, non figé, le fichier garde la sienne.
     const avecReserves = (id, tours) => ({
@@ -482,10 +778,34 @@ describe('départ : la recopie des tours figés (D72)', () => {
     assert.deepEqual(recopie.map(({ reserve }) => reserve), attendues);
     // Une réserve partagée avec le départ, gelé, lèverait ici.
     recopie[0].reserve.push(9);
-    assert.deepEqual(
-      recopierToursFiges(fichier, duDepart, [1]).placement.map(({ reserve }) => reserve),
-      attendues,
-    );
+    // Au tour 1, la dérivée assied la personne 4, en réserve au départ : une
+    // arrivante, qui rejoint sa table en fin de liste et quitte la réserve.
+    const derivee = recopierToursFiges(fichier, duDepart, [1]);
+    assert.deepEqual(derivee.placement.map(({ reserve }) => reserve), [[], [5], []]);
+    assert.deepEqual(derivee.placement[0].sieges, [[2, 1, 3], [5, 4]]);
+  });
+
+  test('recopierToursFiges : une arrivante d’un tour figé va au siège que sa réservation tient, d’abord ; les autres, par identifiant, à la première chaise vide, sinon en fin de liste ; la réserve imposée reste ; les absents du fichier restent', () => {
+    // Au départ ajusté du tour 1 : Iris Ombrelle, Théo Pervenche et Basile
+    // Tourteau absents ; quatre arrivantes en réserve. La dérivée en assied
+    // trois et laisse la quatrième, 8, en réserve imposée.
+    const avecTour1 = (id, tour1) => ({
+      ...propositionDe(id, TOURS_ASSIS, { siegesAttribues: true }),
+      placement: [tour1, ...propositionDe(id, TOURS_ASSIS, { siegesAttribues: true }).placement.slice(1)],
+    });
+    const duDepart = gele(avecTour1(4, { sieges: [[null, null, 3], [5]], reserve: [6, 7, 8, 9], absents: [1, 2, 4] }));
+    const fichier = gele(avecTour1(10, { sieges: [[3, 6, 7], [5, 9]], reserve: [8], absents: [1, 2, 4] }));
+    const sieges = new Map([[1, new Map([[7, 1], [9, 3]])]]);
+    const recopie = recopierToursFiges(fichier, duDepart, [1, 2], sieges);
+    assert.deepEqual(recopie.placement[0], { sieges: [[7, 6, 3], [5, null, 9]], reserve: [8], absents: [1, 2, 4] });
+    assert.deepEqual(recopie.placement[1], duDepart.placement[1]);
+    assert.equal(tourFigeDifferent(recopie, duDepart, [1, 2]), null);
+    // Sans siège tenu : par identifiant, à la première chaise vide.
+    assert.deepEqual(recopierToursFiges(fichier, duDepart, [1]).placement[0].sieges, [[6, 7, 3], [5, 9]]);
+    // Un siège tenu déjà pris ne déloge personne : l'arrivante va à la
+    // première chaise vide.
+    const pris = recopierToursFiges(fichier, duDepart, [1], new Map([[1, new Map([[7, 3]])]]));
+    assert.deepEqual(pris.placement[0].sieges, [[6, 7, 3], [5, 9]]);
   });
 
   test('recopierToursFiges rend le fichier tel quel quand l’un des deux n’attribue pas les sièges', () => {
@@ -554,5 +874,23 @@ describe('départ : le contrôle des tours figés (D72, § 14.12)', () => {
   test('une table du départ absente du fichier diffère', () => {
     const fichier = { ...recopie(), tables: [1] };
     assert.equal(tourFigeDifferent(fichier, duDepart, [2]), 2);
+  });
+
+  test('les arrivantes du tour figé — en réserve au départ — ne comptent pas, assises ou en réserve dans la dérivée ; toute autre personne qui bouge compte, avec ou sans sièges attribués', () => {
+    const avecArrivantes = (id, tour1, siegesAttribues) => {
+      const proposition = propositionDe(id, TOURS_ASSIS, { siegesAttribues });
+      return { ...proposition, placement: [tour1, ...proposition.placement.slice(1)] };
+    };
+    const depart = (siegesAttribues) =>
+      avecArrivantes(4, { sieges: [[null, null, 3], [5]], reserve: [6, 7], absents: [1, 2, 4] }, siegesAttribues);
+    for (const siegesAttribues of [true, false]) {
+      const ici = `sièges attribués : ${siegesAttribues}`;
+      const assises = avecArrivantes(9, { sieges: [[6, null, 3], [5, 7]], reserve: [], absents: [1, 2, 4] }, siegesAttribues);
+      assert.equal(tourFigeDifferent(assises, depart(siegesAttribues), [1]), null, ici);
+      const enReserve = avecArrivantes(9, { sieges: [[null, 6, 3], [5]], reserve: [7], absents: [1, 2, 4] }, siegesAttribues);
+      assert.equal(tourFigeDifferent(enReserve, depart(siegesAttribues), [1]), null, ici);
+      const deplacee = avecArrivantes(9, { sieges: [[6, 5, 3], [7]], reserve: [], absents: [1, 2, 4] }, siegesAttribues);
+      assert.equal(tourFigeDifferent(deplacee, depart(siegesAttribues), [1]), 1, ici);
+    }
   });
 });

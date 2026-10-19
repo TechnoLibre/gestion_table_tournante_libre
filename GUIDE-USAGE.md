@@ -1021,6 +1021,7 @@ l’historique ; les noms des exemples sont inventés.
 | `deplacerDansRetenu` | Déplacé Iris Ombrelle de la table 4 à la table 7, tour 2 |
 | `echangerDansRetenu` | Échangé Iris Ombrelle (table 4) et Théo Pervenche (réserve), tour 2 |
 | `retirerDuTour` | Retiré Iris Ombrelle de la table 4, tour 2 |
+| `changerPresence` | Présence de Iris Ombrelle : tours 1 et 2, au lieu de tous les tours ; retirée du placement retenu aux tours 3 et 4 |
 
 <!-- engendre:fin commandes -->
 

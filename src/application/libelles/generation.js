@@ -72,7 +72,8 @@ export const TABLE = new Map([
         : `, ${toursFiges.length === 1 ? 'tour' : 'tours'} ${enumeration(toursFiges.map(String))} ` +
           `${toursFiges.length === 1 ? 'figé' : 'figés'}`),
   ],
-  ['ENTREE_RETENIR_PROPOSITION', ({ id }) => `Retenu la proposition n° ${id}`],
+  // ajuste : la copie retenue a suivi la présence de chacun.
+  ['ENTREE_RETENIR_PROPOSITION', ({ id, ajuste }) => `Retenu la proposition n° ${id}${ajuste === true ? ' ; ajusté à la présence' : ''}`],
   [
     'ENTREE_EFFACER_PROPOSITIONS',
     ({ n, gardee }) =>
@@ -88,6 +89,18 @@ export const TABLE = new Map([
       `effacé ${compte(effacees, 'proposition', 'propositions')}` +
       `${gardee === null || gardee === undefined ? '' : `, gardé aussi la retenue (n° ${gardee})`}`,
   ],
+  // nonClassees : les propositions qui servent encore de départ sans se
+  // comparer, la présence de chacun ayant changé depuis elles ; n, les
+  // premières que le geste garderait.
+  [
+    'NETTOYAGE_SANS_CLASSEMENT',
+    ({ n, nonClassees }) =>
+      `${compte(nonClassees, 'proposition', 'propositions')} ${nonClassees <= 1 ? "n'est pas classée" : 'ne sont pas classées'} ` +
+      'depuis le changement de participants : ' +
+      `garder ${n <= 1 ? 'la meilleure' : `les ${n} meilleures`} ` +
+      `${nonClassees <= 1 ? "l'effacerait sans l'avoir comparée" : 'les effacerait sans les avoir comparées'}. ` +
+      "Générer d'abord une dérivée.",
+  ],
 
   // --- Le départ d'une génération dérivée (§ 5.7) -----------------------------
   // Les refus que le lancement pose avant tout calcul (application/depart.js).
@@ -100,15 +113,16 @@ export const TABLE = new Map([
         ? `La proposition n° ${depart} n'est plus dans la liste : elle ne peut pas servir de départ.`
         : "Seule une proposition de la liste sert de départ, et ce placement n'en est pas une.",
   ],
-  // statut 'derive' : chaque raison de dérive par son texte ; 'fautif' : les
-  // fautes ne se détaillent pas, comme pour toute proposition qui se
-  // contredit.
+  // statut 'derive' : le mobilier — tables, places, tours — a changé, et
+  // chaque raison se dit par son texte ; un changement de participants ne
+  // refuse pas un départ, qui s'ajuste à la présence. 'fautif' : les fautes
+  // ne se détaillent pas, comme pour toute proposition qui se contredit.
   [
     'DEPART_NON_COMPARABLE',
     ({ depart, statut, raisons }, texte) =>
       statut === 'fautif'
         ? `La proposition n° ${depart} se contredit : elle ne peut pas servir de départ.`
-        : `La proposition n° ${depart} ne décrit plus la soirée : les participants ou le mobilier ont changé depuis elle, ` +
+        : `La proposition n° ${depart} ne décrit plus la soirée : le mobilier a changé depuis elle, ` +
           'et elle ne peut plus servir de départ.' +
           raisons.map((raison) => ` ${phraseDeRaison(raison.code, raison, texte)}`).join(''),
   ],
@@ -146,6 +160,18 @@ export const TABLE = new Map([
     ({ rang, tour }) =>
       `Le placement que la génération a rendu au rang ${rang} de ce lancement ne reprend pas tel quel le tour ${tour} ` +
       "de son départ, que ce tour figé doit garder ; rien n'est enregistré.",
+  ],
+
+  // L'issue d'une génération dérivée dont le retenu a été retenu du départ et
+  // en diffère à des tours figés : la dérivée reprend ces tours du départ,
+  // sans les retouches faites depuis au retenu. tours, croissants.
+  [
+    'DEPART_ECART_AU_RETENU',
+    ({ depart, tours }) =>
+      tours.length === 1
+        ? `Le tour figé ${tours[0]} vient de la proposition n° ${depart} : les retouches du placement retenu à ce tour n'y sont pas.`
+        : `Les tours figés ${enumeration(tours.map(String))} viennent de la proposition n° ${depart} : ` +
+          "les retouches du placement retenu à ces tours n'y sont pas.",
   ],
 
   // --- Le contrôleur de génération (§ 5.9, § 5.10, § 15.4) -------------------

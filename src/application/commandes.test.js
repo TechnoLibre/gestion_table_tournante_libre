@@ -16,6 +16,7 @@ import { serialiser, serialiserCharge } from '../stockage/canonique.js';
 import { analyser, configurationDepuisCharge, creerCharge, etatDeduit } from '../stockage/document.js';
 import { cleDeCourse, courseDe, lireCourses, texteDesCourses } from '../stockage/courses.js';
 import {
+  ajusterALaPresence,
   courseDepuisFichier,
   derive,
   examiner,
@@ -40,7 +41,8 @@ import {
 import { evaluer, nettoyage } from './evaluation.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
-import { derivationDe, planDuDepart, refusDuDepart } from './depart.js';
+import { COMMANDES_PRESENCE } from './presence.js';
+import { departAdapte, departDuMoteur, derivationDe, planDuDepart, refusDuDepart } from './depart.js';
 import { ErreurCommande as ErreurDesErreurs, refus } from './erreurs.js';
 
 const V1 = VERSION.affichee;
@@ -118,10 +120,11 @@ const executer = (nom, charge, args) => COMMANDES.get(nom)(charge, args);
 const CSV_DEUX = 'nom;prenom;appartenance\nAncolie;Bastien;Club des Merles\nBruyère;Capucine;\n';
 
 describe('commandes : le registre (§ 8.2)', () => {
-  test("le registre porte les onze commandes d'A1, changerEtiquettes, garderMeilleures, les dix des places et celles du mobilier, chacune une fonction", () => {
+  test("le registre porte les onze commandes d'A1, changerEtiquettes, garderMeilleures, changerPresence, les dix des places et celles du mobilier, chacune une fonction", () => {
     const attendues = [
       'ajouterParticipant',
       'changerEtat',
+      'changerPresence',
       'changerEtiquettes',
       'convertirEnTous',
       'debloquer',
@@ -145,8 +148,9 @@ describe('commandes : le registre (§ 8.2)', () => {
       'retirerTitre',
       'supprimerParticipant',
     ];
-    assert.equal(attendues.length, 24);
+    assert.equal(attendues.length, 25);
     assert.deepEqual([...COMMANDES.keys()].sort(), [...attendues, ...COMMANDES_MOBILIER.keys()].sort());
+    assert.deepEqual([...COMMANDES_PRESENCE.keys()], ['changerPresence']);
     for (const commande of COMMANDES.values()) assert.equal(typeof commande, 'function');
   });
 
@@ -274,9 +278,12 @@ describe('commandes : les participants (§ 4, § 4.4, § 10.2)', () => {
     assert.deepEqual(charge.prochainsIds, avant.prochainsIds);
     assert.deepEqual(charge.propositions, avant.propositions);
     assert.ok(derive(charge.propositions[0], charge).some(({ code, participant }) => code === 'PARTICIPANT_SUPPRIME' && participant === 1));
-    assert.equal(libelle, 'Supprimé Iris Ombrelle');
+    // Le retenu la perd dans la même entrée, et ses rencontres avec elle.
+    assert.ok(!charge.retenu.participants.includes(1));
+    assert.equal(libelle, 'Supprimé Iris Ombrelle ; placement retenu ajusté');
     assert.deepEqual(avertissements, [
       { code: 'RESERVATIONS_RETIREES', details: { participant: 1, personne: 'Iris Ombrelle', reservations: 1, titres: 1 } },
+      { code: 'RENCONTRES_RETIREES_DU_RETENU', details: { participant: 1, personne: 'Iris Ombrelle', tours: [1, 2], remede: null } },
     ]);
     refuse(() => executer('supprimerParticipant', chargeEssai(), { id: 9 }), 'PARTICIPANT_INCONNU');
   });
@@ -775,6 +782,32 @@ describe('commandes : générer, retenir, effacer (§ 5.7, § 8.9)', () => {
     refuse(() => executer('retenirProposition', generee, { id: 9 }), 'PROPOSITION_INCONNUE', { id: 9, remede: null });
   });
 
+  test('retenir une proposition en dérive par une absence ajuste sa copie, dans la même entrée : un retenu sans raison de participants, et le libellé le dit ; la proposition reste telle quelle', () => {
+    const generee = executer('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 2)).charge;
+    const absente = structuredClone(generee);
+    absente.participants[3].presence = [1];
+    figer(absente);
+    assert.deepEqual(derive(absente.propositions[1], absente).map(({ code }) => code), ['PRESENCE_RETIREE']);
+    const { charge, libelle } = executer('retenirProposition', absente, { id: 2 });
+    const { id, graine, arret, historique, produitVersion, ...plan } = absente.propositions[1];
+    assert.deepEqual(charge.retenu, ajusterALaPresence({ proposition: 2, ...plan }, absente).placement);
+    assert.deepEqual(derive(charge.retenu, charge), []);
+    assert.deepEqual(charge.retenu.placement[1].absents, [4]);
+    assert.equal(libelle, 'Retenu la proposition n° 2 ; ajusté à la présence');
+    assert.deepEqual(charge.propositions, absente.propositions);
+    // Une dérive du mobilier reste ce qu'elle est, sans suffixe.
+    const agrandie = structuredClone(generee);
+    agrandie.tables[0].sieges = 3;
+    const mobilier = executer('retenirProposition', figer(agrandie), { id: 2 });
+    assert.deepEqual(derive(mobilier.charge.retenu, mobilier.charge).map(({ code }) => code), ['CAPACITE_CHANGEE']);
+    assert.equal(mobilier.libelle, 'Retenu la proposition n° 2');
+    // Une proposition fautive se retient telle quelle.
+    const fautive = structuredClone(absente);
+    fautive.propositions[1].placement[0].sieges[0].push(4);
+    const { charge: retenue } = executer('retenirProposition', figer(fautive), { id: 2 });
+    assert.deepEqual(retenue.retenu.placement, fautive.propositions[1].placement);
+  });
+
   test("effacer épargne la proposition retenue ; sans retenu, le plan revient en brouillon ; rien à effacer : SANS_EFFET", () => {
     const riche = chargeRiche();
     const { charge, libelle } = executer('effacerPropositions', riche, {});
@@ -861,6 +894,37 @@ describe('commandes : garder les meilleures propositions (§ 5.7)', () => {
     for (const n of [0, -2, 1.5, '1', null]) assert.throws(() => executer('garderMeilleures', avant, { n }), TypeError, String(n));
     assert.throws(() => executer('garderMeilleures', avant, {}), TypeError);
     assert.equal(Object.hasOwn(executer('garderMeilleures', avant, { n: 1 }), 'courses'), false);
+  });
+
+  test('après un changement de présence, garder les 10 meilleures de 12 propositions toutes déclassées refuse NETTOYAGE_SANS_CLASSEMENT ; avec 10 dérivées comparables générées depuis, il garde les 10 et efface les déclassées', () => {
+    const generee = executer('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 12)).charge;
+    const charge = figer(executer('changerPresence', generee, { id: 4, tours: [1] }).charge);
+    assert.ok(evaluer(charge).propositions.every(({ statut, sertDeDepart }) => statut === 'derive' && sertDeDepart));
+    refuse(() => executer('garderMeilleures', charge, { n: 10 }), 'NETTOYAGE_SANS_CLASSEMENT', {
+      n: 10,
+      classees: 0,
+      nonClassees: 12,
+      remede: null,
+    });
+    // Rien à effacer : SANS_EFFET, comme sans présence.
+    refuse(() => executer('garderMeilleures', charge, { n: 12 }), 'SANS_EFFET');
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = repartir(configuration, { graine: 3, arret: 40, nombre: 10 }, departDuMoteur(charge, { id: 1, toursFiges: [] }));
+    const derivees = figer(
+      executer('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1, derivation: { depart: 1, toursFiges: [] } }).charge,
+    );
+    assert.equal(evaluer(derivees).classement.ordre.length, 10);
+    const { charge: gardee, resume } = executer('garderMeilleures', derivees, { n: 10 });
+    assert.deepEqual(gardee.propositions.map(({ id }) => id), [13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+    assert.deepEqual(resume, { effacees: 12 });
+  });
+
+  test('une dérive du mobilier ne protège rien : garder les meilleures efface sans refus les propositions qui ne servent pas de départ', () => {
+    const generee = executer('enregistrerGeneration', chargeEssai(), generer(chargeEssai(), 3)).charge;
+    const agrandie = structuredClone(generee);
+    agrandie.tables[0].sieges = 3;
+    const { charge, resume } = executer('garderMeilleures', figer(agrandie), { n: 1 });
+    assert.deepEqual([charge.propositions.length, resume], [1, { effacees: 2 }]);
   });
 
   test("après le nettoyage, aucun identifiant ne revient : la génération suivante continue le compteur", () => {
@@ -986,11 +1050,11 @@ describe('commandes : la course de la recherche, rendue à côté de la charge (
 
 describe('commandes : la génération dérivée (§ 5.7, § 8.9, C6, C24)', () => {
   // Les arguments d'enregistrerGeneration d'une génération dérivée courte du
-  // moteur : partie du plan de la proposition depart de la charge, sous
-  // toursFiges, à 200 mouvements.
+  // moteur : partie du départ ajusté de la proposition depart de la charge
+  // (departDuMoteur), sous toursFiges, à 200 mouvements.
   function genererDepuis(charge, depart, toursFiges, graine = 11, nombre = 2) {
     const configuration = configurationDepuisCharge(charge);
-    const propositions = repartir(configuration, { graine, arret: 200, nombre }, { plan: planDuDepart(charge, depart), toursFiges });
+    const propositions = repartir(configuration, { graine, arret: 200, nombre }, departDuMoteur(charge, { id: depart, toursFiges }));
     return { propositions, configuration, produitVersion: V1, derivation: { depart, toursFiges } };
   }
 
@@ -1266,6 +1330,78 @@ describe('commandes : la génération dérivée (§ 5.7, § 8.9, C6, C24)', () =
   });
 });
 
+describe('commandes : la dérivée d’un départ en dérive par ses participants (§ 5.7)', () => {
+  // La charge d'essai sur trois tours, sièges attribués, deux tables de trois
+  // places ; la proposition n° 1 engendrée, puis Théo Pervenche absent au
+  // tour 1 et Anouk Bruyère ajoutée, présente aux tours 1 et 3.
+  function chargeChangee() {
+    const charge = chargeEssai();
+    charge.evenement.siegesParDefaut = 3;
+    charge.evenement.tours = 3;
+    charge.reglages.attribuerSieges = true;
+    charge.titres = [];
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = rechercher(configuration, { graine: 7, arret: 200, nombre: 1 });
+    const generee = executer('enregistrerGeneration', charge, { propositions, configuration, produitVersion: V1 }).charge;
+    generee.participants[2].presence = [2, 3];
+    generee.participants.push({ ...personne(5, 'Bruyère', 'Anouk'), presence: [1, 3] });
+    generee.prochainsIds.participant = 6;
+    return generee;
+  }
+
+  function genererDepuis(charge, toursFiges) {
+    const configuration = configurationDepuisCharge(charge);
+    const propositions = repartir(configuration, { graine: 11, arret: 200, nombre: 2 }, departDuMoteur(charge, { id: 1, toursFiges }));
+    return { propositions, configuration, produitVersion: V1, derivation: { depart: 1, toursFiges } };
+  }
+
+  test('chaque tour figé reprend le départ ajusté, au plan et à chaque point de relevé : la chaise de qui part reste vide, l’arrivante assise ; la dérivée naît comparable', () => {
+    const avant = figer(chargeChangee());
+    assert.ok(derive(avant.propositions[0], avant).length > 0);
+    const adapte = departAdapte(avant, 1);
+    const { charge, courses } = executer('enregistrerGeneration', avant, genererDepuis(avant, [1, 2]));
+    const derivees = charge.propositions.slice(1);
+    assert.equal(derivees.length, 2);
+    derivees.forEach((p, rang) => {
+      const ici = `proposition ${p.id}`;
+      assert.deepEqual([fautes(p), derive(p, charge)], [[], []], ici);
+      const placements = [p.placement, ...courses[rang].course.releves.map(({ placement }) => placement)];
+      placements.forEach((placement, point) => {
+        // Le tour 1, sans la personne 3 : celui du départ ajusté, l'arrivante
+        // posée à une chaise vide ou en fin de liste.
+        const sansArrivante = placement[0].sieges.map((liste) => liste.map((id) => (id === 5 ? null : id)));
+        for (const liste of sansArrivante) while (liste.at(-1) === null) liste.pop();
+        assert.deepEqual(sansArrivante, adapte.placement[0].sieges, `${ici}, point ${point}`);
+        assert.deepEqual([placement[0].reserve, placement[0].absents], [[], [3]], `${ici}, point ${point}`);
+        assert.ok(placement[0].sieges.flat().includes(5), `${ici}, point ${point}`);
+        assert.deepEqual(placement[1], adapte.placement[1], `${ici}, point ${point}`);
+      });
+    });
+    assert.equal(evaluer(charge).propositions.filter(({ statut }) => statut === 'comparable').length, 2);
+  });
+
+  test('TOUR_FIGE_DIFFERENT se juge sur le départ ajusté : deux listes échangées refusent, au plan comme à un point de relevé', () => {
+    const avant = figer(chargeChangee());
+    const args = genererDepuis(avant, [1, 2]);
+    const echange = (plan) => {
+      const [a, b] = plan.tours[1];
+      return { ...plan, tours: [plan.tours[0], [b, a], ...plan.tours.slice(2)] };
+    };
+    const [premiere, seconde] = args.propositions;
+    refuse(
+      () => executer('enregistrerGeneration', avant, { ...args, propositions: [{ ...premiere, plan: echange(premiere.plan) }, seconde] }),
+      'TOUR_FIGE_DIFFERENT',
+      { rang: 1, tour: 2, remede: null },
+    );
+    const releves = seconde.releves.map((releve, i) => (i === 0 ? { ...releve, plan: echange(releve.plan) } : releve));
+    refuse(
+      () => executer('enregistrerGeneration', avant, { ...args, propositions: [premiere, { ...seconde, releves }] }),
+      'TOUR_FIGE_DIFFERENT',
+      { rang: 2, tour: 2, remede: null },
+    );
+  });
+});
+
 describe("commandes : la charge d'un événement neuf (§ 8.1)", () => {
   test("chargeNeuve contrôle chaque champ avant de tirer l'identifiant, et convertit la saisie en NFC", () => {
     let tirages = 0;
@@ -1416,6 +1552,7 @@ describe('commandes : la charge reçue ne change jamais (§ 13.2)', () => {
       ['changerTours', { tours: 3 }],
       ['modifierReglage', { cle: 'nouveauxVoisins', valeur: false }],
       ['changerEtiquettes', { id: 3, ajouter: 'finance' }],
+      ['changerPresence', { id: 3, tours: [2] }],
       ['poserObjectif', { table: 2, tour: 1, etiquettes: 'finance', regle: 'et' }],
       ['retirerObjectif', { table: 2, tour: null }],
       ['changerRegleObjectifs', { regle: 'et' }],
@@ -1468,11 +1605,12 @@ describe('commandes : les registres réunis et les erreurs partagées', () => {
     );
   });
 
-  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, importerObjectifs, garderMeilleures et les deux registres de F1", () => {
-    assert.equal(COMMANDES.size, 14 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size);
+  test("COMMANDES réunit les onze commandes d'A1, changerEtiquettes, importerObjectifs, garderMeilleures, les deux registres de F1 et celui de la présence", () => {
+    assert.equal(COMMANDES.size, 14 + COMMANDES_MOBILIER.size + COMMANDES_PLACES.size + COMMANDES_PRESENCE.size);
     assert.ok(COMMANDES_MOBILIER instanceof Map);
     assert.ok(COMMANDES_PLACES instanceof Map);
-    for (const registre of [COMMANDES_MOBILIER, COMMANDES_PLACES]) {
+    assert.ok(COMMANDES_PRESENCE instanceof Map);
+    for (const registre of [COMMANDES_MOBILIER, COMMANDES_PLACES, COMMANDES_PRESENCE]) {
       for (const [nom, commande] of registre) assert.equal(COMMANDES.get(nom), commande, nom);
     }
   });

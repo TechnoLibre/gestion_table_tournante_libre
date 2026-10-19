@@ -11,6 +11,14 @@
 // faute (fautes, S2) et sans dérive (derive, S2). Fautif ou en dérive, il
 // n'est ni mesuré ni classé, et ses raisons disent pourquoi — la partition
 // se fait avant classer, qui laisse passer deux populations de même taille.
+// Chaque ligne dit en plus si son placement sert de départ (sertDeDepart) :
+// comparable, ou en dérive par ses seuls participants, qu'une génération
+// dérivée ajuste à la présence.
+//
+// Les planchers valent sur un placement qui assied chacun à chacun de ses
+// tours de présence (assisAChaqueTourPresent) et tient chaque réservation :
+// une absence ne sort pas un plan de leur domaine, une présente laissée en
+// réserve, réserve imposée comprise, l'en sort.
 // evaluer valide chaque placement une fois, par fautes, puis lit le placement
 // sans faute par deriveSansRevalider et planSansRevalider, qui ne refont pas
 // cette validation : un placement fautif ne les atteint jamais, et c'est ce
@@ -67,7 +75,7 @@ import { classer, premierPalierQuiDepartage } from '../moteur/classement.js';
 import { SANS_GROUPE, STATUT, figerConfiguration, indexerPlan, normaliser } from '../moteur/configuration.js';
 import { compilationDe } from '../moteur/criteres.js';
 import { diagnostiquer } from '../moteur/diagnostic.js';
-import { mesurer } from '../moteur/indicateurs.js';
+import { assisAChaqueTourPresent, mesurer } from '../moteur/indicateurs.js';
 import {
   borneHaute,
   comparerProfils,
@@ -92,7 +100,14 @@ import {
 } from '../moteur/qualite.js';
 import { verifierIndicateurs, verifierInvariants } from '../moteur/verification.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
-import { derive, deriveSansRevalider, fautes, planDepuisFichier, planSansRevalider } from '../stockage/placements.js';
+import {
+  derive,
+  deriveSansRevalider,
+  fautes,
+  planDepuisFichier,
+  planSansRevalider,
+  raisonsQuiBloquentUnDepart,
+} from '../stockage/placements.js';
 import { configurationDe } from './configuration.js';
 import { derivationDe } from './depart.js';
 import { nomAffiche } from './personnes.js';
@@ -107,6 +122,10 @@ export { CASES, MODES_OBJECTIFS } from '../moteur/criteres.js';
  * @property {number} id          celui de la proposition ; retenu.proposition pour le retenu
  * @property {'comparable'|'derive'|'fautif'} statut
  * @property {object[]} raisons   fautif : ses fautes ; derive : ses raisons ; [] sinon
+ * @property {boolean} sertDeDepart   comparable : vrai ; derive : vrai quand
+ *           chaque raison vient des participants (raisonsQuiBloquentUnDepart
+ *           vide), une génération dérivée l'ajustant à la présence ; fautif :
+ *           faux
  * @property {object[]} violations   comparable : les réservations non honorées
  *           (verifierInvariants, RESERVATION) ; [] sinon
  * @property {object|null} mesures   mesurer, telles quelles
@@ -173,11 +192,13 @@ function mesureDuPlan(instance, tableDe, aPriori) {
   return { mesures, realises, chiffres: troisChiffres(instance, mesures, aPriori, realises) };
 }
 
-// Une ligne qui ne se mesure pas.
+// Une ligne qui ne se mesure pas : en dérive par ses seuls participants,
+// elle sert encore de départ.
 const nonMesuree = (id, statut, raisons) => ({
   id,
   statut,
   raisons,
+  sertDeDepart: statut === 'derive' && raisonsQuiBloquentUnDepart(raisons).length === 0,
   violations: [],
   mesures: null,
   plafondsRealises: null,
@@ -228,6 +249,7 @@ export function evaluer(charge, { plafondsAPriori = 'calcul' } = {}) {
       id,
       statut: 'comparable',
       raisons: [],
+      sertDeDepart: true,
       violations: verifierInvariants(instance, plan, { reserveAutorisee: true }).filter(({ code }) => code === 'RESERVATION'),
       mesures,
       plafondsRealises: realises,
@@ -408,6 +430,9 @@ export function nettoyage(table, n) {
  *           par son identifiant (id, a, b, table), chaque tour par son index
  *           à partir de 0 ; objectifs porte en plus critere, {coche,
  *           sansObjet} du critère des objectifs
+ * @property {string[]|null} planchersRetires   ceux du diagnostic : les
+ *           planchers que la présence par tour retire, ['ecartItineraire']
+ *           dès qu'une personne non exclue manque un tour, [] sinon
  * @property {CourseDetaillee|null} course
  * @property {{depart: number, toursFiges: number[], departPresent: boolean}|null} derivation
  *           la filiation de la proposition dont la course est montrée
@@ -456,6 +481,7 @@ const CHAMPS_DE_MESURE = [
   'matrice',
   'objectifs',
   'animateurs',
+  'planchersRetires',
   'course',
 ];
 
@@ -693,8 +719,10 @@ function placementDe(charge, id) {
  * champ de mesure à null. Sinon : le diagnostic une fois ; le plan mesuré
  * comme sa ligne d'évaluation le mesure (mesureDuPlan), dont detailler lit
  * les trois chiffres pour juger un plancher atteint ; les planchers
- * valent sur un plan qui assoit chacun à chaque tour et ne laisse aucune
- * réservation non tenue (D31) ; la borne de diversité ; detailler, en une
+ * valent sur un plan qui assoit chacun à chacun de ses tours de présence
+ * et ne laisse aucune réservation non tenue (D31), et les planchers que la
+ * présence retire se recopient du diagnostic (planchersRetires) ; la borne
+ * de diversité ; detailler, en une
  * lecture du plan, la matrice seulement jusqu'à SEUIL_MATRICE_PARTICIPANTS
  * personnes, dans l'ordre du profil ; puis la garde à quatre paramètres,
  * planchers des collisions et des objectifs par tour compris (D42).
@@ -753,7 +781,7 @@ export function detaillerQualite(charge, id, options = {}) {
   const tableDe = indexerPlan(instance, plan);
   const { mesures, realises, chiffres } = mesureDuPlan(instance, tableDe, aPriori);
   const nonTenues = verifierInvariants(instance, plan, { reserveAutorisee: true }).filter(({ code }) => code === 'RESERVATION');
-  const planchersValides = nonTenues.length === 0 && mesures.toursAssis.every((assis) => assis === instance.R);
+  const planchersValides = nonTenues.length === 0 && assisAChaqueTourPresent(instance, mesures.toursAssis);
   const { phiAffilies, aMax } = borner(instance, tableDe);
   const ordreMatrice =
     instance.N <= constante(SEUIL_MATRICE.nom)
@@ -804,6 +832,7 @@ export function detaillerQualite(charge, id, options = {}) {
     })),
     propositionDuRetenu: id === 'retenu' && origine !== null ? origine.id : null,
     ...enIdentifiants(instance, brut, critere),
+    planchersRetires: [...diagnostic.planchersRetires],
     course:
       course === null
         ? null
@@ -1052,7 +1081,7 @@ function coteDe({ charge, table, instance, planchers, ajuste }, cle) {
     return { id, manque, rencontres: mesures.rencontres[p], plafondRealise, plafondAPriori: aPriori === null ? null : aPriori[p] };
   });
   const tete = teteDesColonnes(personnes, mesures, realises);
-  const planchersValides = violations.length === 0 && mesures.toursAssis.every((assis) => assis === instance.R);
+  const planchersValides = violations.length === 0 && assisAChaqueTourPresent(instance, mesures.toursAssis);
   return {
     ligne,
     ids,

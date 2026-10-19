@@ -293,3 +293,50 @@ describe('capacité : la lisibilité (§ 6.2, § 14.1)', () => {
     }
   });
 });
+
+// La charge où chaque personne de presences ({id: liste}) porte cette
+// présence.
+function avecPresences(charge, presences) {
+  for (const personne of charge.participants) if (Object.hasOwn(presences, personne.id)) personne.presence = presences[personne.id];
+  return charge;
+}
+
+describe('capacité : la présence par tour (§ 5.8, § 6.2)', () => {
+  test('sous les réservations : une réservation à un tour d’absence ne compte pas', () => {
+    const reservations = [...[1, 2, 3, 4, 5, 6].map((id) => resa(id, 1, null)), resa(7, 1, null, 2), resa(8, 1, null, 2)];
+    const presentes = chargeUneTable({ tours: 2, reservations });
+    assert.deepEqual(champ(presentes, 6).refus, { code: 'SOUS_RESERVATIONS', details: { table: 1, n: 8, tour: 2, remede: afficherTour(2) } });
+    const absentes = avecPresences(chargeUneTable({ tours: 2, reservations }), { 1: [1], 2: [1] });
+    assert.equal(champ(absentes, 6).refus, null);
+    assert.deepEqual(champ(absentes, 5).refus, { code: 'SOUS_RESERVATIONS', details: { table: 1, n: 6, tour: 1, remede: afficherTour(1) } });
+  });
+
+  test("la poignée : une personne absente au tour 3, que le retenu y assied encore, n'occupe pas de chaise", () => {
+    const cinq = [1, 2, 3, 4, 5];
+    const charge = avecPresences(retenir(chargeUneTable({ n: 7, tours: 4 }), [cinq, cinq, [1, 2, 3, 4, 5, 6, 7], cinq]), { 7: [1, 2, 4] });
+    assert.equal(poignee(charge, 6).refus, null);
+    assert.deepEqual(poignee(charge, 5).refus, { code: 'SOUS_OCCUPES', details: { table: 1, n: 6, tour: 3, remede: afficherTour(3) } });
+  });
+
+  test('le champ : une absente que le retenu assied encore part sans être annoncée ; sa chaise reçoit, sièges attribués, la personne réservée que la baisse déplace', () => {
+    const huit = [1, 2, 3, 4, 5, 6, 7, 8];
+    const libres = avecPresences(retenir(chargeUneTable({ tours: 2 }), [huit, huit]), { 8: [1] });
+    assert.deepEqual(champ(libres, 7).avertissements, [{ code: 'SURNUMERAIRES', details: { table: 1, tour: 1, personnes: [8] } }]);
+
+    const cinq = [1, 2, 3, 4, 5];
+    const attribues = avecPresences(
+      retenir(chargeUneTable({ n: 5, tours: 2, attribuerSieges: true, reservations: [resa(5, 1, null)] }), [cinq, cinq]),
+      { 2: [2] },
+    );
+    assert.deepEqual(champ(attribues, 4).avertissements, [{ code: 'SURNUMERAIRES', details: { table: 1, tour: 2, personnes: [4] } }]);
+  });
+
+  test('le champ, sièges attribués : la réservation au siège 2 d’une absente au tour 2 ne retient pas sa chaise à ce tour, et ne déplace personne', () => {
+    const cinq = [1, 2, 3, 4, 5];
+    const charge = avecPresences(
+      retenir(chargeUneTable({ n: 5, tours: 2, attribuerSieges: true, reservations: [resa(5, 1, 2)] }), [cinq, cinq]),
+      { 5: [1] },
+    );
+    assert.deepEqual(champ(charge, 4).avertissements, [{ code: 'SURNUMERAIRES', details: { table: 1, tour: 1, personnes: [4] } }]);
+  });
+});

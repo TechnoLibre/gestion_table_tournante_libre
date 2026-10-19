@@ -3,8 +3,10 @@
 
 // Épreuves du contrôle de pose (§ 5.9, § 4.4) : chaque refus d'une pose, son
 // remède écrit en entier, le cumul de plusieurs refus, le signal d'une table
-// gelée, le compte des réservations par tour et le contrôle d'une
-// réintégration. Les noms d'épreuve sont inventés.
+// gelée, le compte des réservations par tour, le contrôle d'une
+// réintégration et celui d'une présence qui s'étend, sous la règle par tour
+// (une réservation ne tient sa personne qu'à ses tours de présence). Les noms
+// d'épreuve sont inventés.
 import assert from 'node:assert/strict';
 import { describe, test } from '../../test/lanceur.js';
 import { normaliser } from '../moteur/configuration.js';
@@ -12,7 +14,7 @@ import { ErreurConfiguration } from '../moteur/erreurs.js';
 import { configurationDepuisCharge, creerCharge } from '../stockage/document.js';
 import { COMMANDES } from './commandes.js';
 import { ErreurCommande } from './erreurs.js';
-import { controlerPose, controlerReintegration, reservationsParTour } from './pose.js';
+import { controlerPose, controlerPresence, controlerReintegration, reservationsParTour } from './pose.js';
 
 const NOMS = [
   ['Ombrelle', 'Iris'],
@@ -347,5 +349,222 @@ describe('controlerReintegration : la place d’une suspendue (§ 4.4, § 5.9)',
 
   test('une personne présente n’a rien à contrôler', () => {
     assert.deepEqual(controlerReintegration(chargeDe({ reservations: [resa(1, 1, null)] }), 1), []);
+  });
+});
+
+// La charge où chaque personne de presences ({id: liste}) porte cette
+// présence ; une liste null retire le champ (tous les tours).
+function avecPresences(charge, presences) {
+  return {
+    ...charge,
+    participants: charge.participants.map((personne) => {
+      if (!Object.hasOwn(presences, personne.id)) return personne;
+      const rendue = { ...personne };
+      if (presences[personne.id] === null) delete rendue.presence;
+      else rendue.presence = presences[personne.id];
+      return rendue;
+    }),
+  };
+}
+
+describe('controlerPose : la présence par tour (§ 5.8, § 5.9)', () => {
+  test('une réservation « tour » à un tour d’absence : PERSONNE_ABSENTE_AU_TOUR, son remède dit présente à ce tour en plus, tours triés', () => {
+    const charge = avecPresences(chargeDe(), { 2: [1, 4] });
+    const { refus } = controlerPose(charge, { participant: 2, table: 1, siege: null, portee: 'tour', tour: 2 });
+    assert.deepEqual(refus, [
+      {
+        code: 'PERSONNE_ABSENTE_AU_TOUR',
+        details: {
+          participant: 2,
+          personne: 'Théo Pervenche',
+          tour: 2,
+          remede: { commande: 'changerPresence', arguments: { id: 2, tours: [1, 2, 4] } },
+        },
+      },
+    ]);
+    const dernier = controlerPose(avecPresences(chargeDe(), { 4: [1, 2] }), { participant: 4, table: 2, siege: 3, portee: 'tour', tour: 3 });
+    assert.deepEqual(dernier.refus.map(({ code, details }) => [code, details.personne, details.remede.arguments]), [
+      ['PERSONNE_ABSENTE_AU_TOUR', 'Grisaille', { id: 4, tours: [1, 2, 3] }],
+    ]);
+    refuse(() => executer('reserver', charge, { participant: 2, table: 1, siege: null, portee: 'tour', tour: 3 }), 'PERSONNE_ABSENTE_AU_TOUR', {
+      tour: 3,
+      remede: { commande: 'changerPresence', arguments: { id: 2, tours: [1, 3, 4] } },
+    });
+  });
+
+  test('un dépôt dans le retenu à un tour d’absence : le même refus ; à un tour de présence, ou « tous les tours », aucun', () => {
+    const charge = avecPresences(chargeDe(), { 2: [1, 4] });
+    assert.deepEqual(
+      controlerPose(charge, { participant: 2, table: 2, siege: null, portee: 'tour', tour: 3, retenu: true }).refus.map(({ code, details }) => [
+        code,
+        details.tour,
+        details.remede.arguments.tours,
+      ]),
+      [['PERSONNE_ABSENTE_AU_TOUR', 3, [1, 3, 4]]],
+    );
+    assert.deepEqual(controlerPose(charge, { participant: 2, table: 2, siege: null, portee: 'tour', tour: 4, retenu: true }).refus, []);
+    assert.deepEqual(controlerPose(charge, { participant: 2, table: 2, siege: null, portee: 'tour', tour: 1 }).refus, []);
+    assert.deepEqual(controlerPose(charge, { participant: 2, table: 2, siege: 2, portee: 'tous', tour: null }).refus, []);
+  });
+
+  test('une exclue absente au tour : PERSONNE_EXCLUE seul, sa présence est suspendue', () => {
+    const charge = avecPresences(chargeDe({ exclus: [3] }), { 3: [1] });
+    assert.deepEqual(
+      controlerPose(charge, { participant: 3, table: 1, siege: null, portee: 'tour', tour: 2 }).refus.map(({ code }) => code),
+      ['PERSONNE_EXCLUE'],
+    );
+  });
+
+  test('une réservation à un tour d’absence ne compte pas : ni dans reservationsParTour, ni contre une pose, ni pour sa place', () => {
+    const charge = avecPresences(chargeDe({ reservations: [1, 2, 3, 4].map((id) => resa(id, 1, id)) }), { 4: [1, 2, 4] });
+    assert.deepEqual(reservationsParTour(charge, 1), [4, 4, 3, 4]);
+    assert.deepEqual(controlerPose(charge, { participant: 5, table: 1, siege: 4, portee: 'tour', tour: 3 }), { refus: [], signaux: [] });
+    const tous = controlerPose(charge, { participant: 5, table: 1, siege: null, portee: 'tous', tour: null });
+    assert.deepEqual(tous.refus.map(({ code, details: { remede, ...details } }) => [code, details]), [
+      ['SURRESERVATION', { table: 1, tour: 1, reservees: 5, capacite: 4 }],
+    ]);
+    // Absente aux tours 1, 2 et 4, une personne posée « tous » ne compte qu'au
+    // tour 3, où la place de 4 est libre.
+    const partielle = avecPresences(charge, { 5: [3] });
+    assert.deepEqual(controlerPose(partielle, { participant: 5, table: 1, siege: 4, portee: 'tous', tour: null }).refus, []);
+  });
+
+  test('deux réservations de la même personne à deux tables, l’une à ses seuls tours d’absence : DEUX_PLACES_MEME_TOUR quand même, ses réservations s’excluent quelle que soit sa présence', () => {
+    const attendu = [
+      {
+        code: 'DEUX_PLACES_MEME_TOUR',
+        details: {
+          participant: 2,
+          tour: 3,
+          autre: { table: 1, siege: null, portee: 'tour', tour: 3 },
+          remede: { commande: 'deplacerReservation', arguments: { participant: 2, de: { table: 1, portee: 'tour', tour: 3 }, vers: { table: 2, siege: null } } },
+        },
+      },
+    ];
+    const charge = avecPresences(chargeDe({ reservations: [resa(2, 1, null, 3)] }), { 2: [1, 2] });
+    assert.deepEqual(controlerPose(charge, { participant: 2, table: 2, siege: null, portee: 'tous', tour: null }).refus, attendu);
+    const presente = chargeDe({ reservations: [resa(2, 1, null, 3)] });
+    assert.deepEqual(controlerPose(presente, { participant: 2, table: 2, siege: null, portee: 'tous', tour: null }).refus, attendu);
+  });
+
+  test('la chaîne pose puis présence rendue : une pose acceptée, puis une présence que controlerPresence accepte, laissent une charge qui se normalise', () => {
+    const charge = avecPresences(chargeDe({ reservations: [resa(2, 1, null, 3)] }), { 2: [1, 2, 4] });
+    refuse(() => executer('reserver', charge, { participant: 2, table: 2, siege: null, portee: 'tous', tour: null }), 'DEUX_PLACES_MEME_TOUR', {
+      tour: 3,
+    });
+    // Chaque pose de 2, à chaque table, chaque portée et deux sièges : une
+    // pose sans refus, écrite, puis la présence rendue à tous les tours ; si
+    // controlerPresence n'y oppose rien, la charge rendue se normalise.
+    const portees = [{ portee: 'tous', tour: null }, ...[1, 2, 3, 4].map((tour) => ({ portee: 'tour', tour }))];
+    let acceptees = 0;
+    for (const idTable of [1, 2, 3]) {
+      for (const siege of [null, 2]) {
+        for (const { portee, tour } of portees) {
+          const pose = { participant: 2, table: idTable, siege, portee, tour };
+          if (controlerPose(charge, pose).refus.length > 0) continue;
+          const posee = avecPose(charge, pose);
+          const rendue = avecPresences(posee, { 2: null });
+          if (controlerPresence(posee, rendue, [2]).length > 0) continue;
+          acceptees += 1;
+          assert.doesNotThrow(() => normaliser(configurationDepuisCharge(rendue)), JSON.stringify(pose));
+        }
+      }
+    }
+    assert.ok(acceptees >= 6, `${acceptees} poses acceptées`);
+  });
+
+  test('sièges attribués, un siège inexistant à un tour d’absence : SIEGE_INEXISTANT puis PERSONNE_ABSENTE_AU_TOUR, dans cet ordre', () => {
+    const charge = avecPresences(chargeDe({ attribuerSieges: true }), { 2: [1, 4] });
+    const pose = { participant: 2, table: 1, siege: 9, portee: 'tour', tour: 2 };
+    const { refus } = controlerPose(charge, pose);
+    assert.deepEqual(refus.map(({ code }) => code), ['SIEGE_INEXISTANT', 'PERSONNE_ABSENTE_AU_TOUR']);
+    refuse(() => executer('reserver', charge, pose), 'SIEGE_INEXISTANT', {
+      siege: 9,
+      autres: [
+        {
+          code: 'PERSONNE_ABSENTE_AU_TOUR',
+          details: { participant: 2, personne: 'Théo Pervenche', tour: 2, remede: { commande: 'changerPresence', arguments: { id: 2, tours: [1, 2, 4] } } },
+        },
+      ],
+    });
+  });
+});
+
+describe('PERSONNE_ABSENTE_AU_TOUR : le remède s’exécute (§ 2.1, garantie 3)', () => {
+  test('présente aux tours 3 et 4, réservée au tour 1 : le remède porte les tours 1, 3 et 4, croissants, changerPresence l’exécute, puis la réservation passe', () => {
+    const charge = avecPresences(chargeDe(), { 2: [3, 4] });
+    const pose = { participant: 2, table: 1, siege: null, portee: 'tour', tour: 1 };
+    let leve = null;
+    try {
+      executer('reserver', charge, pose);
+    } catch (erreur) {
+      leve = erreur;
+    }
+    assert.ok(leve instanceof ErreurCommande);
+    assert.equal(leve.code, 'PERSONNE_ABSENTE_AU_TOUR');
+    const { remede } = leve.details;
+    assert.deepEqual(remede, { commande: 'changerPresence', arguments: { id: 2, tours: [1, 3, 4] } });
+    const presente = executer(remede.commande, charge, remede.arguments).charge;
+    assert.deepEqual(presente.participants[1].presence, [1, 3, 4]);
+    const { charge: reservee } = executer('reserver', presente, pose);
+    assert.deepEqual(reservee.reservations, [resa(2, 1, null, 1)]);
+  });
+});
+
+describe('controlerPresence : une présence qui s’étend (§ 5.9)', () => {
+  test('deux réservations « tous » sur la dernière place de la table 1, l’une d’une personne absente au tour 3 : lui rendre le tour 3 refuse SURRESERVATION', () => {
+    const charge = avecPresences(chargeDe({ reservations: [1, 2, 3, 4].map((id) => resa(id, 1, null)) }), { 4: [1, 2, 4] });
+    const reserveeEnPlus = executer('reserver', charge, { participant: 5, table: 1, siege: null, portee: 'tour', tour: 3 }).charge;
+    const apres = avecPresences(reserveeEnPlus, { 4: null });
+    assert.deepEqual(controlerPresence(reserveeEnPlus, apres, [4]), [
+      {
+        code: 'SURRESERVATION',
+        details: { table: 1, tour: 3, reservees: 5, capacite: 4, remede: { commande: 'changerPlacesTable', arguments: { id: 1, sieges: 5, origine: 'champ' } } },
+      },
+    ]);
+  });
+
+  test('deux réservations du même siège, l’une suspendue par une absence : lui rendre ce tour refuse PLACE_RESERVEE, le remède déplace celle de la titulaire', () => {
+    const charge = avecPresences(chargeDe({ attribuerSieges: true, reservations: [resa(1, 3, 2), resa(2, 3, 2, 2)] }), { 1: [1, 3, 4] });
+    const apres = avecPresences(charge, { 1: [1, 2, 3, 4] });
+    assert.deepEqual(controlerPresence(charge, apres, [1]), [
+      {
+        code: 'PLACE_RESERVEE',
+        details: {
+          table: 3,
+          siege: 2,
+          tour: 2,
+          titulaire: 2,
+          portee: 'tour',
+          remede: { geste: 'choisirPlace', puis: { commande: 'deplacerReservation', arguments: { participant: 2, de: { table: 3, portee: 'tour', tour: 2 } } } },
+        },
+      },
+    ]);
+    // Rendre le tour 2 à la titulaire seule ne gagne rien pour 1 : aucun refus.
+    assert.deepEqual(controlerPresence(charge, avecPresences(charge, { 1: [1, 3] }), [1]), []);
+  });
+
+  test('une présence qui ne gagne aucun tour, ou qui gagne un tour sans réservation en conflit, rend []', () => {
+    const charge = avecPresences(chargeDe({ reservations: [1, 2, 3, 4].map((id) => resa(id, 1, null)) }), { 4: [1, 2] });
+    assert.deepEqual(controlerPresence(charge, avecPresences(charge, { 4: [2] }), [4]), []);
+    assert.deepEqual(controlerPresence(charge, avecPresences(charge, { 4: null }), [4]), []);
+    assert.deepEqual(controlerPresence(charge, charge, [1, 2, 3, 4]), []);
+  });
+});
+
+describe('controlerReintegration : sur les seuls tours de présence (§ 4.4)', () => {
+  test('une exclue présente aux tours 1 et 2, réservée « tous » au siège 1 que tient une autre au tour 3 : réintégrer passe', () => {
+    const charge = avecPresences(chargeDe({ attribuerSieges: true, exclus: [1], reservations: [resa(1, 3, 1), resa(2, 3, 1, 3)] }), { 1: [1, 2] });
+    assert.deepEqual(controlerReintegration(charge, 1), []);
+    const toutes = avecPresences(charge, { 1: null });
+    assert.deepEqual(controlerReintegration(toutes, 1).map(({ code, details }) => [code, details.tour]), [['PLACE_RESERVEE', 3]]);
+  });
+
+  test('une table pleine au tour 3 seulement : réintégrer une exclue absente au tour 3 passe ; présente, SURRESERVATION au tour 3', () => {
+    const reservations = [resa(1, 1, null), resa(2, 1, null), resa(3, 1, null), resa(4, 1, null, 3), resa(5, 1, null)];
+    const charge = avecPresences(chargeDe({ exclus: [1], reservations }), { 1: [1, 2, 4] });
+    assert.deepEqual(controlerReintegration(charge, 1), []);
+    const presente = avecPresences(charge, { 1: null });
+    assert.deepEqual(controlerReintegration(presente, 1).map(({ code, details }) => [code, details.tour, details.reservees]), [['SURRESERVATION', 3, 5]]);
   });
 });

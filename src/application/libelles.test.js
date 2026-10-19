@@ -501,18 +501,22 @@ describe('libellés : les textes (§ 14.6, § 8.2)', () => {
     assert.match(libelle('DEPART_SIEGE_NON_TENU', siege), /la personne n° 1 au siège 2 de la table d'identifiant 1 au tour 1/);
   });
 
-  test('le départ en dérive dit ses raisons ; fautif, il se contredit ; absent, il a quitté la liste', () => {
+  test('le départ en dérive dit que le mobilier a changé, et ses raisons ; fautif, il se contredit ; absent, il a quitté la liste', () => {
     const derive = libelle('DEPART_NON_COMPARABLE', {
       depart: 4,
       statut: 'derive',
-      raisons: [{ code: 'PARTICIPANT_EXCLU', participant: 5, personne: 'Maëlle Quenouille' }],
+      raisons: [
+        { code: 'CAPACITE_CHANGEE', table: 2, avant: 3, maintenant: 4, numero: 7 },
+        { code: 'TOURS_CHANGES', avant: 3, maintenant: 4 },
+      ],
       remede: { geste: 'repartirDeZero' },
     });
     assert.equal(
       derive,
-      'La proposition n° 4 ne décrit plus la soirée : les participants ou le mobilier ont changé depuis elle, ' +
-        'et elle ne peut plus servir de départ. Maëlle Quenouille est exclue depuis.',
+      'La proposition n° 4 ne décrit plus la soirée : le mobilier a changé depuis elle, ' +
+        'et elle ne peut plus servir de départ. La table 7 est passée de 3 à 4 places. Le nombre de tours est passé de 3 à 4.',
     );
+    assert.equal(derive.includes('participants'), false);
     const fautif = libelle('DEPART_NON_COMPARABLE', { depart: 4, statut: 'fautif', raisons: [{ code: 'FORME', chemin: 'placement' }], remede: null });
     assert.equal(fautif, 'La proposition n° 4 se contredit : elle ne peut pas servir de départ.');
     assert.equal(libelle('DEPART_ABSENT', { depart: 4, remede: null }), "La proposition n° 4 n'est plus dans la liste : elle ne peut pas servir de départ.");

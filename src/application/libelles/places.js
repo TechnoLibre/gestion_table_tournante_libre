@@ -5,7 +5,8 @@
 // § 5.9, § 8.2, § 14.6) : leurs refus, leurs signaux, leurs libellés figés,
 // et le libellé de titre proposé à la désignation. Les détails désignent
 // tables et personnes par identifiant : un refus se pose sur la place qu'il
-// concerne (§ 5.9), et son texte ne les nomme pas. Un libellé figé reçoit le
+// concerne (§ 5.9), et son texte ne les nomme pas, sauf la personne absente
+// au tour, que son refus nomme par son nom affiché. Un libellé figé reçoit le
 // nom affiché et le numéro de table que la commande lit dans la charge.
 // SURRESERVATION garde le texte du moteur (libelles/moteur.js), et
 // INVARIANT_VIOLE celui de la séance (libelles/seance.js).
@@ -29,6 +30,12 @@ export const TABLE = new Map([
     ({ tour }) => `Cette personne a déjà une place au tour ${tour} : elle n'en occupe qu'une par tour.`,
   ],
   ['PERSONNE_EXCLUE', () => "Cette personne est exclue : elle n'est placée nulle part tant qu'elle n'est pas réintégrée."],
+  // PERSONNE_ABSENTE_AU_TOUR {participant, personne, tour} : une réservation
+  // de tour désigné, ou un dépôt dans le retenu, à un tour d'absence.
+  [
+    'PERSONNE_ABSENTE_AU_TOUR',
+    ({ personne, tour }) => `${personne} est absente au tour ${tour} : la marquer présente à ce tour avant de l'y placer.`,
+  ],
   [
     'PLACE_RESERVEE',
     ({ siege, tour, portee: genre }) =>

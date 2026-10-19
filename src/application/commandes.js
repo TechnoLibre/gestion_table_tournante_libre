@@ -26,27 +26,48 @@
 // génération fait passer un brouillon à proposé ; retenir pose retenu ;
 // effacer les propositions ramène un plan proposé sans retenu à brouillon ;
 // garder les meilleures en laisse une au moins, et ne change pas l'état.
+//
+// Le retenu suit qui est là (§ 5.8, § 9) : ajouter, exclure, réintégrer,
+// supprimer et importer des participants l'ajustent dans leur entrée, par
+// retenuAuxPresences (presence.js), pour les seules personnes dont la
+// présence par tour change ; leur libellé le dit quand il change.
 import { ErreurCsv } from '../csv/erreurs.js';
 import { appliquerImport, bilanRemplacement } from '../csv/import.js';
 import { appliquerImportObjectifs } from '../csv/objectifs.js';
 import { ErreurConfiguration } from '../moteur/erreurs.js';
+import { presenceCanonique } from '../moteur/presence.js';
 import { serialiserCharge } from '../stockage/canonique.js';
 import { entreeDeCourse } from '../stockage/courses.js';
 import { SCHEMA, clesRangees, creerCharge, etatDeduit, premiereFaute } from '../stockage/document.js';
 import { ErreurStockage } from '../stockage/erreurs.js';
 import { ETIQUETTES_MAX } from '../stockage/etiquettes.js';
 import { estHorodatage } from '../stockage/journal.js';
-import { courseVersFichier, fauteDeCourse, fautes, formeNommee, versFichier } from '../stockage/placements.js';
+import {
+  ajusterALaPresence,
+  courseVersFichier,
+  fauteDeCourse,
+  fautes,
+  formeNommee,
+  versFichier,
+} from '../stockage/placements.js';
 import { COMMANDES_MOBILIER } from './commandes_mobilier.js';
 import { COMMANDES_PLACES } from './commandes_places.js';
-import { recopierPlacement, recopierToursFiges, tourFigeDifferent } from './depart.js';
+import { departAdapte, recopierPlacement, recopierToursFiges, siegesDesArrivantes, tourFigeDifferent } from './depart.js';
 import { ErreurCommande, refus } from './erreurs.js';
 import { evaluer, nettoyage } from './evaluation.js';
 import { libelle } from './libelles.js';
 import { avisObjectifs, etiquettesDeLEvenement, etiquettesRangees, recevoirEtiquettes } from './objectifs.js';
 import { nomAffiche } from './personnes.js';
-import { couvre, repartirSieges, reservationsActives } from './places.js';
-import { controlerReintegration, leverRefus } from './pose.js';
+import { repartirSieges, reservationsCouvrantes } from './places.js';
+import { controlerPresence, controlerReintegration, leverRefus } from './pose.js';
+import {
+  COMMANDES_PRESENCE,
+  aPlacerDansLeRetenu,
+  lireTours,
+  rencontresRetirees,
+  retenuAuxPresences,
+  retenuChange,
+} from './presence.js';
 
 // Le refus d'une commande vit dans erreurs.js, le nom affiché d'une personne
 // dans personnes.js : les importateurs de ce module les y trouvent encore.
@@ -145,10 +166,29 @@ function avecEtat(charge, etat) {
   return suivante;
 }
 
-/** ajouterParticipant {champs} : seul le nom est requis ; exclu vaut faux par défaut. */
-function ajouterParticipant(charge, { champs }) {
+// La charge suivante, en place, son retenu ajusté aux présences qui changent
+// depuis avant (retenuAuxPresences) : l'ajustement rendu, et ajuste, vrai
+// quand le retenu change.
+function ajusterLeRetenu(avant, suivante) {
+  const ajustement = retenuAuxPresences(avant, suivante);
+  suivante.retenu = ajustement.retenu;
+  return { ...ajustement, ajuste: retenuChange(ajustement) };
+}
+
+/**
+ * ajouterParticipant {champs, presence?} : seul le nom est requis ; exclu
+ * vaut faux par défaut. presence, absente ou null pour tous les tours,
+ * suit la règle de changerPresence : une liste strictement croissante de
+ * tours de 1 à R, sinon TypeError ; aucun tour, PRESENCE_VIDE {participant,
+ * personne}, remède null ; écrite canonique. Une personne neuve n'a pas de
+ * réservation : rien à contrôler. Sous un retenu, elle y attend en réserve à
+ * ses tours de présence, A_PLACER_DANS_LE_RETENU.
+ */
+function ajouterParticipant(charge, { champs, presence = null }) {
   exigerModifiable(charge);
   const lus = lireChamps(champs, { admisExclu: true });
+  const R = charge.evenement.tours;
+  const tours = lireTours(presence, R);
   const id = charge.prochainsIds.participant;
   const participant = {
     id,
@@ -161,14 +201,18 @@ function ajouterParticipant(charge, { champs }) {
     exclu: lus.exclu ?? false,
   };
   exigerParticipant(participant);
+  if (tours !== null && tours.length === 0) throw refus('PRESENCE_VIDE', { participant: id, personne: nomAffiche(participant) });
+  const canonique = tours === null ? undefined : presenceCanonique(tours, R);
+  if (canonique !== undefined) participant.presence = canonique;
   if (id >= IDENTIFIANT_MAX) throw refus('COMPTEUR_SATURE', { compteur: 'participant' });
   const suivante = structuredClone(charge);
   suivante.participants.push(participant);
   suivante.prochainsIds.participant = id + 1;
+  const { arrives, ajuste } = ajusterLeRetenu(charge, suivante);
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_AJOUTER_PARTICIPANT', { personne: nomAffiche(participant) }),
-    avertissements: [],
+    libelle: libelle('ENTREE_AJOUTER_PARTICIPANT', { personne: nomAffiche(participant), ajuste }),
+    avertissements: aPlacerDansLeRetenu(suivante, arrives),
   };
 }
 
@@ -264,7 +308,10 @@ function bilanExclusion(avant, apres, participant) {
 /**
  * exclureParticipant {id} (§ 4.4) : ses réservations restent, suspendues ; ses
  * places reviennent aux autres et ses titres ne sont plus pourvus, ce que
- * RESERVATIONS_SUSPENDUES dit quand il en porte.
+ * RESERVATIONS_SUSPENDUES dit quand il en porte. Elle quitte le retenu à
+ * chaque tour, joués compris, et sa présence reste écrite ; quand elle y
+ * était assise, RENCONTRES_RETIREES_DU_RETENU nomme ces tours et le remède :
+ * défaire, puis réduire sa présence.
  */
 function exclureParticipant(charge, { id }) {
   exigerModifiable(charge);
@@ -272,19 +319,25 @@ function exclureParticipant(charge, { id }) {
   if (participant.exclu) throw refus('SANS_EFFET', { commande: 'exclureParticipant' });
   const suivante = avecParticipant(charge, id, (copie) => ({ ...copie, exclu: true }));
   const bilan = bilanExclusion(charge, suivante, participant);
+  const { retires, ajuste } = ajusterLeRetenu(charge, suivante);
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_EXCLURE_PARTICIPANT', { personne: bilan.personne }),
-    avertissements: bilan.reservations > 0 ? [avertissement('RESERVATIONS_SUSPENDUES', bilan)] : [],
+    libelle: libelle('ENTREE_EXCLURE_PARTICIPANT', { personne: bilan.personne, ajuste }),
+    avertissements: [
+      ...(bilan.reservations > 0 ? [avertissement('RESERVATIONS_SUSPENDUES', bilan)] : []),
+      ...rencontresRetirees(charge, participant, retires),
+    ],
   };
 }
 
 /**
  * reintegrerParticipant {id} (§ 4.4) : ses réservations et ses titres
  * reviennent, RESERVATIONS_RETABLIES. Ses réservations suspendues se
- * contrôlent comme une pose (controlerReintegration, § 5.9) : le premier
- * refus se lève, SURRESERVATION ou PLACE_RESERVEE, les suivants dans
- * details.autres.
+ * contrôlent comme une pose, sur ses seuls tours de présence
+ * (controlerReintegration, § 5.9) : le premier refus se lève,
+ * SURRESERVATION ou PLACE_RESERVEE, les suivants dans details.autres. Sous
+ * un retenu, elle y attend en réserve à ses tours de présence,
+ * A_PLACER_DANS_LE_RETENU.
  */
 function reintegrerParticipant(charge, { id }) {
   exigerModifiable(charge);
@@ -293,17 +346,23 @@ function reintegrerParticipant(charge, { id }) {
   leverRefus(controlerReintegration(charge, id));
   const suivante = avecParticipant(charge, id, (copie) => ({ ...copie, exclu: false }));
   const bilan = bilanExclusion(charge, suivante, participant);
+  const { arrives, ajuste } = ajusterLeRetenu(charge, suivante);
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_REINTEGRER_PARTICIPANT', { personne: bilan.personne }),
-    avertissements: bilan.reservations > 0 ? [avertissement('RESERVATIONS_RETABLIES', bilan)] : [],
+    libelle: libelle('ENTREE_REINTEGRER_PARTICIPANT', { personne: bilan.personne, ajuste }),
+    avertissements: [
+      ...(bilan.reservations > 0 ? [avertissement('RESERVATIONS_RETABLIES', bilan)] : []),
+      ...aPlacerDansLeRetenu(suivante, arrives),
+    ],
   };
 }
 
 /**
  * supprimerParticipant {id} : la personne et ses réservations partent dans la
- * même entrée ; les titres restent à leurs places, les propositions et le
- * retenu restent, en dérive (§ 9) ; le compteur ne recule pas.
+ * même entrée ; les titres restent à leurs places, les propositions restent,
+ * en dérive (§ 9) ; le compteur ne recule pas. Elle quitte le retenu à
+ * chaque tour, et RENCONTRES_RETIREES_DU_RETENU nomme les tours où elle y
+ * était assise.
  */
 function supprimerParticipant(charge, { id }) {
   exigerModifiable(charge);
@@ -318,10 +377,14 @@ function supprimerParticipant(charge, { id }) {
     reservations,
     titres: titresPourvus(charge) - titresPourvus(suivante),
   };
+  const { retires, ajuste } = ajusterLeRetenu(charge, suivante);
   return {
     charge: suivante,
-    libelle: libelle('ENTREE_SUPPRIMER_PARTICIPANT', { personne: details.personne }),
-    avertissements: reservations > 0 ? [avertissement('RESERVATIONS_RETIREES', details)] : [],
+    libelle: libelle('ENTREE_SUPPRIMER_PARTICIPANT', { personne: details.personne, ajuste }),
+    avertissements: [
+      ...(reservations > 0 ? [avertissement('RESERVATIONS_RETIREES', details)] : []),
+      ...rencontresRetirees(charge, participant, retires),
+    ],
   };
 }
 
@@ -355,6 +418,12 @@ function avertissementsDExclusion(avant, suivante) {
  * Une personne que l'import exclut ou réintègre le dit ensuite comme sa
  * commande le dirait (avertissementsDExclusion).
  *
+ * Une personne existante dont la présence par tour s'étend — présence
+ * rendue, réintégration — se contrôle comme changerPresence
+ * (controlerPresence) : un refus refuse l'import entier, sous son code et
+ * ses détails, remède null, puisque le fichier se corrige. Le retenu suit
+ * les présences qui changent (retenuAuxPresences), et le libellé le dit.
+ *
  * Un import dont la charge ne change pas, mais qui refuse des lignes, n'est
  * pas sans effet : ses refus sont à lire et à réexporter. Il rend la charge
  * reçue, un libellé null — aucune entrée ne s'écrit —, aucun avertissement,
@@ -373,9 +442,14 @@ function importerParticipants(charge, { apercu, mode }) {
   if (refusees.length > 0 && serialiserCharge(resultat.charge) === serialiserCharge(charge)) {
     return { charge, libelle: null, avertissements: [], resume: resultat.resume };
   }
+  const existantes = new Set(charge.participants.map(({ id }) => id));
+  const etendues = resultat.charge.participants.filter(({ id }) => existantes.has(id)).map(({ id }) => id);
+  const [premier, ...autres] = controlerPresence(charge, resultat.charge, etendues);
+  if (premier !== undefined) throw new ErreurCommande(premier.code, { ...premier.details, remede: null, autres });
+  const { ajuste } = ajusterLeRetenu(charge, resultat.charge);
   return {
     charge: resultat.charge,
-    libelle: libelle('ENTREE_IMPORTER_PARTICIPANTS', { mode, ajoutes, misAJour, retires }),
+    libelle: libelle('ENTREE_IMPORTER_PARTICIPANTS', { mode, ajoutes, misAJour, retires, ajuste }),
     avertissements: [
       ...(derive ? [avertissement('IMPORT_EN_RETENU', {})] : []),
       ...avertissementsDExclusion(charge, resultat.charge),
@@ -455,8 +529,10 @@ function debloquer(charge) {
 
 // Le plan du moteur rangé par siège quand les sièges sont attribués (§ 4,
 // § 5.3, § 8.9) : chaque liste de table de chaque tour par repartirSieges —
-// la personne que sa réservation active, à un siège, couvrant ce tour à
-// cette table, y prend ce rang —, les null de fin retirés. Le moteur ignore
+// la personne que sa réservation couvrante à ce tour (reservationsCouvrantes :
+// active, couvrant ce tour, la personne présente à ce tour), à un siège de
+// cette table, y prend ce rang —, les null de fin retirés. La réservation
+// d'une absente, suspendue à ce tour, ne tient pas son siège. Le moteur ignore
 // les sièges : sans ce rangement, la liste garde l'ordre du moteur,
 // croissant par identifiant. Les places sont celles de la configuration sur
 // laquelle le moteur a calculé, qui n'assied jamais plus : une table réduite
@@ -464,30 +540,32 @@ function debloquer(charge) {
 // s'enregistre avec sa dérive.
 function rangerParSiege(charge, plan, configuration) {
   const places = new Map(configuration.tables.map(({ id, capacite: sieges }) => [id, sieges]));
-  const assises = reservationsActives(charge).filter(({ siege }) => siege !== null);
   return {
     ...plan,
-    tours: plan.tours.map((listes, rang) =>
-      listes.map((liste, i) => {
+    tours: plan.tours.map((listes, rang) => {
+      const assises = reservationsCouvrantes(charge, rang + 1).filter(({ siege }) => siege !== null);
+      return listes.map((liste, i) => {
         const idTable = plan.tables[i];
         const siegeDe = new Map();
         for (const reservation of assises) {
-          if (reservation.table === idTable && couvre(reservation, rang + 1) && !siegeDe.has(reservation.participant)) {
+          if (reservation.table === idTable && !siegeDe.has(reservation.participant)) {
             siegeDe.set(reservation.participant, reservation.siege);
           }
         }
         const rangee = repartirSieges(liste, siegeDe, places.get(idTable) ?? 0);
         while (rangee.length > 0 && rangee.at(-1) === null) rangee.pop();
         return rangee;
-      }),
-    ),
+      });
+    }),
   };
 }
 
 // Le fichier et la course d'une proposition dérivée, dont les tours figés
-// reprennent ceux du départ (§ 5.7, D72), dans cet ordre : le fichier qui
-// porte la dérivation (versFichier), recopié du départ (recopierToursFiges),
-// puis la course mise en forme sous lui ; sous sièges attribués des deux
+// reprennent ceux du départ ajusté à la présence (§ 5.7, D72), dans cet
+// ordre : le fichier qui porte la dérivation (versFichier), recopié du départ
+// ajusté (recopierToursFiges : ses arrivantes au siège que leur réservation
+// tient, sieges, puis aux chaises vides), puis la course mise en forme sous
+// lui ; sous sièges attribués des deux
 // côtés, chaque point de relevé recopié à son tour, depuis le placement du
 // fichier recopié, qui range ses listes dans l'ordre de ses tables, et la
 // course contrôlée de nouveau. Chaque tour figé du fichier et de chaque
@@ -504,7 +582,7 @@ function rangerParSiege(charge, plan, configuration) {
 // recopierToursFiges et recopierPlacement écrivent, seule une recopie
 // fautive le lève. Rend {fichier, course}, course null quand le moteur n'en
 // rapporte pas.
-function deriveeVersFichier(rangee, configuration, options, derivation, fichierDuDepart) {
+function deriveeVersFichier(rangee, configuration, options, derivation, fichierDuDepart, sieges) {
   const { toursFiges } = derivation;
   const exigerToursFiges = (fichierLu, placement) => {
     const tour = tourFigeDifferent({ ...fichierLu, placement }, fichierDuDepart, toursFiges);
@@ -515,7 +593,7 @@ function deriveeVersFichier(rangee, configuration, options, derivation, fichierD
   // des listes ni les chaises vides, que la recopie fixe ensuite.
   const enEnsemble = { ...rendu, siegesAttribues: false };
   exigerToursFiges(enEnsemble, rendu.placement);
-  const fichier = recopierToursFiges(rendu, fichierDuDepart, toursFiges);
+  const fichier = recopierToursFiges(rendu, fichierDuDepart, toursFiges, sieges);
   let course = courseVersFichier(rangee, fichier, options);
   for (const { placement } of course === null ? [] : course.releves) exigerToursFiges(enEnsemble, placement);
   if (course !== null && fichier.siegesAttribues && fichierDuDepart.siegesAttribues) {
@@ -565,9 +643,12 @@ function exigerDerivation(derivation) {
  *
  * Sous derivation {depart, toursFiges} — une génération dérivée, depart
  * l'identifiant de fichier de son départ —, chaque proposition porte depart
- * et toursFiges (versFichier), et ses tours figés reprennent ceux du départ,
- * plan et points de relevé (deriveeVersFichier) : les listes d'un tour figé
- * sont celles du départ, jamais rangées de nouveau. Un départ absent de la
+ * et toursFiges (versFichier), et ses tours figés reprennent ceux du départ
+ * ajusté à la présence (departAdapte), plan et points de relevé
+ * (deriveeVersFichier) : les listes d'un tour figé sont celles du départ
+ * ajusté, jamais rangées de nouveau, où les arrivantes que le moteur assied
+ * prennent le siège que leur réservation tient, puis une chaise vide ; une
+ * arrivante qu'il garde en réserve y reste. Un départ absent de la
  * charge est refusé PROPOSITION_INCONNUE {id}, avant toute mise en forme ;
  * un tour figé qui diffère du départ, TOUR_FIGE_DIFFERENT {rang, tour}. Le
  * libellé est alors ENTREE_ENREGISTRER_GENERATION_DERIVEE. Sans derivation,
@@ -593,6 +674,8 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
   }
   const fichierDuDepart = derivation === null ? null : charge.propositions.find(({ id }) => id === derivation.depart);
   if (fichierDuDepart === undefined) throw refus('PROPOSITION_INCONNUE', { id: derivation.depart });
+  const adapte = derivation === null ? null : departAdapte(charge, derivation.depart);
+  const sieges = derivation === null ? null : siegesDesArrivantes(charge, adapte, derivation.toursFiges);
   const decalage = charge.prochainsIds.proposition - 1;
   const options = { produitVersion, attribuerSieges: charge.reglages.attribuerSieges, decalage };
   const fichiers = [];
@@ -610,7 +693,7 @@ function enregistrerGeneration(charge, { propositions, configuration, produitVer
       const { fichier, course } =
         derivation === null
           ? sansDerivation(rangee, configuration, options)
-          : deriveeVersFichier(rangee, configuration, options, derivation, fichierDuDepart);
+          : deriveeVersFichier(rangee, configuration, options, derivation, adapte, sieges);
       fichiers.push(fichier);
       if (course !== null) courses.push(entreeDeCourse(fichier, course));
     }
@@ -655,7 +738,11 @@ function sansDerivation(rangee, configuration, options) {
 /**
  * retenirProposition {id} (§ 5.7, § 9) : le placement de la proposition,
  * copié, devient le retenu, que les retouches modifieront sans toucher la
- * proposition ; le plan passe à retenu.
+ * proposition ; le plan passe à retenu. Le retenu suit qui est là : une
+ * copie sans faute s'ajuste à la présence de chacun (ajusterALaPresence),
+ * dans la même entrée, et le libellé le dit (ajuste) quand elle change. Une
+ * dérive du mobilier reste ce qu'elle est ; une copie fautive se retient
+ * telle quelle.
  */
 function retenirProposition(charge, { id }) {
   exigerModifiable(charge);
@@ -663,8 +750,11 @@ function retenirProposition(charge, { id }) {
   if (proposition === undefined) throw refus('PROPOSITION_INCONNUE', { id });
   const { siegesAttribues, tables, capacites, tours, participants, placement } = structuredClone(proposition);
   const suivante = avecEtat(charge, 'retenu');
-  suivante.retenu = { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
-  return { charge: suivante, libelle: libelle('ENTREE_RETENIR_PROPOSITION', { id }), avertissements: [] };
+  const copie = { proposition: id, siegesAttribues, tables, capacites, tours, participants, placement };
+  const ajustement = fautes(copie).length === 0 ? ajusterALaPresence(copie, charge) : null;
+  const ajuste = ajustement !== null && retenuChange(ajustement);
+  suivante.retenu = ajuste ? ajustement.placement : copie;
+  return { charge: suivante, libelle: libelle('ENTREE_RETENIR_PROPOSITION', { id, ajuste }), avertissements: [] };
 }
 
 /**
@@ -702,6 +792,14 @@ function effacerPropositions(charge) {
  * {effacees}, compte les propositions que cette exécution efface : l'annonce
  * de l'écran le lit, plutôt que l'écart de deux lectures de la séance entre
  * lesquelles une autre écriture de la file peut passer.
+ *
+ * Une proposition qui ne dérive que par ses participants sert encore de
+ * départ (sertDeDepart) sans être classée : quand le classement compte moins
+ * de n propositions et que le partage en efface une, le geste refuse
+ * NETTOYAGE_SANS_CLASSEMENT {n, classees, nonClassees}, remède null —
+ * classees, les propositions du classement ; nonClassees, celles qui servent
+ * de départ sans se comparer —, plutôt que de les effacer sans les avoir
+ * comparées. Une génération dérivée les classe de nouveau.
  */
 function garderMeilleures(charge, { n }) {
   exigerModifiable(charge);
@@ -713,6 +811,12 @@ function garderMeilleures(charge, { n }) {
     throw erreur;
   }
   const { gardees, effacees, origineEnPlus } = nettoyage(table, n);
+  const ligneDe = new Map(table.propositions.map((ligne) => [ligne.id, ligne]));
+  const nonClassee = (ligne) => ligne.sertDeDepart && ligne.statut !== 'comparable';
+  const classees = table.classement.ordre.length;
+  if (classees < n && effacees.some((id) => nonClassee(ligneDe.get(id)))) {
+    throw refus('NETTOYAGE_SANS_CLASSEMENT', { n, classees, nonClassees: table.propositions.filter(nonClassee).length });
+  }
   if (effacees.length === 0) throw refus('SANS_EFFET', { commande: 'garderMeilleures' });
   const restent = new Set(gardees);
   const suivante = structuredClone(charge);
@@ -749,7 +853,7 @@ export function reunirCommandes(...registres) {
  * { charge, libelle, avertissements }, et importerParticipants et
  * importerObjectifs y ajoutent le résumé de l'import, enregistrerGeneration
  * les courses de ses propositions. Il réunit les commandes de ce module,
- * celles du mobilier et celles des places.
+ * celles du mobilier, celles des places et celle de la présence.
  *
  * @typedef {{code: string, details: Object}} Avertissement
  * @typedef {{charge: Object, libelle: string, avertissements: Avertissement[]}} Rendu
@@ -774,6 +878,7 @@ export const COMMANDES = reunirCommandes(
   ]),
   COMMANDES_MOBILIER,
   COMMANDES_PLACES,
+  COMMANDES_PRESENCE,
 );
 
 // Le retenu sans son horodatage : une copie de premier niveau, que la

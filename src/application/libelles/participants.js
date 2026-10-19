@@ -2,13 +2,15 @@
 // License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl)
 
 // Les textes des commandes de la liste des participants, de leurs
-// étiquettes et de l'import des participants (§ 4.4, § 4.5, § 10.2,
-// § 14.6) : leurs refus, leurs avertissements et leurs libellés figés. Cette
+// étiquettes, de leur présence par tour et de l'import des participants
+// (§ 4.4, § 4.5, § 5.8, § 10.2, § 14.6) : leurs refus, leurs avertissements
+// et leurs libellés figés. Une personne s'y dit au féminin ; les tours se
+// nomment par toursNommes et auxToursNommes (aides.js). Cette
 // table ne porte que des codes. Un champ ou une raison inconnus lèvent
 // RangeError, au lieu de se taire. Les bornes d'une étiquette viennent de la
 // règle qui les pose.
 import { ETIQUETTES_MAX, ETIQUETTE_LONGUEUR_MAX } from '../../stockage/etiquettes.js';
-import { cite, compte, enumeration, nomDans } from './aides.js';
+import { auxToursNommes, cite, compte, enumeration, nomDans, toursNommes } from './aides.js';
 
 // Les champs d'un participant qu'une saisie modifie, dans l'ordre du fichier.
 const NOMS_DES_CHAMPS = new Map([
@@ -31,6 +33,26 @@ const RAISONS_D_ETIQUETTE = new Map([
 
 // Des étiquettes citées et énumérées.
 const etiquettesCitees = (etiquettes) => enumeration(etiquettes.map(cite));
+
+// Ce qu'un libellé du journal ajoute quand le geste a ajusté le retenu.
+const ajusteTexte = (ajuste) => (ajuste === true ? ' ; placement retenu ajusté' : '');
+
+// Des tours nommés après « au lieu » : « de tous les tours », « du tour 2 »,
+// « des tours 1 et 3 ».
+const auLieuDe = (tours) => {
+  if (tours === null) return 'de tous les tours';
+  return `${tours.length === 1 ? 'du' : 'des'} ${toursNommes(tours)}`;
+};
+
+// Ce que le retenu fait d'une personne dont la présence change : retirée
+// des tours qu'elle perd, mise en réserve à ceux qu'elle gagne ; rien
+// quand il ne bouge pas.
+function dansLeRetenu(retiree, enReserve) {
+  const parties = [];
+  if (retiree.length > 0) parties.push(`retirée du placement retenu ${auxToursNommes(retiree)}`);
+  if (enReserve.length > 0) parties.push(`mise en réserve ${auxToursNommes(enReserve)}`);
+  return parties.length > 0 ? ` ; ${parties.join(', ')}` : '';
+}
 
 // Les titres de place qu'un geste sur une personne touche, quand il y en a.
 const titresDe = (n, singulier, pluriel) =>
@@ -79,12 +101,43 @@ export const TABLE = new Map([
   [
     'IMPORT_EN_RETENU',
     () =>
-      "L'import change la liste après le choix d'un placement : le placement retenu est gardé tel quel, " +
-      "et rien n'est effacé ; à vous de juger s'il convient encore.",
+      "L'import change la liste après le choix d'un placement : le placement retenu suit la présence de chacun, " +
+      "les arrivées en réserve et les départs laissant leur chaise vide, sans que personne d'autre n'y change de place ; " +
+      "à vous de juger s'il convient encore.",
+  ],
+
+  // --- La présence par tour (§ 4, § 5.8, § 9) -------------------------------
+  [
+    'RESERVATIONS_SUSPENDUES_AUX_TOURS',
+    ({ personne, reservations, tours, titres }) =>
+      `Absence de ${personne} ${auxToursNommes(tours)} : ` +
+      `${compte(reservations, 'réservation suspendue', 'réservations suspendues')}, ` +
+      `${reservations <= 1 ? 'sa place y revient' : 'ses places y reviennent'} aux autres` +
+      `${titresDe(titres, "n'y est plus pourvu", "n'y sont plus pourvus")}.`,
+  ],
+  [
+    'RESERVATIONS_RETABLIES_AUX_TOURS',
+    ({ personne, reservations, tours, titres }) =>
+      `Présence de ${personne} ${auxToursNommes(tours)} : ` +
+      `${compte(reservations, 'réservation rétablie', 'réservations rétablies')}` +
+      `${titresDe(titres, 'de nouveau pourvu', 'de nouveau pourvus')}.`,
+  ],
+  [
+    'A_PLACER_DANS_LE_RETENU',
+    ({ personne, tours, tousLesTours }) =>
+      `${personne} attend en réserve du placement retenu ${auxToursNommes(tours)} : ` +
+      'à placer à la main, ou par une proposition dérivée.' +
+      (tousLesTours === true ? ' Si elle arrive en cours de soirée, dire à quels tours elle est présente.' : ''),
+  ],
+  [
+    'RENCONTRES_RETIREES_DU_RETENU',
+    ({ personne, tours }) =>
+      `${personne} était assise ${auxToursNommes(tours)} du placement retenu : ses rencontres de ces tours ` +
+      `n'y comptent plus. Pour les garder, défaire, puis la dire présente ${auxToursNommes(tours)} seulement.`,
   ],
 
   // --- Les libellés figés du journal (§ 8.2, § 8.3) --------------------------
-  ['ENTREE_AJOUTER_PARTICIPANT', ({ personne }) => `Ajouté ${personne}`],
+  ['ENTREE_AJOUTER_PARTICIPANT', ({ personne, ajuste }) => `Ajouté ${personne}${ajusteTexte(ajuste)}`],
   [
     'ENTREE_MODIFIER_PARTICIPANT',
     ({ personne, champs, devenu }) => {
@@ -92,9 +145,9 @@ export const TABLE = new Map([
       return `Modifié ${personne} : ${champs.map(nomChamp).join(', ')}${nouveau}`;
     },
   ],
-  ['ENTREE_EXCLURE_PARTICIPANT', ({ personne }) => `Exclu ${personne}`],
-  ['ENTREE_REINTEGRER_PARTICIPANT', ({ personne }) => `Réintégré ${personne}`],
-  ['ENTREE_SUPPRIMER_PARTICIPANT', ({ personne }) => `Supprimé ${personne}`],
+  ['ENTREE_EXCLURE_PARTICIPANT', ({ personne, ajuste }) => `Exclu ${personne}${ajusteTexte(ajuste)}`],
+  ['ENTREE_REINTEGRER_PARTICIPANT', ({ personne, ajuste }) => `Réintégré ${personne}${ajusteTexte(ajuste)}`],
+  ['ENTREE_SUPPRIMER_PARTICIPANT', ({ personne, ajuste }) => `Supprimé ${personne}${ajusteTexte(ajuste)}`],
   [
     'ENTREE_CHANGER_ETIQUETTES',
     ({ personne, ajoutees, retirees }) => {
@@ -106,16 +159,22 @@ export const TABLE = new Map([
   ],
   [
     'ENTREE_IMPORTER_PARTICIPANTS',
-    ({ mode, ajoutes, misAJour, retires }) => {
+    ({ mode, ajoutes, misAJour, retires, ajuste }) => {
       const ajoutesTexte = compte(ajoutes, 'ajouté', 'ajoutés');
-      if (mode === 'ajouter') return `Importé ${compte(ajoutes, 'participant', 'participants')}`;
+      const suite = ajusteTexte(ajuste);
+      if (mode === 'ajouter') return `Importé ${compte(ajoutes, 'participant', 'participants')}${suite}`;
       if (mode === 'mettreAJour') {
-        return `Mis à jour la liste par import : ${ajoutesTexte}, ${compte(misAJour, 'modifié', 'modifiés')}`;
+        return `Mis à jour la liste par import : ${ajoutesTexte}, ${compte(misAJour, 'modifié', 'modifiés')}${suite}`;
       }
       if (mode === 'remplacer') {
-        return `Remplacé la liste par import : ${compte(retires, 'retiré', 'retirés')}, ${ajoutesTexte}`;
+        return `Remplacé la liste par import : ${compte(retires, 'retiré', 'retirés')}, ${ajoutesTexte}${suite}`;
       }
       throw new RangeError(`libelle : mode d'import inconnu ${JSON.stringify(mode)}`);
     },
+  ],
+  [
+    'ENTREE_CHANGER_PRESENCE',
+    ({ personne, tours, avant, retiree, enReserve }) =>
+      `Présence de ${personne} : ${toursNommes(tours)}, au lieu ${auLieuDe(avant)}${dansLeRetenu(retiree, enReserve)}`,
   ],
 ]);

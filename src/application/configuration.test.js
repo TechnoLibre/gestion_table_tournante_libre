@@ -106,6 +106,20 @@ describe('animateursDe : qui anime, tour par tour (§ 4.5, D6)', () => {
     assert.deepEqual(animateursDe(charge), [{ id: 2, tours: [1, 2, 3] }]);
   });
 
+  test('une animatrice absente au tour 3 n’y anime pas : son anime ne porte pas 3, et la place titrée revient à qui la réserve ce tour-là', () => {
+    const charge = chargeDe((c) => {
+      c.titres = [titre(1, 1)];
+      c.reservations = [reservation(1, 1, 1), reservation(2, 1, 1, 3)];
+      c.participants[0].presence = [1, 2];
+    });
+    assert.deepEqual(animateursDe(charge), [{ id: 1, tours: [1, 2] }, { id: 2, tours: [3] }]);
+    const configuration = configurationDe(charge);
+    assert.deepEqual(configuration.participants.slice(0, 2).map(({ id, presence, anime }) => [id, presence, anime]), [
+      [1, [1, 2], [1, 2]],
+      [2, undefined, [3]],
+    ]);
+  });
+
   test('sans sièges attribués, une réservation sans siège à une table titrée pourvoit le titre ; avec, elle ne le pourvoit pas (A8)', () => {
     const charge = chargeDe((c) => {
       c.titres = [titre(3, 2)];

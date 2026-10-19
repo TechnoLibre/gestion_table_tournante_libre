@@ -333,18 +333,21 @@ describe('intégration : le parcours de l’opérateur par la séance (§ 2.1)',
     assert.deepEqual(libelles.slice(3, 5), vu.corrections.map((rendu) => rendu.libelle));
   });
 
-  test('rouvrir après l’exclusion nomme la dérive de chaque proposition et du retenu, et les garde toutes (§ 9)', async () => {
+  test('rouvrir après l’exclusion nomme la dérive de chaque proposition, garde toutes les propositions, et le retenu suit qui est là (§ 9)', async () => {
     const { vu } = await leParcours();
     const ids = vu.propositionsAvant.map(({ id }) => id);
     assert.deepEqual(ids, [1, 2, 3]);
-    assert.deepEqual(vu.reouverture.avertissements, [{ code: 'DERIVE', details: { ids, retenu: true } }]);
+    assert.deepEqual(vu.reouverture.avertissements, [{ code: 'DERIVE', details: { ids, retenu: false } }]);
     const raison = { code: 'PARTICIPANT_EXCLU', participant: vu.exclue };
     assert.deepEqual(vu.examen.derives, ids.map((id) => ({ id, raisons: [raison] })));
-    assert.deepEqual(vu.examen.retenu, { fautes: [], raisons: [raison] });
+    assert.deepEqual(vu.examen.retenu, { fautes: [], raisons: [] });
     assert.deepEqual(vu.examen.fautives, []);
     assert.match(libelle('DERIVE', { ids, retenu: true }), /gardés, et rien n'est effacé/);
     assert.deepEqual(vu.chargeRouverte.propositions, vu.propositionsAvant);
-    assert.deepEqual(vu.chargeRouverte.retenu, vu.retenuAvant);
+    // Le retenu a perdu l'exclue dans l'entrée de l'exclusion, et rien d'autre.
+    assert.ok(!vu.chargeRouverte.retenu.participants.includes(vu.exclue));
+    const sansElle = vu.retenuAvant.participants.filter((id) => id !== vu.exclue);
+    assert.deepEqual(vu.chargeRouverte.retenu.participants, sansElle);
     assert.equal(vu.chargeRouverte.retenu.proposition, vu.retenue);
     assert.equal(vu.chargeRouverte.evenement.etat, 'retenu');
   });
@@ -355,7 +358,7 @@ describe('intégration : le parcours de l’opérateur par la séance (§ 2.1)',
     assert.deepEqual(
       vu.defaits.map((rendu) => rendu.libelle),
       [
-        `Défait : « Exclu ${exclue.prenom} ${exclue.nom} »`,
+        `Défait : « Exclu ${exclue.prenom} ${exclue.nom} ; placement retenu ajusté »`,
         `Défait : « Retenu la proposition n° ${vu.retenue} »`,
         `Défait : « ${vu.generation.libelle} »`,
       ],
@@ -796,7 +799,9 @@ describe('intégration : l’aller-retour d’un départ, du contrôleur au fich
   test('une dérivée d’une dérivée écrite par la génération précédente ne nomme que son départ immédiat ; ses tours figés sont ceux de ce départ', async () => {
     const { deriveeDeDerivee, rouverte } = await leParcoursDepart();
     assert.deepEqual(deriveeDeDerivee.issue.ajoutees, [5, 6]);
-    assert.deepEqual(deriveeDeDerivee.options, [{ coeurs: 1, depart: { plan: planDuDepart(deriveeDeDerivee.avant, 3), toursFiges: [1, 2] } }]);
+    assert.deepEqual(deriveeDeDerivee.options, [
+      { coeurs: 1, depart: { plan: planDuDepart(deriveeDeDerivee.avant, 3), toursFiges: [1, 2], reservesImposees: [] } },
+    ]);
     assert.notDeepEqual(planDuDepart(deriveeDeDerivee.avant, 3), planDuDepart(deriveeDeDerivee.avant, 1));
     const depart = propositionDe(rouverte, 3);
     assert.equal(depart.depart, 1);
@@ -827,7 +832,7 @@ describe('intégration : l’aller-retour d’un départ, du contrôleur au fich
 
   test('une génération ordinaire après une dérivée : lancer sans départ, charge, libellé et courses de la commande ordinaire, texte écrit égal à son empreinte fixée', async () => {
     const { ensuite, derivee, textes, rouverte } = await leParcoursDepart();
-    assert.deepEqual(derivee.options, [{ coeurs: 1, depart: { plan: planDuDepart(derivee.avant, 1), toursFiges: [1] } }]);
+    assert.deepEqual(derivee.options, [{ coeurs: 1, depart: { plan: planDuDepart(derivee.avant, 1), toursFiges: [1], reservesImposees: [] } }]);
     assert.deepEqual(ensuite.options, [{ coeurs: 1 }]);
     assert.deepEqual(ensuite.issue.ajoutees, [7, 8]);
     assert.equal(ensuite.issue.depart, null);
@@ -868,7 +873,7 @@ describe('intégration : l’aller-retour d’un départ, du contrôleur au fich
       const { id, toursFiges } = DEPARTS[nom];
       assert.deepEqual(messages.map(({ rang }) => rang).sort(), [1, 2], nom);
       for (const message of messages) {
-        assert.deepEqual(message.depart, { plan: planDuDepart(avant, id), toursFiges }, `${nom}, rang ${message.rang}`);
+        assert.deepEqual(message.depart, { plan: planDuDepart(avant, id), toursFiges, reservesImposees: [] }, `${nom}, rang ${message.rang}`);
       }
     }
     for (const nom of ['ordinaire', 'ensuite']) {
