@@ -7,19 +7,22 @@
 // restitué tel qu'il s'est écrit ; la lecture qui s'arrête à la première
 // ligne illisible et compte ce qu'elle écarte ; le fil courant, défaire et
 // refaire ; les lignes de l'historique ; la construction notée ; l'élagage ;
-// le journal d'un format plus ancien, qui se lit. Les journaux s'écrivent
+// le journal d'un format plus ancien, qui se lit ; la restitution de chaque
+// instant de la séance, caractérisée octet pour octet. Les journaux s'écrivent
 // comme les écrit l'enregistreur, une ligne après l'autre, par les fonctions
 // du module ; chaque charge de la séance passe l'analyse du fichier d'état et
 // le contrôle des placements. Les noms des personnes ajoutées sont inventés,
 // hors des réservoirs des démonstrations ; les versions viennent du module
 // engendré, seul à en porter le texte.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
 import { CATALOGUE, PLAN_PARFAIT_PETITE } from '../demo/catalogue.js';
 import { rechercher } from '../moteur/recherche.js';
 import { VERSION } from '../version.genere.js';
-import { serialiser, serialiserCharge } from './canonique.js';
+import { canoniser, serialiser, serialiserCharge } from './canonique.js';
+import { appliquer } from './correctifs.js';
 import { FORMAT, analyser, configurationDepuisCharge, creerCharge, etatDeduit } from './document.js';
 import { ErreurStockage } from './erreurs.js';
 import {
@@ -1395,5 +1398,42 @@ describe('la présence par tour traverse le journal (§ 8.3, § 8.6, § 8.9)', (
     // tour 1 du retenu.
     const correctif = lignesDe(journalDe(etapes))[2];
     assert.ok(correctif.includes('"presence"') && correctif.includes('"absents"'), correctif);
+  });
+});
+
+// --- Caractérisation -------------------------------------------------------
+
+// Empreinte dorée de la restitution (§ 8.3, § 14.2, § 15.5) : le JSON de
+// reconstruire(journal, r) pour chaque révision r de la séance de 120 gestes,
+// ordre des clés compris, une révision par ligne. Les deux versions se
+// remplacent par des marqueurs avant l'empreinte : une livraison, qui change
+// la version, ne la change pas.
+const EMPREINTE_RESTITUTION = '8b171774c5ec48e5ab547a7da4f28ee5763b135e719097c72de43b7e96262a3c';
+
+describe('caractérisation : la restitution de chaque instant, octet pour octet (§ 8.3, § 14.2)', () => {
+  test("reconstruire(journal, r) s'écrit en JSON comme la chaîne d'appliquer refaite d'entrée en entrée, pour chacune des 120 révisions, et leur empreinte est celle de la référence", () => {
+    const journal = lireJournal(texteSeance());
+    assert.equal(journal.entrees.length, 120);
+    // La chaîne : la copie canonique de chaque instantané, puis appliquer de
+    // chaque correctif à la charge de l'entrée qui précède.
+    let chaine = null;
+    let instantanes = 0;
+    const textes = journal.entrees.map(({ revision, instantane, correctif }) => {
+      if (instantane === null) {
+        chaine = appliquer(chaine, correctif);
+      } else {
+        chaine = canoniser(instantane);
+        instantanes += 1;
+      }
+      const texte = JSON.stringify(reconstruire(journal, revision));
+      assert.equal(texte, JSON.stringify(chaine), `révision ${revision}`);
+      return texte;
+    });
+    assert.equal(instantanes, 3);
+    const texte = [V1, V2].reduce(
+      (courant, version, rang) => courant.replaceAll(version, `‹version ${rang + 1}›`),
+      textes.join('\n'),
+    );
+    assert.equal(createHash('sha256').update(texte).digest('hex'), EMPREINTE_RESTITUTION);
   });
 });

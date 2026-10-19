@@ -10,8 +10,11 @@
 // catalogue, chaque proposition d'une distribution tournante. Ce module ne
 // sert qu'à reconnaître un retenu abîmé, et à examiner un fichier qui en
 // porte un comme le dépôt l'ouvre. Les noms des charges tirées et des
-// retouches sont inventés.
+// retouches sont inventés. Un dernier bloc caractérise, octet pour octet, les
+// correctifs des paires tirées et de retouches de la grande démonstration, et
+// les charges qu'appliquer en rend.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fc from 'fast-check';
 import { describe, test } from '../../test/lanceur.js';
 import { versionVoisine } from '../../test/version_voisine.js';
@@ -2308,5 +2311,98 @@ describe('la présence par tour dans un correctif (§ 8.6, § 8.9)', () => {
     assert.deepEqual([...lieux].sort(), ['propositions/absents', `propositions/sieges/${tableDe4}`, 'retenu/absents', 'retenu/sieges/5'].sort());
     const taille = octets(JSON.stringify(placements));
     assert.ok(taille < 400, `${taille} octets`);
+  });
+});
+
+// --- Caractérisation -------------------------------------------------------
+
+// Empreintes dorées des correctifs (§ 8.6, § 14.2, § 15.5) : le JSON de
+// chaque correctif que difference rend, et celui de chaque charge
+// qu'appliquer en rend, ordre des clés compris. Les deux versions que portent
+// les propositions se remplacent par des marqueurs avant l'empreinte : une
+// livraison, qui change la version, ne la change pas.
+//
+// Les paires tirées sont celles que fast-check tire de GRAINE : une mise à
+// jour de fast-check qui change ses tirages change aussi leurs empreintes, et
+// l'aller-retour plus haut dit alors si la propriété tient toujours. Leurs
+// listes sont courtes : une liste qui change à plusieurs rangs s'y pose
+// entière. Les retouches de la grande démonstration (retouchesDeLaGrande)
+// donnent, elles, plusieurs poses au rang dans une même liste, dont l'ordre
+// entre ainsi dans l'empreinte.
+const EMPREINTE_CORRECTIFS = 'a6dff60ae4017c21234ca63f3341ed0350eb23c5b75ab313cb482b7992540aec';
+const EMPREINTE_APPLIQUEES = 'c176c63a917e6f3b9563c438612069f984461484a6b63bd123c86a9928cbf503';
+
+// L'empreinte d'une liste de valeurs, chacune en JSON sur sa ligne, les
+// versions remplacées par leur marqueur.
+function empreinteDesJson(valeurs) {
+  const versions = [VERSION.affichee, versionVoisine(VERSION.affichee)];
+  const texte = versions.reduce(
+    (courant, version, rang) => courant.replaceAll(version, `‹version ${rang + 1}›`),
+    valeurs.map((valeur) => JSON.stringify(valeur)).join('\n'),
+  );
+  return createHash('sha256').update(texte).digest('hex');
+}
+
+const EMPREINTE_CORRECTIFS_GRANDE = 'd300e73b4c27f6e0c1675d89fbb09b0a07e79260a44f644861548b5296b441b9';
+const EMPREINTE_APPLIQUEES_GRANDE = 'eab7c4c78f82ad8cadf2fc864b07febedfa40aeb8b4ab5a4eff1bacd9773e0f1';
+
+// Les retouches de la grande démonstration a, seize charges neuves, deux par
+// j de 0 à 7. La première : dans la proposition de rang j mod 3, la personne
+// de rang longueur − 2 − j quitte les participants, et un identifiant neuf
+// entre en dernier — la liste rangée change à j + 2 rangs, que leurs poses
+// écrivent plus légèrement que la liste entière. La seconde : au tour de
+// rang j mod 4 de la proposition 7, à sièges attribués, deux personnes de
+// deux tables échangent leurs chaises.
+function retouchesDeLaGrande(a) {
+  return Array.from({ length: 8 }, (_, j) => {
+    const sortie = copie(a);
+    const proposition = sortie.propositions[j % sortie.propositions.length];
+    const retiree = proposition.participants.length - 2 - j;
+    proposition.participants = [
+      ...proposition.participants.filter((_, rang) => rang !== retiree),
+      Math.max(...proposition.participants) + 1,
+    ];
+    const echange = copie(a);
+    const { sieges } = echange.propositions.find((p) => p.id === 7).placement[j % 4];
+    const [t1, r1, t2, r2] = [j, j % 8, 32 - j, (j + 3) % 8];
+    [sieges[t1][r1], sieges[t2][r2]] = [sieges[t2][r2], sieges[t1][r1]];
+    return [sortie, echange];
+  }).flat();
+}
+
+// Vrai quand deux opérations du correctif posent à deux rangs d'une même
+// liste.
+function deuxRangsDUneListe(correctif) {
+  const listes = correctif
+    .filter(({ chemin }) => typeof chemin.at(-1) === 'number')
+    .map(({ chemin }) => JSON.stringify(chemin.slice(0, -1)));
+  return new Set(listes).size < listes.length;
+}
+
+describe('caractérisation : les correctifs et les charges appliquées, octet pour octet (§ 8.6, § 14.2)', () => {
+  test(`les ${TIRAGES} paires de la graine ${GRAINE} : chaque correctif et chaque charge appliquée s'écrivent en JSON comme à la référence`, () => {
+    const paires = fc.sample(unePaire, { seed: GRAINE, numRuns: TIRAGES });
+    assert.equal(paires.length, TIRAGES);
+    const correctifs = paires.map(({ a, b }) => difference(a, b));
+    // Des correctifs vides seuls ne caractériseraient rien.
+    const nonVides = correctifs.filter((correctif) => correctif.length > 0).length;
+    assert.ok(nonVides >= TIRAGES / 2, `${nonVides} correctifs non vides sur ${TIRAGES}`);
+    const appliquees = paires.map(({ a }, rang) => appliquer(a, correctifs[rang]));
+    assert.equal(empreinteDesJson(correctifs), EMPREINTE_CORRECTIFS);
+    assert.equal(empreinteDesJson(appliquees), EMPREINTE_APPLIQUEES);
+  });
+
+  test("les retouches de la grande démonstration : chaque correctif, plusieurs poses au rang dans une liste comprises, et chaque charge appliquée s'écrivent en JSON comme à la référence", () => {
+    const a = grande();
+    const retouches = retouchesDeLaGrande(a);
+    const correctifs = retouches.map((b) => difference(a, b));
+    const multiples = correctifs.filter(deuxRangsDUneListe).length;
+    assert.ok(multiples >= 8, `${multiples} correctifs posent à plusieurs rangs d'une liste`);
+    const appliquees = correctifs.map((correctif) => appliquer(a, correctif));
+    retouches.forEach((b, rang) => {
+      assert.equal(serialiserCharge(appliquees[rang]), serialiserCharge(b), `retouche ${rang}`);
+    });
+    assert.equal(empreinteDesJson(correctifs), EMPREINTE_CORRECTIFS_GRANDE);
+    assert.equal(empreinteDesJson(appliquees), EMPREINTE_APPLIQUEES_GRANDE);
   });
 });
