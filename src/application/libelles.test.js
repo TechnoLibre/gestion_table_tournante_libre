@@ -17,6 +17,11 @@
 // exporte TABLE, une Map, et libelles.js les assemble par ordre alphabétique
 // des fichiers ; les tables, comme l'assemblage, sont hors du balayage.
 //
+// Les détails d'exemple suivent le même partage, sous test/libelles/ : un
+// fichier par table, du même nom, qui porte l'exemple de chaque code dont la
+// table a le texte, et les textes à affirmer mot pour mot. Ce module les
+// réunit et garde qu'un code a son exemple dans un seul fichier, le bon.
+//
 // src/moteur se relève à part, épreuves exclues : chaque littéral en
 // capitales de ses sources, hors commentaires, y est un code — celui d'une
 // ErreurConfiguration ou d'une violation de ses vérificateurs —, que le
@@ -34,6 +39,19 @@ import { CRITERES as CRITERES_DU_REGISTRE, MODES_OBJECTIFS, valeursQuiClassent }
 import { TABLES_INTERFACE } from '../interface/libelles.js';
 import { creerTraduction } from './traduction.js';
 import { CODES, TABLES_APPLICATION, libelle } from './libelles.js';
+import { auxToursNommes, toursNommes } from './libelles/aides.js';
+import * as exemplesCsv from '../../test/libelles/csv.js';
+import * as exemplesEvenements from '../../test/libelles/evenements.js';
+import * as exemplesFormat from '../../test/libelles/format.js';
+import * as exemplesGeneration from '../../test/libelles/generation.js';
+import * as exemplesMobilier from '../../test/libelles/mobilier.js';
+import * as exemplesMoteur from '../../test/libelles/moteur.js';
+import * as exemplesParticipants from '../../test/libelles/participants.js';
+import * as exemplesPlaces from '../../test/libelles/places.js';
+import * as exemplesPlanche from '../../test/libelles/planche.js';
+import * as exemplesSeance from '../../test/libelles/seance.js';
+import * as exemplesSorties from '../../test/libelles/sorties.js';
+import * as exemplesStockage from '../../test/libelles/stockage.js';
 
 const RACINE = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -46,6 +64,8 @@ const TABLES = ['src/stockage/types.js', 'src/csv/erreurs.js', 'src/interface/pl
 // qu'on éprouve, et un texte qui en compose un autre le nomme sans l'émettre.
 const TABLE_DES_TEXTES = join('src', 'application', 'libelles.js');
 const DOSSIER_DES_TABLES = join('src', 'application', 'libelles');
+// Les exemples des textes, un fichier par table de libelles/.
+const DOSSIER_DES_EXEMPLES = join('test', 'libelles');
 const horsDesTextes = (chemin) => chemin !== TABLE_DES_TEXTES && !chemin.startsWith(DOSSIER_DES_TABLES + sep);
 
 // --- Le balayage ----------------------------------------------------------
@@ -257,398 +277,129 @@ describe('libellés : le balayage des codes (§ 14.6, § 14.2)', () => {
 
 // --- Les textes -----------------------------------------------------------
 
-// Détails d'exemple de chaque code de la table : chaque texte s'y compose une
-// fois. Un code ajouté à la table sans exemple fait échouer l'épreuve.
-const EXEMPLES = new Map([
-  // Système de fichiers et dépôt
-  ['ABSENT', { chemin: 'Soirée des Lucioles.gtt.json' }],
-  ['ECRITURE', { chemin: 'Soirée des Lucioles.gtt.json', dossier: 'E:\\data', cause: 'EROFS' }],
-  ['LECTURE', { chemin: 'Soirée des Lucioles.gtt.json', dossier: 'E:\\data', cause: 'EACCES' }],
-  ['EXISTE', { chemin: 'Soirée des Lucioles.gtt.json' }],
-  ['CHEMIN_REFUSE', { chemin: '../ailleurs.gtt.json' }],
-  ['ETAT_ILLISIBLE', { base: 'Soirée des Lucioles', raison: 'JSON', chemin: null, secours: { precedent: 4, journal: 5 } }],
-  ['CORRECTIF', { rang: 2 }],
-  ['CHEMIN_TROP_LONG', { racine: 'E:\\un\\dossier\\profond' }],
-  ['IDENTIFIANT_PRESENT', { id: 'evt-lucioles', base: 'Soirée des Lucioles' }],
-  ['VERROU_PRIS', { seance: 'seance-autre', depuis: '2031-05-17T08:05:00-04:00', vivant: true }],
-  ['LECTURE_SEULE', { raison: 'BLOQUE' }],
-  ['ETAT_NON_ECRIT', { chemin: 'Soirée des Lucioles.gtt.json', dossier: 'E:\\data', cause: 'EIO' }],
-  ['CORBEILLE_SATUREE', { dossier: 'corbeille/2031-05-17_08-05-00_99' }],
-  ['COMPTEUR_SATURE', { compteur: 'proposition' }],
-  ['NON_DISPONIBLE', { primitive: 'ouvrirDansExplorateur' }],
-  // Raisons d'un état illisible
-  ['VIDE', {}],
-  ['JSON', {}],
-  ['FORME', { chemin: 'charge.participants[2].nom' }],
-  ['COMPTES', { chemin: 'entete.comptes.tables' }],
-  ['REFERENCE', { chemin: 'charge.reservations[0].table' }],
-  ['FORMAT_INCONNU', { chemin: 'entete.format' }],
-  ['FORMAT_PLUS_RECENT', { format: 2 }],
-  ['ENCODAGE', {}],
-  // Fautes d'un placement
-  ['LONGUEUR', { tour: 2, table: 4, declare: 8, ecrit: 9 }],
-  ['DOUBLON', { tour: 1, participant: 3 }],
-  ['INCONNU', { tour: 1, participant: 12 }],
-  ['MANQUANT', { tour: 2, participant: 7 }],
-  ['IDENTIFIANT_REPETE', {}],
-  ['IDENTIFIANT_HORS_COMPTEUR', {}],
-  ['DERIVATION', { chemin: 'toursFiges[1]', raison: 'tourHorsSoiree' }],
-  // Raisons de dérive
-  ['PARTICIPANT_EXCLU', { participant: 3 }],
-  ['PARTICIPANT_SUPPRIME', { participant: 4 }],
-  ['PARTICIPANT_NON_PLACE', { participant: 9 }],
-  ['TABLE_SUPPRIMEE', { table: 2 }],
-  ['TABLE_AJOUTEE', { table: 5 }],
-  ['CAPACITE_CHANGEE', { table: 1, avant: 8, maintenant: 6 }],
-  ['TOURS_CHANGES', { avant: 4, maintenant: 3 }],
-  // Avertissements de l'ouverture
-  ['RETENU_FAUTIF', {}],
-  ['JOURNAL_REPRIS', {}],
-  ['JOURNAL_EN_AVANCE_DE', { n: 3 }],
-  ['JOURNAL_INCOMPLET', { etat: 9, journal: 6 }],
-  ['JOURNAL_ECARTEES', { n: 64 }],
-  ['JOURNAL_RECREE', {}],
-  ['JOURNAL_FORMAT_PLUS_RECENT', { format: 2 }],
-  ['JOURNAL_ILLISIBLE', { raison: 'ENCODAGE' }],
-  ['JOURNAL_ETRANGER', { evenement: 'evt-autre' }],
-  ['PROPOSITIONS_FAUTIVES', { ids: [3, null] }],
-  ['PROPOSITIONS_MANQUANTES', { n: 2 }],
-  ['DERIVE', { ids: [1, 2], retenu: true }],
-  // Dossier de travail et réglages locaux
-  ['NON_PUBLIE', {}],
-  ['DONNEES_APPLICATIVES', {}],
-  ['SONDE_ECHOUEE', { cause: 'EROFS' }],
-  ['RELECTURE_DIFFERENTE', {}],
-  ['NOM_NON_CONVERTI', {}],
-  ['PORTABLE_NON_INSCRIPTIBLE', { racine: { id: 'portable', chemin: 'E:\\data' }, evenements: 3, cause: 'EROFS' }],
-  ['DOCUMENTS_NON_INSCRIPTIBLE', { racine: { id: 'documents', chemin: 'C:\\Documents\\Table' }, evenements: 0, cause: 'EACCES' }],
-  ['PLATEFORME_WEB', {}],
-  ['SUPPORT_AMOVIBLE', {}],
-  ['REGLAGES_ILLISIBLES', { chemin: 'reglages_locaux.json', raison: 'FORME' }],
-  ['REGLAGES_NON_ECRITS', { chemin: 'reglages_locaux.json', dossier: 'E:\\data', cause: 'EROFS' }],
-  // CSV
-  ['UTF16_SANS_MARQUE', { remede: 'ENREGISTRER_EN_UTF8' }],
-  ['UTF16_INVALIDE', { remede: 'ENREGISTRER_EN_UTF8' }],
-  ['UTF8_INVALIDE', { remede: 'ENREGISTRER_EN_UTF8' }],
-  ['CARACTERE_NUL', { remede: 'ENREGISTRER_EN_UTF8' }],
-  ['ENREGISTRER_EN_UTF8', {}],
-  ['SEPARATEUR_INTROUVABLE', { separateur: ';', ligne: 3, cause: 'NOMBRE_DE_CHAMPS' }],
-  ['NOMBRE_DE_CHAMPS', { ligne: 3 }],
-  ['GUILLEMET_OUVERT', { ligne: 2 }],
-  ['AUCUN_ENTETE', {}],
-  ['NOM_NON_ASSOCIE', {}],
-  ['AUCUNE_LIGNE_VALIDE', {}],
-  ['CHAMPS_EN_TROP', { ligne: 4, valeur: null }],
-  ['NOM_ABSENT', { ligne: 5, valeur: null }],
-  ['EXCLU_INCONNU', { ligne: 6, valeur: 'peut-être' }],
-  ['ETIQUETTE_MAL_FORMEE', { ligne: 6, valeur: 'ressources\thumaines', raison: 'controle' }],
-  ['ETIQUETTES_TROP_NOMBREUSES', { ligne: 6, valeur: null, nombre: 21 }],
-  ['PLUSIEURS_CORRESPONDENT', { ligne: 7, valeur: null, participants: [3, 8] }],
-  ['DEJA_DESIGNE', { ligne: 9, valeur: null, participants: [3], premiereLigne: 4 }],
-  ['PLAN_BLOQUE', { remede: { geste: 'debloquer' } }],
-  ['AMBIGUITE', { champs: ['appartenance', 'courriel'] }],
-  // Le CSV des objectifs de table (§ 10.4)
-  ['TABLE_NON_ASSOCIEE', {}],
-  ['OBJECTIF_NON_ASSOCIE', {}],
-  ['OBJECTIFS_SANS_TABLE', { ligne: null, remede: { geste: 'ouvrirSection', section: 'tables' } }],
-  ['OBJECTIFS_NUMEROS_PARTAGES', { remede: { geste: 'ouvrirSection', section: 'tables' } }],
-  ['TABLE_ABSENTE', { ligne: 3, valeur: null }],
-  ['TABLE_NON_ENTIERE', { ligne: 3, valeur: '3b' }],
-  ['NUMERO_TABLE_INCONNU', { ligne: 4, valeur: '9' }],
-  ['PLUSIEURS_TABLES', { ligne: 4, valeur: '3' }],
-  ['TOUR_NON_ENTIER', { ligne: 5, valeur: 'deux' }],
-  ['TOUR_HORS_SOIREE', { ligne: 5, valeur: '9', tours: 4 }],
-  ['OBJECTIF_VIDE', { ligne: 6, valeur: null }],
-  ['REGLE_INCONNUE', { ligne: 6, valeur: 'peut-être' }],
-  ['OBJECTIF_EN_DOUBLE', { ligne: 8, valeur: null, premiereLigne: 3, numero: 1, tour: 2 }],
-  ['IMPORT_OBJECTIFS_RECLASSE', {}],
-  ['ENTREE_IMPORTER_OBJECTIFS', { mode: 'mettreAJour', ajoutes: 3, remplaces: 1, retires: 0 }],
-  // Séance
-  ['AUCUN_EVENEMENT', {}],
-  ['MODE_LECTURE', {}],
-  ['FORMAT', {}],
-  ['BLOQUE', {}],
-  ['SUPPORT_ROMPU', { echec: 'ECRITURE', chemin: 'Soirée des Lucioles.gtt-journal.jsonl', dossier: 'E:\\data', cause: 'EROFS' }],
-  ['SUPPORT_INTACT', {}],
-  ['SUPPORT_ROMPU_NON_SAUVE', { echec: 'ETAT_NON_ECRIT', chemin: 'Soirée des Lucioles.gtt.json', dossier: 'E:\\data', cause: 'EIO' }],
-  ['EVENEMENT_CHANGE', { revision: 7 }],
-  ['VERROU_REPRIS', { seance: 'seance-morte', depuis: '2031-05-01T21:40:00-04:00' }],
-  ['VERROU_NON_RENDU', { chemin: 'Soirée des Lucioles.gtt.verrou', dossier: 'E:\\data', cause: 'EROFS' }],
-  ['RIEN_A_DEFAIRE', {}],
-  ['RIEN_A_REFAIRE', {}],
-  ['INSTANT_NON_RESTITUABLE', { revision: 3 }],
-  ['PLAN_NON_BLOQUE', { remede: null }],
-  ['JALON_NON_ECRIT', { chemin: 'Soirée des Lucioles.gtt-journal.jsonl', dossier: 'E:\\data', cause: 'EROFS' }],
-  ['SANS_EFFET', { commande: 'modifierParticipant', remede: null }],
-  ['RETOUR_AUTOMATIQUE', {}],
-  [
-    'DERIVE_NOUVELLE',
-    {
-      touchees: [
-        { id: 'retenu', raisons: [{ code: 'TABLE_SUPPRIMEE', table: 2 }] },
-        { id: 3, raisons: [{ code: 'CAPACITE_CHANGEE', table: 1, avant: 8, maintenant: 6 }] },
-      ],
-    },
-  ],
-  ['RESERVATION_NON_HONOREE', { participant: 4, table: 5, tour: 1 }],
-  [
-    'INVARIANT_VIOLE',
-    {
-      proposition: 1,
-      violations: [
-        { code: 'RESERVATION', participant: 4, table: 5, tour: 1 },
-        { code: 'CAPACITE', table: 5, tour: 2 },
-      ],
-      remede: null,
-    },
-  ],
-  ['CONFIGURATION_INCOHERENTE', { code: 'SURRESERVATION', details: { table: 2, tour: 1, reservees: 9, capacite: 8 } }],
-  // Moteur
-  ['PLACES_MANQUANTES', { placesManquantes: 3 }],
-  ['SURRESERVATION', { table: 2, tour: 1, reservees: 9, capacite: 8, remede: null }],
-  ['CAPACITE', { table: 2, capacite: 1 }],
-  ['TOURS', { tours: 0 }],
-  ['PARTICIPANT_DOUBLON', { participant: 4 }],
-  ['TABLE_DOUBLON', { table: 3 }],
-  ['RESERVATION_INCONNUE', { reservation: 0, participant: 42 }],
-  ['RESERVATION_TOUR', { reservation: 2, tour: 5 }],
-  ['RESERVATION_CONFLIT', { participant: 4, tour: 2, tables: [1, 3] }],
-  ['ENUMERATION_TROP_GRANDE', { participant: 7, tablesAdmissibles: 40, toursLibres: 9, limite: 1000000 }],
-  ['PLAN_TOURS', { attendu: 4, tours: 3, reserves: 3 }],
-  ['PLAN_TABLE_INCONNUE', { table: 9 }],
-  ['PLAN_TABLE_DOUBLON', { table: 2 }],
-  ['PLAN_TABLE_ABSENTE', { table: 5 }],
-  ['PLAN_LISTES', { tour: 2, listes: 3, tables: 4 }],
-  ['PLAN_INCONNU', { participant: 42, tour: 1 }],
-  ['PLAN_EXCLU_PLACE', { participant: 3, tour: 2 }],
-  ['PLAN_DOUBLE_PLACE', { participant: 5, tour: 3 }],
-  ['PLAN_NON_ASSIS', { participant: 6, tour: 4 }],
-  ['DEPART_INCOMPATIBLE', { tour: 2, table: 10, participant: 4 }],
-  ['TABLE_INCONNUE', { table: 9, detail: 'inconnue' }],
-  ['DOUBLE_PLACE', { participant: 5, tour: 3 }],
-  ['EXCLU_PLACE', { participant: 3, tour: 2 }],
-  ['NON_ASSIS', { participant: 6, tour: 4 }],
-  ['RESERVATION', { participant: 4, table: 5, tour: 1 }],
-  ['PLAFOND_A_PRIORI', { index: 2, participant: 3 }],
-  ['ORDRE_PLAFONDS', { index: 2, participant: 3 }],
-  ['PLAFOND_REALISE', { index: 0, participant: 1 }],
-  ['DEPASSEMENT', { index: 4, participant: 9 }],
-  ['OBJECTIF_INCONNU', { table: 9 }],
-  ['OBJECTIF_TOUR', { table: 2, tour: 5 }],
-  ['OBJECTIF_CONFLIT', { table: 2, tour: null }],
-  ['PRIORITES', { faute: 'seulASonPalier', critere: 'toursHorsObjectif', palier: 2 }],
-  ['ANIMATION_NON_FIXEE', { participant: 4, tour: 3 }],
-  ['TOURS_SERVIS', { index: 2, participant: 3 }],
-  ['TOURS_SERVIS_NON_ASSIS', { index: 2, participant: 3 }],
-  ['ANIMATEURS_RENCONTRES', { index: 4, participant: 9 }],
-  ['JAMAIS_SERVIES', {}],
-  ['HORS_OBJECTIF_MAX', {}],
-  ['RESTE_NEGATIF', { groupe: 1, appartenance: 'Atelier Ressac' }],
-  ['RESTE_OBJECTIFS_NEGATIF', { tour: 2 }],
-  ['DIVERSITE_RENCONTRES', { index: 4, participant: 9 }],
-  ['DIVERSITE_AFFILIES', { index: 4, participant: 9 }],
-  ['AFFILIES_PLAFOND', { index: 4, participant: 9 }],
-  ['BORNE_DIVERSITE', { index: 4, participant: 9 }],
-  // Génération
-  ['GENERATION_EN_COURS', { remede: null }],
-  ['TRAVAILLEUR_EN_ECHEC', { remede: null }],
-  ['AUCUN_PARTICIPANT', { remede: { geste: 'ouvrirSection', section: 'participants' } }],
-  ['AUCUNE_TABLE', { remede: { geste: 'ouvrirSection', section: 'tables' } }],
-  [
-    'CONFIRMATION_REQUISE',
-    {
-      estimation: {
-        secondes: 1200,
-        longue: true,
-        auDelaDuPlafond: false,
-        mesure: { dureeMs: 2000, mouvements: 1000000, participants: 260, nombre: 5, arret: 200000 },
-      },
-      remede: null,
-    },
-  ],
-  ['HORS_DOMAINE', { min: 1, max: null, remede: null }],
-  ['REGLAGE_HORS_DOMAINE', { reglage: 'arret', remede: null }],
-  [
-    'GENERATION_INVARIANT_VIOLE',
-    {
-      rang: 2,
-      violations: [
-        { code: 'RESERVATION', participant: 4, table: 5, tour: 1 },
-        { code: 'CAPACITE', table: 5, tour: 2 },
-      ],
-      remede: null,
-    },
-  ],
-  // Refus et avertissements des commandes
-  ['NOM_REQUIS', { remede: null }],
-  ['NOM_EVENEMENT_TROP_LONG', { longueur: 201, maximum: 200, remede: null }],
-  ['DATE_INVALIDE', { date: '2031-02-30', remede: null }],
-  ['SIEGES_INVALIDES', { sieges: 1, remede: null }],
-  ['TOURS_INVALIDES', { tours: 0, remede: null }],
-  ['PARTICIPANT_INCONNU', { id: 42, remede: null }],
-  ['PROPOSITION_INCONNUE', { id: 17, remede: null }],
-  ['AUCUNE_PROPOSITION', { remede: { geste: 'ouvrirSection', section: 'generation' } }],
-  ['AUCUN_RETENU', { remede: { geste: 'ouvrirSection', section: 'propositions' } }],
-  ['RESERVATIONS_SUSPENDUES', { participant: 1, personne: 'Iris Ombrelle', reservations: 2, titres: 1 }],
-  ['RESERVATIONS_RETABLIES', { participant: 1, personne: 'Iris Ombrelle', reservations: 2, titres: 1 }],
-  ['RESERVATIONS_RETIREES', { participant: 1, personne: 'Iris Ombrelle', reservations: 1, titres: 1 }],
-  ['IMPORT_EN_RETENU', {}],
-  ['ETIQUETTE_INVALIDE', { valeur: 'ressources\u{0009}humaines', raison: 'controle', remede: null }],
-  ['ETIQUETTES_EN_TROP', { nombre: 21, remede: null }],
-  ['ORTHOGRAPHE_RETENUE', { saisie: 'Finance', retenue: 'finance' }],
-  // Façade des événements
-  ['QUESTION_EN_ATTENTE', { question: 'PORTABLE_NON_INSCRIPTIBLE', remede: null }],
-  ['EXPLORATEUR_ABSENT', { remede: null }],
-  // Libellés figés du journal
-  ['ENTREE_CREATION', { nom: "Soirée d'essai" }],
-  ['JALON_CREATION', {}],
-  ['JALON_ETAT', { etat: 'retenu' }],
-  ['JALON_AVANT_GENERATION', {}],
-  ['ENTREE_REPRISE', {}],
-  ['ENTREE_DEFAIRE', { libelle: 'Ajouté Théo Pervenche' }],
-  ['ENTREE_REFAIRE', { libelle: 'Ajouté Théo Pervenche' }],
-  ['ENTREE_REVENIR', { libelle: 'Ajouté Iris Ombrelle' }],
-  ['ENTREE_AJOUTER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
-  ['ENTREE_MODIFIER_PARTICIPANT', { personne: 'Iris Ombrelle', champs: ['courriel'], devenu: null }],
-  ['ENTREE_EXCLURE_PARTICIPANT', { personne: 'Iris Ombrelle' }],
-  ['ENTREE_REINTEGRER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
-  ['ENTREE_SUPPRIMER_PARTICIPANT', { personne: 'Iris Ombrelle' }],
-  ['ENTREE_CHANGER_ETIQUETTES', { personne: 'Iris Ombrelle', ajoutees: ['Montréal', 'finance'], retirees: ['bénévole'] }],
-  ['ENTREE_IMPORTER_PARTICIPANTS', { mode: 'ajouter', ajoutes: 12, misAJour: 0, retires: 0 }],
-  ['ENTREE_CHANGER_ETAT', { etat: 'bloque' }],
-  ['ENTREE_DEBLOQUER', { etat: 'retenu' }],
-  ['ENTREE_COPIE', { source: 'Soirée des Lucioles', instant: "Création de l'événement « Soirée des Lucioles »" }],
-  ['ENTREE_RENOMMER', { ancien: 'Soirée des Lucioles', nom: 'Soirée des Cerfs' }],
-  ['ENTREE_DEMONSTRATION', { nom: 'Petite démonstration' }],
-  ['ENTREE_ENREGISTRER_GENERATION', { n: 5, premier: 3, dernier: 7 }],
-  ['ENTREE_RETENIR_PROPOSITION', { id: 3 }],
-  ['ENTREE_EFFACER_PROPOSITIONS', { n: 4, gardee: 2 }],
-  ['ENTREE_GARDER_MEILLEURES', { n: 10, effacees: 37, gardee: 42 }],
-  ['ENTREE_ENREGISTRER_GENERATION_DERIVEE', { n: 5, premier: 21, dernier: 25, depart: 4, toursFiges: [1, 2] }],
-  // Le départ d'une génération dérivée : les refus du lancement
-  ['DEPART_ABSENT', { depart: 4, remede: { geste: 'repartirDeZero' } }],
-  [
-    'DEPART_NON_COMPARABLE',
-    {
-      depart: 4,
-      statut: 'derive',
-      raisons: [{ code: 'PARTICIPANT_EXCLU', participant: 5, personne: 'Maëlle Quenouille' }],
-      remede: { geste: 'repartirDeZero' },
-    },
-  ],
-  ['TOUR_FIGE_HORS_SOIREE', { tour: 4, tours: 3, remede: { geste: 'libererTour', tour: 4 } }],
-  ['TOURS_FIGES_TOUS', { tours: 3, remede: null }],
-  [
-    'DEPART_RESERVATION_NON_TENUE',
-    { depart: 4, participant: 2, table: 1, tour: 2, personne: 'Théo Pervenche', numero: 3, remede: { geste: 'repartirDeZero' } },
-  ],
-  [
-    'DEPART_SIEGE_NON_TENU',
-    {
-      depart: 4,
-      participant: 1,
-      table: 1,
-      siege: 2,
-      tour: 1,
-      personne: 'Iris Ombrelle',
-      numero: 3,
-      remede: { geste: 'libererTour', tour: 1 },
-    },
-  ],
-  // Le tour figé que l'enregistrement trouve différent de son départ
-  ['TOUR_FIGE_DIFFERENT', { rang: 3, tour: 2, remede: null }],
-  // Places : refus d'une pose, titres, réservations, retenu
-  ['SIEGE_INEXISTANT', { table: 2, siege: 9, capacite: 8, remede: null }],
-  ['DEUX_PLACES_MEME_TOUR', { participant: 1, tour: 2, autre: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
-  ['PERSONNE_EXCLUE', { participant: 3, remede: null }],
-  ['PLACE_RESERVEE', { table: 2, siege: 3, tour: 2, titulaire: 2, portee: 'tour', remede: null }],
-  ['RESERVEE_AILLEURS', { participant: 1, tour: 2, reservation: { table: 1, siege: null, portee: 'tous', tour: null }, remede: null }],
-  ['TABLE_GELEE', { table: 1 }],
-  ['LIBELLE_VIDE', { remede: null }],
-  ['PLACE_TITREE', { table: 3, siege: 1, libelle: 'accueil', remede: null }],
-  ['AUCUN_SIEGE_SANS_TITRE', { table: 1, capacite: 2, remede: null }],
-  ['TITRE_ABSENT', { table: 3, siege: 1, remede: null }],
-  ['RESERVATION_ABSENTE', { participant: 1, table: 3, portee: 'tour', tour: 2, remede: null }],
-  ['CONVERSION_IMPOSSIBLE', { participant: 1, table: 3, remede: null }],
-  ['PROPOSITION_MONTREE', { proposition: 4, remede: null }],
-  ['SIEGE_OCCUPE', { table: 5, siege: 2, tour: 1, occupant: 2, remede: null }],
-  ['TABLE_PLEINE', { table: 5, tour: 1, capacite: 6, remede: null }],
-  ['RESERVATION_TOUS_LES_TOURS', { participant: 1, table: 3, remede: null }],
-  ['RESERVATION_CE_TOUR', { participant: 1, table: 3, tour: 2, remede: null }],
-  ['ENTREE_RESERVER', { personne: 'Théo Pervenche', numero: 4, siege: 2, portee: 'tour', tour: 2 }],
-  ['ENTREE_RETIRER_RESERVATION', { personne: 'Théo Pervenche', numero: 4, portee: 'tous', tour: null }],
-  ['ENTREE_DEPLACER_RESERVATION', { personne: 'Théo Pervenche', de: 4, vers: 7, siege: null, portee: 'tour', tour: 2 }],
-  ['ENTREE_POSER_TITRE', { libelle: 'accueil', numero: 3, siege: 1 }],
-  ['ENTREE_RETIRER_TITRE', { libelle: 'accueil', numero: 3, siege: 1 }],
-  ['ENTREE_DESIGNER', { personne: 'Iris Ombrelle', numero: 3, siege: 1, libelle: 'accueil' }],
-  ['ENTREE_CONVERTIR_EN_TOUS', { personne: 'Iris Ombrelle', numero: 3 }],
-  ['ENTREE_DEPLACER_DANS_RETENU', { personne: 'Iris Ombrelle', de: 4, vers: 7, siege: null, tour: 2 }],
-  ['ENTREE_ECHANGER_DANS_RETENU', { a: 'Iris Ombrelle', deA: 4, b: 'Théo Pervenche', deB: null, tour: 2 }],
-  ['ENTREE_RETIRER_DU_TOUR', { personne: 'Iris Ombrelle', numero: 4, tour: 2 }],
-  // Mobilier : saisies, capacité, sièges retirés, libellés figés
-  ['NON_ENTIER', { saisie: '8abc', remede: null }],
-  ['MOINS_DE_DEUX', { remede: null }],
-  ['MOINS_D_UN_TOUR', { tours: 0, remede: null }],
-  ['TROP_DE_PLACES', { max: 1000, remede: null }],
-  ['TROP_DE_TOURS', { max: 100, remede: null }],
-  ['SOUS_RESERVATIONS', { table: 2, n: 7, tour: 1, remede: { geste: 'afficherTour', tour: 1, proposition: null } }],
-  ['SOUS_OCCUPES', { table: 2, n: 7, tour: 3, remede: { geste: 'afficherTour', tour: 3, proposition: null } }],
-  [
-    'SIEGES_RETIRES',
-    {
-      table: 2,
-      sieges: [
-        { siege: 8, cause: 'SIEGE_TITRE', libelle: 'animateur' },
-        { siege: 7, cause: 'SIEGE_RESERVE', participant: 1, suspendue: true },
-      ],
-      remede: { commande: 'retirerTitre', arguments: { table: 2, siege: 8 } },
-    },
-  ],
-  ['SIEGE_RESERVE', { siege: 7, participant: 1, suspendue: false }],
-  ['SIEGE_TITRE', { siege: 8, libelle: 'animateur' }],
-  ['SURNUMERAIRES', { table: 3, tour: 2, personnes: [16, 17] }],
-  ['AU_DELA_LISIBLE', { seuil: 16 }],
-  ['LISTE_SUR_VOISINE', { table: 4, voisine: 7, numero: 3, numeroVoisine: 5, remede: { commande: 'deplacerTable', arguments: { id: 7, position: { x: 1626, y: 0 } } } }],
-  ['ENTREE_CREER_TABLE', { numero: 3 }],
-  ['ENTREE_SUPPRIMER_TABLE', { numero: 2, reservations: 2, titres: 1 }],
-  ['ENTREE_DEPLACER_TABLE', { numero: 3 }],
-  ['ENTREE_CHANGER_PLACES_TABLE', { numero: 5, sieges: 10 }],
-  ['ENTREE_REALIGNER_TABLE', { numero: 5, sieges: 8 }],
-  ['ENTREE_CHANGER_DEFAUT', { sieges: 10, realignees: 4 }],
-  ['ENTREE_CHANGER_TOURS', { tours: 3, retirees: 2 }],
-  ['ENTREE_MODIFIER_REGLAGE', { cle: 'separerAppartenances', valeur: false }],
-  // Objectifs des tables
-  ['OBJECTIF_HORS_SOIREE', { tour: 5, remede: null }],
-  ['OBJECTIF_SANS_ETIQUETTE', { table: 2, tour: 3, remede: { commande: 'retirerObjectif', arguments: { table: 2, tour: 3 } } }],
-  ['TABLE_DISPARUE', { table: 9, remede: null }],
-  ['OBJECTIF_SANS_CORRESPONDANT', { table: 2, tour: null }],
-  ['ETIQUETTE_ORPHELINE', { etiquette: 'Finance', voisine: 'finance' }],
-  ['ENTREE_POSER_OBJECTIF', { numero: 3, tour: 2, regle: 'et', etiquettes: ['Montréal', 'finance'] }],
-  ['ENTREE_RETIRER_OBJECTIF', { numero: 3, tour: null }],
-  ['ENTREE_CHANGER_REGLE_OBJECTIFS', { regle: 'et' }],
-  // Ordre des priorités et mode des objectifs
-  ['PRIORITES_INVALIDES', { faute: 'seulASonPalier', critere: 'ecartAuPlafondAPrioriMax', palier: 0, remede: null }],
-  ['POIDS_HORS_DOMAINE', { valeur: 0, remede: null }],
-  ['OBJECTIFS_PALIER_PARTAGE', { mode: 'chacun', palier: 1, remede: null }],
-  ['ENTREE_CHANGER_PRIORITES', { criteres: ['collisionsCumulees'], palier: 1, paliers: 6, avec: ['excedentCollisions'], poids: null }],
-  ['ENTREE_RETABLIR_PRIORITES', {}],
-  // Planche de badges
-  ['PLANCHE_SANS_PLACEMENT', { remede: { geste: 'ouvrirSection', section: 'propositions' } }],
-  ['PROPOSITION_FAUTIVE', { id: 2, remede: { geste: 'ouvrirSection', section: 'propositions' } }],
-  [
-    'PLANCHE_DERIVE',
-    {
-      raisons: [{ code: 'PARTICIPANT_NON_PLACE', participant: 6, personne: 'Ondine Grisaille' }],
-      remede: { geste: 'ouvrirSection', section: 'propositions' },
-    },
-  ],
-  ['PLANCHE_TROP_DE_TOURS', { tours: 40, remede: null }],
-  ['PLANCHE_NOM_TROP_LONG', { participant: 3, personne: 'Ondine Lacasse', remede: { geste: 'ouvrirSection', section: 'participants' } }],
-  ['PLANCHE_NON_ECRITE', { chemin: 'Soirée des Lucioles.badges_A4_feuille_2031-05-17_20-15-07.pdf', dossier: 'E:\\data', cause: 'EROFS', remede: { geste: 'enregistrerSous' } }],
-  ['PAPIER_REQUIS', { remede: { geste: 'choisirPapier' } }],
-  // Sorties
-  ['IMPRESSION_ECHEC', { cause: 'failed', remede: null }],
+// Détails d'exemple de chaque code de la table, un fichier par domaine sous
+// test/libelles/, du nom de la table de libelles/ qui porte son texte :
+// chaque texte s'y compose une fois. Chaque fichier exporte EXEMPLES, des
+// paires [code, détails], et TEXTES, des triplets [code, détails, texte
+// attendu] qui se composent mot pour mot. Un code ajouté à la table sans
+// exemple fait échouer l'épreuve.
+const EXEMPLES_PAR_DOMAINE = Object.freeze([
+  ['csv', exemplesCsv],
+  ['evenements', exemplesEvenements],
+  ['format', exemplesFormat],
+  ['generation', exemplesGeneration],
+  ['mobilier', exemplesMobilier],
+  ['moteur', exemplesMoteur],
+  ['participants', exemplesParticipants],
+  ['places', exemplesPlaces],
+  ['planche', exemplesPlanche],
+  ['seance', exemplesSeance],
+  ['sorties', exemplesSorties],
+  ['stockage', exemplesStockage],
 ]);
+const EXEMPLES = new Map(EXEMPLES_PAR_DOMAINE.flatMap(([, module]) => module.EXEMPLES));
+
+describe("libellés : les exemples, un fichier par domaine (§ 14.6)", () => {
+  test('test/libelles/ porte un fichier par table de libelles/, aides.js excepté, et chacun exporte EXEMPLES et TEXTES, des listes', async () => {
+    const tables = (await tablesDuDossier()).map(({ table }) => table);
+    const fichiers = readdirSync(join(RACINE, DOSSIER_DES_EXEMPLES)).filter((nom) => nom.endsWith('.js')).sort();
+    assert.deepEqual(fichiers, tables.map((table) => `${table}.js`));
+    assert.deepEqual(EXEMPLES_PAR_DOMAINE.map(([domaine]) => domaine), tables);
+    for (const [domaine, module] of EXEMPLES_PAR_DOMAINE) {
+      assert.ok(Array.isArray(module.EXEMPLES) && Array.isArray(module.TEXTES), domaine);
+      for (const exemple of module.EXEMPLES) assert.equal(exemple.length, 2, `${domaine} : ${JSON.stringify(exemple)}`);
+      for (const attendu of module.TEXTES) assert.equal(attendu.length, 3, `${domaine} : ${JSON.stringify(attendu)}`);
+    }
+  });
+
+  test("un code n'a d'exemple que dans un fichier, une fois, et ce fichier est le domaine de son texte", async () => {
+    const domaineDe = domainesDesCles(await tablesDuDossier());
+    const lieux = new Map();
+    for (const [domaine, module] of EXEMPLES_PAR_DOMAINE) {
+      for (const [code] of module.EXEMPLES) lieux.set(code, [...(lieux.get(code) ?? []), domaine]);
+    }
+    assert.ok(lieux.size > 0, 'aucun exemple');
+    assert.deepEqual([...lieux].filter(([, domaines]) => domaines.length !== 1), [], 'codes à plusieurs exemples');
+    assert.deepEqual(
+      [...lieux]
+        .filter(([code, [domaine]]) => domaineDe.get(code) !== domaine)
+        .map(([code, [domaine]]) => `${code} : ${domaine}.js, texte dans ${domaineDe.get(code)}.js`),
+      [],
+      'exemples hors du domaine de leur texte',
+    );
+  });
+
+  test('chaque texte de TEXTES se compose mot pour mot, dans le fichier du domaine de son texte', async () => {
+    const domaineDe = domainesDesCles(await tablesDuDossier());
+    for (const [domaine, module] of EXEMPLES_PAR_DOMAINE) {
+      for (const [cle, details, attendu] of module.TEXTES) {
+        assert.equal(domaineDe.get(cle), domaine, `${cle} : TEXTES de ${domaine}.js, texte dans ${domaineDe.get(cle)}.js`);
+        assert.equal(libelle(cle, details), attendu, `${domaine} : ${cle}`);
+      }
+    }
+  });
+
+  test("la garde des domaines nomme la table de chaque clé, et rien d'une clé qu'aucune ne porte", () => {
+    const domaineDe = domainesDesCles([
+      { table: 'alpha', module: { TABLE: new Map([['UN_CODE', 'a'], ['alpha.cle', 'b']]) } },
+      { table: 'beta', module: { TABLE: new Map([['AUTRE_CODE', 'c']]) } },
+    ]);
+    assert.deepEqual([...domaineDe], [['UN_CODE', 'alpha'], ['alpha.cle', 'alpha'], ['AUTRE_CODE', 'beta']]);
+    assert.equal(domaineDe.get('CODE_ORPHELIN'), undefined);
+  });
+});
+
+describe('libellés : les tours nommés (aides.js)', () => {
+  test("toursNommes : « tous les tours », un tour, deux, une suite d'au moins trois en « a à b », et leurs mélanges", () => {
+    const CAS = [
+      [null, 'tous les tours'],
+      [[2], 'tour 2'],
+      [[1, 3], 'tours 1 et 3'],
+      [[2, 3, 4], 'tours 2 à 4'],
+      [[1, 2, 3, 5], 'tours 1 à 3 et 5'],
+      [[1, 3, 5], 'tours 1, 3 et 5'],
+      [[1, 2], 'tours 1 et 2'],
+      [[1, 2, 4, 5], 'tours 1, 2, 4 et 5'],
+      [[1, 2, 3, 5, 6, 7], 'tours 1 à 3 et 5 à 7'],
+      [[2, 4, 5, 6, 9], 'tours 2, 4 à 6 et 9'],
+      [[10, 11, 12], 'tours 10 à 12'],
+    ];
+    for (const [tours, attendu] of CAS) assert.equal(toursNommes(tours), attendu, JSON.stringify(tours));
+  });
+
+  test('auxToursNommes : « à tous les tours », « au tour r », « aux tours … »', () => {
+    // Les six entrées de toursNommes : la liste de trois termes, suite ou
+    // non, porte « aux » comme celles de deux et de quatre.
+    const CAS = [
+      [null, 'à tous les tours'],
+      [[2], 'au tour 2'],
+      [[1, 3], 'aux tours 1 et 3'],
+      [[2, 3, 4], 'aux tours 2 à 4'],
+      [[1, 2, 3, 5], 'aux tours 1 à 3 et 5'],
+      [[1, 3, 5], 'aux tours 1, 3 et 5'],
+    ];
+    for (const [tours, attendu] of CAS) assert.equal(auxToursNommes(tours), attendu, JSON.stringify(tours));
+  });
+
+  test("une liste vide, non croissante ou qui porte un tour qui n'est pas un entier positif lève RangeError", () => {
+    for (const tours of [[], [3, 1], [2, 2], [0], [1.5], ['2'], undefined]) {
+      assert.throws(() => toursNommes(tours), RangeError, JSON.stringify(tours));
+      assert.throws(() => auxToursNommes(tours), RangeError, JSON.stringify(tours));
+    }
+  });
+
+  test('la liste reçue reste intacte', () => {
+    const tours = Object.freeze([1, 2, 3, 5]);
+    toursNommes(tours);
+    auxToursNommes(tours);
+    assert.deepEqual(tours, [1, 2, 3, 5]);
+  });
+});
+
+/** La table de libelles/ qui porte chaque clé, par clé. */
+function domainesDesCles(tables) {
+  return new Map(tables.flatMap(({ table, module }) => [...module.TABLE.keys()].map((cle) => [cle, table])));
+}
 
 // Un texte composé ne laisse paraître ni valeur absente, ni booléen, ni
 // objet : chaque trace est un mot entier, « nulle part » n'en est pas une.
